@@ -1,0 +1,4 @@
+niworkflows==0.4.4
+grabbit==0.2.3
+pybids==0.6.5
+versioneer
