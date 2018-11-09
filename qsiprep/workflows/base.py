@@ -451,14 +451,16 @@ to workflows in *qsiprep*'s documentation]\
         return workflow
 
     # Handle the grouping of multiple dwi files within a session
-    if layout.get_sessions():
-        raise NotImplementedError()
+    sessions = layout.get_sessions()
     all_dwis = subject_data['dwi']
-    if combine_all_dwis:
-        if len(all_dwis) > 1:
-            all_dwis = [all_dwis]
+    dwi_groups = []
+    if sessions:
+        for session in sessions:
+            dwi_groups.append([img for img in all_dwis if 'ses-'+session in img])
+    else:
+        dwi_groups = [all_dwis]
 
-    for dwi_files in all_dwis:
+    for dwi_files in dwi_groups:
         dwi_preproc_wf = init_dwi_preproc_wf(
             dwi_files=dwi_files,
             layout=layout,

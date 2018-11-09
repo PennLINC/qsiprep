@@ -21,3 +21,4 @@ from .fmap import (
 from .confounds import GatherConfounds, ICAConfounds, FMRISummary
 from .itk import MCFLIRT2ITK, MultiApplyTransforms
 from .multiecho import FirstEcho
+from .dwi_merge import MergeDWIs

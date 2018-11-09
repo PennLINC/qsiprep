@@ -14,6 +14,7 @@ import os
 
 import nibabel as nb
 from nipype import logging
+from collections import defaultdict
 
 from nipype.interfaces.fsl import Split as FSLSplit
 from nipype.pipeline import engine as pe
@@ -57,14 +58,14 @@ def init_dwi_preproc_wf(dwi_files,
                         layout=None,
                         num_dwi=1):
     """
-    This workflow controls the dwi preprocessing stages of qsiprep.
+    Thi workflow controls the dwi preprocessing stages of qsiprep.
 
     .. workflow::
         :graph2use: orig
         :simple_form: yes
 
         from qsiprep.workflows.dwi import init_dwi_preproc_wf
-        wf = init_dwi_preproc_wf('/completely/made/up/path/sub-01_dwi.nii.gz',
+        wf = init_dwi_preproc_wf(['/completely/made/up/path/sub-01_dwi.nii.gz'],
                                   omp_nthreads=1,
                                   ignore=[],
                                   reportlets_dir='.',
@@ -212,7 +213,6 @@ def init_dwi_preproc_wf(dwi_files,
 
     from ..fieldmap.base import init_sdc_wf
 
-    ref_file = dwi_files
     mem_gb = {'filesize': 1, 'resampled': 1, 'largemem': 1}
     dwi_nvols = 10
     multiple_scans = isinstance(dwi_files, list)
@@ -225,18 +225,77 @@ def init_dwi_preproc_wf(dwi_files,
             mem_gb['resampled'] += _mem_gb['resampled']
             mem_gb['largemem'] += _mem_gb['largemem']
     else:
-        dwi_nvols, mem_gb = _create_mem_gb(ref_file)
+        dwi_nvols, mem_gb = _create_mem_gb(dwi_files)
+        dwi_files = [dwi_files]
 
-    wf_name = _get_wf_name(dwi_files)
+    wf_name = _get_wf_name(dwi_files[0])
+    workflow = Workflow(name=wf_name)
     LOGGER.log(25, ('Creating dwi processing workflow "%s" '
                     '(%.2f GB / %d DWIs). '
                     'Memory resampled/largemem=%.2f/%.2f GB.'), wf_name,
                mem_gb['filesize'], dwi_nvols, mem_gb['resampled'],
                mem_gb['largemem'])
 
-    sbref_file = None
+    # Create a list of (dwi image, PE dir, fieldmaps)
+    parsed_dwis = []
+    for ref_file in dwi_files:
+        # Find associated sbref, if possible
+        entities = layout.parse_file_entities(ref_file)
+        entities['type'] = 'sbref'
+        files = layout.get(**entities, extensions=['nii', 'nii.gz'])
+        if len(files):
+            LOGGER.warning("Ignoring sbref for %s", ref_file)
+        metadata = layout.get_metadata(ref_file)
+
+        # Find fieldmaps. Options: (epi|syn)
+        fmaps = []
+        if 'fieldmaps' not in ignore:
+            fmaps = layout.get_fieldmap(ref_file, return_list=True)
+            fmap_files = []
+            for fmap in fmaps:
+                if fmap['type'] == 'epi':
+                    fmap_files.append(fmap['epi'])
+            if len(fmap_files) > 1:
+                LOGGER.warning("Multiple field maps found for %s", ref_file)
+            fmap_file = fmap_files[0]
+        parsed_dwis.append(
+            (ref_file, metadata['PhaseEncodingDirection'], fmap_file))
+
+    # Depending on how the scans are organized, either use the fieldmap or the RPE series
+    scans_and_maps = []
+    if combine_all_dwis:
+        groups = defaultdict(list)
+        for ref_file, pe_dir, fmap in parsed_dwis:
+            groups[(pe_dir, fmap)].append(ref_file)
+        if len(groups) > 2:
+            LOGGER.critical("Unable to match fieldmaps to DWIs.")
+        for k, v in groups.items():
+            scans_and_maps.append((v, k))
+        if len(groups) == 2:
+            LOGGER.warning("Using b0 templates from opposite PEs to unwarp instead of fieldmaps")
+
+    else:
+        # Process each image by itself
+        num_dwi = len(parsed_dwis)
+        workflow.__desc__ = """
+
+DWI data preprocessing
+
+: For each of the {num_dwi} dwi runs found per subject (across all
+tasks and sessions), the following preprocessing was performed.
+    """.format(num_dwi=num_dwi)
+        for ref_file, pe_dir, fmap in parsed_dwis:
+            scans_and_maps.append((ref_file, fmap))
+
+
+
+
+
+
+
+
     # For doc building purposes
-    if layout is None or dwi_files == 'dwi_preprocesing':
+    if layout is None or dwi_files[0] == 'dwi_preprocesing':
         LOGGER.log(25, 'No valid layout: building empty workflow.')
         metadata = {
             'RepetitionTime': 2.0,
@@ -248,64 +307,15 @@ def init_dwi_preproc_wf(dwi_files,
             'epi':
             'sub-03/ses-2/fmap/sub-03_ses-2_acq-AP_epi.nii.gz',
         }]
-    else:
-        # If we're concatenating multiple files, make sure that the
-        # fieldmaps are IntendedFor all the files that will be combined.
 
-        # Find associated sbref, if possible
-        entities = layout.parse_file_entities(ref_file)
-        entities['type'] = 'sbref'
-        files = layout.get(**entities, extensions=['nii', 'nii.gz'])
-        refbase = os.path.basename(ref_file)
-        if 'sbref' in ignore:
-            LOGGER.info("Single-band reference files ignored.")
-        elif files:
-            sbref_file = files[0].filename
-            sbbase = os.path.basename(sbref_file)
-            if len(files) > 1:
-                LOGGER.warning(
-                    "Multiple single-band reference files found for {}; using "
-                    "{}".format(refbase, sbbase))
-            else:
-                LOGGER.log(
-                    25, "Using single-band reference file {}".format(sbbase))
-        else:
-            LOGGER.log(25,
-                       "No single-band-reference found for {}".format(refbase))
-
-        metadata = layout.get_metadata(ref_file)
-
-        # Find fieldmaps. Options: (epi|syn)
-        fmaps = []
-        if 'fieldmaps' not in ignore:
-            fmaps = layout.get_fieldmap(ref_file, return_list=True)
-            for fmap in fmaps:
-                if fmap['type'] == 'epi':
-                    fmap['metadata'] = layout.get_metadata(fmap['epi'])
-
-        # Run SyN if forced or in the absence of fieldmap correction
-        if force_syn or (use_syn and not fmaps):
-            fmaps.append({'type': 'syn'})
+    # Run SyN if forced or in the absence of fieldmap correction
+    if force_syn or (use_syn and not fmaps):
+        fmaps.append({'type': 'syn'})
 
     # Build workflow
-    workflow = Workflow(name=wf_name)
-    workflow.__desc__ = """
 
-DWI data preprocessing
 
-: For each of the {num_dwi} dwi runs found per subject (across all
-tasks and sessions), the following preprocessing was performed.
-""".format(num_dwi=num_dwi)
 
-    workflow.__postdesc__ = """\
-All resamplings can be performed with *a single interpolation
-step* by composing all the pertinent transformations (i.e. head-motion
-transform matrices, susceptibility distortion correction when available,
-and co-registrations to anatomical and template spaces).
-Gridded (volumetric) resamplings were performed using `antsApplyTransforms`
-(ANTs), configured with Lanczos interpolation to minimize the smoothing
-effects of other kernels [@lanczos].
-"""
 
     inputnode = pe.Node(
         niu.IdentityInterface(fields=[
@@ -316,9 +326,6 @@ effects of other kernels [@lanczos].
             't1_2_fsnative_reverse_transform'
         ]),
         name='inputnode')
-    inputnode.inputs.dwi_file = dwi_file
-    if sbref_file is not None:
-        inputnode.inputs.sbref_file = sbref_file
 
     outputnode = pe.Node(
         niu.IdentityInterface(fields=[
@@ -374,12 +381,6 @@ effects of other kernels [@lanczos].
 
     # Generate a tentative dwiref
     dwi_reference_wf = init_dwi_reference_wf(omp_nthreads=omp_nthreads)
-
-    # Top-level dwi splitter
-    dwi_split = pe.Node(
-        FSLSplit(dimension='t'),
-        name='dwi_split',
-        mem_gb=mem_gb['filesize'] * 3)
 
     # HMC on the dwi
     dwi_hmc_wf = init_dwi_hmc_wf(

@@ -142,7 +142,7 @@ def get_alignment_workflow(align_to="iterative",
     if align_to == "iterative" and num_iters < 2:
         raise ValueError("Must specify a positive number of iterations")
 
-    alignment_wf = pe.Workflow(name="alignment")
+    alignment_wf = pe.Workflow(name="alignment_wf")
     node_fields = ["input_images", "updated_template"]
     input_node = pe.Node(
         util.IdentityInterface(fields=node_fields), name='input_node')

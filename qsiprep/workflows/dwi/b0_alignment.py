@@ -5,22 +5,6 @@ from copy import deepcopy
 from nipype.interfaces import ants, afni
 from ..orientation.force_orientation import force_orientation
 
-
-def combine_bvals(bvals):
-    import numpy as np
-    import os
-    collected_vals = []
-    for bval_file in bvals:
-        collected_vals.append(np.loadtxt(bval_file))
-    final_bvals = np.concatenate(collected_vals)
-    final_bvals = final_bvals[np.logical_not(final_bvals) == 0]
-    np.savetxt(
-        "restacked.bval",
-        np.concatenate([np.array([0]), final_bvals]),
-        fmt=str("%i"))
-    return os.path.abspath("restacked.bval")
-
-
 def combine_bvals(bvals):
     import numpy as np
     import os
@@ -130,10 +114,10 @@ def multi_transform_bvecs(bvec_file, transform_list):
 
     transforms = " ".join(
         ["--transform [%s, 1]" % trf for trf in transform_list])
-    os.system("antsApplyTransformsToPoints " + \
-        "--dimensionality 3 " + \
-        "--input pre_rotation.csv " + \
-        "--output rotated_vecs.csv " + \
+    os.system("antsApplyTransformsToPoints "
+        "--dimensionality 3 "
+        "--input pre_rotation.csv "
+        "--output rotated_vecs.csv " +
         transforms)
 
     rotated_vecs = np.loadtxt(
