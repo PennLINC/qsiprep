@@ -8,17 +8,17 @@ from .bids import (
 from .images import (
     IntraModalMerge, ValidateImage, TemplateDimensions, Conform, MatchHeader
 )
-from .freesurfer import (
+from fmriprep.interfaces.freesurfer import (
     StructuralReference, MakeMidthickness, FSInjectBrainExtracted,
     FSDetectInputs, RefineBrainMask, MedialNaNs
 )
-from .surf import NormalizeSurf, GiftiNameSource, GiftiSetAnatomicalStructure
-from .reports import SubjectSummary, FunctionalSummary, AboutSummary
-from .utils import (TPM2ROI, AddTPMs, AddTSVHeader, ConcatAffines,
-                    JoinTSVColumns)
-from .fmap import (
+from fmriprep.interfaces.surf import NormalizeSurf, GiftiNameSource, GiftiSetAnatomicalStructure
+from fmriprep.interfaces.reports import SubjectSummary, FunctionalSummary, AboutSummary
+from fmriprep.interfaces.utils import (TPM2ROI, AddTPMs, AddTSVHeader, ConcatAffines,
+                                       JoinTSVColumns)
+from fmriprep.interfaces.fmap import (
     FieldEnhance, FieldToRadS, FieldToHz, Phasediff2Fieldmap, Phases2Fieldmap)
-from .confounds import GatherConfounds, ICAConfounds, FMRISummary
-from .itk import MCFLIRT2ITK, MultiApplyTransforms
-from .multiecho import FirstEcho
+from fmriprep.interfaces.confounds import GatherConfounds, ICAConfounds, FMRISummary
+from fmriprep.interfaces.itk import MCFLIRT2ITK, MultiApplyTransforms
+from fmriprep.interfaces.multiecho import FirstEcho
 from .dwi_merge import MergeDWIs

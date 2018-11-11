@@ -19,7 +19,7 @@ from niworkflows.interfaces.registration import ANTSApplyTransformsRPT
 
 from fmriprep.engine import Workflow
 from ...interfaces import StructuralReference
-from ..bold.util import init_enhance_and_skullstrip_bold_wf
+from fmriprep.workflows.bold.util import init_enhance_and_skullstrip_bold_wf
 
 
 def init_pepolar_unwarp_wf(bold_meta, epi_fmaps, omp_nthreads=1,

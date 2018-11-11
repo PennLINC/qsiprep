@@ -1,5 +1,5 @@
 from .unbiased_rigid_alignment import get_alignment_workflow
-import nipype.pipelinefmriprep.engine as pe
+import fmriprep.engine as pe
 import nipype.interfaces.utility as util
 from copy import deepcopy
 from nipype.interfaces import ants, afni
@@ -197,15 +197,16 @@ def recombine_dwis(dwi_chunks,
     ]
 
 
-def get_b0_alignment_workflow(align_to="iterative",
-                              transform="Rigid",
-                              metric="Mattes",
-                              num_iters=3):
+def init_b0_alignment_wf(align_to="iterative",
+                         transform="Rigid",
+                         metric="Mattes",
+                         num_iters=3,
+                         name="b0_alignment"):
 
     if align_to == "iterative" and num_iters < 2:
         raise ValueError("Must specify > 2 iterations")
 
-    b0_alignment_wf = pe.Workflow(name="b0_alignment")
+    b0_alignment_wf = pe.Workflow(name=name)
     input_node = pe.Node(
         util.IdentityInterface(fields=["dwi_nifti", "bvals", "bvecs"]),
         name='input_node')
@@ -334,11 +335,11 @@ def get_b0_to_anat_registration_workflow(biascorrect_anat=False,
     return b0_anat_coreg_wf
 
 
-def get_b0_motioncorr_registration_pipeline(b0_motion_corr_to="iterative",
-                                            b0_motion_corr_transform="Rigid",
-                                            b0_motion_corr_metric="Mattes",
-                                            b0_motion_corr_num_iters=3,
-                                            coregister_to="T1w"):
+def init_b0_motioncorr_registration_pipeline(b0_motion_corr_to="iterative",
+                                             b0_motion_corr_transform="Rigid",
+                                             b0_motion_corr_metric="Mattes",
+                                             b0_motion_corr_num_iters=3,
+                                             coregister_to="T1w"):
     """Applies a simple b0-based
     """
     input_node = pe.Node(

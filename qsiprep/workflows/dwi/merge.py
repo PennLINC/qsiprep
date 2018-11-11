@@ -38,7 +38,8 @@ def init_merge_and_denoise_wf(dwi_files,
                               denoise_before_combining,
                               combine_all_dwis,
                               mem_gb=1,
-                              omp_nthreads=1):
+                              omp_nthreads=1,
+                              name="merge_and_denoise_wf"):
     """
 
     .. workflow::
@@ -87,7 +88,7 @@ def init_merge_and_denoise_wf(dwi_files,
 
     # Check if the output from one PE can be used as the RPE for the other
     # Build workflow
-    workflow = Workflow(name="merge_and_denoise_wf")
+    workflow = Workflow(name=name)
 
     inputnode = pe.MapNode(
         niu.IdentityInterface(fields=['dwi_files']), name='inputnode')

@@ -7,11 +7,12 @@ import re
 from copy import deepcopy
 from nipype.interfaces import ants, afni
 from nipype.interfaces.ants.segmentation import BrainExtraction
-import nipype.pipelinefmriprep.engine as pe
+import nipype.pipeline.engine as pe
+from fmriprep.engine import Workflow
 import nipype.interfaces.io as nio
 import nipype.interfaces.utility as util
-from dsi_studio import (DSIStudioCreateSrc, DSIStudioGQIReconstruction,
-                        DSIStudioExport)
+from qsiprep.interfaces.dsi_studio import (DSIStudioCreateSrc, DSIStudioGQIReconstruction,
+                                           DSIStudioExport)
 from glob import glob
 
 def combine_motion(motions):

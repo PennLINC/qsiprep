@@ -27,14 +27,14 @@ from niworkflows.interfaces.registration import ANTSApplyTransformsRPT, ANTSRegi
 
 from fmriprep.engine import Workflow
 from ...interfaces import itk, DerivativesDataSink
-from ...interfaces.fmap import (
+from fmriprep.interfaces.fmap import (
     get_ees as _get_ees,
     FieldToRadS,
 )
 from ...interfaces.images import (
     DemeanImage, FilledImageLike
 )
-from ..bold.util import init_enhance_and_skullstrip_bold_wf
+from fmriprep.workflows.bold.util import init_enhance_and_skullstrip_bold_wf
 
 
 def init_sdc_unwarp_wf(omp_nthreads, fmap_demean, debug, name='sdc_unwarp_wf'):
