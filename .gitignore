@@ -83,3 +83,5 @@ local_settings.py
 *.swp
 
 *.DS_Store
+
+scratch/

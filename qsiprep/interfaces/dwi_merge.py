@@ -1,7 +1,7 @@
 """Handle merging and spliting of DSI files."""
 import numpy as np
 from nipype.interfaces import afni
-from os.path import abspath
+import os.path as op
 from fmriprep.interfaces.bids import _splitext
 from nipype.interfaces.base import (BaseInterfaceInputSpec, TraitedSpec, File, SimpleInterface,
                                     InputMultiObject)
@@ -21,24 +21,26 @@ class MergeDWIsOutputSpec(TraitedSpec):
 
 
 class MergeDWIs(SimpleInterface):
-    """Convert a phase1, phase2 into a difference map."""
-
     input_spec = MergeDWIsInputSpec
     output_spec = MergeDWIsOutputSpec
 
     def _run_interface(self, runtime):
-        bvals = [_splitext(x)[0] + '.bval' for x in self.inputs.original_files]
-        bvecs = [_splitext(x)[0] + '.bvec' for x in self.inputs.original_files]
+        dwi_file = self.inputs.original_files[0]
+        base_dir = op.split(dwi_file)[0]
+        bvals = [op.join(base_dir, _splitext(x)[0] + '.bval')
+                 for x in self.inputs.original_files]
+        bvecs = [op.join(base_dir, _splitext(x)[0] + '.bvec')
+                 for x in self.inputs.original_files]
 
         if len(self.inputs.dwi_files) > 1:
-            dwimrg = afni.Tcat(in_files=self.inputs.dwi_files, output_type='NIFTI_GZ')
+            dwimrg = afni.TCat(in_files=self.inputs.dwi_files, outputtype='NIFTI_GZ')
             self._results['out_dwi'] = dwimrg.run().outputs.out_file
             self._results['out_bval'] = combine_bvals(bvals)
             self._results['out_bvec'] = combine_bvecs(bvecs)
         else:
-            self._results['out_dwi'] = self.inputs.dwi_files
-            self._results['out_bval'] = bvals
-            self._results['out_bvec'] = bvecs
+            self._results['out_dwi'] = dwi_file
+            self._results['out_bval'] = bvals[0]
+            self._results['out_bvec'] = bvecs[0]
         return runtime
 
 
@@ -48,11 +50,8 @@ def combine_bvals(bvals):
     for bval_file in bvals:
         collected_vals.append(np.loadtxt(bval_file))
     final_bvals = np.concatenate(collected_vals)
-    np.savetxt(
-        "restacked.bval",
-        np.concatenate([np.array([0]), final_bvals]),
-        fmt=str("%i"))
-    return abspath("restacked.bval")
+    np.savetxt("restacked.bval", final_bvals, fmt=str("%i"))
+    return op.abspath("restacked.bval")
 
 
 def combine_bvecs(bvecs):
@@ -62,4 +61,4 @@ def combine_bvecs(bvecs):
         collected_vecs.append(np.loadtxt(bvec_file))
     final_bvecs = np.column_stack(collected_vecs)
     np.savetxt("restacked.bvec", final_bvecs, fmt=str("%.8f"))
-    return abspath("restacked.bvec")
+    return op.abspath("restacked.bvec")

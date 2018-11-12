@@ -103,7 +103,7 @@ class IntraModalMerge(SimpleInterface):
 CONFORMATION_TEMPLATE = """\t\t<h3 class="elem-title">Anatomical Conformation</h3>
 \t\t<ul class="elem-desc">
 \t\t\t<li>Input T1w images: {n_t1w}</li>
-\t\t\t<li>Output orientation: RAS</li>
+\t\t\t<li>Output orientation: LPS</li>
 \t\t\t<li>Output dimensions: {dims}</li>
 \t\t\t<li>Output voxel size: {zooms}</li>
 \t\t\t<li>Discarded images: {n_discards}</li>
@@ -159,10 +159,10 @@ class TemplateDimensions(SimpleInterface):
                                             discard_list=discard_list)
 
     def _run_interface(self, runtime):
-        # Load images, orient as RAS, collect shape and zoom data
+        # Load images, orient as LPS, collect shape and zoom data
         in_names = np.array(self.inputs.t1w_list)
         orig_imgs = np.vectorize(nb.load)(in_names)
-        reoriented = np.vectorize(nb.as_closest_canonical)(orig_imgs)
+        reoriented = np.vectorize(to_lps)(orig_imgs)
         all_zooms = np.array([img.header.get_zooms()[:3] for img in reoriented])
         all_shapes = np.array([img.shape[:3] for img in reoriented])
 
@@ -216,17 +216,17 @@ class Conform(SimpleInterface):
 
     Performs two basic functions:
 
-    #. Orient to RAS (left-right, posterior-anterior, inferior-superior)
+    #. Orient to LPS (right-left, anterior-posterior, inferior-superior)
     #. Resample to target zooms (voxel sizes) and shape (number of voxels)
     """
     input_spec = ConformInputSpec
     output_spec = ConformOutputSpec
 
     def _run_interface(self, runtime):
-        # Load image, orient as RAS
+        # Load image, orient as LPS
         fname = self.inputs.in_file
         orig_img = nb.load(fname)
-        reoriented = nb.as_closest_canonical(orig_img)
+        reoriented = to_lps(orig_img)
 
         # Set target shape information
         target_zooms = np.array(self.inputs.target_zooms)
@@ -241,7 +241,8 @@ class Conform(SimpleInterface):
             nb.io_orientation(orig_img.affine), orig_img.shape)
         # Identity unless proven otherwise
         target_affine = reoriented.affine.copy()
-        conform_xfm = np.eye(4)
+        # conform_xfm = np.eye(4)
+        conform_xfm = np.diag([-1, -1, 1, 1])
 
         xyz_unit = reoriented.header.get_xyzt_units()[0]
         if xyz_unit == 'unknown':
@@ -274,7 +275,7 @@ class Conform(SimpleInterface):
 
         # Image may be reoriented, rescaled, and/or resized
         if reoriented is not orig_img:
-            out_name = fname_presuffix(fname, suffix='_ras', newpath=runtime.cwd)
+            out_name = fname_presuffix(fname, suffix='_lps', newpath=runtime.cwd)
             reoriented.to_filename(out_name)
         else:
             out_name = fname
@@ -527,9 +528,9 @@ class MatchHeader(SimpleInterface):
 
 
 def reorient(in_file, newpath=None):
-    """Reorient Nifti files to RAS"""
+    """Reorient Nifti files to LPS"""
     out_file = fname_presuffix(in_file, suffix='_ras', newpath=newpath)
-    nb.as_closest_canonical(nb.load(in_file)).to_filename(out_file)
+    to_lps(nb.load(in_file)).to_filename(out_file)
     return out_file
 
 
@@ -693,3 +694,20 @@ class SignalExtraction(SimpleInterface):
             self._results['out_file'], output, fmt=b'%s', delimiter='\t')
 
         return runtime
+
+
+def to_lps(input_image):
+    new_axcodes = ("L", "P", "S")
+    input_img = nb.load(input_image)
+    input_axcodes = nb.aff2axcodes(input_img.affine)
+    # Is the input image oriented how we want?
+    if not input_axcodes == new_axcodes:
+        # Re-orient
+        input_orientation = nb.orientations.axcodes2ornt(input_axcodes)
+        desired_orientation = nb.orientations.axcodes2ornt(new_axcodes)
+        transform_orientation = nb.orientations.ornt_transform(input_orientation,
+                                                               desired_orientation)
+        reoriented_img = input_img.as_reoriented(transform_orientation)
+        return reoriented_img
+    else:
+        return input_image

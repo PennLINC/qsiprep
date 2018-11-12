@@ -8,7 +8,7 @@ import numpy as np
 import nibabel as nb
 from scipy.interpolate import interpn
 from datetime import datetime as dt
-
+from ..interfaces.images import to_lps
 from nipype import logging
 LOGGER = logging.getLogger('nipype.interfaces')
 
@@ -32,7 +32,7 @@ class BSplineFieldmap(object):
         self._knots_zooms = np.array(knots_zooms)
 
         if isinstance(fmapnii, str):
-            fmapnii = nb.as_closest_canonical(nb.load(fmapnii))
+            fmapnii = to_lps(nb.load(fmapnii))
 
         self._fmapnii = fmapnii
         self._padding = padding

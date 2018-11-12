@@ -16,18 +16,14 @@ from collections import defaultdict
 import nibabel as nb
 from nipype import logging
 
-from nipype.interfaces.fsl import Split as FSLSplit
 from nipype.interfaces.mrtrix3 import DWIDenoise
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
 
 from ...interfaces import DerivativesDataSink, MergeDWIs
 
-from ...interfaces.reports import FunctionalSummary
+# from ...interfaces.reports import FunctionalSummary
 from fmriprep.engine import Workflow
-
-# dwi workflows
-from .util import init_dwi_reference_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger('nipype.workflow')
@@ -91,7 +87,7 @@ def init_merge_and_denoise_wf(dwi_files,
     workflow = Workflow(name=name)
 
     inputnode = pe.MapNode(
-        niu.IdentityInterface(fields=['dwi_files']), name='inputnode')
+        niu.IdentityInterface(fields=['dwi_files']), iterfield=['dwi_files'], name='inputnode')
     inputnode.inputs.dwi_files = dwi_files
 
     outputnode = pe.Node(
@@ -111,7 +107,7 @@ def init_merge_and_denoise_wf(dwi_files,
             workflow.connect([
                 (inputnode, denoise, [('dwi_files', 'in_file')]),
                 (denoise, merge_dwis, [('out_file', 'dwi_files')]),
-                (denoise, outputnode, [('noise', 'noise_image')]),
+                # (denoise, outputnode, [('noise', 'noise_image')]),
                 (merge_dwis, outputnode, [('out_dwi', 'merged_image'),
                                           ('out_bval', 'merged_bval'),
                                           ('out_bvec', 'merged_bvec')])
@@ -120,8 +116,7 @@ def init_merge_and_denoise_wf(dwi_files,
             workflow.connect([
                 (inputnode, merge_dwis, [('dwi_files', 'dwi_files')]),
                 (merge_dwis, denoise, [('out_dwi', 'in_file')]),
-                (denoise, outputnode, [('noise', 'noise_image'),
-                                       ('out_file', 'merged_image')]),
+                (denoise, outputnode, [('out_file', 'merged_image')]),
                 (merge_dwis, outputnode, [('out_bval', 'merged_bval'),
                                           ('out_bvec', 'merged_bvec')])
             ])

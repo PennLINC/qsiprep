@@ -78,7 +78,7 @@ T1w/T2w preprocessing
                               num_t1w=1)
 
 The anatomical sub-workflow begins by constructing an average image by
-:ref:`conforming <conformation>` all found T1w images to RAS orientation and
+:ref:`conforming <conformation>` all found T1w images to LPS orientation and
 a common voxel size, and, in the case of multiple images, averages them into a
 single reference template (see `Longitudinal processing`_).
 

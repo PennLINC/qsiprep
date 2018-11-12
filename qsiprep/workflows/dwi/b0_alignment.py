@@ -1,9 +1,11 @@
 from .unbiased_rigid_alignment import get_alignment_workflow
-import fmriprep.engine as pe
+from fmriprep.engine import Workflow
+import nipype.pipeline.engine as pe
 import nipype.interfaces.utility as util
 from copy import deepcopy
 from nipype.interfaces import ants, afni
-from ..orientation.force_orientation import force_orientation
+from .force_orientation import force_orientation
+
 
 def combine_bvals(bvals):
     import numpy as np
@@ -206,7 +208,7 @@ def init_b0_alignment_wf(align_to="iterative",
     if align_to == "iterative" and num_iters < 2:
         raise ValueError("Must specify > 2 iterations")
 
-    b0_alignment_wf = pe.Workflow(name=name)
+    b0_alignment_wf = Workflow(name=name)
     input_node = pe.Node(
         util.IdentityInterface(fields=["dwi_nifti", "bvals", "bvecs"]),
         name='input_node')
@@ -265,7 +267,7 @@ def init_b0_alignment_wf(align_to="iterative",
     return b0_alignment_wf
 
 
-def get_b0_to_anat_registration_workflow(biascorrect_anat=False,
+def init_b0_to_anat_registration_wf(biascorrect_anat=False,
                                          biascorrect_b0=False):
     """
     registers a b0 to an anatomical scan. Bias corrects each
@@ -279,7 +281,7 @@ def get_b0_to_anat_registration_workflow(biascorrect_anat=False,
         util.IdentityInterface(
             fields=["b0_to_anat_transform", "coreg_metric"]),
         name='output_node')
-    b0_anat_coreg_wf = pe.Workflow(name="b0_anat_coreg")
+    b0_anat_coreg_wf = Workflow(name="b0_anat_coreg")
 
     # Defines a coregistration operation
     coreg = ants.Registration()
@@ -363,7 +365,7 @@ def init_b0_motioncorr_registration_pipeline(b0_motion_corr_to="iterative",
     dwi_to_lps = pe.Node(deepcopy(force_lps), name="dwi_to_lps")
 
     # Apply motion correction to the dwis
-    mc_reg_wf = pe.Workflow(name="b0_motion_corr_and_coreg")
+    mc_reg_wf = Workflow(name="b0_motion_corr_and_coreg")
     mc_reg_wf.connect(input_node, "dwi_nifti", dwi_to_lps, "input_image")
     mc_reg_wf.connect(input_node, "bvecs", dwi_to_lps, "bvecs")
     dwi_to_lps.inputs.new_axcodes = itk_orientation
@@ -421,7 +423,7 @@ def init_b0_motioncorr_registration_pipeline(b0_motion_corr_to="iterative",
         t1_to_lps = pe.Node(deepcopy(force_lps), name="t1_to_lps")
         t1_to_lps.inputs.new_axcodes = itk_orientation
         mc_reg_wf.connect(input_node, "anat_image", t1_to_lps, "input_image")
-        coreg_wf = get_b0_to_anat_registration_workflow()
+        coreg_wf = init_b0_to_anat_registration_wf()
         mc_reg_wf.connect(t1_to_lps, "reoriented_nifti", coreg_wf,
                           "input_node.anat_image")
         mc_reg_wf.connect(motion_corr_wf, "output_node.b0_template", coreg_wf,
