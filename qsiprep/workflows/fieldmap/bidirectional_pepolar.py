@@ -85,7 +85,7 @@ directions, using `3dQwarp` @afni (AFNI {afni_ver}).
 """.format(afni_ver=''.join(['%02d' % v for v in afni.Info().version() or []]))
 
     inputnode = pe.Node(niu.IdentityInterface(
-        fields=['template_plus', 'template_minus']),
+        fields=['template_plus', 'template_minus', 't1w_brain']),
         name='inputnode')
 
     outputnode = pe.Node(niu.IdentityInterface(
@@ -138,23 +138,23 @@ directions, using `3dQwarp` @afni (AFNI {afni_ver}).
     workflow.connect([
         (inputnode, inputs_to_list, [('template_plus', 'in1'),
                                      ('template_minus', 'in2')]),
-        (inputs_to_list, align_reverse_pe_wf, [('out', 'input_node.input_images')]),
-        (align_reverse_pe_wf, get_midpoint_transforms, [('output_node.forward_transforms',
+        (inputs_to_list, align_reverse_pe_wf, [('out', 'inputnode.input_images')]),
+        (align_reverse_pe_wf, get_midpoint_transforms, [('outputnode.forward_transforms',
                                                          'inlist')]),
         (get_midpoint_transforms, outputnode, [('out1', 'out_affine_plus'),
                                                ('out2', 'out_affine_minus')]),
         (inputnode, plus_to_midpoint, [('template_plus', 'input_image')]),
         (inputnode, minus_to_midpoint, [('template_minus', 'input_image')]),
         (get_midpoint_transforms, plus_to_midpoint, [('out1', 'transforms')]),
-        (align_reverse_pe_wf, plus_to_midpoint, [('output_node.final_template',
+        (align_reverse_pe_wf, plus_to_midpoint, [('outputnode.final_template',
                                                   'reference_image')]),
         (get_midpoint_transforms, minus_to_midpoint, [('out2', 'transforms')]),
-        (align_reverse_pe_wf, minus_to_midpoint, [('output_node.final_template',
+        (align_reverse_pe_wf, minus_to_midpoint, [('outputnode.final_template',
                                                   'reference_image')]),
         (plus_to_midpoint, qwarp, [('output_image', 'in_file')]),
         (minus_to_midpoint, qwarp, [('output_image', 'base_file')]),
-        (align_reverse_pe_wf, cphdr_plus_warp, [('output_node.final_template', 'hdr_file')]),
-        (align_reverse_pe_wf, cphdr_minus_warp, [('output_node.final_template', 'hdr_file')]),
+        (align_reverse_pe_wf, cphdr_plus_warp, [('outputnode.final_template', 'hdr_file')]),
+        (align_reverse_pe_wf, cphdr_minus_warp, [('outputnode.final_template', 'hdr_file')]),
         (qwarp, cphdr_plus_warp, [('source_warp', 'in_file')]),
         (qwarp, cphdr_minus_warp, [('base_warp', 'in_file')]),
         (cphdr_plus_warp, to_ants_plus, [('out_file', 'in_file')]),

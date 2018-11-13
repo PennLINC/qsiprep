@@ -27,7 +27,7 @@ from ..utils.bids import collect_data
 from ..utils.misc import fix_multi_T1w_source_name
 from ..__about__ import __version__
 
-from fmriprep.workflows.anatomical import init_anat_preproc_wf
+from .anatomical import init_anat_preproc_wf
 from .dwi import init_dwi_preproc_wf
 
 
@@ -460,6 +460,7 @@ to workflows in *qsiprep*'s documentation]\
     else:
         dwi_groups = [all_dwis]
 
+    # create a processing pipeline for the dwis in each session
     for dwi_files in dwi_groups:
         dwi_preproc_wf = init_dwi_preproc_wf(
             dwi_files=dwi_files,

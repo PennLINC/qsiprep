@@ -36,20 +36,21 @@ from nipype.interfaces import (
 from nipype.interfaces.ants import BrainExtraction, N4BiasFieldCorrection
 
 from niworkflows.interfaces.registration import RobustMNINormalizationRPT
-import niworkflows.data as nid
 from niworkflows.interfaces.masks import ROIsPlot
 
 from niworkflows.interfaces.segmentation import ReconAllRPT
 from niworkflows.interfaces.fixes import FixHeaderApplyTransforms as ApplyTransforms
 
-from ..engine import Workflow
-from ..interfaces import (
+from fmriprep.engine import Workflow
+from fmriprep.interfaces import (
     DerivativesDataSink, StructuralReference, MakeMidthickness, FSInjectBrainExtracted,
-    FSDetectInputs, NormalizeSurf, GiftiNameSource, TemplateDimensions, Conform,
+    FSDetectInputs, NormalizeSurf, GiftiNameSource, TemplateDimensions,
     ConcatAffines, RefineBrainMask,
 )
-from ..utils.misc import fix_multi_T1w_source_name, add_suffix
-from ..interfaces.freesurfer import (
+
+from qsiprep.interfaces import Conform
+from fmriprep.utils.misc import fix_multi_T1w_source_name, add_suffix
+from fmriprep.interfaces.freesurfer import (
         PatchedLTAConvert as LTAConvert,
         PatchedRobustRegister as RobustRegister)
 
@@ -536,7 +537,7 @@ A T1w-reference map was computed after registration of
         name='t1_merge')
 
     # 2. Reorient template to LPS, if needed (mri_robust_template may set to LIA)
-    t1_reorient = pe.Node(image.Reorient(), name='t1_reorient')
+    t1_reorient = pe.Node(image.Reorient(orientation='LPS'), name='t1_reorient')
 
     lta_to_fsl = pe.MapNode(LTAConvert(out_fsl=True), iterfield=['in_lta'],
                             name='lta_to_fsl')

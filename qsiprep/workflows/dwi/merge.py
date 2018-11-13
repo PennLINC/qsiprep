@@ -29,10 +29,8 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger('nipype.workflow')
 
 
-def init_merge_and_denoise_wf(dwi_files,
-                              dwi_denoise_window,
+def init_merge_and_denoise_wf(dwi_denoise_window,
                               denoise_before_combining,
-                              combine_all_dwis,
                               mem_gb=1,
                               omp_nthreads=1,
                               name="merge_and_denoise_wf"):
@@ -43,9 +41,7 @@ def init_merge_and_denoise_wf(dwi_files,
         :simple_form: yes
 
         from qsiprep.workflows.dwi import init_merge_and_denoise_wf
-        wf = init_merge_and_dwnoise_wf(
-                                       ['/completely/made/up/path/sub-01_dwi.nii.gz'],
-                                       dwi_denoise_window=7,
+        wf = init_merge_and_dwnoise_wf(dwi_denoise_window=7,
                                        denoise_before_combining=True,
                                        combine_all_dwis=True)
 
@@ -60,8 +56,6 @@ def init_merge_and_denoise_wf(dwi_files,
             run ``dwidenoise`` before combining dwis. Requires ``combine_all_dwis``
             If ``dwi_denoise_window > 0`` and this is ``False``, then ``dwidenoise``
             is run on the merged dwi series.
-        combine_all_dwis : bool
-            Combine all dwi sequences within a session into a single data set
 
 
     **Inputs**
@@ -88,13 +82,13 @@ def init_merge_and_denoise_wf(dwi_files,
 
     inputnode = pe.MapNode(
         niu.IdentityInterface(fields=['dwi_files']), iterfield=['dwi_files'], name='inputnode')
-    inputnode.inputs.dwi_files = dwi_files
 
     outputnode = pe.Node(
         niu.IdentityInterface(fields=[
             'merged_image', 'merged_bval', 'merged_bvec', 'noise_image']),
         name='outputnode')
 
+    conform_dwis = pe.MapNode(ConformDwis(), iterfield=[], name="conform_dwis")
     merge_dwis = pe.Node(MergeDWIs(), name='merge_dwis')
     workflow.connect([(inputnode, merge_dwis, [('dwi_files', 'original_files')])])
 

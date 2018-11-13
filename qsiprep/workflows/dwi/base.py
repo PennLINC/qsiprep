@@ -26,10 +26,9 @@ from ...interfaces.reports import FunctionalSummary
 from fmriprep.engine import Workflow
 
 # dwi workflows
-from .confounds import init_dwi_confs_wf, init_carpetplot_wf
-from .registration import init_dwi_t1_trans_wf, init_dwi_reg_wf
-from .resampling import (init_dwi_mni_trans_wf, init_dwi_preproc_trans_wf)
-from .util import init_dwi_reference_wf
+from ..fieldmap.opposite_phase_series import init_opposite_phase_series_wf
+from ..fieldmap.fieldmapless import init_dwi_no_fieldmap_wf
+
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger('nipype.workflow')
@@ -190,8 +189,7 @@ def init_dwi_preproc_wf(dwi_files,
             dwi series, resampled to template space
         dwi_mask_mni
             dwi series mask in template space
-        confounds
-            TSV of confounds
+
 
 
     **Subworkflows**
@@ -247,36 +245,73 @@ def init_dwi_preproc_wf(dwi_files,
             LOGGER.warning("Ignoring sbref for %s", ref_file)
         metadata = layout.get_metadata(ref_file)
 
-        # Find fieldmaps. Options: (epi|syn)
+        # Find fieldmaps. Options: (epi only)
         fmaps = []
+        fmap_file = ''
         if 'fieldmaps' not in ignore:
             fmaps = layout.get_fieldmap(ref_file, return_list=True)
             fmap_files = []
             for fmap in fmaps:
                 if fmap['type'] == 'epi':
                     fmap_files.append(fmap['epi'])
-            if len(fmap_files) > 1:
+            num_fmaps = len(fmap_files)
+            if num_fmaps > 1:
                 LOGGER.warning("Multiple field maps found for %s", ref_file)
-            fmap_file = fmap_files[0]
+            if num_fmaps >= 1:
+                fmap_file = fmap_files[0]
         parsed_dwis.append(
             (ref_file, metadata['PhaseEncodingDirection'], fmap_file))
 
     # Depending on how the scans are organized, either use the fieldmap or the RPE series
-    scans_and_maps = []
-    if combine_all_dwis:
-        groups = defaultdict(list)
-        for ref_file, pe_dir, fmap in parsed_dwis:
-            groups[(pe_dir, fmap)].append(ref_file)
-        if len(groups) > 2:
-            LOGGER.critical("Unable to match fieldmaps to DWIs.")
-        for k, v in groups.items():
-            scans_and_maps.append((v, k))
-        if len(groups) == 2:
-            LOGGER.warning("Using b0 templates from opposite PEs to unwarp instead of fieldmaps")
+    if not combine_all_dwis:
+        raise Exception('Currently multiple separate reconstructions within a session is not '
+                        'supported. Consider re-organizing your BIDS structure.')
+    groups = defaultdict(list)
+    for ref_file, pe_dir, fmap in parsed_dwis:
+        groups[(pe_dir, fmap)].append(ref_file)
+    if len(groups) > 2:
+        LOGGER.critical("Unable to match fieldmaps to DWIs.")
 
+    # Process the groupings
+    if len(groups) == 2:
+        # assign the plus and minus series:
+        for (pe_dir, fmap), dwi_files in groups.items():
+            if pe_dir.endswith("-"):
+                series_minus = dwi_files
+            else:
+                series_plus = dwi_files
+
+        if not force_syn:
+            LOGGER.warning("Using b0 templates from opposite PEs to unwarp instead of fieldmaps")
+            opposite_phase_series_wf = init_opposite_phase_series_wf(
+                template_plus_pe=pe_dir[0],
+                dwi_denoise_window=dwi_denoise_window,
+                output_spaces=output_spaces,
+                denoise_before_combining=denoise_before_combining,
+                combine_all_dwis=combine_all_dwis, name='opposite_phase_series_wf')
+            opposite_phase_series_wf.inputnode.inputs.pe_plus_dwis = series_plus
+            opposite_phase_series_wf.inputnode.inputs.pe_minus_dwis = series_minus
+            preproc_wf = opposite_phase_series_wf
+        else:
+            raise Exception("Applying two opposite polarity SDC not yet implemented")
     else:
-        # Process each image by itself
-        num_dwi = len(parsed_dwis)
+        (pe_dir, fmap), dwi_files = list(groups.items())[0]
+        if fmap:
+            raise Exception("PEPOLAR on a single series not yet supported")
+        else:
+            dwi_no_fieldmap_wf = init_dwi_no_fieldmap_wf(
+                use_syn=use_syn,
+                pe_dir=pe_dir[0],
+                dwi_denoise_window=dwi_denoise_window,
+                output_spaces=output_spaces,
+                denoise_before_combining=denoise_before_combining
+            )
+            dwi_no_fieldmap_wf.inputnode.inputs.dwi_files = dwi_files
+            preproc_wf = dwi_no_fieldmap_wf
+
+
+
+
         workflow.__desc__ = """
 
 DWI data preprocessing
@@ -286,36 +321,6 @@ tasks and sessions), the following preprocessing was performed.
     """.format(num_dwi=num_dwi)
         for ref_file, pe_dir, fmap in parsed_dwis:
             scans_and_maps.append((ref_file, fmap))
-
-
-
-
-
-
-
-
-    # For doc building purposes
-    if layout is None or dwi_files[0] == 'dwi_preprocesing':
-        LOGGER.log(25, 'No valid layout: building empty workflow.')
-        metadata = {
-            'RepetitionTime': 2.0,
-            'SliceTiming': [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
-            'PhaseEncodingDirection': 'j',
-        }
-        fmaps = [{
-            'type': 'epi',
-            'epi':
-            'sub-03/ses-2/fmap/sub-03_ses-2_acq-AP_epi.nii.gz',
-        }]
-
-    # Run SyN if forced or in the absence of fieldmap correction
-    if force_syn or (use_syn and not fmaps):
-        fmaps.append({'type': 'syn'})
-
-    # Build workflow
-
-
-
 
     inputnode = pe.Node(
         niu.IdentityInterface(fields=[
@@ -407,10 +412,6 @@ tasks and sessions), the following preprocessing was performed.
         omp_nthreads=omp_nthreads,
         use_compression=False)
 
-    # get confounds
-    dwi_confounds_wf = init_dwi_confs_wf(
-        mem_gb=mem_gb['largemem'], metadata=metadata, name='dwi_confounds_wf')
-    dwi_confounds_wf.get_node('inputnode').inputs.t1_transform_flags = [False]
 
     # Apply transforms in 1 shot
     # Only use uncompressed output if AROMA is to be run
@@ -420,29 +421,6 @@ tasks and sessions), the following preprocessing was performed.
         use_compression=not low_mem,
         use_fieldwarp=(fmaps is not None or use_syn),
         name='dwi_dwi_trans_wf')
-
-    # SDC (SUSCEPTIBILITY DISTORTION CORRECTION) or bypass ###############
-    dwi_sdc_wf = init_sdc_wf(
-        fmaps,
-        metadata,
-        omp_nthreads=omp_nthreads,
-        debug=False,
-        fmap_demean=fmap_demean,
-        fmap_bspline=fmap_bspline)
-    dwi_sdc_wf.inputs.inputnode.template = template
-
-    if not fmaps:
-        LOGGER.warning('SDC: no fieldmaps found or they were ignored (%s).',
-                       ref_file)
-    elif fmaps[0]['type'] == 'syn':
-        LOGGER.warning(
-            'SDC: no fieldmaps found or they were ignored. '
-            'Using EXPERIMENTAL "fieldmap-less SyN" correction '
-            'for dataset %s.', ref_file)
-    else:
-        LOGGER.log(
-            25, 'SDC: fieldmap estimation of type "%s" intended for %s found.',
-            fmaps[0]['type'], ref_file)
 
     # MAIN WORKFLOW STRUCTURE ################################################
     workflow.connect([

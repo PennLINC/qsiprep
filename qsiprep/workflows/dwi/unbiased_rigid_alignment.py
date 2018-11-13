@@ -56,14 +56,14 @@ def linear_alignment_workflow(transform="Rigid",
     """
     iteration_wf = pe.Workflow(name="iterative_alignment_%03d" % iternum)
     input_node_fields = ["image_paths", "template_image", "iteration_num"]
-    input_node = pe.Node(
-        util.IdentityInterface(fields=input_node_fields), name='input_node')
-    input_node.inputs.iteration_num = iternum
-    output_node = pe.Node(
+    inputnode = pe.Node(
+        util.IdentityInterface(fields=input_node_fields), name='inputnode')
+    inputnode.inputs.iteration_num = iternum
+    outputnode = pe.Node(
         util.IdentityInterface(fields=[
             "registered_image_paths", "affine_transforms", "updated_template"
         ]),
-        name='output_node')
+        name='outputnode')
 
     reg = ants.Registration()
     reg.inputs.metric = [metric]
@@ -95,8 +95,8 @@ def linear_alignment_workflow(transform="Rigid",
         reg, name="reg_%03d" % iternum, iterfield=["moving_image"])
 
     # Run the images through antsRegistration
-    iteration_wf.connect(input_node, "image_paths", iter_reg, "moving_image")
-    iteration_wf.connect(input_node, "template_image", iter_reg, "fixed_image")
+    iteration_wf.connect(inputnode, "image_paths", iter_reg, "moving_image")
+    iteration_wf.connect(inputnode, "template_image", iter_reg, "fixed_image")
 
     # Average the images
     averaged_images = pe.Node(
@@ -125,11 +125,11 @@ def linear_alignment_workflow(transform="Rigid",
                          invert_average, "input_image")
     iteration_wf.connect(averaged_images, "output_average_image",
                          invert_average, "reference_image")
-    iteration_wf.connect(invert_average, "output_image", output_node,
+    iteration_wf.connect(invert_average, "output_image", outputnode,
                          "updated_template")
-    iteration_wf.connect(iter_reg, "forward_transforms", output_node,
+    iteration_wf.connect(iter_reg, "forward_transforms", outputnode,
                          "affine_transforms")
-    iteration_wf.connect(iter_reg, "warped_image", output_node,
+    iteration_wf.connect(iter_reg, "warped_image", outputnode,
                          "registered_image_paths")
 
     return iteration_wf
@@ -145,21 +145,21 @@ def get_alignment_workflow(align_to="iterative",
 
     alignment_wf = pe.Workflow(name="alignment_wf")
     node_fields = ["input_images", "updated_template"]
-    input_node = pe.Node(
-        util.IdentityInterface(fields=node_fields), name='input_node')
-    output_node = pe.Node(
+    inputnode = pe.Node(
+        util.IdentityInterface(fields=node_fields), name='inputnode')
+    outputnode = pe.Node(
         util.IdentityInterface(fields=[
             "final_template", "forward_transforms", "iteration_templates",
             "motion_params"
         ]),
-        name='output_node')
+        name='outputnode')
 
     # Iteratively create a template
     if align_to == "iterative":
         initial_template = pe.Node(
             ants.AverageImages(normalize=True, dimension=3),
             name="initial_template")
-        alignment_wf.connect(input_node, "input_images", initial_template,
+        alignment_wf.connect(inputnode, "input_images", initial_template,
                              "images")
         # Store the registration targets
         iter_templates = pe.Node(
@@ -174,9 +174,9 @@ def get_alignment_workflow(align_to="iterative",
             precision="coarse",
             iternum=0)
         alignment_wf.connect(initial_template, "output_average_image",
-                             initial_reg, "input_node.template_image")
-        alignment_wf.connect(input_node, "input_images", initial_reg,
-                             "input_node.image_paths")
+                             initial_reg, "inputnode.template_image")
+        alignment_wf.connect(inputnode, "input_images", initial_reg,
+                             "inputnode.image_paths")
         reg_iters = [initial_reg]
         for iternum in range(1, num_iters):
             reg_iters.append(
@@ -186,11 +186,11 @@ def get_alignment_workflow(align_to="iterative",
                     spatial_bias_correct=spatial_bias_correct,
                     precision="fine",
                     iternum=iternum))
-            alignment_wf.connect(reg_iters[-2], "output_node.updated_template",
-                                 reg_iters[-1], "input_node.template_image")
-            alignment_wf.connect(input_node, "input_images", reg_iters[-1],
-                                 "input_node.image_paths")
-            alignment_wf.connect(reg_iters[-1], "output_node.updated_template",
+            alignment_wf.connect(reg_iters[-2], "outputnode.updated_template",
+                                 reg_iters[-1], "inputnode.template_image")
+            alignment_wf.connect(inputnode, "input_images", reg_iters[-1],
+                                 "inputnode.image_paths")
+            alignment_wf.connect(reg_iters[-1], "outputnode.updated_template",
                                  iter_templates, "in%d" % (iternum + 1))
 
         # Compute distance travelled to the template
@@ -200,17 +200,17 @@ def get_alignment_workflow(align_to="iterative",
                 output_names=["stacked_motion"],
                 function=combine_motion),
             name="summarize_motion")
-        alignment_wf.connect(reg_iters[-1], "output_node.affine_transforms",
+        alignment_wf.connect(reg_iters[-1], "outputnode.affine_transforms",
                              summarize_motion, "motions")
 
         # Attach to outputs
         # The last iteration aligned to the output from the second-to-last
-        alignment_wf.connect(reg_iters[-2], "output_node.updated_template",
-                             output_node, "final_template")
-        alignment_wf.connect(reg_iters[-1], "output_node.affine_transforms",
-                             output_node, "forward_transforms")
-        alignment_wf.connect(iter_templates, "out", output_node,
+        alignment_wf.connect(reg_iters[-2], "outputnode.updated_template",
+                             outputnode, "final_template")
+        alignment_wf.connect(reg_iters[-1], "outputnode.affine_transforms",
+                             outputnode, "forward_transforms")
+        alignment_wf.connect(iter_templates, "out", outputnode,
                              "iteration_templates")
-        alignment_wf.connect(summarize_motion,"stacked_motion", output_node,
+        alignment_wf.connect(summarize_motion,"stacked_motion", outputnode,
                              "motion_params")
     return alignment_wf

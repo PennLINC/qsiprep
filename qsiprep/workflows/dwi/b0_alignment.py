@@ -209,10 +209,10 @@ def init_b0_alignment_wf(align_to="iterative",
         raise ValueError("Must specify > 2 iterations")
 
     b0_alignment_wf = Workflow(name=name)
-    input_node = pe.Node(
+    inputnode = pe.Node(
         util.IdentityInterface(fields=["dwi_nifti", "bvals", "bvecs"]),
-        name='input_node')
-    output_node = pe.Node(
+        name='inputnode')
+    outputnode = pe.Node(
         util.IdentityInterface(fields=[
             "b0_template",
             "motion_params",
@@ -223,7 +223,7 @@ def init_b0_alignment_wf(align_to="iterative",
             "bvec_chunks",
             "to_b0_affines",
         ]),
-        name='output_node')
+        name='outputnode')
 
     dwi_splitter = pe.Node(
         util.Function(
@@ -232,9 +232,9 @@ def init_b0_alignment_wf(align_to="iterative",
             function=split_dwi),
         name="dwi_splitter")
 
-    b0_alignment_wf.connect(input_node, "dwi_nifti", dwi_splitter, "dwi_nifti")
-    b0_alignment_wf.connect(input_node, "bvals", dwi_splitter, "bval_file")
-    b0_alignment_wf.connect(input_node, "bvecs", dwi_splitter, "bvec_file")
+    b0_alignment_wf.connect(inputnode, "dwi_nifti", dwi_splitter, "dwi_nifti")
+    b0_alignment_wf.connect(inputnode, "bvals", dwi_splitter, "bval_file")
+    b0_alignment_wf.connect(inputnode, "bvecs", dwi_splitter, "bvec_file")
 
     # Align the b0s, get the transforms and the template
     iterative_alignment_wf = get_alignment_workflow(
@@ -244,20 +244,20 @@ def init_b0_alignment_wf(align_to="iterative",
         metric=metric,
         num_iters=num_iters)
     b0_alignment_wf.connect(dwi_splitter, "b0_paths", iterative_alignment_wf,
-                            "input_node.input_images")
+                            "inputnode.input_images")
     b0_alignment_wf.connect(iterative_alignment_wf,
-                            "output_node.final_template", output_node,
+                            "outputnode.final_template", outputnode,
                             "b0_template")
     b0_alignment_wf.connect(iterative_alignment_wf,
-                            "output_node.motion_params", output_node,
+                            "outputnode.motion_params", outputnode,
                             "motion_params")
     b0_alignment_wf.connect(iterative_alignment_wf,
-                            "output_node.iteration_templates", output_node,
+                            "outputnode.iteration_templates", outputnode,
                             "iteration_templates")
     b0_alignment_wf.connect(iterative_alignment_wf,
-                            "output_node.forward_transforms", output_node,
+                            "outputnode.forward_transforms", outputnode,
                             "to_b0_affines")
-    b0_alignment_wf.connect([(dwi_splitter, output_node, [
+    b0_alignment_wf.connect([(dwi_splitter, outputnode, [
         ("b0_paths", "b0_images"),
         ("bval_paths", "bval_chunks"),
         ("dwi_paths", "dwi_chunks"),
@@ -274,13 +274,13 @@ def init_b0_to_anat_registration_wf(biascorrect_anat=False,
     (if requested) and coregisters the b0 to the anat. Returns
     the transform and Mattes score
     """
-    input_node = pe.Node(
+    inputnode = pe.Node(
         util.IdentityInterface(fields=["b0_image", "anat_image"]),
-        name='input_node')
-    output_node = pe.Node(
+        name='inputnode')
+    outputnode = pe.Node(
         util.IdentityInterface(
             fields=["b0_to_anat_transform", "coreg_metric"]),
-        name='output_node')
+        name='outputnode')
     b0_anat_coreg_wf = Workflow(name="b0_anat_coreg")
 
     # Defines a coregistration operation
@@ -311,27 +311,27 @@ def init_b0_to_anat_registration_wf(biascorrect_anat=False,
     biascorr.inputs.n_iterations = [50, 50, 50, 50, 50]
     if biascorrect_anat:
         biascorr_anat = pe.Node(deepcopy(biascorr), name="biascorr_anat")
-        b0_anat_coreg_wf.connect(input_node, "anat_image", biascorr_anat,
+        b0_anat_coreg_wf.connect(inputnode, "anat_image", biascorr_anat,
                                  "input_image")
         b0_anat_coreg_wf.connect(biascorr_anat, "output_image", b0_to_anat,
                                  "fixed_image")
     else:
-        b0_anat_coreg_wf.connect(input_node, "anat_image", b0_to_anat,
+        b0_anat_coreg_wf.connect(inputnode, "anat_image", b0_to_anat,
                                  "fixed_image")
 
     if biascorrect_b0:
         biascorr_b0 = pe.Node(deepcopy(biascorr), name="biascorr_b0")
-        b0_anat_coreg_wf.connect(input_node, "b0_image", biascorr_b0,
+        b0_anat_coreg_wf.connect(inputnode, "b0_image", biascorr_b0,
                                  "input_image")
         b0_anat_coreg_wf.connect(biascorr_b0, "output_image", b0_to_anat,
                                  "moving_image")
     else:
-        b0_anat_coreg_wf.connect(input_node, "b0_image", b0_to_anat,
+        b0_anat_coreg_wf.connect(inputnode, "b0_image", b0_to_anat,
                                  "moving_image")
 
-    b0_anat_coreg_wf.connect(b0_to_anat, "forward_transforms", output_node,
+    b0_anat_coreg_wf.connect(b0_to_anat, "forward_transforms", outputnode,
                              "b0_to_anat_transform")
-    b0_anat_coreg_wf.connect(b0_to_anat, "metric_value", output_node,
+    b0_anat_coreg_wf.connect(b0_to_anat, "metric_value", outputnode,
                              "coreg_metric")
 
     return b0_anat_coreg_wf
@@ -344,17 +344,17 @@ def init_b0_motioncorr_registration_pipeline(b0_motion_corr_to="iterative",
                                              coregister_to="T1w"):
     """Applies a simple b0-based
     """
-    input_node = pe.Node(
+    inputnode = pe.Node(
         util.IdentityInterface(
             fields=["dwi_nifti", "bvals", "bvecs", "anat_image"]),
-        name='input_node')
-    output_node = pe.Node(
+        name='inputnode')
+    outputnode = pe.Node(
         util.IdentityInterface(fields=[
             "b0_template", "motion_params", "iteration_templates",
             "registered_b0_images", "bvals", "corrected_bvecs",
             "registered_dwi", "to_b0_affines", "to_T1w_affines"
         ]),
-        name='output_node')
+        name='outputnode')
 
     # Force the dwi and bvecs into LPS+
     itk_orientation = ('L', 'P', 'S')
@@ -366,16 +366,16 @@ def init_b0_motioncorr_registration_pipeline(b0_motion_corr_to="iterative",
 
     # Apply motion correction to the dwis
     mc_reg_wf = Workflow(name="b0_motion_corr_and_coreg")
-    mc_reg_wf.connect(input_node, "dwi_nifti", dwi_to_lps, "input_image")
-    mc_reg_wf.connect(input_node, "bvecs", dwi_to_lps, "bvecs")
+    mc_reg_wf.connect(inputnode, "dwi_nifti", dwi_to_lps, "input_image")
+    mc_reg_wf.connect(inputnode, "bvecs", dwi_to_lps, "bvecs")
     dwi_to_lps.inputs.new_axcodes = itk_orientation
 
     motion_corr_wf = get_b0_alignment_workflow()
     mc_reg_wf.connect(dwi_to_lps, "reoriented_nifti", motion_corr_wf,
-                      "input_node.dwi_nifti")
+                      "inputnode.dwi_nifti")
     mc_reg_wf.connect(dwi_to_lps, "reoriented_bvecs", motion_corr_wf,
-                      "input_node.bvecs")
-    mc_reg_wf.connect(input_node, "bvals", motion_corr_wf, "input_node.bvals")
+                      "inputnode.bvecs")
+    mc_reg_wf.connect(inputnode, "bvals", motion_corr_wf, "inputnode.bvals")
 
     bvec_transform = pe.MapNode(
         util.Function(
@@ -422,25 +422,25 @@ def init_b0_motioncorr_registration_pipeline(b0_motion_corr_to="iterative",
     if coregister_to == "T1w":
         t1_to_lps = pe.Node(deepcopy(force_lps), name="t1_to_lps")
         t1_to_lps.inputs.new_axcodes = itk_orientation
-        mc_reg_wf.connect(input_node, "anat_image", t1_to_lps, "input_image")
+        mc_reg_wf.connect(inputnode, "anat_image", t1_to_lps, "input_image")
         coreg_wf = init_b0_to_anat_registration_wf()
         mc_reg_wf.connect(t1_to_lps, "reoriented_nifti", coreg_wf,
-                          "input_node.anat_image")
-        mc_reg_wf.connect(motion_corr_wf, "output_node.b0_template", coreg_wf,
-                          "input_node.b0_image")
+                          "inputnode.anat_image")
+        mc_reg_wf.connect(motion_corr_wf, "outputnode.b0_template", coreg_wf,
+                          "inputnode.b0_image")
         # Put the to-anat and to-b0 transforms into a transform list
         concat_image_transforms = pe.MapNode(
             util.Merge(2), name="concat_image_transforms", iterfield=["in2"])
-        mc_reg_wf.connect(motion_corr_wf, "output_node.to_b0_affines",
+        mc_reg_wf.connect(motion_corr_wf, "outputnode.to_b0_affines",
                           concat_image_transforms, "in2")
-        mc_reg_wf.connect(coreg_wf, "output_node.b0_to_anat_transform",
+        mc_reg_wf.connect(coreg_wf, "outputnode.b0_to_anat_transform",
                           concat_image_transforms, "in1")
         # Reverse order for bvec transform
         concat_bvec_transforms = pe.MapNode(
             util.Merge(2), name="concat_bvec_transforms", iterfield=["in1"])
-        mc_reg_wf.connect(motion_corr_wf, "output_node.to_b0_affines",
+        mc_reg_wf.connect(motion_corr_wf, "outputnode.to_b0_affines",
                           concat_bvec_transforms, "in1")
-        mc_reg_wf.connect(coreg_wf, "output_node.b0_to_anat_transform",
+        mc_reg_wf.connect(coreg_wf, "outputnode.b0_to_anat_transform",
                           concat_bvec_transforms, "in2")
 
         # Create a volume that the DWIs should get warped into.
@@ -478,35 +478,35 @@ def init_b0_motioncorr_registration_pipeline(b0_motion_corr_to="iterative",
     # Register everything to the b0 template
     elif coregister_to == "b0":
         # Warp the dwi's
-        mc_reg_wf.connect(motion_corr_wf, "output_node.to_b0_affines",
+        mc_reg_wf.connect(motion_corr_wf, "outputnode.to_b0_affines",
                           warp_dwi_chunks, "transforms")
-        mc_reg_wf.connect(motion_corr_wf, "output_node.b0_template",
+        mc_reg_wf.connect(motion_corr_wf, "outputnode.b0_template",
                           warp_dwi_chunks, "reference_image")
         # Warp the b0s
-        mc_reg_wf.connect(motion_corr_wf, "output_node.to_b0_affines",
+        mc_reg_wf.connect(motion_corr_wf, "outputnode.to_b0_affines",
                           warp_b0s, "transforms")
-        mc_reg_wf.connect(motion_corr_wf, "output_node.b0_template", warp_b0s,
+        mc_reg_wf.connect(motion_corr_wf, "outputnode.b0_template", warp_b0s,
                           "reference_image")
         # Correct the bvecs
-        mc_reg_wf.connect(motion_corr_wf, "output_node.to_b0_affines",
+        mc_reg_wf.connect(motion_corr_wf, "outputnode.to_b0_affines",
                           bvec_transform, "transform_list")
 
     # Common to both
-    mc_reg_wf.connect(motion_corr_wf, "output_node.dwi_chunks",
+    mc_reg_wf.connect(motion_corr_wf, "outputnode.dwi_chunks",
                       warp_dwi_chunks, "input_image")
-    mc_reg_wf.connect(motion_corr_wf, "output_node.b0_images", warp_b0s,
+    mc_reg_wf.connect(motion_corr_wf, "outputnode.b0_images", warp_b0s,
                       "input_image")
-    mc_reg_wf.connect(motion_corr_wf, "output_node.bvec_chunks",
+    mc_reg_wf.connect(motion_corr_wf, "outputnode.bvec_chunks",
                       bvec_transform, "bvec_file")
     mc_reg_wf.connect(warp_dwi_chunks, "output_image", recombine_dwi_chunks,
                       "dwi_chunks")
     mc_reg_wf.connect(bvec_transform, "rotated_bvec_file",
                       recombine_dwi_chunks, "bvec_chunks")
-    mc_reg_wf.connect(motion_corr_wf, "output_node.bval_chunks",
+    mc_reg_wf.connect(motion_corr_wf, "outputnode.bval_chunks",
                       recombine_dwi_chunks, "bval_chunks")
-    mc_reg_wf.connect(input_node, "bvals", recombine_dwi_chunks,
+    mc_reg_wf.connect(inputnode, "bvals", recombine_dwi_chunks,
                       "original_bvals")
-    mc_reg_wf.connect(input_node, "bvecs", recombine_dwi_chunks,
+    mc_reg_wf.connect(inputnode, "bvecs", recombine_dwi_chunks,
                       "original_bvecs")
     mc_reg_wf.connect(warp_b0s, "output_image", recombine_dwi_chunks,
                       "b0_images")
