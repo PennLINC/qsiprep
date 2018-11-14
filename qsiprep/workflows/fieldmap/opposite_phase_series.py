@@ -5,7 +5,7 @@ import nipype.interfaces.utility as niu
 from nipype.interfaces import afni
 from nipype.pipeline import engine as pe
 from qsiprep.interfaces import MergeDWIs
-from qsiprep.workflows.dwi.b0_alignment import (init_b0_alignment_wf,
+from qsiprep.workflows.dwi.hmc import (init_hmc_wf,
                                                 init_b0_to_anat_registration_wf)
 from qsiprep.workflows.dwi.merge import init_merge_and_denoise_wf
 from qsiprep.workflows.anatomical import init_anat_preproc_wf
@@ -32,12 +32,12 @@ def init_opposite_phase_series_wf(template_plus_pe,
                                            denoise_before_combining=denoise_before_combining,
                                            combine_all_dwis=combine_all_dwis,
                                            name="merge_plus")
-    b0_hmc_plus = init_b0_alignment_wf(name="b0_hmc_plus")
+    b0_hmc_plus = init_hmc_wf(name="b0_hmc_plus")
     merge_minus = init_merge_and_denoise_wf(dwi_denoise_window=dwi_denoise_window,
                                             denoise_before_combining=denoise_before_combining,
                                             combine_all_dwis=combine_all_dwis,
                                             name="merge_minus")
-    b0_hmc_minus = init_b0_alignment_wf(name="b0_hmc_minus")
+    b0_hmc_minus = init_hmc_wf(name="b0_hmc_minus")
 
     # Create unwarped template and get warps for plus and minus
     register_b0_refs = init_bidirectional_b0_unwarping_wf(template_plus_pe=template_plus_pe)

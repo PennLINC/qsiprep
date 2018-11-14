@@ -18,7 +18,7 @@ from niworkflows.interfaces import CopyHeader
 
 from fmriprep.engine import Workflow
 from fmriprep.workflows.bold.util import init_enhance_and_skullstrip_bold_wf
-from ..dwi.unbiased_rigid_alignment import get_alignment_workflow
+from ..dwi.registration import init_b0_hmc_wf
 
 
 def init_bidirectional_b0_unwarping_wf(template_plus_pe, omp_nthreads=1,
@@ -93,7 +93,7 @@ directions, using `3dQwarp` @afni (AFNI {afni_ver}).
                 'out_affine_minus', 'out_warp_minus', 'out_mask']), name='outputnode')
 
     inputs_to_list = pe.Node(niu.Merge(2), name='inputs_to_list')
-    align_reverse_pe_wf = get_alignment_workflow(align_to='iterative', transform='Rigid')
+    align_reverse_pe_wf = init_b0_hmc_wf(align_to='iterative', transform='Rigid')
     get_midpoint_transforms = pe.Node(niu.Split(splits=[1, 1], squeeze=True),
                                       name="get_midpoint_transforms")
     plus_to_midpoint = pe.Node(ants.ApplyTransforms(float=True,

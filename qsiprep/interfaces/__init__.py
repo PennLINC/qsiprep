@@ -6,7 +6,8 @@ from .bids import (
     BIDSInfo
 )
 from .images import (
-    IntraModalMerge, ValidateImage, TemplateDimensions, Conform, MatchHeader
+    IntraModalMerge, ValidateImage, TemplateDimensions, Conform, MatchHeader,
+    ConformDwi
 )
 from fmriprep.interfaces.freesurfer import (
     StructuralReference, MakeMidthickness, FSInjectBrainExtracted,

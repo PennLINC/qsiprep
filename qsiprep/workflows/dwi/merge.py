@@ -20,7 +20,7 @@ from nipype.interfaces.mrtrix3 import DWIDenoise
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
 
-from ...interfaces import DerivativesDataSink, MergeDWIs
+from ...interfaces import MergeDWIs, ConformDwi
 
 # from ...interfaces.reports import FunctionalSummary
 from fmriprep.engine import Workflow
@@ -88,38 +88,43 @@ def init_merge_and_denoise_wf(dwi_denoise_window,
             'merged_image', 'merged_bval', 'merged_bvec', 'noise_image']),
         name='outputnode')
 
-    conform_dwis = pe.MapNode(ConformDwis(), iterfield=[], name="conform_dwis")
+    conform_dwis = pe.MapNode(ConformDwi(), iterfield=['dwi_file'], name="conform_dwis")
     merge_dwis = pe.Node(MergeDWIs(), name='merge_dwis')
-    workflow.connect([(inputnode, merge_dwis, [('dwi_files', 'original_files')])])
+
+    workflow.connect([
+        (inputnode, conform_dwis, [('dwi_files', 'dwi_file')]),
+        (conform_dwis, merge_dwis, [('bval_file', 'bval_files'),
+                                    ('bvec_file', 'bvec_files')]),
+        (merge_dwis, outputnode, [('out_bval', 'merged_bval'),
+                                  ('out_bvec', 'merged_bvec')])
+    ])
 
     if dwi_denoise_window > 0:
-        denoise = pe.MapNode(DWIDenoise(), iterfield='in_file',
-                             name='denoise',
-                             extent=(dwi_denoise_window, dwi_denoise_window,
-                                     dwi_denoise_window))
         if denoise_before_combining:
+            denoise = pe.MapNode(DWIDenoise(), iterfield='in_file',
+                                 name='denoise',
+                                 extent=(dwi_denoise_window, dwi_denoise_window,
+                                         dwi_denoise_window))
             workflow.connect([
-                (inputnode, denoise, [('dwi_files', 'in_file')]),
+                (conform_dwis, denoise, [('dwi_files', 'in_file')]),
                 (denoise, merge_dwis, [('out_file', 'dwi_files')]),
                 # (denoise, outputnode, [('noise', 'noise_image')]),
-                (merge_dwis, outputnode, [('out_dwi', 'merged_image'),
-                                          ('out_bval', 'merged_bval'),
-                                          ('out_bvec', 'merged_bvec')])
+                (merge_dwis, outputnode, [('out_dwi', 'merged_image')])
             ])
         else:
+            denoise = pe.Node(DWIDenoise(),
+                              name='denoise',
+                              extent=(dwi_denoise_window, dwi_denoise_window,
+                                      dwi_denoise_window))
             workflow.connect([
                 (inputnode, merge_dwis, [('dwi_files', 'dwi_files')]),
                 (merge_dwis, denoise, [('out_dwi', 'in_file')]),
-                (denoise, outputnode, [('out_file', 'merged_image')]),
-                (merge_dwis, outputnode, [('out_bval', 'merged_bval'),
-                                          ('out_bvec', 'merged_bvec')])
+                (denoise, outputnode, [('out_file', 'merged_image')])
             ])
     else:
         workflow.connect([
             (inputnode, merge_dwis, [('dwi_files', 'dwi_files')]),
-            (merge_dwis, outputnode, [('out_dwi', 'merged_image'),
-                                      ('out_bval', 'merged_bval'),
-                                      ('out_bvec', 'merged_bvec')])
+            (merge_dwis, outputnode, [('out_dwi', 'merged_image')])
         ])
 
     return workflow

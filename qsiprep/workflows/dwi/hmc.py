@@ -7,90 +7,8 @@ from nipype.interfaces import ants, afni
 from .force_orientation import force_orientation
 
 
-def combine_bvals(bvals):
-    import numpy as np
-    import os
-    collected_vals = []
-    for bval_file in bvals:
-        collected_vals.append(np.loadtxt(bval_file))
-    final_bvals = np.concatenate(collected_vals)
-    final_bvals = final_bvals[np.logical_not(final_bvals) == 0]
-    np.savetxt(
-        "restacked.bval",
-        np.concatenate([np.array([0]), final_bvals]),
-        fmt=str("%i"))
-    return os.path.abspath("restacked.bval")
-
-
-def combine_bvecs(bvecs):
-    """ Assumes no b0's are included in the bvecs"""
-    import numpy as np
-    import os
-    collected_vecs = [np.zeros((3, 1))]
-    for bvec_file in bvecs:
-        collected_vecs.append(np.loadtxt(bvec_file))
-    final_bvecs = np.column_stack(collected_vecs)
-    np.savetxt("restacked.bvec", final_bvecs, fmt=str("%.8f"))
-    return os.path.abspath("restacked.bvec")
-
-
-def split_dwi(dwi_nifti="", bval_file="", bvec_file="", b0_threshold=10):
-    """
-    splits DWI into a series of b0 images and their following dwi
-    """
-    from dipy.io import read_bvals_bvecs
-    import nibabel as nib
-    import numpy as np
-    import os
-
-    bvals, bvecs = read_bvals_bvecs(bval_file, bvec_file)
-    img = nib.load(dwi_nifti)
-    data = img.get_data()
-    aff = img.get_affine()
-
-    b0s = np.flatnonzero(bvals < b0_threshold)
-    b0_paths = []
-    dwi_paths = []
-    bval_paths = []
-    bvec_paths = []
-
-    # Which b0 is each diffusion-weighted volume nearest to?
-    from collections import defaultdict
-    nearest_b0 = defaultdict(list)
-    for n in np.arange(data.shape[-1]):
-        if n in b0s:
-            continue
-        nearest = np.argmin(np.abs(n - b0s))
-        nearest_b0[b0s[nearest]].append(n)
-
-    # Save the b0s and their corresponding nearest images
-    for n_b0, b0_index in enumerate(sorted(nearest_b0.keys())):
-        #output paths
-        out_path = "b0_%03d.nii.gz" % n_b0
-        dwi_out_path = "dwi_%03d.nii.gz" % n_b0
-        bval_out_path = "dwi_%03d.bval" % n_b0
-        bvec_out_path = "dwi_%03d.bvec" % n_b0
-
-        indices = np.array(nearest_b0[b0_index])
-        dwi = data[..., indices]
-        _bval = bvals[indices]
-        _bvec = bvecs[indices]
-
-        nib.Nifti1Image(dwi, aff).to_filename(dwi_out_path)
-        nib.Nifti1Image(data[..., b0_index], aff).to_filename(out_path)
-        np.savetxt(bvec_out_path, _bvec)
-        np.savetxt(bval_out_path, _bval)
-
-        dwi_paths.append(os.path.abspath(dwi_out_path))
-        b0_paths.append(os.path.abspath(out_path))
-        bval_paths.append(os.path.abspath(bval_out_path))
-        bvec_paths.append(os.path.abspath(bvec_out_path))
-    return b0_paths, dwi_paths, bval_paths, bvec_paths
-
-
 def multi_transform_bvecs(bvec_file, transform_list):
-    """
-    Uses antsApplyTransformsToPoints to warp two points (a vector)
+    """Use antsApplyTransformsToPoints to warp two points (a vector)
     and uses the relationship between the warped points to rotate the
     b vector. Only works if absolutely everything is in LPS+.
     transform_list must be in the order they would be specified on the
@@ -198,152 +116,183 @@ def recombine_dwis(dwi_chunks,
         abspath("concatenated_b0s.nii.gz")
     ]
 
+def linear_alignment_workflow(transform="Rigid",
+                              metric="Mattes",
+                              iternum=0,
+                              spatial_bias_correct=False,
+                              precision="fine"):
+    """
+    Takes a template image and a set of input images, does
+    a linear alignment to the template and updates it with the
+    inverse of the average affine transform to the new template
 
-def init_b0_alignment_wf(align_to="iterative",
-                         transform="Rigid",
-                         metric="Mattes",
-                         num_iters=3,
-                         name="b0_alignment"):
+    Returns a workflow
 
-    if align_to == "iterative" and num_iters < 2:
-        raise ValueError("Must specify > 2 iterations")
-
-    b0_alignment_wf = Workflow(name=name)
+    """
+    iteration_wf = pe.Workflow(name="iterative_alignment_%03d" % iternum)
+    input_node_fields = ["image_paths", "template_image", "iteration_num"]
     inputnode = pe.Node(
-        util.IdentityInterface(fields=["dwi_nifti", "bvals", "bvecs"]),
-        name='inputnode')
+        util.IdentityInterface(fields=input_node_fields), name='inputnode')
+    inputnode.inputs.iteration_num = iternum
     outputnode = pe.Node(
         util.IdentityInterface(fields=[
-            "b0_template",
-            "motion_params",
-            "iteration_templates",
-            "b0_images",
-            "bval_chunks",
-            "dwi_chunks",
-            "bvec_chunks",
-            "to_b0_affines",
+            "registered_image_paths", "affine_transforms", "updated_template"
         ]),
         name='outputnode')
 
-    dwi_splitter = pe.Node(
-        util.Function(
-            input_names=["dwi_nifti", "bval_file", "bvec_file"],
-            output_names=["b0_paths", "dwi_paths", "bval_paths", "bvec_paths"],
-            function=split_dwi),
-        name="dwi_splitter")
+    reg = ants.Registration()
+    reg.inputs.metric = [metric]
+    reg.inputs.transforms = [transform]
+    reg.inputs.sigma_units = ["vox"]
+    reg.inputs.sampling_strategy = ['Random']
+    reg.inputs.sampling_percentage = [0.25]
+    reg.inputs.radius_or_number_of_bins = [32]
+    reg.inputs.initial_moving_transform_com = 0
+    reg.inputs.interpolation = 'HammingWindowedSinc'
+    reg.inputs.dimension = 3
+    reg.inputs.winsorize_lower_quantile = 0.025
+    reg.inputs.winsorize_upper_quantile = 0.975
+    reg.inputs.convergence_threshold = [1e-06]
+    reg.inputs.collapse_output_transforms = True
+    reg.inputs.write_composite_transform = False
+    reg.inputs.output_warped_image = True
+    if precision == "coarse":
+        reg.inputs.shrink_factors = [[4, 2]]
+        reg.inputs.smoothing_sigmas = [[3., 1.]]
+        reg.inputs.number_of_iterations = [[1000, 10000]]
+        reg.inputs.transform_parameters = [[0.3]]
+    else:
+        reg.inputs.shrink_factors = [[4, 2, 1]]
+        reg.inputs.smoothing_sigmas = [[3., 1., 0.]]
+        reg.inputs.number_of_iterations = [[1000, 10000, 10000]]
+        reg.inputs.transform_parameters = [[0.1]]
+    iter_reg = pe.MapNode(
+        reg, name="reg_%03d" % iternum, iterfield=["moving_image"])
 
-    b0_alignment_wf.connect(inputnode, "dwi_nifti", dwi_splitter, "dwi_nifti")
-    b0_alignment_wf.connect(inputnode, "bvals", dwi_splitter, "bval_file")
-    b0_alignment_wf.connect(inputnode, "bvecs", dwi_splitter, "bvec_file")
+    # Run the images through antsRegistration
+    iteration_wf.connect(inputnode, "image_paths", iter_reg, "moving_image")
+    iteration_wf.connect(inputnode, "template_image", iter_reg, "fixed_image")
 
-    # Align the b0s, get the transforms and the template
-    iterative_alignment_wf = get_alignment_workflow(
-        align_to=align_to,
-        transform=transform,
-        spatial_bias_correct=False,
-        metric=metric,
-        num_iters=num_iters)
-    b0_alignment_wf.connect(dwi_splitter, "b0_paths", iterative_alignment_wf,
-                            "inputnode.input_images")
-    b0_alignment_wf.connect(iterative_alignment_wf,
-                            "outputnode.final_template", outputnode,
-                            "b0_template")
-    b0_alignment_wf.connect(iterative_alignment_wf,
-                            "outputnode.motion_params", outputnode,
-                            "motion_params")
-    b0_alignment_wf.connect(iterative_alignment_wf,
-                            "outputnode.iteration_templates", outputnode,
-                            "iteration_templates")
-    b0_alignment_wf.connect(iterative_alignment_wf,
-                            "outputnode.forward_transforms", outputnode,
-                            "to_b0_affines")
-    b0_alignment_wf.connect([(dwi_splitter, outputnode, [
-        ("b0_paths", "b0_images"),
-        ("bval_paths", "bval_chunks"),
-        ("dwi_paths", "dwi_chunks"),
-        ("bvec_paths", "bvec_chunks"),
-    ])])
+    # Average the images
+    averaged_images = pe.Node(
+        ants.AverageImages(normalize=True, dimension=3),
+        name="averaged_images")
+    iteration_wf.connect(iter_reg, "warped_image", averaged_images, "images")
 
-    return b0_alignment_wf
+    # Apply the inverse to the average image
+    transforms_to_list = pe.Node(util.Merge(1), name="transforms_to_list")
+    transforms_to_list.inputs.ravel_inputs = True
+    iteration_wf.connect(iter_reg, "forward_transforms", transforms_to_list,
+                         "in1")
+    avg_affines = pe.Node(ants.AverageAffineTransform(), name="avg_affine")
+    avg_affines.inputs.dimension = 3
+    avg_affines.inputs.output_affine_transform = "AveragedAffines.mat"
+    iteration_wf.connect(transforms_to_list, "out", avg_affines, "transforms")
 
+    invert_average = pe.Node(ants.ApplyTransforms(), name="invert_average")
+    invert_average.inputs.interpolation = "HammingWindowedSinc"
+    invert_average.inputs.invert_transform_flags = [True]
 
-def init_b0_to_anat_registration_wf(biascorrect_anat=False,
-                                         biascorrect_b0=False):
-    """
-    registers a b0 to an anatomical scan. Bias corrects each
-    (if requested) and coregisters the b0 to the anat. Returns
-    the transform and Mattes score
-    """
+    avg_to_list = pe.Node(util.Merge(1), name="to_list")
+    iteration_wf.connect(avg_affines, "affine_transform", avg_to_list, "in1")
+    iteration_wf.connect(avg_to_list, "out", invert_average, "transforms")
+    iteration_wf.connect(averaged_images, "output_average_image",
+                         invert_average, "input_image")
+    iteration_wf.connect(averaged_images, "output_average_image",
+                         invert_average, "reference_image")
+    iteration_wf.connect(invert_average, "output_image", outputnode,
+                         "updated_template")
+    iteration_wf.connect(iter_reg, "forward_transforms", outputnode,
+                         "affine_transforms")
+    iteration_wf.connect(iter_reg, "warped_image", outputnode,
+                         "registered_image_paths")
+
+    return iteration_wf
+
+def init_b0_hmc_wf(align_to="iterative", transform="Rigid", spatial_bias_correct=False,
+                   metric="Mattes", num_iters=3, name="b0_hmc_wf"):
+
+    if align_to == "iterative" and num_iters < 2:
+        raise ValueError("Must specify a positive number of iterations")
+
+    alignment_wf = pe.Workflow(name=name)
     inputnode = pe.Node(
-        util.IdentityInterface(fields=["b0_image", "anat_image"]),
-        name='inputnode')
+        util.IdentityInterface(fields=['dwi_series']), name='inputnode')
     outputnode = pe.Node(
-        util.IdentityInterface(
-            fields=["b0_to_anat_transform", "coreg_metric"]),
+        util.IdentityInterface(fields=[
+            "final_template", "forward_transforms", "iteration_templates",
+            "motion_params"
+        ]),
         name='outputnode')
-    b0_anat_coreg_wf = Workflow(name="b0_anat_coreg")
 
-    # Defines a coregistration operation
-    coreg = ants.Registration()
-    coreg.inputs.metric = ["Mattes"]
-    coreg.inputs.transforms = ["Rigid"]
-    coreg.inputs.shrink_factors = [[8, 4, 2, 1]]
-    coreg.inputs.smoothing_sigmas = [[7., 3., 1., 0.]]
-    coreg.inputs.sigma_units = ["vox"]
-    coreg.inputs.sampling_strategy = ['Random']
-    coreg.inputs.sampling_percentage = [0.25]
-    coreg.inputs.radius_or_number_of_bins = [32]
-    coreg.inputs.initial_moving_transform_com = 0
-    coreg.inputs.interpolation = 'HammingWindowedSinc'
-    coreg.inputs.dimension = 3
-    coreg.inputs.winsorize_lower_quantile = 0.025
-    coreg.inputs.winsorize_upper_quantile = 0.975
-    coreg.inputs.number_of_iterations = [[10000, 1000, 10000, 10000]]
-    coreg.inputs.transform_parameters = [[0.2]]
-    coreg.inputs.convergence_threshold = [1e-06]
-    coreg.inputs.collapse_output_transforms = True
-    coreg.inputs.write_composite_transform = False
-    coreg.inputs.output_warped_image = True
-    b0_to_anat = pe.Node(coreg, name="b0_to_anat")
+    # Iteratively create a template
+    if align_to == "iterative":
+        initial_template = pe.Node(
+            ants.AverageImages(normalize=True, dimension=3),
+            name="initial_template")
+        alignment_wf.connect(inputnode, "input_images", initial_template,
+                             "images")
+        # Store the registration targets
+        iter_templates = pe.Node(
+            util.Merge(num_iters), name="iteration_templates")
+        alignment_wf.connect(initial_template, "output_average_image",
+                             iter_templates, "in1")
 
-    # N4 bias correction on the t2 and b0 before coregistration
-    biascorr = ants.N4BiasFieldCorrection()
-    biascorr.inputs.n_iterations = [50, 50, 50, 50, 50]
-    if biascorrect_anat:
-        biascorr_anat = pe.Node(deepcopy(biascorr), name="biascorr_anat")
-        b0_anat_coreg_wf.connect(inputnode, "anat_image", biascorr_anat,
-                                 "input_image")
-        b0_anat_coreg_wf.connect(biascorr_anat, "output_image", b0_to_anat,
-                                 "fixed_image")
-    else:
-        b0_anat_coreg_wf.connect(inputnode, "anat_image", b0_to_anat,
-                                 "fixed_image")
+        initial_reg = linear_alignment_workflow(
+            transform=transform,
+            metric=metric,
+            spatial_bias_correct=spatial_bias_correct,
+            precision="coarse",
+            iternum=0)
+        alignment_wf.connect(initial_template, "output_average_image",
+                             initial_reg, "inputnode.template_image")
+        alignment_wf.connect(inputnode, "input_images", initial_reg,
+                             "inputnode.image_paths")
+        reg_iters = [initial_reg]
+        for iternum in range(1, num_iters):
+            reg_iters.append(
+                linear_alignment_workflow(
+                    transform=transform,
+                    metric=metric,
+                    spatial_bias_correct=spatial_bias_correct,
+                    precision="fine",
+                    iternum=iternum))
+            alignment_wf.connect(reg_iters[-2], "outputnode.updated_template",
+                                 reg_iters[-1], "inputnode.template_image")
+            alignment_wf.connect(inputnode, "input_images", reg_iters[-1],
+                                 "inputnode.image_paths")
+            alignment_wf.connect(reg_iters[-1], "outputnode.updated_template",
+                                 iter_templates, "in%d" % (iternum + 1))
 
-    if biascorrect_b0:
-        biascorr_b0 = pe.Node(deepcopy(biascorr), name="biascorr_b0")
-        b0_anat_coreg_wf.connect(inputnode, "b0_image", biascorr_b0,
-                                 "input_image")
-        b0_anat_coreg_wf.connect(biascorr_b0, "output_image", b0_to_anat,
-                                 "moving_image")
-    else:
-        b0_anat_coreg_wf.connect(inputnode, "b0_image", b0_to_anat,
-                                 "moving_image")
+        # Compute distance travelled to the template
+        summarize_motion = pe.Node(
+            interface=util.Function(
+                input_names=["motions"],
+                output_names=["stacked_motion"],
+                function=combine_motion),
+            name="summarize_motion")
+        alignment_wf.connect(reg_iters[-1], "outputnode.affine_transforms",
+                             summarize_motion, "motions")
 
-    b0_anat_coreg_wf.connect(b0_to_anat, "forward_transforms", outputnode,
-                             "b0_to_anat_transform")
-    b0_anat_coreg_wf.connect(b0_to_anat, "metric_value", outputnode,
-                             "coreg_metric")
+        # Attach to outputs
+        # The last iteration aligned to the output from the second-to-last
+        alignment_wf.connect(reg_iters[-2], "outputnode.updated_template",
+                             outputnode, "final_template")
+        alignment_wf.connect(reg_iters[-1], "outputnode.affine_transforms",
+                             outputnode, "forward_transforms")
+        alignment_wf.connect(iter_templates, "out", outputnode,
+                             "iteration_templates")
+        alignment_wf.connect(summarize_motion,"stacked_motion", outputnode,
+                             "motion_params")
+    return alignment_wf
 
-    return b0_anat_coreg_wf
 
-
-def init_b0_motioncorr_registration_pipeline(b0_motion_corr_to="iterative",
+"""
+def (b0_motion_corr_to="iterative",
                                              b0_motion_corr_transform="Rigid",
                                              b0_motion_corr_metric="Mattes",
                                              b0_motion_corr_num_iters=3,
                                              coregister_to="T1w"):
-    """Applies a simple b0-based
-    """
     inputnode = pe.Node(
         util.IdentityInterface(
             fields=["dwi_nifti", "bvals", "bvecs", "anat_image"]),
@@ -351,8 +300,8 @@ def init_b0_motioncorr_registration_pipeline(b0_motion_corr_to="iterative",
     outputnode = pe.Node(
         util.IdentityInterface(fields=[
             "b0_template", "motion_params", "iteration_templates",
-            "registered_b0_images", "bvals", "corrected_bvecs",
-            "registered_dwi", "to_b0_affines", "to_T1w_affines"
+            "registered_b0_images",
+            "registered_dwi", "to_b0_affines"
         ]),
         name='outputnode')
 
@@ -370,7 +319,7 @@ def init_b0_motioncorr_registration_pipeline(b0_motion_corr_to="iterative",
     mc_reg_wf.connect(inputnode, "bvecs", dwi_to_lps, "bvecs")
     dwi_to_lps.inputs.new_axcodes = itk_orientation
 
-    motion_corr_wf = get_b0_alignment_workflow()
+    motion_corr_wf = get_hmc_workflow()
     mc_reg_wf.connect(dwi_to_lps, "reoriented_nifti", motion_corr_wf,
                       "inputnode.dwi_nifti")
     mc_reg_wf.connect(dwi_to_lps, "reoriented_bvecs", motion_corr_wf,
@@ -511,3 +460,4 @@ def init_b0_motioncorr_registration_pipeline(b0_motion_corr_to="iterative",
     mc_reg_wf.connect(warp_b0s, "output_image", recombine_dwi_chunks,
                       "b0_images")
     return mc_reg_wf
+"""

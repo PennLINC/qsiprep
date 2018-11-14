@@ -1,107 +1,107 @@
 """Handle merging and spliting of DSI files."""
 import numpy as np
 import os.path as op
+import nibabel as nb
 from nipype.interfaces.base import (BaseInterfaceInputSpec, TraitedSpec, File, SimpleInterface,
-                                    InputMultiObject, traits)
+                                    InputMultiObject, OutputMultiObject, traits, isdefined)
+from nipype.interfaces import afni
+
+class WarpAndRecombineDWIsInputSpec(BaseInterfaceInputSpec):
+    dwi_files = InputMultiObject(
+        File(exists=True), mandatory=True, desc='list of dwi files')
+    bval_files = InputMultiObject(
+        File(exists=True), mandatory=True, desc='list of bval files')
+    bvec_files = InputMultiObject(
+        File(exists=True), mandatory=True, desc='list of bvec files')
+    original_b0_indices = traits.List(mandatory=True)
+    reference_image = File(exists=True, mandatory=True,
+                           desc='grid into which outputs are written')
+    # Transforms to apply
+    b0_hmc_affines = InputMultiObject(File(exists=True), mandatory=True,
+                                      desc='affines registering b0s to motioncorr target')
+    motion_corr_to_dwi_ref_affine = File(exists=True, mandatory=True)
+    dwi_ref_to_unwarped_warp = File(exists=True, mandtory=False,
+                                    desc='SDC unwarping transform')
+    dwi_ref_to_t1w_affine = File(exists=True, mandatory=True, desc='affine from dwi ref to t1w')
+    t1w_to_mni_affine = File(exists=True, mandatory=False, desc='affine from t1w to MNI')
+    t1w_to_mni_warp = File(exists=True, mandatory=False, desc='t1w to MNI warp')
 
 
-class RecombineDWIsInputSpec(BaseInterfaceInputSpec):
-    dwi_chunks = InputMultiObject(
-        File(exists=True), mandatory=True, desc='list of dwi chunks')
-    bval_chunks = InputMultiObject(
-        File(exists=True), mandatory=True, desc='list of bval chunks')
-    bvec_chunks = InputMultiObject(
-        File(exists=True), mandatory=True, desc='list of bvec chunks')
-    original_bval = File(exists=True, mandatory=True,
-                         desc='bval file from before splitting')
-    original_bvec = File(exists=True, mandatory=True,
-                         desc='bvec file from before splitting')
-    b0_images = InputMultiObject(
-        File(exists=True), mandatory=True, desc='list of b0 images')
-    b0_threshold = traits.Int(10, desc='maximum b value for a image to be considered b=0')
-
-
-class RecombineDWIsOutputSpec(TraitedSpec):
+class WarpAndRecombineDWIsOutputSpec(TraitedSpec):
     out_dwi = File(desc='the merged dwi image')
     out_bval = File(desc='the merged bvec file')
     out_bvec = File(desc='the merged bval file')
     out_b0s = File(desc='4d series of b0 images')
 
 
-class RecombineDWIs(SimpleInterface):
-    input_spec = RecombineDWIsInputSpec
-    output_spec = RecombineDWIsOutputSpec
+class WarpAndRecombineDWIs(SimpleInterface):
+    input_spec = WarpAndRecombineDWIsInputSpec
+    output_spec = WarpAndRecombineDWIsOutputSpec
 
     def _run_interface(self, runtime):
-        concat_dwi, concat_bvals, concat_bvecs, concat_b0 = recombine_dwis(
-            self.inputs.dwi_chunks, self.inputs.bval_chunks, self.inputs.bvec_chunks,
-            self.inputs.original_bval, self.inputs.original_bvec, self.inputs.b0_images,
-            self.inputs.b0_threshold)
+        dwi_files = self.inputs.dwi_files
+        bval_files = self.inputs.bval_files
+        bvec_files = self.inputs.bvec_files
+        b0_hmc_affines = self.inputs.b0_hmc_affines
+        original_b0_indices = np.array(self.inputs.original_b0_indices).astype(np.int)
+        num_dwis = len(dwi_files)
 
-        self._results['out_dwi'] = concat_dwi
-        self._results['out_bval'] = concat_bvals
-        self._results['out_bvec'] = concat_bvecs
-        self._results['out_b0s'] = concat_b0
+        # Do sanity checks
+        if not len(dwi_files) == len(bval_files) == len(bvec_files):
+            raise Exception("bvals, bvecs and dwis do not match")
+        if not len(b0_hmc_affines) == len(original_b0_indices):
+            raise Exception('number of hmc affines do not match number of b0 images')
+
+        # Create a list of which hmc affines go with each of the split images
+        dwi_hmc_affines = []
+        for index in range(num_dwis):
+            # There is an direct transform for each b0
+            if index in original_b0_indices:
+                this_transform = b0_hmc_affines[index]
+            else:
+                nearest_b0_num = np.argmin(np.abs(index - original_b0_indices))
+                this_transform = b0_hmc_affines[nearest_b0_num]
+            dwi_hmc_affines.append(this_transform)
+
+        if not len(dwi_hmc_affines) == num_dwis:
+            raise Exception("Shouldn't happen")
+
+        image_transforms = [self.inputs.motion_corr_to_dwi_ref_affine,
+                            self.inputs.dwi_ref_to_unwarped_warp,
+                            self.inputs.dwi_ref_to_t1w_affine,
+                            self.inputs.t1w_to_mni_affine,
+                            self.inputs.t1w_to_mni_warp]
+        final_image_transforms = [trf for trf in image_transforms if isdefined(trf)]
+
+        rotated_bvecs = []
+        warped_images = []
+        for dwi_file, bvec, hmc_transform in zip(dwi_files, bvec_files, dwi_hmc_affines):
+            (warped_image, rotated_bvec_file,
+                rotated_bvec_image) = warp_dwi(dwi_file, bvec,
+                                               [hmc_transform] + final_image_transforms)
+            rotated_bvecs.append(rotated_bvec_file)
+            warped_images.append(warped_image)
+
+        # recombine the bvalues (these shouldn't change)
+        combined_bval = np.concatenate(
+            [np.loadtxt(bval_file) for bval_file in bval_files]).squeeze()
+
+        # recombine the rotated bvecs
+        combined_bvec = np.row_stack([np.loadtxt(fname, ndmin=2) for fname in rotated_bvecs])
+
+        combined_dwis = afni.TCat(in_files=warped_images, outputtype="NIFTI_GZ"
+                                  ).run().outputs.out_file
+
+        self._results['out_dwi'] = combined_dwis
+        self._results['out_bval'] = combined_bval
+        self._results['out_bvec'] = combined_bvec
 
         return runtime
 
 
-def split_dwi(dwi_nifti="", bval_file="", bvec_file="", b0_threshold=10):
-    """
-    split DWI into a series of b0 images and their following dwi
-    """
-    from dipy.io import read_bvals_bvecs
-    import nibabel as nib
-    import numpy as np
-    import os
+def warp_dwi(image, bvec_file, transform_list):
+    """Requires that bvec_file contains only 3 numbers on a single line.
 
-    bvals, bvecs = read_bvals_bvecs(bval_file, bvec_file)
-    img = nib.load(dwi_nifti)
-    data = img.get_data()
-    aff = img.get_affine()
-
-    b0s = np.flatnonzero(bvals < b0_threshold)
-    b0_paths = []
-    dwi_paths = []
-    bval_paths = []
-    bvec_paths = []
-
-    # Which b0 is each diffusion-weighted volume nearest to?
-    from collections import defaultdict
-    nearest_b0 = defaultdict(list)
-    for n in np.arange(data.shape[-1]):
-        if n in b0s:
-            continue
-        nearest = np.argmin(np.abs(n - b0s))
-        nearest_b0[b0s[nearest]].append(n)
-
-    # Save the b0s and their corresponding nearest images
-    for n_b0, b0_index in enumerate(sorted(nearest_b0.keys())):
-        # output paths
-        out_path = "b0_%03d.nii.gz" % n_b0
-        dwi_out_path = "dwi_%03d.nii.gz" % n_b0
-        bval_out_path = "dwi_%03d.bval" % n_b0
-        bvec_out_path = "dwi_%03d.bvec" % n_b0
-
-        indices = np.array(nearest_b0[b0_index])
-        dwi = data[..., indices]
-        _bval = bvals[indices]
-        _bvec = bvecs[indices]
-
-        nib.Nifti1Image(dwi, aff).to_filename(dwi_out_path)
-        nib.Nifti1Image(data[..., b0_index], aff).to_filename(out_path)
-        np.savetxt(bvec_out_path, _bvec)
-        np.savetxt(bval_out_path, _bval)
-
-        dwi_paths.append(os.path.abspath(dwi_out_path))
-        b0_paths.append(os.path.abspath(out_path))
-        bval_paths.append(os.path.abspath(bval_out_path))
-        bvec_paths.append(os.path.abspath(bvec_out_path))
-    return b0_paths, dwi_paths, bval_paths, bvec_paths
-
-
-def multi_transform_bvecs(bvec_file, transform_list):
-    """
     Use antsApplyTransformsToPoints to warp two points (a vector)
     and uses the relationship between the warped points to rotate the
     b vector. Only works if absolutely everything is in LPS+.
@@ -111,18 +111,14 @@ def multi_transform_bvecs(bvec_file, transform_list):
     """
     import os
     import numpy as np
-    orig_bvec = np.loadtxt(bvec_file)
-    bvec_txt = open("pre_rotation.csv", "w")
-    bvec_txt.write("x,y,z,t\n0.0,0.0,0.0,0.0\n")
-    # In case there is only one bvec
-    if orig_bvec.ndim == 1:
-        orig_bvec = orig_bvec[None, :]
-    for vec in orig_bvec:
-        bvec_txt.write(",".join(map(str, 5 * vec)) + ",0.0\n")
-    bvec_txt.close()  # Save it for ants
+    orig_vec = np.loadtxt(bvec_file)
+    # Save it for ants
+    with open("pre_rotation.csv", "w") as bvec_txt:
+        bvec_txt.write("x,y,z,t\n0.0,0.0,0.0,0.0\n")
+        bvec_txt.write(",".join(map(str, 5 * orig_vec)) + ",0.0\n")
 
     def unit_vector(vector):
-        """ The unit vector of the vector."""
+        """The unit vector of the vector."""
         if np.abs(vector).sum() == 0:
             return vector
         return vector / np.linalg.norm(vector)
@@ -135,12 +131,11 @@ def multi_transform_bvecs(bvec_file, transform_list):
               "--output rotated_vecs.csv " +
               transforms)
 
-    rotated_vecs = np.loadtxt(
+    rotated_vec = np.loadtxt(
         "rotated_vecs.csv", skiprows=1, delimiter=",")[:, :3]
-    rotated_vecs = np.row_stack(
-        [unit_vector(v) for v in rotated_vecs - rotated_vecs[0]])
-    np.savetxt("rotated_aattp.bvec", rotated_vecs[1:].T, fmt=str("%.8f"))
-    return os.path.abspath("rotated_aattp.bvec")
+    rotated_unit_vec = unit_vector(rotated_vec[1] - rotated_vec[0])
+
+    return warped_image,
 
 
 def recombine_dwis(dwi_chunks,
