@@ -27,7 +27,7 @@ from fmriprep.engine import Workflow
 
 # dwi workflows
 from ..fieldmap.opposite_phase_series import init_opposite_phase_series_wf
-from ..fieldmap.fieldmapless import init_dwi_no_fieldmap_wf
+from ..fieldmap.fieldmapless import init_no_fieldmap_wf
 
 
 DEFAULT_MEMORY_MIN_GB = 0.01
@@ -209,14 +209,12 @@ def init_dwi_preproc_wf(dwi_files,
 
     """
 
-    from ..fieldmap.base import init_sdc_wf
-
     mem_gb = {'filesize': 1, 'resampled': 1, 'largemem': 1}
     dwi_nvols = 10
     multiple_scans = isinstance(dwi_files, list)
 
     if multiple_scans:
-        for scan in multiple_scans:
+        for scan in dwi_files:
             _dwi_nvols, _mem_gb = _create_mem_gb(scan)
             dwi_nvols += _dwi_nvols
             mem_gb['filesize'] += _mem_gb['filesize']
@@ -289,8 +287,8 @@ def init_dwi_preproc_wf(dwi_files,
                 output_spaces=output_spaces,
                 denoise_before_combining=denoise_before_combining,
                 combine_all_dwis=combine_all_dwis, name='opposite_phase_series_wf')
-            opposite_phase_series_wf.inputnode.inputs.pe_plus_dwis = series_plus
-            opposite_phase_series_wf.inputnode.inputs.pe_minus_dwis = series_minus
+            opposite_phase_series_wf.inputs.inputnode.pe_plus_dwis = series_plus
+            opposite_phase_series_wf.inputs.inputnode.pe_minus_dwis = series_minus
             preproc_wf = opposite_phase_series_wf
         else:
             raise Exception("Applying two opposite polarity SDC not yet implemented")
@@ -299,28 +297,27 @@ def init_dwi_preproc_wf(dwi_files,
         if fmap:
             raise Exception("PEPOLAR on a single series not yet supported")
         else:
-            dwi_no_fieldmap_wf = init_dwi_no_fieldmap_wf(
+            dwi_no_fieldmap_wf = init_no_fieldmap_wf(
                 use_syn=use_syn,
                 pe_dir=pe_dir[0],
                 dwi_denoise_window=dwi_denoise_window,
                 output_spaces=output_spaces,
                 denoise_before_combining=denoise_before_combining
             )
-            dwi_no_fieldmap_wf.inputnode.inputs.dwi_files = dwi_files
+            dwi_no_fieldmap_wf.inputs.inputnode.dwi_files = dwi_files
             preproc_wf = dwi_no_fieldmap_wf
 
+    return preproc_wf
 
-
-
-        workflow.__desc__ = """
-
-DWI data preprocessing
-
-: For each of the {num_dwi} dwi runs found per subject (across all
-tasks and sessions), the following preprocessing was performed.
-    """.format(num_dwi=num_dwi)
-        for ref_file, pe_dir, fmap in parsed_dwis:
-            scans_and_maps.append((ref_file, fmap))
+#         workflow.__desc__ = """
+#
+# DWI data preprocessing
+#
+# : For each of the {num_dwi} dwi runs found per subject (across all
+# tasks and sessions), the following preprocessing was performed.
+#     """.format(num_dwi=num_dwi)
+#         for ref_file, pe_dir, fmap in parsed_dwis:
+#             scans_and_maps.append((ref_file, fmap))
 
     inputnode = pe.Node(
         niu.IdentityInterface(fields=[
@@ -340,6 +337,7 @@ tasks and sessions), the following preprocessing was performed.
         ]),
         name='outputnode')
 
+"""
     # dwi buffer: an identity used as a pointer to either the original dwi
     # or the STC'ed one for further use.
     dwibuffer = pe.Node(
@@ -631,8 +629,7 @@ tasks and sessions), the following preprocessing was performed.
         if node.split('.')[-1].startswith('ds_report'):
             workflow.get_node(node).inputs.base_directory = reportlets_dir
             workflow.get_node(node).inputs.source_file = ref_file
-
-    return workflow
+"""
 
 
 def init_func_derivatives_wf(output_dir,
@@ -815,7 +812,7 @@ def _get_wf_name(dwi_fname):
             name += parts[1].replace(
                 ".", "_").replace(" ", "").replace("-", "_")
     else:
-        fname_nosub = '_'.join(dwi_fname.split("_")[1:-1])
+        fname_nosub = '_'.join(os.path.split(dwi_fname)[1].split("_")[1:-1])
         name = '_' + fname_nosub.replace(
             ".", "_").replace(" ", "").replace("-", "_")
 

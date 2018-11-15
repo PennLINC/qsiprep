@@ -126,7 +126,7 @@ class NiftiInfo(SimpleInterface):
 
 
 class IntraModalMergeInputSpec(BaseInterfaceInputSpec):
-    in_files = InputMultiPath(File(exists=True), mandatory=True,
+    in_files = InputMultiObject(File(exists=True), mandatory=True,
                               desc='input files')
     hmc = traits.Bool(True, usedefault=True)
     zero_based_avg = traits.Bool(True, usedefault=True)

@@ -47,8 +47,6 @@ def init_merge_and_denoise_wf(dwi_denoise_window,
 
     **Parameters**
 
-        dwi_files : list
-            list of dwi NIfTI files
         dwi_denoise_window : int
             window size in voxels for ``dwidenoise``. Must be odd. If 0,
             ``dwidwenoise`` will not be run
@@ -106,7 +104,7 @@ def init_merge_and_denoise_wf(dwi_denoise_window,
                                  extent=(dwi_denoise_window, dwi_denoise_window,
                                          dwi_denoise_window))
             workflow.connect([
-                (conform_dwis, denoise, [('dwi_files', 'in_file')]),
+                (conform_dwis, denoise, [('dwi_file', 'in_file')]),
                 (denoise, merge_dwis, [('out_file', 'dwi_files')]),
                 # (denoise, outputnode, [('noise', 'noise_image')]),
                 (merge_dwis, outputnode, [('out_dwi', 'merged_image')])

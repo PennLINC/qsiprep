@@ -340,7 +340,7 @@ and used as T1w-reference throughout the workflow.
     if 'template' in output_spaces:
         template_str = TEMPLATE_MAP[template]
         # Get the template image
-        ref_img = pkgr('qsiprep', 'data/mni_1mm_t1s_lps.nii.gz')
+        ref_img = pkgr('qsiprep', 'data/mni_1mm_t1w_lps.nii.gz')
 
         t1_2_mni.inputs.template = template_str
         mni_mask.inputs.reference_image = ref_img

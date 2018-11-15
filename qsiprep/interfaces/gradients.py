@@ -7,6 +7,7 @@ from nipype.interfaces.base import (BaseInterfaceInputSpec, TraitedSpec, File, S
 from nipype.interfaces import afni, ants
 from nipype.utils.filemanip import fname_presuffix
 
+
 class WarpAndRecombineDWIsInputSpec(BaseInterfaceInputSpec):
     dwi_files = InputMultiObject(
         File(exists=True), mandatory=True, desc='list of dwi files')

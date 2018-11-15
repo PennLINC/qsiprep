@@ -27,7 +27,7 @@ from ...interfaces import MultiApplyTransforms, DerivativesDataSink
 
 from ...interfaces.nilearn import Merge
 from ...interfaces.images import extract_wm
-from ...interfaces.freesurfer import (
+from fmriprep.interfaces.freesurfer import (
         PatchedConcatenateLTA as ConcatenateLTA,
         PatchedBBRegisterRPT as BBRegisterRPT,
         PatchedMRICoregRPT as MRICoregRPT,

@@ -18,7 +18,7 @@ from niworkflows.interfaces import CopyHeader
 
 from fmriprep.engine import Workflow
 from fmriprep.workflows.bold.util import init_enhance_and_skullstrip_bold_wf
-from ..dwi.registration import init_b0_hmc_wf
+from ..dwi.hmc import init_b0_hmc_wf
 
 
 def init_bidirectional_b0_unwarping_wf(template_plus_pe, omp_nthreads=1,

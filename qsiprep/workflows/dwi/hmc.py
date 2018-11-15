@@ -28,6 +28,7 @@ def combine_motion(motions):
     motion_df.to_csv("motion_params.csv", index=False)
     return os.path.abspath("motion_params.csv")
 
+
 def linear_alignment_workflow(transform="Rigid",
                               metric="Mattes",
                               iternum=0,
@@ -47,10 +48,8 @@ def linear_alignment_workflow(transform="Rigid",
         util.IdentityInterface(fields=input_node_fields), name='inputnode')
     inputnode.inputs.iteration_num = iternum
     outputnode = pe.Node(
-        util.IdentityInterface(fields=[
-            "registered_image_paths", "affine_transforms", "updated_template"
-        ]),
-        name='outputnode')
+        util.IdentityInterface(fields=["registered_image_paths", "affine_transforms",
+                                       "updated_template"]), name='outputnode')
 
     reg = ants.Registration()
     reg.inputs.metric = [metric]
@@ -130,7 +129,7 @@ def init_b0_hmc_wf(align_to="iterative", transform="Rigid", spatial_bias_correct
 
     alignment_wf = pe.Workflow(name=name)
     inputnode = pe.Node(
-        util.IdentityInterface(fields=['dwi_series']), name='inputnode')
+        util.IdentityInterface(fields=['b0_images']), name='inputnode')
     outputnode = pe.Node(
         util.IdentityInterface(fields=[
             "final_template", "forward_transforms", "iteration_templates",
@@ -159,7 +158,7 @@ def init_b0_hmc_wf(align_to="iterative", transform="Rigid", spatial_bias_correct
             iternum=0)
         alignment_wf.connect(initial_template, "output_average_image",
                              initial_reg, "inputnode.template_image")
-        alignment_wf.connect(inputnode, "input_images", initial_reg,
+        alignment_wf.connect(inputnode, "b0_images", initial_reg,
                              "inputnode.image_paths")
         reg_iters = [initial_reg]
         for iternum in range(1, num_iters):
