@@ -27,7 +27,6 @@ from ...interfaces import MultiApplyTransforms, DerivativesDataSink
 
 from ...interfaces.nilearn import Merge
 from ...interfaces.images import extract_wm
-# See https://github.com/pennbbl/qsiprep/issues/768
 from ...interfaces.freesurfer import (
         PatchedConcatenateLTA as ConcatenateLTA,
         PatchedBBRegisterRPT as BBRegisterRPT,

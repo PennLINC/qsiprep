@@ -1,120 +1,32 @@
-from .unbiased_rigid_alignment import get_alignment_workflow
 from fmriprep.engine import Workflow
 import nipype.pipeline.engine as pe
 import nipype.interfaces.utility as util
-from copy import deepcopy
 from nipype.interfaces import ants, afni
-from .force_orientation import force_orientation
+import pandas as pd
+from dipy.core.geometry import decompose_matrix
 
 
-def multi_transform_bvecs(bvec_file, transform_list):
-    """Use antsApplyTransformsToPoints to warp two points (a vector)
-    and uses the relationship between the warped points to rotate the
-    b vector. Only works if absolutely everything is in LPS+.
-    transform_list must be in the order they would be specified on the
-    commandline to antsApplyTransformsToPoints. They will be inverted
-    in this function.
-    """
-    import os
-    import numpy as np
-    orig_bvec = np.loadtxt(bvec_file)
-    bvec_txt = open("pre_rotation.csv", "w")
-    bvec_txt.write("x,y,z,t\n0.0,0.0,0.0,0.0\n")
-    # In case there is only one bvec
-    if orig_bvec.ndim == 1:
-        orig_bvec = orig_bvec[None, :]
-    for vec in orig_bvec:
-        bvec_txt.write(",".join(map(str, 5 * vec)) + ",0.0\n")
-    bvec_txt.close()  # Save it for ants
-
-    def unit_vector(vector):
-        """ Returns the unit vector of the vector.  """
-        if np.abs(vector).sum() == 0: return vector
-        return vector / np.linalg.norm(vector)
-
-    transforms = " ".join(
-        ["--transform [%s, 1]" % trf for trf in transform_list])
-    os.system("antsApplyTransformsToPoints "
-        "--dimensionality 3 "
-        "--input pre_rotation.csv "
-        "--output rotated_vecs.csv " +
-        transforms)
-
-    rotated_vecs = np.loadtxt(
-        "rotated_vecs.csv", skiprows=1, delimiter=",")[:, :3]
-    rotated_vecs = np.row_stack(
-        [unit_vector(v) for v in rotated_vecs - rotated_vecs[0]])
-    np.savetxt("rotated_aattp.bvec", rotated_vecs[1:].T, fmt=str("%.8f"))
-    return os.path.abspath("rotated_aattp.bvec")
-
-
-def recombine_dwis(dwi_chunks,
-                   bval_chunks,
-                   bvec_chunks,
-                   original_bvals,
-                   original_bvecs,
-                   b0_images,
-                   b0_threshold=10):
-    from dipy.io import read_bvals_bvecs
-    import nibabel as nib
+def combine_motion(motions):
     import numpy as np
     import os
-    from os.path import abspath
+    collected_motion = []
+    for motion_file in motions:
+        if os.path.exists("output.txt"):
+            os.remove("output.txt")
+        # Convert to homogenous matrix
+        os.system("ConvertTransformFile 3 %s output.txt --hm" % (motion_file[0]))
+        affine = np.loadtxt("output.txt")
+        scale, shear, angles, translate, persp = decompose_matrix(affine)
+        collected_motion.append(np.concatenate([scale, shear,
+                                np.array(angles)*180/np.pi, translate]))
 
-    bvals, bvecs = read_bvals_bvecs(original_bvals, original_bvecs)
-    template_img = nib.load(b0_images[0])
-    output_dwi_data = np.zeros(template_img.shape + (len(bvals), ))
-
-    # Fill in the b0_images
-    b0_indices = np.flatnonzero(bvals < b0_threshold)
-    output_b0_data = np.zeros(template_img.shape + (len(b0_indices), ))
-    assert len(b0_indices) == len(b0_images)
-    for b0_num, (b0_index, b0_image) in enumerate(zip(b0_indices, b0_images)):
-        b0_data = nib.load(b0_image).get_data()
-        output_dwi_data[..., b0_index] = b0_data
-        output_b0_data[..., b0_num] = b0_data
-    nib.Nifti1Image(output_b0_data,
-                    template_img.affine).to_filename("concatenated_b0s.nii.gz")
-    # Fill in the non-b0 images
-    non_b0_indices = np.flatnonzero(bvals >= b0_threshold)
-    reversed_non_b0_indices = non_b0_indices[::-1].tolist()
-    for dir_dwi_image in dwi_chunks:
-        dwi_img = nib.load(dir_dwi_image)
-        if len(dwi_img.shape) == 3:
-            idx = reversed_non_b0_indices.pop()
-            output_dwi_data[..., idx] = dwi_img.get_data()
-        elif len(dwi_img.shape) == 4:
-            chunk_data = dwi_img.get_data()
-            for within_chunk_index in range(dwi_img.shape[3]):
-                idx = reversed_non_b0_indices.pop()
-                output_dwi_data[..., idx] = chunk_data[..., within_chunk_index]
-    assert len(reversed_non_b0_indices) == 0
-    # dwi signal cannot be negative. Sometimes interpolation causes it to be.
-    output_dwi_data[output_dwi_data < 0] = 0
-    nib.Nifti1Image(output_dwi_data,
-                    template_img.affine).to_filename("concatenated_dwi.nii.gz")
-
-    # Recombine the bvals
-    output_bvals = np.zeros_like(bvals)
-    chunks = [np.loadtxt(fname) for fname in bval_chunks]
-
-    concat_bvals = np.concatenate(
-        [np.loadtxt(fname, ndmin=1) for fname in bval_chunks])
-    output_bvals[non_b0_indices] = concat_bvals
-    np.savetxt("concatenated.bvals", output_bvals[:, None].T, fmt=str("%d"))
-    # Recombine the bvals
-    output_bvecs = np.zeros_like(bvecs)
-    concat_bvecs = np.column_stack(
-        [np.loadtxt(fname, ndmin=2) for fname in bvec_chunks]).T
-    output_bvecs[non_b0_indices] = concat_bvecs
-    np.savetxt("concatenated.bvecs", output_bvecs.T, fmt=str("%.8f"))
-
-    return [
-        abspath("concatenated_dwi.nii.gz"),
-        abspath("concatenated.bvals"),
-        abspath("concatenated.bvecs"),
-        abspath("concatenated_b0s.nii.gz")
-    ]
+    final_motion = np.row_stack(collected_motion)
+    cols = ["scaleX", "scaleY", "scaleZ", "shearXY", "shearXZ",
+            "shearYZ", "rotateX", "rotateY", "rotateZ", "shiftX", "shiftY",
+            "shiftZ"]
+    motion_df = pd.DataFrame(data=final_motion, columns=cols)
+    motion_df.to_csv("motion_params.csv", index=False)
+    return os.path.abspath("motion_params.csv")
 
 def linear_alignment_workflow(transform="Rigid",
                               metric="Mattes",
@@ -209,6 +121,7 @@ def linear_alignment_workflow(transform="Rigid",
 
     return iteration_wf
 
+
 def init_b0_hmc_wf(align_to="iterative", transform="Rigid", spatial_bias_correct=False,
                    metric="Mattes", num_iters=3, name="b0_hmc_wf"):
 
@@ -282,7 +195,7 @@ def init_b0_hmc_wf(align_to="iterative", transform="Rigid", spatial_bias_correct
                              outputnode, "forward_transforms")
         alignment_wf.connect(iter_templates, "out", outputnode,
                              "iteration_templates")
-        alignment_wf.connect(summarize_motion,"stacked_motion", outputnode,
+        alignment_wf.connect(summarize_motion, "stacked_motion", outputnode,
                              "motion_params")
     return alignment_wf
 
