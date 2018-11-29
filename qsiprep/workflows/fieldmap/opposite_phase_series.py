@@ -20,8 +20,8 @@ def init_opposite_phase_series_wf(template_plus_pe,
                                   name='opposite_phase_series_wf'):
 
     inputnode = pe.Node(
-        niu.IdentityInterface(fields=['pe_plus_dwis', 'pe_minus_dwis', 't1w_brain',
-                              't1w_2_mni_affine']),
+        niu.IdentityInterface(fields=['pe_plus_dwis', 'pe_minus_dwis', 't1_brain',
+                              't1_2_mni_forward_transform']),
         name='inputnode')
 
     outputnode = pe.Node(niu.IdentityInterface(
@@ -68,9 +68,9 @@ def init_opposite_phase_series_wf(template_plus_pe,
                                      ('outputnode.merged_bvec', 'inputnode.bvecs')]),
         (b0_hmc_plus, register_b0_refs, [('outputnode.b0_template', 'inputnode.template_plus')]),
         (b0_hmc_minus, register_b0_refs, [('outputnode.b0_template', 'inputnode.template_minus')]),
-        (inputnode, b0_coreg_wf, [('t1w_brain', 'inputnode.anat_image')]),
+        (inputnode, b0_coreg_wf, [('t1_brain', 'inputnode.anat_image')]),
         (register_b0_refs, b0_coreg_wf, [('outputnode.out_reference', 'inputnode.b0_image')]),
-        (inputnode, autobox_t1, [('t1w_brain', 'in_file')]),
+        (inputnode, autobox_t1, [('t1_brain', 'in_file')]),
         (autobox_t1, deoblique_autobox, [('out_file', 'in_file')]),
         (deoblique_autobox, resample_to_dwi, [('out_file', 'in_file')]),
         (register_b0_refs, dwi_info, [('outputnode.out_reference', 'in_file')]),

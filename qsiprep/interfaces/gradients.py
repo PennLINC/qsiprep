@@ -24,9 +24,10 @@ class WarpAndRecombineDWIsInputSpec(BaseInterfaceInputSpec):
     motion_corr_to_dwi_ref_affine = File(exists=True, mandatory=True)
     dwi_ref_to_unwarped_warp = File(exists=True, mandtory=False,
                                     desc='SDC unwarping transform')
+
     dwi_ref_to_t1w_affine = File(exists=True, mandatory=True, desc='affine from dwi ref to t1w')
-    t1w_to_mni_affine = File(exists=True, mandatory=False, desc='affine from t1w to MNI')
-    t1w_to_mni_warp = File(exists=True, mandatory=False, desc='t1w to MNI warp')
+    t1_2_mni_forward_transform = InputMultiObject(File(exists=True), mandatory=False,
+        desc='affine and warp to mni')
 
 
 class WarpAndRecombineDWIsOutputSpec(TraitedSpec):
@@ -70,9 +71,10 @@ class WarpAndRecombineDWIs(SimpleInterface):
 
         image_transforms = [self.inputs.motion_corr_to_dwi_ref_affine,
                             self.inputs.dwi_ref_to_unwarped_warp,
-                            self.inputs.dwi_ref_to_t1w_affine,
-                            self.inputs.t1w_to_mni_affine,
-                            self.inputs.t1w_to_mni_warp]
+                            self.inputs.dwi_ref_to_t1w_affine]
+        if isdefined(self.inputs.t1_2_mni_forward_transform):
+            image_transforms += self.inputs.t1_2_mni_forward_transform
+
         final_image_transforms = [trf for trf in image_transforms if isdefined(trf)]
 
         rotated_bvecs = []

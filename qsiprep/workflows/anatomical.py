@@ -342,7 +342,7 @@ and used as T1w-reference throughout the workflow.
         # Get the template image
         ref_img = pkgr('qsiprep', 'data/mni_1mm_t1w_lps.nii.gz')
 
-        t1_2_mni.inputs.template = template_str
+        t1_2_mni.inputs.template = 'MNI152NLin2009cAsym'
         mni_mask.inputs.reference_image = ref_img
         mni_seg.inputs.reference_image = ref_img
         mni_tpms.inputs.reference_image = ref_img
@@ -575,97 +575,7 @@ A T1w-reference map was computed after registration of
     return workflow
 
 
-def init_skullstrip_ants_wf(skull_strip_template, debug, omp_nthreads,
-                            skull_strip_fixed_seed=False, name='skullstrip_ants_wf'):
-    r"""
-    This workflow performs skull-stripping using ANTs' ``BrainExtraction.sh``
-
-    .. workflow::
-        :graph2use: orig
-        :simple_form: yes
-
-        from fmriprep.workflows.anatomical import init_skullstrip_ants_wf
-        wf = init_skullstrip_ants_wf(skull_strip_template='OASIS', debug=False, omp_nthreads=1)
-
-    **Parameters**
-
-        skull_strip_template : str
-            Name of ANTs skull-stripping template ('OASIS' or 'NKI')
-        debug : bool
-            Enable debugging outputs
-        omp_nthreads : int
-            Maximum number of threads an individual process may use
-        skull_strip_fixed_seed : bool
-            Do not use a random seed for skull-stripping - will ensure
-            run-to-run replicability when used with --omp-nthreads 1 (default: ``False``)
-
-    **Inputs**
-
-        in_file
-            T1-weighted structural image to skull-strip
-
-    **Outputs**
-
-        bias_corrected
-            Bias-corrected ``in_file``, before skull-stripping
-        out_file
-            Skull-stripped ``in_file``
-        out_mask
-            Binary mask of the skull-stripped ``in_file``
-        out_report
-            Reportlet visualizing quality of skull-stripping
-
-    """
-    from niworkflows.data.getters import get_dataset
-
-    if skull_strip_template not in ['OASIS', 'NKI']:
-        raise ValueError("Unknown skull-stripping template; select from {OASIS, NKI}")
-
-    workflow = Workflow(name=name)
-    workflow.__desc__ = """\
-The T1w-reference was then skull-stripped using `antsBrainExtraction.sh`
-(ANTs {ants_ver}), using {skullstrip_tpl} as target template.
-""".format(ants_ver=BrainExtraction().version or '<ver>', skullstrip_tpl=skull_strip_template)
-
-    # Grabbing the appropriate template elements
-    template_dir = get_dataset('ants_%s_template_ras' % skull_strip_template.lower())
-    brain_probability_mask = op.join(
-        template_dir, 'T_template0_BrainCerebellumProbabilityMask.nii.gz')
-
-    # TODO: normalize these names so this is not necessary
-    if skull_strip_template == 'OASIS':
-        brain_template = op.join(template_dir, 'T_template0.nii.gz')
-        extraction_registration_mask = op.join(
-            template_dir, 'T_template0_BrainCerebellumRegistrationMask.nii.gz')
-    elif skull_strip_template == 'NKI':
-        brain_template = op.join(template_dir, 'T_template.nii.gz')
-        extraction_registration_mask = op.join(
-            template_dir, 'T_template_BrainCerebellumExtractionMask.nii.gz')
-
-    inputnode = pe.Node(niu.IdentityInterface(fields=['in_file']),
-                        name='inputnode')
-    outputnode = pe.Node(niu.IdentityInterface(
-        fields=['bias_corrected', 'out_file', 'out_mask', 'out_segs', 'out_report']),
-        name='outputnode')
-
-    t1_skull_strip = pe.Node(
-        BrainExtraction(dimension=3, use_floatingpoint_precision=1, debug=debug,
-                        keep_temporary_files=1, use_random_seeding=not skull_strip_fixed_seed),
-        name='t1_skull_strip', n_procs=omp_nthreads)
-
-    t1_skull_strip.inputs.brain_template = brain_template
-    t1_skull_strip.inputs.brain_probability_mask = brain_probability_mask
-    t1_skull_strip.inputs.extraction_registration_mask = extraction_registration_mask
-
-    workflow.connect([
-        (inputnode, t1_skull_strip, [('in_file', 'anatomical_image')]),
-        (t1_skull_strip, outputnode, [('BrainExtractionMask', 'out_mask'),
-                                      ('BrainExtractionBrain', 'out_file'),
-                                      ('BrainExtractionSegmentation', 'out_segs'),
-                                      ('N4Corrected0', 'bias_corrected')])
-    ])
-
-    return workflow
+from fmriprep.workflows.anatomical import init_skullstrip_ants_wf
 
 
 def init_surface_recon_wf(omp_nthreads, hires, name='surface_recon_wf'):

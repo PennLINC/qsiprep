@@ -71,7 +71,8 @@ class SplitDWIsInputSpec(BaseInterfaceInputSpec):
     dwi_file = File(desc='the dwi image')
     bvec_file = File(desc='the bvec file')
     bval_file = File(desc='the bval file')
-    b0_threshold = traits.Int(50, desc='Maximum b-value that can be considered a b0')
+    b0_threshold = traits.Int(50, usedefault=True,
+                              desc='Maximum b-value that can be considered a b0')
 
 
 class SplitDWIsOutputSpec(TraitedSpec):
@@ -91,16 +92,16 @@ class SplitDWIs(SimpleInterface):
         split_dwi_files = split.run().outputs.out_files
 
         split_bval_files, split_bvec_files = split_bvals_bvecs(
-            self.inputs.bval_file, self.inputs.bvec_file)
+            self.inputs.bval_file, self.inputs.bvec_file, runtime)
 
         bvalues = np.loadtxt(self.inputs.bval_file)
         b0_indices = np.flatnonzero(bvalues < self.inputs.b0_threshold)
         b0_paths = [split_dwi_files[idx] for idx in b0_indices]
 
         self._results['dwi_files'] = split_dwi_files
-        self._results['out_bval'] = split_bval_files
-        self._results['out_bvec'] = split_bvec_files
-        self._results['out_b0s'] = b0_paths
+        self._results['bval_files'] = split_bval_files
+        self._results['bvec_files'] = split_bvec_files
+        self._results['b0_images'] = b0_paths
         self._results['b0_indices'] = b0_indices.tolist()
 
         return runtime
@@ -359,23 +360,26 @@ class ConformDwi(SimpleInterface):
             for this_axnum, (axnum, flip) in enumerate(transform_orientation):
                 output_array[this_axnum] = bvec_array[int(axnum)] * flip
             np.savetxt(out_bvec_fname, output_array, fmt="%.8f ")
+            self._results['bvec_file'] = out_bvec_fname
+            self._results['dwi_file'] = out_fname
 
         else:
             self._results['dwi_file'] = fname
+            self._results['bvec_file'] = bvec_fname
 
         self._results['bval_file'] = bval_fname
 
         return runtime
 
 
-def split_bvals_bvecs(bval_file, bvec_file):
+def split_bvals_bvecs(bval_file, bvec_file, runtime):
     """Split bvals and bvecs into one text file per image."""
     bvals, bvecs = read_bvals_bvecs(bval_file, bvec_file)
     split_bval_files = []
     split_bvec_files = []
     for nsample, (bval, bvec) in enumerate(zip(bvals[:, None], bvecs)):
-        bval_fname = "bval_%04d.txt" % nsample
-        bvec_fname = "bvec_%04d.txt" % nsample
+        bval_fname = fname_presuffix(bval_file, suffix='_%04d' % nsample, newpath=runtime.cwd)
+        bvec_fname = fname_presuffix(bvec_file, suffix='_%04d' % nsample, newpath=runtime.cwd)
         np.savetxt(bval_fname, bval)
         np.savetxt(bvec_fname, bvec)
         split_bval_files.append(bval_fname)

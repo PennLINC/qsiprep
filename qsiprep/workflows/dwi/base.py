@@ -57,7 +57,7 @@ def init_dwi_preproc_wf(dwi_files,
                         layout=None,
                         num_dwi=1):
     """
-    Thi workflow controls the dwi preprocessing stages of qsiprep.
+    This workflow controls the dwi preprocessing stages of qsiprep.
 
     .. workflow::
         :graph2use: orig
@@ -89,9 +89,9 @@ def init_dwi_preproc_wf(dwi_files,
     **Parameters**
 
         dwi_files : str or list
-            dwi series NIfTI file or list of files to be combined
+            List of dwi series NIfTI files to be combined
         ignore : list
-            Preprocessing steps to skip (eg "slicetiming", "fieldmaps")
+            Preprocessing steps to skip (eg "fieldmaps")
         freesurfer : bool
             Enable FreeSurfer functional registration (bbregister) and
             resampling dwi series to FreeSurfer surface meshes.
@@ -211,18 +211,13 @@ def init_dwi_preproc_wf(dwi_files,
 
     mem_gb = {'filesize': 1, 'resampled': 1, 'largemem': 1}
     dwi_nvols = 10
-    multiple_scans = isinstance(dwi_files, list)
 
-    if multiple_scans:
-        for scan in dwi_files:
-            _dwi_nvols, _mem_gb = _create_mem_gb(scan)
-            dwi_nvols += _dwi_nvols
-            mem_gb['filesize'] += _mem_gb['filesize']
-            mem_gb['resampled'] += _mem_gb['resampled']
-            mem_gb['largemem'] += _mem_gb['largemem']
-    else:
-        dwi_nvols, mem_gb = _create_mem_gb(dwi_files)
-        dwi_files = [dwi_files]
+    for scan in dwi_files:
+        _dwi_nvols, _mem_gb = _create_mem_gb(scan)
+        dwi_nvols += _dwi_nvols
+        mem_gb['filesize'] += _mem_gb['filesize']
+        mem_gb['resampled'] += _mem_gb['resampled']
+        mem_gb['largemem'] += _mem_gb['largemem']
 
     wf_name = _get_wf_name(dwi_files[0])
     workflow = Workflow(name=wf_name)
@@ -260,10 +255,10 @@ def init_dwi_preproc_wf(dwi_files,
         parsed_dwis.append(
             (ref_file, metadata['PhaseEncodingDirection'], fmap_file))
 
+    if not combine_all_dwis and len(parsed_dwis) > 1:
+        raise Exception('Reached a logic error')
+
     # Depending on how the scans are organized, either use the fieldmap or the RPE series
-    if not combine_all_dwis:
-        raise Exception('Currently multiple separate reconstructions within a session is not '
-                        'supported. Consider re-organizing your BIDS structure.')
     groups = defaultdict(list)
     for ref_file, pe_dir, fmap in parsed_dwis:
         groups[(pe_dir, fmap)].append(ref_file)
@@ -295,7 +290,7 @@ def init_dwi_preproc_wf(dwi_files,
     else:
         (pe_dir, fmap), dwi_files = list(groups.items())[0]
         if fmap:
-            raise Exception("PEPOLAR on a single series not yet supported")
+            raise Exception("PEPOLAR on a single series not yet implemented")
         else:
             dwi_no_fieldmap_wf = init_no_fieldmap_wf(
                 use_syn=use_syn,
@@ -304,24 +299,12 @@ def init_dwi_preproc_wf(dwi_files,
                 output_spaces=output_spaces,
                 denoise_before_combining=denoise_before_combining
             )
-            dwi_no_fieldmap_wf.inputs.inputnode.dwi_files = dwi_files
+            dwi_no_fieldmap_wf.inputs.inputnode.input_dwis = dwi_files
             preproc_wf = dwi_no_fieldmap_wf
-
-    return preproc_wf
-
-#         workflow.__desc__ = """
-#
-# DWI data preprocessing
-#
-# : For each of the {num_dwi} dwi runs found per subject (across all
-# tasks and sessions), the following preprocessing was performed.
-#     """.format(num_dwi=num_dwi)
-#         for ref_file, pe_dir, fmap in parsed_dwis:
-#             scans_and_maps.append((ref_file, fmap))
 
     inputnode = pe.Node(
         niu.IdentityInterface(fields=[
-            'dwi_file', 'sbref_file', 'subjects_dir', 'subject_id',
+            'dwi_files', 'sbref_file', 'subjects_dir', 'subject_id',
             't1_preproc', 't1_brain', 't1_mask', 't1_seg', 't1_tpms',
             't1_aseg', 't1_aparc', 't1_2_mni_forward_transform',
             't1_2_mni_reverse_transform', 't1_2_fsnative_forward_transform',
@@ -336,6 +319,17 @@ def init_dwi_preproc_wf(dwi_files,
             'dwi_mask_mni', 'nonaggr_denoised_file'
         ]),
         name='outputnode')
+
+    workflow.connect([
+        (inputnode, preproc_wf, [('t1_brain', 'inputnode.t1_brain'),
+                                 ('t1_2_mni_forward_transform',
+                                  'inputnode.t1_2_mni_forward_transform')]),
+    ])
+
+    return workflow
+
+
+
 
 """
     # dwi buffer: an identity used as a pointer to either the original dwi

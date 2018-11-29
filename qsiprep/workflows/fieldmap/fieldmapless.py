@@ -50,12 +50,10 @@ def init_no_fieldmap_wf(use_syn,
 
         input_dwis
             DWI series all of one PE direction
-        t1w_brain
+        t1_brain
             Reference skull stripped T1w brain
-        t1w_to_mni_affine
-            itk affine from ``t1w_brain`` to LPS+ MNI space
-        t1w_to_mni_warp
-            ANTS-compatible displacement field that registers T1w to LPS+ MNI
+        t1_2_mni_forward_transform
+            itk transforms from ``t1_brain`` to LPS+ MNI space
 
 
     Outputs
@@ -82,7 +80,7 @@ directions, using `3dQwarp` @afni (AFNI {afni_ver}).
 """.format(afni_ver=''.join(['%02d' % v for v in afni.Info().version() or []]))
 
     inputnode = pe.Node(niu.IdentityInterface(
-        fields=['input_dwis', 't1w_brain', 't1w_to_mni_affine', 't1w_to_mni_warp']),
+        fields=['input_dwis', 't1_brain', 't1_2_mni_forward_transform', 't1w_to_mni_warp']),
         name='inputnode')
 
     outputnode = pe.Node(niu.IdentityInterface(
@@ -106,7 +104,7 @@ directions, using `3dQwarp` @afni (AFNI {afni_ver}).
         (merge_dwis, outputnode, [('outputnode.merged_bval', 'bval')]),
         (split_dwis, b0_hmc, [('b0_images', 'inputnode.b0_images')]),
         (b0_hmc, t1w_coreg, [('outputnode.final_template', 'inputnode.b0_image')]),
-        (inputnode, t1w_coreg, [('t1w_brain', 'inputnode.anat_image')])
+        (inputnode, t1w_coreg, [('t1_brain', 'inputnode.anat_image')])
     ])
 
     # If use_syn, get the warp. Otherwise make an IdentityNode
@@ -135,7 +133,7 @@ directions, using `3dQwarp` @afni (AFNI {afni_ver}).
     if "template" in output_spaces:
         warp_and_recombine_mni = pe.Node(WarpAndRecombineDWIs(), name="warp_and_recombine_mni")
         workflow.connect([
-            (inputnode, warp_and_recombine_mni, [('t1w_to_mni_affine', 't1w_to_mni_affine'),
-                                                 ('t1w_to_mni_warp', 't1w_to_mni_warp')]),
+            (inputnode, warp_and_recombine_mni, [('t1_2_mni_forward_transform',
+                                                  't1_2_mni_forward_transform')]),
         ])
     return workflow

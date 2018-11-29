@@ -142,7 +142,7 @@ def init_b0_hmc_wf(align_to="iterative", transform="Rigid", spatial_bias_correct
         initial_template = pe.Node(
             ants.AverageImages(normalize=True, dimension=3),
             name="initial_template")
-        alignment_wf.connect(inputnode, "input_images", initial_template,
+        alignment_wf.connect(inputnode, "b0_images", initial_template,
                              "images")
         # Store the registration targets
         iter_templates = pe.Node(
@@ -171,7 +171,7 @@ def init_b0_hmc_wf(align_to="iterative", transform="Rigid", spatial_bias_correct
                     iternum=iternum))
             alignment_wf.connect(reg_iters[-2], "outputnode.updated_template",
                                  reg_iters[-1], "inputnode.template_image")
-            alignment_wf.connect(inputnode, "input_images", reg_iters[-1],
+            alignment_wf.connect(inputnode, "b0_images", reg_iters[-1],
                                  "inputnode.image_paths")
             alignment_wf.connect(reg_iters[-1], "outputnode.updated_template",
                                  iter_templates, "in%d" % (iternum + 1))

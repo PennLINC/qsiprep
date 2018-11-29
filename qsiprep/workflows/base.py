@@ -456,7 +456,7 @@ to workflows in *qsiprep*'s documentation]\
     sessions = layout.get_sessions()
     all_dwis = subject_data['dwi']
     dwi_groups = []
-    if sessions:
+    if sessions and combine_all_dwis:
         for session in sessions:
             dwi_groups.append([img for img in all_dwis if 'ses-'+session in img])
     else:
@@ -486,7 +486,8 @@ to workflows in *qsiprep*'s documentation]\
             fmap_demean=fmap_demean,
             use_syn=use_syn,
             force_syn=force_syn,
-            num_dwi=len(all_dwis))
+            num_dwi=len(all_dwis)
+        )
 
         workflow.connect([
             (

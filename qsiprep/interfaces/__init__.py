@@ -18,7 +18,7 @@ from fmriprep.interfaces.reports import SubjectSummary, FunctionalSummary, About
 from fmriprep.interfaces.utils import (TPM2ROI, AddTPMs, AddTSVHeader, ConcatAffines,
                                        JoinTSVColumns)
 from fmriprep.interfaces.fmap import (
-    FieldEnhance, FieldToRadS, FieldToHz, Phasediff2Fieldmap, Phases2Fieldmap)
+    FieldEnhance, FieldToRadS, FieldToHz, Phasediff2Fieldmap)
 from fmriprep.interfaces.confounds import GatherConfounds, ICAConfounds, FMRISummary
 from fmriprep.interfaces.itk import MCFLIRT2ITK, MultiApplyTransforms
 from fmriprep.interfaces.multiecho import FirstEcho

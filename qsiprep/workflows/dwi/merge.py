@@ -74,8 +74,6 @@ def init_merge_and_denoise_wf(dwi_denoise_window,
             image(s) created by ``dwidenoise``
     """
 
-    # Check if the output from one PE can be used as the RPE for the other
-    # Build workflow
     workflow = Workflow(name=name)
 
     inputnode = pe.MapNode(
