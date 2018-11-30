@@ -9,6 +9,7 @@ ITK files handling
 
 """
 import os
+import subprocess
 from mimetypes import guess_type
 from tempfile import TemporaryDirectory
 import numpy as np
@@ -327,3 +328,35 @@ def _arrange_xfms(transforms, num_files, tmp_folder):
 
     # Transpose back (only Python 3)
     return list(map(list, zip(*xfms_T)))
+
+
+def compose_affines(reference_image, affine_list, output_dir):
+    """Use antsApplyTransforms to get a single affine from multiple affines."""
+    new_fname = "_".join([os.path.split(fn)[1] for fn in affine_list])
+    output_file = fname_presuffix(affine_list[0], suffix='composed_' + new_fname,
+                                  newpath=output_dir)
+    cmd = "antsApplyTransforms -d 3 -r %s -o Linear[%s, 1] " % (
+        reference_image, output_file)
+    cmd += " ".join(["--transform %s" % trf for trf in affine_list])
+    os.system(cmd)
+    assert os.path.exists(output_file)
+    return output_file
+
+
+def rotation_matrix_from_transform(transform):
+    """Get the rotation matrix from an itk transform."""
+    cmd = "antsTransformInfo " + transform
+    proc = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    out, err = proc.communicate()
+    result = str(out)
+    if not len(result):
+        raise ValueError("%s returned no transform info" % transform)
+    lines = [line.strip() for line in result.split("\\n")]
+    start_lines = [linenum for linenum, contents in enumerate(lines) if contents == "Matrix:"]
+    if not len(start_lines):
+        raise ValueError("Unable to read rotation matrix from " + transform)
+    if len(start_lines) > 1:
+        raise ValueError("Too many rotation matrices in " + transform)
+    start_line = start_lines[0]
+    matrix_lines = lines[(start_line+1):(start_line+4)]
+    return np.array([list(map(float, line.split())) for line in matrix_lines])

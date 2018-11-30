@@ -21,13 +21,14 @@ from nipype.interfaces import utility as niu
 from ...interfaces import DerivativesDataSink
 
 from ...interfaces.reports import DiffusionSummary
-from ...interfaces.images import SplitDWIs
+from ...interfaces.images import SplitDWIs, ConcatRPESplits
 
 from fmriprep.engine import Workflow
 
 # dwi workflows
 from ..fieldmap.opposite_phase_series import init_opposite_phase_series_wf
 from ..fieldmap.fieldmapless import init_no_fieldmap_wf
+from ..fieldmap.bidirectional_pepolar import init_bidirectional_b0_unwarping_wf
 from .merge import init_merge_and_denoise_wf
 from .hmc import init_b0_hmc_wf
 
@@ -187,12 +188,26 @@ def init_dwi_preproc_wf(dwi_files,
             dwi series, resampled to T1w space
         dwi_mask_t1
             dwi series mask in T1w space
+        bvals_t1
+            bvalues of the dwi series
+        bvecs_t1
+            bvecs after aligning to the T1w and resampling
+        local_bvecs_t1
+            voxelwise bvecs accounting for local displacements
+
         dwi_mni
             dwi series, resampled to template space
         dwi_mask_mni
             dwi series mask in template space
+        bvals_mni
+            bvalues of the dwi series
+        bvecs_mni
+            bvecs after aligning to the T1w and resampling
+        local_bvecs_mni
+            voxelwise bvecs accounting for local displacements
 
-
+        confounds_file
+            estimated motion parameters and zipper scores
 
     **Subworkflows**
 
@@ -236,7 +251,24 @@ def init_dwi_preproc_wf(dwi_files,
                     'Memory resampled/largemem=%.2f/%.2f GB.'), wf_name,
                mem_gb['filesize'], dwi_nvols, mem_gb['resampled'],
                mem_gb['largemem'])
+    inputnode = pe.Node(
+        niu.IdentityInterface(fields=[
+            'dwi_files', 'sbref_file', 'subjects_dir', 'subject_id',
+            't1_preproc', 't1_brain', 't1_mask', 't1_seg', 't1_tpms',
+            't1_aseg', 't1_aparc', 't1_2_mni_forward_transform',
+            't1_2_mni_reverse_transform', 't1_2_fsnative_forward_transform',
+            't1_2_fsnative_reverse_transform'
+        ]),
+        name='inputnode')
+    outputnode = pe.Node(
+        niu.IdentityInterface(fields=[
+            'dwi_t1', 'dwi_mask_t1', 'bvals_t1', 'bvecs_t1', 'local_bvecs_t1',
+            'dwi_mni', 'dwi_mask_mni', 'bvals_mni', 'bvecs_mni', 'local_bvecs_mni',
+            'confounds'
+        ]),
+        name='outputnode')
 
+    # Special case: Two reverse PE DWI series
     if doing_bidirectional_pepolar and not force_syn:
         # Merge, denoise, split, hmc on the plus series
         plus_key, = [k for k in dwi_files.keys() if len(k) == 1]
@@ -255,37 +287,55 @@ def init_dwi_preproc_wf(dwi_files,
         b0_hmc_minus = init_b0_hmc_wf(name="b0_hmc_minus")
         merge_minus.inputs.inputnode.dwi_files = dwi_files[plus_key] + '-'
 
-        # Combine the original images from the splits into one image
-        concat_rpe_series = pe.Node()
+        # Get affines and warps to the b0 ref
+        bidir_pepolar_wf = init_bidirectional_b0_unwarping_wf(name='bidir_pepolar_wf')
 
-
+        # Combine the original images from the splits into one 'Split'
+        concat_rpe_splits = pe.Node(ConcatRPESplits(), name="concat_rpe_splits")
+        buffernode = concat_rpe_splits
 
         workflow.connect([
                 # Merge, denoise, split, hmc on the plus series
                 (merge_plus, split_plus, [('outputnode.merged_image', 'dwi_file'),
                                           ('outputnode.merged_bval', 'bval_file'),
                                           ('outputnode.merged_bvec', 'bvec_file')]),
-                (split_plus, concat_rpe_series,
+                (split_plus, concat_rpe_splits,
                     [('outputnode.bval_files', 'bval_plus'),
                      ('outputnode.bvec_files', 'bvec_plus'),
                      ('outputnode.dwi_files', 'dwi_plus'),
                      ('outputnode.b0_images', 'b0_images_plus'),
                      ('outputnode.b0_indices', 'b0_indices_plus')]),
                 (split_plus, b0_hmc_plus, [('outputnode.b0_images', 'inputnode.b0_images')]),
+                (b0_hmc_plus, concat_rpe_splits, [('outputnode.forward_transforms',
+                                                   'hmc_affines_plus')]),
 
                 # Merge, denoise, split, hmc on the minus series
                 (merge_minus, split_minus, [('outputnode.merged_image', 'dwi_file'),
                                             ('outputnode.merged_bval', 'bval_file'),
                                             ('outputnode.merged_bvec', 'bvec_file')]),
-                (split_minus, concat_rpe_series,
+                (split_minus, concat_rpe_splits,
                     [('outputnode.bval_files', 'bval_minus'),
                      ('outputnode.bvec_files', 'bvec_minus'),
                      ('outputnode.dwi_files', 'dwi_minus'),
                      ('outputnode.b0_images', 'b0_images_minus'),
                      ('outputnode.b0_indices', 'b0_indices_plus')]),
                 (split_minus, b0_hmc_minus, [('outputnode.b0_images', 'inputnode.b0_images')]),
+                (b0_hmc_plus, concat_rpe_splits, [('outputnode.forward_transforms',
+                                                   'hmc_affines_plus')]),
 
+                # Use the hmc templates as the input for pepolar unwarping
+                (b0_hmc_minus, bidir_pepolar_wf,
+                    [('outputnode.final_template', 'inputnode.template_minus')]),
+                (b0_hmc_plus, bidir_pepolar_wf,
+                    [('outputnode.final_template', 'inputnode.template_plus')]),
 
+                # send unwarping to the rpe recombiner
+                (bidir_pepolar_wf, concat_rpe_splits, [
+                    ('outputnode.out_affine_plus', 'template_plus_to_ref_affine'),
+                    ('outputnode.out_affine_minus', 'template_minus_to_ref_affine'),
+                    ('outputnode.out_warp_plus', 'template_plus_to_ref_warp'),
+                    ('outputnode.out_warp_minus', 'template_minus_to_ref_warp'),
+                    ]),
         ])
 
 
@@ -299,26 +349,13 @@ def init_dwi_preproc_wf(dwi_files,
         dwi_no_fieldmap_wf.inputs.inputnode.input_dwis = dwi_files
         preproc_wf = dwi_no_fieldmap_wf
 
+        buffernode = pe.Node(niu.IdentityInterface(fields=['dwi_files', 'bvec_files']),
+            name="buffernode")
+
     # Register the unwarped image to the t1 template
     b0_coreg_wf = init_b0_to_anat_registration_wf()
 
-    inputnode = pe.Node(
-        niu.IdentityInterface(fields=[
-            'dwi_files', 'sbref_file', 'subjects_dir', 'subject_id',
-            't1_preproc', 't1_brain', 't1_mask', 't1_seg', 't1_tpms',
-            't1_aseg', 't1_aparc', 't1_2_mni_forward_transform',
-            't1_2_mni_reverse_transform', 't1_2_fsnative_forward_transform',
-            't1_2_fsnative_reverse_transform'
-        ]),
-        name='inputnode')
 
-    outputnode = pe.Node(
-        niu.IdentityInterface(fields=[
-            'dwi_t1', 'dwi_t1_ref', 'dwi_mask_t1',
-            'dwi_mni', 'dwi_mni_ref'
-            'dwi_mask_mni'
-        ]),
-        name='outputnode')
 
     workflow.connect([
         (inputnode, preproc_wf, [('t1_brain', 'inputnode.t1_brain'),

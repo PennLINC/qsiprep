@@ -18,9 +18,8 @@ from glob import glob
 from dipy.io import read_bvals_bvecs
 from nipype import logging
 from nipype.utils.filemanip import fname_presuffix
-from nipype.interfaces.base import (
-    traits, TraitedSpec, BaseInterfaceInputSpec, SimpleInterface, File, InputMultiObject,
-    OutputMultiObject)
+from nipype.interfaces.base import (isdefined, traits, TraitedSpec, BaseInterfaceInputSpec,
+                                    SimpleInterface, File, InputMultiObject, OutputMultiObject)
 from nipype.interfaces import fsl
 from fmriprep.interfaces.images import (
     normalize_xform, demean, nii_ones_like, extract_wm, SignalExtraction, MatchHeader,
@@ -35,6 +34,7 @@ class TSplitInputSpec(AFNICommandInputSpec):
     in_file = File(mandatory=True, exists=True, desc='file to be split', position=-1, argstr="%s")
     out_file = File(name_template="%s_split", desc='output image file name',
                     argstr='-prefix %s.nii', name_source=["in_file"])
+
 
 class TSplitOutputSpec(AFNICommandOutputSpec):
     out_files = File(exists=True, desc='split outputs')
@@ -107,6 +107,98 @@ class SplitDWIs(SimpleInterface):
         return runtime
 
 
+class ConcatRPESplitsInputSpec(BaseInterfaceInputSpec):
+    dwi_plus = OutputMultiObject(File(exists=True), desc='single volume dwis')
+    bvec_plus = OutputMultiObject(File(exists=True), desc='single volume bvecs')
+    bval_plus = OutputMultiObject(File(exists=True), desc='single volume bvals')
+    b0_images_plus = OutputMultiObject(File(exists=True), desc='just the b0s')
+    b0_indices_plus = traits.List(desc='list of original indices for each b0 image')
+    hmc_affines_plus = OutputMultiObject(File(exists=True), desc='hmc_affine_transforms')
+    template_plus_to_ref_affine = File(exists=True,
+                                       desc='affine transform from hmc template to ref')
+    template_plus_to_ref_warp = File(exists=True,
+                                     desc='SDC warp for hmc template')
+    dwi_minus = OutputMultiObject(File(exists=True), desc='single volume dwis')
+    bvec_minus = OutputMultiObject(File(exists=True), desc='single volume bvecs')
+    bval_minus = OutputMultiObject(File(exists=True), desc='single volume bvals')
+    b0_images_minus = OutputMultiObject(File(exists=True), desc='just the b0s')
+    b0_indices_minus = traits.List(desc='list of original indices for each b0 image')
+    template_minus_to_ref_affine = File(exists=True,
+                                        desc='affine transform from hmc template to ref')
+    template_minus_to_ref_warp = File(exists=True,
+                                      desc='SDC warp for hmc template')
+    b0_ref_image = File(exists=True, desc='b0 reference image')
+
+
+class ConcatRPESplitsOutputSpec(TraitedSpec):
+    b0_ref_image = File(exists=True, desc='b0 reference image')
+    dwi_files = OutputMultiObject(File(exists=True), desc='single volume dwis')
+    bvec_files = OutputMultiObject(File(exists=True), desc='single volume bvecs')
+    bval_files = OutputMultiObject(File(exists=True), desc='single volume bvals')
+    b0_images = OutputMultiObject(File(exists=True), desc='just the b0s')
+    b0_indices = traits.List(desc='list of original indices for each b0 image')
+    to_dwi_ref_affines = OutputMultiObject(File(exists=True), desc='affines to b0 ref')
+    to_dwi_ref_warps = OutputMultiObject(File(exists=True), desc='correcting warps to b0 ref')
+    original_grouping = traits.List(desc='list of source series for each dwi')
+
+
+class ConcatRPESplits(SimpleInterface):
+    """Combine the outputs from the RPE series workflow into a SplitDWI-like object.
+
+    Plus series goes first, indices are adjusted for minus to be globally correct.
+    """
+
+    input_spec = ConcatRPESplitsInputSpec
+    output_spec = ConcatRPESplitsOutputSpec
+
+    def _run_interface(self, runtime):
+        from .itk import compose_affines
+        self._results['b0_ref_image'] = self.inputs.b0_ref_image
+
+        plus_images = self.inputs.dwi_plus
+        plus_bvecs = self.inputs.bvec_plus
+        plus_bvals = self.inputs.bval_plus
+        plus_b0_images = self.inputs.b0_images_plus
+        plus_b0_indices = self.inputs.b0_indices_plus
+        plus_hmc_affines = self.inputs.hmc_affines_plus
+        plus_hmc_to_ref_affine = self.inputs.template_plus_to_ref_affine
+        plus_hmc_to_ref_warp = self.inputs.template_plus_to_ref_warp
+        num_plus = len(plus_images)
+
+        minus_images = self.inputs.dwi_minus
+        minus_bvecs = self.inputs.bvec_minus
+        minus_bvals = self.inputs.bval_minus
+        minus_b0_images = self.inputs.b0_images_minus
+        minus_b0_indices = self.inputs.b0_indices_minus
+        minus_hmc_affines = self.inputs.hmc_affines_minus
+        minus_hmc_to_ref_affine = self.inputs.template_minus_to_ref_affine
+        minus_hmc_to_ref_warp = self.inputs.template_minus_to_ref_warp
+        num_minus = len(minus_images)
+
+        self._results['dwi_files'] = plus_images + minus_images
+        self._results['bval_files'] = plus_bvals + minus_bvals
+        self._results['bvec_files'] = plus_bvecs + minus_bvecs
+        self._results['b0_images'] = plus_b0_images + minus_b0_images
+        self._results['b0_indices'] = plus_b0_indices + [
+            num_plus + idx for idx in minus_b0_indices]
+        self._results['original_grouping'] = ['plus'] * num_plus + ['minus'] * num_minus
+
+        # Create a list where each element is the warp for the DWI at the corresponding index
+        if isdefined(plus_hmc_to_ref_warp) and isdefined(minus_hmc_to_ref_warp):
+            self.results['to_dwi_ref_warps'] = [plus_hmc_to_ref_warp] * num_plus + \
+                [minus_hmc_to_ref_warp]
+
+        plus_combined_affines = [
+            compose_affines(self.inputs.b0_ref_image, [hmc_aff, plus_hmc_to_ref_affine],
+                            runtime.cwd) for hmc_aff in plus_hmc_affines]
+        minus_combined_affines = [
+            compose_affines(self.inputs.b0_ref_image, [hmc_aff, minus_hmc_to_ref_affine],
+                            runtime.cwd) for hmc_aff in minus_hmc_affines]
+        self._results['to_dwi_ref_affines'] = plus_combined_affines + minus_combined_affines
+
+        return runtime
+
+
 class NiftiInfoInputSpec(BaseInterfaceInputSpec):
     in_file = File(exists=True, mandatory=True, desc='Input NIfTI file')
 
@@ -128,7 +220,7 @@ class NiftiInfo(SimpleInterface):
 
 class IntraModalMergeInputSpec(BaseInterfaceInputSpec):
     in_files = InputMultiObject(File(exists=True), mandatory=True,
-                              desc='input files')
+                                desc='input files')
     hmc = traits.Bool(True, usedefault=True)
     zero_based_avg = traits.Bool(True, usedefault=True)
     to_lps = traits.Bool(True, usedefault=True)
