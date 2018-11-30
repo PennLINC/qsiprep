@@ -19,7 +19,7 @@ from nipype.interfaces.base import (
     File, Directory, InputMultiPath, Str, isdefined,
     SimpleInterface)
 from nipype.interfaces import freesurfer as fs
-
+from fmriprep.interfaces import FunctionalSummary
 from .bids import BIDS_NAME
 
 SUBJECT_TEMPLATE = """\t<ul class="elem-desc">
@@ -140,7 +140,7 @@ class SubjectSummary(SummaryInterface):
                                        freesurfer_status=freesurfer_status)
 
 
-class FunctionalSummaryInputSpec(BaseInterfaceInputSpec):
+class DiffusionSummaryInputSpec(BaseInterfaceInputSpec):
     slice_timing = traits.Enum(False, True, 'TooShort', usedefault=True,
                                desc='Slice timing correction used')
     distortion_correction = traits.Str(desc='Susceptibility distortion correction method',
@@ -156,8 +156,8 @@ class FunctionalSummaryInputSpec(BaseInterfaceInputSpec):
     confounds_file = File(exists=True, desc='Confounds file')
 
 
-class FunctionalSummary(SummaryInterface):
-    input_spec = FunctionalSummaryInputSpec
+class DiffusionSummary(SummaryInterface):
+    input_spec = DiffusionSummaryInputSpec
 
     def _generate_segment(self):
         dof = self.inputs.registration_dof

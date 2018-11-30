@@ -16,6 +16,7 @@ Contents
    installation
    changes
    usage
+   merging
    workflows
    sdc
    outputs

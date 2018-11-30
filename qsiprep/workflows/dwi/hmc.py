@@ -9,6 +9,8 @@ from dipy.core.geometry import decompose_matrix
 def combine_motion(motions):
     import numpy as np
     import os
+    from dipy.core.geometry import decompose_matrix
+    import pandas as pd
     collected_motion = []
     for motion_file in motions:
         if os.path.exists("output.txt"):

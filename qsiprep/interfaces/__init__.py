@@ -15,6 +15,7 @@ from fmriprep.interfaces.freesurfer import (
 )
 from fmriprep.interfaces.surf import NormalizeSurf, GiftiNameSource, GiftiSetAnatomicalStructure
 from fmriprep.interfaces.reports import SubjectSummary, FunctionalSummary, AboutSummary
+from .reports import DiffusionSummary
 from fmriprep.interfaces.utils import (TPM2ROI, AddTPMs, AddTSVHeader, ConcatAffines,
                                        JoinTSVColumns)
 from fmriprep.interfaces.fmap import (

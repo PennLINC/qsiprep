@@ -22,7 +22,6 @@ from nipype.interfaces import utility as niu
 
 from ...interfaces import MergeDWIs, ConformDwi
 
-# from ...interfaces.reports import FunctionalSummary
 from fmriprep.engine import Workflow
 
 DEFAULT_MEMORY_MIN_GB = 0.01

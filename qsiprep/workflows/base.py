@@ -29,6 +29,10 @@ from ..__about__ import __version__
 
 from .anatomical import init_anat_preproc_wf
 from .dwi import init_dwi_preproc_wf
+import logging
+from collections import defaultdict
+
+LOGGER = logging.getLogger('nipype.workflow')
 
 
 def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
@@ -37,7 +41,7 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
                     combine_all_dwis, discard_repeated_samples, omp_nthreads,
                     skull_strip_template, skull_strip_fixed_seed, freesurfer,
                     output_spaces, template, b0_motion_corr_to, b0_to_t1w_dof,
-                    fmap_bspline, fmap_demean, use_syn, force_syn):
+                    prefer_dedicated_fmaps, fmap_bspline, fmap_demean, use_syn, force_syn):
     """
     This workflow organizes the execution of qsiprep, with a sub-workflow for
     each subject.
@@ -74,6 +78,7 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
                               template='MNI152NLin2009cAsym',
                               b0_motion_corr_to='iterative',
                               b0_to_t1w_dof=9,
+                              prefer_dedicated_fmaps=False,
                               fmap_bspline=False,
                               fmap_demean=True,
                               use_syn=True,
@@ -140,6 +145,9 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
             method to motion correct to the midpoint of the b0 images
         b0_to_t1w_dof : 6, 9 or 12
             Degrees-of-freedom for b0-T1w registration
+        prefer_dedicated_fmaps: bool
+            If a reverse PE fieldmap is available in fmap, use that even if a reverse PE
+            DWI series is available
         fmap_bspline : bool
             **Experimental**: Fit B-Spline field using least-squares
         fmap_demean : bool
@@ -187,6 +195,7 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
             skull_strip_fixed_seed=skull_strip_fixed_seed,
             output_spaces=output_spaces,
             template=template,
+            prefer_dedicated_fmaps=prefer_dedicated_fmaps,
             b0_motion_corr_to=b0_motion_corr_to,
             b0_to_t1w_dof=b0_to_t1w_dof,
             fmap_bspline=fmap_bspline,
@@ -212,8 +221,8 @@ def init_single_subject_wf(
         low_mem, anat_only, longitudinal, denoise_before_combining, dwi_denoise_window,
         combine_all_dwis, discard_repeated_samples, omp_nthreads, skull_strip_template,
         skull_strip_fixed_seed, freesurfer, hires, output_spaces, template,
-        b0_motion_corr_to, b0_to_t1w_dof, fmap_bspline, fmap_demean, use_syn,
-        force_syn):
+        prefer_dedicated_fmaps, b0_motion_corr_to, b0_to_t1w_dof, fmap_bspline, fmap_demean,
+        use_syn, force_syn):
     """
     This workflow organizes the preprocessing pipeline for a single subject.
     It collects and reports information about the subject, and prepares
@@ -455,15 +464,22 @@ to workflows in *qsiprep*'s documentation]\
     # Handle the grouping of multiple dwi files within a session
     sessions = layout.get_sessions()
     all_dwis = subject_data['dwi']
-    dwi_groups = []
+    dwi_session_groups = []
     if sessions and combine_all_dwis:
         for session in sessions:
-            dwi_groups.append([img for img in all_dwis if 'ses-'+session in img])
+            dwi_session_groups.append([img for img in all_dwis if 'ses-'+session in img])
     else:
-        dwi_groups = [all_dwis]
+        dwi_session_groups = [all_dwis]
+
+    # Now group by fieldmaps for session x fieldmap
+    dwi_fmap_groups = []
+    for dwi_session_group in dwi_session_groups:
+        dwi_fmap_groups.extend(
+            group_by_fieldmaps(dwi_session_group, layout, "fieldmaps" in ignore,
+                               prefer_dedicated_fmaps))
 
     # create a processing pipeline for the dwis in each session
-    for dwi_files in dwi_groups:
+    for dwi_files in dwi_fmap_groups:
         dwi_preproc_wf = init_dwi_preproc_wf(
             dwi_files=dwi_files,
             layout=layout,
@@ -516,3 +532,70 @@ to workflows in *qsiprep*'s documentation]\
         ])
 
     return workflow
+
+
+def group_by_fieldmaps(dwi_files, layout, ignore_fieldmap, prefer_dedicated_fmaps):
+    """Check to see if multiple phase encoding directions are present within a session."""
+    # Create a list of (dwi image, PE dir, fieldmaps)
+    parsed_dwis = []
+    for ref_file in dwi_files:
+        metadata = layout.get_metadata(ref_file)
+
+        # Find fieldmaps. Options: (epi only)
+        fmaps = []
+        fmap_file = ''
+
+        fmaps = layout.get_fieldmap(ref_file, return_list=True)
+        fmap_files = []
+        for fmap in fmaps:
+            if fmap['type'] == 'epi':
+                fmap_files.append(fmap['epi'])
+
+        num_fmaps = len(fmap_files)
+        if num_fmaps > 1:
+            LOGGER.warning("Multiple field maps found for %s", ref_file)
+        if num_fmaps >= 1:
+            fmap_file = fmap_files[0]
+        parsed_dwis.append(
+            (ref_file, metadata['PhaseEncodingDirection'], fmap_file))
+
+    # If no fieldmap correction is to be done, just make sure that pe dirs aren't mixed
+    if ignore_fieldmap:
+        # group by pe direction and intended_fieldmap
+        groups = defaultdict(list)
+        for ref_file, pe_dir, fmap in parsed_dwis:
+            groups[pe_dir].append(ref_file)
+        return [grouping for grouping in groups.values()]
+
+    # group by pe direction and intended_fieldmap
+    groups = defaultdict(list)
+    for ref_file, pe_dir, fmap in parsed_dwis:
+        groups[(pe_dir, fmap)].append(ref_file)
+
+    # Which groups can be combined to do bidirectional pepolar?
+    complete_groups = []
+    group_keys = set(groups.keys())
+
+    while len(group_keys):
+        key = group_keys.pop()
+        scan_list = groups[key]
+        pe_dir = key[0][0]
+        fmap = key[1]
+        if prefer_dedicated_fmaps:
+            matches = [k for k in group_keys if k[0][0] == pe_dir and fmap == k[1]]
+        else:
+            matches = [k for k in group_keys if k[0][0] == pe_dir]
+        num_matches = len(matches)
+        if not num_matches == 1:
+            # Didn't find any reverse PE groups
+            LOGGER.info("No matches found for %s", key)
+            complete_groups.append(scan_list)
+        else:
+            # Found a perfect match
+            match = matches[0]
+            match_scan_list = groups[match]
+            complete_groups.append({key[0]: scan_list, match[0]: match_scan_list})
+            group_keys.discard(match)
+            LOGGER.info("Matched %s to %s", match, key)
+
+    return complete_groups

@@ -62,49 +62,27 @@ def init_no_fieldmap_wf(use_syn,
             the ``in_reference`` after unwarping
         out_reference_brain
             the ``in_reference`` after unwarping and skullstripping
-        out_warp
+        out_warps
             the corresponding :abbr:`DFM (displacements field map)` to correct
             ``template_plus``
-        dwi_2_t1w_affine
-            the affine from the dwi reference to the T1w
+        dwi_2_ref_affines
+            the affine from the dwi reference to the dwi reference
         out_mask
             mask of the unwarped input file
 
     """
 
     workflow = Workflow(name=name)
-    workflow.__desc__ = """\
-A deformation field to correct for susceptibility distortions was estimated
-based on two b0 templates created from dwi series with opposing phase-encoding
-directions, using `3dQwarp` @afni (AFNI {afni_ver}).
-""".format(afni_ver=''.join(['%02d' % v for v in afni.Info().version() or []]))
 
     inputnode = pe.Node(niu.IdentityInterface(
         fields=['input_dwis', 't1_brain', 't1_2_mni_forward_transform', 't1w_to_mni_warp']),
         name='inputnode')
 
     outputnode = pe.Node(niu.IdentityInterface(
-        fields=['bval', 'dwi_t1w', 'bvec_t1w', 'dwi_mni', 'bval_mni']), name='outputnode')
-
-    merge_dwis = init_merge_and_denoise_wf(dwi_denoise_window=dwi_denoise_window,
-                                           denoise_before_combining=denoise_before_combining,
-                                           name="merge_dwis")
-
-    split_dwis = pe.Node(SplitDWIs(), name="split_dwis")
-
-    b0_hmc = init_b0_hmc_wf()
-
-    t1w_coreg = init_b0_to_anat_registration_wf()
+        fields=['bval', 'dwi_t1w', 'bvec_t1w', 'b0_ref', 'b0_ref_t1', 'sdc_unwarps']),
+        name='outputnode')
 
     workflow.connect([
-        (inputnode, merge_dwis, [('input_dwis', 'inputnode.dwi_files')]),
-        (merge_dwis, split_dwis, [('outputnode.merged_image', 'dwi_file'),
-                                  ('outputnode.merged_bval', 'bval_file'),
-                                  ('outputnode.merged_bvec', 'bvec_file')]),
-        (merge_dwis, outputnode, [('outputnode.merged_bval', 'bval')]),
-        (split_dwis, b0_hmc, [('b0_images', 'inputnode.b0_images')]),
-        (b0_hmc, t1w_coreg, [('outputnode.final_template', 'inputnode.b0_image')]),
-        (inputnode, t1w_coreg, [('t1_brain', 'inputnode.anat_image')])
     ])
 
     # If use_syn, get the warp. Otherwise make an IdentityNode
@@ -114,26 +92,5 @@ directions, using `3dQwarp` @afni (AFNI {afni_ver}).
         sdc_warp = pe.Node(niu.IdentityInterface(fields=['out_warp']))
         sdc_warp.inputs.out_warp = Undefined
 
-    if "T1w" in output_spaces:
-        warp_and_recombine_t1w = pe.Node(WarpAndRecombineDWIs(), name="warp_and_recombine_t1w")
-        workflow.connect([
-            (b0_hmc, warp_and_recombine_t1w, [('outputnode.forward_transforms',
-                                               'b0_hmc_affines')]),
-            (split_dwis, warp_and_recombine_t1w, [('dwi_files', 'dwi_files'),
-                                                  ('bval_files', 'bval_files'),
-                                                  ('bvec_files', 'bvec_files'),
-                                                  ('b0_indices', 'original_b0_indices')]),
-            (t1w_coreg, warp_and_recombine_t1w, [('outputnode.b0_to_anat_transform',
-                                                  'dwi_ref_to_t1w_affine')]),
-            (warp_and_recombine_t1w, outputnode, [('out_dwi', 'dwi_t1w'),
-                                                  ('out_bval', 'bval_t1w'),
-                                                  ('out_bvec', 'bvec_t1w')])
-        ])
 
-    if "template" in output_spaces:
-        warp_and_recombine_mni = pe.Node(WarpAndRecombineDWIs(), name="warp_and_recombine_mni")
-        workflow.connect([
-            (inputnode, warp_and_recombine_mni, [('t1_2_mni_forward_transform',
-                                                  't1_2_mni_forward_transform')]),
-        ])
     return workflow

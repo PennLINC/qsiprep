@@ -10,8 +10,8 @@ For example, slice timing correction will be
 performed only if the ``SliceTiming`` metadata field is found for the input
 dataset.
 
-A (very) high-level view of the simplest pipeline (for a single-band dataset with only
-one task, single-run, with no slice-timing information nor fieldmap acquisitions)
+A (very) high-level view of the simplest pipeline (for a dataset with only
+one DWI series and no reverse PE b0 acquisitions)
 is presented below:
 
 .. workflow::
@@ -24,18 +24,15 @@ is presented below:
         name='single_subject_wf',
         task_id='',
         longitudinal=False,
-        t2s_coreg=False,
         omp_nthreads=1,
-        freesurfer=True,
+        freesurfer=False,
         reportlets_dir='.',
         output_dir='.',
         bids_dir='.',
         skull_strip_template='OASIS',
         skull_strip_fixed_seed=False,
         template='MNI152NLin2009cAsym',
-        output_spaces=['T1w', 'fsnative', 'template', 'fsaverage5'],
-        medial_surface_nan=False,
-        cifti_output=False,
+        output_spaces=['T1w', 'template'],
         ignore=[],
         debug=False,
         low_mem=False,
@@ -377,28 +374,6 @@ If a :abbr:`BOLD (blood-oxygen level-dependent)` series has fewer than
 5 usable (steady-state) volumes, slice time correction will be disabled
 for that run.
 
-.. _bold_t2s:
-
-T2* Driven Coregistration
-~~~~~~~~~~~~~~~~~~~~~~~~~
-:mod:`qsiprep.workflows.bold.t2s.init_bold_t2s_wf`
-
-.. workflow::
-    :graph2use: orig
-    :simple_form: yes
-
-    from qsiprep.workflows.bold import init_bold_t2s_wf
-    wf = init_bold_t2s_wf(
-        bold_echos=['echo1', 'echo2', 'echo3'],
-        echo_times=[13.6, 29.79, 46.59],
-        mem_gb=3,
-        omp_nthreads=1)
-
-If the ``--t2s-coreg`` command line argument is supplied with multi-echo
-:abbr:`BOLD (blood-oxygen level-dependent)` data, a T2* map is generated.
-This T2* map is then used in place of the :ref:`BOLD reference image <bold_ref>`
-to :ref:`register the BOLD series to the T1w image <bold_reg>` of the same subject.
-
 Susceptibility Distortion Correction (SDC)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 :mod:`qsiprep.workflows.fieldmap.base.init_sdc_wf`
@@ -504,103 +479,3 @@ This option accepts the following (``str``) values:
   * ``'2mm'``: uses the 2:math:`\times`2:math:`\times`2 [mm] version of the template.
   * **Path to arbitrary reference file**: the output will be resampled on a grid with
     same resolution as this reference.
-
-
-EPI sampled to FreeSurfer surfaces
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-:mod:`qsiprep.workflows.bold.resampling.init_bold_surf_wf`
-
-.. workflow::
-    :graph2use: colored
-    :simple_form: yes
-
-    from qsiprep.workflows.bold import init_bold_surf_wf
-    wf = init_bold_surf_wf(
-        mem_gb=1,
-        output_spaces=['T1w', 'fsnative',
-                       'template', 'fsaverage5'],
-        medial_surface_nan=False)
-
-If FreeSurfer processing is enabled, the motion-corrected functional series
-(after single shot resampling to T1w space) is sampled to the
-surface by averaging across the cortical ribbon.
-Specifically, at each vertex, the segment normal to the white-matter surface, extending to the pial
-surface, is sampled at 6 intervals and averaged.
-
-Surfaces are generated for the "subject native" surface, as well as transformed to the
-``fsaverage`` template space.
-All surface outputs are in GIFTI format.
-
-.. _bold_confounds:
-
-Confounds estimation
-~~~~~~~~~~~~~~~~~~~~
-:mod:`qsiprep.workflows.bold.confounds.init_bold_confs_wf`
-
-.. workflow::
-    :graph2use: colored
-    :simple_form: yes
-
-    from qsiprep.workflows.bold.confounds import init_bold_confs_wf
-    wf = init_bold_confs_wf(
-        name="discover_wf",
-        mem_gb=1,
-        metadata={"RepetitionTime": 2.0,
-                  "SliceTiming": [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]})
-
-Given a motion-corrected fMRI, a brain mask, ``mcflirt`` movement parameters and a
-segmentation, the `discover_wf` sub-workflow calculates potential
-confounds per volume.
-
-Calculated confounds include the mean global signal, mean tissue class signal,
-tCompCor, aCompCor, Frame-wise Displacement, 6 motion parameters, DVARS, and, if
-the ``--use-aroma`` flag is enabled, the noise components identified by ICA-AROMA
-(those to be removed by the "aggressive" denoising strategy).
-Particular details about ICA-AROMA are given below.
-
-
-ICA-AROMA
-~~~~~~~~~
-:mod:`qsiprep.workflows.bold.confounds.init_ica_aroma_wf`
-
-When one of the `--output-spaces` selected is in MNI space, ICA-AROMA denoising
-can be automatically appended to the workflow.
-The number of ICA-AROMA components depends on a dimensionality estimate
-made by MELODIC.
-For datasets with a very short TR and a large number of timepoints, this may
-result in an unusually high number of components.
-In such cases, it may be useful to specify the number of components to be
-extracted with ``--aroma-melodic-dimensionality``.
-Further details on the implementation are given within the workflow generation
-function (:mod:`qsiprep.workflows.bold.confounds.init_ica_aroma_wf`).
-
-*Note*: *non*-aggressive AROMA denoising is a fundamentally different procedure
-from its "aggressive" counterpart and cannot be performed only by using a set of noise
-regressors (a separate GLM with both noise and signal regressors needs to be used).
-Therefore instead of regressors qsiprep produces *non*-aggressive denoised 4D NIFTI
-files in the MNI space:
-
-``*bold_space-MNI152NLin2009cAsym_variant-smoothAROMAnonaggr_brainmask.nii.gz``
-
-Additionally, the MELODIC mix and noise component indices will
-be generated, so non-aggressive denoising can be manually performed in the T1w space with ``fsl_regfilt``, *e.g.*::
-
-    fsl_regfilt -i sub-<subject_label>_task-<task_id>_bold_space-T1w_preproc.nii.gz \
-        -f $(cat sub-<subject_label>_task-<task_id>_bold_AROMAnoiseICs.csv) \
-        -d sub-<subject_label>_task-<task_id>_bold_MELODICmix.tsv \
-        -o sub-<subject_label>_task-<task_id>_bold_space-<space>_AromaNonAggressiveDenoised.nii.gz
-
-*Note*: The non-steady state volumes are removed for the determination of components in melodic.
-Therefore ``*MELODICmix.tsv`` may have zero padded rows to account for the volumes not used in
-melodic's estimation of components.
-
-A visualization of the AROMA component classification is also included in the HTML reports.
-
-.. figure:: _static/aroma.svg
-    :scale: 100%
-
-    Maps created with maximum intensity projection (glass brain) with a black
-    brain outline.
-    Right hand side of each map: time series (top in seconds),
-    frequency spectrum (bottom in Hertz).
-    Components classified as signal in green; noise in red.

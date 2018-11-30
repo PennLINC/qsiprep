@@ -14,20 +14,22 @@ import os
 
 import nibabel as nb
 from nipype import logging
-from collections import defaultdict
 
-from nipype.interfaces.fsl import Split as FSLSplit
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
 
 from ...interfaces import DerivativesDataSink
 
-from ...interfaces.reports import FunctionalSummary
+from ...interfaces.reports import DiffusionSummary
+from ...interfaces.images import SplitDWIs
+
 from fmriprep.engine import Workflow
 
 # dwi workflows
 from ..fieldmap.opposite_phase_series import init_opposite_phase_series_wf
 from ..fieldmap.fieldmapless import init_no_fieldmap_wf
+from .merge import init_merge_and_denoise_wf
+from .hmc import init_b0_hmc_wf
 
 
 DEFAULT_MEMORY_MIN_GB = 0.01
@@ -89,7 +91,7 @@ def init_dwi_preproc_wf(dwi_files,
     **Parameters**
 
         dwi_files : str or list
-            List of dwi series NIfTI files to be combined
+            List of dwi series NIfTI files to be combined or a dict of PE-dir -> files
         ignore : list
             Preprocessing steps to skip (eg "fieldmaps")
         freesurfer : bool
@@ -209,17 +211,25 @@ def init_dwi_preproc_wf(dwi_files,
 
     """
 
+    if type(dwi_files) is dict:
+        doing_bidirectional_pepolar = True
+        _dwi_lists = list(dwi_files.values())
+        all_dwis = _dwi_lists[0] + _dwi_lists[1]
+    else:
+        doing_bidirectional_pepolar = False
+        all_dwis = dwi_files
+
     mem_gb = {'filesize': 1, 'resampled': 1, 'largemem': 1}
     dwi_nvols = 10
 
-    for scan in dwi_files:
+    for scan in all_dwis:
         _dwi_nvols, _mem_gb = _create_mem_gb(scan)
         dwi_nvols += _dwi_nvols
         mem_gb['filesize'] += _mem_gb['filesize']
         mem_gb['resampled'] += _mem_gb['resampled']
         mem_gb['largemem'] += _mem_gb['largemem']
 
-    wf_name = _get_wf_name(dwi_files[0])
+    wf_name = _get_wf_name(all_dwis[0])
     workflow = Workflow(name=wf_name)
     LOGGER.log(25, ('Creating dwi processing workflow "%s" '
                     '(%.2f GB / %d DWIs). '
@@ -227,80 +237,70 @@ def init_dwi_preproc_wf(dwi_files,
                mem_gb['filesize'], dwi_nvols, mem_gb['resampled'],
                mem_gb['largemem'])
 
-    # Create a list of (dwi image, PE dir, fieldmaps)
-    parsed_dwis = []
-    for ref_file in dwi_files:
-        # Find associated sbref, if possible
-        entities = layout.parse_file_entities(ref_file)
-        entities['type'] = 'sbref'
-        files = layout.get(**entities, extensions=['nii', 'nii.gz'])
-        if len(files):
-            LOGGER.warning("Ignoring sbref for %s", ref_file)
-        metadata = layout.get_metadata(ref_file)
+    if doing_bidirectional_pepolar and not force_syn:
+        # Merge, denoise, split, hmc on the plus series
+        plus_key, = [k for k in dwi_files.keys() if len(k) == 1]
+        merge_plus = init_merge_and_denoise_wf(dwi_denoise_window=dwi_denoise_window,
+                                               denoise_before_combining=denoise_before_combining,
+                                               name="merge_plus")
+        split_plus = pe.Node(SplitDWIs(), name="split_plus")
+        b0_hmc_plus = init_b0_hmc_wf(name="b0_hmc_plus")
+        merge_plus.inputs.inputnode.dwi_files = dwi_files[plus_key]
 
-        # Find fieldmaps. Options: (epi only)
-        fmaps = []
-        fmap_file = ''
-        if 'fieldmaps' not in ignore:
-            fmaps = layout.get_fieldmap(ref_file, return_list=True)
-            fmap_files = []
-            for fmap in fmaps:
-                if fmap['type'] == 'epi':
-                    fmap_files.append(fmap['epi'])
-            num_fmaps = len(fmap_files)
-            if num_fmaps > 1:
-                LOGGER.warning("Multiple field maps found for %s", ref_file)
-            if num_fmaps >= 1:
-                fmap_file = fmap_files[0]
-        parsed_dwis.append(
-            (ref_file, metadata['PhaseEncodingDirection'], fmap_file))
+        # Merge, denoise, split, hmc on the minus series
+        merge_minus = init_merge_and_denoise_wf(dwi_denoise_window=dwi_denoise_window,
+                                                denoise_before_combining=denoise_before_combining,
+                                                name="merge_minus")
+        split_minus = pe.Node(SplitDWIs(), name="split_minus")
+        b0_hmc_minus = init_b0_hmc_wf(name="b0_hmc_minus")
+        merge_minus.inputs.inputnode.dwi_files = dwi_files[plus_key] + '-'
 
-    if not combine_all_dwis and len(parsed_dwis) > 1:
-        raise Exception('Reached a logic error')
+        # Combine the original images from the splits into one image
+        concat_rpe_series = pe.Node()
 
-    # Depending on how the scans are organized, either use the fieldmap or the RPE series
-    groups = defaultdict(list)
-    for ref_file, pe_dir, fmap in parsed_dwis:
-        groups[(pe_dir, fmap)].append(ref_file)
-    if len(groups) > 2:
-        LOGGER.critical("Unable to match fieldmaps to DWIs.")
 
-    # Process the groupings
-    if len(groups) == 2:
-        # assign the plus and minus series:
-        for (pe_dir, fmap), dwi_files in groups.items():
-            if pe_dir.endswith("-"):
-                series_minus = dwi_files
-            else:
-                series_plus = dwi_files
 
-        if not force_syn:
-            LOGGER.warning("Using b0 templates from opposite PEs to unwarp instead of fieldmaps")
-            opposite_phase_series_wf = init_opposite_phase_series_wf(
-                template_plus_pe=pe_dir[0],
-                dwi_denoise_window=dwi_denoise_window,
-                output_spaces=output_spaces,
-                denoise_before_combining=denoise_before_combining,
-                combine_all_dwis=combine_all_dwis, name='opposite_phase_series_wf')
-            opposite_phase_series_wf.inputs.inputnode.pe_plus_dwis = series_plus
-            opposite_phase_series_wf.inputs.inputnode.pe_minus_dwis = series_minus
-            preproc_wf = opposite_phase_series_wf
-        else:
-            raise Exception("Applying two opposite polarity SDC not yet implemented")
+        workflow.connect([
+                # Merge, denoise, split, hmc on the plus series
+                (merge_plus, split_plus, [('outputnode.merged_image', 'dwi_file'),
+                                          ('outputnode.merged_bval', 'bval_file'),
+                                          ('outputnode.merged_bvec', 'bvec_file')]),
+                (split_plus, concat_rpe_series,
+                    [('outputnode.bval_files', 'bval_plus'),
+                     ('outputnode.bvec_files', 'bvec_plus'),
+                     ('outputnode.dwi_files', 'dwi_plus'),
+                     ('outputnode.b0_images', 'b0_images_plus'),
+                     ('outputnode.b0_indices', 'b0_indices_plus')]),
+                (split_plus, b0_hmc_plus, [('outputnode.b0_images', 'inputnode.b0_images')]),
+
+                # Merge, denoise, split, hmc on the minus series
+                (merge_minus, split_minus, [('outputnode.merged_image', 'dwi_file'),
+                                            ('outputnode.merged_bval', 'bval_file'),
+                                            ('outputnode.merged_bvec', 'bvec_file')]),
+                (split_minus, concat_rpe_series,
+                    [('outputnode.bval_files', 'bval_minus'),
+                     ('outputnode.bvec_files', 'bvec_minus'),
+                     ('outputnode.dwi_files', 'dwi_minus'),
+                     ('outputnode.b0_images', 'b0_images_minus'),
+                     ('outputnode.b0_indices', 'b0_indices_plus')]),
+                (split_minus, b0_hmc_minus, [('outputnode.b0_images', 'inputnode.b0_images')]),
+
+
+        ])
+
+
     else:
-        (pe_dir, fmap), dwi_files = list(groups.items())[0]
-        if fmap:
-            raise Exception("PEPOLAR on a single series not yet implemented")
-        else:
-            dwi_no_fieldmap_wf = init_no_fieldmap_wf(
-                use_syn=use_syn,
-                pe_dir=pe_dir[0],
-                dwi_denoise_window=dwi_denoise_window,
-                output_spaces=output_spaces,
-                denoise_before_combining=denoise_before_combining
-            )
-            dwi_no_fieldmap_wf.inputs.inputnode.input_dwis = dwi_files
-            preproc_wf = dwi_no_fieldmap_wf
+        dwi_no_fieldmap_wf = init_no_fieldmap_wf(
+            use_syn=use_syn,
+            dwi_denoise_window=dwi_denoise_window,
+            output_spaces=output_spaces,
+            denoise_before_combining=denoise_before_combining
+        )
+        dwi_no_fieldmap_wf.inputs.inputnode.input_dwis = dwi_files
+        preproc_wf = dwi_no_fieldmap_wf
+
+    # Register the unwarped image to the t1 template
+    b0_coreg_wf = init_b0_to_anat_registration_wf()
 
     inputnode = pe.Node(
         niu.IdentityInterface(fields=[
@@ -314,9 +314,9 @@ def init_dwi_preproc_wf(dwi_files,
 
     outputnode = pe.Node(
         niu.IdentityInterface(fields=[
-            'dwi_t1', 'dwi_t1_ref', 'dwi_mask_t1', 'dwi_aseg_t1',
-            'dwi_aparc_t1', 'dwi_mni', 'dwi_mni_ref'
-            'dwi_mask_mni', 'nonaggr_denoised_file'
+            'dwi_t1', 'dwi_t1_ref', 'dwi_mask_t1',
+            'dwi_mni', 'dwi_mni_ref'
+            'dwi_mask_mni'
         ]),
         name='outputnode')
 
@@ -325,43 +325,36 @@ def init_dwi_preproc_wf(dwi_files,
                                  ('t1_2_mni_forward_transform',
                                   'inputnode.t1_2_mni_forward_transform')]),
     ])
-
-    return workflow
-
-
-
-
-"""
-    # dwi buffer: an identity used as a pointer to either the original dwi
-    # or the STC'ed one for further use.
-    dwibuffer = pe.Node(
-        niu.IdentityInterface(fields=['dwi_file']), name='dwibuffer')
+    '''
+    [        (inputnode, b0_coreg_wf, [('t1_brain', 'inputnode.anat_image')]),
+            (register_b0_refs, b0_coreg_wf, [('outputnode.out_reference', 'inputnode.b0_image')]),
+            (inputnode, autobox_t1, [('t1_brain', 'in_file')]),
+            (autobox_t1, deoblique_autobox, [('out_file', 'in_file')]),
+            (deoblique_autobox, resample_to_dwi, [('out_file', 'in_file')]),
+            (register_b0_refs, dwi_info, [('outputnode.out_reference', 'in_file')]),
+            (dwi_info, resample_to_dwi, [('voxel_size', 'voxel_size')])]
+    '''
 
     summary = pe.Node(
-        FunctionalSummary(
+        DiffusionSummary(
             output_spaces=output_spaces,
             slice_timing=run_stc,
-            registration='FreeSurfer' if freesurfer else 'FSL',
-            registration_dof=b0_to_t1w_dof,
-            pe_direction=metadata.get("PhaseEncodingDirection")),
+            registration_dof=b0_to_t1w_dof),
         name='summary',
         mem_gb=DEFAULT_MEMORY_MIN_GB,
         run_without_submitting=True)
 
-    func_derivatives_wf = init_func_derivatives_wf(
+    dwi_derivatives_wf = init_dwi_derivatives_wf(
         output_dir=output_dir,
         output_spaces=output_spaces,
-        template=template,
-        freesurfer=freesurfer)
+        template=template)
 
     workflow.connect([
-        (inputnode, func_derivatives_wf, [('dwi_file',
+        (inputnode, dwi_derivatives_wf, [('dwi_file',
                                            'inputnode.source_file')]),
-        (outputnode, func_derivatives_wf,
+        (outputnode, dwi_derivatives_wf,
          [('dwi_t1', 'inputnode.dwi_t1'),
           ('dwi_t1_ref', 'inputnode.dwi_t1_ref'),
-          ('dwi_aseg_t1', 'inputnode.dwi_aseg_t1'),
-          ('dwi_aparc_t1', 'inputnode.dwi_aparc_t1'),
           ('dwi_mask_t1', 'inputnode.dwi_mask_t1'),
           ('dwi_mni', 'inputnode.dwi_mni'),
           ('dwi_mni_ref', 'inputnode.dwi_mni_ref'),
@@ -375,15 +368,6 @@ def init_dwi_preproc_wf(dwi_files,
           ('cifti_variant', 'inputnode.cifti_variant'),
           ('cifti_variant_key', 'inputnode.cifti_variant_key')]),
     ])
-
-    # Generate a tentative dwiref
-    dwi_reference_wf = init_dwi_reference_wf(omp_nthreads=omp_nthreads)
-
-    # HMC on the dwi
-    dwi_hmc_wf = init_dwi_hmc_wf(
-        name='dwi_hmc_wf',
-        mem_gb=mem_gb['filesize'],
-        omp_nthreads=omp_nthreads)
 
     # calculate dwi registration to T1w
     dwi_reg_wf = init_dwi_reg_wf(
@@ -475,18 +459,7 @@ def init_dwi_preproc_wf(dwi_files,
           ('outputnode.dwi_mask', 'inputnode.dwi_mask')]),
         (dwi_sdc_wf, summary, [('outputnode.method',
                                  'distortion_correction')]),
-        # Connect dwi_confounds_wf
-        (inputnode, dwi_confounds_wf, [('t1_tpms', 'inputnode.t1_tpms'),
-                                        ('t1_mask', 'inputnode.t1_mask')]),
-        (dwi_hmc_wf, dwi_confounds_wf, [('outputnode.movpar_file',
-                                           'inputnode.movpar_file')]),
-        (dwi_reg_wf, dwi_confounds_wf, [('outputnode.itk_t1_to_dwi',
-                                           'inputnode.t1_dwi_xform')]),
-        (dwi_reference_wf, dwi_confounds_wf, [('outputnode.skip_vols',
-                                                 'inputnode.skip_vols')]),
-        (dwi_confounds_wf, outputnode, [
-            ('outputnode.confounds_file', 'confounds'),
-        ]),
+
         # Connect dwi_dwi_trans_wf
         (inputnode, dwi_dwi_trans_wf, [('dwi_file',
                                           'inputnode.name_source')]),
@@ -622,17 +595,15 @@ def init_dwi_preproc_wf(dwi_files,
     for node in workflow.list_node_names():
         if node.split('.')[-1].startswith('ds_report'):
             workflow.get_node(node).inputs.base_directory = reportlets_dir
-            workflow.get_node(node).inputs.source_file = ref_file
-"""
+            workflow.get_node(node).inputs.source_file = dwi_files
+
+    return workflow
 
 
-def init_func_derivatives_wf(output_dir,
-                             output_spaces,
-                             template,
-                             freesurfer,
-                             use_aroma,
-                             cifti_output,
-                             name='func_derivatives_wf'):
+def init_dwi_derivatives_wf(output_dir,
+                            output_spaces,
+                            template,
+                            name='dwi_derivatives_wf'):
 
     """Set up a battery of datasinks to store derivatives in the right location.
     """
@@ -641,23 +612,11 @@ def init_func_derivatives_wf(output_dir,
     inputnode = pe.Node(
         niu.IdentityInterface(fields=[
             'source_file', 'dwi_t1', 'dwi_t1_ref', 'dwi_mask_t1',
-            'dwi_mni', 'dwi_mni_ref', 'dwi_mask_mni', 'dwi_aseg_t1',
-            'dwi_aparc_t1', 'cifti_variant_key', 'confounds', 'surfaces',
-            'aroma_noise_ics', 'melodic_mix', 'nonaggr_denoised_file',
-            'dwi_cifti', 'cifti_variant'
+            'dwi_bval_t1', 'dwi_bvec_t1', 'dwi_voxelwise_bvec_t1',
+            'dwi_mni', 'dwi_mni_ref', 'dwi_mask_mni', 'dwi_bvec_mni',
+            'dwi_voxelwise_bvec_mni'
         ]),
         name='inputnode')
-
-    ds_confounds = pe.Node(
-        DerivativesDataSink(
-            base_directory=output_dir, desc='confounds', suffix='regressors'),
-        name="ds_confounds",
-        run_without_submitting=True,
-        mem_gb=DEFAULT_MEMORY_MIN_GB)
-    workflow.connect([
-        (inputnode, ds_confounds, [('source_file', 'source_file'),
-                                   ('confounds', 'in_file')]),
-    ])
 
     # Resample to T1w space
     if 'T1w' in output_spaces:
@@ -689,11 +648,11 @@ def init_func_derivatives_wf(output_dir,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
         workflow.connect([
             (inputnode, ds_dwi_t1, [('source_file', 'source_file'),
-                                     ('dwi_t1', 'in_file')]),
+                                    ('dwi_t1', 'in_file')]),
             (inputnode, ds_dwi_t1_ref, [('source_file', 'source_file'),
-                                         ('dwi_t1_ref', 'in_file')]),
+                                        ('dwi_t1_ref', 'in_file')]),
             (inputnode, ds_dwi_mask_t1, [('source_file', 'source_file'),
-                                          ('dwi_mask_t1', 'in_file')]),
+                                         ('dwi_mask_t1', 'in_file')]),
         ])
 
     # Resample to template (default: MNI)
@@ -726,37 +685,11 @@ def init_func_derivatives_wf(output_dir,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
         workflow.connect([
             (inputnode, ds_dwi_mni, [('source_file', 'source_file'),
-                                      ('dwi_mni', 'in_file')]),
+                                     ('dwi_mni', 'in_file')]),
             (inputnode, ds_dwi_mni_ref, [('source_file', 'source_file'),
-                                          ('dwi_mni_ref', 'in_file')]),
+                                         ('dwi_mni_ref', 'in_file')]),
             (inputnode, ds_dwi_mask_mni, [('source_file', 'source_file'),
-                                           ('dwi_mask_mni', 'in_file')]),
-        ])
-
-    if freesurfer:
-        ds_dwi_aseg_t1 = pe.Node(
-            DerivativesDataSink(
-                base_directory=output_dir,
-                space='T1w',
-                desc='aseg',
-                suffix='dseg'),
-            name='ds_dwi_aseg_t1',
-            run_without_submitting=True,
-            mem_gb=DEFAULT_MEMORY_MIN_GB)
-        ds_dwi_aparc_t1 = pe.Node(
-            DerivativesDataSink(
-                base_directory=output_dir,
-                space='T1w',
-                desc='aparcaseg',
-                suffix='dseg'),
-            name='ds_dwi_aparc_t1',
-            run_without_submitting=True,
-            mem_gb=DEFAULT_MEMORY_MIN_GB)
-        workflow.connect([
-            (inputnode, ds_dwi_aseg_t1, [('source_file', 'source_file'),
-                                          ('dwi_aseg_t1', 'in_file')]),
-            (inputnode, ds_dwi_aparc_t1, [('source_file', 'source_file'),
-                                           ('dwi_aparc_t1', 'in_file')]),
+                                          ('dwi_mask_mni', 'in_file')]),
         ])
 
     return workflow

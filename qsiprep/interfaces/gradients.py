@@ -25,9 +25,10 @@ class WarpAndRecombineDWIsInputSpec(BaseInterfaceInputSpec):
     dwi_ref_to_unwarped_warp = File(exists=True, mandtory=False,
                                     desc='SDC unwarping transform')
 
-    dwi_ref_to_t1w_affine = File(exists=True, mandatory=True, desc='affine from dwi ref to t1w')
+    unwarped_dwi_ref_to_t1w_affine = File(exists=True, mandatory=True,
+                                          desc='affine from dwi ref to t1w')
     t1_2_mni_forward_transform = InputMultiObject(File(exists=True), mandatory=False,
-        desc='affine and warp to mni')
+                                                  desc='affine and warp to mni')
 
 
 class WarpAndRecombineDWIsOutputSpec(TraitedSpec):

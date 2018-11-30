@@ -14,11 +14,7 @@ will be used:
 
   1. :ref:`sdc_pepolar` (or **blip-up/blip-down**)
 
-  2. :ref:`sdc_direct_b0`
-
-  3. :ref:`sdc_phasediff`
-
-  4. :ref:`sdc_fieldmapless`
+  2. :ref:`sdc_fieldmapless`
 
 
 Table of behavior (fieldmap use-cases):

@@ -270,6 +270,19 @@ a single, composite transform to correct for head-motion and
 susceptibility distortions""" if use_fieldwarp else """\
 the transforms to correct for head-motion""")
 
+
+    # Create an output grid for the dwis
+    autobox_t1 = pe.Node(afni.Autobox(), name="autobox_t1")
+    autobox_t1.inputs.outputtype = "NIFTI_GZ"
+    autobox_t1.inputs.padding = 5
+    deoblique_autobox = pe.Node(afni.Warp(), name="deoblique_autobox")
+    deoblique_autobox.inputs.deoblique = True
+    deoblique_autobox.inputs.outputtype = "NIFTI_GZ"
+    resample_to_dwi = pe.Node(afni.Resample(), name="resample_to_dwi")
+    resample_to_dwi.inputs.outputtype = "NIFTI_GZ"
+    dwi_info = pe.Node(NiftiInfo(), name='dwi_info')
+
+
     inputnode = pe.Node(niu.IdentityInterface(fields=[
         'name_source', 'bold_file', 'bold_mask', 'hmc_xforms', 'fieldwarp']),
         name='inputnode'
