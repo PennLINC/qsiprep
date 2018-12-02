@@ -46,15 +46,12 @@ from .unwarp import init_sdc_unwarp_wf
 LOGGER = logging.getLogger('nipype.workflow')
 FMAP_PRIORITY = {
     'epi': 0,
-    'fieldmap': 1,
-    'phasediff': 2,
-    'phase': 3,
-    'syn': 4
+    'syn': 1
 }
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
-def init_sdc_wf(fmaps, bold_meta, omp_nthreads=1,
+def init_sdc_wf(fmaps, dwi_meta, omp_nthreads=1,
                 debug=False, fmap_bspline=False, fmap_demean=True):
     """
     This workflow implements the heuristics to choose a
@@ -76,18 +73,11 @@ def init_sdc_wf(fmaps, bold_meta, omp_nthreads=1,
         from qsiprep.workflows.fieldmap import init_sdc_wf
         wf = init_sdc_wf(
             fmaps=[{
-                'type': 'phasediff',
-                'phasediff': \
-                    'sub-03/ses-2/fmap/sub-03_ses-2_run-1_phasediff.nii.gz',
-                'magnitude1': \
-                    'sub-03/ses-2/fmap/sub-03_ses-2_run-1_magnitude1.nii.gz',
-                'magnitude2': \
-                    'sub-03/ses-2/fmap/sub-03_ses-2_run-1_magnitude2.nii.gz',
+                'type': 'epi',
+                'epi': \
+                    'sub-03/ses-2/fmap/sub-03_ses-2_run-1_epi.nii.gz',
             }],
-            bold_meta={
-                'RepetitionTime': 2.0,
-                'SliceTiming': [0.0, 0.1, 0.2, 0.3, 0.4, 0.5,
-                                0.6, 0.7, 0.8, 0.9],
+            dwi_meta={
                 'PhaseEncodingDirection': 'j',
             },
         )
@@ -98,7 +88,7 @@ def init_sdc_wf(fmaps, bold_meta, omp_nthreads=1,
             A list of dictionaries with the available fieldmaps
             (and their metadata using the key ``'metadata'`` for the
             case of *epi* fieldmaps)
-        bold_meta : dict
+        dwi_meta : dict
             BIDS metadata dictionary corresponding to the BOLD run
         omp_nthreads : int
             Maximum number of threads an individual process may use
@@ -183,7 +173,7 @@ co-registration with the anatomical reference.
             (fmap_['epi'], fmap_['metadata']["PhaseEncodingDirection"])
             for fmap_ in fmaps if fmap_['type'] == 'epi']
         sdc_unwarp_wf = init_pepolar_unwarp_wf(
-            bold_meta=bold_meta,
+            dwi_meta=dwi_meta,
             epi_fmaps=epi_fmaps,
             omp_nthreads=omp_nthreads,
             name='pepolar_unwarp_wf')
@@ -195,59 +185,10 @@ co-registration with the anatomical reference.
                 ('bold_ref_brain', 'inputnode.in_reference_brain')]),
         ])
 
-    # FIELDMAP path
-    if fmap['type'] in ['fieldmap', 'phasediff', 'phase']:
-        outputnode.inputs.method = 'FMB (%s-based)' % fmap['type']
-        # Import specific workflows here, so we don't break everything with one
-        # unused workflow.
-        if fmap['type'] == 'fieldmap':
-            from .fmap import init_fmap_wf
-            fmap_estimator_wf = init_fmap_wf(
-                omp_nthreads=omp_nthreads,
-                fmap_bspline=fmap_bspline)
-            # set inputs
-            fmap_estimator_wf.inputs.inputnode.fieldmap = fmap['fieldmap']
-            fmap_estimator_wf.inputs.inputnode.magnitude = fmap['magnitude']
-
-        if fmap['type'] in ('phasediff', 'phase'):
-            from .phdiff import init_phdiff_wf
-            fmap_estimator_wf = init_phdiff_wf(omp_nthreads=omp_nthreads,
-                                               phasetype=fmap['type'])
-            # set inputs
-            if fmap['type'] == 'phasediff':
-                fmap_estimator_wf.inputs.inputnode.phasediff = \
-                    fmap['phasediff']
-            elif fmap['type'] == 'phase':
-                fmap_estimator_wf.inputs.inputnode.phasediff = [
-                    fmap['phase1'], fmap['phase2']
-                ]
-            fmap_estimator_wf.inputs.inputnode.magnitude = [
-                fmap_ for key, fmap_ in sorted(fmap.items())
-                if key.startswith("magnitude")
-            ]
-
-        sdc_unwarp_wf = init_sdc_unwarp_wf(
-            omp_nthreads=omp_nthreads,
-            fmap_demean=fmap_demean,
-            debug=debug,
-            name='sdc_unwarp_wf')
-        sdc_unwarp_wf.inputs.inputnode.metadata = bold_meta
-
-        workflow.connect([
-            (inputnode, sdc_unwarp_wf, [
-                ('bold_ref', 'inputnode.in_reference'),
-                ('bold_ref_brain', 'inputnode.in_reference_brain'),
-                ('bold_mask', 'inputnode.in_mask')]),
-            (fmap_estimator_wf, sdc_unwarp_wf, [
-                ('outputnode.fmap', 'inputnode.fmap'),
-                ('outputnode.fmap_ref', 'inputnode.fmap_ref'),
-                ('outputnode.fmap_mask', 'inputnode.fmap_mask')]),
-        ])
-
     # FIELDMAP-less path
     if any(fm['type'] == 'syn' for fm in fmaps):
         syn_sdc_wf = init_syn_sdc_wf(
-            bold_pe=bold_meta.get('PhaseEncodingDirection', None),
+            bold_pe=dwi_meta.get('PhaseEncodingDirection', None),
             omp_nthreads=omp_nthreads)
 
         workflow.connect([

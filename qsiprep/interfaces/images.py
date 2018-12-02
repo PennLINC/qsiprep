@@ -188,6 +188,7 @@ class ConcatRPESplits(SimpleInterface):
             self.results['to_dwi_ref_warps'] = [plus_hmc_to_ref_warp] * num_plus + \
                 [minus_hmc_to_ref_warp]
 
+        # Combine the hmc affine with the to-reference affine
         plus_combined_affines = [
             compose_affines(self.inputs.b0_ref_image, [hmc_aff, plus_hmc_to_ref_affine],
                             runtime.cwd) for hmc_aff in plus_hmc_affines]

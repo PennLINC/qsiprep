@@ -475,7 +475,8 @@ to workflows in *qsiprep*'s documentation]\
     dwi_fmap_groups = []
     for dwi_session_group in dwi_session_groups:
         dwi_fmap_groups.extend(
-            group_by_fieldmaps(dwi_session_group, layout, "fieldmaps" in ignore,
+            group_by_fieldmaps(dwi_session_group, layout,
+                               "fieldmaps" in ignore or force_syn,
                                prefer_dedicated_fmaps))
 
     # create a processing pipeline for the dwis in each session

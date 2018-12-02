@@ -24,14 +24,15 @@ from ...interfaces.reports import DiffusionSummary
 from ...interfaces.images import SplitDWIs, ConcatRPESplits
 
 from fmriprep.engine import Workflow
+from fmriprep.interfaces.nilearn import MaskE
 
 # dwi workflows
-from ..fieldmap.opposite_phase_series import init_opposite_phase_series_wf
-from ..fieldmap.fieldmapless import init_no_fieldmap_wf
 from ..fieldmap.bidirectional_pepolar import init_bidirectional_b0_unwarping_wf
+from ..fieldmap.base import init_sdc_wf
 from .merge import init_merge_and_denoise_wf
 from .hmc import init_b0_hmc_wf
-
+from .util import init_dwi_reference_wf
+from .registration import init_b0_to_anat_registration_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger('nipype.workflow')
@@ -269,7 +270,7 @@ def init_dwi_preproc_wf(dwi_files,
         name='outputnode')
 
     # Special case: Two reverse PE DWI series
-    if doing_bidirectional_pepolar and not force_syn:
+    if doing_bidirectional_pepolar:
         # Merge, denoise, split, hmc on the plus series
         plus_key, = [k for k in dwi_files.keys() if len(k) == 1]
         merge_plus = init_merge_and_denoise_wf(dwi_denoise_window=dwi_denoise_window,
@@ -338,24 +339,109 @@ def init_dwi_preproc_wf(dwi_files,
                     ]),
         ])
 
-
+    # Normal cases. No RPE to worry about
     else:
-        dwi_no_fieldmap_wf = init_no_fieldmap_wf(
-            use_syn=use_syn,
-            dwi_denoise_window=dwi_denoise_window,
-            output_spaces=output_spaces,
-            denoise_before_combining=denoise_before_combining
-        )
-        dwi_no_fieldmap_wf.inputs.inputnode.input_dwis = dwi_files
-        preproc_wf = dwi_no_fieldmap_wf
+        buffernode = pe.Node(niu.IdentityInterface(fields=[
+            'b0_ref_image', 'dwi_files', 'bvec_files', 'b0_images', 'b0_indices',
+            'to_dwi_ref_affines', 'to_dwi_ref_warps', 'original_grouping']), name="buffernode")
+        # Merge, denoise, split, hmc
+        merge_dwis = init_merge_and_denoise_wf(dwi_denoise_window=dwi_denoise_window,
+                                               denoise_before_combining=denoise_before_combining,
+                                               name="merge_dwis")
+        split_dwis = pe.Node(SplitDWIs(), name="split_dwis")
+        b0_hmc = init_b0_hmc_wf(name="b0_hmc")
+        merge_dwis.inputs.inputnode.dwi_files = dwi_files
 
-        buffernode = pe.Node(niu.IdentityInterface(fields=['dwi_files', 'bvec_files']),
-            name="buffernode")
+        # Fieldmap time
+        sbref_file = None
+        # For doc building purposes
+        if layout is None or dwi_files == 'dwi_preprocesing':
+            LOGGER.log(25, 'No valid layout: building empty workflow.')
+            metadata = {
+                'PhaseEncodingDirection': 'j',
+            }
+            fmaps = [{
+                'type': 'epi',
+                'epi': 'sub-03/ses-2/fmap/sub-03_ses-2_run-1_epi.nii.gz'
+            }]
+        else:
+            # These were grouped at the beginning to have the same fmap file
+            ref_file = dwi_files[0]
+            # Find associated sbref, if possible
+            entities = layout.parse_file_entities(ref_file)
+            entities['type'] = 'sbref'
+            files = layout.get(**entities, extensions=['nii', 'nii.gz'])
+            refbase = os.path.basename(ref_file)
+            if 'sbref' in ignore:
+                LOGGER.info("Single-band reference files ignored.")
+            elif files:
+                sbref_file = files[0].filename
+                sbbase = os.path.basename(sbref_file)
+                if len(files) > 1:
+                    LOGGER.warning(
+                        "Multiple single-band reference files found for {}; using "
+                        "{}".format(refbase, sbbase))
+                else:
+                    LOGGER.log(25, "Using single-band reference file {}".format(sbbase))
+            else:
+                LOGGER.log(25, "No single-band-reference found for {}".format(refbase))
+
+            metadata = layout.get_metadata(ref_file)
+
+            # Find fieldmaps. Options: (epi|syn)
+            fmaps = []
+            if 'fieldmaps' not in ignore:
+                fmaps = layout.get_fieldmap(ref_file, return_list=True)
+                for fmap in fmaps:
+                    fmap['metadata'] = layout.get_metadata(fmap[fmap['type']])
+
+            # Run SyN if forced or in the absence of fieldmap correction
+            if force_syn or (use_syn and not fmaps):
+                fmaps.append({'type': 'syn'})
+
+        b0_sdc_wf = init_sdc_wf(
+            fmaps, metadata, omp_nthreads=omp_nthreads,
+            fmap_demean=fmap_demean, fmap_bspline=fmap_bspline)
+        b0_sdc_wf.inputs.inputnode.template = template
+
+        if not fmaps:
+            LOGGER.warning('SDC: no fieldmaps found or they were ignored (%s).',
+                           ref_file)
+        elif fmaps[0]['type'] == 'syn':
+            LOGGER.warning(
+                'SDC: no fieldmaps found or they were ignored. '
+                'Using EXPERIMENTAL "fieldmap-less SyN" correction '
+                'for dataset %s.', ref_file)
+        else:
+            LOGGER.log(25, 'SDC: fieldmap estimation of type "%s" intended for %s found.',
+                       fmaps[0]['type'], ref_file)
+
+        workflow.connect([
+            # Merge, denoise, split, hmc on the dwis
+            (merge_dwis, split_dwis, [('outputnode.merged_image', 'dwi_file'),
+                                      ('outputnode.merged_bval', 'bval_file'),
+                                      ('outputnode.merged_bvec', 'bvec_file')]),
+            (split_dwis, buffernode,
+                [('outputnode.bval_files', 'bval_files'),
+                 ('outputnode.bvec_files', 'bvec_files'),
+                 ('outputnode.dwi_files', 'dwi_files'),
+                 ('outputnode.b0_images', 'b0_images'),
+                 ('outputnode.b0_indices', 'b0_indices')]),
+            (split_dwis, b0_hmc, [('outputnode.b0_images', 'inputnode.b0_images')]),
+            (b0_hmc, buffernode, [('outputnode.forward_transforms', 'to_dwi_ref_affines')]),
+            (b0_hmc, b0_sdc_wf, [('outputnode.final_template', 'inputnode.bold_ref'),
+                                 ('outputnode.final_template', 'inputnode.bold_ref_brain')]),
+            (inputnode, b0_sdc_wf, [('t1_brain', 'inputnode.t1_brain'),
+                                    ('t1_2t1_2_mni_reverse_transform',
+                                     'inputnode.t1_2t1_2_mni_reverse_transform')]),
+
+
+        ])
+
+    dwi_ref = init_dwi_reference_wf()
 
     # Register the unwarped image to the t1 template
     b0_coreg_wf = init_b0_to_anat_registration_wf()
-
-
 
     workflow.connect([
         (inputnode, preproc_wf, [('t1_brain', 'inputnode.t1_brain'),
@@ -424,16 +510,6 @@ def init_dwi_preproc_wf(dwi_files,
         mem_gb=mem_gb['resampled'],
         omp_nthreads=omp_nthreads,
         use_compression=False)
-
-
-    # Apply transforms in 1 shot
-    # Only use uncompressed output if AROMA is to be run
-    dwi_dwi_trans_wf = init_dwi_preproc_trans_wf(
-        mem_gb=mem_gb['resampled'],
-        omp_nthreads=omp_nthreads,
-        use_compression=not low_mem,
-        use_fieldwarp=(fmaps is not None or use_syn),
-        name='dwi_dwi_trans_wf')
 
     # MAIN WORKFLOW STRUCTURE ################################################
     workflow.connect([
