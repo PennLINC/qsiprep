@@ -127,11 +127,13 @@ class ConcatRPESplitsInputSpec(BaseInterfaceInputSpec):
                                         desc='affine transform from hmc template to ref')
     template_minus_to_ref_warp = File(exists=True,
                                       desc='SDC warp for hmc template')
-    b0_ref_image = File(exists=True, desc='b0 reference image')
+    b0_ref_image = File(exists=True, desc='b0 reference image for coregistration')
+    b0_ref_mask = File(exists=True, desc='mask for reference b0 image')
 
 
 class ConcatRPESplitsOutputSpec(TraitedSpec):
     b0_ref_image = File(exists=True, desc='b0 reference image')
+    b0_ref_mask = File(exists=True, desc='mask for reference b0 image')
     dwi_files = OutputMultiObject(File(exists=True), desc='single volume dwis')
     bvec_files = OutputMultiObject(File(exists=True), desc='single volume bvecs')
     bval_files = OutputMultiObject(File(exists=True), desc='single volume bvals')
@@ -154,6 +156,7 @@ class ConcatRPESplits(SimpleInterface):
     def _run_interface(self, runtime):
         from .itk import compose_affines
         self._results['b0_ref_image'] = self.inputs.b0_ref_image
+        self._results['b0_ref_mask'] = self.inputs.b0_ref_mask
 
         plus_images = self.inputs.dwi_plus
         plus_bvecs = self.inputs.bvec_plus

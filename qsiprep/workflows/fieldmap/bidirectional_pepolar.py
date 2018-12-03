@@ -19,6 +19,7 @@ from niworkflows.interfaces import CopyHeader
 from fmriprep.engine import Workflow
 from fmriprep.workflows.bold.util import init_enhance_and_skullstrip_bold_wf
 from ..dwi.hmc import init_b0_hmc_wf
+from ..dwi.util import init_dwi_reference_wf
 
 
 def init_bidirectional_b0_unwarping_wf(template_plus_pe, omp_nthreads=1,
@@ -91,7 +92,11 @@ directions, using `3dQwarp` @afni (AFNI {afni_ver}).
     outputnode = pe.Node(niu.IdentityInterface(
         fields=['out_reference', 'out_reference_brain', 'out_affine_plus', 'out_warp_plus',
                 'out_affine_minus', 'out_warp_minus', 'out_mask']), name='outputnode')
+    # Create high-contrast ref images
+    plus_ref_wf = init_dwi_reference_wf(name='plus_ref_wf')
+    minus_ref_wf = init_dwi_reference_wf(name='minus_ref_wf')
 
+    # Align the two reference images to the midpoint
     inputs_to_list = pe.Node(niu.Merge(2), name='inputs_to_list')
     align_reverse_pe_wf = init_b0_hmc_wf(align_to='iterative', transform='Rigid')
     get_midpoint_transforms = pe.Node(niu.Split(splits=[1, 1], squeeze=True),
@@ -133,11 +138,14 @@ directions, using `3dQwarp` @afni (AFNI {afni_ver}).
     unwarped_to_list = pe.Node(niu.Merge(2), name="unwarped_to_list")
     merge_unwarped = pe.Node(ants.AverageImages(dimension=3, normalize=True),
                              name="merge_unwarped")
-    enhance_and_skullstrip_bold_wf = init_enhance_and_skullstrip_bold_wf(omp_nthreads=omp_nthreads)
+
+    final_ref = init_dwi_reference_wf(name="final_ref")
 
     workflow.connect([
-        (inputnode, inputs_to_list, [('template_plus', 'in1'),
-                                     ('template_minus', 'in2')]),
+        (inputnode, plus_ref_wf, [('template_plus', 'inputnode.b0_template')]),
+        (plus_ref_wf, inputs_to_list, [('outputnode.ref_image', 'in1')]),
+        (inputnode, minus_ref_wf, [('template_minus', 'inputnode.b0_template')]),
+        (minus_ref_wf, inputs_to_list, [('outputnode.ref_image', 'in2')]),
         (inputs_to_list, align_reverse_pe_wf, [('out', 'inputnode.input_images')]),
         (align_reverse_pe_wf, get_midpoint_transforms, [('outputnode.forward_transforms',
                                                          'inlist')]),
@@ -168,17 +176,16 @@ directions, using `3dQwarp` @afni (AFNI {afni_ver}).
         (to_ants_plus, unwarp_plus_reference, [('out', 'transforms')]),
         (plus_to_midpoint, unwarp_plus_reference, [('output_image', 'reference_image'),
                                                    ('output_image', 'input_image')]),
-        (to_ants_minus, outputnode, [('out', 'out_warp_plus')]),
+        (to_ants_plus, outputnode, [('out', 'out_warp_plus')]),
 
         (unwarp_plus_reference, unwarped_to_list, [('output_image', 'in1')]),
         (unwarp_minus_reference, unwarped_to_list, [('output_image', 'in2')]),
         (unwarped_to_list, merge_unwarped, [('out', 'images')]),
 
-        (merge_unwarped, enhance_and_skullstrip_bold_wf, [('output_average_image',
-                                                           'inputnode.in_file')]),
-        (enhance_and_skullstrip_bold_wf, outputnode, [
-            ('outputnode.mask_file', 'out_mask'),
-            ('outputnode.skull_stripped_file', 'out_reference_brain')]),
+        (merge_unwarped, final_ref, [('output_average_image', 'inputnode.b0_template')]),
+        (final_ref, outputnode, [('outputnode.ref_image', 'out_reference')
+                                 ('outputnode.ref_image_brain', 'out_reference_brain'),
+                                 ('outputnode.dwi_mask', 'out_mask')])
     ])
 
     return workflow

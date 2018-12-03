@@ -24,7 +24,6 @@ from ...interfaces.reports import DiffusionSummary
 from ...interfaces.images import SplitDWIs, ConcatRPESplits
 
 from fmriprep.engine import Workflow
-from fmriprep.interfaces.nilearn import MaskE
 
 # dwi workflows
 from ..fieldmap.bidirectional_pepolar import init_bidirectional_b0_unwarping_wf
@@ -336,13 +335,15 @@ def init_dwi_preproc_wf(dwi_files,
                     ('outputnode.out_affine_minus', 'template_minus_to_ref_affine'),
                     ('outputnode.out_warp_plus', 'template_plus_to_ref_warp'),
                     ('outputnode.out_warp_minus', 'template_minus_to_ref_warp'),
+                    ('outputnode.out_reference', 'b0_ref_image'),
+                    ('outputnode.out_mask', 'b0_ref_mask')
                     ]),
         ])
 
     # Normal cases. No RPE to worry about
     else:
         buffernode = pe.Node(niu.IdentityInterface(fields=[
-            'b0_ref_image', 'dwi_files', 'bvec_files', 'b0_images', 'b0_indices',
+            'b0_ref_image', 'b0_ref_mask', 'dwi_files', 'bvec_files', 'b0_images', 'b0_indices',
             'to_dwi_ref_affines', 'to_dwi_ref_warps', 'original_grouping']), name="buffernode")
         # Merge, denoise, split, hmc
         merge_dwis = init_merge_and_denoise_wf(dwi_denoise_window=dwi_denoise_window,
@@ -399,6 +400,8 @@ def init_dwi_preproc_wf(dwi_files,
             if force_syn or (use_syn and not fmaps):
                 fmaps.append({'type': 'syn'})
 
+        dwi_ref_wf = init_dwi_reference_wf(name="dwi_ref_wf")
+
         b0_sdc_wf = init_sdc_wf(
             fmaps, metadata, omp_nthreads=omp_nthreads,
             fmap_demean=fmap_demean, fmap_bspline=fmap_bspline)
@@ -429,8 +432,9 @@ def init_dwi_preproc_wf(dwi_files,
                  ('outputnode.b0_indices', 'b0_indices')]),
             (split_dwis, b0_hmc, [('outputnode.b0_images', 'inputnode.b0_images')]),
             (b0_hmc, buffernode, [('outputnode.forward_transforms', 'to_dwi_ref_affines')]),
-            (b0_hmc, b0_sdc_wf, [('outputnode.final_template', 'inputnode.bold_ref'),
-                                 ('outputnode.final_template', 'inputnode.bold_ref_brain')]),
+            (b0_hmc, dwi_ref_wf, [('outputnode.final_template', 'inputnode.b0_template')]),
+            (dwi_ref_wf, b0_sdc_wf, [('outputnode.ref_image', 'inputnode.bold_ref'),
+                                     ('outputnode.final_template', 'inputnode.bold_ref_brain')]),
             (inputnode, b0_sdc_wf, [('t1_brain', 'inputnode.t1_brain'),
                                     ('t1_2t1_2_mni_reverse_transform',
                                      'inputnode.t1_2t1_2_mni_reverse_transform')]),
@@ -438,16 +442,10 @@ def init_dwi_preproc_wf(dwi_files,
 
         ])
 
-    dwi_ref = init_dwi_reference_wf()
-
     # Register the unwarped image to the t1 template
     b0_coreg_wf = init_b0_to_anat_registration_wf()
 
     workflow.connect([
-        (inputnode, preproc_wf, [('t1_brain', 'inputnode.t1_brain'),
-                                 ('t1_2_mni_forward_transform',
-                                  'inputnode.t1_2_mni_forward_transform')]),
-    ])
     '''
     [        (inputnode, b0_coreg_wf, [('t1_brain', 'inputnode.anat_image')]),
             (register_b0_refs, b0_coreg_wf, [('outputnode.out_reference', 'inputnode.b0_image')]),
@@ -457,6 +455,7 @@ def init_dwi_preproc_wf(dwi_files,
             (register_b0_refs, dwi_info, [('outputnode.out_reference', 'in_file')]),
             (dwi_info, resample_to_dwi, [('voxel_size', 'voxel_size')])]
     '''
+    ])
 
     summary = pe.Node(
         DiffusionSummary(
