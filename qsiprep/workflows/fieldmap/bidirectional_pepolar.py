@@ -146,7 +146,7 @@ directions, using `3dQwarp` @afni (AFNI {afni_ver}).
         (plus_ref_wf, inputs_to_list, [('outputnode.ref_image', 'in1')]),
         (inputnode, minus_ref_wf, [('template_minus', 'inputnode.b0_template')]),
         (minus_ref_wf, inputs_to_list, [('outputnode.ref_image', 'in2')]),
-        (inputs_to_list, align_reverse_pe_wf, [('out', 'inputnode.input_images')]),
+        (inputs_to_list, align_reverse_pe_wf, [('out', 'inputnode.b0_images')]),
         (align_reverse_pe_wf, get_midpoint_transforms, [('outputnode.forward_transforms',
                                                          'inlist')]),
         (get_midpoint_transforms, outputnode, [('out1', 'out_affine_plus'),
@@ -183,7 +183,7 @@ directions, using `3dQwarp` @afni (AFNI {afni_ver}).
         (unwarped_to_list, merge_unwarped, [('out', 'images')]),
 
         (merge_unwarped, final_ref, [('output_average_image', 'inputnode.b0_template')]),
-        (final_ref, outputnode, [('outputnode.ref_image', 'out_reference')
+        (final_ref, outputnode, [('outputnode.ref_image', 'out_reference'),
                                  ('outputnode.ref_image_brain', 'out_reference_brain'),
                                  ('outputnode.dwi_mask', 'out_mask')])
     ])

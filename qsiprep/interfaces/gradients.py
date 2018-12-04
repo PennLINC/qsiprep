@@ -9,15 +9,17 @@ from nipype.utils.filemanip import fname_presuffix
 
 
 class WarpAndRecombineDWIsInputSpec(BaseInterfaceInputSpec):
+    output_grid = File(exists=True, mandatory=True,
+                       desc='grid into which outputs are written')
+    b0_ref_image = File(exists=True, desc='')
     dwi_files = InputMultiObject(
         File(exists=True), mandatory=True, desc='list of dwi files')
     bval_files = InputMultiObject(
         File(exists=True), mandatory=True, desc='list of bval files')
     bvec_files = InputMultiObject(
         File(exists=True), mandatory=True, desc='list of bvec files')
+    dwi_mask = File(exists=True, desc='dwi mask image')
     original_b0_indices = traits.List(mandatory=True)
-    reference_image = File(exists=True, mandatory=True,
-                           desc='grid into which outputs are written')
     # Transforms to apply
     b0_hmc_affines = InputMultiObject(File(exists=True), mandatory=True,
                                       desc='affines registering b0s to motioncorr target')
@@ -98,9 +100,15 @@ class WarpAndRecombineDWIs(SimpleInterface):
         combined_dwis = afni.TCat(in_files=warped_images, outputtype="NIFTI_GZ"
                                   ).run().outputs.out_file
 
+        # Make just a b0 series
+        combined_b0s = afni.TCat(in_files=[warped_images[n] for n in
+                                           self.inputs.original_b0_indices],
+                                 outputtype="NIFTI_GZ").run().outputs.out_file
+
         self._results['out_dwi'] = combined_dwis
         self._results['out_bval'] = combined_bval
         self._results['out_bvec'] = combined_bvec
+        self._results['out_b0s'] = combined_b0s
 
         return runtime
 

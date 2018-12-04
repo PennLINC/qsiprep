@@ -33,7 +33,7 @@ from fmriprep.interfaces.nilearn import MaskEPI
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
-def init_dwi_reference_wf(omp_nthreads, dwi_file=None, pre_mask=False,
+def init_dwi_reference_wf(omp_nthreads=1, dwi_file=None, pre_mask=False,
                           name='dwi_reference_wf', gen_report=False):
     """
     This workflow generates reference dwi image for a series

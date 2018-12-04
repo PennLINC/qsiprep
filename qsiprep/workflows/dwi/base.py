@@ -22,6 +22,7 @@ from ...interfaces import DerivativesDataSink
 
 from ...interfaces.reports import DiffusionSummary
 from ...interfaces.images import SplitDWIs, ConcatRPESplits
+from ...interfaces.gradients import WarpAndRecombineDWIs
 
 from fmriprep.engine import Workflow
 
@@ -161,6 +162,8 @@ def init_dwi_preproc_wf(dwi_files,
             Skull-stripped ``t1_preproc``
         t1_mask
             Mask of the skull-stripped template image
+        t1_output_grid
+            Image to write out DWIs aligned to t1
         t1_seg
             Segmentation of preprocessed structural image, including
             gray-matter (GM), white-matter (WM) and cerebrospinal fluid (CSF)
@@ -257,7 +260,7 @@ def init_dwi_preproc_wf(dwi_files,
             't1_preproc', 't1_brain', 't1_mask', 't1_seg', 't1_tpms',
             't1_aseg', 't1_aparc', 't1_2_mni_forward_transform',
             't1_2_mni_reverse_transform', 't1_2_fsnative_forward_transform',
-            't1_2_fsnative_reverse_transform'
+            't1_2_fsnative_reverse_transform', 't1_output_grid'
         ]),
         name='inputnode')
     outputnode = pe.Node(
@@ -285,43 +288,45 @@ def init_dwi_preproc_wf(dwi_files,
                                                 name="merge_minus")
         split_minus = pe.Node(SplitDWIs(), name="split_minus")
         b0_hmc_minus = init_b0_hmc_wf(name="b0_hmc_minus")
-        merge_minus.inputs.inputnode.dwi_files = dwi_files[plus_key] + '-'
+        merge_minus.inputs.inputnode.dwi_files = dwi_files[plus_key + "-"]
 
         # Get affines and warps to the b0 ref
-        bidir_pepolar_wf = init_bidirectional_b0_unwarping_wf(name='bidir_pepolar_wf')
+        bidir_pepolar_wf = init_bidirectional_b0_unwarping_wf(
+            template_plus_pe=list(dwi_files.keys())[0], name='bidir_pepolar_wf')
 
         # Combine the original images from the splits into one 'Split'
         concat_rpe_splits = pe.Node(ConcatRPESplits(), name="concat_rpe_splits")
         buffernode = concat_rpe_splits
-
+        # Remove this!
+        workflow.add_nodes([inputnode, outputnode])
         workflow.connect([
                 # Merge, denoise, split, hmc on the plus series
                 (merge_plus, split_plus, [('outputnode.merged_image', 'dwi_file'),
                                           ('outputnode.merged_bval', 'bval_file'),
                                           ('outputnode.merged_bvec', 'bvec_file')]),
                 (split_plus, concat_rpe_splits,
-                    [('outputnode.bval_files', 'bval_plus'),
-                     ('outputnode.bvec_files', 'bvec_plus'),
-                     ('outputnode.dwi_files', 'dwi_plus'),
-                     ('outputnode.b0_images', 'b0_images_plus'),
-                     ('outputnode.b0_indices', 'b0_indices_plus')]),
-                (split_plus, b0_hmc_plus, [('outputnode.b0_images', 'inputnode.b0_images')]),
-                (b0_hmc_plus, concat_rpe_splits, [('outputnode.forward_transforms',
-                                                   'hmc_affines_plus')]),
+                    [('bval_files', 'bval_plus'),
+                     ('bvec_files', 'bvec_plus'),
+                     ('dwi_files', 'dwi_plus'),
+                     ('b0_images', 'b0_images_plus'),
+                     ('b0_indices', 'b0_indices_plus')]),
+                (split_plus, b0_hmc_plus, [('b0_images', 'inputnode.b0_images')]),
+                (b0_hmc_plus, concat_rpe_splits, [
+                    (('outputnode.forward_transforms', list_squeeze), 'hmc_affines_plus')]),
 
                 # Merge, denoise, split, hmc on the minus series
                 (merge_minus, split_minus, [('outputnode.merged_image', 'dwi_file'),
                                             ('outputnode.merged_bval', 'bval_file'),
                                             ('outputnode.merged_bvec', 'bvec_file')]),
                 (split_minus, concat_rpe_splits,
-                    [('outputnode.bval_files', 'bval_minus'),
-                     ('outputnode.bvec_files', 'bvec_minus'),
-                     ('outputnode.dwi_files', 'dwi_minus'),
-                     ('outputnode.b0_images', 'b0_images_minus'),
-                     ('outputnode.b0_indices', 'b0_indices_plus')]),
-                (split_minus, b0_hmc_minus, [('outputnode.b0_images', 'inputnode.b0_images')]),
-                (b0_hmc_plus, concat_rpe_splits, [('outputnode.forward_transforms',
-                                                   'hmc_affines_plus')]),
+                    [('bval_files', 'bval_minus'),
+                     ('bvec_files', 'bvec_minus'),
+                     ('dwi_files', 'dwi_minus'),
+                     ('b0_images', 'b0_images_minus'),
+                     ('b0_indices', 'b0_indices_minus')]),
+                (split_minus, b0_hmc_minus, [('b0_images', 'inputnode.b0_images')]),
+                (b0_hmc_plus, concat_rpe_splits, [
+                    (('outputnode.forward_transforms', list_squeeze), 'hmc_affines_minus')]),
 
                 # Use the hmc templates as the input for pepolar unwarping
                 (b0_hmc_minus, bidir_pepolar_wf,
@@ -343,8 +348,8 @@ def init_dwi_preproc_wf(dwi_files,
     # Normal cases. No RPE to worry about
     else:
         buffernode = pe.Node(niu.IdentityInterface(fields=[
-            'b0_ref_image', 'b0_ref_mask', 'dwi_files', 'bvec_files', 'b0_images', 'b0_indices',
-            'to_dwi_ref_affines', 'to_dwi_ref_warps', 'original_grouping']), name="buffernode")
+            'b0_ref_image', 'b0_ref_mask', 'dwi_files', 'bvec_files', 'bval_files', 'b0_images',
+            'b0_indices', 'to_dwi_ref_affines', 'to_dwi_ref_warps', 'original_grouping']), name="buffernode")
         # Merge, denoise, split, hmc
         merge_dwis = init_merge_and_denoise_wf(dwi_denoise_window=dwi_denoise_window,
                                                denoise_before_combining=denoise_before_combining,
@@ -431,37 +436,25 @@ def init_dwi_preproc_wf(dwi_files,
                  ('outputnode.b0_images', 'b0_images'),
                  ('outputnode.b0_indices', 'b0_indices')]),
             (split_dwis, b0_hmc, [('outputnode.b0_images', 'inputnode.b0_images')]),
-            (b0_hmc, buffernode, [('outputnode.forward_transforms', 'to_dwi_ref_affines')]),
+            (b0_hmc, buffernode, [(('outputnode.forward_transforms', list_squeeze),
+                                  'to_dwi_ref_affines')]),
             (b0_hmc, dwi_ref_wf, [('outputnode.final_template', 'inputnode.b0_template')]),
-            (dwi_ref_wf, b0_sdc_wf, [('outputnode.ref_image', 'inputnode.bold_ref'),
-                                     ('outputnode.final_template', 'inputnode.bold_ref_brain')]),
+            (dwi_ref_wf, b0_sdc_wf, [('outputnode.ref_image', 'inputnode.b0_ref'),
+                                     ('outputnode.ref_image_brain', 'inputnode.b0_ref_brain'),
+                                     ('outputnode.dwi_mask', 'inputnode.b0_mask')]),
             (inputnode, b0_sdc_wf, [('t1_brain', 'inputnode.t1_brain'),
                                     ('t1_2t1_2_mni_reverse_transform',
                                      'inputnode.t1_2t1_2_mni_reverse_transform')]),
+            (b0_sdc_wf, buffernode, [('outputnode.b0_ref', 'b0_ref_image'),
+                                     ('outputnode.b0_mask', 'b0_ref_mask'),
+                                     ('outputnode.out_warp', 'to_dwi_ref_warps')]),
 
 
         ])
 
-    # Register the unwarped image to the t1 template
-    b0_coreg_wf = init_b0_to_anat_registration_wf()
-
-    workflow.connect([
-    '''
-    [        (inputnode, b0_coreg_wf, [('t1_brain', 'inputnode.anat_image')]),
-            (register_b0_refs, b0_coreg_wf, [('outputnode.out_reference', 'inputnode.b0_image')]),
-            (inputnode, autobox_t1, [('t1_brain', 'in_file')]),
-            (autobox_t1, deoblique_autobox, [('out_file', 'in_file')]),
-            (deoblique_autobox, resample_to_dwi, [('out_file', 'in_file')]),
-            (register_b0_refs, dwi_info, [('outputnode.out_reference', 'in_file')]),
-            (dwi_info, resample_to_dwi, [('voxel_size', 'voxel_size')])]
-    '''
-    ])
-
     summary = pe.Node(
         DiffusionSummary(
-            output_spaces=output_spaces,
-            slice_timing=run_stc,
-            registration_dof=b0_to_t1w_dof),
+            output_spaces=output_spaces),
         name='summary',
         mem_gb=DEFAULT_MEMORY_MIN_GB,
         run_without_submitting=True)
@@ -473,7 +466,7 @@ def init_dwi_preproc_wf(dwi_files,
 
     workflow.connect([
         (inputnode, dwi_derivatives_wf, [('dwi_file',
-                                           'inputnode.source_file')]),
+                                          'inputnode.source_file')]),
         (outputnode, dwi_derivatives_wf,
          [('dwi_t1', 'inputnode.dwi_t1'),
           ('dwi_t1_ref', 'inputnode.dwi_t1_ref'),
@@ -482,206 +475,48 @@ def init_dwi_preproc_wf(dwi_files,
           ('dwi_mni_ref', 'inputnode.dwi_mni_ref'),
           ('dwi_mask_mni', 'inputnode.dwi_mask_mni'),
           ('confounds', 'inputnode.confounds'),
-          ('surfaces', 'inputnode.surfaces'),
-          ('aroma_noise_ics', 'inputnode.aroma_noise_ics'),
-          ('melodic_mix', 'inputnode.melodic_mix'),
-          ('nonaggr_denoised_file', 'inputnode.nonaggr_denoised_file'),
-          ('dwi_cifti', 'inputnode.dwi_cifti'),
-          ('cifti_variant', 'inputnode.cifti_variant'),
-          ('cifti_variant_key', 'inputnode.cifti_variant_key')]),
+          ('surfaces', 'inputnode.surfaces')])
     ])
 
     # calculate dwi registration to T1w
-    dwi_reg_wf = init_dwi_reg_wf(
-        name='dwi_reg_wf',
-        freesurfer=freesurfer,
-        use_bbr=use_bbr,
-        b0_to_t1w_dof=b0_to_t1w_dof,
-        mem_gb=mem_gb['resampled'],
-        omp_nthreads=omp_nthreads,
-        use_compression=False)
+    b0_coreg_wf = init_b0_to_anat_registration_wf(omp_nthreads=omp_nthreads,
+                                                  mem_gb=mem_gb['resampled'])
 
-    # apply dwi registration to T1w
-    dwi_t1_trans_wf = init_dwi_t1_trans_wf(
-        name='dwi_t1_trans_wf',
-        freesurfer=freesurfer,
-        use_fieldwarp=(fmaps is not None or use_syn),
-        mem_gb=mem_gb['resampled'],
-        omp_nthreads=omp_nthreads,
-        use_compression=False)
-
-    # MAIN WORKFLOW STRUCTURE ################################################
     workflow.connect([
-        # Generate early reference
-        (inputnode, dwi_reference_wf, [('dwi_file', 'inputnode.dwi_file'),
-                                        ('sbref_file',
-                                         'inputnode.sbref_file')]),
-        # corrected if it was run, original otherwise
-        (dwibuffer, dwi_split, [('dwi_file', 'in_file')]),
-        # HMC
-        (dwi_reference_wf, dwi_hmc_wf,
-         [('outputnode.raw_ref_image', 'inputnode.raw_ref_image'),
-          ('outputnode.dwi_file', 'inputnode.dwi_file')]),
-        # EPI-T1 registration workflow
-        (
-            inputnode,
-            dwi_reg_wf,
-            [
+        (inputnode, b0_coreg_wf, [
                 ('t1_brain', 'inputnode.t1_brain'),
                 ('t1_seg', 'inputnode.t1_seg'),
                 # Undefined if --no-freesurfer, but this is safe
                 ('subjects_dir', 'inputnode.subjects_dir'),
                 ('subject_id', 'inputnode.subject_id'),
                 ('t1_2_fsnative_reverse_transform',
-                 'inputnode.t1_2_fsnative_reverse_transform')
-            ]),
-        (inputnode, dwi_t1_trans_wf, [('dwi_file', 'inputnode.name_source'),
-                                       ('t1_brain', 'inputnode.t1_brain'),
-                                       ('t1_mask', 'inputnode.t1_mask'),
-                                       ('t1_aseg', 'inputnode.t1_aseg'),
-                                       ('t1_aparc', 'inputnode.t1_aparc')]),
-        (dwi_split, dwi_t1_trans_wf, [('out_files',
-                                         'inputnode.dwi_split')]),
-        (dwi_hmc_wf, dwi_t1_trans_wf, [('outputnode.xforms',
-                                          'inputnode.hmc_xforms')]),
-        (dwi_reg_wf, dwi_t1_trans_wf, [('outputnode.itk_dwi_to_t1',
-                                          'inputnode.itk_dwi_to_t1')]),
-        (dwi_t1_trans_wf, outputnode,
-         [('outputnode.dwi_t1', 'dwi_t1'),
-          ('outputnode.dwi_t1_ref', 'dwi_t1_ref'),
-          ('outputnode.dwi_aseg_t1', 'dwi_aseg_t1'),
-          ('outputnode.dwi_aparc_t1', 'dwi_aparc_t1')]),
-        (dwi_reg_wf, summary, [('outputnode.fallback', 'fallback')]),
-        # SDC (or pass-through workflow)
-        (inputnode, dwi_sdc_wf, [('t1_brain', 'inputnode.t1_brain'),
-                                  ('t1_2_mni_reverse_transform',
-                                   'inputnode.t1_2_mni_reverse_transform')]),
-        (dwi_reference_wf, dwi_sdc_wf,
-         [('outputnode.ref_image', 'inputnode.dwi_ref'),
-          ('outputnode.ref_image_brain', 'inputnode.dwi_ref_brain'),
-          ('outputnode.dwi_mask', 'inputnode.dwi_mask')]),
-        (dwi_sdc_wf, dwi_reg_wf, [('outputnode.dwi_ref_brain',
-                                     'inputnode.ref_dwi_brain')]),
-        (dwi_sdc_wf, dwi_t1_trans_wf,
-         [('outputnode.dwi_ref_brain', 'inputnode.ref_dwi_brain'),
-          ('outputnode.dwi_mask', 'inputnode.ref_dwi_mask'),
-          ('outputnode.out_warp', 'inputnode.fieldwarp')]),
-        (dwi_sdc_wf, dwi_dwi_trans_wf,
-         [('outputnode.out_warp', 'inputnode.fieldwarp'),
-          ('outputnode.dwi_mask', 'inputnode.dwi_mask')]),
-        (dwi_sdc_wf, summary, [('outputnode.method',
-                                 'distortion_correction')]),
-
-        # Connect dwi_dwi_trans_wf
-        (inputnode, dwi_dwi_trans_wf, [('dwi_file',
-                                          'inputnode.name_source')]),
-        (dwi_split, dwi_dwi_trans_wf, [('out_files',
-                                           'inputnode.dwi_file')]),
-        (dwi_hmc_wf, dwi_dwi_trans_wf, [('outputnode.xforms',
-                                            'inputnode.hmc_xforms')]),
-        (dwi_dwi_trans_wf, dwi_confounds_wf,
-         [('outputnode.dwi', 'inputnode.dwi'),
-          ('outputnode.dwi_mask', 'inputnode.dwi_mask')]),
-        # Summary
-        (outputnode, summary, [('confounds', 'confounds_file')]),
+                 'inputnode.t1_2_fsnative_reverse_transform')]),
+        (buffernode, b0_coreg_wf, [('b0_ref_image',
+                                   'inputnode.ref_b0_brain')]),
     ])
 
-    if fmaps:
-        from ..fieldmap.unwarp import init_fmap_unwarp_report_wf
-        sdc_type = fmaps[0]['type']
-
-        # Report on dwi correction
-        fmap_unwarp_report_wf = init_fmap_unwarp_report_wf(
-            suffix='sdc_%s' % sdc_type)
-        workflow.connect([
-            (inputnode, fmap_unwarp_report_wf, [('t1_seg',
-                                                 'inputnode.in_seg')]),
-            (dwi_reference_wf, fmap_unwarp_report_wf,
-             [('outputnode.ref_image', 'inputnode.in_pre')]),
-            (dwi_reg_wf, fmap_unwarp_report_wf, [('outputnode.itk_t1_to_dwi',
-                                                   'inputnode.in_xfm')]),
-            (dwi_sdc_wf, fmap_unwarp_report_wf, [('outputnode.dwi_ref',
-                                                   'inputnode.in_post')]),
-        ])
-
-        if force_syn and sdc_type != 'syn':
-            syn_unwarp_report_wf = init_fmap_unwarp_report_wf(
-                suffix='forcedsyn', name='syn_unwarp_report_wf')
-            workflow.connect([
-                (inputnode, syn_unwarp_report_wf, [('t1_seg',
-                                                    'inputnode.in_seg')]),
-                (dwi_reference_wf, syn_unwarp_report_wf,
-                 [('outputnode.ref_image', 'inputnode.in_pre')]),
-                (dwi_reg_wf, syn_unwarp_report_wf,
-                 [('outputnode.itk_t1_to_dwi', 'inputnode.in_xfm')]),
-                (dwi_sdc_wf, syn_unwarp_report_wf,
-                 [('outputnode.syn_dwi_ref', 'inputnode.in_post')]),
-            ])
-
-    # Map final dwi mask into T1w space (if required)
-    if 'T1w' in output_spaces:
-        from niworkflows.interfaces.fixes import (FixHeaderApplyTransforms as
-                                                  ApplyTransforms)
-
-        dwimask_to_t1w = pe.Node(
-            ApplyTransforms(interpolation='MultiLabel', float=True),
-            name='dwimask_to_t1w',
-            mem_gb=0.1)
-        workflow.connect([
-            (dwi_dwi_trans_wf, dwimask_to_t1w, [('outputnode.dwi_mask',
-                                                    'input_image')]),
-            (dwi_reg_wf, dwimask_to_t1w, [('outputnode.itk_dwi_to_t1',
-                                             'transforms')]),
-            (dwi_t1_trans_wf, dwimask_to_t1w, [('outputnode.dwi_mask_t1',
-                                                  'reference_image')]),
-            (dwimask_to_t1w, outputnode, [('output_image', 'dwi_mask_t1')]),
-        ])
-
-    if 'template' in output_spaces:
-        # Apply transforms in 1 shot
-        dwi_mni_trans_wf = init_dwi_mni_trans_wf(
-            template=template,
-            mem_gb=mem_gb['resampled'],
-            omp_nthreads=omp_nthreads,
-            template_out_grid=None,
-            use_compression=not low_mem,
-            use_fieldwarp=fmaps is not None,
-            name='dwi_mni_trans_wf')
-        carpetplot_wf = init_carpetplot_wf(
-            mem_gb=mem_gb['resampled'],
-            metadata=metadata,
-            name='carpetplot_wf')
+    if "T1w" in output_spaces:
+        transform_dwis_t1 = pe.Node(WarpAndRecombineDWIs(), name='transform_dwis_t1')
 
         workflow.connect([
-            (inputnode, dwi_mni_trans_wf,
-             [('dwi_file', 'inputnode.name_source'),
-              ('t1_2_mni_forward_transform',
-               'inputnode.t1_2_mni_forward_transform')]),
-            (dwi_split, dwi_mni_trans_wf, [('out_files',
-                                              'inputnode.dwi_split')]),
-            (dwi_hmc_wf, dwi_mni_trans_wf, [('outputnode.xforms',
-                                               'inputnode.hmc_xforms')]),
-            (dwi_reg_wf, dwi_mni_trans_wf, [('outputnode.itk_dwi_to_t1',
-                                               'inputnode.itk_dwi_to_t1')]),
-            (dwi_dwi_trans_wf, dwi_mni_trans_wf, [('outputnode.dwi_mask',
-                                                      'inputnode.dwi_mask')]),
-            (dwi_sdc_wf, dwi_mni_trans_wf, [('outputnode.out_warp',
-                                               'inputnode.fieldwarp')]),
-            (dwi_mni_trans_wf, outputnode,
-             [('outputnode.dwi_mni', 'dwi_mni'),
-              ('outputnode.dwi_mni_ref', 'dwi_mni_ref'),
-              ('outputnode.dwi_mask_mni', 'dwi_mask_mni')]),
-            (dwi_dwi_trans_wf, carpetplot_wf,
-             [('outputnode.dwi', 'inputnode.dwi'),
-              ('outputnode.dwi_mask', 'inputnode.dwi_mask')]),
-            (inputnode, carpetplot_wf,
-             [('t1_2_mni_reverse_transform',
-               'inputnode.t1_2_mni_reverse_transform')]),
-            (dwi_reg_wf, carpetplot_wf, [('outputnode.itk_t1_to_dwi',
-                                           'inputnode.t1_dwi_xform')]),
-            (dwi_confounds_wf, carpetplot_wf, [('outputnode.confounds_file',
-                                                 'inputnode.confounds_file')]),
+            (inputnode, transform_dwis_t1, [('t1_output_grid', 'output_grid')]),
+                                            # ('t1_2_mni_forward_transform',
+                                            # 't1_2_mni_forward_transform')]),
+            (buffernode, transform_dwis_t1, [
+                ('dwi_files', 'dwi_files'),
+                ('bvec_files', 'bvec_files'),
+                ('bval_files', 'bval_files'),
+                ('b0_ref_image', 'b0_ref_image'),
+                ('b0_ref_mask', 'dwi_mask'),
+                ('b0_indices', 'original_b0_indices'),
+                ('to_dwi_ref_affines', 'b0_hmc_affines'),
+                ('to_dwi_ref_warps', 'dwi_ref_to_unwarped_warp')]),
+            (b0_coreg_wf, transform_dwis_t1, [('outputnode.itk_b0_to_t1',
+                                               'unwarped_dwi_ref_to_t1w_affine')]),
+
+            #(transform_dwis_t1, outputnode, [()])
         ])
+
 
     # REPORTING ############################################################
     ds_report_summary = pe.Node(
@@ -698,16 +533,16 @@ def init_dwi_preproc_wf(dwi_files,
         mem_gb=DEFAULT_MEMORY_MIN_GB)
 
     workflow.connect([
-        (summary, ds_report_summary, [('out_report', 'in_file')]),
-        (dwi_reference_wf, ds_report_validation,
-         [('outputnode.validation_report', 'in_file')]),
-    ])
+        (summary, ds_report_summary, [('out_report', 'in_file')])])
+    #    (dwi_reference_wf, ds_report_validation,
+    #         [('outputnode.validation_report', 'in_file')]),
+    # ])
 
     # Fill-in datasinks of reportlets seen so far
-    for node in workflow.list_node_names():
-        if node.split('.')[-1].startswith('ds_report'):
-            workflow.get_node(node).inputs.base_directory = reportlets_dir
-            workflow.get_node(node).inputs.source_file = dwi_files
+    # for node in workflow.list_node_names():
+    #     if node.split('.')[-1].startswith('ds_report'):
+    #         workflow.get_node(node).inputs.base_directory = reportlets_dir
+    #         workflow.get_node(node).inputs.source_file = dwi_files
 
     return workflow
 
@@ -726,7 +561,7 @@ def init_dwi_derivatives_wf(output_dir,
             'source_file', 'dwi_t1', 'dwi_t1_ref', 'dwi_mask_t1',
             'dwi_bval_t1', 'dwi_bvec_t1', 'dwi_voxelwise_bvec_t1',
             'dwi_mni', 'dwi_mni_ref', 'dwi_mask_mni', 'dwi_bvec_mni',
-            'dwi_voxelwise_bvec_mni'
+            'dwi_voxelwise_bvec_mni', 'surfaces', 'confounds'
         ]),
         name='inputnode')
 
@@ -758,6 +593,7 @@ def init_dwi_derivatives_wf(output_dir,
             name='ds_dwi_mask_t1',
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
+
         workflow.connect([
             (inputnode, ds_dwi_t1, [('source_file', 'source_file'),
                                     ('dwi_t1', 'in_file')]),
@@ -766,6 +602,7 @@ def init_dwi_derivatives_wf(output_dir,
             (inputnode, ds_dwi_mask_t1, [('source_file', 'source_file'),
                                          ('dwi_mask_t1', 'in_file')]),
         ])
+
 
     # Resample to template (default: MNI)
     if 'template' in output_spaces:
@@ -807,17 +644,6 @@ def init_dwi_derivatives_wf(output_dir,
     return workflow
 
 
-def _get_series_len(dwi_fname):
-    from niworkflows.interfaces.registration import _get_vols_to_discard
-    img = nb.load(dwi_fname)
-    if len(img.shape) < 4:
-        return 1
-
-    skip_vols = _get_vols_to_discard(img)
-
-    return img.shape[3] - skip_vols
-
-
 def _create_mem_gb(dwi_fname):
     dwi_size_gb = os.path.getsize(dwi_fname) / (1024**3)
     try:
@@ -856,3 +682,6 @@ def _get_wf_name(dwi_fname):
             ".", "_").replace(" ", "").replace("-", "_")
 
     return "dwi_preproc" + name + "_wf"
+
+def list_squeeze(in_list):
+    return [item[0] for item in in_list]

@@ -88,7 +88,7 @@ def init_sdc_wf(fmaps, dwi_meta, omp_nthreads=1,
             (and their metadata using the key ``'metadata'`` for the
             case of *epi* fieldmaps)
         dwi_meta : dict
-            BIDS metadata dictionary corresponding to the BOLD run
+            BIDS metadata dictionary corresponding to the DWI run
         omp_nthreads : int
             Maximum number of threads an individual process may use
         fmap_bspline : bool
@@ -99,12 +99,12 @@ def init_sdc_wf(fmaps, dwi_meta, omp_nthreads=1,
             Enable debugging outputs
 
     **Inputs**
-        bold_ref
-            A BOLD reference calculated at a previous stage
-        bold_ref_brain
+        b0_ref
+            A b0 reference calculated at a previous stage
+        b0_ref_brain
             Same as above, but brain-masked
-        bold_mask
-            Brain mask for the BOLD run
+        b0_mask
+            Brain mask for the DWI run
         t1_brain
             T1w image, brain-masked, for the fieldmap-less SyN method
         t1_2_mni_reverse_transform
@@ -115,16 +115,16 @@ def init_sdc_wf(fmaps, dwi_meta, omp_nthreads=1,
 
 
     **Outputs**
-        bold_ref
-            An unwarped BOLD reference
-        bold_mask
+        b0_ref
+            An unwarped b0 reference
+        b0_mask
             The corresponding new mask after unwarping
-        bold_ref_brain
-            Brain-extracted, unwarped BOLD reference
+        b0_ref_brain
+            Brain-extracted, unwarped b0 reference
         out_warp
             The deformation field to unwarp the susceptibility distortions
-        syn_bold_ref
-            If ``--force-syn``, an unwarped BOLD reference with this
+        syn_b0_ref
+            If ``--force-syn``, an unwarped b0 reference with this
             method (for reporting purposes)
 
     """
@@ -134,28 +134,28 @@ def init_sdc_wf(fmaps, dwi_meta, omp_nthreads=1,
 
     workflow = Workflow(name='sdc_wf' if fmaps else 'sdc_bypass_wf')
     inputnode = pe.Node(niu.IdentityInterface(
-        fields=['bold_ref', 'bold_ref_brain', 'bold_mask',
+        fields=['b0_ref', 'b0_ref_brain', 'b0_mask',
                 't1_brain', 't1_2_mni_reverse_transform', 'template']),
         name='inputnode')
 
     outputnode = pe.Node(niu.IdentityInterface(
-        fields=['bold_ref', 'bold_mask', 'bold_ref_brain',
-                'out_warp', 'syn_bold_ref', 'method']),
+        fields=['b0_ref', 'b0_mask', 'b0_ref_brain',
+                'out_warp', 'syn_b0_ref', 'method']),
         name='outputnode')
 
     # No fieldmaps - forward inputs to outputs
     if not fmaps:
         outputnode.inputs.method = 'None'
         workflow.connect([
-            (inputnode, outputnode, [('bold_ref', 'bold_ref'),
-                                     ('bold_mask', 'bold_mask'),
-                                     ('bold_ref_brain', 'bold_ref_brain')]),
+            (inputnode, outputnode, [('b0_ref', 'b0_ref'),
+                                     ('b0_mask', 'b0_mask'),
+                                     ('b0_ref_brain', 'b0_ref_brain')]),
         ])
         return workflow
 
     workflow.__postdesc__ = """\
 Based on the estimated susceptibility distortion, an
-unwarped BOLD reference was calculated for a more accurate
+unwarped b0 reference was calculated for a more accurate
 co-registration with the anatomical reference.
 """
 
@@ -179,9 +179,9 @@ co-registration with the anatomical reference.
 
         workflow.connect([
             (inputnode, sdc_unwarp_wf, [
-                ('bold_ref', 'inputnode.in_reference'),
-                ('bold_mask', 'inputnode.in_mask'),
-                ('bold_ref_brain', 'inputnode.in_reference_brain')]),
+                ('b0_ref', 'inputnode.in_reference'),
+                ('b0_mask', 'inputnode.in_mask'),
+                ('b0_ref_brain', 'inputnode.in_reference_brain')]),
         ])
 
     # FIELDMAP-less path
@@ -195,8 +195,8 @@ co-registration with the anatomical reference.
                 ('t1_brain', 'inputnode.t1_brain'),
                 ('t1_2_mni_reverse_transform',
                     'inputnode.t1_2_mni_reverse_transform'),
-                ('bold_ref', 'inputnode.bold_ref'),
-                ('bold_ref_brain', 'inputnode.bold_ref_brain'),
+                ('b0_ref', 'inputnode.bold_ref'),
+                ('b0_ref_brain', 'inputnode.bold_ref_brain'),
                 ('template', 'inputnode.template')]),
         ])
 
@@ -208,15 +208,15 @@ co-registration with the anatomical reference.
             sdc_unwarp_wf.__desc__ = None
             workflow.connect([
                 (syn_sdc_wf, outputnode, [
-                    ('outputnode.out_reference', 'syn_bold_ref')]),
+                    ('outputnode.out_reference', 'syn_b0_ref')]),
             ])
 
     workflow.connect([
         (sdc_unwarp_wf, outputnode, [
             ('outputnode.out_warp', 'out_warp'),
-            ('outputnode.out_reference', 'bold_ref'),
-            ('outputnode.out_reference_brain', 'bold_ref_brain'),
-            ('outputnode.out_mask', 'bold_mask')]),
+            ('outputnode.out_reference', 'b0_ref'),
+            ('outputnode.out_reference_brain', 'b0_ref_brain'),
+            ('outputnode.out_mask', 'b0_mask')]),
     ])
 
     return workflow

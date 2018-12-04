@@ -108,6 +108,11 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug,
               - template
               - fsnative
               - fsaverage (or other pre-existing FreeSurfer templates)
+        out_grid : str or float
+            Either the string 'native' or a float describing the isotropic voxel size.
+            Sometimes it can be nice to upsample DWIs. If you choose to upsample, be
+            sure to choose a robust option for ``interpolation`` to avoid ringing
+            artifacts. One option is 'BSpline', which matches mrtrix.
         template : str
             Name of template targeted by ``template`` output space
         debug : bool
@@ -130,7 +135,6 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug,
         skull_strip_fixed_seed : bool
             Do not use a random seed for skull-stripping - will ensure
             run-to-run replicability when used with --omp-nthreads 1 (default: ``False``)
-
 
     **Inputs**
 
@@ -179,6 +183,10 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug,
             LTA-style affine matrix translating from FreeSurfer-conformed subject space to T1w
         surfaces
             GIFTI surfaces (gray/white boundary, midthickness, pial, inflated)
+        t1_resampling_grid
+            Image of the preprocessed t1 to be used as the reference output for dwis
+        t1_mni_resampling_grid
+            Image of the preprocessed t1 to be used as the reference output for dwis
 
     **Subworkflows**
 
