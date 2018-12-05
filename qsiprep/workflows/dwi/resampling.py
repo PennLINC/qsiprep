@@ -14,7 +14,7 @@ import os.path as op
 
 
 from nipype.pipeline import engine as pe
-from nipype.interfaces import utility as niu
+from nipype.interfaces import afni, utility as niu
 from nipype.interfaces.fsl import Split as FSLSplit
 
 from niworkflows import data as nid

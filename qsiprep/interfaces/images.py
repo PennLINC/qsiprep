@@ -167,7 +167,7 @@ class ConcatRPESplits(SimpleInterface):
 
         # Create a list where each element is the warp for the DWI at the corresponding index
         if isdefined(plus_hmc_to_ref_warp) and isdefined(minus_hmc_to_ref_warp):
-            self.results['to_dwi_ref_warps'] = [plus_hmc_to_ref_warp] * num_plus + \
+            self._results['to_dwi_ref_warps'] = [plus_hmc_to_ref_warp] * num_plus + \
                 [minus_hmc_to_ref_warp]
 
         # Combine the hmc affine with the to-reference affine

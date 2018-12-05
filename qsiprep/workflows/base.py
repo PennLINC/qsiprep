@@ -37,7 +37,7 @@ LOGGER = logging.getLogger('nipype.workflow')
 
 def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
                     ignore, debug, low_mem, anat_only, longitudinal, hires,
-                    denoise_before_combining, dwi_denoise_window,
+                    denoise_before_combining, dwi_denoise_window, output_resolution,
                     combine_all_dwis, discard_repeated_samples, omp_nthreads,
                     skull_strip_template, skull_strip_fixed_seed, freesurfer,
                     output_spaces, template, b0_motion_corr_to, b0_to_t1w_dof,
@@ -182,6 +182,7 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
             ignore=ignore,
             debug=debug,
             low_mem=low_mem,
+            output_resolution=output_resolution,
             denoise_before_combining=denoise_before_combining,
             dwi_denoise_window=dwi_denoise_window,
             anat_only=anat_only,
@@ -220,7 +221,7 @@ def init_single_subject_wf(
         subject_id, name, reportlets_dir, output_dir, bids_dir, ignore, debug,
         low_mem, anat_only, longitudinal, denoise_before_combining, dwi_denoise_window,
         combine_all_dwis, discard_repeated_samples, omp_nthreads, skull_strip_template,
-        skull_strip_fixed_seed, freesurfer, hires, output_spaces, template,
+        skull_strip_fixed_seed, freesurfer, hires, output_spaces, template, output_resolution,
         prefer_dedicated_fmaps, b0_motion_corr_to, b0_to_t1w_dof, fmap_bspline, fmap_demean,
         use_syn, force_syn):
     """
@@ -428,6 +429,7 @@ to workflows in *qsiprep*'s documentation]\
         skull_strip_fixed_seed=skull_strip_fixed_seed,
         output_spaces=output_spaces,
         template=template,
+        output_resolution=output_resolution,
         debug=debug,
         longitudinal=longitudinal,
         omp_nthreads=omp_nthreads,

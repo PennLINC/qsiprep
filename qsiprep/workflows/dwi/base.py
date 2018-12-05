@@ -183,7 +183,8 @@ def init_dwi_preproc_wf(dwi_files,
         t1_2_fsnative_reverse_transform
             LTA-style affine matrix translating from FreeSurfer-conformed
             subject space to T1w
-
+        dwi_sampling_grid
+            A NIfTI1 file with the grid spacing and FoV to resample the DWIs
 
     **Outputs**
 
@@ -265,9 +266,9 @@ def init_dwi_preproc_wf(dwi_files,
         name='inputnode')
     outputnode = pe.Node(
         niu.IdentityInterface(fields=[
-            'dwi_t1', 'dwi_mask_t1', 'bvals_t1', 'bvecs_t1', 'local_bvecs_t1',
-            'dwi_mni', 'dwi_mask_mni', 'bvals_mni', 'bvecs_mni', 'local_bvecs_mni',
-            'confounds'
+            'dwi_t1', 'dwi_mask_t1', 'bvals_t1', 'bvecs_t1', 'local_bvecs_t1', 't1_b0_ref',
+            't1_b0_series', 'dwi_mni', 'dwi_mask_mni', 'bvals_mni', 'bvecs_mni',
+            'local_bvecs_mni', 'mni_b0_ref', 'mni_b0_series', 'confounds'
         ]),
         name='outputnode')
 
@@ -312,7 +313,7 @@ def init_dwi_preproc_wf(dwi_files,
                      ('b0_indices', 'b0_indices_plus')]),
                 (split_plus, b0_hmc_plus, [('b0_images', 'inputnode.b0_images')]),
                 (b0_hmc_plus, concat_rpe_splits, [
-                    (('outputnode.forward_transforms', list_squeeze), 'hmc_affines_plus')]),
+                    (('outputnode.forward_transforms', _list_squeeze), 'hmc_affines_plus')]),
 
                 # Merge, denoise, split, hmc on the minus series
                 (merge_minus, split_minus, [('outputnode.merged_image', 'dwi_file'),
@@ -326,7 +327,7 @@ def init_dwi_preproc_wf(dwi_files,
                      ('b0_indices', 'b0_indices_minus')]),
                 (split_minus, b0_hmc_minus, [('b0_images', 'inputnode.b0_images')]),
                 (b0_hmc_plus, concat_rpe_splits, [
-                    (('outputnode.forward_transforms', list_squeeze), 'hmc_affines_minus')]),
+                    (('outputnode.forward_transforms', _list_squeeze), 'hmc_affines_minus')]),
 
                 # Use the hmc templates as the input for pepolar unwarping
                 (b0_hmc_minus, bidir_pepolar_wf,
@@ -336,8 +337,8 @@ def init_dwi_preproc_wf(dwi_files,
 
                 # send unwarping to the rpe recombiner
                 (bidir_pepolar_wf, concat_rpe_splits, [
-                    ('outputnode.out_affine_plus', 'template_plus_to_ref_affine'),
-                    ('outputnode.out_affine_minus', 'template_minus_to_ref_affine'),
+                    (('outputnode.out_affine_plus', _get_first), 'template_plus_to_ref_affine'),
+                    (('outputnode.out_affine_minus', _get_first), 'template_minus_to_ref_affine'),
                     ('outputnode.out_warp_plus', 'template_plus_to_ref_warp'),
                     ('outputnode.out_warp_minus', 'template_minus_to_ref_warp'),
                     ('outputnode.out_reference', 'b0_ref_image'),
@@ -349,7 +350,8 @@ def init_dwi_preproc_wf(dwi_files,
     else:
         buffernode = pe.Node(niu.IdentityInterface(fields=[
             'b0_ref_image', 'b0_ref_mask', 'dwi_files', 'bvec_files', 'bval_files', 'b0_images',
-            'b0_indices', 'to_dwi_ref_affines', 'to_dwi_ref_warps', 'original_grouping']), name="buffernode")
+            'b0_indices', 'to_dwi_ref_affines', 'to_dwi_ref_warps', 'original_grouping']),
+            name="buffernode")
         # Merge, denoise, split, hmc
         merge_dwis = init_merge_and_denoise_wf(dwi_denoise_window=dwi_denoise_window,
                                                denoise_before_combining=denoise_before_combining,
@@ -436,7 +438,7 @@ def init_dwi_preproc_wf(dwi_files,
                  ('outputnode.b0_images', 'b0_images'),
                  ('outputnode.b0_indices', 'b0_indices')]),
             (split_dwis, b0_hmc, [('outputnode.b0_images', 'inputnode.b0_images')]),
-            (b0_hmc, buffernode, [(('outputnode.forward_transforms', list_squeeze),
+            (b0_hmc, buffernode, [(('outputnode.forward_transforms', _list_squeeze),
                                   'to_dwi_ref_affines')]),
             (b0_hmc, dwi_ref_wf, [('outputnode.final_template', 'inputnode.b0_template')]),
             (dwi_ref_wf, b0_sdc_wf, [('outputnode.ref_image', 'inputnode.b0_ref'),
@@ -463,21 +465,27 @@ def init_dwi_preproc_wf(dwi_files,
         output_dir=output_dir,
         output_spaces=output_spaces,
         template=template)
-
+    '''
     workflow.connect([
-        (inputnode, dwi_derivatives_wf, [('dwi_file',
-                                          'inputnode.source_file')]),
+        (inputnode, dwi_derivatives_wf, [('dwi_files', 'inputnode.source_file')]),
         (outputnode, dwi_derivatives_wf,
          [('dwi_t1', 'inputnode.dwi_t1'),
-          ('dwi_t1_ref', 'inputnode.dwi_t1_ref'),
           ('dwi_mask_t1', 'inputnode.dwi_mask_t1'),
+          ('bvals_t1', 'inputnode.bvals_t1'),
+          ('bvecs_t1', 'inputnode.bvecs_t1'),
+          ('local_bvecs_t1', 'inputnode.local_bvecs_t1'),
+          ('t1_b0_ref', 'inputnode.t1_b0_ref'),
+          ('t1_b0_series', 'inputnode.t1_b0_series'),
           ('dwi_mni', 'inputnode.dwi_mni'),
-          ('dwi_mni_ref', 'inputnode.dwi_mni_ref'),
           ('dwi_mask_mni', 'inputnode.dwi_mask_mni'),
-          ('confounds', 'inputnode.confounds'),
-          ('surfaces', 'inputnode.surfaces')])
+          ('bvals_mni', 'inputnode.bvals_mni'),
+          ('bvecs_mni', 'inputnode.bvecs_mni'),
+          ('local_bvecs_mni', 'inputnode.local_bvecs_mni'),
+          ('mni_b0_ref', 'inputnode.mni_b0_ref'),
+          ('mni_b0_series', 'inputnode.mni_b0_series'),
+          ('confounds', 'inputnode.confounds')])
     ])
-
+    '''
     # calculate dwi registration to T1w
     b0_coreg_wf = init_b0_to_anat_registration_wf(omp_nthreads=omp_nthreads,
                                                   mem_gb=mem_gb['resampled'])
@@ -558,15 +566,20 @@ def init_dwi_derivatives_wf(output_dir,
 
     inputnode = pe.Node(
         niu.IdentityInterface(fields=[
-            'source_file', 'dwi_t1', 'dwi_t1_ref', 'dwi_mask_t1',
-            'dwi_bval_t1', 'dwi_bvec_t1', 'dwi_voxelwise_bvec_t1',
-            'dwi_mni', 'dwi_mni_ref', 'dwi_mask_mni', 'dwi_bvec_mni',
-            'dwi_voxelwise_bvec_mni', 'surfaces', 'confounds'
+            'source_file', 'dwi_t1', 'dwi_mask_t1', 'bvals_t1', 'bvecs_t1', 'local_bvecs_t1',
+            't1_b0_ref', 't1_b0_series', 'dwi_mni', 'dwi_mask_mni', 'bvals_mni', 'bvecs_mni',
+            'local_bvecs_mni', 'mni_b0_ref', 'mni_b0_series', 'confounds'
         ]),
         name='inputnode')
 
+    ds_confounds = pe.Node(DerivativesDataSink(
+        base_directory=output_dir, desc='confounds', suffix='confounds'),
+        name="ds_confounds", run_without_submitting=True,
+        mem_gb=DEFAULT_MEMORY_MIN_GB)
+
     # Resample to T1w space
     if 'T1w' in output_spaces:
+        # 4D DWI in t1 space
         ds_dwi_t1 = pe.Node(
             DerivativesDataSink(
                 base_directory=output_dir,
@@ -577,10 +590,40 @@ def init_dwi_derivatives_wf(output_dir,
             name='ds_dwi_t1',
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
-        ds_dwi_t1_ref = pe.Node(
+        ds_bvals_t1 = pe.Node(
+            DerivativesDataSink(
+                base_directory=output_dir,
+                space='T1w',
+                desc='preproc'),
+            name='ds_bvals_t1',
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB)
+        ds_bvecs_t1 = pe.Node(
+            DerivativesDataSink(
+                base_directory=output_dir,
+                space='T1w',
+                desc='preproc'),
+            name='ds_bvecs_t1',
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB)
+        ds_local_bvecs_t1 = pe.Node(
+            DerivativesDataSink(
+                base_directory=output_dir,
+                space='T1w',
+                desc='preproc'),
+            name='ds_local_bvecs_t1',
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB)
+        ds_t1_b0_ref = pe.Node(
             DerivativesDataSink(
                 base_directory=output_dir, space='T1w', suffix='dwiref'),
-            name='ds_dwi_t1_ref',
+            name='ds_t1_b0_ref',
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB)
+        ds_t1_b0_series = pe.Node(
+            DerivativesDataSink(
+                base_directory=output_dir, space='T1w', suffix='b0series'),
+            name='ds_t1_b0_series',
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
 
@@ -597,15 +640,23 @@ def init_dwi_derivatives_wf(output_dir,
         workflow.connect([
             (inputnode, ds_dwi_t1, [('source_file', 'source_file'),
                                     ('dwi_t1', 'in_file')]),
-            (inputnode, ds_dwi_t1_ref, [('source_file', 'source_file'),
-                                        ('dwi_t1_ref', 'in_file')]),
+            (inputnode, ds_bvals_t1, [('source_file', 'source_file'),
+                                      ('bvals_t1', 'in_file')]),
+            (inputnode, ds_bvecs_t1, [('source_file', 'source_file'),
+                                      ('bvecs_t1', 'in_file')]),
+            (inputnode, ds_local_bvecs_t1, [('source_file', 'source_file'),
+                                            ('local_bvecs_t1', 'in_file')]),
+            (inputnode, ds_t1_b0_ref, [('source_file', 'source_file'),
+                                       ('t1_b0_ref', 'in_file')]),
+            (inputnode, ds_t1_b0_series, [('source_file', 'source_file'),
+                                          ('t1_b0_series', 'in_file')]),
             (inputnode, ds_dwi_mask_t1, [('source_file', 'source_file'),
-                                         ('dwi_mask_t1', 'in_file')]),
-        ])
-
+                                         ('t1_b0_series', 'in_file')]),
+            ])
 
     # Resample to template (default: MNI)
     if 'template' in output_spaces:
+        # 4D DWI in t1 space
         ds_dwi_mni = pe.Node(
             DerivativesDataSink(
                 base_directory=output_dir,
@@ -616,10 +667,40 @@ def init_dwi_derivatives_wf(output_dir,
             name='ds_dwi_mni',
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
-        ds_dwi_mni_ref = pe.Node(
+        ds_bvals_mni = pe.Node(
+            DerivativesDataSink(
+                base_directory=output_dir,
+                space=template,
+                desc='preproc'),
+            name='ds_bvals_mni',
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB)
+        ds_bvecs_mni = pe.Node(
+            DerivativesDataSink(
+                base_directory=output_dir,
+                space=template,
+                desc='preproc'),
+            name='ds_bvecs_mni',
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB)
+        ds_local_bvecs_mni = pe.Node(
+            DerivativesDataSink(
+                base_directory=output_dir,
+                space=template,
+                desc='preproc'),
+            name='ds_local_bvecs_mni',
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB)
+        ds_mni_b0_ref = pe.Node(
             DerivativesDataSink(
                 base_directory=output_dir, space=template, suffix='dwiref'),
-            name='ds_dwi_mni_ref',
+            name='ds_mni_b0_ref',
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB)
+        ds_mni_b0_series = pe.Node(
+            DerivativesDataSink(
+                base_directory=output_dir, space=template, suffix='b0series'),
+            name='ds_mni_b0_series',
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
 
@@ -632,14 +713,23 @@ def init_dwi_derivatives_wf(output_dir,
             name='ds_dwi_mask_mni',
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
+
         workflow.connect([
             (inputnode, ds_dwi_mni, [('source_file', 'source_file'),
                                      ('dwi_mni', 'in_file')]),
-            (inputnode, ds_dwi_mni_ref, [('source_file', 'source_file'),
-                                         ('dwi_mni_ref', 'in_file')]),
+            (inputnode, ds_bvals_mni, [('source_file', 'source_file'),
+                                       ('bvals_mni', 'in_file')]),
+            (inputnode, ds_bvecs_mni, [('source_file', 'source_file'),
+                                       ('bvecs_mni', 'in_file')]),
+            (inputnode, ds_local_bvecs_mni, [('source_file', 'source_file'),
+                                             ('local_bvecs_mni', 'in_file')]),
+            (inputnode, ds_mni_b0_ref, [('source_file', 'source_file'),
+                                        ('mni_b0_ref', 'in_file')]),
+            (inputnode, ds_mni_b0_series, [('source_file', 'source_file'),
+                                           ('mni_b0_series', 'in_file')]),
             (inputnode, ds_dwi_mask_mni, [('source_file', 'source_file'),
-                                          ('dwi_mask_mni', 'in_file')]),
-        ])
+                                          ('mni_b0_series', 'in_file')]),
+            ])
 
     return workflow
 
@@ -683,5 +773,7 @@ def _get_wf_name(dwi_fname):
 
     return "dwi_preproc" + name + "_wf"
 
-def list_squeeze(in_list):
+def _list_squeeze(in_list):
     return [item[0] for item in in_list]
+def _get_first(in_list):
+    return in_list[0]

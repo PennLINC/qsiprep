@@ -8,16 +8,6 @@ Anatomical reference preprocessing workflows
 .. autofunction:: init_anat_preproc_wf
 .. autofunction:: init_skullstrip_ants_wf
 
-Surface preprocessing
-+++++++++++++++++++++
-
-``fmriprep`` uses FreeSurfer_ to reconstruct surfaces from T1w/T2w
-structural images.
-
-.. autofunction:: init_surface_recon_wf
-.. autofunction:: init_autorecon_resume_wf
-.. autofunction:: init_gifti_surface_wf
-
 """
 
 import os.path as op
@@ -32,27 +22,33 @@ from nipype.interfaces import (
     freesurfer as fs,
     fsl,
     image,
+    ants,
+    afni
 )
 from nipype.interfaces.ants import BrainExtraction, N4BiasFieldCorrection
 
 from niworkflows.interfaces.registration import RobustMNINormalizationRPT
 from niworkflows.interfaces.masks import ROIsPlot
+from niworkflows.interfaces.ants import AI
 
-from niworkflows.interfaces.segmentation import ReconAllRPT
 from niworkflows.interfaces.fixes import FixHeaderApplyTransforms as ApplyTransforms
 
 from fmriprep.engine import Workflow
 from fmriprep.interfaces import (
-    DerivativesDataSink, StructuralReference, MakeMidthickness, FSInjectBrainExtracted,
+    StructuralReference, MakeMidthickness, FSInjectBrainExtracted,
     FSDetectInputs, NormalizeSurf, GiftiNameSource, TemplateDimensions,
-    ConcatAffines, RefineBrainMask,
+    ConcatAffines, RefineBrainMask, DerivativesDataSink as FDerivativesDataSink
 )
 
 from qsiprep.interfaces import Conform
 from fmriprep.utils.misc import fix_multi_T1w_source_name, add_suffix
 from fmriprep.interfaces.freesurfer import (
-        PatchedLTAConvert as LTAConvert,
-        PatchedRobustRegister as RobustRegister)
+        PatchedLTAConvert as LTAConvert)
+
+
+class DerivativesDataSink(FDerivativesDataSink):
+    out_path_base = "qsiprep"
+
 
 TEMPLATE_MAP = {
     'MNI152NLin2009cAsym': 'mni_icbm152_nlin_asym_09c',
@@ -62,14 +58,17 @@ TEMPLATE_MAP = {
 #  pylint: disable=R0914
 def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug,
                          freesurfer, longitudinal, omp_nthreads, hires, reportlets_dir,
-                         output_dir, num_t1w,
+                         output_dir, num_t1w, output_resolution,
                          skull_strip_fixed_seed=False, name='anat_preproc_wf'):
     r"""
-    This workflow controls the anatomical preprocessing stages of FMRIPREP.
+    This workflow controls the anatomical preprocessing stages of qsiprep. It differs from
+    the FMRIPREP preprocessing in that a rigid alignment to MNI is performed before declaring
+    the skull-stripped brain as the official preprocessed T1. This is done so that all brains
+    are canonically oriented. This aids in comparing model coefficients later on.
 
     This includes:
 
-     - Creation of a structural template
+     - Creation of a structural template (AC-PC aligned)
      - Skull-stripping and bias correction
      - Tissue segmentation
      - Normalization
@@ -86,6 +85,7 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug,
                                   template='MNI152NLin2009cAsym',
                                   output_spaces=['T1w', 'fsnative',
                                                  'template', 'fsaverage5'],
+                                  output_resolution=1.25,
                                   skull_strip_template='OASIS',
                                   freesurfer=True,
                                   longitudinal=False,
@@ -108,8 +108,8 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug,
               - template
               - fsnative
               - fsaverage (or other pre-existing FreeSurfer templates)
-        out_grid : str or float
-            Either the string 'native' or a float describing the isotropic voxel size.
+        output_resolution : float
+            A float describing the isotropic voxel size of the output data.
             Sometimes it can be nice to upsample DWIs. If you choose to upsample, be
             sure to choose a robust option for ``interpolation`` to avoid ringing
             artifacts. One option is 'BSpline', which matches mrtrix.
@@ -228,7 +228,8 @@ and used as T1w-reference throughout the workflow.
         num_t1w=num_t1w,
         ants_ver=BrainExtraction().version or '<ver>'
     )
-
+    # Get the template image
+    ref_img = pkgr('qsiprep', 'data/mni_1mm_t1w_lps.nii.gz')
     inputnode = pe.Node(
         niu.IdentityInterface(fields=['t1w', 't2w', 'roi', 'flair', 'subjects_dir', 'subject_id']),
         name='inputnode')
@@ -236,7 +237,7 @@ and used as T1w-reference throughout the workflow.
         fields=['t1_preproc', 't1_brain', 't1_mask', 't1_seg', 't1_tpms',
                 't1_2_mni', 't1_2_mni_forward_transform', 't1_2_mni_reverse_transform',
                 'mni_mask', 'mni_seg', 'mni_tpms',
-                'template_transforms',
+                'template_transforms', 'dwi_sampling_grid',
                 'subjects_dir', 'subject_id', 't1_2_fsnative_forward_transform',
                 't1_2_fsnative_reverse_transform', 'surfaces', 't1_aseg', 't1_aparc']),
         name='outputnode')
@@ -251,8 +252,13 @@ and used as T1w-reference throughout the workflow.
     # Bias field correction is handled in skull strip workflows.
     skullstrip_ants_wf = init_skullstrip_ants_wf(name='skullstrip_ants_wf',
                                                  skull_strip_template=skull_strip_template,
+                                                 acpc_template=ref_img,
                                                  debug=debug,
                                                  omp_nthreads=omp_nthreads)
+
+    # 3a. Create the output reference grid_image
+    reference_grid_wf = init_output_grid_wf(voxel_size=output_resolution,
+                                            template_image=ref_img)
 
     workflow.connect([
         (inputnode, anat_template_wf, [('t1w', 'inputnode.t1w')]),
@@ -262,6 +268,7 @@ and used as T1w-reference throughout the workflow.
             ('outputnode.template_transforms', 't1_template_transforms')]),
         (buffernode, outputnode, [('t1_brain', 't1_brain'),
                                   ('t1_mask', 't1_mask')]),
+        (reference_grid_wf, outputnode, [('outputnode.grid_image', 'dwi_sampling_grid')])
     ])
 
     # 4. Surface reconstruction
@@ -275,7 +282,9 @@ and used as T1w-reference throughout the workflow.
                 ('flair', 'inputnode.flair'),
                 ('subjects_dir', 'inputnode.subjects_dir'),
                 ('subject_id', 'inputnode.subject_id')]),
-            (anat_template_wf, surface_recon_wf, [('outputnode.t1_template', 'inputnode.t1w')]),
+            # Change so it's using ACPC input
+            (skullstrip_ants_wf, surface_recon_wf, [
+                ('outputnode.t1_template', 'outputnode.bias_corrected')]),
             (skullstrip_ants_wf, surface_recon_wf, [
                 ('outputnode.out_file', 'inputnode.skullstripped_t1'),
                 ('outputnode.out_segs', 'inputnode.ants_segs'),
@@ -384,8 +393,8 @@ and used as T1w-reference throughout the workflow.
             (('t1w', fix_multi_T1w_source_name), 'inputnode.source_file')]),
         (anat_template_wf, anat_reports_wf, [
             ('outputnode.out_report', 'inputnode.t1_conform_report')]),
-        (anat_template_wf, seg_rpt, [
-            ('outputnode.t1_template', 'in_file')]),
+        (skullstrip_ants_wf, seg_rpt, [
+            ('outputnode.bias_corrected', 'in_file')]),
         (t1_seg, seg2msks, [('tissue_class_map', 'in_file')]),
         (seg2msks, seg_rpt, [('out', 'in_rois')]),
         (outputnode, seg_rpt, [('t1_mask', 'in_mask')]),
@@ -583,86 +592,210 @@ A T1w-reference map was computed after registration of
     return workflow
 
 
-from fmriprep.workflows.anatomical import init_skullstrip_ants_wf
+def init_skullstrip_ants_wf(skull_strip_template, debug, omp_nthreads, acpc_template,
+                            skull_strip_fixed_seed=False, name='skullstrip_ants_wf'):
+    r"""
+    This workflow performs skull-stripping using ANTs' ``BrainExtraction.sh``
+    .. workflow::
+        :graph2use: orig
+        :simple_form: yes
+        from fmriprep.workflows.anatomical import init_skullstrip_ants_wf
+        wf = init_skullstrip_ants_wf(skull_strip_template='OASIS', debug=False, omp_nthreads=1)
+    **Parameters**
+        skull_strip_template : str
+            Name of ANTs skull-stripping template ('OASIS' or 'NKI')
+        debug : bool
+            Enable debugging outputs
+        omp_nthreads : int
+            Maximum number of threads an individual process may use
+        acpc_template: str
+            Path to an image that will be used for Rigid ACPC alignment
+        skull_strip_fixed_seed : bool
+            Do not use a random seed for skull-stripping - will ensure
+            run-to-run replicability when used with --omp-nthreads 1 (default: ``False``)
+    **Inputs**
+        in_file
+            T1-weighted structural image to skull-strip
+    **Outputs**
+        bias_corrected
+            Bias-corrected ``in_file``, before skull-stripping
+        out_file
+            Skull-stripped ``in_file``
+        out_mask
+            Binary mask of the skull-stripped ``in_file``
+        out_report
+            Reportlet visualizing quality of skull-stripping
+    """
+    from niworkflows.data.getters import get_template, TEMPLATE_ALIASES
+
+    if skull_strip_template not in ['OASIS', 'NKI']:
+        raise ValueError("Unknown skull-stripping template; select from {OASIS, NKI}")
+
+    workflow = Workflow(name=name)
+    workflow.__desc__ = """\
+The T1w-reference was then skull-stripped using `antsBrainExtraction.sh`
+(ANTs {ants_ver}), using {skullstrip_tpl} as target template.
+""".format(ants_ver=BrainExtraction().version or '<ver>', skullstrip_tpl=skull_strip_template)
+
+    # Account for template aliases
+    template_name = TEMPLATE_ALIASES.get(skull_strip_template, skull_strip_template)
+    # Template path
+    template_dir = get_template(template_name)
+
+    inputnode = pe.Node(niu.IdentityInterface(fields=['in_file']),
+                        name='inputnode')
+    outputnode = pe.Node(niu.IdentityInterface(
+        fields=['bias_corrected', 'out_file', 'out_mask', 'out_segs', 'out_report']),
+        name='outputnode')
+
+    t1_skull_strip = pe.Node(
+        BrainExtraction(dimension=3, use_floatingpoint_precision=1, debug=debug,
+                        keep_temporary_files=1, use_random_seeding=not skull_strip_fixed_seed),
+        name='t1_skull_strip', n_procs=omp_nthreads)
+
+    # Set appropriate inputs
+    t1_skull_strip.inputs.brain_template = str(
+        template_dir / ('tpl-%s_res-01_T1w.nii.gz' % template_name))
+    t1_skull_strip.inputs.brain_probability_mask = str(
+        template_dir /
+        ('tpl-%s_res-01_class-brainmask_probtissue.nii.gz' % template_name))
+    t1_skull_strip.inputs.extraction_registration_mask = str(
+        template_dir /
+        ('tpl-%s_res-01_label-BrainCerebellumExtraction_roi.nii.gz' % template_name))
+
+    # Get everything in ACPC before sending to output
+    rigid_acpc_align = pe.Node(
+        AI(fixed_image=str(acpc_template),
+           metric=('Mattes', 32, 'Regular', 0.2),
+           transform=('Rigid', 0.1),
+           search_factor=(20, 0.12),
+           principal_axes=False,
+           convergence=(1000, 1e-6, 50),
+           verbose=True),
+        name='rigid_acpc_align',
+        n_procs=omp_nthreads)
+
+    # Resampling
+    rigid_acpc_resample_brain = pe.Node(
+        ants.ApplyTransforms(reference_image=acpc_template,
+                             input_image_type=0,
+                             interpolation='LanczosWindowedSinc'),
+        name='rigid_acpc_resample_brain')
+    rigid_acpc_resample_head = pe.Node(
+        ants.ApplyTransforms(reference_image=acpc_template,
+                             input_image_type=0,
+                             interpolation='LanczosWindowedSinc'),
+        name='rigid_acpc_resample_head')
+    rigid_acpc_resample_seg = pe.Node(
+        ants.ApplyTransforms(reference_image=acpc_template,
+                             input_image_type=0,
+                             interpolation='MultiLabel'),
+        name='rigid_acpc_resample_seg')
+    rigid_acpc_resample_mask = pe.Node(
+        ants.ApplyTransforms(reference_image=acpc_template,
+                             input_image_type=0,
+                             interpolation='MultiLabel'),
+        name='rigid_acpc_resample_mask')
+
+    workflow.connect([
+        (inputnode, t1_skull_strip, [('in_file', 'anatomical_image')]),
+        (t1_skull_strip, rigid_acpc_align, [('N4Corrected0', 'moving_image')]),
+        # Resampling
+        (rigid_acpc_align, rigid_acpc_resample_brain, [('output_transform', 'transforms')]),
+        (rigid_acpc_align, rigid_acpc_resample_head, [('output_transform', 'transforms')]),
+        (rigid_acpc_align, rigid_acpc_resample_mask, [('output_transform', 'transforms')]),
+        (rigid_acpc_align, rigid_acpc_resample_seg, [('output_transform', 'transforms')]),
+        (t1_skull_strip, rigid_acpc_resample_brain, [('BrainExtractionBrain', 'input_image')]),
+        (t1_skull_strip, rigid_acpc_resample_head, [('N4Corrected0', 'input_image')]),
+        (t1_skull_strip, rigid_acpc_resample_mask, [('BrainExtractionMask', 'input_image')]),
+        (t1_skull_strip, rigid_acpc_resample_seg, [
+            ('BrainExtractionSegmentation', 'input_image')]),
+        (rigid_acpc_resample_brain, outputnode, [('output_image', 'out_file')]),
+        (rigid_acpc_resample_head, outputnode, [('output_image', 'bias_corrected')]),
+        (rigid_acpc_resample_mask, outputnode, [('output_image', 'out_mask')]),
+        (rigid_acpc_resample_seg, outputnode, [('output_image', 'out_segs')]),
+    ])
+
+    return workflow
+
+
+def init_output_grid_wf(voxel_size, template_image, name='output_grid_wf'):
+    """Generate a non-oblique, uniform voxel-size grid around a brain."""
+    workflow = Workflow(name=name)
+    inputnode = pe.Node(niu.IdentityInterface(fields=['template_image']), name='inputnode')
+    outputnode = pe.Node(niu.IdentityInterface(fields=['grid_image']), name='outputnode')
+    inputnode.inputs.template_image = template_image
+    autobox_template = pe.Node(afni.Autobox(outputtype="NIFTI_GZ", padding=8),
+                               name='autobox_template')
+    deoblique_autobox = pe.Node(afni.Warp(outputtype="NIFTI_GZ", deoblique=True),
+                                name="deoblique_autobox")
+    size_tuple = (voxel_size, voxel_size, voxel_size)
+    resample_to_voxel_size = pe.Node(afni.Resample(outputtype="NIFTI_GZ", voxel_size=size_tuple),
+                                     name="resample_to_voxel_size")
+    workflow.connect([
+        (inputnode, autobox_template, [('template_image', 'in_file')]),
+        (autobox_template, deoblique_autobox, [('out_file', 'in_file')]),
+        (deoblique_autobox, resample_to_voxel_size, [('out_file', 'in_file')]),
+        (resample_to_voxel_size, outputnode, [('out_file', 'grid_image')])
+    ])
+
+    return workflow
 
 
 def init_surface_recon_wf(omp_nthreads, hires, name='surface_recon_wf'):
     r"""
     This workflow reconstructs anatomical surfaces using FreeSurfer's ``recon-all``.
-
     Reconstruction is performed in three phases.
     The first phase initializes the subject with T1w and T2w (if available)
     structural images and performs basic reconstruction (``autorecon1``) with the
     exception of skull-stripping.
     For example, a subject with only one session with T1w and T2w images
     would be processed by the following command::
-
         $ recon-all -sd <output dir>/freesurfer -subjid sub-<subject_label> \
             -i <bids-root>/sub-<subject_label>/anat/sub-<subject_label>_T1w.nii.gz \
             -T2 <bids-root>/sub-<subject_label>/anat/sub-<subject_label>_T2w.nii.gz \
             -autorecon1 \
             -noskullstrip
-
     The second phase imports an externally computed skull-stripping mask.
     This workflow refines the external brainmask using the internal mask
     implicit the the FreeSurfer's ``aseg.mgz`` segmentation,
     to reconcile ANTs' and FreeSurfer's brain masks.
-
     First, the ``aseg.mgz`` mask from FreeSurfer is refined in two
     steps, using binary morphological operations:
-
       1. With a binary closing operation the sulci are included
          into the mask. This results in a smoother brain mask
          that does not exclude deep, wide sulci.
-
       2. Fill any holes (typically, there could be a hole next to
          the pineal gland and the corpora quadrigemina if the great
          cerebral brain is segmented out).
-
     Second, the brain mask is grown, including pixels that have a high likelihood
     to the GM tissue distribution:
-
       3. Dilate and substract the brain mask, defining the region to search for candidate
          pixels that likely belong to cortical GM.
-
       4. Pixels found in the search region that are labeled as GM by ANTs
          (during ``antsBrainExtraction.sh``) are directly added to the new mask.
-
       5. Otherwise, estimate GM tissue parameters locally in  patches of ``ww`` size,
          and test the likelihood of the pixel to belong in the GM distribution.
-
     This procedure is inspired on mindboggle's solution to the problem:
     https://github.com/nipy/mindboggle/blob/7f91faaa7664d820fe12ccc52ebaf21d679795e2/mindboggle/guts/segment.py#L1660
-
-
     The final phase resumes reconstruction, using the T2w image to assist
     in finding the pial surface, if available.
     See :py:func:`~fmriprep.workflows.anatomical.init_autorecon_resume_wf` for details.
-
-
     Memory annotations for FreeSurfer are based off `their documentation
     <https://surfer.nmr.mgh.harvard.edu/fswiki/SystemRequirements>`_.
     They specify an allocation of 4GB per subject. Here we define 5GB
     to have a certain margin.
-
-
-
     .. workflow::
         :graph2use: orig
         :simple_form: yes
-
         from fmriprep.workflows.anatomical import init_surface_recon_wf
         wf = init_surface_recon_wf(omp_nthreads=1, hires=True)
-
     **Parameters**
-
         omp_nthreads : int
             Maximum number of threads an individual process may use
         hires : bool
             Enable sub-millimeter preprocessing in FreeSurfer
-
     **Inputs**
-
         t1w
             List of T1-weighted structural images
         t2w
@@ -679,9 +812,7 @@ def init_surface_recon_wf(omp_nthreads, hires, name='surface_recon_wf'):
             FreeSurfer SUBJECTS_DIR
         subject_id
             FreeSurfer subject ID
-
     **Outputs**
-
         subjects_dir
             FreeSurfer SUBJECTS_DIR
         subject_id
@@ -701,9 +832,7 @@ def init_surface_recon_wf(omp_nthreads, hires, name='surface_recon_wf'):
             FreeSurfer's aparc+aseg segmentation, in native T1w space
         out_report
             Reportlet visualizing quality of surface alignment
-
     **Subworkflows**
-
         * :py:func:`~fmriprep.workflows.anatomical.init_autorecon_resume_wf`
         * :py:func:`~fmriprep.workflows.anatomical.init_gifti_surface_wf`
     """
@@ -734,6 +863,7 @@ gray-matter of Mindboggle [RRID:SCR_002438, @mindboggle].
         fs.ReconAll(directive='autorecon1', flags='-noskullstrip', openmp=omp_nthreads),
         name='autorecon1', n_procs=omp_nthreads, mem_gb=5)
     autorecon1.interface._can_resume = False
+    autorecon1.interface._always_run = True
 
     skull_strip_extern = pe.Node(FSInjectBrainExtracted(), name='skull_strip_extern')
 
@@ -813,12 +943,10 @@ def init_autorecon_resume_wf(omp_nthreads, name='autorecon_resume_wf'):
     r"""
     This workflow resumes recon-all execution, assuming the `-autorecon1` stage
     has been completed.
-
     In order to utilize resources efficiently, this is broken down into five
     sub-stages; after the first stage, the second and third stages may be run
     simultaneously, and the fourth and fifth stages may be run simultaneously,
     if resources permit::
-
         $ recon-all -sd <output dir>/freesurfer -subjid sub-<subject_label> \
             -autorecon2-volonly
         $ recon-all -sd <output dir>/freesurfer -subjid sub-<subject_label> \
@@ -835,20 +963,15 @@ def init_autorecon_resume_wf(omp_nthreads, name='autorecon_resume_wf'):
             -autorecon3 -hemi lh -T2pial
         $ recon-all -sd <output dir>/freesurfer -subjid sub-<subject_label> \
             -autorecon3 -hemi rh -T2pial
-
     The excluded steps in the second and third stages (``-no<option>``) are not
     fully hemisphere independent, and are therefore postponed to the final two
     stages.
-
     .. workflow::
         :graph2use: orig
         :simple_form: yes
-
         from fmriprep.workflows.anatomical import init_autorecon_resume_wf
         wf = init_autorecon_resume_wf(omp_nthreads=1)
-
     **Inputs**
-
         subjects_dir
             FreeSurfer SUBJECTS_DIR
         subject_id
@@ -857,16 +980,13 @@ def init_autorecon_resume_wf(omp_nthreads, name='autorecon_resume_wf'):
             Refine pial surface using T2w image
         use_FLAIR
             Refine pial surface using FLAIR image
-
     **Outputs**
-
         subjects_dir
             FreeSurfer SUBJECTS_DIR
         subject_id
             FreeSurfer subject ID
         out_report
             Reportlet visualizing quality of surface alignment
-
     """
     workflow = Workflow(name=name)
 
@@ -883,6 +1003,7 @@ def init_autorecon_resume_wf(omp_nthreads, name='autorecon_resume_wf'):
     autorecon2_vol = pe.Node(
         fs.ReconAll(directive='autorecon2-volonly', openmp=omp_nthreads),
         n_procs=omp_nthreads, mem_gb=5, name='autorecon2_vol')
+    autorecon2_vol.interface._always_run = True
 
     autorecon_surfs = pe.MapNode(
         fs.ReconAll(
@@ -895,17 +1016,20 @@ def init_autorecon_resume_wf(omp_nthreads, name='autorecon_resume_wf'):
         iterfield='hemi', n_procs=omp_nthreads, mem_gb=5,
         name='autorecon_surfs')
     autorecon_surfs.inputs.hemi = ['lh', 'rh']
+    autorecon_surfs.interface._always_run = True
 
     autorecon3 = pe.MapNode(
         fs.ReconAll(directive='autorecon3', openmp=omp_nthreads),
         iterfield='hemi', n_procs=omp_nthreads, mem_gb=5,
         name='autorecon3')
     autorecon3.inputs.hemi = ['lh', 'rh']
+    autorecon3.interface._always_run = True
 
     # Only generate the report once; should be nothing to do
     recon_report = pe.Node(
         ReconAllRPT(directive='autorecon3', generate_report=True),
         name='recon_report', mem_gb=5)
+    recon_report.interface._always_run = True
 
     def _dedup(in_list):
         vals = set(in_list)
@@ -936,7 +1060,6 @@ def init_autorecon_resume_wf(omp_nthreads, name='autorecon_resume_wf'):
 def init_gifti_surface_wf(name='gifti_surface_wf'):
     r"""
     This workflow prepares GIFTI surfaces from a FreeSurfer subjects directory
-
     If midthickness (or graymid) surfaces do not exist, they are generated and
     saved to the subject directory as ``lh/rh.midthickness``.
     These, along with the gray/white matter boundary (``lh/rh.smoothwm``), pial
@@ -944,29 +1067,22 @@ def init_gifti_surface_wf(name='gifti_surface_wf'):
     converted to GIFTI files.
     Additionally, the vertex coordinates are :py:class:`recentered
     <fmriprep.interfaces.NormalizeSurf>` to align with native T1w space.
-
     .. workflow::
         :graph2use: orig
         :simple_form: yes
-
         from fmriprep.workflows.anatomical import init_gifti_surface_wf
         wf = init_gifti_surface_wf()
-
     **Inputs**
-
         subjects_dir
             FreeSurfer SUBJECTS_DIR
         subject_id
             FreeSurfer subject ID
         t1_2_fsnative_reverse_transform
             LTA formatted affine transform file (inverse)
-
     **Outputs**
-
         surfaces
             GIFTI surfaces for gray/white matter boundary, pial surface,
             midthickness (or graymid) surface, and inflated surfaces
-
     """
     workflow = Workflow(name=name)
 
@@ -1016,32 +1132,22 @@ def init_gifti_surface_wf(name='gifti_surface_wf'):
 def init_segs_to_native_wf(name='segs_to_native', segmentation='aseg'):
     """
     Get a segmentation from FreeSurfer conformed space into native T1w space
-
-
     .. workflow::
         :graph2use: orig
         :simple_form: yes
-
         from fmriprep.workflows.anatomical import init_segs_to_native_wf
         wf = init_segs_to_native_wf()
-
-
     **Parameters**
         segmentation
             The name of a segmentation ('aseg' or 'aparc_aseg' or 'wmparc')
-
     **Inputs**
-
         in_file
             Anatomical, merged T1w image after INU correction
         subjects_dir
             FreeSurfer SUBJECTS_DIR
         subject_id
             FreeSurfer subject ID
-
-
     **Outputs**
-
         out_file
             The selected segmentation, after resampling in native space
     """
@@ -1268,7 +1374,6 @@ def init_anat_derivatives_wf(output_dir, output_spaces, template, freesurfer,
         ])
 
     return workflow
-
 
 def _seg2msks(in_file, newpath=None):
     """Converts labels to masks"""
