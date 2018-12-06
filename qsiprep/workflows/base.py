@@ -524,6 +524,8 @@ to workflows in *qsiprep*'s documentation]\
                      'inputnode.t1_2_mni_forward_transform'),
                     ('outputnode.t1_2_mni_reverse_transform',
                      'inputnode.t1_2_mni_reverse_transform'),
+                    ('outputnode.dwi_sampling_grid',
+                     'inputnode.dwi_sampling_grid'),
                     # Undefined if --no-freesurfer, but this is safe
                     ('outputnode.subjects_dir', 'inputnode.subjects_dir'),
                     ('outputnode.subject_id', 'inputnode.subject_id'),

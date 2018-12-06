@@ -184,8 +184,8 @@ class DiffusionSummary(SummaryInterface):
                 conflist = cfh.readline().strip('\n').strip()
         return FUNCTIONAL_TEMPLATE.format(
             pedir=pedir, stc=stc, sdc=self.inputs.distortion_correction, registration=reg,
-            output_spaces=', '.join(self.inputs.output_spaces),
-            confounds=re.sub(r'[\t ]+', ', ', conflist))
+            output_spaces=', '.join(self.inputs.output_spaces))
+            #confounds=re.sub(r'[\t ]+', ', ', conflist))
 
 
 class AboutSummaryInputSpec(BaseInterfaceInputSpec):

@@ -195,8 +195,8 @@ def init_enhance_and_skullstrip_dwi_wf(
     outputnode = pe.Node(niu.IdentityInterface(fields=[
         'mask_file', 'skull_stripped_file', 'bias_corrected_file']), name='outputnode')
 
-    # Basic mask from Dipy
-    initial_mask = pe.Node(MedianOtsu(dilate=8, num_pass=3, median_radius=4),
+    # Basic mask
+    initial_mask = pe.Node(afni.Automask(dilate=6, outputtype="NIFTI_GZ"),
                            name="initial_mask")
 
     # Run N4 normally, force num_threads=1 for stability (images are small, no need for >1)
@@ -207,10 +207,10 @@ def init_enhance_and_skullstrip_dwi_wf(
 
     workflow.connect([
         (inputnode, initial_mask, [('in_file', 'in_file')]),
-        (initial_mask, n4_correct, [('out_mask', 'mask_image')]),
+        (initial_mask, n4_correct, [('out_file', 'mask_image')]),
         (inputnode, n4_correct, [('in_file', 'input_image')]),
         (n4_correct, hist_eq, [('output_image', 'in_file')]),
-        (initial_mask, hist_eq, [('out_mask', 'mask_file')]),
+        (initial_mask, hist_eq, [('out_file', 'mask_file')]),
         (hist_eq, outputnode, [('out_file', 'bias_corrected_file'),
                                ('out_file', 'skull_stripped_file')]),
     ])

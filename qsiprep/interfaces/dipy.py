@@ -91,16 +91,16 @@ class HistEQ(SimpleInterface):
         uneq_data = uneq_img.get_data()
 
         mask = nb.load(self.inputs.mask_file)
-        mask_data = mask.get_data() > 0
-        uneq_data[np.logical_not(mask_data)] = 0.0
+        bool_mask = mask.get_data() > 0
+        data_voxels = uneq_data[bool_mask]
 
         # Do a clip on 2 to 98th percentile
-        bottom_2, top_98 = np.percentile(uneq_data, np.array([2, 98]), axis=None)
-        clipped_b0 = np.clip(uneq_data, None, top_98)
-        clipped_b0[clipped_b0 < bottom_2] = 0
-
-        eq_data = histeq(clipped_b0)
-        eq_img = nb.Nifti1Image(eq_data.astype('f8'), uneq_img.affine, uneq_img.header)
+        bottom_2, top_98 = np.percentile(data_voxels, np.array([1, 99]), axis=None)
+        clipped_b0 = np.clip(data_voxels, 0, top_98)
+        eq_data = histeq(clipped_b0, num_bins=512)
+        output = np.zeros_like(mask.get_data())
+        output[bool_mask] = eq_data
+        eq_img = nb.Nifti1Image(output, uneq_img.affine, uneq_img.header)
         self._results['out_file'] = fname_presuffix(
             self.inputs.in_file, suffix='_equalized', newpath=runtime.cwd)
         eq_img.to_filename(self._results['out_file'])

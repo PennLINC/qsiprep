@@ -261,7 +261,7 @@ def init_dwi_preproc_wf(dwi_files,
             't1_preproc', 't1_brain', 't1_mask', 't1_seg', 't1_tpms',
             't1_aseg', 't1_aparc', 't1_2_mni_forward_transform',
             't1_2_mni_reverse_transform', 't1_2_fsnative_forward_transform',
-            't1_2_fsnative_reverse_transform', 't1_output_grid'
+            't1_2_fsnative_reverse_transform', 'dwi_sampling_grid'
         ]),
         name='inputnode')
     outputnode = pe.Node(
@@ -326,7 +326,7 @@ def init_dwi_preproc_wf(dwi_files,
                      ('b0_images', 'b0_images_minus'),
                      ('b0_indices', 'b0_indices_minus')]),
                 (split_minus, b0_hmc_minus, [('b0_images', 'inputnode.b0_images')]),
-                (b0_hmc_plus, concat_rpe_splits, [
+                (b0_hmc_minus, concat_rpe_splits, [
                     (('outputnode.forward_transforms', _list_squeeze), 'hmc_affines_minus')]),
 
                 # Use the hmc templates as the input for pepolar unwarping
@@ -453,14 +453,20 @@ def init_dwi_preproc_wf(dwi_files,
 
 
         ])
-
+    '''
     summary = pe.Node(
         DiffusionSummary(
+            distortion_correction='bidir_pepolar',
+            fallback=False,
+            slice_timing=False,
+            pe_direction='j',
+            registration='FSL',
+            registration_dof=6,
             output_spaces=output_spaces),
         name='summary',
         mem_gb=DEFAULT_MEMORY_MIN_GB,
         run_without_submitting=True)
-
+    '''
     dwi_derivatives_wf = init_dwi_derivatives_wf(
         output_dir=output_dir,
         output_spaces=output_spaces,
@@ -507,7 +513,7 @@ def init_dwi_preproc_wf(dwi_files,
         transform_dwis_t1 = pe.Node(WarpAndRecombineDWIs(), name='transform_dwis_t1')
 
         workflow.connect([
-            (inputnode, transform_dwis_t1, [('t1_output_grid', 'output_grid')]),
+            (inputnode, transform_dwis_t1, [('dwi_sampling_grid', 'output_grid')]),
                                             # ('t1_2_mni_forward_transform',
                                             # 't1_2_mni_forward_transform')]),
             (buffernode, transform_dwis_t1, [
@@ -517,12 +523,13 @@ def init_dwi_preproc_wf(dwi_files,
                 ('b0_ref_image', 'b0_ref_image'),
                 ('b0_ref_mask', 'dwi_mask'),
                 ('b0_indices', 'original_b0_indices'),
-                ('to_dwi_ref_affines', 'b0_hmc_affines'),
+                ('to_dwi_ref_affines', 'hmc_to_ref_affines'),
                 ('to_dwi_ref_warps', 'dwi_ref_to_unwarped_warp')]),
-            (b0_coreg_wf, transform_dwis_t1, [('outputnode.itk_b0_to_t1',
+            (b0_coreg_wf, transform_dwis_t1, [(('outputnode.itk_b0_to_t1', _get_first),
                                                'unwarped_dwi_ref_to_t1w_affine')]),
-
-            #(transform_dwis_t1, outputnode, [()])
+            (transform_dwis_t1, outputnode, [('out_bval', 'bvals_t1'), ('out_bvec', 'bvecs_t1'),
+                                             ('out_dwi', 'dwi_t1'), ('out_b0s', 't1_b0_series'),
+                                             ('out_b0_ref', 't1_b0_ref')])
         ])
 
 
@@ -540,8 +547,8 @@ def init_dwi_preproc_wf(dwi_files,
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB)
 
-    workflow.connect([
-        (summary, ds_report_summary, [('out_report', 'in_file')])])
+    #workflow.connect([
+    #    (summary, ds_report_summary, [('out_report', 'in_file')])])
     #    (dwi_reference_wf, ds_report_validation,
     #         [('outputnode.validation_report', 'in_file')]),
     # ])

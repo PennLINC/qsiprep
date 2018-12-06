@@ -30,21 +30,6 @@ from nipype.interfaces.afni.base import AFNICommand, AFNICommandInputSpec, AFNIC
 LOGGER = logging.getLogger('nipype.interface')
 
 
-class ResamplingGridInputSpec(BaseInterfaceInputSpec):
-    native_image = File(exists=True, mandatory=True, desc='image w/ original data grid')
-    template_image = File(exists=True, mandatory=True, desc='target image (template)')
-    voxel_size = traits.Float(1.0, mandatory=False, desc='output voxel size. If undefinet '
-                              'use the voxel size of ``native_image``')
-
-
-class ResamplingGridOutputSpec(TraitedSpec):
-    out_file = File(exists=True, desc='reference image file for resampling')
-
-
-class ResamplingGridOutputSpec(SimpleInterface):
-    pass
-
-
 class SplitDWIsInputSpec(BaseInterfaceInputSpec):
     dwi_file = File(desc='the dwi image')
     bvec_file = File(desc='the bvec file')
@@ -117,7 +102,7 @@ class ConcatRPESplitsOutputSpec(TraitedSpec):
     bvec_files = OutputMultiObject(File(exists=True), desc='single volume bvecs')
     bval_files = OutputMultiObject(File(exists=True), desc='single volume bvals')
     b0_images = OutputMultiObject(File(exists=True), desc='just the b0s')
-    b0_indices = traits.List(desc='list of original indices for each b0 image')
+    b0_indices = traits.List(desc='list of indices for each b0 image')
     to_dwi_ref_affines = OutputMultiObject(File(exists=True), desc='affines to b0 ref')
     to_dwi_ref_warps = OutputMultiObject(File(exists=True), desc='correcting warps to b0 ref')
     original_grouping = traits.List(desc='list of source series for each dwi')
@@ -127,6 +112,7 @@ class ConcatRPESplits(SimpleInterface):
     """Combine the outputs from the RPE series workflow into a SplitDWI-like object.
 
     Plus series goes first, indices are adjusted for minus to be globally correct.
+    head motion affines are combined with to-ref affines and stored in dwi_to_ref_affines.
     """
 
     input_spec = ConcatRPESplitsInputSpec
@@ -168,16 +154,20 @@ class ConcatRPESplits(SimpleInterface):
         # Create a list where each element is the warp for the DWI at the corresponding index
         if isdefined(plus_hmc_to_ref_warp) and isdefined(minus_hmc_to_ref_warp):
             self._results['to_dwi_ref_warps'] = [plus_hmc_to_ref_warp] * num_plus + \
-                [minus_hmc_to_ref_warp]
+                [minus_hmc_to_ref_warp] * num_minus
 
         # Combine the hmc affine with the to-reference affine
-        plus_combined_affines = [
-            compose_affines(self.inputs.b0_ref_image, [hmc_aff, plus_hmc_to_ref_affine],
-                            runtime.cwd) for hmc_aff in plus_hmc_affines]
-        minus_combined_affines = [
-            compose_affines(self.inputs.b0_ref_image, [hmc_aff, minus_hmc_to_ref_affine],
-                            runtime.cwd) for hmc_aff in minus_hmc_affines]
-        self._results['to_dwi_ref_affines'] = plus_combined_affines + minus_combined_affines
+        combined_affines = []
+        for affine_num, hmc_aff_plus in enumerate(plus_hmc_affines):
+            combined_affines.append(
+                compose_affines(self.inputs.b0_ref_image,
+                                [hmc_aff_plus, plus_hmc_to_ref_affine],
+                                runtime.cwd + "/combined_hmc_affine_plus_%03d.mat" % affine_num))
+        for affine_num, hmc_aff_minus in enumerate(minus_hmc_affines):
+            combined_affines.append(
+                compose_affines(self.inputs.b0_ref_image, [hmc_aff_minus, minus_hmc_to_ref_affine],
+                                runtime.cwd + "/combined_hmc_affine_minus_%03d.mat" % affine_num))
+        self._results['to_dwi_ref_affines'] = combined_affines
 
         return runtime
 

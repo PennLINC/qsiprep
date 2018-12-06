@@ -330,11 +330,8 @@ def _arrange_xfms(transforms, num_files, tmp_folder):
     return list(map(list, zip(*xfms_T)))
 
 
-def compose_affines(reference_image, affine_list, output_dir):
+def compose_affines(reference_image, affine_list, output_file):
     """Use antsApplyTransforms to get a single affine from multiple affines."""
-    new_fname = "_".join([os.path.split(fn)[1] for fn in affine_list])
-    output_file = fname_presuffix(affine_list[0], suffix='composed_' + new_fname,
-                                  newpath=output_dir)
     cmd = "antsApplyTransforms -d 3 -r %s -o Linear[%s, 1] " % (
         reference_image, output_file)
     cmd += " ".join(["--transform %s" % trf for trf in affine_list])
