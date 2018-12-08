@@ -19,10 +19,10 @@ from niworkflows.interfaces.registration import ANTSApplyTransformsRPT
 
 from fmriprep.engine import Workflow
 from ...interfaces import StructuralReference
-from fmriprep.workflows.bold.util import init_enhance_and_skullstrip_bold_wf
+from ..dwi.util import init_enhance_and_skullstrip_dwi_wf
 
 
-def init_pepolar_unwarp_wf(bold_meta, epi_fmaps, omp_nthreads=1,
+def init_pepolar_unwarp_wf(dwi_meta, epi_fmaps, omp_nthreads=1,
                            name="pepolar_unwarp_wf"):
     """
     This workflow takes in a set of EPI files with opposite phase encoding
@@ -51,7 +51,7 @@ def init_pepolar_unwarp_wf(bold_meta, epi_fmaps, omp_nthreads=1,
 
         from qsiprep.workflows.fieldmap.pepolar import init_pepolar_unwarp_wf
         wf = init_pepolar_unwarp_wf(
-            bold_meta={'PhaseEncodingDirection': 'j'},
+            dwi_meta={'PhaseEncodingDirection': 'j'},
             epi_fmaps=[('/dataset/sub-01/fmap/sub-01_epi.nii.gz', 'j-')],
             omp_nthreads=8)
 
@@ -78,20 +78,20 @@ def init_pepolar_unwarp_wf(bold_meta, epi_fmaps, omp_nthreads=1,
             mask of the unwarped input file
 
     """
-    bold_file_pe = bold_meta["PhaseEncodingDirection"]
+    dwi_file_pe = dwi_meta["PhaseEncodingDirection"]
 
     args = '-noXdis -noYdis -noZdis'
     rm_arg = {'i': '-noXdis',
               'j': '-noYdis',
-              'k': '-noZdis'}[bold_file_pe[0]]
+              'k': '-noZdis'}[dwi_file_pe[0]]
     args = args.replace(rm_arg, '')
 
     usable_fieldmaps_matching_pe = []
     usable_fieldmaps_opposite_pe = []
     for fmap, fmap_pe in epi_fmaps:
-        if fmap_pe == bold_file_pe:
+        if fmap_pe == dwi_file_pe:
             usable_fieldmaps_matching_pe.append(fmap)
-        elif fmap_pe[0] == bold_file_pe[0]:
+        elif fmap_pe[0] == dwi_file_pe[0]:
             usable_fieldmaps_opposite_pe.append(fmap)
 
     if not usable_fieldmaps_opposite_pe:
@@ -155,7 +155,7 @@ directions, using `3dQwarp` @afni (AFNI {afni_ver}).
                                                       interpolation='LanczosWindowedSinc'),
                                name='unwarp_reference')
 
-    enhance_and_skullstrip_bold_wf = init_enhance_and_skullstrip_bold_wf(omp_nthreads=omp_nthreads)
+    enhance_and_skullstrip_dwi_wf = init_enhance_and_skullstrip_dwi_wf(omp_nthreads=omp_nthreads)
 
     workflow.connect([
         (inputnode, cphdr_warp, [('in_reference', 'hdr_file')]),
@@ -164,10 +164,10 @@ directions, using `3dQwarp` @afni (AFNI {afni_ver}).
         (to_ants, unwarp_reference, [('out', 'transforms')]),
         (inputnode, unwarp_reference, [('in_reference', 'reference_image'),
                                        ('in_reference', 'input_image')]),
-        (unwarp_reference, enhance_and_skullstrip_bold_wf, [
+        (unwarp_reference, enhance_and_skullstrip_dwi_wf, [
             ('output_image', 'inputnode.in_file')]),
         (unwarp_reference, outputnode, [('output_image', 'out_reference')]),
-        (enhance_and_skullstrip_bold_wf, outputnode, [
+        (enhance_and_skullstrip_dwi_wf, outputnode, [
             ('outputnode.mask_file', 'out_mask'),
             ('outputnode.skull_stripped_file', 'out_reference_brain')]),
         (to_ants, outputnode, [('out', 'out_warp')]),
@@ -228,7 +228,7 @@ def init_prepare_epi_wf(omp_nthreads, name="prepare_epi_wf"):
                             out_file='template.nii.gz'),
         name='merge')
 
-    enhance_and_skullstrip_bold_wf = init_enhance_and_skullstrip_bold_wf(
+    enhance_and_skullstrip_dwi_wf = init_enhance_and_skullstrip_dwi_wf(
         omp_nthreads=omp_nthreads)
 
     ants_settings = pkgr.resource_filename('qsiprep',
@@ -246,8 +246,8 @@ def init_prepare_epi_wf(omp_nthreads, name="prepare_epi_wf"):
     workflow.connect([
         (inputnode, split, [('fmaps', 'in_file')]),
         (split, merge, [(('out_files', _flatten), 'in_files')]),
-        (merge, enhance_and_skullstrip_bold_wf, [('out_file', 'inputnode.in_file')]),
-        (enhance_and_skullstrip_bold_wf, fmap2ref_reg, [
+        (merge, enhance_and_skullstrip_dwi_wf, [('out_file', 'inputnode.in_file')]),
+        (enhance_and_skullstrip_dwi_wf, fmap2ref_reg, [
             ('outputnode.skull_stripped_file', 'moving_image')]),
         (inputnode, fmap2ref_reg, [('ref_brain', 'fixed_image')]),
         (fmap2ref_reg, outputnode, [('warped_image', 'out_file')]),

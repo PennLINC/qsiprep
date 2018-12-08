@@ -146,7 +146,7 @@ class BIDSDataGrabber(SimpleInterface):
             raise FileNotFoundError('No T1w images found for subject sub-{}'.format(
                 self.inputs.subject_id))
 
-        if self._require_funcs and not bids_dict['bold']:
+        if self._require_funcs and not bids_dict['dwi']:
             raise FileNotFoundError('No functional images found for subject sub-{}'.format(
                 self.inputs.subject_id))
 

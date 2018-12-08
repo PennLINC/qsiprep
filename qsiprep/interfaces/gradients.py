@@ -72,28 +72,38 @@ class WarpAndRecombineDWIs(SimpleInterface):
         if not len(dwi_hmc_affines) == num_dwis:
             raise Exception("Shouldn't happen")
 
-        image_transforms = [dwi_hmc_affines,
-                            self.inputs.dwi_ref_to_unwarped_warp,
-                            [self.inputs.unwarped_dwi_ref_to_t1w_affine] * num_dwis]
+        # Add in the unwarps if they exist
+        image_transforms = [dwi_hmc_affines]
+        sdc_unwarp = self.inputs.dwi_ref_to_unwarped_warp
+        if isdefined(sdc_unwarp):
+            if len(sdc_unwarp) == num_dwis:
+                image_transforms.append(sdc_unwarp)
+            elif len(sdc_unwarp) == 1:
+                image_transforms.append(sdc_unwarp * num_dwis)
+        image_transforms.append([self.inputs.unwarped_dwi_ref_to_t1w_affine] * num_dwis)
+
         if isdefined(self.inputs.t1_2_mni_forward_transform):
             image_transforms.append([self.inputs.t1_2_mni_forward_transform * num_dwis])
 
         rotated_bvecs = []
         warped_images = []
-        transform_lists = [list(its) for its in zip(*tuple(image_transforms))]
-        for dwi_file, bvec, transforms in zip(dwi_files, bvec_files, transform_lists):
+        for dwi_num in range(num_dwis):
+            print(dwi_num)
+            dwi_file = dwi_files[dwi_num]
+            bvec = bvec_files[dwi_num]
+            transforms = [trfs[dwi_num] for trfs in image_transforms]
             (warped_image, rotated_bvec_file,
-                warped_bvec_image) = _warp_dwi(dwi_file, bvec, transforms[::-1],
+                warped_bvec_image) = _warp_dwi(dwi_file, bvec, transforms,
                                                self.inputs.output_grid, runtime)
             rotated_bvecs.append(rotated_bvec_file)
             warped_images.append(warped_image)
 
         # recombine the bvalues (these shouldn't change)
         combined_bval = np.concatenate(
-            [np.loadtxt(bval_file) for bval_file in bval_files]).squeeze()
+            [np.loadtxt(bval_file, ndmin=1) for bval_file in bval_files]).squeeze()
 
         # recombine the rotated bvecs
-        combined_bvec = np.row_stack([np.loadtxt(fname, ndmin=2) for fname in rotated_bvecs])
+        combined_bvec = np.row_stack(rotated_bvecs)
 
         # recombine the images
         combined_dwis = afni.TCat(in_files=warped_images, outputtype="NIFTI_GZ"
@@ -110,6 +120,10 @@ class WarpAndRecombineDWIs(SimpleInterface):
         self._results['out_b0s'] = combined_b0s
 
         return runtime
+
+def bvec_rotation(bvec_file_list, transforms, ref_image, runtime):
+    """rotates bvecs according to"""
+    pass
 
 
 def _warp_dwi(image, bvec_file, transform_list, ref_image, runtime):

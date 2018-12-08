@@ -161,11 +161,13 @@ class ConcatRPESplits(SimpleInterface):
         for affine_num, hmc_aff_plus in enumerate(plus_hmc_affines):
             combined_affines.append(
                 compose_affines(self.inputs.b0_ref_image,
-                                [hmc_aff_plus, plus_hmc_to_ref_affine],
+                                # Pop transforms from the stack: first hmc then to ref
+                                [plus_hmc_to_ref_affine, hmc_aff_plus],
                                 runtime.cwd + "/combined_hmc_affine_plus_%03d.mat" % affine_num))
         for affine_num, hmc_aff_minus in enumerate(minus_hmc_affines):
             combined_affines.append(
-                compose_affines(self.inputs.b0_ref_image, [hmc_aff_minus, minus_hmc_to_ref_affine],
+                compose_affines(self.inputs.b0_ref_image,
+                                [minus_hmc_to_ref_affine, hmc_aff_minus],
                                 runtime.cwd + "/combined_hmc_affine_minus_%03d.mat" % affine_num))
         self._results['to_dwi_ref_affines'] = combined_affines
 

@@ -196,7 +196,7 @@ def init_enhance_and_skullstrip_dwi_wf(
         'mask_file', 'skull_stripped_file', 'bias_corrected_file']), name='outputnode')
 
     # Basic mask
-    initial_mask = pe.Node(afni.Automask(dilate=6, outputtype="NIFTI_GZ"),
+    initial_mask = pe.Node(afni.Automask(dilate=3, outputtype="NIFTI_GZ"),
                            name="initial_mask")
 
     # Run N4 normally, force num_threads=1 for stability (images are small, no need for >1)

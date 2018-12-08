@@ -190,7 +190,7 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug,
 
     **Subworkflows**
 
-        * :py:func:`~fmriprep.workflows.anatomical.init_skullstrip_ants_wf`
+        * :py:func:`~qsiprep.workflows.anatomical.init_skullstrip_ants_wf`
         * :py:func:`~fmriprep.workflows.anatomical.init_surface_recon_wf`
 
     """
@@ -230,6 +230,7 @@ and used as T1w-reference throughout the workflow.
     )
     # Get the template image
     ref_img = pkgr('qsiprep', 'data/mni_1mm_t1w_lps.nii.gz')
+    ref_img_brain = pkgr('qsiprep', 'data/mni_1mm_t1w_lps_brain.nii.gz')
     inputnode = pe.Node(
         niu.IdentityInterface(fields=['t1w', 't2w', 'roi', 'flair', 'subjects_dir', 'subject_id']),
         name='inputnode')
@@ -252,7 +253,7 @@ and used as T1w-reference throughout the workflow.
     # Bias field correction is handled in skull strip workflows.
     skullstrip_ants_wf = init_skullstrip_ants_wf(name='skullstrip_ants_wf',
                                                  skull_strip_template=skull_strip_template,
-                                                 acpc_template=ref_img,
+                                                 acpc_template=ref_img_brain,
                                                  debug=debug,
                                                  omp_nthreads=omp_nthreads)
 
@@ -325,6 +326,7 @@ and used as T1w-reference throughout the workflow.
     # 6. Spatial normalization (T1w to MNI registration)
     t1_2_mni = pe.Node(
         RobustMNINormalizationRPT(
+            reference_image=ref_img_brain,
             float=True,
             generate_report=True,
             flavor='testing' if debug else 'precise',
@@ -359,7 +361,7 @@ and used as T1w-reference throughout the workflow.
         # Get the template image
         ref_img = pkgr('qsiprep', 'data/mni_1mm_t1w_lps.nii.gz')
 
-        t1_2_mni.inputs.template = 'MNI152NLin2009cAsym'
+        # t1_2_mni.inputs.template = 'MNI152NLin2009cAsym'
         mni_mask.inputs.reference_image = ref_img
         mni_seg.inputs.reference_image = ref_img
         mni_tpms.inputs.reference_image = ref_img
@@ -664,17 +666,27 @@ The T1w-reference was then skull-stripped using `antsBrainExtraction.sh`
         ('tpl-%s_res-01_label-BrainCerebellumExtraction_roi.nii.gz' % template_name))
 
     # Get everything in ACPC before sending to output
-    rigid_acpc_align = pe.Node(
-        AI(fixed_image=str(acpc_template),
-           metric=('Mattes', 32, 'Regular', 0.2),
-           transform=('Rigid', 0.1),
-           search_factor=(20, 0.12),
-           principal_axes=False,
-           convergence=(1000, 1e-6, 50),
-           verbose=True),
-        name='rigid_acpc_align',
-        n_procs=omp_nthreads)
-
+    rigid_acpc_align = pe.Node(ants.Registration(), name='rigid_acpc_align', n_procs=omp_nthreads)
+    rigid_acpc_align.inputs.metric = ["Mattes"]
+    rigid_acpc_align.inputs.transforms = ["Rigid"]
+    rigid_acpc_align.inputs.shrink_factors = [[8, 4, 2, 1]]
+    rigid_acpc_align.inputs.smoothing_sigmas = [[7., 3., 1., 0.]]
+    rigid_acpc_align.inputs.sigma_units = ["vox"]
+    rigid_acpc_align.inputs.sampling_strategy = ['Random']
+    rigid_acpc_align.inputs.sampling_percentage = [0.25]
+    rigid_acpc_align.inputs.radius_or_number_of_bins = [32]
+    rigid_acpc_align.inputs.initial_moving_transform_com = 0
+    rigid_acpc_align.inputs.interpolation = 'LanczosWindowedSinc'
+    rigid_acpc_align.inputs.dimension = 3
+    rigid_acpc_align.inputs.winsorize_lower_quantile = 0.025
+    rigid_acpc_align.inputs.winsorize_upper_quantile = 0.975
+    rigid_acpc_align.inputs.number_of_iterations = [[10000, 1000, 10000, 10000]]
+    rigid_acpc_align.inputs.transform_parameters = [[0.2]]
+    rigid_acpc_align.inputs.convergence_threshold = [1e-06]
+    rigid_acpc_align.inputs.collapse_output_transforms = True
+    rigid_acpc_align.inputs.write_composite_transform = False
+    rigid_acpc_align.inputs.output_warped_image = True
+    rigid_acpc_align.inputs.fixed_image = acpc_template
     # Resampling
     rigid_acpc_resample_brain = pe.Node(
         ants.ApplyTransforms(reference_image=acpc_template,
@@ -701,10 +713,10 @@ The T1w-reference was then skull-stripped using `antsBrainExtraction.sh`
         (inputnode, t1_skull_strip, [('in_file', 'anatomical_image')]),
         (t1_skull_strip, rigid_acpc_align, [('N4Corrected0', 'moving_image')]),
         # Resampling
-        (rigid_acpc_align, rigid_acpc_resample_brain, [('output_transform', 'transforms')]),
-        (rigid_acpc_align, rigid_acpc_resample_head, [('output_transform', 'transforms')]),
-        (rigid_acpc_align, rigid_acpc_resample_mask, [('output_transform', 'transforms')]),
-        (rigid_acpc_align, rigid_acpc_resample_seg, [('output_transform', 'transforms')]),
+        (rigid_acpc_align, rigid_acpc_resample_brain, [('forward_transforms', 'transforms')]),
+        (rigid_acpc_align, rigid_acpc_resample_head, [('forward_transforms', 'transforms')]),
+        (rigid_acpc_align, rigid_acpc_resample_mask, [('forward_transforms', 'transforms')]),
+        (rigid_acpc_align, rigid_acpc_resample_seg, [('forward_transforms', 'transforms')]),
         (t1_skull_strip, rigid_acpc_resample_brain, [('BrainExtractionBrain', 'input_image')]),
         (t1_skull_strip, rigid_acpc_resample_head, [('N4Corrected0', 'input_image')]),
         (t1_skull_strip, rigid_acpc_resample_mask, [('BrainExtractionMask', 'input_image')]),
