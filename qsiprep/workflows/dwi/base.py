@@ -22,7 +22,6 @@ from ...interfaces import DerivativesDataSink
 
 from ...interfaces.reports import DiffusionSummary
 from ...interfaces.images import SplitDWIs, ConcatRPESplits
-from ...interfaces.gradients import WarpAndRecombineDWIs
 
 from fmriprep.engine import Workflow
 
@@ -33,6 +32,7 @@ from .merge import init_merge_and_denoise_wf
 from .hmc import init_b0_hmc_wf
 from .util import init_dwi_reference_wf
 from .registration import init_b0_to_anat_registration_wf
+from .resampling import init_dwi_trans_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger('nipype.workflow')
@@ -220,11 +220,8 @@ def init_dwi_preproc_wf(dwi_files,
         * :py:func:`~qsiprep.workflows.dwi.registration.init_dwi_t1_trans_wf`
         * :py:func:`~qsiprep.workflows.dwi.registration.init_dwi_reg_wf`
         * :py:func:`~qsiprep.workflows.dwi.confounds.init_dwi_confounds_wf`
-        * :py:func:`~qsiprep.workflows.dwi.confounds.init_ica_aroma_wf`
-        * :py:func:`~qsiprep.workflows.dwi.resampling.init_dwi_mni_trans_wf`
-        * :py:func:`~qsiprep.workflows.dwi.resampling.init_dwi_surf_wf`
+        * :py:func:`~qsiprep.workflows.dwi.resampling.init_dwi_trans_wf`
         * :py:func:`~qsiprep.workflows.fieldmap.pepolar.init_pepolar_unwarp_wf`
-        * :py:func:`~qsiprep.workflows.fieldmap.init_fmap_estimator_wf`
         * :py:func:`~qsiprep.workflows.fieldmap.init_sdc_unwarp_wf`
         * :py:func:`~qsiprep.workflows.fieldmap.init_nonlinear_sdc_wf`
 
@@ -510,28 +507,70 @@ def init_dwi_preproc_wf(dwi_files,
     ])
 
     if "T1w" in output_spaces:
-        transform_dwis_t1 = pe.Node(WarpAndRecombineDWIs(), name='transform_dwis_t1')
-
+        transform_dwis_t1 = init_dwi_trans_wf(name='transform_dwis_t1',
+                                              template="ACPC",
+                                              mem_gb=mem_gb['resampled'],
+                                              use_fieldwarp=(fmaps is not None or use_syn),
+                                              omp_nthreads=omp_nthreads,
+                                              use_compression=False,
+                                              to_mni=False
+                                              )
         workflow.connect([
-            (inputnode, transform_dwis_t1, [('dwi_sampling_grid', 'output_grid')]),
-                                            # ('t1_2_mni_forward_transform',
-                                            # 't1_2_mni_forward_transform')]),
             (buffernode, transform_dwis_t1, [
-                ('dwi_files', 'dwi_files'),
-                ('bvec_files', 'bvec_files'),
-                ('bval_files', 'bval_files'),
-                ('b0_ref_image', 'b0_ref_image'),
-                ('b0_ref_mask', 'dwi_mask'),
-                ('b0_indices', 'original_b0_indices'),
-                ('to_dwi_ref_affines', 'hmc_to_ref_affines'),
-                ('to_dwi_ref_warps', 'dwi_ref_to_unwarped_warp')]),
-            (b0_coreg_wf, transform_dwis_t1, [(('outputnode.itk_b0_to_t1', _get_first),
-                                               'unwarped_dwi_ref_to_t1w_affine')]),
-            (transform_dwis_t1, outputnode, [('out_bval', 'bvals_t1'), ('out_bvec', 'bvecs_t1'),
-                                             ('out_dwi', 'dwi_t1'), ('out_b0s', 't1_b0_series'),
-                                             ('out_b0_ref', 't1_b0_ref')])
+                ('dwi_files', 'inputnode.dwi_files'),
+                ('bvec_files', 'inputnode.bvec_files'),
+                ('bval_files', 'inputnode.bval_files'),
+                ('b0_ref_image', 'inputnode.b0_ref_image'),
+                ('b0_ref_mask', 'inputnode.dwi_mask'),
+                ('b0_indices', 'inputnode.b0_indices'),
+                ('to_dwi_ref_affines', 'inputnode.hmc_xforms'),
+                ('to_dwi_ref_warps', 'inputnode.fieldwarps')]),
+            (inputnode, transform_dwis_t1, [
+                ('t1_2_mni_forward_transform', 'inputnode.t1_2_mni_forward_transform'),
+                ('dwi_sampling_grid', 'inputnode.output_grid')]),
+            (b0_coreg_wf, transform_dwis_t1, [
+                ('outputnode.itk_b0_to_t1', 'inputnode.itk_b0_to_t1')]),
+            (transform_dwis_t1, outputnode, [('outputnode.bvals', 'bvals_t1'),
+                                             ('outputnode.rotated_bvecs', 'bvecs_t1'),
+                                             ('outputnode.dwi_resampled', 'dwi_t1'),
+                                             ('outputnode.local_bvecs', 'local_bvecs_t1'),
+                                             ('outputnode.dwi_mask_resampled', 'dwi_mask_t1'),
+                                             ('outputnode.b0_series', 't1_b0_series'),
+                                             ('outputnode.dwi_ref_resampled', 't1_b0_ref')])
         ])
 
+    if "template" in output_spaces:
+        transform_dwis_mni = init_dwi_trans_wf(name='transform_dwis_mni',
+                                               template=template,
+                                               mem_gb=mem_gb['resampled'],
+                                               use_fieldwarp=(fmaps is not None or use_syn),
+                                               omp_nthreads=omp_nthreads,
+                                               use_compression=False,
+                                               to_mni=True
+                                               )
+        workflow.connect([
+            (buffernode, transform_dwis_mni, [
+                ('dwi_files', 'inputnode.dwi_files'),
+                ('bvec_files', 'inputnode.bvec_files'),
+                ('bval_files', 'inputnode.bval_files'),
+                ('b0_ref_image', 'inputnode.b0_ref_image'),
+                ('b0_ref_mask', 'inputnode.dwi_mask'),
+                ('b0_indices', 'inputnode.b0_indices'),
+                ('to_dwi_ref_affines', 'inputnode.hmc_xforms'),
+                ('to_dwi_ref_warps', 'inputnode.fieldwarps')]),
+            (inputnode, transform_dwis_mni, [
+                ('t1_2_mni_forward_transform', 'inputnode.t1_2_mni_forward_transform'),
+                ('dwi_sampling_grid', 'inputnode.output_grid')]),
+            (b0_coreg_wf, transform_dwis_mni, [
+                ('outputnode.itk_b0_to_t1', 'inputnode.itk_b0_to_t1')]),
+            (transform_dwis_mni, outputnode, [('outputnode.bvals', 'bvals_mni'),
+                                              ('outputnode.rotated_bvecs', 'bvecs_mni'),
+                                              ('outputnode.dwi_resampled', 'dwi_mni'),
+                                              ('outputnode.dwi_mask_resampled', 'mni_mask_t1'),
+                                              ('outputnode.b0_series', 'mni_b0_series'),
+                                              ('outputnode.local_bvecs', 'local_bvecs_mni'),
+                                              ('outputnode.dwi_ref_resampled', 'mni_b0_ref')])
+        ])
 
     # REPORTING ############################################################
     ds_report_summary = pe.Node(

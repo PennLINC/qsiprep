@@ -135,6 +135,12 @@ ENV MKL_NUM_THREADS=1 \
 
 WORKDIR /root/
 
+# Install DSI Studio
+ADD docker/scripts/install_dsi_studio.sh install_dsi_studio.sh
+RUN mkdir -p /opt/dsi_studio && \
+    /root/install_dsi_studio.sh && \
+    chmod -R a+rX /opt/dsi_studio
+
 # Precaching atlases
 ENV CRN_SHARED_DATA /niworkflows_data
 ADD docker/scripts/get_templates.sh get_templates.sh

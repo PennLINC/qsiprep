@@ -1,198 +1,461 @@
 """Handle merging and spliting of DSI files."""
 import numpy as np
+import os
 import os.path as op
 import nibabel as nb
 from nipype.interfaces.base import (BaseInterfaceInputSpec, TraitedSpec, File, SimpleInterface,
                                     InputMultiObject, OutputMultiObject, traits, isdefined)
 from nipype.interfaces import afni, ants
 from nipype.utils.filemanip import fname_presuffix
+from nipype.interfaces.ants.resampling import ApplyTransformsInputSpec
+from .itk import DisassembleTransform
+from tempfile import TemporaryDirectory
+import logging
+from dipy.sims.voxel import all_tensor_evecs
+from dipy.reconst.dti import decompose_tensor
+from dipy.core.geometry import normalized_vector
+LOGGER = logging.getLogger('nipype.interface')
+tensor_index = {
+    "xx": (0, 0),
+    "xy": (0, 1),
+    "xz": (0, 2),
+    "yy": (1, 1),
+    "yz": (1, 2),
+    "zz": (2, 2)
+}
+
+class ExtractB0sInputSpec(BaseInterfaceInputSpec):
+    b0_indices = traits.List(mandatory=True)
+    dwi_series = File(exists=True, mandatory=True)
 
 
-class WarpAndRecombineDWIsInputSpec(BaseInterfaceInputSpec):
-    output_grid = File(exists=True, mandatory=True,
-                       desc='grid into which outputs are written')
-    b0_ref_image = File(exists=True, desc='')
+class ExtractB0sOutputSpec(TraitedSpec):
+    b0_series = File(exists=True)
+
+
+class ExtractB0s(SimpleInterface):
+    input_spec = ExtractB0sInputSpec
+    output_spec = ExtractB0sOutputSpec
+
+    def _run_interface(self, runtime):
+        output_fname = fname_presuffix(self.inputs.dwi_series, suffix='_b0_series',
+                                       use_ext=True, newpath=runtime.cwd)
+        img = nb.load(self.inputs.dwi_series)
+        indices = np.array(self.inputs.b0_indices).astype(np.int)
+        new_data = img.get_data()[..., indices]
+        nb.Nifti1Image(new_data, img.affine, img.header).to_filename(output_fname)
+        self._results['b0_series'] = output_fname
+        return runtime
+
+
+class ComposeTransformsInputSpec(ApplyTransformsInputSpec):
+    input_image = File(mandatory=False)
     dwi_files = InputMultiObject(
         File(exists=True), mandatory=True, desc='list of dwi files')
-    bval_files = InputMultiObject(
-        File(exists=True), mandatory=True, desc='list of bval files')
-    bvec_files = InputMultiObject(
-        File(exists=True), mandatory=True, desc='list of bvec files')
-    dwi_mask = File(exists=True, desc='dwi mask image')
-    original_b0_indices = traits.List(mandatory=True)
+    original_b0_indices = traits.List(mandatory=True, desc='positions of b0 images')
+    reference_image = File(exists=True, mandatory=True, desc='output grid')
     # Transforms to apply
     hmc_to_ref_affines = InputMultiObject(File(exists=True), mandatory=True,
                                           desc='affines registering b0s to b0 reference')
-    dwi_ref_to_unwarped_warp = InputMultiObject(File(exists=True), mandtory=False,
-                                                desc='SDC unwarping transform')
-
+    fieldwarps = InputMultiObject(File(exists=True), mandtory=False,
+                                  desc='SDC unwarping transform')
     unwarped_dwi_ref_to_t1w_affine = File(exists=True, mandatory=True,
                                           desc='affine from dwi ref to t1w')
     t1_2_mni_forward_transform = InputMultiObject(File(exists=True), mandatory=False,
-                                                  desc='affine and warp to mni')
+                                                  desc='composite (h5) transform to mni')
+    transforms = File(mandatory=False)
+    save_cmd = traits.Bool(True, usedefault=True,
+                           desc='write a log of command lines that were applied')
+    copy_dtype = traits.Bool(False, usedefault=True,
+                             desc='copy dtype from inputs to outputs')
+    num_threads = traits.Int(1, usedefault=True, nohash=True,
+                             desc='number of parallel processes')
 
 
-class WarpAndRecombineDWIsOutputSpec(TraitedSpec):
-    out_dwi = File(desc='the merged dwi image')
-    out_bval = File(desc='the merged bvec file')
-    out_bvec = File(desc='the merged bval file')
-    out_b0s = File(desc='4d series of b0 images')
-    out_b0_ref = File(desc='reference b0 image')
+class ComposeTransformsOutputSpec(TraitedSpec):
+    out_warps = OutputMultiObject(File(exists=True),
+                                  desc='composed all transforms to output_grid')
+    out_affines = OutputMultiObject(File(exists=True),
+                                    desc='composed affine-only transforms to output_grid')
+    transform_lists = OutputMultiObject(traits.List(File(exists=True)),
+                                        desc='lists of transforms for each image')
+    log_cmdline = File(desc='a list of command lines used to apply transforms')
 
-class WarpAndRecombineDWIs(SimpleInterface):
-    input_spec = WarpAndRecombineDWIsInputSpec
-    output_spec = WarpAndRecombineDWIsOutputSpec
+
+class ComposeTransforms(SimpleInterface):
+    input_spec = ComposeTransformsInputSpec
+    output_spec = ComposeTransformsOutputSpec
 
     def _run_interface(self, runtime):
         dwi_files = self.inputs.dwi_files
-        bval_files = self.inputs.bval_files
-        bvec_files = self.inputs.bvec_files
         b0_hmc_affines = self.inputs.hmc_to_ref_affines
         original_b0_indices = np.array(self.inputs.original_b0_indices).astype(np.int)
-
         num_dwis = len(dwi_files)
 
         # Do sanity checks
-        if not len(dwi_files) == len(bval_files) == len(bvec_files):
-            raise Exception("bvals, bvecs and dwis do not match")
-        if not len(b0_hmc_affines) == len(original_b0_indices):
-            raise Exception('number of hmc affines do not match number of b0 images')
+        if not len(b0_hmc_affines) == num_dwis:
+            if not len(b0_hmc_affines) == len(original_b0_indices):
+                raise Exception('number of hmc affines do not match number of b0 images')
 
-        # Create a list of which hmc affines go with each of the split images
-        dwi_hmc_affines = []
-        for index in range(num_dwis):
-            # There is an direct transform for each b0
-            if index in original_b0_indices:
-                this_transform = b0_hmc_affines[np.flatnonzero(original_b0_indices == index)[0]]
-            else:
+            # Create a list of which hmc affines go with each of the split images
+            dwi_hmc_affines = []
+            for index in range(num_dwis):
+                # There is an direct transform for each b0
                 nearest_b0_num = np.argmin(np.abs(index - original_b0_indices))
                 this_transform = b0_hmc_affines[nearest_b0_num]
-            dwi_hmc_affines.append(this_transform)
+                dwi_hmc_affines.append(this_transform)
+        else:
+            raise Exception('non-b0 hmc not implemented yet')
 
         if not len(dwi_hmc_affines) == num_dwis:
             raise Exception("Shouldn't happen")
 
-        # Add in the unwarps if they exist
+        # Add in the sdc unwarps if they exist
         image_transforms = [dwi_hmc_affines]
-        sdc_unwarp = self.inputs.dwi_ref_to_unwarped_warp
+        image_transform_names = ["hmc"]
+        sdc_unwarp = self.inputs.fieldwarps
         if isdefined(sdc_unwarp):
+            # ConcatRPESplits produces an entry for each image
             if len(sdc_unwarp) == num_dwis:
                 image_transforms.append(sdc_unwarp)
+                image_transform_names.append("fieldwarp")
+            # Otherwise only one warp in a list
             elif len(sdc_unwarp) == 1:
                 image_transforms.append(sdc_unwarp * num_dwis)
+                image_transform_names.append("fieldwarp")
+
+        # Same b0-to-t1 affine for every image
         image_transforms.append([self.inputs.unwarped_dwi_ref_to_t1w_affine] * num_dwis)
+        image_transform_names.append("b0 to t1")
 
-        if isdefined(self.inputs.t1_2_mni_forward_transform):
-            image_transforms.append([self.inputs.t1_2_mni_forward_transform * num_dwis])
+        # Same t1-to-mni transform for every image
+        mni_xform = self.inputs.t1_2_mni_forward_transform
+        if isdefined(mni_xform):
+            if type(mni_xform) is traits.TraitListObject:
+                mni_xform = mni_xform[0]
+            # Convert to affine and warp if each
+            if mni_xform.endswith("h5"):
+                LOGGER.info("Disassembling %s", mni_xform)
+                disassemble = DisassembleTransform(in_file=mni_xform)
+                mni_xform_list = disassemble.run().outputs.out_transforms
+            else:
+                mni_xform_list = mni_xform
+            image_transforms.append([mni_xform_list[0]] * num_dwis)
+            image_transforms.append([mni_xform_list[1]] * num_dwis)
+            image_transform_names += ['mni affine', 'mni warp']
+        # Check that all the transform lists have the same numbers of transforms
+        assert all([len(xform_list) == len(image_transforms[0]) for
+                    xform_list in image_transforms])
 
-        rotated_bvecs = []
-        warped_images = []
-        for dwi_num in range(num_dwis):
-            print(dwi_num)
-            dwi_file = dwi_files[dwi_num]
-            bvec = bvec_files[dwi_num]
-            transforms = [trfs[dwi_num] for trfs in image_transforms]
-            (warped_image, rotated_bvec_file,
-                warped_bvec_image) = _warp_dwi(dwi_file, bvec, transforms,
-                                               self.inputs.output_grid, runtime)
-            rotated_bvecs.append(rotated_bvec_file)
-            warped_images.append(warped_image)
+        # Reverse the order for ANTs
+        image_transforms = image_transforms[::-1]
 
-        # recombine the bvalues (these shouldn't change)
-        combined_bval = np.concatenate(
-            [np.loadtxt(bval_file, ndmin=1) for bval_file in bval_files]).squeeze()
+        # List of lists, one list per input file
+        xfms_list = []
+        for image_num in range(num_dwis):
+            xfms_list.append([xfm[image_num] for xfm in image_transforms])
 
-        # recombine the rotated bvecs
-        combined_bvec = np.row_stack(rotated_bvecs)
+        LOGGER.info("Composing %s transforms", ' -> '.join(image_transform_names))
 
-        # recombine the images
-        combined_dwis = afni.TCat(in_files=warped_images, outputtype="NIFTI_GZ"
-                                  ).run().outputs.out_file
+        # Get all inputs from the ApplyTransforms object
+        ifargs = self.inputs.get()
 
-        # Make just a b0 series
-        combined_b0s = afni.TCat(in_files=[warped_images[n] for n in
-                                           self.inputs.original_b0_indices],
-                                 outputtype="NIFTI_GZ").run().outputs.out_file
+        # Extract number of input images and transforms
+        num_files = len(dwi_files)
+        # Get number of parallel jobs
+        num_threads = ifargs.pop('num_threads')
+        save_cmd = ifargs.pop('save_cmd')
 
-        self._results['out_dwi'] = combined_dwis
-        self._results['out_bval'] = combined_bval
-        self._results['out_bvec'] = combined_bvec
-        self._results['out_b0s'] = combined_b0s
+        # Remove certain keys
+        for key in ['environ', 'ignore_exception', 'print_out_composite_warp_file',
+                    'terminal_output', 'output_image', 'input_image', 'transforms',
+                    'dwi_files', 'original_b0_indices', 'hmc_to_ref_affines',
+                    'fieldwarps', 'unwarped_dwi_ref_to_t1w_affine', 'interpolation',
+                    't1_2_mni_forward_transform', 'copy_dtype']:
+            ifargs.pop(key, None)
 
+        # Get a temp folder ready
+        tmp_folder = TemporaryDirectory(prefix='tmp-', dir=runtime.cwd)
+
+        # In qsiprep the transforms have already been merged
+        assert len(xfms_list) == num_files
+        self._results['transform_lists'] = xfms_list
+
+        # Inputs are ready to run in parallel
+        if num_threads < 1:
+            num_threads = None
+
+        if num_threads == 1:
+            out_files = [_compose_tfms((
+                in_file, in_xfm, ifargs, i, runtime.cwd))
+                for i, (in_file, in_xfm) in enumerate(zip(dwi_files, xfms_list))
+            ]
+        else:
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=num_threads) as pool:
+                out_files = list(pool.map(_compose_tfms, [
+                    (in_file, in_xfm, ifargs, i, runtime.cwd)
+                    for i, (in_file, in_xfm) in enumerate(zip(dwi_files, xfms_list))]
+                ))
+        tmp_folder.cleanup()
+
+        # Collect output file names, after sorting by index
+        self._results['out_warps'] = [el[0] for el in out_files]
+        self._results['out_affines'] = [el[2] for el in out_files]
+
+        if save_cmd:
+            self._results['log_cmdline'] = os.path.join(runtime.cwd, 'command.txt')
+            with open(self._results['log_cmdline'], 'w') as cmdfile:
+                print('\n-------\n'.join(
+                      ['\n-------\n'.join([el[1], el[3]]) for el in out_files]),
+                      file=cmdfile)
         return runtime
 
-def bvec_rotation(bvec_file_list, transforms, ref_image, runtime):
-    """rotates bvecs according to"""
-    pass
+
+class GradientRotationInputSpec(BaseInterfaceInputSpec):
+    affine_transforms = InputMultiObject(File(exists=True), desc='ITK affine transforms')
+    warp_transforms = InputMultiObject(File(exists=True), desc='Warps')
+    bvec_files = InputMultiObject(File(exists=True), desc='list of split bvec files')
+    bval_files = InputMultiObject(File(exists=True), desc='list of split bval files')
+    mask_image = File(exists=True, desc='brain mask in the output space')
 
 
-def _warp_dwi(image, bvec_file, transform_list, ref_image, runtime):
-    """Requires that bvec_file contains only 3 numbers on a single line.
-
-    Use antsApplyTransformsToPoints to warp two points (a vector)
-    and uses the relationship between the warped points to rotate the
-    b vector. Only works if absolutely everything is in LPS+.
-    transform_list must be in the order they would be specified on the
-    commandline to antsApplyTransforms. They will be inverted
-    in this function (ie last transform is applied first).
-    """
-    import os
-    import numpy as np
-    orig_vec = np.loadtxt(bvec_file)
-    if (orig_vec**2).sum() == 0:
-        rotated_unit_vec = orig_vec
-    else:
-        orig_txt = fname_presuffix(bvec_file, suffix='_pre_rotation.csv', newpath=runtime.cwd,
-                                   use_ext=False)
-        rotated_txt = fname_presuffix(bvec_file, suffix='_post_rotation.csv', newpath=None,
-                                      use_ext=False)
-
-        # Save it for ants
-        with open(orig_txt, "w") as bvec_txt:
-            bvec_txt.write("x,y,z,t\n0.0,0.0,0.0,0.0\n")
-            bvec_txt.write(",".join(map(str, 5 * orig_vec)) + ",0.0\n")
-
-        def unit_vector(vector):
-            """The unit vector of the vector."""
-            if np.abs(vector).sum() == 0:
-                return vector
-            return vector / np.linalg.norm(vector)
-
-        # Only use the affine transforms for global bvecs
-        bvec_transforms = [trf for trf in transform_list if ".nii" not in trf]
-        # Reverse order and inverse to antsApplyTransformsToPoints
-        transforms = " ".join(
-            ["--transform [%s, 1]" % trf for trf in bvec_transforms[::-1]])
-        os.system("antsApplyTransformsToPoints --dimensionality 3 --input " + orig_txt +
-                  " --output " + rotated_txt + " " + transforms)
-        rotated_vec = np.loadtxt(rotated_txt, skiprows=1, delimiter=",")[:, :3]
-        rotated_unit_vec = unit_vector(rotated_vec[1] - rotated_vec[0])
-
-    # Apply all transforms to the image
-    warped_image = fname_presuffix(image, suffix='_warped', newpath=runtime.cwd, use_ext=True)
-    xfm = ants.ApplyTransforms(
-        input_image=image, transforms=transform_list, output_image=warped_image,
-        interpolation="LanczosWindowedSinc", dimension=3, reference_image=ref_image)
-    xfm.run()
-
-    return warped_image, rotated_unit_vec, None
+class GradientRotationOutputSpec(TraitedSpec):
+    bvals = File(exists=True)
+    bvecs = File(exists=True)
+    local_bvecs = File(exists=True)
+    log_cmdline = File(exists=True)
 
 
-def combine_bvals(bvals):
-    """Load, merge and save fsl-style bvals files."""
+class GradientRotation(SimpleInterface):
+    """Reorient gradients accordint to transorms."""
+    input_spec = GradientRotationInputSpec
+    output_spec = GradientRotationOutputSpec
+
+    def _run_interface(self, runtime):
+        out_root = os.path.join(runtime.cwd, "rotated")
+
+        # Simple concatenation of bvals
+        bval_fname = out_root + ".bval"
+        concatenate_bvals(self.inputs.bval_files, bval_fname)
+        self._results['bvals'] = bval_fname
+
+        # Load and rotate the global gradient vectors
+        original_bvecs = concatenate_bvecs(self.inputs.bvec_files)
+        bvec_fname = out_root + ".bvec"
+        commands = bvec_rotation(original_bvecs, self.inputs.affine_transforms, bvec_fname,
+                                 runtime)
+        self._results['bvecs'] = bvec_fname
+
+        # Create the local bvecs
+        local_bvec_fname = out_root + "_local_bvecs.nii.gz"
+        self._results['local_bvecs'] = local_bvec_fname
+        local_bvec_commands = local_bvec_rotation(original_bvecs, self.inputs.warp_transforms,
+                                                  self.inputs.mask_image, runtime)
+
+        self._results['log_cmdline'] = os.path.join(runtime.cwd, 'command.txt')
+        with open(self._results['log_cmdline'], 'w') as cmdfile:
+            print('\n-------\n'.join(commands), file=cmdfile)
+        return runtime
+
+
+def concatenate_bvals(bval_list, out_file):
+    """Create an FSL-style bvals file from split bval files."""
     collected_vals = []
-    for bval_file in bvals:
-        collected_vals.append(np.loadtxt(bval_file))
-    final_bvals = np.concatenate(collected_vals)
-    np.savetxt("restacked.bval", final_bvals, fmt=str("%i"))
-    return op.abspath("restacked.bval")
+    for bval_file in bval_list:
+        collected_vals.append(np.loadtxt(bval_file, ndmin=1))
+    final_bvals = np.concatenate(collected_vals).squeeze()
+    np.savetxt(out_file, final_bvals, fmt=str("%i"))
 
 
-def combine_bvecs(bvecs):
-    """Load, merge and save fsl-style bvecs files."""
+def concatenate_bvecs(input_files):
+    """Create Dipy-style gradient array from bvec files."""
     collected_vecs = []
-    for bvec_file in bvecs:
+    for bvec_file in input_files:
         collected_vecs.append(np.loadtxt(bvec_file))
-    final_bvecs = np.column_stack(collected_vecs)
-    np.savetxt("restacked.bvec", final_bvecs, fmt=str("%.8f"))
-    return op.abspath("restacked.bvec")
+    return np.row_stack(collected_vecs)
+
+
+def bvec_rotation(original_bvecs, transforms, output_file, runtime):
+    """Rotate bvecs using antsApplyTransformsToPoints and antsTransformInfo."""
+    aattp_rotated = []
+    commands = []
+    for bvec, transform in zip(original_bvecs, transforms):
+        vec, cmd = aattp_rotate_vec(bvec, transform, runtime)
+        aattp_rotated.append(vec)
+        commands.append(cmd)
+    rotated_vecs = np.row_stack(aattp_rotated)
+    np.savetxt(output_file, rotated_vecs.T, fmt=str("%.8f"))
+    return commands
+
+
+def aattp_rotate_vec(orig_vec, transform, runtime):
+    if (orig_vec**2).sum() == 0:
+        return orig_vec, "b0: No rotation"
+
+    orig_txt = fname_presuffix(transform, suffix='_pre_rotation.csv', newpath=runtime.cwd,
+                               use_ext=False)
+    rotated_txt = fname_presuffix(transform, suffix='_post_rotation.csv', newpath=runtime.cwd,
+                                  use_ext=False)
+
+    # Save it for ants
+    with open(orig_txt, "w") as bvec_txt:
+        bvec_txt.write("x,y,z,t\n0.0,0.0,0.0,0.0\n")
+        bvec_txt.write(",".join(map(str, 5 * orig_vec)) + ",0.0\n")
+
+    def unit_vector(vector):
+        """The unit vector of the vector."""
+        return vector / np.linalg.norm(vector)
+
+    # Only use the affine transforms for global bvecs
+    # Reverse order and inverse to antsApplyTransformsToPoints
+    transforms = "--transform [%s, 1]" % transform
+    cmd = "antsApplyTransformsToPoints --dimensionality 3 --input " + orig_txt + \
+          " --output " + rotated_txt + " " + transforms
+    os.system(cmd)
+    rotated_vec = np.loadtxt(rotated_txt, skiprows=1, delimiter=",")[:, :3]
+    rotated_unit_vec = unit_vector(rotated_vec[1] - rotated_vec[0])
+
+    return rotated_unit_vec, cmd
+
+
+def _compose_tfms(args):
+    """Create a composite transform from inputs."""
+    in_file, in_xform, ifargs, index, newpath = args
+    out_file = fname_presuffix(in_file, suffix='_xform-%05d' % index,
+                               newpath=newpath, use_ext=True)
+
+    xfm = ants.ApplyTransforms(
+        input_image=in_file, transforms=in_xform, output_image=out_file,
+        print_out_composite_warp_file=True, interpolation='LanczosWindowedSinc', **ifargs)
+    xfm.terminal_output = 'allatonce'
+    xfm.resource_monitor = False
+    runtime = xfm.run().runtime
+
+    # Force floating point precision
+    nii = nb.load(out_file)
+    nii.set_data_dtype(np.dtype('float32'))
+    nii.to_filename(out_file)
+
+    # Get just the affine Transforms
+    affines = [transform for transform in in_xform if '.nii' not in transform]
+    out_affine = fname_presuffix(in_file, suffix='_affine_xform-%05d.mat' % index,
+                                 newpath=newpath, use_ext=False)
+    affine_file, affine_cmd = compose_affines(ifargs['reference_image'], affines, out_affine)
+
+    return (out_file, runtime.cmdline, affine_file, affine_cmd)
+
+
+def compose_affines(reference_image, affine_list, output_file):
+    """Use antsApplyTransforms to get a single affine from multiple affines."""
+    cmd = "antsApplyTransforms -d 3 -r %s -o Linear[%s, 1] " % (
+        reference_image, output_file)
+    cmd += " ".join(["--transform %s" % trf for trf in affine_list])
+    os.system(cmd)
+    assert os.path.exists(output_file)
+    return output_file, cmd
+
+
+def create_tensor_image(mask_img, direction, prefix):
+    """set intent as NIFTI_INTENT_SYMMATRIX (1005),
+    [dxx, dxy, dyy, dxz, dyz, dzz] are the components
+    info from here
+    https://github.com/ANTsX/ANTs/wiki/Importing-diffusion-tensor-data-from-other-software
+    """
+    out_fname = prefix + "_tensor.nii"
+    evecs = all_tensor_evecs(direction)
+    evals = np.diag([1.0, 0.5, 0.05])
+    tensor = np.linalg.multi_dot([evecs, evals, evecs.T])
+
+    temp_components = []
+    for direction in ['xx', 'xy', 'xz', 'yy', 'yz', 'zz']:
+        this_component = prefix + '_temp_dtiComp_%s.nii' % direction
+        nb.Nifti1Image(mask_img.get_data()*tensor[tensor_index[direction]], mask_img.affine,
+                       mask_img.header).to_filename(this_component)
+        temp_components.append(this_component)
+    os.system('ImageMath 3 %s ComponentTo3DTensor dtiComp_' % (
+              out_fname, prefix + '_temp_dtiComp_'))
+    for temp_component in temp_components:
+        os.remove(temp_component)
+
+    return out_fname
+
+
+def reorient_tensor_image(tensor_image, warp_file, mask_img, prefix, output_fname):
+    cmds = []
+    to_remove = []
+    reoriented_tensor_fname = prefix + "reoriented_tensor.nii"
+    reorient_cmd = "ReorientTensorImage 3 %s %s %s" % (tensor_image,
+                                                       reoriented_tensor_fname,
+                                                       warp_file)
+    os.system(reorient_cmd)
+    cmds.append(reorient_cmd)
+    to_remove.append(reoriented_tensor_fname)
+
+    # Load the reoriented tensor and get the principal directions out
+    reoriented_dt_img = nb.load(reoriented_tensor_fname)
+    reoriented_tensor_data = reoriented_dt_img.get_data().squeeze()
+
+    mask_data = mask_img.get_data() > 0
+    output_data = np.zeros(mask_img.shape + (3,))
+
+    reoriented_tensors = reoriented_tensor_data[mask_data]
+    reoriented_vectors = np.zeros((reoriented_tensors.shape[0], 3))
+
+    def tensor_from_vec(vec):
+        """[dxx, dxy, dyy, dxz, dyz, dzz]"""
+        return np.array([
+            [vec[0], vec[1], vec[3]],
+            [vec[1], vec[2], vec[4]],
+            [vec[3], vec[4], vec[5]]
+        ])
+
+    for nrow, row in enumerate(reoriented_tensors):
+        row_tensor = tensor_from_vec(row)
+        evals, evecs = decompose_tensor(row_tensor)
+        reoriented_vectors[nrow] = evecs[:, 0]
+
+    output_data[mask_data] = normalized_vector(reoriented_vectors)
+    vector_data = get_vector_nii(output_data, mask_img.affine, mask_img.header)
+    vector_data.to_filename(output_fname)
+    os.remove(reoriented_tensor_fname)
+    return output_fname, reorient_cmd
+
+
+def get_vector_nii(data, affine, header):
+    hdr = header.copy()
+    hdr.set_data_dtype(np.dtype('<f4'))
+    hdr.set_intent('vector', (), '')
+    return nb.Nifti1Image(data[:, :, :, np.newaxis, :].astype(
+                          np.dtype('<f4')), affine, hdr)
+
+
+def local_bvec_rotation(original_bvecs, warp_transforms, mask_image, runtime):
+    """Create a vector in each voxel that accounts for nonlinear warps."""
+    prefix = os.path.join(runtime.cwd, "local_bvec_")
+    mask_img = nb.load(mask_image)
+    mask_data = mask_img.get_data()
+    b0_image = get_vector_nii(np.stack([np.zeros_like(mask_data)] * 3, -1), mask_img.affine,
+                              mask_img.header)
+    commands = []
+    rotated_vec_files = []
+    for vecnum, (original_bvec, warp_file) in enumerate(zip(original_bvecs, warp_transforms)):
+        num_prefix = prefix + "%03d_" % vecnum
+        out_fname = num_prefix + "rotated.nii.gz"
+        # if it's a b0, no rotation needed
+        if np.sum(original_bvec**2) == 0:
+            b0_image.to_filename(out_fname)
+            rotated_vec_files.append(out_fname)
+            commands.append("B0: No rotation")
+            continue
+
+        # otherwise, rotate it
+        tensor_fname = create_tensor_image(mask_img, original_bvec, num_prefix)
+        rotated_vector_fname, rotate_cmd = reorient_tensor_image(tensor_fname,
+                                                                 warp_file,
+                                                                 mask_img,
+                                                                 num_prefix,
+                                                                 out_fname)
+        commands.append(rotate_cmd)
+        rotated_vec_files.append(out_fname)
+    return rotated_vec_files, commands

@@ -213,6 +213,7 @@ def init_enhance_and_skullstrip_dwi_wf(
         (initial_mask, hist_eq, [('out_file', 'mask_file')]),
         (hist_eq, outputnode, [('out_file', 'bias_corrected_file'),
                                ('out_file', 'skull_stripped_file')]),
+        (initial_mask, outputnode, [('out_file', 'mask_image')]),
     ])
 
     return workflow

@@ -109,6 +109,7 @@ class MergeInputSpec(BaseInterfaceInputSpec):
                         usedefault=True, desc='numpy dtype of output image')
     header_source = File(exists=True, desc='a Nifti file from which the header should be copied')
     compress = traits.Bool(True, usedefault=True, desc='Use gzip compression on .nii output')
+    is_dwi = traits.Bool(True, usedefault=True, desc='if True, negative values are set to zero')
 
 
 class MergeOutputSpec(TraitedSpec):
@@ -130,6 +131,8 @@ class Merge(SimpleInterface):
             new_nii.header.set_xyzt_units(t=src_hdr.get_xyzt_units()[-1])
             new_nii.header.set_zooms(list(new_nii.header.get_zooms()[:3]) +
                                      [src_hdr.get_zooms()[3]])
+        if self.inputs.is_dwi:
+            new_nii = nb.Nifti1Image(np.abs(new_nii.get_data()), new_nii.affine, new_nii.header)
 
         new_nii.to_filename(self._results['out_file'])
 
