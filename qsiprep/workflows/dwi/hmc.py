@@ -209,7 +209,8 @@ def model_alignment_workflow(modelname,
                              replace_outliers=False):
     """Make a model-based hmc iteration."""
     workflow = pe.Workflow(name="model_alignment_%03d" % iternum)
-    input_fields = ["dwi_files", "mask_image", "bvals", "bvecs", "transforms", "b0_indices"]
+    input_fields = ["dwi_files", "mask_image", "bvals", "bvecs", "transforms", "b0_image",
+                    "b0_indices"]
     inputnode = pe.Node(
         niu.IdentityInterface(fields=input_fields), name='inputnode')
     inputnode.inputs.iteration_num = iternum

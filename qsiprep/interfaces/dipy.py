@@ -25,7 +25,9 @@ from nipype.interfaces.base import (
 )
 from nipype.interfaces import ants
 from nipype.interfaces.ants.registration import RegistrationInputSpec
-from .gradients import concatenate_bvecs, concatenate_bvals
+from .gradients import concatenate_bvecs, concatenate_bvals, GradientRotation
+from dipy.core.gradients import gradient_table
+from dipy.reconst import mapmri
 
 LOGGER = logging.getLogger('nipype.interface')
 
@@ -123,6 +125,8 @@ class IdealSignalRegistrationInputSpec(RegistrationInputSpec):
                            desc='write a log of command lines that were applied')
     b0_indices = traits.List(mandatory=True)
     initial_transforms = InputMultiObject(File(exists=True))
+    b0_template = File(exists=True)
+    mask_image = File(exists=True)
 
 
 class IdealSignalRegistrationOutputSpec(TraitedSpec):
@@ -137,6 +141,7 @@ class IdealSignalRegistration(SimpleInterface):
     output_spec = IdealSignalRegistrationOutputSpec
 
     def _run_interface(self, runtime):
+        b0_indices = self.inputs.b0_indices
         dwi_files = self.inputs.input_image
         num_dwis = len(dwi_files)
         # Load the data
@@ -145,10 +150,44 @@ class IdealSignalRegistration(SimpleInterface):
         else:
             bvecs = concatenate_bvecs(self.inputs.bvecs)
         bvals = concatenate_bvals(self.inputs.bvals)
-        # Get ideal images from each of the non-b0s, tracking their indices
-        target_files, target_indices = generate_ideal_signals(dwi_files, bvals, bvecs,
-                                                              self.inputs.b0_indices)
-        # Get all inputs from the ApplyTransforms object
+        mask_img = nb.load(self.inputs.mask_image)
+        mask_array = mask_img.get_data() > 0
+
+        images = [nb.load(img) for img in dwi_files]
+
+        # MODEL PART ######################################################
+        # Prepare a b0 template
+        b0_images = [img for img in images if img not in b0_indices]
+        b0_data = np.stack([img.get_data() for img in b0_images], -1)
+        b0_mean = b0_data.mean(3)
+
+        # Prepate non-b0 images
+        target_indices = [idx for idx in range(num_dwis) if idx not in b0_indices]
+        non_b0_images = [images[idx] for idx in target_indices]
+        model_bvecs = np.row_stack([np.zeros(3)] + [bvecs[n] for n in target_indices])
+        model_bvals = np.array([0.] + [bvals[n] for n in target_indices])
+        model_data = np.concatenate(
+            [b0_mean, np.stack([img.get_data() for img in non_b0_images], -1)])
+
+        gtab = gradient_table(bvals=model_bvals, bvecs=model_bvecs)
+        if self.inputs.model_name == "MAPMRI":
+            model = mapmri(gtab)
+        else:
+            raise Exception("%s model not supported")
+        # Get the predicted signal out
+        model.fit(model_data, mask=mask_array)
+        predicted_signal = model.predict()
+
+        target_files = []
+        for fitnum in range(len(target_indices)):
+            output_fname = os.path.join(
+                runtime.cwd, 'ideal_signal_%03d.nii.gz' % target_indices[fitnum])
+            fit_data = predicted_signal[..., fitnum+1]
+            nb.Nifti1Image(fit_data, mask_img.affine, mask_img.header).to_filename(output_fname)
+            target_files.append(output_fname)
+
+        # REGISTRATION PART ######################################################
+        # Get all inputs from the Registration object
         ifargs = self.inputs.get()
 
         # Get number of parallel jobs
@@ -173,14 +212,14 @@ class IdealSignalRegistration(SimpleInterface):
         if num_threads == 1:
             out_files = [_reg_to_ideal((
                 in_file, in_xfm, ifargs, i, runtime.cwd))
-                for i, (in_file, in_xfm) in enumerate(zip(dwi_files, target_files))
+                for i, (in_file, in_xfm) in enumerate(zip(non_b0_images, target_files))
             ]
         else:
             from concurrent.futures import ThreadPoolExecutor
             with ThreadPoolExecutor(max_workers=num_threads) as pool:
                 out_files = list(pool.map(_reg_to_ideal, [
                     (in_file, in_xfm, ifargs, i, runtime.cwd)
-                    for i, (in_file, in_xfm) in enumerate(zip(dwi_files, target_files))]
+                    for i, (in_file, in_xfm) in enumerate(zip(non_b0_images, target_files))]
                 ))
         tmp_folder.cleanup()
         dwi_transforms = [el[0] for el in out_files]
@@ -204,13 +243,6 @@ class IdealSignalRegistration(SimpleInterface):
                 print('\n-------\n'.join([el[1] for el in out_files]), file=cmdfile)
 
         return runtime
-
-
-def generate_ideal_signals(dwi_files, bvals, bvecs, b0_indices):
-
-    targets_list = []
-    targets_indices = []
-    return targets_list, targets_indices
 
 
 def _reg_to_ideal(args):
