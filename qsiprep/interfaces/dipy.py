@@ -10,6 +10,9 @@ Image tools interfaces
 """
 import nibabel as nb
 import numpy as np
+import os
+
+from tempfile import TemporaryDirectory
 
 from dipy.core.histeq import histeq
 from dipy.segment.mask import median_otsu
@@ -17,9 +20,12 @@ from dipy.segment.mask import median_otsu
 from nipype import logging
 from nipype.utils.filemanip import fname_presuffix
 from nipype.interfaces.base import (
-    traits, TraitedSpec, BaseInterfaceInputSpec,
-    File, SimpleInterface
+    traits, TraitedSpec, BaseInterfaceInputSpec, File, SimpleInterface, InputMultiObject,
+    OutputMultiObject
 )
+from nipype.interfaces import ants
+from nipype.interfaces.ants.registration import RegistrationInputSpec
+from .gradients import concatenate_bvecs, concatenate_bvals
 
 LOGGER = logging.getLogger('nipype.interface')
 
@@ -105,3 +111,125 @@ class HistEQ(SimpleInterface):
             self.inputs.in_file, suffix='_equalized', newpath=runtime.cwd)
         eq_img.to_filename(self._results['out_file'])
         return runtime
+
+
+class IdealSignalRegistrationInputSpec(RegistrationInputSpec):
+    model_name = traits.Enum("3dSHORE", "MAPMRI", desc='model to generate ideal signal')
+    input_image = InputMultiObject(File(exists=True), desc='list of 3d dwis')
+    # fixed_image_masks
+    bvals = InputMultiObject(File(exists=True))
+    bvecs = traits.Either(InputMultiObject(File(exists=True)), traits.Array)
+    save_cmd = traits.Bool(True, usedefault=True,
+                           desc='write a log of command lines that were applied')
+    b0_indices = traits.List(mandatory=True)
+    initial_transforms = InputMultiObject(File(exists=True))
+
+
+class IdealSignalRegistrationOutputSpec(TraitedSpec):
+    confounds = File(exists=True)
+    transforms = OutputMultiObject(File(exists=True))
+    log_cmdline = File(desc='a list of command lines used to apply transforms')
+    rotated_bvecs = OutputMultiObject(File(exists=True))
+
+
+class IdealSignalRegistration(SimpleInterface):
+    input_spec = IdealSignalRegistrationInputSpec
+    output_spec = IdealSignalRegistrationOutputSpec
+
+    def _run_interface(self, runtime):
+        dwi_files = self.inputs.input_image
+        num_dwis = len(dwi_files)
+        # Load the data
+        if type(self.inputs.bvecs) is np.ndarray:
+            bvecs = self.inputs.bvecs
+        else:
+            bvecs = concatenate_bvecs(self.inputs.bvecs)
+        bvals = concatenate_bvals(self.inputs.bvals)
+        # Get ideal images from each of the non-b0s, tracking their indices
+        target_files, target_indices = generate_ideal_signals(dwi_files, bvals, bvecs,
+                                                              self.inputs.b0_indices)
+        # Get all inputs from the ApplyTransforms object
+        ifargs = self.inputs.get()
+
+        # Get number of parallel jobs
+        num_threads = ifargs.pop('num_threads')
+        save_cmd = ifargs.pop('save_cmd')
+
+        # Remove certain keys
+        for key in ['environ', 'ignore_exception', 'print_out_composite_warp_file',
+                    'terminal_output', 'output_image', 'input_image', 'transforms',
+                    'dwi_files', 'original_b0_indices', 'hmc_to_ref_affines',
+                    'fieldwarps', 'unwarped_dwi_ref_to_t1w_affine', 'interpolation',
+                    't1_2_mni_forward_transform', 'copy_dtype']:
+            ifargs.pop(key, None)
+
+        # Get a temp folder ready
+        tmp_folder = TemporaryDirectory(prefix='tmp-', dir=runtime.cwd)
+
+        # Inputs are ready to run in parallel
+        if num_threads < 1:
+            num_threads = None
+
+        if num_threads == 1:
+            out_files = [_reg_to_ideal((
+                in_file, in_xfm, ifargs, i, runtime.cwd))
+                for i, (in_file, in_xfm) in enumerate(zip(dwi_files, target_files))
+            ]
+        else:
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=num_threads) as pool:
+                out_files = list(pool.map(_reg_to_ideal, [
+                    (in_file, in_xfm, ifargs, i, runtime.cwd)
+                    for i, (in_file, in_xfm) in enumerate(zip(dwi_files, target_files))]
+                ))
+        tmp_folder.cleanup()
+        dwi_transforms = [el[0] for el in out_files]
+
+        # Add back in the b0s, return the full transform list
+        recombined_transforms = [''] * num_dwis
+        for b0_index in self.inputs.b0_indices:
+            recombined_transforms[b0_index] = self.inputs.initial_transforms[b0_index]
+        for target_index, target_transform in zip(target_indices, dwi_transforms):
+            recombined_transforms[target_index] = target_transform
+        self._results['transforms'] = recombined_transforms
+
+        rotator = GradientRotation(affine_transforms=recombined_transforms,
+                                   bvec_files=self.inputs.bvecs,
+                                   bval_files=self.inputs.bvals)
+        self._results['rotated_bvecs'] = rotator.run().results['bvecs']
+
+        if save_cmd:
+            self._results['log_cmdline'] = os.path.join(runtime.cwd, 'command.txt')
+            with open(self._results['log_cmdline'], 'w') as cmdfile:
+                print('\n-------\n'.join([el[1] for el in out_files]), file=cmdfile)
+
+        return runtime
+
+
+def generate_ideal_signals(dwi_files, bvals, bvecs, b0_indices):
+
+    targets_list = []
+    targets_indices = []
+    return targets_list, targets_indices
+
+
+def _reg_to_ideal(args):
+    """Create a composite transform from inputs."""
+    in_file, in_target, ifargs, index, newpath = args
+    out_file = fname_presuffix(in_file, suffix='_xform-%05d' % index,
+                               newpath=newpath, use_ext=True)
+
+    xfm = ants.Registration(
+        input_image=in_file, transforms=in_target, output_image=out_file,
+        interpolation='LanczosWindowedSinc', **ifargs)
+    xfm.terminal_output = 'allatonce'
+    xfm.resource_monitor = False
+    runtime = xfm.run().runtime
+    LOGGER.info(runtime.cmdline)
+
+    # Force floating point precision
+    nii = nb.load(out_file)
+    nii.set_data_dtype(np.dtype('float32'))
+    nii.to_filename(out_file)
+
+    return (out_file, runtime.cmdline)

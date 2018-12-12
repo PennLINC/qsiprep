@@ -27,21 +27,20 @@ import pkg_resources as pkgr
 
 from nipype import logging
 from nipype.pipeline import engine as pe
-from nipype.interfaces import fsl, utility as niu
+from nipype.interfaces import fsl, ants, utility as niu
 from nipype.interfaces.image import Rescale
-from niworkflows.interfaces.fixes import (FixHeaderApplyTransforms as ApplyTransforms,
-                                          FixHeaderRegistration as Registration)
+
 from fmriprep.engine import Workflow
-from fmriprep.workflows.bold.util import init_skullstrip_bold_wf
+from ..dwi.util import init_skullstrip_b0_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger('nipype.workflow')
 
 
 def init_syn_sdc_wf(omp_nthreads, bold_pe=None,
-                    atlas_threshold=3, name='syn_sdc_wf'):
+                    atlas_threshold=2, name='syn_sdc_wf'):
     """
-    This workflow takes a skull-stripped T1w image and reference BOLD image and
+    This workflow takes a skull-stripped T1w image and reference b0 image and
     estimates a susceptibility distortion correction warp, using ANTs symmetric
     normalization (SyN) and the average fieldmap atlas described in
     [Treiber2016]_.
@@ -50,7 +49,7 @@ def init_syn_sdc_wf(omp_nthreads, bold_pe=None,
     If no PE direction is specified, anterior-posterior PE is assumed.
 
     SyN deformation is also restricted to regions that are expected to have a
-    >3mm (approximately 1 voxel) warp, based on the fieldmap atlas.
+    >2mm (approximately 1 voxel) warp, based on the fieldmap atlas.
 
     This technique is a variation on those developed in [Huntenburg2014]_ and
     [Wang2017]_.
@@ -66,9 +65,9 @@ def init_syn_sdc_wf(omp_nthreads, bold_pe=None,
 
     **Inputs**
 
-        bold_ref
+        b0_ref
             reference image
-        bold_ref_brain
+        b0_ref_brain
             skull-stripped reference image
         template : str
             Name of template targeted by ``template`` output space
@@ -99,14 +98,14 @@ def init_syn_sdc_wf(omp_nthreads, bold_pe=None,
     workflow.__desc__ = """\
 A deformation field to correct for susceptibility distortions was estimated
 based on *qsiprep*'s *fieldmap-less* approach.
-The deformation field is that resulting from co-registering the BOLD reference
+The deformation field is that resulting from co-registering the b0 reference
 to the same-subject T1w-reference with its intensity inverted [@fieldmapless1;
 @fieldmapless2].
 Registration is performed with `antsRegistration` (ANTs {ants_ver}), and
 the process regularized by constraining deformation to be nonzero only
 along the phase-encoding direction, and modulated with an average fieldmap
 template [@fieldmapless3].
-""".format(ants_ver=Registration().version or '<ver>')
+""".format(ants_ver=ants.Registration().version or '<ver>')
     inputnode = pe.Node(
         niu.IdentityInterface(['bold_ref', 'bold_ref_brain', 'template',
                                't1_brain', 't1_2_mni_reverse_transform']),
@@ -118,7 +117,7 @@ template [@fieldmapless3].
 
     # Collect predefined data
     # Atlas image and registration affine
-    atlas_img = pkgr.resource_filename('qsiprep', 'data/fmap_atlas.nii.gz')
+    atlas_img = pkgr.resource_filename('qsiprep', 'data/mni_1mm_fmap_atlas_lps.nii.gz')
     # Registration specifications
     affine_transform = pkgr.resource_filename('qsiprep', 'data/affine.json')
     syn_transform = pkgr.resource_filename('qsiprep', 'data/susceptibility_syn.json')
@@ -126,22 +125,20 @@ template [@fieldmapless3].
     invert_t1w = pe.Node(Rescale(invert=True), name='invert_t1w',
                          mem_gb=0.3)
 
-    ref_2_t1 = pe.Node(Registration(from_file=affine_transform),
+    ref_2_t1 = pe.Node(ants.Registration(from_file=affine_transform),
                        name='ref_2_t1', n_procs=omp_nthreads)
-    t1_2_ref = pe.Node(ApplyTransforms(invert_transform_flags=[True]),
+    t1_2_ref = pe.Node(ants.ApplyTransforms(invert_transform_flags=[True]),
                        name='t1_2_ref', n_procs=omp_nthreads)
 
-    # 1) BOLD -> T1; 2) MNI -> T1; 3) ATLAS -> MNI
-    transform_list = pe.Node(niu.Merge(3), name='transform_list',
+    # 1) BO -> T1; 2) MNI -> T1
+    transform_list = pe.Node(niu.Merge(2), name='transform_list',
                              mem_gb=DEFAULT_MEMORY_MIN_GB)
 
     # Inverting (1), then applying in reverse order:
     #
     # ATLAS -> MNI -> T1 -> BOLD
-    atlas_2_ref = pe.Node(
-        ApplyTransforms(invert_transform_flags=[True, False, False]),
-        name='atlas_2_ref', n_procs=omp_nthreads,
-        mem_gb=0.3)
+    atlas_2_ref = pe.Node(ants.ApplyTransforms(), name='atlas_2_ref', n_procs=omp_nthreads,
+                          mem_gb=0.3)
     atlas_2_ref.inputs.input_image = atlas_img
 
     threshold_atlas = pe.Node(
@@ -155,14 +152,14 @@ template [@fieldmapless3].
 
     restrict = [[int(bold_pe[0] == 'i'), int(bold_pe[0] == 'j'), 0]] * 2
     syn = pe.Node(
-        Registration(from_file=syn_transform, restrict_deformation=restrict),
+        ants.Registration(from_file=syn_transform, restrict_deformation=restrict),
         name='syn', n_procs=omp_nthreads)
 
-    unwarp_ref = pe.Node(ApplyTransforms(
+    unwarp_ref = pe.Node(ants.ApplyTransforms(
         dimension=3, float=True, interpolation='LanczosWindowedSinc'),
         name='unwarp_ref')
 
-    skullstrip_bold_wf = init_skullstrip_bold_wf()
+    skullstrip_b0_wf = init_skullstrip_b0_wf()
 
     workflow.connect([
         (inputnode, invert_t1w, [('t1_brain', 'in_file'),
@@ -173,9 +170,7 @@ template [@fieldmapless3].
         (invert_t1w, t1_2_ref, [('out_file', 'input_image')]),
         (ref_2_t1, t1_2_ref, [('forward_transforms', 'transforms')]),
         (ref_2_t1, transform_list, [('forward_transforms', 'in1')]),
-        (inputnode, transform_list, [
-            ('t1_2_mni_reverse_transform', 'in2'),
-            (('template', _prior_path), 'in3')]),
+        (inputnode, transform_list, [('t1_2_mni_reverse_transform', 'in2')]),
         (inputnode, atlas_2_ref, [('bold_ref', 'reference_image')]),
         (transform_list, atlas_2_ref, [('out', 'transforms')]),
         (atlas_2_ref, threshold_atlas, [('output_image', 'in_file')]),
@@ -187,18 +182,12 @@ template [@fieldmapless3].
         (syn, unwarp_ref, [('forward_transforms', 'transforms')]),
         (inputnode, unwarp_ref, [('bold_ref', 'reference_image'),
                                  ('bold_ref', 'input_image')]),
-        (unwarp_ref, skullstrip_bold_wf, [
+        (unwarp_ref, skullstrip_b0_wf, [
             ('output_image', 'inputnode.in_file')]),
         (unwarp_ref, outputnode, [('output_image', 'out_reference')]),
-        (skullstrip_bold_wf, outputnode, [
+        (skullstrip_b0_wf, outputnode, [
             ('outputnode.skull_stripped_file', 'out_reference_brain'),
             ('outputnode.mask_file', 'out_mask')]),
     ])
 
     return workflow
-
-
-def _prior_path(template):
-    from pkg_resources import resource_filename
-    return resource_filename(
-        'qsiprep', 'data/fmap_atlas_2_{}_affine.mat'.format(template))

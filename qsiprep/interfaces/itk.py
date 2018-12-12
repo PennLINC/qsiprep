@@ -45,6 +45,7 @@ class DisassembleTransform(SimpleInterface):
         affine_out = runtime.cwd + "/00_disassemble_AffineTransform.mat"
         warp_out = runtime.cwd + "/01_disassemble_DisplacementFieldTransform.nii.gz"
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        LOGGER.info(" ".join(cmd))
         out, err = proc.communicate()
         if False in (op.exists(affine_out), op.exists(warp_out)):
             raise Exception("unable to unpack composite transform")

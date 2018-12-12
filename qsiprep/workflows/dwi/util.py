@@ -213,7 +213,68 @@ def init_enhance_and_skullstrip_dwi_wf(
         (initial_mask, hist_eq, [('out_file', 'mask_file')]),
         (hist_eq, outputnode, [('out_file', 'bias_corrected_file'),
                                ('out_file', 'skull_stripped_file')]),
-        (initial_mask, outputnode, [('out_file', 'mask_image')]),
+        (initial_mask, outputnode, [('out_file', 'mask_file')]),
+    ])
+
+    return workflow
+
+
+def init_skullstrip_b0_wf(name='skullstrip_b0_wf'):
+    """
+    This workflow applies skull-stripping to a BOLD image.
+
+    It is intended to be used on an image that has previously been
+    bias-corrected with
+    :py:func:`~qsiprep.workflows.bold.util.init_enhance_and_skullstrip_bold_wf`
+
+    .. workflow ::
+        :graph2use: orig
+        :simple_form: yes
+
+        from qsiprep.workflows.bold.util import init_skullstrip_b0_wf
+        wf = init_skullstrip_b0_wf()
+
+
+    Inputs
+
+        in_file
+            b0 image (single volume)
+
+
+    Outputs
+
+        skull_stripped_file
+            the ``in_file`` after skull-stripping
+        mask_file
+            mask of the skull-stripped input file
+        out_report
+            reportlet for the skull-stripping
+
+    """
+    workflow = Workflow(name=name)
+    inputnode = pe.Node(
+        niu.IdentityInterface(fields=['in_file']), name='inputnode')
+    outputnode = pe.Node(
+        niu.IdentityInterface(
+            fields=['mask_file', 'skull_stripped_file', 'out_report']),
+        name='outputnode')
+    skullstrip_second_pass = pe.Node(
+        afni.Automask(dilate=3, outputtype='NIFTI_GZ'),
+        name='skullstrip_second_pass')
+    apply_mask = pe.Node(fsl.ApplyMask(), name='apply_mask')
+    mask_reportlet = pe.Node(SimpleShowMaskRPT(), name='mask_reportlet')
+
+    workflow.connect([
+        (inputnode, skullstrip_second_pass, [('in_file', 'in_file')]),
+        (skullstrip_second_pass, outputnode, [('out_file', 'mask_file')]),
+        # Masked file
+        (inputnode, apply_mask, [('in_file', 'in_file')]),
+        (skullstrip_second_pass, apply_mask, [('out_file', 'mask_file')]),
+        (apply_mask, outputnode, [('out_file', 'skull_stripped_file')]),
+        # Reportlet
+        (inputnode, mask_reportlet, [('in_file', 'background_file')]),
+        (skullstrip_second_pass, mask_reportlet, [('out_file', 'mask_file')]),
+        (mask_reportlet, outputnode, [('out_report', 'out_report')]),
     ])
 
     return workflow

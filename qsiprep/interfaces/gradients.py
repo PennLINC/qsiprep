@@ -24,6 +24,28 @@ tensor_index = {
     "zz": (2, 2)
 }
 
+
+class MatchTransformsInputSpec(BaseInterfaceInputSpec):
+    b0_indices = traits.List(mandatory=True)
+    dwi_files = InputMultiObject(File(exists=True), mandatory=True)
+    transforms = InputMultiObject(File(exists=True), mandatory=True)
+
+
+class MatchTransformsOutputSpec(TraitedSpec):
+    transforms = OutputMultiObject(File(exists=True), mandatory=True)
+
+
+class MatchTransforms(SimpleInterface):
+    input_spec = MatchTransformsInputSpec
+    output_spec = MatchTransformsOutputSpec
+
+    def _run_interface(self, runtime):
+        self._results['transforms'] = match_transforms(self.inputs.dwi_files,
+                                                       self.inputs.transforms,
+                                                       self.inputs.b0_indices)
+        return runtime
+
+
 class ExtractB0sInputSpec(BaseInterfaceInputSpec):
     b0_indices = traits.List(mandatory=True)
     dwi_series = File(exists=True, mandatory=True)
@@ -88,27 +110,11 @@ class ComposeTransforms(SimpleInterface):
 
     def _run_interface(self, runtime):
         dwi_files = self.inputs.dwi_files
+        num_dwis = len(dwi_files)
         b0_hmc_affines = self.inputs.hmc_to_ref_affines
         original_b0_indices = np.array(self.inputs.original_b0_indices).astype(np.int)
-        num_dwis = len(dwi_files)
 
-        # Do sanity checks
-        if not len(b0_hmc_affines) == num_dwis:
-            if not len(b0_hmc_affines) == len(original_b0_indices):
-                raise Exception('number of hmc affines do not match number of b0 images')
-
-            # Create a list of which hmc affines go with each of the split images
-            dwi_hmc_affines = []
-            for index in range(num_dwis):
-                # There is an direct transform for each b0
-                nearest_b0_num = np.argmin(np.abs(index - original_b0_indices))
-                this_transform = b0_hmc_affines[nearest_b0_num]
-                dwi_hmc_affines.append(this_transform)
-        else:
-            raise Exception('non-b0 hmc not implemented yet')
-
-        if not len(dwi_hmc_affines) == num_dwis:
-            raise Exception("Shouldn't happen")
+        dwi_hmc_affines = match_transforms(dwi_files, b0_hmc_affines, original_b0_indices)
 
         # Add in the sdc unwarps if they exist
         image_transforms = [dwi_hmc_affines]
@@ -131,17 +137,9 @@ class ComposeTransforms(SimpleInterface):
         # Same t1-to-mni transform for every image
         mni_xform = self.inputs.t1_2_mni_forward_transform
         if isdefined(mni_xform):
-            if type(mni_xform) is traits.TraitListObject:
-                mni_xform = mni_xform[0]
-            # Convert to affine and warp if each
-            if mni_xform.endswith("h5"):
-                LOGGER.info("Disassembling %s", mni_xform)
-                disassemble = DisassembleTransform(in_file=mni_xform)
-                mni_xform_list = disassemble.run().outputs.out_transforms
-            else:
-                mni_xform_list = mni_xform
-            image_transforms.append([mni_xform_list[0]] * num_dwis)
-            image_transforms.append([mni_xform_list[1]] * num_dwis)
+            assert len(mni_xform) == 2
+            image_transforms.append([mni_xform[0]] * num_dwis)
+            image_transforms.append([mni_xform[1]] * num_dwis)
             image_transform_names += ['mni affine', 'mni warp']
         # Check that all the transform lists have the same numbers of transforms
         assert all([len(xform_list) == len(image_transforms[0]) for
@@ -214,16 +212,13 @@ class ComposeTransforms(SimpleInterface):
 
 class GradientRotationInputSpec(BaseInterfaceInputSpec):
     affine_transforms = InputMultiObject(File(exists=True), desc='ITK affine transforms')
-    warp_transforms = InputMultiObject(File(exists=True), desc='Warps')
     bvec_files = InputMultiObject(File(exists=True), desc='list of split bvec files')
     bval_files = InputMultiObject(File(exists=True), desc='list of split bval files')
-    mask_image = File(exists=True, desc='brain mask in the output space')
 
 
 class GradientRotationOutputSpec(TraitedSpec):
     bvals = File(exists=True)
     bvecs = File(exists=True)
-    local_bvecs = File(exists=True)
     log_cmdline = File(exists=True)
 
 
@@ -247,16 +242,60 @@ class GradientRotation(SimpleInterface):
                                  runtime)
         self._results['bvecs'] = bvec_fname
 
-        # Create the local bvecs
-        local_bvec_fname = out_root + "_local_bvecs.nii.gz"
-        self._results['local_bvecs'] = local_bvec_fname
-        local_bvec_commands = local_bvec_rotation(original_bvecs, self.inputs.warp_transforms,
-                                                  self.inputs.mask_image, runtime)
-
         self._results['log_cmdline'] = os.path.join(runtime.cwd, 'command.txt')
         with open(self._results['log_cmdline'], 'w') as cmdfile:
             print('\n-------\n'.join(commands), file=cmdfile)
         return runtime
+
+
+class LocalGradientRotationInputSpec(GradientRotationInputSpec):
+    warp_transforms = InputMultiObject(File(exists=True), desc='Warps')
+    mask_image = File(exists=True, desc='brain mask in the output space')
+
+
+class LocalGradientRotationOutputSpec(TraitedSpec):
+    local_bvecs = File(exists=True)
+    log_cmdline = File(exists=True)
+
+
+class LocalGradientRotation(SimpleInterface):
+    input_spec = LocalGradientRotationInputSpec
+    output_spec = LocalGradientRotationOutputSpec
+
+    def _run_interface(self, runtime):
+        out_root = os.path.join(runtime.cwd, "rotated")
+        # Create the local bvecs
+        local_bvec_fname = out_root + "_local_bvecs.nii.gz"
+        self._results['local_bvecs'] = local_bvec_fname
+        original_bvecs = concatenate_bvecs(self.inputs.bvec_files)
+        commands = local_bvec_rotation(original_bvecs, self.inputs.warp_transforms,
+                                       self.inputs.mask_image, runtime, local_bvec_fname)
+        self._results['log_cmdline'] = os.path.join(runtime.cwd, 'command.txt')
+        with open(self._results['log_cmdline'], 'w') as cmdfile:
+            print('\n-------\n'.join(commands), file=cmdfile)
+        return runtime
+
+
+def match_transforms(dwi_files, transforms, b0_indices):
+    original_b0_indices = np.array(b0_indices)
+    num_dwis = len(dwi_files)
+    num_transforms = len(transforms)
+
+    if num_dwis == num_transforms:
+        return transforms
+
+    # Do sanity checks
+    if not len(transforms) == len(b0_indices):
+        raise Exception('number of transforms does not match number of b0 images')
+
+    # Create a list of which hmc affines go with each of the split images
+    nearest_affines = []
+    for index in range(num_dwis):
+        nearest_b0_num = np.argmin(np.abs(index - original_b0_indices))
+        this_transform = transforms[nearest_b0_num]
+        nearest_affines.append(this_transform)
+
+    return nearest_affines
 
 
 def concatenate_bvals(bval_list, out_file):
@@ -312,6 +351,7 @@ def aattp_rotate_vec(orig_vec, transform, runtime):
     transforms = "--transform [%s, 1]" % transform
     cmd = "antsApplyTransformsToPoints --dimensionality 3 --input " + orig_txt + \
           " --output " + rotated_txt + " " + transforms
+    LOGGER.info(cmd)
     os.system(cmd)
     rotated_vec = np.loadtxt(rotated_txt, skiprows=1, delimiter=",")[:, :3]
     rotated_unit_vec = unit_vector(rotated_vec[1] - rotated_vec[0])
@@ -331,6 +371,7 @@ def _compose_tfms(args):
     xfm.terminal_output = 'allatonce'
     xfm.resource_monitor = False
     runtime = xfm.run().runtime
+    LOGGER.info(runtime.cmdline)
 
     # Force floating point precision
     nii = nb.load(out_file)
@@ -351,6 +392,7 @@ def compose_affines(reference_image, affine_list, output_file):
     cmd = "antsApplyTransforms -d 3 -r %s -o Linear[%s, 1] " % (
         reference_image, output_file)
     cmd += " ".join(["--transform %s" % trf for trf in affine_list])
+    LOGGER.info(cmd)
     os.system(cmd)
     assert os.path.exists(output_file)
     return output_file, cmd
@@ -369,12 +411,16 @@ def create_tensor_image(mask_img, direction, prefix):
 
     temp_components = []
     for direction in ['xx', 'xy', 'xz', 'yy', 'yz', 'zz']:
-        this_component = prefix + '_temp_dtiComp_%s.nii' % direction
+        this_component = prefix + '_temp_dtiComp_%s.nii.gz' % direction
+        LOGGER.info("writing %s", this_component)
         nb.Nifti1Image(mask_img.get_data()*tensor[tensor_index[direction]], mask_img.affine,
                        mask_img.header).to_filename(this_component)
         temp_components.append(this_component)
-    os.system('ImageMath 3 %s ComponentTo3DTensor dtiComp_' % (
-              out_fname, prefix + '_temp_dtiComp_'))
+
+    compose_cmd = 'ImageMath 3 %s ComponentTo3DTensor %s' % (
+        out_fname, prefix + '_temp_dtiComp_')
+    LOGGER.info(compose_cmd)
+    os.system(compose_cmd)
     for temp_component in temp_components:
         os.remove(temp_component)
 
@@ -388,6 +434,7 @@ def reorient_tensor_image(tensor_image, warp_file, mask_img, prefix, output_fnam
     reorient_cmd = "ReorientTensorImage 3 %s %s %s" % (tensor_image,
                                                        reoriented_tensor_fname,
                                                        warp_file)
+    LOGGER.info(reorient_cmd)
     os.system(reorient_cmd)
     cmds.append(reorient_cmd)
     to_remove.append(reoriented_tensor_fname)
@@ -403,7 +450,7 @@ def reorient_tensor_image(tensor_image, warp_file, mask_img, prefix, output_fnam
     reoriented_vectors = np.zeros((reoriented_tensors.shape[0], 3))
 
     def tensor_from_vec(vec):
-        """[dxx, dxy, dyy, dxz, dyz, dzz]"""
+        """[dxx, dxy, dyy, dxz, dyz, dzz]."""
         return np.array([
             [vec[0], vec[1], vec[3]],
             [vec[1], vec[2], vec[4]],
@@ -419,6 +466,7 @@ def reorient_tensor_image(tensor_image, warp_file, mask_img, prefix, output_fnam
     vector_data = get_vector_nii(output_data, mask_img.affine, mask_img.header)
     vector_data.to_filename(output_fname)
     os.remove(reoriented_tensor_fname)
+    os.remove(tensor_image)
     return output_fname, reorient_cmd
 
 
@@ -430,7 +478,7 @@ def get_vector_nii(data, affine, header):
                           np.dtype('<f4')), affine, hdr)
 
 
-def local_bvec_rotation(original_bvecs, warp_transforms, mask_image, runtime):
+def local_bvec_rotation(original_bvecs, warp_transforms, mask_image, runtime, output_fname):
     """Create a vector in each voxel that accounts for nonlinear warps."""
     prefix = os.path.join(runtime.cwd, "local_bvec_")
     mask_img = nb.load(mask_image)
@@ -458,4 +506,8 @@ def local_bvec_rotation(original_bvecs, warp_transforms, mask_image, runtime):
                                                                  out_fname)
         commands.append(rotate_cmd)
         rotated_vec_files.append(out_fname)
+    concatenated = np.stack([img.get_data() for img in rotated_vec_files], -1)
+    nb.Nifti1Image(concatenated.astype('<f4'), mask_img.affine).to_filename(output_fname)
+    for temp_file in rotated_vec_files:
+        os.remove(temp_file)
     return rotated_vec_files, commands
