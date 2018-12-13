@@ -224,6 +224,7 @@ class GradientRotationOutputSpec(TraitedSpec):
 
 class GradientRotation(SimpleInterface):
     """Reorient gradients accordint to transorms."""
+
     input_spec = GradientRotationInputSpec
     output_spec = GradientRotationOutputSpec
 

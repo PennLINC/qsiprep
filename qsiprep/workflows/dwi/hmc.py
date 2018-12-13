@@ -50,7 +50,7 @@ def linear_alignment_workflow(transform="Rigid",
     inputnode.inputs.iteration_num = iternum
     outputnode = pe.Node(
         niu.IdentityInterface(fields=["registered_image_paths", "affine_transforms",
-                                       "updated_template"]), name='outputnode')
+                                      "updated_template"]), name='outputnode')
 
     reg = ants.Registration()
     reg.inputs.metric = [metric]

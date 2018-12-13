@@ -165,10 +165,10 @@ def get_parser():
         help='discard repeats of q-space samples. Useful if using a '
         'regularized reconstruction method')
     g_conf.add_argument(
-        '--b0-to-t1w-dof',
+        '--b0-to-t1w-transform',
         action='store',
-        default=6,
-        choices=[6, 9, 12],
+        default="Rigid",
+        choices=["Rigid", "Affine"],
         type=int,
         help='Degrees of freedom when registering b0 to T1w images. '
         '6 degrees (rotation and translation) are used by default.')
@@ -182,10 +182,8 @@ def get_parser():
         help='volume and surface spaces to resample functional series into\n'
         ' - T1w: subject anatomical volume\n'
         ' - template: normalization target specified by --template\n'
-        ' - fsnative: individual subject surface\n'
-        ' - fsaverage*: FreeSurfer average meshes\n'
         'this argument can be single value or a space delimited list,\n'
-        'for example: --output-space T1w fsnative')
+        'for example: --output-space T1w template')
     g_conf.add_argument(
         '--template',
         required=False,
@@ -194,19 +192,16 @@ def get_parser():
         default='MNI152NLin2009cAsym',
         help='volume template space (default: MNI152NLin2009cAsym)')
     g_conf.add_argument(
-        '--template-resampling-grid',
-        required=False,
+        '--output-resolution', '--output_resolution',
+        required=True,
         action='store',
-        default='native',
-        help='Keyword ("native", "1mm", or "2mm") or path to an existing file.'
-        ' Allows to define a reference grid for the resampling of BOLD images '
-        'in template space. Keyword "native" will use the original BOLD grid '
-        'as reference. Keywords "1mm" and "2mm" will use the corresponding '
-        'isotropic template resolutions. If a path is given, the grid of that '
-        'image will be used. It determines the field of view and resolution '
-        'of the output images, but is not used in normalization.')
+        help='the isotropic voxel size in mm the data will be resampled to '
+        'after preprocessing. If set to a lower value than the original voxel '
+        'size, your data will be upsampled.'
+        )
+
     g_moco = parser.add_argument_group(
-        'Specific options for b0 motion correction and coregistration')
+        'Specific options for motion correction and coregistration')
     g_moco.add_argument(
         '--b0-motion-corr-to',
         action='store',
@@ -214,6 +209,26 @@ def get_parser():
         choices=['iterative', 'first'],
         help='align to the "first" b0 volume or do an "iterative" registration'
         ' of all b0 image to their midpoint image (default: iterative)')
+    g_moco.add_argument(
+        '--hmc-transform',
+        action='store',
+        default='Affine',
+        choices=['Affine', 'Rigid'],
+        help='transformation to be optimized during head motion correction')
+    g_moco.add_argument(
+        '--hmc_model',
+        action='store',
+        default='3dSHORE',
+        choices=['none', '3dSHORE', 'MAPMRI'],
+        help='model used to generate target images for hmc. If "none" the '
+        'non-b0 images will be warped using the same transform as their '
+        'nearest b0 image')
+    g_moco.add_argument(
+        '--impute-slice-threshold',
+        action='store',
+        default=0,
+        help='impute data in slices that are this many SDs from expected. '
+        'If 0, no slices will be imputed')
 
     # ANTs options
     g_ants = parser.add_argument_group(
@@ -233,6 +248,12 @@ def get_parser():
     # Fieldmap options
     g_fmap = parser.add_argument_group(
         'Specific options for handling fieldmaps')
+    g_fmap.add_argument(
+        '--prefer_dedicated_fmaps',
+        action='store_true',
+        default='false',
+        help='forces unwarping to use files from the fmap directory instead '
+        'of using an RPEdir scan from the same session.')
     g_fmap.add_argument(
         '--fmap-bspline',
         action='store_true',
@@ -588,11 +609,6 @@ def build_workflow(opts, retval):
             uuid=run_uuid))
 
     template_out_grid = opts.template_resampling_grid
-    if opts.output_grid_reference is not None:
-        logger.warning(
-            'Option --output-grid-reference is deprecated, please use '
-            '--template-resampling-grid')
-        template_out_grid = template_out_grid or opts.output_grid_reference
     if opts.debug is not None:
         logger.warning('Option --debug is deprecated and has no effect')
 
@@ -614,10 +630,15 @@ def build_workflow(opts, retval):
         skull_strip_template=opts.skull_strip_template,
         skull_strip_fixed_seed=opts.skull_strip_fixed_seed,
         output_spaces=output_spaces,
+        output_resolution=opts.output_resolution,
         template=opts.template,
         bids_dir=bids_dir,
         b0_motion_corr_to=opts.b0_motion_corr_to,
-        b0_to_t1w_dof=opts.b0_to_t1w_dof,
+        hmc_transform=opts.hmc_transform,
+        hmc_model=opts.hmc_model,
+        impute_slice_threshold=opts.impute_slice_threshold,
+        b0_to_t1w_transform=opts.b0_to_t1w_transform,
+        prefer_dedicated_fmaps=opts.prefer_dedicated_fmaps,
         fmap_bspline=opts.fmap_bspline,
         fmap_demean=opts.fmap_no_demean,
         use_syn=opts.use_syn_sdc,

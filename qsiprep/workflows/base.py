@@ -39,8 +39,9 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
                     ignore, debug, low_mem, anat_only, longitudinal, hires,
                     denoise_before_combining, dwi_denoise_window, output_resolution,
                     combine_all_dwis, discard_repeated_samples, omp_nthreads,
-                    skull_strip_template, skull_strip_fixed_seed, freesurfer,
-                    output_spaces, template, b0_motion_corr_to, b0_to_t1w_dof,
+                    skull_strip_template, skull_strip_fixed_seed, freesurfer, hmc_model,
+                    impute_slice_threshold, hmc_transform,
+                    output_spaces, template, b0_motion_corr_to, b0_to_t1w_transform,
                     prefer_dedicated_fmaps, fmap_bspline, fmap_demean, use_syn, force_syn):
     """
     This workflow organizes the execution of qsiprep, with a sub-workflow for
@@ -77,7 +78,9 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
                               output_spaces=['T1w', 'template'],
                               template='MNI152NLin2009cAsym',
                               b0_motion_corr_to='iterative',
-                              b0_to_t1w_dof=9,
+                              b0_to_t1w_transform='Rigid',
+                              hmc_transform='Affine',
+                              impute_slice_threshold=0,
                               prefer_dedicated_fmaps=False,
                               fmap_bspline=False,
                               fmap_demean=True,
@@ -143,8 +146,16 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
         b0_motion_corr_to : str
             Motion correct using the 'first' b0 image or use an 'iterative'
             method to motion correct to the midpoint of the b0 images
-        b0_to_t1w_dof : 6, 9 or 12
-            Degrees-of-freedom for b0-T1w registration
+        b0_to_t1w_transform : "Rigid" or "Affine"
+            Use a rigid or full affine transform for b0-T1w registration
+        hmc_model : 'none', '3dSHORE' or 'MAPMRI'
+            Model used to generate target images for head motion correction. If 'none'
+            the transform from the nearest b0 will be used.
+        hmc_transform : "Rigid" or "Affine"
+            Type of transform used for head motion correction
+        impute_slice_threshold : float
+            Impute data in slices that are this many SDs from expected. If 0, no slices
+            will be imputed.
         prefer_dedicated_fmaps: bool
             If a reverse PE fieldmap is available in fmap, use that even if a reverse PE
             DWI series is available
@@ -198,7 +209,10 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
             template=template,
             prefer_dedicated_fmaps=prefer_dedicated_fmaps,
             b0_motion_corr_to=b0_motion_corr_to,
-            b0_to_t1w_dof=b0_to_t1w_dof,
+            b0_to_t1w_transform=b0_to_t1w_transform,
+            hmc_model=hmc_model,
+            hmc_transform=hmc_transform,
+            impute_slice_threshold=impute_slice_threshold,
             fmap_bspline=fmap_bspline,
             fmap_demean=fmap_demean,
             use_syn=use_syn,
@@ -222,8 +236,8 @@ def init_single_subject_wf(
         low_mem, anat_only, longitudinal, denoise_before_combining, dwi_denoise_window,
         combine_all_dwis, discard_repeated_samples, omp_nthreads, skull_strip_template,
         skull_strip_fixed_seed, freesurfer, hires, output_spaces, template, output_resolution,
-        prefer_dedicated_fmaps, b0_motion_corr_to, b0_to_t1w_dof, fmap_bspline, fmap_demean,
-        use_syn, force_syn):
+        prefer_dedicated_fmaps, b0_motion_corr_to, b0_to_t1w_transform, hmc_model, hmc_transform,
+        impute_slice_threshold, fmap_bspline, fmap_demean, use_syn, force_syn):
     """
     This workflow organizes the preprocessing pipeline for a single subject.
     It collects and reports information about the subject, and prepares
@@ -491,7 +505,7 @@ to workflows in *qsiprep*'s documentation]\
             dwi_denoise_window=dwi_denoise_window,
             denoise_before_combining=denoise_before_combining,
             b0_motion_corr_to=b0_motion_corr_to,
-            b0_to_t1w_dof=b0_to_t1w_dof,
+            b0_to_t1w_transform=b0_to_t1w_transform,
             reportlets_dir=reportlets_dir,
             output_spaces=output_spaces,
             template=template,
