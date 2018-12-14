@@ -28,7 +28,7 @@ from nipype.interfaces.ants.registration import RegistrationInputSpec
 from .gradients import concatenate_bvecs, concatenate_bvals, GradientRotation
 from dipy.core.gradients import gradient_table
 from dipy.reconst.mapmri import MapmriModel
-from ..utils.brainsuite_shore import BrainSuiteShoreModel
+from ..utils.brainsuite_shore import BrainSuiteShoreModel, brainsuite_shore_basis
 
 LOGGER = logging.getLogger('nipype.interface')
 
@@ -125,18 +125,18 @@ class IdealSignalRegistrationInputSpec(RegistrationInputSpec):
     save_cmd = traits.Bool(True, usedefault=True,
                            desc='write a log of command lines that were applied')
     b0_indices = traits.List(mandatory=True)
-    initial_transforms = InputMultiObject(File(exists=True))
-    b0_template = File(exists=True)
+    initial_transforms = InputMultiObject(File(exists=True),
+                                          desc='all b0-based initial transforms')
     mask_image = File(exists=True)
     fixed_image = File(mandatory=False)
 
 
 class IdealSignalRegistrationOutputSpec(TraitedSpec):
-    confounds = File(exists=True)
     transforms = OutputMultiObject(File(exists=True))
     log_cmdline = File(desc='a list of command lines used to apply transforms')
     rotated_bvecs = OutputMultiObject(File(exists=True))
     corrected_images = OutputMultiObject(File(exists=True))
+
 
 class IdealSignalRegistration(SimpleInterface):
     input_spec = IdealSignalRegistrationInputSpec
@@ -154,7 +154,7 @@ class IdealSignalRegistration(SimpleInterface):
         if type(self.inputs.bvals) is np.ndarray:
             bvals = self.inputs.bvals
         else:
-            bvals = concatenate_bvals(self.inputs.bvals)
+            bvals = concatenate_bvals(self.inputs.bvals, None)
         mask_img = nb.load(self.inputs.mask_image)
         mask_array = mask_img.get_data() > 0
 
@@ -175,27 +175,12 @@ class IdealSignalRegistration(SimpleInterface):
         model_data = np.stack([b0_mean] + [img.get_data() for img in non_b0_images], -1)
 
         gtab = gradient_table(bvals=model_bvals, bvecs=model_bvecs)
-        if self.inputs.model_name == "MAPMRI":
-            model = MapmriModel(gtab)
-            LOGGER.info('Fitting MAPMRI model')
-            model_fit = model.fit(model_data, mask=mask_array)
-            LOGGER.info('Predicting signal')
-            predicted_signal = model_fit.fitted_signal()
-        elif self.inputs.model_name == "3dSHORE":
-            model = BrainSuiteShoreModel(gtab, regularization="L2")
-            LOGGER.info('Fitting 3dSHORE model')
-            model_fit = model.fit(model_data, mask=mask_array)
-            LOGGER.info('Predicting signal')
-            predicted_signal = model_fit.fitted_signal()
-        else:
-            raise Exception("%s model not supported", self.inputs.model_name)
-        # Get the predicted signal out
-
+        predicted_signal = estimate_signal_targets(self.inputs.model_name, gtab, model_data,
+                                                   mask_array)
         target_files = []
-        for fitnum in range(len(target_indices)):
+        for fitnum, fit_data in zip(target_indices, predicted_signal):
             output_fname = os.path.join(
-                runtime.cwd, 'ideal_signal_%03d.nii.gz' % target_indices[fitnum])
-            fit_data = predicted_signal[..., fitnum+1]
+                runtime.cwd, 'ideal_signal_%03d.nii.gz' % fitnum)
             nb.Nifti1Image(fit_data, mask_img.affine, mask_img.header).to_filename(output_fname)
             target_files.append(output_fname)
 
@@ -212,7 +197,7 @@ class IdealSignalRegistration(SimpleInterface):
                     'terminal_output', 'output_warped_image', 'moving_image', 'model_name',
                     'dwi_files', 'b0_indices', 'b0_template', 'bvals', 'bvecs', 'mask_image',
                     'initial_transforms', 'interpolation', 'fixed_image',
-                    't1_2_mni_forward_transform', 'copy_dtype']:
+                    'output_transform_prefix', 't1_2_mni_forward_transform', 'copy_dtype']:
             ifargs.pop(key, None)
 
         # Get a temp folder ready
@@ -225,14 +210,15 @@ class IdealSignalRegistration(SimpleInterface):
         if num_threads == 1:
             out_files = [_reg_to_ideal((
                 in_file, in_xfm, ifargs, i, runtime.cwd))
-                for i, (in_file, in_xfm) in enumerate(zip(non_b0_image_paths, target_files))
+                for i, in_file, in_xfm in zip(target_indices, non_b0_image_paths, target_files)
             ]
         else:
             from concurrent.futures import ThreadPoolExecutor
             with ThreadPoolExecutor(max_workers=num_threads) as pool:
                 out_files = list(pool.map(_reg_to_ideal, [
                     (in_file, in_xfm, ifargs, i, runtime.cwd)
-                    for i, (in_file, in_xfm) in enumerate(zip(non_b0_image_paths, target_files))]
+                    for i, in_file, in_xfm in zip(
+                        target_indices, non_b0_image_paths, target_files)]
                 ))
         tmp_folder.cleanup()
 
@@ -246,13 +232,14 @@ class IdealSignalRegistration(SimpleInterface):
             recombined_transforms[b0_index] = self.inputs.initial_transforms[b0_index]
         dwi_transforms = [el[1] for el in out_files]
         for target_index, target_transform in zip(target_indices, dwi_transforms):
-            recombined_transforms[target_index] = target_transform
+            recombined_transforms[target_index] = target_transform[0]
         self._results['transforms'] = recombined_transforms
+        print(recombined_transforms)
 
         rotator = GradientRotation(affine_transforms=recombined_transforms,
                                    bvec_files=self.inputs.bvecs,
                                    bval_files=self.inputs.bvals)
-        self._results['rotated_bvecs'] = rotator.run().results['bvecs']
+        self._results['rotated_bvecs'] = rotator.run().outputs.bvecs
 
         if save_cmd:
             self._results['log_cmdline'] = os.path.join(runtime.cwd, 'command.txt')
@@ -267,10 +254,13 @@ def _reg_to_ideal(args):
     in_file, in_target, ifargs, index, newpath = args
     out_file = fname_presuffix(in_file, suffix='_xform-%05d' % index,
                                newpath=newpath, use_ext=True)
+    out_transform = fname_presuffix(in_file, suffix='_xform-%05d_Affine.mat' % index,
+                                    newpath=newpath, use_ext=False)
 
     xfm = ants.Registration(
         moving_image=in_file, fixed_image=in_target, output_warped_image=out_file,
-        interpolation='LanczosWindowedSinc', **ifargs)
+        interpolation='BSpline', output_transform_prefix=out_transform,
+        **ifargs)
     xfm.terminal_output = 'allatonce'
     xfm.resource_monitor = False
     run = xfm.run()
@@ -283,3 +273,36 @@ def _reg_to_ideal(args):
     nii.to_filename(out_file)
 
     return (out_file, run.outputs.forward_transforms, runtime.cmdline)
+
+
+def estimate_signal_targets(model_name, gtab, model_data, mask_array):
+    def get_model(grads):
+        if model_name == "MAPMRI":
+            return MapmriModel(grads)
+        elif model_name == "3dSHORE":
+            return BrainSuiteShoreModel(grads, regularization="L2")
+
+    full_bvals = gtab.bvals
+    full_bvecs = gtab.bvecs
+
+    num_grads = gtab.gradients.shape[0]
+    LOGGER.info('Fitting 3dSHORE model')
+    full_model = get_model(gtab)
+    phi = brainsuite_shore_basis(full_model.radial_order, full_model.zeta, gtab, full_model.tau)
+    predictions = []
+    for loo in range(1, num_grads):
+        mask = np.ones_like(full_bvals) > 0
+        mask[loo] = False
+        training_bvals = full_bvals[mask]
+        training_bvecs = full_bvecs[mask]
+        training_gtab = gradient_table(bvals=training_bvals, bvecs=training_bvecs)
+        training_data = model_data[..., mask]
+        LOGGER.info("\t%d", loo)
+        iter_model = get_model(training_gtab)
+        iter_fit = iter_model.fit(training_data, mask=mask_array)
+        shore_array = iter_fit._shore_coef[mask_array]
+        this_dir = phi[loo]
+        output_data = np.zeros(mask_array.shape)
+        output_data[mask_array] = np.dot(shore_array, this_dir)
+        predictions.append(output_data)
+    return predictions

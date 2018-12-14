@@ -21,7 +21,7 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 
 
 def init_b0_to_anat_registration_wf(mem_gb=3, omp_nthreads=1, write_report=False,
-                                    name="b0_anat_coreg"):
+                                    transform_type="Rigid", name="b0_anat_coreg"):
     """
     Calculates the registration between a reference b0 image and T1-space
     using `antsRegistration`
@@ -94,7 +94,7 @@ def init_b0_to_anat_registration_wf(mem_gb=3, omp_nthreads=1, write_report=False
     # Defines a coregistration operation
     coreg = ants.Registration()
     coreg.inputs.metric = ["Mattes"]
-    coreg.inputs.transforms = ["Rigid"]
+    coreg.inputs.transforms = [transform_type]
     coreg.inputs.shrink_factors = [[8, 4, 2, 1]]
     coreg.inputs.smoothing_sigmas = [[7., 3., 1., 0.]]
     coreg.inputs.sigma_units = ["vox"]

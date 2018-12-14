@@ -29,7 +29,7 @@ from fmriprep.engine import Workflow
 from ..fieldmap.bidirectional_pepolar import init_bidirectional_b0_unwarping_wf
 from ..fieldmap.base import init_sdc_wf
 from .merge import init_merge_and_denoise_wf
-from .hmc import init_b0_hmc_wf
+from .hmc import init_dwi_hmc_wf
 from .util import init_dwi_reference_wf
 from .registration import init_b0_to_anat_registration_wf
 from .resampling import init_dwi_trans_wf
@@ -40,9 +40,11 @@ LOGGER = logging.getLogger('nipype.workflow')
 
 def init_dwi_preproc_wf(dwi_files,
                         ignore,
-                        b0_motion_corr_to,
-                        use_bbr,
-                        b0_to_t1w_dof,
+                        motion_corr_to,
+                        b0_to_t1w_transform,
+                        hmc_model,
+                        hmc_transform,
+                        impute_slice_threshold,
                         reportlets_dir,
                         freesurfer,
                         output_spaces,
@@ -53,6 +55,7 @@ def init_dwi_preproc_wf(dwi_files,
                         template,
                         output_dir,
                         omp_nthreads,
+                        write_local_bvecs,
                         fmap_bspline,
                         fmap_demean,
                         use_syn,
@@ -81,8 +84,11 @@ def init_dwi_preproc_wf(dwi_files,
                                   denoise_before_combining=True,
                                   combine_all_dwis=True,
                                   discard_repeated_samples=True,
-                                  b0_motion_corr_to='iterative',
-                                  b0_to_t1w_dof=9,
+                                  motion_corr_to='iterative',
+                                  b0_to_t1w_transform='Rigid',
+                                  hmc_model='3dSHORE',
+                                  hmc_transform='Affine',
+                                  impute_slice_threshold=0,
                                   fmap_bspline=True,
                                   fmap_demean=True,
                                   use_syn=True,
@@ -102,11 +108,19 @@ def init_dwi_preproc_wf(dwi_files,
         use_bbr : bool or None
             Enable/disable boundary-based registration refinement.
             If ``None``, test BBR result for distortion before accepting.
-        b0_motion_corr_to : str
+        motion_corr_to : str
             Motion correct using the 'first' b0 image or use an 'iterative'
             method to motion correct to the midpoint of the b0 images
-        b0_to_t1w_dof : 6, 9 or 12
-            Degrees-of-freedom for b0-T1w registration
+        b0_to_t1w_transform : "Rigid" or "Affine"
+            Use a rigid or full affine transform for b0-T1w registration
+        hmc_model : 'none', '3dSHORE' or 'MAPMRI'
+            Model used to generate target images for head motion correction. If 'none'
+            the transform from the nearest b0 will be used.
+        hmc_transform : "Rigid" or "Affine"
+            Type of transform used for head motion correction
+        impute_slice_threshold : float
+            Impute data in slices that are this many SDs from expected. If 0, no slices
+            will be imputed.
         dwi_denoise_window : int
             window size in voxels for ``dwidenoise``. Must be odd. If 0, '
             '``dwidwenoise`` will not be run'
@@ -277,7 +291,8 @@ def init_dwi_preproc_wf(dwi_files,
                                                denoise_before_combining=denoise_before_combining,
                                                name="merge_plus")
         split_plus = pe.Node(SplitDWIs(), name="split_plus")
-        b0_hmc_plus = init_b0_hmc_wf(name="b0_hmc_plus")
+        b0_hmc_plus = init_dwi_hmc_wf(hmc_transform, hmc_model, motion_corr_to,
+                                      name="b0_hmc_plus")
         merge_plus.inputs.inputnode.dwi_files = dwi_files[plus_key]
 
         # Merge, denoise, split, hmc on the minus series
@@ -285,7 +300,8 @@ def init_dwi_preproc_wf(dwi_files,
                                                 denoise_before_combining=denoise_before_combining,
                                                 name="merge_minus")
         split_minus = pe.Node(SplitDWIs(), name="split_minus")
-        b0_hmc_minus = init_b0_hmc_wf(name="b0_hmc_minus")
+        b0_hmc_minus = init_dwi_hmc_wf(hmc_transform, hmc_model, motion_corr_to,
+                                       name="b0_hmc_minus")
         merge_minus.inputs.inputnode.dwi_files = dwi_files[plus_key + "-"]
 
         # Get affines and warps to the b0 ref
@@ -353,9 +369,10 @@ def init_dwi_preproc_wf(dwi_files,
         merge_dwis = init_merge_and_denoise_wf(dwi_denoise_window=dwi_denoise_window,
                                                denoise_before_combining=denoise_before_combining,
                                                name="merge_dwis")
-        split_dwis = pe.Node(SplitDWIs(), name="split_dwis")
-        b0_hmc = init_b0_hmc_wf(name="b0_hmc")
         merge_dwis.inputs.inputnode.dwi_files = dwi_files
+        split_dwis = pe.Node(SplitDWIs(), name="split_dwis")
+        dwi_hmc_wf = init_dwi_hmc_wf(hmc_transform, hmc_model, motion_corr_to,
+                                     omp_nthreads=omp_nthreads, name="dwi_hmc_wf")
 
         # Fieldmap time
         sbref_file = None
@@ -434,10 +451,14 @@ def init_dwi_preproc_wf(dwi_files,
                  ('dwi_files', 'dwi_files'),
                  ('b0_images', 'b0_images'),
                  ('b0_indices', 'b0_indices')]),
-            (split_dwis, b0_hmc, [('b0_images', 'inputnode.b0_images')]),
-            (b0_hmc, buffernode, [(('outputnode.forward_transforms', _list_squeeze),
-                                  'to_dwi_ref_affines')]),
-            (b0_hmc, dwi_ref_wf, [('outputnode.final_template', 'inputnode.b0_template')]),
+            (split_dwis, dwi_hmc_wf, [('b0_images', 'inputnode.b0_images'),
+                                      ('bval_files', 'inputnode.bvals'),
+                                      ('bvec_files', 'inputnode.bvecs'),
+                                      ('dwi_files', 'inputnode.dwi_files'),
+                                      ('b0_indices', 'inputnode.b0_indices')]),
+            (dwi_hmc_wf, buffernode, [(('outputnode.forward_transforms', _list_squeeze),
+                                      'to_dwi_ref_affines')]),
+            (dwi_hmc_wf, dwi_ref_wf, [('outputnode.final_template', 'inputnode.b0_template')]),
             (dwi_ref_wf, b0_sdc_wf, [('outputnode.ref_image', 'inputnode.b0_ref'),
                                      ('outputnode.ref_image_brain', 'inputnode.b0_ref_brain'),
                                      ('outputnode.dwi_mask', 'inputnode.b0_mask')]),
@@ -464,11 +485,13 @@ def init_dwi_preproc_wf(dwi_files,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
         run_without_submitting=True)
     '''
+    # CONNECT TO DERIVATIVES #####################
     dwi_derivatives_wf = init_dwi_derivatives_wf(
         output_dir=output_dir,
         output_spaces=output_spaces,
-        template=template)
-    '''
+        template=template,
+        write_local_bvecs=write_local_bvecs)
+
     workflow.connect([
         (inputnode, dwi_derivatives_wf, [('dwi_files', 'inputnode.source_file')]),
         (outputnode, dwi_derivatives_wf,
@@ -488,7 +511,6 @@ def init_dwi_preproc_wf(dwi_files,
           ('mni_b0_series', 'inputnode.mni_b0_series'),
           ('confounds', 'inputnode.confounds')])
     ])
-    '''
     # calculate dwi registration to T1w
     b0_coreg_wf = init_b0_to_anat_registration_wf(omp_nthreads=omp_nthreads,
                                                   mem_gb=mem_gb['resampled'])
@@ -587,16 +609,16 @@ def init_dwi_preproc_wf(dwi_files,
         mem_gb=DEFAULT_MEMORY_MIN_GB)
 
     #workflow.connect([
-    #    (summary, ds_report_summary, [('out_report', 'in_file')])])
-    #    (dwi_reference_wf, ds_report_validation,
-    #         [('outputnode.validation_report', 'in_file')]),
+    #   (summary, ds_report_summary, [('out_report', 'in_file')])])
+       # (dwi_reference_wf, ds_report_validation,
+       #    [('outputnode.validation_report', 'in_file')]),
     # ])
 
     # Fill-in datasinks of reportlets seen so far
-    # for node in workflow.list_node_names():
-    #     if node.split('.')[-1].startswith('ds_report'):
-    #         workflow.get_node(node).inputs.base_directory = reportlets_dir
-    #         workflow.get_node(node).inputs.source_file = dwi_files
+    for node in workflow.list_node_names():
+        if node.split('.')[-1].startswith('ds_report'):
+            workflow.get_node(node).inputs.base_directory = reportlets_dir
+            workflow.get_node(node).inputs.source_file = dwi_files
 
     return workflow
 
@@ -604,6 +626,7 @@ def init_dwi_preproc_wf(dwi_files,
 def init_dwi_derivatives_wf(output_dir,
                             output_spaces,
                             template,
+                            write_local_bvecs,
                             name='dwi_derivatives_wf'):
 
     """Set up a battery of datasinks to store derivatives in the right location.
@@ -690,8 +713,8 @@ def init_dwi_derivatives_wf(output_dir,
                                       ('bvals_t1', 'in_file')]),
             (inputnode, ds_bvecs_t1, [('source_file', 'source_file'),
                                       ('bvecs_t1', 'in_file')]),
-            (inputnode, ds_local_bvecs_t1, [('source_file', 'source_file'),
-                                            ('local_bvecs_t1', 'in_file')]),
+            #(inputnode, ds_local_bvecs_t1, [('source_file', 'source_file'),
+            #                                ('local_bvecs_t1', 'in_file')]),
             (inputnode, ds_t1_b0_ref, [('source_file', 'source_file'),
                                        ('t1_b0_ref', 'in_file')]),
             (inputnode, ds_t1_b0_series, [('source_file', 'source_file'),
@@ -749,7 +772,6 @@ def init_dwi_derivatives_wf(output_dir,
             name='ds_mni_b0_series',
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
-
         ds_dwi_mask_mni = pe.Node(
             DerivativesDataSink(
                 base_directory=output_dir,
@@ -767,10 +789,10 @@ def init_dwi_derivatives_wf(output_dir,
                                        ('bvals_mni', 'in_file')]),
             (inputnode, ds_bvecs_mni, [('source_file', 'source_file'),
                                        ('bvecs_mni', 'in_file')]),
-            (inputnode, ds_local_bvecs_mni, [('source_file', 'source_file'),
-                                             ('local_bvecs_mni', 'in_file')]),
-            (inputnode, ds_mni_b0_ref, [('source_file', 'source_file'),
-                                        ('mni_b0_ref', 'in_file')]),
+            #(inputnode, ds_local_bvecs_mni, [('source_file', 'source_file'),
+            #                                 ('local_bvecs_mni', 'in_file')]),
+            #(inputnode, ds_mni_b0_ref, [('source_file', 'source_file'),
+            #                            ('mni_b0_ref', 'in_file')]),
             (inputnode, ds_mni_b0_series, [('source_file', 'source_file'),
                                            ('mni_b0_series', 'in_file')]),
             (inputnode, ds_dwi_mask_mni, [('source_file', 'source_file'),
@@ -819,7 +841,10 @@ def _get_wf_name(dwi_fname):
 
     return "dwi_preproc" + name + "_wf"
 
+
 def _list_squeeze(in_list):
     return [item[0] for item in in_list]
+
+
 def _get_first(in_list):
     return in_list[0]

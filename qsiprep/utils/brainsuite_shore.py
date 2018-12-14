@@ -447,17 +447,16 @@ def brainsuite_shore_basis(radial_order, zeta, gtab, tau=1 / (4 * np.pi**2)):
     # Angular part of the basis - Spherical harmonics
     S, Z, L = real_sym_sh_brainsuite(radial_order, theta, phi)
     Snew = []
-    ind = 0
     R = []
     for n in range(radial_order + 1):
         for l in range(0, n + 1, 2):
             Snew.append(S[:, L == l])
             for m in range(-l, l + 1):
                 # Radial part
-                R.append( genlaguerre(n - l, l + 0.5)(r ** 2 / zeta) * \
-                    np.exp(- r ** 2 / (2.0 * zeta)) * \
-                    _kappa(zeta, n, l) * \
-                    (r ** 2 / zeta) ** (l / 2))
+                R.append(genlaguerre(n - l, l + 0.5)(r ** 2 / zeta) *
+                         np.exp(- r ** 2 / (2.0 * zeta)) *
+                         _kappa(zeta, n, l) *
+                         (r ** 2 / zeta) ** (l / 2))
     R = np.column_stack(R)
     Snew = np.column_stack(Snew)
     Sh = R * Snew

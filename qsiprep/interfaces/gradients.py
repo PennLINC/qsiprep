@@ -1,3 +1,4 @@
+
 """Handle merging and spliting of DSI files."""
 import numpy as np
 import os
@@ -53,20 +54,30 @@ class ExtractB0sInputSpec(BaseInterfaceInputSpec):
 
 class ExtractB0sOutputSpec(TraitedSpec):
     b0_series = File(exists=True)
+    b0_average = File(exists=True)
 
 
 class ExtractB0s(SimpleInterface):
+    """Extract a b0 series and a mean b0 from a dwi series."""
+
     input_spec = ExtractB0sInputSpec
     output_spec = ExtractB0sOutputSpec
 
     def _run_interface(self, runtime):
         output_fname = fname_presuffix(self.inputs.dwi_series, suffix='_b0_series',
                                        use_ext=True, newpath=runtime.cwd)
+        output_mean_fname = fname_presuffix(output_fname, suffix='_mean',
+                                            use_ext=True, newpath=runtime.cwd)
         img = nb.load(self.inputs.dwi_series)
         indices = np.array(self.inputs.b0_indices).astype(np.int)
         new_data = img.get_data()[..., indices]
         nb.Nifti1Image(new_data, img.affine, img.header).to_filename(output_fname)
         self._results['b0_series'] = output_fname
+        average_img = afni.Tstat(args='-mean', in_file=output_fname, outputtype='NIFTI_GZ',
+                                 out_file=output_mean_fname)
+        average_img.run()
+        self._results['b0_average'] = output_mean_fname
+
         return runtime
 
 
@@ -305,15 +316,23 @@ def concatenate_bvals(bval_list, out_file):
     for bval_file in bval_list:
         collected_vals.append(np.loadtxt(bval_file, ndmin=1))
     final_bvals = np.concatenate(collected_vals).squeeze()
-    np.savetxt(out_file, final_bvals, fmt=str("%i"))
+    if out_file is not None:
+        np.savetxt(out_file, final_bvals, fmt=str("%i"))
+    return final_bvals
 
 
 def concatenate_bvecs(input_files):
-    """Create Dipy-style gradient array from bvec files."""
-    collected_vecs = []
-    for bvec_file in input_files:
-        collected_vecs.append(np.loadtxt(bvec_file))
-    return np.row_stack(collected_vecs)
+    """Create Dipy-style gradient array (3-columns) from bvec files."""
+    if len(input_files) == 1:
+        stacked = np.loadtxt(input_files[0])
+    else:
+        collected_vecs = []
+        for bvec_file in input_files:
+            collected_vecs.append(np.loadtxt(bvec_file))
+            stacked = np.row_stack(collected_vecs)
+    if not stacked.shape[1] == 3:
+        stacked = stacked.T
+    return stacked
 
 
 def bvec_rotation(original_bvecs, transforms, output_file, runtime):

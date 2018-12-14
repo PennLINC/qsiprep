@@ -165,6 +165,11 @@ def get_parser():
         help='discard repeats of q-space samples. Useful if using a '
         'regularized reconstruction method')
     g_conf.add_argument(
+        '--write-local-bvecs',
+        action='store_true',
+        default=False,
+        help='write a series of voxelwise bvecs')
+    g_conf.add_argument(
         '--b0-to-t1w-transform',
         action='store',
         default="Rigid",
@@ -626,6 +631,7 @@ def build_workflow(opts, retval):
         discard_repeated_samples=opts.discard_repeated_samples,
         dwi_denoise_window=opts.dwi_denoise_window,
         denoise_before_combining=opts.denoise_before_combining,
+        write_local_bvecs=opts.write_local_bvecs,
         omp_nthreads=omp_nthreads,
         skull_strip_template=opts.skull_strip_template,
         skull_strip_fixed_seed=opts.skull_strip_fixed_seed,
@@ -633,7 +639,7 @@ def build_workflow(opts, retval):
         output_resolution=opts.output_resolution,
         template=opts.template,
         bids_dir=bids_dir,
-        b0_motion_corr_to=opts.b0_motion_corr_to,
+        motion_corr_to=opts.motion_corr_to,
         hmc_transform=opts.hmc_transform,
         hmc_model=opts.hmc_model,
         impute_slice_threshold=opts.impute_slice_threshold,

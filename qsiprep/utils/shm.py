@@ -23,7 +23,7 @@ keep the data as is and implement the relevant equations rewritten in the
 following form: Y.T = x.T B.T, or in python syntax data = np.dot(sh_coef, B.T)
 where data is Y.T and sh_coef is x.T.
 """
-
+import warnings
 import numpy as np
 from numpy import concatenate, diag, diff, empty, eye, sqrt, unique, dot
 from numpy.linalg import pinv, svd
@@ -300,7 +300,9 @@ def real_sym_sh_brainsuite(sh_order, theta, phi):
             * np.imag(Pell[:,1:])])
         start_index=int(ell*(ell-1)/2)
         end_index = int((ell+1)*(ell+2)/2)
-        S[:,start_index:end_index] = Pell
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', np.ComplexWarning)
+            S[:,start_index:end_index] = Pell
         L[start_index:end_index] = ell
         Z[start_index:end_index] = np.arange(-ell, ell+1)
     return S, Z, L

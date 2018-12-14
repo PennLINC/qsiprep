@@ -40,8 +40,8 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
                     denoise_before_combining, dwi_denoise_window, output_resolution,
                     combine_all_dwis, discard_repeated_samples, omp_nthreads,
                     skull_strip_template, skull_strip_fixed_seed, freesurfer, hmc_model,
-                    impute_slice_threshold, hmc_transform,
-                    output_spaces, template, b0_motion_corr_to, b0_to_t1w_transform,
+                    impute_slice_threshold, hmc_transform, write_local_bvecs,
+                    output_spaces, template, motion_corr_to, b0_to_t1w_transform,
                     prefer_dedicated_fmaps, fmap_bspline, fmap_demean, use_syn, force_syn):
     """
     This workflow organizes the execution of qsiprep, with a sub-workflow for
@@ -77,10 +77,11 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
                               skull_strip_fixed_seed=False,
                               output_spaces=['T1w', 'template'],
                               template='MNI152NLin2009cAsym',
-                              b0_motion_corr_to='iterative',
+                              motion_corr_to='iterative',
                               b0_to_t1w_transform='Rigid',
                               hmc_transform='Affine',
                               impute_slice_threshold=0,
+                              write_local_bvecs=False,
                               prefer_dedicated_fmaps=False,
                               fmap_bspline=False,
                               fmap_demean=True,
@@ -143,7 +144,7 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
 
         template : str
             Name of template targeted by ``template`` output space
-        b0_motion_corr_to : str
+        motion_corr_to : str
             Motion correct using the 'first' b0 image or use an 'iterative'
             method to motion correct to the midpoint of the b0 images
         b0_to_t1w_transform : "Rigid" or "Affine"
@@ -159,6 +160,8 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
         prefer_dedicated_fmaps: bool
             If a reverse PE fieldmap is available in fmap, use that even if a reverse PE
             DWI series is available
+        write_local_bvecs : bool
+            Write out a series of voxelwise bvecs
         fmap_bspline : bool
             **Experimental**: Fit B-Spline field using least-squares
         fmap_demean : bool
@@ -208,11 +211,12 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
             output_spaces=output_spaces,
             template=template,
             prefer_dedicated_fmaps=prefer_dedicated_fmaps,
-            b0_motion_corr_to=b0_motion_corr_to,
+            motion_corr_to=motion_corr_to,
             b0_to_t1w_transform=b0_to_t1w_transform,
             hmc_model=hmc_model,
             hmc_transform=hmc_transform,
             impute_slice_threshold=impute_slice_threshold,
+            write_local_bvecs=write_local_bvecs,
             fmap_bspline=fmap_bspline,
             fmap_demean=fmap_demean,
             use_syn=use_syn,
@@ -232,11 +236,11 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
 
 
 def init_single_subject_wf(
-        subject_id, name, reportlets_dir, output_dir, bids_dir, ignore, debug,
+        subject_id, name, reportlets_dir, output_dir, bids_dir, ignore, debug, write_local_bvecs,
         low_mem, anat_only, longitudinal, denoise_before_combining, dwi_denoise_window,
         combine_all_dwis, discard_repeated_samples, omp_nthreads, skull_strip_template,
         skull_strip_fixed_seed, freesurfer, hires, output_spaces, template, output_resolution,
-        prefer_dedicated_fmaps, b0_motion_corr_to, b0_to_t1w_transform, hmc_model, hmc_transform,
+        prefer_dedicated_fmaps, motion_corr_to, b0_to_t1w_transform, hmc_model, hmc_transform,
         impute_slice_threshold, fmap_bspline, fmap_demean, use_syn, force_syn):
     """
     This workflow organizes the preprocessing pipeline for a single subject.
@@ -270,12 +274,13 @@ def init_single_subject_wf(
                                     denoise_before_combining=True,
                                     combine_all_dwis=True,
                                     discard_repeated_samples=True,
+                                    write_local_bvecs=False,
                                     omp_nthreads=1,
                                     skull_strip_template='OASIS',
                                     skull_strip_fixed_seed=False,
                                     template='MNI152NLin2009cAsym',
                                     output_spaces=['T1w', 'template'],
-                                    b0_motion_corr_to='iterative',
+                                    motion_corr_to='iterative',
                                     b0_to_t1w_dof=9,
                                     fmap_bspline=False,
                                     fmap_demean=True,
@@ -339,7 +344,7 @@ def init_single_subject_wf(
 
         template : str
             Name of template targeted by ``template`` output space
-        b0_motion_corr_to : str
+        motion_corr_to : str
             Motion correct using the 'first' b0 image or use an 'iterative'
             method to motion correct to the midpoint of the b0 images
         b0_to_t1w_dof : 6, 9 or 12
@@ -504,15 +509,18 @@ to workflows in *qsiprep*'s documentation]\
             freesurfer=freesurfer,
             dwi_denoise_window=dwi_denoise_window,
             denoise_before_combining=denoise_before_combining,
-            b0_motion_corr_to=b0_motion_corr_to,
+            motion_corr_to=motion_corr_to,
             b0_to_t1w_transform=b0_to_t1w_transform,
+            write_local_bvecs=write_local_bvecs,
+            hmc_model=hmc_model,
+            hmc_transform=hmc_transform,
+            impute_slice_threshold=impute_slice_threshold,
             reportlets_dir=reportlets_dir,
             output_spaces=output_spaces,
             template=template,
             output_dir=output_dir,
             omp_nthreads=omp_nthreads,
             low_mem=low_mem,
-            use_bbr=False,
             combine_all_dwis=combine_all_dwis,
             discard_repeated_samples=discard_repeated_samples,
             fmap_bspline=fmap_bspline,

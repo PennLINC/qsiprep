@@ -172,21 +172,12 @@ generating a *preprocessed DWI run in {tpl} space*.
 
     # Rotate the bvecs
     rotate_gradients = pe.Node(GradientRotation(), name='rotate_gradients')
-    workflow.connect([
-        (inputnode, rotate_gradients, [('bvec_files', 'bvec_files'),
-                                       ('bval_files', 'bval_files')]),
-        (compose_transforms, rotate_gradients, [('out_warps', 'warp_transforms'),
-                                                ('out_affines', 'affine_transforms')]),
-        (rotate_gradients, outputnode, [('bvals', 'bvals'),
-                                        ('bvecs', 'rotated_bvecs'),
-                                        ('local_bvecs', 'local_bvecs')])
-    ])
 
+    # Transform the mask to the output space
     mask_tfm = pe.Node(
         ants.ApplyTransforms(interpolation='MultiLabel', float=True),
         name='mask_tfm',
-        mem_gb=1
-    )
+        mem_gb=1)
 
     if to_mni:
         # Write corrected file in the designated output dir
@@ -203,13 +194,6 @@ generating a *preprocessed DWI run in {tpl} space*.
             (inputnode, mask_tfm, [(('itk_b0_to_t1', _aslist), 'transforms')]),
         ])
 
-    workflow.connect([
-        (inputnode, mask_tfm, [('dwi_mask', 'input_image'),
-                               ('output_grid', 'reference_image')]),
-        (mask_tfm, rotate_gradients, [('output_image', 'mask_image')]),
-        (mask_tfm, outputnode, [('output_image', 'dwi_mask_mni')]),
-    ])
-
     dwi_transform = pe.MapNode(
         ants.ApplyTransforms(interpolation="LanczosWindowedSinc", float=True),
         name='dwi_transform', iterfield=['input_image', 'transforms'])
@@ -220,6 +204,15 @@ generating a *preprocessed DWI run in {tpl} space*.
     extract_b0_series = pe.Node(ExtractB0s(), name="extract_b0_series")
 
     workflow.connect([
+        (inputnode, rotate_gradients, [('bvec_files', 'bvec_files'),
+                                       ('bval_files', 'bval_files')]),
+        (compose_transforms, rotate_gradients, [('out_affines', 'affine_transforms')]),
+        (rotate_gradients, outputnode, [('bvals', 'bvals'),
+                                        ('bvecs', 'rotated_bvecs')]),
+        (inputnode, mask_tfm, [('dwi_mask', 'input_image'),
+                               ('output_grid', 'reference_image')]),
+        # (mask_tfm, rotate_gradients, [('output_image', 'mask_image')]),
+        (mask_tfm, outputnode, [('output_image', 'dwi_mask_mni')]),
         (compose_transforms, dwi_transform, [('out_warps', 'transforms')]),
         (inputnode, merge, [('name_source', 'header_source')]),
         (inputnode,  dwi_transform, [('dwi_files', 'input_image'),
@@ -228,7 +221,8 @@ generating a *preprocessed DWI run in {tpl} space*.
         (merge, outputnode, [('out_file', 'dwi_resampled')]),
         (merge, extract_b0_series, [('out_file', 'dwi_series')]),
         (inputnode, extract_b0_series, [('b0_indices', 'b0_indices')]),
-        (extract_b0_series, outputnode, [('b0_series', 'b0_series')]),
+        (extract_b0_series, outputnode, [('b0_series', 'b0_series'),
+                                         ('b0_average', 'dwi_ref_resampled')]),
     ])
 
 

@@ -258,22 +258,22 @@ def init_skullstrip_b0_wf(name='skullstrip_b0_wf'):
         niu.IdentityInterface(
             fields=['mask_file', 'skull_stripped_file', 'out_report']),
         name='outputnode')
-    skullstrip_second_pass = pe.Node(
+    automask_dilate = pe.Node(
         afni.Automask(dilate=3, outputtype='NIFTI_GZ'),
-        name='skullstrip_second_pass')
+        name='automask_dilate')
     apply_mask = pe.Node(fsl.ApplyMask(), name='apply_mask')
     mask_reportlet = pe.Node(SimpleShowMaskRPT(), name='mask_reportlet')
 
     workflow.connect([
-        (inputnode, skullstrip_second_pass, [('in_file', 'in_file')]),
-        (skullstrip_second_pass, outputnode, [('out_file', 'mask_file')]),
+        (inputnode, automask_dilate, [('in_file', 'in_file')]),
+        (automask_dilate, outputnode, [('out_file', 'mask_file')]),
         # Masked file
         (inputnode, apply_mask, [('in_file', 'in_file')]),
-        (skullstrip_second_pass, apply_mask, [('out_file', 'mask_file')]),
+        (automask_dilate, apply_mask, [('out_file', 'mask_file')]),
         (apply_mask, outputnode, [('out_file', 'skull_stripped_file')]),
         # Reportlet
         (inputnode, mask_reportlet, [('in_file', 'background_file')]),
-        (skullstrip_second_pass, mask_reportlet, [('out_file', 'mask_file')]),
+        (automask_dilate, mask_reportlet, [('out_file', 'mask_file')]),
         (mask_reportlet, outputnode, [('out_report', 'out_report')]),
     ])
 
