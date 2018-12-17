@@ -35,12 +35,35 @@ RUN curl -sSL https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/6.0.1/frees
     --exclude='freesurfer/lib/cuda' \
     --exclude='freesurfer/lib/qt'
 
-ENV FSL_DIR=/usr/share/fsl/5.0 \
-    OS=Linux \
-    FS_OVERRIDE=0 \
-    FIX_VERTEX_AREA= \
-    FSF_OUTPUT_FORMAT=nii.gz \
-    FREESURFER_HOME=/opt/freesurfer
+  ENV FSLDIR="/opt/fsl-5.0.11" \
+      PATH="/opt/fsl-5.0.11/bin:$PATH"
+  RUN apt-get update -qq \
+      && apt-get install -y -q --no-install-recommends \
+             bc \
+             dc \
+             file \
+             libfontconfig1 \
+             libfreetype6 \
+             libgl1-mesa-dev \
+             libglu1-mesa-dev \
+             libgomp1 \
+             libice6 \
+             libxcursor1 \
+             libxft2 \
+             libxinerama1 \
+             libxrandr2 \
+             libxrender1 \
+             libxt6 \
+             wget \
+      && apt-get clean \
+      && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
+      && echo "Downloading FSL ..." \
+      && mkdir -p /opt/fsl-5.0.11 \
+      && curl -fsSL --retry 5 https://fsl.fmrib.ox.ac.uk/fsldownloads/fsl-5.0.11-centos6_64.tar.gz \
+      | tar -xz -C /opt/fsl-5.0.11 --strip-components 1 \
+      && echo "Installing FSL conda environment ..." \
+      && bash /opt/fsl-5.0.11/etc/fslconf/fslpython_install.sh -f /opt/fsl-5.0.11
+
 ENV SUBJECTS_DIR=$FREESURFER_HOME/subjects \
     FUNCTIONALS_DIR=$FREESURFER_HOME/sessions \
     MNI_DIR=$FREESURFER_HOME/mni \
@@ -57,30 +80,96 @@ ENV PERL5LIB=$MINC_LIB_DIR/perl5/5.8.5 \
 # Installing Neurodebian packages (FSL, AFNI, git)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-                    fsl-core=5.0.9-4~nd16.04+1 \
-                    fsl-mni152-templates=5.0.7-2 \
-                    afni=16.2.07~dfsg.1-5~nd16.04+1 \
-                    convert3d
+                    afni=16.2.07~dfsg.1-5~nd16.04+1
 
-ENV FSLDIR=/usr/share/fsl/5.0 \
-    FSLOUTPUTTYPE=NIFTI_GZ \
-    FSLMULTIFILEQUIT=TRUE \
-    POSSUMDIR=/usr/share/fsl/5.0 \
-    LD_LIBRARY_PATH=/usr/lib/fsl/5.0:$LD_LIBRARY_PATH \
-    FSLTCLSH=/usr/bin/tclsh \
-    FSLWISH=/usr/bin/wish \
-    AFNI_MODELPATH=/usr/lib/afni/models \
-    AFNI_IMSAVE_WARNINGS=NO \
-    AFNI_TTATLAS_DATASET=/usr/share/afni/atlases \
-    AFNI_PLUGINPATH=/usr/lib/afni/plugins
-ENV PATH=/usr/lib/fsl/5.0:/usr/lib/afni/bin:$PATH
+# Install DSI Studio
+ENV PATH=$PATH:/opt/dsi-studio/dsi_studio_64
+RUN apt-get install -y --no-install-recommends \
+                    git \
+                    qt5-qmake \
+                    qt5-default \
+                    libboost-all-dev \
+                    zlib1g \
+                    zlib1g-dev \
+                    libqt5opengl5-dev \
+                    unzip \
+                    libgl1-mesa-dev \
+                    libglu1-mesa-dev \
+                    freeglut3-dev \
+                    mesa-utils \
+  && apt-get clean \
+  && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
+  && mkdir /opt/dsi-studio \
+  && cd /opt/dsi-studio \
+  && git clone -b master https://github.com/frankyeh/DSI-Studio.git src \
+  && curl -sSLO https://github.com/frankyeh/TIPL/archive/master.zip > master.zip \
+  && unzip master.zip \
+  && mv TIPL-master src/tipl \
+  && mkdir build && cd build \
+  && qmake ../src && make \
+  && cd /opt/dsi-studio \
+  && curl -sSLO 'https://www.dropbox.com/s/ew3rv0jrqqny2dq/dsi_studio_64.zip?dl=1' > dsistudio64.zip \
+  && mv 'dsi_studio_64.zip?dl=1' dsistudio64.zip \
+  && unzip dsistudio64.zip && cd dsi_studio_64 \
+  && find . -name '*.dll' -exec rm {} \; \
+  && rm -rf iconengines imageformats platforms printsupport \
+  && rm dsi_studio.exe \
+  && mv ../build/dsi_studio . \
+  && rm -rf /opt/dsi-studio/src /opt/dsi-studio/build
 
-# Installing ANTs 2.2.0 (NeuroDocker build)
-ENV ANTSPATH=/usr/lib/ants
-RUN mkdir -p $ANTSPATH && \
-    curl -sSL "https://dl.dropbox.com/s/2f4sui1z6lcgyek/ANTs-Linux-centos5_x86_64-v2.2.0-0740f91.tar.gz" \
-    | tar -xzC $ANTSPATH --strip-components 1
-ENV PATH=$ANTSPATH:$PATH
+# Install mrtrix3 from source
+ENV PATH="/opt/mrtrix3-latest/bin:$PATH"
+RUN apt-get update -qq \
+    && apt-get install -y -q --no-install-recommends \
+           g++ \
+           gcc \
+           libeigen3-dev \
+           libqt5svg5* \
+           make \
+           python \
+           python-numpy \
+           zlib1g-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
+    && mkdir -p /opt/mrtrix3-latest \
+    && git clone https://github.com/MRtrix3/mrtrix3.git /opt/mrtrix3-latest \
+    && cd /opt/mrtrix3-latest \
+    && ./configure \
+    && echo "Compiling MRtrix3 ..." \
+    && ./build
+
+# Installing ANTs latest from source
+ADD https://cmake.org/files/v3.11/cmake-3.11.4-Linux-x86_64.sh /cmake-3.11.4-Linux-x86_64.sh
+ENV ANTSPATH="/opt/ants-latest/bin" \
+    PATH="/opt/ants-latest/bin:$PATH" \
+    LD_LIBRARY_PATH="/opt/ants-latest/lib:$LD_LIBRARY_PATH"
+RUN mkdir /opt/cmake \
+  && sh /cmake-3.11.4-Linux-x86_64.sh --prefix=/opt/cmake --skip-license \
+  && ln -s /opt/cmake/bin/cmake /usr/local/bin/cmake \
+  && apt-get update -qq \
+    && apt-get install -y -q --no-install-recommends \
+           g++ \
+           gcc \
+           make \
+           zlib1g-dev \
+    && mkdir -p /tmp/ants/build \
+    && git config --global url."https://".insteadOf git:// \
+    && git clone https://github.com/ANTsX/ANTs.git /tmp/ants/source \
+    && cd /tmp/ants/build \
+    && cmake -DBUILD_SHARED_LIBS=ON /tmp/ants/source \
+    && make -j1 \
+    && mkdir -p /opt/ants-latest \
+    && mv bin lib /opt/ants-latest/ \
+    && mv /tmp/ants/source/Scripts/* /opt/ants-latest/bin \
+    && rm -rf /tmp/ants \
+    && rm -rf /opt/cmake /usr/local/bin/cmake
+
+ENV C3DPATH="/opt/convert3d-nightly" \
+    PATH="/opt/convert3d-nightly/bin:$PATH"
+RUN echo "Downloading Convert3D ..." \
+    && mkdir -p /opt/convert3d-nightly \
+    && curl -fsSL --retry 5 https://sourceforge.net/projects/c3d/files/c3d/Nightly/c3d-nightly-Linux-x86_64.tar.gz/download \
+    | tar -xz -C /opt/convert3d-nightly --strip-components 1
 
 # Installing SVGO
 RUN curl -sL https://deb.nodesource.com/setup_10.x | bash -
@@ -107,6 +196,7 @@ RUN conda install -y mkl=2018.0.3 mkl-service;  sync &&\
                      libxml2=2.9.4 \
                      libxslt=1.1.29 \
                      graphviz=2.40.1 \
+                     cython \
                      traits=4.6.0; sync &&  \
     chmod -R a+rX /usr/local/miniconda; sync && \
     chmod +x /usr/local/miniconda/bin/*; sync && \
@@ -116,12 +206,6 @@ RUN conda install -y mkl=2018.0.3 mkl-service;  sync &&\
 # Precaching fonts, set 'Agg' as default backend for matplotlib
 RUN python -c "from matplotlib import font_manager" && \
     sed -i 's/\(backend *: \).*$/\1Agg/g' $( python -c "import matplotlib; print(matplotlib.matplotlib_fname())" )
-
-# Installing Ubuntu packages and cleaning up
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-                    git=1:2.7.4-0ubuntu1 && \
-    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Install latest pandoc
 RUN curl -o pandoc-2.2.2.1-1-amd64.deb -sSL "https://github.com/jgm/pandoc/releases/download/2.2.2.1/pandoc-2.2.2.1-1-amd64.deb" && \
@@ -134,12 +218,6 @@ ENV MKL_NUM_THREADS=1 \
     OMP_NUM_THREADS=1
 
 WORKDIR /root/
-
-# Install DSI Studio
-ADD docker/scripts/install_dsi_studio.sh install_dsi_studio.sh
-RUN mkdir -p /opt/dsi_studio && \
-    /root/install_dsi_studio.sh && \
-    chmod -R a+rX /opt/dsi_studio
 
 # Precaching atlases
 ENV CRN_SHARED_DATA /niworkflows_data
@@ -162,10 +240,6 @@ RUN echo "${VERSION}" > /root/src/qsiprep/qsiprep/VERSION && \
     pip install .[all] && \
     rm -rf ~/.cache/pip
 
-RUN install -m 0755 \
-    /root/src/qsiprep/scripts/generate_reference_mask.py \
-    /usr/local/bin/generate_reference_mask
-
 RUN ldconfig
 WORKDIR /tmp/
 ENTRYPOINT ["/usr/local/miniconda/bin/qsiprep"]
@@ -175,7 +249,7 @@ ARG VCS_REF
 ARG VERSION
 LABEL org.label-schema.build-date=$BUILD_DATE \
       org.label-schema.name="qsiprep" \
-      org.label-schema.description="qsiprep - q Space Imaging preprocessing tool" \
+      org.label-schema.description="qsiprep - q Space Images preprocessing tool" \
       org.label-schema.url="http://qsiprep.org" \
       org.label-schema.vcs-ref=$VCS_REF \
       org.label-schema.vcs-url="https://github.com/pennbbl/qsiprep" \
