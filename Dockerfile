@@ -229,7 +229,8 @@ RUN mkdir $CRN_SHARED_DATA && \
 # Installing dev requirements (packages that are not in pypi)
 ADD requirements.txt requirements.txt
 RUN pip install -r requirements.txt && \
-    rm -rf ~/.cache/pip
+    rm -rf ~/.cache/pip \
+    && echo 1
 
 # Installing qsiprep
 COPY . /root/src/qsiprep
