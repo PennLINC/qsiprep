@@ -32,6 +32,8 @@ work/**/*
 work
 out/**/*
 out/
+scratch
+scratch/*
 
 # CI, etc.
 .circleci

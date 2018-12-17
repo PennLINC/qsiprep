@@ -18,7 +18,7 @@ from nipype import logging
 from nipype.utils.filemanip import fname_presuffix
 from nipype.interfaces.base import (
     traits, TraitedSpec, BaseInterfaceInputSpec, File, Directory, isdefined,
-    SimpleInterface
+    SimpleInterface, InputMultiObject
 )
 from niworkflows.viz.plots import fMRIPlot
 

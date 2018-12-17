@@ -5,9 +5,7 @@
 Resampling workflows
 ++++++++++++++++++++
 
-.. autofunction:: init_bold_surf_wf
-.. autofunction:: init_bold_mni_trans_wf
-.. autofunction:: init_bold_preproc_trans_wf
+.. autofunction:: init_dwi_trans_wf
 
 """
 import os.path as op

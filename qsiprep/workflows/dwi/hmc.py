@@ -6,7 +6,7 @@ from dipy.core.geometry import decompose_matrix
 from fmriprep.engine import Workflow
 import os
 import numpy as np
-from ...interfaces.gradients import MatchTransforms, GradientRotation
+from ...interfaces.gradients import MatchTransforms, GradientRotation, CombineMotions
 from ...interfaces.dipy import IdealSignalRegistration
 from .util import init_skullstrip_b0_wf
 
@@ -31,12 +31,7 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, mem_gb=3, omp_nthrea
     match_transforms = pe.Node(MatchTransforms(), name="match_transforms")
 
     # Compute distance travelled to the template
-    summarize_motion = pe.Node(
-        interface=niu.Function(
-            input_names=["motions"],
-            output_names=["stacked_motion"],
-            function=combine_motion),
-        name="summarize_motion")
+    summarize_motion = pe.Node(CombineMotions(), name="summarize_motion")
 
     workflow.connect([
         (inputnode, match_transforms, [('dwi_files', 'dwi_files'),
@@ -50,10 +45,10 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, mem_gb=3, omp_nthrea
     if hmc_model == 'none':
         # Motion correction based only on b0's
         workflow.connect([
-            (b0_hmc_wf, outputnode, [('outputnode.motion_params', 'motion_params')]),
+            # (b0_hmc_wf, outputnode, [('outputnode.motion_params', 'motion_params')]),
             (match_transforms, outputnode, [('transforms', 'forward_transforms')]),
-            (match_transforms, summarize_motion, [('transforms', 'motions')]),
-            (summarize_motion, outputnode, [('stacked_motion', 'motion_params')])
+            (match_transforms, summarize_motion, [('transforms', 'transform_files')]),
+            (summarize_motion, outputnode, [('motion_file', 'motion_params')])
         ])
         return workflow
 
@@ -72,36 +67,11 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, mem_gb=3, omp_nthrea
         (match_transforms, dwi_model_hmc_wf, [('transforms', 'inputnode.initial_transforms')]),
         (dwi_model_hmc_wf, outputnode, [('outputnode.noise_free_dwis', 'noise_free_dwis'),
                                         ('outputnode.hmc_transforms', 'forward_transforms')]),
-        (dwi_model_hmc_wf, summarize_motion, [('outputnode.hmc_transforms', 'motions')]),
-        (summarize_motion, outputnode, [('stacked_motion', 'motion_params')])
+        (dwi_model_hmc_wf, summarize_motion, [('outputnode.hmc_transforms', 'transform_files')]),
+        (summarize_motion, outputnode, [('motion_file', 'motion_params')])
     ])
 
     return workflow
-
-
-def combine_motion(motions):
-    import os
-    import numpy as np
-    from dipy.core.geometry import decompose_matrix
-    import pandas as pd
-    collected_motion = []
-    for motion_file in motions:
-        if os.path.exists("output.txt"):
-            os.remove("output.txt")
-        # Convert to homogenous matrix
-        os.system("ConvertTransformFile 3 %s output.txt --RAS --hm" % (motion_file[0]))
-        affine = np.loadtxt("output.txt")
-        scale, shear, angles, translate, persp = decompose_matrix(affine)
-        collected_motion.append(np.concatenate([scale, shear,
-                                np.array(angles)*180/np.pi, translate]))
-
-    final_motion = np.row_stack(collected_motion)
-    cols = ["scaleX", "scaleY", "scaleZ", "shearXY", "shearXZ",
-            "shearYZ", "rotateX", "rotateY", "rotateZ", "shiftX", "shiftY",
-            "shiftZ"]
-    motion_df = pd.DataFrame(data=final_motion, columns=cols)
-    motion_df.to_csv("motion_params.csv", index=False)
-    return os.path.abspath("motion_params.csv")
 
 
 def linear_alignment_workflow(transform="Rigid",

@@ -2,19 +2,19 @@
 """Handle merging and spliting of DSI files."""
 import numpy as np
 import os
-import os.path as op
 import nibabel as nb
 from nipype.interfaces.base import (BaseInterfaceInputSpec, TraitedSpec, File, SimpleInterface,
                                     InputMultiObject, OutputMultiObject, traits, isdefined)
 from nipype.interfaces import afni, ants
 from nipype.utils.filemanip import fname_presuffix
 from nipype.interfaces.ants.resampling import ApplyTransformsInputSpec
-from .itk import DisassembleTransform
 from tempfile import TemporaryDirectory
 import logging
 from dipy.sims.voxel import all_tensor_evecs
 from dipy.reconst.dti import decompose_tensor
-from dipy.core.geometry import normalized_vector
+from dipy.core.geometry import normalized_vector, decompose_matrix
+import pandas as pd
+
 LOGGER = logging.getLogger('nipype.interface')
 tensor_index = {
     "xx": (0, 0),
@@ -24,6 +24,41 @@ tensor_index = {
     "yz": (1, 2),
     "zz": (2, 2)
 }
+
+
+class CombineMotionsInputSpec(BaseInterfaceInputSpec):
+    transform_files = InputMultiObject(File(exists=True), desc='transform files from hmc')
+
+
+class CombineMotionsOututSpec(TraitedSpec):
+    motion_file = File(exists=True)
+
+
+class CombineMotions(SimpleInterface):
+    input_spec = CombineMotionsInputSpec
+    output_spec = CombineMotionsOututSpec
+
+    def _run_interface(self, runtime):
+        collected_motion = []
+        output_fname = os.path.join(runtime.cwd, "motion_params.csv")
+        for motion_file in self.inputs.transform_files:
+            if os.path.exists("output.txt"):
+                os.remove("output.txt")
+            # Convert to homogenous matrix
+            os.system("ConvertTransformFile 3 %s output.txt --RAS --hm" % (motion_file))
+            affine = np.loadtxt("output.txt")
+            scale, shear, angles, translate, persp = decompose_matrix(affine)
+            collected_motion.append(np.concatenate([scale, shear,
+                                    np.array(angles)*180/np.pi, translate]))
+
+        final_motion = np.row_stack(collected_motion)
+        cols = ["scaleX", "scaleY", "scaleZ", "shearXY", "shearXZ",
+                "shearYZ", "rotateX", "rotateY", "rotateZ", "shiftX", "shiftY",
+                "shiftZ"]
+        motion_df = pd.DataFrame(data=final_motion, columns=cols)
+        motion_df.to_csv(output_fname, index=False)
+        self._results['motion_file'] = output_fname
+        return runtime
 
 
 class MatchTransformsInputSpec(BaseInterfaceInputSpec):
@@ -73,7 +108,7 @@ class ExtractB0s(SimpleInterface):
         new_data = img.get_data()[..., indices]
         nb.Nifti1Image(new_data, img.affine, img.header).to_filename(output_fname)
         self._results['b0_series'] = output_fname
-        average_img = afni.Tstat(args='-mean', in_file=output_fname, outputtype='NIFTI_GZ',
+        average_img = afni.TStat(args='-mean', in_file=output_fname, outputtype='NIFTI_GZ',
                                  out_file=output_mean_fname)
         average_img.run()
         self._results['b0_average'] = output_mean_fname

@@ -486,11 +486,20 @@ to workflows in *qsiprep*'s documentation]\
     sessions = layout.get_sessions()
     all_dwis = subject_data['dwi']
     dwi_session_groups = []
-    if sessions and combine_all_dwis:
-        for session in sessions:
-            dwi_session_groups.append([img for img in all_dwis if 'ses-'+session in img])
+    if not combine_all_dwis:
+        LOGGER.info('Processing each of %d dwi files separately', len(all_dwis))
+        dwi_session_groups = [[dwi] for dwi in all_dwis]
     else:
-        dwi_session_groups = [all_dwis]
+        if sessions:
+            LOGGER.info('Combining all dwi files within each available session:')
+            for session in sessions:
+                session_files = [img for img in all_dwis if 'ses-'+session in img]
+                LOGGER.info('\t- %d sessions in %s', len(session_files), session)
+                dwi_session_groups.append(session_files)
+        else:
+            LOGGER.info('Combining all %d dwis within the single available session',
+                        len(all_dwis))
+            dwi_session_groups = [all_dwis]
 
     # Now group by fieldmaps for session x fieldmap
     dwi_fmap_groups = []
@@ -521,7 +530,6 @@ to workflows in *qsiprep*'s documentation]\
             output_dir=output_dir,
             omp_nthreads=omp_nthreads,
             low_mem=low_mem,
-            combine_all_dwis=combine_all_dwis,
             discard_repeated_samples=discard_repeated_samples,
             fmap_bspline=fmap_bspline,
             fmap_demean=fmap_demean,

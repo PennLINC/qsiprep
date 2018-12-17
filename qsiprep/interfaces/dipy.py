@@ -158,21 +158,20 @@ class IdealSignalRegistration(SimpleInterface):
         mask_img = nb.load(self.inputs.mask_image)
         mask_array = mask_img.get_data() > 0
 
-        images = [nb.load(img) for img in dwi_files]
+        # images = [nb.load(img) for img in dwi_files]
 
         # MODEL PART ######################################################
         # Prepare a b0 template
-        b0_images = [img for img in images if img not in b0_indices]
-        b0_data = np.stack([img.get_data() for img in b0_images], -1)
-        b0_mean = b0_data.mean(3)
+        b0_image_paths = [img for img_num, img in enumerate(dwi_files) if img_num in b0_indices]
+        b0_mean = np.stack([nb.load(img).get_data() for img in b0_image_paths], -1).mean(3)
 
         # Prepate non-b0 images
         target_indices = [idx for idx in range(num_dwis) if idx not in b0_indices]
-        non_b0_images = [images[idx] for idx in target_indices]
         non_b0_image_paths = [dwi_files[idx] for idx in target_indices]
         model_bvecs = np.row_stack([np.zeros(3)] + [bvecs[n] for n in target_indices])
         model_bvals = np.array([0.] + [bvals[n] for n in target_indices])
-        model_data = np.stack([b0_mean] + [img.get_data() for img in non_b0_images], -1)
+        model_data = np.stack([b0_mean] +
+                              [nb.load(img).get_data() for img in non_b0_image_paths], -1)
 
         gtab = gradient_table(bvals=model_bvals, bvecs=model_bvecs)
         predicted_signal = estimate_signal_targets(self.inputs.model_name, gtab, model_data,
@@ -223,17 +222,23 @@ class IdealSignalRegistration(SimpleInterface):
         tmp_folder.cleanup()
 
         # Store the warped images
-        resampled_images = [el[0] for el in out_files]
-        self._results['corrected_images'] = resampled_images
+        _resampled_images = [el[0] for el in out_files]
 
-        # Add back in the b0s, return the full transform list
+        # Add back in the b0s, return the full transform list and warped images
         recombined_transforms = [''] * num_dwis
-        for b0_index in self.inputs.b0_indices:
+        resampled_images = [''] * num_dwis
+        for b0_index, b0_image in zip(self.inputs.b0_indices, b0_image_paths):
             recombined_transforms[b0_index] = self.inputs.initial_transforms[b0_index]
+            resampled_images[b0_index] = b0_image
         dwi_transforms = [el[1] for el in out_files]
-        for target_index, target_transform in zip(target_indices, dwi_transforms):
-            recombined_transforms[target_index] = target_transform[0]
+        for target_index, target_transform, _resampled_image in zip(target_indices,
+                                                                    dwi_transforms,
+                                                                    _resampled_images):
+            recombined_transforms[target_index] = target_transform if type(target_transform) \
+                is str else target_transform[0]
+            resampled_images[target_index] = _resampled_image
         self._results['transforms'] = recombined_transforms
+        self._results['corrected_images'] = resampled_images
         print(recombined_transforms)
 
         rotator = GradientRotation(affine_transforms=recombined_transforms,
