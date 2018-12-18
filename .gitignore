@@ -85,3 +85,4 @@ local_settings.py
 *.DS_Store
 
 scratch/
+.Rproj.user
