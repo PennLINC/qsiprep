@@ -140,7 +140,7 @@ template [@fieldmapless3].
     atlas_2_ref = pe.Node(ants.ApplyTransforms(), name='atlas_2_ref', n_procs=omp_nthreads,
                           mem_gb=0.3)
     atlas_2_ref.inputs.input_image = atlas_img
-
+    atlas_2_ref.inputs.invert_transform_flags = [True, False]
     threshold_atlas = pe.Node(
         fsl.maths.MathsCommand(args='-thr {:.8g} -bin'.format(atlas_threshold),
                                output_datatype='char'),
