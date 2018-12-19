@@ -9,13 +9,12 @@ from .images import (
     IntraModalMerge, ValidateImage, TemplateDimensions, Conform, MatchHeader,
     ConformDwi
 )
+from .reports import SubjectSummary, AboutSummary, DiffusionSummary
 from fmriprep.interfaces.freesurfer import (
     StructuralReference, MakeMidthickness, FSInjectBrainExtracted,
     FSDetectInputs, RefineBrainMask, MedialNaNs
 )
 from fmriprep.interfaces.surf import NormalizeSurf, GiftiNameSource, GiftiSetAnatomicalStructure
-from fmriprep.interfaces.reports import SubjectSummary, FunctionalSummary, AboutSummary
-from .reports import DiffusionSummary
 from fmriprep.interfaces.utils import (TPM2ROI, AddTPMs, AddTSVHeader, ConcatAffines,
                                        JoinTSVColumns)
 from fmriprep.interfaces.fmap import (

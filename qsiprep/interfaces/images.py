@@ -106,6 +106,7 @@ class ConcatRPESplitsOutputSpec(TraitedSpec):
     to_dwi_ref_affines = OutputMultiObject(File(exists=True), desc='affines to b0 ref')
     to_dwi_ref_warps = OutputMultiObject(File(exists=True), desc='correcting warps to b0 ref')
     original_grouping = traits.List(desc='list of source series for each dwi')
+    sdc_method = traits.Str("PEB/PEPOLAR Series (phase-encoding based / PE-POLARity)")
 
 
 class ConcatRPESplits(SimpleInterface):

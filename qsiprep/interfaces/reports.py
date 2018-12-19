@@ -32,24 +32,17 @@ SUBJECT_TEMPLATE = """\t<ul class="elem-desc">
 \t</ul>
 """
 
-FUNCTIONAL_TEMPLATE = """\t\t<h3 class="elem-title">Summary</h3>
-\t\t<ul class="elem-desc">
-\t\t\t<li>Phase-encoding (PE) direction: {pedir}</li>
-\t\t\t<li>Slice timing correction: {stc}</li>
-\t\t\t<li>Susceptibility distortion correction: {sdc}</li>
-\t\t\t<li>Registration: {registration}</li>
-\t\t\t<li>Functional series resampled to spaces: {output_spaces}</li>
-\t\t\t<li>Confounds collected: {confounds}</li>
-\t\t</ul>
-"""
-
 DIFFUSION_TEMPLATE = """\t\t<h3 class="elem-title">Summary</h3>
 \t\t<ul class="elem-desc">
 \t\t\t<li>Phase-encoding (PE) direction: {pedir}</li>
 \t\t\t<li>Susceptibility distortion correction: {sdc}</li>
-\t\t\t<li>Registration: {registration}</li>
+\t\t\t<li>Coregistration Transform: {coregistration}</li>
+\t\t\t<li>Denoising Window: {denoise_window}</li>
+\t\t\t<li>HMC Transform: {hmc_transform}</li>
+\t\t\t<li>HMC Model: {hmc_model}</li>
 \t\t\t<li>DWI series resampled to spaces: {output_spaces}</li>
 \t\t\t<li>Confounds collected: {confounds}</li>
+\t\t\t<li>Impute slice threshold: {impute_slice_threshold}</li>
 \t\t</ul>
 """
 
@@ -164,8 +157,12 @@ class DiffusionSummaryInputSpec(BaseInterfaceInputSpec):
                                        mandatory=True)
     pe_direction = traits.Enum(None, 'i', 'i-', 'j', 'j-', mandatory=True,
                                desc='Phase-encoding direction detected')
-    registration_dof = traits.Enum(6, 9, 12, desc='Registration degrees of freedom',
-                                   mandatory=True)
+    distortion_correction = traits.Str(mandatory=True, desc='Method used for SDC')
+    impute_slice_threshold = traits.CFloat(desc='threshold for imputing a slice')
+    hmc_transform = traits.Str(mandatory=True, desc='transform used during HMC')
+    hmc_model = traits.Str(desc='model used for hmc')
+    b0_to_t1w_transform = traits.Enum("Rigid", "Affine", desc='Transform type for coregistration')
+    dwi_denoise_window = traits.Int(desc='window size for dwidenoise')
     output_spaces = traits.List(desc='Target spaces')
     confounds_file = File(exists=True, desc='Confounds file')
 
@@ -174,20 +171,6 @@ class DiffusionSummary(SummaryInterface):
     input_spec = DiffusionSummaryInputSpec
 
     def _generate_segment(self):
-        dof = self.inputs.registration_dof
-        stc = {True: 'Applied',
-               False: 'Not applied',
-               'TooShort': 'Skipped (too few volumes)'}[self.inputs.slice_timing]
-        reg = {
-            'FSL': [
-                'FSL <code>flirt</code> with boundary-based registration'
-                ' (BBR) metric - %d dof' % dof,
-                'FSL <code>flirt</code> rigid registration - 6 dof'],
-            'FreeSurfer': [
-                'FreeSurfer <code>bbregister</code> '
-                '(boundary-based registration, BBR) - %d dof' % dof,
-                'FreeSurfer <code>mri_coreg</code> - %d dof' % dof],
-        }[self.inputs.registration][self.inputs.fallback]
         if self.inputs.pe_direction is None:
             pedir = 'MISSING - Assuming Anterior-Posterior'
         else:
@@ -196,10 +179,20 @@ class DiffusionSummary(SummaryInterface):
         if isdefined(self.inputs.confounds_file):
             with open(self.inputs.confounds_file) as cfh:
                 conflist = cfh.readline().strip('\n').strip()
-        return FUNCTIONAL_TEMPLATE.format(
-            pedir=pedir, stc=stc, sdc=self.inputs.distortion_correction, registration=reg,
-            output_spaces=', '.join(self.inputs.output_spaces))
-            #confounds=re.sub(r'[\t ]+', ', ', conflist))
+        else:
+            conflist = ''
+
+        return DIFFUSION_TEMPLATE.format(
+            pedir=pedir,
+            sdc=self.inputs.distortion_correction,
+            coregistration=self.inputs.b0_to_t1w_transform,
+            hmc_transform=self.inputs.hmc_transform,
+            hmc_model=self.inputs.hmc_model,
+            denoise_window=self.inputs.dwi_denoise_window,
+            output_spaces=', '.join(self.inputs.output_spaces),
+            confounds=re.sub(r'[\t ]+', ', ', conflist),
+            impute_slice_threshold=self.inputs.impute_slice_threshold
+            )
 
 
 class AboutSummaryInputSpec(BaseInterfaceInputSpec):

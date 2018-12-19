@@ -163,7 +163,8 @@ class DerivativesDataSinkInputSpec(BaseInterfaceInputSpec):
         desc='Path to the base directory for storing data.')
     in_file = InputMultiPath(File(exists=True), mandatory=True,
                              desc='the object to be saved')
-    source_file = File(exists=False, mandatory=True, desc='the input func file')
+    source_file = File(exists=False, mandatory=True, desc='the original file')
+    prefix = traits.Str(mandatory=False, desc='prefix for output files')
     space = traits.Str('', usedefault=True, desc='Label for space field')
     desc = traits.Str('', usedefault=True, desc='Label for description field')
     suffix = traits.Str('', usedefault=True, desc='suffix appended to source_file')
@@ -172,6 +173,7 @@ class DerivativesDataSinkInputSpec(BaseInterfaceInputSpec):
     compress = traits.Bool(desc="force compression (True) or uncompression (False)"
                                 " of the output file (default: same as input)")
     extension = traits.Str()
+
 
 class DerivativesDataSinkOutputSpec(TraitedSpec):
     out_file = OutputMultiPath(File(exists=True, desc='written file path'))
@@ -252,7 +254,10 @@ desc-preproc_bold.nii.gz'
 
         os.makedirs(out_path, exist_ok=True)
 
-        base_fname = op.join(out_path, src_fname)
+        if isdefined(self.inputs.prefix):
+            base_fname = op.join(out_path, self.inputs.prefix)
+        else:
+            base_fname = op.join(out_path, src_fname)
 
         formatstr = '{bname}{space}{desc}{suffix}{dtype}{ext}'
         if len(self.inputs.in_file) > 1 and not isdefined(self.inputs.extra_values):

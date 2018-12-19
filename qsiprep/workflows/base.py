@@ -67,7 +67,6 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
                               low_mem=False,
                               anat_only=False,
                               longitudinal=False,
-                              t2s_coreg=False,
                               freesurfer=False,
                               hires=False,
                               denoise_before_combining=True,
@@ -466,7 +465,7 @@ to workflows in *qsiprep*'s documentation]\
         (bidssrc, bids_info, [(('t1w', fix_multi_T1w_source_name),
                                'in_file')]),
         (inputnode, summary, [('subjects_dir', 'subjects_dir')]),
-        (bidssrc, summary, [('t1w', 't1w'), ('t2w', 't2w'), ('bold', 'bold')]),
+        (bidssrc, summary, [('t1w', 't1w'), ('t2w', 't2w')]),
         (bids_info, summary, [('subject_id', 'subject_id')]),
         (bidssrc, anat_preproc_wf, [('t1w', 'inputnode.t1w'),
                                     ('t2w', 'inputnode.t2w'),
@@ -631,7 +630,7 @@ def group_by_fieldmaps(dwi_files, layout, ignore_fieldmap, prefer_dedicated_fmap
         num_matches = len(matches)
         if not num_matches == 1:
             # Didn't find any reverse PE groups
-            LOGGER.info("No matches found for %s", key)
+            # LOGGER.info("No matches found for %s", key)
             complete_groups.append(scan_list)
         else:
             # Found a perfect match
@@ -682,4 +681,4 @@ def _get_output_fname(dwis):
     if fname.endswith("_dwi"):
         fname = fname[:-4]
 
-    return fname.replace(".", "_").replace(" ", "").replace("-", "_")
+    return fname.replace(".", "").replace(" ", "")

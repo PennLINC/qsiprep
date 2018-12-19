@@ -126,6 +126,8 @@ def init_sdc_wf(fmaps, dwi_meta, omp_nthreads=1,
         syn_b0_ref
             If ``--force-syn``, an unwarped b0 reference with this
             method (for reporting purposes)
+        method
+            Name of the method used for SDC
 
     """
 
