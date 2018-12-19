@@ -18,6 +18,8 @@ from copy import deepcopy
 from nipype import __version__ as nipype_ver
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
+from nipype.utils.filemanip import split_filename
+
 from nilearn import __version__ as nilearn_ver
 
 from fmriprep.engine import Workflow
@@ -390,7 +392,7 @@ def init_single_subject_wf(
     workflow.__desc__ = """
 Results included in this manuscript come from preprocessing
 performed using *QSIprep* {qsiprep_ver}
-(@qsiprep1; @qsiprep2; RRID:SCR_016216),
+(@qsiprep; RRID:SCR_016216),
 which is based on *Nipype* {nipype_ver}
 (@nipype1; @nipype2; RRID:SCR_002502).
 
@@ -399,8 +401,8 @@ which is based on *Nipype* {nipype_ver}
     workflow.__postdesc__ = """
 
 Many internal operations of *qsiprep* use
-*Nilearn* {nilearn_ver} [@nilearn, RRID:SCR_001362],
-mostly within the functional processing workflow.
+*Nilearn* {nilearn_ver} [@nilearn, RRID:SCR_001362] and
+*Dipy* [@dipy].
 For more details of the pipeline, see [the section corresponding
 to workflows in *qsiprep*'s documentation]\
 (https://qsiprep.readthedocs.io/en/latest/workflows.html \
@@ -509,10 +511,16 @@ to workflows in *qsiprep*'s documentation]\
                                "fieldmaps" in ignore or force_syn,
                                prefer_dedicated_fmaps))
 
+    outputs_to_files = dict([
+        (_get_output_fname(dwi_group), dwi_group) for dwi_group in dwi_fmap_groups
+    ])
+    summary.inputs.dwi_groupings = outputs_to_files
+
     # create a processing pipeline for the dwis in each session
-    for dwi_files in dwi_fmap_groups:
+    for output_fname, dwi_files in outputs_to_files.items():
         dwi_preproc_wf = init_dwi_preproc_wf(
             dwi_files=dwi_files,
+            output_prefix=output_fname,
             layout=layout,
             ignore=ignore,
             freesurfer=freesurfer,
@@ -634,3 +642,44 @@ def group_by_fieldmaps(dwi_files, layout, ignore_fieldmap, prefer_dedicated_fmap
             LOGGER.info("Matched %s to %s", match, key)
 
     return complete_groups
+
+
+def _get_output_fname(dwis):
+    """Derive the output name for supplied DWI files."""
+    if isinstance(dwis, dict):
+        _dwi_lists = list(dwis.values())
+        all_dwis = _dwi_lists[0] + _dwi_lists[1]
+        bdp = True
+    else:
+        all_dwis = dwis
+        bdp = False
+
+    # If a single file, use its name, otherwise use the common prefix
+    if len(all_dwis) > 1:
+        no_runs = []
+        for dwi in all_dwis:
+            no_runs.append(
+                "_".join([part for part in dwi.split("_")
+                          if not part.startswith("run")]))
+        input_fname = os.path.commonprefix(no_runs)
+        fname = split_filename(input_fname)[1]
+
+        parts = fname.split('_')
+
+        if bdp:
+            parts = [part for part in parts if part.startswith('sub')
+                     or part.startswith('ses')]
+            pe_dir = list(dwis.keys())[0][0]
+            parts.append('buds-' + pe_dir)
+
+        full_parts = [part for part in parts if not part.endswith('-')]
+        fname = '_'.join(full_parts)
+
+    else:
+        input_fname = all_dwis[0]
+        fname = split_filename(input_fname)[1]
+
+    if fname.endswith("_dwi"):
+        fname = fname[:-4]
+
+    return fname.replace(".", "_").replace(" ", "").replace("-", "_")

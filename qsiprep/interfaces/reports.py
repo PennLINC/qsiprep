@@ -25,8 +25,8 @@ from .bids import BIDS_NAME
 SUBJECT_TEMPLATE = """\t<ul class="elem-desc">
 \t\t<li>Subject ID: {subject_id}</li>
 \t\t<li>Structural images: {n_t1s:d} T1-weighted {t2w}</li>
-\t\t<li>Functional series: {n_bold:d}</li>
-{tasks}
+\t\t<li>Diffusion-weighted series: inputs {n_dwis:d}, outputs {n_outputs:d}</li>
+{groupings}
 \t\t<li>Resampling targets: {output_spaces}
 \t\t<li>FreeSurfer reconstruction: {freesurfer_status}</li>
 \t</ul>
@@ -43,12 +43,28 @@ FUNCTIONAL_TEMPLATE = """\t\t<h3 class="elem-title">Summary</h3>
 \t\t</ul>
 """
 
+DIFFUSION_TEMPLATE = """\t\t<h3 class="elem-title">Summary</h3>
+\t\t<ul class="elem-desc">
+\t\t\t<li>Phase-encoding (PE) direction: {pedir}</li>
+\t\t\t<li>Susceptibility distortion correction: {sdc}</li>
+\t\t\t<li>Registration: {registration}</li>
+\t\t\t<li>DWI series resampled to spaces: {output_spaces}</li>
+\t\t\t<li>Confounds collected: {confounds}</li>
+\t\t</ul>
+"""
+
 ABOUT_TEMPLATE = """\t<ul>
 \t\t<li>qsiprep version: {version}</li>
 \t\t<li>qsiprep command: <code>{command}</code></li>
 \t\t<li>Date preprocessed: {date}</li>
 \t</ul>
 </div>
+"""
+
+GROUPING_TEMPLATE = """\t<ul>
+\t\t<li>Output Name: {output_name}</li>
+{input_files}
+</ul>
 """
 
 
@@ -73,9 +89,7 @@ class SubjectSummaryInputSpec(BaseInterfaceInputSpec):
     t2w = InputMultiPath(File(exists=True), desc='T2w structural images')
     subjects_dir = Directory(desc='FreeSurfer subjects directory')
     subject_id = Str(desc='Subject ID')
-    bold = InputMultiPath(traits.Either(File(exists=True),
-                                        traits.List(File(exists=True))),
-                          desc='BOLD functional series')
+    dwi_groupings = traits.Dict(desc='groupings of DWI files and their output names')
     output_spaces = traits.List(desc='Target spaces')
     template = traits.Enum('MNI152NLin2009cAsym', desc='Template space')
 
@@ -115,41 +129,41 @@ class SubjectSummary(SummaryInterface):
         if self.inputs.t2w:
             t2w_seg = '(+ {:d} T2-weighted)'.format(len(self.inputs.t2w))
 
-        # Add list of tasks with number of runs
-        bold_series = self.inputs.bold if isdefined(self.inputs.bold) else []
-        bold_series = [s[0] if isinstance(s, list) else s for s in bold_series]
-
-        counts = Counter(BIDS_NAME.search(series).groupdict()['task_id'][5:]
-                         for series in bold_series)
-
-        tasks = ''
-        if counts:
-            header = '\t\t<ul class="elem-desc">'
-            footer = '\t\t</ul>'
-            lines = ['\t\t\t<li>Task: {task_id} ({n_runs:d} run{s})</li>'.format(
-                     task_id=task_id, n_runs=n_runs, s='' if n_runs == 1 else 's')
-                     for task_id, n_runs in sorted(counts.items())]
-            tasks = '\n'.join([header] + lines + [footer])
+        # Add text for how the dwis are grouped
+        n_dwis = 0
+        n_outputs = 0
+        groupings = ''
+        for output_fname, dwi_files in self.inputs.dwi_groupings:
+            n_outputs += 1
+            files_desc = []
+            if isinstance(dwi_files, dict):
+                for pe_dir, dwi_group in dwi_files.items():
+                    files_desc.append('\t\t\t<li>PE dir group: %s </li>\n' + pe_dir)
+                    for dwi_file in dwi_group:
+                        files_desc.append("\t\t\t\t<li> %s </li>" % dwi_file)
+                        n_dwis += 1
+            else:
+                for dwi_file in dwi_files:
+                    files_desc.append("\t\t\t<li> %s </li>" % dwi_file)
+                    n_dwis += 1
+            groupings += GROUPING_TEMPLATE.format(output_name=output_fname,
+                                                  input_files='\n'.join(files_desc))
 
         return SUBJECT_TEMPLATE.format(subject_id=self.inputs.subject_id,
                                        n_t1s=len(self.inputs.t1w),
                                        t2w=t2w_seg,
-                                       n_bold=len(bold_series),
-                                       tasks=tasks,
+                                       n_dwi=n_dwis,
+                                       n_outputs=n_outputs,
+                                       groupings=groupings,
                                        output_spaces=', '.join(output_spaces),
                                        freesurfer_status=freesurfer_status)
 
 
 class DiffusionSummaryInputSpec(BaseInterfaceInputSpec):
-    slice_timing = traits.Enum(False, True, 'TooShort', usedefault=True,
-                               desc='Slice timing correction used')
     distortion_correction = traits.Str(desc='Susceptibility distortion correction method',
                                        mandatory=True)
     pe_direction = traits.Enum(None, 'i', 'i-', 'j', 'j-', mandatory=True,
                                desc='Phase-encoding direction detected')
-    registration = traits.Enum('FSL', 'FreeSurfer', mandatory=True,
-                               desc='Functional/anatomical registration method')
-    fallback = traits.Bool(desc='Boundary-based registration rejected')
     registration_dof = traits.Enum(6, 9, 12, desc='Registration degrees of freedom',
                                    mandatory=True)
     output_spaces = traits.List(desc='Target spaces')

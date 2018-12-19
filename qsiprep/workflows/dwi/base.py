@@ -39,6 +39,7 @@ LOGGER = logging.getLogger('nipype.workflow')
 
 
 def init_dwi_preproc_wf(dwi_files,
+                        output_prefix,
                         ignore,
                         motion_corr_to,
                         b0_to_t1w_transform,
@@ -98,6 +99,8 @@ def init_dwi_preproc_wf(dwi_files,
 
         dwi_files : str or list
             List of dwi series NIfTI files to be combined or a dict of PE-dir -> files
+        output_prefix : str
+            beginning of the output file name (eg 'sub-1_buds-j')
         ignore : list
             Preprocessing steps to skip (eg "fieldmaps")
         freesurfer : bool
@@ -165,7 +168,7 @@ def init_dwi_preproc_wf(dwi_files,
     **Inputs**
 
         dwi_files
-            dwi file or list of dwi files
+            dwi file list or dict of dwi file lists indexed by PE dir
         t1_preproc
             Bias-corrected structural template image
         t1_brain
@@ -470,7 +473,7 @@ def init_dwi_preproc_wf(dwi_files,
 
 
         ])
-    '''
+
     summary = pe.Node(
         DiffusionSummary(
             distortion_correction='bidir_pepolar',
@@ -483,7 +486,7 @@ def init_dwi_preproc_wf(dwi_files,
         name='summary',
         mem_gb=DEFAULT_MEMORY_MIN_GB,
         run_without_submitting=True)
-    '''
+
     # CONNECT TO DERIVATIVES #####################
     dwi_derivatives_wf = init_dwi_derivatives_wf(
         source_file=source_file,
@@ -608,11 +611,11 @@ def init_dwi_preproc_wf(dwi_files,
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB)
 
-    #workflow.connect([
-    #   (summary, ds_report_summary, [('out_report', 'in_file')])])
-       # (dwi_reference_wf, ds_report_validation,
-       #    [('outputnode.validation_report', 'in_file')]),
-    # ])
+    workflow.connect([
+      (summary, ds_report_summary, [('out_report', 'in_file')]),
+      (dwi_ref_wf, ds_report_validation,
+          [('outputnode.validation_report', 'in_file')]),
+    ])
 
     # Fill-in datasinks of reportlets seen so far
     for node in workflow.list_node_names():
@@ -853,7 +856,6 @@ def _get_wf_name(dwi_fname):
     >>> _get_wf_name('/made/up/sub-01_ses-01_run-1_dwi.nii.gz')
     'dwi_preproc_ses_01_run_1_wf'
     """
-    from nipype.utils.filemanip import split_filename
     if type(dwi_fname) is list:
         fname = split_filename(dwi_fname[0])[1]
         parts = fname.split("_")
