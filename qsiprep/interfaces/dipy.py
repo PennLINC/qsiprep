@@ -118,7 +118,8 @@ class HistEQ(SimpleInterface):
 
 class IdealSignalRegistrationInputSpec(RegistrationInputSpec):
     model_name = traits.Enum("3dSHORE", "MAPMRI", desc='model to generate ideal signal')
-    moving_image = InputMultiObject(File(exists=True), desc='list of 3d dwis')
+    moving_image = InputMultiObject(File(exists=True), desc='list of raw 3d dwis')
+    last_iter_images = InputMultiObject(File(exists=True), desc='list of just-corrected dwis')
     # fixed_image_masks
     bvals = traits.Either(InputMultiObject(File(exists=True)), traits.Array)
     bvecs = traits.Either(InputMultiObject(File(exists=True)), traits.Array)
@@ -136,6 +137,7 @@ class IdealSignalRegistrationOutputSpec(TraitedSpec):
     log_cmdline = File(desc='a list of command lines used to apply transforms')
     rotated_bvecs = OutputMultiObject(File(exists=True))
     corrected_images = OutputMultiObject(File(exists=True))
+    ideal_images = OutputMultiObject(File(exists=True))
 
 
 class IdealSignalRegistration(SimpleInterface):
@@ -144,8 +146,9 @@ class IdealSignalRegistration(SimpleInterface):
 
     def _run_interface(self, runtime):
         b0_indices = self.inputs.b0_indices
-        dwi_files = self.inputs.moving_image
-        num_dwis = len(dwi_files)
+        raw_dwi_files = self.inputs.moving_image
+        last_iter_images = self.inputs.last_iter_images
+        num_dwis = len(raw_dwi_files)
         # Load the data
         if type(self.inputs.bvecs) is np.ndarray:
             bvecs = self.inputs.bvecs
@@ -158,16 +161,17 @@ class IdealSignalRegistration(SimpleInterface):
         mask_img = nb.load(self.inputs.mask_image)
         mask_array = mask_img.get_data() > 0
 
-        # images = [nb.load(img) for img in dwi_files]
+        # images = [nb.load(img) for img in raw_dwi_files]
 
         # MODEL PART ######################################################
         # Prepare a b0 template
-        b0_image_paths = [img for img_num, img in enumerate(dwi_files) if img_num in b0_indices]
+        b0_image_paths = [img for img_num, img in enumerate(last_iter_images)
+                          if img_num in b0_indices]
         b0_mean = np.stack([nb.load(img).get_data() for img in b0_image_paths], -1).mean(3)
 
         # Prepate non-b0 images
         target_indices = [idx for idx in range(num_dwis) if idx not in b0_indices]
-        non_b0_image_paths = [dwi_files[idx] for idx in target_indices]
+        non_b0_image_paths = [last_iter_images[idx] for idx in target_indices]
         model_bvecs = np.row_stack([np.zeros(3)] + [bvecs[n] for n in target_indices])
         model_bvals = np.array([0.] + [bvals[n] for n in target_indices])
         model_data = np.stack([b0_mean] +
@@ -182,6 +186,7 @@ class IdealSignalRegistration(SimpleInterface):
                 runtime.cwd, 'ideal_signal_%03d.nii.gz' % fitnum)
             nb.Nifti1Image(fit_data, mask_img.affine, mask_img.header).to_filename(output_fname)
             target_files.append(output_fname)
+        self._results['ideal_images'] = target_files
 
         # REGISTRATION PART ######################################################
         # Get all inputs from the Registration object
@@ -195,7 +200,7 @@ class IdealSignalRegistration(SimpleInterface):
         for key in ['environ', 'ignore_exception', 'print_out_composite_warp_file',
                     'terminal_output', 'output_warped_image', 'moving_image', 'model_name',
                     'dwi_files', 'b0_indices', 'b0_template', 'bvals', 'bvecs', 'mask_image',
-                    'initial_transforms', 'interpolation', 'fixed_image',
+                    'initial_transforms', 'interpolation', 'fixed_image', 'last_iter_images',
                     'output_transform_prefix', 't1_2_mni_forward_transform', 'copy_dtype']:
             ifargs.pop(key, None)
 
@@ -206,18 +211,20 @@ class IdealSignalRegistration(SimpleInterface):
         if num_threads < 1:
             num_threads = None
 
+        non_b0_raw_image_paths = [raw_dwi_files[idx] for idx in target_indices]
         if num_threads == 1:
             out_files = [_reg_to_ideal((
-                in_file, in_xfm, ifargs, i, runtime.cwd))
-                for i, in_file, in_xfm in zip(target_indices, non_b0_image_paths, target_files)
+                in_file, in_target, index, ifargs, runtime.cwd))
+                for in_file, in_target, index in zip(non_b0_raw_image_paths, target_files,
+                                                     target_indices)
             ]
         else:
             from concurrent.futures import ThreadPoolExecutor
             with ThreadPoolExecutor(max_workers=num_threads) as pool:
                 out_files = list(pool.map(_reg_to_ideal, [
-                    (in_file, in_xfm, ifargs, i, runtime.cwd)
-                    for i, in_file, in_xfm in zip(
-                        target_indices, non_b0_image_paths, target_files)]
+                    (in_file, in_target, index, ifargs, runtime.cwd)
+                    for in_file, in_target, index in zip(non_b0_raw_image_paths, target_files,
+                                                         target_indices)]
                 ))
         tmp_folder.cleanup()
 
@@ -239,7 +246,6 @@ class IdealSignalRegistration(SimpleInterface):
             resampled_images[target_index] = _resampled_image
         self._results['transforms'] = recombined_transforms
         self._results['corrected_images'] = resampled_images
-        print(recombined_transforms)
 
         rotator = GradientRotation(affine_transforms=recombined_transforms,
                                    bvec_files=self.inputs.bvecs,
@@ -256,7 +262,7 @@ class IdealSignalRegistration(SimpleInterface):
 
 def _reg_to_ideal(args):
     """Create a composite transform from inputs."""
-    in_file, in_target, ifargs, index, newpath = args
+    in_file, in_target, index, ifargs, newpath = args
     out_file = fname_presuffix(in_file, suffix='_xform-%05d' % index,
                                newpath=newpath, use_ext=True)
     out_transform = fname_presuffix(in_file, suffix='_xform-%05d_Affine.mat' % index,

@@ -483,6 +483,11 @@ to workflows in *qsiprep*'s documentation]\
     if anat_only:
         return workflow
 
+    if impute_slice_threshold > 0 and hmc_model == "none":
+        LOGGER.warning("hmc_model must not be 'none' if slices are to be imputed. "
+                       "setting `impute_slice_threshold=0`")
+        impute_slice_threshold = 0
+
     # Handle the grouping of multiple dwi files within a session
     sessions = layout.get_sessions()
     all_dwis = subject_data['dwi']

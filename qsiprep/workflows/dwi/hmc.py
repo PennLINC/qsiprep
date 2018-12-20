@@ -350,16 +350,18 @@ def init_dwi_model_hmc_wf(modelname, transform, mem_gb, omp_nthreads,
         (inputnode, initial_transforms, [('dwi_files', 'input_image'),
                                          ('initial_transforms', 'transforms'),
                                          ('b0_mask', 'reference_image')]),
-        (initial_transforms, initial_reg, [('output_image', 'moving_image')]),
+        (initial_transforms, initial_reg, [('output_image', 'last_iter_images')]),
         (inputnode, initial_reg, [('initial_transforms', 'initial_transforms'),
+                                  ('dwi_files', 'moving_image'),
                                   ('bvals', 'bvals'), ('bvecs', 'bvecs'),
                                   ('b0_indices', 'b0_indices'),
                                   ('b0_mask', 'mask_image')]),
         (inputnode, final_reg, [('initial_transforms', 'initial_transforms'),
+                                ('dwi_files', 'moving_image'),
                                 ('bvals', 'bvals'),
                                 ('b0_indices', 'b0_indices'),
                                 ('b0_mask', 'mask_image')]),
-        (initial_reg, final_reg, [('corrected_images', 'moving_image'),
+        (initial_reg, final_reg, [('corrected_images', 'last_iter_images'),
                                   ('rotated_bvecs', 'bvecs')])
     ])
 
@@ -370,7 +372,7 @@ def init_dwi_model_hmc_wf(modelname, transform, mem_gb, omp_nthreads,
                                  name='noise_free_dwis')
 
     workflow.connect([
-        (final_reg, noise_free_dwis, [('corrected_images', 'input_image'),
+        (final_reg, noise_free_dwis, [('ideal_images', 'input_image'),
                                       ('transforms', 'transforms')]),
         (inputnode, noise_free_dwis, [('dwi_files', 'reference_image')]),
         (noise_free_dwis, outputnode, [('output_image', 'noise_free_dwis')]),
