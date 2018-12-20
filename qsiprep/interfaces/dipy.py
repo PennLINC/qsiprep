@@ -186,7 +186,14 @@ class IdealSignalRegistration(SimpleInterface):
                 runtime.cwd, 'ideal_signal_%03d.nii.gz' % fitnum)
             nb.Nifti1Image(fit_data, mask_img.affine, mask_img.header).to_filename(output_fname)
             target_files.append(output_fname)
-        self._results['ideal_images'] = target_files
+        b0_mean_file = os.path.join(runtime.cwd, 'b0_average.nii.gz')
+        nb.Nifti1Image(b0_mean, mask_img.affine, mask_img.header).to_filename(b0_mean_file)
+        ideal_images = [''] * num_dwis
+        for b0_index in self.inputs.b0_indices:
+            ideal_images[b0_index] = b0_mean_file
+        for target_index, target_file in zip(target_indices, target_files):
+            ideal_images[target_index] = target_file
+        self._results['ideal_images'] = ideal_images
 
         # REGISTRATION PART ######################################################
         # Get all inputs from the Registration object

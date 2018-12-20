@@ -876,10 +876,8 @@ def _create_mem_gb(dwi_fname):
 def _get_wf_name(dwi_fname):
     """Derive the workflow name based on the output file prefix."""
     spl = dwi_fname.split("_")
-    if len(spl) <= 2:
-        return 'dwi_preproc_wf'
-    nosub = "_".join(spl[1:-1])
-    return "dwi_preproc_" + "_".join(nosub) + "_wf"
+    nosub = "_".join(spl[1:])
+    return "dwi_preproc_" + nosub + "_wf"
 
 
 def _list_squeeze(in_list):
