@@ -45,6 +45,9 @@ from fmriprep.utils.misc import fix_multi_T1w_source_name, add_suffix
 from fmriprep.interfaces.freesurfer import (
         PatchedLTAConvert as LTAConvert)
 
+from nipype import logging
+LOGGER = logging.getLogger('nipype.workflow')
+
 
 class DerivativesDataSink(FDerivativesDataSink):
     out_path_base = "qsiprep"
@@ -324,17 +327,31 @@ and used as T1w-reference throughout the workflow.
     ])
 
     # 6. Spatial normalization (T1w to MNI registration)
-    t1_2_mni = pe.Node(
-        RobustMNINormalizationRPT(
-            reference_image=ref_img_brain,
-            float=True,
-            generate_report=True,
-            flavor='testing' if debug else 'precise',
-        ),
-        name='t1_2_mni',
-        n_procs=omp_nthreads,
-        mem_gb=2
-    )
+    if debug:
+        LOGGER.info("Using QuickSyN")
+        # Requires a warp file: make an inaccurate one
+        settings = pkgr('qsiprep', 'data/quick_syn.json')
+        t1_2_mni = pe.Node(
+            RobustMNINormalizationRPT(
+                float=True,
+                generate_report=True,
+                settings=[settings],
+            ),
+            name='t1_2_mni',
+            n_procs=omp_nthreads,
+            mem_gb=2
+        )
+    else:
+        t1_2_mni = pe.Node(
+            RobustMNINormalizationRPT(
+                float=True,
+                generate_report=True,
+                flavor='precise',
+            ),
+            name='t1_2_mni',
+            n_procs=omp_nthreads,
+            mem_gb=2
+        )
 
     # Resample the brain mask and the tissue probability maps into mni space
     mni_mask = pe.Node(
