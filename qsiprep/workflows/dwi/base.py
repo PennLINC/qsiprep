@@ -22,7 +22,7 @@ from ...interfaces import DerivativesDataSink
 
 from ...interfaces.reports import DiffusionSummary
 from ...interfaces.images import SplitDWIs, ConcatRPESplits
-
+from ...interfaces.gradients import SliceQC
 from fmriprep.engine import Workflow
 
 # dwi workflows
@@ -33,6 +33,7 @@ from .hmc import init_dwi_hmc_wf
 from .util import init_dwi_reference_wf
 from .registration import init_b0_to_anat_registration_wf
 from .resampling import init_dwi_trans_wf
+from .confounds import init_dwi_confs_wf, init_carpetplot_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger('nipype.workflow')
@@ -289,7 +290,6 @@ def init_dwi_preproc_wf(dwi_files,
     # Special case: Two reverse PE DWI series
     if doing_bidirectional_pepolar:
         # Merge, denoise, split, hmc on the plus series
-        sdc_method = 'blip-up/blip-down series'
         plus_key, = [k for k in dwi_files.keys() if len(k) == 1]
         pe_dir = plus_key
         merge_plus = init_merge_and_denoise_wf(dwi_denoise_window=dwi_denoise_window,
@@ -369,7 +369,7 @@ def init_dwi_preproc_wf(dwi_files,
         buffernode = pe.Node(niu.IdentityInterface(fields=[
             'b0_ref_image', 'b0_ref_mask', 'dwi_files', 'bvec_files', 'bval_files', 'b0_images',
             'b0_indices', 'to_dwi_ref_affines', 'to_dwi_ref_warps', 'original_grouping',
-            'sdc_method']),
+            'sdc_method', 'ideal_images']),
             name="buffernode")
         # Merge, denoise, split, hmc
         merge_dwis = init_merge_and_denoise_wf(dwi_denoise_window=dwi_denoise_window,
@@ -426,9 +426,8 @@ def init_dwi_preproc_wf(dwi_files,
             # Run SyN if forced or in the absence of fieldmap correction
             if force_syn or (use_syn and not fmaps):
                 fmaps.append({'type': 'syn'})
-                sdc_method = "SyN SDC"
         pe_dir = metadata['PhaseEncodingDirection']
-        dwi_ref_wf = init_dwi_reference_wf(name="dwi_ref_wf")
+        dwi_ref_wf = init_dwi_reference_wf(name="dwi_ref_wf", gen_report=True)
 
         b0_sdc_wf = init_sdc_wf(
             fmaps, metadata, omp_nthreads=omp_nthreads,
@@ -464,7 +463,8 @@ def init_dwi_preproc_wf(dwi_files,
                                       ('dwi_files', 'inputnode.dwi_files'),
                                       ('b0_indices', 'inputnode.b0_indices')]),
             (dwi_hmc_wf, buffernode, [(('outputnode.forward_transforms', _list_squeeze),
-                                      'to_dwi_ref_affines')]),
+                                      'to_dwi_ref_affines'),
+                                      ('outputnode.noise_free_dwis', 'ideal_images')]),
             (dwi_hmc_wf, dwi_ref_wf, [('outputnode.final_template', 'inputnode.b0_template')]),
             (dwi_ref_wf, b0_sdc_wf, [('outputnode.ref_image', 'inputnode.b0_ref'),
                                      ('outputnode.ref_image_brain', 'inputnode.b0_ref_brain'),
@@ -480,6 +480,7 @@ def init_dwi_preproc_wf(dwi_files,
 
         ])
 
+    # At this point, buffernode is either a ConcatRPESplit or a single PE output
     summary = pe.Node(
         DiffusionSummary(
             pe_direction=pe_dir,
@@ -539,6 +540,22 @@ def init_dwi_preproc_wf(dwi_files,
         (buffernode, summary, [('sdc_method', 'distortion_correction')])
     ])
 
+    # Compute and gather confounds
+    slice_check = pe.Node(SliceQC(impute_slice_threshold=impute_slice_threshold),
+                          name="slice_check")
+
+    confounds_wf = init_dwi_confs_wf(mem_gb=mem_gb['resampled'], metadata=[],
+                                     impute_slice_threshold=impute_slice_threshold,
+                                     name='confounds_wf')
+
+    workflow.connect([
+        (buffernode, slice_check, [('ideal_images', 'ideal_image_files'),
+                                   ('dwi_files', 'uncorrected_dwi_files'),
+                                   ('b0_ref_mask', 'mask_image')]),
+        (slice_check, confounds_wf, [('slice_stats', 'sliceqc_file')]),
+        (confounds_wf, outputnode, [('confounds_file', 'confounds')])
+    ])
+
     if "T1w" in output_spaces:
         transform_dwis_t1 = init_dwi_trans_wf(name='transform_dwis_t1',
                                               template="ACPC",
@@ -549,8 +566,8 @@ def init_dwi_preproc_wf(dwi_files,
                                               to_mni=False
                                               )
         workflow.connect([
+            (slice_check, transform_dwis_t1, [('imputed_images', 'inputnode.dwi_files')]),
             (buffernode, transform_dwis_t1, [
-                ('dwi_files', 'inputnode.dwi_files'),
                 ('bvec_files', 'inputnode.bvec_files'),
                 ('bval_files', 'inputnode.bval_files'),
                 ('b0_ref_image', 'inputnode.b0_ref_image'),
@@ -582,8 +599,8 @@ def init_dwi_preproc_wf(dwi_files,
                                                to_mni=True
                                                )
         workflow.connect([
+            (slice_check, transform_dwis_mni, [('imputed_images', 'inputnode.dwi_files')]),
             (buffernode, transform_dwis_mni, [
-                ('dwi_files', 'inputnode.dwi_files'),
                 ('bvec_files', 'inputnode.bvec_files'),
                 ('bval_files', 'inputnode.bval_files'),
                 ('b0_ref_image', 'inputnode.b0_ref_image'),
@@ -612,17 +629,8 @@ def init_dwi_preproc_wf(dwi_files,
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB)
 
-    ds_report_validation = pe.Node(
-        DerivativesDataSink(
-            base_directory=reportlets_dir, suffix='validation'),
-        name='ds_report_validation',
-        run_without_submitting=True,
-        mem_gb=DEFAULT_MEMORY_MIN_GB)
-
     workflow.connect([
-      (summary, ds_report_summary, [('out_report', 'in_file')]),
-      (dwi_ref_wf, ds_report_validation,
-          [('outputnode.validation_report', 'in_file')]),
+      (summary, ds_report_summary, [('out_report', 'in_file')])
     ])
 
     # Fill-in datasinks of reportlets seen so far
@@ -659,9 +667,9 @@ def init_dwi_derivatives_wf(output_prefix,
         base_directory=output_dir, desc='confounds', suffix='confounds'),
         name="ds_confounds", run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB)
-    # workflow.connect([
-    #     (inputnode, ds_confounds, [('confounds', 'in_file')])
-    # ])
+    workflow.connect([
+        (inputnode, ds_confounds, [('confounds', 'in_file')])
+    ])
 
     # Resample to T1w space
     if 'T1w' in output_spaces:
@@ -877,7 +885,7 @@ def _get_wf_name(dwi_fname):
     """Derive the workflow name based on the output file prefix."""
     spl = dwi_fname.split("_")
     nosub = "_".join(spl[1:])
-    return "dwi_preproc_" + nosub + "_wf"
+    return ("dwi_preproc_" + nosub + "_wf").replace("__", "_")
 
 
 def _list_squeeze(in_list):

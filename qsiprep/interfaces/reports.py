@@ -126,7 +126,7 @@ class SubjectSummary(SummaryInterface):
         n_dwis = 0
         n_outputs = 0
         groupings = ''
-        for output_fname, dwi_files in self.inputs.dwi_groupings:
+        for output_fname, dwi_files in self.inputs.dwi_groupings.items():
             n_outputs += 1
             files_desc = []
             if isinstance(dwi_files, dict):
@@ -145,7 +145,7 @@ class SubjectSummary(SummaryInterface):
         return SUBJECT_TEMPLATE.format(subject_id=self.inputs.subject_id,
                                        n_t1s=len(self.inputs.t1w),
                                        t2w=t2w_seg,
-                                       n_dwi=n_dwis,
+                                       n_dwis=n_dwis,
                                        n_outputs=n_outputs,
                                        groupings=groupings,
                                        output_spaces=', '.join(output_spaces),

@@ -123,6 +123,7 @@ using a modified version of the custom methodology of *fMRIPrep*.
                 ('outputnode.bias_corrected_file', 'background_file'),
                 ('outputnode.mask_file', 'mask_file'),
             ]),
+            (mask_reportlet, outputnode, [('out_report', 'validation_report')])
         ])
 
     return workflow

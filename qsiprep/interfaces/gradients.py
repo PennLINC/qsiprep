@@ -14,6 +14,8 @@ from dipy.sims.voxel import all_tensor_evecs
 from dipy.reconst.dti import decompose_tensor
 from dipy.core.geometry import normalized_vector, decompose_matrix
 import pandas as pd
+from sklearn.metrics.regression import r2_score
+
 
 LOGGER = logging.getLogger('nipype.interface')
 tensor_index = {
@@ -24,6 +26,87 @@ tensor_index = {
     "yz": (1, 2),
     "zz": (2, 2)
 }
+
+
+class SliceQCInputSpec(BaseInterfaceInputSpec):
+    uncorrected_dwi_files = InputMultiObject(File(exists=True), desc='uncorrected dwi files')
+    ideal_image_files = InputMultiObject(File(exists=True), desc='model-based images')
+    mask_image = File(exists=True, desc='brain mask')
+    impute_slice_threshold = traits.Float(0., desc='threshold for using imputed data in a slice')
+    min_slice_size_percentile = traits.CFloat(10.0, 'slices bigger than this percentile are '
+                                              'candidates for getting imputed.')
+
+
+class SliceQCOutputSpec(TraitedSpec):
+    imputed_images = OutputMultiObject(File(exists=True), desc='dwi files with imputed slices')
+    slice_stats = File(exists=True, desc='npy file with the slice-by-TR error matrix')
+
+
+class SliceQC(SimpleInterface):
+    input_spec = SliceQCInputSpec
+    output_spec = SliceQCOutputSpec
+
+    def _run_interface(self, runtime):
+        threshold = self.inputs.impute_slice_threshold
+        ideal_image_files = self.inputs.ideal_image_files
+        uncorrected_image_files = self.inputs.uncorrected_dwi_files
+
+        self._results['imputed_images'] = self.inputs.uncorrected_dwi_files
+        if threshold > 0:
+            LOGGER.warning("Imputation is not implemented yet")
+
+        output_npz = os.path.join(runtime.cwd, "slice_stats.npz")
+        mask_img = nb.load(self.inputs.mask_image)
+        mask = mask_img.get_data() > 0
+        masked_slices = (mask * np.arange(mask_img.shape[2])[np.newaxis, np.newaxis, :]
+                         ).astype(np.int)
+        slice_nums, slice_counts = np.unique(masked_slices[mask], return_counts=True)
+        min_size = np.percentile(slice_counts, self.inputs.min_slice_size_percentile)
+        too_small = slice_nums[slice_counts < min_size]
+        for small_slice in too_small:
+            masked_slices[masked_slices == small_slice] = 0
+        valid_slices = slice_nums[slice_counts > min_size]
+        valid_slices = valid_slices[valid_slices > 0]
+        slice_scores = []
+        wb_xcorrs = []
+        wb_r2s = []
+        for ideal_image, input_image in zip(ideal_image_files,
+                                            uncorrected_image_files):
+            slices, wb_xcorr, wb_r2 = _score_slices(ideal_image, input_image,
+                                                    masked_slices, valid_slices)
+            slice_scores.append(slices)
+            wb_xcorrs.append(wb_xcorr)
+            wb_r2s.append(wb_r2)
+
+        np.savez(output_npz, slice_scores=slice_scores, wb_r2s=np.array(wb_r2s),
+                 wb_xcorrs=np.array(wb_xcorrs), valid_slices=valid_slices,
+                 masked_slices=masked_slices, slice_nums=slice_nums, slice_counts=slice_counts)
+        self._results['slice_stats'] = output_npz
+        return runtime
+
+
+def _score_slices(ideal_image, input_image, masked_slices, valid_slices):
+    """Compute similarity metrics on a pair of images."""
+    def crosscor(vec1, vec2):
+        v1bar = vec1 - vec1.mean()
+        v2bar = vec2 - vec2.mean()
+        return np.inner(v1bar, v2bar)**2 / (np.inner(v1bar, v1bar) * np.inner(v2bar, v2bar))
+
+    slice_scores = np.zeros(valid_slices.shape)
+    ideal_data = nb.load(ideal_image).get_fdata()
+    input_data = nb.load(input_image).get_fdata()
+    for nslice, slicenum in enumerate(valid_slices):
+        slice_mask = masked_slices == slicenum
+        ideal_slice = ideal_data[slice_mask]
+        data_slice = input_data[slice_mask]
+        slice_scores[nslice] = crosscor(ideal_slice, data_slice)
+
+    global_mask = masked_slices > 0
+    wb_ideal = ideal_data[global_mask]
+    wb_input = input_data[global_mask]
+    global_xcorr = crosscor(wb_input, wb_ideal)
+    global_r2 = r2_score(wb_input, wb_ideal)
+    return slice_scores, global_xcorr, global_r2
 
 
 class CombineMotionsInputSpec(BaseInterfaceInputSpec):

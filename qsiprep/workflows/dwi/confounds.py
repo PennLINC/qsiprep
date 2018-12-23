@@ -19,7 +19,7 @@ from niworkflows.interfaces.segmentation import ICA_AROMARPT
 from niworkflows.interfaces.masks import ROIsPlot
 from niworkflows.interfaces.fixes import FixHeaderApplyTransforms as ApplyTransforms
 
-from ...engine import Workflow
+from fmriprep.engine import Workflow
 from ...interfaces import (
     TPM2ROI, AddTPMs, AddTSVHeader, GatherConfounds, ICAConfounds,
     FMRISummary, DerivativesDataSink
@@ -69,13 +69,9 @@ def init_dwi_confs_wf(mem_gb, metadata, impute_slice_threshold, name="dwi_confs_
 
     **Inputs**
 
-        dwi_files
+        sliceqc_file
             dwi image, after the prescribed corrections (STC, HMC and SDC)
             when available.
-        ideal_files
-            Regitration targets from model-based hmc
-        dwi_mask
-            dwi series mask
         movpar_file
             SPM-formatted motion parameters file
 
@@ -94,10 +90,11 @@ Several confounding time-series were calculated based on the
 *preprocessed dwi*: framewise displacement (FD) using the
 implementation in *Nipype* [following the definitions by @power_fd_dvars].
 The head-motion estimates calculated in the correction step were also
-placed within the corresponding confounds file.
+placed within the corresponding confounds file. Slicewise cross correlation
+was also calculated.
 """
     inputnode = pe.Node(niu.IdentityInterface(
-        fields=['dwi_files', 'ideal_files', 'dwi_mask', 'movpar_file']),
+        fields=['sliceqc_file', 'movpar_file']),
         name='inputnode')
     outputnode = pe.Node(niu.IdentityInterface(
         fields=['confounds_file', 'imputed_images']),
@@ -125,6 +122,88 @@ placed within the corresponding confounds file.
 
     ])
 
+    return workflow
+
+
+def init_sliceqc_wf(mem_gb, metadata, name="dwi_sliceqc_wf"):
+    """
+
+    Resamples the MNI parcellation (ad-hoc parcellation derived from the
+    Harvard-Oxford template and others).
+
+    **Parameters**
+
+        mem_gb : float
+            Size of dwi file in GB - please note that this size
+            should be calculated after resamplings that may extend
+            the FoV
+        metadata : dict
+            BIDS metadata for dwi file
+        name : str
+            Name of workflow (default: ``dwi_carpet_wf``)
+
+    **Inputs**
+
+        dwi
+            dwi image, after the prescribed corrections (STC, HMC and SDC)
+            when available.
+        dwi_mask
+            dwi series mask
+        confounds_file
+            TSV of all aggregated confounds
+        t1_dwi_xform
+            Affine matrix that maps the T1w space into alignment with
+            the native dwi space
+        t1_2_mni_reverse_transform
+            ANTs-compatible affine-and-warp transform file
+
+    **Outputs**
+
+        out_carpetplot
+            Path of the generated SVG file
+
+    """
+    inputnode = pe.Node(niu.IdentityInterface(
+        fields=['dwi', 'dwi_mask', 'confounds_file',
+                't1_dwi_xform', 't1_2_mni_reverse_transform']),
+        name='inputnode')
+
+    outputnode = pe.Node(niu.IdentityInterface(
+        fields=['out_carpetplot']), name='outputnode')
+
+    # List transforms
+    mrg_xfms = pe.Node(niu.Merge(2), name='mrg_xfms')
+
+    # Carpetplot and confounds plot
+    conf_plot = pe.Node(FMRISummary(
+        tr=metadata['RepetitionTime'],
+        confounds_list=[
+            ('global_signal', None, 'GS'),
+            ('csf', None, 'GSCSF'),
+            ('white_matter', None, 'GSWM'),
+            ('std_dvars', None, 'DVARS'),
+            ('framewise_displacement', 'mm', 'FD')]),
+        name='conf_plot', mem_gb=mem_gb)
+    ds_report_dwi_conf = pe.Node(
+        DerivativesDataSink(suffix='carpetplot'),
+        name='ds_report_dwi_conf', run_without_submitting=True,
+        mem_gb=DEFAULT_MEMORY_MIN_GB)
+
+    workflow = Workflow(name=name)
+    workflow.connect([
+        (inputnode, mrg_xfms, [('t1_dwi_xform', 'in1'),
+                               ('t1_2_mni_reverse_transform', 'in2')]),
+        (inputnode, resample_parc, [('dwi_mask', 'reference_image')]),
+        (mrg_xfms, resample_parc, [('out', 'transforms')]),
+        # Carpetplot
+        (inputnode, conf_plot, [
+            ('dwi', 'in_func'),
+            ('dwi_mask', 'in_mask'),
+            ('confounds_file', 'confounds_file')]),
+        (resample_parc, conf_plot, [('output_image', 'in_segm')]),
+        (conf_plot, ds_report_dwi_conf, [('out_file', 'in_file')]),
+        (conf_plot, outputnode, [('out_file', 'out_carpetplot')]),
+    ])
     return workflow
 
 

@@ -299,7 +299,7 @@ def init_single_subject_wf(
         ignore : list
             Preprocessing steps to skip (may include "sbref", "fieldmaps")
         debug : bool
-            Enable debugging outputs
+            Do inaccurate but fast normalization
         low_mem : bool
             Write uncompressed .nii files in some cases to reduce memory usage
         anat_only : bool
