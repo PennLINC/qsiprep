@@ -20,20 +20,19 @@ import re
 import subprocess
 from warnings import warn
 
-__version__ = '99.99.99'
+__version__ = 'latest'
 __packagename__ = 'qsiprep-docker'
-__author__ = 'The CRN developers'
-__copyright__ = 'Copyright 2018, Center for Reproducible Neuroscience, Stanford University'
-__credits__ = ['Craig Moodie', 'Ross Blair', 'Oscar Esteban', 'Chris Gorgolewski',
-               'Shoshana Berleant', 'Christopher J. Markiewicz', 'Russell A. Poldrack']
+__author__ = ''
+__copyright__ = 'Copyright 2019, '
+__credits__ = []
 __license__ = '3-clause BSD'
-__maintainer__ = 'Christopher J. Markiewicz'
-__email__ = 'crn.pennbbl@gmail.com'
+__maintainer__ = ''
+__email__ = ''
 __url__ = 'https://github.com/pennbbl/qsiprep'
 __bugreports__ = 'https://github.com/pennbbl/qsiprep/issues'
 
 __description__ = """\
-qsiprep is a functional magnetic resonance image pre-processing pipeline \
+qsiprep is a non-DTI diffusion-weighted image pre-processing pipeline \
 that is designed to provide an easily accessible, state-of-the-art interface \
 that is robust to differences in scan acquisition protocols and that requires \
 minimal user input, while providing easily interpretable and comprehensive \
@@ -51,8 +50,6 @@ CLASSIFIERS = [
     'Development Status :: 3 - Alpha',
     'Intended Audience :: Science/Research',
     'License :: OSI Approved :: BSD License',
-    'Programming Language :: Python :: 2.7',
-    'Programming Language :: Python :: 3.5',
     'Programming Language :: Python :: 3.6',
 ]
 
