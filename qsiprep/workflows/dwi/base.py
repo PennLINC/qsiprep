@@ -241,6 +241,7 @@ def init_dwi_preproc_wf(dwi_files,
 
     """
 
+
     if type(dwi_files) is dict:
         doing_bidirectional_pepolar = True
         _dwi_lists = list(dwi_files.values())
@@ -552,8 +553,8 @@ def init_dwi_preproc_wf(dwi_files,
         (buffernode, slice_check, [('ideal_images', 'ideal_image_files'),
                                    ('dwi_files', 'uncorrected_dwi_files'),
                                    ('b0_ref_mask', 'mask_image')]),
-        (slice_check, confounds_wf, [('slice_stats', 'sliceqc_file')]),
-        (confounds_wf, outputnode, [('confounds_file', 'confounds')])
+        # (slice_check, confounds_wf, [('slice_stats', 'inputnode.sliceqc_file')]),
+        # (confounds_wf, outputnode, [('outputnode.confounds_file', 'confounds')])
     ])
 
     if "T1w" in output_spaces:
@@ -661,15 +662,15 @@ def init_dwi_derivatives_wf(output_prefix,
             'local_bvecs_mni', 'mni_b0_ref', 'mni_b0_series', 'confounds'
         ]),
         name='inputnode')
-
-    ds_confounds = pe.Node(DerivativesDataSink(
-        prefix=output_prefix,
-        base_directory=output_dir, desc='confounds', suffix='confounds'),
-        name="ds_confounds", run_without_submitting=True,
-        mem_gb=DEFAULT_MEMORY_MIN_GB)
-    workflow.connect([
-        (inputnode, ds_confounds, [('confounds', 'in_file')])
-    ])
+    #
+    # ds_confounds = pe.Node(DerivativesDataSink(
+    #     prefix=output_prefix,
+    #     base_directory=output_dir, desc='confounds', suffix='confounds'),
+    #     name="ds_confounds", run_without_submitting=True,
+    #     mem_gb=DEFAULT_MEMORY_MIN_GB)
+    # workflow.connect([
+    #     (inputnode, ds_confounds, [('confounds', 'in_file')])
+    # ])
 
     # Resample to T1w space
     if 'T1w' in output_spaces:

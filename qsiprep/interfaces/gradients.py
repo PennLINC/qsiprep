@@ -33,8 +33,8 @@ class SliceQCInputSpec(BaseInterfaceInputSpec):
     ideal_image_files = InputMultiObject(File(exists=True), desc='model-based images')
     mask_image = File(exists=True, desc='brain mask')
     impute_slice_threshold = traits.Float(0., desc='threshold for using imputed data in a slice')
-    min_slice_size_percentile = traits.CFloat(10.0, 'slices bigger than this percentile are '
-                                              'candidates for getting imputed.')
+    min_slice_size_percentile = traits.CFloat(10.0, desc='slices bigger than this percentile are '
+                                             'candidates for getting imputed.')
 
 
 class SliceQCOutputSpec(TraitedSpec):

@@ -24,12 +24,7 @@ from ...interfaces import (
     TPM2ROI, AddTPMs, AddTSVHeader, GatherConfounds, ICAConfounds,
     FMRISummary, DerivativesDataSink
 )
-from ...interfaces.patches import (
-    RobustACompCor as ACompCor,
-    RobustTCompCor as TCompCor
-)
 
-from .resampling import init_dwi_mni_trans_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 

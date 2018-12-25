@@ -49,21 +49,26 @@ def get_parser():
     # Arguments as specified by BIDS-Apps
     # required, positional arguments
     # IMPORTANT: they must go directly with the parser object
-    parser.add_argument(
-        'bids_dir',
-        action='store',
-        help='the root folder of a BIDS valid dataset (sub-XXXXX folders '
-        'should be found at the top level in this folder).')
-    parser.add_argument(
-        'output_dir',
-        action='store',
-        help='the output path for the outcomes of preprocessing and visual '
-        'reports')
-    parser.add_argument(
-        'analysis_level',
-        choices=['participant'],
-        help='processing stage to be run, only "participant" in the case of '
-        'qsiprep (see BIDS-Apps specification).')
+    parser.add_argument('--bids_dir', '--bids-dir',
+                        type=os.path.abspath,
+                        required=True,
+                        action='store',
+                        default='',
+                        help='the root folder of a BIDS valid dataset (sub-XXXXX folders '
+                        'should be found at the top level in this folder).')
+    parser.add_argument('--output_dir', '--output-dir',
+                        required=True,
+                        action='store',
+                        type=os.path.abspath,
+                        default='',
+                        help='the output path for the outcomes of preprocessing and visual'
+                        ' reports')
+    parser.add_argument('--analysis_level', '--analysis-level',
+                        choices=['participant'],
+                        required=True,
+                        action='store',
+                        help='processing stage to be run, only "participant" in the case of '
+                        'qsiprep (see BIDS-Apps specification).')
 
     # optional arguments
     parser.add_argument('--version', action='version', version=verstr)
@@ -143,7 +148,7 @@ def get_parser():
         action='store_true',
         help='treat dataset as longitudinal - may increase runtime')
     g_conf.add_argument(
-        '--dwi-denoise_window', '--dwi-denoise-window',
+        '--dwi_denoise_window', '--dwi-denoise-window',
         action='store',
         type=int,
         default=7,
@@ -174,12 +179,11 @@ def get_parser():
         action='store',
         default="Rigid",
         choices=["Rigid", "Affine"],
-        type=int,
         help='Degrees of freedom when registering b0 to T1w images. '
         '6 degrees (rotation and translation) are used by default.')
     g_conf.add_argument(
-        '--output-space',
-        required=False,
+        '--output-space', '--output_space',
+        required=True,
         action='store',
         choices=['T1w', 'template'],
         nargs='+',
@@ -200,6 +204,7 @@ def get_parser():
         '--output-resolution', '--output_resolution',
         required=True,
         action='store',
+        type=float,
         help='the isotropic voxel size in mm the data will be resampled to '
         'after preprocessing. If set to a lower value than the original voxel '
         'size, your data will be upsampled.'
@@ -221,7 +226,7 @@ def get_parser():
         choices=['Affine', 'Rigid'],
         help='transformation to be optimized during head motion correction')
     g_moco.add_argument(
-        '--hmc_model',
+        '--hmc_model', '--hmc-model',
         action='store',
         default='3dSHORE',
         choices=['none', '3dSHORE', 'MAPMRI'],
@@ -232,6 +237,7 @@ def get_parser():
         '--impute-slice-threshold',
         action='store',
         default=0,
+        type=float,
         help='impute data in slices that are this many SDs from expected. '
         'If 0, no slices will be imputed')
 
@@ -249,6 +255,13 @@ def get_parser():
         action='store_true',
         help='do not use a random seed for skull-stripping - will ensure '
         'run-to-run replicability when used with --omp-nthreads 1')
+
+    # FreeSurfer options
+    g_fs = parser.add_argument_group('Specific options for FreeSurfer preprocessing')
+    g_fs.add_argument(
+        '--fs-license-file', metavar='PATH', type=os.path.abspath,
+        help='Path to FreeSurfer license key file. Get it (for free) by registering '
+        'at https://surfer.nmr.mgh.harvard.edu/registration.html')
 
     # Fieldmap options
     g_fmap = parser.add_argument_group(
@@ -350,7 +363,7 @@ def main():
     opts = get_parser().parse_args()
 
     # FreeSurfer license
-    default_license = str(Path(os.getenv('FREESURFER_HOME')) / 'license.txt')
+    default_license = str(Path(str(os.getenv('FREESURFER_HOME'))) / 'license.txt')
     # Precedence: --fs-license-file, $FS_LICENSE, default_license
     license_file = opts.fs_license_file or os.getenv('FS_LICENSE',
                                                      default_license)
@@ -613,16 +626,14 @@ def build_workflow(opts, retval):
             subject_list=subject_list,
             uuid=run_uuid))
 
-    template_out_grid = opts.template_resampling_grid
-    if opts.debug is not None:
-        logger.warning('Option --debug is deprecated and has no effect')
-
     retval['workflow'] = init_qsiprep_wf(
         subject_list=subject_list,
         run_uuid=run_uuid,
         work_dir=work_dir,
         output_dir=output_dir,
         ignore=opts.ignore,
+        hires=False,
+        freesurfer=False,
         debug=opts.sloppy,
         low_mem=opts.low_mem,
         anat_only=opts.anat_only,
@@ -639,7 +650,7 @@ def build_workflow(opts, retval):
         output_resolution=opts.output_resolution,
         template=opts.template,
         bids_dir=bids_dir,
-        motion_corr_to=opts.motion_corr_to,
+        motion_corr_to=opts.b0_motion_corr_to,
         hmc_transform=opts.hmc_transform,
         hmc_model=opts.hmc_model,
         impute_slice_threshold=opts.impute_slice_threshold,

@@ -1,5 +1,7 @@
-niworkflows==0.4.4
 grabbit==0.2.3
 pybids==0.6.5
 versioneer
 fmriprep==1.2.3
+dipy
+niworkflows>=0.5.2.post5,<0.5.3
+numpy==1.15.4

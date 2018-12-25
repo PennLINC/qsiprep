@@ -64,15 +64,16 @@ RUN curl -sSL https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/6.0.1/frees
       && echo "Installing FSL conda environment ..." \
       && bash /opt/fsl-5.0.11/etc/fslconf/fslpython_install.sh -f /opt/fsl-5.0.11
 
-ENV SUBJECTS_DIR=$FREESURFER_HOME/subjects \
-    FUNCTIONALS_DIR=$FREESURFER_HOME/sessions \
-    MNI_DIR=$FREESURFER_HOME/mni \
-    LOCAL_DIR=$FREESURFER_HOME/local \
-    FSFAST_HOME=$FREESURFER_HOME/fsfast \
-    MINC_BIN_DIR=$FREESURFER_HOME/mni/bin \
-    MINC_LIB_DIR=$FREESURFER_HOME/mni/lib \
-    MNI_DATAPATH=$FREESURFER_HOME/mni/data \
-    FMRI_ANALYSIS_DIR=$FREESURFER_HOME/fsfast
+ENV FREESURFER_HOME=/opt/freesurfer \
+    SUBJECTS_DIR=/opt/freesurfer/subjects \
+    FUNCTIONALS_DIR=/opt/freesurfer/sessions \
+    MNI_DIR=/opt/freesurfer/mni \
+    LOCAL_DIR=/opt/freesurfer/local \
+    FSFAST_HOME=/opt/freesurfer/fsfast \
+    MINC_BIN_DIR=/opt/freesurfer/mni/bin \
+    MINC_LIB_DIR=/opt/freesurfer/mni/lib \
+    MNI_DATAPATH=/opt/freesurfer/mni/data \
+    FMRI_ANALYSIS_DIR=/opt/freesurfer/fsfast
 ENV PERL5LIB=$MINC_LIB_DIR/perl5/5.8.5 \
     MNI_PERL5LIB=$MINC_LIB_DIR/perl5/5.8.5 \
     PATH=$FREESURFER_HOME/bin:$FSFAST_HOME/bin:$FREESURFER_HOME/tktools:$MINC_BIN_DIR:$PATH
@@ -239,7 +240,17 @@ ARG VERSION
 RUN echo "${VERSION}" > /root/src/qsiprep/qsiprep/VERSION && \
     cd /root/src/qsiprep && \
     pip install .[all] && \
+    pip install 'niworkflows>=0.5.2.post5,<0.5.3' && \
     rm -rf ~/.cache/pip
+
+ENV AFNI_INSTALLDIR=/usr/lib/afni \
+    PATH=${PATH}:/usr/lib/afni/bin \
+    AFNI_PLUGINPATH=/usr/lib/afni/plugins \
+    AFNI_MODELPATH=/usr/lib/afni/models \
+    AFNI_TTATLAS_DATASET=/usr/share/afni/atlases \
+    AFNI_IMSAVE_WARNINGS=NO \
+    FSLOUTPUTTYPE=NIFTI_GZ
+
 
 RUN ldconfig
 WORKDIR /tmp/
