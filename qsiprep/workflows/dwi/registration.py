@@ -14,13 +14,15 @@ Registration workflows
 """
 
 from nipype.pipeline import engine as pe
-from nipype.interfaces import utility as niu, ants
+from nipype.interfaces import utility as niu
 from fmriprep.engine import Workflow
+from ...interfaces.niworkflows import ANTSRegistrationRPT
+from ...interfaces import DerivativesDataSink
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
-def init_b0_to_anat_registration_wf(mem_gb=3, omp_nthreads=1, write_report=False,
+def init_b0_to_anat_registration_wf(mem_gb=3, omp_nthreads=1, write_report=True,
                                     transform_type="Rigid", name="b0_anat_coreg"):
     """
     Calculates the registration between a reference b0 image and T1-space
@@ -92,7 +94,7 @@ def init_b0_to_anat_registration_wf(mem_gb=3, omp_nthreads=1, write_report=False
     workflow = Workflow(name=name)
 
     # Defines a coregistration operation
-    coreg = ants.Registration()
+    coreg = ANTSRegistrationRPT(generate_report=write_report)
     coreg.inputs.metric = ["Mattes"]
     coreg.inputs.transforms = [transform_type]
     coreg.inputs.shrink_factors = [[8, 4, 2, 1]]
@@ -119,5 +121,14 @@ def init_b0_to_anat_registration_wf(mem_gb=3, omp_nthreads=1, write_report=False
     workflow.connect(b0_to_anat, "forward_transforms", outputnode, "itk_b0_to_t1")
     workflow.connect(b0_to_anat, "reverse_transforms", outputnode, "itk_t1_to_b0")
     workflow.connect(b0_to_anat, "metric_value", outputnode, "coreg_metric")
+
+    if write_report:
+        ds_report_reg = pe.Node(
+            DerivativesDataSink(),
+            name='ds_report_reg', run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB)
+
+        workflow.connect([
+            (b0_to_anat, ds_report_reg, [('out_report', 'in_file')])])
 
     return workflow

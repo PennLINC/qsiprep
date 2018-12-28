@@ -290,7 +290,8 @@ def init_dwi_preproc_wf(dwi_files,
 
     # calculate dwi registration to T1w
     b0_coreg_wf = init_b0_to_anat_registration_wf(omp_nthreads=omp_nthreads,
-                                                  mem_gb=mem_gb['resampled'])
+                                                  mem_gb=mem_gb['resampled'],
+                                                  write_report=True)
     # Special case: Two reverse PE DWI series
     if doing_bidirectional_pepolar:
         # Merge, denoise, split, hmc on the plus series
