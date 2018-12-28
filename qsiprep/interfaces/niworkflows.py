@@ -23,12 +23,6 @@ from nipype.interfaces.base import (
     File, InputMultiPath, SimpleInterface
 )
 
-LOGGER = logging.getLogger('nipype.interface')
-# -*- coding: utf-8 -*-
-# emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
-# vi: set ft=python sts=4 ts=4 sw=4 et:
-"""Plotting tools shared across MRIQC and FMRIPREP"""
-
 import numpy as np
 import nibabel as nb
 import pandas as pd
@@ -47,13 +41,11 @@ from nilearn._utils.niimg import _safe_get_data
 import seaborn as sns
 from seaborn import color_palette
 from nipype.interfaces.ants import Registration
-
-DINA4_LANDSCAPE = (11.69, 8.27)
-
-
 from niworkflows.interfaces.registration import (ANTSRegistrationInputSpecRPT,
                                                  ANTSRegistrationOutputSpecRPT,
                                                  nrc)
+
+LOGGER = logging.getLogger('nipype.interface')
 
 
 class ANTSRegistrationRPT(nrc.RegistrationRC, Registration):

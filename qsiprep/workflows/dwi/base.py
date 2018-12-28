@@ -23,6 +23,7 @@ from ...interfaces import DerivativesDataSink
 from ...interfaces.reports import DiffusionSummary
 from ...interfaces.images import SplitDWIs, ConcatRPESplits
 from ...interfaces.gradients import SliceQC
+from ...interfaces.confounds import DMRISummary
 from fmriprep.engine import Workflow
 
 # dwi workflows
@@ -577,13 +578,26 @@ def init_dwi_preproc_wf(dwi_files,
                                      impute_slice_threshold=impute_slice_threshold,
                                      name='confounds_wf')
 
+    # Carpetplot and confounds plot
+    conf_plot = pe.Node(DMRISummary(), name='conf_plot', mem_gb=mem_gb)
+    ds_report_dwi_conf = pe.Node(
+        DerivativesDataSink(suffix='carpetplot'),
+        name='ds_report_dwi_conf', run_without_submitting=True,
+        mem_gb=DEFAULT_MEMORY_MIN_GB)
+
     workflow.connect([
         (buffernode, slice_check, [('ideal_images', 'ideal_image_files'),
                                    ('dwi_files', 'uncorrected_dwi_files'),
                                    ('b0_ref_mask', 'mask_image')]),
         (slice_check, confounds_wf, [('slice_stats', 'inputnode.sliceqc_file')]),
         (buffernode, confounds_wf, [('to_dwi_ref_affines', 'inputnode.hmc_affines')]),
-        (confounds_wf, outputnode, [('outputnode.confounds_file', 'confounds')])
+        (confounds_wf, outputnode, [('outputnode.confounds_file', 'confounds')]),
+
+        (confounds_wf, conf_plot, [('outputnode.confounds_file', 'confounds_file')]),
+        (slice_check, conf_plot, [('slice_stats', 'sliceqc_file')]),
+        (buffernode, conf_plot, [('bval_files', 'bval_files'),
+                                 ('bvec_files', 'orig_bvecs')]),
+        (conf_plot, ds_report_dwi_conf, [('out_file', 'in_file')])
     ])
 
     if "T1w" in output_spaces:
@@ -695,7 +709,7 @@ def init_dwi_derivatives_wf(output_prefix,
     ds_confounds = pe.Node(DerivativesDataSink(
         prefix=output_prefix,
         source_file=source_file,
-        base_directory=output_dir, desc='confounds', suffix='confounds'),
+        base_directory=output_dir, suffix='confounds'),
         name="ds_confounds", run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB)
     workflow.connect([

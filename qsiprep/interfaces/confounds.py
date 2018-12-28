@@ -11,17 +11,15 @@ Handling confounds
 """
 import os
 import re
-import shutil
 import numpy as np
 import pandas as pd
 from nipype import logging
-from nipype.utils.filemanip import fname_presuffix
 from nipype.interfaces.base import (
     traits, TraitedSpec, BaseInterfaceInputSpec, File, Directory, isdefined,
     SimpleInterface, InputMultiObject
 )
 
-from niworkflows.viz.plots import fMRIPlot
+from .niworkflows import dMRIPlot
 
 LOGGER = logging.getLogger('nipype.interface')
 
@@ -164,14 +162,11 @@ def _gather_confounds(fdisp=None, motion=None, sliceqc_file=None, newpath=None):
     return combined_out, confounds_list
 
 
-class FMRISummaryInputSpec(BaseInterfaceInputSpec):
-    in_func = File(exists=True, mandatory=True,
-                   desc='input BOLD time-series (4D file)')
-    in_mask = File(exists=True, mandatory=True,
-                   desc='3D brain mask')
-    in_segm = File(exists=True, desc='resampled segmentation')
+class DMRISummaryInputSpec(BaseInterfaceInputSpec):
     confounds_file = File(exists=True,
                           desc="BIDS' _confounds.tsv file")
+    sliceqc_file = File(exists=True,
+                        desc="output from SliceQC")
 
     str_or_tuple = traits.Either(
         traits.Str,
@@ -180,69 +175,32 @@ class FMRISummaryInputSpec(BaseInterfaceInputSpec):
     confounds_list = traits.List(
         str_or_tuple, minlen=1,
         desc='list of headers to extract from the confounds_file')
-    tr = traits.Either(None, traits.Float, usedefault=True,
-                       desc='the repetition time')
+    bvals = InputMultiObject(File(exists=True), desc='bvals files')
+    orig_bvecs = InputMultiObject(File(exists=True), desc='original bvecs file')
 
 
-class FMRISummaryOutputSpec(TraitedSpec):
+class DMRISummaryOutputSpec(TraitedSpec):
     out_file = File(exists=True, desc='written file path')
 
 
-class FMRISummary(SimpleInterface):
+class DMRISummary(SimpleInterface):
     """
     Copy the x-form matrices from `hdr_file` to `out_file`.
     """
-    input_spec = FMRISummaryInputSpec
-    output_spec = FMRISummaryOutputSpec
+    input_spec = DMRISummaryInputSpec
+    output_spec = DMRISummaryOutputSpec
 
     def _run_interface(self, runtime):
-        self._results['out_file'] = fname_presuffix(
-            self.inputs.in_func,
-            suffix='_fmriplot.svg',
-            use_ext=False,
-            newpath=runtime.cwd)
+        self._results['out_file'] = os.path.join(runtime.cwd, 'dmriplot.svg')
 
         dataframe = pd.read_csv(
             self.inputs.confounds_file,
             sep="\t", index_col=None, dtype='float32',
             na_filter=True, na_values='n/a')
 
-        headers = []
-        units = {}
-        names = {}
-
-        for conf_el in self.inputs.confounds_list:
-            if isinstance(conf_el, (list, tuple)):
-                headers.append(conf_el[0])
-                if conf_el[1] is not None:
-                    units[conf_el[0]] = conf_el[1]
-
-                if len(conf_el) > 2 and conf_el[2] is not None:
-                    names[conf_el[0]] = conf_el[2]
-            else:
-                headers.append(conf_el)
-
-        if not headers:
-            data = None
-            units = None
-        else:
-            data = dataframe[headers]
-
-        colnames = data.columns.ravel().tolist()
-
-        for name, newname in list(names.items()):
-            colnames[colnames.index(name)] = newname
-
-        data.columns = colnames
-
-        fig = fMRIPlot(
-            self.inputs.in_func,
-            mask_file=self.inputs.in_mask,
-            seg_file=(self.inputs.in_segm
-                      if isdefined(self.inputs.in_segm) else None),
-            tr=self.inputs.tr,
-            data=data,
-            units=units,
+        fig = dMRIPlot(
+            sliceqc_file=self.inputs.sliceqc_file,
+            confounds=dataframe
         ).plot()
         fig.savefig(self._results['out_file'], bbox_inches='tight')
         return runtime

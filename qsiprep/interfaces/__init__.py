@@ -22,4 +22,4 @@ from fmriprep.interfaces.fmap import (
 from fmriprep.interfaces.confounds import ICAConfounds, FMRISummary
 from fmriprep.interfaces.itk import MCFLIRT2ITK, MultiApplyTransforms
 from .dwi_merge import MergeDWIs
-from .confounds import GatherConfounds
+from .confounds import GatherConfounds, DMRISummary
