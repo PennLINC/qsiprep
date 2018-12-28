@@ -28,6 +28,7 @@ from fmriprep.engine import Workflow
 # dwi workflows
 from ..fieldmap.bidirectional_pepolar import init_bidirectional_b0_unwarping_wf
 from ..fieldmap.base import init_sdc_wf
+from ..fieldmap.unwarp import init_fmap_unwarp_report_wf
 from .merge import init_merge_and_denoise_wf
 from .hmc import init_dwi_hmc_wf
 from .util import init_dwi_reference_wf
@@ -241,7 +242,6 @@ def init_dwi_preproc_wf(dwi_files,
 
     """
 
-
     if type(dwi_files) is dict:
         doing_bidirectional_pepolar = True
         _dwi_lists = list(dwi_files.values())
@@ -288,6 +288,9 @@ def init_dwi_preproc_wf(dwi_files,
         ]),
         name='outputnode')
 
+    # calculate dwi registration to T1w
+    b0_coreg_wf = init_b0_to_anat_registration_wf(omp_nthreads=omp_nthreads,
+                                                  mem_gb=mem_gb['resampled'])
     # Special case: Two reverse PE DWI series
     if doing_bidirectional_pepolar:
         # Merge, denoise, split, hmc on the plus series
@@ -443,7 +446,34 @@ def init_dwi_preproc_wf(dwi_files,
                 'SDC: no fieldmaps found or they were ignored. '
                 'Using EXPERIMENTAL "fieldmap-less SyN" correction '
                 'for dataset %s.', ref_file)
+            syn_unwarp_report_wf = init_fmap_unwarp_report_wf(
+                suffix='forcedsyn', name='syn_unwarp_report_wf')
+            workflow.connect([
+                (inputnode, syn_unwarp_report_wf, [
+                    ('t1_seg', 'inputnode.in_seg')]),
+                (dwi_hmc_wf, syn_unwarp_report_wf, [
+                    ('outputnode.final_template', 'inputnode.in_pre')]),
+                (b0_coreg_wf, syn_unwarp_report_wf, [
+                    ('outputnode.itk_b0_to_t1', 'inputnode.in_xfm')]),
+                (b0_sdc_wf, syn_unwarp_report_wf, [
+                    ('outputnode.syn_bold_ref', 'inputnode.in_post')]),
+            ])
         else:
+            sdc_type = fmaps[0]['type']
+
+            # Report on SDC
+            fmap_unwarp_report_wf = init_fmap_unwarp_report_wf(
+                suffix='sdc_%s' % sdc_type)
+            workflow.connect([
+                (inputnode, fmap_unwarp_report_wf, [
+                    ('t1_seg', 'inputnode.in_seg')]),
+                (dwi_hmc_wf, fmap_unwarp_report_wf, [
+                    ('outputnode.final_template', 'inputnode.in_pre')]),
+                (b0_coreg_wf, fmap_unwarp_report_wf, [
+                    ('outputnode.itk_b0_to_t1', 'inputnode.in_xfm')]),
+                (b0_sdc_wf, fmap_unwarp_report_wf, [
+                    ('outputnode.b0_ref', 'inputnode.in_post')]),
+                ])
             LOGGER.log(25, 'SDC: fieldmap estimation of type "%s" intended for %s found.',
                        fmaps[0]['type'], ref_file)
 
@@ -523,9 +553,6 @@ def init_dwi_preproc_wf(dwi_files,
           ('mni_b0_series', 'inputnode.mni_b0_series'),
           ('confounds', 'inputnode.confounds')])
     ])
-    # calculate dwi registration to T1w
-    b0_coreg_wf = init_b0_to_anat_registration_wf(omp_nthreads=omp_nthreads,
-                                                  mem_gb=mem_gb['resampled'])
 
     workflow.connect([
         (inputnode, b0_coreg_wf, [
@@ -553,8 +580,9 @@ def init_dwi_preproc_wf(dwi_files,
         (buffernode, slice_check, [('ideal_images', 'ideal_image_files'),
                                    ('dwi_files', 'uncorrected_dwi_files'),
                                    ('b0_ref_mask', 'mask_image')]),
-        # (slice_check, confounds_wf, [('slice_stats', 'inputnode.sliceqc_file')]),
-        # (confounds_wf, outputnode, [('outputnode.confounds_file', 'confounds')])
+        (slice_check, confounds_wf, [('slice_stats', 'inputnode.sliceqc_file')]),
+        (buffernode, confounds_wf, [('to_dwi_ref_affines', 'inputnode.hmc_affines')]),
+        (confounds_wf, outputnode, [('outputnode.confounds_file', 'confounds')])
     ])
 
     if "T1w" in output_spaces:
@@ -662,15 +690,16 @@ def init_dwi_derivatives_wf(output_prefix,
             'local_bvecs_mni', 'mni_b0_ref', 'mni_b0_series', 'confounds'
         ]),
         name='inputnode')
-    #
-    # ds_confounds = pe.Node(DerivativesDataSink(
-    #     prefix=output_prefix,
-    #     base_directory=output_dir, desc='confounds', suffix='confounds'),
-    #     name="ds_confounds", run_without_submitting=True,
-    #     mem_gb=DEFAULT_MEMORY_MIN_GB)
-    # workflow.connect([
-    #     (inputnode, ds_confounds, [('confounds', 'in_file')])
-    # ])
+
+    ds_confounds = pe.Node(DerivativesDataSink(
+        prefix=output_prefix,
+        source_file=source_file,
+        base_directory=output_dir, desc='confounds', suffix='confounds'),
+        name="ds_confounds", run_without_submitting=True,
+        mem_gb=DEFAULT_MEMORY_MIN_GB)
+    workflow.connect([
+        (inputnode, ds_confounds, [('confounds', 'in_file')])
+    ])
 
     # Resample to T1w space
     if 'T1w' in output_spaces:

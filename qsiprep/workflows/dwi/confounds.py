@@ -18,7 +18,7 @@ from niworkflows.data import get_template
 from niworkflows.interfaces.segmentation import ICA_AROMARPT
 from niworkflows.interfaces.masks import ROIsPlot
 from niworkflows.interfaces.fixes import FixHeaderApplyTransforms as ApplyTransforms
-
+from ...interfaces.gradients import CombineMotions
 from fmriprep.engine import Workflow
 from ...interfaces import (
     TPM2ROI, AddTPMs, AddTSVHeader, GatherConfounds, ICAConfounds,
@@ -67,8 +67,8 @@ def init_dwi_confs_wf(mem_gb, metadata, impute_slice_threshold, name="dwi_confs_
         sliceqc_file
             dwi image, after the prescribed corrections (STC, HMC and SDC)
             when available.
-        movpar_file
-            SPM-formatted motion parameters file
+        hmc_affines
+            ITK affines that correct for head motion
 
     **Outputs**
 
@@ -89,11 +89,14 @@ placed within the corresponding confounds file. Slicewise cross correlation
 was also calculated.
 """
     inputnode = pe.Node(niu.IdentityInterface(
-        fields=['sliceqc_file', 'movpar_file']),
+        fields=['sliceqc_file', 'hmc_affines']),
         name='inputnode')
     outputnode = pe.Node(niu.IdentityInterface(
         fields=['confounds_file', 'imputed_images']),
         name='outputnode')
+
+    # Compute distance travelled to the template
+    summarize_motion = pe.Node(CombineMotions(), name="summarize_motion")
 
     # Frame displacement
     fdisp = pe.Node(nac.FramewiseDisplacement(parameter_source="SPM"),
@@ -105,12 +108,14 @@ was also calculated.
     concat = pe.Node(GatherConfounds(), name="concat", mem_gb=0.01, run_without_submitting=True)
 
     workflow.connect([
-        (inputnode, fdisp, [('movpar_file', 'in_file')]),
+        (inputnode, summarize_motion, [('hmc_affines', 'transform_files')]),
+        (summarize_motion, fdisp, [('spm_motion_file', 'in_file')]),
 
         # Collate computed confounds together
-        (inputnode, add_motion_headers, [('movpar_file', 'in_file')]),
+        (summarize_motion, add_motion_headers, [('spm_motion_file', 'in_file')]),
         (fdisp, concat, [('out_file', 'fd')]),
         (add_motion_headers, concat, [('out_file', 'motion')]),
+        (inputnode, concat, [('sliceqc_file', 'sliceqc_file')]),
 
         # Set outputs
         (concat, outputnode, [('confounds_file', 'confounds_file')]),

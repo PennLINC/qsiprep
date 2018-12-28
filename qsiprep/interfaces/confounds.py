@@ -26,22 +26,10 @@ from niworkflows.viz.plots import fMRIPlot
 LOGGER = logging.getLogger('nipype.interface')
 
 
-class SliceCheckInputSpec(BaseInterfaceInputSpec):
-    dwi_files = InputMultiObject(File(exists=True), desc='uncorrected dwi images')
-    modeled_signal_files = InputMultiObject(File(exists=True), desc='transformed to uncorrected '
-                                            'ideal signal images')
-    mask = File(exists=True, desc='brain mask')
-    rois = File(exists=True, desc='rois in brain mask for calculating carpet plot')
-    threshold = traits.Float(desc='threshold for replacing slices')
-
-
-class SliceCheckOutputSpec(TraitedSpec):
-    r2s = File(exists=True)
-
-
 class GatherConfoundsInputSpec(BaseInterfaceInputSpec):
     fd = File(exists=True, desc='input framewise displacement')
     motion = File(exists=True, desc='input motion parameters')
+    sliceqc_file = File(exists=True, desc='output from sliceqc')
 
 
 class GatherConfoundsOutputSpec(TraitedSpec):
@@ -87,6 +75,7 @@ class GatherConfounds(SimpleInterface):
     def _run_interface(self, runtime):
         combined_out, confounds_list = _gather_confounds(
             fdisp=self.inputs.fd,
+            sliceqc_file=self.inputs.sliceqc_file,
             motion=self.inputs.motion,
             newpath=runtime.cwd,
         )
@@ -95,7 +84,7 @@ class GatherConfounds(SimpleInterface):
         return runtime
 
 
-def _gather_confounds(fdisp=None, motion=None, newpath=None):
+def _gather_confounds(fdisp=None, motion=None, sliceqc_file=None, newpath=None):
     """
     Load confounds from the filenames, concatenate together horizontally
     and save new file.
@@ -158,6 +147,13 @@ def _gather_confounds(fdisp=None, motion=None, newpath=None):
         _adjust_indices(confounds_data, new)
         confounds_data = pd.concat((confounds_data, new), axis=1)
 
+    # Add in the sliceqc measures
+    if sliceqc_file is not None:
+        sqc = np.load(sliceqc_file)
+        confounds_data['hmc_r2'] = sqc['wb_r2s']
+        confounds_data['hmc_xcorr'] = sqc['wb_xcorrs']
+        confounds_list += ['hmc_r2', 'hmc_xcorr']
+
     if newpath is None:
         newpath = os.getcwd()
 
@@ -166,3 +162,87 @@ def _gather_confounds(fdisp=None, motion=None, newpath=None):
                           na_rep='n/a')
 
     return combined_out, confounds_list
+
+
+class FMRISummaryInputSpec(BaseInterfaceInputSpec):
+    in_func = File(exists=True, mandatory=True,
+                   desc='input BOLD time-series (4D file)')
+    in_mask = File(exists=True, mandatory=True,
+                   desc='3D brain mask')
+    in_segm = File(exists=True, desc='resampled segmentation')
+    confounds_file = File(exists=True,
+                          desc="BIDS' _confounds.tsv file")
+
+    str_or_tuple = traits.Either(
+        traits.Str,
+        traits.Tuple(traits.Str, traits.Either(None, traits.Str)),
+        traits.Tuple(traits.Str, traits.Either(None, traits.Str), traits.Either(None, traits.Str)))
+    confounds_list = traits.List(
+        str_or_tuple, minlen=1,
+        desc='list of headers to extract from the confounds_file')
+    tr = traits.Either(None, traits.Float, usedefault=True,
+                       desc='the repetition time')
+
+
+class FMRISummaryOutputSpec(TraitedSpec):
+    out_file = File(exists=True, desc='written file path')
+
+
+class FMRISummary(SimpleInterface):
+    """
+    Copy the x-form matrices from `hdr_file` to `out_file`.
+    """
+    input_spec = FMRISummaryInputSpec
+    output_spec = FMRISummaryOutputSpec
+
+    def _run_interface(self, runtime):
+        self._results['out_file'] = fname_presuffix(
+            self.inputs.in_func,
+            suffix='_fmriplot.svg',
+            use_ext=False,
+            newpath=runtime.cwd)
+
+        dataframe = pd.read_csv(
+            self.inputs.confounds_file,
+            sep="\t", index_col=None, dtype='float32',
+            na_filter=True, na_values='n/a')
+
+        headers = []
+        units = {}
+        names = {}
+
+        for conf_el in self.inputs.confounds_list:
+            if isinstance(conf_el, (list, tuple)):
+                headers.append(conf_el[0])
+                if conf_el[1] is not None:
+                    units[conf_el[0]] = conf_el[1]
+
+                if len(conf_el) > 2 and conf_el[2] is not None:
+                    names[conf_el[0]] = conf_el[2]
+            else:
+                headers.append(conf_el)
+
+        if not headers:
+            data = None
+            units = None
+        else:
+            data = dataframe[headers]
+
+        colnames = data.columns.ravel().tolist()
+
+        for name, newname in list(names.items()):
+            colnames[colnames.index(name)] = newname
+
+        data.columns = colnames
+
+        fig = fMRIPlot(
+            self.inputs.in_func,
+            mask_file=self.inputs.in_mask,
+            seg_file=(self.inputs.in_segm
+                      if isdefined(self.inputs.in_segm) else None),
+            tr=self.inputs.tr,
+            data=data,
+            units=units,
+        ).plot()
+        fig.savefig(self._results['out_file'], bbox_inches='tight')
+        return runtime

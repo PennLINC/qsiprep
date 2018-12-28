@@ -33,8 +33,8 @@ class SliceQCInputSpec(BaseInterfaceInputSpec):
     ideal_image_files = InputMultiObject(File(exists=True), desc='model-based images')
     mask_image = File(exists=True, desc='brain mask')
     impute_slice_threshold = traits.Float(0., desc='threshold for using imputed data in a slice')
-    min_slice_size_percentile = traits.CFloat(10.0, desc='slices bigger than this percentile are '
-                                             'candidates for getting imputed.')
+    min_slice_size_percentile = traits.CFloat(10.0, usedefault=True, desc='slices bigger than '
+                                              'this percentile are candidates for imputation.')
 
 
 class SliceQCOutputSpec(TraitedSpec):
@@ -115,6 +115,7 @@ class CombineMotionsInputSpec(BaseInterfaceInputSpec):
 
 class CombineMotionsOututSpec(TraitedSpec):
     motion_file = File(exists=True)
+    spm_motion_file = File(exists=True)
 
 
 class CombineMotions(SimpleInterface):
@@ -124,6 +125,7 @@ class CombineMotions(SimpleInterface):
     def _run_interface(self, runtime):
         collected_motion = []
         output_fname = os.path.join(runtime.cwd, "motion_params.csv")
+        output_spm_fname = os.path.join(runtime.cwd, "spm_movpar.txt")
         for motion_file in self.inputs.transform_files:
             if os.path.exists("output.txt"):
                 os.remove("output.txt")
@@ -141,6 +143,11 @@ class CombineMotions(SimpleInterface):
         motion_df = pd.DataFrame(data=final_motion, columns=cols)
         motion_df.to_csv(output_fname, index=False)
         self._results['motion_file'] = output_fname
+
+        spmcols = motion_df[['shiftX', 'shiftY', 'shiftZ', 'rotateX', 'rotateY', 'rotateZ']]
+        self._results['spm_motion_file'] = output_spm_fname
+        np.savetxt(output_spm_fname, spmcols.values)
+
         return runtime
 
 

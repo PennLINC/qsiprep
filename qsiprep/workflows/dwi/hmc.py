@@ -6,7 +6,7 @@ from dipy.core.geometry import decompose_matrix
 from fmriprep.engine import Workflow
 import os
 import numpy as np
-from ...interfaces.gradients import MatchTransforms, GradientRotation, CombineMotions
+from ...interfaces.gradients import MatchTransforms, GradientRotation
 from ...interfaces.dipy import IdealSignalRegistration
 from .util import init_skullstrip_b0_wf
 
@@ -20,8 +20,7 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, mem_gb=3, omp_nthrea
         name='inputnode')
 
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=["final_template", "forward_transforms", "noise_free_dwis",
-                                      "motion_params"]),
+        niu.IdentityInterface(fields=["final_template", "forward_transforms", "noise_free_dwis"]),
         name='outputnode')
 
     workflow = Workflow(name=name)
@@ -29,9 +28,6 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, mem_gb=3, omp_nthrea
     b0_hmc_wf = init_b0_hmc_wf(align_to=hmc_align_to, transform=hmc_transform)
     # Tile the transforms so each non-b0 gets the transform from the nearest b0
     match_transforms = pe.Node(MatchTransforms(), name="match_transforms")
-
-    # Compute distance travelled to the template
-    summarize_motion = pe.Node(CombineMotions(), name="summarize_motion")
 
     workflow.connect([
         (inputnode, match_transforms, [('dwi_files', 'dwi_files'),
@@ -45,10 +41,7 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, mem_gb=3, omp_nthrea
     if hmc_model == 'none':
         # Motion correction based only on b0's
         workflow.connect([
-            # (b0_hmc_wf, outputnode, [('outputnode.motion_params', 'motion_params')]),
-            (match_transforms, outputnode, [('transforms', 'forward_transforms')]),
-            (match_transforms, summarize_motion, [('transforms', 'transform_files')]),
-            (summarize_motion, outputnode, [('motion_file', 'motion_params')])
+            (match_transforms, outputnode, [('transforms', 'forward_transforms')])
         ])
         return workflow
 
@@ -66,9 +59,7 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, mem_gb=3, omp_nthrea
                                         ('bvals', 'inputnode.bvals')])),
         (match_transforms, dwi_model_hmc_wf, [('transforms', 'inputnode.initial_transforms')]),
         (dwi_model_hmc_wf, outputnode, [('outputnode.noise_free_dwis', 'noise_free_dwis'),
-                                        ('outputnode.hmc_transforms', 'forward_transforms')]),
-        (dwi_model_hmc_wf, summarize_motion, [('outputnode.hmc_transforms', 'transform_files')]),
-        (summarize_motion, outputnode, [('motion_file', 'motion_params')])
+                                        ('outputnode.hmc_transforms', 'forward_transforms')])
     ])
 
     return workflow

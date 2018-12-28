@@ -19,6 +19,7 @@ from fmriprep.interfaces.utils import (TPM2ROI, AddTPMs, AddTSVHeader, ConcatAff
                                        JoinTSVColumns)
 from fmriprep.interfaces.fmap import (
     FieldEnhance, FieldToRadS, FieldToHz, Phasediff2Fieldmap)
-from fmriprep.interfaces.confounds import GatherConfounds, ICAConfounds, FMRISummary
+from fmriprep.interfaces.confounds import ICAConfounds, FMRISummary
 from fmriprep.interfaces.itk import MCFLIRT2ITK, MultiApplyTransforms
 from .dwi_merge import MergeDWIs
+from .confounds import GatherConfounds
