@@ -35,7 +35,7 @@ from .hmc import init_dwi_hmc_wf
 from .util import init_dwi_reference_wf
 from .registration import init_b0_to_anat_registration_wf
 from .resampling import init_dwi_trans_wf
-from .confounds import init_dwi_confs_wf, init_carpetplot_wf
+from .confounds import init_dwi_confs_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger('nipype.workflow')
@@ -490,6 +490,7 @@ def init_dwi_preproc_wf(dwi_files,
                  ('dwi_files', 'dwi_files'),
                  ('b0_images', 'b0_images'),
                  ('b0_indices', 'b0_indices')]),
+            # (merge_dwis, buffernode, [('original_images', 'original_grouping')]),
             (split_dwis, dwi_hmc_wf, [('b0_images', 'inputnode.b0_images'),
                                       ('bval_files', 'inputnode.bvals'),
                                       ('bvec_files', 'inputnode.bvecs'),
@@ -597,7 +598,9 @@ def init_dwi_preproc_wf(dwi_files,
         (slice_check, conf_plot, [('slice_stats', 'sliceqc_file')]),
         (buffernode, conf_plot, [('bval_files', 'bval_files'),
                                  ('bvec_files', 'orig_bvecs')]),
-        (conf_plot, ds_report_dwi_conf, [('out_file', 'in_file')])
+                                 # ('original_grouping', 'source_image_num')
+        (conf_plot, ds_report_dwi_conf, [('out_file', 'in_file')]),
+
     ])
 
     if "T1w" in output_spaces:

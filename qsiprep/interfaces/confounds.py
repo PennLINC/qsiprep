@@ -28,6 +28,7 @@ class GatherConfoundsInputSpec(BaseInterfaceInputSpec):
     fd = File(exists=True, desc='input framewise displacement')
     motion = File(exists=True, desc='input motion parameters')
     sliceqc_file = File(exists=True, desc='output from sliceqc')
+    original_files = traits.List(desc='original grouping of each volume')
 
 
 class GatherConfoundsOutputSpec(TraitedSpec):
@@ -75,6 +76,7 @@ class GatherConfounds(SimpleInterface):
             fdisp=self.inputs.fd,
             sliceqc_file=self.inputs.sliceqc_file,
             motion=self.inputs.motion,
+            original_files=self.inputs.original_files,
             newpath=runtime.cwd,
         )
         self._results['confounds_file'] = combined_out
@@ -82,7 +84,8 @@ class GatherConfounds(SimpleInterface):
         return runtime
 
 
-def _gather_confounds(fdisp=None, motion=None, sliceqc_file=None, newpath=None):
+def _gather_confounds(fdisp=None, motion=None, sliceqc_file=None, newpath=None,
+                      original_files=None):
     """
     Load confounds from the filenames, concatenate together horizontally
     and save new file.
@@ -155,9 +158,12 @@ def _gather_confounds(fdisp=None, motion=None, sliceqc_file=None, newpath=None):
     if newpath is None:
         newpath = os.getcwd()
 
+    if original_files is not None:
+        confounds_data['original_file'] = np.array(original_files)
+        confounds_list += ['original_file']
+
     combined_out = os.path.join(newpath, 'confounds.tsv')
-    confounds_data.to_csv(combined_out, sep='\t', index=False,
-                          na_rep='n/a')
+    confounds_data.to_csv(combined_out, sep='\t', index=False, na_rep='n/a')
 
     return combined_out, confounds_list
 
@@ -175,7 +181,7 @@ class DMRISummaryInputSpec(BaseInterfaceInputSpec):
     confounds_list = traits.List(
         str_or_tuple, minlen=1,
         desc='list of headers to extract from the confounds_file')
-    bvals = InputMultiObject(File(exists=True), desc='bvals files')
+    bval_files = InputMultiObject(File(exists=True), desc='bvals files')
     orig_bvecs = InputMultiObject(File(exists=True), desc='original bvecs file')
 
 
@@ -184,9 +190,6 @@ class DMRISummaryOutputSpec(TraitedSpec):
 
 
 class DMRISummary(SimpleInterface):
-    """
-    Copy the x-form matrices from `hdr_file` to `out_file`.
-    """
     input_spec = DMRISummaryInputSpec
     output_spec = DMRISummaryOutputSpec
 

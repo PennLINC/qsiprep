@@ -3,8 +3,9 @@ import numpy as np
 from nipype.interfaces import afni
 import os.path as op
 from nipype.interfaces.base import (BaseInterfaceInputSpec, TraitedSpec, File, SimpleInterface,
-                                    InputMultiObject)
+                                    InputMultiObject, traits)
 from nipype.utils.filemanip import fname_presuffix
+import nibabel as nb
 
 
 class MergeDWIsInputSpec(BaseInterfaceInputSpec):
@@ -20,6 +21,7 @@ class MergeDWIsOutputSpec(TraitedSpec):
     out_dwi = File(desc='the merged dwi image')
     out_bval = File(desc='the merged bvec file')
     out_bvec = File(desc='the merged bval file')
+    original_images = traits.List()
 
 
 class MergeDWIs(SimpleInterface):
@@ -29,6 +31,12 @@ class MergeDWIs(SimpleInterface):
     def _run_interface(self, runtime):
         bvals = self.inputs.bval_files
         bvecs = self.inputs.bvec_files
+
+        def get_nvols(img):
+            shape = nb.load(img).shape
+            if len(shape) < 4:
+                return 1
+            return shape[3]
 
         if len(self.inputs.dwi_files) > 1:
             dwimrg = afni.TCat(in_files=self.inputs.dwi_files, outputtype='NIFTI_GZ')
@@ -40,10 +48,15 @@ class MergeDWIs(SimpleInterface):
                                        newpath=runtime.cwd)
             self._results['out_bval'] = combine_bvals(bvals, output_file=out_bval)
             self._results['out_bvec'] = combine_bvecs(bvecs, output_file=out_bvec)
+            sources = []
+            for img in self.inputs.dwi_files:
+                sources += [img] * get_nvols(img)
         else:
-            self._results['out_dwi'] = self.inputs.dwi_files[0]
+            dwi_file = self.inputs.dwi_files[0]
+            self._results['out_dwi'] = dwi_file
             self._results['out_bval'] = bvals[0]
             self._results['out_bvec'] = bvecs[0]
+            self._results['original_images'] = [self._results['out_dwi']] * get_nvols(dwi_file)
         return runtime
 
 

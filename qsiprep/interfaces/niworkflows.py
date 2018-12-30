@@ -65,45 +65,11 @@ class dMRIPlot(object):
     """
     Generates the dMRI Summary Plot
     """
-    __slots__ = ['dwi_file', 'mask_data',
-                 'tr', 'seg_data', 'confounds', 'spikes']
 
-    def __init__(self, dwi_file, mask_file=None, data=None, conf_file=None, seg_file=None,
-                 tr=None, usecols=None, units=None, vlines=None, spikes_files=None):
-        self.dwi_file = dwi_file
-        dwi_nii = nb.load(dwi_file)
-
-        self.mask_data = np.ones_like(dwi_nii.get_data(), dtype='uint8')
-        if mask_file:
-            self.mask_data = nb.load(mask_file).get_data().astype('uint8')
-
-        self.seg_data = None
-        if seg_file:
-            self.seg_data = nb.load(seg_file).get_data()
-
-        if units is None:
-            units = {}
-
-        if vlines is None:
-            vlines = {}
-
-        self.confounds = {}
-        if data is None and conf_file:
-            data = pd.read_csv(conf_file, sep=r'[\t\s]+',
-                               usecols=usecols, index_col=False)
-
-        if data is not None:
-            for name in data.columns.ravel():
-                self.confounds[name] = {
-                    'values': data[[name]].values.ravel().tolist(),
-                    'units': units.get(name),
-                    'cutoff': vlines.get(name)
-                }
-
-        self.spikes = []
-        if spikes_files:
-            for sp_file in spikes_files:
-                self.spikes.append((np.loadtxt(sp_file), None, False))
+    def __init__(self, sliceqc_file, confounds, usecols=None, units=None, vlines=None,
+                 spikes_files=None):
+        self.qc_data = np.load(sliceqc_file)
+        self.confounds = confounds
 
     def plot(self, figure=None):
         """Main plotter"""
@@ -113,38 +79,34 @@ class dMRIPlot(object):
         if figure is None:
             figure = plt.gcf()
 
-        nconfounds = len(self.confounds)
-        nspikes = len(self.spikes)
-        nrows = 1 + nconfounds + nspikes
+        to_plot = ["framewise_displacement", "hmc_xcorr"]
+        nconfounds = len(to_plot)
+        nrows = 1 + nconfounds
 
         # Create grid
         grid = mgs.GridSpec(nrows, 1, wspace=0.0, hspace=0.05,
                             height_ratios=[1] * (nrows - 1) + [5])
 
         grid_id = 0
-        for tsz, name, iszs in self.spikes:
-            spikesplot(tsz, title=name, outer_gs=grid[grid_id], tr=self.tr,
-                       zscored=iszs)
+        # for tsz, name, iszs in []:
+        #     spikesplot(tsz, title=name, outer_gs=grid[grid_id], tr=self.tr,
+        #                zscored=iszs)
+        #     grid_id += 1
+        palette = color_palette("husl", nconfounds)
+
+        for i, name in enumerate(to_plot):
+            tseries = self.confounds[name]
+            confoundplot(tseries, grid[grid_id], color=palette[i], name=name)
             grid_id += 1
 
-        if self.confounds:
-            palette = color_palette("husl", nconfounds)
-
-        for i, (name, kwargs) in enumerate(self.confounds.items()):
-            tseries = kwargs.pop('values')
-            confoundplot(
-                tseries, grid[grid_id], tr=self.tr, color=palette[i],
-                name=name, **kwargs)
-            grid_id += 1
-
-        plot_carpet(self.dwi_file, self.seg_data, subplot=grid[-1], tr=self.tr)
+        plot_sliceqc(self.qc_data['slice_scores'], self.qc_data['slice_counts'], subplot=grid[-1])
         # spikesplot_cb([0.7, 0.78, 0.2, 0.008])
         return figure
 
 
-def plot_carpet(img, atlaslabels, detrend=True, nskip=0, size=(950, 800),
-                subplot=None, title=None, output_file=None, legend=False,
-                lut=None, tr=None):
+def plot_sliceqc(slice_data, nperslice, size=(950, 800),
+                 subplot=None, title=None, output_file=None,
+                 lut=None, tr=None):
     """
     Plot an image representation of voxel intensities across time also know
     as the "carpet plot" or "Power plot". See Jonathan Power Neuroimage
@@ -152,19 +114,10 @@ def plot_carpet(img, atlaslabels, detrend=True, nskip=0, size=(950, 800),
 
     Parameters
     ----------
-
-        img : Niimg-like object
-            See http://nilearn.github.io/manipulating_images/input_output.html
-            4D input image
-        atlaslabels: ndarray
-            A 3D array of integer labels from an atlas, resampled into ``img`` space.
-        detrend : boolean, optional
-            Detrend and standardize the data prior to plotting.
-        nskip : int
-            Number of volumes at the beginning of the scan marked as nonsteady state.
-        long_cutoff : int
-            Number of TRs to consider img too long (and decimate the time direction
-            to save memory)
+        slice_data: 2d array
+            errors in each slice for each volume
+        nperslice: 1d array
+            number of voxels included in each slice
         axes : matplotlib axes, optional
             The axes used to display the plot. If None, the complete
             figure is used.
@@ -174,9 +127,6 @@ def plot_carpet(img, atlaslabels, detrend=True, nskip=0, size=(950, 800),
             The name of an image file to export the plot to. Valid extensions
             are .png, .pdf, .svg. If output_file is not None, the plot
             is saved to a file, and the display is closed.
-        legend : bool
-            Whether to render the average dwitional series with ``atlaslabels`` as
-            overlay.
         tr : float , optional
             Specify the TR, if specified it uses this value. If left as None,
             # Frames is plotted instead of time.
@@ -188,60 +138,21 @@ def plot_carpet(img, atlaslabels, detrend=True, nskip=0, size=(950, 800),
         notr = True
         tr = 1.
 
-    img_nii = check_niimg_4d(img, dtype='auto',)
-    dwi_data = _safe_get_data(img_nii, ensure_finite=True)
-    ntsteps = dwi_data.shape[-1]
-
-    data = dwi_data[atlaslabels > 0].reshape(-1, ntsteps)
-    seg = atlaslabels[atlaslabels > 0].reshape(-1)
-
-    # Map segmentation
-    if lut is None:
-        lut = np.zeros((256, ), dtype='int')
-        lut[1:11] = 1
-        lut[255] = 2
-        lut[30:99] = 3
-        lut[100:201] = 4
-
-    # Apply lookup table
-    newsegm = lut[seg.astype(int)]
-
-    p_dec = 1 + data.shape[0] // size[0]
-    if p_dec:
-        data = data[::p_dec, :]
-        newsegm = newsegm[::p_dec]
-
-    t_dec = 1 + data.shape[1] // size[1]
-    if t_dec:
-        data = data[:, ::t_dec]
-
-    # Detrend data
-    v = (None, None)
-    if detrend:
-        data = clean(data.T, t_r=tr).T
-        v = (-2, 2)
-
-    # Order following segmentation labels
-    order = np.argsort(newsegm)[::-1]
-
     # If subplot is not defined
     if subplot is None:
         subplot = mgs.GridSpec(1, 1)[0]
 
     # Define nested GridSpec
-    wratios = [1, 100, 20]
-    gs = mgs.GridSpecFromSubplotSpec(1, 2 + int(legend), subplot_spec=subplot,
-                                     width_ratios=wratios[:2 + int(legend)],
+    wratios = [1, 100]
+    gs = mgs.GridSpecFromSubplotSpec(1, 2, subplot_spec=subplot,
+                                     width_ratios=wratios,
                                      wspace=0.0)
-
-    mycolors = ListedColormap(cm.get_cmap('tab10').colors[:4][::-1])
 
     # Segmentation colorbar
     ax0 = plt.subplot(gs[0])
     ax0.set_yticks([])
     ax0.set_xticks([])
-    ax0.imshow(newsegm[order, np.newaxis], interpolation='none', aspect='auto',
-               cmap=mycolors, vmin=1, vmax=4)
+    ax0.imshow(nperslice[:, np.newaxis], interpolation='nearest', aspect='auto', cmap='viridis')
     ax0.grid(False)
     ax0.spines["left"].set_visible(False)
     ax0.spines["bottom"].set_color('none')
@@ -249,22 +160,20 @@ def plot_carpet(img, atlaslabels, detrend=True, nskip=0, size=(950, 800),
 
     # Carpet plot
     ax1 = plt.subplot(gs[1])
-    ax1.imshow(data[order, ...], interpolation='nearest', aspect='auto', cmap='gray',
-               vmin=v[0], vmax=v[1])
-
+    ax1.imshow(slice_data, interpolation='nearest', aspect='auto', cmap='gray')
     ax1.grid(False)
     ax1.set_yticks([])
     ax1.set_yticklabels([])
 
     # Set 10 frame markers in X axis
-    interval = max((int(data.shape[-1] + 1) // 10, int(data.shape[-1] + 1) // 5, 1))
-    xticks = list(range(0, data.shape[-1])[::interval])
+    interval = max((int(slice_data.shape[1] + 1) // 10, int(slice_data.shape[1] + 1) // 5, 1))
+    xticks = list(range(0, slice_data.shape[1])[::interval])
     ax1.set_xticks(xticks)
     if notr:
         ax1.set_xlabel('time (frame #)')
     else:
         ax1.set_xlabel('time (s)')
-    labels = tr * (np.array(xticks)) * t_dec
+    labels = tr * (np.array(xticks))
     ax1.set_xticklabels(['%.02f' % t for t in labels.tolist()], fontsize=5)
 
     # Remove and redefine spines
@@ -280,22 +189,6 @@ def plot_carpet(img, atlaslabels, detrend=True, nskip=0, size=(950, 800),
     ax1.spines["bottom"].set_visible(False)
     ax1.spines["left"].set_color('none')
     ax1.spines["left"].set_visible(False)
-
-    if legend:
-        gslegend = mgs.GridSpecFromSubplotSpec(
-            5, 1, subplot_spec=gs[2], wspace=0.0, hspace=0.0)
-        epiavg = dwi_data.mean(3)
-        epinii = nb.Nifti1Image(epiavg, img_nii.affine, img_nii.header)
-        segnii = nb.Nifti1Image(lut[atlaslabels.astype(int)], epinii.affine, epinii.header)
-        segnii.set_data_dtype('uint8')
-
-        nslices = epiavg.shape[-1]
-        coords = np.linspace(int(0.10 * nslices), int(0.95 * nslices), 5).astype(np.uint8)
-        for i, c in enumerate(coords.tolist()):
-            ax2 = plt.subplot(gslegend[i])
-            plot_img(segnii, bg_img=epinii, axes=ax2, display_mode='z',
-                     annotate=False, cut_coords=[c], threshold=0.1, cmap=mycolors,
-                     interpolation='nearest')
 
     if output_file is not None:
         figure = plt.gcf()
