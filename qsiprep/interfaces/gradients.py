@@ -519,7 +519,7 @@ def _compose_tfms(args):
     LOGGER.info(runtime.cmdline)
 
     # Force floating point precision
-    nii = nb.load(out_file)
+    nii = nb.load(out_file, mmap=False)
     nii.set_data_dtype(np.dtype('float32'))
     nii.to_filename(out_file)
 
