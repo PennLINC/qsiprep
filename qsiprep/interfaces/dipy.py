@@ -293,7 +293,7 @@ def _reg_to_ideal(args):
     return (out_file, run.outputs.forward_transforms, runtime.cmdline)
 
 
-def estimate_signal_targets(model_name, gtab, model_data, mask_array):
+def estimate_signal_targets(model_name, gtab, model_data, mask_array, cutoff=50):
     def get_model(grads):
         if model_name == "MAPMRI":
             return MapmriModel(grads)
@@ -306,18 +306,29 @@ def estimate_signal_targets(model_name, gtab, model_data, mask_array):
     num_grads = gtab.gradients.shape[0]
     LOGGER.info('Fitting 3dSHORE model')
     full_model = get_model(gtab)
+    scaled_gradients = full_bvals[:, np.newaxis] * full_bvecs
     phi = brainsuite_shore_basis(full_model.radial_order, full_model.zeta, gtab, full_model.tau)
     predictions = []
     for loo in range(1, num_grads):
+        # Create masks for training and testing
         mask = np.ones_like(full_bvals) > 0
+        # Remove the sample itself
         mask[loo] = False
-        training_bvals = full_bvals[mask]
-        training_bvecs = full_bvecs[mask]
+        # The model is symmetric, so remove any samples that are too close or the opposite
+        distances = np.sqrt(np.sum((scaled_gradients - scaled_gradients[loo]) ** 2, axis=1))
+        distances_flip = np.sqrt(np.sum((-scaled_gradients + scaled_gradients[loo]) ** 2, axis=1))
+        training_mask = (distances > cutoff) * (distances_flip > cutoff)
+
+        # Extract training images and gradients
+        training_bvals = full_bvals[training_mask]
+        training_bvecs = full_bvecs[training_mask]
         training_gtab = gradient_table(bvals=training_bvals, bvecs=training_bvecs)
         training_data = model_data[..., mask]
-        LOGGER.info("\t%d", loo)
+
+        LOGGER.info("\tleaving out %d: training with %d samples", loo, training_mask.sum())
         iter_model = get_model(training_gtab)
         iter_fit = iter_model.fit(training_data, mask=mask_array)
+
         shore_array = iter_fit._shore_coef[mask_array]
         this_dir = phi[loo]
         output_data = np.zeros(mask_array.shape)

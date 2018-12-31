@@ -388,6 +388,7 @@ class GradientRotation(SimpleInterface):
 class LocalGradientRotationInputSpec(GradientRotationInputSpec):
     warp_transforms = InputMultiObject(File(exists=True), desc='Warps')
     mask_image = File(exists=True, desc='brain mask in the output space')
+    bvec_files = InputMultiObject(File(exists=True), desc='list of split bvec files')
 
 
 class LocalGradientRotationOutputSpec(TraitedSpec):
@@ -409,7 +410,7 @@ class LocalGradientRotation(SimpleInterface):
                                        self.inputs.mask_image, runtime, local_bvec_fname)
         self._results['log_cmdline'] = os.path.join(runtime.cwd, 'command.txt')
         with open(self._results['log_cmdline'], 'w') as cmdfile:
-            print('\n-------\n'.join(commands), file=cmdfile)
+            print('\n-------\n'.join(commands[1]), file=cmdfile)
         return runtime
 
 
@@ -651,7 +652,7 @@ def local_bvec_rotation(original_bvecs, warp_transforms, mask_image, runtime, ou
                                                                  out_fname)
         commands.append(rotate_cmd)
         rotated_vec_files.append(out_fname)
-    concatenated = np.stack([img.get_data() for img in rotated_vec_files], -1)
+    concatenated = np.stack([nb.load(img).get_data() for img in rotated_vec_files], -1)
     nb.Nifti1Image(concatenated.astype('<f4'), mask_img.affine).to_filename(output_fname)
     for temp_file in rotated_vec_files:
         os.remove(temp_file)

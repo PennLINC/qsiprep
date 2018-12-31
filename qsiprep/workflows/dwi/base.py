@@ -490,7 +490,7 @@ def init_dwi_preproc_wf(dwi_files,
                  ('dwi_files', 'dwi_files'),
                  ('b0_images', 'b0_images'),
                  ('b0_indices', 'b0_indices')]),
-            # (merge_dwis, buffernode, [('original_images', 'original_grouping')]),
+            (merge_dwis, buffernode, [('outputnode.original_files', 'original_grouping')]),
             (split_dwis, dwi_hmc_wf, [('b0_images', 'inputnode.b0_images'),
                                       ('bval_files', 'inputnode.bvals'),
                                       ('bvec_files', 'inputnode.bvecs'),
@@ -580,7 +580,7 @@ def init_dwi_preproc_wf(dwi_files,
                                      name='confounds_wf')
 
     # Carpetplot and confounds plot
-    conf_plot = pe.Node(DMRISummary(), name='conf_plot', mem_gb=mem_gb)
+    conf_plot = pe.Node(DMRISummary(), name='conf_plot', mem_gb=mem_gb['resampled'])
     ds_report_dwi_conf = pe.Node(
         DerivativesDataSink(suffix='carpetplot'),
         name='ds_report_dwi_conf', run_without_submitting=True,
@@ -591,14 +591,15 @@ def init_dwi_preproc_wf(dwi_files,
                                    ('dwi_files', 'uncorrected_dwi_files'),
                                    ('b0_ref_mask', 'mask_image')]),
         (slice_check, confounds_wf, [('slice_stats', 'inputnode.sliceqc_file')]),
-        (buffernode, confounds_wf, [('to_dwi_ref_affines', 'inputnode.hmc_affines')]),
+        (buffernode, confounds_wf, [('to_dwi_ref_affines', 'inputnode.hmc_affines'),
+                                    ('bval_files', 'inputnode.bval_files'),
+                                    ('bvec_files', 'inputnode.bvec_files'),
+                                    ('original_grouping', 'inputnode.original_files')]),
         (confounds_wf, outputnode, [('outputnode.confounds_file', 'confounds')]),
 
         (confounds_wf, conf_plot, [('outputnode.confounds_file', 'confounds_file')]),
         (slice_check, conf_plot, [('slice_stats', 'sliceqc_file')]),
-        (buffernode, conf_plot, [('bval_files', 'bval_files'),
-                                 ('bvec_files', 'orig_bvecs')]),
-                                 # ('original_grouping', 'source_image_num')
+        (buffernode, conf_plot, []),
         (conf_plot, ds_report_dwi_conf, [('out_file', 'in_file')]),
 
     ])
@@ -610,7 +611,8 @@ def init_dwi_preproc_wf(dwi_files,
                                               use_fieldwarp=(fmaps is not None or use_syn),
                                               omp_nthreads=omp_nthreads,
                                               use_compression=False,
-                                              to_mni=False
+                                              to_mni=False,
+                                              write_local_bvecs=write_local_bvecs
                                               )
         workflow.connect([
             (slice_check, transform_dwis_t1, [('imputed_images', 'inputnode.dwi_files')]),
@@ -643,7 +645,8 @@ def init_dwi_preproc_wf(dwi_files,
                                                use_fieldwarp=(fmaps is not None or use_syn),
                                                omp_nthreads=omp_nthreads,
                                                use_compression=False,
-                                               to_mni=True
+                                               to_mni=True,
+                                               write_local_bvecs=write_local_bvecs
                                                )
         workflow.connect([
             (slice_check, transform_dwis_mni, [('imputed_images', 'inputnode.dwi_files')]),
@@ -756,14 +759,6 @@ def init_dwi_derivatives_wf(output_prefix,
             name='ds_bvecs_t1',
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
-        # ds_local_bvecs_t1 = pe.Node(
-        #     DerivativesDataSink(
-        #         base_directory=output_dir,
-        #         space='T1w',
-        #         desc='preproc'),
-        #     name='ds_local_bvecs_t1',
-        #     run_without_submitting=True,
-        #     mem_gb=DEFAULT_MEMORY_MIN_GB)
         ds_t1_b0_ref = pe.Node(
             DerivativesDataSink(
                 prefix=output_prefix,
@@ -807,13 +802,23 @@ def init_dwi_derivatives_wf(output_prefix,
             (inputnode, ds_dwi_t1, [('dwi_t1', 'in_file')]),
             (inputnode, ds_bvals_t1, [('bvals_t1', 'in_file')]),
             (inputnode, ds_bvecs_t1, [('bvecs_t1', 'in_file')]),
-            # (inputnode, ds_local_bvecs_t1, [('source_file', 'source_file'),
-            #                                ('local_bvecs_t1', 'in_file')]),
             (inputnode, ds_t1_b0_ref, [('t1_b0_ref', 'in_file')]),
             (inputnode, ds_t1_b0_series, [('t1_b0_series', 'in_file')]),
             (inputnode, ds_dwi_mask_t1, [('t1_b0_series', 'in_file')]),
             ])
-
+        # If requested, write local bvecs
+        if write_local_bvecs:
+            ds_local_bvecs_t1 = pe.Node(
+                DerivativesDataSink(
+                    base_directory=output_dir,
+                    source_file=source_file,
+                    space='T1w',
+                    suffix='bvec',
+                    compress=True),
+                name='ds_local_bvecs_t1',
+                run_without_submitting=True,
+                mem_gb=DEFAULT_MEMORY_MIN_GB)
+            workflow.connect([(inputnode, ds_local_bvecs_t1, [('local_bvecs_t1', 'in_file')])])
     # Resample to template (default: MNI)
     if 'template' in output_spaces:
         # 4D DWI in t1 space
@@ -852,16 +857,6 @@ def init_dwi_derivatives_wf(output_prefix,
             name='ds_bvecs_mni',
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
-        # ds_local_bvecs_mni = pe.Node(
-        #     DerivativesDataSink(
-        #         prefix=output_prefix,
-        #         source_file=source_file,
-        #         base_directory=output_dir,
-        #         space=template,
-        #         desc='preproc'),
-        #     name='ds_local_bvecs_mni',
-        #     run_without_submitting=True,
-        #     mem_gb=DEFAULT_MEMORY_MIN_GB)
         ds_mni_b0_ref = pe.Node(
             DerivativesDataSink(
                 prefix=output_prefix,
@@ -904,13 +899,25 @@ def init_dwi_derivatives_wf(output_prefix,
             (inputnode, ds_dwi_mni, [('dwi_mni', 'in_file')]),
             (inputnode, ds_bvals_mni, [('bvals_mni', 'in_file')]),
             (inputnode, ds_bvecs_mni, [('bvecs_mni', 'in_file')]),
-            # (inputnode, ds_local_bvecs_mni, [('source_file', 'source_file'),
-            #                                 ('local_bvecs_mni', 'in_file')]),
+
             (inputnode, ds_mni_b0_ref, [('mni_b0_ref', 'in_file')]),
             (inputnode, ds_mni_b0_series, [('mni_b0_series', 'in_file')]),
             (inputnode, ds_dwi_mask_mni, [('mni_b0_series', 'in_file')]),
             ])
-
+        # Local bvecs?
+        if write_local_bvecs:
+            ds_local_bvecs_mni = pe.Node(
+                DerivativesDataSink(
+                    prefix=output_prefix,
+                    source_file=source_file,
+                    base_directory=output_dir,
+                    space=template,
+                    suffix='bvec',
+                    compress=True),
+                name='ds_local_bvecs_mni',
+                run_without_submitting=True,
+                mem_gb=DEFAULT_MEMORY_MIN_GB)
+            workflow.connect([(inputnode, ds_local_bvecs_mni, [('local_bvecs_mni', 'in_file')])])
     return workflow
 
 

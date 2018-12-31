@@ -15,7 +15,8 @@ from nipype.interfaces import afni, utility as niu, ants
 
 from fmriprep.engine import Workflow
 from ...interfaces.nilearn import Merge
-from ...interfaces.gradients import ComposeTransforms, ExtractB0s, GradientRotation
+from ...interfaces.gradients import (ComposeTransforms, ExtractB0s, GradientRotation,
+                                     LocalGradientRotation)
 from ...interfaces.itk import DisassembleTransform
 from .util import init_dwi_reference_wf
 
@@ -209,7 +210,6 @@ generating a *preprocessed DWI run in {tpl} space*.
                                         ('bvecs', 'rotated_bvecs')]),
         (inputnode, mask_tfm, [('dwi_mask', 'input_image'),
                                ('output_grid', 'reference_image')]),
-        # (mask_tfm, rotate_gradients, [('output_image', 'mask_image')]),
         (mask_tfm, outputnode, [('output_image', 'dwi_mask_mni')]),
         (compose_transforms, dwi_transform, [('out_warps', 'transforms')]),
         (inputnode, merge, [('name_source', 'header_source')]),
@@ -223,12 +223,14 @@ generating a *preprocessed DWI run in {tpl} space*.
                                          ('b0_average', 'dwi_ref_resampled')]),
     ])
 
-
-    # (dwi_transform, merge, [('out_files', 'in_files')]),
-    #        (merge, gen_final_ref, [('out_file', 'inputnode.b0_template')]),
-    #        (mask_tfm, gen_final_ref, [('output_image', 'inputnode.dwi_mask')]),
-    #
-    #        (gen_final_ref, outputnode, [('outputnode.ref_image', 'dwi_ref_resampled')]),
+    if write_local_bvecs:
+        local_grad_rotation = pe.Node(LocalGradientRotation(), name='local_grad_rotation')
+        workflow.connect([
+            (compose_transforms, local_grad_rotation, [('out_warps', 'warp_transforms')]),
+            (mask_tfm, local_grad_rotation, [('output_image', 'mask_image')]),
+            (inputnode, local_grad_rotation, [('bvec_files', 'bvec_files')]),
+            (local_grad_rotation, outputnode, [('local_bvecs', 'local_bvecs')])
+        ])
 
     return workflow
 

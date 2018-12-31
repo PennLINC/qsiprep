@@ -79,8 +79,9 @@ class dMRIPlot(object):
         if figure is None:
             figure = plt.gcf()
 
-        to_plot = ["framewise_displacement", "hmc_xcorr"]
-        nconfounds = len(to_plot)
+        to_plot = ["bval", "hmc_xcorr", "framewise_displacement"]
+        confound_names = [p for p in to_plot if p in self.confounds.columns]
+        nconfounds = len(confound_names)
         nrows = 1 + nconfounds
 
         # Create grid
@@ -94,7 +95,7 @@ class dMRIPlot(object):
         #     grid_id += 1
         palette = color_palette("husl", nconfounds)
 
-        for i, name in enumerate(to_plot):
+        for i, name in enumerate(confound_names):
             tseries = self.confounds[name]
             confoundplot(tseries, grid[grid_id], color=palette[i], name=name)
             grid_id += 1
@@ -152,7 +153,7 @@ def plot_sliceqc(slice_data, nperslice, size=(950, 800),
     ax0 = plt.subplot(gs[0])
     ax0.set_yticks([])
     ax0.set_xticks([])
-    ax0.imshow(nperslice[:, np.newaxis], interpolation='nearest', aspect='auto', cmap='viridis')
+    ax0.imshow(nperslice[:, np.newaxis], interpolation='nearest', aspect='auto', cmap='plasma')
     ax0.grid(False)
     ax0.spines["left"].set_visible(False)
     ax0.spines["bottom"].set_color('none')
@@ -160,7 +161,7 @@ def plot_sliceqc(slice_data, nperslice, size=(950, 800),
 
     # Carpet plot
     ax1 = plt.subplot(gs[1])
-    ax1.imshow(slice_data, interpolation='nearest', aspect='auto', cmap='gray')
+    ax1.imshow(slice_data, interpolation='nearest', aspect='auto', cmap='viridis')
     ax1.grid(False)
     ax1.set_yticks([])
     ax1.set_yticklabels([])

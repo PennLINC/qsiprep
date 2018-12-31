@@ -71,6 +71,8 @@ def init_merge_and_denoise_wf(dwi_denoise_window,
             bvecs from merged images
         noise_image
             image(s) created by ``dwidenoise``
+        original_files
+            names of the original files for each volume
     """
 
     workflow = Workflow(name=name)
@@ -80,7 +82,7 @@ def init_merge_and_denoise_wf(dwi_denoise_window,
 
     outputnode = pe.Node(
         niu.IdentityInterface(fields=[
-            'merged_image', 'merged_bval', 'merged_bvec', 'noise_image']),
+            'merged_image', 'merged_bval', 'merged_bvec', 'noise_image', 'original_files']),
         name='outputnode')
 
     conform_dwis = pe.MapNode(ConformDwi(), iterfield=['dwi_file'], name="conform_dwis")
@@ -91,7 +93,8 @@ def init_merge_and_denoise_wf(dwi_denoise_window,
         (conform_dwis, merge_dwis, [('bval_file', 'bval_files'),
                                     ('bvec_file', 'bvec_files')]),
         (merge_dwis, outputnode, [('out_bval', 'merged_bval'),
-                                  ('out_bvec', 'merged_bvec')])
+                                  ('out_bvec', 'merged_bvec'),
+                                  ('original_images', 'original_files')])
     ])
 
     if dwi_denoise_window > 0:

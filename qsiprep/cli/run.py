@@ -17,6 +17,7 @@ from argparse import ArgumentParser
 from argparse import RawTextHelpFormatter
 from multiprocessing import cpu_count
 from time import strftime
+warnings.filterwarnings("ignore", category=ImportWarning)
 
 logging.addLevelName(25,
                      'IMPORTANT')  # Add a new level between INFO and WARNING

@@ -18,6 +18,7 @@ from nipype.interfaces.base import (
     traits, TraitedSpec, BaseInterfaceInputSpec, File, Directory, isdefined,
     SimpleInterface, InputMultiObject
 )
+from .gradients import concatenate_bvecs, concatenate_bvals
 
 from .niworkflows import dMRIPlot
 
@@ -29,6 +30,8 @@ class GatherConfoundsInputSpec(BaseInterfaceInputSpec):
     motion = File(exists=True, desc='input motion parameters')
     sliceqc_file = File(exists=True, desc='output from sliceqc')
     original_files = traits.List(desc='original grouping of each volume')
+    original_bvecs = InputMultiObject(File(exists=True), desc='original bvec files')
+    original_bvals = InputMultiObject(File(exists=True), desc='originals bval files')
 
 
 class GatherConfoundsOutputSpec(TraitedSpec):
@@ -77,6 +80,8 @@ class GatherConfounds(SimpleInterface):
             sliceqc_file=self.inputs.sliceqc_file,
             motion=self.inputs.motion,
             original_files=self.inputs.original_files,
+            original_bvals=concatenate_bvals(self.inputs.original_bvals, None),
+            original_bvecs=concatenate_bvecs(self.inputs.original_bvecs),
             newpath=runtime.cwd,
         )
         self._results['confounds_file'] = combined_out
@@ -85,7 +90,7 @@ class GatherConfounds(SimpleInterface):
 
 
 def _gather_confounds(fdisp=None, motion=None, sliceqc_file=None, newpath=None,
-                      original_files=None):
+                      original_files=None, original_bvals=None, original_bvecs=None):
     """
     Load confounds from the filenames, concatenate together horizontally
     and save new file.
@@ -158,9 +163,20 @@ def _gather_confounds(fdisp=None, motion=None, sliceqc_file=None, newpath=None,
     if newpath is None:
         newpath = os.getcwd()
 
-    if original_files is not None:
-        confounds_data['original_file'] = np.array(original_files)
+    if original_files is not None and isdefined(original_files):
+        file_array = np.array(original_files)
+        unique_files, filenums = np.unique(file_array, return_inverse=True)
+        confounds_data['original_file'] = filenums
+
         confounds_list += ['original_file']
+
+    if original_bvecs is not None and isdefined(original_bvecs):
+        confounds_data['grad_x'] = original_bvecs[:, 0]
+        confounds_data['grad_y'] = original_bvecs[:, 1]
+        confounds_data['grad_z'] = original_bvecs[:, 2]
+
+    if original_bvals is not None and isdefined(original_bvals):
+        confounds_data['bval'] = original_bvals
 
     combined_out = os.path.join(newpath, 'confounds.tsv')
     confounds_data.to_csv(combined_out, sep='\t', index=False, na_rep='n/a')
@@ -197,9 +213,8 @@ class DMRISummary(SimpleInterface):
         self._results['out_file'] = os.path.join(runtime.cwd, 'dmriplot.svg')
 
         dataframe = pd.read_csv(
-            self.inputs.confounds_file,
-            sep="\t", index_col=None, dtype='float32',
-            na_filter=True, na_values='n/a')
+            self.inputs.confounds_file, dtype='float32',
+            sep="\t", index_col=None, na_filter=True, na_values='n/a')
 
         fig = dMRIPlot(
             sliceqc_file=self.inputs.sliceqc_file,
