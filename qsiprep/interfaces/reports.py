@@ -12,15 +12,21 @@ Interfaces to generate reportlets
 import os
 import time
 import re
-
+from mpl_toolkits.mplot3d import Axes3D
+import seaborn as sns
+import matplotlib.pyplot as plt
+import numpy as np
 from collections import Counter
 from nipype.interfaces.base import (
     traits, TraitedSpec, BaseInterfaceInputSpec,
-    File, Directory, InputMultiPath, Str, isdefined,
+    File, Directory, InputMultiPath, InputMultiObject, Str, isdefined,
     SimpleInterface)
 from nipype.interfaces import freesurfer as fs
 from fmriprep.interfaces import FunctionalSummary
 from .bids import BIDS_NAME
+from .gradients import concatenate_bvals, concatenate_bvecs
+import matplotlib.pyplot as plt
+from matplotlib import animation
 
 SUBJECT_TEMPLATE = """\t<ul class="elem-desc">
 \t\t<li>Subject ID: {subject_id}</li>
@@ -208,3 +214,102 @@ class AboutSummary(SummaryInterface):
         return ABOUT_TEMPLATE.format(version=self.inputs.version,
                                      command=self.inputs.command,
                                      date=time.strftime("%Y-%m-%d %H:%M:%S %z"))
+
+
+class GradientPlotInputSpec(BaseInterfaceInputSpec):
+    orig_bvec_files = InputMultiObject(File(exists=True), mandatory=True,
+                                       desc='bvecs from DWISplit')
+    orig_bval_files = InputMultiObject(File(exists=True), mandatory=True,
+                                       desc='bvals from DWISplit')
+    source_files = traits.List(desc='source file for each gradient')
+    final_bvec_file = File(exists=True, desc='bval file')
+
+
+class GradientPlotOutputSpec(SummaryOutputSpec):
+    plot_file = File(exists=True)
+
+
+class GradientPlot(SummaryInterface):
+    input_spec = GradientPlotInputSpec
+    output_spec = GradientPlotOutputSpec
+
+    def _run_interface(self, runtime):
+        outfile = os.path.join(runtime.cwd, "bvec_plot.gif")
+        sns.set_style("whitegrid")
+        sns.set_context("paper", font_scale=0.8)
+
+        orig_bvecs = concatenate_bvecs(self.inputs.orig_bvec_files)
+        bvals = concatenate_bvals(self.inputs.orig_bval_files, None)
+        file_array = np.array(self.inputs.source_files)
+        unique_files, filenums = np.unique(file_array, return_inverse=True)
+
+        # Plot the final bvecs if provided
+        final_bvecs = None
+        if isdefined(self.inputs.final_bvec_file):
+            final_bvecs = np.loadtxt(self.inputs.final_bvec_file).T
+
+        plot_gradients(bvals, orig_bvecs, filenums, outfile, final_bvecs)
+        self._results['plot_file'] = outfile
+        return runtime
+
+
+def plot_gradients(bvals, orig_bvecs, source_filenums, output_fname, final_bvecs=None,
+                   frames=60):
+    qrads = np.sqrt(bvals)
+    qvecs = (qrads[:, np.newaxis] * orig_bvecs)
+    qx, qy, qz = qvecs.T
+    maxvals = qvecs.max(0)
+    minvals = qvecs.min(0)
+
+    def add_lines(ax):
+        labels = ['L', 'P', 'S']
+        for axnum in range(3):
+            minvec = np.zeros(3)
+            maxvec = np.zeros(3)
+            minvec[axnum] = minvals[axnum]
+            maxvec[axnum] = maxvals[axnum]
+            x, y, z = np.column_stack([minvec, maxvec])
+            ax.plot(x, y, z, color="k")
+            txt_pos = maxvec + 5
+            ax.text(txt_pos[0], txt_pos[1], txt_pos[2], labels[axnum], size=8,
+                    zorder=1, color='k')
+
+    if final_bvecs is not None:
+        fqx, fqy, fqz = (qrads[:, np.newaxis] * final_bvecs).T
+        fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(10, 5),
+                                 subplot_kw={"aspect": "equal", "projection": "3d"})
+        orig_ax = axes[0]
+        final_ax = axes[1]
+        axes_list = [orig_ax, final_ax]
+        final_ax.scatter(fqx, fqy, fqz, c=source_filenums, marker="+")
+        orig_ax.scatter(qx, qy, qz, c=source_filenums, marker="+")
+        final_ax.axis('off')
+        add_lines(final_ax)
+        final_ax.set_title('After Preprocessing')
+    else:
+        fig, orig_ax = plt.subplots(nrows=1, ncols=1, figsize=(10, 5),
+                                    subplot_kw={"aspect": "equal", "projection": "3d"})
+        axes_list = [orig_ax]
+        orig_ax.scatter(qx, qy, qz, c=source_filenums, marker="+")
+    orig_ax.axis('off')
+    orig_ax.set_title("Original Scheme")
+    add_lines(orig_ax)
+    # Animate rotating the axes
+    rotate_amount = np.ones(frames) * 180 / frames
+    stay_put = np.zeros_like(rotate_amount)
+    rotate_azim = np.concatenate([rotate_amount, stay_put, -rotate_amount, stay_put])
+    rotate_elev = np.concatenate([stay_put, rotate_amount, stay_put, -rotate_amount])
+    plt.tight_layout()
+
+    def rotate(i):
+        for ax in axes_list:
+            ax.azim += rotate_azim[i]
+            ax.elev += rotate_elev[i]
+        return tuple(axes_list)
+
+    anim = animation.FuncAnimation(fig, rotate, frames=frames*4,
+                                   interval=20, blit=False)
+    anim.save(output_fname, writer='imagemagick', fps=32)
+
+    plt.close(fig)
+    fig = None

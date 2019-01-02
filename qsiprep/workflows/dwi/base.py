@@ -20,7 +20,7 @@ from nipype.interfaces import utility as niu
 
 from ...interfaces import DerivativesDataSink
 
-from ...interfaces.reports import DiffusionSummary
+from ...interfaces.reports import DiffusionSummary, GradientPlot
 from ...interfaces.images import SplitDWIs, ConcatRPESplits
 from ...interfaces.gradients import SliceQC
 from ...interfaces.confounds import DMRISummary
@@ -528,6 +528,12 @@ def init_dwi_preproc_wf(dwi_files,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
         run_without_submitting=True)
 
+    gradient_plot = pe.Node(GradientPlot(), name='gradient_plot', run_without_submitting=True)
+    ds_report_gradients = pe.Node(
+        DerivativesDataSink(suffix='sampling_scheme'),
+        name='ds_report_gradients', run_without_submitting=True,
+        mem_gb=DEFAULT_MEMORY_MIN_GB)
+
     # CONNECT TO DERIVATIVES #####################
     dwi_derivatives_wf = init_dwi_derivatives_wf(
         output_prefix=output_prefix,
@@ -601,6 +607,10 @@ def init_dwi_preproc_wf(dwi_files,
         (slice_check, conf_plot, [('slice_stats', 'sliceqc_file')]),
         (buffernode, conf_plot, []),
         (conf_plot, ds_report_dwi_conf, [('out_file', 'in_file')]),
+        (buffernode, gradient_plot, [('bvec_files', 'orig_bvec_files'),
+                                     ('bval_files', 'orig_bval_files'),
+                                     ('original_grouping', 'source_files')]),
+        (gradient_plot, ds_report_gradients, [('plot_file', 'in_file')])
 
     ])
 
@@ -635,7 +645,8 @@ def init_dwi_preproc_wf(dwi_files,
                                              ('outputnode.local_bvecs', 'local_bvecs_t1'),
                                              ('outputnode.dwi_mask_resampled', 'dwi_mask_t1'),
                                              ('outputnode.b0_series', 't1_b0_series'),
-                                             ('outputnode.dwi_ref_resampled', 't1_b0_ref')])
+                                             ('outputnode.dwi_ref_resampled', 't1_b0_ref')]),
+            (outputnode, gradient_plot, [('bvecs_t1', 'final_bvec_file')])
         ])
 
     if "template" in output_spaces:
@@ -671,6 +682,8 @@ def init_dwi_preproc_wf(dwi_files,
                                               ('outputnode.local_bvecs', 'local_bvecs_mni'),
                                               ('outputnode.dwi_ref_resampled', 'mni_b0_ref')])
         ])
+        if "T1w" not in output_spaces:
+            workflow.connect([(outputnode, gradient_plot, [('bvecs_mni', 'final_bvec_file')])])
 
     # REPORTING ############################################################
     ds_report_summary = pe.Node(

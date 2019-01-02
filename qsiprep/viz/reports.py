@@ -32,7 +32,8 @@ class Reportlet(Element):
     """
     A reportlet has title, description and a list of graphical components
     """
-    def __init__(self, name, file_pattern=None, title=None, description=None, raw=False):
+    def __init__(self, name, imgtype=None, file_pattern=None, title=None, description=None,
+                 raw=False):
         self.name = name
         self.file_pattern = re.compile(file_pattern)
         self.title = title
@@ -40,6 +41,7 @@ class Reportlet(Element):
         self.source_files = []
         self.contents = []
         self.raw = raw
+        self.imgtype = imgtype
 
 
 class SubReport(Element):
@@ -94,7 +96,7 @@ class Report(object):
                         if ext == 'html':
                             with open(src) as fp:
                                 contents = fp.read().strip()
-                        elif ext == 'svg':
+                        elif ext in ('svg', 'gif'):
                             fbase = Path(src).name
                             copyfile(src, str(svg_dir / fbase),
                                      copy=True, use_hardlink=True)

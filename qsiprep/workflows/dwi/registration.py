@@ -124,7 +124,7 @@ def init_b0_to_anat_registration_wf(mem_gb=3, omp_nthreads=1, write_report=True,
 
     if write_report:
         ds_report_reg = pe.Node(
-            DerivativesDataSink(),
+            DerivativesDataSink(suffix="coreg"),
             name='ds_report_reg', run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
 

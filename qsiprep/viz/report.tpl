@@ -90,7 +90,7 @@ div#boilerplate pre {
                         {% for content in elem.contents %}
                             {% if elem.raw %}{{ content }}{% else %}
                             <div class="elem-image">
-                            <object class="svg-reportlet" type="image/svg+xml" data="./{{ content }}">
+                            <object class="svg-reportlet" type="image/{{ elem.imgtype }}+xml" data="./{{ content }}">
                             Problem loading figure {{ content }}. If the link below works, please try reloading the report in your browser.</object>
                             </div>
                             <div class="elem-filename">

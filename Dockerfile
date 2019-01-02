@@ -153,6 +153,7 @@ RUN mkdir /opt/cmake \
            gcc \
            make \
            zlib1g-dev \
+           imagemagick \
     && mkdir -p /tmp/ants/build \
     && git config --global url."https://".insteadOf git:// \
     && git clone https://github.com/ANTsX/ANTs.git /tmp/ants/source \

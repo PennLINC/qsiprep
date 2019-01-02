@@ -25,19 +25,22 @@
                 "name": "anat_preproc/t1_brain_seg",
                 "file_pattern": "anat/.*seg_brainmask",
                 "title": "Brain mask and brain tissue segmentation of the T1w",
-                "description": "This panel shows the template T1-weighted image (if several T1w images were found), with contours delineating the detected brain mask and brain tissue segmentations."
+                "description": "This panel shows the template T1-weighted image (if several T1w images were found), with contours delineating the detected brain mask and brain tissue segmentations.",
+                "imgtype": "svg"
             },
             {
                 "name": "anat_preproc/t1_2_mni",
                 "file_pattern": "anat/.*t1_2_mni",
                 "title": "T1 to MNI registration",
-                "description": "Nonlinear mapping of the T1w image into MNI space. Hover on the panel with the mouse to transition between both spaces."
+                "description": "Nonlinear mapping of the T1w image into MNI space. Hover on the panel with the mouse to transition between both spaces.",
+                "imgtype": "svg"
             },
             {
                 "name": "anat_preproc/reconall",
                 "file_pattern": "anat/.*reconall",
                 "title": "Surface reconstruction",
-                "description": "Surfaces (white and pial) reconstructed with FreeSurfer (<code>recon-all</code>) overlaid on the participant's T1w template."
+                "description": "Surfaces (white and pial) reconstructed with FreeSurfer (<code>recon-all</code>) overlaid on the participant's T1w template.",
+                "imgtype": "svg"
             }
 
         ]
@@ -50,7 +53,8 @@
                 "name": "fmap/magnitude_mask",
                 "file_pattern": "fmap/.*fmap_mask",
                 "title": "Skull stripped magnitude image",
-                "description": "Brain extraction of the magnitude image from the fieldmap"
+                "description": "Brain extraction of the magnitude image from the fieldmap",
+                "imgtype": "svg"
             }
         ]
     },
@@ -64,6 +68,13 @@
                 "raw": true
             },
             {
+                "name": "epi/sampling_scheme",
+                "file_pattern": "dwi/.*sampling_scheme",
+                "title": "DWI Sampling Scheme",
+                "description": "Animation of the DWI sampling scheme. Each separate scan is its own color.",
+                "imgtype": "gif"
+            },
+            {
                 "name": "epi/validation",
                 "file_pattern": "dwi/.*_validation\\.",
                 "raw": true
@@ -72,61 +83,43 @@
                 "name": "epi/fmpa_reg",
                 "file_pattern": "dwi/.*fmap_reg\\.",
                 "title": "Fieldmap to EPI registration",
-                "description": "Results of affine coregistration between the magnitude image of the fieldmap and the reference EPI image"
+                "description": "Results of affine coregistration between the magnitude image of the fieldmap and the reference EPI image",
+                "imgtype": "svg"
             },
             {
-                "name": "epi/fmpa_reg",
+                "name": "epi/fmap_reg",
                 "file_pattern": "dwi/.*fmap_reg_vsm\\.",
                 "title": "Fieldmap",
-                "description": "Overlaid on the reference EPI image"
+                "description": "Overlaid on the reference EPI image",
+                "imgtype": "svg"
             },
             {
                 "name": "epi/unwarp",
                 "file_pattern": "dwi/.*_sdc_.*\\.",
                 "title": "Susceptibility distortion correction",
-                "description": "Results of performing susceptibility distortion correction (SDC) on the EPI"
+                "description": "Results of performing susceptibility distortion correction (SDC) on the EPI",
+                "imgtype": "svg"
             },
             {
                 "name": "epi/sdc_syn",
                 "file_pattern": "dwi/.*_forcedsyn",
                 "title": "Experimental fieldmap-less susceptibility distortion correction",
-                "description": "The dataset contained some fieldmap information, but the argument <code>--force-syn</code> was used. The higher-priority SDC method was used. Here, we show the results of performing SyN-based SDC on the EPI for comparison."
-            },
-            {
-                "name": "epi/rois",
-                "file_pattern": "dwi/.*_rois",
-                "title": "ROIs in BOLD space",
-                "description": "Brain mask calculated on the BOLD signal (red contour), along with the masks used for a/tCompCor.<br />The aCompCor mask (magenta contour) is a conservative CSF and white-matter mask for extracting physiological and movement confounds. <br />The fCompCor mask (blue contour) contains the top 5% most variable voxels within a heavily-eroded brain-mask."
-            },
-            {
-                "name": "epi_mean_t1_registration/flirt",
-                "file_pattern": "dwi/.*_flirtnobbr",
-                "title": "EPI to T1 registration",
-                "description": "FSL <code>flirt</code> was used to generate transformations from EPI space to T1 Space - BBR refinement rejected"
-            },
-            {
-                "name": "epi_mean_t1_registration/coreg",
-                "file_pattern": "dwi/.*_coreg",
-                "title": "EPI to T1 registration",
-                "description": "<code>mri_coreg</code> (FreeSurfer) was used to generate transformations from EPI space to T1 Space - <code>bbregister</code> refinement rejected"
+                "description": "The dataset contained some fieldmap information, but the argument <code>--force-syn</code> was used. The higher-priority SDC method was used. Here, we show the results of performing SyN-based SDC on the EPI for comparison.",
+                "imgtype": "svg"
             },
             {
                 "name": "epi_mean_t1_registration/flirtbbr",
-                "file_pattern": "dwi/.*_flirtbbr",
-                "title": "EPI to T1 registration",
-                "description": "FSL <code>flirt</code> was used to generate transformations from EPI-space to T1w-space - The white matter mask calculated with FSL <code>fast</code> (brain tissue segmentation) was used for BBR"
-            },
-            {
-                "name": "epi_mean_t1_registration/bbregister",
-                "file_pattern": "dwi/.*_bbregister",
-                "title": "EPI to T1 registration",
-                "description": "<code>bbregister</code> was used to generate transformations from EPI-space to T1w-space"
+                "file_pattern": "dwi/.*_coreg",
+                "title": "b0 to T1 registration",
+                "description": "<code>antsRegistration</code> was used to generate transformations from b0I-space to T1w-space",
+                "imgtype": "svg"
             },
             {
                 "name": "epi/carpetplot",
                 "file_pattern": "dwi/.*carpetplot",
                 "title": "BOLD Summary",
-                "description": "Summary statistics are plotted, which may reveal trends or artifacts in the BOLD data. Global signals calculated within the whole-brain (GS), within the white-matter (WM) and within cerebro-spinal fluid (CSF) show the mean BOLD signal in their corresponding masks. DVARS and FD show the standardized DVARS and framewise-displacement measures for each time point.<br />A carpet plot shows the time series for all voxels within the brain mask. Voxels are grouped into cortical (blue), and subcortical (orange) gray matter, cerebellum (green) and white matter and CSF (red), indicated by the color map on the left-hand side."
+                "description": "Summary statistics are plotted, which may reveal trends or artifacts in the BOLD data. Global signals calculated within the whole-brain (GS), within the white-matter (WM) and within cerebro-spinal fluid (CSF) show the mean BOLD signal in their corresponding masks. DVARS and FD show the standardized DVARS and framewise-displacement measures for each time point.<br />A carpet plot shows the time series for all voxels within the brain mask. Voxels are grouped into cortical (blue), and subcortical (orange) gray matter, cerebellum (green) and white matter and CSF (red), indicated by the color map on the left-hand side.",
+                "imgtype": "svg"
             }
         ]
     },
