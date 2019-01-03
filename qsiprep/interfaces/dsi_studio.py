@@ -7,6 +7,7 @@ from nipype.interfaces.base import (TraitedSpec, CommandLineInputSpec,
 import os
 from glob import glob
 from nipype.interfaces.utility import Function
+from nipype.utils.filemanip import fname_presuffix
 
 
 # Step 1 from DSI Studio, importing DICOM files or nifti
@@ -38,6 +39,8 @@ class DSIStudioCreateSrcInputSpec(CommandLineInputSpec):
     subject_id = traits.Str("data")
     output_src = File(
         name_template="%s.src.gz",
+        default='',
+        usedefault=True,
         desc="Output file (.src.gz)",
         argstr="--output=%s",
         name_source="subject_id",
@@ -63,9 +66,20 @@ class DSIStudioCreateSrc(CommandLine):
     output_spec = DSIStudioCreateSrcOutputSpec
     _cmd = "dsi_studio --action=src "
 
+    def _format_arg(self, name, spec, value):
+        if name == "output_src":
+            if not self.inputs.output_src:
+                return '--output=' + self._gen_filename()
+            return '--output=' + self.inputs.output_src
+        return super(DSIStudioCreateSrc, self)._format_arg(name, spec, value)
+
     def _gen_filename(self):
         cwd = os.getcwd()
-        return os.path.join(cwd, self.inputs.subject_id + ".src.gz")
+        input_fname = self.inputs.input_dicom_dir if isdefined(self.inputs.input_dicom_dir) \
+            else self.inputs.input_nifti_file
+        if not isdefined(input_fname):
+            raise Exception()
+        return fname_presuffix(input_fname, newpath=cwd, suffix=".src.gz", use_ext=False)
 
     def _list_outputs(self):
         outputs = self.output_spec().get()
@@ -158,11 +172,11 @@ class DSIStudioDSIReconstructionInputSpec(DSIStudioReconstructionInputSpec):
 class DSIStudioReconstruction(CommandLine):
     input_spec = DSIStudioReconstructionInputSpec
     output_spec = DSIStudioReconstructionOutputSpec
-    cmd = "dsi_studio --action=rec "
+    _cmd = "dsi_studio --action=rec "
 
 
 class DSIStudioDTIReconstruction(DSIStudioReconstruction):
-    cmd = "dsi_studio --action=rec --method=1"
+    _cmd = "dsi_studio --action=rec --method=1"
     input_spec = DSIStudioReconstructionInputSpec
 
     def _list_outputs(self):
@@ -181,7 +195,7 @@ class DSIStudioDTIReconstruction(DSIStudioReconstruction):
 
 
 class DSIStudioGQIReconstruction(DSIStudioReconstruction):
-    cmd = "dsi_studio --action=rec --method=4"
+    _cmd = "dsi_studio --action=rec --method=4"
     input_spec = DSIStudioGQIReconstructionInputSpec
 
     def _list_outputs(self):
@@ -222,7 +236,7 @@ class DSIStudioExportOutputSpec(CommandLineInputSpec):
 class DSIStudioExport(CommandLine):
     input_spec = DSIStudioExportInputSpec
     output_spec = DSIStudioExportOutputSpec
-    cmd = "dsi_studio --action=exp"
+    _cmd = "dsi_studio --action=exp"
 
     def _list_outputs(self):
         outputs = self.output_spec().get()
@@ -235,51 +249,6 @@ class DSIStudioExport(CommandLine):
                 outputs[expected + "_file"] = os.path.abspath(matches[0])
             print(outputs)
         return outputs
-
-
-def compute_mda(fib_file):
-    import gzip
-    from scipy.io.matlab import loadmat
-    import re
-    import numpy as np
-    import os
-    if fib_file.endswith(".gz"):
-        with gzip.open(fib_file, "rb") as f:
-            m = loadmat(f)
-    elif fib_file.endswith(".fib") or fib_file.endswith(".mat"):
-        m = loadmat(fib_file)
-    else:
-        raise ValueError("Unrecognized file type")
-    odf_vars = [k for k in m.keys() if re.match("odf\\d+", k)]
-    mdas = []
-    msk = m["gfa"].squeeze() > 0
-    for n in range(len(odf_vars)):
-        varname = "odf%d" % n
-        odfs = m[varname]
-        odfs = odfs / odfs.sum(0)
-        mu = np.power(odfs.min(0) / odfs.max(0), 2. / 3)
-        mdas.append((1 - mu) / np.sqrt(1 + 2 * mu**2))
-    # Was a mask used?
-    mda = np.concatenate(mdas)
-    mda = mda[np.isfinite(mda)]
-    output = np.zeros_like(m['fa0'].squeeze())
-    output[msk] = mda
-
-    voxel_size = m['voxel_size'].squeeze()
-    shape = m['dimension'].squeeze()
-    output_aff = np.eye(4)
-    output_aff[(0, 1, 2), (0, 1, 2)] = voxel_size
-
-    import nibabel as nib
-    nib.Nifti1Image(
-        output.reshape(shape, order="F")[::-1, ::-1, :],
-        output_aff).to_filename("MDA.nii.gz")
-    import os
-    return os.path.abspath("MDA.nii.gz")
-
-
-mda_from_fib = Function(
-    input_names=["fib_file"], output_names=["mda_file"], function=compute_mda)
 
 
 class DSIStudioConnectivityMatrixInputSpec(CommandLineInputSpec):
@@ -321,7 +290,7 @@ class DSIStudioConnectivityMatrixOutputSpec(TraitedSpec):
 class DSIStudioConnectivityMatrix(CommandLine):
     input_spec = DSIStudioConnectivityMatrixInputSpec
     output_spec = DSIStudioConnectivityMatrixOutputSpec
-    cmd = "dsi_studio --action=ana "
+    _cmd = "dsi_studio --action=ana "
 
     def _list_outputs(self):
         outputs = self.output_spec().get()
@@ -363,7 +332,7 @@ class DSIStudioTrackingOutputSpec(TraitedSpec):
 class DSIStudioTracking(CommandLine):
     input_spec = DSIStudioTrackingInputSpec
     output_spec = DSIStudioTrackingOutputSpec
-    cmd = "dsi_studio --action=trk"
+    _cmd = "dsi_studio --action=trk"
 
     def _list_outputs(self):
         outputs = self.output_spec().get()

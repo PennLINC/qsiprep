@@ -652,8 +652,9 @@ def local_bvec_rotation(original_bvecs, warp_transforms, mask_image, runtime, ou
                                                                  out_fname)
         commands.append(rotate_cmd)
         rotated_vec_files.append(out_fname)
-    concatenated = np.stack([nb.load(img).get_data() for img in rotated_vec_files], -1)
-    nb.Nifti1Image(concatenated.astype('<f4'), mask_img.affine).to_filename(output_fname)
+    concatenated = np.stack(
+        [nb.load(img, mmap=False).get_data().astype("<f4") for img in rotated_vec_files], -1)
+    nb.Nifti1Image(concatenated, mask_img.affine, mask_img.header).to_filename(output_fname)
     for temp_file in rotated_vec_files:
         os.remove(temp_file)
     return rotated_vec_files, commands

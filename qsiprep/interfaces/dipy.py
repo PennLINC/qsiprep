@@ -310,10 +310,6 @@ def estimate_signal_targets(model_name, gtab, model_data, mask_array, cutoff=50)
     phi = brainsuite_shore_basis(full_model.radial_order, full_model.zeta, gtab, full_model.tau)
     predictions = []
     for loo in range(1, num_grads):
-        # Create masks for training and testing
-        mask = np.ones_like(full_bvals) > 0
-        # Remove the sample itself
-        mask[loo] = False
         # The model is symmetric, so remove any samples that are too close or the opposite
         distances = np.sqrt(np.sum((scaled_gradients - scaled_gradients[loo]) ** 2, axis=1))
         distances_flip = np.sqrt(np.sum((-scaled_gradients + scaled_gradients[loo]) ** 2, axis=1))
@@ -323,7 +319,7 @@ def estimate_signal_targets(model_name, gtab, model_data, mask_array, cutoff=50)
         training_bvals = full_bvals[training_mask]
         training_bvecs = full_bvecs[training_mask]
         training_gtab = gradient_table(bvals=training_bvals, bvecs=training_bvecs)
-        training_data = model_data[..., mask]
+        training_data = model_data[..., training_mask]
 
         LOGGER.info("\tleaving out %d: training with %d samples", loo, training_mask.sum())
         iter_model = get_model(training_gtab)

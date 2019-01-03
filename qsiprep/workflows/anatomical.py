@@ -692,7 +692,7 @@ The T1w-reference was then skull-stripped using `antsBrainExtraction.sh`
     rigid_acpc_align.inputs.sampling_strategy = ['Random']
     rigid_acpc_align.inputs.sampling_percentage = [0.25]
     rigid_acpc_align.inputs.radius_or_number_of_bins = [32]
-    rigid_acpc_align.inputs.initial_moving_transform_com = 0
+    rigid_acpc_align.inputs.initial_moving_transform_com = 1
     rigid_acpc_align.inputs.interpolation = 'LanczosWindowedSinc'
     rigid_acpc_align.inputs.dimension = 3
     rigid_acpc_align.inputs.winsorize_lower_quantile = 0.025

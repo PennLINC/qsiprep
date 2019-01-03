@@ -240,8 +240,11 @@ class GradientPlot(SummaryInterface):
 
         orig_bvecs = concatenate_bvecs(self.inputs.orig_bvec_files)
         bvals = concatenate_bvals(self.inputs.orig_bval_files, None)
-        file_array = np.array(self.inputs.source_files)
-        unique_files, filenums = np.unique(file_array, return_inverse=True)
+        if isdefined(self.inputs.source_files):
+            file_array = np.array(self.inputs.source_files)
+            unique_files, filenums = np.unique(file_array, return_inverse=True)
+        else:
+            filenums = np.ones_like(bvals)
 
         # Plot the final bvecs if provided
         final_bvecs = None

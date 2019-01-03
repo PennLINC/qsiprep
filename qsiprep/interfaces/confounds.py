@@ -164,10 +164,8 @@ def _gather_confounds(fdisp=None, motion=None, sliceqc_file=None, newpath=None,
         newpath = os.getcwd()
 
     if original_files is not None and isdefined(original_files):
-        file_array = np.array(original_files)
-        unique_files, filenums = np.unique(file_array, return_inverse=True)
-        confounds_data['original_file'] = filenums
-
+        file_array = np.array([os.path.split(fname)[1] for fname in original_files])
+        confounds_data['original_file'] = file_array
         confounds_list += ['original_file']
 
     if original_bvecs is not None and isdefined(original_bvecs):

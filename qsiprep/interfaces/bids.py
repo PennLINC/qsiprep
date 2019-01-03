@@ -30,19 +30,102 @@ from nipype import logging
 from nipype.interfaces.base import (
     traits, isdefined, TraitedSpec, BaseInterfaceInputSpec,
     File, Directory, InputMultiPath, OutputMultiPath, Str,
-    SimpleInterface
+    SimpleInterface, InputMultiObject, OutputMultiObject
 )
-from nipype.utils.filemanip import copyfile
+from nipype.utils.filemanip import copyfile, split_filename
+from glob import glob
 
 LOGGER = logging.getLogger('nipype.interface')
 BIDS_NAME = re.compile(
     '^(.*\/)?(?P<subject_id>sub-[a-zA-Z0-9]+)(_(?P<session_id>ses-[a-zA-Z0-9]+))?'
     '(_(?P<task_id>task-[a-zA-Z0-9]+))?(_(?P<acq_id>acq-[a-zA-Z0-9]+))?'
+    '(_(?P<space_id>space-[a-zA-Z0-9]+))?'
     '(_(?P<rec_id>rec-[a-zA-Z0-9]+))?(_(?P<run_id>run-[a-zA-Z0-9]+))?')
 
 
 class FileNotFoundError(IOError):
     pass
+
+
+class QsiprepOutputInputSpec(BaseInterfaceInputSpec):
+    in_file = File(mandatory=True, desc='input file, part of a qsiprep output tree')
+
+
+class QsiprepOutputOutputSpec(TraitedSpec):
+    subject_id = traits.Str()
+    session_id = traits.Str()
+    space_id = traits.Str()
+    acq_id = traits.Str()
+    rec_id = traits.Str()
+    run_id = traits.Str()
+    bval_file = File(exists=True)
+    bvec_file = File(exists=True)
+    confounds_file = File(exists=True)
+    dwi_file = File(exists=True)
+    local_bvec_file = File()
+    mask_file = File()
+    t1_tpms = OutputMultiObject(File(exists=True))
+    t1_seg = File(exists=True)
+    t1_brain = File(exists=True)
+    t1_mask = File(exists=True)
+    t1_2_mni_forward_transform = File(exists=True)
+    t1_2_mni_reverse_transform = File(exists=True)
+    mni_mask = File(exists=True)
+    mni_seg = File(exists=True)
+    mni_tpms = OutputMultiObject(File(exists=True))
+    mni_brain = File(exists=True)
+
+
+class QsiprepOutput(SimpleInterface):
+    """
+    """
+    input_spec = QsiprepOutputInputSpec
+    output_spec = QsiprepOutputOutputSpec
+
+    def _run_interface(self, runtime):
+        match = BIDS_NAME.search(self.inputs.in_file)
+        params = match.groupdict() if match is not None else {}
+        self._results = {key: val for key, val in list(params.items())
+                         if val is not None}
+        space = self._results.get("space_id")
+        if space is None:
+            raise Exception("Unable to detect space of %s" % self.inputs.in_file)
+        # Find the additional files
+        out_root, fname, ext = split_filename(self.inputs.in_file)
+        self._results['bval_file'] = op.join(out_root, fname+".bval")
+        self._results['bvec_file'] = op.join(out_root, fname+".bvec")
+        confounds_file = glob(op.join(out_root, "*confounds.tsv"))
+        self._results['confounds_file'] = confounds_file[0]
+        local_bvecs_file = glob(op.join(out_root, fname[:-3]+'bvec.nii*'))
+        if len(local_bvecs_file):
+            self._results['local_bvec_file'] = local_bvecs_file[0]
+        self._results['dwi_file'] = self.inputs.in_file
+
+        # Get the anatomical data
+        path_parts = out_root.split(op.sep)[:-1]  # remove "dwi"
+        # Anat is above ses
+        if path_parts[-1].startswith('ses'):
+            path_parts.pop()
+        qp_root = op.sep.join(path_parts)
+        anat_root = op.join(qp_root, 'anat')
+        sub = self._results['subject_id']
+        self._results['t1_tpms'] = glob(anat_root + "/%s_label-*_probseg.nii*" % sub)
+        self._results['mni_tpms'] = glob(
+            anat_root + "/%s_space-MNI152NLin2009cAsym_label-CSF_probseg.nii*" % sub)
+        self._results['t1_seg'] = glob('%s/%s_dseg.nii*' % (anat_root, sub))[0]
+        self._results['mni_seg'] = glob(
+            '%s/%s_space-MNI152NLin2009cAsym_dseg.nii*' % (anat_root, sub))[0]
+        self._results['t1_brain'] = glob('%s/%s_desc-preproc_T1w.nii*' % (anat_root, sub))[0]
+        self._results['mni_brain'] = glob(
+            '%s/%s_space-MNI152NLin2009cAsym_desc-preproc_T1w.nii*' % (anat_root, sub))[0]
+        self._results['t1_mask'] = glob('%s/%s_desc-brain_mask.nii*' % (anat_root, sub))[0]
+        self._results['mni_mask'] = glob(
+            '%s/%s_space-MNI152NLin2009cAsym_desc-brain_mask.nii*' % (anat_root, sub))[0]
+        self._results['t1_2_mni_reverse_transform'] = glob(
+            '%s/%s_from-MNI152NLin2009cAsym_to-T1w*_xfm.h5' % (anat_root, sub))[0]
+        self._results['t1_2_mni_forward_transform'] = glob(
+            '%s/%s_from-T1w_to-MNI152NLin2009cAsym*_xfm.h5' % (anat_root, sub))[0]
+        return runtime
 
 
 class BIDSInfoInputSpec(BaseInterfaceInputSpec):
