@@ -1,13 +1,15 @@
 #!python
 from __future__ import print_function
 
-from nipype.interfaces.base import (TraitedSpec, CommandLineInputSpec,
-                                    CommandLine, File, traits, isdefined)
+from nipype.interfaces.base import (TraitedSpec, CommandLineInputSpec, BaseInterfaceInputSpec,
+                                    CommandLine, File, traits, isdefined, SimpleInterface)
 
 import os
+import os.path as op
 from glob import glob
-from nipype.interfaces.utility import Function
 from nipype.utils.filemanip import fname_presuffix
+import logging
+LOGGER = logging.getLogger('nipype.interface')
 
 
 # Step 1 from DSI Studio, importing DICOM files or nifti
@@ -242,12 +244,9 @@ class DSIStudioExport(CommandLine):
         outputs = self.output_spec().get()
         to_expect = self.inputs.to_export.split(",")
         for expected in to_expect:
-            print("searching for", expected, "in", os.getcwd())
             matches = glob("*" + expected + "*.nii.gz")
-            print("found", matches)
             if len(matches) == 1:
                 outputs[expected + "_file"] = os.path.abspath(matches[0])
-            print(outputs)
         return outputs
 
 
@@ -280,6 +279,7 @@ class DSIStudioConnectivityMatrixInputSpec(CommandLineInputSpec):
     smoothing = traits.CFloat(argstr="--smoothing=%.2f")
     min_length = traits.CInt(argstr="--min_length=%d")
     max_length = traits.CInt(argstr="--max_length=%d")
+    num_threads = traits.Int(1, usedefault=True, nohash=True, desc='number of parallel processes')
 
 
 class DSIStudioConnectivityMatrixOutputSpec(TraitedSpec):
@@ -301,6 +301,67 @@ class DSIStudioConnectivityMatrix(CommandLine):
         ]
         return outputs
 
+
+class DSIStudioAtlasGraphInputSpec(DSIStudioConnectivityMatrixInputSpec):
+    atlas_configs = traits.Dict(desc='atlas configs for atlases to run connectivity for')
+
+class DSIStudioAtlasGraphOutputSpec(TraitedSpec):
+    connectivity_matfile = File(exists=True)
+    commands = File()
+
+
+class DSIStudioAtlasGraph(SimpleInterface):
+    """Produce one connectivity matrix per atlas based on DSI Studio tractography"""
+    input_spec = DSIStudioAtlasGraphInputSpec
+    output_spec = DSIStudioConnectivityMatrixOutputSpec
+
+    def _run_interface(self, runtime):
+        # Get all inputs from the ApplyTransforms object
+        ifargs = self.inputs.get()
+        ifargs.pop('connectivity')
+
+        # Get number of parallel jobs
+        num_threads = ifargs.pop('num_threads')
+        atlas_configs = ifargs.pop('atlas_configs')
+
+        # flatten the atlas_configs
+        args = [(atlas_name, atlas_config, ifargs) for atlas_name, atlas_config
+                in atlas_configs.items()]
+
+        if num_threads == 1:
+            outputs = [_dsi_studio_connectivity(arg) for arg in args]
+        else:
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=num_threads) as pool:
+                outputs = list(pool.map(_dsi_studio_connectivity, args))
+
+        commands = [out[0] for out in outputs]
+        commands_file = op.join(runtime.cwd, "dsi_studio_commands.txt")
+        with open(commands_file, "w") as f:
+            f.write("\n".join(commands))
+        self._results['commands'] = commands_file
+
+        matfile_lists = [out[1] for out in outputs]
+        merged_connectivity_file = op.join(runtime.cwd, "combined_connectivity.mat")
+        _merge_conmats(matfile_lists, args, merged_connectivity_file)
+        self._results['connectivity_matfile'] = merged_connectivity_file
+
+
+def _merge_conmats(matfile_lists, recon_args, outfile):
+    """Merge the many matfiles output by dsi studio and ensure they conform"""
+    pass
+
+
+def _dsi_studio_connectivity(args):
+    atlas_name, atlas_config, ifargs = args
+    con = DSIStudioConnectivityMatrix(connectivity=atlas_confic['dwi_resolution_file'], **ifargs)
+    con.terminal_output = 'allatonce'
+    con.resource_monitor = False
+    run = con.run()
+    runtime = run.runtime
+    LOGGER.info(runtime.cmdline)
+
+    return runtime.cmdline, run.outputs()['connectivity_matrices']
 
 class DSIStudioTrackingInputSpec(DSIStudioConnectivityMatrixInputSpec):
     roi = File(exists=True, argstr="--roi=%s")

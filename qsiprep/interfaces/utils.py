@@ -20,8 +20,63 @@ from nipype.interfaces.base import (
     TraitedSpec, DynamicTraitedSpec, BaseInterfaceInputSpec, SimpleInterface
 )
 from nipype.interfaces.io import add_traits
+from nipype.interfaces import ants
+from ..utils.atlases import get_atlases
 
 IFLOGGER = logging.getLogger('nipype.interfaces')
+
+
+class GetConnectivityAtlasesInputSpec(BaseInterfaceInputSpec):
+    atlas_names = traits.List(mandatory=True, desc='atlas names to be used')
+    forward_transform = File(exists=True, desc='transform to get atlas into T1w space if desired')
+    reference_image = File(exists=True, desc='')
+
+
+class GetConnectivityAtlasesOutputSpec(TraitedSpec):
+    atlas_configs = traits.Dict()
+    commands = File()
+
+
+class GetConnectivityAtlases(SimpleInterface):
+    input_spec = GetConnectivityAtlasesInputSpec
+    output_spec = GetConnectivityAtlasesOutputSpec
+
+    def _run_interface(self, runtime):
+        atlas_names = self.inputs.atlas_names
+        atlas_configs = get_atlases(atlas_names)
+
+        transform = 'identity' if not isdefined(self.inputs.forward_transform) \
+            else self.inputs.forward_transform
+
+        # Transform atlases to match the DWI data
+        resample_commands = []
+        for atlas_name, atlas_config in atlas_configs.items():
+            output_name = fname_presuffix(atlas_config['file'], newpath=runtime.cwd,
+                                          suffix="_to_dwi")
+            atlas_configs[atlas_name]['dwi_resolution_file'] = output_name
+
+            resample_commands.append(
+                _resample_atlas(input_atlas=atlas_config['file'],
+                                output_atlas=output_name,
+                                transform=transform,
+                                ref_image=self.inputs.reference_image))
+
+        self._results['atlas_configs'] = atlas_configs
+        commands_file = os.path.join(runtime.cwd, "transform_commands.txt")
+        with open(commands_file, "w") as f:
+            f.write('\n'.join(resample_commands))
+
+        self._results['commands'] = commands_file
+        return runtime
+
+
+def _resample_atlas(input_atlas, output_atlas, transform, ref_image):
+    xform = ants.ApplyTransforms(transforms=[transform], reference_image=ref_image,
+                                 input_image=input_atlas, output_image=output_atlas,
+                                 interpolation="MultiLabel")
+    result = xform.run()
+
+    return result.runtime.cmdline
 
 
 class TPM2ROIInputSpec(BaseInterfaceInputSpec):

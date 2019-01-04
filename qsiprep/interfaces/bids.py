@@ -125,6 +125,7 @@ class QsiprepOutput(SimpleInterface):
             '%s/%s_from-MNI152NLin2009cAsym_to-T1w*_xfm.h5' % (anat_root, sub))[0]
         self._results['t1_2_mni_forward_transform'] = glob(
             '%s/%s_from-T1w_to-MNI152NLin2009cAsym*_xfm.h5' % (anat_root, sub))[0]
+
         return runtime
 
 
