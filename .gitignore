@@ -86,3 +86,6 @@ local_settings.py
 
 scratch/
 .Rproj.user
+
+notebooks/*
+!notebooks/*.ipynb

@@ -1,0 +1,33 @@
+{ "description": "Reconstruct dwis using Dipy, then convert to mrtrix and dsi studio formats",
+  "space": "T1w",
+  "name": "convert_shore_recons",
+  "nodes": [
+    {
+      "name": "csdsi_3dshore",
+      "software": "Dipy",
+      "action": "reconstruction",
+      "input": "qsiprep",
+      "output": [
+        "coeffs",
+        "gfa"
+      ],
+      "parameters": {
+        "method": "gqi"
+      }
+    },
+    { "name": "dipy2dsistudio",
+      "action": "convert",
+      "input": "csdsi_3dshore",
+      "output": ["fibgz"],
+      "parameters": {
+        "odf_order": "odf8"
+      }
+    },
+    {
+      "name": "dipy2mrtrix",
+      "action": "convert",
+      "input": "csdsi_3dshore",
+      "output": ["fod", "fixels"]
+    }
+  ]
+}
