@@ -9,6 +9,9 @@ import os.path as op
 from glob import glob
 from nipype.utils.filemanip import fname_presuffix
 import logging
+from copy import deepcopy
+import numpy as np
+from scipy.io.matlab import loadmat, savemat
 LOGGER = logging.getLogger('nipype.interface')
 
 
@@ -256,6 +259,7 @@ class DSIStudioConnectivityMatrixInputSpec(CommandLineInputSpec):
         exists=True, argstr="--source=%s", mandatory=True, copyfile=False)
     fiber_count = traits.Int(xor=["seed_count"], argstr="--fiber_count=%d")
     seed_count = traits.Int(xor=["fiber_count"], argstr="--seed_count=%d")
+    method = traits.Enum((0, 4), argstr="--method=%d", usedefault=True)
     seed_plan = traits.Enum((0, 1), argstr="--seed_plan=%d")
     initial_dir = traits.Enum((0, 1, 2), argstr="--initial_dir=%d")
     interpolation = traits.Enum((0, 1, 2), argstr="--interpolation=%d")
@@ -279,7 +283,12 @@ class DSIStudioConnectivityMatrixInputSpec(CommandLineInputSpec):
     smoothing = traits.CFloat(argstr="--smoothing=%.2f")
     min_length = traits.CInt(argstr="--min_length=%d")
     max_length = traits.CInt(argstr="--max_length=%d")
-    num_threads = traits.Int(1, usedefault=True, nohash=True, desc='number of parallel processes')
+    thread_count = traits.Int(1, argstr="--thread_count=%d", usedefault=True)
+    output_trk = traits.Str(
+        name_template="%s.trk.gz",
+        desc="Output file (trk.gz)",
+        argstr="--output=%s",
+        name_source="input_fib")
 
 
 class DSIStudioConnectivityMatrixOutputSpec(TraitedSpec):
@@ -295,15 +304,18 @@ class DSIStudioConnectivityMatrix(CommandLine):
     def _list_outputs(self):
         outputs = self.output_spec().get()
         results = glob("*.connectivity.mat")
-        assert len(results) > 1
         outputs["connectivity_matrices"] = [
             os.path.abspath(c) for c in results
         ]
+        network_results = glob("*.network_measures.txt")
+        outputs["connectivity_matrices"] += [op.abspath(c) for c in network_results]
         return outputs
 
 
 class DSIStudioAtlasGraphInputSpec(DSIStudioConnectivityMatrixInputSpec):
     atlas_configs = traits.Dict(desc='atlas configs for atlases to run connectivity for')
+    n_procs = traits.Int(1, usedefault=True)
+
 
 class DSIStudioAtlasGraphOutputSpec(TraitedSpec):
     connectivity_matfile = File(exists=True)
@@ -313,15 +325,16 @@ class DSIStudioAtlasGraphOutputSpec(TraitedSpec):
 class DSIStudioAtlasGraph(SimpleInterface):
     """Produce one connectivity matrix per atlas based on DSI Studio tractography"""
     input_spec = DSIStudioAtlasGraphInputSpec
-    output_spec = DSIStudioConnectivityMatrixOutputSpec
+    output_spec = DSIStudioAtlasGraphOutputSpec
 
     def _run_interface(self, runtime):
         # Get all inputs from the ApplyTransforms object
         ifargs = self.inputs.get()
         ifargs.pop('connectivity')
+        ifargs['thread_count'] = 1
 
         # Get number of parallel jobs
-        num_threads = ifargs.pop('num_threads')
+        num_threads = ifargs.pop('n_procs')
         atlas_configs = ifargs.pop('atlas_configs')
 
         # flatten the atlas_configs
@@ -338,7 +351,7 @@ class DSIStudioAtlasGraph(SimpleInterface):
         commands = [out[0] for out in outputs]
         commands_file = op.join(runtime.cwd, "dsi_studio_commands.txt")
         with open(commands_file, "w") as f:
-            f.write("\n".join(commands))
+            f.write("\n----------\n".join(commands))
         self._results['commands'] = commands_file
 
         matfile_lists = [out[1] for out in outputs]
@@ -346,22 +359,105 @@ class DSIStudioAtlasGraph(SimpleInterface):
         _merge_conmats(matfile_lists, args, merged_connectivity_file)
         self._results['connectivity_matfile'] = merged_connectivity_file
 
+        return runtime
+
+
+def _parse_network_file(txtfile):
+    with open(txtfile, "r") as f:
+        lines = f.readlines()
+    network_data = {}
+    for line in lines:
+        sanitized_line = line.strip().replace("(", "_").replace(")", "")
+        tokens = sanitized_line.split("\t")
+        measure_name = tokens[0]
+        if measure_name == 'network_measures':
+            network_data['region_ids'] = tokens[1:]
+            continue
+
+        values = list(map(float, tokens[1:]))
+        if len(values) == 1:
+            network_data[measure_name] = values[0]
+        else:
+            network_data[measure_name] = np.array(values)
+
+    return network_data
+
 
 def _merge_conmats(matfile_lists, recon_args, outfile):
     """Merge the many matfiles output by dsi studio and ensure they conform"""
-    pass
+    connectivity_values = {}
+
+    for matfile_list, (atlas_name, atlas_config, ifargs) in zip(matfile_lists, recon_args):
+        matfiles = [f for f in matfile_list if f.endswith('.mat')]
+        txtfiles = [f for f in matfile_list if f.endswith('.txt')]
+
+        labels = np.array(atlas_config['node_ids']).astype(np.int)
+        n_atlas_labels = len(labels)
+
+        for conmat in matfiles:
+            m = loadmat(conmat)
+            measure = "_".join(conmat.split(".")[-4:-2])
+            # Column names are binary strings. Very confusing.
+            column_names = "".join(
+                [s.decode('UTF-8') for s in m["name"].squeeze().view("S1")]).split("\n")[:-1]
+            region_ids = np.array([int(name[6:]) f or name in column_names])
+
+            # Where does each column go? Make an index array
+            connectivity = m['connectivity']
+            in_this_mask = np.in1d(labels, region_ids)
+            truncated_labels = labels[in_this_mask]
+            assert np.all(truncated_labels == region_ids)
+            output = np.zeros((n_atlas_labels, n_atlas_labels))
+            new_row = np.searchsorted(labels, region_ids)
+
+            for row_index, conn in zip(new_row, connectivity):
+                tmp = np.zeros(n_atlas_labels)
+                tmp[in_this_mask] = conn
+                output[row_index] = tmp
+            connectivity_values[atlas_name + "_" + measure + "_connectivity"] = output
+
+        for network_txt in txtfiles:
+            measure = "_".join(network_txt.split(".")[-4:-2])
+            network_data = _parse_network_file(network_txt)
+
+            # Make sure to get the full atlas
+            region_ids = np.array(network_data.pop('region_ids')).astype(np.int)
+            in_this_mask = np.in1d(labels, region_ids)
+            truncated_labels = labels[in_this_mask]
+            assert np.all(truncated_labels == region_ids)
+            new_row = np.searchsorted(labels, region_ids)
+
+            for net_measure_name, net_measure_data in network_data.items():
+                variable_name = atlas_name + "_" + measure + "_" + net_measure_name
+                if type(net_measure_data) is np.ndarray:
+                    tmp = np.zeros_like(net_measure_data)
+                    tmp[in_this_mask] = net_measure_data
+                    connectivity_values[variable_name] = tmp
+                else:
+                    connectivity_values[variable_name] = net_measure_data
+
+    savemat(outfile, connectivity_values)
 
 
 def _dsi_studio_connectivity(args):
     atlas_name, atlas_config, ifargs = args
-    con = DSIStudioConnectivityMatrix(connectivity=atlas_confic['dwi_resolution_file'], **ifargs)
+    rundir = op.abspath(atlas_name)
+    # Make a temporary directory for this node
+    os.makedirs(rundir, exist_ok=True)
+    ifargs = deepcopy(ifargs)
+    input_fib = ifargs.pop('input_fib')
+    new_fib = op.join(rundir, op.split(input_fib)[1])
+    os.symlink(input_fib, new_fib)
+    con = DSIStudioTracking(input_fib=new_fib, connectivity=atlas_config['dwi_resolution_file'],
+                            **ifargs)
     con.terminal_output = 'allatonce'
     con.resource_monitor = False
-    run = con.run()
+    LOGGER.info(con.cmdline)
+    run = con.run(cwd=rundir)
     runtime = run.runtime
-    LOGGER.info(runtime.cmdline)
 
-    return runtime.cmdline, run.outputs()['connectivity_matrices']
+    return runtime.cmdline, run.outputs.connectivity_matrices
+
 
 class DSIStudioTrackingInputSpec(DSIStudioConnectivityMatrixInputSpec):
     roi = File(exists=True, argstr="--roi=%s")
@@ -370,13 +466,6 @@ class DSIStudioTrackingInputSpec(DSIStudioConnectivityMatrixInputSpec):
     end = File(exists=True, argstr="--end=%s")
     end2 = File(exists=True, argstr="--end2=%s")
     ter = File(exists=True, argstr="--ter=%s")
-    method = traits.Enum((0, 4), argstr="--method=%d", usedefault=True)
-    thread_count = traits.Int(1, argstr="--thread_count=%d", usedefault=True)
-    output_trk = traits.Str(
-        name_template="%s.trk.gz",
-        desc="Output file (trk.gz)",
-        argstr="--output=%s",
-        name_source="input_fib")
 
 
 class DSIStudioTrackingOutputSpec(TraitedSpec):
@@ -397,7 +486,7 @@ class DSIStudioTracking(CommandLine):
 
     def _list_outputs(self):
         outputs = self.output_spec().get()
-        results = glob("*src*fib*trk.gz")
+        results = glob(self.inputs.output_trk + "*src*fib*trk.gz")
         if len(results) == 1:
             trk_out = os.path.abspath(results[0])
             outputs["output_trk"] = trk_out
