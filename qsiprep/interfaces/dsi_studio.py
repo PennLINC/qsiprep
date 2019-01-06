@@ -400,7 +400,7 @@ def _merge_conmats(matfile_lists, recon_args, outfile):
             # Column names are binary strings. Very confusing.
             column_names = "".join(
                 [s.decode('UTF-8') for s in m["name"].squeeze().view("S1")]).split("\n")[:-1]
-            region_ids = np.array([int(name[6:]) f or name in column_names])
+            region_ids = np.array([int(name[6:]) for name in column_names])
 
             # Where does each column go? Make an index array
             connectivity = m['connectivity']
