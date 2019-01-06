@@ -145,9 +145,6 @@ generating a *preprocessed DWI run in {tpl} space*.
             return in_value
         return [in_value]
 
-    # Disassemble the to-mni transform if it's a h5 (it should be!)
-    disassemble_mni_xform = pe.Node(DisassembleTransform(), name='disassemble_mni_xform')
-
     # get composite warps and composed affines for warping and rotating
     compose_transforms = pe.Node(ComposeTransforms(), name='compose_transforms')
 
@@ -158,11 +155,7 @@ generating a *preprocessed DWI run in {tpl} space*.
             ('dwi_files', 'dwi_files'),
             ('hmc_xforms', 'hmc_to_ref_affines'),
             (('itk_b0_to_t1', _first), 'unwarped_dwi_ref_to_t1w_affine'),
-            ]),
-        (inputnode, disassemble_mni_xform, [('t1_2_mni_forward_transform',
-                                             'in_file')]),
-        (disassemble_mni_xform, compose_transforms, [('out_transforms',
-                                                      't1_2_mni_forward_transform')]),
+            ])
     ])
 
     if use_fieldwarp:
@@ -179,11 +172,18 @@ generating a *preprocessed DWI run in {tpl} space*.
         mem_gb=1)
 
     if to_mni:
+        # Disassemble the to-mni transform if it's a h5 (it should be!)
+        disassemble_mni_xform = pe.Node(DisassembleTransform(), name='disassemble_mni_xform')
+
         # Write corrected file in the designated output dir
         mask_merge_tfms = pe.Node(niu.Merge(2), name='mask_merge_tfms',
                                   run_without_submitting=True,
                                   mem_gb=DEFAULT_MEMORY_MIN_GB)
         workflow.connect([
+            (inputnode, disassemble_mni_xform, [('t1_2_mni_forward_transform',
+                                                 'in_file')]),
+            (disassemble_mni_xform, compose_transforms, [('out_transforms',
+                                                          't1_2_mni_forward_transform')]),
             (inputnode, mask_merge_tfms, [('t1_2_mni_forward_transform', 'in1'),
                                           (('itk_b0_to_t1', _aslist), 'in2')]),
             (mask_merge_tfms, mask_tfm, [('out', 'transforms')]),

@@ -635,7 +635,7 @@ def init_dwi_preproc_wf(dwi_files,
                 ('to_dwi_ref_affines', 'inputnode.hmc_xforms'),
                 ('to_dwi_ref_warps', 'inputnode.fieldwarps')]),
             (inputnode, transform_dwis_t1, [
-                ('t1_2_mni_forward_transform', 'inputnode.t1_2_mni_forward_transform'),
+                # ('t1_2_mni_forward_transform', 'inputnode.t1_2_mni_forward_transform'),
                 ('dwi_sampling_grid', 'inputnode.output_grid')]),
             (b0_coreg_wf, transform_dwis_t1, [
                 ('outputnode.itk_b0_to_t1', 'inputnode.itk_b0_to_t1')]),

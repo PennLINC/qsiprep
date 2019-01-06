@@ -307,7 +307,7 @@ class DSIStudioConnectivityMatrix(CommandLine):
         outputs["connectivity_matrices"] = [
             os.path.abspath(c) for c in results
         ]
-        network_results = glob("*.network_measures.txt")
+        network_results = glob("*network*txt")
         outputs["connectivity_matrices"] += [op.abspath(c) for c in network_results]
         return outputs
 
@@ -392,6 +392,8 @@ def _merge_conmats(matfile_lists, recon_args, outfile):
         txtfiles = [f for f in matfile_list if f.endswith('.txt')]
 
         labels = np.array(atlas_config['node_ids']).astype(np.int)
+        connectivity_values[atlas_name + "_region_ids"] = labels
+        connectivity_values[atlas_name + "_region_labels"] = np.array(atlas_config['node_names'])
         n_atlas_labels = len(labels)
 
         for conmat in matfiles:
