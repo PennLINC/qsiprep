@@ -211,7 +211,7 @@ class DMRISummary(SimpleInterface):
         self._results['out_file'] = os.path.join(runtime.cwd, 'dmriplot.svg')
 
         dataframe = pd.read_csv(
-            self.inputs.confounds_file, dtype='float32',
+            self.inputs.confounds_file,
             sep="\t", index_col=None, na_filter=True, na_values='n/a')
 
         fig = dMRIPlot(
