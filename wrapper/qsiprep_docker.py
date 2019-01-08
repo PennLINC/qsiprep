@@ -236,6 +236,12 @@ def get_parser():
                         required=True,
                         action='store',
                         default='participant')
+    # For qsirecon
+    parser.add_argument('--recon-input', '--recon_input',
+                        required=False,
+                        action='store',
+                        type=os.path.abspath,
+                        default='')
 
     parser.add_argument('-h', '--help', action='store_true',
                         help="show this help message and exit")
@@ -259,6 +265,11 @@ def get_parser():
         default=os.getenv('FS_LICENSE', None),
         help='Path to FreeSurfer license key file. Get it (for free) by registering'
              ' at https://surfer.nmr.mgh.harvard.edu/registration.html')
+    g_wrap.add_argument('--recon-spec', '--recon_spec',
+                        required=False,
+                        action='store',
+                        type=os.path.abspath,
+                        default='')
 
     # Developer patch/shell options
     g_dev = parser.add_argument_group(
@@ -359,6 +370,12 @@ def main():
         for envvar in opts.env:
             command.extend(['-e', '%s=%s' % tuple(envvar)])
 
+    # Check for atlas dir
+    atlas_dir = os.getenv("QSIRECON_ATLAS")
+    if atlas_dir is not None:
+        command.extend(['-e', 'QSIRECON_ATLAS=/qsiprep_atlas'])
+        command.extend(['-v', ':'.join((atlas_dir, '/qsiprep_atlas', 'ro'))])
+
     if opts.user:
         command.extend(['-u', opts.user])
 
@@ -371,6 +388,12 @@ def main():
     if opts.bids_dir:
         command.extend(['-v', ':'.join((opts.bids_dir, '/data', 'ro'))])
         main_args.extend(['--bids-dir', '/data'])
+    if opts.recon_input:
+        command.extend(['-v', ':'.join((opts.recon_input, '/qsiprep-output', 'ro'))])
+        main_args.extend(['--recon-input', '/qsiprep-output'])
+    if opts.recon_spec:
+        command.extend(['-v', ':'.join((opts.recon_spec, '/root/spec.json', 'ro'))])
+        main_args.extend(['--recon-spec', '/root/spec.json'])
     if opts.output_dir:
         command.extend(['-v', ':'.join((opts.output_dir, '/out'))])
         main_args.extend(['--output-dir', '/out'])

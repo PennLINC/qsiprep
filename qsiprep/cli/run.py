@@ -44,7 +44,7 @@ def get_parser():
     verstr = 'qsiprep v{}'.format(__version__)
 
     parser = ArgumentParser(
-        description='qsiprep: fMRI PREProcessing workflows',
+        description='qsiprep: q-Space Image PREProcessing workflows',
         formatter_class=RawTextHelpFormatter)
 
     # Arguments as specified by BIDS-Apps
@@ -88,6 +88,21 @@ def get_parser():
         '--task-id',
         action='store',
         help='select a specific task to be processed')
+
+    # arguments for reconstructing QSI data
+    g_recon = parser.add_argument_group('Options for reconstructing qsiprep outputs')
+    g_recon.add_argument(
+        '--recon-spec', '--recon_spec',
+        action='store',
+        type=os.path.abspath,
+        help='json file specifying a reconstruction pipeline to be run after preprocessing'
+    )
+    g_recon.add_argument(
+        '--recon-input', '--recon_input',
+        action='store',
+        type=os.path.abspath,
+        help='use this directory as inputs to qsirecon. This option skips qsiprep.'
+    )
 
     g_perfm = parser.add_argument_group('Options to handle performance')
     g_perfm.add_argument(
@@ -184,7 +199,6 @@ def get_parser():
         '6 degrees (rotation and translation) are used by default.')
     g_conf.add_argument(
         '--output-space', '--output_space',
-        required=True,
         action='store',
         choices=['T1w', 'template'],
         nargs='+',
@@ -203,7 +217,6 @@ def get_parser():
         help='volume template space (default: MNI152NLin2009cAsym)')
     g_conf.add_argument(
         '--output-resolution', '--output_resolution',
-        required=True,
         action='store',
         type=float,
         help='the isotropic voxel size in mm the data will be resampled to '
@@ -388,38 +401,74 @@ def main():
     nlogging.getLogger('nipype.utils').setLevel(log_level)
 
     errno = 0
+    mode = "recon" if opts.recon_input else "prep"
+    if mode == "recon":
+        logger.info("running qsirecon")
+        # Call build_workflow(opts, retval)
+        with Manager() as mgr:
+            retval = mgr.dict()
+            p = Process(target=build_recon_workflow, args=(opts, retval))
+            p.start()
+            p.join()
 
-    # Call build_workflow(opts, retval)
-    with Manager() as mgr:
-        retval = mgr.dict()
-        p = Process(target=build_workflow, args=(opts, retval))
-        p.start()
-        p.join()
+            if p.exitcode != 0:
+                sys.exit(p.exitcode)
 
-        if p.exitcode != 0:
-            sys.exit(p.exitcode)
+            qsiprep_wf = retval['workflow']
+            plugin_settings = retval['plugin_settings']
+            bids_dir = retval['bids_dir']
+            output_dir = retval['output_dir']
+            work_dir = retval['work_dir']
+            subject_list = retval['subject_list']
+            run_uuid = retval['run_uuid']
+            retcode = retval['return_code']
 
-        qsiprep_wf = retval['workflow']
-        plugin_settings = retval['plugin_settings']
-        bids_dir = retval['bids_dir']
-        output_dir = retval['output_dir']
-        work_dir = retval['work_dir']
-        subject_list = retval['subject_list']
-        run_uuid = retval['run_uuid']
-        retcode = retval['return_code']
+        if qsiprep_wf is None:
+            sys.exit(1)
 
-    if qsiprep_wf is None:
-        sys.exit(1)
+        if opts.write_graph:
+            qsiprep_wf.write_graph(
+                graph2use="colored", format='svg', simple_form=True)
 
-    if opts.write_graph:
-        qsiprep_wf.write_graph(
-            graph2use="colored", format='svg', simple_form=True)
+        if opts.reports_only:
+            sys.exit(int(retcode > 0))
 
-    if opts.reports_only:
-        sys.exit(int(retcode > 0))
+        if opts.boilerplate:
+            sys.exit(int(retcode > 0))
 
-    if opts.boilerplate:
-        sys.exit(int(retcode > 0))
+    else:
+        logger.info("running qsiprep")
+        # Call build_workflow(opts, retval)
+        with Manager() as mgr:
+            retval = mgr.dict()
+            p = Process(target=build_workflow, args=(opts, retval))
+            p.start()
+            p.join()
+
+            if p.exitcode != 0:
+                sys.exit(p.exitcode)
+
+            qsiprep_wf = retval['workflow']
+            plugin_settings = retval['plugin_settings']
+            bids_dir = retval['bids_dir']
+            output_dir = retval['output_dir']
+            work_dir = retval['work_dir']
+            subject_list = retval['subject_list']
+            run_uuid = retval['run_uuid']
+            retcode = retval['return_code']
+
+        if qsiprep_wf is None:
+            sys.exit(1)
+
+        if opts.write_graph:
+            qsiprep_wf.write_graph(
+                graph2use="colored", format='svg', simple_form=True)
+
+        if opts.reports_only:
+            sys.exit(int(retcode > 0))
+
+        if opts.boilerplate:
+            sys.exit(int(retcode > 0))
 
     """
     # Sentry tracking
@@ -463,10 +512,13 @@ def main():
         else:
             raise
 
-    # Generate reports phase
-    errno += generate_reports(subject_list, output_dir, work_dir, run_uuid)
-    write_derivative_description(bids_dir, str(Path(output_dir) / 'qsiprep'))
-    sys.exit(int(errno > 0))
+    if mode == "recon":
+        sys.exit(int(errno > 0))
+    else:
+        # Generate reports phase
+        errno += generate_reports(subject_list, output_dir, work_dir, run_uuid)
+        write_derivative_description(bids_dir, str(Path(output_dir) / 'qsiprep'))
+        sys.exit(int(errno > 0))
 
 
 def build_workflow(opts, retval):
@@ -661,6 +713,185 @@ def build_workflow(opts, retval):
         fmap_demean=opts.fmap_no_demean,
         use_syn=opts.use_syn_sdc,
         force_syn=opts.force_syn,
+    )
+    retval['return_code'] = 0
+
+    logs_path = Path(output_dir) / 'qsiprep' / 'logs'
+    boilerplate = retval['workflow'].visit_desc()
+    (logs_path / 'CITATION.md').write_text(boilerplate)
+    logger.log(
+        25, 'Works derived from this qsiprep execution should '
+        'include the following boilerplate:\n\n%s', boilerplate)
+
+    # Generate HTML file resolving citations
+    cmd = [
+        'pandoc', '-s', '--bibliography',
+        pkgrf('qsiprep', 'data/boilerplate.bib'), '--filter',
+        'pandoc-citeproc',
+        str(logs_path / 'CITATION.md'), '-o',
+        str(logs_path / 'CITATION.html')
+    ]
+    try:
+        check_call(cmd, timeout=10)
+    except (FileNotFoundError, CalledProcessError, TimeoutExpired):
+        logger.warning('Could not generate CITATION.html file:\n%s',
+                       ' '.join(cmd))
+
+    # Generate LaTex file resolving citations
+    cmd = [
+        'pandoc', '-s', '--bibliography',
+        pkgrf('qsiprep', 'data/boilerplate.bib'), '--natbib',
+        str(logs_path / 'CITATION.md'), '-o',
+        str(logs_path / 'CITATION.tex')
+    ]
+    try:
+        check_call(cmd, timeout=10)
+    except (FileNotFoundError, CalledProcessError, TimeoutExpired):
+        logger.warning('Could not generate CITATION.tex file:\n%s',
+                       ' '.join(cmd))
+    return retval
+
+
+def build_recon_workflow(opts, retval):
+    """
+    Create the Nipype Workflow that supports the whole execution
+    graph, given the inputs.
+
+    All the checks and the construction of the workflow are done
+    inside this function that has pickleable inputs and output
+    dictionary (``retval``) to allow isolation using a
+    ``multiprocessing.Process`` that allows qsiprep to enforce
+    a hard-limited memory-scope.
+
+    """
+    from subprocess import check_call, CalledProcessError, TimeoutExpired
+    from pkg_resources import resource_filename as pkgrf
+
+    from nipype import logging, config as ncfg
+    from ..__about__ import __version__
+    from ..workflows.recon import init_qsirecon_wf
+    from ..utils.bids import collect_participants
+
+    logger = logging.getLogger('nipype.workflow')
+
+    INIT_MSG = """
+    Running qsiprep version {version}:
+      * BIDS dataset path: {bids_dir}.
+      * Participant list: {subject_list}.
+      * Run identifier: {uuid}.
+    """.format
+
+    # Set up some instrumental utilities
+    run_uuid = '%s_%s' % (strftime('%Y%m%d-%H%M%S'), uuid.uuid4())
+
+    # First check that bids_dir looks like a BIDS folder
+    bids_dir = os.path.abspath(opts.bids_dir)
+    subject_list = collect_participants(
+        bids_dir, participant_label=opts.participant_label)
+
+    # Load base plugin_settings from file if --use-plugin
+    if opts.use_plugin is not None:
+        from yaml import load as loadyml
+        with open(opts.use_plugin) as f:
+            plugin_settings = loadyml(f)
+        plugin_settings.setdefault('plugin_args', {})
+    else:
+        # Defaults
+        plugin_settings = {
+            'plugin': 'MultiProc',
+            'plugin_args': {
+                'raise_insufficient': False,
+                'maxtasksperchild': 1,
+            }
+        }
+
+    # Resource management options
+    # Note that we're making strong assumptions about valid plugin args
+    # This may need to be revisited if people try to use batch plugins
+    nthreads = plugin_settings['plugin_args'].get('n_procs')
+    # Permit overriding plugin config with specific CLI options
+    if nthreads is None or opts.nthreads is not None:
+        nthreads = opts.nthreads
+        if nthreads is None or nthreads < 1:
+            nthreads = cpu_count()
+        plugin_settings['plugin_args']['n_procs'] = nthreads
+
+    if opts.mem_mb:
+        plugin_settings['plugin_args']['memory_gb'] = opts.mem_mb / 1024
+
+    omp_nthreads = opts.omp_nthreads
+    if omp_nthreads == 0:
+        omp_nthreads = min(nthreads - 1 if nthreads > 1 else cpu_count(), 8)
+
+    if 1 < nthreads < omp_nthreads:
+        logger.warning(
+            'Per-process threads (--omp-nthreads=%d) exceed total '
+            'threads (--nthreads/--n_cpus=%d)', omp_nthreads, nthreads)
+
+    # Set up directories
+    output_dir = op.abspath(opts.output_dir)
+    log_dir = op.join(output_dir, 'qsiprep', 'logs')
+    work_dir = op.abspath(opts.work_dir or 'work')  # Set work/ as default
+
+    # Check and create output and working directories
+    os.makedirs(output_dir, exist_ok=True)
+    os.makedirs(log_dir, exist_ok=True)
+    os.makedirs(work_dir, exist_ok=True)
+
+    # Nipype config (logs and execution)
+    ncfg.update_config({
+        'logging': {
+            'log_directory': log_dir,
+            'log_to_file': True
+        },
+        'execution': {
+            'crashdump_dir':
+            log_dir,
+            'crashfile_format':
+            'txt',
+            'get_linked_libs':
+            False,
+            'stop_on_first_crash':
+            opts.stop_on_first_crash or opts.work_dir is None,
+        },
+        'monitoring': {
+            'enabled': opts.resource_monitor,
+            'sample_frequency': '0.5',
+            'summary_append': True,
+        }
+    })
+
+    if opts.resource_monitor:
+        ncfg.enable_resource_monitor()
+
+    retval['return_code'] = 0
+    retval['plugin_settings'] = plugin_settings
+    retval['bids_dir'] = bids_dir
+    retval['output_dir'] = output_dir
+    retval['work_dir'] = work_dir
+    retval['subject_list'] = subject_list
+    retval['run_uuid'] = run_uuid
+    retval['workflow'] = None
+
+    # Build main workflow
+    logger.log(
+        25,
+        INIT_MSG(
+            version=__version__,
+            bids_dir=bids_dir,
+            subject_list=subject_list,
+            uuid=run_uuid))
+
+    retval['workflow'] = init_qsirecon_wf(
+        subject_list=subject_list,
+        run_uuid=run_uuid,
+        work_dir=work_dir,
+        output_dir=output_dir,
+        recon_input=opts.recon_input,
+        recon_spec=opts.recon_spec,
+        low_mem=opts.low_mem,
+        omp_nthreads=omp_nthreads,
+        bids_dir=bids_dir
     )
     retval['return_code'] = 0
 
