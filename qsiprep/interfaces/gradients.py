@@ -28,6 +28,93 @@ tensor_index = {
 }
 
 
+class RemoveDuplicatesInputSpec(BaseInterfaceInputSpec):
+    dwi_file = File(exists=True, mandatory=True)
+    bval_file = File(exists=True, mandatory=True)
+    bvec_file = File(exists=True, mandatory=True)
+    local_bvec_file = File(exists=True)
+    distance_cutoff = traits.Float(2.0, usedefault=True)
+    expected_directions = traits.Int()
+
+
+class RemoveDuplicatesOutputSpec(TraitedSpec):
+    dwi_file = File(exists=True)
+    bval_file = File(exists=True)
+    bvec_file = File(exists=True)
+    local_bvec_file = File(exists=True)
+
+
+class RemoveDuplicates(SimpleInterface):
+    input_spec = RemoveDuplicatesInputSpec
+    output_spec = RemoveDuplicatesOutputSpec
+
+    def _run_interface(self, runtime):
+        bvecs = np.loadtxt(self.inputs.bvec_file).T
+        bvals = np.loadtxt(self.inputs.bval_file).squeeze()
+        original_image = nb.load(self.inputs.dwi_file)
+        cutoff = self.inputs.distance_cutoff
+
+        scaled_bvecs = np.sqrt(bvals[:, np.newaxis]) * bvecs
+        ok_vecs = []
+        seen_vecs = []
+
+        def is_unique_sample(vec):
+            if len(seen_vecs) == 0:
+                return True
+            vec_array = np.row_stack(seen_vecs)
+            distances = np.linalg.norm(vec_array - vec, axis=1)
+            distances_flip = np.linalg.norm(vec_array + vec, axis=1)
+            return np.all(distances > cutoff) and np.all(distances_flip > cutoff)
+
+        for vec_num, vec in enumerate(scaled_bvecs):
+            magnitude = np.linalg.norm(vec)
+
+            # Is it a b0?
+            if magnitude < cutoff:
+                ok_vecs.append(vec_num)
+            else:
+                if is_unique_sample(vec):
+                    ok_vecs.append(vec_num)
+                    seen_vecs.append(vec)
+
+        # If an expected number of directions was specified, check that it's there
+        expected = self.inputs.expected_directions
+        if isdefined(expected):
+            if not len(seen_vecs) == expected:
+                raise Exception("Expected %d unique samples but found %d",
+                                expected, len(seen_vecs))
+
+        # Are all the directions unique?
+        if len(ok_vecs) == len(bvals):
+            self._results['dwi_file'] = self.inputs.dwi_file
+            self._results['bval_file'] = self.inputs.bval_file
+            self._results['bvec_file'] = self.inputs.bvec_file
+            self._results['local_bvec_file'] = self.inputs.local_bvec_file
+
+            return runtime
+
+        # Extract the unique samples
+        output_bval = fname_presuffix(self.inputs.bval_file, newpath=runtime.cwd,
+                                      suffix="_unique")
+        output_bvec = fname_presuffix(self.inputs.bvec_file, newpath=runtime.cwd,
+                                      suffix="_unique")
+        output_nii = fname_presuffix(self.inputs.dwi_file, newpath=runtime.cwd,
+                                     suffix="_unique")
+        unique_indices = np.array(ok_vecs)
+        unique_bvals = bvals[unique_indices]
+        np.savetxt(output_bval, unique_bvals, fmt='%d', newline=' ')
+        unique_bvecs = bvecs[unique_indices]
+        np.savetxt(output_bvec, unique_bvecs.T, fmt='%.8f')
+        unique_data = original_image.get_data()[..., unique_indices]
+        nb.Nifti1Image(unique_data, original_image.affine, original_image.header
+                       ).to_filename(output_nii)
+        self._results['bval_file'] = output_bval
+        self._results['bvec_file'] = output_bvec
+        self._results['dwi_file'] = output_nii
+        # TODO: support local bvecs
+        return runtime
+
+
 class SliceQCInputSpec(BaseInterfaceInputSpec):
     uncorrected_dwi_files = InputMultiObject(File(exists=True), desc='uncorrected dwi files')
     ideal_image_files = InputMultiObject(File(exists=True), desc='model-based images')

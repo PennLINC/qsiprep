@@ -34,7 +34,7 @@ class Controllability(SimpleInterface):
                                   newpath=runtime.cwd)
         connectivity_info = _calculate_controllability(mat)
         LOGGER.info("writing %s", outfile)
-        savemat(outfile, connectivity_info)
+        savemat(outfile, connectivity_info, do_compression=True)
         self._results['controllability'] = outfile
         return runtime
 

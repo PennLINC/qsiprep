@@ -183,6 +183,8 @@ def init_single_subject_wf(
 
     # create a processing pipeline for the dwis in each session
     for dwi_file in dwi_files:
-        workflow.add_nodes([init_dwi_recon_workflow(dwi_file, spec)])
+        workflow.add_nodes(
+            [init_dwi_recon_workflow(dwi_file=dwi_file, workflow_spec=spec,
+                                     reportlets_dir=reportlets_dir, output_dir=output_dir)])
 
     return workflow

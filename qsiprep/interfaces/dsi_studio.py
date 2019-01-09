@@ -12,6 +12,7 @@ import logging
 from copy import deepcopy
 import numpy as np
 from scipy.io.matlab import loadmat, savemat
+import nibabel as nb
 LOGGER = logging.getLogger('nipype.interface')
 
 
@@ -113,7 +114,7 @@ class DSIStudioReconstructionInputSpec(CommandLineInputSpec):
         argstr="#%s")
     thread_count = traits.Int(1, usedefault=True, argstr="--thread_count=%d")
     output_odf = traits.Bool(
-        False,
+        True,
         usedefault=True,
         desc="Include full ODF's in output",
         argstr="--record_odf=1")
@@ -502,3 +503,39 @@ class DSIStudioTracking(CommandLine):
             if "qa" in self.inputs.to_export:
                 outputs["output_qa"] = trk_out + ".qa.txt"
         return outputs
+
+
+class FixDSIStudioExportHeaderInputSpec(BaseInterfaceInputSpec):
+    dsi_studio_nifti = File(exists=True, mandatory=True)
+    correct_header_nifti = File(exists=True, mandatory=True)
+
+
+class FixDSIStudioExportHeaderOutputSpec(TraitedSpec):
+    out_file = File(exists=True)
+
+
+class FixDSIStudioExportHeader(SimpleInterface):
+    input_spec = FixDSIStudioExportHeaderInputSpec
+    output_spec = FixDSIStudioExportHeaderOutputSpec
+
+    def _run_interface(self, runtime):
+        dsi_studio_file = self.inputs.dsi_studio_nifti
+        new_file = fname_presuffix(dsi_studio_file, suffix="fixhdr", newpath=runtime.cwd)
+        dsi_img = nb.load(dsi_studio_file)
+        correct_img = nb.load(self.inputs.correct_header_nifti)
+
+        new_axcodes = nb.aff2axcodes(correct_img.affine)
+        input_axcodes = nb.aff2axcodes(dsi_img.affine)
+        # Is the input image oriented how we want?
+        if not input_axcodes == new_axcodes:
+            # Re-orient
+            input_orientation = nb.orientations.axcodes2ornt(input_axcodes)
+            desired_orientation = nb.orientations.axcodes2ornt(new_axcodes)
+            transform_orientation = nb.orientations.ornt_transform(input_orientation,
+                                                                   desired_orientation)
+            reoriented_img = dsi_img.as_reoriented(transform_orientation)
+        nb.Nifti1Image(reoriented_img.get_data(), correct_img.affine, correct_img.header
+                       ).to_filename(new_file)
+        self._results['out_file'] = new_file
+
+        return runtime
