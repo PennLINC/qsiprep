@@ -240,8 +240,7 @@ def get_parser():
     parser.add_argument('--recon-input', '--recon_input',
                         required=False,
                         action='store',
-                        type=os.path.abspath,
-                        default='')
+                        type=os.path.abspath)
 
     parser.add_argument('-h', '--help', action='store_true',
                         help="show this help message and exit")
@@ -268,8 +267,7 @@ def get_parser():
     g_wrap.add_argument('--recon-spec', '--recon_spec',
                         required=False,
                         action='store',
-                        type=os.path.abspath,
-                        default='')
+                        type=os.path.abspath)
 
     # Developer patch/shell options
     g_dev = parser.add_argument_group(
