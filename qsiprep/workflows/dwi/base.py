@@ -677,7 +677,7 @@ def init_dwi_preproc_wf(dwi_files,
             (transform_dwis_mni, outputnode, [('outputnode.bvals', 'bvals_mni'),
                                               ('outputnode.rotated_bvecs', 'bvecs_mni'),
                                               ('outputnode.dwi_resampled', 'dwi_mni'),
-                                              ('outputnode.dwi_mask_resampled', 'mni_mask_t1'),
+                                              ('outputnode.dwi_mask_resampled', 'dwi_mask_mni'),
                                               ('outputnode.b0_series', 'mni_b0_series'),
                                               ('outputnode.local_bvecs', 'local_bvecs_mni'),
                                               ('outputnode.dwi_ref_resampled', 'mni_b0_ref')])
@@ -799,7 +799,6 @@ def init_dwi_derivatives_wf(output_prefix,
             name='ds_t1_b0_series',
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
-
         ds_dwi_mask_t1 = pe.Node(
             DerivativesDataSink(
                 prefix=output_prefix,
@@ -820,7 +819,7 @@ def init_dwi_derivatives_wf(output_prefix,
             (inputnode, ds_bvecs_t1, [('bvecs_t1', 'in_file')]),
             (inputnode, ds_t1_b0_ref, [('t1_b0_ref', 'in_file')]),
             (inputnode, ds_t1_b0_series, [('t1_b0_series', 'in_file')]),
-            (inputnode, ds_dwi_mask_t1, [('t1_b0_series', 'in_file')]),
+            (inputnode, ds_dwi_mask_t1, [('dwi_mask_t1', 'in_file')]),
             ])
         # If requested, write local bvecs
         if write_local_bvecs:
@@ -921,7 +920,7 @@ def init_dwi_derivatives_wf(output_prefix,
 
             (inputnode, ds_mni_b0_ref, [('mni_b0_ref', 'in_file')]),
             (inputnode, ds_mni_b0_series, [('mni_b0_series', 'in_file')]),
-            (inputnode, ds_dwi_mask_mni, [('mni_b0_series', 'in_file')]),
+            (inputnode, ds_dwi_mask_mni, [('dwi_mask_mni', 'in_file')]),
             ])
         # Local bvecs?
         if write_local_bvecs:

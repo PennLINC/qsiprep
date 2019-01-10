@@ -64,16 +64,12 @@ class QsiprepOutputOutputSpec(TraitedSpec):
     dwi_file = File(exists=True)
     local_bvec_file = File()
     mask_file = File()
-    t1_tpms = OutputMultiObject(File(exists=True))
-    t1_seg = File(exists=True)
+    tpms = OutputMultiObject(File(exists=True))
+    seg = File(exists=True)
     t1_brain = File(exists=True)
-    t1_mask = File(exists=True)
+    anat_mask = File(exists=True)
     t1_2_mni_forward_transform = File(exists=True)
     t1_2_mni_reverse_transform = File(exists=True)
-    mni_mask = File(exists=True)
-    mni_seg = File(exists=True)
-    mni_tpms = OutputMultiObject(File(exists=True))
-    mni_brain = File(exists=True)
 
 
 class QsiprepOutput(SimpleInterface):
@@ -109,23 +105,24 @@ class QsiprepOutput(SimpleInterface):
         qp_root = op.sep.join(path_parts)
         anat_root = op.join(qp_root, 'anat')
         sub = self._results['subject_id']
-        self._results['t1_tpms'] = glob(anat_root + "/%s_label-*_probseg.nii*" % sub)
-        self._results['mni_tpms'] = glob(
-            anat_root + "/%s_space-MNI152NLin2009cAsym_label-CSF_probseg.nii*" % sub)
-        self._results['t1_seg'] = glob('%s/%s_dseg.nii*' % (anat_root, sub))[0]
-        self._results['mni_seg'] = glob(
-            '%s/%s_space-MNI152NLin2009cAsym_dseg.nii*' % (anat_root, sub))[0]
-        self._results['t1_brain'] = glob('%s/%s_desc-preproc_T1w.nii*' % (anat_root, sub))[0]
-        self._results['mni_brain'] = glob(
-            '%s/%s_space-MNI152NLin2009cAsym_desc-preproc_T1w.nii*' % (anat_root, sub))[0]
-        self._results['t1_mask'] = glob('%s/%s_desc-brain_mask.nii*' % (anat_root, sub))[0]
-        self._results['mni_mask'] = glob(
-            '%s/%s_space-MNI152NLin2009cAsym_desc-brain_mask.nii*' % (anat_root, sub))[0]
+        if self.inputs.space_id == "space-T1w":
+            self._results['tpms'] = glob(anat_root + "/%s_label-*_probseg.nii*" % sub)
+            self._results['seg'] = glob('%s/%s_dseg.nii*' % (anat_root, sub))[0]
+            self._results['t1_brain'] = glob('%s/%s_desc-preproc_T1w.nii*' % (anat_root, sub))[0]
+            self._results['anat_mask'] = glob('%s/%s_desc-brain_mask.nii*' % (anat_root, sub))[0]
+        else:
+            self._results['tpms'] = glob(
+                anat_root + "/%s_space-MNI152NLin2009cAsym_label-CSF_probseg.nii*" % sub)
+            self._results['seg'] = glob(
+                '%s/%s_space-MNI152NLin2009cAsym_dseg.nii*' % (anat_root, sub))[0]
+            self._results['t1_brain'] = glob(
+                '%s/%s_space-MNI152NLin2009cAsym_desc-preproc_T1w.nii*' % (anat_root, sub))[0]
+            self._results['anat_mask'] = glob(
+                '%s/%s_space-MNI152NLin2009cAsym_desc-brain_mask.nii*' % (anat_root, sub))[0]
         self._results['t1_2_mni_reverse_transform'] = glob(
             '%s/%s_from-MNI152NLin2009cAsym_to-T1w*_xfm.h5' % (anat_root, sub))[0]
         self._results['t1_2_mni_forward_transform'] = glob(
             '%s/%s_from-T1w_to-MNI152NLin2009cAsym*_xfm.h5' % (anat_root, sub))[0]
-
         return runtime
 
 
@@ -367,6 +364,10 @@ desc-preproc_bold.nii.gz'
             self._results['out_file'].append(out_file)
             self._results['compression'].append(_copy_any(fname, out_file))
         return runtime
+
+
+class ReconDerivativesDataSink(DerivativesDataSink):
+    out_path_base = "qsirecon"
 
 
 class ReadSidecarJSONInputSpec(BaseInterfaceInputSpec):

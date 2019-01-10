@@ -210,7 +210,7 @@ generating a *preprocessed DWI run in {tpl} space*.
                                         ('bvecs', 'rotated_bvecs')]),
         (inputnode, mask_tfm, [('dwi_mask', 'input_image'),
                                ('output_grid', 'reference_image')]),
-        (mask_tfm, outputnode, [('output_image', 'dwi_mask_mni')]),
+        (mask_tfm, outputnode, [('output_image', 'dwi_mask_resampled')]),
         (compose_transforms, dwi_transform, [('out_warps', 'transforms')]),
         (inputnode, merge, [('name_source', 'header_source')]),
         (inputnode,  dwi_transform, [('dwi_files', 'input_image'),

@@ -27,5 +27,7 @@ from .gradients import concatenate_bvecs, concatenate_bvals, GradientRotation
 from dipy.core.gradients import gradient_table
 from dipy.reconst.mapmri import MapmriModel
 from ..utils.brainsuite_shore import BrainSuiteShoreModel, brainsuite_shore_basis
+from nipype.interfaces.mrtrix3 import EstimateFOD, Generate5tt, ComputeTDI, ResponseSD, MRConvert
+from nipype.interfaces.mrtrix3.base import MRTrix3Base, MRTrix3BaseInputSpec
 
 LOGGER = logging.getLogger('nipype.interface')
