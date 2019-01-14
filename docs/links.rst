@@ -5,10 +5,8 @@
 .. _Merging: merging.html
 .. _Installation: installation.html
 .. _workflows: workflows.html
-.. _FSL: https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/
+.. _Dipy: http://nipy.org/dipy/
 .. _ANTs: https://stnava.github.io/ANTs/
-.. _FreeSurfer: https://surfer.nmr.mgh.harvard.edu/
-.. _`submillimeter reconstruction`: https://surfer.nmr.mgh.harvard.edu/fswiki/SubmillimeterRecon
-.. _`mri_robust_template`: https://surfer.nmr.mgh.harvard.edu/fswiki/mri_robust_template
+.. _`DSI Studio`: http://dsi-studio.labsolver.org/
+.. _MRTrix: http://www.mrtrix.org/
 .. _AFNI: https://afni.nimh.nih.gov/
-.. _`qsiprep-docker`: https://pypi.python.org/pypi/qsiprep-docker

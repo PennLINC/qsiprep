@@ -692,7 +692,6 @@ def build_workflow(opts, retval):
         anat_only=opts.anat_only,
         longitudinal=opts.longitudinal,
         combine_all_dwis=opts.combine_all_dwis,
-        discard_repeated_samples=opts.discard_repeated_samples,
         dwi_denoise_window=opts.dwi_denoise_window,
         denoise_before_combining=opts.denoise_before_combining,
         write_local_bvecs=opts.write_local_bvecs,

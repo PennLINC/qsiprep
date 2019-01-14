@@ -40,7 +40,7 @@ LOGGER = logging.getLogger('nipype.workflow')
 def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
                     ignore, debug, low_mem, anat_only, longitudinal, hires,
                     denoise_before_combining, dwi_denoise_window, output_resolution,
-                    combine_all_dwis, discard_repeated_samples, omp_nthreads,
+                    combine_all_dwis, omp_nthreads,
                     skull_strip_template, skull_strip_fixed_seed, freesurfer, hmc_model,
                     impute_slice_threshold, hmc_transform, write_local_bvecs,
                     output_spaces, template, motion_corr_to, b0_to_t1w_transform,
@@ -72,7 +72,6 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
                               denoise_before_combining=True,
                               dwi_denoise_window=7,
                               combine_all_dwis=True,
-                              discard_repeated_samples=True,
                               omp_nthreads=1,
                               skull_strip_template='OASIS',
                               skull_strip_fixed_seed=False,
@@ -120,8 +119,6 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
             'run ``dwidenoise`` before combining dwis. Requires ``combine_all_dwis``'
         combine_all_dwis : bool
             Combine all dwi sequences within a session into a single data set
-        discard_repeated_samples : Bool
-            Ignore images if their q space coordinate has already been sampled
         omp_nthreads : int
             Maximum number of threads an individual process may use
         skull_strip_template : str
@@ -205,7 +202,6 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
             freesurfer=freesurfer,
             hires=hires,
             combine_all_dwis=combine_all_dwis,
-            discard_repeated_samples=discard_repeated_samples,
             omp_nthreads=omp_nthreads,
             skull_strip_template=skull_strip_template,
             skull_strip_fixed_seed=skull_strip_fixed_seed,
@@ -239,7 +235,7 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
 def init_single_subject_wf(
         subject_id, name, reportlets_dir, output_dir, bids_dir, ignore, debug, write_local_bvecs,
         low_mem, anat_only, longitudinal, denoise_before_combining, dwi_denoise_window,
-        combine_all_dwis, discard_repeated_samples, omp_nthreads, skull_strip_template,
+        combine_all_dwis, omp_nthreads, skull_strip_template,
         skull_strip_fixed_seed, freesurfer, hires, output_spaces, template, output_resolution,
         prefer_dedicated_fmaps, motion_corr_to, b0_to_t1w_transform, hmc_model, hmc_transform,
         impute_slice_threshold, fmap_bspline, fmap_demean, use_syn, force_syn):
@@ -274,7 +270,6 @@ def init_single_subject_wf(
                                     dwi_denoise_window=7,
                                     denoise_before_combining=True,
                                     combine_all_dwis=True,
-                                    discard_repeated_samples=True,
                                     write_local_bvecs=False,
                                     omp_nthreads=1,
                                     skull_strip_template='OASIS',
@@ -314,8 +309,6 @@ def init_single_subject_wf(
             'run ``dwidenoise`` before combining dwis. Requires ``combine_all_dwis``'
         combine_all_dwis : Bool
             Combine all dwi sequences within a session into a single data set
-        discard_repeated_samples : Bool
-            Ignore images if their q space coordinate has already been sampled
         omp_nthreads : int
             Maximum number of threads an individual process may use
         skull_strip_template : str
@@ -542,7 +535,6 @@ to workflows in *qsiprep*'s documentation]\
             output_dir=output_dir,
             omp_nthreads=omp_nthreads,
             low_mem=low_mem,
-            discard_repeated_samples=discard_repeated_samples,
             fmap_bspline=fmap_bspline,
             fmap_demean=fmap_demean,
             use_syn=use_syn,

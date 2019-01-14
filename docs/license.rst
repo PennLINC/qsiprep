@@ -7,5 +7,5 @@ in the ``qsiprep`` distribution.
 
 All trademarks referenced herein are property of their respective holders.
 
-Copyright (c) 2015-2018, the qsiprep developers and the CRN.
+Copyright (c) 2018-2019 PennBBL
 All rights reserved.

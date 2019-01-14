@@ -18,7 +18,6 @@ Contents
    usage
    merging
    workflows
-   sdc
    outputs
    contributors
    citing

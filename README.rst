@@ -3,7 +3,7 @@
 QSIprep: Preprocessing and analysis of q-space images
 =======================================================
 
-This pipeline was developed at UCSB and UPenn for processing q space
+This pipeline was developed at UCSB and UPenn for processing q-space
 images.
 
 .. image:: https://readthedocs.org/projects/qsiprep/badge/?version=latest
@@ -14,78 +14,34 @@ images.
 About
 -----
 
-``qsiprep`` is a functional magnetic resonance imaging (fMRI) data
-preprocessing pipeline that is designed to provide an easily accessible,
-state-of-the-art interface that is robust to variations in scan acquisition
-protocols and that requires minimal user input, while providing easily
-interpretable and comprehensive error and output reporting.
-It performs basic processing steps (coregistration, normalization, unwarping,
-noise component extraction, segmentation, skullstripping etc.) providing
-outputs that can be easily submitted to a variety of group level analyses,
-including task-based or resting-state fMRI, graph theory measures, surface or
-volume-based statistics, etc.
+``qsiprep`` is designed to perform preprocessing and reconstruction of
+non-DTI q-space images. Non-DTI means that the imaging sequence used
+either:
 
-.. note::
+  - A multi-shell HARDI sampling scheme
+  - A Cartesian grid (aka DSI) sampling scheme
+  - A random q-space sampling scheme (eg for compressed sensing)
 
-   qsiprep performs minimal preprocessing.
-   Here we define 'minimal preprocessing'  as motion correction, field
-   unwarping, normalization, bias field correction, and brain extraction.
-   See the workflows_ for more details.
+DTI is not supported here because there are already excellent preprocessing
+tools in FSL, MRTrix, Tortoise and others, and because the head motion correction algorithm
+relies on voxelwise estimates of ensemble average propagators (EAPs), which
+require angular and radial variability in the sampling scheme.
 
-The ``qsiprep`` pipeline uses a combination of tools from well-known software
-packages, including FSL_, ANTs_, FreeSurfer_, DSI Studio_, Dipy_ and AFNI_.
-This pipeline was designed to provide the best software implementation for each
-state of preprocessing, and will be updated as newer and better neuroimaging
-software become available.
+The ``qsiprep`` pipeline uses much of the code from ``FMRIPREP``, but has
+deviated in a few noteworthy ways.
 
-This tool allows you to easily do the following:
+  1. All images are conformed to LPS+ instead of RAS+. This greatly simplified
+     spatial operations on vectors / vector images within ANTs and working with
+     DSI Studio's internal data model.
+  2. Co-registration is performed with ANTs instead of FSL or FreeSurfer. We have
+     removed FSL and FreeSurfer as much as possible from the pipeline in an effort
+     to keep the licensing of bundled software as permissive as possible. Our testing
+     also showed that ANTs was more robust for co-registering b0 images to T1w images.
+  3. It is common to scan multiple separate DWI sequences that are ultimately supposed
+     to be combined for analysis. Whether scans are combined or not will alter when
+     denoising is applied.
 
-- Take fMRI data from raw to fully preprocessed form.
-- Implement tools from different software packages.
-- Achieve optimal data processing quality by using the best tools available.
-- Generate preprocessing quality reports, with which the user can easily
-  identify outliers.
-- Receive verbose output concerning the stage of preprocessing for each
-  subject, including meaningful errors.
-- Automate and parallelize processing steps, which provides a significant
-  speed-up from typical linear, manual processing.
-
-More information and documentation can be found at
-https://qsiprep.readthedocs.io/
-
-
-Principles
-----------
-
-``qsiprep`` is built around three principles:
-
-1. **Robustness** - The pipeline adapts the preprocessing steps depending on
-   the input dataset and should provide results as good as possible
-   independently of scanner make, scanning parameters or presence of additional
-   correction scans (such as fieldmaps).
-2. **Ease of use** - Thanks to dependence on the BIDS standard, manual
-   parameter input is reduced to a minimum, allowing the pipeline to run in an
-   automatic fashion.
-3. **"Glass box"** philosophy - Automation should not mean that one should not
-   visually inspect the results or understand the methods.
-   Thus, ``qsiprep`` provides visual reports for each subject, detailing the
-   accuracy of the most important processing steps.
-   This, combined with the documentation, can help researchers to understand
-   the process and decide which subjects should be kept for the group level
-   analysis.
-
-
-Acknowledgements
-----------------
-
-Please acknowledge this work by mentioning explicitly the name of this software
-(qsiprep) and the version, along with a link to the `GitHub repository
-<https://github.com/pennbbl/qsiprep>`_ or the Zenodo reference.
-For more details, please see :ref:`citation`.
-
-.. include:: license.rst
-
-
-.. image:: https://badges.gitter.im/pennbbl/qsiprep.svg
-   :alt: Join the chat at https://gitter.im/pennbbl/qsiprep
-   :target: https://gitter.im/pennbbl/qsiprep?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge
+The ``qsiprep`` pipeline heavily uses ANTs_, Dipy_ and MRTrix_ for preprocessing and
+supports `DSI Studio`_, MRTrix_ and Dipy_ for reconstruction/analysis. It can also convert
+across the file formats of these software packages so one can, for example, reconstruct
+using GQI in DSI Studio and then do fixel-based analysis in MRTrix.

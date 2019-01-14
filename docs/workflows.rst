@@ -6,9 +6,7 @@ Processing pipeline details
 
 ``qsiprep`` adapts its pipeline depending on what data and metadata are
 available and are used as the input.
-For example, slice timing correction will be
-performed only if the ``SliceTiming`` metadata field is found for the input
-dataset.
+
 
 A (very) high-level view of the simplest pipeline (for a dataset with only
 one DWI series and no reverse PE b0 acquisitions)
@@ -22,7 +20,6 @@ is presented below:
     wf = init_single_subject_wf(
         subject_id='test',
         name='single_subject_wf',
-        task_id='',
         longitudinal=False,
         omp_nthreads=1,
         freesurfer=False,
@@ -146,233 +143,107 @@ flag, which forces the estimation of an unbiased template.
     ``T1w`` space, and not to the input images.
 
 
-.. _workflows_surface:
-
-Surface preprocessing
-~~~~~~~~~~~~~~~~~~~~~
-:mod:`qsiprep.workflows.anatomical.init_surface_recon_wf`
-
-.. workflow::
-    :graph2use: orig
-    :simple_form: yes
-
-    from qsiprep.workflows.anatomical import init_surface_recon_wf
-    wf = init_surface_recon_wf(omp_nthreads=1,
-                               hires=True)
-
-``qsiprep`` uses FreeSurfer_ to reconstruct surfaces from T1w/T2w
-structural images.
-If enabled, several steps in the ``qsiprep`` pipeline are added or replaced.
-All surface preprocessing may be disabled with the ``--fs-no-reconall`` flag.
-
-.. note::
-    Surface processing will be skipped if the outputs already exist.
-
-    In order to bypass reconstruction in ``qsiprep``, place existing reconstructed
-    subjects in ``<output dir>/freesurfer`` prior to the run.
-    ``qsiprep`` will perform any missing ``recon-all`` steps, but will not perform
-    any steps whose outputs already exist.
-
-
-If FreeSurfer reconstruction is performed, the reconstructed subject is placed in
-``<output dir>/freesurfer/sub-<subject_label>/`` (see :ref:`fsderivs`).
-
-Surface reconstruction is performed in three phases.
-The first phase initializes the subject with T1w and T2w (if available)
-structural images and performs basic reconstruction (``autorecon1``) with the
-exception of skull-stripping.
-Skull-stripping is skipped since the brain mask :ref:`calculated previously
-<t1preproc_steps>` is injected into the appropriate location for FreeSurfer.
-For example, a subject with only one session with T1w and T2w images
-would be processed by the following command::
-
-    $ recon-all -sd <output dir>/freesurfer -subjid sub-<subject_label> \
-        -i <bids-root>/sub-<subject_label>/anat/sub-<subject_label>_T1w.nii.gz \
-        -T2 <bids-root>/sub-<subject_label>/anat/sub-<subject_label>_T2w.nii.gz \
-        -autorecon1 \
-        -noskullstrip
-
-The second phase imports the brainmask calculated in the `T1w/T2w preprocessing`_
-sub-workflow.
-The final phase resumes reconstruction, using the T2w image to assist
-in finding the pial surface, if available.
-See :py:meth:`~qsiprep.workflows.anatomical.init_autorecon_resume_wf` for
-details.
-
-Reconstructed white and pial surfaces are included in the report.
-
-.. figure:: _static/reconall.svg
-    :scale: 100%
-
-    Surface reconstruction (FreeSurfer)
-
-If T1w voxel sizes are less than 1mm in all dimensions (rounding to nearest
-.1mm), `submillimeter reconstruction`_ is used, unless disabled with
-``--no-submm-recon``.
-
-``lh.midthickness`` and ``rh.midthickness`` surfaces are created in the subject
-``surf/`` directory, corresponding to the surface half-way between the gray/white
-boundary and the pial surface.
-The ``smoothwm``, ``midthickness``, ``pial`` and ``inflated`` surfaces are also
-converted to GIFTI_ format and adjusted to be compatible with multiple software
-packages, including FreeSurfer and the `Connectome Workbench`_.
-
-.. note::
-    GIFTI surface outputs are aligned to the FreeSurfer T1.mgz image, which
-    may differ from the T1w space in some cases, to maintain compatibility
-    with the FreeSurfer directory.
-    Any measures sampled to the surface take into account any difference in
-    these images.
-
-Refinement of the brain mask
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Typically, the original brain mask calculated with ``antsBrainExtraction.sh``
-will contain some innaccuracies including small amounts of MR signal from
-outside the brain.
-Based on the tissue segmentation of FreeSurfer (located in ``mri/aseg.mgz``)
-and only when the :ref:`Surface Processing <workflows_surface>` step has been
-executed, qsiprep replaces the brain mask with a refined one that derives
-from the ``aseg.mgz`` file as described in
-:mod:`qsiprep.interfaces.freesurfer.grow_mask`.
-
-
-BOLD preprocessing
+DWI preprocessing
 ------------------
-:mod:`qsiprep.workflows.bold.base.init_func_preproc_wf`
+:mod:`qsiprep.workflows.dwi.base.init_dwi_preproc_wf`
 
 .. workflow::
     :graph2use: orig
     :simple_form: yes
 
-    from qsiprep.workflows.bold import init_func_preproc_wf
-    wf = init_func_preproc_wf(
-        '/completely/made/up/path/sub-01_task-nback_bold.nii.gz',
-        omp_nthreads=1,
-        ignore=[],
-        freesurfer=True,
-        reportlets_dir='.',
-        output_dir='.',
-        template='MNI152NLin2009cAsym',
-        output_spaces=['T1w', 'fsnative', 'template', 'fsaverage5'],
-        medial_surface_nan=False,
-        cifti_output=False,
-        debug=False,
-        low_mem=False,
-        use_bbr=True,
-        t2s_coreg=False,
-        bold2t1w_dof=9,
-        fmap_bspline=True,
-        fmap_demean=True,
-        use_syn=True,
-        force_syn=True,
-        template_out_grid='native',
-        use_aroma=False,
-        aroma_melodic_dim=None,
-        ignore_aroma_err=False,
-    )
+    from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
+    wf = init_dwi_preproc_wf(['/completely/made/up/path/sub-01_dwi.nii.gz'],
+                              omp_nthreads=1,
+                              ignore=[],
+                              reportlets_dir='.',
+                              output_dir='.',
+                              template='MNI152NLin2009cAsym',
+                              output_spaces=['T1w', 'template'],
+                              freesurfer=False,
+                              use_bbr=False,
+                              dwi_denoise_window=7,
+                              denoise_before_combining=True,
+                              motion_corr_to='iterative',
+                              b0_to_t1w_transform='Rigid',
+                              hmc_model='3dSHORE',
+                              hmc_transform='Affine',
+                              impute_slice_threshold=0,
+                              fmap_bspline=True,
+                              fmap_demean=True,
+                              use_syn=True,
+                              force_syn=True,
+                              low_mem=False,
+                              num_dwi=1)
 
-Preprocessing of :abbr:`BOLD (blood-oxygen level-dependent)` files is
+Preprocessing of :abbr:`DWI (Diffusion Weighted Image)` files is
 split into multiple sub-workflows described below.
 
-In the case of multi-echo :abbr:`BOLD (blood-oxygen level-dependent)` data,
-each echo is processed independently. The two exceptions to this occur for
-:ref:`head-motion estimation <bold_hmc>` and :ref:`T2* map creation <bold_t2s>`.
-
-For the :ref:`head-motion estimation workflow <bold_hmc>`, only the first echo
-is submitted as this echo is expected to have the highest contrast between gray
-and white matter. For :ref:`T2* map creation <bold_t2s>`, all echos are
-considered jointly to look at voxel-wise T2* decay.
-
-.. _bold_ref:
-
-BOLD reference image estimation
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-:mod:`qsiprep.workflows.bold.util.init_bold_reference_wf`
-
-.. workflow::
-    :graph2use: orig
-    :simple_form: yes
-
-    from qsiprep.workflows.bold import init_bold_reference_wf
-    wf = init_bold_reference_wf(omp_nthreads=1)
-
-This workflow estimates a reference image for a
-:abbr:`BOLD (blood-oxygen level-dependent)` series.
-If a single-band reference ("sbref") image associated with the BOLD series is
-available, then it is used directly.
-If not, a reference image is estimated from the BOLD series as follows:
-When T1-saturation effects ("dummy scans" or non-steady state volumes) are
-detected, they are averaged and used as reference due to their
-superior tissue contrast.
-Otherwise, a median of motion corrected subset of volumes is used.
-
-The reference image is then used to calculate a brain mask for the
-:abbr:`BOLD (blood-oxygen level-dependent)` signal using the
-:mod:`qsiprep.workflows.bold.util.init_enhance_and_skullstrip_bold_wf`.
-Further, the reference is fed to the :ref:`head-motion estimation
-workflow <bold_hmc>` and the :ref:`registration workflow to map
-BOLD series into the T1w image of the same subject <bold_reg>`.
-
-.. figure:: _static/brainextraction.svg
-    :scale: 100%
-
-    Calculation of a brain mask from the BOLD series.
-
-.. _bold_hmc:
+.. _dwi_hmc:
 
 Head-motion estimation
 ~~~~~~~~~~~~~~~~~~~~~~
-:mod:`qsiprep.workflows.bold.hmc.init_bold_hmc_wf`
+:mod:`qsiprep.workflows.dwi.hmc.init_dwi_hmc_wf`
 
 .. workflow::
     :graph2use: colored
     :simple_form: yes
 
-    from qsiprep.workflows.bold import init_bold_hmc_wf
-    wf = init_bold_hmc_wf(
-        mem_gb=1,
-        omp_nthreads=1)
+    from qsiprep.workflows.dwi.hmc import init_dwi_hmc_wf
+    wf = init_dwi_hmc_wf(hmc_transform="Affine",
+                         hmc_model="3dSHORE",
+                         hmc_align_to="iterative",
+                         mem_gb=3,
+                         omp_nthreads=1,
+                         write_report=False)
 
-Using the previously :ref:`estimated reference scan <bold_ref>`,
-FSL ``mcflirt`` is used to estimate head-motion.
-As a result, one rigid-body transform with respect to
-the reference image is written for each :abbr:`BOLD (blood-oxygen level-dependent)`
-time-step.
-Additionally, a list of 6-parameters (three rotations,
-three translations) per time-step is written and fed to the
-:ref:`confounds workflow <bold_confounds>`.
-For a more accurate estimation of head-motion, we calculate its parameters
-before any time-domain filtering (i.e. :ref:`slice-timing correction <bold_stc>`),
-as recommended in [Power2017]_.
+A long-standing issue for q-space imaging techniques, particularly DSI, has
+been the lack of motion correction methods. DTI and multi-shell HARDI have
+had ``eddy_correct`` and ``eddy`` in FSL, but DSI has relied on aligning the
+interleaved b0 images and applying the transforms to nearby non-b0 images.
 
-.. _bold_stc:
+``qsiprep`` introduces a method for head motion correction that iteratively
+creates target images based on ``3dSHORE`` or ``MAPMRI`` fits.
+First, all b0 images are aligned to a midpoint b0 image (or the first b0 image
+if ``hmc_align_to="first"``) and each non-b0 image is transformed along with
+its nearest b0 image.
 
-Slice time correction
-~~~~~~~~~~~~~~~~~~~~~
-:mod:`qsiprep.workflows.bold.stc.init_bold_stc_wf`
+Then, for each non-b0 image, a ``3dSHORE`` or ``MAPMRI``
+model is fit to all the other images with that image left out. The model is then
+used to generate a target signal image for the gradient direction and magnitude
+(i.e. q-space coordinate) of the left-out image. The left-out image is registered
+to the generated target
+signal image and its vector is rotated accordingly. A new model is fit on the
+transformed images and their rotated vectors. The leave-one-out procedure is
+then repeated on this updated DWI and gradient set.
+
+If ``"none"`` is specified as the hmc_model, then only the b0 images are used
+and the non-b0 images are transformed based on their nearest b0 image. This
+is not a great idea.
+
+Ultimately a list of 6 (or 12)-parameters per time-step is written and
+fed to the :ref:`confounds workflow <dwi_confounds>`. These are used to
+estimate framewise displacement.  Additionally, measures of model fits
+are saved for each slice for display in a carpet plot-like thing.
+
+.. _dwi_ref:
+
+DWI reference image estimation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+:mod:`qsiprep.workflows.dwi.util.init_dwi_reference_wf`
 
 .. workflow::
-    :graph2use: colored
+    :graph2use: orig
     :simple_form: yes
 
-    from qsiprep.workflows.bold import init_bold_stc_wf
-    wf = init_bold_stc_wf(
-        metadata={'RepetitionTime': 2.0,
-                  'SliceTiming': [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]},
-        )
+    from qsiprep.workflows.dwi.util import init_dwi_reference_wf
+    wf = init_dwi_reference_wf(omp_nthreads=1)
 
-If the ``SliceTiming`` field is available within the input dataset metadata,
-this workflow performs slice time correction prior to other signal resampling
-processes.
-Slice time correction is performed using AFNI ``3dTShift``.
-All slices are realigned in time to the middle of each TR.
-
-Slice time correction can be disabled with the ``--ignore slicetiming``
-command line argument.
-If a :abbr:`BOLD (blood-oxygen level-dependent)` series has fewer than
-5 usable (steady-state) volumes, slice time correction will be disabled
-for that run.
+This workflow estimates a reference image for a DWI series. This
+procedure is different from the BOLD reference image workflow in the
+sense that true brain masking isn't usually done until later in the
+pipeline for DWIs. It performs a generous automasking and uses
+Dipy's histogram equalization on the b0 template generated during
+motion correction.
 
 Susceptibility Distortion Correction (SDC)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -384,98 +255,58 @@ Susceptibility Distortion Correction (SDC)
     Applying susceptibility-derived distortion correction, based on
     fieldmap estimation.
 
-One of the major problems that affects :abbr:`EPI (echo planar imaging)` data
-is the spatial distortion caused by the inhomogeneity of the field inside
-the scanner.
-Please refer to :ref:`sdc` for details on the
-available workflows.
+The PEPOLAR and SyN-SDC workflows from FMRIPREP are copied here.
+They operate on the output of reference estimation, after head
+motion correction.
 
+.. _resampling:
 
-Pre-processed BOLD in native space
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-:mod:`qsiprep.workflows.bold.resampling.init_bold_preproc_trans_wf`
+Pre-processed DWIs in a different space
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+:mod:`qsiprep.workflows.dwi.resampling.init_dwi_trans_wf`
 
 .. workflow::
     :graph2use: orig
     :simple_form: yes
 
-    from qsiprep.workflows.bold import init_bold_preproc_trans_wf
-    wf = init_bold_preproc_trans_wf(mem_gb=3, omp_nthreads=1)
+    from qsiprep.workflows.dwi.resampling import init_dwi_trans_wf
+    wf = init_dwi_trans_wf(template="ACPC",
+                           use_fieldwarp=True,
+                           use_compression=True,
+                           to_mni=False,
+                           write_local_bvecs=True,
+                           mem_gb=3,
+                           omp_nthreads=1)
 
-A new *preproc* :abbr:`BOLD (blood-oxygen level-dependent)` series is generated
-from the slice-timing corrected or the original data (if
-:abbr:`STC (slice-timing correction)` was not applied) in the
-original space.
-All volumes in the :abbr:`BOLD (blood-oxygen level-dependent)` series are
-resampled in their native space by concatenating the mappings found in previous
-correction workflows (:abbr:`HMC (head-motion correction)` and
-:abbr:`SDC (susceptibility-derived distortion correction)` if excecuted)
-for a one-shot interpolation process.
-Interpolation uses a Lanczos kernel.
+A DWI series is resampled to an output space. The ``output_resolution`` is
+specified on the commandline call. All transformations, including head motion
+correction, susceptibility distortion correction, coregistration and optionally
+normalization to the template is performed in a single shot using a Lanczos kernel.
 
-.. _bold_reg:
+There are two ways that the gradient vectors can be saved. This workflow always
+produces a FSL-style bval/bvec pair for the image and a MRTrix .b gradient table
+with the rotations from the linear transforms applied. You can also write out
+a ``local_bvecs`` file that contains a 3d vector that has been rotated to account
+for nonlinear transforms in each voxel. I'm not aware of any software that can
+use these yet, but it's an interesting idea.
 
-EPI to T1w registration
+
+.. _b0_reg:
+
+b0 to T1w registration
 ~~~~~~~~~~~~~~~~~~~~~~~
-:mod:`qsiprep.workflows.bold.registration.init_bold_reg_wf`
+:mod:`qsiprep.workflows.dwi.registration.init_b0_to_anat_registration_wf`
 
 .. workflow::
     :graph2use: orig
     :simple_form: yes
 
-    from qsiprep.workflows.bold import init_bold_reg_wf
-    wf = init_bold_reg_wf(
-        freesurfer=True,
-        mem_gb=1,
-        omp_nthreads=1,
-        use_bbr=True,
-        bold2t1w_dof=9)
+    from qsiprep.workflows.dwi.registration import init_b0init_b0_to_anat_registration_wf
+    wf = init_b0_to_anat_registration_wf(
+                                         mem_gb=3,
+                                         omp_nthreads=1,
+                                         transform_type="Rigid",
+                                         write_report=False,
+                                         bold2t1w_dof=9)
 
-The alignment between the reference :abbr:`EPI (echo-planar imaging)` image
-of each run and the reconstructed subject using the gray/white matter boundary
-(FreeSurfer's ``?h.white`` surfaces) is calculated by the ``bbregister`` routine.
-
-.. figure:: _static/EPIT1Normalization.svg
-    :scale: 100%
-
-    Animation showing :abbr:`EPI (echo-planar imaging)` to T1w registration (FreeSurfer ``bbregister``)
-
-If FreeSurfer processing is disabled, FSL ``flirt`` is run with the
-:abbr:`BBR (boundary-based registration)` cost function, using the
-``fast`` segmentation to establish the gray/white matter boundary.
-After :abbr:`BBR (boundary-based registration)` is run, the resulting affine transform will be compared to the initial transform found by FLIRT.
-Excessive deviation will result in rejecting the BBR refinement and accepting the original, affine registration.
-
-EPI to MNI transformation
-~~~~~~~~~~~~~~~~~~~~~~~~~
-:mod:`qsiprep.workflows.bold.resampling.init_bold_mni_trans_wf`
-
-.. workflow::
-    :graph2use: colored
-    :simple_form: yes
-
-    from qsiprep.workflows.bold import init_bold_mni_trans_wf
-    wf = init_bold_mni_trans_wf(
-        template='MNI152NLin2009cAsym',
-        mem_gb=1,
-        omp_nthreads=1,
-        template_out_grid='native')
-
-This sub-workflow concatenates the transforms calculated upstream (see
-`Head-motion estimation`_, `Susceptibility Distortion Correction (SDC)`_ --if
-fieldmaps are available--, `EPI to T1w registration`_, and a T1w-to-MNI
-transform from `T1w/T2w preprocessing`_) to map the :abbr:`EPI (echo-planar imaging)`
-image to standard MNI space.
-It also maps the T1w-based mask to MNI space.
-
-Transforms are concatenated and applied all at once, with one interpolation (Lanczos)
-step, so as little information is lost as possible.
-
-The output space grid can be specified using the ``template_out_grid`` argument.
-This option accepts the following (``str``) values:
-
-  * ``'native'``: the original resolution of the BOLD image will be used.
-  * ``'1mm'``: uses the 1:math:`\times`1:math:`\times`1 [mm] version of the template.
-  * ``'2mm'``: uses the 2:math:`\times`2:math:`\times`2 [mm] version of the template.
-  * **Path to arbitrary reference file**: the output will be resampled on a grid with
-    same resolution as this reference.
+This just uses `antsRegistration`.

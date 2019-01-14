@@ -31,3 +31,27 @@ from nipype.interfaces.mrtrix3 import EstimateFOD, Generate5tt, ComputeTDI, Resp
 from nipype.interfaces.mrtrix3.base import MRTrix3Base, MRTrix3BaseInputSpec
 
 LOGGER = logging.getLogger('nipype.interface')
+
+
+class MRTrixGradientTableInputSpec(BaseInterfaceInputSpec):
+    bval_file = File(exists=True, mandatory=True)
+    bvec_file = File(exists=True, mandatory=True)
+
+
+class MRTrixGradientTableOutputSpec(TraitedSpec):
+    gradient_file = File(exists=True)
+
+
+class MRTrixGradientTable(SimpleInterface):
+    input_spec = MRTrixGradientTableInputSpec
+    output_spec = MRTrixGradientTableOutputSpec
+
+    def _run_interface(self, runtime):
+        gtab_fname = fname_presuffix(self.inputs.bval_file, suffix=".b", newpath=runtime.cwd,
+                                     use_ext=False)
+        vecs = np.loadtxt(self.inputs.bvec_file)
+        vals = np.loadtxt(self.inputs.bval_file)
+        gtab = np.column_stack([vecs.T, vals]) * np.array([-1, -1, 1, 1])
+        np.savetxt(gtab_fname, gtab, fmt=["%.8f", "%.8f", "%.8f", "%d"])
+        self._results['gradient_file'] = gtab_fname
+        return runtime

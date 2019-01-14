@@ -9,68 +9,32 @@ from ._version import get_versions
 __version__ = get_versions()['version']
 del get_versions
 
-__author__ = 'The CRN developers'
-__copyright__ = 'Copyright 2018, Center for Reproducible Neuroscience, Stanford University'
-__credits__ = ['Craig Moodie', 'Ross Blair', 'Oscar Esteban', 'Chris Gorgolewski',
-               'Shoshana Berleant', 'Christopher J. Markiewicz', 'Russell A. Poldrack']
+__author__ = 'The PennBBL Developers'
+__copyright__ = 'Copyright 2019, PennBBL, Perelman School of Medicine, University of Pennsylvania'
+__credits__ = ['Matt Cieslak', 'Clint Greene', 'The FMRIPREP Authors']
 __license__ = '3-clause BSD'
 __maintainer__ = 'Ross Blair'
 __email__ = 'crn.pennbbl@gmail.com'
 __status__ = 'Prototype'
 __url__ = 'https://github.com/pennbbl/qsiprep'
 __packagename__ = 'qsiprep'
-__description__ = ("qsiprep is a functional magnetic resonance image pre-processing pipeline "
-                   "that is designed to provide an easily accessible, state-of-the-art interface "
-                   "that is robust to differences in scan acquisition protocols and that requires "
-                   "minimal user input, while providing easily interpretable and comprehensive "
-                   "error and output reporting.")
+__description__ = ("qsiprep builds workflows for preprocessing and reconstructing q-space images")
 __longdesc__ = """\
-Preprocessing of functional MRI (fMRI) involves numerous steps to clean and standardize
-data before statistical analysis.
-Generally, researchers create ad hoc preprocessing workflows for each new dataset,
-building upon a large inventory of tools available for each step.
-The complexity of these workflows has snowballed with rapid advances in MR data
-acquisition and image processing techniques.
-qsiprep is an analysis-agnostic tool that addresses the challenge of robust and
-reproducible preprocessing for task-based and resting fMRI data.
-qsiprep automatically adapts a best-in-breed workflow to the idiosyncrasies of
-virtually any dataset, ensuring high-quality preprocessing with no manual intervention,
-while providing easily interpretable and comprehensive error and output reporting.
-It performs basic preprocessing steps (coregistration, normalization, unwarping, noise
-component extraction, segmentation, skullstripping etc.) providing outputs that can be
-easily submitted to a variety of group level analyses, including task-based or resting-state
-fMRI, graph theory measures, surface or volume-based statistics, etc.
+qsiprep borrows heavily from FMRIPREP to build workflows for preprocessing q-space images
+such as Diffusion Spectrum Images (DSI), multi-shell HARDI and compressed sensing DSI (CS-DSI).
+It utilizes Dipy and ANTs to implement a novel high-b-value head motion correction approach
+using q-space methods such as 3dSHORE to iteratively generate head motion target images for each
+gradient direction and strength.
 
-The workflow is based on `Nipype <https://nipype.readthedocs.io>`_ and encompases a large
-set of tools from well-known neuroimaging packages, including
-`FSL <https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/>`_,
-`ANTs <https://stnava.github.io/ANTs/>`_,
-`FreeSurfer <https://surfer.nmr.mgh.harvard.edu/>`_,
-`AFNI <https://afni.nimh.nih.gov/>`_,
-and `Nilearn <https://nilearn.github.io/>`_.
-This pipeline was designed to provide the best software implementation for each state of
-preprocessing, and will be updated as newer and better neuroimaging software becomes
-available.
+Since qsiprep uses the FMRIPREP workflow-building strategy, it can also generate methods
+boilerplate and quality-check figures.
 
-This tool allows you to easily do the following:
+Users can also reconstruct orientation distribution functions (ODFs), fiber orientation
+distributions (FODs) and perform tractography, estimate anisotropy scalars and connectivity
+estimation using a combination of Dipy, MRTrix and DSI Studio using a JSON-based pipeline
+specification.
 
-  * Take fMRI data from *unprocessed* (only reconstructed) to ready for analysis.
-  * Implement tools from different software packages.
-  * Achieve optimal data processing quality by using the best tools available.
-  * Generate preprocessing-assessment reports, with which the user can easily identify problems.
-  * Receive verbose output concerning the stage of preprocessing for each subject, including
-    meaningful errors.
-  * Automate and parallelize processing steps, which provides a significant speed-up from
-    typical linear, manual processing.
-
-qsiprep has the potential to transform fMRI research by equipping
-neuroscientists with a high-quality, robust, easy-to-use and transparent preprocessing workflow
-which can help ensure the validity of inference and the interpretability of their results.
-
-[Pre-print doi:`10.1101/306951 <https://doi.org/10.1101/306951>`_]
 [Documentation `qsiprep.org <https://qsiprep.readthedocs.io>`_]
-[Software doi:`10.5281/zenodo.852659 <https://doi.org/10.5281/zenodo.852659>`_]
-[Support `neurostars.org <https://neurostars.org/tags/qsiprep>`_]
 """
 
 DOWNLOAD_URL = (
@@ -92,13 +56,14 @@ REQUIRES = [
     'matplotlib>=2.2.0',
     'nilearn',
     'sklearn',
+    'dipy',
     'nibabel>=2.2.1',
     'pandas',
     'grabbit==0.2.3',
     'pybids==0.6.5',
     'nitime',
     'nipype>=1.1.3',
-    'niworkflows==0.4.4',
+    'niworkflows==0.5.2post5',
     'statsmodels',
     'seaborn',
     'indexed_gzip>=0.8.2',
@@ -130,7 +95,7 @@ EXTRA_REQUIRES = {
     'duecredit': ['duecredit'],
     'datalad': ['datalad'],
     'resmon': ['psutil>=5.4.0'],
-    'sentry': ['raven'],
+    # 'sentry': ['raven'],
 }
 EXTRA_REQUIRES['docs'] = EXTRA_REQUIRES['doc']
 

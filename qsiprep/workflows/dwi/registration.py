@@ -2,16 +2,6 @@
 # -*- coding: utf-8 -*-
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-"""
-Registration workflows
-++++++++++++++++++++++
-
-.. autofunction:: init_bold_reg_wf
-.. autofunction:: init_bold_t1_trans_wf
-.. autofunction:: init_bbreg_wf
-.. autofunction:: init_fsl_bbr_wf
-
-"""
 
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
@@ -32,11 +22,12 @@ def init_b0_to_anat_registration_wf(mem_gb=3, omp_nthreads=1, write_report=True,
         :graph2use: orig
         :simple_form: yes
 
-        from qsiprep.workflows.bold.registration import init_bold_reg_wf
+        from qsiprep.workflows.dwi.registration import init_b0init_b0_to_anat_registration_wf
         wf = init_b0_to_anat_registration_wf(
                               mem_gb=3,
                               omp_nthreads=1,
-                              use_bbr=True,
+                              transform_type="Rigid",
+                              write_report=False,
                               bold2t1w_dof=9)
 
     **Parameters**
@@ -47,6 +38,8 @@ def init_b0_to_anat_registration_wf(mem_gb=3, omp_nthreads=1, write_report=True,
             Maximum number of threads an individual process may use
         name : str
             Name of workflow (default: ``bold_reg_wf``)
+        transform_type : str
+            Either "Rigid" or "Affine"
         write_report : bool
             Should a reportlet be written?
 
