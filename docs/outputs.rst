@@ -10,43 +10,41 @@ qsiprep generates three broad classes of outcomes:
 
   1. **Visual QA (quality assessment) reports**:
      one :abbr:`HTML (hypertext markup language)` per subject,
-     that allows the user a thorough visual assessment of the quality
-     of processing and ensures the transparency of qsiprep operation.
+     depicting images that provide a sanity check for each step of the pipeline.
 
-  2. **Pre-processed imaging data** which are derivatives of the original
-     anatomical and functional images after various preparation procedures
-     have been applied. For example,
-     :abbr:`INU (intensity non-uniformity)`-corrected versions of the T1-weighted
-     image (per subject), the brain mask, or :abbr:`BOLD (blood-oxygen level dependent)`
-     images after head-motion correction, slice-timing correction and aligned into
-     the same-subject's T1w space or into MNI space.
+  2. **Pre-processed imaging data** such as anatomical segmentations, realigned and resampled
+     diffusion weighted images and the corresponding corrected gradient files in FSL and MRTrix
+     format.
 
   3. **Additional data for subsequent analysis**, for instance the transformations
-     between different spaces or the estimated confounds.
-
-
-In general, qsiprep follows the current working draft of the
-:abbr:`BIDS (brain imaging data structure)`-derivatives extension.
+     between different spaces or the estimated head motion and model fit quality calculated
+     during model-based head motion correction.
 
 
 Visual Reports
 --------------
 
 qsiprep outputs summary reports, written to ``<output dir>/qsiprep/sub-<subject_label>.html``.
-These reports provide a quick way to make visual inspection of the results easy.
-Each report is self contained and thus can be easily shared with collaborators (for example via email).
-`View a sample report. <_static/sample_report.html>`_
+These reports provide a quick way to make visual inspection of the results easy.  One useful
+graphic is the animation of the q-space sampling scheme before and after the pipeline. Here is
+a sampling scheme from a DSI scan:
+
+.. figure:: _static/sampling_scheme.gif
+    :scale: 75%
+
+    A Q5 DSI sampling scheme before (left) and after (right) preprocessing. This is useful to
+    confirm that the gradients have indeed been rotated and that head motion correction has not
+    disrupted the scheme extensively.
 
 
 Preprocessed data (qsiprep *derivatives*)
 ------------------------------------------
 
 There are additional files, called "Derivatives", written to
-``<output dir>/qsiprep/sub-<subject_label>/``. See the
-`BIDS Derivatives <https://docs.google.com/document/d/1Wwc4A6Mow4ZPPszDIWfCUCRNstn7d_zzaWPcfcHmgI4/edit?usp=sharing>`_
-spec for more information.
+``<output dir>/qsiprep/sub-<subject_label>/``.
 
-Derivatives related to T1w files are in the ``anat`` subfolder:
+Derivatives related to T1w files are nearly identical to those produced by FMRIPREP and
+can be found in the ``anat`` subfolder:
 
 - ``*T1w_brainmask.nii.gz`` Brain mask derived using ANTs' ``antsBrainExtraction.sh``.
 - ``*T1w_class-CSF_probtissue.nii.gz``
@@ -62,133 +60,81 @@ Derivatives related to T1w files are in the ``anat`` subfolder:
 - ``*T1w_space-MNI152NLin2009cAsym_preproc.nii.gz`` Same as ``_preproc`` above, but in MNI space
 - ``*T1w_space-MNI152NLin2009cAsym_target-T1w_warp.h5`` Composite (warp and affine) transform to map from MNI to T1 space
 - ``*T1w_target-MNI152NLin2009cAsym_warp.h5`` Composite (warp and affine) transform to transform T1w into MNI space
-- (optional) ``*T1w_target-fsnative_affine.txt`` Affine transform to transform T1w into ``fsnative`` space
-- (optional) ``*T1w_smoothwm.[LR].surf.gii`` Smoothed GrayWhite surfaces
-- (optional) ``*T1w_pial.[LR].surf.gii`` Pial surfaces
-- (optional) ``*T1w_midthickness.[LR].surf.gii`` MidThickness surfaces
-- (optional) ``*T1w_inflated.[LR].surf.gii`` FreeSurfer inflated surfaces for visualization
 
-Derivatives related to EPI files are in the ``func`` subfolder.
+.. Note:
+  These are in LPS+ orientation, so are not identical to FMRIPREP's anatomical outputs
 
-- ``*bold_confounds.tsv`` A tab-separated value file with one column per calculated confound and one row per timepoint/volume
-- (optional) ``*bold_AROMAnoiseICs.csv`` A comma-separated value file listing each MELODIC component classified as noise
-- (optional) ``*bold_MELODICmix.tsv`` A tab-separated value file with one column per MELODIC component
+Derivatives related to diffusion images are in the ``dwi`` subfolder.
+
+- ``*_confounds.tsv`` A tab-separated value file with one column per calculated confound and one row per timepoint/volume
 
 Volumetric output spaces include ``T1w`` and ``MNI152NLin2009cAsym`` (default).
 
-- ``*bold_space-<space>_brainmask.nii.gz`` Brain mask for EPI files, calculated by nilearn on the average EPI volume, post-motion correction
-- ``*bold_space-<space>_preproc.nii.gz`` Motion-corrected (using MCFLIRT for estimation and ANTs for interpolation) EPI file
-- (optional) ``*bold_space-<space>_variant-smoothAROMAnonaggr_preproc.nii.gz`` Motion-corrected (using MCFLIRT for estimation and ANTs for interpolation),
-  smoothed (6mm), and non-aggressively denoised (using AROMA) EPI file - currently produced only for the ``MNI152NLin2009cAsym`` space
-
-Surface output spaces include ``fsnative`` (full density subject-specific mesh),
-``fsaverage`` and the down-sampled meshes ``fsaverage6`` (41k vertices) and
-``fsaverage5`` (10k vertices, default).
-
-- (optional) ``*bold_space-<space>.[LR].func.gii`` Motion-corrected EPI file sampled to surface ``<space>``
-
-EPIs can be saved as a CIFTI dtseries file.
-
-- (optional) ``*bold_space-cifti_variant-<variant>_preproc.dtseries.nii`` Motion-corrected EPI converted to CIFTI filetype. Sub-cortical representations
-  are volumetric (supported spaces: ``MNI152NLin2009cAsym``), while cortical representations are sampled to surface (supported spaces: ``fsaverage5``, ``fsaverage6``)
-
-
-.. _fsderivs:
-
-FreeSurfer Derivatives
-----------------------
-
-A FreeSurfer subjects directory is created in ``<output dir>/freesurfer``.
-
-::
-
-    freesurfer/
-        fsaverage{,5,6}/
-            mri/
-            surf/
-            ...
-        sub-<subject_label>/
-            mri/
-            surf/
-            ...
-        ...
-
-Copies of the ``fsaverage`` subjects distributed with the running version of
-FreeSurfer are copied into this subjects directory, if any functional data are
-sampled to those subject spaces.
-
+- ``*dwiref.nii.gz`` The b0 template
+- ``*desc-brain_mask.nii.gz`` The generous brain mask that should be reduced probably
+- ``*desc-preproc_dwi.nii.gz`` Resampled DWI series including all b0 images.
+- ``*desc-preproc_dwi.bval``, ``*desc-preproc_dwi.bvec`` FSL-style bvals and bvecs files.
+  *These will be incorrectly interpreted by MRTrix, but will work with DSI Studio.* Use the
+  ``.b`` file for MRTrix.
+- ``desc-preproc_dwi.b`` The gradient table to import data into MRTrix. This and the
+  ``_dwi.nii.gz`` can be converted directly to a ``.mif`` file using the ``mrconvert -grad _dwi.b``
+  command.
+- ``*b0series.nii.gz`` The b0 images from the series in a 4d image. Useful to see how much the
+  images are impacted by Eddy currents.
+- ``*bvecs.nii.gz`` Each voxel contains a gradient table that has been adjusted for local
+  rotations introduced by spatial warping.
 
 
 Confounds
 ---------
 
-See implementation on :mod:`~qsiprep.workflows.bold.confounds.init_bold_confs_wf`.
+See implementation on :mod:`~qsiprep.workflows.dwi.confounds.init_dwi_confs_wf`.
 
 
-For each :abbr:`BOLD (blood-oxygen level dependent)` run processed with qsiprep, a
+For each DWI processed by qsiprep, a
 ``<output_folder>/qsiprep/sub-<sub_id>/func/sub-<sub_id>_task-<task_id>_run-<run_id>_confounds.tsv``
 file will be generated.
 These are :abbr:`TSV (tab-separated values)` tables, which look like the example below: ::
 
-  WhiteMatter GlobalSignal    stdDVARS    non-stdDVARS    vx-wisestdDVARS FramewiseDisplacement   tCompCor00  tCompCor01  tCompCor02  tCompCor03  tCompCor04  tCompCor05  aCompCor00  aCompCor01  aCompCor02  aCompCor03  aCompCor04  aCompCor05  NonSteadyStateOutlier00 X   Y   Z   RotX    RotY    RotZ    AROMAAggrComp01 AROMAAggrComp03 AROMAAggrComp04 AROMAAggrComp05
-  0.63    2.72    n/a n/a n/a n/a 0.00    0.00    0.00    0.00    0.00    0.00    0.00    0.00    0.00    0.00    0.00    0.00    1.00    0.00    0.00    0.00    0.00    0.00    0.00    2.62    -1.12   -0.03   3.12
-  3.14    0.51    1.18    16.05   1.21    0.07    -0.21   -0.36   -0.23   0.29    -0.37   0.04    -0.33   -0.54   -0.36   0.22    -0.07   0.16    0.00    0.00    0.02    0.05    0.00    0.00    0.00    1.66    -1.74   -0.38   -0.99
-  -1.23   -0.85   1.09    14.86   1.11    0.03    0.02    0.04    -0.22   -0.08   -0.18   0.66    0.11    -0.45   -0.16   -0.28   -0.05   0.26    0.00    0.00    0.00    0.05    0.00    0.00    0.00    0.35    -1.22   0.10    -0.23
-  -1.61   -1.53   1.01    13.83   1.05    0.03    0.27    0.21    -0.07   0.21    0.30    -0.02   0.24    -0.15   0.24    0.17    0.51    -0.02   0.00    0.01    -0.01   0.04    0.00    0.00    0.00    -0.42   -0.55   0.49    -0.38
-  -3.43   -1.48   0.98    13.32   1.02    0.03    0.06    0.49    0.24    -0.18   0.06    0.12    0.25    0.11    0.09    -0.10   0.08    0.47    0.00    0.02    -0.01   0.03    0.00    0.00    0.00    -1.12   -0.40   0.21    1.23
-  0.71    -0.66   0.97    13.26   1.02    0.04    -0.29   0.43    0.14    0.06    -0.20   -0.32   0.40    0.22    -0.07   0.45    -0.02   -0.04   0.00    0.02    -0.02   0.03    0.00    0.00    0.00    -1.00   -0.91   -0.99   0.30
-  -2.81   0.61    0.95    12.98   1.01    0.08    -0.48   0.24    -0.11   -0.15   -0.16   -0.22   0.38    0.20    -0.35   0.16    -0.31   -0.01   0.00    0.00    0.00    0.05    0.00    0.00    0.00    -0.66   -0.49   -1.89   0.43
-  2.85    0.35    0.95    12.99   1.01    0.04    -0.22   0.00    -0.50   0.05    0.15    0.14    0.30    -0.20   -0.22   -0.22   0.04    -0.34   0.00    0.00    -0.01   0.03    0.00    0.00    0.00    0.01    0.22    -1.76   -0.39
-  -2.57   -0.54   1.04    14.22   1.07    0.05    0.45    0.01    -0.43   -0.51   -0.01   -0.20   0.13    -0.02   0.26    -0.62   0.00    -0.30   0.00    0.00    0.00    0.06    0.00    0.00    0.00    0.60    1.59    0.05    -0.46
-  3.41    -0.72   1.03    14.04   1.05    0.07    0.37    0.06    0.08    0.55    -0.21   -0.14   -0.10   -0.18   0.51    0.17    -0.24   0.05    0.00    0.00    0.02    0.07    0.00    0.00    0.00    0.52    0.71    1.63    -0.95
-  3.75    -0.54   1.01    13.83   1.04    0.06    0.16    -0.16   0.38    -0.19   -0.01   0.16    -0.11   0.18    0.37    0.00    -0.43   0.20    0.00    0.00    0.00    0.06    0.00    0.00    0.00    -0.53   -0.07   1.85    -0.01
-  0.41    1.19    1.05    14.28   1.08    0.06    -0.27   -0.38   0.32    -0.11   0.10    0.07    -0.31   0.31    -0.25   -0.24   -0.01   0.27    0.00    0.00    0.01    0.09    0.00    0.00    0.00    -0.75   -0.03   0.14    -0.26
-  -4.14   0.72    0.97    13.20   1.01    0.03    -0.13   -0.28   0.03    -0.16   0.48    -0.28   -0.26   0.40    -0.24   -0.10   0.18    -0.20   0.00    0.00    0.00    0.08    0.00    0.00    0.00    -0.44   1.03    -0.50   -0.15
-  2.21    -0.02   0.96    13.09   1.00    0.01    0.18    -0.26   -0.04   0.14    -0.05   -0.37   -0.26   -0.10   0.07    0.25    -0.10   -0.54   0.00    0.00    0.00    0.08    0.00    0.00    0.00    0.28    1.54    0.12    -0.77
-  0.08    -0.06   0.95    12.89   0.99    0.01    0.15    -0.12   0.31    -0.22   -0.37   0.08    -0.22   0.12    -0.02   0.01    -0.15   -0.10   0.00    0.00    0.00    0.08    0.00    0.00    0.00    -0.46   1.00    0.70    0.08
-  -1.41   0.29    0.96    13.06   0.99    0.01    -0.04   0.07    0.10    0.31    0.47    0.27    -0.22   0.09    0.11    0.12    0.56    0.14    0.00    0.00    0.00    0.07    0.00    0.00    0.00    -0.67   0.44    0.25    -0.57
+framewise_displacement	trans_x	trans_y	trans_z	rot_x	rot_y	rot_z	hmc_r2	hmc_xcorr	original_file	grad_x	grad_y	grad_z	bval
 
+n/a	-0.705	-0.002	0.133	0.119	0.350	0.711	0.941	0.943	sub-abcd_dwi.nii.gz	0.000	0.000	0.000	0.000
+16.343	-0.711	-0.075	0.220	0.067	0.405	0.495	0.945	0.946	sub-abcd_dwi.nii.gz	0.000	0.000	0.000	0.000
+35.173	-0.672	-0.415	0.725	0.004	0.468	1.055	0.756	0.766	sub-abcd_dwi.nii.gz	-0.356	0.656	0.665	3000.000
+45.131	0.021	-0.498	1.046	0.403	0.331	1.400	0.771	0.778	sub-abcd_dwi.nii.gz	-0.935	0.272	0.229	3000.000
+37.506	-0.184	0.117	0.723	0.305	0.138	0.964	0.895	0.896	sub-abcd_dwi.nii.gz	-0.187	-0.957	-0.223	2000.000
+16.388	-0.447	0.020	0.847	0.217	0.129	0.743	0.792	0.800	sub-abcd_dwi.nii.gz	-0.111	-0.119	0.987	3000.000
 
-Each row of the file corresponds to one time point found in the
-corresponding :abbr:`BOLD (blood-oxygen level dependent)` time-series
-(stored in ``<output_folder>/qsiprep/sub-<sub_id>/func/sub-<sub_id>_task-<task_id>_run-<run_id>_bold_preproc.nii.gz``).
-
-Columns represent the different confounds: ``CSF`` and ``WhiteMatter`` are the average signal inside
-the :abbr:`CSF (cerebro-spinal fluid)` and :abbr:`WM (white matter)` mask across time;
-``GlobalSignal`` corresponds to the global-signal within the whole-brain mask; three columns relate to the
-derivative of RMS variance over voxels (or :abbr:`DVARS (D referring to difference, )`) that can be
-standardized (``stdDVARS``), non-standardized (``non-stdDVARS``), and voxel-wise standardized (``vx-wisestdDVARS``);
-the ``FrameDisplacement`` is a quantification of the estimated bulk-head motion; ``X``, ``Y``, ``Z``, ``RotX``,
-``RotY``, ``RotZ`` are the actual 6 rigid-body transform parameters estimated by qsiprep;
-the ``NonSteadyStateOutlierXX`` columns indicate non-steady state volumes with a single ``1`` value and ``0`` elsewhere (there
-is one ``NonSteadyStateOutlierXX`` column per outlier/volume); and finally six noise components ``aCompCorXX`` calculated using
-:abbr:`CompCor (Component Based Noise Correction Method)`
-and five noise components ``AROMAaggrCompXX`` if
-:abbr:`ICA (independent components analysis)`-:abbr:`AROMA (Automatic Removal Of Motion Artifacts)` was enabled.
-
-All these confounds can be used to perform *scrubbing* and *censoring* of outliers,
-in the subsequent first-level analysis when building the design matrix,
-and in group level analysis.
+The motion parameters come from the model-based head motion estimation workflow. The ``hmc_r2`` and
+``hmc_xcorr`` are whole-brain r^2 values and cross correlation scores (using the ANTs definition)
+between the model-generated target image and the motion-corrected empirical image. The final
+columns are not really confounds, but book-keeping information that reminds us which 4d DWI series
+the image originally came from and what gradient direction (``grad_x``, ``grad_y``, ``grad_z``)
+and gradient strength ``bval`` the image came from. This can be useful for tracking down
+mostly-corrupted scans and can indicate if the head motion model isn't working on specific
+gradient strengths or directions.
 
 Confounds and "carpet"-plot on the visual reports
 -------------------------------------------------
 
-Some of the estimated confounds, as well as a "carpet" visualization of the
-:abbr:`BOLD (blood-oxygen level-dependant)` time-series (see [Power2016]_).
+fMRI has been using a "carpet" visualization of the
+:abbr:`BOLD (blood-oxygen level-dependant)` time-series (see [Power2016]_),
+but this type of plot does not make sense for DWI data. Instead, we plot
+the cross-correlation value between each raw slice and the HMC model signal
+resampled into that slice.
 This plot is included for each run within the corresponding visual report.
 An example of these plots follows:
 
 
-.. figure:: _static/sub-01_task-mixedgamblestask_run-01_bold_carpetplot.svg
+.. figure:: _static/sub-abcd_carpetplot.svg
     :scale: 100%
 
-    The figure shows on top several confounds estimated for the BOLD series:
-    global signals ('GlobalSignal', 'WM', 'GM'), standardized DVARS ('stdDVARS'),
-    and framewise-displacement ('FramewiseDisplacement').
-    At the bottom, a 'carpetplot' summarizing the BOLD series.
-    The colormap on the left-side of the carpetplot denotes signals located
-    in cortical gray matter regions (blue), subcortical gray matter (orange),
-    cerebellum (green) and the union of white-matter and CSF compartments (red).
+    Higher scores appear more yellow, while lower scores
+    are more blue. Not all slices contain the same number of voxels,
+    so the number of voxels in the slice is represented in the color bar
+    to the left of the image plot. The more yellow the pixel, the more
+    voxels are present in the slice. Purple pixels reflect slices with fewer
+    brain voxels.
 
 
 .. topic:: References

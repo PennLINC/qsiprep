@@ -23,7 +23,7 @@ preprocessed output per each DWI file in your input.
 
 If ``combine_all_dwis`` is set to ``True``, two possibilities arise. If all DWIs in a session
 are in the same PE direction, they will be merged into a single series. If there are
-two PE directions detected in the DWI scans and ``'fieldmaps'``` is not in ``ignore``,
+two PE directions detected in the DWI scans and ``'fieldmaps'`` is not in ``ignore``,
 images are combined according to their PE direction, and their b0 reference images are used to
 perform SDC. Either way, at the end of the day, there will be one preprocessed DWI
 file per session in your input.

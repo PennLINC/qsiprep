@@ -19,6 +19,7 @@ Contents
    merging
    workflows
    outputs
+   reconstruction
    contributors
    citing
    api/index.rst

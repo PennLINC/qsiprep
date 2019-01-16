@@ -22,13 +22,12 @@ def init_b0_to_anat_registration_wf(mem_gb=3, omp_nthreads=1, write_report=True,
         :graph2use: orig
         :simple_form: yes
 
-        from qsiprep.workflows.dwi.registration import init_b0init_b0_to_anat_registration_wf
+        from qsiprep.workflows.dwi.registration import init_b0_to_anat_registration_wf
         wf = init_b0_to_anat_registration_wf(
                               mem_gb=3,
                               omp_nthreads=1,
                               transform_type="Rigid",
-                              write_report=False,
-                              bold2t1w_dof=9)
+                              write_report=False)
 
     **Parameters**
 

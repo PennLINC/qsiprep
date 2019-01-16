@@ -17,35 +17,38 @@ is presented below:
     :simple_form: yes
 
     from qsiprep.workflows.base import init_single_subject_wf
-    wf = init_single_subject_wf(
-        subject_id='test',
-        name='single_subject_wf',
-        longitudinal=False,
-        omp_nthreads=1,
-        freesurfer=False,
-        reportlets_dir='.',
-        output_dir='.',
-        bids_dir='.',
-        skull_strip_template='OASIS',
-        skull_strip_fixed_seed=False,
-        template='MNI152NLin2009cAsym',
-        output_spaces=['T1w', 'template'],
-        ignore=[],
-        debug=False,
-        low_mem=False,
-        anat_only=False,
-        hires=True,
-        use_bbr=True,
-        bold2t1w_dof=9,
-        fmap_bspline=False,
-        fmap_demean=True,
-        use_syn=True,
-        force_syn=True,
-        template_out_grid='native',
-        use_aroma=False,
-        aroma_melodic_dim=None,
-        ignore_aroma_err=False,
-    )
+    wf = init_single_subject_wf(subject_id="1",
+                                name="test_wf",
+                                reportlets_dir=".",
+                                output_dir=".",
+                                bids_dir=".",
+                                ignore=[],
+                                debug=False,
+                                write_local_bvecs=False,
+                                low_mem=False,
+                                anat_only=False,
+                                longitudinal=False,
+                                denoise_before_combining=True,
+                                dwi_denoise_window=7,
+                                combine_all_dwis=True,
+                                omp_nthreads=1,
+                                skull_strip_template='OASIS',
+                                skull_strip_fixed_seed=False,
+                                freesurfer=False,
+                                hires=False,
+                                output_spaces=['T1w', 'template'],
+                                template='MNI152NLin2009cAsym',
+                                output_resolution=2.0,
+                                prefer_dedicated_fmaps=False,
+                                motion_corr_to='iterative',
+                                b0_to_t1w_transform='Rigid',
+                                hmc_model='3dSHORE',
+                                hmc_transform='Affine',
+                                impute_slice_threshold=0.,
+                                fmap_bspline=True,
+                                fmap_demean=True,
+                                use_syn=False,
+                                force_syn=False)
 
 
 T1w/T2w preprocessing
@@ -301,12 +304,11 @@ b0 to T1w registration
     :graph2use: orig
     :simple_form: yes
 
-    from qsiprep.workflows.dwi.registration import init_b0init_b0_to_anat_registration_wf
+    from qsiprep.workflows.dwi.registration import init_b0_to_anat_registration_wf
     wf = init_b0_to_anat_registration_wf(
                                          mem_gb=3,
                                          omp_nthreads=1,
                                          transform_type="Rigid",
-                                         write_report=False,
-                                         bold2t1w_dof=9)
+                                         write_report=False)
 
 This just uses `antsRegistration`.
