@@ -179,9 +179,9 @@ RUN apt-get install -y nodejs
 RUN npm install -g svgo
 
 # Installing and setting up miniconda
-RUN curl -sSLO https://repo.continuum.io/miniconda/Miniconda3-4.5.4-Linux-x86_64.sh && \
-    bash Miniconda3-4.5.4-Linux-x86_64.sh -b -p /usr/local/miniconda && \
-    rm Miniconda3-4.5.4-Linux-x86_64.sh
+RUN curl -sSLO https://repo.continuum.io/miniconda/Miniconda3-4.5.12-Linux-x86_64.sh && \
+    bash Miniconda3-4.5.12-Linux-x86_64.sh -b -p /usr/local/miniconda && \
+    rm Miniconda3-4.5.12-Linux-x86_64.sh
 
 ENV PATH=/usr/local/miniconda/bin:$PATH \
     LANG=C.UTF-8 \
@@ -189,16 +189,16 @@ ENV PATH=/usr/local/miniconda/bin:$PATH \
     PYTHONNOUSERSITE=1
 
 # Installing precomputed python packages
-RUN conda install -y mkl=2018.0.3 mkl-service;  sync &&\
-    conda install -y numpy=1.14.3 \
-                     scipy=1.1.0 \
-                     scikit-learn=0.19.1 \
-                     matplotlib=2.2.0 \
-                     pandas=0.23.0 \
-                     libxml2=2.9.4 \
-                     libxslt=1.1.29 \
+RUN conda install -y mkl=2019.1 mkl-service;  sync &&\
+    conda install -y numpy=1.15.4 \
+                     scipy=1.2.0 \
+                     scikit-learn=0.20.2 \
+                     matplotlib=3.0.2 \
+                     pandas=0.24.0 \
+                     libxml2=2.9.9 \
+                     libxslt=1.1.33 \
                      graphviz=2.40.1 \
-                     cython \
+                     cython=0.29.2 \
                      traits=4.6.0; sync &&  \
     chmod -R a+rX /usr/local/miniconda; sync && \
     chmod +x /usr/local/miniconda/bin/*; sync && \
@@ -221,6 +221,15 @@ ENV MKL_NUM_THREADS=1 \
 
 WORKDIR /root/
 
+ENV QSIRECON_ATLAS /atlas/qsirecon_atlases
+RUN bash -c \
+    'mkdir /atlas \
+    && cd  /atlas \
+    && wget -nv https://upenn.box.com/shared/static/pvttd0om8zhzfjr7ul6uiny24gmz7ns2.xz \
+    && tar xvfJm pvttd0om8zhzfjr7ul6uiny24gmz7ns2.xz \
+    && rm pvttd0om8zhzfjr7ul6uiny24gmz7ns2.xz'
+
+
 # Precaching atlases
 ENV CRN_SHARED_DATA /niworkflows_data
 ADD docker/scripts/get_templates.sh get_templates.sh
@@ -241,7 +250,6 @@ ARG VERSION
 RUN echo "${VERSION}" > /root/src/qsiprep/qsiprep/VERSION && \
     cd /root/src/qsiprep && \
     pip install .[all] && \
-    pip install 'niworkflows>=0.5.2.post5,<0.5.3' && \
     rm -rf ~/.cache/pip
 
 ENV AFNI_INSTALLDIR=/usr/lib/afni \

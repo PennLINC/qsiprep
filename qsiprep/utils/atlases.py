@@ -3,15 +3,9 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 """
-Utilities to handle BIDS inputs
+Loading atlases
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Fetch some test data
-
-    >>> import os
-    >>> from niworkflows import data
-    >>> data_root = data.get_bids_examples(variant='BIDS-examples-1-enh-ds054')
-    >>> os.chdir(data_root)
 
 """
 import os

@@ -4,4 +4,3 @@ versioneer
 fmriprep==1.2.3
 dipy
 niworkflows>=0.5.2.post5,<0.5.3
-numpy==1.15.4
