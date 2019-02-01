@@ -15,7 +15,7 @@ def main():
 
     setup(
         name=info['__packagename__'],
-        version=info['__version__'],
+        version='0.1.0',
         description=info['__description__'],
         long_description=info['__longdesc__'],
         author=info['__author__'],
@@ -32,8 +32,9 @@ def main():
         extras_require={},
         dependency_links=[],
         package_data={},
-        py_modules=["qsiprep_docker"],
-        entry_points={'console_scripts': ['qsiprep-docker=qsiprep_docker:main']},
+        py_modules=["qsiprep_docker", "qsiprep_singularity"],
+        entry_points={'console_scripts': ['qsiprep-docker=qsiprep_docker:main',
+                                          'qsiprep-singularity=qsiprep_singularity:main']},
         packages=find_packages(),
         zip_safe=False
     )
