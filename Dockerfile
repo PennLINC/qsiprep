@@ -268,3 +268,9 @@ LABEL org.label-schema.build-date=$BUILD_DATE \
       org.label-schema.vcs-url="https://github.com/pennbbl/qsiprep" \
       org.label-schema.version=$VERSION \
       org.label-schema.schema-version="1.0"
+
+# Make singularity mount directories
+RUN  mkdir -p /sngl/data \
+  && mkdir /sngl/qsiprep-output \
+  && mkdir /sngl/out \
+  && mkdir /sngl/scratch

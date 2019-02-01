@@ -3,7 +3,7 @@ jobs:
 
   build:
     environment:
-      TZ: "/usr/share/zoneinfo/America/Los_Angeles"
+      TZ: "/usr/share/zoneinfo/America/New_York"
       SCRATCH: "/scratch"
     docker:
       - image: docker:18.01.0-ce-git
