@@ -175,7 +175,8 @@ class IdealSignalRegistration(SimpleInterface):
         model_bvecs = np.row_stack([np.zeros(3)] + [bvecs[n] for n in target_indices])
         model_bvals = np.array([0.] + [bvals[n] for n in target_indices])
         model_data = np.stack([b0_mean] +
-                              [nb.load(img).get_data() for img in non_b0_image_paths], -1)
+                              [nb.load(img).get_data().astype(np.float32) for img in
+                              non_b0_image_paths], -1)  # 64bit precision is too much here
 
         gtab = gradient_table(bvals=model_bvals, bvecs=model_bvecs)
         predicted_signal = estimate_signal_targets(self.inputs.model_name, gtab, model_data,
