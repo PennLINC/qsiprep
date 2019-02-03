@@ -41,9 +41,9 @@ from nilearn._utils.niimg import _safe_get_data
 import seaborn as sns
 from seaborn import color_palette
 from nipype.interfaces.ants import Registration
-from niworkflows.interfaces.registration import (ANTSRegistrationInputSpecRPT,
-                                                 ANTSRegistrationOutputSpecRPT,
-                                                 nrc)
+from ..niworkflows.interfaces.registration import (ANTSRegistrationInputSpecRPT,
+                                                   ANTSRegistrationOutputSpecRPT,
+                                                   nrc)
 
 LOGGER = logging.getLogger('nipype.interface')
 

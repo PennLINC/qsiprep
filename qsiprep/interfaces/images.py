@@ -24,7 +24,7 @@ from nipype.interfaces import fsl
 from fmriprep.interfaces.images import (
     normalize_xform, demean, nii_ones_like, extract_wm, SignalExtraction, MatchHeader,
     FilledImageLike, DemeanImage, TemplateDimensions)
-from niworkflows.interfaces.images import ValidateImageInputSpec, ValidateImageOutputSpec
+from ..niworkflows.interfaces.images import ValidateImageInputSpec, ValidateImageOutputSpec
 from nipype.interfaces.afni.base import AFNICommand, AFNICommandInputSpec, AFNICommandOutputSpec
 
 LOGGER = logging.getLogger('nipype.interface')

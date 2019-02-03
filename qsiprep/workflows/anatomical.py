@@ -27,11 +27,11 @@ from nipype.interfaces import (
 )
 from nipype.interfaces.ants import BrainExtraction, N4BiasFieldCorrection
 
-from niworkflows.interfaces.registration import RobustMNINormalizationRPT
-from niworkflows.interfaces.masks import ROIsPlot
-from niworkflows.interfaces.ants import AI
+from ..niworkflows.interfaces.registration import RobustMNINormalizationRPT
+from ..niworkflows.interfaces.masks import ROIsPlot
+from ..niworkflows.interfaces.ants import AI
 
-from niworkflows.interfaces.fixes import FixHeaderApplyTransforms as ApplyTransforms
+from ..niworkflows.interfaces.fixes import FixHeaderApplyTransforms as ApplyTransforms
 
 from fmriprep.engine import Workflow
 from fmriprep.interfaces import (
@@ -645,7 +645,7 @@ def init_skullstrip_ants_wf(skull_strip_template, debug, omp_nthreads, acpc_temp
         out_report
             Reportlet visualizing quality of skull-stripping
     """
-    from niworkflows.data.getters import get_template, TEMPLATE_ALIASES
+    from ..niworkflows.data.getters import get_template, TEMPLATE_ALIASES
 
     if skull_strip_template not in ['OASIS', 'NKI']:
         raise ValueError("Unknown skull-stripping template; select from {OASIS, NKI}")

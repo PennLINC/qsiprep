@@ -14,8 +14,8 @@ import pkg_resources as pkgr
 
 from nipype.pipeline import engine as pe
 from nipype.interfaces import afni, ants, fsl, utility as niu
-from niworkflows.interfaces import CopyHeader
-from niworkflows.interfaces.registration import ANTSApplyTransformsRPT
+from ...niworkflows.interfaces import CopyHeader
+from ...niworkflows.interfaces.registration import ANTSApplyTransformsRPT
 
 from fmriprep.engine import Workflow
 from ...interfaces import StructuralReference

@@ -276,9 +276,6 @@ def get_parser():
     g_dev.add_argument('-f', '--patch-qsiprep', metavar='PATH',
                        type=os.path.abspath,
                        help='working qsiprep repository')
-    g_dev.add_argument('-n', '--patch-niworkflows', metavar='PATH',
-                       type=os.path.abspath,
-                       help='working niworkflows repository')
     g_dev.add_argument('-p', '--patch-nipype', metavar='PATH',
                        type=os.path.abspath,
                        help='working nipype repository')
@@ -358,7 +355,7 @@ def main():
     command = ['docker', 'run', '--rm', '-it']
 
     # Patch working repositories into installed package directories
-    for pkg in ('qsiprep', 'niworkflows', 'nipype'):
+    for pkg in ('qsiprep', 'nipype'):
         repo_path = getattr(opts, 'patch_' + pkg)
         if repo_path is not None:
             command.extend(['-v',

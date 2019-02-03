@@ -13,10 +13,6 @@ By default, work should be built off of `pennbbl/qsiprep:latest
 <https://hub.docker.com/r/pennbbl/qsiprep/>`_ (see the
 installation_ guide for the basic procedure for running).
 
-It will be assumed the developer has a working repository in
-``$HOME/projects/qsiprep``, and examples are also given for
-`niworkflows <https://github.com/pennbbl/niworkflows>`_ and
-`nipype`_.
 
 Patching working repositories
 =============================
@@ -27,15 +23,12 @@ The `qsiprep-docker`_ script simplifies this for the most common repositories::
 
     -f PATH, --patch-qsiprep PATH
                           working qsiprep repository (default: None)
-    -n PATH, --patch-niworkflows PATH
-                          working niworkflows repository (default: None)
     -p PATH, --patch-nipype PATH
                           working nipype repository (default: None)
 
 For instance, if your repositories are contained in ``$HOME/projects``::
 
     $ qsiprep-docker -f $HOME/projects/qsiprep/qsiprep \
-                      -n $HOME/projects/niworkflows/niworkflows \
                       -p $HOME/projects/nipype/nipype \
                       -i pennbbl/qsiprep:latest \
                       $HOME/fullds005 $HOME/dockerout participant
@@ -46,7 +39,6 @@ When invoking ``docker`` directly, the mount options must be specified
 with the ``-v`` flag::
 
     -v $HOME/projects/qsiprep/qsiprep:/usr/local/miniconda/lib/python3.6/site-packages/qsiprep:ro
-    -v $HOME/projects/niworkflows/niworkflows:/usr/local/miniconda/lib/python3.6/site-packages/niworkflows:ro
     -v $HOME/projects/nipype/nipype:/usr/local/miniconda/lib/python3.6/site-packages/nipype:ro
 
 For example, ::
@@ -164,4 +156,3 @@ An example of how this works is shown here: ::
     parameters) are estimated before any spatiotemporal filtering using
     `mcflirt` [FSL {fsl_ver}, @mcflirt].
     """.format(fsl_ver=fsl.Info().version() or '<ver>')
-

@@ -8,7 +8,7 @@ Interfaces for handling BIDS-like neuroimaging structures
 Fetch some example data:
 
     >>> import os
-    >>> from niworkflows import data
+    >>> from qsiprep.niworkflows import data
     >>> data_root = data.get_bids_examples(variant='BIDS-examples-1-enh-ds054')
     >>> os.chdir(data_root)
 

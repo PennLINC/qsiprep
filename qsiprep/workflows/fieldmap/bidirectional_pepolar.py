@@ -14,7 +14,7 @@ import pkg_resources as pkgr
 
 from nipype.pipeline import engine as pe
 from nipype.interfaces import afni, ants, utility as niu
-from niworkflows.interfaces import CopyHeader
+from ...niworkflows.interfaces import CopyHeader
 
 from fmriprep.engine import Workflow
 from fmriprep.workflows.bold.util import init_enhance_and_skullstrip_bold_wf

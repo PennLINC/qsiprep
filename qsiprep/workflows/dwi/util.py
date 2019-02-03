@@ -15,15 +15,15 @@ from pkg_resources import resource_filename as pkgr_fn
 
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu, fsl, afni, ants
-from niworkflows.data import get_template
-from niworkflows.interfaces.ants import AI
-from niworkflows.interfaces.fixes import (
+from ...niworkflows.data import get_template
+from ...niworkflows.interfaces.ants import AI
+from ...niworkflows.interfaces.fixes import (
     FixHeaderRegistration as Registration,
     FixHeaderApplyTransforms as ApplyTransforms,
 )
-from niworkflows.interfaces.masks import SimpleShowMaskRPT
-from niworkflows.interfaces.registration import EstimateReferenceImage
-from niworkflows.interfaces.utils import CopyXForm
+from ...niworkflows.interfaces.masks import SimpleShowMaskRPT
+from ...niworkflows.interfaces.registration import EstimateReferenceImage
+from ...niworkflows.interfaces.utils import CopyXForm
 
 from fmriprep.engine import Workflow
 from ...interfaces import ValidateImage, MatchHeader

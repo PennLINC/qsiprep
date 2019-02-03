@@ -29,4 +29,3 @@ dependencies:
     - svgutils
     - nitime
     - nilearn
-    - niworkflows==0.5.2post5
