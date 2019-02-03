@@ -17,7 +17,7 @@ from nipype.interfaces import afni, ants, fsl, utility as niu
 from ...niworkflows.interfaces import CopyHeader
 from ...niworkflows.interfaces.registration import ANTSApplyTransformsRPT
 
-from fmriprep.engine import Workflow
+from ...engine import Workflow
 from ...interfaces import StructuralReference
 from ..dwi.util import init_enhance_and_skullstrip_dwi_wf
 

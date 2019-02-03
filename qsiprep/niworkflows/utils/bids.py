@@ -63,7 +63,7 @@ def collect_participants(bids_dir, participant_label=None, strict=False):
     >>> collect_participants(str(datadir / 'ds114'), participant_label=['02', '14'],
     ...                      strict=True)  # doctest: +IGNORE_EXCEPTION_DETAIL
     Traceback (most recent call last):
-    fmriprep.utils.bids.BIDSError:
+    qsiprep.utils.bids.BIDSError:
     ...
     """
     bids_dir = Path(bids_dir).resolve()

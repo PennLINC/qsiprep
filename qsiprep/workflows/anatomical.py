@@ -33,16 +33,16 @@ from ..niworkflows.interfaces.ants import AI
 
 from ..niworkflows.interfaces.fixes import FixHeaderApplyTransforms as ApplyTransforms
 
-from fmriprep.engine import Workflow
-from fmriprep.interfaces import (
+from ..engine import Workflow
+from ..interfaces import (
     StructuralReference, MakeMidthickness, FSInjectBrainExtracted,
     FSDetectInputs, NormalizeSurf, GiftiNameSource, TemplateDimensions,
     ConcatAffines, RefineBrainMask, DerivativesDataSink as FDerivativesDataSink
 )
 
 from qsiprep.interfaces import Conform
-from fmriprep.utils.misc import fix_multi_T1w_source_name, add_suffix
-from fmriprep.interfaces.freesurfer import (
+from ..utils.misc import fix_multi_T1w_source_name, add_suffix
+from ..interfaces.freesurfer import (
         PatchedLTAConvert as LTAConvert)
 
 from nipype import logging
@@ -81,7 +81,7 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug,
         :graph2use: orig
         :simple_form: yes
 
-        from fmriprep.workflows.anatomical import init_anat_preproc_wf
+        from qsiprep.workflows.anatomical import init_anat_preproc_wf
         wf = init_anat_preproc_wf(omp_nthreads=1,
                                   reportlets_dir='.',
                                   output_dir='.',
@@ -194,7 +194,7 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug,
     **Subworkflows**
 
         * :py:func:`~qsiprep.workflows.anatomical.init_skullstrip_ants_wf`
-        * :py:func:`~fmriprep.workflows.anatomical.init_surface_recon_wf`
+        * :py:func:`~qsiprep.workflows.anatomical.init_surface_recon_wf`
 
     """
 
@@ -476,7 +476,7 @@ def init_anat_template_wf(longitudinal, omp_nthreads, num_t1w, name='anat_templa
         :graph2use: orig
         :simple_form: yes
 
-        from fmriprep.workflows.anatomical import init_anat_template_wf
+        from qsiprep.workflows.anatomical import init_anat_template_wf
         wf = init_anat_template_wf(longitudinal=False, omp_nthreads=1, num_t1w=1)
 
     **Parameters**
@@ -542,7 +542,7 @@ A T1w-reference map was computed after registration of
                 return in_list[0]
             return in_list
 
-        outputnode.inputs.template_transforms = [pkgr('fmriprep', 'data/itkIdentityTransform.txt')]
+        outputnode.inputs.template_transforms = [pkgr('qsiprep', 'data/itkIdentityTransform.txt')]
 
         workflow.connect([
             (t1_conform, outputnode, [(('out_file', _get_first), 't1_template')]),
@@ -618,7 +618,7 @@ def init_skullstrip_ants_wf(skull_strip_template, debug, omp_nthreads, acpc_temp
     .. workflow::
         :graph2use: orig
         :simple_form: yes
-        from fmriprep.workflows.anatomical import init_skullstrip_ants_wf
+        from qsiprep.workflows.anatomical import init_skullstrip_ants_wf
         wf = init_skullstrip_ants_wf(skull_strip_template='OASIS', debug=False, omp_nthreads=1)
     **Parameters**
         skull_strip_template : str
@@ -809,7 +809,7 @@ def init_surface_recon_wf(omp_nthreads, hires, name='surface_recon_wf'):
     https://github.com/nipy/mindboggle/blob/7f91faaa7664d820fe12ccc52ebaf21d679795e2/mindboggle/guts/segment.py#L1660
     The final phase resumes reconstruction, using the T2w image to assist
     in finding the pial surface, if available.
-    See :py:func:`~fmriprep.workflows.anatomical.init_autorecon_resume_wf` for details.
+    See :py:func:`~qsiprep.workflows.anatomical.init_autorecon_resume_wf` for details.
     Memory annotations for FreeSurfer are based off `their documentation
     <https://surfer.nmr.mgh.harvard.edu/fswiki/SystemRequirements>`_.
     They specify an allocation of 4GB per subject. Here we define 5GB
@@ -817,7 +817,7 @@ def init_surface_recon_wf(omp_nthreads, hires, name='surface_recon_wf'):
     .. workflow::
         :graph2use: orig
         :simple_form: yes
-        from fmriprep.workflows.anatomical import init_surface_recon_wf
+        from qsiprep.workflows.anatomical import init_surface_recon_wf
         wf = init_surface_recon_wf(omp_nthreads=1, hires=True)
     **Parameters**
         omp_nthreads : int
@@ -862,8 +862,8 @@ def init_surface_recon_wf(omp_nthreads, hires, name='surface_recon_wf'):
         out_report
             Reportlet visualizing quality of surface alignment
     **Subworkflows**
-        * :py:func:`~fmriprep.workflows.anatomical.init_autorecon_resume_wf`
-        * :py:func:`~fmriprep.workflows.anatomical.init_gifti_surface_wf`
+        * :py:func:`~qsiprep.workflows.anatomical.init_autorecon_resume_wf`
+        * :py:func:`~qsiprep.workflows.anatomical.init_gifti_surface_wf`
     """
 
     workflow = Workflow(name=name)
@@ -998,7 +998,7 @@ def init_autorecon_resume_wf(omp_nthreads, name='autorecon_resume_wf'):
     .. workflow::
         :graph2use: orig
         :simple_form: yes
-        from fmriprep.workflows.anatomical import init_autorecon_resume_wf
+        from qsiprep.workflows.anatomical import init_autorecon_resume_wf
         wf = init_autorecon_resume_wf(omp_nthreads=1)
     **Inputs**
         subjects_dir
@@ -1095,11 +1095,11 @@ def init_gifti_surface_wf(name='gifti_surface_wf'):
     sufaces (``lh/rh.pial``) and inflated surfaces (``lh/rh.inflated``) are
     converted to GIFTI files.
     Additionally, the vertex coordinates are :py:class:`recentered
-    <fmriprep.interfaces.NormalizeSurf>` to align with native T1w space.
+    <qsiprep.interfaces.NormalizeSurf>` to align with native T1w space.
     .. workflow::
         :graph2use: orig
         :simple_form: yes
-        from fmriprep.workflows.anatomical import init_gifti_surface_wf
+        from qsiprep.workflows.anatomical import init_gifti_surface_wf
         wf = init_gifti_surface_wf()
     **Inputs**
         subjects_dir
@@ -1164,7 +1164,7 @@ def init_segs_to_native_wf(name='segs_to_native', segmentation='aseg'):
     .. workflow::
         :graph2use: orig
         :simple_form: yes
-        from fmriprep.workflows.anatomical import init_segs_to_native_wf
+        from qsiprep.workflows.anatomical import init_segs_to_native_wf
         wf = init_segs_to_native_wf()
     **Parameters**
         segmentation

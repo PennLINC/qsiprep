@@ -21,9 +21,9 @@ from nipype.utils.filemanip import fname_presuffix
 from nipype.interfaces.base import (isdefined, traits, TraitedSpec, BaseInterfaceInputSpec,
                                     SimpleInterface, File, InputMultiObject, OutputMultiObject)
 from nipype.interfaces import fsl
-from fmriprep.interfaces.images import (
-    normalize_xform, demean, nii_ones_like, extract_wm, SignalExtraction, MatchHeader,
-    FilledImageLike, DemeanImage, TemplateDimensions)
+#from qsiprep.interfaces.images import (
+#    nii_ones_like, extract_wm, SignalExtraction, MatchHeader,
+#    FilledImageLike, DemeanImage, TemplateDimensions)
 from ..niworkflows.interfaces.images import ValidateImageInputSpec, ValidateImageOutputSpec
 from nipype.interfaces.afni.base import AFNICommand, AFNICommandInputSpec, AFNICommandOutputSpec
 

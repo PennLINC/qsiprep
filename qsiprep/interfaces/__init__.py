@@ -5,21 +5,21 @@ from .bids import (
     ReadSidecarJSON, DerivativesDataSink, BIDSDataGrabber, BIDSFreeSurferDir,
     BIDSInfo
 )
+
+from ..niworkflows.interfaces.images import (TemplateDimensions, MatchHeader)
 from .images import (
-    IntraModalMerge, ValidateImage, TemplateDimensions, Conform, MatchHeader,
-    ConformDwi
+    IntraModalMerge, ValidateImage, Conform, ConformDwi
 )
 from .reports import SubjectSummary, AboutSummary, DiffusionSummary
-from fmriprep.interfaces.freesurfer import (
+from .freesurfer import (
     StructuralReference, MakeMidthickness, FSInjectBrainExtracted,
     FSDetectInputs, RefineBrainMask, MedialNaNs
 )
-from fmriprep.interfaces.surf import NormalizeSurf, GiftiNameSource, GiftiSetAnatomicalStructure
-from fmriprep.interfaces.utils import (TPM2ROI, AddTPMs, AddTSVHeader, ConcatAffines,
-                                       JoinTSVColumns)
-from fmriprep.interfaces.fmap import (
+from .surf import NormalizeSurf, GiftiNameSource, GiftiSetAnatomicalStructure
+from .utils import (TPM2ROI, AddTPMs, AddTSVHeader, ConcatAffines,
+                    JoinTSVColumns)
+from .fmap import (
     FieldEnhance, FieldToRadS, FieldToHz, Phasediff2Fieldmap)
-from fmriprep.interfaces.confounds import ICAConfounds, FMRISummary
-from fmriprep.interfaces.itk import MCFLIRT2ITK, MultiApplyTransforms
+from .itk import MultiApplyTransforms
 from .dwi_merge import MergeDWIs
 from .confounds import GatherConfounds, DMRISummary

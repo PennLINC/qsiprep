@@ -5,7 +5,7 @@
 
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
-from fmriprep.engine import Workflow
+from ...engine import Workflow
 from ...interfaces.niworkflows import ANTSRegistrationRPT
 from ...interfaces import DerivativesDataSink
 

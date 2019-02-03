@@ -30,7 +30,7 @@ from ...niworkflows.interfaces.registration import ANTSApplyTransformsRPT, ANTSR
 
 from ...interfaces import DerivativesDataSink
 from ..dwi.util import init_enhance_and_skullstrip_dwi_wf
-from fmriprep.interfaces.fmap import get_ees as _get_ees, FieldToRadS
+from ...interfaces.fmap import get_ees as _get_ees, FieldToRadS
 
 
 def init_sdc_unwarp_wf(omp_nthreads, fmap_demean, debug, name='sdc_unwarp_wf'):
@@ -46,7 +46,7 @@ def init_sdc_unwarp_wf(omp_nthreads, fmap_demean, debug, name='sdc_unwarp_wf'):
         :graph2use: orig
         :simple_form: yes
 
-        from fmriprep.workflows.fieldmap.unwarp import init_sdc_unwarp_wf
+        from qsiprep.workflows.fieldmap.unwarp import init_sdc_unwarp_wf
         wf = init_sdc_unwarp_wf(omp_nthreads=8,
                                 fmap_demean=True,
                                 debug=False)
@@ -96,10 +96,10 @@ def init_sdc_unwarp_wf(omp_nthreads, fmap_demean, debug, name='sdc_unwarp_wf'):
 
     # Register the reference of the fieldmap to the reference
     # of the target image (the one that shall be corrected)
-    ants_settings = pkgr.resource_filename('fmriprep', 'data/fmap-any_registration.json')
+    ants_settings = pkgr.resource_filename('qsiprep', 'data/fmap-any_registration.json')
     if debug:
         ants_settings = pkgr.resource_filename(
-            'fmriprep', 'data/fmap-any_registration_testing.json')
+            'qsiprep', 'data/fmap-any_registration_testing.json')
     fmap2ref_reg = pe.Node(
         ANTSRegistrationRPT(generate_report=True, from_file=ants_settings,
                             output_inverse_warped_image=True, output_warped_image=True),
@@ -220,7 +220,7 @@ def init_fmap_unwarp_report_wf(name='fmap_unwarp_report_wf', suffix='variant-hmc
         :graph2use: orig
         :simple_form: yes
 
-        from fmriprep.workflows.fieldmap.unwarp import init_fmap_unwarp_report_wf
+        from qsiprep.workflows.fieldmap.unwarp import init_fmap_unwarp_report_wf
         wf = init_fmap_unwarp_report_wf()
 
     **Parameters**

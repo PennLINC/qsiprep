@@ -13,7 +13,7 @@ import os.path as op
 from nipype.pipeline import engine as pe
 from nipype.interfaces import afni, utility as niu, ants
 
-from fmriprep.engine import Workflow
+from ...engine import Workflow
 from ...interfaces.nilearn import Merge
 from ...interfaces.gradients import (ComposeTransforms, ExtractB0s, GradientRotation,
                                      LocalGradientRotation)

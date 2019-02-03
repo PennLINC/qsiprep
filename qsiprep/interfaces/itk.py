@@ -22,7 +22,6 @@ from nipype.interfaces.base import (
     traits, TraitedSpec, BaseInterfaceInputSpec, File, InputMultiPath, OutputMultiPath,
     OutputMultiObject, SimpleInterface)
 from nipype.interfaces.ants.resampling import ApplyTransformsInputSpec
-from fmriprep.interfaces.itk import MCFLIRT2ITK, FUGUEvsm2ANTSwarp
 LOGGER = logging.getLogger('nipype.interface')
 
 

@@ -22,7 +22,6 @@ from nipype.interfaces.base import (
     File, Directory, InputMultiPath, InputMultiObject, Str, isdefined,
     SimpleInterface)
 from nipype.interfaces import freesurfer as fs
-from fmriprep.interfaces import FunctionalSummary
 from .bids import BIDS_NAME
 from .gradients import concatenate_bvals, concatenate_bvecs
 import matplotlib.pyplot as plt

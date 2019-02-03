@@ -22,7 +22,7 @@ from nipype.utils.filemanip import split_filename
 
 from nilearn import __version__ as nilearn_ver
 
-from fmriprep.engine import Workflow
+from ..engine import Workflow
 from ..interfaces import (BIDSDataGrabber, BIDSInfo, BIDSFreeSurferDir,
                           SubjectSummary, AboutSummary, DerivativesDataSink)
 from ..utils.bids import collect_data

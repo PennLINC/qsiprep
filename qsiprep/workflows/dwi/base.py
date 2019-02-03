@@ -25,7 +25,7 @@ from ...interfaces.images import SplitDWIs, ConcatRPESplits
 from ...interfaces.gradients import SliceQC
 from ...interfaces.confounds import DMRISummary
 from ...interfaces.mrtrix import MRTrixGradientTable
-from fmriprep.engine import Workflow
+from ...engine import Workflow
 
 # dwi workflows
 from ..fieldmap.bidirectional_pepolar import init_bidirectional_b0_unwarping_wf

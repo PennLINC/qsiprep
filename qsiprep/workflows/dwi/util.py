@@ -25,10 +25,10 @@ from ...niworkflows.interfaces.masks import SimpleShowMaskRPT
 from ...niworkflows.interfaces.registration import EstimateReferenceImage
 from ...niworkflows.interfaces.utils import CopyXForm
 
-from fmriprep.engine import Workflow
+from ...engine import Workflow
 from ...interfaces import ValidateImage, MatchHeader
 from ...interfaces.dipy import HistEQ, MedianOtsu
-from fmriprep.interfaces.nilearn import MaskEPI
+from ...interfaces.nilearn import MaskEPI
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
@@ -46,7 +46,7 @@ def init_dwi_reference_wf(omp_nthreads=1, dwi_file=None, pre_mask=False,
         :graph2use: orig
         :simple_form: yes
 
-        from fmriprep.workflows.dwi import init_dwi_reference_wf
+        from qsiprep.workflows.dwi import init_dwi_reference_wf
         wf = init_dwi_reference_wf(omp_nthreads=1)
 
     **Parameters**
@@ -84,7 +84,7 @@ def init_dwi_reference_wf(omp_nthreads=1, dwi_file=None, pre_mask=False,
 
     **Subworkflows**
 
-        * :py:func:`~fmriprep.workflows.dwi.util.init_enhance_and_skullstrip_wf`
+        * :py:func:`~qsiprep.workflows.dwi.util.init_enhance_and_skullstrip_wf`
 
     """
     workflow = Workflow(name=name)

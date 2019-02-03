@@ -336,7 +336,7 @@ def run_reports(reportlets_dir, out_dir, subject_label, run_uuid, config,
     >>> os.chdir(tmpdir.name)  #noqa
     >>> testdir = Path().resolve()
     >>> data_dir = copytree(test_data_path, testdir / 'work')
-    >>> (testdir / 'fmriprep').mkdir(parents=True, exist_ok=True)
+    >>> (testdir / 'qsiprep').mkdir(parents=True, exist_ok=True)
 
     .. doctest::
 

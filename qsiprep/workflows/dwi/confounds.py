@@ -13,7 +13,7 @@ from nipype.interfaces import utility as niu
 from nipype.algorithms import confounds as nac
 
 from ...interfaces.gradients import CombineMotions
-from fmriprep.engine import Workflow
+from ...engine import Workflow
 from ...interfaces import (
     AddTSVHeader, GatherConfounds, DMRISummary, DerivativesDataSink
 )
@@ -39,7 +39,7 @@ def init_dwi_confs_wf(mem_gb, metadata, impute_slice_threshold, name="dwi_confs_
         :graph2use: orig
         :simple_form: yes
 
-        from fmriprep.workflows.dwi.confounds import init_dwi_confs_wf
+        from qsiprep.workflows.dwi.confounds import init_dwi_confs_wf
         wf = init_dwi_confs_wf(
             mem_gb=1,
             metadata={})

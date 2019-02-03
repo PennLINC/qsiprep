@@ -1,9 +1,8 @@
-from fmriprep.engine import Workflow
+from ...engine import Workflow
 import nipype.pipeline.engine as pe
 from nipype.interfaces import ants, afni, utility as niu
 import pandas as pd
 from dipy.core.geometry import decompose_matrix
-from fmriprep.engine import Workflow
 import os
 import numpy as np
 from ...interfaces.gradients import MatchTransforms, GradientRotation

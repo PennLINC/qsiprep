@@ -36,7 +36,7 @@ from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
 from nipype import logging
 
-from fmriprep.engine import Workflow
+from ...engine import Workflow
 
 # Fieldmap workflows
 from .pepolar import init_pepolar_unwarp_wf

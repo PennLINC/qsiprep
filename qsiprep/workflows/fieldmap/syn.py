@@ -30,7 +30,7 @@ from nipype.pipeline import engine as pe
 from nipype.interfaces import fsl, ants, utility as niu
 from nipype.interfaces.image import Rescale
 
-from fmriprep.engine import Workflow
+from ...engine import Workflow
 from ..dwi.util import init_skullstrip_b0_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01

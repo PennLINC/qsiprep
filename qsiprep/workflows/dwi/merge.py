@@ -22,7 +22,7 @@ from nipype.interfaces import utility as niu
 
 from ...interfaces import MergeDWIs, ConformDwi
 
-from fmriprep.engine import Workflow
+from ...engine import Workflow
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger('nipype.workflow')

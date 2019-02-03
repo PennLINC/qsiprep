@@ -16,8 +16,7 @@ from nipype.pipeline import engine as pe
 from nipype.interfaces import afni, ants, utility as niu
 from ...niworkflows.interfaces import CopyHeader
 
-from fmriprep.engine import Workflow
-from fmriprep.workflows.bold.util import init_enhance_and_skullstrip_bold_wf
+from ...engine import Workflow
 from ..dwi.hmc import init_b0_hmc_wf
 from ..dwi.util import init_dwi_reference_wf
 
