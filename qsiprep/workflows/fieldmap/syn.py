@@ -117,7 +117,7 @@ template [@fieldmapless3].
 
     # Collect predefined data
     # Atlas image and registration affine
-    atlas_img = pkgr.resource_filename('qsiprep', 'data/mni_1mm_fmap_atlas_lps.nii.gz')
+    atlas_img = pkgr.resource_filename('qsiprep', 'data/mni_lps_fmap_atlas.nii.gz')
     # Registration specifications
     affine_transform = pkgr.resource_filename('qsiprep', 'data/affine.json')
     syn_transform = pkgr.resource_filename('qsiprep', 'data/susceptibility_syn.json')

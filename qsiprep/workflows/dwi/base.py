@@ -286,7 +286,8 @@ def init_dwi_preproc_wf(dwi_files,
         niu.IdentityInterface(fields=[
             'dwi_t1', 'dwi_mask_t1', 'bvals_t1', 'bvecs_t1', 'local_bvecs_t1', 't1_b0_ref',
             't1_b0_series', 'dwi_mni', 'dwi_mask_mni', 'bvals_mni', 'bvecs_mni',
-            'local_bvecs_mni', 'mni_b0_ref', 'mni_b0_series', 'confounds'
+            'local_bvecs_mni', 'mni_b0_ref', 'mni_b0_series', 'confounds', 'gradient_table_mni',
+            'gradient_table_t1'
         ]),
         name='outputnode')
 

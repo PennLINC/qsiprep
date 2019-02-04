@@ -243,8 +243,8 @@ def init_fmap_unwarp_report_wf(name='fmap_unwarp_report_wf', suffix='variant-hmc
             Affine transform from T1 space to b0 space (ITK format)
 
     """
-    from ....niworkflows.interfaces import SimpleBeforeAfter
-    from ....niworkflows.interfaces.images import extract_wm
+    from ...niworkflows.interfaces import SimpleBeforeAfter
+    from ...niworkflows.interfaces.images import extract_wm
 
     DEFAULT_MEMORY_MIN_GB = 0.01
 

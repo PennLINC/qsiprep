@@ -57,7 +57,7 @@ CLASSIFIERS = [
 MISSING = """
 Image '{}' is missing
 Would you like to download? [Y/n] """
-PKG_PATH = '/usr/local/miniconda/lib/python3.6/site-packages'
+PKG_PATH = '/usr/local/miniconda/lib/python3.7/site-packages'
 
 # Monkey-patch Py2 subprocess
 if not hasattr(subprocess, 'DEVNULL'):
@@ -364,12 +364,6 @@ def main():
     if opts.env:
         for envvar in opts.env:
             command.extend(['-e', '%s=%s' % tuple(envvar)])
-
-    # Check for atlas dir
-    atlas_dir = os.getenv("QSIRECON_ATLAS")
-    if atlas_dir is not None:
-        command.extend(['-e', 'QSIRECON_ATLAS=/qsiprep_atlas'])
-        command.extend(['-v', ':'.join((atlas_dir, '/qsiprep_atlas', 'ro'))])
 
     if opts.user:
         command.extend(['-u', opts.user])
