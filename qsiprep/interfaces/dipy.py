@@ -11,11 +11,13 @@ Image tools interfaces
 import nibabel as nb
 import numpy as np
 import os
+import os.path as op
 
 from tempfile import TemporaryDirectory
 from time import time
 from dipy.core.histeq import histeq
 from dipy.segment.mask import median_otsu
+from dipy.direction import peak_directions
 
 from nipype import logging
 from nipype.utils.filemanip import fname_presuffix
@@ -28,10 +30,19 @@ from nipype.interfaces.ants.registration import RegistrationInputSpec
 from .gradients import concatenate_bvecs, concatenate_bvals, GradientRotation
 from dipy.core.gradients import gradient_table
 from dipy.reconst.mapmri import MapmriModel
+from dipy.core.geometry import cart2sphere
 from ..utils.brainsuite_shore import BrainSuiteShoreModel, brainsuite_shore_basis
 
 LOGGER = logging.getLogger('nipype.interface')
+from .converters import get_dsi_studio_ODF_geometry
+import subprocess
 
+def popen_run(arg_list):
+    cmd = subprocess.Popen(arg_list, stdout=subprocess.PIPE,
+                           stderr=subprocess.PIPE)
+    out, err = cmd.communicate()
+    print(out)
+    print(err)
 
 class MedianOtsuInputSpec(BaseInterfaceInputSpec):
     in_file = File(exists=True, mandatory=True, desc="b0 template image")
@@ -113,6 +124,107 @@ class HistEQ(SimpleInterface):
         self._results['out_file'] = fname_presuffix(
             self.inputs.in_file, suffix='_equalized', newpath=runtime.cwd)
         eq_img.to_filename(self._results['out_file'])
+        return runtime
+
+
+class BrainSuiteShoreReconstructionInputSpec(BaseInterfaceInputSpec):
+    bval_file = File(exists=True, mandatory=True)
+    bvec_file = File(exists=True, mandatory=True)
+    mask_file = File(exists=True, mandatory=True)
+    local_bvec_file = File(exists=True)
+    dwi_file = File(exists=True, mandatory=True)
+    radial_order = traits.Int(6, usedefault=True)
+    zeta = traits.Float(700)
+    tau = traits.Float(4 * np.pi**2)
+    regularization = traits.Enum("L1", "L2")
+    big_delta = traits.Float()
+    little_delta = traits.Float()
+    b0_threshold = traits.CFloat(50)
+    # For L2
+    lambdaN = traits.Float(1e-8)
+    lambdaL = traits.Float(1e-8)
+    # For L1
+    regularization_weighting = traits.Str("CV", usedefault=True)
+    l1_positive_constraint = traits.Bool(False, usedefault=True)
+    l1_cv = traits.Either(None, traits.Str())
+    l1_maxiter = traits.Int(1000, usedefault=True)
+    l1_verbose = traits.Bool(False, usedefault=True)
+    l1_alpha = trauts.Float(1.0, usedefault=True)
+    # For EAP
+    pos_grid = traits.Int(11, usedefault=True)
+    pos_radius = traits.Float(20e-03, usedefault=True)
+    # Outputs
+    write_fibgz = traits.Bool(True)
+    write_mif = traits.Bool(True)
+
+
+class BrainSuiteShoreReconstructionOutputSpec(TraitedSpec):
+    shore_coeffs = File()
+    rtop = File()
+
+
+class BrainSuiteShoreReconstruction(SimpleInterface):
+    input_spec = BrainSuiteShoreReconstructionInputSpec
+    output_spec = BrainSuiteShoreReconstructionOutputSpec
+
+    def _run_interface(self,runtime):
+        gtab = gradient_table(bvals=np.loadtxt(self.inputs.bval_file),
+                              bvecs=np.loatxt(self.inputs.bvec_file).T,
+                              b0_threshold=self.inputs.b0_threshold)
+        b0s_mask = gtab.b0s_mask
+        dwis_mask = np.logical_not(b0s_mask)
+        dwi_img = nb.load(self.inputs.dwi_file)
+        dwi_data = dwi_img.get_fdata(dtype=np.float32)
+        b0_images = dwi_data[..., b0s_mask]
+        dwi_images = dwi_data[..., dwis_mask]
+
+        mask_img = nb.load(self.inputs.mask_file)
+        mask_array = mask_img.get_data() > 0
+
+        b0_mean =  b0_images.mean(3)
+        final_bvals = np.concatenate([np.array([0]), gtab.bvals[dwis_mask]])
+        final_bvecs = np.row_stack([np.array([0., 0., 0.]), gtab.bvecs[dwis_mask]])
+        final_data = np.concatenate([b0_mean[...,np.newaxis], dwi_images], 3)
+        final_grads = gradient_table(bvals=final_bvals, bvecs=final_bvecs, b0_threshold=5)
+
+        # Cleanup
+        del dwi_images
+        del b0_images
+        del dwi_data
+
+        bss_model = BrainSuiteShoreModel(final_grads, regularization="L2")
+        bss_fit = bss_model.fit(final_data, mask=mask_array)
+        rtop = bss_fit.rtop_signal()
+        coeffs = bss_fit.shore_coeff
+
+        coeffs_file = fname_presuffix(self.inputs_dwi_file, suffix="_shore_coeff",
+                                      newpath=runtime.cwd)
+        rtop_file = fname_presuffix(self.inputs_dwi_file, suffix="_rtop",
+                                      newpath=runtime.cwd)
+        nb.Nifti1Image(coeffs, dwi_img.affine, dwi_img.header).to_filename(coeffs_file)
+        nb.Nifti1Image(rtop, dwi_img.affine, dwi_img.header).to_filename(rtop_file)
+        self._results['shore_coeffs'] = coeffs_file
+        self._results['rtop'] = rtop_file
+
+        if not (self.inputs.write_fibgz or self.inputs.write_mif):
+            return runtime
+
+        # Convert to amplitudes for other software
+        verts, faces = get_dsi_studio_ODF_geometry("odf8")
+        num_dirs, _ = verts.shape
+        hemisphere = num_dirs // 2
+        x, y, z = verts[:hemisphere].T
+        hs = HemiSphere(x=x, y=y, z=z)
+        odf_amplitudes = bss_fit.odf(hs)
+        if self.inputs.write_fibgz:
+            output_fib_file = fname_presuffix(self.inputs_dwi_file, suffix="_3dSHORE.fib",
+                                              newpath=runtime.cwd, use_ext=False))
+            fit_to_fibgz(odf_amplitudes, hs, verts, faces, output_fib_file)
+        if self.inputs.write_mif:
+            output_mif_file = fname_presuffix(self.inputs_dwi_file, suffix="_3dSHORE.mif",
+                                              newpath=runtime.cwd, use_ext=False))
+            fit_to_mif()
+
         return runtime
 
 
@@ -266,6 +378,69 @@ class IdealSignalRegistration(SimpleInterface):
                 print('\n-------\n'.join([el[2] for el in out_files]), file=cmdfile)
 
         return runtime
+
+
+def fit_to_mif(odf_amplitudes, dwi_img, sphere, output_mif_file, runtime):
+    x, y, z = sphere.vertices.T
+    _, theta, phi = cart2sphere(-x, -y, z)
+    dirs_txt = op.join(runtime.cwd, "ras+directions.txt")
+    tmp_nii = op.join(runtime.cwd, "amps.nii")
+    nb.Nifti1Image(odf_amplitudes, dwi_img.affine, dwi_img.header).to_filename(tmp_nii)
+    np.savetxt(dirs_txt, np.column_stack([phi, theta]))
+    popen_run(["amp2sh", "-force", "-directions", dirs_txt, tmp_nii, output_mif_file])
+    os.remove(tmp_nii)
+
+
+def fit_to_fibgz(odf_amplitudes, sphere, verts, faces, output_fib_file, n_fibers=5):
+    """Write a dipy fit object to a DSI Studio fib file.
+    """
+    ampl_mask = np.abs(odf_amplitudes.sum(3)) > 1e-6
+    flat_mask = ampl_mask.flatten(order="F")
+    odf_array = odf_amplitudes.reshape(-1, odf_amplitudes.shape[3], order="F")
+    masked_odfs = odf_array[flat_mask, :]
+    del odf_array
+    z0 = masked_odfs.max()
+    masked_odfs = masked_odfs/z0
+    n_odfs = masked_odfs.shape[0]
+    peak_indices = np.zeros((n_odfs, n_fibers))
+    peak_vals = np.zeros((n_odfs, n_fibers))
+
+    dsi_mat = {}
+    # Create matfile that can be read by dsi Studio
+    dsi_mat['dimension'] = np.array(amplitudes_img.shape[:3])
+    dsi_mat['voxel_size'] = np.array(amplitudes_img.header.get_zooms()[:3])
+    n_voxels = int(np.prod(dsi_mat['dimension']))
+    #LOGGER.info("Detecting Peaks")
+    for odfnum in tqdm(range(masked_odfs.shape[0])):
+        dirs, vals, indices = peak_directions(masked_odfs[odfnum], hs)
+        for dirnum, (val, idx) in enumerate(zip(vals, indices)):
+            if dirnum == n_fibers:
+                break
+            peak_indices[odfnum, dirnum] = idx
+            peak_vals[odfnum, dirnum] = val
+
+    for nfib in range(n_fibers):
+        # fill in the "fa" values
+        fa_n = np.zeros(n_voxels)
+        fa_n[flat_mask] = peak_vals[:, nfib]
+        dsi_mat['fa%d' % nfib] = fa_n.astype(np.float32)
+
+        # Fill in the index values
+        index_n = np.zeros(n_voxels)
+        index_n[flat_mask] = peak_indices[:, nfib]
+        dsi_mat['index%d' % nfib] = index_n.astype(np.int16)
+
+    # Add in the ODFs
+    num_odf_matrices = n_odfs // ODF_COLS
+    split_indices = (np.arange(num_odf_matrices) + 1) * ODF_COLS
+    odf_splits = np.array_split(masked_odfs, split_indices, axis=0)
+    for splitnum, odfs in enumerate(odf_splits):
+        dsi_mat['odf%d' % splitnum] = odfs.T.astype(np.float32)
+
+    dsi_mat['odf_vertices'] = verts.T
+    dsi_mat['odf_faces'] = faces.T
+    dsi_mat['z0'] = np.array([1.])
+    savemat(output_fib_file, dsi_mat, format='4', appendmat=False)
 
 
 def _reg_to_ideal(args):
