@@ -149,7 +149,7 @@ class BrainSuiteShoreReconstructionInputSpec(BaseInterfaceInputSpec):
     l1_cv = traits.Either(None, traits.Str())
     l1_maxiter = traits.Int(1000, usedefault=True)
     l1_verbose = traits.Bool(False, usedefault=True)
-    l1_alpha = trauts.Float(1.0, usedefault=True)
+    l1_alpha = traits.Float(1.0, usedefault=True)
     # For EAP
     pos_grid = traits.Int(11, usedefault=True)
     pos_radius = traits.Float(20e-03, usedefault=True)
@@ -218,11 +218,11 @@ class BrainSuiteShoreReconstruction(SimpleInterface):
         odf_amplitudes = bss_fit.odf(hs)
         if self.inputs.write_fibgz:
             output_fib_file = fname_presuffix(self.inputs_dwi_file, suffix="_3dSHORE.fib",
-                                              newpath=runtime.cwd, use_ext=False))
+                                              newpath=runtime.cwd, use_ext=False)
             fit_to_fibgz(odf_amplitudes, hs, verts, faces, output_fib_file)
         if self.inputs.write_mif:
             output_mif_file = fname_presuffix(self.inputs_dwi_file, suffix="_3dSHORE.mif",
-                                              newpath=runtime.cwd, use_ext=False))
+                                              newpath=runtime.cwd, use_ext=False)
             fit_to_mif()
 
         return runtime

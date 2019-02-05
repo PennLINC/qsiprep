@@ -622,12 +622,14 @@ def _compose_tfms(args):
 
 def compose_affines(reference_image, affine_list, output_file):
     """Use antsApplyTransforms to get a single affine from multiple affines."""
-    cmd = "antsApplyTransforms -d 3 -r %s -o Linear[%s, 1] " % (
+    cmd = "antsApplyTransforms -d 3 -r %s -o Linear[%s] " % (
         reference_image, output_file)
     cmd += " ".join(["--transform %s" % trf for trf in affine_list])
     LOGGER.info(cmd)
     os.system(cmd)
-    assert os.path.exists(output_file)
+    if not os.path.exists(output_file):
+        logger.critical(cmd)
+        assert False
     return output_file, cmd
 
 
