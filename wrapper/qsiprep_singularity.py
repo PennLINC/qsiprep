@@ -16,6 +16,7 @@ uses (https://qsiprep.readthedocs.io/en/latest/citing.html).
 """
 import sys
 import os
+import os.path as op
 import re
 import subprocess
 from warnings import warn
@@ -50,14 +51,14 @@ CLASSIFIERS = [
     'Development Status :: 3 - Alpha',
     'Intended Audience :: Science/Research',
     'License :: OSI Approved :: BSD License',
-    'Programming Language :: Python :: 3.6',
+    'Programming Language :: Python :: 3.7',
 ]
 
 
 MISSING = """
 Image '{}' is missing
 Would you like to download? [Y/n] """
-PKG_PATH = '/usr/local/miniconda/lib/python3.6/site-packages'
+PKG_PATH = '/usr/local/miniconda/lib/python3.7/site-packages'
 
 # Monkey-patch Py2 subprocess
 if not hasattr(subprocess, 'DEVNULL'):
@@ -230,8 +231,9 @@ def get_parser():
                         help="show program's version number and exit")
 
     # Allow alternative images (semi-developer)
+
     parser.add_argument('-i', '--image', metavar='IMG', type=str,
-                        default='pennbbl/qsiprep:{}'.format(__version__),
+                        default=os.path.expanduser("~") + "/qsiprep-latest.simg",
                         help='image name')
 
     # Options for mapping files and directories into container
@@ -335,8 +337,8 @@ def main():
     if mem_gib < 10:
         print('Warning: <10GB of RAM is available on your system.\n'
               'Some parts of xcpEngine may fail to complete.')
-    if not (opts.help or opts.version or '--reports-only' in unknown_args) and mem_total < 8000:
-        print('Warning: <8GB of RAM is available within your Docker '
+    if not (opts.help or opts.version or '--reports-only' in unknown_args) and mem_gib < 10:
+        print('Warning: <10GB of RAM is available within your '
               'environment.\nSome parts of qsiprep may fail to complete.')
         if '--mem_mb' not in unknown_args:
             resp = 'N'
@@ -357,12 +359,12 @@ def main():
             command.extend(['-B',
                             '{}:{}/{}'.format(repo_path, PKG_PATH, pkg)])
 
-    if opts.fs_license_file:
-        command.extend([
-            '-v', '{}:/opt/freesurfer/license.txt:ro'.format(
-                opts.fs_license_file)])
-
     main_args = []
+    if opts.fs_license_file:
+        license_dir, license_fname = op.split(opts.fs_license_file)
+        mounted_license = "/mnt/" + license_fname
+        command.extend(['-B', license_dir + ':/mnt'])
+        main_args.extend(['--fs-license-file', mounted_license])
     if opts.bids_dir:
         command.extend(['-B', ':'.join((opts.bids_dir, '/sngl/data'))])
         main_args.extend(['--bids-dir', '/sngl/data'])
