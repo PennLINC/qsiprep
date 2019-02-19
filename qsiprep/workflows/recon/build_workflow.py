@@ -11,6 +11,9 @@ from qsiprep.interfaces.utils import GetConnectivityAtlases
 from qsiprep.interfaces.connectivity import Controllability
 from qsiprep.interfaces.gradients import RemoveDuplicates
 from qsiprep.interfaces.mrtrix import ResponseSD, EstimateFOD, MRConvert
+from qsiprep.interfaces import ConformDwi
+from .dsi_studio import (init_dsi_studio_recon_wf, init_dsi_studio_export_workflow,
+                         init_dsi_studio_connectivity_workflow)
 
 LOGGER = logging.getLogger('nipype.interface')
 qsiprep_output_names = QsiprepOutput().output_spec.class_editable_traits()
@@ -38,14 +41,15 @@ def init_dwi_recon_workflow(dwi_file, workflow_spec, output_dir, reportlets_dir,
     workflow = pe.Workflow(name=_get_wf_name(dwi_file))
 
     # Transform from MNI to T1w if analysis should happen in T1w space
-    workflow.add_nodes([preprocessed_data, get_atlases])
-    if space == "T1w":
-        workflow.connect([
-            (preprocessed_data, get_atlases,
-             [('t1_2_mni_reverse_transform', 'forward_transform')])])
+    workflow.add_nodes([preprocessed_data])
 
     # Save the atlases
     if len(workflow_spec['atlases']):
+        workflow.add_nodes([get_atlases])
+        if space == "T1w":
+            workflow.connect([
+                (preprocessed_data, get_atlases,
+                 [('t1_2_mni_reverse_transform', 'forward_transform')])])
         for atlas in workflow_spec['atlases']:
             workflow.connect([
                 (get_atlases,
@@ -115,11 +119,6 @@ def init_dwi_recon_workflow(dwi_file, workflow_spec, output_dir, reportlets_dir,
     return workflow
 
 
-
-
-
-
-
 def init_controllability_workflow(name="controllability", output_suffix="", params={}):
     inputnode = pe.Node(niu.IdentityInterface(fields=qsiprep_output_names + ['matfile']),
                         name="inputnode")
@@ -163,6 +162,25 @@ def init_discard_repeated_samples_workflow(name="discard_repeats", output_suffix
     return workflow
 
 
+def init_conform_dwi_wf(name="conform_dwi", output_suffix="", params={}):
+    """If data were preprocessed elsewhere, ensure the gradients and images
+    conform to LPS+ before running other parts of the pipeline."""
+    inputnode = pe.Node(niu.IdentityInterface(fields=qsiprep_output_names),
+                        name="inputnode")
+    outputnode = pe.Node(
+        niu.IdentityInterface(fields=['dwi_file', 'bval_file', 'bvec_file']),
+        name="outputnode")
+    workflow = pe.Workflow(name=name)
+    conform = pe.Node(ConformDwi(), name="conform_dwi")
+    workflow.connect([
+        (inputnode, conform, [('dwi_file', 'dwi_file')]),
+        (conform, outputnode, [('bval_file', 'bval_file'),
+                               ('bvec_file', 'bvec_file'),
+                               ('dwi_file', 'dwi_file')])
+    ])
+    return workflow
+
+
 def workflow_from_spec(node_spec):
     software = node_spec.get("software", "qsiprep")
     output_suffix = node_spec.get("output_suffix", "")
@@ -189,6 +207,8 @@ def workflow_from_spec(node_spec):
             return init_controllability_workflow(**kwargs)
         if node_spec['action'] == 'discard_repeated_samples':
             return init_discard_repeated_samples_workflow(**kwargs)
+        if node_spec['action'] == 'conform':
+            return init_conform_dwi_wf(**kwargs)
     raise Exception("Unknown node %s", node_spec)
 
 

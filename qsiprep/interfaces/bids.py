@@ -90,11 +90,8 @@ class QsiprepOutput(SimpleInterface):
         out_root, fname, ext = split_filename(self.inputs.in_file)
         self._results['bval_file'] = op.join(out_root, fname+".bval")
         self._results['bvec_file'] = op.join(out_root, fname+".bvec")
-        confounds_file = glob(op.join(out_root, "*confounds.tsv"))
-        self._results['confounds_file'] = confounds_file[0]
-        local_bvecs_file = glob(op.join(out_root, fname[:-3]+'bvec.nii*'))
-        if len(local_bvecs_file):
-            self._results['local_bvec_file'] = local_bvecs_file[0]
+        self._get_if_exists('confounds_file', op.join(out_root, "*confounds.tsv"))
+        self._get_if_exists('local_bvec_file', op.join(out_root, fname[:-3]+'bvec.nii*'))
         self._results['dwi_file'] = self.inputs.in_file
 
         # Get the anatomical data
@@ -105,25 +102,35 @@ class QsiprepOutput(SimpleInterface):
         qp_root = op.sep.join(path_parts)
         anat_root = op.join(qp_root, 'anat')
         sub = self._results['subject_id']
-        if self.inputs.space_id == "space-T1w":
-            self._results['tpms'] = glob(anat_root + "/%s_label-*_probseg.nii*" % sub)
-            self._results['seg'] = glob('%s/%s_dseg.nii*' % (anat_root, sub))[0]
-            self._results['t1_brain'] = glob('%s/%s_desc-preproc_T1w.nii*' % (anat_root, sub))[0]
-            self._results['anat_mask'] = glob('%s/%s_desc-brain_mask.nii*' % (anat_root, sub))[0]
+        if space == "space-T1w":
+            self._get_if_exists('tpms', anat_root + "/%s_label-*_probseg.nii*" % sub)
+            self._get_if_exists('seg', '%s/%s_dseg.nii*' % (anat_root, sub))
+            self._get_if_exists('t1_brain',
+                '%s/%s_desc-preproc_T1w.nii*' % (anat_root, sub))
+            self._get_if_exists('anat_mask',
+                '%s/%s_desc-brain_mask.nii*' % (anat_root, sub))
         else:
-            self._results['tpms'] = glob(
-                anat_root + "/%s_space-MNI152NLin2009cAsym_label-CSF_probseg.nii*" % sub)
-            self._results['seg'] = glob(
+            self._get_if_exists('tpms',
+                anat_root + "/%s_space-MNI152NLin2009cAsym_label-CSF_probseg.nii*" % sub,
+                multi_ok=True)
+            self._get_if_exists('seg',
                 '%s/%s_space-MNI152NLin2009cAsym_dseg.nii*' % (anat_root, sub))[0]
-            self._results['t1_brain'] = glob(
-                '%s/%s_space-MNI152NLin2009cAsym_desc-preproc_T1w.nii*' % (anat_root, sub))[0]
-            self._results['anat_mask'] = glob(
-                '%s/%s_space-MNI152NLin2009cAsym_desc-brain_mask.nii*' % (anat_root, sub))[0]
-        self._results['t1_2_mni_reverse_transform'] = glob(
-            '%s/%s_from-MNI152NLin2009cAsym_to-T1w*_xfm.h5' % (anat_root, sub))[0]
-        self._results['t1_2_mni_forward_transform'] = glob(
-            '%s/%s_from-T1w_to-MNI152NLin2009cAsym*_xfm.h5' % (anat_root, sub))[0]
+            self._get_if_exists('t1_brain',
+                '%s/%s_space-MNI152NLin2009cAsym_desc-preproc_T1w.nii*' % (anat_root, sub))
+            self._get_if_exists('anat_mask',
+                '%s/%s_space-MNI152NLin2009cAsym_desc-brain_mask.nii*' % (anat_root, sub))
+        self._get_if_exists('t1_2_mni_reverse_transform',
+            '%s/%s_from-MNI152NLin2009cAsym_to-T1w*_xfm.h5' % (anat_root, sub))
+        self._get_if_exists('t1_2_mni_forward_transform',
+            '%s/%s_from-T1w_to-MNI152NLin2009cAsym*_xfm.h5' % (anat_root, sub))
         return runtime
+
+    def _get_if_exists(self, name, pattern, multi_ok=False):
+        files = glob(pattern)
+        if len(files) == 1:
+            self._results[name] = files[0]
+        if len(files) > 1 and multi_ok:
+            self._results[name] = files[0]
 
 
 class BIDSInfoInputSpec(BaseInterfaceInputSpec):
