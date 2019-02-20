@@ -19,7 +19,7 @@ from nipype import logging
 from nipype.utils.filemanip import fname_presuffix
 from nipype.interfaces.base import (
     traits, TraitedSpec, BaseInterfaceInputSpec, File, SimpleInterface, InputMultiObject,
-    OutputMultiObject
+    OutputMultiObject, isdefined
 )
 from nipype.interfaces import ants
 from nipype.interfaces.ants.registration import RegistrationInputSpec
@@ -54,4 +54,40 @@ class MRTrixGradientTable(SimpleInterface):
         gtab = np.column_stack([vecs.T, vals]) * np.array([-1, -1, 1, 1])
         np.savetxt(gtab_fname, gtab, fmt=["%.8f", "%.8f", "%.8f", "%d"])
         self._results['gradient_file'] = gtab_fname
+        return runtime
+
+
+class MRTrixIngressInputSpec(BaseInterfaceInputSpec):
+    dwi_file = File(exists=True, mandatory=True)
+    bval_file = File(exists=True)
+    bvec_file = File(exists=True)
+    b_file = File(exists=True)
+    suffix = traits.Str("_dwi", usedefault=True)
+
+
+class MRTrixIngressOutputSpec(TraitedSpec):
+    mif_file = File()
+
+
+class MRTrixIngress(SimpleInterface):
+    input_spec = MRTrixIngressInputSpec
+    output_spec = MRTrixIngressOutputSpec
+
+    def _run_interface(self, runtime):
+        output_mif = fname_presuffix(self.inputs.dwi_file, suffix=self.inputs.suffix + ".mif",
+                                     newpath=runtime.cwd, use_ext=False)
+        if isdefined(self.inputs.b_file):
+            convert = MRConvert(in_file=self.inputs.dwi_file,
+                                grad_file=self.inputs.b_file,
+                                out_file=output_mif)
+        elif isdefined(self.inputs.bval_file) and isdefined(self.inputs.bvec_file):
+            convert = MRConvert(in_file=self.inputs.dwi_file,
+                                in_bval=self.inputs.bval_file,
+                                in_bvec=self.inputs.bvec_file,
+                                out_file=output_mif)
+        else:
+            raise Exception("No valid mrtrix gradient files or fsl bval/bvec files specified")
+        convert_run = convert.run()
+        self._results['mif_file'] = convert_run.outputs.out_file
+
         return runtime

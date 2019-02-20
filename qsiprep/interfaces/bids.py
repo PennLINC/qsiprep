@@ -60,6 +60,7 @@ class QsiprepOutputOutputSpec(TraitedSpec):
     run_id = traits.Str()
     bval_file = File(exists=True)
     bvec_file = File(exists=True)
+    b_file = File(exists=True)
     confounds_file = File(exists=True)
     dwi_file = File(exists=True)
     local_bvec_file = File()
@@ -92,6 +93,7 @@ class QsiprepOutput(SimpleInterface):
         self._results['bvec_file'] = op.join(out_root, fname+".bvec")
         self._get_if_exists('confounds_file', op.join(out_root, "*confounds.tsv"))
         self._get_if_exists('local_bvec_file', op.join(out_root, fname[:-3]+'bvec.nii*'))
+        self._get_if_exists('b_file', op.join(out_root, fname+".b"))
         self._results['dwi_file'] = self.inputs.in_file
 
         # Get the anatomical data

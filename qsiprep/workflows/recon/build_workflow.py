@@ -10,11 +10,13 @@ from qsiprep.interfaces.bids import QsiprepOutput, ReconDerivativesDataSink
 from qsiprep.interfaces.utils import GetConnectivityAtlases
 from qsiprep.interfaces.connectivity import Controllability
 from qsiprep.interfaces.gradients import RemoveDuplicates
-from qsiprep.interfaces.mrtrix import ResponseSD, EstimateFOD, MRConvert
+from qsiprep.interfaces.mrtrix import ResponseSD, EstimateFOD, MRConvert, MRTrixGradientTable
 from qsiprep.interfaces import ConformDwi
 from .dsi_studio import (init_dsi_studio_recon_wf, init_dsi_studio_export_workflow,
                          init_dsi_studio_connectivity_workflow)
 from .dipy import init_dipy_brainsuite_shore_recon_wf
+from .mrtrix import init_mrtrix_vanilla_csd_recon_workflow
+from .converters import init_mif_to_fibgz_wf
 
 LOGGER = logging.getLogger('nipype.interface')
 qsiprep_output_names = QsiprepOutput().output_spec.class_editable_traits()
@@ -169,12 +171,16 @@ def init_conform_dwi_wf(name="conform_dwi", output_suffix="", params={}):
     inputnode = pe.Node(niu.IdentityInterface(fields=qsiprep_output_names),
                         name="inputnode")
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=['dwi_file', 'bval_file', 'bvec_file']),
+        niu.IdentityInterface(fields=['dwi_file', 'bval_file', 'bvec_file', 'b_file']),
         name="outputnode")
     workflow = pe.Workflow(name=name)
     conform = pe.Node(ConformDwi(), name="conform_dwi")
+    grad_table = pe.Node(MRTrixGradientTable(), name="grad_table")
     workflow.connect([
         (inputnode, conform, [('dwi_file', 'dwi_file')]),
+        (conform, grad_table, [('bval_file', 'bval_file'),
+                               ('bvec_file', 'bvec_file')]),
+        (grad_table, outputnode, [('gradient_file', 'b_file')]),
         (conform, outputnode, [('bval_file', 'bval_file'),
                                ('bvec_file', 'bvec_file'),
                                ('dwi_file', 'dwi_file')])
@@ -193,6 +199,8 @@ def workflow_from_spec(node_spec):
     kwargs = {"name": node_name,
               "output_suffix": output_suffix,
               "params": parameters}
+
+    # DSI Studio operations
     if software == "DSI Studio":
         if node_spec["action"] == "reconstruction":
             return init_dsi_studio_recon_wf(**kwargs)
@@ -200,12 +208,18 @@ def workflow_from_spec(node_spec):
             return init_dsi_studio_export_workflow(**kwargs)
         if node_spec["action"] == "connectivity":
             return init_dsi_studio_connectivity_workflow(**kwargs)
+
+    # MRTrix3 operations
     elif software == "MRTrix3":
         if node_spec["action"] == "csd":
             return init_mrtrix_vanilla_csd_recon_workflow(**kwargs)
+
+    # Dipy operations
     elif software == "Dipy":
         if node_spec["action"] == "3dSHORE_reconstruction":
             return init_dipy_brainsuite_shore_recon_wf(**kwargs)
+
+    # qsiprep operations
     else:
         if node_spec['action'] == "controllability":
             return init_controllability_workflow(**kwargs)
@@ -213,6 +227,8 @@ def workflow_from_spec(node_spec):
             return init_discard_repeated_samples_workflow(**kwargs)
         if node_spec['action'] == 'conform':
             return init_conform_dwi_wf(**kwargs)
+        if node_spec['action'] == 'mif_to_fib':
+            return init_mif_to_fibgz_wf(**kwargs)
     raise Exception("Unknown node %s", node_spec)
 
 
