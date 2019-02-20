@@ -14,6 +14,7 @@ from qsiprep.interfaces.mrtrix import ResponseSD, EstimateFOD, MRConvert
 from qsiprep.interfaces import ConformDwi
 from .dsi_studio import (init_dsi_studio_recon_wf, init_dsi_studio_export_workflow,
                          init_dsi_studio_connectivity_workflow)
+from .dipy import init_dipy_brainsuite_shore_recon_wf
 
 LOGGER = logging.getLogger('nipype.interface')
 qsiprep_output_names = QsiprepOutput().output_spec.class_editable_traits()
@@ -202,6 +203,9 @@ def workflow_from_spec(node_spec):
     elif software == "MRTrix3":
         if node_spec["action"] == "csd":
             return init_mrtrix_vanilla_csd_recon_workflow(**kwargs)
+    elif software == "Dipy":
+        if node_spec["action"] == "3dSHORE_reconstruction":
+            return init_dipy_brainsuite_shore_recon_wf(**kwargs)
     else:
         if node_spec['action'] == "controllability":
             return init_controllability_workflow(**kwargs)

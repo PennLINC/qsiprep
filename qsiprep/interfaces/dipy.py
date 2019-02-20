@@ -18,12 +18,13 @@ from time import time
 from dipy.core.histeq import histeq
 from dipy.segment.mask import median_otsu
 from dipy.direction import peak_directions
+from dipy.core.sphere import HemiSphere
 
 from nipype import logging
 from nipype.utils.filemanip import fname_presuffix
 from nipype.interfaces.base import (
     traits, TraitedSpec, BaseInterfaceInputSpec, File, SimpleInterface, InputMultiObject,
-    OutputMultiObject
+    OutputMultiObject, isdefined
 )
 from nipype.interfaces import ants
 from nipype.interfaces.ants.registration import RegistrationInputSpec
@@ -34,7 +35,7 @@ from dipy.core.geometry import cart2sphere
 from ..utils.brainsuite_shore import BrainSuiteShoreModel, brainsuite_shore_basis
 
 LOGGER = logging.getLogger('nipype.interface')
-from .converters import get_dsi_studio_ODF_geometry
+from .converters import get_dsi_studio_ODF_geometry, amplitudes_to_fibgz, amplitudes_to_sh_mif
 import subprocess
 
 def popen_run(arg_list):
@@ -130,16 +131,16 @@ class HistEQ(SimpleInterface):
 class BrainSuiteShoreReconstructionInputSpec(BaseInterfaceInputSpec):
     bval_file = File(exists=True, mandatory=True)
     bvec_file = File(exists=True, mandatory=True)
-    mask_file = File(exists=True, mandatory=True)
-    local_bvec_file = File(exists=True)
     dwi_file = File(exists=True, mandatory=True)
+    mask_file = File(exists=True)
+    local_bvec_file = File(exists=True)
     radial_order = traits.Int(6, usedefault=True)
     zeta = traits.Float(700)
-    tau = traits.Float(4 * np.pi**2)
-    regularization = traits.Enum("L1", "L2")
+    tau = traits.Float(4 * np.pi**2, usedefault=True)
+    regularization = traits.Enum("L2", "L1", usedefault=True)
     big_delta = traits.Float()
     little_delta = traits.Float()
-    b0_threshold = traits.CFloat(50)
+    b0_threshold = traits.CFloat(50, usedefault=True)
     # For L2
     lambdaN = traits.Float(1e-8)
     lambdaL = traits.Float(1e-8)
@@ -161,6 +162,8 @@ class BrainSuiteShoreReconstructionInputSpec(BaseInterfaceInputSpec):
 class BrainSuiteShoreReconstructionOutputSpec(TraitedSpec):
     shore_coeffs = File()
     rtop = File()
+    fibgz_file = File()
+    sh_mif = File()
 
 
 class BrainSuiteShoreReconstruction(SimpleInterface):
@@ -169,19 +172,24 @@ class BrainSuiteShoreReconstruction(SimpleInterface):
 
     def _run_interface(self,runtime):
         gtab = gradient_table(bvals=np.loadtxt(self.inputs.bval_file),
-                              bvecs=np.loatxt(self.inputs.bvec_file).T,
+                              bvecs=np.loadtxt(self.inputs.bvec_file).T,
                               b0_threshold=self.inputs.b0_threshold)
         b0s_mask = gtab.b0s_mask
         dwis_mask = np.logical_not(b0s_mask)
         dwi_img = nb.load(self.inputs.dwi_file)
         dwi_data = dwi_img.get_fdata(dtype=np.float32)
         b0_images = dwi_data[..., b0s_mask]
+        b0_mean =  b0_images.mean(3)
         dwi_images = dwi_data[..., dwis_mask]
 
-        mask_img = nb.load(self.inputs.mask_file)
-        mask_array = mask_img.get_data() > 0
+        if not isdefined(self.inputs.mask_file):
+            LOGGER.warning("Creating an Otsu mask, check that the whole brain is covered.")
+            b0_mask, mask_array = median_otsu(b0_mean, 3, 2)
+            mask_img = nb.Nifti1Image(mask_array.astype(np.float32), dwi_img.affine, dwi_img.header)
+        else:
+            mask_img = nb.load(self.inputs.mask_file)
+            mask_array = mask_img.get_data() > 0
 
-        b0_mean =  b0_images.mean(3)
         final_bvals = np.concatenate([np.array([0]), gtab.bvals[dwis_mask]])
         final_bvecs = np.row_stack([np.array([0., 0., 0.]), gtab.bvecs[dwis_mask]])
         final_data = np.concatenate([b0_mean[...,np.newaxis], dwi_images], 3)
@@ -192,14 +200,32 @@ class BrainSuiteShoreReconstruction(SimpleInterface):
         del b0_images
         del dwi_data
 
-        bss_model = BrainSuiteShoreModel(final_grads, regularization="L2")
+        bss_model = BrainSuiteShoreModel(
+            final_grads,
+            regularization=self.inputs.regularization,
+            radial_order=self.inputs.radial_order,
+            zeta=self.inputs.zeta,
+            tau=self.inputs.tau,
+            # For L2
+            lambdaN=self.inputs.lambdaN,
+            lambdaL=self.inputs.lambdaL,
+            # For L1
+            regularization_weighting=self.inputs.regularization_weighting,
+            l1_positive_constraint = traits.Bool(False, usedefault=True),
+            l1_cv=self.inputs.l1_cv,
+            l1_maxiter=self.inputs.l1_maxiter,
+            l1_verbose=self.inputs.l1_verbose,
+            l1_alpha=self.inputs.l1_alpha,
+            # For EAP
+            pos_grid=self.inputs.pos_grid
+            )
         bss_fit = bss_model.fit(final_data, mask=mask_array)
         rtop = bss_fit.rtop_signal()
         coeffs = bss_fit.shore_coeff
 
-        coeffs_file = fname_presuffix(self.inputs_dwi_file, suffix="_shore_coeff",
+        coeffs_file = fname_presuffix(self.inputs.dwi_file, suffix="_shore_coeff",
                                       newpath=runtime.cwd)
-        rtop_file = fname_presuffix(self.inputs_dwi_file, suffix="_rtop",
+        rtop_file = fname_presuffix(self.inputs.dwi_file, suffix="_rtop",
                                       newpath=runtime.cwd)
         nb.Nifti1Image(coeffs, dwi_img.affine, dwi_img.header).to_filename(coeffs_file)
         nb.Nifti1Image(rtop, dwi_img.affine, dwi_img.header).to_filename(rtop_file)
@@ -215,16 +241,22 @@ class BrainSuiteShoreReconstruction(SimpleInterface):
         hemisphere = num_dirs // 2
         x, y, z = verts[:hemisphere].T
         hs = HemiSphere(x=x, y=y, z=z)
-        odf_amplitudes = bss_fit.odf(hs)
-        if self.inputs.write_fibgz:
-            output_fib_file = fname_presuffix(self.inputs_dwi_file, suffix="_3dSHORE.fib",
-                                              newpath=runtime.cwd, use_ext=False)
-            fit_to_fibgz(odf_amplitudes, hs, verts, faces, output_fib_file)
-        if self.inputs.write_mif:
-            output_mif_file = fname_presuffix(self.inputs_dwi_file, suffix="_3dSHORE.mif",
-                                              newpath=runtime.cwd, use_ext=False)
-            fit_to_mif()
+        odf_amplitudes = nb.Nifti1Image(bss_fit.odf(hs), dwi_img.affine, dwi_img.header)
 
+        if self.inputs.write_fibgz:
+            output_fib_file = fname_presuffix(self.inputs.dwi_file, suffix="_3dSHORE.fib",
+                                              newpath=runtime.cwd, use_ext=False)
+            LOGGER.info("Writing DSI Studio fib file %s", output_fib_file)
+            amplitudes_to_fibgz(odf_amplitudes, verts, faces, output_fib_file, mask_img,
+                                num_fibers=5)
+            self._results['fibgz_file'] = output_fib_file
+
+        if self.inputs.write_mif:
+            output_mif_file = fname_presuffix(self.inputs.dwi_file, suffix="_3dSHORE.mif",
+                                              newpath=runtime.cwd, use_ext=False)
+            LOGGER.info("Writing sh mif file %s", output_mif_file)
+            amplitudes_to_sh_mif(odf_amplitudes, verts, output_mif_file, runtime.cwd)
+            self._results['sh_mif'] = output_mif_file
         return runtime
 
 
