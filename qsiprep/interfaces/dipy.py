@@ -167,7 +167,7 @@ class DipyInterface(SimpleInterface):
         return mask_img, mask_array
 
     def _save_scalar(self, data, suffix, runtime, ref_img):
-        output_fname = fname_presuffix(self.inputs.dwi_file, suffix=suffix
+        output_fname = fname_presuffix(self.inputs.dwi_file, suffix=suffix,
                                        newpath=runtime.cwd)
         nb.Nifti1Image(data, ref_img.affine, ref_img.header).to_filename(output_fname)
         return output_fname

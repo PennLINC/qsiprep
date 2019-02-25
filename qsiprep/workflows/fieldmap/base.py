@@ -75,6 +75,7 @@ def init_sdc_wf(fmaps, dwi_meta, omp_nthreads=1,
                 'type': 'epi',
                 'epi': \
                     'sub-03/ses-2/fmap/sub-03_ses-2_run-1_epi.nii.gz',
+                'metadata': {'PhaseEncodingDirection': 'j-'}
             }],
             dwi_meta={
                 'PhaseEncodingDirection': 'j',

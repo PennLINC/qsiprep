@@ -30,6 +30,8 @@ from nipype.interfaces.ants import BrainExtraction, N4BiasFieldCorrection
 from ..niworkflows.interfaces.registration import RobustMNINormalizationRPT
 from ..niworkflows.interfaces.masks import ROIsPlot
 from ..niworkflows.interfaces.ants import AI
+from ..niworkflows.interfaces.freesurfer import RobustRegister
+from ..niworkflows.interfaces.segmentation import ReconAllRPT
 
 from ..niworkflows.interfaces.fixes import FixHeaderApplyTransforms as ApplyTransforms
 
@@ -287,8 +289,6 @@ and used as T1w-reference throughout the workflow.
                 ('subjects_dir', 'inputnode.subjects_dir'),
                 ('subject_id', 'inputnode.subject_id')]),
             # Change so it's using ACPC input
-            (skullstrip_ants_wf, surface_recon_wf, [
-                ('outputnode.t1_template', 'outputnode.bias_corrected')]),
             (skullstrip_ants_wf, surface_recon_wf, [
                 ('outputnode.out_file', 'inputnode.skullstripped_t1'),
                 ('outputnode.out_segs', 'inputnode.ants_segs'),
@@ -615,12 +615,19 @@ def init_skullstrip_ants_wf(skull_strip_template, debug, omp_nthreads, acpc_temp
                             skull_strip_fixed_seed=False, name='skullstrip_ants_wf'):
     r"""
     This workflow performs skull-stripping using ANTs' ``BrainExtraction.sh``
+
     .. workflow::
         :graph2use: orig
         :simple_form: yes
+
         from qsiprep.workflows.anatomical import init_skullstrip_ants_wf
-        wf = init_skullstrip_ants_wf(skull_strip_template='OASIS', debug=False, omp_nthreads=1)
-    **Parameters**
+        wf = init_skullstrip_ants_wf(skull_strip_template='OASIS',
+                                     debug=False,
+                                     omp_nthreads=1,
+                                     acpc_template='test')
+
+    Parameters
+
         skull_strip_template : str
             Name of ANTs skull-stripping template ('OASIS' or 'NKI')
         debug : bool
@@ -632,10 +639,14 @@ def init_skullstrip_ants_wf(skull_strip_template, debug, omp_nthreads, acpc_temp
         skull_strip_fixed_seed : bool
             Do not use a random seed for skull-stripping - will ensure
             run-to-run replicability when used with --omp-nthreads 1 (default: ``False``)
-    **Inputs**
+
+    Inputs
+
         in_file
             T1-weighted structural image to skull-strip
-    **Outputs**
+
+    Outputs
+
         bias_corrected
             Bias-corrected ``in_file``, before skull-stripping
         out_file
@@ -660,6 +671,12 @@ The T1w-reference was then skull-stripped using `antsBrainExtraction.sh`
     template_name = TEMPLATE_ALIASES.get(skull_strip_template, skull_strip_template)
     # Template path
     template_dir = get_template(template_name)
+    brain_template = str(
+        template_dir / ('tpl-%s_res-01_T1w.nii.gz' % template_name))
+
+    # For docs building
+    if acpc_template == "test":
+        acpc_template = brain_template
 
     inputnode = pe.Node(niu.IdentityInterface(fields=['in_file']),
                         name='inputnode')
@@ -673,8 +690,7 @@ The T1w-reference was then skull-stripped using `antsBrainExtraction.sh`
         name='t1_skull_strip', n_procs=omp_nthreads)
 
     # Set appropriate inputs
-    t1_skull_strip.inputs.brain_template = str(
-        template_dir / ('tpl-%s_res-01_T1w.nii.gz' % template_name))
+    t1_skull_strip.inputs.brain_template = brain_template
     t1_skull_strip.inputs.brain_probability_mask = str(
         template_dir /
         ('tpl-%s_res-01_class-brainmask_probtissue.nii.gz' % template_name))

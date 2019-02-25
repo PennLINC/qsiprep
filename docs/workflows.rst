@@ -18,7 +18,7 @@ is presented below:
 
     from qsiprep.workflows.base import init_single_subject_wf
     wf = init_single_subject_wf(subject_id="1",
-                                name="test_wf",
+                                name='single_subject_wf',
                                 reportlets_dir=".",
                                 output_dir=".",
                                 bids_dir=".",
@@ -68,6 +68,7 @@ T1w/T2w preprocessing
                                              'template', 'fsaverage5'],
                               skull_strip_template='OASIS',
                               skull_strip_fixed_seed=False,
+                              output_resolution=1.25,
                               freesurfer=True,
                               longitudinal=False,
                               debug=False,
@@ -127,7 +128,7 @@ to be run through ``qsiprep``.
 Longitudinal processing
 ~~~~~~~~~~~~~~~~~~~~~~~
 In the case of multiple T1w images (across sessions and/or runs), T1w images are
-merged into a single template image using FreeSurfer's `mri_robust_template`_.
+merged into a single template image using FreeSurfer's ``mri_robust_template``.
 This template may be *unbiased*, or equidistant from all source images, or
 aligned to the first image (determined lexicographically by session label).
 For two images, the additional cost of estimating an unbiased template is
@@ -163,7 +164,6 @@ DWI preprocessing
                               template='MNI152NLin2009cAsym',
                               output_spaces=['T1w', 'template'],
                               freesurfer=False,
-                              use_bbr=False,
                               dwi_denoise_window=7,
                               denoise_before_combining=True,
                               motion_corr_to='iterative',
@@ -176,6 +176,8 @@ DWI preprocessing
                               use_syn=True,
                               force_syn=True,
                               low_mem=False,
+                              write_local_bvecs=False,
+                              output_prefix="",
                               num_dwi=1)
 
 Preprocessing of :abbr:`DWI (Diffusion Weighted Image)` files is

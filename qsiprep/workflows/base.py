@@ -57,7 +57,6 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
         os.environ['FREESURFER_HOME'] = os.getcwd()
         from qsiprep.workflows.base import init_qsiprep_wf
         wf = init_qsiprep_wf(subject_list=['qsipreptest'],
-                              task_id='',
                               run_uuid='X',
                               work_dir='.',
                               output_dir='.',
@@ -73,6 +72,8 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
                               dwi_denoise_window=7,
                               combine_all_dwis=True,
                               omp_nthreads=1,
+                              output_resolution=2.0,
+                              hmc_model='3dSHORE',
                               skull_strip_template='OASIS',
                               skull_strip_fixed_seed=False,
                               output_spaces=['T1w', 'template'],
@@ -254,41 +255,45 @@ def init_single_subject_wf(
         :simple_form: yes
 
         from qsiprep.workflows.base import init_single_subject_wf
-        wf = init_single_subject_wf(subject_id='test',
-                                    task_id='',
-                                    name='single_subject_wf',
-                                    reportlets_dir='.',
-                                    output_dir='.',
-                                    bids_dir='.',
-                                    ignore=[],
-                                    debug=False,
-                                    low_mem=False,
-                                    anat_only=False,
-                                    longitudinal=False,
-                                    freesurfer=False,
-                                    hires=False,
-                                    dwi_denoise_window=7,
-                                    denoise_before_combining=True,
-                                    combine_all_dwis=True,
-                                    write_local_bvecs=False,
-                                    omp_nthreads=1,
-                                    skull_strip_template='OASIS',
-                                    skull_strip_fixed_seed=False,
-                                    template='MNI152NLin2009cAsym',
-                                    output_spaces=['T1w', 'template'],
-                                    motion_corr_to='iterative',
-                                    b0_to_t1w_dof=9,
-                                    fmap_bspline=False,
-                                    fmap_demean=True,
-                                    use_syn=True,
-                                    force_syn=True)
+
+        wf = init_single_subject_wf(
+            subject_id='test',
+            name='single_subject_qsipreptest_wf',
+            reportlets_dir='.',
+            output_dir='.',
+            bids_dir='.',
+            ignore=[],
+            debug=False,
+            low_mem=False,
+            output_resolution=1.25,
+            denoise_before_combining=True,
+            dwi_denoise_window=7,
+            anat_only=False,
+            longitudinal=False,
+            freesurfer=False,
+            hires=False,
+            combine_all_dwis=True,
+            omp_nthreads=1,
+            skull_strip_template='OASIS',
+            skull_strip_fixed_seed=False,
+            output_spaces=['T1w', 'template'],
+            template='MNI152NLin2009cAsym',
+            prefer_dedicated_fmaps=False,
+            motion_corr_to='iterative',
+            b0_to_t1w_transform='Rigid',
+            hmc_model='3dSHORE',
+            hmc_transform='Affine',
+            impute_slice_threshold=0.0,
+            write_local_bvecs=False,
+            fmap_bspline=False,
+            fmap_demean=True,
+            use_syn=False,
+            force_syn=False)
 
     Parameters
 
         subject_id : str
             List of subject labels
-        task_id : str or None
-            Task ID of BOLD series to preprocess, or ``None`` to preprocess all
         name : str
             Name of workflow
         ignore : list
@@ -482,7 +487,7 @@ to workflows in *qsiprep*'s documentation]\
         impute_slice_threshold = 0
 
     # Handle the grouping of multiple dwi files within a session
-    sessions = layout.get_sessions()
+    sessions = layout.get_sessions() if layout is not None else []
     all_dwis = subject_data['dwi']
     dwi_session_groups = []
     if not combine_all_dwis:
@@ -577,6 +582,14 @@ def group_by_fieldmaps(dwi_files, layout, ignore_fieldmap, prefer_dedicated_fmap
     """Check to see if multiple phase encoding directions are present within a session."""
     # Create a list of (dwi image, PE dir, fieldmaps)
     parsed_dwis = []
+    # If no fieldmap correction is to be done, just make sure that pe dirs aren't mixed
+    if ignore_fieldmap or layout is None:
+        # group by pe direction and intended_fieldmap
+        groups = defaultdict(list)
+        for ref_file, pe_dir, fmap in parsed_dwis:
+            groups[pe_dir].append(ref_file)
+        return [grouping for grouping in groups.values()]
+
     for ref_file in dwi_files:
         metadata = layout.get_metadata(ref_file)
 
@@ -597,14 +610,6 @@ def group_by_fieldmaps(dwi_files, layout, ignore_fieldmap, prefer_dedicated_fmap
             fmap_file = fmap_files[0]
         parsed_dwis.append(
             (ref_file, metadata['PhaseEncodingDirection'], fmap_file))
-
-    # If no fieldmap correction is to be done, just make sure that pe dirs aren't mixed
-    if ignore_fieldmap:
-        # group by pe direction and intended_fieldmap
-        groups = defaultdict(list)
-        for ref_file, pe_dir, fmap in parsed_dwis:
-            groups[pe_dir].append(ref_file)
-        return [grouping for grouping in groups.values()]
 
     # group by pe direction and intended_fieldmap
     groups = defaultdict(list)

@@ -42,14 +42,6 @@ def init_sdc_unwarp_wf(omp_nthreads, fmap_demean, debug, name='sdc_unwarp_wf'):
     The mask is restricted to the field of view of the fieldmap since outside of it corrections
     could not be performed.
 
-    .. workflow ::
-        :graph2use: orig
-        :simple_form: yes
-
-        from qsiprep.workflows.fieldmap.unwarp import init_sdc_unwarp_wf
-        wf = init_sdc_unwarp_wf(omp_nthreads=8,
-                                fmap_demean=True,
-                                debug=False)
 
 
     Inputs

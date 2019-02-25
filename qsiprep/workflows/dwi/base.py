@@ -82,7 +82,6 @@ def init_dwi_preproc_wf(dwi_files,
                                   template='MNI152NLin2009cAsym',
                                   output_spaces=['T1w', 'template'],
                                   freesurfer=False,
-                                  use_bbr=True,
                                   dwi_denoise_window=7,
                                   denoise_before_combining=True,
                                   motion_corr_to='iterative',
@@ -108,9 +107,6 @@ def init_dwi_preproc_wf(dwi_files,
         freesurfer : bool
             Enable FreeSurfer functional registration (bbregister) and
             resampling dwi series to FreeSurfer surface meshes.
-        use_bbr : bool or None
-            Enable/disable boundary-based registration refinement.
-            If ``None``, test BBR result for distortion before accepting.
         motion_corr_to : str
             Motion correct using the 'first' b0 image or use an 'iterative'
             method to motion correct to the midpoint of the b0 images
@@ -239,7 +235,6 @@ def init_dwi_preproc_wf(dwi_files,
         * :py:func:`~qsiprep.workflows.dwi.confounds.init_dwi_confounds_wf`
         * :py:func:`~qsiprep.workflows.dwi.resampling.init_dwi_trans_wf`
         * :py:func:`~qsiprep.workflows.fieldmap.pepolar.init_pepolar_unwarp_wf`
-        * :py:func:`~qsiprep.workflows.fieldmap.init_sdc_unwarp_wf`
         * :py:func:`~qsiprep.workflows.fieldmap.init_nonlinear_sdc_wf`
 
     """
