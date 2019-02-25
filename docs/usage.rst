@@ -3,11 +3,11 @@
 Usage
 -----
 
-Execution and the BIDS format
+Preprocessing QSI Data
 =============================
 
-The ``qsiprep`` workflow takes as principal input the path of the dataset
-that is to be processed.
+The ``qsiprep`` preprocessing workflow takes as principal input the
+path of the dataset that is to be processed.
 The input dataset is required to be in valid :abbr:`BIDS (Brain Imaging Data
 Structure)` format, and it must include at least one T1w structural image and
 (unless disabled with a flag) a diffusion MRI series.

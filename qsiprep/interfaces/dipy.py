@@ -30,7 +30,7 @@ from nipype.interfaces import ants
 from nipype.interfaces.ants.registration import RegistrationInputSpec
 from .gradients import concatenate_bvecs, concatenate_bvals, GradientRotation
 from dipy.core.gradients import gradient_table
-from dipy.reconst.mapmri import MapmriModel
+from dipy.reconst import mapmri
 from dipy.core.geometry import cart2sphere
 from ..utils.brainsuite_shore import BrainSuiteShoreModel, brainsuite_shore_basis
 
@@ -128,19 +128,197 @@ class HistEQ(SimpleInterface):
         return runtime
 
 
-class BrainSuiteShoreReconstructionInputSpec(BaseInterfaceInputSpec):
+class DipyInputSpec(BaseInterfaceInputSpec):
     bval_file = File(exists=True, mandatory=True)
     bvec_file = File(exists=True, mandatory=True)
     dwi_file = File(exists=True, mandatory=True)
     mask_file = File(exists=True)
     local_bvec_file = File(exists=True)
+    big_delta = traits.Float()
+    little_delta = traits.Float()
+    b0_threshold = traits.CFloat(50, usedefault=True)
+
+class DipyOutputSpec(TraitedSpec):
+    fibgz_file = File()
+
+
+class DipyInterface(SimpleInterface):
+    input_spec = DipyInputSpec
+    output_spec = DipyOutputSpec
+
+    def _get_gtab(self):
+        little_delta = self.inputs.little_delta if isdefined(self.inputs.little_delta) else None
+        big_delta = self.inputs.big_delta if isdefined(self.inputs.big_delta) else None
+        gtab = gradient_table(bvals=np.loadtxt(self.inputs.bval_file),
+                              bvecs=np.loadtxt(self.inputs.bvec_file).T,
+                              b0_threshold=self.inputs.b0_threshold,
+                              big_delta=big_delta,
+                              little_delta=little_delta)
+
+    def _get_mask(self, amplitudes_img, gtab):
+        if not isdefined(self.inputs.mask_file):
+            LOGGER.warning("Creating an Otsu mask, check that the whole brain is covered.")
+            b0_mask, mask_array = median_otsu(
+                amplitudes_img.get_data()[..., gtab.b0s_mask], 3, 2)
+            mask_img = nb.Nifti1Image(mask_array.astype(np.float32), dwi_img.affine, dwi_img.header)
+        else:
+            mask_img = nb.load(self.inputs.mask_file)
+            mask_array = mask_img.get_data() > 0
+        return mask_img, mask_array
+
+    def _save_scalar(self, data, suffix, runtime, ref_img):
+        output_fname = fname_presuffix(self.inputs.dwi_file, suffix=suffix
+                                       newpath=runtime.cwd)
+        nb.Nifti1Image(data, ref_img.affine, ref_img.header).to_filename(output_fname)
+        return output_fname
+
+    def _write_external_formats(self, fit_obj, mask_img, suffix):
+
+        if not (self.inputs.write_fibgz or self.inputs.write_mif):
+            return runtime
+
+        # Convert to amplitudes for other software
+        verts, faces = get_dsi_studio_ODF_geometry("odf8")
+        num_dirs, _ = verts.shape
+        hemisphere = num_dirs // 2
+        x, y, z = verts[:hemisphere].T
+        hs = HemiSphere(x=x, y=y, z=z)
+        odf_amplitudes = nb.Nifti1Image(fit_obj.odf(hs), mask_img.affine, mask_img.header)
+
+        if self.inputs.write_fibgz:
+            output_fib_file = fname_presuffix(self.inputs.dwi_file, suffix=suffix+".fib",
+                                              newpath=runtime.cwd, use_ext=False)
+            LOGGER.info("Writing DSI Studio fib file %s", output_fib_file)
+            amplitudes_to_fibgz(odf_amplitudes, verts, faces, output_fib_file, mask_img,
+                                num_fibers=5)
+            self._results['fibgz_file'] = output_fib_file
+
+        if self.inputs.write_mif:
+            output_mif_file = fname_presuffix(self.inputs.dwi_file, suffix=suffix+".mif",
+                                              newpath=runtime.cwd, use_ext=False)
+            LOGGER.info("Writing sh mif file %s", output_mif_file)
+            amplitudes_to_sh_mif(odf_amplitudes, verts, output_mif_file, runtime.cwd)
+            self._results['sh_mif'] = output_mif_file
+
+
+class MAPMRIInputSpec(DipyInputSpec):
+    radial_order = traits.Int(6, usedefault=True)
+    laplacian_regularization = traits.Bool(True, usedefault=True)
+    laplacian_weighting = traits.Float(0.2, usedefault=True)
+    positivity_constraint = traits.Bool(False, usedefault=True)
+    pos_grid = traits.Int(15, usedefault=True)
+    pos_radius = traits.Either(traits.Str('adaptive'), traits.Int(),
+                               usedefault=True)
+    anisotropic_scaling = traits.Bool(True, usedefault=True)
+    eigenvalue_threshold = traits.Float(1e-04, usedefault=True)
+    bval_threshold = traits.Float()
+    dti_scale_estimation = traits.Bool(True, usedefault=True)
+    static_diffusivity = traits.Float(0.7e-3, usedefault=True)
+    cvxpy_solver = traits.Str()
+
+
+class MAPMRIOutputSpec(DipyOutputSpec):
+    rtop = File()
+    lapnorm = File()
+    msd = File()
+    qiv = File()
+    rtap = File()
+    rtpp = File()
+    ng = File()
+    perng = File()
+    parng = File()
+    mapmri_coeffs = File()
+
+
+class MAPMRIReconstruction(SimpleInterface):
+    input_spec = MAPMRIInputSpec
+    output_spec = MAPMRIOutputSpec
+
+    def _run_interface(self, runtime):
+        gtab = self._get_gtab()
+        dwi_img = nb.load(self.inputs.dwi_file)
+        dwi_data = dwi_img.get_fdata(dtype=np.float32)
+        mask_image, mask_array = self._get_mask(dwi_img, gtab)
+
+        if self.inputs.laplacian_regularization and \
+           self.inputs.positivity_constraint:
+            map_model_aniso = mapmri.MapmriModel(
+                        gtab,
+                        radial_order=self.inputs.radial_order,
+                        laplacian_regularization=True,
+                        laplacian_weighting=self.inputs.laplacian_weighting,
+                        positivity_constraint=True,
+                        bval_threshold=self.inputs.b0_threshold,
+                        anisotropic_scaling=self.inputs.anisotropic_scaling)
+
+        elif self.inputs.positivity_constraint:
+            map_model_aniso = mapmri.MapmriModel(
+                        gtab,
+                        radial_order=self.inputs.radial_order,
+                        laplacian_regularization=False,
+                        positivity_constraint=True,
+                        bval_threshold=self.inputs.b0_threshold,
+                        anisotropic_scaling=self.inputs.anisotropic_scaling)
+
+        elif self.inputs.laplacian_regularization:
+            map_model_aniso = mapmri.MapmriModel(
+                        gtab,
+                        radial_order=self.inputs.radial_order,
+                        laplacian_regularization=True,
+                        laplacian_weighting=self.inputs.laplacian_weighting,
+                        bval_threshold=self.inputs.b0_threshold,
+                        anisotropic_scaling=self.inputs.anisotropic_scaling)
+
+        else:
+            map_model_aniso = mapmri.MapmriModel(
+                        gtab,
+                        radial_order=self.inputs.radial_order,
+                        laplacian_regularization=False,
+                        positivity_constraint=False,
+                        bval_threshold=self.inputs.b0_threshold,
+                        anisotropic_scaling=self.inputs.anisotropic_scaling)
+
+        LOGGER.info("Fitting MAPMRI Model.")
+        mapfit_aniso = map_model_aniso.fit(data)
+        rtop = mapfit_aniso.rtop()
+        self._results['rtop'] = self._save_scalar(rtop, "_rtop", runtime, dwi_img)
+
+        ll = mapfit_aniso.norm_of_laplacian_signal()
+        self._results['lapnorm'] = self._save_scalar(ll, "_lapnorm", runtime, dwi_img)
+
+        m = mapfit_aniso.msd()
+        self._results['msd'] = self._save_scalar(m, "_msd", runtime, dwi_img)
+
+        q = mapfit_aniso.qiv()
+        self._results['qiv'] = self._save_scalar(q, "_qiv", runtime, dwi_img)
+
+        rtap= mapfit_aniso.rtap()
+        self._results['rtap'] = self._save_scalar(q, "_rtap", runtime, dwi_img)
+
+        rtpp = mapfit_aniso.rtpp()
+        self._results['rtpp'] = self._save_scalar(q, "_rtpp", runtime, dwi_img)
+
+        n = mapfit_aniso.ng()
+        self._results['ng'] = self._save_scalar(n, "_ng", runtime, dwi_img)
+
+        ng_perp = mapfit_aniso.ng_perpendicular()
+        self._results['perng'] = self._save_scalar(ng_perp, "_perng", runtime, dwi_img)
+
+        ng_par = mapfit_aniso.ng_parallel()
+        self._results['parng'] = self._save_scalar(ng_par, "_parng", runtime, dwi_img)
+
+        coeffs = mapfit_aniso.mapmri_coeff
+        self._results['mapmri_coeffs'] = self._save_scalar(coeffs, "_mapcoeffs", runtime, dwi_img)
+
+
+        return runtime
+
+
+class BrainSuiteShoreReconstructionInputSpec(DipyInputSpec):
     radial_order = traits.Int(6, usedefault=True)
     zeta = traits.Float(700)
     tau = traits.Float(4 * np.pi**2, usedefault=True)
     regularization = traits.Enum("L2", "L1", usedefault=True)
-    big_delta = traits.Float()
-    little_delta = traits.Float()
-    b0_threshold = traits.CFloat(50, usedefault=True)
     # For L2
     lambdaN = traits.Float(1e-8)
     lambdaL = traits.Float(1e-8)
@@ -159,21 +337,17 @@ class BrainSuiteShoreReconstructionInputSpec(BaseInterfaceInputSpec):
     write_mif = traits.Bool(True)
 
 
-class BrainSuiteShoreReconstructionOutputSpec(TraitedSpec):
+class BrainSuiteShoreReconstructionOutputSpec(DipyOutputSpec):
     shore_coeffs = File()
     rtop = File()
-    fibgz_file = File()
-    sh_mif = File()
 
 
-class BrainSuiteShoreReconstruction(SimpleInterface):
+class BrainSuiteShoreReconstruction(DipyInterface):
     input_spec = BrainSuiteShoreReconstructionInputSpec
     output_spec = BrainSuiteShoreReconstructionOutputSpec
 
     def _run_interface(self,runtime):
-        gtab = gradient_table(bvals=np.loadtxt(self.inputs.bval_file),
-                              bvecs=np.loadtxt(self.inputs.bvec_file).T,
-                              b0_threshold=self.inputs.b0_threshold)
+        gtab = self._get_gtab()
         b0s_mask = gtab.b0s_mask
         dwis_mask = np.logical_not(b0s_mask)
         dwi_img = nb.load(self.inputs.dwi_file)
@@ -182,13 +356,7 @@ class BrainSuiteShoreReconstruction(SimpleInterface):
         b0_mean =  b0_images.mean(3)
         dwi_images = dwi_data[..., dwis_mask]
 
-        if not isdefined(self.inputs.mask_file):
-            LOGGER.warning("Creating an Otsu mask, check that the whole brain is covered.")
-            b0_mask, mask_array = median_otsu(b0_mean, 3, 2)
-            mask_img = nb.Nifti1Image(mask_array.astype(np.float32), dwi_img.affine, dwi_img.header)
-        else:
-            mask_img = nb.load(self.inputs.mask_file)
-            mask_array = mask_img.get_data() > 0
+        mask_img, mask_array = self._get_mask(dwi_img, gtab)
 
         final_bvals = np.concatenate([np.array([0]), gtab.bvals[dwis_mask]])
         final_bvecs = np.row_stack([np.array([0., 0., 0.]), gtab.bvecs[dwis_mask]])
@@ -232,6 +400,7 @@ class BrainSuiteShoreReconstruction(SimpleInterface):
         self._results['shore_coeffs'] = coeffs_file
         self._results['rtop'] = rtop_file
 
+        self._write_external_formats(bss_fit, mask_img, "_BS3dSHORE")
         if not (self.inputs.write_fibgz or self.inputs.write_mif):
             return runtime
 
@@ -410,69 +579,6 @@ class IdealSignalRegistration(SimpleInterface):
                 print('\n-------\n'.join([el[2] for el in out_files]), file=cmdfile)
 
         return runtime
-
-
-def fit_to_mif(odf_amplitudes, dwi_img, sphere, output_mif_file, runtime):
-    x, y, z = sphere.vertices.T
-    _, theta, phi = cart2sphere(-x, -y, z)
-    dirs_txt = op.join(runtime.cwd, "ras+directions.txt")
-    tmp_nii = op.join(runtime.cwd, "amps.nii")
-    nb.Nifti1Image(odf_amplitudes, dwi_img.affine, dwi_img.header).to_filename(tmp_nii)
-    np.savetxt(dirs_txt, np.column_stack([phi, theta]))
-    popen_run(["amp2sh", "-force", "-directions", dirs_txt, tmp_nii, output_mif_file])
-    os.remove(tmp_nii)
-
-
-def fit_to_fibgz(odf_amplitudes, sphere, verts, faces, output_fib_file, n_fibers=5):
-    """Write a dipy fit object to a DSI Studio fib file.
-    """
-    ampl_mask = np.abs(odf_amplitudes.sum(3)) > 1e-6
-    flat_mask = ampl_mask.flatten(order="F")
-    odf_array = odf_amplitudes.reshape(-1, odf_amplitudes.shape[3], order="F")
-    masked_odfs = odf_array[flat_mask, :]
-    del odf_array
-    z0 = masked_odfs.max()
-    masked_odfs = masked_odfs/z0
-    n_odfs = masked_odfs.shape[0]
-    peak_indices = np.zeros((n_odfs, n_fibers))
-    peak_vals = np.zeros((n_odfs, n_fibers))
-
-    dsi_mat = {}
-    # Create matfile that can be read by dsi Studio
-    dsi_mat['dimension'] = np.array(amplitudes_img.shape[:3])
-    dsi_mat['voxel_size'] = np.array(amplitudes_img.header.get_zooms()[:3])
-    n_voxels = int(np.prod(dsi_mat['dimension']))
-    #LOGGER.info("Detecting Peaks")
-    for odfnum in tqdm(range(masked_odfs.shape[0])):
-        dirs, vals, indices = peak_directions(masked_odfs[odfnum], hs)
-        for dirnum, (val, idx) in enumerate(zip(vals, indices)):
-            if dirnum == n_fibers:
-                break
-            peak_indices[odfnum, dirnum] = idx
-            peak_vals[odfnum, dirnum] = val
-
-    for nfib in range(n_fibers):
-        # fill in the "fa" values
-        fa_n = np.zeros(n_voxels)
-        fa_n[flat_mask] = peak_vals[:, nfib]
-        dsi_mat['fa%d' % nfib] = fa_n.astype(np.float32)
-
-        # Fill in the index values
-        index_n = np.zeros(n_voxels)
-        index_n[flat_mask] = peak_indices[:, nfib]
-        dsi_mat['index%d' % nfib] = index_n.astype(np.int16)
-
-    # Add in the ODFs
-    num_odf_matrices = n_odfs // ODF_COLS
-    split_indices = (np.arange(num_odf_matrices) + 1) * ODF_COLS
-    odf_splits = np.array_split(masked_odfs, split_indices, axis=0)
-    for splitnum, odfs in enumerate(odf_splits):
-        dsi_mat['odf%d' % splitnum] = odfs.T.astype(np.float32)
-
-    dsi_mat['odf_vertices'] = verts.T
-    dsi_mat['odf_faces'] = faces.T
-    dsi_mat['z0'] = np.array([1.])
-    savemat(output_fib_file, dsi_mat, format='4', appendmat=False)
 
 
 def _reg_to_ideal(args):
