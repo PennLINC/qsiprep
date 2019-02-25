@@ -1,4 +1,4 @@
-.. include:: links.rst
+.. include:: docs/links.rst
 
 QSIprep: Preprocessing and analysis of q-space images
 =======================================================

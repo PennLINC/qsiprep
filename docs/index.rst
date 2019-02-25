@@ -13,7 +13,6 @@ Contents
    :maxdepth: 3
 
    installation
-   changes
    usage
    merging
    workflows
@@ -21,4 +20,5 @@ Contents
    reconstruction
    contributors
    citing
+   changes
    api/index.rst
