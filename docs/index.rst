@@ -22,3 +22,4 @@ Contents
    citing
    changes
    api/index.rst
+   license

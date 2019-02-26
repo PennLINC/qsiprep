@@ -19,7 +19,7 @@ Patching working repositories
 In order to test new code without rebuilding the Docker image, it is
 possible to mount working repositories as source directories within the
 container.
-The `qsiprep-docker`_ script simplifies this for the most common repositories::
+The ``qsiprep-docker`` script simplifies this for the most common repositories::
 
     -f PATH, --patch-qsiprep PATH
                           working qsiprep repository (default: None)
@@ -117,7 +117,7 @@ repository, located in ``~/projects/qsiprep``: ::
 
 To work in this image, replace ``pennbbl/qsiprep:latest`` with
 ``qsiprep`` in any of the above commands.
-This image may be accessed by the `qsiprep-docker`_ wrapper via the
+This image may be accessed by the ``qsiprep-docker`` wrapper via the
 ``-i`` flag, e.g. ::
 
     $ qsiprep-docker -i qsiprep --shell

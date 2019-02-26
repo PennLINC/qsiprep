@@ -254,6 +254,9 @@ def init_dwi_preproc_wf(dwi_files,
     dwi_nvols = 10
 
     for scan in all_dwis:
+        if not os.path.exists(scan):
+            # For docs building
+            continue
         _dwi_nvols, _mem_gb = _create_mem_gb(scan)
         dwi_nvols += _dwi_nvols
         mem_gb['filesize'] += _mem_gb['filesize']
@@ -385,19 +388,16 @@ def init_dwi_preproc_wf(dwi_files,
 
         # Fieldmap time
         sbref_file = None
+        # These were grouped at the beginning to have the same fmap file
+        ref_file = dwi_files[0]
         # For doc building purposes
         if layout is None or dwi_files == 'dwi_preprocesing':
             LOGGER.log(25, 'No valid layout: building empty workflow.')
             metadata = {
                 'PhaseEncodingDirection': 'j',
             }
-            fmaps = [{
-                'type': 'epi',
-                'epi': 'sub-03/ses-2/fmap/sub-03_ses-2_run-1_epi.nii.gz'
-            }]
+            fmaps = []
         else:
-            # These were grouped at the beginning to have the same fmap file
-            ref_file = dwi_files[0]
             # Find associated sbref, if possible
             entities = layout.parse_file_entities(ref_file)
             entities['type'] = 'sbref'

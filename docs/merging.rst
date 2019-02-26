@@ -39,11 +39,11 @@ The are two kinds of SDC available in qsiprep:
 
   1. :ref:`sdc_pepolar` (also called **blip-up/blip-down**):
      This is the implementation from FMRIPREP, using 3dQwarp to
-     correct a DWI series using a fieldmap in the fmaps directory.
+     correct a DWI series using a fieldmap in the fmaps directory [Jezzard1995]_.
 
   1. (a) This uses two separe Blip-Up/blip-Down Series (BUDS), again
-      using FMRIPREP's 3dQwarp implementation, but applying the
-      correct unwarping transformation depending on each scan's polarity.
+     using FMRIPREP's 3dQwarp implementation, but applying the
+     correct unwarping transformation depending on each scan's polarity.
 
   2. :ref:`sdc_fieldmapless`: The SyN-based susceptibility distortion correction
      implemented in FMRIPREP

@@ -262,7 +262,8 @@ Susceptibility Distortion Correction (SDC)
 
 The PEPOLAR and SyN-SDC workflows from FMRIPREP are copied here.
 They operate on the output of reference estimation, after head
-motion correction.
+motion correction. For a complete list of possibilties here, see
+:ref:`merging`.
 
 .. _resampling:
 

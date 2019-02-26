@@ -12,10 +12,6 @@ Nothing to cite yet...
     Unbiased average age-appropriate atlases for pediatric studies, NeuroImage 54(1), 2011
     doi:`10.1016/j.neuroimage.2010.07.033 <https://doi.org/10.1016/j.neuroimage.2010.07.033>`_.
 
-.. [Power2017] Power JD, Plitt M, Kundu P, Bandettini PA, Martin A (2017) Temporal interpolation alters
-    motion in fMRI scans: Magnitudes and consequences for artifact detection. PLOS ONE 12(9): e0182939.
-    doi:`10.1371/journal.pone.0182939 <https://doi.org/10.1371/journal.pone.0182939>`_.
-
 .. [Brett2001] Brett M, Leff AP, Rorden C, Ashburner J (2001) Spatial Normalization of Brain Images with
     Focal Lesions Using Cost Function Masking. NeuroImage 14(2)
     doi:`10.006/nimg.2001.0845 <https://doi.org/10.1006/nimg.2001.0845>`_.
@@ -24,10 +20,6 @@ Nothing to cite yet...
                  Correction for geometric distortion in echo planar images from B0
                  field variations Magn. Reson. Med., 34 (1) (1995), pp. 65-73,
                  doi:`10.1002/mrm.1910340111 <https://doi.org/10.1002/mrm.1910340111>`_.
-
-.. [Hutton2002] Hutton et al., Image Distortion Correction in fMRI: A Quantitative
-                Evaluation, NeuroImage 16(1):217-240, 2002. doi:`10.1006/nimg.2001.1054
-                <https://doi.org/10.1006/nimg.2001.1054>`_.
 
 .. [Huntenburg2014] Huntenburg, J. M. (2014) Evaluating Nonlinear
                     Coregistration of BOLD EPI and T1w Images. Berlin: Master

@@ -6,23 +6,24 @@ Installation
 
 There are three ways to use qsiprep:
 in a `Docker Container`_, in a `Singularity Container`_, or in a `Manually
-Prepared Environment (Python 3.5+)`_.
+Prepared Environment (Python 3.6+)`_.
 Using a local container method is highly recommended.
 Once you are ready to run qsiprep, see Usage_ for details.
+
+To install::
+
+    $ pip install --user --upgrade qsiprep-container
+
+.. _`Docker Container`:
 
 Docker Container
 ================
 
-NOTE: This does not work yet -- no package on PyPI
-
 In order to run qsiprep in a Docker container, Docker must be `installed
 <https://docs.docker.com/engine/installation/>`_.
 Once Docker is installed, the recommended way to run qsiprep is to use the
-qsiprep-docker_ wrapper, which requires Python and an Internet connection.
+``qsiprep-docker`` wrapper, which requires Python and an Internet connection.
 
-To install::
-
-    $ pip install --user --upgrade qsiprep-docker
 
 When run, ``qsiprep-docker`` will generate a Docker command line for you,
 print it out for reporting purposes, and then run the command, e.g.::
@@ -64,7 +65,7 @@ The easiest way to get a Sigularity image is to run
 Where ``<version>`` should be replaced with the desired version of qsiprep that you want to download.
 
 
-Manually Prepared Environment (Python 3.5+)
+Manually Prepared Environment (Python 3.6+)
 ===========================================
 
 .. warning::
