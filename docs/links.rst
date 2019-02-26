@@ -10,3 +10,5 @@
 .. _`DSI Studio`: http://dsi-studio.labsolver.org/
 .. _MRTrix: http://www.mrtrix.org/
 .. _AFNI: https://afni.nimh.nih.gov/
+.. _Docker: https://docs.docker.com/
+.. _freesurfer: https://surfer.nmr.mgh.harvard.edu/
