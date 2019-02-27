@@ -1,4 +1,12 @@
+"""
+DSI Studio workflows
+^^^^^^^^^^^^^^^^^^^^^
 
+.. autofunction:: init_dsi_studio_recon_wf
+.. autofunction:: init_dsi_studio_connectivity_workflow
+.. autofunction:: init_dsi_studio_export_workflow
+
+"""
 import json
 import nipype.pipeline.engine as pe
 import nipype.interfaces.utility as niu

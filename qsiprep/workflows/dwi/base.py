@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-# emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
-# vi: set ft=python sts=4 ts=4 sw=4 et:
 """
 Orchestrating the dwi-preprocessing workflow
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -94,6 +91,8 @@ def init_dwi_preproc_wf(dwi_files,
                                   use_syn=True,
                                   force_syn=True,
                                   low_mem=False,
+                                  output_prefix='',
+                                  write_local_bvecs=False,
                                   num_dwi=1)
 
     **Parameters**

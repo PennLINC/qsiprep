@@ -42,7 +42,8 @@ def init_dwi_confs_wf(mem_gb, metadata, impute_slice_threshold, name="dwi_confs_
         from qsiprep.workflows.dwi.confounds import init_dwi_confs_wf
         wf = init_dwi_confs_wf(
             mem_gb=1,
-            metadata={})
+            metadata={},
+            impute_slice_threshold=0)
 
     **Parameters**
 

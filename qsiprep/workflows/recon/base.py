@@ -3,10 +3,10 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 """
-qsiprep base processing workflows
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+qsiprep base reconstruction workflows
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. autofunction:: init_qsiprep_wf
+.. autofunction:: init_qsirecon_wf
 .. autofunction:: init_single_subject_wf
 
 """

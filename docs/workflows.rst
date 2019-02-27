@@ -8,49 +8,6 @@ Processing pipeline details
 available and are used as the input.
 
 
-A (very) high-level view of the simplest pipeline (for a dataset with only
-one DWI series and no reverse PE b0 acquisitions)
-is presented below:
-
-.. workflow::
-    :graph2use: orig
-    :simple_form: yes
-
-    from qsiprep.workflows.base import init_single_subject_wf
-    wf = init_single_subject_wf(subject_id="1",
-                                name='single_subject_wf',
-                                reportlets_dir=".",
-                                output_dir=".",
-                                bids_dir=".",
-                                ignore=[],
-                                debug=False,
-                                write_local_bvecs=False,
-                                low_mem=False,
-                                anat_only=False,
-                                longitudinal=False,
-                                denoise_before_combining=True,
-                                dwi_denoise_window=7,
-                                combine_all_dwis=True,
-                                omp_nthreads=1,
-                                skull_strip_template='OASIS',
-                                skull_strip_fixed_seed=False,
-                                freesurfer=False,
-                                hires=False,
-                                output_spaces=['T1w', 'template'],
-                                template='MNI152NLin2009cAsym',
-                                output_resolution=2.0,
-                                prefer_dedicated_fmaps=False,
-                                motion_corr_to='iterative',
-                                b0_to_t1w_transform='Rigid',
-                                hmc_model='3dSHORE',
-                                hmc_transform='Affine',
-                                impute_slice_threshold=0.,
-                                fmap_bspline=True,
-                                fmap_demean=True,
-                                use_syn=False,
-                                force_syn=False)
-
-
 T1w/T2w preprocessing
 ---------------------
 :mod:`qsiprep.workflows.anatomical.init_anat_preproc_wf`

@@ -1,4 +1,10 @@
+"""
+Dipy Reconstruction workflows
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+.. autofunction:: init_dipy_brainsuite_shore_recon_wf
+
+"""
 import json
 import nipype.pipeline.engine as pe
 import nipype.interfaces.utility as niu

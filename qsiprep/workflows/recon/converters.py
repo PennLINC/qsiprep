@@ -1,5 +1,11 @@
+"""
+Converting between file formats
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-"""Handle merging and spliting of DSI files."""
+.. autofunction:: init_mif_to_fibgz_wf
+.. autofunction:: init_fibgz_to_mif_wf
+
+"""
 import numpy as np
 import os
 import nipype.pipeline.engine as pe
@@ -19,13 +25,26 @@ from pkg_resources import resource_filename as pkgr
 from qsiprep.interfaces.converters import FODtoFIBGZ
 from qsiprep.interfaces.bids import QsiprepOutput, ReconDerivativesDataSink
 qsiprep_output_names = QsiprepOutput().output_spec.class_editable_traits()
-
-
 LOGGER = logging.getLogger('nipype.workflow')
-ODF_COLS = 20000  # Number of columns in DSI Studio odf split
 
 
 def init_mif_to_fibgz_wf(name="mif_to_fibgz", output_suffix="", params={}):
+    """Converts a MRTrix mif file to DSI Studio fib file."""
+    inputnode = pe.Node(niu.IdentityInterface(fields=qsiprep_output_names + ["mif_file"]),
+                        name="inputnode")
+    outputnode = pe.Node(
+        niu.IdentityInterface(fields=['fib_file']), name="outputnode")
+    workflow = pe.Workflow(name=name)
+    convert_to_fib = pe.Node(FODtoFIBGZ(), name="convert_to_fib")
+    workflow.connect([
+        (inputnode, convert_to_fib, [('mif_file', 'mif_file')]),
+        (convert_to_fib, outputnode, [('fib_file', 'fib_file')])
+    ])
+    return workflow
+
+
+def init_fibgz_to_mif_wf(name="fibgz_to_mif", output_suffix="", params={}):
+    """Needs Documentation"""
     inputnode = pe.Node(niu.IdentityInterface(fields=qsiprep_output_names + ["mif_file"]),
                         name="inputnode")
     outputnode = pe.Node(

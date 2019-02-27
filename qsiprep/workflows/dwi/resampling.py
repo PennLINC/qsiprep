@@ -37,7 +37,7 @@ def init_dwi_trans_wf(template, mem_gb, omp_nthreads,
         :graph2use: colored
         :simple_form: yes
 
-        from qsiprep.workflows.dwi import init_dwi_trans_wf
+        from qsiprep.workflows.dwi.resampling import init_dwi_trans_wf
         wf = init_dwi_trans_wf(template='MNI152NLin2009cAsym',
                                mem_gb=3,
                                omp_nthreads=1)

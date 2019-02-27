@@ -1,3 +1,10 @@
+"""
+MRTrix workflows
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. autofunction:: init_mrtrix_vanilla_csd_recon_workflow
+
+"""
 import json
 import nipype.pipeline.engine as pe
 import nipype.interfaces.utility as niu

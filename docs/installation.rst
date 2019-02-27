@@ -58,9 +58,9 @@ what is included in the latest Docker images.
 Singularity Container
 =====================
 
-The easiest way to get a Sigularity image is to run
+The easiest way to get a Sigularity image is to run::
 
-    $ singularity build qsiprep-<version>.simg docker:/pennbl/qsiprep:<version>
+    $ singularity build qsiprep-<version>.simg docker://pennbl/qsiprep:<version>
 
 Where ``<version>`` should be replaced with the desired version of qsiprep that you want to download.
 
@@ -103,5 +103,5 @@ the ``qsiprep`` package:
 
 - ANTs_ (version 2.3.9)
 - AFNI_ (version Debian-16.2.07)
-- `C3D <https://sourceforge.net/projects/c3d/>`_ (version 1.0.0)
-- FreeSurfer_ (version 6.0.1)
+- Dipy_ (version 0.15.0)
+- FreeSurfer_ (6.0.1)

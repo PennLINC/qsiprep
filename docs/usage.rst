@@ -1,10 +1,7 @@
 .. include:: links.rst
 
 Usage
------
-
-Preprocessing QSI Data
-=============================
+------------------------
 
 The ``qsiprep`` preprocessing workflow takes as principal input the
 path of the dataset that is to be processed.

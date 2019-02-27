@@ -7,7 +7,6 @@ Utility workflows
 
 .. autofunction:: init_dwi_reference_wf
 .. autofunction:: init_enhance_and_skullstrip_dwi_wf
-.. autofunction:: init_skullstrip_dwi_wf
 
 """
 from packaging.version import parse as parseversion, Version
@@ -46,7 +45,7 @@ def init_dwi_reference_wf(omp_nthreads=1, dwi_file=None, pre_mask=False,
         :graph2use: orig
         :simple_form: yes
 
-        from qsiprep.workflows.dwi import init_dwi_reference_wf
+        from qsiprep.workflows.dwi.util import init_dwi_reference_wf
         wf = init_dwi_reference_wf(omp_nthreads=1)
 
     **Parameters**

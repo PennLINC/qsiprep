@@ -1,3 +1,11 @@
+"""
+Head motion correction
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. autofunction:: init_dwi_hmc_wf
+.. autofunction:: init_dwi_model_hmc_wf
+
+"""
 from ...engine import Workflow
 import nipype.pipeline.engine as pe
 from nipype.interfaces import ants, afni, utility as niu
