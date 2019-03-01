@@ -1,51 +1,172 @@
-''' Testing module for qsiprep.workflows.base '''
-import mock
+''' Testing qsiprep workflows'''
+from pkg_resources import resource_filename as pkgrf
+from qsiprep.workflows.base import init_qsiprep_wf
 
-from ...utils.testing import TestWorkflow
-from ..base import init_single_subject_wf
+def test_preproc_pepolar_sdc(tmp_path):
+    # Get the empty bids data
+    bids_root = pkgrf('qsiprep', 'data/abcd')
+
+    work_dir = tmp_path / "preproc_pepolar_sdc_work"
+    output_dir = tmp_path / "preproc_pepolar_sdc_output"
+    bids_dir = bids_rood
+    subject_list = ['abcd']
+    wf = init_qsiprep_wf(subject_list=subject_list,
+                         run_uuid="test",
+                         work_dir=work_dir,
+                         output_dir=output_dir,
+                         bids_dir=bids_dir,
+                         ignore=[],
+                         debug=False,
+                         low_mem=False,
+                         anat_only=False,
+                         longitudinal=False,
+                         freesurfer=False,
+                         hires=False,
+                         denoise_before_combining=True,
+                         dwi_denoise_window=7,
+                         combine_all_dwis=True,
+                         omp_nthreads=1,
+                         skull_strip_template='OASIS',
+                         skull_strip_fixed_seed=False,
+                         output_spaces=['T1w', 'template'],
+                         template='MNI152NLin2009cAsym',
+                         output_resolution=1.25,
+                         motion_corr_to='iterative',
+                         b0_to_t1w_transform='Rigid',
+                         hmc_transform='Affine',
+                         hmc_model='3dSHORE',
+                         impute_slice_threshold=0,
+                         write_local_bvecs=False,
+                         fmap_bspline=False,
+                         fmap_demean=True,
+                         use_syn=False,
+                         prefer_dedicated_fmaps=True,
+                         force_syn=False)
 
 
-@mock.patch('qsiprep.interfaces.BIDSDataGrabber')  # no actual BIDS dir necessary
-class TestBase(TestWorkflow):
+def test_preproc_syn_sdc(tmp_path):
+    # Get the empty bids data
+    bids_root = pkgrf('qsiprep', 'data/abcd')
 
-    def test_single_subject_wf(self, _):
+    work_dir = tmp_path / "preproc_syn_sdc_work"
+    output_dir = tmp_path / "preproc_syn_sdc_output"
+    bids_dir = bids_rood
+    subject_list = ['abcd']
+    wf = init_qsiprep_wf(subject_list=subject_list,
+                         run_uuid="test",
+                         work_dir=work_dir,
+                         output_dir=output_dir,
+                         bids_dir=bids_dir,
+                         ignore=[],
+                         debug=False,
+                         low_mem=False,
+                         anat_only=False,
+                         longitudinal=False,
+                         freesurfer=False,
+                         hires=False,
+                         denoise_before_combining=True,
+                         dwi_denoise_window=7,
+                         combine_all_dwis=True,
+                         omp_nthreads=1,
+                         skull_strip_template='OASIS',
+                         skull_strip_fixed_seed=False,
+                         output_spaces=['T1w', 'template'],
+                         template='MNI152NLin2009cAsym',
+                         output_resolution=1.25,
+                         motion_corr_to='iterative',
+                         b0_to_t1w_transform='Rigid',
+                         hmc_transform='Affine',
+                         hmc_model='3dSHORE',
+                         impute_slice_threshold=0,
+                         write_local_bvecs=False,
+                         fmap_bspline=False,
+                         fmap_demean=True,
+                         use_syn=True,
+                         prefer_dedicated_fmaps=False,
+                         force_syn=True)
 
-        # run
-        wfbasic = init_single_subject_wf(subject_id='test',
-                                         name='single_subject_wf',
-                                         task_id='',
-                                         ignore=[],
-                                         debug=False,
-                                         low_mem=False,
-                                         anat_only=False,
-                                         longitudinal=False,
-                                         t2s_coreg=False,
-                                         omp_nthreads=1,
-                                         skull_strip_template='OASIS',
-                                         skull_strip_fixed_seed=False,
-                                         reportlets_dir='.',
-                                         output_dir='.',
-                                         bids_dir='.',
-                                         freesurfer=False,
-                                         output_spaces=['T1w'],
-                                         template='MNI152NLin2009cAsym',
-                                         medial_surface_nan=False,
-                                         cifti_output=False,
-                                         hires=False,
-                                         use_bbr=None,
-                                         bold2t1w_dof=9,
-                                         fmap_bspline=True,
-                                         fmap_demean=True,
-                                         use_aroma=False,
-                                         aroma_melodic_dim=70,
-                                         ignore_aroma_err=False,
-                                         use_syn=True,
-                                         force_syn=True,
-                                         template_out_grid='native')
-        wfbasic.write_graph()
-        self._assert_mandatory_inputs_set(wfbasic)
 
-    def _assert_mandatory_inputs_set(self, workflow):
-        self.assert_inputs_set(workflow, {
-            'bidssrc': ['subject_data']
-        })
+def test_preproc_nonehmc_sdc(tmp_path):
+    # Get the empty bids data
+    bids_root = pkgrf('qsiprep', 'data/abcd')
+
+    work_dir = tmp_path / "preproc_nonehmc_work"
+    output_dir = tmp_path / "preproc_nonehmc_output"
+    bids_dir = bids_rood
+    subject_list = ['abcd']
+    wf = init_qsiprep_wf(subject_list=subject_list,
+                         run_uuid="test",
+                         work_dir=work_dir,
+                         output_dir=output_dir,
+                         bids_dir=bids_dir,
+                         ignore=[],
+                         debug=False,
+                         low_mem=False,
+                         anat_only=False,
+                         longitudinal=False,
+                         freesurfer=False,
+                         hires=False,
+                         denoise_before_combining=True,
+                         dwi_denoise_window=7,
+                         combine_all_dwis=True,
+                         omp_nthreads=1,
+                         skull_strip_template='OASIS',
+                         skull_strip_fixed_seed=False,
+                         output_spaces=['T1w', 'template'],
+                         template='MNI152NLin2009cAsym',
+                         output_resolution=1.25,
+                         motion_corr_to='iterative',
+                         b0_to_t1w_transform='Rigid',
+                         hmc_transform='Affine',
+                         hmc_model='none',
+                         impute_slice_threshold=0,
+                         write_local_bvecs=False,
+                         fmap_bspline=False,
+                         fmap_demean=True,
+                         use_syn=False,
+                         prefer_dedicated_fmaps=False,
+                         force_syn=False)
+
+
+def test_preproc_buds(tmp_path):
+    # Get the empty bids data
+    bids_root = pkgrf('qsiprep', 'data/buds')
+
+    work_dir = tmp_path / "preproc_buds_work"
+    output_dir = tmp_path / "preproc_buds_output"
+    bids_dir = bids_rood
+    subject_list = ['1']
+    wf = init_qsiprep_wf(subject_list=subject_list,
+                         run_uuid="test",
+                         work_dir=work_dir,
+                         output_dir=output_dir,
+                         bids_dir=bids_dir,
+                         ignore=[],
+                         debug=False,
+                         low_mem=False,
+                         anat_only=False,
+                         longitudinal=False,
+                         freesurfer=False,
+                         hires=False,
+                         denoise_before_combining=True,
+                         dwi_denoise_window=7,
+                         combine_all_dwis=True,
+                         omp_nthreads=1,
+                         skull_strip_template='OASIS',
+                         skull_strip_fixed_seed=False,
+                         output_spaces=['T1w', 'template'],
+                         template='MNI152NLin2009cAsym',
+                         output_resolution=1.25,
+                         motion_corr_to='iterative',
+                         b0_to_t1w_transform='Rigid',
+                         hmc_transform='Affine',
+                         hmc_model='none',
+                         impute_slice_threshold=0,
+                         write_local_bvecs=False,
+                         fmap_bspline=False,
+                         fmap_demean=True,
+                         use_syn=False,
+                         prefer_dedicated_fmaps=False,
+                         force_syn=False)
+
+                         

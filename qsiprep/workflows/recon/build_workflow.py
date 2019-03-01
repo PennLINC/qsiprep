@@ -12,10 +12,10 @@ from qsiprep.interfaces.connectivity import Controllability
 from qsiprep.interfaces.gradients import RemoveDuplicates
 from qsiprep.interfaces.mrtrix import ResponseSD, EstimateFOD, MRConvert, MRTrixGradientTable
 from qsiprep.interfaces import ConformDwi
-from .dsi_studio import (init_dsi_studio_recon_wf, init_dsi_studio_export_workflow,
-                         init_dsi_studio_connectivity_workflow)
+from .dsi_studio import (init_dsi_studio_recon_wf, init_dsi_studio_export_wf,
+                         init_dsi_studio_connectivity_wf)
 from .dipy import init_dipy_brainsuite_shore_recon_wf
-from .mrtrix import init_mrtrix_vanilla_csd_recon_workflow
+from .mrtrix import init_mrtrix_vanilla_csd_recon_wf
 from .converters import init_mif_to_fibgz_wf
 
 LOGGER = logging.getLogger('nipype.interface')
@@ -205,14 +205,14 @@ def workflow_from_spec(node_spec):
         if node_spec["action"] == "reconstruction":
             return init_dsi_studio_recon_wf(**kwargs)
         if node_spec["action"] == "export":
-            return init_dsi_studio_export_workflow(**kwargs)
+            return init_dsi_studio_export_wf(**kwargs)
         if node_spec["action"] == "connectivity":
-            return init_dsi_studio_connectivity_workflow(**kwargs)
+            return init_dsi_studio_connectivity_wf(**kwargs)
 
     # MRTrix3 operations
     elif software == "MRTrix3":
         if node_spec["action"] == "csd":
-            return init_mrtrix_vanilla_csd_recon_workflow(**kwargs)
+            return init_mrtrix_vanilla_csd_recon_wf(**kwargs)
 
     # Dipy operations
     elif software == "Dipy":

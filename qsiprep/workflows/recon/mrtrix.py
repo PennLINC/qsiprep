@@ -2,7 +2,7 @@
 MRTrix workflows
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. autofunction:: init_mrtrix_vanilla_csd_recon_workflow
+.. autofunction:: init_mrtrix_vanilla_csd_recon_wf
 
 """
 import json
@@ -25,7 +25,7 @@ default_connections = [(trait, trait) for trait in qsiprep_output_names]
 default_input_set = set(qsiprep_output_names)
 
 
-def init_mrtrix_vanilla_csd_recon_workflow(name="mrtrix_recon", output_suffix="", params={}):
+def init_mrtrix_vanilla_csd_recon_wf(name="mrtrix_recon", output_suffix="", params={}):
     inputnode = pe.Node(niu.IdentityInterface(fields=qsiprep_output_names),
                         name="inputnode")
     outputnode = pe.Node(

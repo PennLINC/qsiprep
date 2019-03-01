@@ -1,8 +1,8 @@
 .. _reconstruction:
 
--------------------------------
-Reconstruction Pipelines
--------------------------------
+---------------
+Reconstruction
+---------------
 
 You can send the outputs from ``qsiprep`` to other software packages
 by specifying a JSON file with the ``--recon-spec`` option. Here we use

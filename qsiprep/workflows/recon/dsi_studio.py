@@ -3,8 +3,8 @@ DSI Studio workflows
 ^^^^^^^^^^^^^^^^^^^^^
 
 .. autofunction:: init_dsi_studio_recon_wf
-.. autofunction:: init_dsi_studio_connectivity_workflow
-.. autofunction:: init_dsi_studio_export_workflow
+.. autofunction:: init_dsi_studio_connectivity_wf
+.. autofunction:: init_dsi_studio_export_wf
 
 """
 import json
@@ -61,7 +61,7 @@ def init_dsi_studio_recon_wf(name="dsi_studio_recon", output_suffix="", params={
     return workflow
 
 
-def init_dsi_studio_connectivity_workflow(name="dsi_studio_connectivity", n_procs=1,
+def init_dsi_studio_connectivity_wf(name="dsi_studio_connectivity", n_procs=1,
                                           params={}, output_suffix=""):
     inputnode = pe.Node(
         niu.IdentityInterface(
@@ -86,7 +86,7 @@ def init_dsi_studio_connectivity_workflow(name="dsi_studio_connectivity", n_proc
     return workflow
 
 
-def init_dsi_studio_export_workflow(name="dsi_studio_export", params={}, output_suffix=""):
+def init_dsi_studio_export_wf(name="dsi_studio_export", params={}, output_suffix=""):
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=qsiprep_output_names + ['fibgz']),
