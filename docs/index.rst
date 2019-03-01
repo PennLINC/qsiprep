@@ -14,9 +14,7 @@ Contents
 
    installation
    usage
-   merging
-   workflows
-   outputs
+   preprocessing
    reconstruction
    contributors
    citing

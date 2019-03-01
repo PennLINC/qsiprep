@@ -1,9 +1,7 @@
-
-
 .. _reconstruction:
 
 -------------------------------
-Reconstruction pipeline details
+Reconstruction Pipelines
 -------------------------------
 
 You can send the outputs from ``qsiprep`` to other software packages
@@ -65,5 +63,3 @@ Other example reconstruction specs
 
 Here are some other potentially useful JSON files for reconstructing ``qsiprep`` output
 and a description of what they do
-
-Reconstruct

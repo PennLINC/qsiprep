@@ -43,33 +43,6 @@ class GatherConfounds(SimpleInterface):
     """
     Combine various sources of confounds in one TSV file
 
-    .. testsetup::
-
-    >>> from tempfile import TemporaryDirectory
-    >>> tmpdir = TemporaryDirectory()
-    >>> os.chdir(tmpdir.name)
-
-    .. doctest::
-
-    >>> pd.DataFrame({'a': [0.1]}).to_csv('signals.tsv', index=False, na_rep='n/a')
-    >>> pd.DataFrame({'b': [0.2]}).to_csv('dvars.tsv', index=False, na_rep='n/a')
-
-    >>> gather = GatherConfounds()
-    >>> gather.inputs.signals = 'signals.tsv'
-    >>> gather.inputs.dvars = 'dvars.tsv'
-    >>> res = gather.run()
-    >>> res.outputs.confounds_list
-    ['Global signals', 'DVARS']
-
-    >>> pd.read_csv(res.outputs.confounds_file, sep='\s+', index_col=None,
-    ...             engine='python')  # doctest: +NORMALIZE_WHITESPACE
-         a    b
-    0  0.1  0.2
-
-    .. testcleanup::
-
-    >>> tmpdir.cleanup()
-
     """
     input_spec = GatherConfoundsInputSpec
     output_spec = GatherConfoundsOutputSpec

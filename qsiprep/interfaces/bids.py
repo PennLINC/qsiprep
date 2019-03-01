@@ -155,23 +155,6 @@ class BIDSInfo(SimpleInterface):
     This interface uses only the basename, not the path, to determine the
     subject, session, task, run, acquisition or reconstruction.
 
-    >>> from qsiprep.interfaces import BIDSInfo
-    >>> from qsiprep.utils.bids import collect_data
-    >>> bids_info = BIDSInfo()
-    >>> bids_info.inputs.in_file = collect_data('ds114', '01')[0]['bold'][0]
-    >>> bids_info.inputs.in_file  # doctest: +ELLIPSIS
-    '.../ds114/sub-01/ses-retest/func/sub-01_ses-retest_task-covertverbgeneration_bold.nii.gz'
-    >>> res = bids_info.run()
-    >>> res.outputs
-    <BLANKLINE>
-    acq_id = <undefined>
-    rec_id = <undefined>
-    run_id = <undefined>
-    session_id = ses-retest
-    subject_id = sub-01
-    task_id = task-covertverbgeneration
-    <BLANKLINE>
-
     """
     input_spec = BIDSInfoInputSpec
     output_spec = BIDSInfoOutputSpec

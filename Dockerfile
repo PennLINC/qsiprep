@@ -235,7 +235,8 @@ ENV CRN_SHARED_DATA /niworkflows_data
 ADD docker/scripts/get_templates.sh get_templates.sh
 RUN mkdir $CRN_SHARED_DATA && \
     /root/get_templates.sh && \
-    chmod -R a+rX $CRN_SHARED_DATA
+    chmod -R a+rX $CRN_SHARED_DATA && \
+    echo "add OASIS30"
 
 # Installing dev requirements (packages that are not in pypi)
 ADD requirements.txt requirements.txt
