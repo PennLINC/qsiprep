@@ -24,4 +24,9 @@ from .__about__ import (  # noqa
 import warnings
 
 # cmp is not used by qsiprep, so ignore nipype-generated warnings
+warnings.simplefilter('ignore')
 warnings.filterwarnings('ignore', r'cmp not installed')
+warnings.filterwarnings('ignore', r'Enable tracemalloc')
+warnings.filterwarnings('ignore', r"can't resolve package from __spec__ or __package__")
+warnings.filterwarnings('ignore', category=ResourceWarning)
+warnings.filterwarnings('ignore', r'Using or importing the ABCs from')

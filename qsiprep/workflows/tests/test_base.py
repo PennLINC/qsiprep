@@ -5,10 +5,9 @@ from qsiprep.workflows.base import init_qsiprep_wf
 def test_preproc_pepolar_sdc(tmp_path):
     # Get the empty bids data
     bids_root = pkgrf('qsiprep', 'data/abcd')
-
-    work_dir = tmp_path / "preproc_pepolar_sdc_work"
-    output_dir = tmp_path / "preproc_pepolar_sdc_output"
-    bids_dir = bids_rood
+    work_dir = str(tmp_path.absolute() / "preproc_pepolar_sdc_work")
+    output_dir = str(tmp_path.absolute() / "preproc_pepolar_sdc_output")
+    bids_dir = bids_root
     subject_list = ['abcd']
     wf = init_qsiprep_wf(subject_list=subject_list,
                          run_uuid="test",
@@ -43,14 +42,15 @@ def test_preproc_pepolar_sdc(tmp_path):
                          prefer_dedicated_fmaps=True,
                          force_syn=False)
 
+    assert len(wf.list_node_names())
+
 
 def test_preproc_syn_sdc(tmp_path):
     # Get the empty bids data
     bids_root = pkgrf('qsiprep', 'data/abcd')
-
-    work_dir = tmp_path / "preproc_syn_sdc_work"
-    output_dir = tmp_path / "preproc_syn_sdc_output"
-    bids_dir = bids_rood
+    work_dir = str(tmp_path.absolute() / "preproc_syn_sdc_work")
+    output_dir = str(tmp_path.absolute() / "preproc_syn_sdc_output")
+    bids_dir = bids_root
     subject_list = ['abcd']
     wf = init_qsiprep_wf(subject_list=subject_list,
                          run_uuid="test",
@@ -84,15 +84,15 @@ def test_preproc_syn_sdc(tmp_path):
                          use_syn=True,
                          prefer_dedicated_fmaps=False,
                          force_syn=True)
+    assert len(wf.list_node_names())
 
 
 def test_preproc_nonehmc_sdc(tmp_path):
     # Get the empty bids data
     bids_root = pkgrf('qsiprep', 'data/abcd')
-
-    work_dir = tmp_path / "preproc_nonehmc_work"
-    output_dir = tmp_path / "preproc_nonehmc_output"
-    bids_dir = bids_rood
+    work_dir = str(tmp_path.absolute() / "preproc_nonehmc_work")
+    output_dir = str(tmp_path.absolute() / "preproc_nonehmc_output")
+    bids_dir = bids_root
     subject_list = ['abcd']
     wf = init_qsiprep_wf(subject_list=subject_list,
                          run_uuid="test",
@@ -126,16 +126,17 @@ def test_preproc_nonehmc_sdc(tmp_path):
                          use_syn=False,
                          prefer_dedicated_fmaps=False,
                          force_syn=False)
+    assert len(wf.list_node_names())
 
 
 def test_preproc_buds(tmp_path):
     # Get the empty bids data
     bids_root = pkgrf('qsiprep', 'data/buds')
-
-    work_dir = tmp_path / "preproc_buds_work"
-    output_dir = tmp_path / "preproc_buds_output"
-    bids_dir = bids_rood
+    work_dir = str(tmp_path.absolute() / "preproc_buds_work")
+    output_dir = str(tmp_path.absolute() / "preproc_buds_output")
+    bids_dir = bids_root
     subject_list = ['1']
+
     wf = init_qsiprep_wf(subject_list=subject_list,
                          run_uuid="test",
                          work_dir=work_dir,
@@ -168,5 +169,4 @@ def test_preproc_buds(tmp_path):
                          use_syn=False,
                          prefer_dedicated_fmaps=False,
                          force_syn=False)
-
-                         
+    assert len(wf.list_node_names())

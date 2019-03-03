@@ -51,10 +51,12 @@ class RemoveDuplicates(SimpleInterface):
     def _run_interface(self, runtime):
         bvecs = np.loadtxt(self.inputs.bvec_file).T
         bvals = np.loadtxt(self.inputs.bval_file).squeeze()
+        bvals = np.sqrt(bvals-bvals.min())
+        bvals = bvals/bvals.max() * 100
         original_image = nb.load(self.inputs.dwi_file)
         cutoff = self.inputs.distance_cutoff
 
-        scaled_bvecs = np.sqrt(bvals[:, np.newaxis]) * bvecs
+        scaled_bvecs = bvals[:, np.newaxis] * bvecs
         ok_vecs = []
         seen_vecs = []
 
@@ -68,7 +70,6 @@ class RemoveDuplicates(SimpleInterface):
 
         for vec_num, vec in enumerate(scaled_bvecs):
             magnitude = np.linalg.norm(vec)
-
             # Is it a b0?
             if magnitude < cutoff:
                 ok_vecs.append(vec_num)
