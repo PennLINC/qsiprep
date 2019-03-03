@@ -51,6 +51,7 @@ class RemoveDuplicates(SimpleInterface):
     def _run_interface(self, runtime):
         bvecs = np.loadtxt(self.inputs.bvec_file).T
         bvals = np.loadtxt(self.inputs.bval_file).squeeze()
+        orig_bvals = bvals.copy()
         bvals = np.sqrt(bvals-bvals.min())
         bvals = bvals/bvals.max() * 100
         original_image = nb.load(self.inputs.dwi_file)
@@ -102,7 +103,7 @@ class RemoveDuplicates(SimpleInterface):
         output_nii = fname_presuffix(self.inputs.dwi_file, newpath=runtime.cwd,
                                      suffix="_unique")
         unique_indices = np.array(ok_vecs)
-        unique_bvals = bvals[unique_indices]
+        unique_bvals = orig_bvals[unique_indices]
         np.savetxt(output_bval, unique_bvals, fmt='%d', newline=' ')
         unique_bvecs = bvecs[unique_indices]
         np.savetxt(output_bvec, unique_bvecs.T, fmt='%.8f')
