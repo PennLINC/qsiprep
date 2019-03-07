@@ -123,6 +123,9 @@ def init_dwi_recon_workflow(dwi_file, workflow_spec, output_dir, reportlets_dir,
 
 
 def init_controllability_workflow(name="controllability", output_suffix="", params={}):
+    """Calculates network controllability from connectivity matrices.
+
+    """
     inputnode = pe.Node(niu.IdentityInterface(fields=qsiprep_output_names + ['matfile']),
                         name="inputnode")
     outputnode = pe.Node(
