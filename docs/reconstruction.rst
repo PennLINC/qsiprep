@@ -133,8 +133,7 @@ formats.
 
 Action: ``"3dSHORE_reconstruction"``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Use the 3dSHORE bases to fit diffusion signal, and estimate ODFs.
+.. autofunction:: qsiprep.workflows.recon.dipy.init_dipy_brainsuite_shore_recon_wf
 
 
 DSI Studio
@@ -142,12 +141,15 @@ DSI Studio
 
 Action: ``"reconstruction"``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.. autofunction:: qsiprep.workflows.recon.dsi_studio.init_dsi_studio_recon_wf
 
 Action: ``"export"``
 ^^^^^^^^^^^^^^^^^^^^^^^
+.. autofunction:: qsiprep.workflows.recon.dsi_studio.init_dsi_studio_export_wf
 
 Action: ``"connectivity"``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.. autofunction:: qsiprep.workflows.recon.dsi_studio.init_dsi_studio_connectivity_wf
 
 MRTrix
 ~~~~~~~~~~
@@ -166,22 +168,22 @@ Assorted workflows
 
 Action: ``"conform"``
 ^^^^^^^^^^^^^^^^^^^^^^^^
+.. autofunction:: qsiprep.workflows.recon.build_workflow.init_conform_dwi_wf
 
 Action: ``"controllability"``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.. autofunction:: qsiprep.workflows.recon.build_workflow.init_controllability_workflow
 
 Action: ``"discard_repeated_samples"``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-.. autofunction:: qsiprep.workflows.recon.
+.. autofunction:: qsiprep.workflows.recon.build_workflow.init_discard_repeated_samples_wf
 
 Action: ``"mif_to_fib"``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
 .. autofunction:: qsiprep.workflows.recon.converters.init_fibgz_to_mif_wf
 
 Action: ``"fib_to_mif"``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-..note:: Workflow not implemented yet
+.. note:: Workflow not implemented yet
 
 .. autofunction:: qsiprep.workflows.recon.converters.init_mif_to_fibgz_wf

@@ -29,7 +29,25 @@ LOGGER = logging.getLogger('nipype.workflow')
 
 
 def init_mif_to_fibgz_wf(name="mif_to_fibgz", output_suffix="", params={}):
-    """Converts a MRTrix mif file to DSI Studio fib file."""
+    """Converts a MRTrix mif file to DSI Studio fib file.
+
+    This workflow uses ``sh2amp`` to sample the FODs on the standard DSI Studio
+    ODF direction set. These are then loaded and converted to the fib MATLAB v4 format
+    and peak directions are detected using Dipy.
+
+    Inputs:
+    --------
+
+    mif_file
+        MRTrix format mif file containing sh coefficients representing FODs.
+
+    Outputs:
+    ---------
+
+    fibgz
+        DSI Studio fib file containing the FODs from the input ``mif_file``.
+
+    """
     inputnode = pe.Node(niu.IdentityInterface(fields=qsiprep_output_names + ["mif_file"]),
                         name="inputnode")
     outputnode = pe.Node(

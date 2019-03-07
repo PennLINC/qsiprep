@@ -125,6 +125,23 @@ def init_dwi_recon_workflow(dwi_file, workflow_spec, output_dir, reportlets_dir,
 def init_controllability_workflow(name="controllability", output_suffix="", params={}):
     """Calculates network controllability from connectivity matrices.
 
+    Calculates modal and average controllability using the method of Gu et al. 2015.
+
+    Inputs:
+    -------
+
+    matfile
+        MATLAB format connectivity matrices from DSI Studio connectivity, MRTrix
+        connectivity or Dipy Connectivity.
+
+    Outputs:
+    --------
+
+    matfile
+        MATLAB format controllability values for each node in each connectivity matrix
+        in the input file.
+
+
     """
     inputnode = pe.Node(niu.IdentityInterface(fields=qsiprep_output_names + ['matfile']),
                         name="inputnode")
@@ -147,7 +164,7 @@ def init_controllability_workflow(name="controllability", output_suffix="", para
     return workflow
 
 
-def init_discard_repeated_samples_workflow(name="discard_repeats", output_suffix="",
+def init_discard_repeated_samples_wf(name="discard_repeats", output_suffix="",
                                            space="T1w", params={}):
     """Remove a sample if a similar direction/gradient has already been sampled."""
     inputnode = pe.Node(niu.IdentityInterface(fields=qsiprep_output_names),
@@ -227,7 +244,7 @@ def workflow_from_spec(node_spec):
         if node_spec['action'] == "controllability":
             return init_controllability_workflow(**kwargs)
         if node_spec['action'] == 'discard_repeated_samples':
-            return init_discard_repeated_samples_workflow(**kwargs)
+            return init_discard_repeated_samples_wf(**kwargs)
         if node_spec['action'] == 'conform':
             return init_conform_dwi_wf(**kwargs)
         if node_spec['action'] == 'mif_to_fib':
