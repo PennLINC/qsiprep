@@ -34,11 +34,13 @@ def init_dwi_recon_workflow(dwi_file, workflow_spec, output_dir, reportlets_dir,
 
     # Collect all relevant qsiprep outputs for dwi_file
     preprocessed_data = pe.Node(QsiprepOutput(), name='preprocessed_data')
-    preprocessed_data.inputs.in_file = dwi_file
-
     # Resample all atlases to dwi_file's resolution
     get_atlases = pe.Node(GetConnectivityAtlases(atlas_names=atlas_names), name='get_atlases')
-    get_atlases.inputs.reference_image = dwi_file
+
+    # For doctests
+    if not workflow_spec['name'] == 'fake':
+        get_atlases.inputs.reference_image = dwi_file
+        preprocessed_data.inputs.in_file = dwi_file
 
     # Go time.
     workflow = pe.Workflow(name=_get_wf_name(dwi_file))
@@ -127,19 +129,17 @@ def init_controllability_workflow(name="controllability", output_suffix="", para
 
     Calculates modal and average controllability using the method of Gu et al. 2015.
 
-    Inputs:
-    -------
+    Inputs
 
-    matfile
-        MATLAB format connectivity matrices from DSI Studio connectivity, MRTrix
-        connectivity or Dipy Connectivity.
+        matfile
+            MATLAB format connectivity matrices from DSI Studio connectivity, MRTrix
+            connectivity or Dipy Connectivity.
 
-    Outputs:
-    --------
+    Outputs
 
-    matfile
-        MATLAB format controllability values for each node in each connectivity matrix
-        in the input file.
+        matfile
+            MATLAB format controllability values for each node in each connectivity matrix
+            in the input file.
 
 
     """

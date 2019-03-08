@@ -1,0 +1,77 @@
+{
+  "name":"dsistudio_from_eddy",
+  "space": "T1w",
+  "atlases": [],
+  "nodes": [
+    {
+      "name": "conform_dwis",
+      "action": "conform",
+      "input": "qsiprep",
+      "output": [],
+      "parameters": {
+        "method": "gqi"
+      }
+    },
+    {
+      "name": "3dSHORE_L2_recon",
+      "software": "Dipy",
+      "action": "3dSHORE_reconstruction",
+      "input": "conform_dwis",
+      "output_suffix": "_3dSHORE",
+      "parameters": {
+        "radial_order": 8,
+        "zeta": 700,
+        "regularization": "L2",
+        "lambdaN":0.0000001,
+        "lambdaL":0.00000001,
+        "write_fibgz": true,
+        "write_mif": true
+      }
+    },
+    {
+      "name": "MAPMRI_isotropic_recon",
+      "software": "Dipy",
+      "action": "MAPMRIi_reconstruction",
+      "input": "conform_dwis",
+      "output_suffix": "_MAPi",
+      "parameters": {
+        "radial_order": 8,
+        "zeta": 700,
+        "regularization": "L2",
+        "lambdaN":0.0000001,
+        "lambdaL":0.00000001,
+        "write_fibgz": true,
+        "write_mif": true
+      }
+    },
+    {
+      "name": "dsistudio_gqi",
+      "software": "DSI Studio",
+      "action": "reconstruction",
+      "input": "conform_dwis",
+      "output_suffix": "gqi",
+      "parameters": {
+        "method": "gqi"
+      }
+    },
+    {
+      "name": "csd_fod",
+      "software": "MRTrix3",
+      "action": "csd",
+      "output_suffix": "csd",
+      "input": "conform_dwis",
+      "parameters": {
+        "response": {"algorithm": "tournier"},
+        "fod": {"algorithm": "csd",
+                "max_sh": 8}
+      }
+    },
+    {
+      "name": "mif2fibgz",
+      "input": "csd_fod",
+      "output_suffix": "csd",
+      "action": "mif_to_fib",
+      "parameters": {}
+    }
+  ]
+}

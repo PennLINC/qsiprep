@@ -1,8 +1,8 @@
 .. _reconstruction:
 
----------------
+
 Reconstruction
----------------
+================
 
 You can send the outputs from ``qsiprep`` to other software packages
 by specifying a JSON file with the ``--recon-spec`` option. Here we use
@@ -118,8 +118,8 @@ Assuming this file is called ``qgi_scalar_export.json`` and you've installed
 
 .. _recon_workflows:
 
-Reconstruction Workflows
--------------------------
+Reconstruction Workflow Nodes
+==================================
 
 Here the inputs, outputs and parameters of each workflow are listed for
 each software package and action.

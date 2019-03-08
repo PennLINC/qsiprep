@@ -128,7 +128,7 @@ class HistEQ(SimpleInterface):
         return runtime
 
 
-class DipyInputSpec(BaseInterfaceInputSpec):
+class DipyReconInputSpec(BaseInterfaceInputSpec):
     bval_file = File(exists=True, mandatory=True)
     bvec_file = File(exists=True, mandatory=True)
     dwi_file = File(exists=True, mandatory=True)
@@ -138,13 +138,14 @@ class DipyInputSpec(BaseInterfaceInputSpec):
     little_delta = traits.Float()
     b0_threshold = traits.CFloat(50, usedefault=True)
 
-class DipyOutputSpec(TraitedSpec):
-    fibgz_file = File()
+class DipyReconOutputSpec(TraitedSpec):
+    fibgz = File()
+    mif = File()
 
 
-class DipyInterface(SimpleInterface):
-    input_spec = DipyInputSpec
-    output_spec = DipyOutputSpec
+class DipyReconInterface(SimpleInterface):
+    input_spec = DipyReconInputSpec
+    output_spec = DipyReconOutputSpec
 
     def _get_gtab(self):
         little_delta = self.inputs.little_delta if isdefined(self.inputs.little_delta) else None
@@ -201,7 +202,7 @@ class DipyInterface(SimpleInterface):
             self._results['sh_mif'] = output_mif_file
 
 
-class MAPMRIInputSpec(DipyInputSpec):
+class MAPMRIInputSpec(DipyReconInputSpec):
     radial_order = traits.Int(6, usedefault=True)
     laplacian_regularization = traits.Bool(True, usedefault=True)
     laplacian_weighting = traits.Float(0.2, usedefault=True)
@@ -217,7 +218,7 @@ class MAPMRIInputSpec(DipyInputSpec):
     cvxpy_solver = traits.Str()
 
 
-class MAPMRIOutputSpec(DipyOutputSpec):
+class MAPMRIOutputSpec(DipyReconOutputSpec):
     rtop = File()
     lapnorm = File()
     msd = File()
@@ -230,7 +231,7 @@ class MAPMRIOutputSpec(DipyOutputSpec):
     mapmri_coeffs = File()
 
 
-class MAPMRIReconstruction(SimpleInterface):
+class MAPMRIReconstruction(DipyReconInterface):
     input_spec = MAPMRIInputSpec
     output_spec = MAPMRIOutputSpec
 
@@ -314,7 +315,7 @@ class MAPMRIReconstruction(SimpleInterface):
         return runtime
 
 
-class BrainSuiteShoreReconstructionInputSpec(DipyInputSpec):
+class BrainSuiteShoreReconstructionInputSpec(DipyReconInputSpec):
     radial_order = traits.Int(6, usedefault=True)
     zeta = traits.Float(700)
     tau = traits.Float(4 * np.pi**2, usedefault=True)
@@ -337,12 +338,12 @@ class BrainSuiteShoreReconstructionInputSpec(DipyInputSpec):
     write_mif = traits.Bool(True)
 
 
-class BrainSuiteShoreReconstructionOutputSpec(DipyOutputSpec):
+class BrainSuiteShoreReconstructionOutputSpec(DipyReconOutputSpec):
     shore_coeffs = File()
     rtop = File()
 
 
-class BrainSuiteShoreReconstruction(DipyInterface):
+class BrainSuiteShoreReconstruction(DipyReconInterface):
     input_spec = BrainSuiteShoreReconstructionInputSpec
     output_spec = BrainSuiteShoreReconstructionOutputSpec
 

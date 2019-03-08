@@ -51,16 +51,14 @@ def init_qsirecon_wf(subject_list, run_uuid, work_dir, output_dir, recon_input,
         :graph2use: orig
         :simple_form: yes
 
-        import os
-        from qsiprep.workflows.recon import init_qsirecon_wf
-        wf = init_qsirecon_wf(subject_list=['qsirecontest'],
+        from qsiprep.workflows.recon.base import init_qsirecon_wf
+        wf = init_qsirecon_wf(subject_list=['test'],
                               run_uuid='X',
                               work_dir='.',
                               recon_input='.',
-                              recon_spec='spec.json',
+                              recon_spec='doctest_spec.json',
                               output_dir='.',
                               bids_dir='.',
-                              recon_spec='',
                               low_mem=False,
                               omp_nthreads=1)
 
@@ -119,23 +117,6 @@ def init_single_subject_wf(
     This workflow organizes the reconstruction pipeline for a single subject.
     Reconstruction is performed using a separate workflow for each dwi series.
 
-    .. workflow::
-        :graph2use: orig
-        :simple_form: yes
-
-        from qsiprep.workflows.recon import init_single_subject_wf
-        wf = init_single_subject_wf(subject_id='test',
-                                    task_id='',
-                                    name='single_subject_wf',
-                                    recon_input='.',
-                                    recon_spec='spec.json',
-                                    reportlets_dir='.',
-                                    output_dir='.',
-                                    bids_dir='.',
-                                    low_mem=False,
-                                    omp_nthreads=1,
-                                    )
-
     Parameters
 
         subject_id : str
@@ -157,10 +138,13 @@ def init_single_subject_wf(
         recon_spec : str
             Path to a JSON file that specifies how to run reconstruction
     """
-    if name in ('single_subject_wf', 'single_subject_qsipreptest_wf'):
+    if name in ('single_subject_wf', 'single_subject_test_recon_wf'):
         # a fake spec
-        spec = {"name": "fake"}
-        space = "T1w"
+        spec = {"name": "fake",
+                "atlases": [],
+                "space": "T1w",
+                "nodes":[]}
+        space = spec['space']
         # for documentation purposes
         dwi_files = ['/made/up/outputs/sub-X_dwi.nii.gz']
         layout = None

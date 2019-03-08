@@ -281,7 +281,7 @@ def init_dwi_model_hmc_wf(modelname, transform, mem_gb, omp_nthreads,
         :graph2use: colored
         :simple_form: yes
 
-        from qsiprep.workflows.dwi import init_dwi_model_hmc_wf
+        from qsiprep.workflows.dwi.hmc import init_dwi_model_hmc_wf
         wf = init_dwi_model_hmc_wf(modelname='3dSHORE',
                                    transform='Affine',
                                    num_iters=2,

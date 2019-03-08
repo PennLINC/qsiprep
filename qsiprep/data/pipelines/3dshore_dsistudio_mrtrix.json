@@ -5,29 +5,47 @@
     {
       "name": "csdsi_3dshore",
       "software": "Dipy",
-      "action": "reconstruction",
+      "action": "3dSHORE_reconstruction",
       "input": "qsiprep",
-      "output": [
-        "coeffs",
-        "gfa"
-      ],
+      "output_prefix": "3dSHORE",
       "parameters": {
-        "method": "gqi"
-      }
-    },
-    { "name": "dipy2dsistudio",
-      "action": "convert",
-      "input": "csdsi_3dshore",
-      "output": ["fibgz"],
-      "parameters": {
-        "odf_order": "odf8"
+        "radial_order": 6,
+        "zeta": 700,
+        "tau": 40,
+        "regularization": "L2",
+        "lambdaN": 1e-8,
+        "lambdaL": 1e-8,
+        "write_mif": true,
+        "write_fibgz": true
       }
     },
     {
-      "name": "dipy2mrtrix",
-      "action": "convert",
+      "name": "streamline_connectivity",
+      "software": "DSI Studio",
+      "action": "connectivity",
       "input": "csdsi_3dshore",
-      "output": ["fod", "fixels"]
+      "output": "",
+      "parameters": {
+        "turning_angle": 35,
+        "method": 0,
+        "smoothing": 0.0,
+        "step_size": 1.0,
+        "min_length": 10,
+        "max_length": 250,
+        "seed_plan": 0,
+        "interpolation": 0,
+        "initial_dir": 2,
+        "fiber_count": 5000000,
+        "connectivity_value": "count,ncount,mean_length,gfa",
+        "connectivity_type": "pass,end",
+        "output_trk": "no_trk"
+      }
+    },
+    {
+        "name": "controlability",
+        "input": "streamline_connectivity",
+        "action": "controllability",
+        "output_suffix": "rec-3dshore_control"
     }
   ]
 }

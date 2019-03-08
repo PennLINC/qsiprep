@@ -10,29 +10,50 @@ QSIprep: Preprocessing and analysis of q-space images
 About
 -----
 
-``qsiprep`` is designed to perform preprocessing and reconstruction of
+``qsiprep`` configures pipelines for processing diffusion-weighted MRI (dMRI) data.
+The two main features of this software are
+
+  1. A novel :ref:`preprocessing_def` pipeline for non-DTI q-space imaging sequences
+  2. A system for building a :ref:`reconstruction_def` pipeline that includes algorithms
+     from Dipy_, MRTrix_, `DSI Studio`_  and others.
+
+.. _preprocessing_def:
+
+Preprocessing
+~~~~~~~~~~~~~~~
+
+The preprocessing pipelines are designed to perform preprocessing and reconstruction of
 non-DTI q-space images. Non-DTI means that the imaging sequence used
 either:
 
-  - A multi-shell HARDI sampling scheme
-  - A Cartesian grid (aka DSI) sampling scheme
-  - A random q-space sampling scheme (eg for compressed sensing)
+ - A multi-shell HARDI sampling scheme
+ - A Cartesian grid (aka DSI) sampling scheme
+ - A random q-space sampling scheme (eg for compressed sensing)
 
-DTI preprocessing can be done in tools like FSL, MRTrix, Tortoise and others.
-QSIprep can then reconstruct their processed outputs.
 QSIprep's head motion correction algorithm relies on voxelwise estimates of
-ensemble average propagators (EAPs), which
-require angular and radial variability in the sampling scheme.
+ensemble average propagators (EAPs), which require angular and radial
+variability in the sampling scheme. The preprocessing workflow performs
+head motion correction, susceptibility distortion correction, MP-PCA denoising,
+coregistration to T1w images, spatial normalization using ANTs_ and tissue segmentation.
 
-Uses
-------
 
-QSIprep builds workflows that can preprocess and reconstruct q-space images.
-The two main features of this software are
+.. _reconstruction_def:
 
-  1. A novel preprocessing pipeline for non-DTI q-space imaging sequences
-  2. A system for building a reconstruction pipeline that includes algorithms
-     from Dipy_, MRTrix_, `DSI Studio`_  and others.
+Reconstruction
+~~~~~~~~~~~~~~~~
+
+For DTI and multi-shell data, the preprocessing tools available in FSL, MRTrix_
+and others are very good. The outputs from these preprocessing pipelines can
+be named to mimic the :ref:`outputs` from the ``qsiprep`` preprocessing pipeline
+and then reconstructed using workflows from our curated set of :ref:`recon_workflows`.
+
+
+
+
+
+
+Example use cases
+-------------------
 
 Consider the following use-cases:
 
