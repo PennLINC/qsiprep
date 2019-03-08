@@ -48,10 +48,6 @@ be named to mimic the :ref:`outputs` from the ``qsiprep`` preprocessing pipeline
 and then reconstructed using workflows from our curated set of :ref:`recon_workflows`.
 
 
-
-
-
-
 Example use cases
 -------------------
 
