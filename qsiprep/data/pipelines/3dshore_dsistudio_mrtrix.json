@@ -7,7 +7,7 @@
       "software": "Dipy",
       "action": "3dSHORE_reconstruction",
       "input": "qsiprep",
-      "output_prefix": "3dSHORE",
+      "output_suffix": "3dSHORE",
       "parameters": {
         "radial_order": 6,
         "zeta": 700,
@@ -24,7 +24,6 @@
       "software": "DSI Studio",
       "action": "connectivity",
       "input": "csdsi_3dshore",
-      "output": "",
       "parameters": {
         "turning_angle": 35,
         "method": 0,

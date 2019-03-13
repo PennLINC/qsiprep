@@ -38,6 +38,7 @@ LOGGER = logging.getLogger('nipype.interface')
 from .converters import get_dsi_studio_ODF_geometry, amplitudes_to_fibgz, amplitudes_to_sh_mif
 import subprocess
 
+
 def popen_run(arg_list):
     cmd = subprocess.Popen(arg_list, stdout=subprocess.PIPE,
                            stderr=subprocess.PIPE)
@@ -140,7 +141,7 @@ class DipyReconInputSpec(BaseInterfaceInputSpec):
 
 class DipyReconOutputSpec(TraitedSpec):
     fibgz = File()
-    mif = File()
+    fod_sh_mif = File()
 
 
 class DipyReconInterface(SimpleInterface):
@@ -154,14 +155,16 @@ class DipyReconInterface(SimpleInterface):
                               bvecs=np.loadtxt(self.inputs.bvec_file).T,
                               b0_threshold=self.inputs.b0_threshold,
                               big_delta=big_delta,
-                              little_delta=little_delta)
+                              small_delta=little_delta)
+        return gtab
 
     def _get_mask(self, amplitudes_img, gtab):
         if not isdefined(self.inputs.mask_file):
             LOGGER.warning("Creating an Otsu mask, check that the whole brain is covered.")
-            b0_mask, mask_array = median_otsu(
+            _, mask_array = median_otsu(
                 amplitudes_img.get_data()[..., gtab.b0s_mask], 3, 2)
-            mask_img = nb.Nifti1Image(mask_array.astype(np.float32), dwi_img.affine, dwi_img.header)
+            mask_img = nb.Nifti1Image(mask_array.astype(np.float32), amplitudes_img.affine,
+                                      amplitudes_img.header)
         else:
             mask_img = nb.load(self.inputs.mask_file)
             mask_array = mask_img.get_data() > 0
@@ -173,10 +176,10 @@ class DipyReconInterface(SimpleInterface):
         nb.Nifti1Image(data, ref_img.affine, ref_img.header).to_filename(output_fname)
         return output_fname
 
-    def _write_external_formats(self, fit_obj, mask_img, suffix):
+    def _write_external_formats(self, runtime, fit_obj, mask_img, suffix):
 
         if not (self.inputs.write_fibgz or self.inputs.write_mif):
-            return runtime
+            return
 
         # Convert to amplitudes for other software
         verts, faces = get_dsi_studio_ODF_geometry("odf8")
@@ -192,14 +195,14 @@ class DipyReconInterface(SimpleInterface):
             LOGGER.info("Writing DSI Studio fib file %s", output_fib_file)
             amplitudes_to_fibgz(odf_amplitudes, verts, faces, output_fib_file, mask_img,
                                 num_fibers=5)
-            self._results['fibgz_file'] = output_fib_file
+            self._results['fibgz'] = output_fib_file
 
         if self.inputs.write_mif:
             output_mif_file = fname_presuffix(self.inputs.dwi_file, suffix=suffix+".mif",
                                               newpath=runtime.cwd, use_ext=False)
             LOGGER.info("Writing sh mif file %s", output_mif_file)
             amplitudes_to_sh_mif(odf_amplitudes, verts, output_mif_file, runtime.cwd)
-            self._results['sh_mif'] = output_mif_file
+            self._results['fod_sh_mif'] = output_mif_file
 
 
 class MAPMRIInputSpec(DipyReconInputSpec):
@@ -347,21 +350,21 @@ class BrainSuiteShoreReconstruction(DipyReconInterface):
     input_spec = BrainSuiteShoreReconstructionInputSpec
     output_spec = BrainSuiteShoreReconstructionOutputSpec
 
-    def _run_interface(self,runtime):
+    def _run_interface(self, runtime):
         gtab = self._get_gtab()
         b0s_mask = gtab.b0s_mask
         dwis_mask = np.logical_not(b0s_mask)
         dwi_img = nb.load(self.inputs.dwi_file)
         dwi_data = dwi_img.get_fdata(dtype=np.float32)
         b0_images = dwi_data[..., b0s_mask]
-        b0_mean =  b0_images.mean(3)
+        b0_mean = b0_images.mean(3)
         dwi_images = dwi_data[..., dwis_mask]
 
         mask_img, mask_array = self._get_mask(dwi_img, gtab)
 
         final_bvals = np.concatenate([np.array([0]), gtab.bvals[dwis_mask]])
         final_bvecs = np.row_stack([np.array([0., 0., 0.]), gtab.bvecs[dwis_mask]])
-        final_data = np.concatenate([b0_mean[...,np.newaxis], dwi_images], 3)
+        final_data = np.concatenate([b0_mean[..., np.newaxis], dwi_images], 3)
         final_grads = gradient_table(bvals=final_bvals, bvecs=final_bvecs, b0_threshold=5)
 
         # Cleanup
@@ -380,7 +383,7 @@ class BrainSuiteShoreReconstruction(DipyReconInterface):
             lambdaL=self.inputs.lambdaL,
             # For L1
             regularization_weighting=self.inputs.regularization_weighting,
-            l1_positive_constraint = traits.Bool(False, usedefault=True),
+            l1_positive_constraint=traits.Bool(False, usedefault=True),
             l1_cv=self.inputs.l1_cv,
             l1_maxiter=self.inputs.l1_maxiter,
             l1_verbose=self.inputs.l1_verbose,
@@ -395,38 +398,14 @@ class BrainSuiteShoreReconstruction(DipyReconInterface):
         coeffs_file = fname_presuffix(self.inputs.dwi_file, suffix="_shore_coeff",
                                       newpath=runtime.cwd)
         rtop_file = fname_presuffix(self.inputs.dwi_file, suffix="_rtop",
-                                      newpath=runtime.cwd)
+                                    newpath=runtime.cwd)
         nb.Nifti1Image(coeffs, dwi_img.affine, dwi_img.header).to_filename(coeffs_file)
         nb.Nifti1Image(rtop, dwi_img.affine, dwi_img.header).to_filename(rtop_file)
         self._results['shore_coeffs'] = coeffs_file
         self._results['rtop'] = rtop_file
 
-        self._write_external_formats(bss_fit, mask_img, "_BS3dSHORE")
-        if not (self.inputs.write_fibgz or self.inputs.write_mif):
-            return runtime
-
-        # Convert to amplitudes for other software
-        verts, faces = get_dsi_studio_ODF_geometry("odf8")
-        num_dirs, _ = verts.shape
-        hemisphere = num_dirs // 2
-        x, y, z = verts[:hemisphere].T
-        hs = HemiSphere(x=x, y=y, z=z)
-        odf_amplitudes = nb.Nifti1Image(bss_fit.odf(hs), dwi_img.affine, dwi_img.header)
-
-        if self.inputs.write_fibgz:
-            output_fib_file = fname_presuffix(self.inputs.dwi_file, suffix="_3dSHORE.fib",
-                                              newpath=runtime.cwd, use_ext=False)
-            LOGGER.info("Writing DSI Studio fib file %s", output_fib_file)
-            amplitudes_to_fibgz(odf_amplitudes, verts, faces, output_fib_file, mask_img,
-                                num_fibers=5)
-            self._results['fibgz_file'] = output_fib_file
-
-        if self.inputs.write_mif:
-            output_mif_file = fname_presuffix(self.inputs.dwi_file, suffix="_3dSHORE.mif",
-                                              newpath=runtime.cwd, use_ext=False)
-            LOGGER.info("Writing sh mif file %s", output_mif_file)
-            amplitudes_to_sh_mif(odf_amplitudes, verts, output_mif_file, runtime.cwd)
-            self._results['sh_mif'] = output_mif_file
+        # Write DSI Studio or MRtrix
+        self._write_external_formats(runtime, bss_fit, mask_img, "_BS3dSHORE")
         return runtime
 
 

@@ -202,9 +202,11 @@ def init_dsi_studio_export_wf(name="dsi_studio_export", params={}, output_suffix
                        (fixhdr_nodes[scalar_name], outputnode, [('out_file', scalar_name)])]
         if output_suffix:
             connections += [(fixhdr_nodes[scalar_name],
-                             pe.Node(ReconDerivativesDataSink(desc=scalar_name, suffix=output_suffix),
-                                     name='ds_%s_%s' % (name, scalar_name)),
-                            [('out_file', 'in_file')])]
+                             pe.Node(
+                                 ReconDerivativesDataSink(desc=scalar_name,
+                                                          suffix=output_suffix),
+                                 name='ds_%s_%s' % (name, scalar_name)),
+                             [('out_file', 'in_file')])]
         workflow.connect(connections)
 
     workflow.connect([(inputnode, export, [('fibgz', 'input_file')])])

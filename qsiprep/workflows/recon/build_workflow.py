@@ -2,7 +2,6 @@ import json
 import nipype.pipeline.engine as pe
 import nipype.interfaces.utility as niu
 from nipype.utils.filemanip import copyfile, split_filename
-
 import logging
 import os
 import os.path as op
@@ -10,11 +9,11 @@ from qsiprep.interfaces.bids import QsiprepOutput, ReconDerivativesDataSink
 from qsiprep.interfaces.utils import GetConnectivityAtlases
 from qsiprep.interfaces.connectivity import Controllability
 from qsiprep.interfaces.gradients import RemoveDuplicates
-from qsiprep.interfaces.mrtrix import ResponseSD, EstimateFOD, MRConvert, MRTrixGradientTable
+from qsiprep.interfaces.mrtrix import MRTrixGradientTable
 from qsiprep.interfaces import ConformDwi
 from .dsi_studio import (init_dsi_studio_recon_wf, init_dsi_studio_export_wf,
                          init_dsi_studio_connectivity_wf)
-from .dipy import init_dipy_brainsuite_shore_recon_wf
+from .dipy import init_dipy_brainsuite_shore_recon_wf, init_dipy_mapmri_recon_wf
 from .mrtrix import init_mrtrix_vanilla_csd_recon_wf
 from .converters import init_mif_to_fibgz_wf
 
@@ -29,7 +28,7 @@ def _get_resampled(atlas_configs, atlas_name):
 
 
 def init_dwi_recon_workflow(dwi_file, workflow_spec, output_dir, reportlets_dir, name="recon_wf"):
-    atlas_names = workflow_spec['atlases']
+    atlas_names = workflow_spec.get('atlases', [])
     space = workflow_spec['space']
 
     # Collect all relevant qsiprep outputs for dwi_file
@@ -49,7 +48,7 @@ def init_dwi_recon_workflow(dwi_file, workflow_spec, output_dir, reportlets_dir,
     workflow.add_nodes([preprocessed_data])
 
     # Save the atlases
-    if len(workflow_spec['atlases']):
+    if len(atlas_names):
         workflow.add_nodes([get_atlases])
         if space == "T1w":
             workflow.connect([
@@ -238,6 +237,8 @@ def workflow_from_spec(node_spec):
     elif software == "Dipy":
         if node_spec["action"] == "3dSHORE_reconstruction":
             return init_dipy_brainsuite_shore_recon_wf(**kwargs)
+        if node_spec["action"] == "MAPMRI_reconstruction":
+            return init_dipy_mapmri_recon_wf(**kwargs)
 
     # qsiprep operations
     else:
