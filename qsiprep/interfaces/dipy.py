@@ -138,6 +138,9 @@ class DipyReconInputSpec(BaseInterfaceInputSpec):
     big_delta = traits.Float()
     little_delta = traits.Float()
     b0_threshold = traits.CFloat(50, usedefault=True)
+    # Outputs
+    write_fibgz = traits.Bool(True)
+    write_mif = traits.Bool(True)
 
 class DipyReconOutputSpec(TraitedSpec):
     fibgz = File()
@@ -160,9 +163,11 @@ class DipyReconInterface(SimpleInterface):
 
     def _get_mask(self, amplitudes_img, gtab):
         if not isdefined(self.inputs.mask_file):
+            dwi_data = amplitudes_img.get_data()
             LOGGER.warning("Creating an Otsu mask, check that the whole brain is covered.")
-            _, mask_array = median_otsu(
-                amplitudes_img.get_data()[..., gtab.b0s_mask], 3, 2)
+            _, mask_array = median_otsu(dwi_data[..., gtab.b0s_mask], 3, 2)
+            # Needed for synthetic data
+            mask_array = mask_array * (dwi_data.sum(3) > 0)
             mask_img = nb.Nifti1Image(mask_array.astype(np.float32), amplitudes_img.affine,
                                       amplitudes_img.header)
         else:
@@ -208,7 +213,9 @@ class DipyReconInterface(SimpleInterface):
 class MAPMRIInputSpec(DipyReconInputSpec):
     radial_order = traits.Int(6, usedefault=True)
     laplacian_regularization = traits.Bool(True, usedefault=True)
-    laplacian_weighting = traits.Float(0.2, usedefault=True)
+    laplacian_weighting = traits.Either(traits.Str("GCV"),
+                                        traits.Float(0.2),
+                                        usedefault=True)
     positivity_constraint = traits.Bool(False, usedefault=True)
     pos_grid = traits.Int(15, usedefault=True)
     pos_radius = traits.Either(traits.Str('adaptive'), traits.Int(),
@@ -241,49 +248,49 @@ class MAPMRIReconstruction(DipyReconInterface):
     def _run_interface(self, runtime):
         gtab = self._get_gtab()
         dwi_img = nb.load(self.inputs.dwi_file)
-        dwi_data = dwi_img.get_fdata(dtype=np.float32)
-        mask_image, mask_array = self._get_mask(dwi_img, gtab)
+        data = dwi_img.get_fdata(dtype=np.float32)
+        mask_img, mask_array = self._get_mask(dwi_img, gtab)
 
         if self.inputs.laplacian_regularization and \
            self.inputs.positivity_constraint:
             map_model_aniso = mapmri.MapmriModel(
-                        gtab,
-                        radial_order=self.inputs.radial_order,
-                        laplacian_regularization=True,
-                        laplacian_weighting=self.inputs.laplacian_weighting,
-                        positivity_constraint=True,
-                        bval_threshold=self.inputs.b0_threshold,
-                        anisotropic_scaling=self.inputs.anisotropic_scaling)
+                gtab,
+                radial_order=self.inputs.radial_order,
+                laplacian_regularization=True,
+                laplacian_weighting=self.inputs.laplacian_weighting,
+                positivity_constraint=True,
+                bval_threshold=self.inputs.b0_threshold,
+                anisotropic_scaling=self.inputs.anisotropic_scaling)
 
         elif self.inputs.positivity_constraint:
             map_model_aniso = mapmri.MapmriModel(
-                        gtab,
-                        radial_order=self.inputs.radial_order,
-                        laplacian_regularization=False,
-                        positivity_constraint=True,
-                        bval_threshold=self.inputs.b0_threshold,
-                        anisotropic_scaling=self.inputs.anisotropic_scaling)
+                gtab,
+                radial_order=self.inputs.radial_order,
+                laplacian_regularization=False,
+                positivity_constraint=True,
+                bval_threshold=self.inputs.b0_threshold,
+                anisotropic_scaling=self.inputs.anisotropic_scaling)
 
         elif self.inputs.laplacian_regularization:
             map_model_aniso = mapmri.MapmriModel(
-                        gtab,
-                        radial_order=self.inputs.radial_order,
-                        laplacian_regularization=True,
-                        laplacian_weighting=self.inputs.laplacian_weighting,
-                        bval_threshold=self.inputs.b0_threshold,
-                        anisotropic_scaling=self.inputs.anisotropic_scaling)
+                gtab,
+                radial_order=self.inputs.radial_order,
+                laplacian_regularization=True,
+                laplacian_weighting=self.inputs.laplacian_weighting,
+                bval_threshold=self.inputs.b0_threshold,
+                anisotropic_scaling=self.inputs.anisotropic_scaling)
 
         else:
             map_model_aniso = mapmri.MapmriModel(
-                        gtab,
-                        radial_order=self.inputs.radial_order,
-                        laplacian_regularization=False,
-                        positivity_constraint=False,
-                        bval_threshold=self.inputs.b0_threshold,
-                        anisotropic_scaling=self.inputs.anisotropic_scaling)
+                gtab,
+                radial_order=self.inputs.radial_order,
+                laplacian_regularization=False,
+                positivity_constraint=False,
+                bval_threshold=self.inputs.b0_threshold,
+                anisotropic_scaling=self.inputs.anisotropic_scaling)
 
         LOGGER.info("Fitting MAPMRI Model.")
-        mapfit_aniso = map_model_aniso.fit(data)
+        mapfit_aniso = map_model_aniso.fit(data, mask=mask_array)
         rtop = mapfit_aniso.rtop()
         self._results['rtop'] = self._save_scalar(rtop, "_rtop", runtime, dwi_img)
 
@@ -296,24 +303,16 @@ class MAPMRIReconstruction(DipyReconInterface):
         q = mapfit_aniso.qiv()
         self._results['qiv'] = self._save_scalar(q, "_qiv", runtime, dwi_img)
 
-        rtap= mapfit_aniso.rtap()
+        rtap = mapfit_aniso.rtap()
         self._results['rtap'] = self._save_scalar(q, "_rtap", runtime, dwi_img)
 
         rtpp = mapfit_aniso.rtpp()
         self._results['rtpp'] = self._save_scalar(q, "_rtpp", runtime, dwi_img)
 
-        n = mapfit_aniso.ng()
-        self._results['ng'] = self._save_scalar(n, "_ng", runtime, dwi_img)
-
-        ng_perp = mapfit_aniso.ng_perpendicular()
-        self._results['perng'] = self._save_scalar(ng_perp, "_perng", runtime, dwi_img)
-
-        ng_par = mapfit_aniso.ng_parallel()
-        self._results['parng'] = self._save_scalar(ng_par, "_parng", runtime, dwi_img)
-
         coeffs = mapfit_aniso.mapmri_coeff
         self._results['mapmri_coeffs'] = self._save_scalar(coeffs, "_mapcoeffs", runtime, dwi_img)
-
+        # Write DSI Studio or MRtrix
+        self._write_external_formats(runtime, mapfit_aniso, mask_img, "_MAPMRI")
 
         return runtime
 
@@ -336,9 +335,6 @@ class BrainSuiteShoreReconstructionInputSpec(DipyReconInputSpec):
     # For EAP
     pos_grid = traits.Int(11, usedefault=True)
     pos_radius = traits.Float(20e-03, usedefault=True)
-    # Outputs
-    write_fibgz = traits.Bool(True)
-    write_mif = traits.Bool(True)
 
 
 class BrainSuiteShoreReconstructionOutputSpec(DipyReconOutputSpec):

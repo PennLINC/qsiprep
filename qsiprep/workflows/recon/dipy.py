@@ -14,7 +14,7 @@ import logging
 import os
 import os.path as op
 from qsiprep.interfaces.bids import QsiprepOutput, ReconDerivativesDataSink
-from ...interfaces.dipy import BrainSuiteShoreReconstruction
+from ...interfaces.dipy import BrainSuiteShoreReconstruction, MAPMRIReconstruction
 from qsiprep.interfaces.converters import amplitudes_to_fibgz, amplitudes_to_sh_mif
 
 LOGGER = logging.getLogger('nipype.interface')
@@ -157,7 +157,10 @@ def init_dipy_mapmri_recon_wf(name="dipy_mapmri_recon", output_suffix="", params
             Voxelwise Return-to-axis probability.
         rtpp
             Voxelwise Return-to-plane probability.
-
+        msd
+            Voxelwise MSD
+        lapnorm
+            Voxelwise norm of the Laplacian
 
     Params
 
@@ -214,40 +217,41 @@ def init_dipy_mapmri_recon_wf(name="dipy_mapmri_recon", output_suffix="", params
                         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(
-            fields=['map_coeffs', 'rtop', 'rtap', 'rtpp', 'fibgz', 'fod_sh_mif']),
+            fields=['mapmri_coeffs', 'rtop', 'rtap', 'rtpp', 'fibgz', 'fod_sh_mif',
+                    'parng', 'perng', 'ng', 'qiv', 'lapnorm']),
         name="outputnode")
 
     workflow = pe.Workflow(name=name)
-    recon_shore = pe.Node(BrainSuiteShoreReconstruction(**params), name="recon_shore")
+    recon_map = pe.Node(MAPMRIReconstruction(**params), name="recon_map")
 
     workflow.connect([
-        (inputnode, recon_shore, [('dwi_file', 'dwi_file'),
-                                  ('bval_file', 'bval_file'),
-                                  ('bvec_file', 'bvec_file'),
-                                  ('mask_file', 'mask_file')]),
-        (recon_shore, outputnode, [('shore_coeffs', 'shore_coeffs'),
-                                   ('rtop', 'rtop'),
-                                   ('fibgz', 'fibgz'),
-                                   ('fod_sh_mif', 'fod_sh_mif')])
+        (inputnode, recon_map, [('dwi_file', 'dwi_file'),
+                                ('bval_file', 'bval_file'),
+                                ('bvec_file', 'bvec_file'),
+                                ('mask_file', 'mask_file')]),
+        (recon_map, outputnode, [('mapmri_coeffs', 'mapmri_coeffs'),
+                                 ('rtop', 'rtop'),
+                                 ('rtap', 'rtap'),
+                                 ('rtpp', 'rtpp'),
+                                 ('parng', 'parng'),
+                                 ('perng', 'perng'),
+                                 ('ng', 'ng'),
+                                 ('qiv', 'qiv'),
+                                 ('lapnorm', 'lapnorm'),
+                                 ('fibgz', 'fibgz'),
+                                 ('fod_sh_mif', 'fod_sh_mif')])
 
     ])
     if output_suffix:
         external_format_datasinks(output_suffix, params, workflow)
-        ds_rtop = pe.Node(
-            ReconDerivativesDataSink(extension='.nii.gz',
-                                     desc="rtop",
-                                     suffix=output_suffix,
-                                     compress=True),
-            name='ds_bsshore_rtop',
-            run_without_submitting=True)
-        workflow.connect(outputnode, 'rtop', ds_rtop, 'in_file')
-        ds_coeff = pe.Node(
-            ReconDerivativesDataSink(extension='.nii.gz',
-                                     desc="SHOREcoeff",
-                                     suffix=output_suffix,
-                                     compress=True),
-            name='ds_bsshore_coeff',
-            run_without_submitting=True)
-        workflow.connect(outputnode, 'shore_coeffs', ds_coeff, 'in_file')
+        connections = []
+        for scalar_name in ['rtop', 'rtap', 'rtpp']:
+            connections += [(outputnode,
+                             pe.Node(
+                                 ReconDerivativesDataSink(desc=scalar_name,
+                                                          suffix=output_suffix),
+                                 name='ds_%s_%s' % (name, scalar_name)),
+                             [(scalar_name, 'in_file')])]
+        workflow.connect(connections)
 
     return workflow
