@@ -131,21 +131,22 @@ class SubjectSummary(SummaryInterface):
         n_dwis = 0
         n_outputs = 0
         groupings = ''
-        for output_fname, dwi_files in self.inputs.dwi_groupings.items():
-            n_outputs += 1
-            files_desc = []
-            if isinstance(dwi_files, dict):
-                for pe_dir, dwi_group in dwi_files.items():
-                    files_desc.append('\t\t\t<li>PE dir group: %s </li>\n' + pe_dir)
-                    for dwi_file in dwi_group:
-                        files_desc.append("\t\t\t\t<li> %s </li>" % dwi_file)
+        if isdefined(self.inputs.dwi_groupings):
+            for output_fname, dwi_files in self.inputs.dwi_groupings.items():
+                n_outputs += 1
+                files_desc = []
+                if isinstance(dwi_files, dict):
+                    for pe_dir, dwi_group in dwi_files.items():
+                        files_desc.append('\t\t\t<li>PE dir group: %s </li>\n' + pe_dir)
+                        for dwi_file in dwi_group:
+                            files_desc.append("\t\t\t\t<li> %s </li>" % dwi_file)
+                            n_dwis += 1
+                else:
+                    for dwi_file in dwi_files:
+                        files_desc.append("\t\t\t<li> %s </li>" % dwi_file)
                         n_dwis += 1
-            else:
-                for dwi_file in dwi_files:
-                    files_desc.append("\t\t\t<li> %s </li>" % dwi_file)
-                    n_dwis += 1
-            groupings += GROUPING_TEMPLATE.format(output_name=output_fname,
-                                                  input_files='\n'.join(files_desc))
+                groupings += GROUPING_TEMPLATE.format(output_name=output_fname,
+                                                      input_files='\n'.join(files_desc))
 
         return SUBJECT_TEMPLATE.format(subject_id=self.inputs.subject_id,
                                        n_t1s=len(self.inputs.t1w),
