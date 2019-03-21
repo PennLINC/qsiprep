@@ -19,7 +19,7 @@ from ...interfaces import DerivativesDataSink
 
 from ...interfaces.reports import DiffusionSummary, GradientPlot
 from ...interfaces.images import SplitDWIs, ConcatRPESplits
-from ...interfaces.gradients import SliceQC
+from ...interfaces.gradients import ExtractB0s
 from ...interfaces.confounds import DMRISummary
 from ...interfaces.mrtrix import MRTrixGradientTable
 from ...engine import Workflow
@@ -39,61 +39,61 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger('nipype.workflow')
 
 
-def init_qsiprep_dwi_preproc_wf(dwi_files,
-                                output_prefix,
-                                ignore,
-                                motion_corr_to,
-                                b0_to_t1w_transform,
-                                hmc_model,
-                                hmc_transform,
-                                impute_slice_threshold,
-                                reportlets_dir,
-                                freesurfer,
-                                output_spaces,
-                                dwi_denoise_window,
-                                denoise_before_combining,
-                                template,
-                                output_dir,
-                                omp_nthreads,
-                                write_local_bvecs,
-                                fmap_bspline,
-                                fmap_demean,
-                                use_syn,
-                                force_syn,
-                                low_mem,
-                                layout=None,
-                                num_dwi=1):
+def init_fsl_dwi_preproc_wf(dwi_files,
+                            output_prefix,
+                            ignore,
+                            motion_corr_to,
+                            b0_to_t1w_transform,
+                            hmc_model,
+                            hmc_transform,
+                            impute_slice_threshold,
+                            reportlets_dir,
+                            freesurfer,
+                            output_spaces,
+                            dwi_denoise_window,
+                            denoise_before_combining,
+                            template,
+                            output_dir,
+                            omp_nthreads,
+                            write_local_bvecs,
+                            fmap_bspline,
+                            fmap_demean,
+                            use_syn,
+                            force_syn,
+                            low_mem,
+                            layout=None,
+                            num_dwi=1):
     """
-    This workflow controls the dwi preprocessing stages of qsiprep.
+    This workflow controls the dwi preprocessing stages using FSL tools.
 
     .. workflow::
         :graph2use: orig
         :simple_form: yes
 
         from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
-        wf = init_dwi_preproc_wf(['/completely/made/up/path/sub-01_dwi.nii.gz'],
-                                  omp_nthreads=1,
-                                  ignore=[],
-                                  reportlets_dir='.',
-                                  output_dir='.',
-                                  template='MNI152NLin2009cAsym',
-                                  output_spaces=['T1w', 'template'],
-                                  freesurfer=False,
-                                  dwi_denoise_window=7,
-                                  denoise_before_combining=True,
-                                  motion_corr_to='iterative',
-                                  b0_to_t1w_transform='Rigid',
-                                  hmc_model='3dSHORE',
-                                  hmc_transform='Affine',
-                                  impute_slice_threshold=0,
-                                  fmap_bspline=True,
-                                  fmap_demean=True,
-                                  use_syn=True,
-                                  force_syn=True,
-                                  low_mem=False,
-                                  output_prefix='',
-                                  write_local_bvecs=False,
-                                  num_dwi=1)
+        wf = init_fsl_dwi_preproc_wf(['/completely/made/up/path/sub-01_dwi.nii.gz'],
+                                     omp_nthreads=1,
+                                     ignore=[],
+                                     reportlets_dir='.',
+                                     output_dir='.',
+                                     template='MNI152NLin2009cAsym',
+                                     output_spaces=['T1w', 'template'],
+                                     freesurfer=False,
+                                     dwi_denoise_window=7,
+                                     denoise_before_combining=True,
+                                     motion_corr_to='iterative',
+                                     b0_to_t1w_transform='Rigid',
+                                     hmc_model='3dSHORE',
+                                     hmc_transform='Affine',
+                                     impute_slice_threshold=0,
+                                     fmap_bspline=True,
+                                     fmap_demean=True,
+                                     use_syn=True,
+                                     force_syn=True,
+                                     low_mem=False,
+                                     output_prefix='',
+                                     write_local_bvecs=False,
+                                     num_dwi=1)
 
     **Parameters**
 
@@ -237,14 +237,7 @@ def init_qsiprep_dwi_preproc_wf(dwi_files,
         * :py:func:`~qsiprep.workflows.fieldmap.init_nonlinear_sdc_wf`
 
     """
-
-    if type(dwi_files) is dict:
-        doing_bidirectional_pepolar = True
-        _dwi_lists = list(dwi_files.values())
-        all_dwis = _dwi_lists[0] + _dwi_lists[1]
-    else:
-        doing_bidirectional_pepolar = False
-        all_dwis = dwi_files
+    all_dwis = dwi_files
 
     # For naming outputs
     source_file = all_dwis[0]
@@ -264,7 +257,7 @@ def init_qsiprep_dwi_preproc_wf(dwi_files,
 
     wf_name = _get_wf_name(output_prefix)
     workflow = Workflow(name=wf_name)
-    LOGGER.log(25, ('Creating dwi processing workflow "%s" '
+    LOGGER.log(25, ('Creating fsl processing workflow "%s" '
                     'to produce output %s '
                     '(%.2f GB / %d DWIs). '
                     'Memory resampled/largemem=%.2f/%.2f GB.'), wf_name,
@@ -292,96 +285,43 @@ def init_qsiprep_dwi_preproc_wf(dwi_files,
     b0_coreg_wf = init_b0_to_anat_registration_wf(omp_nthreads=omp_nthreads,
                                                   mem_gb=mem_gb['resampled'],
                                                   write_report=True)
-    # Special case: Two reverse PE DWI series
-    if doing_bidirectional_pepolar:
-        # Merge, denoise, split, hmc on the plus series
-        plus_key, = [k for k in dwi_files.keys() if len(k) == 1]
-        pe_dir = plus_key
-        merge_plus = init_merge_and_denoise_wf(dwi_denoise_window=dwi_denoise_window,
-                                               denoise_before_combining=denoise_before_combining,
-                                               name="merge_plus")
-        split_plus = pe.Node(SplitDWIs(), name="split_plus")
-        b0_hmc_plus = init_dwi_hmc_wf(hmc_transform, hmc_model, motion_corr_to,
-                                      name="b0_hmc_plus")
-        merge_plus.inputs.inputnode.dwi_files = dwi_files[plus_key]
+    buffernode = pe.Node(
+        niu.IdentityInterface(
+            fields=['b0_ref_image', 'b0_ref_mask', 'dwi_files', 'bvec_files', 'bval_files',
+                    'b0_images', 'b0_indices', 'to_dwi_ref_affines', 'to_dwi_ref_warps',
+                    'original_grouping', 'sdc_method', 'ideal_images']),
+        name="buffernode")
 
-        # Merge, denoise, split, hmc on the minus series
-        merge_minus = init_merge_and_denoise_wf(dwi_denoise_window=dwi_denoise_window,
-                                                denoise_before_combining=denoise_before_combining,
-                                                name="merge_minus")
-        split_minus = pe.Node(SplitDWIs(), name="split_minus")
-        b0_hmc_minus = init_dwi_hmc_wf(hmc_transform, hmc_model, motion_corr_to,
-                                       name="b0_hmc_minus")
-        merge_minus.inputs.inputnode.dwi_files = dwi_files[plus_key + "-"]
-
-        # Get affines and warps to the b0 ref
-        bidir_pepolar_wf = init_bidirectional_b0_unwarping_wf(
-            template_plus_pe=list(dwi_files.keys())[0], name='bidir_pepolar_wf')
-
-        # Combine the original images from the splits into one 'Split'
-        concat_rpe_splits = pe.Node(ConcatRPESplits(), name="concat_rpe_splits")
-        buffernode = concat_rpe_splits
-        # Remove this!
-        workflow.add_nodes([inputnode, outputnode])
-        workflow.connect([
-                # Merge, denoise, split, hmc on the plus series
-                (merge_plus, split_plus, [('outputnode.merged_image', 'dwi_file'),
-                                          ('outputnode.merged_bval', 'bval_file'),
-                                          ('outputnode.merged_bvec', 'bvec_file')]),
-                (split_plus, concat_rpe_splits,
-                    [('bval_files', 'bval_plus'),
-                     ('bvec_files', 'bvec_plus'),
-                     ('dwi_files', 'dwi_plus'),
-                     ('b0_images', 'b0_images_plus'),
-                     ('b0_indices', 'b0_indices_plus')]),
-                (split_plus, b0_hmc_plus, [('b0_images', 'inputnode.b0_images')]),
-                (b0_hmc_plus, concat_rpe_splits, [
-                    (('outputnode.forward_transforms', _list_squeeze), 'hmc_affines_plus')]),
-
-                # Merge, denoise, split, hmc on the minus series
-                (merge_minus, split_minus, [('outputnode.merged_image', 'dwi_file'),
-                                            ('outputnode.merged_bval', 'bval_file'),
-                                            ('outputnode.merged_bvec', 'bvec_file')]),
-                (split_minus, concat_rpe_splits,
-                    [('bval_files', 'bval_minus'),
-                     ('bvec_files', 'bvec_minus'),
-                     ('dwi_files', 'dwi_minus'),
-                     ('b0_images', 'b0_images_minus'),
-                     ('b0_indices', 'b0_indices_minus')]),
-                (split_minus, b0_hmc_minus, [('b0_images', 'inputnode.b0_images')]),
-                (b0_hmc_minus, concat_rpe_splits, [
-                    (('outputnode.forward_transforms', _list_squeeze), 'hmc_affines_minus')]),
-
-                # Use the hmc templates as the input for pepolar unwarping
-                (b0_hmc_minus, bidir_pepolar_wf,
-                    [('outputnode.final_template', 'inputnode.template_minus')]),
-                (b0_hmc_plus, bidir_pepolar_wf,
-                    [('outputnode.final_template', 'inputnode.template_plus')]),
-
-                # send unwarping to the rpe recombiner
-                (bidir_pepolar_wf, concat_rpe_splits, [
-                    (('outputnode.out_affine_plus', _get_first), 'template_plus_to_ref_affine'),
-                    (('outputnode.out_affine_minus', _get_first), 'template_minus_to_ref_affine'),
-                    ('outputnode.out_warp_plus', 'template_plus_to_ref_warp'),
-                    ('outputnode.out_warp_minus', 'template_minus_to_ref_warp'),
-                    ('outputnode.out_reference', 'b0_ref_image'),
-                    ('outputnode.out_mask', 'b0_ref_mask')
-                    ]),
-        ])
-
-    # Normal cases. No RPE to worry about
-    else:
-        buffernode = pe.Node(niu.IdentityInterface(fields=[
-            'b0_ref_image', 'b0_ref_mask', 'dwi_files', 'bvec_files', 'bval_files', 'b0_images',
-            'b0_indices', 'to_dwi_ref_affines', 'to_dwi_ref_warps', 'original_grouping',
-            'sdc_method', 'ideal_images']),
-            name="buffernode")
-        # Merge, denoise, split, hmc
-        merge_dwis = init_merge_and_denoise_wf(dwi_denoise_window=dwi_denoise_window,
-                                               denoise_before_combining=denoise_before_combining,
+    if hmc_model == 'eddy_ingress':
+        buffernode.inputs.sdc_method = "eddy"
+        # Merge, split
+        merge_dwis = init_merge_and_denoise_wf(dwi_denoise_window=0,
+                                               denoise_before_combining=False,
                                                name="merge_dwis")
         merge_dwis.inputs.inputnode.dwi_files = dwi_files
         split_dwis = pe.Node(SplitDWIs(), name="split_dwis")
+        collect_b0s = pe.Node(ExtractB0s(), name="collect_b0s")
+        dwi_ref_wf = init_dwi_reference_wf(name="dwi_ref_wf")
+        workflow.connect([
+            # Merge, denoise, split, hmc on the dwis
+            (merge_dwis, split_dwis, [('outputnode.merged_image', 'dwi_file'),
+                                      ('outputnode.merged_bval', 'bval_file'),
+                                      ('outputnode.merged_bvec', 'bvec_file')]),
+            (merge_dwis, collect_b0s, [('outputnode.merged_image', 'dwi_file'),
+                                       ('outputnode.merged_bval', 'bval_file'),
+                                       ('outputnode.merged_bvec', 'bvec_file')]),
+            (split_dwis, buffernode, [('bval_files', 'bval_files'),
+                                      ('bvec_files', 'bvec_files'),
+                                      ('dwi_files', 'dwi_files'),
+                                      ('b0_images', 'b0_images'),
+                                      ('b0_indices', 'b0_indices')]),
+            (merge_dwis, buffernode, [('outputnode.original_files', 'original_grouping')]),
+            (collect_b0s, dwi_ref_wf, [('b0_average', 'inputnode.b0_template')]),
+            (dwi_ref_wf, buffernode, [('outputnode.ref_image', 'b0_ref_image'),
+                                      ('outputnode.dwi_mask', 'b0_ref_mask')]),
+        ])
+
+    else:
         dwi_hmc_wf = init_dwi_hmc_wf(hmc_transform, hmc_model, motion_corr_to,
                                      omp_nthreads=omp_nthreads, name="dwi_hmc_wf")
 
@@ -428,107 +368,85 @@ def init_qsiprep_dwi_preproc_wf(dwi_files,
             # Run SyN if forced or in the absence of fieldmap correction
             if force_syn or (use_syn and not fmaps):
                 fmaps.append({'type': 'syn'})
-        pe_dir = metadata['PhaseEncodingDirection']
-        dwi_ref_wf = init_dwi_reference_wf(name="dwi_ref_wf", gen_report=True)
 
-        b0_sdc_wf = init_sdc_wf(
-            fmaps, metadata, omp_nthreads=omp_nthreads,
-            fmap_demean=fmap_demean, fmap_bspline=fmap_bspline)
-        b0_sdc_wf.inputs.inputnode.template = template
 
-        if not fmaps:
-            LOGGER.warning('SDC: no fieldmaps found or they were ignored (%s).',
-                           ref_file)
-        elif fmaps[0]['type'] == 'syn':
-            LOGGER.warning(
-                'SDC: no fieldmaps found or they were ignored. '
-                'Using EXPERIMENTAL "fieldmap-less SyN" correction '
-                'for dataset %s.', ref_file)
-            syn_unwarp_report_wf = init_fmap_unwarp_report_wf(
-                suffix='forcedsyn', name='syn_unwarp_report_wf')
+            if not fmaps:
+                LOGGER.warning('SDC: no fieldmaps found or they were ignored (%s).',
+                               ref_file)
+
+            else:
+                sdc_type = fmaps[0]['type']
+
+                # Report on SDC
+                fmap_unwarp_report_wf = init_fmap_unwarp_report_wf(
+                    suffix='sdc_%s' % sdc_type)
+                workflow.connect([
+                    (inputnode, fmap_unwarp_report_wf, [
+                        ('t1_seg', 'inputnode.in_seg')]),
+                    (dwi_hmc_wf, fmap_unwarp_report_wf, [
+                        ('outputnode.final_template', 'inputnode.in_pre')]),
+                    (b0_coreg_wf, fmap_unwarp_report_wf, [
+                        ('outputnode.itk_b0_to_t1', 'inputnode.in_xfm')]),
+                    (b0_sdc_wf, fmap_unwarp_report_wf, [
+                        ('outputnode.b0_ref', 'inputnode.in_post')]),
+                    ])
+                LOGGER.log(25, 'SDC: fieldmap estimation of type "%s" intended for %s found.',
+                           fmaps[0]['type'], ref_file)
+
             workflow.connect([
-                (inputnode, syn_unwarp_report_wf, [
-                    ('t1_seg', 'inputnode.in_seg')]),
-                (dwi_hmc_wf, syn_unwarp_report_wf, [
-                    ('outputnode.final_template', 'inputnode.in_pre')]),
-                (b0_coreg_wf, syn_unwarp_report_wf, [
-                    ('outputnode.itk_b0_to_t1', 'inputnode.in_xfm')]),
-                (b0_sdc_wf, syn_unwarp_report_wf, [
-                    ('outputnode.syn_bold_ref', 'inputnode.in_post')]),
+                # Merge, denoise, split, hmc on the dwis
+                (merge_dwis, split_dwis, [('outputnode.merged_image', 'dwi_file'),
+                                          ('outputnode.merged_bval', 'bval_file'),
+                                          ('outputnode.merged_bvec', 'bvec_file')]),
+                (split_dwis, buffernode,
+                    [('bval_files', 'bval_files'),
+                     ('bvec_files', 'bvec_files'),
+                     ('dwi_files', 'dwi_files'),
+                     ('b0_images', 'b0_images'),
+                     ('b0_indices', 'b0_indices')]),
+                (merge_dwis, buffernode, [('outputnode.original_files', 'original_grouping')]),
+                (split_dwis, dwi_hmc_wf, [('b0_images', 'inputnode.b0_images'),
+                                          ('bval_files', 'inputnode.bvals'),
+                                          ('bvec_files', 'inputnode.bvecs'),
+                                          ('dwi_files', 'inputnode.dwi_files'),
+                                          ('b0_indices', 'inputnode.b0_indices')]),
+                (dwi_hmc_wf, buffernode, [(('outputnode.forward_transforms', _list_squeeze),
+                                          'to_dwi_ref_affines'),
+                                          ('outputnode.noise_free_dwis', 'ideal_images')]),
+                (dwi_hmc_wf, dwi_ref_wf, [('outputnode.final_template', 'inputnode.b0_template')]),
+                (dwi_ref_wf, b0_sdc_wf, [('outputnode.ref_image', 'inputnode.b0_ref'),
+                                         ('outputnode.ref_image_brain', 'inputnode.b0_ref_brain'),
+                                         ('outputnode.dwi_mask', 'inputnode.b0_mask')]),
+                (inputnode, b0_sdc_wf, [('t1_brain', 'inputnode.t1_brain'),
+                                        ('t1_2_mni_reverse_transform',
+                                         'inputnode.t1_2_mni_reverse_transform')]),
+                (b0_sdc_wf, buffernode, [('outputnode.b0_ref', 'b0_ref_image'),
+                                         ('outputnode.b0_mask', 'b0_ref_mask'),
+                                         ('outputnode.out_warp', 'to_dwi_ref_warps'),
+                                         ('outputnode.method', 'sdc_method')]),
+
+
             ])
-        else:
-            sdc_type = fmaps[0]['type']
-
-            # Report on SDC
-            fmap_unwarp_report_wf = init_fmap_unwarp_report_wf(
-                suffix='sdc_%s' % sdc_type)
-            workflow.connect([
-                (inputnode, fmap_unwarp_report_wf, [
-                    ('t1_seg', 'inputnode.in_seg')]),
-                (dwi_hmc_wf, fmap_unwarp_report_wf, [
-                    ('outputnode.final_template', 'inputnode.in_pre')]),
-                (b0_coreg_wf, fmap_unwarp_report_wf, [
-                    ('outputnode.itk_b0_to_t1', 'inputnode.in_xfm')]),
-                (b0_sdc_wf, fmap_unwarp_report_wf, [
-                    ('outputnode.b0_ref', 'inputnode.in_post')]),
-                ])
-            LOGGER.log(25, 'SDC: fieldmap estimation of type "%s" intended for %s found.',
-                       fmaps[0]['type'], ref_file)
-
-        workflow.connect([
-            # Merge, denoise, split, hmc on the dwis
-            (merge_dwis, split_dwis, [('outputnode.merged_image', 'dwi_file'),
-                                      ('outputnode.merged_bval', 'bval_file'),
-                                      ('outputnode.merged_bvec', 'bvec_file')]),
-            (split_dwis, buffernode,
-                [('bval_files', 'bval_files'),
-                 ('bvec_files', 'bvec_files'),
-                 ('dwi_files', 'dwi_files'),
-                 ('b0_images', 'b0_images'),
-                 ('b0_indices', 'b0_indices')]),
-            (merge_dwis, buffernode, [('outputnode.original_files', 'original_grouping')]),
-            (split_dwis, dwi_hmc_wf, [('b0_images', 'inputnode.b0_images'),
-                                      ('bval_files', 'inputnode.bvals'),
-                                      ('bvec_files', 'inputnode.bvecs'),
-                                      ('dwi_files', 'inputnode.dwi_files'),
-                                      ('b0_indices', 'inputnode.b0_indices')]),
-            (dwi_hmc_wf, buffernode, [(('outputnode.forward_transforms', _list_squeeze),
-                                      'to_dwi_ref_affines'),
-                                      ('outputnode.noise_free_dwis', 'ideal_images')]),
-            (dwi_hmc_wf, dwi_ref_wf, [('outputnode.final_template', 'inputnode.b0_template')]),
-            (dwi_ref_wf, b0_sdc_wf, [('outputnode.ref_image', 'inputnode.b0_ref'),
-                                     ('outputnode.ref_image_brain', 'inputnode.b0_ref_brain'),
-                                     ('outputnode.dwi_mask', 'inputnode.b0_mask')]),
-            (inputnode, b0_sdc_wf, [('t1_brain', 'inputnode.t1_brain'),
-                                    ('t1_2_mni_reverse_transform',
-                                     'inputnode.t1_2_mni_reverse_transform')]),
-            (b0_sdc_wf, buffernode, [('outputnode.b0_ref', 'b0_ref_image'),
-                                     ('outputnode.b0_mask', 'b0_ref_mask'),
-                                     ('outputnode.out_warp', 'to_dwi_ref_warps'),
-                                     ('outputnode.method', 'sdc_method')]),
-
-
-        ])
 
     # At this point, buffernode is either a ConcatRPESplit or a single PE output
-    summary = pe.Node(
-        DiffusionSummary(
-            pe_direction=pe_dir,
-            hmc_model=hmc_model,
-            b0_to_t1w_transform=b0_to_t1w_transform,
-            hmc_transform=hmc_transform,
-            impute_slice_threshold=impute_slice_threshold,
-            dwi_denoise_window=dwi_denoise_window,
-            output_spaces=output_spaces),
-        name='summary',
-        mem_gb=DEFAULT_MEMORY_MIN_GB,
-        run_without_submitting=True)
+    # summary = pe.Node(
+    #     DiffusionSummary(
+    #         pe_direction='j',
+    #         hmc_model=hmc_model,
+    #         b0_to_t1w_transform=b0_to_t1w_transform,
+    #         hmc_transform=hmc_transform,
+    #         impute_slice_threshold=impute_slice_threshold,
+    #         dwi_denoise_window=dwi_denoise_window,
+    #         output_spaces=output_spaces),
+    #     name='summary',
+    #     mem_gb=DEFAULT_MEMORY_MIN_GB,
+    #     run_without_submitting=True)
 
     gradient_plot = pe.Node(GradientPlot(), name='gradient_plot', run_without_submitting=True)
-    ds_report_gradients = pe.Node(
-        DerivativesDataSink(suffix='sampling_scheme'),
-        name='ds_report_gradients', run_without_submitting=True,
-        mem_gb=DEFAULT_MEMORY_MIN_GB)
+    # ds_report_gradients = pe.Node(
+    #     DerivativesDataSink(suffix='sampling_scheme'),
+    #     name='ds_report_gradients', run_without_submitting=True,
+    #     mem_gb=DEFAULT_MEMORY_MIN_GB)
 
     # CONNECT TO DERIVATIVES #####################
     dwi_derivatives_wf = init_dwi_derivatives_wf(
@@ -562,54 +480,49 @@ def init_qsiprep_dwi_preproc_wf(dwi_files,
     ])
 
     workflow.connect([
-        (inputnode, b0_coreg_wf, [
-                ('t1_brain', 'inputnode.t1_brain'),
-                ('t1_seg', 'inputnode.t1_seg'),
-                ('subjects_dir', 'inputnode.subjects_dir'),
-                ('subject_id', 'inputnode.subject_id'),
-                ('t1_2_fsnative_reverse_transform',
-                 'inputnode.t1_2_fsnative_reverse_transform')]),
+        (inputnode, b0_coreg_wf,
+            [('t1_brain', 'inputnode.t1_brain'),
+             ('t1_seg', 'inputnode.t1_seg'),
+             ('subjects_dir', 'inputnode.subjects_dir'),
+             ('subject_id', 'inputnode.subject_id'),
+             ('t1_2_fsnative_reverse_transform',
+              'inputnode.t1_2_fsnative_reverse_transform')]),
         (buffernode, b0_coreg_wf, [('b0_ref_image',
-                                   'inputnode.ref_b0_brain')]),
-        (buffernode, summary, [('sdc_method', 'distortion_correction')])
+                                    'inputnode.ref_b0_brain')]),
     ])
 
-    # Compute and gather confounds
-    slice_check = pe.Node(SliceQC(impute_slice_threshold=impute_slice_threshold),
-                          name="slice_check")
-
-    confounds_wf = init_dwi_confs_wf(mem_gb=mem_gb['resampled'], metadata=[],
-                                     impute_slice_threshold=impute_slice_threshold,
-                                     name='confounds_wf')
+    # confounds_wf = init_dwi_confs_wf(mem_gb=mem_gb['resampled'], metadata=[],
+    #                                 impute_slice_threshold=impute_slice_threshold,
+    #                                 name='confounds_wf')
 
     # Carpetplot and confounds plot
-    conf_plot = pe.Node(DMRISummary(), name='conf_plot', mem_gb=mem_gb['resampled'])
-    ds_report_dwi_conf = pe.Node(
-        DerivativesDataSink(suffix='carpetplot'),
-        name='ds_report_dwi_conf', run_without_submitting=True,
-        mem_gb=DEFAULT_MEMORY_MIN_GB)
+    # conf_plot = pe.Node(DMRISummary(), name='conf_plot', mem_gb=mem_gb['resampled'])
+    # ds_report_dwi_conf = pe.Node(
+    #    DerivativesDataSink(suffix='carpetplot'),
+    #    name='ds_report_dwi_conf', run_without_submitting=True,
+    #    mem_gb=DEFAULT_MEMORY_MIN_GB)
 
-    workflow.connect([
-        (buffernode, slice_check, [('ideal_images', 'ideal_image_files'),
-                                   ('dwi_files', 'uncorrected_dwi_files'),
-                                   ('b0_ref_mask', 'mask_image')]),
-        (slice_check, confounds_wf, [('slice_stats', 'inputnode.sliceqc_file')]),
-        (buffernode, confounds_wf, [('to_dwi_ref_affines', 'inputnode.hmc_affines'),
-                                    ('bval_files', 'inputnode.bval_files'),
-                                    ('bvec_files', 'inputnode.bvec_files'),
-                                    ('original_grouping', 'inputnode.original_files')]),
-        (confounds_wf, outputnode, [('outputnode.confounds_file', 'confounds')]),
-
-        (confounds_wf, conf_plot, [('outputnode.confounds_file', 'confounds_file')]),
-        (slice_check, conf_plot, [('slice_stats', 'sliceqc_file')]),
-        (buffernode, conf_plot, []),
-        (conf_plot, ds_report_dwi_conf, [('out_file', 'in_file')]),
-        (buffernode, gradient_plot, [('bvec_files', 'orig_bvec_files'),
-                                     ('bval_files', 'orig_bval_files'),
-                                     ('original_grouping', 'source_files')]),
-        (gradient_plot, ds_report_gradients, [('plot_file', 'in_file')])
-
-    ])
+    #  workflow.connect([
+    #     (buffernode, slice_check, [('ideal_images', 'ideal_image_files'),
+    #                                ('dwi_files', 'uncorrected_dwi_files'),
+    #                                ('b0_ref_mask', 'mask_image')]),
+    #     (slice_check, confounds_wf, [('slice_stats', 'inputnode.sliceqc_file')]),
+    #     (buffernode, confounds_wf, [('to_dwi_ref_affines', 'inputnode.hmc_affines'),
+    #                                 ('bval_files', 'inputnode.bval_files'),
+    #                                 ('bvec_files', 'inputnode.bvec_files'),
+    #                                 ('original_grouping', 'inputnode.original_files')]),
+    #     (confounds_wf, outputnode, [('outputnode.confounds_file', 'confounds')]),
+    #
+    #     (confounds_wf, conf_plot, [('outputnode.confounds_file', 'confounds_file')]),
+    #     (slice_check, conf_plot, [('slice_stats', 'sliceqc_file')]),
+    #     (buffernode, conf_plot, []),
+    #     (conf_plot, ds_report_dwi_conf, [('out_file', 'in_file')]),
+    #     (buffernode, gradient_plot, [('bvec_files', 'orig_bvec_files'),
+    #                                  ('bval_files', 'orig_bval_files'),
+    #                                  ('original_grouping', 'source_files')]),
+    #     (gradient_plot, ds_report_gradients, [('plot_file', 'in_file')])
+    #
+    # ])
 
     if "T1w" in output_spaces:
         transform_dwis_t1 = init_dwi_trans_wf(name='transform_dwis_t1',
@@ -623,17 +536,14 @@ def init_qsiprep_dwi_preproc_wf(dwi_files,
                                               )
         gtab_t1 = pe.Node(MRTrixGradientTable(), name='gtab_t1')
         workflow.connect([
-            (slice_check, transform_dwis_t1, [('imputed_images', 'inputnode.dwi_files')]),
             (buffernode, transform_dwis_t1, [
+                ('dwi', 'inputnode.dwi_files'),
                 ('bvec_files', 'inputnode.bvec_files'),
                 ('bval_files', 'inputnode.bval_files'),
                 ('b0_ref_image', 'inputnode.b0_ref_image'),
                 ('b0_ref_mask', 'inputnode.dwi_mask'),
-                ('b0_indices', 'inputnode.b0_indices'),
-                ('to_dwi_ref_affines', 'inputnode.hmc_xforms'),
-                ('to_dwi_ref_warps', 'inputnode.fieldwarps')]),
+                ('b0_indices', 'inputnode.b0_indices')]),
             (inputnode, transform_dwis_t1, [
-                # ('t1_2_mni_forward_transform', 'inputnode.t1_2_mni_forward_transform'),
                 ('dwi_sampling_grid', 'inputnode.output_grid')]),
             (b0_coreg_wf, transform_dwis_t1, [
                 ('outputnode.itk_b0_to_t1', 'inputnode.itk_b0_to_t1')]),
@@ -662,8 +572,8 @@ def init_qsiprep_dwi_preproc_wf(dwi_files,
                                                )
         gtab_mni = pe.Node(MRTrixGradientTable(), name='gtab_mni')
         workflow.connect([
-            (slice_check, transform_dwis_mni, [('imputed_images', 'inputnode.dwi_files')]),
             (buffernode, transform_dwis_mni, [
+                ('dwi_files', 'dwi_files'),
                 ('bvec_files', 'inputnode.bvec_files'),
                 ('bval_files', 'inputnode.bval_files'),
                 ('b0_ref_image', 'inputnode.b0_ref_image'),
@@ -691,15 +601,15 @@ def init_qsiprep_dwi_preproc_wf(dwi_files,
             workflow.connect([(outputnode, gradient_plot, [('bvecs_mni', 'final_bvec_file')])])
 
     # REPORTING ############################################################
-    ds_report_summary = pe.Node(
-        DerivativesDataSink(suffix='summary'),
-        name='ds_report_summary',
-        run_without_submitting=True,
-        mem_gb=DEFAULT_MEMORY_MIN_GB)
+    # ds_report_summary = pe.Node(
+    #     DerivativesDataSink(suffix='summary'),
+    #     name='ds_report_summary',
+    #     run_without_submitting=True,
+    #     mem_gb=DEFAULT_MEMORY_MIN_GB)
 
-    workflow.connect([
-      (summary, ds_report_summary, [('out_report', 'in_file')])
-    ])
+    # workflow.connect([
+    #   (summary, ds_report_summary, [('out_report', 'in_file')])
+    # ])
 
     # Fill-in datasinks of reportlets seen so far
     for node in workflow.list_node_names():
@@ -990,7 +900,7 @@ def _get_wf_name(dwi_fname):
     """Derive the workflow name based on the output file prefix."""
     spl = dwi_fname.split("_")
     nosub = "_".join(spl[1:])
-    return ("dwi_preproc_" + nosub + "_wf").replace("__", "_")
+    return ("dwi_fsl_preproc_" + nosub + "_wf").replace("__", "_")
 
 
 def _list_squeeze(in_list):

@@ -83,12 +83,6 @@ def get_parser():
         help='a space delimited list of participant identifiers or a single '
         'identifier (the sub- prefix can be removed)')
 
-    g_bids.add_argument(
-        '-t',
-        '--task-id',
-        action='store',
-        help='select a specific task to be processed')
-
     # arguments for reconstructing QSI data
     g_recon = parser.add_argument_group('Options for reconstructing qsiprep outputs')
     g_recon.add_argument(
@@ -243,10 +237,12 @@ def get_parser():
         '--hmc_model', '--hmc-model',
         action='store',
         default='3dSHORE',
-        choices=['none', '3dSHORE', 'MAPMRI'],
+        choices=['none', '3dSHORE', 'eddy_ingress', 'eddy'],
         help='model used to generate target images for hmc. If "none" the '
         'non-b0 images will be warped using the same transform as their '
-        'nearest b0 image')
+        'nearest b0 image. If "3dSHORE", SHORELine will be used. If '
+        '"eddy_ingress", the dwis are assumed to have been run through '
+        'fsls eddy. ')
     g_moco.add_argument(
         '--impute-slice-threshold',
         action='store',
