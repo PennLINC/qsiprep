@@ -288,11 +288,14 @@ and used as T1w-reference throughout the workflow.
                 ('flair', 'inputnode.flair'),
                 ('subjects_dir', 'inputnode.subjects_dir'),
                 ('subject_id', 'inputnode.subject_id')]),
-            # Change so it's using ACPC input
+
+            # Change so it's using ACPC (or not) input
             (skullstrip_ants_wf, surface_recon_wf, [
+                ('outputnode.bias_corrected', 'inputnode.t1w'),
                 ('outputnode.out_file', 'inputnode.skullstripped_t1'),
                 ('outputnode.out_segs', 'inputnode.ants_segs'),
                 ('outputnode.bias_corrected', 'inputnode.corrected_t1')]),
+
             (skullstrip_ants_wf, applyrefined, [
                 ('outputnode.bias_corrected', 'in_file')]),
             (surface_recon_wf, applyrefined, [

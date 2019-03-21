@@ -4,7 +4,9 @@
 QSI workflow
 =====
 """
-
+import warnings
+warnings.filterwarnings("ignore", category=ImportWarning)
+warnings.filterwarnings("ignore", category=PendingDeprecationWarning)
 import os
 import os.path as op
 from pathlib import Path
@@ -12,12 +14,10 @@ import logging
 import sys
 import gc
 import uuid
-import warnings
 from argparse import ArgumentParser
 from argparse import RawTextHelpFormatter
 from multiprocessing import cpu_count
 from time import strftime
-warnings.filterwarnings("ignore", category=ImportWarning)
 
 logging.addLevelName(25,
                      'IMPORTANT')  # Add a new level between INFO and WARNING
@@ -272,6 +272,9 @@ def get_parser():
         '--fs-license-file', metavar='PATH', type=os.path.abspath,
         help='Path to FreeSurfer license key file. Get it (for free) by registering '
         'at https://surfer.nmr.mgh.harvard.edu/registration.html')
+    g_fs.add_argument(
+        '--do-reconall', action='store_true',
+        help='Run the FreeSurfer recon-all pipeline')
 
     # Fieldmap options
     g_fmap = parser.add_argument_group(
@@ -683,7 +686,7 @@ def build_workflow(opts, retval):
         output_dir=output_dir,
         ignore=opts.ignore,
         hires=False,
-        freesurfer=False,
+        freesurfer=opts.do_reconall,
         debug=opts.sloppy,
         low_mem=opts.low_mem,
         anat_only=opts.anat_only,
