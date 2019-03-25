@@ -86,7 +86,9 @@ def main():
         dependency_links=LINKS_REQUIRES,
         package_data=pkg_data,
         entry_points={'console_scripts': [
-            'qsiprep=qsiprep.cli.run:main'
+            'qsiprep=qsiprep.cli.run:main',
+            'mif2fib=qsiprep.cli.convertODFs:mif_to_fib',
+            'fib2mif=qsiprep.cli.convertODFs:fib_to_mif'
         ]},
         packages=find_packages(exclude=("tests",)),
         zip_safe=False,
