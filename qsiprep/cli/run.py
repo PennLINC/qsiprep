@@ -86,6 +86,12 @@ def get_parser():
     # arguments for reconstructing QSI data
     g_recon = parser.add_argument_group('Options for reconstructing qsiprep outputs')
     g_recon.add_argument(
+        '--recon-only', '--recon_only',
+        action='store_true',
+        default=False,
+        help='run only reconstruction, assumes preprocessing has already completed.'
+    )
+    g_recon.add_argument(
         '--recon-spec', '--recon_spec',
         action='store',
         type=os.path.abspath,
@@ -401,98 +407,44 @@ def main():
 
     errno = 0
     mode = "recon" if opts.recon_input is not None else "prep"
-    logger.info("mode is %s", mode)
     if mode == "recon":
         logger.info("running qsirecon")
-        # Call build_workflow(opts, retval)
-        with Manager() as mgr:
-            retval = mgr.dict()
-            p = Process(target=build_recon_workflow, args=(opts, retval))
-            p.start()
-            p.join()
-
-            if p.exitcode != 0:
-                sys.exit(p.exitcode)
-
-            qsiprep_wf = retval['workflow']
-            plugin_settings = retval['plugin_settings']
-            bids_dir = retval['bids_dir']
-            output_dir = retval['output_dir']
-            work_dir = retval['work_dir']
-            subject_list = retval['subject_list']
-            run_uuid = retval['run_uuid']
-            retcode = retval['return_code']
-
-        if qsiprep_wf is None:
-            sys.exit(1)
-
-        if opts.write_graph:
-            qsiprep_wf.write_graph(
-                graph2use="colored", format='svg', simple_form=True)
-
-        if opts.reports_only:
-            sys.exit(int(retcode > 0))
-
-        if opts.boilerplate:
-            sys.exit(int(retcode > 0))
-
+        building_func = build_recon_workflow
     else:
         logger.info("running qsiprep")
-        # Call build_workflow(opts, retval)
-        with Manager() as mgr:
-            retval = mgr.dict()
-            p = Process(target=build_workflow, args=(opts, retval))
-            p.start()
-            p.join()
+        building_func = build_qsiprep_workflow
 
-            if p.exitcode != 0:
-                sys.exit(p.exitcode)
+    # Call build_workflow(opts, retval)
+    with Manager() as mgr:
+        retval = mgr.dict()
+        p = Process(target=building_func, args=(opts, retval))
+        p.start()
+        p.join()
 
-            qsiprep_wf = retval['workflow']
-            plugin_settings = retval['plugin_settings']
-            bids_dir = retval['bids_dir']
-            output_dir = retval['output_dir']
-            work_dir = retval['work_dir']
-            subject_list = retval['subject_list']
-            run_uuid = retval['run_uuid']
-            retcode = retval['return_code']
+        if p.exitcode != 0:
+            sys.exit(p.exitcode)
 
-        if qsiprep_wf is None:
-            sys.exit(1)
+        qsiprep_wf = retval['workflow']
+        plugin_settings = retval['plugin_settings']
+        bids_dir = retval['bids_dir']
+        output_dir = retval['output_dir']
+        work_dir = retval['work_dir']
+        subject_list = retval['subject_list']
+        run_uuid = retval['run_uuid']
+        retcode = retval['return_code']
 
-        if opts.write_graph:
-            qsiprep_wf.write_graph(
-                graph2use="colored", format='svg', simple_form=True)
+    if qsiprep_wf is None:
+        sys.exit(1)
 
-        if opts.reports_only:
-            sys.exit(int(retcode > 0))
+    if opts.write_graph:
+        qsiprep_wf.write_graph(
+            graph2use="colored", format='svg', simple_form=True)
 
-        if opts.boilerplate:
-            sys.exit(int(retcode > 0))
+    if opts.reports_only:
+        sys.exit(int(retcode > 0))
 
-    """
-    # Sentry tracking
-    if not opts.notrack:
-        try:
-            from raven import Client
-            dev_user = bool(int(os.getenv('qsiprep_DEV', 0)))
-            msg = 'qsiprep running%s' % (int(dev_user) * ' [dev]')
-            client = Client(
-                'https://d5a16b0c38d84d1584dfc93b9fb1ade6:'
-                '21f3c516491847af8e4ed249b122c4af@sentry.io/1137693',
-                release=__version__)
-            client.captureMessage(
-                message=msg,
-                level='debug' if dev_user else 'info',
-                tags={
-                    'run_id': run_uuid,
-                    'npart': len(subject_list),
-                    'type': 'ping',
-                    'dev': dev_user
-                })
-        except Exception:
-            pass
-    """
+    if opts.boilerplate:
+        sys.exit(int(retcode > 0))
 
     # Check workflow for missing commands
     missing = check_deps(qsiprep_wf)
@@ -512,16 +464,69 @@ def main():
         else:
             raise
 
+    # No reports for recon mode yet
     if mode == "recon":
         sys.exit(int(errno > 0))
-    else:
-        # Generate reports phase
-        errno += generate_reports(subject_list, output_dir, work_dir, run_uuid)
-        write_derivative_description(bids_dir, str(Path(output_dir) / 'qsiprep'))
+
+    # Generate reports phase
+    errno += generate_reports(subject_list, output_dir, work_dir, run_uuid)
+    write_derivative_description(bids_dir, str(Path(output_dir) / 'qsiprep'))
+    if opts.recon_spec is None:
+        logger.info("No additional workflows to run.")
         sys.exit(int(errno > 0))
 
+    # Run an additional workflow if preproc + recon are requested
+    opts.recon_input = output_dir
+    with Manager() as mgr:
+        retval = mgr.dict()
+        p = Process(target=build_recon_workflow, args=(opts, retval))
+        p.start()
+        p.join()
 
-def build_workflow(opts, retval):
+        if p.exitcode != 0:
+            sys.exit(p.exitcode)
+
+        qsirecon_post_wf = retval['workflow']
+        plugin_settings = retval['plugin_settings']
+        bids_dir = retval['bids_dir']
+        output_dir = retval['output_dir']
+        work_dir = retval['work_dir']
+        subject_list = retval['subject_list']
+        run_uuid = retval['run_uuid']
+        retcode = retval['return_code']
+
+    if qsirecon_post_wf is None:
+        sys.exit(1)
+
+    if opts.write_graph:
+        qsirecon_post_wf.write_graph(
+            graph2use="colored", format='svg', simple_form=True)
+
+    if opts.reports_only:
+        sys.exit(int(retcode > 0))
+
+    if opts.boilerplate:
+        sys.exit(int(retcode > 0))
+
+    # Check workflow for missing commands
+    missing = check_deps(qsirecon_post_wf)
+    if missing:
+        print("Cannot run qsiprep. Missing dependencies:")
+        for iface, cmd in missing:
+            print("\t{} (Interface: {})".format(cmd, iface))
+        sys.exit(2)
+
+    # Clean up master process before running workflow, which may create forks
+    gc.collect()
+    try:
+        qsirecon_post_wf.run(**plugin_settings)
+    except RuntimeError as e:
+        if "Workflow did not execute cleanly" in str(e):
+            errno = 1
+        else:
+            raise
+
+def build_qsiprep_workflow(opts, retval):
     """
     Create the Nipype Workflow that supports the whole execution
     graph, given the inputs.
