@@ -2,7 +2,7 @@
 Orchestrating the dwi-preprocessing workflow
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. autofunction:: init_dwi_preproc_wf
+.. autofunction:: init_qsiprep_dwi_preproc_wf
 .. autofunction:: init_dwi_derivatives_wf
 
 """
@@ -70,8 +70,8 @@ def init_qsiprep_dwi_preproc_wf(dwi_files,
         :graph2use: orig
         :simple_form: yes
 
-        from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
-        wf = init_dwi_preproc_wf(['/completely/made/up/path/sub-01_dwi.nii.gz'],
+        from qsiprep.workflows.dwi.base import init_qsiprep_dwi_preproc_wf
+        wf = init_qsiprep_dwi_preproc_wf(['/completely/made/up/path/sub-01_dwi.nii.gz'],
                                   omp_nthreads=1,
                                   ignore=[],
                                   reportlets_dir='.',
@@ -301,8 +301,8 @@ def init_qsiprep_dwi_preproc_wf(dwi_files,
                                                denoise_before_combining=denoise_before_combining,
                                                name="merge_plus")
         split_plus = pe.Node(SplitDWIs(), name="split_plus")
-        b0_hmc_plus = init_dwi_hmc_wf(hmc_transform, hmc_model, motion_corr_to,
-                                      name="b0_hmc_plus")
+        dwi_hmc_plus = init_dwi_hmc_wf(hmc_transform, hmc_model, motion_corr_to,
+                                       name="dwi_hmc_plus")
         merge_plus.inputs.inputnode.dwi_files = dwi_files[plus_key]
 
         # Merge, denoise, split, hmc on the minus series
@@ -310,8 +310,8 @@ def init_qsiprep_dwi_preproc_wf(dwi_files,
                                                 denoise_before_combining=denoise_before_combining,
                                                 name="merge_minus")
         split_minus = pe.Node(SplitDWIs(), name="split_minus")
-        b0_hmc_minus = init_dwi_hmc_wf(hmc_transform, hmc_model, motion_corr_to,
-                                       name="b0_hmc_minus")
+        dwi_hmc_minus = init_dwi_hmc_wf(hmc_transform, hmc_model, motion_corr_to,
+                                        name="dwi_hmc_minus")
         merge_minus.inputs.inputnode.dwi_files = dwi_files[plus_key + "-"]
 
         # Get affines and warps to the b0 ref
@@ -324,57 +324,70 @@ def init_qsiprep_dwi_preproc_wf(dwi_files,
         # Remove this!
         workflow.add_nodes([inputnode, outputnode])
         workflow.connect([
-                # Merge, denoise, split, hmc on the plus series
-                (merge_plus, split_plus, [('outputnode.merged_image', 'dwi_file'),
-                                          ('outputnode.merged_bval', 'bval_file'),
-                                          ('outputnode.merged_bvec', 'bvec_file')]),
-                (split_plus, concat_rpe_splits,
-                    [('bval_files', 'bval_plus'),
-                     ('bvec_files', 'bvec_plus'),
-                     ('dwi_files', 'dwi_plus'),
-                     ('b0_images', 'b0_images_plus'),
-                     ('b0_indices', 'b0_indices_plus')]),
-                (split_plus, b0_hmc_plus, [('b0_images', 'inputnode.b0_images')]),
-                (b0_hmc_plus, concat_rpe_splits, [
-                    (('outputnode.forward_transforms', _list_squeeze), 'hmc_affines_plus')]),
+            # Merge, denoise, split, hmc on the plus series
+            (merge_plus, split_plus, [('outputnode.merged_image', 'dwi_file'),
+                                      ('outputnode.merged_bval', 'bval_file'),
+                                      ('outputnode.merged_bvec', 'bvec_file')]),
+            (split_plus, concat_rpe_splits, [
+                ('bval_files', 'bval_plus'),
+                ('bvec_files', 'bvec_plus'),
+                ('dwi_files', 'dwi_plus'),
+                ('b0_images', 'b0_images_plus'),
+                ('b0_indices', 'b0_indices_plus')]),
+            (split_plus, dwi_hmc_plus, [
+                ('b0_images', 'inputnode.b0_images'),
+                ('bval_files', 'inputnode.bvals'),
+                ('bvec_files', 'inputnode.bvecs'),
+                ('dwi_files', 'inputnode.dwi_files'),
+                ('b0_indices', 'inputnode.b0_indices')]),
+            (dwi_hmc_plus, concat_rpe_splits, [
+                (('outputnode.forward_transforms', _list_squeeze), 'hmc_affines_plus'),
+                ('outputnode.noise_free_dwis', 'ideal_plus')]),
 
-                # Merge, denoise, split, hmc on the minus series
-                (merge_minus, split_minus, [('outputnode.merged_image', 'dwi_file'),
-                                            ('outputnode.merged_bval', 'bval_file'),
-                                            ('outputnode.merged_bvec', 'bvec_file')]),
-                (split_minus, concat_rpe_splits,
-                    [('bval_files', 'bval_minus'),
-                     ('bvec_files', 'bvec_minus'),
-                     ('dwi_files', 'dwi_minus'),
-                     ('b0_images', 'b0_images_minus'),
-                     ('b0_indices', 'b0_indices_minus')]),
-                (split_minus, b0_hmc_minus, [('b0_images', 'inputnode.b0_images')]),
-                (b0_hmc_minus, concat_rpe_splits, [
-                    (('outputnode.forward_transforms', _list_squeeze), 'hmc_affines_minus')]),
+            # Merge, denoise, split, hmc on the minus series
+            (merge_minus, split_minus, [('outputnode.merged_image', 'dwi_file'),
+                                        ('outputnode.merged_bval', 'bval_file'),
+                                        ('outputnode.merged_bvec', 'bvec_file')]),
+            (split_minus, concat_rpe_splits, [
+                ('bval_files', 'bval_minus'),
+                ('bvec_files', 'bvec_minus'),
+                ('dwi_files', 'dwi_minus'),
+                ('b0_images', 'b0_images_minus'),
+                ('b0_indices', 'b0_indices_minus')]),
+            (split_minus, dwi_hmc_minus, [
+                ('b0_images', 'inputnode.b0_images'),
+                ('bval_files', 'inputnode.bvals'),
+                ('bvec_files', 'inputnode.bvecs'),
+                ('dwi_files', 'inputnode.dwi_files'),
+                ('b0_indices', 'inputnode.b0_indices')]),
+            (dwi_hmc_minus, concat_rpe_splits, [
+                (('outputnode.forward_transforms', _list_squeeze), 'hmc_affines_minus'),
+                ('outputnode.noise_free_dwis', 'ideal_minus')]),
 
-                # Use the hmc templates as the input for pepolar unwarping
-                (b0_hmc_minus, bidir_pepolar_wf,
-                    [('outputnode.final_template', 'inputnode.template_minus')]),
-                (b0_hmc_plus, bidir_pepolar_wf,
-                    [('outputnode.final_template', 'inputnode.template_plus')]),
+            # Use the hmc templates as the input for pepolar unwarping
+            (dwi_hmc_minus, bidir_pepolar_wf, [
+                ('outputnode.final_template', 'inputnode.template_minus')]),
+            (dwi_hmc_plus, bidir_pepolar_wf, [
+                ('outputnode.final_template', 'inputnode.template_plus')]),
 
-                # send unwarping to the rpe recombiner
-                (bidir_pepolar_wf, concat_rpe_splits, [
-                    (('outputnode.out_affine_plus', _get_first), 'template_plus_to_ref_affine'),
-                    (('outputnode.out_affine_minus', _get_first), 'template_minus_to_ref_affine'),
-                    ('outputnode.out_warp_plus', 'template_plus_to_ref_warp'),
-                    ('outputnode.out_warp_minus', 'template_minus_to_ref_warp'),
-                    ('outputnode.out_reference', 'b0_ref_image'),
-                    ('outputnode.out_mask', 'b0_ref_mask')
-                    ]),
+            # send unwarping to the rpe recombiner
+            (bidir_pepolar_wf, concat_rpe_splits, [
+                (('outputnode.out_affine_plus', _get_first), 'template_plus_to_ref_affine'),
+                (('outputnode.out_affine_minus', _get_first), 'template_minus_to_ref_affine'),
+                ('outputnode.out_warp_plus', 'template_plus_to_ref_warp'),
+                ('outputnode.out_warp_minus', 'template_minus_to_ref_warp'),
+                ('outputnode.out_reference', 'b0_ref_image'),
+                ('outputnode.out_mask', 'b0_ref_mask')
+                ]),
         ])
-
+        fmaps = "BUDS"
     # Normal cases. No RPE to worry about
     else:
-        buffernode = pe.Node(niu.IdentityInterface(fields=[
-            'b0_ref_image', 'b0_ref_mask', 'dwi_files', 'bvec_files', 'bval_files', 'b0_images',
-            'b0_indices', 'to_dwi_ref_affines', 'to_dwi_ref_warps', 'original_grouping',
-            'sdc_method', 'ideal_images']),
+        buffernode = pe.Node(
+            niu.IdentityInterface(fields=[
+                'b0_ref_image', 'b0_ref_mask', 'dwi_files', 'bvec_files', 'bval_files',
+                'b0_images', 'b0_indices', 'to_dwi_ref_affines', 'to_dwi_ref_warps',
+                'original_grouping', 'sdc_method', 'ideal_images']),
             name="buffernode")
         # Merge, denoise, split, hmc
         merge_dwis = init_merge_and_denoise_wf(dwi_denoise_window=dwi_denoise_window,
@@ -454,7 +467,7 @@ def init_qsiprep_dwi_preproc_wf(dwi_files,
                 (b0_coreg_wf, syn_unwarp_report_wf, [
                     ('outputnode.itk_b0_to_t1', 'inputnode.in_xfm')]),
                 (b0_sdc_wf, syn_unwarp_report_wf, [
-                    ('outputnode.syn_bold_ref', 'inputnode.in_post')]),
+                    ('outputnode.b0_ref', 'inputnode.in_post')]),
             ])
         else:
             sdc_type = fmaps[0]['type']
@@ -481,11 +494,11 @@ def init_qsiprep_dwi_preproc_wf(dwi_files,
                                       ('outputnode.merged_bval', 'bval_file'),
                                       ('outputnode.merged_bvec', 'bvec_file')]),
             (split_dwis, buffernode,
-                [('bval_files', 'bval_files'),
-                 ('bvec_files', 'bvec_files'),
-                 ('dwi_files', 'dwi_files'),
-                 ('b0_images', 'b0_images'),
-                 ('b0_indices', 'b0_indices')]),
+             [('bval_files', 'bval_files'),
+              ('bvec_files', 'bvec_files'),
+              ('dwi_files', 'dwi_files'),
+              ('b0_images', 'b0_images'),
+              ('b0_indices', 'b0_indices')]),
             (merge_dwis, buffernode, [('outputnode.original_files', 'original_grouping')]),
             (split_dwis, dwi_hmc_wf, [('b0_images', 'inputnode.b0_images'),
                                       ('bval_files', 'inputnode.bvals'),
@@ -493,7 +506,7 @@ def init_qsiprep_dwi_preproc_wf(dwi_files,
                                       ('dwi_files', 'inputnode.dwi_files'),
                                       ('b0_indices', 'inputnode.b0_indices')]),
             (dwi_hmc_wf, buffernode, [(('outputnode.forward_transforms', _list_squeeze),
-                                      'to_dwi_ref_affines'),
+                                       'to_dwi_ref_affines'),
                                       ('outputnode.noise_free_dwis', 'ideal_images')]),
             (dwi_hmc_wf, dwi_ref_wf, [('outputnode.final_template', 'inputnode.b0_template')]),
             (dwi_ref_wf, b0_sdc_wf, [('outputnode.ref_image', 'inputnode.b0_ref'),
@@ -563,14 +576,14 @@ def init_qsiprep_dwi_preproc_wf(dwi_files,
 
     workflow.connect([
         (inputnode, b0_coreg_wf, [
-                ('t1_brain', 'inputnode.t1_brain'),
-                ('t1_seg', 'inputnode.t1_seg'),
-                ('subjects_dir', 'inputnode.subjects_dir'),
-                ('subject_id', 'inputnode.subject_id'),
-                ('t1_2_fsnative_reverse_transform',
-                 'inputnode.t1_2_fsnative_reverse_transform')]),
+            ('t1_brain', 'inputnode.t1_brain'),
+            ('t1_seg', 'inputnode.t1_seg'),
+            ('subjects_dir', 'inputnode.subjects_dir'),
+            ('subject_id', 'inputnode.subject_id'),
+            ('t1_2_fsnative_reverse_transform',
+             'inputnode.t1_2_fsnative_reverse_transform')]),
         (buffernode, b0_coreg_wf, [('b0_ref_image',
-                                   'inputnode.ref_b0_brain')]),
+                                    'inputnode.ref_b0_brain')]),
         (buffernode, summary, [('sdc_method', 'distortion_correction')])
     ])
 
@@ -990,7 +1003,7 @@ def _get_wf_name(dwi_fname):
     """Derive the workflow name based on the output file prefix."""
     spl = dwi_fname.split("_")
     nosub = "_".join(spl[1:])
-    return ("dwi_preproc_" + nosub + "_wf").replace("__", "_")
+    return ("dwi_preproc_" + nosub + "_wf").replace("__", "_").replace("-", "_")
 
 
 def _list_squeeze(in_list):

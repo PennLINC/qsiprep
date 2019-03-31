@@ -71,21 +71,23 @@ class SplitDWIs(SimpleInterface):
 
 
 class ConcatRPESplitsInputSpec(BaseInterfaceInputSpec):
-    dwi_plus = OutputMultiObject(File(exists=True), desc='single volume dwis')
-    bvec_plus = OutputMultiObject(File(exists=True), desc='single volume bvecs')
-    bval_plus = OutputMultiObject(File(exists=True), desc='single volume bvals')
-    b0_images_plus = OutputMultiObject(File(exists=True), desc='just the b0s')
+    dwi_plus = InputMultiObject(File(exists=True), desc='single volume dwis')
+    ideal_plus = InputMultiObject(File(exists=True), desc='model-based single volume dwis')
+    bvec_plus = InputMultiObject(File(exists=True), desc='single volume bvecs')
+    bval_plus = InputMultiObject(File(exists=True), desc='single volume bvals')
+    b0_images_plus = InputMultiObject(File(exists=True), desc='just the b0s')
     b0_indices_plus = traits.List(desc='list of original indices for each b0 image')
-    hmc_affines_plus = OutputMultiObject(File(exists=True), desc='hmc_affine_transforms')
-    hmc_affines_minus = OutputMultiObject(File(exists=True), desc='hmc_affine_transforms')
+    hmc_affines_plus = InputMultiObject(File(exists=True), desc='hmc_affine_transforms')
+    hmc_affines_minus = InputMultiObject(File(exists=True), desc='hmc_affine_transforms')
     template_plus_to_ref_affine = File(exists=True,
                                        desc='affine transform from hmc template to ref')
     template_plus_to_ref_warp = File(exists=True,
                                      desc='SDC warp for hmc template')
-    dwi_minus = OutputMultiObject(File(exists=True), desc='single volume dwis')
-    bvec_minus = OutputMultiObject(File(exists=True), desc='single volume bvecs')
-    bval_minus = OutputMultiObject(File(exists=True), desc='single volume bvals')
-    b0_images_minus = OutputMultiObject(File(exists=True), desc='just the b0s')
+    dwi_minus = InputMultiObject(File(exists=True), desc='single volume dwis')
+    ideal_minus = InputMultiObject(File(exists=True), desc='model-based single volume dwis')
+    bvec_minus = InputMultiObject(File(exists=True), desc='single volume bvecs')
+    bval_minus = InputMultiObject(File(exists=True), desc='single volume bvals')
+    b0_images_minus = InputMultiObject(File(exists=True), desc='just the b0s')
     b0_indices_minus = traits.List(desc='list of original indices for each b0 image')
     template_minus_to_ref_affine = File(exists=True,
                                         desc='affine transform from hmc template to ref')
@@ -102,12 +104,12 @@ class ConcatRPESplitsOutputSpec(TraitedSpec):
     bvec_files = OutputMultiObject(File(exists=True), desc='single volume bvecs')
     bval_files = OutputMultiObject(File(exists=True), desc='single volume bvals')
     b0_images = OutputMultiObject(File(exists=True), desc='just the b0s')
+    ideal_images = OutputMultiObject(File(exists=True), desc='Model-based images')
     b0_indices = traits.List(desc='list of indices for each b0 image')
     to_dwi_ref_affines = OutputMultiObject(File(exists=True), desc='affines to b0 ref')
     to_dwi_ref_warps = OutputMultiObject(File(exists=True), desc='correcting warps to b0 ref')
     original_grouping = traits.List(desc='list of source series for each dwi')
     sdc_method = traits.Str("PEB/PEPOLAR Series (phase-encoding based / PE-POLARity)")
-
 
 class ConcatRPESplits(SimpleInterface):
     """Combine the outputs from the RPE series workflow into a SplitDWI-like object.
@@ -125,6 +127,7 @@ class ConcatRPESplits(SimpleInterface):
         self._results['b0_ref_mask'] = self.inputs.b0_ref_mask
 
         plus_images = self.inputs.dwi_plus
+        plus_ideal = self.inputs.ideal_plus
         plus_bvecs = self.inputs.bvec_plus
         plus_bvals = self.inputs.bval_plus
         plus_b0_images = self.inputs.b0_images_plus
@@ -135,6 +138,7 @@ class ConcatRPESplits(SimpleInterface):
         num_plus = len(plus_images)
 
         minus_images = self.inputs.dwi_minus
+        minus_ideal = self.inputs.ideal_minus
         minus_bvecs = self.inputs.bvec_minus
         minus_bvals = self.inputs.bval_minus
         minus_b0_images = self.inputs.b0_images_minus
@@ -151,7 +155,7 @@ class ConcatRPESplits(SimpleInterface):
         self._results['b0_indices'] = plus_b0_indices + [
             num_plus + idx for idx in minus_b0_indices]
         self._results['original_grouping'] = ['plus'] * num_plus + ['minus'] * num_minus
-
+        self._results['ideal_images'] = plus_ideal + minus_ideal
         # Create a list where each element is the warp for the DWI at the corresponding index
         if isdefined(plus_hmc_to_ref_warp) and isdefined(minus_hmc_to_ref_warp):
             self._results['to_dwi_ref_warps'] = [plus_hmc_to_ref_warp] * num_plus + \
@@ -171,7 +175,7 @@ class ConcatRPESplits(SimpleInterface):
                                 [minus_hmc_to_ref_affine, hmc_aff_minus],
                                 runtime.cwd + "/combined_hmc_affine_minus_%03d.mat" % affine_num))
         self._results['to_dwi_ref_affines'] = combined_affines
-
+        self._results['sdc_method'] = "PEB/PEPOLAR Series"
         return runtime
 
 

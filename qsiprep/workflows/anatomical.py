@@ -683,8 +683,9 @@ The T1w-reference was then skull-stripped using `antsBrainExtraction.sh`
 
     inputnode = pe.Node(niu.IdentityInterface(fields=['in_file']),
                         name='inputnode')
-    outputnode = pe.Node(niu.IdentityInterface(
-        fields=['bias_corrected', 'out_file', 'out_mask', 'out_segs', 'out_report']),
+    outputnode = pe.Node(
+        niu.IdentityInterface(fields=[
+            'bias_corrected', 'out_file', 'out_mask', 'out_segs', 'out_report']),
         name='outputnode')
 
     t1_skull_strip = pe.Node(
@@ -777,9 +778,10 @@ def init_output_grid_wf(voxel_size, template_image, name='output_grid_wf'):
                                name='autobox_template')
     deoblique_autobox = pe.Node(afni.Warp(outputtype="NIFTI_GZ", deoblique=True),
                                 name="deoblique_autobox")
-    size_tuple = (voxel_size, voxel_size, voxel_size)
-    resample_to_voxel_size = pe.Node(afni.Resample(outputtype="NIFTI_GZ", voxel_size=size_tuple),
+    resample_to_voxel_size = pe.Node(afni.Resample(outputtype="NIFTI_GZ"),
                                      name="resample_to_voxel_size")
+    resample_to_voxel_size.inputs.voxel_size = (voxel_size, voxel_size, voxel_size)
+
     workflow.connect([
         (inputnode, autobox_template, [('template_image', 'in_file')]),
         (autobox_template, deoblique_autobox, [('out_file', 'in_file')]),

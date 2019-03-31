@@ -107,7 +107,7 @@ def get_parser():
         type=int,
         help='maximum number of threads across all processes')
     g_perfm.add_argument(
-        '--omp-nthreads',
+        '--omp-nthreads', '--omp_nthreads',
         action='store',
         type=int,
         default=0,
@@ -120,7 +120,7 @@ def get_parser():
         type=int,
         help='upper bound memory limit for qsiprep processes')
     g_perfm.add_argument(
-        '--low-mem',
+        '--low-mem', '--low_mem',
         action='store_true',
         help='attempt to reduce memory usage (will increase disk usage '
         'in working directory)')
@@ -175,11 +175,6 @@ def get_parser():
         help='combine dwis from across multiple runs for motion correction '
         'and reconstruction.')
     g_conf.add_argument(
-        '--discard-repeated-samples',
-        action='store_true',
-        help='discard repeats of q-space samples. Useful if using a '
-        'regularized reconstruction method')
-    g_conf.add_argument(
         '--write-local-bvecs',
         action='store_true',
         default=False,
@@ -212,6 +207,7 @@ def get_parser():
     g_conf.add_argument(
         '--output-resolution', '--output_resolution',
         action='store',
+        required=True,
         type=float,
         help='the isotropic voxel size in mm the data will be resampled to '
         'after preprocessing. If set to a lower value than the original voxel '
@@ -282,7 +278,7 @@ def get_parser():
     g_fmap.add_argument(
         '--prefer_dedicated_fmaps',
         action='store_true',
-        default='false',
+        default=False,
         help='forces unwarping to use files from the fmap directory instead '
         'of using an RPEdir scan from the same session.')
     g_fmap.add_argument(
@@ -370,7 +366,11 @@ def main():
     from multiprocessing import set_start_method, Process, Manager
     from ..viz.reports import generate_reports
     from ..utils.bids import write_derivative_description
-    set_start_method('forkserver')
+
+    try:
+        set_start_method('forkserver')
+    except RuntimeError:
+        pass
 
     warnings.showwarning = _warn_redirect
     opts = get_parser().parse_args()
@@ -711,7 +711,7 @@ def build_workflow(opts, retval):
         fmap_bspline=opts.fmap_bspline,
         fmap_demean=opts.fmap_no_demean,
         use_syn=opts.use_syn_sdc,
-        force_syn=opts.force_syn,
+        force_syn=opts.force_syn
     )
     retval['return_code'] = 0
 

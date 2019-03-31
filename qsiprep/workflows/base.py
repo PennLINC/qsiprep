@@ -30,7 +30,7 @@ from ..utils.misc import fix_multi_T1w_source_name
 from ..__about__ import __version__
 
 from .anatomical import init_anat_preproc_wf
-from .dwi import init_dwi_preproc_wf
+from .dwi import init_qsiprep_dwi_preproc_wf
 import logging
 from collections import defaultdict
 
@@ -373,6 +373,7 @@ def init_single_subject_wf(
             'dwi': ['/completely/made/up/path/sub-01_dwi.nii.gz']
         }
         layout = None
+        LOGGER.warning("Building a test workflow")
     else:
         subject_data, layout = collect_data(bids_dir, subject_id)
 
@@ -487,40 +488,26 @@ to workflows in *qsiprep*'s documentation]\
         impute_slice_threshold = 0
 
     # Handle the grouping of multiple dwi files within a session
-    sessions = layout.get_sessions() if layout is not None else []
-    all_dwis = subject_data['dwi']
-    dwi_session_groups = []
-    if not combine_all_dwis:
-        LOGGER.info('Processing each of %d dwi files separately', len(all_dwis))
-        dwi_session_groups = [[dwi] for dwi in all_dwis]
-    else:
-        if sessions:
-            LOGGER.info('Combining all dwi files within each available session:')
-            for session in sessions:
-                session_files = [img for img in all_dwis if 'ses-'+session in img]
-                LOGGER.info('\t- %d sessions in %s', len(session_files), session)
-                dwi_session_groups.append(session_files)
-        else:
-            LOGGER.info('Combining all %d dwis within the single available session',
-                        len(all_dwis))
-            dwi_session_groups = [all_dwis]
+    dwi_session_groups = get_session_groups(layout, subject_data, combine_all_dwis)
 
     # Now group by fieldmaps for session x fieldmap
     dwi_fmap_groups = []
+    LOGGER.info(dwi_session_groups)
     for dwi_session_group in dwi_session_groups:
         dwi_fmap_groups.extend(
             group_by_fieldmaps(dwi_session_group, layout,
                                "fieldmaps" in ignore or force_syn,
-                               prefer_dedicated_fmaps))
-
+                               prefer_dedicated_fmaps,
+                               combine_all_dwis))
     outputs_to_files = dict([
         (_get_output_fname(dwi_group), dwi_group) for dwi_group in dwi_fmap_groups
     ])
+
     summary.inputs.dwi_groupings = outputs_to_files
 
     # create a processing pipeline for the dwis in each session
     for output_fname, dwi_files in outputs_to_files.items():
-        dwi_preproc_wf = init_dwi_preproc_wf(
+        dwi_preproc_wf = init_qsiprep_dwi_preproc_wf(
             dwi_files=dwi_files,
             output_prefix=output_fname,
             layout=layout,
@@ -543,8 +530,7 @@ to workflows in *qsiprep*'s documentation]\
             fmap_bspline=fmap_bspline,
             fmap_demean=fmap_demean,
             use_syn=use_syn,
-            force_syn=force_syn,
-            num_dwi=len(all_dwis)
+            force_syn=force_syn
         )
 
         workflow.connect([
@@ -578,18 +564,42 @@ to workflows in *qsiprep*'s documentation]\
     return workflow
 
 
-def group_by_fieldmaps(dwi_files, layout, ignore_fieldmap, prefer_dedicated_fmaps):
+# def get_
+
+def get_session_groups(layout, subject_data, combine_all_dwis):
+    # Handle the grouping of multiple dwi files within a session
+    sessions = layout.get_sessions() if layout is not None else []
+    all_dwis = subject_data['dwi']
+    dwi_session_groups = []
+    if not combine_all_dwis:
+        dwi_session_groups = [[dwi] for dwi in all_dwis]
+    else:
+        if sessions:
+            LOGGER.info('Combining all dwi files within each available session:')
+            for session in sessions:
+                session_files = [img for img in all_dwis if 'ses-'+session in img]
+                LOGGER.info('\t- %d sessions in %s', len(session_files), session)
+                dwi_session_groups.append(session_files)
+        else:
+            LOGGER.info('Combining all %d dwis within the single available session',
+                        len(all_dwis))
+            dwi_session_groups = [all_dwis]
+    return dwi_session_groups
+
+
+def group_by_fieldmaps(dwi_files, layout, ignore_fieldmap, prefer_dedicated_fmaps,
+                       combine_all_dwis):
     """Check to see if multiple phase encoding directions are present within a session."""
-    # Create a list of (dwi image, PE dir, fieldmaps)
-    parsed_dwis = []
+
     # If no fieldmap correction is to be done, just make sure that pe dirs aren't mixed
     if ignore_fieldmap or layout is None:
         # group by pe direction and intended_fieldmap
         groups = defaultdict(list)
-        for ref_file, pe_dir, fmap in parsed_dwis:
-            groups[pe_dir].append(ref_file)
+        for ref_file in dwi_files:
+            groups[ref_file].append(ref_file)
         return [grouping for grouping in groups.values()]
 
+    parsed_dwis = []
     for ref_file in dwi_files:
         metadata = layout.get_metadata(ref_file)
 
@@ -620,6 +630,10 @@ def group_by_fieldmaps(dwi_files, layout, ignore_fieldmap, prefer_dedicated_fmap
     complete_groups = []
     group_keys = set(groups.keys())
 
+    # If we're not combining DWIs, we're not doing BUDS
+    if not combine_all_dwis:
+        return list(groups.values())
+
     while len(group_keys):
         key = group_keys.pop()
         scan_list = groups[key]
@@ -632,7 +646,7 @@ def group_by_fieldmaps(dwi_files, layout, ignore_fieldmap, prefer_dedicated_fmap
         num_matches = len(matches)
         if not num_matches == 1:
             # Didn't find any reverse PE groups
-            # LOGGER.info("No matches found for %s", key)
+            LOGGER.info("No matches found for %s", key)
             complete_groups.append(scan_list)
         else:
             # Found a perfect match

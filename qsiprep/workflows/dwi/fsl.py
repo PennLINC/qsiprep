@@ -2,7 +2,7 @@
 Orchestrating the dwi-preprocessing workflow
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. autofunction:: init_dwi_preproc_wf
+.. autofunction:: init_qsiprep_dwi_preproc_wf
 .. autofunction:: init_dwi_derivatives_wf
 
 """
@@ -70,7 +70,7 @@ def init_fsl_dwi_preproc_wf(dwi_files,
         :graph2use: orig
         :simple_form: yes
 
-        from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
+        from qsiprep.workflows.dwi.base import init_qsiprep_dwi_preproc_wf
         wf = init_fsl_dwi_preproc_wf(['/completely/made/up/path/sub-01_dwi.nii.gz'],
                                      omp_nthreads=1,
                                      ignore=[],

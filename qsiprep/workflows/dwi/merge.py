@@ -5,7 +5,7 @@
 Merge and denoise dwi images
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. autofunction:: init_dwi_preproc_wf
+.. autofunction:: init_qsiprep_dwi_preproc_wf
 .. autofunction:: init_dwi_derivatives_wf
 
 """
