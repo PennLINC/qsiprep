@@ -23,8 +23,8 @@ import subprocess
 from scipy.io.matlab import loadmat, savemat
 from pkg_resources import resource_filename as pkgr
 from qsiprep.interfaces.converters import FODtoFIBGZ
-from qsiprep.interfaces.bids import QsiprepOutput, ReconDerivativesDataSink
-qsiprep_output_names = QsiprepOutput().output_spec.class_editable_traits()
+from qsiprep.interfaces.bids import ReconDerivativesDataSink
+from .interchange import input_fields, default_connections
 LOGGER = logging.getLogger('nipype.workflow')
 
 
@@ -46,7 +46,7 @@ def init_mif_to_fibgz_wf(name="mif_to_fibgz", output_suffix="", params={}):
             DSI Studio fib file containing the FODs from the input ``mif_file``.
 
     """
-    inputnode = pe.Node(niu.IdentityInterface(fields=qsiprep_output_names + ["mif_file"]),
+    inputnode = pe.Node(niu.IdentityInterface(fields=input_fields + ["mif_file"]),
                         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(fields=['fib_file']), name="outputnode")
@@ -61,7 +61,7 @@ def init_mif_to_fibgz_wf(name="mif_to_fibgz", output_suffix="", params={}):
 
 def init_fibgz_to_mif_wf(name="fibgz_to_mif", output_suffix="", params={}):
     """Needs Documentation"""
-    inputnode = pe.Node(niu.IdentityInterface(fields=qsiprep_output_names + ["mif_file"]),
+    inputnode = pe.Node(niu.IdentityInterface(fields=input_fields + ["mif_file"]),
                         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(fields=['fib_file']), name="outputnode")

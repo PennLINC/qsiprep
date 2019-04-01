@@ -43,15 +43,40 @@ BIDS_NAME = re.compile(
     '(_(?P<rec_id>rec-[a-zA-Z0-9]+))?(_(?P<run_id>run-[a-zA-Z0-9]+))?')
 
 
+def get_bids_params(fullpath):
+    bids_patterns = [
+        r'^(.*/)?(?P<subject_id>sub-[a-zA-Z0-9]+)',
+        '^.*_(?P<session_id>ses-[a-zA-Z0-9]+)',
+        '^.*_(?P<task_id>task-[a-zA-Z0-9]+)',
+        '^.*_(?P<acq_id>acq-[a-zA-Z0-9]+)',
+        '^.*_(?P<space_id>space-[a-zA-Z0-9]+)',
+        '^.*_(?P<rec_id>rec-[a-zA-Z0-9]+)',
+        '^.*_(?P<run_id>run-[a-zA-Z0-9]+)'
+    ]
+    matches = {"subject_id": None, "session_id": None, "task_id": None,
+               "acq_id": None, "space_id": None, "rec_id": None, "run_id": None}
+    for pattern in bids_patterns:
+        pat = re.compile( pattern)
+        match = pat.search(fullpath)
+        params = match.groupdict() if match is not None else {}
+        matches.update(params)
+    return matches
+
+
 class FileNotFoundError(IOError):
     pass
 
 
-class QsiprepOutputInputSpec(BaseInterfaceInputSpec):
-    in_file = File(mandatory=True, desc='input file, part of a qsiprep output tree')
+class QsiReconIngressInputSpec(BaseInterfaceInputSpec):
+    # DWI files
+    dwi_file = File(exists=True)
+    bval_file = File(exists=True)
+    bvec_file = File(exists=True)
+    b_file = File(exists=True)
+    atlas_names = traits.List()
 
 
-class QsiprepOutputOutputSpec(TraitedSpec):
+class QsiReconIngressOutputSpec(TraitedSpec):
     subject_id = traits.Str()
     session_id = traits.Str()
     space_id = traits.Str()
@@ -65,36 +90,27 @@ class QsiprepOutputOutputSpec(TraitedSpec):
     dwi_file = File(exists=True)
     local_bvec_file = File()
     mask_file = File()
-    tpms = OutputMultiObject(File(exists=True))
-    seg = File(exists=True)
-    t1_brain = File(exists=True)
-    anat_mask = File(exists=True)
-    t1_2_mni_forward_transform = File(exists=True)
-    t1_2_mni_reverse_transform = File(exists=True)
 
 
-class QsiprepOutput(SimpleInterface):
-    """
-    """
-    input_spec = QsiprepOutputInputSpec
-    output_spec = QsiprepOutputOutputSpec
+class QsiReconIngress(SimpleInterface):
+    input_spec = QsiReconIngressInputSpec
+    output_spec = QsiReconIngressOutputSpec
 
     def _run_interface(self, runtime):
-        match = BIDS_NAME.search(self.inputs.in_file)
-        params = match.groupdict() if match is not None else {}
+        params = get_bids_params(self.inputs.dwi_file)
         self._results = {key: val for key, val in list(params.items())
                          if val is not None}
         space = self._results.get("space_id")
         if space is None:
-            raise Exception("Unable to detect space of %s" % self.inputs.in_file)
+            raise Exception("Unable to detect space of %s" % self.inputs.dwi_file)
         # Find the additional files
-        out_root, fname, ext = split_filename(self.inputs.in_file)
+        out_root, fname, ext = split_filename(self.inputs.dwi_file)
         self._results['bval_file'] = op.join(out_root, fname+".bval")
         self._results['bvec_file'] = op.join(out_root, fname+".bvec")
         self._get_if_exists('confounds_file', op.join(out_root, "*confounds.tsv"))
         self._get_if_exists('local_bvec_file', op.join(out_root, fname[:-3]+'bvec.nii*'))
         self._get_if_exists('b_file', op.join(out_root, fname+".b"))
-        self._results['dwi_file'] = self.inputs.in_file
+        self._results['dwi_file'] = self.inputs.dwi_file
 
         # Get the anatomical data
         path_parts = out_root.split(op.sep)[:-1]  # remove "dwi"
@@ -104,9 +120,9 @@ class QsiprepOutput(SimpleInterface):
         qp_root = op.sep.join(path_parts)
         anat_root = op.join(qp_root, 'anat')
         sub = self._results['subject_id']
+        """
         if space == "space-T1w":
             self._get_if_exists('tpms', anat_root + "/%s_label-*_probseg.nii*" % sub)
-            self._get_if_exists('seg', '%s/%s_dseg.nii*' % (anat_root, sub))
             self._get_if_exists('t1_brain',
                 '%s/%s_desc-preproc_T1w.nii*' % (anat_root, sub))
             self._get_if_exists('anat_mask',
@@ -125,6 +141,7 @@ class QsiprepOutput(SimpleInterface):
             '%s/%s_from-MNI152NLin2009cAsym_to-T1w*_xfm.h5' % (anat_root, sub))
         self._get_if_exists('t1_2_mni_forward_transform',
             '%s/%s_from-T1w_to-MNI152NLin2009cAsym*_xfm.h5' % (anat_root, sub))
+        """
         return runtime
 
     def _get_if_exists(self, name, pattern, multi_ok=False):

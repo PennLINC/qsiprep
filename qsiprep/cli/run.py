@@ -406,7 +406,7 @@ def main():
     nlogging.getLogger('nipype.utils').setLevel(log_level)
 
     errno = 0
-    mode = "recon" if opts.recon_input is not None else "prep"
+    mode = "recon" if opts.recon_only else "prep"
     if mode == "recon":
         logger.info("running qsirecon")
         building_func = build_recon_workflow

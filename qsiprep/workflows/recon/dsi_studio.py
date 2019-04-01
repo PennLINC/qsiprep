@@ -18,16 +18,14 @@ from qsiprep.interfaces.dsi_studio import (DSIStudioCreateSrc, DSIStudioGQIRecon
 import logging
 import os
 import os.path as op
-from qsiprep.interfaces.bids import QsiprepOutput, ReconDerivativesDataSink
+from qsiprep.interfaces.bids import ReconDerivativesDataSink
 from qsiprep.interfaces.utils import GetConnectivityAtlases
 from qsiprep.interfaces.connectivity import Controllability
 from qsiprep.interfaces.gradients import RemoveDuplicates
 from qsiprep.interfaces.mrtrix import ResponseSD, EstimateFOD, MRConvert
 
 LOGGER = logging.getLogger('nipype.interface')
-qsiprep_output_names = QsiprepOutput().output_spec.class_editable_traits()
-default_connections = [(trait, trait) for trait in qsiprep_output_names]
-default_input_set = set(qsiprep_output_names)
+from .interchange import input_fields
 
 
 def init_dsi_studio_recon_wf(name="dsi_studio_recon", output_suffix="", params={}):
@@ -51,7 +49,7 @@ def init_dsi_studio_recon_wf(name="dsi_studio_recon", output_suffix="", params={
             Default 1.25. Distance to sample EAP at.
 
     """
-    inputnode = pe.Node(niu.IdentityInterface(fields=qsiprep_output_names),
+    inputnode = pe.Node(niu.IdentityInterface(fields=input_fields),
                         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(
@@ -138,7 +136,7 @@ def init_dsi_studio_connectivity_wf(name="dsi_studio_connectivity", n_procs=1,
     """
     inputnode = pe.Node(
         niu.IdentityInterface(
-            fields=qsiprep_output_names + ['fibgz', 'atlas_configs']),
+            fields=input_fields + ['fibgz', 'atlas_configs']),
         name="inputnode")
     outputnode = pe.Node(niu.IdentityInterface(fields=['matfile']),
                          name="outputnode")
@@ -185,7 +183,7 @@ def init_dsi_studio_export_wf(name="dsi_studio_export", params={}, output_suffix
     """
     inputnode = pe.Node(
         niu.IdentityInterface(
-            fields=qsiprep_output_names + ['fibgz']),
+            fields=input_fields + ['fibgz']),
         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(fields=['gfa', 'fa0', 'fa1', 'fa2', 'iso']),

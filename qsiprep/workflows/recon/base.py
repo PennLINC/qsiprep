@@ -32,9 +32,9 @@ from collections import defaultdict
 import json
 from ...interfaces.dsi_studio import (DSIStudioCreateSrc, DSIStudioGQIReconstruction,
                                       DSIStudioAtlasGraph, DSIStudioExport)
-from ...interfaces.bids import QsiprepOutput, DerivativesDataSink
 from ...interfaces.utils import GetConnectivityAtlases
 from ...interfaces.connectivity import Controllability
+from ...interfaces.anatomical import QsiprepAnatomicalIngress
 from bids.layout import BIDSLayout
 from .build_workflow import init_dwi_recon_workflow
 
@@ -165,10 +165,52 @@ def init_single_subject_wf(
         LOGGER.info("No dwi files found for %s", subject_id)
         return workflow
 
+    anat_src = pe.Node(
+        QsiprepAnatomicalIngress(subject_id=subject_id,
+                                 recon_input_dir=recon_input),
+        name='anat_src')
+
     # create a processing pipeline for the dwis in each session
     for dwi_file in dwi_files:
-        workflow.add_nodes(
-            [init_dwi_recon_workflow(dwi_file=dwi_file, workflow_spec=spec,
-                                     reportlets_dir=reportlets_dir, output_dir=output_dir)])
+        dwi_recon_wf = init_dwi_recon_workflow(dwi_file=dwi_file,
+                                               workflow_spec=spec,
+                                               reportlets_dir=reportlets_dir,
+                                               output_dir=output_dir,
+                                               omp_nthreads=omp_nthreads)
+        workflow.connect([
+            (
+                anat_src,
+                dwi_recon_wf,
+                [
+                    ('t1_aparc', 'inputnode.t1_aparc'),
+                    ('t1_seg', 'inputnode.t1_seg'),
+                    ('t1_aseg', 'inputnode.t1_aseg'),
+                    ('t1_brain_mask', 'inputnode.t1_brain_mask'),
+                    ('t1_preproc', 'inputnode.t1_preproc'),
+                    ('t1_csf_probseg', 'inputnode.t1_csf_probseg'),
+                    ('t1_gm_probseg', 'inputnode.t1_gm_probseg'),
+                    ('t1_wm_probseg', 'inputnode.t1_wm_probseg'),
+                    ('left_inflated_surf', 'inputnode.left_inflated_surf'),
+                    ('left_midthickness_surf', 'inputnode.left_midthickness_surf'),
+                    ('left_pial_surf', 'inputnode.left_pial_surf'),
+                    ('left_smoothwm_surf', 'inputnode.left_smoothwm_surf'),
+                    ('right_inflated_surf', 'inputnode.right_inflated_surf'),
+                    ('right_midthickness_surf', 'inputnode.right_midthickness_surf'),
+                    ('right_pial_surf', 'inputnode.right_pial_surf'),
+                    ('right_smoothwm_surf', 'inputnode.right_smoothwm_surf'),
+                    ('orig_to_t1_mode_forward_transform',
+                     'inputnode.orig_to_t1_mode_forward_transform'),
+                    ('t1_2_fsnative_forward_transform',
+                     'inputnode.t1_2_fsnative_forward_transform'),
+                    ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
+                    ('t1_2_mni_forward_transform', 'inputnode.t1_2_mni_forward_transform'),
+                    ('template_brain_mask', 'inputnode.template_brain_mask'),
+                    ('template_preproc', 'inputnode.template_preproc'),
+                    ('template_seg', 'inputnode.template_seg'),
+                    ('template_csf_probseg', 'inputnode.template_csf_probseg'),
+                    ('template_gm_probseg', 'inputnode.template_gm_probseg'),
+                    ('template_wm_probseg', 'inputnode.template_wm_probseg')
+                ])
+        ])
 
     return workflow

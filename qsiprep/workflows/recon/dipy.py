@@ -13,14 +13,11 @@ from nipype.utils.filemanip import copyfile, split_filename
 import logging
 import os
 import os.path as op
-from qsiprep.interfaces.bids import QsiprepOutput, ReconDerivativesDataSink
+from qsiprep.interfaces.bids import ReconDerivativesDataSink
 from ...interfaces.dipy import BrainSuiteShoreReconstruction, MAPMRIReconstruction
-from qsiprep.interfaces.converters import amplitudes_to_fibgz, amplitudes_to_sh_mif
+from .interchange import input_fields
 
 LOGGER = logging.getLogger('nipype.interface')
-qsiprep_output_names = QsiprepOutput().output_spec.class_editable_traits()
-default_connections = [(trait, trait) for trait in qsiprep_output_names]
-default_input_set = set(qsiprep_output_names)
 
 
 def external_format_datasinks(output_suffix, params, wf):
@@ -97,7 +94,7 @@ def init_dipy_brainsuite_shore_recon_wf(name="dipy_3dshore_recon", output_suffix
 
     """
 
-    inputnode = pe.Node(niu.IdentityInterface(fields=qsiprep_output_names),
+    inputnode = pe.Node(niu.IdentityInterface(fields=input_fields),
                         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(
@@ -213,7 +210,7 @@ def init_dipy_mapmri_recon_wf(name="dipy_mapmri_recon", output_suffix="", params
             Default: None (cvxpy chooses its own solver)
     """
 
-    inputnode = pe.Node(niu.IdentityInterface(fields=qsiprep_output_names),
+    inputnode = pe.Node(niu.IdentityInterface(fields=input_fields),
                         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(

@@ -30,6 +30,7 @@ class GetConnectivityAtlasesInputSpec(BaseInterfaceInputSpec):
     atlas_names = traits.List(mandatory=True, desc='atlas names to be used')
     forward_transform = File(exists=True, desc='transform to get atlas into T1w space if desired')
     reference_image = File(exists=True, desc='')
+    space = traits.Str('T1w')
 
 
 class GetConnectivityAtlasesOutputSpec(TraitedSpec):
@@ -45,8 +46,13 @@ class GetConnectivityAtlases(SimpleInterface):
         atlas_names = self.inputs.atlas_names
         atlas_configs = get_atlases(atlas_names)
 
-        transform = 'identity' if not isdefined(self.inputs.forward_transform) \
-            else self.inputs.forward_transform
+        if self.inputs.space == "T1w":
+            if not isdefined(self.inputs.forward_transform):
+                raise Exception("No MNI to T1w transform found in anatomical directory")
+            else:
+                transform = self.inputs.forward_transform
+        else:
+            transform = 'identity'
 
         # Transform atlases to match the DWI data
         resample_commands = []
