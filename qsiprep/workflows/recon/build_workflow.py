@@ -42,7 +42,7 @@ def init_dwi_recon_workflow(dwi_file, workflow_spec, output_dir, reportlets_dir,
         inputnode.inputs.dwi_file = dwi_file
         preprocessed_data.inputs.dwi_file = dwi_file
 
-    # Connect the anatomical and diffusion inputs to the inputnode
+    # Connect the collected diffusion data (gradients, etc) to the inputnode
     workflow.connect([
         (preprocessed_data, inputnode, [
             (trait, trait) for trait in qsiprep_output_names])
@@ -52,6 +52,7 @@ def init_dwi_recon_workflow(dwi_file, workflow_spec, output_dir, reportlets_dir,
         GetConnectivityAtlases(atlas_names=atlas_names, space=space),
         name='get_atlases',
         run_without_submitting=True)
+
     # Save the atlases
     if len(atlas_names) > 0:
         if space == "T1w":
@@ -69,6 +70,7 @@ def init_dwi_recon_workflow(dwi_file, workflow_spec, output_dir, reportlets_dir,
                          run_without_submitting=True),
                  [(('atlas_configs', _get_resampled, atlas), 'in_file')])
             ])
+        workflow.connect(inputnode, "dwi_file", get_atlases, "reference_image")
     # Read nodes from workflow spec, make sure we can implement them
     nodes_to_add = []
     for node_spec in workflow_spec['nodes']:
@@ -126,6 +128,7 @@ def init_dwi_recon_workflow(dwi_file, workflow_spec, output_dir, reportlets_dir,
             workflow.connect([(get_atlases, node,
                                [('atlas_configs', 'inputnode.atlas_configs')])])
         _check_repeats(workflow.list_node_names())
+
     # Fill-in datasinks and reportlet datasinks seen so far
     for node in workflow.list_node_names():
         node_suffix = node.split('.')[-1]

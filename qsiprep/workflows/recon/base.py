@@ -13,6 +13,7 @@ qsiprep base reconstruction workflows
 
 import sys
 import os
+import os.path as op
 from copy import deepcopy
 
 from nipype import __version__ as nipype_ver
@@ -149,6 +150,15 @@ def init_single_subject_wf(
         dwi_files = ['/made/up/outputs/sub-X_dwi.nii.gz']
         layout = None
     else:
+        # If recon_input is specified without qsiprep, check if we can find the subject dir
+        if not op.exists(op.join(recon_input, "sub-"+subject_id)):
+            qp_recon_input = op.join(recon_input, "qsiprep")
+            LOGGER.info("%s not in %s, trying recon_input=%s", recon_input, qp_recon_input)
+            if not op.exists(op.join(qp_recon_input, "sub-"+subject_id)):
+                raise Exception(
+                    "Unable to find subject directory in %s or %s" % (
+                        recon_input, qp_recon_input))
+
         with open(recon_spec, "r") as f:
             spec = json.load(f)
         space = spec['space']
@@ -164,6 +174,7 @@ def init_single_subject_wf(
     if len(dwi_files) == 0:
         LOGGER.info("No dwi files found for %s", subject_id)
         return workflow
+
 
     anat_src = pe.Node(
         QsiprepAnatomicalIngress(subject_id=subject_id,

@@ -131,6 +131,8 @@ class QsiprepAnatomicalIngress(SimpleInterface):
             't1_preproc',
             "%s/sub-%s_desc-preproc_T1w.nii*" % (anat_root, sub),
             excludes=['space-MNI'])
+        if not isdefined(self._results['t1_preproc']):
+            raise Exception("Unable to find a preprocessed T1w in %s" % qp_root)
         self._get_if_exists(
             't1_csf_probseg',
             "%s/sub-%s*_label-CSF_probseg.nii*" % (anat_root, sub),
@@ -197,11 +199,10 @@ class QsiprepAnatomicalIngress(SimpleInterface):
             "%s/sub-%s*_from-T1w_to-fsnative_mode-image_xfm.txt" % (anat_root, sub))
         self._get_if_exists(
             't1_2_mni_reverse_transform',
-            "%s/sub-%s*_from-MNI152NLin2009cAsym_to-T1w_mode-image_xfm.h5" % (anat_root, sub))
+            "%s/sub-%s*_from-MNI152NLin2009cAsym_to-T1w*_xfm.h5" % (anat_root, sub))
         self._get_if_exists(
             't1_2_mni_forward_transform',
             "%s/sub-%s*_from-T1w_to-MNI152NLin2009cAsym_mode-image_xfm.h5" % (anat_root, sub))
-
         return runtime
 
     def _get_if_exists(self, name, pattern, excludes=None):
