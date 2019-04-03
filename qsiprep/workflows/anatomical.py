@@ -63,7 +63,7 @@ TEMPLATE_MAP = {
 #  pylint: disable=R0914
 def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug,
                          freesurfer, longitudinal, omp_nthreads, hires, reportlets_dir,
-                         output_dir, num_t1w, output_resolution,
+                         output_dir, num_t1w, output_resolution, force_spatial_normalization,
                          skull_strip_fixed_seed=False, name='anat_preproc_wf'):
     r"""
     This workflow controls the anatomical preprocessing stages of qsiprep. It differs from
@@ -113,6 +113,8 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug,
               - template
               - fsnative
               - fsaverage (or other pre-existing FreeSurfer templates)
+        force_spatial_normalization : bool
+            Run spatial normalization even if "template" is not in ``output_spaces``
         output_resolution : float
             A float describing the isotropic voxel size of the output data.
             Sometimes it can be nice to upsample DWIs. If you choose to upsample, be
@@ -382,7 +384,7 @@ and used as T1w-reference throughout the workflow.
         name='mni_tpms'
     )
 
-    if 'template' in output_spaces:
+    if 'template' in output_spaces or force_spatial_normalization:
         template_str = TEMPLATE_MAP[template]
         # Get the template image
         ref_img = pkgr('qsiprep', 'data/mni_1mm_t1w_lps.nii.gz')
@@ -434,7 +436,7 @@ and used as T1w-reference throughout the workflow.
             (surface_recon_wf, anat_reports_wf, [
                 ('outputnode.out_report', 'inputnode.recon_report')]),
         ])
-    if 'template' in output_spaces:
+    if 'template' in output_spaces or force_spatial_normalization:
         workflow.connect([
             (t1_2_mni, anat_reports_wf, [('out_report', 'inputnode.t1_2_mni_report')]),
         ])
@@ -849,8 +851,8 @@ The T1w-reference was then skull-stripped using `3dSkullStrip`
     rigid_acpc_align = pe.Node(ants.Registration(), name='rigid_acpc_align', n_procs=omp_nthreads)
     rigid_acpc_align.inputs.metric = ["Mattes"]
     rigid_acpc_align.inputs.transforms = ["Rigid"]
-    rigid_acpc_align.inputs.shrink_factors = [[8, 4, 2, 1]]
-    rigid_acpc_align.inputs.smoothing_sigmas = [[7., 3., 1., 0.]]
+    rigid_acpc_align.inputs.shrink_factors = [[ 2, 1]]
+    rigid_acpc_align.inputs.smoothing_sigmas = [[ 1., 0.]]
     rigid_acpc_align.inputs.sigma_units = ["vox"]
     rigid_acpc_align.inputs.sampling_strategy = ['Random']
     rigid_acpc_align.inputs.sampling_percentage = [0.25]
@@ -860,7 +862,7 @@ The T1w-reference was then skull-stripped using `3dSkullStrip`
     rigid_acpc_align.inputs.dimension = 3
     rigid_acpc_align.inputs.winsorize_lower_quantile = 0.025
     rigid_acpc_align.inputs.winsorize_upper_quantile = 0.975
-    rigid_acpc_align.inputs.number_of_iterations = [[10000, 1000, 10000, 10000]]
+    rigid_acpc_align.inputs.number_of_iterations = [[100, 100]]
     rigid_acpc_align.inputs.transform_parameters = [[0.2]]
     rigid_acpc_align.inputs.convergence_threshold = [1e-06]
     rigid_acpc_align.inputs.collapse_output_transforms = True

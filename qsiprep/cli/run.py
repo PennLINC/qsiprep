@@ -267,6 +267,13 @@ def get_parser():
         action='store_true',
         help='do not use a random seed for skull-stripping - will ensure '
         'run-to-run replicability when used with --omp-nthreads 1')
+    g_ants.add_argument(
+        '--force-spatial-normalization', '--force_spatial_normalziation',
+        action='store_true',
+        help='ensures that spatial normalization is run, even if template '
+        'is not specified in --output-space. Useful if you plan to warp '
+        'atlases into subject space.'
+    )
 
     # FreeSurfer options
     g_fs = parser.add_argument_group('Specific options for FreeSurfer preprocessing')
@@ -703,6 +710,7 @@ def build_qsiprep_workflow(opts, retval):
         omp_nthreads=omp_nthreads,
         skull_strip_template=opts.skull_strip_template,
         skull_strip_fixed_seed=opts.skull_strip_fixed_seed,
+        force_spatial_normalization=opts.force_spatial_normalization,
         output_spaces=output_spaces,
         output_resolution=opts.output_resolution,
         template=opts.template,
