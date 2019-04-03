@@ -476,7 +476,7 @@ def main():
         sys.exit(int(errno > 0))
 
     # Run an additional workflow if preproc + recon are requested
-    opts.recon_input = output_dir
+    opts.recon_input = output_dir + "/qsiprep"
     with Manager() as mgr:
         retval = mgr.dict()
         p = Process(target=build_recon_workflow, args=(opts, retval))
@@ -779,7 +779,7 @@ def build_recon_workflow(opts, retval):
     logger = logging.getLogger('nipype.workflow')
 
     INIT_MSG = """
-    Running qsiprep version {version}:
+    Running qsirecon version {version}:
       * BIDS dataset path: {bids_dir}.
       * Participant list: {subject_list}.
       * Run identifier: {uuid}.

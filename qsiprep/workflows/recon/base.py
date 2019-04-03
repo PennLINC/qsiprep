@@ -151,10 +151,12 @@ def init_single_subject_wf(
         layout = None
     else:
         # If recon_input is specified without qsiprep, check if we can find the subject dir
-        if not op.exists(op.join(recon_input, "sub-"+subject_id)):
+        subject_dir = 'sub-' + subject_id
+        if not op.exists(op.join(recon_input, subject_dir)):
             qp_recon_input = op.join(recon_input, "qsiprep")
-            LOGGER.info("%s not in %s, trying recon_input=%s", recon_input, qp_recon_input)
-            if not op.exists(op.join(qp_recon_input, "sub-"+subject_id)):
+            LOGGER.info("%s not in %s, trying recon_input=%s",
+                        subject_dir, recon_input, qp_recon_input)
+            if not op.exists(op.join(qp_recon_input, subject_dir)):
                 raise Exception(
                     "Unable to find subject directory in %s or %s" % (
                         recon_input, qp_recon_input))

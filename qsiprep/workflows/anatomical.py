@@ -256,11 +256,17 @@ and used as T1w-reference throughout the workflow.
 
     # 3. Skull-stripping
     # Bias field correction is handled in skull strip workflows.
-    skullstrip_ants_wf = init_skullstrip_ants_wf(name='skullstrip_ants_wf',
-                                                 skull_strip_template=skull_strip_template,
-                                                 acpc_template=ref_img_brain,
-                                                 debug=debug,
-                                                 omp_nthreads=omp_nthreads)
+    if debug:
+        skullstrip_wf = init_skullstrip_afni_wf(name='skullstrip_wf',
+                                                acpc_template=ref_img_brain,
+                                                debug=debug,
+                                                omp_nthreads=omp_nthreads)
+    else:
+        skullstrip_wf = init_skullstrip_ants_wf(name='skullstrip_wf',
+                                                skull_strip_template=skull_strip_template,
+                                                acpc_template=ref_img_brain,
+                                                debug=debug,
+                                                omp_nthreads=omp_nthreads)
 
     # 3a. Create the output reference grid_image
     reference_grid_wf = init_output_grid_wf(voxel_size=output_resolution,
@@ -268,8 +274,8 @@ and used as T1w-reference throughout the workflow.
 
     workflow.connect([
         (inputnode, anat_template_wf, [('t1w', 'inputnode.t1w')]),
-        (anat_template_wf, skullstrip_ants_wf, [('outputnode.t1_template', 'inputnode.in_file')]),
-        (skullstrip_ants_wf, outputnode, [('outputnode.bias_corrected', 't1_preproc')]),
+        (anat_template_wf, skullstrip_wf, [('outputnode.t1_template', 'inputnode.in_file')]),
+        (skullstrip_wf, outputnode, [('outputnode.bias_corrected', 't1_preproc')]),
         (anat_template_wf, outputnode, [
             ('outputnode.template_transforms', 't1_template_transforms')]),
         (buffernode, outputnode, [('t1_brain', 't1_brain'),
@@ -290,13 +296,13 @@ and used as T1w-reference throughout the workflow.
                 ('subject_id', 'inputnode.subject_id')]),
 
             # Change so it's using ACPC (or not) input
-            (skullstrip_ants_wf, surface_recon_wf, [
+            (skullstrip_wf, surface_recon_wf, [
                 ('outputnode.bias_corrected', 'inputnode.t1w'),
                 ('outputnode.out_file', 'inputnode.skullstripped_t1'),
                 ('outputnode.out_segs', 'inputnode.ants_segs'),
                 ('outputnode.bias_corrected', 'inputnode.corrected_t1')]),
 
-            (skullstrip_ants_wf, applyrefined, [
+            (skullstrip_wf, applyrefined, [
                 ('outputnode.bias_corrected', 'in_file')]),
             (surface_recon_wf, applyrefined, [
                 ('outputnode.out_brainmask', 'mask_file')]),
@@ -314,7 +320,7 @@ and used as T1w-reference throughout the workflow.
         ])
     else:
         workflow.connect([
-            (skullstrip_ants_wf, buffernode, [
+            (skullstrip_wf, buffernode, [
                 ('outputnode.out_file', 't1_brain'),
                 ('outputnode.out_mask', 't1_mask')]),
         ])
@@ -388,7 +394,7 @@ and used as T1w-reference throughout the workflow.
 
         workflow.connect([
             (inputnode, t1_2_mni, [('roi', 'lesion_mask')]),
-            (skullstrip_ants_wf, t1_2_mni, [('outputnode.bias_corrected', 'moving_image')]),
+            (skullstrip_wf, t1_2_mni, [('outputnode.bias_corrected', 'moving_image')]),
             (buffernode, t1_2_mni, [('t1_mask', 'moving_mask')]),
             (buffernode, mni_mask, [('t1_mask', 'input_image')]),
             (t1_2_mni, mni_mask, [('composite_transform', 'transforms')]),
@@ -415,7 +421,7 @@ and used as T1w-reference throughout the workflow.
             (('t1w', fix_multi_T1w_source_name), 'inputnode.source_file')]),
         (anat_template_wf, anat_reports_wf, [
             ('outputnode.out_report', 'inputnode.t1_conform_report')]),
-        (skullstrip_ants_wf, seg_rpt, [
+        (skullstrip_wf, seg_rpt, [
             ('outputnode.bias_corrected', 'in_file')]),
         (t1_seg, seg2msks, [('tissue_class_map', 'in_file')]),
         (seg2msks, seg_rpt, [('out', 'in_rois')]),
@@ -623,8 +629,8 @@ def init_skullstrip_ants_wf(skull_strip_template, debug, omp_nthreads, acpc_temp
         :graph2use: orig
         :simple_form: yes
 
-        from qsiprep.workflows.anatomical import init_skullstrip_ants_wf
-        wf = init_skullstrip_ants_wf(skull_strip_template='OASIS',
+        from qsiprep.workflows.anatomical import init_skullstrip_wf
+        wf = init_skullstrip_wf(skull_strip_template='OASIS',
                                      debug=False,
                                      omp_nthreads=1,
                                      acpc_template='test')
@@ -759,6 +765,142 @@ The T1w-reference was then skull-stripped using `antsBrainExtraction.sh`
         (t1_skull_strip, rigid_acpc_resample_mask, [('BrainExtractionMask', 'input_image')]),
         (t1_skull_strip, rigid_acpc_resample_seg, [
             ('BrainExtractionSegmentation', 'input_image')]),
+        (rigid_acpc_resample_brain, outputnode, [('output_image', 'out_file')]),
+        (rigid_acpc_resample_head, outputnode, [('output_image', 'bias_corrected')]),
+        (rigid_acpc_resample_mask, outputnode, [('output_image', 'out_mask')]),
+        (rigid_acpc_resample_seg, outputnode, [('output_image', 'out_segs')]),
+    ])
+
+    return workflow
+
+
+def init_skullstrip_afni_wf(debug, omp_nthreads, acpc_template, name='skullstrip_afni_wf'):
+    r"""
+    This workflow performs skull-stripping using AFNI
+
+    .. workflow::
+        :graph2use: orig
+        :simple_form: yes
+
+        from qsiprep.workflows.anatomical import init_skullstrip_afni_wf
+        wf = init_skullstrip_afni_wf(debug=False,
+                                     omp_nthreads=1)
+
+    Parameters
+
+        debug : bool
+            Enable debugging outputs
+        omp_nthreads : int
+            Maximum number of threads an individual process may use
+        acpc_template: str
+            Path to an image that will be used for Rigid ACPC alignment
+        skull_strip_fixed_seed : bool
+            Do not use a random seed for skull-stripping - will ensure
+            run-to-run replicability when used with --omp-nthreads 1 (default: ``False``)
+
+    Inputs
+
+        in_file
+            T1-weighted structural image to skull-strip
+
+    Outputs
+
+        bias_corrected
+            Bias-corrected ``in_file``, before skull-stripping
+        out_file
+            Skull-stripped ``in_file``
+        out_mask
+            Binary mask of the skull-stripped ``in_file``
+        out_report
+            Reportlet visualizing quality of skull-stripping
+    """
+    from ..niworkflows.data.getters import get_template, TEMPLATE_ALIASES
+
+    workflow = Workflow(name=name)
+    workflow.__desc__ = """\
+The T1w-reference was then skull-stripped using `3dSkullStrip`
+(AFNI {ants_ver}).
+""".format(ants_ver=BrainExtraction().version or '<ver>')
+
+    # For docs building
+    if acpc_template == "test":
+        acpc_template = "brain_template"
+
+    inputnode = pe.Node(niu.IdentityInterface(fields=['in_file']),
+                        name='inputnode')
+    outputnode = pe.Node(
+        niu.IdentityInterface(fields=[
+            'bias_corrected', 'out_file', 'out_mask', 'out_segs', 'out_report']),
+        name='outputnode')
+
+    inu_n4 = pe.Node(
+        ants.N4BiasFieldCorrection(dimension=3, save_bias=True, num_threads=omp_nthreads),
+        n_procs=omp_nthreads,
+        name='inu_n4')
+
+    skullstrip = pe.Node(fsl.BET(output_type="NIFTI_GZ", mask=True), name='skullstrip')
+
+    workflow.connect([
+        (inputnode, inu_n4, [('in_file', 'input_image')]),
+        (inu_n4, skullstrip, [('output_image', 'in_file')]),
+    ])
+
+    # Get everything in ACPC before sending to output
+    rigid_acpc_align = pe.Node(ants.Registration(), name='rigid_acpc_align', n_procs=omp_nthreads)
+    rigid_acpc_align.inputs.metric = ["Mattes"]
+    rigid_acpc_align.inputs.transforms = ["Rigid"]
+    rigid_acpc_align.inputs.shrink_factors = [[8, 4, 2, 1]]
+    rigid_acpc_align.inputs.smoothing_sigmas = [[7., 3., 1., 0.]]
+    rigid_acpc_align.inputs.sigma_units = ["vox"]
+    rigid_acpc_align.inputs.sampling_strategy = ['Random']
+    rigid_acpc_align.inputs.sampling_percentage = [0.25]
+    rigid_acpc_align.inputs.radius_or_number_of_bins = [32]
+    rigid_acpc_align.inputs.initial_moving_transform_com = 1
+    rigid_acpc_align.inputs.interpolation = 'LanczosWindowedSinc'
+    rigid_acpc_align.inputs.dimension = 3
+    rigid_acpc_align.inputs.winsorize_lower_quantile = 0.025
+    rigid_acpc_align.inputs.winsorize_upper_quantile = 0.975
+    rigid_acpc_align.inputs.number_of_iterations = [[10000, 1000, 10000, 10000]]
+    rigid_acpc_align.inputs.transform_parameters = [[0.2]]
+    rigid_acpc_align.inputs.convergence_threshold = [1e-06]
+    rigid_acpc_align.inputs.collapse_output_transforms = True
+    rigid_acpc_align.inputs.write_composite_transform = False
+    rigid_acpc_align.inputs.output_warped_image = True
+    rigid_acpc_align.inputs.fixed_image = acpc_template
+    # Resampling
+    rigid_acpc_resample_brain = pe.Node(
+        ants.ApplyTransforms(reference_image=acpc_template,
+                             input_image_type=0,
+                             interpolation='LanczosWindowedSinc'),
+        name='rigid_acpc_resample_brain')
+    rigid_acpc_resample_head = pe.Node(
+        ants.ApplyTransforms(reference_image=acpc_template,
+                             input_image_type=0,
+                             interpolation='LanczosWindowedSinc'),
+        name='rigid_acpc_resample_head')
+    rigid_acpc_resample_seg = pe.Node(
+        ants.ApplyTransforms(reference_image=acpc_template,
+                             input_image_type=0,
+                             interpolation='MultiLabel'),
+        name='rigid_acpc_resample_seg')
+    rigid_acpc_resample_mask = pe.Node(
+        ants.ApplyTransforms(reference_image=acpc_template,
+                             input_image_type=0,
+                             interpolation='MultiLabel'),
+        name='rigid_acpc_resample_mask')
+
+    workflow.connect([
+        (inu_n4, rigid_acpc_align, [('output_image', 'moving_image')]),
+        # Resampling
+        (rigid_acpc_align, rigid_acpc_resample_brain, [('forward_transforms', 'transforms')]),
+        (rigid_acpc_align, rigid_acpc_resample_head, [('forward_transforms', 'transforms')]),
+        (rigid_acpc_align, rigid_acpc_resample_mask, [('forward_transforms', 'transforms')]),
+        (rigid_acpc_align, rigid_acpc_resample_seg, [('forward_transforms', 'transforms')]),
+        (skullstrip, rigid_acpc_resample_brain, [('out_file', 'input_image')]),
+        (inu_n4, rigid_acpc_resample_head, [('output_image', 'input_image')]),
+        (skullstrip, rigid_acpc_resample_mask, [('mask_file', 'input_image')]),
+        (skullstrip, rigid_acpc_resample_seg, [
+            ('mask_file', 'input_image')]),
         (rigid_acpc_resample_brain, outputnode, [('output_image', 'out_file')]),
         (rigid_acpc_resample_head, outputnode, [('output_image', 'bias_corrected')]),
         (rigid_acpc_resample_mask, outputnode, [('output_image', 'out_mask')]),
