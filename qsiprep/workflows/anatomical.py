@@ -417,7 +417,7 @@ and used as T1w-reference throughout the workflow.
     seg_rpt = pe.Node(ROIsPlot(colors=['r', 'magenta', 'b', 'g']), name='seg_rpt')
     anat_reports_wf = init_anat_reports_wf(
         reportlets_dir=reportlets_dir, output_spaces=output_spaces, template=template,
-        freesurfer=freesurfer)
+        freesurfer=freesurfer, force_spatial_normalization=force_spatial_normalization)
     workflow.connect([
         (inputnode, anat_reports_wf, [
             (('t1w', fix_multi_T1w_source_name), 'inputnode.source_file')]),
@@ -441,10 +441,12 @@ and used as T1w-reference throughout the workflow.
             (t1_2_mni, anat_reports_wf, [('out_report', 'inputnode.t1_2_mni_report')]),
         ])
 
-    anat_derivatives_wf = init_anat_derivatives_wf(output_dir=output_dir,
-                                                   output_spaces=output_spaces,
-                                                   template=template,
-                                                   freesurfer=freesurfer)
+    anat_derivatives_wf = init_anat_derivatives_wf(
+        output_dir=output_dir,
+        output_spaces=output_spaces,
+        template=template,
+        freesurfer=freesurfer,
+        force_spatial_normalization=force_spatial_normalization)
 
     workflow.connect([
         (anat_template_wf, anat_derivatives_wf, [
@@ -1377,7 +1379,7 @@ def init_segs_to_native_wf(name='segs_to_native', segmentation='aseg'):
     return workflow
 
 
-def init_anat_reports_wf(reportlets_dir, output_spaces,
+def init_anat_reports_wf(reportlets_dir, output_spaces, force_spatial_normalization,
                          template, freesurfer, name='anat_reports_wf'):
     """
     Set up a battery of datasinks to store reports in the right location
@@ -1418,7 +1420,7 @@ def init_anat_reports_wf(reportlets_dir, output_spaces,
             (inputnode, ds_recon_report, [('source_file', 'source_file'),
                                           ('recon_report', 'in_file')])
         ])
-    if 'template' in output_spaces:
+    if 'template' in output_spaces or force_spatial_normalization:
         workflow.connect([
             (inputnode, ds_t1_2_mni_report, [('source_file', 'source_file'),
                                              ('t1_2_mni_report', 'in_file')])
@@ -1428,7 +1430,7 @@ def init_anat_reports_wf(reportlets_dir, output_spaces,
 
 
 def init_anat_derivatives_wf(output_dir, output_spaces, template, freesurfer,
-                             name='anat_derivatives_wf'):
+                             force_spatial_normalization, name='anat_derivatives_wf'):
     """
     Set up a battery of datasinks to store derivatives in the right location
     """
@@ -1551,7 +1553,7 @@ def init_anat_derivatives_wf(output_dir, output_spaces, template, freesurfer,
             (t1_name, ds_t1_fsaseg, [('out', 'source_file')]),
             (t1_name, ds_t1_fsparc, [('out', 'source_file')]),
         ])
-    if 'template' in output_spaces:
+    if 'template' in output_spaces or force_spatial_normalization:
         workflow.connect([
             (inputnode, ds_t1_mni_warp, [('t1_2_mni_forward_transform', 'in_file')]),
             (inputnode, ds_t1_mni_inv_warp, [('t1_2_mni_reverse_transform', 'in_file')]),
