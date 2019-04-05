@@ -29,6 +29,7 @@ src/
 
 # other
 work/**/*
+tests/*
 work
 out/**/*
 out/
