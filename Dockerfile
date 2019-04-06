@@ -99,13 +99,20 @@ RUN apt-get install -y --no-install-recommends \
                     freeglut3-dev \
                     mesa-utils \
   && apt-get clean \
-  && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
-  && mkdir /opt/dsi-studio \
+  && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+ARG DSI_SHA=af54c617d5b851f2000e5a4982c11b7b2b7496de
+ARG TIPL_SHA=c3293a8b89717284c571fd9cffb7d39d2f1f5b3a
+RUN mkdir /opt/dsi-studio \
   && cd /opt/dsi-studio \
-  && git clone -b master https://github.com/frankyeh/DSI-Studio.git src \
-  && curl -sSLO https://github.com/frankyeh/TIPL/archive/master.zip > master.zip \
-  && unzip master.zip \
-  && mv TIPL-master src/tipl \
+  && curl -sSLO https://github.com/frankyeh/DSI-Studio/archive/af54c617d5b851f2000e5a4982c11b7b2b7496de.zip \
+  && unzip af54c617d5b851f2000e5a4982c11b7b2b7496de.zip \
+  && mv DSI-Studio-af54c617d5b851f2000e5a4982c11b7b2b7496de src \
+  && rm -rf af54c617d5b851f2000e5a4982c11b7b2b7496de.zip \
+  && curl -sSLO https://github.com/frankyeh/TIPL/archive/c3293a8b89717284c571fd9cffb7d39d2f1f5b3a.zip \
+  && unzip c3293a8b89717284c571fd9cffb7d39d2f1f5b3a.zip \
+  && mv TIPL-c3293a8b89717284c571fd9cffb7d39d2f1f5b3a src/tipl \
+  && rm c3293a8b89717284c571fd9cffb7d39d2f1f5b3a.zip \
   && mkdir build && cd build \
   && qmake ../src && make \
   && cd /opt/dsi-studio \
