@@ -32,7 +32,7 @@ def init_b0_to_anat_registration_wf(mem_gb=3, omp_nthreads=1, write_report=True,
     **Parameters**
 
         mem_gb : float
-            Size of BOLD file in GB
+            Size of DWI file in GB
         omp_nthreads : int
             Maximum number of threads an individual process may use
         name : str
@@ -45,7 +45,7 @@ def init_b0_to_anat_registration_wf(mem_gb=3, omp_nthreads=1, write_report=True,
     **Inputs**
 
         ref_b0_brain
-            Reference image to which BOLD series is aligned
+            Reference image to which DWI series is aligned
             If ``fieldwarp == True``, ``ref_bold_brain`` should be unwarped
         t1_brain
             Skull-stripped ``t1_preproc``
@@ -64,7 +64,7 @@ def init_b0_to_anat_registration_wf(mem_gb=3, omp_nthreads=1, write_report=True,
         itk_b0_to_t1
             Affine transform from ``ref_bold_brain`` to T1 space (ITK format)
         itk_t1_to_b0
-            Affine transform from T1 space to BOLD space (ITK format)
+            Affine transform from T1 space to DWI space (ITK format)
         coreg_metric
             Mattes score from the coregistration
         fallback

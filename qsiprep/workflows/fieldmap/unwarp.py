@@ -206,7 +206,7 @@ def init_sdc_unwarp_wf(omp_nthreads, fmap_demean, debug, name='sdc_unwarp_wf'):
 def init_fmap_unwarp_report_wf(name='fmap_unwarp_report_wf', suffix='variant-hmcsdc_preproc'):
     """
     This workflow generates and saves a reportlet showing the effect of fieldmap
-    unwarping a BOLD image.
+    unwarping a DWI image.
 
     .. workflow::
         :graph2use: orig

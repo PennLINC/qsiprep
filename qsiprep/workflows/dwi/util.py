@@ -221,7 +221,7 @@ def init_enhance_and_skullstrip_dwi_wf(
 
 def init_skullstrip_b0_wf(name='skullstrip_b0_wf'):
     """
-    This workflow applies skull-stripping to a BOLD image.
+    This workflow applies skull-stripping to a DWI image.
 
     It is intended to be used on an image that has previously been
     bias-corrected with

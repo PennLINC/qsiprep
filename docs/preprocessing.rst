@@ -187,7 +187,7 @@ Confounds and "carpet"-plot on the visual reports
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 fMRI has been using a "carpet" visualization of the
-:abbr:`BOLD (blood-oxygen level-dependant)` time-series (see [Power2016]_),
+:abbr:`DWI (blood-oxygen level-dependant)` time-series (see [Power2016]_),
 but this type of plot does not make sense for DWI data. Instead, we plot
 the cross-correlation value between each raw slice and the HMC model signal
 resampled into that slice.
@@ -412,7 +412,7 @@ DWI reference image estimation
     wf = init_dwi_reference_wf(omp_nthreads=1)
 
 This workflow estimates a reference image for a DWI series. This
-procedure is different from the BOLD reference image workflow in the
+procedure is different from the DWI reference image workflow in the
 sense that true brain masking isn't usually done until later in the
 pipeline for DWIs. It performs a generous automasking and uses
 Dipy's histogram equalization on the b0 template generated during
