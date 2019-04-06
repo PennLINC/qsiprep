@@ -127,7 +127,6 @@ class RobustMNINormalization(BaseInterface):
         # Get a list of settings files.
         settings_files = self._get_settings()
         ants_args = self._get_ants_args()
-        assert 0
         if not isdefined(self.inputs.initial_moving_transform):
             NIWORKFLOWS_LOG.info('Estimating initial transform using AffineInitializer')
             init = AffineInitializer(
