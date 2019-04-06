@@ -227,6 +227,7 @@ class Conform(SimpleInterface):
 
     def _run_interface(self, runtime):
         # Load image, orient as RAS
+        raise Exception("This should not be called")
         fname = self.inputs.in_file
         orig_img = nb.load(fname)
         reoriented = nb.as_closest_canonical(orig_img)

@@ -168,7 +168,7 @@ jobs:
             - regression-v2-{{ epoch }}
             - regression-v2-
       - run:
-          name: Get truncated BOLD series
+          name: Get truncated DWI series
           command: |
             mkdir -p /tmp/data
             if [[ ! -d /tmp/data/qsiprep_bold_truncated ]]; then
@@ -176,7 +176,7 @@ jobs:
                 -O qsiprep_bold_truncated.tar.gz "https://osf.io/286yr/download"
               tar xvzf qsiprep_bold_truncated.tar.gz -C /tmp/data/
             else
-              echo "Truncated BOLD series were cached"
+              echo "Truncated DWI series were cached"
             fi
       - run:
           name: Get pre-computed masks

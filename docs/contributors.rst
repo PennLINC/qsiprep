@@ -151,7 +151,7 @@ An example of how this works is shown here: ::
 
     workflow = Workflow(name=name)
     workflow.__desc__ = """\
-    Head-motion parameters with respect to the BOLD reference
+    Head-motion parameters with respect to the DWI reference
     (transformation matrices, and six corresponding rotation and translation
     parameters) are estimated before any spatiotemporal filtering using
     `mcflirt` [FSL {fsl_ver}, @mcflirt].

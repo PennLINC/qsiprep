@@ -52,7 +52,7 @@ class RobustMNINormalizationInputSpec(BaseInterfaceInputSpec):
     flavor = traits.Enum('precise', 'testing', 'fast', usedefault=True,
                          desc='registration settings parameter set')
     # Template orientation.
-    orientation = traits.Enum('RAS', 'LAS', mandatory=True, usedefault=True,
+    orientation = traits.Enum('LPS', mandatory=True, usedefault=True,
                               desc='modify template orientation (should match input image)')
     # Modality of the reference image.
     reference = traits.Enum('T1w', 'T2w', 'boldref', 'PDw', mandatory=True, usedefault=True,
@@ -127,7 +127,7 @@ class RobustMNINormalization(BaseInterface):
         # Get a list of settings files.
         settings_files = self._get_settings()
         ants_args = self._get_ants_args()
-
+        assert 0
         if not isdefined(self.inputs.initial_moving_transform):
             NIWORKFLOWS_LOG.info('Estimating initial transform using AffineInitializer')
             init = AffineInitializer(

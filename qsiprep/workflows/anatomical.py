@@ -385,11 +385,9 @@ and used as T1w-reference throughout the workflow.
     )
 
     if 'template' in output_spaces or force_spatial_normalization:
-        template_str = TEMPLATE_MAP[template]
-        # Get the template image
-        ref_img = pkgr('qsiprep', 'data/mni_1mm_t1w_lps.nii.gz')
-
-        # t1_2_mni.inputs.template = 'MNI152NLin2009cAsym'
+        t1_2_mni.inputs.template = 'MNI152NLin2009cAsym'
+        t1_2_mni.inputs.reference_image = ref_img_brain
+        t1_2_mni.inputs.orientation = "LPS"
         mni_mask.inputs.reference_image = ref_img
         mni_seg.inputs.reference_image = ref_img
         mni_tpms.inputs.reference_image = ref_img
