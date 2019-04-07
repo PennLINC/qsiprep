@@ -101,18 +101,18 @@ RUN apt-get install -y --no-install-recommends \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-ARG DSI_SHA=af54c617d5b851f2000e5a4982c11b7b2b7496de
-ARG TIPL_SHA=c3293a8b89717284c571fd9cffb7d39d2f1f5b3a
+ARG DSI_SHA=1685bfeb4df194fa3e907f4ee032691d82aeb3ba
+ARG TIPL_SHA=b01ec5a46bdec7d13506d23e97b91fd0840c2b09
 RUN mkdir /opt/dsi-studio \
   && cd /opt/dsi-studio \
-  && curl -sSLO https://github.com/frankyeh/DSI-Studio/archive/af54c617d5b851f2000e5a4982c11b7b2b7496de.zip \
-  && unzip af54c617d5b851f2000e5a4982c11b7b2b7496de.zip \
-  && mv DSI-Studio-af54c617d5b851f2000e5a4982c11b7b2b7496de src \
-  && rm -rf af54c617d5b851f2000e5a4982c11b7b2b7496de.zip \
-  && curl -sSLO https://github.com/frankyeh/TIPL/archive/c3293a8b89717284c571fd9cffb7d39d2f1f5b3a.zip \
-  && unzip c3293a8b89717284c571fd9cffb7d39d2f1f5b3a.zip \
-  && mv TIPL-c3293a8b89717284c571fd9cffb7d39d2f1f5b3a src/tipl \
-  && rm c3293a8b89717284c571fd9cffb7d39d2f1f5b3a.zip \
+  && curl -sSLO https://github.com/frankyeh/DSI-Studio/archive/${DSI_SHA}.zip \
+  && unzip ${DSI_SHA}.zip \
+  && mv DSI-Studio-${DSI_SHA} src \
+  && rm -rf ${DSI_SHA}.zip \
+  && curl -sSLO https://github.com/frankyeh/TIPL/archive/${TIPL_SHA}.zip \
+  && unzip ${TIPL_SHA}.zip \
+  && mv TIPL-${TIPL_SHA} src/tipl \
+  && rm ${TIPL_SHA}.zip \
   && mkdir build && cd build \
   && qmake ../src && make \
   && cd /opt/dsi-studio \
@@ -126,6 +126,7 @@ RUN mkdir /opt/dsi-studio \
   && rm -rf /opt/dsi-studio/src /opt/dsi-studio/build
 
 # Install mrtrix3 from source
+ARG MRTRIX_SHA=5d6b3a6ffc6ee651151779539c8fd1e2e03fad81
 ENV PATH="/opt/mrtrix3-latest/bin:$PATH"
 RUN apt-get update -qq \
     && apt-get install -y -q --no-install-recommends \
@@ -139,8 +140,11 @@ RUN apt-get update -qq \
            zlib1g-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
-    && mkdir -p /opt/mrtrix3-latest \
-    && git clone https://github.com/MRtrix3/mrtrix3.git /opt/mrtrix3-latest \
+    && cd /opt \
+    && curl -sSLO https://github.com/MRtrix3/mrtrix3/archive/${MRTRIX_SHA}.zip \
+    && unzip ${MRTRIX_SHA}.zip \
+    && mv mrtrix3-${MRTRIX_SHA} /opt/mrtrix3-latest \
+    && rm ${MRTRIX_SHA}.zip \
     && cd /opt/mrtrix3-latest \
     && ./configure \
     && echo "Compiling MRtrix3 ..." \
