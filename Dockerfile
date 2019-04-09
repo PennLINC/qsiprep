@@ -151,7 +151,7 @@ RUN apt-get update -qq \
     && ./build
 
 # Installing ANTs latest from source
-ARG ANTS_SHA=c56a0d8ccf683731d0b93f7a9358d03939d1238b
+ARG ANTS_SHA=51855944553a73960662d3e4f7c1326e584b23b2
 ADD https://cmake.org/files/v3.11/cmake-3.11.4-Linux-x86_64.sh /cmake-3.11.4-Linux-x86_64.sh
 ENV ANTSPATH="/opt/ants-latest/bin" \
     PATH="/opt/ants-latest/bin:$PATH" \
