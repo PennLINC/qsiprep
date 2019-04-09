@@ -36,7 +36,7 @@ def anatomical_pipeline(bids_data):
 def test_anat(anatomical_pipeline):
     assert True
 
-"""
+
 def test_buds(anatomical_pipeline, tmpdir):
     buds_opts = get_default_cli_args()
     buds_opts.work_dir = tmpdir
@@ -52,7 +52,7 @@ def test_buds(anatomical_pipeline, tmpdir):
 
         with pytest.raises(SystemExit):
             cli_main()
-"""
+
 
 def test_all_separate_no_sdc(anatomical_pipeline, tmpdir):
     all_separate_no_sdc_opts = get_default_cli_args()
@@ -70,7 +70,7 @@ def test_all_separate_no_sdc(anatomical_pipeline, tmpdir):
         with pytest.raises(SystemExit):
             cli_main()
 
-"""
+
 def test_all_separate_syn_sdc(anatomical_pipeline, tmpdir):
     all_separate_syn_opts = get_default_cli_args()
     all_separate_syn_opts.work_dir = tmpdir
@@ -87,4 +87,3 @@ def test_all_separate_syn_sdc(anatomical_pipeline, tmpdir):
 
         # with pytest.raises(SystemExit):
         cli_main()
-"""

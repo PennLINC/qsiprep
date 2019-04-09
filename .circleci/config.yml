@@ -15,10 +15,10 @@ jobs:
             apk add --no-cache pigz python3
       - restore_cache:
           keys:
-            - docker-v2-{{ .Branch }}-{{ epoch }}
-            - docker-v2-{{ .Branch }}-
-            - docker-v2-master-
-            - docker-v2-
+            - docker-v1-{{ .Branch }}-{{ epoch }}
+            - docker-v1-{{ .Branch }}-
+            - docker-v1-master-
+            - docker-v1-
           paths:
             - /tmp/cache/docker.tar.gz
             - /tmp/cache/ubuntu.tar.gz
@@ -36,7 +36,7 @@ jobs:
             fi
       - run:
           name: Build Docker image
-          no_output_timeout: 60m
+          no_output_timeout: 2h
           command: |
             # Get version, update files.
             THISVERSION=$( python3 get_version.py )
@@ -83,119 +83,55 @@ jobs:
     steps:
       - restore_cache:
           keys:
-            - data-v5-{{ epoch }}
-            - data-v5-
+            - data-v1-{{ epoch }}
+            - data-v1-
       - run:
-          name: Get test data from ds000005
+          name: Get single scan from downsampled CS-DSI
           command: |
             mkdir -p /tmp/data
-            if [[ ! -d /tmp/data/ds005 ]]; then
+            if [[ ! -d /tmp/data/DSCSDSI ]]; then
               wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
-                -O ds005_downsampled.tar.gz "https://files.osf.io/v1/resources/fvuh8/providers/osfstorage/57f32a429ad5a101f977eb75"
-              tar xvzf ds005_downsampled.tar.gz -C /tmp/data/
+                -O dscsdsi_single.tar.xz "https://upenn.box.com/shared/static/4dolh6uiiy2g2ct0vdk8drs106gayt8o.xz"
+              tar xvfJ dscsdsi_single.tar.xz -C /tmp/data/
             else
-              echo "Dataset ds000005 was cached"
+              echo "Dataset DSCSDSI was cached"
             fi
       - run:
-          name: Get test data from ds000054
+          name: Get BUDS scans from downsampled CS-DSI
           command: |
-            if [[ ! -d /tmp/data/ds054 ]]; then
+            if [[ ! -d /tmp/data/DSCSDSI_BUDS ]]; then
               wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
-                -O ds054_downsampled.tar.gz "https://files.osf.io/v1/resources/fvuh8/providers/osfstorage/57f32c22594d9001ef91bf9e"
-              tar xvzf ds054_downsampled.tar.gz -C /tmp/data/
+                -O dscsdsi_buds.tar.xz "https://upenn.box.com/shared/static/uxbgof3l7tq0n6ofltirifq557hyconn.xz"
+              tar xvfJ dscsdsi_buds.tar.xz -C /tmp/data/
             else
-              echo "Dataset ds000054 was cached"
-            fi
-      - run:
-          name: Get test data from ds000210
-          command: |
-            if [[ ! -d /tmp/data/ds210 ]]; then
-              wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
-                -O ds210_downsampled.tar.gz "https://files.osf.io/v1/resources/fvuh8/providers/osfstorage/5ae9e37b9a64d7000ce66c21"
-              tar xvzf ds210_downsampled.tar.gz -C /tmp/data/
-            else
-              echo "Dataset ds000210 was cached"
-            fi
-      - run:
-          name: Get FreeSurfer derivatives for ds000005
-          command: |
-            if [[ ! -d /tmp/ds005/derivatives/freesurfer ]]; then
-              mkdir -p /tmp/ds005/derivatives
-              wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
-                -O ds005_derivatives_freesurfer.tar.gz "https://files.osf.io/v1/resources/fvuh8/providers/osfstorage/58fe59eb594d900250960180"
-              tar xvzf ds005_derivatives_freesurfer.tar.gz -C /tmp/ds005/derivatives
-            else
-              echo "FreeSurfer derivatives of ds000005 were cached"
+              echo "Dataset DSCSDSI_BUDS was cached"
             fi
       - run:
           name: Store FreeSurfer license file
           command: |
             mkdir -p /tmp/fslicense
             cd /tmp/fslicense
-            echo "cHJpbnRmICJrcnp5c3p0b2YuZ29yZ29sZXdza2lAZ21haWwuY29tXG41MTcyXG4gKkN2dW12RVYzelRmZ1xuRlM1Si8yYzFhZ2c0RVxuIiA+IGxpY2Vuc2UudHh0Cg==" | base64 -d | sh
+            echo "cHJpbnRmICJtYXR0aGV3LmNpZXNsYWtAcHN5Y2gudWNzYi5lZHVcbjIwNzA2XG4gKkNmZVZkSDVVVDhyWVxuIEZTQllaLlVrZVRJQ3dcbiIgPiBsaWNlbnNlLnR4dAo=" | base64 -d | sh
       - run:
           name: Create Nipype config files
           command: |
-            mkdir -p /tmp/ds005 /tmp/ds054 /tmp/ds210
-            printf "[execution]\nstop_on_first_crash = true\n" > /tmp/ds005/nipype.cfg
-            echo "poll_sleep_duration = 0.01" >> /tmp/ds005/nipype.cfg
-            echo "hash_method = content" >> /tmp/ds005/nipype.cfg
-            cp /tmp/ds005/nipype.cfg /tmp/ds054/nipype.cfg
-            cp /tmp/ds005/nipype.cfg /tmp/ds210/nipype.cfg
+            mkdir -p /tmp/DSCSDSI_BUDS /tmp/DSCSDSI
+            printf "[execution]\nstop_on_first_crash = true\n" > /tmp/DSCSDSI/nipype.cfg
+            echo "poll_sleep_duration = 0.01" >> /tmp/DSCSDSI/nipype.cfg
+            echo "hash_method = content" >> /tmp/DSCSDSI/nipype.cfg
+            cp /tmp/DSCSDSI/nipype.cfg /tmp/DSCSDSI_BUDS/nipype.cfg
       - persist_to_workspace:
           root: /tmp
           paths:
             - data
             - fslicense
-            - ds005/nipype.cfg
-            - ds005/derivatives
-            - ds054/nipype.cfg
-            - ds210/nipype.cfg
+            - DSCSDSI/nipype.cfg
+            - DSCSDSI_BUDS/nipype.cfg
       - save_cache:
-         key: data-v5-{{ epoch }}
+         key: data-v1-{{ epoch }}
          paths:
             - /tmp/data
-            - /tmp/ds005/derivatives/freesurfer
 
-  get_regression_data:
-    machine:
-      # Ubuntu 14.04 with Docker 17.10.0-ce
-      image: circleci/classic:201711-01
-    working_directory: /home/circleci/data
-    steps:
-      - restore_cache:
-          keys:
-            - regression-v2-{{ epoch }}
-            - regression-v2-
-      - run:
-          name: Get truncated DWI series
-          command: |
-            mkdir -p /tmp/data
-            if [[ ! -d /tmp/data/qsiprep_bold_truncated ]]; then
-              wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
-                -O qsiprep_bold_truncated.tar.gz "https://osf.io/286yr/download"
-              tar xvzf qsiprep_bold_truncated.tar.gz -C /tmp/data/
-            else
-              echo "Truncated DWI series were cached"
-            fi
-      - run:
-          name: Get pre-computed masks
-          command: |
-            if [[ ! -d /tmp/data/qsiprep_bold_mask ]]; then
-              wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
-                -O qsiprep_bold_mask.tar.gz "https://osf.io/s4f7b/download"
-              tar xvzf qsiprep_bold_mask.tar.gz -C /tmp/data/
-            else
-              echo "Pre-computed masks were cached"
-            fi
-      - persist_to_workspace:
-          root: /tmp
-          paths:
-            - data
-      - save_cache:
-         key: regression-v2-{{ epoch }}
-         paths:
-            - /tmp/data
 
   update_cache:
     machine:
@@ -206,137 +142,15 @@ jobs:
       - attach_workspace:
           at: /tmp
       - save_cache:
-         key: docker-v2-{{ .Branch }}-{{ epoch }}
+         key: docker-v1-{{ .Branch }}-{{ epoch }}
          paths:
             - /tmp/cache/docker.tar.gz
 
-  test_pytest:
+
+  DSCSDSI:
     machine:
       image: circleci/classic:201711-01
-    working_directory: /tmp/src/qsiprep
-    steps:
-      - checkout:
-          path: /home/circleci/src/qsiprep
-      - run:
-          name: Check whether build should be skipped
-          command: |
-            cd /home/circleci/src/qsiprep
-            if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?tests\]' )" != "" ]]; then
-              echo "Skipping pytest job"
-              circleci step halt
-            fi
-      - attach_workspace:
-          at: /tmp
-      - run:
-          name: Check PyPi preconditions
-          command: |
-            pip install "setuptools>=27.0" cython numpy twine future docutils
-            python setup.py check -r -s
-            python setup.py sdist
-      - run:
-          name: Load Docker image layer cache
-          no_output_timeout: 30m
-          command: |
-            docker info
-            set +o pipefail
-            if [ -f /tmp/cache/docker.tar.gz ]; then
-              sudo apt update && sudo apt -y install pigz
-              pigz -d --stdout /tmp/cache/docker.tar.gz | docker load
-              docker images
-            fi
-      - run:
-          name: Run qsiprep tests
-          no_output_timeout: 2h
-          command: |
-            mkdir /tmp/data/reports && \
-            docker run -ti --rm=false \
-              -v /tmp/data:/tmp/data \
-              -e qsiprep_REGRESSION_SOURCE=/tmp/data/qsiprep_bold_truncated \
-              -e qsiprep_REGRESSION_TARGETS=/tmp/data/qsiprep_bold_mask \
-              -e qsiprep_REGRESSION_REPORTS=/tmp/data/reports \
-              --entrypoint="py.test" pennbbl/qsiprep:latest \
-              /root/src/qsiprep/ \
-              -svx --doctest-modules --ignore=/root/src/qsiprep/docs --ignore=setup.py
-      - run:
-          name: Package new masks
-          no_output_timeout: 10m
-          working_directory: /tmp/data/reports
-          command: |
-            tar cfz qsiprep_bold_mask.tar.gz qsiprep_bold_mask/*/*.nii.gz
-      - run:
-          name: Test qsiprep-wrapper (Python 2)
-          command: |
-            export PY2=$(pyenv versions | grep '2\.' |
-                         sed -e 's/.* 2\./2./' -e 's/ .*//')
-            pyenv local $PY2
-            echo -n "Python version: "
-            python --version
-            pip install --upgrade wrapper/
-            which qsiprep-docker
-            qsiprep-docker -i pennbbl/qsiprep:latest --help
-            qsiprep-docker -i pennbbl/qsiprep:latest --version
-      - run:
-          name: Test qsiprep-wrapper (Python 3)
-          command: |
-            export PY3=$(pyenv versions | grep '3\.' |
-                         sed -e 's/.* 3\./3./' -e 's/ .*//')
-            pyenv local $PY3
-            echo -n "Python version: "
-            python --version
-            pip install --upgrade wrapper/
-            which qsiprep-docker
-            qsiprep-docker -i pennbbl/qsiprep:latest --help
-            qsiprep-docker -i pennbbl/qsiprep:latest --version
-      - store_artifacts:
-          path: /tmp/data/reports
-
-
-  build_docs:
-    machine:
-      image: circleci/classic:201711-01
-    working_directory: /home/circleci/out/docs
-    steps:
-      - checkout:
-          path: /home/circleci/src/qsiprep
-      - run:
-          name: Check whether build should be skipped
-          command: |
-            cd /home/circleci/src/qsiprep
-            if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?docs\]' )" != "" ]]; then
-              echo "Skipping pytest job"
-              circleci step halt
-            fi
-      - attach_workspace:
-          at: /tmp
-      - run:
-          name: Load Docker image layer cache
-          no_output_timeout: 30m
-          command: |
-            docker info
-            set +o pipefail
-            if [ -f /tmp/cache/docker.tar.gz ]; then
-              sudo apt update && sudo apt -y install pigz
-              pigz -d --stdout /tmp/cache/docker.tar.gz | docker load
-              docker images
-            fi
-      - run:
-          name: Build qsiprep documentation
-          no_output_timeout: 2h
-          command: |
-            docker run -ti --rm=false -v $PWD:/_build_html \
-              --entrypoint=sphinx-build pennbbl/qsiprep:latest \
-              -T -E -b html -d _build/doctrees-readthedocs -W -D \
-              language=en /root/src/qsiprep/docs/ /_build_html 2>&1 \
-              | tee $PWD/builddocs.log
-            cat $PWD/builddocs.log
-            grep -qv "ERROR" $PWD/builddocs.log
-      - store_artifacts:
-          path: /home/circleci/out/docs
-
-  ds005:
-    machine:
-      image: circleci/classic:201711-01
-    working_directory: /tmp/ds005
+    working_directory: /tmp/DSCSDSI
     environment:
       - FS_LICENSE: /tmp/fslicense/license.txt
     steps:
@@ -346,22 +160,22 @@ jobs:
           name: Check whether build should be skipped
           command: |
             cd /home/circleci/src/qsiprep
-            if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?ds005\]' )" != "" ]]; then
-              echo "Skipping ds000005 build"
+            if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?DSCSDSI\]' )" != "" ]]; then
+              echo "Skipping DSCSDSI build"
               circleci step halt
             fi
       - attach_workspace:
           at: /tmp
       - restore_cache:
           keys:
-            - ds005-anat-v10-{{ .Branch }}-{{ epoch }}
-            - ds005-anat-v10-{{ .Branch }}
-            - ds005-anat-v10-master
-            - ds005-anat-v10-
+            - DSCSDSI-anat-v1-{{ .Branch }}-{{ epoch }}
+            - DSCSDSI-anat-v1-{{ .Branch }}
+            - DSCSDSI-anat-v1-master
+            - DSCSDSI-anat-v1-
       - run:
           name: Setting up test
           command: |
-            mkdir -p /tmp/ds005/derivatives && sudo setfacl -d -m group:$(id -gn):rwx /tmp/ds005/derivatives && sudo setfacl -m group:$(id -gn):rwx /tmp/ds005/derivatives
+            mkdir -p /tmp/DSCSDSI/derivatives && sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSCSDSI/derivatives && sudo setfacl -m group:$(id -gn):rwx /tmp/DSCSDSI/derivatives
             pip install future numpy
             pip install --upgrade /tmp/src/qsiprep/wrapper/
       - run:
@@ -376,352 +190,57 @@ jobs:
               docker images
             fi
       - run:
-          name: Run anatomical workflow on ds005
+          name: Run anatomical workflow on DSCSDSI
           no_output_timeout: 2h
           command: |
-            mkdir -p /tmp/ds005/work /tmp/ds005/derivatives
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/ds005/derivatives && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/ds005/derivatives
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/ds005/work && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/ds005/work
+            mkdir -p /tmp/DSCSDSI/work /tmp/DSCSDSI/derivatives
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSCSDSI/derivatives && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/DSCSDSI/derivatives
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSCSDSI/work && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/DSCSDSI/work
             qsiprep-docker -i pennbbl/qsiprep:latest \
                 -e qsiprep_DEV 1 -u $(id -u) \
-                --config $PWD/nipype.cfg -w /tmp/ds005/work \
-                /tmp/data/ds005 /tmp/ds005/derivatives participant \
+                --config $PWD/nipype.cfg -w /tmp/DSCSDSI/work \
+                --bids-dir /tmp/data/DSCSDSI --output-dir /tmp/DSCSDSI/derivatives \
+                --analysis-level participant \
+                --force-spatial-normalization \
                 --sloppy --write-graph --mem_mb 4096 \
-                --nthreads 2 --anat-only -vv
+                --nthreads 2 --anat-only -vv --output-resolution 5
       - save_cache:
-         key: ds005-anat-v10-{{ .Branch }}-{{ epoch }}
+         key: DSCSDSI-anat-v1-{{ .Branch }}-{{ epoch }}
          paths:
-            - /tmp/ds005/work
-            - /tmp/ds005/derivatives/qsiprep
+            - /tmp/DSCSDSI/work
+            - /tmp/DSCSDSI/derivatives/qsiprep
 
       - run:
-          name: Run full qsiprep on ds005
+          name: Run full qsiprep on DSCSDSI
           no_output_timeout: 2h
           command: |
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/ds005/derivatives && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/ds005/derivatives
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/ds005/work && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/ds005/work
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSCSDSI/derivatives && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/DSCSDSI/derivatives
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSCSDSI/work && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/DSCSDSI/work
             qsiprep-docker -i pennbbl/qsiprep:latest \
                 -e qsiprep_DEV 1 -u $(id -u) \
-                --config $PWD/nipype.cfg -w /tmp/ds005/work \
-                /tmp/data/ds005 /tmp/ds005/derivatives participant \
+                --config $PWD/nipype.cfg -w /tmp/DSCSDSI/work \
+                --bids-dir /tmp/data/DSCSDSI --output-dir /tmp/DSCSDSI/derivatives \
+                --analysis-level participant \
                 --sloppy --write-graph --use-syn-sdc --mem_mb 4096 \
-                --ignore-aroma-denoising-errors --use-aroma \
-                --output-space T1w template fsaverage5 \
-                --template-resampling-grid native \
-                --nthreads 2 --cifti-output -vv
+                --output-space T1w \
+                --force-spatial-normalization \
+                --output-resolution 5 \
+                --nthreads 2 -vv
       - run:
           name: Move intermediate results for second run
           command: |
-            mkdir -p /tmp/ds005/derivatives_partial
-            sudo mv /tmp/ds005/derivatives/freesurfer /tmp/ds005/derivatives_partial
-            sudo cp -a /tmp/ds005/work /tmp/ds005/work_partial
-      - run:
-          name: Checking outputs of full qsiprep run
-          command: |
-            mkdir -p /tmp/ds005/test
-            find /tmp/ds005/derivatives -path */figures -prune -o -name "*" -print | sed s+/tmp/ds005/derivatives/++ | sort > /tmp/ds005/test/outputs.out
-            diff /tmp/src/qsiprep/.circleci/ds005_outputs.txt /tmp/ds005/test/outputs.out
-            exit $?
-      - run:
-          name: Re-run qsiprep on single run of task data
-          no_output_timeout: 2h
-          command: |
-            rm /tmp/data/ds005/sub-01/func/*_run-02_*
-            qsiprep-docker -i pennbbl/qsiprep:latest \
-                -e qsiprep_DEV 1 -u $(id -u) \
-                --config $PWD/nipype.cfg -w /tmp/ds005/work \
-                /tmp/data/ds005 /tmp/ds005/derivatives_partial participant \
-                --sloppy --write-graph --use-syn-sdc --mem_mb 4096 \
-                --output-space T1w template fsaverage5 \
-                --ignore-aroma-denoising-errors --use-aroma \
-                --template-resampling-grid native \
-                --nthreads 2 --cifti-output -vv
-      - run:
-          name: Checking outputs of partial qsiprep run
-          command: |
-            mkdir -p /tmp/ds005/test
-            sudo rm -rf /tmp/ds005/derivatives_partial/freesurfer
-            find /tmp/ds005/derivatives_partial -path */figures -prune -o -name "*" -print | sed s+/tmp/ds005/derivatives_partial/++ | sort > /tmp/ds005/test/outputs.out
-            diff /tmp/src/qsiprep/.circleci/ds005_partial_outputs.txt /tmp/ds005/test/outputs.out
-            exit $?
-      - run:
-          name: Clean working directory
-          when: always
-          command: |
-            sudo chown $(id -un):$(id -gn) -R /tmp/ds005
-            find /tmp/ds005/work -not -name "*.svg" -not -name "*.html" -not -name "*.rst" \
-                -not -name "*.mat" -not -name "*.lta" -not -name "*.json" -not -name "*.txt" -not -name "*.pklz" -type f -delete
-            find /tmp/ds005/work_partial -not -name "*.svg" -not -name "*.html" -not -name "*.rst" \
-                -not -name "*.mat" -not -name "*.lta" -not -name "*.json" -not -name "*.txt" -not -name "*.pklz" -type f -delete
-            # tar cf - work_partial/ | pigz -2 -p 2 > ds005_workdir.tar.gz && sudo rm -fr work work_partial
+            mkdir -p /tmp/DSCSDSI/derivatives_partial
+            sudo mv /tmp/DSCSDSI/derivatives/freesurfer /tmp/DSCSDSI/derivatives_partial
+            sudo cp -a /tmp/DSCSDSI/work /tmp/DSCSDSI/work_partial
+
 
       - store_artifacts:
-          path: /tmp/ds005
+          path: /tmp/DSCSDSI
 
-  ds054:
-    machine:
-      image: circleci/classic:201711-01
-    working_directory: /tmp/ds054
-    environment:
-      - FS_LICENSE: /tmp/fslicense/license.txt
-    steps:
-      - checkout:
-          path: /home/circleci/src/qsiprep
-      - run:
-          name: Check whether build should be skipped
-          command: |
-            cd /home/circleci/src/qsiprep
-            if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?ds054\]' )" != "" ]]; then
-              echo "Skipping ds000054 build"
-              circleci step halt
-            fi
-      - attach_workspace:
-          at: /tmp
-      - restore_cache:
-          keys:
-            - ds054-anat-v7-{{ .Branch }}-{{ epoch }}
-            - ds054-anat-v7-{{ .Branch }}
-            - ds054-anat-v7-master
-            - ds054-anat-v7-
-      - run:
-          name: Setting up test
-          command: |
-            mkdir -p /tmp/ds054/derivatives && sudo setfacl -d -m group:$(id -gn):rwx /tmp/ds054/derivatives && sudo setfacl -m group:$(id -gn):rwx /tmp/ds054/derivatives
-            pip install future numpy
-            pip install --upgrade /tmp/src/qsiprep/wrapper/
-      - run:
-          name: Load Docker image layer cache
-          no_output_timeout: 30m
-          command: |
-            docker info
-            set +o pipefail
-            if [ -f /tmp/cache/docker.tar.gz ]; then
-              sudo apt update && sudo apt -y install pigz
-              pigz -d --stdout /tmp/cache/docker.tar.gz | docker load
-              docker images
-            fi
-      - run:
-          name: Run anatomical workflow on ds054
-          no_output_timeout: 2h
-          command: |
-            mkdir -p /tmp/ds054/work /tmp/ds054/derivatives
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/ds054/derivatives && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/ds054/derivatives
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/ds054/work && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/ds054/work
-            qsiprep-docker -i pennbbl/qsiprep:latest \
-                -e qsiprep_DEV 1 \
-                --config $PWD/nipype.cfg -w /tmp/ds054/work \
-                /tmp/data/ds054 /tmp/ds054/derivatives participant \
-                --fs-no-reconall --sloppy --write-graph \
-                --mem_mb 4096 --nthreads 2 --anat-only -vv
-      - save_cache:
-         key: ds054-anat-v7-{{ .Branch }}-{{ epoch }}
-         paths:
-            - /tmp/ds054/work
-            - /tmp/ds054/derivatives
-
-      - run:
-          name: Run full qsiprep on ds054
-          no_output_timeout: 2h
-          command: |
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/ds054/derivatives && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/ds054/derivatives
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/ds054/work && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/ds054/work
-            qsiprep-docker -i pennbbl/qsiprep:latest \
-                -e qsiprep_DEV 1 \
-                --config $PWD/nipype.cfg -w /tmp/ds054/work \
-                /tmp/data/ds054 /tmp/ds054/derivatives participant \
-                --fs-no-reconall --sloppy \
-                --output-space T1w template \
-                --template-resampling-grid 2mm \
-                --mem_mb 4096 --nthreads 2 -vv
-      - run:
-          name: Checking outputs of qsiprep
-          command: |
-            mkdir -p /tmp/ds054/test
-            find /tmp/ds054/derivatives -path */figures -prune -o -name "*" -print | sed s+/tmp/ds054/derivatives/++ | sort > /tmp/ds054/test/outputs.out
-            diff /tmp/src/qsiprep/.circleci/ds054_outputs.txt /tmp/ds054/test/outputs.out
-            exit $?
-      - run:
-          name: Generate report with one artificial error
-          command: |
-            sudo mv /tmp/ds054/derivatives/qsiprep/sub-100185.html \
-                    /tmp/ds054/derivatives/qsiprep/sub-100185_noerror.html
-            UUID="$(date '+%Y%m%d-%H%M%S_')$(uuidgen)"
-            mkdir -p /tmp/ds054/derivatives/qsiprep/sub-100185/log/$UUID/
-            cp /tmp/src/qsiprep/qsiprep/data/tests/crash_files/*.txt \
-                /tmp/ds054/derivatives/qsiprep/sub-100185/log/$UUID/
-            set +e
-            qsiprep-docker -i pennbbl/qsiprep:latest \
-                -e qsiprep_DEV 1 \
-                --config $PWD/nipype.cfg -w /tmp/ds054/work \
-                /tmp/data/ds054 /tmp/ds054/derivatives participant \
-                --fs-no-reconall --sloppy --write-graph \
-                --output-space T1w template \
-                --template-resampling-grid 2mm \
-                --reports-only --run-uuid $UUID
-            RET=$?
-            set -e
-            [[ "$RET" -eq "1" ]]
-      - run:
-          name: Clean-up work directory
-          when: always
-          command: |
-            sudo chown $(id -un):$(id -gn) -R /tmp/ds054
-            find /tmp/ds054/work -not -name "*.svg" -not -name "*.html" -not -name "*.rst" \
-                -not -name "*.mat" -not -name "*.lta" -not -name "*.json" -not -name "*.txt" -not -name "*.pklz" -type f -delete
-            # tar cf - work/ | pigz -2 -p 2 > ds054_workdir.tar.gz && sudo rm -fr work
-      - store_artifacts:
-          path: /tmp/ds054
-
-  ds210:
-    machine:
-      image: circleci/classic:201711-01
-    working_directory: /tmp/ds210
-    environment:
-      - FS_LICENSE: /tmp/fslicense/license.txt
-    steps:
-      - checkout:
-          path: /home/circleci/src/qsiprep
-      - run:
-          name: Check whether build should be skipped
-          command: |
-            cd /home/circleci/src/qsiprep
-            if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?ds210\]' )" != "" ]]; then
-              echo "Skipping ds000210 build"
-              circleci step halt
-            fi
-      - attach_workspace:
-          at: /tmp
-      - restore_cache:
-          keys:
-            - ds210-anat-v5-{{ .Branch }}-{{ epoch }}
-            - ds210-anat-v5-{{ .Branch }}
-            - ds210-anat-v5-master
-            - ds210-anat-v5-
-      - run:
-          name: Setting up test
-          command: |
-            mkdir -p /tmp/ds210/derivatives && sudo setfacl -d -m group:$(id -gn):rwx /tmp/ds210/derivatives && sudo setfacl -m group:$(id -gn):rwx /tmp/ds210/derivatives
-            pip install future numpy
-            pip install --upgrade /tmp/src/qsiprep/wrapper/
-      - run:
-          name: Load Docker image layer cache
-          no_output_timeout: 30m
-          command: |
-            docker info
-            set +o pipefail
-            if [ -f /tmp/cache/docker.tar.gz ]; then
-              sudo apt update && sudo apt -y install pigz
-              pigz -d --stdout /tmp/cache/docker.tar.gz | docker load
-              docker images
-            fi
-      - run:
-          name: Run anatomical workflow on ds000210
-          no_output_timeout: 2h
-          command: |
-            mkdir -p /tmp/ds210/work /tmp/ds210/derivatives
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/ds210/derivatives && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/ds210/derivatives
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/ds210/work && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/ds210/work
-            qsiprep-docker -i pennbbl/qsiprep:latest \
-                -e qsiprep_DEV 1 \
-                --config $PWD/nipype.cfg -w /tmp/ds210/work \
-                /tmp/data/ds210 /tmp/ds210/derivatives participant \
-                --fs-no-reconall --sloppy --write-graph \
-                --mem_mb 4096 --nthreads 2 --anat-only -vv
-      - save_cache:
-         key: ds210-anat-v5-{{ .Branch }}-{{ epoch }}
-         paths:
-            - /tmp/ds210/work
-            - /tmp/ds210/derivatives
-
-      - run:
-          name: Run full qsiprep on ds000210
-          no_output_timeout: 2h
-          command: |
-            qsiprep-docker -i pennbbl/qsiprep:latest \
-                -e qsiprep_DEV 1 \
-                --config $PWD/nipype.cfg -w /tmp/ds210/work \
-                /tmp/data/ds210 /tmp/ds210/derivatives participant \
-                --fs-no-reconall --t2s-coreg --use-syn-sdc \
-                --template-resampling-grid native \
-                --sloppy --write-graph --mem_mb 4096 --nthreads 2 -vv
-      - run:
-          name: Checking outputs of qsiprep
-          command: |
-            mkdir -p /tmp/ds210/test
-            find /tmp/ds210/derivatives -path */figures -prune -o -name "*" -print | sed s+/tmp/ds210/derivatives/++ | sort > /tmp/ds210/test/outputs.out
-            diff /tmp/src/qsiprep/.circleci/ds210_outputs.txt /tmp/ds210/test/outputs.out
-            exit $?
-      - run:
-          name: Clean-up work directory
-          when: always
-          command: |
-            sudo chown $(id -un):$(id -gn) -R /tmp/ds210
-            find /tmp/ds210/work -not -name "*.svg" -not -name "*.html" -not -name "*.rst" \
-                -not -name "*.mat" -not -name "*.lta" -not -name "*.json" -not -name "*.txt" -not -name "*.pklz" -type f -delete
-            # tar cf - work/ | pigz -2 -p 2 > ds054_workdir.tar.gz && sudo rm -fr work
-      - store_artifacts:
-          path: /tmp/ds210
-
-  deploy_docker:
-    machine:
-      image: circleci/classic:201711-01
-    working_directory: /tmp/src/qsiprep
-    steps:
-      - attach_workspace:
-          at: /tmp
-      - run:
-          name: Load Docker image layer cache
-          no_output_timeout: 30m
-          command: |
-            docker info
-            set +o pipefail
-            if [ -f /tmp/cache/docker.tar.gz ]; then
-              sudo apt update && sudo apt -y install pigz
-              pigz -d --stdout /tmp/cache/docker.tar.gz | docker load
-              docker images
-            fi
-      - run:
-          name: Deploy to Docker Hub
-          no_output_timeout: 40m
-          command: |
-            if [[ -n "$DOCKER_PASS" ]]; then
-              docker login -u $DOCKER_USER -p $DOCKER_PASS
-              docker tag pennbbl/qsiprep pennbbl/qsiprep:unstable
-              docker push pennbbl/qsiprep:unstable
-              if [[ -n "$CIRCLE_TAG" ]]; then
-                docker push pennbbl/qsiprep:latest
-                docker tag pennbbl/qsiprep pennbbl/qsiprep:$CIRCLE_TAG
-                docker push pennbbl/qsiprep:$CIRCLE_TAG
-              fi
-            fi
-
-  deploy_pypi:
-    machine:
-      image: circleci/classic:201711-01
-    working_directory: /tmp/src/qsiprep
-    steps:
-      - attach_workspace:
-          at: /tmp
-      - run:
-          name: Deploy to PyPi
-          command: |
-            pip install "setuptools>=27.0" cython numpy twine future docutils
-            echo "${CIRCLE_TAG}" > qsiprep/VERSION
-            python setup.py check -r -s
-            python setup.py sdist
-            twine upload dist/*
-            cd wrapper && python setup.py sdist
-            twine upload dist/*
 
 workflows:
   version: 2
@@ -741,28 +260,6 @@ workflows:
             tags:
               only: /.*/
 
-      - get_regression_data:
-          filters:
-            branches:
-              ignore:
-                - /docs?\/.*/
-                - /ds005\/.*/
-                - /ds054\/.*/
-                - /ds210\/.*/
-
-      - build_docs:
-          requires:
-            - build
-          filters:
-            branches:
-              ignore:
-                - /tests?\/.*/
-                - /ds005\/.*/
-                - /ds054\/.*/
-                - /ds210\/.*/
-            tags:
-              only: /.*/
-
       - update_cache:
           requires:
             - build
@@ -774,21 +271,8 @@ workflows:
             tags:
               only: /.*/
 
-      - test_pytest:
-          requires:
-            - build
-            - get_regression_data
-          filters:
-            branches:
-              ignore:
-                - /docs?\/.*/
-                - /ds005\/.*/
-                - /ds054\/.*/
-                - /ds210\/.*/
-            tags:
-              only: /.*/
 
-      - ds005:
+      - DSCSDSI:
           requires:
             - get_data
             - build
@@ -797,64 +281,5 @@ workflows:
               ignore:
                 - /docs?\/.*/
                 - /tests?\/.*/
-                - /ds054\/.*/
-                - /ds210\/.*/
-            tags:
-              only: /.*/
-
-      - ds054:
-          requires:
-            - get_data
-            - build
-          filters:
-            branches:
-              ignore:
-                - /docs?\/.*/
-                - /tests?\/.*/
-                - /ds005\/.*/
-                - /ds210\/.*/
-            tags:
-              only: /.*/
-
-      - ds210:
-          requires:
-            - get_data
-            - build
-          filters:
-            branches:
-              # only: /meepi.*/
-              ignore:
-                - /docs?\/.*/
-                - /tests?\/.*/
-                - /ds005\/.*/
-                - /ds054\/.*/
-            tags:
-              only: /.*/
-
-      - deploy_docker:
-          requires:
-            - build
-            - test_pytest
-            - build_docs
-            - ds005
-            - ds054
-            - ds210
-          filters:
-            branches:
-              only: master
-            tags:
-              only: /.*/
-
-      - deploy_pypi:
-          requires:
-            - build
-            - test_pytest
-            - build_docs
-            - ds005
-            - ds054
-            - ds210
-          filters:
-            branches:
-              ignore: /.*/
             tags:
               only: /.*/
