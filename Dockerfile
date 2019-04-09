@@ -174,6 +174,7 @@ RUN mkdir /opt/cmake \
     && rm ${ANTS_SHA}.zip \
     && mkdir -p /tmp/ants/build \
     && cd /tmp/ants/build \
+    && git config --global url."https://".insteadOf git:// \
     && cmake -DBUILD_SHARED_LIBS=ON /tmp/ants/source \
     && make -j1 \
     && mkdir -p /opt/ants-latest \
