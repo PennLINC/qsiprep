@@ -151,6 +151,7 @@ RUN apt-get update -qq \
     && ./build
 
 # Installing ANTs latest from source
+ARG ANTS_SHA=c56a0d8ccf683731d0b93f7a9358d03939d1238b
 ADD https://cmake.org/files/v3.11/cmake-3.11.4-Linux-x86_64.sh /cmake-3.11.4-Linux-x86_64.sh
 ENV ANTSPATH="/opt/ants-latest/bin" \
     PATH="/opt/ants-latest/bin:$PATH" \
@@ -165,9 +166,13 @@ RUN mkdir /opt/cmake \
            make \
            zlib1g-dev \
            imagemagick \
+    && mkdir /tmp/ants \
+    && cd /tmp \
+    && curl -sSLO https://github.com/ANTsX/ANTs/archive/${ANTS_SHA}.zip \
+    && unzip ${ANTS_SHA}.zip \
+    && mv ANTs-${ANTS_SHA} /tmp/ants/source \
+    && rm ${ANTS_SHA}.zip \
     && mkdir -p /tmp/ants/build \
-    && git config --global url."https://".insteadOf git:// \
-    && git clone https://github.com/ANTsX/ANTs.git /tmp/ants/source \
     && cd /tmp/ants/build \
     && cmake -DBUILD_SHARED_LIBS=ON /tmp/ants/source \
     && make -j1 \
