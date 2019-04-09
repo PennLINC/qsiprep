@@ -988,7 +988,7 @@ def _create_mem_gb(dwi_fname):
     except IndexError:
         dwi_nvols = 1
     except nb.filebasedimages.ImageFileError:
-        LOGGER.warn("Zero-sized image")
+        LOGGER.warning("Zero-sized image")
         dwi_nvols = 1
     mem_gb = {
         'filesize': dwi_size_gb,
