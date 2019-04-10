@@ -91,7 +91,7 @@ jobs:
             mkdir -p /tmp/data
             if [[ ! -d /tmp/data/DSCSDSI ]]; then
               wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
-                -O dscsdsi_single.tar.xz "https://upenn.box.com/shared/static/4dolh6uiiy2g2ct0vdk8drs106gayt8o.xz"
+                -O dscsdsi_single.tar.xz "https://upenn.box.com/shared/static/5t8xuc5mgfcz5rnl77egvc0ced6h8dcx.xz"
               tar xvfJ dscsdsi_single.tar.xz -C /tmp/data/
             else
               echo "Dataset DSCSDSI was cached"
@@ -101,7 +101,7 @@ jobs:
           command: |
             if [[ ! -d /tmp/data/DSCSDSI_BUDS ]]; then
               wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
-                -O dscsdsi_buds.tar.xz "https://upenn.box.com/shared/static/uxbgof3l7tq0n6ofltirifq557hyconn.xz"
+                -O dscsdsi_buds.tar.xz "https://upenn.box.com/shared/static/bvhs3sw2swdkdyekpjhnrhvz89x3k87t.xz"
               tar xvfJ dscsdsi_buds.tar.xz -C /tmp/data/
             else
               echo "Dataset DSCSDSI_BUDS was cached"
