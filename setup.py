@@ -41,6 +41,8 @@ def main():
             'data/itkIdentityTransform.txt',
             'viz/*.tpl',
             'viz/*.json',
+            'niworkflows/data/t1-mni_registration*.json',
+            'niworkflows/data/bold-mni_registration*.json',
         ]
     }
 
