@@ -15,10 +15,10 @@ jobs:
             apk add --no-cache pigz python3
       - restore_cache:
           keys:
-            - docker-v2-{{ .Branch }}-{{ epoch }}
-            - docker-v2-{{ .Branch }}-
-            - docker-v2-master-
-            - docker-v2-
+            - docker-v3-{{ .Branch }}-{{ epoch }}
+            - docker-v3-{{ .Branch }}-
+            - docker-v3-master-
+            - docker-v3-
           paths:
             - /tmp/cache/docker.tar.gz
             - /tmp/cache/ubuntu.tar.gz
@@ -36,7 +36,7 @@ jobs:
             fi
       - run:
           name: Build Docker image
-          no_output_timeout: 2h
+          no_output_timeout: 3h
           command: |
             # Get version, update files.
             THISVERSION=$( python3 get_version.py )
@@ -142,7 +142,7 @@ jobs:
       - attach_workspace:
           at: /tmp
       - save_cache:
-         key: docker-v2-{{ .Branch }}-{{ epoch }}
+         key: docker-v3-{{ .Branch }}-{{ epoch }}
          paths:
             - /tmp/cache/docker.tar.gz
 
