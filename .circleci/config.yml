@@ -234,7 +234,7 @@ jobs:
           name: Move intermediate results for second run
           command: |
             mkdir -p /tmp/DSCSDSI/derivatives_partial
-            sudo mv /tmp/DSCSDSI/derivatives/freesurfer /tmp/DSCSDSI/derivatives_partial
+            # sudo mv /tmp/DSCSDSI/derivatives/freesurfer /tmp/DSCSDSI/derivatives_partial
             sudo cp -a /tmp/DSCSDSI/work /tmp/DSCSDSI/work_partial
 
 
