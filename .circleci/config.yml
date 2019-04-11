@@ -83,8 +83,8 @@ jobs:
     steps:
       - restore_cache:
           keys:
-            - data-v1-{{ epoch }}
-            - data-v1-
+            - data-v2-{{ epoch }}
+            - data-v2-
       - run:
           name: Get single scan from downsampled CS-DSI
           command: |
@@ -128,7 +128,7 @@ jobs:
             - DSCSDSI/nipype.cfg
             - DSCSDSI_BUDS/nipype.cfg
       - save_cache:
-         key: data-v1-{{ epoch }}
+         key: data-v2-{{ epoch }}
          paths:
             - /tmp/data
 
