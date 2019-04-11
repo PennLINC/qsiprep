@@ -12,7 +12,7 @@ jobs:
       - run:
           name: Install parallel gzip and python3
           command: |
-            apk add --no-cache pigz python3
+            apk add --no-cache pigz python3 tar
       - restore_cache:
           keys:
             - docker-v3-{{ .Branch }}-{{ epoch }}
@@ -21,7 +21,6 @@ jobs:
             - docker-v3-
           paths:
             - /tmp/cache/docker.tar.gz
-            - /tmp/cache/ubuntu.tar.gz
       - checkout
       - setup_remote_docker
       - run:
@@ -234,7 +233,6 @@ jobs:
           name: Move intermediate results for second run
           command: |
             mkdir -p /tmp/DSCSDSI/derivatives_partial
-            # sudo mv /tmp/DSCSDSI/derivatives/freesurfer /tmp/DSCSDSI/derivatives_partial
             sudo cp -a /tmp/DSCSDSI/work /tmp/DSCSDSI/work_partial
 
 
