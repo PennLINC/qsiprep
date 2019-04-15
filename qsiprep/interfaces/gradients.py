@@ -28,6 +28,34 @@ tensor_index = {
 }
 
 
+def _unique_bvecs(bvals, bvecs, cutoff):
+    bvals = np.sqrt(bvals-bvals.min())
+    bvals = bvals/bvals.max() * 100
+
+    scaled_bvecs = bvals[:, np.newaxis] * bvecs
+    ok_vecs = []
+    seen_vecs = []
+
+    def is_unique_sample(vec):
+        if len(seen_vecs) == 0:
+            return True
+        vec_array = np.row_stack(seen_vecs)
+        distances = np.linalg.norm(vec_array - vec, axis=1)
+        distances_flip = np.linalg.norm(vec_array + vec, axis=1)
+        return np.all(distances > cutoff) and np.all(distances_flip > cutoff)
+
+    for vec_num, vec in enumerate(scaled_bvecs):
+        magnitude = np.linalg.norm(vec)
+        # Is it a b0?
+        if magnitude < cutoff:
+            ok_vecs.append(vec_num)
+        else:
+            if is_unique_sample(vec):
+                ok_vecs.append(vec_num)
+                seen_vecs.append(vec)
+    return ok_vecs
+
+
 class RemoveDuplicatesInputSpec(BaseInterfaceInputSpec):
     dwi_file = File(exists=True, mandatory=True)
     bval_file = File(exists=True, mandatory=True)
@@ -52,39 +80,15 @@ class RemoveDuplicates(SimpleInterface):
         bvecs = np.loadtxt(self.inputs.bvec_file).T
         bvals = np.loadtxt(self.inputs.bval_file).squeeze()
         orig_bvals = bvals.copy()
-        bvals = np.sqrt(bvals-bvals.min())
-        bvals = bvals/bvals.max() * 100
-        original_image = nb.load(self.inputs.dwi_file)
-        cutoff = self.inputs.distance_cutoff
+        original_image = self.inputs.dwi_file
 
-        scaled_bvecs = bvals[:, np.newaxis] * bvecs
-        ok_vecs = []
-        seen_vecs = []
-
-        def is_unique_sample(vec):
-            if len(seen_vecs) == 0:
-                return True
-            vec_array = np.row_stack(seen_vecs)
-            distances = np.linalg.norm(vec_array - vec, axis=1)
-            distances_flip = np.linalg.norm(vec_array + vec, axis=1)
-            return np.all(distances > cutoff) and np.all(distances_flip > cutoff)
-
-        for vec_num, vec in enumerate(scaled_bvecs):
-            magnitude = np.linalg.norm(vec)
-            # Is it a b0?
-            if magnitude < cutoff:
-                ok_vecs.append(vec_num)
-            else:
-                if is_unique_sample(vec):
-                    ok_vecs.append(vec_num)
-                    seen_vecs.append(vec)
-
+        ok_vecs = _unique_bvecs(bvecs, bvals, self.inputs.distance_cutoff)
         # If an expected number of directions was specified, check that it's there
         expected = self.inputs.expected_directions
         if isdefined(expected):
-            if not len(seen_vecs) == expected:
+            if not len(ok_vecs) == expected:
                 raise Exception("Expected %d unique samples but found %d",
-                                expected, len(seen_vecs))
+                                expected, len(ok_vecs))
 
         # Are all the directions unique?
         if len(ok_vecs) == len(bvals):

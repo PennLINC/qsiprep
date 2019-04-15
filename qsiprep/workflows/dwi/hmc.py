@@ -6,15 +6,16 @@ Head motion correction
 .. autofunction:: init_dwi_model_hmc_wf
 
 """
-from ...engine import Workflow
 import nipype.pipeline.engine as pe
+from ...engine import Workflow
 from nipype.interfaces import ants, afni, utility as niu
 import pandas as pd
 from dipy.core.geometry import decompose_matrix
 import os
 import numpy as np
 from ...interfaces.gradients import MatchTransforms, GradientRotation
-from ...interfaces.dipy import IdealSignalRegistration
+from ...interfaces.shoreline import (SignalPrediction, ExtractDWIsForModel, ReorderTransforms,
+                                     B0Mask)
 from .util import init_skullstrip_b0_wf
 
 
@@ -42,11 +43,16 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, mem_gb=3, omp_nthrea
         (inputnode, b0_hmc_wf, [('b0_images', 'inputnode.b0_images')]),
         (b0_hmc_wf, outputnode, [('outputnode.final_template', 'final_template')]),
         (b0_hmc_wf, match_transforms, [(('outputnode.forward_transforms', _list_squeeze),
-                                       'transforms')]),
+                                        'transforms')]),
     ])
 
     if hmc_model == 'none':
         # Motion correction based only on b0's
+        # Inverse warp the model images
+        noise_free_dwis = pe.MapNode(ants.ApplyTransforms(interpolation="LanczosWindowedSinc",
+                                                          invert_transform_flags=[True]),
+                                     iterfield=['input_image', 'reference_image', 'transforms'],
+                                     name='noise_free_dwis')
         workflow.connect([
             (match_transforms, outputnode, [('transforms', 'forward_transforms')])
         ])
@@ -60,11 +66,13 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, mem_gb=3, omp_nthrea
     workflow.connect([
         (b0_hmc_wf, b0_template_mask, [('outputnode.final_template', 'inputnode.in_file')]),
         (b0_template_mask, dwi_model_hmc_wf, [('outputnode.mask_file', 'inputnode.b0_mask')]),
+        (b0_hmc_wf, dwi_model_hmc_wf, [('outputnode.final_template', 'b0_mean')]),
         (inputnode, dwi_model_hmc_wf, ([('dwi_files', 'inputnode.dwi_files'),
                                         ('b0_indices', 'inputnode.b0_indices'),
                                         ('bvecs', 'inputnode.bvecs'),
                                         ('bvals', 'inputnode.bvals')])),
         (match_transforms, dwi_model_hmc_wf, [('transforms', 'inputnode.initial_transforms')]),
+
         (dwi_model_hmc_wf, outputnode, [('outputnode.noise_free_dwis', 'noise_free_dwis'),
                                         ('outputnode.hmc_transforms', 'forward_transforms')])
     ])
@@ -231,45 +239,116 @@ def init_b0_hmc_wf(align_to="iterative", transform="Rigid", spatial_bias_correct
     return alignment_wf
 
 
-def get_model_reg(model_name,
-                  transform="Rigid",
-                  metric="Mattes",
-                  iternum=0,
-                  spatial_bias_correct=False,
-                  precision="fine",
-                  replace_outliers=False):
-    """Make a model-based hmc iteration."""
-    if precision == "coarse":
-        extra_opts = dict(
-            shrink_factors=[[4, 2]],
-            smoothing_sigmas=[[3., 1.]],
-            number_of_iterations=[[1000, 10000]],
-            transform_parameters=[[0.3]])
-    else:
-        extra_opts = dict(
-            shrink_factors=[[4, 2, 1]],
-            smoothing_sigmas=[[3., 1., 0.]],
-            number_of_iterations=[[1000, 10000, 10000]],
-            transform_parameters=[[0.1]])
-    model_reg = IdealSignalRegistration(
-        model_name=model_name,
-        metric=[metric],
-        transforms=[transform],
-        sigma_units=["vox"],
-        sampling_strategy=['Random'],
-        sampling_percentage=[0.25],
-        radius_or_number_of_bins=[32],
-        initial_moving_transform_com=0,
-        interpolation='LanczosWindowedSinc',
-        dimension=3,
-        winsorize_lower_quantile=0.025,
-        winsorize_upper_quantile=0.975,
-        convergence_threshold=[1e-06],
-        collapse_output_transforms=True,
-        write_composite_transform=False,
-        output_warped_image=True,
-        **extra_opts)
-    return model_reg
+def init_hmc_model_iteration_wf(modelname, transform, precision="coarse", name="hmc_model_iter0"):
+    """Create a model-based hmc registration iteration workflow.
+
+    This workflow takes an initial set of transforms, applies them to the
+    original data, and builds a signal model out of the transformed images.
+
+    The original images are then registered to the model-generated target
+    images. Included in the outputs are the transforms and optionally the
+    noise-free images in original (non-aligned) space.
+
+    .. workflow::
+        :graph2use: colored
+        :simple_form: yes
+
+        from qsiprep.workflows.dwi.hmc import init_dwi_model_hmc_wf
+        wf = init_dwi_model_hmc_wf(modelname='3dSHORE',
+                                   transform='Affine',
+                                   num_iters=2,
+                                   mem_gb=3,
+                                   omp_nthreads=1)
+
+    **Parameters**
+
+        modelname : str
+            one of the models for reconstructing an EAP and producing
+            signal estimates used for motion correction
+        transform : str
+            either "Rigid" or "Affine". Choosing "Affine" may help with Eddy warping
+        calculate_noise_free : bool
+            Should the noise-free images (in original space) be calculated and saved?
+        precision : str
+            Use fast "coarse" alignment or accurate "precise" registration
+        name : str
+            name of the workflow
+
+    **Inputs**
+
+        original_dwi_files
+            list of 3d dwi files, no b0's
+        original_bvecs
+            list of bvec files corresponding to `original_dwi_files`
+        original_bvals
+            list of bval files corresponding to `original_dwi_files`
+        b0_indices
+            list of which indices in `dwi_files` are b0 images
+        initial_transforms
+            list of transforms from a previous registration
+        b0_mask
+            mask of containing brain voxels
+        b0_mean
+            mean of the aligned b0 images
+
+    **Outputs**
+
+        hmc_transforms
+            list of transforms, one per file in `dwi_files`
+        noise_free_dwis
+            Model-based predictions transformed into original dwi images
+
+
+    """
+    workflow = Workflow(name=name)
+    inputnode = pe.Node(
+        niu.IdentityInterface(
+            fields=['original_dwi_files', 'original_bvecs',
+                    'approx_aligned_dwi_files', 'approx_aligned_bvecs',
+                    'initial_transforms', 'b0_mask', 'b0_mean', 'bvals']),
+        name='inputnode')
+
+    outputnode = pe.Node(
+        niu.IdentityInterface(
+            fields=['hmc_transforms', 'aligned_dwis', 'aligned_bvecs', 'bvals']),
+        name='outputnode')
+
+    predict_dwis = pe.MapNode(SignalPrediction(),
+                              iterfield=['bval_to_predict', 'bvec_to_predict'],
+                              name="predict_dwis")
+    predict_dwis.synchronize = True
+
+    # Register original images to the predicted images
+    register_to_predicted = pe.MapNode(ants.Registration(),
+                                       iterfield=['fixed_image', 'moving_image'],
+                                       name='register_to_predicted')
+    register_to_predicted.synchronize = True
+
+    # Apply new transforms to bvecs
+    post_bvec_transforms = pe.Node(GradientRotation(), name="post_bvec_transforms")
+
+    workflow.connect([
+        # Send inputs to DWI prediction
+        (inputnode, predict_dwis, [('approx_aligned_dwi_files', 'aligned_dwis'),
+                                   ('approx_aligned_bvecs', 'aligned_bvecs'),
+                                   ('bvals', 'bvals'),
+                                   ('b0_mean', 'aligned_b0_mean'),
+                                   ('b0_mask', 'aligned_mask'),
+                                   ('bvec_to_predict'),
+                                   ('bvals', 'bval_to_predict')]),
+        (predict_dwis, register_to_predicted, [('image_to_align', 'moving_image'),
+                                               ('predicted_image', 'fixed_image')]),
+        (register_to_predicted, post_bvec_transforms, [
+            ('forward_transforms', 'affine_transforms')]),
+        (inputnode, post_bvec_transforms, [('original_bvecs', 'bvec_files'),
+                                           ('bvals', 'bval_files')]),
+        (post_bvec_transforms, outputnode, [('bvals', 'bvals'),
+                                            ('bvecs', 'aligned_bvecs')]),
+        (register_to_predicted, outputnode, [('warped_image', 'aligned_dwis'),
+                                             ('forward_trasforms', 'hmc_trasforms')])
+    ])
+
+    return workflow
 
 
 def init_dwi_model_hmc_wf(modelname, transform, mem_gb, omp_nthreads,
@@ -324,31 +403,55 @@ def init_dwi_model_hmc_wf(modelname, transform, mem_gb, omp_nthreads,
 
     """
     workflow = Workflow(name=name)
-    inputnode = pe.Node(niu.IdentityInterface(
-        fields=['dwi_files', 'b0_indices', 'initial_transforms', 'b0_mask', 'bvecs', 'bvals']),
+    inputnode = pe.Node(
+        niu.IdentityInterface(
+            fields=['dwi_files', 'b0_indices', 'initial_transforms', 'b0_mask',
+                    'bvecs', 'bvals', 'warped_b0_images']),
         name='inputnode')
     outputnode = pe.Node(niu.IdentityInterface(
         fields=['hmc_transforms', 'noise_free_dwis']), name='outputnode')
 
-    # Initialize with transform from nearest b0
-    initial_transforms = pe.MapNode(ants.ApplyTransforms(interpolation="BSpline"),
-                                    iterfield=['input_image', 'transforms'],
-                                    name="initial_transforms")
-
-    # Coarse iteration
-    initial_reg = pe.Node(get_model_reg(modelname, transform=transform, metric=metric,
-                                        precision='coarse'),
-                          name='initial_reg')
-    # Fine iteration
-    final_reg = pe.Node(get_model_reg(modelname, transform=transform, metric=metric,
-                                      precision='fine'),
-                        name='final_reg')
+    # Merge b0s into a single volume, put the non-b0 dwis into a list
+    extract_dwis = pe.Node(ExtractDWIsForModel(), name="extract_dwis")
+    # Initialize with the transforms provided
+    b0_based_image_transforms = pe.MapNode(ants.ApplyTransforms(interpolation="BSpline"),
+                                           iterfield=['input_image', 'transforms'],
+                                           name="b0_based_image_transforms")
+    # Rotate the original bvecs as well
+    b0_based_bvec_transforms = pe.Node(GradientRotation(), name="b0_based_bvec_transforms")
+    # Create a mask and an average from the aligned b0 images
+    b0_mask = pe.Node(B0Mask(), name='b0_mask')
 
     workflow.connect([
-        (inputnode, initial_transforms, [('dwi_files', 'input_image'),
-                                         ('initial_transforms', 'transforms'),
-                                         ('b0_mask', 'reference_image')]),
-        (initial_transforms, initial_reg, [('output_image', 'last_iter_images')]),
+        (inputnode, extract_dwis, [('dwi_files', 'dwi_files'),
+                                   ('bval_files', 'bval_files'),
+                                   ('bvec_files', 'bvec_files'),
+                                   ('initial_transforms', 'transforms'),
+                                   ('b0_indices', 'b0_indices')]),
+        (extract_dwis, b0_based_bvec_transforms, [('model_bvecs', 'bvec_files'),
+                                                  ('model_bvals', 'bval_files'),
+                                                  ('transforms', 'affine_transforms')]),
+        (extract_dwis, b0_based_image_transforms, [('model_dwi_files', 'input_image'),
+                                                   ('transforms', 'transforms')])
+    ])
+    initial_model_iteration = init_hmc_model_iteration_wf(
+        modelname, transform, precision="coarse", name="initial_model_iteration")
+
+    workflow.connect([
+        (extract_dwis, initial_model_iteration, [
+            ('model_dwi_files', 'inputnode.original_dwi_files'),
+            ('model_bvec_files', 'inputnode.original_bvecs'),
+            ('model_bval_files', 'bvals')])
+    ])
+
+    reorder_dwi_xforms = pe.Node(ReorderTransforms(), name='reorder_dwi_xforms')
+
+
+
+
+
+
+    workflow.connect([
         (inputnode, initial_reg, [('initial_transforms', 'initial_transforms'),
                                   ('dwi_files', 'moving_image'),
                                   ('bvals', 'bvals'), ('bvecs', 'bvecs'),
@@ -361,6 +464,8 @@ def init_dwi_model_hmc_wf(modelname, transform, mem_gb, omp_nthreads,
                                 ('b0_mask', 'mask_image')]),
         (initial_reg, final_reg, [('corrected_images', 'last_iter_images'),
                                   ('rotated_bvecs', 'bvecs')])
+        (inputnode, reorder_dwi_xforms, [('b0_indices', 'b0_indices'),
+                                         ('initial_transforms', 'initial_transforms')]),
     ])
 
     # Inverse warp the model images
@@ -368,14 +473,6 @@ def init_dwi_model_hmc_wf(modelname, transform, mem_gb, omp_nthreads,
                                                       invert_transform_flags=[True]),
                                  iterfield=['input_image', 'reference_image', 'transforms'],
                                  name='noise_free_dwis')
-
-    workflow.connect([
-        (final_reg, noise_free_dwis, [('ideal_images', 'input_image'),
-                                      ('transforms', 'transforms')]),
-        (inputnode, noise_free_dwis, [('dwi_files', 'reference_image')]),
-        (noise_free_dwis, outputnode, [('output_image', 'noise_free_dwis')]),
-        (final_reg, outputnode, [('transforms', 'hmc_transforms')]),
-    ])
     return workflow
 
 
