@@ -28,18 +28,43 @@ from ..utils.brainsuite_shore import BrainSuiteShoreModel, brainsuite_shore_basi
 
 LOGGER = logging.getLogger('nipype.interface')
 
-class B0MaskInputSpec(BaseInterfaceInputSpec):
-    b0_images = InputMultiObject(File(exists=True))
+
+def _nonoverlapping_qspace_samples(prediction_bval, prediction_bvec,
+                                   all_bvals, all_bvecs, cutoff):
+    """Ensure that none of the training samples are too close to the sample to predict.
+
+    Parameters
+    """
+    min_bval = min(all_bvals.min(), prediction_bval)
+    all_qvals = np.sqrt(all_bvals - min_bval)
+    prediction_qval = np.sqrt(prediction_bval - min_bval)
+
+    # Convert q values to percent of maximum qval
+    max_qval = max(all_qvals.max(), prediction_qval)
+    all_qvals_scaled = all_qvals / max_qval * 100
+    prediction_qval_scaled = prediction_qval / max_qval * 100
+    scaled_qvecs = all_bvecs * all_qvals_scaled[:, np.newaxis]
+    scaled_prediction_qvec = prediction_bvec * prediction_qval_scaled
+
+    # Calculate the distance between the sampled qvecs and the prediction qvec
+    distances = np.linalg.norm(scaled_qvecs - scaled_prediction_qvec, axis=1)
+    distances_flip = np.linalg.norm(scaled_qvecs + scaled_prediction_qvec, axis=1)
+    ok_samples = (distances > cutoff) * (distances_flip > cutoff)
+
+    return ok_samples
 
 
-class B0MaskOutputSpec(TraitedSpec):
-    mask_image = File(exists=True)
+class B0MeanInputSpec(BaseInterfaceInputSpec):
+    b0_images = InputMultiObject(File(exists=True), mandatory=True)
+
+
+class B0MeanOutputSpec(TraitedSpec):
     average_image = File(exists=True)
 
 
-class B0Mask(SimpleInterface):
-    input_spec = B0MaskInputSpec
-    output_spec = B0MaskOutputSpec
+class B0Mean(SimpleInterface):
+    input_spec = B0MeanInputSpec
+    output_spec = B0MeanOutputSpec
 
     def _run_interface(self, runtime):
         b0_images = [nb.load(fname) for fname in self.inputs.b0_images]
@@ -48,13 +73,6 @@ class B0Mask(SimpleInterface):
         nb.Nifti1Image(b0_mean, b0_images[0].affine, b0_images[0].header
                        ).to_filename(mean_file)
         self._results['average_image'] = mean_file
-        masked_data, data_mask = median_otsu(b0_mean, median_radius=4, numpass=2, autocrop=False,
-                                             dilate=1)
-        mask_file = op.join(runtime.cwd, "b0_mask.nii.gz")
-        nb.Nifti1Image(data_mask, b0_images[0].affine, b0_images[0].header
-                       ).to_filename(mask_file)
-        self._results['mask_image'] = mask_file
-
         return runtime
 
 
@@ -126,7 +144,8 @@ class SignalPrediction(SimpleInterface):
     output_spec = SignalPredictionOutputSpec
 
     def _run_interface(self, runtime):
-
+        pred_vec = self.inputs.bvec_to_predict
+        pred_val = self.inputs.bval_to_predict
         # Load the mask image:
         mask_img = nb.load(self.inputs.aligned_mask)
         mask_array = mask_img.get_data() > 1e-6
@@ -135,18 +154,22 @@ class SignalPrediction(SimpleInterface):
             bvecs = self.inputs.aligned_bvecs
         else:
             bvecs = concatenate_bvecs(self.inputs.aligned_bvecs)
+        all_bvecs = np.row_stack([np.zeros(3)] + bvecs.tolist())
         if isinstance(self.inputs.bvals, np.ndarray):
             bvals = self.inputs.bvals
         else:
             bvals = concatenate_bvals(self.inputs.bvals, None)
+        all_bvals = np.array([0.] + bvals.tolist())
 
         # Which sample points are too close to the one we want to predict?
-        training_indices = _unique_bvecs(bvals, bvecs, self.inputs.minimal_q_distance)
+        training_mask = _nonoverlapping_qspace_samples(
+            pred_val, pred_vec, all_bvals, all_bvecs, self.inputs.minimal_q_distance)
+        training_indices = np.flatnonzero(training_mask[1:])
         training_image_paths = [self.inputs.aligned_b0_mean] + [
             all_images[idx] for idx in training_indices]
-        training_bvecs = np.row_stack([np.zeros(3)] + [bvecs[n] for n in training_indices])
-        training_bvals = np.array([0.] + [bvals[n] for n in training_indices])
-        LOGGER.info("Training with %d of %d", len(training_indices), len(all_images))
+        training_bvecs = all_bvecs[training_mask]
+        training_bvals = all_bvals[training_mask]
+        LOGGER.info("Training with %d of %d", training_mask.sum(), len(training_mask))
 
         # Load training data and fit the model
         training_data = quick_load_images(training_image_paths)
@@ -155,10 +178,10 @@ class SignalPrediction(SimpleInterface):
         shore_fit = shore_model.fit(training_data, mask=mask_array)
 
         # Get the shore vector for the desired coordinate
-        pred_vec = self.inputs.bvec_to_predict
-        pred_val = self.inputs.bval_to_predict
+
         prediction_bvecs = np.tile(pred_vec, (10, 1))
         prediction_bvals = np.ones(10) * pred_val
+        prediction_bvals[9] = 0  # prevent warning
         prediction_gtab = gradient_table(bvals=prediction_bvals, bvecs=prediction_bvecs)
         prediction_shore = brainsuite_shore_basis(shore_model.radial_order, shore_model.zeta,
                                                   prediction_gtab, shore_model.tau)
@@ -178,20 +201,41 @@ class SignalPrediction(SimpleInterface):
         return runtime
 
 
-class ReorderTransformsInputSpec(BaseInterfaceInputSpec):
-    b0_indices = traits.List()
-    initial_transforms = InputMultiObject(traits.List())
-    model_based_transforms = InputMultiObject(traits.List())
+class ReorderOutputsInputSpec(BaseInterfaceInputSpec):
+    b0_indices = traits.List(mandatory=True)
+    b0_mean = File(exists=True, mandatory=True)
+    initial_transforms = InputMultiObject(File(exists=True), mandatory=True)
+    model_based_transforms = InputMultiObject(traits.List(), mandatory=True)
+    model_predicted_images = InputMultiObject(File(exists=True), mandatory=True)
 
 
-class ReorderTransformsOutputSpec(TraitedSpec):
-    transforms = OutputMultiObject(traits.List())
+class ReorderOutputsOutputSpec(TraitedSpec):
+    full_transforms = OutputMultiObject(traits.List())
+    full_predicted_dwi_series = OutputMultiObject(traits.File(exists=True))
 
 
-class ReorderTransforms(SimpleInterface):
-    input_spec = ReorderTransformsInputSpec
-    output_spec = ReorderTransformsOutputSpec
+class ReorderOutputs(SimpleInterface):
+    input_spec = ReorderOutputsInputSpec
+    output_spec = ReorderOutputsOutputSpec
 
     def _run_interface(self, runtime):
+        full_transforms = []
+        full_predicted_dwi_series = []
+        model_transforms = self.inputs.model_based_transforms[::-1]
+        model_images = self.inputs.model_predicted_images[::-1]
+        b0_transforms = [self.inputs.initial_transforms[idx] for idx in
+                         self.inputs.b0_indices][::-1]
+        num_dwis = len(self.inputs.initial_transforms)
+        for imagenum in range(num_dwis):
+            if imagenum in self.inputs.b0_indices:
+                full_predicted_dwi_series.append(self.inputs.b0_mean)
+                full_transforms.append(b0_transforms.pop())
+            else:
+                full_transforms.append(model_transforms.pop())
+                full_predicted_dwi_series.append(model_images.pop())
+        if not len(model_transforms) == len(b0_transforms) == len(model_images) == 0:
+            raise Exception("Unable to recombine images and transforms")
+        self._results['full_transforms'] = full_transforms
+        self._results['full_predicted_dwi_series'] = full_predicted_dwi_series
 
         return runtime
