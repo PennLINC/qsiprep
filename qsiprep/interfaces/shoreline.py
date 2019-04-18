@@ -309,14 +309,14 @@ class SHORELineReport(SummaryInterface):
 
     def _run_interface(self, runtime):
         images = []
-        for imagenum, (orig_file, aligned_file, model_file) in enumerate(
-                self.inputs.original_imagess, self.inputs.registered_images,
-                self.inputs.model_predicted_images):
+        for imagenum, (orig_file, aligned_file, model_file) in enumerate(zip(
+                self.inputs.original_images, self.inputs.registered_images,
+                self.inputs.model_predicted_images)):
 
             images.extend(before_after_images(orig_file, aligned_file, model_file, imagenum))
 
         out_file = op.join(runtime.cwd, "shoreline_reg.gif")
-        imageio.mimsave(out_file, images, fps=1, quantizer='nq')
+        imageio.mimsave(out_file, images, fps=1)
         self._results['plot_file'] = out_file
         return runtime
 
@@ -364,7 +364,7 @@ def before_after_images(orig_file, aligned_file, model_file, imagenum):
                  interpolation="nearest")
     ax[1].imshow(target_mip, vmax=1., vmin=0, origin="lower", cmap="gray",
                  interpolation="nearest")
-    ax[0].text(5, 5, "%03d: Before" % imagenum, fontsize=16, color='white')
+    ax[0].text(1, 1, "%03d: Before" % imagenum, fontsize=16, color='white')
     for contour in target_contours + target_contours_low:
         ax[0].plot(contour[:, 1], contour[:, 0], linewidth=2, alpha=0.9, color="#e7298a")
         ax[1].plot(contour[:, 1], contour[:, 0], linewidth=2, alpha=0.9, color="#e7298a")
@@ -384,7 +384,7 @@ def before_after_images(orig_file, aligned_file, model_file, imagenum):
                  interpolation="nearest")
     ax[1].imshow(target_mip, vmax=1., vmin=0, origin="lower", cmap="gray",
                  interpolation="nearest")
-    ax[0].text(5, 5, "%03d: After" % imagenum, fontsize=16, color='white')
+    ax[0].text(1, 1, "%03d: After" % imagenum, fontsize=16, color='white')
     for contour in target_contours + target_contours_low:
         ax[0].plot(contour[:, 1], contour[:, 0], linewidth=2, alpha=0.9, color="#e7298a")
         ax[1].plot(contour[:, 1], contour[:, 0], linewidth=2, alpha=0.9, color="#e7298a")

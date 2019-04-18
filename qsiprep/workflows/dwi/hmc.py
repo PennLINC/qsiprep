@@ -22,7 +22,7 @@ from .util import init_skullstrip_b0_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
-def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, mem_gb=3, omp_nthreads=1,
+def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file, mem_gb=3, omp_nthreads=1,
                     num_model_iterations=2, write_report=True, name="dwi_hmc_wf"):
     """Perform head motion correction on a dwi series."""
     inputnode = pe.Node(
@@ -84,6 +84,10 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, mem_gb=3, omp_nthrea
         (inputnode, uncorrect_model_images, [('dwi_files', 'reference_image')]),
         (uncorrect_model_images, outputnode, [('output_image', 'noise_free_dwis')])
     ])
+    datasinks = [node for node in workflow.list_node_names()
+                 if node.split(".")[-1].startswith("ds_")]
+    for ds in datasinks:
+        workflow.get_node(ds).inputs.source_file = source_file
 
     return workflow
 
@@ -528,6 +532,9 @@ def init_dwi_model_hmc_wf(modelname, transform, mem_gb, omp_nthreads,
     ds_report_shoreline_gif = pe.Node(
         DerivativesDataSink(suffix="shoreline_animation"), name='ds_report_shoreline_gif',
         mem_gb=1, run_without_submitting=True)
+    ds_shoreline_params = pe.Node(
+        DerivativesDataSink(suffix="shoreline_qc"), name='ds_shoreline_params',
+        mem_gb=1, run_without_submitting=True)
 
     workflow.connect([
         (model_iterations[-1], reorder_dwi_xforms, [
@@ -552,7 +559,9 @@ def init_dwi_model_hmc_wf(modelname, transform, mem_gb, omp_nthreads,
         (reorder_dwi_xforms, shoreline_report, [
             ('full_predicted_dwi_series', 'model_predicted_images'),
             ('hmc_warped_images', 'registered_images')]),
-        (shoreline_report, ds_report_shoreline_gif, [('out_report', 'in_file')])
+        (shoreline_report, ds_report_shoreline_gif, [('plot_file', 'in_file')]),
+        (summarize_iterations, ds_shoreline_params, [
+            ('iteration_summary_file', 'in_file')])
     ])
 
     return workflow
