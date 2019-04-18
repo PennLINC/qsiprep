@@ -396,6 +396,7 @@ def init_qsiprep_dwi_preproc_wf(dwi_files,
         merge_dwis.inputs.inputnode.dwi_files = dwi_files
         split_dwis = pe.Node(SplitDWIs(), name="split_dwis")
         dwi_hmc_wf = init_dwi_hmc_wf(hmc_transform, hmc_model, motion_corr_to,
+                                     source_file=source_file,
                                      omp_nthreads=omp_nthreads, name="dwi_hmc_wf")
 
         # Fieldmap time

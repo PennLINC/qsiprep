@@ -68,7 +68,10 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file, mem_gb=
             ('b0_indices', 'inputnode.b0_indices'),
             ('bvecs', 'inputnode.bvec_files'),
             ('bvals', 'inputnode.bval_files')]),
-        (match_transforms, dwi_model_hmc_wf, [('transforms', 'inputnode.initial_transforms')])
+        (match_transforms, dwi_model_hmc_wf, [
+            ('transforms', 'inputnode.initial_transforms')]),
+        (dwi_model_hmc_wf, outputnode, [
+            ('outputnode.hmc_transforms', 'forward_transforms')])
     ])
 
     # Warp the modeled images into non-motion-corrected space
