@@ -12,10 +12,10 @@ import nibabel as nb
 import numpy as np
 import os
 import os.path as op
-from dipy.segment.mask import median_otsu
-
-from tempfile import TemporaryDirectory
-
+import pandas as pd
+from skimage import measure
+import imageio
+from nipype.utils.filemanip import fname_presuffix
 from nipype import logging
 from nipype.utils.filemanip import fname_presuffix
 from nipype.interfaces.base import (
@@ -25,6 +25,9 @@ from nipype.interfaces.base import (
 from .gradients import concatenate_bvecs, concatenate_bvals, _unique_bvecs
 from dipy.core.gradients import gradient_table
 from ..utils.brainsuite_shore import BrainSuiteShoreModel, brainsuite_shore_basis
+from .reports import SummaryInterface, SummaryOutputSpec
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 LOGGER = logging.getLogger('nipype.interface')
 
@@ -204,6 +207,8 @@ class SignalPrediction(SimpleInterface):
 class ReorderOutputsInputSpec(BaseInterfaceInputSpec):
     b0_indices = traits.List(mandatory=True)
     b0_mean = File(exists=True, mandatory=True)
+    warped_b0_images = InputMultiObject(File(exists=True), mandatory=True)
+    warped_dwi_images = InputMultiObject(File(exists=True), mandatory=True)
     initial_transforms = InputMultiObject(File(exists=True), mandatory=True)
     model_based_transforms = InputMultiObject(traits.List(), mandatory=True)
     model_predicted_images = InputMultiObject(File(exists=True), mandatory=True)
@@ -211,7 +216,8 @@ class ReorderOutputsInputSpec(BaseInterfaceInputSpec):
 
 class ReorderOutputsOutputSpec(TraitedSpec):
     full_transforms = OutputMultiObject(traits.List())
-    full_predicted_dwi_series = OutputMultiObject(traits.File(exists=True))
+    full_predicted_dwi_series = OutputMultiObject(File(exists=True))
+    hmc_warped_images = OutputMultiObject(File(exists=True))
 
 
 class ReorderOutputs(SimpleInterface):
@@ -221,21 +227,220 @@ class ReorderOutputs(SimpleInterface):
     def _run_interface(self, runtime):
         full_transforms = []
         full_predicted_dwi_series = []
+        full_warped_images = []
+        warped_b0_images = self.inputs.warped_b0_images[::-1]
+        warped_dwi_images = self.inputs.warped_dwi_images[::-1]
         model_transforms = self.inputs.model_based_transforms[::-1]
         model_images = self.inputs.model_predicted_images[::-1]
         b0_transforms = [self.inputs.initial_transforms[idx] for idx in
                          self.inputs.b0_indices][::-1]
         num_dwis = len(self.inputs.initial_transforms)
+
         for imagenum in range(num_dwis):
             if imagenum in self.inputs.b0_indices:
                 full_predicted_dwi_series.append(self.inputs.b0_mean)
                 full_transforms.append(b0_transforms.pop())
+                full_warped_images.append(warped_b0_images.pop())
             else:
                 full_transforms.append(model_transforms.pop())
                 full_predicted_dwi_series.append(model_images.pop())
+                full_warped_images.append(warped_dwi_images.pop())
+
         if not len(model_transforms) == len(b0_transforms) == len(model_images) == 0:
             raise Exception("Unable to recombine images and transforms")
+
+        self._results['hmc_warped_images'] = full_warped_images
         self._results['full_transforms'] = full_transforms
         self._results['full_predicted_dwi_series'] = full_predicted_dwi_series
 
         return runtime
+
+
+class IterationSummaryInputSpec(BaseInterfaceInputSpec):
+    collected_motion_files = InputMultiObject(File(exists=True))
+
+
+class IterationSummaryOutputSpec(TraitedSpec):
+    iteration_summary_file = File(exists=True)
+    plot_file = File(exists=True)
+
+
+class IterationSummary(SummaryInterface):
+    input_spec = IterationSummaryInputSpec
+    output_spec = IterationSummaryOutputSpec
+
+    def _run_interface(self, runtime):
+        motion_files = self.inputs.collected_motion_files
+        all_iters = []
+        for fnum, fname in enumerate(motion_files):
+            df = pd.read_csv(fname)
+            df['iter_num'] = fnum
+            path_parts = fname.split(os.sep)
+            itername = '' if 'iter' not in path_parts[-3] else path_parts[-3]
+            df['iter_name'] = itername
+            all_iters.append(df)
+        combined = pd.concat(all_iters, axis=0, ignore_index=True)
+        output_fname = op.join(runtime.cwd, "iteration_summary.csv")
+        combined.to_csv(output_fname, index=False)
+        self._results['iteration_summary_file'] = output_fname
+
+        # Create a figure for the report
+        fig_output_fname = op.join(runtime.cwd, "iterdiffs.svg")
+        _iteration_summary_plot(combined, fig_output_fname)
+        self._results['plot_file'] = fig_output_fname
+
+        return runtime
+
+
+class SHORELineReportInputSpec(BaseInterfaceInputSpec):
+    iteration_summary = File(exists=True)
+    registered_images = InputMultiObject(File(exists=True))
+    original_images = InputMultiObject(File(exists=True))
+    model_predicted_images = InputMultiObject(File(exists=True))
+
+
+class SHORELineReportOutputSpec(SummaryOutputSpec):
+    plot_file = File(exists=True)
+
+
+class SHORELineReport(SummaryInterface):
+    input_spec = SHORELineReportInputSpec
+    output_spec = SHORELineReportOutputSpec
+
+    def _run_interface(self, runtime):
+        images = []
+        for imagenum, (orig_file, aligned_file, model_file) in enumerate(
+                self.inputs.original_imagess, self.inputs.registered_images,
+                self.inputs.model_predicted_images):
+
+            images.extend(before_after_images(orig_file, aligned_file, model_file, imagenum))
+
+        out_file = op.join(runtime.cwd, "shoreline_reg.gif")
+        imageio.mimsave(out_file, images, fps=1, quantizer='nq')
+        self._results['plot_file'] = out_file
+        return runtime
+
+
+def scaled_mip(img1, img2, img3, axis):
+    mip1 = img1.max(axis=axis).T
+    mip2 = img2.max(axis=axis).T
+    mip3 = img3.max(axis=axis).T
+    max_obs = max(mip1.max(), mip2.max(), mip3.max())
+    vmax = 0.98 * max_obs
+    return (np.clip(mip1, 0, vmax) / vmax,
+            np.clip(mip2, 0, vmax) / vmax,
+            np.clip(mip3, 0, vmax) / vmax)
+
+
+def to_image(fig):
+    fig.subplots_adjust(hspace=0, left=0, right=1, wspace=0)
+    fig.canvas.draw()       # draw the canvas, cache the renderer
+    image = np.frombuffer(fig.canvas.tostring_rgb(), dtype='uint8')
+    image = image.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+    return image
+
+
+def before_after_images(orig_file, aligned_file, model_file, imagenum):
+    fig, ax = plt.subplots(ncols=2, figsize=(10, 5))
+    fig.subplots_adjust(hspace=0, left=0, right=1, wspace=0)
+    for _ax in ax:
+        _ax.clear()
+    orig_img = nb.load(orig_file).get_fdata()
+    aligned_img = nb.load(aligned_file).get_fdata()
+    model_img = nb.load(model_file).get_fdata()
+    orig_mip, aligned_mip, target_mip = scaled_mip(orig_img, aligned_img, model_img, 0)
+
+    # Get contours for the orig, aligned images
+    orig_contours = measure.find_contours(orig_mip, 0.7)
+    aligned_contours = measure.find_contours(aligned_mip, 0.7)
+    target_contours = measure.find_contours(target_mip, 0.7)
+
+    orig_contours_low = measure.find_contours(orig_mip, 0.05)
+    aligned_contours_low = measure.find_contours(aligned_mip, 0.05)
+    target_contours_low = measure.find_contours(target_mip, 0.05)
+
+    # Plot before
+    ax[0].imshow(orig_mip, vmax=1., vmin=0, origin="lower", cmap="gray",
+                 interpolation="nearest")
+    ax[1].imshow(target_mip, vmax=1., vmin=0, origin="lower", cmap="gray",
+                 interpolation="nearest")
+    ax[0].text(5, 5, "%03d: Before" % imagenum, fontsize=16, color='white')
+    for contour in target_contours + target_contours_low:
+        ax[0].plot(contour[:, 1], contour[:, 0], linewidth=2, alpha=0.9, color="#e7298a")
+        ax[1].plot(contour[:, 1], contour[:, 0], linewidth=2, alpha=0.9, color="#e7298a")
+    for contour in orig_contours + orig_contours_low:
+        ax[1].plot(contour[:, 1], contour[:, 0], linewidth=2, alpha=0.9, color="#d95f02")
+        ax[0].plot(contour[:, 1], contour[:, 0], linewidth=2, alpha=0.9, color="#d95f02")
+    for axis in ax:
+        axis.set_xticks([])
+        axis.set_yticks([])
+
+    before_image = to_image(fig)
+
+    # Plot after
+    for _ax in ax:
+        _ax.clear()
+    ax[0].imshow(aligned_mip, vmax=1., vmin=0, origin="lower", cmap="gray",
+                 interpolation="nearest")
+    ax[1].imshow(target_mip, vmax=1., vmin=0, origin="lower", cmap="gray",
+                 interpolation="nearest")
+    ax[0].text(5, 5, "%03d: After" % imagenum, fontsize=16, color='white')
+    for contour in target_contours + target_contours_low:
+        ax[0].plot(contour[:, 1], contour[:, 0], linewidth=2, alpha=0.9, color="#e7298a")
+        ax[1].plot(contour[:, 1], contour[:, 0], linewidth=2, alpha=0.9, color="#e7298a")
+    for contour in aligned_contours + aligned_contours_low:
+        ax[1].plot(contour[:, 1], contour[:, 0], linewidth=2, alpha=0.9, color="#d95f02")
+        ax[0].plot(contour[:, 1], contour[:, 0], linewidth=2, alpha=0.9, color="#d95f02")
+    for axis in ax:
+        axis.set_xticks([])
+        axis.set_yticks([])
+    after_image = to_image(fig)
+
+    return before_image, after_image
+
+
+def _iteration_summary_plot(iters_df, out_file):
+    iters = list([item[1] for item in iters_df.groupby('iter_num')])
+    shift_cols = ["shiftX", "shiftY", "shiftZ"]
+    rotate_cols = ["rotateX", "rotateY", "rotateZ"]
+    shifts = np.stack([df[shift_cols] for df in iters], -1)
+    rotations = np.stack([df[rotate_cols] for df in iters], -1)
+
+    rot_diffs = np.diff(rotations, axis=2).squeeze()
+    shift_diffs = np.diff(shifts, axis=2).squeeze()
+    if len(iters) == 2:
+        rot_diffs = rot_diffs[..., np.newaxis]
+        shift_diffs = shift_diffs[..., np.newaxis]
+
+    shiftdiff_dfs = []
+    rotdiff_dfs = []
+    for diffnum, (rot_diff, shift_diff) in enumerate(zip(rot_diffs.T, shift_diffs.T)):
+        shiftdiff_df = pd.DataFrame(shift_diff.T, columns=shift_cols)
+        shiftdiff_df['difference_num'] = "%02d" % diffnum
+        shiftdiff_dfs.append(shiftdiff_df)
+
+        rotdiff_df = pd.DataFrame(rot_diff.T, columns=rotate_cols)
+        rotdiff_df['difference_num'] = "%02d" % diffnum
+        rotdiff_dfs.append(rotdiff_df)
+
+    shift_diffs = pd.concat(shiftdiff_dfs, axis=0)
+    rotate_diffs = pd.concat(rotdiff_dfs, axis=0)
+
+    # Plot shifts
+    sns.set()
+    fig, ax = plt.subplots(ncols=2, figsize=(10, 5))
+    sns.violinplot(x="variable", y="value",
+                   hue="difference_num",
+                   ax=ax[0],
+                   data=shift_diffs.melt(id_vars=['difference_num']))
+    ax[0].set_ylabel("mm")
+    ax[0].set_title("Shift")
+
+    # Plot rotations
+    sns.violinplot(x="variable", y="value",
+                   hue="difference_num",
+                   data=rotate_diffs.melt(id_vars=['difference_num']))
+    ax[1].set_ylabel("Degrees")
+    ax[1].set_title("Rotation")
+    sns.despine(offset=10, trim=True, fig=fig)
+    fig.savefig(out_file)

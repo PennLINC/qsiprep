@@ -216,6 +216,10 @@ RUN conda install -y mkl=2019.1 mkl-service;  sync &&\
                      libxslt=1.1.33 \
                      graphviz=2.40.1 \
                      cython=0.29.2 \
+                     imageio=2.5.0 \
+                     olefile=0.46 \
+                     pillow=6.0.0 \
+                     scikit-image=0.14.2 \
                      traits=4.6.0; sync &&  \
     chmod -R a+rX /usr/local/miniconda; sync && \
     chmod +x /usr/local/miniconda/bin/*; sync && \

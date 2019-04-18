@@ -16,15 +16,12 @@ from mpl_toolkits.mplot3d import Axes3D
 import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np
-from collections import Counter
 from nipype.interfaces.base import (
     traits, TraitedSpec, BaseInterfaceInputSpec,
     File, Directory, InputMultiPath, InputMultiObject, Str, isdefined,
     SimpleInterface)
 from nipype.interfaces import freesurfer as fs
-from .bids import BIDS_NAME
 from .gradients import concatenate_bvals, concatenate_bvecs
-import matplotlib.pyplot as plt
 from matplotlib import animation
 
 SUBJECT_TEMPLATE = """\t<ul class="elem-desc">

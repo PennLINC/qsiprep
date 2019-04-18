@@ -671,8 +671,7 @@ def init_qsiprep_dwi_preproc_wf(dwi_files,
                                                omp_nthreads=omp_nthreads,
                                                use_compression=False,
                                                to_mni=True,
-                                               write_local_bvecs=write_local_bvecs
-                                               )
+                                               write_local_bvecs=write_local_bvecs)
         gtab_mni = pe.Node(MRTrixGradientTable(), name='gtab_mni')
         workflow.connect([
             (slice_check, transform_dwis_mni, [('imputed_images', 'inputnode.dwi_files')]),

@@ -16,9 +16,11 @@ import os
 import numpy as np
 from ...interfaces.gradients import MatchTransforms, GradientRotation, CombineMotions
 from ...interfaces.shoreline import (SignalPrediction, ExtractDWIsForModel, ReorderOutputs,
-                                     B0Mean)
+                                     B0Mean, SHORELineReport, IterationSummary)
+from ...interfaces import DerivativesDataSink
 from .util import init_skullstrip_b0_wf
 
+DEFAULT_MEMORY_MIN_GB = 0.01
 
 def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, mem_gb=3, omp_nthreads=1,
                     num_model_iterations=2, write_report=True, name="dwi_hmc_wf"):
@@ -29,7 +31,8 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, mem_gb=3, omp_nthrea
         name='inputnode')
 
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=["final_template", "forward_transforms", "noise_free_dwis"]),
+        niu.IdentityInterface(
+            fields=["final_template", "forward_transforms", "noise_free_dwis"]),
         name='outputnode')
 
     workflow = Workflow(name=name)
@@ -65,8 +68,7 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, mem_gb=3, omp_nthrea
             ('b0_indices', 'inputnode.b0_indices'),
             ('bvecs', 'inputnode.bvec_files'),
             ('bvals', 'inputnode.bval_files')]),
-        (match_transforms, dwi_model_hmc_wf, [('transforms', 'inputnode.initial_transforms')]),
-
+        (match_transforms, dwi_model_hmc_wf, [('transforms', 'inputnode.initial_transforms')])
     ])
 
     # Warp the modeled images into non-motion-corrected space
@@ -369,6 +371,7 @@ def init_hmc_model_iteration_wf(modelname, transform, precision="coarse", name="
         (inputnode, post_bvec_transforms, [('original_bvecs', 'bvec_files'),
                                            ('bvals', 'bval_files')]),
 
+        (predict_dwis, outputnode, [('predicted_image', 'predicted_dwis')]),
         (post_bvec_transforms, outputnode, [('bvecs', 'aligned_bvecs')]),
         (register_to_predicted, outputnode, [('warped_image', 'aligned_dwis'),
                                              ('forward_transforms', 'hmc_transforms')])
@@ -434,8 +437,10 @@ def init_dwi_model_hmc_wf(modelname, transform, mem_gb, omp_nthreads,
             fields=['dwi_files', 'b0_indices', 'initial_transforms', 'bvec_files', 'bval_files',
                     'warped_b0_images', 'warped_b0_mask']),
         name='inputnode')
-    outputnode = pe.Node(niu.IdentityInterface(
-        fields=['hmc_transforms', 'model_predicted_images']), name='outputnode')
+    outputnode = pe.Node(
+        niu.IdentityInterface(
+            fields=['hmc_transforms', 'model_predicted_images', 'optimization_data']),
+        name='outputnode')
 
     # Merge b0s into a single volume, put the non-b0 dwis into a list
     extract_dwis = pe.Node(ExtractDWIsForModel(), name="extract_dwis")
@@ -513,17 +518,41 @@ def init_dwi_model_hmc_wf(modelname, transform, mem_gb, omp_nthreads,
         ])
 
     reorder_dwi_xforms = pe.Node(ReorderOutputs(), name='reorder_dwi_xforms')
+    summarize_iterations = pe.Node(IterationSummary(), name='summarize_iterations')
+    ds_report_iteration_plot = pe.Node(
+        DerivativesDataSink(suffix="shoreline_summary"), name='ds_report_iteration_plot',
+        mem_gb=0.1, run_without_submitting=True)
+
+    # Create a report:
+    shoreline_report = pe.Node(SHORELineReport(), name='shoreline_report')
+    ds_report_shoreline_gif = pe.Node(
+        DerivativesDataSink(suffix="shoreline_animation"), name='ds_report_shoreline_gif',
+        mem_gb=1, run_without_submitting=True)
+
     workflow.connect([
         (model_iterations[-1], reorder_dwi_xforms, [
             ('outputnode.hmc_transforms', 'model_based_transforms'),
-            ('outputnode.aligned_dwis', 'model_predicted_images')]),
+            ('outputnode.predicted_dwis', 'model_predicted_images'),
+            ('outputnode.aligned_dwis', 'warped_dwi_images')]),
         (b0_mean, reorder_dwi_xforms, [('average_image', 'b0_mean')]),
         (inputnode, reorder_dwi_xforms, [
+            ('warped_b0_images', 'warped_b0_images'),
             ('b0_indices', 'b0_indices'),
             ('initial_transforms', 'initial_transforms')]),
         (reorder_dwi_xforms, outputnode, [
             ('full_transforms', 'hmc_transforms'),
-            ('full_predicted_dwi_series', 'model_predicted_images')])
+            ('full_predicted_dwi_series', 'model_predicted_images')]),
+        (collect_motion_params, summarize_iterations, [
+            ('out', 'collected_motion_files')]),
+        (summarize_iterations, ds_report_iteration_plot, [
+            ('plot_file', 'in_file')]),
+        (summarize_iterations, shoreline_report, [
+            ('iteration_summary_file', 'iteration_summary')]),
+        (inputnode, shoreline_report, [('dwi_files', 'original_images')]),
+        (reorder_dwi_xforms, shoreline_report, [
+            ('full_predicted_dwi_series', 'model_predicted_images'),
+            ('hmc_warped_images', 'registered_images')]),
+        (shoreline_report, ds_report_shoreline_gif, [('out_report', 'in_file')])
     ])
 
     return workflow
