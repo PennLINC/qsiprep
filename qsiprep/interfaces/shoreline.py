@@ -22,7 +22,7 @@ from nipype.interfaces.base import (
     traits, TraitedSpec, BaseInterfaceInputSpec, File, SimpleInterface, InputMultiObject,
     OutputMultiObject, isdefined
 )
-from .gradients import concatenate_bvecs, concatenate_bvals, _unique_bvecs
+from .gradients import concatenate_bvecs, concatenate_bvals
 from dipy.core.gradients import gradient_table
 from ..utils.brainsuite_shore import BrainSuiteShoreModel, brainsuite_shore_basis
 from .reports import SummaryInterface, SummaryOutputSpec
