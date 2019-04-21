@@ -101,7 +101,6 @@ class Report(object):
                             copyfile(src, str(svg_dir / fbase),
                                      copy=True, use_hardlink=True)
                             contents = str(Path(subject) / fig_dir / fbase)
-
                         if contents:
                             rlet.source_files.append(src)
                             rlet.contents.append(contents)
@@ -213,8 +212,9 @@ class Report(object):
 def order_by_run(subreport):
     ordered = []
     run_reps = {}
-
+    print('Order by runs')
     for element in subreport.reportlets:
+        print(element.source_files)
         if len(element.source_files) == 1 and element.source_files[0]:
             ordered.append(element)
             continue

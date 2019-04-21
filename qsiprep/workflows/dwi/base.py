@@ -284,7 +284,7 @@ def init_qsiprep_dwi_preproc_wf(dwi_files,
             'dwi_t1', 'dwi_mask_t1', 'bvals_t1', 'bvecs_t1', 'local_bvecs_t1', 't1_b0_ref',
             't1_b0_series', 'dwi_mni', 'dwi_mask_mni', 'bvals_mni', 'bvecs_mni',
             'local_bvecs_mni', 'mni_b0_ref', 'mni_b0_series', 'confounds', 'gradient_table_mni',
-            'gradient_table_t1'
+            'gradient_table_t1', 'hmc_optimization_data'
         ]),
         name='outputnode')
 
@@ -387,7 +387,7 @@ def init_qsiprep_dwi_preproc_wf(dwi_files,
             niu.IdentityInterface(fields=[
                 'b0_ref_image', 'b0_ref_mask', 'dwi_files', 'bvec_files', 'bval_files',
                 'b0_images', 'b0_indices', 'to_dwi_ref_affines', 'to_dwi_ref_warps',
-                'original_grouping', 'sdc_method', 'ideal_images']),
+                'original_grouping', 'sdc_method', 'ideal_images', 'hmc_optimization_data']),
             name="buffernode")
         # Merge, denoise, split, hmc
         merge_dwis = init_merge_and_denoise_wf(dwi_denoise_window=dwi_denoise_window,
@@ -508,7 +508,8 @@ def init_qsiprep_dwi_preproc_wf(dwi_files,
                                       ('b0_indices', 'inputnode.b0_indices')]),
             (dwi_hmc_wf, buffernode, [(('outputnode.forward_transforms', _list_squeeze),
                                        'to_dwi_ref_affines'),
-                                      ('outputnode.noise_free_dwis', 'ideal_images')]),
+                                      ('outputnode.noise_free_dwis', 'ideal_images'),
+                                      ('outputnode.optimization_data', 'hmc_optimization_data')]),
             (dwi_hmc_wf, dwi_ref_wf, [('outputnode.final_template', 'inputnode.b0_template')]),
             (dwi_ref_wf, b0_sdc_wf, [('outputnode.ref_image', 'inputnode.b0_ref'),
                                      ('outputnode.ref_image_brain', 'inputnode.b0_ref_brain'),
@@ -551,7 +552,8 @@ def init_qsiprep_dwi_preproc_wf(dwi_files,
         output_dir=output_dir,
         output_spaces=output_spaces,
         template=template,
-        write_local_bvecs=write_local_bvecs)
+        write_local_bvecs=write_local_bvecs,
+        hmc_model=hmc_model)
 
     workflow.connect([
         (inputnode, dwi_derivatives_wf, [('dwi_files', 'inputnode.source_file')]),
@@ -572,7 +574,8 @@ def init_qsiprep_dwi_preproc_wf(dwi_files,
           ('mni_b0_ref', 'inputnode.mni_b0_ref'),
           ('mni_b0_series', 'inputnode.mni_b0_series'),
           ('gradient_table_mni', 'inputnode.gradient_table_mni'),
-          ('confounds', 'inputnode.confounds')])
+          ('confounds', 'inputnode.confounds'),
+          ('hmc_optimization_data', 'inputnode.hmc_optimization_data')])
     ])
 
     workflow.connect([
@@ -613,7 +616,7 @@ def init_qsiprep_dwi_preproc_wf(dwi_files,
                                     ('bvec_files', 'inputnode.bvec_files'),
                                     ('original_grouping', 'inputnode.original_files')]),
         (confounds_wf, outputnode, [('outputnode.confounds_file', 'confounds')]),
-
+        (buffernode, outputnode, [('hmc_optimization_data', 'hmc_optimization_data')]),
         (confounds_wf, conf_plot, [('outputnode.confounds_file', 'confounds_file')]),
         (slice_check, conf_plot, [('slice_stats', 'sliceqc_file')]),
         (buffernode, conf_plot, []),
@@ -711,7 +714,7 @@ def init_qsiprep_dwi_preproc_wf(dwi_files,
         mem_gb=DEFAULT_MEMORY_MIN_GB)
 
     workflow.connect([
-      (summary, ds_report_summary, [('out_report', 'in_file')])
+        (summary, ds_report_summary, [('out_report', 'in_file')])
     ])
 
     # Fill-in datasinks of reportlets seen so far
@@ -729,6 +732,7 @@ def init_dwi_derivatives_wf(output_prefix,
                             output_spaces,
                             template,
                             write_local_bvecs,
+                            hmc_model,
                             name='dwi_derivatives_wf'):
 
     """Set up a battery of datasinks to store derivatives in the right location.
@@ -738,20 +742,35 @@ def init_dwi_derivatives_wf(output_prefix,
     inputnode = pe.Node(
         niu.IdentityInterface(fields=[
             'source_file', 'dwi_t1', 'dwi_mask_t1', 'bvals_t1', 'bvecs_t1', 'local_bvecs_t1',
-            't1_b0_ref', 't1_b0_series', 'gradient_table_t1', 'dwi_mni', 'dwi_mask_mni', 'bvals_mni', 'bvecs_mni',
-            'local_bvecs_mni', 'mni_b0_ref', 'mni_b0_series', 'gradient_table_mni', 'confounds'
+            't1_b0_ref', 't1_b0_series', 'gradient_table_t1', 'dwi_mni', 'dwi_mask_mni',
+            'bvals_mni', 'bvecs_mni', 'local_bvecs_mni', 'mni_b0_ref', 'mni_b0_series',
+            'gradient_table_mni', 'confounds', 'hmc_optimization_data'
         ]),
         name='inputnode')
 
-    ds_confounds = pe.Node(DerivativesDataSink(
-        prefix=output_prefix,
-        source_file=source_file,
-        base_directory=output_dir, suffix='confounds'),
+    ds_confounds = pe.Node(
+        DerivativesDataSink(
+            prefix=output_prefix,
+            source_file=source_file,
+            base_directory=output_dir, suffix='confounds'),
         name="ds_confounds", run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB)
     workflow.connect([
         (inputnode, ds_confounds, [('confounds', 'in_file')])
     ])
+
+    ds_optimization = pe.Node(
+        DerivativesDataSink(
+            prefix=output_prefix,
+            source_file=source_file,
+            base_directory=output_dir, suffix='hmcOptimization'),
+        name="ds_optimization", run_without_submitting=True,
+        mem_gb=DEFAULT_MEMORY_MIN_GB)
+
+    if hmc_model == '3dSHORE':
+        workflow.connect([
+            (inputnode, ds_optimization, [('hmc_optimization_data', 'in_file')])
+        ])
 
     # Resample to T1w space
     if 'T1w' in output_spaces:

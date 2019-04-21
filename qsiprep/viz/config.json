@@ -68,19 +68,33 @@
                 "raw": true
             },
             {
-                "name": "epi/sampling_scheme",
-                "file_pattern": "dwi/.*sampling_scheme",
-                "title": "DWI Sampling Scheme",
-                "description": "Animation of the DWI sampling scheme. Each separate scan is its own color.",
-                "imgtype": "gif"
-            },
-            {
                 "name": "epi/validation",
                 "file_pattern": "dwi/.*_validation\\.",
                 "raw": true
             },
             {
-                "name": "epi/fmpa_reg",
+                "name": "epi/sampling_scheme",
+                "file_pattern": "dwi/.*sampling_scheme\\.",
+                "title": "DWI Sampling Scheme",
+                "description": "Animation of the DWI sampling scheme. Each separate scan is its own color.",
+                "imgtype": "gif"
+            },
+            {
+              "name": "epi/shoreline_convergence",
+              "file_pattern": "dwi/.*shoreline_iterdata\\.",
+              "title": "SHORELine Convergence",
+              "description": "Difference in motion estimates over SHORELine iterations. Values close to zero indicate good convergence.",
+              "imgtype": "svg"
+            },
+            {
+              "name": "epi/shoreline_reg",
+              "file_pattern": "dwi/.*shoreline_animation\\.",
+              "title": "SHORELine Registration",
+              "description": "Maximum intensity projections of each DWI before and after SHORELine registration. Orange lines are from the observed image and magenta lines are from the model-based registration target.",
+              "imgtype": "gif"
+            },
+            {
+                "name": "epi/fmap_reg",
                 "file_pattern": "dwi/.*fmap_reg\\.",
                 "title": "Fieldmap to EPI registration",
                 "description": "Results of affine coregistration between the magnitude image of the fieldmap and the reference EPI image",
