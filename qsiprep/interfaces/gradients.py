@@ -159,13 +159,21 @@ class SliceQC(SimpleInterface):
         slice_scores = []
         wb_xcorrs = []
         wb_r2s = []
-        for ideal_image, input_image in zip(ideal_image_files,
-                                            uncorrected_image_files):
-            slices, wb_xcorr, wb_r2 = _score_slices(ideal_image, input_image,
-                                                    masked_slices, valid_slices)
-            slice_scores.append(slices)
-            wb_xcorrs.append(wb_xcorr)
-            wb_r2s.append(wb_r2)
+        # If impute slice threshold==0 or hmc_model=="none"
+        if isdefined(ideal_image_files):
+            for ideal_image, input_image in zip(ideal_image_files,
+                                                uncorrected_image_files):
+                slices, wb_xcorr, wb_r2 = _score_slices(ideal_image, input_image,
+                                                        masked_slices, valid_slices)
+                slice_scores.append(slices)
+                wb_xcorrs.append(wb_xcorr)
+                wb_r2s.append(wb_r2)
+        else:
+            num_trs = len(uncorrected_image_files)
+            num_slices = mask_img.shape[2]
+            wb_xcorrs = np.zeros(num_trs)
+            wb_r2s = np.zeros(num_trs)
+            slice_scores = np.zeros((num_slices, num_trs))
 
         np.savez(output_npz, slice_scores=slice_scores, wb_r2s=np.array(wb_r2s),
                  wb_xcorrs=np.array(wb_xcorrs), valid_slices=valid_slices,
@@ -222,8 +230,9 @@ class CombineMotions(SimpleInterface):
             os.system("ConvertTransformFile 3 %s output.txt --RAS --hm" % (motion_file))
             affine = np.loadtxt("output.txt")
             scale, shear, angles, translate, persp = decompose_matrix(affine)
-            collected_motion.append(np.concatenate([scale, shear,
-                                    np.array(angles)*180/np.pi, translate]))
+            collected_motion.append(
+                np.concatenate([
+                    scale, shear, np.array(angles) * 180 / np.pi, translate]))
 
         final_motion = np.row_stack(collected_motion)
         cols = ["scaleX", "scaleY", "scaleZ", "shearXY", "shearXZ",

@@ -56,6 +56,12 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file, mem_gb=
         (b0_hmc_wf, b0_template_mask, [('outputnode.final_template', 'inputnode.in_file')])
     ])
 
+    if hmc_model.lower() == "none":
+        workflow.connect([
+            (match_transforms, outputnode, [('transforms', 'forward_transforms')])
+        ])
+        return workflow
+
     # Do model-based motion correction
     dwi_model_hmc_wf = init_dwi_model_hmc_wf(hmc_model, hmc_transform, mem_gb, omp_nthreads,
                                              num_iters=num_model_iterations)
