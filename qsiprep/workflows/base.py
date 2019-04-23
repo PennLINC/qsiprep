@@ -42,7 +42,7 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
                     denoise_before_combining, dwi_denoise_window, output_resolution,
                     combine_all_dwis, omp_nthreads, force_spatial_normalization,
                     skull_strip_template, skull_strip_fixed_seed, freesurfer, hmc_model,
-                    impute_slice_threshold, hmc_transform, write_local_bvecs,
+                    impute_slice_threshold, hmc_transform, shoreline_iters, write_local_bvecs,
                     output_spaces, template, motion_corr_to, b0_to_t1w_transform,
                     prefer_dedicated_fmaps, fmap_bspline, fmap_demean, use_syn, force_syn):
     """
@@ -81,6 +81,7 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
                               motion_corr_to='iterative',
                               b0_to_t1w_transform='Rigid',
                               hmc_transform='Affine',
+                              shoreline_iters=2,
                               impute_slice_threshold=0,
                               write_local_bvecs=False,
                               prefer_dedicated_fmaps=False,
@@ -215,6 +216,7 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
             b0_to_t1w_transform=b0_to_t1w_transform,
             hmc_model=hmc_model,
             hmc_transform=hmc_transform,
+            shoreline_iters=shoreline_iters,
             impute_slice_threshold=impute_slice_threshold,
             write_local_bvecs=write_local_bvecs,
             fmap_bspline=fmap_bspline,
@@ -241,7 +243,7 @@ def init_single_subject_wf(
         combine_all_dwis, omp_nthreads, skull_strip_template, force_spatial_normalization,
         skull_strip_fixed_seed, freesurfer, hires, output_spaces, template, output_resolution,
         prefer_dedicated_fmaps, motion_corr_to, b0_to_t1w_transform, hmc_model, hmc_transform,
-        impute_slice_threshold, fmap_bspline, fmap_demean, use_syn, force_syn):
+        shoreline_iters, impute_slice_threshold, fmap_bspline, fmap_demean, use_syn, force_syn):
     """
     This workflow organizes the preprocessing pipeline for a single subject.
     It collects and reports information about the subject, and prepares
@@ -286,6 +288,7 @@ def init_single_subject_wf(
             b0_to_t1w_transform='Rigid',
             hmc_model='3dSHORE',
             hmc_transform='Affine',
+            shoreline_iters=2,
             impute_slice_threshold=0.0,
             write_local_bvecs=False,
             fmap_bspline=False,
@@ -392,8 +395,7 @@ def init_single_subject_wf(
     workflow = Workflow(name=name)
     workflow.__desc__ = """
 Results included in this manuscript come from preprocessing
-performed using *QSIprep* {qsiprep_ver}
-(@qsiprep; RRID:SCR_016216),
+performed using *QSIprep* {qsiprep_ver},
 which is based on *Nipype* {nipype_ver}
 (@nipype1; @nipype2; RRID:SCR_002502).
 
@@ -524,6 +526,7 @@ to workflows in *qsiprep*'s documentation]\
             write_local_bvecs=write_local_bvecs,
             hmc_model=hmc_model,
             hmc_transform=hmc_transform,
+            shoreline_iters=shoreline_iters,
             impute_slice_threshold=impute_slice_threshold,
             reportlets_dir=reportlets_dir,
             output_spaces=output_spaces,

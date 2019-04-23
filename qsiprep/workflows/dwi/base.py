@@ -46,6 +46,7 @@ def init_qsiprep_dwi_preproc_wf(dwi_files,
                                 b0_to_t1w_transform,
                                 hmc_model,
                                 hmc_transform,
+                                shoreline_iters,
                                 impute_slice_threshold,
                                 reportlets_dir,
                                 freesurfer,
@@ -85,6 +86,7 @@ def init_qsiprep_dwi_preproc_wf(dwi_files,
                                   b0_to_t1w_transform='Rigid',
                                   hmc_model='3dSHORE',
                                   hmc_transform='Affine',
+                                  shoreline_iters=2,
                                   impute_slice_threshold=0,
                                   fmap_bspline=True,
                                   fmap_demean=True,
@@ -301,7 +303,8 @@ def init_qsiprep_dwi_preproc_wf(dwi_files,
                                                denoise_before_combining=denoise_before_combining,
                                                name="merge_plus")
         split_plus = pe.Node(SplitDWIs(), name="split_plus")
-        dwi_hmc_plus = init_dwi_hmc_wf(hmc_transform, hmc_model, motion_corr_to,
+        dwi_hmc_plus = init_dwi_hmc_wf(hmc_transform, hmc_model, motion_corr_to, source_file,
+                                       num_model_iterations=shoreline_iters,
                                        name="dwi_hmc_plus")
         merge_plus.inputs.inputnode.dwi_files = dwi_files[plus_key]
 
@@ -310,7 +313,8 @@ def init_qsiprep_dwi_preproc_wf(dwi_files,
                                                 denoise_before_combining=denoise_before_combining,
                                                 name="merge_minus")
         split_minus = pe.Node(SplitDWIs(), name="split_minus")
-        dwi_hmc_minus = init_dwi_hmc_wf(hmc_transform, hmc_model, motion_corr_to,
+        dwi_hmc_minus = init_dwi_hmc_wf(hmc_transform, hmc_model, motion_corr_to, source_file,
+                                        num_model_iterations=shoreline_iters,
                                         name="dwi_hmc_minus")
         merge_minus.inputs.inputnode.dwi_files = dwi_files[plus_key + "-"]
 
@@ -397,6 +401,7 @@ def init_qsiprep_dwi_preproc_wf(dwi_files,
         split_dwis = pe.Node(SplitDWIs(), name="split_dwis")
         dwi_hmc_wf = init_dwi_hmc_wf(hmc_transform, hmc_model, motion_corr_to,
                                      source_file=source_file,
+                                     num_model_iterations=shoreline_iters,
                                      omp_nthreads=omp_nthreads, name="dwi_hmc_wf")
 
         # Fieldmap time
@@ -423,12 +428,12 @@ def init_qsiprep_dwi_preproc_wf(dwi_files,
                 sbbase = os.path.basename(sbref_file)
                 if len(files) > 1:
                     LOGGER.warning(
-                        "Multiple single-band reference files found for {}; using "
-                        "{}".format(refbase, sbbase))
+                        "Multiple single-band reference files found for %s; using "
+                        "%s", refbase, sbbase)
                 else:
-                    LOGGER.log(25, "Using single-band reference file {}".format(sbbase))
+                    LOGGER.log(25, "Using single-band reference file %s", sbbase)
             else:
-                LOGGER.log(25, "No single-band-reference found for {}".format(refbase))
+                LOGGER.log(25, "No single-band-reference found for %s", refbase)
 
             metadata = layout.get_metadata(ref_file)
 

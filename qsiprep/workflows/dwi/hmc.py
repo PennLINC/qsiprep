@@ -348,7 +348,11 @@ def init_hmc_model_iteration_wf(modelname, transform, precision="coarse", name="
                     'motion_params']),
         name='outputnode')
 
-    ants_settings = pkgrf("qsiprep", "data/shoreline_coarse.json")
+    ants_settings = pkgrf(
+        "qsiprep",
+        "data/shoreline_{precision}_{transform}.json".format(precision=precision,
+                                                             transform=transform))
+
     predict_dwis = pe.MapNode(SignalPrediction(),
                               iterfield=['bval_to_predict', 'bvec_to_predict'],
                               name="predict_dwis")
@@ -376,7 +380,9 @@ def init_hmc_model_iteration_wf(modelname, transform, precision="coarse", name="
                                    (('approx_aligned_bvecs', _bvecs_to_list), 'bvec_to_predict'),
                                    (('bvals', _bvals_to_floats), 'bval_to_predict')]),
         (predict_dwis, register_to_predicted, [('predicted_image', 'fixed_image')]),
-        (inputnode, register_to_predicted, [('original_dwi_files', 'moving_image')]),
+        (inputnode, register_to_predicted, [
+            ('original_dwi_files', 'moving_image'),
+            ('b0_mask', 'fixed_image_masks')]),
 
         (register_to_predicted, calculate_motion, [
             (('forward_transforms', _list_squeeze), 'transform_files')]),
