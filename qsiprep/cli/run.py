@@ -246,6 +246,12 @@ def get_parser():
         '"eddy_ingress", the dwis are assumed to have been run through '
         'fsls eddy. ')
     g_moco.add_argument(
+        '--shoreline_iters', '--shoreline-iters',
+        action='store',
+        type=int,
+        default=2,
+        help='number of SHORELine iterations')
+    g_moco.add_argument(
         '--impute-slice-threshold',
         action='store',
         default=0,
@@ -718,6 +724,7 @@ def build_qsiprep_workflow(opts, retval):
         motion_corr_to=opts.b0_motion_corr_to,
         hmc_transform=opts.hmc_transform,
         hmc_model=opts.hmc_model,
+        shoreline_iters=opts.shoreline_iters,
         impute_slice_threshold=opts.impute_slice_threshold,
         b0_to_t1w_transform=opts.b0_to_t1w_transform,
         prefer_dedicated_fmaps=opts.prefer_dedicated_fmaps,
