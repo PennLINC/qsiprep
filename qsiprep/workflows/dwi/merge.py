@@ -98,11 +98,10 @@ def init_merge_and_denoise_wf(dwi_denoise_window,
     ])
 
     if dwi_denoise_window > 0:
+        denoiser = DWIDenoise(extent=(dwi_denoise_window, dwi_denoise_window,
+                                      dwi_denoise_window))
         if denoise_before_combining:
-            denoise = pe.MapNode(DWIDenoise(), iterfield='in_file',
-                                 name='denoise',
-                                 extent=(dwi_denoise_window, dwi_denoise_window,
-                                         dwi_denoise_window))
+            denoise = pe.MapNode(denoiser, iterfield='in_file', name='denoise')
             workflow.connect([
                 (conform_dwis, denoise, [('dwi_file', 'in_file')]),
                 (denoise, merge_dwis, [('out_file', 'dwi_files')]),
@@ -110,10 +109,7 @@ def init_merge_and_denoise_wf(dwi_denoise_window,
                 (merge_dwis, outputnode, [('out_dwi', 'merged_image')])
             ])
         else:
-            denoise = pe.Node(DWIDenoise(),
-                              name='denoise',
-                              extent=(dwi_denoise_window, dwi_denoise_window,
-                                      dwi_denoise_window))
+            denoise = pe.Node(denoiser, name='denoise')
             workflow.connect([
                 (inputnode, merge_dwis, [('dwi_files', 'dwi_files')]),
                 (merge_dwis, denoise, [('out_dwi', 'in_file')]),

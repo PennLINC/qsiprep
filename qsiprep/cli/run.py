@@ -167,7 +167,7 @@ def get_parser():
         '--dwi_denoise_window', '--dwi-denoise-window',
         action='store',
         type=int,
-        default=7,
+        default=5,
         help='window size in voxels for ``dwidenoise``. Must be odd. '
              'If 0, ``dwidwenoise`` will not be run')
     g_conf.add_argument(
