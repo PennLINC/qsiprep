@@ -1,7 +1,7 @@
 {
     "dimension": 3,
     "float": true,
-    "winsorize_lower_quantile": 0.005,
+    "winsorize_lower_quantile": 0.002,
     "winsorize_upper_quantile": 0.998,
     "collapse_output_transforms": true,
     "write_composite_transform": false,
