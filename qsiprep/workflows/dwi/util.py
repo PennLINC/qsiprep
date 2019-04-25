@@ -278,3 +278,42 @@ def init_skullstrip_b0_wf(name='skullstrip_b0_wf'):
     ])
 
     return workflow
+
+
+def _create_mem_gb(dwi_fname):
+    dwi_size_gb = os.path.getsize(dwi_fname) / (1024**3)
+    try:
+        dwi_nvols = nb.load(dwi_fname).shape[3]
+    except IndexError:
+        dwi_nvols = 1
+    except nb.filebasedimages.ImageFileError:
+        LOGGER.warning("Zero-sized image")
+        dwi_nvols = 1
+    mem_gb = {
+        'filesize': dwi_size_gb,
+        'resampled': dwi_size_gb * 4,
+        'largemem': dwi_size_gb * (max(dwi_nvols / 100, 1.0) + 4),
+    }
+
+    return dwi_nvols, mem_gb
+
+
+def _get_wf_name(dwi_fname):
+    """Derive the workflow name based on the output file prefix."""
+    spl = dwi_fname.split("_")
+    nosub = "_".join(spl[1:])
+    return ("dwi_preproc_" + nosub + "_wf").replace("__", "_").replace("-", "_")
+
+
+def _list_squeeze(in_list):
+    squeezed = []
+    for item in in_list:
+        if type(item) is not str:
+            squeezed.append(item[0])
+        else:
+            squeezed.append(item)
+    return squeezed
+
+
+def _get_first(in_list):
+    return in_list[0]

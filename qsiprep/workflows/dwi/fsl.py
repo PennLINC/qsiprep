@@ -2,8 +2,7 @@
 Orchestrating the dwi-preprocessing workflow
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. autofunction:: init_qsiprep_dwi_preproc_wf
-.. autofunction:: init_dwi_derivatives_wf
+.. autofunction:: init_fsl_dwi_preproc_wf
 
 """
 
@@ -20,20 +19,17 @@ from ...interfaces import DerivativesDataSink
 from ...interfaces.reports import DiffusionSummary, GradientPlot
 from ...interfaces.images import SplitDWIs, ConcatRPESplits
 from ...interfaces.gradients import ExtractB0s
-from ...interfaces.confounds import DMRISummary
 from ...interfaces.mrtrix import MRTrixGradientTable
 from ...engine import Workflow
 
 # dwi workflows
-from ..fieldmap.bidirectional_pepolar import init_bidirectional_b0_unwarping_wf
-from ..fieldmap.base import init_sdc_wf
-from ..fieldmap.unwarp import init_fmap_unwarp_report_wf
 from .merge import init_merge_and_denoise_wf
 from .hmc import init_dwi_hmc_wf
-from .util import init_dwi_reference_wf
+from .util import init_dwi_reference_wf, _create_mem_gb, _get_wf_name, _list_squeeze
 from .registration import init_b0_to_anat_registration_wf
 from .resampling import init_dwi_trans_wf
 from .confounds import init_dwi_confs_wf
+from .derivatives import init_dwi_derivatives_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger('nipype.workflow')
@@ -48,7 +44,6 @@ def init_fsl_dwi_preproc_wf(dwi_files,
                             hmc_transform,
                             impute_slice_threshold,
                             reportlets_dir,
-                            freesurfer,
                             output_spaces,
                             dwi_denoise_window,
                             denoise_before_combining,
@@ -618,300 +613,3 @@ def init_fsl_dwi_preproc_wf(dwi_files,
             workflow.get_node(node).inputs.source_file = source_file
 
     return workflow
-
-
-def init_dwi_derivatives_wf(output_prefix,
-                            source_file,
-                            output_dir,
-                            output_spaces,
-                            template,
-                            write_local_bvecs,
-                            name='dwi_derivatives_wf'):
-
-    """Set up a battery of datasinks to store derivatives in the right location.
-    """
-    workflow = Workflow(name=name)
-
-    inputnode = pe.Node(
-        niu.IdentityInterface(fields=[
-            'source_file', 'dwi_t1', 'dwi_mask_t1', 'bvals_t1', 'bvecs_t1', 'local_bvecs_t1',
-            't1_b0_ref', 't1_b0_series', 'gradient_table_t1', 'dwi_mni', 'dwi_mask_mni', 'bvals_mni', 'bvecs_mni',
-            'local_bvecs_mni', 'mni_b0_ref', 'mni_b0_series', 'gradient_table_mni', 'confounds'
-        ]),
-        name='inputnode')
-
-    ds_confounds = pe.Node(DerivativesDataSink(
-        prefix=output_prefix,
-        source_file=source_file,
-        base_directory=output_dir, suffix='confounds'),
-        name="ds_confounds", run_without_submitting=True,
-        mem_gb=DEFAULT_MEMORY_MIN_GB)
-    workflow.connect([
-        (inputnode, ds_confounds, [('confounds', 'in_file')])
-    ])
-
-    # Resample to T1w space
-    if 'T1w' in output_spaces:
-        # 4D DWI in t1 space
-        ds_dwi_t1 = pe.Node(
-            DerivativesDataSink(
-                prefix=output_prefix,
-                source_file=source_file,
-                base_directory=output_dir,
-                space='T1w',
-                desc='preproc',
-                suffix='dwi',
-                extension='.nii.gz',
-                compress=True),
-            name='ds_dwi_t1',
-            run_without_submitting=True,
-            mem_gb=DEFAULT_MEMORY_MIN_GB)
-        ds_bvals_t1 = pe.Node(
-            DerivativesDataSink(
-                prefix=output_prefix,
-                source_file=source_file,
-                base_directory=output_dir,
-                space='T1w',
-                suffix='dwi',
-                extension='.bval',
-                desc='preproc'),
-            name='ds_bvals_t1',
-            run_without_submitting=True,
-            mem_gb=DEFAULT_MEMORY_MIN_GB)
-        ds_bvecs_t1 = pe.Node(
-            DerivativesDataSink(
-                prefix=output_prefix,
-                source_file=source_file,
-                base_directory=output_dir,
-                space='T1w',
-                suffix='dwi',
-                extension='.bvec',
-                desc='preproc'),
-            name='ds_bvecs_t1',
-            run_without_submitting=True,
-            mem_gb=DEFAULT_MEMORY_MIN_GB)
-        ds_t1_b0_ref = pe.Node(
-            DerivativesDataSink(
-                prefix=output_prefix,
-                source_file=source_file,
-                base_directory=output_dir,
-                space='T1w',
-                suffix='dwiref',
-                extension='.nii.gz',
-                compress=True),
-            name='ds_t1_b0_ref',
-            run_without_submitting=True,
-            mem_gb=DEFAULT_MEMORY_MIN_GB)
-        ds_t1_b0_series = pe.Node(
-            DerivativesDataSink(
-                prefix=output_prefix,
-                source_file=source_file,
-                base_directory=output_dir,
-                space='T1w',
-                suffix='b0series',
-                extension='.nii.gz',
-                compress=True),
-            name='ds_t1_b0_series',
-            run_without_submitting=True,
-            mem_gb=DEFAULT_MEMORY_MIN_GB)
-        ds_dwi_mask_t1 = pe.Node(
-            DerivativesDataSink(
-                prefix=output_prefix,
-                source_file=source_file,
-                base_directory=output_dir,
-                space='T1w',
-                desc='brain',
-                suffix='mask',
-                extension='.nii.gz',
-                compress=True),
-            name='ds_dwi_mask_t1',
-            run_without_submitting=True,
-            mem_gb=DEFAULT_MEMORY_MIN_GB)
-        ds_gradient_table_t1 = pe.Node(
-            DerivativesDataSink(
-                prefix=output_prefix,
-                source_file=source_file,
-                base_directory=output_dir,
-                space='T1w',
-                suffix='dwi',
-                extension='.b',
-                desc='preproc'),
-            name='ds_gradient_table_t1',
-            run_without_submitting=True,
-            mem_gb=DEFAULT_MEMORY_MIN_GB)
-
-        workflow.connect([
-            (inputnode, ds_dwi_t1, [('dwi_t1', 'in_file')]),
-            (inputnode, ds_bvals_t1, [('bvals_t1', 'in_file')]),
-            (inputnode, ds_bvecs_t1, [('bvecs_t1', 'in_file')]),
-            (inputnode, ds_t1_b0_ref, [('t1_b0_ref', 'in_file')]),
-            (inputnode, ds_t1_b0_series, [('t1_b0_series', 'in_file')]),
-            (inputnode, ds_dwi_mask_t1, [('dwi_mask_t1', 'in_file')]),
-            (inputnode, ds_gradient_table_t1, [('gradient_table_t1', 'in_file')])
-            ])
-        # If requested, write local bvecs
-        if write_local_bvecs:
-            ds_local_bvecs_t1 = pe.Node(
-                DerivativesDataSink(
-                    base_directory=output_dir,
-                    source_file=source_file,
-                    space='T1w',
-                    suffix='bvec',
-                    compress=True),
-                name='ds_local_bvecs_t1',
-                run_without_submitting=True,
-                mem_gb=DEFAULT_MEMORY_MIN_GB)
-            workflow.connect([(inputnode, ds_local_bvecs_t1, [('local_bvecs_t1', 'in_file')])])
-    # Resample to template (default: MNI)
-    if 'template' in output_spaces:
-        # 4D DWI in t1 space
-        ds_dwi_mni = pe.Node(
-            DerivativesDataSink(
-                prefix=output_prefix,
-                source_file=source_file,
-                base_directory=output_dir,
-                space=template,
-                desc='preproc',
-                suffix='dwi',
-                extension='.nii.gz',
-                keep_dtype=True,
-                compress=True),
-            name='ds_dwi_mni',
-            run_without_submitting=True,
-            mem_gb=DEFAULT_MEMORY_MIN_GB)
-        ds_bvals_mni = pe.Node(
-            DerivativesDataSink(
-                prefix=output_prefix,
-                source_file=source_file,
-                base_directory=output_dir,
-                space=template,
-                suffix='dwi',
-                extension='.bval',
-                desc='preproc'),
-            name='ds_bvals_mni',
-            run_without_submitting=True,
-            mem_gb=DEFAULT_MEMORY_MIN_GB)
-        ds_bvecs_mni = pe.Node(
-            DerivativesDataSink(
-                prefix=output_prefix,
-                source_file=source_file,
-                base_directory=output_dir,
-                space=template,
-                suffix='dwi',
-                extension='.bvec',
-                desc='preproc'),
-            name='ds_bvecs_mni',
-            run_without_submitting=True,
-            mem_gb=DEFAULT_MEMORY_MIN_GB)
-        ds_mni_b0_ref = pe.Node(
-            DerivativesDataSink(
-                prefix=output_prefix,
-                source_file=source_file,
-                base_directory=output_dir,
-                space=template,
-                suffix='dwiref',
-                extension='.nii.gz',
-                compress=True),
-            name='ds_mni_b0_ref',
-            run_without_submitting=True,
-            mem_gb=DEFAULT_MEMORY_MIN_GB)
-        ds_mni_b0_series = pe.Node(
-            DerivativesDataSink(
-                prefix=output_prefix,
-                source_file=source_file,
-                base_directory=output_dir,
-                space=template,
-                suffix='b0series',
-                extension='.nii.gz',
-                compress=True),
-            name='ds_mni_b0_series',
-            run_without_submitting=True,
-            mem_gb=DEFAULT_MEMORY_MIN_GB)
-        ds_dwi_mask_mni = pe.Node(
-            DerivativesDataSink(
-                prefix=output_prefix,
-                source_file=source_file,
-                base_directory=output_dir,
-                space=template,
-                desc='brain',
-                suffix='mask',
-                extension='.nii.gz',
-                compress=True),
-            name='ds_dwi_mask_mni',
-            run_without_submitting=True,
-            mem_gb=DEFAULT_MEMORY_MIN_GB)
-        ds_gradient_table_mni = pe.Node(
-            DerivativesDataSink(
-                prefix=output_prefix,
-                source_file=source_file,
-                base_directory=output_dir,
-                space=template,
-                suffix='dwi',
-                extension='.b',
-                desc='preproc'),
-            name='ds_gradient_table_mni',
-            run_without_submitting=True,
-            mem_gb=DEFAULT_MEMORY_MIN_GB)
-        workflow.connect([
-            (inputnode, ds_dwi_mni, [('dwi_mni', 'in_file')]),
-            (inputnode, ds_bvals_mni, [('bvals_mni', 'in_file')]),
-            (inputnode, ds_bvecs_mni, [('bvecs_mni', 'in_file')]),
-            (inputnode, ds_mni_b0_ref, [('mni_b0_ref', 'in_file')]),
-            (inputnode, ds_mni_b0_series, [('mni_b0_series', 'in_file')]),
-            (inputnode, ds_dwi_mask_mni, [('dwi_mask_mni', 'in_file')]),
-            (inputnode, ds_gradient_table_mni, [('gradient_table_mni', 'in_file')])
-            ])
-        # Local bvecs?
-        if write_local_bvecs:
-            ds_local_bvecs_mni = pe.Node(
-                DerivativesDataSink(
-                    prefix=output_prefix,
-                    source_file=source_file,
-                    base_directory=output_dir,
-                    space=template,
-                    suffix='bvec',
-                    compress=True),
-                name='ds_local_bvecs_mni',
-                run_without_submitting=True,
-                mem_gb=DEFAULT_MEMORY_MIN_GB)
-            workflow.connect([(inputnode, ds_local_bvecs_mni, [('local_bvecs_mni', 'in_file')])])
-    return workflow
-
-
-def _create_mem_gb(dwi_fname):
-    dwi_size_gb = os.path.getsize(dwi_fname) / (1024**3)
-    try:
-        dwi_nvols = nb.load(dwi_fname).shape[3]
-    except IndexError:
-        dwi_nvols = 1
-    except nb.filebasedimages.ImageFileError:
-        LOGGER.warning("Zero-sized image")
-        dwi_nvols = 1
-    mem_gb = {
-        'filesize': dwi_size_gb,
-        'resampled': dwi_size_gb * 4,
-        'largemem': dwi_size_gb * (max(dwi_nvols / 100, 1.0) + 4),
-    }
-
-    return dwi_nvols, mem_gb
-
-
-def _get_wf_name(dwi_fname):
-    """Derive the workflow name based on the output file prefix."""
-    spl = dwi_fname.split("_")
-    nosub = "_".join(spl[1:])
-    return ("dwi_fsl_preproc_" + nosub + "_wf").replace("__", "_")
-
-
-def _list_squeeze(in_list):
-    squeezed = []
-    for item in in_list:
-        if type(item) is not str:
-            squeezed.append(item[0])
-        else:
-            squeezed.append(item)
-    return squeezed
-
-
-def _get_first(in_list):
-    return in_list[0]
