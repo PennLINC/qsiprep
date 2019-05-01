@@ -44,6 +44,7 @@ class SplitDWIsOutputSpec(TraitedSpec):
     bval_files = OutputMultiObject(File(exists=True), desc='single volume bvals')
     b0_images = OutputMultiObject(File(exists=True), desc='just the b0s')
     b0_indices = traits.List(desc='list of original indices for each b0 image')
+    original_files = OutputMultiObject(File(exists=True))
 
 
 class SplitDWIs(SimpleInterface):
@@ -66,49 +67,33 @@ class SplitDWIs(SimpleInterface):
         self._results['bvec_files'] = split_bvec_files
         self._results['b0_images'] = b0_paths
         self._results['b0_indices'] = b0_indices.tolist()
+        self._results['original_files'] = [self.inputs.dwi_file] * len(split_dwi_files)
 
         return runtime
 
 
 class ConcatRPESplitsInputSpec(BaseInterfaceInputSpec):
     dwi_plus = InputMultiObject(File(exists=True), desc='single volume dwis')
-    ideal_plus = InputMultiObject(File(exists=True), desc='model-based single volume dwis')
     bvec_plus = InputMultiObject(File(exists=True), desc='single volume bvecs')
     bval_plus = InputMultiObject(File(exists=True), desc='single volume bvals')
     b0_images_plus = InputMultiObject(File(exists=True), desc='just the b0s')
     b0_indices_plus = traits.List(desc='list of original indices for each b0 image')
-    hmc_affines_plus = InputMultiObject(File(exists=True), desc='hmc_affine_transforms')
-    hmc_affines_minus = InputMultiObject(File(exists=True), desc='hmc_affine_transforms')
-    template_plus_to_ref_affine = File(exists=True,
-                                       desc='affine transform from hmc template to ref')
-    template_plus_to_ref_warp = File(exists=True,
-                                     desc='SDC warp for hmc template')
+    original_images_plus = InputMultiObject(File(exists=True))
+
     dwi_minus = InputMultiObject(File(exists=True), desc='single volume dwis')
-    ideal_minus = InputMultiObject(File(exists=True), desc='model-based single volume dwis')
     bvec_minus = InputMultiObject(File(exists=True), desc='single volume bvecs')
     bval_minus = InputMultiObject(File(exists=True), desc='single volume bvals')
     b0_images_minus = InputMultiObject(File(exists=True), desc='just the b0s')
     b0_indices_minus = traits.List(desc='list of original indices for each b0 image')
-    template_minus_to_ref_affine = File(exists=True,
-                                        desc='affine transform from hmc template to ref')
-    template_minus_to_ref_warp = File(exists=True,
-                                      desc='SDC warp for hmc template')
-    b0_ref_image = File(exists=True, desc='b0 reference image for coregistration')
-    b0_ref_mask = File(exists=True, desc='mask for reference b0 image')
-
+    original_images_minus = traits.List()
 
 class ConcatRPESplitsOutputSpec(TraitedSpec):
-    b0_ref_image = File(exists=True, desc='b0 reference image')
-    b0_ref_mask = File(exists=True, desc='mask for reference b0 image')
     dwi_files = OutputMultiObject(File(exists=True), desc='single volume dwis')
     bvec_files = OutputMultiObject(File(exists=True), desc='single volume bvecs')
     bval_files = OutputMultiObject(File(exists=True), desc='single volume bvals')
     b0_images = OutputMultiObject(File(exists=True), desc='just the b0s')
-    ideal_images = OutputMultiObject(File(exists=True), desc='Model-based images')
     b0_indices = traits.List(desc='list of indices for each b0 image')
-    to_dwi_ref_affines = OutputMultiObject(File(exists=True), desc='affines to b0 ref')
-    to_dwi_ref_warps = OutputMultiObject(File(exists=True), desc='correcting warps to b0 ref')
-    original_grouping = traits.List(desc='list of source series for each dwi')
+    original_files = traits.List(desc='list of source series for each dwi')
     sdc_method = traits.Str("PEB/PEPOLAR Series (phase-encoding based / PE-POLARity)")
 
 class ConcatRPESplits(SimpleInterface):
@@ -122,31 +107,21 @@ class ConcatRPESplits(SimpleInterface):
     output_spec = ConcatRPESplitsOutputSpec
 
     def _run_interface(self, runtime):
-        from .itk import compose_affines
-        self._results['b0_ref_image'] = self.inputs.b0_ref_image
-        self._results['b0_ref_mask'] = self.inputs.b0_ref_mask
 
         plus_images = self.inputs.dwi_plus
-        plus_ideal = self.inputs.ideal_plus
         plus_bvecs = self.inputs.bvec_plus
         plus_bvals = self.inputs.bval_plus
         plus_b0_images = self.inputs.b0_images_plus
         plus_b0_indices = self.inputs.b0_indices_plus
-        plus_hmc_affines = self.inputs.hmc_affines_plus
-        plus_hmc_to_ref_affine = self.inputs.template_plus_to_ref_affine
-        plus_hmc_to_ref_warp = self.inputs.template_plus_to_ref_warp
+        plus_orig_files = self.inputs.original_images_plus
         num_plus = len(plus_images)
 
         minus_images = self.inputs.dwi_minus
-        minus_ideal = self.inputs.ideal_minus
         minus_bvecs = self.inputs.bvec_minus
         minus_bvals = self.inputs.bval_minus
         minus_b0_images = self.inputs.b0_images_minus
         minus_b0_indices = self.inputs.b0_indices_minus
-        minus_hmc_affines = self.inputs.hmc_affines_minus
-        minus_hmc_to_ref_affine = self.inputs.template_minus_to_ref_affine
-        minus_hmc_to_ref_warp = self.inputs.template_minus_to_ref_warp
-        num_minus = len(minus_images)
+        minus_orig_files = self.inputs.original_images_minus
 
         self._results['dwi_files'] = plus_images + minus_images
         self._results['bval_files'] = plus_bvals + minus_bvals
@@ -154,27 +129,10 @@ class ConcatRPESplits(SimpleInterface):
         self._results['b0_images'] = plus_b0_images + minus_b0_images
         self._results['b0_indices'] = plus_b0_indices + [
             num_plus + idx for idx in minus_b0_indices]
-        self._results['original_grouping'] = ['plus'] * num_plus + ['minus'] * num_minus
-        self._results['ideal_images'] = plus_ideal + minus_ideal
-        # Create a list where each element is the warp for the DWI at the corresponding index
-        if isdefined(plus_hmc_to_ref_warp) and isdefined(minus_hmc_to_ref_warp):
-            self._results['to_dwi_ref_warps'] = [plus_hmc_to_ref_warp] * num_plus + \
-                [minus_hmc_to_ref_warp] * num_minus
+        self._results['original_files'] = [
+            item for sublist in plus_orig_files for item in sublist] + [
+            item for sublist in minus_orig_files for item in sublist]
 
-        # Combine the hmc affine with the to-reference affine
-        combined_affines = []
-        for affine_num, hmc_aff_plus in enumerate(plus_hmc_affines):
-            combined_affines.append(
-                compose_affines(self.inputs.b0_ref_image,
-                                # Pop transforms from the stack: first hmc then to ref
-                                [plus_hmc_to_ref_affine, hmc_aff_plus],
-                                runtime.cwd + "/combined_hmc_affine_plus_%03d.mat" % affine_num))
-        for affine_num, hmc_aff_minus in enumerate(minus_hmc_affines):
-            combined_affines.append(
-                compose_affines(self.inputs.b0_ref_image,
-                                [minus_hmc_to_ref_affine, hmc_aff_minus],
-                                runtime.cwd + "/combined_hmc_affine_minus_%03d.mat" % affine_num))
-        self._results['to_dwi_ref_affines'] = combined_affines
         self._results['sdc_method'] = "PEB/PEPOLAR Series"
         return runtime
 

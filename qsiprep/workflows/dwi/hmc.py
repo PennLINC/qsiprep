@@ -23,12 +23,60 @@ from .util import init_skullstrip_b0_wf
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
-def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file, mem_gb=3, omp_nthreads=1,
-                    num_model_iterations=2, write_report=True, name="dwi_hmc_wf"):
-    """Perform head motion correction on a dwi series."""
+def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file, bidirectional_pepolar,
+                    rpe_b0='', num_model_iterations=2, mem_gb=3, omp_nthreads=1,
+                    name="dwi_hmc_wf"):
+    """Perform head motion correction and susceptibility distortion correction.
+
+    This workflow uses antsRegistration and an iteratively updated signal model to perform
+    motion correction and potentially susceptibility distortion correction.
+
+    **Parameters**
+
+        hmc_transform: 'Rigid' or 'Affine'
+            How many degrees of freedom to incorporate into motion correction
+        hmc_model: '3dSHORE', 'none' or 'SH'
+            Which model to use for generating signal predictions for hmc. '3dSHORE' requires
+            multiple b-values, 'none' will only use b0 images for motion correction and
+            'SH' uses spherical harmonics (not implemented yet).
+        hmc_align_to: 'first' or 'iterative'
+            Which volume should be used to determine the motion-corrected space?
+        source_file: str
+            Path to one of the original dwi files (used for reportlets)
+        bidirectional_pepolar: bool
+            If a second set of DWIs is to be used to correct the first set of DWIs. Requires
+            that the sets have opposite phase encoding directions
+        rpe_b0: str
+            Path to a reverse phase encoding image to be used for 3dQWarp's TOPUP-style
+            correction
+        num_model_iterations: int
+            If ``hmc_model`` is ``'3dSHORE'`` or ``'SH'`` determines the number of times the
+            model is updated and motion corretion is estimated. Default: 2.
+
+    **Inputs**
+
+        dwi_files: list
+            List of single-volume files across all DWI series
+        b0_indices: list
+            Indexes into ``dwi_files`` that correspond to b=0 volumes
+        bvecs: list
+            List of paths to single-line bvec files
+        bvals: list
+            List of paths to single-line bval files
+        b0_images: list
+            List of single b=0 volumes
+        original_files: list
+            List of the files from which each DWI volume came from.
+
+    **Outputs**
+
+
+
+    """
+
     inputnode = pe.Node(
         niu.IdentityInterface(
-            fields=['dwi_files', 'b0_indices', 'bvecs', 'bvals', 'b0_images']),
+            fields=['dwi_files', 'b0_indices', 'bvecs', 'bvals', 'b0_images', 'original_files']),
         name='inputnode')
 
     outputnode = pe.Node(

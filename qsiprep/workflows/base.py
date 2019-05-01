@@ -571,8 +571,6 @@ to workflows in *qsiprep*'s documentation]\
     return workflow
 
 
-# def get_
-
 def get_session_groups(layout, subject_data, combine_all_dwis):
     # Handle the grouping of multiple dwi files within a session
     sessions = layout.get_sessions() if layout is not None else []
@@ -596,16 +594,109 @@ def get_session_groups(layout, subject_data, combine_all_dwis):
 
 def group_by_fieldmaps(dwi_files, layout, ignore_fieldmap, prefer_dedicated_fmaps,
                        combine_all_dwis):
-    """Check to see if multiple phase encoding directions are present within a session."""
+    """Groups a session's DWI files by their PE direction and fieldmaps, if specified.
 
-    # If no fieldmap correction is to be done, just make sure that pe dirs aren't mixed
-    if ignore_fieldmap or layout is None:
-        # group by pe direction and intended_fieldmap
-        groups = defaultdict(list)
-        for ref_file in dwi_files:
-            groups[ref_file].append(ref_file)
-        return [grouping for grouping in groups.values()]
+    DWIs are grouped by their **warped space**. Two DWI series that are
+    listed in the IntendedFor field of a fieldmap are assumed to have the same
+    susceptibility distortions and therefore be in the same warped space. The goal
+    of this function is to combine DWI series into groups of acquisitions that
+    are in the same warped space into a list of scans that can be combined after
+    unwarping.
 
+    The first step in the pipeline must be ``dwidenoise``. This algorithm can
+    be run directly on each DWI Series. OR, DWI series in the same warped space
+    can be combined before running ``dwidenoise``.  Running ``dwidenoise`` on
+    concatenated DWI series that include noise and susceptibility distortion
+    violates the assumptions made by ``dwidenoise`` and is not allowed.
+    Performing susceptibility distortion correction before running ``dwidenoise``
+    is also not allowed.
+
+    Similarly, SHORELine performs head motion correction in **warped space**.
+    The more q-space samples are available to SHORELine, the better the EAP
+    estimates. However, if the position of the head is very different between
+    the two runs it may take more iterations for SHORELine to converge. Be sure
+    to check the QC files if using this algorithm.
+
+    Specifying ``combine_all_dwis=True`` means that the SDC outputs will be
+    used to combine across warped spaces. If ``False``, then no scans will be
+    combined even if they are in the same warped space. Other
+    possibilities for grouping are not supported.
+
+
+    Parameters
+    -----------
+
+        dwi_files: list
+            A list of full paths to dwi nifti files in a BIDS tree
+
+        layout: BIDSLayout
+            A representation of the BIDS tree
+
+        prefer_dedicated_fmaps: bool
+            If True, use files in fmap directories to perform SDC even if there
+            is a series in dwi with the reverse phase encoding direction that
+            could be used.
+
+        combine_all_dwis: bool
+            If True, concaenate DWI series that can be concatenated. To be concatenated
+            the series must either have the same phase encoding direction or there
+            must be fieldmaps that correct for opposite phase encoding directions.
+
+    Returns:
+    ---------
+
+        groups_list: list
+            A list of dictionaries that describe "group info". These can take a couple forms
+
+            When there are two groups of dwi series with opposite phase encoding dirs:
+            [
+                {'dwi_series': ['scan1.nii', 'scan2.nii'],
+                 'rpe_dwi_series': ['scan3.nii', 'scan4.nii'],
+                 'rpe_b0': [],
+                 'dwi_series_pedir': 'j'}
+            ]
+
+            When there is a PEPolar fieldmap
+            [
+             {
+              'dwi_series': ['scan1.nii', 'scan2.nii'],
+              'rpe_dwi_series': [],
+              'rpe_b0: ['fmap_scan.nii'],
+              'dwi_series_pedir': 'j'
+             }
+            ]
+
+            When two different PE directions each have their own fieldmaps
+            [
+             {
+              'dwi_series': ['scan1.nii', 'scan2.nii'],
+              'rpe_dwi_series': [],
+              'rpe_b0: ['fmap_scan.nii'],
+              'dwi_series_pedir': 'j'
+             },
+             {
+              'dwi_series': ['scan3.nii', 'scan4.nii'],
+              'rpe_dwi_series': [],
+              'rpe_b0: ['fmap_scan2.nii'],
+              'dwi_series_pedir': 'j-'
+             }
+            ]
+
+        NOTE: the pre-hmc steps, such as denoising, will only be run within warped space
+        groups
+
+    """
+
+    # For doc-building
+    if layout is None:
+        return [{'dwi_series': dwi_files,
+                 'rpe_series': [],
+                 'rpe_b0':[],
+                 'dwi_series_pedir': 'j'}]
+
+    # For each DWI, figure out its PE dir and whether or not it was listed in
+    # an IntendedFor field in a fieldmap sidecar. Make a list of
+    # (filename, PE dir, fmap_file)
     parsed_dwis = []
     for ref_file in dwi_files:
         metadata = layout.get_metadata(ref_file)
@@ -622,13 +713,25 @@ def group_by_fieldmaps(dwi_files, layout, ignore_fieldmap, prefer_dedicated_fmap
 
         num_fmaps = len(fmap_files)
         if num_fmaps > 1:
-            LOGGER.warning("Multiple field maps found for %s", ref_file)
+            print("Multiple field maps found for %s", ref_file)
         if num_fmaps >= 1:
             fmap_file = fmap_files[0]
         parsed_dwis.append(
             (ref_file, metadata['PhaseEncodingDirection'], fmap_file))
 
-    # group by pe direction and intended_fieldmap
+    # If we're not combining, each DWI series is its own group
+    groups = []
+    if not combine_all_dwis:
+        for ref_file, pe_dir, fmap_file in parsed_dwis:
+            groups.append({
+                'dwi_series': [ref_file],
+                'rpe_series': [],
+                'rpe_b0': fmap_file,
+                'dwi_series_pedir': pe_dir
+            })
+        return groups
+
+    # group by warped space, defined by pe_dir and fmap
     groups = defaultdict(list)
     for ref_file, pe_dir, fmap in parsed_dwis:
         groups[(pe_dir, fmap)].append(ref_file)
@@ -637,29 +740,35 @@ def group_by_fieldmaps(dwi_files, layout, ignore_fieldmap, prefer_dedicated_fmap
     complete_groups = []
     group_keys = set(groups.keys())
 
-    # If we're not combining DWIs, we're not doing BUDS
-    if not combine_all_dwis:
-        return list(groups.values())
-
     while len(group_keys):
         key = group_keys.pop()
         scan_list = groups[key]
-        pe_dir = key[0][0]
-        fmap = key[1]
+        pe_dir, fmap = key
+        pe_axis = pe_dir[0]
+
         if prefer_dedicated_fmaps:
-            matches = [k for k in group_keys if k[0][0] == pe_dir and fmap == k[1]]
+            matches = [k for k in group_keys if k[0][0] == pe_axis and fmap == k[1]]
         else:
-            matches = [k for k in group_keys if k[0][0] == pe_dir]
+            matches = [k for k in group_keys if k[0][0] == pe_axis]
         num_matches = len(matches)
+
         if not num_matches == 1:
             # Didn't find any reverse PE groups
-            LOGGER.info("No matches found for %s", key)
-            complete_groups.append(scan_list)
+            print("No matches found for %s", key)
+            complete_groups.append(
+                {'dwi_series': scan_list,
+                 'rpe_series': [],
+                 'rpe_b0': fmap,
+                 'dwi_series_pedir': pe_dir})
         else:
             # Found a perfect match
             match = matches[0]
             match_scan_list = groups[match]
-            complete_groups.append({key[0]: scan_list, match[0]: match_scan_list})
+            complete_groups.append(
+                {'dwi_series': scan_list,
+                 'rpe_series': match_scan_list,
+                 'rpe_b0': [],
+                 'dwi_series_pedir': pe_dir})
             group_keys.discard(match)
             LOGGER.info("Matched %s to %s", match, key)
 
@@ -667,14 +776,9 @@ def group_by_fieldmaps(dwi_files, layout, ignore_fieldmap, prefer_dedicated_fmap
 
 
 def _get_output_fname(dwis):
-    """Derive the output name for supplied DWI files."""
-    if isinstance(dwis, dict):
-        _dwi_lists = list(dwis.values())
-        all_dwis = _dwi_lists[0] + _dwi_lists[1]
-        bdp = True
-    else:
-        all_dwis = dwis
-        bdp = False
+    """Derive the output name for a dwi grouping."""
+    all_dwis = dwis['dwi_series'] + dwis['rpe_series']
+    bdp = len(dwis['rpe_series']) > 0
 
     # If a single file, use its name, otherwise use the common prefix
     if len(all_dwis) > 1:
