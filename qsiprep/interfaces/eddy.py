@@ -60,10 +60,10 @@ class GatherEddyInputs(SimpleInterface):
         # Gather inputs for TOPUP
         topup_datain = op.join(runtime.cwd, "topup_datain.txt")
         b0_source_images = [original_files[idx] for idx in b0_indices] + rpe_files
+        
         topup_file, slspec_file = specs_from_dwi_files(b0_source_images, topup_datain)
         self.outputs['topup_datain'] = topup_file
-        self.outputs['topup_b0s'] =
-
+        self.outputs['topup_b0s'] = b0_source_images
 
         # Gather inputs for eddy
 
@@ -121,6 +121,7 @@ def prepare_topup_file(b0_file_list, topup_file, image_to_unwarp):
         last_image = nb.Nifti1Image(last_image.get_fdata()[..., 0], last_image.affine,
                                     last_image.header)
     b0_images.append(last_image)
+    out_nii = nb.Nifti1Image()
 
 
     return
