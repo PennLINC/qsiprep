@@ -11,6 +11,8 @@ import nibabel as nb
 class MergeDWIsInputSpec(BaseInterfaceInputSpec):
     dwi_files = InputMultiObject(
         File(exists=True), mandatory=True, desc='list of dwi files')
+    bids_dwi_files = InputMultiObject(
+        File(exists=True), mandatory=True, desc='list of original (BIDS) dwi files')
     bval_files = InputMultiObject(
         File(exists=True), mandatory=True, desc='list of bval files')
     bvec_files = InputMultiObject(
@@ -49,14 +51,15 @@ class MergeDWIs(SimpleInterface):
             self._results['out_bval'] = combine_bvals(bvals, output_file=out_bval)
             self._results['out_bvec'] = combine_bvecs(bvecs, output_file=out_bvec)
             sources = []
-            for img in self.inputs.dwi_files:
+            for img in self.inputs.bids_dwi_files:
                 sources += [img] * get_nvols(img)
         else:
             dwi_file = self.inputs.dwi_files[0]
+            bids_dwi_file = self.inputs.bids_dwi_files[0]
             self._results['out_dwi'] = dwi_file
             self._results['out_bval'] = bvals[0]
             self._results['out_bvec'] = bvecs[0]
-            self._results['original_images'] = [self._results['out_dwi']] * get_nvols(dwi_file)
+            self._results['original_images'] = [bids_dwi_file] * get_nvols(bids_dwi_file)
         return runtime
 
 

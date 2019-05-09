@@ -90,6 +90,7 @@ def init_merge_and_denoise_wf(dwi_denoise_window,
 
     workflow.connect([
         (inputnode, conform_dwis, [('dwi_files', 'dwi_file')]),
+        (inputnode, merge_dwis, [('dwi_files', 'bids_dwi_files')]),
         (conform_dwis, merge_dwis, [('bval_file', 'bval_files'),
                                     ('bvec_file', 'bvec_files')]),
         (merge_dwis, outputnode, [('out_bval', 'merged_bval'),

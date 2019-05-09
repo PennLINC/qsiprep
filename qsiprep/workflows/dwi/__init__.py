@@ -10,4 +10,4 @@ Pre-processing q-space Image workflows
 """
 
 
-from .base import init_qsiprep_dwi_preproc_wf
+from .base import init_dwi_preproc_wf

@@ -14,16 +14,68 @@ Interfaces to deal with the various types of fieldmap sources
 
 
 """
-
+import os.path as op
 import numpy as np
 import nibabel as nb
 from nipype import logging
-from nipype.utils.filemanip import fname_presuffix
+from nipype.utils.filemanip import (
+    fname_presuffix, split_filename, copyfile, related_filetype_sets)
+
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec, TraitedSpec, File, isdefined, traits,
     SimpleInterface)
+from .images import to_lps
+import shutil
 
 LOGGER = logging.getLogger('nipype.interface')
+
+
+class B0RPEFieldmapInputSpec(BaseInterfaceInputSpec):
+    b0_file = File(exists=True)
+
+
+class B0RPEFieldmapOutputSpec(TraitedSpec):
+    fmap_file = File(exists=True)
+    fmap_info = File(exists=True)
+
+
+class B0RPEFieldmap(SimpleInterface):
+    input_spec = B0RPEFieldmapInputSpec
+    output_spec = B0RPEFieldmapOutputSpec
+
+    def _run_interface(self, runtime):
+        pth, fname, ext = split_filename(self.inputs.b0_file)
+        potential_bval_file = op.join(pth, fname) + ".bval"
+        fmap_img = nb.load(self.inputs.b0_file)
+        original_json = op.join(pth, fname) + ".json"
+
+        # Conform the fieldmap
+        lps_fmap = to_lps(fmap_img)
+
+        # Determine if there is a bval file corresponding to this file
+        if op.exists(potential_bval_file):
+            LOGGER.info("Found bval file %s for fieldmap.", potential_bval_file)
+            bvals = np.loadtxt(potential_bval_file)
+            # TODO: standard b0 threshold
+            if np.any(bvals > 50):
+                LOGGER.info("Found one or more b > 50 images: discarding them")
+                fmap_data = lps_fmap.get_fdata()[..., bvals < 50].squeeze()
+                lps_fmap = nb.Nifti1Image(fmap_data, lps_fmap.affine, header=lps_fmap.header)
+
+        # Save the conformed fmap
+        output_fmap = fname_presuffix(self.inputs.b0_file, suffix="conform",
+                                      newpath=runtime.cwd)
+        output_json = fname_presuffix(output_fmap, use_ext=False, suffix=".json")
+        lps_fmap.to_filename(output_fmap)
+        # Copy the original json file:
+        LOGGER.info("Copying json file %s -> %s", original_json, output_json)
+        shutil.copy2(original_json, output_json)
+        assert op.exists(output_json)
+        self._results['fmap_file'] = output_fmap
+        self._results['fmap_info'] = output_json
+        print(self._results)
+
+        return runtime
 
 
 class FieldEnhanceInputSpec(BaseInterfaceInputSpec):

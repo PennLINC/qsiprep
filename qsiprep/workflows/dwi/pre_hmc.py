@@ -166,18 +166,18 @@ def init_dwi_pre_hmc_wf(dwi_series,
                                            name="merge_dwis")
     split_dwis = pe.Node(SplitDWIs(), name="split_dwis")
     merge_dwis.inputs.inputnode.dwi_files = dwi_series
-    split_dwis = pe.Node(SplitDWIs(), name="split_dwis")
 
     workflow.connect([
         (merge_dwis, split_dwis, [
             ('outputnode.merged_image', 'dwi_file'),
             ('outputnode.merged_bval', 'bval_file'),
             ('outputnode.merged_bvec', 'bvec_file')]),
+        (merge_dwis, outputnode, [
+            ('outputnode.original_files', 'original_files')]),
         (split_dwis, outputnode, [
             ('dwi_files', 'dwi_files'),
             ('bval_files', 'bval_files'),
             ('bvec_files', 'bvec_files'),
-            ('original_files', 'original_files'),
             ('b0_images', 'b0_images'),
             ('b0_indices', 'b0_indices')])
     ])

@@ -9,6 +9,8 @@ Utility workflows
 .. autofunction:: init_enhance_and_skullstrip_dwi_wf
 
 """
+import os
+import nibabel as nb
 from packaging.version import parse as parseversion, Version
 from pkg_resources import resource_filename as pkgr_fn
 

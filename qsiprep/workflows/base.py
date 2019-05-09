@@ -30,7 +30,7 @@ from ..utils.misc import fix_multi_T1w_source_name
 from ..__about__ import __version__
 
 from .anatomical import init_anat_preproc_wf
-from .dwi import init_qsiprep_dwi_preproc_wf
+from .dwi.base import init_dwi_preproc_wf
 import logging
 from collections import defaultdict
 
@@ -42,9 +42,10 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
                     denoise_before_combining, dwi_denoise_window, output_resolution,
                     combine_all_dwis, omp_nthreads, force_spatial_normalization,
                     skull_strip_template, skull_strip_fixed_seed, freesurfer, hmc_model,
-                    impute_slice_threshold, hmc_transform, shoreline_iters, write_local_bvecs,
-                    output_spaces, template, motion_corr_to, b0_to_t1w_transform,
-                    prefer_dedicated_fmaps, fmap_bspline, fmap_demean, use_syn, force_syn):
+                    impute_slice_threshold, hmc_transform, shoreline_iters, eddy_config,
+                    write_local_bvecs, output_spaces, template, motion_corr_to,
+                    b0_to_t1w_transform, prefer_dedicated_fmaps, fmap_bspline, fmap_demean,
+                    use_syn, force_syn):
     """
     This workflow organizes the execution of qsiprep, with a sub-workflow for
     each subject.
@@ -81,6 +82,7 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
                               motion_corr_to='iterative',
                               b0_to_t1w_transform='Rigid',
                               hmc_transform='Affine',
+                              eddy_config=None,
                               shoreline_iters=2,
                               impute_slice_threshold=0,
                               write_local_bvecs=False,
@@ -158,6 +160,8 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
         impute_slice_threshold : float
             Impute data in slices that are this many SDs from expected. If 0, no slices
             will be imputed.
+        eddy_config: str
+            Path to a JSON file containing config options for eddy
         prefer_dedicated_fmaps: bool
             If a reverse PE fieldmap is available in fmap, use that even if a reverse PE
             DWI series is available
@@ -217,6 +221,7 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
             hmc_model=hmc_model,
             hmc_transform=hmc_transform,
             shoreline_iters=shoreline_iters,
+            eddy_config=eddy_config,
             impute_slice_threshold=impute_slice_threshold,
             write_local_bvecs=write_local_bvecs,
             fmap_bspline=fmap_bspline,
@@ -243,7 +248,8 @@ def init_single_subject_wf(
         combine_all_dwis, omp_nthreads, skull_strip_template, force_spatial_normalization,
         skull_strip_fixed_seed, freesurfer, hires, output_spaces, template, output_resolution,
         prefer_dedicated_fmaps, motion_corr_to, b0_to_t1w_transform, hmc_model, hmc_transform,
-        shoreline_iters, impute_slice_threshold, fmap_bspline, fmap_demean, use_syn, force_syn):
+        shoreline_iters, eddy_config, impute_slice_threshold, fmap_bspline, fmap_demean, use_syn,
+        force_syn):
     """
     This workflow organizes the preprocessing pipeline for a single subject.
     It collects and reports information about the subject, and prepares
@@ -512,9 +518,12 @@ to workflows in *qsiprep*'s documentation]\
     summary.inputs.dwi_groupings = outputs_to_files
 
     # create a processing pipeline for the dwis in each session
-    for output_fname, dwi_files in outputs_to_files.items():
-        dwi_preproc_wf = init_qsiprep_dwi_preproc_wf(
-            dwi_files=dwi_files,
+    for output_fname, dwi_info in outputs_to_files.items():
+        dwi_preproc_wf = init_dwi_preproc_wf(
+            dwi_series=dwi_info['dwi_series'],
+            rpe_series=dwi_info['rpe_series'],
+            rpe_b0=dwi_info['rpe_b0'],
+            dwi_series_pedir=dwi_info['dwi_series_pedir'],
             output_prefix=output_fname,
             layout=layout,
             ignore=ignore,
@@ -527,6 +536,7 @@ to workflows in *qsiprep*'s documentation]\
             hmc_model=hmc_model,
             hmc_transform=hmc_transform,
             shoreline_iters=shoreline_iters,
+            eddy_config=eddy_config,
             impute_slice_threshold=impute_slice_threshold,
             reportlets_dir=reportlets_dir,
             output_spaces=output_spaces,

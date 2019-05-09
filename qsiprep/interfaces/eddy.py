@@ -3,9 +3,8 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 """
-ITK files handling
+Prepare files for TOPUP and eddy
 ~~~~~~~~~~~~~~~~~~
-
 
 """
 import os
@@ -25,6 +24,7 @@ LOGGER = logging.getLogger('nipype.interface')
 
 class GatherEddyInputsInputSpec(BaseInterfaceInputSpec):
     rpe_b0 = File(exists=True)
+    rpe_b0_json = File(exists=True)
     dwi_files = InputMultiObject(File(exists=True))
     bval_files = InputMultiObject(File(exists=True))
     bvec_files = InputMultiObject(File(exists=True))
@@ -60,10 +60,10 @@ class GatherEddyInputs(SimpleInterface):
         # Gather inputs for TOPUP
         topup_datain = op.join(runtime.cwd, "topup_datain.txt")
         b0_source_images = [original_files[idx] for idx in b0_indices] + rpe_files
-        
+
         topup_file, slspec_file = specs_from_dwi_files(b0_source_images, topup_datain)
-        self.outputs['topup_datain'] = topup_file
-        self.outputs['topup_b0s'] = b0_source_images
+        self._results['topup_datain'] = topup_file
+        self._results['topup_b0s'] = b0_source_images
 
         # Gather inputs for eddy
 
@@ -72,8 +72,8 @@ class GatherEddyInputs(SimpleInterface):
 
 def read_nifti_sidecar(path):
     pth, fname, ext = split_filename(path)
-    json_file = op.join(pth,fname) + ".json"
-    with open(path, "r") as f:
+    json_file = op.join(pth, fname) + ".json"
+    with open(json_file, "r") as f:
         metadata = json.load(f)
     pe_dir = metadata['PhaseEncodingDirection']
     slice_times = metadata.get("SliceTiming")
