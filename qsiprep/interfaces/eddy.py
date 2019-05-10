@@ -47,7 +47,6 @@ class GatherEddyInputs(SimpleInterface):
     output_spec = GatherEddyInputsOutputSpec
 
     def _run_interface(self, runtime):
-        dwi_files_list = self.inputs.dwi_files
         rpe_b0 = self.inputs.rpe_b0
         original_files = self.inputs.original_files
         b0_indices = self.inputs.b0_indices
@@ -63,7 +62,7 @@ class GatherEddyInputs(SimpleInterface):
 
         topup_file, slspec_file = specs_from_dwi_files(b0_source_images, topup_datain)
         self._results['topup_datain'] = topup_file
-        self._results['topup_b0s'] = b0_source_images
+        self._results['topup_b0s'] = topup_files
 
         # Gather inputs for eddy
 
@@ -105,7 +104,11 @@ def specs_from_dwi_files(dwi_file_list, datain_file):
         slicetime_lookup[unique_dwi] = spec['SliceTiming']
 
     # Write the datain.txt file
-    datain_lines = [spec_lookup[dwi_file] for dwi_file in dwi_file_list]
+    datain_lines = []
+    for dwi_file in dwi_file_list:
+        img = nb.load(dwi_file)
+        num_trs = 1 if len(img.shape) < 4 else img.shape[3]
+        datain_lines.extend([spec_lookup[dwi_file]] * num_trs)
     with open(datain_file, "w") as f:
         f.write("\n".join(datain_lines))
 
