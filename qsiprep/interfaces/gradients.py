@@ -639,7 +639,7 @@ def compose_affines(reference_image, affine_list, output_file):
     LOGGER.info(cmd)
     os.system(cmd)
     if not os.path.exists(output_file):
-        logger.critical(cmd)
+        LOGGER.critical(cmd)
         assert False
     return output_file, cmd
 

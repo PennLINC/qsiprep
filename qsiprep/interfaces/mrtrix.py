@@ -10,7 +10,7 @@ Image tools interfaces
 """
 import nibabel as nb
 import numpy as np
-import os
+import os.path as op
 
 from tempfile import TemporaryDirectory
 from time import time
@@ -21,7 +21,6 @@ from nipype.interfaces.base import (
     traits, TraitedSpec, BaseInterfaceInputSpec, File, SimpleInterface, InputMultiObject,
     OutputMultiObject, isdefined
 )
-from nipype.interfaces import ants
 from nipype.interfaces.ants.registration import RegistrationInputSpec
 from .gradients import concatenate_bvecs, concatenate_bvals, GradientRotation
 from dipy.core.gradients import gradient_table
@@ -91,3 +90,73 @@ class MRTrixIngress(SimpleInterface):
         self._results['mif_file'] = convert_run.outputs.out_file
 
         return runtime
+
+
+class DWIDenoiseInputSpec(MRTrix3BaseInputSpec):
+    in_file = File(
+        exists=True,
+        argstr='%s',
+        position=-2,
+        mandatory=True,
+        desc='input DWI image')
+    mask = File(
+        exists=True,
+        argstr='-mask %s',
+        position=1,
+        desc='mask image')
+    extent = traits.Tuple(
+        (traits.Int, traits.Int, traits.Int),
+        argstr='-extent %d,%d,%d',
+        desc='set the window size of the denoising filter. (default = 5,5,5)')
+    noise = File(
+        argstr='-noise %s',
+        name_template='%s_noise',
+        name_source=['in_file'],
+        keep_extension=True,
+        desc='the output noise map')
+    out_file = File(
+        name_template='%s_denoised',
+        name_source=['in_file'],
+        keep_extension=True,
+        argstr='%s',
+        position=-1,
+        desc='the output denoised DWI image')
+
+class DWIDenoiseOutputSpec(TraitedSpec):
+    noise = File(desc='the output noise map', exists=True)
+    out_file = File(desc='the output denoised DWI image', exists=True)
+
+class DWIDenoise(MRTrix3Base):
+    """
+    Denoise DWI data and estimate the noise level based on the optimal
+    threshold for PCA.
+
+    DWI data denoising and noise map estimation by exploiting data redundancy
+    in the PCA domain using the prior knowledge that the eigenspectrum of
+    random covariance matrices is described by the universal Marchenko Pastur
+    distribution.
+
+    Important note: image denoising must be performed as the first step of the
+    image processing pipeline. The routine will fail if interpolation or
+    smoothing has been applied to the data prior to denoising.
+
+    Note that this function does not correct for non-Gaussian noise biases.
+
+    For more information, see
+    <https://mrtrix.readthedocs.io/en/latest/reference/commands/dwidenoise.html>
+
+    Example
+    -------
+
+    >>> import nipype.interfaces.mrtrix3 as mrt
+    >>> denoise = mrt.DWIDenoise()
+    >>> denoise.inputs.in_file = 'dwi.mif'
+    >>> denoise.inputs.mask = 'mask.mif'
+    >>> denoise.cmdline                               # doctest: +ELLIPSIS
+    'dwidenoise -mask mask.mif dwi.mif dwi_denoised.mif'
+    >>> denoise.run()                                 # doctest: +SKIP
+    """
+
+    _cmd = 'dwidenoise'
+    input_spec = DWIDenoiseInputSpec
+    output_spec = DWIDenoiseOutputSpec

@@ -67,7 +67,7 @@ def combine_bvals(bvals, output_file="restacked.bval"):
     """Load, merge and save fsl-style bvals files."""
     collected_vals = []
     for bval_file in bvals:
-        collected_vals.append(np.loadtxt(bval_file))
+        collected_vals.append(np.atleast_1d(np.loadtxt(bval_file)))
     final_bvals = np.concatenate(collected_vals)
     np.savetxt(output_file, final_bvals, fmt=str("%i"))
     return op.abspath(output_file)

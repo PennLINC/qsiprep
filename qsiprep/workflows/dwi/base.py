@@ -321,10 +321,10 @@ def init_dwi_preproc_wf(dwi_series,
     # If a topupref is provided, connect it to hmc for unwarping
     if rpe_b0:
         prepare_rpe_b0 = pe.Node(B0RPEFieldmap(b0_file=rpe_b0), name="prepare_rpe_b0")
-        workflow.connect([(prepare_rpe_b0, hmc_wf, [
-            ('fmap_file', 'inputnode.rpe_b0'),
-            ('fmap_info', 'inputnode.rpe_b0_info')])
-        ])
+        workflow.connect([
+            (prepare_rpe_b0, hmc_wf, [
+                ('fmap_file', 'inputnode.rpe_b0'),
+                ('fmap_info', 'inputnode.rpe_b0_info')])])
 
     workflow.connect([
         (pre_hmc_wf, hmc_wf, [
@@ -369,7 +369,6 @@ def init_dwi_preproc_wf(dwi_series,
         #(hmc_wf, summary, [('outputnode.sdc_method', 'distortion_correction')])
     ])
 
-    """
     gradient_plot = pe.Node(GradientPlot(), name='gradient_plot', run_without_submitting=True)
     ds_report_gradients = pe.Node(
         DerivativesDataSink(suffix='sampling_scheme'),
@@ -410,9 +409,6 @@ def init_dwi_preproc_wf(dwi_series,
     ])
 
     # Compute and gather confounds
-    slice_check = pe.Node(SliceQC(impute_slice_threshold=impute_slice_threshold),
-                          name="slice_check")
-
     confounds_wf = init_dwi_confs_wf(mem_gb=mem_gb['resampled'], metadata=[],
                                      impute_slice_threshold=impute_slice_threshold,
                                      name='confounds_wf')
@@ -424,25 +420,23 @@ def init_dwi_preproc_wf(dwi_series,
         name='ds_report_dwi_conf', run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB)
     workflow.connect([
-        (buffernode, slice_check, [('ideal_images', 'ideal_image_files'),
-                                   ('dwi_files', 'uncorrected_dwi_files'),
-                                   ('b0_ref_mask', 'mask_image')]),
-        (slice_check, confounds_wf, [('slice_stats', 'inputnode.sliceqc_file')]),
-        (buffernode, confounds_wf, [('to_dwi_ref_affines', 'inputnode.hmc_affines'),
-                                    ('bval_files', 'inputnode.bval_files'),
-                                    ('bvec_files', 'inputnode.bvec_files'),
-                                    ('original_grouping', 'inputnode.original_files')]),
+        (hmc_wf, confounds_wf, [
+            ('outputnode.slice_quality', 'inputnode.sliceqc_file')]),
+        (pre_hmc_wf, confounds_wf, [
+            ('outputnode.bval_files', 'inputnode.bval_files'),
+            ('outputnode.bvec_files', 'inputnode.bvec_files'),
+            ('outputnode.original_files', 'inputnode.original_files')]),
         (confounds_wf, outputnode, [('outputnode.confounds_file', 'confounds')]),
-        (buffernode, outputnode, [('hmc_optimization_data', 'hmc_optimization_data')]),
-        (confounds_wf, conf_plot, [('outputnode.confounds_file', 'confounds_file')]),
-        (slice_check, conf_plot, [('slice_stats', 'sliceqc_file')]),
-        (buffernode, conf_plot, []),
+        (hmc_wf, outputnode, [('outputnode.hmc_optimization_data', 'hmc_optimization_data')]),
+        (confounds_wf, conf_plot, [
+            ('outputnode.confounds_file', 'confounds_file'),
+            ('slice_stats', 'sliceqc_file')]),
         (conf_plot, ds_report_dwi_conf, [('out_file', 'in_file')]),
-        (buffernode, gradient_plot, [('bvec_files', 'orig_bvec_files'),
-                                     ('bval_files', 'orig_bval_files'),
-                                     ('original_grouping', 'source_files')]),
+        (pre_hmc_wf, gradient_plot, [
+            ('outputnode.bvec_files', 'orig_bvec_files'),
+            ('outputnode.bval_files', 'orig_bval_files'),
+            ('outputnode.original_grouping', 'source_files')]),
         (gradient_plot, ds_report_gradients, [('plot_file', 'in_file')])
-
     ])
 
     if "T1w" in output_spaces:
@@ -539,5 +533,4 @@ def init_dwi_preproc_wf(dwi_series,
         if node.split('.')[-1].startswith('ds_report'):
             workflow.get_node(node).inputs.base_directory = reportlets_dir
             workflow.get_node(node).inputs.source_file = source_file
-    """
     return workflow

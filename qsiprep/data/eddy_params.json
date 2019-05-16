@@ -7,7 +7,6 @@
   "fudge_factor": 10,
   "dont_sep_offs_move": false,
   "dont_peas": false,
-  "fwhm": null,
   "niter": 5,
   "method": "jac",
   "repol": true,
