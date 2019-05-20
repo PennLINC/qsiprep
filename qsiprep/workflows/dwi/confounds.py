@@ -61,8 +61,8 @@ def init_dwi_confs_wf(mem_gb, metadata, impute_slice_threshold, name="dwi_confs_
         sliceqc_file
             dwi image, after the prescribed corrections (STC, HMC and SDC)
             when available.
-        hmc_affines
-            ITK affines that correct for head motion
+        motion_params
+
 
     **Outputs**
 
@@ -83,14 +83,11 @@ placed within the corresponding confounds file. Slicewise cross correlation
 was also calculated.
 """
     inputnode = pe.Node(niu.IdentityInterface(
-        fields=['sliceqc_file', 'hmc_affines', 'bval_files', 'bvec_files', 'original_files']),
+        fields=['sliceqc_file', 'motion_params', 'bval_files', 'bvec_files', 'original_files']),
         name='inputnode')
     outputnode = pe.Node(niu.IdentityInterface(
         fields=['confounds_file', 'imputed_images']),
         name='outputnode')
-
-    # Compute distance travelled to the template
-    summarize_motion = pe.Node(CombineMotions(), name="summarize_motion")
 
     # Frame displacement
     fdisp = pe.Node(nac.FramewiseDisplacement(parameter_source="SPM"),
@@ -102,11 +99,10 @@ was also calculated.
     concat = pe.Node(GatherConfounds(), name="concat", mem_gb=0.01, run_without_submitting=True)
 
     workflow.connect([
-        (inputnode, summarize_motion, [('hmc_affines', 'transform_files')]),
-        (summarize_motion, fdisp, [('spm_motion_file', 'in_file')]),
+        (inputnode, fdisp, [('motion_params', 'in_file')]),
 
         # Collate computed confounds together
-        (summarize_motion, add_motion_headers, [('spm_motion_file', 'in_file')]),
+        (inputnode, add_motion_headers, [('motion_params', 'in_file')]),
         (fdisp, concat, [('out_file', 'fd')]),
         (add_motion_headers, concat, [('out_file', 'motion')]),
         (inputnode, concat, [('sliceqc_file', 'sliceqc_file'),

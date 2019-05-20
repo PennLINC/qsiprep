@@ -66,9 +66,23 @@ class dMRIPlot(object):
     Generates the dMRI Summary Plot
     """
 
-    def __init__(self, sliceqc_file, confounds, usecols=None, units=None, vlines=None,
-                 spikes_files=None):
-        self.qc_data = np.load(sliceqc_file)
+    def __init__(self, sliceqc_file, mask_file, confounds, usecols=None, units=None, vlines=None,
+                 spikes_files=None, min_slice_size_percentile=10.0):
+        if sliceqc_file.endswith(".npz") or sliceqc_file.endswith(".npy"):
+            self.qc_data = np.load(sliceqc_file)
+        else:
+            # Load the info from eddy
+            slice_scores = np.loadtxt(sliceqc_file, skiprows=1)
+            # Get the slice counts
+            mask_img = nb.load(mask_file)
+            mask = mask_img.get_data() > 0
+            masked_slices = (mask * np.arange(mask_img.shape[2])[np.newaxis, np.newaxis, :]
+                             ).astype(np.int)
+            slice_nums, slice_counts = np.unique(masked_slices[mask], return_counts=True)
+            self.qc_data = {
+                'slice_scores': slice_scores.T,
+                'slice_counts': slice_counts}
+
         self.confounds = confounds
 
     def plot(self, figure=None):
@@ -96,7 +110,8 @@ class dMRIPlot(object):
             confoundplot(tseries, grid[grid_id], color=palette[i], name=name)
             grid_id += 1
 
-        plot_sliceqc(self.qc_data['slice_scores'].T, self.qc_data['slice_counts'], subplot=grid[-1])
+        plot_sliceqc(self.qc_data['slice_scores'].T, self.qc_data['slice_counts'],
+                     subplot=grid[-1])
         return figure
 
 
@@ -321,7 +336,7 @@ def confoundplot(tseries, gs_ts, gs_dist=None, name=None,
 
     if gs_dist is not None:
         ax_dist = plt.subplot(gs_dist)
-        sns.displot(tseries, vertical=True, ax=ax_dist)
+        sns.distplot(tseries, vertical=True, ax=ax_dist)
         ax_dist.set_xlabel('Timesteps')
         ax_dist.set_ylim(ax_ts.get_ylim())
         ax_dist.set_yticklabels([])

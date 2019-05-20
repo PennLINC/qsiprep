@@ -341,7 +341,6 @@ def init_dwi_preproc_wf(dwi_series,
                                                   mem_gb=mem_gb['resampled'],
                                                   write_report=True)
 
-
     # At this point, buffernode is either a ConcatRPESplit or a single PE output
     summary = pe.Node(
         DiffusionSummary(
@@ -366,7 +365,7 @@ def init_dwi_preproc_wf(dwi_series,
              'inputnode.t1_2_fsnative_reverse_transform')]),
         (hmc_wf, b0_coreg_wf, [('outputnode.b0_template',
                                 'inputnode.ref_b0_brain')]),
-        #(hmc_wf, summary, [('outputnode.sdc_method', 'distortion_correction')])
+        (hmc_wf, summary, [('outputnode.sdc_method', 'distortion_correction')])
     ])
 
     gradient_plot = pe.Node(GradientPlot(), name='gradient_plot', run_without_submitting=True)
@@ -421,21 +420,24 @@ def init_dwi_preproc_wf(dwi_series,
         mem_gb=DEFAULT_MEMORY_MIN_GB)
     workflow.connect([
         (hmc_wf, confounds_wf, [
-            ('outputnode.slice_quality', 'inputnode.sliceqc_file')]),
+            ('outputnode.slice_quality', 'inputnode.sliceqc_file'),
+            ('outputnode.motion_params', 'inputnode.motion_params')]),
         (pre_hmc_wf, confounds_wf, [
             ('outputnode.bval_files', 'inputnode.bval_files'),
             ('outputnode.bvec_files', 'inputnode.bvec_files'),
             ('outputnode.original_files', 'inputnode.original_files')]),
         (confounds_wf, outputnode, [('outputnode.confounds_file', 'confounds')]),
         (hmc_wf, outputnode, [('outputnode.hmc_optimization_data', 'hmc_optimization_data')]),
+        (hmc_wf, conf_plot, [
+            ('outputnode.slice_quality', 'sliceqc_file'),
+            ('outputnode.b0_template_mask', 'sliceqc_mask')]),
         (confounds_wf, conf_plot, [
-            ('outputnode.confounds_file', 'confounds_file'),
-            ('slice_stats', 'sliceqc_file')]),
+            ('outputnode.confounds_file', 'confounds_file')]),
         (conf_plot, ds_report_dwi_conf, [('out_file', 'in_file')]),
         (pre_hmc_wf, gradient_plot, [
             ('outputnode.bvec_files', 'orig_bvec_files'),
             ('outputnode.bval_files', 'orig_bval_files'),
-            ('outputnode.original_grouping', 'source_files')]),
+            ('outputnode.original_files', 'source_files')]),
         (gradient_plot, ds_report_gradients, [('plot_file', 'in_file')])
     ])
 
@@ -443,7 +445,8 @@ def init_dwi_preproc_wf(dwi_series,
         transform_dwis_t1 = init_dwi_trans_wf(name='transform_dwis_t1',
                                               template="ACPC",
                                               mem_gb=mem_gb['resampled'],
-                                              use_fieldwarp=(fmaps is not None or use_syn),
+                                              use_fieldwarp=(doing_bidirectional_pepolar or
+                                                             rpe_b0 is not None or use_syn),
                                               omp_nthreads=omp_nthreads,
                                               use_compression=False,
                                               to_mni=False,
@@ -451,17 +454,15 @@ def init_dwi_preproc_wf(dwi_series,
                                               )
         gtab_t1 = pe.Node(MRTrixGradientTable(), name='gtab_t1')
         workflow.connect([
-            (slice_check, transform_dwis_t1, [('imputed_images', 'inputnode.dwi_files')]),
-            (buffernode, transform_dwis_t1, [
-                ('bvec_files', 'inputnode.bvec_files'),
-                ('bval_files', 'inputnode.bval_files'),
-                ('b0_ref_image', 'inputnode.b0_ref_image'),
-                ('b0_ref_mask', 'inputnode.dwi_mask'),
-                ('b0_indices', 'inputnode.b0_indices'),
-                ('to_dwi_ref_affines', 'inputnode.hmc_xforms'),
-                ('to_dwi_ref_warps', 'inputnode.fieldwarps')]),
+            (hmc_wf, transform_dwis_t1, [
+                ('outputnode.bvec_files_to_transform', 'inputnode.bvec_files'),
+                ('outputnode.b0_template', 'inputnode.b0_ref_image'),
+                ('outputnode.b0_template_mask', 'inputnode.dwi_mask'),
+                ('outputnode.b0_indices', 'inputnode.b0_indices'),
+                ('outputnode.to_dwi_ref_affines', 'inputnode.hmc_xforms'),
+                ('outputnode.to_dwi_ref_warps', 'inputnode.fieldwarps'),
+                ('outputnode.dwi_files_to_transform', 'inputnode.dwi_files')]),
             (inputnode, transform_dwis_t1, [
-                # ('t1_2_mni_forward_transform', 'inputnode.t1_2_mni_forward_transform'),
                 ('dwi_sampling_grid', 'inputnode.output_grid')]),
             (b0_coreg_wf, transform_dwis_t1, [
                 ('outputnode.itk_b0_to_t1', 'inputnode.itk_b0_to_t1')]),

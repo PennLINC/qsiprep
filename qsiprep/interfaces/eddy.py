@@ -44,6 +44,7 @@ class GatherEddyInputsOutputSpec(TraitedSpec):
     eddy_acqp = File(exists=True)
     eddy_indices = File(exists=True)
     forward_transforms = traits.List()
+    forward_warps = traits.List()
 
 
 class GatherEddyInputs(SimpleInterface):
@@ -86,7 +87,7 @@ class GatherEddyInputs(SimpleInterface):
         self._results['eddy_indices'] = index_file
 
         self._results['forward_transforms'] = ['identity'] * len(dwi_files)
-
+        self._results['forward_warps'] = ['identity'] * len(dwi_files)
         return runtime
 
 
@@ -300,8 +301,32 @@ class ExtendedEddy(fsl.Eddy):
         if op.exists(outlier_map):
             outputs['outlier_map'] = outlier_map
         if op.exists(outlier_n_stdev_map):
-            outputs['outlier_map'] = outlier_n_stdev_map
+            outputs['outlier_n_stdev_map'] = outlier_n_stdev_map
         if op.exists(outlier_n_sqr_stdev_map):
             outputs['outlier_n_sqr_stdev_map'] = outlier_n_sqr_stdev_map
 
         return outputs
+
+
+class Eddy2SPMMotionInputSpec(BaseInterfaceInputSpec):
+    eddy_motion = File(exists=True)
+
+
+class Eddy2SPMMotionOututSpec(TraitedSpec):
+    spm_motion_file = File(exists=True)
+
+
+class Eddy2SPMMotion(SimpleInterface):
+    input_spec = Eddy2SPMMotionInputSpec
+    output_spec = Eddy2SPMMotionOututSpec
+
+    def _run_interface(self, runtime):
+        # Load the eddy motion params File
+        eddy_motion = np.loadtxt(self.inputs.eddy_motion)
+        spm_motion = eddy_motion[:, :6]
+        spm_motion_file = fname_presuffix(self.inputs.eddy_motion, suffix="spm_rp.txt",
+                                          use_ext=False, newpath=runtime.cwd)
+        np.savetxt(spm_motion_file, spm_motion)
+        self._results['spm_motion_file'] = spm_motion_file
+
+        return runtime

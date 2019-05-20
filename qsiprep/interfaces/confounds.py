@@ -127,11 +127,15 @@ def _gather_confounds(fdisp=None, motion=None, sliceqc_file=None, newpath=None,
         confounds_data = pd.concat((confounds_data, new), axis=1)
 
     # Add in the sliceqc measures
-    if sliceqc_file is not None:
-        sqc = np.load(sliceqc_file)
-        confounds_data['hmc_r2'] = sqc['wb_r2s']
-        confounds_data['hmc_xcorr'] = sqc['wb_xcorrs']
-        confounds_list += ['hmc_r2', 'hmc_xcorr']
+    if isdefined(sliceqc_file) and sliceqc_file is not None:
+        if sliceqc_file.endswith(".npy"):
+            sqc = np.load(sliceqc_file)
+            confounds_data['hmc_r2'] = sqc['wb_r2s']
+            confounds_data['hmc_xcorr'] = sqc['wb_xcorrs']
+            confounds_list += ['hmc_r2', 'hmc_xcorr']
+        else:
+            sqc = np.loadtxt(sliceqc_file, skiprows=1)
+            confounds_data['eddy_stdevs'] = sqc.sum(axis=1)
 
     if newpath is None:
         newpath = os.getcwd()
@@ -160,6 +164,7 @@ class DMRISummaryInputSpec(BaseInterfaceInputSpec):
                           desc="BIDS' _confounds.tsv file")
     sliceqc_file = File(exists=True,
                         desc="output from SliceQC")
+    sliceqc_mask = File(exists=True, desc='Mask')
 
     str_or_tuple = traits.Either(
         traits.Str,
@@ -189,6 +194,7 @@ class DMRISummary(SimpleInterface):
 
         fig = dMRIPlot(
             sliceqc_file=self.inputs.sliceqc_file,
+            mask_file=self.inputs.sliceqc_mask,
             confounds=dataframe
         ).plot()
         fig.savefig(self._results['out_file'], bbox_inches='tight')

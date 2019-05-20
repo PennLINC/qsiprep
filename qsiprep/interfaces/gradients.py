@@ -232,7 +232,7 @@ class CombineMotions(SimpleInterface):
             scale, shear, angles, translate, persp = decompose_matrix(affine)
             collected_motion.append(
                 np.concatenate([
-                    scale, shear, np.array(angles) * 180 / np.pi, translate]))
+                    scale, shear, np.array(angles), translate]))
 
         final_motion = np.row_stack(collected_motion)
         cols = ["scaleX", "scaleY", "scaleZ", "shearXY", "shearXZ",
@@ -311,9 +311,11 @@ class ComposeTransformsInputSpec(ApplyTransformsInputSpec):
     original_b0_indices = traits.List(mandatory=True, desc='positions of b0 images')
     reference_image = File(exists=True, mandatory=True, desc='output grid')
     # Transforms to apply
-    hmc_to_ref_affines = InputMultiObject(File(exists=True), mandatory=True,
+    hmc_to_ref_affines = InputMultiObject(traits.Either(File(exists=True), traits.Str),
+                                          mandatory=True,
                                           desc='affines registering b0s to b0 reference')
-    fieldwarps = InputMultiObject(File(exists=True), mandtory=False,
+    fieldwarps = InputMultiObject(traits.Either(File(exists=True), traits.Str),
+                                  mandtory=False,
                                   desc='SDC unwarping transform')
     unwarped_dwi_ref_to_t1w_affine = File(exists=True, mandatory=True,
                                           desc='affine from dwi ref to t1w')

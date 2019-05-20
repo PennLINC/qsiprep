@@ -18,7 +18,7 @@ from nipype.interfaces import utility as niu
 from nipype.interfaces import fsl, afni
 
 from ...interfaces import DerivativesDataSink
-from ...interfaces.eddy import GatherEddyInputs, ExtendedEddy
+from ...interfaces.eddy import GatherEddyInputs, ExtendedEddy, Eddy2SPMMotion
 from ...interfaces.dwi_merge import MergeDWIs
 from ...interfaces.images import SplitDWIs
 from ...engine import Workflow
@@ -40,7 +40,7 @@ def init_fsl_hmc_wf(impute_slice_threshold,
                     eddy_config,
                     mem_gb=3,
                     omp_nthreads=1,
-                    slice_quality='outlier_n_stdev_map',
+                    slice_quality='outlier_n_sqr_stdev_map',
                     name="fsl_hmc_wf"):
     """
     This workflow controls the dwi preprocessing stages using FSL tools.
@@ -87,13 +87,13 @@ def init_fsl_hmc_wf(impute_slice_threshold,
 
     outputnode = pe.Node(
         niu.IdentityInterface(
-            fields=["b0_template", "pre_sdc_template", "forward_transforms", "optimization_data",
-                    "sdc_method", 'slice_quality', 'motion_params', 'cnr_map']),
+            fields=["b0_template", "b0_template_mask", "pre_sdc_template",
+                    "hmc_optimization_data", "sdc_method", 'slice_quality', 'motion_params',
+                    "cnr_map", "bvec_files_to_transform", "dwi_files_to_transform", "b0_indices",
+                    "to_dwi_ref_affines", "to_dwi_ref_warps"]),
         name='outputnode')
 
     workflow = Workflow(name=name)
-    workflow.add_nodes([outputnode])
-
     gather_inputs = pe.Node(GatherEddyInputs(), name="gather_inputs")
     if eddy_config is None:
         # load from the defaults
@@ -103,10 +103,10 @@ def init_fsl_hmc_wf(impute_slice_threshold,
 
     with open(eddy_cfg_file, "r") as f:
         eddy_args = json.load(f)
-    eddy_args['use_cuda'] = False
 
     eddy = pe.Node(ExtendedEddy(**eddy_args), name="eddy")
     dwi_merge = pe.Node(MergeDWIs(), name="dwi_merge")
+    spm_motion = pe.Node(Eddy2SPMMotion(), name="spm_motion")
 
     workflow.connect([
         (inputnode, gather_inputs, [
@@ -130,13 +130,15 @@ def init_fsl_hmc_wf(impute_slice_threshold,
             ('out_bval', 'in_bval'),
             ('out_bvec', 'in_bvec')]),
         (gather_inputs, outputnode, [
-            ('pre_topup_image', 'pre_sdc_template')])
+            ('pre_topup_image', 'pre_sdc_template'),
+            ('forward_warps', 'to_dwi_ref_warps'),
+            ('forward_transforms', 'to_dwi_ref_affines')])
     ])
 
     if do_topup:
-        inputnode.inputs.sdc_method = "TOPUP"
+        outputnode.inputs.sdc_method = "TOPUP"
         topup = pe.Node(fsl.TOPUP(), name="topup")
-        unwarped_mean = pe.Node(afni.TStat(), name='unwarped_mean')
+        unwarped_mean = pe.Node(afni.TStat(outputtype='NIFTI_GZ'), name='unwarped_mean')
         unwarped_mask = pe.Node(afni.Automask(outputtype="NIFTI_GZ"), name='unwarped_mask')
 
         workflow.connect([
@@ -147,12 +149,13 @@ def init_fsl_hmc_wf(impute_slice_threshold,
             (unwarped_mean, outputnode, [('out_file', 'b0_template')]),
             (topup, unwarped_mask, [('out_corrected', 'in_file')]),
             (unwarped_mask, eddy, [('out_file', 'in_mask')]),
+            (unwarped_mask, outputnode, [('out_file', 'b0_template_mask')]),
             (topup, eddy, [
                 ('out_movpar', 'in_topup_movpar'),
                 ('out_fieldcoef', 'in_topup_fieldcoef')]),
         ])
     else:
-        inputnode.inputs.sdc_method = "None"
+        outputnode.inputs.sdc_method = "None"
         workflow.connect([
             (gather_inputs, outputnode, [('pre_topup_image', 'b0_template')])
         ])
@@ -161,18 +164,20 @@ def init_fsl_hmc_wf(impute_slice_threshold,
     split_eddy = pe.Node(SplitDWIs(), name="split_eddy")
     workflow.connect([
         (eddy, split_eddy, [
-            ('out_bvec', 'bvec_file'),
+            ('out_rotated_bvecs', 'bvec_file'),
             ('out_corrected', 'dwi_file')]),
         (dwi_merge, split_eddy, [('out_bval', 'bval_file')]),
         (dwi_merge, outputnode, [
-            ('original_files', 'original_files')]),
+            ('original_images', 'original_files')]),
         (split_eddy, outputnode, [
-            ('dwi_files', 'corrected_dwis'),
-            ('bvec_files', 'corrected_bvecs')]),
+            ('dwi_files', 'dwi_files_to_transform'),
+            ('bvec_files', 'bvec_files_to_transform')]),
         (eddy, outputnode, [
             (slice_quality, 'slice_quality'),
-            ('out_parameter', 'motion_params'),
-            ('out_cnr_maps', 'cnr_map')])
+            ('out_cnr_maps', 'cnr_map'),
+            (slice_quality, 'hmc_optimization_data')]),
+        (eddy, spm_motion, [('out_parameter', 'eddy_motion')]),
+        (spm_motion, outputnode, [('spm_motion_file', 'motion_params')])
     ])
 
     return workflow
