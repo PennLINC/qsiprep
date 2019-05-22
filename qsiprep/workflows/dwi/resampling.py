@@ -150,17 +150,12 @@ generating a *preprocessed DWI run in {tpl} space*.
 
     workflow.connect([
         (inputnode, compose_transforms, [
-            ('b0_indices', 'original_b0_indices'),
             ('output_grid', 'reference_image'),
             ('dwi_files', 'dwi_files'),
-            ('hmc_xforms', 'hmc_to_ref_affines'),
+            ('hmc_xforms', 'hmc_affines'),
             (('itk_b0_to_t1', _first), 'unwarped_dwi_ref_to_t1w_affine'),
-            ])
+            ('fieldwarps', 'fieldwarps')])
     ])
-
-    if use_fieldwarp:
-        workflow.connect([(inputnode, compose_transforms, [
-            ('fieldwarps', 'fieldwarps')])])
 
     # Rotate the bvecs
     rotate_gradients = pe.Node(GradientRotation(), name='rotate_gradients')

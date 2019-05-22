@@ -341,6 +341,18 @@ def init_dwi_preproc_wf(dwi_series,
                                                   mem_gb=mem_gb['resampled'],
                                                   write_report=True)
 
+    # Make a fieldmap report
+    if rpe_b0 or doing_bidirectional_pepolar and 'fieldmaps' not in ignore:
+        fmap_unwarp_report_wf = init_fmap_unwarp_report_wf()
+        workflow.connect([
+            (inputnode, fmap_unwarp_report_wf, [
+                ('t1_seg', 'inputnode.in_seg')]),
+            (hmc_wf, fmap_unwarp_report_wf, [
+                ('outputnode.pre_sdc_template', 'inputnode.in_pre'),
+                ('outputnode.b0_template', 'inputnode.in_post')]),
+            (b0_coreg_wf, fmap_unwarp_report_wf, [
+                ('outputnode.itk_b0_to_t1', 'inputnode.in_xfm')])])
+
     # At this point, buffernode is either a ConcatRPESplit or a single PE output
     summary = pe.Node(
         DiffusionSummary(
@@ -445,8 +457,9 @@ def init_dwi_preproc_wf(dwi_series,
         transform_dwis_t1 = init_dwi_trans_wf(name='transform_dwis_t1',
                                               template="ACPC",
                                               mem_gb=mem_gb['resampled'],
-                                              use_fieldwarp=(doing_bidirectional_pepolar or
-                                                             rpe_b0 is not None or use_syn),
+                                              use_fieldwarp=(doing_bidirectional_pepolar
+                                                             or rpe_b0 is not None
+                                                             or use_syn),
                                               omp_nthreads=omp_nthreads,
                                               use_compression=False,
                                               to_mni=False,
@@ -454,11 +467,13 @@ def init_dwi_preproc_wf(dwi_series,
                                               )
         gtab_t1 = pe.Node(MRTrixGradientTable(), name='gtab_t1')
         workflow.connect([
+            (pre_hmc_wf, transform_dwis_t1, [
+                ('outputnode.b0_indices', 'inputnode.b0_indices'),
+                ('outputnode.bval_files', 'inputnode.bval_files')]),
             (hmc_wf, transform_dwis_t1, [
                 ('outputnode.bvec_files_to_transform', 'inputnode.bvec_files'),
                 ('outputnode.b0_template', 'inputnode.b0_ref_image'),
                 ('outputnode.b0_template_mask', 'inputnode.dwi_mask'),
-                ('outputnode.b0_indices', 'inputnode.b0_indices'),
                 ('outputnode.to_dwi_ref_affines', 'inputnode.hmc_xforms'),
                 ('outputnode.to_dwi_ref_warps', 'inputnode.fieldwarps'),
                 ('outputnode.dwi_files_to_transform', 'inputnode.dwi_files')]),

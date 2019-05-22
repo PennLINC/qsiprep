@@ -203,7 +203,7 @@ def init_sdc_unwarp_wf(omp_nthreads, fmap_demean, debug, name='sdc_unwarp_wf'):
     return workflow
 
 
-def init_fmap_unwarp_report_wf(name='fmap_unwarp_report_wf', suffix='variant-hmcsdc_preproc'):
+def init_fmap_unwarp_report_wf(name='fmap_unwarp_report_wf', suffix='hmcsdc'):
     """
     This workflow generates and saves a reportlet showing the effect of fieldmap
     unwarping a DWI image.
@@ -258,7 +258,7 @@ def init_fmap_unwarp_report_wf(name='fmap_unwarp_report_wf', suffix='variant-hmc
     dwi_rpt = pe.Node(SimpleBeforeAfter(), name='dwi_rpt',
                       mem_gb=0.1)
     ds_report_sdc = pe.Node(
-        DerivativesDataSink(suffix=suffix), name='ds_report_sdc',
+        DerivativesDataSink(desc="sdc", suffix='b0'), name='ds_report_sdc',
         mem_gb=DEFAULT_MEMORY_MIN_GB, run_without_submitting=True
     )
 

@@ -511,9 +511,7 @@ to workflows in *qsiprep*'s documentation]\
                                "fieldmaps" in ignore or force_syn,
                                prefer_dedicated_fmaps,
                                combine_all_dwis))
-    outputs_to_files = dict([
-        (_get_output_fname(dwi_group), dwi_group) for dwi_group in dwi_fmap_groups
-    ])
+    outputs_to_files = {_get_output_fname(dwi_group): dwi_group for dwi_group in dwi_fmap_groups}
 
     summary.inputs.dwi_groupings = outputs_to_files
 

@@ -86,8 +86,9 @@ class GatherEddyInputs(SimpleInterface):
         self._results['eddy_acqp'] = acqp_file
         self._results['eddy_indices'] = index_file
 
-        self._results['forward_transforms'] = ['identity'] * len(dwi_files)
-        self._results['forward_warps'] = ['identity'] * len(dwi_files)
+        # these have already had HMC, SDC applied
+        self._results['forward_transforms'] = []
+        self._results['forward_warps'] = []
         return runtime
 
 

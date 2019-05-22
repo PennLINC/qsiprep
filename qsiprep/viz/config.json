@@ -109,7 +109,7 @@
             },
             {
                 "name": "epi/unwarp",
-                "file_pattern": "dwi/.*_sdc_.*\\.",
+                "file_pattern": "dwi/.*sdc_.*\\.",
                 "title": "Susceptibility distortion correction",
                 "description": "Results of performing susceptibility distortion correction (SDC) on the EPI",
                 "imgtype": "svg"

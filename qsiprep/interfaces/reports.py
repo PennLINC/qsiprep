@@ -129,19 +129,24 @@ class SubjectSummary(SummaryInterface):
         n_outputs = 0
         groupings = ''
         if isdefined(self.inputs.dwi_groupings):
-            for output_fname, dwi_files in self.inputs.dwi_groupings.items():
+            for output_fname, group_info in self.inputs.dwi_groupings.items():
                 n_outputs += 1
                 files_desc = []
-                if isinstance(dwi_files, dict):
-                    for pe_dir, dwi_group in dwi_files.items():
-                        files_desc.append('\t\t\t<li>PE dir group: %s </li>\n' + pe_dir)
-                        for dwi_file in dwi_group:
-                            files_desc.append("\t\t\t\t<li> %s </li>" % dwi_file)
-                            n_dwis += 1
-                else:
-                    for dwi_file in dwi_files:
-                        files_desc.append("\t\t\t<li> %s </li>" % dwi_file)
+                files_desc.append(
+                    '\t\t\t<li>Scan group: %s (PE Dir %s)</li><ul>' % (
+                        output_fname, group_info['dwi_series_pedir']))
+                files_desc.append('\t\t\t\t<li>DWI Files: </li>')
+                for dwi_file in group_info['dwi_series']:
+                    files_desc.append("\t\t\t\t\t<li> %s </li>" % dwi_file)
+                    n_dwis += 1
+                if len(group_info['rpe_series']):
+                    files_desc.append('\t\t\t\t<li>RPE DWI Files: </li>' % output_fname)
+                    for dwi_file in group_info['rpe_series']:
+                        files_desc.append("\t\t\t\t\t<li> %s </li>" % dwi_file)
                         n_dwis += 1
+                if group_info['rpe_b0']:
+                    files_desc.append('\t\t\t\t<li>RPE b0 file: %s</li>' % group_info['rpe_b0'])
+                files_desc.append("</ul>")
                 groupings += GROUPING_TEMPLATE.format(output_name=output_fname,
                                                       input_files='\n'.join(files_desc))
 

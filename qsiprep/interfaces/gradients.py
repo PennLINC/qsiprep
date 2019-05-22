@@ -308,26 +308,24 @@ class ComposeTransformsInputSpec(ApplyTransformsInputSpec):
     input_image = File(mandatory=False)
     dwi_files = InputMultiObject(
         File(exists=True), mandatory=True, desc='list of dwi files')
-    original_b0_indices = traits.List(mandatory=True, desc='positions of b0 images')
     reference_image = File(exists=True, mandatory=True, desc='output grid')
     # Transforms to apply
-    hmc_to_ref_affines = InputMultiObject(traits.Either(File(exists=True), traits.Str),
-                                          mandatory=True,
-                                          desc='affines registering b0s to b0 reference')
-    fieldwarps = InputMultiObject(traits.Either(File(exists=True), traits.Str),
+    hmc_affines = InputMultiObject(File(exists=True),
+                                   desc='head motion correction affines')
+    fieldwarps = InputMultiObject(File(exists=True),
                                   mandtory=False,
                                   desc='SDC unwarping transform')
-    unwarped_dwi_ref_to_t1w_affine = File(exists=True, mandatory=True,
+    unwarped_dwi_ref_to_t1w_affine = File(exists=True,
                                           desc='affine from dwi ref to t1w')
     t1_2_mni_forward_transform = InputMultiObject(File(exists=True), mandatory=False,
                                                   desc='composite (h5) transform to mni')
-    transforms = File(mandatory=False)
     save_cmd = traits.Bool(True, usedefault=True,
                            desc='write a log of command lines that were applied')
     copy_dtype = traits.Bool(False, usedefault=True,
                              desc='copy dtype from inputs to outputs')
     num_threads = traits.Int(1, usedefault=True, nohash=True,
                              desc='number of parallel processes')
+    transforms = File(mandatory=False)
 
 
 class ComposeTransformsOutputSpec(TraitedSpec):
@@ -347,28 +345,30 @@ class ComposeTransforms(SimpleInterface):
     def _run_interface(self, runtime):
         dwi_files = self.inputs.dwi_files
         num_dwis = len(dwi_files)
-        b0_hmc_affines = self.inputs.hmc_to_ref_affines
-        original_b0_indices = np.array(self.inputs.original_b0_indices).astype(np.int)
 
-        dwi_hmc_affines = match_transforms(dwi_files, b0_hmc_affines, original_b0_indices)
+        # concatenate transformations to get into the desired output space
+        image_transforms = []
+        image_transform_names = []
 
-        # Add in the sdc unwarps if they exist
-        image_transforms = [dwi_hmc_affines]
-        image_transform_names = ["hmc"]
-        sdc_unwarp = self.inputs.fieldwarps
-        if isdefined(sdc_unwarp):
-            # ConcatRPESplits produces an entry for each image
-            if len(sdc_unwarp) == num_dwis:
-                image_transforms.append(sdc_unwarp)
-                image_transform_names.append("fieldwarp")
-            # Otherwise only one warp in a list
-            elif len(sdc_unwarp) == 1:
-                image_transforms.append(sdc_unwarp * num_dwis)
-                image_transform_names.append("fieldwarp")
+        def include_transform(transform):
+            if not isdefined(transform):
+                return False
+            return len(transform) == num_dwis
 
-        # Same b0-to-t1 affine for every image
-        image_transforms.append([self.inputs.unwarped_dwi_ref_to_t1w_affine] * num_dwis)
-        image_transform_names.append("b0 to t1")
+        hmc_affines = self.inputs.hmc_affines
+        fieldwarps = self.inputs.fieldwarps
+        coreg_to_t1 = [self.inputs.unwarped_dwi_ref_to_t1w_affine] * num_dwis
+
+        transform_order = [
+            (hmc_affines, 'hmc'),
+            (fieldwarps, 'fieldwarp'),
+            (coreg_to_t1, 'b0 to T1w'),
+        ]
+
+        for transform_list, transform_name in transform_order:
+            if include_transform(transform_list):
+                image_transforms.append(transform_list)
+                image_transform_names.append(transform_name)
 
         # Same t1-to-mni transform for every image
         mni_xform = self.inputs.t1_2_mni_forward_transform
@@ -377,9 +377,17 @@ class ComposeTransforms(SimpleInterface):
             image_transforms.append([mni_xform[0]] * num_dwis)
             image_transforms.append([mni_xform[1]] * num_dwis)
             image_transform_names += ['mni affine', 'mni warp']
+
         # Check that all the transform lists have the same numbers of transforms
         assert all([len(xform_list) == len(image_transforms[0]) for
                     xform_list in image_transforms])
+
+        # If there is just a coreg transform, then we have everything
+        if image_transform_names == ['b0 to T1w']:
+            self._results['out_warps'] = image_transforms[0]
+            self._results['out_affines'] = image_transforms[0]
+            self._results['transform_lists'] = image_transforms
+            return runtime
 
         # Reverse the order for ANTs
         image_transforms = image_transforms[::-1]
@@ -395,7 +403,6 @@ class ComposeTransforms(SimpleInterface):
         ifargs = self.inputs.get()
 
         # Extract number of input images and transforms
-        num_files = len(dwi_files)
         # Get number of parallel jobs
         num_threads = ifargs.pop('num_threads')
         save_cmd = ifargs.pop('save_cmd')
@@ -403,16 +410,13 @@ class ComposeTransforms(SimpleInterface):
         # Remove certain keys
         for key in ['environ', 'ignore_exception', 'print_out_composite_warp_file',
                     'terminal_output', 'output_image', 'input_image', 'transforms',
-                    'dwi_files', 'original_b0_indices', 'hmc_to_ref_affines',
+                    'dwi_files', 'original_b0_indices', 'hmc_affines',
                     'fieldwarps', 'unwarped_dwi_ref_to_t1w_affine', 'interpolation',
                     't1_2_mni_forward_transform', 'copy_dtype']:
             ifargs.pop(key, None)
 
-        # Get a temp folder ready
-        tmp_folder = TemporaryDirectory(prefix='tmp-', dir=runtime.cwd)
-
         # In qsiprep the transforms have already been merged
-        assert len(xfms_list) == num_files
+        assert len(xfms_list) == num_dwis
         self._results['transform_lists'] = xfms_list
 
         # Inputs are ready to run in parallel
@@ -420,18 +424,15 @@ class ComposeTransforms(SimpleInterface):
             num_threads = None
 
         if num_threads == 1:
-            out_files = [_compose_tfms((
-                in_file, in_xfm, ifargs, i, runtime.cwd))
-                for i, (in_file, in_xfm) in enumerate(zip(dwi_files, xfms_list))
-            ]
+            out_files = [_compose_tfms((in_file, in_xfm, ifargs, i, runtime.cwd))
+                         for i, (in_file, in_xfm) in enumerate(zip(dwi_files, xfms_list))]
         else:
             from concurrent.futures import ThreadPoolExecutor
             with ThreadPoolExecutor(max_workers=num_threads) as pool:
-                out_files = list(pool.map(_compose_tfms, [
+                mapper = pool.map(_compose_tfms, [
                     (in_file, in_xfm, ifargs, i, runtime.cwd)
-                    for i, (in_file, in_xfm) in enumerate(zip(dwi_files, xfms_list))]
-                ))
-        tmp_folder.cleanup()
+                    for i, (in_file, in_xfm) in enumerate(zip(dwi_files, xfms_list))])
+                out_files = list(mapper)
 
         # Collect output file names, after sorting by index
         self._results['out_warps'] = [el[0] for el in out_files]
