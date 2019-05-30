@@ -38,7 +38,7 @@ LOGGER = logging.getLogger('nipype.workflow')
 
 
 def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
-                    ignore, debug, low_mem, anat_only, longitudinal, hires,
+                    ignore, debug, low_mem, anat_only, longitudinal, b0_threshold, hires,
                     denoise_before_combining, dwi_denoise_window, output_resolution,
                     combine_all_dwis, omp_nthreads, force_spatial_normalization,
                     skull_strip_template, skull_strip_fixed_seed, freesurfer, hmc_model,
@@ -67,6 +67,7 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
                               low_mem=False,
                               anat_only=False,
                               longitudinal=False,
+                              b0_threshold=100,
                               freesurfer=False,
                               hires=False,
                               denoise_before_combining=True,
@@ -117,6 +118,8 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
         longitudinal : bool
             Treat multiple sessions as longitudinal (may increase runtime)
             See sub-workflows for specific differences
+        b0_threshold : int
+            Images with b-values less than this value will be treated as a b=0 image.
         dwi_denoise_window : int
             window size in voxels for ``dwidenoise``. Must be odd. If 0, '
             '``dwidwenoise`` will not be run'
@@ -207,6 +210,7 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
             dwi_denoise_window=dwi_denoise_window,
             anat_only=anat_only,
             longitudinal=longitudinal,
+            b0_threshold=b0_threshold,
             freesurfer=freesurfer,
             hires=hires,
             combine_all_dwis=combine_all_dwis,
@@ -244,12 +248,12 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
 
 def init_single_subject_wf(
         subject_id, name, reportlets_dir, output_dir, bids_dir, ignore, debug, write_local_bvecs,
-        low_mem, anat_only, longitudinal, denoise_before_combining, dwi_denoise_window,
-        combine_all_dwis, omp_nthreads, skull_strip_template, force_spatial_normalization,
-        skull_strip_fixed_seed, freesurfer, hires, output_spaces, template, output_resolution,
-        prefer_dedicated_fmaps, motion_corr_to, b0_to_t1w_transform, hmc_model, hmc_transform,
-        shoreline_iters, eddy_config, impute_slice_threshold, fmap_bspline, fmap_demean, use_syn,
-        force_syn):
+        low_mem, anat_only, longitudinal, b0_threshold, denoise_before_combining,
+        dwi_denoise_window, combine_all_dwis, omp_nthreads, skull_strip_template,
+        force_spatial_normalization, skull_strip_fixed_seed, freesurfer, hires, output_spaces,
+        template, output_resolution, prefer_dedicated_fmaps, motion_corr_to, b0_to_t1w_transform,
+        hmc_model, hmc_transform, shoreline_iters, eddy_config, impute_slice_threshold,
+        fmap_bspline, fmap_demean, use_syn, force_syn):
     """
     This workflow organizes the preprocessing pipeline for a single subject.
     It collects and reports information about the subject, and prepares
@@ -280,6 +284,7 @@ def init_single_subject_wf(
             dwi_denoise_window=7,
             anat_only=False,
             longitudinal=False,
+            b0_threhold=100,
             freesurfer=False,
             hires=False,
             force_spatial_normalization=True,
@@ -294,6 +299,7 @@ def init_single_subject_wf(
             b0_to_t1w_transform='Rigid',
             hmc_model='3dSHORE',
             hmc_transform='Affine',
+            eddy_config=None,
             shoreline_iters=2,
             impute_slice_threshold=0.0,
             write_local_bvecs=False,
@@ -319,6 +325,8 @@ def init_single_subject_wf(
         longitudinal : bool
             Treat multiple sessions as longitudinal (may increase runtime)
             See sub-workflows for specific differences
+        b0_threshold : int
+            Images with b-values less than this value will be treated as a b=0 image.
         dwi_denoise_window : int
             window size in voxels for ``dwidenoise``. Must be odd. If 0, '
             '``dwidwenoise`` will not be run'
@@ -355,9 +363,19 @@ def init_single_subject_wf(
 
         template : str
             Name of template targeted by ``template`` output space
+        hmc_model : 'none', '3dSHORE' or 'MAPMRI'
+            Model used to generate target images for head motion correction. If 'none'
+            the transform from the nearest b0 will be used.
+        hmc_transform : "Rigid" or "Affine"
+            Type of transform used for head motion correction
+        impute_slice_threshold : float
+            Impute data in slices that are this many SDs from expected. If 0, no slices
+            will be imputed.
         motion_corr_to : str
             Motion correct using the 'first' b0 image or use an 'iterative'
             method to motion correct to the midpoint of the b0 images
+        eddy_config: str
+            Path to a JSON file containing config options for eddy
         b0_to_t1w_dof : 6, 9 or 12
             Degrees-of-freedom for b0-T1w registration
         fmap_bspline : bool
@@ -370,6 +388,8 @@ def init_single_subject_wf(
             run, by default.
         force_syn : bool
             **Temporary**: Always run SyN-based SDC
+        eddy_config: str
+            Path to a JSON file containing config options for eddy
 
 
     Inputs
@@ -521,6 +541,7 @@ to workflows in *qsiprep*'s documentation]\
             output_prefix=output_fname,
             layout=layout,
             ignore=ignore,
+            b0_threshold=b0_threshold,
             dwi_denoise_window=dwi_denoise_window,
             denoise_before_combining=denoise_before_combining,
             motion_corr_to=motion_corr_to,

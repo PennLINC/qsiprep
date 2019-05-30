@@ -38,6 +38,7 @@ LOGGER = logging.getLogger('nipype.workflow')
 def init_dwi_preproc_wf(scan_groups,
                         output_prefix,
                         ignore,
+                        b0_threshold,
                         motion_corr_to,
                         b0_to_t1w_transform,
                         hmc_model,
@@ -72,6 +73,7 @@ def init_dwi_preproc_wf(scan_groups,
                                   'dwi_series_pedir': 'j'},
                                  omp_nthreads=1,
                                  ignore=[],
+                                 b0_threshold=100,
                                  reportlets_dir='.',
                                  output_dir='.',
                                  template='MNI152NLin2009cAsym',
@@ -101,6 +103,8 @@ def init_dwi_preproc_wf(scan_groups,
             beginning of the output file name (eg 'sub-1_buds-j')
         ignore : list
             Preprocessing steps to skip (eg "fieldmaps")
+        b0_threshold : int
+            Images with b-values less than this value will be treated as a b=0 image.
         freesurfer : bool
             Enable FreeSurfer functional registration (bbregister) and
             resampling dwi series to FreeSurfer surface meshes.
@@ -290,6 +294,7 @@ def init_dwi_preproc_wf(scan_groups,
         name='outputnode')
 
     pre_hmc_wf = init_dwi_pre_hmc_wf(scan_groups=scan_groups,
+                                     b0_threshold=b0_threshold,
                                      preprocess_rpe_series=preprocess_rpe_series,
                                      dwi_denoise_window=dwi_denoise_window,
                                      low_mem=low_mem,
@@ -316,6 +321,7 @@ def init_dwi_preproc_wf(scan_groups,
     elif hmc_model == 'eddy':
         hmc_wf = init_fsl_hmc_wf(
             scan_groups=scan_groups,
+            b0_threshold=b0_threshold,
             impute_slice_threshold=impute_slice_threshold,
             eddy_config=eddy_config,
             mem_gb=mem_gb,

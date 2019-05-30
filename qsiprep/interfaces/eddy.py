@@ -245,7 +245,6 @@ class ExtendedEddy(fsl.Eddy):
         if isdefined(self.inputs.use_cuda):
             self._use_cuda()
 
-
     def _list_outputs(self):
         outputs = self.output_spec().get()
         outputs['out_corrected'] = os.path.abspath(

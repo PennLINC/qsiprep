@@ -38,6 +38,7 @@ LOGGER = logging.getLogger('nipype.workflow')
 
 
 def init_fsl_hmc_wf(scan_groups,
+                    b0_threshold,
                     impute_slice_threshold,
                     eddy_config,
                     mem_gb=3,
@@ -160,7 +161,8 @@ def init_fsl_hmc_wf(scan_groups,
             (prepare_rpe_b0, gather_inputs, [('fmap_file', 'rpe_b0')]),
             (gather_inputs, topup, [
                 ('topup_datain', 'encoding_file'),
-                ('topup_imain', 'in_file')]),
+                ('topup_imain', 'in_file'),
+                ('topup_config', 'config')]),
             (topup, unwarped_mean, [('out_corrected', 'in_file')]),
             (unwarped_mean, unwarped_enhance, [('out_file', 'inputnode.in_file')]),
             (unwarped_enhance, outputnode, [
@@ -180,7 +182,7 @@ def init_fsl_hmc_wf(scan_groups,
         ])
 
     # Organize outputs for the rest of the pipeline
-    split_eddy = pe.Node(SplitDWIs(), name="split_eddy")
+    split_eddy = pe.Node(SplitDWIs(b0_threshold=b0_threshold), name="split_eddy")
     workflow.connect([
         (eddy, split_eddy, [
             ('out_rotated_bvecs', 'bvec_file'),

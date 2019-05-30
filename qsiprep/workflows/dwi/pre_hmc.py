@@ -36,6 +36,7 @@ LOGGER = logging.getLogger('nipype.workflow')
 
 
 def init_dwi_pre_hmc_wf(scan_groups,
+                        b0_threshold,
                         preprocess_rpe_series,
                         dwi_denoise_window,
                         denoise_before_combining,
@@ -105,14 +106,14 @@ def init_dwi_pre_hmc_wf(scan_groups,
         merge_plus = init_merge_and_denoise_wf(dwi_denoise_window=dwi_denoise_window,
                                                denoise_before_combining=denoise_before_combining,
                                                name="merge_plus")
-        split_plus = pe.Node(SplitDWIs(), name="split_plus")
+        split_plus = pe.Node(SplitDWIs(b0_threshold=b0_threshold), name="split_plus")
         merge_plus.inputs.inputnode.dwi_files = plus_files
 
         # Merge, denoise, split, hmc on the minus series
         merge_minus = init_merge_and_denoise_wf(dwi_denoise_window=dwi_denoise_window,
                                                 denoise_before_combining=denoise_before_combining,
                                                 name="merge_minus")
-        split_minus = pe.Node(SplitDWIs(), name="split_minus")
+        split_minus = pe.Node(SplitDWIs(b0_threshold=b0_threshold), name="split_minus")
         merge_minus.inputs.inputnode.dwi_files = minus_files
 
         concat_rpe_splits = pe.Node(ConcatRPESplits(), name="concat_rpe_splits")
@@ -157,7 +158,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
     merge_dwis = init_merge_and_denoise_wf(dwi_denoise_window=dwi_denoise_window,
                                            denoise_before_combining=denoise_before_combining,
                                            name="merge_dwis")
-    split_dwis = pe.Node(SplitDWIs(), name="split_dwis")
+    split_dwis = pe.Node(SplitDWIs(b0_threshold=b0_threshold), name="split_dwis")
     merge_dwis.inputs.inputnode.dwi_files = dwi_series
 
     workflow.connect([

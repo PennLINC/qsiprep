@@ -106,6 +106,16 @@ jobs:
               echo "Dataset DSCSDSI_BUDS was cached"
             fi
       - run:
+          name: Get downsampled DTI
+          command: |
+            if [[ ! -d /tmp/data/DSDTI ]]; then
+              wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
+                -O DSDTI.tar.xz "https://upenn.box.com/shared/static/iefjtvfez0c2oug0g1a9ulozqe5il5xy.xz"
+              tar xvfJ DSDTI.tar.xz -C /tmp/data/
+            else
+              echo "Dataset DSDTI was cached"
+            fi
+      - run:
           name: Store FreeSurfer license file
           command: |
             mkdir -p /tmp/fslicense

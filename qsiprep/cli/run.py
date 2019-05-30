@@ -164,6 +164,13 @@ def get_parser():
         action='store_true',
         help='treat dataset as longitudinal - may increase runtime')
     g_conf.add_argument(
+        '--b0-threshold', '--b0_threshold',
+        action='store',
+        type=int,
+        default=100,
+        help='any value in the .bval file less than this will be considered '
+        'a b=0 image. Setting this too high can result in inaccurate results.')
+    g_conf.add_argument(
         '--dwi_denoise_window', '--dwi-denoise-window',
         action='store',
         type=int,
@@ -245,6 +252,11 @@ def get_parser():
         'nearest b0 image. If "3dSHORE", SHORELine will be used. If '
         '"eddy_ingress", the dwis are assumed to have been run through '
         'fsls eddy. ')
+    g_moco.add_argument(
+        '--eddy-config', '--eddy_config',
+        action='store',
+        help='path to a json file with settinge for the call to eddy.'
+    )
     g_moco.add_argument(
         '--shoreline_iters', '--shoreline-iters',
         action='store',
@@ -709,6 +721,7 @@ def build_qsiprep_workflow(opts, retval):
         low_mem=opts.low_mem,
         anat_only=opts.anat_only,
         longitudinal=opts.longitudinal,
+        b0_threshold=opts.b0_threshold,
         combine_all_dwis=opts.combine_all_dwis,
         dwi_denoise_window=opts.dwi_denoise_window,
         denoise_before_combining=opts.denoise_before_combining,
@@ -724,6 +737,7 @@ def build_qsiprep_workflow(opts, retval):
         motion_corr_to=opts.b0_motion_corr_to,
         hmc_transform=opts.hmc_transform,
         hmc_model=opts.hmc_model,
+        eddy_config=opts.eddy_config,
         shoreline_iters=opts.shoreline_iters,
         impute_slice_threshold=opts.impute_slice_threshold,
         b0_to_t1w_transform=opts.b0_to_t1w_transform,
