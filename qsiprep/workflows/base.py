@@ -501,15 +501,14 @@ to workflows in *qsiprep*'s documentation]\
 
     # Handle the grouping of multiple dwi files within a session
     dwi_session_groups = get_session_groups(layout, subject_data, combine_all_dwis)
-
-    # Now group by fieldmaps for session x fieldmap
-    dwi_fmap_groups = []
     LOGGER.info(dwi_session_groups)
+
+    dwi_fmap_groups = []
     for dwi_session_group in dwi_session_groups:
         dwi_fmap_groups.extend(
-            group_by_fieldmaps(dwi_session_group, layout,
+            group_by_warpspace(dwi_session_group, layout, prefer_dedicated_fmaps,
+                               hmc_model == "eddy",
                                "fieldmaps" in ignore or force_syn,
-                               prefer_dedicated_fmaps,
                                combine_all_dwis))
     outputs_to_files = {_get_output_fname(dwi_group): dwi_group for dwi_group in dwi_fmap_groups}
 
@@ -518,14 +517,10 @@ to workflows in *qsiprep*'s documentation]\
     # create a processing pipeline for the dwis in each session
     for output_fname, dwi_info in outputs_to_files.items():
         dwi_preproc_wf = init_dwi_preproc_wf(
-            dwi_series=dwi_info['dwi_series'],
-            rpe_series=dwi_info['rpe_series'],
-            rpe_b0=dwi_info['rpe_b0'],
-            dwi_series_pedir=dwi_info['dwi_series_pedir'],
+            scan_groups=dwi_info,
             output_prefix=output_fname,
             layout=layout,
             ignore=ignore,
-            freesurfer=freesurfer,
             dwi_denoise_window=dwi_denoise_window,
             denoise_before_combining=denoise_before_combining,
             motion_corr_to=motion_corr_to,
@@ -600,7 +595,16 @@ def get_session_groups(layout, subject_data, combine_all_dwis):
     return dwi_session_groups
 
 
-def group_by_fieldmaps(dwi_files, layout, ignore_fieldmap, prefer_dedicated_fmaps,
+FMAP_PRIORITY = {
+    'epi': 0,
+    'fieldmap': 1,
+    'phasediff': 2,
+    'phase1': 3,
+    'syn': 4
+}
+
+
+def group_by_warpspace(dwi_files, layout, prefer_dedicated_fmaps, using_eddy, ignore_fieldmaps,
                        combine_all_dwis):
     """Groups a session's DWI files by their PE direction and fieldmaps, if specified.
 
@@ -656,137 +660,219 @@ def group_by_fieldmaps(dwi_files, layout, ignore_fieldmap, prefer_dedicated_fmap
         groups_list: list
             A list of dictionaries that describe "group info". These can take a couple forms
 
-            When there are two groups of dwi series with opposite phase encoding dirs:
+            When there are two groups of dwi series with opposite phase encoding dirs
+            and ``use_eddy``:
             [
                 {'dwi_series': ['scan1.nii', 'scan2.nii'],
-                 'rpe_dwi_series': ['scan3.nii', 'scan4.nii'],
-                 'rpe_b0': [],
+                 'fieldmap_info': {'rpe_series':['scan3.nii', 'scan4.nii', 'type':'rpe_series']}
                  'dwi_series_pedir': 'j'}
+            ]
+
+            if not ``use_eddy`` a separate grouping is made for each PE direction:
+            [
+                {'dwi_series': ['scan1.nii', 'scan2.nii'],
+                 'fieldmap_info': {'rpe_series':['scan3.nii', 'scan4.nii'],
+                                   'type':'rpe_series']}
+                 'dwi_series_pedir': 'j'},
+                 {'dwi_series': ['scan3.nii', 'scan4.nii'],
+                  'fieldmap_info': {'rpe_series': ['scan1.nii', 'scan2.nii'],
+                                    'type':'rpe_series']}
+                  'dwi_series_pedir': 'j'}
             ]
 
             When there is a PEPolar fieldmap
             [
-             {
-              'dwi_series': ['scan1.nii', 'scan2.nii'],
-              'rpe_dwi_series': [],
-              'rpe_b0: ['fmap_scan.nii'],
-              'dwi_series_pedir': 'j'
-             }
+             {'dwi_series': ['scan1.nii', 'scan2.nii'],
+              'fieldmap_info': {'epi': 'fmap_scan1.nii',
+                                'type': 'epi'},
+              'dwi_series_pedir': 'j'}
             ]
 
             When two different PE directions each have their own fieldmaps
             [
-             {
-              'dwi_series': ['scan1.nii', 'scan2.nii'],
-              'rpe_dwi_series': [],
-              'rpe_b0: ['fmap_scan.nii'],
-              'dwi_series_pedir': 'j'
-             },
-             {
-              'dwi_series': ['scan3.nii', 'scan4.nii'],
-              'rpe_dwi_series': [],
-              'rpe_b0: ['fmap_scan2.nii'],
-              'dwi_series_pedir': 'j-'
-             }
+             {'dwi_series': ['scan1.nii', 'scan2.nii'],
+              'fieldmap_info': {'epi': 'fmap_scan1.nii',
+                                'type': 'epi'},
+              'dwi_series_pedir': 'j'},
+             {'dwi_series': ['scan3.nii', 'scan4.nii'],
+              'fieldmap_info': {'epi': 'fmap_scan2.nii',
+                               'type': 'epi'},
+              'dwi_series_pedir': 'j-'}
+            ]
+
+            When there is a phasediff fieldmap
+            [
+             {'dwi_series': [ 'scan1.nii', 'scan2.nii'],
+              'fieldmap_info': { 'magnitude1': 'magnitude1.nii',
+                                 'magnitude2': 'magnitude2.nii',
+                                 'phasediff': 'phasediff.nii',
+                                 'type': 'phasediff'},
+              'dwi_series_pedir': 'j-'}
             ]
 
         NOTE: the pre-hmc steps, such as denoising, will only be run within warped space
         groups
 
     """
+    rationale = ['The following DWI files were found with the following fieldmaps:']
 
     # For doc-building
     if layout is None:
+        LOGGER.warning("Assuming we're building docs")
         return [{'dwi_series': dwi_files,
-                 'rpe_series': [],
-                 'rpe_b0':[],
+                 'fieldmap_info': {'type': None},
                  'dwi_series_pedir': 'j'}]
 
     # For each DWI, figure out its PE dir and whether or not it was listed in
     # an IntendedFor field in a fieldmap sidecar. Make a list of
-    # (filename, PE dir, fmap_file)
+    # (filename, PE dir, fmap_file) and hang on to the pointers to additional files
+    # for this fieldmap
     parsed_dwis = []
+    fmap_pointers = {}
     for ref_file in dwi_files:
         metadata = layout.get_metadata(ref_file)
 
-        # Find fieldmaps. Options: (epi only)
-        fmaps = []
-        fmap_file = ''
-
+        # Find fieldmaps
         fmaps = layout.get_fieldmap(ref_file, return_list=True)
-        fmap_files = []
+        fmap_file = ''
+        priority = 99999
         for fmap in fmaps:
-            if fmap['type'] == 'epi':
-                fmap_files.append(fmap['epi'])
+            fmap_type = fmap['type']
+            if fmap_type not in ('epi', 'phasediff', 'phase'):
+                continue
 
-        num_fmaps = len(fmap_files)
-        if num_fmaps > 1:
-            print("Multiple field maps found for %s", ref_file)
-        if num_fmaps >= 1:
-            fmap_file = fmap_files[0]
-        parsed_dwis.append(
-            (ref_file, metadata['PhaseEncodingDirection'], fmap_file))
+            if fmap_type == 'phase':
+                fmap_type = 'phase1'
 
-    # If we're not combining, each DWI series is its own group
+            this_priority = FMAP_PRIORITY[fmap_type]
+            if this_priority < priority:
+                priority = this_priority
+                fmap_file = fmap[fmap_type]
+                fmap_pointers[fmap_file] = fmap
+
+        fmap_tuple = (ref_file, metadata['PhaseEncodingDirection'], fmap_file, fmap_type)
+        parsed_dwis.append(fmap_tuple)
+        rationale.append(' * %s (PEDir %s): %s (Type %s)' % fmap_tuple)
+
     groups = []
     if not combine_all_dwis:
-        for ref_file, pe_dir, fmap_file in parsed_dwis:
+        rationale.append("\nEach DWI was assigned to its own group for preprocessing")
+        for ref_file, pe_dir, fmap_file, fmap_type in parsed_dwis:
             groups.append({
                 'dwi_series': [ref_file],
-                'rpe_series': [],
-                'rpe_b0': fmap_file,
-                'dwi_series_pedir': pe_dir
-            })
+                'fieldmap_info': fmap_pointers[fmap_file],
+                'dwi_series_pedir': pe_dir})
+        LOGGER.info('\n'.join(rationale))
         return groups
 
     # group by warped space, defined by pe_dir and fmap
     groups = defaultdict(list)
-    for ref_file, pe_dir, fmap in parsed_dwis:
+    for ref_file, pe_dir, fmap, fmap_type in parsed_dwis:
         groups[(pe_dir, fmap)].append(ref_file)
 
-    # Which groups can be combined to do bidirectional pepolar?
-    complete_groups = []
-    group_keys = set(groups.keys())
+    # Also group by PE dir
+    pedir_groups = defaultdict(list)
+    for warp_group, member_images in groups.items():
+        pe_dir, _ = warp_group
+        pedir_groups[pe_dir].extend(member_images)
 
+    if ignore_fieldmaps:
+        output_groups = []
+        rationale.append("\nFieldmaps were ignored and images were grouped by PE Direction")
+        for pe_dir, member_images in pedir_groups.items():
+            output_groups.append({
+                'dwi_series': member_images,
+                'fieldmap_info': {'type': None},
+                'dwi_series_pedir': pe_dir})
+        LOGGER.info('\n'.join(rationale))
+        return output_groups
+
+    # Print the group memberships
+    rationale.append("\nThe following warped spaces were defined to contain:")
+    for warp_group, member_images in groups.items():
+        rationale.append(' * PEDir: %s, fmap: %s ' % warp_group)
+        for member_image in member_images:
+            rationale.append('    -> ' + member_image)
+
+    # group by pe dir and fmap
+    complete_groups = []
+    for warp_group, member_images in groups.items():
+        pe_dir, fmap_file = warp_group
+        complete_groups.append({
+            'dwi_series': member_images,
+            'fieldmap_info': fmap_pointers[fmap_file],
+            'dwi_series_pedir': pe_dir})
+
+    if prefer_dedicated_fmaps:
+        rationale.append('\nStrictly using data from fmaps/ for SDC')
+        LOGGER.info('\n'.join(rationale))
+        return complete_groups
+
+    # Ignoring dedicated fieldmaps, define warped spaces by PEDir
+    match_header = 'No opportunities for bidirectional PEPolar DWI series were found.'
+    group_keys = set(list(pedir_groups.keys()))
+    final_groups = []
+    matches_rationale = []
     while len(group_keys):
         key = group_keys.pop()
-        scan_list = groups[key]
-        pe_dir, fmap = key
-        pe_axis = pe_dir[0]
+        scan_list = pedir_groups[key]
+        pe_axis = key[0]
 
-        if prefer_dedicated_fmaps:
-            matches = [k for k in group_keys if k[0][0] == pe_axis and fmap == k[1]]
-        else:
-            matches = [k for k in group_keys if k[0][0] == pe_axis]
+        # Find opposing fieldmap groups
+        matches = [k for k in group_keys if k[0] == pe_axis]
         num_matches = len(matches)
 
-        if not num_matches == 1:
-            # Didn't find any reverse PE groups
-            print("No matches found for %s", key)
-            complete_groups.append(
-                {'dwi_series': scan_list,
-                 'rpe_series': [],
-                 'rpe_b0': fmap,
-                 'dwi_series_pedir': pe_dir})
-        else:
+        if num_matches == 1:
+            match_header = '\nThe following warp groups were used to SDC each other'
             # Found a perfect match
             match = matches[0]
-            match_scan_list = groups[match]
-            complete_groups.append(
-                {'dwi_series': scan_list,
-                 'rpe_series': match_scan_list,
-                 'rpe_b0': [],
-                 'dwi_series_pedir': pe_dir})
+            match_scan_list = pedir_groups[match]
+            if using_eddy:
+                matches_rationale.append(
+                    '  * A single group containing %s/%s PE dir groups was sent to TOPUP' % (
+                        key, match))
+                final_groups.append(
+                    {'dwi_series': scan_list,
+                     'fieldmap_info': {'type': 'rpe_series', 'rpe_series': match_scan_list,},
+                     'dwi_series_pedir': pe_dir})
+            else:
+                matches_rationale.append(
+                    '  * Two pipelines generated using %s/%s PE dir groups for SDC' % (
+                        key, match))
+                final_groups.append(
+                    {'dwi_series': scan_list,
+                     'fieldmap_info': {'type': 'rpe_series', 'rpe_series': match_scan_list},
+                     'dwi_series_pedir': key})
+                final_groups.append(
+                    {'dwi_series': match_scan_list,
+                     'fieldmap_info': {'type': 'rpe_series', 'rpe_series': scan_list},
+                     'dwi_series_pedir': match})
             group_keys.discard(match)
-            LOGGER.info("Matched %s to %s", match, key)
 
-    return complete_groups
+        elif num_matches == 0:
+            # Didn't find any reverse PE groups: add back all the original warp groups
+            LOGGER.info("No matches found for %s", key)
+            for warp_group, member_images in groups.items():
+                pe_dir, fmap_file = warp_group
+                if pe_dir == key:
+                    final_groups.append({
+                        'dwi_series': member_images,
+                        'fieldmap_info': fmap_pointers[fmap_file],
+                        'dwi_series_pedir': pe_dir
+                    })
+        else:
+            # Didn't find any reverse PE groups
+            LOGGER.critical("Multiple matches found for %s", key)
+
+    LOGGER.info('\n'.join(rationale + [match_header] + matches_rationale))
+    return final_groups
 
 
-def _get_output_fname(dwis):
+def _get_output_fname(dwi_group):
     """Derive the output name for a dwi grouping."""
-    all_dwis = dwis['dwi_series'] + dwis['rpe_series']
-    bdp = len(dwis['rpe_series']) > 0
+    all_dwis = dwi_group['dwi_series']
+    if dwi_group['fieldmap_info']['type'] == 'rpe_series':
+        all_dwis += dwi_group['fieldmap_info']['rpe_series']
 
     # If a single file, use its name, otherwise use the common prefix
     if len(all_dwis) > 1:
@@ -797,15 +883,7 @@ def _get_output_fname(dwis):
                           if not part.startswith("run")]))
         input_fname = os.path.commonprefix(no_runs)
         fname = split_filename(input_fname)[1]
-
         parts = fname.split('_')
-
-        if bdp:
-            parts = [part for part in parts if part.startswith('sub')
-                     or part.startswith('ses')]
-            pe_dir = list(dwis.keys())[0][0]
-            parts.append('buds-' + pe_dir)
-
         full_parts = [part for part in parts if not part.endswith('-')]
         fname = '_'.join(full_parts)
 

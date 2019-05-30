@@ -139,13 +139,13 @@ class SubjectSummary(SummaryInterface):
                 for dwi_file in group_info['dwi_series']:
                     files_desc.append("\t\t\t\t\t<li> %s </li>" % dwi_file)
                     n_dwis += 1
-                if len(group_info['rpe_series']):
-                    files_desc.append('\t\t\t\t<li>RPE DWI Files: </li>' % output_fname)
-                    for dwi_file in group_info['rpe_series']:
-                        files_desc.append("\t\t\t\t\t<li> %s </li>" % dwi_file)
+                fieldmap_type = group_info['fieldmap_info']['type']
+                if fieldmap_type is not None:
+                    files_desc.append('\t\t\t\t<li>Fieldmap type: %s </li>' % fieldmap_type)
+
+                    for key, value in group_info['fieldmap_info'].items():
+                        files_desc.append("\t\t\t\t\t<li> %s: %s </li>" % (key, str(value)))
                         n_dwis += 1
-                if group_info['rpe_b0']:
-                    files_desc.append('\t\t\t\t<li>RPE b0 file: %s</li>' % group_info['rpe_b0'])
                 files_desc.append("</ul>")
                 groupings += GROUPING_TEMPLATE.format(output_name=output_fname,
                                                       input_files='\n'.join(files_desc))

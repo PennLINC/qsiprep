@@ -15,16 +15,18 @@ from nipype import logging
 
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
-from nipype.interfaces import fsl, afni
+from nipype.interfaces import fsl, afni, ants
 
 from ...interfaces import DerivativesDataSink
 from ...interfaces.eddy import GatherEddyInputs, ExtendedEddy, Eddy2SPMMotion
 from ...interfaces.dwi_merge import MergeDWIs
 from ...interfaces.images import SplitDWIs
+from ...interfaces.fmap import B0RPEFieldmap
 from ...engine import Workflow
 
 # dwi workflows
-from .util import init_dwi_reference_wf, _create_mem_gb, _get_wf_name, _list_squeeze
+from .util import (init_dwi_reference_wf, _create_mem_gb, _get_wf_name, _list_squeeze,
+                   init_enhance_and_skullstrip_dwi_wf)
 from .registration import init_b0_to_anat_registration_wf
 from .resampling import init_dwi_trans_wf
 from .confounds import init_dwi_confs_wf
@@ -35,8 +37,8 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger('nipype.workflow')
 
 
-def init_fsl_hmc_wf(impute_slice_threshold,
-                    do_topup,
+def init_fsl_hmc_wf(scan_groups,
+                    impute_slice_threshold,
                     eddy_config,
                     mem_gb=3,
                     omp_nthreads=1,
@@ -47,6 +49,8 @@ def init_fsl_hmc_wf(impute_slice_threshold,
 
 
     **Parameters**
+        scan_groups: dict
+            dictionary with fieldmaps and warp space information for the dwis
         impute_slice_threshold: float
             threshold for a slice to be replaced with imputed values. Overrides the
             parameter in ``eddy_config`` if set to a number > 0.
@@ -81,8 +85,8 @@ def init_fsl_hmc_wf(impute_slice_threshold,
 
     inputnode = pe.Node(
         niu.IdentityInterface(
-            fields=['dwi_files', 'rpe_b0', 'b0_indices', 'bvec_files', 'bval_files', 'b0_images',
-                    'original_files', 'rpe_b0_info', 'hmc_optimization_data']),
+            fields=['dwi_files', 'b0_indices', 'bvec_files', 'bval_files', 'b0_images',
+                    'original_files', 't1_brain', 't1_2_mni_reverse_transform']),
         name='inputnode')
 
     outputnode = pe.Node(
@@ -90,7 +94,7 @@ def init_fsl_hmc_wf(impute_slice_threshold,
             fields=["b0_template", "b0_template_mask", "pre_sdc_template",
                     "hmc_optimization_data", "sdc_method", 'slice_quality', 'motion_params',
                     "cnr_map", "bvec_files_to_transform", "dwi_files_to_transform", "b0_indices",
-                    "to_dwi_ref_affines", "to_dwi_ref_warps"]),
+                    "to_dwi_ref_affines", "to_dwi_ref_warps", "rpe_b0_info"]),
         name='outputnode')
 
     workflow = Workflow(name=name)
@@ -111,7 +115,6 @@ def init_fsl_hmc_wf(impute_slice_threshold,
     workflow.connect([
         (inputnode, gather_inputs, [
             ('dwi_files', 'dwi_files'),
-            ('rpe_b0', 'rpe_b0'),
             ('bval_files', 'bval_files'),
             ('bvec_files', 'bvec_files'),
             ('b0_indices', 'b0_indices'),
@@ -135,21 +138,37 @@ def init_fsl_hmc_wf(impute_slice_threshold,
             ('forward_transforms', 'to_dwi_ref_affines')])
     ])
 
-    if do_topup:
+    # If a topupref is provided, use it for TOPUP
+    rpe_b0 = None
+    fieldmap_type = scan_groups['fieldmap_info']['type']
+    if fieldmap_type == 'epi':
+        rpe_b0 = scan_groups['fieldmap_info']['epi']
+    elif fieldmap_type == 'rpe_series':
+        rpe_b0 = scan_groups['fieldmap_info']['rpe_series'][0]
+
+    if rpe_b0 is not None:
         outputnode.inputs.sdc_method = "TOPUP"
+        gather_inputs.inputs.rpe_b0 = rpe_b0
+        prepare_rpe_b0 = pe.Node(B0RPEFieldmap(b0_file=rpe_b0), name="prepare_rpe_b0")
+
         topup = pe.Node(fsl.TOPUP(), name="topup")
         unwarped_mean = pe.Node(afni.TStat(outputtype='NIFTI_GZ'), name='unwarped_mean')
-        unwarped_mask = pe.Node(afni.Automask(outputtype="NIFTI_GZ"), name='unwarped_mask')
+        unwarped_enhance = init_enhance_and_skullstrip_dwi_wf(name='unwarped_enhance')
 
         workflow.connect([
+            (prepare_rpe_b0, outputnode, [('fmap_info', 'inputnode.rpe_b0_info')]),
+            (prepare_rpe_b0, gather_inputs, [('fmap_file', 'rpe_b0')]),
             (gather_inputs, topup, [
                 ('topup_datain', 'encoding_file'),
                 ('topup_imain', 'in_file')]),
             (topup, unwarped_mean, [('out_corrected', 'in_file')]),
-            (unwarped_mean, outputnode, [('out_file', 'b0_template')]),
-            (topup, unwarped_mask, [('out_corrected', 'in_file')]),
-            (unwarped_mask, eddy, [('out_file', 'in_mask')]),
-            (unwarped_mask, outputnode, [('out_file', 'b0_template_mask')]),
+            (unwarped_mean, unwarped_enhance, [('out_file', 'inputnode.in_file')]),
+            (unwarped_enhance, outputnode, [
+                ('outputnode.skull_stripped_file', 'b0_template')]),
+            (unwarped_enhance, outputnode, [
+                ('outputnode.mask_file', 'b0_template_mask')]),
+            (unwarped_enhance, eddy, [
+                ('outputnode.mask_file', 'in_mask')]),
             (topup, eddy, [
                 ('out_movpar', 'in_topup_movpar'),
                 ('out_fieldcoef', 'in_topup_fieldcoef')]),

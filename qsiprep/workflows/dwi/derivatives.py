@@ -25,6 +25,7 @@ def init_dwi_derivatives_wf(output_prefix,
                             template,
                             write_local_bvecs,
                             hmc_model,
+                            shoreline_iters,
                             name='dwi_derivatives_wf'):
     """Set up a battery of datasinks to store derivatives in the right location.
     """
@@ -50,15 +51,15 @@ def init_dwi_derivatives_wf(output_prefix,
         (inputnode, ds_confounds, [('confounds', 'in_file')])
     ])
 
-    ds_optimization = pe.Node(
-        DerivativesDataSink(
-            prefix=output_prefix,
-            source_file=source_file,
-            base_directory=output_dir, suffix='hmcOptimization'),
-        name="ds_optimization", run_without_submitting=True,
-        mem_gb=DEFAULT_MEMORY_MIN_GB)
 
-    if hmc_model == '3dSHORE':
+    if hmc_model == '3dSHORE' and shoreline_iters > 1:
+        ds_optimization = pe.Node(
+            DerivativesDataSink(
+                prefix=output_prefix,
+                source_file=source_file,
+                base_directory=output_dir, suffix='hmcOptimization'),
+            name="ds_optimization", run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB)
         workflow.connect([
             (inputnode, ds_optimization, [('hmc_optimization_data', 'in_file')])
         ])

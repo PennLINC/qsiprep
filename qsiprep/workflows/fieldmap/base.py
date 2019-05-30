@@ -43,14 +43,10 @@ from .pepolar import init_pepolar_unwarp_wf
 from .syn import init_syn_sdc_wf
 
 LOGGER = logging.getLogger('nipype.workflow')
-FMAP_PRIORITY = {
-    'epi': 0,
-    'syn': 1
-}
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
-def init_sdc_wf(fmaps, dwi_meta, omp_nthreads=1,
+def init_sdc_wf(fieldmap_info, dwi_meta, omp_nthreads=1,
                 debug=False, fmap_bspline=False, fmap_demean=True):
     """
     This workflow implements the heuristics to choose a
@@ -132,10 +128,8 @@ def init_sdc_wf(fmaps, dwi_meta, omp_nthreads=1,
 
     """
 
-    # TODO: To be removed (filter out unsupported fieldmaps):
-    fmaps = [fmap for fmap in fmaps if fmap['type'] in FMAP_PRIORITY]
-
-    workflow = Workflow(name='sdc_wf' if fmaps else 'sdc_bypass_wf')
+    workflow = Workflow(
+        name='sdc_wf' if fieldmap_info['type'] is not None else 'sdc_bypass_wf')
     inputnode = pe.Node(niu.IdentityInterface(
         fields=['b0_ref', 'b0_ref_brain', 'b0_mask',
                 't1_brain', 't1_2_mni_reverse_transform', 'template']),
@@ -147,7 +141,7 @@ def init_sdc_wf(fmaps, dwi_meta, omp_nthreads=1,
         name='outputnode')
 
     # No fieldmaps - forward inputs to outputs
-    if not fmaps:
+    if fieldmap_info['type'] is None:
         outputnode.inputs.method = 'None'
         workflow.connect([
             (inputnode, outputnode, [('b0_ref', 'b0_ref'),
@@ -162,18 +156,14 @@ unwarped b0 reference was calculated for a more accurate
 co-registration with the anatomical reference.
 """
 
-    # In case there are multiple fieldmaps prefer EPI
-    fmaps.sort(key=lambda fmap: FMAP_PRIORITY[fmap['type']])
-    fmap = fmaps[0]
-
     # PEPOLAR path
-    if fmap['type'] == 'epi':
+    if fieldmap_info['type'] == 'epi':
         outputnode.inputs.method = \
             'PEB/PEPOLAR (phase-encoding based / PE-POLARity)'
         # Get EPI polarities and their metadata
         epi_fmaps = [
-            (fmap_['epi'], fmap_['metadata']["PhaseEncodingDirection"])
-            for fmap_ in fmaps if fmap_['type'] == 'epi']
+            (fieldmap_info['epi'], fieldmap_info['metadata']["PhaseEncodingDirection"])]
+
         sdc_unwarp_wf = init_pepolar_unwarp_wf(
             dwi_meta=dwi_meta,
             epi_fmaps=epi_fmaps,
@@ -188,7 +178,7 @@ co-registration with the anatomical reference.
         ])
 
     # FIELDMAP-less path
-    if any(fm['type'] == 'syn' for fm in fmaps):
+    if fieldmap_info['type'] == 'syn':
         syn_sdc_wf = init_syn_sdc_wf(
             bold_pe=dwi_meta.get('PhaseEncodingDirection', None),
             omp_nthreads=omp_nthreads)
@@ -196,15 +186,14 @@ co-registration with the anatomical reference.
         workflow.connect([
             (inputnode, syn_sdc_wf, [
                 ('t1_brain', 'inputnode.t1_brain'),
-                ('t1_2_mni_reverse_transform',
-                    'inputnode.t1_2_mni_reverse_transform'),
+                ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
                 ('b0_ref', 'inputnode.bold_ref'),
                 ('b0_ref_brain', 'inputnode.bold_ref_brain'),
                 ('template', 'inputnode.template')]),
         ])
 
         # XXX Eliminate branch when forcing isn't an option
-        if fmap['type'] == 'syn':  # No fieldmaps, but --use-syn
+        if fieldmap_info['type'] == 'syn':  # No fieldmaps, but --use-syn
             outputnode.inputs.method = 'FLB ("fieldmap-less", SyN-based)'
             sdc_unwarp_wf = syn_sdc_wf
         else:  # --force-syn was called when other fieldmap was present

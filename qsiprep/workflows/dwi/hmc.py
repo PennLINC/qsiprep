@@ -23,13 +23,13 @@ from .util import init_skullstrip_b0_wf
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
-def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file, bidirectional_pepolar,
+def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file,
                     rpe_b0='', num_model_iterations=2, mem_gb=3, omp_nthreads=1,
                     name="dwi_hmc_wf"):
     """Perform head motion correction and susceptibility distortion correction.
 
     This workflow uses antsRegistration and an iteratively updated signal model to perform
-    motion correction and potentially susceptibility distortion correction.
+    motion correction.
 
     **Parameters**
 
@@ -43,9 +43,6 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file, bidirec
             Which volume should be used to determine the motion-corrected space?
         source_file: str
             Path to one of the original dwi files (used for reportlets)
-        bidirectional_pepolar: bool
-            If a second set of DWIs is to be used to correct the first set of DWIs. Requires
-            that the sets have opposite phase encoding directions
         rpe_b0: str
             Path to a reverse phase encoding image to be used for 3dQWarp's TOPUP-style
             correction
@@ -588,16 +585,27 @@ def init_dwi_model_hmc_wf(modelname, transform, mem_gb, omp_nthreads,
         ])
 
     reorder_dwi_xforms = pe.Node(ReorderOutputs(), name='reorder_dwi_xforms')
-    summarize_iterations = pe.Node(IterationSummary(), name='summarize_iterations')
-    ds_report_iteration_plot = pe.Node(
-        DerivativesDataSink(suffix="shoreline_iterdata"), name='ds_report_iteration_plot',
-        mem_gb=0.1, run_without_submitting=True)
-
     # Create a report:
     shoreline_report = pe.Node(SHORELineReport(), name='shoreline_report')
     ds_report_shoreline_gif = pe.Node(
         DerivativesDataSink(suffix="shoreline_animation"), name='ds_report_shoreline_gif',
         mem_gb=1, run_without_submitting=True)
+
+    if num_iters > 1:
+        summarize_iterations = pe.Node(IterationSummary(), name='summarize_iterations')
+        ds_report_iteration_plot = pe.Node(
+            DerivativesDataSink(suffix="shoreline_iterdata"), name='ds_report_iteration_plot',
+            mem_gb=0.1, run_without_submitting=True)
+        workflow.connect([
+            (collect_motion_params, summarize_iterations, [
+                ('out', 'collected_motion_files')]),
+            (summarize_iterations, ds_report_iteration_plot, [
+                ('plot_file', 'in_file')]),
+            (summarize_iterations, outputnode, [
+                ('iteration_summary_file', 'optimization_data')]),
+            (summarize_iterations, shoreline_report, [
+                ('iteration_summary_file', 'iteration_summary')])])
+
 
     workflow.connect([
         (model_iterations[-1], reorder_dwi_xforms, [
@@ -612,19 +620,11 @@ def init_dwi_model_hmc_wf(modelname, transform, mem_gb, omp_nthreads,
         (reorder_dwi_xforms, outputnode, [
             ('full_transforms', 'hmc_transforms'),
             ('full_predicted_dwi_series', 'model_predicted_images')]),
-        (collect_motion_params, summarize_iterations, [
-            ('out', 'collected_motion_files')]),
-        (summarize_iterations, ds_report_iteration_plot, [
-            ('plot_file', 'in_file')]),
-        (summarize_iterations, shoreline_report, [
-            ('iteration_summary_file', 'iteration_summary')]),
         (inputnode, shoreline_report, [('dwi_files', 'original_images')]),
         (reorder_dwi_xforms, shoreline_report, [
             ('full_predicted_dwi_series', 'model_predicted_images'),
             ('hmc_warped_images', 'registered_images')]),
         (shoreline_report, ds_report_shoreline_gif, [('plot_file', 'in_file')]),
-        (summarize_iterations, outputnode, [
-            ('iteration_summary_file', 'optimization_data')])
     ])
 
     return workflow

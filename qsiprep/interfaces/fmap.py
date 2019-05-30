@@ -57,9 +57,9 @@ class B0RPEFieldmap(SimpleInterface):
             LOGGER.info("Found bval file %s for fieldmap.", potential_bval_file)
             bvals = np.loadtxt(potential_bval_file)
             # TODO: standard b0 threshold
-            if np.any(bvals > 50):
+            if np.any(bvals > 100):
                 LOGGER.info("Found one or more b > 50 images: discarding them")
-                fmap_data = lps_fmap.get_fdata()[..., bvals < 50].squeeze()
+                fmap_data = lps_fmap.get_fdata()[..., bvals < 100].squeeze()
                 lps_fmap = nb.Nifti1Image(fmap_data, lps_fmap.affine, header=lps_fmap.header)
 
         # Save the conformed fmap

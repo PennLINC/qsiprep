@@ -128,7 +128,7 @@ def _gather_confounds(fdisp=None, motion=None, sliceqc_file=None, newpath=None,
 
     # Add in the sliceqc measures
     if isdefined(sliceqc_file) and sliceqc_file is not None:
-        if sliceqc_file.endswith(".npy"):
+        if sliceqc_file.endswith(".npz"):
             sqc = np.load(sliceqc_file)
             confounds_data['hmc_r2'] = sqc['wb_r2s']
             confounds_data['hmc_xcorr'] = sqc['wb_xcorrs']

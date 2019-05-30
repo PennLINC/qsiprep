@@ -32,6 +32,30 @@ import matplotlib.pyplot as plt
 LOGGER = logging.getLogger('nipype.interface')
 
 
+class GroupImagesInputSpec(BaseInterfaceInputSpec):
+    image_groups = traits.Dict(mandatory=True)
+    dwi_files = InputMultiObject(File(exists=True))
+    bval_files = InputMultiObject(File(exists=True))
+    bvec_files = InputMultiObject(File(exists=True))
+    original_files = InputMultiObject(File(exists=True))
+
+
+class GroupImagesOutputSpec(TraitedSpec):
+    plus_dwi_files = OutputMultiObject(File(exists=True))
+    plus_bval_files = OutputMultiObject(File(exists=True))
+    plus_bvec_files = OutputMultiObject(File(exists=True))
+    plus_original_files = OutputMultiObject(File(exists=True))
+    minus_dwi_files = OutputMultiObject(File(exists=True))
+    minus_bval_files = OutputMultiObject(File(exists=True))
+    minus_bvec_files = OutputMultiObject(File(exists=True))
+    minus_original_files = OutputMultiObject(File(exists=True))
+
+
+class GroupImages(SimpleInterface):
+    input_spec = GroupImagesInputSpec
+    output_spec = GroupImagesOutputSpec
+
+
 def _nonoverlapping_qspace_samples(prediction_bval, prediction_bvec,
                                    all_bvals, all_bvecs, cutoff):
     """Ensure that none of the training samples are too close to the sample to predict.
@@ -181,7 +205,6 @@ class SignalPrediction(SimpleInterface):
         shore_fit = shore_model.fit(training_data, mask=mask_array)
 
         # Get the shore vector for the desired coordinate
-
         prediction_bvecs = np.tile(pred_vec, (10, 1))
         prediction_bvals = np.ones(10) * pred_val
         prediction_bvals[9] = 0  # prevent warning
@@ -271,6 +294,11 @@ class IterationSummary(SummaryInterface):
 
     def _run_interface(self, runtime):
         motion_files = self.inputs.collected_motion_files
+        output_fname = op.join(runtime.cwd, "iteration_summary.csv")
+        fig_output_fname = op.join(runtime.cwd, "iterdiffs.svg")
+        if not isdefined(motion_files):
+            return runtime
+
         all_iters = []
         for fnum, fname in enumerate(motion_files):
             df = pd.read_csv(fname)
@@ -280,12 +308,11 @@ class IterationSummary(SummaryInterface):
             df['iter_name'] = itername
             all_iters.append(df)
         combined = pd.concat(all_iters, axis=0, ignore_index=True)
-        output_fname = op.join(runtime.cwd, "iteration_summary.csv")
+
         combined.to_csv(output_fname, index=False)
         self._results['iteration_summary_file'] = output_fname
 
         # Create a figure for the report
-        fig_output_fname = op.join(runtime.cwd, "iterdiffs.svg")
         _iteration_summary_plot(combined, fig_output_fname)
         self._results['plot_file'] = fig_output_fname
 

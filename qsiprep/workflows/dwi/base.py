@@ -8,7 +8,6 @@ Orchestrating the dwi-preprocessing workflow
 
 import os
 
-import nibabel as nb
 from nipype import logging
 
 from nipype.pipeline import engine as pe
@@ -17,22 +16,16 @@ from nipype.interfaces import utility as niu
 from ...interfaces import DerivativesDataSink
 
 from ...interfaces.reports import DiffusionSummary, GradientPlot
-from ...interfaces.images import SplitDWIs, ConcatRPESplits
-from ...interfaces.gradients import SliceQC
 from ...interfaces.confounds import DMRISummary
 from ...interfaces.mrtrix import MRTrixGradientTable
-from ...interfaces.fmap import B0RPEFieldmap
 from ...engine import Workflow
 
 # dwi workflows
-from ..fieldmap.bidirectional_pepolar import init_bidirectional_b0_unwarping_wf
-from ..fieldmap.base import init_sdc_wf
 from ..fieldmap.unwarp import init_fmap_unwarp_report_wf
-from .merge import init_merge_and_denoise_wf
-from .pre_hmc import init_dwi_pre_hmc_wf
-from .hmc import init_dwi_hmc_wf
+from .shoreline import init_qsiprep_hmcsdc_wf
 from .fsl import init_fsl_hmc_wf
-from .util import init_dwi_reference_wf, _create_mem_gb, _get_wf_name, _get_first, _list_squeeze
+from .pre_hmc import init_dwi_pre_hmc_wf
+from .util import _create_mem_gb, _get_wf_name, _get_first, _list_squeeze
 from .registration import init_b0_to_anat_registration_wf
 from .resampling import init_dwi_trans_wf
 from .confounds import init_dwi_confs_wf
@@ -42,10 +35,7 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger('nipype.workflow')
 
 
-def init_dwi_preproc_wf(dwi_series,
-                        rpe_series,
-                        rpe_b0,
-                        dwi_series_pedir,
+def init_dwi_preproc_wf(scan_groups,
                         output_prefix,
                         ignore,
                         motion_corr_to,
@@ -56,7 +46,6 @@ def init_dwi_preproc_wf(dwi_series,
                         impute_slice_threshold,
                         eddy_config,
                         reportlets_dir,
-                        freesurfer,
                         output_spaces,
                         dwi_denoise_window,
                         denoise_before_combining,
@@ -78,16 +67,15 @@ def init_dwi_preproc_wf(dwi_series,
         :simple_form: yes
 
         from qsiprep.workflows.dwi.base import init_qsiprep_dwi_preproc_wf
-        wf = init_dwi_preproc_wf(['/completely/made/up/path/sub-01_dwi.nii.gz'],
-                                 [],
-                                 '',
+        wf = init_dwi_preproc_wf({'dwi_series': ['fake.nii'],
+                                  'fieldmap_info': {'type': None},
+                                  'dwi_series_pedir': 'j'},
                                  omp_nthreads=1,
                                  ignore=[],
                                  reportlets_dir='.',
                                  output_dir='.',
                                  template='MNI152NLin2009cAsym',
                                  output_spaces=['T1w', 'template'],
-                                 freesurfer=False,
                                  dwi_denoise_window=7,
                                  denoise_before_combining=True,
                                  motion_corr_to='iterative',
@@ -247,14 +235,19 @@ def init_dwi_preproc_wf(dwi_series,
         * :py:func:`~qsiprep.workflows.fieldmap.init_nonlinear_sdc_wf`
 
     """
-
-    doing_bidirectional_pepolar = len(rpe_series) > 0
-    all_dwis = dwi_series
-    if doing_bidirectional_pepolar:
-        all_dwis += rpe_series
+    # Check the inputs
+    all_dwis = scan_groups['dwi_series']
+    fieldmap_info = scan_groups['fieldmap_info']
+    fieldmap_type = fieldmap_info['type']
+    doing_bidirectional_pepolar = fieldmap_type == 'rpe_series'
+    preprocess_rpe_series = doing_bidirectional_pepolar and hmc_model == 'eddy'
+    if fieldmap_type is not None:
+        fieldmap_file = fieldmap_info[fieldmap_type]
+        fieldmap_info['metadata'] = layout.get_metadata(fieldmap_file)
 
     # For naming outputs
     source_file = all_dwis[0]
+    dwi_metadata = layout.get_metadata(source_file)
 
     mem_gb = {'filesize': 1, 'resampled': 1, 'largemem': 1}
     dwi_nvols = 10
@@ -296,35 +289,38 @@ def init_dwi_preproc_wf(dwi_series,
         ]),
         name='outputnode')
 
-    pre_hmc_wf = init_dwi_pre_hmc_wf(dwi_series=dwi_series,
-                                     rpe_series=rpe_series,
-                                     dwi_series_pedir=dwi_series_pedir,
+    pre_hmc_wf = init_dwi_pre_hmc_wf(scan_groups=scan_groups,
+                                     preprocess_rpe_series=preprocess_rpe_series,
                                      dwi_denoise_window=dwi_denoise_window,
                                      low_mem=low_mem,
                                      denoise_before_combining=denoise_before_combining,
                                      omp_nthreads=omp_nthreads)
 
-    if hmc_model in ('none', '3dSHORE'):
-        hmc_wf = init_dwi_hmc_wf(hmc_transform=hmc_transform, hmc_model=hmc_model,
-                                 hmc_align_to=motion_corr_to, source_file=source_file,
-                                 bidirectional_pepolar=doing_bidirectional_pepolar,
-                                 rpe_b0=rpe_b0, num_model_iterations=shoreline_iters,
-                                 mem_gb=mem_gb, omp_nthreads=omp_nthreads, name="hmc_wf")
-    elif hmc_model == 'eddy':
-        hmc_wf = init_fsl_hmc_wf(impute_slice_threshold=impute_slice_threshold,
-                                 do_topup=doing_bidirectional_pepolar or rpe_b0,
-                                 eddy_config=eddy_config,
-                                 mem_gb=mem_gb,
-                                 omp_nthreads=omp_nthreads,
-                                 name="hmc_wf")
+    if hmc_model in ('none', '3dSHORE', 'SH'):
+        hmc_wf = init_qsiprep_hmcsdc_wf(
+            scan_groups=scan_groups,
+            hmc_transform=hmc_transform,
+            hmc_model=hmc_model,
+            hmc_align_to=motion_corr_to,
+            template=template,
+            shoreline_iters=shoreline_iters,
+            impute_slice_threshold=impute_slice_threshold,
+            omp_nthreads=omp_nthreads,
+            fmap_bspline=fmap_bspline,
+            fmap_demean=fmap_demean,
+            use_syn=use_syn,
+            force_syn=force_syn,
+            dwi_metadata=dwi_metadata,
+            name="hmc_wf")
 
-    # If a topupref is provided, connect it to hmc for unwarping
-    if rpe_b0:
-        prepare_rpe_b0 = pe.Node(B0RPEFieldmap(b0_file=rpe_b0), name="prepare_rpe_b0")
-        workflow.connect([
-            (prepare_rpe_b0, hmc_wf, [
-                ('fmap_file', 'inputnode.rpe_b0'),
-                ('fmap_info', 'inputnode.rpe_b0_info')])])
+    elif hmc_model == 'eddy':
+        hmc_wf = init_fsl_hmc_wf(
+            scan_groups=scan_groups,
+            impute_slice_threshold=impute_slice_threshold,
+            eddy_config=eddy_config,
+            mem_gb=mem_gb,
+            omp_nthreads=omp_nthreads,
+            name="hmc_wf")
 
     workflow.connect([
         (pre_hmc_wf, hmc_wf, [
@@ -333,7 +329,10 @@ def init_dwi_preproc_wf(dwi_series,
             ('outputnode.bvec_files', 'inputnode.bvec_files'),
             ('outputnode.original_files', 'inputnode.original_files'),
             ('outputnode.b0_images', 'inputnode.b0_images'),
-            ('outputnode.b0_indices', 'inputnode.b0_indices')])
+            ('outputnode.b0_indices', 'inputnode.b0_indices')]),
+        (inputnode, hmc_wf, [
+            ('t1_brain', 'inputnode.t1_brain'),
+            ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform')])
     ])
 
     # calculate dwi registration to T1w
@@ -342,7 +341,7 @@ def init_dwi_preproc_wf(dwi_series,
                                                   write_report=True)
 
     # Make a fieldmap report
-    if rpe_b0 or doing_bidirectional_pepolar and 'fieldmaps' not in ignore:
+    if fieldmap_type is not None:
         fmap_unwarp_report_wf = init_fmap_unwarp_report_wf()
         workflow.connect([
             (inputnode, fmap_unwarp_report_wf, [
@@ -353,10 +352,9 @@ def init_dwi_preproc_wf(dwi_series,
             (b0_coreg_wf, fmap_unwarp_report_wf, [
                 ('outputnode.itk_b0_to_t1', 'inputnode.in_xfm')])])
 
-    # At this point, buffernode is either a ConcatRPESplit or a single PE output
     summary = pe.Node(
         DiffusionSummary(
-            pe_direction=dwi_series_pedir,
+            pe_direction=scan_groups['dwi_series_pedir'],
             hmc_model=hmc_model,
             b0_to_t1w_transform=b0_to_t1w_transform,
             hmc_transform=hmc_transform,
@@ -394,7 +392,8 @@ def init_dwi_preproc_wf(dwi_series,
         output_spaces=output_spaces,
         template=template,
         write_local_bvecs=write_local_bvecs,
-        hmc_model=hmc_model)
+        hmc_model=hmc_model,
+        shoreline_iters=shoreline_iters)
 
     workflow.connect([
         (inputnode, dwi_derivatives_wf, [('dwi_files', 'inputnode.source_file')]),
@@ -457,8 +456,7 @@ def init_dwi_preproc_wf(dwi_series,
         transform_dwis_t1 = init_dwi_trans_wf(name='transform_dwis_t1',
                                               template="ACPC",
                                               mem_gb=mem_gb['resampled'],
-                                              use_fieldwarp=(doing_bidirectional_pepolar
-                                                             or rpe_b0 is not None
+                                              use_fieldwarp=(fieldmap_type is not None
                                                              or use_syn),
                                               omp_nthreads=omp_nthreads,
                                               use_compression=False,
@@ -498,7 +496,8 @@ def init_dwi_preproc_wf(dwi_series,
         transform_dwis_mni = init_dwi_trans_wf(name='transform_dwis_mni',
                                                template=template,
                                                mem_gb=mem_gb['resampled'],
-                                               use_fieldwarp=(fmaps is not None or use_syn),
+                                               use_fieldwarp=(fieldmap_type is not None
+                                                              or use_syn),
                                                omp_nthreads=omp_nthreads,
                                                use_compression=False,
                                                to_mni=True,

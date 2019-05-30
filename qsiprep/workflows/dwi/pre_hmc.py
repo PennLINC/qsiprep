@@ -30,18 +30,13 @@ from ..fieldmap.unwarp import init_fmap_unwarp_report_wf
 from .merge import init_merge_and_denoise_wf
 from .hmc import init_dwi_hmc_wf
 from .util import init_dwi_reference_wf, _create_mem_gb, _get_wf_name, _get_first
-from .registration import init_b0_to_anat_registration_wf
-from .resampling import init_dwi_trans_wf
-from .confounds import init_dwi_confs_wf
-from .derivatives import init_dwi_derivatives_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger('nipype.workflow')
 
 
-def init_dwi_pre_hmc_wf(dwi_series,
-                        rpe_series,
-                        dwi_series_pedir,
+def init_dwi_pre_hmc_wf(scan_groups,
+                        preprocess_rpe_series,
                         dwi_denoise_window,
                         denoise_before_combining,
                         omp_nthreads,
@@ -66,11 +61,6 @@ def init_dwi_pre_hmc_wf(dwi_series,
 
     **Parameters**
 
-        dwi_series : list
-            List of dwi series NIfTI files to be combined or a dict of PE-dir -> files
-        rpe_series : list
-            List of dwi series NIfTI files with the reverse phase encoding direction of
-            those in  ``dwi_series``
         dwi_denoise_window : int
             window size in voxels for ``dwidenoise``. Must be odd. If 0, '
             '``dwidwenoise`` will not be run'
@@ -94,21 +84,24 @@ def init_dwi_pre_hmc_wf(dwi_series,
             list of paths to single-volume b0 images
         original_files
             list of paths to the original files that the single volumes came from
+        original_grouping
+            list of warped space group ids
     """
     workflow = Workflow(name=name)
     outputnode = pe.Node(
         niu.IdentityInterface(fields=[
             'dwi_files', 'bval_files', 'bvec_files', 'original_files',
-            'b0_images', 'b0_indices', 'rpe_b0s']),
+            'b0_images', 'b0_indices', 'rpe_b0s', 'warp_grouping']),
         name='outputnode')
-
-    doing_bidirectional_pepolar = len(rpe_series) > 0
+    dwi_series_pedir = scan_groups['dwi_series_pedir']
+    dwi_series = scan_groups['dwi_series']
 
     # Special case: Two reverse PE DWI series
-    if doing_bidirectional_pepolar:
+    if preprocess_rpe_series:
+        rpe_series = scan_groups['fieldmap_info']['rpe_series']
         # Merge, denoise, split, hmc on the plus series
         plus_files, minus_files = (rpe_series, dwi_series) if dwi_series_pedir.endswith("-") \
-                                  else (dwi_series, rpe_series)
+                                   else (dwi_series, rpe_series)
         merge_plus = init_merge_and_denoise_wf(dwi_denoise_window=dwi_denoise_window,
                                                denoise_before_combining=denoise_before_combining,
                                                name="merge_plus")
