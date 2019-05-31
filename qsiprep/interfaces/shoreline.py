@@ -219,11 +219,47 @@ class SignalPrediction(SimpleInterface):
         output_data[mask_array] = np.dot(shore_array, prediction_dir)
         prediction_file = op.join(
             runtime.cwd,
-            "predicted_b%d_%.2f_%.2f_%.2f.nii.gz" % ((pred_val,) + tuple(pred_vec)))
+            "predicted_b%d_%.2f_%.2f_%.2f.nii.gz" % (
+                (pred_val,) + tuple(np.round(pred_vec, decimals=2))))
         nb.Nifti1Image(output_data, mask_img.affine, mask_img.header
                        ).to_filename(prediction_file)
         self._results['predicted_image'] = prediction_file
 
+        return runtime
+
+
+class CalculateCNRInputSpec(BaseInterfaceInputSpec):
+    hmc_warped_images = InputMultiObject(File(exists=True))
+    predicted_images = InputMultiObject(File(exists=True))
+    mask_image = File(exists=True)
+
+
+class CalculateCNROutputSpec(TraitedSpec):
+    cnr_image = File(exists=True)
+
+
+class CalculateCNR(SimpleInterface):
+    input_spec = CalculateCNRInputSpec
+    output_spec = CalculateCNROutputSpec
+
+    def _run_interface(self, runtime):
+        cnr_file = op.join(runtime.cwd, "SHORELine_CNR.nii.gz")
+        model_images = quick_load_images(self.inputs.predicted_images)
+        observed_images = quick_load_images(self.inputs.hmc_warped_images)
+        mask_image = nb.load(self.inputs.mask_image)
+        mask = mask_image.get_data() > 1e-6
+        signal_vals = model_images[mask]
+        b0 = signal_vals[:, 0][:, np.newaxis]
+        signal_vals = signal_vals / b0
+        signal_var = np.var(signal_vals, 1)
+        observed_vals = observed_images[mask] / b0
+        noise_var = np.var(signal_vals - observed_vals, 1)
+        snr = np.nan_to_num(signal_var / noise_var)
+        out_mat = np.zeros(mask_image.shape)
+        out_mat[mask] = snr
+        nb.Nifti1Image(out_mat, mask_image.affine,
+                       header=mask_image.header).to_filename(cnr_file)
+        self._results['cnr_image'] = cnr_file
         return runtime
 
 

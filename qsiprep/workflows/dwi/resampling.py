@@ -69,6 +69,8 @@ def init_dwi_trans_wf(template, mem_gb, omp_nthreads,
             ANTs-compatible affine-and-warp transform file
         dwi_files
             Individual 3D volumes, not motion corrected
+        cnr_map
+            Contrast to noise map from model-based hmc
         bval_files
             individual bval files
         bvec_files
@@ -97,6 +99,8 @@ def init_dwi_trans_wf(template, mem_gb, omp_nthreads,
             Reference, contrast-enhanced summary of the DWI series, resampled to template space
         dwi_mask_resampled
             DWI series mask in template space
+        cnr_map_resampled
+            Contrast to noise map resampled
         bvals
             bvals file for the DWI series
         rotated_bvecs
@@ -117,6 +121,7 @@ generating a *preprocessed DWI run in {tpl} space*.
             't1_2_mni_forward_transform',
             'name_source',
             'dwi_files',
+            'cnr_map',
             'bval_files',
             'bvec_files',
             'b0_ref_image',
@@ -134,6 +139,7 @@ generating a *preprocessed DWI run in {tpl} space*.
             'dwi_resampled',
             'dwi_ref_resampled',
             'dwi_mask_resampled',
+            'cnr_map_resampled',
             'bvals',
             'rotated_bvecs',
             'local_bvecs',
@@ -166,6 +172,11 @@ generating a *preprocessed DWI run in {tpl} space*.
         name='mask_tfm',
         mem_gb=1)
 
+    cnr_tfm = pe.Node(
+        ants.ApplyTransforms(interpolation='LanczosWindowedSinc', float=True),
+        name='cnr_tfm',
+        mem_gb=1)
+
     if to_mni:
         # Disassemble the to-mni transform if it's a h5 (it should be!)
         disassemble_mni_xform = pe.Node(DisassembleTransform(), name='disassemble_mni_xform')
@@ -182,10 +193,12 @@ generating a *preprocessed DWI run in {tpl} space*.
             (inputnode, mask_merge_tfms, [('t1_2_mni_forward_transform', 'in1'),
                                           (('itk_b0_to_t1', _aslist), 'in2')]),
             (mask_merge_tfms, mask_tfm, [('out', 'transforms')]),
+            (mask_merge_tfms, cnr_tfm, [('out', 'transforms')])
         ])
     else:
         workflow.connect([
             (inputnode, mask_tfm, [(('itk_b0_to_t1', _aslist), 'transforms')]),
+            (inputnode, cnr_tfm, [(('itk_b0_to_t1', _aslist), 'transforms')])
         ])
 
     dwi_transform = pe.MapNode(
@@ -205,11 +218,14 @@ generating a *preprocessed DWI run in {tpl} space*.
                                         ('bvecs', 'rotated_bvecs')]),
         (inputnode, mask_tfm, [('dwi_mask', 'input_image'),
                                ('output_grid', 'reference_image')]),
+        (inputnode, cnr_tfm, [('cnr_map', 'input_image'),
+                              ('output_grid', 'reference_image')]),
         (mask_tfm, outputnode, [('output_image', 'dwi_mask_resampled')]),
+        (cnr_tfm, outputnode, [('output_image', 'cnr_map_resampled')]),
         (compose_transforms, dwi_transform, [('out_warps', 'transforms')]),
         (inputnode, merge, [('name_source', 'header_source')]),
-        (inputnode,  dwi_transform, [('dwi_files', 'input_image'),
-                                     ('output_grid', 'reference_image')]),
+        (inputnode, dwi_transform, [('dwi_files', 'input_image'),
+                                    ('output_grid', 'reference_image')]),
         (dwi_transform, merge, [('output_image', 'in_files')]),
         (merge, outputnode, [('out_file', 'dwi_resampled')]),
         (merge, extract_b0_series, [('out_file', 'dwi_series')]),

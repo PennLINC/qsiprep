@@ -22,10 +22,10 @@ from ...engine import Workflow
 
 # dwi workflows
 from ..fieldmap.unwarp import init_fmap_unwarp_report_wf
-from .shoreline import init_qsiprep_hmcsdc_wf
+from .hmc_sdc import init_qsiprep_hmcsdc_wf
 from .fsl import init_fsl_hmc_wf
 from .pre_hmc import init_dwi_pre_hmc_wf
-from .util import _create_mem_gb, _get_wf_name, _get_first, _list_squeeze
+from .util import _create_mem_gb, _get_wf_name
 from .registration import init_b0_to_anat_registration_wf
 from .resampling import init_dwi_trans_wf
 from .confounds import init_dwi_confs_wf
@@ -286,10 +286,10 @@ def init_dwi_preproc_wf(scan_groups,
         name='inputnode')
     outputnode = pe.Node(
         niu.IdentityInterface(fields=[
-            'dwi_t1', 'dwi_mask_t1', 'bvals_t1', 'bvecs_t1', 'local_bvecs_t1', 't1_b0_ref',
-            't1_b0_series', 'dwi_mni', 'dwi_mask_mni', 'bvals_mni', 'bvecs_mni',
-            'local_bvecs_mni', 'mni_b0_ref', 'mni_b0_series', 'confounds', 'gradient_table_mni',
-            'gradient_table_t1', 'hmc_optimization_data'
+            'dwi_t1', 'dwi_mask_t1', 'cnr_map_t1', 'bvals_t1', 'bvecs_t1', 'local_bvecs_t1',
+            't1_b0_ref', 't1_b0_series', 'dwi_mni', 'dwi_mask_mni', 'cnr_map_mni', 'bvals_mni',
+            'bvecs_mni', 'local_bvecs_mni', 'mni_b0_ref', 'mni_b0_series', 'confounds',
+            'gradient_table_mni', 'gradient_table_t1', 'hmc_optimization_data'
         ]),
         name='outputnode')
 
@@ -302,6 +302,8 @@ def init_dwi_preproc_wf(scan_groups,
                                      omp_nthreads=omp_nthreads)
 
     if hmc_model in ('none', '3dSHORE', 'SH'):
+        if not hmc_model == 'none' and shoreline_iters < 1:
+            raise Exception("--shoreline-iters must be > 0 when --hmc-model is " + hmc_model)
         hmc_wf = init_qsiprep_hmcsdc_wf(
             scan_groups=scan_groups,
             hmc_transform=hmc_transform,
@@ -406,6 +408,7 @@ def init_dwi_preproc_wf(scan_groups,
         (outputnode, dwi_derivatives_wf,
          [('dwi_t1', 'inputnode.dwi_t1'),
           ('dwi_mask_t1', 'inputnode.dwi_mask_t1'),
+          ('cnr_map_t1', 'inputnode.cnr_map_t1'),
           ('bvals_t1', 'inputnode.bvals_t1'),
           ('bvecs_t1', 'inputnode.bvecs_t1'),
           ('local_bvecs_t1', 'inputnode.local_bvecs_t1'),
@@ -414,6 +417,7 @@ def init_dwi_preproc_wf(scan_groups,
           ('gradient_table_t1', 'inputnode.gradient_table_t1'),
           ('dwi_mni', 'inputnode.dwi_mni'),
           ('dwi_mask_mni', 'inputnode.dwi_mask_mni'),
+          ('cnr_map_mni', 'inputnode.cnr_map_mni'),
           ('bvals_mni', 'inputnode.bvals_mni'),
           ('bvecs_mni', 'inputnode.bvecs_mni'),
           ('local_bvecs_mni', 'inputnode.local_bvecs_mni'),
@@ -477,6 +481,7 @@ def init_dwi_preproc_wf(scan_groups,
             (hmc_wf, transform_dwis_t1, [
                 ('outputnode.bvec_files_to_transform', 'inputnode.bvec_files'),
                 ('outputnode.b0_template', 'inputnode.b0_ref_image'),
+                ('outputnode.cnr_map', 'inputnode.cnr_map'),
                 ('outputnode.b0_template_mask', 'inputnode.dwi_mask'),
                 ('outputnode.to_dwi_ref_affines', 'inputnode.hmc_xforms'),
                 ('outputnode.to_dwi_ref_warps', 'inputnode.fieldwarps'),
@@ -488,6 +493,7 @@ def init_dwi_preproc_wf(scan_groups,
             (transform_dwis_t1, outputnode, [('outputnode.bvals', 'bvals_t1'),
                                              ('outputnode.rotated_bvecs', 'bvecs_t1'),
                                              ('outputnode.dwi_resampled', 'dwi_t1'),
+                                             ('outputnode.cnr_map_resampled', 'cnr_map_t1'),
                                              ('outputnode.local_bvecs', 'local_bvecs_t1'),
                                              ('outputnode.dwi_mask_resampled', 'dwi_mask_t1'),
                                              ('outputnode.b0_series', 't1_b0_series'),

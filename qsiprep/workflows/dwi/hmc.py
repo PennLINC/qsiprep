@@ -8,15 +8,11 @@ Head motion correction
 """
 import nipype.pipeline.engine as pe
 from pkg_resources import resource_filename as pkgrf
-from ...engine import Workflow
 from nipype.interfaces import ants, afni, utility as niu
-import pandas as pd
-from dipy.core.geometry import decompose_matrix
-import os
-import numpy as np
+from ...engine import Workflow
 from ...interfaces.gradients import MatchTransforms, GradientRotation, CombineMotions
 from ...interfaces.shoreline import (SignalPrediction, ExtractDWIsForModel, ReorderOutputs,
-                                     B0Mean, SHORELineReport, IterationSummary)
+                                     B0Mean, SHORELineReport, IterationSummary, CalculateCNR)
 from ...interfaces import DerivativesDataSink
 from .util import init_skullstrip_b0_wf
 
@@ -24,7 +20,7 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 
 
 def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file,
-                    rpe_b0='', num_model_iterations=2, mem_gb=3, omp_nthreads=1,
+                    num_model_iterations=2, mem_gb=3, omp_nthreads=1,
                     name="dwi_hmc_wf"):
     """Perform head motion correction and susceptibility distortion correction.
 
@@ -67,8 +63,17 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file,
 
     **Outputs**
 
-
-
+        final_template: str
+            Path to the mean of the coregistered b0 images
+        forward_transforms: list
+            List of ITK transforms that motion-correct the images in ``dwi_files``
+        noise_free_dwis: list
+            Model-predicted images reverse-transformed into alignment with ``dwi_files``
+        cnr_image: str
+            If hmc_model is 'none' this is the tsnr of the b=0 images. Otherwise it is the
+            model fit divided by the model error in each voxel.
+        optimization_data: str
+            CSV file tracking the motion estimates across shoreline iterations
     """
 
     inputnode = pe.Node(
@@ -79,7 +84,7 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file,
     outputnode = pe.Node(
         niu.IdentityInterface(
             fields=["final_template", "forward_transforms", "noise_free_dwis",
-                    "optimization_data"]),
+                    "cnr_image", "optimization_data"]),
         name='outputnode')
 
     workflow = Workflow(name=name)
@@ -101,15 +106,27 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file,
         (b0_hmc_wf, b0_template_mask, [('outputnode.final_template', 'inputnode.in_file')])
     ])
 
+    # If we're just aligning based on the b=0 images, compute the b=0 tsnr as the cnr
     if hmc_model.lower() == "none":
+        concat_b0s = pe.Node(afni.TCat(outputtype="NIFTI_GZ"), name="concat_b0s")
+        b0_tsnr = pe.Node(afni.TStat(options=' -tsnr '), name='b0_tsnr')
         workflow.connect([
-            (match_transforms, outputnode, [('transforms', 'forward_transforms')])
-        ])
+            (match_transforms, outputnode, [('transforms', 'forward_transforms')]),
+            (b0_hmc_wf, concat_b0s, [('outputnode.aligned_images', 'in_files')]),
+            (concat_b0s, b0_tsnr, [('out_file', 'in_file')]),
+            (b0_tsnr, outputnode, [('out_file', 'cnr_image')])])
         return workflow
 
     # Do model-based motion correction
     dwi_model_hmc_wf = init_dwi_model_hmc_wf(hmc_model, hmc_transform, mem_gb, omp_nthreads,
                                              num_iters=num_model_iterations)
+
+    # Warp the modeled images into non-motion-corrected space
+    uncorrect_model_images = pe.MapNode(
+        ants.ApplyTransforms(invert_transform_flags=[True],
+                             interpolation='LanczosWindowedSinc'),
+        iterfield=['input_image', 'reference_image', 'transforms'],
+        name='uncorrect_model_images')
 
     workflow.connect([
         (b0_hmc_wf, dwi_model_hmc_wf, [
@@ -125,16 +142,8 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file,
             ('transforms', 'inputnode.initial_transforms')]),
         (dwi_model_hmc_wf, outputnode, [
             ('outputnode.hmc_transforms', 'forward_transforms'),
-            ('outputnode.optimization_data', 'optimization_data')])
-    ])
-
-    # Warp the modeled images into non-motion-corrected space
-    uncorrect_model_images = pe.MapNode(
-        ants.ApplyTransforms(invert_transform_flags=[True],
-                             interpolation='LanczosWindowedSinc'),
-        iterfield=['input_image', 'reference_image', 'transforms'],
-        name='uncorrect_model_images')
-    workflow.connect([
+            ('outputnode.optimization_data', 'optimization_data'),
+            ('outputnode.cnr_image', 'cnr_image')]),
         (dwi_model_hmc_wf, uncorrect_model_images, [
             ('outputnode.model_predicted_images', 'input_image'),
             ('outputnode.hmc_transforms', 'transforms')]),
@@ -143,17 +152,14 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file,
     ])
     datasinks = [node for node in workflow.list_node_names()
                  if node.split(".")[-1].startswith("ds_")]
+
     for ds in datasinks:
         workflow.get_node(ds).inputs.source_file = source_file
 
     return workflow
 
 
-def linear_alignment_workflow(transform="Rigid",
-                              metric="Mattes",
-                              iternum=0,
-                              spatial_bias_correct=False,
-                              precision="fine"):
+def linear_alignment_workflow(transform="Rigid", metric="Mattes", iternum=0, precision="fine"):
     """
     Takes a template image and a set of input images, does
     a linear alignment to the template and updates it with the
@@ -272,7 +278,6 @@ def init_b0_hmc_wf(align_to="iterative", transform="Rigid", spatial_bias_correct
         initial_reg = linear_alignment_workflow(
             transform=transform,
             metric=metric,
-            spatial_bias_correct=spatial_bias_correct,
             precision="coarse",
             iternum=0)
         alignment_wf.connect(initial_template, "output_average_image",
@@ -285,7 +290,6 @@ def init_b0_hmc_wf(align_to="iterative", transform="Rigid", spatial_bias_correct
                 linear_alignment_workflow(
                     transform=transform,
                     metric=metric,
-                    spatial_bias_correct=spatial_bias_correct,
                     precision="fine",
                     iternum=iternum))
             alignment_wf.connect(reg_iters[-2], "outputnode.updated_template",
@@ -294,7 +298,7 @@ def init_b0_hmc_wf(align_to="iterative", transform="Rigid", spatial_bias_correct
                                  "inputnode.image_paths")
             alignment_wf.connect(reg_iters[-1], "outputnode.updated_template",
                                  iter_templates, "in%d" % (iternum + 1))
-        #
+
         # Attach to outputs
         # The last iteration aligned to the output from the second-to-last
         alignment_wf.connect(reg_iters[-2], "outputnode.updated_template",
@@ -494,9 +498,13 @@ def init_dwi_model_hmc_wf(modelname, transform, mem_gb, omp_nthreads,
 
         hmc_transforms
             list of transforms, one per file in `dwi_files`
-        hmc_confounds
-            file containing motion and qc parameters from hmc
-
+        model_predicted_images: list
+            Model-predicted images reverse-transformed into alignment with ``dwi_files``
+        cnr_image: str
+            If hmc_model is 'none' this is the tsnr of the b=0 images. Otherwise it is the
+            model fit divided by the model error in each voxel.
+        optimization_data: str
+            CSV file tracking the motion estimates across shoreline iterations
     """
     workflow = Workflow(name=name)
     inputnode = pe.Node(
@@ -506,7 +514,8 @@ def init_dwi_model_hmc_wf(modelname, transform, mem_gb, omp_nthreads,
         name='inputnode')
     outputnode = pe.Node(
         niu.IdentityInterface(
-            fields=['hmc_transforms', 'model_predicted_images', 'optimization_data']),
+            fields=['hmc_transforms', 'model_predicted_images', 'cnr_image',
+                    'optimization_data']),
         name='outputnode')
 
     # Merge b0s into a single volume, put the non-b0 dwis into a list
@@ -584,12 +593,16 @@ def init_dwi_model_hmc_wf(modelname, transform, mem_gb, omp_nthreads,
                 ('outputnode.motion_params', motion_key)])
         ])
 
+    # Return to the original, b0-interspersed ordering
     reorder_dwi_xforms = pe.Node(ReorderOutputs(), name='reorder_dwi_xforms')
+
     # Create a report:
     shoreline_report = pe.Node(SHORELineReport(), name='shoreline_report')
     ds_report_shoreline_gif = pe.Node(
         DerivativesDataSink(suffix="shoreline_animation"), name='ds_report_shoreline_gif',
         mem_gb=1, run_without_submitting=True)
+
+    calculate_cnr = pe.Node(CalculateCNR(), name='calculate_cnr')
 
     if num_iters > 1:
         summarize_iterations = pe.Node(IterationSummary(), name='summarize_iterations')
@@ -606,7 +619,6 @@ def init_dwi_model_hmc_wf(modelname, transform, mem_gb, omp_nthreads,
             (summarize_iterations, shoreline_report, [
                 ('iteration_summary_file', 'iteration_summary')])])
 
-
     workflow.connect([
         (model_iterations[-1], reorder_dwi_xforms, [
             ('outputnode.hmc_transforms', 'model_based_transforms'),
@@ -618,9 +630,15 @@ def init_dwi_model_hmc_wf(modelname, transform, mem_gb, omp_nthreads,
             ('b0_indices', 'b0_indices'),
             ('initial_transforms', 'initial_transforms')]),
         (reorder_dwi_xforms, outputnode, [
+            ('hmc_warped_images', 'aligned_dwis'),
             ('full_transforms', 'hmc_transforms'),
             ('full_predicted_dwi_series', 'model_predicted_images')]),
         (inputnode, shoreline_report, [('dwi_files', 'original_images')]),
+        (reorder_dwi_xforms, calculate_cnr, [
+            ('hmc_warped_images', 'hmc_warped_images'),
+            ('full_predicted_dwi_series', 'predicted_images')]),
+        (inputnode, calculate_cnr, [('warped_b0_mask', 'mask_image')]),
+        (calculate_cnr, outputnode, [('cnr_image', 'cnr_image')]),
         (reorder_dwi_xforms, shoreline_report, [
             ('full_predicted_dwi_series', 'model_predicted_images'),
             ('hmc_warped_images', 'registered_images')]),
