@@ -749,7 +749,7 @@ def group_by_warpspace(dwi_files, layout, prefer_dedicated_fmaps, using_eddy, ig
     # (filename, PE dir, fmap_file) and hang on to the pointers to additional files
     # for this fieldmap
     parsed_dwis = []
-    fmap_pointers = {}
+    fmap_pointers = {'': {'type': None}}
     for ref_file in dwi_files:
         metadata = layout.get_metadata(ref_file)
 
@@ -757,6 +757,7 @@ def group_by_warpspace(dwi_files, layout, prefer_dedicated_fmaps, using_eddy, ig
         fmaps = layout.get_fieldmap(ref_file, return_list=True)
         fmap_file = ''
         priority = 99999
+        fmap_type = None
         for fmap in fmaps:
             fmap_type = fmap['type']
             if fmap_type not in ('epi', 'phasediff', 'phase'):
