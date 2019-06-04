@@ -241,6 +241,11 @@ def get_parser():
                         required=False,
                         action='store',
                         type=os.path.abspath)
+    # For eddy
+    parser.add_argument('--eddy-config', '--eddy_config',
+                        required=False,
+                        action='store',
+                        type=os.path.abspath)
 
     parser.add_argument('-h', '--help', action='store_true',
                         help="show this help message and exit")
@@ -383,6 +388,9 @@ def main():
     if opts.recon_spec:
         command.extend(['-v', ':'.join((opts.recon_spec, '/root/spec.json', 'ro'))])
         main_args.extend(['--recon-spec', '/root/spec.json'])
+    if opts.eddy_config:
+        command.extend(['-v', ':'.join((opts.eddy_config, '/root/eddy_config.json', 'ro'))])
+        main_args.extend(['--recon-spec', '/root/eddy_config.json'])
     if opts.output_dir:
         command.extend(['-v', ':'.join((opts.output_dir, '/out'))])
         main_args.extend(['--output-dir', '/out'])

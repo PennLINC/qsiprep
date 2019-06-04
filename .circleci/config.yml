@@ -82,8 +82,8 @@ jobs:
     steps:
       - restore_cache:
           keys:
-            - data-v2-{{ epoch }}
-            - data-v2-
+            - data-v3-{{ epoch }}
+            - data-v3-
       - run:
           name: Get single scan from downsampled CS-DSI
           command: |
@@ -112,6 +112,9 @@ jobs:
               wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
                 -O DSDTI.tar.xz "https://upenn.box.com/shared/static/iefjtvfez0c2oug0g1a9ulozqe5il5xy.xz"
               tar xvfJ DSDTI.tar.xz -C /tmp/data/
+              wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
+                -O /tmp/data/eddy_config.json \
+                "https://upenn.box.com/shared/static/93g89mug6cejzn6jtq0v7wkupz86iafh.json"
             else
               echo "Dataset DSDTI was cached"
             fi
@@ -124,11 +127,12 @@ jobs:
       - run:
           name: Create Nipype config files
           command: |
-            mkdir -p /tmp/DSCSDSI_BUDS /tmp/DSCSDSI
+            mkdir -p /tmp/DSCSDSI_BUDS /tmp/DSCSDSI /tmp/DSDTI
             printf "[execution]\nstop_on_first_crash = true\n" > /tmp/DSCSDSI/nipype.cfg
             echo "poll_sleep_duration = 0.01" >> /tmp/DSCSDSI/nipype.cfg
             echo "hash_method = content" >> /tmp/DSCSDSI/nipype.cfg
             cp /tmp/DSCSDSI/nipype.cfg /tmp/DSCSDSI_BUDS/nipype.cfg
+            cp /tmp/DSCSDSI/nipype.cfg /tmp/DSDTI/nipype.cfg
       - persist_to_workspace:
           root: /tmp
           paths:
@@ -136,8 +140,9 @@ jobs:
             - fslicense
             - DSCSDSI/nipype.cfg
             - DSCSDSI_BUDS/nipype.cfg
+            - DSDTI/nipype.cfg
       - save_cache:
-         key: data-v2-{{ epoch }}
+         key: data-v3-{{ epoch }}
          paths:
             - /tmp/data
 
@@ -250,6 +255,99 @@ jobs:
           path: /tmp/DSCSDSI
 
 
+  DSDTI:
+    machine:
+      image: circleci/classic:201711-01
+    working_directory: /tmp/DSDTI
+    environment:
+      - FS_LICENSE: /tmp/fslicense/license.txt
+    steps:
+      - checkout:
+          path: /home/circleci/src/qsiprep
+      - run:
+          name: Check whether build should be skipped
+          command: |
+            cd /home/circleci/src/qsiprep
+            if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?DSDTI\]' )" != "" ]]; then
+              echo "Skipping DSDTI build"
+              circleci step halt
+            fi
+      - attach_workspace:
+          at: /tmp
+      - restore_cache:
+          keys:
+            - DSDTI-anat-v1-{{ .Branch }}-{{ epoch }}
+            - DSDTI-anat-v1-{{ .Branch }}
+            - DSDTI-anat-v1-master
+            - DSDTI-anat-v1-
+      - run:
+          name: Setting up test
+          command: |
+            mkdir -p /tmp/DSDTI/derivatives && sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSDTI/derivatives && sudo setfacl -m group:$(id -gn):rwx /tmp/DSDTI/derivatives
+            pip install future numpy
+            pip install --upgrade /tmp/src/qsiprep/wrapper/
+      - run:
+          name: Load Docker image layer cache
+          no_output_timeout: 30m
+          command: |
+            docker info
+            set +o pipefail
+            if [ -f /tmp/cache/docker.tar.gz ]; then
+              sudo apt update && sudo apt -y install pigz
+              pigz -d --stdout /tmp/cache/docker.tar.gz | docker load
+              docker images
+            fi
+      - run:
+          name: Run anatomical workflow on DSDTI
+          no_output_timeout: 2h
+          command: |
+            mkdir -p /tmp/DSDTI/work /tmp/DSDTI/derivatives
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSDTI/derivatives && \
+                sudo set facl -m group:$(id -gn):rwx /tmp/DSDTI/derivatives
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSDTI/work && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/DSDTI/work
+            qsiprep-docker -i pennbbl/qsiprep:latest \
+                -e qsiprep_DEV 1 -u $(id -u) \
+                --config $PWD/nipype.cfg -w /tmp/DSDTI/work \
+                --bids-dir /tmp/data/DSDTI --output-dir /tmp/DSDTI/derivatives \
+                --analysis-level participant \
+                --sloppy --write-graph --mem_mb 4096 \
+                --nthreads 2 --anat-only -vv --output-resolution 5
+      - save_cache:
+         key: DSDTI-anat-v1-{{ .Branch }}-{{ epoch }}
+         paths:
+            - /tmp/DSDTI/work
+            - /tmp/DSDTI/derivatives/qsiprep
+
+      - run:
+          name: Run full qsiprep (eddy) on DSDTI
+          no_output_timeout: 2h
+          command: |
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSDTI/derivatives && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/DSDTI/derivatives
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSDTI/work && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/DSDTI/work
+            qsiprep-docker -i pennbbl/qsiprep:latest \
+                -e qsiprep_DEV 1 -u $(id -u) \
+                --config $PWD/nipype.cfg -w /tmp/DSDTI/work \
+                --bids-dir /tmp/data/DSDTI --output-dir /tmp/DSDTI/derivatives \
+                --analysis-level participant \
+                --sloppy --mem_mb 4096 \
+                --output-space T1w \
+                --hmc_model eddy \
+                --eddy_config /tmp/data/eddy_config.json \
+                --output-resolution 5 \
+                --nthreads 2 -vv
+      - run:
+          name: Move intermediate results for second run
+          command: |
+            mkdir -p /tmp/DSDTI/derivatives_partial
+            sudo cp -a /tmp/DSDTI/work /tmp/DSDTI/work_partial
+
+
+      - store_artifacts:
+          path: /tmp/DSDTI
+
 workflows:
   version: 2
   build_test_deploy:
@@ -281,6 +379,18 @@ workflows:
 
 
       - DSCSDSI:
+          requires:
+            - get_data
+            - build
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - DSDTI:
           requires:
             - get_data
             - build

@@ -304,4 +304,5 @@ RUN  mkdir -p /sngl/data \
   && mkdir /sngl/qsiprep-output \
   && mkdir /sngl/out \
   && mkdir /sngl/scratch \
-  && mkdir /sngl/spec
+  && mkdir /sngl/spec \
+  && mkdir /sngl/eddy

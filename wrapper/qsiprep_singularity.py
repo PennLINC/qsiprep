@@ -252,6 +252,10 @@ def get_parser():
                         required=False,
                         action='store',
                         type=os.path.abspath)
+    g_wrap.add_argument('--eddy-config', '--eddy_config',
+                        required=False,
+                        action='store',
+                        type=os.path.abspath)
 
     # Developer patch/shell options
     g_dev = parser.add_argument_group(
@@ -376,6 +380,11 @@ def main():
         mounted_spec = "/sngl/spec/" + spec_fname
         command.extend(['-B', ':'.join((spec_dir, '/sngl/spec'))])
         main_args.extend(['--recon-spec', mounted_spec])
+    if opts.eddy_config:
+        config_dir, config_fname = op.split(opts.eddy_config)
+        mounted_config = "/sngl/eddy/" + config_fname
+        command.extend(['-B', ':'.join((spec_dir, '/sngl/eddy'))])
+        main_args.extend(['--eddy-config', mounted_config])
     if opts.output_dir:
         mkdir(opts.output_dir)
         command.extend(['-B', ':'.join((opts.output_dir, '/sngl/out'))])
