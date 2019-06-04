@@ -159,7 +159,7 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file,
     return workflow
 
 
-def linear_alignment_workflow(transform="Rigid", metric="Mattes", iternum=0, precision="fine"):
+def linear_alignment_workflow(transform="Rigid", metric="Mattes", iternum=0, precision="precise"):
     """
     Takes a template image and a set of input images, does
     a linear alignment to the template and updates it with the
@@ -176,33 +176,11 @@ def linear_alignment_workflow(transform="Rigid", metric="Mattes", iternum=0, pre
     outputnode = pe.Node(
         niu.IdentityInterface(fields=["registered_image_paths", "affine_transforms",
                                       "updated_template"]), name='outputnode')
-
-    reg = ants.Registration()
-    reg.inputs.metric = [metric]
-    reg.inputs.transforms = [transform]
-    reg.inputs.sigma_units = ["vox"]
-    reg.inputs.sampling_strategy = ['Random']
-    reg.inputs.sampling_percentage = [0.25]
-    reg.inputs.radius_or_number_of_bins = [32]
-    reg.inputs.initial_moving_transform_com = 0
-    reg.inputs.interpolation = 'LanczosWindowedSinc'
-    reg.inputs.dimension = 3
-    reg.inputs.winsorize_lower_quantile = 0.025
-    reg.inputs.winsorize_upper_quantile = 0.975
-    reg.inputs.convergence_threshold = [1e-06]
-    reg.inputs.collapse_output_transforms = True
-    reg.inputs.write_composite_transform = False
-    reg.inputs.output_warped_image = True
-    if precision == "coarse":
-        reg.inputs.shrink_factors = [[4, 2]]
-        reg.inputs.smoothing_sigmas = [[3., 1.]]
-        reg.inputs.number_of_iterations = [[1000, 10000]]
-        reg.inputs.transform_parameters = [[0.3]]
-    else:
-        reg.inputs.shrink_factors = [[4, 2, 1]]
-        reg.inputs.smoothing_sigmas = [[3., 1., 0.]]
-        reg.inputs.number_of_iterations = [[1000, 10000, 10000]]
-        reg.inputs.transform_parameters = [[0.1]]
+    ants_settings = pkgrf(
+        "qsiprep",
+        "data/shoreline_{precision}_{transform}.json".format(precision=precision,
+                                                             transform=transform))
+    reg = ants.Registration(from_file=ants_settings)
     iter_reg = pe.MapNode(
         reg, name="reg_%03d" % iternum, iterfield=["moving_image"])
 
@@ -290,7 +268,7 @@ def init_b0_hmc_wf(align_to="iterative", transform="Rigid", spatial_bias_correct
                 linear_alignment_workflow(
                     transform=transform,
                     metric=metric,
-                    precision="fine",
+                    precision="precise",
                     iternum=iternum))
             alignment_wf.connect(reg_iters[-2], "outputnode.updated_template",
                                  reg_iters[-1], "inputnode.template_image")
@@ -309,8 +287,27 @@ def init_b0_hmc_wf(align_to="iterative", transform="Rigid", spatial_bias_correct
                              outputnode, "aligned_images")
         alignment_wf.connect(iter_templates, "out", outputnode,
                              "iteration_templates")
+    elif align_to == 'first':
+        reg_to_first = linear_alignment_workflow(
+            transform=transform,
+            metric=metric,
+            precision="coarse",
+            iternum=0)
+        alignment_wf.connect([
+            (inputnode, reg_to_first, [
+                (('b0_images', first_image), 'inputnode.template_image'),
+                ('b0_images', 'inputnode.image_paths')]),
+            (reg_to_first, outputnode, [
+                ('outputnode.updated_template', 'final_template'),
+                ('outputnode.affine_transforms', 'forward_transforms'),
+                ('outputnode.registered_image_paths', 'aligned_images')])
+        ])
 
     return alignment_wf
+
+
+def first_image(image_list):
+    return image_list[0]
 
 
 def _bvecs_to_list(bvec_file):
@@ -352,8 +349,6 @@ def init_hmc_model_iteration_wf(modelname, transform, precision="coarse", name="
             signal estimates used for motion correction
         transform : str
             either "Rigid" or "Affine". Choosing "Affine" may help with Eddy warping
-        calculate_noise_free : bool
-            Should the noise-free images (in original space) be calculated and saved?
         precision : str
             Use fast "coarse" alignment or accurate "precise" registration
         name : str
@@ -402,7 +397,7 @@ def init_hmc_model_iteration_wf(modelname, transform, precision="coarse", name="
         "data/shoreline_{precision}_{transform}.json".format(precision=precision,
                                                              transform=transform))
 
-    predict_dwis = pe.MapNode(SignalPrediction(),
+    predict_dwis = pe.MapNode(SignalPrediction(model=modelname),
                               iterfield=['bval_to_predict', 'bvec_to_predict'],
                               name="predict_dwis")
     predict_dwis.synchronize = True

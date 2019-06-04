@@ -356,7 +356,8 @@ class ComposeTransforms(SimpleInterface):
             return len(transform) == num_dwis
 
         hmc_affines = self.inputs.hmc_affines
-        fieldwarps = self.inputs.fieldwarps
+        if isdefined(self.inputs.fieldwarps):
+            fieldwarps = self.inputs.fieldwarps * num_dwis
         coreg_to_t1 = [self.inputs.unwarped_dwi_ref_to_t1w_affine] * num_dwis
 
         transform_order = [

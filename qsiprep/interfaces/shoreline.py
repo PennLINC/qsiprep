@@ -158,6 +158,7 @@ class SignalPredictionInputSpec(BaseInterfaceInputSpec):
     bvec_to_predict = traits.Array()
     bval_to_predict = traits.Float()
     minimal_q_distance = traits.Float(2.0, usedefault=True)
+    model = traits.Str('3dSHORE', usedefault=True)
 
 
 class SignalPredictionOutputSpec(TraitedSpec):
@@ -201,7 +202,10 @@ class SignalPrediction(SimpleInterface):
         # Load training data and fit the model
         training_data = quick_load_images(training_image_paths)
         training_gtab = gradient_table(bvals=training_bvals, bvecs=training_bvecs)
-        shore_model = BrainSuiteShoreModel(training_gtab, regularization="L2")
+        if self.inputs.model == '3dSHORE':
+            shore_model = BrainSuiteShoreModel(training_gtab, regularization="L2")
+        else:
+            raise NotImplementedError('Unsupported model: ' + self.inputs.model)
         shore_fit = shore_model.fit(training_data, mask=mask_array)
 
         # Get the shore vector for the desired coordinate
