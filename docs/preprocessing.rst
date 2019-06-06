@@ -39,8 +39,7 @@ If ``combine_all_dwis`` is set to ``True``, two possibilities arise. If all DWIs
 are in the same PE direction, they will be merged into a single series. If there are
 two PE directions detected in the DWI scans and ``'fieldmaps'`` is not in ``ignore``,
 images are combined according to their PE direction, and their b0 reference images are used to
-perform SDC. Either way, at the end of the day, there will be one preprocessed DWI
-file per session in your input.
+perform SDC.
 
 If you have some scans you want to combine and others you want to preprocess separately,
 consider creating fake sessions in your BIDS directory.
@@ -54,11 +53,8 @@ The are two kinds of SDC available in qsiprep:
   1. :ref:`sdc_pepolar` (also called **blip-up/blip-down**):
      This is the implementation from FMRIPREP, using 3dQwarp to
      correct a DWI series using a fieldmap in the fmaps directory [Jezzard1995]_.
-
-  1. (a) This uses two separe Blip-Up/blip-Down Series (BUDS), again
-     using FMRIPREP's 3dQwarp implementation, but applying the
-     correct unwarping transformation depending on each scan's polarity.
-     The pair of scans are both in the ``dwi`` directory.
+     The reverse phase encoding direction scan can come from the fieldmaps directory
+     or the dwi directory.
 
   2. :ref:`sdc_fieldmapless`: The SyN-based susceptibility distortion correction
      implemented in FMRIPREP
@@ -152,6 +148,8 @@ Volumetric output spaces include ``T1w`` and ``MNI152NLin2009cAsym`` (default).
   images are impacted by Eddy currents.
 - ``*bvecs.nii.gz`` Each voxel contains a gradient table that has been adjusted for local
   rotations introduced by spatial warping.
+- ``*cnr.nii.gz`` Each voxel contains a contrast-to-noise model defined as the variance of the
+  signal model divided by the variance of the error of the signal model.
 
 
 Confounds
@@ -187,7 +185,7 @@ Confounds and "carpet"-plot on the visual reports
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 fMRI has been using a "carpet" visualization of the
-:abbr:`DWI (blood-oxygen level-dependant)` time-series (see [Power2016]_),
+:abbr:`DWI (blood-oxygen level-dependent)` time-series (see [Power2016]_),
 but this type of plot does not make sense for DWI data. Instead, we plot
 the cross-correlation value between each raw slice and the HMC model signal
 resampled into that slice.
@@ -351,8 +349,8 @@ split into multiple sub-workflows described below.
 
 .. _dwi_hmc:
 
-Head-motion estimation
-^^^^^^^^^^^^^^^^^^^^^^^^^
+Head-motion estimation (SHORELine)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 :mod:`qsiprep.workflows.dwi.hmc.init_dwi_hmc_wf`
 
@@ -360,13 +358,24 @@ Head-motion estimation
     :graph2use: colored
     :simple_form: yes
 
-    from qsiprep.workflows.dwi.hmc import init_dwi_hmc_wf
-    wf = init_dwi_hmc_wf(hmc_transform="Affine",
-                         hmc_model="3dSHORE",
-                         hmc_align_to="iterative",
-                         mem_gb=3,
-                         omp_nthreads=1,
-                         write_report=False)
+    from qsiprep.workflows.dwi.shoreline import init_qsiprep_hmcsdc_wf
+    wf = init_qsiprep_hmcsdc_wf({'dwi_series':[dwi1.nii, dwi2.nii],
+                                'fieldmap_info': {'type': None},
+                                'dwi_series_pedir': j},
+                                hmc_transform='Affine',
+                                hmc_model='3dSHORE',
+                                hmc_align_to='iterative',
+                                template='MNI152NLin2009cAsym',
+                                shoreline_iters=1,
+                                impute_slice_threshold=0,
+                                omp_nthreads=1,
+                                fmap_bspline=False,
+                                fmap_demean=False,
+                                use_syn=True,
+                                force_syn=False,
+                                name='qsiprep_hmcsdc_wf',
+                                dwi_metadata={})
+
 
 A long-standing issue for q-space imaging techniques, particularly DSI, has
 been the lack of motion correction methods. DTI and multi-shell HARDI have
@@ -390,12 +399,42 @@ then repeated on this updated DWI and gradient set.
 
 If ``"none"`` is specified as the hmc_model, then only the b0 images are used
 and the non-b0 images are transformed based on their nearest b0 image. This
-is not a great idea.
+is probably not a great idea.
+
+Susceptibility distortion correction is run as part of this pipeline to be
+consistent with the ``TOPUP``/``eddy`` workflow.
 
 Ultimately a list of 6 (or 12)-parameters per time-step is written and
 fed to the :ref:`confounds workflow <dwi_confounds>`. These are used to
 estimate framewise displacement.  Additionally, measures of model fits
 are saved for each slice for display in a carpet plot-like thing.
+
+
+Head-motion estimation (TOPUP/eddy)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+:mod:`qsiprep.workflows.dwi.hmc.init_dwi_hmc_wf`
+
+.. workflow::
+    :graph2use: colored
+    :simple_form: yes
+
+    from qsiprep.workflows.dwi.hmc import init_dwi_hmc_wf
+    wf = init_dwi_hmc_wf(hmc_transform="Affine",
+                         hmc_model="3dSHORE",
+                         hmc_align_to="iterative",
+                         mem_gb=3,
+                         omp_nthreads=1,
+                         write_report=False)
+
+DTI and multi-shell HARDI can be passed to ``TOPUP`` and ``eddy`` for
+head motion correction, susceptibility distortion correction and eddy current
+correction. ``qsiprep`` will use the BIDS-specified fieldmaps to configure and
+run ``TOPUP`` before passing the fieldmap to ``eddy`` if fieldmaps are available.
+
+``eddy`` has many configuration options. Instead of making these commandline options,
+you can specify them in a JSON file and pass that to ``qsiprep`` using the ``--eddy_config``
+option.
 
 .. _dwi_ref:
 

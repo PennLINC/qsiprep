@@ -303,7 +303,7 @@ jobs:
           command: |
             mkdir -p /tmp/DSDTI/work /tmp/DSDTI/derivatives
             sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSDTI/derivatives && \
-                sudo set facl -m group:$(id -gn):rwx /tmp/DSDTI/derivatives
+                sudo setfacl -m group:$(id -gn):rwx /tmp/DSDTI/derivatives
             sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSDTI/work && \
                 sudo setfacl -m group:$(id -gn):rwx /tmp/DSDTI/work
             qsiprep-docker -i pennbbl/qsiprep:latest \

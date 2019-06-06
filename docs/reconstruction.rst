@@ -9,15 +9,8 @@ by specifying a JSON file with the ``--recon-spec`` option. Here we use
 "reconstruction" to mean reconstructing ODFs/FODs/EAPs from the preprocessed
 diffusion data.
 
-.. note::
-   You can also reconstruct data preprocessed with ``dwipreproc`` and ``eddy``.
-   Note **the :ref:`conform` node must be the first in your pipeline.** This
-   ensures that the orientation of the preprocessed images and gradient scheme
-   are correctly interpreted by downstream nodes. Skipping this step can
-   result in incorrect orientation!!
-
 ``qsiprep`` supports a limited number of algorithms that are wrapped in
-nipype workflows that can be configured and connected based on the
+nipype workflows and can be configured and connected based on the
 recon spec JSON file.  The output from one workflow can be the input to
 another as long as the output from the upstream workflow matches the inputs to
 the downstream workflow. The :ref:`recon_workflows` section lists all the

@@ -23,41 +23,25 @@ Preprocessing
 ~~~~~~~~~~~~~~~
 
 The preprocessing pipelines are designed to perform preprocessing and reconstruction of
-non-DTI q-space images. Non-DTI means that the imaging sequence used
-either:
+q-space images.  Many other sampling schemes are supported:
 
  - A multi-shell HARDI sampling scheme
  - A Cartesian grid (aka DSI) sampling scheme
  - A random q-space sampling scheme (eg for compressed sensing)
+ - As of version 0.4 single shell sequences can be processed by specifying ``--hmc-model eddy``.
 
-QSIprep's head motion correction algorithm relies on voxelwise estimates of
-ensemble average propagators (EAPs), which require angular and radial
-variability in the sampling scheme. The preprocessing workflow performs
+The preprocessing workflow performs
 head motion correction, susceptibility distortion correction, MP-PCA denoising,
 coregistration to T1w images, spatial normalization using ANTs_ and tissue segmentation.
 
 
 .. _reconstruction_def:
 
-Reconstruction
-~~~~~~~~~~~~~~~~
-
-For DTI and multi-shell data, the preprocessing tools available in FSL, MRTrix_
-and others are very good. The outputs from these preprocessing pipelines can
-be named to mimic the :ref:`outputs` from the ``qsiprep`` preprocessing pipeline
-and then reconstructed using workflows from our curated set of :ref:`recon_workflows`.
-
 
 Example use cases
 -------------------
 
 Consider the following use-cases:
-
-Post-``eddy``
-
-  You have already preprocessed your diffusion data using ``eddy``, and want
-  to reconstruct it using ``MAPMRI`` and save the ODFs in a DSI Studio
-  ``fib.gz`` file to perform fiber tracking and connectivity analysis.
 
 CS-DSI group analysis
 
