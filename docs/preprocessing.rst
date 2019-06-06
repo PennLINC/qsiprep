@@ -321,7 +321,10 @@ DWI preprocessing
     :simple_form: yes
 
     from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
-    wf = init_dwi_preproc_wf(['/completely/made/up/path/sub-01_dwi.nii.gz'],
+    wf = init_dwi_preproc_wf({'dwi_series': [
+                                '/completely/made/up/path/sub-01_dwi.nii.gz'],
+                              'fieldmap_info': {'type': None},
+                              'dwi_series_pedir': 'j'},
                               omp_nthreads=1,
                               ignore=[],
                               reportlets_dir='.',
@@ -426,6 +429,7 @@ Head-motion estimation (TOPUP/eddy)
                          hmc_model="3dSHORE",
                          hmc_align_to="iterative",
                          mem_gb=3,
+                         source_file='/path/to/dwi/sub-X_dwi.nii.gz',
                          omp_nthreads=1)
 
 DTI and multi-shell HARDI can be passed to ``TOPUP`` and ``eddy`` for
