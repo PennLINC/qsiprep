@@ -23,44 +23,32 @@ Preprocessing
 ~~~~~~~~~~~~~~~
 
 The preprocessing pipelines are designed to perform preprocessing and reconstruction of
-q-space images.  Many other sampling schemes are supported:
+q-space images. As of version 0.4 single shell sequences can be processed by setting the
+
+either:
 
  - A multi-shell HARDI sampling scheme
  - A Cartesian grid (aka DSI) sampling scheme
  - A random q-space sampling scheme (eg for compressed sensing)
- - As of version 0.4 single shell sequences can be processed by specifying ``--hmc-model eddy``.
 
-The preprocessing workflow performs
+QSIprep's head motion correction algorithm relies on voxelwise estimates of
+ensemble average propagators (EAPs), which require angular and radial
+variability in the sampling scheme. The preprocessing workflow performs
 head motion correction, susceptibility distortion correction, MP-PCA denoising,
 coregistration to T1w images, spatial normalization using ANTs_ and tissue segmentation.
 
 
 .. _reconstruction_def:
 
+Reconstruction
+~~~~~~~~~~~~~~~~
 
-Example use cases
--------------------
-
-Consider the following use-cases:
-
-CS-DSI group analysis
-
-  You've acquired a compressed sensing DSI scan and would like to perform
-  motion correction, coregistration to your T1w image and spatial normalization
-  to MNI space. Then reconstruct ensemble average propagators using
-  regularized ``3dSHORE`` and estimate the return-to-origin probability in
-  MNI Space.
-
-Fixel-based analysis on DSI data
-
-  You have a classic Cartesian grid DSI dataset that you want to motion-correct
-  and estimate ODFs with in T1 space. Then you want to convert these ODFs to the
-  MRTrix sh representation and perform fixel-based analysis.
+For DTI and multi-shell data, the preprocessing tools available in FSL, MRTrix_
+and others are very good. The outputs from these preprocessing pipelines can
+be named to mimic the :ref:`outputs` from the ``qsiprep`` preprocessing pipeline
+and then reconstructed using workflows from our curated set of :ref:`recon_workflows`.
 
 
-These are examples of pipelines that can be created and run through qsiprep. These
-pipelines use Nipype and are therefore able to run on multiple cores. All the
-dependencies of this software are included in the Docker_ image.
 
 Note
 ------

@@ -6,7 +6,7 @@ jobs:
       TZ: "/usr/share/zoneinfo/America/New_York"
       SCRATCH: "/scratch"
     docker:
-      - image: docker:18.01.0-ce-git
+      - image: docker:18.06.1-ce-git
     working_directory: /tmp/src/qsiprep
     steps:
       - run:
@@ -15,10 +15,10 @@ jobs:
             apk add --no-cache pigz python3 tar
       - restore_cache:
           keys:
-            - docker-v3-{{ .Branch }}-{{ epoch }}
-            - docker-v3-{{ .Branch }}-
-            - docker-v3-master-
-            - docker-v3-
+            - docker-v4-{{ .Branch }}-{{ epoch }}
+            - docker-v4-{{ .Branch }}-
+            - docker-v4-master-
+            - docker-v4-
           paths:
             - /tmp/cache/docker.tar.gz
       - checkout
@@ -156,7 +156,7 @@ jobs:
       - attach_workspace:
           at: /tmp
       - save_cache:
-         key: docker-v3-{{ .Branch }}-{{ epoch }}
+         key: docker-v4-{{ .Branch }}-{{ epoch }}
          paths:
             - /tmp/cache/docker.tar.gz
 
