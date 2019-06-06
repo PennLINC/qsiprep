@@ -230,6 +230,7 @@ T1w/T2w preprocessing
                                              'template', 'fsaverage5'],
                               skull_strip_template='OASIS',
                               skull_strip_fixed_seed=False,
+                              force_spatial_normalization=True,
                               output_resolution=1.25,
                               freesurfer=True,
                               longitudinal=False,
@@ -313,27 +314,29 @@ flag, which forces the estimation of an unbiased template.
 DWI preprocessing
 ~~~~~~~~~~~~~~~~~~~~
 
-:mod:`qsiprep.workflows.dwi.base.init_qsiprep_dwi_preproc_wf`
+:mod:`qsiprep.workflows.dwi.base.init_dwi_preproc_wf`
 
 .. workflow::
     :graph2use: orig
     :simple_form: yes
 
-    from qsiprep.workflows.dwi.base import init_qsiprep_dwi_preproc_wf
-    wf = init_qsiprep_dwi_preproc_wf(['/completely/made/up/path/sub-01_dwi.nii.gz'],
+    from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
+    wf = init_dwi_preproc_wf(['/completely/made/up/path/sub-01_dwi.nii.gz'],
                               omp_nthreads=1,
                               ignore=[],
                               reportlets_dir='.',
                               output_dir='.',
                               template='MNI152NLin2009cAsym',
                               output_spaces=['T1w', 'template'],
-                              freesurfer=False,
                               dwi_denoise_window=7,
                               denoise_before_combining=True,
                               motion_corr_to='iterative',
                               b0_to_t1w_transform='Rigid',
                               hmc_model='3dSHORE',
                               hmc_transform='Affine',
+                              shoreline_iters=2,
+                              b0_threshold=100,
+                              eddy_config=None,
                               impute_slice_threshold=0,
                               fmap_bspline=True,
                               fmap_demean=True,
@@ -341,8 +344,7 @@ DWI preprocessing
                               force_syn=True,
                               low_mem=False,
                               write_local_bvecs=False,
-                              output_prefix="",
-                              num_dwi=1)
+                              output_prefix="")
 
 Preprocessing of :abbr:`DWI (Diffusion Weighted Image)` files is
 split into multiple sub-workflows described below.
@@ -358,10 +360,10 @@ Head-motion estimation (SHORELine)
     :graph2use: colored
     :simple_form: yes
 
-    from qsiprep.workflows.dwi.shoreline import init_qsiprep_hmcsdc_wf
-    wf = init_qsiprep_hmcsdc_wf({'dwi_series':[dwi1.nii, dwi2.nii],
+    from qsiprep.workflows.dwi.hmc_sdc import init_qsiprep_hmcsdc_wf
+    wf = init_qsiprep_hmcsdc_wf({'dwi_series':['dwi1.nii', 'dwi2.nii'],
                                 'fieldmap_info': {'type': None},
-                                'dwi_series_pedir': j},
+                                'dwi_series_pedir': 'j'},
                                 hmc_transform='Affine',
                                 hmc_model='3dSHORE',
                                 hmc_align_to='iterative',
@@ -424,8 +426,7 @@ Head-motion estimation (TOPUP/eddy)
                          hmc_model="3dSHORE",
                          hmc_align_to="iterative",
                          mem_gb=3,
-                         omp_nthreads=1,
-                         write_report=False)
+                         omp_nthreads=1)
 
 DTI and multi-shell HARDI can be passed to ``TOPUP`` and ``eddy`` for
 head motion correction, susceptibility distortion correction and eddy current

@@ -165,7 +165,7 @@ Action: ``"conform"``
 
 Action: ``"controllability"``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-.. autofunction:: qsiprep.workflows.recon.build_workflow.init_controllability_workflow
+.. autofunction:: qsiprep.workflows.recon.dynamics.init_controllability_wf
 
 Action: ``"discard_repeated_samples"``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

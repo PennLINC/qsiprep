@@ -92,6 +92,7 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug,
                                                  'template', 'fsaverage5'],
                                   output_resolution=1.25,
                                   skull_strip_template='OASIS',
+                                  force_spatial_normalization=True,
                                   freesurfer=True,
                                   longitudinal=False,
                                   debug=False,
@@ -631,8 +632,8 @@ def init_skullstrip_ants_wf(skull_strip_template, debug, omp_nthreads, acpc_temp
         :graph2use: orig
         :simple_form: yes
 
-        from qsiprep.workflows.anatomical import init_skullstrip_wf
-        wf = init_skullstrip_wf(skull_strip_template='OASIS',
+        from qsiprep.workflows.anatomical import init_skullstrip_ants_wf
+        wf = init_skullstrip_ants_wf(skull_strip_template='OASIS',
                                      debug=False,
                                      omp_nthreads=1,
                                      acpc_template='test')

@@ -284,7 +284,7 @@ def init_single_subject_wf(
             dwi_denoise_window=7,
             anat_only=False,
             longitudinal=False,
-            b0_threhold=100,
+            b0_threshold=100,
             freesurfer=False,
             hires=False,
             force_spatial_normalization=True,

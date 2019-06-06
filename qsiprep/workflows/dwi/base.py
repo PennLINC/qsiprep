@@ -2,7 +2,7 @@
 Orchestrating the dwi-preprocessing workflow
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. autofunction:: init_qsiprep_dwi_preproc_wf
+.. autofunction:: init_dwi_preproc_wf
 
 """
 
@@ -67,7 +67,7 @@ def init_dwi_preproc_wf(scan_groups,
         :graph2use: orig
         :simple_form: yes
 
-        from qsiprep.workflows.dwi.base import init_qsiprep_dwi_preproc_wf
+        from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
         wf = init_dwi_preproc_wf({'dwi_series': ['fake.nii'],
                                   'fieldmap_info': {'type': None},
                                   'dwi_series_pedir': 'j'},
@@ -523,15 +523,17 @@ def init_dwi_preproc_wf(scan_groups,
                                                write_local_bvecs=write_local_bvecs)
         gtab_mni = pe.Node(MRTrixGradientTable(), name='gtab_mni')
         workflow.connect([
-            (slice_check, transform_dwis_mni, [('imputed_images', 'inputnode.dwi_files')]),
-            (buffernode, transform_dwis_mni, [
-                ('bvec_files', 'inputnode.bvec_files'),
-                ('bval_files', 'inputnode.bval_files'),
-                ('b0_ref_image', 'inputnode.b0_ref_image'),
-                ('b0_ref_mask', 'inputnode.dwi_mask'),
-                ('b0_indices', 'inputnode.b0_indices'),
-                ('to_dwi_ref_affines', 'inputnode.hmc_xforms'),
-                ('to_dwi_ref_warps', 'inputnode.fieldwarps')]),
+            (pre_hmc_wf, transform_dwis_mni, [
+                ('outputnode.b0_indices', 'inputnode.b0_indices'),
+                ('outputnode.bval_files', 'inputnode.bval_files')]),
+            (hmc_wf, transform_dwis_mni, [
+                ('outputnode.bvec_files_to_transform', 'inputnode.bvec_files'),
+                ('outputnode.b0_template', 'inputnode.b0_ref_image'),
+                ('outputnode.cnr_map', 'inputnode.cnr_map'),
+                ('outputnode.b0_template_mask', 'inputnode.dwi_mask'),
+                ('outputnode.to_dwi_ref_affines', 'inputnode.hmc_xforms'),
+                ('outputnode.to_dwi_ref_warps', 'inputnode.fieldwarps'),
+                ('outputnode.dwi_files_to_transform', 'inputnode.dwi_files')]),
             (inputnode, transform_dwis_mni, [
                 ('t1_2_mni_forward_transform', 'inputnode.t1_2_mni_forward_transform'),
                 ('dwi_sampling_grid', 'inputnode.output_grid')]),

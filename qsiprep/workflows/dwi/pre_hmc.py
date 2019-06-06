@@ -2,7 +2,7 @@
 Orchestrating the dwi-preprocessing workflow
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. autofunction:: init_qsiprep_dwi_preproc_wf
+.. autofunction:: init_dwi_preproc_wf
 
 """
 
@@ -53,7 +53,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
         :graph2use: orig
         :simple_form: yes
 
-        from qsiprep.workflows.dwi.base import init_qsiprep_dwi_preproc_wf
+        from qsiprep.workflows.dwi.pre_hmc import init_dwi_pre_hmc_wf
         wf = init_dwi_pre_hmc_wf(['/completely/made/up/path/sub-01_dwi.nii.gz'],
                                   omp_nthreads=1,
                                   dwi_denoise_window=7,
