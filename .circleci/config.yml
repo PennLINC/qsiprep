@@ -115,6 +115,7 @@ jobs:
               wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
                 -O /tmp/data/eddy_config.json \
                 "https://upenn.box.com/shared/static/93g89mug6cejzn6jtq0v7wkupz86iafh.json"
+              chmod a+r /tmp/data/eddy_config.json
             else
               echo "Dataset DSDTI was cached"
             fi
