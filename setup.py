@@ -37,6 +37,7 @@ def main():
             'data/*.json',
             'data/*.nii.gz',
             'data/*.mat',
+            'data/*.cnf',
             'data/boilerplate.bib',
             'data/itkIdentityTransform.txt',
             'viz/*.tpl',
