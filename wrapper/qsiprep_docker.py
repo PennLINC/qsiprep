@@ -389,8 +389,8 @@ def main():
         command.extend(['-v', ':'.join((opts.recon_spec, '/root/spec.json', 'ro'))])
         main_args.extend(['--recon-spec', '/root/spec.json'])
     if opts.eddy_config:
-        command.extend(['-v', ':'.join((opts.eddy_config, '/root/eddy_config.json', 'ro'))])
-        main_args.extend(['--recon-spec', '/root/eddy_config.json'])
+        command.extend(['-v', ':'.join((opts.eddy_config, '/sngl/eddy/eddy_config.json', 'ro'))])
+        main_args.extend(['--eddy-config', '/sngl/eddy/eddy_config.json'])
     if opts.output_dir:
         command.extend(['-v', ':'.join((opts.output_dir, '/out'))])
         main_args.extend(['--output-dir', '/out'])

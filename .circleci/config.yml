@@ -327,7 +327,8 @@ jobs:
             sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSDTI/derivatives && \
                 sudo setfacl -m group:$(id -gn):rwx /tmp/DSDTI/derivatives
             sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSDTI/work && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/DSDTI/work
+                sudo setfacl -m group:$(id -gn):rwx /tmp/DSDTI/work && \
+            sudo chmod a+rw /tmp/data/eddy_config.json
             qsiprep-docker -i pennbbl/qsiprep:latest \
                 -e qsiprep_DEV 1 -u $(id -u) \
                 --config $PWD/nipype.cfg -w /tmp/DSDTI/work \
