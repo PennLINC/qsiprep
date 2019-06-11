@@ -10,6 +10,9 @@ QSIprep: Preprocessing and analysis of q-space images
 .. image:: https://circleci.com/gh/PennBBL/qsiprep/tree/master.svg?style=svg
   :target: https://circleci.com/gh/PennBBL/qsiprep/tree/master
 
+
+Full documentation at https://qsiprep.readthedocs.io
+
 About
 -----
 
