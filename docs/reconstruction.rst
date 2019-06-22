@@ -62,7 +62,8 @@ that all operations will take place in subject anatomical (``"T1w"``) space.
 Many "connectomics" algorithms require a brain parcellation. A number of these
 come packaged with ``qsiprep`` in the Docker image. In this case, the
 atlases will be transformed from group template space to subject anatomical space
-because we specified  ``"space": "T1w"`` earlier.
+because we specified  ``"space": "T1w"`` earlier. Be sure a warp is calculated if
+using these (transforms_).
 
 Pipeline nodes
 ^^^^^^^^^^^^^^^
@@ -109,6 +110,25 @@ Assuming this file is called ``qgi_scalar_export.json`` and you've installed
       --fs-license-file /path/to/license.txt
 
 
+.. _transforms:
+
+Spaces and transforms
+^^^^^^^^^^^^^^^^^^^^^^^
+
+Transforming the a reconstruction output to template space requires that the
+spatial normalization transform is calculated. This can be accomplished in
+two ways
+
+  1. During preprocessing you included ``--output-spaces template``. This will also
+     result in your preprocessed DWI series being written in template space, which
+     you likely don't want.
+  2. You include the ``--force-spatial-normalization`` argument during preprocessing.
+     This will create the warp to your template and store it in the derivatives directory
+     but will not write your preprocessed DWI series in template space.
+
+Some of the workflows require a warp to a template. For example, connectivity_ will use
+this warp to transform atlases into T1w space for calculating a connectivity matrix.
+
 .. _recon_workflows:
 
 Reconstruction Workflow Nodes
@@ -139,6 +159,8 @@ Action: ``"reconstruction"``
 Action: ``"export"``
 ^^^^^^^^^^^^^^^^^^^^^^^
 .. autofunction:: qsiprep.workflows.recon.dsi_studio.init_dsi_studio_export_wf
+
+.. _connectivity:
 
 Action: ``"connectivity"``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

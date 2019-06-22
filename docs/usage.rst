@@ -39,6 +39,16 @@ The docker wrapper CLI
    :nodefaultconst:
 
 
+The singularity wrapper CLI
+=============================
+
+.. argparse::
+   :ref: qsiprep_singularity.get_parser
+   :prog: qsiprep-docker
+   :nodefault:
+   :nodefaultconst:
+
+
 Debugging
 =========
 
