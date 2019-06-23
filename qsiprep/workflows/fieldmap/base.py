@@ -14,7 +14,11 @@ will be used:
 
   1. :ref:`sdc_pepolar` (or **blip-up/blip-down**)
 
-  2. :ref:`sdc_fieldmapless`
+  2. :ref:`sdc_direct_b0`
+
+  3. :ref:`sdc_phasediff`
+
+  4. :ref:`sdc_fieldmapless`
 
 
 Table of behavior (fieldmap use-cases):
@@ -43,6 +47,13 @@ from .pepolar import init_pepolar_unwarp_wf
 from .syn import init_syn_sdc_wf
 
 LOGGER = logging.getLogger('nipype.workflow')
+FMAP_PRIORITY = {
+    'epi': 0,
+    'fieldmap': 1,
+    'phasediff': 2,
+    'phase': 3,
+    'syn': 4
+}
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 

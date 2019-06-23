@@ -24,7 +24,6 @@ from ...interfaces.mrtrix import MRTrixGradientTable
 from ...engine import Workflow
 
 # dwi workflows
-from ..fieldmap.bidirectional_pepolar import init_bidirectional_b0_unwarping_wf
 from ..fieldmap.base import init_sdc_wf
 from ..fieldmap.unwarp import init_fmap_unwarp_report_wf
 from .merge import init_merge_and_denoise_wf
