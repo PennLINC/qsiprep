@@ -24,6 +24,7 @@ from pkg_resources import resource_filename as pkgr
 
 LOGGER = logging.getLogger('nipype.workflow')
 ODF_COLS = 20000  # Number of columns in DSI Studio odf split
+MIN_NONZERO = 1e-6
 
 
 class FODtoFIBGZInputSpec(BaseInterfaceInputSpec):
@@ -211,13 +212,14 @@ def amplitudes_to_fibgz(amplitudes_img, odf_dirs, odf_faces, output_file,
     # Get the flat mask
     ampl_data = amplitudes_img.get_data()
     flat_mask = mask_img.get_data().flatten(order="F") > 0
-    odf_array = ampl_data.reshape(-1, ampl_data.shape[3], order="F")
+    odf_array = ampl_data.reshape(-1, ampl_data.shape[3], order='F')
     del ampl_data
     masked_odfs = odf_array[flat_mask, :]
     z0 = masked_odfs.max()
     masked_odfs = masked_odfs / z0
     masked_odfs[masked_odfs < 0] = 0
     masked_odfs = masked_odfs.astype(np.float)
+
 
     if unit_odf:
         sums = masked_odfs.sum(1)
@@ -234,7 +236,7 @@ def amplitudes_to_fibgz(amplitudes_img, odf_dirs, odf_faces, output_file,
     dsi_mat['voxel_size'] = np.array(amplitudes_img.header.get_zooms()[:3])
     n_voxels = int(np.prod(dsi_mat['dimension']))
     LOGGER.info("Detecting Peaks")
-    for odfnum in range(masked_odfs.shape[0]):
+    for odfnum in range(n_odfs):
         dirs, vals, indices = peak_directions(masked_odfs[odfnum], hs)
         for dirnum, (val, idx) in enumerate(zip(vals, indices)):
             if dirnum == num_fibers:
@@ -242,6 +244,8 @@ def amplitudes_to_fibgz(amplitudes_img, odf_dirs, odf_faces, output_file,
             peak_indices[odfnum, dirnum] = idx
             peak_vals[odfnum, dirnum] = val
 
+    # ensure that fa0 > 0 for all odf values
+    peak_vals[np.abs(peak_vals[:, 0]) < MIN_NONZERO, 0] = MIN_NONZERO
     for nfib in range(num_fibers):
         # fill in the "fa" values
         fa_n = np.zeros(n_voxels)

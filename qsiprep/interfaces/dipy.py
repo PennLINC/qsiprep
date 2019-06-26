@@ -135,8 +135,8 @@ class DipyReconInputSpec(BaseInterfaceInputSpec):
     dwi_file = File(exists=True, mandatory=True)
     mask_file = File(exists=True)
     local_bvec_file = File(exists=True)
-    big_delta = traits.Float()
-    little_delta = traits.Float()
+    big_delta = traits.Either(None, traits.Float(), usedefault=True)
+    little_delta = traits.Either(None, traits.Float(), usedefault=True)
     b0_threshold = traits.CFloat(50, usedefault=True)
     # Outputs
     write_fibgz = traits.Bool(True)
@@ -329,7 +329,7 @@ class BrainSuiteShoreReconstructionInputSpec(DipyReconInputSpec):
     # For L1
     regularization_weighting = traits.Str("CV", usedefault=True)
     l1_positive_constraint = traits.Bool(False, usedefault=True)
-    l1_cv = traits.Either(None, traits.Str())
+    l1_cv = traits.Either(traits.Int(3), None, usedefault=True)
     l1_maxiter = traits.Int(1000, usedefault=True)
     l1_verbose = traits.Bool(False, usedefault=True)
     l1_alpha = traits.Float(1.0, usedefault=True)
@@ -362,7 +362,11 @@ class BrainSuiteShoreReconstruction(DipyReconInterface):
         final_bvals = np.concatenate([np.array([0]), gtab.bvals[dwis_mask]])
         final_bvecs = np.row_stack([np.array([0., 0., 0.]), gtab.bvecs[dwis_mask]])
         final_data = np.concatenate([b0_mean[..., np.newaxis], dwi_images], 3)
-        final_grads = gradient_table(bvals=final_bvals, bvecs=final_bvecs, b0_threshold=5)
+        final_grads = gradient_table(bvals=final_bvals,
+                                     bvecs=final_bvecs,
+                                     b0_threshold=50,
+                                     big_delta=self.inputs.big_delta,
+                                     small_delta=self.inputs.little_delta)
 
         # Cleanup
         del dwi_images
@@ -380,7 +384,7 @@ class BrainSuiteShoreReconstruction(DipyReconInterface):
             lambdaL=self.inputs.lambdaL,
             # For L1
             regularization_weighting=self.inputs.regularization_weighting,
-            l1_positive_constraint=traits.Bool(False, usedefault=True),
+            l1_positive_constraint=self.inputs.l1_positive_constraint,
             l1_cv=self.inputs.l1_cv,
             l1_maxiter=self.inputs.l1_maxiter,
             l1_verbose=self.inputs.l1_verbose,
@@ -396,6 +400,8 @@ class BrainSuiteShoreReconstruction(DipyReconInterface):
                                       newpath=runtime.cwd)
         rtop_file = fname_presuffix(self.inputs.dwi_file, suffix="_rtop",
                                     newpath=runtime.cwd)
+        alphas_file = fname_presuffix(self.inputs.dwi_file, suffix="_alpha",
+                                      newpath=runtime.cwd)
         nb.Nifti1Image(coeffs, dwi_img.affine, dwi_img.header).to_filename(coeffs_file)
         nb.Nifti1Image(rtop, dwi_img.affine, dwi_img.header).to_filename(rtop_file)
         self._results['shore_coeffs'] = coeffs_file

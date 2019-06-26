@@ -56,7 +56,7 @@ class BrainSuiteShoreModel(Cache):
             # For L1 method
             regularization_weighting="CV",
             l1_positive_constraint=False,
-            l1_cv=None,
+            l1_cv=3,
             l1_maxiter=1000,
             l1_verbose=False,
             l1_alpha=1.0,
@@ -197,6 +197,9 @@ class BrainSuiteShoreModel(Cache):
                     np.dot(M.T, M) + self.lambdaN * self.Nshore + self.lambdaL * self.Lshore, M.T)
                 self.cache_set('shore_matrix_reg_pinv', self.gtab, MpseudoInv)
             coef = np.dot(MpseudoInv, data)
+            alpha = 0
+            r2 = 0
+            cnr = 0
 
         elif self.regularization == "L1":
             if self.regularization_weighting == "CV":
@@ -214,13 +217,16 @@ class BrainSuiteShoreModel(Cache):
                     max_iter=self.l1_maxiter)
             lasso_fit = lasso.fit(M, data)
             coef = lasso_fit.coef_
-            self.alpha = lasso_fit.alpha_
+            alpha = lasso_fit.alpha_
+            r2 = lasso_fit.score(M, data)
+            fitted = lasso_fit.predict(M)
+            cnr = np.nan_to_num(np.var(fitted) / np.var(fitted - data))
 
-        return BrainSuiteShoreFit(self, coef)
+        return BrainSuiteShoreFit(self, coef, alpha, r2, cnr)
 
 
 class BrainSuiteShoreFit():
-    def __init__(self, model, shore_coef):
+    def __init__(self, model, shore_coef, alpha=0., r2=0., cnr=0.):
         """ Calculates diffusion properties for a single voxel
 
         Parameters
@@ -233,6 +239,9 @@ class BrainSuiteShoreFit():
 
         self.model = model
         self._shore_coef = shore_coef
+        self._alpha = alpha
+        self._r2 = r2
+        self._cnr = cnr
         self.gtab = model.gtab
         self.radial_order = model.radial_order
         self.zeta = model.zeta
@@ -435,10 +444,16 @@ def _kappa(zeta, n, l):
 
 
 def brainsuite_shore_basis(radial_order, zeta, gtab, tau=1 / (4 * np.pi**2)):
-    qvals = np.sqrt(gtab.bvals / (4 * np.pi**2 * tau))
+    """Calculate the brainsuite shore basis functions."""
+
+    # If deltas are defined, use them
+    try:
+        qvals = gtab.qvals
+    except TypeError:
+        qvals = np.sqrt(gtab.bvals / (4 * np.pi**2 * tau))
+
     qvals[gtab.b0s_mask] = 0
     bvecs = gtab.bvecs
-
     qgradients = qvals[:, None] * bvecs
 
     r, theta, phi = cart2sphere(qgradients[:, 0], qgradients[:, 1], qgradients[:, 2])
