@@ -1,5 +1,8 @@
 from __future__ import division
+import warnings
 from sklearn.linear_model import Lasso, LassoCV
+from sklearn.exceptions import ConvergenceWarning
+from sklearn.metrics import r2_score
 from math import factorial
 import numpy as np
 from scipy.special import genlaguerre, gamma, hyp2f1
@@ -188,20 +191,16 @@ class BrainSuiteShoreModel(Cache):
         if M is None:
             M = brainsuite_shore_basis(self.radial_order, self.zeta, self.gtab, self.tau)
             self.cache_set('shore_matrix', self.gtab, M)
+        MpseudoInv = self.cache_get('shore_matrix_reg_pinv', key=self.gtab)
+        if MpseudoInv is None:
+            MpseudoInv = np.linalg.solve(
+                np.dot(M.T, M) + self.lambdaN * self.Nshore + self.lambdaL * self.Lshore, M.T)
+            self.cache_set('shore_matrix_reg_pinv', self.gtab, MpseudoInv)
 
         # Compute the signal coefficients in SHORE basis
-        if self.regularization == "L2":
-            MpseudoInv = self.cache_get('shore_matrix_reg_pinv', key=self.gtab)
-            if MpseudoInv is None:
-                MpseudoInv = np.linalg.solve(
-                    np.dot(M.T, M) + self.lambdaN * self.Nshore + self.lambdaL * self.Lshore, M.T)
-                self.cache_set('shore_matrix_reg_pinv', self.gtab, MpseudoInv)
-            coef = np.dot(MpseudoInv, data)
-            alpha = 0
-            r2 = 0
-            cnr = 0
-
-        elif self.regularization == "L1":
+        l2_fallback = False
+        if self.regularization == "L1":
+            regularization = 1
             if self.regularization_weighting == "CV":
                 lasso = LassoCV(
                     fit_intercept=False,
@@ -215,18 +214,36 @@ class BrainSuiteShoreModel(Cache):
                     alpha=self.l1_alpha,
                     positive=self.l1_positive_constraint,
                     max_iter=self.l1_maxiter)
-            lasso_fit = lasso.fit(M, data)
-            coef = lasso_fit.coef_
-            alpha = lasso_fit.alpha_
-            r2 = lasso_fit.score(M, data)
-            fitted = lasso_fit.predict(M)
-            cnr = np.nan_to_num(np.var(fitted) / np.var(fitted - data))
 
-        return BrainSuiteShoreFit(self, coef, alpha, r2, cnr)
+            # Try the L1 fit
+            with warnings.catch_warnings():
+                warnings.filterwarnings('error', category=ConvergenceWarning)
+
+                try:
+                    lasso_fit = lasso.fit(M, data)
+                    coef = lasso_fit.coef_
+                    alpha = lasso_fit.alpha_
+                    fitted = lasso_fit.predict(M)
+
+                except Warning as this_warning:
+                    if isinstance(this_warning, ConvergenceWarning):
+                        l2_fallback = True
+                    else:
+                        raise this_warning
+
+        if self.regularization == "L2" or l2_fallback:
+            regularization = 2
+            coef = np.dot(MpseudoInv, data)
+            fitted = np.dot(M, coef)
+            alpha = 0
+
+        r2 = r2_score(data, fitted)
+        cnr = np.nan_to_num(np.var(fitted) / np.var(fitted - data))
+        return BrainSuiteShoreFit(self, coef, regularization, alpha, r2, cnr)
 
 
 class BrainSuiteShoreFit():
-    def __init__(self, model, shore_coef, alpha=0., r2=0., cnr=0.):
+    def __init__(self, model, shore_coef, regularization=0, alpha=0., r2=0., cnr=0.):
         """ Calculates diffusion properties for a single voxel
 
         Parameters
@@ -242,6 +259,7 @@ class BrainSuiteShoreFit():
         self._alpha = alpha
         self._r2 = r2
         self._cnr = cnr
+        self._regularization = regularization
         self.gtab = model.gtab
         self.radial_order = model.radial_order
         self.zeta = model.zeta
@@ -434,9 +452,28 @@ class BrainSuiteShoreFit():
 
     @property
     def shore_coeff(self):
-        """The SHORE coefficients
-        """
+        """The SHORE coefficients."""
         return self._shore_coef
+
+    @property
+    def alpha(self):
+        """The alpha used for the L1 fit."""
+        return self._alpha
+
+    @property
+    def cnr(self):
+        """Contrast to Noise ratio."""
+        return self._cnr
+
+    @property
+    def regularization(self):
+        """Regularization used for fitting coefficients."""
+        return self._regularization
+
+    @property
+    def r2(self):
+        """Model r^2."""
+        return self._r2
 
 
 def _kappa(zeta, n, l):

@@ -339,8 +339,12 @@ class BrainSuiteShoreReconstructionInputSpec(DipyReconInputSpec):
 
 
 class BrainSuiteShoreReconstructionOutputSpec(DipyReconOutputSpec):
-    shore_coeffs = File()
-    rtop = File()
+    shore_coeffs_image = File()
+    rtop_image = File()
+    alpha_image = File()
+    r2_image = File()
+    cnr_image = File()
+    regularization_image = File()
 
 
 class BrainSuiteShoreReconstruction(DipyReconInterface):
@@ -402,10 +406,29 @@ class BrainSuiteShoreReconstruction(DipyReconInterface):
                                     newpath=runtime.cwd)
         alphas_file = fname_presuffix(self.inputs.dwi_file, suffix="_alpha",
                                       newpath=runtime.cwd)
+        r2_file = fname_presuffix(self.inputs.dwi_file, suffix="_r2",
+                                  newpath=runtime.cwd)
+        cnr_file = fname_presuffix(self.inputs.dwi_file, suffix="_cnr",
+                                   newpath=runtime.cwd)
+        regl_file = fname_presuffix(self.inputs.dwi_file, suffix="_regularization",
+                                    newpath=runtime.cwd)
+
         nb.Nifti1Image(coeffs, dwi_img.affine, dwi_img.header).to_filename(coeffs_file)
         nb.Nifti1Image(rtop, dwi_img.affine, dwi_img.header).to_filename(rtop_file)
-        self._results['shore_coeffs'] = coeffs_file
-        self._results['rtop'] = rtop_file
+        nb.Nifti1Image(bss_fit.regularization, dwi_img.affine, dwi_img.header
+                       ).to_filename(regl_file)
+        nb.Nifti1Image(bss_fit.r2, dwi_img.affine, dwi_img.header
+                       ).to_filename(r2_file)
+        nb.Nifti1Image(bss_fit.cnr, dwi_img.affine, dwi_img.header
+                       ).to_filename(cnr_file)
+        nb.Nifti1Image(bss_fit.alpha, dwi_img.affine, dwi_img.header
+                       ).to_filename(alphas_file)
+        self._results['shore_coeffs_image'] = coeffs_file
+        self._results['rtop_image'] = rtop_file
+        self._results['alpha_image'] = alphas_file
+        self._results['r2_image'] = r2_file
+        self._results['cnr_image'] = cnr_file
+        self._results['regularization_image'] = regl_file
 
         # Write DSI Studio or MRtrix
         self._write_external_formats(runtime, bss_fit, mask_img, "_BS3dSHORE")

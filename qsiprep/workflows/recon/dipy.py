@@ -98,7 +98,9 @@ def init_dipy_brainsuite_shore_recon_wf(name="dipy_3dshore_recon", output_suffix
                         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(
-            fields=['shore_coeffs', 'rtop', 'rtap', 'rtpp', 'fibgz', 'fod_sh_mif']),
+            fields=['shore_coeffs_image', 'rtop_image', 'alpha_image', 'r2_image',
+                    'cnr_image', 'regularization_image',
+                    'fibgz', 'fod_sh_mif']),
         name="outputnode")
 
     workflow = pe.Workflow(name=name)
@@ -109,14 +111,19 @@ def init_dipy_brainsuite_shore_recon_wf(name="dipy_3dshore_recon", output_suffix
                                   ('bval_file', 'bval_file'),
                                   ('bvec_file', 'bvec_file'),
                                   ('mask_file', 'mask_file')]),
-        (recon_shore, outputnode, [('shore_coeffs', 'shore_coeffs'),
-                                   ('rtop', 'rtop'),
+        (recon_shore, outputnode, [('shore_coeffs_image', 'shore_coeffs_image'),
+                                   ('rtop_image', 'rtop_image'),
+                                   ('alpha_image', 'alpha_image'),
+                                   ('r2_image', 'r2_image'),
+                                   ('cnr_image', 'cnr_image'),
+                                   ('regularization_image', 'regularization_image'),
                                    ('fibgz', 'fibgz'),
                                    ('fod_sh_mif', 'fod_sh_mif')])
 
     ])
     if output_suffix:
         external_format_datasinks(output_suffix, params, workflow)
+
         ds_rtop = pe.Node(
             ReconDerivativesDataSink(extension='.nii.gz',
                                      desc="rtop",
@@ -124,7 +131,8 @@ def init_dipy_brainsuite_shore_recon_wf(name="dipy_3dshore_recon", output_suffix
                                      compress=True),
             name='ds_bsshore_rtop',
             run_without_submitting=True)
-        workflow.connect(outputnode, 'rtop', ds_rtop, 'in_file')
+        workflow.connect(outputnode, 'rtop_image', ds_rtop, 'in_file')
+
         ds_coeff = pe.Node(
             ReconDerivativesDataSink(extension='.nii.gz',
                                      desc="SHOREcoeff",
@@ -132,7 +140,43 @@ def init_dipy_brainsuite_shore_recon_wf(name="dipy_3dshore_recon", output_suffix
                                      compress=True),
             name='ds_bsshore_coeff',
             run_without_submitting=True)
-        workflow.connect(outputnode, 'shore_coeffs', ds_coeff, 'in_file')
+        workflow.connect(outputnode, 'shore_coeffs_image', ds_coeff, 'in_file')
+
+        ds_alpha = pe.Node(
+            ReconDerivativesDataSink(extension='.nii.gz',
+                                     desc="L1alpha",
+                                     suffix=output_suffix,
+                                     compress=True),
+            name='ds_bsshore_alpha',
+            run_without_submitting=True)
+        workflow.connect(outputnode, 'alpha_image', ds_alpha, 'in_file')
+
+        ds_r2 = pe.Node(
+            ReconDerivativesDataSink(extension='.nii.gz',
+                                     desc="r2",
+                                     suffix=output_suffix,
+                                     compress=True),
+            name='ds_bsshore_r2',
+            run_without_submitting=True)
+        workflow.connect(outputnode, 'r2_image', ds_r2, 'in_file')
+
+        ds_cnr = pe.Node(
+            ReconDerivativesDataSink(extension='.nii.gz',
+                                     desc="CNR",
+                                     suffix=output_suffix,
+                                     compress=True),
+            name='ds_bsshore_cnr',
+            run_without_submitting=True)
+        workflow.connect(outputnode, 'cnr_image', ds_cnr, 'in_file')
+
+        ds_regl = pe.Node(
+            ReconDerivativesDataSink(extension='.nii.gz',
+                                     desc="regularization",
+                                     suffix=output_suffix,
+                                     compress=True),
+            name='ds_bsshore_regl',
+            run_without_submitting=True)
+        workflow.connect(outputnode, 'regularization_image', ds_regl, 'in_file')
 
     return workflow
 
