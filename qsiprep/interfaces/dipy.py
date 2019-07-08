@@ -135,8 +135,8 @@ class DipyReconInputSpec(BaseInterfaceInputSpec):
     dwi_file = File(exists=True, mandatory=True)
     mask_file = File(exists=True)
     local_bvec_file = File(exists=True)
-    big_delta = traits.Float()
-    little_delta = traits.Float()
+    big_delta = traits.Either(None, traits.Float(), usedefault=True)
+    little_delta = traits.Either(None, traits.Float(), usedefault=True)
     b0_threshold = traits.CFloat(50, usedefault=True)
     # Outputs
     write_fibgz = traits.Bool(True)
@@ -329,7 +329,7 @@ class BrainSuiteShoreReconstructionInputSpec(DipyReconInputSpec):
     # For L1
     regularization_weighting = traits.Str("CV", usedefault=True)
     l1_positive_constraint = traits.Bool(False, usedefault=True)
-    l1_cv = traits.Either(None, traits.Str())
+    l1_cv = traits.Either(traits.Int(3), None, usedefault=True)
     l1_maxiter = traits.Int(1000, usedefault=True)
     l1_verbose = traits.Bool(False, usedefault=True)
     l1_alpha = traits.Float(1.0, usedefault=True)
@@ -339,8 +339,12 @@ class BrainSuiteShoreReconstructionInputSpec(DipyReconInputSpec):
 
 
 class BrainSuiteShoreReconstructionOutputSpec(DipyReconOutputSpec):
-    shore_coeffs = File()
-    rtop = File()
+    shore_coeffs_image = File()
+    rtop_image = File()
+    alpha_image = File()
+    r2_image = File()
+    cnr_image = File()
+    regularization_image = File()
 
 
 class BrainSuiteShoreReconstruction(DipyReconInterface):
@@ -362,7 +366,11 @@ class BrainSuiteShoreReconstruction(DipyReconInterface):
         final_bvals = np.concatenate([np.array([0]), gtab.bvals[dwis_mask]])
         final_bvecs = np.row_stack([np.array([0., 0., 0.]), gtab.bvecs[dwis_mask]])
         final_data = np.concatenate([b0_mean[..., np.newaxis], dwi_images], 3)
-        final_grads = gradient_table(bvals=final_bvals, bvecs=final_bvecs, b0_threshold=5)
+        final_grads = gradient_table(bvals=final_bvals,
+                                     bvecs=final_bvecs,
+                                     b0_threshold=50,
+                                     big_delta=self.inputs.big_delta,
+                                     small_delta=self.inputs.little_delta)
 
         # Cleanup
         del dwi_images
@@ -380,7 +388,7 @@ class BrainSuiteShoreReconstruction(DipyReconInterface):
             lambdaL=self.inputs.lambdaL,
             # For L1
             regularization_weighting=self.inputs.regularization_weighting,
-            l1_positive_constraint=traits.Bool(False, usedefault=True),
+            l1_positive_constraint=self.inputs.l1_positive_constraint,
             l1_cv=self.inputs.l1_cv,
             l1_maxiter=self.inputs.l1_maxiter,
             l1_verbose=self.inputs.l1_verbose,
@@ -396,10 +404,31 @@ class BrainSuiteShoreReconstruction(DipyReconInterface):
                                       newpath=runtime.cwd)
         rtop_file = fname_presuffix(self.inputs.dwi_file, suffix="_rtop",
                                     newpath=runtime.cwd)
+        alphas_file = fname_presuffix(self.inputs.dwi_file, suffix="_alpha",
+                                      newpath=runtime.cwd)
+        r2_file = fname_presuffix(self.inputs.dwi_file, suffix="_r2",
+                                  newpath=runtime.cwd)
+        cnr_file = fname_presuffix(self.inputs.dwi_file, suffix="_cnr",
+                                   newpath=runtime.cwd)
+        regl_file = fname_presuffix(self.inputs.dwi_file, suffix="_regularization",
+                                    newpath=runtime.cwd)
+
         nb.Nifti1Image(coeffs, dwi_img.affine, dwi_img.header).to_filename(coeffs_file)
         nb.Nifti1Image(rtop, dwi_img.affine, dwi_img.header).to_filename(rtop_file)
-        self._results['shore_coeffs'] = coeffs_file
-        self._results['rtop'] = rtop_file
+        nb.Nifti1Image(bss_fit.regularization, dwi_img.affine, dwi_img.header
+                       ).to_filename(regl_file)
+        nb.Nifti1Image(bss_fit.r2, dwi_img.affine, dwi_img.header
+                       ).to_filename(r2_file)
+        nb.Nifti1Image(bss_fit.cnr, dwi_img.affine, dwi_img.header
+                       ).to_filename(cnr_file)
+        nb.Nifti1Image(bss_fit.alpha, dwi_img.affine, dwi_img.header
+                       ).to_filename(alphas_file)
+        self._results['shore_coeffs_image'] = coeffs_file
+        self._results['rtop_image'] = rtop_file
+        self._results['alpha_image'] = alphas_file
+        self._results['r2_image'] = r2_file
+        self._results['cnr_image'] = cnr_file
+        self._results['regularization_image'] = regl_file
 
         # Write DSI Studio or MRtrix
         self._write_external_formats(runtime, bss_fit, mask_img, "_BS3dSHORE")

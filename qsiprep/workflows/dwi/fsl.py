@@ -177,8 +177,15 @@ def init_fsl_hmc_wf(scan_groups,
         ])
     else:
         outputnode.inputs.sdc_method = "None"
+        b0_enhance = init_enhance_and_skullstrip_dwi_wf(name='b0_enhance')
         workflow.connect([
-            (gather_inputs, outputnode, [('pre_topup_image', 'b0_template')])
+            (gather_inputs, b0_enhance, [('pre_topup_image', 'inputnode.in_file')]),
+            (b0_enhance, outputnode, [
+                ('outputnode.skull_stripped_file', 'b0_template')]),
+            (b0_enhance, outputnode, [
+                ('outputnode.mask_file', 'b0_template_mask')]),
+            (b0_enhance, eddy, [
+                ('outputnode.mask_file', 'in_mask')]),
         ])
 
     # Organize outputs for the rest of the pipeline
