@@ -45,6 +45,7 @@ from ...engine import Workflow
 # Fieldmap workflows
 from .pepolar import init_pepolar_unwarp_wf
 from .syn import init_syn_sdc_wf
+from .unwarp import init_sdc_unwarp_wf
 
 LOGGER = logging.getLogger('nipype.workflow')
 FMAP_PRIORITY = {
@@ -136,6 +137,8 @@ def init_sdc_wf(fieldmap_info, dwi_meta, omp_nthreads=1,
             method (for reporting purposes)
         method
             Name of the method used for SDC
+        fieldmap_hz
+            The fieldmap in Hz for eddy
 
     """
 
@@ -148,7 +151,7 @@ def init_sdc_wf(fieldmap_info, dwi_meta, omp_nthreads=1,
 
     outputnode = pe.Node(niu.IdentityInterface(
         fields=['b0_ref', 'b0_mask', 'b0_ref_brain',
-                'out_warp', 'syn_b0_ref', 'method']),
+                'out_warp', 'syn_b0_ref', 'method', 'fieldmap_hz']),
         name='outputnode')
 
     # No fieldmaps - forward inputs to outputs
@@ -186,6 +189,70 @@ co-registration with the anatomical reference.
                 ('b0_ref', 'inputnode.in_reference'),
                 ('b0_mask', 'inputnode.in_mask'),
                 ('b0_ref_brain', 'inputnode.in_reference_brain')]),
+        ])
+
+    # FIELDMAP path
+    if fieldmap_info['type'] in ['fieldmap', 'phasediff', 'phase']:
+        outputnode.inputs.method = 'FMB (%s-based)' % fieldmap_info['type']
+        # Import specific workflows here, so we don't break everything with one
+        # unused workflow.
+        if fieldmap_info['type'] == 'fieldmap':
+            from .fmap import init_fmap_wf
+            fmap_estimator_wf = init_fmap_wf(
+                omp_nthreads=omp_nthreads,
+                fmap_bspline=fmap_bspline)
+            # set inputs
+            fmap_estimator_wf.inputs.inputnode.fieldmap = fieldmap_info['fieldmap']
+            fmap_estimator_wf.inputs.inputnode.magnitude = fieldmap_info['magnitude']
+
+        if fieldmap_info['type'] in ('phasediff', 'phase'):
+            from .phdiff import init_phdiff_wf
+            fmap_estimator_wf = init_phdiff_wf(omp_nthreads=omp_nthreads,
+                                               phasetype=fieldmap_info['type'])
+            # set inputs
+            if fieldmap_info['type'] == 'phasediff':
+                fmap_estimator_wf.inputs.inputnode.phasediff = fieldmap_info['phasediff']
+            elif fieldmap_info['type'] == 'phase':
+                # Check that fieldmap is not bipolar
+                fmap_polarity = fieldmap_info['metadata'].get('DiffusionScheme', None)
+                if fmap_polarity == 'Bipolar':
+                    LOGGER.warning("Bipolar fieldmaps are not supported. Ignoring")
+                    workflow.__postdesc__ = ""
+                    outputnode.inputs.method = 'None'
+                    workflow.connect([
+                        (inputnode, outputnode, [('b0_ref', 'b0_ref'),
+                                                 ('b0_mask', 'b0_mask'),
+                                                 ('b0_ref_brain', 'b0_ref_brain')]),
+                    ])
+                    return workflow
+                if fmap_polarity is None:
+                    LOGGER.warning("Assuming phase images are Monopolar")
+
+                fmap_estimator_wf.inputs.inputnode.phasediff = [
+                    fieldmap_info['phase1'], fieldmap_info['phase2']]
+            fmap_estimator_wf.inputs.inputnode.magnitude = [
+                fmap_ for key, fmap_ in sorted(fieldmap_info.items())
+                if key.startswith("magnitude")
+            ]
+
+        sdc_unwarp_wf = init_sdc_unwarp_wf(
+            omp_nthreads=omp_nthreads,
+            fmap_demean=fmap_demean,
+            debug=debug,
+            name='sdc_unwarp_wf')
+        sdc_unwarp_wf.inputs.inputnode.metadata = dwi_meta
+
+        workflow.connect([
+            (inputnode, sdc_unwarp_wf, [
+                ('b0_ref', 'inputnode.in_reference'),
+                ('b0_ref_brain', 'inputnode.in_reference_brain'),
+                ('b0_mask', 'inputnode.in_mask')]),
+            (fmap_estimator_wf, sdc_unwarp_wf, [
+                ('outputnode.fmap', 'inputnode.fmap'),
+                ('outputnode.fmap_ref', 'inputnode.fmap_ref'),
+                ('outputnode.fmap_mask', 'inputnode.fmap_mask')]),
+            (sdc_unwarp_wf, outputnode, [
+                ('outputnode.out_hz', 'fieldmap_hz')])
         ])
 
     # FIELDMAP-less path

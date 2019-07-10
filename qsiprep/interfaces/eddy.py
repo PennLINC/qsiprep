@@ -235,7 +235,7 @@ class ExtendedEddy(fsl.Eddy):
     _num_threads = 1
 
     def __init__(self, **inputs):
-        super(fsl.Eddy, self).__init__(**inputs)
+        super(ExtendedEddy, self).__init__(**inputs)
         self.inputs.on_trait_change(self._num_threads_update, 'num_threads')
         if not isdefined(self.inputs.num_threads):
             self.inputs.num_threads = self._num_threads
@@ -307,6 +307,12 @@ class ExtendedEddy(fsl.Eddy):
 
         return outputs
 
+
+    def _format_arg(self, name, spec, value):
+        if name == 'field':
+            pth, fname, ext = split_filename(value)
+            return spec.argstr % op.join(pth, fname)
+        return super(ExtendedEddy, self)._format_arg(name, spec, value)
 
 class Eddy2SPMMotionInputSpec(BaseInterfaceInputSpec):
     eddy_motion = File(exists=True)

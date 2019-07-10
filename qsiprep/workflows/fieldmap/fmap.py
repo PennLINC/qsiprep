@@ -42,7 +42,7 @@ def init_fmap_wf(omp_nthreads, fmap_bspline, name='fmap_wf'):
         :graph2use: orig
         :simple_form: yes
 
-        from fmriprep.workflows.fieldmap.fmap import init_fmap_wf
+        from qsiprep.workflows.fieldmap.fmap import init_fmap_wf
         wf = init_fmap_wf(omp_nthreads=6, fmap_bspline=False)
 
     """

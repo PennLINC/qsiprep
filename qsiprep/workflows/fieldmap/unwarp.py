@@ -30,7 +30,7 @@ from ...niworkflows.interfaces.registration import ANTSApplyTransformsRPT, ANTSR
 
 from ...interfaces import DerivativesDataSink
 from ..dwi.util import init_enhance_and_skullstrip_dwi_wf
-from ...interfaces.fmap import get_ees as _get_ees, FieldToRadS
+from ...interfaces.fmap import get_ees as _get_ees, FieldToRadS, FieldToHz
 
 
 def init_sdc_unwarp_wf(omp_nthreads, fmap_demean, debug, name='sdc_unwarp_wf'):
@@ -75,6 +75,8 @@ def init_sdc_unwarp_wf(omp_nthreads, fmap_demean, debug, name='sdc_unwarp_wf'):
             the jacobian of the field (for drop-out alleviation)
         out_mask
             mask of the unwarped input file
+        out_hz
+            fieldmap in Hz that can be sent to eddy
 
     """
 
@@ -84,7 +86,7 @@ def init_sdc_unwarp_wf(omp_nthreads, fmap_demean, debug, name='sdc_unwarp_wf'):
                 'fmap_ref', 'fmap_mask', 'fmap']), name='inputnode')
     outputnode = pe.Node(niu.IdentityInterface(
         fields=['out_reference', 'out_reference_brain', 'out_warp', 'out_mask',
-                'out_jacobian']), name='outputnode')
+                'out_jacobian', 'out_hz']), name='outputnode')
 
     # Register the reference of the fieldmap to the reference
     # of the target image (the one that shall be corrected)
@@ -116,9 +118,12 @@ def init_sdc_unwarp_wf(omp_nthreads, fmap_demean, debug, name='sdc_unwarp_wf'):
     # Fieldmap to rads and then to voxels (VSM - voxel shift map)
     torads = pe.Node(FieldToRadS(fmap_range=0.5), name='torads')
 
+    # Make one in Hz for eddy
+    tohz = pe.Node(FieldToHz(range_hz=1), name='tohz')
+
     get_ees = pe.Node(niu.Function(function=_get_ees, output_names=['ees']), name='get_ees')
 
-    gen_vsm = pe.Node(fsl.FUGUE(save_unmasked_shift=True), name='gen_vsm')
+    gen_vsm = pe.Node(fsl.FUGUE(save_unmasked_shift=True, save_fmap=True), name='gen_vsm')
     # Convert the VSM into a DFM (displacements field map)
     # or: FUGUE shift to ANTS warping.
     vsm2dfm = pe.Node(itk.FUGUEvsm2ANTSwarp(), name='vsm2dfm')
@@ -140,8 +145,7 @@ def init_sdc_unwarp_wf(omp_nthreads, fmap_demean, debug, name='sdc_unwarp_wf'):
 
     apply_fov_mask = pe.Node(fsl.ApplyMask(), name="apply_fov_mask")
 
-    enhance_and_skullstrip_bold_wf = init_enhance_and_skullstrip_bold_wf(omp_nthreads=omp_nthreads,
-                                                                         pre_mask=True)
+    enhance_and_skullstrip_bold_wf = init_enhance_and_skullstrip_dwi_wf(omp_nthreads=omp_nthreads)
 
     workflow.connect([
         (inputnode, fmap2ref_reg, [('fmap_ref', 'moving_image')]),
@@ -157,6 +161,8 @@ def init_sdc_unwarp_wf(omp_nthreads, fmap_demean, debug, name='sdc_unwarp_wf'):
         (inputnode, fmap2ref_apply, [('fmap', 'input_image')]),
         (inputnode, fmap_mask2ref_apply, [('fmap_mask', 'input_image')]),
         (fmap2ref_apply, torads, [('output_image', 'in_file')]),
+        (fmap2ref_apply, tohz, [('output_image', 'in_file')]),
+        (tohz, outputnode, [('out_file', 'out_hz')]),
         (inputnode, get_ees, [('in_reference', 'in_file'),
                               ('metadata', 'in_meta')]),
         (fmap_mask2ref_apply, gen_vsm, [('output_image', 'mask_file')]),
@@ -164,6 +170,7 @@ def init_sdc_unwarp_wf(omp_nthreads, fmap_demean, debug, name='sdc_unwarp_wf'):
         (inputnode, gen_vsm, [(('metadata', _get_pedir_fugue), 'unwarp_direction')]),
         (inputnode, vsm2dfm, [(('metadata', _get_pedir_bids), 'pe_dir')]),
         (torads, gen_vsm, [('out_file', 'fmap_in_file')]),
+        (gen_vsm, outputnode, [('fmap_out_file', 'fieldcoef')]),
         (vsm2dfm, unwarp_reference, [('out_file', 'transforms')]),
         (inputnode, unwarp_reference, [('in_reference', 'reference_image')]),
         (inputnode, unwarp_reference, [('in_reference', 'input_image')]),
@@ -177,7 +184,7 @@ def init_sdc_unwarp_wf(omp_nthreads, fmap_demean, debug, name='sdc_unwarp_wf'):
         (unwarp_reference, apply_fov_mask, [('output_image', 'in_file')]),
         (apply_fov_mask, enhance_and_skullstrip_bold_wf, [('out_file', 'inputnode.in_file')]),
         (fmap_mask2ref_apply, enhance_and_skullstrip_bold_wf,
-            [('output_image', 'inputnode.pre_mask')]),
+         [('output_image', 'inputnode.pre_mask')]),
         (apply_fov_mask, outputnode, [('out_file', 'out_reference')]),
         (enhance_and_skullstrip_bold_wf, outputnode, [
             ('outputnode.mask_file', 'out_mask'),

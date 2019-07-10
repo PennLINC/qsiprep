@@ -255,10 +255,9 @@ def init_dwi_preproc_wf(scan_groups,
     doing_bidirectional_pepolar = fieldmap_type == 'rpe_series'
     preprocess_rpe_series = doing_bidirectional_pepolar and hmc_model == 'eddy'
     if fieldmap_type is not None:
-        fieldmap_file = fieldmap_info[fieldmap_type]
+        fmap_key = "phase1" if fieldmap_type == "phase" else fieldmap_type
+        fieldmap_file = fieldmap_info[fmap_key]
         fieldmap_info['metadata'] = layout.get_metadata(fieldmap_file)
-
-
 
     mem_gb = {'filesize': 1, 'resampled': 1, 'largemem': 1}
     dwi_nvols = 10
@@ -335,6 +334,9 @@ def init_dwi_preproc_wf(scan_groups,
             eddy_config=eddy_config,
             mem_gb=mem_gb,
             omp_nthreads=omp_nthreads,
+            fmap_bspline=fmap_bspline,
+            fmap_demean=fmap_demean,
+            dwi_metadata=dwi_metadata,
             name="hmc_wf")
 
     workflow.connect([

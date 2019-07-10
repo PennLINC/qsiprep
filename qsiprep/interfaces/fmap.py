@@ -23,7 +23,7 @@ from nipype.utils.filemanip import (
 
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec, TraitedSpec, File, isdefined, traits,
-    SimpleInterface)
+    SimpleInterface, InputMultiObject)
 from .images import to_lps
 import shutil
 
@@ -259,6 +259,95 @@ class Phasediff2Fieldmap(SimpleInterface):
         return runtime
 
 
+class Phases2FieldmapInputSpec(BaseInterfaceInputSpec):
+    phase_files = InputMultiObject(
+        File(exists=True), mandatory=True, desc='list of phase1, phase2 files')
+    metadatas = traits.List(
+        traits.Dict, mandatory=True, desc='list of phase1, phase2 metadata dicts')
+
+
+class Phases2FieldmapOutputSpec(TraitedSpec):
+    out_file = File(desc='the output fieldmap')
+    phasediff_metadata = traits.Dict(desc='the phasediff metadata')
+
+
+class Phases2Fieldmap(SimpleInterface):
+    """
+    Convert a phase1, phase2 into a difference map
+    """
+    input_spec = Phases2FieldmapInputSpec
+    output_spec = Phases2FieldmapOutputSpec
+
+    def _run_interface(self, runtime):
+        # Get the echo times
+        fmap_file, merged_metadata = phases2fmap(self.inputs.phase_files, self.inputs.metadatas,
+                                                 newpath=runtime.cwd)
+        self._results['phasediff_metadata'] = merged_metadata
+        self._results['out_file'] = fmap_file
+        return runtime
+
+
+def phases2fmap(phase_files, metadatas, newpath=None):
+    """Calculates a phasediff from two phase images. Assumes monopolar
+    readout. """
+    import numpy as np
+    import nibabel as nb
+    from nipype.utils.filemanip import fname_presuffix
+    from copy import deepcopy
+
+    phasediff_file = fname_presuffix(phase_files[0], suffix='_phasediff', newpath=newpath)
+    echo_times = [meta.get("EchoTime") for meta in metadatas]
+    if None in echo_times or echo_times[0] == echo_times[1]:
+        raise RuntimeError()
+    # Determine the order of subtraction
+    short_echo_index = echo_times.index(min(echo_times))
+    long_echo_index = echo_times.index(max(echo_times))
+
+    short_phase_image = phase_files[short_echo_index]
+    long_phase_image = phase_files[long_echo_index]
+
+    image0 = nb.load(short_phase_image)
+    phase0 = image0.get_fdata()
+    image1 = nb.load(long_phase_image)
+    phase1 = image1.get_fdata()
+
+    def rescale_image(img):
+        if np.any(img < -128):
+            # This happens sometimes on 7T fieldmaps
+            LOGGER.info("Found negative values in phase image: rescaling")
+            imax = img.max()
+            imin = img.min()
+            scaled = 2 * ((img - imin) / (imax - imin) - 0.5)
+            return np.pi * scaled
+        mask = img > 0
+        imax = img.max()
+        imin = img.min()
+        max_check = imax - 4096
+        if np.abs(max_check) > 10 or np.abs(imin) > 10:
+            LOGGER.warning("Phase image may be scaled incorrectly: check results")
+        return mask * (img / 2048 * np.pi - np.pi)
+
+    # Calculate fieldmaps
+    rad0 = rescale_image(phase0)
+    rad1 = rescale_image(phase1)
+    a = np.cos(rad0)
+    b = np.sin(rad0)
+    c = np.cos(rad1)
+    d = np.sin(rad1)
+    fmap = -np.arctan2(b * c - a * d, a * c + b * d)
+
+    phasediff_nii = nb.Nifti1Image(fmap, image0.affine)
+    phasediff_nii.set_data_dtype(np.float32)
+    phasediff_nii.to_filename(phasediff_file)
+
+    merged_metadata = deepcopy(metadatas[0])
+    del merged_metadata['EchoTime']
+    merged_metadata['EchoTime1'] = float(echo_times[short_echo_index])
+    merged_metadata['EchoTime2'] = float(echo_times[long_echo_index])
+
+    return phasediff_file, merged_metadata
+
+
 def _despike2d(data, thres, neigh=None):
     """
     despiking as done in FSL fugue
@@ -367,7 +456,7 @@ def get_ees(in_meta, in_file=None):
     """
 
     import nibabel as nb
-    from fmriprep.interfaces.fmap import _get_pe_index
+    from qsiprep.interfaces.fmap import _get_pe_index
 
     # Use case 1: EES is defined
     ees = in_meta.get('EffectiveEchoSpacing', None)

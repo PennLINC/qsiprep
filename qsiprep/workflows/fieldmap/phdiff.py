@@ -42,7 +42,7 @@ def init_phdiff_wf(omp_nthreads, phasetype='phasediff', name='phdiff_wf'):
         :graph2use: orig
         :simple_form: yes
 
-        from fmriprep.workflows.fieldmap.phdiff import init_phdiff_wf
+        from qsiprep.workflows.fieldmap.phdiff import init_phdiff_wf
         wf = init_phdiff_wf(omp_nthreads=1)
 
 
@@ -89,7 +89,7 @@ further improvements of HCP Pipelines [@hcppipelines].
     prelude = pe.Node(fsl.PRELUDE(), name='prelude')
 
     denoise = pe.Node(fsl.SpatialFilter(operation='median', kernel_shape='sphere',
-                                        kernel_size=3), name='denoise')
+                                        kernel_size=5), name='denoise')
 
     demean = pe.Node(niu.Function(function=demean_image), name='demean')
 
@@ -104,7 +104,7 @@ further improvements of HCP Pipelines [@hcppipelines].
 
     if phasetype == "phasediff":
         # Read phasediff echo times
-        meta = pe.Node(ReadSidecarJSON(bids_validate=False), name='meta', mem_gb=0.01)
+        meta = pe.Node(ReadSidecarJSON(), name='meta', mem_gb=0.01)
 
         # phase diff -> radians
         pha2rads = pe.Node(niu.Function(function=siemens2rads),

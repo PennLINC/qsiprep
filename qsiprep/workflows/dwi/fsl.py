@@ -32,6 +32,7 @@ from .resampling import init_dwi_trans_wf
 from .confounds import init_dwi_confs_wf
 from .derivatives import init_dwi_derivatives_wf
 from ..fieldmap.unwarp import init_fmap_unwarp_report_wf
+from ..fieldmap.base import init_sdc_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger('nipype.workflow')
@@ -40,9 +41,12 @@ LOGGER = logging.getLogger('nipype.workflow')
 def init_fsl_hmc_wf(scan_groups,
                     b0_threshold,
                     impute_slice_threshold,
+                    fmap_demean,
+                    fmap_bspline,
                     eddy_config,
                     mem_gb=3,
                     omp_nthreads=1,
+                    dwi_metadata=None,
                     slice_quality='outlier_n_sqr_stdev_map',
                     name="fsl_hmc_wf"):
     """
@@ -174,6 +178,32 @@ def init_fsl_hmc_wf(scan_groups,
             (topup, eddy, [
                 ('out_movpar', 'in_topup_movpar'),
                 ('out_fieldcoef', 'in_topup_fieldcoef')]),
+        ])
+    elif fieldmap_type in ('fieldmap', 'phasediff', 'phase'):
+        outputnode.inputs.sdc_method = fieldmap_type
+        b0_enhance = init_enhance_and_skullstrip_dwi_wf(name='b0_enhance')
+        b0_sdc_wf = init_sdc_wf(
+            scan_groups['fieldmap_info'], dwi_metadata, omp_nthreads=omp_nthreads,
+            fmap_demean=fmap_demean, fmap_bspline=fmap_bspline)
+
+        workflow.connect([
+            (gather_inputs, b0_enhance, [('pre_topup_image', 'inputnode.in_file')]),
+            (b0_enhance, b0_sdc_wf, [
+                ('outputnode.bias_corrected_file', 'inputnode.b0_ref'),
+                ('outputnode.skull_stripped_file', 'inputnode.b0_ref_brain'),
+                ('outputnode.mask_file', 'inputnode.b0_mask')]),
+            (inputnode, b0_sdc_wf, [
+                ('t1_brain', 'inputnode.t1_brain'),
+                ('t1_2_mni_reverse_transform',
+                 'inputnode.t1_2_mni_reverse_transform')]),
+            (b0_sdc_wf, outputnode, [
+                ('outputnode.method', 'sdc_method'),
+                ('outputnode.b0_ref', 'b0_template'),
+                ('outputnode.b0_mask', 'b0_template_mask')]),
+            (b0_sdc_wf, eddy, [
+                ('outputnode.fieldmap_hz', 'field'),
+                ('outputnode.b0_mask', 'in_mask')])
+
         ])
     else:
         outputnode.inputs.sdc_method = "None"
