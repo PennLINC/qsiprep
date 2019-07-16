@@ -437,7 +437,7 @@ def init_hmc_model_iteration_wf(modelname, transform, precision="coarse", name="
 
         (register_to_predicted, post_bvec_transforms, [
             (('forward_transforms', _list_squeeze), 'affine_transforms')]),
-        (inputnode, post_bvec_transforms, [('original_bvecs', 'bvec_files'),
+        (inputnode, post_bvec_transforms, [('bvec_files', 'bvec_files'),
                                            ('bvals', 'bval_files')]),
 
         (predict_dwis, outputnode, [('predicted_image', 'predicted_dwis')]),
