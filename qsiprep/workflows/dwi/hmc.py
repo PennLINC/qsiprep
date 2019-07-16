@@ -358,10 +358,12 @@ def init_hmc_model_iteration_wf(modelname, transform, precision="coarse", name="
 
         original_dwi_files
             list of 3d dwi files, no b0's
-        original_bvecs
-            list of bvec files corresponding to `original_dwi_files`
-        original_bvals
+        bvals
             list of bval files corresponding to `original_dwi_files`
+        approx_aligned_dwi_files
+            dwi files that have been registered through a shoreline iteration
+        approx_aligned_bvecs
+            list of bvec files corresponding to `approx_aligned_dwi_files`
         b0_indices
             list of which indices in `dwi_files` are b0 images
         initial_transforms
@@ -382,9 +384,8 @@ def init_hmc_model_iteration_wf(modelname, transform, precision="coarse", name="
     workflow = Workflow(name=name)
     inputnode = pe.Node(
         niu.IdentityInterface(
-            fields=['original_dwi_files', 'original_bvecs',
-                    'approx_aligned_dwi_files', 'approx_aligned_bvecs',
-                    'b0_mask', 'b0_mean', 'bvals']),
+            fields=['original_dwi_files', 'bvals', 'approx_aligned_dwi_files',
+                    'approx_aligned_bvecs', 'b0_mask', 'b0_mean']),
         name='inputnode')
     outputnode = pe.Node(
         niu.IdentityInterface(
@@ -430,6 +431,8 @@ def init_hmc_model_iteration_wf(modelname, transform, precision="coarse", name="
 
         (register_to_predicted, calculate_motion, [
             (('forward_transforms', _list_squeeze), 'transform_files')]),
+        (predict_dwis, calculate_motion, [('predicted_image', 'ref_files')]),
+        (inputnode, calculate_motion, [('original_dwi_files', 'source_files')]),
         (calculate_motion, outputnode, [('motion_file', 'motion_params')]),
 
         (register_to_predicted, post_bvec_transforms, [
@@ -578,7 +581,6 @@ def init_dwi_model_hmc_wf(modelname, transform, mem_gb, omp_nthreads,
                 ('outputnode.aligned_bvecs', 'inputnode.approx_aligned_bvecs')]),
             (extract_dwis, model_iterations[-1], [
                 ('model_dwi_files', 'inputnode.original_dwi_files'),
-                ('model_bvecs', 'inputnode.original_bvecs'),
                 ('model_bvals', 'inputnode.bvals')]),
             (b0_mean, model_iterations[-1], [
                 ('average_image', 'inputnode.b0_mean')]),

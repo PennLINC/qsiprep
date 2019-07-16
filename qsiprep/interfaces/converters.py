@@ -215,16 +215,15 @@ def amplitudes_to_fibgz(amplitudes_img, odf_dirs, odf_faces, output_file,
     odf_array = ampl_data.reshape(-1, ampl_data.shape[3], order='F')
     del ampl_data
     masked_odfs = odf_array[flat_mask, :]
-    z0 = masked_odfs.max()
+    z0 = np.nanmax(masked_odfs)
     masked_odfs = masked_odfs / z0
     masked_odfs[masked_odfs < 0] = 0
-    masked_odfs = masked_odfs.astype(np.float)
-
+    masked_odfs = np.nan_to_num(masked_odfs).astype(np.float)
 
     if unit_odf:
         sums = masked_odfs.sum(1)
         sums[sums == 0] = 1
-        masked_odfs = masked_odfs / sums[:, np.newaxis]
+        masked_odfs = np.masked_odfs / sums[:, np.newaxis]
 
     n_odfs = masked_odfs.shape[0]
     peak_indices = np.zeros((n_odfs, num_fibers))

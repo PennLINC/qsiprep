@@ -15,6 +15,7 @@ from dipy.reconst.dti import decompose_tensor
 from dipy.core.geometry import normalized_vector, decompose_matrix
 import pandas as pd
 from sklearn.metrics.regression import r2_score
+from subprocess import Popen, PIPE
 
 
 LOGGER = logging.getLogger('nipype.interface')
@@ -208,6 +209,8 @@ def _score_slices(ideal_image, input_image, masked_slices, valid_slices):
 
 class CombineMotionsInputSpec(BaseInterfaceInputSpec):
     transform_files = InputMultiObject(File(exists=True), desc='transform files from hmc')
+    source_files = InputMultiObject(File(exists=True), desc='Moving images')
+    ref_files = InputMultiObject(File(exists=True), desc='Fixed Images')
 
 
 class CombineMotionsOututSpec(TraitedSpec):
@@ -223,16 +226,11 @@ class CombineMotions(SimpleInterface):
         collected_motion = []
         output_fname = os.path.join(runtime.cwd, "motion_params.csv")
         output_spm_fname = os.path.join(runtime.cwd, "spm_movpar.txt")
-        for motion_file in self.inputs.transform_files:
-            if os.path.exists("output.txt"):
-                os.remove("output.txt")
-            # Convert to homogenous matrix
-            os.system("ConvertTransformFile 3 %s output.txt --RAS --hm" % (motion_file))
-            affine = np.loadtxt("output.txt")
-            scale, shear, angles, translate, persp = decompose_matrix(affine)
+        for motion_file, src_file, ref_file in zip(self.inputs.transform_files,
+                                                   self.inputs.source_files,
+                                                   self.inputs.ref_files):
             collected_motion.append(
-                np.concatenate([
-                    scale, shear, np.array(angles), translate]))
+                get_fsl_motion_params(motion_file, src_file, ref_file, runtime.cwd))
 
         final_motion = np.row_stack(collected_motion)
         cols = ["scaleX", "scaleY", "scaleZ", "shearXY", "shearXZ",
@@ -515,6 +513,35 @@ class LocalGradientRotation(SimpleInterface):
         with open(self._results['log_cmdline'], 'w') as cmdfile:
             print('\n-------\n'.join(commands[1]), file=cmdfile)
         return runtime
+
+
+def get_fsl_motion_params(itk_file, src_file, ref_file, working_dir):
+    tmp_fsl_file = fname_presuffix(itk_file, newpath=working_dir,
+                                   suffix='_FSL.xfm', use_ext=False)
+    fsl_convert_cmd = "c3d_affine_tool " \
+        "-ref {ref_file} " \
+        "-src {src_file} " \
+        "-itk {itk_file} " \
+        "-ras2fsl -o {fsl_file}".format(
+            src_file=src_file, ref_file=ref_file, itk_file=itk_file,
+            fsl_file=tmp_fsl_file)
+    os.system(fsl_convert_cmd)
+    proc = Popen(['avscale', '--allparams', tmp_fsl_file, src_file], stdout=PIPE,
+                 stderr=PIPE)
+    stdout, _ = proc.communicate()
+
+    def get_measures(line):
+        line = line.strip().split()
+        return np.array([float(num) for num in line[-3:]])
+
+    lines = stdout.decode("utf-8").split("\n")
+    flip = np.array([1, -1, -1])
+    rotation = get_measures(lines[6]) * flip
+    translation = get_measures(lines[8]) * flip
+    scale = get_measures(lines[10])
+    shear = get_measures(lines[12])
+
+    return np.concatenate([scale, shear, rotation, translation])
 
 
 def match_transforms(dwi_files, transforms, b0_indices):
