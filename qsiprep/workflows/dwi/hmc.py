@@ -385,7 +385,7 @@ def init_hmc_model_iteration_wf(modelname, transform, precision="coarse", name="
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=['original_dwi_files', 'bvals', 'approx_aligned_dwi_files',
-                    'approx_aligned_bvecs', 'b0_mask', 'b0_mean']),
+                    'approx_aligned_bvecs', 'b0_mask', 'b0_mean', 'original_bvecs']),
         name='inputnode')
     outputnode = pe.Node(
         niu.IdentityInterface(
@@ -437,7 +437,7 @@ def init_hmc_model_iteration_wf(modelname, transform, precision="coarse", name="
 
         (register_to_predicted, post_bvec_transforms, [
             (('forward_transforms', _list_squeeze), 'affine_transforms')]),
-        (inputnode, post_bvec_transforms, [('bvec_files', 'bvec_files'),
+        (inputnode, post_bvec_transforms, [('original_bvecs', 'bvec_files'),
                                            ('bvals', 'bval_files')]),
 
         (predict_dwis, outputnode, [('predicted_image', 'predicted_dwis')]),
@@ -581,7 +581,8 @@ def init_dwi_model_hmc_wf(modelname, transform, mem_gb, omp_nthreads,
                 ('outputnode.aligned_bvecs', 'inputnode.approx_aligned_bvecs')]),
             (extract_dwis, model_iterations[-1], [
                 ('model_dwi_files', 'inputnode.original_dwi_files'),
-                ('model_bvals', 'inputnode.bvals')]),
+                ('model_bvals', 'inputnode.bvals'),
+                ('model_bvecs', 'inputnode.original_bvecs')]),
             (b0_mean, model_iterations[-1], [
                 ('average_image', 'inputnode.b0_mean')]),
             (inputnode, model_iterations[-1], [
