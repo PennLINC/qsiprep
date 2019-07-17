@@ -140,7 +140,9 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
         (dwi_hmc_wf, dwi_ref_wf, [
             ('outputnode.final_template', 'inputnode.b0_template')]),
         (dwi_hmc_wf, summarize_motion, [
+            ('outputnode.final_template', 'ref_file'),
             (('outputnode.forward_transforms', _list_squeeze), 'transform_files')]),
+        (inputnode, summarize_motion, [('dwi_files', 'source_files')]),
         (dwi_hmc_wf, slice_qc, [
             ('outputnode.noise_free_dwis', 'ideal_image_files')]),
         (dwi_ref_wf, b0_sdc_wf, [

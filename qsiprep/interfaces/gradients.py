@@ -208,9 +208,11 @@ def _score_slices(ideal_image, input_image, masked_slices, valid_slices):
 
 
 class CombineMotionsInputSpec(BaseInterfaceInputSpec):
-    transform_files = InputMultiObject(File(exists=True), desc='transform files from hmc')
-    source_files = InputMultiObject(File(exists=True), desc='Moving images')
-    ref_files = InputMultiObject(File(exists=True), desc='Fixed Images')
+    transform_files = InputMultiObject(File(exists=True), mandatory=True,
+                                       desc='transform files from hmc')
+    source_files = InputMultiObject(File(exists=True), mandatory=True,
+                                    desc='Moving images')
+    ref_file = File(exists=True, mandatory=True, desc='Fixed Image')
 
 
 class CombineMotionsOututSpec(TraitedSpec):
@@ -226,9 +228,9 @@ class CombineMotions(SimpleInterface):
         collected_motion = []
         output_fname = os.path.join(runtime.cwd, "motion_params.csv")
         output_spm_fname = os.path.join(runtime.cwd, "spm_movpar.txt")
-        for motion_file, src_file, ref_file in zip(self.inputs.transform_files,
-                                                   self.inputs.source_files,
-                                                   self.inputs.ref_files):
+        ref_file = self.inputs.ref_file
+        for motion_file, src_file in zip(self.inputs.transform_files,
+                                         self.inputs.source_files):
             collected_motion.append(
                 get_fsl_motion_params(motion_file, src_file, ref_file, runtime.cwd))
 
