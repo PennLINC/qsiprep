@@ -12,7 +12,7 @@
   "repol": true,
   "num_threads": 1,
   "is_shelled": true,
-  "use_cuda": true,
+  "use_cuda": false,
   "cnr_maps": true,
   "residuals": false,
   "output_type": "NIFTI_GZ",
