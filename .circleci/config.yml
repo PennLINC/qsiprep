@@ -245,15 +245,15 @@ jobs:
                 --force-spatial-normalization \
                 --output-resolution 5 \
                 --nthreads 2 -vv
-      - run:
-          name: Move intermediate results for second run
-          command: |
-            mkdir -p /tmp/DSCSDSI/derivatives_partial
-            sudo cp -a /tmp/DSCSDSI/work /tmp/DSCSDSI/work_partial
+      #- run:
+      #    name: Move intermediate results for second run
+      #    command: |
+      #      mkdir -p /tmp/DSCSDSI/derivatives_partial
+      #      sudo cp -a /tmp/DSCSDSI/work /tmp/DSCSDSI/work_partial
 
 
-      - store_artifacts:
-          path: /tmp/DSCSDSI
+      #- store_artifacts:
+      #    path: /tmp/DSCSDSI
 
 
   DSDTI:
@@ -317,7 +317,7 @@ jobs:
       - save_cache:
          key: DSDTI-anat-v1-{{ .Branch }}-{{ epoch }}
          paths:
-            - /tmp/DSDTI/work
+            # - /tmp/DSDTI/work
             - /tmp/DSDTI/derivatives/qsiprep
 
       - run:
@@ -340,11 +340,11 @@ jobs:
                 --eddy_config /tmp/data/eddy_config.json \
                 --output-resolution 5 \
                 --nthreads 2 -vv
-      - run:
-          name: Move intermediate results for second run
-          command: |
-            mkdir -p /tmp/DSDTI/derivatives_partial
-            sudo cp -a /tmp/DSDTI/work /tmp/DSDTI/work_partial
+      # - run:
+      #     name: Move intermediate results for second run
+      #     command: |
+      #       mkdir -p /tmp/DSDTI/derivatives_partial
+      #       sudo cp -a /tmp/DSDTI/work /tmp/DSDTI/work_partial
 
 
       - store_artifacts:
