@@ -110,6 +110,7 @@ class QsiReconIngress(SimpleInterface):
         self._get_if_exists('confounds_file', op.join(out_root, "*confounds.tsv"))
         self._get_if_exists('local_bvec_file', op.join(out_root, fname[:-3]+'bvec.nii*'))
         self._get_if_exists('b_file', op.join(out_root, fname+".b"))
+        self._get_if_exists('mask_file', op.join(out_root, fname[:-11] + 'brain_mask.nii.gz'))
         self._results['dwi_file'] = self.inputs.dwi_file
 
         # Get the anatomical data
