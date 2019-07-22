@@ -305,13 +305,14 @@ class MAPMRIReconstruction(DipyReconInterface):
         self._results['qiv'] = self._save_scalar(q, "_qiv", runtime, dwi_img)
 
         rtap = mapfit_aniso.rtap()
-        self._results['rtap'] = self._save_scalar(q, "_rtap", runtime, dwi_img)
+        self._results['rtap'] = self._save_scalar(rtap, "_rtap", runtime, dwi_img)
 
         rtpp = mapfit_aniso.rtpp()
-        self._results['rtpp'] = self._save_scalar(q, "_rtpp", runtime, dwi_img)
+        self._results['rtpp'] = self._save_scalar(rtpp, "_rtpp", runtime, dwi_img)
 
         coeffs = mapfit_aniso.mapmri_coeff
         self._results['mapmri_coeffs'] = self._save_scalar(coeffs, "_mapcoeffs", runtime, dwi_img)
+
         # Write DSI Studio or MRtrix
         self._write_external_formats(runtime, mapfit_aniso, mask_img, "_MAPMRI")
 

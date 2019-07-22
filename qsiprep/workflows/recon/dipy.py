@@ -200,6 +200,8 @@ def init_dipy_mapmri_recon_wf(name="dipy_mapmri_recon", output_suffix="", params
             Voxelwise Return-to-plane probability.
         msd
             Voxelwise MSD
+        qiv
+            q-space inverse variance
         lapnorm
             Voxelwise norm of the Laplacian
 
@@ -211,7 +213,7 @@ def init_dipy_mapmri_recon_wf(name="dipy_mapmri_recon", output_suffix="", params
             True writes out a MRTrix mif file with sh coefficients
         radial_order: int
             An even integer that represent the order of the basis
-        lablacian_regularization: bool
+        laplacian_regularization: bool
             Regularize using the Laplacian of the MAP-MRI basis.
         laplacian_weighting: str or scalar
             The string 'GCV' makes it use generalized cross-validation to find
@@ -286,7 +288,7 @@ def init_dipy_mapmri_recon_wf(name="dipy_mapmri_recon", output_suffix="", params
     if output_suffix:
         external_format_datasinks(output_suffix, params, workflow)
         connections = []
-        for scalar_name in ['rtop', 'rtap', 'rtpp']:
+        for scalar_name in ['rtop', 'rtap', 'rtpp', 'qiv', 'msd', 'lapnorm']:
             connections += [(outputnode,
                              pe.Node(
                                  ReconDerivativesDataSink(desc=scalar_name,
