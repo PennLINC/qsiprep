@@ -261,7 +261,7 @@ def init_dipy_mapmri_recon_wf(name="dipy_mapmri_recon", output_suffix="", params
     outputnode = pe.Node(
         niu.IdentityInterface(
             fields=['mapmri_coeffs', 'rtop', 'rtap', 'rtpp', 'fibgz', 'fod_sh_mif',
-                    'parng', 'perng', 'ng', 'qiv', 'lapnorm']),
+                    'parng', 'perng', 'ng', 'qiv', 'lapnorm', 'msd']),
         name="outputnode")
 
     workflow = pe.Workflow(name=name)
@@ -278,6 +278,7 @@ def init_dipy_mapmri_recon_wf(name="dipy_mapmri_recon", output_suffix="", params
                                  ('rtpp', 'rtpp'),
                                  ('parng', 'parng'),
                                  ('perng', 'perng'),
+                                 ('msd', 'msd'),
                                  ('ng', 'ng'),
                                  ('qiv', 'qiv'),
                                  ('lapnorm', 'lapnorm'),
