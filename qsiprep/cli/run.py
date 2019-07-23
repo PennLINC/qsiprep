@@ -325,7 +325,7 @@ def get_parser():
         '--fmap-no-demean',
         action='store_false',
         default=True,
-        help='do not remove median (within mask) from fieldmap (default: True')
+        help='do not remove median (within mask) from fieldmap (default: True)')
 
     # SyN-unwarp options
     g_syn = parser.add_argument_group(
