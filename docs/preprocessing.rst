@@ -57,7 +57,10 @@ The are two kinds of SDC available in qsiprep:
      or the dwi directory.
 
   2. :ref:`sdc_fieldmapless`: The SyN-based susceptibility distortion correction
-     implemented in FMRIPREP
+     implemented in FMRIPREP. To use this method, include argument --use-syn-sdc when 
+     calling qsiprep. Briefly, this method estimates a SDC warp using ANTS SyN based
+     on an average fieldmap in MNI space. For details on this method, see
+     `here <https://fmriprep.readthedocs.io/en/latest/api/index.html#sdc-fieldmapless>`_ 
 
 
 ``qsiprep`` determines if a fieldmap should be used based on the ``"IntendedFor"``
@@ -133,7 +136,7 @@ Derivatives related to diffusion images are in the ``dwi`` subfolder.
 
 - ``*_confounds.tsv`` A tab-separated value file with one column per calculated confound and one row per timepoint/volume
 
-Volumetric output spaces include ``T1w`` and ``MNI152NLin2009cAsym`` (default).
+Volumetric output spaces include ``T1w`` (default) and ``MNI152NLin2009cAsym``.
 
 - ``*dwiref.nii.gz`` The b0 template
 - ``*desc-brain_mask.nii.gz`` The generous brain mask that should be reduced probably
@@ -439,7 +442,8 @@ run ``TOPUP`` before passing the fieldmap to ``eddy`` if fieldmaps are available
 
 ``eddy`` has many configuration options. Instead of making these commandline options,
 you can specify them in a JSON file and pass that to ``qsiprep`` using the ``--eddy_config``
-option.
+option. An example (default) eddy config json can be viewed or downloaded
+`here <https://github.com/PennBBL/qsiprep/blob/master/qsiprep/data/eddy_params.json>`_  
 
 .. _dwi_ref:
 
@@ -500,7 +504,7 @@ Pre-processed DWIs in a different space
 
 A DWI series is resampled to an output space. The ``output_resolution`` is
 specified on the commandline call. All transformations, including head motion
-correction, susceptibility distortion correction, coregistration and optionally
+correction, susceptibility distortion correction, coregistration and (optionally)
 normalization to the template is performed in a single shot using a Lanczos kernel.
 
 There are two ways that the gradient vectors can be saved. This workflow always
