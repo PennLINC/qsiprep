@@ -172,11 +172,10 @@ def init_single_subject_wf(
                      layout.get(type="dwi", extensions=['nii', 'nii.gz'])
                      if 'space-' + space in f.filename]
 
-    workflow = pe.Workflow(name=spec['name'])
+    workflow = pe.Workflow('sub-{}_{}'.format(subject_id, spec['name']))
     if len(dwi_files) == 0:
         LOGGER.info("No dwi files found for %s", subject_id)
         return workflow
-
 
     anat_src = pe.Node(
         QsiprepAnatomicalIngress(subject_id=subject_id,
