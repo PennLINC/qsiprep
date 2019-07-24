@@ -10,9 +10,10 @@ qsiprep base processing workflows
 .. autofunction:: init_single_subject_wf
 
 """
-
+import logging
 import sys
 import os
+from collections import defaultdict
 from copy import deepcopy
 
 from nipype import __version__ as nipype_ver
@@ -31,8 +32,8 @@ from ..__about__ import __version__
 
 from .anatomical import init_anat_preproc_wf
 from .dwi.base import init_dwi_preproc_wf
-import logging
-from collections import defaultdict
+from .dwi.intramodal_template import init_intramodal_template_wf
+
 
 LOGGER = logging.getLogger('nipype.workflow')
 
@@ -44,8 +45,8 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
                     skull_strip_template, skull_strip_fixed_seed, freesurfer, hmc_model,
                     impute_slice_threshold, hmc_transform, shoreline_iters, eddy_config,
                     write_local_bvecs, output_spaces, template, motion_corr_to,
-                    b0_to_t1w_transform, prefer_dedicated_fmaps, fmap_bspline, fmap_demean,
-                    use_syn, force_syn):
+                    b0_to_t1w_transform, intramodal_template_iters, intramodal_template_transform,
+                    prefer_dedicated_fmaps, fmap_bspline, fmap_demean, use_syn, force_syn):
     """
     This workflow organizes the execution of qsiprep, with a sub-workflow for
     each subject.
@@ -82,6 +83,8 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
                               template='MNI152NLin2009cAsym',
                               motion_corr_to='iterative',
                               b0_to_t1w_transform='Rigid',
+                              intramodal_template_iters=2,
+                              intramodal_template_transform="Rigid",
                               hmc_transform='Affine',
                               eddy_config=None,
                               shoreline_iters=2,
@@ -155,6 +158,12 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
             method to motion correct to the midpoint of the b0 images
         b0_to_t1w_transform : "Rigid" or "Affine"
             Use a rigid or full affine transform for b0-T1w registration
+        intramodal_template_iters: int
+            Number of iterations for finding the midpoint image from the b0 templates
+            from all groups. Has no effect if there is only one group. If 0, all b0
+            templates are directly registered to the t1w image.
+        intramodal_template_transform: str
+            Transformation used for building the intramodal template.
         hmc_model : 'none', '3dSHORE' or 'MAPMRI'
             Model used to generate target images for head motion correction. If 'none'
             the transform from the nearest b0 will be used.
@@ -222,6 +231,8 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
             prefer_dedicated_fmaps=prefer_dedicated_fmaps,
             motion_corr_to=motion_corr_to,
             b0_to_t1w_transform=b0_to_t1w_transform,
+            intramodal_template_iters=intramodal_template_iters,
+            intramodal_template_transform=intramodal_template_transform,
             hmc_model=hmc_model,
             hmc_transform=hmc_transform,
             shoreline_iters=shoreline_iters,
@@ -252,8 +263,9 @@ def init_single_subject_wf(
         dwi_denoise_window, combine_all_dwis, omp_nthreads, skull_strip_template,
         force_spatial_normalization, skull_strip_fixed_seed, freesurfer, hires, output_spaces,
         template, output_resolution, prefer_dedicated_fmaps, motion_corr_to, b0_to_t1w_transform,
-        hmc_model, hmc_transform, shoreline_iters, eddy_config, impute_slice_threshold,
-        fmap_bspline, fmap_demean, use_syn, force_syn):
+        intramodal_template_iters, intramodal_template_transform, hmc_model, hmc_transform,
+        shoreline_iters, eddy_config, impute_slice_threshold, fmap_bspline, fmap_demean, use_syn,
+        force_syn):
     """
     This workflow organizes the preprocessing pipeline for a single subject.
     It collects and reports information about the subject, and prepares
@@ -297,6 +309,8 @@ def init_single_subject_wf(
             prefer_dedicated_fmaps=False,
             motion_corr_to='iterative',
             b0_to_t1w_transform='Rigid',
+            intramodal_template_iters=2,
+            intramodal_template_transform="Rigid",
             hmc_model='3dSHORE',
             hmc_transform='Affine',
             eddy_config=None,
@@ -376,8 +390,6 @@ def init_single_subject_wf(
             method to motion correct to the midpoint of the b0 images
         eddy_config: str
             Path to a JSON file containing config options for eddy
-        b0_to_t1w_dof : 6, 9 or 12
-            Degrees-of-freedom for b0-T1w registration
         fmap_bspline : bool
             **Experimental**: Fit B-Spline field using least-squares
         fmap_demean : bool
@@ -390,6 +402,14 @@ def init_single_subject_wf(
             **Temporary**: Always run SyN-based SDC
         eddy_config: str
             Path to a JSON file containing config options for eddy
+        b0_to_t1w_transform : "Rigid" or "Affine"
+            Use a rigid or full affine transform for b0-T1w registration
+        intramodal_template_iters: int
+            Number of iterations for finding the midpoint image from the b0 templates
+            from all groups. Has no effect if there is only one group. If 0, all b0
+            templates are directly registered to the t1w image.
+        intramodal_template_transform: str
+            Transformation used for building the intramodal template.
 
 
     Inputs
@@ -534,6 +554,17 @@ to workflows in *qsiprep*'s documentation]\
 
     summary.inputs.dwi_groupings = outputs_to_files
 
+    make_intramodal_template = False
+    if intramodal_template_iters > 0:
+        if len(outputs_to_files) < 2:
+            LOGGER.warning("Cannot make an intramodal with less than 2 groups.")
+        else:
+            make_intramodal_template = True
+
+    intramodal_template_wf = init_intramodal_template_wf(
+        inputs_list=sorted(outputs_to_files.keys()),
+        name="intramodal_template_wf")
+
     # create a processing pipeline for the dwis in each session
     for output_fname, dwi_info in outputs_to_files.items():
         dwi_preproc_wf = init_dwi_preproc_wf(
@@ -563,7 +594,6 @@ to workflows in *qsiprep*'s documentation]\
             use_syn=use_syn,
             force_syn=force_syn
         )
-
         workflow.connect([
             (
                 anat_preproc_wf,
@@ -589,8 +619,40 @@ to workflows in *qsiprep*'s documentation]\
                      'inputnode.t1_2_fsnative_forward_transform'),
                     ('outputnode.t1_2_fsnative_reverse_transform',
                      'inputnode.t1_2_fsnative_reverse_transform')
-                ]),
+                ])
         ])
+
+        if make_intramodal_template:
+            input_name = 'inputnode.{name}_b0_template'.format(name=output_fname)
+            output_name = 'inputnode.{name}_transform'.format(name=output_fname)
+
+            workflow.connect([
+                (anat_preproc_wf, intramodal_template_wf, [
+                    ('outputnode.t1_preproc', 'inputnode.t1_preproc'),
+                    ('outputnode.t1_brain', 'inputnode.t1_brain'),
+                    ('outputnode.t1_mask', 'inputnode.t1_mask'),
+                    ('outputnode.t1_seg', 'inputnode.t1_seg'),
+                    ('outputnode.t1_aseg', 'inputnode.t1_aseg'),
+                    ('outputnode.t1_aparc', 'inputnode.t1_aparc'),
+                    ('outputnode.t1_tpms', 'inputnode.t1_tpms'),
+                    ('outputnode.t1_2_mni_forward_transform',
+                     'inputnode.t1_2_mni_forward_transform'),
+                    ('outputnode.t1_2_mni_reverse_transform',
+                     'inputnode.t1_2_mni_reverse_transform'),
+                    ('outputnode.dwi_sampling_grid',
+                     'inputnode.dwi_sampling_grid'),
+                    # Undefined if --no-freesurfer, but this is safe
+                    ('outputnode.subjects_dir', 'inputnode.subjects_dir'),
+                    ('outputnode.subject_id', 'inputnode.subject_id'),
+                    ('outputnode.t1_2_fsnative_forward_transform',
+                     'inputnode.t1_2_fsnative_forward_transform'),
+                    ('outputnode.t1_2_fsnative_reverse_transform',
+                     'inputnode.t1_2_fsnative_reverse_transform')]),
+                (dwi_preproc_wf, intramodal_template_wf, [
+                    ('hmc_sdc_wf.b0_template', input_name)]),
+                (intramodal_template_wf, dwi_preproc_wf, [
+                    (output_name, 'side_input_node.intramodal_transform_file')])
+                ])
 
     return workflow
 

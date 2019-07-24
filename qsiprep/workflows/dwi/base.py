@@ -290,6 +290,9 @@ def init_dwi_preproc_wf(scan_groups,
             't1_2_fsnative_reverse_transform', 'dwi_sampling_grid'
         ]),
         name='inputnode')
+    intramodal_inputnode = pe.Node(
+        niu.IdentityInterface(fields=['intramodal_transform_file']),
+        name='intramodal_inputnode')
     outputnode = pe.Node(
         niu.IdentityInterface(fields=[
             'dwi_t1', 'dwi_mask_t1', 'cnr_map_t1', 'bvals_t1', 'bvecs_t1', 'local_bvecs_t1',
@@ -324,7 +327,7 @@ def init_dwi_preproc_wf(scan_groups,
             use_syn=use_syn,
             force_syn=force_syn,
             dwi_metadata=dwi_metadata,
-            name="hmc_wf")
+            name="hmc_sdc_wf")
 
     elif hmc_model == 'eddy':
         hmc_wf = init_fsl_hmc_wf(
@@ -337,7 +340,7 @@ def init_dwi_preproc_wf(scan_groups,
             fmap_bspline=fmap_bspline,
             fmap_demean=fmap_demean,
             dwi_metadata=dwi_metadata,
-            name="hmc_wf")
+            name="hmc_sdc_wf")
 
     workflow.connect([
         (pre_hmc_wf, hmc_wf, [
