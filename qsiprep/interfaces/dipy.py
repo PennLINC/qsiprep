@@ -241,6 +241,8 @@ class MAPMRIReconstruction(DipyReconInterface):
         dwi_img = nb.load(self.inputs.dwi_file)
         data = dwi_img.get_fdata(dtype=np.float32)
         mask_img, mask_array = self._get_mask(dwi_img, gtab)
+        weighting = "GCV" if self.inputs.laplacian_weighting == "GCV" else \
+            self.inputs.laplacian_weighting
 
         if self.inputs.laplacian_regularization and \
            self.inputs.positivity_constraint:
@@ -248,7 +250,7 @@ class MAPMRIReconstruction(DipyReconInterface):
                 gtab,
                 radial_order=self.inputs.radial_order,
                 laplacian_regularization=True,
-                laplacian_weighting=self.inputs.laplacian_weighting,
+                laplacian_weighting=weighting,
                 positivity_constraint=True,
                 bval_threshold=self.inputs.b0_threshold,
                 anisotropic_scaling=self.inputs.anisotropic_scaling)
@@ -267,7 +269,7 @@ class MAPMRIReconstruction(DipyReconInterface):
                 gtab,
                 radial_order=self.inputs.radial_order,
                 laplacian_regularization=True,
-                laplacian_weighting=self.inputs.laplacian_weighting,
+                laplacian_weighting=weighting,
                 bval_threshold=self.inputs.b0_threshold,
                 anisotropic_scaling=self.inputs.anisotropic_scaling)
 
