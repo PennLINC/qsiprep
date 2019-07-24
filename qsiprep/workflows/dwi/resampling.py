@@ -18,12 +18,13 @@ from ...interfaces.nilearn import Merge
 from ...interfaces.gradients import (ComposeTransforms, ExtractB0s, GradientRotation,
                                      LocalGradientRotation)
 from ...interfaces.itk import DisassembleTransform
-from .util import init_dwi_reference_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
-def init_dwi_trans_wf(template, mem_gb, omp_nthreads,
+def init_dwi_trans_wf(template,
+                      mem_gb,
+                      omp_nthreads,
                       name='dwi_trans_wf',
                       use_compression=True,
                       use_fieldwarp=False,
@@ -118,6 +119,7 @@ generating a *preprocessed DWI run in {tpl} space*.
     inputnode = pe.Node(
         niu.IdentityInterface(fields=[
             'itk_b0_to_t1',
+            'to_intramodal_template_transform',
             't1_2_mni_forward_transform',
             'name_source',
             'dwi_files',
@@ -159,6 +161,7 @@ generating a *preprocessed DWI run in {tpl} space*.
             ('output_grid', 'reference_image'),
             ('dwi_files', 'dwi_files'),
             ('hmc_xforms', 'hmc_affines'),
+            ('to_intramodal_template_transform', ''),
             (('itk_b0_to_t1', _first), 'unwarped_dwi_ref_to_t1w_affine'),
             ('fieldwarps', 'fieldwarps')])
     ])

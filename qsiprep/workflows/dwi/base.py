@@ -41,6 +41,8 @@ def init_dwi_preproc_wf(scan_groups,
                         b0_threshold,
                         motion_corr_to,
                         b0_to_t1w_transform,
+                        use_intramodal_template,
+                        intramodal_template_transform,
                         hmc_model,
                         hmc_transform,
                         shoreline_iters,
@@ -82,6 +84,7 @@ def init_dwi_preproc_wf(scan_groups,
                                  denoise_before_combining=True,
                                  motion_corr_to='iterative',
                                  b0_to_t1w_transform='Rigid',
+                                 use_intramodal_template=False,
                                  hmc_model='3dSHORE',
                                  hmc_transform='Affine',
                                  shoreline_iters=2,
@@ -483,8 +486,7 @@ def init_dwi_preproc_wf(scan_groups,
                                               omp_nthreads=omp_nthreads,
                                               use_compression=False,
                                               to_mni=False,
-                                              write_local_bvecs=write_local_bvecs
-                                              )
+                                              write_local_bvecs=write_local_bvecs)
         gtab_t1 = pe.Node(MRTrixGradientTable(), name='gtab_t1')
         workflow.connect([
             (pre_hmc_wf, transform_dwis_t1, [
@@ -500,8 +502,6 @@ def init_dwi_preproc_wf(scan_groups,
                 ('outputnode.dwi_files_to_transform', 'inputnode.dwi_files')]),
             (inputnode, transform_dwis_t1, [
                 ('dwi_sampling_grid', 'inputnode.output_grid')]),
-            (b0_coreg_wf, transform_dwis_t1, [
-                ('outputnode.itk_b0_to_t1', 'inputnode.itk_b0_to_t1')]),
             (transform_dwis_t1, outputnode, [('outputnode.bvals', 'bvals_t1'),
                                              ('outputnode.rotated_bvecs', 'bvecs_t1'),
                                              ('outputnode.dwi_resampled', 'dwi_t1'),
@@ -515,6 +515,15 @@ def init_dwi_preproc_wf(scan_groups,
                                           ('outputnode.rotated_bvecs', 'bvec_file')]),
             (gtab_t1, outputnode, [('gradient_file', 'gradient_table_t1')])
         ])
+        if use_intramodal_template:
+            workflow.connect([
+                (intramodal_inputnode, transform_dwis_t1, [
+                    ('intramodal_transform_file', 'inputnode.to_intramodal_template_transform'),
+                    ('intramodal_template_to_t1_transform', 'inputnode.itk_b0_to_t1')])])
+        else:
+            workflow.connect([
+                (b0_coreg_wf, transform_dwis_t1, [
+                    ('outputnode.itk_b0_to_t1', 'inputnode.itk_b0_to_t1')])])
 
     if "template" in output_spaces:
         transform_dwis_mni = init_dwi_trans_wf(name='transform_dwis_mni',
@@ -542,8 +551,6 @@ def init_dwi_preproc_wf(scan_groups,
             (inputnode, transform_dwis_mni, [
                 ('t1_2_mni_forward_transform', 'inputnode.t1_2_mni_forward_transform'),
                 ('dwi_sampling_grid', 'inputnode.output_grid')]),
-            (b0_coreg_wf, transform_dwis_mni, [
-                ('outputnode.itk_b0_to_t1', 'inputnode.itk_b0_to_t1')]),
             (transform_dwis_mni, outputnode, [('outputnode.bvals', 'bvals_mni'),
                                               ('outputnode.rotated_bvecs', 'bvecs_mni'),
                                               ('outputnode.dwi_resampled', 'dwi_mni'),
@@ -555,6 +562,15 @@ def init_dwi_preproc_wf(scan_groups,
                                             ('outputnode.rotated_bvecs', 'bvec_file')]),
             (gtab_mni, outputnode, [('gradient_file', 'gradient_table_mni')])
         ])
+        if use_intramodal_template:
+            workflow.connect([
+                (intramodal_inputnode, transform_dwis_mni, [
+                    ('intramodal_transform_file', 'inputnode.to_intramodal_template_transform'),
+                    ('intramodal_template_to_t1_transform', 'inputnode.itk_b0_to_t1')])])
+        else:
+            workflow.connect([
+                (b0_coreg_wf, transform_dwis_mni, [
+                    ('outputnode.itk_b0_to_t1', 'inputnode.itk_b0_to_t1')])])
         if "T1w" not in output_spaces:
             workflow.connect([(outputnode, gradient_plot, [('bvecs_mni', 'final_bvec_file')])])
 

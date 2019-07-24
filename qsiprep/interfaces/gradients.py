@@ -1,22 +1,22 @@
 
 """Handle merging and spliting of DSI files."""
-import numpy as np
 import os
+import logging
+from subprocess import Popen, PIPE
 import nibabel as nb
+import numpy as np
+import pandas as pd
 from nipype.interfaces.base import (BaseInterfaceInputSpec, TraitedSpec, File, SimpleInterface,
                                     InputMultiObject, OutputMultiObject, traits, isdefined)
 from nipype.interfaces import afni, ants
 from nipype.utils.filemanip import fname_presuffix
 from nipype.interfaces.ants.resampling import ApplyTransformsInputSpec
-from tempfile import TemporaryDirectory
-import logging
 from dipy.sims.voxel import all_tensor_evecs
 from dipy.reconst.dti import decompose_tensor
-from dipy.core.geometry import normalized_vector, decompose_matrix
-import pandas as pd
+from dipy.core.geometry import normalized_vector
 from sklearn.metrics.regression import r2_score
-from subprocess import Popen, PIPE
 
+from .itk import disassemble_transform
 
 LOGGER = logging.getLogger('nipype.interface')
 tensor_index = {
@@ -304,6 +304,28 @@ class ExtractB0s(SimpleInterface):
         return runtime
 
 
+class SplitIntramodalTransformInputSpec(BaseInterfaceInputSpec):
+    transform_file = File(exists=True)
+
+
+class SplitIntramodalTransformOutputSpec(TraitedSpec):
+    transform_files = OutputMultiObject(File(exists=True))
+
+
+class SplitIntramodalTransform(SimpleInterface):
+    input_spec = SplitIntramodalTransformInputSpec
+    output_spec = SplitIntramodalTransformOutputSpec
+
+    def _run_interface(self, runtime):
+        transform_file = self.inputs.transform_file
+        if not transform_file.endswith(".h5"):
+            self._results["transform_files"] = [transform_file]
+        # If it's an h5 file, split it into affine and warp
+        affine_part, warp_part = disassemble_transform(transform_file, runtime.cwd)
+        self._results["transform_files"] = [affine_part, warp_part]
+        return runtime
+
+
 class ComposeTransformsInputSpec(ApplyTransformsInputSpec):
     input_image = File(mandatory=False)
     dwi_files = InputMultiObject(
@@ -315,6 +337,10 @@ class ComposeTransformsInputSpec(ApplyTransformsInputSpec):
     fieldwarps = InputMultiObject(File(exists=True),
                                   mandtory=False,
                                   desc='SDC unwarping transform')
+    intramodal_transform_file = InputMultiObject(File(exists=True),
+                                                 mandtory=False,
+                                                 desc='composite or affine transform to '
+                                                      'intramodal template.')
     unwarped_dwi_ref_to_t1w_affine = File(exists=True,
                                           desc='affine from dwi ref to t1w')
     t1_2_mni_forward_transform = InputMultiObject(File(exists=True), mandatory=False,
@@ -359,12 +385,26 @@ class ComposeTransforms(SimpleInterface):
         fieldwarps = self.inputs.fieldwarps
         if isdefined(fieldwarps):
             fieldwarps = fieldwarps * num_dwis
+
+        # Handle transforms to intramodal transforms
+        intramodal_transforms = self.inputs.intramodal_transform_file
+        intramodal_affine = traits.undefined
+        intramodal_warp = traits.undefined
+        if isdefined(intramodal_transforms):
+            intramodal_affine = [intramodal_transforms[0]] * num_dwis
+            if len(intramodal_transforms) == 2:
+                intramodal_warp = [intramodal_transforms[1]] * num_dwis
+            elif len(intramodal_transforms) > 2:
+                raise Exception("Unsupported intramodal template transform")
+
         coreg_to_t1 = [self.inputs.unwarped_dwi_ref_to_t1w_affine] * num_dwis
 
         transform_order = [
             (hmc_affines, 'hmc'),
             (fieldwarps, 'fieldwarp'),
-            (coreg_to_t1, 'b0 to T1w'),
+            (intramodal_affine, 'to b=0 affine'),
+            (intramodal_warp, 'to b=0 warp'),
+            (coreg_to_t1, 'b=0 to T1w')
         ]
 
         for transform_list, transform_name in transform_order:
@@ -385,7 +425,7 @@ class ComposeTransforms(SimpleInterface):
                     xform_list in image_transforms])
 
         # If there is just a coreg transform, then we have everything
-        if image_transform_names == ['b0 to T1w']:
+        if image_transform_names == ['b=0 to T1w']:
             self._results['out_warps'] = image_transforms[0]
             self._results['out_affines'] = image_transforms[0]
             self._results['transform_lists'] = image_transforms

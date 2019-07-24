@@ -577,6 +577,8 @@ to workflows in *qsiprep*'s documentation]\
             denoise_before_combining=denoise_before_combining,
             motion_corr_to=motion_corr_to,
             b0_to_t1w_transform=b0_to_t1w_transform,
+            use_intramodal_template=make_intramodal_template,
+            intramodal_template_transform=intramodal_template_transform,
             write_local_bvecs=write_local_bvecs,
             hmc_model=hmc_model,
             hmc_transform=hmc_transform,
