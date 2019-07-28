@@ -16,7 +16,7 @@ from nipype.interfaces import afni, utility as niu, ants
 from ...engine import Workflow
 from ...interfaces.nilearn import Merge
 from ...interfaces.gradients import (ComposeTransforms, ExtractB0s, GradientRotation,
-                                     LocalGradientRotation)
+                                     LocalGradientRotation, SplitIntramodalTransform)
 from ...interfaces.itk import DisassembleTransform
 
 DEFAULT_MEMORY_MIN_GB = 0.01
@@ -153,15 +153,21 @@ generating a *preprocessed DWI run in {tpl} space*.
             return in_value
         return [in_value]
 
+    # Split the to-intramodal-template transform
+    disassemble_intramodal_xform = pe.Node(SplitIntramodalTransform(),
+                                           name="disassemble_intramodal_xform")
     # get composite warps and composed affines for warping and rotating
     compose_transforms = pe.Node(ComposeTransforms(), name='compose_transforms')
 
     workflow.connect([
+        (inputnode, disassemble_intramodal_xform, [
+            ('to_intramodal_template_transform', 'transform_file')]),
+        (disassemble_intramodal_xform, compose_transforms, [
+            ('transform_files', 'intramodal_transform_file')]),
         (inputnode, compose_transforms, [
             ('output_grid', 'reference_image'),
             ('dwi_files', 'dwi_files'),
             ('hmc_xforms', 'hmc_affines'),
-            ('to_intramodal_template_transform', ''),
             (('itk_b0_to_t1', _first), 'unwarped_dwi_ref_to_t1w_affine'),
             ('fieldwarps', 'fieldwarps')])
     ])

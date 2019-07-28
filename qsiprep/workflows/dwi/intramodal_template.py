@@ -27,8 +27,8 @@ def init_intramodal_template_wf(inputs_list, transform="Rigid", num_iterations=2
     **Parameters**
         inputs_list: list of inputs
             List if identifiers for the input b=0 images.
-        transform: 'Rigid' or 'Affine'
-            How many degrees of freedom to incorporate into motion correction
+        transform: 'Rigid', 'Affine', 'BSpline', 'SyN'
+
         num_iterations: int
             Default: 2.
 
@@ -43,19 +43,22 @@ def init_intramodal_template_wf(inputs_list, transform="Rigid", num_iterations=2
             transform files to the intramodal template
 
     """
+    input_names = [name + '_b0_template' for name in inputs_list]
+    output_names = [name + '_transform' for name in inputs_list]
 
     inputnode = pe.Node(
         niu.IdentityInterface(
-            fields=['dwi_files', 'b0_indices', 'bvecs', 'bvals', 'b0_images', 'original_files']),
+            fields=input_names + ['t1w_brain']),
         name='inputnode')
 
     outputnode = pe.Node(
         niu.IdentityInterface(
-            fields=["final_template", "forward_transforms", "noise_free_dwis",
-                    "cnr_image", "optimization_data"]),
+            fields=output_names + ["intramodal_template"]),
         name='outputnode')
 
     workflow = Workflow(name=name)
+    workflow.add_nodes([inputnode, outputnode])
+    """
     # Unbiased align the b0s
     b0_hmc_wf = init_b0_hmc_wf(align_to=hmc_align_to, transform=hmc_transform)
     # Tile the transforms so each non-b0 gets the transform from the nearest b0
@@ -69,7 +72,6 @@ def init_intramodal_template_wf(inputs_list, transform="Rigid", num_iterations=2
                                        ('b0_indices', 'b0_indices')]),
         (inputnode, b0_hmc_wf, [('b0_images', 'inputnode.b0_images')]),
         (b0_hmc_wf, outputnode, [('outputnode.final_template', 'final_template')]),
-        (b0_hmc_wf, match_transforms, [(('outputnode.forward_transforms', _list_squeeze),
                                         'transforms')]),
         (b0_hmc_wf, b0_template_mask, [('outputnode.final_template', 'inputnode.in_file')])
     ])
@@ -123,6 +125,7 @@ def init_intramodal_template_wf(inputs_list, transform="Rigid", num_iterations=2
 
     for ds in datasinks:
         workflow.get_node(ds).inputs.source_file = source_file
+    """
 
     return workflow
 

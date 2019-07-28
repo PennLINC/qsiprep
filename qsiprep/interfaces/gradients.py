@@ -318,11 +318,14 @@ class SplitIntramodalTransform(SimpleInterface):
 
     def _run_interface(self, runtime):
         transform_file = self.inputs.transform_file
-        if not transform_file.endswith(".h5"):
-            self._results["transform_files"] = [transform_file]
-        # If it's an h5 file, split it into affine and warp
-        affine_part, warp_part = disassemble_transform(transform_file, runtime.cwd)
-        self._results["transform_files"] = [affine_part, warp_part]
+        if isdefined(transform_file) and transform_file:
+            if not transform_file.endswith(".h5"):
+                self._results["transform_files"] = [transform_file]
+            # If it's an h5 file, split it into affine and warp
+            affine_part, warp_part = disassemble_transform(transform_file, runtime.cwd)
+            self._results["transform_files"] = [affine_part, warp_part]
+        else:
+            self._results["transform_files"] = traits.undefined
         return runtime
 
 
@@ -379,6 +382,7 @@ class ComposeTransforms(SimpleInterface):
         def include_transform(transform):
             if not isdefined(transform):
                 return False
+            LOGGER.info('Including %s' % transform)
             return len(transform) == num_dwis
 
         hmc_affines = self.inputs.hmc_affines
@@ -388,8 +392,8 @@ class ComposeTransforms(SimpleInterface):
 
         # Handle transforms to intramodal transforms
         intramodal_transforms = self.inputs.intramodal_transform_file
-        intramodal_affine = traits.undefined
-        intramodal_warp = traits.undefined
+        intramodal_affine = traits.Undefined
+        intramodal_warp = traits.Undefined
         if isdefined(intramodal_transforms):
             intramodal_affine = [intramodal_transforms[0]] * num_dwis
             if len(intramodal_transforms) == 2:
@@ -408,6 +412,7 @@ class ComposeTransforms(SimpleInterface):
         ]
 
         for transform_list, transform_name in transform_order:
+            LOGGER.info(transform_name)
             if include_transform(transform_list):
                 image_transforms.append(transform_list)
                 image_transform_names.append(transform_name)
@@ -453,6 +458,7 @@ class ComposeTransforms(SimpleInterface):
         for key in ['environ', 'ignore_exception', 'print_out_composite_warp_file',
                     'terminal_output', 'output_image', 'input_image', 'transforms',
                     'dwi_files', 'original_b0_indices', 'hmc_affines',
+                    'intramodal_transform_file',
                     'fieldwarps', 'unwarped_dwi_ref_to_t1w_affine', 'interpolation',
                     't1_2_mni_forward_transform', 'copy_dtype']:
             ifargs.pop(key, None)
