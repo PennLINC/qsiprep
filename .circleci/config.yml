@@ -191,7 +191,7 @@ jobs:
           name: Setting up test
           command: |
             mkdir -p /tmp/DSCSDSI/derivatives && sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSCSDSI/derivatives && sudo setfacl -m group:$(id -gn):rwx /tmp/DSCSDSI/derivatives
-            pip install future numpy
+            pip install future numpy==1.16.4
             pip install --upgrade /tmp/src/qsiprep/wrapper/
       - run:
           name: Load Docker image layer cache
@@ -285,7 +285,7 @@ jobs:
           name: Setting up test
           command: |
             mkdir -p /tmp/DSDTI/derivatives && sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSDTI/derivatives && sudo setfacl -m group:$(id -gn):rwx /tmp/DSDTI/derivatives
-            pip install future numpy
+            pip install future numpy==1.16.4
             pip install --upgrade /tmp/src/qsiprep/wrapper/
       - run:
           name: Load Docker image layer cache
