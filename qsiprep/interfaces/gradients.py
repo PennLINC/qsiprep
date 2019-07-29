@@ -325,7 +325,7 @@ class SplitIntramodalTransform(SimpleInterface):
             affine_part, warp_part = disassemble_transform(transform_file, runtime.cwd)
             self._results["transform_files"] = [affine_part, warp_part]
         else:
-            self._results["transform_files"] = traits.undefined
+            self._results["transform_files"] = traits.Undefined
         return runtime
 
 
