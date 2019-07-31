@@ -97,7 +97,7 @@ def init_intramodal_template_wf(inputs_list, transform="Rigid", num_iterations=2
                 (('outputnode.forward_transforms', _list_squeeze), 'inlist')])
         ])
     else:
-        nonlinear_alignment_wf = init_nonlinear_alignment_wf()
+        nonlinear_alignment_wf = init_nonlinear_alignment_wf(num_iters=num_iterations)
         workflow.connect([
             (merge_inputs, nonlinear_alignment_wf, [('out', 'inputnode.images')]),
             (nonlinear_alignment_wf, intramodal_template_mask, [
@@ -111,7 +111,7 @@ def init_intramodal_template_wf(inputs_list, transform="Rigid", num_iterations=2
     return workflow
 
 
-def nonlinear_alignment_iteration(iternum=0, gradient_step=0.15):
+def nonlinear_alignment_iteration(iternum=0, gradient_step=0.1):
     """
     Takes a template image and a set of input images, does
     a linear alignment to the template and updates it with the
@@ -189,10 +189,9 @@ def nonlinear_alignment_iteration(iternum=0, gradient_step=0.15):
         (warps_to_list, average_warps, [('out', 'images')]),
         (average_warps, scale_warp, [('output_average_image', 'first_input')]),
         (scale_warp, align_warp, [
-            ('output_product_image', 'input_image'),
-            ('output_product_image', 'reference_image')]),
+            ('output_product_image', 'input_image')]),
         (avg_affines, align_warp, [('affine_transform', 'transforms')]),
-
+        (inputnode, align_warp, [('template_image', 'reference_image')]),
         (avg_affines, shape_update_merge, [('affine_transform', 'in1')]),
         (align_warp, shape_update_merge, [
             ('output_image', 'in2'), ('output_image', 'in3'),
