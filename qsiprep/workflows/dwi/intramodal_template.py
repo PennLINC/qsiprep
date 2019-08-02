@@ -71,6 +71,19 @@ def init_intramodal_template_wf(inputs_list, transform="Rigid", num_iterations=2
     for output_num, output_name in enumerate(output_names):
         workflow.connect(split_outputs, 'out%d' % (output_num + 1), outputnode, output_name)
 
+    # N4 correct
+    n4_correct = pe.MapNode(
+        ants.N4BiasFieldCorrection(
+            dimension=3,
+            copy_header=True,
+            n_iterations=[50, 50, 40, 30],
+            shrink_factor=2,
+            convergence_threshold=0.00000001,
+            bspline_fitting_distance=200,
+            bspline_order=3),
+        name='n4_correct',
+        iterfield=['input_image'])
+
     # Should we add nonlinear iterations?
     do_nonlinear = transform not in ('Rigid', 'Affine')
 
@@ -78,6 +91,7 @@ def init_intramodal_template_wf(inputs_list, transform="Rigid", num_iterations=2
     initial_transform = 'Affine' if do_nonlinear else transform
     intramodal_b0_affine_template = init_b0_hmc_wf(
         align_to='iterative',
+        num_iters=2,
         transform=initial_transform,
         spatial_bias_correct=True,
         name='intramodal_b0_affine_template')
@@ -85,7 +99,9 @@ def init_intramodal_template_wf(inputs_list, transform="Rigid", num_iterations=2
     intramodal_template_mask = init_skullstrip_b0_wf(name="intramodal_template_mask")
 
     workflow.connect([
-        (merge_inputs, intramodal_b0_affine_template, [('out', 'inputnode.b0_images')]),
+        (merge_inputs, n4_correct, [('out', 'input_image')]),
+        (n4_correct, intramodal_b0_affine_template, [
+            ('output_image', 'inputnode.b0_images')]),
         (intramodal_template_mask, outputnode, [
             ('outputnode.mask_file', 'intramodal_template_mask')])
     ])
@@ -99,7 +115,7 @@ def init_intramodal_template_wf(inputs_list, transform="Rigid", num_iterations=2
     else:
         nonlinear_alignment_wf = init_nonlinear_alignment_wf(num_iters=num_iterations)
         workflow.connect([
-            (merge_inputs, nonlinear_alignment_wf, [('out', 'inputnode.images')]),
+            (n4_correct, nonlinear_alignment_wf, [('output_image', 'inputnode.images')]),
             (nonlinear_alignment_wf, intramodal_template_mask, [
                 ('outputnode.final_template', 'inputnode.in_file')]),
             (intramodal_b0_affine_template, nonlinear_alignment_wf, [
@@ -111,7 +127,7 @@ def init_intramodal_template_wf(inputs_list, transform="Rigid", num_iterations=2
     return workflow
 
 
-def nonlinear_alignment_iteration(iternum=0, gradient_step=0.1):
+def nonlinear_alignment_iteration(iternum=0, gradient_step=0.2):
     """
     Takes a template image and a set of input images, does
     a linear alignment to the template and updates it with the
@@ -132,12 +148,15 @@ def nonlinear_alignment_iteration(iternum=0, gradient_step=0.1):
     ants_settings = pkgrf("qsiprep", "data/intramodal_nonlinear.json")
     reg = ants.Registration(from_file=ants_settings)
     iter_reg = pe.MapNode(
-        reg, name="reg_%03d" % iternum, iterfield=["moving_image"])
+        reg, name="nlreg_%03d" % iternum, iterfield=["moving_image"])
 
     # Average the images
     averaged_images = pe.Node(
         ants.AverageImages(normalize=True, dimension=3),
         name="averaged_images")
+
+    # Make an automask
+    mask_average = pe.Node(afni.Automask(), name='mask_average')
 
     # Shape update to template:
     # Average the affines so that the inverse can be applied to the template
