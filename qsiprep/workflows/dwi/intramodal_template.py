@@ -11,8 +11,7 @@ from pkg_resources import resource_filename as pkgrf
 from nipype.interfaces import ants, afni, utility as niu
 from ...engine import Workflow
 from ...interfaces.gradients import MatchTransforms, GradientRotation, CombineMotions
-from ...interfaces.shoreline import (SignalPrediction, ExtractDWIsForModel, ReorderOutputs,
-                                     B0Mean, SHORELineReport, IterationSummary, CalculateCNR)
+from ...interfaces.ants import MultivariateTemplateConstruction2
 from ...interfaces import DerivativesDataSink
 from .util import init_skullstrip_b0_wf
 from .hmc import init_b0_hmc_wf
@@ -22,6 +21,76 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 
 def init_intramodal_template_wf(inputs_list, transform="Rigid", num_iterations=2, mem_gb=3,
                                 omp_nthreads=1, name="intramodal_template_wf"):
+    """Create an unbiased intramodal template for a subject. This aligns the b=0 references
+    from all the scans of a subject. Can be rigid, affine or nonlinear (BSplineSyN).
+
+    **Parameters**
+        inputs_list: list of inputs
+            List if identifiers for the input b=0 images.
+        transform: 'Rigid', 'Affine', 'BSplineSyN'
+            Which transform to ultimately use. If 'BSplineSyN', first 2 iterations of Affine will
+            be run.
+        num_iterations: int
+            Default: 2.
+
+    **Inputs**
+
+        [workflow_name]_image...
+            One input for each input image. There is no input called inputs_list
+        t1w_image
+
+    **Outputs**
+        [workflow_name]_transform
+            transform files to the intramodal template
+
+        intramodal_template_to_t1w_transform
+            Transform from the b0
+
+    """
+    workflow = Workflow(name=name)
+    input_names = [name + '_b0_template' for name in inputs_list]
+    output_names = [name + '_transform' for name in inputs_list]
+
+    inputnode = pe.Node(
+        niu.IdentityInterface(
+            fields=input_names + ['t1w_brain']),
+        name='inputnode')
+    merge_inputs = pe.Node(niu.Merge(len(input_names)), name='merge_inputs')
+    for input_num, input_name in enumerate(input_names):
+        workflow.connect(inputnode, input_name, merge_inputs, 'in%d' % (input_num + 1))
+
+    outputnode = pe.Node(
+        niu.IdentityInterface(
+            fields=output_names + ["intramodal_template",
+                                   "intramodal_template_mask",
+                                   "intramodal_template_to_t1w_transform"]),
+        name='outputnode')
+    split_outputs = pe.Node(niu.Split(splits=[1] * len(input_names), squeeze=True),
+                            name='split_outputs')
+    for output_num, output_name in enumerate(output_names):
+        workflow.connect(split_outputs, 'out%d' % (output_num + 1), outputnode, output_name)
+
+    ants_mvtc2 = pe.Node(MultivariateTemplateConstruction2(dimension=3), name='ants_mvtc2')
+    intramodal_template_mask = init_skullstrip_b0_wf(name="intramodal_template_mask")
+
+    def get_first(lll):
+        return lll[0]
+
+    workflow.connect([
+        (merge_inputs, ants_mvtc2, [('out', 'input_images')]),
+        (intramodal_template_mask, outputnode, [
+            ('outputnode.mask_file', 'intramodal_template_mask')]),
+        (ants_mvtc2, intramodal_template_mask, [
+            (('templates', get_first), 'inputnode.in_file')]),
+        (ants_mvtc2, split_outputs, [
+            (('forward_transforms', _list_squeeze), 'inlist')])
+    ])
+
+    return workflow
+
+
+def init_qsiprep_intramodal_template_wf(inputs_list, transform="Rigid", num_iterations=2,
+                                        mem_gb=3, omp_nthreads=1, name="intramodal_template_wf"):
     """Create an unbiased intramodal template for a subject. This aligns the b=0 references
     from all the scans of a subject. Can be rigid, affine or nonlinear (BSplineSyN).
 
