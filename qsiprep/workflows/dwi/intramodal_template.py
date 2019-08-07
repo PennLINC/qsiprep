@@ -15,8 +15,12 @@ from ...interfaces.ants import MultivariateTemplateConstruction2
 from ...interfaces import DerivativesDataSink
 from .util import init_skullstrip_b0_wf
 from .hmc import init_b0_hmc_wf
+from .registration import init_b0_to_anat_registration_wf
+
 
 DEFAULT_MEMORY_MIN_GB = 0.01
+
+
 
 
 def init_intramodal_template_wf(inputs_list, transform="Rigid", num_iterations=2, mem_gb=3,
@@ -48,12 +52,16 @@ def init_intramodal_template_wf(inputs_list, transform="Rigid", num_iterations=2
 
     """
     workflow = Workflow(name=name)
-    input_names = [name + '_b0_template' for name in inputs_list]
-    output_names = [name + '_transform' for name in inputs_list]
+    input_names = [name.replace('-', '_') + '_b0_template' for name in inputs_list]
+    output_names = [name.replace('-', '_') + '_transform' for name in inputs_list]
 
     inputnode = pe.Node(
         niu.IdentityInterface(
-            fields=input_names + ['t1w_brain']),
+            fields=input_names + [
+                't1_brain', 't1_preproc', 't1_mask', 't1_seg', 'subjects_dir', 'subject_id',
+                't1_aseg', 't1_aparc', 't1_tpms', 't1_2_mni_forward_transform',
+                'dwi_sampling_grid', 't1_2_fsnative_forward_transform',
+                't1_2_fsnative_reverse_transform', 't1_2_mni_reverse_transform']),
         name='inputnode')
     merge_inputs = pe.Node(niu.Merge(len(input_names)), name='merge_inputs')
     for input_num, input_name in enumerate(input_names):
@@ -86,11 +94,30 @@ def init_intramodal_template_wf(inputs_list, transform="Rigid", num_iterations=2
             (('forward_transforms', _list_squeeze), 'inlist')])
     ])
 
+    # calculate dwi registration to T1w
+    b0_coreg_wf = init_b0_to_anat_registration_wf(omp_nthreads=omp_nthreads,
+                                                  mem_gb=mem_gb,
+                                                  write_report=True)
+    workflow.connect([
+        (inputnode, b0_coreg_wf, [
+            ('t1_brain', 'inputnode.t1_brain'),
+            ('t1_seg', 'inputnode.t1_seg'),
+            ('subjects_dir', 'inputnode.subjects_dir'),
+            ('subject_id', 'inputnode.subject_id'),
+            ('t1_2_fsnative_reverse_transform',
+             'inputnode.t1_2_fsnative_reverse_transform')]),
+        (ants_mvtc2, b0_coreg_wf, [
+            (('templates', get_first), 'inputnode.ref_b0_brain')]),
+        (b0_coreg_wf, outputnode, [
+            ('outputnode.itk_b0_to_t1', 'intramodal_template_to_t1w_transform')])
+    ])
+
     return workflow
 
 
-def init_qsiprep_intramodal_template_wf(inputs_list, transform="Rigid", num_iterations=2,
-                                        mem_gb=3, omp_nthreads=1, name="intramodal_template_wf"):
+def init_qsiprep_intramodal_template_wf(
+    inputs_list, transform="Rigid", num_iterations=2,
+    mem_gb=3, omp_nthreads=1, name="intramodal_template_wf"):
     """Create an unbiased intramodal template for a subject. This aligns the b=0 references
     from all the scans of a subject. Can be rigid, affine or nonlinear (BSplineSyN).
 

@@ -32,6 +32,7 @@ from ..__about__ import __version__
 
 from .anatomical import init_anat_preproc_wf
 from .dwi.base import init_dwi_preproc_wf
+from .dwi.finalize import init_dwi_finalize_wf
 from .dwi.intramodal_template import init_intramodal_template_wf
 
 
@@ -565,6 +566,30 @@ to workflows in *qsiprep*'s documentation]\
         inputs_list=sorted(outputs_to_files.keys()),
         name="intramodal_template_wf")
 
+    if make_intramodal_template:
+        workflow.connect([
+            (anat_preproc_wf, intramodal_template_wf, [
+                ('outputnode.t1_preproc', 'inputnode.t1_preproc'),
+                ('outputnode.t1_brain', 'inputnode.t1_brain'),
+                ('outputnode.t1_mask', 'inputnode.t1_mask'),
+                ('outputnode.t1_seg', 'inputnode.t1_seg'),
+                ('outputnode.t1_aseg', 'inputnode.t1_aseg'),
+                ('outputnode.t1_aparc', 'inputnode.t1_aparc'),
+                ('outputnode.t1_tpms', 'inputnode.t1_tpms'),
+                ('outputnode.t1_2_mni_forward_transform',
+                 'inputnode.t1_2_mni_forward_transform'),
+                ('outputnode.t1_2_mni_reverse_transform',
+                 'inputnode.t1_2_mni_reverse_transform'),
+                ('outputnode.dwi_sampling_grid',
+                 'inputnode.dwi_sampling_grid'),
+                # Undefined if --no-freesurfer, but this is safe
+                ('outputnode.subjects_dir', 'inputnode.subjects_dir'),
+                ('outputnode.subject_id', 'inputnode.subject_id'),
+                ('outputnode.t1_2_fsnative_forward_transform',
+                 'inputnode.t1_2_fsnative_forward_transform'),
+                ('outputnode.t1_2_fsnative_reverse_transform',
+                 'inputnode.t1_2_fsnative_reverse_transform')])])
+
     # create a processing pipeline for the dwis in each session
     for output_fname, dwi_info in outputs_to_files.items():
         dwi_preproc_wf = init_dwi_preproc_wf(
@@ -596,6 +621,24 @@ to workflows in *qsiprep*'s documentation]\
             use_syn=use_syn,
             force_syn=force_syn
         )
+        dwi_finalize_wf = init_dwi_finalize_wf(
+            scan_groups=dwi_info,
+            name=dwi_preproc_wf.name.replace('dwi_preproc', 'dwi_finalize'),
+            output_prefix=output_fname,
+            layout=layout,
+            ignore=ignore,
+            hmc_model=hmc_model,
+            shoreline_iters=shoreline_iters,
+            write_local_bvecs=write_local_bvecs,
+            reportlets_dir=reportlets_dir,
+            output_spaces=output_spaces,
+            template=template,
+            output_dir=output_dir,
+            omp_nthreads=omp_nthreads,
+            use_syn=use_syn,
+            low_mem=low_mem
+        )
+
         workflow.connect([
             (
                 anat_preproc_wf,
@@ -621,15 +664,11 @@ to workflows in *qsiprep*'s documentation]\
                      'inputnode.t1_2_fsnative_forward_transform'),
                     ('outputnode.t1_2_fsnative_reverse_transform',
                      'inputnode.t1_2_fsnative_reverse_transform')
-                ])
-        ])
-
-        if make_intramodal_template:
-            input_name = 'inputnode.{name}_b0_template'.format(name=output_fname)
-            output_name = 'inputnode.{name}_transform'.format(name=output_fname)
-
-            workflow.connect([
-                (anat_preproc_wf, intramodal_template_wf, [
+                ]),
+            (
+                anat_preproc_wf,
+                dwi_finalize_wf,
+                [
                     ('outputnode.t1_preproc', 'inputnode.t1_preproc'),
                     ('outputnode.t1_brain', 'inputnode.t1_brain'),
                     ('outputnode.t1_mask', 'inputnode.t1_mask'),
@@ -649,12 +688,25 @@ to workflows in *qsiprep*'s documentation]\
                     ('outputnode.t1_2_fsnative_forward_transform',
                      'inputnode.t1_2_fsnative_forward_transform'),
                     ('outputnode.t1_2_fsnative_reverse_transform',
-                     'inputnode.t1_2_fsnative_reverse_transform')]),
-                (dwi_preproc_wf, intramodal_template_wf, [
-                    ('hmc_sdc_wf.b0_template', input_name)]),
-                (intramodal_template_wf, dwi_preproc_wf, [
-                    (output_name, 'side_input_node.intramodal_transform_file')])
+                     'inputnode.t1_2_fsnative_reverse_transform')
                 ])
+        ])
+
+        if make_intramodal_template:
+            input_name = 'inputnode.{name}_b0_template'.format(
+                name=output_fname.replace('-', '_'))
+            output_name = 'outputnode.{name}_transform'.format(
+                name=output_fname.replace('-', '_'))
+            workflow.connect([
+                (dwi_preproc_wf, intramodal_template_wf, [
+                    ('outputnode.b0_ref_image', input_name)]),
+                (intramodal_template_wf, dwi_finalize_wf, [
+                    (output_name, 'inputnode.intramodal_transform_file'),
+                    ('intramodal_template_to_t1w_transform', 'itk_b0_to_t1')])])
+        else:
+            workflow.connect([
+                (dwi_preproc_wf, dwi_finalize_wf, [
+                    ('outputnode.itk_b0_to_t1', 'itk_b0_to_t1')])])
 
     return workflow
 
