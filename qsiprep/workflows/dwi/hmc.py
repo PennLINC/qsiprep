@@ -109,7 +109,8 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file,
     # If we're just aligning based on the b=0 images, compute the b=0 tsnr as the cnr
     if hmc_model.lower() == "none":
         concat_b0s = pe.Node(afni.TCat(outputtype="NIFTI_GZ"), name="concat_b0s")
-        b0_tsnr = pe.Node(afni.TStat(options=' -cvarinvNOD '), name='b0_tsnr')
+        b0_tsnr = pe.Node(
+            afni.TStat(options=' -cvarinvNOD ', outputtype='NIFTI_GZ'), name='b0_tsnr')
         workflow.connect([
             (match_transforms, outputnode, [('transforms', 'forward_transforms')]),
             (b0_hmc_wf, concat_b0s, [('outputnode.aligned_images', 'in_files')]),
@@ -293,12 +294,13 @@ def init_b0_hmc_wf(align_to="iterative", transform="Rigid", spatial_bias_correct
             metric=metric,
             precision="coarse",
             iternum=0)
+
         alignment_wf.connect([
             (inputnode, reg_to_first, [
                 (('b0_images', first_image), 'inputnode.template_image'),
                 ('b0_images', 'inputnode.image_paths')]),
             (reg_to_first, outputnode, [
-                ('outputnode.updated_template', 'final_template'),
+                ('averaged_images.output_average_image', 'final_template'),
                 ('outputnode.affine_transforms', 'forward_transforms'),
                 ('outputnode.registered_image_paths', 'aligned_images')])
         ])

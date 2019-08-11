@@ -146,7 +146,6 @@ def init_enhance_and_skullstrip_dwi_wf(
       2. Run ANTs' ``N4BiasFieldCorrection`` on the input
          :abbr:`dwi (blood-oxygen level-dependant)` average, using the
          mask generated in 1) instead of the internal Otsu thresholding.
-      3. Apply Dipy's ``histeq`` to enhance the contrast of the data
 
     Step 1 can be skipped if the ``pre_mask`` argument is set to ``True`` and
     a tentative mask is passed in to the workflow throught the ``pre_mask``
@@ -205,16 +204,12 @@ def init_enhance_and_skullstrip_dwi_wf(
     n4_correct = pe.Node(ants.N4BiasFieldCorrection(dimension=3, copy_header=True),
                          name='n4_correct', n_procs=1)
 
-    hist_eq = pe.Node(HistEQ(), name='hist_eq')
-
     workflow.connect([
         (inputnode, initial_mask, [('in_file', 'in_file')]),
         (initial_mask, n4_correct, [('out_file', 'mask_image')]),
         (inputnode, n4_correct, [('in_file', 'input_image')]),
-        (n4_correct, hist_eq, [('output_image', 'in_file')]),
-        (initial_mask, hist_eq, [('out_file', 'mask_file')]),
-        (hist_eq, outputnode, [('out_file', 'bias_corrected_file'),
-                               ('out_file', 'skull_stripped_file')]),
+        (n4_correct, outputnode, [('output_image', 'bias_corrected_file'),
+                                  ('output_image', 'skull_stripped_file')]),
         (initial_mask, outputnode, [('out_file', 'mask_file')]),
     ])
 

@@ -64,6 +64,12 @@ def init_intramodal_template_wf(inputs_list, transform="Rigid", num_iterations=2
                 't1_2_fsnative_reverse_transform', 't1_2_mni_reverse_transform']),
         name='inputnode')
     merge_inputs = pe.Node(niu.Merge(len(input_names)), name='merge_inputs')
+    rename_inputs = pe.MapNode(
+        niu.Rename(keep_ext=True),
+        iterfield=['in_file', 'format_string'],
+        name='rename_inputs')
+    rename_inputs.inputs.format_string = input_names
+    rename_inputs.synchronize = True
     for input_num, input_name in enumerate(input_names):
         workflow.connect(inputnode, input_name, merge_inputs, 'in%d' % (input_num + 1))
 
@@ -71,27 +77,30 @@ def init_intramodal_template_wf(inputs_list, transform="Rigid", num_iterations=2
         niu.IdentityInterface(
             fields=output_names + ["intramodal_template",
                                    "intramodal_template_mask",
-                                   "intramodal_template_to_t1w_transform"]),
+                                   "intramodal_template_to_t1_affine",
+                                   "intramodal_template_to_t1_warp"]),
         name='outputnode')
     split_outputs = pe.Node(niu.Split(splits=[1] * len(input_names), squeeze=True),
                             name='split_outputs')
     for output_num, output_name in enumerate(output_names):
         workflow.connect(split_outputs, 'out%d' % (output_num + 1), outputnode, output_name)
 
-    ants_mvtc2 = pe.Node(MultivariateTemplateConstruction2(dimension=3), name='ants_mvtc2')
+    runtime_opts = {'num_cores': 1, 'parallel_control': 0}
+    if omp_nthreads > 1:
+        runtime_opts = {'num_cores': omp_nthreads, 'parallel_control': 2}
+    ants_mvtc2 = pe.Node(MultivariateTemplateConstruction2(dimension=3, **runtime_opts),
+                         name='ants_mvtc2')
     intramodal_template_mask = init_skullstrip_b0_wf(name="intramodal_template_mask")
 
-    def get_first(lll):
-        return lll[0]
-
     workflow.connect([
-        (merge_inputs, ants_mvtc2, [('out', 'input_images')]),
+        (merge_inputs, rename_inputs, [('out', 'in_file')]),
+        (rename_inputs, ants_mvtc2, [('out_file', 'input_images')]),
         (intramodal_template_mask, outputnode, [
             ('outputnode.mask_file', 'intramodal_template_mask')]),
         (ants_mvtc2, intramodal_template_mask, [
-            (('templates', get_first), 'inputnode.in_file')]),
+            ('templates', 'inputnode.in_file')]),
         (ants_mvtc2, split_outputs, [
-            (('forward_transforms', _list_squeeze), 'inlist')])
+            ('forward_transforms', 'inlist')])
     ])
 
     # calculate dwi registration to T1w
@@ -107,9 +116,9 @@ def init_intramodal_template_wf(inputs_list, transform="Rigid", num_iterations=2
             ('t1_2_fsnative_reverse_transform',
              'inputnode.t1_2_fsnative_reverse_transform')]),
         (ants_mvtc2, b0_coreg_wf, [
-            (('templates', get_first), 'inputnode.ref_b0_brain')]),
+            ('templates', 'inputnode.ref_b0_brain')]),
         (b0_coreg_wf, outputnode, [
-            ('outputnode.itk_b0_to_t1', 'intramodal_template_to_t1w_transform')])
+            ('outputnode.itk_b0_to_t1', 'intramodal_template_to_t1_affine')])
     ])
 
     return workflow

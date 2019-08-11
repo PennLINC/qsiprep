@@ -563,6 +563,9 @@ to workflows in *qsiprep*'s documentation]\
             make_intramodal_template = True
 
     intramodal_template_wf = init_intramodal_template_wf(
+        omp_nthreads=omp_nthreads,
+        num_iterations=intramodal_template_iters,
+        transform=intramodal_template_transform,
         inputs_list=sorted(outputs_to_files.keys()),
         name="intramodal_template_wf")
 
@@ -602,9 +605,6 @@ to workflows in *qsiprep*'s documentation]\
             denoise_before_combining=denoise_before_combining,
             motion_corr_to=motion_corr_to,
             b0_to_t1w_transform=b0_to_t1w_transform,
-            use_intramodal_template=make_intramodal_template,
-            intramodal_template_transform=intramodal_template_transform,
-            write_local_bvecs=write_local_bvecs,
             hmc_model=hmc_model,
             hmc_transform=hmc_transform,
             shoreline_iters=shoreline_iters,
@@ -689,7 +689,22 @@ to workflows in *qsiprep*'s documentation]\
                      'inputnode.t1_2_fsnative_forward_transform'),
                     ('outputnode.t1_2_fsnative_reverse_transform',
                      'inputnode.t1_2_fsnative_reverse_transform')
-                ])
+                ]),
+            (
+                dwi_preproc_wf,
+                dwi_finalize_wf,
+                [
+                    ('outputnode.dwi_files', 'inputnode.dwi_files'),
+                    ('outputnode.cnr_map', 'inputnode.cnr_map'),
+                    ('outputnode.bval_files', 'inputnode.bval_files'),
+                    ('outputnode.bvec_files', 'inputnode.bvec_files'),
+                    ('outputnode.b0_ref_image', 'inputnode.b0_ref_image'),
+                    ('outputnode.b0_indices', 'inputnode.b0_indices'),
+                    ('outputnode.dwi_mask', 'inputnode.dwi_mask'),
+                    ('outputnode.hmc_xforms', 'inputnode.hmc_xforms'),
+                    ('outputnode.fieldwarps', 'inputnode.fieldwarps'),
+                    ('outputnode.itk_b0_to_t1', 'inputnode.itk_b0_to_t1')
+                    ])
         ])
 
         if make_intramodal_template:
@@ -701,12 +716,12 @@ to workflows in *qsiprep*'s documentation]\
                 (dwi_preproc_wf, intramodal_template_wf, [
                     ('outputnode.b0_ref_image', input_name)]),
                 (intramodal_template_wf, dwi_finalize_wf, [
-                    (output_name, 'inputnode.intramodal_transform_file'),
-                    ('intramodal_template_to_t1w_transform', 'itk_b0_to_t1')])])
-        else:
-            workflow.connect([
-                (dwi_preproc_wf, dwi_finalize_wf, [
-                    ('outputnode.itk_b0_to_t1', 'itk_b0_to_t1')])])
+                    (output_name, 'inputnode.b0_to_intramodal_template_transforms'),
+                    ('outputnode.intramodal_template_to_t1_affine',
+                     'inputnode.intramodal_template_to_t1_affine'),
+                    ('outputnode.intramodal_template_to_t1_warp',
+                     'inputnode.intramodal_template_to_t1_warp')])
+            ])
 
     return workflow
 

@@ -46,8 +46,9 @@ class MultivariateTemplateConstruction2InputSpec(CommandLineInputSpec):
         '4 = PBS qsub, '
         '5 = SLURM',
         argstr='-c %d',
-        usedefault=True)
-    num_cores = traits.Int(default=1, usedefault=True, argstr='-j %d')
+        usedefault=True,
+        hash_files=False)
+    num_cores = traits.Int(default=1, usedefault=True, argstr='-j %d', hash_files=False)
     num_modalities = traits.Int(
         1, usedefault=True, desc='Number of modalities used '
         'to construct the template (default 1):  For example, '

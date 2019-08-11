@@ -45,6 +45,7 @@ def init_dwi_preproc_wf(scan_groups,
                         eddy_config,
                         reportlets_dir,
                         output_spaces,
+                        output_dir,
                         dwi_denoise_window,
                         denoise_before_combining,
                         template,
@@ -288,7 +289,6 @@ def init_dwi_preproc_wf(scan_groups,
     outputnode = pe.Node(
         niu.IdentityInterface(fields=[
             'confounds', 'hmc_optimization_data', 'itk_b0_to_t1',
-            'to_intramodal_template_transform', 't1_2_mni_forward_transform', 'name_source',
             'dwi_files', 'cnr_map', 'bval_files', 'bvec_files', 'b0_ref_image', 'b0_indices',
             'dwi_mask', 'hmc_xforms', 'fieldwarps', 'fieldmap_to_b0_transform', 'sbref_file',
             'original_files']),
@@ -354,9 +354,29 @@ def init_dwi_preproc_wf(scan_groups,
                                                   mem_gb=mem_gb['resampled'],
                                                   write_report=True)
 
-    # Make a fieldmap report
+    # Make a fieldmap report, save the transforms
     if fieldmap_type is not None:
         fmap_unwarp_report_wf = init_fmap_unwarp_report_wf()
+        ds_fieldmap_to_b0_affine = pe.Node(
+            DerivativesDataSink(
+                prefix=output_prefix,
+                source_file=source_file,
+                suffix='fmap_to_b0_affine',
+                base_directory=output_dir),
+            name='ds_fieldmap_to_b0_affine',
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB)
+
+        ds_fieldwarp = pe.Node(
+            DerivativesDataSink(
+                prefix=output_prefix,
+                source_file=source_file,
+                suffix='fmap_to_b0_',
+                base_directory=output_dir),
+            name='ds_fmap_to_b0_affine',
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB)
+
         workflow.connect([
             (inputnode, fmap_unwarp_report_wf, [
                 ('t1_seg', 'inputnode.in_seg')]),
@@ -364,7 +384,13 @@ def init_dwi_preproc_wf(scan_groups,
                 ('outputnode.pre_sdc_template', 'inputnode.in_pre'),
                 ('outputnode.b0_template', 'inputnode.in_post')]),
             (b0_coreg_wf, fmap_unwarp_report_wf, [
-                ('outputnode.itk_b0_to_t1', 'inputnode.in_xfm')])])
+                ('outputnode.itk_b0_to_t1', 'inputnode.in_xfm')]),
+            (hmc_wf, ds_fieldwarp, [
+                ('outputnode.to_dwi_ref_warps', 'in_file')]),
+            (hmc_wf, ds_fieldmap_to_b0_affine, [
+                ('outputnode.to_dwi_ref_affines', 'in_file')
+            ])
+        ])
 
     summary = pe.Node(
         DiffusionSummary(
@@ -396,6 +422,16 @@ def init_dwi_preproc_wf(scan_groups,
     confounds_wf = init_dwi_confs_wf(mem_gb=mem_gb['resampled'], metadata=[],
                                      impute_slice_threshold=impute_slice_threshold,
                                      name='confounds_wf')
+    ds_confounds = pe.Node(
+        DerivativesDataSink(
+            prefix=output_prefix,
+            source_file=source_file,
+            base_directory=output_dir, suffix='confounds'),
+        name="ds_confounds", run_without_submitting=True,
+        mem_gb=DEFAULT_MEMORY_MIN_GB)
+    workflow.connect([
+        (confounds_wf, ds_confounds, [('outputnode.confounds_file', 'in_file')]),
+    ])
 
     # Carpetplot and confounds plot
     conf_plot = pe.Node(DMRISummary(), name='conf_plot', mem_gb=mem_gb['resampled'])
@@ -411,7 +447,6 @@ def init_dwi_preproc_wf(scan_groups,
             ('outputnode.bval_files', 'inputnode.bval_files'),
             ('outputnode.bvec_files', 'inputnode.bvec_files'),
             ('outputnode.original_files', 'inputnode.original_files')]),
-        (confounds_wf, outputnode, [('outputnode.confounds_file', 'confounds')]),
         (hmc_wf, outputnode, [('outputnode.hmc_optimization_data', 'hmc_optimization_data')]),
         (hmc_wf, conf_plot, [
             ('outputnode.slice_quality', 'sliceqc_file'),
