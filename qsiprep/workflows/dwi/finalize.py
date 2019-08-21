@@ -14,7 +14,7 @@ from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
 
 from ...interfaces import DerivativesDataSink
-
+from ...niworkflows.interfaces.registration import SimpleBeforeAfterRPT
 from ...interfaces.reports import DiffusionSummary, GradientPlot
 from ...interfaces.confounds import DMRISummary
 from ...interfaces.mrtrix import MRTrixGradientTable
@@ -49,6 +49,7 @@ def init_dwi_finalize_wf(scan_groups,
                          write_local_bvecs,
                          low_mem,
                          use_syn,
+                         make_intramodal_template,
                          layout=None):
     """
     This workflow controls the resampling parts of the dwi preprocessing workflow.
@@ -130,6 +131,10 @@ def init_dwi_finalize_wf(scan_groups,
             subject space to T1w
         dwi_sampling_grid
             A NIfTI1 file with the grid spacing and FoV to resample the DWIs
+        b0_ref_image
+            A Nifti of the b0 reference that was used for hmc and sdc
+        intramodal_template
+            The intramodal template image created from all b0 ref images
 
     **Outputs**
 
@@ -206,6 +211,7 @@ def init_dwi_finalize_wf(scan_groups,
             'bval_files',
             'bvec_files',
             'b0_ref_image',
+            'intramodal_template',
             'b0_indices',
             'dwi_mask',
             'original_files',
@@ -233,6 +239,19 @@ def init_dwi_finalize_wf(scan_groups,
         DerivativesDataSink(suffix='sampling_scheme'),
         name='ds_report_gradients', run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB)
+
+    if make_intramodal_template:
+        b0_to_im_template = pe.Node(SimpleBeforeAfterRPT(), name='b0_to_im_template')
+        ds_report_intramodal = pe.Node(
+            DerivativesDataSink(suffix='to_intramodal'),
+            name='ds_report_intramodal', run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB)
+        workflow.connect([
+            (inputnode, b0_to_im_template, [
+                ('intramodal_template', 'after'),
+                ('b0_ref_image', 'before')]),
+            (b0_to_im_template, ds_report_intramodal, [('out_report', 'in_file')])
+        ])
 
     # CONNECT TO DERIVATIVES #####################
     dwi_derivatives_wf = init_dwi_derivatives_wf(

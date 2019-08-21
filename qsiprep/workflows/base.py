@@ -638,7 +638,8 @@ to workflows in *qsiprep*'s documentation]\
             output_dir=output_dir,
             omp_nthreads=omp_nthreads,
             use_syn=use_syn,
-            low_mem=low_mem
+            low_mem=low_mem,
+            make_intramodal_template=make_intramodal_template
         )
 
         workflow.connect([
@@ -722,7 +723,9 @@ to workflows in *qsiprep*'s documentation]\
                     ('outputnode.intramodal_template_to_t1_affine',
                      'inputnode.intramodal_template_to_t1_affine'),
                     ('outputnode.intramodal_template_to_t1_warp',
-                     'inputnode.intramodal_template_to_t1_warp')])
+                     'inputnode.intramodal_template_to_t1_warp'),
+                    ('outputnode.intramodal_template',
+                     'inputnode.intramodal_template')])
             ])
 
     return workflow

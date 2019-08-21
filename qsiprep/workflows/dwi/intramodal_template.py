@@ -101,7 +101,9 @@ def init_intramodal_template_wf(inputs_list, t1w_source_file, reportlets_dir, tr
         (ants_mvtc2, intramodal_template_mask, [
             ('templates', 'inputnode.in_file')]),
         (ants_mvtc2, split_outputs, [
-            ('forward_transforms', 'inlist')])
+            ('forward_transforms', 'inlist')]),
+        (ants_mvtc2, outputnode, [
+            ('templates', 'intramodal_template')])
     ])
 
     # calculate dwi registration to T1w
@@ -249,7 +251,7 @@ def nonlinear_alignment_iteration(iternum=0, gradient_step=0.2):
     Returns a workflow
 
     """
-    iteration_wf = pe.Workflow(name="nl_iterative_alignment_%03d" % iternum)
+    iteration_wf = Workflow(name="nl_iterative_alignment_%03d" % iternum)
     input_node_fields = ["image_paths", "template_image", "iteration_num"]
     inputnode = pe.Node(
         niu.IdentityInterface(fields=input_node_fields), name='inputnode')
@@ -344,7 +346,7 @@ def nonlinear_alignment_iteration(iternum=0, gradient_step=0.2):
 def init_nonlinear_alignment_wf(transform="BSplineSyN", metric="CC",
                                 num_iters=2, name="nonlinear_alignment_wf"):
     """Creates a workflow that does nonlinear template creation."""
-    workflow = pe.Workflow(name=name)
+    workflow = Workflow(name=name)
     inputnode = pe.Node(
         niu.IdentityInterface(fields=['images', 'initial_template']), name='inputnode')
     outputnode = pe.Node(

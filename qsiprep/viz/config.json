@@ -41,8 +41,14 @@
                 "title": "Surface reconstruction",
                 "description": "Surfaces (white and pial) reconstructed with FreeSurfer (<code>recon-all</code>) overlaid on the participant's T1w template.",
                 "imgtype": "svg"
+            },
+            {
+              "name": "anat_preproc/intramodal_template",
+              "file_pattern": "anat/.*coreg",
+              "title": "Intramodal B0 template to T1w registration",
+              "description": "The intramodal B0 template registered to the T1w image",
+              "imgtype": "svg"
             }
-
         ]
     },
     {
@@ -85,6 +91,13 @@
               "title": "SHORELine Convergence",
               "description": "Difference in motion estimates over SHORELine iterations. Values close to zero indicate good convergence.",
               "imgtype": "svg"
+            },
+            {
+              "name": "epi/intramodal_template",
+              "file_pattern": "dwi/.*to_intramodal\\.",
+              "title": "Registration to Intramodal Template",
+              "description": "b0 reference image warped to the across-scan/session b0 template",
+              "imgtype": "svg"              
             },
             {
               "name": "epi/shoreline_reg",
