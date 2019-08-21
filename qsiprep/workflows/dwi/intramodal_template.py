@@ -23,8 +23,9 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 
 
 
-def init_intramodal_template_wf(inputs_list, transform="Rigid", num_iterations=2, mem_gb=3,
-                                omp_nthreads=1, name="intramodal_template_wf"):
+def init_intramodal_template_wf(inputs_list, t1w_source_file, reportlets_dir, transform="Rigid",
+                                num_iterations=2, mem_gb=3, omp_nthreads=1,
+                                name="intramodal_template_wf"):
     """Create an unbiased intramodal template for a subject. This aligns the b=0 references
     from all the scans of a subject. Can be rigid, affine or nonlinear (BSplineSyN).
 
@@ -107,6 +108,7 @@ def init_intramodal_template_wf(inputs_list, transform="Rigid", num_iterations=2
     b0_coreg_wf = init_b0_to_anat_registration_wf(omp_nthreads=omp_nthreads,
                                                   mem_gb=mem_gb,
                                                   write_report=True)
+
     workflow.connect([
         (inputnode, b0_coreg_wf, [
             ('t1_brain', 'inputnode.t1_brain'),
@@ -120,6 +122,12 @@ def init_intramodal_template_wf(inputs_list, transform="Rigid", num_iterations=2
         (b0_coreg_wf, outputnode, [
             ('outputnode.itk_b0_to_t1', 'intramodal_template_to_t1_affine')])
     ])
+
+    # Fill-in datasinks of reportlets seen so far
+    for node in workflow.list_node_names():
+        if node.split('.')[-1].startswith('ds_report'):
+            workflow.get_node(node).inputs.base_directory = reportlets_dir
+            workflow.get_node(node).inputs.source_file = t1w_source_file
 
     return workflow
 

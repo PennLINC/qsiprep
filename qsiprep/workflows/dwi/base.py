@@ -290,8 +290,7 @@ def init_dwi_preproc_wf(scan_groups,
         niu.IdentityInterface(fields=[
             'confounds', 'hmc_optimization_data', 'itk_b0_to_t1',
             'dwi_files', 'cnr_map', 'bval_files', 'bvec_files', 'b0_ref_image', 'b0_indices',
-            'dwi_mask', 'hmc_xforms', 'fieldwarps', 'fieldmap_to_b0_transform', 'sbref_file',
-            'original_files']),
+            'dwi_mask', 'hmc_xforms', 'fieldwarps', 'sbref_file', 'original_files']),
         name='outputnode')
 
     pre_hmc_wf = init_dwi_pre_hmc_wf(scan_groups=scan_groups,
@@ -302,7 +301,7 @@ def init_dwi_preproc_wf(scan_groups,
                                      denoise_before_combining=denoise_before_combining,
                                      omp_nthreads=omp_nthreads)
 
-    if hmc_model in ('none', '3dSHORE', 'SH'):
+    if hmc_model in ('none', '3dSHORE'):
         if not hmc_model == 'none' and shoreline_iters < 1:
             raise Exception("--shoreline-iters must be > 0 when --hmc-model is " + hmc_model)
         hmc_wf = init_qsiprep_hmcsdc_wf(
@@ -357,25 +356,6 @@ def init_dwi_preproc_wf(scan_groups,
     # Make a fieldmap report, save the transforms
     if fieldmap_type is not None:
         fmap_unwarp_report_wf = init_fmap_unwarp_report_wf()
-        ds_fieldmap_to_b0_affine = pe.Node(
-            DerivativesDataSink(
-                prefix=output_prefix,
-                source_file=source_file,
-                suffix='fmap_to_b0_affine',
-                base_directory=output_dir),
-            name='ds_fieldmap_to_b0_affine',
-            run_without_submitting=True,
-            mem_gb=DEFAULT_MEMORY_MIN_GB)
-
-        ds_fieldwarp = pe.Node(
-            DerivativesDataSink(
-                prefix=output_prefix,
-                source_file=source_file,
-                suffix='fmap_to_b0_',
-                base_directory=output_dir),
-            name='ds_fmap_to_b0_affine',
-            run_without_submitting=True,
-            mem_gb=DEFAULT_MEMORY_MIN_GB)
 
         workflow.connect([
             (inputnode, fmap_unwarp_report_wf, [
@@ -384,12 +364,7 @@ def init_dwi_preproc_wf(scan_groups,
                 ('outputnode.pre_sdc_template', 'inputnode.in_pre'),
                 ('outputnode.b0_template', 'inputnode.in_post')]),
             (b0_coreg_wf, fmap_unwarp_report_wf, [
-                ('outputnode.itk_b0_to_t1', 'inputnode.in_xfm')]),
-            (hmc_wf, ds_fieldwarp, [
-                ('outputnode.to_dwi_ref_warps', 'in_file')]),
-            (hmc_wf, ds_fieldmap_to_b0_affine, [
-                ('outputnode.to_dwi_ref_affines', 'in_file')
-            ])
+                ('outputnode.itk_b0_to_t1', 'inputnode.in_xfm')])
         ])
 
     summary = pe.Node(

@@ -564,6 +564,8 @@ to workflows in *qsiprep*'s documentation]\
 
     intramodal_template_wf = init_intramodal_template_wf(
         omp_nthreads=omp_nthreads,
+        t1w_source_file=fix_multi_T1w_source_name(subject_data['t1w']),
+        reportlets_dir=reportlets_dir,
         num_iterations=intramodal_template_iters,
         transform=intramodal_template_transform,
         inputs_list=sorted(outputs_to_files.keys()),

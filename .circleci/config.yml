@@ -82,8 +82,8 @@ jobs:
     steps:
       - restore_cache:
           keys:
-            - data-v3-{{ epoch }}
-            - data-v3-
+            - data-v4-{{ epoch }}
+            - data-v4-
       - run:
           name: Get single scan from downsampled CS-DSI
           command: |
@@ -120,6 +120,16 @@ jobs:
               echo "Dataset DSDTI was cached"
             fi
       - run:
+          name: Get multisession CS-DSI
+          command: |
+            if [[ ! -d /tmp/data/twoses ]]; then
+              wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
+                -O twoses.tar.xz "https://upenn.box.com/shared/static/c949fjjhhen3ihgnzhkdw5jympm327pp.xz"
+              tar xvfJ twoses.tar.xz -C /tmp/data/
+            else
+              echo "Dataset twoses was cached"
+            fi
+      - run:
           name: Store FreeSurfer license file
           command: |
             mkdir -p /tmp/fslicense
@@ -143,7 +153,7 @@ jobs:
             - DSCSDSI_BUDS/nipype.cfg
             - DSDTI/nipype.cfg
       - save_cache:
-         key: data-v3-{{ epoch }}
+         key: data-v4-{{ epoch }}
          paths:
             - /tmp/data
 
