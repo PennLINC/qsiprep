@@ -231,7 +231,7 @@ def get_parser():
     g_coreg.add_argument(
         '--intramodal-template-iters', '--intramodal_template_iters',
         action='store',
-        default=2,
+        default=0,
         type=int,
         help='Number of iterations for finding the midpoint image '
         'from the b0 templates from all groups. Has no effect if there '
@@ -240,7 +240,7 @@ def get_parser():
     g_coreg.add_argument(
         '--intramodal-template-transform', '--intramodal_template_transform',
         default='Rigid',
-        choices=['Rigid', 'Affine', 'BSpline', 'SyN'],
+        choices=['Rigid', 'Affine', 'BSplineSyn', 'SyN'],
         action='store',
         help='Transformation used for building the intramodal template.')
 
@@ -263,7 +263,7 @@ def get_parser():
         '--hmc_model', '--hmc-model',
         action='store',
         default='3dSHORE',
-        choices=['none', '3dSHORE', 'eddy_ingress', 'eddy'],
+        choices=['none', '3dSHORE', 'eddy'],
         help='model used to generate target images for hmc. If "none" the '
         'non-b0 images will be warped using the same transform as their '
         'nearest b0 image. If "3dSHORE", SHORELine will be used. If '
