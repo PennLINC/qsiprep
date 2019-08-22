@@ -13,6 +13,7 @@ import os.path as op
 from nipype.pipeline import engine as pe
 from nipype.interfaces import afni, utility as niu, ants
 
+
 from ...engine import Workflow
 from ...interfaces.nilearn import Merge
 from ...interfaces.gradients import (ComposeTransforms, ExtractB0s, GradientRotation,
@@ -159,7 +160,10 @@ generating a *preprocessed DWI run in {tpl} space*.
     compose_transforms = pe.Node(ComposeTransforms(), name='compose_transforms')
 
     def _get_first(lll):
-        return lll[0]
+        from nipype.interfaces.base import isdefined
+        if isdefined(lll):
+            return lll[0]
+        return lll
 
     workflow.connect([
         (inputnode, compose_transforms, [

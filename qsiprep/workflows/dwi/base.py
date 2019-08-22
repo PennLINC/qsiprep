@@ -390,7 +390,9 @@ def init_dwi_preproc_wf(scan_groups,
              'inputnode.t1_2_fsnative_reverse_transform')]),
         (hmc_wf, b0_coreg_wf, [('outputnode.b0_template',
                                 'inputnode.ref_b0_brain')]),
-        (hmc_wf, summary, [('outputnode.sdc_method', 'distortion_correction')])
+        (hmc_wf, summary, [('outputnode.sdc_method', 'distortion_correction')]),
+        (b0_coreg_wf, outputnode, [
+            (('outputnode.itk_b0_to_t1', _get_first), 'itk_b0_to_t1')])
     ])
 
     # Compute and gather confounds
@@ -462,3 +464,6 @@ def init_dwi_preproc_wf(scan_groups,
             workflow.get_node(node).inputs.base_directory = reportlets_dir
             workflow.get_node(node).inputs.source_file = source_file
     return workflow
+
+def _get_first(lll):
+    return lll[0]
