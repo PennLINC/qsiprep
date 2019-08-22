@@ -138,7 +138,7 @@ jobs:
       - run:
           name: Create Nipype config files
           command: |
-            mkdir -p /tmp/DSCSDSI_BUDS /tmp/DSCSDSI /tmp/DSDTI
+            mkdir -p /tmp/DSCSDSI_BUDS /tmp/DSCSDSI /tmp/DSDTI /tmp/twoses
             printf "[execution]\nstop_on_first_crash = true\n" > /tmp/DSCSDSI/nipype.cfg
             echo "poll_sleep_duration = 0.01" >> /tmp/DSCSDSI/nipype.cfg
             echo "hash_method = content" >> /tmp/DSCSDSI/nipype.cfg
@@ -257,7 +257,6 @@ jobs:
                 --hmc_model 3dSHORE \
                 --hmc-transform Rigid \
                 --shoreline_iters 1 \
-                --stop-on-first-crash \
                 --force-spatial-normalization \
                 --output-resolution 5 \
                 --nthreads 2 -vv
