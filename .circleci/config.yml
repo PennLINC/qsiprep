@@ -406,6 +406,7 @@ jobs:
           name: Run full qsiprep with an intramodal template
           no_output_timeout: 2h
           command: |
+            mkdir -p /tmp/twoses/work /tmp/twoses/derivatives && \
             sudo setfacl -d -m group:$(id -gn):rwx /tmp/twoses/derivatives && \
                 sudo setfacl -m group:$(id -gn):rwx /tmp/twoses/derivatives
             sudo setfacl -d -m group:$(id -gn):rwx /tmp/twoses/work && \
