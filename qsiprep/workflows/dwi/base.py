@@ -71,29 +71,31 @@ def init_dwi_preproc_wf(scan_groups,
         wf = init_dwi_preproc_wf({'dwi_series': ['fake.nii'],
                                   'fieldmap_info': {'type': None},
                                   'dwi_series_pedir': 'j'},
-                                 omp_nthreads=1,
-                                 ignore=[],
-                                 b0_threshold=100,
-                                 reportlets_dir='.',
-                                 output_dir='.',
-                                 template='MNI152NLin2009cAsym',
-                                 output_spaces=['T1w', 'template'],
-                                 dwi_denoise_window=7,
-                                 denoise_before_combining=True,
-                                 motion_corr_to='iterative',
-                                 b0_to_t1w_transform='Rigid',
-                                 hmc_model='3dSHORE',
-                                 hmc_transform='Affine',
-                                 shoreline_iters=2,
-                                 impute_slice_threshold=0,
-                                 fmap_bspline=True,
-                                 fmap_demean=True,
-                                 use_syn=True,
-                                 force_syn=True,
-                                 low_mem=False,
-                                 output_prefix='',
-                                 write_local_bvecs=False,
-                                 num_dwi=1)
+                                  output_prefix='',
+                                  ignore=[],
+                                  b0_threshold=100,
+                                  motion_corr_to='iterative',
+                                  b0_to_t1w_transform='Rigid',
+                                  hmc_model='3dSHORE',
+                                  hmc_transform='Rigid',
+                                  shoreline_iters=2,
+                                  impute_slice_threshold=0,
+                                  eddy_config=None,
+                                  reportlets_dir='.',
+                                  output_spaces=['T1w', 'template'],
+                                  dwi_denoise_window=5,
+                                  denoise_before_combining=True,
+                                  template='MNI152NLin2009cAsym',
+                                  output_dir='.',
+                                  omp_nthreads=1,
+                                  write_local_bvecs=False,
+                                  fmap_bspline=False,
+                                  fmap_demean=True,
+                                  use_syn=True,
+                                  force_syn=False,
+                                  low_mem=False,
+                                  layout=None)
+
 
     **Parameters**
 
@@ -210,7 +212,6 @@ def init_dwi_preproc_wf(scan_groups,
             voxelwise bvecs accounting for local displacements
         gradient_table_t1
             MRTrix-style gradient table
-
         dwi_mni
             dwi series, resampled to template space
         dwi_mask_mni
@@ -223,7 +224,6 @@ def init_dwi_preproc_wf(scan_groups,
             voxelwise bvecs accounting for local displacements
         gradient_table_mni
             MRTrix-style gradient table
-
         confounds_file
             estimated motion parameters and zipper scores
 

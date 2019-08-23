@@ -15,10 +15,10 @@ jobs:
             apk add --no-cache pigz python3 tar
       - restore_cache:
           keys:
-            - docker-v4-{{ .Branch }}-{{ epoch }}
-            - docker-v4-{{ .Branch }}-
-            - docker-v4-master-
-            - docker-v4-
+            - docker-v5-{{ .Branch }}-{{ epoch }}
+            - docker-v5-{{ .Branch }}-
+            - docker-v5-master-
+            - docker-v5-
           paths:
             - /tmp/cache/docker.tar.gz
       - checkout
@@ -85,9 +85,9 @@ jobs:
             - src/qsiprep
 
       - save_cache:
-         key: docker-v4-{{ .Branch }}-{{ .Revision }}-{{ epoch }}
+         key: docker-v5-{{ .Branch }}-{{ .Revision }}-{{ epoch }}
          paths:
-            - /tmp/cache/docker.tar.gz
+           - /tmp/cache/docker.tar.gz
 
   get_data:
     machine:
@@ -183,7 +183,7 @@ jobs:
       - attach_workspace:
           at: /tmp
       - save_cache:
-         key: docker-v4-{{ .Branch }}-{{ epoch }}
+         key: docker-v5-{{ .Branch }}-{{ epoch }}
          paths:
             - /tmp/cache/docker.tar.gz
 
@@ -213,6 +213,9 @@ jobs:
             - DSCSDSI-anat-v1-{{ .Branch }}
             - DSCSDSI-anat-v1-master
             - DSCSDSI-anat-v1-
+      - restore_cache:
+          keys:
+            - docker-v5-{{ .Branch }}-{{ .Revision }}
       - run:
           name: Setting up test
           command: |
@@ -310,6 +313,9 @@ jobs:
             - DSDTI-anat-v1-{{ .Branch }}
             - DSDTI-anat-v1-master
             - DSDTI-anat-v1-
+      - restore_cache:
+          keys:
+            - docker-v5-{{ .Branch }}-{{ .Revision }}
       - run:
           name: Setting up test
           command: |
@@ -398,6 +404,9 @@ jobs:
             fi
       - attach_workspace:
           at: /tmp
+      - restore_cache:
+          keys:
+            - docker-v5-{{ .Branch }}-{{ .Revision }}
       - run:
           name: Setting up test
           command: |

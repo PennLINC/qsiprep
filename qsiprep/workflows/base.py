@@ -95,7 +95,7 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
                               force_syn=True)
 
 
-    Parameters
+    Parameters:
 
         subject_list : list
             List of subject labels
@@ -180,6 +180,7 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
             run, by default.
         force_syn : bool
             **Temporary**: Always run SyN-based SDC
+
     """
     qsiprep_wf = Workflow(name='qsiprep_wf')
     qsiprep_wf.base_dir = work_dir

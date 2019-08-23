@@ -4,7 +4,7 @@
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 """
 
-.. _sdc_direct_b0 :
+.. _sdc_direct_b0:
 
 Direct B0 mapping sequences
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
