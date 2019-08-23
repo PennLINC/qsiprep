@@ -67,7 +67,7 @@ jobs:
             THISVERSION=${CIRCLE_TAG:-$THISVERSION}
             DOCKERVERSION=$(docker run --rm -it pennbbl/qsiprep:latest --version)
             DOCKERVERSION=${DOCKERVERSION%$'\r'}
-            DOCKERVERSION=${DOCKERVERSION#*"fmriprep v"}
+            DOCKERVERSION=${DOCKERVERSION#*"qsiprep v"}
             echo "VERSION: \"$THISVERSION\""
             echo "DOCKERVERSION: \"${DOCKERVERSION}\""
             test "$DOCKERVERSION" = "$THISVERSION"
@@ -91,7 +91,7 @@ jobs:
 
   get_data:
     machine:
-      # Ubuntu 14.04 with Docker 17.10.0-ce
+      # Ubuntu 16.04, docker 18.09.3, docker-compose 1.23.1
       image: ubuntu-1604:201903-01
     working_directory: /home/circleci/data
     steps:
