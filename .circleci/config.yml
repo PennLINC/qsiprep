@@ -419,7 +419,7 @@ jobs:
                 --sloppy --mem_mb 4096 \
                 --output-space T1w \
                 --hmc_model none \
-                --b0_motion_corr_to first \
+                --b0-motion-corr-to first \
                 --output-resolution 5 \
                 --intramodal-template-transform BSplineSyN \
                 --intramodal-template-iters 2 \
