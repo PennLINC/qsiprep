@@ -240,7 +240,7 @@ def get_parser():
     g_coreg.add_argument(
         '--intramodal-template-transform', '--intramodal_template_transform',
         default='Rigid',
-        choices=['Rigid', 'Affine', 'BSplineSyn', 'SyN'],
+        choices=['Rigid', 'Affine', 'BSplineSyN', 'SyN'],
         action='store',
         help='Transformation used for building the intramodal template.')
 
