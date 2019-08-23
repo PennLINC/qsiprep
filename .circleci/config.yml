@@ -92,7 +92,7 @@ jobs:
   get_data:
     machine:
       # Ubuntu 14.04 with Docker 17.10.0-ce
-      image: circleci/classic:201711-01
+      image: ubuntu-1604:201903-01
     working_directory: /home/circleci/data
     steps:
       - restore_cache:
@@ -177,8 +177,7 @@ jobs:
 
   update_cache:
     machine:
-      # Ubuntu 14.04 with Docker 17.10.0-ce
-      image: circleci/classic:201711-01
+      image: ubuntu-1604:201903-01
     working_directory: /tmp/src/qsiprep
     steps:
       - attach_workspace:
@@ -191,7 +190,7 @@ jobs:
 
   DSCSDSI:
     machine:
-      image: circleci/classic:201711-01
+      image: ubuntu-1604:201903-01
     working_directory: /tmp/DSCSDSI
     environment:
       - FS_LICENSE: /tmp/fslicense/license.txt
@@ -288,7 +287,7 @@ jobs:
 
   DSDTI:
     machine:
-      image: circleci/classic:201711-01
+      image: ubuntu-1604:201903-01
     working_directory: /tmp/DSDTI
     environment:
       - FS_LICENSE: /tmp/fslicense/license.txt
@@ -382,7 +381,7 @@ jobs:
 
   IntramodalTemplate:
     machine:
-      image: circleci/classic:201711-01
+      image: ubuntu-1604:201903-01
     working_directory: /tmp/twoses
     environment:
       - FS_LICENSE: /tmp/fslicense/license.txt
