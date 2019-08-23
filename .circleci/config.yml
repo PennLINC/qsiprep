@@ -9,19 +9,19 @@ jobs:
       - image: docker:18.06.1-ce-git
     working_directory: /tmp/src/qsiprep
     steps:
+      - checkout
       - run:
           name: Install parallel gzip and python3
           command: |
             apk add --no-cache pigz python3 tar
       - restore_cache:
           keys:
-            - docker-v5-{{ .Branch }}-{{ epoch }}
+            - docker-v5-{{ .Branch }}-{{ .Revision }}
             - docker-v5-{{ .Branch }}-
             - docker-v5-master-
             - docker-v5-
           paths:
             - /tmp/cache/docker.tar.gz
-      - checkout
       - setup_remote_docker
       - run:
           name: Load Docker image layer cache
