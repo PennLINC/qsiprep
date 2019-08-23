@@ -169,13 +169,14 @@ def get_parser():
         type=int,
         default=100,
         help='any value in the .bval file less than this will be considered '
-        'a b=0 image. Setting this too high can result in inaccurate results.')
+        'a b=0 image. Current default threshold = 100; this threshold can be '
+        'lowered or increased. Note, setting this too high can result in inaccurate results.')
     g_conf.add_argument(
         '--dwi_denoise_window', '--dwi-denoise-window',
         action='store',
         type=int,
         default=5,
-        help='window size in voxels for ``dwidenoise``. Must be odd. '
+        help='window size in voxels for ``dwidenoise``. Must be odd (default: 5). '
              'If 0, ``dwidwenoise`` will not be run')
     g_conf.add_argument(
         '--denoise-before-combining', '--denoise_before_combining',
@@ -191,14 +192,15 @@ def get_parser():
         '--write-local-bvecs', '--write_local_bvecs',
         action='store_true',
         default=False,
-        help='write a series of voxelwise bvecs')
+        help='write a series of voxelwise bvecs, relevant if '
+        'writing preprocessed dwis to template space')
     g_conf.add_argument(
         '--output-space', '--output_space',
         action='store',
         choices=['T1w', 'template'],
         nargs='+',
         default=['T1w'],
-        help='volume and surface spaces to resample functional series into\n'
+        help='volume and surface spaces to resample dwis into\n'
         ' - T1w: subject anatomical volume\n'
         ' - template: normalization target specified by --template\n'
         'this argument can be single value or a space delimited list,\n'
@@ -217,8 +219,7 @@ def get_parser():
         type=float,
         help='the isotropic voxel size in mm the data will be resampled to '
         'after preprocessing. If set to a lower value than the original voxel '
-        'size, your data will be upsampled.'
-        )
+        'size, your data will be upsampled. This is a required argument.')
 
     g_coreg = parser.add_argument_group('Options for dwi-to-T1w coregistration')
     g_coreg.add_argument(
@@ -239,7 +240,7 @@ def get_parser():
         'to the t1w image.')
     g_coreg.add_argument(
         '--intramodal-template-transform', '--intramodal_template_transform',
-        default='Rigid',
+        default='BSplineSyN',
         choices=['Rigid', 'Affine', 'BSplineSyN', 'SyN'],
         action='store',
         help='Transformation used for building the intramodal template.')
@@ -252,13 +253,14 @@ def get_parser():
         default='iterative',
         choices=['iterative', 'first'],
         help='align to the "first" b0 volume or do an "iterative" registration'
-        ' of all b0 image to their midpoint image (default: iterative)')
+        ' of all b0 images to their midpoint image (default: iterative)')
     g_moco.add_argument(
         '--hmc-transform', '--hmc_transform',
         action='store',
         default='Affine',
         choices=['Affine', 'Rigid'],
-        help='transformation to be optimized during head motion correction')
+        help='transformation to be optimized during head motion correction '
+        '(default: affine)')
     g_moco.add_argument(
         '--hmc_model', '--hmc-model',
         action='store',
@@ -272,21 +274,22 @@ def get_parser():
     g_moco.add_argument(
         '--eddy-config', '--eddy_config',
         action='store',
-        help='path to a json file with settinge for the call to eddy.'
-    )
+        help='path to a json file with settings for the call to eddy. If no '
+        'json is specified, a default one will be used. The current default '
+        'json can be found here: https://github.com/PennBBL/qsiprep/blob/master/qsiprep/data/eddy_params.json')
     g_moco.add_argument(
         '--shoreline_iters', '--shoreline-iters',
         action='store',
         type=int,
         default=2,
-        help='number of SHORELine iterations')
+        help='number of SHORELine iterations. (default: 2)')
     g_moco.add_argument(
         '--impute-slice-threshold', '--impute_slice_threshold',
         action='store',
         default=0,
         type=float,
         help='impute data in slices that are this many SDs from expected. '
-        'If 0, no slices will be imputed')
+        'If 0 (default), no slices will be imputed')
 
     # ANTs options
     g_ants = parser.add_argument_group(
@@ -296,7 +299,7 @@ def get_parser():
         action='store',
         default='OASIS',
         choices=['OASIS', 'NKI'],
-        help='select ANTs skull-stripping template (default: OASIS))')
+        help='select ANTs skull-stripping template (default: OASIS)')
     g_ants.add_argument(
         '--skull-strip-fixed-seed', '--skull_strip_fixed_seed',
         action='store_true',
@@ -338,7 +341,7 @@ def get_parser():
         '--fmap-no-demean', '--fmap_no_demean',
         action='store_false',
         default=True,
-        help='do not remove median (within mask) from fieldmap')
+        help='do not remove median (within mask) from fieldmap (default: True)')
 
     # SyN-unwarp options
     g_syn = parser.add_argument_group(
@@ -347,7 +350,8 @@ def get_parser():
         '--use-syn-sdc', '--use_syn_sdc',
         action='store_true',
         default=False,
-        help='EXPERIMENTAL: Use fieldmap-free distortion correction')
+        help='EXPERIMENTAL: Use fieldmap-free distortion correction. To use '
+        'this option, "template" must be passed to --output-space')
     g_syn.add_argument(
         '--force-syn', '--force_syn',
         action='store_true',
