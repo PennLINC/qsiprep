@@ -1,0 +1,27 @@
+{
+    "dimension": 3,
+    "float": true,
+    "winsorize_lower_quantile": 0.002,
+    "winsorize_upper_quantile": 0.998,
+    "collapse_output_transforms": true,
+    "write_composite_transform": false,
+    "initial_moving_transform_com": 1,
+    "use_histogram_matching": [true, true, true],
+    "use_estimate_learning_rate_once": [ true, true, true ],
+    "transforms": [ "Rigid", "Affine", "BSplineSyN" ],
+    "number_of_iterations": [ [ 1000, 500, 250, 0 ], [ 1000, 500, 250, 0 ], [100, 100, 70, 20] ],
+    "output_warped_image": true,
+    "transform_parameters": [ [ 0.1 ], [ 0.1 ], [0.1, 26, 0, 3] ],
+    "convergence_threshold": [ 1e-6, 1e-6, 1e-9 ],
+    "convergence_window_size": [ 10, 10, 10 ],
+    "metric": [ "MI", "MI", "CC" ],
+    "sampling_percentage": [ 0.25, 0.25, null ],
+    "sampling_strategy": [ "Regular", "Regular", null ],
+    "shrink_factors": [ [ 6, 4, 2, 1 ], [ 6, 4, 2, 1 ], [6, 4, 2, 1] ],
+    "sigma_units": [ "vox", "vox", "vox" ],
+    "metric_weight": [ 1, 1, 1 ],
+    "smoothing_sigmas": [ [ 4, 2, 1, 0 ], [ 4, 2, 1, 0 ], [ 3, 2, 1, 0 ] ],
+    "radius_or_number_of_bins": [ 32, 32, 4 ],
+    "interpolation": "Linear"
+}
+

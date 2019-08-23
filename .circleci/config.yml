@@ -82,8 +82,8 @@ jobs:
     steps:
       - restore_cache:
           keys:
-            - data-v3-{{ epoch }}
-            - data-v3-
+            - data-v5-{{ epoch }}
+            - data-v5-
       - run:
           name: Get single scan from downsampled CS-DSI
           command: |
@@ -120,6 +120,16 @@ jobs:
               echo "Dataset DSDTI was cached"
             fi
       - run:
+          name: Get multisession CS-DSI
+          command: |
+            if [[ ! -d /tmp/data/twoses ]]; then
+              wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
+                -O twoses.tar.xz "https://upenn.box.com/shared/static/c949fjjhhen3ihgnzhkdw5jympm327pp.xz"
+              tar xvfJ twoses.tar.xz -C /tmp/data/
+            else
+              echo "Dataset twoses was cached"
+            fi
+      - run:
           name: Store FreeSurfer license file
           command: |
             mkdir -p /tmp/fslicense
@@ -128,12 +138,13 @@ jobs:
       - run:
           name: Create Nipype config files
           command: |
-            mkdir -p /tmp/DSCSDSI_BUDS /tmp/DSCSDSI /tmp/DSDTI
+            mkdir -p /tmp/DSCSDSI_BUDS /tmp/DSCSDSI /tmp/DSDTI /tmp/twoses
             printf "[execution]\nstop_on_first_crash = true\n" > /tmp/DSCSDSI/nipype.cfg
             echo "poll_sleep_duration = 0.01" >> /tmp/DSCSDSI/nipype.cfg
             echo "hash_method = content" >> /tmp/DSCSDSI/nipype.cfg
             cp /tmp/DSCSDSI/nipype.cfg /tmp/DSCSDSI_BUDS/nipype.cfg
             cp /tmp/DSCSDSI/nipype.cfg /tmp/DSDTI/nipype.cfg
+            cp /tmp/DSCSDSI/nipype.cfg /tmp/twoses/nipype.cfg
       - persist_to_workspace:
           root: /tmp
           paths:
@@ -142,8 +153,9 @@ jobs:
             - DSCSDSI/nipype.cfg
             - DSCSDSI_BUDS/nipype.cfg
             - DSDTI/nipype.cfg
+            - twoses/nipype.cfg
       - save_cache:
-         key: data-v3-{{ epoch }}
+         key: data-v5-{{ epoch }}
          paths:
             - /tmp/data
 
@@ -191,7 +203,7 @@ jobs:
           name: Setting up test
           command: |
             mkdir -p /tmp/DSCSDSI/derivatives && sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSCSDSI/derivatives && sudo setfacl -m group:$(id -gn):rwx /tmp/DSCSDSI/derivatives
-            pip install future numpy
+            pip install future numpy==1.16.4
             pip install --upgrade /tmp/src/qsiprep/wrapper/
       - run:
           name: Load Docker image layer cache
@@ -242,18 +254,21 @@ jobs:
                 --analysis-level participant \
                 --sloppy --write-graph --use-syn-sdc --mem_mb 4096 \
                 --output-space T1w \
+                --hmc_model 3dSHORE \
+                --hmc-transform Rigid \
+                --shoreline_iters 1 \
                 --force-spatial-normalization \
                 --output-resolution 5 \
                 --nthreads 2 -vv
-      #- run:
+      # - run:
       #    name: Move intermediate results for second run
       #    command: |
       #      mkdir -p /tmp/DSCSDSI/derivatives_partial
       #      sudo cp -a /tmp/DSCSDSI/work /tmp/DSCSDSI/work_partial
 
 
-      #- store_artifacts:
-      #    path: /tmp/DSCSDSI
+      - store_artifacts:
+         path: /tmp/DSCSDSI
 
 
   DSDTI:
@@ -285,7 +300,7 @@ jobs:
           name: Setting up test
           command: |
             mkdir -p /tmp/DSDTI/derivatives && sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSDTI/derivatives && sudo setfacl -m group:$(id -gn):rwx /tmp/DSDTI/derivatives
-            pip install future numpy
+            pip install future numpy==1.16.4
             pip install --upgrade /tmp/src/qsiprep/wrapper/
       - run:
           name: Load Docker image layer cache
@@ -350,6 +365,74 @@ jobs:
       - store_artifacts:
           path: /tmp/DSDTI
 
+  IntramodalTemplate:
+    machine:
+      image: circleci/classic:201711-01
+    working_directory: /tmp/twoses
+    environment:
+      - FS_LICENSE: /tmp/fslicense/license.txt
+    steps:
+      - checkout:
+          path: /home/circleci/src/qsiprep
+      - run:
+          name: Check whether build should be skipped
+          command: |
+            cd /home/circleci/src/qsiprep
+            if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?IntramodalTemplate\]' )" != "" ]]; then
+              echo "Skipping IntramodalTemplate build"
+              circleci step halt
+            fi
+      - attach_workspace:
+          at: /tmp
+      - run:
+          name: Setting up test
+          command: |
+            mkdir -p /tmp/twoses/derivatives && sudo setfacl -d -m group:$(id -gn):rwx /tmp/twoses/derivatives && sudo setfacl -m group:$(id -gn):rwx /tmp/twoses/derivatives
+            pip install future numpy==1.16.4
+            pip install --upgrade /tmp/src/qsiprep/wrapper/
+      - run:
+          name: Load Docker image layer cache
+          no_output_timeout: 30m
+          command: |
+            docker info
+            set +o pipefail
+            if [ -f /tmp/cache/docker.tar.gz ]; then
+              sudo apt update && sudo apt -y install pigz
+              pigz -d --stdout /tmp/cache/docker.tar.gz | docker load
+              docker images
+            fi
+
+      - run:
+          name: Run full qsiprep with an intramodal template
+          no_output_timeout: 2h
+          command: |
+            mkdir -p /tmp/twoses/work /tmp/twoses/derivatives && \
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/twoses/derivatives && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/twoses/derivatives
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/twoses/work && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/twoses/work && \
+            qsiprep-docker -i pennbbl/qsiprep:latest \
+                -e qsiprep_DEV 1 -u $(id -u) \
+                --config $PWD/nipype.cfg -w /tmp/twoses/work \
+                --bids-dir /tmp/data/twoses --output-dir /tmp/twoses/derivatives \
+                --analysis-level participant \
+                --sloppy --mem_mb 4096 \
+                --output-space T1w \
+                --hmc_model none \
+                --b0-motion-corr-to first \
+                --output-resolution 5 \
+                --intramodal-template-transform BSplineSyN \
+                --intramodal-template-iters 2 \
+                --nthreads 2 -vv
+      # - run:
+      #     name: Move intermediate results for second run
+      #     command: |
+      #       mkdir -p /tmp/DSDTI/derivatives_partial
+      #       sudo cp -a /tmp/DSDTI/work /tmp/DSDTI/work_partial
+
+      - store_artifacts:
+          path: /tmp/twoses
+
 workflows:
   version: 2
   build_test_deploy:
@@ -393,6 +476,18 @@ workflows:
               only: /.*/
 
       - DSDTI:
+          requires:
+            - get_data
+            - build
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - IntramodalTemplate:
           requires:
             - get_data
             - build

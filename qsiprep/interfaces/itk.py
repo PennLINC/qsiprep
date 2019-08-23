@@ -40,14 +40,7 @@ class DisassembleTransform(SimpleInterface):
     output_spec = DisassembleTransformOutputSpec
 
     def _run_interface(self, runtime):
-        cmd = ['CompositeTransformUtil', '--disassemble', self.inputs.in_file, 'disassemble']
-        affine_out = runtime.cwd + "/00_disassemble_AffineTransform.mat"
-        warp_out = runtime.cwd + "/01_disassemble_DisplacementFieldTransform.nii.gz"
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        LOGGER.info(" ".join(cmd))
-        out, err = proc.communicate()
-        if False in (op.exists(affine_out), op.exists(warp_out)):
-            raise Exception("unable to unpack composite transform")
+        affine_out, warp_out = disassemble_transform(self.inputs.in_file, runtime.cwd)
         self._results['out_transforms'] = [affine_out, warp_out]
         return runtime
 
@@ -217,6 +210,17 @@ def _arrange_xfms(transforms, num_files, tmp_folder):
 
     # Transpose back (only Python 3)
     return list(map(list, zip(*xfms_T)))
+
+def disassemble_transform(transform_file, cwd):
+    cmd = ['CompositeTransformUtil', '--disassemble', transform_file, 'disassemble']
+    affine_out = cwd + "/00_disassemble_AffineTransform.mat"
+    warp_out = cwd + "/01_disassemble_DisplacementFieldTransform.nii.gz"
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    LOGGER.info(" ".join(cmd))
+    out, err = proc.communicate()
+    if False in (op.exists(affine_out), op.exists(warp_out)):
+        raise Exception("unable to unpack composite transform")
+    return [affine_out, warp_out]
 
 
 def compose_affines(reference_image, affine_list, output_file):

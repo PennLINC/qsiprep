@@ -41,18 +41,6 @@ def init_dwi_derivatives_wf(output_prefix,
         ]),
         name='inputnode')
 
-    ds_confounds = pe.Node(
-        DerivativesDataSink(
-            prefix=output_prefix,
-            source_file=source_file,
-            base_directory=output_dir, suffix='confounds'),
-        name="ds_confounds", run_without_submitting=True,
-        mem_gb=DEFAULT_MEMORY_MIN_GB)
-    workflow.connect([
-        (inputnode, ds_confounds, [('confounds', 'in_file')])
-    ])
-
-
     if hmc_model == '3dSHORE' and shoreline_iters > 1:
         ds_optimization = pe.Node(
             DerivativesDataSink(

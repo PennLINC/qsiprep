@@ -1,22 +1,22 @@
 
 """Handle merging and spliting of DSI files."""
-import numpy as np
 import os
+import logging
+from subprocess import Popen, PIPE
 import nibabel as nb
+import numpy as np
+import pandas as pd
 from nipype.interfaces.base import (BaseInterfaceInputSpec, TraitedSpec, File, SimpleInterface,
                                     InputMultiObject, OutputMultiObject, traits, isdefined)
 from nipype.interfaces import afni, ants
 from nipype.utils.filemanip import fname_presuffix
 from nipype.interfaces.ants.resampling import ApplyTransformsInputSpec
-from tempfile import TemporaryDirectory
-import logging
 from dipy.sims.voxel import all_tensor_evecs
 from dipy.reconst.dti import decompose_tensor
-from dipy.core.geometry import normalized_vector, decompose_matrix
-import pandas as pd
+from dipy.core.geometry import normalized_vector
 from sklearn.metrics.regression import r2_score
-from subprocess import Popen, PIPE
 
+from .itk import disassemble_transform
 
 LOGGER = logging.getLogger('nipype.interface')
 tensor_index = {
@@ -304,6 +304,31 @@ class ExtractB0s(SimpleInterface):
         return runtime
 
 
+class SplitIntramodalTransformInputSpec(BaseInterfaceInputSpec):
+    transform_file = File(exists=True)
+
+
+class SplitIntramodalTransformOutputSpec(TraitedSpec):
+    transform_files = OutputMultiObject(File(exists=True))
+
+
+class SplitIntramodalTransform(SimpleInterface):
+    input_spec = SplitIntramodalTransformInputSpec
+    output_spec = SplitIntramodalTransformOutputSpec
+
+    def _run_interface(self, runtime):
+        transform_file = self.inputs.transform_file
+        if isdefined(transform_file) and transform_file:
+            if not transform_file.endswith(".h5"):
+                self._results["transform_files"] = [transform_file]
+            # If it's an h5 file, split it into affine and warp
+            affine_part, warp_part = disassemble_transform(transform_file, runtime.cwd)
+            self._results["transform_files"] = [affine_part, warp_part]
+        else:
+            self._results["transform_files"] = traits.Undefined
+        return runtime
+
+
 class ComposeTransformsInputSpec(ApplyTransformsInputSpec):
     input_image = File(mandatory=False)
     dwi_files = InputMultiObject(
@@ -315,8 +340,15 @@ class ComposeTransformsInputSpec(ApplyTransformsInputSpec):
     fieldwarps = InputMultiObject(File(exists=True),
                                   mandtory=False,
                                   desc='SDC unwarping transform')
-    unwarped_dwi_ref_to_t1w_affine = File(exists=True,
-                                          desc='affine from dwi ref to t1w')
+    b0_to_intramodal_template_transforms = InputMultiObject(
+        File(exists=True), mandtory=False, desc='list of transforms to register the b=0 to '
+        'the intramodal template.')
+    intramodal_template_to_t1_affine = File(exists=True,
+                                            desc='affine from the intramodal template to t1')
+    intramodal_template_to_t1_warp = File(exists=True,
+                                          desc='warp from the intramodal template to t1')
+    hmcsdc_dwi_ref_to_t1w_affine = File(exists=True,
+                                        desc='affine from dwi ref to t1w')
     t1_2_mni_forward_transform = InputMultiObject(File(exists=True), mandatory=False,
                                                   desc='composite (h5) transform to mni')
     save_cmd = traits.Bool(True, usedefault=True,
@@ -353,21 +385,56 @@ class ComposeTransforms(SimpleInterface):
         def include_transform(transform):
             if not isdefined(transform):
                 return False
+            LOGGER.info('Including %s', transform)
             return len(transform) == num_dwis
 
         hmc_affines = self.inputs.hmc_affines
         fieldwarps = self.inputs.fieldwarps
         if isdefined(fieldwarps):
             fieldwarps = fieldwarps * num_dwis
-        coreg_to_t1 = [self.inputs.unwarped_dwi_ref_to_t1w_affine] * num_dwis
+
+        # The affine transform to the t1 can come from hmcsdc or the intramodal template
+        coreg_to_t1 = traits.Undefined
+        if isdefined(self.inputs.intramodal_template_to_t1_affine):
+            if isdefined(self.inputs.hmcsdc_dwi_ref_to_t1w_affine):
+                LOGGER.warning('Two b0 to t1 transforms are provided: using intramodal')
+            coreg_to_t1 = self.inputs.intramodal_template_to_t1_affine
+        else:
+            coreg_to_t1 = self.inputs.hmcsdc_dwi_ref_to_t1w_affine
+        if isdefined(coreg_to_t1):
+            coreg_to_t1 = [coreg_to_t1] * num_dwis
+
+        # Handle transforms to intramodal transforms
+        intramodal_transforms = self.inputs.b0_to_intramodal_template_transforms
+        intramodal_affine = traits.Undefined
+        intramodal_warp = traits.Undefined
+        if isdefined(intramodal_transforms):
+            intramodal_affine = [intramodal_transforms[0]] * num_dwis
+            if len(intramodal_transforms) == 2:
+                intramodal_warp = [intramodal_transforms[1]] * num_dwis
+            elif len(intramodal_transforms) > 2:
+                raise Exception("Unsupported intramodal template transform")
+
+        # If an intramodal template to t1 affine is present, copy for each dwi
+        intramodal_template_to_t1_affine = self.inputs.intramodal_template_to_t1_affine
+        if isdefined(intramodal_template_to_t1_affine):
+            intramodal_template_to_t1_affine = [intramodal_template_to_t1_affine] * num_dwis
+
+        # If an intramodal template to t1 warp is present, copy for each dwi
+        intramodal_template_to_t1_warp = self.inputs.intramodal_template_to_t1_warp
+        if isdefined(intramodal_template_to_t1_warp):
+            intramodal_template_to_t1_affine = [intramodal_template_to_t1_warp] * num_dwis
 
         transform_order = [
             (hmc_affines, 'hmc'),
             (fieldwarps, 'fieldwarp'),
-            (coreg_to_t1, 'b0 to T1w'),
+            (intramodal_affine, 'to b=0 affine'),
+            (intramodal_warp, 'to b=0 warp'),
+            (coreg_to_t1, 'b=0 to T1w'),
         ]
 
         for transform_list, transform_name in transform_order:
+            LOGGER.info(transform_name)
             if include_transform(transform_list):
                 image_transforms.append(transform_list)
                 image_transform_names.append(transform_name)
@@ -385,7 +452,7 @@ class ComposeTransforms(SimpleInterface):
                     xform_list in image_transforms])
 
         # If there is just a coreg transform, then we have everything
-        if image_transform_names == ['b0 to T1w']:
+        if image_transform_names == ['b=0 to T1w']:
             self._results['out_warps'] = image_transforms[0]
             self._results['out_affines'] = image_transforms[0]
             self._results['transform_lists'] = image_transforms
@@ -413,7 +480,9 @@ class ComposeTransforms(SimpleInterface):
         for key in ['environ', 'ignore_exception', 'print_out_composite_warp_file',
                     'terminal_output', 'output_image', 'input_image', 'transforms',
                     'dwi_files', 'original_b0_indices', 'hmc_affines',
-                    'fieldwarps', 'unwarped_dwi_ref_to_t1w_affine', 'interpolation',
+                    'b0_to_intramodal_template_transforms',
+                    'intramodal_template_to_t1_affine', 'intramodal_template_to_t1_warp',
+                    'fieldwarps', 'hmcsdc_dwi_ref_to_t1w_affine', 'interpolation',
                     't1_2_mni_forward_transform', 'copy_dtype']:
             ifargs.pop(key, None)
 
