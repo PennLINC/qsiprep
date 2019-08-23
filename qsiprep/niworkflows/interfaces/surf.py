@@ -100,34 +100,6 @@ class GiftiNameSource(SimpleInterface):
     matches "l" or "r".
     These groups must correspond to named format elements in the template.
 
-    .. testsetup::
-
-    >>> open('lh.pial.gii', 'w').close()
-    >>> open('rh.fsaverage.gii', 'w').close()
-
-    .. doctest::
-
-    >>> surf_namer = GiftiNameSource()
-    >>> surf_namer.inputs.pattern = r'(?P<LR>[lr])h.(?P<surf>\w+).gii'
-    >>> surf_namer.inputs.template = r'{surf}.{LR}.surf'
-    >>> surf_namer.inputs.in_file = 'lh.pial.gii'
-    >>> res = surf_namer.run()
-    >>> res.outputs.out_name
-    'pial.L.surf'
-
-    >>> func_namer = GiftiNameSource()
-    >>> func_namer.inputs.pattern = r'(?P<LR>[lr])h.(?P<space>\w+).gii'
-    >>> func_namer.inputs.template = r'space-{space}.{LR}.func'
-    >>> func_namer.inputs.in_file = 'rh.fsaverage.gii'
-    >>> res = func_namer.run()
-    >>> res.outputs.out_name
-    'space-fsaverage.R.func'
-
-    .. testcleanup::
-
-    >>> import os
-    >>> os.unlink('lh.pial.gii')
-    >>> os.unlink('rh.fsaverage.gii')
 
     .. _GIFTI Standard: https://www.nitrc.org/frs/download.php/2871/GIFTI_Surface_Format.pdf
     """

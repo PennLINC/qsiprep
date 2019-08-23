@@ -44,21 +44,6 @@ class BIDSInfo(SimpleInterface):
     This interface uses only the basename, not the path, to determine the
     subject, session, task, run, acquisition or reconstruction.
 
-    >>> from niworkflows.utils.bids import collect_data
-    >>> bids_info = BIDSInfo()
-    >>> bids_info.inputs.in_file = collect_data(str(datadir / 'ds114'), '01')[0]['bold'][0]
-    >>> bids_info.inputs.in_file  # doctest: +ELLIPSIS
-    '.../ds114/sub-01/ses-retest/func/sub-01_ses-retest_task-covertverbgeneration_bold.nii.gz'
-    >>> res = bids_info.run()
-    >>> res.outputs
-    <BLANKLINE>
-    acq_id = <undefined>
-    rec_id = <undefined>
-    run_id = <undefined>
-    session_id = ses-retest
-    subject_id = sub-01
-    task_id = task-covertverbgeneration
-    <BLANKLINE>
 
     """
     input_spec = BIDSInfoInputSpec
@@ -92,14 +77,6 @@ class BIDSDataGrabber(SimpleInterface):
     """
     Collect files from a BIDS directory structure
 
-    >>> from niworkflows.utils.bids import collect_data
-    >>> bids_src = BIDSDataGrabber(anat_only=False)
-    >>> bids_src.inputs.subject_data = collect_data(str(datadir / 'ds114'), '01')[0]
-    >>> bids_src.inputs.subject_id = 'ds114'
-    >>> res = bids_src.run()
-    >>> res.outputs.t1w  # doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
-    ['.../ds114/sub-01/ses-retest/anat/sub-01_ses-retest_T1w.nii.gz',
-     '.../ds114/sub-01/ses-test/anat/sub-01_ses-test_T1w.nii.gz']
 
     """
     input_spec = BIDSDataGrabberInputSpec
@@ -161,34 +138,6 @@ class DerivativesDataSink(SimpleInterface):
     Saves the `in_file` into a BIDS-Derivatives folder provided
     by `base_directory`, given the input reference `source_file`.
 
-    >>> from pathlib import Path
-    >>> import tempfile
-    >>> from qsiprep.niworkflows.utils.bids import collect_data
-    >>> tmpdir = Path(tempfile.mkdtemp())
-    >>> tmpfile = tmpdir / 'a_temp_file.nii.gz'
-    >>> tmpfile.open('w').close()  # "touch" the file
-    >>> dsink = DerivativesDataSink(base_directory=str(tmpdir))
-    >>> dsink.inputs.in_file = str(tmpfile)
-    >>> dsink.inputs.source_file = collect_data(str(datadir / 'ds114'), '01')[0]['t1w'][0]
-    >>> dsink.inputs.keep_dtype = True
-    >>> dsink.inputs.suffix = 'target-mni'
-    >>> res = dsink.run()
-    >>> res.outputs.out_file  # doctest: +ELLIPSIS
-    '.../niworkflows/sub-01/ses-retest/anat/sub-01_ses-retest_target-mni_T1w.nii.gz'
-
-    >>> bids_dir = tmpdir / 'bidsroot' / 'sub-02' / 'ses-noanat' / 'func'
-    >>> bids_dir.mkdir(parents=True, exist_ok=True)
-    >>> tricky_source = bids_dir / 'sub-02_ses-noanat_task-rest_run-01_bold.nii.gz'
-    >>> tricky_source.open('w').close()
-    >>> dsink = DerivativesDataSink(base_directory=str(tmpdir))
-    >>> dsink.inputs.in_file = str(tmpfile)
-    >>> dsink.inputs.source_file = str(tricky_source)
-    >>> dsink.inputs.keep_dtype = True
-    >>> dsink.inputs.desc = 'preproc'
-    >>> res = dsink.run()
-    >>> res.outputs.out_file  # doctest: +ELLIPSIS
-    '.../niworkflows/sub-02/ses-noanat/func/sub-02_ses-noanat_task-rest_run-01_\
-desc-preproc_bold.nii.gz'
 
     """
     input_spec = DerivativesDataSinkInputSpec
