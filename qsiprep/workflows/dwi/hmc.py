@@ -109,7 +109,8 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file,
     # If we're just aligning based on the b=0 images, compute the b=0 tsnr as the cnr
     if hmc_model.lower() == "none":
         concat_b0s = pe.Node(afni.TCat(outputtype="NIFTI_GZ"), name="concat_b0s")
-        b0_tsnr = pe.Node(afni.TStat(options=' -cvarinvNOD '), name='b0_tsnr')
+        b0_tsnr = pe.Node(
+            afni.TStat(options=' -cvarinvNOD ', outputtype='NIFTI_GZ'), name='b0_tsnr')
         workflow.connect([
             (match_transforms, outputnode, [('transforms', 'forward_transforms')]),
             (b0_hmc_wf, concat_b0s, [('outputnode.aligned_images', 'in_files')]),
