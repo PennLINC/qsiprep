@@ -1,13 +1,12 @@
 #!/usr/bin/env python
 """
-The qsiprep on Docker wrapper
+Using qsiprep within a singularity container (qsiprep-<version>.simg)
 
 
-This is a lightweight Python wrapper to run qsiprep.
-Docker must be installed and running. This can be checked
-running ::
+To run qsiprep with singularity, a singularity image must be built (see Installation).
+This is the preferred method for HPCs. For example ::
 
-  docker info
+  singularity run --cleanenv -B /data/:/home/$user/data qsiprep-<version>.simg 
 
 Please report any feedback to our GitHub repository
 (https://github.com/pennbbl/qsiprep) and do not
@@ -39,9 +38,8 @@ that is robust to differences in scan acquisition protocols and that requires \
 minimal user input, while providing easily interpretable and comprehensive \
 error and output reporting."""
 __longdesc__ = """\
-This package is a basic wrapper for qsiprep that generates the appropriate
-Docker commands, providing an intuitive interface to running the qsiprep
-workflow in a Docker environment."""
+This package provides an intuitive interface for running the qsiprep
+workflow with a singularity image."""
 
 DOWNLOAD_URL = (
     'https://pypi.python.org/packages/source/{name[0]}/{name}/{name}-{ver}.tar.gz'.format(

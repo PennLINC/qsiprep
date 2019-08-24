@@ -131,12 +131,12 @@ def get_parser():
         help='attempt to reduce memory usage (will increase disk usage '
         'in working directory)')
     g_perfm.add_argument(
-        '--use-plugin',
+        '--use-plugin', '--use_plugin',
         action='store',
         default=None,
         help='nipype plugin configuration file')
     g_perfm.add_argument(
-        '--anat-only',
+        '--anat-only', '--anat_only',
         action='store_true',
         help='run anatomical workflows only')
     g_perfm.add_argument(
@@ -169,13 +169,14 @@ def get_parser():
         type=int,
         default=100,
         help='any value in the .bval file less than this will be considered '
-        'a b=0 image. Setting this too high can result in inaccurate results.')
+        'a b=0 image. Current default threshold = 100; this threshold can be '
+        'lowered or increased. Note, setting this too high can result in inaccurate results.')
     g_conf.add_argument(
         '--dwi_denoise_window', '--dwi-denoise-window',
         action='store',
         type=int,
         default=5,
-        help='window size in voxels for ``dwidenoise``. Must be odd. '
+        help='window size in voxels for ``dwidenoise``. Must be odd (default: 5). '
              'If 0, ``dwidwenoise`` will not be run')
     g_conf.add_argument(
         '--denoise-before-combining', '--denoise_before_combining',
@@ -188,17 +189,18 @@ def get_parser():
         help='combine dwis from across multiple runs for motion correction '
         'and reconstruction.')
     g_conf.add_argument(
-        '--write-local-bvecs',
+        '--write-local-bvecs', '--write_local_bvecs',
         action='store_true',
         default=False,
-        help='write a series of voxelwise bvecs')
+        help='write a series of voxelwise bvecs, relevant if '
+        'writing preprocessed dwis to template space')
     g_conf.add_argument(
         '--output-space', '--output_space',
         action='store',
         choices=['T1w', 'template'],
         nargs='+',
         default=['T1w'],
-        help='volume and surface spaces to resample functional series into\n'
+        help='volume and surface spaces to resample dwis into\n'
         ' - T1w: subject anatomical volume\n'
         ' - template: normalization target specified by --template\n'
         'this argument can be single value or a space delimited list,\n'
@@ -217,8 +219,31 @@ def get_parser():
         type=float,
         help='the isotropic voxel size in mm the data will be resampled to '
         'after preprocessing. If set to a lower value than the original voxel '
-        'size, your data will be upsampled.'
-        )
+        'size, your data will be upsampled. This is a required argument.')
+
+    g_coreg = parser.add_argument_group('Options for dwi-to-T1w coregistration')
+    g_coreg.add_argument(
+        '--b0-to-t1w-transform', '--b0_to_t1w_transform',
+        action='store',
+        default="Rigid",
+        choices=["Rigid", "Affine"],
+        help='Degrees of freedom when registering b0 to T1w images. '
+        '6 degrees (rotation and translation) are used by default.')
+    g_coreg.add_argument(
+        '--intramodal-template-iters', '--intramodal_template_iters',
+        action='store',
+        default=0,
+        type=int,
+        help='Number of iterations for finding the midpoint image '
+        'from the b0 templates from all groups. Has no effect if there '
+        'is only one group. If 0, all b0 templates are directly registered '
+        'to the t1w image.')
+    g_coreg.add_argument(
+        '--intramodal-template-transform', '--intramodal_template_transform',
+        default='BSplineSyN',
+        choices=['Rigid', 'Affine', 'BSplineSyN', 'SyN'],
+        action='store',
+        help='Transformation used for building the intramodal template.')
 
     g_coreg = parser.add_argument_group('Options for dwi-to-T1w coregistration')
     g_coreg.add_argument(
@@ -247,23 +272,24 @@ def get_parser():
     g_moco = parser.add_argument_group(
         'Specific options for motion correction and coregistration')
     g_moco.add_argument(
-        '--b0-motion-corr-to',
+        '--b0-motion-corr-to', '--bo_motion_corr_to',
         action='store',
         default='iterative',
         choices=['iterative', 'first'],
         help='align to the "first" b0 volume or do an "iterative" registration'
-        ' of all b0 image to their midpoint image (default: iterative)')
+        ' of all b0 images to their midpoint image (default: iterative)')
     g_moco.add_argument(
-        '--hmc-transform',
+        '--hmc-transform', '--hmc_transform',
         action='store',
         default='Affine',
         choices=['Affine', 'Rigid'],
-        help='transformation to be optimized during head motion correction')
+        help='transformation to be optimized during head motion correction '
+        '(default: affine)')
     g_moco.add_argument(
         '--hmc_model', '--hmc-model',
         action='store',
         default='3dSHORE',
-        choices=['none', '3dSHORE', 'eddy_ingress', 'eddy'],
+        choices=['none', '3dSHORE', 'eddy'],
         help='model used to generate target images for hmc. If "none" the '
         'non-b0 images will be warped using the same transform as their '
         'nearest b0 image. If "3dSHORE", SHORELine will be used. If '
@@ -272,33 +298,34 @@ def get_parser():
     g_moco.add_argument(
         '--eddy-config', '--eddy_config',
         action='store',
-        help='path to a json file with settinge for the call to eddy.'
-    )
+        help='path to a json file with settings for the call to eddy. If no '
+        'json is specified, a default one will be used. The current default '
+        'json can be found here: https://github.com/PennBBL/qsiprep/blob/master/qsiprep/data/eddy_params.json')
     g_moco.add_argument(
         '--shoreline_iters', '--shoreline-iters',
         action='store',
         type=int,
         default=2,
-        help='number of SHORELine iterations')
+        help='number of SHORELine iterations. (default: 2)')
     g_moco.add_argument(
-        '--impute-slice-threshold',
+        '--impute-slice-threshold', '--impute_slice_threshold',
         action='store',
         default=0,
         type=float,
         help='impute data in slices that are this many SDs from expected. '
-        'If 0, no slices will be imputed')
+        'If 0 (default), no slices will be imputed')
 
     # ANTs options
     g_ants = parser.add_argument_group(
         'Specific options for ANTs registrations')
     g_ants.add_argument(
-        '--skull-strip-template',
+        '--skull-strip-template', '--skull_strip_template',
         action='store',
         default='OASIS',
         choices=['OASIS', 'NKI'],
-        help='select ANTs skull-stripping template (default: OASIS))')
+        help='select ANTs skull-stripping template (default: OASIS)')
     g_ants.add_argument(
-        '--skull-strip-fixed-seed',
+        '--skull-strip-fixed-seed', '--skull_strip_fixed_seed',
         action='store_true',
         help='do not use a random seed for skull-stripping - will ensure '
         'run-to-run replicability when used with --omp-nthreads 1')
@@ -313,43 +340,44 @@ def get_parser():
     # FreeSurfer options
     g_fs = parser.add_argument_group('Specific options for FreeSurfer preprocessing')
     g_fs.add_argument(
-        '--fs-license-file', metavar='PATH', type=os.path.abspath,
+        '--fs-license-file', '--fs_license_file', metavar='PATH', type=os.path.abspath,
         help='Path to FreeSurfer license key file. Get it (for free) by registering '
         'at https://surfer.nmr.mgh.harvard.edu/registration.html')
     g_fs.add_argument(
-        '--do-reconall', action='store_true',
+        '--do-reconall', '--do_reconall', action='store_true',
         help='Run the FreeSurfer recon-all pipeline')
 
     # Fieldmap options
     g_fmap = parser.add_argument_group(
         'Specific options for handling fieldmaps')
     g_fmap.add_argument(
-        '--prefer_dedicated_fmaps',
+        '--prefer_dedicated_fmaps', '--prefer-dedicated-fmaps',
         action='store_true',
         default=False,
         help='forces unwarping to use files from the fmap directory instead '
         'of using an RPEdir scan from the same session.')
     g_fmap.add_argument(
-        '--fmap-bspline',
+        '--fmap-bspline', '--fmap_bspline',
         action='store_true',
         default=False,
         help='fit a B-Spline field using least-squares (experimental)')
     g_fmap.add_argument(
-        '--fmap-no-demean',
+        '--fmap-no-demean', '--fmap_no_demean',
         action='store_false',
         default=True,
-        help='do not remove median (within mask) from fieldmap')
+        help='do not remove median (within mask) from fieldmap (default: True)')
 
     # SyN-unwarp options
     g_syn = parser.add_argument_group(
         'Specific options for SyN distortion correction')
     g_syn.add_argument(
-        '--use-syn-sdc',
+        '--use-syn-sdc', '--use_syn_sdc',
         action='store_true',
         default=False,
-        help='EXPERIMENTAL: Use fieldmap-free distortion correction')
+        help='EXPERIMENTAL: Use fieldmap-free distortion correction. To use '
+        'this option, "template" must be passed to --output-space')
     g_syn.add_argument(
-        '--force-syn',
+        '--force-syn', '--force_syn',
         action='store_true',
         default=False,
         help='EXPERIMENTAL/TEMPORARY: Use SyN correction in addition to '
@@ -358,35 +386,35 @@ def get_parser():
     g_other = parser.add_argument_group('Other options')
     g_other.add_argument(
         '-w',
-        '--work-dir',
+        '--work-dir', '--work_dir',
         action='store',
         help='path where intermediate results should be stored')
     g_other.add_argument(
-        '--resource-monitor',
+        '--resource-monitor', '--resource_monitor',
         action='store_true',
         default=False,
         help='enable Nipype\'s resource monitoring to keep track of memory '
         'and CPU usage')
     g_other.add_argument(
-        '--reports-only',
+        '--reports-only', '--reports_only',
         action='store_true',
         default=False,
         help='only generate reports, don\'t run workflows. This will only '
         'rerun report aggregation, not reportlet generation for specific '
         'nodes.')
     g_other.add_argument(
-        '--run-uuid',
+        '--run-uuid', '--run_uuid',
         action='store',
         default=None,
         help='Specify UUID of previous run, to include error logs in report. '
         'No effect without --reports-only.')
     g_other.add_argument(
-        '--write-graph',
+        '--write-graph', '--write_graph',
         action='store_true',
         default=False,
         help='Write workflow graph.')
     g_other.add_argument(
-        '--stop-on-first-crash',
+        '--stop-on-first-crash', '--stop_on_first_crash',
         action='store_true',
         default=False,
         help='Force stopping on first crash, even if a work directory'
@@ -758,6 +786,8 @@ def build_qsiprep_workflow(opts, retval):
         shoreline_iters=opts.shoreline_iters,
         impute_slice_threshold=opts.impute_slice_threshold,
         b0_to_t1w_transform=opts.b0_to_t1w_transform,
+        intramodal_template_iters=opts.intramodal_template_iters,
+        intramodal_template_transform=opts.intramodal_template_transform,
         prefer_dedicated_fmaps=opts.prefer_dedicated_fmaps,
         fmap_bspline=opts.fmap_bspline,
         fmap_demean=opts.fmap_no_demean,

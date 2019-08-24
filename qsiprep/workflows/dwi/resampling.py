@@ -13,17 +13,19 @@ import os.path as op
 from nipype.pipeline import engine as pe
 from nipype.interfaces import afni, utility as niu, ants
 
+
 from ...engine import Workflow
 from ...interfaces.nilearn import Merge
 from ...interfaces.gradients import (ComposeTransforms, ExtractB0s, GradientRotation,
-                                     LocalGradientRotation)
+                                     LocalGradientRotation, SplitIntramodalTransform)
 from ...interfaces.itk import DisassembleTransform
-from .util import init_dwi_reference_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
-def init_dwi_trans_wf(template, mem_gb, omp_nthreads,
+def init_dwi_trans_wf(template,
+                      mem_gb,
+                      omp_nthreads,
                       name='dwi_trans_wf',
                       use_compression=True,
                       use_fieldwarp=False,
@@ -118,6 +120,9 @@ generating a *preprocessed DWI run in {tpl} space*.
     inputnode = pe.Node(
         niu.IdentityInterface(fields=[
             'itk_b0_to_t1',
+            'b0_to_intramodal_template_transforms',
+            'intramodal_template_to_t1_warp',
+            'intramodal_template_to_t1_affine',
             't1_2_mni_forward_transform',
             'name_source',
             'dwi_files',
@@ -154,19 +159,30 @@ generating a *preprocessed DWI run in {tpl} space*.
     # get composite warps and composed affines for warping and rotating
     compose_transforms = pe.Node(ComposeTransforms(), name='compose_transforms')
 
+    def _get_first(lll):
+        from nipype.interfaces.base import isdefined
+        if isdefined(lll):
+            return lll[0]
+        return lll
+
     workflow.connect([
         (inputnode, compose_transforms, [
             ('output_grid', 'reference_image'),
             ('dwi_files', 'dwi_files'),
             ('hmc_xforms', 'hmc_affines'),
-            (('itk_b0_to_t1', _first), 'unwarped_dwi_ref_to_t1w_affine'),
-            ('fieldwarps', 'fieldwarps')])
+            ('itk_b0_to_t1', 'hmcsdc_dwi_ref_to_t1w_affine'),
+            ('fieldwarps', 'fieldwarps'),
+            ('b0_to_intramodal_template_transforms', 'b0_to_intramodal_template_transforms'),
+            (('intramodal_template_to_t1_affine', _get_first), 'intramodal_template_to_t1_affine'),
+            ('intramodal_template_to_t1_warp', 'intramodal_template_to_t1_warp'),
+            ])
     ])
 
     # Rotate the bvecs
     rotate_gradients = pe.Node(GradientRotation(), name='rotate_gradients')
 
     # Transform the mask to the output space
+
     mask_tfm = pe.Node(
         ants.ApplyTransforms(interpolation='MultiLabel', float=True),
         name='mask_tfm',
@@ -195,11 +211,14 @@ generating a *preprocessed DWI run in {tpl} space*.
             (mask_merge_tfms, mask_tfm, [('out', 'transforms')]),
             (mask_merge_tfms, cnr_tfm, [('out', 'transforms')])
         ])
-    else:
-        workflow.connect([
-            (inputnode, mask_tfm, [(('itk_b0_to_t1', _aslist), 'transforms')]),
-            (inputnode, cnr_tfm, [(('itk_b0_to_t1', _aslist), 'transforms')])
-        ])
+
+    def _get_first(items):
+        return items[0]
+
+    workflow.connect([
+        (compose_transforms, mask_tfm, [(('out_warps', _get_first), 'transforms')]),
+        (compose_transforms, cnr_tfm, [(('out_warps', _get_first), 'transforms')])
+    ])
 
     dwi_transform = pe.MapNode(
         ants.ApplyTransforms(interpolation="LanczosWindowedSinc", float=True),

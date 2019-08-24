@@ -294,12 +294,13 @@ def init_b0_hmc_wf(align_to="iterative", transform="Rigid", spatial_bias_correct
             metric=metric,
             precision="coarse",
             iternum=0)
+
         alignment_wf.connect([
             (inputnode, reg_to_first, [
                 (('b0_images', first_image), 'inputnode.template_image'),
                 ('b0_images', 'inputnode.image_paths')]),
             (reg_to_first, outputnode, [
-                ('outputnode.updated_template', 'final_template'),
+                ('averaged_images.output_average_image', 'final_template'),
                 ('outputnode.affine_transforms', 'forward_transforms'),
                 ('outputnode.registered_image_paths', 'aligned_images')])
         ])
