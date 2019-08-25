@@ -203,7 +203,7 @@ jobs:
               apt-get update
               apt-get install -y graphviz
       - run:
-          name: Install qsiprep
+          name: Install qsiprep.
           command: python -m pip install ".[doc]"
       - run:
           name: Build documentation
