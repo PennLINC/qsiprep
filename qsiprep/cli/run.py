@@ -245,30 +245,6 @@ def get_parser():
         action='store',
         help='Transformation used for building the intramodal template.')
 
-    g_coreg = parser.add_argument_group('Options for dwi-to-T1w coregistration')
-    g_coreg.add_argument(
-        '--b0-to-t1w-transform', '--b0_to_t1w_transform',
-        action='store',
-        default="Rigid",
-        choices=["Rigid", "Affine"],
-        help='Degrees of freedom when registering b0 to T1w images. '
-        '6 degrees (rotation and translation) are used by default.')
-    g_coreg.add_argument(
-        '--intramodal-template-iters', '--intramodal_template_iters',
-        action='store',
-        default=0,
-        type=int,
-        help='Number of iterations for finding the midpoint image '
-        'from the b0 templates from all groups. Has no effect if there '
-        'is only one group. If 0, all b0 templates are directly registered '
-        'to the t1w image.')
-    g_coreg.add_argument(
-        '--intramodal-template-transform', '--intramodal_template_transform',
-        default='BSplineSyN',
-        choices=['Rigid', 'Affine', 'BSplineSyN', 'SyN'],
-        action='store',
-        help='Transformation used for building the intramodal template.')
-
     g_moco = parser.add_argument_group(
         'Specific options for motion correction and coregistration')
     g_moco.add_argument(
