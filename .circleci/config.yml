@@ -177,6 +177,40 @@ jobs:
             - /tmp/cache/docker.tar.gz
 
 
+  build_docs:
+    docker:
+        - image: python:latest
+    working_directory: /tmp/src/qsiprep
+    environment:
+      - FSLOUTPUTTYPE: 'NIFTI'
+    steps:
+      - checkout
+      - run:
+          name: Check whether build should be skipped
+          command: |
+            if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?docs\]' )" != "" ]]; then
+              echo "Skipping doc building job"
+              circleci step halt
+            fi
+      - run:
+          name: Check Python version and upgrade pip
+          command: |
+            python --version
+            python -m pip install -U pip
+      - run:
+          name: Install graphviz
+          command: |
+              apt-get update
+              apt-get install -y graphviz
+      - run:
+          name: Install qsiprep
+          command: python -m pip install ".[doc]"
+      - run:
+          name: Build documentation
+          command: make SPHINXOPTS="-W" -C docs html
+      - store_artifacts:
+          path: /tmp/src/qsiprep/docs/_build/html
+
   DSCSDSI:
     machine:
       image: ubuntu-1604:201903-01

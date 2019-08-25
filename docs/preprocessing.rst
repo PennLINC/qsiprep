@@ -1,4 +1,3 @@
-
 .. include:: links.rst
 
 .. _preprocessing:
@@ -56,17 +55,25 @@ The are two kinds of SDC available in qsiprep:
      The reverse phase encoding direction scan can come from the fieldmaps directory
      or the dwi directory.
 
-  2. :ref:`sdc_fieldmapless`: The SyN-based susceptibility distortion correction
-     implemented in FMRIPREP. To use this method, include argument --use-syn-sdc when 
+  2. :ref:`sdc_phasediff`: Use a B0map sequence that includes at lease one magnitude
+     image and two phase images or a phasediff image.
+
+  3. :ref:`sdc_fieldmapless`: The SyN-based susceptibility distortion correction
+     implemented in FMRIPREP. To use this method, include argument --use-syn-sdc when
      calling qsiprep. Briefly, this method estimates a SDC warp using ANTS SyN based
      on an average fieldmap in MNI space. For details on this method, see
-     `here <https://fmriprep.readthedocs.io/en/latest/api/index.html#sdc-fieldmapless>`_ 
+     `here <https://fmriprep.readthedocs.io/en/latest/api/index.html#sdc-fieldmapless>`_
 
 
 ``qsiprep`` determines if a fieldmap should be used based on the ``"IntendedFor"``
 fields in the JSON sidecars in the ``fmap/`` directory. If you have two DWI
 series with reverse phase encodings, but would rather use method 1 instead of
 1a, include the ``--prefer-dedicated-fmaps`` argument.
+
+.. critical::
+   if you are using ``eddy`` as the head motion correction method, the fieldmap will be
+   converted to a format that can be used with ``eddy``. Methods 1 and 2 work with ``eddy``
+   and all methods work with SHORELine.
 
 
 .. _outputs:
@@ -111,7 +118,7 @@ Preprocessed data (qsiprep *derivatives*)
 There are additional files, called "Derivatives", written to
 ``<output dir>/qsiprep/sub-<subject_label>/``.
 
-Derivatives related to T1w files are nearly identical to those produced by FMRIPREP and
+Derivatives related to T1w files are nearly identical to those produced by ``FMRIPREP`` and
 can be found in the ``anat`` subfolder:
 
 - ``*T1w_brainmask.nii.gz`` Brain mask derived using ANTs' ``antsBrainExtraction.sh``.
@@ -349,7 +356,6 @@ DWI preprocessing
                               use_syn=True,
                               force_syn=True,
                               low_mem=False,
-                              write_local_bvecs=False,
                               output_prefix="")
 
 Preprocessing of :abbr:`DWI (Diffusion Weighted Image)` files is
@@ -443,7 +449,7 @@ run ``TOPUP`` before passing the fieldmap to ``eddy`` if fieldmaps are available
 ``eddy`` has many configuration options. Instead of making these commandline options,
 you can specify them in a JSON file and pass that to ``qsiprep`` using the ``--eddy_config``
 option. An example (default) eddy config json can be viewed or downloaded
-`here <https://github.com/PennBBL/qsiprep/blob/master/qsiprep/data/eddy_params.json>`_  
+`here <https://github.com/PennBBL/qsiprep/blob/master/qsiprep/data/eddy_params.json>`_
 
 .. _dwi_ref:
 
