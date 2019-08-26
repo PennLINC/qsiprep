@@ -166,7 +166,7 @@ jobs:
   build_docs:
     docker:
         - image: python:latest
-    working_directory: /tmp/src/qsiprep/docs
+    working_directory: /tmp/src/qsiprep
     environment:
       - FSLOUTPUTTYPE: 'NIFTI'
     steps:
@@ -197,7 +197,9 @@ jobs:
           command: python -m pip install ".[doc]"
       - run:
           name: Build documentation
-          command: make html
+          command: |
+            cd /tmp/src/qsiprep/docs
+            make html
       - store_artifacts:
           path: /tmp/src/qsiprep/docs/_build/html
 
