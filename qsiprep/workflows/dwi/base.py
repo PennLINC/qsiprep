@@ -92,7 +92,6 @@ def init_dwi_preproc_wf(scan_groups,
                                   low_mem=False,
                                   layout=None)
 
-
     **Parameters**
 
         dwi_groups : list of dicts

@@ -536,3 +536,15 @@ workflows:
                 - /tests?\/.*/
             tags:
               only: /.*/
+
+      - IntramodalTemplate:
+          requires:
+            - get_data
+            - build
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
