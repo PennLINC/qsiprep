@@ -483,18 +483,6 @@ workflows:
             tags:
               only: /.*/
 
-      - update_cache:
-          requires:
-            - build
-          filters:
-            branches:
-              ignore:
-                - /docs?\/.*/
-                - /tests?\/.*/
-            tags:
-              only: /.*/
-
-
       - DSCSDSI:
           requires:
             - get_data
