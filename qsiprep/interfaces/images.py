@@ -264,8 +264,9 @@ class Conform(SimpleInterface):
 
     Performs two basic functions:
 
-    #. Orient to LPS (right-left, anterior-posterior, inferior-superior)
-    #. Resample to target zooms (voxel sizes) and shape (number of voxels)
+    1. Orient to LPS (right-left, anterior-posterior, inferior-superior)
+    2. Resample to target zooms (voxel sizes) and shape (number of voxels)
+
     """
     input_spec = ConformInputSpec
     output_spec = ConformOutputSpec
