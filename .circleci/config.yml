@@ -197,7 +197,7 @@ jobs:
           command: python -m pip install ".[doc]"
       - run:
           name: Build documentation
-          command: make SPHINXOPTS="-W" -C docs html
+          command: make SPHINXOPTS="-C" docs html
       - store_artifacts:
           path: /tmp/src/qsiprep/docs/_build/html
 
