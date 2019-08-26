@@ -145,16 +145,6 @@ class DWIDenoise(MRTrix3Base):
     For more information, see
     <https://mrtrix.readthedocs.io/en/latest/reference/commands/dwidenoise.html>
 
-    Example
-    -------
-
-    >>> import nipype.interfaces.mrtrix3 as mrt
-    >>> denoise = mrt.DWIDenoise()
-    >>> denoise.inputs.in_file = 'dwi.mif'
-    >>> denoise.inputs.mask = 'mask.mif'
-    >>> denoise.cmdline                               # doctest: +ELLIPSIS
-    'dwidenoise -mask mask.mif dwi.mif dwi_denoised.mif'
-    >>> denoise.run()                                 # doctest: +SKIP
     """
 
     _cmd = 'dwidenoise'

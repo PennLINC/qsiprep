@@ -79,12 +79,12 @@ def init_sdc_wf(fieldmap_info, dwi_meta, omp_nthreads=1,
 
         from qsiprep.workflows.fieldmap import init_sdc_wf
         wf = init_sdc_wf(
-            fmaps=[{
+            fieldmap_info={
                 'type': 'epi',
                 'epi': \
                     'sub-03/ses-2/fmap/sub-03_ses-2_run-1_epi.nii.gz',
                 'metadata': {'PhaseEncodingDirection': 'j-'}
-            }],
+            },
             dwi_meta={
                 'PhaseEncodingDirection': 'j',
             },

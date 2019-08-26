@@ -9,19 +9,19 @@ jobs:
       - image: docker:18.06.1-ce-git
     working_directory: /tmp/src/qsiprep
     steps:
+      - checkout
       - run:
           name: Install parallel gzip and python3
           command: |
             apk add --no-cache pigz python3 tar
       - restore_cache:
           keys:
-            - docker-v4-{{ .Branch }}-{{ epoch }}
-            - docker-v4-{{ .Branch }}-
-            - docker-v4-master-
-            - docker-v4-
+            - docker-v5-{{ .Branch }}-{{ .Revision }}
+            - docker-v5-{{ .Branch }}-
+            - docker-v5-master-
+            - docker-v5-
           paths:
             - /tmp/cache/docker.tar.gz
-      - checkout
       - setup_remote_docker
       - run:
           name: Load Docker image layer cache
@@ -66,23 +66,27 @@ jobs:
           command: |
             mkdir -p /tmp/cache
             docker save ubuntu:xenial-20161213 pennbbl/qsiprep:latest \
-            | pigz -8 -p 3 > /tmp/cache/docker.tar.gz
+            | pigz -3 > /tmp/cache/docker.tar.gz
 
       - persist_to_workspace:
           root: /tmp
           paths:
-            - cache/docker.tar.gz
             - src/qsiprep
+
+      - save_cache:
+         key: docker-v5-{{ .Branch }}-{{ .Revision }}-{{ epoch }}
+         paths:
+           - /tmp/cache/docker.tar.gz
 
   get_data:
     machine:
-      # Ubuntu 14.04 with Docker 17.10.0-ce
-      image: circleci/classic:201711-01
+      # Ubuntu 16.04, docker 18.09.3, docker-compose 1.23.1
+      image: ubuntu-1604:201903-01
     working_directory: /home/circleci/data
     steps:
       - restore_cache:
           keys:
-            - data-v5-{{ epoch }}
+            - data-v5-{{ .Revision }}
             - data-v5-
       - run:
           name: Get single scan from downsampled CS-DSI
@@ -159,24 +163,49 @@ jobs:
          paths:
             - /tmp/data
 
-
-  update_cache:
-    machine:
-      # Ubuntu 14.04 with Docker 17.10.0-ce
-      image: circleci/classic:201711-01
+  build_docs:
+    docker:
+        - image: python:latest
     working_directory: /tmp/src/qsiprep
+    environment:
+      - FSLOUTPUTTYPE: 'NIFTI'
     steps:
-      - attach_workspace:
-          at: /tmp
-      - save_cache:
-         key: docker-v4-{{ .Branch }}-{{ epoch }}
-         paths:
-            - /tmp/cache/docker.tar.gz
-
+      - checkout
+      - run:
+          name: Check whether build should be skipped
+          command: |
+            if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?docs\]' )" != "" ]]; then
+              echo "Skipping doc building job"
+              circleci step halt
+            fi
+      - run:
+          name: Check Python version and upgrade pip
+          command: |
+            python --version
+            pip install --upgrade "pip>=19.1" numpy svgutils duecredit
+      - run:
+          name: Install docs dependencies
+          command: |
+            pip install -r /tmp/src/qsiprep/docs/requirements.txt
+      - run:
+          name: Install graphviz
+          command: |
+              apt-get update
+              apt-get install -y graphviz
+      - run:
+          name: Install qsiprep.
+          command: python -m pip install ".[doc]"
+      - run:
+          name: Build documentation
+          command: |
+            cd /tmp/src/qsiprep/docs
+            make html
+      - store_artifacts:
+          path: /tmp/src/qsiprep/docs/_build/html
 
   DSCSDSI:
     machine:
-      image: circleci/classic:201711-01
+      image: ubuntu-1604:201903-01
     working_directory: /tmp/DSCSDSI
     environment:
       - FS_LICENSE: /tmp/fslicense/license.txt
@@ -199,6 +228,9 @@ jobs:
             - DSCSDSI-anat-v1-{{ .Branch }}
             - DSCSDSI-anat-v1-master
             - DSCSDSI-anat-v1-
+      - restore_cache:
+          keys:
+            - docker-v5-{{ .Branch }}-{{ .Revision }}
       - run:
           name: Setting up test
           command: |
@@ -273,7 +305,7 @@ jobs:
 
   DSDTI:
     machine:
-      image: circleci/classic:201711-01
+      image: ubuntu-1604:201903-01
     working_directory: /tmp/DSDTI
     environment:
       - FS_LICENSE: /tmp/fslicense/license.txt
@@ -296,6 +328,9 @@ jobs:
             - DSDTI-anat-v1-{{ .Branch }}
             - DSDTI-anat-v1-master
             - DSDTI-anat-v1-
+      - restore_cache:
+          keys:
+            - docker-v5-{{ .Branch }}-{{ .Revision }}
       - run:
           name: Setting up test
           command: |
@@ -367,7 +402,7 @@ jobs:
 
   IntramodalTemplate:
     machine:
-      image: circleci/classic:201711-01
+      image: ubuntu-1604:201903-01
     working_directory: /tmp/twoses
     environment:
       - FS_LICENSE: /tmp/fslicense/license.txt
@@ -384,6 +419,9 @@ jobs:
             fi
       - attach_workspace:
           at: /tmp
+      - restore_cache:
+          keys:
+            - docker-v5-{{ .Branch }}-{{ .Revision }}
       - run:
           name: Setting up test
           command: |
@@ -451,17 +489,17 @@ workflows:
             tags:
               only: /.*/
 
-      - update_cache:
-          requires:
-            - build
+      - build_docs:
           filters:
             branches:
               ignore:
-                - /docs?\/.*/
                 - /tests?\/.*/
+                - /ds005\/.*/
+                - /ds054\/.*/
+                - /ds210\/.*/
+                - /docker\/.*/
             tags:
               only: /.*/
-
 
       - DSCSDSI:
           requires:
@@ -476,6 +514,18 @@ workflows:
               only: /.*/
 
       - DSDTI:
+          requires:
+            - get_data
+            - build
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - IntramodalTemplate:
           requires:
             - get_data
             - build

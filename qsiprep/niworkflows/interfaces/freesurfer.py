@@ -29,14 +29,6 @@ class StructuralReference(fs.RobustTemplate):
     """Variation on RobustTemplate that simply copies the source if a single
     volume is provided.
 
-    >>> from ..utils.bids import collect_data
-    >>> t1w = collect_data(str(datadir / 'ds114'), '01')[0]['t1w']
-    >>> template = StructuralReference()
-    >>> template.inputs.in_files = t1w
-    >>> template.inputs.auto_detect_sensitivity = True
-    >>> template.cmdline  # doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
-    'mri_robust_template --satit --mov .../sub-01_ses-retest_T1w.nii.gz
-        .../sub-01_ses-test_T1w.nii.gz --template mri_robust_template_out.mgz'
 
     """
 

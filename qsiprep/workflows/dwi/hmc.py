@@ -462,7 +462,6 @@ def init_dwi_model_hmc_wf(modelname, transform, mem_gb, omp_nthreads,
         from qsiprep.workflows.dwi.hmc import init_dwi_model_hmc_wf
         wf = init_dwi_model_hmc_wf(modelname='3dSHORE',
                                    transform='Affine',
-                                   calculate_noise_free=True,
                                    num_iters=2,
                                    mem_gb=3,
                                    omp_nthreads=1)
@@ -505,6 +504,8 @@ def init_dwi_model_hmc_wf(modelname, transform, mem_gb, omp_nthreads,
             model fit divided by the model error in each voxel.
         optimization_data: str
             CSV file tracking the motion estimates across shoreline iterations
+
+
     """
     workflow = Workflow(name=name)
     inputnode = pe.Node(

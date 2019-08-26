@@ -71,17 +71,18 @@ def _gather_confounds(fdisp=None, motion=None, sliceqc_file=None, newpath=None,
     >>> from tempfile import TemporaryDirectory
     >>> tmpdir = TemporaryDirectory()
     >>> os.chdir(tmpdir.name)
-    >>> pd.DataFrame({'Global Signal': [0.1]}).to_csv('signals.tsv', index=False, na_rep='n/a')
-    >>> pd.DataFrame({'stdDVARS': [0.2]}).to_csv('dvars.tsv', index=False, na_rep='n/a')
-    >>> out_file, confound_list = _gather_confounds('signals.tsv', 'dvars.tsv')
+    >>> pd.DataFrame({'FramewiseDisplacement': [0.1]}).to_csv('FD.txt', index=False, na_rep='n/a')
+    >>> pd.DataFrame({'trans_x': [0.2], 'trans_y': [0.3], 'trans_z': [0.4],
+    ...               'rot_x': [0.5], 'rot_y': [0.6], 'rot_z': [0.7]}).to_csv(
+    ...                   'spm_motion.tsv', index=False, na_rep='n/a')
+    >>> out_file, confound_list = _gather_confounds('FD.txt', 'spm_motion.tsv')
     >>> confound_list
-    ['Global signals', 'DVARS']
+    ['Framewise displacement', 'Motion parameters']
 
     >>> pd.read_csv(out_file, sep='\s+', index_col=None,
     ...             engine='python')  # doctest: +NORMALIZE_WHITESPACE
-       global_signal  std_dvars
-    0            0.1        0.2
-    >>> tmpdir.cleanup()
+       framewise_displacement trans_x,trans_y,trans_z,rot_x,rot_y,rot_z
+    0                     0.1                   0.2,0.3,0.4,0.5,0.6,0.7
 
 
     """

@@ -325,30 +325,6 @@ def run_reports(reportlets_dir, out_dir, subject_label, run_uuid, config,
                 sentry_sdk=None):
     """
     Runs the reports
-
-    .. testsetup::
-
-    >>> from shutil import copytree
-    >>> from tempfile import TemporaryDirectory
-    >>> new_path = Path(__file__).resolve().parent.parent
-    >>> test_data_path = new_path / 'data' / 'tests' / 'work'
-    >>> tmpdir = TemporaryDirectory()
-    >>> os.chdir(tmpdir.name)  #noqa
-    >>> testdir = Path().resolve()
-    >>> data_dir = copytree(test_data_path, testdir / 'work')
-    >>> (testdir / 'qsiprep').mkdir(parents=True, exist_ok=True)
-
-    .. doctest::
-
-    >>> run_reports(str(testdir / 'work' / 'reportlets'),
-    ...             str(testdir / 'out'), '01', 'madeoutuuid',
-    ...             'work/config.json')
-    0
-
-    .. testcleanup::
-
-    >>> tmpdir.cleanup()
-
     """
     reportlet_path = Path(reportlets_dir)
     reportlet_path = str(reportlet_path / ("sub-%s" % subject_label))

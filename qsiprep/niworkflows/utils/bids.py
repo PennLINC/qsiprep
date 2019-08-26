@@ -46,25 +46,6 @@ def collect_participants(bids_dir, participant_label=None, strict=False):
     designated with the participant_label argument exist in that folder.
     Returns the list of participants to be finally processed.
     Requesting all subjects in a BIDS directory root:
-    >>> collect_participants(str(datadir / 'ds114'))
-    ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10']
-
-    Requesting two subjects, given their IDs:
-    >>> collect_participants(str(datadir / 'ds114'), participant_label=['02', '04'])
-    ['02', '04']
-
-    Requesting two subjects, given their IDs (works with 'sub-' prefixes):
-    >>> collect_participants(str(datadir / 'ds114'), participant_label=['sub-02', 'sub-04'])
-    ['02', '04']
-
-    Requesting two subjects, but one does not exist:
-    >>> collect_participants(str(datadir / 'ds114'), participant_label=['02', '14'])
-    ['02']
-    >>> collect_participants(str(datadir / 'ds114'), participant_label=['02', '14'],
-    ...                      strict=True)  # doctest: +IGNORE_EXCEPTION_DETAIL
-    Traceback (most recent call last):
-    qsiprep.utils.bids.BIDSError:
-    ...
     """
     bids_dir = Path(bids_dir).resolve()
     all_participants = sorted([str(subdir.name)[4:] for subdir in bids_dir.glob('sub-*')
@@ -111,29 +92,6 @@ def collect_participants(bids_dir, participant_label=None, strict=False):
 def collect_data(dataset, participant_label, task=None, echo=None):
     """
     Uses pybids to retrieve the input data for a given participant
-    >>> bids_root, _ = collect_data(str(datadir / 'ds054'), '100185')
-    >>> bids_root['fmap']  # doctest: +ELLIPSIS
-    ['.../ds054/sub-100185/fmap/sub-100185_magnitude1.nii.gz', \
-'.../ds054/sub-100185/fmap/sub-100185_magnitude2.nii.gz', \
-'.../ds054/sub-100185/fmap/sub-100185_phasediff.nii.gz']
-    >>> bids_root['bold']  # doctest: +ELLIPSIS
-    ['.../ds054/sub-100185/func/sub-100185_task-machinegame_run-01_bold.nii.gz', \
-'.../ds054/sub-100185/func/sub-100185_task-machinegame_run-02_bold.nii.gz', \
-'.../ds054/sub-100185/func/sub-100185_task-machinegame_run-03_bold.nii.gz', \
-'.../ds054/sub-100185/func/sub-100185_task-machinegame_run-04_bold.nii.gz', \
-'.../ds054/sub-100185/func/sub-100185_task-machinegame_run-05_bold.nii.gz', \
-'.../ds054/sub-100185/func/sub-100185_task-machinegame_run-06_bold.nii.gz']
-    >>> bids_root['sbref']  # doctest: +ELLIPSIS
-    ['.../ds054/sub-100185/func/sub-100185_task-machinegame_run-01_sbref.nii.gz', \
-'.../ds054/sub-100185/func/sub-100185_task-machinegame_run-02_sbref.nii.gz', \
-'.../ds054/sub-100185/func/sub-100185_task-machinegame_run-03_sbref.nii.gz', \
-'.../ds054/sub-100185/func/sub-100185_task-machinegame_run-04_sbref.nii.gz', \
-'.../ds054/sub-100185/func/sub-100185_task-machinegame_run-05_sbref.nii.gz', \
-'.../ds054/sub-100185/func/sub-100185_task-machinegame_run-06_sbref.nii.gz']
-    >>> bids_root['t1w']  # doctest: +ELLIPSIS
-    ['.../ds054/sub-100185/anat/sub-100185_T1w.nii.gz']
-    >>> bids_root['t2w']  # doctest: +ELLIPSIS
-    []
     """
     layout = BIDSLayout(dataset, exclude=['derivatives', 'sourcedata'])
     queries = {
@@ -171,14 +129,6 @@ def collect_data(dataset, participant_label, task=None, echo=None):
 
 def get_metadata_for_nifti(in_file):
     """Fetch metadata for a given nifti file
-
-    >>> fmap = bids_collect_data(
-    ...     str(datadir / 'ds054'), '100185')[0]['fmap'][-1]
-    >>> metadata = get_metadata_for_nifti(fmap)
-    >>> metadata['Manufacturer']
-    'SIEMENS'
-
-    >>>
 
     """
     in_file = Path(in_file).resolve()
@@ -233,76 +183,6 @@ def group_multiecho(bold_sess):
     """
     Multiplexes multi-echo EPIs into arrays. Dual-echo is a special
     case of multi-echo, which is treated as single-echo data.
-
-    >>> bold_sess = ["sub-01_task-rest_echo-1_run-01_bold.nii.gz",
-    ...              "sub-01_task-rest_echo-2_run-01_bold.nii.gz",
-    ...              "sub-01_task-rest_echo-1_run-02_bold.nii.gz",
-    ...              "sub-01_task-rest_echo-2_run-02_bold.nii.gz",
-    ...              "sub-01_task-rest_echo-3_run-02_bold.nii.gz",
-    ...              "sub-01_task-rest_run-03_bold.nii.gz"]
-    >>> group_multiecho(bold_sess)
-    ['sub-01_task-rest_echo-1_run-01_bold.nii.gz',
-     'sub-01_task-rest_echo-2_run-01_bold.nii.gz',
-    ['sub-01_task-rest_echo-1_run-02_bold.nii.gz',
-     'sub-01_task-rest_echo-2_run-02_bold.nii.gz',
-     'sub-01_task-rest_echo-3_run-02_bold.nii.gz'],
-     'sub-01_task-rest_run-03_bold.nii.gz']
-
-    >>> bold_sess.insert(2, "sub-01_task-rest_echo-3_run-01_bold.nii.gz")
-    >>> group_multiecho(bold_sess)
-    [['sub-01_task-rest_echo-1_run-01_bold.nii.gz',
-      'sub-01_task-rest_echo-2_run-01_bold.nii.gz',
-      'sub-01_task-rest_echo-3_run-01_bold.nii.gz'],
-     ['sub-01_task-rest_echo-1_run-02_bold.nii.gz',
-      'sub-01_task-rest_echo-2_run-02_bold.nii.gz',
-      'sub-01_task-rest_echo-3_run-02_bold.nii.gz'],
-      'sub-01_task-rest_run-03_bold.nii.gz']
-
-    >>> bold_sess += ["sub-01_task-beh_echo-1_run-01_bold.nii.gz",
-    ...               "sub-01_task-beh_echo-2_run-01_bold.nii.gz",
-    ...               "sub-01_task-beh_echo-1_run-02_bold.nii.gz",
-    ...               "sub-01_task-beh_echo-2_run-02_bold.nii.gz",
-    ...               "sub-01_task-beh_echo-3_run-02_bold.nii.gz",
-    ...               "sub-01_task-beh_run-03_bold.nii.gz"]
-    >>> group_multiecho(bold_sess)
-    [['sub-01_task-rest_echo-1_run-01_bold.nii.gz',
-      'sub-01_task-rest_echo-2_run-01_bold.nii.gz',
-      'sub-01_task-rest_echo-3_run-01_bold.nii.gz'],
-     ['sub-01_task-rest_echo-1_run-02_bold.nii.gz',
-      'sub-01_task-rest_echo-2_run-02_bold.nii.gz',
-      'sub-01_task-rest_echo-3_run-02_bold.nii.gz'],
-      'sub-01_task-rest_run-03_bold.nii.gz',
-      'sub-01_task-beh_echo-1_run-01_bold.nii.gz',
-      'sub-01_task-beh_echo-2_run-01_bold.nii.gz',
-     ['sub-01_task-beh_echo-1_run-02_bold.nii.gz',
-      'sub-01_task-beh_echo-2_run-02_bold.nii.gz',
-      'sub-01_task-beh_echo-3_run-02_bold.nii.gz'],
-      'sub-01_task-beh_run-03_bold.nii.gz']
-
-    Some tests from https://neurostars.org/t/fmriprep-from\
--singularity-unboundlocalerror/3299/7
-
-    >>> bold_sess = ['sub-01_task-AudLoc_echo-1_bold.nii',
-    ...              'sub-01_task-AudLoc_echo-2_bold.nii',
-    ...              'sub-01_task-FJT_echo-1_bold.nii',
-    ...              'sub-01_task-FJT_echo-2_bold.nii',
-    ...              'sub-01_task-LDT_echo-1_bold.nii',
-    ...              'sub-01_task-LDT_echo-2_bold.nii',
-    ...              'sub-01_task-MotLoc_echo-1_bold.nii',
-    ...              'sub-01_task-MotLoc_echo-2_bold.nii']
-    >>> group_multiecho(bold_sess) == bold_sess
-    True
-
-    >>> bold_sess += ['sub-01_task-MotLoc_echo-3_bold.nii']
-    >>> groups = group_multiecho(bold_sess)
-    >>> len(groups[:-1])
-    6
-    >>> [isinstance(g, list) for g in groups]
-    [False, False, False, False, False, False, True]
-    >>> len(groups[-1])
-    3
-
-
     """
     from itertools import groupby
 

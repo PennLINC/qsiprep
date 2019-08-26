@@ -125,35 +125,6 @@ def collect_data(dataset, participant_label, task=None):
     """
     Uses grabbids to retrieve the input data for a given participant
 
-    >>> bids_root, _ = collect_data('ds054', '100185')
-    >>> bids_root['fmap']  # doctest: +ELLIPSIS
-    ['.../ds054/sub-100185/fmap/sub-100185_magnitude1.nii.gz', \
-'.../ds054/sub-100185/fmap/sub-100185_magnitude2.nii.gz', \
-'.../ds054/sub-100185/fmap/sub-100185_phasediff.nii.gz']
-
-    >>> bids_root['bold']  # doctest: +ELLIPSIS
-    ['.../ds054/sub-100185/func/sub-100185_task-machinegame_run-01_bold.nii.gz', \
-'.../ds054/sub-100185/func/sub-100185_task-machinegame_run-02_bold.nii.gz', \
-'.../ds054/sub-100185/func/sub-100185_task-machinegame_run-03_bold.nii.gz', \
-'.../ds054/sub-100185/func/sub-100185_task-machinegame_run-04_bold.nii.gz', \
-'.../ds054/sub-100185/func/sub-100185_task-machinegame_run-05_bold.nii.gz', \
-'.../ds054/sub-100185/func/sub-100185_task-machinegame_run-06_bold.nii.gz']
-
-    >>> bids_root['sbref']  # doctest: +ELLIPSIS
-    ['.../ds054/sub-100185/func/sub-100185_task-machinegame_run-01_sbref.nii.gz', \
-'.../ds054/sub-100185/func/sub-100185_task-machinegame_run-02_sbref.nii.gz', \
-'.../ds054/sub-100185/func/sub-100185_task-machinegame_run-03_sbref.nii.gz', \
-'.../ds054/sub-100185/func/sub-100185_task-machinegame_run-04_sbref.nii.gz', \
-'.../ds054/sub-100185/func/sub-100185_task-machinegame_run-05_sbref.nii.gz', \
-'.../ds054/sub-100185/func/sub-100185_task-machinegame_run-06_sbref.nii.gz']
-
-    >>> bids_root['t1w']  # doctest: +ELLIPSIS
-    ['.../ds054/sub-100185/anat/sub-100185_T1w.nii.gz']
-
-    >>> bids_root['t2w']  # doctest: +ELLIPSIS
-    []
-
-
     """
     layout = BIDSLayout(dataset, exclude=['derivatives', 'sourcedata'])
     queries = {
