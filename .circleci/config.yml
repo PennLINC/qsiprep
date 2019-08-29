@@ -184,10 +184,6 @@ jobs:
             python --version
             pip install --upgrade "pip>=19.1" numpy svgutils duecredit
       - run:
-          name: Install docs dependencies
-          command: |
-            pip install -r /tmp/src/qsiprep/docs/requirements.txt
-      - run:
           name: Install graphviz
           command: |
               apt-get update
