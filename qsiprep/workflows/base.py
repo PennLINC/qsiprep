@@ -559,7 +559,10 @@ to workflows in *qsiprep*'s documentation]\
     make_intramodal_template = False
     if intramodal_template_iters > 0:
         if len(outputs_to_files) < 2:
-            LOGGER.warning("Cannot make an intramodal with less than 2 groups.")
+            raise RuntimeError(
+                'ERROR:  Not enough dwi groups were found to create an intramodal '
+                'template. Consider changing --combine-all-dwis and/or removing '
+                'fieldmaps from --ignore.')
         else:
             make_intramodal_template = True
 
