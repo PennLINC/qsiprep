@@ -147,7 +147,7 @@ brackets should be used: e.g. ``[see @myreference]`` will produce
 a citation like *(see Doe J. et al 2018)*.
 
 
-An example of how this works is shown here: ::
+An example of how this works is shown here::
 
     workflow = Workflow(name=name)
     workflow.__desc__ = """\

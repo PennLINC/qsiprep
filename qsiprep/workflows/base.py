@@ -24,8 +24,9 @@ from nipype.utils.filemanip import split_filename
 from nilearn import __version__ as nilearn_ver
 
 from ..engine import Workflow
-from ..interfaces import (BIDSDataGrabber, BIDSInfo, BIDSFreeSurferDir,
-                          SubjectSummary, AboutSummary, DerivativesDataSink)
+from ..interfaces import (BIDSDataGrabber, BIDSInfo, BIDSFreeSurferDir, DerivativesDataSink)
+from ..interfaces.reports import SubjectSummary, AboutSummary
+
 from ..utils.bids import collect_data
 from ..utils.misc import fix_multi_T1w_source_name
 from ..__about__ import __version__
@@ -84,7 +85,7 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
                               template='MNI152NLin2009cAsym',
                               motion_corr_to='iterative',
                               b0_to_t1w_transform='Rigid',
-                              intramodal_template_iters=2,
+                              intramodal_template_iters=0,
                               intramodal_template_transform="Rigid",
                               hmc_transform='Affine',
                               eddy_config=None,
@@ -311,7 +312,7 @@ def init_single_subject_wf(
             prefer_dedicated_fmaps=False,
             motion_corr_to='iterative',
             b0_to_t1w_transform='Rigid',
-            intramodal_template_iters=2,
+            intramodal_template_iters=0,
             intramodal_template_transform="Rigid",
             hmc_model='3dSHORE',
             hmc_transform='Affine',

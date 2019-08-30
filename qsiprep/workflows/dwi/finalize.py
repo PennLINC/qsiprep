@@ -353,7 +353,7 @@ def init_dwi_finalize_wf(scan_groups,
                                                write_local_bvecs=write_local_bvecs)
         gtab_mni = pe.Node(MRTrixGradientTable(), name='gtab_mni')
         workflow.connect([
-            (inputnode, transform_dwis_t1, [
+            (inputnode, transform_dwis_mni, [
                 ('b0_indices', 'inputnode.b0_indices'),
                 ('bval_files', 'inputnode.bval_files'),
                 ('bvec_files', 'inputnode.bvec_files'),
@@ -364,11 +364,14 @@ def init_dwi_finalize_wf(scan_groups,
                 ('fieldwarps', 'inputnode.fieldwarps'),
                 ('dwi_files', 'inputnode.dwi_files'),
                 ('dwi_sampling_grid', 'inputnode.output_grid'),
-                ('intramodal_affine_file', 'inputnode.to_intramodal_template_affine'),
-                ('intramodal_warp_file', 'inputnode.to_intramodal_template_warp'),
+                ('b0_to_intramodal_template_transforms',
+                 'inputnode.b0_to_intramodal_template_transforms'),
+                ('intramodal_template_to_t1_affine',
+                 'inputnode.intramodal_template_to_t1_affine'),
+                ('intramodal_template_to_t1_warp',
+                 'inputnode.intramodal_template_to_t1_warp'),
                 ('itk_b0_to_t1', 'inputnode.itk_b0_to_t1'),
-                ('intramodal_template_to_t1_warp', 'inputnode.intramodal_template_to_t1_warp')
-                ]),
+                ('t1_2_mni_forward_transform', 'inputnode.t1_2_mni_forward_transform')]),
             (transform_dwis_mni, outputnode, [('outputnode.bvals', 'bvals_mni'),
                                               ('outputnode.rotated_bvecs', 'bvecs_mni'),
                                               ('outputnode.dwi_resampled', 'dwi_mni'),

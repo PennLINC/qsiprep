@@ -212,7 +212,7 @@ RUN conda install -y python=3.7.1 \
                      mkl=2019.1 \
                      mkl-service \
                      scikit-learn=0.20.2 \
-                     matplotlib=3.0.2 \
+                     matplotlib=2.2.4 \
                      seaborn=0.9.0 \
                      pandas=0.24.0 \
                      libxml2=2.9.9 \

@@ -24,8 +24,6 @@ from nipype.utils.filemanip import split_filename
 from nilearn import __version__ as nilearn_ver
 
 from ...engine import Workflow
-from ...interfaces import (BIDSDataGrabber, BIDSInfo, BIDSFreeSurferDir,
-                           SubjectSummary, AboutSummary, DerivativesDataSink)
 from ...__about__ import __version__
 
 import logging
