@@ -279,7 +279,8 @@ ENV AFNI_INSTALLDIR=/usr/lib/afni \
     AFNI_MODELPATH=/usr/lib/afni/models \
     AFNI_TTATLAS_DATASET=/usr/share/afni/atlases \
     AFNI_IMSAVE_WARNINGS=NO \
-    FSLOUTPUTTYPE=NIFTI_GZ
+    FSLOUTPUTTYPE=NIFTI_GZ \
+    IS_DOCKER_8395080871=1
 
 RUN ldconfig
 WORKDIR /tmp/

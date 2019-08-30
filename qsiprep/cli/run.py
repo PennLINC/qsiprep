@@ -433,6 +433,16 @@ def main():
     warnings.showwarning = _warn_redirect
     opts = get_parser().parse_args()
 
+    exec_env = os.name
+
+    # special variable set in the container
+    if os.getenv('IS_DOCKER_8395080871'):
+        exec_env = 'singularity'
+        cgroup = Path('/proc/1/cgroup')
+        if cgroup.exists() and 'docker' in cgroup.read_text():
+            exec_env = 'docker'
+            if os.getenv('DOCKER_VERSION_8395080871'):
+                exec_env = 'qsiprep-docker'
     # Validate inputs
     if not opts.skip_bids_validation:
         print("Making sure the input data is BIDS compliant (warnings can be ignored in most "

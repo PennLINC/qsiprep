@@ -15,6 +15,7 @@ Fetch some test data
 
 """
 import os
+import sys
 import os.path as op
 import json
 import warnings
