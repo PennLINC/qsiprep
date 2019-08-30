@@ -75,6 +75,9 @@ def get_parser():
     parser.add_argument('--version', action='version', version=verstr)
 
     g_bids = parser.add_argument_group('Options for filtering BIDS queries')
+    g_bids.add_argument('--skip_bids_validation', '--skip-bids-validation', action='store_true',
+                        default=False,
+                        help='assume the input dataset is BIDS compliant and skip the validation')
     g_bids.add_argument(
         '--participant_label',
         '--participant-label',
@@ -82,6 +85,8 @@ def get_parser():
         nargs='+',
         help='a space delimited list of participant identifiers or a single '
         'identifier (the sub- prefix can be removed)')
+    g_bids.add_argument('--acquisition_type', '--acquisition_type', action='store',
+                        help='select a specific acquisition type to be processed')
 
     # arguments for reconstructing QSI data
     g_recon = parser.add_argument_group('Options for reconstructing qsiprep outputs')
@@ -417,7 +422,7 @@ def main():
     from nipype import logging as nlogging
     from multiprocessing import set_start_method, Process, Manager
     from ..viz.reports import generate_reports
-    from ..utils.bids import write_derivative_description
+    from ..utils.bids import write_derivative_description, validate_input_dir
 
     try:
         set_start_method('forkserver')
@@ -426,6 +431,12 @@ def main():
 
     warnings.showwarning = _warn_redirect
     opts = get_parser().parse_args()
+
+    # Validate inputs
+    if not opts.skip_bids_validation:
+        print("Making sure the input data is BIDS compliant (warnings can be ignored in most "
+              "cases).")
+        validate_input_dir(exec_env, opts.bids_dir, opts.participant_label)
 
     # FreeSurfer license
     default_license = str(Path(str(os.getenv('FREESURFER_HOME'))) / 'license.txt')
@@ -586,7 +597,7 @@ def build_qsiprep_workflow(opts, retval):
     """
     from subprocess import check_call, CalledProcessError, TimeoutExpired
     from pkg_resources import resource_filename as pkgrf
-
+    from bids import BIDSLayout
     from nipype import logging, config as ncfg
     from ..__about__ import __version__
     from ..workflows.base import init_qsiprep_wf
@@ -601,6 +612,34 @@ def build_qsiprep_workflow(opts, retval):
       * Participant list: {subject_list}.
       * Run identifier: {uuid}.
     """.format
+
+    bids_dir = opts.bids_dir.resolve()
+    output_dir = opts.output_dir.resolve()
+    work_dir = opts.work_dir.resolve()
+
+    retval['return_code'] = 1
+    retval['workflow'] = None
+    retval['bids_dir'] = str(bids_dir)
+    retval['work_dir'] = str(work_dir)
+    retval['output_dir'] = str(output_dir)
+
+    if output_dir == bids_dir:
+        logger.error(
+            'The selected output folder is the same as the input BIDS folder. '
+            'Please modify the output path (suggestion: %s).',
+            bids_dir / 'derivatives' / ('qsiprep-%s' % __version__.split('+')[0]))
+        retval['return_code'] = 1
+        return retval
+
+    # Set up some instrumental utilities
+    run_uuid = '%s_%s' % (strftime('%Y%m%d-%H%M%S'), uuid.uuid4())
+    retval['run_uuid'] = run_uuid
+
+    # First check that bids_dir looks like a BIDS folder
+    layout = BIDSLayout(str(bids_dir), validate=False)
+    subject_list = collect_participants(
+        layout, participant_label=opts.participant_label)
+    retval['subject_list'] = subject_list
 
     output_spaces = opts.output_space or []
 
@@ -618,14 +657,6 @@ def build_qsiprep_workflow(opts, retval):
                 ' Since --force-syn has been requested, "template" has been '
                 'added to the "--output-space" list.')
         logger.warning(' '.join(msg))
-
-    # Set up some instrumental utilities
-    run_uuid = '%s_%s' % (strftime('%Y%m%d-%H%M%S'), uuid.uuid4())
-
-    # First check that bids_dir looks like a BIDS folder
-    bids_dir = os.path.abspath(opts.bids_dir)
-    subject_list = collect_participants(
-        bids_dir, participant_label=opts.participant_label)
 
     # Load base plugin_settings from file if --use-plugin
     if opts.use_plugin is not None:
@@ -665,30 +696,25 @@ def build_qsiprep_workflow(opts, retval):
         logger.warning(
             'Per-process threads (--omp-nthreads=%d) exceed total '
             'threads (--nthreads/--n_cpus=%d)', omp_nthreads, nthreads)
+    retval['plugin_settings'] = plugin_settings
 
     # Set up directories
-    output_dir = op.abspath(opts.output_dir)
-    log_dir = op.join(output_dir, 'qsiprep', 'logs')
-    work_dir = op.abspath(opts.work_dir or 'work')  # Set work/ as default
-
+    log_dir = output_dir / 'qsiprep' / 'logs'
     # Check and create output and working directories
-    os.makedirs(output_dir, exist_ok=True)
-    os.makedirs(log_dir, exist_ok=True)
-    os.makedirs(work_dir, exist_ok=True)
+    output_dir.mkdir(exist_ok=True, parents=True)
+    log_dir.mkdir(exist_ok=True, parents=True)
+    work_dir.mkdir(exist_ok=True, parents=True)
 
     # Nipype config (logs and execution)
     ncfg.update_config({
         'logging': {
-            'log_directory': log_dir,
+            'log_directory': str(log_dir),
             'log_to_file': True
         },
         'execution': {
-            'crashdump_dir':
-            log_dir,
-            'crashfile_format':
-            'txt',
-            'get_linked_libs':
-            False,
+            'crashdump_dir': str(log_dir),
+            'crashfile_format': 'txt',
+            'get_linked_libs': False,
             'stop_on_first_crash':
             opts.stop_on_first_crash or opts.work_dir is None,
         },
@@ -702,21 +728,13 @@ def build_qsiprep_workflow(opts, retval):
     if opts.resource_monitor:
         ncfg.enable_resource_monitor()
 
-    retval['return_code'] = 0
-    retval['plugin_settings'] = plugin_settings
-    retval['bids_dir'] = bids_dir
-    retval['output_dir'] = output_dir
-    retval['work_dir'] = work_dir
-    retval['subject_list'] = subject_list
-    retval['run_uuid'] = run_uuid
-    retval['workflow'] = None
-
     # Called with reports only
     if opts.reports_only:
         logger.log(25, 'Running --reports-only on participants %s',
                    ', '.join(subject_list))
         if opts.run_uuid is not None:
             run_uuid = opts.run_uuid
+            retval['run_uuid'] = run_uuid
         retval['return_code'] = generate_reports(subject_list, output_dir,
                                                  work_dir, run_uuid)
         return retval

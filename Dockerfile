@@ -194,6 +194,9 @@ RUN curl -sL https://deb.nodesource.com/setup_10.x | bash -
 RUN apt-get install -y nodejs
 RUN npm install -g svgo
 
+# Installing bids-validator
+RUN npm install -g bids-validator@1.2.3
+
 # Installing and setting up miniconda
 RUN curl -sSLO https://repo.continuum.io/miniconda/Miniconda3-4.5.12-Linux-x86_64.sh && \
     bash Miniconda3-4.5.12-Linux-x86_64.sh -b -p /usr/local/miniconda && \
@@ -211,7 +214,7 @@ RUN conda install -y python=3.7.1 \
                      scipy=1.2.0 \
                      mkl=2019.1 \
                      mkl-service \
-                     scikit-learn=0.20.2 \
+                     scikit-learn=0.23 \
                      matplotlib=2.2.3 \
                      seaborn=0.9.0 \
                      pandas=0.24.0 \
