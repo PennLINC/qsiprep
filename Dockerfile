@@ -232,9 +232,6 @@ RUN conda install -y python=3.7.1 \
     conda build purge-all; sync && \
     conda clean -tipsy && sync
 
-# Precaching fonts, set 'Agg' as default backend for matplotlib
-RUN python -c "from matplotlib import font_manager" && \
-    sed -i 's/\(backend *: \).*$/\1Agg/g' $( python -c "import matplotlib; print(matplotlib.matplotlib_fname())" )
 
 # Unless otherwise specified each process should only use one thread - nipype
 # will handle parallelization
@@ -268,6 +265,10 @@ ARG VERSION
 RUN echo "${VERSION}" > /src/qsiprep/qsiprep/VERSION && \
     echo "include qsiprep/VERSION" >> /src/qsiprep/MANIFEST.in && \
     pip install --no-cache-dir "/src/qsiprep[all]"
+
+# Precaching fonts, set 'Agg' as default backend for matplotlib
+RUN python -c "from matplotlib import font_manager" && \
+    sed -i 's/\(backend *: \).*$/\1Agg/g' $( python -c "import matplotlib; print(matplotlib.matplotlib_fname())" )
 
 RUN find $HOME -type d -exec chmod go=u {} + && \
     find $HOME -type f -exec chmod go=u {} +
