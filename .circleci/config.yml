@@ -190,7 +190,7 @@ jobs:
               apt-get install -y graphviz
       - run:
           name: Install qsiprep.
-          command: python -m pip install ".[doc]"
+          command: python -m pip install ".[doc]" --no-cache-dir --progress-bar off
       - run:
           name: Build documentation
           command: |
