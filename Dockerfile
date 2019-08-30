@@ -214,7 +214,8 @@ RUN conda install -y python=3.7.1 \
                      scipy=1.2.0 \
                      mkl=2019.1 \
                      mkl-service \
-                     scikit-learn=0.23 \
+                     joblib=0.13.2 \
+                     scikit-learn=0.21.3 \
                      matplotlib=2.2.3 \
                      seaborn=0.9.0 \
                      pandas=0.24.0 \

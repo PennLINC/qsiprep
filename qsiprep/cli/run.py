@@ -7,6 +7,7 @@ QSI workflow
 import warnings
 warnings.filterwarnings("ignore", category=ImportWarning)
 warnings.filterwarnings("ignore", category=PendingDeprecationWarning)
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 import os
 import os.path as op
 from pathlib import Path
