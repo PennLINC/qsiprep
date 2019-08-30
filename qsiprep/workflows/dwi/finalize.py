@@ -174,10 +174,10 @@ def init_dwi_finalize_wf(scan_groups,
     else:
         all_dwis = ['/fake/testing/path.nii.gz']
         source_file = all_dwis[0]
-        fieldmap_info = {'type': None}
+        fieldmap_info = {'suffix': None}
         dwi_metadata = {}
 
-    fieldmap_type = fieldmap_info['type']
+    fieldmap_type = fieldmap_info['suffix']
     if fieldmap_type is not None:
         fmap_key = "phase1" if fieldmap_type == "phase" else fieldmap_type
         fieldmap_file = fieldmap_info[fmap_key]

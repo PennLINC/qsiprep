@@ -826,7 +826,7 @@ def group_by_warpspace(dwi_files, layout, prefer_dedicated_fmaps, using_eddy, ig
             and ``use_eddy``:
             [
                 {'dwi_series': ['scan1.nii', 'scan2.nii'],
-                 'fieldmap_info': {'rpe_series':['scan3.nii', 'scan4.nii', 'type':'rpe_series']}
+                 'fieldmap_info': {'rpe_series':['scan3.nii', 'scan4.nii', 'suffix':'rpe_series']}
                  'dwi_series_pedir': 'j'}
             ]
 
@@ -834,11 +834,11 @@ def group_by_warpspace(dwi_files, layout, prefer_dedicated_fmaps, using_eddy, ig
             [
                 {'dwi_series': ['scan1.nii', 'scan2.nii'],
                  'fieldmap_info': {'rpe_series':['scan3.nii', 'scan4.nii'],
-                                   'type':'rpe_series']}
+                                   'suffix':'rpe_series']}
                  'dwi_series_pedir': 'j'},
                  {'dwi_series': ['scan3.nii', 'scan4.nii'],
                   'fieldmap_info': {'rpe_series': ['scan1.nii', 'scan2.nii'],
-                                    'type':'rpe_series']}
+                                    'suffix':'rpe_series']}
                   'dwi_series_pedir': 'j'}
             ]
 
@@ -846,7 +846,7 @@ def group_by_warpspace(dwi_files, layout, prefer_dedicated_fmaps, using_eddy, ig
             [
              {'dwi_series': ['scan1.nii', 'scan2.nii'],
               'fieldmap_info': {'epi': 'fmap_scan1.nii',
-                                'type': 'epi'},
+                                'suffix': 'epi'},
               'dwi_series_pedir': 'j'}
             ]
 
@@ -854,11 +854,11 @@ def group_by_warpspace(dwi_files, layout, prefer_dedicated_fmaps, using_eddy, ig
             [
              {'dwi_series': ['scan1.nii', 'scan2.nii'],
               'fieldmap_info': {'epi': 'fmap_scan1.nii',
-                                'type': 'epi'},
+                                'suffix': 'epi'},
               'dwi_series_pedir': 'j'},
              {'dwi_series': ['scan3.nii', 'scan4.nii'],
               'fieldmap_info': {'epi': 'fmap_scan2.nii',
-                               'type': 'epi'},
+                               'suffix': 'epi'},
               'dwi_series_pedir': 'j-'}
             ]
 
@@ -868,7 +868,7 @@ def group_by_warpspace(dwi_files, layout, prefer_dedicated_fmaps, using_eddy, ig
               'fieldmap_info': { 'magnitude1': 'magnitude1.nii',
                                  'magnitude2': 'magnitude2.nii',
                                  'phasediff': 'phasediff.nii',
-                                 'type': 'phasediff'},
+                                 'suffix': 'phasediff'},
               'dwi_series_pedir': 'j-'}
             ]
 
@@ -882,7 +882,7 @@ def group_by_warpspace(dwi_files, layout, prefer_dedicated_fmaps, using_eddy, ig
     if layout is None:
         LOGGER.warning("Assuming we're building docs")
         return [{'dwi_series': dwi_files,
-                 'fieldmap_info': {'type': None},
+                 'fieldmap_info': {'suffix': None},
                  'dwi_series_pedir': 'j'}]
 
     # For each DWI, figure out its PE dir and whether or not it was listed in
@@ -890,7 +890,7 @@ def group_by_warpspace(dwi_files, layout, prefer_dedicated_fmaps, using_eddy, ig
     # (filename, PE dir, fmap_file) and hang on to the pointers to additional files
     # for this fieldmap
     parsed_dwis = []
-    fmap_pointers = {'': {'type': None}}
+    fmap_pointers = {'': {'suffix': None}}
     for ref_file in dwi_files:
         metadata = layout.get_metadata(ref_file)
 
@@ -900,7 +900,7 @@ def group_by_warpspace(dwi_files, layout, prefer_dedicated_fmaps, using_eddy, ig
         priority = 99999
         fmap_type = None
         for fmap in fmaps:
-            fmap_type = fmap['type']
+            fmap_type = fmap['suffix']
             if fmap_type not in ('epi', 'phasediff', 'phase'):
                 continue
 
@@ -945,7 +945,7 @@ def group_by_warpspace(dwi_files, layout, prefer_dedicated_fmaps, using_eddy, ig
         for pe_dir, member_images in pedir_groups.items():
             output_groups.append({
                 'dwi_series': member_images,
-                'fieldmap_info': {'type': None},
+                'fieldmap_info': {'suffix': None},
                 'dwi_series_pedir': pe_dir})
         LOGGER.info('\n'.join(rationale))
         return output_groups
@@ -996,7 +996,7 @@ def group_by_warpspace(dwi_files, layout, prefer_dedicated_fmaps, using_eddy, ig
                         key, match))
                 final_groups.append(
                     {'dwi_series': scan_list,
-                     'fieldmap_info': {'type': 'rpe_series', 'rpe_series': match_scan_list,},
+                     'fieldmap_info': {'suffix': 'rpe_series', 'rpe_series': match_scan_list,},
                      'dwi_series_pedir': pe_dir})
             else:
                 matches_rationale.append(
@@ -1004,11 +1004,11 @@ def group_by_warpspace(dwi_files, layout, prefer_dedicated_fmaps, using_eddy, ig
                         key, match))
                 final_groups.append(
                     {'dwi_series': scan_list,
-                     'fieldmap_info': {'type': 'rpe_series', 'rpe_series': match_scan_list},
+                     'fieldmap_info': {'suffix': 'rpe_series', 'rpe_series': match_scan_list},
                      'dwi_series_pedir': key})
                 final_groups.append(
                     {'dwi_series': match_scan_list,
-                     'fieldmap_info': {'type': 'rpe_series', 'rpe_series': scan_list},
+                     'fieldmap_info': {'suffix': 'rpe_series', 'rpe_series': scan_list},
                      'dwi_series_pedir': match})
             group_keys.discard(match)
 
@@ -1034,7 +1034,7 @@ def group_by_warpspace(dwi_files, layout, prefer_dedicated_fmaps, using_eddy, ig
 def _get_output_fname(dwi_group):
     """Derive the output name for a dwi grouping."""
     all_dwis = dwi_group['dwi_series']
-    if dwi_group['fieldmap_info']['type'] == 'rpe_series':
+    if dwi_group['fieldmap_info']['suffix'] == 'rpe_series':
         all_dwis += dwi_group['fieldmap_info']['rpe_series']
 
     # If a single file, use its name, otherwise use the common prefix

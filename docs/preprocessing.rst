@@ -335,7 +335,7 @@ DWI preprocessing
     from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
     wf = init_dwi_preproc_wf({'dwi_series': [
                                 '/completely/made/up/path/sub-01_dwi.nii.gz'],
-                              'fieldmap_info': {'type': None},
+                              'fieldmap_info': {'suffix': None},
                               'dwi_series_pedir': 'j'},
                               omp_nthreads=1,
                               ignore=[],
@@ -376,7 +376,7 @@ Head-motion estimation (SHORELine)
 
     from qsiprep.workflows.dwi.hmc_sdc import init_qsiprep_hmcsdc_wf
     wf = init_qsiprep_hmcsdc_wf({'dwi_series':['dwi1.nii', 'dwi2.nii'],
-                                'fieldmap_info': {'type': None},
+                                'fieldmap_info': {'suffix': None},
                                 'dwi_series_pedir': 'j'},
                                 hmc_transform='Affine',
                                 hmc_model='3dSHORE',

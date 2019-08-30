@@ -139,7 +139,7 @@ class SubjectSummary(SummaryInterface):
                 for dwi_file in group_info['dwi_series']:
                     files_desc.append("\t\t\t\t\t<li> %s </li>" % dwi_file)
                     n_dwis += 1
-                fieldmap_type = group_info['fieldmap_info']['type']
+                fieldmap_type = group_info['fieldmap_info']['suffix']
                 if fieldmap_type is not None:
                     files_desc.append('\t\t\t\t<li>Fieldmap type: %s </li>' % fieldmap_type)
 

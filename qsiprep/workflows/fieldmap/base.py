@@ -80,7 +80,7 @@ def init_sdc_wf(fieldmap_info, dwi_meta, omp_nthreads=1,
         from qsiprep.workflows.fieldmap import init_sdc_wf
         wf = init_sdc_wf(
             fieldmap_info={
-                'type': 'epi',
+                'suffix': 'epi',
                 'epi': \
                     'sub-03/ses-2/fmap/sub-03_ses-2_run-1_epi.nii.gz',
                 'metadata': {'PhaseEncodingDirection': 'j-'}
@@ -143,7 +143,7 @@ def init_sdc_wf(fieldmap_info, dwi_meta, omp_nthreads=1,
     """
 
     workflow = Workflow(
-        name='sdc_wf' if fieldmap_info['type'] is not None else 'sdc_bypass_wf')
+        name='sdc_wf' if fieldmap_info['suffix'] is not None else 'sdc_bypass_wf')
     inputnode = pe.Node(niu.IdentityInterface(
         fields=['b0_ref', 'b0_ref_brain', 'b0_mask',
                 't1_brain', 't1_2_mni_reverse_transform', 'template']),
@@ -155,7 +155,7 @@ def init_sdc_wf(fieldmap_info, dwi_meta, omp_nthreads=1,
         name='outputnode')
 
     # No fieldmaps - forward inputs to outputs
-    if fieldmap_info['type'] is None:
+    if fieldmap_info['suffix'] is None:
         outputnode.inputs.method = 'None'
         workflow.connect([
             (inputnode, outputnode, [('b0_ref', 'b0_ref'),
@@ -171,7 +171,7 @@ co-registration with the anatomical reference.
 """
 
     # PEPOLAR path
-    if fieldmap_info['type'] == 'epi':
+    if fieldmap_info['suffix'] == 'epi':
         outputnode.inputs.method = \
             'PEB/PEPOLAR (phase-encoding based / PE-POLARity)'
         # Get EPI polarities and their metadata
@@ -192,11 +192,11 @@ co-registration with the anatomical reference.
         ])
 
     # FIELDMAP path
-    if fieldmap_info['type'] in ['fieldmap', 'phasediff', 'phase']:
-        outputnode.inputs.method = 'FMB (%s-based)' % fieldmap_info['type']
+    if fieldmap_info['suffix'] in ['fieldmap', 'phasediff', 'phase']:
+        outputnode.inputs.method = 'FMB (%s-based)' % fieldmap_info['suffix']
         # Import specific workflows here, so we don't break everything with one
         # unused workflow.
-        if fieldmap_info['type'] == 'fieldmap':
+        if fieldmap_info['suffix'] == 'fieldmap':
             from .fmap import init_fmap_wf
             fmap_estimator_wf = init_fmap_wf(
                 omp_nthreads=omp_nthreads,
@@ -205,14 +205,14 @@ co-registration with the anatomical reference.
             fmap_estimator_wf.inputs.inputnode.fieldmap = fieldmap_info['fieldmap']
             fmap_estimator_wf.inputs.inputnode.magnitude = fieldmap_info['magnitude']
 
-        if fieldmap_info['type'] in ('phasediff', 'phase'):
+        if fieldmap_info['suffix'] in ('phasediff', 'phase'):
             from .phdiff import init_phdiff_wf
             fmap_estimator_wf = init_phdiff_wf(omp_nthreads=omp_nthreads,
-                                               phasetype=fieldmap_info['type'])
+                                               phasetype=fieldmap_info['suffix'])
             # set inputs
-            if fieldmap_info['type'] == 'phasediff':
+            if fieldmap_info['suffix'] == 'phasediff':
                 fmap_estimator_wf.inputs.inputnode.phasediff = fieldmap_info['phasediff']
-            elif fieldmap_info['type'] == 'phase':
+            elif fieldmap_info['suffix'] == 'phase':
                 # Check that fieldmap is not bipolar
                 fmap_polarity = fieldmap_info['metadata'].get('DiffusionScheme', None)
                 if fmap_polarity == 'Bipolar':
@@ -256,7 +256,7 @@ co-registration with the anatomical reference.
         ])
 
     # FIELDMAP-less path
-    if fieldmap_info['type'] == 'syn':
+    if fieldmap_info['suffix'] == 'syn':
         syn_sdc_wf = init_syn_sdc_wf(
             bold_pe=dwi_meta.get('PhaseEncodingDirection', None),
             omp_nthreads=omp_nthreads)
@@ -271,7 +271,7 @@ co-registration with the anatomical reference.
         ])
 
         # XXX Eliminate branch when forcing isn't an option
-        if fieldmap_info['type'] == 'syn':  # No fieldmaps, but --use-syn
+        if fieldmap_info['suffix'] == 'syn':  # No fieldmaps, but --use-syn
             outputnode.inputs.method = 'FLB ("fieldmap-less", SyN-based)'
             sdc_unwarp_wf = syn_sdc_wf
         else:  # --force-syn was called when other fieldmap was present

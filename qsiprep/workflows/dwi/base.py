@@ -65,7 +65,7 @@ def init_dwi_preproc_wf(scan_groups,
 
         from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
         wf = init_dwi_preproc_wf({'dwi_series': ['fake.nii'],
-                                  'fieldmap_info': {'type': None},
+                                  'fieldmap_info': {'suffix': None},
                                   'dwi_series_pedir': 'j'},
                                   output_prefix='',
                                   ignore=[],
@@ -242,10 +242,10 @@ def init_dwi_preproc_wf(scan_groups,
     else:
         all_dwis = ['/fake/testing/path.nii.gz']
         source_file = all_dwis[0]
-        fieldmap_info = {'type': None}
+        fieldmap_info = {'suffix': None}
         dwi_metadata = {}
 
-    fieldmap_type = fieldmap_info['type']
+    fieldmap_type = fieldmap_info['suffix']
     doing_bidirectional_pepolar = fieldmap_type == 'rpe_series'
     preprocess_rpe_series = doing_bidirectional_pepolar and hmc_model == 'eddy'
     if fieldmap_type is not None:
