@@ -52,7 +52,7 @@ def get_parser():
     # required, positional arguments
     # IMPORTANT: they must go directly with the parser object
     parser.add_argument('--bids_dir', '--bids-dir',
-                        type=os.path.abspath,
+                        type=Path,
                         required=True,
                         action='store',
                         default='',
@@ -61,7 +61,7 @@ def get_parser():
     parser.add_argument('--output_dir', '--output-dir',
                         required=True,
                         action='store',
-                        type=os.path.abspath,
+                        type=Path,
                         default='',
                         help='the output path for the outcomes of preprocessing and visual'
                         ' reports')
@@ -322,7 +322,7 @@ def get_parser():
     # FreeSurfer options
     g_fs = parser.add_argument_group('Specific options for FreeSurfer preprocessing')
     g_fs.add_argument(
-        '--fs-license-file', '--fs_license_file', metavar='PATH', type=os.path.abspath,
+        '--fs-license-file', '--fs_license_file', metavar='PATH', type=Path,
         help='Path to FreeSurfer license key file. Get it (for free) by registering '
         'at https://surfer.nmr.mgh.harvard.edu/registration.html')
     g_fs.add_argument(
@@ -450,20 +450,16 @@ def main():
         validate_input_dir(exec_env, opts.bids_dir, opts.participant_label)
 
     # FreeSurfer license
-    default_license = str(Path(str(os.getenv('FREESURFER_HOME'))) / 'license.txt')
+    default_license = str(Path(os.getenv('FREESURFER_HOME')) / 'license.txt')
     # Precedence: --fs-license-file, $FS_LICENSE, default_license
-    license_file = opts.fs_license_file or os.getenv('FS_LICENSE',
-                                                     default_license)
-    if not os.path.exists(license_file):
-        raise RuntimeError(
-            'ERROR: a valid license file is required for FreeSurfer to run. '
-            'qsiprep looked for an existing license file at several paths, in'
-            'this order: 1) command line argument ``--fs-license-file``; 2) '
-            '``$FS_LICENSE`` environment variable; and 3) the '
-            '``$FREESURFER_HOME/license.txt`` path. '
-            'Get it (for free) by registering at https://'
-            'surfer.nmr.mgh.harvard.edu/registration.html')
-    os.environ['FS_LICENSE'] = license_file
+    license_file = opts.fs_license_file or Path(os.getenv('FS_LICENSE', default_license))
+    if not license_file.exists():
+        raise RuntimeError("""\
+ERROR: a valid license file is required for FreeSurfer to run. fMRIPrep looked for an existing \
+license file at several paths, in this order: 1) command line argument ``--fs-license-file``; \
+2) ``$FS_LICENSE`` environment variable; and 3) the ``$FREESURFER_HOME/license.txt`` path. Get it \
+(for free) by registering at https://surfer.nmr.mgh.harvard.edu/registration.html""")
+    os.environ['FS_LICENSE'] = str(license_file.resolve())
 
     # Retrieve logging level
     log_level = int(max(25 - 5 * opts.verbose_count, logging.DEBUG))
