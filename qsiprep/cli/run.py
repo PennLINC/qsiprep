@@ -369,6 +369,7 @@ def get_parser():
     g_other.add_argument(
         '-w',
         '--work-dir', '--work_dir',
+        type=Path,
         action='store',
         help='path where intermediate results should be stored')
     g_other.add_argument(
