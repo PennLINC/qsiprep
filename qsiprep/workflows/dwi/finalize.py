@@ -170,19 +170,12 @@ def init_dwi_finalize_wf(scan_groups,
         all_dwis = scan_groups['dwi_series']
         source_file = all_dwis[0]
         fieldmap_info = scan_groups['fieldmap_info']
-        dwi_metadata = layout.get_metadata(source_file)
     else:
         all_dwis = ['/fake/testing/path.nii.gz']
         source_file = all_dwis[0]
         fieldmap_info = {'suffix': None}
-        dwi_metadata = {}
 
     fieldmap_type = fieldmap_info['suffix']
-    if fieldmap_type is not None:
-        fmap_key = "phase1" if fieldmap_type == "phase" else fieldmap_type
-        fieldmap_file = fieldmap_info[fmap_key]
-        fieldmap_info['metadata'] = layout.get_metadata(fieldmap_file)
-
     mem_gb = {'filesize': 1, 'resampled': 1, 'largemem': 1}
     dwi_nvols = 10
 

@@ -1,0 +1,21 @@
+{
+  "flm": "linear",
+  "slm": "linear",
+  "fep": false,
+  "interp": "linear",
+  "nvoxhp": 1000,
+  "fudge_factor": 10,
+  "dont_sep_offs_move": false,
+  "dont_peas": false,
+  "niter": 5,
+  "method": "lsr",
+  "repol": false,
+  "num_threads": 1,
+  "is_shelled": true,
+  "use_cuda": false,
+  "cnr_maps": true,
+  "residuals": false,
+  "output_type": "NIFTI_GZ",
+  "args": "",
+  "niter": 1
+}

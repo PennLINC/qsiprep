@@ -36,6 +36,7 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
                            use_syn,
                            force_syn,
                            dwi_metadata=None,
+                           sloppy=False,
                            name='qsiprep_hmcsdc_wf'):
     """
     This workflow controls the head motion correction and susceptibility distortion
@@ -62,6 +63,7 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
                                          use_syn=True,
                                          force_syn=False,
                                          name='qsiprep_hmcsdc_wf',
+                                         sloppy=False,
                                          dwi_metadata={})
     """
     inputnode = pe.Node(
@@ -106,6 +108,7 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
     dwi_hmc_wf = init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to,
                                  source_file=source_file,
                                  num_model_iterations=shoreline_iters,
+                                 sloppy=sloppy,
                                  omp_nthreads=omp_nthreads, name="dwi_hmc_wf")
 
     # Perform SDC if possible

@@ -41,6 +41,7 @@ from nipype.interfaces import utility as niu
 from nipype import logging
 
 from ...engine import Workflow
+from ...interfaces.fmap import B0RPEFieldmap
 
 # Fieldmap workflows
 from .pepolar import init_pepolar_unwarp_wf
@@ -50,6 +51,7 @@ from .unwarp import init_sdc_unwarp_wf
 LOGGER = logging.getLogger('nipype.workflow')
 FMAP_PRIORITY = {
     'epi': 0,
+    'rpe_series': 0,
     'fieldmap': 1,
     'phasediff': 2,
     'phase': 3,
@@ -171,13 +173,14 @@ co-registration with the anatomical reference.
 """
 
     # PEPOLAR path
-    if fieldmap_info['suffix'] == 'epi':
+    if fieldmap_info['suffix'] in ('epi', 'rpe_series'):
+        using_rpe_series = fieldmap_info['suffix'] == 'rpe_series'
         outputnode.inputs.method = \
-            'PEB/PEPOLAR (phase-encoding based / PE-POLARity)'
-        # Get EPI polarities and their metadata
-        epi_fmaps = [
-            (fieldmap_info['epi'], fieldmap_info['metadata']["PhaseEncodingDirection"])]
+            'PEB/PEPOLAR (phase-encoding based / PE-POLARity): %s' % fieldmap_info['suffix']
 
+        epi_fmaps = fieldmap_info[fieldmap_info['suffix']]
+
+        # We have already sorted by compatible 
         sdc_unwarp_wf = init_pepolar_unwarp_wf(
             dwi_meta=dwi_meta,
             epi_fmaps=epi_fmaps,

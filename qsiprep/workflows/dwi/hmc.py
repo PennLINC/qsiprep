@@ -20,7 +20,7 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 
 
 def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file,
-                    num_model_iterations=2, mem_gb=3, omp_nthreads=1,
+                    num_model_iterations=2, mem_gb=3, omp_nthreads=1, sloppy=False,
                     name="dwi_hmc_wf"):
     """Perform head motion correction and susceptibility distortion correction.
 
@@ -89,7 +89,7 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file,
 
     workflow = Workflow(name=name)
     # Unbiased align the b0s
-    b0_hmc_wf = init_b0_hmc_wf(align_to=hmc_align_to, transform=hmc_transform)
+    b0_hmc_wf = init_b0_hmc_wf(align_to=hmc_align_to, transform=hmc_transform, sloppy=sloppy)
     # Tile the transforms so each non-b0 gets the transform from the nearest b0
     match_transforms = pe.Node(MatchTransforms(), name="match_transforms")
     # Make a mask from the output template. It is bias-corrected, so good for masking
@@ -227,7 +227,7 @@ def linear_alignment_workflow(transform="Rigid", metric="Mattes", iternum=0, pre
 
 
 def init_b0_hmc_wf(align_to="iterative", transform="Rigid", spatial_bias_correct=False,
-                   metric="Mattes", num_iters=3, name="b0_hmc_wf"):
+                   sloppy=False, metric="Mattes", num_iters=3, name="b0_hmc_wf"):
 
     if align_to == "iterative" and num_iters < 2:
         raise ValueError("Must specify a positive number of iterations")

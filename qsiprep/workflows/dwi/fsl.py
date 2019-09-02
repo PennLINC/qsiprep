@@ -48,6 +48,7 @@ def init_fsl_hmc_wf(scan_groups,
                     omp_nthreads=1,
                     dwi_metadata=None,
                     slice_quality='outlier_n_sqr_stdev_map',
+                    sloppy=False,
                     name="fsl_hmc_wf"):
     """
     This workflow controls the dwi preprocessing stages using FSL tools.

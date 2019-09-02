@@ -544,8 +544,6 @@ to workflows in *qsiprep*'s documentation]\
 
     # Handle the grouping of multiple dwi files within a session
     dwi_session_groups = get_session_groups(layout, subject_data, combine_all_dwis)
-    LOGGER.info(dwi_session_groups)
-
     dwi_fmap_groups = []
     for dwi_session_group in dwi_session_groups:
         dwi_fmap_groups.extend(
@@ -554,9 +552,9 @@ to workflows in *qsiprep*'s documentation]\
                                "fieldmaps" in ignore or force_syn,
                                combine_all_dwis))
     outputs_to_files = {_get_output_fname(dwi_group): dwi_group for dwi_group in dwi_fmap_groups}
-
     summary.inputs.dwi_groupings = outputs_to_files
 
+    # Ensure there are enough groups to make a template
     make_intramodal_template = False
     if intramodal_template_iters > 0:
         if len(outputs_to_files) < 2:
@@ -564,8 +562,7 @@ to workflows in *qsiprep*'s documentation]\
                 'ERROR:  Not enough dwi groups were found to create an intramodal '
                 'template. Consider changing --combine-all-dwis and/or removing '
                 'fieldmaps from --ignore.')
-        else:
-            make_intramodal_template = True
+        make_intramodal_template = True
 
     intramodal_template_wf = init_intramodal_template_wf(
         omp_nthreads=omp_nthreads,
@@ -626,7 +623,8 @@ to workflows in *qsiprep*'s documentation]\
             fmap_bspline=fmap_bspline,
             fmap_demean=fmap_demean,
             use_syn=use_syn,
-            force_syn=force_syn
+            force_syn=force_syn,
+            sloppy=debug
         )
         dwi_finalize_wf = init_dwi_finalize_wf(
             scan_groups=dwi_info,
@@ -996,7 +994,7 @@ def group_by_warpspace(dwi_files, layout, prefer_dedicated_fmaps, using_eddy, ig
                         key, match))
                 final_groups.append(
                     {'dwi_series': scan_list,
-                     'fieldmap_info': {'suffix': 'rpe_series', 'rpe_series': match_scan_list,},
+                     'fieldmap_info': {'suffix': 'rpe_series', 'rpe_series': match_scan_list},
                      'dwi_series_pedir': pe_dir})
             else:
                 matches_rationale.append(
@@ -1026,16 +1024,17 @@ def group_by_warpspace(dwi_files, layout, prefer_dedicated_fmaps, using_eddy, ig
         else:
             # Didn't find any reverse PE groups
             LOGGER.critical("Multiple matches found for %s", key)
-
-    LOGGER.info('\n'.join(rationale + [match_header] + matches_rationale))
+    LOGGER.log(25, '\n'.join(rationale + [match_header] + matches_rationale))
     return final_groups
 
 
 def _get_output_fname(dwi_group):
     """Derive the output name for a dwi grouping."""
     all_dwis = dwi_group['dwi_series']
-    if dwi_group['fieldmap_info']['suffix'] == 'rpe_series':
-        all_dwis += dwi_group['fieldmap_info']['rpe_series']
+
+    # This causes lots of problems. Why was it here?
+    #if dwi_group['fieldmap_info']['suffix'] == 'rpe_series':
+    #    all_dwis += dwi_group['fieldmap_info']['rpe_series']
 
     # If a single file, use its name, otherwise use the common prefix
     if len(all_dwis) > 1:

@@ -55,6 +55,7 @@ def init_dwi_preproc_wf(scan_groups,
                         use_syn,
                         force_syn,
                         low_mem,
+                        sloppy,
                         layout=None):
     """
     This workflow controls the dwi preprocessing stages of qsiprep.
@@ -89,6 +90,7 @@ def init_dwi_preproc_wf(scan_groups,
                                   use_syn=True,
                                   force_syn=False,
                                   low_mem=False,
+                                  sloppy=True,
                                   layout=None)
 
     **Parameters**
@@ -159,7 +161,8 @@ def init_dwi_preproc_wf(scan_groups,
         num_dwi : int
             Total number of dwi files that have been set for preprocessing
             (default is 1)
-
+        sloppy : bool
+            Use low-quality settings for motion correction
     **Inputs**
 
         t1_preproc
@@ -251,7 +254,9 @@ def init_dwi_preproc_wf(scan_groups,
     if fieldmap_type is not None:
         fmap_key = "phase1" if fieldmap_type == "phase" else fieldmap_type
         fieldmap_file = fieldmap_info[fmap_key]
-        fieldmap_info['metadata'] = layout.get_metadata(fieldmap_file)
+        # There can be a bunch of rpe series, so don't get the info yet
+        if fmap_key != 'rpe_series':
+            fieldmap_info['metadata'] = layout.get_metadata(fieldmap_file)
 
     mem_gb = {'filesize': 1, 'resampled': 1, 'largemem': 1}
     dwi_nvols = 10
@@ -315,6 +320,7 @@ def init_dwi_preproc_wf(scan_groups,
             use_syn=use_syn,
             force_syn=force_syn,
             dwi_metadata=dwi_metadata,
+            sloppy=sloppy,
             name="hmc_sdc_wf")
 
     elif hmc_model == 'eddy':
@@ -328,6 +334,7 @@ def init_dwi_preproc_wf(scan_groups,
             fmap_bspline=fmap_bspline,
             fmap_demean=fmap_demean,
             dwi_metadata=dwi_metadata,
+            sloppy=sloppy,
             name="hmc_sdc_wf")
 
     workflow.connect([
