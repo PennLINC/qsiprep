@@ -248,6 +248,7 @@ T1w/T2w preprocessing
                               longitudinal=False,
                               debug=False,
                               hires=True,
+                              sloppy=False,
                               num_t1w=1)
 
 The anatomical sub-workflow begins by constructing an average image by
