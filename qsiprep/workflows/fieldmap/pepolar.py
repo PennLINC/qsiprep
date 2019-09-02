@@ -242,27 +242,6 @@ def init_prepare_dwi_epi_wf(omp_nthreads, name="prepare_epi_wf"):
     'mri_robust_template', bias field correction using ANTs N4BiasFieldCorrection
     and AFNI 3dUnifize, skullstripping using FSL BET and AFNI 3dAutomask,
     and rigid coregistration to the reference using ANTs.
-
-    .. workflow ::
-        :graph2use: orig
-        :simple_form: yes
-
-        from qsiprep.workflows.fieldmap.pepolar import init_prepare_epi_wf
-        wf = init_prepare_dwi_epi_wf(omp_nthreads=8)
-
-
-    Inputs
-
-        fmaps
-            list of 3D or 4D NIfTI images
-        ref_brain
-            coregistration reference (skullstripped and bias field corrected)
-
-    Outputs
-
-        out_file
-            single 3D NIfTI file
-
     """
     inputnode = pe.Node(niu.IdentityInterface(fields=['fmaps', 'ref_brain']),
                         name='inputnode')
