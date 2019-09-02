@@ -163,6 +163,7 @@ def init_dwi_preproc_wf(scan_groups,
             (default is 1)
         sloppy : bool
             Use low-quality settings for motion correction
+
     **Inputs**
 
         t1_preproc
