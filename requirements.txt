@@ -3,3 +3,4 @@ pybids==0.6.5
 versioneer
 dipy
 svgutils
+nipype==1.1.9
