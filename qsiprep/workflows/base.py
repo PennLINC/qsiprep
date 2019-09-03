@@ -707,7 +707,8 @@ to workflows in *qsiprep*'s documentation]\
                     ('outputnode.dwi_mask', 'inputnode.dwi_mask'),
                     ('outputnode.hmc_xforms', 'inputnode.hmc_xforms'),
                     ('outputnode.fieldwarps', 'inputnode.fieldwarps'),
-                    ('outputnode.itk_b0_to_t1', 'inputnode.itk_b0_to_t1')
+                    ('outputnode.itk_b0_to_t1', 'inputnode.itk_b0_to_t1'),
+                    ('outputnode.hmc_optimization_data', 'inputnode.hmc_optimization_data')
                     ])
         ])
 
