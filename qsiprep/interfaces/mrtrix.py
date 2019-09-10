@@ -16,7 +16,7 @@ from tempfile import TemporaryDirectory
 from time import time
 
 from nipype import logging
-from nipype.utils.filemanip import fname_presuffix
+from nipype.utils.filemanip import fname_presuffix, split_filename
 from nipype.interfaces.base import (
     traits, TraitedSpec, BaseInterfaceInputSpec, File, SimpleInterface, InputMultiObject,
     OutputMultiObject, isdefined
@@ -26,8 +26,11 @@ from .gradients import concatenate_bvecs, concatenate_bvals, GradientRotation
 from dipy.core.gradients import gradient_table
 from dipy.reconst.mapmri import MapmriModel
 from ..utils.brainsuite_shore import BrainSuiteShoreModel, brainsuite_shore_basis
-from nipype.interfaces.mrtrix3 import EstimateFOD, Generate5tt, ComputeTDI, ResponseSD, MRConvert
+from nipype.interfaces.mrtrix3 import (EstimateFOD, Generate5tt, ComputeTDI,
+    ResponseSD, MRConvert)
+from nipype.interfaces.mrtrix3.utils import Generate5ttInputSpec, Generate5ttOutputSpec
 from nipype.interfaces.mrtrix3.base import MRTrix3Base, MRTrix3BaseInputSpec
+from nipype.interfaces.mrtrix3.preprocess import ResponseSDInputSpec
 
 LOGGER = logging.getLogger('nipype.interface')
 
@@ -150,3 +153,64 @@ class DWIDenoise(MRTrix3Base):
     _cmd = 'dwidenoise'
     input_spec = DWIDenoiseInputSpec
     output_spec = DWIDenoiseOutputSpec
+
+
+class GenerateMasked5ttInputSpec(Generate5ttInputSpec):
+    algorithm = traits.Enum(
+        'fsl',
+        'gif',
+        'freesurfer',
+        argstr='%s',
+        position=0,
+        mandatory=True,
+        desc='tissue segmentation algorithm')
+    in_file = File(
+        exists=True, argstr='%s', mandatory=True, position=1, desc='input image')
+    out_file = File(
+        argstr='%s', genfile=True, position=2, desc='output image')
+    mask = File(exists=True, argstr='-mask %s')
+
+
+class GenerateMasked5tt(Generate5tt):
+    input_spec = GenerateMasked5ttInputSpec
+
+    def _gen_filename(self, name):
+        if name == "out_file":
+            output = self.inputs.out_file
+            if not isdefined(output):
+                _ , fname, ext = split_filename(self.inputs.in_file)
+                output = fname + '_5tt' + ext
+            return output
+        return None
+
+
+class Dwi2ResponseInputSpec(ResponseSDInputSpec):
+    out_wm = File(genfile=True)
+    out_gm = File(genfile=True)
+    out_csf = File(genfile=True)
+
+class Dwi2Response(ResponseSD):
+    input_spec = Dwi2ResponseInputSpec
+
+    def _format_arg(self, name, spec, val):
+        if self.inputs.algorithm in ('dhollander', 'msmt_5tt'):
+            if name in ('out_gm', 'out_csf'):
+                return ''
+        return super(Dwi2Response, self)._format_arg(self, name, spec, val)
+
+    def _gen_filename(self, name):
+        if name in ('out_gm', 'out_csf', 'out_wm'):
+            output = getattr(self.inputs, name)
+            if not isdefined(output):
+                _ , fname, ext = split_filename(self.inputs.in_file)
+                output = fname + name[3:] + '.txt'
+            return output
+        return None
+
+    def _list_outputs(self):
+        outputs = self.output_spec().get()
+        outputs['wm_file'] = op.abspath(self.inputs.out_wm)
+        if self.inputs.algorithm in ('dhollander', 'msmt_5tt'):
+            outputs['gm_file'] = op.abspath(self.inputs.out_gm)
+            outputs['csf_file'] = op.abspath(self.inputs.out_csf)
+        return outputs

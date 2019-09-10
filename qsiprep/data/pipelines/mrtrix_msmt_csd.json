@@ -1,0 +1,26 @@
+{
+  "name":"mrtrix_msmt",
+  "space": "T1w",
+  "atlases": [],
+  "nodes": [
+    {
+      "name": "msmt_csd",
+      "software": "MRTrix3",
+      "action": "csd",
+      "output_suffix": "msmtcsd",
+      "input": "qsiprep",
+      "parameters": {
+        "response": {"algorithm": "msmt_5tt"},
+        "fod": {"algorithm": "csd",
+                "max_sh": 8}
+      }
+    },
+    {
+      "name": "mif2fibgz",
+      "input": "msmt_csd",
+      "output_suffix": "msmtcsd",
+      "action": "mif_to_fib",
+      "parameters": {}
+    }
+  ]
+}

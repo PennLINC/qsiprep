@@ -7,7 +7,7 @@ from qsiprep.interfaces.utils import GetConnectivityAtlases
 from .dsi_studio import (init_dsi_studio_recon_wf, init_dsi_studio_export_wf,
                          init_dsi_studio_connectivity_wf)
 from .dipy import init_dipy_brainsuite_shore_recon_wf, init_dipy_mapmri_recon_wf
-from .mrtrix import init_mrtrix_vanilla_csd_recon_wf
+from .mrtrix import init_mrtrix_csd_recon_wf
 from .converters import init_mif_to_fibgz_wf
 from .dynamics import init_controllability_wf
 from .utils import init_conform_dwi_wf, init_discard_repeated_samples_wf
@@ -168,7 +168,7 @@ def workflow_from_spec(node_spec):
     # MRTrix3 operations
     elif software == "MRTrix3":
         if node_spec["action"] == "csd":
-            return init_mrtrix_vanilla_csd_recon_wf(**kwargs)
+            return init_mrtrix_csd_recon_wf(**kwargs)
 
     # Dipy operations
     elif software == "Dipy":
