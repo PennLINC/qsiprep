@@ -77,8 +77,8 @@ def init_merge_and_denoise_wf(dwi_denoise_window,
 
     workflow = Workflow(name=name)
 
-    inputnode = pe.MapNode(
-        niu.IdentityInterface(fields=['dwi_files']), iterfield=['dwi_files'], name='inputnode')
+    inputnode = pe.Node(
+        niu.IdentityInterface(fields=['dwi_files']), name='inputnode')
 
     outputnode = pe.Node(
         niu.IdentityInterface(fields=[

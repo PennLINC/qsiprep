@@ -154,9 +154,9 @@ def init_dwi_pre_hmc_wf(scan_groups,
             ])
         return workflow
 
-    merge_dwis = init_merge_and_denoise_wf(dwi_denoise_window=dwi_denoise_window,
-                                           denoise_before_combining=denoise_before_combining,
-                                           name="merge_dwis")
+    merge_dwis = init_merge_and_denoise_wf(
+        dwi_denoise_window=dwi_denoise_window,
+        denoise_before_combining=denoise_before_combining)
     split_dwis = pe.Node(SplitDWIs(b0_threshold=b0_threshold), name="split_dwis")
     merge_dwis.inputs.inputnode.dwi_files = dwi_series
 

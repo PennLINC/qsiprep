@@ -53,6 +53,7 @@ class MergeDWIs(SimpleInterface):
             sources = []
             for img in self.inputs.bids_dwi_files:
                 sources += [img] * get_nvols(img)
+            self._results['original_images'] = sources
         else:
             dwi_file = self.inputs.dwi_files[0]
             bids_dwi_file = self.inputs.bids_dwi_files[0]
