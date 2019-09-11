@@ -20,21 +20,9 @@ from nipype import __version__ as nipype_ver
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
 from nipype.utils.filemanip import split_filename
-
-from nilearn import __version__ as nilearn_ver
-
 from ...engine import Workflow
-from ...interfaces import (BIDSDataGrabber, BIDSInfo, BIDSFreeSurferDir,
-                           SubjectSummary, AboutSummary, DerivativesDataSink)
-from ...__about__ import __version__
-
 import logging
-from collections import defaultdict
 import json
-from ...interfaces.dsi_studio import (DSIStudioCreateSrc, DSIStudioGQIReconstruction,
-                                      DSIStudioAtlasGraph, DSIStudioExport)
-from ...interfaces.utils import GetConnectivityAtlases
-from ...interfaces.connectivity import Controllability
 from ...interfaces.anatomical import QsiprepAnatomicalIngress
 from bids.layout import BIDSLayout
 from .build_workflow import init_dwi_recon_workflow

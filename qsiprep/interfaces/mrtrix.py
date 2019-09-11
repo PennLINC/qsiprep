@@ -26,7 +26,7 @@ from .gradients import concatenate_bvecs, concatenate_bvals, GradientRotation
 from dipy.core.gradients import gradient_table
 from dipy.reconst.mapmri import MapmriModel
 from ..utils.brainsuite_shore import BrainSuiteShoreModel, brainsuite_shore_basis
-from nipype.interfaces.mrtrix3 import (EstimateFOD, Generate5tt, ComputeTDI,
+from nipype.interfaces.mrtrix3 import (Generate5tt, ComputeTDI,
     ResponseSD, MRConvert)
 from nipype.interfaces.mrtrix3.utils import Generate5ttInputSpec, Generate5ttOutputSpec
 from nipype.interfaces.mrtrix3.base import MRTrix3Base, MRTrix3BaseInputSpec
@@ -64,7 +64,7 @@ class MRTrixIngressInputSpec(BaseInterfaceInputSpec):
     bval_file = File(exists=True)
     bvec_file = File(exists=True)
     b_file = File(exists=True)
-    suffix = traits.Str("_dwi", usedefault=True)
+    suffix = traits.Str("", usedefault=True)
 
 
 class MRTrixIngressOutputSpec(TraitedSpec):
@@ -179,38 +179,183 @@ class GenerateMasked5tt(Generate5tt):
             output = self.inputs.out_file
             if not isdefined(output):
                 _ , fname, ext = split_filename(self.inputs.in_file)
-                output = fname + '_5tt' + ext
+                output = fname + '_5tt.mif'
             return output
         return None
 
+    def _list_outputs(self):
+        outputs = self._outputs().get()
+        outputs['out_file'] = op.abspath(self._gen_filename('out_file'))
+        return outputs
+
 
 class Dwi2ResponseInputSpec(ResponseSDInputSpec):
-    out_wm = File(genfile=True)
-    out_gm = File(genfile=True)
-    out_csf = File(genfile=True)
+    wm_file = File(
+        argstr='%s',
+        position=-3,
+        genfile=True,
+        desc='output WM response text file')
+    gm_file = File(
+        argstr='%s', genfile=True, position=-2, desc='output GM response text file')
+    csf_file = File(
+        argstr='%s', position=-1, genfile=True, desc='output CSF response text file')
+    max_sh = InputMultiObject(
+        traits.Int,
+        argstr='-lmax %s',
+        sep=',',
+        desc=('maximum harmonic degree of response function - single value for '
+              'single-shell response, list for multi-shell response'))
 
 class Dwi2Response(ResponseSD):
     input_spec = Dwi2ResponseInputSpec
 
     def _format_arg(self, name, spec, val):
-        if self.inputs.algorithm in ('dhollander', 'msmt_5tt'):
-            if name in ('out_gm', 'out_csf'):
+        if self.inputs.algorithm not in ('dhollander', 'msmt_5tt'):
+            if name in ('gm_file', 'csf_file'):
                 return ''
-        return super(Dwi2Response, self)._format_arg(self, name, spec, val)
+        return super(Dwi2Response, self)._format_arg(name, spec, val)
 
     def _gen_filename(self, name):
-        if name in ('out_gm', 'out_csf', 'out_wm'):
+        if name in ('gm_file', 'csf_file', 'wm_file'):
             output = getattr(self.inputs, name)
             if not isdefined(output):
-                _ , fname, ext = split_filename(self.inputs.in_file)
-                output = fname + name[3:] + '.txt'
+                _, fname, ext = split_filename(self.inputs.in_file)
+                output = fname + "_" + name.split("_")[0] + '.txt'
             return output
         return None
 
     def _list_outputs(self):
         outputs = self.output_spec().get()
-        outputs['wm_file'] = op.abspath(self.inputs.out_wm)
+        outputs['wm_file'] = op.abspath(self._gen_filename('wm_file'))
         if self.inputs.algorithm in ('dhollander', 'msmt_5tt'):
-            outputs['gm_file'] = op.abspath(self.inputs.out_gm)
-            outputs['csf_file'] = op.abspath(self.inputs.out_csf)
+            outputs['gm_file'] = op.abspath(self._gen_filename('gm_file'))
+            outputs['csf_file'] = op.abspath(self._gen_filename('csf_file'))
         return outputs
+
+
+class EstimateFODInputSpec(MRTrix3BaseInputSpec):
+    algorithm = traits.Enum(
+        'csd',
+        'msmt_csd',
+        argstr='%s',
+        position=-8,
+        mandatory=True,
+        desc='FOD algorithm')
+    in_file = File(
+        exists=True,
+        argstr='%s',
+        position=-7,
+        mandatory=True,
+        desc='input DWI image')
+    wm_txt = File(
+        argstr='%s', position=-6, mandatory=True, desc='WM response text file')
+    wm_odf = File(
+        argstr='%s',
+        position=-5,
+        genfile=True,
+        desc='output WM ODF')
+    gm_txt = File(
+        argstr='%s',
+        position=-4,
+        requires=['csf_txt'],
+        desc='GM response text file')
+    gm_odf = File(
+        argstr='%s',
+        position=-3,
+        genfile=True,
+        requires=['gm_txt'],
+        desc='output GM ODF')
+    csf_txt = File(
+        argstr='%s', position=-2, desc='CSF response text file')
+    csf_odf = File(
+        argstr='%s',
+        position=-1,
+        genfile=True,
+        requires=['csf_txt'],
+        desc='output CSF ODF')
+    mask_file = File(exists=True, argstr='-mask %s', desc='mask image')
+    shell = traits.List(
+        traits.Float,
+        sep=',',
+        argstr='-shell %s',
+        desc='specify one or more dw gradient shells')
+    max_sh = InputMultiObject(
+        traits.Int,
+        argstr='-lmax %s',
+        sep=',',
+        desc='maximum harmonic degree of response function - single value for single-shell '
+             'response, list for multi-shell response')
+    in_dirs = File(
+        exists=True,
+        argstr='-directions %s',
+        desc=('specify the directions over which to apply the non-negativity '
+              'constraint (by default, the built-in 300 direction set is '
+              'used). These should be supplied as a text file containing the '
+              '[ az el ] pairs for the directions.'))
+
+
+class EstimateFODOutputSpec(TraitedSpec):
+    wm_odf = File(desc='output WM ODF')
+    gm_odf = File(desc='output GM ODF')
+    csf_odf = File(desc='output CSF ODF')
+
+
+class EstimateFOD(MRTrix3Base):
+    """
+    Estimate fibre orientation distributions from diffusion data using spherical deconvolution
+    """
+
+    _cmd = 'dwi2fod'
+    input_spec = EstimateFODInputSpec
+    output_spec = EstimateFODOutputSpec
+
+    def _list_outputs(self):
+        outputs = self.output_spec().get()
+        outputs['wm_odf'] = op.abspath(self._gen_filename('wm_odf'))
+        if self.inputs.algorithm == 'msmt_csd':
+            outputs['gm_odf'] = op.abspath(self._gen_filename('gm_odf'))
+            outputs['csf_odf'] = op.abspath(self._gen_filename('csf_odf'))
+            print(outputs)
+        return outputs
+
+    def _format_arg(self, name, spec, value):
+        if self.inputs.algorithm == 'csd':
+            if name in ('gm_odf', 'gm_txt', 'csf_odf', 'csf_txt'):
+                return ''
+        return super(EstimateFOD, self)._format_arg(name, spec, value)
+
+    def _gen_filename(self, name):
+        if name in ('gm_odf', 'gm_txt', 'wm_odf', 'wm_txt', 'csf_odf', 'csf_txt'):
+            output = getattr(self.inputs, name)
+            if not isdefined(output):
+                _, fname, _ = split_filename(self.inputs.in_file)
+                ext = '.txt' if name.endswith('txt') else '.mif'
+                output = fname + "_" + name.split("_")[0] + ext
+            return output
+        return None
+
+
+class SIFTInputSpec(MRTrix3BaseInputSpec):
+    in_tracks = File(
+        argstr='%s', exists=True, mandatory=True, position=-3, desc='input tck file')
+    in_fod = File(
+        argstr='%s', position=-2, exists=True, mandatory=True, desc='input FOD SH file')
+    out_tracks = File(
+        argstr='%s', position=-1, genfile=True, desc='')
+
+
+class GlobalTractographyInputSpec(MRTrix3BaseInputSpec):
+    dwi_file = File(
+        argstr='%s', exists=True, mandatory=True, position=-3, desc='full dwi file')
+    wm_txt = File(exists=True, mandatory=True, position=-2, desc='wm response function')
+    out_tracks = File(
+        argstr='%s', position=-1, genfile=True, desc='the globally-optimized streamlines')
+    isotropic_response_txt = InputMultiObject(
+        File(argstr='-riso %s', exists=True),
+        desc='set one or more isotropic response functions')
+    out_isotropic_fod = InputMultiObject(
+        File(
+            argstr='-fiso %s', requires=['isotropic_response_txt'], genfile=True,
+            desc=' Predicted isotropic fractions of the tissues for which response '
+                 'functions were provided with isotropic_response_txt. Typically, '
+                 'these are CSF and GM.'))

@@ -2,6 +2,7 @@
   "name":"mrtrix_msmt",
   "space": "T1w",
   "atlases": [],
+  "anatomical": ["t1_dwi_brain_mask", "5tt"],
   "nodes": [
     {
       "name": "msmt_csd",
@@ -11,16 +12,9 @@
       "input": "qsiprep",
       "parameters": {
         "response": {"algorithm": "msmt_5tt"},
-        "fod": {"algorithm": "csd",
-                "max_sh": 8}
+        "fod": {"algorithm": "msmt_csd",
+                "max_sh": [4,8,8]}
       }
-    },
-    {
-      "name": "mif2fibgz",
-      "input": "msmt_csd",
-      "output_suffix": "msmtcsd",
-      "action": "mif_to_fib",
-      "parameters": {}
     }
   ]
 }
