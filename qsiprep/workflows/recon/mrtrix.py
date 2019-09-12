@@ -48,7 +48,7 @@ def init_mrtrix_csd_recon_wf(name="mrtrix_recon", output_suffix="", params={}):
             SH fiber response function for CSF
         csf_fod
             FOD SH coefficients for CSF
-        mif_file
+        fod_sh_mif
             The same file as wm_fod.
 
 
@@ -67,7 +67,7 @@ def init_mrtrix_csd_recon_wf(name="mrtrix_recon", output_suffix="", params={}):
                         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(
-            fields=['mif_file', 'wm_odf', 'wm_txt', 'gm_odf', 'gm_txt', 'csf_odf',
+            fields=['fod_sh_mif', 'wm_odf', 'wm_txt', 'gm_odf', 'gm_txt', 'csf_odf',
                     'csf_txt']),
         name="outputnode")
 
@@ -112,7 +112,7 @@ def init_mrtrix_csd_recon_wf(name="mrtrix_recon", output_suffix="", params={}):
                                  ('bval_file', 'bval_file'),
                                  ('bvec_file', 'bvec_file'),
                                  ('b_file', 'b_file')]),
-        (create_mif, estimate_response, [('mif_file', 'in_file')]),
+        (create_mif, estimate_response, [('fod_sh_mif', 'in_file')]),
         (resample_mask, estimate_response, [('out_file', 'in_mask')]),
         (estimate_response, outputnode, [('wm_file', 'wm_txt'),
                                          ('gm_file', 'gm_txt'),
@@ -120,7 +120,7 @@ def init_mrtrix_csd_recon_wf(name="mrtrix_recon", output_suffix="", params={}):
 
         (create_mif, estimate_fod, [('mif_file', 'in_file')]),
         (resample_mask, estimate_fod, [('out_file', 'mask_file')]),
-        (estimate_fod, outputnode, [('wm_odf', 'mif_file'),
+        (estimate_fod, outputnode, [('wm_odf', 'fod_sh_mif'),
                                     ('wm_odf', 'wm_odf'),
                                     ('gm_odf', 'gm_odf'),
                                     ('csf_odf', 'csf_odf')]),

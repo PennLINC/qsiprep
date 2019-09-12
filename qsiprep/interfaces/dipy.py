@@ -9,9 +9,10 @@ Image tools interfaces
 
 """
 import subprocess
+import shutil
+from pkg_resources import resource_filename as pkgr
 import nibabel as nb
 import numpy as np
-
 from dipy.core.histeq import histeq
 from dipy.segment.mask import median_otsu
 from dipy.core.sphere import HemiSphere
@@ -131,22 +132,29 @@ class DipyReconInputSpec(BaseInterfaceInputSpec):
     # Outputs
     write_fibgz = traits.Bool(True)
     write_mif = traits.Bool(True)
+    # To extrapolate
+    extrapolate_scheme = traits.Enum('HCP', 'ABCD')
 
 
 class DipyReconOutputSpec(TraitedSpec):
     fibgz = File()
     fod_sh_mif = File()
+    extrapolated_dwi = File()
+    extrpolated_bvals = File()
+    extrapolated_bvecs = File()
 
 
 class DipyReconInterface(SimpleInterface):
     input_spec = DipyReconInputSpec
     output_spec = DipyReconOutputSpec
 
-    def _get_gtab(self):
+    def _get_gtab(self, external_bvals=None, external_bvecs=None):
         little_delta = self.inputs.little_delta if isdefined(self.inputs.little_delta) else None
         big_delta = self.inputs.big_delta if isdefined(self.inputs.big_delta) else None
-        gtab = gradient_table(bvals=np.loadtxt(self.inputs.bval_file),
-                              bvecs=np.loadtxt(self.inputs.bvec_file).T,
+        bval_file = self.inputs.bval_file if external_bvals is not None else external_bvals
+        bvec_file = self.inputs.bvec_file if external_bvecs is not None else external_bvecs
+        gtab = gradient_table(bvals=np.loadtxt(bval_file),
+                              bvecs=np.loadtxt(bvec_file).T,
                               b0_threshold=self.inputs.b0_threshold,
                               big_delta=big_delta,
                               small_delta=little_delta)
@@ -199,6 +207,32 @@ class DipyReconInterface(SimpleInterface):
             LOGGER.info("Writing sh mif file %s", output_mif_file)
             amplitudes_to_sh_mif(odf_amplitudes, verts, output_mif_file, runtime.cwd)
             self._results['fod_sh_mif'] = output_mif_file
+
+    def _extrapolate_scheme(self, scheme_name, runtime, fit_obj, mask_img):
+        if scheme_name not in ("ABCD", "HCP"):
+            return
+        output_dwi_file = fname_presuffix(self.inputs.dwi_file,
+                                          suffix=scheme_name,
+                                          newpath=runtime.cwd, use_ext=True)
+        output_bval_file = fname_presuffix(self.inputs.dwi_file,
+                                           suffix='{}.bval'.format(scheme_name),
+                                           newpath=runtime.cwd, use_ext=False)
+        output_bvec_file = fname_presuffix(self.inputs.dwi_file,
+                                           suffix='{}.bvec'.format(scheme_name),
+                                           newpath=runtime.cwd, use_ext=False)
+        # Copy in the bval and bvecs
+        bval_file = pkgr('qsiprep', 'data/schemes/{}.bval'.format(scheme_name))
+        bvec_file = pkgr('qsiprep', 'data/schemes/{}.bvec'.format(scheme_name))
+        shutil.copyfile(bval_file, output_bval_file)
+        shutil.copyfile(bvec_file, output_bvec_file)
+        self._results['extrapolated_bvecs'] = bvec_file
+        self._results['extrapoloated_bvals'] = bval_file
+
+        gtab_to_predict = self._get_gtab(external_bvals=bval_file, external_bvecs=bvec_file)
+        new_data = fit_obj.predict(gtab_to_predict, S0=1)
+        nb.Nifti1Image(new_data, mask_img.affine, mask_img.header).to_filename(output_dwi_file)
+        self._results['extrapolated_dwi'] = output_dwi_file
+
 
 
 class MAPMRIInputSpec(DipyReconInputSpec):
@@ -425,4 +459,8 @@ class BrainSuiteShoreReconstruction(DipyReconInterface):
 
         # Write DSI Studio or MRtrix
         self._write_external_formats(runtime, bss_fit, mask_img, "_BS3dSHORE")
+        # Make HARDIs if desired
+        extrapolate = self.inputs.extrapolate_scheme
+        if isdefined(extrapolate):
+            self._extrapolate_scheme(extrapolate, runtime, bss_fit, mask_img)
         return runtime

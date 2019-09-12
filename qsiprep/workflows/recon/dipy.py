@@ -66,6 +66,8 @@ def init_dipy_brainsuite_shore_recon_wf(name="dipy_3dshore_recon", output_suffix
             True writes out a DSI Studio fib file
         write_mif: bool
             True writes out a MRTrix mif file with sh coefficients
+        convert_to_multishell: str
+            either "HCP", "ABCD", "lifespan" will resample the data with this scheme
         radial_order: int
             Radial order for spherical harmonics (even)
         zeta: float
@@ -114,7 +116,7 @@ def init_dipy_brainsuite_shore_recon_wf(name="dipy_3dshore_recon", output_suffix
                                   ('bvec_file', 'bvec_file')]),
         (inputnode, resample_mask, [('t1_brain_mask', 'in_file'),
                                     ('dwi_file', 'master')]),
-        (resample_mask, recon_shore, [('out_file', 'mask')]),
+        (resample_mask, recon_shore, [('out_file', 'mask_file')]),
         (recon_shore, outputnode, [('shore_coeffs_image', 'shore_coeffs_image'),
                                    ('rtop_image', 'rtop_image'),
                                    ('alpha_image', 'alpha_image'),
@@ -122,7 +124,10 @@ def init_dipy_brainsuite_shore_recon_wf(name="dipy_3dshore_recon", output_suffix
                                    ('cnr_image', 'cnr_image'),
                                    ('regularization_image', 'regularization_image'),
                                    ('fibgz', 'fibgz'),
-                                   ('fod_sh_mif', 'fod_sh_mif')])
+                                   ('fod_sh_mif', 'fod_sh_mif'),
+                                   ('extrapolated_dwi', 'dwi_file'),
+                                   ('extrpolated_bvals', 'bval_file'),
+                                   ('extrapolated_bvecs', 'bvec_file')])
 
     ])
     if output_suffix:
@@ -279,7 +284,7 @@ def init_dipy_mapmri_recon_wf(name="dipy_mapmri_recon", output_suffix="", params
                                 ('bvec_file', 'bvec_file')]),
         (inputnode, resample_mask, [('t1_brain_mask', 'in_file'),
                                     ('dwi_file', 'master')]),
-        (resample_mask, recon_map, [('out_file', 'mask')]),
+        (resample_mask, recon_map, [('out_file', 'mask_file')]),
         (recon_map, outputnode, [('mapmri_coeffs', 'mapmri_coeffs'),
                                  ('rtop', 'rtop'),
                                  ('rtap', 'rtap'),
