@@ -19,7 +19,7 @@ from qsiprep.interfaces.utils import GetConnectivityAtlases
 from qsiprep.interfaces.connectivity import Controllability
 from qsiprep.interfaces.gradients import RemoveDuplicates
 from qsiprep.interfaces.mrtrix import (ResponseSD, EstimateFOD, MRTrixIngress,
-    GenerateMasked5tt, Dwi2Response)
+    Dwi2Response)
 from .interchange import input_fields
 
 LOGGER = logging.getLogger('nipype.interface')
@@ -87,16 +87,12 @@ def init_mrtrix_csd_recon_wf(name="mrtrix_recon", output_suffix="", params={}):
 
     workflow = pe.Workflow(name=name)
     create_mif = pe.Node(MRTrixIngress(), name='create_mif')
-    create_5tt = pe.Node(GenerateMasked5tt(algorithm='fsl'), name='create_5tt')
     estimate_response = pe.Node(Dwi2Response(**response), 'estimate_response')
     estimate_fod = pe.Node(EstimateFOD(**fod), 'estimate_fod')
 
     if response_algorithm == 'msmt_5tt':
         workflow.connect([
-            (inputnode, create_5tt, [('t1_brain_mask', 'mask'),
-                                     ('t1_preproc', 'in_file')]),
-            (create_5tt, estimate_response, [('out_file', 'mtt_file')])
-        ])
+            (inputnode, estimate_response, [('mrtrix_5tt', 'mtt_file')])])
 
     # Connect all response functions if it's multi-response
     if fod_algorithm == 'msmt_csd':

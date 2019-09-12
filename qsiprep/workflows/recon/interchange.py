@@ -2,8 +2,6 @@ from qsiprep.interfaces.bids import QsiReconIngress
 from ...interfaces.anatomical import QsiprepAnatomicalIngress
 qsiprep_output_names = QsiReconIngress().output_spec.class_editable_traits()
 anatomical_input_fields = [
-    'dwi_file',
-    't1_preproc',
     't1_aparc',
     't1_seg',
     't1_aseg',
@@ -16,6 +14,7 @@ anatomical_input_fields = [
     'left_midthickness_surf',
     'left_pial_surf',
     'left_smoothwm_surf',
+    'mrtrix_5tt',
     'right_inflated_surf',
     'right_midthickness_surf',
     'right_pial_surf',

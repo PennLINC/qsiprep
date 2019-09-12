@@ -2,7 +2,7 @@
   "name":"mrtrix_msmt",
   "space": "T1w",
   "atlases": [],
-  "anatomical": ["t1_dwi_brain_mask", "5tt"],
+  "anatomical": ["mrtrix_5tt"],
   "nodes": [
     {
       "name": "msmt_csd",

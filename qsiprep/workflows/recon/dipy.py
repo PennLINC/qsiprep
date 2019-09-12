@@ -7,7 +7,7 @@ Dipy Reconstruction workflows
 """
 import json
 import nipype.pipeline.engine as pe
-import nipype.interfaces.utility as niu
+from nipype.interfaces import afni, utility as niu
 from nipype.utils.filemanip import copyfile, split_filename
 
 import logging
@@ -104,13 +104,17 @@ def init_dipy_brainsuite_shore_recon_wf(name="dipy_3dshore_recon", output_suffix
         name="outputnode")
 
     workflow = pe.Workflow(name=name)
+    resample_mask = pe.Node(
+        afni.Resample(outputtype='NIFTI_GZ', resample_mode="NN"), name='resample_mask')
     recon_shore = pe.Node(BrainSuiteShoreReconstruction(**params), name="recon_shore")
 
     workflow.connect([
         (inputnode, recon_shore, [('dwi_file', 'dwi_file'),
                                   ('bval_file', 'bval_file'),
-                                  ('bvec_file', 'bvec_file'),
-                                  ('mask_file', 'mask_file')]),
+                                  ('bvec_file', 'bvec_file')]),
+        (inputnode, resample_mask, [('t1_brain_mask', 'in_file'),
+                                    ('dwi_file', 'master')]),
+        (resample_mask, recon_shore, [('out_file', 'mask')]),
         (recon_shore, outputnode, [('shore_coeffs_image', 'shore_coeffs_image'),
                                    ('rtop_image', 'rtop_image'),
                                    ('alpha_image', 'alpha_image'),
@@ -266,12 +270,16 @@ def init_dipy_mapmri_recon_wf(name="dipy_mapmri_recon", output_suffix="", params
 
     workflow = pe.Workflow(name=name)
     recon_map = pe.Node(MAPMRIReconstruction(**params), name="recon_map")
+    resample_mask = pe.Node(
+        afni.Resample(outputtype='NIFTI_GZ', resample_mode="NN"), name='resample_mask')
 
     workflow.connect([
         (inputnode, recon_map, [('dwi_file', 'dwi_file'),
                                 ('bval_file', 'bval_file'),
-                                ('bvec_file', 'bvec_file'),
-                                ('mask_file', 'mask_file')]),
+                                ('bvec_file', 'bvec_file')]),
+        (inputnode, resample_mask, [('t1_brain_mask', 'in_file'),
+                                    ('dwi_file', 'master')]),
+        (resample_mask, recon_map, [('out_file', 'mask')]),
         (recon_map, outputnode, [('mapmri_coeffs', 'mapmri_coeffs'),
                                  ('rtop', 'rtop'),
                                  ('rtap', 'rtap'),
