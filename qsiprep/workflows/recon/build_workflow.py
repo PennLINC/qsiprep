@@ -108,15 +108,15 @@ def init_dwi_recon_workflow(dwi_file, workflow_spec, output_dir, reportlets_dir,
             connect_from_upstream = upstream_outputs.intersection(downstream_inputs)
             connect_from_qsiprep = default_input_set - connect_from_upstream
 
-            LOGGER.info("connecting %s from %s to %s", connect_from_qsiprep,
-                        inputnode, node)
+            # LOGGER.info("connecting %s from %s to %s", connect_from_qsiprep,
+            #             inputnode, node)
             # workflow.connect([(inputnode, node, _as_connections(connect_from_qsiprep))])
             for qp_connection in connect_from_qsiprep:
                 workflow.connect(inputnode, qp_connection, node, 'inputnode.' + qp_connection)
                 _check_repeats(workflow.list_node_names())
 
-            LOGGER.info("connecting %s from %s to %s", connect_from_upstream,
-                        upstream_outputnode_name, downstream_inputnode_name)
+            # LOGGER.info("connecting %s from %s to %s", connect_from_upstream,
+            #             upstream_outputnode_name, downstream_inputnode_name)
             # workflow.connect([(upstream_node, node, _as_connections(connect_from_upstream))])
             for upstream_connection in connect_from_upstream:
                 workflow.connect(upstream_node, "outputnode." + upstream_connection,

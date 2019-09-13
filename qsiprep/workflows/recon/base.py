@@ -155,12 +155,11 @@ def init_single_subject_wf(
             spec = json.load(f)
         space = spec['space']
         layout = BIDSLayout(recon_input)
-        LOGGER.info("found %s in %s", layout.get(type="dwi", extensions=['nii', 'nii.gz']),
-                    recon_input)
         # Get all the output files that are in this space
         dwi_files = [f.filename for f in
-                     layout.get(type="dwi", extensions=['nii', 'nii.gz'])
+                     layout.get(type="dwi", subject=subject_id, extensions=['nii', 'nii.gz'])
                      if 'space-' + space in f.filename]
+        LOGGER.info("found %s in %s", dwi_files, recon_input)
 
     workflow = pe.Workflow('sub-{}_{}'.format(subject_id, spec['name']))
     if len(dwi_files) == 0:
