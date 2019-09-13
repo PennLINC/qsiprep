@@ -166,19 +166,18 @@ def init_single_subject_wf(
         LOGGER.info("No dwi files found for %s", subject_id)
         return workflow
 
-    anat_src_wf = init_recon_anatomical_wf(subject_id=subject_id,
+    anat_ingress_wf = init_recon_anatomical_wf(subject_id=subject_id,
                                            recon_input_dir=recon_input,
                                            extras_to_make=spec.get('anatomical', []),
-                                           name='anat_src_wf')
+                                           name='anat_ingress_wf')
 
     to_connect = [('outputnode.' + name, 'inputnode.' + name) for name in anatomical_input_fields]
     # create a processing pipeline for the dwis in each session
-    for dwi_file in dwi_files:
-        dwi_recon_wf = init_dwi_recon_workflow(dwi_file=dwi_file,
-                                               workflow_spec=spec,
-                                               reportlets_dir=reportlets_dir,
-                                               output_dir=output_dir,
-                                               omp_nthreads=omp_nthreads)
-        workflow.connect([(anat_src_wf, dwi_recon_wf, to_connect)])
+    dwi_recon_wf = init_dwi_recon_workflow(dwi_files=dwi_files,
+                                           workflow_spec=spec,
+                                           reportlets_dir=reportlets_dir,
+                                           output_dir=output_dir,
+                                           omp_nthreads=omp_nthreads)
+    workflow.connect([(anat_ingress_wf, dwi_recon_wf, to_connect)])
 
     return workflow

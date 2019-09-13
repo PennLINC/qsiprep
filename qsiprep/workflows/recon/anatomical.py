@@ -54,14 +54,14 @@ def init_recon_anatomical_wf(subject_id, recon_input_dir, extras_to_make,
         niu.IdentityInterface(fields=anatomical_input_fields),
         name="outputnode")
 
-    anat_src = pe.Node(
+    anat_ingress = pe.Node(
         QsiprepAnatomicalIngress(subject_id=subject_id,
                                  recon_input_dir=recon_input_dir),
-        name='anat_src')
+        name='anat_ingress')
 
     workflow.connect([
         (
-            anat_src,
+            anat_ingress,
             outputnode,
             [
                 ('t1_aparc', 't1_aparc'),
@@ -99,7 +99,7 @@ def init_recon_anatomical_wf(subject_id, recon_input_dir, extras_to_make,
     if 'mrtrix_5tt' in extras_to_make:
         create_5tt = pe.Node(GenerateMasked5tt(algorithm='fsl'), name='create_5tt')
         workflow.connect([
-            (anat_src, create_5tt, [('t1_brain_mask', 'mask'),
+            (anat_ingress, create_5tt, [('t1_brain_mask', 'mask'),
                                     ('t1_preproc', 'in_file')]),
             (create_5tt, outputnode, [('out_file', 'mrtrix_5tt')])
         ])
