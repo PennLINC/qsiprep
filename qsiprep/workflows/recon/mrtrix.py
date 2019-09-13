@@ -112,7 +112,7 @@ def init_mrtrix_csd_recon_wf(name="mrtrix_recon", output_suffix="", params={}):
                                  ('bval_file', 'bval_file'),
                                  ('bvec_file', 'bvec_file'),
                                  ('b_file', 'b_file')]),
-        (create_mif, estimate_response, [('fod_sh_mif', 'in_file')]),
+        (create_mif, estimate_response, [('mif_file', 'in_file')]),
         (resample_mask, estimate_response, [('out_file', 'in_mask')]),
         (estimate_response, outputnode, [('wm_file', 'wm_txt'),
                                          ('gm_file', 'gm_txt'),

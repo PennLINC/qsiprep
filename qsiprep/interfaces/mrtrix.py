@@ -51,12 +51,16 @@ class MRTrixGradientTable(SimpleInterface):
     def _run_interface(self, runtime):
         gtab_fname = fname_presuffix(self.inputs.bval_file, suffix=".b", newpath=runtime.cwd,
                                      use_ext=False)
-        vecs = np.loadtxt(self.inputs.bvec_file)
-        vals = np.loadtxt(self.inputs.bval_file)
-        gtab = np.column_stack([vecs.T, vals]) * np.array([-1, -1, 1, 1])
-        np.savetxt(gtab_fname, gtab, fmt=["%.8f", "%.8f", "%.8f", "%d"])
+        _convert_fsl_to_mrtrix(self.inputs.bval_file, self.inputs.bvec_file, gtab_fname)
         self._results['gradient_file'] = gtab_fname
         return runtime
+
+
+def _convert_fsl_to_mrtrix(bval_file, bvec_file, output_fname):
+    vecs = np.loadtxt(bvec_file)
+    vals = np.loadtxt(bval_file)
+    gtab = np.column_stack([vecs.T, vals]) * np.array([-1, -1, 1, 1])
+    np.savetxt(output_fname, gtab, fmt=["%.8f", "%.8f", "%.8f", "%d"])
 
 
 class MRTrixIngressInputSpec(BaseInterfaceInputSpec):

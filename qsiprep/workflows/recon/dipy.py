@@ -101,14 +101,15 @@ def init_dipy_brainsuite_shore_recon_wf(name="dipy_3dshore_recon", output_suffix
     outputnode = pe.Node(
         niu.IdentityInterface(
             fields=['shore_coeffs_image', 'rtop_image', 'alpha_image', 'r2_image',
-                    'cnr_image', 'regularization_image',
-                    'fibgz', 'fod_sh_mif']),
+                    'cnr_image', 'regularization_image', 'fibgz', 'fod_sh_mif',
+                    'dwi_file', 'bval_file', 'bvec_file', 'b_file']),
         name="outputnode")
 
     workflow = pe.Workflow(name=name)
     resample_mask = pe.Node(
         afni.Resample(outputtype='NIFTI_GZ', resample_mode="NN"), name='resample_mask')
     recon_shore = pe.Node(BrainSuiteShoreReconstruction(**params), name="recon_shore")
+    doing_extrapolation = params.get("extrapolate_scheme") in ("HCP", "ABCD")
 
     workflow.connect([
         (inputnode, recon_shore, [('dwi_file', 'dwi_file'),
@@ -126,10 +127,10 @@ def init_dipy_brainsuite_shore_recon_wf(name="dipy_3dshore_recon", output_suffix
                                    ('fibgz', 'fibgz'),
                                    ('fod_sh_mif', 'fod_sh_mif'),
                                    ('extrapolated_dwi', 'dwi_file'),
-                                   ('extrpolated_bvals', 'bval_file'),
-                                   ('extrapolated_bvecs', 'bvec_file')])
+                                   ('extrapolated_bvals', 'bval_file'),
+                                   ('extrapolated_bvecs', 'bvec_file'),
+                                   ('extrapolated_b', 'b_file')])])
 
-    ])
     if output_suffix:
         external_format_datasinks(output_suffix, params, workflow)
 
@@ -186,7 +187,36 @@ def init_dipy_brainsuite_shore_recon_wf(name="dipy_3dshore_recon", output_suffix
             name='ds_bsshore_regl',
             run_without_submitting=True)
         workflow.connect(outputnode, 'regularization_image', ds_regl, 'in_file')
-
+        if doing_extrapolation:
+            ds_extrap_dwi = pe.Node(
+                ReconDerivativesDataSink(extension='.nii.gz',
+                                         desc="extrapolated",
+                                         suffix=output_suffix,
+                                         compress=True),
+                name='ds_extrap_dwi',
+                run_without_submitting=True)
+            workflow.connect(outputnode, 'dwi_file', ds_extrap_dwi, 'in_file')
+            ds_extrap_bval = pe.Node(
+                ReconDerivativesDataSink(extension='.bval',
+                                         desc="extrapolated",
+                                         suffix=output_suffix),
+                name='ds_extrap_bval',
+                run_without_submitting=True)
+            workflow.connect(outputnode, 'bval_file', ds_extrap_bval, 'in_file')
+            ds_extrap_bvec = pe.Node(
+                ReconDerivativesDataSink(extension='.bvec',
+                                         desc="extrapolated",
+                                         suffix=output_suffix),
+                name='ds_extrap_bvec',
+                run_without_submitting=True)
+            workflow.connect(outputnode, 'bvec_file', ds_extrap_bvec, 'in_file')
+            ds_extrap_b = pe.Node(
+                ReconDerivativesDataSink(extension='.b',
+                                         desc="extrapolated",
+                                         suffix=output_suffix),
+                name='ds_extrap_b',
+                run_without_submitting=True)
+            workflow.connect(outputnode, 'b_file', ds_extrap_b, 'in_file')
     return workflow
 
 
