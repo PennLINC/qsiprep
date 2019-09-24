@@ -8,18 +8,20 @@ Image tools interfaces
 
 
 """
+import os
 import nibabel as nb
 import numpy as np
 import os.path as op
-
+from scipy.io.matlab import savemat
 from tempfile import TemporaryDirectory
 from time import time
+from copy import deepcopy
 
 from nipype import logging
 from nipype.utils.filemanip import fname_presuffix, split_filename
 from nipype.interfaces.base import (
     traits, TraitedSpec, BaseInterfaceInputSpec, File, SimpleInterface, InputMultiObject,
-    OutputMultiObject, isdefined
+    OutputMultiObject, isdefined, CommandLineInputSpec
 )
 from nipype.interfaces.ants.registration import RegistrationInputSpec
 from .gradients import concatenate_bvecs, concatenate_bvals, GradientRotation
@@ -129,9 +131,11 @@ class DWIDenoiseInputSpec(MRTrix3BaseInputSpec):
         position=-1,
         desc='the output denoised DWI image')
 
+
 class DWIDenoiseOutputSpec(TraitedSpec):
     noise = File(desc='the output noise map', exists=True)
     out_file = File(desc='the output denoised DWI image', exists=True)
+
 
 class DWIDenoise(MRTrix3Base):
     """
@@ -209,6 +213,7 @@ class Dwi2ResponseInputSpec(ResponseSDInputSpec):
         sep=',',
         desc=('maximum harmonic degree of response function - single value for '
               'single-shell response, list for multi-shell response'))
+
 
 class Dwi2Response(ResponseSD):
     input_spec = Dwi2ResponseInputSpec
@@ -350,16 +355,289 @@ class SIFTInputSpec(MRTrix3BaseInputSpec):
 
 class GlobalTractographyInputSpec(MRTrix3BaseInputSpec):
     dwi_file = File(
-        argstr='%s', exists=True, mandatory=True, position=-3, desc='full dwi file')
-    wm_txt = File(exists=True, mandatory=True, position=-2, desc='wm response function')
+        argstr='%s', exists=True, mandatory=True, position=-3, desc='full dwi file (source)')
+    wm_txt = File(exists=True, argstr='%s', mandatory=True, position=-2,
+                  desc='wm response function (response)')
+    mask = File(exists=True, argstr='-mask %s',
+                desc='only reconstruct the tractogram within the specified brain mask image.')
     out_tracks = File(
-        argstr='%s', position=-1, genfile=True, desc='the globally-optimized streamlines')
-    isotropic_response_txt = InputMultiObject(
-        File(argstr='-riso %s', exists=True),
-        desc='set one or more isotropic response functions')
-    out_isotropic_fod = InputMultiObject(
-        File(
-            argstr='-fiso %s', requires=['isotropic_response_txt'], genfile=True,
-            desc=' Predicted isotropic fractions of the tissues for which response '
-                 'functions were provided with isotropic_response_txt. Typically, '
-                 'these are CSF and GM.'))
+        argstr='%s', position=-1, genfile=True,
+        desc='the globally-optimized streamlines (tracks)')
+    gm_txt = File(argstr='-riso %s', exists=True,
+                  desc='gm isotropic response functions')
+    csf_txt = File(argstr='-riso %s', exists=True,
+                   desc='csf isotropic response functions')
+    out_fod = File(
+                argstr='-fod %s', genfile=True,
+                desc='Predicted fibre orientation distribution function (fODF).This fODF is '
+                'estimated as part of the global track optimization, and therefore incorporates '
+                'the spatial regularization that it imposes. Internally, the fODF is '
+                'represented as a discrete sum of apodized point spread functions (aPSF) '
+                'oriented along the directions of all particles in the voxel, used to predict '
+                'the DWI signal from the particle configuration')
+    out_isotropic_fraction = File(
+        argstr='-fiso %s', requires=['csf_txt'], genfile=True,
+        desc=' Predicted isotropic fractions of the tissues for which response '
+             'functions were provided with isotropic_response_txt. Typically, '
+             'these are CSF and GM.')
+    niter = traits.Int(1e9,
+                       argstr='-niter %d',
+                       desc='the number of iterations of the metropolis hastings optimizer. '
+                       '(default = 10M)')
+    out_residual_energy = File(
+        argstr='-eext %s', genfile=True,
+        desc=' Residual external energy in every voxel.')
+
+
+class GlobalTractographyOutputSpec(TraitedSpec):
+    wm_odf = File(
+        exists=True,
+        desc='Predicted fibre orientation distribution function (fODF).This fODF is '
+        'estimated as part of the global track optimization, and therefore incorporates '
+        'the spatial regularization that it imposes. Internally, the fODF is represented '
+        'as a discrete sum of apodized point spread functions (aPSF) oriented along the '
+        'directions of all particles in the voxel, used to predict the DWI signal from the '
+        'particle configuration.')
+    isotropic_fraction = File(exists=True,
+                              desc='Predicted isotropic fractions of the tissues for '
+                              'which response functions were provided with -riso. Typically, '
+                              'these are CSF and GM.')
+    residual_energy = File(exists=True, desc='Residual external energy in every voxel')
+    tck_file = File(exists=True, desc='global tck file')
+
+
+class GlobalTractography(MRTrix3Base):
+    input_spec = GlobalTractographyInputSpec
+    output_spec = GlobalTractographyOutputSpec
+    _cmd = 'tckglobal'
+
+    def _list_outputs(self):
+        outputs = self.output_spec().get()
+        outputs['wm_odf'] = op.abspath(self._gen_filename('out_fod'))
+        outputs['isotropic_fraction'] = op.abspath(self._gen_filename('out_isotropic_fraction'))
+        outputs['tck_file'] = op.abspath(self._gen_filename('out_tracks'))
+        outputs['residual_energy'] = op.abspath(self._gen_filename('out_residual_energy'))
+        return outputs
+
+    def _gen_filename(self, name):
+        if name == 'out_isotropic_fraction':
+            output = getattr(self.inputs, name)
+            if not isdefined(output):
+                _, fname, _ = split_filename(self.inputs.dwi_file)
+                output = fname + "_tckglobalISOfraction.mif"
+            return output
+        if name == 'out_fod':
+            output = getattr(self.inputs, name)
+            if not isdefined(output):
+                _, fname, _ = split_filename(self.inputs.dwi_file)
+                output = fname + "_tckglobalFOD.mif"
+            return output
+        if name == 'out_tracks':
+            output = getattr(self.inputs, name)
+            if not isdefined(output):
+                _, fname, _ = split_filename(self.inputs.dwi_file)
+                output = fname + "_tckglobal.tck"
+            return output
+        if name == 'out_residual_energy':
+            output = getattr(self.inputs, name)
+            if not isdefined(output):
+                _, fname, _ = split_filename(self.inputs.dwi_file)
+                output = fname + "_residualEnergy.mif"
+            return output
+        return None
+
+
+class BuildConnectomeInputSpec(CommandLineInputSpec):
+    in_file = File(
+        exists=True,
+        argstr='%s',
+        mandatory=True,
+        position=-3,
+        desc='input tractography')
+    in_parc = File(
+        exists=True, argstr='%s', position=-2, desc='parcellation file')
+    out_file = File(
+        'connectome.csv',
+        argstr='%s',
+        mandatory=True,
+        position=-1,
+        usedefault=True,
+        desc='output file after processing')
+    nthreads = traits.Int(
+        argstr='-nthreads %d',
+        desc='number of threads. if zero, the number'
+        ' of available cpus will be used',
+        nohash=True)
+    vox_lookup = traits.Bool(
+        argstr='-assignment_voxel_lookup',
+        desc='use a simple voxel lookup value at each streamline endpoint')
+    search_radius = traits.Float(
+        argstr='-assignment_radial_search %f',
+        desc='perform a radial search from each streamline endpoint to locate '
+        'the nearest node. Argument is the maximum radius in mm; if no node is'
+        ' found within this radius, the streamline endpoint is not assigned to'
+        ' any node.')
+    search_reverse = traits.Float(
+        argstr='-assignment_reverse_search %f',
+        desc='traverse from each streamline endpoint inwards along the '
+        'streamline, in search of the last node traversed by the streamline. '
+        'Argument is the maximum traversal length in mm (set to 0 to allow '
+        'search to continue to the streamline midpoint).')
+    search_forward = traits.Float(
+        argstr='-assignment_forward_search %f',
+        desc='project the streamline forwards from the endpoint in search of a'
+        'parcellation node voxel. Argument is the maximum traversal length in '
+        'mm.')
+    stat_edge = traits.Enum("sum", "mean", "min", "max", argstr='-stat_edge %s',
+                            usedefault=True)
+    length_scale = traits.Enum("None", "length", "invlength", argstr='%s')
+    scale_invnodevol = traits.Bool(False, argstr="-scale_invnodevol")
+    in_scalar = File(
+        exists=True,
+        argstr='-scale_file %s',
+        desc='provide the associated image '
+        'for the mean_scalar metric')
+    in_weights = File(
+        exists=True,
+        argstr='-tck_weights_in %s',
+        desc='specify a text scalar '
+        'file containing the streamline weights')
+    keep_unassigned = traits.Bool(
+        argstr='-keep_unassigned',
+        desc='By default, the program discards the'
+        ' information regarding those streamlines that are not successfully '
+        'assigned to a node pair. Set this option to keep these values (will '
+        'be the first row/column in the output matrix)')
+    zero_diagonal = traits.Bool(
+        argstr='-zero_diagonal',
+        desc='set all diagonal entries in the matrix '
+        'to zero (these represent streamlines that connect to the same node at'
+        ' both ends)')
+    symmetric = traits.Bool(
+        argstr='-symmetric',
+        desc='Make matrices symmetric on output')
+
+
+
+class BuildConnectomeOutputSpec(TraitedSpec):
+    out_file = File(exists=True, desc='the output response file')
+
+
+class BuildConnectome(MRTrix3Base):
+    """
+    Generate a connectome matrix from a streamlines file and a node
+    parcellation image
+    Example
+    -------
+    >>> import nipype.interfaces.mrtrix3 as mrt
+    >>> mat = mrt.BuildConnectome()
+    >>> mat.inputs.in_file = 'tracks.tck'
+    >>> mat.inputs.in_parc = 'aparc+aseg.nii'
+    >>> mat.cmdline                               # doctest: +ELLIPSIS
+    'tck2connectome tracks.tck aparc+aseg.nii connectome.csv'
+    >>> mat.run()                                 # doctest: +SKIP
+    """
+
+    _cmd = 'tck2connectome'
+    input_spec = BuildConnectomeInputSpec
+    output_spec = BuildConnectomeOutputSpec
+
+    def _list_outputs(self):
+        outputs = self.output_spec().get()
+        outputs['out_file'] = op.abspath(self.inputs.out_file)
+        return outputs
+
+    def _format_arg(self, name, spec, val):
+        if name == 'length_scale':
+            if val == 'length':
+                return '-scale_length'
+            if val == 'invlength':
+                return '-scale_invlength'
+            return ''
+        return super(BuildConnectome, self)._format_arg(name, spec, val)
+
+
+class MRTrixAtlasGraphInputSpec(BuildConnectomeInputSpec):
+    atlas_configs = traits.Dict(desc='atlas configs for atlases to run connectivity for',
+                                mandatory=True)
+
+
+class MRTrixAtlasGraphOutputSpec(TraitedSpec):
+    connectivity_matfile = File(exists=True)
+    commands = File()
+
+
+class MRTrixAtlasGraph(SimpleInterface):
+    """Produce one connectivity matrix per atlas based on DSI Studio tractography"""
+    input_spec = MRTrixAtlasGraphInputSpec
+    output_spec = MRTrixAtlasGraphOutputSpec
+
+    def _run_interface(self, runtime):
+        # Get all inputs from the ApplyTransforms object
+        ifargs = self.inputs.get()
+        ifargs['nthreads'] = 1
+
+        # Get number of parallel jobs
+        num_threads = ifargs.pop('nthreads')
+        atlas_configs = ifargs.pop('atlas_configs')
+        del ifargs['in_parc']
+
+        # flatten the atlas_configs
+        args = [(atlas_name, atlas_config, self.inputs.in_file, ifargs) for atlas_name,
+                atlas_config in atlas_configs.items()]
+
+        if num_threads == 1:
+            outputs = [_mrtrix_connectivity(arg) for arg in args]
+        else:
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=num_threads) as pool:
+                outputs = list(pool.map(_mrtrix_connectivity, args))
+
+        commands = [out[0] for out in outputs]
+        commands_file = op.join(runtime.cwd, "mrtrix_commands.txt")
+        with open(commands_file, "w") as f:
+            f.write("\n----------\n".join(commands))
+        self._results['commands'] = commands_file
+
+        matfile_list = [out[1] for out in outputs]
+        merged_connectivity_file = op.join(runtime.cwd, "combined_connectivity.mat")
+        _merge_conmats(matfile_list, args, merged_connectivity_file)
+        self._results['connectivity_matfile'] = merged_connectivity_file
+
+        return runtime
+
+
+def _merge_conmats(matfile_list, recon_args, outfile):
+    """Merge the many matfiles output by dsi studio and ensure they conform"""
+    connectivity_values = {}
+
+    for matfile, (atlas_name, atlas_config, tck_file, ifargs) in zip(matfile_list, recon_args):
+        labels = np.array(atlas_config['node_ids']).astype(np.int)
+        connectivity_values[atlas_name + "_region_ids"] = labels
+        connectivity_values[atlas_name + "_region_labels"] = np.array(atlas_config['node_names'])
+        measure_name = atlas_name + '_' + ifargs['stat_edge']
+        if isdefined(ifargs['length_scale']):
+            measure_name += "_" + ifargs['length_scale']
+        if isdefined(ifargs['scale_invnodevol']):
+            measure_name += "_invroiscale"
+        connectivity_values[measure_name + "_connectivity"] = np.loadtxt(matfile)
+        connectivity_values[measure_name + "_tck"] = tck_file
+        connectivity_values[measure_name + "_image"] = atlas_config['dwi_resolution_mif']
+    savemat(outfile, connectivity_values, do_compression=True)
+
+
+def _mrtrix_connectivity(args):
+    atlas_name, atlas_config, _, ifargs = args
+    csv_name = 'atlas_{}_length_{}_roiscale_{}_stat_{}.csv'.format(
+        atlas_name, ifargs['length_scale'], ifargs['scale_invnodevol'],
+        ifargs['stat_edge']).replace("<undefined>", "None")
+    ifargs = deepcopy(ifargs)
+    ifargs['out_file'] = csv_name
+    con = BuildConnectome(in_parc=atlas_config['dwi_resolution_mif'], **ifargs)
+    con.terminal_output = 'allatonce'
+    con.resource_monitor = False
+    LOGGER.info(con.cmdline)
+    run = con.run(cwd=os.getcwd())
+    runtime = run.runtime
+
+    return runtime.cmdline, run.outputs.out_file

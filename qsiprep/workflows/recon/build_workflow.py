@@ -7,19 +7,19 @@ from qsiprep.interfaces.utils import GetConnectivityAtlases
 from .dsi_studio import (init_dsi_studio_recon_wf, init_dsi_studio_export_wf,
                          init_dsi_studio_connectivity_wf)
 from .dipy import init_dipy_brainsuite_shore_recon_wf, init_dipy_mapmri_recon_wf
-from .mrtrix import init_mrtrix_csd_recon_wf
+from .mrtrix import (init_mrtrix_csd_recon_wf, init_global_tractography_wf,
+                     init_mrtrix_tractography_wf, init_mrtrix_connectivity_wf)
 from .converters import init_mif_to_fibgz_wf
 from .dynamics import init_controllability_wf
 from .utils import init_conform_dwi_wf, init_discard_repeated_samples_wf
 from ...engine import Workflow
-from .interchange import (qsiprep_output_names, input_fields, default_connections,
-                          default_input_set)
+from .interchange import (qsiprep_output_names, input_fields, default_input_set)
 
 LOGGER = logging.getLogger('nipype.interface')
 
 
-def _get_resampled(atlas_configs, atlas_name):
-    return atlas_configs[atlas_name]['dwi_resolution_file']
+def _get_resampled(atlas_configs, atlas_name, to_retrieve):
+    return atlas_configs[atlas_name][to_retrieve]
 
 
 def _check_repeats(nodelist):
@@ -44,7 +44,6 @@ def init_dwi_recon_workflow(dwi_files, workflow_spec, output_dir, reportlets_dir
     # For doctests
     if not workflow_spec['name'] == 'fake':
         scans_iter.inputs.dwi_file = dwi_files
-
 
     # Connect the collected diffusion data (gradients, etc) to the inputnode
     workflow.connect([
@@ -73,7 +72,32 @@ def init_dwi_recon_workflow(dwi_files, workflow_spec, output_dir, reportlets_dir
                                                   compress=True),
                          name='ds_atlases_'+atlas,
                          run_without_submitting=True),
-                 [(('atlas_configs', _get_resampled, atlas), 'in_file')])
+                 [(('atlas_configs', _get_resampled, atlas, 'dwi_resolution_file'), 'in_file')]),
+                (get_atlases,
+                 pe.Node(ReconDerivativesDataSink(space=space,
+                                                  desc=atlas,
+                                                  suffix="atlas",
+                                                  extension=".mif.gz",
+                                                  compress=True),
+                         name='ds_atlas_mifs_'+atlas,
+                         run_without_submitting=True),
+                 [(('atlas_configs', _get_resampled, atlas, 'dwi_resolution_mif'), 'in_file')]),
+                (get_atlases,
+                 pe.Node(ReconDerivativesDataSink(space=space,
+                                                  desc=atlas,
+                                                  extension=".txt",
+                                                  suffix="mrtrixLUT"),
+                         name='ds_atlas_mrtrix_lut_' + atlas,
+                         run_without_submitting=True),
+                 [(('atlas_configs', _get_resampled, atlas, 'mrtrix_lut'), 'in_file')]),
+                (get_atlases,
+                 pe.Node(ReconDerivativesDataSink(space=space,
+                                                  desc=atlas,
+                                                  extension=".txt",
+                                                  suffix="origLUT"),
+                         name='ds_atlas_orig_lut_' + atlas,
+                         run_without_submitting=True),
+                 [(('atlas_configs', _get_resampled, atlas, 'orig_lut'), 'in_file')]),
             ])
         workflow.connect(inputnode, "dwi_file", get_atlases, "reference_image")
     # Read nodes from workflow spec, make sure we can implement them
@@ -146,7 +170,7 @@ def init_dwi_recon_workflow(dwi_files, workflow_spec, output_dir, reportlets_dir
     for node in workflow.list_node_names():
         node_suffix = node.split('.')[-1]
         if node_suffix.startswith('ds_'):
-            workflow.connect(scans_iter, 'dwi_file',workflow.get_node(node), 'source_file')
+            workflow.connect(scans_iter, 'dwi_file', workflow.get_node(node), 'source_file')
             workflow.get_node(node).inputs.space = space
             if "report" in node_suffix:
                 workflow.get_node(node).inputs.base_directory = reportlets_dir
@@ -182,6 +206,12 @@ def workflow_from_spec(node_spec):
     elif software == "MRTrix3":
         if node_spec["action"] == "csd":
             return init_mrtrix_csd_recon_wf(**kwargs)
+        if node_spec["action"] == "global_tractography":
+            return init_global_tractography_wf(**kwargs)
+        if node_spec["action"] == "tractography":
+            return init_mrtrix_tractography_wf(**kwargs)
+        if node_spec["action"] == "connectivity":
+            return init_mrtrix_connectivity_wf(**kwargs)
 
     # Dipy operations
     elif software == "Dipy":

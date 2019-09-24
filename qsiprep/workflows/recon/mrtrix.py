@@ -19,7 +19,7 @@ from qsiprep.interfaces.utils import GetConnectivityAtlases
 from qsiprep.interfaces.connectivity import Controllability
 from qsiprep.interfaces.gradients import RemoveDuplicates
 from qsiprep.interfaces.mrtrix import (ResponseSD, EstimateFOD, MRTrixIngress,
-    Dwi2Response)
+    Dwi2Response, GlobalTractography, MRTrixAtlasGraph)
 from .interchange import input_fields
 
 LOGGER = logging.getLogger('nipype.interface')
@@ -206,4 +206,171 @@ def init_global_tractography_wf(name="mrtrix_recon", output_suffix="", params={}
 
 
     """
-    pass
+    inputnode = pe.Node(
+        niu.IdentityInterface(fields=input_fields + ['gm_txt', 'wm_txt', 'csf_txt']),
+        name="inputnode")
+    outputnode = pe.Node(
+        niu.IdentityInterface(
+            fields=['fod_sh_mif', 'wm_odf', 'iso_fraction', 'tck_file']),
+        name="outputnode")
+
+    workflow = pe.Workflow(name=name)
+    create_mif = pe.Node(MRTrixIngress(), name='create_mif')
+
+    # Resample anat mask
+    resample_mask = pe.Node(
+        afni.Resample(outputtype='NIFTI_GZ', resample_mode="NN"), name='resample_mask')
+    tck_global = pe.Node(GlobalTractography(**params), name='tck_global')
+    workflow.connect([
+        (inputnode, resample_mask, [('t1_brain_mask', 'in_file'),
+                                    ('dwi_file', 'master')]),
+        (inputnode, create_mif, [('dwi_file', 'dwi_file'),
+                                 ('bval_file', 'bval_file'),
+                                 ('bvec_file', 'bvec_file'),
+                                 ('b_file', 'b_file')]),
+        (create_mif, tck_global, [('mif_file', 'dwi_file')]),
+        (resample_mask, tck_global, [('out_file', 'mask')]),
+        (inputnode, tck_global, [("wm_txt", "wm_txt"),
+                                 ("gm_txt", "gm_txt"),
+                                 ("csf_txt", "csf_txt")]),
+        (tck_global, outputnode, [("wm_odf", "wm_odf"),
+                                  ("isotropic_fraction", "isotropic_fraction"),
+                                  ("tck_file", "tck_file"),
+                                  ("residual_energy", "residual_energy"),
+                                  ("wm_odf", "fod_sh_mif")])
+        ])
+
+    if output_suffix:
+        ds_globalwm_odf = pe.Node(
+            ReconDerivativesDataSink(extension='.mif.gz',
+                                     desc="globalwmFOD",
+                                     suffix=output_suffix,
+                                     compress=True),
+            name='ds_globalwm_odf',
+            run_without_submitting=True)
+        workflow.connect(outputnode, 'wm_odf', ds_globalwm_odf, 'in_file')
+
+        ds_isotropic_fraction = pe.Node(
+            ReconDerivativesDataSink(extension='.mif.gz',
+                                     desc="ISOfraction",
+                                     suffix=output_suffix),
+            name='ds_isotropic_fraction',
+            run_without_submitting=True)
+        workflow.connect(outputnode, 'isotropic_fraction', ds_isotropic_fraction, 'in_file')
+
+        ds_tck_file = pe.Node(
+            ReconDerivativesDataSink(extension='.tck.gz',
+                                     desc="global",
+                                     suffix=output_suffix,
+                                     compress=True),
+            name='ds_tck_file',
+            run_without_submitting=True)
+        workflow.connect(outputnode, 'tck_file', ds_tck_file, 'in_file')
+
+        ds_residual_energy = pe.Node(
+            ReconDerivativesDataSink(extension='.tck.gz',
+                                     desc="residualEnergy",
+                                     suffix=output_suffix,
+                                     compress=True),
+            name='ds_residual_energy',
+            run_without_submitting=True)
+        workflow.connect(outputnode, 'residual_energy', ds_residual_energy, 'in_file')
+
+    return workflow
+
+
+def init_mrtrix_tractography_wf(name="mrtrix_tracking", output_suffix="", params={}):
+    """Run tractography
+
+    This workflow uses mrtrix tools to run csd on multishell data.
+
+    Inputs
+
+        fod_sh_mif
+            mif file containing spherical harmonics for tractography
+
+    Outputs
+
+        global_wm_fod
+            FOD SH image enhanced by global tractography
+        global_iso_fod
+            FOD SH coefficients for other tissue compartments.
+        l1_penalty
+             the residual data energy image, including the L1-penalty imposed
+             by the particle potential
+
+
+    """
+    inputnode = pe.Node(
+        niu.IdentityInterface(fields=input_fields + ['fod_sh_mif']),
+        name="inputnode")
+    outputnode = pe.Node(
+        niu.IdentityInterface(fields=['tck_file']),
+        name="outputnode")
+
+    workflow = pe.Workflow(name=name)
+    # Resample anat mask
+    resample_mask = pe.Node(
+        afni.Resample(outputtype='NIFTI_GZ', resample_mode="NN"), name='resample_mask')
+    tracking_params = params.get("tckgen", {})
+    tracking = pe.Node(mrtrix3.Tractography(**tracking_params), name='tractography')
+    workflow.connect([
+        (inputnode, resample_mask, [('t1_brain_mask', 'in_file'),
+                                    ('dwi_file', 'master')]),
+        (inputnode, tracking, [('fod_sh_mif', 'in_file')]),
+        (resample_mask, tracking, [('out_file', 'seed_image')]),
+        (tracking, outputnode, [("out_file", "tck_file")])
+        ])
+
+    if params['use_5tt']:
+        workflow.connect(inputnode, 'mrtrix_5tt', tracking, 'act_file')
+
+    if output_suffix:
+        ds_tck_file = pe.Node(
+            ReconDerivativesDataSink(extension='.tck',
+                                     desc="tracks",
+                                     suffix=output_suffix),
+            name='ds_tck_file',
+            run_without_submitting=True)
+        workflow.connect(outputnode, 'tck_file', ds_tck_file, 'in_file')
+
+    return workflow
+
+
+def init_mrtrix_connectivity_wf(name="mrtrix_connectiity", params={},
+                                output_suffix="", n_procs=1):
+    """Runs ``tck2connectome`` on a ``tck`` file.abs
+
+    Inputs
+
+        tck_file
+            mrtrix3 tck file.
+
+    Outputs
+
+        matfile
+            A MATLAB-format file with numerous connectivity matrices for each
+            atlas.
+    """
+    inputnode = pe.Node(
+        niu.IdentityInterface(
+            fields=input_fields + ['tck_file', 'atlas_configs']),
+        name="inputnode")
+    outputnode = pe.Node(niu.IdentityInterface(fields=['matfile']),
+                         name="outputnode")
+    workflow = pe.Workflow(name=name)
+    conmat_params = params.get("tck2connectome", {})
+    calc_connectivity = pe.Node(MRTrixAtlasGraph(**conmat_params),
+                                name='calc_connectivity')
+    workflow.connect([
+        (inputnode, calc_connectivity, [('atlas_configs', 'atlas_configs'),
+                                        ('tck_file', 'in_file')]),
+        (calc_connectivity, outputnode, [('connectivity_matfile', 'matfile')])
+    ])
+    if output_suffix:
+        # Save the output in the outputs directory
+        ds_connectivity = pe.Node(ReconDerivativesDataSink(suffix=output_suffix),
+                                  name='ds_' + name,
+                                  run_without_submitting=True)
+        workflow.connect(calc_connectivity, 'connectivity_matfile', ds_connectivity, 'in_file')
+    return workflow

@@ -87,7 +87,7 @@ def init_dsi_studio_recon_wf(name="dsi_studio_recon", output_suffix="", params={
 
 
 def init_dsi_studio_connectivity_wf(name="dsi_studio_connectivity", n_procs=1,
-                                          params={}, output_suffix=""):
+                                    params={}, output_suffix=""):
     """Calculate streamline-based connectivity matrices using DSI Studio.
 
     DSI Studio has a deterministic tractography algorithm that can be used to
