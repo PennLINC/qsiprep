@@ -11,7 +11,7 @@ import os
 from nipype import logging
 
 from nipype.pipeline import engine as pe
-from nipype.interfaces import utility as niu
+from nipype.interfaces import afni, mrtrix3, utility as niu
 
 from ...interfaces import DerivativesDataSink
 from ...niworkflows.interfaces.registration import SimpleBeforeAfterRPT
@@ -220,7 +220,7 @@ def init_dwi_finalize_wf(scan_groups,
             'fieldwarps',
             'output_grid',
             'sbref_file', 'subjects_dir', 'subject_id',
-            't1_preproc', 't1_brain', 't1_mask', 't1_seg', 't1_tpms',
+            't1_preproc', 't1_brain', 't1_mask', 'mni_mask', 't1_seg', 't1_tpms',
             't1_aseg', 't1_aparc',
             't1_2_mni_reverse_transform', 't1_2_fsnative_forward_transform',
             't1_2_fsnative_reverse_transform', 'dwi_sampling_grid'
@@ -310,6 +310,7 @@ def init_dwi_finalize_wf(scan_groups,
                                               to_mni=False,
                                               write_local_bvecs=write_local_bvecs)
         gtab_t1 = pe.Node(MRTrixGradientTable(), name='gtab_t1')
+        dwi_mask_t1_wf = init_mask_finalize_wf(name="dwi_mask_t1_wf")
         workflow.connect([
             (inputnode, transform_dwis_t1, [
                 ('b0_indices', 'inputnode.b0_indices'),
@@ -317,6 +318,7 @@ def init_dwi_finalize_wf(scan_groups,
                 ('bvec_files', 'inputnode.bvec_files'),
                 ('b0_ref_image', 'inputnode.b0_ref_image'),
                 ('cnr_map', 'inputnode.cnr_map'),
+                ('t1_mask', 'inputnode.t1_mask'),
                 ('dwi_mask', 'inputnode.dwi_mask'),
                 ('hmc_xforms', 'inputnode.hmc_xforms'),
                 ('fieldwarps', 'inputnode.fieldwarps'),
@@ -334,13 +336,16 @@ def init_dwi_finalize_wf(scan_groups,
                                              ('outputnode.dwi_resampled', 'dwi_t1'),
                                              ('outputnode.cnr_map_resampled', 'cnr_map_t1'),
                                              ('outputnode.local_bvecs', 'local_bvecs_t1'),
-                                             ('outputnode.dwi_mask_resampled', 'dwi_mask_t1'),
                                              ('outputnode.b0_series', 't1_b0_series'),
                                              ('outputnode.dwi_ref_resampled', 't1_b0_ref')]),
             (outputnode, gradient_plot, [('bvecs_t1', 'final_bvec_file')]),
             (transform_dwis_t1, gtab_t1, [('outputnode.bvals', 'bval_file'),
                                           ('outputnode.rotated_bvecs', 'bvec_file')]),
-            (gtab_t1, outputnode, [('gradient_file', 'gradient_table_t1')])
+            (gtab_t1, outputnode, [('gradient_file', 'gradient_table_t1')]),
+            (inputnode, dwi_mask_t1_wf, [('t1_mask', 'inputnode.t1_mask')]),
+            (transform_dwis_t1, dwi_mask_t1_wf, [
+                ('outputnode.b0_series', 'inputnode.resampled_b0s')]),
+            (dwi_mask_t1_wf, outputnode, [('outputnode.mask_file', 'dwi_mask_t1')])
         ])
 
     if "template" in output_spaces:
@@ -354,8 +359,9 @@ def init_dwi_finalize_wf(scan_groups,
                                                to_mni=True,
                                                write_local_bvecs=write_local_bvecs)
         gtab_mni = pe.Node(MRTrixGradientTable(), name='gtab_mni')
+        dwi_mask_mni_wf = init_mask_finalize_wf(name="dwi_mask_mni_wf")
         workflow.connect([
-            (inputnode, transform_dwis_t1, [
+            (inputnode, transform_dwis_mni, [
                 ('b0_indices', 'inputnode.b0_indices'),
                 ('bval_files', 'inputnode.bval_files'),
                 ('bvec_files', 'inputnode.bvec_files'),
@@ -369,18 +375,22 @@ def init_dwi_finalize_wf(scan_groups,
                 ('intramodal_affine_file', 'inputnode.to_intramodal_template_affine'),
                 ('intramodal_warp_file', 'inputnode.to_intramodal_template_warp'),
                 ('itk_b0_to_t1', 'inputnode.itk_b0_to_t1'),
+                ('t1_mask', 'inputnode.t1_mask'),
                 ('intramodal_template_to_t1_warp', 'inputnode.intramodal_template_to_t1_warp')
                 ]),
             (transform_dwis_mni, outputnode, [('outputnode.bvals', 'bvals_mni'),
                                               ('outputnode.rotated_bvecs', 'bvecs_mni'),
                                               ('outputnode.dwi_resampled', 'dwi_mni'),
-                                              ('outputnode.dwi_mask_resampled', 'dwi_mask_mni'),
                                               ('outputnode.b0_series', 'mni_b0_series'),
                                               ('outputnode.local_bvecs', 'local_bvecs_mni'),
                                               ('outputnode.dwi_ref_resampled', 'mni_b0_ref')]),
             (transform_dwis_mni, gtab_mni, [('outputnode.bvals', 'bval_file'),
                                             ('outputnode.rotated_bvecs', 'bvec_file')]),
-            (gtab_mni, outputnode, [('gradient_file', 'gradient_table_mni')])
+            (gtab_mni, outputnode, [('gradient_file', 'gradient_table_mni')]),
+            (inputnode, dwi_mask_mni_wf, [('mni_mask', 'inputnode.t1_mask')]),
+            (transform_dwis_mni, dwi_mask_mni_wf, [
+                ('outputnode.b0_series', 'inputnode.resampled_b0s')]),
+            (dwi_mask_mni_wf, outputnode, [('outputnode.mask_file', 'dwi_mask_mni')])
         ])
         if "T1w" not in output_spaces:
             workflow.connect([(outputnode, gradient_plot, [('bvecs_mni', 'final_bvec_file')])])
@@ -390,4 +400,29 @@ def init_dwi_finalize_wf(scan_groups,
         if node.split('.')[-1].startswith('ds_report'):
             workflow.get_node(node).inputs.base_directory = reportlets_dir
             workflow.get_node(node).inputs.source_file = source_file
+    return workflow
+
+
+def init_mask_finalize_wf(name="mask_finalize_wf"):
+    """Creates a final mask using a combination of the t1 mask and dwi2mask
+    """
+    inputnode = pe.Node(
+        niu.IdentityInterface(fields=['t1_mask', 'resampled_b0s']),
+        name='inputnode')
+    outputnode = pe.Node(niu.IdentityInterface(fields=['mask_file']), name='outputnode')
+    workflow = Workflow(name=name)
+    resample_t1_mask = pe.Node(
+        afni.Resample(outputtype='NIFTI_GZ', resample_mode="NN"), name='resample_t1_mask')
+    b0mask = pe.Node(afni.Automask(outputtype='NIFTI_GZ'), name='b0mask')
+    or_mask = pe.Node(afni.Calc(outputtype='NIFTI_GZ', expr='step(a+b)'), name='or_mask')
+    workflow.connect([
+        (inputnode, resample_t1_mask, [
+            ('t1_mask', 'in_file'),
+            ('resampled_b0s', 'master')]),
+        (inputnode, b0mask, [('resampled_b0s', 'in_file')]),
+        (b0mask, or_mask, [('out_file', 'in_file_a')]),
+        (resample_t1_mask, or_mask, [('out_file', 'in_file_b')]),
+        (or_mask, outputnode, [('out_file', 'mask_file')])
+    ])
+
     return workflow
