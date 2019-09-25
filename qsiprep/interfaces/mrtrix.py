@@ -33,8 +33,18 @@ from nipype.interfaces.mrtrix3 import (Generate5tt, ComputeTDI,
 from nipype.interfaces.mrtrix3.utils import Generate5ttInputSpec, Generate5ttOutputSpec
 from nipype.interfaces.mrtrix3.base import MRTrix3Base, MRTrix3BaseInputSpec
 from nipype.interfaces.mrtrix3.preprocess import ResponseSDInputSpec
+from nipype.interfaces.mrtrix3.tracking import TractographyInputSpec, Tractography
 
 LOGGER = logging.getLogger('nipype.interface')
+
+
+class TckGenInputSpec(TractographyInputSpec):
+    power = traits.CFloat(argstr='-power %f')
+    select = traits.CInt(argstr='-select %d')
+
+
+class TckGen(Tractography):
+    input_spec = TckGenInputSpec
 
 
 class MRTrixGradientTableInputSpec(BaseInterfaceInputSpec):
@@ -344,13 +354,74 @@ class EstimateFOD(MRTrix3Base):
         return None
 
 
-class SIFTInputSpec(MRTrix3BaseInputSpec):
+class SIFT2InputSpec(MRTrix3BaseInputSpec):
     in_tracks = File(
         argstr='%s', exists=True, mandatory=True, position=-3, desc='input tck file')
     in_fod = File(
         argstr='%s', position=-2, exists=True, mandatory=True, desc='input FOD SH file')
-    out_tracks = File(
-        argstr='%s', position=-1, genfile=True, desc='')
+    out_weights = File(
+        argstr='%s', position=-1, genfile=True, desc='output text file containing the weighting'
+        'factor for each streamline')
+    act_file = File(
+        exists=True,
+        argstr='-act %s',
+        desc=('use the Anatomically-Constrained Tractography framework during'
+              ' tracking; provided image must be in the 5TT '
+              '(five - tissue - type) format'))
+    fd_scale_gm = traits.Bool(
+        requires=['act_file'], argstr='-fd_scale_gm', desc='provide this option '
+        '(in conjunction with -act) to heuristically downsize the fibre density estimates '
+        'based on the presence of GM in the voxel. This can assist in reducing tissue interface '
+        'effects when using a single-tissue deconvolution algorithm')
+    no_dilate_lut = traits.Bool(
+        argstr='-no_dilate_lut', desc='do NOT dilate FOD lobe lookup tables; only map '
+        'streamlines to FOD lobes if the precise tangent lies within the angular spread of '
+        'that lobe')
+    make_null_lobes = traits.Bool(
+        argstr='-make_null_lobes', desc='add an additional FOD lobe to each voxel, with zero '
+        'integral, that covers all directions with zero / negative FOD amplitudes')
+    remove_untracked = traits.Bool(
+        argstr='-remove_untracked', desc='remove FOD lobes that do not have any streamline '
+        'density attributed to them; this improves filtering slightly, at the expense of longer '
+        'computation time (and you can no longer do quantitative comparisons between '
+        'reconstructions if this is enabled)')
+    fd_thresh = traits.Float(
+        argstr='-fd_thresh %f', desc='fibre density threshold; exclude an FOD lobe from '
+        'filtering processing if its integral is less than this amount (streamlines will still '
+        'be mapped to it, but it will not contribute to the cost function or the filtering)')
+    out_mu = traits.File(
+        argstr='-out_mu %s', genfile=True, desc='output the final value of SIFT proportionality '
+        'coefficient mu to a text file')
+
+
+class SIFT2OutputSpec(TraitedSpec):
+    out_mu = File(exists=True)
+    out_weights = File(exists=True)
+
+
+class SIFT2(MRTrix3Base):
+    input_spec = SIFT2InputSpec
+    output_spec = SIFT2OutputSpec
+    _cmd = 'tcksift2'
+
+    def _list_outputs(self):
+        outputs = self.output_spec().get()
+        outputs['out_mu'] = op.abspath(self._gen_filename('out_mu'))
+        outputs['out_weights'] = op.abspath(self._gen_filename('out_weights'))
+        return outputs
+
+    def _gen_filename(self, name):
+        _, fname, _ = split_filename(self.inputs.in_fod)
+        output = getattr(self.inputs, name)
+        if name == 'out_mu':
+            if not isdefined(output):
+                output = fname + "_mu.txt"
+            return output
+        if name == 'out_weights':
+            if not isdefined(output):
+                output = fname + "_weights.csv"
+            return output
+        return None
 
 
 class GlobalTractographyInputSpec(MRTrix3BaseInputSpec):
@@ -420,28 +491,22 @@ class GlobalTractography(MRTrix3Base):
         return outputs
 
     def _gen_filename(self, name):
+        output = getattr(self.inputs, name)
+        _, fname, _ = split_filename(self.inputs.dwi_file)
         if name == 'out_isotropic_fraction':
-            output = getattr(self.inputs, name)
             if not isdefined(output):
-                _, fname, _ = split_filename(self.inputs.dwi_file)
                 output = fname + "_tckglobalISOfraction.mif"
             return output
         if name == 'out_fod':
-            output = getattr(self.inputs, name)
             if not isdefined(output):
-                _, fname, _ = split_filename(self.inputs.dwi_file)
                 output = fname + "_tckglobalFOD.mif"
             return output
         if name == 'out_tracks':
-            output = getattr(self.inputs, name)
             if not isdefined(output):
-                _, fname, _ = split_filename(self.inputs.dwi_file)
                 output = fname + "_tckglobal.tck"
             return output
         if name == 'out_residual_energy':
-            output = getattr(self.inputs, name)
             if not isdefined(output):
-                _, fname, _ = split_filename(self.inputs.dwi_file)
                 output = fname + "_residualEnergy.mif"
             return output
         return None
@@ -463,6 +528,8 @@ class BuildConnectomeInputSpec(CommandLineInputSpec):
         position=-1,
         usedefault=True,
         desc='output file after processing')
+    out_assignments = File(
+        argstr='-out_assignments %s', desc='file with streamline assignments')
     nthreads = traits.Int(
         argstr='-nthreads %d',
         desc='number of threads. if zero, the number'
@@ -518,9 +585,9 @@ class BuildConnectomeInputSpec(CommandLineInputSpec):
         desc='Make matrices symmetric on output')
 
 
-
 class BuildConnectomeOutputSpec(TraitedSpec):
     out_file = File(exists=True, desc='the output response file')
+    out_assignments = File(exists=True, desc='streamline assignment csv')
 
 
 class BuildConnectome(MRTrix3Base):
@@ -545,6 +612,8 @@ class BuildConnectome(MRTrix3Base):
     def _list_outputs(self):
         outputs = self.output_spec().get()
         outputs['out_file'] = op.abspath(self.inputs.out_file)
+        if isdefined(self.inputs.out_assignments):
+            outputs['out_assignments'] = op.abspath(self.inputs.out_assignments)
         return outputs
 
     def _format_arg(self, name, spec, val):

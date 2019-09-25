@@ -19,7 +19,7 @@ from qsiprep.interfaces.utils import GetConnectivityAtlases
 from qsiprep.interfaces.connectivity import Controllability
 from qsiprep.interfaces.gradients import RemoveDuplicates
 from qsiprep.interfaces.mrtrix import (ResponseSD, EstimateFOD, MRTrixIngress,
-    Dwi2Response, GlobalTractography, MRTrixAtlasGraph)
+    Dwi2Response, GlobalTractography, MRTrixAtlasGraph, SIFT2, TckGen)
 from .interchange import input_fields
 
 LOGGER = logging.getLogger('nipype.interface')
@@ -89,6 +89,8 @@ def init_mrtrix_csd_recon_wf(name="mrtrix_recon", output_suffix="", params={}):
     create_mif = pe.Node(MRTrixIngress(), name='create_mif')
     estimate_response = pe.Node(Dwi2Response(**response), 'estimate_response')
     estimate_fod = pe.Node(EstimateFOD(**fod), 'estimate_fod')
+
+    use_sift2 = params.get("use_sift2", False)
 
     if response_algorithm == 'msmt_5tt':
         workflow.connect([
@@ -305,7 +307,7 @@ def init_mrtrix_tractography_wf(name="mrtrix_tracking", output_suffix="", params
         niu.IdentityInterface(fields=input_fields + ['fod_sh_mif']),
         name="inputnode")
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=['tck_file']),
+        niu.IdentityInterface(fields=['tck_file', 'sift_weights']),
         name="outputnode")
 
     workflow = pe.Workflow(name=name)
@@ -313,17 +315,32 @@ def init_mrtrix_tractography_wf(name="mrtrix_tracking", output_suffix="", params
     resample_mask = pe.Node(
         afni.Resample(outputtype='NIFTI_GZ', resample_mode="NN"), name='resample_mask')
     tracking_params = params.get("tckgen", {})
-    tracking = pe.Node(mrtrix3.Tractography(**tracking_params), name='tractography')
+    use_sift2 = params.get("use_sift2", True)
+    use_5tt = params.get("use_5tt", False)
+    sift_params = params.get("sift2", {})
+    tracking = pe.Node(TckGen(**tracking_params), name='tractography')
     workflow.connect([
         (inputnode, resample_mask, [('t1_brain_mask', 'in_file'),
                                     ('dwi_file', 'master')]),
-        (inputnode, tracking, [('fod_sh_mif', 'in_file')]),
-        (resample_mask, tracking, [('out_file', 'seed_image')]),
-        (tracking, outputnode, [("out_file", "tck_file")])
-        ])
+        (inputnode, tracking, [
+            ('fod_sh_mif', 'in_file'),
+            ('fod_sh_mif', 'seed_dynamic')]),
+        (tracking, outputnode, [("out_file", "tck_file")])])
 
-    if params['use_5tt']:
+    if use_5tt:
         workflow.connect(inputnode, 'mrtrix_5tt', tracking, 'act_file')
+
+    if use_sift2:
+        tck_sift2 = pe.Node(SIFT2(**sift_params), name="tck_sift2")
+        workflow.connect([
+            (inputnode, tck_sift2, [('fod_sh_mif', 'in_fod')]),
+            (tracking, tck_sift2, [('out_file', 'in_tracks')]),
+            (tck_sift2, outputnode, [
+                ('out_mu', 'mu'),
+                ('out_weights', 'sift_weights')])
+        ])
+        if use_5tt:
+            workflow.connect(inputnode, "mrtrix_5tt", tck_sift2, "act_file")
 
     if output_suffix:
         ds_tck_file = pe.Node(
@@ -354,12 +371,13 @@ def init_mrtrix_connectivity_wf(name="mrtrix_connectiity", params={},
     """
     inputnode = pe.Node(
         niu.IdentityInterface(
-            fields=input_fields + ['tck_file', 'atlas_configs']),
+            fields=input_fields + ['tck_file', 'sift_weights', 'atlas_configs']),
         name="inputnode")
     outputnode = pe.Node(niu.IdentityInterface(fields=['matfile']),
                          name="outputnode")
     workflow = pe.Workflow(name=name)
     conmat_params = params.get("tck2connectome", {})
+    use_sift_weights = params.get("use_sift_weights", False)
     calc_connectivity = pe.Node(MRTrixAtlasGraph(**conmat_params),
                                 name='calc_connectivity')
     workflow.connect([
@@ -367,6 +385,12 @@ def init_mrtrix_connectivity_wf(name="mrtrix_connectiity", params={},
                                         ('tck_file', 'in_file')]),
         (calc_connectivity, outputnode, [('connectivity_matfile', 'matfile')])
     ])
+
+    if use_sift_weights:
+        workflow.connect([
+            (inputnode, calc_connectivity, [('sift_weights', 'in_weights')])
+        ])
+
     if output_suffix:
         # Save the output in the outputs directory
         ds_connectivity = pe.Node(ReconDerivativesDataSink(suffix=output_suffix),
