@@ -178,10 +178,6 @@ def init_dwi_finalize_wf(scan_groups,
         dwi_metadata = {}
 
     fieldmap_type = fieldmap_info['type']
-    if fieldmap_type is not None:
-        fmap_key = "phase1" if fieldmap_type == "phase" else fieldmap_type
-        fieldmap_file = fieldmap_info[fmap_key]
-        fieldmap_info['metadata'] = layout.get_metadata(fieldmap_file)
 
     mem_gb = {'filesize': 1, 'resampled': 1, 'largemem': 1}
     dwi_nvols = 10

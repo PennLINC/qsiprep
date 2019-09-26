@@ -309,6 +309,7 @@ jobs:
                 --output-dir /tmp/DSCSDSI/derivatives \
                 --analysis-level participant \
                 --recon-spec /home/circleci/src/qsiprep/.circleci/3dshore_dsistudio_mrtrix.json \
+                --recon-only \
                 --mem_mb 4096 \
                 --output-resolution 5 \
                 --nthreads 2 -vv

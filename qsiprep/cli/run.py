@@ -604,19 +604,16 @@ def build_qsiprep_workflow(opts, retval):
 
     output_spaces = opts.output_space or []
 
+    force_spatial_normalization = opts.force_spatial_normalization
     # Check output_space
-    if 'template' not in output_spaces and (opts.use_syn_sdc
-                                            or opts.force_syn):
+    if ('template' not in output_spaces and not force_spatial_normalization) \
+            and (opts.use_syn_sdc or opts.force_syn):
         msg = [
             'SyN SDC correction requires T1 to MNI registration, but '
             '"template" is not specified in "--output-space" arguments.',
             'Option --use-syn will be cowardly dismissed.'
         ]
-        if opts.force_syn:
-            output_spaces.append('template')
-            msg[1] = (
-                ' Since --force-syn has been requested, "template" has been '
-                'added to the "--output-space" list.')
+        force_spatial_normalization = True
         logger.warning(' '.join(msg))
 
     # Set up some instrumental utilities
@@ -750,7 +747,7 @@ def build_qsiprep_workflow(opts, retval):
         omp_nthreads=omp_nthreads,
         skull_strip_template=opts.skull_strip_template,
         skull_strip_fixed_seed=opts.skull_strip_fixed_seed,
-        force_spatial_normalization=opts.force_spatial_normalization,
+        force_spatial_normalization=force_spatial_normalization,
         output_spaces=output_spaces,
         output_resolution=opts.output_resolution,
         template=opts.template,

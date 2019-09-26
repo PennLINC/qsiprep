@@ -11,7 +11,7 @@
     "workflow",
     "pipeline",
     "preprocessing",
-    "fMRI",
+    "dMRI",
     "BIDS"
   ],
   "license": "BSD-3-Clause",

@@ -207,13 +207,15 @@ generating a *preprocessed DWI run in {tpl} space*.
                                           (('itk_b0_to_t1', _aslist), 'in2')]),
             (mask_merge_tfms, cnr_tfm, [('out', 'transforms')])
         ])
+    else:
+        workflow.connect([
+            (compose_transforms, cnr_tfm, [(('out_warps', _get_first), 'transforms')])
+        ])
 
     def _get_first(items):
         return items[0]
 
-    workflow.connect([
-        (compose_transforms, cnr_tfm, [(('out_warps', _get_first), 'transforms')])
-    ])
+
 
     dwi_transform = pe.MapNode(
         ants.ApplyTransforms(interpolation="LanczosWindowedSinc", float=True),

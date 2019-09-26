@@ -228,8 +228,6 @@ def init_prepare_epi_wf(omp_nthreads, name="prepare_epi_wf"):
                             out_file='template.nii.gz'),
         name='merge')
 
-    conform = pe.Node(Conform(), name='conform')
-
     enhance_and_skullstrip_dwi_wf = init_enhance_and_skullstrip_dwi_wf(
         omp_nthreads=omp_nthreads)
 
@@ -248,8 +246,7 @@ def init_prepare_epi_wf(omp_nthreads, name="prepare_epi_wf"):
     workflow.connect([
         (inputnode, split, [('fmaps', 'in_file')]),
         (split, merge, [(('out_files', _flatten), 'in_files')]),
-        (merge, conform, [('out_file', 'in_file')]),
-        (conform, enhance_and_skullstrip_dwi_wf, [('out_file', 'inputnode.in_file')]),
+        (merge, enhance_and_skullstrip_dwi_wf, [('out_file', 'inputnode.in_file')]),
         (enhance_and_skullstrip_dwi_wf, fmap2ref_reg, [
             ('outputnode.skull_stripped_file', 'moving_image')]),
         (inputnode, fmap2ref_reg, [('ref_brain', 'fixed_image')]),
