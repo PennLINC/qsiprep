@@ -79,6 +79,13 @@
                 "raw": true
             },
             {
+              "name": "epi/b0ref",
+              "file_pattern":"dwi/.*_b0ref\\.",
+              "title": "b=0 Reference Image",
+              "description": "The b=0 image used for coregistration to T1 before and after sharpening. Tentative brain mask is in blue.",
+              "imgtype": "svg"
+            },
+            {
                 "name": "epi/sampling_scheme",
                 "file_pattern": "dwi/.*sampling_scheme\\.",
                 "title": "DWI Sampling Scheme",
@@ -97,7 +104,7 @@
               "file_pattern": "dwi/.*to_intramodal\\.",
               "title": "Registration to Intramodal Template",
               "description": "b0 reference image warped to the across-scan/session b0 template",
-              "imgtype": "svg"              
+              "imgtype": "svg"
             },
             {
               "name": "epi/shoreline_reg",

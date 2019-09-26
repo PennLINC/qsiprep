@@ -39,7 +39,7 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 
 
 def init_dwi_reference_wf(omp_nthreads=1, dwi_file=None, name='dwi_reference_wf',
-                          gen_report=False):
+                          gen_report=False, use_t1_prior=False):
     """
     This workflow generates reference dwi image for a series
 
@@ -97,10 +97,11 @@ def init_dwi_reference_wf(omp_nthreads=1, dwi_file=None, name='dwi_reference_wf'
 First, a reference volume and its skull-stripped version were generated
 using a modified version of the custom methodology of *fMRIPrep*.
 """
-    inputnode = pe.Node(niu.IdentityInterface(fields=['b0_template', 'dwi_mask']),
-                        name='inputnode')
+    inputnode = pe.Node(
+        niu.IdentityInterface(fields=['b0_template', 'dwi_mask', 't1_prior_mask']),
+        name='inputnode')
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=['dwi_file', 'raw_ref_image', 'ref_image',
+        niu.IdentityInterface(fields=['dwi_file', 'raw_ref_image', 'ref_image', 'bias_image',
                                       'ref_image_brain', 'dwi_mask', 'validation_report']),
         name='outputnode')
 
@@ -111,7 +112,8 @@ using a modified version of the custom methodology of *fMRIPrep*.
     enhance_and_skullstrip_dwi_wf = init_enhance_and_skullstrip_dwi_wf(
         omp_nthreads=omp_nthreads)
 
-    skullstrip_b0_wf = init_skullstrip_b0_wf(use_initial_mask=True, name='skullstrip_b0_wf')
+    skullstrip_b0_wf = init_skullstrip_b0_wf(use_initial_mask=True, use_t1_prior=use_t1_prior,
+                                             name='skullstrip_b0_wf')
 
     workflow.connect([
         (inputnode, outputnode, [('b0_template', 'raw_ref_image')]),
@@ -121,6 +123,7 @@ using a modified version of the custom methodology of *fMRIPrep*.
             ('outputnode.mask_file', 'inputnode.initial_dwi_mask')]),
         (enhance_and_skullstrip_dwi_wf, outputnode, [
             ('outputnode.bias_corrected_file', 'ref_image')]),
+        (inputnode, skullstrip_b0_wf, [('t1_prior_mask', 'inputnode.t1_prior_mask')]),
         (skullstrip_b0_wf, outputnode, [
             ('outputnode.mask_file', 'dwi_mask'),
             ('outputnode.skull_stripped_file', 'ref_image_brain')])
@@ -130,7 +133,7 @@ using a modified version of the custom methodology of *fMRIPrep*.
     if gen_report:
         b0ref_reportlet = pe.Node(SimpleBeforeAfter(), name='b0ref_reportlet', mem_gb=0.1)
         ds_report_b0_mask = pe.Node(
-            DerivativesDataSink(desc="b0ref", suffix='b0ref'), name='ds_report_b0_mask',
+            DerivativesDataSink(desc="sdccoreg", suffix='b0ref'), name='ds_report_b0_mask',
             mem_gb=DEFAULT_MEMORY_MIN_GB, run_without_submitting=True
         )
 
@@ -147,11 +150,10 @@ using a modified version of the custom methodology of *fMRIPrep*.
     return workflow
 
 
-def init_enhance_and_skullstrip_dwi_wf(
-        name='enhance_and_skullstrip_dwi_wf',
-        omp_nthreads=1):
+def init_enhance_and_skullstrip_dwi_wf(name='enhance_and_skullstrip_dwi_wf', omp_nthreads=1):
     """
-    https://community.mrtrix.org/t/dwibiascorrect-with-ants-high-intensity-in-cerebellum-brainstem/1338/3
+    https://community.mrtrix.org/t/\
+    dwibiascorrect-with-ants-high-intensity-in-cerebellum-brainstem/1338/3
 
     Truncates image intensities, runs N4, does a pre-mask
 

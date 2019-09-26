@@ -7,18 +7,18 @@
   ],
   "nodes": [
     {
-      "name": "msmt_csd",
+      "name": "csd",
       "software": "MRTrix3",
       "action": "csd",
-      "output_suffix": "msmtcsd",
+      "output_suffix": "csd",
       "input": "qsiprep",
       "parameters": {
         "response": {
-          "algorithm": "msmt_5tt"
+          "algorithm": "tournier"
         },
         "fod": {
-          "algorithm": "msmt_csd",
-          "max_sh": [4, 8, 8]
+          "algorithm": "csd",
+          "max_sh": [6]
         }
       }
     },
@@ -33,7 +33,7 @@
         "use_sift2": true,
         "tckgen":{
           "algorithm": "iFOD2",
-          "select": 1e8,
+          "select": 1e6,
           "n_trials": 10,
           "max_length": 250,
           "min_length": 30,
@@ -45,20 +45,10 @@
       }
     },
     {
-      "name": "global_tractography",
-      "software": "MRTrix3",
-      "action": "global_tractography",
-      "output_suffix": "tckglobal",
-      "input": "msmt_csd",
-      "parameters": {
-        "niter": 1000
-      }
-    },
-    {
       "name": "mrtrix_conn",
       "software": "MRTrix3",
       "action": "connectivity",
-      "output_suffix": "msmtconnectome",
+      "output_suffix": "connectome",
       "input": "track_ifod2",
       "parameters":{
         "use_sift_weights": true,

@@ -13,7 +13,7 @@ import os.path as op
 from nipype.pipeline import engine as pe
 from nipype.interfaces import afni, utility as niu, ants
 
-
+from .util import init_dwi_reference_wf
 from ...engine import Workflow
 from ...interfaces.nilearn import Merge
 from ...interfaces.gradients import (ComposeTransforms, ExtractB0s, GradientRotation,
@@ -149,6 +149,7 @@ generating a *preprocessed DWI run in {tpl} space*.
             'dwi_mask_resampled',
             'cnr_map_resampled',
             'bvals',
+            'resampled_dwi_mask',
             'rotated_bvecs',
             'local_bvecs',
             'b0_series']),
@@ -223,6 +224,14 @@ generating a *preprocessed DWI run in {tpl} space*.
 
     extract_b0_series = pe.Node(ExtractB0s(), name="extract_b0_series")
 
+    # Use the T1w to make a final mask
+    resample_t1_mask = pe.Node(
+        ants.ApplyTransforms(dimension=3,
+                             transforms='identity',
+                             interpolation="MultiLabel"),
+        name='resample_t1_mask')
+    final_b0_ref = init_dwi_reference_wf(use_t1_prior=True)
+
     workflow.connect([
         (inputnode, rotate_gradients, [('bvec_files', 'bvec_files'),
                                        ('bval_files', 'bval_files')]),
@@ -240,9 +249,14 @@ generating a *preprocessed DWI run in {tpl} space*.
         (merge, outputnode, [('out_file', 'dwi_resampled')]),
         (merge, extract_b0_series, [('out_file', 'dwi_series')]),
         (inputnode, extract_b0_series, [('b0_indices', 'b0_indices')]),
-        (extract_b0_series, outputnode, [('b0_series', 'b0_series'),
-                                         ('b0_average', 'dwi_ref_resampled')]),
-    ])
+        (extract_b0_series, final_b0_ref, [('b0_average', 'inputnode.b0_template')]),
+        (extract_b0_series, resample_t1_mask, [('b0_average', 'reference_image')]),
+        (inputnode, resample_t1_mask, [('t1_mask', 'input_image')]),
+        (resample_t1_mask, final_b0_ref, [('output_image', 'inputnode.t1_prior_mask')]),
+        (final_b0_ref, outputnode, [
+            ('outputnode.ref_image', 'dwi_ref_resampled'),
+            ('outputnode.dwi_mask', 'resampled_dwi_mask')]),
+        (extract_b0_series, outputnode, [('b0_series', 'b0_series')])])
 
     if write_local_bvecs:
         local_grad_rotation = pe.Node(LocalGradientRotation(), name='local_grad_rotation')

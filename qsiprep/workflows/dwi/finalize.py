@@ -310,7 +310,6 @@ def init_dwi_finalize_wf(scan_groups,
                                               to_mni=False,
                                               write_local_bvecs=write_local_bvecs)
         gtab_t1 = pe.Node(MRTrixGradientTable(), name='gtab_t1')
-        dwi_mask_t1_wf = init_mask_finalize_wf(name="dwi_mask_t1_wf")
         workflow.connect([
             (inputnode, transform_dwis_t1, [
                 ('b0_indices', 'inputnode.b0_indices'),
@@ -337,16 +336,12 @@ def init_dwi_finalize_wf(scan_groups,
                                              ('outputnode.cnr_map_resampled', 'cnr_map_t1'),
                                              ('outputnode.local_bvecs', 'local_bvecs_t1'),
                                              ('outputnode.b0_series', 't1_b0_series'),
-                                             ('outputnode.dwi_ref_resampled', 't1_b0_ref')]),
+                                             ('outputnode.dwi_ref_resampled', 't1_b0_ref'),
+                                             ('outputnode.resampled_dwi_mask', 'dwi_mask_t1')]),
             (outputnode, gradient_plot, [('bvecs_t1', 'final_bvec_file')]),
             (transform_dwis_t1, gtab_t1, [('outputnode.bvals', 'bval_file'),
                                           ('outputnode.rotated_bvecs', 'bvec_file')]),
-            (gtab_t1, outputnode, [('gradient_file', 'gradient_table_t1')]),
-            (inputnode, dwi_mask_t1_wf, [('t1_mask', 'inputnode.t1_mask')]),
-            (transform_dwis_t1, dwi_mask_t1_wf, [
-                ('outputnode.b0_series', 'inputnode.resampled_b0s')]),
-            (dwi_mask_t1_wf, outputnode, [('outputnode.mask_file', 'dwi_mask_t1')])
-        ])
+            (gtab_t1, outputnode, [('gradient_file', 'gradient_table_t1')])])
 
     if "template" in output_spaces:
         transform_dwis_mni = init_dwi_trans_wf(name='transform_dwis_mni',
@@ -359,7 +354,6 @@ def init_dwi_finalize_wf(scan_groups,
                                                to_mni=True,
                                                write_local_bvecs=write_local_bvecs)
         gtab_mni = pe.Node(MRTrixGradientTable(), name='gtab_mni')
-        dwi_mask_mni_wf = init_mask_finalize_wf(name="dwi_mask_mni_wf")
         workflow.connect([
             (inputnode, transform_dwis_mni, [
                 ('b0_indices', 'inputnode.b0_indices'),
@@ -375,7 +369,7 @@ def init_dwi_finalize_wf(scan_groups,
                 ('intramodal_affine_file', 'inputnode.to_intramodal_template_affine'),
                 ('intramodal_warp_file', 'inputnode.to_intramodal_template_warp'),
                 ('itk_b0_to_t1', 'inputnode.itk_b0_to_t1'),
-                ('t1_mask', 'inputnode.t1_mask'),
+                ('mni_mask', 'inputnode.t1_mask'),
                 ('intramodal_template_to_t1_warp', 'inputnode.intramodal_template_to_t1_warp')
                 ]),
             (transform_dwis_mni, outputnode, [('outputnode.bvals', 'bvals_mni'),
@@ -383,14 +377,11 @@ def init_dwi_finalize_wf(scan_groups,
                                               ('outputnode.dwi_resampled', 'dwi_mni'),
                                               ('outputnode.b0_series', 'mni_b0_series'),
                                               ('outputnode.local_bvecs', 'local_bvecs_mni'),
-                                              ('outputnode.dwi_ref_resampled', 'mni_b0_ref')]),
+                                              ('outputnode.dwi_ref_resampled', 'mni_b0_ref'),
+                                              ('outputnode.resampled_dwi_mask', 'dwi_mask_mni')]),
             (transform_dwis_mni, gtab_mni, [('outputnode.bvals', 'bval_file'),
                                             ('outputnode.rotated_bvecs', 'bvec_file')]),
-            (gtab_mni, outputnode, [('gradient_file', 'gradient_table_mni')]),
-            (inputnode, dwi_mask_mni_wf, [('mni_mask', 'inputnode.t1_mask')]),
-            (transform_dwis_mni, dwi_mask_mni_wf, [
-                ('outputnode.b0_series', 'inputnode.resampled_b0s')]),
-            (dwi_mask_mni_wf, outputnode, [('outputnode.mask_file', 'dwi_mask_mni')])
+            (gtab_mni, outputnode, [('gradient_file', 'gradient_table_mni')])
         ])
         if "T1w" not in output_spaces:
             workflow.connect([(outputnode, gradient_plot, [('bvecs_mni', 'final_bvec_file')])])
