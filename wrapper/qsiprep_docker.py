@@ -386,8 +386,8 @@ def main():
         command.extend(['-v', ':'.join((opts.recon_input, '/qsiprep-output', 'ro'))])
         main_args.extend(['--recon-input', '/qsiprep-output'])
     if opts.recon_spec:
-        command.extend(['-v', ':'.join((opts.recon_spec, '/root/spec.json', 'ro'))])
-        main_args.extend(['--recon-spec', '/root/spec.json'])
+        command.extend(['-v', ':'.join((opts.recon_spec, '/root/spec/spec.json', 'ro'))])
+        main_args.extend(['--recon-spec', '/root/spec/spec.json'])
     if opts.eddy_config:
         command.extend(['-v', ':'.join((opts.eddy_config, '/sngl/eddy/eddy_config.json', 'ro'))])
         main_args.extend(['--eddy-config', '/sngl/eddy/eddy_config.json'])
