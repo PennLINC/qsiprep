@@ -430,7 +430,7 @@ jobs:
             qsiprep-docker -i pennbbl/qsiprep:latest \
                 -e qsiprep_DEV 1 -u $(id -u) \
                 --config $PWD/nipype.cfg -w /tmp/DSDTI/work \
-                --bids-dir /tmp/data/DSDTI \
+                --bids-dir /tmp/data/DSDTI --mem_mb 4096 \
                 --recon-input /tmp/DSDTI/derivatives/qsiprep \
                 --output-dir /tmp/DSDTI/derivatives \
                 --recon-spec /tmp/data/mrtrix_spec.json \
