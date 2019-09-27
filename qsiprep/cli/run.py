@@ -264,7 +264,7 @@ def get_parser():
     g_moco.add_argument(
         '--hmc_model', '--hmc-model',
         action='store',
-        default='3dSHORE',
+        default='eddy',
         choices=['none', '3dSHORE', 'eddy'],
         help='model used to generate target images for hmc. If "none" the '
         'non-b0 images will be warped using the same transform as their '
