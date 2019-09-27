@@ -237,6 +237,8 @@ jobs:
             mkdir -p /tmp/DSCSDSI/derivatives && sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSCSDSI/derivatives && sudo setfacl -m group:$(id -gn):rwx /tmp/DSCSDSI/derivatives
             pip install future numpy==1.16.4
             pip install --upgrade /tmp/src/qsiprep/wrapper/
+            cp /tmp/src/qsiprep/.circleci/3dshore_dsistudio_mrtrix.json /tmp/data/csdsi_spec.json
+            sudo chmod a+rw /tmp/data/csdsi_spec.json
       - run:
           name: Load Docker image layer cache
           no_output_timeout: 30m
@@ -301,7 +303,6 @@ jobs:
                 sudo setfacl -m group:$(id -gn):rwx /tmp/DSCSDSI/derivatives
             sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSCSDSI/work && \
                 sudo setfacl -m group:$(id -gn):rwx /tmp/DSCSDSI/work
-            sudo chmod a+r /home/circleci/src/qsiprep/.circleci/3dshore_dsistudio_mrtrix.json
             qsiprep-docker -i pennbbl/qsiprep:latest \
                 -e qsiprep_DEV 1 -u $(id -u) \
                 --config $PWD/nipype.cfg -w /tmp/DSCSDSI/work \
@@ -309,7 +310,7 @@ jobs:
                 --recon-input /tmp/DSCSDSI/derivatives/qsiprep \
                 --output-dir /tmp/DSCSDSI/derivatives \
                 --analysis-level participant \
-                --recon-spec /home/circleci/src/qsiprep/.circleci/3dshore_dsistudio_mrtrix.json \
+                --recon-spec /tmp/data/csdsi_spec.json \
                 --recon-only \
                 --mem_mb 4096 \
                 --output-resolution 5 \
@@ -360,6 +361,8 @@ jobs:
             mkdir -p /tmp/DSDTI/derivatives && sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSDTI/derivatives && sudo setfacl -m group:$(id -gn):rwx /tmp/DSDTI/derivatives
             pip install future numpy==1.16.4
             pip install --upgrade /tmp/src/qsiprep/wrapper/
+            cp /tmp/src/qsiprep/.circleci/mrtrix_msmt_csd_test.json /tmp/data/mrtrix_spec.json
+            sudo chmod a+rw /tmp/data/mrtrix_spec.json
       - run:
           name: Load Docker image layer cache
           no_output_timeout: 30m
@@ -409,7 +412,7 @@ jobs:
                 --bids-dir /tmp/data/DSDTI --output-dir /tmp/DSDTI/derivatives \
                 --analysis-level participant \
                 --sloppy --mem_mb 4096 \
-                --force-spatial-normalzation \
+                --force-spatial-normalization \
                 --output-space T1w \
                 --hmc_model eddy \
                 --eddy_config /tmp/data/eddy_config.json \
@@ -423,15 +426,14 @@ jobs:
             sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSDTI/derivatives && \
                 sudo setfacl -m group:$(id -gn):rwx /tmp/DSDTI/derivatives
             sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSDTI/work && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/DSDTI/work && \
-            sudo chmod a+r /home/circleci/src/qsiprep/.circleci/mrtrix_msmt_csd_test.json
+                sudo setfacl -m group:$(id -gn):rwx /tmp/DSDTI/work
             qsiprep-docker -i pennbbl/qsiprep:latest \
                 -e qsiprep_DEV 1 -u $(id -u) \
                 --config $PWD/nipype.cfg -w /tmp/DSDTI/work \
                 --bids-dir /tmp/data/DSDTI \
                 --recon-input /tmp/DSDTI/derivatives/qsiprep \
                 --output-dir /tmp/DSDTI/derivatives \
-                --recon-spec /home/circleci/src/qsiprep/.circleci/mrtrix_msmt_csd_test.json \
+                --recon-spec /tmp/data/mrtrix_spec.json \
                 --recon-only \
                 --analysis-level participant \
                 --output-resolution 5 \
