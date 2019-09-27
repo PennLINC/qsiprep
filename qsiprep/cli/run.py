@@ -306,7 +306,7 @@ def get_parser():
         help='do not use a random seed for skull-stripping - will ensure '
         'run-to-run replicability when used with --omp-nthreads 1')
     g_ants.add_argument(
-        '--force-spatial-normalization', '--force_spatial_normalziation',
+        '--force-spatial-normalization', '--force_spatial_normalization',
         action='store_true',
         help='ensures that spatial normalization is run, even if template '
         'is not specified in --output-space. Useful if you plan to warp '
