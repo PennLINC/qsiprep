@@ -27,7 +27,7 @@
       "software": "MRTrix3",
       "action": "tractography",
       "output_suffix": "ifod2",
-      "input": "msmt_csd",
+      "input": "csd",
       "parameters": {
         "use_5tt": true,
         "use_sift2": true,

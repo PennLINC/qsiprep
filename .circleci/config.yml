@@ -301,6 +301,7 @@ jobs:
                 sudo setfacl -m group:$(id -gn):rwx /tmp/DSCSDSI/derivatives
             sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSCSDSI/work && \
                 sudo setfacl -m group:$(id -gn):rwx /tmp/DSCSDSI/work
+            sudo chmod a+r /home/circleci/src/qsiprep/.circleci/3dshore_dsistudio_mrtrix.json
             qsiprep-docker -i pennbbl/qsiprep:latest \
                 -e qsiprep_DEV 1 -u $(id -u) \
                 --config $PWD/nipype.cfg -w /tmp/DSCSDSI/work \
@@ -384,6 +385,7 @@ jobs:
                 --config $PWD/nipype.cfg -w /tmp/DSDTI/work \
                 --bids-dir /tmp/data/DSDTI --output-dir /tmp/DSDTI/derivatives \
                 --analysis-level participant \
+                --force-spatial-normalization \
                 --sloppy --write-graph --mem_mb 4096 \
                 --nthreads 2 --anat-only -vv --output-resolution 5
       - save_cache:
@@ -407,9 +409,31 @@ jobs:
                 --bids-dir /tmp/data/DSDTI --output-dir /tmp/DSDTI/derivatives \
                 --analysis-level participant \
                 --sloppy --mem_mb 4096 \
+                --force-spatial-normalzation \
                 --output-space T1w \
                 --hmc_model eddy \
                 --eddy_config /tmp/data/eddy_config.json \
+                --output-resolution 5 \
+                --nthreads 2 -vv
+
+      - run:
+          name: Run mrtrix recon workflow
+          no_output_timeout: 2h
+          command: |
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSDTI/derivatives && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/DSDTI/derivatives
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSDTI/work && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/DSDTI/work && \
+            sudo chmod a+r /home/circleci/src/qsiprep/.circleci/mrtrix_msmt_csd_test.json
+            qsiprep-docker -i pennbbl/qsiprep:latest \
+                -e qsiprep_DEV 1 -u $(id -u) \
+                --config $PWD/nipype.cfg -w /tmp/DSDTI/work \
+                --bids-dir /tmp/data/DSDTI \
+                --recon-input /tmp/DSDTI/derivatives/qsiprep \
+                --output-dir /tmp/DSDTI/derivatives \
+                --recon-spec /home/circleci/src/qsiprep/.circleci/mrtrix_msmt_csd_test.json \
+                --recon-only \
+                --analysis-level participant \
                 --output-resolution 5 \
                 --nthreads 2 -vv
       # - run:
