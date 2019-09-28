@@ -41,7 +41,7 @@ LOGGER = logging.getLogger('nipype.interface')
 class TckGenInputSpec(TractographyInputSpec):
     power = traits.CFloat(argstr='-power %f')
     select = traits.CInt(argstr='-select %d')
-    select = traits.Int(
+    select = traits.CInt(
         argstr='-select %d',
         desc=('set the desired number of tracks. The program will continue'
               ' to generate tracks until this number of tracks have been '
