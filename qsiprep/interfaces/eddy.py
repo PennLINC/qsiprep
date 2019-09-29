@@ -16,6 +16,7 @@ from tempfile import TemporaryDirectory
 import numpy as np
 import nibabel as nb
 from nipype.interfaces import fsl
+from .images import to_lps
 
 from nipype import logging
 from nipype.utils.filemanip import fname_presuffix, split_filename
@@ -192,8 +193,8 @@ def topup_inputs_from_dwi_files(dwi_file_list, b0_file_list, topup_prefix, cwd, 
             datain_lines.extend([line] * num_to_add)
             spec_counts[line] += num_to_add
 
-    # Make a 4d series
-    images = [nb.load(img) for img in imain_images]
+    # Make a 4d series, all conformed to LPS+
+    images = [to_lps(nb.load(img)) for img in imain_images]
     image_data = [img.get_fdata()[..., np.newaxis] if len(img.shape) == 3 else img.get_fdata()
                   for img in images]
     imain_output = topup_prefix + "imain.nii.gz"

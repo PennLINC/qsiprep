@@ -18,7 +18,7 @@ from ...niworkflows.interfaces import CopyHeader
 from ...niworkflows.interfaces.registration import ANTSApplyTransformsRPT
 
 from ...engine import Workflow
-from ...interfaces import StructuralReference
+from ...interfaces import StructuralReference, Conform
 from ..dwi.util import init_enhance_and_skullstrip_dwi_wf
 
 

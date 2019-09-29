@@ -9,7 +9,7 @@ DSI Studio workflows
 """
 import json
 import nipype.pipeline.engine as pe
-import nipype.interfaces.utility as niu
+from nipype.interfaces import afni, utility as niu
 from nipype.utils.filemanip import copyfile, split_filename
 from qsiprep.interfaces.dsi_studio import (DSIStudioCreateSrc, DSIStudioGQIReconstruction,
                                            DSIStudioAtlasGraph, DSIStudioExport,
@@ -58,29 +58,36 @@ def init_dsi_studio_recon_wf(name="dsi_studio_recon", output_suffix="", params={
     workflow = pe.Workflow(name=name)
     create_src = pe.Node(DSIStudioCreateSrc(), name="create_src")
     gqi_recon = pe.Node(DSIStudioGQIReconstruction(), name="gqi_recon")
+    # Resample anat mask
+    resample_mask = pe.Node(
+        afni.Resample(outputtype='NIFTI_GZ', resample_mode="NN"), name='resample_mask')
 
     workflow.connect([
         (inputnode, create_src, [('dwi_file', 'input_nifti_file'),
                                  ('bval_file', 'input_bvals_file'),
                                  ('bvec_file', 'input_bvecs_file')]),
+        (inputnode, resample_mask, [('t1_brain_mask', 'in_file'),
+                                    ('dwi_file', 'master')]),
         (create_src, gqi_recon, [('output_src', 'input_src_file')]),
+        (resample_mask, gqi_recon, [('out_file', 'mask')]),
         (gqi_recon, outputnode, [('output_fib', 'fibgz')])
     ])
 
     if output_suffix:
         # Save the output in the outputs directory
-        ds_gqi_fibgz = pe.Node(ReconDerivativesDataSink(
-                                    extension='.fib.gz',
-                                    suffix=output_suffix,
-                                    compress=True),
-                               name='ds_gqi_fibgz',
-                               run_without_submitting=True)
+        ds_gqi_fibgz = pe.Node(
+            ReconDerivativesDataSink(
+                extension='.fib.gz',
+                suffix=output_suffix,
+                compress=True),
+            name='ds_gqi_fibgz',
+            run_without_submitting=True)
         workflow.connect(gqi_recon, 'output_fib', ds_gqi_fibgz, 'in_file')
     return workflow
 
 
 def init_dsi_studio_connectivity_wf(name="dsi_studio_connectivity", n_procs=1,
-                                          params={}, output_suffix=""):
+                                    params={}, output_suffix=""):
     """Calculate streamline-based connectivity matrices using DSI Studio.
 
     DSI Studio has a deterministic tractography algorithm that can be used to

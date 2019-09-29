@@ -4,6 +4,7 @@ from __future__ import print_function
 from nipype.interfaces.base import (TraitedSpec, CommandLineInputSpec, BaseInterfaceInputSpec,
                                     CommandLine, File, traits, isdefined, SimpleInterface,
                                     InputMultiObject, OutputMultiObject)
+from nipype.interfaces import ants
 
 import os
 import os.path as op
@@ -111,4 +112,41 @@ class MultivariateTemplateConstruction2(CommandLine):
         outputs["reverse_transforms"] = reverse_transforms
         outputs["templates"] = templates
 
+        return outputs
+
+
+class N3BiasFieldCorrection(ants.N4BiasFieldCorrection):
+    _cmd = "N3BiasFieldCorrection"
+
+
+class ImageMathInputSpec(BaseInterfaceInputSpec):
+    in_file = File(exists=True, mandatory=True, position=3, argstr='%s')
+    dimension = traits.Enum(3, 2, 4, usedefault=True, argstr="%d", position=0)
+    out_file = File(argstr="%s", genfile=True, position=1)
+    operation = traits.Str(argstr="%s", position=2)
+    secondary_arg = traits.Str("", argstr="%s")
+    secondary_file = File(argstr="%s")
+
+
+class ImageMathOutputSpec(TraitedSpec):
+    out_file = File(exists=True)
+
+
+class ImageMath(CommandLine):
+    input_spec = ImageMathInputSpec
+    output_spec = ImageMathOutputSpec
+    _cmd = 'ImageMath'
+
+    def _gen_filename(self, name):
+        if name == 'out_file':
+            output = self.inputs.out_file
+            if not isdefined(output):
+                _, fname, ext = split_filename(self.inputs.in_file)
+                output = fname + "_" + self.inputs.operation + ext
+            return output
+        return None
+
+    def _list_outputs(self):
+        outputs = self.output_spec().get()
+        outputs['out_file'] = op.abspath(self._gen_filename('out_file'))
         return outputs
