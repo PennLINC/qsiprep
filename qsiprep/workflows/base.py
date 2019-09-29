@@ -686,6 +686,7 @@ to workflows in *qsiprep*'s documentation]\
                      'inputnode.t1_2_mni_reverse_transform'),
                     ('outputnode.dwi_sampling_grid',
                      'inputnode.dwi_sampling_grid'),
+                    ('outputnode.mni_mask', 'inputnode.mni_mask'),
                     # Undefined if --no-freesurfer, but this is safe
                     ('outputnode.subjects_dir', 'inputnode.subjects_dir'),
                     ('outputnode.subject_id', 'inputnode.subject_id'),
@@ -704,7 +705,6 @@ to workflows in *qsiprep*'s documentation]\
                     ('outputnode.bvec_files', 'inputnode.bvec_files'),
                     ('outputnode.b0_ref_image', 'inputnode.b0_ref_image'),
                     ('outputnode.b0_indices', 'inputnode.b0_indices'),
-                    ('outputnode.dwi_mask', 'inputnode.dwi_mask'),
                     ('outputnode.hmc_xforms', 'inputnode.hmc_xforms'),
                     ('outputnode.fieldwarps', 'inputnode.fieldwarps'),
                     ('outputnode.itk_b0_to_t1', 'inputnode.itk_b0_to_t1'),

@@ -59,13 +59,23 @@ class GetConnectivityAtlases(SimpleInterface):
         for atlas_name, atlas_config in atlas_configs.items():
             output_name = fname_presuffix(atlas_config['file'], newpath=runtime.cwd,
                                           suffix="_to_dwi")
-            atlas_configs[atlas_name]['dwi_resolution_file'] = output_name
+            output_mif = fname_presuffix(atlas_config['file'], newpath=runtime.cwd,
+                                         suffix="_to_dwi.mif", use_ext=False)
+            output_mif_txt = fname_presuffix(atlas_config['file'], newpath=runtime.cwd,
+                                             suffix="_mrtrixlabels.txt", use_ext=False)
+            output_orig_txt = fname_presuffix(atlas_config['file'], newpath=runtime.cwd,
+                                              suffix="_origlabels.txt", use_ext=False)
 
+            atlas_configs[atlas_name]['dwi_resolution_file'] = output_name
+            atlas_configs[atlas_name]['dwi_resolution_mif'] = output_mif
+            atlas_configs[atlas_name]['orig_lut'] = output_mif_txt
+            atlas_configs[atlas_name]['mrtrix_lut'] = output_orig_txt
             resample_commands.append(
                 _resample_atlas(input_atlas=atlas_config['file'],
                                 output_atlas=output_name,
                                 transform=transform,
                                 ref_image=self.inputs.reference_image))
+            label_convert(output_name, output_mif, output_orig_txt, output_mif_txt, atlas_config)
 
         self._results['atlas_configs'] = atlas_configs
         commands_file = os.path.join(runtime.cwd, "transform_commands.txt")
@@ -83,6 +93,19 @@ def _resample_atlas(input_atlas, output_atlas, transform, ref_image):
     result = xform.run()
 
     return result.runtime.cmdline
+
+
+def label_convert(original_atlas, output_mif, orig_txt, mrtrix_txt, metadata):
+    """Create a mrtrix label file from an atlas."""
+
+    with open(mrtrix_txt, "w") as mrtrix_f:
+        with open(orig_txt, "w") as orig_f:
+            for row_num, (roi_num, roi_name) in enumerate(
+                    zip(metadata['node_ids'], metadata['node_names'])):
+                orig_f.write("{}\t{}\n".format(roi_num, roi_name))
+                mrtrix_f.write("{}\t{}\n".format(row_num + 1, roi_name))
+    cmd = ['labelconvert', original_atlas, orig_txt, mrtrix_txt, output_mif]
+    os.system(' '.join(cmd))
 
 
 class TPM2ROIInputSpec(BaseInterfaceInputSpec):
