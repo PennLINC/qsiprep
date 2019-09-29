@@ -46,6 +46,8 @@ class TckGenInputSpec(TractographyInputSpec):
         desc=('set the desired number of tracks. The program will continue'
               ' to generate tracks until this number of tracks have been '
               'selected and written to the output file'))
+    n_tracks = traits.Int(
+        desc='NOT supported, do not use')
 
 
 class TckGen(Tractography):
