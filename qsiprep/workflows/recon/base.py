@@ -189,7 +189,7 @@ def _load_recon_spec(spec_name):
     prepackaged = [op.split(fname)[1][:-5] for fname in glob(prepackaged_dir+"/*.json")]
     if op.exists(spec_name):
         recon_spec = spec_name
-    if spec_name in prepackaged:
+    elif spec_name in prepackaged:
         recon_spec = op.join(prepackaged + "/{}.json".format(spec_name))
     else:
         raise Exception("{} is not a file that exists or in {}".format(spec_name, prepackaged))
