@@ -14,6 +14,7 @@ qsiprep base reconstruction workflows
 import sys
 import os
 import os.path as op
+from glob import glob
 from copy import deepcopy
 from pkg_resources import resource_filename as pkgrf
 from nipype import __version__ as nipype_ver

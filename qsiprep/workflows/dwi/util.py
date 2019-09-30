@@ -127,7 +127,6 @@ using a modified version of the custom methodology of *fMRIPrep*.
         (skullstrip_b0_wf, outputnode, [
             ('outputnode.mask_file', 'dwi_mask'),
             ('outputnode.skull_stripped_file', 'ref_image_brain')])
-
     ])
 
     if gen_report:

@@ -352,12 +352,12 @@ class MAPMRIReconstruction(DipyReconInterface):
 
 class BrainSuiteShoreReconstructionInputSpec(DipyReconInputSpec):
     radial_order = traits.Int(6, usedefault=True)
-    zeta = traits.Float(700)
+    zeta = traits.Float(700, usedefault=True)
     tau = traits.Float(4 * np.pi**2, usedefault=True)
     regularization = traits.Enum("L2", "L1", usedefault=True)
     # For L2
-    lambdaN = traits.Float(1e-8)
-    lambdaL = traits.Float(1e-8)
+    lambdaN = traits.Float(1e-8, usedefault=True)
+    lambdaL = traits.Float(1e-8, usedefault=True)
     # For L1
     regularization_weighting = traits.Str("CV", usedefault=True)
     l1_positive_constraint = traits.Bool(False, usedefault=True)
