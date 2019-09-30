@@ -215,7 +215,7 @@ def get_parser():
     g_conf.add_argument(
         '--output-resolution', '--output_resolution',
         action='store',
-        required=True,
+        required=False,
         type=float,
         help='the isotropic voxel size in mm the data will be resampled to '
         'after preprocessing. If set to a lower value than the original voxel '
@@ -615,6 +615,10 @@ def build_qsiprep_workflow(opts, retval):
         ]
         force_spatial_normalization = True
         logger.warning(' '.join(msg))
+
+    if not opts.output_resolution:
+        if not (opts.recon_only or opts.anat_only):
+            raise Exception("--output-resolution is required for preprocessing")
 
     # Set up some instrumental utilities
     run_uuid = '%s_%s' % (strftime('%Y%m%d-%H%M%S'), uuid.uuid4())

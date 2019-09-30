@@ -11,3 +11,11 @@ Preprocessing Workflows
 .. automodule:: qsiprep.workflows.anatomical
 .. automodule:: qsiprep.workflows.dwi
 .. automodule:: qsiprep.workflows.fieldmap
+
+
+.. _recon_workflows:
+
+Reconstruction Workflows
+--------------------------
+
+..automodule:: qsiprep.workflows.recon

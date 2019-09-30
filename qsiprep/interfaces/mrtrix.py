@@ -717,3 +717,62 @@ def _mrtrix_connectivity(args):
     runtime = run.runtime
 
     return runtime.cmdline, run.outputs.out_file
+
+
+class DWIBiasCorrectInputSpec(MRTrix3BaseInputSpec):
+    in_file = File(
+        exists=True,
+        argstr='%s',
+        position=-2,
+        mandatory=True,
+        desc='input DWI image')
+    in_mask = File(
+        argstr='-mask %s',
+        desc='input mask image for bias field estimation')
+    use_ants = traits.Bool(
+        argstr='-ants',
+        mandatory=True,
+        desc='use ANTS N4 to estimate the inhomogeneity field',
+        xor=['use_fsl'])
+    use_fsl = traits.Bool(
+        argstr='-fsl',
+        mandatory=True,
+        desc='use FSL FAST to estimate the inhomogeneity field',
+        xor=['use_ants'])
+    bias = File(
+        argstr='-bias %s',
+        desc='bias field')
+    out_file = File(
+        name_template='%s_biascorr',
+        name_source='in_file',
+        keep_extension=True,
+        argstr='%s',
+        position=-1,
+        desc='the output bias corrected DWI image',
+        genfile=True)
+
+
+class DWIBiasCorrectOutputSpec(TraitedSpec):
+    bias = File(desc='the output bias field', exists=True)
+    out_file = File(desc='the output bias corrected DWI image', exists=True)
+
+
+class DWIBiasCorrect(MRTrix3Base):
+    """
+    Perform B1 field inhomogeneity correction for a DWI volume series.
+    For more information, see
+    <https://mrtrix.readthedocs.io/en/latest/reference/scripts/dwibiascorrect.html>
+    Example
+    -------
+    >>> import nipype.interfaces.mrtrix3 as mrt
+    >>> bias_correct = mrt.DWIBiasCorrect()
+    >>> bias_correct.inputs.in_file = 'dwi.mif'
+    >>> bias_correct.inputs.use_ants = True
+    >>> bias_correct.cmdline
+    'dwibiascorrect -ants dwi.mif dwi_biascorr.mif'
+    >>> bias_correct.run()                             # doctest: +SKIP
+    """
+
+    _cmd = 'dwibiascorrect'
+    input_spec = DWIBiasCorrectInputSpec
+    output_spec = DWIBiasCorrectOutputSpec

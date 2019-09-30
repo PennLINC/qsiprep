@@ -62,7 +62,7 @@ The are two kinds of SDC available in qsiprep:
      implemented in FMRIPREP. To use this method, include argument --use-syn-sdc when
      calling qsiprep. Briefly, this method estimates a SDC warp using ANTS SyN based
      on an average fieldmap in MNI space. For details on this method, see
-     `here <https://fmriprep.readthedocs.io/en/latest/api/index.html#sdc-fieldmapless>`_
+     `fmriprep's documentation <https://fmriprep.readthedocs.io/en/latest/api/index.html#sdc-fieldmapless>`_
 
 
 ``qsiprep`` determines if a fieldmap should be used based on the ``"IntendedFor"``
@@ -70,7 +70,7 @@ fields in the JSON sidecars in the ``fmap/`` directory. If you have two DWI
 series with reverse phase encodings, but would rather use method 1 instead of
 1a, include the ``--prefer-dedicated-fmaps`` argument.
 
-.. critical::
+.. warning::
    if you are using ``eddy`` as the head motion correction method, the fieldmap will be
    converted to a format that can be used with ``eddy``. Methods 1 and 2 work with ``eddy``
    and all methods work with SHORELine.
@@ -97,7 +97,7 @@ qsiprep generates three broad classes of outcomes:
 
 
 Visual Reports
-~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^
 
 qsiprep outputs summary reports, written to ``<output dir>/qsiprep/sub-<subject_label>.html``.
 These reports provide a quick way to make visual inspection of the results easy.  One useful
@@ -113,7 +113,7 @@ a sampling scheme from a DSI scan:
 
 
 Preprocessed data (qsiprep *derivatives*)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 There are additional files, called "Derivatives", written to
 ``<output dir>/qsiprep/sub-<subject_label>/``.
@@ -163,7 +163,7 @@ Volumetric output spaces include ``T1w`` (default) and ``MNI152NLin2009cAsym``.
 
 
 Confounds
-~~~~~~~~~~~~
+^^^^^^^^^^^^
 
 See implementation on :mod:`~qsiprep.workflows.dwi.confounds.init_dwi_confs_wf`.
 
@@ -175,7 +175,7 @@ These are :abbr:`TSV (tab-separated values)` tables, which look like the example
 
   framewise_displacement	trans_x	trans_y	trans_z	rot_x	rot_y	rot_z	hmc_r2	hmc_xcorr	original_file	grad_x	grad_y	grad_z	bval
 
-  n/a	-0.705	-0.002	0.133	0.119	0.350	0.711	0.941	0.943	sub-abcd_dwi.nii.gz	0.000	0.000	0.000	0.000
+  n/a    -0.705	-0.002	0.133	0.119	0.350	0.711	0.941	0.943	sub-abcd_dwi.nii.gz	0.000	0.000	0.000	0.000
   16.343	-0.711	-0.075	0.220	0.067	0.405	0.495	0.945	0.946	sub-abcd_dwi.nii.gz	0.000	0.000	0.000	0.000
   35.173	-0.672	-0.415	0.725	0.004	0.468	1.055	0.756	0.766	sub-abcd_dwi.nii.gz	-0.356	0.656	0.665	3000.000
   45.131	0.021	-0.498	1.046	0.403	0.331	1.400	0.771	0.778	sub-abcd_dwi.nii.gz	-0.935	0.272	0.229	3000.000
@@ -192,7 +192,7 @@ mostly-corrupted scans and can indicate if the head motion model isn't working o
 gradient strengths or directions.
 
 Confounds and "carpet"-plot on the visual reports
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 fMRI has been using a "carpet" visualization of the
 :abbr:`DWI (blood-oxygen level-dependent)` time-series (see [Power2016]_),
@@ -435,7 +435,7 @@ Head-motion estimation (TOPUP/eddy)
 
     from qsiprep.workflows.dwi.hmc import init_dwi_hmc_wf
     wf = init_dwi_hmc_wf(hmc_transform="Affine",
-                         hmc_model="3dSHORE",
+                         hmc_model="eddy",
                          hmc_align_to="iterative",
                          mem_gb=3,
                          source_file='/path/to/dwi/sub-X_dwi.nii.gz',

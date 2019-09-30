@@ -380,7 +380,7 @@ def init_skullstrip_b0_wf(name='skullstrip_b0_wf', use_t1_prior=False, use_initi
     erode2 = pe.Node(
         ImageMath(dimension=3,
                   operation="ME",
-                  secondary_arg="5"),
+                  secondary_arg="7"),
         name="erode2")
 
     apply_mask = pe.Node(fsl.ApplyMask(), name='apply_mask')
