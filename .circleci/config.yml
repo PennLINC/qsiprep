@@ -262,7 +262,7 @@ jobs:
             qsiprep-docker -i pennbbl/qsiprep:latest \
                 -e qsiprep_DEV 1 -u $(id -u) \
                 --config $PWD/nipype.cfg -w /tmp/DSCSDSI/work \
-                --bids-dir /tmp/data/DSCSDSI --output-dir /tmp/DSCSDSI/derivatives \
+                --bids-dir /tmp/data/DSCSDSI_nofmap --output-dir /tmp/DSCSDSI/derivatives \
                 --analysis-level participant \
                 --force-spatial-normalization \
                 --sloppy --write-graph --mem_mb 4096 \
@@ -284,9 +284,9 @@ jobs:
             qsiprep-docker -i pennbbl/qsiprep:latest \
                 -e qsiprep_DEV 1 -u $(id -u) \
                 --config $PWD/nipype.cfg -w /tmp/DSCSDSI/work \
-                --bids-dir /tmp/data/DSCSDSI --output-dir /tmp/DSCSDSI/derivatives \
+                --bids-dir /tmp/data/DSCSDSI_nofmap --output-dir /tmp/DSCSDSI/derivatives \
                 --analysis-level participant \
-                --sloppy --write-graph --use-syn-sdc --mem_mb 4096 \
+                --sloppy --write-graph --use-syn-sdc --force-syn --mem_mb 4096 \
                 --output-space T1w \
                 --hmc_model 3dSHORE \
                 --hmc-transform Rigid \
@@ -306,7 +306,7 @@ jobs:
             qsiprep-docker -i pennbbl/qsiprep:latest \
                 -e qsiprep_DEV 1 -u $(id -u) \
                 --config $PWD/nipype.cfg -w /tmp/DSCSDSI/work \
-                --bids-dir /tmp/data/DSCSDSI \
+                --bids-dir /tmp/data/DSCSDSI_nofmap \
                 --recon-input /tmp/DSCSDSI/derivatives/qsiprep \
                 --output-dir /tmp/DSCSDSI/derivatives \
                 --analysis-level participant \
