@@ -86,8 +86,8 @@ jobs:
     steps:
       - restore_cache:
           keys:
-            - data-v5-{{ .Revision }}
-            - data-v5-
+            - data-v6-{{ .Revision }}
+            - data-v6-
       - run:
           name: Get single scan from downsampled CS-DSI
           command: |
@@ -159,7 +159,7 @@ jobs:
             - DSDTI/nipype.cfg
             - twoses/nipype.cfg
       - save_cache:
-         key: data-v5-{{ epoch }}
+         key: data-v6-{{ epoch }}
          paths:
             - /tmp/data
 
