@@ -156,6 +156,7 @@ def init_sdc_wf(fieldmap_info, dwi_meta, omp_nthreads=1,
 
     # No fieldmaps - forward inputs to outputs
     if fieldmap_info['type'] is None:
+        workflow.__postdesc__ = "No susceptibility distortion correction was performed."
         outputnode.inputs.method = 'None'
         workflow.connect([
             (inputnode, outputnode, [('b0_ref', 'b0_ref'),
@@ -269,17 +270,8 @@ co-registration with the anatomical reference.
                 ('b0_ref_brain', 'inputnode.bold_ref_brain'),
                 ('template', 'inputnode.template')]),
         ])
-
-        # XXX Eliminate branch when forcing isn't an option
-        if fieldmap_info['type'] == 'syn':  # No fieldmaps, but --use-syn
-            outputnode.inputs.method = 'FLB ("fieldmap-less", SyN-based)'
-            sdc_unwarp_wf = syn_sdc_wf
-        else:  # --force-syn was called when other fieldmap was present
-            sdc_unwarp_wf.__desc__ = None
-            workflow.connect([
-                (syn_sdc_wf, outputnode, [
-                    ('outputnode.out_reference', 'syn_b0_ref')]),
-            ])
+        outputnode.inputs.method = 'FLB ("fieldmap-less", SyN-based)'
+        sdc_unwarp_wf = syn_sdc_wf
 
     workflow.connect([
         (sdc_unwarp_wf, outputnode, [

@@ -252,33 +252,31 @@ def init_fmap_unwarp_report_wf(name='fmap_unwarp_report_wf', suffix='hmcsdc'):
     inputnode = pe.Node(niu.IdentityInterface(
         fields=['in_pre', 'in_post', 'in_seg', 'in_xfm']), name='inputnode')
 
-    enhance_hmc_b0 = init_enhance_and_skullstrip_dwi_wf(name='enhance_hmc_b0')
-
-    map_seg = pe.Node(ants.ApplyTransforms(
-        dimension=3, float=True, interpolation='MultiLabel'), invert_transform_flags=[True],
-        name='map_seg', mem_gb=0.3)
-    map_seg.inputs.invert_transform_flags = [True]
+    map_seg = pe.Node(
+        ants.ApplyTransforms(dimension=3, float=True, interpolation='MultiLabel',
+                             invert_transform_flags=[True]),
+        name='map_seg',
+        mem_gb=0.3)
 
     sel_wm = pe.Node(niu.Function(function=extract_wm), name='sel_wm',
                      mem_gb=DEFAULT_MEMORY_MIN_GB)
 
     dwi_rpt = pe.Node(SimpleBeforeAfter(), name='dwi_rpt',
                       mem_gb=0.1)
+
     ds_report_sdc = pe.Node(
         DerivativesDataSink(desc="sdc", suffix='b0'), name='ds_report_sdc',
         mem_gb=DEFAULT_MEMORY_MIN_GB, run_without_submitting=True
     )
 
     workflow.connect([
-        (inputnode, enhance_hmc_b0, [('in_pre', 'inputnode.in_file')]),
-        (enhance_hmc_b0, dwi_rpt, [('outputnode.skull_stripped_file', 'before')]),
-        (inputnode, dwi_rpt, [('in_post', 'after')]),
-        (dwi_rpt, ds_report_sdc, [('out_report', 'in_file')]),
+        (inputnode, dwi_rpt, [('in_pre', 'before'), ('in_post', 'after')]),
         (inputnode, map_seg, [('in_post', 'reference_image'),
                               ('in_seg', 'input_image'),
                               ('in_xfm', 'transforms')]),
         (map_seg, sel_wm, [('output_image', 'in_seg')]),
         (sel_wm, dwi_rpt, [('out', 'wm_seg')]),
+        (dwi_rpt, ds_report_sdc, [('out_report', 'in_file')])
     ])
 
     return workflow

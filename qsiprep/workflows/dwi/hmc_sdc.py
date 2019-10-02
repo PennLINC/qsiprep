@@ -89,6 +89,7 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
     doing_syn = force_syn or (use_syn and fieldmap_type is None)
     if doing_syn:
         fieldmap_info['type'] = 'syn'
+        fieldmap_type = fieldmap_info['type']
 
     if fieldmap_type is None:
         LOGGER.warning('SDC: no fieldmaps found or they were ignored (%s).',

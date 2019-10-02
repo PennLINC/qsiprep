@@ -31,7 +31,6 @@ from .registration import init_b0_to_anat_registration_wf
 from .resampling import init_dwi_trans_wf
 from .confounds import init_dwi_confs_wf
 from .derivatives import init_dwi_derivatives_wf
-from ..fieldmap.unwarp import init_fmap_unwarp_report_wf
 from ..fieldmap.base import init_sdc_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01

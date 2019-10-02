@@ -21,7 +21,6 @@ from ...interfaces.mrtrix import MRTrixGradientTable
 from ...engine import Workflow
 
 # dwi workflows
-from ..fieldmap.unwarp import init_fmap_unwarp_report_wf
 from .hmc_sdc import init_qsiprep_hmcsdc_wf
 from .fsl import init_fsl_hmc_wf
 from .pre_hmc import init_dwi_pre_hmc_wf

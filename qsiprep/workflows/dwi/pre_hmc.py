@@ -25,7 +25,6 @@ from ...engine import Workflow
 
 # dwi workflows
 from ..fieldmap.base import init_sdc_wf
-from ..fieldmap.unwarp import init_fmap_unwarp_report_wf
 from .merge import init_merge_and_denoise_wf
 from .hmc import init_dwi_hmc_wf
 from .util import init_dwi_reference_wf, _create_mem_gb, _get_wf_name, _get_first
