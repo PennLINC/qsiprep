@@ -251,8 +251,9 @@ def init_dwi_preproc_wf(scan_groups,
     preprocess_rpe_series = doing_bidirectional_pepolar and hmc_model == 'eddy'
     if fieldmap_type is not None:
         fmap_key = "phase1" if fieldmap_type == "phase" else fieldmap_type
-        fieldmap_file = fieldmap_info[fmap_key]
-        fieldmap_info['metadata'] = layout.get_metadata(fieldmap_file)
+        if fieldmap_type != "syn":
+            fieldmap_file = fieldmap_info[fmap_key]
+            fieldmap_info['metadata'] = layout.get_metadata(fieldmap_file)
 
     mem_gb = {'filesize': 1, 'resampled': 1, 'largemem': 1}
     dwi_nvols = 10
@@ -351,7 +352,7 @@ def init_dwi_preproc_wf(scan_groups,
                                                   mem_gb=mem_gb['resampled'],
                                                   write_report=True)
 
-    # Make a fieldmap report, save the transforms
+    # Make a fieldmap report, save the transforms. Do it here because we need wm
     if fieldmap_type is not None:
         fmap_unwarp_report_wf = init_fmap_unwarp_report_wf()
 

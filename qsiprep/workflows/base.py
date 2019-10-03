@@ -551,8 +551,12 @@ to workflows in *qsiprep*'s documentation]\
             group_by_warpspace(dwi_session_group, layout, prefer_dedicated_fmaps,
                                hmc_model == "eddy",
                                "fieldmaps" in ignore or force_syn,
-                               combine_all_dwis))
+                               combine_all_dwis,
+                               use_syn))
     outputs_to_files = {_get_output_fname(dwi_group): dwi_group for dwi_group in dwi_fmap_groups}
+    if force_syn:
+        for group_name in outputs_to_files:
+            outputs_to_files[group_name]['fieldmap_info'] = {"type": "syn"}
 
     summary.inputs.dwi_groupings = outputs_to_files
 
@@ -764,7 +768,7 @@ FMAP_PRIORITY = {
 
 
 def group_by_warpspace(dwi_files, layout, prefer_dedicated_fmaps, using_eddy, ignore_fieldmaps,
-                       combine_all_dwis):
+                       combine_all_dwis, use_syn):
     """Groups a session's DWI files by their PE direction and fieldmaps, if specified.
 
     DWIs are grouped by their **warped space**. Two DWI series that are
@@ -895,7 +899,7 @@ def group_by_warpspace(dwi_files, layout, prefer_dedicated_fmaps, using_eddy, ig
         fmaps = layout.get_fieldmap(ref_file, return_list=True)
         fmap_file = ''
         priority = 99999
-        fmap_type = None
+        fmap_type = "syn" if use_syn else None
         for fmap in fmaps:
             fmap_type = fmap['type']
             if fmap_type not in ('epi', 'phasediff', 'phase'):

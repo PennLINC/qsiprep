@@ -109,7 +109,7 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
                                  num_model_iterations=shoreline_iters,
                                  omp_nthreads=omp_nthreads, name="dwi_hmc_wf")
 
-    # Perform SDC if possible
+    # Perform SDC if possible. This will pass-through if no sdc is to be done
     b0_sdc_wf = init_sdc_wf(
         scan_groups['fieldmap_info'], dwi_metadata, omp_nthreads=omp_nthreads,
         fmap_demean=fmap_demean, fmap_bspline=fmap_bspline)
