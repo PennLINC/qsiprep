@@ -59,12 +59,6 @@ be sure to adjust your statistics for these additional comparisons.
 
 
 
-
-
-
-
-
-
 .. _custom_reconstruction:
 
 Building a custom reconstruction pipeline

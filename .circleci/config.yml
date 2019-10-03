@@ -326,6 +326,85 @@ jobs:
       - store_artifacts:
          path: /tmp/DSCSDSI
 
+  BlipUpDownSeries:
+    machine:
+      image: ubuntu-1604:201903-01
+    working_directory: /tmp/DSCSDSI_BUDS
+    environment:
+      - FS_LICENSE: /tmp/fslicense/license.txt
+    steps:
+      - checkout:
+          path: /home/circleci/src/qsiprep
+      - run:
+          name: Check whether build should be skipped
+          command: |
+            cd /home/circleci/src/qsiprep
+            if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?DSCSDSI_BUDS\]' )" != "" ]]; then
+              echo "Skipping DSCSDSI_BUDS build"
+              circleci step halt
+            fi
+      - attach_workspace:
+          at: /tmp
+      - restore_cache:
+          keys:
+            - docker-v5-{{ .Branch }}-{{ .Revision }}
+
+      - run:
+          name: Setting up test
+          command: |
+            mkdir -p /tmp/DSCSDSI_BUDS/derivatives && sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSCSDSI_BUDS/derivatives && sudo setfacl -m group:$(id -gn):rwx /tmp/DSCSDSI_BUDS/derivatives
+            pip install future numpy==1.16.4
+            pip install --upgrade /tmp/src/qsiprep/wrapper/
+
+      - run:
+          name: Load Docker image layer cache
+          no_output_timeout: 30m
+          command: |
+            docker info
+            set +o pipefail
+            if [ -f /tmp/cache/docker.tar.gz ]; then
+              sudo apt update && sudo apt -y install pigz
+              pigz -d --stdout /tmp/cache/docker.tar.gz | docker load
+              docker images
+            fi
+      - run:
+          name: Run anatomical workflow on DSCSDSI_BUDS
+          no_output_timeout: 2h
+          command: |
+            mkdir -p /tmp/DSCSDSI_BUDS/work /tmp/DSCSDSI_BUDS/derivatives
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSCSDSI_BUDS/derivatives && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/DSCSDSI_BUDS/derivatives
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSCSDSI_BUDS/work && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/DSCSDSI_BUDS/work
+            qsiprep-docker -i pennbbl/qsiprep:latest \
+                -e qsiprep_DEV 1 -u $(id -u) \
+                --config $PWD/nipype.cfg -w /tmp/DSCSDSI_BUDS/work \
+                --bids-dir /tmp/data/DSCSDSI_BUDS --output-dir /tmp/DSCSDSI_BUDS/derivatives \
+                --analysis-level participant \
+                --force-spatial-normalization \
+                --sloppy --write-graph --mem_mb 4096 \
+                --nthreads 2 --anat-only -vv --output-resolution 5
+
+      - run:
+          name: Run full qsiprep on DSCSDSI_BUDS
+          no_output_timeout: 2h
+          command: |
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSCSDSI_BUDS/derivatives && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/DSCSDSI_BUDS/derivatives
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSCSDSI_BUDS/work && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/DSCSDSI_BUDS/work
+            qsiprep-docker -i pennbbl/qsiprep:latest \
+                -e qsiprep_DEV 1 -u $(id -u) \
+                --config $PWD/nipype.cfg -w /tmp/DSCSDSI_BUDS/work \
+                --bids-dir /tmp/data/DSCSDSI_BUDS --output-dir /tmp/DSCSDSI_BUDS/derivatives \
+                --analysis-level participant \
+                --sloppy --write-graph --use-syn-sdc --force-syn --mem_mb 4096 \
+                --output-space T1w \
+                --hmc_model none \
+                --hmc-transform Rigid \
+                --force-spatial-normalization \
+                --output-resolution 5 \
+                --nthreads 2 -vv
 
   DSDTI:
     machine:
