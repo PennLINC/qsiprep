@@ -137,10 +137,7 @@ def init_fsl_hmc_wf(scan_groups,
             ('out_bval', 'in_bval'),
             ('out_bvec', 'in_bvec')]),
         (gather_inputs, outputnode, [
-            ('pre_topup_image', 'pre_sdc_template'),
-            ('forward_warps', 'to_dwi_ref_warps'),
-            ('forward_transforms', 'to_dwi_ref_affines')])
-    ])
+            ('pre_topup_image', 'pre_sdc_template')])])
 
     # If a topupref is provided, use it for TOPUP
     rpe_b0 = None
@@ -149,6 +146,12 @@ def init_fsl_hmc_wf(scan_groups,
         rpe_b0 = scan_groups['fieldmap_info']['epi']
     elif fieldmap_type == 'rpe_series':
         rpe_b0 = scan_groups['fieldmap_info']['rpe_series'][0]
+
+    if not fieldmap_type == 'syn':
+        workflow.connect([
+            (gather_inputs, outputnode, [
+                ('forward_warps', 'to_dwi_ref_warps'),
+                ('forward_transforms', 'to_dwi_ref_affines')])])
 
     if rpe_b0 is not None:
         outputnode.inputs.sdc_method = "TOPUP"
@@ -176,9 +179,8 @@ def init_fsl_hmc_wf(scan_groups,
                 ('outputnode.mask_file', 'in_mask')]),
             (topup, eddy, [
                 ('out_movpar', 'in_topup_movpar'),
-                ('out_fieldcoef', 'in_topup_fieldcoef')]),
-        ])
-    elif fieldmap_type in ('fieldmap', 'phasediff', 'phase'):
+                ('out_fieldcoef', 'in_topup_fieldcoef')])])
+    elif fieldmap_type in ('fieldmap', 'phasediff', 'phase', 'syn'):
         outputnode.inputs.sdc_method = fieldmap_type
         b0_enhance = init_enhance_and_skullstrip_dwi_wf(name='b0_enhance')
         b0_sdc_wf = init_sdc_wf(
@@ -200,10 +202,16 @@ def init_fsl_hmc_wf(scan_groups,
                 ('outputnode.b0_ref', 'b0_template'),
                 ('outputnode.b0_mask', 'b0_template_mask')]),
             (b0_sdc_wf, eddy, [
-                ('outputnode.fieldmap_hz', 'field'),
-                ('outputnode.b0_mask', 'in_mask')])
-
-        ])
+                ('outputnode.b0_mask', 'in_mask')])])
+        if fieldmap_type == 'syn':
+            # SyN has transforms passed to the outputnode
+            workflow.connect([
+                (b0_sdc_wf, outputnode, [
+                    ('outputnode.out_warp', 'to_dwi_ref_warps')])])
+        else:
+            # Phasediff, phase, fieldmap can be passed to eddy
+            workflow.connect([
+                (b0_sdc_wf, eddy, [('outputnode.fieldmap_hz', 'field')])])
     else:
         outputnode.inputs.sdc_method = "None"
         b0_enhance = init_enhance_and_skullstrip_dwi_wf(name='b0_enhance')
@@ -214,8 +222,7 @@ def init_fsl_hmc_wf(scan_groups,
             (b0_enhance, outputnode, [
                 ('outputnode.mask_file', 'b0_template_mask')]),
             (b0_enhance, eddy, [
-                ('outputnode.mask_file', 'in_mask')]),
-        ])
+                ('outputnode.mask_file', 'in_mask')])])
 
     # Organize outputs for the rest of the pipeline
     split_eddy = pe.Node(SplitDWIs(b0_threshold=b0_threshold), name="split_eddy")
