@@ -346,7 +346,7 @@ def init_mrtrix_tractography_wf(name="mrtrix_tracking", output_suffix="", params
                                          suffix=output_suffix),
                 name='ds_sift_weights',
                 run_without_submitting=True)
-            workflow.connect(outputnode, 'out_weights', ds_sift_weights, 'in_file')
+            workflow.connect(outputnode, 'sift_weights', ds_sift_weights, 'in_file')
         if use_5tt:
             workflow.connect(inputnode, "mrtrix_5tt", tck_sift2, "act_file")
 
