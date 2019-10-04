@@ -11,7 +11,7 @@ del get_versions
 
 __author__ = 'The PennBBL Developers'
 __copyright__ = 'Copyright 2019, PennBBL, Perelman School of Medicine, University of Pennsylvania'
-__credits__ = ['Matt Cieslak', 'Clint Greene', 'The FMRIPREP Authors']
+__credits__ = ['Matt Cieslak', 'Phil Cook', 'Clint Greene', 'The FMRIPREP Authors']
 __license__ = '3-clause BSD'
 __maintainer__ = 'Matt Cieslak'
 __email__ = 'crn.pennbbl@gmail.com'

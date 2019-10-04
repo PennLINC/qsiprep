@@ -294,7 +294,10 @@ jobs:
                 --force-spatial-normalization \
                 --output-resolution 5 \
                 --nthreads 2 -vv
-
+      - save_cache:
+         key: DSCSDSI-derivatives-v1-{{ .Branch }}-{{ epoch }}
+         paths:
+            - /tmp/DSCSDSI/derivatives/qsiprep
       - run:
           name: Run DIPY 3dSHORE recon on outputs
           no_output_timeout: 2h
@@ -321,7 +324,70 @@ jobs:
       #    command: |
       #      mkdir -p /tmp/DSCSDSI/derivatives_partial
       #      sudo cp -a /tmp/DSCSDSI/work /tmp/DSCSDSI/work_partial
+      - store_artifacts:
+         path: /tmp/DSCSDSI
 
+  DIPY_3dSHORE_Recon:
+    machine:
+      image: ubuntu-1604:201903-01
+    working_directory: /tmp/DSCSDSI
+    environment:
+      - FS_LICENSE: /tmp/fslicense/license.txt
+    steps:
+      - checkout:
+          path: /home/circleci/src/qsiprep
+      - run:
+          name: Check whether build should be skipped
+          command: |
+            cd /home/circleci/src/qsiprep
+            if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?DIPY_3dSHORE_Recon\]' )" != "" ]]; then
+              echo "Skipping DIPY_3dSHORE_Recon build"
+              circleci step halt
+            fi
+      - attach_workspace:
+          at: /tmp
+      - restore_cache:
+          keys:
+            - DSCSDSI-derivatives-v1-{{ .Branch }}-{{ epoch }}
+            - DSCSDSI-derivatives-v1-{{ .Branch }}
+            - DSCSDSI-derivatives-v1-master
+
+      - restore_cache:
+          keys:
+            - docker-v5-{{ .Branch }}-{{ .Revision }}
+
+      - run:
+          name: Load Docker image layer cache
+          no_output_timeout: 30m
+          command: |
+            docker info
+            set +o pipefail
+            if [ -f /tmp/cache/docker.tar.gz ]; then
+              sudo apt update && sudo apt -y install pigz
+              pigz -d --stdout /tmp/cache/docker.tar.gz | docker load
+              docker images
+            fi
+
+      - run:
+          name: Run DIPY 3dSHORE recon on outputs
+          no_output_timeout: 2h
+          command: |
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSCSDSI/derivatives && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/DSCSDSI/derivatives
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSCSDSI/work && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/DSCSDSI/work
+            qsiprep-docker -i pennbbl/qsiprep:latest \
+                -e qsiprep_DEV 1 -u $(id -u) \
+                --config $PWD/nipype.cfg -w /tmp/DSCSDSI/work \
+                --bids-dir /tmp/data/DSCSDSI_nofmap \
+                --recon-input /tmp/DSCSDSI/derivatives/qsiprep \
+                --output-dir /tmp/DSCSDSI/derivatives \
+                --analysis-level participant \
+                --recon-spec /tmp/data/csdsi_spec.json \
+                --recon-only \
+                --mem_mb 4096 \
+                --output-resolution 5 \
+                --nthreads 2 -vv
 
       - store_artifacts:
          path: /tmp/DSCSDSI
@@ -367,8 +433,9 @@ jobs:
               pigz -d --stdout /tmp/cache/docker.tar.gz | docker load
               docker images
             fi
+
       - run:
-          name: Run anatomical workflow on DSCSDSI_BUDS
+          name: Run full qsiprep on DSCSDSI_BUDS
           no_output_timeout: 2h
           command: |
             mkdir -p /tmp/DSCSDSI_BUDS/work /tmp/DSCSDSI_BUDS/derivatives
@@ -381,30 +448,14 @@ jobs:
                 --config $PWD/nipype.cfg -w /tmp/DSCSDSI_BUDS/work \
                 --bids-dir /tmp/data/DSCSDSI_BUDS --output-dir /tmp/DSCSDSI_BUDS/derivatives \
                 --analysis-level participant \
-                --force-spatial-normalization \
                 --sloppy --write-graph --mem_mb 4096 \
-                --nthreads 2 --anat-only -vv --output-resolution 5
-
-      - run:
-          name: Run full qsiprep on DSCSDSI_BUDS
-          no_output_timeout: 2h
-          command: |
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSCSDSI_BUDS/derivatives && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/DSCSDSI_BUDS/derivatives
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSCSDSI_BUDS/work && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/DSCSDSI_BUDS/work
-            qsiprep-docker -i pennbbl/qsiprep:latest \
-                -e qsiprep_DEV 1 -u $(id -u) \
-                --config $PWD/nipype.cfg -w /tmp/DSCSDSI_BUDS/work \
-                --bids-dir /tmp/data/DSCSDSI_BUDS --output-dir /tmp/DSCSDSI_BUDS/derivatives \
-                --analysis-level participant \
-                --sloppy --write-graph --use-syn-sdc --force-syn --mem_mb 4096 \
                 --output-space T1w \
                 --hmc_model none \
                 --hmc-transform Rigid \
-                --force-spatial-normalization \
                 --output-resolution 5 \
                 --nthreads 2 -vv
+      - store_artifacts:
+         path: /tmp/DSCSDSI_BUDS
 
   DSDTI:
     machine:
@@ -664,10 +715,23 @@ workflows:
             tags:
               only: /.*/
 
-      - IntramodalTemplate:
+      - BlipUpDownSeries:
           requires:
             - get_data
             - build
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - DIPY_3dSHORE_Recon:
+          requires:
+            - get_data
+            - build
+            - DSCSDSI
           filters:
             branches:
               ignore:

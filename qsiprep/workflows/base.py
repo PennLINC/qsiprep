@@ -550,7 +550,7 @@ to workflows in *qsiprep*'s documentation]\
         dwi_fmap_groups.extend(
             group_by_warpspace(dwi_session_group, layout, prefer_dedicated_fmaps,
                                hmc_model == "eddy",
-                               "fieldmaps" in ignore or force_syn,
+                               "fieldmaps" in ignore,
                                combine_all_dwis,
                                use_syn))
     outputs_to_files = {_get_output_fname(dwi_group): dwi_group for dwi_group in dwi_fmap_groups}

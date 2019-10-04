@@ -1,6 +1,8 @@
-{ "description": "Reconstruct dwis using Dipy, then convert to mrtrix and dsi studio formats",
-  "space": "T1w",
+{ "space": "T1w",
   "name": "convert_shore_recons",
+  "space": "T1w",
+  "atlases": ["schaefer100", "schaefer200"],
+  "anatomical": ["mrtrix_5tt"],
   "nodes": [
     {
       "name": "csdsi_3dshore",
@@ -9,9 +11,8 @@
       "input": "qsiprep",
       "output_suffix": "3dSHORE",
       "parameters": {
-        "radial_order": 6,
-        "zeta": 700,
-        "tau": 40,
+        "extrapolate_scheme": "HCP",
+        "radial_order": 8,
         "regularization": "L2",
         "lambdaN": 1e-8,
         "lambdaL": 1e-8,
@@ -45,6 +46,60 @@
         "input": "streamline_connectivity",
         "action": "controllability",
         "output_suffix": "rec-3dshore_control"
+    },
+    {
+      "name": "msmt_csd",
+      "software": "MRTrix3",
+      "action": "csd",
+      "output_suffix": "msmtcsd",
+      "input":"csdsi_3dshore",
+      "parameters": {
+        "mtnormalize": true,
+        "response": {
+          "algorithm": "msmt_5tt"
+        },
+        "fod": {
+          "algorithm": "msmt_csd",
+          "max_sh": [4, 8, 8]
+        }
+      }
+    },
+    {
+      "name": "track_ifod2",
+      "software": "MRTrix3",
+      "action": "tractography",
+      "output_suffix": "ifod2",
+      "input": "msmt_csd",
+      "parameters": {
+        "use_5tt": true,
+        "use_sift2": true,
+        "tckgen":{
+          "algorithm": "iFOD2",
+          "select": 5e6,
+          "max_length": 250,
+          "min_length": 30,
+          "power":0.33,
+          "crop_at_gmwmi": true,
+          "backtrack": true
+        },
+        "sift2":{}
+      }
+    },
+    {
+      "name": "mrtrix_conn",
+      "software": "MRTrix3",
+      "action": "connectivity",
+      "output_suffix": "msmtconnectome",
+      "input": "track_ifod2",
+      "parameters":{
+        "use_sift_weights": true,
+        "tck2connectome": {
+          "zero_diagonal":false,
+          "search_radius": 2.0,
+          "scale_invnodevol":true,
+          "symmetric": true
+        }
+      }
     }
   ]
 }
