@@ -298,27 +298,6 @@ jobs:
          key: DSCSDSI-derivatives-v1-{{ .Branch }}-{{ epoch }}
          paths:
             - /tmp/DSCSDSI/derivatives/qsiprep
-      - run:
-          name: Run DIPY 3dSHORE recon on outputs
-          no_output_timeout: 2h
-          command: |
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSCSDSI/derivatives && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/DSCSDSI/derivatives
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSCSDSI/work && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/DSCSDSI/work
-            qsiprep-docker -i pennbbl/qsiprep:latest \
-                -e qsiprep_DEV 1 -u $(id -u) \
-                --config $PWD/nipype.cfg -w /tmp/DSCSDSI/work \
-                --bids-dir /tmp/data/DSCSDSI_nofmap \
-                --recon-input /tmp/DSCSDSI/derivatives/qsiprep \
-                --output-dir /tmp/DSCSDSI/derivatives \
-                --analysis-level participant \
-                --recon-spec /tmp/data/csdsi_spec.json \
-                --recon-only \
-                --mem_mb 4096 \
-                --output-resolution 5 \
-                --nthreads 2 -vv
-
       # - run:
       #    name: Move intermediate results for second run
       #    command: |
@@ -388,6 +367,7 @@ jobs:
                 --mem_mb 4096 \
                 --output-resolution 5 \
                 --nthreads 2 -vv
+
 
       - store_artifacts:
          path: /tmp/DSCSDSI

@@ -563,7 +563,7 @@ to workflows in *qsiprep*'s documentation]\
     make_intramodal_template = False
     if intramodal_template_iters > 0:
         if len(outputs_to_files) < 2:
-            LOGGER.warning("Cannot make an intramodal with less than 2 groups.")
+            raise Exception("Cannot make an intramodal with less than 2 groups.")
         else:
             make_intramodal_template = True
 
