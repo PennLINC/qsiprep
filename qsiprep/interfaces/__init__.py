@@ -10,7 +10,6 @@ from ..niworkflows.interfaces.images import (TemplateDimensions, MatchHeader)
 from .images import (
     IntraModalMerge, ValidateImage, Conform, ConformDwi
 )
-from .reports import SubjectSummary, AboutSummary, DiffusionSummary
 from .freesurfer import (
     StructuralReference, MakeMidthickness, FSInjectBrainExtracted,
     FSDetectInputs, RefineBrainMask, MedialNaNs

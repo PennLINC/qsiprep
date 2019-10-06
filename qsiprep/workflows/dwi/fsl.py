@@ -47,6 +47,7 @@ def init_fsl_hmc_wf(scan_groups,
                     omp_nthreads=1,
                     dwi_metadata=None,
                     slice_quality='outlier_n_sqr_stdev_map',
+                    sloppy=False,
                     name="fsl_hmc_wf"):
     """
     This workflow controls the dwi preprocessing stages using FSL tools.
@@ -141,7 +142,7 @@ def init_fsl_hmc_wf(scan_groups,
 
     # If a topupref is provided, use it for TOPUP
     rpe_b0 = None
-    fieldmap_type = scan_groups['fieldmap_info']['type']
+    fieldmap_type = scan_groups['fieldmap_info']['suffix']
     if fieldmap_type == 'epi':
         rpe_b0 = scan_groups['fieldmap_info']['epi']
     elif fieldmap_type == 'rpe_series':

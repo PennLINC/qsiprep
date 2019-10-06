@@ -47,7 +47,7 @@ consider creating fake sessions in your BIDS directory.
 Susceptibility correction methods
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The are two kinds of SDC available in qsiprep:
+The are three kinds of SDC available in qsiprep:
 
   1. :ref:`sdc_pepolar` (also called **blip-up/blip-down**):
      This is the implementation from FMRIPREP, using 3dQwarp to
@@ -162,6 +162,8 @@ Volumetric output spaces include ``T1w`` (default) and ``MNI152NLin2009cAsym``.
   signal model divided by the variance of the error of the signal model.
 
 
+.. _dwi_confounds:
+
 Confounds
 ^^^^^^^^^^^^
 
@@ -192,7 +194,7 @@ mostly-corrupted scans and can indicate if the head motion model isn't working o
 gradient strengths or directions.
 
 Confounds and "carpet"-plot on the visual reports
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 fMRI has been using a "carpet" visualization of the
 :abbr:`DWI (blood-oxygen level-dependent)` time-series (see [Power2016]_),
@@ -223,7 +225,7 @@ available and are used as the input.
 
 
 T1w/T2w preprocessing
-~~~~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^^^^^^
 
 :mod:`qsiprep.workflows.anatomical.init_anat_preproc_wf`
 
@@ -246,6 +248,7 @@ T1w/T2w preprocessing
                               longitudinal=False,
                               debug=False,
                               hires=True,
+                              sloppy=False,
                               num_t1w=1)
 
 The anatomical sub-workflow begins by constructing an average image by
@@ -256,7 +259,7 @@ single reference template (see `Longitudinal processing`_).
 .. _t1preproc_steps:
 
 Brain extraction, brain tissue segmentation and spatial normalization
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Then, the T1w image/average is skull-stripped using ANTs' ``antsBrainExtraction.sh``,
 which is an atlas-based brain extraction workflow.
@@ -299,7 +302,7 @@ to be run through ``qsiprep``.
 
 
 Longitudinal processing
-^^^^^^^^^^^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 In the case of multiple T1w images (across sessions and/or runs), T1w images are
 merged into a single template image using FreeSurfer's ``mri_robust_template``.
@@ -322,7 +325,7 @@ flag, which forces the estimation of an unbiased template.
 
 
 DWI preprocessing
-~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^^
 
 :mod:`qsiprep.workflows.dwi.base.init_dwi_preproc_wf`
 
@@ -333,7 +336,7 @@ DWI preprocessing
     from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
     wf = init_dwi_preproc_wf({'dwi_series': [
                                 '/completely/made/up/path/sub-01_dwi.nii.gz'],
-                              'fieldmap_info': {'type': None},
+                              'fieldmap_info': {'suffix': None},
                               'dwi_series_pedir': 'j'},
                               omp_nthreads=1,
                               ignore=[],
@@ -364,7 +367,7 @@ split into multiple sub-workflows described below.
 .. _dwi_hmc:
 
 Head-motion estimation (SHORELine)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 :mod:`qsiprep.workflows.dwi.hmc.init_dwi_hmc_wf`
 
@@ -374,7 +377,7 @@ Head-motion estimation (SHORELine)
 
     from qsiprep.workflows.dwi.hmc_sdc import init_qsiprep_hmcsdc_wf
     wf = init_qsiprep_hmcsdc_wf({'dwi_series':['dwi1.nii', 'dwi2.nii'],
-                                'fieldmap_info': {'type': None},
+                                'fieldmap_info': {'suffix': None},
                                 'dwi_series_pedir': 'j'},
                                 hmc_transform='Affine',
                                 hmc_model='3dSHORE',
@@ -425,7 +428,7 @@ are saved for each slice for display in a carpet plot-like thing.
 
 
 Head-motion estimation (TOPUP/eddy)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 :mod:`qsiprep.workflows.dwi.hmc.init_dwi_hmc_wf`
 
@@ -454,7 +457,7 @@ option. An example (default) eddy config json can be viewed or downloaded
 .. _dwi_ref:
 
 DWI reference image estimation
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 :mod:`qsiprep.workflows.dwi.util.init_dwi_reference_wf`
 
@@ -473,7 +476,7 @@ Dipy's histogram equalization on the b0 template generated during
 motion correction.
 
 Susceptibility Distortion Correction (SDC)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 :mod:`qsiprep.workflows.fieldmap.base.init_sdc_wf`
 
@@ -491,7 +494,7 @@ motion correction. For a complete list of possibilties here, see
 .. _resampling:
 
 Pre-processed DWIs in a different space
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 :mod:`qsiprep.workflows.dwi.resampling.init_dwi_trans_wf`
 

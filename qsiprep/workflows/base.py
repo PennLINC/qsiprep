@@ -146,12 +146,6 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
             List of output spaces functional images are to be resampled to.
             Some parts of pipeline will only be instantiated for some output
             spaces.
-
-            Valid spaces:
-
-             - T1w
-             - template
-
         template : str
             Name of template targeted by ``template`` output space
         motion_corr_to : str

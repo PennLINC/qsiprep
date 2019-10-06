@@ -22,6 +22,8 @@ from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
 from nipype.utils.filemanip import split_filename
 from ...engine import Workflow
+from ...__about__ import __version__
+
 import logging
 import json
 from ...interfaces.anatomical import QsiprepAnatomicalIngress

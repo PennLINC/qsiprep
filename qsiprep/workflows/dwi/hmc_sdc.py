@@ -36,6 +36,7 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
                            use_syn,
                            force_syn,
                            dwi_metadata=None,
+                           sloppy=False,
                            name='qsiprep_hmcsdc_wf'):
     """
     This workflow controls the head motion correction and susceptibility distortion
@@ -48,7 +49,7 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
 
         from qsiprep.workflows.dwi.shoreline import init_qsiprep_hmcsdc_wf
         wf = init_qsiprep_hmcsdc_wf({'dwi_series':[dwi1.nii, dwi2.nii],
-                                          'fieldmap_info': {'type': None},
+                                          'fieldmap_info': {'suffix': None},
                                           'dwi_series_pedir': j},
                                          hmc_transform='Affine',
                                          hmc_model='3dSHORE',
@@ -62,6 +63,7 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
                                          use_syn=True,
                                          force_syn=False,
                                          name='qsiprep_hmcsdc_wf',
+                                         sloppy=False,
                                          dwi_metadata={})
     """
     inputnode = pe.Node(
@@ -84,17 +86,13 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
     dwi_series = scan_groups['dwi_series']
     source_file = dwi_series[0]
     fieldmap_info = scan_groups['fieldmap_info']
-    fieldmap_type = fieldmap_info['type']
     # Run SyN if forced or in the absence of fieldmap correction
-    doing_syn = force_syn or (use_syn and fieldmap_type is None)
-    if doing_syn:
-        fieldmap_info['type'] = 'syn'
-        fieldmap_type = fieldmap_info['type']
+    fieldmap_type = fieldmap_info['suffix']
 
     if fieldmap_type is None:
         LOGGER.warning('SDC: no fieldmaps found or they were ignored (%s).',
                        source_file)
-    elif doing_syn:
+    elif fieldmap_type == 'syn':
         LOGGER.warning(
             'SDC: no fieldmaps found or they were ignored. '
             'Using EXPERIMENTAL "fieldmap-less SyN" correction '
@@ -107,6 +105,7 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
     dwi_hmc_wf = init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to,
                                  source_file=source_file,
                                  num_model_iterations=shoreline_iters,
+                                 sloppy=sloppy,
                                  omp_nthreads=omp_nthreads, name="dwi_hmc_wf")
 
     # Perform SDC if possible. This will pass-through if no sdc is to be done
