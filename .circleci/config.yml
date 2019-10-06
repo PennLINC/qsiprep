@@ -351,6 +351,7 @@ jobs:
           name: Run DIPY 3dSHORE recon on outputs
           no_output_timeout: 2h
           command: |
+            mkdir -p /tmp/DSCSDSI/work /tmp/DSCSDSI/derivatives
             sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSCSDSI/derivatives && \
                 sudo setfacl -m group:$(id -gn):rwx /tmp/DSCSDSI/derivatives
             sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSCSDSI/work && \
@@ -425,6 +426,7 @@ jobs:
                 sudo setfacl -m group:$(id -gn):rwx /tmp/DSCSDSI_BUDS/work
             qsiprep-docker -i pennbbl/qsiprep:latest \
                 -e qsiprep_DEV 1 -u $(id -u) \
+                --combine-all-dwis \
                 --config $PWD/nipype.cfg -w /tmp/DSCSDSI_BUDS/work \
                 --bids-dir /tmp/data/DSCSDSI_BUDS --output-dir /tmp/DSCSDSI_BUDS/derivatives \
                 --analysis-level participant \
