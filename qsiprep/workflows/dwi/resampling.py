@@ -112,6 +112,7 @@ def init_dwi_trans_wf(template,
         local_bvecs
             NIfTI file containing the bvec rotation matrix (due to transforms) in each voxel.
             Includes rotations introduced by warping
+
     """
     workflow = Workflow(name=name)
     workflow.__desc__ = """\
