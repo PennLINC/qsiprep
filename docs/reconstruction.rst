@@ -48,6 +48,8 @@ the downstream workflow. The :ref:`recon_workflows` section lists all the
 available workflows and their inputs and outputs.
 
 
+.. _connectivity:
+
 Reconstruction Outputs: Connectivity matrices
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

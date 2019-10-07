@@ -240,16 +240,15 @@ T1w/T2w preprocessing
                               template='MNI152NLin2009cAsym',
                               output_spaces=['T1w', 'fsnative',
                                              'template', 'fsaverage5'],
-                              skull_strip_template='OASIS',
-                              skull_strip_fixed_seed=False,
-                              force_spatial_normalization=True,
                               output_resolution=1.25,
+                              skull_strip_template='OASIS',
+                              force_spatial_normalization=True,
                               freesurfer=True,
                               longitudinal=False,
                               debug=False,
                               hires=True,
-                              sloppy=False,
                               num_t1w=1)
+
 
 The anatomical sub-workflow begins by constructing an average image by
 :ref:`conforming <conformation>` all found T1w images to LPS orientation and
@@ -334,32 +333,34 @@ DWI preprocessing
     :simple_form: yes
 
     from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
-    wf = init_dwi_preproc_wf({'dwi_series': [
-                                '/completely/made/up/path/sub-01_dwi.nii.gz'],
+    wf = init_dwi_preproc_wf({'dwi_series': ['fake.nii'],
                               'fieldmap_info': {'suffix': None},
                               'dwi_series_pedir': 'j'},
-                              omp_nthreads=1,
+                              output_prefix='',
                               ignore=[],
-                              reportlets_dir='.',
-                              output_dir='.',
-                              template='MNI152NLin2009cAsym',
-                              output_spaces=['T1w', 'template'],
-                              dwi_denoise_window=7,
-                              denoise_before_combining=True,
+                              b0_threshold=100,
                               motion_corr_to='iterative',
                               b0_to_t1w_transform='Rigid',
                               hmc_model='3dSHORE',
-                              hmc_transform='Affine',
+                              hmc_transform='Rigid',
                               shoreline_iters=2,
-                              b0_threshold=100,
-                              eddy_config=None,
                               impute_slice_threshold=0,
-                              fmap_bspline=True,
+                              eddy_config=None,
+                              reportlets_dir='.',
+                              output_spaces=['T1w', 'template'],
+                              dwi_denoise_window=5,
+                              denoise_before_combining=True,
+                              template='MNI152NLin2009cAsym',
+                              output_dir='.',
+                              omp_nthreads=1,
+                              fmap_bspline=False,
                               fmap_demean=True,
                               use_syn=True,
-                              force_syn=True,
+                              force_syn=False,
                               low_mem=False,
-                              output_prefix="")
+                              sloppy=True,
+                              layout=None)
+
 
 Preprocessing of :abbr:`DWI (Diffusion Weighted Image)` files is
 split into multiple sub-workflows described below.
