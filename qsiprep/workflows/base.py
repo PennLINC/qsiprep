@@ -84,7 +84,7 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
                               template='MNI152NLin2009cAsym',
                               motion_corr_to='iterative',
                               b0_to_t1w_transform='Rigid',
-                              intramodal_template_iters=2,
+                              intramodal_template_iters=0,
                               intramodal_template_transform="Rigid",
                               hmc_transform='Affine',
                               eddy_config=None,
@@ -146,12 +146,6 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
             List of output spaces functional images are to be resampled to.
             Some parts of pipeline will only be instantiated for some output
             spaces.
-
-            Valid spaces:
-
-             - T1w
-             - template
-
         template : str
             Name of template targeted by ``template`` output space
         motion_corr_to : str
@@ -311,7 +305,7 @@ def init_single_subject_wf(
             prefer_dedicated_fmaps=False,
             motion_corr_to='iterative',
             b0_to_t1w_transform='Rigid',
-            intramodal_template_iters=2,
+            intramodal_template_iters=0,
             intramodal_template_transform="Rigid",
             hmc_model='3dSHORE',
             hmc_transform='Affine',
@@ -550,16 +544,20 @@ to workflows in *qsiprep*'s documentation]\
         dwi_fmap_groups.extend(
             group_by_warpspace(dwi_session_group, layout, prefer_dedicated_fmaps,
                                hmc_model == "eddy",
-                               "fieldmaps" in ignore or force_syn,
-                               combine_all_dwis))
+                               "fieldmaps" in ignore,
+                               combine_all_dwis,
+                               use_syn))
     outputs_to_files = {_get_output_fname(dwi_group): dwi_group for dwi_group in dwi_fmap_groups}
+    if force_syn:
+        for group_name in outputs_to_files:
+            outputs_to_files[group_name]['fieldmap_info'] = {"suffix": "syn"}
 
     summary.inputs.dwi_groupings = outputs_to_files
 
     make_intramodal_template = False
     if intramodal_template_iters > 0:
         if len(outputs_to_files) < 2:
-            LOGGER.warning("Cannot make an intramodal with less than 2 groups.")
+            raise Exception("Cannot make an intramodal with less than 2 groups.")
         else:
             make_intramodal_template = True
 
@@ -622,7 +620,8 @@ to workflows in *qsiprep*'s documentation]\
             fmap_bspline=fmap_bspline,
             fmap_demean=fmap_demean,
             use_syn=use_syn,
-            force_syn=force_syn
+            force_syn=force_syn,
+            sloppy=debug
         )
         dwi_finalize_wf = init_dwi_finalize_wf(
             scan_groups=dwi_info,
@@ -764,7 +763,7 @@ FMAP_PRIORITY = {
 
 
 def group_by_warpspace(dwi_files, layout, prefer_dedicated_fmaps, using_eddy, ignore_fieldmaps,
-                       combine_all_dwis):
+                       combine_all_dwis, use_syn):
     """Groups a session's DWI files by their PE direction and fieldmaps, if specified.
 
     DWIs are grouped by their **warped space**. Two DWI series that are
@@ -823,7 +822,7 @@ def group_by_warpspace(dwi_files, layout, prefer_dedicated_fmaps, using_eddy, ig
             and ``use_eddy``:
             [
                 {'dwi_series': ['scan1.nii', 'scan2.nii'],
-                 'fieldmap_info': {'rpe_series':['scan3.nii', 'scan4.nii', 'type':'rpe_series']}
+                 'fieldmap_info': {'rpe_series':['scan3.nii', 'scan4.nii', 'suffix':'rpe_series']}
                  'dwi_series_pedir': 'j'}
             ]
 
@@ -831,11 +830,11 @@ def group_by_warpspace(dwi_files, layout, prefer_dedicated_fmaps, using_eddy, ig
             [
                 {'dwi_series': ['scan1.nii', 'scan2.nii'],
                  'fieldmap_info': {'rpe_series':['scan3.nii', 'scan4.nii'],
-                                   'type':'rpe_series']}
+                                   'suffix':'rpe_series']}
                  'dwi_series_pedir': 'j'},
                  {'dwi_series': ['scan3.nii', 'scan4.nii'],
                   'fieldmap_info': {'rpe_series': ['scan1.nii', 'scan2.nii'],
-                                    'type':'rpe_series']}
+                                    'suffix':'rpe_series']}
                   'dwi_series_pedir': 'j'}
             ]
 
@@ -843,7 +842,7 @@ def group_by_warpspace(dwi_files, layout, prefer_dedicated_fmaps, using_eddy, ig
             [
              {'dwi_series': ['scan1.nii', 'scan2.nii'],
               'fieldmap_info': {'epi': 'fmap_scan1.nii',
-                                'type': 'epi'},
+                                'suffix': 'epi'},
               'dwi_series_pedir': 'j'}
             ]
 
@@ -851,11 +850,11 @@ def group_by_warpspace(dwi_files, layout, prefer_dedicated_fmaps, using_eddy, ig
             [
              {'dwi_series': ['scan1.nii', 'scan2.nii'],
               'fieldmap_info': {'epi': 'fmap_scan1.nii',
-                                'type': 'epi'},
+                                'suffix': 'epi'},
               'dwi_series_pedir': 'j'},
              {'dwi_series': ['scan3.nii', 'scan4.nii'],
               'fieldmap_info': {'epi': 'fmap_scan2.nii',
-                               'type': 'epi'},
+                               'suffix': 'epi'},
               'dwi_series_pedir': 'j-'}
             ]
 
@@ -865,7 +864,7 @@ def group_by_warpspace(dwi_files, layout, prefer_dedicated_fmaps, using_eddy, ig
               'fieldmap_info': { 'magnitude1': 'magnitude1.nii',
                                  'magnitude2': 'magnitude2.nii',
                                  'phasediff': 'phasediff.nii',
-                                 'type': 'phasediff'},
+                                 'suffix': 'phasediff'},
               'dwi_series_pedir': 'j-'}
             ]
 
@@ -879,7 +878,7 @@ def group_by_warpspace(dwi_files, layout, prefer_dedicated_fmaps, using_eddy, ig
     if layout is None:
         LOGGER.warning("Assuming we're building docs")
         return [{'dwi_series': dwi_files,
-                 'fieldmap_info': {'type': None},
+                 'fieldmap_info': {'suffix': None},
                  'dwi_series_pedir': 'j'}]
 
     # For each DWI, figure out its PE dir and whether or not it was listed in
@@ -887,7 +886,7 @@ def group_by_warpspace(dwi_files, layout, prefer_dedicated_fmaps, using_eddy, ig
     # (filename, PE dir, fmap_file) and hang on to the pointers to additional files
     # for this fieldmap
     parsed_dwis = []
-    fmap_pointers = {'': {'type': None}}
+    fmap_pointers = {'': {'suffix': None}}
     for ref_file in dwi_files:
         metadata = layout.get_metadata(ref_file)
 
@@ -895,9 +894,9 @@ def group_by_warpspace(dwi_files, layout, prefer_dedicated_fmaps, using_eddy, ig
         fmaps = layout.get_fieldmap(ref_file, return_list=True)
         fmap_file = ''
         priority = 99999
-        fmap_type = None
+        fmap_type = "syn" if use_syn else None
         for fmap in fmaps:
-            fmap_type = fmap['type']
+            fmap_type = fmap['suffix']
             if fmap_type not in ('epi', 'phasediff', 'phase'):
                 continue
 
@@ -942,7 +941,7 @@ def group_by_warpspace(dwi_files, layout, prefer_dedicated_fmaps, using_eddy, ig
         for pe_dir, member_images in pedir_groups.items():
             output_groups.append({
                 'dwi_series': member_images,
-                'fieldmap_info': {'type': None},
+                'fieldmap_info': {'suffix': None},
                 'dwi_series_pedir': pe_dir})
         LOGGER.info('\n'.join(rationale))
         return output_groups
@@ -993,7 +992,7 @@ def group_by_warpspace(dwi_files, layout, prefer_dedicated_fmaps, using_eddy, ig
                         key, match))
                 final_groups.append(
                     {'dwi_series': scan_list,
-                     'fieldmap_info': {'type': 'rpe_series', 'rpe_series': match_scan_list,},
+                     'fieldmap_info': {'suffix': 'rpe_series', 'rpe_series': match_scan_list,},
                      'dwi_series_pedir': pe_dir})
             else:
                 matches_rationale.append(
@@ -1001,11 +1000,11 @@ def group_by_warpspace(dwi_files, layout, prefer_dedicated_fmaps, using_eddy, ig
                         key, match))
                 final_groups.append(
                     {'dwi_series': scan_list,
-                     'fieldmap_info': {'type': 'rpe_series', 'rpe_series': match_scan_list},
+                     'fieldmap_info': {'suffix': 'rpe_series', 'rpe_series': match_scan_list},
                      'dwi_series_pedir': key})
                 final_groups.append(
                     {'dwi_series': match_scan_list,
-                     'fieldmap_info': {'type': 'rpe_series', 'rpe_series': scan_list},
+                     'fieldmap_info': {'suffix': 'rpe_series', 'rpe_series': scan_list},
                      'dwi_series_pedir': match})
             group_keys.discard(match)
 
@@ -1031,7 +1030,7 @@ def group_by_warpspace(dwi_files, layout, prefer_dedicated_fmaps, using_eddy, ig
 def _get_output_fname(dwi_group):
     """Derive the output name for a dwi grouping."""
     all_dwis = dwi_group['dwi_series']
-    if dwi_group['fieldmap_info']['type'] == 'rpe_series':
+    if dwi_group['fieldmap_info']['suffix'] == 'rpe_series':
         all_dwis += dwi_group['fieldmap_info']['rpe_series']
 
     # If a single file, use its name, otherwise use the common prefix

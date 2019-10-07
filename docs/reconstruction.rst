@@ -1,3 +1,5 @@
+.. include:: links.rst
+
 .. _reconstruction:
 
 
@@ -6,8 +8,37 @@ Reconstruction
 
 You can send the outputs from ``qsiprep`` to other software packages
 by specifying a JSON file with the ``--recon-spec`` option. Here we use
-"reconstruction" to mean reconstructing ODFs/FODs/EAPs from the preprocessed
-diffusion data.
+"reconstruction" to mean reconstructing ODFs/FODs/EAPs and connectivity matrices
+from the preprocessed diffusion data.
+
+The easiest way to get started is to use one of the pre-packaged workflows.
+Instead of specifying a path to a file you can choose from the following:
+
++---------------------------+--------------+-------------+---------+-----------------+----------------+
+| Option                    | Requires SDC | MultiShell  |   DSI   | DTI             |  Tractography  |
++===========================+==============+=============+=========+=================+================+
+|``mrtrix_msmt_csd``        |    Yes       |  Required   |    No   |      No         | Probabilistic  |
++---------------------------+--------------+-------------+---------+-----------------+----------------+
+|``mrtrix_dhollander``      |    Yes       |    Yes      |    No   |     Yes         | Probabilistic  |
++---------------------------+--------------+-------------+---------+-----------------+----------------+
+|``mrtrix_dhollander_no5tt``|     No       |    Yes      |    No   |     Yes         | Probabilistic  |
++---------------------------+--------------+-------------+---------+-----------------+----------------+
+|``mrtrix_tckglobal``       |    Yes       |   Required  |    No   |      No         |    Global      |
++---------------------------+--------------+-------------+---------+-----------------+----------------+
+|``dsi_studio_gqi``         | Recommended  |    Yes      |   Yes   | Not Recommended | Deterministic  |
++---------------------------+--------------+-------------+---------+-----------------+----------------+
+|``dipy_mapmri``            | Recommended  |    Yes      |   Yes   |      No         |   Both         |
++---------------------------+--------------+-------------+---------+-----------------+----------------+
+|``dipy_3dshore``           | Recommended  |    Yes      |   Yes   |      No         |   Both         |
++---------------------------+--------------+-------------+---------+-----------------+----------------+
+|``csdsi_3dshore``          | Recommended  |    Yes      |   Yes   |      No         |   Both         |
++---------------------------+--------------+-------------+---------+-----------------+----------------+
+
+These workflows each take considerable processing time, because they output as many versions of
+connectivity as possible. All included atlases and all possible weightings are included. Each of
+these corresponds to a JSON file that can be found in QSIprep's
+`github <https://github.com/PennBBL/qsiprep/tree/master/qsiprep/data/pipelines>`_. For extra
+information about how to customize these, see :ref:`custom_reconstruction`.
 
 ``qsiprep`` supports a limited number of algorithms that are wrapped in
 nipype workflows and can be configured and connected based on the
@@ -16,11 +47,25 @@ another as long as the output from the upstream workflow matches the inputs to
 the downstream workflow. The :ref:`recon_workflows` section lists all the
 available workflows and their inputs and outputs.
 
-Building a reconstruction pipeline
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-A number of pre-configured pipelines can be found
-`here <https://github.com/PennBBL/qsiprep/tree/master/qsiprep/data/pipelines>`_.
+.. _connectivity:
+
+Reconstruction Outputs: Connectivity matrices
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Instead of offering a bewildering number of options for constructing connectivity matrices,
+``qsiprep`` will construct as many connectivity matrices as it can given the reconstruction
+methods. It is **highly** recommended that you pick a weighting method before you run
+these pipelines and only look at those numbers. If you look at more than one weighting method
+be sure to adjust your statistics for these additional comparisons.
+
+
+
+.. _custom_reconstruction:
+
+Building a custom reconstruction pipeline
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 Instead of going through each possible element of a pipeline, we will go through
 a simple example and describe its components.
 
@@ -33,6 +78,7 @@ file similar to the following::
   {
     "name": "dsistudio_pipeline",
     "space": "T1w",
+    "anatomical": ["mrtrix_5tt"],
     "atlases": ["schaefer100", "schaefer200"],
     "nodes": [
       {
@@ -128,77 +174,3 @@ two ways
 
 Some of the workflows require a warp to a template. For example, connectivity_ will use
 this warp to transform atlases into T1w space for calculating a connectivity matrix.
-
-.. _recon_workflows:
-
-Reconstruction Workflow Nodes
-==================================
-
-Here the inputs, outputs and parameters of each workflow are listed for
-each software package and action.
-
-Dipy
-~~~~~~~~~~
-
-Dipy offers the most options for data reconstruction. For convenience, all Dipy
-reconstruction workflows have the option to write outputs in MRTrix and DSI Studio
-formats.
-
-Action: ``"3dSHORE_reconstruction"``
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-.. autofunction:: qsiprep.workflows.recon.dipy.init_dipy_brainsuite_shore_recon_wf
-
-
-DSI Studio
-~~~~~~~~~~~~~
-
-Action: ``"reconstruction"``
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-.. autofunction:: qsiprep.workflows.recon.dsi_studio.init_dsi_studio_recon_wf
-
-Action: ``"export"``
-^^^^^^^^^^^^^^^^^^^^^^^
-.. autofunction:: qsiprep.workflows.recon.dsi_studio.init_dsi_studio_export_wf
-
-.. _connectivity:
-
-Action: ``"connectivity"``
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-.. autofunction:: qsiprep.workflows.recon.dsi_studio.init_dsi_studio_connectivity_wf
-
-MRTrix
-~~~~~~~~~~
-
-Action: ``"csd"``
-^^^^^^^^^^^^^^^^^^^
-
-Action: ``"msmt_csd"``
-^^^^^^^^^^^^^^^^^^^^^^^^
-
-
-QSIPrep
-~~~~~~~~~~~
-
-Assorted workflows
-
-Action: ``"conform"``
-^^^^^^^^^^^^^^^^^^^^^^^^
-.. autofunction:: qsiprep.workflows.recon.build_workflow.init_conform_dwi_wf
-
-Action: ``"controllability"``
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-.. autofunction:: qsiprep.workflows.recon.dynamics.init_controllability_wf
-
-Action: ``"discard_repeated_samples"``
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-.. autofunction:: qsiprep.workflows.recon.build_workflow.init_discard_repeated_samples_wf
-
-Action: ``"mif_to_fib"``
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
-.. autofunction:: qsiprep.workflows.recon.converters.init_fibgz_to_mif_wf
-
-Action: ``"fib_to_mif"``
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
-.. note:: Workflow not implemented yet
-
-.. autofunction:: qsiprep.workflows.recon.converters.init_mif_to_fibgz_wf

@@ -29,7 +29,7 @@ from ..utils.brainsuite_shore import BrainSuiteShoreModel, brainsuite_shore_basi
 from ..interfaces.mrtrix import _convert_fsl_to_mrtrix
 
 LOGGER = logging.getLogger('nipype.interface')
-
+TAU_DEFAULT = 1. / (4 * np.pi**2)
 
 def popen_run(arg_list):
     cmd = subprocess.Popen(arg_list, stdout=subprocess.PIPE,
@@ -240,6 +240,7 @@ class DipyReconInterface(SimpleInterface):
         nb.Nifti1Image(new_data, mask_img.affine, mask_img.header).to_filename(output_dwi_file)
         self._results['extrapolated_dwi'] = output_dwi_file
 
+
 class MAPMRIInputSpec(DipyReconInputSpec):
     radial_order = traits.Int(6, usedefault=True)
     laplacian_regularization = traits.Bool(True, usedefault=True)
@@ -352,12 +353,12 @@ class MAPMRIReconstruction(DipyReconInterface):
 
 class BrainSuiteShoreReconstructionInputSpec(DipyReconInputSpec):
     radial_order = traits.Int(6, usedefault=True)
-    zeta = traits.Float(700)
-    tau = traits.Float(4 * np.pi**2, usedefault=True)
+    zeta = traits.Float(700, usedefault=True)
+    tau = traits.Float(TAU_DEFAULT, usedefault=True)
     regularization = traits.Enum("L2", "L1", usedefault=True)
     # For L2
-    lambdaN = traits.Float(1e-8)
-    lambdaL = traits.Float(1e-8)
+    lambdaN = traits.Float(1e-8, usedefault=True)
+    lambdaL = traits.Float(1e-8, usedefault=True)
     # For L1
     regularization_weighting = traits.Str("CV", usedefault=True)
     l1_positive_constraint = traits.Bool(False, usedefault=True)

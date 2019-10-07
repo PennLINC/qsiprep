@@ -14,13 +14,16 @@ qsiprep base reconstruction workflows
 import sys
 import os
 import os.path as op
+from glob import glob
 from copy import deepcopy
-
+from pkg_resources import resource_filename as pkgrf
 from nipype import __version__ as nipype_ver
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
 from nipype.utils.filemanip import split_filename
 from ...engine import Workflow
+from ...__about__ import __version__
+
 import logging
 import json
 from ...interfaces.anatomical import QsiprepAnatomicalIngress
@@ -134,6 +137,7 @@ def init_single_subject_wf(
         spec = {"name": "fake",
                 "atlases": [],
                 "space": "T1w",
+                "anatomical": [],
                 "nodes":[]}
         space = spec['space']
         # for documentation purposes
@@ -151,13 +155,13 @@ def init_single_subject_wf(
                     "Unable to find subject directory in %s or %s" % (
                         recon_input, qp_recon_input))
 
-        with open(recon_spec, "r") as f:
-            spec = json.load(f)
+        spec = _load_recon_spec(recon_spec)
         space = spec['space']
-        layout = BIDSLayout(recon_input)
+        layout = BIDSLayout(recon_input, validate=False, absolute_paths=True)
         # Get all the output files that are in this space
-        dwi_files = [f.filename for f in
-                     layout.get(type="dwi", subject=subject_id, extensions=['nii', 'nii.gz'])
+        dwi_files = [f.path for f in
+                     layout.get(suffix="dwi", subject=subject_id, absolute_paths=True,
+                                extensions=['nii', 'nii.gz'])
                      if 'space-' + space in f.filename]
         LOGGER.info("found %s in %s", dwi_files, recon_input)
 
@@ -167,9 +171,9 @@ def init_single_subject_wf(
         return workflow
 
     anat_ingress_wf = init_recon_anatomical_wf(subject_id=subject_id,
-                                           recon_input_dir=recon_input,
-                                           extras_to_make=spec.get('anatomical', []),
-                                           name='anat_ingress_wf')
+                                               recon_input_dir=recon_input,
+                                               extras_to_make=spec.get('anatomical', []),
+                                               name='anat_ingress_wf')
 
     to_connect = [('outputnode.' + name, 'inputnode.' + name) for name in anatomical_input_fields]
     # create a processing pipeline for the dwis in each session
@@ -181,3 +185,20 @@ def init_single_subject_wf(
     workflow.connect([(anat_ingress_wf, dwi_recon_wf, to_connect)])
 
     return workflow
+
+
+def _load_recon_spec(spec_name):
+    prepackaged_dir = pkgrf("qsiprep", "data/pipelines")
+    prepackaged = [op.split(fname)[1][:-5] for fname in glob(prepackaged_dir+"/*.json")]
+    if op.exists(spec_name):
+        recon_spec = spec_name
+    elif spec_name in prepackaged:
+        recon_spec = op.join(prepackaged_dir + "/{}.json".format(spec_name))
+    else:
+        raise Exception("{} is not a file that exists or in {}".format(spec_name, prepackaged))
+    with open(recon_spec, "r") as f:
+        try:
+            spec = json.load(f)
+        except Exception:
+            raise Exception("Unable to read JSON spec. Check the syntax.")
+    return spec

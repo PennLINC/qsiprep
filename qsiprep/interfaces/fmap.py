@@ -23,7 +23,7 @@ from nipype.utils.filemanip import (
 
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec, TraitedSpec, File, isdefined, traits,
-    SimpleInterface, InputMultiObject)
+    SimpleInterface, InputMultiObject, OutputMultiObject)
 from .images import to_lps
 import shutil
 
@@ -32,11 +32,13 @@ LOGGER = logging.getLogger('nipype.interface')
 
 class B0RPEFieldmapInputSpec(BaseInterfaceInputSpec):
     b0_file = File(exists=True)
+    output_3d_images = traits.Bool(False, usedefault=True)
+    max_num_b0s = traits.Int(3)
 
 
 class B0RPEFieldmapOutputSpec(TraitedSpec):
-    fmap_file = File(exists=True)
-    fmap_info = File(exists=True)
+    fmap_file = OutputMultiObject(File(exists=True))
+    fmap_info = OutputMultiObject(File(exists=True))
 
 
 class B0RPEFieldmap(SimpleInterface):
@@ -60,21 +62,53 @@ class B0RPEFieldmap(SimpleInterface):
             if np.any(bvals > 100):
                 LOGGER.info("Found one or more b > 50 images: discarding them")
                 fmap_data = lps_fmap.get_fdata()[..., bvals < 100].squeeze()
-                lps_fmap = nb.Nifti1Image(fmap_data, lps_fmap.affine, header=lps_fmap.header)
+        # If not, assume these are all b=0 images
+        else:
+            fmap_data = lps_fmap.get_fdata().squeeze()
 
-        # Save the conformed fmap
-        output_fmap = fname_presuffix(self.inputs.b0_file, suffix="conform",
-                                      newpath=runtime.cwd)
-        output_json = fname_presuffix(output_fmap, use_ext=False, suffix=".json")
-        lps_fmap.to_filename(output_fmap)
-        # Copy the original json file:
-        LOGGER.info("Copying json file %s -> %s", original_json, output_json)
-        shutil.copy2(original_json, output_json)
-        assert op.exists(output_json)
-        self._results['fmap_file'] = output_fmap
-        self._results['fmap_info'] = output_json
-        print(self._results)
+        # Output just one 3/4d image and a sidecar
+        if not self.inputs.output_3d_images:
+            lps_fmap = nb.Nifti1Image(fmap_data, lps_fmap.affine, header=lps_fmap.header)
+            # Save the conformed fmap
+            output_fmap = fname_presuffix(self.inputs.b0_file, suffix="conform",
+                                          newpath=runtime.cwd)
+            output_json = fname_presuffix(output_fmap, use_ext=False, suffix=".json")
+            lps_fmap.to_filename(output_fmap)
+            # Copy the original json file:
+            LOGGER.info("Copying json file %s -> %s", original_json, output_json)
+            shutil.copy2(original_json, output_json)
+            assert op.exists(output_json)
+            self._results['fmap_file'] = output_fmap
+            self._results['fmap_info'] = output_json
+            print(self._results)
+            return runtime
 
+        if fmap_data.ndim == 3:
+            fmap_data = fmap_data[..., np.newaxis]
+        image_list = []
+        json_list = []
+        for imgnum, img_index in enumerate(range(fmap_data.shape[3])):
+            lps_fmap = nb.Nifti1Image(fmap_data[..., img_index], lps_fmap.affine,
+                                      header=lps_fmap.header)
+            # Save the conformed fmap
+            output_fmap = fname_presuffix(self.inputs.b0_file, suffix="conform_%03d" % imgnum,
+                                          newpath=runtime.cwd)
+            output_json = fname_presuffix(output_fmap, use_ext=False, suffix=".json")
+            lps_fmap.to_filename(output_fmap)
+            # Copy the original json file:
+            LOGGER.info("Copying json file %s -> %s", original_json, output_json)
+            shutil.copy2(original_json, output_json)
+            assert op.exists(output_json)
+            # Append to lists
+            image_list.append(output_fmap)
+            json_list.append(output_json)
+            if isdefined(self.inputs.max_num_b0s):
+                if len(image_list) == self.inputs.max_num_b0s:
+                    break
+
+
+        self._results['fmap_file'] = image_list
+        self._results['fmap_info'] = json_list
         return runtime
 
 

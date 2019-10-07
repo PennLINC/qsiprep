@@ -30,9 +30,9 @@ def init_dwi_confs_wf(mem_gb, metadata, impute_slice_threshold, name="dwi_confs_
 
     The following confounds are calculated, with column headings in parentheses:
 
-    #. Framewise displacement, based on head-motion parameters
+    1. Framewise displacement, based on head-motion parameters
        (``framewise_displacement``)
-    #. Estimated head-motion parameters, in mm and rad
+    2. Estimated head-motion parameters, in mm and rad
        (``trans_x``, ``trans_y``, ``trans_z``, ``rot_x``, ``rot_y``, ``rot_z``)
 
     .. workflow::
@@ -56,12 +56,14 @@ def init_dwi_confs_wf(mem_gb, metadata, impute_slice_threshold, name="dwi_confs_
         name : str
             Name of workflow (default: ``dwi_confs_wf``)
 
+
     **Inputs**
 
         sliceqc_file
             dwi image, after the prescribed corrections (STC, HMC and SDC)
             when available.
         motion_params
+            spm motion params
 
 
     **Outputs**

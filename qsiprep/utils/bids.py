@@ -15,13 +15,11 @@ Fetch some test data
 
 """
 import os
-import re
+import sys
 import os.path as op
 import json
 import warnings
-from itertools import groupby
-# from bids.grabbids import BIDSLayout
-from bids.layout import BIDSLayout
+from bids import BIDSLayout
 
 
 class BIDSError(ValueError):
@@ -41,7 +39,8 @@ class BIDSWarning(RuntimeWarning):
     pass
 
 
-def collect_participants(bids_dir, participant_label=None, strict=False):
+def collect_participants(bids_dir, participant_label=None, strict=False,
+                         bids_validate=True):
     """
     List the participants under the BIDS root and checks that participants
     designated with the participant_label argument exist in that folder.
@@ -76,10 +75,12 @@ def collect_participants(bids_dir, participant_label=None, strict=False):
 
 
     """
-    bids_dir = op.abspath(bids_dir)
-    all_participants = sorted(
-        [subdir[4:] for subdir in os.listdir(bids_dir)
-         if op.isdir(op.join(bids_dir, subdir)) and subdir.startswith('sub-')])
+    if isinstance(bids_dir, BIDSLayout):
+        layout = bids_dir
+    else:
+        layout = BIDSLayout(str(bids_dir), validate=bids_validate)
+
+    all_participants = set(layout.get_subjects())
 
     # Error: bids_dir does not contain subjects
     if not all_participants:
@@ -92,15 +93,14 @@ def collect_participants(bids_dir, participant_label=None, strict=False):
             'may need to adjust your "File sharing" preferences.', bids_dir)
 
     # No --participant-label was set, return all
-    if participant_label is None or not participant_label:
-        return all_participants
+    if not participant_label:
+        return sorted(all_participants)
 
     if isinstance(participant_label, str):
         participant_label = [participant_label]
 
     # Drop sub- prefixes
-    participant_label = [sub[4:] if sub.startswith('sub-') else sub
-                         for sub in participant_label]
+    participant_label = [sub[4:] if sub.startswith('sub-') else sub for sub in participant_label]
     # Remove duplicates
     participant_label = sorted(set(participant_label))
     # Remove labels not found
@@ -121,31 +121,30 @@ def collect_participants(bids_dir, participant_label=None, strict=False):
     return found_label
 
 
-def collect_data(dataset, participant_label, task=None):
+def collect_data(bids_dir, participant_label, task=None, bids_validate=True):
     """
-    Uses grabbids to retrieve the input data for a given participant
+    Uses pybids to retrieve the input data for a given participant
 
     """
-    layout = BIDSLayout(dataset, exclude=['derivatives', 'sourcedata'])
+    if isinstance(bids_dir, BIDSLayout):
+        layout = bids_dir
+    else:
+        layout = BIDSLayout(str(bids_dir), validate=bids_validate)
+
     queries = {
-        'fmap': {'subject': participant_label, 'modality': 'fmap',
-                 'extensions': ['nii', 'nii.gz']},
-        'sbref': {'subject': participant_label, 'modality': 'func',
-                  'type': 'sbref', 'extensions': ['nii', 'nii.gz']},
-        'flair': {'subject': participant_label, 'modality': 'anat',
-                  'type': 'FLAIR', 'extensions': ['nii', 'nii.gz']},
-        't2w': {'subject': participant_label, 'modality': 'anat',
-                'type': 'T2w', 'extensions': ['nii', 'nii.gz']},
-        't1w': {'subject': participant_label, 'modality': 'anat',
-                'type': 'T1w', 'extensions': ['nii', 'nii.gz']},
-        'roi': {'subject': participant_label, 'modality': 'anat',
-                'type': 'roi', 'extensions': ['nii', 'nii.gz']},
-        'dwi': {'subject': participant_label, 'modality': 'dwi',
-                'type': 'dwi', 'extensions': ['nii', 'nii.gz']}
+        'fmap': {'datatype': 'fmap'},
+        'sbref': {'datatype': 'func', 'suffix': 'sbref'},
+        'flair': {'datatype': 'anat', 'suffix': 'FLAIR'},
+        't2w': {'datatype': 'anat', 'suffix': 'T2w'},
+        't1w': {'datatype': 'anat', 'suffix': 'T1w'},
+        'roi': {'datatype': 'anat', 'suffix': 'roi'},
+        'dwi': {'datatype': 'dwi', 'suffix': 'dwi'}
     }
 
-    subj_data = {modality: [x.filename for x in layout.get(**query)]
-                 for modality, query in queries.items()}
+    subj_data = {
+        dtype: sorted(layout.get(return_type='file', subject=participant_label,
+                                 extension=['nii', 'nii.gz'], **query))
+        for dtype, query in queries.items()}
 
     return subj_data, layout
 
@@ -198,6 +197,88 @@ def write_derivative_description(bids_dir, deriv_dir):
     with open(os.path.join(deriv_dir,
               'dataset_description.json'), 'w') as fobj:
         json.dump(desc, fobj, indent=4)
+
+
+def validate_input_dir(exec_env, bids_dir, participant_label):
+    # Ignore issues and warnings that should not influence qsiprep
+    import tempfile
+    import subprocess
+    validator_config_dict = {
+        "ignore": [
+            "EVENTS_COLUMN_ONSET",
+            "EVENTS_COLUMN_DURATION",
+            "TSV_EQUAL_ROWS",
+            "TSV_EMPTY_CELL",
+            "TSV_IMPROPER_NA",
+            "VOLUME_COUNT_MISMATCH",
+            "BVAL_MULTIPLE_ROWS",
+            "BVEC_NUMBER_ROWS",
+            "DWI_MISSING_BVAL",
+            "INCONSISTENT_SUBJECTS",
+            "INCONSISTENT_PARAMETERS",
+            "PARTICIPANT_ID_COLUMN",
+            "PARTICIPANT_ID_MISMATCH",
+            "TASK_NAME_MUST_DEFINE",
+            "PHENOTYPE_SUBJECTS_MISSING",
+            "STIMULUS_FILE_MISSING",
+            "EVENTS_TSV_MISSING",
+            "TSV_IMPROPER_NA",
+            "ACQTIME_FMT",
+            "Participants age 89 or higher",
+            "DATASET_DESCRIPTION_JSON_MISSING",
+            "FILENAME_COLUMN",
+            "WRONG_NEW_LINE",
+            "MISSING_TSV_COLUMN_CHANNELS",
+            "MISSING_TSV_COLUMN_IEEG_CHANNELS",
+            "MISSING_TSV_COLUMN_IEEG_ELECTRODES",
+            "UNUSED_STIMULUS",
+            "CHANNELS_COLUMN_SFREQ",
+            "CHANNELS_COLUMN_LOWCUT",
+            "CHANNELS_COLUMN_HIGHCUT",
+            "CHANNELS_COLUMN_NOTCH",
+            "CUSTOM_COLUMN_WITHOUT_DESCRIPTION",
+            "ACQTIME_FMT",
+            "SUSPICIOUSLY_LONG_EVENT_DESIGN",
+            "SUSPICIOUSLY_SHORT_EVENT_DESIGN",
+            "MISSING_TSV_COLUMN_EEG_ELECTRODES",
+            "MISSING_SESSION"
+        ],
+        "error": ["NO_T1W"],
+        "ignoredFiles": ['/dataset_description.json', '/participants.tsv']
+    }
+    # Limit validation only to data from requested participants
+    if participant_label:
+        all_subs = set([s.name[4:] for s in bids_dir.glob('sub-*')])
+        selected_subs = set([s[4:] if s.startswith('sub-') else s
+                             for s in participant_label])
+        bad_labels = selected_subs.difference(all_subs)
+        if bad_labels:
+            error_msg = 'Data for requested participant(s) label(s) not found. Could ' \
+                        'not find data for participant(s): %s. Please verify the requested ' \
+                        'participant labels.'
+            if exec_env == 'docker':
+                error_msg += ' This error can be caused by the input data not being ' \
+                             'accessible inside the docker container. Please make sure all ' \
+                             'volumes are mounted properly (see https://docs.docker.com/' \
+                             'engine/reference/commandline/run/#mount-volume--v---read-only)'
+            if exec_env == 'singularity':
+                error_msg += ' This error can be caused by the input data not being ' \
+                             'accessible inside the singularity container. Please make sure ' \
+                             'all paths are mapped properly (see https://www.sylabs.io/' \
+                             'guides/3.0/user-guide/bind_paths_and_mounts.html)'
+            raise RuntimeError(error_msg % ','.join(bad_labels))
+
+        ignored_subs = all_subs.difference(selected_subs)
+        if ignored_subs:
+            for sub in ignored_subs:
+                validator_config_dict["ignoredFiles"].append("/sub-%s/**" % sub)
+    with tempfile.NamedTemporaryFile('w+') as temp:
+        temp.write(json.dumps(validator_config_dict))
+        temp.flush()
+        try:
+            subprocess.check_call(['bids-validator', bids_dir, '-c', temp.name])
+        except FileNotFoundError:
+            print("bids-validator does not appear to be installed", file=sys.stderr)
 
 
 def _get_shub_version(singularity_url):

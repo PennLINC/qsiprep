@@ -30,6 +30,7 @@ def init_dwi_derivatives_wf(output_prefix,
     """Set up a battery of datasinks to store derivatives in the right location.
     """
     workflow = Workflow(name=name)
+    output_dir = str(output_dir)
 
     inputnode = pe.Node(
         niu.IdentityInterface(fields=[

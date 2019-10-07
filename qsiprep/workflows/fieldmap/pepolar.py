@@ -18,7 +18,8 @@ from ...niworkflows.interfaces import CopyHeader
 from ...niworkflows.interfaces.registration import ANTSApplyTransformsRPT
 
 from ...engine import Workflow
-from ...interfaces import StructuralReference, Conform
+from ...interfaces import StructuralReference
+from ...interfaces.fmap import B0RPEFieldmap
 from ..dwi.util import init_enhance_and_skullstrip_dwi_wf
 
 
@@ -86,20 +87,6 @@ def init_pepolar_unwarp_wf(dwi_meta, epi_fmaps, omp_nthreads=1,
               'k': '-noZdis'}[dwi_file_pe[0]]
     args = args.replace(rm_arg, '')
 
-    usable_fieldmaps_matching_pe = []
-    usable_fieldmaps_opposite_pe = []
-    for fmap, fmap_pe in epi_fmaps:
-        if fmap_pe == dwi_file_pe:
-            usable_fieldmaps_matching_pe.append(fmap)
-        elif fmap_pe[0] == dwi_file_pe[0]:
-            usable_fieldmaps_opposite_pe.append(fmap)
-
-    if not usable_fieldmaps_opposite_pe:
-        raise Exception("None of the discovered fieldmaps has the right "
-                        "phase encoding direction. Possibly a problem with "
-                        "metadata. If not, rerun with '--ignore fieldmaps' to "
-                        "skip distortion correction step.")
-
     workflow = Workflow(name=name)
     workflow.__desc__ = """\
 A deformation field to correct for susceptibility distortions was estimated
@@ -110,13 +97,14 @@ directions, using `3dQwarp` @afni (AFNI {afni_ver}).
     inputnode = pe.Node(niu.IdentityInterface(
         fields=['in_reference', 'in_reference_brain', 'in_mask']), name='inputnode')
 
-    outputnode = pe.Node(niu.IdentityInterface(
-        fields=['out_reference', 'out_reference_brain', 'out_warp', 'out_mask']),
+    outputnode = pe.Node(
+        niu.IdentityInterface(fields=[
+            'out_reference', 'out_reference_brain', 'out_warp', 'out_mask']),
         name='outputnode')
 
-    prepare_epi_opposite_wf = init_prepare_epi_wf(omp_nthreads=omp_nthreads,
-                                                  name="prepare_epi_opposite_wf")
-    prepare_epi_opposite_wf.inputs.inputnode.fmaps = usable_fieldmaps_opposite_pe
+    prepare_epi_opposite_wf = init_prepare_dwi_epi_wf(omp_nthreads=omp_nthreads,
+                                                      name="prepare_epi_opposite_wf")
+    prepare_epi_opposite_wf.inputs.inputnode.fmaps = epi_fmaps
 
     qwarp = pe.Node(afni.QwarpPlusMinus(pblur=[0.05, 0.05],
                                         blur=[-1, -1],
@@ -130,19 +118,8 @@ directions, using `3dQwarp` @afni (AFNI {afni_ver}).
     workflow.connect([
         (inputnode, prepare_epi_opposite_wf, [('in_reference_brain', 'inputnode.ref_brain')]),
         (prepare_epi_opposite_wf, qwarp, [('outputnode.out_file', 'base_file')]),
+        (inputnode, qwarp, [('in_reference_brain', 'in_file')])
     ])
-
-    if usable_fieldmaps_matching_pe:
-        prepare_epi_matching_wf = init_prepare_epi_wf(omp_nthreads=omp_nthreads,
-                                                      name="prepare_epi_matching_wf")
-        prepare_epi_matching_wf.inputs.inputnode.fmaps = usable_fieldmaps_matching_pe
-
-        workflow.connect([
-            (inputnode, prepare_epi_matching_wf, [('in_reference_brain', 'inputnode.ref_brain')]),
-            (prepare_epi_matching_wf, qwarp, [('outputnode.out_file', 'in_file')]),
-        ])
-    else:
-        workflow.connect([(inputnode, qwarp, [('in_reference_brain', 'in_file')])])
 
     to_ants = pe.Node(niu.Function(function=_fix_hdr), name='to_ants',
                       mem_gb=0.01)
@@ -255,6 +232,63 @@ def init_prepare_epi_wf(omp_nthreads, name="prepare_epi_wf"):
 
     return workflow
 
+def init_prepare_dwi_epi_wf(omp_nthreads, name="prepare_epi_wf"):
+    """
+    This workflow takes in a set of dwi files with with the same phase
+    encoding direction and returns a single 3D volume ready to be used in
+    field distortion estimation. It removes b>0 volumes.
+
+    The procedure involves: estimating a robust template using FreeSurfer's
+    'mri_robust_template', bias field correction using ANTs N4BiasFieldCorrection
+    and AFNI 3dUnifize, skullstripping using FSL BET and AFNI 3dAutomask,
+    and rigid coregistration to the reference using ANTs.
+    """
+    inputnode = pe.Node(niu.IdentityInterface(fields=['fmaps', 'ref_brain']),
+                        name='inputnode')
+
+    outputnode = pe.Node(niu.IdentityInterface(fields=['out_file']),
+                         name='outputnode')
+
+    prepare_b0s = pe.MapNode(B0RPEFieldmap(output_3d_images=True), iterfield='b0_file',
+                             name='prepare_b0s')
+
+    merge = pe.Node(
+        StructuralReference(auto_detect_sensitivity=True,
+                            initial_timepoint=1,
+                            fixed_timepoint=True,  # Align to first image
+                            intensity_scaling=True,
+                            # 7-DOF (rigid + intensity)
+                            no_iteration=True,
+                            subsample_threshold=200,
+                            out_file='template.nii.gz'),
+        name='merge')
+
+    enhance_and_skullstrip_dwi_wf = init_enhance_and_skullstrip_dwi_wf(
+        omp_nthreads=omp_nthreads)
+
+    ants_settings = pkgr.resource_filename('qsiprep',
+                                           'data/translation_rigid.json')
+    fmap2ref_reg = pe.Node(ants.Registration(from_file=ants_settings,
+                                             output_warped_image=True),
+                           name='fmap2ref_reg', n_procs=omp_nthreads)
+
+    workflow = Workflow(name=name)
+
+    def _flatten(l):
+        from nipype.utils.filemanip import filename_to_list
+        return [item for sublist in l for item in filename_to_list(sublist)]
+
+    workflow.connect([
+        (inputnode, prepare_b0s, [('fmaps', 'b0_file')]),
+        (prepare_b0s, merge, [(('fmap_file', _flatten), 'in_files')]),
+        (merge, enhance_and_skullstrip_dwi_wf, [('out_file', 'inputnode.in_file')]),
+        (enhance_and_skullstrip_dwi_wf, fmap2ref_reg, [
+            ('outputnode.skull_stripped_file', 'moving_image')]),
+        (inputnode, fmap2ref_reg, [('ref_brain', 'fixed_image')]),
+        (fmap2ref_reg, outputnode, [('warped_image', 'out_file')]),
+    ])
+
+    return workflow
 
 def _fix_hdr(in_file, newpath=None):
     import nibabel as nb

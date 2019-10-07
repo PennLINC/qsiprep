@@ -60,10 +60,10 @@ Singularity Container
 
 The easiest way to get a Sigularity image is to run::
 
-    $ singularity build qsiprep-<version>.simg docker://pennbl/qsiprep:<version>
+    $ singularity build qsiprep-<version>.sif docker://pennbbl/qsiprep:<version>
 
 Where ``<version>`` should be replaced with the desired version of qsiprep that you want to download.
-
+Do not use ``latest``.
 
 Manually Prepared Environment (Python 3.6+)
 ===========================================
@@ -79,7 +79,7 @@ These tools must be installed and their binaries available in the
 system's ``$PATH``.
 A relatively interpretable description of how your environment can be set-up
 is found in the `Dockerfile <https://github.com/pennbbl/qsiprep/blob/master/Dockerfile>`_.
-As an additional installation setting, FreeSurfer requires a license file (see :ref:`fs_license`).
+As an additional installation setting, FreeSurfer requires a license file.
 
 On a functional Python 3.5 (or above) environment with ``pip`` installed,
 qsiprep can be installed using the habitual command ::
@@ -105,3 +105,4 @@ the ``qsiprep`` package:
 - AFNI_ (version Debian-16.2.07)
 - Dipy_ (version 0.15.0)
 - FreeSurfer_ (6.0.1)
+- FSL_ (5.0.11)

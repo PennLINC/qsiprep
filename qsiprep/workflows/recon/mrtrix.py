@@ -339,6 +339,14 @@ def init_mrtrix_tractography_wf(name="mrtrix_tracking", output_suffix="", params
                 ('out_mu', 'mu'),
                 ('out_weights', 'sift_weights')])
         ])
+        if output_suffix:
+            ds_sift_weights = pe.Node(
+                ReconDerivativesDataSink(extension='.csv',
+                                         desc="siftweights",
+                                         suffix=output_suffix),
+                name='ds_sift_weights',
+                run_without_submitting=True)
+            workflow.connect(outputnode, 'sift_weights', ds_sift_weights, 'in_file')
         if use_5tt:
             workflow.connect(inputnode, "mrtrix_5tt", tck_sift2, "act_file")
 

@@ -1,0 +1,23 @@
+{ "description": "Reconstruct dwis using Dipy, then convert to mrtrix and dsi studio formats",
+  "space": "T1w",
+  "name": "convert_mapmri_recon",
+  "nodes": [
+    {
+      "name": "mapmri_recon",
+      "software": "Dipy",
+      "action": "MAPMRI_reconstruction",
+      "input": "qsiprep",
+      "output_suffix": "MAPMRI",
+      "parameters": {
+        "radial_order": 6,
+        "laplacian_regularization": true,
+        "laplacian_weighting": 0.2,
+        "anisotropic_scaling": false,
+        "bval_threshold": 2000,
+        "dti_scale_estimation": false,
+        "write_mif": true,
+        "write_fibgz": true
+      }
+    }
+  ]
+}

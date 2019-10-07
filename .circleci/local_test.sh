@@ -169,3 +169,20 @@ export FS_LICENSE=${WORKDIR}/fslicense/license.txt
       --fs-license-file $FREESURFER_HOME/license.txt \
       --intramodal-template-iters 2 \
       -vv
+
+#BlipUpDownSeries:
+#name: Run full qsiprep on DSCSDSI_BUDS
+#command: |
+mkdir -p ${WORKDIR}/DSCSDSI_BUDS/work ${WORKDIR}/DSCSDSI_BUDS/derivatives
+  qsiprep \
+      -w ${WORKDIR}/DSCSDSI_BUDS/work \
+      --bids-dir ${WORKDIR}/data/DSCSDSI_BUDS --output-dir ${WORKDIR}/DSCSDSI_BUDS/derivatives \
+      --combine-all-dwis \
+      --analysis-level participant \
+      --sloppy --write-graph --mem_mb 4096 \
+      --output-space T1w \
+      --hmc_model none \
+      --hmc-transform Rigid \
+      --output-resolution 5 \
+      --fs-license-file $FREESURFER_HOME/license.txt \
+      --nthreads 2 -vv

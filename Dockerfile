@@ -2,7 +2,7 @@
 FROM ubuntu:xenial-20161213
 
 # Pre-cache neurodebian key
-COPY docker/files/neurodebian.gpg /root/.neurodebian.gpg
+COPY docker/files/neurodebian.gpg /usr/local/etc/neurodebian.gpg
 
 # Prepare environment
 RUN apt-get update && \
@@ -15,11 +15,53 @@ RUN apt-get update && \
                     build-essential \
                     autoconf \
                     libtool \
-                    pkg-config && \
-    curl -sSL http://neuro.debian.net/lists/xenial.us-ca.full >> /etc/apt/sources.list.d/neurodebian.sources.list && \
-    apt-key add /root/.neurodebian.gpg && \
-    (apt-key adv --refresh-keys --keyserver hkp://ha.pool.sks-keyservers.net 0xA5D32F012649A5A9 || true) && \
-    apt-get update
+                    pkg-config \
+                    bc \
+                    dc \
+                    file \
+                    libfontconfig1 \
+                    libfreetype6 \
+                    libgl1-mesa-dev \
+                    libglu1-mesa-dev \
+                    libgomp1 \
+                    libice6 \
+                    libxcursor1 \
+                    libxft2 \
+                    libxinerama1 \
+                    libxrandr2 \
+                    libxrender1 \
+                    libxt6 \
+                    wget \
+                    qt5-qmake \
+                    qt5-default \
+                    libboost-all-dev \
+                    zlib1g \
+                    zlib1g-dev \
+                    libqt5opengl5-dev \
+                    unzip \
+                    libgl1-mesa-dev \
+                    libglu1-mesa-dev \
+                    freeglut3-dev \
+                    mesa-utils \
+                    g++ \
+                    gcc \
+                    libeigen3-dev \
+                    libqt5svg5* \
+                    make \
+                    python \
+                    python-numpy \
+                    zlib1g-dev \
+                    imagemagick \
+                    git && \
+    curl -sL https://deb.nodesource.com/setup_10.x | bash - && \
+    apt-get install -y --no-install-recommends \
+      nodejs && \
+    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+# Install latest pandoc
+RUN curl -o pandoc-2.2.2.1-1-amd64.deb -sSL "https://github.com/jgm/pandoc/releases/download/2.2.2.1/pandoc-2.2.2.1-1-amd64.deb" && \
+    dpkg -i pandoc-2.2.2.1-1-amd64.deb && \
+    rm pandoc-2.2.2.1-1-amd64.deb
 
 # Installing freesurfer
 RUN curl -sSL https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/6.0.1/freesurfer-Linux-centos6_x86_64-stable-pub-v6.0.1.tar.gz | tar zxv --no-same-owner -C /opt \
@@ -37,27 +79,7 @@ RUN curl -sSL https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/6.0.1/frees
 
   ENV FSLDIR="/opt/fsl-5.0.11" \
       PATH="/opt/fsl-5.0.11/bin:$PATH"
-  RUN apt-get update -qq \
-      && apt-get install -y -q --no-install-recommends \
-             bc \
-             dc \
-             file \
-             libfontconfig1 \
-             libfreetype6 \
-             libgl1-mesa-dev \
-             libglu1-mesa-dev \
-             libgomp1 \
-             libice6 \
-             libxcursor1 \
-             libxft2 \
-             libxinerama1 \
-             libxrandr2 \
-             libxrender1 \
-             libxt6 \
-             wget \
-      && apt-get clean \
-      && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
-      && echo "Downloading FSL ..." \
+  RUN echo "Downloading FSL ..." \
       && mkdir -p /opt/fsl-5.0.11 \
       && curl -fsSL --retry 5 https://fsl.fmrib.ox.ac.uk/fsldownloads/fsl-5.0.11-centos6_64.tar.gz \
       | tar -xz -C /opt/fsl-5.0.11 --strip-components 1 \
@@ -79,28 +101,18 @@ ENV PERL5LIB=$MINC_LIB_DIR/perl5/5.8.5 \
     PATH=$FREESURFER_HOME/bin:$FSFAST_HOME/bin:$FREESURFER_HOME/tktools:$MINC_BIN_DIR:$PATH
 
 # Installing Neurodebian packages (FSL, AFNI, git)
+RUN curl -sSL "http://neuro.debian.net/lists/$( lsb_release -c | cut -f2 ).us-ca.full" >> /etc/apt/sources.list.d/neurodebian.sources.list && \
+    apt-key add /usr/local/etc/neurodebian.gpg && \
+    (apt-key adv --refresh-keys --keyserver hkp://ha.pool.sks-keyservers.net 0xA5D32F012649A5A9 || true)
+
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-                    afni=16.2.07~dfsg.1-5~nd16.04+1
+                    afni=16.2.07~dfsg.1-5~nd16.04+1 \
+                    git-annex-standalone && \
+    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Install DSI Studio
 ENV PATH=$PATH:/opt/dsi-studio/dsi_studio_64
-RUN apt-get install -y --no-install-recommends \
-                    git \
-                    qt5-qmake \
-                    qt5-default \
-                    libboost-all-dev \
-                    zlib1g \
-                    zlib1g-dev \
-                    libqt5opengl5-dev \
-                    unzip \
-                    libgl1-mesa-dev \
-                    libglu1-mesa-dev \
-                    freeglut3-dev \
-                    mesa-utils \
-  && apt-get clean \
-  && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
 ARG DSI_SHA=1685bfeb4df194fa3e907f4ee032691d82aeb3ba
 ARG TIPL_SHA=b01ec5a46bdec7d13506d23e97b91fd0840c2b09
 RUN mkdir /opt/dsi-studio \
@@ -128,19 +140,7 @@ RUN mkdir /opt/dsi-studio \
 # Install mrtrix3 from source
 ARG MRTRIX_SHA=5d6b3a6ffc6ee651151779539c8fd1e2e03fad81
 ENV PATH="/opt/mrtrix3-latest/bin:$PATH"
-RUN apt-get update -qq \
-    && apt-get install -y -q --no-install-recommends \
-           g++ \
-           gcc \
-           libeigen3-dev \
-           libqt5svg5* \
-           make \
-           python \
-           python-numpy \
-           zlib1g-dev \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
-    && cd /opt \
+RUN cd /opt \
     && curl -sSLO https://github.com/MRtrix3/mrtrix3/archive/${MRTRIX_SHA}.zip \
     && unzip ${MRTRIX_SHA}.zip \
     && mv mrtrix3-${MRTRIX_SHA} /opt/mrtrix3-latest \
@@ -160,12 +160,6 @@ RUN mkdir /opt/cmake \
   && sh /cmake-3.11.4-Linux-x86_64.sh --prefix=/opt/cmake --skip-license \
   && ln -s /opt/cmake/bin/cmake /usr/local/bin/cmake \
   && apt-get update -qq \
-    && apt-get install -y -q --no-install-recommends \
-           g++ \
-           gcc \
-           make \
-           zlib1g-dev \
-           imagemagick \
     && mkdir /tmp/ants \
     && cd /tmp \
     && curl -sSLO https://github.com/ANTsX/ANTs/archive/${ANTS_SHA}.zip \
@@ -190,10 +184,18 @@ RUN echo "Downloading Convert3D ..." \
     && curl -fsSL --retry 5 https://sourceforge.net/projects/c3d/files/c3d/Nightly/c3d-nightly-Linux-x86_64.tar.gz/download \
     | tar -xz -C /opt/convert3d-nightly --strip-components 1
 
+# Create a shared $HOME directory
+RUN useradd -m -s /bin/bash -G users qsiprep
+WORKDIR /home/qsiprep
+ENV HOME="/home/qsiprep"
+
 # Installing SVGO
 RUN curl -sL https://deb.nodesource.com/setup_10.x | bash -
 RUN apt-get install -y nodejs
 RUN npm install -g svgo
+
+# Installing bids-validator
+RUN npm install -g bids-validator@1.2.3
 
 # Installing and setting up miniconda
 RUN curl -sSLO https://repo.continuum.io/miniconda/Miniconda3-4.5.12-Linux-x86_64.sh && \
@@ -201,16 +203,20 @@ RUN curl -sSLO https://repo.continuum.io/miniconda/Miniconda3-4.5.12-Linux-x86_6
     rm Miniconda3-4.5.12-Linux-x86_64.sh
 
 ENV PATH=/usr/local/miniconda/bin:$PATH \
+    CPATH="/usr/local/miniconda/include/:$CPATH" \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
     PYTHONNOUSERSITE=1
 
 # Installing precomputed python packages
-RUN conda install -y mkl=2019.1 mkl-service;  sync &&\
-    conda install -y numpy=1.15.4 \
+RUN conda install -y python=3.7.1 \
+                     numpy=1.15.4 \
                      scipy=1.2.0 \
+                     mkl=2019.1 \
+                     mkl-service \
                      scikit-learn=0.20.2 \
-                     matplotlib=3.0.2 \
+                     matplotlib=2.2.3 \
+                     seaborn=0.9.0 \
                      pandas=0.24.0 \
                      libxml2=2.9.9 \
                      libxslt=1.1.33 \
@@ -223,22 +229,15 @@ RUN conda install -y mkl=2019.1 mkl-service;  sync &&\
                      traits=4.6.0; sync &&  \
     chmod -R a+rX /usr/local/miniconda; sync && \
     chmod +x /usr/local/miniconda/bin/*; sync && \
-    conda clean --all -y; sync && \
+    conda build purge-all; sync && \
     conda clean -tipsy && sync
 
-# Precaching fonts, set 'Agg' as default backend for matplotlib
-RUN python -c "from matplotlib import font_manager" && \
-    sed -i 's/\(backend *: \).*$/\1Agg/g' $( python -c "import matplotlib; print(matplotlib.matplotlib_fname())" )
-
-# Install latest pandoc
-RUN curl -o pandoc-2.2.2.1-1-amd64.deb -sSL "https://github.com/jgm/pandoc/releases/download/2.2.2.1/pandoc-2.2.2.1-1-amd64.deb" && \
-    dpkg -i pandoc-2.2.2.1-1-amd64.deb && \
-    rm pandoc-2.2.2.1-1-amd64.deb
 
 # Unless otherwise specified each process should only use one thread - nipype
 # will handle parallelization
 ENV MKL_NUM_THREADS=1 \
-    OMP_NUM_THREADS=1
+    OMP_NUM_THREADS=1 \
+    MRTRIX_NTHREADS=1
 
 WORKDIR /root/
 
@@ -259,20 +258,21 @@ RUN mkdir $CRN_SHARED_DATA && \
     chmod -R a+rX $CRN_SHARED_DATA && \
     echo "add OASIS30"
 
-# Installing dev requirements (packages that are not in pypi)
-ADD requirements.txt requirements.txt
-RUN pip install -r requirements.txt && \
-    rm -rf ~/.cache/pip \
-    && echo 1
-
 # Installing qsiprep
-COPY . /root/src/qsiprep
+COPY . /src/qsiprep
 ARG VERSION
+
 # Force static versioning within container
-RUN echo "${VERSION}" > /root/src/qsiprep/qsiprep/VERSION && \
-    cd /root/src/qsiprep && \
-    pip install .[all] && \
-    rm -rf ~/.cache/pip
+RUN echo "${VERSION}" > /src/qsiprep/qsiprep/VERSION && \
+    echo "include qsiprep/VERSION" >> /src/qsiprep/MANIFEST.in && \
+    pip install --no-cache-dir "/src/qsiprep[all]"
+
+# Precaching fonts, set 'Agg' as default backend for matplotlib
+RUN python -c "from matplotlib import font_manager" && \
+    sed -i 's/\(backend *: \).*$/\1Agg/g' $( python -c "import matplotlib; print(matplotlib.matplotlib_fname())" )
+
+RUN find $HOME -type d -exec chmod go=u {} + && \
+    find $HOME -type f -exec chmod go=u {} +
 
 ENV AFNI_INSTALLDIR=/usr/lib/afni \
     PATH=${PATH}:/usr/lib/afni/bin \
@@ -281,8 +281,8 @@ ENV AFNI_INSTALLDIR=/usr/lib/afni \
     AFNI_TTATLAS_DATASET=/usr/share/afni/atlases \
     AFNI_IMSAVE_WARNINGS=NO \
     FSLOUTPUTTYPE=NIFTI_GZ \
-    MRTRIX_NTHREADS=1
-
+    MRTRIX_NTHREADS=1 \
+    IS_DOCKER_8395080871=1
 
 RUN ldconfig
 WORKDIR /tmp/
@@ -294,7 +294,7 @@ ARG VERSION
 LABEL org.label-schema.build-date=$BUILD_DATE \
       org.label-schema.name="qsiprep" \
       org.label-schema.description="qsiprep - q Space Images preprocessing tool" \
-      org.label-schema.url="http://qsiprep.org" \
+      org.label-schema.url="http://qsiprep.readthedocs.io" \
       org.label-schema.vcs-ref=$VCS_REF \
       org.label-schema.vcs-url="https://github.com/pennbbl/qsiprep" \
       org.label-schema.version=$VERSION \

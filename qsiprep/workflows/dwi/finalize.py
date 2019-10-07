@@ -21,7 +21,6 @@ from ...interfaces.mrtrix import MRTrixGradientTable
 from ...engine import Workflow
 
 # dwi workflows
-from ..fieldmap.unwarp import init_fmap_unwarp_report_wf
 from .hmc_sdc import init_qsiprep_hmcsdc_wf
 from .fsl import init_fsl_hmc_wf
 from .pre_hmc import init_dwi_pre_hmc_wf
@@ -58,7 +57,7 @@ def init_dwi_finalize_wf(scan_groups,
         :graph2use: orig
         :simple_form: yes
 
-        from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
+        from qsiprep.workflows.dwi.base import init_dwi_finalize_wf(scan_groups, name, output_prefix, ignore, hmc_model, shoreline_iters, reportlets_dir, output_spaces, template, output_dir, omp_nthreads, write_local_bvecs, low_mem, use_syn, make_intramodal_template, layout)
         wf = init_dwi_finalize_wf(name='finalize_wf',
                                   omp_nthreads=1,
                                   ignore=[],
@@ -170,15 +169,14 @@ def init_dwi_finalize_wf(scan_groups,
         all_dwis = scan_groups['dwi_series']
         source_file = all_dwis[0]
         fieldmap_info = scan_groups['fieldmap_info']
-        dwi_metadata = layout.get_metadata(source_file)
     else:
         all_dwis = ['/fake/testing/path.nii.gz']
         source_file = all_dwis[0]
-        fieldmap_info = {'type': None}
-        dwi_metadata = {}
+        fieldmap_info = {'suffix': None}
 
-    fieldmap_type = fieldmap_info['type']
+    fieldmap_type = fieldmap_info['suffix']
 
+    fieldmap_type = fieldmap_info['suffix']
     mem_gb = {'filesize': 1, 'resampled': 1, 'largemem': 1}
     dwi_nvols = 10
 
@@ -362,19 +360,21 @@ def init_dwi_finalize_wf(scan_groups,
                 ('fieldwarps', 'inputnode.fieldwarps'),
                 ('dwi_files', 'inputnode.dwi_files'),
                 ('dwi_sampling_grid', 'inputnode.output_grid'),
-                ('intramodal_affine_file', 'inputnode.to_intramodal_template_affine'),
-                ('intramodal_warp_file', 'inputnode.to_intramodal_template_warp'),
+                ('b0_to_intramodal_template_transforms',
+                 'inputnode.b0_to_intramodal_template_transforms'),
+                ('intramodal_template_to_t1_affine',
+                 'inputnode.intramodal_template_to_t1_affine'),
+                ('intramodal_template_to_t1_warp',
+                 'inputnode.intramodal_template_to_t1_warp'),
                 ('itk_b0_to_t1', 'inputnode.itk_b0_to_t1'),
-                ('mni_mask', 'inputnode.t1_mask'),
-                ('intramodal_template_to_t1_warp', 'inputnode.intramodal_template_to_t1_warp')
-                ]),
+                ('t1_2_mni_forward_transform', 'inputnode.t1_2_mni_forward_transform')]),
             (transform_dwis_mni, outputnode, [('outputnode.bvals', 'bvals_mni'),
                                               ('outputnode.rotated_bvecs', 'bvecs_mni'),
                                               ('outputnode.dwi_resampled', 'dwi_mni'),
+                                              ('outputnode.dwi_mask_resampled', 'dwi_mask_mni'),
                                               ('outputnode.b0_series', 'mni_b0_series'),
                                               ('outputnode.local_bvecs', 'local_bvecs_mni'),
-                                              ('outputnode.dwi_ref_resampled', 'mni_b0_ref'),
-                                              ('outputnode.resampled_dwi_mask', 'dwi_mask_mni')]),
+                                              ('outputnode.dwi_ref_resampled', 'mni_b0_ref')]),
             (transform_dwis_mni, gtab_mni, [('outputnode.bvals', 'bval_file'),
                                             ('outputnode.rotated_bvecs', 'bvec_file')]),
             (gtab_mni, outputnode, [('gradient_file', 'gradient_table_mni')])

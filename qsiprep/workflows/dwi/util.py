@@ -127,7 +127,6 @@ using a modified version of the custom methodology of *fMRIPrep*.
         (skullstrip_b0_wf, outputnode, [
             ('outputnode.mask_file', 'dwi_mask'),
             ('outputnode.skull_stripped_file', 'ref_image_brain')])
-
     ])
 
     if gen_report:
@@ -152,8 +151,7 @@ using a modified version of the custom methodology of *fMRIPrep*.
 
 def init_enhance_and_skullstrip_dwi_wf(name='enhance_and_skullstrip_dwi_wf', omp_nthreads=1):
     """
-    https://community.mrtrix.org/t/\
-    dwibiascorrect-with-ants-high-intensity-in-cerebellum-brainstem/1338/3
+    https://community.mrtrix.org/t/dwibiascorrect-with-ants-high-intensity-in-cerebellum-brainstem/1338/3
 
     Truncates image intensities, runs N4, does a pre-mask
 
@@ -185,7 +183,7 @@ def init_enhance_and_skullstrip_dwi_wf(name='enhance_and_skullstrip_dwi_wf', omp
     **Outputs**
 
         bias_corrected_file
-            the ``in_file`` after `N4BiasFieldCorrection`_ and sharpening
+            the ``in_file`` after N4BiasFieldCorrection and sharpening
         skull_stripped_file
             the ``bias_corrected_file`` after soft skull-stripping
         mask_file
@@ -380,7 +378,7 @@ def init_skullstrip_b0_wf(name='skullstrip_b0_wf', use_t1_prior=False, use_initi
     erode2 = pe.Node(
         ImageMath(dimension=3,
                   operation="ME",
-                  secondary_arg="5"),
+                  secondary_arg="7"),
         name="erode2")
 
     apply_mask = pe.Node(fsl.ApplyMask(), name='apply_mask')

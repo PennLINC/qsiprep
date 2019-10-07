@@ -112,6 +112,7 @@ def init_dwi_trans_wf(template,
         local_bvecs
             NIfTI file containing the bvec rotation matrix (due to transforms) in each voxel.
             Includes rotations introduced by warping
+
     """
     workflow = Workflow(name=name)
     workflow.__desc__ = """\
@@ -214,8 +215,6 @@ generating a *preprocessed DWI run in {tpl} space*.
 
     def _get_first(items):
         return items[0]
-
-
 
     dwi_transform = pe.MapNode(
         ants.ApplyTransforms(interpolation="LanczosWindowedSinc", float=True),

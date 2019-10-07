@@ -12,3 +12,4 @@
 .. _AFNI: https://afni.nimh.nih.gov/
 .. _Docker: https://docs.docker.com/
 .. _freesurfer: https://surfer.nmr.mgh.harvard.edu/
+.. _FSL: https://fsl.fmrib.ox.ac.uk/fsl/fslwiki
