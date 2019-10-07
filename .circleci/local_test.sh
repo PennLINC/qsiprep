@@ -177,6 +177,7 @@ mkdir -p ${WORKDIR}/DSCSDSI_BUDS/work ${WORKDIR}/DSCSDSI_BUDS/derivatives
   qsiprep \
       -w ${WORKDIR}/DSCSDSI_BUDS/work \
       --bids-dir ${WORKDIR}/data/DSCSDSI_BUDS --output-dir ${WORKDIR}/DSCSDSI_BUDS/derivatives \
+      --combine-all-dwis \
       --analysis-level participant \
       --sloppy --write-graph --mem_mb 4096 \
       --output-space T1w \
