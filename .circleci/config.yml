@@ -700,18 +700,6 @@ workflows:
             tags:
               only: /.*/
 
-      - BlipUpDownSeries:
-          requires:
-            - get_data
-            - build
-          filters:
-            branches:
-              ignore:
-                - /docs?\/.*/
-                - /tests?\/.*/
-            tags:
-              only: /.*/
-
       - DIPY_3dSHORE_Recon:
           requires:
             - get_data
