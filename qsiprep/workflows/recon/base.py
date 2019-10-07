@@ -157,10 +157,11 @@ def init_single_subject_wf(
 
         spec = _load_recon_spec(recon_spec)
         space = spec['space']
-        layout = BIDSLayout(recon_input)
+        layout = BIDSLayout(recon_input, validate=False, absolute_paths=True)
         # Get all the output files that are in this space
-        dwi_files = [f.filename for f in
-                     layout.get(type="dwi", subject=subject_id, extensions=['nii', 'nii.gz'])
+        dwi_files = [f.path for f in
+                     layout.get(suffix="dwi", subject=subject_id, absolute_paths=True,
+                                extensions=['nii', 'nii.gz'])
                      if 'space-' + space in f.filename]
         LOGGER.info("found %s in %s", dwi_files, recon_input)
 

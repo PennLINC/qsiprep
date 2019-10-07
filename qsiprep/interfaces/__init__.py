@@ -22,3 +22,4 @@ from .fmap import (
 from .itk import MultiApplyTransforms
 from .dwi_merge import MergeDWIs
 from .confounds import GatherConfounds, DMRISummary
+from .reports import SubjectSummary, AboutSummary

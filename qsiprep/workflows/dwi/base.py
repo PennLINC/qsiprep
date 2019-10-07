@@ -410,7 +410,7 @@ def init_dwi_preproc_wf(scan_groups,
         DerivativesDataSink(
             prefix=output_prefix,
             source_file=source_file,
-            base_directory=output_dir, suffix='confounds'),
+            base_directory=str(output_dir), suffix='confounds'),
         name="ds_confounds", run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB)
     workflow.connect([
@@ -468,8 +468,8 @@ def init_dwi_preproc_wf(scan_groups,
     # Fill-in datasinks of reportlets seen so far
     for node in workflow.list_node_names():
         if node.split('.')[-1].startswith('ds_report'):
-            workflow.get_node(node).inputs.base_directory = reportlets_dir
-            workflow.get_node(node).inputs.source_file = source_file
+            workflow.get_node(node).inputs.base_directory = str(reportlets_dir)
+            workflow.get_node(node).inputs.source_file = str(source_file)
     return workflow
 
 def _get_first(lll):

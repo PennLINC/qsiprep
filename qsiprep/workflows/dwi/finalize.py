@@ -172,9 +172,9 @@ def init_dwi_finalize_wf(scan_groups,
     else:
         all_dwis = ['/fake/testing/path.nii.gz']
         source_file = all_dwis[0]
-        fieldmap_info = {'type': None}
+        fieldmap_info = {'suffix': None}
 
-    fieldmap_type = fieldmap_info['type']
+    fieldmap_type = fieldmap_info['suffix']
 
     fieldmap_type = fieldmap_info['suffix']
     mem_gb = {'filesize': 1, 'resampled': 1, 'largemem': 1}

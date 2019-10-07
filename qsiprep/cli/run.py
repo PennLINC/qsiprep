@@ -757,7 +757,7 @@ def build_qsiprep_workflow(opts, retval):
         subject_list=subject_list,
         run_uuid=run_uuid,
         work_dir=work_dir,
-        output_dir=output_dir,
+        output_dir=str(output_dir),
         ignore=opts.ignore,
         hires=False,
         freesurfer=opts.do_reconall,

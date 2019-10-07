@@ -334,7 +334,7 @@ desc-preproc_bold.nii.gz'
 
         base_directory = runtime.cwd
         if isdefined(self.inputs.base_directory):
-            base_directory = op.abspath(self.inputs.base_directory)
+            base_directory = str(self.inputs.base_directory)
 
         out_path = '{}/{subject_id}'.format(self.out_path_base, **m.groupdict())
         if m.groupdict().get('session_id') is not None:
