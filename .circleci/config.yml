@@ -738,8 +738,8 @@ jobs:
             twine check dist/qsiprep*.tar.gz
             virtualenv --python=python sdist
             source sdist/bin/activate
-            pip install --upgrade "pip>=19.1" numpy
-            pip install dist/qsiprep*.tar.gz
+            pip install --progress-bar off --upgrade "pip>=19.1" numpy
+            pip install --progress-bar off dist/qsiprep*.tar.gz
             which qsiprep | grep sdist\\/bin
             INSTALLED_VERSION=$(qsiprep --version)
             INSTALLED_VERSION=${INSTALLED_VERSION%$'\r'}
