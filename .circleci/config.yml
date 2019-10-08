@@ -850,6 +850,15 @@ workflows:
             tags:
               only: /.*/
 
+      - test_deploy_pypi:
+          filters:
+            branches:
+              ignore:
+                - /docs\/.*/
+                - /docker\/.*/
+            tags:
+              only: /.*/
+
       - DSCSDSI:
           requires:
             - get_data
