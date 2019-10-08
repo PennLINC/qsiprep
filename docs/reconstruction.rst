@@ -14,31 +14,45 @@ from the preprocessed diffusion data.
 The easiest way to get started is to use one of the pre-packaged workflows.
 Instead of specifying a path to a file you can choose from the following:
 
-+---------------------------+--------------+-------------+---------+-----------------+----------------+
-| Option                    | Requires SDC | MultiShell  |   DSI   | DTI             |  Tractography  |
-+===========================+==============+=============+=========+=================+================+
-|``mrtrix_msmt_csd``        |    Yes       |  Required   |    No   |      No         | Probabilistic  |
-+---------------------------+--------------+-------------+---------+-----------------+----------------+
-|``mrtrix_dhollander``      |    Yes       |    Yes      |    No   |     Yes         | Probabilistic  |
-+---------------------------+--------------+-------------+---------+-----------------+----------------+
-|``mrtrix_dhollander_no5tt``|     No       |    Yes      |    No   |     Yes         | Probabilistic  |
-+---------------------------+--------------+-------------+---------+-----------------+----------------+
-|``mrtrix_tckglobal``       |    Yes       |   Required  |    No   |      No         |    Global      |
-+---------------------------+--------------+-------------+---------+-----------------+----------------+
-|``dsi_studio_gqi``         | Recommended  |    Yes      |   Yes   | Not Recommended | Deterministic  |
-+---------------------------+--------------+-------------+---------+-----------------+----------------+
-|``dipy_mapmri``            | Recommended  |    Yes      |   Yes   |      No         |   Both         |
-+---------------------------+--------------+-------------+---------+-----------------+----------------+
-|``dipy_3dshore``           | Recommended  |    Yes      |   Yes   |      No         |   Both         |
-+---------------------------+--------------+-------------+---------+-----------------+----------------+
-|``csdsi_3dshore``          | Recommended  |    Yes      |   Yes   |      No         |   Both         |
-+---------------------------+--------------+-------------+---------+-----------------+----------------+
++-------------------------------+--------------+-------------+---------+-----------------+----------------+
+| Option                        | Requires SDC | MultiShell  |   DSI   | DTI             |  Tractography  |
++===============================+==============+=============+=========+=================+================+
+|:ref:`mrtrix_msmt_csd`         |    Yes       |  Required   |    No   |      No         | Probabilistic  |
++-------------------------------+--------------+-------------+---------+-----------------+----------------+
+|:ref:`mrtrix_dhollander`       |    Yes       |    Yes      |    No   |     Yes         | Probabilistic  |
++-------------------------------+--------------+-------------+---------+-----------------+----------------+
+|:ref:`mrtrix_dhollander_no5tt` |     No       |    Yes      |    No   |     Yes         | Probabilistic  |
++-------------------------------+--------------+-------------+---------+-----------------+----------------+
+|:ref:`mrtrix_tckglobal`        |    Yes       |   Required  |    No   |      No         |    Global      |
++-------------------------------+--------------+-------------+---------+-----------------+----------------+
+|:ref:`dsi_studio_gqi`          | Recommended  |    Yes      |   Yes   |    Yes*         | Deterministic  |
++-------------------------------+--------------+-------------+---------+-----------------+----------------+
+|:ref:`dipy_mapmri`             | Recommended  |    Yes      |   Yes   |      No         |   Both         |
++-------------------------------+--------------+-------------+---------+-----------------+----------------+
+|:ref:`dipy_3dshore`            | Recommended  |    Yes      |   Yes   |      No         |   Both         |
++-------------------------------+--------------+-------------+---------+-----------------+----------------+
+|:ref:`csdsi_3dshore`           | Recommended  |    Yes      |   Yes   |      No         |   Both         |
++-------------------------------+--------------+-------------+---------+-----------------+----------------+
+
+\* Not recommended
 
 These workflows each take considerable processing time, because they output as many versions of
 connectivity as possible. All included atlases and all possible weightings are included. Each of
 these corresponds to a JSON file that can be found in QSIprep's
 `github <https://github.com/PennBBL/qsiprep/tree/master/qsiprep/data/pipelines>`_. For extra
 information about how to customize these, see :ref:`custom_reconstruction`.
+
+To use a pre-packaged workflow, simply provide the name from the leftmost column above for the
+``--recon-spec`` argument. For example::
+
+  $ qsiprep-docker \
+      --bids_dir /path/to/bids \
+      --recon_input /output/from/qsiprep \
+      --recon_spec mrtrix_msmt_csd \
+      --output_dir /where/my/reconstructed/data/goes \
+      --analysis_level participant \
+      --fs-license-file /path/to/license.txt
+
 
 ``qsiprep`` supports a limited number of algorithms that are wrapped in
 nipype workflows and can be configured and connected based on the
@@ -59,12 +73,119 @@ methods. It is **highly** recommended that you pick a weighting method before yo
 these pipelines and only look at those numbers. If you look at more than one weighting method
 be sure to adjust your statistics for these additional comparisons.
 
+.. _mrtrix_msmt_csd:
+
+``mrtrix_msmt_csd``
+~~~~~~~~~~~~~~~~~~~~~~
+
+This workflow explicitly uses the T1w-based segmentation to estimate response functions for
+white matter, gray matter and CSF. Tissue-specific response functions are estimated using the
+T1w-based FAST segmentation. Good alignment between the dMRI and T1w scan is therefore required:
+susceptibility distortion correction must have been performed during preprocessing. Additionally,
+a unique shell is required for each tissue response function. This means that at least 3 b>0
+shells need to be included in the preprocessed data.
+
+The output from ``qsiprep`` is sent to  `dwi2response (msmt_5tt)`_ [Jeurissen2014]_ with a mask
+based on the T1w. The GM, WM and CSF FODs, along with the anatomical segmentation are input to
+tckgen_, which uses the iFOD2 probabilistic tracking method to generate 1e7 streamlines with a
+maximum length of 250mm, minimum length of 30mm, FOD power of 0.33, cropping performed at the
+GM/WM interface, and backtracking. Weights for each streamline were calculated using SIFT2_
+[Smith2015]_ and were included for while estimating the structural connectivity matrix.
+
+
+.. _mrtrix_dhollander:
+
+``mrtrix_dhollander``
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Unlike :ref:`mrtrix_msmt_csd`, this workflow uses an unsupervised learning approach to
+estimate response functions for white matter, gray matter and CSF [Dhollander2016]_, [Dhollander2018]_.
+A unique shell is required for each tissue response function. This means that at least 3 b>0
+shells need to be included in the preprocessed data.
+
+The output from ``qsiprep`` is sent to  `dwi2response (dhollander)`_ [Dhollander2016]_ with a mask
+based on the T1w. The GM, WM and CSF FODs along with the FAST segmentation are input to
+tckgen_, which uses the iFOD2 probabilistic tracking method to generate 1e7 streamlines with a
+maximum length of 250mm, minimum length of 30mm, FOD power of 0.33, cropping performed at the
+GM/WM interface, and backtracking. Weights for each streamline were calculated using SIFT2_
+[Smith2015]_ and were included for while estimating the structural connectivity matrix.
+
+Although the T1w-based tissue segmentation is *not* used for the tissue-specific response
+functions, it *is* used for Anatomically constrained tractography by tckgen_. Therefore
+distortion correction is still required for this workflow. A workflow that does not hinge on
+distortion-correction data is :ref:`mrtrix_dhollander_no5tt`.
+
+
+
+.. _mrtrix_dhollander_no5tt:
+
+``mrtrix_dhollander_no5tt``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This pipeline is nearly identical to :ref:`mrtrix_dhollander` except that Anatomically Constrained
+Tractography is disabled in tckgen_. Not using any distortion correction is a bad idea, but
+if that is your choice, you can use this pipeline and get connectivity matrices. Interpret their
+contents at your own peril.
+
+
+.. _mrtrix_tckglobal:
+
+``mrtrix_tckglobal``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+MRtrix has a multi-shell multi-tissue version of Global tractography [Christiaens2015]_. This
+pipeline uses segmentation-based multi-tissue response function estimation
+(like :ref:`mrtrix_msmt_csd`). The FODs and streamlines are then created inside tckglobal_.
+The ultimate number of streamlines is dependent on the input data.
+
+
+.. _dsi_studio_gqi:
+
+``dsi_studio_gqi``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Here the standard GQI plus deterministic tractography pipeline is used [Yeh2013]_.  GQI works on
+almost any imaginable sampling scheme because DSI Studio will internally interpolate the q-space
+data so  symmetry requirements are met. GQI models the water diffusion ODF, so ODF peaks are much
+smaller  than you see with CSD. This results in a rather conservative peak detection, which greatly
+benefits from having more diffusion data than a typical DTI.
+
+5 million streamlines are created with a maximum length of 250mm, minimum length of 30mm,
+random seeding, a step size of 1mm and an automatically calculated QA threshold.
+
+Additionally, a number of anisotropy scalar images are produced such as QA, GFA and ISO.
+
+.. _dipy_mapmri:
+
+``dipy_mapmri``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The MAPMRI method is used to estimate EAPs from which ODFs are calculated analytically. This
+method produces scalars like RTOP, RTAP, QIV, MSD, etc.
+
+The ODFs are saved in DSI Studio format and tractography is run identically to that in
+:ref:`dsi_studio_gqi`.
+
+
+.. _dipy_3dshore:
+
+``dipy_3dshore``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This uses the BrainSuite 3dSHORE basis in a Dipy reconstruction. Much like :ref:`dipy_mapmri`,
+a slew of anisotropy scalars are estimated. Here the :ref:`dsi_studio_gqi` fiber tracking is
+again run on the 
+
+.. _csdsi_3dshore:
+
+``csdsi_3dshore``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
 .. _custom_reconstruction:
 
 Building a custom reconstruction pipeline
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+==========================================
 
 Instead of going through each possible element of a pipeline, we will go through
 a simple example and describe its components.

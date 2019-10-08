@@ -29,7 +29,7 @@
         "method": 0,
         "smoothing": 0.0,
         "step_size": 1.0,
-        "min_length": 10,
+        "min_length": 30,
         "max_length": 250,
         "seed_plan": 0,
         "interpolation": 0,
