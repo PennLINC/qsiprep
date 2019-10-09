@@ -781,7 +781,7 @@ jobs:
 
   deploy_pypi:
     docker:
-      - image: circleci/classic:201711-01
+      - image: ubuntu-1604:201903-01
     working_directory: /tmp/src/qsiprep
     steps:
       - checkout
