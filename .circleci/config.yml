@@ -781,7 +781,7 @@ jobs:
 
   deploy_pypi:
     docker:
-      - image: circleci/python:3.7.4
+      - image: circleci/classic:201711-01
     working_directory: /tmp/src/qsiprep
     steps:
       - checkout
@@ -797,7 +797,7 @@ jobs:
             docker run --rm=false -e PLAT='manylinux1_x86_64' -e PKGNAME='qsiprep' -v `pwd`:/io \
                 quay.io/pypa/manylinux1_x86_64 /io/.circleci/pypi_wheel/build-wheels.sh
       - run:
-          name: Build qsiprep-docker
+          name: Build qsiprep-container
           command: |
             THISVERSION=$( python get_version.py )
             cd wrapper
