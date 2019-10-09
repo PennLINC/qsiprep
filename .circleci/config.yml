@@ -780,8 +780,8 @@ jobs:
           path: /tmp/src/qsiprep/wrapper/dist
 
   deploy_pypi:
-    docker:
-      - image: ubuntu-1604:201903-01
+    machine:
+      image: ubuntu-1604:201903-01
     working_directory: /tmp/src/qsiprep
     steps:
       - checkout
