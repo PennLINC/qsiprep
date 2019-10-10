@@ -789,7 +789,7 @@ jobs:
           name: Build qsiprep
           command: |
             THISVERSION=$( python3 get_version.py )
-            virtualenv --python=python3 build
+            virtualenv --python=python3.6.5 build
             source build/bin/activate
             pip install --upgrade "pip>=19.1" numpy
             echo "${CIRCLE_TAG:-$THISVERSION}" > qsiprep/VERSION
@@ -801,7 +801,7 @@ jobs:
           command: |
             THISVERSION=$( python3 get_version.py )
             cd wrapper
-            virtualenv --python=python3 build
+            virtualenv --python=python3.6.5 build
             source build/bin/activate
             pip install --upgrade "pip>=19.1"
             sed -i -E "s/(__version__ = )'[A-Za-z0-9.-]+'/\1'${CIRCLE_TAG:-$THISVERSION}'/" qsiprep_docker.py
