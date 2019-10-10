@@ -386,8 +386,11 @@ def main():
         command.extend(['-v', ':'.join((opts.recon_input, '/qsiprep-output', 'ro'))])
         main_args.extend(['--recon-input', '/qsiprep-output'])
     if opts.recon_spec:
-        command.extend(['-v', ':'.join((opts.recon_spec, '/sngl/spec/spec.json', 'ro'))])
-        main_args.extend(['--recon-spec', '/sngl/spec/spec.json'])
+        if os.path.exists(opts.recon_spec):
+            command.extend(['-v', ':'.join((opts.recon_spec, '/sngl/spec/spec.json', 'ro'))])
+            main_args.extend(['--recon-spec', '/sngl/spec/spec.json'])
+        else:
+            main_args.extend(['--recon-spec', opts.recon_spec])
     if opts.eddy_config:
         command.extend(['-v', ':'.join((opts.eddy_config, '/sngl/eddy/eddy_config.json', 'ro'))])
         main_args.extend(['--eddy-config', '/sngl/eddy/eddy_config.json'])
