@@ -32,3 +32,28 @@ Nothing to cite yet...
 .. [Wang2017] Wang S, et al. (2017) Evaluation of Field Map and Nonlinear
               Registration Methods for Correction of Susceptibility Artifacts
               in Diffusion MRI. Front. Neuroinform. 11:17.
+
+.. [Jeurissen2014] Jeurissen, B.; Tournier, J.-D.; Dhollander, T.; Connelly, A. & Sijbers, J.
+                   Multi-tissue constrained spherical deconvolution for improved analysis of
+                   multi-shell diffusion MRI data. NeuroImage, 2014, 103, 411-426
+
+.. [Dhollander2016] Dhollander, T.; Raffelt, D. & Connelly, A. Unsupervised 3-tissue response
+                    function estimation from single-shell or multi-shell diffusion MR data without
+                    a co-registered T1 image. ISMRM Workshop on Breaking the Barriers of Diffusion
+                    MRI, 2016, 5
+
+.. [Dhollander2018] Dhollander, T.; Raffelt, D. & Connelly, A. Accuracy of response function
+                    estimation algorithms for 3-tissue spherical deconvolution of diverse quality
+                    diffusion MRI data. Proc Intl Soc Mag Reson Med, 2018, 26, 1569
+
+.. [Smith2015] Smith, R. E.; Tournier, J.-D.; Calamante, F. & Connelly, A. SIFT2: Enabling dense
+               quantitative assessment of brain white matter connectivity using streamlines
+               tractography. NeuroImage, 2015, 119, 338-351
+
+.. [Christiaens2015] Christiaens, D.; Reisert, M.; Dhollander, T.; Sunaert, S.; Suetens, P. &
+                     Maes, F. Global tractography of multi-shell diffusion-weighted imaging data
+                     using a multi-tissue model. NeuroImage, 2015, 123, 89-101
+
+.. [Yeh2013]  F.-C. Yeh, T. D. Verstynen, Y. Wang, J. C. Fernández-Miranda, and W-Y. I. Tseng,
+          Deterministic Diffusion Fiber Tracking Improved By Quantitative Anisotropy, PLoS
+          ONE 8(11): e80713. doi:10.1371/journal.pone.0080713

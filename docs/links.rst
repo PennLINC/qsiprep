@@ -13,3 +13,9 @@
 .. _Docker: https://docs.docker.com/
 .. _freesurfer: https://surfer.nmr.mgh.harvard.edu/
 .. _FSL: https://fsl.fmrib.ox.ac.uk/fsl/fslwiki
+.. _`dwi2response (dhollander)`: https://mrtrix.readthedocs.io/en/latest/reference/scripts/dwi2response.html#dwi2response-dhollander
+.. _`dwi2response (msmt_5tt)`: https://mrtrix.readthedocs.io/en/latest/reference/scripts/dwi2response.html#dwi2response-msmt-5tt
+.. _`tckgen`: https://mrtrix.readthedocs.io/en/latest/reference/commands/tckgen.html
+.. _SIFT2: https://mrtrix.readthedocs.io/en/latest/reference/commands/tcksift2.html
+.. _tckglobal: https://mrtrix.readthedocs.io/en/latest/reference/commands/tckglobal.html
+
