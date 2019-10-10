@@ -930,7 +930,7 @@ workflows:
             - DIPY_3dSHORE_Recon
           filters:
             branches:
-              only: pypi_docker
+              only: master
             tags:
               only: /.*/
 
@@ -939,7 +939,7 @@ workflows:
             - deployable
           filters:
             branches:
-              only: pypi_docker
+              only: master
             tags:
               only: /.*/
 
@@ -948,6 +948,6 @@ workflows:
             - deployable
           filters:
             branches:
-              only: pypi_docker
+              only: master
             tags:
               only: /.*/
