@@ -187,6 +187,7 @@ again run on the
 Building a custom reconstruction pipeline
 ==========================================
 
+
 Instead of going through each possible element of a pipeline, we will go through
 a simple example and describe its components.
 
