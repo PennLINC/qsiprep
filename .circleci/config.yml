@@ -788,8 +788,10 @@ jobs:
       - run:
           name: Build qsiprep
           command: |
-            THISVERSION=$( python3 get_version.py )
-            virtualenv --python=python3.6.5 build
+            pyenv local 3.6.5
+            #THISVERSION=$( python get_version.py )
+            THISVERSION=0.6.0rc1
+            virtualenv --python=python3 build
             source build/bin/activate
             pip install --upgrade "pip>=19.1" numpy
             echo "${CIRCLE_TAG:-$THISVERSION}" > qsiprep/VERSION
@@ -799,9 +801,10 @@ jobs:
       - run:
           name: Build qsiprep-container
           command: |
-            THISVERSION=$( python3 get_version.py )
+            pyenv local 3.6.5
+            THISVERSION=$( python get_version.py )
             cd wrapper
-            virtualenv --python=python3.6.5 build
+            virtualenv --python=python3 build
             source build/bin/activate
             pip install --upgrade "pip>=19.1"
             sed -i -E "s/(__version__ = )'[A-Za-z0-9.-]+'/\1'${CIRCLE_TAG:-$THISVERSION}'/" qsiprep_docker.py
@@ -810,7 +813,9 @@ jobs:
       - run:
           name: Upload packages to PyPI
           command: |
-            pip install --user twine
+            pyenv local 3.6.5
+            source build/bin/activate
+            pip install twine
             twine upload dist/qsiprep* wrapper/dist/qsiprep*
 
   deployable:
