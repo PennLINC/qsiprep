@@ -153,7 +153,7 @@ jobs:
       - run:
           name: Create Nipype config files
           command: |
-            mkdir -p /tmp/DSCSDSI_BUDS /tmp/DSCSDSI /tmp/DSDTI /tmp/twoses
+            mkdir -p /tmp/DSCSDSI_BUDS /tmp/DSCSDSI /tmp/DSDTI /tmp/twoses /tmp/multishell_output
             printf "[execution]\nstop_on_first_crash = true\n" > /tmp/DSCSDSI/nipype.cfg
             echo "poll_sleep_duration = 0.01" >> /tmp/DSCSDSI/nipype.cfg
             echo "hash_method = content" >> /tmp/DSCSDSI/nipype.cfg
@@ -541,7 +541,7 @@ jobs:
   ReconTests:
     machine:
       image: ubuntu-1604:201903-01
-    working_directory: /tmp
+    working_directory: /tmp/multishell_output
     environment:
       - FS_LICENSE: /tmp/fslicense/license.txt
     steps:
