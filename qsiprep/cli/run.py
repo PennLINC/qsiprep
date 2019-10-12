@@ -100,7 +100,7 @@ def get_parser():
     g_recon.add_argument(
         '--recon-spec', '--recon_spec',
         action='store',
-        type=os.path.abspath,
+        type=str,
         help='json file specifying a reconstruction pipeline to be run after preprocessing'
     )
     g_recon.add_argument(
@@ -866,7 +866,7 @@ def build_recon_workflow(opts, retval):
     # First check that bids_dir looks like a BIDS folder
     bids_dir = os.path.abspath(opts.bids_dir)
     subject_list = collect_participants(
-        bids_dir, participant_label=opts.participant_label)
+        bids_dir, participant_label=opts.participant_label, bids_validate=False)
 
     # Load base plugin_settings from file if --use-plugin
     if opts.use_plugin is not None:
@@ -970,7 +970,8 @@ def build_recon_workflow(opts, retval):
         recon_spec=opts.recon_spec,
         low_mem=opts.low_mem,
         omp_nthreads=omp_nthreads,
-        bids_dir=bids_dir
+        bids_dir=bids_dir,
+        sloppy=opts.sloppy
     )
     retval['return_code'] = 0
 

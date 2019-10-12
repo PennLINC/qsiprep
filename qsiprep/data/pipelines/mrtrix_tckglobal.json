@@ -28,7 +28,7 @@
       "output_suffix": "tckglobal",
       "input": "msmt_csd",
       "parameters": {
-        "niter": 1000
+        "niter": 10000000
       }
     },
     {

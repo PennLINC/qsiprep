@@ -86,8 +86,8 @@ jobs:
     steps:
       - restore_cache:
           keys:
-            - data-v6-{{ .Revision }}
-            - data-v6-
+            - data-v7-{{ .Revision }}
+            - data-v7-
       - run:
           name: Get single scan from downsampled CS-DSI
           command: |
@@ -134,6 +134,17 @@ jobs:
               echo "Dataset twoses was cached"
             fi
       - run:
+          name: Get Multi Shell outputs
+          command: |
+            if [[ ! -d /tmp/data/multishell_output ]]; then
+              wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
+                -O multishell_output.tar.gz "https://upenn.box.com/shared/static/nwxdn4ale8dkebvpjmxbx99dqjzwvlmh.gz"
+              tar xvfz multishell_output.tar.gz -C /tmp/data/
+            else
+              echo "Dataset twoses was cached"
+            fi
+
+      - run:
           name: Store FreeSurfer license file
           command: |
             mkdir -p /tmp/fslicense
@@ -149,6 +160,7 @@ jobs:
             cp /tmp/DSCSDSI/nipype.cfg /tmp/DSCSDSI_BUDS/nipype.cfg
             cp /tmp/DSCSDSI/nipype.cfg /tmp/DSDTI/nipype.cfg
             cp /tmp/DSCSDSI/nipype.cfg /tmp/twoses/nipype.cfg
+            cp /tmp/DSCSDSI/nipype.cfg /tmp/multishell_output/nipype.cfg
       - persist_to_workspace:
           root: /tmp
           paths:
@@ -159,7 +171,7 @@ jobs:
             - DSDTI/nipype.cfg
             - twoses/nipype.cfg
       - save_cache:
-         key: data-v6-{{ epoch }}
+         key: data-v7-{{ epoch }}
          paths:
             - /tmp/data
 
@@ -262,6 +274,7 @@ jobs:
                 --force-spatial-normalization \
                 --sloppy --write-graph --mem_mb 4096 \
                 --nthreads 2 --anat-only -vv --output-resolution 5
+
       - save_cache:
          key: DSCSDSI-anat-v1-{{ .Branch }}-{{ epoch }}
          paths:
@@ -289,89 +302,11 @@ jobs:
                 --force-spatial-normalization \
                 --output-resolution 5 \
                 --nthreads 2 -vv
+
       - save_cache:
          key: DSCSDSI-derivatives-v1-{{ .Branch }}-{{ epoch }}
          paths:
             - /tmp/DSCSDSI/derivatives/qsiprep
-      # - run:
-      #    name: Move intermediate results for second run
-      #    command: |
-      #      mkdir -p /tmp/DSCSDSI/derivatives_partial
-      #      sudo cp -a /tmp/DSCSDSI/work /tmp/DSCSDSI/work_partial
-      - store_artifacts:
-         path: /tmp/DSCSDSI
-
-  DIPY_3dSHORE_Recon:
-    machine:
-      image: ubuntu-1604:201903-01
-    working_directory: /tmp/DSCSDSI
-    environment:
-      - FS_LICENSE: /tmp/fslicense/license.txt
-    steps:
-      - checkout:
-          path: /home/circleci/src/qsiprep
-      - run:
-          name: Check whether build should be skipped
-          command: |
-            cd /home/circleci/src/qsiprep
-            if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?DIPY_3dSHORE_Recon\]' )" != "" ]]; then
-              echo "Skipping DIPY_3dSHORE_Recon build"
-              circleci step halt
-            fi
-      - attach_workspace:
-          at: /tmp
-      - restore_cache:
-          keys:
-            - DSCSDSI-derivatives-v1-{{ .Branch }}-{{ epoch }}
-            - DSCSDSI-derivatives-v1-{{ .Branch }}
-            - DSCSDSI-derivatives-v1-master
-
-      - restore_cache:
-          keys:
-            - docker-v5-{{ .Branch }}-{{ .Revision }}
-      - run:
-          name: Setting up test
-          command: |
-            mkdir -p /tmp/DSCSDSI/derivatives && sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSCSDSI/derivatives && sudo setfacl -m group:$(id -gn):rwx /tmp/DSCSDSI/derivatives
-            pip install future numpy==1.16.4
-            pip install --upgrade /tmp/src/qsiprep/wrapper/
-            cp /tmp/src/qsiprep/.circleci/3dshore_dsistudio_mrtrix.json /tmp/data/csdsi_spec.json
-            sudo chmod a+rw /tmp/data/csdsi_spec.json
-
-      - run:
-          name: Load Docker image layer cache
-          no_output_timeout: 30m
-          command: |
-            docker info
-            set +o pipefail
-            if [ -f /tmp/cache/docker.tar.gz ]; then
-              sudo apt update && sudo apt -y install pigz
-              pigz -d --stdout /tmp/cache/docker.tar.gz | docker load
-              docker images
-            fi
-
-      - run:
-          name: Run DIPY 3dSHORE recon on outputs
-          no_output_timeout: 2h
-          command: |
-            mkdir -p /tmp/DSCSDSI/work /tmp/DSCSDSI/derivatives
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSCSDSI/derivatives && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/DSCSDSI/derivatives
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSCSDSI/work && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/DSCSDSI/work
-            qsiprep-docker -i pennbbl/qsiprep:latest \
-                -e qsiprep_DEV 1 -u $(id -u) \
-                --config $PWD/nipype.cfg -w /tmp/DSCSDSI/work \
-                --bids-dir /tmp/data/DSCSDSI_nofmap \
-                --recon-input /tmp/DSCSDSI/derivatives/qsiprep \
-                --output-dir /tmp/DSCSDSI/derivatives \
-                --analysis-level participant \
-                --recon-spec /tmp/data/csdsi_spec.json \
-                --recon-only \
-                --mem_mb 4096 \
-                --output-resolution 5 \
-                --nthreads 2 -vv
-
 
       - store_artifacts:
          path: /tmp/DSCSDSI
@@ -509,11 +444,10 @@ jobs:
       - save_cache:
          key: DSDTI-anat-v1-{{ .Branch }}-{{ epoch }}
          paths:
-            # - /tmp/DSDTI/work
             - /tmp/DSDTI/derivatives/qsiprep
 
       - run:
-          name: Run full qsiprep (eddy) on DSDTI
+          name: Run full qsiprep/recon (eddy) on DSDTI
           no_output_timeout: 2h
           command: |
             sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSDTI/derivatives && \
@@ -530,35 +464,10 @@ jobs:
                 --force-spatial-normalization \
                 --output-space T1w \
                 --hmc_model eddy \
+                --recon-spec dsi_studio_gqi \
                 --eddy_config /tmp/data/eddy_config.json \
                 --output-resolution 5 \
                 --nthreads 2 -vv
-
-      - run:
-          name: Run mrtrix recon workflow
-          no_output_timeout: 2h
-          command: |
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSDTI/derivatives && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/DSDTI/derivatives
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSDTI/work && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/DSDTI/work
-            qsiprep-docker -i pennbbl/qsiprep:latest \
-                -e qsiprep_DEV 1 -u $(id -u) \
-                --config $PWD/nipype.cfg -w /tmp/DSDTI/work \
-                --bids-dir /tmp/data/DSDTI --mem_mb 4096 \
-                --recon-input /tmp/DSDTI/derivatives/qsiprep \
-                --output-dir /tmp/DSDTI/derivatives \
-                --recon-spec /tmp/data/mrtrix_spec.json \
-                --recon-only \
-                --analysis-level participant \
-                --output-resolution 5 \
-                --nthreads 2 -vv
-      # - run:
-      #     name: Move intermediate results for second run
-      #     command: |
-      #       mkdir -p /tmp/DSDTI/derivatives_partial
-      #       sudo cp -a /tmp/DSDTI/work /tmp/DSDTI/work_partial
-
 
       - store_artifacts:
           path: /tmp/DSDTI
@@ -625,14 +534,193 @@ jobs:
                 --intramodal-template-transform BSplineSyN \
                 --intramodal-template-iters 2 \
                 --nthreads 2 -vv
-      # - run:
-      #     name: Move intermediate results for second run
-      #     command: |
-      #       mkdir -p /tmp/DSDTI/derivatives_partial
-      #       sudo cp -a /tmp/DSDTI/work /tmp/DSDTI/work_partial
 
       - store_artifacts:
           path: /tmp/twoses
+
+  ReconTests:
+    machine:
+      image: ubuntu-1604:201903-01
+    working_directory: /tmp
+    environment:
+      - FS_LICENSE: /tmp/fslicense/license.txt
+    steps:
+      - checkout:
+          path: /home/circleci/src/qsiprep
+      - run:
+          name: Check whether build should be skipped
+          command: |
+            cd /home/circleci/src/qsiprep
+            if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?DIPY_3dSHORE_Recon\]' )" != "" ]]; then
+              echo "Skipping DIPY_3dSHORE_Recon build"
+              circleci step halt
+            fi
+      - attach_workspace:
+          at: /tmp
+
+      - restore_cache:
+          keys:
+            - docker-v5-{{ .Branch }}-{{ .Revision }}
+      - run:
+          name: Setting up test
+          command: |
+            mkdir -p /tmp/multishell_output/derivatives && sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/derivatives && sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/derivatives
+            pip install future numpy==1.16.4
+            pip install --upgrade /tmp/src/qsiprep/wrapper/
+
+      - run:
+          name: Load Docker image layer cache
+          no_output_timeout: 30m
+          command: |
+            docker info
+            set +o pipefail
+            if [ -f /tmp/cache/docker.tar.gz ]; then
+              sudo apt update && sudo apt -y install pigz
+              pigz -d --stdout /tmp/cache/docker.tar.gz | docker load
+              docker images
+            fi
+
+      - run:
+          name: Run mrtrix_dhollander_no5tt
+          no_output_timeout: 2h
+          command: |
+            mkdir -p /tmp/multishell_output/work /tmp/multishell_output/derivatives/mrtrix_dhollander_no5tt
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/mrtrix_dhollander_no5tt && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/mrtrix_dhollander_no5tt
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/work && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/work
+            qsiprep-docker -i pennbbl/qsiprep:latest \
+                -e qsiprep_DEV 1 -u $(id -u) \
+                --config $PWD/nipype.cfg -w /tmp/multishell_output/work \
+                --bids-dir /tmp/data/multishell_output_nofmap \
+                --recon-input /tmp/multishell_output/derivatives/qsiprep \
+                --output-dir /tmp/multishell_output/derivatives/mrtrix_dhollander_no5tt \
+                --sloppy \
+                --analysis-level participant \
+                --recon-spec mrtrix_dhollander_no5tt \
+                --recon-only \
+                --mem_mb 4096 \
+                --output-resolution 5 \
+                --nthreads 2 -vv
+
+      - run:
+          name: Run mrtrix_dhollander
+          no_output_timeout: 2h
+          command: |
+            mkdir -p /tmp/multishell_output/work /tmp/multishell_output/derivatives/mrtrix_dhollander
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/mrtrix_dhollander && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/mrtrix_dhollander
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/work && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/work
+            qsiprep-docker -i pennbbl/qsiprep:latest \
+                -e qsiprep_DEV 1 -u $(id -u) \
+                --config $PWD/nipype.cfg -w /tmp/multishell_output/work \
+                --bids-dir /tmp/data/multishell_output_nofmap \
+                --recon-input /tmp/multishell_output/derivatives/qsiprep \
+                --output-dir /tmp/multishell_output/derivatives/mrtrix_dhollander \
+                --sloppy \
+                --analysis-level participant \
+                --recon-spec mrtrix_dhollander \
+                --recon-only \
+                --mem_mb 4096 \
+                --output-resolution 5 \
+                --nthreads 2 -vv
+
+      - run:
+          name: Run mrtrix_msmt_csd
+          no_output_timeout: 2h
+          command: |
+            mkdir -p /tmp/multishell_output/work /tmp/multishell_output/derivatives/mrtrix_msmt_csd
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/mrtrix_msmt_csd && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/mrtrix_msmt_csd
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/work && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/work
+            qsiprep-docker -i pennbbl/qsiprep:latest \
+                -e qsiprep_DEV 1 -u $(id -u) \
+                --config $PWD/nipype.cfg -w /tmp/multishell_output/work \
+                --bids-dir /tmp/data/multishell_output_nofmap \
+                --recon-input /tmp/multishell_output/derivatives/qsiprep \
+                --output-dir /tmp/multishell_output/derivatives/mrtrix_msmt_csd \
+                --sloppy \
+                --analysis-level participant \
+                --recon-spec mrtrix_msmt_csd \
+                --recon-only \
+                --mem_mb 4096 \
+                --output-resolution 5 \
+                --nthreads 2 -vv
+
+      - run:
+          name: Run mrtrix_tckglobal
+          no_output_timeout: 2h
+          command: |
+            mkdir -p /tmp/multishell_output/work /tmp/multishell_output/derivatives/mrtrix_tckglobal
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/mrtrix_tckglobal && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/mrtrix_tckglobal
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/work && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/work
+            qsiprep-docker -i pennbbl/qsiprep:latest \
+                -e qsiprep_DEV 1 -u $(id -u) \
+                --config $PWD/nipype.cfg -w /tmp/multishell_output/work \
+                --bids-dir /tmp/data/multishell_output_nofmap \
+                --recon-input /tmp/multishell_output/derivatives/qsiprep \
+                --output-dir /tmp/multishell_output/derivatives/mrtrix_tckglobal \
+                --sloppy \
+                --analysis-level participant \
+                --recon-spec mrtrix_tckglobal \
+                --recon-only \
+                --mem_mb 4096 \
+                --output-resolution 5 \
+                --nthreads 2 -vv
+
+      - run:
+          name: Run dsi_studio_gqi
+          no_output_timeout: 2h
+          command: |
+            mkdir -p /tmp/multishell_output/work /tmp/multishell_output/derivatives/dsi_studio_gqi
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/dsi_studio_gqi && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/dsi_studio_gqi
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/work && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/work
+            qsiprep-docker -i pennbbl/qsiprep:latest \
+                -e qsiprep_DEV 1 -u $(id -u) \
+                --config $PWD/nipype.cfg -w /tmp/multishell_output/work \
+                --bids-dir /tmp/data/multishell_output_nofmap \
+                --recon-input /tmp/multishell_output/derivatives/qsiprep \
+                --output-dir /tmp/multishell_output/derivatives/dsi_studio_gqi \
+                --sloppy \
+                --analysis-level participant \
+                --recon-spec dsi_studio_gqi \
+                --recon-only \
+                --mem_mb 4096 \
+                --output-resolution 5 \
+                --nthreads 2 -vv
+
+      - run:
+          name: Run dipy_mapmri
+          no_output_timeout: 2h
+          command: |
+            mkdir -p /tmp/multishell_output/work /tmp/multishell_output/derivatives/dipy_mapmri
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/dipy_mapmri && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/dipy_mapmri
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/work && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/work
+            qsiprep-docker -i pennbbl/qsiprep:latest \
+                -e qsiprep_DEV 1 -u $(id -u) \
+                --config $PWD/nipype.cfg -w /tmp/multishell_output/work \
+                --bids-dir /tmp/data/multishell_output_nofmap \
+                --recon-input /tmp/multishell_output/derivatives/qsiprep \
+                --output-dir /tmp/multishell_output/derivatives/dipy_mapmri \
+                --sloppy \
+                --analysis-level participant \
+                --recon-spec dipy_mapmri \
+                --recon-only \
+                --mem_mb 4096 \
+                --output-resolution 5 \
+                --nthreads 2 -vv
+
+
+      - store_artifacts:
+         path: /tmp/multishell_output/derivatives
 
   deploy_docker_patches:
     machine:
@@ -900,11 +988,10 @@ workflows:
             tags:
               only: /.*/
 
-      - DIPY_3dSHORE_Recon:
+      - ReconTests:
           requires:
             - get_data
             - build
-            - DSCSDSI
           filters:
             branches:
               ignore:
