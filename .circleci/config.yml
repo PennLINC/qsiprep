@@ -1014,7 +1014,7 @@ workflows:
             - DSDTI
             - DSCSDSI
             - IntramodalTemplate
-            - DIPY_3dSHORE_Recon
+            - ReconTests
           filters:
             branches:
               only: master
