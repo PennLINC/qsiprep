@@ -244,8 +244,6 @@ jobs:
             mkdir -p /tmp/DSCSDSI/derivatives && sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSCSDSI/derivatives && sudo setfacl -m group:$(id -gn):rwx /tmp/DSCSDSI/derivatives
             pip install future numpy==1.16.4
             pip install --upgrade /tmp/src/qsiprep/wrapper/
-            cp /tmp/src/qsiprep/.circleci/3dshore_dsistudio_mrtrix.json /tmp/data/csdsi_spec.json
-            sudo chmod a+rw /tmp/data/csdsi_spec.json
       - run:
           name: Load Docker image layer cache
           no_output_timeout: 30m
@@ -411,7 +409,6 @@ jobs:
             mkdir -p /tmp/DSDTI/derivatives && sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSDTI/derivatives && sudo setfacl -m group:$(id -gn):rwx /tmp/DSDTI/derivatives
             pip install future numpy==1.16.4
             pip install --upgrade /tmp/src/qsiprep/wrapper/
-            sudo chmod a+rw /tmp/data/mrtrix_spec.json
       - run:
           name: Load Docker image layer cache
           no_output_timeout: 30m
@@ -591,8 +588,8 @@ jobs:
             qsiprep-docker -i pennbbl/qsiprep:latest \
                 -e qsiprep_DEV 1 -u $(id -u) \
                 --config $PWD/nipype.cfg -w /tmp/multishell_output/work \
-                --bids-dir /tmp/data/multishell_output_nofmap \
-                --recon-input /tmp/multishell_output/derivatives/qsiprep \
+                --bids-dir /tmp/data/multishell_output/qsiprep \
+                --recon-input /tmp/data/multishell_output/qsiprep \
                 --output-dir /tmp/multishell_output/derivatives/mrtrix_dhollander_no5tt \
                 --sloppy \
                 --analysis-level participant \
@@ -614,8 +611,8 @@ jobs:
             qsiprep-docker -i pennbbl/qsiprep:latest \
                 -e qsiprep_DEV 1 -u $(id -u) \
                 --config $PWD/nipype.cfg -w /tmp/multishell_output/work \
-                --bids-dir /tmp/data/multishell_output_nofmap \
-                --recon-input /tmp/multishell_output/derivatives/qsiprep \
+                --bids-dir /tmp/data/multishell_output/qsiprep \
+                --recon-input /tmp/data/multishell_output/qsiprep \
                 --output-dir /tmp/multishell_output/derivatives/mrtrix_dhollander \
                 --sloppy \
                 --analysis-level participant \
@@ -637,8 +634,8 @@ jobs:
             qsiprep-docker -i pennbbl/qsiprep:latest \
                 -e qsiprep_DEV 1 -u $(id -u) \
                 --config $PWD/nipype.cfg -w /tmp/multishell_output/work \
-                --bids-dir /tmp/data/multishell_output_nofmap \
-                --recon-input /tmp/multishell_output/derivatives/qsiprep \
+                --bids-dir /tmp/data/multishell_output/qsiprep \
+                --recon-input /tmp/data/multishell_output/qsiprep \
                 --output-dir /tmp/multishell_output/derivatives/mrtrix_msmt_csd \
                 --sloppy \
                 --analysis-level participant \
@@ -660,8 +657,8 @@ jobs:
             qsiprep-docker -i pennbbl/qsiprep:latest \
                 -e qsiprep_DEV 1 -u $(id -u) \
                 --config $PWD/nipype.cfg -w /tmp/multishell_output/work \
-                --bids-dir /tmp/data/multishell_output_nofmap \
-                --recon-input /tmp/multishell_output/derivatives/qsiprep \
+                --bids-dir /tmp/data/multishell_output/qsiprep \
+                --recon-input /tmp/data/multishell_output/qsiprep \
                 --output-dir /tmp/multishell_output/derivatives/mrtrix_tckglobal \
                 --sloppy \
                 --analysis-level participant \
@@ -683,8 +680,8 @@ jobs:
             qsiprep-docker -i pennbbl/qsiprep:latest \
                 -e qsiprep_DEV 1 -u $(id -u) \
                 --config $PWD/nipype.cfg -w /tmp/multishell_output/work \
-                --bids-dir /tmp/data/multishell_output_nofmap \
-                --recon-input /tmp/multishell_output/derivatives/qsiprep \
+                --bids-dir /tmp/data/multishell_output/qsiprep \
+                --recon-input /tmp/data/multishell_output/qsiprep \
                 --output-dir /tmp/multishell_output/derivatives/dsi_studio_gqi \
                 --sloppy \
                 --analysis-level participant \
@@ -706,8 +703,8 @@ jobs:
             qsiprep-docker -i pennbbl/qsiprep:latest \
                 -e qsiprep_DEV 1 -u $(id -u) \
                 --config $PWD/nipype.cfg -w /tmp/multishell_output/work \
-                --bids-dir /tmp/data/multishell_output_nofmap \
-                --recon-input /tmp/multishell_output/derivatives/qsiprep \
+                --bids-dir /tmp/data/multishell_output/qsiprep \
+                --recon-input /tmp/data/multishell_output/qsiprep \
                 --output-dir /tmp/multishell_output/derivatives/dipy_mapmri \
                 --sloppy \
                 --analysis-level participant \
