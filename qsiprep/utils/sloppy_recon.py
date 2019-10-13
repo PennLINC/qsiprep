@@ -14,8 +14,12 @@ def make_sloppy(spec):
 
         ("MRTrix3", "tractography"): {
             "tckgen": {
-                "select": 1000,
-                "backtrack": False}},
+                "select": 100,
+                "seed": 500,
+                "backtrack": "DELETE",
+                "n_samples": "DELETE",
+                "n_trials": "DELETE",
+                "algorithm": "SD_Stream"}},
 
         ("MRTrix3", "connectivity"): {
             "tck2connectome": {
