@@ -250,7 +250,7 @@ class MAPMRIInputSpec(DipyReconInputSpec):
     positivity_constraint = traits.Bool(False, usedefault=True)
     pos_grid = traits.Int(15, usedefault=True)
     pos_radius = traits.Either(traits.Str('adaptive'), traits.Int(),
-                               usedefault=True)
+                               default='adaptive', usedefault=True)
     anisotropic_scaling = traits.Bool(True, usedefault=True)
     eigenvalue_threshold = traits.Float(1e-04, usedefault=True)
     bval_threshold = traits.Float()
