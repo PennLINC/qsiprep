@@ -411,7 +411,6 @@ jobs:
             mkdir -p /tmp/DSDTI/derivatives && sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSDTI/derivatives && sudo setfacl -m group:$(id -gn):rwx /tmp/DSDTI/derivatives
             pip install future numpy==1.16.4
             pip install --upgrade /tmp/src/qsiprep/wrapper/
-            cp /tmp/src/qsiprep/.circleci/mrtrix_msmt_csd_test.json /tmp/data/mrtrix_spec.json
             sudo chmod a+rw /tmp/data/mrtrix_spec.json
       - run:
           name: Load Docker image layer cache
