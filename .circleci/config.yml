@@ -332,7 +332,7 @@ jobs:
           at: /tmp
       - restore_cache:
           keys:
-            - docker-v5-{{ .Branch }}-{{ .Revision }}
+            - docker-v6-{{ .Branch }}-{{ .Revision }}
 
       - run:
           name: Setting up test
@@ -560,7 +560,7 @@ jobs:
 
       - restore_cache:
           keys:
-            - docker-v5-{{ .Branch }}-{{ .Revision }}
+            - docker-v6-{{ .Branch }}-{{ .Revision }}
       - run:
           name: Setting up test
           command: |
