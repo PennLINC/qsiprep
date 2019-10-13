@@ -445,7 +445,7 @@ def main():
             if os.getenv('DOCKER_VERSION_8395080871'):
                 exec_env = 'qsiprep-docker'
     # Validate inputs
-    if not opts.skip_bids_validation:
+    if not opts.recon_only or not opts.skip_bids_validation:
         print("Making sure the input data is BIDS compliant (warnings can be ignored in most "
               "cases).")
         validate_input_dir(exec_env, opts.bids_dir, opts.participant_label)

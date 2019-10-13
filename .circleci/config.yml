@@ -596,7 +596,6 @@ jobs:
                 --recon-spec mrtrix_dhollander_no5tt \
                 --recon-only \
                 --mem_mb 4096 \
-                --output-resolution 5 \
                 --nthreads 2 -vv
 
       - run:
@@ -619,7 +618,6 @@ jobs:
                 --recon-spec mrtrix_dhollander \
                 --recon-only \
                 --mem_mb 4096 \
-                --output-resolution 5 \
                 --nthreads 2 -vv
 
       - run:
@@ -642,7 +640,6 @@ jobs:
                 --recon-spec mrtrix_msmt_csd \
                 --recon-only \
                 --mem_mb 4096 \
-                --output-resolution 5 \
                 --nthreads 2 -vv
 
       - run:
@@ -665,7 +662,6 @@ jobs:
                 --recon-spec mrtrix_tckglobal \
                 --recon-only \
                 --mem_mb 4096 \
-                --output-resolution 5 \
                 --nthreads 2 -vv
 
       - run:
@@ -688,7 +684,6 @@ jobs:
                 --recon-spec dsi_studio_gqi \
                 --recon-only \
                 --mem_mb 4096 \
-                --output-resolution 5 \
                 --nthreads 2 -vv
 
       - run:
@@ -711,7 +706,6 @@ jobs:
                 --recon-spec dipy_mapmri \
                 --recon-only \
                 --mem_mb 4096 \
-                --output-resolution 5 \
                 --nthreads 2 -vv
 
 
