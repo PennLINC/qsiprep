@@ -249,7 +249,7 @@ def get_parser():
     g_wrap.add_argument('--recon-spec', '--recon_spec',
                         required=False,
                         action='store',
-                        type=os.path.abspath)
+                        type=str)
     g_wrap.add_argument('--eddy-config', '--eddy_config',
                         required=False,
                         action='store',

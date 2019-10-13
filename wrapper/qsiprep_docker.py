@@ -272,7 +272,7 @@ def get_parser():
     g_wrap.add_argument('--recon-spec', '--recon_spec',
                         required=False,
                         action='store',
-                        type=os.path.abspath)
+                        type=str)
 
     # Developer patch/shell options
     g_dev = parser.add_argument_group(
