@@ -6,7 +6,7 @@ Using qsiprep within a singularity container (qsiprep-<version>.simg)
 To run qsiprep with singularity, a singularity image must be built (see Installation).
 This is the preferred method for HPCs. For example ::
 
-  singularity run --cleanenv -B /data/:/home/$user/data qsiprep-<version>.simg 
+  singularity run --cleanenv -B /data/:/home/$user/data qsiprep-<version>.simg
 
 Please report any feedback to our GitHub repository
 (https://github.com/pennbbl/qsiprep) and do not
@@ -249,7 +249,7 @@ def get_parser():
     g_wrap.add_argument('--recon-spec', '--recon_spec',
                         required=False,
                         action='store',
-                        type=os.path.abspath)
+                        type=str)
     g_wrap.add_argument('--eddy-config', '--eddy_config',
                         required=False,
                         action='store',
@@ -374,10 +374,13 @@ def main():
         command.extend(['-B', ':'.join((opts.recon_input, '/sngl/qsiprep-output'))])
         main_args.extend(['--recon-input', '/sngl/qsiprep-output'])
     if opts.recon_spec:
-        spec_dir, spec_fname = op.split(opts.recon_spec)
-        mounted_spec = "/sngl/spec/" + spec_fname
-        command.extend(['-B', ':'.join((spec_dir, '/sngl/spec'))])
-        main_args.extend(['--recon-spec', mounted_spec])
+        if os.path.exists(opts.recon_spec):
+            spec_dir, spec_fname = op.split(opts.recon_spec)
+            mounted_spec = "/sngl/spec/" + spec_fname
+            command.extend(['-B', ':'.join((spec_dir, '/sngl/spec'))])
+            main_args.extend(['--recon-spec', mounted_spec])
+        else:
+            main_args.extend(['--recon-spec', opts.recon_spec])
     if opts.eddy_config:
         config_dir, config_fname = op.split(opts.eddy_config)
         mounted_config = "/sngl/eddy/" + config_fname

@@ -186,3 +186,19 @@ mkdir -p ${WORKDIR}/DSCSDSI_BUDS/work ${WORKDIR}/DSCSDSI_BUDS/derivatives
       --output-resolution 5 \
       --fs-license-file $FREESURFER_HOME/license.txt \
       --nthreads 2 -vv
+
+
+# name: Run mrtrix on downsampled abcd
+# command: |
+  qsiprep -w /Users/mcieslak/Desktop/multishell_output/DSCSDSI/work \
+      --bids-dir /Users/mcieslak/Desktop/multishell_output/qsiprep \
+      --recon-input /Users/mcieslak/Desktop/multishell_output/qsiprep \
+      --output-dir /Users/mcieslak/Desktop/multishell_output/multishell_output/derivatives \
+      --analysis-level participant \
+      --recon-spec mrtrix_msmt_csd \
+      --sloppy \
+      --recon-only \
+      --mem_mb 4096 \
+      --output-resolution 5 \
+      --fs-license-file $FREESURFER_HOME/license.txt \
+      --nthreads 2 -vv

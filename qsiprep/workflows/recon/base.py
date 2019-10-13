@@ -23,6 +23,7 @@ from nipype.interfaces import utility as niu
 from nipype.utils.filemanip import split_filename
 from ...engine import Workflow
 from ...__about__ import __version__
+from ...utils.sloppy_recon import make_sloppy
 
 import logging
 import json
@@ -36,7 +37,7 @@ LOGGER = logging.getLogger('nipype.workflow')
 
 
 def init_qsirecon_wf(subject_list, run_uuid, work_dir, output_dir, recon_input,
-                     recon_spec, low_mem, omp_nthreads, bids_dir, name="qsirecon_wf"):
+                     recon_spec, low_mem, omp_nthreads, bids_dir, sloppy, name="qsirecon_wf"):
     """
     This workflow organizes the execution of qsiprep, with a sub-workflow for
     each subject.
@@ -76,6 +77,8 @@ def init_qsirecon_wf(subject_list, run_uuid, work_dir, output_dir, recon_input,
             Path to a JSON file that specifies how to run reconstruction
         low_mem : bool
             Write uncompressed .nii files in some cases to reduce memory usage
+        sloppy : bool
+            If True, replace reconstruction options with fast but bad options.
     """
     qsiprep_wf = Workflow(name=name)
     qsiprep_wf.base_dir = work_dir
@@ -91,7 +94,8 @@ def init_qsirecon_wf(subject_list, run_uuid, work_dir, output_dir, recon_input,
             output_dir=output_dir,
             bids_dir=bids_dir,
             omp_nthreads=omp_nthreads,
-            low_mem=low_mem
+            low_mem=low_mem,
+            sloppy=sloppy
             )
 
         single_subject_wf.config['execution']['crashdump_dir'] = (os.path.join(
@@ -106,7 +110,7 @@ def init_qsirecon_wf(subject_list, run_uuid, work_dir, output_dir, recon_input,
 
 def init_single_subject_wf(
         subject_id, name, reportlets_dir, output_dir, bids_dir,
-        low_mem, omp_nthreads, recon_input, recon_spec):
+        low_mem, omp_nthreads, recon_input, recon_spec, sloppy):
     """
     This workflow organizes the reconstruction pipeline for a single subject.
     Reconstruction is performed using a separate workflow for each dwi series.
@@ -131,6 +135,8 @@ def init_single_subject_wf(
             Root directory of the output from qsiprep
         recon_spec : str
             Path to a JSON file that specifies how to run reconstruction
+        sloppy : bool
+            Use bad parameters for reconstruction to make the workflow faster.
     """
     if name in ('single_subject_wf', 'single_subject_test_recon_wf'):
         # a fake spec
@@ -155,7 +161,7 @@ def init_single_subject_wf(
                     "Unable to find subject directory in %s or %s" % (
                         recon_input, qp_recon_input))
 
-        spec = _load_recon_spec(recon_spec)
+        spec = _load_recon_spec(recon_spec, sloppy=sloppy)
         space = spec['space']
         layout = BIDSLayout(recon_input, validate=False, absolute_paths=True)
         # Get all the output files that are in this space
@@ -187,7 +193,7 @@ def init_single_subject_wf(
     return workflow
 
 
-def _load_recon_spec(spec_name):
+def _load_recon_spec(spec_name, sloppy=False):
     prepackaged_dir = pkgrf("qsiprep", "data/pipelines")
     prepackaged = [op.split(fname)[1][:-5] for fname in glob(prepackaged_dir+"/*.json")]
     if op.exists(spec_name):
@@ -201,4 +207,7 @@ def _load_recon_spec(spec_name):
             spec = json.load(f)
         except Exception:
             raise Exception("Unable to read JSON spec. Check the syntax.")
+    if sloppy:
+        LOGGER.warning("Forcing reconstruction to use unrealistic parameters")
+        spec = make_sloppy(spec)
     return spec
