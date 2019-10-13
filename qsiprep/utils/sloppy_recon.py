@@ -42,7 +42,7 @@ def make_sloppy(spec):
             node['parameters'] = sloppy_params
             sloppy_nodes.append(node)
     sloppy_spec['nodes'] = sloppy_nodes
-    return spec
+    return sloppy_spec
 
 
 def update_params(node_params, params_to_update, elem_name=''):
