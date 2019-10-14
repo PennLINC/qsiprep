@@ -19,14 +19,16 @@ About
 ``qsiprep`` configures pipelines for processing diffusion-weighted MRI (dMRI) data.
 The main features of this software are
 
-  1. A novel :ref:`preprocessing_def` pipeline for non-DTI q-space imaging sequences
-  2. A BIDS-app approach to preprocessing with ``TOPUP`` and ``eddy`` in a larger workflow
-  3. A system for building a :ref:`reconstruction_def` pipeline that includes algorithms
+  1. A BIDS-app approach to preprocessing nearly all kinds of modern diffusion MRI data.
+  2. Automatically generated preprocessing pipelines that correctly group, distortion correct,
+     motion correct, denoise, coregister and resample your scans, producing visual reports and
+     QC metrics.
+  3. A system for running state-of-the-art reconstruction pipelines that include algorithms
      from Dipy_, MRTrix_, `DSI Studio`_  and others.
+  4. A novel motion correction algorithm that works on DSI and random q-space sampling schemes
 
 .. figure:: _static/qsiprep_workflow.svg
    :scale: 75%
-
 
 
 .. _preprocessing_def:
@@ -34,12 +36,10 @@ The main features of this software are
 Preprocessing
 ~~~~~~~~~~~~~~~
 
-The preprocessing pipelines are designed to perform preprocessing and reconstruction of
-q-space images. As of version 0.4 single shell sequences can be processed with FSL tools
-if you use the ``--hmc-model eddy`` flag and the ``--eddy-config /path/to/config.json``
-options. The preprocessing workflow performs
-head motion correction, susceptibility distortion correction, MP-PCA denoising,
-coregistration to T1w images, spatial normalization using ANTs_ and tissue segmentation.
+The preprocessing pipelines are built based on the available BIDS inputs, ensuring that fieldmaps
+are handled correctly. The preprocessing workflow performs head motion correction, susceptibility
+distortion correction, MP-PCA denoising, coregistration to T1w images, spatial normalization
+using ANTs_ and tissue segmentation.
 
 
 .. _reconstruction_def:
@@ -47,7 +47,7 @@ coregistration to T1w images, spatial normalization using ANTs_ and tissue segme
 Reconstruction
 ~~~~~~~~~~~~~~~~
 
-The outputs from these preprocessing pipelines can be reconstructed in many other
+The outputs from the :ref:`preprocessing_def` pipelines can be reconstructed in many other
 software packages. We provide a curated set of :ref:`recon_workflows` in ``qsiprep``
 that can run ODF/FOD reconstruction, tractography, Fixel estimation and regional
 connectivity.
