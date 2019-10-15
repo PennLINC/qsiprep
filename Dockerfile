@@ -247,7 +247,8 @@ RUN bash -c \
     && cd  /atlas \
     && wget -nv https://upenn.box.com/shared/static/8k17yt2rfeqm3emzol5sa0j9fh3dhs0i.xz \
     && tar xvfJm 8k17yt2rfeqm3emzol5sa0j9fh3dhs0i.xz \
-    && rm 8k17yt2rfeqm3emzol5sa0j9fh3dhs0i.xz'
+    && rm 8k17yt2rfeqm3emzol5sa0j9fh3dhs0i.xz \
+    && echo 1'
 
 
 # Precaching atlases
