@@ -236,13 +236,22 @@ The ODFs are saved in DSI Studio format and tractography is run identically to t
 
 This uses the BrainSuite 3dSHORE basis in a Dipy reconstruction. Much like :ref:`dipy_mapmri`,
 a slew of anisotropy scalars are estimated. Here the :ref:`dsi_studio_gqi` fiber tracking is
-again run on the
+again run on the 3dSHORE-estimated ODFs.
 
 .. _csdsi_3dshore:
 
 ``csdsi_3dshore``
 ^^^^^^^^^^^^^^^^^
 
+**[EXPERIMENTAL]** This pipeline is for DSI or compressed-sensing DSI. The first step is a
+L2-regularized 3dSHORE reconstruction of the ensemble average propagator in each voxel. These EAPs
+are then used for two purposes
+
+ 1. To calculate ODFs, which are then sent to DSI Studio for tractography
+ 2. To estimate signal for a multishell (specifically HCP) sampling scheme, which is run
+    through the :ref:`mrtrix_msmt_csd` pipeline
+
+All outputs, including the imputed HCP sequence are saved in the outputs directory.
 
 .. _custom_reconstruction:
 
