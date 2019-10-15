@@ -265,6 +265,9 @@ def get_parser():
     g_dev.add_argument('-p', '--patch-nipype', metavar='PATH',
                        type=os.path.abspath,
                        help='working nipype repository')
+    g_dev.add_argument('-a', '--custom_atlases',
+                       type=os.path.abspath,
+                       help='custom atlas directory')
     g_dev.add_argument('--shell', action='store_true',
                        help='open shell in image instead of running qsiprep')
     g_dev.add_argument('--config', metavar='PATH', action='store',
@@ -390,6 +393,8 @@ def main():
         mkdir(opts.output_dir)
         command.extend(['-B', ':'.join((opts.output_dir, '/sngl/out'))])
         main_args.extend(['--output-dir', '/sngl/out'])
+    if opts.custom_atlases:
+        command.extend(['-B', ':'.join((opts.custom_atlases, '/atlas/qsirecon_atlases'))])
 
     main_args.extend(['--analysis-level', opts.analysis_level])
 

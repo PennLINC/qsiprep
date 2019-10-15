@@ -4,14 +4,14 @@
 
 
 Reconstruction
-================
+==============
 
 You can send the outputs from ``qsiprep`` to other software packages
 by specifying a JSON file with the ``--recon-spec`` option. Here we use
 "reconstruction" to mean reconstructing ODFs/FODs/EAPs and connectivity matrices
 from the preprocessed diffusion data.
 
-The easiest way to get started is to use one of the pre-packaged workflows.
+The easiest way to get started is to use one of the :ref:`preconfigured_workflows`.
 Instead of specifying a path to a file you can choose from the following:
 
 +-------------------------------+--------------+-------------+---------+-----------------+----------------+
@@ -37,8 +37,8 @@ Instead of specifying a path to a file you can choose from the following:
 \* Not recommended
 
 These workflows each take considerable processing time, because they output as many versions of
-connectivity as possible. All included atlases and all possible weightings are included. Each of
-these corresponds to a JSON file that can be found in QSIprep's
+connectivity as possible. All :ref:`connectivity_atlases`  and all possible weightings are
+included. Each workflow corresponds to a JSON file that can be found in QSIprep's
 `github <https://github.com/PennBBL/qsiprep/tree/master/qsiprep/data/pipelines>`_. For extra
 information about how to customize these, see :ref:`custom_reconstruction`.
 
@@ -65,18 +65,80 @@ available workflows and their inputs and outputs.
 .. _connectivity:
 
 Reconstruction Outputs: Connectivity matrices
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Instead of offering a bewildering number of options for constructing connectivity matrices,
 ``qsiprep`` will construct as many connectivity matrices as it can given the reconstruction
-methods. It is **highly** recommended that you pick a weighting method before you run
+methods. It is **highly** recommended that you pick a weighting scheme before you run
 these pipelines and only look at those numbers. If you look at more than one weighting method
-be sure to adjust your statistics for these additional comparisons.
+be sure to adjust your statistics for the additional comparisons.
+
+.. _connectivity_atlases:
+
+Atlases
+^^^^^^^
+
+The following atlases are included in ``qsiprep`` and are used by default in the
+:ref:`preconfigured_workflows`. If you use one of them please be sure to cite
+the relevant publication.
+
+ * ``schaefer100x7``, ``schaefer100x17``, ``schaefer200x7``, ``schaefer200x17``,
+   ``schaefer400x7``, ``schaefer400x17``: [Schaefer2017]_, [Yeo2011]_
+ * ``brainnetome246``: [Fan2016]_
+ * ``aicha384``: [Joliot2015]_
+ * ``gordon333``: [Gordon2014]_
+ * ``aal116``: [TzourioMazoyer2002]_
+ * ``power264``: [Power2011]_
+
+.. _custom_atlases:
+
+Using custom atlases
+^^^^^^^^^^^^^^^^^^^^
+
+It's possible to use your own atlases provided you can match the format ``qsiprep`` uses to
+read atlases. The ``qsiprep`` atlas set can be downloaded directly from
+`box  <https://upenn.box.com/shared/static/8k17yt2rfeqm3emzol5sa0j9fh3dhs0i.xz>`_.
+
+In this directory there must exist a JSON file called ``atlas_config.json`` containing an
+entry for each atlas you would like included. The format is::
+
+  {
+    "my_custom_atlas": {
+      "file": "file_in_this_directory.nii.gz",
+      "node_names": ["Region1_L", "Region1_R" ... "RegionN_R"],
+      "node_ids": [1, 2, ..., N]
+    }
+    ...
+  }
+
+Where ``"node_names"`` are the text names of the regions in ``"my_custom_atlas"`` and
+``"node_ids"`` are the numbers in the nifti file that correspond to each region. When
+:ref:`custom_reconstruction` you can then inclued ``"my_custom_atlas"`` in the ``"atlases":[]``
+section.
+
+The directory containing ``atlas_config.json`` and the atlas nifti files should be mounted in
+the container at ``/atlas/qsirecon_atlases``. If using ``qsiprep-docker`` or
+``qsiprep-singularity`` this can be done with ``--custom-atlases /path/to/my/atlases`` or
+if you're running on your own system (not recommended) you can set the environment variable
+``QSIRECON_ATLAS=/path/to/my/atlases``.
+
+The nifti images should be registered to the
+`MNI152NLin2009cAsym <https://github.com/PennBBL/qsiprep/blob/master/qsiprep/data/mni_1mm_t1w_lps.nii.gz>`_
+included in ``qsiprep``.
+It is essential that your images are in the LPS+ orientation and have the sform zeroed-out
+in the header. **Be sure to check for alignment and orientation** in your outputs.
+
+
+
+.. _preconfigured_workflows:
+
+Pre-configured recon_workflows
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. _mrtrix_msmt_csd:
 
 ``mrtrix_msmt_csd``
-~~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^
 
 This workflow explicitly uses the T1w-based segmentation to estimate response functions for
 white matter, gray matter and CSF. Tissue-specific response functions are estimated using the
@@ -96,7 +158,7 @@ GM/WM interface, and backtracking. Weights for each streamline were calculated u
 .. _mrtrix_dhollander:
 
 ``mrtrix_dhollander``
-~~~~~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^^^
 
 Unlike :ref:`mrtrix_msmt_csd`, this workflow uses an unsupervised learning approach to
 estimate response functions for white matter, gray matter and CSF [Dhollander2016]_, [Dhollander2018]_.
@@ -120,7 +182,7 @@ distortion-correction data is :ref:`mrtrix_dhollander_no5tt`.
 .. _mrtrix_dhollander_no5tt:
 
 ``mrtrix_dhollander_no5tt``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 This pipeline is nearly identical to :ref:`mrtrix_dhollander` except that Anatomically Constrained
 Tractography is disabled in tckgen_. Not using any distortion correction is a bad idea, but
@@ -131,7 +193,7 @@ contents at your own peril.
 .. _mrtrix_tckglobal:
 
 ``mrtrix_tckglobal``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^^
 
 MRtrix has a multi-shell multi-tissue version of Global tractography [Christiaens2015]_. This
 pipeline uses segmentation-based multi-tissue response function estimation
@@ -142,7 +204,7 @@ The ultimate number of streamlines is dependent on the input data.
 .. _dsi_studio_gqi:
 
 ``dsi_studio_gqi``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^
 
 Here the standard GQI plus deterministic tractography pipeline is used [Yeh2013]_.  GQI works on
 almost any imaginable sampling scheme because DSI Studio will internally interpolate the q-space
@@ -158,7 +220,7 @@ Additionally, a number of anisotropy scalar images are produced such as QA, GFA 
 .. _dipy_mapmri:
 
 ``dipy_mapmri``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^
 
 The MAPMRI method is used to estimate EAPs from which ODFs are calculated analytically. This
 method produces scalars like RTOP, RTAP, QIV, MSD, etc.
@@ -170,16 +232,16 @@ The ODFs are saved in DSI Studio format and tractography is run identically to t
 .. _dipy_3dshore:
 
 ``dipy_3dshore``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^
 
 This uses the BrainSuite 3dSHORE basis in a Dipy reconstruction. Much like :ref:`dipy_mapmri`,
 a slew of anisotropy scalars are estimated. Here the :ref:`dsi_studio_gqi` fiber tracking is
-again run on the 
+again run on the
 
 .. _csdsi_3dshore:
 
 ``csdsi_3dshore``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^
 
 
 .. _custom_reconstruction:

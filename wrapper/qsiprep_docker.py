@@ -284,6 +284,9 @@ def get_parser():
     g_dev.add_argument('-p', '--patch-nipype', metavar='PATH',
                        type=os.path.abspath,
                        help='working nipype repository')
+    g_dev.add_argument('-a', '--custom_atlases',
+                       type=os.path.abspath,
+                       help='custom atlas directory')
     g_dev.add_argument('--shell', action='store_true',
                        help='open shell in image instead of running qsiprep')
     g_dev.add_argument('--config', metavar='PATH', action='store',
@@ -394,6 +397,8 @@ def main():
     if opts.eddy_config:
         command.extend(['-v', ':'.join((opts.eddy_config, '/sngl/eddy/eddy_config.json', 'ro'))])
         main_args.extend(['--eddy-config', '/sngl/eddy/eddy_config.json'])
+    if opts.custom_atlases:
+        command.extend(['-v', ':'.join((opts.custom_atlases, '/atlas/qsirecon_atlases'))])
     if opts.output_dir:
         command.extend(['-v', ':'.join((opts.output_dir, '/out'))])
         main_args.extend(['--output-dir', '/out'])
