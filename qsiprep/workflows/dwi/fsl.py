@@ -159,7 +159,7 @@ def init_fsl_hmc_wf(scan_groups,
         gather_inputs.inputs.rpe_b0 = rpe_b0
         prepare_rpe_b0 = pe.Node(B0RPEFieldmap(b0_file=rpe_b0), name="prepare_rpe_b0")
 
-        topup = pe.Node(fsl.TOPUP(), name="topup")
+        topup = pe.Node(fsl.TOPUP(out_field="fieldmap_HZ.nii.gz"), name="topup")
         unwarped_mean = pe.Node(afni.TStat(outputtype='NIFTI_GZ'), name='unwarped_mean')
         unwarped_enhance = init_enhance_and_skullstrip_dwi_wf(name='unwarped_enhance')
 
@@ -180,7 +180,7 @@ def init_fsl_hmc_wf(scan_groups,
                 ('outputnode.mask_file', 'in_mask')]),
             (topup, eddy, [
                 ('out_movpar', 'in_topup_movpar'),
-                ('out_fieldcoef', 'in_topup_fieldcoef')])])
+                ('out_field', 'field')])])
     elif fieldmap_type in ('fieldmap', 'phasediff', 'phase', 'syn'):
         outputnode.inputs.sdc_method = fieldmap_type
         b0_enhance = init_enhance_and_skullstrip_dwi_wf(name='b0_enhance')
