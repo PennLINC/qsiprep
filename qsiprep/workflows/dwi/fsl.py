@@ -179,7 +179,6 @@ def init_fsl_hmc_wf(scan_groups,
             (unwarped_enhance, eddy, [
                 ('outputnode.mask_file', 'in_mask')]),
             (topup, eddy, [
-                ('out_movpar', 'in_topup_movpar'),
                 ('out_field', 'field')])])
     elif fieldmap_type in ('fieldmap', 'phasediff', 'phase', 'syn'):
         outputnode.inputs.sdc_method = fieldmap_type
