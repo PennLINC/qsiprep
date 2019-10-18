@@ -11,23 +11,17 @@ import os
 from nipype import logging
 
 from nipype.pipeline import engine as pe
-from nipype.interfaces import afni, mrtrix3, utility as niu
+from nipype.interfaces import afni, utility as niu
 
 from ...interfaces import DerivativesDataSink
 from ...niworkflows.interfaces.registration import SimpleBeforeAfterRPT
-from ...interfaces.reports import DiffusionSummary, GradientPlot
-from ...interfaces.confounds import DMRISummary
+from ...interfaces.reports import GradientPlot
 from ...interfaces.mrtrix import MRTrixGradientTable
 from ...engine import Workflow
 
 # dwi workflows
-from .hmc_sdc import init_qsiprep_hmcsdc_wf
-from .fsl import init_fsl_hmc_wf
-from .pre_hmc import init_dwi_pre_hmc_wf
-from .util import _create_mem_gb, _get_wf_name
-from .registration import init_b0_to_anat_registration_wf
+from .util import _create_mem_gb
 from .resampling import init_dwi_trans_wf
-from .confounds import init_dwi_confs_wf
 from .derivatives import init_dwi_derivatives_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01

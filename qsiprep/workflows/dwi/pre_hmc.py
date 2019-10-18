@@ -14,9 +14,6 @@ from nipype import logging
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
 
-from ...interfaces import DerivativesDataSink
-
-from ...interfaces.reports import DiffusionSummary, GradientPlot
 from ...interfaces.images import SplitDWIs, ConcatRPESplits
 from ...interfaces.gradients import SliceQC
 from ...interfaces.confounds import DMRISummary
@@ -38,6 +35,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
                         preprocess_rpe_series,
                         dwi_denoise_window,
                         denoise_before_combining,
+                        orientation,
                         omp_nthreads,
                         low_mem,
                         name="pre_hmc_wf"):
@@ -67,6 +65,8 @@ def init_dwi_pre_hmc_wf(scan_groups,
             'run ``dwidenoise`` before combining dwis. Requires ``combine_all_dwis``'
         omp_nthreads : int
             Maximum number of threads an individual process may use
+        orientation : str
+            'LPS' or 'LAS'
         low_mem : bool
             Write uncompressed .nii files in some cases to reduce memory usage
 
@@ -95,7 +95,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
     dwi_series_pedir = scan_groups['dwi_series_pedir']
     dwi_series = scan_groups['dwi_series']
 
-    # Special case: Two reverse PE DWI series
+    # Special case: Two reverse PE DWI series are going to get combined for eddy
     if preprocess_rpe_series:
         rpe_series = scan_groups['fieldmap_info']['rpe_series']
         # Merge, denoise, split, hmc on the plus series
@@ -103,6 +103,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
                                    else (dwi_series, rpe_series)
         merge_plus = init_merge_and_denoise_wf(dwi_denoise_window=dwi_denoise_window,
                                                denoise_before_combining=denoise_before_combining,
+                                               orientation=orientation,
                                                name="merge_plus")
         split_plus = pe.Node(SplitDWIs(b0_threshold=b0_threshold), name="split_plus")
         merge_plus.inputs.inputnode.dwi_files = plus_files
@@ -110,6 +111,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
         # Merge, denoise, split, hmc on the minus series
         merge_minus = init_merge_and_denoise_wf(dwi_denoise_window=dwi_denoise_window,
                                                 denoise_before_combining=denoise_before_combining,
+                                                orientation=orientation,
                                                 name="merge_minus")
         split_minus = pe.Node(SplitDWIs(b0_threshold=b0_threshold), name="split_minus")
         merge_minus.inputs.inputnode.dwi_files = minus_files
@@ -155,7 +157,8 @@ def init_dwi_pre_hmc_wf(scan_groups,
 
     merge_dwis = init_merge_and_denoise_wf(
         dwi_denoise_window=dwi_denoise_window,
-        denoise_before_combining=denoise_before_combining)
+        denoise_before_combining=denoise_before_combining,
+        orientation=orientation)
     split_dwis = pe.Node(SplitDWIs(b0_threshold=b0_threshold), name="split_dwis")
     merge_dwis.inputs.inputnode.dwi_files = dwi_series
 

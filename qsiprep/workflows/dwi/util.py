@@ -11,13 +11,9 @@ Utility workflows
 """
 import os
 import nibabel as nb
-from packaging.version import parse as parseversion, Version
-from pkg_resources import resource_filename as pkgr_fn
 
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu, fsl, afni, ants
-from ...niworkflows.data import get_template
-from ...niworkflows.interfaces.ants import AI
 from ...niworkflows.interfaces import SimpleBeforeAfter
 from ...niworkflows.interfaces.fixes import (
     FixHeaderRegistration as Registration,

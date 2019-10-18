@@ -232,7 +232,7 @@ def init_prepare_epi_wf(omp_nthreads, name="prepare_epi_wf"):
 
     return workflow
 
-def init_prepare_dwi_epi_wf(omp_nthreads, name="prepare_epi_wf"):
+def init_prepare_dwi_epi_wf(omp_nthreads, orientation="LPS", name="prepare_epi_wf"):
     """
     This workflow takes in a set of dwi files with with the same phase
     encoding direction and returns a single 3D volume ready to be used in
@@ -249,8 +249,9 @@ def init_prepare_dwi_epi_wf(omp_nthreads, name="prepare_epi_wf"):
     outputnode = pe.Node(niu.IdentityInterface(fields=['out_file']),
                          name='outputnode')
 
-    prepare_b0s = pe.MapNode(B0RPEFieldmap(output_3d_images=True), iterfield='b0_file',
-                             name='prepare_b0s')
+    prepare_b0s = pe.MapNode(
+        B0RPEFieldmap(output_3d_images=True, orientation=orientation),
+        iterfield='b0_file', name='prepare_b0s')
 
     merge = pe.Node(
         StructuralReference(auto_detect_sensitivity=True,
