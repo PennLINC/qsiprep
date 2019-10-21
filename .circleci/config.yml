@@ -177,7 +177,7 @@ jobs:
 
   build_docs:
     docker:
-        - image: python:latest
+        - image: python:3.7.5-stretch
     working_directory: /tmp/src/qsiprep
     environment:
       - FSLOUTPUTTYPE: 'NIFTI'
