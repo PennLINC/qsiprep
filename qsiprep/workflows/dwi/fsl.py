@@ -151,9 +151,12 @@ def init_fsl_hmc_wf(scan_groups,
             ('out_dwi', 'in_file'),
             ('out_bval', 'in_bval'),
             ('out_bvec', 'in_bvec')]),
-        #(gather_inputs, outputnode, [
-        #    ('pre_topup_image', 'pre_sdc_template')]),
-        (eddy, back_to_lps, [('out_corrected', 'dwi_file')]),
+        (gather_inputs, outputnode, [
+            ('pre_topup_image', 'pre_sdc_template')]),
+        (eddy, back_to_lps, [
+            ('out_corrected', 'dwi_file'),
+            ('out_rotated_bvecs', 'bvec_file')]),
+        (dwi_merge, back_to_lps, [('out_bval', 'bval_file')]),
         (back_to_lps, split_eddy_lps, [
             ('dwi_file', 'dwi_file'),
             ('bval_file', 'bval_file'),
@@ -181,6 +184,7 @@ def init_fsl_hmc_wf(scan_groups,
         rpe_b0 = scan_groups['fieldmap_info']['rpe_series'][0]
     using_topup = rpe_b0 is not None
 
+    # SyN is the only option that creates warps to the reference. Eddy does the others
     if not fieldmap_type == 'syn':
         workflow.connect([
             (gather_inputs, outputnode, [

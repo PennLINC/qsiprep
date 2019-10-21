@@ -13,7 +13,6 @@ import os
 import numpy as np
 import nibabel as nb
 import nilearn.image as nli
-from glob import glob
 from textwrap import indent
 from dipy.io import read_bvals_bvecs
 from nipype import logging
@@ -21,11 +20,10 @@ from nipype.utils.filemanip import fname_presuffix
 from nipype.interfaces.base import (isdefined, traits, TraitedSpec, BaseInterfaceInputSpec,
                                     SimpleInterface, File, InputMultiObject, OutputMultiObject)
 from nipype.interfaces import fsl
-#from qsiprep.interfaces.images import (
+# from qsiprep.interfaces.images import (
 #    nii_ones_like, extract_wm, SignalExtraction, MatchHeader,
 #    FilledImageLike, DemeanImage, TemplateDimensions)
 from ..niworkflows.interfaces.images import ValidateImageInputSpec
-from nipype.interfaces.afni.base import AFNICommand, AFNICommandInputSpec, AFNICommandOutputSpec
 
 LOGGER = logging.getLogger('nipype.interface')
 
@@ -87,6 +85,7 @@ class ConcatRPESplitsInputSpec(BaseInterfaceInputSpec):
     b0_indices_minus = traits.List(desc='list of original indices for each b0 image')
     original_images_minus = traits.List()
 
+
 class ConcatRPESplitsOutputSpec(TraitedSpec):
     dwi_files = OutputMultiObject(File(exists=True), desc='single volume dwis')
     bvec_files = OutputMultiObject(File(exists=True), desc='single volume bvecs')
@@ -95,6 +94,7 @@ class ConcatRPESplitsOutputSpec(TraitedSpec):
     b0_indices = traits.List(desc='list of indices for each b0 image')
     original_files = traits.List(desc='list of source series for each dwi')
     sdc_method = traits.Str("PEB/PEPOLAR Series (phase-encoding based / PE-POLARity)")
+
 
 class ConcatRPESplits(SimpleInterface):
     """Combine the outputs from the RPE series workflow into a SplitDWI-like object.
@@ -343,6 +343,8 @@ class Conform(SimpleInterface):
 
 class ConformDwiInputSpec(BaseInterfaceInputSpec):
     dwi_file = File(exists=True, mandatory=True, desc='dwi image')
+    bval_file = File(exists=True)
+    bvec_file = File(exists=True)
     orientation = traits.Enum('LPS', 'LAS', default='LPS', usedefault=True)
 
 
@@ -372,8 +374,18 @@ class ConformDwi(SimpleInterface):
         orientation = self.inputs.orientation
         suffix = "_" + orientation
         out_fname = fname_presuffix(fname, suffix=suffix, newpath=runtime.cwd)
-        bvec_fname = fname_presuffix(fname, suffix=".bvec", use_ext=False)
-        bval_fname = fname_presuffix(fname, suffix=".bval", use_ext=False)
+
+        # If not defined, find it
+        if isdefined(self.inputs.bval_file):
+            bval_fname = self.inputs.bval_file
+        else:
+            bval_fname = fname_presuffix(fname, suffix=".bval", use_ext=False)
+
+        if isdefined(self.inputs.bvec_file):
+            bvec_fname = self.inputs.bvec_file
+        else:
+            bvec_fname = fname_presuffix(fname, suffix=".bvec", use_ext=False)
+
         out_bvec_fname = fname_presuffix(bvec_fname, suffix=suffix, newpath=runtime.cwd)
         input_img = nb.load(fname)
         input_axcodes = nb.aff2axcodes(input_img.affine)
