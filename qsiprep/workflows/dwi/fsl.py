@@ -6,23 +6,18 @@ Orchestrating the dwi-preprocessing workflow
 
 """
 
-import os
 import json
 from pkg_resources import resource_filename as pkgr_fn
-
-import nibabel as nb
 from nipype import logging
 
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
 from nipype.interfaces import fsl, afni, ants
 
-from ...interfaces import DerivativesDataSink
 from ...interfaces.eddy import GatherEddyInputs, ExtendedEddy, Eddy2SPMMotion
 from ...interfaces.dwi_merge import MergeDWIs
 from ...interfaces.images import SplitDWIs, ConformDwi
 from ...interfaces.fmap import B0RPEFieldmap
-from ...interfaces.gradients import ExtractB0s
 from ...engine import Workflow
 
 # dwi workflows

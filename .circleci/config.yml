@@ -199,7 +199,7 @@ jobs:
           name: Install graphviz
           command: |
               apt-get update
-              apt-get install -y graphviz numpy
+              apt-get install -y graphviz
       - run:
           name: Install qsiprep.
           command: python -m pip install ".[doc]" --no-cache-dir --progress-bar off
