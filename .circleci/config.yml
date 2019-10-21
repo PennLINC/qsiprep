@@ -194,7 +194,7 @@ jobs:
           name: Check Python version and upgrade pip
           command: |
             python --version
-            python -m pip install -U pip
+            python -m pip install -U pip numpy
       - run:
           name: Install graphviz
           command: |
