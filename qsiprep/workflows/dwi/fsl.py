@@ -21,12 +21,7 @@ from ...interfaces.fmap import B0RPEFieldmap
 from ...engine import Workflow
 
 # dwi workflows
-from .util import (init_dwi_reference_wf, _create_mem_gb, _get_wf_name, _list_squeeze,
-                   init_enhance_and_skullstrip_dwi_wf)
-from .registration import init_b0_to_anat_registration_wf
-from .resampling import init_dwi_trans_wf
-from .confounds import init_dwi_confs_wf
-from .derivatives import init_dwi_derivatives_wf
+from .util import init_enhance_and_skullstrip_dwi_wf
 from ..fieldmap.base import init_sdc_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
@@ -121,6 +116,8 @@ def init_fsl_hmc_wf(scan_groups,
     eddy = pe.Node(ExtendedEddy(**eddy_args), name="eddy")
     spm_motion = pe.Node(Eddy2SPMMotion(), name="spm_motion")
     # Convert eddy outputs back to LPS+, split them
+    pre_topup_lps = pe.Node(ConformDwi(orientation="LPS"), name='pre_topup_lps')
+    pre_topup_enhance = init_enhance_and_skullstrip_dwi_wf(name='pre_topup_enhance')
     back_to_lps = pe.Node(ConformDwi(orientation="LPS"), name='back_to_lps')
     split_eddy_lps = pe.Node(SplitDWIs(b0_threshold=b0_threshold), name="split_eddy_lps")
 
@@ -146,8 +143,12 @@ def init_fsl_hmc_wf(scan_groups,
             ('out_dwi', 'in_file'),
             ('out_bval', 'in_bval'),
             ('out_bvec', 'in_bvec')]),
-        (gather_inputs, outputnode, [
-            ('pre_topup_image', 'pre_sdc_template')]),
+        (gather_inputs, pre_topup_lps, [
+            ('pre_topup_image', 'dwi_file')]),
+        (pre_topup_lps, pre_topup_enhance, [
+            ('dwi_file', 'inputnode.in_file')]),
+        (pre_topup_enhance, outputnode, [
+            ('outputnode.skull_stripped_file', 'pre_sdc_template')]),
         (eddy, back_to_lps, [
             ('out_corrected', 'dwi_file'),
             ('out_rotated_bvecs', 'bvec_file')]),
