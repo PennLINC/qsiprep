@@ -169,7 +169,7 @@ def linear_alignment_workflow(transform="Rigid", metric="Mattes", iternum=0, pre
     Returns a workflow
 
     """
-    iteration_wf = pe.Workflow(name="iterative_alignment_%03d" % iternum)
+    iteration_wf = Workflow(name="iterative_alignment_%03d" % iternum)
     input_node_fields = ["image_paths", "template_image", "iteration_num"]
     inputnode = pe.Node(
         niu.IdentityInterface(fields=input_node_fields), name='inputnode')
@@ -232,7 +232,7 @@ def init_b0_hmc_wf(align_to="iterative", transform="Rigid", spatial_bias_correct
     if align_to == "iterative" and num_iters < 2:
         raise ValueError("Must specify a positive number of iterations")
 
-    alignment_wf = pe.Workflow(name=name)
+    alignment_wf = Workflow(name=name)
     inputnode = pe.Node(
         niu.IdentityInterface(fields=['b0_images']), name='inputnode')
     outputnode = pe.Node(

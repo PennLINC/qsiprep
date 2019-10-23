@@ -120,6 +120,8 @@ def init_fsl_hmc_wf(scan_groups,
     pre_topup_enhance = init_enhance_and_skullstrip_dwi_wf(name='pre_topup_enhance')
     back_to_lps = pe.Node(ConformDwi(orientation="LPS"), name='back_to_lps')
     split_eddy_lps = pe.Node(SplitDWIs(b0_threshold=b0_threshold), name="split_eddy_lps")
+    mean_b0_lps = pe.Node(ants.AverageImages(dimension=3, normalize=True), name='mean_b0_lps')
+    lps_b0_enhance = init_enhance_and_skullstrip_dwi_wf(name='lps_b0_enhance')
 
     workflow.connect([
         # These images and gradients should be in LAS+
@@ -145,10 +147,11 @@ def init_fsl_hmc_wf(scan_groups,
             ('out_bvec', 'in_bvec')]),
         (gather_inputs, pre_topup_lps, [
             ('pre_topup_image', 'dwi_file')]),
+        (gather_inputs, outputnode, [('forward_transforms', 'to_dwi_ref_affines')]),
         (pre_topup_lps, pre_topup_enhance, [
             ('dwi_file', 'inputnode.in_file')]),
         (pre_topup_enhance, outputnode, [
-            ('outputnode.skull_stripped_file', 'pre_sdc_template')]),
+            ('outputnode.bias_corrected_file', 'pre_sdc_template')]),
         (eddy, back_to_lps, [
             ('out_corrected', 'dwi_file'),
             ('out_rotated_bvecs', 'bvec_file')]),
@@ -162,6 +165,8 @@ def init_fsl_hmc_wf(scan_groups,
         (split_eddy_lps, outputnode, [
             ('dwi_files', 'dwi_files_to_transform'),
             ('bvec_files', 'bvec_files_to_transform')]),
+        (split_eddy_lps, mean_b0_lps, [('b0_images', 'images')]),
+        (mean_b0_lps, lps_b0_enhance, [('output_average_image', 'inputnode.in_file')]),
         (eddy, outputnode, [
             (slice_quality, 'slice_quality'),
             ('out_cnr_maps', 'cnr_map'),
@@ -170,7 +175,7 @@ def init_fsl_hmc_wf(scan_groups,
         (spm_motion, outputnode, [('spm_motion_file', 'motion_params')])
     ])
 
-    # Fieldmap correction to be done in LAS+: TOPUP or GRE
+    # Fieldmap correction to be done in LAS+: TOPUP for rpe series or epi fieldmap
     # If a topupref is provided, use it for TOPUP
     rpe_b0 = None
     fieldmap_type = scan_groups['fieldmap_info']['suffix']
@@ -180,13 +185,6 @@ def init_fsl_hmc_wf(scan_groups,
         rpe_b0 = scan_groups['fieldmap_info']['rpe_series'][0]
     using_topup = rpe_b0 is not None
 
-    # SyN is the only option that creates warps to the reference. Eddy does the others
-    if not fieldmap_type == 'syn':
-        workflow.connect([
-            (gather_inputs, outputnode, [
-                ('forward_warps', 'to_dwi_ref_warps'),
-                ('forward_transforms', 'to_dwi_ref_affines')])])
-
     if using_topup:
         outputnode.inputs.sdc_method = "TOPUP"
         # Whether an rpe series (from dwi/) or an epi fmap (in fmap/) extract just the
@@ -195,6 +193,7 @@ def init_fsl_hmc_wf(scan_groups,
             B0RPEFieldmap(b0_file=rpe_b0, orientation='LAS', output_3d_images=False),
             name="prepare_rpe_b0")
         topup = pe.Node(fsl.TOPUP(out_field="fieldmap_HZ.nii.gz"), name="topup")
+        # Enhance and skullstrip the TOPUP output to get a mask for eddy
         unwarped_mean = pe.Node(afni.TStat(outputtype='NIFTI_GZ'), name='unwarped_mean')
         unwarped_enhance = init_enhance_and_skullstrip_dwi_wf(name='unwarped_enhance')
 
@@ -205,49 +204,31 @@ def init_fsl_hmc_wf(scan_groups,
                 ('topup_datain', 'encoding_file'),
                 ('topup_imain', 'in_file'),
                 ('topup_config', 'config')]),
+            (gather_inputs, outputnode, [('forward_warps', 'to_dwi_ref_warps')]),
             (topup, unwarped_mean, [('out_corrected', 'in_file')]),
             (unwarped_mean, unwarped_enhance, [('out_file', 'inputnode.in_file')]),
-            (unwarped_enhance, eddy, [
-                ('outputnode.mask_file', 'in_mask')]),
+            (unwarped_enhance, eddy, [('outputnode.mask_file', 'in_mask')]),
             (topup, eddy, [
-                ('out_field', 'field')])])
+                ('out_field', 'field')]),
+            (lps_b0_enhance, outputnode, [
+                ('outputnode.bias_corrected_file', 'b0_template'),
+                ('outputnode.mask_file', 'b0_template_mask')]),
+            ])
 
-    elif fieldmap_type in ('fieldmap', 'phasediff', 'phase'):
-        outputnode.inputs.sdc_method = fieldmap_type
-        b0_enhance = init_enhance_and_skullstrip_dwi_wf(name='b0_enhance')
-        b0_sdc_wf = init_sdc_wf(
-            scan_groups['fieldmap_info'], dwi_metadata, omp_nthreads=omp_nthreads,
-            fmap_demean=fmap_demean, fmap_bspline=fmap_bspline)
-
-        workflow.connect([
-            (gather_inputs, b0_enhance, [('pre_topup_image', 'inputnode.in_file')]),
-            (b0_enhance, b0_sdc_wf, [
-                ('outputnode.bias_corrected_file', 'inputnode.b0_ref'),
-                ('outputnode.skull_stripped_file', 'inputnode.b0_ref_brain'),
-                ('outputnode.mask_file', 'inputnode.b0_mask')]),
-            (inputnode, b0_sdc_wf, [
-                ('t1_brain', 'inputnode.t1_brain'),
-                ('t1_2_mni_reverse_transform',
-                 'inputnode.t1_2_mni_reverse_transform')]),
-            # These deformations will be applied later, use the unwarped image now. Nilearn
-            # uses physical coordinates for plotting
-            (b0_sdc_wf, outputnode, [
-                ('outputnode.method', 'sdc_method')]),
-            # Send the fieldmap (Hz) to eddy
-            (b0_sdc_wf, eddy, [('outputnode.fieldmap_hz', 'field')])])
-    else:
-        outputnode.inputs.sdc_method = "None"
-
-    mean_b0_lps = pe.Node(ants.AverageImages(dimension=3, normalize=True), name='mean_b0_lps')
-    lps_b0_enhance = init_enhance_and_skullstrip_dwi_wf(name='lps_b0_enhance')
-
-    if fieldmap_type == 'syn':
+    elif fieldmap_type in ('fieldmap', 'phasediff', 'phase', 'syn'):
+        # Enhance and skullstrip the TOPUP output to get a mask for eddy
+        distorted_enhance = init_enhance_and_skullstrip_dwi_wf(name='distorted_enhance')
         outputnode.inputs.sdc_method = fieldmap_type
         b0_sdc_wf = init_sdc_wf(
             scan_groups['fieldmap_info'], dwi_metadata, omp_nthreads=omp_nthreads,
             fmap_demean=fmap_demean, fmap_bspline=fmap_bspline)
 
         workflow.connect([
+            # Use the distorted mask for eddy
+            (gather_inputs, distorted_enhance, [('pre_topup_image', 'inputnode.in_file')]),
+            (distorted_enhance, eddy, [('outputnode.mask_file', 'in_mask')]),
+
+            # Calculate distortion correction on eddy-corrected data
             (lps_b0_enhance, b0_sdc_wf, [
                 ('outputnode.bias_corrected_file', 'inputnode.b0_ref'),
                 ('outputnode.skull_stripped_file', 'inputnode.b0_ref_brain'),
@@ -256,16 +237,17 @@ def init_fsl_hmc_wf(scan_groups,
                 ('t1_brain', 'inputnode.t1_brain'),
                 ('t1_2_mni_reverse_transform',
                  'inputnode.t1_2_mni_reverse_transform')]),
+
             # These deformations will be applied later, use the unwarped image now
             (b0_sdc_wf, outputnode, [
+                ('outputnode.out_warp', 'to_dwi_ref_warps'),
                 ('outputnode.method', 'sdc_method'),
                 ('outputnode.b0_ref', 'b0_template'),
                 ('outputnode.b0_mask', 'b0_template_mask')])])
 
     else:
+        outputnode.inputs.sdc_method = "None"
         workflow.connect([
-            (split_eddy_lps, mean_b0_lps, [('b0_images', 'images')]),
-            (mean_b0_lps, lps_b0_enhance, [('output_average_image', 'inputnode.in_file')]),
             (lps_b0_enhance, outputnode, [
                 ('outputnode.skull_stripped_file', 'b0_template'),
                 ('outputnode.mask_file', 'b0_template_mask')]),
