@@ -100,7 +100,7 @@ def init_recon_anatomical_wf(subject_id, recon_input_dir, extras_to_make,
         create_5tt = pe.Node(GenerateMasked5tt(algorithm='fsl'), name='create_5tt')
         workflow.connect([
             (anat_ingress, create_5tt, [('t1_brain_mask', 'mask'),
-                                    ('t1_preproc', 'in_file')]),
+                                        ('t1_preproc', 'in_file')]),
             (create_5tt, outputnode, [('out_file', 'mrtrix_5tt')])
         ])
 

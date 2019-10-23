@@ -245,9 +245,10 @@ ENV QSIRECON_ATLAS /atlas/qsirecon_atlases
 RUN bash -c \
     'mkdir /atlas \
     && cd  /atlas \
-    && wget -nv https://upenn.box.com/shared/static/pvttd0om8zhzfjr7ul6uiny24gmz7ns2.xz \
-    && tar xvfJm pvttd0om8zhzfjr7ul6uiny24gmz7ns2.xz \
-    && rm pvttd0om8zhzfjr7ul6uiny24gmz7ns2.xz'
+    && wget -nv https://upenn.box.com/shared/static/8k17yt2rfeqm3emzol5sa0j9fh3dhs0i.xz \
+    && tar xvfJm 8k17yt2rfeqm3emzol5sa0j9fh3dhs0i.xz \
+    && rm 8k17yt2rfeqm3emzol5sa0j9fh3dhs0i.xz \
+    && echo 1'
 
 
 # Precaching atlases
