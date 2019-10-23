@@ -302,6 +302,7 @@ def init_dwi_preproc_wf(scan_groups,
                                      b0_threshold=b0_threshold,
                                      preprocess_rpe_series=preprocess_rpe_series,
                                      dwi_denoise_window=dwi_denoise_window,
+                                     orientation='LAS' if hmc_model == 'eddy' else 'LPS',
                                      low_mem=low_mem,
                                      denoise_before_combining=denoise_before_combining,
                                      omp_nthreads=omp_nthreads)

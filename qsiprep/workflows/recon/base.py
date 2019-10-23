@@ -18,7 +18,6 @@ from glob import glob
 from copy import deepcopy
 from pkg_resources import resource_filename as pkgrf
 from nipype import __version__ as nipype_ver
-from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
 from nipype.utils.filemanip import split_filename
 from ...engine import Workflow
@@ -171,7 +170,7 @@ def init_single_subject_wf(
                      if 'space-' + space in f.filename]
         LOGGER.info("found %s in %s", dwi_files, recon_input)
 
-    workflow = pe.Workflow('sub-{}_{}'.format(subject_id, spec['name']))
+    workflow = Workflow('sub-{}_{}'.format(subject_id, spec['name']))
     if len(dwi_files) == 0:
         LOGGER.info("No dwi files found for %s", subject_id)
         return workflow

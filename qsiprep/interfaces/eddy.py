@@ -16,7 +16,7 @@ from tempfile import TemporaryDirectory
 import numpy as np
 import nibabel as nb
 from nipype.interfaces import fsl
-from .images import to_lps
+from .images import to_lps, reorient_to
 
 from nipype import logging
 from nipype.utils.filemanip import fname_presuffix, split_filename
@@ -28,7 +28,6 @@ LOGGER = logging.getLogger('nipype.interface')
 
 class GatherEddyInputsInputSpec(BaseInterfaceInputSpec):
     rpe_b0 = File(exists=True)
-    rpe_b0_json = File(exists=True)
     dwi_files = InputMultiObject(File(exists=True))
     bval_files = InputMultiObject(File(exists=True))
     bvec_files = InputMultiObject(File(exists=True))
@@ -49,6 +48,16 @@ class GatherEddyInputsOutputSpec(TraitedSpec):
 
 
 class GatherEddyInputs(SimpleInterface):
+    """Manually prepare inputs for TOPUP and eddy.
+
+    **Inputs**
+        rpe_b0: str
+            path to a file (3D or 4D) containing b=0 images with the reverse PE direction
+        dwi_files: list
+            list of paths to 3d DWI volumes
+        bval_files, bvec_files: list
+            lists of paths to bval, bvec files
+    """
     input_spec = GatherEddyInputsInputSpec
     output_spec = GatherEddyInputsOutputSpec
 
@@ -65,12 +74,16 @@ class GatherEddyInputs(SimpleInterface):
 
         # Gather inputs for TOPUP
         topup_prefix = op.join(runtime.cwd, "topup_")
+        # get original files for their bids metadata
         b0_source_images = [original_files[idx] for idx in b0_indices] + rpe_files
+        # this will be all the original b=0 files and the b=0 files from the rpe series
         b0_images = self.inputs.b0_images + rpe_files
         topup_datain_file, topup_imain_file = topup_inputs_from_dwi_files(
             b0_source_images, b0_images, topup_prefix, runtime.cwd)
         self._results['topup_datain'] = topup_datain_file
         self._results['topup_imain'] = topup_imain_file
+
+        # If there are an odd number of slices, use b02b0_1.cnf
         example_b0 = nb.load(b0_images[0])
         self._results['topup_config'] = 'b02b0.cnf'
         if 1 in (example_b0.shape[0] % 2, example_b0.shape[1] % 2, example_b0.shape[2] % 2):
@@ -94,7 +107,7 @@ class GatherEddyInputs(SimpleInterface):
 
 
 def read_nifti_sidecar(path):
-    pth, fname, ext = split_filename(path)
+    pth, fname, _ = split_filename(path)
     json_file = op.join(pth, fname) + ".json"
     with open(json_file, "r") as f:
         metadata = json.load(f)
@@ -193,8 +206,8 @@ def topup_inputs_from_dwi_files(dwi_file_list, b0_file_list, topup_prefix, cwd, 
             datain_lines.extend([line] * num_to_add)
             spec_counts[line] += num_to_add
 
-    # Make a 4d series, all conformed to LPS+
-    images = [to_lps(nb.load(img)) for img in imain_images]
+    # Make a 4d series, all conformed to LAS+
+    images = [to_lps(nb.load(img), new_axcodes=('L', 'A', 'S')) for img in imain_images]
     image_data = [img.get_fdata()[..., np.newaxis] if len(img.shape) == 3 else img.get_fdata()
                   for img in images]
     imain_output = topup_prefix + "imain.nii.gz"

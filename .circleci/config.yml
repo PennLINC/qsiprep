@@ -177,7 +177,7 @@ jobs:
 
   build_docs:
     docker:
-        - image: python:latest
+        - image: python:3.7.5-stretch
     working_directory: /tmp/src/qsiprep
     environment:
       - FSLOUTPUTTYPE: 'NIFTI'
@@ -194,7 +194,7 @@ jobs:
           name: Check Python version and upgrade pip
           command: |
             python --version
-            python -m pip install -U pip
+            python -m pip install -U pip numpy
       - run:
           name: Install graphviz
           command: |

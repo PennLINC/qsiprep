@@ -16,6 +16,7 @@ import os.path as op
 from qsiprep.interfaces.bids import ReconDerivativesDataSink
 from ...interfaces.dipy import BrainSuiteShoreReconstruction, MAPMRIReconstruction
 from .interchange import input_fields
+from ...engine import Workflow
 
 LOGGER = logging.getLogger('nipype.interface')
 
@@ -105,7 +106,7 @@ def init_dipy_brainsuite_shore_recon_wf(name="dipy_3dshore_recon", output_suffix
                     'dwi_file', 'bval_file', 'bvec_file', 'b_file']),
         name="outputnode")
 
-    workflow = pe.Workflow(name=name)
+    workflow = Workflow(name=name)
     resample_mask = pe.Node(
         afni.Resample(outputtype='NIFTI_GZ', resample_mode="NN"), name='resample_mask')
     recon_shore = pe.Node(BrainSuiteShoreReconstruction(**params), name="recon_shore")
@@ -303,7 +304,7 @@ def init_dipy_mapmri_recon_wf(name="dipy_mapmri_recon", output_suffix="", params
                     'parng', 'perng', 'ng', 'qiv', 'lapnorm', 'msd']),
         name="outputnode")
 
-    workflow = pe.Workflow(name=name)
+    workflow = Workflow(name=name)
     recon_map = pe.Node(MAPMRIReconstruction(**params), name="recon_map")
     resample_mask = pe.Node(
         afni.Resample(outputtype='NIFTI_GZ', resample_mode="NN"), name='resample_mask')

@@ -24,7 +24,7 @@ from nipype.utils.filemanip import (
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec, TraitedSpec, File, isdefined, traits,
     SimpleInterface, InputMultiObject, OutputMultiObject)
-from .images import to_lps
+from .images import reorient_to, to_lps
 import shutil
 
 LOGGER = logging.getLogger('nipype.interface')
@@ -34,6 +34,8 @@ class B0RPEFieldmapInputSpec(BaseInterfaceInputSpec):
     b0_file = File(exists=True)
     output_3d_images = traits.Bool(False, usedefault=True)
     max_num_b0s = traits.Int(3)
+    orientation = traits.Enum('LPS', 'LAS', default='LPS', usedefault=True)
+    b0_threshold = traits.Int(100, usedefault=True)
 
 
 class B0RPEFieldmapOutputSpec(TraitedSpec):
@@ -42,59 +44,76 @@ class B0RPEFieldmapOutputSpec(TraitedSpec):
 
 
 class B0RPEFieldmap(SimpleInterface):
+    """Prepares b=0 EPI fieldmaps to be used for distortion correction.
+    Some siemens scanners are unable to make a b=0 image by itself, and will produce
+    a dwi series (with bvals and bvecs). This interface removes the b>0 volumes and
+    writes the b=0 images in the resuested orientation (LAS+ for FSL, or LPS+ for
+    everything else).
+
+    **Inputs**
+        b0_file: str
+            Path to the b=0 epi fieldmap in fmaps/
+        output_3d_images: bool
+            Write outputs as multiple 3d images
+        max_num_b0s: int
+            Include a maximum number of b=0 images in the outputs
+        orientation: str
+            Write the outputs in either 'LAS' or 'LPS' orientation
+
+    """
     input_spec = B0RPEFieldmapInputSpec
     output_spec = B0RPEFieldmapOutputSpec
 
     def _run_interface(self, runtime):
         pth, fname, ext = split_filename(self.inputs.b0_file)
         potential_bval_file = op.join(pth, fname) + ".bval"
-        fmap_img = nb.load(self.inputs.b0_file)
         original_json = op.join(pth, fname) + ".json"
+        b0_threshold = self.inputs.b0_threshold
 
         # Conform the fieldmap
-        lps_fmap = to_lps(fmap_img)
+        lps_fmap = to_lps(nb.load(self.inputs.b0_file), self.inputs.orientation)
 
         # Determine if there is a bval file corresponding to this file
         if op.exists(potential_bval_file):
             LOGGER.info("Found bval file %s for fieldmap.", potential_bval_file)
             bvals = np.loadtxt(potential_bval_file)
-            # TODO: standard b0 threshold
-            if np.any(bvals > 100):
+            if np.any(bvals > b0_threshold):
                 LOGGER.info("Found one or more b > 50 images: discarding them")
-                fmap_data = lps_fmap.get_fdata()[..., bvals < 100].squeeze()
+                fmap_data = lps_fmap.get_fdata()[..., bvals < b0_threshold].squeeze()
         # If not, assume these are all b=0 images
         else:
             fmap_data = lps_fmap.get_fdata().squeeze()
 
         # Output just one 3/4d image and a sidecar
         if not self.inputs.output_3d_images:
-            lps_fmap = nb.Nifti1Image(fmap_data, lps_fmap.affine, header=lps_fmap.header)
+            out_lps_fmap_img = nb.Nifti1Image(fmap_data, lps_fmap.affine, header=lps_fmap.header)
             # Save the conformed fmap
             output_fmap = fname_presuffix(self.inputs.b0_file, suffix="conform",
                                           newpath=runtime.cwd)
             output_json = fname_presuffix(output_fmap, use_ext=False, suffix=".json")
-            lps_fmap.to_filename(output_fmap)
+            out_lps_fmap_img.to_filename(output_fmap)
             # Copy the original json file:
             LOGGER.info("Copying json file %s -> %s", original_json, output_json)
             shutil.copy2(original_json, output_json)
             assert op.exists(output_json)
             self._results['fmap_file'] = output_fmap
             self._results['fmap_info'] = output_json
-            print(self._results)
             return runtime
 
+        # Write out a series of 3d conformed b=0 volumes
         if fmap_data.ndim == 3:
             fmap_data = fmap_data[..., np.newaxis]
         image_list = []
         json_list = []
         for imgnum, img_index in enumerate(range(fmap_data.shape[3])):
-            lps_fmap = nb.Nifti1Image(fmap_data[..., img_index], lps_fmap.affine,
-                                      header=lps_fmap.header)
+            out_lps_fmap_img = nb.Nifti1Image(fmap_data[..., img_index], lps_fmap.affine,
+                                              header=lps_fmap.header)
             # Save the conformed fmap
-            output_fmap = fname_presuffix(self.inputs.b0_file, suffix="conform_%03d" % imgnum,
+            output_fmap = fname_presuffix(self.inputs.b0_file,
+                                          suffix="%s_%03d" % (self.inputs.orientation, imgnum),
                                           newpath=runtime.cwd)
             output_json = fname_presuffix(output_fmap, use_ext=False, suffix=".json")
-            lps_fmap.to_filename(output_fmap)
+            out_lps_fmap_img.to_filename(output_fmap)
             # Copy the original json file:
             LOGGER.info("Copying json file %s -> %s", original_json, output_json)
             shutil.copy2(original_json, output_json)
@@ -105,7 +124,6 @@ class B0RPEFieldmap(SimpleInterface):
             if isdefined(self.inputs.max_num_b0s):
                 if len(image_list) == self.inputs.max_num_b0s:
                     break
-
 
         self._results['fmap_file'] = image_list
         self._results['fmap_info'] = json_list

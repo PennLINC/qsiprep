@@ -25,6 +25,7 @@ from pkg_resources import resource_filename as pkgr
 from qsiprep.interfaces.converters import FODtoFIBGZ
 from qsiprep.interfaces.bids import ReconDerivativesDataSink
 from .interchange import input_fields, default_connections
+from ...engine import Workflow
 LOGGER = logging.getLogger('nipype.workflow')
 
 
@@ -50,7 +51,7 @@ def init_mif_to_fibgz_wf(name="mif_to_fibgz", output_suffix="", params={}):
                         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(fields=['fib_file']), name="outputnode")
-    workflow = pe.Workflow(name=name)
+    workflow = Workflow(name=name)
     convert_to_fib = pe.Node(FODtoFIBGZ(), name="convert_to_fib")
     workflow.connect([
         (inputnode, convert_to_fib, [('mif_file', 'mif_file')]),
@@ -65,7 +66,7 @@ def init_fibgz_to_mif_wf(name="fibgz_to_mif", output_suffix="", params={}):
                         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(fields=['fib_file']), name="outputnode")
-    workflow = pe.Workflow(name=name)
+    workflow = Workflow(name=name)
     convert_to_fib = pe.Node(FODtoFIBGZ(), name="convert_to_fib")
     workflow.connect([
         (inputnode, convert_to_fib, [('mif_file', 'mif_file')]),

@@ -19,7 +19,7 @@ from nipype import logging
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
 
-from ...interfaces import MergeDWIs, ConformDwi
+from ...interfaces import MergeDWIs, ConformDwi, ValidateImage
 from ...interfaces.mrtrix import DWIDenoise
 
 from ...engine import Workflow
@@ -30,6 +30,7 @@ LOGGER = logging.getLogger('nipype.workflow')
 
 def init_merge_and_denoise_wf(dwi_denoise_window,
                               denoise_before_combining,
+                              orientation,
                               mem_gb=1,
                               omp_nthreads=1,
                               name="merge_and_denoise_wf"):
@@ -85,7 +86,9 @@ def init_merge_and_denoise_wf(dwi_denoise_window,
             'merged_image', 'merged_bval', 'merged_bvec', 'noise_image', 'original_files']),
         name='outputnode')
 
-    conform_dwis = pe.MapNode(ConformDwi(), iterfield=['dwi_file'], name="conform_dwis")
+    # validate_dwis = pe.MapNode(ValidateImage(), iterfield=[], name='validate_dwis')
+    conform_dwis = pe.MapNode(
+        ConformDwi(orientation=orientation), iterfield=['dwi_file'], name="conform_dwis")
     merge_dwis = pe.Node(MergeDWIs(), name='merge_dwis')
 
     workflow.connect([

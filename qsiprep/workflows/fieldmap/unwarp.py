@@ -244,6 +244,7 @@ def init_fmap_unwarp_report_wf(name='fmap_unwarp_report_wf', suffix='hmcsdc'):
     """
     from ...niworkflows.interfaces import SimpleBeforeAfter
     from ...niworkflows.interfaces.images import extract_wm
+    from ...niworkflows.interfaces.fixes import FixHeaderApplyTransforms as ApplyTransforms
 
     DEFAULT_MEMORY_MIN_GB = 0.01
 
@@ -253,7 +254,7 @@ def init_fmap_unwarp_report_wf(name='fmap_unwarp_report_wf', suffix='hmcsdc'):
         fields=['in_pre', 'in_post', 'in_seg', 'in_xfm']), name='inputnode')
 
     map_seg = pe.Node(
-        ants.ApplyTransforms(dimension=3, float=True, interpolation='MultiLabel',
+            ApplyTransforms(dimension=3, float=True, interpolation='MultiLabel',
                              invert_transform_flags=[True]),
         name='map_seg',
         mem_gb=0.3)
