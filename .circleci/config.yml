@@ -97,8 +97,8 @@ jobs:
     steps:
       - restore_cache:
           keys:
-            - data-v7-{{ .Revision }}
-            - data-v7-
+            - data-v8-{{ .Revision }}
+            - data-v8-
       - run:
           name: Get single scan from downsampled CS-DSI
           command: |
@@ -134,6 +134,15 @@ jobs:
             else
               echo "Dataset DSDTI was cached"
             fi
+      -run:
+          name: Create no-fieldmap DTI
+          command: |
+            if [[ ! -d /tmp/data/nofmap_DSDTI ]]; then
+              cp -r /tmp/data/DSDTI /tmp/data/nofmap_DSDTI
+              rm -rf /tmp/data/DSDTI/sub-PNC/fmap
+            else
+              echo "Dataset nofmap_DSDTI was cached"
+            fi
       - run:
           name: Get multisession CS-DSI
           command: |
@@ -161,17 +170,20 @@ jobs:
             mkdir -p /tmp/fslicense
             cd /tmp/fslicense
             echo "cHJpbnRmICJtYXR0aGV3LmNpZXNsYWtAcHN5Y2gudWNzYi5lZHVcbjIwNzA2XG4gKkNmZVZkSDVVVDhyWVxuIEZTQllaLlVrZVRJQ3dcbiIgPiBsaWNlbnNlLnR4dAo=" | base64 -d | sh
+
       - run:
           name: Create Nipype config files
           command: |
-            mkdir -p /tmp/DSCSDSI_BUDS /tmp/DSCSDSI /tmp/DSDTI /tmp/twoses /tmp/multishell_output
+            mkdir -p /tmp/DSCSDSI_BUDS /tmp/DSCSDSI /tmp/DSDTI /tmp/twoses /tmp/multishell_output /tmp/nofmap_DSDTI
             printf "[execution]\nstop_on_first_crash = true\n" > /tmp/DSCSDSI/nipype.cfg
             echo "poll_sleep_duration = 0.01" >> /tmp/DSCSDSI/nipype.cfg
             echo "hash_method = content" >> /tmp/DSCSDSI/nipype.cfg
             cp /tmp/DSCSDSI/nipype.cfg /tmp/DSCSDSI_BUDS/nipype.cfg
             cp /tmp/DSCSDSI/nipype.cfg /tmp/DSDTI/nipype.cfg
             cp /tmp/DSCSDSI/nipype.cfg /tmp/twoses/nipype.cfg
+            cp /tmp/DSCSDSI/nipype.cfg /tmp/nofmap_DSDTI/nipype.cfg
             cp /tmp/DSCSDSI/nipype.cfg /tmp/multishell_output/nipype.cfg
+
       - persist_to_workspace:
           root: /tmp
           paths:
@@ -182,7 +194,7 @@ jobs:
             - DSDTI/nipype.cfg
             - twoses/nipype.cfg
       - save_cache:
-         key: data-v7-{{ epoch }}
+         key: data-v8-{{ epoch }}
          paths:
             - /tmp/data
 
@@ -386,7 +398,7 @@ jobs:
       - store_artifacts:
          path: /tmp/DSCSDSI_BUDS
 
-  DSDTI:
+  DSDTI_TOPUP:
     machine:
       image: ubuntu-1604:201903-01
     working_directory: /tmp/DSDTI
@@ -444,7 +456,7 @@ jobs:
                 --nthreads 2 --anat-only -vv --output-resolution 5
 
       - run:
-          name: Run full qsiprep/recon (eddy) on DSDTI
+          name: Run full qsiprep/recon (TOPUP/eddy) on DSDTI
           no_output_timeout: 2h
           command: |
             sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSDTI/derivatives && \
@@ -466,11 +478,50 @@ jobs:
                 --output-resolution 5 \
                 --nthreads 2 -vv
 
+  DSDTInofmap:
+    machine:
+      image: ubuntu-1604:201903-01
+    working_directory: /tmp/DSDTI
+    environment:
+      - FS_LICENSE: /tmp/fslicense/license.txt
+    steps:
+      - checkout:
+          path: /home/circleci/src/qsiprep
+      - run:
+          name: Check whether build should be skipped
+          command: |
+            cd /home/circleci/src/qsiprep
+            if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?DSDTI\]' )" != "" ]]; then
+              echo "Skipping DSDTI build"
+              circleci step halt
+            fi
+      - attach_workspace:
+          at: /tmp
+      - restore_cache:
+          keys:
+            - docker-v6-{{ .Branch }}-{{ .Revision }}
+      - run:
+          name: Setting up test
+          command: |
+            mkdir -p /tmp/DSDTI/derivatives && sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSDTI/derivatives && sudo setfacl -m group:$(id -gn):rwx /tmp/DSDTI/derivatives
+            pip install future numpy==1.16.4
+            pip install --upgrade /tmp/src/qsiprep/wrapper/
+      - run:
+          name: Load Docker image layer cache
+          no_output_timeout: 30m
+          command: |
+            docker info
+            set +o pipefail
+            if [ -f /tmp/cache/docker.tar.gz ]; then
+              sudo apt update && sudo apt -y install pigz
+              pigz -d --stdout /tmp/cache/docker.tar.gz | docker load
+              docker images
+            fi
+
       - run:
           name: Run qsiprep on no-fieldmap DTI
           no_output_timeout: 2h
           command: |
-            rm -rf /tmp/data/DSDTI/sub-PNC/fmap
             mkdir /tmp/DSDTI/nofmap_derivatives
             sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSDTI/nofmap_derivatives && \
                 sudo setfacl -m group:$(id -gn):rwx /tmp/DSDTI/nofmap_derivatives
@@ -491,22 +542,24 @@ jobs:
                 --eddy_config /tmp/data/eddy_config.json \
                 --output-resolution 5 \
                 --nthreads 2 -vv
+      -run:
+          name: copy workdir for artifacts
+          command: |
+            cp -r /tmp/DSDTI/nofmap_work /tmp/DSDTI/nofmap_work1
 
       - run:
-          name: Run qsiprep fieldmapless on no-fieldmap DTI
+          name: Run qsiprep SyN SDC on no-fieldmap DTI
           no_output_timeout: 2h
           command: |
             mkdir /tmp/DSDTI/synfmap_derivatives
             sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSDTI/synfmap_derivatives && \
                 sudo setfacl -m group:$(id -gn):rwx /tmp/DSDTI/synfmap_derivatives
             cp -r /tmp/DSDTI/work /tmp/DSDTI/synfmap_work
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSDTI/synfmap_work && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/DSDTI/synfmap_work && \
-            rm -rf /tmp/DSDTI/synfmap_work/qsiprep_wf/single_subject_PNC_wf/dwi_preproc_acq_realistic_wf
+            rm -rf /tmp/DSDTI/nofmap_work/qsiprep_wf/single_subject_PNC_wf/dwi_preproc_acq_realistic_wf
             sudo chmod a+rw /tmp/data/eddy_config.json
             qsiprep-docker -i pennbbl/qsiprep:latest \
                 -e qsiprep_DEV 1 -u $(id -u) \
-                --config $PWD/nipype.cfg -w /tmp/DSDTI/synfmap_work \
+                --config $PWD/nipype.cfg -w /tmp/DSDTI/nofmap_work \
                 --bids-dir /tmp/data/DSDTI --output-dir /tmp/DSDTI/synfmap_derivatives \
                 --analysis-level participant \
                 --sloppy --mem_mb 4096 \
@@ -979,9 +1032,6 @@ workflows:
             branches:
               ignore:
                 - /tests?\/.*/
-                - /ds005\/.*/
-                - /ds054\/.*/
-                - /ds210\/.*/
                 - /docker\/.*/
             tags:
               only: /.*/
@@ -1007,7 +1057,19 @@ workflows:
             tags:
               only: /.*/
 
-      - DSDTI:
+      - DSDTI_TOPUP:
+          requires:
+            - get_data
+            - build
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - DSDTInofmap:
           requires:
             - get_data
             - build
@@ -1054,7 +1116,8 @@ workflows:
           requires:
             - test_deploy_pypi
             - build_docs
-            - DSDTI
+            - DSDTI_TOPUP
+            - DSDTInofmap
             - DSCSDSI
             - IntramodalTemplate
             - ReconTests
