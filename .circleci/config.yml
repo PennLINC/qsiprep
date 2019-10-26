@@ -134,8 +134,8 @@ jobs:
             else
               echo "Dataset DSDTI was cached"
             fi
-            
-      -run:
+
+      - run:
           name: Create no-fieldmap DTI
           command: |
             if [[ ! -d /tmp/data/nofmap_DSDTI ]]; then
@@ -543,7 +543,7 @@ jobs:
                 --eddy_config /tmp/data/eddy_config.json \
                 --output-resolution 5 \
                 --nthreads 2 -vv
-      -run:
+      - run:
           name: copy workdir for artifacts
           command: |
             cp -r /tmp/DSDTI/nofmap_work /tmp/DSDTI/nofmap_work1
