@@ -479,7 +479,10 @@ jobs:
                 --output-resolution 5 \
                 --nthreads 2 -vv
 
-  DSDTInofmap:
+      - store_artifacts:
+          path: /tmp/DSDTI
+
+  DSDTI_nofmap:
     machine:
       image: ubuntu-1604:201903-01
     working_directory: /tmp/DSDTI
@@ -559,7 +562,7 @@ jobs:
                 --bids-dir /tmp/data/DSDTI --output-dir /tmp/DSDTI/synfmap_derivatives \
                 --analysis-level participant \
                 --sloppy --mem_mb 4096 \
-                --use-syn \
+                --force-syn \
                 --force-spatial-normalization \
                 --output-space T1w \
                 --hmc_model eddy \
@@ -1065,7 +1068,7 @@ workflows:
             tags:
               only: /.*/
 
-      - DSDTInofmap:
+      - DSDTI_nofmap:
           requires:
             - get_data
             - build
@@ -1113,7 +1116,7 @@ workflows:
             - test_deploy_pypi
             - build_docs
             - DSDTI_TOPUP
-            - DSDTInofmap
+            - DSDTI_nofmap
             - DSCSDSI
             - IntramodalTemplate
             - ReconTests
