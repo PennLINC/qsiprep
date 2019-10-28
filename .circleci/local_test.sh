@@ -138,6 +138,34 @@ export FS_LICENSE=${WORKDIR}/fslicense/license.txt
       --output-resolution 5 \
       --nthreads 2 -vv
 
+      # Run eddy without fieldmaps
+      qsiprep \
+          -w ${WORKDIR}/DSDTI/work \
+          --bids-dir ${WORKDIR}/data/DSDTI --output-dir ${WORKDIR}/DSDTI/derivatives \
+          --analysis-level participant \
+          --sloppy --mem_mb 4096 \
+          --output-space T1w \
+          --ignore fieldmaps \
+          --hmc_model eddy \
+          --eddy_config ${WORKDIR}/data/eddy_config.json \
+          --fs-license-file $FREESURFER_HOME/license.txt \
+          --output-resolution 5 \
+          --nthreads 2 -vv
+
+          # Run eddy with syn
+          qsiprep \
+              -w ${WORKDIR}/DSDTI/work \
+              --bids-dir ${WORKDIR}/data/DSDTI --output-dir ${WORKDIR}/DSDTI/derivatives \
+              --analysis-level participant \
+              --sloppy --mem_mb 4096 \
+              --output-space T1w \
+              --ignore fieldmaps \
+              --use-syn \
+              --hmc_model eddy \
+              --eddy_config ${WORKDIR}/data/eddy_config.json \
+              --fs-license-file $FREESURFER_HOME/license.txt \
+              --output-resolution 5 \
+              --nthreads 2 -vv
 # name: run mrtrix3 connectome workflow on DSDTI
 # command: |
   qsiprep -w ${WORKDIR}/DSDTI/work \

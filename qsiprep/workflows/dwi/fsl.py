@@ -214,20 +214,23 @@ def init_fsl_hmc_wf(scan_groups,
                 ('outputnode.bias_corrected_file', 'b0_template'),
                 ('outputnode.mask_file', 'b0_template_mask')]),
             ])
+        return workflow
 
-    elif fieldmap_type in ('fieldmap', 'phasediff', 'phase', 'syn'):
-        # Enhance and skullstrip the TOPUP output to get a mask for eddy
-        distorted_enhance = init_enhance_and_skullstrip_dwi_wf(name='distorted_enhance')
+    # Enhance and skullstrip the TOPUP output to get a mask for eddy
+    distorted_enhance = init_enhance_and_skullstrip_dwi_wf(name='distorted_enhance')
+    workflow.connect([
+        # Use the distorted mask for eddy
+        (gather_inputs, distorted_enhance, [('pre_topup_image', 'inputnode.in_file')]),
+        (distorted_enhance, eddy, [('outputnode.mask_file', 'in_mask')]),
+    ])
+    if fieldmap_type in ('fieldmap', 'phasediff', 'phase', 'syn'):
+
         outputnode.inputs.sdc_method = fieldmap_type
         b0_sdc_wf = init_sdc_wf(
             scan_groups['fieldmap_info'], dwi_metadata, omp_nthreads=omp_nthreads,
             fmap_demean=fmap_demean, fmap_bspline=fmap_bspline)
 
         workflow.connect([
-            # Use the distorted mask for eddy
-            (gather_inputs, distorted_enhance, [('pre_topup_image', 'inputnode.in_file')]),
-            (distorted_enhance, eddy, [('outputnode.mask_file', 'in_mask')]),
-
             # Calculate distortion correction on eddy-corrected data
             (lps_b0_enhance, b0_sdc_wf, [
                 ('outputnode.bias_corrected_file', 'inputnode.b0_ref'),
