@@ -505,6 +505,7 @@ Pre-processed DWIs in a different space
 
     from qsiprep.workflows.dwi.resampling import init_dwi_trans_wf
     wf = init_dwi_trans_wf(template="ACPC",
+                           output_resolution=1.2,
                            use_fieldwarp=True,
                            use_compression=True,
                            to_mni=False,

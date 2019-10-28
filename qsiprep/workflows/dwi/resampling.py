@@ -43,6 +43,7 @@ def init_dwi_trans_wf(template,
 
         from qsiprep.workflows.dwi.resampling import init_dwi_trans_wf
         wf = init_dwi_trans_wf(template='MNI152NLin2009cAsym',
+                               output_resolution=1.2,
                                mem_gb=3,
                                omp_nthreads=1)
 
