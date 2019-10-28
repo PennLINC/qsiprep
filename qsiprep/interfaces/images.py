@@ -327,7 +327,8 @@ class Conform(SimpleInterface):
             out_name = fname_presuffix(fname, suffix='_lps', newpath=runtime.cwd)
             reoriented.to_filename(out_name)
             transform = ornt_xfm.dot(conform_xfm)
-            assert np.allclose(orig_img.affine.dot(transform), target_affine)
+            if not np.allclose(orig_img.affine.dot(transform), target_affine):
+                LOGGER.warning("Check alignment of anatomical image.")
 
         else:
             out_name = fname
