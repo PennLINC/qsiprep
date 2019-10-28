@@ -427,6 +427,33 @@ class ConformDwi(SimpleInterface):
         return runtime
 
 
+class _ChooseInterpolatorInputSpec(BaseInterfaceInputSpec):
+    dwi_files = InputMultiObject(File(exists=True), mandatory=True)
+    output_resolution = traits.Float(mandatory=True)
+
+
+class _ChooseInterpolatorOutputSpec(TraitedSpec):
+    interpolation_method = traits.Enum("LanczosWindowedSinc", "BSpline")
+
+
+class ChooseInterpolator(SimpleInterface):
+    """If the requested output resolution is more than 10% smaller than the input, use BSpline.
+    """
+    input_spec = _ChooseInterpolatorInputSpec
+    output_spec = _ChooseInterpolatorOutputSpec
+
+    def _run_interface(self, runtime):
+        output_resolution = np.array([self.inputs.output_resolution] * 3) * 0.9
+        interpolator = "LanczosWindowedSinc"
+        for input_file in self.inputs.dwi_files:
+            original_resolution = np.load(input_file).header.get_zooms()[:3]
+            if np.any(output_resolution < original_resolution):
+                interpolator = "BSpline"
+                LOGGER.warning("Using BSpline interpolation for upsampling")
+                break
+        self._results['interpolation_method'] = interpolator
+
+
 class ValidateImageOutputSpec(TraitedSpec):
     out_file = File(exists=True, desc='validated image')
     out_report = File(exists=True, desc='HTML segment containing warning')

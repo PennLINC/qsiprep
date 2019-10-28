@@ -635,6 +635,7 @@ to workflows in *qsiprep*'s documentation]\
             reportlets_dir=reportlets_dir,
             output_spaces=output_spaces,
             template=template,
+            output_resolution=output_resolution,
             output_dir=output_dir,
             omp_nthreads=omp_nthreads,
             use_syn=use_syn,

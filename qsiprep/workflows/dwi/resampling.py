@@ -19,6 +19,7 @@ from ...interfaces.nilearn import Merge
 from ...interfaces.gradients import (ComposeTransforms, ExtractB0s, GradientRotation,
                                      LocalGradientRotation, SplitIntramodalTransform)
 from ...interfaces.itk import DisassembleTransform
+from ...interfaces.images import ChooseInterpolator
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
@@ -26,6 +27,7 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 def init_dwi_trans_wf(template,
                       mem_gb,
                       omp_nthreads,
+                      output_resolution,
                       name='dwi_trans_wf',
                       use_compression=True,
                       use_fieldwarp=False,
@@ -58,6 +60,8 @@ def init_dwi_trans_wf(template,
             Save registered DWI series as ``.nii.gz``
         use_fieldwarp : bool
             Include SDC warp in single-shot transform from DWI to MNI
+        output_resolution : float
+            Voxel size in mm for the output data
         to_mni : bool
             Include warps to MNI
         write_local_bvecs : bool
@@ -216,8 +220,11 @@ generating a *preprocessed DWI run in {tpl} space*.
     def _get_first(items):
         return items[0]
 
+    get_interpolation = pe.Node(
+        ChooseInterpolator(output_resolution=output_resolution), name='get_interpolation')
+
     dwi_transform = pe.MapNode(
-        ants.ApplyTransforms(interpolation="LanczosWindowedSinc", float=True),
+        ants.ApplyTransforms(float=True),
         name='dwi_transform', iterfield=['input_image', 'transforms'])
 
     merge = pe.Node(Merge(compress=use_compression), name='merge',
@@ -246,6 +253,8 @@ generating a *preprocessed DWI run in {tpl} space*.
         (inputnode, merge, [('name_source', 'header_source')]),
         (inputnode, dwi_transform, [('dwi_files', 'input_image'),
                                     ('output_grid', 'reference_image')]),
+        (inputnode, get_interpolation, [('dwi_files', 'dwi_files')]),
+        (get_interpolation, dwi_transform, [('interpolation_method', 'interpolation')]),
         (dwi_transform, merge, [('output_image', 'in_files')]),
         (merge, outputnode, [('out_file', 'dwi_resampled')]),
         (merge, extract_b0_series, [('out_file', 'dwi_series')]),
