@@ -225,7 +225,7 @@ def get_parser():
         type=float,
         help='the isotropic voxel size in mm the data will be resampled to '
         'after preprocessing. If set to a lower value than the original voxel '
-        'size, your data will be upsampled. This is a required argument.')
+        'size, your data will be upsampled using BSpline interpolation.')
 
     g_coreg = parser.add_argument_group('Options for dwi-to-T1w coregistration')
     g_coreg.add_argument(
