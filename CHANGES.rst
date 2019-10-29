@@ -4,6 +4,7 @@
  * Bugfix: masking was not working on eddy.
  * Bugfix: static versioning was not workign in the container.
  * New graphics in the documentation.
+ * Use BSpline Interpolation if --output-resolution is higher than the input resolution.
 
 
 0.6.0RC1, 0.6.2 (October 13, 2019)
