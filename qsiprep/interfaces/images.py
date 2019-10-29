@@ -443,15 +443,17 @@ class ChooseInterpolator(SimpleInterface):
     output_spec = _ChooseInterpolatorOutputSpec
 
     def _run_interface(self, runtime):
-        output_resolution = np.array([self.inputs.output_resolution] * 3) * 0.9
+        output_resolution = np.array([self.inputs.output_resolution] * 3)
         interpolator = "LanczosWindowedSinc"
         for input_file in self.inputs.dwi_files:
-            original_resolution = np.load(input_file).header.get_zooms()[:3]
-            if np.any(output_resolution < original_resolution):
+            resolution_cutoff = 0.9 * np.array(nb.load(input_file).header.get_zooms()[:3])
+            print(output_resolution, resolution_cutoff)
+            if np.any(output_resolution < resolution_cutoff):
                 interpolator = "BSpline"
                 LOGGER.warning("Using BSpline interpolation for upsampling")
                 break
         self._results['interpolation_method'] = interpolator
+        return runtime
 
 
 class ValidateImageOutputSpec(TraitedSpec):
