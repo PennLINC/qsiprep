@@ -36,6 +36,7 @@ def init_dwi_finalize_wf(scan_groups,
                          shoreline_iters,
                          reportlets_dir,
                          output_spaces,
+                         output_resolution,
                          template,
                          output_dir,
                          omp_nthreads,
@@ -51,12 +52,13 @@ def init_dwi_finalize_wf(scan_groups,
         :graph2use: orig
         :simple_form: yes
 
-        from qsiprep.workflows.dwi.base import init_dwi_finalize_wf(scan_groups, name, output_prefix, ignore, hmc_model, shoreline_iters, reportlets_dir, output_spaces, template, output_dir, omp_nthreads, write_local_bvecs, low_mem, use_syn, make_intramodal_template, layout)
+        from qsiprep.workflows.dwi.base import init_dwi_finalize_wf
         wf = init_dwi_finalize_wf(name='finalize_wf',
                                   omp_nthreads=1,
                                   ignore=[],
                                   reportlets_dir='.',
                                   output_dir='.',
+                                  output_resolution=2.0,
                                   template='MNI152NLin2009cAsym',
                                   output_spaces=['T1w', 'template'],
                                   low_mem=False,
@@ -86,6 +88,8 @@ def init_dwi_finalize_wf(scan_groups,
             Name of template targeted by ``template`` output space
         output_dir : str
             Directory in which to save derivatives
+        output_resolution : float
+            Output voxel resolution in mm
         omp_nthreads : int
             Maximum number of threads an individual process may use
         low_mem : bool
@@ -294,6 +298,7 @@ def init_dwi_finalize_wf(scan_groups,
                                               use_fieldwarp=(fieldmap_type is not None
                                                              or use_syn),
                                               omp_nthreads=omp_nthreads,
+                                              output_resolution=output_resolution,
                                               use_compression=False,
                                               to_mni=False,
                                               write_local_bvecs=write_local_bvecs)
@@ -338,6 +343,7 @@ def init_dwi_finalize_wf(scan_groups,
                                                use_fieldwarp=(fieldmap_type is not None
                                                               or use_syn),
                                                omp_nthreads=omp_nthreads,
+                                               output_resolution=output_resolution,
                                                use_compression=False,
                                                to_mni=True,
                                                write_local_bvecs=write_local_bvecs)
