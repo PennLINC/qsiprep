@@ -18,7 +18,6 @@ import sys
 import os
 import re
 import subprocess
-from warnings import warn
 
 __version__ = 'latest'
 __packagename__ = 'qsiprep-container'

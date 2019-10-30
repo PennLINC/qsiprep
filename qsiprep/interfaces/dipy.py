@@ -31,12 +31,14 @@ from ..interfaces.mrtrix import _convert_fsl_to_mrtrix
 LOGGER = logging.getLogger('nipype.interface')
 TAU_DEFAULT = 1. / (4 * np.pi**2)
 
+
 def popen_run(arg_list):
     cmd = subprocess.Popen(arg_list, stdout=subprocess.PIPE,
                            stderr=subprocess.PIPE)
     out, err = cmd.communicate()
     print(out)
     print(err)
+
 
 class MedianOtsuInputSpec(BaseInterfaceInputSpec):
     in_file = File(exists=True, mandatory=True, desc="b0 template image")

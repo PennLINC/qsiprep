@@ -1,5 +1,4 @@
 from qsiprep.interfaces.bids import QsiReconIngress
-from ...interfaces.anatomical import QsiprepAnatomicalIngress
 qsiprep_output_names = QsiReconIngress().output_spec.class_editable_traits()
 anatomical_input_fields = [
     't1_aparc',

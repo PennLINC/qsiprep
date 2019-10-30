@@ -12,7 +12,7 @@ Interfaces to generate reportlets
 import os
 import time
 import re
-from mpl_toolkits.mplot3d import Axes3D
+from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np

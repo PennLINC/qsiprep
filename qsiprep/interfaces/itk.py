@@ -14,8 +14,6 @@ import subprocess
 from mimetypes import guess_type
 from tempfile import TemporaryDirectory
 import numpy as np
-import nibabel as nb
-
 from nipype import logging
 from nipype.utils.filemanip import fname_presuffix
 from nipype.interfaces.base import (
@@ -210,6 +208,7 @@ def _arrange_xfms(transforms, num_files, tmp_folder):
 
     # Transpose back (only Python 3)
     return list(map(list, zip(*xfms_T)))
+
 
 def disassemble_transform(transform_file, cwd):
     cmd = ['CompositeTransformUtil', '--disassemble', transform_file, 'disassemble']

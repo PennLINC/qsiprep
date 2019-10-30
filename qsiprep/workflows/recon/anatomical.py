@@ -11,18 +11,10 @@ qsiprep base reconstruction workflows
 
 """
 
-import sys
-import os
-import os.path as op
-from copy import deepcopy
-
-from nipype import __version__ as nipype_ver
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
-from nipype.utils.filemanip import split_filename
 from ...engine import Workflow
 import logging
-import json
 from ...interfaces.anatomical import QsiprepAnatomicalIngress
 from ...interfaces.mrtrix import GenerateMasked5tt
 from .interchange import anatomical_input_fields

@@ -1,16 +1,8 @@
 #!/usr/bin/env python
 import warnings
 import os
-import os.path as op
-from pathlib import Path
-import logging
-import sys
-import gc
-import uuid
 from argparse import ArgumentParser
 from argparse import RawTextHelpFormatter
-from multiprocessing import cpu_count
-from time import strftime
 from qsiprep.interfaces.converters import FODtoFIBGZ, FIBGZtoFOD
 
 warnings.filterwarnings("ignore", category=ImportWarning)
@@ -58,7 +50,7 @@ def fib_to_mif():
                            fib_file=opts.fib,
                            ref_image=opts.ref_image,
                            subtract_iso=opts.subtract_iso)
-    outputs = converter.run()
+    converter.run()
 
 
 def mif_to_fib():
@@ -106,8 +98,8 @@ def mif_to_fib():
                                fib_file=opts.fib,
                                num_fibers=opts.num_fibers,
                                unit_odf=opts.unit_odf)
-    outputs = converter.run()
+    converter.run()
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
     mif_to_fib()

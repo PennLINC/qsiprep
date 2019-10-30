@@ -5,25 +5,19 @@ MRTrix workflows
 .. autofunction:: init_mrtrix_csd_recon_wf
 
 """
-import json
 import nipype.pipeline.engine as pe
 import nipype.interfaces.utility as niu
-from nipype.interfaces import afni, mrtrix3
-from nipype.utils.filemanip import copyfile, split_filename
+from nipype.interfaces import afni
 
 import logging
-import os
-import os.path as op
 from qsiprep.interfaces.bids import ReconDerivativesDataSink
-from qsiprep.interfaces.utils import GetConnectivityAtlases
-from qsiprep.interfaces.connectivity import Controllability
-from qsiprep.interfaces.gradients import RemoveDuplicates
-from qsiprep.interfaces.mrtrix import (ResponseSD, EstimateFOD, MRTrixIngress,
-    Dwi2Response, GlobalTractography, MRTrixAtlasGraph, SIFT2, TckGen)
+from qsiprep.interfaces.mrtrix import (EstimateFOD, MRTrixIngress, Dwi2Response,
+                                       GlobalTractography, MRTrixAtlasGraph, SIFT2, TckGen)
 from .interchange import input_fields
 
 LOGGER = logging.getLogger('nipype.interface')
 MULTI_RESPONSE_ALGORITHMS = ('dhollander', 'msmt_5tt')
+
 
 def init_mrtrix_csd_recon_wf(name="mrtrix_recon", output_suffix="", params={}):
     """Create FOD images for WM, GM and CSF.
@@ -89,8 +83,6 @@ def init_mrtrix_csd_recon_wf(name="mrtrix_recon", output_suffix="", params={}):
     create_mif = pe.Node(MRTrixIngress(), name='create_mif')
     estimate_response = pe.Node(Dwi2Response(**response), 'estimate_response')
     estimate_fod = pe.Node(EstimateFOD(**fod), 'estimate_fod')
-
-    use_sift2 = params.get("use_sift2", False)
 
     if response_algorithm == 'msmt_5tt':
         workflow.connect([

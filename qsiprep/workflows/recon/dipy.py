@@ -5,14 +5,9 @@ Dipy Reconstruction workflows
 .. autofunction:: init_dipy_brainsuite_shore_recon_wf
 
 """
-import json
 import nipype.pipeline.engine as pe
 from nipype.interfaces import afni, utility as niu
-from nipype.utils.filemanip import copyfile, split_filename
-
 import logging
-import os
-import os.path as op
 from qsiprep.interfaces.bids import ReconDerivativesDataSink
 from ...interfaces.dipy import BrainSuiteShoreReconstruction, MAPMRIReconstruction
 from .interchange import input_fields
