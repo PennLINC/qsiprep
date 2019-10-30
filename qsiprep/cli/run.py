@@ -553,7 +553,10 @@ license file at several paths, in this order: 1) command line argument ``--fs-li
         raise
     else:
         errno = 0
-        logger.log(25, 'QSIPrep finished without errors')
+        logger.log(25, 'QSI{} finished without errors'.format(mode))
+        if not opts.notrack:
+            sentry_sdk.capture_message('QSI{} finished without errors'.format(mode),
+                                       level='info')
 
     # No reports for recon mode yet
     if mode == "recon":
@@ -564,9 +567,6 @@ license file at several paths, in this order: 1) command line argument ``--fs-li
     write_derivative_description(bids_dir, str(Path(output_dir) / 'qsiprep'))
     if opts.recon_spec is None:
         logger.info("No additional workflows to run.")
-        if not opts.notrack:
-            sentry_sdk.capture_message('QSIPrep finished without errors',
-                                       level='info')
         sys.exit(int(errno > 0))
 
     # Run an additional workflow if preproc + recon are requested
@@ -630,9 +630,9 @@ license file at several paths, in this order: 1) command line argument ``--fs-li
     else:
         errno += 0
         logger.log(25, 'QSIPrep finished without errors')
-    if not opts.notrack:
-        sentry_sdk.capture_message('QSIPrep finished without errors',
-                                   level='info')
+        if not opts.notrack:
+            sentry_sdk.capture_message('QSIPostRecon finished without errors',
+                                       level='info')
     sys.exit(int(errno > 0))
 
 
