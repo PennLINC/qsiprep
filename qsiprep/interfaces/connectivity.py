@@ -1,17 +1,10 @@
 from __future__ import print_function
-
-from nipype.interfaces.base import (TraitedSpec, CommandLineInputSpec, BaseInterfaceInputSpec,
-                                    CommandLine, File, traits, isdefined, SimpleInterface)
-
-import os
-import os.path as op
-from glob import glob
-from nipype.utils.filemanip import fname_presuffix
 import logging
-from copy import deepcopy
 import numpy as np
 from scipy.io.matlab import loadmat, savemat
 from scipy.linalg import schur, svd
+from nipype.interfaces.base import TraitedSpec, BaseInterfaceInputSpec, File, SimpleInterface
+from nipype.utils.filemanip import fname_presuffix
 
 LOGGER = logging.getLogger('nipype.interface')
 

@@ -9,28 +9,19 @@ Image tools interfaces
 
 """
 import os
-import nibabel as nb
 import numpy as np
 import os.path as op
 from scipy.io.matlab import savemat
-from tempfile import TemporaryDirectory
-from time import time
 from copy import deepcopy
 
 from nipype import logging
 from nipype.utils.filemanip import fname_presuffix, split_filename
 from nipype.interfaces.base import (
     traits, TraitedSpec, BaseInterfaceInputSpec, File, SimpleInterface, InputMultiObject,
-    OutputMultiObject, isdefined, CommandLineInputSpec
+    isdefined, CommandLineInputSpec
 )
-from nipype.interfaces.ants.registration import RegistrationInputSpec
-from .gradients import concatenate_bvecs, concatenate_bvals, GradientRotation
-from dipy.core.gradients import gradient_table
-from dipy.reconst.mapmri import MapmriModel
-from ..utils.brainsuite_shore import BrainSuiteShoreModel, brainsuite_shore_basis
-from nipype.interfaces.mrtrix3 import (Generate5tt, ComputeTDI,
-    ResponseSD, MRConvert)
-from nipype.interfaces.mrtrix3.utils import Generate5ttInputSpec, Generate5ttOutputSpec
+from nipype.interfaces.mrtrix3 import Generate5tt, ResponseSD, MRConvert
+from nipype.interfaces.mrtrix3.utils import Generate5ttInputSpec
 from nipype.interfaces.mrtrix3.base import MRTrix3Base, MRTrix3BaseInputSpec
 from nipype.interfaces.mrtrix3.preprocess import ResponseSDInputSpec
 from nipype.interfaces.mrtrix3.tracking import TractographyInputSpec, Tractography
@@ -203,7 +194,7 @@ class GenerateMasked5tt(Generate5tt):
         if name == "out_file":
             output = self.inputs.out_file
             if not isdefined(output):
-                _ , fname, ext = split_filename(self.inputs.in_file)
+                _, fname, ext = split_filename(self.inputs.in_file)
                 output = fname + '_5tt.mif'
             return output
         return None

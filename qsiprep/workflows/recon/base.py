@@ -11,22 +11,16 @@ qsiprep base reconstruction workflows
 
 """
 
-import sys
 import os
 import os.path as op
 from glob import glob
 from copy import deepcopy
 from pkg_resources import resource_filename as pkgrf
-from nipype import __version__ as nipype_ver
-from nipype.interfaces import utility as niu
-from nipype.utils.filemanip import split_filename
 from ...engine import Workflow
-from ...__about__ import __version__
 from ...utils.sloppy_recon import make_sloppy
 
 import logging
 import json
-from ...interfaces.anatomical import QsiprepAnatomicalIngress
 from bids.layout import BIDSLayout
 from .build_workflow import init_dwi_recon_workflow
 from .anatomical import init_recon_anatomical_wf
@@ -143,7 +137,7 @@ def init_single_subject_wf(
                 "atlases": [],
                 "space": "T1w",
                 "anatomical": [],
-                "nodes":[]}
+                "nodes": []}
         space = spec['space']
         # for documentation purposes
         dwi_files = ['/made/up/outputs/sub-X_dwi.nii.gz']

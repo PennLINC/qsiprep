@@ -7,25 +7,17 @@ DSI Studio workflows
 .. autofunction:: init_dsi_studio_export_wf
 
 """
-import json
 import nipype.pipeline.engine as pe
 from nipype.interfaces import afni, utility as niu
-from nipype.utils.filemanip import copyfile, split_filename
 from qsiprep.interfaces.dsi_studio import (DSIStudioCreateSrc, DSIStudioGQIReconstruction,
                                            DSIStudioAtlasGraph, DSIStudioExport,
                                            FixDSIStudioExportHeader)
 
 import logging
-import os
-import os.path as op
 from qsiprep.interfaces.bids import ReconDerivativesDataSink
-from qsiprep.interfaces.utils import GetConnectivityAtlases
-from qsiprep.interfaces.connectivity import Controllability
-from qsiprep.interfaces.gradients import RemoveDuplicates
-from qsiprep.interfaces.mrtrix import ResponseSD, EstimateFOD, MRConvert
+from .interchange import input_fields
 
 LOGGER = logging.getLogger('nipype.interface')
-from .interchange import input_fields
 
 
 def init_dsi_studio_recon_wf(name="dsi_studio_recon", output_suffix="", params={}):

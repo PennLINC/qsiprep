@@ -336,10 +336,10 @@ class BrainSuiteShoreFit():
 
                     j = int(l + m + (2 * np.array(range(0, l, 2)) + 1).sum())
 
-                    Cnl = (((-1)**
+                    Cnl = (((-1) **
                             (n - l / 2)) / (2.0 * (4.0 * np.pi**2 * self.zeta)**(3.0 / 2.0)) * (
-                                (2.0 * (4.0 * np.pi**2 * self.zeta)**
-                                 (3.0 / 2.0) * factorial(n - l)) / (gamma(n + 3.0 / 2.0)))**
+                                (2.0 * (4.0 * np.pi**2 * self.zeta) **
+                                 (3.0 / 2.0) * factorial(n - l)) / (gamma(n + 3.0 / 2.0))) **
                            (1.0 / 2.0))
                     Gnl = (gamma(l / 2 + 3.0 / 2.0) * gamma(3.0 / 2.0 + n)) / \
                         (gamma(l + 3.0 / 2.0) * factorial(n - l)) * \
@@ -377,8 +377,8 @@ class BrainSuiteShoreFit():
 
         for n in range(int(self.radial_order / 2) + 1):
             rtop += c[n] * (-1) ** n * \
-                ((16 * np.pi * self.zeta ** 1.5 * gamma(n + 1.5)) / (
-                 factorial(n))) ** 0.5
+                ((16 * np.pi * self.zeta ** 1.5 * gamma(n + 1.5))
+                 / (factorial(n))) ** 0.5
 
         return np.clip(rtop, 0, rtop.max())
 
@@ -396,9 +396,8 @@ class BrainSuiteShoreFit():
         c = self._shore_coef
         for n in range(int(self.radial_order / 2) + 1):
             rtop += c[n] * (-1) ** n * \
-                ((4 * np.pi ** 2 * self.zeta ** 1.5 * factorial(n)) /
-                 (gamma(n + 1.5))) ** 0.5 * \
-                genlaguerre(n, 0.5)(0)
+                ((4 * np.pi ** 2 * self.zeta ** 1.5 * factorial(n))
+                 / (gamma(n + 1.5))) ** 0.5 * genlaguerre(n, 0.5)(0)
 
         return np.clip(rtop, 0, rtop.max())
 
@@ -426,9 +425,8 @@ class BrainSuiteShoreFit():
 
         for n in range(int(self.radial_order / 2) + 1):
             msd += c[n] * (-1) ** n *\
-                (9 * (gamma(n + 1.5)) / (8 * np.pi ** 6 * self.zeta ** 3.5 *
-                                         factorial(n))) ** 0.5 *\
-                hyp2f1(-n, 2.5, 1.5, 2)
+                (9 * (gamma(n + 1.5)) / (8 * np.pi ** 6 * self.zeta ** 3.5
+                                         * factorial(n))) ** 0.5 * hyp2f1(-n, 2.5, 1.5, 2)
 
         return np.clip(msd, 0, msd.max())
 
@@ -442,11 +440,7 @@ class BrainSuiteShoreFit():
         r"""Recovers the reconstructed signal for any qvalue array or
         gradient table.
         """
-        qvals = np.sqrt(gtab.bvals / self.model.tau) / (2 * np.pi)
-        q = qvals[:, None] * gtab.bvecs
-
         M = brainsuite_shore_basis(self.radial_order, self.zeta, gtab, self.model.tau)
-
         E = S0 * np.dot(M, self._shore_coef)
         return E
 
@@ -497,13 +491,13 @@ def brainsuite_shore_basis(radial_order, zeta, gtab, tau=1 / (4 * np.pi**2)):
     theta[np.isnan(theta)] = 0
 
     # Angular part of the basis - Spherical harmonics
-    S, Z, L = real_sym_sh_brainsuite(radial_order, theta, phi)
+    S, _, L = real_sym_sh_brainsuite(radial_order, theta, phi)
     Snew = []
     R = []
     for n in range(radial_order + 1):
         for l in range(0, n + 1, 2):
             Snew.append(S[:, L == l])
-            for m in range(-l, l + 1):
+            for _ in range(-l, l + 1):
                 # Radial part
                 R.append(genlaguerre(n - l, l + 0.5)(r ** 2 / zeta) *
                          np.exp(- r ** 2 / (2.0 * zeta)) *
@@ -536,24 +530,20 @@ def brainsuite_shore_matrix_pdf(radial_order, zeta, rtab):
 
     r, theta, phi = cart2sphere(rtab[:, 0], rtab[:, 1], rtab[:, 2])
     theta[np.isnan(theta)] = 0
-    F = radial_order / 2
     psi = []
 
     # Angular part of the basis - Spherical harmonics
-    S, Z, L = real_sym_sh_brainsuite(radial_order, theta, phi)
+    S, _, L = real_sym_sh_brainsuite(radial_order, theta, phi)
     Snew = []
 
     for n in range(radial_order + 1):
         for l in range(0, n + 1, 2):
             Snew.append(S[:, L == l])
-            for m in range(-l, l + 1):
+            for _ in range(-l, l + 1):
                 psi.append(
-                    genlaguerre(n - l, l + 0.5)(4 * np.pi ** 2 *
-                                                zeta * r ** 2) *\
-                    np.exp(-2 * np.pi ** 2 * zeta * r ** 2) *\
-                    _kappa_pdf(zeta, n, l) * \
-                    (4 * np.pi ** 2 * zeta * r ** 2) ** (l / 2) * \
-                    (-1) ** (n - l / 2))
+                    genlaguerre(n - l, l + 0.5)(4 * np.pi ** 2 * zeta * r ** 2)
+                    * np.exp(-2 * np.pi ** 2 * zeta * r ** 2) * _kappa_pdf(zeta, n, l)
+                    * (4 * np.pi ** 2 * zeta * r ** 2) ** (l / 2) * (-1) ** (n - l / 2))
 
     return np.column_stack(psi) * np.column_stack(Snew)
 
@@ -581,30 +571,29 @@ def shore_matrix_odf(radial_order, zeta, sphere_vertices):
     Image Analysis, 2013.
     """
 
-    r, theta, phi = cart2sphere(sphere_vertices[:, 0], sphere_vertices[:, 1],
+    _, theta, phi = cart2sphere(sphere_vertices[:, 0], sphere_vertices[:, 1],
                                 sphere_vertices[:, 2])
     theta[np.isnan(theta)] = 0
     upsilon = []
 
     # Angular part of the basis - Spherical harmonics
-    S, Z, L = real_sym_sh_brainsuite(radial_order, theta, phi)
+    S, _, L = real_sym_sh_brainsuite(radial_order, theta, phi)
     Snew = []
 
     for n in range(radial_order + 1):
         for l in range(0, n + 1, 2):
             Snew.append(S[:, L == l])
-            for m in range(-l, l + 1):
-                upsilon.append( (-1) ** (n - l / 2.0) * \
-                    _kappa_odf(zeta, n, l) * \
-                    hyp2f1(l - n, l / 2.0 + 1.5, l + 1.5, 2.0))
+            for _ in range(-l, l + 1):
+                upsilon.append((-1) ** (n - l / 2.0) * _kappa_odf(zeta, n, l) * hyp2f1(
+                    l - n, l / 2.0 + 1.5, l + 1.5, 2.0))
 
     return np.column_stack(upsilon) * np.column_stack(Snew)
 
 
 def _kappa_odf(zeta, n, l):
     return np.sqrt(
-        (gamma(l / 2.0 + 1.5)**2 * gamma(n + 1.5) * 2**
-         (l + 3)) / (16 * np.pi**3 * (zeta)**1.5 * factorial(n - l) * gamma(l + 1.5)**2))
+        (gamma(l / 2.0 + 1.5)**2 * gamma(n + 1.5) * 2 ** (l + 3)) / (
+            16 * np.pi**3 * (zeta)**1.5 * factorial(n - l) * gamma(l + 1.5)**2))
 
 
 def create_rspace(gridsize, radius_max):
@@ -648,3 +637,7 @@ def shore_index_matrix(radial_order):
             for m in range(-l, l + 1):
                 indices.append((n, l, m))
     return np.array(indices).astype(np.int)
+
+
+def shore_matrix_pdf(radial_order, zeta, rtab):
+    raise NotImplementedError()

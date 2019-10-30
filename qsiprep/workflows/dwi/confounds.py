@@ -12,11 +12,8 @@ from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
 from nipype.algorithms import confounds as nac
 
-from ...interfaces.gradients import CombineMotions
 from ...engine import Workflow
-from ...interfaces import (
-    AddTSVHeader, GatherConfounds, DMRISummary, DerivativesDataSink
-)
+from ...interfaces import AddTSVHeader, GatherConfounds
 
 
 DEFAULT_MEMORY_MIN_GB = 0.01

@@ -29,7 +29,7 @@ from shutil import copytree, rmtree, copyfileobj
 from nipype import logging
 from nipype.interfaces.base import (
     traits, isdefined, TraitedSpec, BaseInterfaceInputSpec,
-    File, Directory, InputMultiPath, OutputMultiPath, Str,
+    File, Directory, OutputMultiPath, Str,
     SimpleInterface, InputMultiObject, OutputMultiObject
 )
 from nipype.utils.filemanip import copyfile, split_filename
@@ -56,7 +56,7 @@ def get_bids_params(fullpath):
     matches = {"subject_id": None, "session_id": None, "task_id": None,
                "acq_id": None, "space_id": None, "rec_id": None, "run_id": None}
     for pattern in bids_patterns:
-        pat = re.compile( pattern)
+        pat = re.compile(pattern)
         match = pat.search(fullpath)
         params = match.groupdict() if match is not None else {}
         matches.update(params)
@@ -118,10 +118,10 @@ class QsiReconIngress(SimpleInterface):
         # Anat is above ses
         if path_parts[-1].startswith('ses'):
             path_parts.pop()
+        """
         qp_root = op.sep.join(path_parts)
         anat_root = op.join(qp_root, 'anat')
         sub = self._results['subject_id']
-        """
         if space == "space-T1w":
             self._get_if_exists('tpms', anat_root + "/%s_label-*_probseg.nii*" % sub)
             self._get_if_exists('t1_brain',
@@ -252,8 +252,8 @@ class BIDSDataGrabber(SimpleInterface):
 class DerivativesDataSinkInputSpec(BaseInterfaceInputSpec):
     base_directory = traits.Directory(
         desc='Path to the base directory for storing data.')
-    in_file = InputMultiPath(File(exists=True), mandatory=True,
-                             desc='the object to be saved')
+    in_file = InputMultiObject(File(exists=True), mandatory=True,
+                               desc='the object to be saved')
     source_file = File(exists=False, mandatory=True, desc='the original file')
     prefix = traits.Str(mandatory=False, desc='prefix for output files')
     space = traits.Str('', usedefault=True, desc='Label for space field')
@@ -267,7 +267,7 @@ class DerivativesDataSinkInputSpec(BaseInterfaceInputSpec):
 
 
 class DerivativesDataSinkOutputSpec(TraitedSpec):
-    out_file = OutputMultiPath(File(exists=True, desc='written file path'))
+    out_file = OutputMultiObject(File(exists=True, desc='written file path'))
     compression = OutputMultiPath(
         traits.Bool, desc='whether ``in_file`` was compressed/uncompressed '
                           'or `it was copied directly.')

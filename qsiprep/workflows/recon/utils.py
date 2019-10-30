@@ -7,29 +7,13 @@ Miscellaneous workflows
 
 
 """
-import numpy as np
-import os
 import nipype.pipeline.engine as pe
 import nipype.interfaces.utility as niu
-import os.path as op
-import nibabel as nb
-from nipype.interfaces.base import (BaseInterfaceInputSpec, TraitedSpec, File, SimpleInterface,
-                                    InputMultiObject, OutputMultiObject, traits, isdefined)
-from nipype.utils.filemanip import fname_presuffix
 import logging
-from qsiprep.interfaces.connectivity import Controllability
 from qsiprep.interfaces.gradients import RemoveDuplicates
-from dipy.core.geometry import cart2sphere
-from dipy.direction import peak_directions
-from dipy.core.sphere import HemiSphere
-import subprocess
-from scipy.io.matlab import loadmat, savemat
-from pkg_resources import resource_filename as pkgr
-from qsiprep.interfaces.converters import FODtoFIBGZ
-from qsiprep.interfaces.bids import ReconDerivativesDataSink
-from .interchange import input_fields, default_connections
+from .interchange import input_fields
 from qsiprep.interfaces import ConformDwi
-from qsiprep.interfaces.mrtrix import ResponseSD, EstimateFOD, MRConvert, MRTrixGradientTable
+from qsiprep.interfaces.mrtrix import MRTrixGradientTable
 LOGGER = logging.getLogger('nipype.workflow')
 
 

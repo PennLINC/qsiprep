@@ -8,21 +8,19 @@ Prepare files for TOPUP and eddy
 
 """
 import os
-import json
-from pkg_resources import resource_filename as pkgr_fn
 import os.path as op
+import json
 from collections import defaultdict
-from tempfile import TemporaryDirectory
+from pkg_resources import resource_filename as pkgr_fn
 import numpy as np
 import nibabel as nb
-from nipype.interfaces import fsl
-from .images import to_lps, reorient_to
-
 from nipype import logging
 from nipype.utils.filemanip import fname_presuffix, split_filename
+from nipype.interfaces import fsl
 from nipype.interfaces.base import (
-    traits, TraitedSpec, BaseInterfaceInputSpec, File, InputMultiObject, OutputMultiObject,
-    SimpleInterface, isdefined)
+    traits, TraitedSpec, BaseInterfaceInputSpec, File, InputMultiObject, SimpleInterface,
+    isdefined)
+from .images import to_lps
 LOGGER = logging.getLogger('nipype.interface')
 
 
@@ -321,12 +319,12 @@ class ExtendedEddy(fsl.Eddy):
 
         return outputs
 
-
     def _format_arg(self, name, spec, value):
         if name == 'field':
-            pth, fname, ext = split_filename(value)
+            pth, fname, _ = split_filename(value)
             return spec.argstr % op.join(pth, fname)
         return super(ExtendedEddy, self)._format_arg(name, spec, value)
+
 
 class Eddy2SPMMotionInputSpec(BaseInterfaceInputSpec):
     eddy_motion = File(exists=True)

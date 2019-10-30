@@ -10,16 +10,12 @@ Merge and denoise dwi images
 
 """
 
-import os
-from collections import defaultdict
-
-import nibabel as nb
 from nipype import logging
 
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
 
-from ...interfaces import MergeDWIs, ConformDwi, ValidateImage
+from ...interfaces import MergeDWIs, ConformDwi
 from ...interfaces.mrtrix import DWIDenoise
 
 from ...engine import Workflow

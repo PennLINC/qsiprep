@@ -15,18 +15,7 @@ import nibabel as nb
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu, fsl, afni, ants
 from ...niworkflows.interfaces import SimpleBeforeAfter
-from ...niworkflows.interfaces.fixes import (
-    FixHeaderRegistration as Registration,
-    FixHeaderApplyTransforms as ApplyTransforms,
-)
-from ...niworkflows.interfaces.masks import SimpleShowMaskRPT
-from ...niworkflows.interfaces.registration import EstimateReferenceImage
-from ...niworkflows.interfaces.utils import CopyXForm
-
 from ...engine import Workflow
-from ...interfaces import ValidateImage, MatchHeader
-from ...interfaces.dipy import HistEQ, MedianOtsu
-from ...interfaces.nilearn import MaskEPI
 from ...interfaces.ants import ImageMath
 from ...interfaces import DerivativesDataSink
 

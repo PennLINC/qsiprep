@@ -232,6 +232,7 @@ def init_prepare_epi_wf(omp_nthreads, name="prepare_epi_wf"):
 
     return workflow
 
+
 def init_prepare_dwi_epi_wf(omp_nthreads, orientation="LPS", name="prepare_epi_wf"):
     """
     This workflow takes in a set of dwi files with with the same phase
@@ -290,6 +291,7 @@ def init_prepare_dwi_epi_wf(omp_nthreads, orientation="LPS", name="prepare_epi_w
     ])
 
     return workflow
+
 
 def _fix_hdr(in_file, newpath=None):
     import nibabel as nb

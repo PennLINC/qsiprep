@@ -5,9 +5,6 @@ QSI workflow
 =====
 """
 import warnings
-warnings.filterwarnings("ignore", category=ImportWarning)
-warnings.filterwarnings("ignore", category=PendingDeprecationWarning)
-warnings.filterwarnings("ignore", category=DeprecationWarning)
 import os
 import os.path as op
 from pathlib import Path
@@ -19,6 +16,9 @@ from argparse import ArgumentParser
 from argparse import RawTextHelpFormatter
 from multiprocessing import cpu_count
 from time import strftime
+warnings.filterwarnings("ignore", category=ImportWarning)
+warnings.filterwarnings("ignore", category=PendingDeprecationWarning)
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 logging.addLevelName(25,
                      'IMPORTANT')  # Add a new level between INFO and WARNING
@@ -282,7 +282,8 @@ def get_parser():
         action='store',
         help='path to a json file with settings for the call to eddy. If no '
         'json is specified, a default one will be used. The current default '
-        'json can be found here: https://github.com/PennBBL/qsiprep/blob/master/qsiprep/data/eddy_params.json')
+        'json can be found here: '
+        'https://github.com/PennBBL/qsiprep/blob/master/qsiprep/data/eddy_params.json')
     g_moco.add_argument(
         '--shoreline_iters', '--shoreline-iters',
         action='store',
@@ -590,6 +591,7 @@ license file at several paths, in this order: 1) command line argument ``--fs-li
             errno = 1
         else:
             raise
+
 
 def build_qsiprep_workflow(opts, retval):
     """
