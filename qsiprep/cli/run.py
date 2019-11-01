@@ -541,7 +541,7 @@ license file at several paths, in this order: 1) command line argument ``--fs-li
     except Exception as e:
         if not opts.notrack:
             from ..utils.sentry import process_crashfile
-            crashfolders = [output_dir / 'qsiprep' / 'sub-{}'.format(s) / 'log' / run_uuid
+            crashfolders = [Path(output_dir) / 'qsiprep' / 'sub-{}'.format(s) / 'log' / run_uuid
                             for s in subject_list]
             for crashfolder in crashfolders:
                 for crashfile in crashfolder.glob('crash*.*'):

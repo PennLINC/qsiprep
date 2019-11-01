@@ -73,7 +73,7 @@ def sentry_setup(opts, exec_env):
         if exec_env == 'qsiprep-docker':
             scope.set_tag('docker_version', os.getenv('DOCKER_VERSION_8395080871'))
 
-        dset_desc_path = opts.bids_dir / 'dataset_description.json'
+        dset_desc_path = Path(opts.bids_dir) / 'dataset_description.json'
         if dset_desc_path.exists():
             desc_content = dset_desc_path.read_bytes()
             scope.set_tag('dset_desc_sha256', hashlib.sha256(desc_content).hexdigest())
