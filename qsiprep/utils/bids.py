@@ -210,9 +210,6 @@ def validate_input_dir(exec_env, bids_dir, participant_label):
             "TSV_EMPTY_CELL",
             "TSV_IMPROPER_NA",
             "VOLUME_COUNT_MISMATCH",
-            "BVAL_MULTIPLE_ROWS",
-            "BVEC_NUMBER_ROWS",
-            "DWI_MISSING_BVAL",
             "INCONSISTENT_SUBJECTS",
             "INCONSISTENT_PARAMETERS",
             "PARTICIPANT_ID_COLUMN",
@@ -243,7 +240,7 @@ def validate_input_dir(exec_env, bids_dir, participant_label):
             "MISSING_SESSION"
         ],
         "error": ["NO_T1W"],
-        "ignoredFiles": ['/dataset_description.json', '/participants.tsv']
+        "ignoredFiles": ['/README', '/dataset_description.json', '/participants.tsv']
     }
     # Limit validation only to data from requested participants
     if participant_label:
