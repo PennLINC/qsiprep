@@ -18,7 +18,6 @@ import os
 import os.path as op
 import re
 import subprocess
-from warnings import warn
 
 __version__ = 'latest'
 __packagename__ = 'qsiprep-container'
@@ -104,9 +103,9 @@ def check_singularity():
      1  Test run OK
      """
     try:
-        ret = subprocess.run(['singularity', '--version'],
-                             stdout=subprocess.PIPE,
-                             stderr=subprocess.PIPE)
+        subprocess.run(['singularity', '--version'],
+                       stdout=subprocess.PIPE,
+                       stderr=subprocess.PIPE)
     except OSError as e:
         from errno import ENOENT
         if e.errno == ENOENT:

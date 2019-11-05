@@ -10,8 +10,6 @@ Anatomical reference preprocessing workflows
 
 """
 
-import os.path as op
-
 from pkg_resources import resource_filename as pkgr
 
 from nipype.pipeline import engine as pe
@@ -29,7 +27,6 @@ from nipype.interfaces.ants import BrainExtraction, N4BiasFieldCorrection
 
 from ..niworkflows.interfaces.registration import RobustMNINormalizationRPT
 from ..niworkflows.interfaces.masks import ROIsPlot
-from ..niworkflows.interfaces.ants import AI
 from ..niworkflows.interfaces.freesurfer import RobustRegister
 from ..niworkflows.interfaces.segmentation import ReconAllRPT
 
@@ -817,8 +814,6 @@ def init_skullstrip_afni_wf(debug, omp_nthreads, acpc_template, name='skullstrip
         out_report
             Reportlet visualizing quality of skull-stripping
     """
-    from ..niworkflows.data.getters import get_template, TEMPLATE_ALIASES
-
     workflow = Workflow(name=name)
     workflow.__desc__ = """\
 The T1w-reference was then skull-stripped using `3dSkullStrip`
@@ -852,8 +847,8 @@ The T1w-reference was then skull-stripped using `3dSkullStrip`
     rigid_acpc_align = pe.Node(ants.Registration(), name='rigid_acpc_align', n_procs=omp_nthreads)
     rigid_acpc_align.inputs.metric = ["Mattes"]
     rigid_acpc_align.inputs.transforms = ["Rigid"]
-    rigid_acpc_align.inputs.shrink_factors = [[ 2, 1]]
-    rigid_acpc_align.inputs.smoothing_sigmas = [[ 1., 0.]]
+    rigid_acpc_align.inputs.shrink_factors = [[2, 1]]
+    rigid_acpc_align.inputs.smoothing_sigmas = [[1., 0.]]
     rigid_acpc_align.inputs.sigma_units = ["vox"]
     rigid_acpc_align.inputs.sampling_strategy = ['Random']
     rigid_acpc_align.inputs.sampling_percentage = [0.25]
@@ -1569,6 +1564,7 @@ def init_anat_derivatives_wf(output_dir, output_spaces, template, freesurfer,
         ])
 
     return workflow
+
 
 def _seg2msks(in_file, newpath=None):
     """Converts labels to masks"""

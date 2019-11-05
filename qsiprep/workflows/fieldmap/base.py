@@ -174,7 +174,6 @@ co-registration with the anatomical reference.
 
     # PEPOLAR path
     if fieldmap_info['suffix'] in ('epi', 'rpe_series'):
-        using_rpe_series = fieldmap_info['suffix'] == 'rpe_series'
         outputnode.inputs.method = \
             'PEB/PEPOLAR (phase-encoding based / PE-POLARity): %s' % fieldmap_info['suffix']
 

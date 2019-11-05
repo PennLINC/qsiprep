@@ -254,8 +254,8 @@ def init_fmap_unwarp_report_wf(name='fmap_unwarp_report_wf', suffix='hmcsdc'):
         fields=['in_pre', 'in_post', 'in_seg', 'in_xfm']), name='inputnode')
 
     map_seg = pe.Node(
-            ApplyTransforms(dimension=3, float=True, interpolation='MultiLabel',
-                             invert_transform_flags=[True]),
+        ApplyTransforms(dimension=3, float=True, interpolation='MultiLabel',
+                        invert_transform_flags=[True]),
         name='map_seg',
         mem_gb=0.3)
 

@@ -1,20 +1,13 @@
 #!python
-from __future__ import print_function
-
-from nipype.interfaces.base import (TraitedSpec, CommandLineInputSpec, BaseInterfaceInputSpec,
-                                    CommandLine, File, traits, isdefined, SimpleInterface,
-                                    InputMultiObject, OutputMultiObject)
-from nipype.interfaces import ants
-
 import os
 import os.path as op
-from glob import glob
-from nipype.utils.filemanip import fname_presuffix, split_filename
 import logging
-from copy import deepcopy
-import numpy as np
-from scipy.io.matlab import loadmat, savemat
-import nibabel as nb
+
+from nipype.interfaces.base import (TraitedSpec, CommandLineInputSpec, BaseInterfaceInputSpec,
+                                    CommandLine, File, traits, isdefined, InputMultiObject,
+                                    OutputMultiObject)
+from nipype.interfaces import ants
+from nipype.utils.filemanip import split_filename
 LOGGER = logging.getLogger('nipype.interface')
 
 
@@ -72,6 +65,7 @@ class MultivariateTemplateConstruction2OutputSpec(TraitedSpec):
     reverse_transforms = OutputMultiObject(
         OutputMultiObject(File(exists=True)), mandatory=True)
     iteration_templates = OutputMultiObject(File(exists=True))
+
 
 class MultivariateTemplateConstruction2(CommandLine):
     input_spec = MultivariateTemplateConstruction2InputSpec

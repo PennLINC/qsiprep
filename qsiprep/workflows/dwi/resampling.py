@@ -8,16 +8,14 @@ Resampling workflows
 .. autofunction:: init_dwi_trans_wf
 
 """
-import os.path as op
-
 from nipype.pipeline import engine as pe
-from nipype.interfaces import afni, utility as niu, ants
+from nipype.interfaces import utility as niu, ants
 
 from .util import init_dwi_reference_wf
 from ...engine import Workflow
 from ...interfaces.nilearn import Merge
 from ...interfaces.gradients import (ComposeTransforms, ExtractB0s, GradientRotation,
-                                     LocalGradientRotation, SplitIntramodalTransform)
+                                     LocalGradientRotation)
 from ...interfaces.itk import DisassembleTransform
 from ...interfaces.images import ChooseInterpolator
 

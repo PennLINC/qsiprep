@@ -9,27 +9,11 @@ Image tools interfaces
 
 """
 
-from qsiprep.__about__ import __version__
-import os
-import numpy as np
-import nibabel as nb
-import nilearn.image as nli
-from textwrap import indent
-from dipy.io import read_bvals_bvecs
-import nipype.interfaces.utility as niu
-import nipype.pipeline.engine as pe
 from nipype import logging
-from glob import glob
-from nipype.utils.filemanip import fname_presuffix
-from nipype.interfaces.base import (isdefined, traits, TraitedSpec, BaseInterfaceInputSpec,
-                                    SimpleInterface, File, InputMultiObject, OutputMultiObject)
-from ..workflows.anatomical import (init_anat_preproc_wf, DerivativesDataSink,
-                                    fix_multi_T1w_source_name)
-from .bids import BIDSFreeSurferDir, BIDSDataGrabber, BIDSInfo
-from .reports import SubjectSummary, AboutSummary
-from ..utils.bids import collect_data
-from ..engine import Workflow
 import os.path as op
+from glob import glob
+from nipype.interfaces.base import (traits, TraitedSpec, BaseInterfaceInputSpec,
+                                    SimpleInterface, File)
 
 LOGGER = logging.getLogger('nipype.interface')
 
@@ -83,8 +67,6 @@ class QsiprepAnatomicalIngressOutputSpec(TraitedSpec):
     t1_2_mni_reverse_transform = File()
     # sub-1_from-T1w_to-MNI152NLin2009cAsym_mode-image_xfm.h5
     t1_2_mni_forward_transform = File()
-
-
     # sub-1_space-MNI152NLin2009cAsym_desc-brain_mask.nii.gz
     template_brain_mask = File()
     # sub-1_space-MNI152NLin2009cAsym_desc-preproc_T1w.nii.gz

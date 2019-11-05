@@ -5,9 +5,6 @@ QSI workflow
 =====
 """
 import warnings
-warnings.filterwarnings("ignore", category=ImportWarning)
-warnings.filterwarnings("ignore", category=PendingDeprecationWarning)
-warnings.filterwarnings("ignore", category=DeprecationWarning)
 import os
 import os.path as op
 from pathlib import Path
@@ -19,6 +16,9 @@ from argparse import ArgumentParser
 from argparse import RawTextHelpFormatter
 from multiprocessing import cpu_count
 from time import strftime
+warnings.filterwarnings("ignore", category=ImportWarning)
+warnings.filterwarnings("ignore", category=PendingDeprecationWarning)
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 logging.addLevelName(25,
                      'IMPORTANT')  # Add a new level between INFO and WARNING
@@ -282,7 +282,8 @@ def get_parser():
         action='store',
         help='path to a json file with settings for the call to eddy. If no '
         'json is specified, a default one will be used. The current default '
-        'json can be found here: https://github.com/PennBBL/qsiprep/blob/master/qsiprep/data/eddy_params.json')
+        'json can be found here: '
+        'https://github.com/PennBBL/qsiprep/blob/master/qsiprep/data/eddy_params.json')
     g_moco.add_argument(
         '--shoreline_iters', '--shoreline-iters',
         action='store',
@@ -444,8 +445,15 @@ def main():
             exec_env = 'docker'
             if os.getenv('DOCKER_VERSION_8395080871'):
                 exec_env = 'qsiprep-docker'
+
+    sentry_sdk = None
+    if not opts.notrack:
+        import sentry_sdk
+        from ..utils.sentry import sentry_setup
+        sentry_setup(opts, exec_env)
+
     # Validate inputs
-    if not opts.recon_only and not opts.skip_bids_validation:
+    if not (opts.recon_only or opts.skip_bids_validation):
         print("Making sure the input data is BIDS compliant (warnings can be ignored in most "
               "cases).")
         validate_input_dir(exec_env, opts.bids_dir, opts.participant_label)
@@ -521,13 +529,34 @@ license file at several paths, in this order: 1) command line argument ``--fs-li
 
     # Clean up master process before running workflow, which may create forks
     gc.collect()
+
+    # Sentry tracking
+    if not opts.notrack:
+        from ..utils.sentry import start_ping
+        start_ping(run_uuid, len(subject_list))
+
+    errno = 1
     try:
         qsiprep_wf.run(**plugin_settings)
-    except RuntimeError as e:
-        if "Workflow did not execute cleanly" in str(e):
-            errno = 1
-        else:
-            raise
+    except Exception as e:
+        if not opts.notrack:
+            from ..utils.sentry import process_crashfile
+            crashfolders = [Path(output_dir) / 'qsiprep' / 'sub-{}'.format(s) / 'log' / run_uuid
+                            for s in subject_list]
+            for crashfolder in crashfolders:
+                for crashfile in crashfolder.glob('crash*.*'):
+                    process_crashfile(crashfile)
+
+            if "Workflow did not execute cleanly" not in str(e):
+                sentry_sdk.capture_exception(e)
+        logger.critical('QSIPrep failed: %s', e)
+        raise
+    else:
+        errno = 0
+        logger.log(25, 'QSI{} finished without errors'.format(mode))
+        if not opts.notrack:
+            sentry_sdk.capture_message('QSI{} finished without errors'.format(mode),
+                                       level='info')
 
     # No reports for recon mode yet
     if mode == "recon":
@@ -585,11 +614,27 @@ license file at several paths, in this order: 1) command line argument ``--fs-li
     gc.collect()
     try:
         qsirecon_post_wf.run(**plugin_settings)
-    except RuntimeError as e:
-        if "Workflow did not execute cleanly" in str(e):
-            errno = 1
-        else:
-            raise
+    except Exception as e:
+        if not opts.notrack:
+            from ..utils.sentry import process_crashfile
+            crashfolders = [output_dir / 'qsiprep' / 'sub-{}'.format(s) / 'log' / run_uuid
+                            for s in subject_list]
+            for crashfolder in crashfolders:
+                for crashfile in crashfolder.glob('crash*.*'):
+                    process_crashfile(crashfile)
+
+            if "Workflow did not execute cleanly" not in str(e):
+                sentry_sdk.capture_exception(e)
+        logger.critical('QSIPrep failed: %s', e)
+        raise
+    else:
+        errno += 0
+        logger.log(25, 'QSIPrep finished without errors')
+        if not opts.notrack:
+            sentry_sdk.capture_message('QSIPostRecon finished without errors',
+                                       level='info')
+    sys.exit(int(errno > 0))
+
 
 def build_qsiprep_workflow(opts, retval):
     """

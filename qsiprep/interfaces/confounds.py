@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 from nipype import logging
 from nipype.interfaces.base import (
-    traits, TraitedSpec, BaseInterfaceInputSpec, File, Directory, isdefined,
+    traits, TraitedSpec, BaseInterfaceInputSpec, File, isdefined,
     SimpleInterface, InputMultiObject
 )
 from .gradients import concatenate_bvecs, concatenate_bvals
