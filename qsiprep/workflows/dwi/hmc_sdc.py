@@ -7,7 +7,6 @@ Orchestrating the dwi-preprocessing workflow
 
 """
 
-import os
 from nipype import logging
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu

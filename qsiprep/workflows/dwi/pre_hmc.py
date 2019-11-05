@@ -6,25 +6,16 @@ Orchestrating the dwi-preprocessing workflow
 
 """
 
-import os
-
-import nibabel as nb
 from nipype import logging
 
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
 
 from ...interfaces.images import SplitDWIs, ConcatRPESplits
-from ...interfaces.gradients import SliceQC
-from ...interfaces.confounds import DMRISummary
-from ...interfaces.mrtrix import MRTrixGradientTable
 from ...engine import Workflow
 
 # dwi workflows
-from ..fieldmap.base import init_sdc_wf
 from .merge import init_merge_and_denoise_wf
-from .hmc import init_dwi_hmc_wf
-from .util import init_dwi_reference_wf, _create_mem_gb, _get_wf_name, _get_first
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger('nipype.workflow')
@@ -100,7 +91,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
         rpe_series = scan_groups['fieldmap_info']['rpe_series']
         # Merge, denoise, split, hmc on the plus series
         plus_files, minus_files = (rpe_series, dwi_series) if dwi_series_pedir.endswith("-") \
-                                   else (dwi_series, rpe_series)
+            else (dwi_series, rpe_series)
         merge_plus = init_merge_and_denoise_wf(dwi_denoise_window=dwi_denoise_window,
                                                denoise_before_combining=denoise_before_combining,
                                                orientation=orientation,

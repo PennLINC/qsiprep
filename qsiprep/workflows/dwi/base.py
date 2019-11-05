@@ -473,5 +473,6 @@ def init_dwi_preproc_wf(scan_groups,
             workflow.get_node(node).inputs.source_file = str(source_file)
     return workflow
 
+
 def _get_first(lll):
     return lll[0]

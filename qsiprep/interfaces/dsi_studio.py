@@ -212,8 +212,8 @@ class DSIStudioGQIReconstruction(DSIStudioReconstruction):
         print("split src name", srcname)
         target = os.path.join(os.getcwd(), srcname) + \
             "*odf%d*f%d*gqi.%.2f.fib.gz" % (self.inputs.odf_order,
-            self.inputs.num_fibers,
-            self.inputs.ratio_of_mean_diffusion_distance)
+                                            self.inputs.num_fibers,
+                                            self.inputs.ratio_of_mean_diffusion_distance)
         print("search target", target)
         results = glob(target)
         assert len(results) == 1

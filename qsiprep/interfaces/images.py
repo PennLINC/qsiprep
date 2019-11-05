@@ -608,6 +608,7 @@ def reorient(in_file, newpath=None):
     to_lps(nb.load(in_file)).to_filename(out_file)
     return out_file
 
+
 def reorient_to(in_file, orientation="LPS", newpath=None):
     out_file = fname_presuffix(in_file, suffix='_'+orientation, newpath=newpath)
     to_lps(in_file, tuple(orientation)).to_filename(out_file)

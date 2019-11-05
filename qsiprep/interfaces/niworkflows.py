@@ -10,34 +10,10 @@ Image tools interfaces
 """
 import nibabel as nb
 import numpy as np
-from skimage import morphology as sim
-from scipy.ndimage.morphology import binary_fill_holes
-
-from nilearn.masking import compute_epi_mask
-from nilearn.image import concat_imgs
-
 from nipype import logging
-from nipype.utils.filemanip import fname_presuffix
-from nipype.interfaces.base import (
-    traits, isdefined, TraitedSpec, BaseInterfaceInputSpec,
-    File, InputMultiPath, SimpleInterface
-)
-
-import numpy as np
-import nibabel as nb
-import pandas as pd
 
 import matplotlib.pyplot as plt
 from matplotlib import gridspec as mgs
-import matplotlib.cm as cm
-from matplotlib.colors import ListedColormap, Normalize
-from matplotlib.colorbar import ColorbarBase
-
-from nilearn.plotting import plot_img
-from nilearn.signal import clean
-from nilearn._utils import check_niimg_4d
-from nilearn._utils.niimg import _safe_get_data
-
 import seaborn as sns
 from seaborn import color_palette
 from nipype.interfaces.ants import Registration

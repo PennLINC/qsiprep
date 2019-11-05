@@ -993,7 +993,7 @@ def group_by_warpspace(dwi_files, layout, prefer_dedicated_fmaps, using_eddy, ig
                         key, match))
                 final_groups.append(
                     {'dwi_series': scan_list,
-                     'fieldmap_info': {'suffix': 'rpe_series', 'rpe_series': match_scan_list,},
+                     'fieldmap_info': {'suffix': 'rpe_series', 'rpe_series': match_scan_list},
                      'dwi_series_pedir': pe_dir})
             else:
                 matches_rationale.append(

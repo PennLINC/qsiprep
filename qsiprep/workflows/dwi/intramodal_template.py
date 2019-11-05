@@ -8,19 +8,15 @@ Head motion correction
 """
 import nipype.pipeline.engine as pe
 from pkg_resources import resource_filename as pkgrf
-from nipype.interfaces import ants, afni, utility as niu
+from nipype.interfaces import ants, utility as niu
 from ...engine import Workflow
-from ...interfaces.gradients import MatchTransforms, GradientRotation, CombineMotions
 from ...interfaces.ants import MultivariateTemplateConstruction2
-from ...interfaces import DerivativesDataSink
 from .util import init_skullstrip_b0_wf
 from .hmc import init_b0_hmc_wf
 from .registration import init_b0_to_anat_registration_wf
 
 
 DEFAULT_MEMORY_MIN_GB = 0.01
-
-
 
 
 def init_intramodal_template_wf(inputs_list, t1w_source_file, reportlets_dir, transform="Rigid",
@@ -135,8 +131,8 @@ def init_intramodal_template_wf(inputs_list, t1w_source_file, reportlets_dir, tr
 
 
 def init_qsiprep_intramodal_template_wf(
-    inputs_list, transform="Rigid", num_iterations=2,
-    mem_gb=3, omp_nthreads=1, name="intramodal_template_wf"):
+            inputs_list, transform="Rigid", num_iterations=2,
+            mem_gb=3, omp_nthreads=1, name="intramodal_template_wf"):
     """Create an unbiased intramodal template for a subject. This aligns the b=0 references
     from all the scans of a subject. Can be rigid, affine or nonlinear (BSplineSyN).
 
@@ -269,9 +265,6 @@ def nonlinear_alignment_iteration(iternum=0, gradient_step=0.2):
     averaged_images = pe.Node(
         ants.AverageImages(normalize=True, dimension=3),
         name="averaged_images")
-
-    # Make an automask
-    mask_average = pe.Node(afni.Automask(), name='mask_average')
 
     # Shape update to template:
     # Average the affines so that the inverse can be applied to the template

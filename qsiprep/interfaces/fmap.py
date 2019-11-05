@@ -15,17 +15,15 @@ Interfaces to deal with the various types of fieldmap sources
 
 """
 import os.path as op
+import shutil
 import numpy as np
 import nibabel as nb
 from nipype import logging
-from nipype.utils.filemanip import (
-    fname_presuffix, split_filename, copyfile, related_filetype_sets)
-
+from nipype.utils.filemanip import fname_presuffix, split_filename
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec, TraitedSpec, File, isdefined, traits,
     SimpleInterface, InputMultiObject, OutputMultiObject)
-from .images import reorient_to, to_lps
-import shutil
+from .images import to_lps
 
 LOGGER = logging.getLogger('nipype.interface')
 
