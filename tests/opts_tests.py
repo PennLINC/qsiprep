@@ -26,6 +26,15 @@ def test_required():
         assert pa_fail.value.code == 2
 
 
+def test_required_recononly(monkeypatch):
+    # dont need output_resolution if we have recon_only
+    base_args = "--bids-dir bids --output-dir out --analysis-level participant --recon_only"
+    args = base_args.split(' ')
+    # sys.argv used to set if output-res required
+    monkeypatch.setattr('qsiprep.cli.run.sys.argv', args)
+    get_parser().parse_args(args)
+
+
 def test_set_freesurfer_license(tmpdir):
     """test setting, precedence, and error if DNE"""
     # create temp file

@@ -221,7 +221,8 @@ def get_parser():
     g_conf.add_argument(
         '--output-resolution', '--output_resolution',
         action='store',
-        required=True,
+        # required when not recon-only (which can be specified in sysargs 2 ways)
+        required=not any(rcn in sys.argv for rcn in ['--recon-only', '--recon_only']),
         type=float,
         help='the isotropic voxel size in mm the data will be resampled to '
         'after preprocessing. If set to a lower value than the original voxel '
