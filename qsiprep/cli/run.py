@@ -652,7 +652,6 @@ def main():
     sys.exit(int(errno > 0))
 
 
-
 def build_qsiprep_workflow(opts, retval):
     """
     Create the Nipype Workflow that supports the whole execution
