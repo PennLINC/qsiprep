@@ -291,8 +291,8 @@ jobs:
             qsiprep-docker -i pennbbl/qsiprep:latest \
                 -e qsiprep_DEV 1 -u $(id -u) \
                 --config $PWD/nipype.cfg -w /tmp/DSCSDSI/work \
-                --bids-dir /tmp/data/DSCSDSI_nofmap --output-dir /tmp/DSCSDSI/derivatives \
-                --analysis-level participant \
+                 /tmp/data/DSCSDSI_nofmap  /tmp/DSCSDSI/derivatives \
+                 participant \
                 --force-spatial-normalization \
                 --sloppy --write-graph --mem_mb 4096 \
                 --nthreads 2 --anat-only -vv --output-resolution 5
@@ -314,8 +314,8 @@ jobs:
             qsiprep-docker -i pennbbl/qsiprep:latest \
                 -e qsiprep_DEV 1 -u $(id -u) \
                 --config $PWD/nipype.cfg -w /tmp/DSCSDSI/work \
-                --bids-dir /tmp/data/DSCSDSI_nofmap --output-dir /tmp/DSCSDSI/derivatives \
-                --analysis-level participant \
+                 /tmp/data/DSCSDSI_nofmap  /tmp/DSCSDSI/derivatives \
+                 participant \
                 --sloppy --write-graph --use-syn-sdc --force-syn --mem_mb 4096 \
                 --output-space T1w \
                 --hmc_model 3dSHORE \
@@ -388,8 +388,8 @@ jobs:
                 -e qsiprep_DEV 1 -u $(id -u) \
                 --combine-all-dwis \
                 --config $PWD/nipype.cfg -w /tmp/DSCSDSI_BUDS/work \
-                --bids-dir /tmp/data/DSCSDSI_BUDS --output-dir /tmp/DSCSDSI_BUDS/derivatives \
-                --analysis-level participant \
+                 /tmp/data/DSCSDSI_BUDS  /tmp/DSCSDSI_BUDS/derivatives \
+                 participant \
                 --sloppy --write-graph --mem_mb 4096 \
                 --output-space T1w \
                 --hmc_model none \
@@ -450,8 +450,8 @@ jobs:
             qsiprep-docker -i pennbbl/qsiprep:latest \
                 -e qsiprep_DEV 1 -u $(id -u) \
                 --config $PWD/nipype.cfg -w /tmp/DSDTI/work \
-                --bids-dir /tmp/data/DSDTI --output-dir /tmp/DSDTI/derivatives \
-                --analysis-level participant \
+                 /tmp/data/DSDTI  /tmp/DSDTI/derivatives \
+                 participant \
                 --force-spatial-normalization \
                 --sloppy --write-graph --mem_mb 4096 \
                 --nthreads 2 --anat-only -vv --output-resolution 5
@@ -468,8 +468,8 @@ jobs:
             qsiprep-docker -i pennbbl/qsiprep:latest \
                 -e qsiprep_DEV 1 -u $(id -u) \
                 --config $PWD/nipype.cfg -w /tmp/DSDTI/work \
-                --bids-dir /tmp/data/DSDTI --output-dir /tmp/DSDTI/derivatives \
-                --analysis-level participant \
+                 /tmp/data/DSDTI  /tmp/DSDTI/derivatives \
+                 participant \
                 --sloppy --mem_mb 4096 \
                 --force-spatial-normalization \
                 --output-space T1w \
@@ -534,8 +534,8 @@ jobs:
             qsiprep-docker -i pennbbl/qsiprep:latest \
                 -e qsiprep_DEV 1 -u $(id -u) \
                 --config $PWD/nipype.cfg -w /tmp/DSDTI/nofmap_work \
-                --bids-dir /tmp/data/DSDTI --output-dir /tmp/DSDTI/nofmap_derivatives \
-                --analysis-level participant \
+                 /tmp/data/DSDTI  /tmp/DSDTI/nofmap_derivatives \
+                 participant \
                 --sloppy --mem_mb 4096 \
                 --force-spatial-normalization \
                 --output-space T1w \
@@ -559,8 +559,8 @@ jobs:
             qsiprep-docker -i pennbbl/qsiprep:latest \
                 -e qsiprep_DEV 1 -u $(id -u) \
                 --config $PWD/nipype.cfg -w /tmp/DSDTI/nofmap_work \
-                --bids-dir /tmp/data/DSDTI --output-dir /tmp/DSDTI/synfmap_derivatives \
-                --analysis-level participant \
+                 /tmp/data/DSDTI  /tmp/DSDTI/synfmap_derivatives \
+                 participant \
                 --sloppy --mem_mb 4096 \
                 --force-syn \
                 --force-spatial-normalization \
@@ -625,8 +625,8 @@ jobs:
             qsiprep-docker -i pennbbl/qsiprep:latest \
                 -e qsiprep_DEV 1 -u $(id -u) \
                 --config $PWD/nipype.cfg -w /tmp/twoses/work \
-                --bids-dir /tmp/data/twoses --output-dir /tmp/twoses/derivatives \
-                --analysis-level participant \
+                 /tmp/data/twoses  /tmp/twoses/derivatives \
+                 participant \
                 --sloppy --mem_mb 4096 \
                 --output-space T1w \
                 --hmc_model none \
@@ -693,11 +693,11 @@ jobs:
             qsiprep-docker -i pennbbl/qsiprep:latest \
                 -e qsiprep_DEV 1 -u $(id -u) \
                 --config $PWD/nipype.cfg -w /tmp/multishell_output/work \
-                --bids-dir /tmp/data/multishell_output/qsiprep \
+                 /tmp/data/multishell_output/qsiprep \
                 --recon-input /tmp/data/multishell_output/qsiprep \
-                --output-dir /tmp/multishell_output/derivatives/mrtrix_dhollander_no5tt \
+                 /tmp/multishell_output/derivatives/mrtrix_dhollander_no5tt \
                 --sloppy \
-                --analysis-level participant \
+                 participant \
                 --recon-spec mrtrix_dhollander_no5tt \
                 --recon-only \
                 --mem_mb 4096 \
@@ -715,11 +715,11 @@ jobs:
             qsiprep-docker -i pennbbl/qsiprep:latest \
                 -e qsiprep_DEV 1 -u $(id -u) \
                 --config $PWD/nipype.cfg -w /tmp/multishell_output/work \
-                --bids-dir /tmp/data/multishell_output/qsiprep \
+                 /tmp/data/multishell_output/qsiprep \
                 --recon-input /tmp/data/multishell_output/qsiprep \
-                --output-dir /tmp/multishell_output/derivatives/mrtrix_dhollander \
+                 /tmp/multishell_output/derivatives/mrtrix_dhollander \
                 --sloppy \
-                --analysis-level participant \
+                 participant \
                 --recon-spec mrtrix_dhollander \
                 --recon-only \
                 --mem_mb 4096 \
@@ -737,11 +737,11 @@ jobs:
             qsiprep-docker -i pennbbl/qsiprep:latest \
                 -e qsiprep_DEV 1 -u $(id -u) \
                 --config $PWD/nipype.cfg -w /tmp/multishell_output/work \
-                --bids-dir /tmp/data/multishell_output/qsiprep \
+                 /tmp/data/multishell_output/qsiprep \
                 --recon-input /tmp/data/multishell_output/qsiprep \
-                --output-dir /tmp/multishell_output/derivatives/mrtrix_msmt_csd \
+                 /tmp/multishell_output/derivatives/mrtrix_msmt_csd \
                 --sloppy \
-                --analysis-level participant \
+                 participant \
                 --recon-spec mrtrix_msmt_csd \
                 --recon-only \
                 --mem_mb 4096 \
@@ -759,11 +759,11 @@ jobs:
             qsiprep-docker -i pennbbl/qsiprep:latest \
                 -e qsiprep_DEV 1 -u $(id -u) \
                 --config $PWD/nipype.cfg -w /tmp/multishell_output/work \
-                --bids-dir /tmp/data/multishell_output/qsiprep \
+                 /tmp/data/multishell_output/qsiprep \
                 --recon-input /tmp/data/multishell_output/qsiprep \
-                --output-dir /tmp/multishell_output/derivatives/mrtrix_tckglobal \
+                 /tmp/multishell_output/derivatives/mrtrix_tckglobal \
                 --sloppy \
-                --analysis-level participant \
+                 participant \
                 --recon-spec mrtrix_tckglobal \
                 --recon-only \
                 --mem_mb 4096 \
@@ -781,11 +781,11 @@ jobs:
             qsiprep-docker -i pennbbl/qsiprep:latest \
                 -e qsiprep_DEV 1 -u $(id -u) \
                 --config $PWD/nipype.cfg -w /tmp/multishell_output/work \
-                --bids-dir /tmp/data/multishell_output/qsiprep \
+                 /tmp/data/multishell_output/qsiprep \
                 --recon-input /tmp/data/multishell_output/qsiprep \
-                --output-dir /tmp/multishell_output/derivatives/dsi_studio_gqi \
+                 /tmp/multishell_output/derivatives/dsi_studio_gqi \
                 --sloppy \
-                --analysis-level participant \
+                 participant \
                 --recon-spec dsi_studio_gqi \
                 --recon-only \
                 --mem_mb 4096 \
@@ -803,11 +803,11 @@ jobs:
             qsiprep-docker -i pennbbl/qsiprep:latest \
                 -e qsiprep_DEV 1 -u $(id -u) \
                 --config $PWD/nipype.cfg -w /tmp/multishell_output/work \
-                --bids-dir /tmp/data/multishell_output/qsiprep \
+                 /tmp/data/multishell_output/qsiprep \
                 --recon-input /tmp/data/multishell_output/qsiprep \
-                --output-dir /tmp/multishell_output/derivatives/dipy_mapmri \
+                 /tmp/multishell_output/derivatives/dipy_mapmri \
                 --sloppy \
-                --analysis-level participant \
+                 participant \
                 --recon-spec dipy_mapmri \
                 --recon-only \
                 --mem_mb 4096 \

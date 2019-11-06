@@ -13,7 +13,7 @@ import sys
 import gc
 import uuid
 from argparse import ArgumentParser
-from argparse import RawTextHelpFormatter
+from argparse import ArgumentDefaultsHelpFormatter
 from multiprocessing import cpu_count
 from time import strftime
 warnings.filterwarnings("ignore", category=ImportWarning)
@@ -46,28 +46,23 @@ def get_parser():
 
     parser = ArgumentParser(
         description='qsiprep: q-Space Image PREProcessing workflows',
-        formatter_class=RawTextHelpFormatter)
+        formatter_class=ArgumentDefaultsHelpFormatter)
 
     # Arguments as specified by BIDS-Apps
     # required, positional arguments
     # IMPORTANT: they must go directly with the parser object
-    parser.add_argument('--bids_dir', '--bids-dir',
+    parser.add_argument('bids_dir',
                         type=Path,
-                        required=True,
                         action='store',
-                        default='',
                         help='the root folder of a BIDS valid dataset (sub-XXXXX folders '
                         'should be found at the top level in this folder).')
-    parser.add_argument('--output_dir', '--output-dir',
-                        required=True,
+    parser.add_argument('output_dir',
                         action='store',
                         type=Path,
-                        default='',
                         help='the output path for the outcomes of preprocessing and visual'
                         ' reports')
-    parser.add_argument('--analysis_level', '--analysis-level',
+    parser.add_argument('analysis_level',
                         choices=['participant'],
-                        required=True,
                         action='store',
                         help='processing stage to be run, only "participant" in the case of '
                         'qsiprep (see BIDS-Apps specification).')
