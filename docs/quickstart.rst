@@ -16,8 +16,7 @@ in the BIDS input::
 One way to process these data would be to call ``qsiprep`` like this::
 
   qsiprep \
-    --bids-dir /path/to/inputs \
-    --output-dir /path/to/outputs \
+    /path/to/inputs /path/to/outputs participant \
     --combine-all-dwis \
     --denoise-before-combining \
     --dwi-denoise-window 7 \
@@ -25,7 +24,6 @@ One way to process these data would be to call ``qsiprep`` like this::
     --output-space T1w \
     --force-spatial-normalization \
     --hmc-model eddy \
-    --analysis-level participant \
     --fs-license-file /path/to/license.txt
 
 

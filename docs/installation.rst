@@ -31,7 +31,7 @@ print it out for reporting purposes, and then run the command, e.g.::
     $ qsiprep-docker /path/to/data/dir /path/to/output/dir participant
     RUNNING: docker run --rm -it -v /path/to/data/dir:/data:ro \
         -v /path/to_output/dir:/out pennbbl/qsiprep:1.0.0 \
-        --bids-dir /data --output_dir /out --analysis_level participant
+        /data /out participant
     ...
 
 You may also invoke ``docker`` directly::
@@ -40,7 +40,7 @@ You may also invoke ``docker`` directly::
         -v filepath/to/data/dir:/data:ro \
         -v filepath/to/output/dir:/out \
         pennbbl/qsiprep:latest \
-        --bids-dir /data --output_dir /out --analysis_level participant
+        /data /out participant
 
 For example: ::
 
@@ -48,7 +48,7 @@ For example: ::
         -v $HOME/fullds005:/data:ro \
         -v $HOME/dockerout:/out \
         pennbbl/qsiprep:latest \
-        --bids-dir /data --output_dir /out --analysis_level participant \
+        /data /out participant \
         --ignore fieldmaps
 
 See `External Dependencies`_ for more information (e.g., specific versions) on
