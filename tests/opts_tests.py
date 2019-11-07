@@ -2,7 +2,7 @@ import pytest
 import os
 from qsiprep.cli.run import set_freesurfer_license, validate_bids, get_parser
 
-base_args = "--bids-dir bids --output-dir out --analysis-level participant --output_resolution 2.3"
+base_args = "bids out participant --output_resolution 2.3"
 
 
 def test_required():
@@ -18,17 +18,15 @@ def test_required():
     assert pa_fail.value.code == 2
 
     # missing one of any of the base args
-    # all base args are pairs of 2
-    for i in [0, 2, 4, 6]:
-        part_args = args[0:i] + args[(i+2):]
+    for part_args in ["bids", "bids out", "bid out participant"]:
         with pytest.raises(SystemExit) as pa_fail:
-            get_parser().parse_args(part_args)
+            get_parser().parse_args(part_args.split(' '))
         assert pa_fail.value.code == 2
 
 
 def test_required_recononly(monkeypatch):
     # dont need output_resolution if we have recon_only
-    base_args = "--bids-dir bids --output-dir out --analysis-level participant --recon_only"
+    base_args = "bids out participant --recon_only"
     args = base_args.split(' ')
     # sys.argv used to set if output-res required
     monkeypatch.setattr('qsiprep.cli.run.sys.argv', args)
