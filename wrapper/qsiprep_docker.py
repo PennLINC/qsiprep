@@ -220,21 +220,13 @@ def get_parser():
         add_help=False)
 
     # Standard qsiprep arguments
-    parser.add_argument('--bids_dir', '--bids-dir',
-                        type=os.path.abspath,
-                        required=True,
-                        action='store',
+    parser.add_argument('bids_dir', nargs='?', type=os.path.abspath,
                         default='')
-    parser.add_argument('--output_dir', '--output-dir',
-                        required=True,
-                        action='store',
-                        type=os.path.abspath,
+    parser.add_argument('output_dir', nargs='?', type=os.path.abspath,
                         default='')
-    parser.add_argument('--analysis_level', '--analysis-level',
-                        choices=['participant'],
-                        required=True,
-                        action='store',
+    parser.add_argument('analysis_level', nargs='?', choices=['participant'],
                         default='participant')
+
     # For qsirecon
     parser.add_argument('--recon-input', '--recon_input',
                         required=False,
@@ -380,10 +372,9 @@ def main():
             '-v', '{}:/opt/freesurfer/license.txt:ro'.format(
                 opts.fs_license_file)])
 
-    main_args = []
+    main_args = ['/data', '/out', opts.analysis_level]
     if opts.bids_dir:
         command.extend(['-v', ':'.join((opts.bids_dir, '/data', 'ro'))])
-        main_args.extend(['--bids-dir', '/data'])
     if opts.recon_input:
         command.extend(['-v', ':'.join((opts.recon_input, '/qsiprep-output', 'ro'))])
         main_args.extend(['--recon-input', '/qsiprep-output'])
@@ -400,17 +391,12 @@ def main():
         command.extend(['-v', ':'.join((opts.custom_atlases, '/atlas/qsirecon_atlases'))])
     if opts.output_dir:
         command.extend(['-v', ':'.join((opts.output_dir, '/out'))])
-        main_args.extend(['--output-dir', '/out'])
-    main_args.extend(['--analysis-level', opts.analysis_level])
-
     if opts.work_dir:
         command.extend(['-v', ':'.join((opts.work_dir, '/scratch'))])
         unknown_args.extend(['-w', '/scratch'])
-
     if opts.config:
         command.extend(['-v', ':'.join((opts.config,
                                         '/root/.nipype/nipype.cfg', 'ro'))])
-
     if opts.shell:
         command.append('--entrypoint=bash')
 
