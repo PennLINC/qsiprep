@@ -453,6 +453,9 @@ def main():
               "cases).")
         validate_input_dir(exec_env, opts.bids_dir, opts.participant_label)
 
+    if not opts.recon_only and opts.output_resolution is None:
+        raise RuntimeError("--output-resolution is required unless you're using --recon-only")
+
     # FreeSurfer license
     default_license = str(Path(os.getenv('FREESURFER_HOME')) / 'license.txt')
     # Precedence: --fs-license-file, $FS_LICENSE, default_license
