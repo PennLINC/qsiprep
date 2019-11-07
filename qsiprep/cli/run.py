@@ -419,28 +419,21 @@ def get_parser():
 def validate_bids(opts):
     """Validate bids unless opts say otherwise"""
     from ..utils.bids import validate_input_dir
-    exec_env = os.name
 
     # special variable set in the container
     if os.getenv('IS_DOCKER_8395080871'):
-        exec_env = 'singularity'
+        os.name = 'singularity'
         cgroup = Path('/proc/1/cgroup')
         if cgroup.exists() and 'docker' in cgroup.read_text():
-            exec_env = 'docker'
+            os.name = 'docker'
             if os.getenv('DOCKER_VERSION_8395080871'):
-                exec_env = 'qsiprep-docker'
-
-    sentry_sdk = None
-    if not opts.notrack:
-        import sentry_sdk
-        from ..utils.sentry import sentry_setup
-        sentry_setup(opts, exec_env)
+                os.name = 'qsiprep-docker'
 
     # Validate inputs
     if not (opts.recon_only or opts.skip_bids_validation):
         print("Making sure the input data is BIDS compliant (warnings can be ignored in most "
               "cases).")
-        validate_input_dir(exec_env, opts.bids_dir, opts.participant_label)
+        validate_input_dir(os.name, opts.bids_dir, opts.participant_label)
         return True
     return False
 
@@ -476,6 +469,12 @@ def main():
 
     warnings.showwarning = _warn_redirect
     opts = get_parser().parse_args()
+
+    sentry_sdk = None
+    if not opts.notrack:
+        import sentry_sdk
+        from ..utils.sentry import sentry_setup
+        sentry_setup(opts, os.name)
 
     validate_bids(opts)
 
