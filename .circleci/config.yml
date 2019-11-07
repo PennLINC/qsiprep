@@ -693,11 +693,11 @@ jobs:
             qsiprep-docker -i pennbbl/qsiprep:latest \
                 -e qsiprep_DEV 1 -u $(id -u) \
                 --config $PWD/nipype.cfg -w /tmp/multishell_output/work \
-                 /tmp/data/multishell_output/qsiprep \
-                --recon-input /tmp/data/multishell_output/qsiprep \
+                 /tmp/data/multishell_output/qsiprep  \
                  /tmp/multishell_output/derivatives/mrtrix_dhollander_no5tt \
-                --sloppy \
                  participant \
+                --recon-input /tmp/data/multishell_output/qsiprep \
+                --sloppy \
                 --recon-spec mrtrix_dhollander_no5tt \
                 --recon-only \
                 --mem_mb 4096 \
@@ -716,10 +716,10 @@ jobs:
                 -e qsiprep_DEV 1 -u $(id -u) \
                 --config $PWD/nipype.cfg -w /tmp/multishell_output/work \
                  /tmp/data/multishell_output/qsiprep \
-                --recon-input /tmp/data/multishell_output/qsiprep \
                  /tmp/multishell_output/derivatives/mrtrix_dhollander \
-                --sloppy \
                  participant \
+                --sloppy \
+                --recon-input /tmp/data/multishell_output/qsiprep \
                 --recon-spec mrtrix_dhollander \
                 --recon-only \
                 --mem_mb 4096 \
@@ -738,10 +738,10 @@ jobs:
                 -e qsiprep_DEV 1 -u $(id -u) \
                 --config $PWD/nipype.cfg -w /tmp/multishell_output/work \
                  /tmp/data/multishell_output/qsiprep \
-                --recon-input /tmp/data/multishell_output/qsiprep \
                  /tmp/multishell_output/derivatives/mrtrix_msmt_csd \
-                --sloppy \
                  participant \
+                --sloppy \
+                --recon-input /tmp/data/multishell_output/qsiprep \
                 --recon-spec mrtrix_msmt_csd \
                 --recon-only \
                 --mem_mb 4096 \
@@ -760,10 +760,10 @@ jobs:
                 -e qsiprep_DEV 1 -u $(id -u) \
                 --config $PWD/nipype.cfg -w /tmp/multishell_output/work \
                  /tmp/data/multishell_output/qsiprep \
-                --recon-input /tmp/data/multishell_output/qsiprep \
                  /tmp/multishell_output/derivatives/mrtrix_tckglobal \
-                --sloppy \
                  participant \
+                --sloppy \
+                --recon-input /tmp/data/multishell_output/qsiprep \
                 --recon-spec mrtrix_tckglobal \
                 --recon-only \
                 --mem_mb 4096 \
@@ -782,11 +782,11 @@ jobs:
                 -e qsiprep_DEV 1 -u $(id -u) \
                 --config $PWD/nipype.cfg -w /tmp/multishell_output/work \
                  /tmp/data/multishell_output/qsiprep \
-                --recon-input /tmp/data/multishell_output/qsiprep \
                  /tmp/multishell_output/derivatives/dsi_studio_gqi \
-                --sloppy \
                  participant \
+                --sloppy \
                 --recon-spec dsi_studio_gqi \
+                --recon-input /tmp/data/multishell_output/qsiprep \
                 --recon-only \
                 --mem_mb 4096 \
                 --nthreads 2 -vv
@@ -804,10 +804,10 @@ jobs:
                 -e qsiprep_DEV 1 -u $(id -u) \
                 --config $PWD/nipype.cfg -w /tmp/multishell_output/work \
                  /tmp/data/multishell_output/qsiprep \
-                --recon-input /tmp/data/multishell_output/qsiprep \
                  /tmp/multishell_output/derivatives/dipy_mapmri \
-                --sloppy \
                  participant \
+                --recon-input /tmp/data/multishell_output/qsiprep \
+                --sloppy \
                 --recon-spec dipy_mapmri \
                 --recon-only \
                 --mem_mb 4096 \

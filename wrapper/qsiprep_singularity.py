@@ -332,7 +332,7 @@ def main():
     mem_gib = mem_bytes/(1024.**3)
     if mem_gib < 10:
         print('Warning: <10GB of RAM is available on your system.\n'
-              'Some parts of xcpEngine may fail to complete.')
+              'Some parts of QSIPrep may fail to complete.')
     if not (opts.help or opts.version or '--reports-only' in unknown_args) and mem_gib < 10:
         print('Warning: <10GB of RAM is available within your '
               'environment.\nSome parts of qsiprep may fail to complete.')
@@ -355,7 +355,7 @@ def main():
             command.extend(['-B',
                             '{}:{}/{}'.format(repo_path, PKG_PATH, pkg)])
 
-    main_args = []
+    main_args = ['/sngl/data', '/sngl/out', opts.analysis_level]
     if opts.fs_license_file:
         license_dir, license_fname = op.split(opts.fs_license_file)
         mounted_license = "/mnt/" + license_fname
@@ -363,7 +363,6 @@ def main():
         main_args.extend(['--fs-license-file', mounted_license])
     if opts.bids_dir:
         command.extend(['-B', ':'.join((opts.bids_dir, '/sngl/data'))])
-        main_args.extend(['--bids-dir', '/sngl/data'])
     if opts.recon_input:
         command.extend(['-B', ':'.join((opts.recon_input, '/sngl/qsiprep-output'))])
         main_args.extend(['--recon-input', '/sngl/qsiprep-output'])
@@ -383,12 +382,8 @@ def main():
     if opts.output_dir:
         mkdir(opts.output_dir)
         command.extend(['-B', ':'.join((opts.output_dir, '/sngl/out'))])
-        main_args.extend(['--output-dir', '/sngl/out'])
     if opts.custom_atlases:
         command.extend(['-B', ':'.join((opts.custom_atlases, '/atlas/qsirecon_atlases'))])
-
-    main_args.extend(['--analysis-level', opts.analysis_level])
-
     if opts.work_dir:
         mkdir(opts.work_dir)
         command.extend(['-B', ':'.join((opts.work_dir, '/sngl/scratch'))])
