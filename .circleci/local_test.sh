@@ -71,8 +71,8 @@ export FS_LICENSE=${WORKDIR}/fslicense/license.txt
   qsiprep \
       --stop-on-first-crash \
       -w ${WORKDIR}/DSCSDSI/work \
-      --bids-dir ${WORKDIR}/data/DSCSDSI_nofmap --output-dir ${WORKDIR}/DSCSDSI/derivatives \
-      --analysis-level participant \
+      ${WORKDIR}/data/DSCSDSI_nofmap ${WORKDIR}/DSCSDSI/derivatives \
+      participant \
       --force-spatial-normalization \
       --sloppy --write-graph --mem_mb 4096 \
       --fs-license-file $FREESURFER_HOME/license.txt \
@@ -82,8 +82,8 @@ export FS_LICENSE=${WORKDIR}/fslicense/license.txt
 # command: |
   qsiprep \
       -w ${WORKDIR}/DSCSDSI/work \
-      --bids-dir ${WORKDIR}/data/DSCSDSI_nofmap --output-dir ${WORKDIR}/DSCSDSI/derivatives \
-      --analysis-level participant \
+       ${WORKDIR}/data/DSCSDSI_nofmap  ${WORKDIR}/DSCSDSI/derivatives \
+       participant \
       --sloppy --write-graph --use-syn-sdc --force-syn --mem_mb 4096 \
       --output-space T1w \
       --hmc_model 3dSHORE \
@@ -97,10 +97,10 @@ export FS_LICENSE=${WORKDIR}/fslicense/license.txt
 # name: Run DIPY 3dSHORE recon on outputs
 # command: |
   qsiprep -w ${WORKDIR}/DSCSDSI/work \
-      --bids-dir ${WORKDIR}/data/DSCSDSI_nofmap \
+       ${WORKDIR}/data/DSCSDSI_nofmap \
       --recon-input ${WORKDIR}/DSCSDSI/derivatives/qsiprep \
-      --output-dir ${WORKDIR}/DSCSDSI/derivatives \
-      --analysis-level participant \
+       ${WORKDIR}/DSCSDSI/derivatives \
+       participant \
       --recon-spec ${HOME}/projects/qsiprep/.circleci/3dshore_dsistudio_mrtrix.json \
       --recon-only \
       --mem_mb 4096 \
@@ -116,9 +116,9 @@ export FS_LICENSE=${WORKDIR}/fslicense/license.txt
   mkdir -p ${WORKDIR}/DSDTI/work ${WORKDIR}/DSDTI/derivatives
   qsiprep \
       -w ${WORKDIR}/DSDTI/work \
-      --bids-dir ${WORKDIR}/data/DSDTI \
-      --output-dir ${WORKDIR}/DSDTI/derivatives \
-      --analysis-level participant \
+       ${WORKDIR}/data/DSDTI \
+       ${WORKDIR}/DSDTI/derivatives \
+       participant \
       --sloppy --write-graph --mem_mb 4096 \
       --fs-license-file $FREESURFER_HOME/license.txt \
       --anat-only -vv --output-resolution 5
@@ -127,8 +127,8 @@ export FS_LICENSE=${WORKDIR}/fslicense/license.txt
 # command: |
   qsiprep \
       -w ${WORKDIR}/DSDTI/work \
-      --bids-dir ${WORKDIR}/data/DSDTI --output-dir ${WORKDIR}/DSDTI/derivatives \
-      --analysis-level participant \
+       ${WORKDIR}/data/DSDTI  ${WORKDIR}/DSDTI/derivatives \
+       participant \
       --sloppy --mem_mb 4096 \
       --output-space T1w \
       --hmc_model eddy \
@@ -141,8 +141,8 @@ export FS_LICENSE=${WORKDIR}/fslicense/license.txt
       # Run eddy without fieldmaps
       qsiprep \
           -w ${WORKDIR}/DSDTI/work \
-          --bids-dir ${WORKDIR}/data/DSDTI --output-dir ${WORKDIR}/DSDTI/derivatives \
-          --analysis-level participant \
+           ${WORKDIR}/data/DSDTI  ${WORKDIR}/DSDTI/derivatives \
+           participant \
           --sloppy --mem_mb 4096 \
           --output-space T1w \
           --ignore fieldmaps \
@@ -155,8 +155,8 @@ export FS_LICENSE=${WORKDIR}/fslicense/license.txt
           # Run eddy with syn
           qsiprep \
               -w ${WORKDIR}/DSDTI/work \
-              --bids-dir ${WORKDIR}/data/DSDTI --output-dir ${WORKDIR}/DSDTI/derivatives \
-              --analysis-level participant \
+               ${WORKDIR}/data/DSDTI  ${WORKDIR}/DSDTI/derivatives \
+               participant \
               --sloppy --mem_mb 4096 \
               --output-space T1w \
               --ignore fieldmaps \
@@ -169,10 +169,10 @@ export FS_LICENSE=${WORKDIR}/fslicense/license.txt
 # name: run mrtrix3 connectome workflow on DSDTI
 # command: |
   qsiprep -w ${WORKDIR}/DSDTI/work \
-      --bids-dir ${WORKDIR}/data/DSDTI \
+       ${WORKDIR}/data/DSDTI \
       --recon-input ${WORKDIR}/DSDTI/derivatives/qsiprep \
-      --output-dir ${WORKDIR}/DSDTI/derivatives \
-      --analysis-level participant \
+       ${WORKDIR}/DSDTI/derivatives \
+       participant \
       --recon-spec ${HOME}/projects/qsiprep/.circleci/mrtrix_msmt_csd_test.json \
       --recon-only \
       --mem_mb 4096 \
@@ -186,8 +186,8 @@ export FS_LICENSE=${WORKDIR}/fslicense/license.txt
   mkdir -p ${WORKDIR}/twoses/work ${WORKDIR}/twoses/derivatives
   qsiprep \
       -w ${WORKDIR}/twoses/work \
-      --bids-dir ${WORKDIR}/data/twoses --output-dir ${WORKDIR}/twoses/derivatives \
-      --analysis-level participant \
+       ${WORKDIR}/data/twoses  ${WORKDIR}/twoses/derivatives \
+       participant \
       --sloppy --mem_mb 4096 \
       --output-space T1w \
       --hmc_model none \
@@ -204,9 +204,9 @@ export FS_LICENSE=${WORKDIR}/fslicense/license.txt
 mkdir -p ${WORKDIR}/DSCSDSI_BUDS/work ${WORKDIR}/DSCSDSI_BUDS/derivatives
   qsiprep \
       -w ${WORKDIR}/DSCSDSI_BUDS/work \
-      --bids-dir ${WORKDIR}/data/DSCSDSI_BUDS --output-dir ${WORKDIR}/DSCSDSI_BUDS/derivatives \
+       ${WORKDIR}/data/DSCSDSI_BUDS  ${WORKDIR}/DSCSDSI_BUDS/derivatives \
       --combine-all-dwis \
-      --analysis-level participant \
+       participant \
       --sloppy --write-graph --mem_mb 4096 \
       --output-space T1w \
       --hmc_model none \
@@ -219,10 +219,10 @@ mkdir -p ${WORKDIR}/DSCSDSI_BUDS/work ${WORKDIR}/DSCSDSI_BUDS/derivatives
 # name: Run mrtrix on downsampled abcd
 # command: |
   qsiprep -w /Users/mcieslak/Desktop/multishell_output/DSCSDSI/work \
-      --bids-dir /Users/mcieslak/Desktop/multishell_output/qsiprep \
+       /Users/mcieslak/Desktop/multishell_output/qsiprep \
       --recon-input /Users/mcieslak/Desktop/multishell_output/qsiprep \
-      --output-dir /Users/mcieslak/Desktop/multishell_output/multishell_output/derivatives \
-      --analysis-level participant \
+       /Users/mcieslak/Desktop/multishell_output/multishell_output/derivatives \
+       participant \
       --recon-spec mrtrix_msmt_csd \
       --sloppy \
       --recon-only \

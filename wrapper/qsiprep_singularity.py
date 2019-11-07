@@ -201,21 +201,13 @@ def get_parser():
         add_help=False)
 
     # Standard qsiprep arguments
-    parser.add_argument('--bids_dir', '--bids-dir',
-                        type=os.path.abspath,
-                        required=True,
-                        action='store',
+    parser.add_argument('bids_dir', nargs='?', type=os.path.abspath,
                         default='')
-    parser.add_argument('--output_dir', '--output-dir',
-                        required=True,
-                        action='store',
-                        type=os.path.abspath,
+    parser.add_argument('output_dir', nargs='?', type=os.path.abspath,
                         default='')
-    parser.add_argument('--analysis_level', '--analysis-level',
-                        choices=['participant'],
-                        required=True,
-                        action='store',
+    parser.add_argument('analysis_level', nargs='?', choices=['participant'],
                         default='participant')
+
     # For qsirecon
     parser.add_argument('--recon-input', '--recon_input',
                         required=False,
