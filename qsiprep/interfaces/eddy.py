@@ -257,6 +257,18 @@ class ExtendedEddy(fsl.Eddy):
         if isdefined(self.inputs.use_cuda):
             self._use_cuda()
 
+    def _num_threads_update(self):
+        self._num_threads = self.inputs.num_threads
+        if not isdefined(self.inputs.num_threads):
+            if 'OMP_NUM_THREADS' in self.inputs.environ:
+                del self.inputs.environ['OMP_NUM_THREADS']
+        else:
+            self.inputs.environ['OMP_NUM_THREADS'] = str(
+                self.inputs.num_threads)
+
+    def _use_cuda(self):
+        self._cmd = 'eddy_cuda' if self.inputs.use_cuda else 'eddy_openmp'
+
     def _list_outputs(self):
         outputs = self.output_spec().get()
         outputs['out_corrected'] = os.path.abspath(
