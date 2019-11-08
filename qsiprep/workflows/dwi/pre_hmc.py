@@ -121,7 +121,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
                 ('dwi_files', 'dwi_plus'),
                 ('b0_images', 'b0_images_plus'),
                 ('b0_indices', 'b0_indices_plus'),
-                ('original_files', 'original_files_plus')]),
+                ('original_files', 'original_images_plus')]),
 
             # Merge, denoise, split on the minus series
             (merge_minus, split_minus, [('outputnode.merged_image', 'dwi_file'),
@@ -133,7 +133,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
                 ('dwi_files', 'dwi_minus'),
                 ('b0_images', 'b0_images_minus'),
                 ('b0_indices', 'b0_indices_minus'),
-                ('original_files', 'original_files_minus')]),
+                ('original_files', 'original_images_minus')]),
 
             # Connect to the outputnode
             (concat_rpe_splits, outputnode, [
