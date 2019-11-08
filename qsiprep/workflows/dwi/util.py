@@ -138,7 +138,7 @@ def init_enhance_and_skullstrip_dwi_wf(name='enhance_and_skullstrip_dwi_wf', omp
     """
     https://community.mrtrix.org/t/dwibiascorrect-with-ants-high-intensity-in-cerebellum-brainstem/1338/3
 
-    Truncates image intensities, runs N4, does a pre-mask
+    Truncates image intensities, runs N4, creates a rough initial mask
 
     .. workflow ::
         :graph2use: orig
@@ -187,8 +187,16 @@ def init_enhance_and_skullstrip_dwi_wf(name='enhance_and_skullstrip_dwi_wf', omp
     truncate_values = pe.Node(
         ImageMath(dimension=3,
                   operation="TruncateImageIntensity",
-                  secondary_arg="0.001 0.999 512"),
+                  secondary_arg="0.001 0.95 512"),
         name="truncate_values")
+
+    # Truncate intensity values for creating a mask
+    # (there are many high outliers in b=0 images)
+    truncate_values_for_masking = pe.Node(
+        ImageMath(dimension=3,
+                  operation="TruncateImageIntensity",
+                  secondary_arg="0.001 0.9 512"),
+        name="truncate_values_for_masking")
 
     # N4 will break if any negative values are present.
     rescale_image = pe.Node(
@@ -248,7 +256,8 @@ def init_enhance_and_skullstrip_dwi_wf(name='enhance_and_skullstrip_dwi_wf', omp
     workflow.connect([
         (inputnode, truncate_values, [('in_file', 'in_file')]),
         (truncate_values, rescale_image, [('out_file', 'in_file')]),
-        (rescale_image, initial_mask, [('out_file', 'in_file')]),
+        (inputnode, truncate_values_for_masking, [('in_file', 'in_file')]),
+        (truncate_values_for_masking, initial_mask, [('out_file', 'in_file')]),
         (initial_mask, fill_holes, [('out_file', 'in_file')]),
         (fill_holes, dilate_mask, [('out_file', 'in_file')]),
         (dilate_mask, smooth_mask, [('out_file', 'in_file')]),
@@ -266,7 +275,7 @@ def init_enhance_and_skullstrip_dwi_wf(name='enhance_and_skullstrip_dwi_wf', omp
 
 def init_skullstrip_b0_wf(name='skullstrip_b0_wf', use_t1_prior=False, use_initial_mask=False):
     """
-    This workflow applies skull-stripping to a DWI image.
+    This workflow applies fancy skull-stripping to a DWI image.
 
     It is intended to be used on an image that has previously been
     bias-corrected and enhanced with
