@@ -437,7 +437,7 @@ def validate_bids(opts):
         return True
     return False
 
-
+  
 def set_freesurfer_license(opts):
     """Set FS_LICENSE environment variable"""
     # FreeSurfer license
@@ -470,15 +470,18 @@ def main():
     warnings.showwarning = _warn_redirect
     opts = get_parser().parse_args()
 
+    if not opts.recon_only and opts.output_resolution is None:
+        raise RuntimeError("--output-resolution is required unless you're using --recon-only")
+  
+    validate_bids(opts)
+    set_freesurfer_license(opts) 
+  
     sentry_sdk = None
     if not opts.notrack:
         import sentry_sdk
         from ..utils.sentry import sentry_setup
         sentry_setup(opts, os.name)
-
-    validate_bids(opts)
-
-    set_freesurfer_license(opts)
+     
 
     # Retrieve logging level
     log_level = int(max(25 - 5 * opts.verbose_count, logging.DEBUG))
