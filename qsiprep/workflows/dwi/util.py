@@ -187,7 +187,7 @@ def init_enhance_and_skullstrip_dwi_wf(name='enhance_and_skullstrip_dwi_wf', omp
     truncate_values = pe.Node(
         ImageMath(dimension=3,
                   operation="TruncateImageIntensity",
-                  secondary_arg="0.001 0.95 512"),
+                  secondary_arg="0.0 0.98 512"),
         name="truncate_values")
 
     # Truncate intensity values for creating a mask
@@ -195,7 +195,7 @@ def init_enhance_and_skullstrip_dwi_wf(name='enhance_and_skullstrip_dwi_wf', omp
     truncate_values_for_masking = pe.Node(
         ImageMath(dimension=3,
                   operation="TruncateImageIntensity",
-                  secondary_arg="0.001 0.9 512"),
+                  secondary_arg="0.0 0.9 512"),
         name="truncate_values_for_masking")
 
     # N4 will break if any negative values are present.
