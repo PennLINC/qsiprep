@@ -111,6 +111,8 @@ def init_fsl_hmc_wf(scan_groups,
     with open(eddy_cfg_file, "r") as f:
         eddy_args = json.load(f)
 
+    # Use run in parallel if possible
+    eddy_args["num_threads"] = omp_nthreads
     # These should be in LAS+
     dwi_merge = pe.Node(MergeDWIs(), name="dwi_merge")
     eddy = pe.Node(ExtendedEddy(**eddy_args), name="eddy")
