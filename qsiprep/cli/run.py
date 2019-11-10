@@ -420,15 +420,6 @@ def validate_bids(opts):
     """Validate bids unless opts say otherwise"""
     from ..utils.bids import validate_input_dir
 
-    # special variable set in the container
-    if os.getenv('IS_DOCKER_8395080871'):
-        os.name = 'singularity'
-        cgroup = Path('/proc/1/cgroup')
-        if cgroup.exists() and 'docker' in cgroup.read_text():
-            os.name = 'docker'
-            if os.getenv('DOCKER_VERSION_8395080871'):
-                os.name = 'qsiprep-docker'
-
     # Validate inputs
     if not (opts.recon_only or opts.skip_bids_validation):
         print("Making sure the input data is BIDS compliant (warnings can be ignored in most "
@@ -437,7 +428,7 @@ def validate_bids(opts):
         return True
     return False
 
-  
+
 def set_freesurfer_license(opts):
     """Set FS_LICENSE environment variable"""
     # FreeSurfer license
@@ -470,18 +461,26 @@ def main():
     warnings.showwarning = _warn_redirect
     opts = get_parser().parse_args()
 
-    if not opts.recon_only and opts.output_resolution is None:
-        raise RuntimeError("--output-resolution is required unless you're using --recon-only")
-  
-    validate_bids(opts)
-    set_freesurfer_license(opts) 
-  
+    exec_env = os.name
+
+    # special variable set in the container
+    if os.getenv('IS_DOCKER_8395080871'):
+        exec_env = 'singularity'
+        cgroup = Path('/proc/1/cgroup')
+        if cgroup.exists() and 'docker' in cgroup.read_text():
+            exec_env = 'docker'
+            if os.getenv('DOCKER_VERSION_8395080871'):
+                exec_env = 'qsiprep-docker'
+
     sentry_sdk = None
     if not opts.notrack:
         import sentry_sdk
         from ..utils.sentry import sentry_setup
-        sentry_setup(opts, os.name)
-     
+        sentry_setup(opts, exec_env)
+
+    # Check input files and directories
+    validate_bids(opts)
+    set_freesurfer_license(opts)
 
     # Retrieve logging level
     log_level = int(max(25 - 5 * opts.verbose_count, logging.DEBUG))
