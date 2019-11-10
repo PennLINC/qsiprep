@@ -111,9 +111,12 @@ def init_fsl_hmc_wf(scan_groups,
     with open(eddy_cfg_file, "r") as f:
         eddy_args = json.load(f)
 
+    # Use run in parallel if possible
+    LOGGER.info("Using %d threads in eddy", omp_nthreads)
+    eddy_args["num_threads"] = omp_nthreads
+    eddy = pe.Node(ExtendedEddy(**eddy_args), name="eddy")
     # These should be in LAS+
     dwi_merge = pe.Node(MergeDWIs(), name="dwi_merge")
-    eddy = pe.Node(ExtendedEddy(**eddy_args), name="eddy")
     spm_motion = pe.Node(Eddy2SPMMotion(), name="spm_motion")
     # Convert eddy outputs back to LPS+, split them
     pre_topup_lps = pe.Node(ConformDwi(orientation="LPS"), name='pre_topup_lps')

@@ -109,7 +109,7 @@ def get_parser():
     g_perfm.add_argument(
         '--nthreads',
         '--n_cpus',
-        '-n-cpus',
+        '--n-cpus',
         action='store',
         type=int,
         help='maximum number of threads across all processes')
@@ -745,6 +745,7 @@ def build_qsiprep_workflow(opts, retval):
             'Per-process threads (--omp-nthreads=%d) exceed total '
             'threads (--nthreads/--n_cpus=%d)', omp_nthreads, nthreads)
     retval['plugin_settings'] = plugin_settings
+    logger.info('Running with omp_nthreads=%d, nthreads=%d', omp_nthreads, nthreads)
 
     # Set up directories
     log_dir = output_dir / 'qsiprep' / 'logs'
