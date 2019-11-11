@@ -138,12 +138,12 @@ RUN mkdir /opt/dsi-studio \
   && rm -rf /opt/dsi-studio/src /opt/dsi-studio/build
 
 # Install mrtrix3 from source
-ARG MRTRIX_SHA=5d6b3a6ffc6ee651151779539c8fd1e2e03fad81
+ARG MRTRIX_SHA=c1367255f51a3cbe774c8317448cdc0b0aa587be
 ENV PATH="/opt/mrtrix3-latest/bin:$PATH"
 RUN cd /opt \
-    && curl -sSLO https://github.com/MRtrix3/mrtrix3/archive/${MRTRIX_SHA}.zip \
+    && curl -sSLO https://github.com/3Tissue/MRtrix3Tissue/archive/${MRTRIX_SHA}.zip \
     && unzip ${MRTRIX_SHA}.zip \
-    && mv mrtrix3-${MRTRIX_SHA} /opt/mrtrix3-latest \
+    && MRtrix3Tissue-${MRTRIX_SHA} /opt/mrtrix3-latest \
     && rm ${MRTRIX_SHA}.zip \
     && cd /opt/mrtrix3-latest \
     && ./configure \
@@ -151,7 +151,7 @@ RUN cd /opt \
     && ./build
 
 # Installing ANTs latest from source
-ARG ANTS_SHA=51855944553a73960662d3e4f7c1326e584b23b2
+ARG ANTS_SHA=b8889562341471dbe18b415d2bcefb9b8f12232a
 ADD https://cmake.org/files/v3.11/cmake-3.11.4-Linux-x86_64.sh /cmake-3.11.4-Linux-x86_64.sh
 ENV ANTSPATH="/opt/ants-latest/bin" \
     PATH="/opt/ants-latest/bin:$PATH" \
