@@ -109,7 +109,7 @@ def get_parser():
     g_perfm.add_argument(
         '--nthreads',
         '--n_cpus',
-        '-n-cpus',
+        '--n-cpus',
         action='store',
         type=int,
         help='maximum number of threads across all processes')
@@ -453,6 +453,9 @@ def main():
               "cases).")
         validate_input_dir(exec_env, opts.bids_dir, opts.participant_label)
 
+    if not opts.recon_only and opts.output_resolution is None:
+        raise RuntimeError("--output-resolution is required unless you're using --recon-only")
+
     # FreeSurfer license
     default_license = str(Path(os.getenv('FREESURFER_HOME')) / 'license.txt')
     # Precedence: --fs-license-file, $FS_LICENSE, default_license
@@ -742,6 +745,7 @@ def build_qsiprep_workflow(opts, retval):
             'Per-process threads (--omp-nthreads=%d) exceed total '
             'threads (--nthreads/--n_cpus=%d)', omp_nthreads, nthreads)
     retval['plugin_settings'] = plugin_settings
+    logger.info('Running with omp_nthreads=%d, nthreads=%d', omp_nthreads, nthreads)
 
     # Set up directories
     log_dir = output_dir / 'qsiprep' / 'logs'
