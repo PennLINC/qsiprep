@@ -128,12 +128,10 @@ RUN mkdir /opt/dsi-studio \
   && mkdir build && cd build \
   && qmake ../src && make \
   && cd /opt/dsi-studio \
-  && curl -sSLO 'https://www.dropbox.com/s/ew3rv0jrqqny2dq/dsi_studio_64.zip?dl=1' > dsistudio64.zip \
-  && mv 'dsi_studio_64.zip?dl=1' dsistudio64.zip \
-  && unzip dsistudio64.zip && cd dsi_studio_64 \
-  && find . -name '*.dll' -exec rm {} \; \
-  && rm -rf iconengines imageformats platforms printsupport \
-  && rm dsi_studio.exe \
+  && curl -sSLO 'https://upenn.box.com/shared/static/01r73d4a15utl13himv4d7cjpa6etf6z.gz' \
+  && tar xvfz 01r73d4a15utl13himv4d7cjpa6etf6z.gz \
+  && rm 01r73d4a15utl13himv4d7cjpa6etf6z.gz \
+  && cd dsi_studio_64 \
   && mv ../build/dsi_studio . \
   && rm -rf /opt/dsi-studio/src /opt/dsi-studio/build
 
@@ -143,7 +141,7 @@ ENV PATH="/opt/mrtrix3-latest/bin:$PATH"
 RUN cd /opt \
     && curl -sSLO https://github.com/3Tissue/MRtrix3Tissue/archive/${MRTRIX_SHA}.zip \
     && unzip ${MRTRIX_SHA}.zip \
-    && MRtrix3Tissue-${MRTRIX_SHA} /opt/mrtrix3-latest \
+    && mv MRtrix3Tissue-${MRTRIX_SHA} /opt/mrtrix3-latest \
     && rm ${MRTRIX_SHA}.zip \
     && cd /opt/mrtrix3-latest \
     && ./configure \
@@ -168,12 +166,12 @@ RUN mkdir /opt/cmake \
     && rm ${ANTS_SHA}.zip \
     && mkdir -p /tmp/ants/build \
     && cd /tmp/ants/build \
-    && git config --global url."https://".insteadOf git:// \
-    && cmake -DBUILD_SHARED_LIBS=ON /tmp/ants/source \
-    && make -j1 \
     && mkdir -p /opt/ants-latest \
-    && mv bin lib /opt/ants-latest/ \
-    && mv /tmp/ants/source/Scripts/* /opt/ants-latest/bin \
+    && git config --global url."https://".insteadOf git:// \
+    && cmake -DBUILD_SHARED_LIBS=ON -DCMAKE_INSTALL_PREFIX=/opt/ants-latest /tmp/ants/source \
+    && make -j2 \
+    && cd ANTS-build \
+    && make install \
     && rm -rf /tmp/ants \
     && rm -rf /opt/cmake /usr/local/bin/cmake
 
