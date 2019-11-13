@@ -160,10 +160,10 @@ RUN mkdir /opt/cmake \
   && apt-get update -qq \
     && mkdir /tmp/ants \
     && cd /tmp \
-    && curl -sSLO https://github.com/ANTsX/ANTs/archive/${ANTS_SHA}.zip \
-    && unzip ${ANTS_SHA}.zip \
-    && mv ANTs-${ANTS_SHA} /tmp/ants/source \
-    && rm ${ANTS_SHA}.zip \
+    && git clone https://github.com/ANTsX/ANTs.git \
+    && mv ANTs /tmp/ants/source \
+    && cd /tmp/ants/source \
+    && git checkout ${ANTS_SHA} \
     && mkdir -p /tmp/ants/build \
     && cd /tmp/ants/build \
     && mkdir -p /opt/ants-latest \
