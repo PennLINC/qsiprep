@@ -115,25 +115,27 @@ def init_dwi_pre_hmc_wf(scan_groups,
             (merge_plus, split_plus, [('outputnode.merged_image', 'dwi_file'),
                                       ('outputnode.merged_bval', 'bval_file'),
                                       ('outputnode.merged_bvec', 'bvec_file')]),
+            (merge_plus, concat_rpe_splits, [
+                ('outputnode.original_files', 'original_images_plus')]),
             (split_plus, concat_rpe_splits, [
                 ('bval_files', 'bval_plus'),
                 ('bvec_files', 'bvec_plus'),
                 ('dwi_files', 'dwi_plus'),
                 ('b0_images', 'b0_images_plus'),
-                ('b0_indices', 'b0_indices_plus'),
-                ('original_files', 'original_images_plus')]),
+                ('b0_indices', 'b0_indices_plus')]),
 
             # Merge, denoise, split on the minus series
             (merge_minus, split_minus, [('outputnode.merged_image', 'dwi_file'),
                                         ('outputnode.merged_bval', 'bval_file'),
                                         ('outputnode.merged_bvec', 'bvec_file')]),
+            (merge_minus, concat_rpe_splits, [
+                ('outputnode.original_files', 'original_images_minus')]),
             (split_minus, concat_rpe_splits, [
                 ('bval_files', 'bval_minus'),
                 ('bvec_files', 'bvec_minus'),
                 ('dwi_files', 'dwi_minus'),
                 ('b0_images', 'b0_images_minus'),
-                ('b0_indices', 'b0_indices_minus'),
-                ('original_files', 'original_images_minus')]),
+                ('b0_indices', 'b0_indices_minus')]),
 
             # Connect to the outputnode
             (concat_rpe_splits, outputnode, [
