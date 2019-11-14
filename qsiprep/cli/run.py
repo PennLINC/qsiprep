@@ -109,7 +109,7 @@ def get_parser():
     g_perfm.add_argument(
         '--nthreads',
         '--n_cpus',
-        '-n-cpus',
+        '--n-cpus',
         action='store',
         type=int,
         help='maximum number of threads across all processes')
@@ -216,7 +216,8 @@ def get_parser():
     g_conf.add_argument(
         '--output-resolution', '--output_resolution',
         action='store',
-        required=False,
+        # required when not recon-only (which can be specified in sysargs 2 ways)
+        required=not any(rcn in sys.argv for rcn in ['--recon-only', '--recon_only']),
         type=float,
         help='the isotropic voxel size in mm the data will be resampled to '
         'after preprocessing. If set to a lower value than the original voxel '
@@ -415,12 +416,42 @@ def get_parser():
     return parser
 
 
+def validate_bids(opts):
+    """Validate bids unless opts say otherwise"""
+    from ..utils.bids import validate_input_dir
+
+    # Validate inputs
+    if not (opts.recon_only or opts.skip_bids_validation):
+        print("Making sure the input data is BIDS compliant (warnings can be ignored in most "
+              "cases).")
+        validate_input_dir(os.name, opts.bids_dir, opts.participant_label)
+        return True
+    return False
+
+
+def set_freesurfer_license(opts):
+    """Set FS_LICENSE environment variable"""
+    # FreeSurfer license
+    # if qsiprep's current directory has a license.txt file, this will use that
+    default_license = str(Path(os.getenv('FREESURFER_HOME', '')) / 'license.txt')
+    # Precedence: --fs-license-file, $FS_LICENSE, default_license
+    license_file = opts.fs_license_file or Path(os.getenv('FS_LICENSE', default_license))
+    if not license_file.exists():
+        raise RuntimeError("""\
+ERROR: a valid license file is required for FreeSurfer to run. fMRIPrep looked for an existing \
+license file at several paths, in this order: 1) command line argument ``--fs-license-file``; \
+2) ``$FS_LICENSE`` environment variable; and 3) the ``$FREESURFER_HOME/license.txt`` path. Get it \
+(for free) by registering at https://surfer.nmr.mgh.harvard.edu/registration.html""")
+    os.environ['FS_LICENSE'] = str(license_file.resolve())
+    return os.environ['FS_LICENSE']
+
+
 def main():
     """Entry point"""
     from nipype import logging as nlogging
     from multiprocessing import set_start_method, Process, Manager
     from ..viz.reports import generate_reports
-    from ..utils.bids import write_derivative_description, validate_input_dir
+    from ..utils.bids import write_derivative_description
 
     try:
         set_start_method('forkserver')
@@ -447,26 +478,9 @@ def main():
         from ..utils.sentry import sentry_setup
         sentry_setup(opts, exec_env)
 
-    # Validate inputs
-    if not (opts.recon_only or opts.skip_bids_validation):
-        print("Making sure the input data is BIDS compliant (warnings can be ignored in most "
-              "cases).")
-        validate_input_dir(exec_env, opts.bids_dir, opts.participant_label)
-
-    if not opts.recon_only and opts.output_resolution is None:
-        raise RuntimeError("--output-resolution is required unless you're using --recon-only")
-
-    # FreeSurfer license
-    default_license = str(Path(os.getenv('FREESURFER_HOME')) / 'license.txt')
-    # Precedence: --fs-license-file, $FS_LICENSE, default_license
-    license_file = opts.fs_license_file or Path(os.getenv('FS_LICENSE', default_license))
-    if not license_file.exists():
-        raise RuntimeError("""\
-ERROR: a valid license file is required for FreeSurfer to run. fMRIPrep looked for an existing \
-license file at several paths, in this order: 1) command line argument ``--fs-license-file``; \
-2) ``$FS_LICENSE`` environment variable; and 3) the ``$FREESURFER_HOME/license.txt`` path. Get it \
-(for free) by registering at https://surfer.nmr.mgh.harvard.edu/registration.html""")
-    os.environ['FS_LICENSE'] = str(license_file.resolve())
+    # Check input files and directories
+    validate_bids(opts)
+    set_freesurfer_license(opts)
 
     # Retrieve logging level
     log_level = int(max(25 - 5 * opts.verbose_count, logging.DEBUG))
@@ -745,6 +759,7 @@ def build_qsiprep_workflow(opts, retval):
             'Per-process threads (--omp-nthreads=%d) exceed total '
             'threads (--nthreads/--n_cpus=%d)', omp_nthreads, nthreads)
     retval['plugin_settings'] = plugin_settings
+    logger.info('Running with omp_nthreads=%d, nthreads=%d', omp_nthreads, nthreads)
 
     # Set up directories
     log_dir = output_dir / 'qsiprep' / 'logs'

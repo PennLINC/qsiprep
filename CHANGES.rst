@@ -1,3 +1,10 @@
+0.6.4, 0.6.4-1 (Nov 11, 2019)
+==============================
+ * IMPORTANT: commandline call changed to use official BIDS App
+ * eddy will use multiple cores if available
+ * Fixed bug in sentry interaction
+
+
 0.6.2, 0.6.3RC1, 0.6.3RC2 (October 27, 2019)
 ============================================
 
