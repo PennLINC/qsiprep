@@ -134,11 +134,12 @@ using a modified version of the custom methodology of *fMRIPrep*.
     return workflow
 
 
-def init_enhance_and_skullstrip_dwi_wf(name='enhance_and_skullstrip_dwi_wf', omp_nthreads=1):
+def init_enhance_and_skullstrip_dwi_wf(name='enhance_and_skullstrip_dwi_wf',
+                                       do_biascorrection=True, omp_nthreads=1):
     """
     https://community.mrtrix.org/t/dwibiascorrect-with-ants-high-intensity-in-cerebellum-brainstem/1338/3
 
-    Truncates image intensities, runs N4, does a pre-mask
+    Truncates image intensities, runs N4, creates a rough initial mask
 
     .. workflow ::
         :graph2use: orig
@@ -150,9 +151,8 @@ def init_enhance_and_skullstrip_dwi_wf(name='enhance_and_skullstrip_dwi_wf', omp
     **Parameters**
         name : str
             Name of workflow (default: ``enhance_and_skullstrip_dwi_wf``)
-        pre_mask : bool
-            Indicates whether the ``pre_mask`` input will be set (and thus, step 1
-            should be skipped).
+        do_biascorrection : Bool
+            Do bias correction on ``in_file``?
         omp_nthreads : int
             number of threads available to parallel nodes
 
@@ -160,9 +160,6 @@ def init_enhance_and_skullstrip_dwi_wf(name='enhance_and_skullstrip_dwi_wf', omp
 
         in_file
             dwi image (single volume)
-        pre_mask : bool
-            A tentative brain mask to initialize the workflow (requires ``pre_mask``
-            parameter set ``True``).
 
 
     **Outputs**
@@ -178,7 +175,7 @@ def init_enhance_and_skullstrip_dwi_wf(name='enhance_and_skullstrip_dwi_wf', omp
 
     """
     workflow = Workflow(name=name)
-    inputnode = pe.Node(niu.IdentityInterface(fields=['in_file', 'pre_mask']),
+    inputnode = pe.Node(niu.IdentityInterface(fields=['in_file']),
                         name='inputnode')
     outputnode = pe.Node(niu.IdentityInterface(fields=[
         'mask_file', 'skull_stripped_file', 'bias_corrected_file']), name='outputnode')
@@ -187,8 +184,16 @@ def init_enhance_and_skullstrip_dwi_wf(name='enhance_and_skullstrip_dwi_wf', omp
     truncate_values = pe.Node(
         ImageMath(dimension=3,
                   operation="TruncateImageIntensity",
-                  secondary_arg="0.001 0.999 512"),
+                  secondary_arg="0.0 0.98 512"),
         name="truncate_values")
+
+    # Truncate intensity values for creating a mask
+    # (there are many high outliers in b=0 images)
+    truncate_values_for_masking = pe.Node(
+        ImageMath(dimension=3,
+                  operation="TruncateImageIntensity",
+                  secondary_arg="0.0 0.9 512"),
+        name="truncate_values_for_masking")
 
     # N4 will break if any negative values are present.
     rescale_image = pe.Node(
@@ -248,7 +253,8 @@ def init_enhance_and_skullstrip_dwi_wf(name='enhance_and_skullstrip_dwi_wf', omp
     workflow.connect([
         (inputnode, truncate_values, [('in_file', 'in_file')]),
         (truncate_values, rescale_image, [('out_file', 'in_file')]),
-        (rescale_image, initial_mask, [('out_file', 'in_file')]),
+        (inputnode, truncate_values_for_masking, [('in_file', 'in_file')]),
+        (truncate_values_for_masking, initial_mask, [('out_file', 'in_file')]),
         (initial_mask, fill_holes, [('out_file', 'in_file')]),
         (fill_holes, dilate_mask, [('out_file', 'in_file')]),
         (dilate_mask, smooth_mask, [('out_file', 'in_file')]),
@@ -266,7 +272,7 @@ def init_enhance_and_skullstrip_dwi_wf(name='enhance_and_skullstrip_dwi_wf', omp
 
 def init_skullstrip_b0_wf(name='skullstrip_b0_wf', use_t1_prior=False, use_initial_mask=False):
     """
-    This workflow applies skull-stripping to a DWI image.
+    This workflow applies fancy skull-stripping to a DWI image.
 
     It is intended to be used on an image that has previously been
     bias-corrected and enhanced with
