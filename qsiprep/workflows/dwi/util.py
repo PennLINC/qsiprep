@@ -134,7 +134,8 @@ using a modified version of the custom methodology of *fMRIPrep*.
     return workflow
 
 
-def init_enhance_and_skullstrip_dwi_wf(name='enhance_and_skullstrip_dwi_wf', omp_nthreads=1):
+def init_enhance_and_skullstrip_dwi_wf(name='enhance_and_skullstrip_dwi_wf',
+                                       do_biascorrection=True, omp_nthreads=1):
     """
     https://community.mrtrix.org/t/dwibiascorrect-with-ants-high-intensity-in-cerebellum-brainstem/1338/3
 
@@ -150,9 +151,8 @@ def init_enhance_and_skullstrip_dwi_wf(name='enhance_and_skullstrip_dwi_wf', omp
     **Parameters**
         name : str
             Name of workflow (default: ``enhance_and_skullstrip_dwi_wf``)
-        pre_mask : bool
-            Indicates whether the ``pre_mask`` input will be set (and thus, step 1
-            should be skipped).
+        do_biascorrection : Bool
+            Do bias correction on ``in_file``?
         omp_nthreads : int
             number of threads available to parallel nodes
 
@@ -160,9 +160,6 @@ def init_enhance_and_skullstrip_dwi_wf(name='enhance_and_skullstrip_dwi_wf', omp
 
         in_file
             dwi image (single volume)
-        pre_mask : bool
-            A tentative brain mask to initialize the workflow (requires ``pre_mask``
-            parameter set ``True``).
 
 
     **Outputs**
@@ -178,7 +175,7 @@ def init_enhance_and_skullstrip_dwi_wf(name='enhance_and_skullstrip_dwi_wf', omp
 
     """
     workflow = Workflow(name=name)
-    inputnode = pe.Node(niu.IdentityInterface(fields=['in_file', 'pre_mask']),
+    inputnode = pe.Node(niu.IdentityInterface(fields=['in_file']),
                         name='inputnode')
     outputnode = pe.Node(niu.IdentityInterface(fields=[
         'mask_file', 'skull_stripped_file', 'bias_corrected_file']), name='outputnode')
@@ -187,7 +184,7 @@ def init_enhance_and_skullstrip_dwi_wf(name='enhance_and_skullstrip_dwi_wf', omp
     truncate_values = pe.Node(
         ImageMath(dimension=3,
                   operation="TruncateImageIntensity",
-                  secondary_arg="0.001 0.95 512"),
+                  secondary_arg="0.00 0.95 512"),
         name="truncate_values")
 
     # Truncate intensity values for creating a mask
@@ -195,7 +192,7 @@ def init_enhance_and_skullstrip_dwi_wf(name='enhance_and_skullstrip_dwi_wf', omp
     truncate_values_for_masking = pe.Node(
         ImageMath(dimension=3,
                   operation="TruncateImageIntensity",
-                  secondary_arg="0.001 0.9 512"),
+                  secondary_arg="0.00 0.9 512"),
         name="truncate_values_for_masking")
 
     # N4 will break if any negative values are present.
