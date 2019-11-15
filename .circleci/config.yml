@@ -162,7 +162,7 @@ jobs:
                 -O multishell_output.tar.gz "https://upenn.box.com/shared/static/nwxdn4ale8dkebvpjmxbx99dqjzwvlmh.gz"
               tar xvfz multishell_output.tar.gz -C /tmp/data/
             else
-              echo "Dataset twoses was cached"
+              echo "Dataset multishell_output was cached"
             fi
 
       - run:
