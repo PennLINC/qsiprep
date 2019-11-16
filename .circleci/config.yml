@@ -974,8 +974,7 @@ jobs:
           name: Build qsiprep
           command: |
             pyenv local 3.6.5
-            #THISVERSION=$( python get_version.py )
-            THISVERSION=0.6.0rc1
+            THISVERSION=$( python get_version.py )
             virtualenv --python=python3 build
             source build/bin/activate
             pip install --upgrade "pip>=19.1" numpy
