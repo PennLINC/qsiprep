@@ -4,7 +4,7 @@
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 """
 Prepare files for TOPUP and eddy
-~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 """
 import os
@@ -155,7 +155,22 @@ def eddy_inputs_from_dwi_files(origin_file_list, dwi_files, eddy_prefix):
 
 
 def topup_inputs_from_dwi_files(dwi_file_list, b0_file_list, topup_prefix, cwd, max_per_spec=3):
-    """Create a datain spec and a slspec from a list of dwi files."""
+    """Create a datain spec and a slspec from a list of dwi files.
+
+    Create inputs for TOPUP that come from data in dwi/ and epi fieldmaps in fmap/.
+
+    Parameters:
+    ===========
+
+        dwi_file_list : list
+            List of absolute paths to dwi files. This includes b=0 images and b>0 images.
+
+        b0_file_list : list
+
+
+    """
+
+    # Create a lookup-table for each DWI file
     unique_files = list(set(dwi_file_list))
     spec_lookup = {}
     slicetime_lookup = {}

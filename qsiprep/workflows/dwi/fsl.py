@@ -49,7 +49,8 @@ def init_fsl_hmc_wf(scan_groups,
     LAS+. The fieldcoefs are applied during eddy's run and the corrected series comes out.
     This is finally converted to LPS+ and sent to the rest of the pipeline.
 
-    If a GRE fieldmap is available, a fieldmap in Hz is calculated and sent to eddy.
+    If a GRE fieldmap is available, the correction is applied to eddy's outputs after they have
+    been converted back to LPS+.
 
     Finally, if SyN is chosen, it is applied to the LPS+ converted, eddy-resampled data.
 
@@ -81,7 +82,7 @@ def init_fsl_hmc_wf(scan_groups,
         b0_images: list
             List of single b=0 volumes
         original_files: list
-            List of the files from which each DWI volume came from.
+            List of the files from which each DWI volume came.
 
 
     """
@@ -185,7 +186,7 @@ def init_fsl_hmc_wf(scan_groups,
     if fieldmap_type == 'epi':
         rpe_b0 = scan_groups['fieldmap_info']['epi']
     elif fieldmap_type == 'rpe_series':
-        rpe_b0 = scan_groups['fieldmap_info']['rpe_series'][0]
+        rpe_b0 = scan_groups['fieldmap_info']['rpe_series']
     using_topup = rpe_b0 is not None
 
     if using_topup:
