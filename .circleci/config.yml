@@ -628,6 +628,7 @@ jobs:
                  /tmp/data/twoses  /tmp/twoses/derivatives \
                  participant \
                 --sloppy --mem_mb 4096 \
+                --dwi-denoise-window 0 \
                 --output-space T1w \
                 --hmc_model none \
                 --b0-motion-corr-to first \
@@ -645,6 +646,7 @@ jobs:
     working_directory: /tmp/multishell_output
     environment:
       - FS_LICENSE: /tmp/fslicense/license.txt
+    parallelism: 2
     steps:
       - checkout:
           path: /home/circleci/src/qsiprep
@@ -701,7 +703,7 @@ jobs:
                 --recon-spec mrtrix_dhollander_no5tt \
                 --recon-only \
                 --mem_mb 4096 \
-                --nthreads 2 -vv
+                --nthreads 1 -vv
 
       - run:
           name: Run mrtrix_dhollander
@@ -723,7 +725,7 @@ jobs:
                 --recon-spec mrtrix_dhollander \
                 --recon-only \
                 --mem_mb 4096 \
-                --nthreads 2 -vv
+                --nthreads 1 -vv
 
       - run:
           name: Run mrtrix_msmt_csd
@@ -745,7 +747,7 @@ jobs:
                 --recon-spec mrtrix_msmt_csd \
                 --recon-only \
                 --mem_mb 4096 \
-                --nthreads 2 -vv
+                --nthreads 1 -vv
 
       - run:
           name: Run mrtrix_tckglobal
@@ -767,7 +769,7 @@ jobs:
                 --recon-spec mrtrix_tckglobal \
                 --recon-only \
                 --mem_mb 4096 \
-                --nthreads 2 -vv
+                --nthreads 1 -vv
 
       - run:
           name: Run dsi_studio_gqi
@@ -789,7 +791,7 @@ jobs:
                 --recon-input /tmp/data/multishell_output/qsiprep \
                 --recon-only \
                 --mem_mb 4096 \
-                --nthreads 2 -vv
+                --nthreads 1 -vv
 
       - run:
           name: Run dipy_mapmri
@@ -811,7 +813,7 @@ jobs:
                 --recon-spec dipy_mapmri \
                 --recon-only \
                 --mem_mb 4096 \
-                --nthreads 2 -vv
+                --nthreads 1 -vv
 
 
       - store_artifacts:
