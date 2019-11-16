@@ -248,6 +248,19 @@ def init_dwi_preproc_wf(scan_groups,
         source_file = all_dwis[0]
         fieldmap_info = {'suffix': None}
         dwi_metadata = {}
+    desc = """Diffusion data preprocessing
+
+: """
+    desc += """\
+A total of {num_t1w} T1-weighted (T1w) images were found within the input
+BIDS dataset.
+All of them were corrected for intensity non-uniformity (INU)
+using `N4BiasFieldCorrection` [@n4, ANTs {ants_ver}].
+""" if num_t1w > 1 else """\
+The T1-weighted (T1w) image was corrected for intensity non-uniformity (INU)
+using `N4BiasFieldCorrection` [@n4, ANTs {ants_ver}],
+and used as T1w-reference throughout the workflow.
+"""
 
     fieldmap_type = fieldmap_info['suffix']
     doing_bidirectional_pepolar = fieldmap_type == 'rpe_series'
