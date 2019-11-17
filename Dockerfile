@@ -136,12 +136,12 @@ RUN mkdir /opt/dsi-studio \
   && rm -rf /opt/dsi-studio/src /opt/dsi-studio/build
 
 # Install mrtrix3 from source
-ARG MRTRIX_SHA=c1367255f51a3cbe774c8317448cdc0b0aa587be
+ARG MRTRIX_SHA=5d6b3a6ffc6ee651151779539c8fd1e2e03fad81
 ENV PATH="/opt/mrtrix3-latest/bin:$PATH"
 RUN cd /opt \
-    && curl -sSLO https://github.com/3Tissue/MRtrix3Tissue/archive/${MRTRIX_SHA}.zip \
+    && curl -sSLO https://github.com/MRtrix3/mrtrix3/archive/${MRTRIX_SHA}.zip \
     && unzip ${MRTRIX_SHA}.zip \
-    && mv MRtrix3Tissue-${MRTRIX_SHA} /opt/mrtrix3-latest \
+    && mv mrtrix3-${MRTRIX_SHA} /opt/mrtrix3-latest \
     && rm ${MRTRIX_SHA}.zip \
     && cd /opt/mrtrix3-latest \
     && ./configure \
