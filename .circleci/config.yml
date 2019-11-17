@@ -646,7 +646,6 @@ jobs:
     working_directory: /tmp/multishell_output
     environment:
       - FS_LICENSE: /tmp/fslicense/license.txt
-    parallelism: 2
     steps:
       - checkout:
           path: /home/circleci/src/qsiprep
