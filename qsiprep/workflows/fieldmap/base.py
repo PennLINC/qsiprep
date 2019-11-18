@@ -168,7 +168,7 @@ def init_sdc_wf(fieldmap_info, dwi_meta, omp_nthreads=1,
 
     workflow.__postdesc__ = """\
 Based on the estimated susceptibility distortion, an
-unwarped b0 reference was calculated for a more accurate
+unwarped b=0 reference was calculated for a more accurate
 co-registration with the anatomical reference.
 """
 

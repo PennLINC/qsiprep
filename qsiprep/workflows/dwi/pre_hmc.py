@@ -32,9 +32,12 @@ def init_dwi_pre_hmc_wf(scan_groups,
                         name="pre_hmc_wf"):
     """
     This workflow controls the dwi initial stages of the dwi pipeline. Denoising
-    must occur before any interpolation. The outputs from this workflow are
-    lists of single volumes (optionally denoised) and corresponding lists of
-    bvals, bvecs, etc.
+    must occur before any interpolation. In the special case of preparing for FSL tools,
+    the positive and negative blip series are separately denoised before being merged
+    along with their metadata.
+
+    The outputs from this workflow are lists of single volumes (optionally denoised)
+    and corresponding lists of bvals, bvecs, etc.
 
     .. workflow::
         :graph2use: orig
@@ -88,6 +91,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
 
     # Special case: Two reverse PE DWI series are going to get combined for eddy
     if preprocess_rpe_series:
+        workflow.__desc__ = "Images were grouped into two phase encoding polarity groups."
         rpe_series = scan_groups['fieldmap_info']['rpe_series']
         # Merge, denoise, split, hmc on the plus series
         plus_files, minus_files = (rpe_series, dwi_series) if dwi_series_pedir.endswith("-") \
@@ -95,17 +99,17 @@ def init_dwi_pre_hmc_wf(scan_groups,
         merge_plus = init_merge_and_denoise_wf(dwi_denoise_window=dwi_denoise_window,
                                                denoise_before_combining=denoise_before_combining,
                                                orientation=orientation,
+                                               dwi_files=plus_files,
                                                name="merge_plus")
         split_plus = pe.Node(SplitDWIs(b0_threshold=b0_threshold), name="split_plus")
-        merge_plus.inputs.inputnode.dwi_files = plus_files
 
         # Merge, denoise, split, hmc on the minus series
         merge_minus = init_merge_and_denoise_wf(dwi_denoise_window=dwi_denoise_window,
                                                 denoise_before_combining=denoise_before_combining,
                                                 orientation=orientation,
+                                                dwi_files=minus_files,
                                                 name="merge_minus")
         split_minus = pe.Node(SplitDWIs(b0_threshold=b0_threshold), name="split_minus")
-        merge_minus.inputs.inputnode.dwi_files = minus_files
 
         concat_rpe_splits = pe.Node(ConcatRPESplits(), name="concat_rpe_splits")
 
@@ -144,14 +148,16 @@ def init_dwi_pre_hmc_wf(scan_groups,
                 ('b0_images', 'b0_images'),
                 ('b0_indices', 'b0_indices')])
             ])
+        workflow.__postdesc__ = "Both groups were then merged into a single file, as required " \
+                                "for the FSL workflows."
         return workflow
 
     merge_dwis = init_merge_and_denoise_wf(
         dwi_denoise_window=dwi_denoise_window,
         denoise_before_combining=denoise_before_combining,
-        orientation=orientation)
+        orientation=orientation,
+        dwi_files=dwi_series)
     split_dwis = pe.Node(SplitDWIs(b0_threshold=b0_threshold), name="split_dwis")
-    merge_dwis.inputs.inputnode.dwi_files = dwi_series
 
     workflow.connect([
         (merge_dwis, split_dwis, [

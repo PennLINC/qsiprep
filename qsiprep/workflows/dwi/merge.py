@@ -9,7 +9,7 @@ Merge and denoise dwi images
 .. autofunction:: init_dwi_derivatives_wf
 
 """
-
+import os.path as op
 from nipype import logging
 
 from nipype.pipeline import engine as pe
@@ -27,6 +27,7 @@ LOGGER = logging.getLogger('nipype.workflow')
 def init_merge_and_denoise_wf(dwi_denoise_window,
                               denoise_before_combining,
                               orientation,
+                              dwi_files=None,
                               mem_gb=1,
                               omp_nthreads=1,
                               name="merge_and_denoise_wf"):
@@ -73,14 +74,22 @@ def init_merge_and_denoise_wf(dwi_denoise_window,
     """
 
     workflow = Workflow(name=name)
-
     inputnode = pe.Node(
         niu.IdentityInterface(fields=['dwi_files']), name='inputnode')
-
     outputnode = pe.Node(
         niu.IdentityInterface(fields=[
             'merged_image', 'merged_bval', 'merged_bvec', 'noise_image', 'original_files']),
         name='outputnode')
+
+    # Start the boilerplate
+    desc = "All DWI scans and their gradients were first conformed to " \
+            "{ornt}+ orientation.".format(ornt=orientation)
+    if dwi_files is not None:
+        inputnode.inputs.dwi_files = dwi_files
+        if len(dwi_files) > 1:
+            dwi_list = ", ".join([op.split(fname)[1] for fname in dwi_files])
+            desc += "DWI runs {dwi_list} were merged for preprocessing.".format(
+                dwi_list=dwi_list)
 
     # validate_dwis = pe.MapNode(ValidateImage(), iterfield=[], name='validate_dwis')
     conform_dwis = pe.MapNode(
@@ -100,6 +109,10 @@ def init_merge_and_denoise_wf(dwi_denoise_window,
     if dwi_denoise_window > 0:
         denoiser = DWIDenoise(extent=(dwi_denoise_window, dwi_denoise_window,
                                       dwi_denoise_window))
+        denoise_boilerplate = "DWI scans were denoised using MP-PCA [@dwidenoise1, " \
+            " @dwidenoise2, MRtrix version {mrtrix_ver}] ".format(
+                mrtrix_ver=DWIDenoise().version)
+
         if denoise_before_combining:
             denoise = pe.MapNode(denoiser, iterfield='in_file', name='denoise')
             workflow.connect([
@@ -108,6 +121,7 @@ def init_merge_and_denoise_wf(dwi_denoise_window,
                 # (denoise, outputnode, [('noise', 'noise_image')]),
                 (merge_dwis, outputnode, [('out_dwi', 'merged_image')])
             ])
+            denoise_boilerplate += "before being merged."
         else:
             denoise = pe.Node(denoiser, name='denoise')
             workflow.connect([
@@ -115,10 +129,13 @@ def init_merge_and_denoise_wf(dwi_denoise_window,
                 (merge_dwis, denoise, [('out_dwi', 'in_file')]),
                 (denoise, outputnode, [('out_file', 'merged_image')])
             ])
+            denoise_boilerplate += " after being merged together into a single series."
     else:
         workflow.connect([
             (inputnode, merge_dwis, [('dwi_files', 'dwi_files')]),
             (merge_dwis, outputnode, [('out_dwi', 'merged_image')])
         ])
+        denoise_boilerplate = ""
 
+    workflow.__desc__ = desc + denoise_boilerplate
     return workflow
