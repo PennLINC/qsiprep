@@ -248,9 +248,6 @@ def init_dwi_preproc_wf(scan_groups,
         source_file = all_dwis[0]
         fieldmap_info = {'suffix': None}
         dwi_metadata = {}
-    self.__desc__ = """Diffusion data preprocessing
-
-: """
 
     fieldmap_type = fieldmap_info['suffix']
     doing_bidirectional_pepolar = fieldmap_type == 'rpe_series'
@@ -299,6 +296,9 @@ def init_dwi_preproc_wf(scan_groups,
             'dwi_files', 'cnr_map', 'bval_files', 'bvec_files', 'b0_ref_image', 'b0_indices',
             'dwi_mask', 'hmc_xforms', 'fieldwarps', 'sbref_file', 'original_files']),
         name='outputnode')
+    workflow.__desc__ = """Diffusion data preprocessing
+
+: """
 
     pre_hmc_wf = init_dwi_pre_hmc_wf(scan_groups=scan_groups,
                                      b0_threshold=b0_threshold,
