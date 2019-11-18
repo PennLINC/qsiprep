@@ -248,7 +248,7 @@ def init_dwi_preproc_wf(scan_groups,
         source_file = all_dwis[0]
         fieldmap_info = {'suffix': None}
         dwi_metadata = {}
-    desc = """Diffusion data preprocessing
+    self.__desc__ = """Diffusion data preprocessing
 
 : """
 
