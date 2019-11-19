@@ -83,13 +83,15 @@ def init_merge_and_denoise_wf(dwi_denoise_window,
 
     # Start the boilerplate
     desc = "All DWI scans and their gradients were first conformed to " \
-            "{ornt}+ orientation.".format(ornt=orientation)
+            "{ornt}+ orientation. ".format(ornt=orientation)
+    doing_merge = False
     if dwi_files is not None:
         inputnode.inputs.dwi_files = dwi_files
         if len(dwi_files) > 1:
             dwi_list = ", ".join([op.split(fname)[1] for fname in dwi_files])
-            desc += "DWI runs {dwi_list} were merged for preprocessing.".format(
+            desc += "DWI runs {dwi_list} were merged for preprocessing. ".format(
                 dwi_list=dwi_list)
+            doing_merge = True
 
     # validate_dwis = pe.MapNode(ValidateImage(), iterfield=[], name='validate_dwis')
     conform_dwis = pe.MapNode(
@@ -110,7 +112,7 @@ def init_merge_and_denoise_wf(dwi_denoise_window,
         denoiser = DWIDenoise(extent=(dwi_denoise_window, dwi_denoise_window,
                                       dwi_denoise_window))
         denoise_boilerplate = "DWI scans were denoised using MP-PCA [@dwidenoise1, " \
-            " @dwidenoise2, MRtrix version {mrtrix_ver}] ".format(
+            " MRtrix version {mrtrix_ver}] ".format(
                 mrtrix_ver=DWIDenoise().version)
 
         if denoise_before_combining:
@@ -121,7 +123,8 @@ def init_merge_and_denoise_wf(dwi_denoise_window,
                 # (denoise, outputnode, [('noise', 'noise_image')]),
                 (merge_dwis, outputnode, [('out_dwi', 'merged_image')])
             ])
-            denoise_boilerplate += "before being merged."
+            if doing_merge:
+                denoise_boilerplate += "before being merged."
         else:
             denoise = pe.Node(denoiser, name='denoise')
             workflow.connect([
@@ -129,7 +132,8 @@ def init_merge_and_denoise_wf(dwi_denoise_window,
                 (merge_dwis, denoise, [('out_dwi', 'in_file')]),
                 (denoise, outputnode, [('out_file', 'merged_image')])
             ])
-            denoise_boilerplate += " after being merged together into a single series."
+            if doing_merge:
+                denoise_boilerplate += " after being merged together into a single series. "
     else:
         workflow.connect([
             (inputnode, merge_dwis, [('dwi_files', 'dwi_files')]),

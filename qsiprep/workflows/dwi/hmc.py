@@ -109,7 +109,7 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file,
     # If we're just aligning based on the b=0 images, compute the b=0 tsnr as the cnr
     if hmc_model.lower() == "none":
         workflow.__postdesc__ = "Each b>0 image was transformed based on the registration " \
-                                " of the nearest b=0 image."
+                                " of the nearest b=0 image. "
 
         concat_b0s = pe.Node(afni.TCat(outputtype="NIFTI_GZ"), name="concat_b0s")
         b0_tsnr = pe.Node(
@@ -246,12 +246,12 @@ def init_b0_hmc_wf(align_to="iterative", transform="Rigid", spatial_bias_correct
             "motion_params", "aligned_images"]),
         name='outputnode')
 
-    desc = "Initial motion correction was performed using only the b=0 images."
+    desc = "Initial motion correction was performed using only the b=0 images. "
 
     # Iteratively create a template
     if align_to == "iterative":
         desc += "An unbiased b=0 template was constructed over {num_iters} iterations "\
-                "of {transform} registrations.".format(num_iters=num_iters,
+                "of {transform} registrations. ".format(num_iters=num_iters,
                                                        transform=transform)
         initial_template = pe.Node(
             ants.AverageImages(normalize=True, dimension=3),
@@ -300,7 +300,7 @@ def init_b0_hmc_wf(align_to="iterative", transform="Rigid", spatial_bias_correct
                              "iteration_templates")
     elif align_to == 'first':
         desc += "Each b=0 image was registered to the first b=0 image using " \
-                "a {transform} registration.".format(transform=transform)
+                "a {transform} registration. ".format(transform=transform)
         reg_to_first = linear_alignment_workflow(
             transform=transform,
             metric=metric,
@@ -534,7 +534,7 @@ def init_dwi_model_hmc_wf(modelname, transform, mem_gb, omp_nthreads,
                         "images. This entails leaving out each b>0 image and reconstructing " \
                         "the others using 3dSHORE [@merlet3dshore]. The signal for the left-" \
                         "out image serves as the registration target. A total of {num_iters} " \
-                        "iterations were run using a {transform} transform.".format(
+                        "iterations were run using a {transform} transform. ".format(
                             transform=transform, num_iters=num_iters)
 
     # Merge b0s into a single volume, put the non-b0 dwis into a list

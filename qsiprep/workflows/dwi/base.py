@@ -296,7 +296,9 @@ def init_dwi_preproc_wf(scan_groups,
             'dwi_files', 'cnr_map', 'bval_files', 'bvec_files', 'b0_ref_image', 'b0_indices',
             'dwi_mask', 'hmc_xforms', 'fieldwarps', 'sbref_file', 'original_files']),
         name='outputnode')
-    workflow.__desc__ = """Diffusion data preprocessing
+    workflow.__desc__ = """
+
+Diffusion data preprocessing
 
 : """
 
