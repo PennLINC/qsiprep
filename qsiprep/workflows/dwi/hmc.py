@@ -14,7 +14,7 @@ from ...interfaces.gradients import MatchTransforms, GradientRotation, CombineMo
 from ...interfaces.shoreline import (SignalPrediction, ExtractDWIsForModel, ReorderOutputs,
                                      B0Mean, SHORELineReport, IterationSummary, CalculateCNR)
 from ...interfaces import DerivativesDataSink
-from .util import init_skullstrip_b0_wf
+from .util import init_enhance_and_skullstrip_dwi_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
@@ -94,7 +94,7 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file,
     match_transforms = pe.Node(MatchTransforms(), name="match_transforms")
     # Make a mask from the output template. It is bias-corrected, so good for masking
     # but bad for using as a b=0 for modeling.
-    b0_template_mask = init_skullstrip_b0_wf(name="b0_template_mask")
+    b0_template_mask = init_enhance_and_skullstrip_dwi_wf(name="b0_template_mask")
 
     workflow.connect([
         (inputnode, match_transforms, [('dwi_files', 'dwi_files'),
