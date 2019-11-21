@@ -8,15 +8,29 @@ if [[ ! -d ${WORKDIR}/data/DSCSDSI ]]; then
 else
   echo "Dataset DSCSDSI was cached"
 fi
-# name: Get BUDS scans from downsampled CS-DSI
+
+# name: Get all kinds of fieldmaps for DTI data
 # command: |
-  if [[ ! -d ${WORKDIR}/data/DSCSDSI_BUDS ]]; then
-    wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
-      -O dscsdsi_buds.tar.xz "https://upenn.box.com/shared/static/bvhs3sw2swdkdyekpjhnrhvz89x3k87t.xz"
-    tar xvfJ dscsdsi_buds.tar.xz -C ${WORKDIR}/data/
-  else
-    echo "Dataset DSCSDSI_BUDS was cached"
-  fi
+if [[ ! -d ${WORKDIR}/data/fmaptests/DSDTI_fmap ]]; then
+  mkdir -p ${WORKDIR}/data/fmaptests/
+  wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
+    -O DSDTI_fmap.tar.xz "https://upenn.box.com/shared/static/rxr6qbi6ezku9gw3esfpnvqlcxaw7n5n.gz"
+  tar xvfJ DSDTI_fmap.tar.xz -C ${WORKDIR}/data/fmaptests
+else
+  echo "Dataset DSDTI_fmap was cached"
+fi
+
+# name: Get all kinds of fieldmaps for DSI data
+# command: |
+if [[ ! -d ${WORKDIR}/data/fmaptests/DSCSDSI_fmap ]]; then
+  mkdir -p ${WORKDIR}/data/fmaptests/
+  wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
+    -O DSCSDSI_fmap.tar.xz "https://upenn.box.com/shared/static/l561psez1ojzi4p3a12eidaw9vbizwdc.gz"
+  tar xvfJ DSCSDSI_fmap.tar.xz -C ${WORKDIR}/data/fmaptests
+else
+  echo "Dataset DSCSDSI_fmap was cached"
+fi
+
 
 # name: Get downsampled DTI
 # command: |
@@ -198,23 +212,44 @@ export FS_LICENSE=${WORKDIR}/fslicense/license.txt
       --intramodal-template-iters 2 \
       -vv
 
-#BlipUpDownSeries:
-#name: Run full qsiprep on DSCSDSI_BUDS
-#command: |
-mkdir -p ${WORKDIR}/DSCSDSI_BUDS/work ${WORKDIR}/DSCSDSI_BUDS/derivatives
-  qsiprep \
-      -w ${WORKDIR}/DSCSDSI_BUDS/work \
-       ${WORKDIR}/data/DSCSDSI_BUDS  ${WORKDIR}/DSCSDSI_BUDS/derivatives \
-      --combine-all-dwis \
-       participant \
-      --sloppy --write-graph --mem_mb 4096 \
-      --output-space T1w \
-      --hmc_model none \
-      --hmc-transform Rigid \
-      --output-resolution 5 \
-      --fs-license-file $FREESURFER_HOME/license.txt \
-      --nthreads 2 -vv
+# AllFieldmaps:
+mkdir -p ${WORKDIR}/DTI_SDC/work ${WORKDIR}/DTI_SDC/derivatives
+qsiprep \
+    -w ${WORKDIR}/DTI_SDC/work \
+     ${WORKDIR}/data/fmaptests/DSDTI_fmap  ${WORKDIR}/DTI_SDC/derivatives \
+     participant \
+    --boilerplate \
+    --sloppy --write-graph --mem_mb 4096 \
+    --nthreads 2 -vv --output-resolution 5
 
+qsiprep \
+    -w ${WORKDIR}/DTI_SDC/work \
+     ${WORKDIR}/data/fmaptests/DSDTI_fmap  ${WORKDIR}/DTI_SDC/derivatives \
+     participant \
+    --boilerplate \
+    --combine-all-dwis \
+    --sloppy --write-graph --mem_mb 4096 \
+    --nthreads 2 -vv --output-resolution 5
+
+# name: Test Fieldmap setups for DSI (using BUDS)
+# command: |
+mkdir -p ${WORKDIR}/DSI_SDC/work ${WORKDIR}/DSI_SDC/derivatives
+qsiprep \
+    -w ${WORKDIR}/DSI_SDC/work \
+     ${WORKDIR}/data/fmaptests/DSCSDSI_fmap  ${WORKDIR}/DSI_SDC/derivatives \
+     participant \
+    --boilerplate \
+    --sloppy --write-graph --mem_mb 4096 \
+    --nthreads 2 -vv --output-resolution 5
+
+qsiprep \
+    -w ${WORKDIR}/DSI_SDC/work \
+     ${WORKDIR}/data/fmaptests/DSCSDSI_fmap  ${WORKDIR}/DSI_SDC/derivatives \
+     participant \
+    --combine-all-dwis \
+    --boilerplate \
+    --sloppy --write-graph --mem_mb 4096 \
+    --nthreads 2 -vv --output-resolution 5
 
 # name: Run mrtrix on downsampled abcd
 # command: |

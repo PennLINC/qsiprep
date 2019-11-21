@@ -745,7 +745,7 @@ def get_session_groups(layout, subject_data, combine_all_dwis):
             LOGGER.info('Combining all dwi files within each available session:')
             for session in sessions:
                 session_files = [img for img in all_dwis if 'ses-'+session in img]
-                LOGGER.info('\t- %d sessions in %s', len(session_files), session)
+                LOGGER.info('\t- %d scans in session %s', len(session_files), session)
                 dwi_session_groups.append(session_files)
         else:
             LOGGER.info('Combining all %d dwis within the single available session',

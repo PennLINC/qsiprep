@@ -15,7 +15,7 @@ Interfaces to deal with the various types of fieldmap sources
 
 """
 import os.path as op
-import shutil
+import json
 import numpy as np
 import nibabel as nb
 from nipype import logging
@@ -24,14 +24,16 @@ from nipype.interfaces.base import (
     BaseInterfaceInputSpec, TraitedSpec, File, isdefined, traits,
     SimpleInterface, InputMultiObject, OutputMultiObject)
 from .images import to_lps
+from nilearn.image import concat_imgs
 
 LOGGER = logging.getLogger('nipype.interface')
+CRITICAL_KEYS = ["PhaseEncodingDirection", "TotalReadoutTime", "EffectiveEchoSpacing"]
 
 
 class B0RPEFieldmapInputSpec(BaseInterfaceInputSpec):
-    b0_file = File(exists=True)
+    b0_file = InputMultiObject(File(exists=True))
     output_3d_images = traits.Bool(False, usedefault=True)
-    max_num_b0s = traits.Int(3)
+    max_num_b0s = traits.Int(3, usedefault=True)
     orientation = traits.Enum('LPS', 'LAS', default='LPS', usedefault=True)
     b0_threshold = traits.Int(100, usedefault=True)
 
@@ -50,7 +52,7 @@ class B0RPEFieldmap(SimpleInterface):
 
     **Inputs**
         b0_file: str
-            Path to the b=0 epi fieldmap in fmaps/
+            List of paths to b=0 epi fieldmaps in fmaps/ or an RPE series in dwi/
         output_3d_images: bool
             Write outputs as multiple 3d images
         max_num_b0s: int
@@ -63,69 +65,116 @@ class B0RPEFieldmap(SimpleInterface):
     output_spec = B0RPEFieldmapOutputSpec
 
     def _run_interface(self, runtime):
-        pth, fname, ext = split_filename(self.inputs.b0_file)
-        potential_bval_file = op.join(pth, fname) + ".bval"
-        original_json = op.join(pth, fname) + ".json"
-        b0_threshold = self.inputs.b0_threshold
 
-        # Conform the fieldmap
-        lps_fmap = to_lps(nb.load(self.inputs.b0_file), self.inputs.orientation)
+        # Get b=0 images and metadata from all the input images
+        b0_fieldmap_imagedata = []
+        b0_fieldmap_metadata = []
+        for image_path in self.inputs.b0_file:
+            image, meta = _get_b0s_and_metadata(image_path, self.inputs.orientation,
+                                                self.inputs)
+            b0_fieldmap_imagedata.append(image)
+            b0_fieldmap_metadata.append(meta)
 
-        # Determine if there is a bval file corresponding to this file
-        if op.exists(potential_bval_file):
-            LOGGER.info("Found bval file %s for fieldmap.", potential_bval_file)
-            bvals = np.loadtxt(potential_bval_file)
-            if np.any(bvals > b0_threshold):
-                LOGGER.info("Found one or more b > 50 images: discarding them")
-                fmap_data = lps_fmap.get_fdata()[..., bvals < b0_threshold].squeeze()
-        # If not, assume these are all b=0 images
-        else:
-            fmap_data = lps_fmap.get_fdata().squeeze()
+        # Merge all the images from all the inputs into a single b=0 time series
+        merged_b0s = concat_imgs(b0_fieldmap_imagedata, auto_resample=True)
+        # Select a fixed number of images from the concatenated images
+        merged_b0_data = merged_b0s.get_data()
+        num_b0s = 1 if merged_b0_data.ndim < 4 else merged_b0_data.shape[3]
+        if num_b0s > self.inputs.max_num_b0s:
+            mask_indices = np.linspace(0, num_b0s-1, num=self.inputs.max_num_b0s,
+                                       endpoint=True, dtype=np.int)
+            merged_b0s = nb.Nifti1Image(merged_b0_data[:, :, :, mask_indices],
+                                        affine=merged_b0s.affine,
+                                        header=merged_b0s.header)
+
+        # Warn the user if the metadata does not match
+        merged_metadata = _merge_metadata(b0_fieldmap_metadata)
 
         # Output just one 3/4d image and a sidecar
         if not self.inputs.output_3d_images:
-            out_lps_fmap_img = nb.Nifti1Image(fmap_data, lps_fmap.affine, header=lps_fmap.header)
             # Save the conformed fmap
             output_fmap = fname_presuffix(self.inputs.b0_file, suffix="conform",
                                           newpath=runtime.cwd)
             output_json = fname_presuffix(output_fmap, use_ext=False, suffix=".json")
-            out_lps_fmap_img.to_filename(output_fmap)
-            # Copy the original json file:
-            LOGGER.info("Copying json file %s -> %s", original_json, output_json)
-            shutil.copy2(original_json, output_json)
-            assert op.exists(output_json)
+            merged_b0s.to_filename(output_fmap)
+            with open(output_json, "w") as sidecar:
+                json.dump(merged_metadata, sidecar)
             self._results['fmap_file'] = output_fmap
             self._results['fmap_info'] = output_json
             return runtime
 
         # Write out a series of 3d conformed b=0 volumes
+        fmap_data = merged_b0s.get_data()
         if fmap_data.ndim == 3:
             fmap_data = fmap_data[..., np.newaxis]
         image_list = []
         json_list = []
-        for imgnum, img_index in enumerate(range(fmap_data.shape[3])):
-            out_lps_fmap_img = nb.Nifti1Image(fmap_data[..., img_index], lps_fmap.affine,
-                                              header=lps_fmap.header)
-            # Save the conformed fmap
+        b0s_to_write = min(fmap_data.shape[3], self.inputs.max_num_b0s)
+        for img_index in range(b0s_to_write):
+            out_fmap_img = nb.Nifti1Image(fmap_data[..., img_index], merged_b0s.affine,
+                                          header=merged_b0s.header)
+            # Save the conformed fmap and metadata
             output_fmap = fname_presuffix(self.inputs.b0_file,
-                                          suffix="%s_%03d" % (self.inputs.orientation, imgnum),
+                                          suffix="%s_%03d" % (self.inputs.orientation, img_index),
                                           newpath=runtime.cwd)
             output_json = fname_presuffix(output_fmap, use_ext=False, suffix=".json")
-            out_lps_fmap_img.to_filename(output_fmap)
-            # Copy the original json file:
-            LOGGER.info("Copying json file %s -> %s", original_json, output_json)
-            shutil.copy2(original_json, output_json)
-            assert op.exists(output_json)
+            with open(output_json, "w") as sidecar:
+                json.dump(merged_b0_data, sidecar)
+            out_fmap_img.to_filename(output_fmap)
+
             # Append to lists
             image_list.append(output_fmap)
             json_list.append(output_json)
-            if isdefined(self.inputs.max_num_b0s):
-                if len(image_list) == self.inputs.max_num_b0s:
-                    break
 
         self._results['fmap_file'] = image_list
         self._results['fmap_info'] = json_list
         return runtime
+
+
+def _get_b0s_and_metadata(dwi_file, orientation, b0_threshold):
+    """Load a fieldmap image that may have b>0 images in it, returning b=0 images
+    and metadata.
+
+    """
+    pth, fname, _ = split_filename(dwi_file)
+    potential_bval_file = op.join(pth, fname) + ".bval"
+    original_json = op.join(pth, fname) + ".json"
+
+    # Load the metadata
+    with open(original_json, "r") as meta_file:
+        meta = json.load(meta_file)
+
+    # Conform the fieldmap
+    conform_fmap = to_lps(nb.load(dwi_file), orientation)
+
+    # Determine if there is a bval file corresponding to this file
+    if op.exists(potential_bval_file):
+        LOGGER.info("Found bval file %s for fieldmap.", potential_bval_file)
+        bvals = np.loadtxt(potential_bval_file)
+        if np.any(bvals > b0_threshold):
+            LOGGER.info("Found one or more b > %d images: discarding them", b0_threshold)
+            fmap_data = conform_fmap.get_fdata()[..., bvals < b0_threshold].squeeze()
+
+    # If not, assume these are all b=0 images
+    else:
+        fmap_data = conform_fmap.get_fdata().squeeze()
+    return fmap_data, meta
+
+
+def _merge_metadata(metadatas):
+    # Combine metadata from merged b=0 images
+    if not metadatas:
+        return {}
+
+    merged_metadata = metadatas[0]
+    for next_metadata in metadatas[1:]:
+        for critical_key in CRITICAL_KEYS:
+            current_value = merged_metadata.get(critical_key)
+            next_value = next_metadata.get(critical_key)
+            if not current_value == next_value:
+                LOGGER.warning("%s inconsistent in fieldmaps: %s, %s", critical_key,
+                               str(current_value), str(next_value))
+    return merged_metadata
 
 
 class FieldEnhanceInputSpec(BaseInterfaceInputSpec):
