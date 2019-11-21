@@ -77,14 +77,14 @@ RUN curl -sSL https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/6.0.1/frees
     --exclude='freesurfer/lib/cuda' \
     --exclude='freesurfer/lib/qt'
 
-  ENV FSLDIR="/opt/fsl-5.0.11" \
-      PATH="/opt/fsl-5.0.11/bin:$PATH"
+  ENV FSLDIR="/opt/fsl-6.0.1" \
+      PATH="/opt/fsl-6.0.1/bin:$PATH"
   RUN echo "Downloading FSL ..." \
-      && mkdir -p /opt/fsl-5.0.11 \
-      && curl -fsSL --retry 5 https://fsl.fmrib.ox.ac.uk/fsldownloads/fsl-5.0.11-centos6_64.tar.gz \
-      | tar -xz -C /opt/fsl-5.0.11 --strip-components 1 \
+      && mkdir -p /opt/fsl-6.0.1 \
+      && curl -fsSL --retry 5 https://fsl.fmrib.ox.ac.uk/fsldownloads/fsl-6.0.1-centos6_64.tar.gz \
+      | tar -xz -C /opt/fsl-6.0.1 --strip-components 1 \
       && echo "Installing FSL conda environment ..." \
-      && bash /opt/fsl-5.0.11/etc/fslconf/fslpython_install.sh -f /opt/fsl-5.0.11
+      && bash /opt/fsl-6.0.1/etc/fslconf/fslpython_install.sh -f /opt/fsl-6.0.1
 
 ENV FREESURFER_HOME=/opt/freesurfer \
     SUBJECTS_DIR=/opt/freesurfer/subjects \
