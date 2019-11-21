@@ -19,6 +19,7 @@ RUN apt-get update && \
                     bc \
                     dc \
                     file \
+                    libopenblas-base \
                     libfontconfig1 \
                     libfreetype6 \
                     libgl1-mesa-dev \
