@@ -117,8 +117,8 @@ jobs:
             if [[ ! -d /tmp/data/fmaptests/DSDTI_fmap ]]; then
               mkdir -p /tmp/data/fmaptests/
               wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
-                -O DSDTI_fmap.tar.xz "https://upenn.box.com/shared/static/rxr6qbi6ezku9gw3esfpnvqlcxaw7n5n.gz"
-              tar xvfJ DSDTI_fmap.tar.xz -C /tmp/data/fmaptests
+                -O DSDTI_fmap.tar.gz "https://upenn.box.com/shared/static/rxr6qbi6ezku9gw3esfpnvqlcxaw7n5n.gz"
+              tar xvfz DSDTI_fmap.tar.gz -C /tmp/data/fmaptests
             else
               echo "Dataset DSDTI_fmap was cached"
             fi
@@ -129,8 +129,8 @@ jobs:
             if [[ ! -d /tmp/data/fmaptests/DSCSDSI_fmap ]]; then
               mkdir -p /tmp/data/fmaptests/
               wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
-                -O DSCSDSI_fmap.tar.xz "https://upenn.box.com/shared/static/l561psez1ojzi4p3a12eidaw9vbizwdc.gz"
-              tar xvfJ DSCSDSI_fmap.tar.xz -C /tmp/data/fmaptests
+                -O DSCSDSI_fmap.tar.gz "https://upenn.box.com/shared/static/l561psez1ojzi4p3a12eidaw9vbizwdc.gz"
+              tar xvfz DSCSDSI_fmap.tar.gz -C /tmp/data/fmaptests
             else
               echo "Dataset DSCSDSI_fmap was cached"
             fi
