@@ -15,7 +15,6 @@ Interfaces to deal with the various types of fieldmap sources
 
 """
 import os.path as op
-import shutil
 import json
 import numpy as np
 import nibabel as nb
@@ -176,7 +175,6 @@ def _merge_metadata(metadatas):
                 LOGGER.warning("%s inconsistent in fieldmaps: %s, %s", critical_key,
                                str(current_value), str(next_value))
     return merged_metadata
-
 
 
 class FieldEnhanceInputSpec(BaseInterfaceInputSpec):
