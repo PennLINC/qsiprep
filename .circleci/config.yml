@@ -1149,6 +1149,18 @@ workflows:
             tags:
               only: /.*/
 
+      - AllFieldmaps:
+          requires:
+            - get_data
+            - build
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
       - deploy_docker_patches:
           requires:
             - build
@@ -1165,6 +1177,7 @@ workflows:
             - DSCSDSI
             - IntramodalTemplate
             - ReconTests
+            - AllFieldmaps
           filters:
             branches:
               only: master
