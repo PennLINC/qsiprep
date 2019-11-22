@@ -423,6 +423,7 @@ jobs:
                 --force-spatial-normalization \
                 --output-space T1w \
                 --hmc_model eddy \
+                --combine-all-dwis \
                 --recon-spec dsi_studio_gqi \
                 --eddy_config /tmp/data/eddy_config.json \
                 --output-resolution 5 \
@@ -508,6 +509,25 @@ jobs:
                 --sloppy --write-graph --mem_mb 4096 \
                 --nthreads 2 -vv --output-resolution 5
 
+      - run:
+          name: Test Fieldmap setups for DTI merging (prefer fmaps)
+          no_output_timeout: 2h
+          command: |
+            mkdir -p /tmp/DTI_SDC/work /tmp/DTI_SDC/derivatives
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DTI_SDC/derivatives && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/DTI_SDC/derivatives
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DTI_SDC/work && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/DTI_SDC/work
+            qsiprep-docker -i pennbbl/qsiprep:latest \
+                -e qsiprep_DEV 1 -u $(id -u) \
+                --config $PWD/nipype.cfg -w /tmp/DTI_SDC/work \
+                 /tmp/data/fmaptests/DSDTI_fmap  /tmp/DTI_SDC/derivatives \
+                 participant \
+                --boilerplate \
+                --combine-all-dwis \
+                --prefer-dedicated-fmaps \
+                --sloppy --write-graph --mem_mb 4096 \
+                --nthreads 2 -vv --output-resolution 5
       - run:
           name: Test Fieldmap setups for DSI (using BUDS)
           no_output_timeout: 2h
