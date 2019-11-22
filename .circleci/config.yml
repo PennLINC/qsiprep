@@ -422,8 +422,6 @@ jobs:
                 --sloppy --mem_mb 4096 \
                 --force-spatial-normalization \
                 --output-space T1w \
-                --hmc_model eddy \
-                --combine-all-dwis \
                 --recon-spec dsi_studio_gqi \
                 --eddy_config /tmp/data/eddy_config.json \
                 --output-resolution 5 \
@@ -545,7 +543,6 @@ jobs:
                 --boilerplate \
                 --sloppy --write-graph --mem_mb 4096 \
                 --nthreads 2 -vv --output-resolution 5
-
 
   DSDTI_nofmap:
     machine:
