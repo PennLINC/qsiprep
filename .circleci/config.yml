@@ -97,8 +97,8 @@ jobs:
     steps:
       - restore_cache:
           keys:
-            - data-v9-{{ .Revision }}
-            - data-v9-
+            - data-v10-{{ .Revision }}
+            - data-v10-
       - run:
           name: Get single scan from downsampled CS-DSI
           command: |
@@ -155,10 +155,11 @@ jobs:
           command: |
             if [[ ! -d /tmp/data/nofmap_DSDTI ]]; then
               cp -r /tmp/data/DSDTI /tmp/data/nofmap_DSDTI
-              rm -rf /tmp/data/DSDTI/sub-PNC/fmap
+              rm -rf /tmp/data/nofmap_DSDTI/sub-PNC/fmap
             else
               echo "Dataset nofmap_DSDTI was cached"
             fi
+
       - run:
           name: Get multisession CS-DSI
           command: |
@@ -169,8 +170,9 @@ jobs:
             else
               echo "Dataset twoses was cached"
             fi
+
       - run:
-          name: Get Multi Shell outputs
+          name: Get MultiShell outputs
           command: |
             if [[ ! -d /tmp/data/multishell_output ]]; then
               wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
@@ -190,7 +192,7 @@ jobs:
       - run:
           name: Create Nipype config files
           command: |
-            mkdir -p /tmp/DSCSDSI_BUDS /tmp/DSCSDSI /tmp/DSDTI /tmp/twoses /tmp/multishell_output /tmp/nofmap_DSDTI /tmp/DSDTI_fmap
+            mkdir -p /tmp/DSCSDSI /tmp/DSDTI /tmp/twoses /tmp/multishell_output /tmp/nofmap_DSDTI /tmp/DSDTI_fmap
             printf "[execution]\nstop_on_first_crash = true\n" > /tmp/DSCSDSI/nipype.cfg
             echo "poll_sleep_duration = 0.01" >> /tmp/DSCSDSI/nipype.cfg
             echo "hash_method = content" >> /tmp/DSCSDSI/nipype.cfg
@@ -209,8 +211,9 @@ jobs:
             - DSDTI_fmap/nipype.cfg
             - DSDTI/nipype.cfg
             - twoses/nipype.cfg
+
       - save_cache:
-         key: data-v9-{{ epoch }}
+         key: data-v10-{{ epoch }}
          paths:
             - /tmp/data
 
@@ -427,6 +430,14 @@ jobs:
                 --output-resolution 5 \
                 --nthreads 2 -vv
 
+      - run:
+          name: Checking outputs of DSDTI with TOPUP
+          command: |
+            mkdir -p /tmp/DSDTI/test
+            find /tmp/DSDTI/derivatives -path */figures -prune -o -name "*" -print | sed s+/tmp/DSDTI/derivatives/++ | sort > /tmp/DSDTI/test/outputs.out
+            diff /tmp/src/qsiprep/.circleci/DSDTI_outputs.txt /tmp/DSDTI/test/outputs.out
+            exit $?
+
       - store_artifacts:
           path: /tmp/DSDTI
 
@@ -604,6 +615,7 @@ jobs:
                 --hmc_model eddy \
                 --output-resolution 5 \
                 --nthreads 2 -vv
+
       - run:
           name: copy workdir for artifacts
           command: |
