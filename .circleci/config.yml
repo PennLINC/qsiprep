@@ -363,7 +363,7 @@ jobs:
           when: on_fail
           command: |
             sudo chown $(id -un):$(id -gn) -R /tmp/DSCSDSI
-            find /tmp/DSCSDSI/work \( -name "*.nii.gz" -or -name "*.nii" -or "*.gii" -or "*.h5" \) \
+            find /tmp/DSCSDSI/work \( -name "*.nii.gz" -or -name "*.nii" -or "*.h5" \) \
                 -exec sh -c 'rm -f {}; touch {}' \;
 
       - store_artifacts:
@@ -452,7 +452,7 @@ jobs:
           when: on_fail
           command: |
             sudo chown $(id -un):$(id -gn) -R /tmp/DSDTI
-            find /tmp/DSDTI/work \( -name "*.nii.gz" -or -name "*.nii" -or "*.gii" -or "*.h5" \) \
+            find /tmp/DSDTI/work \( -name "*.nii.gz" -or -name "*.nii" -or "*.h5" \) \
                 -exec sh -c 'rm -f {}; touch {}' \;
 
       - store_artifacts:
@@ -652,7 +652,7 @@ jobs:
           when: on_fail
           command: |
             sudo chown $(id -un):$(id -gn) -R /tmp/DSCSDSI
-            find /tmp/DSDTI/nofmap_work \( -name "*.nii.gz" -or -name "*.nii" -or "*.gii" -or "*.h5" \) \
+            find /tmp/DSDTI/nofmap_work \( -name "*.nii.gz" -or -name "*.nii" -or "*.h5" \) \
                 -exec sh -c 'rm -f {}; touch {}' \;
 
       - run:
@@ -703,7 +703,7 @@ jobs:
           when: on_fail
           command: |
             sudo chown $(id -un):$(id -gn) -R /tmp/DSCSDSI
-            find /tmp/DSDTI/nofmap_work \( -name "*.nii.gz" -or -name "*.nii" -or "*.gii" -or "*.h5" \) \
+            find /tmp/DSDTI/nofmap_work \( -name "*.nii.gz" -or -name "*.nii" -or "*.h5" \) \
                 -exec sh -c 'rm -f {}; touch {}' \;
 
       - store_artifacts:
@@ -792,7 +792,7 @@ jobs:
           when: on_fail
           command: |
             sudo chown $(id -un):$(id -gn) -R /tmp/twoses
-            find /tmp/twoses/work \( -name "*.nii.gz" -or -name "*.nii" -or "*.gii" -or "*.h5" \) \
+            find /tmp/twoses/work \( -name "*.nii.gz" -or -name "*.nii" -or "*.h5" \) \
                 -exec sh -c 'rm -f {}; touch {}' \;
 
       - store_artifacts:
