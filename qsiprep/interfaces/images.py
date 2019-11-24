@@ -59,13 +59,11 @@ class SplitDWIs(SimpleInterface):
         bvalues = np.loadtxt(self.inputs.bval_file)
         b0_indices = np.flatnonzero(bvalues < self.inputs.b0_threshold)
         b0_paths = [split_dwi_files[idx] for idx in b0_indices]
-
         self._results['dwi_files'] = split_dwi_files
         self._results['bval_files'] = split_bval_files
         self._results['bvec_files'] = split_bvec_files
         self._results['b0_images'] = b0_paths
         self._results['b0_indices'] = b0_indices.tolist()
-        self._results['original_files'] = [self.inputs.dwi_file] * len(split_dwi_files)
 
         return runtime
 
@@ -129,12 +127,20 @@ class ConcatRPESplits(SimpleInterface):
         self._results['b0_images'] = plus_b0_images + minus_b0_images
         self._results['b0_indices'] = plus_b0_indices + [
             num_plus + idx for idx in minus_b0_indices]
-        self._results['original_files'] = [
-            item for sublist in plus_orig_files for item in sublist] + [
-            item for sublist in minus_orig_files for item in sublist]
-
-        self._results['sdc_method'] = "PEB/PEPOLAR Series"
+        self._results['original_files'] = _flatten(plus_orig_files) \
+            + _flatten(minus_orig_files)
+        self._results['sdc_method'] = "PEB/PEPOLAR Series (TOPUP)"
         return runtime
+
+
+def _flatten(in_list):
+    out_list = []
+    for item in in_list:
+        if isinstance(item, (list, tuple)):
+            out_list.extend(item)
+        else:
+            out_list.append(item)
+    return out_list
 
 
 class NiftiInfoInputSpec(BaseInterfaceInputSpec):
