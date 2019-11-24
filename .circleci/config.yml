@@ -641,11 +641,10 @@ jobs:
             exit $?
 
       - run:
-          name: Clean working directory
+          name: copy workdir for artifacts
           when: on_success
           command: |
-            sudo chown $(id -un):$(id -gn) -R /tmp/DSDTI
-            sudo rm -rf /tmp/DSDTI/nofmap_work
+            cp -r /tmp/DSDTI/nofmap_work /tmp/DSDTI/nofmap_work_
 
       - run:
           name: Clean working directory
@@ -654,11 +653,6 @@ jobs:
             sudo chown $(id -un):$(id -gn) -R /tmp/DSCSDSI
             find /tmp/DSDTI/nofmap_work \( -name "*.nii.gz" -or -name "*.nii" -or "*.h5" \) \
                 -exec sh -c 'rm -f {}; touch {}' \;
-
-      - run:
-          name: copy workdir for artifacts
-          command: |
-            cp -r /tmp/DSDTI/nofmap_work /tmp/DSDTI/nofmap_work_
 
       - run:
           name: Run qsiprep SyN SDC on no-fieldmap DTI
