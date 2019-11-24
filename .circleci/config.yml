@@ -681,7 +681,7 @@ jobs:
           name: Checking outputs of DSDTI (SyN-SDC)
           command: |
             mkdir -p /tmp/DSDTI/synsdc_test
-            find /tmp/DSDTI/synsdc_derivatives -name "*" -print | sed s+/tmp/DSDTI/synsdc_derivatives/++ | sort > /tmp/DSDTI/synsdc_test/outputs.out
+            find /tmp/DSDTI/synfmap_derivatives -name "*" -print | sed s+/tmp/DSDTI/synfmap_derivatives/++ | sort > /tmp/DSDTI/synsdc_test/outputs.out
             diff /tmp/src/qsiprep/.circleci/DSDTI_synsdc_outputs.txt /tmp/DSDTI/synsdc_test/outputs.out
             exit $?
 
