@@ -347,7 +347,7 @@ jobs:
           name: Checking outputs of DSCSDSI run
           command: |
             mkdir -p /tmp/DSCSDSI/test
-            find /tmp/DSCSDSI/derivatives -path */figures -prune -o -name "*" -print | sed s+/tmp/DSCSDSI/derivatives/++ | sort > /tmp/DSCSDSI/test/outputs.out
+            find /tmp/DSCSDSI/derivatives -name "*" -print | sed s+/tmp/DSCSDSI/derivatives/++ | sort > /tmp/DSCSDSI/test/outputs.out
             diff /tmp/src/qsiprep/.circleci/DSCSDSI_outputs.txt /tmp/DSCSDSI/test/outputs.out
             exit $?
 
@@ -436,7 +436,7 @@ jobs:
           name: Checking outputs of DSDTI with TOPUP/eddy
           command: |
             mkdir -p /tmp/DSDTI/test
-            find /tmp/DSDTI/derivatives -path */figures -prune -o -name "*" -print | sed s+/tmp/DSDTI/derivatives/++ | sort > /tmp/DSDTI/test/outputs.out
+            find /tmp/DSDTI/derivatives -name "*" -print | sed s+/tmp/DSDTI/derivatives/++ | sort > /tmp/DSDTI/test/outputs.out
             diff /tmp/src/qsiprep/.circleci/DSDTI_outputs.txt /tmp/DSDTI/test/outputs.out
             exit $?
 
@@ -636,7 +636,7 @@ jobs:
           name: Checking outputs of DSDTI (no fieldmaps)
           command: |
             mkdir -p /tmp/DSDTI/nofmap_test
-            find /tmp/DSDTI/nofmap_derivatives -path */figures -prune -o -name "*" -print | sed s+/tmp/DSDTI/nofmap_derivatives/++ | sort > /tmp/DSDTI/nofmap_test/outputs.out
+            find /tmp/DSDTI/nofmap_derivatives -name "*" -print | sed s+/tmp/DSDTI/nofmap_derivatives/++ | sort > /tmp/DSDTI/nofmap_test/outputs.out
             diff /tmp/src/qsiprep/.circleci/DSDTI_nofmap_outputs.txt /tmp/DSDTI/nofmap_test/outputs.out
             exit $?
 
@@ -687,7 +687,7 @@ jobs:
           name: Checking outputs of DSDTI (SyN-SDC)
           command: |
             mkdir -p /tmp/DSDTI/synsdc_test
-            find /tmp/DSDTI/synsdc_derivatives -path */figures -prune -o -name "*" -print | sed s+/tmp/DSDTI/synsdc_derivatives/++ | sort > /tmp/DSDTI/synsdc_test/outputs.out
+            find /tmp/DSDTI/synsdc_derivatives -name "*" -print | sed s+/tmp/DSDTI/synsdc_derivatives/++ | sort > /tmp/DSDTI/synsdc_test/outputs.out
             diff /tmp/src/qsiprep/.circleci/DSDTI_synsdc_outputs.txt /tmp/DSDTI/synsdc_test/outputs.out
             exit $?
 
@@ -776,7 +776,7 @@ jobs:
           name: Checking outputs of IntramodalTemplate
           command: |
             mkdir -p /tmp/twoses/test
-            find /tmp/twoses/derivatives -path */figures -prune -o -name "*" -print | sed s+/tmp/twoses/derivatives/++ | sort > /tmp/twoses/test/outputs.out
+            find /tmp/twoses/derivatives -name "*" -print | sed s+/tmp/twoses/derivatives/++ | sort > /tmp/twoses/test/outputs.out
             diff /tmp/src/qsiprep/.circleci/IntramodalTemplate_outputs.txt /tmp/twoses/test/outputs.out
             exit $?
 
