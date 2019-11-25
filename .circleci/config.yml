@@ -1,4 +1,4 @@
-version: 2
+synsdcversion: 2
 jobs:
 
   build:
@@ -97,8 +97,8 @@ jobs:
     steps:
       - restore_cache:
           keys:
-            - data-v9-{{ .Revision }}
-            - data-v9-
+            - data-v10-{{ .Revision }}
+            - data-v10-
       - run:
           name: Get single scan from downsampled CS-DSI
           command: |
@@ -155,10 +155,11 @@ jobs:
           command: |
             if [[ ! -d /tmp/data/nofmap_DSDTI ]]; then
               cp -r /tmp/data/DSDTI /tmp/data/nofmap_DSDTI
-              rm -rf /tmp/data/DSDTI/sub-PNC/fmap
+              rm -rf /tmp/data/nofmap_DSDTI/sub-PNC/fmap
             else
               echo "Dataset nofmap_DSDTI was cached"
             fi
+
       - run:
           name: Get multisession CS-DSI
           command: |
@@ -169,8 +170,9 @@ jobs:
             else
               echo "Dataset twoses was cached"
             fi
+
       - run:
-          name: Get Multi Shell outputs
+          name: Get MultiShell outputs
           command: |
             if [[ ! -d /tmp/data/multishell_output ]]; then
               wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
@@ -190,7 +192,7 @@ jobs:
       - run:
           name: Create Nipype config files
           command: |
-            mkdir -p /tmp/DSCSDSI_BUDS /tmp/DSCSDSI /tmp/DSDTI /tmp/twoses /tmp/multishell_output /tmp/nofmap_DSDTI /tmp/DSDTI_fmap
+            mkdir -p /tmp/DSCSDSI /tmp/DSDTI /tmp/twoses /tmp/multishell_output /tmp/nofmap_DSDTI /tmp/DSDTI_fmap
             printf "[execution]\nstop_on_first_crash = true\n" > /tmp/DSCSDSI/nipype.cfg
             echo "poll_sleep_duration = 0.01" >> /tmp/DSCSDSI/nipype.cfg
             echo "hash_method = content" >> /tmp/DSCSDSI/nipype.cfg
@@ -209,8 +211,9 @@ jobs:
             - DSDTI_fmap/nipype.cfg
             - DSDTI/nipype.cfg
             - twoses/nipype.cfg
+
       - save_cache:
-         key: data-v9-{{ epoch }}
+         key: data-v10-{{ epoch }}
          paths:
             - /tmp/data
 
@@ -340,10 +343,28 @@ jobs:
                 --output-resolution 5 \
                 --nthreads 2 -vv
 
-      - save_cache:
-         key: DSCSDSI-derivatives-v1-{{ .Branch }}-{{ epoch }}
-         paths:
-            - /tmp/DSCSDSI/derivatives/qsiprep
+      - run:
+          name: Checking outputs of DSCSDSI run
+          command: |
+            mkdir -p /tmp/DSCSDSI/test
+            find /tmp/DSCSDSI/derivatives -name "*" -print | sed s+/tmp/DSCSDSI/derivatives/++ | sort > /tmp/DSCSDSI/test/outputs.out
+            diff /tmp/src/qsiprep/.circleci/DSCSDSI_outputs.txt /tmp/DSCSDSI/test/outputs.out
+            exit $?
+
+      - run:
+          name: Clean working directory
+          when: on_success
+          command: |
+            sudo chown $(id -un):$(id -gn) -R /tmp/DSCSDSI
+            sudo rm -rf /tmp/DSCSDSI/work
+
+      - run:
+          name: Clean working directory
+          when: on_fail
+          command: |
+            sudo chown $(id -un):$(id -gn) -R /tmp/DSCSDSI
+            find /tmp/DSCSDSI/work \( -name "*.nii.gz" -or -name "*.nii" -or "*.h5" \) \
+                -exec sh -c 'rm -f {}; touch {}' \;
 
       - store_artifacts:
          path: /tmp/DSCSDSI
@@ -387,28 +408,12 @@ jobs:
               pigz -d --stdout /tmp/cache/docker.tar.gz | docker load
               docker images
             fi
-      - run:
-          name: Run anatomical workflow on DSDTI
-          no_output_timeout: 2h
-          command: |
-            mkdir -p /tmp/DSDTI/work /tmp/DSDTI/derivatives
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSDTI/derivatives && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/DSDTI/derivatives
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSDTI/work && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/DSDTI/work
-            qsiprep-docker -i pennbbl/qsiprep:latest \
-                -e qsiprep_DEV 1 -u $(id -u) \
-                --config $PWD/nipype.cfg -w /tmp/DSDTI/work \
-                 /tmp/data/DSDTI  /tmp/DSDTI/derivatives \
-                 participant \
-                --force-spatial-normalization \
-                --sloppy --write-graph --mem_mb 4096 \
-                --nthreads 2 --anat-only -vv --output-resolution 5
 
       - run:
           name: Run full qsiprep/recon (TOPUP/eddy) on DSDTI
           no_output_timeout: 2h
           command: |
+            mkdir -p /tmp/DSDTI/work /tmp/DSDTI/derivatives
             sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSDTI/derivatives && \
                 sudo setfacl -m group:$(id -gn):rwx /tmp/DSDTI/derivatives
             sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSDTI/work && \
@@ -422,11 +427,33 @@ jobs:
                 --sloppy --mem_mb 4096 \
                 --force-spatial-normalization \
                 --output-space T1w \
-                --hmc_model eddy \
                 --recon-spec dsi_studio_gqi \
                 --eddy_config /tmp/data/eddy_config.json \
                 --output-resolution 5 \
                 --nthreads 2 -vv
+
+      - run:
+          name: Checking outputs of DSDTI with TOPUP/eddy
+          command: |
+            mkdir -p /tmp/DSDTI/test
+            find /tmp/DSDTI/derivatives -name "*" -print | sed s+/tmp/DSDTI/derivatives/++ | sort > /tmp/DSDTI/test/outputs.out
+            diff /tmp/src/qsiprep/.circleci/DSDTI_outputs.txt /tmp/DSDTI/test/outputs.out
+            exit $?
+
+      - run:
+          name: Clean working directory
+          when: on_success
+          command: |
+            sudo chown $(id -un):$(id -gn) -R /tmp/DSDTI
+            sudo rm -rf /tmp/DSDTI/work
+
+      - run:
+          name: Clean working directory
+          when: on_fail
+          command: |
+            sudo chown $(id -un):$(id -gn) -R /tmp/DSDTI
+            find /tmp/DSDTI/work \( -name "*.nii.gz" -or -name "*.nii" -or "*.h5" \) \
+                -exec sh -c 'rm -f {}; touch {}' \;
 
       - store_artifacts:
           path: /tmp/DSDTI
@@ -509,6 +536,25 @@ jobs:
                 --nthreads 2 -vv --output-resolution 5
 
       - run:
+          name: Test Fieldmap setups for DTI merging (prefer fmaps)
+          no_output_timeout: 2h
+          command: |
+            mkdir -p /tmp/DTI_SDC/work /tmp/DTI_SDC/derivatives
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DTI_SDC/derivatives && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/DTI_SDC/derivatives
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DTI_SDC/work && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/DTI_SDC/work
+            qsiprep-docker -i pennbbl/qsiprep:latest \
+                -e qsiprep_DEV 1 -u $(id -u) \
+                --config $PWD/nipype.cfg -w /tmp/DTI_SDC/work \
+                 /tmp/data/fmaptests/DSDTI_fmap  /tmp/DTI_SDC/derivatives \
+                 participant \
+                --boilerplate \
+                --combine-all-dwis \
+                --prefer-dedicated-fmaps \
+                --sloppy --write-graph --mem_mb 4096 \
+                --nthreads 2 -vv --output-resolution 5
+      - run:
           name: Test Fieldmap setups for DSI (using BUDS)
           no_output_timeout: 2h
           command: |
@@ -525,7 +571,6 @@ jobs:
                 --boilerplate \
                 --sloppy --write-graph --mem_mb 4096 \
                 --nthreads 2 -vv --output-resolution 5
-
 
   DSDTI_nofmap:
     machine:
@@ -584,13 +629,30 @@ jobs:
                 --sloppy --mem_mb 4096 \
                 --force-spatial-normalization \
                 --output-space T1w \
-                --hmc_model eddy \
                 --output-resolution 5 \
                 --nthreads 2 -vv
+
+      - run:
+          name: Checking outputs of DSDTI (no fieldmaps)
+          command: |
+            mkdir -p /tmp/DSDTI/nofmap_test
+            find /tmp/DSDTI/nofmap_derivatives -name "*" -print | sed s+/tmp/DSDTI/nofmap_derivatives/++ | sort > /tmp/DSDTI/nofmap_test/outputs.out
+            diff /tmp/src/qsiprep/.circleci/DSDTI_nofmap_outputs.txt /tmp/DSDTI/nofmap_test/outputs.out
+            exit $?
+
       - run:
           name: copy workdir for artifacts
+          when: on_success
           command: |
             cp -r /tmp/DSDTI/nofmap_work /tmp/DSDTI/nofmap_work_
+
+      - run:
+          name: Clean working directory
+          when: on_fail
+          command: |
+            sudo chown $(id -un):$(id -gn) -R /tmp/DSCSDSI
+            find /tmp/DSDTI/nofmap_work \( -name "*.nii.gz" -or -name "*.nii" -or "*.h5" \) \
+                -exec sh -c 'rm -f {}; touch {}' \;
 
       - run:
           name: Run qsiprep SyN SDC on no-fieldmap DTI
@@ -614,6 +676,29 @@ jobs:
                 --eddy_config /tmp/data/eddy_config.json \
                 --output-resolution 5 \
                 --nthreads 2 -vv
+
+      - run:
+          name: Checking outputs of DSDTI (SyN-SDC)
+          command: |
+            mkdir -p /tmp/DSDTI/synsdc_test
+            find /tmp/DSDTI/synfmap_derivatives -name "*" -print | sed s+/tmp/DSDTI/synfmap_derivatives/++ | sort > /tmp/DSDTI/synsdc_test/outputs.out
+            diff /tmp/src/qsiprep/.circleci/DSDTI_synsdc_outputs.txt /tmp/DSDTI/synsdc_test/outputs.out
+            exit $?
+
+      - run:
+          name: Clean working directory
+          when: on_success
+          command: |
+            sudo chown $(id -un):$(id -gn) -R /tmp/DSDTI
+            sudo rm -rf /tmp/DSDTI/nofmap_work
+
+      - run:
+          name: Clean working directory
+          when: on_fail
+          command: |
+            sudo chown $(id -un):$(id -gn) -R /tmp/DSCSDSI
+            find /tmp/DSDTI/nofmap_work \( -name "*.nii.gz" -or -name "*.nii" -or "*.h5" \) \
+                -exec sh -c 'rm -f {}; touch {}' \;
 
       - store_artifacts:
           path: /tmp/DSDTI
@@ -681,6 +766,29 @@ jobs:
                 --intramodal-template-transform BSplineSyN \
                 --intramodal-template-iters 2 \
                 --nthreads 2 -vv
+
+      - run:
+          name: Checking outputs of IntramodalTemplate
+          command: |
+            mkdir -p /tmp/twoses/test
+            find /tmp/twoses/derivatives -name "*" -print | sed s+/tmp/twoses/derivatives/++ | sort > /tmp/twoses/test/outputs.out
+            diff /tmp/src/qsiprep/.circleci/IntramodalTemplate_outputs.txt /tmp/twoses/test/outputs.out
+            exit $?
+
+      - run:
+          name: Clean working directory
+          when: on_success
+          command: |
+            sudo chown $(id -un):$(id -gn) -R /tmp/twoses
+            sudo rm -rf /tmp/twoses/work
+
+      - run:
+          name: Clean working directory
+          when: on_fail
+          command: |
+            sudo chown $(id -un):$(id -gn) -R /tmp/twoses
+            find /tmp/twoses/work \( -name "*.nii.gz" -or -name "*.nii" -or "*.h5" \) \
+                -exec sh -c 'rm -f {}; touch {}' \;
 
       - store_artifacts:
           path: /tmp/twoses
