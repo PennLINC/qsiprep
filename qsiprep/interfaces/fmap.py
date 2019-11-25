@@ -93,7 +93,7 @@ class B0RPEFieldmap(SimpleInterface):
         # Output just one 3/4d image and a sidecar
         if not self.inputs.output_3d_images:
             # Save the conformed fmap
-            output_fmap = fname_presuffix(self.inputs.b0_file, suffix="conform",
+            output_fmap = fname_presuffix(self.inputs.b0_file[0], suffix="conform",
                                           newpath=runtime.cwd)
             output_json = fname_presuffix(output_fmap, use_ext=False, suffix=".json")
             merged_b0s.to_filename(output_fmap)
@@ -158,7 +158,8 @@ def _get_b0s_and_metadata(dwi_file, orientation, b0_threshold):
     # If not, assume these are all b=0 images
     else:
         fmap_data = conform_fmap.get_fdata().squeeze()
-    return fmap_data, meta
+    b0_image = nb.Nifti1Image(fmap_data, conform_fmap.affine, header=conform_fmap.header)
+    return b0_image, meta
 
 
 def _merge_metadata(metadatas):
