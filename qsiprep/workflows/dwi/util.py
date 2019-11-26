@@ -15,6 +15,7 @@ import nibabel as nb
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu, fsl, afni, ants
 from ...niworkflows.interfaces import SimpleBeforeAfter
+from ...niworkflows.interfaces.utils import CopyHeader
 from ...engine import Workflow
 from ...interfaces.ants import ImageMath
 from ...interfaces import DerivativesDataSink
@@ -211,7 +212,8 @@ def init_enhance_and_skullstrip_dwi_wf(name='enhance_and_skullstrip_dwi_wf',
             convergence_threshold=1e-6,
             bspline_order=3,
             bspline_fitting_distance=150,
-            copy_header=True),
+            copy_header=True,
+            args='-v 1'),
         name='n4_correct', n_procs=1)
 
     # Sharpen the b0 ref
@@ -250,6 +252,9 @@ def init_enhance_and_skullstrip_dwi_wf(name='enhance_and_skullstrip_dwi_wf',
         ants.MultiplyImages(dimension=3, output_product_image="SkullStrippedRef.nii.gz"),
         name="apply_mask")
 
+    fix_mask_header = pe.Node(CopyHeader(), name='fix_mask_header')
+    fix_smooth_mask_header = pe.Node(CopyHeader(), name='fix_smooth_mask_header')
+
     workflow.connect([
         (inputnode, truncate_values, [('in_file', 'in_file')]),
         (truncate_values, rescale_image, [('out_file', 'in_file')]),
@@ -259,13 +264,17 @@ def init_enhance_and_skullstrip_dwi_wf(name='enhance_and_skullstrip_dwi_wf',
         (fill_holes, dilate_mask, [('out_file', 'in_file')]),
         (dilate_mask, smooth_mask, [('out_file', 'in_file')]),
         (rescale_image, n4_correct, [('out_file', 'input_image')]),
-        (smooth_mask, n4_correct, [('out_file', 'weight_image')]),
+        (inputnode, fix_smooth_mask_header, [('in_file', 'hdr_file')]),
+        (smooth_mask, fix_smooth_mask_header, [('out_file', 'in_file')]),
+        (fix_smooth_mask_header, n4_correct, [('out_file', 'weight_image')]),
         (n4_correct, sharpen_image, [('output_image', 'in_file')]),
         (sharpen_image, outputnode, [('out_file', 'bias_corrected_file')]),
         (sharpen_image, apply_mask, [('out_file', 'first_input')]),
         (smooth_mask, apply_mask, [('out_file', 'second_input')]),
         (apply_mask, outputnode, [('output_product_image', 'skull_stripped_file')]),
-        (fill_holes, outputnode, [('out_file', 'mask_file')])])
+        (fill_holes, fix_mask_header, [('out_file', 'in_file')]),
+        (inputnode, fix_mask_header, [('in_file', 'hdr_file')]),
+        (fix_mask_header, outputnode, [('out_file', 'mask_file')])])
 
     return workflow
 
