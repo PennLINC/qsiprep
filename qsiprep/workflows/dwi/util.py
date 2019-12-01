@@ -264,7 +264,7 @@ def init_enhance_and_skullstrip_dwi_wf(name='enhance_and_skullstrip_dwi_wf',
         (fill_holes, dilate_mask, [('out_file', 'in_file')]),
         (dilate_mask, smooth_mask, [('out_file', 'in_file')]),
         (rescale_image, n4_correct, [('out_file', 'input_image')]),
-        (inputnode, fix_smooth_mask_header, [('in_file', 'hdr_file')]),
+        (rescale_image, fix_smooth_mask_header, [('out_file', 'hdr_file')]),
         (smooth_mask, fix_smooth_mask_header, [('out_file', 'in_file')]),
         (fix_smooth_mask_header, n4_correct, [('out_file', 'weight_image')]),
         (n4_correct, sharpen_image, [('output_image', 'in_file')]),
@@ -273,7 +273,7 @@ def init_enhance_and_skullstrip_dwi_wf(name='enhance_and_skullstrip_dwi_wf',
         (smooth_mask, apply_mask, [('out_file', 'second_input')]),
         (apply_mask, outputnode, [('output_product_image', 'skull_stripped_file')]),
         (fill_holes, fix_mask_header, [('out_file', 'in_file')]),
-        (inputnode, fix_mask_header, [('in_file', 'hdr_file')]),
+        (sharpen_image, fix_mask_header, [('out_file', 'hdr_file')]),
         (fix_mask_header, outputnode, [('out_file', 'mask_file')])])
 
     return workflow
