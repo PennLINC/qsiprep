@@ -1,5 +1,5 @@
 # Use Ubuntu 16.04 LTS
-FROM ubuntu:xenial-20161213
+FROM nvidia/cuda:9.1-runtime-ubuntu16.04
 
 # Pre-cache neurodebian key
 COPY docker/files/neurodebian.gpg /usr/local/etc/neurodebian.gpg
@@ -19,6 +19,7 @@ RUN apt-get update && \
                     bc \
                     dc \
                     file \
+                    libopenblas-base \
                     libfontconfig1 \
                     libfreetype6 \
                     libgl1-mesa-dev \
@@ -77,14 +78,14 @@ RUN curl -sSL https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/6.0.1/frees
     --exclude='freesurfer/lib/cuda' \
     --exclude='freesurfer/lib/qt'
 
-  ENV FSLDIR="/opt/fsl-5.0.11" \
-      PATH="/opt/fsl-5.0.11/bin:$PATH"
+  ENV FSLDIR="/opt/fsl-6.0.1" \
+      PATH="/opt/fsl-6.0.1/bin:$PATH"
   RUN echo "Downloading FSL ..." \
-      && mkdir -p /opt/fsl-5.0.11 \
-      && curl -fsSL --retry 5 https://fsl.fmrib.ox.ac.uk/fsldownloads/fsl-5.0.11-centos6_64.tar.gz \
-      | tar -xz -C /opt/fsl-5.0.11 --strip-components 1 \
+      && mkdir -p /opt/fsl-6.0.1 \
+      && curl -fsSL --retry 5 https://fsl.fmrib.ox.ac.uk/fsldownloads/fsl-6.0.1-centos6_64.tar.gz \
+      | tar -xz -C /opt/fsl-6.0.1 --strip-components 1 \
       && echo "Installing FSL conda environment ..." \
-      && bash /opt/fsl-5.0.11/etc/fslconf/fslpython_install.sh -f /opt/fsl-5.0.11
+      && bash /opt/fsl-6.0.1/etc/fslconf/fslpython_install.sh -f /opt/fsl-6.0.1
 
 ENV FREESURFER_HOME=/opt/freesurfer \
     SUBJECTS_DIR=/opt/freesurfer/subjects \
@@ -128,12 +129,10 @@ RUN mkdir /opt/dsi-studio \
   && mkdir build && cd build \
   && qmake ../src && make \
   && cd /opt/dsi-studio \
-  && curl -sSLO 'https://www.dropbox.com/s/ew3rv0jrqqny2dq/dsi_studio_64.zip?dl=1' > dsistudio64.zip \
-  && mv 'dsi_studio_64.zip?dl=1' dsistudio64.zip \
-  && unzip dsistudio64.zip && cd dsi_studio_64 \
-  && find . -name '*.dll' -exec rm {} \; \
-  && rm -rf iconengines imageformats platforms printsupport \
-  && rm dsi_studio.exe \
+  && curl -sSLO 'https://upenn.box.com/shared/static/01r73d4a15utl13himv4d7cjpa6etf6z.gz' \
+  && tar xvfz 01r73d4a15utl13himv4d7cjpa6etf6z.gz \
+  && rm 01r73d4a15utl13himv4d7cjpa6etf6z.gz \
+  && cd dsi_studio_64 \
   && mv ../build/dsi_studio . \
   && rm -rf /opt/dsi-studio/src /opt/dsi-studio/build
 
@@ -164,7 +163,7 @@ RUN cd /opt \
     && ./build
 
 # Installing ANTs latest from source
-ARG ANTS_SHA=51855944553a73960662d3e4f7c1326e584b23b2
+ARG ANTS_SHA=b8889562341471dbe18b415d2bcefb9b8f12232a
 ADD https://cmake.org/files/v3.11/cmake-3.11.4-Linux-x86_64.sh /cmake-3.11.4-Linux-x86_64.sh
 ENV ANTSPATH="/opt/ants-latest/bin" \
     PATH="/opt/ants-latest/bin:$PATH" \
@@ -175,18 +174,18 @@ RUN mkdir /opt/cmake \
   && apt-get update -qq \
     && mkdir /tmp/ants \
     && cd /tmp \
-    && curl -sSLO https://github.com/ANTsX/ANTs/archive/${ANTS_SHA}.zip \
-    && unzip ${ANTS_SHA}.zip \
-    && mv ANTs-${ANTS_SHA} /tmp/ants/source \
-    && rm ${ANTS_SHA}.zip \
+    && git clone https://github.com/ANTsX/ANTs.git \
+    && mv ANTs /tmp/ants/source \
+    && cd /tmp/ants/source \
+    && git checkout ${ANTS_SHA} \
     && mkdir -p /tmp/ants/build \
     && cd /tmp/ants/build \
-    && git config --global url."https://".insteadOf git:// \
-    && cmake -DBUILD_SHARED_LIBS=ON /tmp/ants/source \
-    && make -j1 \
     && mkdir -p /opt/ants-latest \
-    && mv bin lib /opt/ants-latest/ \
-    && mv /tmp/ants/source/Scripts/* /opt/ants-latest/bin \
+    && git config --global url."https://".insteadOf git:// \
+    && cmake -DBUILD_SHARED_LIBS=ON -DCMAKE_INSTALL_PREFIX=/opt/ants-latest /tmp/ants/source \
+    && make -j2 \
+    && cd ANTS-build \
+    && make install \
     && rm -rf /tmp/ants \
     && rm -rf /opt/cmake /usr/local/bin/cmake
 

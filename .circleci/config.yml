@@ -16,10 +16,10 @@ jobs:
             apk add --no-cache pigz python3 tar
       - restore_cache:
           keys:
-            - docker-v6-{{ .Branch }}-{{ .Revision }}
-            - docker-v6-{{ .Branch }}-
-            - docker-v6-master-
-            - docker-v6-
+            - docker-v7-{{ .Branch }}-{{ .Revision }}
+            - docker-v7-{{ .Branch }}-
+            - docker-v7-master-
+            - docker-v7-
           paths:
             - /tmp/cache/docker.tar.gz
       - setup_remote_docker
@@ -76,7 +76,7 @@ jobs:
           no_output_timeout: 40m
           command: |
             mkdir -p /tmp/cache
-            docker save ubuntu:xenial-20161213 pennbbl/qsiprep:latest \
+            docker save nvidia/cuda:9.1-runtime-ubuntu16.04 pennbbl/qsiprep:latest \
             | pigz -3 > /tmp/cache/docker.tar.gz
 
       - persist_to_workspace:
@@ -85,7 +85,7 @@ jobs:
             - src/qsiprep
 
       - save_cache:
-         key: docker-v6-{{ .Branch }}-{{ .Revision }}-{{ epoch }}
+         key: docker-v7-{{ .Branch }}-{{ .Revision }}-{{ epoch }}
          paths:
            - /tmp/cache/docker.tar.gz
 
@@ -179,7 +179,7 @@ jobs:
                 -O multishell_output.tar.gz "https://upenn.box.com/shared/static/nwxdn4ale8dkebvpjmxbx99dqjzwvlmh.gz"
               tar xvfz multishell_output.tar.gz -C /tmp/data/
             else
-              echo "Dataset twoses was cached"
+              echo "Dataset multishell_output was cached"
             fi
 
       - run:
@@ -279,7 +279,7 @@ jobs:
             - DSCSDSI-anat-v1-
       - restore_cache:
           keys:
-            - docker-v6-{{ .Branch }}-{{ .Revision }}
+            - docker-v7-{{ .Branch }}-{{ .Revision }}
       - run:
           name: Setting up test
           command: |
@@ -390,7 +390,8 @@ jobs:
           at: /tmp
       - restore_cache:
           keys:
-            - docker-v6-{{ .Branch }}-{{ .Revision }}
+            - docker-v7-{{ .Branch }}-{{ .Revision }}
+
       - run:
           name: Setting up test
           command: |
@@ -479,7 +480,7 @@ jobs:
           at: /tmp
       - restore_cache:
           keys:
-            - docker-v6-{{ .Branch }}-{{ .Revision }}
+            - docker-v7-{{ .Branch }}-{{ .Revision }}
       - run:
           name: Setting up test
           command: |
@@ -593,7 +594,7 @@ jobs:
           at: /tmp
       - restore_cache:
           keys:
-            - docker-v6-{{ .Branch }}-{{ .Revision }}
+            - docker-v7-{{ .Branch }}-{{ .Revision }}
       - run:
           name: Setting up test
           command: |
@@ -724,7 +725,7 @@ jobs:
           at: /tmp
       - restore_cache:
           keys:
-            - docker-v6-{{ .Branch }}-{{ .Revision }}
+            - docker-v7-{{ .Branch }}-{{ .Revision }}
       - run:
           name: Setting up test
           command: |
@@ -758,6 +759,7 @@ jobs:
                  /tmp/data/twoses  /tmp/twoses/derivatives \
                  participant \
                 --sloppy --mem_mb 4096 \
+                --dwi-denoise-window 0 \
                 --output-space T1w \
                 --hmc_model none \
                 --b0-motion-corr-to first \
@@ -814,7 +816,7 @@ jobs:
 
       - restore_cache:
           keys:
-            - docker-v6-{{ .Branch }}-{{ .Revision }}
+            - docker-v7-{{ .Branch }}-{{ .Revision }}
       - run:
           name: Setting up test
           command: |
@@ -854,7 +856,7 @@ jobs:
                 --recon-spec mrtrix_dhollander_no5tt \
                 --recon-only \
                 --mem_mb 4096 \
-                --nthreads 2 -vv
+                --nthreads 1 -vv
 
       - run:
           name: Run mrtrix_dhollander
@@ -876,7 +878,7 @@ jobs:
                 --recon-spec mrtrix_dhollander \
                 --recon-only \
                 --mem_mb 4096 \
-                --nthreads 2 -vv
+                --nthreads 1 -vv
 
       - run:
           name: Run mrtrix_msmt_csd
@@ -898,7 +900,7 @@ jobs:
                 --recon-spec mrtrix_msmt_csd \
                 --recon-only \
                 --mem_mb 4096 \
-                --nthreads 2 -vv
+                --nthreads 1 -vv
 
       - run:
           name: Run mrtrix_tckglobal
@@ -920,7 +922,7 @@ jobs:
                 --recon-spec mrtrix_tckglobal \
                 --recon-only \
                 --mem_mb 4096 \
-                --nthreads 2 -vv
+                --nthreads 1 -vv
 
       - run:
           name: Run dsi_studio_gqi
@@ -942,7 +944,7 @@ jobs:
                 --recon-input /tmp/data/multishell_output/qsiprep \
                 --recon-only \
                 --mem_mb 4096 \
-                --nthreads 2 -vv
+                --nthreads 1 -vv
 
       - run:
           name: Run dipy_mapmri
@@ -964,7 +966,7 @@ jobs:
                 --recon-spec dipy_mapmri \
                 --recon-only \
                 --mem_mb 4096 \
-                --nthreads 2 -vv
+                --nthreads 1 -vv
 
 
       - store_artifacts:
@@ -978,7 +980,7 @@ jobs:
 
       - restore_cache:
           keys:
-            - docker-v6-{{ .Branch }}-{{ .Revision }}
+            - docker-v7-{{ .Branch }}-{{ .Revision }}
       - run:
           name: Load Docker image layer cache
           no_output_timeout: 30m
@@ -1017,7 +1019,7 @@ jobs:
             fi
       - restore_cache:
           keys:
-            - docker-v6-{{ .Branch }}-{{ .Revision }}
+            - docker-v7-{{ .Branch }}-{{ .Revision }}
       - run:
           name: Load Docker image layer cache
           no_output_timeout: 30m
@@ -1125,8 +1127,7 @@ jobs:
           name: Build qsiprep
           command: |
             pyenv local 3.6.5
-            #THISVERSION=$( python get_version.py )
-            THISVERSION=0.6.0rc1
+            THISVERSION=$( python get_version.py )
             virtualenv --python=python3 build
             source build/bin/activate
             pip install --upgrade "pip>=19.1" numpy
