@@ -150,6 +150,19 @@ RUN cd /opt \
     && echo "Compiling MRtrix3 ..." \
     && ./build
 
+# Install 3Tissue from source
+ARG MRTRIX_SHA=c1367255f51a3cbe774c8317448cdc0b0aa587be
+ENV PATH="/opt/mrtrix3-latest/bin:$PATH"
+RUN cd /opt \
+    && curl -sSLO https://github.com/3Tissue/MRtrix3Tissue/archive/${MRTRIX_SHA}.zip \
+    && unzip ${MRTRIX_SHA}.zip \
+    && mv MRtrix3Tissue-${MRTRIX_SHA} /opt/3Tissue \
+    && rm ${MRTRIX_SHA}.zip \
+    && cd /opt/3Tissue \
+    && ./configure \
+    && echo "Compiling MRtrix3-3Tissue ..." \
+    && ./build
+
 # Installing ANTs latest from source
 ARG ANTS_SHA=51855944553a73960662d3e4f7c1326e584b23b2
 ADD https://cmake.org/files/v3.11/cmake-3.11.4-Linux-x86_64.sh /cmake-3.11.4-Linux-x86_64.sh

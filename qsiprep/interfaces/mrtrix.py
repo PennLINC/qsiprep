@@ -250,6 +250,20 @@ class Dwi2Response(ResponseSD):
         return outputs
 
 
+class SS3TBase(MRTrix3Base):
+
+    def _pre_run_hook(self, runtime):
+        """Sets the PATH to containe 3Tissue instead of mrtrix3."""
+        old_path = runtime.environ.get("PATH")
+        new_path = old_path.replace('/opt/mrtrix3-latest', '/opt/3Tissue')
+        runtime.environ['PATH'] = new_path
+        return runtime
+
+
+class SS3TDwi2Response(SS3TBase, Dwi2Response):
+    pass
+
+
 class EstimateFODInputSpec(MRTrix3BaseInputSpec):
     algorithm = traits.Enum(
         'csd',
