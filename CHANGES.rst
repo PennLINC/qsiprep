@@ -1,3 +1,20 @@
+0.6.6 (Nov 25, 2019)
+=====================
+Fixes a bug introduced in 0.6.5 for the TOPUP/eddy version of the pipeline. ANTs is
+updated to a newer version.
+
+ * Fix RPEB0 bug Closes #78
+ * Add additional CI testing for specific output files
+ * Adds CI tests for creating workflows for all RPE combinations (series and fieldmap)
+
+0.6.5 (Nov 21, 2019)
+====================
+ * Improved handling of Freesurfer path (#50)
+ * Better logic in commandline argument checking (#50, #62)
+ * More robust brain masking for b=0 reference images (#73)
+ * Bugfix for reverse phase encoding directon dwi series (#68)
+ * Bugfix for warping eddy's CNR output (#72)
+
 0.6.4, 0.6.4-1 (Nov 11, 2019)
 ==============================
  * IMPORTANT: commandline call changed to use official BIDS App

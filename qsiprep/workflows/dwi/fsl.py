@@ -49,7 +49,8 @@ def init_fsl_hmc_wf(scan_groups,
     LAS+. The fieldcoefs are applied during eddy's run and the corrected series comes out.
     This is finally converted to LPS+ and sent to the rest of the pipeline.
 
-    If a GRE fieldmap is available, a fieldmap in Hz is calculated and sent to eddy.
+    If a GRE fieldmap is available, the correction is applied to eddy's outputs after they have
+    been converted back to LPS+.
 
     Finally, if SyN is chosen, it is applied to the LPS+ converted, eddy-resampled data.
 
@@ -81,7 +82,7 @@ def init_fsl_hmc_wf(scan_groups,
         b0_images: list
             List of single b=0 volumes
         original_files: list
-            List of the files from which each DWI volume came from.
+            List of the files from which each DWI volume came.
 
 
     """
@@ -122,6 +123,7 @@ def init_fsl_hmc_wf(scan_groups,
     pre_topup_lps = pe.Node(ConformDwi(orientation="LPS"), name='pre_topup_lps')
     pre_topup_enhance = init_enhance_and_skullstrip_dwi_wf(name='pre_topup_enhance')
     back_to_lps = pe.Node(ConformDwi(orientation="LPS"), name='back_to_lps')
+    cnr_lps = pe.Node(ConformDwi(orientation="LPS"), name='cnr_lps')
     split_eddy_lps = pe.Node(SplitDWIs(b0_threshold=b0_threshold), name="split_eddy_lps")
     mean_b0_lps = pe.Node(ants.AverageImages(dimension=3, normalize=True), name='mean_b0_lps')
     lps_b0_enhance = init_enhance_and_skullstrip_dwi_wf(name='lps_b0_enhance')
@@ -170,9 +172,10 @@ def init_fsl_hmc_wf(scan_groups,
             ('bvec_files', 'bvec_files_to_transform')]),
         (split_eddy_lps, mean_b0_lps, [('b0_images', 'images')]),
         (mean_b0_lps, lps_b0_enhance, [('output_average_image', 'inputnode.in_file')]),
+        (eddy, cnr_lps, [('out_cnr_maps', 'dwi_file')]),
+        (cnr_lps, outputnode, [('dwi_file', 'cnr_map')]),
         (eddy, outputnode, [
             (slice_quality, 'slice_quality'),
-            ('out_cnr_maps', 'cnr_map'),
             (slice_quality, 'hmc_optimization_data')]),
         (eddy, spm_motion, [('out_parameter', 'eddy_motion')]),
         (spm_motion, outputnode, [('spm_motion_file', 'motion_params')])
@@ -185,7 +188,7 @@ def init_fsl_hmc_wf(scan_groups,
     if fieldmap_type == 'epi':
         rpe_b0 = scan_groups['fieldmap_info']['epi']
     elif fieldmap_type == 'rpe_series':
-        rpe_b0 = scan_groups['fieldmap_info']['rpe_series'][0]
+        rpe_b0 = scan_groups['fieldmap_info']['rpe_series']
     using_topup = rpe_b0 is not None
 
     if using_topup:
