@@ -76,12 +76,14 @@ def init_dwi_pre_hmc_wf(scan_groups,
             list of paths to the original files that the single volumes came from
         original_grouping
             list of warped space group ids
+        validation_reports
+            list of image validation reports
     """
     workflow = Workflow(name=name)
     outputnode = pe.Node(
         niu.IdentityInterface(fields=[
             'dwi_files', 'bval_files', 'bvec_files', 'original_files',
-            'b0_images', 'b0_indices', 'rpe_b0s', 'warp_grouping']),
+            'b0_images', 'b0_indices', 'rpe_b0s', 'warp_grouping', 'validation_reports']),
         name='outputnode')
     dwi_series_pedir = scan_groups['dwi_series_pedir']
     dwi_series = scan_groups['dwi_series']
@@ -122,7 +124,8 @@ def init_dwi_pre_hmc_wf(scan_groups,
                 ('bvec_files', 'bvec_plus'),
                 ('dwi_files', 'dwi_plus'),
                 ('b0_images', 'b0_images_plus'),
-                ('b0_indices', 'b0_indices_plus')]),
+                ('b0_indices', 'b0_indices_plus'),
+                ('validation_reports', 'validation_reports_plus')]),
 
             # Merge, denoise, split on the minus series
             (merge_minus, split_minus, [('outputnode.merged_image', 'dwi_file'),
@@ -135,7 +138,8 @@ def init_dwi_pre_hmc_wf(scan_groups,
                 ('bvec_files', 'bvec_minus'),
                 ('dwi_files', 'dwi_minus'),
                 ('b0_images', 'b0_images_minus'),
-                ('b0_indices', 'b0_indices_minus')]),
+                ('b0_indices', 'b0_indices_minus'),
+                ('validation_reports', 'validation_reports_minus')]),
 
             # Connect to the outputnode
             (concat_rpe_splits, outputnode, [
@@ -144,7 +148,8 @@ def init_dwi_pre_hmc_wf(scan_groups,
                 ('bvec_files', 'bvec_files'),
                 ('original_files', 'original_files'),
                 ('b0_images', 'b0_images'),
-                ('b0_indices', 'b0_indices')])
+                ('b0_indices', 'b0_indices'),
+                ('validation_reports', 'validation_reports')])
             ])
         return workflow
 
@@ -161,7 +166,8 @@ def init_dwi_pre_hmc_wf(scan_groups,
             ('outputnode.merged_bval', 'bval_file'),
             ('outputnode.merged_bvec', 'bvec_file')]),
         (merge_dwis, outputnode, [
-            ('outputnode.original_files', 'original_files')]),
+            ('outputnode.original_files', 'original_files'),
+            ('outputnode.validation_reports', 'validation_reports')]),
         (split_dwis, outputnode, [
             ('dwi_files', 'dwi_files'),
             ('bval_files', 'bval_files'),

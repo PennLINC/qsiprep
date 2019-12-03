@@ -75,13 +75,15 @@ class ConcatRPESplitsInputSpec(BaseInterfaceInputSpec):
     b0_images_plus = InputMultiObject(File(exists=True), desc='just the b0s')
     b0_indices_plus = traits.List(desc='list of original indices for each b0 image')
     original_images_plus = InputMultiObject(File(exists=True))
+    validation_reports_plus = InputMultiObject(File(exists=True))
 
     dwi_minus = InputMultiObject(File(exists=True), desc='single volume dwis')
     bvec_minus = InputMultiObject(File(exists=True), desc='single volume bvecs')
     bval_minus = InputMultiObject(File(exists=True), desc='single volume bvals')
     b0_images_minus = InputMultiObject(File(exists=True), desc='just the b0s')
     b0_indices_minus = traits.List(desc='list of original indices for each b0 image')
-    original_images_minus = traits.List()
+    original_images_minus = InputMultiObject(File(exists=True))
+    validation_reports_minus = InputMultiObject(File(exists=True))
 
 
 class ConcatRPESplitsOutputSpec(TraitedSpec):
@@ -92,6 +94,7 @@ class ConcatRPESplitsOutputSpec(TraitedSpec):
     b0_indices = traits.List(desc='list of indices for each b0 image')
     original_files = traits.List(desc='list of source series for each dwi')
     sdc_method = traits.Str("PEB/PEPOLAR Series (phase-encoding based / PE-POLARity)")
+    validation_reports = OutputMultiObject(File(exists=True))
 
 
 class ConcatRPESplits(SimpleInterface):
@@ -129,6 +132,8 @@ class ConcatRPESplits(SimpleInterface):
             num_plus + idx for idx in minus_b0_indices]
         self._results['original_files'] = _flatten(plus_orig_files) \
             + _flatten(minus_orig_files)
+        self._results['validation_reports'] = self.inputs.validation_reports_plus \
+            + self.inputs.validation_reports_minus
         self._results['sdc_method'] = "PEB/PEPOLAR Series (TOPUP)"
         return runtime
 
@@ -359,7 +364,7 @@ class ConformDwiOutputSpec(TraitedSpec):
     dwi_file = File(exists=True, desc='conformed dwi image')
     bvec_file = File(exists=True, desc='conformed bvec file')
     bval_file = File(exists=True, desc='conformed bval file')
-    # report_file = File(exists=True)
+    out_report = File(exists=True, desc='HTML segment containing warning')
 
 
 class ConformDwi(SimpleInterface):
@@ -368,6 +373,7 @@ class ConformDwi(SimpleInterface):
     Performs three basic functions:
 
     #. Orient image to requested orientation
+    #. Validate the qform and sform, set qform code to 1
     #. Flip bvecs accordingly
     #. Do nothing to the bvals
 
@@ -394,7 +400,11 @@ class ConformDwi(SimpleInterface):
             bvec_fname = fname_presuffix(fname, suffix=".bvec", use_ext=False)
 
         out_bvec_fname = fname_presuffix(bvec_fname, suffix=suffix, newpath=runtime.cwd)
-        input_img = nb.load(fname)
+        validator = ValidateImage(in_file=fname)
+        validated = validator.run()
+        self._results['out_report'] = validated.outputs.out_report
+        input_img = nb.load(validated.outputs.out_file)
+
         input_axcodes = nb.aff2axcodes(input_img.affine)
         # Is the input image oriented how we want?
         new_axcodes = tuple(orientation)
@@ -577,7 +587,7 @@ class ValidateImage(SimpleInterface):
             warning_txt = 'WARNING - Missing orientation information'
             description = """\
 <p class="elem-desc">
-    FMRIPREP could not retrieve orientation information from the image header.
+    QSIPrep could not retrieve orientation information from the image header.
     The qform and sform matrices have been set to a default, LAS-oriented affine.
     Analyses of this dataset MAY BE INVALID.
 </p>
