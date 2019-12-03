@@ -177,7 +177,7 @@ tractography with no T1w-based anatomical constraints.
 .. _mrtrix_singleshell_ss3t:
 
 ``mrtrix_singleshell_ss3t``
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 This workflow uses the ``ss3t_csd_beta`` algorithm to estimate FODs for white matter, and
 cerebrospinal fluid using *single shell (DTI) acquisitions*. The white matter FODs are used for
@@ -186,7 +186,7 @@ tractography and the T1w segmentation is used for anatomical constraints [Smith2
 .. _mrtrix_singleshell_ss3t_noACT:
 
 ``mrtrix_singleshell_ss3t_noACT``
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 This workflow uses the ``ss3t_csd_beta`` algorithm to estimate FODs for white matter, and
 cerebrospinal fluid using *single shell (DTI) acquisitions*. The white matter FODs are used for
