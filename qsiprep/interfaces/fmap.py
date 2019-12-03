@@ -71,7 +71,7 @@ class B0RPEFieldmap(SimpleInterface):
         b0_fieldmap_metadata = []
         for image_path in self.inputs.b0_file:
             image, meta = _get_b0s_and_metadata(image_path, self.inputs.orientation,
-                                                self.inputs)
+                                                self.inputs.b0_threshold)
             b0_fieldmap_imagedata.append(image)
             b0_fieldmap_metadata.append(meta)
 
