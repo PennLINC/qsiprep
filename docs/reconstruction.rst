@@ -137,7 +137,7 @@ Pre-configured recon_workflows
 
 .. note::
   The MRtrix workflows are identical up to the FOD estimation. In each case the fiber response
-  function is estimated using `dwi2response dhollander`_ [Dhollander2019a]_ with a mask based on
+  function is estimated using ``dwi2response dhollander`` [Dhollander2019a]_ with a mask based on
   the T1w. The main differences are in
 
     * the CSD algorithm used in dwi2fod (msmt_csd or ss3t_csd)
