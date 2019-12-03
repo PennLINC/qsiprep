@@ -14,25 +14,25 @@ from the preprocessed diffusion data.
 The easiest way to get started is to use one of the :ref:`preconfigured_workflows`.
 Instead of specifying a path to a file you can choose from the following:
 
-+-------------------------------+--------------+-------------+---------+-----------------+----------------+
-| Option                        | Requires SDC | MultiShell  |   DSI   | DTI             |  Tractography  |
-+===============================+==============+=============+=========+=================+================+
-|:ref:`mrtrix_msmt_csd`         |    Yes       |  Required   |    No   |      No         | Probabilistic  |
-+-------------------------------+--------------+-------------+---------+-----------------+----------------+
-|:ref:`mrtrix_dhollander`       |    Yes       |    Yes      |    No   |     Yes         | Probabilistic  |
-+-------------------------------+--------------+-------------+---------+-----------------+----------------+
-|:ref:`mrtrix_dhollander_no5tt` |     No       |    Yes      |    No   |     Yes         | Probabilistic  |
-+-------------------------------+--------------+-------------+---------+-----------------+----------------+
-|:ref:`mrtrix_tckglobal`        |    Yes       |   Required  |    No   |      No         |    Global      |
-+-------------------------------+--------------+-------------+---------+-----------------+----------------+
-|:ref:`dsi_studio_gqi`          | Recommended  |    Yes      |   Yes   |    Yes*         | Deterministic  |
-+-------------------------------+--------------+-------------+---------+-----------------+----------------+
-|:ref:`dipy_mapmri`             | Recommended  |    Yes      |   Yes   |      No         |   Both         |
-+-------------------------------+--------------+-------------+---------+-----------------+----------------+
-|:ref:`dipy_3dshore`            | Recommended  |    Yes      |   Yes   |      No         |   Both         |
-+-------------------------------+--------------+-------------+---------+-----------------+----------------+
-|:ref:`csdsi_3dshore`           | Recommended  |    Yes      |   Yes   |      No         |   Both         |
-+-------------------------------+--------------+-------------+---------+-----------------+----------------+
++-------------------------------------+--------------+-------------+---------+-----------------+----------------+
+| Option                              | Requires SDC | MultiShell  |   DSI   | DTI             |  Tractography  |
++=====================================+==============+=============+=========+=================+================+
+|:ref:`mrtrix_multishell_msmt`        |    Yes       |  Required   |    No   |      No         | Probabilistic  |
++-------------------------------------+--------------+-------------+---------+-----------------+----------------+
+|:ref:`mrtrix_multishell_msmt_noACT`  |    No        |  Required   |    No   |      No         | Probabilistic  |
++-------------------------------------+--------------+-------------+---------+-----------------+----------------+
+|:ref:`mrtrix_singleshell_ss3t`       |    Yes       |  No         |    No   |      Yes        | Probabilistic  |
++-------------------------------------+--------------+-------------+---------+-----------------+----------------+
+|:ref:`mrtrix_singleshell_ss3t_noACT` |    No        |  No         |    No   |      Yes        | Probabilistic  |
++-------------------------------------+--------------+-------------+---------+-----------------+----------------+
+|:ref:`dsi_studio_gqi`                | Recommended  |    Yes      |   Yes   |    Yes*         | Deterministic  |
++-------------------------------------+--------------+-------------+---------+-----------------+----------------+
+|:ref:`dipy_mapmri`                   | Recommended  |    Yes      |   Yes   |      No         |   Both         |
++-------------------------------------+--------------+-------------+---------+-----------------+----------------+
+|:ref:`dipy_3dshore`                  | Recommended  |    Yes      |   Yes   |      No         |   Both         |
++-------------------------------------+--------------+-------------+---------+-----------------+----------------+
+|:ref:`csdsi_3dshore`                 | Recommended  |    Yes      |   Yes   |      No         |   Both         |
++-------------------------------------+--------------+-------------+---------+-----------------+----------------+
 
 \* Not recommended
 
@@ -135,70 +135,62 @@ in the header. **Be sure to check for alignment and orientation** in your output
 Pre-configured recon_workflows
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. _mrtrix_msmt_csd:
+.. note::
+  The MRtrix workflows are identical up to the FOD estimation. In each case the fiber response
+  function is estimated using `dwi2response dhollander`_ [Dhollander2019a]_ with a mask based on
+  the T1w. The main differences are in
 
-``mrtrix_msmt_csd``
-^^^^^^^^^^^^^^^^^^^
+    * the CSD algorithm used in dwi2fod (msmt_csd or ss3t_csd)
+    * whether a T1w-based tissue segmentation is used during tractography
 
-This workflow explicitly uses the T1w-based segmentation to estimate response functions for
-white matter, gray matter and CSF. Tissue-specific response functions are estimated using the
-T1w-based FAST segmentation. Good alignment between the dMRI and T1w scan is therefore required:
-susceptibility distortion correction must have been performed during preprocessing. Additionally,
-a unique shell is required for each tissue response function. This means that at least 3 b>0
-shells need to be included in the preprocessed data.
+  In the ``*_noact`` versions of the pipelines, no T1w-based segmentation is used during
+  tractography. Otherwise, cropping is performed at the GM/WM interface, along with backtracking.
 
-The output from ``qsiprep`` is sent to  `dwi2response (msmt_5tt)`_ [Jeurissen2014]_ with a mask
-based on the T1w. The GM, WM and CSF FODs, along with the anatomical segmentation are input to
-tckgen_, which uses the iFOD2 probabilistic tracking method to generate 1e7 streamlines with a
-maximum length of 250mm, minimum length of 30mm, FOD power of 0.33, cropping performed at the
-GM/WM interface, and backtracking. Weights for each streamline were calculated using SIFT2_
-[Smith2015]_ and were included for while estimating the structural connectivity matrix.
-
-
-.. _mrtrix_dhollander:
-
-``mrtrix_dhollander``
-^^^^^^^^^^^^^^^^^^^^^
-
-Unlike :ref:`mrtrix_msmt_csd`, this workflow uses an unsupervised learning approach to
-estimate response functions for white matter, gray matter and CSF [Dhollander2016]_, [Dhollander2018]_.
-A unique shell is required for each tissue response function. This means that at least 3 b>0
-shells need to be included in the preprocessed data.
-
-The output from ``qsiprep`` is sent to  `dwi2response (dhollander)`_ [Dhollander2016]_ with a mask
-based on the T1w. The GM, WM and CSF FODs along with the FAST segmentation are input to
-tckgen_, which uses the iFOD2 probabilistic tracking method to generate 1e7 streamlines with a
-maximum length of 250mm, minimum length of 30mm, FOD power of 0.33, cropping performed at the
-GM/WM interface, and backtracking. Weights for each streamline were calculated using SIFT2_
-[Smith2015]_ and were included for while estimating the structural connectivity matrix.
-
-Although the T1w-based tissue segmentation is *not* used for the tissue-specific response
-functions, it *is* used for Anatomically constrained tractography by tckgen_. Therefore
-distortion correction is still required for this workflow. A workflow that does not hinge on
-distortion-correction data is :ref:`mrtrix_dhollander_no5tt`.
+  In all pipelines, tractography is performed using
+  tckgen_, which uses the iFOD2 probabilistic tracking method to generate 1e7 streamlines with a
+  maximum length of 250mm, minimum length of 30mm, FOD power of 0.33. Weights for each streamline
+  were calculated using SIFT2_ [Smith2015]_ and were included for while estimating the
+  structural connectivity matrix.
 
 
 
-.. _mrtrix_dhollander_no5tt:
+.. _mrtrix_multishell_msmt:
 
-``mrtrix_dhollander_no5tt``
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
+``mrtrix_multishell_msmt``
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-This pipeline is nearly identical to :ref:`mrtrix_dhollander` except that Anatomically Constrained
-Tractography is disabled in tckgen_. Not using any distortion correction is a bad idea, but
-if that is your choice, you can use this pipeline and get connectivity matrices. Interpret their
-contents at your own peril.
+This workflow uses the ``msmt_csd`` algorithm to estimate FODs for white matter, gray matter and
+cerebrospinal fluid using *multi-shell acquisitions*. The white matter FODs are used for
+tractography and the T1w segmentation is used for anatomical constraints [Smith2012]_.
 
 
-.. _mrtrix_tckglobal:
+.. _mrtrix_multishell_msmt_noACT:
 
-``mrtrix_tckglobal``
-^^^^^^^^^^^^^^^^^^^^
+``mrtrix_multishell_msmt``
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-MRtrix has a multi-shell multi-tissue version of Global tractography [Christiaens2015]_. This
-pipeline uses segmentation-based multi-tissue response function estimation
-(like :ref:`mrtrix_msmt_csd`). The FODs and streamlines are then created inside tckglobal_.
-The ultimate number of streamlines is dependent on the input data.
+This workflow uses the ``msmt_csd`` algorithm to estimate FODs for white matter, gray matter and
+cerebrospinal fluid using *multi-shell acquisitions*. The white matter FODs are used for
+tractography with no T1w-based anatomical constraints.
+
+
+.. _mrtrix_singleshell_ss3t:
+
+``mrtrix_singleshell_ss3t``
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+This workflow uses the ``ss3t_csd_beta`` algorithm to estimate FODs for white matter, and
+cerebrospinal fluid using *single shell (DTI) acquisitions*. The white matter FODs are used for
+tractography and the T1w segmentation is used for anatomical constraints [Smith2012]_.
+
+.. _mrtrix_singleshell_ss3t_noACT:
+
+``mrtrix_singleshell_ss3t_noACT``
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+This workflow uses the ``ss3t_csd_beta`` algorithm to estimate FODs for white matter, and
+cerebrospinal fluid using *single shell (DTI) acquisitions*. The white matter FODs are used for
+tractography with no T1w-based anatomical constraints.
 
 
 .. _dsi_studio_gqi:
