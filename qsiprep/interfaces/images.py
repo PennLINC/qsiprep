@@ -592,7 +592,8 @@ class ValidateImage(SimpleInterface):
     Analyses of this dataset MAY BE INVALID.
 </p>
 """
-        snippet = '<h3 class="elem-title">%s</h3>\n%s\n' % (warning_txt, description)
+        snippet = '<h3 class="elem-title">%s</h3>\n%s:\n\t %s\n' % (
+            warning_txt, self.inputs.in_file, description)
         # Store new file and report
         img.to_filename(out_fname)
         with open(out_report, 'w') as fobj:
