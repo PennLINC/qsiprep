@@ -208,7 +208,7 @@ An example of these plots follows:
 .. figure:: _static/sub-abcd_carpetplot.svg
     :scale: 100%
 
-    Higher scores appear more yellow, while lower scores
+    For SHORELine higher scores appear more yellow, while lower scores
     are more blue. Not all slices contain the same number of voxels,
     so the number of voxels in the slice is represented in the color bar
     to the left of the image plot. The more yellow the pixel, the more
