@@ -305,3 +305,54 @@ qsiprep \
       --mem_mb 4096 \
       --fs-license-file $FREESURFER_HOME/license.txt \
       --nthreads 1 -vv
+
+#- run:
+#name: Run mrtrix_multishell_msmt_noACT
+#no_output_timeout: 2h
+#command: |
+  mkdir -p ${WORKDIR}/multishell_output/work ${WORKDIR}/multishell_output/derivatives/mrtrix_multishell_msmt_noACT
+  qsiprep -w ${WORKDIR}/multishell_output/work \
+       ${WORKDIR}/data/multishell_output/qsiprep \
+       ${WORKDIR}/multishell_output/derivatives/mrtrix_multishell_msmt_noACT \
+       participant \
+      --sloppy \
+      --recon-input ${WORKDIR}/data/multishell_output/qsiprep \
+      --recon-spec mrtrix_multishell_msmt_noACT \
+      --recon-only \
+      --fs-license-file $FREESURFER_HOME/license.txt \
+      --mem_mb 4096 \
+      --nthreads 1 -vv
+
+#- run:
+#name: Run mrtrix_singleshell_ss3t
+#no_output_timeout: 2h
+#command: |
+  mkdir -p ${WORKDIR}/singleshell_output/work ${WORKDIR}/singleshell_output/derivatives/mrtrix_singleshell_ss3t
+  qsiprep -w ${WORKDIR}/singleshell_output/work \
+       ${WORKDIR}/data/singleshell_output/qsiprep \
+       ${WORKDIR}/singleshell_output/derivatives/mrtrix_singleshell_ss3t \
+       participant \
+      --sloppy \
+      --recon-input ${WORKDIR}/data/singleshell_output/qsiprep \
+      --recon-spec mrtrix_singleshell_ss3t \
+      --recon-only \
+      --mem_mb 4096 \
+      --fs-license-file $FREESURFER_HOME/license.txt \
+      --nthreads 1 -vv
+
+#- run:
+#name: Run mrtrix_singleshell_ss3t_noACT
+#no_output_timeout: 2h
+#command: |
+  mkdir -p ${WORKDIR}/singleshell_output/work ${WORKDIR}/singleshell_output/derivatives/mrtrix_singleshell_ss3t_noACT
+  qsiprep -w ${WORKDIR}/singleshell_output/work \
+       ${WORKDIR}/data/singleshell_output/qsiprep \
+       ${WORKDIR}/singleshell_output/derivatives/mrtrix_singleshell_ss3t_noACT \
+       participant \
+      --sloppy \
+      --recon-input ${WORKDIR}/data/singleshell_output/qsiprep \
+      --recon-spec mrtrix_singleshell_ss3t_noACT \
+      --fs-license-file $FREESURFER_HOME/license.txt \
+      --recon-only \
+      --mem_mb 4096 \
+      --nthreads 1 -vv
