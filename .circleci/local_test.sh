@@ -56,6 +56,28 @@ fi
     echo "Dataset twoses was cached"
   fi
 
+#  name: Get MultiShell outputs
+#  command: |
+    if [[ ! -d ${WORKDIR}/data/multishell_output ]]; then
+      wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
+        -O multishell_output.tar.gz "https://upenn.box.com/shared/static/nwxdn4ale8dkebvpjmxbx99dqjzwvlmh.gz"
+      tar xvfz multishell_output.tar.gz -C ${WORKDIR}/data/
+    else
+      echo "Dataset multishell_output was cached"
+    fi
+
+# get singleshell output
+if [[ ! -d ${WORKDIR}/data/singleshell_output ]]; then
+  mkdir -p ${WORKDIR}/data/singleshell_output
+  wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
+    -O singleshell_output.tar.gz "https://upenn.box.com/shared/static/9jhf0eo3ml6ojrlxlz6lej09ny12efgg.gz"
+  tar xvfz singleshell_output.tar.gz -C ${WORKDIR}/data/singleshell_output
+else
+  echo "Dataset singleshell_output was cached"
+fi
+
+# get multishell output
+
 # name: Store FreeSurfer license file
 # command: |
   mkdir -p ${WORKDIR}/fslicense
@@ -180,6 +202,7 @@ export FS_LICENSE=${WORKDIR}/fslicense/license.txt
               --fs-license-file $FREESURFER_HOME/license.txt \
               --output-resolution 5 \
               --nthreads 2 -vv
+
 # name: run mrtrix3 connectome workflow on DSDTI
 # command: |
   qsiprep -w ${WORKDIR}/DSDTI/work \
@@ -265,3 +288,20 @@ qsiprep \
       --output-resolution 5 \
       --fs-license-file $FREESURFER_HOME/license.txt \
       --nthreads 2 -vv
+
+#- run:
+#name: Run mrtrix_multishell_msmt
+#no_output_timeout: 2h
+#command: |
+  mkdir -p ${WORKDIR}/multishell_output/work ${WORKDIR}/multishell_output/derivatives/mrtrix_multishell_msmt
+  qsiprep -w ${WORKDIR}/multishell_output/work \
+       ${WORKDIR}/data/multishell_output/qsiprep  \
+       ${WORKDIR}/multishell_output/derivatives/mrtrix_multishell_msmt \
+       participant \
+      --recon-input ${WORKDIR}/data/multishell_output/qsiprep \
+      --sloppy \
+      --recon-spec mrtrix_multishell_msmt \
+      --recon-only \
+      --mem_mb 4096 \
+      --fs-license-file $FREESURFER_HOME/license.txt \
+      --nthreads 1 -vv

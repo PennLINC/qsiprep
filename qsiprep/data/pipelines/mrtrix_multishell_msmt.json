@@ -1,11 +1,11 @@
 {
-  "name": "mrtrix_msmt",
+  "name": "mrtrix_multishell_msmt",
   "space": "T1w",
   "atlases": ["schaefer100x7", "schaefer100x17", "schaefer200x7", "schaefer200x17", "schaefer400x7", "schaefer400x17", "brainnetome246", "aicha384", "gordon333", "aal116", "power264"],
   "anatomical": ["mrtrix_5tt"],
   "nodes": [
     {
-      "name": "dhollander",
+      "name": "msmt_csd",
       "software": "MRTrix3",
       "action": "csd",
       "output_suffix": "msmtcsd",
@@ -13,7 +13,7 @@
       "parameters": {
         "mtnormalize": true,
         "response": {
-          "algorithm": "dhollander"
+          "algorithm": "msmt_5tt"
         },
         "fod": {
           "algorithm": "msmt_csd",
@@ -26,7 +26,7 @@
       "software": "MRTrix3",
       "action": "tractography",
       "output_suffix": "ifod2",
-      "input": "dhollander",
+      "input": "msmt_csd",
       "parameters": {
         "use_5tt": true,
         "use_sift2": true,
@@ -46,7 +46,7 @@
       "name": "mrtrix_conn",
       "software": "MRTrix3",
       "action": "connectivity",
-      "output_suffix": "dhollanderconnectome",
+      "output_suffix": "msmtconnectome",
       "input": "track_ifod2",
       "parameters":{
         "use_sift_weights": true,

@@ -15,7 +15,7 @@ from scipy.io.matlab import savemat
 from copy import deepcopy
 
 from nipype import logging
-from nipype.utils.filemanip import fname_presuffix, split_filename
+from nipype.utils.filemanip import fname_presuffix, split_filename, which
 from nipype.interfaces.base import (
     traits, TraitedSpec, BaseInterfaceInputSpec, File, SimpleInterface, InputMultiObject,
     isdefined, CommandLineInputSpec
@@ -27,6 +27,16 @@ from nipype.interfaces.mrtrix3.preprocess import ResponseSDInputSpec
 from nipype.interfaces.mrtrix3.tracking import TractographyInputSpec, Tractography
 
 LOGGER = logging.getLogger('nipype.interface')
+RC3_ROOT = which('average_response')  # Only exists in RC3
+if RC3_ROOT is not None:
+    # Use the directory containing average_response
+    RC3_ROOT = os.path.split(RC3_ROOT)[0]
+SS3T_ROOT = which('ss3t_csd_beta1')
+if SS3T_ROOT is None:
+    if os.getenv('SS3T_HOME'):
+        SS3T_ROOT = os.getenv('SS3T_HOME')
+    elif os.path.exists('/opt/3Tissue/bin/ss3t_csd_beta1'):
+        SS3T_ROOT = '/opt/3Tissue/bin'
 
 
 class TckGenInputSpec(TractographyInputSpec):
@@ -253,9 +263,15 @@ class Dwi2Response(ResponseSD):
 class SS3TBase(MRTrix3Base):
 
     def _pre_run_hook(self, runtime):
-        """Sets the PATH to containe 3Tissue instead of mrtrix3."""
+        """Sets the PATH to contain 3Tissue instead of RC3."""
+
+        # If 3Tissue is the only MRtrix, there will be no path to average_response
+        if RC3_ROOT is None:
+            return runtime
+
+        # Replace the RC3 mrtrix with 3Tissue in PATH
         old_path = runtime.environ.get("PATH")
-        new_path = old_path.replace('/opt/mrtrix3-latest', '/opt/3Tissue')
+        new_path = old_path.replace(RC3_ROOT, SS3T_ROOT)
         runtime.environ['PATH'] = new_path
         return runtime
 
@@ -343,10 +359,9 @@ class EstimateFOD(MRTrix3Base):
     def _list_outputs(self):
         outputs = self.output_spec().get()
         outputs['wm_odf'] = op.abspath(self._gen_filename('wm_odf'))
-        if self.inputs.algorithm == 'msmt_csd':
+        if self.inputs.algorithm in ('msmt_csd', 'ss3t'):
             outputs['gm_odf'] = op.abspath(self._gen_filename('gm_odf'))
             outputs['csf_odf'] = op.abspath(self._gen_filename('csf_odf'))
-            print(outputs)
         return outputs
 
     def _format_arg(self, name, spec, value):
@@ -354,6 +369,33 @@ class EstimateFOD(MRTrix3Base):
             if name in ('gm_odf', 'gm_txt', 'csf_odf', 'csf_txt'):
                 return ''
         return super(EstimateFOD, self)._format_arg(name, spec, value)
+
+    def _gen_filename(self, name):
+        if name in ('gm_odf', 'gm_txt', 'wm_odf', 'wm_txt', 'csf_odf', 'csf_txt'):
+            output = getattr(self.inputs, name)
+            if not isdefined(output):
+                _, fname, _ = split_filename(self.inputs.in_file)
+                ext = '.txt' if name.endswith('txt') else '.mif'
+                output = fname + "_" + name.split("_")[0] + ext
+            return output
+        return None
+
+
+class SS3TEstimateFODInputSpec(EstimateFODInputSpec):
+    algorithm = traits.Str('ss3t', desc='Not needed for ss3t')
+
+
+class SS3TEstimateFOD(SS3TBase, EstimateFOD):
+    _cmd = 'ss3t_csd_beta1' if SS3T_ROOT is None else op.join(SS3T_ROOT, 'ss3t_csd_beta1')
+    input_spec = SS3TEstimateFODInputSpec
+    output_spec = EstimateFODOutputSpec
+
+    def _list_outputs(self):
+        outputs = self.output_spec().get()
+        outputs['wm_odf'] = op.abspath(self._gen_filename('wm_odf'))
+        outputs['gm_odf'] = op.abspath(self._gen_filename('gm_odf'))
+        outputs['csf_odf'] = op.abspath(self._gen_filename('csf_odf'))
+        return outputs
 
     def _gen_filename(self, name):
         if name in ('gm_odf', 'gm_txt', 'wm_odf', 'wm_txt', 'csf_odf', 'csf_txt'):

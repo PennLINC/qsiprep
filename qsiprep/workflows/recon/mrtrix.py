@@ -5,14 +5,14 @@ MRTrix workflows
 .. autofunction:: init_mrtrix_csd_recon_wf
 
 """
+import logging
 import nipype.pipeline.engine as pe
 import nipype.interfaces.utility as niu
 from nipype.interfaces import afni
-
-import logging
 from qsiprep.interfaces.bids import ReconDerivativesDataSink
-from qsiprep.interfaces.mrtrix import (EstimateFOD, MRTrixIngress, Dwi2Response,
-                                       GlobalTractography, MRTrixAtlasGraph, SIFT2, TckGen)
+from qsiprep.interfaces.mrtrix import (
+    EstimateFOD, SS3TEstimateFOD, MRTrixIngress, SS3TDwi2Response, GlobalTractography,
+    MRTrixAtlasGraph, SIFT2, TckGen)
 from .interchange import input_fields
 
 LOGGER = logging.getLogger('nipype.interface')
@@ -76,28 +76,26 @@ def init_mrtrix_csd_recon_wf(name="mrtrix_recon", output_suffix="", params={}):
 
     # FOD estimation
     fod = params.get('fod', {})
-    fod_algorithm = fod.get('algorithm', 'csd')
+    fod_algorithm = fod.get('algorithm', 'msmt_csd')
     fod['algorithm'] = fod_algorithm
 
     workflow = pe.Workflow(name=name)
     create_mif = pe.Node(MRTrixIngress(), name='create_mif')
-    estimate_response = pe.Node(Dwi2Response(**response), 'estimate_response')
-    estimate_fod = pe.Node(EstimateFOD(**fod), 'estimate_fod')
+    # Use dwi2response from 3Tissue for updated dhollander
+    estimate_response = pe.Node(SS3TDwi2Response(**response), 'estimate_response')
 
     if response_algorithm == 'msmt_5tt':
         workflow.connect([
             (inputnode, estimate_response, [('mrtrix_5tt', 'mtt_file')])])
 
-    # Connect all response functions if it's multi-response
     if fod_algorithm == 'msmt_csd':
-        workflow.connect([
-            (estimate_response, estimate_fod, [('wm_file', 'wm_txt'),
-                                               ('gm_file', 'gm_txt'),
-                                               ('csf_file', 'csf_txt')])])
-    else:
-        workflow.connect([
-            (estimate_response, estimate_fod, [('wm_file', 'wm_txt')])
-        ])
+        estimate_fod = pe.Node(EstimateFOD(**fod), 'estimate_fod')
+    elif fod_algorithm == 'ss3t':
+        estimate_fod = pe.Node(SS3TEstimateFOD(**fod), 'estimate_fod')
+    workflow.connect([
+        (estimate_response, estimate_fod, [('wm_file', 'wm_txt'),
+                                           ('gm_file', 'gm_txt'),
+                                           ('csf_file', 'csf_txt')])])
 
     workflow.connect([
         (inputnode, resample_mask, [('t1_brain_mask', 'in_file'),
