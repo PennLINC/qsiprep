@@ -50,7 +50,7 @@ The singularity wrapper CLI
    :nodefaultconst:
 
 Note on using CUDA
-~~~~~~~~~~~~~~~~~~~
+===================
 
 The CUDA runtime version 9.1 is included in the QSIPrep docker image.
 The CUDA version of eddy is dramatically faster than the openmp version.
