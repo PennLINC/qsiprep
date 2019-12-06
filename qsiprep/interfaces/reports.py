@@ -196,7 +196,7 @@ class DiffusionSummary(SummaryInterface):
             conflist = ''
 
         validation_summaries = []
-        for summary in self.inputs.validation_summaries:
+        for summary in self.inputs.validation_reports:
             with open(summary, 'r') as summary_f:
                 validation_summaries.extend(summary_f.readlines())
         validation_summary = '\n'.join(validation_summaries)
@@ -211,7 +211,7 @@ class DiffusionSummary(SummaryInterface):
             output_spaces=', '.join(self.inputs.output_spaces),
             confounds=re.sub(r'[\t ]+', ', ', conflist),
             impute_slice_threshold=self.inputs.impute_slice_threshold,
-            validation_summary=validation_summary
+            validation_reports=validation_summary
             )
 
 
