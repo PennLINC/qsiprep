@@ -79,10 +79,10 @@ def init_merge_and_denoise_wf(dwi_denoise_window,
 
     outputnode = pe.Node(
         niu.IdentityInterface(fields=[
-            'merged_image', 'merged_bval', 'merged_bvec', 'noise_image', 'original_files']),
+            'merged_image', 'merged_bval', 'merged_bvec', 'noise_image', 'original_files',
+            'validation_reports']),
         name='outputnode')
 
-    # validate_dwis = pe.MapNode(ValidateImage(), iterfield=[], name='validate_dwis')
     conform_dwis = pe.MapNode(
         ConformDwi(orientation=orientation), iterfield=['dwi_file'], name="conform_dwis")
     merge_dwis = pe.Node(MergeDWIs(), name='merge_dwis')
@@ -92,6 +92,7 @@ def init_merge_and_denoise_wf(dwi_denoise_window,
         (inputnode, merge_dwis, [('dwi_files', 'bids_dwi_files')]),
         (conform_dwis, merge_dwis, [('bval_file', 'bval_files'),
                                     ('bvec_file', 'bvec_files')]),
+        (conform_dwis, outputnode, [('out_report', 'validation_reports')]),
         (merge_dwis, outputnode, [('out_bval', 'merged_bval'),
                                   ('out_bvec', 'merged_bvec'),
                                   ('original_images', 'original_files')])

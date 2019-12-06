@@ -463,6 +463,7 @@ def init_dwi_preproc_wf(scan_groups,
         mem_gb=DEFAULT_MEMORY_MIN_GB)
 
     workflow.connect([
+        (pre_hmc_wf, summary, [('outputnode.validation_reports', 'validation_reports')]),
         (summary, ds_report_summary, [('out_report', 'in_file')])
     ])
 
