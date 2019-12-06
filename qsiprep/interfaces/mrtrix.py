@@ -280,6 +280,81 @@ class SS3TDwi2Response(SS3TBase, Dwi2Response):
     pass
 
 
+class MTNormalizeInputSpec(MRTrix3BaseInputSpec):
+    wm_odf = File(
+        argstr='%s', position=0, mandatory=True, desc='WM ODF image')
+    wm_normed_odf = File(
+        argstr='%s',
+        position=1,
+        genfile=True,
+        desc='output WM normed_odf')
+    gm_odf = File(
+        argstr='%s',
+        position=2,
+        desc='GM ODF image')
+    gm_normed_odf = File(
+        argstr='%s',
+        position=3,
+        genfile=True,
+        desc='output GM normed_odf')
+    csf_odf = File(
+        argstr='%s', position=4, desc='CSF ODF image')
+    csf_normed_odf = File(
+        argstr='%s',
+        position=5,
+        genfile=True,
+        desc='output CSF normed_odf')
+    mask_file = File(exists=True, mandatory=True, argstr='-mask %s', desc='mask image')
+    inlier_mask = File(
+        argstr='-check_mask %s',
+        genfile=True,
+        desc='estimated spatially varying intensity level that is used for normalisation')
+    norm_image = File(
+        argstr='-check_norm %s',
+        genfile=True,
+        desc='final mask used to compute the normalisation. This mask'
+             ' excludes regions identified as outliers by the optimisation process.')
+
+
+class MTNormalizeOutputSpec(TraitedSpec):
+    wm_norm_odf = File(desc='normalized WM ODF')
+    gm_norm_odf = File(desc='normalized GM ODF')
+    csf_norm_odf = File(desc='normalized CSF ODF')
+    norm_image = File(desc='estimated spatially varying intensity level that is used '
+                      'for normalisation')
+    inlier_mask = File(desc='final mask used to compute the normalisation. This mask'
+                       ' excludes regions identified as outliers by the optimisation process.')
+
+
+class MTNormalize(SS3TBase):
+    _cmd = "mtnormalise"
+    input_spec = MTNormalizeInputSpec
+    output_spec = MTNormalizeOutputSpec
+
+    def _list_outputs(self):
+        outputs = self.output_spec().get()
+        outputs['wm_normed_odf'] = op.abspath(self._gen_filename('wm_normed_odf'))
+        outputs['gm_normed_odf'] = op.abspath(self._gen_filename('gm_normed_odf'))
+        outputs['csf_normed_odf'] = op.abspath(self._gen_filename('csf_normed_odf'))
+        outputs['norm_image'] = op.abspath(self._gen_filename('norm_image'))
+        outputs['inlier_mask'] = op.abspath(self._gen_filename('inlier_mask'))
+        return outputs
+
+    def _gen_filename(self, name):
+        _, fname, ext = split_filename(self.inputs.in_file)
+        if name.endswith('_norm_odf'):
+            tissue_type = name.split("_")[0]
+            output = getattr(self.inputs, tissue_type + "_odf")
+            if not isdefined(output):
+                output = fname + "_" + tissue_type + "_normed" + ext
+            return output
+        if name == 'norm_image':
+            return fname + "_mtbias.nii.gz"
+        if name == 'inlier_mask':
+            return fname + "_mtmask.nii.gz"
+        return None
+
+
 class EstimateFODInputSpec(MRTrix3BaseInputSpec):
     algorithm = traits.Enum(
         'csd',
