@@ -101,10 +101,8 @@ RUN curl -sSL https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/6.0.1/frees
       && curl -fsSL --retry 5 https://fsl.fmrib.ox.ac.uk/fsldownloads/fsl-6.0.3-centos6_64.tar.gz \
       | tar -xz -C /opt/fsl-6.0.3 --strip-components 1 \
       --exclude='fsl/doc' \
-      --exclude='fsl/data/first' \
       --exclude='fsl/data/atlases' \
       --exclude='fsl/data/possum' \
-      --exclude='fsl/data/standard' \
       --exclude='fsl/src' \
       --exclude='fsl/extras/src' \
       --exclude='fsl/bin/fslview*' \
