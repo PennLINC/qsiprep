@@ -9,11 +9,12 @@ Image tools interfaces
 
 """
 import os
-import numpy as np
 import os.path as op
-from scipy.io.matlab import savemat
 from copy import deepcopy
-
+import numpy as np
+import nibabel as nb
+from scipy.io.matlab import savemat
+from nilearn.image import load_img, threshold_img
 from nipype import logging
 from nipype.utils.filemanip import fname_presuffix, split_filename, which
 from nipype.interfaces.base import (
@@ -25,6 +26,9 @@ from nipype.interfaces.mrtrix3.utils import Generate5ttInputSpec
 from nipype.interfaces.mrtrix3.base import MRTrix3Base, MRTrix3BaseInputSpec
 from nipype.interfaces.mrtrix3.preprocess import ResponseSDInputSpec
 from nipype.interfaces.mrtrix3.tracking import TractographyInputSpec, Tractography
+from nipype.interfaces.mixins import reporting
+from ..niworkflows.interfaces.report_base import SegmentationRC, RegistrationRC
+from ..niworkflows.viz.utils import cuts_from_bbox, compose_view, plot_registration
 
 LOGGER = logging.getLogger('nipype.interface')
 RC3_ROOT = which('average_response')  # Only exists in RC3
@@ -119,7 +123,7 @@ class MRTrixIngress(SimpleInterface):
         return runtime
 
 
-class DWIDenoiseInputSpec(MRTrix3BaseInputSpec):
+class DWIDenoiseInputSpec(MRTrix3BaseInputSpec, reporting.ReportCapableInputSpec):
     in_file = File(
         exists=True,
         argstr='%s',
@@ -135,27 +139,28 @@ class DWIDenoiseInputSpec(MRTrix3BaseInputSpec):
         (traits.Int, traits.Int, traits.Int),
         argstr='-extent %d,%d,%d',
         desc='set the window size of the denoising filter. (default = 5,5,5)')
-    noise = File(
+    noise_image = File(
         argstr='-noise %s',
-        name_template='%s_noise',
+        name_template='%s_noise.nii.gz',
         name_source=['in_file'],
-        keep_extension=True,
+        genfile=True,
+        keep_extension=False,
         desc='the output noise map')
     out_file = File(
-        name_template='%s_denoised',
+        name_template='%s_denoised.nii.gz',
         name_source=['in_file'],
-        keep_extension=True,
+        keep_extension=False,
         argstr='%s',
         position=-1,
         desc='the output denoised DWI image')
 
 
-class DWIDenoiseOutputSpec(TraitedSpec):
-    noise = File(desc='the output noise map', exists=True)
+class DWIDenoiseOutputSpec(reporting.ReportCapableOutputSpec):
+    noise_image = File(desc='the output noise map', exists=True)
     out_file = File(desc='the output denoised DWI image', exists=True)
 
 
-class DWIDenoise(MRTrix3Base):
+class DWIDenoise(MRTrix3Base, reporting.ReportCapableInterface):
     """
     Denoise DWI data and estimate the noise level based on the optimal
     threshold for PCA.
@@ -176,9 +181,67 @@ class DWIDenoise(MRTrix3Base):
 
     """
 
+    _n_cuts = 7
     _cmd = 'dwidenoise'
     input_spec = DWIDenoiseInputSpec
     output_spec = DWIDenoiseOutputSpec
+
+    def __init__(self, **kwargs):
+        """Instantiate FieldmapReportlet."""
+        self._n_cuts = kwargs.pop('n_cuts', self._n_cuts)
+        super(DWIDenoise, self).__init__(generate_report=True, **kwargs)
+
+    def _generate_report(self):
+        """Generate a reportlet."""
+        LOGGER.info('Generating dwidenoise visual report')
+        # find an image to use as the background
+        input_dwi = load_img(self.inputs.in_file)
+        image_data = input_dwi.get_fdata()
+        image_intensities = np.array([img.mean() for img in image_data.T])
+        display_index = int(np.argmax(image_intensities))
+        movnii = input_dwi.slicer[..., display_index]
+        refnii = load_img(self.inputs.out_file).slicer[..., display_index]
+        noisenii = load_img(self.inputs.noise_image)
+
+        contour_nii = mask_nii = None
+        if isdefined(self.inputs.mask):
+            contour_nii = load_img(self.inputs.mask)
+            maskdata = contour_nii.get_fdata() > 0
+        else:
+            mask_nii = threshold_img(refnii, 1e-3)
+            maskdata = mask_nii.get_fdata() > 0
+        cuts = cuts_from_bbox(contour_nii or mask_nii, cuts=self._n_cuts)
+        noisedata = noisenii.get_fdata()
+
+        noise_overlay = [{
+            'overlay': noisenii,
+            'overlay_params': {
+                'cmap': "viridis",
+                'vmin': np.percentile(noisedata[maskdata], 0.02),
+            }
+        }] * 2
+
+        if self.inputs.show != 'both':
+            noise_overlay[not self.inputs.show] = {}
+
+        # Call composer
+        compose_view(
+            plot_registration(movnii, 'moving-image',
+                              estimate_brightness=True,
+                              cuts=cuts,
+                              label=self.inputs.moving_label,
+                              contour=contour_nii,
+                              compress=False,
+                              **fmap_overlay[1]),
+            plot_registration(refnii, 'fixed-image',
+                              estimate_brightness=True,
+                              cuts=cuts,
+                              label=self.inputs.reference_label,
+                              contour=contour_nii,
+                              compress=False,
+                              **fmap_overlay[0]),
+            out_file=self._out_report
+        )
 
 
 class GenerateMasked5ttInputSpec(Generate5ttInputSpec):
