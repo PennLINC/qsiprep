@@ -16,10 +16,10 @@ jobs:
             apk add --no-cache pigz python3 tar
       - restore_cache:
           keys:
-            - docker-v7-{{ .Branch }}-{{ .Revision }}
-            - docker-v7-{{ .Branch }}-
-            - docker-v7-master-
-            - docker-v7-
+            - docker-v8-{{ .Branch }}-{{ .Revision }}
+            - docker-v8-{{ .Branch }}-
+            - docker-v8-master-
+            - docker-v8-
           paths:
             - /tmp/cache/docker.tar.gz
       - setup_remote_docker
@@ -85,7 +85,7 @@ jobs:
             - src/qsiprep
 
       - save_cache:
-         key: docker-v7-{{ .Branch }}-{{ .Revision }}-{{ epoch }}
+         key: docker-v8-{{ .Branch }}-{{ .Revision }}-{{ epoch }}
          paths:
            - /tmp/cache/docker.tar.gz
 
@@ -279,7 +279,7 @@ jobs:
             - DSCSDSI-anat-v1-
       - restore_cache:
           keys:
-            - docker-v7-{{ .Branch }}-{{ .Revision }}
+            - docker-v8-{{ .Branch }}-{{ .Revision }}
       - run:
           name: Setting up test
           command: |
@@ -390,7 +390,7 @@ jobs:
           at: /tmp
       - restore_cache:
           keys:
-            - docker-v7-{{ .Branch }}-{{ .Revision }}
+            - docker-v8-{{ .Branch }}-{{ .Revision }}
 
       - run:
           name: Setting up test
@@ -480,7 +480,7 @@ jobs:
           at: /tmp
       - restore_cache:
           keys:
-            - docker-v7-{{ .Branch }}-{{ .Revision }}
+            - docker-v8-{{ .Branch }}-{{ .Revision }}
       - run:
           name: Setting up test
           command: |
@@ -594,7 +594,7 @@ jobs:
           at: /tmp
       - restore_cache:
           keys:
-            - docker-v7-{{ .Branch }}-{{ .Revision }}
+            - docker-v8-{{ .Branch }}-{{ .Revision }}
       - run:
           name: Setting up test
           command: |
@@ -725,7 +725,7 @@ jobs:
           at: /tmp
       - restore_cache:
           keys:
-            - docker-v7-{{ .Branch }}-{{ .Revision }}
+            - docker-v8-{{ .Branch }}-{{ .Revision }}
       - run:
           name: Setting up test
           command: |
@@ -816,7 +816,7 @@ jobs:
 
       - restore_cache:
           keys:
-            - docker-v7-{{ .Branch }}-{{ .Revision }}
+            - docker-v8-{{ .Branch }}-{{ .Revision }}
       - run:
           name: Setting up test
           command: |
@@ -980,7 +980,7 @@ jobs:
 
       - restore_cache:
           keys:
-            - docker-v7-{{ .Branch }}-{{ .Revision }}
+            - docker-v8-{{ .Branch }}-{{ .Revision }}
       - run:
           name: Load Docker image layer cache
           no_output_timeout: 30m
@@ -1019,7 +1019,7 @@ jobs:
             fi
       - restore_cache:
           keys:
-            - docker-v7-{{ .Branch }}-{{ .Revision }}
+            - docker-v8-{{ .Branch }}-{{ .Revision }}
       - run:
           name: Load Docker image layer cache
           no_output_timeout: 30m
