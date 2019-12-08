@@ -383,6 +383,89 @@ def plot_registration(anat_nii, div_id, plot_params=None,
     return out_files
 
 
+def plot_denoise(lowb_nii, highb_nii, div_id, plot_params=None,
+                 order=('z', 'x', 'y'), cuts=None,
+                 estimate_brightness=False, label=None, lowb_contour=None,
+                 highb_contour=None,
+                 compress='auto', overlay=None, overlay_params=None):
+    """
+    Plot the foreground and background views.
+    Default order is: axial, coronal, sagittal
+
+    Updated version from sdcflows
+    """
+    plot_params = plot_params or {}
+
+    # Use default MNI cuts if none defined
+    if cuts is None:
+        raise NotImplementedError
+
+    # Do the low-b image first
+    out_files = []
+    if estimate_brightness:
+        plot_params = robust_set_limits(
+            lowb_nii.get_fdata(dtype='float32').reshape(-1),
+            plot_params)
+    # Plot each cut axis for low-b
+    for i, mode in enumerate(list(order)):
+        plot_params['display_mode'] = mode
+        plot_params['cut_coords'] = cuts[mode]
+        if i == 0:
+            plot_params['title'] = label + ": low-b"
+        else:
+            plot_params['title'] = None
+
+        # Generate nilearn figure
+        display = plot_anat(lowb_nii, **plot_params)
+        if lowb_contour is not None:
+            display.add_contours(lowb_contour, linewidths=1)
+
+        svg = extract_svg(display, compress=compress)
+        display.close()
+
+        # Find and replace the figure_1 id.
+        xml_data = etree.fromstring(svg)
+        find_text = etree.ETXPath("//{%s}g[@id='figure_1']" % SVGNS)
+        find_text(xml_data)[0].set('id', '%s-%s-%s' % (div_id, mode, uuid4()))
+
+        svg_fig = SVGFigure()
+        svg_fig.root = xml_data
+        out_files.append(svg_fig)
+
+    # Plot each cut axis for high-b
+    if estimate_brightness:
+        highb_data = highb_nii.get_fdata(dtype='float32').reshape(-1)
+        plot_params['vmin'] = np.percentile(highb_data, 10)
+        plot_params['vmax'] = np.percentile(highb_data, 99.5)
+
+    for i, mode in enumerate(list(order)):
+        plot_params['display_mode'] = mode
+        plot_params['cut_coords'] = cuts[mode]
+        if i == 0:
+            plot_params['title'] = label + ': high-b'
+        else:
+            plot_params['title'] = None
+
+        # Generate nilearn figure
+        display = plot_anat(highb_nii, **plot_params)
+        if highb_contour is not None:
+            display.add_contours(highb_contour, linewidths=1)
+
+        svg = extract_svg(display, compress=compress)
+        display.close()
+
+        # Find and replace the figure_1 id.
+        xml_data = etree.fromstring(svg)
+        find_text = etree.ETXPath("//{%s}g[@id='figure_1']" % SVGNS)
+        find_text(xml_data)[0].set('id', '%s-%s-%s' % (div_id, mode, uuid4()))
+
+        svg_fig = SVGFigure()
+        svg_fig.root = xml_data
+        out_files.append(svg_fig)
+
+    return out_files
+
+
 def compose_view(bg_svgs, fg_svgs, ref=0, out_file='report.svg'):
     """
     Composes the input svgs into one standalone svg and inserts
