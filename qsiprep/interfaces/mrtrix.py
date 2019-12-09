@@ -28,7 +28,7 @@ from nipype.interfaces.mrtrix3.preprocess import ResponseSDInputSpec
 from nipype.interfaces.mrtrix3.tracking import TractographyInputSpec, Tractography
 from nipype.interfaces.mixins import reporting
 from ..niworkflows.interfaces.report_base import SegmentationRC, RegistrationRC
-from ..niworkflows.viz.utils import cuts_from_bbox, compose_view, plot_denoise
+from ..niworkflows.viz.utils import cuts_from_bbox, compose_view, plot_denoise, robust_set_limits
 
 LOGGER = logging.getLogger('nipype.interface')
 RC3_ROOT = which('average_response')  # Only exists in RC3
@@ -126,6 +126,7 @@ class SeriesPreprocReport(reporting.ReportCapableInterface):
         """Implemented in subclasses to return the original image, the denoised image,
         and optionally an image created during the denoieing step."""
         raise NotImplementedError()
+
 
 class TckGenInputSpec(TractographyInputSpec):
     power = traits.CFloat(argstr='-power %f')
@@ -1019,3 +1020,109 @@ class DWIBiasCorrect(MRTrix3Base, SeriesPreprocReport):
         noise_name = outputs['bias_image']
         noisenii = load_img(noise_name)
         return input_dwi, denoised_nii, noisenii
+
+
+class MRDeGibbsInputSpec(MRTrix3BaseInputSpec, SeriesPreprocReportInputSpec):
+    out_report = File('degibbs_report.svg', usedefault=True,
+                      desc='filename for the visual report')
+    in_file = File(
+        exists=True,
+        argstr='%s',
+        position=-2,
+        mandatory=True,
+        desc='input DWI image')
+    out_file = File(
+        name_source='in_file',
+        keep_extension=False,
+        argstr='%s',
+        name_template='%s_mrdegibbs.nii.gz',
+        position=-1,
+        desc="the output de-Gibbs'd DWI image")
+    mask = File(desc='input mask image for the visual report')
+    nshifts = traits.Int(
+        default=20,
+        argstr='-nshifts %d',
+        desc='discretization of subpixel spacing.')
+    axes = traits.Enum(
+        '0,1', '0,2', '1,2', default='0,1',
+        argstr='-axes %s',
+        desc='select the slice axes (default: 0,1 - i.e. x-y)')
+    minw = traits.Int(
+        default=1,
+        argstr='-minW %d',
+        desc='left border of window used for TV computation')
+    maxw = traits.Int(
+        default=3,
+        argstr='-maxW %d',
+        desc='right border of window used for TV computation')
+
+
+class MRDeGibbsOutputSpec(SeriesPreprocReportOutputSpec):
+    out_file = File(desc="the output de-Gibbs'd DWI image")
+
+
+class MRDeGibbs(MRTrix3Base, SeriesPreprocReport):
+    input_spec = MRDeGibbsInputSpec
+    output_spec = MRDeGibbsOutputSpec
+    _cmd = 'mrdegibbs'
+
+    def _get_plotting_images(self):
+        input_dwi = load_img(self.inputs.in_file)
+        outputs = self._list_outputs()
+        ref_name = outputs.get('out_file')
+        denoised_nii = load_img(ref_name)
+        return input_dwi, denoised_nii, None
+
+    def _generate_report(self):
+        """Generate a reportlet."""
+        LOGGER.info('Generating denoising visual report')
+
+        input_dwi, denoised_nii, _ = self._get_plotting_images()
+
+        # find an image to use as the background
+        image_data = input_dwi.get_fdata()
+        image_intensities = np.array([img.mean() for img in image_data.T])
+        lowb_index = int(np.argmax(image_intensities))
+        highb_index = int(np.argmin(image_intensities))
+
+        # Original images
+        orig_lowb_nii = input_dwi.slicer[..., lowb_index]
+        orig_highb_nii = input_dwi.slicer[..., highb_index]
+
+        # Denoised images
+        denoised_lowb_nii = denoised_nii.slicer[..., lowb_index]
+        denoised_highb_nii = denoised_nii.slicer[..., highb_index]
+
+        # Find spatial extent of the image
+        contour_nii = mask_nii = None
+        if isdefined(self.inputs.mask):
+            contour_nii = load_img(self.inputs.mask)
+        else:
+            mask_nii = threshold_img(denoised_lowb_nii, 50)
+        cuts = cuts_from_bbox(contour_nii or mask_nii, cuts=self._n_cuts)
+
+        diff_lowb_nii = nb.Nifti1Image(orig_lowb_nii.get_fdata()
+                                       - denoised_lowb_nii.get_fdata(),
+                                       affine=denoised_lowb_nii.affine)
+        diff_highb_nii = nb.Nifti1Image(orig_highb_nii.get_fdata()
+                                        - denoised_highb_nii.get_fdata(),
+                                        affine=denoised_highb_nii.affine)
+
+        # Call composer
+        compose_view(
+            plot_denoise(denoised_lowb_nii, denoised_highb_nii, 'moving-image',
+                         estimate_brightness=True,
+                         cuts=cuts,
+                         label='De-Gibbs',
+                         lowb_contour=None,
+                         highb_contour=None,
+                         compress=False),
+            plot_denoise(diff_lowb_nii, diff_highb_nii, 'fixed-image',
+                         estimate_brightness=True,
+                         cuts=cuts,
+                         label="Estimated Ringing",
+                         lowb_contour=None,
+                         highb_contour=None,
+                         compress=False),
+            out_file=self._out_report
+        )

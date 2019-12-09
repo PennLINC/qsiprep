@@ -383,7 +383,7 @@ def plot_registration(anat_nii, div_id, plot_params=None,
     return out_files
 
 
-def plot_denoise(lowb_nii, highb_nii, div_id, plot_params=None,
+def plot_denoise(lowb_nii, highb_nii, div_id, plot_params=None, highb_plot_params=None,
                  order=('z', 'x', 'y'), cuts=None,
                  estimate_brightness=False, label=None, lowb_contour=None,
                  highb_contour=None,
@@ -395,6 +395,7 @@ def plot_denoise(lowb_nii, highb_nii, div_id, plot_params=None,
     Updated version from sdcflows
     """
     plot_params = plot_params or {}
+    highb_plot_params = highb_plot_params or {}
 
     # Use default MNI cuts if none defined
     if cuts is None:
@@ -434,20 +435,19 @@ def plot_denoise(lowb_nii, highb_nii, div_id, plot_params=None,
 
     # Plot each cut axis for high-b
     if estimate_brightness:
-        highb_data = highb_nii.get_fdata(dtype='float32').reshape(-1)
-        plot_params['vmin'] = np.percentile(highb_data, 10)
-        plot_params['vmax'] = np.percentile(highb_data, 99.5)
-
+        highb_plot_params = robust_set_limits(
+            highb_nii.get_fdata(dtype='float32').reshape(-1),
+            highb_plot_params)
     for i, mode in enumerate(list(order)):
-        plot_params['display_mode'] = mode
-        plot_params['cut_coords'] = cuts[mode]
+        highb_plot_params['display_mode'] = mode
+        highb_plot_params['cut_coords'] = cuts[mode]
         if i == 0:
-            plot_params['title'] = label + ': high-b'
+            highb_plot_params['title'] = label + ': high-b'
         else:
-            plot_params['title'] = None
+            highb_plot_params['title'] = None
 
         # Generate nilearn figure
-        display = plot_anat(highb_nii, **plot_params)
+        display = plot_anat(highb_nii, **highb_plot_params)
         if highb_contour is not None:
             display.add_contours(highb_contour, linewidths=1)
 
