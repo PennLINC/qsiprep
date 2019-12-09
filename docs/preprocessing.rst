@@ -216,7 +216,7 @@ Examples of these plots follow:
     brain voxels.
 
 .. figure:: _static/sub-pnc_carpetplot.png
-    :scale: 80%
+    :scale: 40%
 
     For eddy higher motion appears more yellow, while lower motion
     is more blue. 
