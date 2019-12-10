@@ -47,6 +47,9 @@ def init_dwi_preproc_wf(scan_groups,
                         output_spaces,
                         output_dir,
                         dwi_denoise_window,
+                        unringing_method,
+                        dwi_no_biascorr,
+                        no_b0_harmonization,
                         denoise_before_combining,
                         template,
                         omp_nthreads,
@@ -81,6 +84,9 @@ def init_dwi_preproc_wf(scan_groups,
                                   reportlets_dir='.',
                                   output_spaces=['T1w', 'template'],
                                   dwi_denoise_window=5,
+                                  unringing_method='none',
+                                  dwi_no_biascorr=False,
+                                  no_b0_harmonization=False,
                                   denoise_before_combining=True,
                                   template='MNI152NLin2009cAsym',
                                   output_dir='.',
@@ -124,6 +130,12 @@ def init_dwi_preproc_wf(scan_groups,
         dwi_denoise_window : int
             window size in voxels for ``dwidenoise``. Must be odd. If 0, '
             '``dwidwenoise`` will not be run'
+        unringing_method : str
+            algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
+        dwi_no_biascorr : bool
+            run spatial bias correction (N4) on dwi series
+        no_b0_harmonization : bool
+            skip rescaling dwi scans to have matching b=0 intensities across scans
         denoise_before_combining : bool
             'run ``dwidenoise`` before combining dwis. Requires ``combine_all_dwis``'
         reportlets_dir : str
@@ -302,6 +314,9 @@ def init_dwi_preproc_wf(scan_groups,
                                      b0_threshold=b0_threshold,
                                      preprocess_rpe_series=preprocess_rpe_series,
                                      dwi_denoise_window=dwi_denoise_window,
+                                     unringing_method=unringing_method,
+                                     dwi_no_biascorr=dwi_no_biascorr,
+                                     no_b0_harmonization=no_b0_harmonization,
                                      orientation='LAS' if hmc_model == 'eddy' else 'LPS',
                                      low_mem=low_mem,
                                      denoise_before_combining=denoise_before_combining,

@@ -39,15 +39,15 @@ from .dwi.intramodal_template import init_intramodal_template_wf
 LOGGER = logging.getLogger('nipype.workflow')
 
 
-def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
-                    ignore, debug, low_mem, anat_only, longitudinal, b0_threshold, hires,
-                    denoise_before_combining, dwi_denoise_window, output_resolution,
-                    combine_all_dwis, omp_nthreads, force_spatial_normalization,
-                    skull_strip_template, skull_strip_fixed_seed, freesurfer, hmc_model,
-                    impute_slice_threshold, hmc_transform, shoreline_iters, eddy_config,
-                    write_local_bvecs, output_spaces, template, motion_corr_to,
-                    b0_to_t1w_transform, intramodal_template_iters, intramodal_template_transform,
-                    prefer_dedicated_fmaps, fmap_bspline, fmap_demean, use_syn, force_syn):
+def init_qsiprep_wf(
+        subject_list, run_uuid, work_dir, output_dir, bids_dir, ignore, debug, low_mem, anat_only,
+        longitudinal, b0_threshold, hires, denoise_before_combining, dwi_denoise_window,
+        unringing_method, dwi_no_biascorr, no_b0_harmonization, output_resolution,
+        combine_all_dwis, omp_nthreads, force_spatial_normalization, skull_strip_template,
+        skull_strip_fixed_seed, freesurfer, hmc_model, impute_slice_threshold, hmc_transform,
+        shoreline_iters, eddy_config, write_local_bvecs, output_spaces, template, motion_corr_to,
+        b0_to_t1w_transform, intramodal_template_iters, intramodal_template_transform,
+        prefer_dedicated_fmaps, fmap_bspline, fmap_demean, use_syn, force_syn):
     """
     This workflow organizes the execution of qsiprep, with a sub-workflow for
     each subject.
@@ -74,6 +74,9 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
                               hires=False,
                               denoise_before_combining=True,
                               dwi_denoise_window=7,
+                              unringing_method='mrdegibbs',
+                              dwi_no_biascorr=False,
+                              no_b0_harmonization=False,
                               combine_all_dwis=True,
                               omp_nthreads=1,
                               output_resolution=2.0,
@@ -127,6 +130,12 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
         dwi_denoise_window : int
             window size in voxels for ``dwidenoise``. Must be odd. If 0, '
             '``dwidwenoise`` will not be run'
+        unringing_method : str
+            algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
+        dwi_no_biascorr : bool
+            run spatial bias correction (N4) on dwi series
+        no_b0_harmonization : bool
+            skip rescaling dwi scans to have matching b=0 intensities across scans
         denoise_before_combining : bool
             'run ``dwidenoise`` before combining dwis. Requires ``combine_all_dwis``'
         combine_all_dwis : bool
@@ -213,6 +222,9 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
             output_resolution=output_resolution,
             denoise_before_combining=denoise_before_combining,
             dwi_denoise_window=dwi_denoise_window,
+            unringing_method=unringing_method,
+            dwi_no_biascorr=dwi_no_biascorr,
+            no_b0_harmonization=no_b0_harmonization,
             anat_only=anat_only,
             longitudinal=longitudinal,
             b0_threshold=b0_threshold,
@@ -256,12 +268,12 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
 def init_single_subject_wf(
         subject_id, name, reportlets_dir, output_dir, bids_dir, ignore, debug, write_local_bvecs,
         low_mem, anat_only, longitudinal, b0_threshold, denoise_before_combining,
-        dwi_denoise_window, combine_all_dwis, omp_nthreads, skull_strip_template,
-        force_spatial_normalization, skull_strip_fixed_seed, freesurfer, hires, output_spaces,
-        template, output_resolution, prefer_dedicated_fmaps, motion_corr_to, b0_to_t1w_transform,
-        intramodal_template_iters, intramodal_template_transform, hmc_model, hmc_transform,
-        shoreline_iters, eddy_config, impute_slice_threshold, fmap_bspline, fmap_demean, use_syn,
-        force_syn):
+        dwi_denoise_window, unringing_method, dwi_no_biascorr, no_b0_harmonization,
+        combine_all_dwis, omp_nthreads, skull_strip_template, force_spatial_normalization,
+        skull_strip_fixed_seed, freesurfer, hires, output_spaces, template, output_resolution,
+        prefer_dedicated_fmaps, motion_corr_to, b0_to_t1w_transform, intramodal_template_iters,
+        intramodal_template_transform, hmc_model, hmc_transform, shoreline_iters, eddy_config,
+        impute_slice_threshold, fmap_bspline, fmap_demean, use_syn, force_syn):
     """
     This workflow organizes the preprocessing pipeline for a single subject.
     It collects and reports information about the subject, and prepares
@@ -290,6 +302,9 @@ def init_single_subject_wf(
             output_resolution=1.25,
             denoise_before_combining=True,
             dwi_denoise_window=7,
+            unringing_method='mrdegibbs',
+            dwi_no_biascorr=False,
+            no_b0_harmonization=False,
             anat_only=False,
             longitudinal=False,
             b0_threshold=100,
@@ -340,6 +355,12 @@ def init_single_subject_wf(
         dwi_denoise_window : int
             window size in voxels for ``dwidenoise``. Must be odd. If 0, '
             '``dwidwenoise`` will not be run'
+        unringing_method : str
+            algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
+        dwi_no_biascorr : bool
+            run spatial bias correction (N4) on dwi series
+        no_b0_harmonization : bool
+            skip rescaling dwi scans to have matching b=0 intensities across scans
         denoise_before_combining : bool
             'run ``dwidenoise`` before combining dwis. Requires ``combine_all_dwis``'
         combine_all_dwis : Bool
@@ -603,6 +624,9 @@ to workflows in *qsiprep*'s documentation]\
             ignore=ignore,
             b0_threshold=b0_threshold,
             dwi_denoise_window=dwi_denoise_window,
+            unringing_method=unringing_method,
+            dwi_no_biascorr=dwi_no_biascorr,
+            no_b0_harmonization=no_b0_harmonization,
             denoise_before_combining=denoise_before_combining,
             motion_corr_to=motion_corr_to,
             b0_to_t1w_transform=b0_to_t1w_transform,

@@ -208,7 +208,7 @@ class MRTrixIngress(SimpleInterface):
         return runtime
 
 
-class DWIDenoiseInputSpec(MRTrix3BaseInputSpec, reporting.ReportCapableInputSpec):
+class DWIDenoiseInputSpec(MRTrix3BaseInputSpec, SeriesPreprocReportInputSpec):
     in_file = File(
         exists=True,
         argstr='%s',
@@ -241,12 +241,12 @@ class DWIDenoiseInputSpec(MRTrix3BaseInputSpec, reporting.ReportCapableInputSpec
                       desc='filename for the visual report')
 
 
-class DWIDenoiseOutputSpec(reporting.ReportCapableOutputSpec):
+class DWIDenoiseOutputSpec(SeriesPreprocReportOutputSpec):
     noise_image = File(desc='the output noise map', exists=True)
     out_file = File(desc='the output denoised DWI image', exists=True)
 
 
-class DWIDenoise(MRTrix3Base, reporting.ReportCapableInterface):
+class DWIDenoise(MRTrix3Base, SeriesPreprocReport):
     """
     Denoise DWI data and estimate the noise level based on the optimal
     threshold for PCA.

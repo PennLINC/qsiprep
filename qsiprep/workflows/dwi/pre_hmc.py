@@ -25,6 +25,9 @@ def init_dwi_pre_hmc_wf(scan_groups,
                         b0_threshold,
                         preprocess_rpe_series,
                         dwi_denoise_window,
+                        unringing_method,
+                        dwi_no_biascorr,
+                        no_b0_harmonization,
                         denoise_before_combining,
                         orientation,
                         omp_nthreads,
@@ -43,7 +46,10 @@ def init_dwi_pre_hmc_wf(scan_groups,
         from qsiprep.workflows.dwi.pre_hmc import init_dwi_pre_hmc_wf
         wf = init_dwi_pre_hmc_wf(['/completely/made/up/path/sub-01_dwi.nii.gz'],
                                   omp_nthreads=1,
+                                  unringing_method='mrdegibbs',
                                   dwi_denoise_window=7,
+                                  dwi_no_biascorr=False,
+                                  no_b0_harmonization=False,
                                   denoise_before_combining=True,
                                   low_mem=False)
 
@@ -52,6 +58,12 @@ def init_dwi_pre_hmc_wf(scan_groups,
         dwi_denoise_window : int
             window size in voxels for ``dwidenoise``. Must be odd. If 0, '
             '``dwidwenoise`` will not be run'
+        unringing_method : str
+            algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
+        dwi_no_biascorr : bool
+            run spatial bias correction (N4) on dwi series
+        no_b0_harmonization : bool
+            skip rescaling dwi scans to have matching b=0 intensities across scans
         denoise_before_combining : bool
             'run ``dwidenoise`` before combining dwis. Requires ``combine_all_dwis``'
         omp_nthreads : int
@@ -92,24 +104,29 @@ def init_dwi_pre_hmc_wf(scan_groups,
         # Merge, denoise, split, hmc on the plus series
         plus_files, minus_files = (rpe_series, dwi_series) if dwi_series_pedir.endswith("-") \
             else (dwi_series, rpe_series)
-        merge_plus = init_merge_and_denoise_wf(dwi_denoise_window=dwi_denoise_window,
+        merge_plus = init_merge_and_denoise_wf(raw_dwi_files=plus_files,
+                                               dwi_denoise_window=dwi_denoise_window,
+                                               unringing_method=unringing_method,
+                                               dwi_no_biascorr=dwi_no_biascorr,
+                                               no_b0_harmonization=no_b0_harmonization,
                                                denoise_before_combining=denoise_before_combining,
                                                orientation=orientation,
                                                name="merge_plus")
         split_plus = pe.Node(SplitDWIs(b0_threshold=b0_threshold), name="split_plus")
-        merge_plus.inputs.inputnode.dwi_files = plus_files
 
         # Merge, denoise, split, hmc on the minus series
-        merge_minus = init_merge_and_denoise_wf(dwi_denoise_window=dwi_denoise_window,
+        merge_minus = init_merge_and_denoise_wf(raw_dwi_files=minus_files,
+                                                dwi_denoise_window=dwi_denoise_window,
+                                                unringing_method=unringing_method,
+                                                dwi_no_biascorr=dwi_no_biascorr,
+                                                no_b0_harmonization=no_b0_harmonization,
                                                 denoise_before_combining=denoise_before_combining,
                                                 orientation=orientation,
                                                 name="merge_minus")
         split_minus = pe.Node(SplitDWIs(b0_threshold=b0_threshold), name="split_minus")
-        merge_minus.inputs.inputnode.dwi_files = minus_files
-
-        concat_rpe_splits = pe.Node(ConcatRPESplits(), name="concat_rpe_splits")
 
         # Combine the original images from the splits into one 'Split'
+        concat_rpe_splits = pe.Node(ConcatRPESplits(), name="concat_rpe_splits")
         workflow.connect([
             # Merge, denoise, split on the plus series
             (merge_plus, split_plus, [('outputnode.merged_image', 'dwi_file'),
@@ -149,11 +166,14 @@ def init_dwi_pre_hmc_wf(scan_groups,
         return workflow
 
     merge_dwis = init_merge_and_denoise_wf(
+        raw_dwi_files=dwi_series,
         dwi_denoise_window=dwi_denoise_window,
+        unringing_method=unringing_method,
+        dwi_no_biascorr=dwi_no_biascorr,
+        no_b0_harmonization=no_b0_harmonization,
         denoise_before_combining=denoise_before_combining,
         orientation=orientation)
     split_dwis = pe.Node(SplitDWIs(b0_threshold=b0_threshold), name="split_dwis")
-    merge_dwis.inputs.inputnode.dwi_files = dwi_series
 
     workflow.connect([
         (merge_dwis, split_dwis, [
