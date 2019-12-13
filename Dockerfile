@@ -33,11 +33,10 @@ RUN apt-get update && \
                     libxrender1 \
                     libxt6 \
                     wget \
-                    qt5-qmake \
-                    qt5-default \
                     libboost-all-dev \
                     zlib1g \
                     zlib1g-dev \
+                    libfftw3-dev libtiff5-dev \
                     libqt5opengl5-dev \
                     unzip \
                     libgl1-mesa-dev \
@@ -53,6 +52,7 @@ RUN apt-get update && \
                     python-numpy \
                     zlib1g-dev \
                     imagemagick \
+                    software-properties-common \
                     git && \
     curl -sL https://deb.nodesource.com/setup_10.x | bash - && \
     apt-get install -y --no-install-recommends \
@@ -63,6 +63,22 @@ RUN apt-get update && \
 RUN curl -o pandoc-2.2.2.1-1-amd64.deb -sSL "https://github.com/jgm/pandoc/releases/download/2.2.2.1/pandoc-2.2.2.1-1-amd64.deb" && \
     dpkg -i pandoc-2.2.2.1-1-amd64.deb && \
     rm pandoc-2.2.2.1-1-amd64.deb
+
+# Install qt5.12.2
+RUN add-apt-repository ppa:beineri/opt-qt-5.12.2-xenial \
+    && apt-get update \
+    && apt install -y --no-install-recommends \
+    freetds-common libclang1-5.0 libllvm5.0 libodbc1 libsdl2-2.0-0 libsndio6.1 \
+    qt5123d qt512base qt512canvas3d \
+    qt512declarative qt512graphicaleffects \
+    qt512imageformats \
+    qt512charts-no-lgpl \
+    && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+ENV QT_BASE_DIR="/opt/qt512"
+ENV QTDIR="$QT_BASE_DIR" \
+    PATH="$QT_BASE_DIR/bin:$PATH:/opt/dsi-studio/dsi_studio_64" \
+    LD_LIBRARY_PATH="$QT_BASE_DIR/lib/x86_64-linux-gnu:$QT_BASE_DIR/lib:$LD_LIBRARY_PATH" \
+    PKG_CONFIG_PATH="$QT_BASE_DIR/lib/pkgconfig:$PKG_CONFIG_PATH"
 
 # Installing freesurfer
 RUN curl -sSL https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/6.0.1/freesurfer-Linux-centos6_x86_64-stable-pub-v6.0.1.tar.gz | tar zxv --no-same-owner -C /opt \
@@ -78,14 +94,25 @@ RUN curl -sSL https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/6.0.1/frees
     --exclude='freesurfer/lib/cuda' \
     --exclude='freesurfer/lib/qt'
 
-  ENV FSLDIR="/opt/fsl-6.0.1" \
-      PATH="/opt/fsl-6.0.1/bin:$PATH"
+  ENV FSLDIR="/opt/fsl-6.0.3" \
+      PATH="/opt/fsl-6.0.3/bin:$PATH"
   RUN echo "Downloading FSL ..." \
-      && mkdir -p /opt/fsl-6.0.1 \
-      && curl -fsSL --retry 5 https://fsl.fmrib.ox.ac.uk/fsldownloads/fsl-6.0.1-centos6_64.tar.gz \
-      | tar -xz -C /opt/fsl-6.0.1 --strip-components 1 \
+      && mkdir -p /opt/fsl-6.0.3 \
+      && curl -fsSL --retry 5 https://fsl.fmrib.ox.ac.uk/fsldownloads/fsl-6.0.3-centos6_64.tar.gz \
+      | tar -xz -C /opt/fsl-6.0.3 --strip-components 1 \
+      --exclude='fsl/doc' \
+      --exclude='fsl/data/atlases' \
+      --exclude='fsl/data/possum' \
+      --exclude='fsl/src' \
+      --exclude='fsl/extras/src' \
+      --exclude='fsl/bin/fslview*' \
+      --exclude='fsl/bin/FSLeyes' \
       && echo "Installing FSL conda environment ..." \
-      && bash /opt/fsl-6.0.1/etc/fslconf/fslpython_install.sh -f /opt/fsl-6.0.1
+      && sed -i -e "/fsleyes/d" -e "/wxpython/d" \
+         ${FSLDIR}/etc/fslconf/fslpython_environment.yml \
+      && bash /opt/fsl-6.0.3/etc/fslconf/fslpython_install.sh -f /opt/fsl-6.0.3 \
+      && find ${FSLDIR}/fslpython/envs/fslpython/lib/python3.7/site-packages/ -type d -name "tests"  -print0 | xargs -0 rm -r \
+      && ${FSLDIR}/fslpython/bin/conda clean --all
 
 ENV FREESURFER_HOME=/opt/freesurfer \
     SUBJECTS_DIR=/opt/freesurfer/subjects \
@@ -112,11 +139,11 @@ RUN apt-get update && \
                     git-annex-standalone && \
     apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
+
 # Install DSI Studio
-ENV PATH=$PATH:/opt/dsi-studio/dsi_studio_64
-ARG DSI_SHA=1685bfeb4df194fa3e907f4ee032691d82aeb3ba
-ARG TIPL_SHA=b01ec5a46bdec7d13506d23e97b91fd0840c2b09
-RUN mkdir /opt/dsi-studio \
+ARG DSI_SHA=e017604dac47798609ad892216a778e4a04e1ebe
+ARG TIPL_SHA=a0688617db9352d6fb8c046126f7c90a9dd13411
+RUN mkdir -p /opt/dsi-studio/dsi_studio_64 \
   && cd /opt/dsi-studio \
   && curl -sSLO https://github.com/frankyeh/DSI-Studio/archive/${DSI_SHA}.zip \
   && unzip ${DSI_SHA}.zip \
@@ -127,12 +154,11 @@ RUN mkdir /opt/dsi-studio \
   && mv TIPL-${TIPL_SHA} src/tipl \
   && rm ${TIPL_SHA}.zip \
   && mkdir build && cd build \
-  && qmake ../src && make \
-  && cd /opt/dsi-studio \
-  && curl -sSLO 'https://upenn.box.com/shared/static/01r73d4a15utl13himv4d7cjpa6etf6z.gz' \
-  && tar xvfz 01r73d4a15utl13himv4d7cjpa6etf6z.gz \
-  && rm 01r73d4a15utl13himv4d7cjpa6etf6z.gz \
-  && cd dsi_studio_64 \
+  && /opt/qt512/bin/qmake ../src && make \
+  && cd /opt/dsi-studio/dsi_studio_64 \
+  && curl -sSLO 'https://www.dropbox.com/s/rq5khgmoyiye0op/dsi_studio_other_files.zip' \
+  && unzip dsi_studio_other_files.zip \
+  && rm dsi_studio_other_files.zip \
   && mv ../build/dsi_studio . \
   && rm -rf /opt/dsi-studio/src /opt/dsi-studio/build
 
@@ -145,7 +171,7 @@ RUN cd /opt \
     && mv mrtrix3-${MRTRIX_SHA} /opt/mrtrix3-latest \
     && rm ${MRTRIX_SHA}.zip \
     && cd /opt/mrtrix3-latest \
-    && ./configure \
+    && ./configure -nogui \
     && echo "Compiling MRtrix3 ..." \
     && ./build
 

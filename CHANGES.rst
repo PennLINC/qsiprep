@@ -1,3 +1,12 @@
+0.6.6 (Nov 25, 2019)
+=====================
+Fixes a bug introduced in 0.6.5 for the TOPUP/eddy version of the pipeline. ANTs is
+updated to a newer version.
+
+ * Fix RPEB0 bug Closes #78
+ * Add additional CI testing for specific output files
+ * Adds CI tests for creating workflows for all RPE combinations (series and fieldmap)
+
 0.6.5 (Nov 21, 2019)
 ====================
  * Improved handling of Freesurfer path (#50)

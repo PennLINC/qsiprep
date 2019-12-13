@@ -70,11 +70,6 @@ fields in the JSON sidecars in the ``fmap/`` directory. If you have two DWI
 series with reverse phase encodings, but would rather use method 1 instead of
 1a, include the ``--prefer-dedicated-fmaps`` argument.
 
-.. warning::
-   if you are using ``eddy`` as the head motion correction method, the fieldmap will be
-   converted to a format that can be used with ``eddy``. Methods 1 and 2 work with ``eddy``
-   and all methods work with SHORELine.
-
 
 .. _outputs:
 
@@ -452,6 +447,11 @@ DTI and multi-shell HARDI can be passed to ``TOPUP`` and ``eddy`` for
 head motion correction, susceptibility distortion correction and eddy current
 correction. ``qsiprep`` will use the BIDS-specified fieldmaps to configure and
 run ``TOPUP`` before passing the fieldmap to ``eddy`` if fieldmaps are available.
+
+.. _configure_eddy:
+
+Configuring ``eddy``
++++++++++++++++++++++
 
 ``eddy`` has many configuration options. Instead of making these commandline options,
 you can specify them in a JSON file and pass that to ``qsiprep`` using the ``--eddy_config``
