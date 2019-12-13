@@ -13,6 +13,7 @@ import os
 import nibabel as nb
 
 from nipype.pipeline import engine as pe
+from nipype.utils.filemanip import split_filename
 from nipype.interfaces import utility as niu, fsl, afni, ants
 from ...niworkflows.interfaces import SimpleBeforeAfter
 from ...engine import Workflow
@@ -429,6 +430,35 @@ def _create_mem_gb(dwi_fname):
     }
 
     return dwi_nvols, mem_gb
+
+
+def _get_output_fname(dwi_group):
+    """Derive the output name for a dwi grouping."""
+    all_dwis = dwi_group['dwi_series']
+    if dwi_group['fieldmap_info']['suffix'] == 'rpe_series':
+        all_dwis += dwi_group['fieldmap_info']['rpe_series']
+
+    # If a single file, use its name, otherwise use the common prefix
+    if len(all_dwis) > 1:
+        no_runs = []
+        for dwi in all_dwis:
+            no_runs.append(
+                "_".join([part for part in dwi.split("_")
+                          if not part.startswith("run")]))
+        input_fname = os.path.commonprefix(no_runs)
+        fname = split_filename(input_fname)[1]
+        parts = fname.split('_')
+        full_parts = [part for part in parts if not part.endswith('-')]
+        fname = '_'.join(full_parts)
+
+    else:
+        input_fname = all_dwis[0]
+        fname = split_filename(input_fname)[1]
+
+    if fname.endswith("_dwi"):
+        fname = fname[:-4]
+
+    return fname.replace(".", "").replace(" ", "")
 
 
 def _get_wf_name(dwi_fname):

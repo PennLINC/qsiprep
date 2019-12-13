@@ -8,14 +8,15 @@ from nipype.interfaces.base import (BaseInterfaceInputSpec, TraitedSpec, File, S
 from nipype.utils.filemanip import fname_presuffix
 from nipype import logging
 import nibabel as nb
+from ..workflows.dwi.util import _get_output_fname
 LOGGER = logging.getLogger('nipype.workflow')
 
 
 class MergeDWIsInputSpec(BaseInterfaceInputSpec):
     dwi_files = InputMultiObject(
-        File(exists=True), mandatory=True, desc='list of dwi files')
+        File(), mandatory=True, desc='list of dwi files')
     bids_dwi_files = InputMultiObject(
-        File(exists=True), mandatory=True, desc='list of original (BIDS) dwi files')
+        File(), mandatory=True, desc='list of original (BIDS) dwi files')
     bval_files = InputMultiObject(
         File(exists=True), mandatory=True, desc='list of bval files')
     bvec_files = InputMultiObject(
@@ -93,24 +94,29 @@ class MergeDWIs(SimpleInterface):
                     "series_b0_mean": [b0_mean] * nvols,
                     "series_b0_correction": [correction] * nvols}))
         image_df = pd.concat(series_confounds, axis=0, ignore_index=True)
+
         # Collect the confounds
-        confounds = [pd.read_csv(fname) for fname in self.inputs.denoising_confounds]
-        if confounds:
+        if isdefined(self.inputs.denoising_confounds):
+            confounds = [pd.read_csv(fname) for fname in self.inputs.denoising_confounds]
             _confounds_df = pd.concat(confounds, axis=0, ignore_index=True)
             confounds_df = pd.concat([image_df, _confounds_df], axis=1, ignore_index=False)
         else:
             confounds_df = image_df
 
         # Concatenate the gradient information
-        merged_fname = fname_presuffix(
-            self.inputs.dwi_files[0], suffix=".nii.gz", use_ext=False, newpath=runtime.cwd) \
-            if num_dwis > 1 else self.inputs.dwi_files[0]
-        out_bvec = fname_presuffix(merged_fname, suffix=".bvec", use_ext=False,
-                                   newpath=runtime.cwd) \
-            if num_dwis > 1 else bvals[0]
-        out_bval = fname_presuffix(merged_fname, suffix=".bval", use_ext=False,
-                                   newpath=runtime.cwd) \
-            if num_dwis > 1 else bvecs[0]
+        if num_dwis > 1:
+            merged_output = _get_output_fname(
+                {'dwi_series': self.inputs.dwi_files,
+                 'fieldmap_info': {'suffix': None}})
+            merged_fname = op.join(runtime.cwd, merged_output + "_merged.nii.gz")
+            out_bval = fname_presuffix(merged_fname, suffix=".bval", use_ext=False,
+                                       newpath=runtime.cwd)
+            out_bvec = fname_presuffix(merged_fname, suffix=".bvec", use_ext=False,
+                                       newpath=runtime.cwd)
+        else:
+            merged_fname = self.inputs.dwi_files[0]
+            out_bval = bvals[0]
+            out_bvec = bvecs[0]
         merged_confounds = fname_presuffix(merged_fname, suffix="_confounds.csv", use_ext=False,
                                            newpath=runtime.cwd)
         confounds_df = confounds_df.drop('Unnamed: 0', axis=1, errors='ignore')
@@ -157,6 +163,7 @@ class StackConfounds(SimpleInterface):
         dfs = [pd.read_csv(fname) for fname in self.inputs.in_files]
         stacked = pd.concat(dfs, axis=self.inputs.axis, ignore_index=self.inputs.axis==0)
         out_file = op.join(runtime.cwd, 'confounds.csv')
+        stacked = stacked.drop('Unnamed: 0', axis=1, errors='ignore')
         stacked.to_csv(out_file)
         self._results['confounds_file'] = out_file
         return runtime

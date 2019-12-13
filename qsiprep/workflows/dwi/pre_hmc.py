@@ -105,6 +105,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
         plus_files, minus_files = (rpe_series, dwi_series) if dwi_series_pedir.endswith("-") \
             else (dwi_series, rpe_series)
         merge_plus = init_merge_and_denoise_wf(raw_dwi_files=plus_files,
+                                               b0_threshold=b0_threshold,
                                                dwi_denoise_window=dwi_denoise_window,
                                                unringing_method=unringing_method,
                                                dwi_no_biascorr=dwi_no_biascorr,
@@ -116,6 +117,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
 
         # Merge, denoise, split, hmc on the minus series
         merge_minus = init_merge_and_denoise_wf(raw_dwi_files=minus_files,
+                                               b0_threshold=b0_threshold,
                                                 dwi_denoise_window=dwi_denoise_window,
                                                 unringing_method=unringing_method,
                                                 dwi_no_biascorr=dwi_no_biascorr,
@@ -167,6 +169,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
 
     merge_dwis = init_merge_and_denoise_wf(
         raw_dwi_files=dwi_series,
+        b0_threshold=b0_threshold,
         dwi_denoise_window=dwi_denoise_window,
         unringing_method=unringing_method,
         dwi_no_biascorr=dwi_no_biascorr,

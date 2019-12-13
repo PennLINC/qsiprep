@@ -252,7 +252,7 @@ DISCARD_TEMPLATE = """\t\t\t\t<li><abbr title="{path}">{basename}</abbr></li>"""
 
 
 class ConformInputSpec(BaseInterfaceInputSpec):
-    in_file = File(exists=True, mandatory=True, desc='Input image')
+    in_file = File(mandatory=True, desc='Input image')
     target_zooms = traits.Tuple(traits.Float, traits.Float, traits.Float,
                                 desc='Target zoom information')
     target_shape = traits.Tuple(traits.Int, traits.Int, traits.Int,
@@ -349,7 +349,7 @@ class Conform(SimpleInterface):
 
 
 class ConformDwiInputSpec(BaseInterfaceInputSpec):
-    dwi_file = File(exists=True, mandatory=True, desc='dwi image')
+    dwi_file = File(mandatory=True, desc='dwi image')
     bval_file = File(exists=True)
     bvec_file = File(exists=True)
     orientation = traits.Enum('LPS', 'LAS', default='LPS', usedefault=True)

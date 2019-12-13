@@ -20,6 +20,5 @@ from .utils import (TPM2ROI, AddTPMs, AddTSVHeader, ConcatAffines,
 from .fmap import (
     FieldEnhance, FieldToRadS, FieldToHz, Phases2Fieldmap, Phasediff2Fieldmap)
 from .itk import MultiApplyTransforms
-from .dwi_merge import MergeDWIs
 from .confounds import GatherConfounds, DMRISummary
 from .reports import SubjectSummary, AboutSummary

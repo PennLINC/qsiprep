@@ -19,7 +19,6 @@ from copy import deepcopy
 from nipype import __version__ as nipype_ver
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
-from nipype.utils.filemanip import split_filename
 
 from nilearn import __version__ as nilearn_ver
 
@@ -34,6 +33,7 @@ from .anatomical import init_anat_preproc_wf
 from .dwi.base import init_dwi_preproc_wf
 from .dwi.finalize import init_dwi_finalize_wf
 from .dwi.intramodal_template import init_intramodal_template_wf
+from .dwi.util import _get_output_fname
 
 
 LOGGER = logging.getLogger('nipype.workflow')
@@ -1050,32 +1050,3 @@ def group_by_warpspace(dwi_files, layout, prefer_dedicated_fmaps, using_eddy, ig
 
     LOGGER.info('\n'.join(rationale + [match_header] + matches_rationale))
     return final_groups
-
-
-def _get_output_fname(dwi_group):
-    """Derive the output name for a dwi grouping."""
-    all_dwis = dwi_group['dwi_series']
-    if dwi_group['fieldmap_info']['suffix'] == 'rpe_series':
-        all_dwis += dwi_group['fieldmap_info']['rpe_series']
-
-    # If a single file, use its name, otherwise use the common prefix
-    if len(all_dwis) > 1:
-        no_runs = []
-        for dwi in all_dwis:
-            no_runs.append(
-                "_".join([part for part in dwi.split("_")
-                          if not part.startswith("run")]))
-        input_fname = os.path.commonprefix(no_runs)
-        fname = split_filename(input_fname)[1]
-        parts = fname.split('_')
-        full_parts = [part for part in parts if not part.endswith('-')]
-        fname = '_'.join(full_parts)
-
-    else:
-        input_fname = all_dwis[0]
-        fname = split_filename(input_fname)[1]
-
-    if fname.endswith("_dwi"):
-        fname = fname[:-4]
-
-    return fname.replace(".", "").replace(" ", "")
