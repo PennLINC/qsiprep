@@ -13,22 +13,21 @@ import os.path as op
 from copy import deepcopy
 import numpy as np
 import nibabel as nb
+import pandas as pd
 from scipy.io.matlab import savemat
-from nilearn.image import load_img, threshold_img
+from nilearn.image import load_img, threshold_img, iter_img
 from nipype import logging
 from nipype.utils.filemanip import fname_presuffix, split_filename, which
 from nipype.interfaces.base import (
     traits, TraitedSpec, BaseInterfaceInputSpec, File, SimpleInterface, InputMultiObject,
-    isdefined, CommandLineInputSpec
-)
+    isdefined, CommandLineInputSpec)
 from nipype.interfaces.mrtrix3 import Generate5tt, ResponseSD, MRConvert
 from nipype.interfaces.mrtrix3.utils import Generate5ttInputSpec
 from nipype.interfaces.mrtrix3.base import MRTrix3Base, MRTrix3BaseInputSpec
 from nipype.interfaces.mrtrix3.preprocess import ResponseSDInputSpec
 from nipype.interfaces.mrtrix3.tracking import TractographyInputSpec, Tractography
 from nipype.interfaces.mixins import reporting
-from ..niworkflows.interfaces.report_base import SegmentationRC, RegistrationRC
-from ..niworkflows.viz.utils import cuts_from_bbox, compose_view, plot_denoise, robust_set_limits
+from ..niworkflows.viz.utils import cuts_from_bbox, compose_view, plot_denoise
 
 LOGGER = logging.getLogger('nipype.interface')
 RC3_ROOT = which('average_response')  # Only exists in RC3
@@ -63,6 +62,26 @@ class SeriesPreprocReport(reporting.ReportCapableInterface):
         """Instantiate FieldmapReportlet."""
         self._n_cuts = kwargs.pop('n_cuts', self._n_cuts)
         super(SeriesPreprocReport, self).__init__(generate_report=True, **kwargs)
+
+    def _calculate_nmse(self, original_nii, corrected_nii):
+        """Calculate NMSE from the applied preprocessing operation."""
+        outputs = self._list_outputs()
+        output_file = outputs.get('nmse_text')
+        pres = []
+        posts = []
+        differences = []
+        for orig_img, corrected_img in zip(iter_img(original_nii), iter_img(corrected_nii)):
+            orig_data = orig_img.get_fdata()
+            corrected_data = corrected_img.get_fdata()
+            baseline = orig_data.mean()
+            pres.append(baseline)
+            posts.append(corrected_data.mean())
+            scaled_diff = np.abs(corrected_data - orig_data).mean() / baseline
+            differences.append(scaled_diff)
+        title = str(self.__class__)[:-2].split('.')[-1]
+        pd.DataFrame({title+"_pre": pres,
+                      title+"_post": posts,
+                      title+"_change": differences}).to_csv(output_file, index=False)
 
     def _generate_report(self):
         """Generate a reportlet."""
@@ -121,6 +140,8 @@ class SeriesPreprocReport(reporting.ReportCapableInterface):
                          compress=False),
             out_file=self._out_report
         )
+
+        self._calculate_nmse(input_dwi, denoised_nii)
 
     def _get_plotting_images(self):
         """Implemented in subclasses to return the original image, the denoised image,
@@ -303,7 +324,7 @@ class GenerateMasked5tt(Generate5tt):
         if name == "out_file":
             output = self.inputs.out_file
             if not isdefined(output):
-                _, fname, ext = split_filename(self.inputs.in_file)
+                _, fname, _ = split_filename(self.inputs.in_file)
                 output = fname + '_5tt.mif'
             return output
         return None
@@ -1126,3 +1147,5 @@ class MRDeGibbs(MRTrix3Base, SeriesPreprocReport):
                          compress=False),
             out_file=self._out_report
         )
+
+        self._calculate_nmse(input_dwi, denoised_nii)

@@ -271,7 +271,9 @@ class MatchTransforms(SimpleInterface):
 
 
 class ExtractB0sInputSpec(BaseInterfaceInputSpec):
-    b0_indices = traits.List(mandatory=True)
+    b0_indices = traits.List()
+    bval_file = File(exists=True)
+    b0_threshold = traits.Int(50, usedefault=True)
     dwi_series = File(exists=True, mandatory=True)
 
 
@@ -292,7 +294,15 @@ class ExtractB0s(SimpleInterface):
         output_mean_fname = fname_presuffix(output_fname, suffix='_mean',
                                             use_ext=True, newpath=runtime.cwd)
         img = nb.load(self.inputs.dwi_series)
-        indices = np.array(self.inputs.b0_indices).astype(np.int)
+        if isdefined(self.inputs.b0_indices):
+            indices = np.array(self.inputs.b0_indices).astype(np.int)
+        elif isdefined(self.inputs.bval_file):
+            bvals = np.loadtxt(self.inputs.bval_file)
+            indices = np.flatnonzero(bvals < self.inputs.b0_threshold)
+            if indices.size == 0:
+                raise ValueError("No b<%d images found" % self.inputs.b0_threshold)
+        else:
+            raise ValueError("No gradient information available")
         new_data = img.get_data()[..., indices]
         nb.Nifti1Image(new_data, img.affine, img.header).to_filename(output_fname)
         self._results['b0_series'] = output_fname
