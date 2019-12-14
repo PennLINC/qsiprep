@@ -245,7 +245,7 @@ def init_dwi_denoising_wf(dwi_denoise_window,
 
     # Which steps to apply?
     do_denoise = dwi_denoise_window > 0
-    do_unringing = not unringing_method == 'none'
+    do_unringing = unringing_method in ('mrdegibbs', 'dipy')
     do_biascorr = not dwi_no_biascorr
     harmonize_b0s = not no_b0_harmonization
     # How many steps in the denoising pipeline

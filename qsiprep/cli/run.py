@@ -182,7 +182,7 @@ def get_parser():
     g_conf.add_argument(
         '--unringing-method', '--unringing-method',
         action='store',
-        type=int,
+        type='str',
         choices=['none', 'mrdegibbs'],
         help='Method for Gibbs-ringing removal.\n - none: no action\n - mrdegibbs: '
              'use mrdegibbs from mrtrix3')
