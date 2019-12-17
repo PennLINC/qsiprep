@@ -11,7 +11,7 @@ from nipype import logging
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
 
-from ...interfaces.images import SplitDWIs, ConcatRPESplits
+from ...interfaces.images import ConcatRPESplits
 from ...engine import Workflow
 
 # dwi workflows
@@ -34,10 +34,13 @@ def init_dwi_pre_hmc_wf(scan_groups,
                         low_mem,
                         name="pre_hmc_wf"):
     """
-    This workflow controls the dwi initial stages of the dwi pipeline. Denoising
-    must occur before any interpolation. The outputs from this workflow are
-    lists of single volumes (optionally denoised) and corresponding lists of
-    bvals, bvecs, etc.
+    This workflow merges and denoises dwi scans. The outputs from this workflow is
+    a single dwi file (optionally denoised) and corresponding bvals, bvecs.
+
+    In the general case, a single warped group will be sent to this workflow. However,
+    since eddy expects a single 4D input file, two warped groups can be processed
+    separately and merged into a 4D file. This happens when ``preprocess_rpe_series`` is
+    ``True``. FSL's eddy also requires data in LAS+ orientation.
 
     .. workflow::
         :graph2use: orig
@@ -45,12 +48,14 @@ def init_dwi_pre_hmc_wf(scan_groups,
 
         from qsiprep.workflows.dwi.pre_hmc import init_dwi_pre_hmc_wf
         wf = init_dwi_pre_hmc_wf(['/completely/made/up/path/sub-01_dwi.nii.gz'],
-                                  omp_nthreads=1,
-                                  unringing_method='mrdegibbs',
+                                  b0_threshold=100,
+                                  preprocess_rpe_series=False,
                                   dwi_denoise_window=7,
+                                  unringing_method='mrdegibbs',
                                   dwi_no_biascorr=False,
                                   no_b0_harmonization=False,
                                   denoise_before_combining=True,
+                                  omp_nthreads=1,
                                   low_mem=False)
 
     **Parameters**
@@ -74,12 +79,12 @@ def init_dwi_pre_hmc_wf(scan_groups,
             Write uncompressed .nii files in some cases to reduce memory usage
 
     **Outputs**
-        dwi_files
-            list of (potentially-denoised) single-volume dwi files
-        bvec_files
-            list of single-volume bvec files
-        bval_files
-            list of single-volume bval files
+        dwi_file
+            a (potentially-denoised) dwi file
+        bvec_file
+            a bvec file
+        bval_file
+            a bval files
         b0_indices
             list of the positions of the b0 images in the dwi series
         b0_images
@@ -92,8 +97,8 @@ def init_dwi_pre_hmc_wf(scan_groups,
     workflow = Workflow(name=name)
     outputnode = pe.Node(
         niu.IdentityInterface(fields=[
-            'dwi_files', 'bval_files', 'bvec_files', 'original_files',
-            'b0_images', 'b0_indices', 'rpe_b0s', 'warp_grouping']),
+            'dwi_file', 'bval_file', 'bvec_file', 'original_files', 'denoising_confounds',
+            'noise_images', 'bias_images']),
         name='outputnode')
     dwi_series_pedir = scan_groups['dwi_series_pedir']
     dwi_series = scan_groups['dwi_series']
@@ -112,58 +117,48 @@ def init_dwi_pre_hmc_wf(scan_groups,
                                                no_b0_harmonization=no_b0_harmonization,
                                                denoise_before_combining=denoise_before_combining,
                                                orientation=orientation,
+                                               omp_nthreads=omp_nthreads,
                                                name="merge_plus")
-        split_plus = pe.Node(SplitDWIs(b0_threshold=b0_threshold), name="split_plus")
 
         # Merge, denoise, split, hmc on the minus series
         merge_minus = init_merge_and_denoise_wf(raw_dwi_files=minus_files,
-                                               b0_threshold=b0_threshold,
+                                                b0_threshold=b0_threshold,
                                                 dwi_denoise_window=dwi_denoise_window,
                                                 unringing_method=unringing_method,
                                                 dwi_no_biascorr=dwi_no_biascorr,
                                                 no_b0_harmonization=no_b0_harmonization,
                                                 denoise_before_combining=denoise_before_combining,
                                                 orientation=orientation,
+                                                omp_nthreads=omp_nthreads,
                                                 name="merge_minus")
-        split_minus = pe.Node(SplitDWIs(b0_threshold=b0_threshold), name="split_minus")
 
-        # Combine the original images from the splits into one 'Split'
+        # Combine the original images from the splits into one 4D series + bvals/bvecs
         concat_rpe_splits = pe.Node(ConcatRPESplits(), name="concat_rpe_splits")
         workflow.connect([
-            # Merge, denoise, split on the plus series
-            (merge_plus, split_plus, [('outputnode.merged_image', 'dwi_file'),
-                                      ('outputnode.merged_bval', 'bval_file'),
-                                      ('outputnode.merged_bvec', 'bvec_file')]),
+            # Merge, denoise, combine
             (merge_plus, concat_rpe_splits, [
-                ('outputnode.original_files', 'original_images_plus')]),
-            (split_plus, concat_rpe_splits, [
-                ('bval_files', 'bval_plus'),
-                ('bvec_files', 'bvec_plus'),
-                ('dwi_files', 'dwi_plus'),
-                ('b0_images', 'b0_images_plus'),
-                ('b0_indices', 'b0_indices_plus')]),
-
-            # Merge, denoise, split on the minus series
-            (merge_minus, split_minus, [('outputnode.merged_image', 'dwi_file'),
-                                        ('outputnode.merged_bval', 'bval_file'),
-                                        ('outputnode.merged_bvec', 'bvec_file')]),
+                ('outputnode.merged_image', 'dwi_plus'),
+                ('outputnode.merged_bval', 'bval_plus'),
+                ('outputnode.merged_bvec', 'bvec_plus'),
+                ('outputnode.bias_images', 'bias_images_plus'),
+                ('outputnode.noise_images', 'noise_images_plus'),
+                ('outputnode.denoising_confounds', 'denoising_confounds_plus')]),
             (merge_minus, concat_rpe_splits, [
-                ('outputnode.original_files', 'original_images_minus')]),
-            (split_minus, concat_rpe_splits, [
-                ('bval_files', 'bval_minus'),
-                ('bvec_files', 'bvec_minus'),
-                ('dwi_files', 'dwi_minus'),
-                ('b0_images', 'b0_images_minus'),
-                ('b0_indices', 'b0_indices_minus')]),
-
+                ('outputnode.merged_image', 'dwi_minus'),
+                ('outputnode.merged_bval', 'bval_minus'),
+                ('outputnode.merged_bvec', 'bvec_minus'),
+                ('outputnode.bias_images', 'bias_images_minus'),
+                ('outputnode.noise_images', 'noise_images_minus'),
+                ('outputnode.denoising_confounds', 'denoising_confounds_minus')]),
             # Connect to the outputnode
             (concat_rpe_splits, outputnode, [
-                ('dwi_files', 'dwi_files'),
-                ('bval_files', 'bval_files'),
-                ('bvec_files', 'bvec_files'),
+                ('dwi_file', 'dwi_file'),
+                ('bval_file', 'bval_file'),
+                ('bvec_file', 'bvec_file'),
                 ('original_files', 'original_files'),
-                ('b0_images', 'b0_images'),
-                ('b0_indices', 'b0_indices')])
+                ('denoising_confounds', 'denoising_confounds'),
+                ('noise_images', 'noise_images'),
+                ('bias_images', 'bias_images')])
             ])
         return workflow
 
@@ -176,21 +171,16 @@ def init_dwi_pre_hmc_wf(scan_groups,
         no_b0_harmonization=no_b0_harmonization,
         denoise_before_combining=denoise_before_combining,
         orientation=orientation)
-    split_dwis = pe.Node(SplitDWIs(b0_threshold=b0_threshold), name="split_dwis")
 
     workflow.connect([
-        (merge_dwis, split_dwis, [
+        (merge_dwis, outputnode, [
             ('outputnode.merged_image', 'dwi_file'),
             ('outputnode.merged_bval', 'bval_file'),
-            ('outputnode.merged_bvec', 'bvec_file')]),
-        (merge_dwis, outputnode, [
-            ('outputnode.original_files', 'original_files')]),
-        (split_dwis, outputnode, [
-            ('dwi_files', 'dwi_files'),
-            ('bval_files', 'bval_files'),
-            ('bvec_files', 'bvec_files'),
-            ('b0_images', 'b0_images'),
-            ('b0_indices', 'b0_indices')])
+            ('outputnode.merged_bvec', 'bvec_file'),
+            ('outputnode.bias_images', 'bias_images'),
+            ('outputnode.noise_images', 'noise_images'),
+            ('outputnode.denoising_confounds', 'denoising_confounds'),
+            ('outputnode.original_files', 'original_files')])
     ])
 
     return workflow

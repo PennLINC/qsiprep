@@ -305,7 +305,7 @@ def init_dwi_preproc_wf(scan_groups,
         name='inputnode')
     outputnode = pe.Node(
         niu.IdentityInterface(fields=[
-            'confounds', 'hmc_optimization_data', 'itk_b0_to_t1',
+            'confounds', 'hmc_optimization_data', 'itk_b0_to_t1', 'noise_images', 'bias_images',
             'dwi_files', 'cnr_map', 'bval_files', 'bvec_files', 'b0_ref_image', 'b0_indices',
             'dwi_mask', 'hmc_xforms', 'fieldwarps', 'sbref_file', 'original_files']),
         name='outputnode')
@@ -358,17 +358,17 @@ def init_dwi_preproc_wf(scan_groups,
 
     workflow.connect([
         (pre_hmc_wf, hmc_wf, [
-            ('outputnode.dwi_files', 'inputnode.dwi_files'),
-            ('outputnode.bval_files', 'inputnode.bval_files'),
-            ('outputnode.bvec_files', 'inputnode.bvec_files'),
-            ('outputnode.original_files', 'inputnode.original_files'),
-            ('outputnode.b0_images', 'inputnode.b0_images'),
-            ('outputnode.b0_indices', 'inputnode.b0_indices')]),
+            ('outputnode.dwi_file', 'inputnode.dwi_file'),
+            ('outputnode.bval_file', 'inputnode.bval_file'),
+            ('outputnode.bvec_file', 'inputnode.bvec_file'),
+            ('outputnode.original_files', 'inputnode.original_files')]),
         (inputnode, hmc_wf, [
             ('t1_brain', 'inputnode.t1_brain'),
             ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform')]),
         (pre_hmc_wf, outputnode, [
-            ('outputnode.original_files', 'original_files')])
+            ('outputnode.original_files', 'original_files'),
+            ('outputnode.bias_images', 'bias_images'),
+            ('outputnode.noise_images', 'noise_images')])
     ])
 
     # calculate dwi registration to T1w

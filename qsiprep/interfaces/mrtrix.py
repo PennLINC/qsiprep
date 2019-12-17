@@ -56,7 +56,7 @@ class SeriesPreprocReportOutputSpec(reporting.ReportCapableOutputSpec):
 class SeriesPreprocReport(reporting.ReportCapableInterface):
     input_spec = SeriesPreprocReportInputSpec
     output_spce = SeriesPreprocReportOutputSpec
-    _n_cuts = 6
+    _n_cuts = 5
 
     def __init__(self, **kwargs):
         """Instantiate FieldmapReportlet."""

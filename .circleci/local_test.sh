@@ -137,7 +137,8 @@ export FS_LICENSE=${WORKDIR}/fslicense/license.txt
       --recon-input ${WORKDIR}/DSCSDSI/derivatives/qsiprep \
        ${WORKDIR}/DSCSDSI/derivatives \
        participant \
-      --recon-spec ${HOME}/projects/qsiprep/.circleci/3dshore_dsistudio_mrtrix.json \
+      --recon-spec dipy_3dshore \
+      --sloppy \
       --recon-only \
       --mem_mb 4096 \
       --output-resolution 5 \

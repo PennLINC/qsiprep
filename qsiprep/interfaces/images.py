@@ -38,8 +38,8 @@ class SplitDWIsInputSpec(BaseInterfaceInputSpec):
 
 class SplitDWIsOutputSpec(TraitedSpec):
     dwi_files = OutputMultiObject(File(exists=True), desc='single volume dwis')
-    bvec_files = OutputMultiObject(File(exists=True), desc='single volume bvecs')
     bval_files = OutputMultiObject(File(exists=True), desc='single volume bvals')
+    bvec_files = OutputMultiObject(File(exists=True), desc='single volume bvecs')
     b0_images = OutputMultiObject(File(exists=True), desc='just the b0s')
     b0_indices = traits.List(desc='list of original indices for each b0 image')
     original_files = OutputMultiObject(File(exists=True))
@@ -69,29 +69,33 @@ class SplitDWIs(SimpleInterface):
 
 
 class ConcatRPESplitsInputSpec(BaseInterfaceInputSpec):
-    dwi_plus = InputMultiObject(File(exists=True), desc='single volume dwis')
-    bvec_plus = InputMultiObject(File(exists=True), desc='single volume bvecs')
-    bval_plus = InputMultiObject(File(exists=True), desc='single volume bvals')
-    b0_images_plus = InputMultiObject(File(exists=True), desc='just the b0s')
-    b0_indices_plus = traits.List(desc='list of original indices for each b0 image')
-    original_images_plus = InputMultiObject(File(exists=True))
-
-    dwi_minus = InputMultiObject(File(exists=True), desc='single volume dwis')
-    bvec_minus = InputMultiObject(File(exists=True), desc='single volume bvecs')
-    bval_minus = InputMultiObject(File(exists=True), desc='single volume bvals')
-    b0_images_minus = InputMultiObject(File(exists=True), desc='just the b0s')
-    b0_indices_minus = traits.List(desc='list of original indices for each b0 image')
-    original_images_minus = traits.List()
+    # Plus images
+    dwi_plus = InputMultiObject(File(exists=True), desc='plus dwi file')
+    bvec_plus = InputMultiObject(File(exists=True), desc='plus bvec file')
+    bval_plus = InputMultiObject(File(exists=True), desc='plus bval file')
+    noise_images_plus = InputMultiObject(File(exists=True), desc='plus_noise_images')
+    bias_images_plus = InputMultiObject(File(exists=True), desc='plus bias images')
+    denoising_confounds_plus = File(exists=True, desc='confounds csv from merging plus')
+    # Minus images
+    dwi_minus = InputMultiObject(File(exists=True), desc='minus dwi file')
+    bvec_minus = InputMultiObject(File(exists=True), desc='minus bvec file')
+    bval_minus = InputMultiObject(File(exists=True), desc='minus bval file')
+    noise_images_minus = InputMultiObject(File(exists=True), desc='minus_noise_images')
+    bias_images_minus = InputMultiObject(File(exists=True), desc='minus bias images')
+    denoising_confounds_minus = File(exists=True, desc='confounds csv from merging minus')
 
 
 class ConcatRPESplitsOutputSpec(TraitedSpec):
-    dwi_files = OutputMultiObject(File(exists=True), desc='single volume dwis')
-    bvec_files = OutputMultiObject(File(exists=True), desc='single volume bvecs')
-    bval_files = OutputMultiObject(File(exists=True), desc='single volume bvals')
+    dwi_file = OutputMultiObject(File(exists=True), desc='plus and minus merged into on series')
+    bvec_file = OutputMultiObject(File(exists=True), desc='concatenated bvec file')
+    bval_file = OutputMultiObject(File(exists=True), desc='concatenated bval file')
+    bias_images = OutputMultiObject(File(exists=True), desc='bias field images')
+    noise_images = OutputMultiObject(File(exists=True), desc='noise level images')
     b0_images = OutputMultiObject(File(exists=True), desc='just the b0s')
     b0_indices = traits.List(desc='list of indices for each b0 image')
     original_files = traits.List(desc='list of source series for each dwi')
     sdc_method = traits.Str("PEB/PEPOLAR Series (phase-encoding based / PE-POLARity)")
+    denoising_confounds = File(exists=True, desc='plus and minus confounds merged')
 
 
 class ConcatRPESplits(SimpleInterface):

@@ -71,14 +71,14 @@ def init_fsl_hmc_wf(scan_groups,
 
     **Inputs**
 
-        dwi_files: list
-            List of single-volume files across all DWI series
+        dwi_file: str
+            DWI series
+        bvec_file: str
+            bvec file
+        bval_file: str
+            bval file
         b0_indices: list
             Indexes into ``dwi_files`` that correspond to b=0 volumes
-        bvecs: list
-            List of paths to single-line bvec files
-        bvals: list
-            List of paths to single-line bval files
         b0_images: list
             List of single b=0 volumes
         original_files: list
@@ -89,7 +89,7 @@ def init_fsl_hmc_wf(scan_groups,
 
     inputnode = pe.Node(
         niu.IdentityInterface(
-            fields=['dwi_files', 'b0_indices', 'bvec_files', 'bval_files', 'b0_images',
+            fields=['dwi_file', 'bvec_file', 'bval_file', 'b0_indices', 'b0_images',
                     'original_files', 't1_brain', 't1_2_mni_reverse_transform']),
         name='inputnode')
 
@@ -116,8 +116,6 @@ def init_fsl_hmc_wf(scan_groups,
     LOGGER.info("Using %d threads in eddy", omp_nthreads)
     eddy_args["num_threads"] = omp_nthreads
     eddy = pe.Node(ExtendedEddy(**eddy_args), name="eddy")
-    # These should be in LAS+
-    dwi_merge = pe.Node(MergeDWIs(), name="dwi_merge")
     spm_motion = pe.Node(Eddy2SPMMotion(), name="spm_motion")
     # Convert eddy outputs back to LPS+, split them
     pre_topup_lps = pe.Node(ConformDwi(orientation="LPS"), name='pre_topup_lps')
@@ -131,22 +129,13 @@ def init_fsl_hmc_wf(scan_groups,
     workflow.connect([
         # These images and gradients should be in LAS+
         (inputnode, gather_inputs, [
-            ('dwi_files', 'dwi_files'),
-            ('bval_files', 'bval_files'),
-            ('bvec_files', 'bvec_files'),
-            ('b0_indices', 'b0_indices'),
-            ('b0_images', 'b0_images'),
+            ('dwi_file', 'dwi_file'),
+            ('bval_file', 'bval_file'),
+            ('bvec_file', 'bvec_file'),
             ('original_files', 'original_files')]),
-        # Re-concatenate
-        (inputnode, dwi_merge, [
-            ('dwi_files', 'dwi_files'),
-            ('bval_files', 'bval_files'),
-            ('bvec_files', 'bvec_files'),
-            ('original_files', 'bids_dwi_files')]),
         (gather_inputs, eddy, [
             ('eddy_indices', 'in_index'),
-            ('eddy_acqp', 'in_acqp')]),
-        (dwi_merge, eddy, [
+            ('eddy_acqp', 'in_acqp'),
             ('out_dwi', 'in_file'),
             ('out_bval', 'in_bval'),
             ('out_bvec', 'in_bvec')]),
@@ -160,12 +149,12 @@ def init_fsl_hmc_wf(scan_groups,
         (eddy, back_to_lps, [
             ('out_corrected', 'dwi_file'),
             ('out_rotated_bvecs', 'bvec_file')]),
-        (dwi_merge, back_to_lps, [('out_bval', 'bval_file')]),
+        (inputnode, back_to_lps, [('bval_file', 'bval_file')]),
         (back_to_lps, split_eddy_lps, [
             ('dwi_file', 'dwi_file'),
             ('bval_file', 'bval_file'),
             ('bvec_file', 'bvec_file')]),
-        (dwi_merge, outputnode, [
+        (inputnode, outputnode, [
             ('original_images', 'original_files')]),
         (split_eddy_lps, outputnode, [
             ('dwi_files', 'dwi_files_to_transform'),

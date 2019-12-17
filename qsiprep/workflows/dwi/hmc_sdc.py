@@ -12,6 +12,7 @@ from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
 
 from ...interfaces.gradients import SliceQC, CombineMotions
+from ...interfaces.images import SplitDWIs
 from ..fieldmap.base import init_sdc_wf
 from ...engine import Workflow
 
@@ -23,6 +24,7 @@ LOGGER = logging.getLogger('nipype.workflow')
 
 
 def init_qsiprep_hmcsdc_wf(scan_groups,
+                           b0_threshold,
                            hmc_transform,
                            hmc_model,
                            hmc_align_to,
@@ -50,6 +52,7 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
         wf = init_qsiprep_hmcsdc_wf({'dwi_series':[dwi1.nii, dwi2.nii],
                                           'fieldmap_info': {'suffix': None},
                                           'dwi_series_pedir': j},
+                                         b0_threshold=100,
                                          hmc_transform='Affine',
                                          hmc_model='3dSHORE',
                                          hmc_align_to='iterative',
@@ -67,7 +70,7 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
     """
     inputnode = pe.Node(
         niu.IdentityInterface(
-            fields=['dwi_files', 'rpe_b0', 'b0_indices', 'bvec_files', 'bval_files', 'b0_images',
+            fields=['dwi_file', 'bvec_files', 'bval_files', 'rpe_b0',
                     'original_files', 'rpe_b0_info', 'hmc_optimization_data', 't1_brain',
                     't1_2_mni_reverse_transform']),
         name='inputnode')
@@ -100,6 +103,9 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
         LOGGER.log(25, 'SDC: fieldmap estimation of type "%s" intended for %s found.',
                    fieldmap_type, source_file)
 
+    # Split the input data into single volumes
+    split_dwis = pe.Node(SplitDWIs(b0_threshold=b0_threshold), name='split_dwis')
+
     # Motion correct the data
     dwi_hmc_wf = init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to,
                                  source_file=source_file,
@@ -123,13 +129,17 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
     summarize_motion = pe.Node(CombineMotions(), name="summarize_motion")
 
     workflow.connect([
-        (inputnode, dwi_hmc_wf, [
-            ('b0_images', 'inputnode.b0_images'),
+        (inputnode, split_dwis, [
+            ('dwi_file', 'dwi_file'),
+            ('bval_file', 'bval_file'),
+            ('bvec_file', 'bvec_file')]),
+        (split_dwis, dwi_hmc_wf, [
+            ('dwi_files', 'inputnode.dwi_files'),
             ('bval_files', 'inputnode.bvals'),
             ('bvec_files', 'inputnode.bvecs'),
-            ('dwi_files', 'inputnode.dwi_files'),
+            ('b0_images', 'inputnode.b0_images'),
             ('b0_indices', 'inputnode.b0_indices')]),
-        (inputnode, slice_qc, [('dwi_files', 'uncorrected_dwi_files')]),
+        (split_dwis, slice_qc, [('dwi_files', 'uncorrected_dwi_files')]),
         (dwi_hmc_wf, outputnode, [
             ('outputnode.final_template', 'pre_sdc_template'),
             (('outputnode.forward_transforms', _list_squeeze),
@@ -141,7 +151,7 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
         (dwi_hmc_wf, summarize_motion, [
             ('outputnode.final_template', 'ref_file'),
             (('outputnode.forward_transforms', _list_squeeze), 'transform_files')]),
-        (inputnode, summarize_motion, [('dwi_files', 'source_files')]),
+        (inputnode, summarize_motion, [('original_files', 'source_files')]),
         (dwi_hmc_wf, slice_qc, [
             ('outputnode.noise_free_dwis', 'ideal_image_files')]),
         (dwi_ref_wf, b0_sdc_wf, [
@@ -159,7 +169,7 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
             ('outputnode.b0_mask', 'b0_template_mask')]),
         (b0_sdc_wf, slice_qc, [('outputnode.b0_mask', 'mask_image')]),
         (summarize_motion, outputnode, [('spm_motion_file', 'motion_params')]),
-        (inputnode, outputnode, [
+        (split_dwis, outputnode, [
             ('bvec_files', 'bvec_files_to_transform')]),
         (slice_qc, outputnode, [
             ('slice_stats', 'slice_quality'),
