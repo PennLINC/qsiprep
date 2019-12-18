@@ -95,7 +95,7 @@ def init_fsl_hmc_wf(scan_groups,
 
     outputnode = pe.Node(
         niu.IdentityInterface(
-            fields=["b0_template", "b0_template_mask", "pre_sdc_template",
+            fields=["b0_template", "b0_template_mask", "pre_sdc_template", "bval_files",
                     "hmc_optimization_data", "sdc_method", 'slice_quality', 'motion_params',
                     "cnr_map", "bvec_files_to_transform", "dwi_files_to_transform", "b0_indices",
                     "to_dwi_ref_affines", "to_dwi_ref_warps", "rpe_b0_info"]),
@@ -158,7 +158,9 @@ def init_fsl_hmc_wf(scan_groups,
             ('original_images', 'original_files')]),
         (split_eddy_lps, outputnode, [
             ('dwi_files', 'dwi_files_to_transform'),
-            ('bvec_files', 'bvec_files_to_transform')]),
+            ('bvec_files', 'bvec_files_to_transform'),
+            ('bval_files', 'bval_files'),
+            ('b0_indices', 'b0_indices')]),
         (split_eddy_lps, mean_b0_lps, [('b0_images', 'images')]),
         (mean_b0_lps, lps_b0_enhance, [('output_average_image', 'inputnode.in_file')]),
         (eddy, cnr_lps, [('out_cnr_maps', 'dwi_file')]),

@@ -327,6 +327,7 @@ def init_dwi_preproc_wf(scan_groups,
             raise Exception("--shoreline-iters must be > 0 when --hmc-model is " + hmc_model)
         hmc_wf = init_qsiprep_hmcsdc_wf(
             scan_groups=scan_groups,
+            b0_threshold=b0_threshold,
             hmc_transform=hmc_transform,
             hmc_model=hmc_model,
             hmc_align_to=motion_corr_to,
@@ -444,8 +445,9 @@ def init_dwi_preproc_wf(scan_groups,
             ('outputnode.slice_quality', 'inputnode.sliceqc_file'),
             ('outputnode.motion_params', 'inputnode.motion_params')]),
         (pre_hmc_wf, confounds_wf, [
-            ('outputnode.bval_files', 'inputnode.bval_files'),
-            ('outputnode.bvec_files', 'inputnode.bvec_files'),
+            ('outputnode.denoising_confounds', 'inputnode.denoising_confounds'),
+            ('outputnode.bval_file', 'inputnode.bval_file'),
+            ('outputnode.bvec_file', 'inputnode.bvec_file'),
             ('outputnode.original_files', 'inputnode.original_files')]),
         (hmc_wf, outputnode, [('outputnode.hmc_optimization_data', 'hmc_optimization_data')]),
         (hmc_wf, conf_plot, [
@@ -457,10 +459,9 @@ def init_dwi_preproc_wf(scan_groups,
     ])
 
     workflow.connect([
-        (pre_hmc_wf, outputnode, [
-            ('outputnode.b0_indices', 'b0_indices'),
-            ('outputnode.bval_files', 'bval_files')]),
         (hmc_wf, outputnode, [
+            ('outputnode.b0_indices', 'b0_indices'),
+            ('outputnode.bval_files', 'bval_files'),
             ('outputnode.bvec_files_to_transform', 'bvec_files'),
             ('outputnode.b0_template', 'b0_ref_image'),
             ('outputnode.cnr_map', 'cnr_map'),

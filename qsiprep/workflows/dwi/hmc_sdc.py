@@ -70,7 +70,7 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
     """
     inputnode = pe.Node(
         niu.IdentityInterface(
-            fields=['dwi_file', 'bvec_files', 'bval_files', 'rpe_b0',
+            fields=['dwi_file', 'bvec_file', 'bval_file', 'rpe_b0',
                     'original_files', 'rpe_b0_info', 'hmc_optimization_data', 't1_brain',
                     't1_2_mni_reverse_transform']),
         name='inputnode')
@@ -80,7 +80,7 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
             fields=["b0_template", "b0_template_mask", "pre_sdc_template",
                     "hmc_optimization_data", "sdc_method", 'slice_quality', 'motion_params',
                     "cnr_map", "bvec_files_to_transform", "dwi_files_to_transform", "b0_indices",
-                    "to_dwi_ref_affines", "to_dwi_ref_warps"]),
+                    "bval_files", "to_dwi_ref_affines", "to_dwi_ref_warps"]),
         name='outputnode')
 
     workflow = Workflow(name=name)
@@ -170,7 +170,9 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
         (b0_sdc_wf, slice_qc, [('outputnode.b0_mask', 'mask_image')]),
         (summarize_motion, outputnode, [('spm_motion_file', 'motion_params')]),
         (split_dwis, outputnode, [
-            ('bvec_files', 'bvec_files_to_transform')]),
+            ('bvec_files', 'bvec_files_to_transform'),
+            ('bval_files', 'bval_files'),
+            ('b0_indices', 'b0_indices')]),
         (slice_qc, outputnode, [
             ('slice_stats', 'slice_quality'),
             ('imputed_images', 'dwi_files_to_transform')]),
