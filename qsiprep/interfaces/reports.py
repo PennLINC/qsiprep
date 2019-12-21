@@ -12,6 +12,7 @@ Interfaces to generate reportlets
 import os
 import time
 import re
+from collections import defaultdict
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -318,3 +319,96 @@ def plot_gradients(bvals, orig_bvecs, source_filenums, output_fname, final_bvecs
 
     plt.close(fig)
     fig = None
+
+
+def topup_selection_to_report(selected_indices, original_files, spec_lookup):
+    """Write a description of how the images were selected for TOPUP.
+
+    >>> selected_indices = [0, 15, 30, 45]
+    >>> original_files = ["sub-1_dir-AP_dwi.nii.gz"] * 30 + ["sub-1_dir-PA_dwi.nii.gz"] * 30
+    >>> spec_lookup = {"sub-1_dir-AP_dwi.nii.gz": "0 1 0 0.087",
+    ...                "sub-1_dir-PA_dwi.nii.gz": "0 -1 0 0.087"}
+    >>> print(_topup_selection_to_report(selected_indices, original_files, spec_lookup))
+    A total of 2 distortion groups was included in the combined dwi data. Distortion \
+group '0 1 0 0.087' was represented by images 0, 15 from sub-1_dir-AP_dwi.nii.gz. \
+Distortion group '0 -1 0 0.087' was represented by images 0, 15 from sub-1_dir-PA_dwi.nii.gz. "
+
+    Or
+
+    >>> selected_indices = [0, 15, 30, 45]
+    >>> original_files = ["sub-1_dir-AP_run-1_dwi.nii.gz"] * 15 + [
+    ...                   "sub-1_dir-AP_run-2_dwi.nii.gz"] * 15 + [
+    ...                   "sub-1_dir-PA_dwi.nii.gz"] * 30
+    >>> spec_lookup = {"sub-1_dir-AP_run-1_dwi.nii.gz": "0 1 0 0.087",
+    ...                "sub-1_dir-AP_run-2_dwi.nii.gz": "0 1 0 0.087",
+    ...                "sub-1_dir-PA_dwi.nii.gz": "0 -1 0 0.087"}
+    >>> print(_topup_selection_to_report(selected_indices, original_files, spec_lookup))
+    A total of 2 distortion groups was included in the combined dwi data. Distortion \
+group '0 1 0 0.087' was represented by image 0 from sub-1_dir-AP_run-1_dwi.nii.gz and \
+image 0 from sub-1_dir-AP_run-2_dwi.nii.gz. Distortion group '0 -1 0 0.087' was represented \
+by images 0, 15 from sub-1_dir-PA_dwi.nii.gz.
+
+    >>> selected_indices = [0, 15, 30, 45, 60]
+    >>> original_files = ["sub-1_dir-AP_run-1_dwi.nii.gz"] * 15 + [
+    ...                   "sub-1_dir-AP_run-2_dwi.nii.gz"] * 15 + [
+    ...                   "sub-1_dir-AP_run-3_dwi.nii.gz"] * 15 + [
+    ...                   "sub-1_dir-PA_dwi.nii.gz"] * 30
+    >>> spec_lookup = {"sub-1_dir-AP_run-1_dwi.nii.gz": "0 1 0 0.087",
+    ...                "sub-1_dir-AP_run-2_dwi.nii.gz": "0 1 0 0.087",
+    ...                "sub-1_dir-AP_run-3_dwi.nii.gz": "0 1 0 0.087",
+    ...                "sub-1_dir-PA_dwi.nii.gz": "0 -1 0 0.087"}
+    >>> print(_topup_selection_to_report(selected_indices, original_files, spec_lookup))
+    A total of 2 distortion groups was included in the combined dwi data. Distortion \
+group '0 1 0 0.087' was represented by image 0 from sub-1_dir-AP_run-1_dwi.nii.gz, \
+image 0 from sub-1_dir-AP_run-2_dwi.nii.gz and image 0 from sub-1_dir-AP_run-3_dwi.nii.gz. \
+Distortion group '0 -1 0 0.087' was represented by images 0, 15 from sub-1_dir-PA_dwi.nii.gz.
+
+    >>> selected_indices = [0, 15, 30, 45]
+    >>> original_files = ["sub-1_dir-PA_dwi.nii.gz"] * 60
+    >>> spec_lookup = {"sub-1_dir-PA_dwi.nii.gz": "0 -1 0 0.087"}
+    >>> print(_topup_selection_to_report(selected_indices, original_files, spec_lookup))
+    A total of 1 distortion group was included in the combined dwi data. \
+Distortion group '0 -1 0 0.087' was represented by images 0, 15, 30, 45 \
+from sub-1_dir-PA_dwi.nii.gz.
+
+    """
+    image_indices = defaultdict(list)
+    for imgnum, image in enumerate(original_files):
+        image_indices[image].append(imgnum)
+
+    # Collect the original volume number within each source image
+    selected_per_image = defaultdict(list)
+    for b0_index in selected_indices:
+        b0_image = original_files[b0_index]
+        first_index = min(image_indices[b0_image])
+        within_image_index = b0_index - first_index
+        selected_per_image[b0_image].append(within_image_index)
+
+    # Collect the images and indices within each warp group
+    selected_per_warp_group = defaultdict(list)
+    for original_image, selection in selected_per_image.items():
+        warp_group = spec_lookup[original_image]
+        selected_per_warp_group[warp_group].append((original_image, selection))
+
+    # Make the description
+    num_groups = len(selected_per_warp_group)
+    plural = 's' if num_groups > 1 else ''
+    desc = ["A total of {num_groups} distortion group{plural} was included in the "
+            "combined dwi data. ".format(num_groups=num_groups, plural=plural)]
+    for distortion_group, image_list in selected_per_warp_group.items():
+        group_desc = [
+            "Distortion group '{spec}' was represented by ".format(spec=distortion_group)]
+        for image_name, image_indices in image_list:
+            formatted_indices = ", ".join(map(str, image_indices))
+            plural = 's' if len(image_indices) > 1 else ''
+            group_desc += [
+                "image{plural} {imgnums} from {img_name}".format(plural=plural,
+                                                                 imgnums=formatted_indices,
+                                                                 img_name=image_name),
+                ", "]
+        group_desc[-1] = ". "
+        if len(image_list) > 1:
+            group_desc[-3] = " and "
+        desc += group_desc
+
+    return ''.join(desc)

@@ -135,10 +135,11 @@ def init_fsl_hmc_wf(scan_groups,
             ('original_files', 'original_files')]),
         (gather_inputs, eddy, [
             ('eddy_indices', 'in_index'),
-            ('eddy_acqp', 'in_acqp'),
-            ('out_dwi', 'in_file'),
-            ('out_bval', 'in_bval'),
-            ('out_bvec', 'in_bvec')]),
+            ('eddy_acqp', 'in_acqp')]),
+        (inputnode, eddy, [
+            ('dwi_file', 'in_file'),
+            ('bval_file', 'in_bval'),
+            ('bvec_file', 'in_bvec')]),
         (gather_inputs, pre_topup_lps, [
             ('pre_topup_image', 'dwi_file')]),
         (gather_inputs, outputnode, [('forward_transforms', 'to_dwi_ref_affines')]),
@@ -196,7 +197,9 @@ def init_fsl_hmc_wf(scan_groups,
 
         workflow.connect([
             (prepare_rpe_b0, outputnode, [('fmap_info', 'inputnode.rpe_b0_info')]),
-            (prepare_rpe_b0, gather_inputs, [('fmap_file', 'rpe_b0')]),
+            (prepare_rpe_b0, gather_inputs, [
+                ('fmap_file', 'rpe_b0_images'),
+                ('fmap_info', 'rpe_b0_metadata')]),
             (gather_inputs, topup, [
                 ('topup_datain', 'encoding_file'),
                 ('topup_imain', 'in_file'),
