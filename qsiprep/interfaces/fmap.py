@@ -791,6 +791,11 @@ def epi_fieldmap_images_for_topup():
 
 
 def read_nifti_sidecar(json_file):
+    if not json_file.endswith(".json"):
+        json_file = fname_presuffix(json_file, suffix='.json', use_ext=False)
+        if not op.exists(json_file):
+            raise Exception("No corresponding json file found")
+
     with open(json_file, "r") as f:
         metadata = json.load(f)
     pe_dir = metadata['PhaseEncodingDirection']
@@ -927,14 +932,16 @@ def get_topup_inputs_from(dwi_file, bval_file, b0_threshold, topup_prefix,
     dwi_nii = load_img(dwi_file)
     # Gather images from just the dwi series
     dwi_spec_lines, dwi_imain, dwi_report = topup_inputs_from_4d_file(
-        dwi_nii, b0_indices, bids_origin_files)
+        dwi_nii, b0_indices, bids_origin_files, image_source="combined DWI series",
+        max_per_spec=max_per_spec)
 
     # If there are EPI fieldmaps, add them to the END of the topup spec
     if rpe_files and isdefined(rpe_files):
         fmaps_4d, fmap_b0_indices, fmap_original_files = load_epi_dwi_fieldmaps(rpe_files,
                                                                                 b0_threshold)
         fmap_spec_lines, fmap_imain, fmap_report = topup_inputs_from_4d_file(
-            fmaps_4d, fmap_b0_indices, fmap_original_files)
+            fmaps_4d, fmap_b0_indices, fmap_original_files, image_source="EPI fieldmap",
+            max_per_spec=max_per_spec)
         topup_imain = concat_imgs([dwi_imain, fmap_imain], auto_resample=True)
         topup_spec_lines = dwi_spec_lines + fmap_spec_lines
         topup_text = dwi_report + fmap_report
@@ -975,6 +982,11 @@ def load_epi_dwi_fieldmaps(fmap_list, b0_threshold):
         # Which images are b=0 images?
         if op.exists(potential_bval_file):
             bvals = np.loadtxt(potential_bval_file)
+            too_large = np.flatnonzero(bvals > b0_threshold)
+            too_large_values = bvals[too_large]
+            if too_large.size:
+                LOGGER.warning("Excluding volumes %s from the %s because b=%d is greater than %d",
+                               str(too_large), fmap_file, str(too_large_values), b0_threshold)
             _b0_indices = np.flatnonzero(bvals < b0_threshold) + starting_index
         else:
             _b0_indices = np.arange(num_images) + starting_index
@@ -984,7 +996,8 @@ def load_epi_dwi_fieldmaps(fmap_list, b0_threshold):
     return concatenated_images, b0_indices, original_files
 
 
-def topup_inputs_from_4d_file(nii_file, b0_indices, bids_origin_files=None, max_per_spec=3):
+def topup_inputs_from_4d_file(nii_file, b0_indices, bids_origin_files=None,
+                              image_source="combined DWI series", max_per_spec=3):
     """Represent distortion groups from a concatenated image and its origins.
 
     Create inputs for TOPUP that come from data in ``dwi/`` and epi fieldmaps in ``fmap/``.
@@ -1056,6 +1069,7 @@ def topup_inputs_from_4d_file(nii_file, b0_indices, bids_origin_files=None, max_
 
     # Load and subset the image
     imain_nii = index_img(nii_file, selected_b0_indices)
-    report = topup_selection_to_report(b0_indices, bids_origin_files, spec_lookup)
+    report = topup_selection_to_report(selected_b0_indices, bids_origin_files, spec_lookup,
+                                       image_source=image_source)
 
     return spec_lines, imain_nii, report

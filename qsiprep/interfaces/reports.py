@@ -321,7 +321,8 @@ def plot_gradients(bvals, orig_bvecs, source_filenums, output_fname, final_bvecs
     fig = None
 
 
-def topup_selection_to_report(selected_indices, original_files, spec_lookup):
+def topup_selection_to_report(selected_indices, original_files, spec_lookup,
+                              image_source='combined DWI series'):
     """Write a description of how the images were selected for TOPUP.
 
     >>> selected_indices = [0, 15, 30, 45]
@@ -393,8 +394,10 @@ from sub-1_dir-PA_dwi.nii.gz.
     # Make the description
     num_groups = len(selected_per_warp_group)
     plural = 's' if num_groups > 1 else ''
-    desc = ["A total of {num_groups} distortion group{plural} was included in the "
-            "combined dwi data. ".format(num_groups=num_groups, plural=plural)]
+    plural2 = 'were' if plural == 's' else 'was'
+    desc = ["A total of {num_groups} distortion group{plural} {plural2} included in the "
+            "{image_source} data. ".format(num_groups=num_groups, plural=plural,
+                                           plural2=plural2, image_source=image_source)]
     for distortion_group, image_list in selected_per_warp_group.items():
         group_desc = [
             "Distortion group '{spec}' was represented by ".format(spec=distortion_group)]
