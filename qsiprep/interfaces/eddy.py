@@ -9,32 +9,27 @@ Prepare files for TOPUP and eddy
 """
 import os
 import os.path as op
-import json
-from collections import defaultdict
 from pkg_resources import resource_filename as pkgr_fn
 import numpy as np
 import nibabel as nb
+from nilearn.image import index_img
 from nipype import logging
 from nipype.utils.filemanip import fname_presuffix, split_filename
 from nipype.interfaces import fsl
 from nipype.interfaces.base import (
     traits, TraitedSpec, BaseInterfaceInputSpec, File, InputMultiObject, SimpleInterface,
     isdefined)
-from .fmap import topup_inputs_from_4d_file
-from .images import to_lps
-from .reports import topup_selection_to_report
+from .fmap import get_topup_inputs_from, eddy_inputs_from_dwi_files
 LOGGER = logging.getLogger('nipype.interface')
 
 
 class GatherEddyInputsInputSpec(BaseInterfaceInputSpec):
-    rpe_b0_images = InputMultiObject(File(exists=True),
-                                     desc='b0 images with reverse phase encoding')
-    rpe_b0_metadata = InputMultiObject(File(exists=True), desc='rpe metadata json files')
     dwi_file = File(exists=True)
     bval_file = File(exists=True)
     bvec_file = File(exists=True)
     b0_threshold = traits.CInt(100, usedefault=True)
     original_files = InputMultiObject(File(exists=True))
+    rpe_files = InputMultiObject(File(exists=True), desc='')
     topup_max_b0s_per_spec = traits.CInt(3, usedefault=True)
 
 
@@ -47,7 +42,7 @@ class GatherEddyInputsOutputSpec(TraitedSpec):
     eddy_indices = File(exists=True)
     forward_transforms = traits.List()
     forward_warps = traits.List()
-    topup_report = File(exists=True, desc="description of where data came from")
+    topup_report = traits.Str(desc="description of where data came from")
 
 
 class GatherEddyInputs(SimpleInterface):
@@ -70,12 +65,17 @@ class GatherEddyInputs(SimpleInterface):
 
         # Gather inputs for TOPUP
         topup_prefix = op.join(runtime.cwd, "topup_")
-        topup_datain_file, topup_imain_file, topup_text = topup_inputs_from_4d_file(
-            self.inputs.dwi_file, self.inputs.bval_file, self.inputs.b0_threshold, topup_prefix,
-            rpe_files=self.inputs.rpe_b0, rpe_metadata=self.inputs.rpe_b0_metadata,
+        topup_datain_file, topup_imain_file, topup_text = get_topup_inputs_from(
+            dwi_file=self.inputs.dwi_file,
+            bval_file=self.inputs.bval_file,
+            b0_threshold=self.inputs.b0_threshold,
+            topup_prefix=topup_prefix,
+            bids_origin_files=self.inputs.original_files,
+            rpe_files=self.inputs.rpe_files,
             max_per_spec=self.inputs.topup_max_b0s_per_spec)
         self._results['topup_datain'] = topup_datain_file
         self._results['topup_imain'] = topup_imain_file
+        self._results['topup_report'] = topup_text
 
         # If there are an odd number of slices, use b02b0_1.cnf
         example_b0 = nb.load(self.inputs.dwi_file)
@@ -86,11 +86,15 @@ class GatherEddyInputs(SimpleInterface):
             self._results['topup_config'] = pkgr_fn('qsiprep.data', 'b02b0_1.cnf')
 
         # For the apply topup report:
-        eddy_prefix = op.join(runtime.cwd, "eddy_")
-        self._results['pre_topup_image'] = b0_images[0]
+        pre_topup_image = index_img(topup_imain_file, 0)
+        pre_topup_image_file = topup_prefix + "pre_image.nii.gz"
+        pre_topup_image.to_filename(pre_topup_image_file)
+        self._results['pre_topup_image'] = pre_topup_image_file
 
         # Gather inputs for eddy
-        acqp_file, index_file = eddy_inputs_from_dwi_files(original_files, dwi_files, eddy_prefix)
+        eddy_prefix = op.join(runtime.cwd, "eddy_")
+        acqp_file, index_file = eddy_inputs_from_dwi_files(self.inputs.original_files,
+                                                           eddy_prefix)
         self._results['eddy_acqp'] = acqp_file
         self._results['eddy_indices'] = index_file
 
@@ -98,32 +102,6 @@ class GatherEddyInputs(SimpleInterface):
         self._results['forward_transforms'] = []
         self._results['forward_warps'] = []
         return runtime
-
-
-def eddy_inputs_from_dwi_files(origin_file_list, dwi_files, eddy_prefix):
-    unique_files = list(set(origin_file_list))
-    line_lookup = {}
-    acqp_data = []
-    for line_num, unique_dwi in enumerate(unique_files):
-        spec = read_nifti_sidecar(unique_dwi)
-        spec_line = acqp_lines[spec['PhaseEncodingDirection']]
-        acqp_line = spec_line % spec['TotalReadoutTime']
-        line_lookup[unique_dwi] = line_num + 1
-        acqp_data.append(acqp_line)
-
-    # Create the acqp file
-    acqp_file = eddy_prefix + "acqp.txt"
-    with open(acqp_file, "w") as f:
-        f.write("\n".join(acqp_data))
-
-    # Create the index file
-    index_file = eddy_prefix + "index.txt"
-    index_numbers = [line_lookup[dwi_file] for dwi_file in origin_file_list]
-    with open(index_file, "w") as f:
-        f.write(" ".join(map(str, index_numbers)))
-
-    return acqp_file, index_file
-
 
 
 class ExtendedEddyOutputSpec(fsl.epi.EddyOutputSpec):

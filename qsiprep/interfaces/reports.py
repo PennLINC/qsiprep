@@ -57,6 +57,11 @@ ABOUT_TEMPLATE = """\t<ul>
 </div>
 """
 
+TOPUP_TEMPLATE = """\t\t<h3 class="elem-title">TOPUP Summary</h3>
+\t\t<p class="elem-desc">
+\t\t{summary}</p>
+"""
+
 GROUPING_TEMPLATE = """\t<ul>
 \t\t<li>Output Name: {output_name}</li>
 {input_files}
@@ -217,6 +222,17 @@ class AboutSummary(SummaryInterface):
         return ABOUT_TEMPLATE.format(version=self.inputs.version,
                                      command=self.inputs.command,
                                      date=time.strftime("%Y-%m-%d %H:%M:%S %z"))
+
+
+class TopupSummaryInputSpec(BaseInterfaceInputSpec):
+    summary = Str(desc='Summary of TOPUP inputs')
+
+
+class TopupSummary(SummaryInterface):
+    input_spec = TopupSummaryInputSpec
+
+    def _generate_segment(self):
+        return TOPUP_TEMPLATE.format(summary=self.inputs.summary)
 
 
 class GradientPlotInputSpec(BaseInterfaceInputSpec):

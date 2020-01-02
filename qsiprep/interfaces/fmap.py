@@ -1073,3 +1073,28 @@ def topup_inputs_from_4d_file(nii_file, b0_indices, bids_origin_files=None,
                                        image_source=image_source)
 
     return spec_lines, imain_nii, report
+
+
+def eddy_inputs_from_dwi_files(origin_file_list, eddy_prefix):
+    unique_files = list(set(origin_file_list))
+    line_lookup = {}
+    acqp_data = []
+    for line_num, unique_dwi in enumerate(unique_files):
+        spec = read_nifti_sidecar(unique_dwi)
+        spec_line = acqp_lines[spec['PhaseEncodingDirection']]
+        acqp_line = spec_line % spec['TotalReadoutTime']
+        line_lookup[unique_dwi] = line_num + 1
+        acqp_data.append(acqp_line)
+
+    # Create the acqp file
+    acqp_file = eddy_prefix + "acqp.txt"
+    with open(acqp_file, "w") as f:
+        f.write("\n".join(acqp_data))
+
+    # Create the index file
+    index_file = eddy_prefix + "index.txt"
+    index_numbers = [line_lookup[dwi_file] for dwi_file in origin_file_list]
+    with open(index_file, "w") as f:
+        f.write(" ".join(map(str, index_numbers)))
+
+    return acqp_file, index_file

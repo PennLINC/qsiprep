@@ -15,9 +15,9 @@ from nipype.interfaces import utility as niu
 from nipype.interfaces import fsl, afni, ants
 
 from ...interfaces.eddy import GatherEddyInputs, ExtendedEddy, Eddy2SPMMotion
-from ...interfaces.dwi_merge import MergeDWIs
 from ...interfaces.images import SplitDWIs, ConformDwi
-from ...interfaces.fmap import B0RPEFieldmap
+from ...interfaces.reports import TopupSummary
+from ...interfaces import DerivativesDataSink
 from ...engine import Workflow
 
 # dwi workflows
@@ -102,7 +102,8 @@ def init_fsl_hmc_wf(scan_groups,
         name='outputnode')
 
     workflow = Workflow(name=name)
-    gather_inputs = pe.Node(GatherEddyInputs(), name="gather_inputs")
+    gather_inputs = pe.Node(
+        GatherEddyInputs(b0_threshold=b0_threshold), name="gather_inputs")
     if eddy_config is None:
         # load from the defaults
         eddy_cfg_file = pkgr_fn('qsiprep.data', 'eddy_params.json')
@@ -156,7 +157,7 @@ def init_fsl_hmc_wf(scan_groups,
             ('bval_file', 'bval_file'),
             ('bvec_file', 'bvec_file')]),
         (inputnode, outputnode, [
-            ('original_images', 'original_files')]),
+            ('original_files', 'original_files')]),
         (split_eddy_lps, outputnode, [
             ('dwi_files', 'dwi_files_to_transform'),
             ('bvec_files', 'bvec_files_to_transform'),
@@ -185,25 +186,25 @@ def init_fsl_hmc_wf(scan_groups,
 
     if using_topup:
         outputnode.inputs.sdc_method = "TOPUP"
-        # Whether an rpe series (from dwi/) or an epi fmap (in fmap/) extract just the
-        # b=0s for topup
-        prepare_rpe_b0 = pe.Node(
-            B0RPEFieldmap(b0_file=rpe_b0, orientation='LAS', output_3d_images=False),
-            name="prepare_rpe_b0")
-        topup = pe.Node(fsl.TOPUP(out_field="fieldmap_HZ.nii.gz"), name="topup")
+        gather_inputs.inputs.rpe_files = rpe_b0
+        topup = pe.Node(fsl.TOPUP(out_field="fieldmap_HZ.nii.gz", scale=1), name="topup")
+        topup_summary = pe.Node(TopupSummary(), name='topup_summary')
+        ds_report_topupsummary = pe.Node(
+            DerivativesDataSink(suffix='topupsummary'),
+            name='ds_report_topupsummary',
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB)
         # Enhance and skullstrip the TOPUP output to get a mask for eddy
         unwarped_mean = pe.Node(afni.TStat(outputtype='NIFTI_GZ'), name='unwarped_mean')
         unwarped_enhance = init_enhance_and_skullstrip_dwi_wf(name='unwarped_enhance')
 
         workflow.connect([
-            (prepare_rpe_b0, outputnode, [('fmap_info', 'inputnode.rpe_b0_info')]),
-            (prepare_rpe_b0, gather_inputs, [
-                ('fmap_file', 'rpe_b0_images'),
-                ('fmap_info', 'rpe_b0_metadata')]),
             (gather_inputs, topup, [
                 ('topup_datain', 'encoding_file'),
                 ('topup_imain', 'in_file'),
                 ('topup_config', 'config')]),
+            (gather_inputs, topup_summary, [('topup_report', 'summary')]),
+            (topup_summary, ds_report_topupsummary, [('out_report', 'in_file')]),
             (gather_inputs, outputnode, [('forward_warps', 'to_dwi_ref_warps')]),
             (topup, unwarped_mean, [('out_corrected', 'in_file')]),
             (unwarped_mean, unwarped_enhance, [('out_file', 'inputnode.in_file')]),

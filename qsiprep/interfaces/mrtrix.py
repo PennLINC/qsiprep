@@ -59,7 +59,7 @@ class SeriesPreprocReport(reporting.ReportCapableInterface):
     _n_cuts = 5
 
     def __init__(self, **kwargs):
-        """Instantiate FieldmapReportlet."""
+        """Instantiate SeriesPreprocReportlet."""
         self._n_cuts = kwargs.pop('n_cuts', self._n_cuts)
         super(SeriesPreprocReport, self).__init__(generate_report=True, **kwargs)
 
@@ -267,7 +267,7 @@ class DWIDenoiseOutputSpec(SeriesPreprocReportOutputSpec):
     out_file = File(desc='the output denoised DWI image', exists=True)
 
 
-class DWIDenoise(MRTrix3Base, SeriesPreprocReport):
+class DWIDenoise(SeriesPreprocReport, MRTrix3Base):
     """
     Denoise DWI data and estimate the noise level based on the optimal
     threshold for PCA.
@@ -1014,7 +1014,7 @@ class DWIBiasCorrectOutputSpec(SeriesPreprocReportOutputSpec):
     out_file = File(desc='the output bias corrected DWI image', exists=True)
 
 
-class DWIBiasCorrect(MRTrix3Base, SeriesPreprocReport):
+class DWIBiasCorrect(SeriesPreprocReport, MRTrix3Base):
     """
     Perform B1 field inhomogeneity correction for a DWI volume series.
     For more information, see
@@ -1082,7 +1082,7 @@ class MRDeGibbsOutputSpec(SeriesPreprocReportOutputSpec):
     out_file = File(desc="the output de-Gibbs'd DWI image")
 
 
-class MRDeGibbs(MRTrix3Base, SeriesPreprocReport):
+class MRDeGibbs(SeriesPreprocReport, MRTrix3Base):
     input_spec = MRDeGibbsInputSpec
     output_spec = MRDeGibbsOutputSpec
     _cmd = 'mrdegibbs'
