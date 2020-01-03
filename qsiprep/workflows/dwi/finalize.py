@@ -235,7 +235,7 @@ def init_dwi_finalize_wf(scan_groups,
     if make_intramodal_template:
         b0_to_im_template = pe.Node(SimpleBeforeAfterRPT(), name='b0_to_im_template')
         ds_report_intramodal = pe.Node(
-            DerivativesDataSink(suffix='to_intramodal', source_file=source_file),
+            DerivativesDataSink(suffix='tointramodal', source_file=source_file),
             name='ds_report_intramodal', run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
         workflow.connect([

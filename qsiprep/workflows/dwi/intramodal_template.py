@@ -10,6 +10,7 @@ import nipype.pipeline.engine as pe
 from pkg_resources import resource_filename as pkgrf
 from nipype.interfaces import ants, utility as niu
 from ...engine import Workflow
+from ...interfaces import DerivativesDataSink
 from ...interfaces.ants import MultivariateTemplateConstruction2
 from .util import init_skullstrip_b0_wf
 from .hmc import init_b0_hmc_wf
@@ -106,6 +107,10 @@ def init_intramodal_template_wf(inputs_list, t1w_source_file, reportlets_dir, tr
     b0_coreg_wf = init_b0_to_anat_registration_wf(omp_nthreads=omp_nthreads,
                                                   mem_gb=mem_gb,
                                                   write_report=True)
+    ds_report_imtcoreg = pe.Node(
+        DerivativesDataSink(suffix="imtcoreg", source_file=t1w_source_file),
+        name='ds_report_imtcoreg', run_without_submitting=True,
+        mem_gb=DEFAULT_MEMORY_MIN_GB)
 
     workflow.connect([
         (inputnode, b0_coreg_wf, [

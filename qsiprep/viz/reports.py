@@ -224,7 +224,7 @@ def order_by_run(subreport):
 
             new_element = Reportlet(
                 name=element.name, title=element.title, file_pattern=element.file_pattern,
-                description=element.description, raw=element.raw)
+                description=element.description, raw=element.raw, imgtype=element.imgtype)
             new_element.contents.append(file_contents)
             new_element.source_files.append(filename)
 
