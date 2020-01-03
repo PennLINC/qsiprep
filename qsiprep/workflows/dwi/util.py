@@ -10,6 +10,7 @@ Utility workflows
 
 """
 import os
+from pathlib import Path
 import nibabel as nb
 
 from nipype.pipeline import engine as pe
@@ -25,7 +26,7 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 
 
 def init_dwi_reference_wf(omp_nthreads=1, dwi_file=None, name='dwi_reference_wf',
-                          gen_report=False, use_t1_prior=False):
+                          gen_report=False, use_t1_prior=False, source_file=None):
     """
     This workflow generates reference dwi image for a series
 
@@ -118,7 +119,8 @@ using a modified version of the custom methodology of *fMRIPrep*.
     if gen_report:
         b0ref_reportlet = pe.Node(SimpleBeforeAfter(), name='b0ref_reportlet', mem_gb=0.1)
         ds_report_b0_mask = pe.Node(
-            DerivativesDataSink(desc="sdccoreg", suffix='b0ref'), name='ds_report_b0_mask',
+            DerivativesDataSink(desc="sdccoreg", suffix='b0ref', source_file=source_file),
+            name='ds_report_b0_mask',
             mem_gb=DEFAULT_MEMORY_MIN_GB, run_without_submitting=True
         )
 
@@ -480,3 +482,10 @@ def _list_squeeze(in_list):
 
 def _get_first(in_list):
     return in_list[0]
+
+
+def get_source_file(dwi_files, output_prefix=None, suffix=''):
+    """The reportlets need a source file. This file might not exist in the input data."""
+    if output_prefix is None:
+        output_prefix = _get_output_fname(dwi_files)
+    return str(Path(dwi_files[0]).parent / output_prefix) + suffix + ".nii.gz"

@@ -16,6 +16,7 @@ from ...engine import Workflow
 
 # dwi workflows
 from .merge import init_merge_and_denoise_wf
+from .util import get_source_file
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger('nipype.workflow')
@@ -31,6 +32,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
                         denoise_before_combining,
                         orientation,
                         omp_nthreads,
+                        source_file,
                         low_mem,
                         name="pre_hmc_wf"):
     """
@@ -109,6 +111,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
         # Merge, denoise, split, hmc on the plus series
         plus_files, minus_files = (rpe_series, dwi_series) if dwi_series_pedir.endswith("-") \
             else (dwi_series, rpe_series)
+        plus_source_file = get_source_file(plus_files, suffix='_PEplus')
         merge_plus = init_merge_and_denoise_wf(raw_dwi_files=plus_files,
                                                b0_threshold=b0_threshold,
                                                dwi_denoise_window=dwi_denoise_window,
@@ -118,9 +121,11 @@ def init_dwi_pre_hmc_wf(scan_groups,
                                                denoise_before_combining=denoise_before_combining,
                                                orientation=orientation,
                                                omp_nthreads=omp_nthreads,
+                                               source_file=plus_source_file,
                                                name="merge_plus")
 
         # Merge, denoise, split, hmc on the minus series
+        minus_source_file = get_source_file(minus_files, suffix='_PEminus')
         merge_minus = init_merge_and_denoise_wf(raw_dwi_files=minus_files,
                                                 b0_threshold=b0_threshold,
                                                 dwi_denoise_window=dwi_denoise_window,
@@ -130,6 +135,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
                                                 denoise_before_combining=denoise_before_combining,
                                                 orientation=orientation,
                                                 omp_nthreads=omp_nthreads,
+                                                source_file=minus_source_file,
                                                 name="merge_minus")
 
         # Combine the original images from the splits into one 4D series + bvals/bvecs
@@ -170,7 +176,8 @@ def init_dwi_pre_hmc_wf(scan_groups,
         dwi_no_biascorr=dwi_no_biascorr,
         no_b0_harmonization=no_b0_harmonization,
         denoise_before_combining=denoise_before_combining,
-        orientation=orientation)
+        orientation=orientation,
+        source_file=source_file)
 
     workflow.connect([
         (merge_dwis, outputnode, [

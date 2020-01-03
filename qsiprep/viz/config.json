@@ -61,7 +61,40 @@
                 "title": "Skull stripped magnitude image",
                 "description": "Brain extraction of the magnitude image from the fieldmap",
                 "imgtype": "svg"
+            },
+            {
+                "name": "epi/topup_summary",
+                "title": "TOPUP Inputs",
+                "file_pattern": "dwi/.*_topupsummary\\.",
+                "raw": true
             }
+        ]
+    },
+    {
+        "name": "Denoising",
+        "reportlets":
+        [
+          {
+              "name": "epi/denoising",
+              "file_pattern": "dwi/.*_denoising\\.",
+              "title": "MP-PCA denoising",
+              "description": "Effect of MP-PCA denoising on a low and high-b image.",
+              "imgtype": "svg"
+          },
+          {
+              "name": "epi/unringing",
+              "file_pattern": "dwi/.*_unringing\\.",
+              "title": "Gibbs Ringing Removal",
+              "description": "Effect of removing Gibbs ringing on a low and high-b image.",
+              "imgtype": "svg"
+          },
+          {
+              "name": "epi/bias_correction",
+              "file_pattern": "dwi/.*_biascorr\\.",
+              "title": "DWI Bias correction",
+              "description": "Effect of bias correction on a low and high-b image. Bias field contour lines are drawn as an overlay.",
+              "imgtype": "svg"
+          }
         ]
     },
     {

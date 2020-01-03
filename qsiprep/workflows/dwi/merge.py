@@ -33,6 +33,7 @@ def init_merge_and_denoise_wf(raw_dwi_files,
                               denoise_before_combining,
                               orientation,
                               b0_threshold,
+                              source_file,
                               mem_gb=1,
                               omp_nthreads=1,
                               name="merge_and_denoise_wf"):
@@ -44,6 +45,7 @@ def init_merge_and_denoise_wf(raw_dwi_files,
 
         from qsiprep.workflows.dwi import init_merge_and_denoise_wf
         wf = init_merge_and_dwnoise_wf(['/path/to/dwi/sub-1_dwi.nii.gz'],
+                                       source_file='/data/sub-1/dwi/sub-1_dwi.nii.gz',
                                        dwi_denoise_window=7,
                                        b0_threshold=100,
                                        unringing_method='mrdegibbs',
@@ -131,6 +133,7 @@ def init_merge_and_denoise_wf(raw_dwi_files,
                                       b0_threshold=b0_threshold,
                                       mem_gb=mem_gb,
                                       omp_nthreads=omp_nthreads,
+                                      source_file=dwi_file,
                                       name=wf_name))
             workflow.connect([
                 (conformers[-1], denoising_wfs[-1], [
@@ -190,6 +193,7 @@ def init_merge_and_denoise_wf(raw_dwi_files,
         b0_threshold=b0_threshold,
         mem_gb=mem_gb,
         omp_nthreads=omp_nthreads,
+        source_file=source_file,
         name='merged_denoise')
     workflow.connect([
         (merge_dwis, denoising_wf, [
@@ -214,6 +218,7 @@ def init_dwi_denoising_wf(dwi_denoise_window,
                           dwi_no_biascorr,
                           no_b0_harmonization,
                           b0_threshold,
+                          source_file,
                           mem_gb=1,
                           omp_nthreads=1,
                           name="denoise_wf"):
@@ -259,7 +264,8 @@ def init_dwi_denoising_wf(dwi_denoise_window,
                                dwi_denoise_window)),
             name='denoiser')
         ds_report_denoising = pe.Node(
-            DerivativesDataSink(suffix=name + '_denoising'),
+            DerivativesDataSink(suffix=name + '_denoising',
+                                source_file=source_file),
             name='ds_report_' + name + '_denoising',
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
@@ -276,7 +282,8 @@ def init_dwi_denoising_wf(dwi_denoise_window,
         if unringing_method == 'mrdegibbs':
             degibbser = pe.Node(MRDeGibbs(), name='degibbser')
         ds_report_unringing = pe.Node(
-            DerivativesDataSink(suffix=name + '_unringing'),
+            DerivativesDataSink(suffix=name + '_unringing',
+                                source_file=source_file),
             name='ds_report_' + name + '_unringing',
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
@@ -292,7 +299,8 @@ def init_dwi_denoising_wf(dwi_denoise_window,
     if do_biascorr:
         biascorr = pe.Node(DWIBiasCorrect(use_ants=True), name='biascorr')
         ds_report_biascorr = pe.Node(
-            DerivativesDataSink(suffix=name + '_biascorr'),
+            DerivativesDataSink(suffix=name + '_biascorr',
+                                source_file=source_file),
             name='ds_report_' + name + '_biascorr',
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB)

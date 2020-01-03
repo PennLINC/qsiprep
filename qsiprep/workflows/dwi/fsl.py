@@ -29,6 +29,7 @@ LOGGER = logging.getLogger('nipype.workflow')
 
 
 def init_fsl_hmc_wf(scan_groups,
+                    source_file,
                     b0_threshold,
                     impute_slice_threshold,
                     fmap_demean,

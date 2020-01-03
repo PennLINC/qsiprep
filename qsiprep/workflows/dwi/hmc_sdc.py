@@ -36,6 +36,7 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
                            fmap_demean,
                            use_syn,
                            force_syn,
+                           source_file,
                            dwi_metadata=None,
                            sloppy=False,
                            name='qsiprep_hmcsdc_wf'):
@@ -52,6 +53,7 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
         wf = init_qsiprep_hmcsdc_wf({'dwi_series':[dwi1.nii, dwi2.nii],
                                           'fieldmap_info': {'suffix': None},
                                           'dwi_series_pedir': j},
+                                         source_file='/data/sub-1/dwi/sub-1_dwi.nii.gz',
                                          b0_threshold=100,
                                          hmc_transform='Affine',
                                          hmc_model='3dSHORE',
@@ -85,8 +87,6 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
 
     workflow = Workflow(name=name)
 
-    dwi_series = scan_groups['dwi_series']
-    source_file = dwi_series[0]
     fieldmap_info = scan_groups['fieldmap_info']
     # Run SyN if forced or in the absence of fieldmap correction
     fieldmap_type = fieldmap_info['suffix']
@@ -120,7 +120,9 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
     b0_sdc_wf.inputs.inputnode.template = template
 
     # Create a b=0 reference for coregistration
-    dwi_ref_wf = init_dwi_reference_wf(name="dwi_ref_wf", gen_report=True)
+    dwi_ref_wf = init_dwi_reference_wf(name="dwi_ref_wf",
+                                       gen_report=True,
+                                       source_file=source_file)
 
     # Impute slice data if requested
     slice_qc = pe.Node(SliceQC(impute_slice_threshold=impute_slice_threshold), name="slice_qc")

@@ -25,6 +25,7 @@ def init_b0_to_anat_registration_wf(mem_gb=3, omp_nthreads=1, write_report=True,
         from qsiprep.workflows.dwi.registration import init_b0_to_anat_registration_wf
         wf = init_b0_to_anat_registration_wf(
                               mem_gb=3,
+                              source_file='/data/sub-1/dwi/sub-1_dwi.nii.gz',
                               omp_nthreads=1,
                               transform_type="Rigid",
                               write_report=False)
@@ -69,7 +70,8 @@ def init_b0_to_anat_registration_wf(mem_gb=3, omp_nthreads=1, write_report=True,
             Mattes score from the coregistration
         fallback
             Boolean indicating whether BBR was rejected (mri_coreg registration returned)
-
+        report
+            svg reportlet for the coregistration
     """
     inputnode = pe.Node(
         niu.IdentityInterface(
@@ -79,7 +81,7 @@ def init_b0_to_anat_registration_wf(mem_gb=3, omp_nthreads=1, write_report=True,
     )
     outputnode = pe.Node(
         niu.IdentityInterface(fields=[
-            'itk_b0_to_t1', 'itk_t1_to_b0', 'fallback', 'coreg_metric']),
+            'itk_b0_to_t1', 'itk_t1_to_b0', 'fallback', 'coreg_metric', 'report']),
         name='outputnode'
     )
 
@@ -113,14 +115,6 @@ def init_b0_to_anat_registration_wf(mem_gb=3, omp_nthreads=1, write_report=True,
     workflow.connect(b0_to_anat, "forward_transforms", outputnode, "itk_b0_to_t1")
     workflow.connect(b0_to_anat, "reverse_transforms", outputnode, "itk_t1_to_b0")
     workflow.connect(b0_to_anat, "metric_value", outputnode, "coreg_metric")
-
-    if write_report:
-        ds_report_reg = pe.Node(
-            DerivativesDataSink(suffix="coreg"),
-            name='ds_report_reg', run_without_submitting=True,
-            mem_gb=DEFAULT_MEMORY_MIN_GB)
-
-        workflow.connect([
-            (b0_to_anat, ds_report_reg, [('out_report', 'in_file')])])
+    workflow.connect(b0_to_anat, "out_report", outputnode, "report")
 
     return workflow

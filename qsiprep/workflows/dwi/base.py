@@ -7,6 +7,7 @@ Orchestrating the dwi-preprocessing workflow
 """
 
 import os
+import os.path as op
 
 from nipype import logging
 
@@ -59,6 +60,7 @@ def init_dwi_preproc_wf(scan_groups,
                         force_syn,
                         low_mem,
                         sloppy,
+                        source_file,
                         layout=None):
     """
     This workflow controls the dwi preprocessing stages of qsiprep.
@@ -97,6 +99,7 @@ def init_dwi_preproc_wf(scan_groups,
                                   force_syn=False,
                                   low_mem=False,
                                   sloppy=True,
+                                  source_file='/data/bids/sub-1/dwi/sub-1_dwi.nii.gz',
                                   layout=None)
 
     **Parameters**
@@ -175,6 +178,8 @@ def init_dwi_preproc_wf(scan_groups,
             (default is 1)
         sloppy : bool
             Use low-quality settings for motion correction
+        source_file : str
+            The file name template used for derivatives
 
     **Inputs**
 
@@ -252,12 +257,10 @@ def init_dwi_preproc_wf(scan_groups,
     # Check the inputs
     if layout is not None:
         all_dwis = scan_groups['dwi_series']
-        source_file = all_dwis[0]
         fieldmap_info = scan_groups['fieldmap_info']
-        dwi_metadata = layout.get_metadata(source_file)
+        dwi_metadata = layout.get_metadata(all_dwis[0])
     else:
         all_dwis = ['/fake/testing/path.nii.gz']
-        source_file = all_dwis[0]
         fieldmap_info = {'suffix': None}
         dwi_metadata = {}
 
@@ -318,6 +321,7 @@ def init_dwi_preproc_wf(scan_groups,
                                      dwi_no_biascorr=dwi_no_biascorr,
                                      no_b0_harmonization=no_b0_harmonization,
                                      orientation='LAS' if hmc_model == 'eddy' else 'LPS',
+                                     source_file=source_file,
                                      low_mem=low_mem,
                                      denoise_before_combining=denoise_before_combining,
                                      omp_nthreads=omp_nthreads)
@@ -327,6 +331,7 @@ def init_dwi_preproc_wf(scan_groups,
             raise Exception("--shoreline-iters must be > 0 when --hmc-model is " + hmc_model)
         hmc_wf = init_qsiprep_hmcsdc_wf(
             scan_groups=scan_groups,
+            source_file=source_file,
             b0_threshold=b0_threshold,
             hmc_transform=hmc_transform,
             hmc_model=hmc_model,
@@ -347,6 +352,7 @@ def init_dwi_preproc_wf(scan_groups,
         hmc_wf = init_fsl_hmc_wf(
             scan_groups=scan_groups,
             b0_threshold=b0_threshold,
+            source_file=source_file,
             impute_slice_threshold=impute_slice_threshold,
             eddy_config=eddy_config,
             mem_gb=mem_gb,
@@ -376,6 +382,11 @@ def init_dwi_preproc_wf(scan_groups,
     b0_coreg_wf = init_b0_to_anat_registration_wf(omp_nthreads=omp_nthreads,
                                                   mem_gb=mem_gb['resampled'],
                                                   write_report=True)
+    ds_report_coreg = pe.Node(
+        DerivativesDataSink(suffix="coreg", source_file=source_file),
+        name='ds_report_coreg', run_without_submitting=True,
+        mem_gb=DEFAULT_MEMORY_MIN_GB)
+
 
     # Make a fieldmap report, save the transforms. Do it here because we need wm
     if fieldmap_type is not None:
@@ -415,6 +426,7 @@ def init_dwi_preproc_wf(scan_groups,
         (hmc_wf, b0_coreg_wf, [('outputnode.b0_template',
                                 'inputnode.ref_b0_brain')]),
         (hmc_wf, summary, [('outputnode.sdc_method', 'distortion_correction')]),
+        (b0_coreg_wf, ds_report_coreg, [('outputnode.report', 'in_file')]),
         (b0_coreg_wf, outputnode, [
             (('outputnode.itk_b0_to_t1', _get_first), 'itk_b0_to_t1')])
     ])
@@ -425,9 +437,9 @@ def init_dwi_preproc_wf(scan_groups,
                                      name='confounds_wf')
     ds_confounds = pe.Node(
         DerivativesDataSink(
-            prefix=output_prefix,
             source_file=source_file,
-            base_directory=str(output_dir), suffix='confounds'),
+            base_directory=str(output_dir),
+            suffix='confounds'),
         name="ds_confounds", run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB)
     workflow.connect([
@@ -437,7 +449,8 @@ def init_dwi_preproc_wf(scan_groups,
     # Carpetplot and confounds plot
     conf_plot = pe.Node(DMRISummary(), name='conf_plot', mem_gb=mem_gb['resampled'])
     ds_report_dwi_conf = pe.Node(
-        DerivativesDataSink(suffix='carpetplot'),
+        DerivativesDataSink(suffix='carpetplot',
+                            source_file=source_file),
         name='ds_report_dwi_conf', run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB)
     workflow.connect([
@@ -473,7 +486,8 @@ def init_dwi_preproc_wf(scan_groups,
 
     # Reporting
     ds_report_summary = pe.Node(
-        DerivativesDataSink(suffix='summary'),
+        DerivativesDataSink(suffix='summary',
+                            source_file=source_file),
         name='ds_report_summary',
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB)
@@ -486,7 +500,6 @@ def init_dwi_preproc_wf(scan_groups,
     for node in workflow.list_node_names():
         if node.split('.')[-1].startswith('ds_report'):
             workflow.get_node(node).inputs.base_directory = str(reportlets_dir)
-            workflow.get_node(node).inputs.source_file = str(source_file)
     return workflow
 
 
