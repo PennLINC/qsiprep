@@ -250,7 +250,7 @@ def init_fmap_unwarp_report_wf(name='fmap_unwarp_report_wf', suffix='hmcsdc'):
 
     inputnode = pe.Node(niu.IdentityInterface(
         fields=['in_pre', 'in_post', 'in_seg', 'in_xfm']), name='inputnode')
-
+    outputnode = pe.Node(niu.IdentityInterface(fields=['report']), name='outputnode')
     map_seg = pe.Node(
         ApplyTransforms(dimension=3, float=True, interpolation='MultiLabel',
                         invert_transform_flags=[True]),
@@ -263,11 +263,6 @@ def init_fmap_unwarp_report_wf(name='fmap_unwarp_report_wf', suffix='hmcsdc'):
     dwi_rpt = pe.Node(SimpleBeforeAfter(), name='dwi_rpt',
                       mem_gb=0.1)
 
-    ds_report_sdc = pe.Node(
-        DerivativesDataSink(desc="sdc", suffix='b0'), name='ds_report_sdc',
-        mem_gb=DEFAULT_MEMORY_MIN_GB, run_without_submitting=True
-    )
-
     workflow.connect([
         (inputnode, dwi_rpt, [('in_pre', 'before'), ('in_post', 'after')]),
         (inputnode, map_seg, [('in_post', 'reference_image'),
@@ -275,7 +270,7 @@ def init_fmap_unwarp_report_wf(name='fmap_unwarp_report_wf', suffix='hmcsdc'):
                               ('in_xfm', 'transforms')]),
         (map_seg, sel_wm, [('output_image', 'in_seg')]),
         (sel_wm, dwi_rpt, [('out', 'wm_seg')]),
-        (dwi_rpt, ds_report_sdc, [('out_report', 'in_file')])
+        (dwi_rpt, outputnode, [('out_report', 'report')])
     ])
 
     return workflow

@@ -387,10 +387,14 @@ def init_dwi_preproc_wf(scan_groups,
         name='ds_report_coreg', run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB)
 
-
     # Make a fieldmap report, save the transforms. Do it here because we need wm
     if fieldmap_type is not None:
         fmap_unwarp_report_wf = init_fmap_unwarp_report_wf()
+        ds_report_sdc = pe.Node(
+            DerivativesDataSink(desc="sdc", suffix='b0', source_file=source_file),
+            name='ds_report_sdc',
+            mem_gb=DEFAULT_MEMORY_MIN_GB,
+            run_without_submitting=True)
 
         workflow.connect([
             (inputnode, fmap_unwarp_report_wf, [
@@ -399,7 +403,8 @@ def init_dwi_preproc_wf(scan_groups,
                 ('outputnode.pre_sdc_template', 'inputnode.in_pre'),
                 ('outputnode.b0_template', 'inputnode.in_post')]),
             (b0_coreg_wf, fmap_unwarp_report_wf, [
-                ('outputnode.itk_b0_to_t1', 'inputnode.in_xfm')])
+                ('outputnode.itk_b0_to_t1', 'inputnode.in_xfm')]),
+            (fmap_unwarp_report_wf, ds_report_sdc, [('outputnode.report', 'in_file')])
         ])
 
     summary = pe.Node(
