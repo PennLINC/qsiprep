@@ -617,7 +617,7 @@ to workflows in *qsiprep*'s documentation]\
 
     # create a processing pipeline for the dwis in each session
     for output_fname, dwi_info in outputs_to_files.items():
-        source_file = get_source_file(dwi_info['dwi_series'], output_fname)
+        source_file = get_source_file(dwi_info['dwi_series'], output_fname, suffix="_dwi")
         dwi_preproc_wf = init_dwi_preproc_wf(
             scan_groups=dwi_info,
             output_prefix=output_fname,
