@@ -9,7 +9,7 @@ import pandas as pd
 from nilearn import image as nim
 from nipype.interfaces.base import (BaseInterfaceInputSpec, TraitedSpec, File, SimpleInterface,
                                     InputMultiObject, OutputMultiObject, traits, isdefined)
-from nipype.interfaces import afni, ants
+from nipype.interfaces import ants
 from nipype.utils.filemanip import fname_presuffix
 from nipype.interfaces.ants.resampling import ApplyTransformsInputSpec
 from dipy.sims.voxel import all_tensor_evecs

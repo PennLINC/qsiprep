@@ -122,6 +122,7 @@ def init_intramodal_template_wf(inputs_list, t1w_source_file, reportlets_dir, tr
              'inputnode.t1_2_fsnative_reverse_transform')]),
         (ants_mvtc2, b0_coreg_wf, [
             ('templates', 'inputnode.ref_b0_brain')]),
+        (b0_coreg_wf, ds_report_imtcoreg, [('out_report', 'in_file')]),
         (b0_coreg_wf, outputnode, [
             ('outputnode.itk_b0_to_t1', 'intramodal_template_to_t1_affine')])
     ])

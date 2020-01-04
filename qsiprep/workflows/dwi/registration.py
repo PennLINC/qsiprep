@@ -7,7 +7,6 @@ from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
 from ...engine import Workflow
 from ...interfaces.niworkflows import ANTSRegistrationRPT
-from ...interfaces import DerivativesDataSink
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 

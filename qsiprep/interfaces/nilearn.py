@@ -15,7 +15,6 @@ import numpy as np
 from scipy import ndimage
 from scipy.ndimage.morphology import binary_fill_holes
 from skimage import morphology as sim
-from skimage import segmentation as sis
 from dipy.segment.threshold import otsu
 from sklearn.preprocessing import robust_scale, power_transform
 

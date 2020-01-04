@@ -161,7 +161,7 @@ class StackConfounds(SimpleInterface):
         if not self.inputs.in_files:
             return runtime
         dfs = [pd.read_csv(fname) for fname in self.inputs.in_files]
-        stacked = pd.concat(dfs, axis=self.inputs.axis, ignore_index=self.inputs.axis==0)
+        stacked = pd.concat(dfs, axis=self.inputs.axis, ignore_index=self.inputs.axis == 0)
         out_file = op.join(runtime.cwd, 'confounds.csv')
         stacked = stacked.drop('Unnamed: 0', axis=1, errors='ignore')
         stacked.to_csv(out_file)

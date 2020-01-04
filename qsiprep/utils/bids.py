@@ -19,7 +19,6 @@ import sys
 import json
 import warnings
 from bids import BIDSLayout
-from pathlib import Path
 
 
 class BIDSError(ValueError):
