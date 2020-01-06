@@ -242,7 +242,6 @@ def init_dwi_preproc_wf(scan_groups,
 
     **Subworkflows**
 
-        * :py:func:`~qsiprep.workflows.dwi.util.init_dwi_reference_wf`
         * :py:func:`~qsiprep.workflows.dwi.hmc.init_dwi_hmc_wf`
         * :py:func:`~qsiprep.workflows.dwi.registration.init_dwi_t1_trans_wf`
         * :py:func:`~qsiprep.workflows.dwi.registration.init_dwi_reg_wf`

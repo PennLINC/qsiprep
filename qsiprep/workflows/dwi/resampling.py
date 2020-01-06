@@ -237,7 +237,7 @@ generating a *preprocessed DWI run in {tpl} space*.
                              transforms='identity',
                              interpolation="MultiLabel"),
         name='resample_t1_mask')
-    final_b0_ref = init_dwi_reference_wf(use_t1_prior=True)
+    final_b0_ref = init_dwi_reference_wf()
 
     workflow.connect([
         (inputnode, rotate_gradients, [('bvec_files', 'bvec_files'),
