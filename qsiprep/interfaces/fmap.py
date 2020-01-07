@@ -26,7 +26,7 @@ from nipype.interfaces.base import (
     SimpleInterface, InputMultiObject, OutputMultiObject)
 from .images import to_lps
 from .reports import topup_selection_to_report
-from nilearn.image import load_img, index_img, concat_imgs
+from nilearn.image import load_img, index_img, concat_imgs, iter_img
 
 LOGGER = logging.getLogger('nipype.interface')
 CRITICAL_KEYS = ["PhaseEncodingDirection", "TotalReadoutTime", "EffectiveEchoSpacing"]
@@ -69,31 +69,22 @@ class B0RPEFieldmap(SimpleInterface):
 
     def _run_interface(self, runtime):
 
-        # Get b=0 images and metadata from all the input images
-        b0_fieldmap_imagedata = []
-        b0_fieldmap_metadata = []
-        desc = ''
-        for image_path in self.inputs.b0_file:
-            image, meta, _report = _get_b0s_and_metadata(image_path, self.inputs.orientation,
-                                                         self.inputs)
-            b0_fieldmap_imagedata.append(image)
-            b0_fieldmap_metadata.append(meta)
-            desc += _report
+        # Get b=0 images from all the inputs
+        b0_series, b0_indices, original_files = load_epi_dwi_fieldmaps(
+            self.inputs.b0_file, self.inputs.b0_threshold)
 
-        if len(self.inputs.b0_file) > 1:
-            desc = "Images from {n_images} were combined for distortion correction. ".format(
-                n_images=len(self.inputs.b0_file))
-        # Merge all the images from all the inputs into a single b=0 time series
-        merged_b0s = concat_imgs(b0_fieldmap_imagedata, auto_resample=True)
-        # Select a fixed number of images from the concatenated images
-        merged_b0_data = merged_b0s.get_data()
-        num_b0s = 1 if merged_b0_data.ndim < 4 else merged_b0_data.shape[3]
-        if num_b0s > self.inputs.max_num_b0s:
-            mask_indices = np.linspace(0, num_b0s-1, num=self.inputs.max_num_b0s,
-                                       endpoint=True, dtype=np.int)
-            merged_b0s = nb.Nifti1Image(merged_b0_data[:, :, :, mask_indices],
-                                        affine=merged_b0s.affine,
-                                        header=merged_b0s.header)
+        # Only get the requested number of images
+        _, fmap_imain, fmap_report = topup_inputs_from_4d_file(
+            b0_series, b0_indices, original_files, image_source="EPI fieldmap",
+            max_per_spec=self.inputs.max_num_b0s)
+        LOGGER.info(fmap_report)
+
+        # Get b=0 images and metadata from all the input images
+        b0_fieldmap_metadata = []
+        for image_path in set(original_files):
+            pth, fname, _ = split_filename(image_path)
+            original_json = op.join(pth, fname) + ".json"
+            b0_fieldmap_metadata.append(original_json)
 
         # Warn the user if the metadata does not match
         merged_metadata = _merge_metadata(b0_fieldmap_metadata)
@@ -111,24 +102,19 @@ class B0RPEFieldmap(SimpleInterface):
             self._results['fmap_info'] = output_json
             return runtime
 
-        # Write out a series of 3d conformed b=0 volumes
-        fmap_data = merged_b0s.get_data()
-        if fmap_data.ndim == 3:
-            fmap_data = fmap_data[..., np.newaxis]
         image_list = []
         json_list = []
-        b0s_to_write = min(fmap_data.shape[3], self.inputs.max_num_b0s)
-        for img_index in range(b0s_to_write):
-            out_fmap_img = nb.Nifti1Image(fmap_data[..., img_index], merged_b0s.affine,
-                                          header=merged_b0s.header)
+        oriented_b0_imgs = to_lps(b0_series, tuple(self.inputs.orientation))
+        for imgnum, img in enumerate(iter_img(oriented_b0_imgs)):
+
             # Save the conformed fmap and metadata
-            output_fmap = fname_presuffix(self.inputs.b0_file,
-                                          suffix="%s_%03d" % (self.inputs.orientation, img_index),
+            output_fmap = fname_presuffix(self.inputs.b0_file[0],
+                                          suffix="%s_%03d" % (self.inputs.orientation, imgnum),
                                           newpath=runtime.cwd)
             output_json = fname_presuffix(output_fmap, use_ext=False, suffix=".json")
             with open(output_json, "w") as sidecar:
-                json.dump(merged_b0_data, sidecar)
-            out_fmap_img.to_filename(output_fmap)
+                json.dump(merged_metadata, sidecar)
+            img.to_filename(output_fmap)
 
             # Append to lists
             image_list.append(output_fmap)
@@ -137,42 +123,6 @@ class B0RPEFieldmap(SimpleInterface):
         self._results['fmap_file'] = image_list
         self._results['fmap_info'] = json_list
         return runtime
-
-
-def _get_b0s_and_metadata(dwi_file, orientation, b0_threshold):
-    """Load a fieldmap image that may have b>0 images in it, returning b=0 images
-    and metadata.
-
-    """
-    pth, fname, _ = split_filename(dwi_file)
-    potential_bval_file = op.join(pth, fname) + ".bval"
-    original_json = op.join(pth, fname) + ".json"
-
-    # Load the metadata
-    with open(original_json, "r") as meta_file:
-        meta = json.load(meta_file)
-
-    # Conform the fieldmap
-    conform_fmap = to_lps(nb.load(dwi_file), orientation)
-
-    # Determine if there is a bval file corresponding to this file
-    if op.exists(potential_bval_file):
-        LOGGER.info("Found bval file %s for fieldmap.", potential_bval_file)
-        bvals = np.loadtxt(potential_bval_file)
-        if np.any(bvals > b0_threshold):
-            LOGGER.info("Found one or more b > %d images: discarding them", b0_threshold)
-            fmap_data = conform_fmap.get_fdata()[..., bvals < b0_threshold].squeeze()
-
-    # If not, assume these are all b=0 images
-    else:
-        fmap_data = conform_fmap.get_fdata().squeeze()
-    num_b0s = fmap_data.shape[3] if fmap_data.ndim > 3 else 1
-    plural = 's' if num_b0s > 1 else ''
-    report = "A total of {num_b0s} b=0 image{plural} came from {b0_file}. ".format(
-        num_b0s=num_b0s, plural=plural, b0_file=fname)
-
-    b0_image = nb.Nifti1Image(fmap_data, conform_fmap.affine, header=conform_fmap.header)
-    return b0_image, meta, report
 
 
 def _merge_metadata(metadatas):
@@ -964,6 +914,27 @@ def get_topup_inputs_from(dwi_file, bval_file, b0_threshold, topup_prefix,
 
 
 def load_epi_dwi_fieldmaps(fmap_list, b0_threshold):
+    """Creates a 4D image of b=0s from a list of input images.
+
+    Parameters:
+    -----------
+
+    fmap_list: list
+        List of paths to epi fieldmap images
+    b0_threshold: int
+        Maximum b value for an image to be considered a b=0
+
+    Returns:
+    --------
+
+    concatenated_images: spatial image
+        The b=0 volumes concatenated into a 4D image
+    b0_indices: list
+        List of the original indices of the images in ``concatenated_images``
+    original_files: list
+        List of the original files where each b=0 image came from.
+
+    """
     # Add in the rpe data, if it exists
     b0_indices = []
     original_files = []
@@ -1047,22 +1018,15 @@ def topup_inputs_from_4d_file(nii_file, b0_indices, bids_origin_files=None,
         spec_line = spec_lookup[bids_file]
         spec_indices[spec_line].append(b0_index)
 
-    def get_evenly_spaced_b0s(b0_indices):
-        if len(b0_indices) <= max_per_spec:
-            return b0_indices
-        selected_indices = np.linspace(0, len(b0_indices)-1, num=max_per_spec,
-                                       endpoint=True, dtype=np.int)
-        return [b0_indices[idx] for idx in selected_indices]
-
     # The first image needs to be the first b=0 from the dwi series
     first_b0_spec_line = spec_lookup[b0_bids_origins[0]]
     first_b0_spec_indices = spec_indices.pop(first_b0_spec_line)
-    selected_b0_indices = get_evenly_spaced_b0s(first_b0_spec_indices)
+    selected_b0_indices = get_evenly_spaced_b0s(first_b0_spec_indices, max_per_spec)
     spec_lines = [first_b0_spec_line] * len(selected_b0_indices)
 
     # Iterate over the remaining unique spec lines
     for spec_line in spec_indices:
-        spec_b0_indices = get_evenly_spaced_b0s(spec_indices[spec_line])
+        spec_b0_indices = get_evenly_spaced_b0s(spec_indices[spec_line], max_per_spec)
         selected_b0_indices += spec_b0_indices
         spec_lines += [spec_line] * len(spec_b0_indices)
 
@@ -1072,6 +1036,15 @@ def topup_inputs_from_4d_file(nii_file, b0_indices, bids_origin_files=None,
                                        image_source=image_source)
 
     return spec_lines, imain_nii, report
+
+
+def get_evenly_spaced_b0s(b0_indices, max_per_spec):
+    """Choose up to ``max_per_spec`` b=0 images from a list of b0 indices."""
+    if len(b0_indices) <= max_per_spec:
+        return b0_indices
+    selected_indices = np.linspace(0, len(b0_indices)-1, num=max_per_spec,
+                                   endpoint=True, dtype=np.int)
+    return [b0_indices[idx] for idx in selected_indices]
 
 
 def eddy_inputs_from_dwi_files(origin_file_list, eddy_prefix):
