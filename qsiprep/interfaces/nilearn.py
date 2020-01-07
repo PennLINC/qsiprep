@@ -167,8 +167,8 @@ class EnhanceAndSkullstripB0(SimpleInterface):
         if np.any(voxel_size > 3.5):
             mask_img, _, _ = calculate_gradmax_b0_mask(input_img, cwd=runtime.cwd)
         else:
-            mask_img, weight_img = watershed_refined_b0_mask(input_img, show_plot=False,
-                                                             cwd=runtime.cwd)
+            mask_img = watershed_refined_b0_mask(input_img, show_plot=False,
+                                                 cwd=runtime.cwd)
         out_mask = fname_presuffix(self.inputs.b0_file, suffix='_mask', newpath=runtime.cwd)
         mask_img.to_filename(out_mask)
         self._results['mask_file'] = out_mask
