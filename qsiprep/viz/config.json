@@ -44,7 +44,7 @@
             },
             {
               "name": "anat_preproc/intramodal_template",
-              "file_pattern": "anat/.*imtcoreg",
+              "file_pattern": "anat/.*imtcoreg\\.",
               "title": "Intramodal B0 template to T1w registration",
               "description": "The intramodal B0 template registered to the T1w image",
               "imgtype": "svg+xml"
@@ -57,7 +57,7 @@
         [
             {
                 "name": "fmap/magnitude_mask",
-                "file_pattern": "fmap/.*fmap_mask",
+                "file_pattern": "fmap/.*fmap_mask\\.",
                 "title": "Skull stripped magnitude image",
                 "description": "Brain extraction of the magnitude image from the fieldmap",
                 "imgtype": "svg+xml"
@@ -169,31 +169,31 @@
             },
             {
                 "name": "epi/sdc_syn",
-                "file_pattern": "dwi/.*_forcedsyn",
+                "file_pattern": "dwi/.*_forcedsyn\\.",
                 "title": "Experimental fieldmap-less susceptibility distortion correction",
                 "description": "The dataset contained some fieldmap information, but the argument <code>--force-syn</code> was used. The higher-priority SDC method was used. Here, we show the results of performing SyN-based SDC on the EPI for comparison.",
                 "imgtype": "svg+xml"
             },
             {
                 "name": "epi_mean_t1_registration/flirtbbr",
-                "file_pattern": "dwi/.*_coreg",
+                "file_pattern": "dwi/.*_coreg\\.",
                 "title": "b0 to T1 registration",
                 "description": "<code>antsRegistration</code> was used to generate transformations from b0I-space to T1w-space",
                 "imgtype": "svg+xml"
             },
             {
+              "name": "epi/intramodal_reg",
+              "file_pattern": "dwi/.*to_intramodal\\.",
+              "title": "Registration to the Intramodal Template",
+              "description": "The B0 template registered to the modpoint B=0 image",
+              "imgtype": "svg+xml"
+          },
+            {
                 "name": "epi/carpetplot",
-                "file_pattern": "dwi/.*carpetplot",
+                "file_pattern": "dwi/.*carpetplot\\.",
                 "title": "DWI Summary",
                 "description": "Summary statistics are plotted, which may reveal trends or artifacts in the DWI data. Global signals calculated within the whole-brain (GS), within the white-matter (WM) and within cerebro-spinal fluid (CSF) show the mean DWI signal in their corresponding masks. DVARS and FD show the standardized DVARS and framewise-displacement measures for each time point.<br />A carpet plot shows the time series for all voxels within the brain mask. Voxels are grouped into cortical (blue), and subcortical (orange) gray matter, cerebellum (green) and white matter and CSF (red), indicated by the color map on the left-hand side.",
                 "imgtype": "svg+xml"
-            },
-            {
-              "name": "epi/intermodal_coreg",
-              "file_pattern": "dwi/.*coreg",
-              "title": "B0 template to T1w registration",
-              "description": "The B0 template registered to the T1w image",
-              "imgtype": "svg+xml"
             }
         ]
     },

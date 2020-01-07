@@ -123,7 +123,7 @@ class MergeDWIs(SimpleInterface):
         confounds_df.to_csv(merged_confounds, index=False)
 
         self._results['merged_denoising_confounds'] = merged_confounds
-        self._results['original_images'] = confounds_df['original_file'].to_list()
+        self._results['original_images'] = confounds_df['original_file'].tolist()
         self._results['out_dwi'] = merged_fname
         self._results['out_bval'] = out_bval
         self._results['out_bvec'] = out_bvec

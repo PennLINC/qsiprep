@@ -27,7 +27,7 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 
 
 def init_dwi_reference_wf(omp_nthreads=1, dwi_file=None, name='dwi_reference_wf',
-                          gen_report=False, source_file=None):
+                          gen_report=False, source_file=None, desc="initial"):
     """
     This workflow generates reference b=0 image.
 
@@ -106,7 +106,7 @@ def init_dwi_reference_wf(omp_nthreads=1, dwi_file=None, name='dwi_reference_wf'
     if gen_report:
         b0ref_reportlet = pe.Node(SimpleBeforeAfter(), name='b0ref_reportlet', mem_gb=0.1)
         ds_report_b0_mask = pe.Node(
-            DerivativesDataSink(desc="sdccoreg", suffix='b0ref', source_file=source_file),
+            DerivativesDataSink(desc=desc, suffix='b0ref', source_file=source_file),
             name='ds_report_b0_mask',
             mem_gb=DEFAULT_MEMORY_MIN_GB, run_without_submitting=True
         )
