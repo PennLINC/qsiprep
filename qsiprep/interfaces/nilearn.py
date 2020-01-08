@@ -19,7 +19,7 @@ from dipy.segment.threshold import otsu
 from sklearn.preprocessing import robust_scale, power_transform
 
 from nilearn.masking import compute_epi_mask, _post_process_mask
-from nilearn.image import (concat_imgs, load_img, new_img_like, math_img)
+from nilearn.image import (concat_imgs, load_img, new_img_like, math_img, iter_img)
 from nilearn.plotting import plot_epi
 
 from nipype import logging
@@ -200,6 +200,43 @@ class EnhanceAndSkullstripB0(SimpleInterface):
                                             newpath=runtime.cwd)
         skullstripped_img.to_filename(out_skullstripped)
         self._results['skull_stripped_file'] = out_skullstripped
+
+        return runtime
+
+
+class _MaskB0SeriesInputSpec(BaseInterfaceInputSpec):
+    b0_series = File(exists=True, mandatory=True)
+
+
+class _MaskB0SeriesOutputSpec(TraitedSpec):
+    mask_file = File(exists=True)
+
+
+class MaskB0Series(SimpleInterface):
+    input_spec = _MaskB0SeriesInputSpec
+    output_spec = _MaskB0SeriesOutputSpec
+
+    def _run_interface(self, runtime):
+        b0_img = load_img(self.inputs.b0_series)
+        big_voxels = np.any(np.array(b0_img.header.get_zooms()) > 4.0)
+        masks = []
+        for img in iter_img(b0_img):
+            if big_voxels:
+                mask, _, _ = calculate_gradmax_b0_mask(img, show_plot=False, cwd=runtime.cwd)
+            else:
+                mask = watershed_refined_b0_mask(img, show_plot=False, cwd=runtime.cwd)
+            masks.append(mask)
+
+        if len(masks) > 1:
+            all_masks = concat_imgs(masks)
+            final_mask = new_img_like(b0_img, all_masks.get_fdata().sum(3))
+        else:
+            final_mask = masks[0]
+
+        output_fname = fname_presuffix(self.inputs.b0_series, suffix="_masked")
+        output_nii = new_img_like(b0_img, final_mask.get_fdata() >= 0.5)
+        output_nii.to_filename(output_fname)
+        self._results['mask_file'] = output_fname
 
         return runtime
 
