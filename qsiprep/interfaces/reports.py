@@ -57,7 +57,7 @@ ABOUT_TEMPLATE = """\t<ul>
 </div>
 """
 
-TOPUP_TEMPLATE = """\t\t<h3 class="elem-title">TOPUP Summary</h3>
+TOPUP_TEMPLATE = """\
 \t\t<p class="elem-desc">
 \t\t{summary}</p>
 """
