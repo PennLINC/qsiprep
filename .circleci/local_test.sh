@@ -137,7 +137,8 @@ export FS_LICENSE=${WORKDIR}/fslicense/license.txt
       --recon-input ${WORKDIR}/DSCSDSI/derivatives/qsiprep \
        ${WORKDIR}/DSCSDSI/derivatives \
        participant \
-      --recon-spec ${HOME}/projects/qsiprep/.circleci/3dshore_dsistudio_mrtrix.json \
+      --recon-spec dipy_3dshore \
+      --sloppy \
       --recon-only \
       --mem_mb 4096 \
       --output-resolution 5 \
@@ -168,6 +169,7 @@ export FS_LICENSE=${WORKDIR}/fslicense/license.txt
       --sloppy --mem_mb 4096 \
       --output-space T1w \
       --hmc_model eddy \
+      --stop_on_first_crash \
       --force-spatial-normalization \
       --eddy_config ${WORKDIR}/data/eddy_config.json \
       --fs-license-file $FREESURFER_HOME/license.txt \

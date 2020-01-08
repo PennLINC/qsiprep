@@ -13,7 +13,7 @@ from nipype.interfaces import utility as niu, ants
 
 from .util import init_dwi_reference_wf
 from ...engine import Workflow
-from ...interfaces.nilearn import Merge
+from ...interfaces.nilearn import Merge, MaskB0Series
 from ...interfaces.gradients import (ComposeTransforms, ExtractB0s, GradientRotation,
                                      LocalGradientRotation)
 from ...interfaces.itk import DisassembleTransform
@@ -230,6 +230,7 @@ generating a *preprocessed DWI run in {tpl} space*.
                     mem_gb=mem_gb * 3)
 
     extract_b0_series = pe.Node(ExtractB0s(), name="extract_b0_series")
+    mask_b0s = pe.Node(MaskB0Series(), name="mask_b0s")
 
     # Use the T1w to make a final mask
     resample_t1_mask = pe.Node(
@@ -237,7 +238,7 @@ generating a *preprocessed DWI run in {tpl} space*.
                              transforms='identity',
                              interpolation="MultiLabel"),
         name='resample_t1_mask')
-    final_b0_ref = init_dwi_reference_wf(use_t1_prior=True)
+    final_b0_ref = init_dwi_reference_wf()
 
     workflow.connect([
         (inputnode, rotate_gradients, [('bvec_files', 'bvec_files'),
@@ -262,9 +263,9 @@ generating a *preprocessed DWI run in {tpl} space*.
         (extract_b0_series, resample_t1_mask, [('b0_average', 'reference_image')]),
         (inputnode, resample_t1_mask, [('t1_mask', 'input_image')]),
         (resample_t1_mask, final_b0_ref, [('output_image', 'inputnode.t1_prior_mask')]),
-        (final_b0_ref, outputnode, [
-            ('outputnode.ref_image', 'dwi_ref_resampled'),
-            ('outputnode.dwi_mask', 'resampled_dwi_mask')]),
+        (final_b0_ref, outputnode, [('outputnode.ref_image', 'dwi_ref_resampled')]),
+        (extract_b0_series, mask_b0s, [('b0_series', 'b0_series')]),
+        (mask_b0s, outputnode, [('mask_file', 'resampled_dwi_mask')]),
         (extract_b0_series, outputnode, [('b0_series', 'b0_series')])])
 
     if write_local_bvecs:

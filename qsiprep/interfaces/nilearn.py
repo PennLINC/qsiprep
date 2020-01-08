@@ -8,13 +8,19 @@ Image tools interfaces
 
 
 """
+import os
+from tempfile import NamedTemporaryFile
 import nibabel as nb
 import numpy as np
-from skimage import morphology as sim
+from scipy import ndimage
 from scipy.ndimage.morphology import binary_fill_holes
+from skimage import morphology as sim
+from dipy.segment.threshold import otsu
+from sklearn.preprocessing import robust_scale, power_transform
 
-from nilearn.masking import compute_epi_mask
-from nilearn.image import concat_imgs
+from nilearn.masking import compute_epi_mask, _post_process_mask
+from nilearn.image import (concat_imgs, load_img, new_img_like, math_img, iter_img)
+from nilearn.plotting import plot_epi
 
 from nipype import logging
 from nipype.utils.filemanip import fname_presuffix
@@ -139,6 +145,102 @@ class Merge(SimpleInterface):
         return runtime
 
 
+class _EnhanceAndSkullstripB0InputSpec(BaseInterfaceInputSpec):
+    b0_file = File(exists=True, mandatory=True)
+
+
+class _EnhanceAndSkullstripB0OutputSpec(TraitedSpec):
+    mask_file = File(exists=True)
+    bias_corrected_file = File(exists=True)
+    skull_stripped_file = File(exists=True)
+
+
+class EnhanceAndSkullstripB0(SimpleInterface):
+    input_spec = _EnhanceAndSkullstripB0InputSpec
+    output_spec = _EnhanceAndSkullstripB0OutputSpec
+
+    def _run_interface(self, runtime):
+        input_img = load_img(self.inputs.b0_file)
+
+        # Get a mask. Choose a good method depending on the resolution
+        voxel_size = np.array(input_img.header.get_zooms()[:3])
+        if np.any(voxel_size > 3.5):
+            mask_img, _, _ = calculate_gradmax_b0_mask(input_img, cwd=runtime.cwd)
+        else:
+            mask_img = watershed_refined_b0_mask(input_img, show_plot=False,
+                                                 cwd=runtime.cwd)
+        out_mask = fname_presuffix(self.inputs.b0_file, suffix='_mask', newpath=runtime.cwd)
+        mask_img.to_filename(out_mask)
+        self._results['mask_file'] = out_mask
+
+        # Make a smoothed mask for N4
+        dilated_mask = ndimage.binary_dilation(mask_img.get_fdata().astype(np.int),
+                                               structure=sim.cube(3))
+        smoothed_dilated_mask = ndimage.gaussian_filter(dilated_mask.astype(np.float), sigma=3)
+        weight_img = new_img_like(input_img, smoothed_dilated_mask)
+
+        # Find a bias field and correct the original input
+        masked_input = math_img('np.clip(b0_img * mask_weight, 0, None)',
+                                b0_img=input_img, mask_weight=weight_img)
+        _, bias_img = biascorrect(masked_input, cwd=runtime.cwd)
+        bias_corrected = math_img('np.nan_to_num(orig / biasfield)',
+                                  orig=input_img, biasfield=bias_img)
+
+        # Enhance the input image via sharpening
+        enhanced = run_imagemath(bias_corrected, 'Sharpen', [], cwd=runtime.cwd)
+        out_bias_corrected = fname_presuffix(self.inputs.b0_file, suffix='_unbiasedsharpened',
+                                             newpath=runtime.cwd)
+        enhanced.to_filename(out_bias_corrected)
+        self._results['bias_corrected_file'] = out_bias_corrected
+
+        # Apply the soft mask to the bias-corrected, sharpened image
+        skullstripped_img = math_img('weights * enhanced',
+                                     weights=weight_img, enhanced=enhanced)
+        out_skullstripped = fname_presuffix(self.inputs.b0_file, suffix='_brain',
+                                            newpath=runtime.cwd)
+        skullstripped_img.to_filename(out_skullstripped)
+        self._results['skull_stripped_file'] = out_skullstripped
+
+        return runtime
+
+
+class _MaskB0SeriesInputSpec(BaseInterfaceInputSpec):
+    b0_series = File(exists=True, mandatory=True)
+
+
+class _MaskB0SeriesOutputSpec(TraitedSpec):
+    mask_file = File(exists=True)
+
+
+class MaskB0Series(SimpleInterface):
+    input_spec = _MaskB0SeriesInputSpec
+    output_spec = _MaskB0SeriesOutputSpec
+
+    def _run_interface(self, runtime):
+        b0_img = load_img(self.inputs.b0_series)
+        big_voxels = np.any(np.array(b0_img.header.get_zooms()) > 4.0)
+        masks = []
+        for img in iter_img(b0_img):
+            if big_voxels:
+                mask, _, _ = calculate_gradmax_b0_mask(img, show_plot=False, cwd=runtime.cwd)
+            else:
+                mask = watershed_refined_b0_mask(img, show_plot=False, cwd=runtime.cwd)
+            masks.append(mask)
+
+        if len(masks) > 1:
+            all_masks = concat_imgs(masks)
+            final_mask = new_img_like(b0_img, all_masks.get_fdata().sum(3))
+        else:
+            final_mask = masks[0]
+
+        output_fname = fname_presuffix(self.inputs.b0_series, suffix="_masked")
+        output_nii = new_img_like(b0_img, final_mask.get_fdata() >= 0.5)
+        output_nii.to_filename(output_fname)
+        self._results['mask_file'] = output_fname
+
+        return runtime
+
+
 def _enhance_t2_contrast(in_file, newpath=None, offset=0.5):
     """
     Performs a logarithmic transformation of intensity that
@@ -156,3 +258,249 @@ def _enhance_t2_contrast(in_file, newpath=None, offset=0.5):
     nii = nii.__class__(newdata, nii.affine, nii.header)
     nii.to_filename(out_file)
     return out_file
+
+
+def run_imagemath(nii, op, args, copy_input_header=True, cwd=None):
+    tmpf_in = NamedTemporaryFile(dir=cwd)
+    tmpf_out = NamedTemporaryFile(dir=cwd)
+    in_fname = tmpf_in.name + ".nii.gz"
+    out_fname = tmpf_out.name + ".nii.gz"
+    nii.to_filename(in_fname)
+    imath_cmd = ["ImageMath", "3", out_fname, op, in_fname] + args
+    os.system(' '.join(imath_cmd))
+    new_img = load_img(out_fname)
+    tmpf_in.close()
+    tmpf_out.close()
+    if copy_input_header:
+        out_nii = nb.Nifti1Image(new_img.get_fdata(), nii.affine, nii.header)
+    else:
+        out_nii = new_img
+    return out_nii
+
+
+def biascorrect(nii, copy_input_header=True, cwd=None):
+    tmpf_in = NamedTemporaryFile(dir=cwd)
+    tmpf_out = NamedTemporaryFile(dir=cwd)
+    in_fname = tmpf_in.name + ".nii.gz"
+    out_fname = tmpf_out.name + ".nii.gz"
+    out_bias_fname = tmpf_out.name + "_bias.nii.gz"
+    nii.to_filename(in_fname)
+    cmd = ["N3BiasFieldCorrection", "3", in_fname, out_fname, "4", "none",
+           "50", "4", out_bias_fname]
+    os.system(' '.join(cmd))
+    new_img = load_img(out_fname)
+    bias_img = load_img(out_bias_fname)
+    tmpf_in.close()
+    tmpf_out.close()
+    if copy_input_header:
+        out_nii = nb.Nifti1Image(new_img.get_fdata(), nii.affine, nii.header)
+        out_bias = nb.Nifti1Image(bias_img.get_fdata(), nii.affine, nii.header)
+    else:
+        out_nii = new_img
+        out_bias = bias_img
+    return out_nii, out_bias
+
+
+def calculate_gradmax_b0_mask(b0_nii, show_plot=False, quantile_max=0.8, pad_size=10,
+                              cwd=None):
+    """Robustly finds a brain mask from a low-res b=0 image.
+
+    The steps for finding a mask for a b=0 image
+
+      1. Remove spiky outliers with a median filter
+      2. Non-aggressively bias correct the image using N3
+      3. Calculate the magnitude of the spatial gradient
+      4. Clip the intensity values and rescale them using a Box-Cox transform
+      5. Calculate a foreground threshold using Otsu's Method
+      6. Try a series of orders for opening. Select the order that maximizes the gradient
+         from (3) at the edge of the opened mask.
+
+    **Returns**
+
+        mask_nii: spatial image
+            binary gradient-optimizing mask
+        scaled_nii: spatial image
+            robust scaled image for brain extraction
+        gradient_nii: spatial image
+            gradient image
+    """
+
+    if pad_size:
+        padded_nii = run_imagemath(b0_nii, 'PadImage', [str(pad_size)], copy_input_header=False,
+                                   cwd=cwd)
+    else:
+        padded_nii = b0_nii
+
+    # First apply a median filter to the data
+    footprint = sim.cube(3)
+    data = padded_nii.get_fdata()
+    mask = data > 0
+    median_filt = ndimage.median_filter(data, footprint=footprint) * mask
+    median_nii = new_img_like(padded_nii, median_filt)
+    bc_nii, _ = biascorrect(median_nii, cwd=cwd)
+
+    # Calculate the gradient on the bias-corrected, median filtered image
+    grad_nii = run_imagemath(bc_nii, "Grad", ['0'], cwd=cwd)
+    grad_data = grad_nii.get_fdata()
+
+    # Make an edge map
+    values = np.abs(data[mask].reshape(-1, 1))
+    clipped = robust_scale(values, quantile_range=(0, quantile_max),
+                           with_centering=False)
+    scaled = np.clip(
+        power_transform(clipped, method='box-cox', standardize=False).squeeze(),
+        0, None)
+    cutoff = otsu(scaled)
+    binary = scaled > cutoff
+    data[mask] = binary
+    scaled_image = data.copy()
+    scaled_image[mask] = scaled
+
+    # Make a distance-weighted gradient
+    maurer_abs = new_img_like(
+        padded_nii,
+        np.abs(run_imagemath(new_img_like(padded_nii, data),
+                             'MaurerDistance', [], cwd=cwd).get_fdata()))
+    weighted_edges = math_img('1/(img+1)**2 * grad', img=maurer_abs, grad=grad_nii)
+    grad_data = weighted_edges.get_fdata()
+
+    # Send it out for post processing
+    edge_scores = []
+    opening_values = np.array([2, 4, 6, 8, 10, 12], dtype=np.int)
+    opened_masks = []
+    for opening_test in opening_values:
+        processed_mask, _ = _post_process_mask(data, b0_nii.affine, opening=opening_test)
+        # Make a mask around the edge of the mask
+        dilated_mask = ndimage.binary_dilation(processed_mask)
+        eroded_mask = ndimage.binary_erosion(processed_mask)
+        mask_edge = dilated_mask ^ eroded_mask
+        opened_masks.append(processed_mask)
+        # How many edges are captured by the mask edge?
+        edge_scores.append(grad_data[mask_edge].mean())
+
+    best_mask = np.argmax(edge_scores)
+    processed_mask = opened_masks[best_mask]
+
+    if pad_size:
+        processed_mask = processed_mask[pad_size:-pad_size,
+                                        pad_size:-pad_size,
+                                        pad_size:-pad_size]
+        scaled_image = scaled_image[pad_size:-pad_size,
+                                    pad_size:-pad_size,
+                                    pad_size:-pad_size]
+        grad_data = grad_data[pad_size:-pad_size,
+                              pad_size:-pad_size,
+                              pad_size:-pad_size]
+
+    mask_img = new_img_like(b0_nii, processed_mask)
+    scaled_img = new_img_like(b0_nii, scaled_image)
+    grad_img = new_img_like(b0_nii, grad_data)
+    if show_plot:
+        import matplotlib.pyplot as plt
+        print("picked opening=", opening_values[best_mask])
+        plot_epi(padded_nii, display_mode='z', cut_coords=10, title='Input Image')
+        plot_epi(median_nii, display_mode='z', cut_coords=10, title='Median Filtered')
+        plot_epi(bc_nii, display_mode='z', cut_coords=10, title='Bias Corrected')
+        fig, ax = plt.subplots(ncols=2)
+        ax[0].hist(scaled, bins=256)
+        ax[0].axvline(cutoff, color='k')
+        ax[0].set_title("Step 2: BoxCox")
+        ax[1].plot(opening_values, edge_scores, 'o-')
+        ax[1].set_title("MI Scores for different openings")
+        vmax = np.percentile(values, quantile_max * 100)
+        display = plot_epi(b0_nii, cmap='gray', vmin=cutoff, vmax=vmax, display_mode='z',
+                           cut_coords=10)
+        display.add_contours(mask_img, linewidths=2)
+        disp2 = plot_epi(grad_img, cmap='gray', resampling_interpolation='nearest',
+                         display_mode='z', cut_coords=10)
+        disp2.add_contours(mask_img, linewidths=0.5)
+    return mask_img, scaled_img, grad_img
+
+
+def watershed_refined_b0_mask(b0_nii, show_plot=False, pad_size=10, quantile_max=0.8,
+                              ribbon_size=5, cwd=None):
+    """Refine the boundary of a mask using the watershed algorithm.
+
+    **Returns**
+
+        mask_nii: spatial image
+            binary gradient-optimizing mask
+        weighting_mask: spatial image
+            smoothed mask for use with N4
+    """
+
+    initial_mask_nii, initial_scaled_nii, _ = \
+        calculate_gradmax_b0_mask(b0_nii, show_plot=show_plot, quantile_max=quantile_max, cwd=cwd)
+
+    if pad_size:
+        initial_mask_nii = run_imagemath(initial_mask_nii, 'PadImage', [str(pad_size)],
+                                         copy_input_header=False, cwd=cwd)
+        initial_scaled_nii = run_imagemath(initial_scaled_nii, 'PadImage', [str(pad_size)],
+                                           copy_input_header=False, cwd=cwd)
+
+    mask_image = initial_mask_nii.get_fdata().astype(np.uint8)
+    scaled_image = initial_scaled_nii.get_fdata()
+
+    # Find a ribbon to detect the boundary in
+    morph_size = ribbon_size // 2 if (ribbon_size // 2) % 2 == 1 else ribbon_size // 2 + 1
+    eroded_mask = ndimage.binary_erosion(mask_image, structure=sim.cube(morph_size))
+    dilated_mask = ndimage.binary_dilation(mask_image, structure=sim.cube(morph_size))
+    definitely_outer = ndimage.binary_dilation(
+        dilated_mask, structure=sim.cube(morph_size)) ^ dilated_mask
+    ribbon_mask = (dilated_mask ^ eroded_mask)
+
+    # Down-weight data deep in the mask
+    inner_weights = ndimage.gaussian_filter(eroded_mask.astype(np.float), sigma=morph_size)
+    inner_weights = 1. - inner_weights / inner_weights.max()
+
+    # Down-weight data as it gets far from the mask
+    maurer = run_imagemath(new_img_like(initial_mask_nii, eroded_mask),
+                           'MaurerDistance', [], cwd=cwd).get_fdata()
+    outside_mask_distance = np.clip(maurer, 2, None)
+    outer_weights = 1 / outside_mask_distance
+
+    morph_grad_weights = inner_weights * outer_weights
+    smoothed_weights = ndimage.gaussian_filter(morph_grad_weights, sigma=morph_size/2)
+    smoothed_weights = smoothed_weights / smoothed_weights.max()
+
+    # Calculate the morphological gradient
+    morph_grad = ndimage.morphological_gradient(scaled_image,
+                                                footprint=sim.cube(3)) \
+        * smoothed_weights
+
+    markers = select_markers_for_rw(morph_grad, eroded_mask, ribbon_mask, definitely_outer)
+    watershed_seg = sim.watershed(morph_grad, markers)
+    ws_mask = watershed_seg == 2
+
+    if pad_size:
+        ws_mask = ws_mask[pad_size:-pad_size,
+                          pad_size:-pad_size,
+                          pad_size:-pad_size]
+        morph_grad = morph_grad[pad_size:-pad_size,
+                                pad_size:-pad_size,
+                                pad_size:-pad_size]
+
+    # Ensure headers are the same as the input image
+    mask_img = new_img_like(b0_nii, ws_mask)
+    grad_img = new_img_like(b0_nii, morph_grad)
+
+    if show_plot:
+        display = plot_epi(b0_nii, cmap='gray', display_mode='z',
+                           cut_coords=10)
+        display.add_contours(mask_img, linewidths=2)
+        disp2 = plot_epi(grad_img, cmap='gray', resampling_interpolation='nearest',
+                         display_mode='z', cut_coords=10)
+        disp2.add_contours(mask_img, linewidths=0.5)
+    return mask_img
+
+
+def select_markers_for_rw(image, inner_mask, empty_mask, outer_mask,
+                          sample_proportion=.5):
+    markers = np.zeros_like(image) - 1.
+    use_as_inner_marker = np.random.rand(inner_mask.sum()) < sample_proportion
+    use_as_outer_marker = np.random.rand(outer_mask.sum()) < sample_proportion
+    markers[inner_mask > 0] = use_as_inner_marker.astype(np.int) * 2
+    markers[outer_mask > 0] = use_as_outer_marker.astype(np.int) * 1
+    markers[empty_mask > 0] = 0
+
+    return markers

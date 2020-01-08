@@ -82,7 +82,8 @@ placed within the corresponding confounds file. Slicewise cross correlation
 was also calculated.
 """
     inputnode = pe.Node(niu.IdentityInterface(
-        fields=['sliceqc_file', 'motion_params', 'bval_files', 'bvec_files', 'original_files']),
+        fields=['sliceqc_file', 'motion_params', 'bval_file', 'bvec_file', 'original_files',
+                'denoising_confounds']),
         name='inputnode')
     outputnode = pe.Node(niu.IdentityInterface(
         fields=['confounds_file', 'imputed_images']),
@@ -105,10 +106,10 @@ was also calculated.
         (fdisp, concat, [('out_file', 'fd')]),
         (add_motion_headers, concat, [('out_file', 'motion')]),
         (inputnode, concat, [('sliceqc_file', 'sliceqc_file'),
-                             ('bval_files', 'original_bvals'),
-                             ('bvec_files', 'original_bvecs'),
-                             ('original_files', 'original_files')]),
-
+                             ('bval_file', 'original_bvals'),
+                             ('bvec_file', 'original_bvecs'),
+                             ('original_files', 'original_files'),
+                             ('denoising_confounds', 'denoising_confounds')]),
         # Set outputs
         (concat, outputnode, [('confounds_file', 'confounds_file')]),
     ])

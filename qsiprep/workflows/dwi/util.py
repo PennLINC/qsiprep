@@ -10,25 +10,27 @@ Utility workflows
 
 """
 import os
+from pathlib import Path
 import nibabel as nb
 
 from nipype.pipeline import engine as pe
 from nipype.utils.filemanip import split_filename
-from nipype.interfaces import utility as niu, fsl, afni, ants
+from nipype.interfaces import utility as niu, fsl, afni
 from ...niworkflows.interfaces import SimpleBeforeAfter
 from ...niworkflows.interfaces.utils import CopyHeader
 from ...engine import Workflow
 from ...interfaces.ants import ImageMath
 from ...interfaces import DerivativesDataSink
+from ...interfaces.nilearn import EnhanceAndSkullstripB0
 
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
 def init_dwi_reference_wf(omp_nthreads=1, dwi_file=None, name='dwi_reference_wf',
-                          gen_report=False, use_t1_prior=False):
+                          gen_report=False, source_file=None, desc="initial"):
     """
-    This workflow generates reference dwi image for a series
+    This workflow generates reference b=0 image.
 
     The raw reference image is the target of :abbr:`HMC (head motion correction)`, and a
     contrast-enhanced reference is the subject of distortion correction, as well as
@@ -56,9 +58,6 @@ def init_dwi_reference_wf(omp_nthreads=1, dwi_file=None, name='dwi_reference_wf'
 
         b0_template
             the b0 template used as the motion correction reference
-        dwi_mask : bool
-            A tentative brain mask to initialize the workflow (requires ``pre_mask``
-            parameter set ``True``).
 
     **Outputs**
 
@@ -81,11 +80,9 @@ def init_dwi_reference_wf(omp_nthreads=1, dwi_file=None, name='dwi_reference_wf'
     """
     workflow = Workflow(name=name)
     workflow.__desc__ = """\
-First, a reference volume and its skull-stripped version were generated
-using a modified version of the custom methodology of *fMRIPrep*.
 """
     inputnode = pe.Node(
-        niu.IdentityInterface(fields=['b0_template', 'dwi_mask', 't1_prior_mask']),
+        niu.IdentityInterface(fields=['b0_template', 't1_prior_mask']),
         name='inputnode')
     outputnode = pe.Node(
         niu.IdentityInterface(fields=['dwi_file', 'raw_ref_image', 'ref_image', 'bias_image',
@@ -99,35 +96,26 @@ using a modified version of the custom methodology of *fMRIPrep*.
     enhance_and_skullstrip_dwi_wf = init_enhance_and_skullstrip_dwi_wf(
         omp_nthreads=omp_nthreads)
 
-    skullstrip_b0_wf = init_skullstrip_b0_wf(use_initial_mask=True, use_t1_prior=use_t1_prior,
-                                             name='skullstrip_b0_wf')
-
     workflow.connect([
         (inputnode, outputnode, [('b0_template', 'raw_ref_image')]),
         (inputnode, enhance_and_skullstrip_dwi_wf, [('b0_template', 'inputnode.in_file')]),
-        (enhance_and_skullstrip_dwi_wf, skullstrip_b0_wf, [
-            ('outputnode.bias_corrected_file', 'inputnode.in_file'),
-            ('outputnode.mask_file', 'inputnode.initial_dwi_mask')]),
         (enhance_and_skullstrip_dwi_wf, outputnode, [
-            ('outputnode.bias_corrected_file', 'ref_image')]),
-        (inputnode, skullstrip_b0_wf, [('t1_prior_mask', 'inputnode.t1_prior_mask')]),
-        (skullstrip_b0_wf, outputnode, [
-            ('outputnode.mask_file', 'dwi_mask'),
-            ('outputnode.skull_stripped_file', 'ref_image_brain')])
-    ])
+            ('outputnode.bias_corrected_file', 'ref_image'),
+            ('outputnode.skull_stripped_file', 'ref_image_brain'),
+            ('outputnode.mask_file', 'dwi_mask')])])
 
     if gen_report:
         b0ref_reportlet = pe.Node(SimpleBeforeAfter(), name='b0ref_reportlet', mem_gb=0.1)
         ds_report_b0_mask = pe.Node(
-            DerivativesDataSink(desc="sdccoreg", suffix='b0ref'), name='ds_report_b0_mask',
+            DerivativesDataSink(desc=desc, suffix='b0ref', source_file=source_file),
+            name='ds_report_b0_mask',
             mem_gb=DEFAULT_MEMORY_MIN_GB, run_without_submitting=True
         )
 
         workflow.connect([
             (inputnode, b0ref_reportlet, [('b0_template', 'before')]),
             (enhance_and_skullstrip_dwi_wf, b0ref_reportlet, [
-                ('outputnode.bias_corrected_file', 'after')]),
-            (skullstrip_b0_wf, b0ref_reportlet, [
+                ('outputnode.bias_corrected_file', 'after'),
                 ('outputnode.mask_file', 'wm_seg')]),
             (b0ref_reportlet, outputnode, [('out_report', 'validation_report')]),
             (b0ref_reportlet, ds_report_b0_mask, [('out_report', 'in_file')])
@@ -136,12 +124,12 @@ using a modified version of the custom methodology of *fMRIPrep*.
     return workflow
 
 
-def init_enhance_and_skullstrip_dwi_wf(name='enhance_and_skullstrip_dwi_wf',
-                                       do_biascorrection=True, omp_nthreads=1):
+def init_enhance_and_skullstrip_dwi_wf(name='enhance_and_skullstrip_dwi_wf', omp_nthreads=1):
     """
-    https://community.mrtrix.org/t/dwibiascorrect-with-ants-high-intensity-in-cerebellum-brainstem/1338/3
+    https://community.mrtrix.org/t/
+        dwibiascorrect-with-ants-high-intensity-in-cerebellum-brainstem/1338/3
 
-    Truncates image intensities, runs N4, creates a rough initial mask
+    Truncates image intensities, runs N3, creates a rough initial mask
 
     .. workflow ::
         :graph2use: orig
@@ -153,8 +141,6 @@ def init_enhance_and_skullstrip_dwi_wf(name='enhance_and_skullstrip_dwi_wf',
     **Parameters**
         name : str
             Name of workflow (default: ``enhance_and_skullstrip_dwi_wf``)
-        do_biascorrection : Bool
-            Do bias correction on ``in_file``?
         omp_nthreads : int
             number of threads available to parallel nodes
 
@@ -172,8 +158,6 @@ def init_enhance_and_skullstrip_dwi_wf(name='enhance_and_skullstrip_dwi_wf',
             the ``bias_corrected_file`` after soft skull-stripping
         mask_file
             mask of the skull-stripped input file
-        out_report
-            reportlet for the skull-stripping
 
     """
     workflow = Workflow(name=name)
@@ -182,100 +166,18 @@ def init_enhance_and_skullstrip_dwi_wf(name='enhance_and_skullstrip_dwi_wf',
     outputnode = pe.Node(niu.IdentityInterface(fields=[
         'mask_file', 'skull_stripped_file', 'bias_corrected_file']), name='outputnode')
 
-    # Truncate intensity values so they're OK for N4
-    truncate_values = pe.Node(
-        ImageMath(dimension=3,
-                  operation="TruncateImageIntensity",
-                  secondary_arg="0.0 0.98 512"),
-        name="truncate_values")
-
-    # Truncate intensity values for creating a mask
-    # (there are many high outliers in b=0 images)
-    truncate_values_for_masking = pe.Node(
-        ImageMath(dimension=3,
-                  operation="TruncateImageIntensity",
-                  secondary_arg="0.0 0.9 512"),
-        name="truncate_values_for_masking")
-
-    # N4 will break if any negative values are present.
-    rescale_image = pe.Node(
-        ImageMath(dimension=3,
-                  operation="RescaleImage",
-                  secondary_arg="0 1000"),
-        name="rescale_image"
-    )
-
-    # Run N4 normally, force num_threads=1 for stability (images are small, no need for >1)
-    n4_correct = pe.Node(
-        ants.N4BiasFieldCorrection(
-            dimension=3,
-            n_iterations=[200, 200],
-            convergence_threshold=1e-6,
-            bspline_order=3,
-            bspline_fitting_distance=150,
-            copy_header=True,
-            args='-v 1'),
-        name='n4_correct', n_procs=1)
-
-    # Sharpen the b0 ref
-    sharpen_image = pe.Node(
-        ImageMath(dimension=3,
-                  operation="Sharpen"),
-        name="sharpen_image")
-
-    # Basic mask
-    initial_mask = pe.Node(afni.Automask(outputtype="NIFTI_GZ"),
-                           name="initial_mask")
-
-    # Fill holes left by Automask
-    fill_holes = pe.Node(
-        ImageMath(dimension=3,
-                  operation='FillHoles',
-                  secondary_arg='2'),
-        name='fill_holes')
-
-    # Dilate before smoothing
-    dilate_mask = pe.Node(
-        ImageMath(dimension=3,
-                  operation='MD',
-                  secondary_arg='1'),
-        name='dilate_mask')
-
-    # Smooth the mask and use it as a weight for N4
-    smooth_mask = pe.Node(
-        ImageMath(dimension=3,
-                  operation='G',
-                  secondary_arg='4'),
-        name='smooth_mask')
-
-    # Make a "soft" skull-stripped image
-    apply_mask = pe.Node(
-        ants.MultiplyImages(dimension=3, output_product_image="SkullStrippedRef.nii.gz"),
-        name="apply_mask")
+    enhance_and_mask_b0 = pe.Node(EnhanceAndSkullstripB0(), name='enhance_and_mask_b0')
 
     fix_mask_header = pe.Node(CopyHeader(), name='fix_mask_header')
     fix_smooth_mask_header = pe.Node(CopyHeader(), name='fix_smooth_mask_header')
 
     workflow.connect([
-        (inputnode, truncate_values, [('in_file', 'in_file')]),
-        (truncate_values, rescale_image, [('out_file', 'in_file')]),
-        (inputnode, truncate_values_for_masking, [('in_file', 'in_file')]),
-        (truncate_values_for_masking, initial_mask, [('out_file', 'in_file')]),
-        (initial_mask, fill_holes, [('out_file', 'in_file')]),
-        (fill_holes, dilate_mask, [('out_file', 'in_file')]),
-        (dilate_mask, smooth_mask, [('out_file', 'in_file')]),
-        (rescale_image, n4_correct, [('out_file', 'input_image')]),
-        (rescale_image, fix_smooth_mask_header, [('out_file', 'hdr_file')]),
-        (smooth_mask, fix_smooth_mask_header, [('out_file', 'in_file')]),
-        (fix_smooth_mask_header, n4_correct, [('out_file', 'weight_image')]),
-        (n4_correct, sharpen_image, [('output_image', 'in_file')]),
-        (sharpen_image, outputnode, [('out_file', 'bias_corrected_file')]),
-        (sharpen_image, apply_mask, [('out_file', 'first_input')]),
-        (smooth_mask, apply_mask, [('out_file', 'second_input')]),
-        (apply_mask, outputnode, [('output_product_image', 'skull_stripped_file')]),
-        (fill_holes, fix_mask_header, [('out_file', 'in_file')]),
-        (sharpen_image, fix_mask_header, [('out_file', 'hdr_file')]),
-        (fix_mask_header, outputnode, [('out_file', 'mask_file')])])
+        (inputnode, enhance_and_mask_b0, [('in_file', 'b0_file')]),
+        (enhance_and_mask_b0, outputnode, [
+            ('mask_file', 'mask_file'),
+            ('bias_corrected_file', 'bias_corrected_file'),
+            ('skull_stripped_file', 'skull_stripped_file')])
+        ])
 
     return workflow
 
@@ -312,8 +214,6 @@ def init_skullstrip_b0_wf(name='skullstrip_b0_wf', use_t1_prior=False, use_initi
             the ``in_file`` after skull-stripping
         mask_file
             mask of the skull-stripped input file
-        out_report
-            reportlet for the skull-stripping
 
     """
     workflow = Workflow(name=name)
@@ -340,11 +240,10 @@ def init_skullstrip_b0_wf(name='skullstrip_b0_wf', use_t1_prior=False, use_initi
     if use_initial_mask:
         workflow.connect([(inputnode, pad_image, [('initial_dwi_mask', 'in_file')])])
     else:
-        initial_mask = pe.Node(afni.Automask(outputtype="NIFTI_GZ"),
-                               name="initial_mask")
+        initial_mask = pe.Node(EnhanceAndSkullstripB0(), name="initial_mask")
         workflow.connect([
-            (inputnode, initial_mask, [('in_file', 'in_file')]),
-            (initial_mask, pad_image, [('out_file', 'in_file')])
+            (inputnode, initial_mask, [('in_file', 'b0_file')]),
+            (initial_mask, pad_image, [('mask_file', 'in_file')])
         ])
 
     erode1 = pe.Node(
@@ -489,3 +388,10 @@ def _list_squeeze(in_list):
 
 def _get_first(in_list):
     return in_list[0]
+
+
+def get_source_file(dwi_files, output_prefix=None, suffix=''):
+    """The reportlets need a source file. This file might not exist in the input data."""
+    if output_prefix is None:
+        output_prefix = _get_output_fname(dwi_files)
+    return str(Path(dwi_files[0]).parent / output_prefix) + suffix + ".nii.gz"

@@ -33,7 +33,7 @@ from .anatomical import init_anat_preproc_wf
 from .dwi.base import init_dwi_preproc_wf
 from .dwi.finalize import init_dwi_finalize_wf
 from .dwi.intramodal_template import init_intramodal_template_wf
-from .dwi.util import _get_output_fname
+from .dwi.util import _get_output_fname, get_source_file
 
 
 LOGGER = logging.getLogger('nipype.workflow')
@@ -617,6 +617,7 @@ to workflows in *qsiprep*'s documentation]\
 
     # create a processing pipeline for the dwis in each session
     for output_fname, dwi_info in outputs_to_files.items():
+        source_file = get_source_file(dwi_info['dwi_series'], output_fname, suffix="_dwi")
         dwi_preproc_wf = init_dwi_preproc_wf(
             scan_groups=dwi_info,
             output_prefix=output_fname,
@@ -645,7 +646,8 @@ to workflows in *qsiprep*'s documentation]\
             fmap_demean=fmap_demean,
             use_syn=use_syn,
             force_syn=force_syn,
-            sloppy=debug
+            sloppy=debug,
+            source_file=source_file
         )
         dwi_finalize_wf = init_dwi_finalize_wf(
             scan_groups=dwi_info,
@@ -664,7 +666,8 @@ to workflows in *qsiprep*'s documentation]\
             omp_nthreads=omp_nthreads,
             use_syn=use_syn,
             low_mem=low_mem,
-            make_intramodal_template=make_intramodal_template
+            make_intramodal_template=make_intramodal_template,
+            source_file=source_file
         )
 
         workflow.connect([

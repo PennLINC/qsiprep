@@ -189,7 +189,7 @@ RUN cd /opt \
     && ./build
 
 # Installing ANTs latest from source
-ARG ANTS_SHA=b8889562341471dbe18b415d2bcefb9b8f12232a
+ARG ANTS_SHA=e00e8164d7a92f048e5d06e388a15c1ee8e889c4
 ADD https://cmake.org/files/v3.11/cmake-3.11.4-Linux-x86_64.sh /cmake-3.11.4-Linux-x86_64.sh
 ENV ANTSPATH="/opt/ants-latest/bin" \
     PATH="/opt/ants-latest/bin:$PATH" \
@@ -312,6 +312,8 @@ RUN python -c "from matplotlib import font_manager" && \
 
 RUN find $HOME -type d -exec chmod go=u {} + && \
     find $HOME -type f -exec chmod go=u {} +
+
+RUN ln -s /opt/fsl-6.0.1/bin/eddy_cuda9.1 /opt/fsl-6.0.1/bin/eddy_cuda
 
 ENV AFNI_INSTALLDIR=/usr/lib/afni \
     PATH=${PATH}:/usr/lib/afni/bin \

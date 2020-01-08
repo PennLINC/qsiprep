@@ -254,8 +254,7 @@ class DerivativesDataSinkInputSpec(BaseInterfaceInputSpec):
         desc='Path to the base directory for storing data.')
     in_file = InputMultiObject(File(exists=True), mandatory=True,
                                desc='the object to be saved')
-    source_file = File(exists=False, mandatory=True, desc='the original file')
-    prefix = traits.Str(mandatory=False, desc='prefix for output files')
+    source_file = File(mandatory=True, desc='the original file or name of merged files')
     space = traits.Str('', usedefault=True, desc='Label for space field')
     desc = traits.Str('', usedefault=True, desc='Label for description field')
     suffix = traits.Str('', usedefault=True, desc='suffix appended to source_file')
@@ -344,11 +343,7 @@ desc-preproc_bold.nii.gz'
         out_path = op.join(base_directory, out_path)
 
         os.makedirs(out_path, exist_ok=True)
-
-        if isdefined(self.inputs.prefix):
-            base_fname = op.join(out_path, self.inputs.prefix)
-        else:
-            base_fname = op.join(out_path, src_fname)
+        base_fname = op.join(out_path, src_fname)
 
         formatstr = '{bname}{space}{desc}{suffix}{dtype}{ext}'
         if len(self.inputs.in_file) > 1 and not isdefined(self.inputs.extra_values):

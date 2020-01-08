@@ -123,7 +123,7 @@ class MergeDWIs(SimpleInterface):
         confounds_df.to_csv(merged_confounds, index=False)
 
         self._results['merged_denoising_confounds'] = merged_confounds
-        self._results['original_images'] = confounds_df['original_file'].to_list()
+        self._results['original_images'] = confounds_df['original_file'].tolist()
         self._results['out_dwi'] = merged_fname
         self._results['out_bval'] = out_bval
         self._results['out_bvec'] = out_bvec
@@ -161,7 +161,7 @@ class StackConfounds(SimpleInterface):
         if not self.inputs.in_files:
             return runtime
         dfs = [pd.read_csv(fname) for fname in self.inputs.in_files]
-        stacked = pd.concat(dfs, axis=self.inputs.axis, ignore_index=self.inputs.axis==0)
+        stacked = pd.concat(dfs, axis=self.inputs.axis, ignore_index=self.inputs.axis == 0)
         out_file = op.join(runtime.cwd, 'confounds.csv')
         stacked = stacked.drop('Unnamed: 0', axis=1, errors='ignore')
         stacked.to_csv(out_file)
