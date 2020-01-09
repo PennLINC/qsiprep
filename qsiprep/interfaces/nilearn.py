@@ -170,7 +170,9 @@ class EnhanceAndSkullstripB0(SimpleInterface):
             mask_img = watershed_refined_b0_mask(input_img, show_plot=False,
                                                  cwd=runtime.cwd)
         out_mask = fname_presuffix(self.inputs.b0_file, suffix='_mask', newpath=runtime.cwd)
-        mask_img.to_filename(out_mask)
+        # Ensure the header is ok
+        good_header_mask = new_img_like(input_img, out_mask.get_fdata())
+        good_header_mask.to_filename(out_mask)
         self._results['mask_file'] = out_mask
 
         # Make a smoothed mask for N4
