@@ -169,6 +169,7 @@ export FS_LICENSE=${WORKDIR}/fslicense/license.txt
       --sloppy --mem_mb 4096 \
       --output-space T1w \
       --hmc_model eddy \
+      --stop_on_first_crash \
       --force-spatial-normalization \
       --eddy_config ${WORKDIR}/data/eddy_config.json \
       --fs-license-file $FREESURFER_HOME/license.txt \

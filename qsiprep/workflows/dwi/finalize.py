@@ -387,28 +387,3 @@ def init_dwi_finalize_wf(scan_groups,
             workflow.get_node(node).inputs.base_directory = reportlets_dir
             workflow.get_node(node).inputs.source_file = source_file
     return workflow
-
-
-def init_mask_finalize_wf(name="mask_finalize_wf"):
-    """Creates a final mask using a combination of the t1 mask and dwi2mask
-    """
-    inputnode = pe.Node(
-        niu.IdentityInterface(fields=['t1_mask', 'resampled_b0s']),
-        name='inputnode')
-    outputnode = pe.Node(niu.IdentityInterface(fields=['mask_file']), name='outputnode')
-    workflow = Workflow(name=name)
-    resample_t1_mask = pe.Node(
-        afni.Resample(outputtype='NIFTI_GZ', resample_mode="NN"), name='resample_t1_mask')
-    b0mask = pe.Node(afni.Automask(outputtype='NIFTI_GZ'), name='b0mask')
-    or_mask = pe.Node(afni.Calc(outputtype='NIFTI_GZ', expr='step(a+b)'), name='or_mask')
-    workflow.connect([
-        (inputnode, resample_t1_mask, [
-            ('t1_mask', 'in_file'),
-            ('resampled_b0s', 'master')]),
-        (inputnode, b0mask, [('resampled_b0s', 'in_file')]),
-        (b0mask, or_mask, [('out_file', 'in_file_a')]),
-        (resample_t1_mask, or_mask, [('out_file', 'in_file_b')]),
-        (or_mask, outputnode, [('out_file', 'mask_file')])
-    ])
-
-    return workflow
