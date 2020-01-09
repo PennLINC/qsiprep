@@ -165,7 +165,8 @@ class EnhanceAndSkullstripB0(SimpleInterface):
         # Get a mask. Choose a good method depending on the resolution
         voxel_size = np.array(input_img.header.get_zooms()[:3])
         if np.any(voxel_size > 3.5):
-            mask_img, _, _ = calculate_gradmax_b0_mask(input_img, cwd=runtime.cwd)
+            LOGGER.warning("Using simple EPI masking due to large voxel size")
+            mask_img = compute_epi_mask(input_img)
         else:
             mask_img = watershed_refined_b0_mask(input_img, show_plot=False,
                                                  cwd=runtime.cwd)
