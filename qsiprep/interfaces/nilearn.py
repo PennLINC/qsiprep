@@ -171,7 +171,7 @@ class EnhanceAndSkullstripB0(SimpleInterface):
                                                  cwd=runtime.cwd)
         out_mask = fname_presuffix(self.inputs.b0_file, suffix='_mask', newpath=runtime.cwd)
         # Ensure the header is ok
-        good_header_mask = new_img_like(input_img, out_mask.get_fdata())
+        good_header_mask = new_img_like(input_img, mask_img.get_fdata())
         good_header_mask.to_filename(out_mask)
         self._results['mask_file'] = out_mask
 

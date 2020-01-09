@@ -1,3 +1,11 @@
+0.6.7 (January 9 2020)
+======================
+This release adds some rather big updates to QSIPrep.
+ * FSL is updated to version 6.0.3
+ * CUDA v9.1 support is added to the image (works with GPUS in Docker and Singularity)
+ * A new robust b=0 masking algorith is introduced.
+ *
+
 0.6.5 (Nov 21, 2019)
 ====================
  * Improved handling of Freesurfer path (#50)

@@ -12,7 +12,7 @@ from nipype.interfaces import afni
 from qsiprep.interfaces.bids import ReconDerivativesDataSink
 from qsiprep.interfaces.mrtrix import (
     EstimateFOD, SS3TEstimateFOD, MRTrixIngress, SS3TDwi2Response, GlobalTractography,
-    MRTrixAtlasGraph, SIFT2, TckGen)
+    MRTrixAtlasGraph, SIFT2, TckGen, MTNormalize)
 from .interchange import input_fields
 
 LOGGER = logging.getLogger('nipype.interface')
@@ -22,7 +22,8 @@ MULTI_RESPONSE_ALGORITHMS = ('dhollander', 'msmt_5tt')
 def init_mrtrix_csd_recon_wf(name="mrtrix_recon", output_suffix="", params={}):
     """Create FOD images for WM, GM and CSF.
 
-    This workflow uses mrtrix tools to run csd on multishell data.
+    This workflow uses mrtrix tools to run csd on multishell data. At the end,
+    mtnormalise is run.
 
     Inputs
 
@@ -54,6 +55,8 @@ def init_mrtrix_csd_recon_wf(name="mrtrix_recon", output_suffix="", params={}):
         fod: dict
             parameters for dwi2fod. A minimal example would be
             ``{"algorithm": "msmt_csd", "max_sh": [6, 8, 8]}``.
+        mtnormalize: bool
+            Should the FODs be mtnormalized?
 
 
     """
@@ -79,6 +82,9 @@ def init_mrtrix_csd_recon_wf(name="mrtrix_recon", output_suffix="", params={}):
     fod_algorithm = fod.get('algorithm', 'msmt_csd')
     fod['algorithm'] = fod_algorithm
 
+    # Intensity normalize?
+    run_mtnormalize = params.get('mtnormalize', True)
+
     workflow = pe.Workflow(name=name)
     create_mif = pe.Node(MRTrixIngress(), name='create_mif')
     # Use dwi2response from 3Tissue for updated dhollander
@@ -92,12 +98,11 @@ def init_mrtrix_csd_recon_wf(name="mrtrix_recon", output_suffix="", params={}):
         estimate_fod = pe.Node(EstimateFOD(**fod), 'estimate_fod')
     elif fod_algorithm == 'ss3t':
         estimate_fod = pe.Node(SS3TEstimateFOD(**fod), 'estimate_fod')
+
     workflow.connect([
         (estimate_response, estimate_fod, [('wm_file', 'wm_txt'),
                                            ('gm_file', 'gm_txt'),
-                                           ('csf_file', 'csf_txt')])])
-
-    workflow.connect([
+                                           ('csf_file', 'csf_txt')]),
         (inputnode, resample_mask, [('t1_brain_mask', 'in_file'),
                                     ('dwi_file', 'master')]),
         (inputnode, create_mif, [('dwi_file', 'dwi_file'),
@@ -105,23 +110,40 @@ def init_mrtrix_csd_recon_wf(name="mrtrix_recon", output_suffix="", params={}):
                                  ('bvec_file', 'bvec_file'),
                                  ('b_file', 'b_file')]),
         (create_mif, estimate_response, [('mif_file', 'in_file')]),
-        (resample_mask, estimate_response, [('out_file', 'in_mask')]),
         (estimate_response, outputnode, [('wm_file', 'wm_txt'),
                                          ('gm_file', 'gm_txt'),
                                          ('csf_file', 'csf_txt')]),
 
         (create_mif, estimate_fod, [('mif_file', 'in_file')]),
         (resample_mask, estimate_fod, [('out_file', 'mask_file')]),
-        (estimate_fod, outputnode, [('wm_odf', 'fod_sh_mif'),
-                                    ('wm_odf', 'wm_odf'),
-                                    ('gm_odf', 'gm_odf'),
-                                    ('csf_odf', 'csf_odf')]),
-    ])
+        (resample_mask, estimate_response, [('out_file', 'in_mask')])])
+
+    if not run_mtnormalize:
+        workflow.connect([
+            (estimate_fod, outputnode, [('wm_odf', 'fod_sh_mif'),
+                                        ('wm_odf', 'wm_odf'),
+                                        ('gm_odf', 'gm_odf'),
+                                        ('csf_odf', 'csf_odf')])])
+    else:
+        intensity_norm = pe.Node(
+            MTNormalize(inlier_mask='inliers.nii.gz', norm_image='norm.nii.gz'),
+            name='intensity_norm')
+        workflow.connect(
+            (resample_mask, intensity_norm, [('out_file', 'mask_file')]),
+            (estimate_fod, intensity_norm, [('wm_odf', 'wm_odf'),
+                                            ('gm_odf', 'gm_odf'),
+                                            ('csf_odf', 'csf_odf')]),
+            (intensity_norm, outputnode, [('wm_normed_odf', 'fod_sh_mif'),
+                                          ('wm_normed_odf', 'wm_odf'),
+                                          ('gm_normed_odf', 'gm_odf'),
+                                          ('csf_normed_odf', 'csf_odf')]))
+        ])
 
     if output_suffix:
+        normed = '' if not run_mtnormalize else 'mtnormed'
         ds_wm_odf = pe.Node(
             ReconDerivativesDataSink(extension='.mif.gz',
-                                     desc="wmFOD",
+                                     desc="wmFOD" + normed,
                                      suffix=output_suffix,
                                      compress=True),
             name='ds_wm_odf',
@@ -138,7 +160,7 @@ def init_mrtrix_csd_recon_wf(name="mrtrix_recon", output_suffix="", params={}):
         if fod_algorithm == 'msmt_csd':
             ds_gm_odf = pe.Node(
                 ReconDerivativesDataSink(extension='.mif.gz',
-                                         desc="gmFOD",
+                                         desc="gmFOD" + normed,
                                          suffix=output_suffix,
                                          compress=True),
                 name='ds_gm_odf',
@@ -154,7 +176,7 @@ def init_mrtrix_csd_recon_wf(name="mrtrix_recon", output_suffix="", params={}):
 
             ds_csf_odf = pe.Node(
                 ReconDerivativesDataSink(extension='.mif.gz',
-                                         desc="csfFOD",
+                                         desc="csfFOD" + normed,
                                          suffix=output_suffix,
                                          compress=True),
                 name='ds_csf_odf',
