@@ -134,10 +134,10 @@ def init_mrtrix_csd_recon_wf(name="mrtrix_recon", output_suffix="", params={}):
             (estimate_fod, intensity_norm, [('wm_odf', 'wm_odf'),
                                             ('gm_odf', 'gm_odf'),
                                             ('csf_odf', 'csf_odf')]),
-            (intensity_norm, outputnode, [('wm_norm_odf', 'fod_sh_mif'),
-                                          ('wm_norm_odf', 'wm_odf'),
-                                          ('gm_norm_odf', 'gm_odf'),
-                                          ('csf_norm_odf', 'csf_odf')])
+            (intensity_norm, outputnode, [('wm_normed_odf', 'fod_sh_mif'),
+                                          ('wm_normed_odf', 'wm_odf'),
+                                          ('gm_normed_odf', 'gm_odf'),
+                                          ('csf_normed_odf', 'csf_odf')])
         ])
 
     if output_suffix:
