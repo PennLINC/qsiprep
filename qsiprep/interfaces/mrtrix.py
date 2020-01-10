@@ -406,7 +406,9 @@ class MTNormalizeInputSpec(MRTrix3BaseInputSpec):
     wm_normed_odf = File(
         argstr='%s',
         position=1,
-        genfile=True,
+        name_template='%s_mtnorm',
+        keep_extension=True,
+        name_source='wm_odf',
         desc='output WM normed_odf')
     gm_odf = File(
         argstr='%s',
@@ -415,31 +417,39 @@ class MTNormalizeInputSpec(MRTrix3BaseInputSpec):
     gm_normed_odf = File(
         argstr='%s',
         position=3,
-        genfile=True,
+        name_template='%s_mtnorm',
+        keep_extension=True,
+        name_source='gm_odf',
         desc='output GM normed_odf')
     csf_odf = File(
         argstr='%s', position=4, desc='CSF ODF image')
     csf_normed_odf = File(
         argstr='%s',
         position=5,
-        genfile=True,
+        name_template='%s_mtnorm',
+        keep_extension=True,
+        name_source='csf_odf',
         desc='output CSF normed_odf')
     mask_file = File(exists=True, mandatory=True, argstr='-mask %s', desc='mask image')
     inlier_mask = File(
         argstr='-check_mask %s',
-        genfile=True,
+        name_template='%s_inlier_mask.nii.gz',
+        keep_extension=False,
+        name_source='wm_odf',
         desc='estimated spatially varying intensity level that is used for normalisation')
     norm_image = File(
         argstr='-check_norm %s',
-        genfile=True,
+        name_template='%s_norm_image.nii.gz',
+        keep_extension=False,
+        name_source='wm_odf',
         desc='final mask used to compute the normalisation. This mask'
              ' excludes regions identified as outliers by the optimisation process.')
 
 
 class MTNormalizeOutputSpec(TraitedSpec):
-    wm_norm_odf = File(desc='normalized WM ODF')
-    gm_norm_odf = File(desc='normalized GM ODF')
-    csf_norm_odf = File(desc='normalized CSF ODF')
+    wm_normed_odf = File(desc='normalized WM ODF')
+    gm_normed_odf = File(desc='normalized GM ODF')
+    csf_normed_odf = File(desc='normalized CSF ODF')
     norm_image = File(desc='estimated spatially varying intensity level that is used '
                       'for normalisation')
     inlier_mask = File(desc='final mask used to compute the normalisation. This mask'
@@ -450,15 +460,6 @@ class MTNormalize(SS3TBase):
     _cmd = "mtnormalise"
     input_spec = MTNormalizeInputSpec
     output_spec = MTNormalizeOutputSpec
-
-    def _list_outputs(self):
-        outputs = self.output_spec().get()
-        outputs['wm_normed_odf'] = op.abspath(self._gen_filename('wm_normed_odf'))
-        outputs['gm_normed_odf'] = op.abspath(self._gen_filename('gm_normed_odf'))
-        outputs['csf_normed_odf'] = op.abspath(self._gen_filename('csf_normed_odf'))
-        outputs['norm_image'] = op.abspath(self._gen_filename('norm_image'))
-        outputs['inlier_mask'] = op.abspath(self._gen_filename('inlier_mask'))
-        return outputs
 
     def _gen_filename(self, name):
         _, fname, ext = split_filename(self.inputs.in_file)
