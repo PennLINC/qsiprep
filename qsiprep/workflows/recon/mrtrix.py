@@ -81,9 +81,10 @@ def init_mrtrix_csd_recon_wf(name="mrtrix_recon", output_suffix="", params={}):
     fod = params.get('fod', {})
     fod_algorithm = fod.get('algorithm', 'msmt_csd')
     fod['algorithm'] = fod_algorithm
+    using_multitissue = fod_algorithm in ('ss3t', 'msmt_csd')
 
     # Intensity normalize?
-    run_mtnormalize = params.get('mtnormalize', True)
+    run_mtnormalize = params.get('mtnormalize', True) and using_multitissue
 
     workflow = pe.Workflow(name=name)
     create_mif = pe.Node(MRTrixIngress(), name='create_mif')
@@ -128,7 +129,7 @@ def init_mrtrix_csd_recon_wf(name="mrtrix_recon", output_suffix="", params={}):
         intensity_norm = pe.Node(
             MTNormalize(inlier_mask='inliers.nii.gz', norm_image='norm.nii.gz'),
             name='intensity_norm')
-        workflow.connect(
+        workflow.connect([
             (resample_mask, intensity_norm, [('out_file', 'mask_file')]),
             (estimate_fod, intensity_norm, [('wm_odf', 'wm_odf'),
                                             ('gm_odf', 'gm_odf'),
@@ -136,7 +137,7 @@ def init_mrtrix_csd_recon_wf(name="mrtrix_recon", output_suffix="", params={}):
             (intensity_norm, outputnode, [('wm_normed_odf', 'fod_sh_mif'),
                                           ('wm_normed_odf', 'wm_odf'),
                                           ('gm_normed_odf', 'gm_odf'),
-                                          ('csf_normed_odf', 'csf_odf')]))
+                                          ('csf_normed_odf', 'csf_odf')])
         ])
 
     if output_suffix:
@@ -157,7 +158,8 @@ def init_mrtrix_csd_recon_wf(name="mrtrix_recon", output_suffix="", params={}):
             run_without_submitting=True)
         workflow.connect(outputnode, 'wm_txt', ds_wm_txt, 'in_file')
 
-        if fod_algorithm == 'msmt_csd':
+        # If multitissue write out FODs for csf, gm
+        if using_multitissue:
             ds_gm_odf = pe.Node(
                 ReconDerivativesDataSink(extension='.mif.gz',
                                          desc="gmFOD" + normed,
@@ -189,6 +191,25 @@ def init_mrtrix_csd_recon_wf(name="mrtrix_recon", output_suffix="", params={}):
                 name='ds_csf_txt',
                 run_without_submitting=True)
             workflow.connect(outputnode, 'csf_txt', ds_csf_txt, 'in_file')
+
+            if run_mtnormalize:
+                ds_mt_norm = pe.Node(
+                    ReconDerivativesDataSink(extension='.mif.gz',
+                                             desc="mtnorm",
+                                             suffix=output_suffix,
+                                             compress=True),
+                    name='ds_mt_norm',
+                    run_without_submitting=True)
+                workflow.connect(intensity_norm, 'norm_image', ds_mt_norm, 'in_file')
+                ds_inlier_mask = pe.Node(
+                    ReconDerivativesDataSink(extension='.mif.gz',
+                                             desc="mtinliermask",
+                                             suffix=output_suffix,
+                                             compress=True),
+                    name='ds_inlier_mask',
+                    run_without_submitting=True)
+                workflow.connect(intensity_norm, 'inlier_mask', ds_inlier_mask, 'in_file')
+
     return workflow
 
 
