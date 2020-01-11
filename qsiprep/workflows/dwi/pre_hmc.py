@@ -17,6 +17,7 @@ from ...engine import Workflow
 # dwi workflows
 from .merge import init_merge_and_denoise_wf
 from .util import get_source_file
+from .qc import init_modelfree_qc_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger('nipype.workflow')
@@ -100,7 +101,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
     outputnode = pe.Node(
         niu.IdentityInterface(fields=[
             'dwi_file', 'bval_file', 'bvec_file', 'original_files', 'denoising_confounds',
-            'noise_images', 'bias_images']),
+            'noise_images', 'bias_images', 'qc_file']),
         name='outputnode')
     dwi_series_pedir = scan_groups['dwi_series_pedir']
     dwi_series = scan_groups['dwi_series']
@@ -142,6 +143,8 @@ def init_dwi_pre_hmc_wf(scan_groups,
 
         # Combine the original images from the splits into one 4D series + bvals/bvecs
         concat_rpe_splits = pe.Node(ConcatRPESplits(), name="concat_rpe_splits")
+        qc_wf = init_modelfree_qc_wf(dwi_files=plus_files + minus_files)
+
         workflow.connect([
             # Merge, denoise, combine
             (merge_plus, concat_rpe_splits, [
@@ -166,8 +169,12 @@ def init_dwi_pre_hmc_wf(scan_groups,
                 ('original_files', 'original_files'),
                 ('denoising_confounds', 'denoising_confounds'),
                 ('noise_images', 'noise_images'),
-                ('bias_images', 'bias_images')])
-            ])
+                ('bias_images', 'bias_images')]),
+            (concat_rpe_splits, qc_wf, [
+                ('bval_file', 'iputnode.bval_file'),
+                ('bvec_file', 'inputnode.bvec_file')]),
+            (qc_wf, outputnode, [('outputnode.qc_summary', 'qc_file')])])
+
         return workflow
 
     merge_dwis = init_merge_and_denoise_wf(
@@ -182,6 +189,8 @@ def init_dwi_pre_hmc_wf(scan_groups,
         calculate_qc=True,
         source_file=source_file)
 
+    qc_wf = init_modelfree_qc_wf(dwi_files=dwi_series)
+
     workflow.connect([
         (merge_dwis, outputnode, [
             ('outputnode.merged_image', 'dwi_file'),
@@ -190,7 +199,11 @@ def init_dwi_pre_hmc_wf(scan_groups,
             ('outputnode.bias_images', 'bias_images'),
             ('outputnode.noise_images', 'noise_images'),
             ('outputnode.denoising_confounds', 'denoising_confounds'),
-            ('outputnode.original_files', 'original_files')])
+            ('outputnode.original_files', 'original_files')]),
+        (merge_dwis, qc_wf, [
+            ('outputnode.merged_bval', 'iputnode.bval_file'),
+            ('outputnode.merged_bvec', 'inputnode.bvec_file')]),
+        (qc_wf, outputnode, [('outputnode.qc_summary', 'qc_file')])
     ])
 
     return workflow

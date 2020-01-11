@@ -18,6 +18,7 @@ from ...interfaces.gradients import (ComposeTransforms, ExtractB0s, GradientRota
                                      LocalGradientRotation)
 from ...interfaces.itk import DisassembleTransform
 from ...interfaces.images import ChooseInterpolator
+from .qc import init_modelfree_qc_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
@@ -156,7 +157,8 @@ generating a *preprocessed DWI run in {tpl} space*.
             'resampled_dwi_mask',
             'rotated_bvecs',
             'local_bvecs',
-            'b0_series']),
+            'b0_series',
+            'resampled_qc']),
         name='outputnode')
 
     def _aslist(in_value):
@@ -268,6 +270,15 @@ generating a *preprocessed DWI run in {tpl} space*.
         (mask_b0s, outputnode, [('mask_file', 'resampled_dwi_mask')]),
         (extract_b0_series, outputnode, [('b0_series', 'b0_series')])])
 
+    # Calculate QC metrics on the resampled data
+    calculate_qc = init_modelfree_qc_wf(name='calculate_qc')
+    workflow.connect([
+        (rotate_gradients, calculate_qc, [
+            ('bvals', 'inputnode.bval_file'),
+            ('bvecs', 'inputnode.bvec_file')]),
+        (merge, calculate_qc, [('out_file', 'inputnode.dwi_file')]),
+        (calculate_qc, outputnode, [('outputnode.qc_summary', 'resampled_qc')])
+    ])
     if write_local_bvecs:
         local_grad_rotation = pe.Node(LocalGradientRotation(), name='local_grad_rotation')
         workflow.connect([

@@ -13,6 +13,7 @@ from copy import deepcopy
 import numpy as np
 from scipy.io.matlab import loadmat, savemat
 import nibabel as nb
+import pandas as pd
 LOGGER = logging.getLogger('nipype.interface')
 
 
@@ -93,7 +94,7 @@ class DSIStudioCreateSrc(CommandLine):
 
 
 class _DSIStudioSrcQCInputSpec(CommandLineInputSpec):
-    src_file = File(exists=True, copyfile=False, argstr="%s",
+    src_file = File(exists=True, copyfile=True, argstr="%s",
                     desc='DSI Studio src[.gz] file')
 
 

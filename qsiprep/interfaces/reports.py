@@ -10,6 +10,7 @@ Interfaces to generate reportlets
 """
 
 import os
+import os.path as op
 import time
 import re
 from collections import defaultdict
@@ -24,6 +25,7 @@ from nipype.interfaces.base import (
 from nipype.interfaces import freesurfer as fs
 from .gradients import concatenate_bvals, concatenate_bvecs
 from matplotlib import animation
+import pandas as pd
 
 SUBJECT_TEMPLATE = """\t<ul class="elem-desc">
 \t\t<li>Subject ID: {subject_id}</li>
@@ -431,3 +433,59 @@ from sub-1_dir-PA_dwi.nii.gz.
         desc += group_desc
 
     return ''.join(desc)
+
+
+class _SeriesQCInputSpec(BaseInterfaceInputSpec):
+    pre_qc = File(exists=True, desc='qc file from the raw data')
+    t1_qc = File(exists=True, desc='qc file from preprocessed image in t1 space')
+    mni_qc = File(exists=True, desc='qc file from preprocessed image in template space')
+    confounds_file = File(exists=True, desc='confounds file')
+
+
+class _SeriesQCOutputSpec(TraitedSpec):
+    series_qc_file = File(exists=True)
+
+
+class CombineQC(SimpleInterface):
+    input_spec = _SeriesQCInputSpec
+    output_spec = _SeriesQCOutputSpec
+
+    def _run_interface(self, runtime):
+        image_qc = [_load_qc_file(self.inputs.pre_qc, prefix="raw_")]
+        if isdefined(self.inputs.t1_qc):
+            image_qc.append(_load_qc_file(self.inputs.t1_qc, prefix="t1_"))
+        if isdefined(self.inputs.mni_qc):
+            image_qc.append(_load_qc_file(self.inputs.mni_qc, prefix="mni_"))
+        all_qc = pd.concat(image_qc, axis=1)
+        output = op.join(runtime.cwd, "dwi_qc.csv")
+
+        all_qc.to_csv(output, index=False)
+        self._results['series_qc_file'] = output
+        return runtime
+
+
+def _load_qc_file(fname, prefix=""):
+    with open(fname, "r") as qc_file:
+        qc_data = qc_file.readlines()
+    data = qc_data[2]
+    parts = data.split('\t')
+    _, dims, voxel_size, dirs, max_b, _, ndc, bad_slices, _ = parts
+    voxelsx, voxelsy, voxelsz = map(float, voxel_size.strip().split())
+    dimx, dimy, dimz = map(float, dims.strip().split())
+    n_dirs = float(dirs)
+    max_b = float(max_b)
+    dwi_corr = float(ndc)
+    n_bad_slices = float(bad_slices)
+    data = {
+        prefix + 'dimension_x': [dimx],
+        prefix + 'dimension_y': [dimy],
+        prefix + 'dimension_z': [dimz],
+        prefix + 'voxel_size_x': [voxelsx],
+        prefix + 'voxel_size_y': [voxelsy],
+        prefix + 'voxel_size_z': [voxelsz],
+        prefix + 'max_b': [max_b],
+        prefix + 'neighbor_corr': [dwi_corr],
+        prefix + 'num_bad_slices': [n_bad_slices],
+        prefix + 'num_directions': [n_dirs]
+    }
+    return pd.DataFrame(data)

@@ -14,11 +14,10 @@ from nipype.pipeline import engine as pe
 from nipype.utils.filemanip import split_filename
 from nipype.interfaces import utility as niu
 from .util import _get_wf_name
+from .qc import init_modelfree_qc_wf
 from ...interfaces import ConformDwi, DerivativesDataSink
 from ...interfaces.mrtrix import DWIDenoise, DWIBiasCorrect, MRDeGibbs
 from ...interfaces.gradients import ExtractB0s
-from ...interfaces.nilearn import MaskEPI, Merge
-from ...interfaces.dsi_studio import DSIStudioSrcQC, DSIStudioCreateSrc
 from ...interfaces.dwi_merge import MergeDWIs, StackConfounds
 from ...engine import Workflow
 
@@ -167,21 +166,11 @@ def init_merge_and_denoise_wf(raw_dwi_files,
 
     # Get a QC score for the raw data
     if calculate_qc:
-        raw_src = pe.Node(DSIStudioCreateSrc(), name='raw_src')
-        raw_qc = pe.Node(DSIStudioSrcQC(), name='raw_qc')
-        if len(raw_dwi_files) > 1:
-            concat_raw_dwis = pe.Node(Merge(in_files=raw_dwi_files, is_dwi=True),
-                                      name='concat_raw_dwis')
-            workflow.connect(concat_raw_dwis, "out_file", raw_src, "input_nifti_file")
-        else:
-            raw_src.inputs.input_nifti_file = raw_dwi_files[0]
+        qc_wf = init_modelfree_qc_wf(dwi_files=raw_dwi_files)
         workflow.connect([
-            (merge_dwis, raw_src, [
-                ('out_bval', 'input_bvals'),
-                ('out_bvec', 'input_bvecs')]),
-            (raw_src, raw_qc, [('output_src', 'src_file')]),
-            (raw_qc, outputnode, [('qc_txt', 'qc_summary')])
-        ])
+            (qc_wf, outputnode, [('outputnode.qc_file', 'qc_summary')]),
+            (merge_dwis, qc_wf, [('out_bval', 'inputnode.bval_file'),
+                                 ('out_bvec', 'inputnode.bvec_file')])])
 
     # Merge the either conformed-only or conformed-and-denoised data
     workflow.connect([

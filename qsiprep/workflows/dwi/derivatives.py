@@ -36,9 +36,22 @@ def init_dwi_derivatives_wf(output_prefix,
             'local_bvecs_t1', 't1_b0_ref', 't1_b0_series', 'gradient_table_t1', 'dwi_mni',
             'dwi_mask_mni', 'cnr_map_mni', 'bvals_mni', 'bvecs_mni', 'local_bvecs_mni',
             'mni_b0_ref', 'mni_b0_series', 'gradient_table_mni', 'confounds',
-            'hmc_optimization_data'
+            'hmc_optimization_data', 'series_qc'
         ]),
         name='inputnode')
+
+    # Save the series qc file
+    ds_qc = pe.Node(
+        DerivativesDataSink(
+            source_file=source_file,
+            base_directory=output_dir,
+            suffix='dwi',
+            extension='.csv',
+            desc='imageQC'),
+        name='ds_qc',
+        run_without_submitting=True,
+        mem_gb=DEFAULT_MEMORY_MIN_GB)
+    workflow.connect([(inputnode, ds_qc, [('series_qc', 'in_file')])])
 
     if hmc_model == '3dSHORE' and shoreline_iters > 1:
         ds_optimization = pe.Node(

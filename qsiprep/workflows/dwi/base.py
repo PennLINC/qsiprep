@@ -239,6 +239,8 @@ def init_dwi_preproc_wf(scan_groups,
             MRTrix-style gradient table
         confounds_file
             estimated motion parameters and zipper scores
+        raw_qc_file
+            DSI Studio QC file for the raw data
 
     **Subworkflows**
 
@@ -307,7 +309,8 @@ def init_dwi_preproc_wf(scan_groups,
         niu.IdentityInterface(fields=[
             'confounds', 'hmc_optimization_data', 'itk_b0_to_t1', 'noise_images', 'bias_images',
             'dwi_files', 'cnr_map', 'bval_files', 'bvec_files', 'b0_ref_image', 'b0_indices',
-            'dwi_mask', 'hmc_xforms', 'fieldwarps', 'sbref_file', 'original_files']),
+            'dwi_mask', 'hmc_xforms', 'fieldwarps', 'sbref_file', 'original_files',
+            'raw_qc_file']),
         name='outputnode')
 
     pre_hmc_wf = init_dwi_pre_hmc_wf(scan_groups=scan_groups,
@@ -370,6 +373,7 @@ def init_dwi_preproc_wf(scan_groups,
             ('t1_brain', 'inputnode.t1_brain'),
             ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform')]),
         (pre_hmc_wf, outputnode, [
+            ('outputnode.qc_file', 'raw_qc_file'),
             ('outputnode.original_files', 'original_files'),
             ('outputnode.bias_images', 'bias_images'),
             ('outputnode.noise_images', 'noise_images')])
