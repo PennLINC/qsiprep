@@ -88,14 +88,14 @@ class B0RPEFieldmap(SimpleInterface):
 
         # Warn the user if the metadata does not match
         merged_metadata = _merge_metadata(b0_fieldmap_metadata)
-
+        merged_b0s = to_lps(fmap_imain, tuple(self.inputs.orientation))
         # Output just one 3/4d image and a sidecar
         if not self.inputs.output_3d_images:
             # Save the conformed fmap
             output_fmap = fname_presuffix(self.inputs.b0_file[0], suffix="conform",
                                           newpath=runtime.cwd)
             output_json = fname_presuffix(output_fmap, use_ext=False, suffix=".json")
-            merged_b0s.to_filename(output_fmap)
+            fmap_imain.to_filename(output_fmap)
             with open(output_json, "w") as sidecar:
                 json.dump(merged_metadata, sidecar)
             self._results['fmap_file'] = output_fmap
@@ -104,8 +104,7 @@ class B0RPEFieldmap(SimpleInterface):
 
         image_list = []
         json_list = []
-        oriented_b0_imgs = to_lps(b0_series, tuple(self.inputs.orientation))
-        for imgnum, img in enumerate(iter_img(oriented_b0_imgs)):
+        for imgnum, img in enumerate(iter_img(merged_b0s)):
 
             # Save the conformed fmap and metadata
             output_fmap = fname_presuffix(self.inputs.b0_file[0],

@@ -16,7 +16,6 @@ import nibabel as nb
 LOGGER = logging.getLogger('nipype.interface')
 
 
-# Step 1 from DSI Studio, importing DICOM files or nifti
 class DSIStudioCreateSrcInputSpec(CommandLineInputSpec):
     test_trait = traits.Bool()
     input_nifti_file = File(
@@ -93,6 +92,31 @@ class DSIStudioCreateSrc(CommandLine):
         return outputs
 
 
+class _DSIStudioSrcQCInputSpec(CommandLineInputSpec):
+    src_file = File(exists=True, copyfile=False, argstr="%s",
+                    desc='DSI Studio src[.gz] file')
+
+
+class _DSIStudioSrcQCOutputSpec(CommandLineInputSpec):
+    qc_txt = File(exists=True, desc="Text file with QC measures")
+
+
+class DSIStudioSrcQC(CommandLine):
+    _cmd = 'dsi_studio --action=qc'
+    input_spec = _DSIStudioSrcQCInputSpec
+    output_spec = _DSIStudioSrcQCOutputSpec
+
+    def _format_arg(self, name, trait_spec, value):
+        if name == 'src_file':
+            return '--source=' + op.dirname(value)
+        return super(DSIStudioSrcQC, self)._format_arg(name, trait_spec, value)
+
+    def _list_outputs(self):
+        outputs = self.output_spec().get()
+        outputs['qc_txt'] = op.abspath("src_report.txt")
+        return outputs
+
+
 # Step 2 reonstruct ODFs
 class DSIStudioReconstructionInputSpec(CommandLineInputSpec):
     input_src_file = File(
@@ -131,12 +155,6 @@ class DSIStudioReconstructionInputSpec(CommandLineInputSpec):
         usedefault=True,
         argstr="--num_fiber=%d",
         desc="number of fiber populations estimated at each voxel")
-    grad_dev = File(
-        desc="Gradient deviation file",
-        exists=True,
-        copyfile=True,
-        position=-1,
-        argstr="#%s")
 
     # Decomposition traits
     decomposition = traits.Bool(

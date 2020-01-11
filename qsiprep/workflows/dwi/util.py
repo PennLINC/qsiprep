@@ -168,9 +168,6 @@ def init_enhance_and_skullstrip_dwi_wf(name='enhance_and_skullstrip_dwi_wf', omp
 
     enhance_and_mask_b0 = pe.Node(EnhanceAndSkullstripB0(), name='enhance_and_mask_b0')
 
-    fix_mask_header = pe.Node(CopyHeader(), name='fix_mask_header')
-    fix_smooth_mask_header = pe.Node(CopyHeader(), name='fix_smooth_mask_header')
-
     workflow.connect([
         (inputnode, enhance_and_mask_b0, [('in_file', 'b0_file')]),
         (enhance_and_mask_b0, outputnode, [

@@ -17,7 +17,8 @@ from .util import _get_wf_name
 from ...interfaces import ConformDwi, DerivativesDataSink
 from ...interfaces.mrtrix import DWIDenoise, DWIBiasCorrect, MRDeGibbs
 from ...interfaces.gradients import ExtractB0s
-from ...interfaces.nilearn import MaskEPI
+from ...interfaces.nilearn import MaskEPI, Merge
+from ...interfaces.dsi_studio import DSIStudioSrcQC, DSIStudioCreateSrc
 from ...interfaces.dwi_merge import MergeDWIs, StackConfounds
 from ...engine import Workflow
 
@@ -36,6 +37,7 @@ def init_merge_and_denoise_wf(raw_dwi_files,
                               source_file,
                               mem_gb=1,
                               omp_nthreads=1,
+                              calculate_qc=False,
                               name="merge_and_denoise_wf"):
     """
 
@@ -73,6 +75,8 @@ def init_merge_and_denoise_wf(raw_dwi_files,
             run ``dwidenoise`` before combining dwis. Requires ``combine_all_dwis``
             If ``dwi_denoise_window > 0`` and this is ``False``, then ``dwidenoise``
             is run on the merged dwi series.
+        calculate_qc : bool
+            Should DSI Studio's QC be calculated on the merged raw data?
 
     **Outputs**
 
@@ -86,6 +90,8 @@ def init_merge_and_denoise_wf(raw_dwi_files,
             image(s) created by ``dwidenoise``
         original_files
             names of the original files for each volume
+        qc_summary
+            DSI Studio QC text file
 
     """
 
@@ -93,7 +99,7 @@ def init_merge_and_denoise_wf(raw_dwi_files,
     outputnode = pe.Node(
         niu.IdentityInterface(fields=[
             'merged_image', 'merged_bval', 'merged_bvec', 'noise_images', 'bias_images',
-            'denoising_confounds', 'original_files']),
+            'denoising_confounds', 'original_files', 'qc_summary']),
         name='outputnode')
 
     # DWIs will be merged at some point.
@@ -159,6 +165,24 @@ def init_merge_and_denoise_wf(raw_dwi_files,
             (dwi_source, conformed_bvecs, [(edge_prefix + 'bvec_file', 'in%d' % dwi_num)]),
         ])
 
+    # Get a QC score for the raw data
+    if calculate_qc:
+        raw_src = pe.Node(DSIStudioCreateSrc(), name='raw_src')
+        raw_qc = pe.Node(DSIStudioSrcQC(), name='raw_qc')
+        if len(raw_dwi_files) > 1:
+            concat_raw_dwis = pe.Node(Merge(in_files=raw_dwi_files, is_dwi=True),
+                                      name='concat_raw_dwis')
+            workflow.connect(concat_raw_dwis, "out_file", raw_src, "input_nifti_file")
+        else:
+            raw_src.inputs.input_nifti_file = raw_dwi_files[0]
+        workflow.connect([
+            (merge_dwis, raw_src, [
+                ('out_bval', 'input_bvals'),
+                ('out_bvec', 'input_bvecs')]),
+            (raw_src, raw_qc, [('output_src', 'src_file')]),
+            (raw_qc, outputnode, [('qc_txt', 'qc_summary')])
+        ])
+
     # Merge the either conformed-only or conformed-and-denoised data
     workflow.connect([
         (conformed_images, merge_dwis, [('out', 'dwi_files')]),
@@ -167,8 +191,7 @@ def init_merge_and_denoise_wf(raw_dwi_files,
         (merge_dwis, outputnode, [
             ('original_images', 'original_files'),
             ('out_bval', 'merged_bval'),
-            ('out_bvec', 'merged_bvec')])
-    ])
+            ('out_bvec', 'merged_bvec')])])
 
     # We have denoised and combined, therefore we are done
     if denoise_before_combining:

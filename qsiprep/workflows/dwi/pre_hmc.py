@@ -122,6 +122,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
                                                orientation=orientation,
                                                omp_nthreads=omp_nthreads,
                                                source_file=plus_source_file,
+                                               calculate_qc=False,
                                                name="merge_plus")
 
         # Merge, denoise, split, hmc on the minus series
@@ -136,6 +137,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
                                                 orientation=orientation,
                                                 omp_nthreads=omp_nthreads,
                                                 source_file=minus_source_file,
+                                                calculate_qc=False,
                                                 name="merge_minus")
 
         # Combine the original images from the splits into one 4D series + bvals/bvecs
@@ -177,6 +179,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
         no_b0_harmonization=no_b0_harmonization,
         denoise_before_combining=denoise_before_combining,
         orientation=orientation,
+        calculate_qc=True,
         source_file=source_file)
 
     workflow.connect([
