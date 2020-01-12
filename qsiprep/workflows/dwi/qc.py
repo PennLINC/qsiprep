@@ -66,7 +66,7 @@ def init_modelfree_qc_wf(dwi_files=None, name='dwi_qc_wf'):
         niu.IdentityInterface(fields=['dwi_file', 'bval_file', 'bvec_file']),
         name='inputnode')
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=['qc_file']),
+        niu.IdentityInterface(fields=['qc_summary']),
         name='outputnode')
 
     raw_src = pe.Node(DSIStudioCreateSrc(), name='raw_src')
@@ -84,8 +84,8 @@ def init_modelfree_qc_wf(dwi_files=None, name='dwi_qc_wf'):
 
     workflow.connect([
         (inputnode, raw_src, [
-            ('out_bval', 'input_bvals'),
-            ('out_bvec', 'input_bvecs')]),
+            ('bval_file', 'input_bvals_file'),
+            ('bvec_file', 'input_bvecs_file')]),
         (raw_src, raw_qc, [('output_src', 'src_file')]),
         (raw_qc, outputnode, [('qc_txt', 'qc_summary')])
     ])

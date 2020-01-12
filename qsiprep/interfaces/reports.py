@@ -440,13 +440,14 @@ class _SeriesQCInputSpec(BaseInterfaceInputSpec):
     t1_qc = File(exists=True, desc='qc file from preprocessed image in t1 space')
     mni_qc = File(exists=True, desc='qc file from preprocessed image in template space')
     confounds_file = File(exists=True, desc='confounds file')
+    coreg_score = traits.Float()
 
 
 class _SeriesQCOutputSpec(TraitedSpec):
     series_qc_file = File(exists=True)
 
 
-class CombineQC(SimpleInterface):
+class SeriesQC(SimpleInterface):
     input_spec = _SeriesQCInputSpec
     output_spec = _SeriesQCOutputSpec
 

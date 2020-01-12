@@ -15,7 +15,7 @@ from nipype.interfaces import utility as niu
 
 from ...interfaces import DerivativesDataSink
 from ...niworkflows.interfaces.registration import SimpleBeforeAfterRPT
-from ...interfaces.reports import GradientPlot, SeriesQCSummary
+from ...interfaces.reports import GradientPlot, SeriesQC
 from ...interfaces.mrtrix import MRTrixGradientTable
 from ...engine import Workflow
 
@@ -216,7 +216,8 @@ def init_dwi_finalize_wf(scan_groups,
             't1_preproc', 't1_brain', 't1_mask', 'mni_mask', 't1_seg', 't1_tpms',
             't1_aseg', 't1_aparc',
             't1_2_mni_reverse_transform', 't1_2_fsnative_forward_transform',
-            't1_2_fsnative_reverse_transform', 'dwi_sampling_grid', 'raw_qc_file'
+            't1_2_fsnative_reverse_transform', 'dwi_sampling_grid', 'raw_qc_file',
+            'coreg_score'
         ]),
         name='inputnode')
     outputnode = pe.Node(
@@ -224,7 +225,7 @@ def init_dwi_finalize_wf(scan_groups,
             'dwi_t1', 'dwi_mask_t1', 'cnr_map_t1', 'bvals_t1', 'bvecs_t1', 'local_bvecs_t1',
             't1_b0_ref', 't1_b0_series', 'dwi_mni', 'dwi_mask_mni', 'cnr_map_mni', 'bvals_mni',
             'bvecs_mni', 'local_bvecs_mni', 'mni_b0_ref', 'mni_b0_series', 'confounds',
-            'gradient_table_mni', 'gradient_table_t1', 'hmc_optimization_data', 'qc_t1', 'qc_mni'
+            'gradient_table_mni', 'gradient_table_t1', 'hmc_optimization_data', 'series_qc'
         ]),
         name='outputnode')
 
@@ -258,10 +259,19 @@ def init_dwi_finalize_wf(scan_groups,
         hmc_model=hmc_model,
         shoreline_iters=shoreline_iters)
 
+    # Combine all the QC measures for a series QC
+    series_qc = pe.Node(SeriesQC(), name='series_qc')
+    ds_series_qc = pe.Node(
+        DerivativesDataSink(desc='ImageQC', suffix='dwi', source_file=source_file,
+                            base_directory=output_dir),
+        name='ds_series_qc', run_without_submitting=True,
+        mem_gb=DEFAULT_MEMORY_MIN_GB)
+
     workflow.connect([
-        (inputnode, dwi_derivatives_wf, [
-            ('dwi_files', 'inputnode.source_file'),
-            ('raw_qc_file', 'qc_orig')]),
+        (inputnode, series_qc, [('raw_qc_file', 'pre_qc')]),
+        (series_qc, ds_series_qc, [('series_qc_file', 'in_file')]),
+        (inputnode, dwi_derivatives_wf, [('dwi_files', 'inputnode.source_file')]),
+        (inputnode, series_qc, [('coreg_score', 'coreg_score')]),
         (inputnode, outputnode, [('hmc_optimization_data', 'hmc_optimization_data')]),
         (outputnode, dwi_derivatives_wf,
          [('dwi_t1', 'inputnode.dwi_t1'),
@@ -283,9 +293,7 @@ def init_dwi_finalize_wf(scan_groups,
           ('mni_b0_series', 'inputnode.mni_b0_series'),
           ('gradient_table_mni', 'inputnode.gradient_table_mni'),
           ('confounds', 'inputnode.confounds'),
-          ('hmc_optimization_data', 'inputnode.hmc_optimization_data'),
-          ('qc_t1', 'inputnode.qc_t1'),
-          ('qc_mni', 'inputnode.qc_mni')])
+          ('hmc_optimization_data', 'inputnode.hmc_optimization_data')])
     ])
 
     workflow.connect([
@@ -335,11 +343,11 @@ def init_dwi_finalize_wf(scan_groups,
                                              ('outputnode.local_bvecs', 'local_bvecs_t1'),
                                              ('outputnode.b0_series', 't1_b0_series'),
                                              ('outputnode.dwi_ref_resampled', 't1_b0_ref'),
-                                             ('outputnode.resampled_dwi_mask', 'dwi_mask_t1'),
-                                             ('outputnode.resampled_qc', 'qc_t1')]),
+                                             ('outputnode.resampled_dwi_mask', 'dwi_mask_t1')]),
             (outputnode, gradient_plot, [('bvecs_t1', 'final_bvec_file')]),
             (transform_dwis_t1, gtab_t1, [('outputnode.bvals', 'bval_file'),
                                           ('outputnode.rotated_bvecs', 'bvec_file')]),
+            (transform_dwis_t1, series_qc, [('outputnode.resampled_qc', 't1_qc')]),
             (gtab_t1, outputnode, [('gradient_file', 'gradient_table_t1')])])
 
     if "template" in output_spaces:
@@ -380,16 +388,15 @@ def init_dwi_finalize_wf(scan_groups,
                                               ('outputnode.dwi_mask_resampled', 'dwi_mask_mni'),
                                               ('outputnode.b0_series', 'mni_b0_series'),
                                               ('outputnode.local_bvecs', 'local_bvecs_mni'),
-                                              ('outputnode.dwi_ref_resampled', 'mni_b0_ref'),
-                                              ('outputnode.resampled_qc', 'qc_mni')]),
+                                              ('outputnode.dwi_ref_resampled', 'mni_b0_ref')]),
             (transform_dwis_mni, gtab_mni, [('outputnode.bvals', 'bval_file'),
                                             ('outputnode.rotated_bvecs', 'bvec_file')]),
+            (transform_dwis_mni, series_qc, [('outputnode.qc_summary', 'mni_qc')]),
             (gtab_mni, outputnode, [('gradient_file', 'gradient_table_mni')])
         ])
         if "T1w" not in output_spaces:
             workflow.connect([(outputnode, gradient_plot, [('bvecs_mni', 'final_bvec_file')])])
 
-    # Combine all the QC measures for a
     # Fill-in datasinks of reportlets seen so far
     for node in workflow.list_node_names():
         if node.split('.')[-1].startswith('ds_report'):

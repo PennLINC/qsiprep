@@ -171,7 +171,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
                 ('noise_images', 'noise_images'),
                 ('bias_images', 'bias_images')]),
             (concat_rpe_splits, qc_wf, [
-                ('bval_file', 'iputnode.bval_file'),
+                ('bval_file', 'inputnode.bval_file'),
                 ('bvec_file', 'inputnode.bvec_file')]),
             (qc_wf, outputnode, [('outputnode.qc_summary', 'qc_file')])])
 
@@ -201,7 +201,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
             ('outputnode.denoising_confounds', 'denoising_confounds'),
             ('outputnode.original_files', 'original_files')]),
         (merge_dwis, qc_wf, [
-            ('outputnode.merged_bval', 'iputnode.bval_file'),
+            ('outputnode.merged_bval', 'inputnode.bval_file'),
             ('outputnode.merged_bvec', 'inputnode.bvec_file')]),
         (qc_wf, outputnode, [('outputnode.qc_summary', 'qc_file')])
     ])

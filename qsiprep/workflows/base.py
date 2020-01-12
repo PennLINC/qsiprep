@@ -736,7 +736,8 @@ to workflows in *qsiprep*'s documentation]\
                     ('outputnode.fieldwarps', 'inputnode.fieldwarps'),
                     ('outputnode.itk_b0_to_t1', 'inputnode.itk_b0_to_t1'),
                     ('outputnode.hmc_optimization_data', 'inputnode.hmc_optimization_data'),
-                    ('outputnode.raw_qc_file', 'inputnode.raw_qc_file')
+                    ('outputnode.raw_qc_file', 'inputnode.raw_qc_file'),
+                    ('outputnode.coreg_score', 'inputnode.coreg_score')
                     ])
         ])
 

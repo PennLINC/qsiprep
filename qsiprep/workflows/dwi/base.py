@@ -310,7 +310,7 @@ def init_dwi_preproc_wf(scan_groups,
             'confounds', 'hmc_optimization_data', 'itk_b0_to_t1', 'noise_images', 'bias_images',
             'dwi_files', 'cnr_map', 'bval_files', 'bvec_files', 'b0_ref_image', 'b0_indices',
             'dwi_mask', 'hmc_xforms', 'fieldwarps', 'sbref_file', 'original_files',
-            'raw_qc_file']),
+            'raw_qc_file', 'coreg_score']),
         name='outputnode')
 
     pre_hmc_wf = init_dwi_pre_hmc_wf(scan_groups=scan_groups,
@@ -434,7 +434,8 @@ def init_dwi_preproc_wf(scan_groups,
         (hmc_wf, summary, [('outputnode.sdc_method', 'distortion_correction')]),
         (b0_coreg_wf, ds_report_coreg, [('outputnode.report', 'in_file')]),
         (b0_coreg_wf, outputnode, [
-            (('outputnode.itk_b0_to_t1', _get_first), 'itk_b0_to_t1')])
+            (('outputnode.itk_b0_to_t1', _get_first), 'itk_b0_to_t1'),
+            ('outputnode.coreg_metric', 'coreg_score')])
     ])
 
     # Compute and gather confounds

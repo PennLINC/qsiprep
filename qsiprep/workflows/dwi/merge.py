@@ -18,6 +18,7 @@ from .qc import init_modelfree_qc_wf
 from ...interfaces import ConformDwi, DerivativesDataSink
 from ...interfaces.mrtrix import DWIDenoise, DWIBiasCorrect, MRDeGibbs
 from ...interfaces.gradients import ExtractB0s
+from ...interfaces.nilearn import MaskEPI
 from ...interfaces.dwi_merge import MergeDWIs, StackConfounds
 from ...engine import Workflow
 
@@ -168,7 +169,7 @@ def init_merge_and_denoise_wf(raw_dwi_files,
     if calculate_qc:
         qc_wf = init_modelfree_qc_wf(dwi_files=raw_dwi_files)
         workflow.connect([
-            (qc_wf, outputnode, [('outputnode.qc_file', 'qc_summary')]),
+            (qc_wf, outputnode, [('outputnode.qc_summary', 'qc_summary')]),
             (merge_dwis, qc_wf, [('out_bval', 'inputnode.bval_file'),
                                  ('out_bvec', 'inputnode.bvec_file')])])
 
