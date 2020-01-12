@@ -391,7 +391,7 @@ def init_dwi_finalize_wf(scan_groups,
                                               ('outputnode.dwi_ref_resampled', 'mni_b0_ref')]),
             (transform_dwis_mni, gtab_mni, [('outputnode.bvals', 'bval_file'),
                                             ('outputnode.rotated_bvecs', 'bvec_file')]),
-            (transform_dwis_mni, series_qc, [('outputnode.qc_summary', 'mni_qc')]),
+            (transform_dwis_mni, series_qc, [('outputnode.resampled_qc', 'mni_qc')]),
             (gtab_mni, outputnode, [('gradient_file', 'gradient_table_mni')])
         ])
         if "T1w" not in output_spaces:

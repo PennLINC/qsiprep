@@ -22,7 +22,6 @@ class DSIStudioCreateSrcInputSpec(CommandLineInputSpec):
     input_nifti_file = File(
         desc="DWI Nifti file",
         argstr="--source=%s",
-        exists=True,
         copyfile=False)
     input_dicom_dir = File(
         desc="Directory with DICOM data from only the dwi",
