@@ -69,11 +69,12 @@ RUN add-apt-repository ppa:beineri/opt-qt-5.12.2-xenial \
     && apt-get update \
     && apt install -y --no-install-recommends \
     freetds-common libclang1-5.0 libllvm5.0 libodbc1 libsdl2-2.0-0 libsndio6.1 \
-    qt5123d qt512base qt512canvas3d \
-    qt512declarative qt512graphicaleffects \
-    qt512imageformats \
-    qt512charts-no-lgpl \
+    libsybdb5 libxcb-xinerama0 qt5123d qt512base qt512canvas3d \
+    qt512connectivity qt512declarative qt512graphicaleffects \
+    qt512imageformats qt512location qt512multimedia qt512scxml qt512svg \
+    qt512wayland qt512x11extras qt512xmlpatterns qt512charts-no-lgpl \
     && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
 ENV QT_BASE_DIR="/opt/qt512"
 ENV QTDIR="$QT_BASE_DIR" \
     PATH="$QT_BASE_DIR/bin:$PATH:/opt/dsi-studio/dsi_studio_64" \
@@ -148,7 +149,7 @@ ENV QTDIR="$QT_BASE_DIR" \
     PKG_CONFIG_PATH="$QT_BASE_DIR/lib/pkgconfig:$PKG_CONFIG_PATH"
 ARG DSI_SHA=daea4f1b4bc560243b1bd6c3ac40ce7f6c0b3ed4
 ARG TIPL_SHA=a0688617db9352d6fb8c046126f7c90a9dd13411
-RUN mkdir -p /opt/dsi-studio/dsi_studio_64 \
+RUN mkdir /opt/dsi-studio \
   && cd /opt/dsi-studio \
   && curl -sSLO https://github.com/frankyeh/DSI-Studio/archive/${DSI_SHA}.zip \
   && unzip ${DSI_SHA}.zip \
@@ -160,12 +161,14 @@ RUN mkdir -p /opt/dsi-studio/dsi_studio_64 \
   && rm ${TIPL_SHA}.zip \
   && mkdir build && cd build \
   && /opt/qt512/bin/qmake ../src && make \
-  && cd /opt/dsi-studio/dsi_studio_64 \
-  && curl -sSLO 'https://www.dropbox.com/s/rq5khgmoyiye0op/dsi_studio_other_files.zip' \
-  && unzip dsi_studio_other_files.zip \
-  && rm dsi_studio_other_files.zip \
+  && cd /opt/dsi-studio \
+  && curl -sSLO 'https://upenn.box.com/shared/static/01r73d4a15utl13himv4d7cjpa6etf6z.gz' \
+  && tar xvfz 01r73d4a15utl13himv4d7cjpa6etf6z.gz \
+  && rm 01r73d4a15utl13himv4d7cjpa6etf6z.gz \
+  && cd dsi_studio_64 \
   && mv ../build/dsi_studio . \
   && rm -rf /opt/dsi-studio/src /opt/dsi-studio/build
+
 
 # Install mrtrix3 from source
 ARG MRTRIX_SHA=5d6b3a6ffc6ee651151779539c8fd1e2e03fad81
@@ -189,7 +192,7 @@ RUN cd /opt \
     && mv MRtrix3Tissue-${MRTRIX_SHA} /opt/3Tissue \
     && rm ${MRTRIX_SHA}.zip \
     && cd /opt/3Tissue \
-    && ./configure \
+    && ./configure -nogui \
     && echo "Compiling MRtrix3-3Tissue ..." \
     && ./build
 
