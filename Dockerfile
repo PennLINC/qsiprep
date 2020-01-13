@@ -141,7 +141,12 @@ RUN apt-get update && \
 
 
 # Install DSI Studio
-ARG DSI_SHA=e017604dac47798609ad892216a778e4a04e1ebe
+ENV QT_BASE_DIR="/opt/qt512"
+ENV QTDIR="$QT_BASE_DIR" \
+    PATH="$QT_BASE_DIR/bin:$PATH:/opt/dsi-studio/dsi_studio_64" \
+    LD_LIBRARY_PATH="$QT_BASE_DIR/lib/x86_64-linux-gnu:$QT_BASE_DIR/lib:$LD_LIBRARY_PATH" \
+    PKG_CONFIG_PATH="$QT_BASE_DIR/lib/pkgconfig:$PKG_CONFIG_PATH"
+ARG DSI_SHA=daea4f1b4bc560243b1bd6c3ac40ce7f6c0b3ed4
 ARG TIPL_SHA=a0688617db9352d6fb8c046126f7c90a9dd13411
 RUN mkdir -p /opt/dsi-studio/dsi_studio_64 \
   && cd /opt/dsi-studio \
