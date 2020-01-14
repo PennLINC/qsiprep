@@ -216,7 +216,7 @@ RUN mkdir /opt/cmake \
     && cd /tmp/ants/build \
     && mkdir -p /opt/ants-latest \
     && git config --global url."https://".insteadOf git:// \
-    && cmake -DBUILD_SHARED_LIBS=ON -DCMAKE_INSTALL_PREFIX=/opt/ants-latest /tmp/ants/source \
+    && cmake -DBUILD_TESTING=OFF -DBUILD_SHARED_LIBS=ON -DCMAKE_INSTALL_PREFIX=/opt/ants-latest /tmp/ants/source \
     && make -j2 \
     && cd ANTS-build \
     && make install \
