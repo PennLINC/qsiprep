@@ -51,7 +51,7 @@ def init_dwi_derivatives_wf(output_prefix,
         name='ds_qc',
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB)
-    workflow.connect([(inputnode, ds_qc, [('series_qc', 'in_file')])])
+    # workflow.connect([(inputnode, ds_qc, [('series_qc', 'in_file')])])
 
     if hmc_model == '3dSHORE' and shoreline_iters > 1:
         ds_optimization = pe.Node(

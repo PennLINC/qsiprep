@@ -739,7 +739,8 @@ to workflows in *qsiprep*'s documentation]\
                     ('outputnode.raw_qc_file', 'inputnode.raw_qc_file'),
                     ('outputnode.coreg_score', 'inputnode.coreg_score'),
                     ('outputnode.raw_concatenated', 'inputnode.raw_concatenated'),
-                    ('outputnode.confounds', 'inputnode.confounds')
+                    ('outputnode.confounds', 'inputnode.confounds'),
+                    ('outputnode.carpetplot_data', 'inputnode.carpetplot_data')
                     ])
         ])
 

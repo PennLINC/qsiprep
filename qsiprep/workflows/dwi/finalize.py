@@ -141,6 +141,8 @@ def init_dwi_finalize_wf(scan_groups,
             The QC file from the DWI data before any preprocessing
         raw_concatenated
             The original raw images in a single 4D file
+        carpetplot_data
+            File containing carpetplot data
 
     **Outputs**
 
@@ -220,7 +222,7 @@ def init_dwi_finalize_wf(scan_groups,
             't1_aseg', 't1_aparc',
             't1_2_mni_reverse_transform', 't1_2_fsnative_forward_transform',
             't1_2_fsnative_reverse_transform', 'dwi_sampling_grid', 'raw_qc_file',
-            'coreg_score', 'raw_concatenated', 'confounds'
+            'coreg_score', 'raw_concatenated', 'confounds', 'carpetplot_data'
         ]),
         name='inputnode')
     outputnode = pe.Node(
@@ -228,7 +230,7 @@ def init_dwi_finalize_wf(scan_groups,
             'dwi_t1', 'dwi_mask_t1', 'cnr_map_t1', 'bvals_t1', 'bvecs_t1', 'local_bvecs_t1',
             't1_b0_ref', 't1_b0_series', 'dwi_mni', 'dwi_mask_mni', 'cnr_map_mni', 'bvals_mni',
             'bvecs_mni', 'local_bvecs_mni', 'mni_b0_ref', 'mni_b0_series', 'confounds',
-            'gradient_table_mni', 'gradient_table_t1', 'hmc_optimization_data', 'series_qc'
+            'gradient_table_mni', 'gradient_table_t1', 'hmc_optimization_data'
         ]),
         name='outputnode')
 
@@ -273,7 +275,7 @@ def init_dwi_finalize_wf(scan_groups,
     # Gather files for creating an interactive report
     interactive_report_wf = init_interactive_report_wf()
     ds_report_interactive = pe.Node(
-        DerivativesDataSink(desc='interactive', suffix='dwi', source_file=source_file,
+        DerivativesDataSink(suffix='interactive', source_file=source_file,
                             base_directory=reportlets_dir),
         name='ds_report_interactive', run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB)
@@ -281,9 +283,8 @@ def init_dwi_finalize_wf(scan_groups,
     workflow.connect([
         (inputnode, interactive_report_wf, [
             ('raw_concatenated', 'inputnode.raw_dwi_file'),
-            ('confounds', 'inputnode.confounds_files'),
-            ('bval_files', 'inputnode.bval_files'),
-            ('dwi_mask', 'inputnode.mask_file')]),
+            ('confounds', 'inputnode.confounds_file'),
+            ('carpetplot_data', 'inputnode.carpetplot_data')]),
         (interactive_report_wf, ds_report_interactive, [('outputnode.out_report', 'in_file')]),
         (inputnode, series_qc, [('raw_qc_file', 'pre_qc')]),
         (series_qc, ds_series_qc, [('series_qc_file', 'in_file')]),
@@ -360,13 +361,17 @@ def init_dwi_finalize_wf(scan_groups,
                                              ('outputnode.local_bvecs', 'local_bvecs_t1'),
                                              ('outputnode.b0_series', 't1_b0_series'),
                                              ('outputnode.dwi_ref_resampled', 't1_b0_ref'),
-                                             ('outputnode.resampled_dwi_mask', 'dwi_mask_t1')]),
+                                             ('outputnode.resampled_dwi_mask', 'dwi_mask_t1'),
+                                             ('outputnode.resampled_qc', 'series_qc_t1')]),
             (outputnode, gradient_plot, [('bvecs_t1', 'final_bvec_file')]),
             (transform_dwis_t1, gtab_t1, [('outputnode.bvals', 'bval_file'),
                                           ('outputnode.rotated_bvecs', 'bvec_file')]),
             (transform_dwis_t1, series_qc, [('outputnode.resampled_qc', 't1_qc')]),
             (transform_dwis_t1, interactive_report_wf, [
-                ('outputnode.dwi_resampled', 'inputnode.processed_dwi_file')]),
+                ('outputnode.dwi_resampled', 'inputnode.processed_dwi_file'),
+                ('outputnode.resampled_dwi_mask', 'inputnode.mask_file'),
+                ('outputnode.bvals', 'inputnode.bval_file'),
+                ('outputnode.rotated_bvecs', 'inputnode.bvec_file')]),
             (gtab_t1, outputnode, [('gradient_file', 'gradient_table_t1')])])
 
     if "template" in output_spaces:

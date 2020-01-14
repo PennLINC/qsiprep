@@ -516,16 +516,17 @@ class TensorReconstructionInputSpec(DipyReconInputSpec):
 
 
 class TensorReconstructionOutputSpec(DipyReconOutputSpec):
-    color_fa = File()
+    color_fa_image = File()
     fa_image = File()
     md_image = File()
     rd_image = File()
+    ad_image = File()
     cnr_image = File()
 
 
 class TensorReconstruction(DipyReconInterface):
-    input_spec = BrainSuiteShoreReconstructionInputSpec
-    output_spec = BrainSuiteShoreReconstructionOutputSpec
+    input_spec = TensorReconstructionInputSpec
+    output_spec = TensorReconstructionOutputSpec
 
     def _run_interface(self, runtime):
         gtab = self._get_gtab()
@@ -549,7 +550,7 @@ class TensorReconstruction(DipyReconInterface):
             out_name = fname_presuffix(self.inputs.dwi_file,
                                        suffix=metric,
                                        newpath=runtime.cwd, use_ext=True)
-            nb.Nifti1Image(data, affine).to_filename(out_name)
-            self._results[metric] = out_name
+            nb.Nifti1Image(data, dwi_img.affine).to_filename(out_name)
+            self._results[metric + "_image"] = out_name
 
         return runtime

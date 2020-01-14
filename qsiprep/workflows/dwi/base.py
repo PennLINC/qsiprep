@@ -243,6 +243,8 @@ def init_dwi_preproc_wf(scan_groups,
             DSI Studio QC file for the raw data
         raw_concatenated
             concatenated raw images for a qc report
+        carpetplot_data
+            path to a file containing carpetplot data
 
     **Subworkflows**
 
@@ -312,7 +314,7 @@ def init_dwi_preproc_wf(scan_groups,
             'confounds', 'hmc_optimization_data', 'itk_b0_to_t1', 'noise_images', 'bias_images',
             'dwi_files', 'cnr_map', 'bval_files', 'bvec_files', 'b0_ref_image', 'b0_indices',
             'dwi_mask', 'hmc_xforms', 'fieldwarps', 'sbref_file', 'original_files',
-            'raw_qc_file', 'coreg_score', 'raw_concatenated']),
+            'raw_qc_file', 'coreg_score', 'raw_concatenated', 'carpetplot_data']),
         name='outputnode')
 
     pre_hmc_wf = init_dwi_pre_hmc_wf(scan_groups=scan_groups,
@@ -379,7 +381,7 @@ def init_dwi_preproc_wf(scan_groups,
             ('outputnode.original_files', 'original_files'),
             ('outputnode.bias_images', 'bias_images'),
             ('outputnode.noise_images', 'noise_images'),
-            ('outputnode.concatenated_data', 'raw_concatenated')])
+            ('outputnode.raw_concatenated', 'raw_concatenated')])
     ])
 
     # calculate dwi registration to T1w
@@ -467,6 +469,7 @@ def init_dwi_preproc_wf(scan_groups,
         (hmc_wf, confounds_wf, [
             ('outputnode.slice_quality', 'inputnode.sliceqc_file'),
             ('outputnode.motion_params', 'inputnode.motion_params')]),
+        (hmc_wf, outputnode, [('outputnode.slice_quality', 'carpetplot_data')]),
         (pre_hmc_wf, confounds_wf, [
             ('outputnode.denoising_confounds', 'inputnode.denoising_confounds'),
             ('outputnode.bval_file', 'inputnode.bval_file'),

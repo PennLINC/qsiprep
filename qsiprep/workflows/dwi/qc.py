@@ -118,24 +118,25 @@ def init_interactive_report_wf(name="interactive_report_wf"):
 
     inputnode = pe.Node(
         niu.IdentityInterface(fields=[
-            "raw_dwi_file", "processed_dwi_file", "confounds_file", "bval_files",
-            "bvec_files", "mask_file"]),
-        name="outputnode")
+            "raw_dwi_file", "processed_dwi_file", "confounds_file", "bval_file",
+            "bvec_file", "mask_file", "carpetplot_data"]),
+        name="inputnode")
     outputnode = pe.Node(niu.IdentityInterface(fields=["out_report"]), name="outputnode")
     interactive_report = pe.Node(InteractiveReport(), name='interactive_report')
     workflow = Workflow(name=name)
     tensor_fit = pe.Node(TensorReconstruction(), name='tensor_fit')
     workflow.connect([
         (inputnode, tensor_fit, [
-            ('dwi_file', 'dwi_file'),
+            ('processed_dwi_file', 'dwi_file'),
             ('bval_file', 'bval_file'),
             ('bvec_file', 'bvec_file'),
             ('mask_file', 'mask_file')]),
         (tensor_fit, interactive_report, [('color_fa_image', 'color_fa')]),
         (inputnode, interactive_report, [
+            ('raw_dwi_file', 'raw_dwi_file'),
+            ('processed_dwi_file', 'processed_dwi_file'),
             ('confounds_file', 'confounds_file'),
-            ('dwi_file', 'dwi_file'),
             ('mask_file', 'mask_file')]),
-        (interactive_report, outputnode, [('out_file', 'out_report')])
+        (interactive_report, outputnode, [('out_report', 'out_report')])
     ])
     return workflow

@@ -12,6 +12,7 @@ Interfaces to generate reportlets
 import os
 import os.path as op
 import time
+import json
 import re
 from collections import defaultdict
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
@@ -76,27 +77,26 @@ GROUPING_TEMPLATE = """\t<ul>
 
 INTERACTIVE_TEMPLATE = """
 <script src="https://unpkg.com/vue"></script>
-<script src="./dmriprepReport.umd.js"></script>
-<link rel="stylesheet" href="./dmriprepReport.css">
+<script src="https://nipreps.github.io/dmriprep-viewer/dmriprepReport.umd.min.js"></script>
+<link rel="stylesheet" href="https://nipreps.github.io/dmriprep-viewer/dmriprepReport.css">
 
 <div id="app">
   <demo :report="report"></demo>
 </div>
 
 <script>
-
-d3.json('./report.json').then((report) => {
+var report = REPORT
   new Vue({
     components: {
       demo: dmriprepReport
     },
     data () {
       return {
-        {report}
+        report
       }
     }
   }).$mount('#app')
-})
+
 </script>
 """
 
@@ -488,7 +488,6 @@ class SeriesQC(SimpleInterface):
             image_qc.append(_load_qc_file(self.inputs.mni_qc, prefix="mni_"))
         all_qc = pd.concat(image_qc, axis=1)
         output = op.join(runtime.cwd, "dwi_qc.csv")
-
         all_qc.to_csv(output, index=False)
         self._results['series_qc_file'] = output
         return runtime
@@ -527,6 +526,7 @@ class _InteractiveReportInputSpec(TraitedSpec):
     confounds_file = File(exists=True)
     mask_file = File(exists=True)
     color_fa = File(exists=True)
+    carpetplot_data = File(exists=True)
 
 
 class InteractiveReport(SimpleInterface):
@@ -535,17 +535,27 @@ class InteractiveReport(SimpleInterface):
 
     def _run_interface(self, runtime):
         report = {}
-        report['dwi_corrected'] = createSprite4D(self.inputs.dwi_file)
+        report['dwi_corrected'] = createSprite4D(self.inputs.processed_dwi_file)
 
-        b0, colorFA, mask = createB0_ColorFA_Mask_Sprites(self.inputs.dwi_file,
-                                                          self.inputs.color_fa_file,
-                                                          self.inputs.anat_mask_file)
+        b0, colorFA, mask = createB0_ColorFA_Mask_Sprites(self.inputs.processed_dwi_file,
+                                                          self.inputs.color_fa,
+                                                          self.inputs.mask_file)
+        report['carpetplot'] = []
+        if isdefined(self.inputs.carpetplot_data):
+            carpet_data = np.load(self.inputs.carpetplot_data)
+            carpetplot_matrix = carpet_data['slice_scores'].tolist()
+            report['carpetplot'] = carpetplot_matrix
+
         report['b0'] = b0
         report['colorFA'] = colorFA
         report['anat_mask'] = mask
-        report['outlier_volumes'] = self.inputs.outlier_indices.tolist()
-        report['eddy_params'] = np.genfromtxt(eddy_rms).tolist()
-        eddy_qc = load_json(eddy_qc_file)
+        report['outlier_volumes'] = [3, 4, 5]  # self.inputs.outlier_indices.tolist()
+        report['eddy_params'] = [[i, i] for i in range(30)]
+        eddy_qc = {}
         report['eddy_quad'] = eddy_qc
-        save_json(outpath, report)
-        return outpath
+        safe_json = json.dumps(report)
+        out_file = op.join(runtime.cwd, "interactive_report.html")
+        with open(out_file, "w") as out_html:
+            out_html.write(INTERACTIVE_TEMPLATE.replace("REPORT", safe_json))
+        self._results['out_report'] = out_file
+        return runtime
