@@ -321,7 +321,7 @@ RUN python -c "from matplotlib import font_manager" && \
 RUN find $HOME -type d -exec chmod go=u {} + && \
     find $HOME -type f -exec chmod go=u {} +
 
-RUN ln -s /opt/fsl-6.0.1/bin/eddy_cuda9.1 /opt/fsl-6.0.1/bin/eddy_cuda
+RUN ln -s /opt/fsl-6.0.3/bin/eddy_cuda9.1 /opt/fsl-6.0.3/bin/eddy_cuda
 
 ENV AFNI_INSTALLDIR=/usr/lib/afni \
     PATH=${PATH}:/usr/lib/afni/bin \
