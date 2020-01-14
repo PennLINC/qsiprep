@@ -74,6 +74,31 @@ GROUPING_TEMPLATE = """\t<ul>
 </ul>
 """
 
+INTERACTIVE_TEMPLATE = """
+<script src="https://unpkg.com/vue"></script>
+<script src="./dmriprepReport.umd.js"></script>
+<link rel="stylesheet" href="./dmriprepReport.css">
+
+<div id="app">
+  <demo :report="report"></demo>
+</div>
+
+<script>
+
+d3.json('./report.json').then((report) => {
+  new Vue({
+    components: {
+      demo: dmriprepReport
+    },
+    data () {
+      return {
+        {report}
+      }
+    }
+  }).$mount('#app')
+})
+</script>
+"""
 
 class SummaryOutputSpec(TraitedSpec):
     out_report = File(exists=True, desc='HTML segment containing summary')
