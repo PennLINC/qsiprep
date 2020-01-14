@@ -18,6 +18,7 @@ from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np
+from nipype.utils.filemanip import save_json, load_json
 from nipype.interfaces.base import (
     traits, TraitedSpec, BaseInterfaceInputSpec,
     File, Directory, InputMultiPath, InputMultiObject, Str, isdefined,
@@ -26,6 +27,9 @@ from nipype.interfaces import freesurfer as fs
 from .gradients import concatenate_bvals, concatenate_bvecs
 from matplotlib import animation
 import pandas as pd
+from .qc import (createB0_ColorFA_Mask_Sprites, createSprite4D, create_sprite_from_tiles,
+    nearest_square, get_middle_slices, reshape4D, reshape3D, load_and_reorient,
+    mplfigcontour, mplfig, reorient_array)
 
 SUBJECT_TEMPLATE = """\t<ul class="elem-desc">
 \t\t<li>Subject ID: {subject_id}</li>
@@ -490,3 +494,33 @@ def _load_qc_file(fname, prefix=""):
         prefix + 'num_directions': [n_dirs]
     }
     return pd.DataFrame(data)
+
+
+class _InteractiveReportInputSpec(TraitedSpec):
+    raw_dwi_file = File(exists=True)
+    processed_dwi_file = File(exists=True)
+    confounds_file = File(exists=True)
+    mask_file = File(exists=True)
+    color_fa = File(exists=True)
+
+
+class InteractiveReport(SimpleInterface):
+    input_spec = _InteractiveReportInputSpec
+    output_spec = SummaryOutputSpec
+
+    def _run_interface(self, runtime):
+        report = {}
+        report['dwi_corrected'] = createSprite4D(self.inputs.dwi_file)
+
+        b0, colorFA, mask = createB0_ColorFA_Mask_Sprites(self.inputs.dwi_file,
+                                                          self.inputs.color_fa_file,
+                                                          self.inputs.anat_mask_file)
+        report['b0'] = b0
+        report['colorFA'] = colorFA
+        report['anat_mask'] = mask
+        report['outlier_volumes'] = self.inputs.outlier_indices.tolist()
+        report['eddy_params'] = np.genfromtxt(eddy_rms).tolist()
+        eddy_qc = load_json(eddy_qc_file)
+        report['eddy_quad'] = eddy_qc
+        save_json(outpath, report)
+        return outpath

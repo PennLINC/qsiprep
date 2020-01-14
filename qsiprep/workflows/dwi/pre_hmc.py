@@ -96,12 +96,14 @@ def init_dwi_pre_hmc_wf(scan_groups,
             list of paths to the original files that the single volumes came from
         original_grouping
             list of warped space group ids
+        raw_concatenated
+            4d image of the raw inputs concatenated (for QC and visualization)
     """
     workflow = Workflow(name=name)
     outputnode = pe.Node(
         niu.IdentityInterface(fields=[
             'dwi_file', 'bval_file', 'bvec_file', 'original_files', 'denoising_confounds',
-            'noise_images', 'bias_images', 'qc_file']),
+            'noise_images', 'bias_images', 'qc_file', 'raw_concatenated']),
         name='outputnode')
     dwi_series_pedir = scan_groups['dwi_series_pedir']
     dwi_series = scan_groups['dwi_series']
@@ -203,7 +205,9 @@ def init_dwi_pre_hmc_wf(scan_groups,
         (merge_dwis, qc_wf, [
             ('outputnode.merged_bval', 'inputnode.bval_file'),
             ('outputnode.merged_bvec', 'inputnode.bvec_file')]),
-        (qc_wf, outputnode, [('outputnode.qc_summary', 'qc_file')])
+        (qc_wf, outputnode, [
+            ('outputnode.qc_summary', 'qc_file'),
+            ('outputnode.concatenated_data', 'raw_concatenated')])
     ])
 
     return workflow

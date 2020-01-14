@@ -14,7 +14,7 @@ from nipype.interfaces import utility as niu
 
 from ...interfaces import DerivativesDataSink
 
-from ...interfaces.reports import DiffusionSummary
+from ...interfaces.reports import DiffusionSummary, InteractiveReport
 from ...interfaces.confounds import DMRISummary
 from ...engine import Workflow
 
@@ -241,6 +241,8 @@ def init_dwi_preproc_wf(scan_groups,
             estimated motion parameters and zipper scores
         raw_qc_file
             DSI Studio QC file for the raw data
+        raw_concatenated
+            concatenated raw images for a qc report
 
     **Subworkflows**
 
@@ -310,7 +312,7 @@ def init_dwi_preproc_wf(scan_groups,
             'confounds', 'hmc_optimization_data', 'itk_b0_to_t1', 'noise_images', 'bias_images',
             'dwi_files', 'cnr_map', 'bval_files', 'bvec_files', 'b0_ref_image', 'b0_indices',
             'dwi_mask', 'hmc_xforms', 'fieldwarps', 'sbref_file', 'original_files',
-            'raw_qc_file', 'coreg_score']),
+            'raw_qc_file', 'coreg_score', 'raw_concatenated']),
         name='outputnode')
 
     pre_hmc_wf = init_dwi_pre_hmc_wf(scan_groups=scan_groups,
@@ -376,7 +378,8 @@ def init_dwi_preproc_wf(scan_groups,
             ('outputnode.qc_file', 'raw_qc_file'),
             ('outputnode.original_files', 'original_files'),
             ('outputnode.bias_images', 'bias_images'),
-            ('outputnode.noise_images', 'noise_images')])
+            ('outputnode.noise_images', 'noise_images'),
+            ('outputnode.concatenated_data', 'raw_concatenated')])
     ])
 
     # calculate dwi registration to T1w
@@ -476,9 +479,6 @@ def init_dwi_preproc_wf(scan_groups,
         (confounds_wf, conf_plot, [
             ('outputnode.confounds_file', 'confounds_file')]),
         (conf_plot, ds_report_dwi_conf, [('out_file', 'in_file')]),
-    ])
-
-    workflow.connect([
         (hmc_wf, outputnode, [
             ('outputnode.b0_indices', 'b0_indices'),
             ('outputnode.bval_files', 'bval_files'),

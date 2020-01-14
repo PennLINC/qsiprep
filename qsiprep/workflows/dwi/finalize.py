@@ -15,7 +15,7 @@ from nipype.interfaces import utility as niu
 
 from ...interfaces import DerivativesDataSink
 from ...niworkflows.interfaces.registration import SimpleBeforeAfterRPT
-from ...interfaces.reports import GradientPlot, SeriesQC
+from ...interfaces.reports import GradientPlot, SeriesQC, InteractiveReport
 from ...interfaces.mrtrix import MRTrixGradientTable
 from ...engine import Workflow
 
@@ -23,6 +23,7 @@ from ...engine import Workflow
 from .util import _create_mem_gb
 from .resampling import init_dwi_trans_wf
 from .derivatives import init_dwi_derivatives_wf
+from .qc import init_interactive_report_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger('nipype.workflow')
@@ -138,6 +139,8 @@ def init_dwi_finalize_wf(scan_groups,
             The file name template used for derivatives
         raw_qc_file
             The QC file from the DWI data before any preprocessing
+        raw_concatenated
+            The original raw images in a single 4D file
 
     **Outputs**
 
@@ -217,7 +220,7 @@ def init_dwi_finalize_wf(scan_groups,
             't1_aseg', 't1_aparc',
             't1_2_mni_reverse_transform', 't1_2_fsnative_forward_transform',
             't1_2_fsnative_reverse_transform', 'dwi_sampling_grid', 'raw_qc_file',
-            'coreg_score'
+            'coreg_score', 'raw_concatenated', 'confounds'
         ]),
         name='inputnode')
     outputnode = pe.Node(
@@ -267,7 +270,21 @@ def init_dwi_finalize_wf(scan_groups,
         name='ds_series_qc', run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB)
 
+    # Gather files for creating an interactive report
+    interactive_report_wf = init_interactive_report_wf()
+    ds_report_interactive = pe.Node(
+        DerivativesDataSink(desc='interactive', suffix='dwi', source_file=source_file,
+                            base_directory=reportlets_dir),
+        name='ds_report_interactive', run_without_submitting=True,
+        mem_gb=DEFAULT_MEMORY_MIN_GB)
+
     workflow.connect([
+        (inputnode, interactive_report_wf, [
+            ('raw_concatenated', 'inputnode.raw_dwi_file'),
+            ('confounds', 'inputnode.confounds_files'),
+            ('bval_files', 'inputnode.bval_files'),
+            ('dwi_mask', 'inputnode.mask_file')]),
+        (interactive_report_wf, ds_report_interactive, [('outputnode.out_report', 'in_file')]),
         (inputnode, series_qc, [('raw_qc_file', 'pre_qc')]),
         (series_qc, ds_series_qc, [('series_qc_file', 'in_file')]),
         (inputnode, dwi_derivatives_wf, [('dwi_files', 'inputnode.source_file')]),
@@ -348,6 +365,8 @@ def init_dwi_finalize_wf(scan_groups,
             (transform_dwis_t1, gtab_t1, [('outputnode.bvals', 'bval_file'),
                                           ('outputnode.rotated_bvecs', 'bvec_file')]),
             (transform_dwis_t1, series_qc, [('outputnode.resampled_qc', 't1_qc')]),
+            (transform_dwis_t1, interactive_report_wf, [
+                ('outputnode.dwi_resampled', 'inputnode.processed_dwi_file')]),
             (gtab_t1, outputnode, [('gradient_file', 'gradient_table_t1')])])
 
     if "template" in output_spaces:
