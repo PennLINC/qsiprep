@@ -33,7 +33,7 @@ from .anatomical import init_anat_preproc_wf
 from .dwi.base import init_dwi_preproc_wf
 from .dwi.finalize import init_dwi_finalize_wf
 from .dwi.intramodal_template import init_intramodal_template_wf
-from .dwi.util import _get_output_fname, get_source_file
+from .dwi.util import _get_concatenated_bids_name, get_source_file
 
 
 LOGGER = logging.getLogger('nipype.workflow')
@@ -568,7 +568,7 @@ to workflows in *qsiprep*'s documentation]\
                                "fieldmaps" in ignore,
                                combine_all_dwis,
                                use_syn))
-    outputs_to_files = {_get_output_fname(dwi_group): dwi_group for dwi_group in dwi_fmap_groups}
+    outputs_to_files = {_get_concatenated_bids_name(dwi_group): dwi_group for dwi_group in dwi_fmap_groups}
     if force_syn:
         for group_name in outputs_to_files:
             outputs_to_files[group_name]['fieldmap_info'] = {"suffix": "syn"}
@@ -940,7 +940,11 @@ def group_by_warpspace(dwi_files, layout, prefer_dedicated_fmaps, using_eddy, ig
             if this_priority < priority:
                 priority = this_priority
                 fmap_file = fmap[fmap_type]
-                fmap_pointers[fmap_file] = fmap
+                fmap_pointers[fmap_file] = [fmap]
+            # Another fieldmap of this priority
+            elif this_priority == priority:
+                fmap_file = fmap[fmap_type]
+                fmap_pointers[fmap_file].append(fmap)
 
         fmap_tuple = (ref_file, metadata['PhaseEncodingDirection'], fmap_file, fmap_type)
         parsed_dwis.append(fmap_tuple)

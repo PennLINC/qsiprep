@@ -8,7 +8,7 @@ from nipype.interfaces.base import (BaseInterfaceInputSpec, TraitedSpec, File, S
 from nipype.utils.filemanip import fname_presuffix
 from nipype import logging
 import nibabel as nb
-from ..workflows.dwi.util import _get_output_fname
+from ..workflows.dwi.util import _get_concatenated_bids_name
 LOGGER = logging.getLogger('nipype.workflow')
 
 
@@ -105,7 +105,7 @@ class MergeDWIs(SimpleInterface):
 
         # Concatenate the gradient information
         if num_dwis > 1:
-            merged_output = _get_output_fname(
+            merged_output = _get_concatenated_bids_name(
                 {'dwi_series': self.inputs.dwi_files,
                  'fieldmap_info': {'suffix': None}})
             merged_fname = op.join(runtime.cwd, merged_output + "_merged.nii.gz")

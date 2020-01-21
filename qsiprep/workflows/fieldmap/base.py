@@ -156,7 +156,7 @@ def init_sdc_wf(fieldmap_info, dwi_meta, omp_nthreads=1,
         name='outputnode')
 
     # No fieldmaps - forward inputs to outputs
-    if fieldmap_info['suffix'] is None:
+    if fieldmap_info.get('suffix') is None:
         workflow.__postdesc__ = "No susceptibility distortion correction was performed."
         outputnode.inputs.method = 'None'
         workflow.connect([

@@ -337,7 +337,7 @@ def _create_mem_gb(dwi_fname):
     return dwi_nvols, mem_gb
 
 
-def _get_output_fname(dwi_group):
+def _get_concatenated_bids_name(dwi_group):
     """Derive the output name for a dwi grouping."""
     all_dwis = dwi_group['dwi_series']
     if dwi_group['fieldmap_info']['suffix'] == 'rpe_series':
@@ -390,5 +390,5 @@ def _get_first(in_list):
 def get_source_file(dwi_files, output_prefix=None, suffix=''):
     """The reportlets need a source file. This file might not exist in the input data."""
     if output_prefix is None:
-        output_prefix = _get_output_fname(dwi_files)
+        output_prefix = _get_concatenated_bids_name(dwi_files)
     return str(Path(dwi_files[0]).parent / output_prefix) + suffix + ".nii.gz"
