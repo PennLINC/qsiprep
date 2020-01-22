@@ -6,6 +6,14 @@ Utilities to group scans based on their acquisition parameters
 
 Download many variations of fieldmaps and dwi data
 
+Examples:
+---------
+
+    Setup tests
+    >>> import os
+    >>> from qsiprep.utils.testing import get_grouping_test_data
+    >>> data_root = get_grouping_test_data()
+    >>> os.chdir(data_root)
 """
 from collections import defaultdict
 import logging
@@ -15,12 +23,15 @@ from nipype.utils.filemanip import split_filename
 LOGGER = logging.getLogger('nipype.workflow')
 
 
-def group_dwi_scans(bids_layout, subject_data, combine_scans=True):
+def group_dwi_scans(bids_layout, subject_data, group_for_eddy=False, combine_scans=True,
+                    ignore_fieldmaps=False):
     """Determine which scans can be concatenated based on their acquisition parameters.
 
     **Parameters**
         bids_layout : layout
             A PyBIDS layout
+        group_for_eddy : bool
+            Should a plus and minus series be grouped together for TOPUP/eddy?
         combine_scans : bool
             Should scan concatention happen?
 
@@ -37,11 +48,12 @@ def group_dwi_scans(bids_layout, subject_data, combine_scans=True):
     dwi_fmap_groups = []
     for dwi_session_group in dwi_session_groups:
         dwi_fmap_groups.extend(
-            group_by_warpspace(dwi_session_group, layout, prefer_dedicated_fmaps,
-                               hmc_model == "eddy",
-                               "fieldmaps" in ignore,
-                               combine_all_dwis,
-                               use_syn))
+            group_by_warpspace(dwi_session_group, bids_layout, ignore_fieldmaps))
+
+    if group_for_eddy:
+        return group_for_eddy(dwi_fmap_groups)
+
+    return dwi_fmap_groups
 
 
 def get_session_groups(layout, subject_data, combine_all_dwis):
@@ -386,11 +398,12 @@ def split_by_phase_encoding_direction(dwi_files, metadatas):
              'dwi_series_pedir': pe_dir,
              'concatenated_bids_name': get_concatenated_bids_name(dwi_group)})
     for unknown in unknowns:
-                dwi_groups.append(
-                    {'dwi_series': [unknown],
-                     'fieldmap_info': {'suffix': None},
-                     'dwi_series_pedir': '',
-                     'concatenated_bids_name': get_concatenated_bids_name([unknown])})
+        dwi_groups.append(
+            {'dwi_series': [unknown],
+             'fieldmap_info': {'suffix': None},
+             'dwi_series_pedir': '',
+             'concatenated_bids_name': get_concatenated_bids_name([unknown])})
+
     return dwi_groups
 
 
@@ -420,13 +433,9 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
     Examples:
     ---------
 
-    Setup tests
-    >>> import os
+    Set up tests
     >>> from qsiprep.utils.bids import collect_data
-    >>> from qsiprep.utils.testing import get_grouping_test_data
-    >>> data_root = get_grouping_test_data()
     >>> SUBJECT_ID = "1"
-    >>> os.chdir(data_root)
 
     No fieldmap data, a single DWI series
     >>> subject_data, layout = collect_data("easy", SUBJECT_ID)
@@ -644,6 +653,237 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
                  'concatenated_bids_name': get_concatenated_bids_name(dwi_group)})
 
     return dwi_groups
+
+
+def merge_dwi_groups(dwi_groups_plus, dwi_groups_minus):
+    """Convert two dwi groups into a single group that will be concatenated for FSL.
+
+    Examples:
+    ---------
+
+    Set up tests
+    >>> from qsiprep.utils.bids import collect_data
+    >>> SUBJECT_ID = "1"
+
+    AP/PA fieldmaps and paired DWI series
+    >>> plus_groups = [
+    ...     {'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
+    ...      'fieldmap_info': {'suffix': 'epi',
+    ...       'epi': ['.../mixed_fmaps/sub-1/fmap/sub-1_dir-PA_run-1_epi.nii.gz']},
+    ...      'dwi_series_pedir': 'j',
+    ...      'concatenated_bids_name': 'sub-1_dir-AP_run-1'}]
+    >>> minus_groups = [
+    ...     {'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz'],
+    ...      'fieldmap_info': {'suffix': 'epi',
+    ...       'epi': ['.../mixed_fmaps/sub-1/fmap/sub-1_dir-AP_run-2_epi.nii.gz']},
+    ...       'dwi_series_pedir': 'j-',
+    ...       'concatenated_bids_name': 'sub-1_dir-PA_run-2'}]
+    >>> merge_dwi_groups(plus_groups, minus_groups) # doctest: +NORMALIZE_WHITESPACE
+    {'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
+     'dwi_series_pedir': 'j',
+     'fieldmap_info': {'suffix': 'rpe_series',
+      'rpe_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz'],
+      'epi': ['.../mixed_fmaps/sub-1/fmap/sub-1_dir-AP_run-2_epi.nii.gz',
+       '.../mixed_fmaps/sub-1/fmap/sub-1_dir-PA_run-1_epi.nii.gz']},
+     'concatenated_bids_name': 'sub-1'}
+
+    Two series SDC each other
+    >>> plus_groups = [
+    ...     {'dwi_series': ['.../opposite/sub-1/dwi/sub-1_dir-AP_dwi.nii.gz'],
+    ...      'fieldmap_info': {'suffix': 'dwi',
+    ...       'dwi': ['.../opposite/sub-1/dwi/sub-1_dir-PA_dwi.nii.gz']},
+    ...      'dwi_series_pedir': 'j',
+    ...      'concatenated_bids_name': 'sub-1_dir-AP'}]
+    >>> minus_groups = [
+    ...     {'dwi_series': ['.../opposite/sub-1/dwi/sub-1_dir-PA_dwi.nii.gz'],
+    ...      'fieldmap_info': {'suffix': 'dwi',
+    ...       'dwi': ['.../opposite/sub-1/dwi/sub-1_dir-AP_dwi.nii.gz']},
+    ...      'dwi_series_pedir': 'j-',
+    ...      'concatenated_bids_name': 'sub-1_dir-PA'}]
+    >>> merge_dwi_groups(plus_groups, minus_groups) # doctest: +NORMALIZE_WHITESPACE
+    {'dwi_series': ['.../opposite/sub-1/dwi/sub-1_dir-AP_dwi.nii.gz'],
+     'dwi_series_pedir': 'j',
+     'fieldmap_info': {'suffix': 'rpe_series',
+      'rpe_series': ['.../opposite/sub-1/dwi/sub-1_dir-PA_dwi.nii.gz']},
+     'concatenated_bids_name': 'sub-1'}
+
+    An odd case: one has an EPI
+    >>> plus_groups = [
+    ...     {'dwi_series': ['.../opposite/sub-1/dwi/sub-1_dir-AP_dwi.nii.gz'],
+    ...      'fieldmap_info': {'suffix': 'dwi',
+    ...       'dwi': ['.../opposite/sub-1/dwi/sub-1_dir-PA_dwi.nii.gz']},
+    ...      'dwi_series_pedir': 'j',
+    ...      'concatenated_bids_name': 'sub-1_dir-AP'}]
+    >>> minus_groups = [
+    ...     {'dwi_series': ['.../opposite/sub-1/dwi/sub-1_dir-PA_dwi.nii.gz'],
+    ...      'fieldmap_info': {'suffix': 'epi',
+    ...       'epi': ['.../mixed_fmaps/sub-1/fmap/sub-1_dir-AP_run-2_epi.nii.gz']},
+    ...      'dwi_series_pedir': 'j-',
+    ...      'concatenated_bids_name': 'sub-1_dir-PA'}]
+    >>> merge_dwi_groups(plus_groups, minus_groups) # doctest: +NORMALIZE_WHITESPACE
+    {'dwi_series': ['.../opposite/sub-1/dwi/sub-1_dir-AP_dwi.nii.gz'],
+     'dwi_series_pedir': 'j',
+     'fieldmap_info': {'suffix': 'rpe_series',
+      'rpe_series': ['.../opposite/sub-1/dwi/sub-1_dir-PA_dwi.nii.gz'],
+      'epi': ['.../mixed_fmaps/sub-1/fmap/sub-1_dir-AP_run-2_epi.nii.gz']},
+     'concatenated_bids_name': 'sub-1'}
+
+    """
+    dwi_files = []
+    rpe_files = []
+    fmap_files = []
+
+    for dwi_group in dwi_groups_plus:
+        dwi_files += dwi_group['dwi_series']
+        fmap_type = dwi_group['fieldmap_info'].get('suffix')
+        if fmap_type == 'dwi':
+            rpe_files += dwi_group['fieldmap_info']['dwi']
+        elif fmap_type == 'epi':
+            fmap_files += dwi_group['fieldmap_info']['epi']
+        pe_dir = dwi_group['dwi_series_pedir']
+
+    for dwi_group in dwi_groups_minus:
+        rpe_files += dwi_group['dwi_series']
+        fmap_type = dwi_group['fieldmap_info'].get('suffix')
+        if fmap_type == 'dwi':
+            dwi_files += dwi_group['fieldmap_info']['dwi']
+        elif fmap_type == 'epi':
+            fmap_files += dwi_group['fieldmap_info']['epi']
+
+    dwi_files = sorted(set(dwi_files))
+    rpe_files = sorted(set(rpe_files))
+    fmap_files = sorted(set(fmap_files))
+    fieldmap_info = {
+        "suffix": "rpe_series",
+        "rpe_series": rpe_files
+    }
+    if fmap_files:
+        fieldmap_info["epi"] = fmap_files
+
+    merged_group = {
+        "dwi_series": dwi_files,
+        "dwi_series_pedir": pe_dir,
+        "fieldmap_info": fieldmap_info,
+        "concatenated_bids_name": get_concatenated_bids_name(dwi_files + rpe_files)
+    }
+    return merged_group
+
+
+def group_for_eddy(dwi_fmap_groups):
+    """Find matched pairs of phase encoding directions that can be combined for TOPUP/eddy.
+
+    Any groups that don't have a phase encoding direction won't be correctable by eddy/TOPUP.
+
+    Examples:
+    ----------
+
+    Paired DWI series to correct each other:
+    >>> dwi_groups = [
+    ...  {'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
+    ...      'fieldmap_info': {'suffix': 'dwi',
+    ...      'dwi': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz']},
+    ...   'dwi_series_pedir': 'j',
+    ...      'concatenated_bids_name': 'sub-1_dir-AP_run-1'},
+    ...  {'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz'],
+    ...      'fieldmap_info': {'suffix': 'dwi',
+    ...      'dwi': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz']},
+    ...      'dwi_series_pedir': 'j-',
+    ...   'concatenated_bids_name': 'sub-1_dir-PA_run-2'}]
+    >>> group_for_eddy(dwi_groups) # doctest: +NORMALIZE_WHITESPACE
+    [{'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
+      'dwi_series_pedir': 'j',
+      'fieldmap_info': {'suffix': 'rpe_series',
+       'rpe_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz']},
+      'concatenated_bids_name': 'sub-1'}]
+
+    AP/PA EPI fieldmaps
+    >>> dwi_groups = [
+    ...     {'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
+    ...      'fieldmap_info': {'suffix': 'epi',
+    ...       'epi': ['.../mixed_fmaps/sub-1/fmap/sub-1_dir-PA_run-1_epi.nii.gz']},
+    ...      'dwi_series_pedir': 'j',
+    ...      'concatenated_bids_name': 'sub-1_dir-AP_run-1'},
+    ...     {'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz'],
+    ...      'fieldmap_info': {'suffix': 'epi',
+    ...       'epi': ['.../mixed_fmaps/sub-1/fmap/sub-1_dir-AP_run-2_epi.nii.gz']},
+    ...       'dwi_series_pedir': 'j-',
+    ...       'concatenated_bids_name': 'sub-1_dir-PA_run-2'}]
+    >>> group_for_eddy(dwi_groups) # doctest: +NORMALIZE_WHITESPACE
+    [{'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
+      'dwi_series_pedir': 'j',
+      'fieldmap_info': {'suffix': 'rpe_series',
+       'rpe_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz'],
+       'epi': ['.../mixed_fmaps/sub-1/fmap/sub-1_dir-AP_run-2_epi.nii.gz',
+               '.../mixed_fmaps/sub-1/fmap/sub-1_dir-PA_run-1_epi.nii.gz']},
+      'concatenated_bids_name': 'sub-1'}]
+
+    Repeated scans per PE direction
+    >>> dwi_groups = [
+    ...    {'dwi_series': ['.../opposite_concat/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
+    ...                     '.../opposite_concat/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
+    ...      'fieldmap_info': {'suffix': 'dwi',
+    ...       'dwi': ['.../opposite_concat/sub-1/dwi/sub-1_dir-PA_run-1_dwi.nii.gz',
+    ...               '.../opposite_concat/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz']},
+    ...      'dwi_series_pedir': 'j',
+    ...      'concatenated_bids_name': 'sub-1_dir-AP'},
+    ...     {'dwi_series': ['.../opposite_concat/sub-1/dwi/sub-1_dir-PA_run-1_dwi.nii.gz',
+    ...                     '.../opposite_concat/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz'],
+    ...      'fieldmap_info': {'suffix': 'dwi',
+    ...       'dwi': ['.../opposite_concat/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
+    ...               '.../opposite_concat/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz']},
+    ...      'dwi_series_pedir': 'j-',
+    ...      'concatenated_bids_name': 'sub-1_dir-PA'}]
+    >>> group_for_eddy(dwi_groups) # doctest: +NORMALIZE_WHITESPACE
+    [{'dwi_series': ['.../opposite_concat/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
+                     '.../opposite_concat/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
+      'dwi_series_pedir': 'j',
+      'fieldmap_info': {'suffix': 'rpe_series',
+       'rpe_series': ['.../opposite_concat/sub-1/dwi/sub-1_dir-PA_run-1_dwi.nii.gz',
+                      '.../opposite_concat/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz']},
+      'concatenated_bids_name': 'sub-1'}]
+
+    A phasediff fieldmap (Not used by eddy)
+    >>> dwi_groups = [
+    ...    {'dwi_series': ['.../phasediff/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
+    ...                     '.../phasediff/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
+    ...      'fieldmap_info': {'phasediff': '.../phasediff/sub-1/fmap/sub-1_phasediff.nii.gz',
+    ...                        'magnitude1': '.../magnitude1/sub-1/fmap/sub-1_magnitude1.nii.gz',
+    ...                        'suffix': 'phasediff'},
+    ...      'dwi_series_pedir': 'j',
+    ...      'concatenated_bids_name': 'sub-1_dir-AP'}]
+    >>> group_for_eddy(dwi_groups) # doctest: +NORMALIZE_WHITESPACE
+    [{'dwi_series': ['.../phasediff/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
+       '.../phasediff/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
+      'fieldmap_info': {'phasediff': '.../phasediff/sub-1/fmap/sub-1_phasediff.nii.gz',
+       'magnitude1': '.../magnitude1/sub-1/fmap/sub-1_magnitude1.nii.gz',
+       'suffix': 'phasediff'},
+      'dwi_series_pedir': 'j',
+      'concatenated_bids_name': 'sub-1_dir-AP'}]
+
+    """
+    eddy_dwi_groups = []
+    eddy_compatible_suffixes = ('dwi', 'epi')
+    for pe_dir in 'ijk':
+        plus_series = [dwi_group for dwi_group in dwi_fmap_groups if
+                       dwi_group.get('dwi_series_pedir') == pe_dir
+                       and dwi_group['fieldmap_info'].get('suffix') in eddy_compatible_suffixes]
+        minus_series = [dwi_group for dwi_group in dwi_fmap_groups if
+                        dwi_group.get('dwi_series_pedir') == pe_dir + '-'
+                        and dwi_group['fieldmap_info'].get('suffix') in eddy_compatible_suffixes]
+
+        # Can these be grouped?
+
+        if plus_series and minus_series:
+            eddy_dwi_groups.append(merge_dwi_groups(plus_series, minus_series))
+        else:
+            eddy_dwi_groups.extend(plus_series + minus_series)
+
+    # Add separate groups for non-compatible fieldmaps
+    for dwi_group in dwi_fmap_groups:
+        if dwi_group['fieldmap_info'].get('suffix') not in eddy_compatible_suffixes:
+            eddy_dwi_groups.append(dwi_group)
+
+    return eddy_dwi_groups
 
 
 def get_concatenated_bids_name(dwi_group):
