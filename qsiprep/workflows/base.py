@@ -27,13 +27,14 @@ from ..interfaces import (BIDSDataGrabber, BIDSInfo, BIDSFreeSurferDir,
                           SubjectSummary, AboutSummary, DerivativesDataSink)
 from ..utils.bids import collect_data
 from ..utils.misc import fix_multi_T1w_source_name
+from ..utils.grouping import group_dwi_scans
 from ..__about__ import __version__
 
 from .anatomical import init_anat_preproc_wf
 from .dwi.base import init_dwi_preproc_wf
 from .dwi.finalize import init_dwi_finalize_wf
 from .dwi.intramodal_template import init_intramodal_template_wf
-from .dwi.util import _get_concatenated_bids_name, get_source_file, group_dwi_scans
+from .dwi.util import get_source_file
 
 
 LOGGER = logging.getLogger('nipype.workflow')
@@ -557,7 +558,7 @@ to workflows in *qsiprep*'s documentation]\
         impute_slice_threshold = 0
 
     # Handle the grouping of multiple dwi files within a session
-    dwi_fmap_groups = group_dwi_scans(layout, subject_data, combine_all_dwis,
+    dwi_fmap_groups = group_dwi_scans(layout, subject_data,
                                       using_fsl=hmc_model == 'eddy',
                                       combine_scans=combine_all_dwis,
                                       ignore_fieldmaps="fieldmaps" in ignore)

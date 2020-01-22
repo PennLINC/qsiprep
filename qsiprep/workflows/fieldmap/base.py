@@ -51,6 +51,7 @@ LOGGER = logging.getLogger('nipype.workflow')
 FMAP_PRIORITY = {
     'epi': 0,
     'rpe_series': 0,
+    'dwi': 0,
     'fieldmap': 1,
     'phasediff': 2,
     'phase': 3,
@@ -173,7 +174,7 @@ co-registration with the anatomical reference.
 """
 
     # PEPOLAR path
-    if fieldmap_info['suffix'] in ('epi', 'rpe_series'):
+    if fieldmap_info['suffix'] in ('epi', 'rpe_series', 'dwi'):
         outputnode.inputs.method = \
             'PEB/PEPOLAR (phase-encoding based / PE-POLARity): %s' % fieldmap_info['suffix']
 
