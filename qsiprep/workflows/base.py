@@ -33,7 +33,7 @@ from .anatomical import init_anat_preproc_wf
 from .dwi.base import init_dwi_preproc_wf
 from .dwi.finalize import init_dwi_finalize_wf
 from .dwi.intramodal_template import init_intramodal_template_wf
-from .dwi.util import _get_concatenated_bids_name, get_source_file
+from .dwi.util import _get_concatenated_bids_name, get_source_file, group_dwi_scans
 
 
 LOGGER = logging.getLogger('nipype.workflow')
@@ -557,30 +557,24 @@ to workflows in *qsiprep*'s documentation]\
         impute_slice_threshold = 0
 
     # Handle the grouping of multiple dwi files within a session
-    dwi_session_groups = get_session_groups(layout, subject_data, combine_all_dwis)
-    LOGGER.info(dwi_session_groups)
+    dwi_fmap_groups = group_dwi_scans(layout, subject_data, combine_all_dwis,
+                                      using_fsl=hmc_model == 'eddy',
+                                      combine_scans=combine_all_dwis,
+                                      ignore_fieldmaps="fieldmaps" in ignore)
+    LOGGER.info(dwi_fmap_groups)
 
-    dwi_fmap_groups = []
-    for dwi_session_group in dwi_session_groups:
-        dwi_fmap_groups.extend(
-            group_by_warpspace(dwi_session_group, layout, prefer_dedicated_fmaps,
-                               hmc_model == "eddy",
-                               "fieldmaps" in ignore,
-                               combine_all_dwis,
-                               use_syn))
-    outputs_to_files = {_get_concatenated_bids_name(dwi_group): dwi_group for dwi_group in dwi_fmap_groups}
+    outputs_to_files = {dwi_group['concatenated_bids_name']: dwi_group
+                        for dwi_group in dwi_fmap_groups}
     if force_syn:
         for group_name in outputs_to_files:
             outputs_to_files[group_name]['fieldmap_info'] = {"suffix": "syn"}
-
     summary.inputs.dwi_groupings = outputs_to_files
 
     make_intramodal_template = False
     if intramodal_template_iters > 0:
         if len(outputs_to_files) < 2:
             raise Exception("Cannot make an intramodal with less than 2 groups.")
-        else:
-            make_intramodal_template = True
+        make_intramodal_template = True
 
     intramodal_template_wf = init_intramodal_template_wf(
         omp_nthreads=omp_nthreads,
@@ -763,302 +757,3 @@ to workflows in *qsiprep*'s documentation]\
             ])
 
     return workflow
-
-
-def get_session_groups(layout, subject_data, combine_all_dwis):
-    # Handle the grouping of multiple dwi files within a session
-    sessions = layout.get_sessions() if layout is not None else []
-    all_dwis = subject_data['dwi']
-    dwi_session_groups = []
-    if not combine_all_dwis:
-        dwi_session_groups = [[dwi] for dwi in all_dwis]
-    else:
-        if sessions:
-            LOGGER.info('Combining all dwi files within each available session:')
-            for session in sessions:
-                session_files = [img for img in all_dwis if 'ses-'+session in img]
-                LOGGER.info('\t- %d scans in session %s', len(session_files), session)
-                dwi_session_groups.append(session_files)
-        else:
-            LOGGER.info('Combining all %d dwis within the single available session',
-                        len(all_dwis))
-            dwi_session_groups = [all_dwis]
-    return dwi_session_groups
-
-
-FMAP_PRIORITY = {
-    'epi': 0,
-    'fieldmap': 1,
-    'phasediff': 2,
-    'phase1': 3,
-    'syn': 4
-}
-
-
-def group_by_warpspace(dwi_files, layout, prefer_dedicated_fmaps, using_eddy, ignore_fieldmaps,
-                       combine_all_dwis, use_syn):
-    """Groups a session's DWI files by their PE direction and fieldmaps, if specified.
-
-    DWIs are grouped by their **warped space**. Two DWI series that are
-    listed in the IntendedFor field of a fieldmap are assumed to have the same
-    susceptibility distortions and therefore be in the same warped space. The goal
-    of this function is to combine DWI series into groups of acquisitions that
-    are in the same warped space into a list of scans that can be combined after
-    unwarping.
-
-    The first step in the pipeline must be ``dwidenoise``. This algorithm can
-    be run directly on each DWI Series. OR, DWI series in the same warped space
-    can be combined before running ``dwidenoise``.  Running ``dwidenoise`` on
-    concatenated DWI series that include noise and susceptibility distortion
-    violates the assumptions made by ``dwidenoise`` and is not allowed.
-    Performing susceptibility distortion correction before running ``dwidenoise``
-    is also not allowed.
-
-    Similarly, SHORELine performs head motion correction in **warped space**.
-    The more q-space samples are available to SHORELine, the better the EAP
-    estimates. However, if the position of the head is very different between
-    the two runs it may take more iterations for SHORELine to converge. Be sure
-    to check the QC files if using this algorithm.
-
-    Specifying ``combine_all_dwis=True`` means that the SDC outputs will be
-    used to combine across warped spaces. If ``False``, then no scans will be
-    combined even if they are in the same warped space. Other
-    possibilities for grouping are not supported.
-
-
-    Parameters
-    -----------
-
-        dwi_files: list
-            A list of full paths to dwi nifti files in a BIDS tree
-
-        layout: BIDSLayout
-            A representation of the BIDS tree
-
-        prefer_dedicated_fmaps: bool
-            If True, use files in fmap directories to perform SDC even if there
-            is a series in dwi with the reverse phase encoding direction that
-            could be used.
-
-        combine_all_dwis: bool
-            If True, concaenate DWI series that can be concatenated. To be concatenated
-            the series must either have the same phase encoding direction or there
-            must be fieldmaps that correct for opposite phase encoding directions.
-
-    Returns:
-    ---------
-
-        groups_list: list
-            A list of dictionaries that describe "group info". These can take a couple forms
-
-            When there are two groups of dwi series with opposite phase encoding dirs
-            and ``use_eddy``:
-            [
-                {'dwi_series': ['scan1.nii', 'scan2.nii'],
-                 'fieldmap_info': {'rpe_series':['scan3.nii', 'scan4.nii', 'suffix':'rpe_series']}
-                 'dwi_series_pedir': 'j'}
-            ]
-
-            if not ``use_eddy`` a separate grouping is made for each PE direction:
-            [
-                {'dwi_series': ['scan1.nii', 'scan2.nii'],
-                 'fieldmap_info': {'rpe_series':['scan3.nii', 'scan4.nii'],
-                                   'suffix':'rpe_series']}
-                 'dwi_series_pedir': 'j'},
-                 {'dwi_series': ['scan3.nii', 'scan4.nii'],
-                  'fieldmap_info': {'rpe_series': ['scan1.nii', 'scan2.nii'],
-                                    'suffix':'rpe_series']}
-                  'dwi_series_pedir': 'j'}
-            ]
-
-            When there is a PEPolar fieldmap
-            [
-             {'dwi_series': ['scan1.nii', 'scan2.nii'],
-              'fieldmap_info': {'epi': 'fmap_scan1.nii',
-                                'suffix': 'epi'},
-              'dwi_series_pedir': 'j'}
-            ]
-
-            When two different PE directions each have their own fieldmaps
-            [
-             {'dwi_series': ['scan1.nii', 'scan2.nii'],
-              'fieldmap_info': {'epi': 'fmap_scan1.nii',
-                                'suffix': 'epi'},
-              'dwi_series_pedir': 'j'},
-             {'dwi_series': ['scan3.nii', 'scan4.nii'],
-              'fieldmap_info': {'epi': 'fmap_scan2.nii',
-                               'suffix': 'epi'},
-              'dwi_series_pedir': 'j-'}
-            ]
-
-            When there is a phasediff fieldmap
-            [
-             {'dwi_series': [ 'scan1.nii', 'scan2.nii'],
-              'fieldmap_info': { 'magnitude1': 'magnitude1.nii',
-                                 'magnitude2': 'magnitude2.nii',
-                                 'phasediff': 'phasediff.nii',
-                                 'suffix': 'phasediff'},
-              'dwi_series_pedir': 'j-'}
-            ]
-
-        NOTE: the pre-hmc steps, such as denoising, will only be run within warped space
-        groups
-
-    """
-    rationale = ['The following DWI files were found with the following fieldmaps:']
-
-    # For doc-building
-    if layout is None:
-        LOGGER.warning("Assuming we're building docs")
-        return [{'dwi_series': dwi_files,
-                 'fieldmap_info': {'suffix': None},
-                 'dwi_series_pedir': 'j'}]
-
-    # For each DWI, figure out its PE dir and whether or not it was listed in
-    # an IntendedFor field in a fieldmap sidecar. Make a list of
-    # (filename, PE dir, fmap_file) and hang on to the pointers to additional files
-    # for this fieldmap
-    parsed_dwis = []
-    fmap_pointers = {'': {'suffix': None}}
-    for ref_file in dwi_files:
-        metadata = layout.get_metadata(ref_file)
-
-        # Find fieldmaps
-        fmaps = layout.get_fieldmap(ref_file, return_list=True)
-        fmap_file = ''
-        priority = 99999
-        fmap_type = "syn" if use_syn else None
-        for fmap in fmaps:
-            fmap_type = fmap['suffix']
-            if fmap_type not in ('epi', 'phasediff', 'phase'):
-                continue
-
-            if fmap_type == 'phase':
-                fmap_type = 'phase1'
-
-            this_priority = FMAP_PRIORITY[fmap_type]
-            if this_priority < priority:
-                priority = this_priority
-                fmap_file = fmap[fmap_type]
-                fmap_pointers[fmap_file] = [fmap]
-            # Another fieldmap of this priority
-            elif this_priority == priority:
-                fmap_file = fmap[fmap_type]
-                fmap_pointers[fmap_file].append(fmap)
-
-        fmap_tuple = (ref_file, metadata['PhaseEncodingDirection'], fmap_file, fmap_type)
-        parsed_dwis.append(fmap_tuple)
-        rationale.append(' * %s (PEDir %s): %s (Type %s)' % fmap_tuple)
-
-    groups = []
-    if not combine_all_dwis:
-        rationale.append("\nEach DWI was assigned to its own group for preprocessing")
-        for ref_file, pe_dir, fmap_file, fmap_type in parsed_dwis:
-            groups.append({
-                'dwi_series': [ref_file],
-                'fieldmap_info': fmap_pointers[fmap_file],
-                'dwi_series_pedir': pe_dir})
-        LOGGER.info('\n'.join(rationale))
-        return groups
-
-    # group by warped space, defined by pe_dir and fmap
-    groups = defaultdict(list)
-    for ref_file, pe_dir, fmap, fmap_type in parsed_dwis:
-        groups[(pe_dir, fmap)].append(ref_file)
-
-    # Also group by PE dir
-    pedir_groups = defaultdict(list)
-    for warp_group, member_images in groups.items():
-        pe_dir, _ = warp_group
-        pedir_groups[pe_dir].extend(member_images)
-
-    if ignore_fieldmaps:
-        output_groups = []
-        rationale.append("\nFieldmaps were ignored and images were grouped by PE Direction")
-        for pe_dir, member_images in pedir_groups.items():
-            output_groups.append({
-                'dwi_series': member_images,
-                'fieldmap_info': {'suffix': None},
-                'dwi_series_pedir': pe_dir})
-        LOGGER.info('\n'.join(rationale))
-        return output_groups
-
-    # Print the group memberships
-    rationale.append("\nThe following warped spaces were defined to contain:")
-    for warp_group, member_images in groups.items():
-        rationale.append(' * PEDir: %s, fmap: %s ' % warp_group)
-        for member_image in member_images:
-            rationale.append('    -> ' + member_image)
-
-    # group by pe dir and fmap
-    complete_groups = []
-    for warp_group, member_images in groups.items():
-        pe_dir, fmap_file = warp_group
-        complete_groups.append({
-            'dwi_series': member_images,
-            'fieldmap_info': fmap_pointers[fmap_file],
-            'dwi_series_pedir': pe_dir})
-
-    if prefer_dedicated_fmaps:
-        rationale.append('\nStrictly using data from fmaps/ for SDC')
-        LOGGER.info('\n'.join(rationale))
-        return complete_groups
-
-    # Ignoring dedicated fieldmaps, define warped spaces by PEDir
-    match_header = 'No opportunities for bidirectional PEPolar DWI series were found.'
-    group_keys = set(list(pedir_groups.keys()))
-    final_groups = []
-    matches_rationale = []
-    while len(group_keys):
-        key = group_keys.pop()
-        scan_list = pedir_groups[key]
-        pe_axis = key[0]
-
-        # Find opposing fieldmap groups
-        matches = [k for k in group_keys if k[0] == pe_axis]
-        num_matches = len(matches)
-
-        if num_matches == 1:
-            match_header = '\nThe following warp groups were used to SDC each other'
-            # Found a perfect match
-            match = matches[0]
-            match_scan_list = pedir_groups[match]
-            if using_eddy:
-                matches_rationale.append(
-                    '  * A single group containing %s/%s PE dir groups was sent to TOPUP' % (
-                        key, match))
-                final_groups.append(
-                    {'dwi_series': scan_list,
-                     'fieldmap_info': {'suffix': 'rpe_series', 'rpe_series': match_scan_list},
-                     'dwi_series_pedir': pe_dir})
-            else:
-                matches_rationale.append(
-                    '  * Two pipelines generated using %s/%s PE dir groups for SDC' % (
-                        key, match))
-                final_groups.append(
-                    {'dwi_series': scan_list,
-                     'fieldmap_info': {'suffix': 'rpe_series', 'rpe_series': match_scan_list},
-                     'dwi_series_pedir': key})
-                final_groups.append(
-                    {'dwi_series': match_scan_list,
-                     'fieldmap_info': {'suffix': 'rpe_series', 'rpe_series': scan_list},
-                     'dwi_series_pedir': match})
-            group_keys.discard(match)
-
-        elif num_matches == 0:
-            # Didn't find any reverse PE groups: add back all the original warp groups
-            LOGGER.info("No matches found for %s", key)
-            for warp_group, member_images in groups.items():
-                pe_dir, fmap_file = warp_group
-                if pe_dir == key:
-                    final_groups.append({
-                        'dwi_series': member_images,
-                        'fieldmap_info': fmap_pointers[fmap_file],
-                        'dwi_series_pedir': pe_dir
-                    })
-        else:
-            # Didn't find any reverse PE groups
-            LOGGER.critical("Multiple matches found for %s", key)
-
-    LOGGER.info('\n'.join(rationale + [match_header] + matches_rationale))
-    return final_groups

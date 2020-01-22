@@ -29,7 +29,8 @@ class GatherEddyInputsInputSpec(BaseInterfaceInputSpec):
     bvec_file = File(exists=True)
     b0_threshold = traits.CInt(100, usedefault=True)
     original_files = InputMultiObject(File(exists=True))
-    rpe_files = InputMultiObject(File(exists=True), desc='')
+    epi_fmaps = InputMultiObject(File(exists=True),
+                                 desc='files from fmaps/ for distortion correction')
     topup_max_b0s_per_spec = traits.CInt(3, usedefault=True)
 
 
@@ -71,7 +72,7 @@ class GatherEddyInputs(SimpleInterface):
             b0_threshold=self.inputs.b0_threshold,
             topup_prefix=topup_prefix,
             bids_origin_files=self.inputs.original_files,
-            rpe_files=self.inputs.rpe_files,
+            epi_fmaps=self.inputs.rpe_files,
             max_per_spec=self.inputs.topup_max_b0s_per_spec)
         self._results['topup_datain'] = topup_datain_file
         self._results['topup_imain'] = topup_imain_file

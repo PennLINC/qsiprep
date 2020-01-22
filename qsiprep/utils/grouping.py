@@ -23,7 +23,7 @@ from nipype.utils.filemanip import split_filename
 LOGGER = logging.getLogger('nipype.workflow')
 
 
-def group_dwi_scans(bids_layout, subject_data, group_for_eddy=False, combine_scans=True,
+def group_dwi_scans(bids_layout, subject_data, using_fsl=False, combine_scans=True,
                     ignore_fieldmaps=False):
     """Determine which scans can be concatenated based on their acquisition parameters.
 
@@ -50,7 +50,7 @@ def group_dwi_scans(bids_layout, subject_data, group_for_eddy=False, combine_sca
         dwi_fmap_groups.extend(
             group_by_warpspace(dwi_session_group, bids_layout, ignore_fieldmaps))
 
-    if group_for_eddy:
+    if using_fsl:
         return group_for_eddy(dwi_fmap_groups)
 
     return dwi_fmap_groups

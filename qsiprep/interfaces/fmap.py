@@ -767,7 +767,7 @@ acqp_lines = {
 
 
 def get_topup_inputs_from(dwi_file, bval_file, b0_threshold, topup_prefix,
-                          bids_origin_files, rpe_files=None, max_per_spec=3):
+                          bids_origin_files, epi_fmaps=None, max_per_spec=3):
     """Create a datain spec and a slspec from a concatenated dwi series.
 
     Create inputs for TOPUP that come from data in ``dwi/`` and epi fieldmaps in ``fmap/``.
@@ -863,10 +863,8 @@ def get_topup_inputs_from(dwi_file, bval_file, b0_threshold, topup_prefix,
         bids_origin_files: list
             A list with the original bids file of each image in ``nii_file``. This is
             necessary because merging may have happened earlier in the pipeline
-        rpe_files:
-            A list of 4D b=0 images in the reverse phase encoding direction.
-        rpe_metadata: list
-            List of paths to json files that have metadata for each file in ``rpe_files``
+        epi_fmaps:
+            A list of b=0 images from the fmaps/ directory.
         max_per_spec: int
             The maximum number of b=0 images to extract from a PE direction / image set
 
@@ -885,8 +883,8 @@ def get_topup_inputs_from(dwi_file, bval_file, b0_threshold, topup_prefix,
         max_per_spec=max_per_spec)
 
     # If there are EPI fieldmaps, add them to the END of the topup spec
-    if rpe_files and isdefined(rpe_files):
-        fmaps_4d, fmap_b0_indices, fmap_original_files = load_epi_dwi_fieldmaps(rpe_files,
+    if epi_fmaps and isdefined(epi_fmaps):
+        fmaps_4d, fmap_b0_indices, fmap_original_files = load_epi_dwi_fieldmaps(epi_fmaps,
                                                                                 b0_threshold)
         fmap_spec_lines, fmap_imain, fmap_report = topup_inputs_from_4d_file(
             fmaps_4d, fmap_b0_indices, fmap_original_files, image_source="EPI fieldmap",
@@ -905,6 +903,9 @@ def get_topup_inputs_from(dwi_file, bval_file, b0_threshold, topup_prefix,
     imain_img.to_filename(imain_output)
 
     # Write the datain text file
+    if len(set(topup_spec_lines)) < 2:
+        raise Exception("Unable to run TOPUP. Not enough distortion groups.")
+
     datain_file = topup_prefix + "datain.txt"
     with open(datain_file, "w") as f:
         f.write("\n".join(topup_spec_lines))
