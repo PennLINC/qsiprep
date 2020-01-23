@@ -14,7 +14,7 @@ from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
 from ...interfaces import DerivativesDataSink
 
-from ...interfaces.reports import DiffusionSummary, InteractiveReport
+from ...interfaces.reports import DiffusionSummary
 from ...interfaces.confounds import DMRISummary
 from ...engine import Workflow
 

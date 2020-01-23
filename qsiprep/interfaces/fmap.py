@@ -767,7 +767,8 @@ acqp_lines = {
 
 
 def get_topup_inputs_from(dwi_file, bval_file, b0_threshold, topup_prefix,
-                          bids_origin_files, epi_fmaps=None, max_per_spec=3):
+                          bids_origin_files, epi_fmaps=None, max_per_spec=3,
+                          topup_requested=False):
     """Create a datain spec and a slspec from a concatenated dwi series.
 
     Create inputs for TOPUP that come from data in ``dwi/`` and epi fieldmaps in ``fmap/``.
@@ -902,9 +903,11 @@ def get_topup_inputs_from(dwi_file, bval_file, b0_threshold, topup_prefix,
     assert imain_img.shape[3] == len(topup_spec_lines)
     imain_img.to_filename(imain_output)
 
-    # Write the datain text file
-    if len(set(topup_spec_lines)) < 2:
-        raise Exception("Unable to run TOPUP. Not enough distortion groups.")
+    # Write the datain text file and make sure it's usable if it's needed
+    if len(set(topup_spec_lines)) < 2 and topup_requested:
+        print(topup_spec_lines)
+        raise Exception("Unable to run TOPUP: not enough distortion groups. "
+                        "Check \"IntendedFor\" fields or consider using --ignore fieldmaps.")
 
     datain_file = topup_prefix + "datain.txt"
     with open(datain_file, "w") as f:

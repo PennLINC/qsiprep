@@ -32,6 +32,7 @@ class GatherEddyInputsInputSpec(BaseInterfaceInputSpec):
     epi_fmaps = InputMultiObject(File(exists=True),
                                  desc='files from fmaps/ for distortion correction')
     topup_max_b0s_per_spec = traits.CInt(3, usedefault=True)
+    topup_requested = traits.Bool(False, usedefault=True)
 
 
 class GatherEddyInputsOutputSpec(TraitedSpec):
@@ -73,7 +74,8 @@ class GatherEddyInputs(SimpleInterface):
             topup_prefix=topup_prefix,
             bids_origin_files=self.inputs.original_files,
             epi_fmaps=self.inputs.epi_fmaps,
-            max_per_spec=self.inputs.topup_max_b0s_per_spec)
+            max_per_spec=self.inputs.topup_max_b0s_per_spec,
+            topup_requested=self.inputs.topup_requested)
         self._results['topup_datain'] = topup_datain_file
         self._results['topup_imain'] = topup_imain_file
         self._results['topup_report'] = topup_text

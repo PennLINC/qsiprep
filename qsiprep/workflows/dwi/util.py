@@ -339,9 +339,12 @@ def _create_mem_gb(dwi_fname):
 
 def _get_concatenated_bids_name(dwi_group):
     """Derive the output name for a dwi grouping."""
-    all_dwis = dwi_group['dwi_series']
-    if dwi_group['fieldmap_info']['suffix'] == 'rpe_series':
-        all_dwis += dwi_group['fieldmap_info']['rpe_series']
+    try:
+        all_dwis = dwi_group['dwi_series']
+        if dwi_group['fieldmap_info']['suffix'] == 'rpe_series':
+            all_dwis += dwi_group['fieldmap_info']['rpe_series']
+    except Exception:
+        all_dwis = dwi_group
 
     # If a single file, use its name, otherwise use the common prefix
     if len(all_dwis) > 1:

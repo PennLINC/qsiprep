@@ -169,6 +169,9 @@ class EnhanceAndSkullstripB0(SimpleInterface):
         else:
             mask_img = watershed_refined_b0_mask(input_img, show_plot=False,
                                                  cwd=runtime.cwd)
+        if mask_img.get_fdata().sum() < 100:
+            LOGGER.warning("Masking appears to have failed. Using a backup method")
+            mask_img = compute_epi_mask(input_img)
         out_mask = fname_presuffix(self.inputs.b0_file, suffix='_mask', newpath=runtime.cwd)
         mask_img.to_filename(out_mask)
         self._results['mask_file'] = out_mask

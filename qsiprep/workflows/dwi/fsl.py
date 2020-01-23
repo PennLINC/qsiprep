@@ -177,11 +177,11 @@ def init_fsl_hmc_wf(scan_groups,
 
     # Fieldmap correction to be done in LAS+: TOPUP for rpe series or epi fieldmap
     # If a topupref is provided, use it for TOPUP
-
     fieldmap_type = scan_groups['fieldmap_info']['suffix']
     if fieldmap_type in ('epi', 'rpe_series'):
         # If there are EPI fieldmaps in fmaps/, make sure they get to TOPUP. It will always use
         # b=0 images from the DWI series regardless
+        gather_inputs.inputs.topup_requested = True
         if 'epi' in scan_groups['fieldmap_info']:
             gather_inputs.inputs.epi_fmaps = scan_groups['fieldmap_info']['epi']
         outputnode.inputs.sdc_method = "TOPUP"

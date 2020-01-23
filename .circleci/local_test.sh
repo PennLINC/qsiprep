@@ -198,7 +198,7 @@ export FS_LICENSE=${WORKDIR}/fslicense/license.txt
               --sloppy --mem_mb 4096 \
               --output-space T1w \
               --ignore fieldmaps \
-              --use-syn \
+              --force-syn \
               --hmc_model eddy \
               --eddy_config ${WORKDIR}/data/eddy_config.json \
               --fs-license-file $FREESURFER_HOME/license.txt \
@@ -245,6 +245,7 @@ qsiprep \
      participant \
     --boilerplate \
     --sloppy --write-graph --mem_mb 4096 \
+      --fs-license-file $FREESURFER_HOME/license.txt \
     --nthreads 2 -vv --output-resolution 5
 
 qsiprep \
@@ -253,6 +254,7 @@ qsiprep \
      participant \
     --boilerplate \
     --combine-all-dwis \
+      --fs-license-file $FREESURFER_HOME/license.txt \
     --sloppy --write-graph --mem_mb 4096 \
     --nthreads 2 -vv --output-resolution 5
 
@@ -264,6 +266,7 @@ qsiprep \
      ${WORKDIR}/data/fmaptests/DSCSDSI_fmap  ${WORKDIR}/DSI_SDC/derivatives \
      participant \
     --boilerplate \
+      --fs-license-file $FREESURFER_HOME/license.txt \
     --sloppy --write-graph --mem_mb 4096 \
     --nthreads 2 -vv --output-resolution 5
 
@@ -273,6 +276,7 @@ qsiprep \
      participant \
     --combine-all-dwis \
     --boilerplate \
+      --fs-license-file $FREESURFER_HOME/license.txt \
     --sloppy --write-graph --mem_mb 4096 \
     --nthreads 2 -vv --output-resolution 5
 
@@ -286,6 +290,7 @@ qsiprep \
       --recon-spec mrtrix_msmt_csd \
       --sloppy \
       --recon-only \
+      --fs-license-file $FREESURFER_HOME/license.txt \
       --mem_mb 4096 \
       --output-resolution 5 \
       --fs-license-file $FREESURFER_HOME/license.txt \
