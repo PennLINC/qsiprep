@@ -108,6 +108,9 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file,
 
     # If we're just aligning based on the b=0 images, compute the b=0 tsnr as the cnr
     if hmc_model.lower() == "none":
+        workflow.__postdesc__ = "Each b>0 image was transformed based on the registration " \
+                                " of the nearest b=0 image. "
+
         concat_b0s = pe.Node(afni.TCat(outputtype="NIFTI_GZ"), name="concat_b0s")
         b0_tsnr = pe.Node(
             afni.TStat(options=' -cvarinvNOD ', outputtype='NIFTI_GZ'), name='b0_tsnr')
@@ -128,7 +131,9 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file,
                              interpolation='LanczosWindowedSinc'),
         iterfield=['input_image', 'reference_image', 'transforms'],
         name='uncorrect_model_images')
-
+    workflow.__postdesc__ = "Model-generated images were transformed into alignment with each " \
+                            "b>0 image. Both slicewise and whole-brain QC measures (cross " \
+                            "correlation and R^2) were calculated."
     workflow.connect([
         (b0_hmc_wf, dwi_model_hmc_wf, [
             ('outputnode.aligned_images', 'inputnode.warped_b0_images')]),
@@ -241,8 +246,13 @@ def init_b0_hmc_wf(align_to="iterative", transform="Rigid", spatial_bias_correct
             "motion_params", "aligned_images"]),
         name='outputnode')
 
+    desc = "Initial motion correction was performed using only the b=0 images. "
+
     # Iteratively create a template
     if align_to == "iterative":
+        desc += "An unbiased b=0 template was constructed over {num_iters} iterations "\
+                "of {transform} registrations. ".format(num_iters=num_iters,
+                                                       transform=transform)
         initial_template = pe.Node(
             ants.AverageImages(normalize=True, dimension=3),
             name="initial_template")
@@ -289,6 +299,8 @@ def init_b0_hmc_wf(align_to="iterative", transform="Rigid", spatial_bias_correct
         alignment_wf.connect(iter_templates, "out", outputnode,
                              "iteration_templates")
     elif align_to == 'first':
+        desc += "Each b=0 image was registered to the first b=0 image using " \
+                "a {transform} registration. ".format(transform=transform)
         reg_to_first = linear_alignment_workflow(
             transform=transform,
             metric=metric,
@@ -304,7 +316,7 @@ def init_b0_hmc_wf(align_to="iterative", transform="Rigid", spatial_bias_correct
                 ('outputnode.affine_transforms', 'forward_transforms'),
                 ('outputnode.registered_image_paths', 'aligned_images')])
         ])
-
+    alignment_wf.__desc__ = desc
     return alignment_wf
 
 
@@ -518,6 +530,12 @@ def init_dwi_model_hmc_wf(modelname, transform, mem_gb, omp_nthreads,
             fields=['hmc_transforms', 'model_predicted_images', 'cnr_image',
                     'optimization_data']),
         name='outputnode')
+    workflow.__desc__ = "The the SHORELine method was used to estimate head motion in b>0 " \
+                        "images. This entails leaving out each b>0 image and reconstructing " \
+                        "the others using 3dSHORE [@merlet3dshore]. The signal for the left-" \
+                        "out image serves as the registration target. A total of {num_iters} " \
+                        "iterations were run using a {transform} transform. ".format(
+                            transform=transform, num_iters=num_iters)
 
     # Merge b0s into a single volume, put the non-b0 dwis into a list
     extract_dwis = pe.Node(ExtractDWIsForModel(), name="extract_dwis")

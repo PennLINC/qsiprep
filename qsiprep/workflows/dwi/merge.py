@@ -9,6 +9,7 @@ Merge and denoise dwi images
 .. autofunction:: init_dwi_derivatives_wf
 
 """
+import os.path as op
 from nipype import logging
 from nipype.pipeline import engine as pe
 from nipype.utils.filemanip import split_filename
@@ -343,6 +344,7 @@ def init_dwi_denoising_wf(dwi_denoise_window,
             (merge_confounds, hstack_confounds, [('out', 'in_files')]),
             (hstack_confounds, outputnode, [('confounds_file', 'confounds')])])
 
+    # workflow.__desc__ = desc + denoise_boilerplate
     return workflow
 
 

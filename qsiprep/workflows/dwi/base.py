@@ -281,7 +281,6 @@ def init_dwi_preproc_wf(scan_groups,
 
     mem_gb = {'filesize': 1, 'resampled': 1, 'largemem': 1}
     dwi_nvols = 10
-
     # Determine resource usage
     for scan in all_dwis:
         if not os.path.exists(scan):
@@ -316,6 +315,11 @@ def init_dwi_preproc_wf(scan_groups,
             'dwi_mask', 'hmc_xforms', 'fieldwarps', 'sbref_file', 'original_files',
             'raw_qc_file', 'coreg_score', 'raw_concatenated', 'carpetplot_data']),
         name='outputnode')
+    workflow.__desc__ = """
+
+Diffusion data preprocessing
+
+: """
 
     pre_hmc_wf = init_dwi_pre_hmc_wf(scan_groups=scan_groups,
                                      b0_threshold=b0_threshold,

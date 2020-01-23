@@ -110,6 +110,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
 
     # Special case: Two reverse PE DWI series are going to get combined for eddy
     if preprocess_rpe_series:
+        workflow.__desc__ = "Images were grouped into two phase encoding polarity groups. "
         rpe_series = scan_groups['fieldmap_info']['rpe_series']
         # Merge, denoise, split, hmc on the plus series
         plus_files, minus_files = (rpe_series, dwi_series) if dwi_series_pedir.endswith("-") \
@@ -176,6 +177,8 @@ def init_dwi_pre_hmc_wf(scan_groups,
                 ('bval_file', 'inputnode.bval_file'),
                 ('bvec_file', 'inputnode.bvec_file')]),
             (qc_wf, outputnode, [('outputnode.qc_summary', 'qc_file')])])
+        workflow.__postdesc__ = "Both groups were then merged into a single file, as required " \
+                                "for the FSL workflows. "
 
         return workflow
 
