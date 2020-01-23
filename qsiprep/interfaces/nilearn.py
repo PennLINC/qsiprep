@@ -165,7 +165,8 @@ class EnhanceAndSkullstripB0(SimpleInterface):
         # Get a mask. Choose a good method depending on the resolution
         voxel_size = np.array(input_img.header.get_zooms()[:3])
         if np.any(voxel_size > 3.5):
-            mask_img, _, _ = calculate_gradmax_b0_mask(input_img, cwd=runtime.cwd)
+            LOGGER.warning("Using simple EPI masking due to large voxel size")
+            mask_img = compute_epi_mask(input_img)
         else:
             mask_img = watershed_refined_b0_mask(input_img, show_plot=False,
                                                  cwd=runtime.cwd)
@@ -173,7 +174,9 @@ class EnhanceAndSkullstripB0(SimpleInterface):
             LOGGER.warning("Masking appears to have failed. Using a backup method")
             mask_img = compute_epi_mask(input_img)
         out_mask = fname_presuffix(self.inputs.b0_file, suffix='_mask', newpath=runtime.cwd)
-        mask_img.to_filename(out_mask)
+        # Ensure the header is ok
+        good_header_mask = new_img_like(input_img, mask_img.get_fdata())
+        good_header_mask.to_filename(out_mask)
         self._results['mask_file'] = out_mask
 
         # Make a smoothed mask for N4

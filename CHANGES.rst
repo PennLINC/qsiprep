@@ -1,11 +1,10 @@
-0.6.6 (Nov 25, 2019)
-=====================
-Fixes a bug introduced in 0.6.5 for the TOPUP/eddy version of the pipeline. ANTs is
-updated to a newer version.
-
- * Fix RPEB0 bug Closes #78
- * Add additional CI testing for specific output files
- * Adds CI tests for creating workflows for all RPE combinations (series and fieldmap)
+0.6.7 (January 9 2020)
+======================
+This release adds some rather big updates to QSIPrep.
+ * FSL is updated to version 6.0.3
+ * CUDA v9.1 support is added to the image (works with GPUS in Docker and Singularity)
+ * A new robust b=0 masking algorith is introduced.
+ *
 
 0.6.5 (Nov 21, 2019)
 ====================

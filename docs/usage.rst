@@ -67,6 +67,14 @@ Information on how to customize and understand these files can be found on the
 `nipype debugging <http://nipype.readthedocs.io/en/latest/users/debug.html>`_
 page.
 
+CUDA Support
+=============
+
+As of version 0.6.7 CUDA version 9.1 is supported in the QSIPrep container! To run locally
+using docker you will need the nvidia container runtime installed for Docker version 19.0.3
+or higher. Singularity images will run with CUDA 9.1 with the ``-nv`` flag.
+
+
 Support and communication
 =========================
 
