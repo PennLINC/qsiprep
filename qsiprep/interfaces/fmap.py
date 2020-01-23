@@ -817,7 +817,7 @@ def get_topup_inputs_from(dwi_file, bval_file, b0_threshold, topup_prefix,
     Case: one DWI series and an EPI fieldmap
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-    If a reverse-phase encoding fieldmap image (or images) are passed in through ``rpe_files``,
+    If a reverse-phase encoding fieldmap image (or images) are passed in through ``epi_fmaps``,
     these will undergo the same selection process using ``max_per_spec``. The images will be
     added to the *end* of the image series, though, to ensure that the fieldmap correction will
     be aligned to the first b=0 image in ``nii_file``. For example if ``nii_file`` contains

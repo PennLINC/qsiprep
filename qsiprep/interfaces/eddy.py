@@ -72,7 +72,7 @@ class GatherEddyInputs(SimpleInterface):
             b0_threshold=self.inputs.b0_threshold,
             topup_prefix=topup_prefix,
             bids_origin_files=self.inputs.original_files,
-            epi_fmaps=self.inputs.rpe_files,
+            epi_fmaps=self.inputs.epi_fmaps,
             max_per_spec=self.inputs.topup_max_b0s_per_spec)
         self._results['topup_datain'] = topup_datain_file
         self._results['topup_imain'] = topup_imain_file

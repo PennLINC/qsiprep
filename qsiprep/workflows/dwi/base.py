@@ -7,11 +7,11 @@ Orchestrating the dwi-preprocessing workflow
 """
 
 import os
+import pdb
 
 from nipype import logging
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
-
 from ...interfaces import DerivativesDataSink
 
 from ...interfaces.reports import DiffusionSummary, InteractiveReport
@@ -276,7 +276,7 @@ def init_dwi_preproc_wf(scan_groups,
         if fieldmap_type != "syn":
             fieldmap_file = fieldmap_info[fmap_key]
             # There can be a bunch of rpe series, so don't get the info yet
-            if fmap_key != 'rpe_series':
+            if fmap_key not in ('rpe_series', 'epi', 'dwi'):
                 fieldmap_info['metadata'] = layout.get_metadata(fieldmap_file)
 
     mem_gb = {'filesize': 1, 'resampled': 1, 'largemem': 1}
