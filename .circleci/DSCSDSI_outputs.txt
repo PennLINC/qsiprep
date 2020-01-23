@@ -23,6 +23,7 @@ qsiprep/sub-tester/anat/sub-tester_space-MNI152NLin2009cAsym_label-GM_probseg.ni
 qsiprep/sub-tester/anat/sub-tester_space-MNI152NLin2009cAsym_label-WM_probseg.nii.gz
 qsiprep/sub-tester/dwi
 qsiprep/sub-tester/dwi/sub-tester_acq-HASC55AP_confounds.tsv
+qsiprep/sub-tester/dwi/sub-tester_acq-HASC55AP_desc-ImageQC_dwi.csv
 qsiprep/sub-tester/dwi/sub-tester_acq-HASC55AP_space-T1w_b0series.nii.gz
 qsiprep/sub-tester/dwi/sub-tester_acq-HASC55AP_space-T1w_desc-3dSHORE_cnr.nii.gz
 qsiprep/sub-tester/dwi/sub-tester_acq-HASC55AP_space-T1w_desc-brain_mask.nii.gz
