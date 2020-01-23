@@ -16,6 +16,7 @@ import json
 import re
 from collections import defaultdict
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+import matplotlib
 import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np
@@ -521,12 +522,12 @@ def _load_qc_file(fname, prefix=""):
 
 
 class _InteractiveReportInputSpec(TraitedSpec):
-    raw_dwi_file = File(exists=True)
-    processed_dwi_file = File(exists=True)
-    confounds_file = File(exists=True)
-    mask_file = File(exists=True)
-    color_fa = File(exists=True)
-    carpetplot_data = File(exists=True)
+    raw_dwi_file = File(exists=True, mandatory=True)
+    processed_dwi_file = File(exists=True, mandatory=True)
+    confounds_file = File(exists=True, mandatory=True)
+    mask_file = File(exists=True, mandatory=True)
+    color_fa = File(exists=True, mandatory=True)
+    carpetplot_data = File(exists=True, mandatory=True)
 
 
 class InteractiveReport(SimpleInterface):
@@ -542,20 +543,47 @@ class InteractiveReport(SimpleInterface):
                                                           self.inputs.mask_file)
         report['carpetplot'] = []
         if isdefined(self.inputs.carpetplot_data):
-            carpet_data = np.load(self.inputs.carpetplot_data)
-            carpetplot_matrix = carpet_data['slice_scores'].tolist()
-            report['carpetplot'] = carpetplot_matrix
+            with open(self.inputs.carpetplot_data, 'r') as carpet_f:
+                carpet_data = json.load(carpet_f)
+            report.update(carpet_data)
 
         report['b0'] = b0
         report['colorFA'] = colorFA
         report['anat_mask'] = mask
-        report['outlier_volumes'] = [3, 4, 5]  # self.inputs.outlier_indices.tolist()
+        report['outlier_volumes'] = []
         report['eddy_params'] = [[i, i] for i in range(30)]
         eddy_qc = {}
         report['eddy_quad'] = eddy_qc
+
+        df = pd.read_csv(self.inputs.confounds_file, delimiter="\t")
+        translations = df[['trans_x', 'trans_y', 'trans_z']].to_numpy()
+        rms = np.sqrt((translations ** 2).sum(1))
+        fdisp = df['framewise_displacement'].tolist()
+        fdisp[0] = None
+        report['eddy_params'] = [[fd_, rms_] for fd_, rms_ in zip(fdisp, rms)]
+
+        # Get the sampling scheme
+        xyz = df[["grad_x", "grad_y", "grad_z"]].to_numpy()
+        bval = df['bval'].to_numpy()
+        qxyz = np.sqrt(bval)[:, None] * xyz
+        report['q_coords'] = qxyz.tolist()
+        report['color'] = _filename_to_colors(df['original_file'])
+
         safe_json = json.dumps(report)
         out_file = op.join(runtime.cwd, "interactive_report.html")
         with open(out_file, "w") as out_html:
             out_html.write(INTERACTIVE_TEMPLATE.replace("REPORT", safe_json))
         self._results['out_report'] = out_file
         return runtime
+
+
+def _filename_to_colors(labels_column, colormap="rainbow"):
+    cmap = matplotlib.cm.get_cmap(colormap)
+    labels, _ = pd.factorize(labels_column)
+    n_samples = labels.shape[0]
+    max_label = labels.max()
+    if max_label == 0:
+        return [(1.0, 0.0, 0.0)] * n_samples
+    labels = labels / max_label
+    colors = np.array([cmap(label) for label in labels])
+    return colors.tolist()

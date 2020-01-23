@@ -15,7 +15,7 @@ from nipype.interfaces import utility as niu
 
 from ...interfaces import DerivativesDataSink
 from ...niworkflows.interfaces.registration import SimpleBeforeAfterRPT
-from ...interfaces.reports import GradientPlot, SeriesQC, InteractiveReport
+from ...interfaces.reports import GradientPlot, SeriesQC
 from ...interfaces.mrtrix import MRTrixGradientTable
 from ...engine import Workflow
 

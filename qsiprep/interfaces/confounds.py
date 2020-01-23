@@ -11,6 +11,7 @@ Handling confounds
 """
 import os
 import re
+import json
 import numpy as np
 import pandas as pd
 from nipype import logging
@@ -200,7 +201,7 @@ class DMRISummaryInputSpec(BaseInterfaceInputSpec):
 
 class DMRISummaryOutputSpec(TraitedSpec):
     out_file = File(exists=True, desc='written file path')
-
+    carpetplot_json = File(exists=True)
 
 class DMRISummary(SimpleInterface):
     input_spec = DMRISummaryInputSpec
@@ -213,10 +214,18 @@ class DMRISummary(SimpleInterface):
             self.inputs.confounds_file,
             sep="\t", index_col=None, na_filter=True, na_values='n/a')
 
-        fig = dMRIPlot(
+        plotter = dMRIPlot(
             sliceqc_file=self.inputs.sliceqc_file,
             mask_file=self.inputs.sliceqc_mask,
-            confounds=dataframe
-        ).plot()
+            confounds=dataframe)
+        fig = plotter.plot()
         fig.savefig(self._results['out_file'], bbox_inches='tight')
+
+        # Write a json file of the carpetplot data
+        carpetplot_json = os.path.join(runtime.cwd, 'carpetplot.json')
+        with open(carpetplot_json, "w") as carpet_file:
+            json.dump(
+                {'carpetplot': np.nan_to_num(plotter.qc_data['slice_scores']).tolist()},
+                carpet_file)
+        self._results['carpetplot_json'] = carpetplot_json
         return runtime

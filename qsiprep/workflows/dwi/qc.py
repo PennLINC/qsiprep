@@ -133,6 +133,7 @@ def init_interactive_report_wf(name="interactive_report_wf"):
             ('mask_file', 'mask_file')]),
         (tensor_fit, interactive_report, [('color_fa_image', 'color_fa')]),
         (inputnode, interactive_report, [
+            ('carpetplot_data', 'carpetplot_data'),
             ('raw_dwi_file', 'raw_dwi_file'),
             ('processed_dwi_file', 'processed_dwi_file'),
             ('confounds_file', 'confounds_file'),

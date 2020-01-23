@@ -473,20 +473,21 @@ Diffusion data preprocessing
         (hmc_wf, confounds_wf, [
             ('outputnode.slice_quality', 'inputnode.sliceqc_file'),
             ('outputnode.motion_params', 'inputnode.motion_params')]),
-        (hmc_wf, outputnode, [('outputnode.slice_quality', 'carpetplot_data')]),
         (pre_hmc_wf, confounds_wf, [
             ('outputnode.denoising_confounds', 'inputnode.denoising_confounds'),
             ('outputnode.bval_file', 'inputnode.bval_file'),
             ('outputnode.bvec_file', 'inputnode.bvec_file'),
             ('outputnode.original_files', 'inputnode.original_files')]),
-        (hmc_wf, outputnode, [('outputnode.hmc_optimization_data', 'hmc_optimization_data')]),
         (hmc_wf, conf_plot, [
             ('outputnode.slice_quality', 'sliceqc_file'),
             ('outputnode.b0_template_mask', 'sliceqc_mask')]),
         (confounds_wf, conf_plot, [
             ('outputnode.confounds_file', 'confounds_file')]),
+        (confounds_wf, outputnode, [('outputnode.confounds_file', 'confounds')]),
         (conf_plot, ds_report_dwi_conf, [('out_file', 'in_file')]),
+        (conf_plot, outputnode, [('carpetplot_json', 'carpetplot_data')]),
         (hmc_wf, outputnode, [
+            ('outputnode.hmc_optimization_data', 'hmc_optimization_data'),
             ('outputnode.b0_indices', 'b0_indices'),
             ('outputnode.bval_files', 'bval_files'),
             ('outputnode.bvec_files_to_transform', 'bvec_files'),
