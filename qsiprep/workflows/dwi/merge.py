@@ -164,7 +164,7 @@ def init_merge_and_denoise_wf(raw_dwi_files,
             (dwi_source, conformed_images, [(edge_prefix + 'dwi_file', 'in%d' % dwi_num)]),
             (dwi_source, conformed_bvals, [(edge_prefix + 'bval_file', 'in%d' % dwi_num)]),
             (dwi_source, conformed_bvecs, [(edge_prefix + 'bvec_file', 'in%d' % dwi_num)]),
-            (dwi_source, conformation_reports, [('out_report', 'in%d' % dwi_num)])
+            (conformers[-1], conformation_reports, [('out_report', 'in%d' % dwi_num)])
         ])
 
     # Get a QC score for the raw data
