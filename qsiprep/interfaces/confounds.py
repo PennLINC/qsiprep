@@ -203,6 +203,7 @@ class DMRISummaryOutputSpec(TraitedSpec):
     out_file = File(exists=True, desc='written file path')
     carpetplot_json = File(exists=True)
 
+
 class DMRISummary(SimpleInterface):
     input_spec = DMRISummaryInputSpec
     output_spec = DMRISummaryOutputSpec

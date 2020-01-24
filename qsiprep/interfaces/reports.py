@@ -16,22 +16,19 @@ import json
 import re
 from collections import defaultdict
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
-import matplotlib
 import seaborn as sns
+import matplotlib
 import matplotlib.pyplot as plt
+from matplotlib import animation
+import pandas as pd
 import numpy as np
-from nipype.utils.filemanip import save_json, load_json
 from nipype.interfaces.base import (
     traits, TraitedSpec, BaseInterfaceInputSpec,
     File, Directory, InputMultiPath, InputMultiObject, Str, isdefined,
     SimpleInterface)
 from nipype.interfaces import freesurfer as fs
 from .gradients import concatenate_bvals, concatenate_bvecs
-from matplotlib import animation
-import pandas as pd
-from .qc import (createB0_ColorFA_Mask_Sprites, createSprite4D, create_sprite_from_tiles,
-    nearest_square, get_middle_slices, reshape4D, reshape3D, load_and_reorient,
-    mplfigcontour, mplfig, reorient_array)
+from .qc import createB0_ColorFA_Mask_Sprites, createSprite4D
 
 SUBJECT_TEMPLATE = """\t<ul class="elem-desc">
 \t\t<li>Subject ID: {subject_id}</li>
@@ -101,6 +98,7 @@ var report = REPORT
 
 </script>
 """
+
 
 class SummaryOutputSpec(TraitedSpec):
     out_report = File(exists=True, desc='HTML segment containing summary')

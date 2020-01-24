@@ -103,7 +103,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
     outputnode = pe.Node(
         niu.IdentityInterface(fields=[
             'dwi_file', 'bval_file', 'bvec_file', 'original_files', 'denoising_confounds',
-            'noise_images', 'bias_images', 'qc_file', 'raw_concatenated']),
+            'noise_images', 'bias_images', 'qc_file', 'raw_concatenated', 'validation_reports']),
         name='outputnode')
     dwi_series_pedir = scan_groups['dwi_series_pedir']
     dwi_series = scan_groups['dwi_series']

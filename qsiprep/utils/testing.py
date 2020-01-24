@@ -155,29 +155,29 @@ def get_grouping_test_data():
         return test_bids.parent
 
     # One dwi, no fmaps
-    easy = write_test_bids(
+    write_test_bids(
         'easy',
         [('dwi/sub-1_dwi', {'PhaseEncodingDirection': 'j'})])
 
-    concat1 = write_test_bids(
+    write_test_bids(
         'concat1',
         [("dwi/sub-1_run-01_dwi", {'PhaseEncodingDirection': 'j'}),
          ("dwi/sub-1_run-02_dwi", {'PhaseEncodingDirection': 'j'})]
     )
 
-    opposite = write_test_bids(
+    write_test_bids(
         'opposite',
         [("dwi/sub-1_dir-AP_dwi", {'PhaseEncodingDirection': 'j'}),
          ("dwi/sub-1_dir-PA_dwi", {'PhaseEncodingDirection': 'j-'})])
 
-    opposite_concat = write_test_bids(
+    write_test_bids(
         'opposite_concat',
         [("dwi/sub-1_dir-AP_run-1_dwi", {'PhaseEncodingDirection': 'j'}),
          ("dwi/sub-1_dir-AP_run-2_dwi", {'PhaseEncodingDirection': 'j'}),
          ("dwi/sub-1_dir-PA_run-1_dwi", {'PhaseEncodingDirection': 'j-'}),
          ("dwi/sub-1_dir-PA_run-2_dwi", {'PhaseEncodingDirection': 'j-'})])
 
-    phasediff = write_test_bids(
+    write_test_bids(
         'phasediff',
         [("dwi/sub-1_dir-AP_run-1_dwi", {'PhaseEncodingDirection': 'j'}),
          ("dwi/sub-1_dir-AP_run-2_dwi", {'PhaseEncodingDirection': 'j'}),
@@ -188,7 +188,7 @@ def get_grouping_test_data():
              'IntendedFor': ['dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
                              'dwi/sub-1_dir-AP_run-2_dwi.nii.gz']})])
 
-    epi = write_test_bids(
+    write_test_bids(
         'epi',
         [("dwi/sub-1_dir-AP_run-1_dwi", {'PhaseEncodingDirection': 'j'}),
          ("dwi/sub-1_dir-AP_run-2_dwi", {'PhaseEncodingDirection': 'j'}),
@@ -197,7 +197,7 @@ def get_grouping_test_data():
              'IntendedFor': ['dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
                              'dwi/sub-1_dir-AP_run-2_dwi.nii.gz']})])
 
-    separate_fmaps = write_test_bids(
+    write_test_bids(
         'separate_fmaps',
         [("dwi/sub-1_dir-AP_run-1_dwi", {'PhaseEncodingDirection': 'j'}),
          ("dwi/sub-1_dir-AP_run-2_dwi", {'PhaseEncodingDirection': 'j'}),
@@ -209,7 +209,7 @@ def get_grouping_test_data():
              'IntendedFor': ['dwi/sub-1_dir-AP_run-2_dwi.nii.gz']}),
          ])
 
-    mixed_fmaps = write_test_bids(
+    write_test_bids(
         'mixed_fmaps',
         [("dwi/sub-1_dir-AP_run-1_dwi", {'PhaseEncodingDirection': 'j'}),
          ("dwi/sub-1_dir-PA_run-2_dwi", {'PhaseEncodingDirection': 'j-'}),
@@ -221,13 +221,13 @@ def get_grouping_test_data():
              'IntendedFor': ['dwi/sub-1_dir-PA_run-2_dwi.nii.gz']}),
          ])
 
-    missing_info = write_test_bids(
+    write_test_bids(
         'missing_info',
         [("dwi/sub-1_dir-AP_run-1_dwi", {}),
          ("dwi/sub-1_dir-PA_run-2_dwi", {})]
     )
 
-    wtf = write_test_bids(
+    write_test_bids(
         'wtf',
         [("dwi/sub-1_run-1_dwi", {}),
          ("dwi/sub-1_run-2_dwi", {}),
@@ -238,7 +238,7 @@ def get_grouping_test_data():
          ("dwi/sub-1_dir-IS_dwi", {'PhaseEncodingDirection': 'k-'}),
          ])
 
-    appa_fmaps = write_test_bids(
+    write_test_bids(
         'appa_fmaps',
         [("dwi/sub-1_dir-AP_run-1_dwi", {'PhaseEncodingDirection': 'j'}),
          ("dwi/sub-1_dir-AP_run-2_dwi", {'PhaseEncodingDirection': 'j'}),
@@ -251,6 +251,5 @@ def get_grouping_test_data():
              'IntendedFor': ['dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
                              'dwi/sub-1_dir-AP_run-2_dwi.nii.gz']}),
          ])
-
 
     return empty_bids_dir

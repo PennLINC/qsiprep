@@ -662,7 +662,6 @@ def merge_dwi_groups(dwi_groups_plus, dwi_groups_minus):
     ---------
 
     Set up tests
-    >>> from qsiprep.utils.bids import collect_data
     >>> SUBJECT_ID = "1"
 
     AP/PA fieldmaps and paired DWI series

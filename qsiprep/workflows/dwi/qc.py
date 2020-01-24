@@ -9,15 +9,8 @@ Utility workflows
 .. autofunction:: init_enhance_and_skullstrip_dwi_wf
 
 """
-import os
-from pathlib import Path
-import nibabel as nb
-
 from nipype.pipeline import engine as pe
-from nipype.utils.filemanip import split_filename
-from nipype.interfaces import utility as niu, fsl, afni
-from ...niworkflows.interfaces import SimpleBeforeAfter
-from ...niworkflows.interfaces.utils import CopyHeader
+from nipype.interfaces import utility as niu
 from ...engine import Workflow
 from ...interfaces.nilearn import Merge
 from ...interfaces.dsi_studio import DSIStudioSrcQC, DSIStudioCreateSrc

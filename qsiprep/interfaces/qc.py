@@ -1,9 +1,6 @@
 import base64
 import os.path as op
 from io import BytesIO
-
-import matplotlib
-matplotlib.use('agg')
 import matplotlib.pyplot as plt
 import nibabel as nib
 import numpy as np

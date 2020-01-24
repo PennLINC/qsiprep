@@ -13,7 +13,6 @@ from copy import deepcopy
 import numpy as np
 from scipy.io.matlab import loadmat, savemat
 import nibabel as nb
-import pandas as pd
 LOGGER = logging.getLogger('nipype.interface')
 
 

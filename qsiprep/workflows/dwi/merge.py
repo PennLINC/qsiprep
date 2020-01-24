@@ -9,7 +9,6 @@ Merge and denoise dwi images
 .. autofunction:: init_dwi_derivatives_wf
 
 """
-import os.path as op
 from nipype import logging
 from nipype.pipeline import engine as pe
 from nipype.utils.filemanip import split_filename

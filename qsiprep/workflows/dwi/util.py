@@ -15,9 +15,8 @@ import nibabel as nb
 
 from nipype.pipeline import engine as pe
 from nipype.utils.filemanip import split_filename
-from nipype.interfaces import utility as niu, fsl, afni
+from nipype.interfaces import utility as niu, fsl
 from ...niworkflows.interfaces import SimpleBeforeAfter
-from ...niworkflows.interfaces.utils import CopyHeader
 from ...engine import Workflow
 from ...interfaces.ants import ImageMath
 from ...interfaces import DerivativesDataSink

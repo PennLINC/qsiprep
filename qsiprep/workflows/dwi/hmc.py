@@ -252,7 +252,7 @@ def init_b0_hmc_wf(align_to="iterative", transform="Rigid", spatial_bias_correct
     if align_to == "iterative":
         desc += "An unbiased b=0 template was constructed over {num_iters} iterations "\
                 "of {transform} registrations. ".format(num_iters=num_iters,
-                                                       transform=transform)
+                                                        transform=transform)
         initial_template = pe.Node(
             ants.AverageImages(normalize=True, dimension=3),
             name="initial_template")

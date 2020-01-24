@@ -13,7 +13,6 @@ qsiprep base processing workflows
 import logging
 import sys
 import os
-from collections import defaultdict
 from copy import deepcopy
 
 from nipype import __version__ as nipype_ver
