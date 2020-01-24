@@ -99,7 +99,7 @@ def init_merge_and_denoise_wf(raw_dwi_files,
     outputnode = pe.Node(
         niu.IdentityInterface(fields=[
             'merged_image', 'merged_bval', 'merged_bvec', 'noise_images', 'bias_images',
-            'denoising_confounds', 'original_files', 'qc_summary']),
+            'denoising_confounds', 'original_files', 'qc_summary', 'validation_reports']),
         name='outputnode')
 
     # DWIs will be merged at some point.
@@ -113,6 +113,7 @@ def init_merge_and_denoise_wf(raw_dwi_files,
     conformed_bvals = pe.Node(niu.Merge(num_dwis), name='conformed_bvals')
     conformed_bvecs = pe.Node(niu.Merge(num_dwis), name='conformed_bvecs')
     conformed_images = pe.Node(niu.Merge(num_dwis), name='conformed_images')
+    conformation_reports = pe.Node(niu.Merge(num_dwis), name='conformation_reports')
     # derivatives from denoising
     denoising_confounds = pe.Node(niu.Merge(num_dwis), name='denoising_confounds')
     noise_images = pe.Node(niu.Merge(num_dwis), name='noise_images')
@@ -163,6 +164,7 @@ def init_merge_and_denoise_wf(raw_dwi_files,
             (dwi_source, conformed_images, [(edge_prefix + 'dwi_file', 'in%d' % dwi_num)]),
             (dwi_source, conformed_bvals, [(edge_prefix + 'bval_file', 'in%d' % dwi_num)]),
             (dwi_source, conformed_bvecs, [(edge_prefix + 'bvec_file', 'in%d' % dwi_num)]),
+            (dwi_source, conformation_reports, [('out_report', 'in%d' % dwi_num)])
         ])
 
     # Get a QC score for the raw data
@@ -178,6 +180,7 @@ def init_merge_and_denoise_wf(raw_dwi_files,
         (conformed_images, merge_dwis, [('out', 'dwi_files')]),
         (conformed_bvals, merge_dwis, [('out', 'bval_files')]),
         (conformed_bvecs, merge_dwis, [('out', 'bvec_files')]),
+        (conformation_reports, outputnode, [('out', 'validation_reports')]),
         (merge_dwis, outputnode, [
             ('original_images', 'original_files'),
             ('out_bval', 'merged_bval'),
