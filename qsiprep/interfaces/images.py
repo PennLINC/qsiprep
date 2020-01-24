@@ -101,6 +101,7 @@ class ConcatRPESplitsOutputSpec(TraitedSpec):
     denoising_confounds = File(exists=True, desc='plus and minus confounds merged')
     validation_reports = OutputMultiObject(File(exists=True))
 
+
 class ConcatRPESplits(SimpleInterface):
     """Combine the outputs from the RPE series workflow into a SplitDWI-like object.
 
