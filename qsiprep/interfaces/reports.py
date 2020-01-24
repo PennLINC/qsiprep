@@ -55,6 +55,7 @@ DIFFUSION_TEMPLATE = """\t\t<h3 class="elem-title">Summary</h3>
 \t\t\t<li>Confounds collected: {confounds}</li>
 \t\t\t<li>Impute slice threshold: {impute_slice_threshold}</li>
 \t\t</ul>
+{validation_reports}
 """
 
 ABOUT_TEMPLATE = """\t<ul>
@@ -107,6 +108,9 @@ class SummaryOutputSpec(TraitedSpec):
 
 class SummaryInterface(SimpleInterface):
     output_spec = SummaryOutputSpec
+
+    def _generate_segment(self):
+        raise NotImplementedError()
 
     def _run_interface(self, runtime):
         segment = self._generate_segment()
@@ -211,6 +215,7 @@ class DiffusionSummaryInputSpec(BaseInterfaceInputSpec):
     dwi_denoise_window = traits.Int(desc='window size for dwidenoise')
     output_spaces = traits.List(desc='Target spaces')
     confounds_file = File(exists=True, desc='Confounds file')
+    validation_reports = InputMultiObject(File(exists=True))
 
 
 class DiffusionSummary(SummaryInterface):
@@ -228,6 +233,12 @@ class DiffusionSummary(SummaryInterface):
         else:
             conflist = ''
 
+        validation_summaries = []
+        for summary in self.inputs.validation_reports:
+            with open(summary, 'r') as summary_f:
+                validation_summaries.extend(summary_f.readlines())
+        validation_summary = '\n'.join(validation_summaries)
+
         return DIFFUSION_TEMPLATE.format(
             pedir=pedir,
             sdc=self.inputs.distortion_correction,
@@ -237,7 +248,8 @@ class DiffusionSummary(SummaryInterface):
             denoise_window=self.inputs.dwi_denoise_window,
             output_spaces=', '.join(self.inputs.output_spaces),
             confounds=re.sub(r'[\t ]+', ', ', conflist),
-            impute_slice_threshold=self.inputs.impute_slice_threshold
+            impute_slice_threshold=self.inputs.impute_slice_threshold,
+            validation_reports=validation_summary
             )
 
 

@@ -221,7 +221,7 @@ def init_merge_and_denoise_wf(raw_dwi_files,
         (denoising_wf, outputnode, [
             ('outputnode.dwi_file', 'merged_image'),
             (('outputnode.noise_image', _as_list), 'noise_images'),
-            (('outputnode.bias_image', _as_list), 'bias_images')]),
+            (('outputnode.bias_image', _as_list), 'bias_images')])
     ])
 
     return workflow

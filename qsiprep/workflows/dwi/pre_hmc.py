@@ -179,7 +179,6 @@ def init_dwi_pre_hmc_wf(scan_groups,
             (qc_wf, outputnode, [('outputnode.qc_summary', 'qc_file')])])
         workflow.__postdesc__ = "Both groups were then merged into a single file, as required " \
                                 "for the FSL workflows. "
-
         return workflow
 
     merge_dwis = init_merge_and_denoise_wf(
