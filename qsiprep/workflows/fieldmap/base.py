@@ -51,6 +51,7 @@ LOGGER = logging.getLogger('nipype.workflow')
 FMAP_PRIORITY = {
     'epi': 0,
     'rpe_series': 0,
+    'dwi': 0,
     'fieldmap': 1,
     'phasediff': 2,
     'phase': 3,
@@ -156,7 +157,7 @@ def init_sdc_wf(fieldmap_info, dwi_meta, omp_nthreads=1,
         name='outputnode')
 
     # No fieldmaps - forward inputs to outputs
-    if fieldmap_info['suffix'] is None:
+    if fieldmap_info.get('suffix') is None:
         workflow.__postdesc__ = "No susceptibility distortion correction was performed."
         outputnode.inputs.method = 'None'
         workflow.connect([
@@ -168,12 +169,12 @@ def init_sdc_wf(fieldmap_info, dwi_meta, omp_nthreads=1,
 
     workflow.__postdesc__ = """\
 Based on the estimated susceptibility distortion, an
-unwarped b0 reference was calculated for a more accurate
+unwarped b=0 reference was calculated for a more accurate
 co-registration with the anatomical reference.
 """
 
     # PEPOLAR path
-    if fieldmap_info['suffix'] in ('epi', 'rpe_series'):
+    if fieldmap_info['suffix'] in ('epi', 'rpe_series', 'dwi'):
         outputnode.inputs.method = \
             'PEB/PEPOLAR (phase-encoding based / PE-POLARity): %s' % fieldmap_info['suffix']
 

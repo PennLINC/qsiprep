@@ -15,9 +15,9 @@ from nipype.interfaces import utility as niu
 from nipype.interfaces import fsl, afni, ants
 
 from ...interfaces.eddy import GatherEddyInputs, ExtendedEddy, Eddy2SPMMotion
-from ...interfaces.dwi_merge import MergeDWIs
 from ...interfaces.images import SplitDWIs, ConformDwi
-from ...interfaces.fmap import B0RPEFieldmap
+from ...interfaces.reports import TopupSummary
+from ...interfaces import DerivativesDataSink
 from ...engine import Workflow
 
 # dwi workflows
@@ -29,6 +29,7 @@ LOGGER = logging.getLogger('nipype.workflow')
 
 
 def init_fsl_hmc_wf(scan_groups,
+                    source_file,
                     b0_threshold,
                     impute_slice_threshold,
                     fmap_demean,
@@ -71,14 +72,14 @@ def init_fsl_hmc_wf(scan_groups,
 
     **Inputs**
 
-        dwi_files: list
-            List of single-volume files across all DWI series
+        dwi_file: str
+            DWI series
+        bvec_file: str
+            bvec file
+        bval_file: str
+            bval file
         b0_indices: list
             Indexes into ``dwi_files`` that correspond to b=0 volumes
-        bvecs: list
-            List of paths to single-line bvec files
-        bvals: list
-            List of paths to single-line bval files
         b0_images: list
             List of single b=0 volumes
         original_files: list
@@ -89,20 +90,21 @@ def init_fsl_hmc_wf(scan_groups,
 
     inputnode = pe.Node(
         niu.IdentityInterface(
-            fields=['dwi_files', 'b0_indices', 'bvec_files', 'bval_files', 'b0_images',
+            fields=['dwi_file', 'bvec_file', 'bval_file', 'b0_indices', 'b0_images',
                     'original_files', 't1_brain', 't1_2_mni_reverse_transform']),
         name='inputnode')
 
     outputnode = pe.Node(
         niu.IdentityInterface(
-            fields=["b0_template", "b0_template_mask", "pre_sdc_template",
+            fields=["b0_template", "b0_template_mask", "pre_sdc_template", "bval_files",
                     "hmc_optimization_data", "sdc_method", 'slice_quality', 'motion_params',
                     "cnr_map", "bvec_files_to_transform", "dwi_files_to_transform", "b0_indices",
                     "to_dwi_ref_affines", "to_dwi_ref_warps", "rpe_b0_info"]),
         name='outputnode')
 
     workflow = Workflow(name=name)
-    gather_inputs = pe.Node(GatherEddyInputs(), name="gather_inputs")
+    gather_inputs = pe.Node(
+        GatherEddyInputs(b0_threshold=b0_threshold), name="gather_inputs")
     if eddy_config is None:
         # load from the defaults
         eddy_cfg_file = pkgr_fn('qsiprep.data', 'eddy_params.json')
@@ -116,8 +118,6 @@ def init_fsl_hmc_wf(scan_groups,
     LOGGER.info("Using %d threads in eddy", omp_nthreads)
     eddy_args["num_threads"] = omp_nthreads
     eddy = pe.Node(ExtendedEddy(**eddy_args), name="eddy")
-    # These should be in LAS+
-    dwi_merge = pe.Node(MergeDWIs(), name="dwi_merge")
     spm_motion = pe.Node(Eddy2SPMMotion(), name="spm_motion")
     # Convert eddy outputs back to LPS+, split them
     pre_topup_lps = pe.Node(ConformDwi(orientation="LPS"), name='pre_topup_lps')
@@ -131,25 +131,17 @@ def init_fsl_hmc_wf(scan_groups,
     workflow.connect([
         # These images and gradients should be in LAS+
         (inputnode, gather_inputs, [
-            ('dwi_files', 'dwi_files'),
-            ('bval_files', 'bval_files'),
-            ('bvec_files', 'bvec_files'),
-            ('b0_indices', 'b0_indices'),
-            ('b0_images', 'b0_images'),
+            ('dwi_file', 'dwi_file'),
+            ('bval_file', 'bval_file'),
+            ('bvec_file', 'bvec_file'),
             ('original_files', 'original_files')]),
-        # Re-concatenate
-        (inputnode, dwi_merge, [
-            ('dwi_files', 'dwi_files'),
-            ('bval_files', 'bval_files'),
-            ('bvec_files', 'bvec_files'),
-            ('original_files', 'bids_dwi_files')]),
         (gather_inputs, eddy, [
             ('eddy_indices', 'in_index'),
             ('eddy_acqp', 'in_acqp')]),
-        (dwi_merge, eddy, [
-            ('out_dwi', 'in_file'),
-            ('out_bval', 'in_bval'),
-            ('out_bvec', 'in_bvec')]),
+        (inputnode, eddy, [
+            ('dwi_file', 'in_file'),
+            ('bval_file', 'in_bval'),
+            ('bvec_file', 'in_bvec')]),
         (gather_inputs, pre_topup_lps, [
             ('pre_topup_image', 'dwi_file')]),
         (gather_inputs, outputnode, [('forward_transforms', 'to_dwi_ref_affines')]),
@@ -160,16 +152,18 @@ def init_fsl_hmc_wf(scan_groups,
         (eddy, back_to_lps, [
             ('out_corrected', 'dwi_file'),
             ('out_rotated_bvecs', 'bvec_file')]),
-        (dwi_merge, back_to_lps, [('out_bval', 'bval_file')]),
+        (inputnode, back_to_lps, [('bval_file', 'bval_file')]),
         (back_to_lps, split_eddy_lps, [
             ('dwi_file', 'dwi_file'),
             ('bval_file', 'bval_file'),
             ('bvec_file', 'bvec_file')]),
-        (dwi_merge, outputnode, [
-            ('original_images', 'original_files')]),
+        (inputnode, outputnode, [
+            ('original_files', 'original_files')]),
         (split_eddy_lps, outputnode, [
             ('dwi_files', 'dwi_files_to_transform'),
-            ('bvec_files', 'bvec_files_to_transform')]),
+            ('bvec_files', 'bvec_files_to_transform'),
+            ('bval_files', 'bval_files'),
+            ('b0_indices', 'b0_indices')]),
         (split_eddy_lps, mean_b0_lps, [('b0_images', 'images')]),
         (mean_b0_lps, lps_b0_enhance, [('output_average_image', 'inputnode.in_file')]),
         (eddy, cnr_lps, [('out_cnr_maps', 'dwi_file')]),
@@ -183,33 +177,32 @@ def init_fsl_hmc_wf(scan_groups,
 
     # Fieldmap correction to be done in LAS+: TOPUP for rpe series or epi fieldmap
     # If a topupref is provided, use it for TOPUP
-    rpe_b0 = None
     fieldmap_type = scan_groups['fieldmap_info']['suffix']
-    if fieldmap_type == 'epi':
-        rpe_b0 = scan_groups['fieldmap_info']['epi']
-    elif fieldmap_type == 'rpe_series':
-        rpe_b0 = scan_groups['fieldmap_info']['rpe_series']
-    using_topup = rpe_b0 is not None
-
-    if using_topup:
+    if fieldmap_type in ('epi', 'rpe_series'):
+        # If there are EPI fieldmaps in fmaps/, make sure they get to TOPUP. It will always use
+        # b=0 images from the DWI series regardless
+        gather_inputs.inputs.topup_requested = True
+        if 'epi' in scan_groups['fieldmap_info']:
+            gather_inputs.inputs.epi_fmaps = scan_groups['fieldmap_info']['epi']
         outputnode.inputs.sdc_method = "TOPUP"
-        # Whether an rpe series (from dwi/) or an epi fmap (in fmap/) extract just the
-        # b=0s for topup
-        prepare_rpe_b0 = pe.Node(
-            B0RPEFieldmap(b0_file=rpe_b0, orientation='LAS', output_3d_images=False),
-            name="prepare_rpe_b0")
-        topup = pe.Node(fsl.TOPUP(out_field="fieldmap_HZ.nii.gz"), name="topup")
+        topup = pe.Node(fsl.TOPUP(out_field="fieldmap_HZ.nii.gz", scale=1), name="topup")
+        topup_summary = pe.Node(TopupSummary(), name='topup_summary')
+        ds_report_topupsummary = pe.Node(
+            DerivativesDataSink(suffix='topupsummary', source_file=source_file),
+            name='ds_report_topupsummary',
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB)
         # Enhance and skullstrip the TOPUP output to get a mask for eddy
         unwarped_mean = pe.Node(afni.TStat(outputtype='NIFTI_GZ'), name='unwarped_mean')
         unwarped_enhance = init_enhance_and_skullstrip_dwi_wf(name='unwarped_enhance')
 
         workflow.connect([
-            (prepare_rpe_b0, outputnode, [('fmap_info', 'inputnode.rpe_b0_info')]),
-            (prepare_rpe_b0, gather_inputs, [('fmap_file', 'rpe_b0')]),
             (gather_inputs, topup, [
                 ('topup_datain', 'encoding_file'),
                 ('topup_imain', 'in_file'),
                 ('topup_config', 'config')]),
+            (gather_inputs, topup_summary, [('topup_report', 'summary')]),
+            (topup_summary, ds_report_topupsummary, [('out_report', 'in_file')]),
             (gather_inputs, outputnode, [('forward_warps', 'to_dwi_ref_warps')]),
             (topup, unwarped_mean, [('out_corrected', 'in_file')]),
             (unwarped_mean, unwarped_enhance, [('out_file', 'inputnode.in_file')]),

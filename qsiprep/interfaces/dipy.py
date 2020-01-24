@@ -13,11 +13,12 @@ import shutil
 from pkg_resources import resource_filename as pkgr
 import nibabel as nb
 import numpy as np
+from dipy.io.utils import nifti1_symmat
 from dipy.core.histeq import histeq
 from dipy.segment.mask import median_otsu
 from dipy.core.sphere import HemiSphere
 from dipy.core.gradients import gradient_table
-from dipy.reconst import mapmri
+from dipy.reconst import mapmri, dti
 from nipype import logging
 from nipype.utils.filemanip import fname_presuffix
 from nipype.interfaces.base import (
@@ -507,4 +508,49 @@ class BrainSuiteShoreReconstruction(DipyReconInterface):
         extrapolate = self.inputs.extrapolate_scheme
         if isdefined(extrapolate):
             self._extrapolate_scheme(extrapolate, runtime, bss_fit, mask_array, mask_img)
+        return runtime
+
+
+class TensorReconstructionInputSpec(DipyReconInputSpec):
+    pass
+
+
+class TensorReconstructionOutputSpec(DipyReconOutputSpec):
+    color_fa_image = File()
+    fa_image = File()
+    md_image = File()
+    rd_image = File()
+    ad_image = File()
+    cnr_image = File()
+
+
+class TensorReconstruction(DipyReconInterface):
+    input_spec = TensorReconstructionInputSpec
+    output_spec = TensorReconstructionOutputSpec
+
+    def _run_interface(self, runtime):
+        gtab = self._get_gtab()
+        dwi_img = nb.load(self.inputs.dwi_file)
+        dwi_data = dwi_img.get_fdata(dtype=np.float32)
+        mask_img, mask_array = self._get_mask(dwi_img, gtab)
+
+        # Fit it
+        tenmodel = dti.TensorModel(gtab)
+        ten_fit = tenmodel.fit(dwi_data, mask_array)
+        lower_triangular = ten_fit.lower_triangular()
+        tensor_img = nifti1_symmat(lower_triangular, dwi_img.affine)
+        output_tensor_file = fname_presuffix(self.inputs.dwi_file,
+                                             suffix='tensor',
+                                             newpath=runtime.cwd, use_ext=True)
+        tensor_img.to_filename(output_tensor_file)
+
+        # FA MD RD and AD
+        for metric in ["fa", "md", "rd", "ad", "color_fa"]:
+            data = getattr(ten_fit, metric).astype("float32")
+            out_name = fname_presuffix(self.inputs.dwi_file,
+                                       suffix=metric,
+                                       newpath=runtime.cwd, use_ext=True)
+            nb.Nifti1Image(data, dwi_img.affine).to_filename(out_name)
+            self._results[metric + "_image"] = out_name
+
         return runtime

@@ -180,6 +180,20 @@ def get_parser():
         help='window size in voxels for ``dwidenoise``. Must be odd (default: 5). '
              'If 0, ``dwidwenoise`` will not be run')
     g_conf.add_argument(
+        '--unringing-method', '--unringing-method',
+        action='store',
+        choices=['none', 'mrdegibbs'],
+        help='Method for Gibbs-ringing removal.\n - none: no action\n - mrdegibbs: '
+             'use mrdegibbs from mrtrix3')
+    g_conf.add_argument(
+        '--dwi-no-biascorr', '--dwi_no_biascorr',
+        action='store_true',
+        help='skip b0-based dwi spatial bias correction')
+    g_conf.add_argument(
+        '--no-b0-harmonization', '--no_b0_harmonization',
+        action='store_true',
+        help='skip re-scaling dwi scans to have matching b=0 intensities')
+    g_conf.add_argument(
         '--denoise-before-combining', '--denoise_before_combining',
         action='store_true',
         help='run ``dwidenoise`` before combining dwis. Requires '
@@ -826,6 +840,9 @@ def build_qsiprep_workflow(opts, retval):
         b0_threshold=opts.b0_threshold,
         combine_all_dwis=opts.combine_all_dwis,
         dwi_denoise_window=opts.dwi_denoise_window,
+        unringing_method=opts.unringing_method,
+        dwi_no_biascorr=opts.dwi_no_biascorr,
+        no_b0_harmonization=opts.no_b0_harmonization,
         denoise_before_combining=opts.denoise_before_combining,
         write_local_bvecs=opts.write_local_bvecs,
         omp_nthreads=omp_nthreads,

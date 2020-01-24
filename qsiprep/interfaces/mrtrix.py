@@ -9,24 +9,144 @@ Image tools interfaces
 
 """
 import os
-import numpy as np
 import os.path as op
-from scipy.io.matlab import savemat
 from copy import deepcopy
-
+import numpy as np
+import nibabel as nb
+import pandas as pd
+from scipy.io.matlab import savemat
+from nilearn.image import load_img, threshold_img, iter_img
 from nipype import logging
-from nipype.utils.filemanip import fname_presuffix, split_filename
+from nipype.utils.filemanip import fname_presuffix, split_filename, which
 from nipype.interfaces.base import (
     traits, TraitedSpec, BaseInterfaceInputSpec, File, SimpleInterface, InputMultiObject,
-    isdefined, CommandLineInputSpec
-)
+    isdefined, CommandLineInputSpec)
 from nipype.interfaces.mrtrix3 import Generate5tt, ResponseSD, MRConvert
 from nipype.interfaces.mrtrix3.utils import Generate5ttInputSpec
 from nipype.interfaces.mrtrix3.base import MRTrix3Base, MRTrix3BaseInputSpec
 from nipype.interfaces.mrtrix3.preprocess import ResponseSDInputSpec
 from nipype.interfaces.mrtrix3.tracking import TractographyInputSpec, Tractography
+from nipype.interfaces.mixins import reporting
+from ..niworkflows.viz.utils import cuts_from_bbox, compose_view, plot_denoise
 
 LOGGER = logging.getLogger('nipype.interface')
+RC3_ROOT = which('average_response')  # Only exists in RC3
+if RC3_ROOT is not None:
+    # Use the directory containing average_response
+    RC3_ROOT = os.path.split(RC3_ROOT)[0]
+SS3T_ROOT = which('ss3t_csd_beta1')
+if SS3T_ROOT is None:
+    if os.getenv('SS3T_HOME'):
+        SS3T_ROOT = os.getenv('SS3T_HOME')
+    elif os.path.exists('/opt/3Tissue/bin/ss3t_csd_beta1'):
+        SS3T_ROOT = '/opt/3Tissue/bin'
+
+
+class SeriesPreprocReportInputSpec(reporting.ReportCapableInputSpec):
+    nmse_text = traits.File(
+        name_source='in_file',
+        keep_extension=False,
+        name_template='%s_nmse.txt')
+
+
+class SeriesPreprocReportOutputSpec(reporting.ReportCapableOutputSpec):
+    nmse_text = traits.File(desc='nmse between input and output volumes')
+
+
+class SeriesPreprocReport(reporting.ReportCapableInterface):
+    input_spec = SeriesPreprocReportInputSpec
+    output_spce = SeriesPreprocReportOutputSpec
+    _n_cuts = 7
+
+    def __init__(self, **kwargs):
+        """Instantiate SeriesPreprocReportlet."""
+        self._n_cuts = kwargs.pop('n_cuts', self._n_cuts)
+        super(SeriesPreprocReport, self).__init__(generate_report=True, **kwargs)
+
+    def _calculate_nmse(self, original_nii, corrected_nii):
+        """Calculate NMSE from the applied preprocessing operation."""
+        outputs = self._list_outputs()
+        output_file = outputs.get('nmse_text')
+        pres = []
+        posts = []
+        differences = []
+        for orig_img, corrected_img in zip(iter_img(original_nii), iter_img(corrected_nii)):
+            orig_data = orig_img.get_fdata()
+            corrected_data = corrected_img.get_fdata()
+            baseline = orig_data.mean()
+            pres.append(baseline)
+            posts.append(corrected_data.mean())
+            scaled_diff = np.abs(corrected_data - orig_data).mean() / baseline
+            differences.append(scaled_diff)
+        title = str(self.__class__)[:-2].split('.')[-1]
+        pd.DataFrame({title+"_pre": pres,
+                      title+"_post": posts,
+                      title+"_change": differences}).to_csv(output_file, index=False)
+
+    def _generate_report(self):
+        """Generate a reportlet."""
+        LOGGER.info('Generating denoising visual report')
+
+        input_dwi, denoised_nii, field_nii = self._get_plotting_images()
+
+        # find an image to use as the background
+        image_data = input_dwi.get_fdata()
+        image_intensities = np.array([img.mean() for img in image_data.T])
+        lowb_index = int(np.argmax(image_intensities))
+        highb_index = int(np.argmin(image_intensities))
+
+        # Original images
+        orig_lowb_nii = input_dwi.slicer[..., lowb_index]
+        orig_highb_nii = input_dwi.slicer[..., highb_index]
+
+        # Denoised images
+        denoised_lowb_nii = denoised_nii.slicer[..., lowb_index]
+        denoised_highb_nii = denoised_nii.slicer[..., highb_index]
+
+        # Find spatial extent of the image
+        contour_nii = mask_nii = None
+        if isdefined(self.inputs.mask):
+            contour_nii = load_img(self.inputs.mask)
+        else:
+            mask_nii = threshold_img(denoised_lowb_nii, 50)
+        cuts = cuts_from_bbox(contour_nii or mask_nii, cuts=self._n_cuts)
+
+        # What image should be contoured?
+        if field_nii is None:
+            lowb_field_nii = nb.Nifti1Image(denoised_lowb_nii.get_fdata()
+                                            - orig_lowb_nii.get_fdata(),
+                                            affine=denoised_lowb_nii.affine)
+            highb_field_nii = nb.Nifti1Image(denoised_highb_nii.get_fdata()
+                                             - orig_highb_nii.get_fdata(),
+                                             affine=denoised_highb_nii.affine)
+        else:
+            lowb_field_nii = highb_field_nii = field_nii
+
+        # Call composer
+        compose_view(
+            plot_denoise(orig_lowb_nii, orig_highb_nii, 'moving-image',
+                         estimate_brightness=True,
+                         cuts=cuts,
+                         label='Raw Image',
+                         lowb_contour=lowb_field_nii,
+                         highb_contour=highb_field_nii,
+                         compress=False),
+            plot_denoise(denoised_lowb_nii, denoised_highb_nii, 'fixed-image',
+                         estimate_brightness=True,
+                         cuts=cuts,
+                         label="Denoised",
+                         lowb_contour=lowb_field_nii,
+                         highb_contour=highb_field_nii,
+                         compress=False),
+            out_file=self._out_report
+        )
+
+        self._calculate_nmse(input_dwi, denoised_nii)
+
+    def _get_plotting_images(self):
+        """Implemented in subclasses to return the original image, the denoised image,
+        and optionally an image created during the denoieing step."""
+        raise NotImplementedError()
 
 
 class TckGenInputSpec(TractographyInputSpec):
@@ -109,7 +229,7 @@ class MRTrixIngress(SimpleInterface):
         return runtime
 
 
-class DWIDenoiseInputSpec(MRTrix3BaseInputSpec):
+class DWIDenoiseInputSpec(MRTrix3BaseInputSpec, SeriesPreprocReportInputSpec):
     in_file = File(
         exists=True,
         argstr='%s',
@@ -125,27 +245,29 @@ class DWIDenoiseInputSpec(MRTrix3BaseInputSpec):
         (traits.Int, traits.Int, traits.Int),
         argstr='-extent %d,%d,%d',
         desc='set the window size of the denoising filter. (default = 5,5,5)')
-    noise = File(
+    noise_image = File(
         argstr='-noise %s',
-        name_template='%s_noise',
+        name_template='%s_noise.nii.gz',
         name_source=['in_file'],
-        keep_extension=True,
+        keep_extension=False,
         desc='the output noise map')
     out_file = File(
-        name_template='%s_denoised',
+        name_template='%s_denoised.nii.gz',
         name_source=['in_file'],
-        keep_extension=True,
+        keep_extension=False,
         argstr='%s',
         position=-1,
         desc='the output denoised DWI image')
+    out_report = File('dwidenoise_report.svg', usedefault=True,
+                      desc='filename for the visual report')
 
 
-class DWIDenoiseOutputSpec(TraitedSpec):
-    noise = File(desc='the output noise map', exists=True)
+class DWIDenoiseOutputSpec(SeriesPreprocReportOutputSpec):
+    noise_image = File(desc='the output noise map', exists=True)
     out_file = File(desc='the output denoised DWI image', exists=True)
 
 
-class DWIDenoise(MRTrix3Base):
+class DWIDenoise(SeriesPreprocReport, MRTrix3Base):
     """
     Denoise DWI data and estimate the noise level based on the optimal
     threshold for PCA.
@@ -165,10 +287,18 @@ class DWIDenoise(MRTrix3Base):
     <https://mrtrix.readthedocs.io/en/latest/reference/commands/dwidenoise.html>
 
     """
-
     _cmd = 'dwidenoise'
     input_spec = DWIDenoiseInputSpec
     output_spec = DWIDenoiseOutputSpec
+
+    def _get_plotting_images(self):
+        input_dwi = load_img(self.inputs.in_file)
+        outputs = self._list_outputs()
+        ref_name = outputs.get('out_file')
+        denoised_nii = load_img(ref_name)
+        noise_name = outputs['noise_image']
+        noisenii = load_img(noise_name)
+        return input_dwi, denoised_nii, noisenii
 
 
 class GenerateMasked5ttInputSpec(Generate5ttInputSpec):
@@ -194,7 +324,7 @@ class GenerateMasked5tt(Generate5tt):
         if name == "out_file":
             output = self.inputs.out_file
             if not isdefined(output):
-                _, fname, ext = split_filename(self.inputs.in_file)
+                _, fname, _ = split_filename(self.inputs.in_file)
                 output = fname + '_5tt.mif'
             return output
         return None
@@ -248,6 +378,102 @@ class Dwi2Response(ResponseSD):
             outputs['gm_file'] = op.abspath(self._gen_filename('gm_file'))
             outputs['csf_file'] = op.abspath(self._gen_filename('csf_file'))
         return outputs
+
+
+class SS3TBase(MRTrix3Base):
+
+    def _pre_run_hook(self, runtime):
+        """Sets the PATH to contain 3Tissue instead of RC3."""
+
+        # If 3Tissue is the only MRtrix, there will be no path to average_response
+        if RC3_ROOT is None:
+            return runtime
+
+        # Replace the RC3 mrtrix with 3Tissue in PATH
+        old_path = runtime.environ.get("PATH")
+        new_path = old_path.replace(RC3_ROOT, SS3T_ROOT)
+        runtime.environ['PATH'] = new_path
+        return runtime
+
+
+class SS3TDwi2Response(SS3TBase, Dwi2Response):
+    pass
+
+
+class MTNormalizeInputSpec(MRTrix3BaseInputSpec):
+    wm_odf = File(
+        argstr='%s', position=0, mandatory=True, desc='WM ODF image')
+    wm_normed_odf = File(
+        argstr='%s',
+        position=1,
+        name_template='%s_mtnorm',
+        keep_extension=True,
+        name_source='wm_odf',
+        desc='output WM normed_odf')
+    gm_odf = File(
+        argstr='%s',
+        position=2,
+        desc='GM ODF image')
+    gm_normed_odf = File(
+        argstr='%s',
+        position=3,
+        name_template='%s_mtnorm',
+        keep_extension=True,
+        name_source='gm_odf',
+        desc='output GM normed_odf')
+    csf_odf = File(
+        argstr='%s', position=4, desc='CSF ODF image')
+    csf_normed_odf = File(
+        argstr='%s',
+        position=5,
+        name_template='%s_mtnorm',
+        keep_extension=True,
+        name_source='csf_odf',
+        desc='output CSF normed_odf')
+    mask_file = File(exists=True, mandatory=True, argstr='-mask %s', desc='mask image')
+    inlier_mask = File(
+        argstr='-check_mask %s',
+        name_template='%s_inlier_mask.nii.gz',
+        keep_extension=False,
+        name_source='wm_odf',
+        desc='estimated spatially varying intensity level that is used for normalisation')
+    norm_image = File(
+        argstr='-check_norm %s',
+        name_template='%s_norm_image.nii.gz',
+        keep_extension=False,
+        name_source='wm_odf',
+        desc='final mask used to compute the normalisation. This mask'
+             ' excludes regions identified as outliers by the optimisation process.')
+
+
+class MTNormalizeOutputSpec(TraitedSpec):
+    wm_normed_odf = File(desc='normalized WM ODF')
+    gm_normed_odf = File(desc='normalized GM ODF')
+    csf_normed_odf = File(desc='normalized CSF ODF')
+    norm_image = File(desc='estimated spatially varying intensity level that is used '
+                      'for normalisation')
+    inlier_mask = File(desc='final mask used to compute the normalisation. This mask'
+                       ' excludes regions identified as outliers by the optimisation process.')
+
+
+class MTNormalize(SS3TBase):
+    _cmd = "mtnormalise"
+    input_spec = MTNormalizeInputSpec
+    output_spec = MTNormalizeOutputSpec
+
+    def _gen_filename(self, name):
+        _, fname, ext = split_filename(self.inputs.in_file)
+        if name.endswith('_norm_odf'):
+            tissue_type = name.split("_")[0]
+            output = getattr(self.inputs, tissue_type + "_odf")
+            if not isdefined(output):
+                output = fname + "_" + tissue_type + "_normed" + ext
+            return output
+        if name == 'norm_image':
+            return fname + "_mtbias.nii.gz"
+        if name == 'inlier_mask':
+            return fname + "_mtmask.nii.gz"
+        return None
 
 
 class EstimateFODInputSpec(MRTrix3BaseInputSpec):
@@ -329,10 +555,9 @@ class EstimateFOD(MRTrix3Base):
     def _list_outputs(self):
         outputs = self.output_spec().get()
         outputs['wm_odf'] = op.abspath(self._gen_filename('wm_odf'))
-        if self.inputs.algorithm == 'msmt_csd':
+        if self.inputs.algorithm in ('msmt_csd', 'ss3t'):
             outputs['gm_odf'] = op.abspath(self._gen_filename('gm_odf'))
             outputs['csf_odf'] = op.abspath(self._gen_filename('csf_odf'))
-            print(outputs)
         return outputs
 
     def _format_arg(self, name, spec, value):
@@ -340,6 +565,33 @@ class EstimateFOD(MRTrix3Base):
             if name in ('gm_odf', 'gm_txt', 'csf_odf', 'csf_txt'):
                 return ''
         return super(EstimateFOD, self)._format_arg(name, spec, value)
+
+    def _gen_filename(self, name):
+        if name in ('gm_odf', 'gm_txt', 'wm_odf', 'wm_txt', 'csf_odf', 'csf_txt'):
+            output = getattr(self.inputs, name)
+            if not isdefined(output):
+                _, fname, _ = split_filename(self.inputs.in_file)
+                ext = '.txt' if name.endswith('txt') else '.mif'
+                output = fname + "_" + name.split("_")[0] + ext
+            return output
+        return None
+
+
+class SS3TEstimateFODInputSpec(EstimateFODInputSpec):
+    algorithm = traits.Str('ss3t', desc='Not needed for ss3t')
+
+
+class SS3TEstimateFOD(SS3TBase, EstimateFOD):
+    _cmd = 'ss3t_csd_beta1' if SS3T_ROOT is None else op.join(SS3T_ROOT, 'ss3t_csd_beta1')
+    input_spec = SS3TEstimateFODInputSpec
+    output_spec = EstimateFODOutputSpec
+
+    def _list_outputs(self):
+        outputs = self.output_spec().get()
+        outputs['wm_odf'] = op.abspath(self._gen_filename('wm_odf'))
+        outputs['gm_odf'] = op.abspath(self._gen_filename('gm_odf'))
+        outputs['csf_odf'] = op.abspath(self._gen_filename('csf_odf'))
+        return outputs
 
     def _gen_filename(self, name):
         if name in ('gm_odf', 'gm_txt', 'wm_odf', 'wm_txt', 'csf_odf', 'csf_txt'):
@@ -710,14 +962,14 @@ def _mrtrix_connectivity(args):
     return runtime.cmdline, run.outputs.out_file
 
 
-class DWIBiasCorrectInputSpec(MRTrix3BaseInputSpec):
+class DWIBiasCorrectInputSpec(MRTrix3BaseInputSpec, SeriesPreprocReportInputSpec):
     in_file = File(
         exists=True,
         argstr='%s',
         position=-2,
         mandatory=True,
         desc='input DWI image')
-    in_mask = File(
+    mask = File(
         argstr='-mask %s',
         desc='input mask image for bias field estimation')
     use_ants = traits.Bool(
@@ -730,25 +982,40 @@ class DWIBiasCorrectInputSpec(MRTrix3BaseInputSpec):
         mandatory=True,
         desc='use FSL FAST to estimate the inhomogeneity field',
         xor=['use_ants'])
-    bias = File(
+    bias_image = File(
         argstr='-bias %s',
+        name_source='in_file',
+        name_template='%s_bias.nii.gz',
+        keep_extension=False,
         desc='bias field')
     out_file = File(
-        name_template='%s_biascorr',
         name_source='in_file',
-        keep_extension=True,
+        keep_extension=False,
         argstr='%s',
+        name_template='%s_N4.nii.gz',
         position=-1,
-        desc='the output bias corrected DWI image',
-        genfile=True)
+        desc='the output bias corrected DWI image')
+    ants_b = traits.Str(
+        default_value='[150,3]',
+        argstr='-ants.b %s',
+        usedefault=True)
+    ants_c = traits.Str(
+        default_value='[200x200,1e-6]',
+        argstr='-ants.c %s',
+        usedefault=True)
+    ants_s = traits.Str(
+        default_value='4',
+        argstr='-ants.s %s')
+    out_report = File('n4_report.svg', usedefault=True,
+                      desc='filename for the visual report')
 
 
-class DWIBiasCorrectOutputSpec(TraitedSpec):
-    bias = File(desc='the output bias field', exists=True)
+class DWIBiasCorrectOutputSpec(SeriesPreprocReportOutputSpec):
+    bias_image = File(desc='the output bias field', exists=True)
     out_file = File(desc='the output bias corrected DWI image', exists=True)
 
 
-class DWIBiasCorrect(MRTrix3Base):
+class DWIBiasCorrect(SeriesPreprocReport, MRTrix3Base):
     """
     Perform B1 field inhomogeneity correction for a DWI volume series.
     For more information, see
@@ -763,7 +1030,123 @@ class DWIBiasCorrect(MRTrix3Base):
     'dwibiascorrect -ants dwi.mif dwi_biascorr.mif'
     >>> bias_correct.run()                             # doctest: +SKIP
     """
-
     _cmd = 'dwibiascorrect'
     input_spec = DWIBiasCorrectInputSpec
     output_spec = DWIBiasCorrectOutputSpec
+
+    def _get_plotting_images(self):
+        input_dwi = load_img(self.inputs.in_file)
+        outputs = self._list_outputs()
+        ref_name = outputs.get('out_file')
+        denoised_nii = load_img(ref_name)
+        noise_name = outputs['bias_image']
+        noisenii = load_img(noise_name)
+        return input_dwi, denoised_nii, noisenii
+
+
+class MRDeGibbsInputSpec(MRTrix3BaseInputSpec, SeriesPreprocReportInputSpec):
+    out_report = File('degibbs_report.svg', usedefault=True,
+                      desc='filename for the visual report')
+    in_file = File(
+        exists=True,
+        argstr='%s',
+        position=-2,
+        mandatory=True,
+        desc='input DWI image')
+    out_file = File(
+        name_source='in_file',
+        keep_extension=False,
+        argstr='%s',
+        name_template='%s_mrdegibbs.nii.gz',
+        position=-1,
+        desc="the output de-Gibbs'd DWI image")
+    mask = File(desc='input mask image for the visual report')
+    nshifts = traits.Int(
+        default=20,
+        argstr='-nshifts %d',
+        desc='discretization of subpixel spacing.')
+    axes = traits.Enum(
+        '0,1', '0,2', '1,2', default='0,1',
+        argstr='-axes %s',
+        desc='select the slice axes (default: 0,1 - i.e. x-y)')
+    minw = traits.Int(
+        default=1,
+        argstr='-minW %d',
+        desc='left border of window used for TV computation')
+    maxw = traits.Int(
+        default=3,
+        argstr='-maxW %d',
+        desc='right border of window used for TV computation')
+
+
+class MRDeGibbsOutputSpec(SeriesPreprocReportOutputSpec):
+    out_file = File(desc="the output de-Gibbs'd DWI image")
+
+
+class MRDeGibbs(SeriesPreprocReport, MRTrix3Base):
+    input_spec = MRDeGibbsInputSpec
+    output_spec = MRDeGibbsOutputSpec
+    _cmd = 'mrdegibbs'
+
+    def _get_plotting_images(self):
+        input_dwi = load_img(self.inputs.in_file)
+        outputs = self._list_outputs()
+        ref_name = outputs.get('out_file')
+        denoised_nii = load_img(ref_name)
+        return input_dwi, denoised_nii, None
+
+    def _generate_report(self):
+        """Generate a reportlet."""
+        LOGGER.info('Generating denoising visual report')
+
+        input_dwi, denoised_nii, _ = self._get_plotting_images()
+
+        # find an image to use as the background
+        image_data = input_dwi.get_fdata()
+        image_intensities = np.array([img.mean() for img in image_data.T])
+        lowb_index = int(np.argmax(image_intensities))
+        highb_index = int(np.argmin(image_intensities))
+
+        # Original images
+        orig_lowb_nii = input_dwi.slicer[..., lowb_index]
+        orig_highb_nii = input_dwi.slicer[..., highb_index]
+
+        # Denoised images
+        denoised_lowb_nii = denoised_nii.slicer[..., lowb_index]
+        denoised_highb_nii = denoised_nii.slicer[..., highb_index]
+
+        # Find spatial extent of the image
+        contour_nii = mask_nii = None
+        if isdefined(self.inputs.mask):
+            contour_nii = load_img(self.inputs.mask)
+        else:
+            mask_nii = threshold_img(denoised_lowb_nii, 50)
+        cuts = cuts_from_bbox(contour_nii or mask_nii, cuts=self._n_cuts)
+
+        diff_lowb_nii = nb.Nifti1Image(orig_lowb_nii.get_fdata()
+                                       - denoised_lowb_nii.get_fdata(),
+                                       affine=denoised_lowb_nii.affine)
+        diff_highb_nii = nb.Nifti1Image(orig_highb_nii.get_fdata()
+                                        - denoised_highb_nii.get_fdata(),
+                                        affine=denoised_highb_nii.affine)
+
+        # Call composer
+        compose_view(
+            plot_denoise(denoised_lowb_nii, denoised_highb_nii, 'moving-image',
+                         estimate_brightness=True,
+                         cuts=cuts,
+                         label='De-Gibbs',
+                         lowb_contour=None,
+                         highb_contour=None,
+                         compress=False),
+            plot_denoise(diff_lowb_nii, diff_highb_nii, 'fixed-image',
+                         estimate_brightness=True,
+                         cuts=cuts,
+                         label="Estimated Ringing",
+                         lowb_contour=None,
+                         highb_contour=None,
+                         compress=False),
+            out_file=self._out_report
+        )
+
+        self._calculate_nmse(input_dwi, denoised_nii)

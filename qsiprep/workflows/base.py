@@ -13,13 +13,11 @@ qsiprep base processing workflows
 import logging
 import sys
 import os
-from collections import defaultdict
 from copy import deepcopy
 
 from nipype import __version__ as nipype_ver
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
-from nipype.utils.filemanip import split_filename
 
 from nilearn import __version__ as nilearn_ver
 
@@ -28,26 +26,28 @@ from ..interfaces import (BIDSDataGrabber, BIDSInfo, BIDSFreeSurferDir,
                           SubjectSummary, AboutSummary, DerivativesDataSink)
 from ..utils.bids import collect_data
 from ..utils.misc import fix_multi_T1w_source_name
+from ..utils.grouping import group_dwi_scans
 from ..__about__ import __version__
 
 from .anatomical import init_anat_preproc_wf
 from .dwi.base import init_dwi_preproc_wf
 from .dwi.finalize import init_dwi_finalize_wf
 from .dwi.intramodal_template import init_intramodal_template_wf
+from .dwi.util import get_source_file
 
 
 LOGGER = logging.getLogger('nipype.workflow')
 
 
-def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
-                    ignore, debug, low_mem, anat_only, longitudinal, b0_threshold, hires,
-                    denoise_before_combining, dwi_denoise_window, output_resolution,
-                    combine_all_dwis, omp_nthreads, force_spatial_normalization,
-                    skull_strip_template, skull_strip_fixed_seed, freesurfer, hmc_model,
-                    impute_slice_threshold, hmc_transform, shoreline_iters, eddy_config,
-                    write_local_bvecs, output_spaces, template, motion_corr_to,
-                    b0_to_t1w_transform, intramodal_template_iters, intramodal_template_transform,
-                    prefer_dedicated_fmaps, fmap_bspline, fmap_demean, use_syn, force_syn):
+def init_qsiprep_wf(
+        subject_list, run_uuid, work_dir, output_dir, bids_dir, ignore, debug, low_mem, anat_only,
+        longitudinal, b0_threshold, hires, denoise_before_combining, dwi_denoise_window,
+        unringing_method, dwi_no_biascorr, no_b0_harmonization, output_resolution,
+        combine_all_dwis, omp_nthreads, force_spatial_normalization, skull_strip_template,
+        skull_strip_fixed_seed, freesurfer, hmc_model, impute_slice_threshold, hmc_transform,
+        shoreline_iters, eddy_config, write_local_bvecs, output_spaces, template, motion_corr_to,
+        b0_to_t1w_transform, intramodal_template_iters, intramodal_template_transform,
+        prefer_dedicated_fmaps, fmap_bspline, fmap_demean, use_syn, force_syn):
     """
     This workflow organizes the execution of qsiprep, with a sub-workflow for
     each subject.
@@ -74,6 +74,9 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
                               hires=False,
                               denoise_before_combining=True,
                               dwi_denoise_window=7,
+                              unringing_method='mrdegibbs',
+                              dwi_no_biascorr=False,
+                              no_b0_harmonization=False,
                               combine_all_dwis=True,
                               omp_nthreads=1,
                               output_resolution=2.0,
@@ -127,6 +130,12 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
         dwi_denoise_window : int
             window size in voxels for ``dwidenoise``. Must be odd. If 0, '
             '``dwidwenoise`` will not be run'
+        unringing_method : str
+            algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
+        dwi_no_biascorr : bool
+            run spatial bias correction (N4) on dwi series
+        no_b0_harmonization : bool
+            skip rescaling dwi scans to have matching b=0 intensities across scans
         denoise_before_combining : bool
             'run ``dwidenoise`` before combining dwis. Requires ``combine_all_dwis``'
         combine_all_dwis : bool
@@ -213,6 +222,9 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
             output_resolution=output_resolution,
             denoise_before_combining=denoise_before_combining,
             dwi_denoise_window=dwi_denoise_window,
+            unringing_method=unringing_method,
+            dwi_no_biascorr=dwi_no_biascorr,
+            no_b0_harmonization=no_b0_harmonization,
             anat_only=anat_only,
             longitudinal=longitudinal,
             b0_threshold=b0_threshold,
@@ -256,12 +268,12 @@ def init_qsiprep_wf(subject_list, run_uuid, work_dir, output_dir, bids_dir,
 def init_single_subject_wf(
         subject_id, name, reportlets_dir, output_dir, bids_dir, ignore, debug, write_local_bvecs,
         low_mem, anat_only, longitudinal, b0_threshold, denoise_before_combining,
-        dwi_denoise_window, combine_all_dwis, omp_nthreads, skull_strip_template,
-        force_spatial_normalization, skull_strip_fixed_seed, freesurfer, hires, output_spaces,
-        template, output_resolution, prefer_dedicated_fmaps, motion_corr_to, b0_to_t1w_transform,
-        intramodal_template_iters, intramodal_template_transform, hmc_model, hmc_transform,
-        shoreline_iters, eddy_config, impute_slice_threshold, fmap_bspline, fmap_demean, use_syn,
-        force_syn):
+        dwi_denoise_window, unringing_method, dwi_no_biascorr, no_b0_harmonization,
+        combine_all_dwis, omp_nthreads, skull_strip_template, force_spatial_normalization,
+        skull_strip_fixed_seed, freesurfer, hires, output_spaces, template, output_resolution,
+        prefer_dedicated_fmaps, motion_corr_to, b0_to_t1w_transform, intramodal_template_iters,
+        intramodal_template_transform, hmc_model, hmc_transform, shoreline_iters, eddy_config,
+        impute_slice_threshold, fmap_bspline, fmap_demean, use_syn, force_syn):
     """
     This workflow organizes the preprocessing pipeline for a single subject.
     It collects and reports information about the subject, and prepares
@@ -290,6 +302,9 @@ def init_single_subject_wf(
             output_resolution=1.25,
             denoise_before_combining=True,
             dwi_denoise_window=7,
+            unringing_method='mrdegibbs',
+            dwi_no_biascorr=False,
+            no_b0_harmonization=False,
             anat_only=False,
             longitudinal=False,
             b0_threshold=100,
@@ -340,6 +355,12 @@ def init_single_subject_wf(
         dwi_denoise_window : int
             window size in voxels for ``dwidenoise``. Must be odd. If 0, '
             '``dwidwenoise`` will not be run'
+        unringing_method : str
+            algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
+        dwi_no_biascorr : bool
+            run spatial bias correction (N4) on dwi series
+        no_b0_harmonization : bool
+            skip rescaling dwi scans to have matching b=0 intensities across scans
         denoise_before_combining : bool
             'run ``dwidenoise`` before combining dwis. Requires ``combine_all_dwis``'
         combine_all_dwis : Bool
@@ -536,30 +557,24 @@ to workflows in *qsiprep*'s documentation]\
         impute_slice_threshold = 0
 
     # Handle the grouping of multiple dwi files within a session
-    dwi_session_groups = get_session_groups(layout, subject_data, combine_all_dwis)
-    LOGGER.info(dwi_session_groups)
+    dwi_fmap_groups = group_dwi_scans(layout, subject_data,
+                                      using_fsl=hmc_model == 'eddy',
+                                      combine_scans=combine_all_dwis,
+                                      ignore_fieldmaps="fieldmaps" in ignore)
+    LOGGER.info(dwi_fmap_groups)
 
-    dwi_fmap_groups = []
-    for dwi_session_group in dwi_session_groups:
-        dwi_fmap_groups.extend(
-            group_by_warpspace(dwi_session_group, layout, prefer_dedicated_fmaps,
-                               hmc_model == "eddy",
-                               "fieldmaps" in ignore,
-                               combine_all_dwis,
-                               use_syn))
-    outputs_to_files = {_get_output_fname(dwi_group): dwi_group for dwi_group in dwi_fmap_groups}
+    outputs_to_files = {dwi_group['concatenated_bids_name']: dwi_group
+                        for dwi_group in dwi_fmap_groups}
     if force_syn:
         for group_name in outputs_to_files:
             outputs_to_files[group_name]['fieldmap_info'] = {"suffix": "syn"}
-
     summary.inputs.dwi_groupings = outputs_to_files
 
     make_intramodal_template = False
     if intramodal_template_iters > 0:
         if len(outputs_to_files) < 2:
             raise Exception("Cannot make an intramodal with less than 2 groups.")
-        else:
-            make_intramodal_template = True
+        make_intramodal_template = True
 
     intramodal_template_wf = init_intramodal_template_wf(
         omp_nthreads=omp_nthreads,
@@ -596,6 +611,7 @@ to workflows in *qsiprep*'s documentation]\
 
     # create a processing pipeline for the dwis in each session
     for output_fname, dwi_info in outputs_to_files.items():
+        source_file = get_source_file(dwi_info['dwi_series'], output_fname, suffix="_dwi")
         dwi_preproc_wf = init_dwi_preproc_wf(
             scan_groups=dwi_info,
             output_prefix=output_fname,
@@ -603,6 +619,9 @@ to workflows in *qsiprep*'s documentation]\
             ignore=ignore,
             b0_threshold=b0_threshold,
             dwi_denoise_window=dwi_denoise_window,
+            unringing_method=unringing_method,
+            dwi_no_biascorr=dwi_no_biascorr,
+            no_b0_harmonization=no_b0_harmonization,
             denoise_before_combining=denoise_before_combining,
             motion_corr_to=motion_corr_to,
             b0_to_t1w_transform=b0_to_t1w_transform,
@@ -621,7 +640,8 @@ to workflows in *qsiprep*'s documentation]\
             fmap_demean=fmap_demean,
             use_syn=use_syn,
             force_syn=force_syn,
-            sloppy=debug
+            sloppy=debug,
+            source_file=source_file
         )
         dwi_finalize_wf = init_dwi_finalize_wf(
             scan_groups=dwi_info,
@@ -640,7 +660,8 @@ to workflows in *qsiprep*'s documentation]\
             omp_nthreads=omp_nthreads,
             use_syn=use_syn,
             low_mem=low_mem,
-            make_intramodal_template=make_intramodal_template
+            make_intramodal_template=make_intramodal_template,
+            source_file=source_file
         )
 
         workflow.connect([
@@ -708,7 +729,12 @@ to workflows in *qsiprep*'s documentation]\
                     ('outputnode.hmc_xforms', 'inputnode.hmc_xforms'),
                     ('outputnode.fieldwarps', 'inputnode.fieldwarps'),
                     ('outputnode.itk_b0_to_t1', 'inputnode.itk_b0_to_t1'),
-                    ('outputnode.hmc_optimization_data', 'inputnode.hmc_optimization_data')
+                    ('outputnode.hmc_optimization_data', 'inputnode.hmc_optimization_data'),
+                    ('outputnode.raw_qc_file', 'inputnode.raw_qc_file'),
+                    ('outputnode.coreg_score', 'inputnode.coreg_score'),
+                    ('outputnode.raw_concatenated', 'inputnode.raw_concatenated'),
+                    ('outputnode.confounds', 'inputnode.confounds'),
+                    ('outputnode.carpetplot_data', 'inputnode.carpetplot_data')
                     ])
         ])
 
@@ -731,327 +757,3 @@ to workflows in *qsiprep*'s documentation]\
             ])
 
     return workflow
-
-
-def get_session_groups(layout, subject_data, combine_all_dwis):
-    # Handle the grouping of multiple dwi files within a session
-    sessions = layout.get_sessions() if layout is not None else []
-    all_dwis = subject_data['dwi']
-    dwi_session_groups = []
-    if not combine_all_dwis:
-        dwi_session_groups = [[dwi] for dwi in all_dwis]
-    else:
-        if sessions:
-            LOGGER.info('Combining all dwi files within each available session:')
-            for session in sessions:
-                session_files = [img for img in all_dwis if 'ses-'+session in img]
-                LOGGER.info('\t- %d scans in session %s', len(session_files), session)
-                dwi_session_groups.append(session_files)
-        else:
-            LOGGER.info('Combining all %d dwis within the single available session',
-                        len(all_dwis))
-            dwi_session_groups = [all_dwis]
-    return dwi_session_groups
-
-
-FMAP_PRIORITY = {
-    'epi': 0,
-    'fieldmap': 1,
-    'phasediff': 2,
-    'phase1': 3,
-    'syn': 4
-}
-
-
-def group_by_warpspace(dwi_files, layout, prefer_dedicated_fmaps, using_eddy, ignore_fieldmaps,
-                       combine_all_dwis, use_syn):
-    """Groups a session's DWI files by their PE direction and fieldmaps, if specified.
-
-    DWIs are grouped by their **warped space**. Two DWI series that are
-    listed in the IntendedFor field of a fieldmap are assumed to have the same
-    susceptibility distortions and therefore be in the same warped space. The goal
-    of this function is to combine DWI series into groups of acquisitions that
-    are in the same warped space into a list of scans that can be combined after
-    unwarping.
-
-    The first step in the pipeline must be ``dwidenoise``. This algorithm can
-    be run directly on each DWI Series. OR, DWI series in the same warped space
-    can be combined before running ``dwidenoise``.  Running ``dwidenoise`` on
-    concatenated DWI series that include noise and susceptibility distortion
-    violates the assumptions made by ``dwidenoise`` and is not allowed.
-    Performing susceptibility distortion correction before running ``dwidenoise``
-    is also not allowed.
-
-    Similarly, SHORELine performs head motion correction in **warped space**.
-    The more q-space samples are available to SHORELine, the better the EAP
-    estimates. However, if the position of the head is very different between
-    the two runs it may take more iterations for SHORELine to converge. Be sure
-    to check the QC files if using this algorithm.
-
-    Specifying ``combine_all_dwis=True`` means that the SDC outputs will be
-    used to combine across warped spaces. If ``False``, then no scans will be
-    combined even if they are in the same warped space. Other
-    possibilities for grouping are not supported.
-
-
-    Parameters
-    -----------
-
-        dwi_files: list
-            A list of full paths to dwi nifti files in a BIDS tree
-
-        layout: BIDSLayout
-            A representation of the BIDS tree
-
-        prefer_dedicated_fmaps: bool
-            If True, use files in fmap directories to perform SDC even if there
-            is a series in dwi with the reverse phase encoding direction that
-            could be used.
-
-        combine_all_dwis: bool
-            If True, concaenate DWI series that can be concatenated. To be concatenated
-            the series must either have the same phase encoding direction or there
-            must be fieldmaps that correct for opposite phase encoding directions.
-
-    Returns:
-    ---------
-
-        groups_list: list
-            A list of dictionaries that describe "group info". These can take a couple forms
-
-            When there are two groups of dwi series with opposite phase encoding dirs
-            and ``use_eddy``:
-            [
-                {'dwi_series': ['scan1.nii', 'scan2.nii'],
-                 'fieldmap_info': {'rpe_series':['scan3.nii', 'scan4.nii', 'suffix':'rpe_series']}
-                 'dwi_series_pedir': 'j'}
-            ]
-
-            if not ``use_eddy`` a separate grouping is made for each PE direction:
-            [
-                {'dwi_series': ['scan1.nii', 'scan2.nii'],
-                 'fieldmap_info': {'rpe_series':['scan3.nii', 'scan4.nii'],
-                                   'suffix':'rpe_series']}
-                 'dwi_series_pedir': 'j'},
-                 {'dwi_series': ['scan3.nii', 'scan4.nii'],
-                  'fieldmap_info': {'rpe_series': ['scan1.nii', 'scan2.nii'],
-                                    'suffix':'rpe_series']}
-                  'dwi_series_pedir': 'j'}
-            ]
-
-            When there is a PEPolar fieldmap
-            [
-             {'dwi_series': ['scan1.nii', 'scan2.nii'],
-              'fieldmap_info': {'epi': 'fmap_scan1.nii',
-                                'suffix': 'epi'},
-              'dwi_series_pedir': 'j'}
-            ]
-
-            When two different PE directions each have their own fieldmaps
-            [
-             {'dwi_series': ['scan1.nii', 'scan2.nii'],
-              'fieldmap_info': {'epi': 'fmap_scan1.nii',
-                                'suffix': 'epi'},
-              'dwi_series_pedir': 'j'},
-             {'dwi_series': ['scan3.nii', 'scan4.nii'],
-              'fieldmap_info': {'epi': 'fmap_scan2.nii',
-                               'suffix': 'epi'},
-              'dwi_series_pedir': 'j-'}
-            ]
-
-            When there is a phasediff fieldmap
-            [
-             {'dwi_series': [ 'scan1.nii', 'scan2.nii'],
-              'fieldmap_info': { 'magnitude1': 'magnitude1.nii',
-                                 'magnitude2': 'magnitude2.nii',
-                                 'phasediff': 'phasediff.nii',
-                                 'suffix': 'phasediff'},
-              'dwi_series_pedir': 'j-'}
-            ]
-
-        NOTE: the pre-hmc steps, such as denoising, will only be run within warped space
-        groups
-
-    """
-    rationale = ['The following DWI files were found with the following fieldmaps:']
-
-    # For doc-building
-    if layout is None:
-        LOGGER.warning("Assuming we're building docs")
-        return [{'dwi_series': dwi_files,
-                 'fieldmap_info': {'suffix': None},
-                 'dwi_series_pedir': 'j'}]
-
-    # For each DWI, figure out its PE dir and whether or not it was listed in
-    # an IntendedFor field in a fieldmap sidecar. Make a list of
-    # (filename, PE dir, fmap_file) and hang on to the pointers to additional files
-    # for this fieldmap
-    parsed_dwis = []
-    fmap_pointers = {'': {'suffix': None}}
-    for ref_file in dwi_files:
-        metadata = layout.get_metadata(ref_file)
-
-        # Find fieldmaps
-        fmaps = layout.get_fieldmap(ref_file, return_list=True)
-        fmap_file = ''
-        priority = 99999
-        fmap_type = "syn" if use_syn else None
-        for fmap in fmaps:
-            fmap_type = fmap['suffix']
-            if fmap_type not in ('epi', 'phasediff', 'phase'):
-                continue
-
-            if fmap_type == 'phase':
-                fmap_type = 'phase1'
-
-            this_priority = FMAP_PRIORITY[fmap_type]
-            if this_priority < priority:
-                priority = this_priority
-                fmap_file = fmap[fmap_type]
-                fmap_pointers[fmap_file] = fmap
-
-        fmap_tuple = (ref_file, metadata['PhaseEncodingDirection'], fmap_file, fmap_type)
-        parsed_dwis.append(fmap_tuple)
-        rationale.append(' * %s (PEDir %s): %s (Type %s)' % fmap_tuple)
-
-    groups = []
-    if not combine_all_dwis:
-        rationale.append("\nEach DWI was assigned to its own group for preprocessing")
-        for ref_file, pe_dir, fmap_file, fmap_type in parsed_dwis:
-            groups.append({
-                'dwi_series': [ref_file],
-                'fieldmap_info': fmap_pointers[fmap_file],
-                'dwi_series_pedir': pe_dir})
-        LOGGER.info('\n'.join(rationale))
-        return groups
-
-    # group by warped space, defined by pe_dir and fmap
-    groups = defaultdict(list)
-    for ref_file, pe_dir, fmap, fmap_type in parsed_dwis:
-        groups[(pe_dir, fmap)].append(ref_file)
-
-    # Also group by PE dir
-    pedir_groups = defaultdict(list)
-    for warp_group, member_images in groups.items():
-        pe_dir, _ = warp_group
-        pedir_groups[pe_dir].extend(member_images)
-
-    if ignore_fieldmaps:
-        output_groups = []
-        rationale.append("\nFieldmaps were ignored and images were grouped by PE Direction")
-        for pe_dir, member_images in pedir_groups.items():
-            output_groups.append({
-                'dwi_series': member_images,
-                'fieldmap_info': {'suffix': None},
-                'dwi_series_pedir': pe_dir})
-        LOGGER.info('\n'.join(rationale))
-        return output_groups
-
-    # Print the group memberships
-    rationale.append("\nThe following warped spaces were defined to contain:")
-    for warp_group, member_images in groups.items():
-        rationale.append(' * PEDir: %s, fmap: %s ' % warp_group)
-        for member_image in member_images:
-            rationale.append('    -> ' + member_image)
-
-    # group by pe dir and fmap
-    complete_groups = []
-    for warp_group, member_images in groups.items():
-        pe_dir, fmap_file = warp_group
-        complete_groups.append({
-            'dwi_series': member_images,
-            'fieldmap_info': fmap_pointers[fmap_file],
-            'dwi_series_pedir': pe_dir})
-
-    if prefer_dedicated_fmaps:
-        rationale.append('\nStrictly using data from fmaps/ for SDC')
-        LOGGER.info('\n'.join(rationale))
-        return complete_groups
-
-    # Ignoring dedicated fieldmaps, define warped spaces by PEDir
-    match_header = 'No opportunities for bidirectional PEPolar DWI series were found.'
-    group_keys = set(list(pedir_groups.keys()))
-    final_groups = []
-    matches_rationale = []
-    while len(group_keys):
-        key = group_keys.pop()
-        scan_list = pedir_groups[key]
-        pe_axis = key[0]
-
-        # Find opposing fieldmap groups
-        matches = [k for k in group_keys if k[0] == pe_axis]
-        num_matches = len(matches)
-
-        if num_matches == 1:
-            match_header = '\nThe following warp groups were used to SDC each other'
-            # Found a perfect match
-            match = matches[0]
-            match_scan_list = pedir_groups[match]
-            if using_eddy:
-                matches_rationale.append(
-                    '  * A single group containing %s/%s PE dir groups was sent to TOPUP' % (
-                        key, match))
-                final_groups.append(
-                    {'dwi_series': scan_list,
-                     'fieldmap_info': {'suffix': 'rpe_series', 'rpe_series': match_scan_list},
-                     'dwi_series_pedir': pe_dir})
-            else:
-                matches_rationale.append(
-                    '  * Two pipelines generated using %s/%s PE dir groups for SDC' % (
-                        key, match))
-                final_groups.append(
-                    {'dwi_series': scan_list,
-                     'fieldmap_info': {'suffix': 'rpe_series', 'rpe_series': match_scan_list},
-                     'dwi_series_pedir': key})
-                final_groups.append(
-                    {'dwi_series': match_scan_list,
-                     'fieldmap_info': {'suffix': 'rpe_series', 'rpe_series': scan_list},
-                     'dwi_series_pedir': match})
-            group_keys.discard(match)
-
-        elif num_matches == 0:
-            # Didn't find any reverse PE groups: add back all the original warp groups
-            LOGGER.info("No matches found for %s", key)
-            for warp_group, member_images in groups.items():
-                pe_dir, fmap_file = warp_group
-                if pe_dir == key:
-                    final_groups.append({
-                        'dwi_series': member_images,
-                        'fieldmap_info': fmap_pointers[fmap_file],
-                        'dwi_series_pedir': pe_dir
-                    })
-        else:
-            # Didn't find any reverse PE groups
-            LOGGER.critical("Multiple matches found for %s", key)
-
-    LOGGER.info('\n'.join(rationale + [match_header] + matches_rationale))
-    return final_groups
-
-
-def _get_output_fname(dwi_group):
-    """Derive the output name for a dwi grouping."""
-    all_dwis = dwi_group['dwi_series']
-    if dwi_group['fieldmap_info']['suffix'] == 'rpe_series':
-        all_dwis += dwi_group['fieldmap_info']['rpe_series']
-
-    # If a single file, use its name, otherwise use the common prefix
-    if len(all_dwis) > 1:
-        no_runs = []
-        for dwi in all_dwis:
-            no_runs.append(
-                "_".join([part for part in dwi.split("_")
-                          if not part.startswith("run")]))
-        input_fname = os.path.commonprefix(no_runs)
-        fname = split_filename(input_fname)[1]
-        parts = fname.split('_')
-        full_parts = [part for part in parts if not part.endswith('-')]
-        fname = '_'.join(full_parts)
-
-    else:
-        input_fname = all_dwis[0]
-        fname = split_filename(input_fname)[1]
-
-    if fname.endswith("_dwi"):
-        fname = fname[:-4]
-
-    return fname.replace(".", "").replace(" ", "")

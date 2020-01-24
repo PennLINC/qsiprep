@@ -11,11 +11,11 @@ import os
 from nipype import logging
 
 from nipype.pipeline import engine as pe
-from nipype.interfaces import afni, utility as niu
+from nipype.interfaces import utility as niu
 
 from ...interfaces import DerivativesDataSink
 from ...niworkflows.interfaces.registration import SimpleBeforeAfterRPT
-from ...interfaces.reports import GradientPlot
+from ...interfaces.reports import GradientPlot, SeriesQC
 from ...interfaces.mrtrix import MRTrixGradientTable
 from ...engine import Workflow
 
@@ -23,6 +23,7 @@ from ...engine import Workflow
 from .util import _create_mem_gb
 from .resampling import init_dwi_trans_wf
 from .derivatives import init_dwi_derivatives_wf
+from .qc import init_interactive_report_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger('nipype.workflow')
@@ -44,6 +45,7 @@ def init_dwi_finalize_wf(scan_groups,
                          low_mem,
                          use_syn,
                          make_intramodal_template,
+                         source_file,
                          layout=None):
     """
     This workflow controls the resampling parts of the dwi preprocessing workflow.
@@ -64,6 +66,7 @@ def init_dwi_finalize_wf(scan_groups,
                                   low_mem=False,
                                   output_prefix='',
                                   write_local_bvecs=False,
+                                  source_file='/data/sub-1/dwi/sub-1_dwi.nii.gz',
                                   num_dwi=1)
 
     **Parameters**
@@ -132,6 +135,14 @@ def init_dwi_finalize_wf(scan_groups,
             A Nifti of the b0 reference that was used for hmc and sdc
         intramodal_template
             The intramodal template image created from all b0 ref images
+        source_file
+            The file name template used for derivatives
+        raw_qc_file
+            The QC file from the DWI data before any preprocessing
+        raw_concatenated
+            The original raw images in a single 4D file
+        carpetplot_data
+            File containing carpetplot data
 
     **Outputs**
 
@@ -147,7 +158,6 @@ def init_dwi_finalize_wf(scan_groups,
             voxelwise bvecs accounting for local displacements
         gradient_table_t1
             MRTrix-style gradient table
-
         dwi_mni
             dwi series, resampled to template space
         dwi_mask_mni
@@ -165,14 +175,10 @@ def init_dwi_finalize_wf(scan_groups,
     # Check the inputs
     if layout is not None:
         all_dwis = scan_groups['dwi_series']
-        source_file = all_dwis[0]
         fieldmap_info = scan_groups['fieldmap_info']
     else:
         all_dwis = ['/fake/testing/path.nii.gz']
-        source_file = all_dwis[0]
         fieldmap_info = {'suffix': None}
-
-    fieldmap_type = fieldmap_info['suffix']
 
     fieldmap_type = fieldmap_info['suffix']
     mem_gb = {'filesize': 1, 'resampled': 1, 'largemem': 1}
@@ -215,7 +221,8 @@ def init_dwi_finalize_wf(scan_groups,
             't1_preproc', 't1_brain', 't1_mask', 'mni_mask', 't1_seg', 't1_tpms',
             't1_aseg', 't1_aparc',
             't1_2_mni_reverse_transform', 't1_2_fsnative_forward_transform',
-            't1_2_fsnative_reverse_transform', 'dwi_sampling_grid'
+            't1_2_fsnative_reverse_transform', 'dwi_sampling_grid', 'raw_qc_file',
+            'coreg_score', 'raw_concatenated', 'confounds', 'carpetplot_data'
         ]),
         name='inputnode')
     outputnode = pe.Node(
@@ -229,14 +236,14 @@ def init_dwi_finalize_wf(scan_groups,
 
     gradient_plot = pe.Node(GradientPlot(), name='gradient_plot', run_without_submitting=True)
     ds_report_gradients = pe.Node(
-        DerivativesDataSink(suffix='sampling_scheme'),
+        DerivativesDataSink(suffix='sampling_scheme', source_file=source_file),
         name='ds_report_gradients', run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB)
 
     if make_intramodal_template:
         b0_to_im_template = pe.Node(SimpleBeforeAfterRPT(), name='b0_to_im_template')
         ds_report_intramodal = pe.Node(
-            DerivativesDataSink(suffix='to_intramodal'),
+            DerivativesDataSink(suffix='tointramodal', source_file=source_file),
             name='ds_report_intramodal', run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
         workflow.connect([
@@ -257,8 +264,32 @@ def init_dwi_finalize_wf(scan_groups,
         hmc_model=hmc_model,
         shoreline_iters=shoreline_iters)
 
+    # Combine all the QC measures for a series QC
+    series_qc = pe.Node(SeriesQC(), name='series_qc')
+    ds_series_qc = pe.Node(
+        DerivativesDataSink(desc='ImageQC', suffix='dwi', source_file=source_file,
+                            base_directory=output_dir),
+        name='ds_series_qc', run_without_submitting=True,
+        mem_gb=DEFAULT_MEMORY_MIN_GB)
+
+    # Gather files for creating an interactive report
+    interactive_report_wf = init_interactive_report_wf()
+    ds_report_interactive = pe.Node(
+        DerivativesDataSink(suffix='interactive', source_file=source_file,
+                            base_directory=reportlets_dir),
+        name='ds_report_interactive', run_without_submitting=True,
+        mem_gb=DEFAULT_MEMORY_MIN_GB)
+
     workflow.connect([
+        (inputnode, interactive_report_wf, [
+            ('raw_concatenated', 'inputnode.raw_dwi_file'),
+            ('confounds', 'inputnode.confounds_file'),
+            ('carpetplot_data', 'inputnode.carpetplot_data')]),
+        (interactive_report_wf, ds_report_interactive, [('outputnode.out_report', 'in_file')]),
+        (inputnode, series_qc, [('raw_qc_file', 'pre_qc')]),
+        (series_qc, ds_series_qc, [('series_qc_file', 'in_file')]),
         (inputnode, dwi_derivatives_wf, [('dwi_files', 'inputnode.source_file')]),
+        (inputnode, series_qc, [('coreg_score', 'coreg_score')]),
         (inputnode, outputnode, [('hmc_optimization_data', 'hmc_optimization_data')]),
         (outputnode, dwi_derivatives_wf,
          [('dwi_t1', 'inputnode.dwi_t1'),
@@ -330,10 +361,17 @@ def init_dwi_finalize_wf(scan_groups,
                                              ('outputnode.local_bvecs', 'local_bvecs_t1'),
                                              ('outputnode.b0_series', 't1_b0_series'),
                                              ('outputnode.dwi_ref_resampled', 't1_b0_ref'),
-                                             ('outputnode.resampled_dwi_mask', 'dwi_mask_t1')]),
+                                             ('outputnode.resampled_dwi_mask', 'dwi_mask_t1'),
+                                             ('outputnode.resampled_qc', 'series_qc_t1')]),
             (outputnode, gradient_plot, [('bvecs_t1', 'final_bvec_file')]),
             (transform_dwis_t1, gtab_t1, [('outputnode.bvals', 'bval_file'),
                                           ('outputnode.rotated_bvecs', 'bvec_file')]),
+            (transform_dwis_t1, series_qc, [('outputnode.resampled_qc', 't1_qc')]),
+            (transform_dwis_t1, interactive_report_wf, [
+                ('outputnode.dwi_resampled', 'inputnode.processed_dwi_file'),
+                ('outputnode.resampled_dwi_mask', 'inputnode.mask_file'),
+                ('outputnode.bvals', 'inputnode.bval_file'),
+                ('outputnode.rotated_bvecs', 'inputnode.bvec_file')]),
             (gtab_t1, outputnode, [('gradient_file', 'gradient_table_t1')])])
 
     if "template" in output_spaces:
@@ -377,6 +415,7 @@ def init_dwi_finalize_wf(scan_groups,
                                               ('outputnode.dwi_ref_resampled', 'mni_b0_ref')]),
             (transform_dwis_mni, gtab_mni, [('outputnode.bvals', 'bval_file'),
                                             ('outputnode.rotated_bvecs', 'bvec_file')]),
+            (transform_dwis_mni, series_qc, [('outputnode.resampled_qc', 'mni_qc')]),
             (gtab_mni, outputnode, [('gradient_file', 'gradient_table_mni')])
         ])
         if "T1w" not in output_spaces:
@@ -387,29 +426,4 @@ def init_dwi_finalize_wf(scan_groups,
         if node.split('.')[-1].startswith('ds_report'):
             workflow.get_node(node).inputs.base_directory = reportlets_dir
             workflow.get_node(node).inputs.source_file = source_file
-    return workflow
-
-
-def init_mask_finalize_wf(name="mask_finalize_wf"):
-    """Creates a final mask using a combination of the t1 mask and dwi2mask
-    """
-    inputnode = pe.Node(
-        niu.IdentityInterface(fields=['t1_mask', 'resampled_b0s']),
-        name='inputnode')
-    outputnode = pe.Node(niu.IdentityInterface(fields=['mask_file']), name='outputnode')
-    workflow = Workflow(name=name)
-    resample_t1_mask = pe.Node(
-        afni.Resample(outputtype='NIFTI_GZ', resample_mode="NN"), name='resample_t1_mask')
-    b0mask = pe.Node(afni.Automask(outputtype='NIFTI_GZ'), name='b0mask')
-    or_mask = pe.Node(afni.Calc(outputtype='NIFTI_GZ', expr='step(a+b)'), name='or_mask')
-    workflow.connect([
-        (inputnode, resample_t1_mask, [
-            ('t1_mask', 'in_file'),
-            ('resampled_b0s', 'master')]),
-        (inputnode, b0mask, [('resampled_b0s', 'in_file')]),
-        (b0mask, or_mask, [('out_file', 'in_file_a')]),
-        (resample_t1_mask, or_mask, [('out_file', 'in_file_b')]),
-        (or_mask, outputnode, [('out_file', 'mask_file')])
-    ])
-
     return workflow

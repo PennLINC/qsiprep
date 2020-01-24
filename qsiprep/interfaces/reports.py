@@ -10,11 +10,17 @@ Interfaces to generate reportlets
 """
 
 import os
+import os.path as op
 import time
+import json
 import re
+from collections import defaultdict
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 import seaborn as sns
+import matplotlib
 import matplotlib.pyplot as plt
+from matplotlib import animation
+import pandas as pd
 import numpy as np
 from nipype.interfaces.base import (
     traits, TraitedSpec, BaseInterfaceInputSpec,
@@ -22,7 +28,7 @@ from nipype.interfaces.base import (
     SimpleInterface)
 from nipype.interfaces import freesurfer as fs
 from .gradients import concatenate_bvals, concatenate_bvecs
-from matplotlib import animation
+from .qc import createB0_ColorFA_Mask_Sprites, createSprite4D
 
 SUBJECT_TEMPLATE = """\t<ul class="elem-desc">
 \t\t<li>Subject ID: {subject_id}</li>
@@ -57,10 +63,40 @@ ABOUT_TEMPLATE = """\t<ul>
 </div>
 """
 
+TOPUP_TEMPLATE = """\
+\t\t<p class="elem-desc">
+\t\t{summary}</p>
+"""
+
 GROUPING_TEMPLATE = """\t<ul>
 \t\t<li>Output Name: {output_name}</li>
 {input_files}
 </ul>
+"""
+
+INTERACTIVE_TEMPLATE = """
+<script src="https://unpkg.com/vue"></script>
+<script src="https://nipreps.github.io/dmriprep-viewer/dmriprepReport.umd.min.js"></script>
+<link rel="stylesheet" href="https://nipreps.github.io/dmriprep-viewer/dmriprepReport.css">
+
+<div id="app">
+  <demo :report="report"></demo>
+</div>
+
+<script>
+var report = REPORT
+  new Vue({
+    components: {
+      demo: dmriprepReport
+    },
+    data () {
+      return {
+        report
+      }
+    }
+  }).$mount('#app')
+
+</script>
 """
 
 
@@ -230,6 +266,17 @@ class AboutSummary(SummaryInterface):
                                      date=time.strftime("%Y-%m-%d %H:%M:%S %z"))
 
 
+class TopupSummaryInputSpec(BaseInterfaceInputSpec):
+    summary = Str(desc='Summary of TOPUP inputs')
+
+
+class TopupSummary(SummaryInterface):
+    input_spec = TopupSummaryInputSpec
+
+    def _generate_segment(self):
+        return TOPUP_TEMPLATE.format(summary=self.inputs.summary)
+
+
 class GradientPlotInputSpec(BaseInterfaceInputSpec):
     orig_bvec_files = InputMultiObject(File(exists=True), mandatory=True,
                                        desc='bvecs from DWISplit')
@@ -330,3 +377,223 @@ def plot_gradients(bvals, orig_bvecs, source_filenums, output_fname, final_bvecs
 
     plt.close(fig)
     fig = None
+
+
+def topup_selection_to_report(selected_indices, original_files, spec_lookup,
+                              image_source='combined DWI series'):
+    """Write a description of how the images were selected for TOPUP.
+
+    >>> selected_indices = [0, 15, 30, 45]
+    >>> original_files = ["sub-1_dir-AP_dwi.nii.gz"] * 30 + ["sub-1_dir-PA_dwi.nii.gz"] * 30
+    >>> spec_lookup = {"sub-1_dir-AP_dwi.nii.gz": "0 1 0 0.087",
+    ...                "sub-1_dir-PA_dwi.nii.gz": "0 -1 0 0.087"}
+    >>> print(topup_selection_to_report(selected_indices, original_files, spec_lookup))
+    A total of 2 distortion groups was included in the combined dwi data. Distortion \
+group '0 1 0 0.087' was represented by images 0, 15 from sub-1_dir-AP_dwi.nii.gz. \
+Distortion group '0 -1 0 0.087' was represented by images 0, 15 from sub-1_dir-PA_dwi.nii.gz. "
+
+    Or
+
+    >>> selected_indices = [0, 15, 30, 45]
+    >>> original_files = ["sub-1_dir-AP_run-1_dwi.nii.gz"] * 15 + [
+    ...                   "sub-1_dir-AP_run-2_dwi.nii.gz"] * 15 + [
+    ...                   "sub-1_dir-PA_dwi.nii.gz"] * 30
+    >>> spec_lookup = {"sub-1_dir-AP_run-1_dwi.nii.gz": "0 1 0 0.087",
+    ...                "sub-1_dir-AP_run-2_dwi.nii.gz": "0 1 0 0.087",
+    ...                "sub-1_dir-PA_dwi.nii.gz": "0 -1 0 0.087"}
+    >>> print(topup_selection_to_report(selected_indices, original_files, spec_lookup))
+    A total of 2 distortion groups was included in the combined dwi data. Distortion \
+group '0 1 0 0.087' was represented by image 0 from sub-1_dir-AP_run-1_dwi.nii.gz and \
+image 0 from sub-1_dir-AP_run-2_dwi.nii.gz. Distortion group '0 -1 0 0.087' was represented \
+by images 0, 15 from sub-1_dir-PA_dwi.nii.gz.
+
+    >>> selected_indices = [0, 15, 30, 45, 60]
+    >>> original_files = ["sub-1_dir-AP_run-1_dwi.nii.gz"] * 15 + [
+    ...                   "sub-1_dir-AP_run-2_dwi.nii.gz"] * 15 + [
+    ...                   "sub-1_dir-AP_run-3_dwi.nii.gz"] * 15 + [
+    ...                   "sub-1_dir-PA_dwi.nii.gz"] * 30
+    >>> spec_lookup = {"sub-1_dir-AP_run-1_dwi.nii.gz": "0 1 0 0.087",
+    ...                "sub-1_dir-AP_run-2_dwi.nii.gz": "0 1 0 0.087",
+    ...                "sub-1_dir-AP_run-3_dwi.nii.gz": "0 1 0 0.087",
+    ...                "sub-1_dir-PA_dwi.nii.gz": "0 -1 0 0.087"}
+    >>> print(topup_selection_to_report(selected_indices, original_files, spec_lookup))
+    A total of 2 distortion groups was included in the combined dwi data. Distortion \
+group '0 1 0 0.087' was represented by image 0 from sub-1_dir-AP_run-1_dwi.nii.gz, \
+image 0 from sub-1_dir-AP_run-2_dwi.nii.gz and image 0 from sub-1_dir-AP_run-3_dwi.nii.gz. \
+Distortion group '0 -1 0 0.087' was represented by images 0, 15 from sub-1_dir-PA_dwi.nii.gz.
+
+    >>> selected_indices = [0, 15, 30, 45]
+    >>> original_files = ["sub-1_dir-PA_dwi.nii.gz"] * 60
+    >>> spec_lookup = {"sub-1_dir-PA_dwi.nii.gz": "0 -1 0 0.087"}
+    >>> print(topup_selection_to_report(selected_indices, original_files, spec_lookup))
+    A total of 1 distortion group was included in the combined dwi data. \
+Distortion group '0 -1 0 0.087' was represented by images 0, 15, 30, 45 \
+from sub-1_dir-PA_dwi.nii.gz.
+
+    """
+    image_indices = defaultdict(list)
+    for imgnum, image in enumerate(original_files):
+        image_indices[image].append(imgnum)
+
+    # Collect the original volume number within each source image
+    selected_per_image = defaultdict(list)
+    for b0_index in selected_indices:
+        b0_image = original_files[b0_index]
+        first_index = min(image_indices[b0_image])
+        within_image_index = b0_index - first_index
+        selected_per_image[b0_image].append(within_image_index)
+
+    # Collect the images and indices within each warp group
+    selected_per_warp_group = defaultdict(list)
+    for original_image, selection in selected_per_image.items():
+        warp_group = spec_lookup[original_image]
+        selected_per_warp_group[warp_group].append((original_image, selection))
+
+    # Make the description
+    num_groups = len(selected_per_warp_group)
+    plural = 's' if num_groups > 1 else ''
+    plural2 = 'were' if plural == 's' else 'was'
+    desc = ["A total of {num_groups} distortion group{plural} {plural2} included in the "
+            "{image_source} data. ".format(num_groups=num_groups, plural=plural,
+                                           plural2=plural2, image_source=image_source)]
+    for distortion_group, image_list in selected_per_warp_group.items():
+        group_desc = [
+            "Distortion group '{spec}' was represented by ".format(spec=distortion_group)]
+        for image_name, image_indices in image_list:
+            formatted_indices = ", ".join(map(str, image_indices))
+            plural = 's' if len(image_indices) > 1 else ''
+            group_desc += [
+                "image{plural} {imgnums} from {img_name}".format(plural=plural,
+                                                                 imgnums=formatted_indices,
+                                                                 img_name=image_name),
+                ", "]
+        group_desc[-1] = ". "
+        if len(image_list) > 1:
+            group_desc[-3] = " and "
+        desc += group_desc
+
+    return ''.join(desc)
+
+
+class _SeriesQCInputSpec(BaseInterfaceInputSpec):
+    pre_qc = File(exists=True, desc='qc file from the raw data')
+    t1_qc = File(exists=True, desc='qc file from preprocessed image in t1 space')
+    mni_qc = File(exists=True, desc='qc file from preprocessed image in template space')
+    confounds_file = File(exists=True, desc='confounds file')
+    coreg_score = traits.Float()
+
+
+class _SeriesQCOutputSpec(TraitedSpec):
+    series_qc_file = File(exists=True)
+
+
+class SeriesQC(SimpleInterface):
+    input_spec = _SeriesQCInputSpec
+    output_spec = _SeriesQCOutputSpec
+
+    def _run_interface(self, runtime):
+        image_qc = [_load_qc_file(self.inputs.pre_qc, prefix="raw_")]
+        if isdefined(self.inputs.t1_qc):
+            image_qc.append(_load_qc_file(self.inputs.t1_qc, prefix="t1_"))
+        if isdefined(self.inputs.mni_qc):
+            image_qc.append(_load_qc_file(self.inputs.mni_qc, prefix="mni_"))
+        all_qc = pd.concat(image_qc, axis=1)
+        output = op.join(runtime.cwd, "dwi_qc.csv")
+        all_qc.to_csv(output, index=False)
+        self._results['series_qc_file'] = output
+        return runtime
+
+
+def _load_qc_file(fname, prefix=""):
+    with open(fname, "r") as qc_file:
+        qc_data = qc_file.readlines()
+    data = qc_data[2]
+    parts = data.split('\t')
+    _, dims, voxel_size, dirs, max_b, _, ndc, bad_slices, _ = parts
+    voxelsx, voxelsy, voxelsz = map(float, voxel_size.strip().split())
+    dimx, dimy, dimz = map(float, dims.strip().split())
+    n_dirs = float(dirs)
+    max_b = float(max_b)
+    dwi_corr = float(ndc)
+    n_bad_slices = float(bad_slices)
+    data = {
+        prefix + 'dimension_x': [dimx],
+        prefix + 'dimension_y': [dimy],
+        prefix + 'dimension_z': [dimz],
+        prefix + 'voxel_size_x': [voxelsx],
+        prefix + 'voxel_size_y': [voxelsy],
+        prefix + 'voxel_size_z': [voxelsz],
+        prefix + 'max_b': [max_b],
+        prefix + 'neighbor_corr': [dwi_corr],
+        prefix + 'num_bad_slices': [n_bad_slices],
+        prefix + 'num_directions': [n_dirs]
+    }
+    return pd.DataFrame(data)
+
+
+class _InteractiveReportInputSpec(TraitedSpec):
+    raw_dwi_file = File(exists=True, mandatory=True)
+    processed_dwi_file = File(exists=True, mandatory=True)
+    confounds_file = File(exists=True, mandatory=True)
+    mask_file = File(exists=True, mandatory=True)
+    color_fa = File(exists=True, mandatory=True)
+    carpetplot_data = File(exists=True, mandatory=True)
+
+
+class InteractiveReport(SimpleInterface):
+    input_spec = _InteractiveReportInputSpec
+    output_spec = SummaryOutputSpec
+
+    def _run_interface(self, runtime):
+        report = {}
+        report['dwi_corrected'] = createSprite4D(self.inputs.processed_dwi_file)
+
+        b0, colorFA, mask = createB0_ColorFA_Mask_Sprites(self.inputs.processed_dwi_file,
+                                                          self.inputs.color_fa,
+                                                          self.inputs.mask_file)
+        report['carpetplot'] = []
+        if isdefined(self.inputs.carpetplot_data):
+            with open(self.inputs.carpetplot_data, 'r') as carpet_f:
+                carpet_data = json.load(carpet_f)
+            report.update(carpet_data)
+
+        report['b0'] = b0
+        report['colorFA'] = colorFA
+        report['anat_mask'] = mask
+        report['outlier_volumes'] = []
+        report['eddy_params'] = [[i, i] for i in range(30)]
+        eddy_qc = {}
+        report['eddy_quad'] = eddy_qc
+
+        df = pd.read_csv(self.inputs.confounds_file, delimiter="\t")
+        translations = df[['trans_x', 'trans_y', 'trans_z']].to_numpy()
+        rms = np.sqrt((translations ** 2).sum(1))
+        fdisp = df['framewise_displacement'].tolist()
+        fdisp[0] = None
+        report['eddy_params'] = [[fd_, rms_] for fd_, rms_ in zip(fdisp, rms)]
+
+        # Get the sampling scheme
+        xyz = df[["grad_x", "grad_y", "grad_z"]].to_numpy()
+        bval = df['bval'].to_numpy()
+        qxyz = np.sqrt(bval)[:, None] * xyz
+        report['q_coords'] = qxyz.tolist()
+        report['color'] = _filename_to_colors(df['original_file'])
+
+        safe_json = json.dumps(report)
+        out_file = op.join(runtime.cwd, "interactive_report.html")
+        with open(out_file, "w") as out_html:
+            out_html.write(INTERACTIVE_TEMPLATE.replace("REPORT", safe_json))
+        self._results['out_report'] = out_file
+        return runtime
+
+
+def _filename_to_colors(labels_column, colormap="rainbow"):
+    cmap = matplotlib.cm.get_cmap(colormap)
+    labels, _ = pd.factorize(labels_column)
+    n_samples = labels.shape[0]
+    max_label = labels.max()
+    if max_label == 0:
+        return [(1.0, 0.0, 0.0)] * n_samples
+    labels = labels / max_label
+    colors = np.array([cmap(label) for label in labels])
+    return colors.tolist()

@@ -6,9 +6,10 @@ from subprocess import Popen, PIPE
 import nibabel as nb
 import numpy as np
 import pandas as pd
+from nilearn import image as nim
 from nipype.interfaces.base import (BaseInterfaceInputSpec, TraitedSpec, File, SimpleInterface,
                                     InputMultiObject, OutputMultiObject, traits, isdefined)
-from nipype.interfaces import afni, ants
+from nipype.interfaces import ants
 from nipype.utils.filemanip import fname_presuffix
 from nipype.interfaces.ants.resampling import ApplyTransformsInputSpec
 from dipy.sims.voxel import all_tensor_evecs
@@ -271,7 +272,9 @@ class MatchTransforms(SimpleInterface):
 
 
 class ExtractB0sInputSpec(BaseInterfaceInputSpec):
-    b0_indices = traits.List(mandatory=True)
+    b0_indices = traits.List()
+    bval_file = File(exists=True)
+    b0_threshold = traits.Int(50, usedefault=True)
     dwi_series = File(exists=True, mandatory=True)
 
 
@@ -291,15 +294,24 @@ class ExtractB0s(SimpleInterface):
                                        use_ext=True, newpath=runtime.cwd)
         output_mean_fname = fname_presuffix(output_fname, suffix='_mean',
                                             use_ext=True, newpath=runtime.cwd)
-        img = nb.load(self.inputs.dwi_series)
-        indices = np.array(self.inputs.b0_indices).astype(np.int)
-        new_data = img.get_data()[..., indices]
-        nb.Nifti1Image(new_data, img.affine, img.header).to_filename(output_fname)
+        if isdefined(self.inputs.b0_indices):
+            indices = np.array(self.inputs.b0_indices).astype(np.int)
+        elif isdefined(self.inputs.bval_file):
+            bvals = np.loadtxt(self.inputs.bval_file)
+            indices = np.flatnonzero(bvals < self.inputs.b0_threshold)
+            if indices.size == 0:
+                raise ValueError("No b<%d images found" % self.inputs.b0_threshold)
+        else:
+            raise ValueError("No gradient information available")
+        new_data = nim.index_img(self.inputs.dwi_series, indices)
+        new_data.to_filename(output_fname)
         self._results['b0_series'] = output_fname
-        average_img = afni.TStat(args='-mean', in_file=output_fname, outputtype='NIFTI_GZ',
-                                 out_file=output_mean_fname)
-        average_img.run()
-        self._results['b0_average'] = output_mean_fname
+        if new_data.ndim == 3:
+            self._results['b0_average'] = output_fname
+        else:
+            mean_image = nim.math_img('img.mean(3)', img=new_data)
+            mean_image.to_filename(output_mean_fname)
+            self._results['b0_average'] = output_mean_fname
 
         return runtime
 

@@ -1,4 +1,4 @@
-synsdcversion: 2
+version: 2
 jobs:
 
   build:
@@ -16,10 +16,10 @@ jobs:
             apk add --no-cache pigz python3 tar
       - restore_cache:
           keys:
-            - docker-v6-{{ .Branch }}-{{ .Revision }}
-            - docker-v6-{{ .Branch }}-
-            - docker-v6-master-
-            - docker-v6-
+            - docker-v10-{{ .Branch }}-{{ .Revision }}
+            - docker-v10-{{ .Branch }}-
+            - docker-v10-master-
+            - docker-v10-
           paths:
             - /tmp/cache/docker.tar.gz
       - setup_remote_docker
@@ -76,7 +76,7 @@ jobs:
           no_output_timeout: 40m
           command: |
             mkdir -p /tmp/cache
-            docker save ubuntu:xenial-20161213 pennbbl/qsiprep:latest \
+            docker save nvidia/cuda:9.1-runtime-ubuntu16.04 pennbbl/qsiprep:latest \
             | pigz -3 > /tmp/cache/docker.tar.gz
 
       - persist_to_workspace:
@@ -85,7 +85,7 @@ jobs:
             - src/qsiprep
 
       - save_cache:
-         key: docker-v6-{{ .Branch }}-{{ .Revision }}-{{ epoch }}
+         key: docker-v10-{{ .Branch }}-{{ .Revision }}-{{ epoch }}
          paths:
            - /tmp/cache/docker.tar.gz
 
@@ -97,8 +97,8 @@ jobs:
     steps:
       - restore_cache:
           keys:
-            - data-v10-{{ .Revision }}
-            - data-v10-
+            - data-v11-{{ .Revision }}
+            - data-v11-
       - run:
           name: Get single scan from downsampled CS-DSI
           command: |
@@ -183,6 +183,18 @@ jobs:
             fi
 
       - run:
+          name: Get SingleShell outputs
+          command: |
+            if [[ ! -d /tmp/data/singleshell_output ]]; then
+              mkdir -p /tmp/data/singleshell_output
+              wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
+                -O singleshell_output.tar.gz "https://upenn.box.com/shared/static/9jhf0eo3ml6ojrlxlz6lej09ny12efgg.gz"
+              tar xvfz singleshell_output.tar.gz -C /tmp/data/singleshell_output
+            else
+              echo "Dataset singleshell_output was cached"
+            fi
+
+      - run:
           name: Store FreeSurfer license file
           command: |
             mkdir -p /tmp/fslicense
@@ -213,7 +225,7 @@ jobs:
             - twoses/nipype.cfg
 
       - save_cache:
-         key: data-v10-{{ epoch }}
+         key: data-v11-{{ epoch }}
          paths:
             - /tmp/data
 
@@ -279,7 +291,7 @@ jobs:
             - DSCSDSI-anat-v1-
       - restore_cache:
           keys:
-            - docker-v6-{{ .Branch }}-{{ .Revision }}
+            - docker-v10-{{ .Branch }}-{{ .Revision }}
       - run:
           name: Setting up test
           command: |
@@ -336,6 +348,7 @@ jobs:
                  participant \
                 --sloppy --write-graph --use-syn-sdc --force-syn --mem_mb 4096 \
                 --output-space T1w \
+                --dwi-no-biascorr \
                 --hmc_model 3dSHORE \
                 --hmc-transform Rigid \
                 --shoreline_iters 1 \
@@ -390,7 +403,8 @@ jobs:
           at: /tmp
       - restore_cache:
           keys:
-            - docker-v6-{{ .Branch }}-{{ .Revision }}
+            - docker-v10-{{ .Branch }}-{{ .Revision }}
+
       - run:
           name: Setting up test
           command: |
@@ -425,6 +439,7 @@ jobs:
                  /tmp/data/DSDTI  /tmp/DSDTI/derivatives \
                  participant \
                 --sloppy --mem_mb 4096 \
+                --unringing-method mrdegibbs \
                 --force-spatial-normalization \
                 --output-space T1w \
                 --recon-spec dsi_studio_gqi \
@@ -479,7 +494,7 @@ jobs:
           at: /tmp
       - restore_cache:
           keys:
-            - docker-v6-{{ .Branch }}-{{ .Revision }}
+            - docker-v10-{{ .Branch }}-{{ .Revision }}
       - run:
           name: Setting up test
           command: |
@@ -593,7 +608,7 @@ jobs:
           at: /tmp
       - restore_cache:
           keys:
-            - docker-v6-{{ .Branch }}-{{ .Revision }}
+            - docker-v10-{{ .Branch }}-{{ .Revision }}
       - run:
           name: Setting up test
           command: |
@@ -724,7 +739,7 @@ jobs:
           at: /tmp
       - restore_cache:
           keys:
-            - docker-v6-{{ .Branch }}-{{ .Revision }}
+            - docker-v10-{{ .Branch }}-{{ .Revision }}
       - run:
           name: Setting up test
           command: |
@@ -815,7 +830,7 @@ jobs:
 
       - restore_cache:
           keys:
-            - docker-v6-{{ .Branch }}-{{ .Revision }}
+            - docker-v10-{{ .Branch }}-{{ .Revision }}
       - run:
           name: Setting up test
           command: |
@@ -836,89 +851,89 @@ jobs:
             fi
 
       - run:
-          name: Run mrtrix_dhollander_no5tt
+          name: Run mrtrix_multishell_msmt
           no_output_timeout: 2h
           command: |
-            mkdir -p /tmp/multishell_output/work /tmp/multishell_output/derivatives/mrtrix_dhollander_no5tt
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/mrtrix_dhollander_no5tt && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/mrtrix_dhollander_no5tt
+            mkdir -p /tmp/multishell_output/work /tmp/multishell_output/derivatives/mrtrix_multishell_msmt
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/mrtrix_multishell_msmt && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/mrtrix_multishell_msmt
             sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/work && \
                 sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/work
             qsiprep-docker -i pennbbl/qsiprep:latest \
                 -e qsiprep_DEV 1 -u $(id -u) \
                 --config $PWD/nipype.cfg -w /tmp/multishell_output/work \
                  /tmp/data/multishell_output/qsiprep  \
-                 /tmp/multishell_output/derivatives/mrtrix_dhollander_no5tt \
+                 /tmp/multishell_output/derivatives/mrtrix_multishell_msmt \
                  participant \
                 --recon-input /tmp/data/multishell_output/qsiprep \
                 --sloppy \
-                --recon-spec mrtrix_dhollander_no5tt \
+                --recon-spec mrtrix_multishell_msmt \
                 --recon-only \
                 --mem_mb 4096 \
                 --nthreads 1 -vv
 
       - run:
-          name: Run mrtrix_dhollander
+          name: Run mrtrix_multishell_msmt_noACT
           no_output_timeout: 2h
           command: |
-            mkdir -p /tmp/multishell_output/work /tmp/multishell_output/derivatives/mrtrix_dhollander
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/mrtrix_dhollander && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/mrtrix_dhollander
+            mkdir -p /tmp/multishell_output/work /tmp/multishell_output/derivatives/mrtrix_multishell_msmt_noACT
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/mrtrix_multishell_msmt_noACT && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/mrtrix_multishell_msmt_noACT
             sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/work && \
                 sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/work
             qsiprep-docker -i pennbbl/qsiprep:latest \
                 -e qsiprep_DEV 1 -u $(id -u) \
                 --config $PWD/nipype.cfg -w /tmp/multishell_output/work \
                  /tmp/data/multishell_output/qsiprep \
-                 /tmp/multishell_output/derivatives/mrtrix_dhollander \
+                 /tmp/multishell_output/derivatives/mrtrix_multishell_msmt_noACT \
                  participant \
                 --sloppy \
                 --recon-input /tmp/data/multishell_output/qsiprep \
-                --recon-spec mrtrix_dhollander \
+                --recon-spec mrtrix_multishell_msmt_noACT \
                 --recon-only \
                 --mem_mb 4096 \
                 --nthreads 1 -vv
 
       - run:
-          name: Run mrtrix_msmt_csd
+          name: Run mrtrix_singleshell_ss3t
           no_output_timeout: 2h
           command: |
-            mkdir -p /tmp/multishell_output/work /tmp/multishell_output/derivatives/mrtrix_msmt_csd
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/mrtrix_msmt_csd && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/mrtrix_msmt_csd
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/work && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/work
+            mkdir -p /tmp/singleshell_output/work /tmp/singleshell_output/derivatives/mrtrix_singleshell_ss3t
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/singleshell_output/derivatives/mrtrix_singleshell_ss3t && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/singleshell_output/derivatives/mrtrix_singleshell_ss3t
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/singleshell_output/work && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/singleshell_output/work
             qsiprep-docker -i pennbbl/qsiprep:latest \
                 -e qsiprep_DEV 1 -u $(id -u) \
-                --config $PWD/nipype.cfg -w /tmp/multishell_output/work \
-                 /tmp/data/multishell_output/qsiprep \
-                 /tmp/multishell_output/derivatives/mrtrix_msmt_csd \
+                --config $PWD/nipype.cfg -w /tmp/singleshell_output/work \
+                 /tmp/data/singleshell_output/qsiprep \
+                 /tmp/singleshell_output/derivatives/mrtrix_singleshell_ss3t \
                  participant \
                 --sloppy \
-                --recon-input /tmp/data/multishell_output/qsiprep \
-                --recon-spec mrtrix_msmt_csd \
+                --recon-input /tmp/data/singleshell_output/qsiprep \
+                --recon-spec mrtrix_singleshell_ss3t \
                 --recon-only \
                 --mem_mb 4096 \
                 --nthreads 1 -vv
 
       - run:
-          name: Run mrtrix_tckglobal
+          name: Run mrtrix_singleshell_ss3t_noACT
           no_output_timeout: 2h
           command: |
-            mkdir -p /tmp/multishell_output/work /tmp/multishell_output/derivatives/mrtrix_tckglobal
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/mrtrix_tckglobal && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/mrtrix_tckglobal
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/work && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/work
+            mkdir -p /tmp/singleshell_output/work /tmp/singleshell_output/derivatives/mrtrix_singleshell_ss3t_noACT
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/singleshell_output/derivatives/mrtrix_singleshell_ss3t_noACT && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/singleshell_output/derivatives/mrtrix_singleshell_ss3t_noACT
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/singleshell_output/work && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/singleshell_output/work
             qsiprep-docker -i pennbbl/qsiprep:latest \
                 -e qsiprep_DEV 1 -u $(id -u) \
-                --config $PWD/nipype.cfg -w /tmp/multishell_output/work \
-                 /tmp/data/multishell_output/qsiprep \
-                 /tmp/multishell_output/derivatives/mrtrix_tckglobal \
+                --config $PWD/nipype.cfg -w /tmp/singleshell_output/work \
+                 /tmp/data/singleshell_output/qsiprep \
+                 /tmp/singleshell_output/derivatives/mrtrix_singleshell_ss3t_noACT \
                  participant \
                 --sloppy \
-                --recon-input /tmp/data/multishell_output/qsiprep \
-                --recon-spec mrtrix_tckglobal \
+                --recon-input /tmp/data/singleshell_output/qsiprep \
+                --recon-spec mrtrix_singleshell_ss3t_noACT \
                 --recon-only \
                 --mem_mb 4096 \
                 --nthreads 1 -vv
@@ -979,7 +994,7 @@ jobs:
 
       - restore_cache:
           keys:
-            - docker-v6-{{ .Branch }}-{{ .Revision }}
+            - docker-v10-{{ .Branch }}-{{ .Revision }}
       - run:
           name: Load Docker image layer cache
           no_output_timeout: 30m
@@ -1018,7 +1033,7 @@ jobs:
             fi
       - restore_cache:
           keys:
-            - docker-v6-{{ .Branch }}-{{ .Revision }}
+            - docker-v10-{{ .Branch }}-{{ .Revision }}
       - run:
           name: Load Docker image layer cache
           no_output_timeout: 30m

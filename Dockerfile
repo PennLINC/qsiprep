@@ -1,5 +1,5 @@
 # Use Ubuntu 16.04 LTS
-FROM ubuntu:xenial-20161213
+FROM nvidia/cuda:9.1-runtime-ubuntu16.04
 
 # Pre-cache neurodebian key
 COPY docker/files/neurodebian.gpg /usr/local/etc/neurodebian.gpg
@@ -19,6 +19,7 @@ RUN apt-get update && \
                     bc \
                     dc \
                     file \
+                    libopenblas-base \
                     libfontconfig1 \
                     libfreetype6 \
                     libgl1-mesa-dev \
@@ -32,11 +33,10 @@ RUN apt-get update && \
                     libxrender1 \
                     libxt6 \
                     wget \
-                    qt5-qmake \
-                    qt5-default \
                     libboost-all-dev \
                     zlib1g \
                     zlib1g-dev \
+                    libfftw3-dev libtiff5-dev \
                     libqt5opengl5-dev \
                     unzip \
                     libgl1-mesa-dev \
@@ -52,6 +52,7 @@ RUN apt-get update && \
                     python-numpy \
                     zlib1g-dev \
                     imagemagick \
+                    software-properties-common \
                     git && \
     curl -sL https://deb.nodesource.com/setup_10.x | bash - && \
     apt-get install -y --no-install-recommends \
@@ -62,6 +63,23 @@ RUN apt-get update && \
 RUN curl -o pandoc-2.2.2.1-1-amd64.deb -sSL "https://github.com/jgm/pandoc/releases/download/2.2.2.1/pandoc-2.2.2.1-1-amd64.deb" && \
     dpkg -i pandoc-2.2.2.1-1-amd64.deb && \
     rm pandoc-2.2.2.1-1-amd64.deb
+
+# Install qt5.12.2
+RUN add-apt-repository ppa:beineri/opt-qt-5.12.2-xenial \
+    && apt-get update \
+    && apt install -y --no-install-recommends \
+    freetds-common libclang1-5.0 libllvm5.0 libodbc1 libsdl2-2.0-0 libsndio6.1 \
+    libsybdb5 libxcb-xinerama0 qt5123d qt512base qt512canvas3d \
+    qt512connectivity qt512declarative qt512graphicaleffects \
+    qt512imageformats qt512location qt512multimedia qt512scxml qt512svg \
+    qt512wayland qt512x11extras qt512xmlpatterns qt512charts-no-lgpl \
+    && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+ENV QT_BASE_DIR="/opt/qt512"
+ENV QTDIR="$QT_BASE_DIR" \
+    PATH="$QT_BASE_DIR/bin:$PATH:/opt/dsi-studio/dsi_studio_64" \
+    LD_LIBRARY_PATH="$QT_BASE_DIR/lib/x86_64-linux-gnu:$QT_BASE_DIR/lib:$LD_LIBRARY_PATH" \
+    PKG_CONFIG_PATH="$QT_BASE_DIR/lib/pkgconfig:$PKG_CONFIG_PATH"
 
 # Installing freesurfer
 RUN curl -sSL https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/6.0.1/freesurfer-Linux-centos6_x86_64-stable-pub-v6.0.1.tar.gz | tar zxv --no-same-owner -C /opt \
@@ -77,14 +95,25 @@ RUN curl -sSL https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/6.0.1/frees
     --exclude='freesurfer/lib/cuda' \
     --exclude='freesurfer/lib/qt'
 
-  ENV FSLDIR="/opt/fsl-5.0.11" \
-      PATH="/opt/fsl-5.0.11/bin:$PATH"
+  ENV FSLDIR="/opt/fsl-6.0.3" \
+      PATH="/opt/fsl-6.0.3/bin:$PATH"
   RUN echo "Downloading FSL ..." \
-      && mkdir -p /opt/fsl-5.0.11 \
-      && curl -fsSL --retry 5 https://fsl.fmrib.ox.ac.uk/fsldownloads/fsl-5.0.11-centos6_64.tar.gz \
-      | tar -xz -C /opt/fsl-5.0.11 --strip-components 1 \
+      && mkdir -p /opt/fsl-6.0.3 \
+      && curl -fsSL --retry 5 https://fsl.fmrib.ox.ac.uk/fsldownloads/fsl-6.0.3-centos6_64.tar.gz \
+      | tar -xz -C /opt/fsl-6.0.3 --strip-components 1 \
+      --exclude='fsl/doc' \
+      --exclude='fsl/data/atlases' \
+      --exclude='fsl/data/possum' \
+      --exclude='fsl/src' \
+      --exclude='fsl/extras/src' \
+      --exclude='fsl/bin/fslview*' \
+      --exclude='fsl/bin/FSLeyes' \
       && echo "Installing FSL conda environment ..." \
-      && bash /opt/fsl-5.0.11/etc/fslconf/fslpython_install.sh -f /opt/fsl-5.0.11
+      && sed -i -e "/fsleyes/d" -e "/wxpython/d" \
+         ${FSLDIR}/etc/fslconf/fslpython_environment.yml \
+      && bash /opt/fsl-6.0.3/etc/fslconf/fslpython_install.sh -f /opt/fsl-6.0.3 \
+      && find ${FSLDIR}/fslpython/envs/fslpython/lib/python3.7/site-packages/ -type d -name "tests"  -print0 | xargs -0 rm -r \
+      && ${FSLDIR}/fslpython/bin/conda clean --all
 
 ENV FREESURFER_HOME=/opt/freesurfer \
     SUBJECTS_DIR=/opt/freesurfer/subjects \
@@ -111,10 +140,15 @@ RUN apt-get update && \
                     git-annex-standalone && \
     apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
+
 # Install DSI Studio
-ENV PATH=$PATH:/opt/dsi-studio/dsi_studio_64
-ARG DSI_SHA=1685bfeb4df194fa3e907f4ee032691d82aeb3ba
-ARG TIPL_SHA=b01ec5a46bdec7d13506d23e97b91fd0840c2b09
+ENV QT_BASE_DIR="/opt/qt512"
+ENV QTDIR="$QT_BASE_DIR" \
+    PATH="$QT_BASE_DIR/bin:$PATH:/opt/dsi-studio/dsi_studio_64" \
+    LD_LIBRARY_PATH="$QT_BASE_DIR/lib/x86_64-linux-gnu:$QT_BASE_DIR/lib:$LD_LIBRARY_PATH" \
+    PKG_CONFIG_PATH="$QT_BASE_DIR/lib/pkgconfig:$PKG_CONFIG_PATH"
+ARG DSI_SHA=daea4f1b4bc560243b1bd6c3ac40ce7f6c0b3ed4
+ARG TIPL_SHA=a0688617db9352d6fb8c046126f7c90a9dd13411
 RUN mkdir /opt/dsi-studio \
   && cd /opt/dsi-studio \
   && curl -sSLO https://github.com/frankyeh/DSI-Studio/archive/${DSI_SHA}.zip \
@@ -126,7 +160,7 @@ RUN mkdir /opt/dsi-studio \
   && mv TIPL-${TIPL_SHA} src/tipl \
   && rm ${TIPL_SHA}.zip \
   && mkdir build && cd build \
-  && qmake ../src && make \
+  && /opt/qt512/bin/qmake ../src && make \
   && cd /opt/dsi-studio \
   && curl -sSLO 'https://upenn.box.com/shared/static/01r73d4a15utl13himv4d7cjpa6etf6z.gz' \
   && tar xvfz 01r73d4a15utl13himv4d7cjpa6etf6z.gz \
@@ -134,6 +168,7 @@ RUN mkdir /opt/dsi-studio \
   && cd dsi_studio_64 \
   && mv ../build/dsi_studio . \
   && rm -rf /opt/dsi-studio/src /opt/dsi-studio/build
+
 
 # Install mrtrix3 from source
 ARG MRTRIX_SHA=5d6b3a6ffc6ee651151779539c8fd1e2e03fad81
@@ -144,12 +179,25 @@ RUN cd /opt \
     && mv mrtrix3-${MRTRIX_SHA} /opt/mrtrix3-latest \
     && rm ${MRTRIX_SHA}.zip \
     && cd /opt/mrtrix3-latest \
-    && ./configure \
+    && ./configure -nogui \
     && echo "Compiling MRtrix3 ..." \
     && ./build
 
+# Install 3Tissue from source
+ARG MRTRIX_SHA=c1367255f51a3cbe774c8317448cdc0b0aa587be
+ENV PATH="/opt/mrtrix3-latest/bin:$PATH"
+RUN cd /opt \
+    && curl -sSLO https://github.com/3Tissue/MRtrix3Tissue/archive/${MRTRIX_SHA}.zip \
+    && unzip ${MRTRIX_SHA}.zip \
+    && mv MRtrix3Tissue-${MRTRIX_SHA} /opt/3Tissue \
+    && rm ${MRTRIX_SHA}.zip \
+    && cd /opt/3Tissue \
+    && ./configure -nogui \
+    && echo "Compiling MRtrix3-3Tissue ..." \
+    && ./build
+
 # Installing ANTs latest from source
-ARG ANTS_SHA=b8889562341471dbe18b415d2bcefb9b8f12232a
+ARG ANTS_SHA=e00e8164d7a92f048e5d06e388a15c1ee8e889c4
 ADD https://cmake.org/files/v3.11/cmake-3.11.4-Linux-x86_64.sh /cmake-3.11.4-Linux-x86_64.sh
 ENV ANTSPATH="/opt/ants-latest/bin" \
     PATH="/opt/ants-latest/bin:$PATH" \
@@ -168,7 +216,7 @@ RUN mkdir /opt/cmake \
     && cd /tmp/ants/build \
     && mkdir -p /opt/ants-latest \
     && git config --global url."https://".insteadOf git:// \
-    && cmake -DBUILD_SHARED_LIBS=ON -DCMAKE_INSTALL_PREFIX=/opt/ants-latest /tmp/ants/source \
+    && cmake -DBUILD_TESTING=OFF -DBUILD_SHARED_LIBS=ON -DCMAKE_INSTALL_PREFIX=/opt/ants-latest /tmp/ants/source \
     && make -j2 \
     && cd ANTS-build \
     && make install \
@@ -272,6 +320,8 @@ RUN python -c "from matplotlib import font_manager" && \
 
 RUN find $HOME -type d -exec chmod go=u {} + && \
     find $HOME -type f -exec chmod go=u {} +
+
+RUN ln -s /opt/fsl-6.0.3/bin/eddy_cuda9.1 /opt/fsl-6.0.3/bin/eddy_cuda
 
 ENV AFNI_INSTALLDIR=/usr/lib/afni \
     PATH=${PATH}:/usr/lib/afni/bin \

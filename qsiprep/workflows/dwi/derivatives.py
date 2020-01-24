@@ -36,16 +36,16 @@ def init_dwi_derivatives_wf(output_prefix,
             'local_bvecs_t1', 't1_b0_ref', 't1_b0_series', 'gradient_table_t1', 'dwi_mni',
             'dwi_mask_mni', 'cnr_map_mni', 'bvals_mni', 'bvecs_mni', 'local_bvecs_mni',
             'mni_b0_ref', 'mni_b0_series', 'gradient_table_mni', 'confounds',
-            'hmc_optimization_data'
+            'hmc_optimization_data', 'series_qc'
         ]),
         name='inputnode')
 
     if hmc_model == '3dSHORE' and shoreline_iters > 1:
         ds_optimization = pe.Node(
             DerivativesDataSink(
-                prefix=output_prefix,
                 source_file=source_file,
-                base_directory=output_dir, suffix='hmcOptimization'),
+                base_directory=output_dir,
+                suffix='hmcOptimization'),
             name="ds_optimization", run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
         workflow.connect([
@@ -57,7 +57,6 @@ def init_dwi_derivatives_wf(output_prefix,
         # 4D DWI in t1 space
         ds_dwi_t1 = pe.Node(
             DerivativesDataSink(
-                prefix=output_prefix,
                 source_file=source_file,
                 base_directory=output_dir,
                 space='T1w',
@@ -70,7 +69,6 @@ def init_dwi_derivatives_wf(output_prefix,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
         ds_bvals_t1 = pe.Node(
             DerivativesDataSink(
-                prefix=output_prefix,
                 source_file=source_file,
                 base_directory=output_dir,
                 space='T1w',
@@ -82,7 +80,6 @@ def init_dwi_derivatives_wf(output_prefix,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
         ds_bvecs_t1 = pe.Node(
             DerivativesDataSink(
-                prefix=output_prefix,
                 source_file=source_file,
                 base_directory=output_dir,
                 space='T1w',
@@ -94,7 +91,6 @@ def init_dwi_derivatives_wf(output_prefix,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
         ds_t1_b0_ref = pe.Node(
             DerivativesDataSink(
-                prefix=output_prefix,
                 source_file=source_file,
                 base_directory=output_dir,
                 space='T1w',
@@ -106,7 +102,6 @@ def init_dwi_derivatives_wf(output_prefix,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
         ds_t1_b0_series = pe.Node(
             DerivativesDataSink(
-                prefix=output_prefix,
                 source_file=source_file,
                 base_directory=output_dir,
                 space='T1w',
@@ -118,7 +113,6 @@ def init_dwi_derivatives_wf(output_prefix,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
         ds_dwi_mask_t1 = pe.Node(
             DerivativesDataSink(
-                prefix=output_prefix,
                 source_file=source_file,
                 base_directory=output_dir,
                 space='T1w',
@@ -131,7 +125,6 @@ def init_dwi_derivatives_wf(output_prefix,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
         ds_cnr_map_t1 = pe.Node(
             DerivativesDataSink(
-                prefix=output_prefix,
                 source_file=source_file,
                 base_directory=output_dir,
                 space='T1w',
@@ -144,7 +137,6 @@ def init_dwi_derivatives_wf(output_prefix,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
         ds_gradient_table_t1 = pe.Node(
             DerivativesDataSink(
-                prefix=output_prefix,
                 source_file=source_file,
                 base_directory=output_dir,
                 space='T1w',
@@ -183,7 +175,6 @@ def init_dwi_derivatives_wf(output_prefix,
         # 4D DWI in t1 space
         ds_dwi_mni = pe.Node(
             DerivativesDataSink(
-                prefix=output_prefix,
                 source_file=source_file,
                 base_directory=output_dir,
                 space=template,
@@ -197,7 +188,6 @@ def init_dwi_derivatives_wf(output_prefix,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
         ds_bvals_mni = pe.Node(
             DerivativesDataSink(
-                prefix=output_prefix,
                 source_file=source_file,
                 base_directory=output_dir,
                 space=template,
@@ -209,7 +199,6 @@ def init_dwi_derivatives_wf(output_prefix,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
         ds_bvecs_mni = pe.Node(
             DerivativesDataSink(
-                prefix=output_prefix,
                 source_file=source_file,
                 base_directory=output_dir,
                 space=template,
@@ -221,7 +210,6 @@ def init_dwi_derivatives_wf(output_prefix,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
         ds_mni_b0_ref = pe.Node(
             DerivativesDataSink(
-                prefix=output_prefix,
                 source_file=source_file,
                 base_directory=output_dir,
                 space=template,
@@ -233,7 +221,6 @@ def init_dwi_derivatives_wf(output_prefix,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
         ds_mni_b0_series = pe.Node(
             DerivativesDataSink(
-                prefix=output_prefix,
                 source_file=source_file,
                 base_directory=output_dir,
                 space=template,
@@ -245,7 +232,6 @@ def init_dwi_derivatives_wf(output_prefix,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
         ds_dwi_mask_mni = pe.Node(
             DerivativesDataSink(
-                prefix=output_prefix,
                 source_file=source_file,
                 base_directory=output_dir,
                 space=template,
@@ -258,7 +244,6 @@ def init_dwi_derivatives_wf(output_prefix,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
         ds_gradient_table_mni = pe.Node(
             DerivativesDataSink(
-                prefix=output_prefix,
                 source_file=source_file,
                 base_directory=output_dir,
                 space=template,
@@ -281,7 +266,6 @@ def init_dwi_derivatives_wf(output_prefix,
         if write_local_bvecs:
             ds_local_bvecs_mni = pe.Node(
                 DerivativesDataSink(
-                    prefix=output_prefix,
                     source_file=source_file,
                     base_directory=output_dir,
                     space=template,

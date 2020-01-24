@@ -11,6 +11,7 @@ Handling confounds
 """
 import os
 import re
+import json
 import numpy as np
 import pandas as pd
 from nipype import logging
@@ -32,6 +33,7 @@ class GatherConfoundsInputSpec(BaseInterfaceInputSpec):
     original_files = traits.List(desc='original grouping of each volume')
     original_bvecs = InputMultiObject(File(exists=True), desc='original bvec files')
     original_bvals = InputMultiObject(File(exists=True), desc='originals bval files')
+    denoising_confounds = File(exists=True, desc='descriptive statistics from denoising')
 
 
 class GatherConfoundsOutputSpec(TraitedSpec):
@@ -55,6 +57,7 @@ class GatherConfounds(SimpleInterface):
             original_files=self.inputs.original_files,
             original_bvals=concatenate_bvals(self.inputs.original_bvals, None),
             original_bvecs=concatenate_bvecs(self.inputs.original_bvecs),
+            denoising_confounds=self.inputs.denoising_confounds,
             newpath=runtime.cwd,
         )
         self._results['confounds_file'] = combined_out
@@ -63,7 +66,8 @@ class GatherConfounds(SimpleInterface):
 
 
 def _gather_confounds(fdisp=None, motion=None, sliceqc_file=None, newpath=None,
-                      original_files=None, original_bvals=None, original_bvecs=None):
+                      original_files=None, original_bvals=None, original_bvecs=None,
+                      denoising_confounds=None):
     """
     Load confounds from the filenames, concatenate together horizontally
     and save new file.
@@ -154,6 +158,23 @@ def _gather_confounds(fdisp=None, motion=None, sliceqc_file=None, newpath=None,
     if original_bvals is not None and isdefined(original_bvals):
         confounds_data['bval'] = original_bvals
 
+    if denoising_confounds is not None and isdefined(denoising_confounds):
+        denoising = pd.read_csv(denoising_confounds)
+        denoising.original_file = denoising.original_file.str.split("/").str[-1]
+        denoising_check = denoising[['original_bx', 'original_by', 'original_bz',
+                                     'original_bval']]
+        confound_check = confounds_data[['grad_x', 'grad_y', 'grad_z', 'bval']]
+
+        # Check that the gradients and original files match after recombining
+        if not np.allclose(denoising_check.to_numpy(), confound_check.to_numpy()) or \
+                not (denoising['original_file'] == confounds_data['original_file']).all():
+            raise Exception("Gradients or original files don't match. File a bug report!")
+        denoising.drop(columns=['original_file', 'original_bval', 'original_bx',
+                                'original_by', 'original_bz'],
+                       inplace=True)
+        confounds_data = pd.concat([confounds_data, denoising], axis=1)
+        confounds_list += denoising.columns.to_list()
+
     combined_out = os.path.join(newpath, 'confounds.tsv')
     confounds_data.to_csv(combined_out, sep='\t', index=False, na_rep='n/a')
 
@@ -180,6 +201,7 @@ class DMRISummaryInputSpec(BaseInterfaceInputSpec):
 
 class DMRISummaryOutputSpec(TraitedSpec):
     out_file = File(exists=True, desc='written file path')
+    carpetplot_json = File(exists=True)
 
 
 class DMRISummary(SimpleInterface):
@@ -193,10 +215,18 @@ class DMRISummary(SimpleInterface):
             self.inputs.confounds_file,
             sep="\t", index_col=None, na_filter=True, na_values='n/a')
 
-        fig = dMRIPlot(
+        plotter = dMRIPlot(
             sliceqc_file=self.inputs.sliceqc_file,
             mask_file=self.inputs.sliceqc_mask,
-            confounds=dataframe
-        ).plot()
+            confounds=dataframe)
+        fig = plotter.plot()
         fig.savefig(self._results['out_file'], bbox_inches='tight')
+
+        # Write a json file of the carpetplot data
+        carpetplot_json = os.path.join(runtime.cwd, 'carpetplot.json')
+        with open(carpetplot_json, "w") as carpet_file:
+            json.dump(
+                {'carpetplot': np.nan_to_num(plotter.qc_data['slice_scores']).tolist()},
+                carpet_file)
+        self._results['carpetplot_json'] = carpetplot_json
         return runtime

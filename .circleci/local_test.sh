@@ -56,6 +56,28 @@ fi
     echo "Dataset twoses was cached"
   fi
 
+#  name: Get MultiShell outputs
+#  command: |
+    if [[ ! -d ${WORKDIR}/data/multishell_output ]]; then
+      wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
+        -O multishell_output.tar.gz "https://upenn.box.com/shared/static/nwxdn4ale8dkebvpjmxbx99dqjzwvlmh.gz"
+      tar xvfz multishell_output.tar.gz -C ${WORKDIR}/data/
+    else
+      echo "Dataset multishell_output was cached"
+    fi
+
+# get singleshell output
+if [[ ! -d ${WORKDIR}/data/singleshell_output ]]; then
+  mkdir -p ${WORKDIR}/data/singleshell_output
+  wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
+    -O singleshell_output.tar.gz "https://upenn.box.com/shared/static/9jhf0eo3ml6ojrlxlz6lej09ny12efgg.gz"
+  tar xvfz singleshell_output.tar.gz -C ${WORKDIR}/data/singleshell_output
+else
+  echo "Dataset singleshell_output was cached"
+fi
+
+# get multishell output
+
 # name: Store FreeSurfer license file
 # command: |
   mkdir -p ${WORKDIR}/fslicense
@@ -115,7 +137,8 @@ export FS_LICENSE=${WORKDIR}/fslicense/license.txt
       --recon-input ${WORKDIR}/DSCSDSI/derivatives/qsiprep \
        ${WORKDIR}/DSCSDSI/derivatives \
        participant \
-      --recon-spec ${HOME}/projects/qsiprep/.circleci/3dshore_dsistudio_mrtrix.json \
+      --recon-spec dipy_3dshore \
+      --sloppy \
       --recon-only \
       --mem_mb 4096 \
       --output-resolution 5 \
@@ -146,6 +169,7 @@ export FS_LICENSE=${WORKDIR}/fslicense/license.txt
       --sloppy --mem_mb 4096 \
       --output-space T1w \
       --hmc_model eddy \
+      --stop_on_first_crash \
       --force-spatial-normalization \
       --eddy_config ${WORKDIR}/data/eddy_config.json \
       --fs-license-file $FREESURFER_HOME/license.txt \
@@ -174,12 +198,13 @@ export FS_LICENSE=${WORKDIR}/fslicense/license.txt
               --sloppy --mem_mb 4096 \
               --output-space T1w \
               --ignore fieldmaps \
-              --use-syn \
+              --force-syn \
               --hmc_model eddy \
               --eddy_config ${WORKDIR}/data/eddy_config.json \
               --fs-license-file $FREESURFER_HOME/license.txt \
               --output-resolution 5 \
               --nthreads 2 -vv
+
 # name: run mrtrix3 connectome workflow on DSDTI
 # command: |
   qsiprep -w ${WORKDIR}/DSDTI/work \
@@ -220,6 +245,7 @@ qsiprep \
      participant \
     --boilerplate \
     --sloppy --write-graph --mem_mb 4096 \
+      --fs-license-file $FREESURFER_HOME/license.txt \
     --nthreads 2 -vv --output-resolution 5
 
 qsiprep \
@@ -228,6 +254,7 @@ qsiprep \
      participant \
     --boilerplate \
     --combine-all-dwis \
+      --fs-license-file $FREESURFER_HOME/license.txt \
     --sloppy --write-graph --mem_mb 4096 \
     --nthreads 2 -vv --output-resolution 5
 
@@ -239,6 +266,7 @@ qsiprep \
      ${WORKDIR}/data/fmaptests/DSCSDSI_fmap  ${WORKDIR}/DSI_SDC/derivatives \
      participant \
     --boilerplate \
+      --fs-license-file $FREESURFER_HOME/license.txt \
     --sloppy --write-graph --mem_mb 4096 \
     --nthreads 2 -vv --output-resolution 5
 
@@ -248,6 +276,7 @@ qsiprep \
      participant \
     --combine-all-dwis \
     --boilerplate \
+      --fs-license-file $FREESURFER_HOME/license.txt \
     --sloppy --write-graph --mem_mb 4096 \
     --nthreads 2 -vv --output-resolution 5
 
@@ -261,7 +290,76 @@ qsiprep \
       --recon-spec mrtrix_msmt_csd \
       --sloppy \
       --recon-only \
+      --fs-license-file $FREESURFER_HOME/license.txt \
       --mem_mb 4096 \
       --output-resolution 5 \
       --fs-license-file $FREESURFER_HOME/license.txt \
       --nthreads 2 -vv
+
+#- run:
+#name: Run mrtrix_multishell_msmt
+#no_output_timeout: 2h
+#command: |
+  mkdir -p ${WORKDIR}/multishell_output/work ${WORKDIR}/multishell_output/derivatives/mrtrix_multishell_msmt
+  qsiprep -w ${WORKDIR}/multishell_output/work \
+       ${WORKDIR}/data/multishell_output/qsiprep  \
+       ${WORKDIR}/multishell_output/derivatives/mrtrix_multishell_msmt \
+       participant \
+      --recon-input ${WORKDIR}/data/multishell_output/qsiprep \
+      --sloppy \
+      --recon-spec mrtrix_multishell_msmt \
+      --recon-only \
+      --mem_mb 4096 \
+      --fs-license-file $FREESURFER_HOME/license.txt \
+      --nthreads 1 -vv
+
+#- run:
+#name: Run mrtrix_multishell_msmt_noACT
+#no_output_timeout: 2h
+#command: |
+  mkdir -p ${WORKDIR}/multishell_output/work ${WORKDIR}/multishell_output/derivatives/mrtrix_multishell_msmt_noACT
+  qsiprep -w ${WORKDIR}/multishell_output/work \
+       ${WORKDIR}/data/multishell_output/qsiprep \
+       ${WORKDIR}/multishell_output/derivatives/mrtrix_multishell_msmt_noACT \
+       participant \
+      --sloppy \
+      --recon-input ${WORKDIR}/data/multishell_output/qsiprep \
+      --recon-spec mrtrix_multishell_msmt_noACT \
+      --recon-only \
+      --fs-license-file $FREESURFER_HOME/license.txt \
+      --mem_mb 4096 \
+      --nthreads 1 -vv
+
+#- run:
+#name: Run mrtrix_singleshell_ss3t
+#no_output_timeout: 2h
+#command: |
+  mkdir -p ${WORKDIR}/singleshell_output/work ${WORKDIR}/singleshell_output/derivatives/mrtrix_singleshell_ss3t
+  qsiprep -w ${WORKDIR}/singleshell_output/work \
+       ${WORKDIR}/data/singleshell_output/qsiprep \
+       ${WORKDIR}/singleshell_output/derivatives/mrtrix_singleshell_ss3t \
+       participant \
+      --sloppy \
+      --recon-input ${WORKDIR}/data/singleshell_output/qsiprep \
+      --recon-spec mrtrix_singleshell_ss3t \
+      --recon-only \
+      --mem_mb 4096 \
+      --fs-license-file $FREESURFER_HOME/license.txt \
+      --nthreads 1 -vv
+
+#- run:
+#name: Run mrtrix_singleshell_ss3t_noACT
+#no_output_timeout: 2h
+#command: |
+  mkdir -p ${WORKDIR}/singleshell_output/work ${WORKDIR}/singleshell_output/derivatives/mrtrix_singleshell_ss3t_noACT
+  qsiprep -w ${WORKDIR}/singleshell_output/work \
+       ${WORKDIR}/data/singleshell_output/qsiprep \
+       ${WORKDIR}/singleshell_output/derivatives/mrtrix_singleshell_ss3t_noACT \
+       participant \
+      --sloppy \
+      --recon-input ${WORKDIR}/data/singleshell_output/qsiprep \
+      --recon-spec mrtrix_singleshell_ss3t_noACT \
+      --fs-license-file $FREESURFER_HOME/license.txt \
+      --recon-only \
+      --mem_mb 4096 \
+      --nthreads 1 -vv

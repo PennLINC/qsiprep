@@ -1,0 +1,76 @@
+{
+  "name": "mrtrix_multishell_msmt",
+  "space": "T1w",
+  "atlases": ["schaefer100x7", "schaefer100x17", "schaefer200x7", "schaefer200x17", "schaefer400x7", "schaefer400x17", "brainnetome246", "aicha384", "gordon333", "aal116", "power264"],
+  "anatomical": ["mrtrix_5tt"],
+  "nodes": [
+    {
+      "name": "msmt_csd",
+      "software": "MRTrix3",
+      "action": "csd",
+      "output_suffix": "msmtcsd",
+      "input": "qsiprep",
+      "parameters": {
+        "mtnormalize": true,
+        "response": {
+          "algorithm": "msmt_5tt"
+        },
+        "fod": {
+          "algorithm": "msmt_csd",
+          "max_sh": [4, 8, 8]
+        }
+      }
+    },
+    {
+      "name": "track_ifod2",
+      "software": "MRTrix3",
+      "action": "tractography",
+      "output_suffix": "ifod2",
+      "input": "msmt_csd",
+      "parameters": {
+        "use_5tt": true,
+        "use_sift2": true,
+        "tckgen":{
+          "algorithm": "iFOD2",
+          "select": 1e7,
+          "max_length": 250,
+          "min_length": 30,
+          "power":0.33,
+          "crop_at_gmwmi": true,
+          "backtrack": true
+        },
+        "sift2":{}
+      }
+    },
+    {
+      "name": "mrtrix_conn",
+      "software": "MRTrix3",
+      "action": "connectivity",
+      "output_suffix": "msmtconnectome",
+      "input": "track_ifod2",
+      "parameters":{
+        "use_sift_weights": true,
+        "tck2connectome": {
+          "zero_diagonal":false,
+          "search_radius": 2.0,
+          "scale_invnodevol":true,
+          "symmetric": true
+        }
+      }
+    },
+    {
+      "name": "mrtrix_invlen_conn",
+      "software": "MRTrix3",
+      "action": "connectivity",
+      "output_suffix": "msmtinvlenconnectome",
+      "input": "track_ifod2",
+      "parameters":{
+        "tck2connectome": {
+          "zero_diagonal":false,
+          "search_radius": 2.0,
+          "symmetric": true
+        }
+      }
+    }
+  ]
+}

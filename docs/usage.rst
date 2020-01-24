@@ -17,7 +17,7 @@ The common parts of the command are similar to the `BIDS-Apps
 <https://github.com/BIDS-Apps>`_ definition.
 Example: ::
 
-    qsiprep --bids_dir data/bids_root/ --output_dir out/ --analysis_level participant -w work/
+    qsiprep data/bids_root/ out/ participant -w work/
 
 
 Command-Line Arguments
@@ -49,6 +49,14 @@ The singularity wrapper CLI
    :nodefault:
    :nodefaultconst:
 
+Note on using CUDA
+===================
+
+The CUDA runtime version 9.1 is included in the QSIPrep docker image.
+The CUDA version of eddy is dramatically faster than the openmp version.
+Information on running Docker with CUDA enabled can be found on
+`dockerhub <https://github.com/NVIDIA/nvidia-docker/wiki/CUDA>`_. If running with singularity,
+the call to singularity should include ``--nv``. To enable CUDA, see :ref:`configure_eddy`.
 
 Debugging
 =========
@@ -58,6 +66,14 @@ Logs and crashfiles are outputted into the
 Information on how to customize and understand these files can be found on the
 `nipype debugging <http://nipype.readthedocs.io/en/latest/users/debug.html>`_
 page.
+
+CUDA Support
+=============
+
+As of version 0.6.7 CUDA version 9.1 is supported in the QSIPrep container! To run locally
+using docker you will need the nvidia container runtime installed for Docker version 19.0.3
+or higher. Singularity images will run with CUDA 9.1 with the ``-nv`` flag.
+
 
 Support and communication
 =========================
