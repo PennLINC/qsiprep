@@ -551,8 +551,11 @@ class FixDSIStudioExportHeader(SimpleInterface):
             transform_orientation = nb.orientations.ornt_transform(input_orientation,
                                                                    desired_orientation)
             reoriented_img = dsi_img.as_reoriented(transform_orientation)
-        nb.Nifti1Image(reoriented_img.get_data(), correct_img.affine, correct_img.header
-                       ).to_filename(new_file)
-        self._results['out_file'] = new_file
+            nb.Nifti1Image(reoriented_img.get_data(), correct_img.affine, correct_img.header
+                           ).to_filename(new_file)
+            self._results['out_file'] = new_file
+        else:
+            self._results['out_file'] = dsi_studio_file
+
 
         return runtime
