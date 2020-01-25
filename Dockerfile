@@ -147,7 +147,7 @@ ENV QTDIR="$QT_BASE_DIR" \
     PATH="$QT_BASE_DIR/bin:$PATH:/opt/dsi-studio/dsi_studio_64" \
     LD_LIBRARY_PATH="$QT_BASE_DIR/lib/x86_64-linux-gnu:$QT_BASE_DIR/lib:$LD_LIBRARY_PATH" \
     PKG_CONFIG_PATH="$QT_BASE_DIR/lib/pkgconfig:$PKG_CONFIG_PATH"
-ARG DSI_SHA=faec8629500be9555dd154632c1846017d5f214f
+ARG DSI_SHA=bf710d594527f64c125beb7f8990570c769cd3a8
 ARG TIPL_SHA=a0688617db9352d6fb8c046126f7c90a9dd13411
 RUN mkdir /opt/dsi-studio \
   && cd /opt/dsi-studio \
