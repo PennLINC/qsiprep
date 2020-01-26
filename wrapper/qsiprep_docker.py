@@ -264,6 +264,8 @@ def get_parser():
                         required=False,
                         action='store',
                         type=str)
+    g_wrap.add_argument('--gpus', required=False,
+                        help='gpus argument sent to docker', type=str)
 
     # Developer patch/shell options
     g_dev = parser.add_argument_group(
@@ -378,6 +380,8 @@ def main():
     if opts.recon_input:
         command.extend(['-v', ':'.join((opts.recon_input, '/qsiprep-output', 'ro'))])
         main_args.extend(['--recon-input', '/qsiprep-output'])
+    if opts.gpus:
+        command.extend(['--gpus', opts.gpus])
     if opts.recon_spec:
         if os.path.exists(opts.recon_spec):
             command.extend(['-v', ':'.join((opts.recon_spec, '/sngl/spec/spec.json', 'ro'))])
