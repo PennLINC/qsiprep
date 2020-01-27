@@ -23,7 +23,7 @@ from ...engine import Workflow
 from .util import _create_mem_gb
 from .resampling import init_dwi_trans_wf
 from .derivatives import init_dwi_derivatives_wf
-from .qc import init_interactive_report_wf
+# from .qc import init_interactive_report_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger('nipype.workflow')
@@ -273,19 +273,19 @@ def init_dwi_finalize_wf(scan_groups,
         mem_gb=DEFAULT_MEMORY_MIN_GB)
 
     # Gather files for creating an interactive report
-    interactive_report_wf = init_interactive_report_wf()
-    ds_report_interactive = pe.Node(
-        DerivativesDataSink(suffix='interactive', source_file=source_file,
-                            base_directory=reportlets_dir),
-        name='ds_report_interactive', run_without_submitting=True,
-        mem_gb=DEFAULT_MEMORY_MIN_GB)
+    # interactive_report_wf = init_interactive_report_wf()
+    # ds_report_interactive = pe.Node(
+    #     DerivativesDataSink(suffix='interactive', source_file=source_file,
+    #                         base_directory=reportlets_dir),
+    #     name='ds_report_interactive', run_without_submitting=True,
+    #     mem_gb=DEFAULT_MEMORY_MIN_GB)
 
     workflow.connect([
-        (inputnode, interactive_report_wf, [
-            ('raw_concatenated', 'inputnode.raw_dwi_file'),
-            ('confounds', 'inputnode.confounds_file'),
-            ('carpetplot_data', 'inputnode.carpetplot_data')]),
-        (interactive_report_wf, ds_report_interactive, [('outputnode.out_report', 'in_file')]),
+        # (inputnode, interactive_report_wf, [
+        #     ('raw_concatenated', 'inputnode.raw_dwi_file'),
+        #     ('confounds', 'inputnode.confounds_file'),
+        #     ('carpetplot_data', 'inputnode.carpetplot_data')]),
+        # (interactive_report_wf, ds_report_interactive, [('outputnode.out_report', 'in_file')]),
         (inputnode, series_qc, [('raw_qc_file', 'pre_qc')]),
         (series_qc, ds_series_qc, [('series_qc_file', 'in_file')]),
         (inputnode, dwi_derivatives_wf, [('dwi_files', 'inputnode.source_file')]),
@@ -367,11 +367,11 @@ def init_dwi_finalize_wf(scan_groups,
             (transform_dwis_t1, gtab_t1, [('outputnode.bvals', 'bval_file'),
                                           ('outputnode.rotated_bvecs', 'bvec_file')]),
             (transform_dwis_t1, series_qc, [('outputnode.resampled_qc', 't1_qc')]),
-            (transform_dwis_t1, interactive_report_wf, [
-                ('outputnode.dwi_resampled', 'inputnode.processed_dwi_file'),
-                ('outputnode.resampled_dwi_mask', 'inputnode.mask_file'),
-                ('outputnode.bvals', 'inputnode.bval_file'),
-                ('outputnode.rotated_bvecs', 'inputnode.bvec_file')]),
+            # (transform_dwis_t1, interactive_report_wf, [
+            #     ('outputnode.dwi_resampled', 'inputnode.processed_dwi_file'),
+            #     ('outputnode.resampled_dwi_mask', 'inputnode.mask_file'),
+            #     ('outputnode.bvals', 'inputnode.bval_file'),
+            #     ('outputnode.rotated_bvecs', 'inputnode.bvec_file')]),
             (gtab_t1, outputnode, [('gradient_file', 'gradient_table_t1')])])
 
     if "template" in output_spaces:
