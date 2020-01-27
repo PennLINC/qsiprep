@@ -557,5 +557,4 @@ class FixDSIStudioExportHeader(SimpleInterface):
         else:
             self._results['out_file'] = dsi_studio_file
 
-
         return runtime

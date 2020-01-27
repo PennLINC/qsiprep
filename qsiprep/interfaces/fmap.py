@@ -74,7 +74,7 @@ class B0RPEFieldmap(SimpleInterface):
             self.inputs.b0_file, self.inputs.b0_threshold)
 
         # Only get the requested number of images
-        _, fmap_imain, fmap_report = topup_inputs_from_4d_file(
+        _, fmap_imain, fmap_report, _ = topup_inputs_from_4d_file(
             b0_series, b0_indices, original_files, image_source="EPI fieldmap",
             max_per_spec=self.inputs.max_num_b0s)
         LOGGER.info(fmap_report)
@@ -735,10 +735,6 @@ def _delta_te(in_values, te1=None, te2=None):
     return abs(float(te2) - float(te1))
 
 
-def epi_fieldmap_images_for_topup():
-    pass
-
-
 def read_nifti_sidecar(json_file):
     if not json_file.endswith(".json"):
         json_file = fname_presuffix(json_file, suffix='.json', use_ext=False)
@@ -869,7 +865,6 @@ def get_topup_inputs_from(dwi_file, bval_file, b0_threshold, topup_prefix,
         max_per_spec: int
             The maximum number of b=0 images to extract from a PE direction / image set
 
-
     """
 
     # Start with the DWI file. Determine which images are b=0
@@ -879,19 +874,14 @@ def get_topup_inputs_from(dwi_file, bval_file, b0_threshold, topup_prefix,
         raise RuntimeError("No b=0 images available for TOPUP from the dwi.")
     dwi_nii = load_img(dwi_file)
     # Gather images from just the dwi series
-    dwi_spec_lines, dwi_imain, dwi_report = topup_inputs_from_4d_file(
+    dwi_spec_lines, dwi_imain, dwi_report, _ = topup_inputs_from_4d_file(
         dwi_nii, b0_indices, bids_origin_files, image_source="combined DWI series",
         max_per_spec=max_per_spec)
 
     # If there are EPI fieldmaps, add them to the END of the topup spec
     if epi_fmaps and isdefined(epi_fmaps):
-        fmaps_4d, fmap_b0_indices, fmap_original_files = load_epi_dwi_fieldmaps(epi_fmaps,
-                                                                                b0_threshold)
-        fmap_spec_lines, fmap_imain, fmap_report = topup_inputs_from_4d_file(
-            fmaps_4d, fmap_b0_indices, fmap_original_files, image_source="EPI fieldmap",
-            max_per_spec=max_per_spec)
-        topup_imain = concat_imgs([dwi_imain, fmap_imain], auto_resample=True)
-        topup_spec_lines = dwi_spec_lines + fmap_spec_lines
+        topup_imain, topup_spec_lines, fmap_report = add_epi_fmaps_to_dwi_b0s(
+            epi_fmaps, b0_threshold, max_per_spec, dwi_spec_lines, dwi_imain)
         topup_text = dwi_report + fmap_report
     else:
         topup_imain = dwi_imain
@@ -958,7 +948,7 @@ def load_epi_dwi_fieldmaps(fmap_list, b0_threshold):
             too_large = np.flatnonzero(bvals > b0_threshold)
             too_large_values = bvals[too_large]
             if too_large.size:
-                LOGGER.warning("Excluding volumes %s from the %s because b=%d is greater than %d",
+                LOGGER.warning("Excluding volumes %s from the %s because b=%s is greater than %d",
                                str(too_large), fmap_file, str(too_large_values), b0_threshold)
             _b0_indices = np.flatnonzero(bvals < b0_threshold) + starting_index
         else:
@@ -1038,7 +1028,7 @@ def topup_inputs_from_4d_file(nii_file, b0_indices, bids_origin_files=None,
     report = topup_selection_to_report(selected_b0_indices, bids_origin_files, spec_lookup,
                                        image_source=image_source)
 
-    return spec_lines, imain_nii, report
+    return spec_lines, imain_nii, report, spec_lookup
 
 
 def get_evenly_spaced_b0s(b0_indices, max_per_spec):
@@ -1048,6 +1038,57 @@ def get_evenly_spaced_b0s(b0_indices, max_per_spec):
     selected_indices = np.linspace(0, len(b0_indices)-1, num=max_per_spec,
                                    endpoint=True, dtype=np.int)
     return [b0_indices[idx] for idx in selected_indices]
+
+
+def add_epi_fmaps_to_dwi_b0s(epi_fmaps, b0_threshold, max_per_spec, dwi_spec_lines, dwi_imain):
+    """Add additional images from EPI fieldmaps or distortion correction.
+
+    In order to fill out the maximum number of images per distortion group, images
+    from files in the fmap/ directory can be added to those already extracted from the
+    DWI series.
+
+    Examples:
+    ---------
+
+    >>> epi_fmaps = ["/data/sub-1/fmap/sub-1_dir-AP_epi.nii.gz",
+    ...              "/data/sub-1/fmap/sub-1_dir-PA_epi.nii.gz"]
+
+    """
+    # Extract b=0 images as if we were only pulling images from epi fmaps.
+    fmaps_4d, fmap_b0_indices, fmap_original_files = load_epi_dwi_fieldmaps(epi_fmaps,
+                                                                            b0_threshold)
+    fmap_spec_lines, fmap_imain, fmap_report, fmap_spec_map = topup_inputs_from_4d_file(
+        fmaps_4d, fmap_b0_indices, fmap_original_files, image_source="EPI fieldmap",
+        max_per_spec=max_per_spec)
+
+    # Check how many are present in each group from just the dwi files
+    spec_counts = defaultdict(int)
+    for dwi_spec in dwi_spec_lines:
+        spec_counts[dwi_spec] += 1
+
+    # Only add as many as you need to fill out max_per_spec
+    fmap_indices_to_add = []
+    for image_num, epi_spec in enumerate(fmap_spec_lines):
+        if spec_counts[epi_spec] + 1 > max_per_spec:
+            continue
+        fmap_indices_to_add.append(image_num)
+        spec_counts[epi_spec] += 1
+
+    # No additional epi fmaps to add
+    if not fmap_indices_to_add:
+        return dwi_imain, dwi_spec_lines, \
+            ' No Additional images from EPI fieldmaps were added because the maximum ' \
+            'number of images per distortion group was reached.'
+
+    # Add the epi b=0's to the dwi b=0's
+    topup_imain = concat_imgs([dwi_imain, index_img(fmap_imain, fmap_indices_to_add)],
+                              auto_resample=True)
+    topup_spec_lines = dwi_spec_lines + [fmap_spec_lines[idx] for idx in fmap_indices_to_add]
+
+    new_report = topup_selection_to_report(
+        fmap_indices_to_add, fmap_original_files, fmap_spec_map, image_source='EPI fieldmap')
+
+    return topup_imain, topup_spec_lines, new_report
 
 
 def eddy_inputs_from_dwi_files(origin_file_list, eddy_prefix):
