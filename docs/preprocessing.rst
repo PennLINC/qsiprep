@@ -188,6 +188,21 @@ and gradient strength ``bval`` the image came from. This can be useful for track
 mostly-corrupted scans and can indicate if the head motion model isn't working on specific
 gradient strengths or directions.
 
+.. _qc_data:
+
+Quality Control data
+^^^^^^^^^^^^^^^^^^^^^
+
+A single-line csv file (``desc-ImageQC_dwi.csv``) is created for each output image. This file is
+particularly useful for comparing the relative quality across subjects before deciding who to
+include in a group analysis. The columns in this file come from DSI Studio's QC calculation and is
+described in [Yeh2019]_. Columns prefixed by ``raw_`` reflect QC measurements from the data before
+preprocessing. Columns prefixed by ``t1_`` or ``mni_`` contain QC metrics calculated on the
+preprocessed data. Motion parameter summaries are also provided, such as the mean and max of
+framewise displacement (``mean_fd``, ``max_fd``). The max and mean absolute values for translation
+and rotation are ``max_translation`` and ``max_rotation`` and the maxima of their derivatives are
+in ``max_rel_translation`` and ``max_rel_rotation``.
+
 Confounds and "carpet"-plot on the visual reports
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -214,7 +229,7 @@ Examples of these plots follow:
     :scale: 40%
 
     For eddy higher motion appears more yellow, while lower motion
-    is more blue. 
+    is more blue.
 
 Preprocessing pipeline details
 ---------------------------------

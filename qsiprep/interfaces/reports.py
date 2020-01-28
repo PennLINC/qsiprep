@@ -492,14 +492,15 @@ class SeriesQC(SimpleInterface):
     output_spec = _SeriesQCOutputSpec
 
     def _run_interface(self, runtime):
-        image_qc = [_load_qc_file(self.inputs.pre_qc, prefix="raw_")]
+        image_qc = _load_qc_file(self.inputs.pre_qc, prefix="raw_")
         if isdefined(self.inputs.t1_qc):
-            image_qc.append(_load_qc_file(self.inputs.t1_qc, prefix="t1_"))
+            image_qc.update(_load_qc_file(self.inputs.t1_qc, prefix="t1_"))
         if isdefined(self.inputs.mni_qc):
-            image_qc.append(_load_qc_file(self.inputs.mni_qc, prefix="mni_"))
-        all_qc = pd.concat(image_qc, axis=1)
+            image_qc.update(_load_qc_file(self.inputs.mni_qc, prefix="mni_"))
+        motion_summary = calculate_motion_summary(self.inputs.confounds_file)
+        image_qc.update(motion_summary)
         output = op.join(runtime.cwd, "dwi_qc.csv")
-        all_qc.to_csv(output, index=False)
+        pd.DataFrame(image_qc).to_csv(output, index=False)
         self._results['series_qc_file'] = output
         return runtime
 
@@ -528,7 +529,51 @@ def _load_qc_file(fname, prefix=""):
         prefix + 'num_bad_slices': [n_bad_slices],
         prefix + 'num_directions': [n_dirs]
     }
-    return pd.DataFrame(data)
+    return data
+
+
+def calculate_motion_summary(confounds_tsv):
+    if not isdefined(confounds_tsv) or confounds_tsv is None:
+        return {
+            "mean_fd": [np.nan],
+            "max_fd": [np.nan],
+            "max_rotation": [np.nan],
+            "max_translation": [np.nan],
+            "max_rel_rotation": [np.nan],
+            "max_rel_translation": [np.nan]
+        }
+    df = pd.read_csv(confounds_tsv, delimiter="\t")
+    translations = df[['trans_x', 'trans_y', 'trans_z']].to_numpy()
+    rotations = df[['rot_x', 'rot_y', 'rot_z']].to_numpy()
+
+    def padded_diff(data):
+        out = np.zeros_like(data)
+        out[1:] = np.diff(data, axis=0)
+        return out
+
+    drotations = padded_diff(rotations)
+    dtranslations = padded_diff(translations)
+
+    # We don't want the relative values across the boundaries of runs.
+    # Determine which values should be ignored
+    file_labels, _ = pd.factorize(df['original_file'])
+    new_files = padded_diff(file_labels)
+
+    def file_masked(data):
+        masked_data = data.copy()
+        masked_data[new_files > 0] = 0
+        return masked_data
+
+    framewise_disp = file_masked(df['framewise_displacement'].abs())
+    motion_summary = {
+        "mean_fd": [framewise_disp.mean()],
+        "max_fd": [framewise_disp.max()],
+        "max_rotation": [file_masked(np.abs(rotations)).max()],
+        "max_translation": [file_masked(np.abs(translations)).max()],
+        "max_rel_rotation": [file_masked(np.abs(drotations)).max()],
+        "max_rel_translation": [file_masked(np.abs(dtranslations)).max()]
+    }
+    return motion_summary
 
 
 class _InteractiveReportInputSpec(TraitedSpec):
