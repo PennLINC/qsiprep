@@ -197,7 +197,7 @@ but this type of plot does not make sense for DWI data. Instead, we plot
 the cross-correlation value between each raw slice and the HMC model signal
 resampled into that slice.
 This plot is included for each run within the corresponding visual report.
-An example of these plots follows:
+Examples of these plots follow:
 
 
 .. figure:: _static/sub-abcd_carpetplot.svg
@@ -210,7 +210,11 @@ An example of these plots follows:
     voxels are present in the slice. Purple pixels reflect slices with fewer
     brain voxels.
 
+.. figure:: _static/sub-pnc_carpetplot.png
+    :scale: 40%
 
+    For eddy higher motion appears more yellow, while lower motion
+    is more blue. 
 
 Preprocessing pipeline details
 ---------------------------------
