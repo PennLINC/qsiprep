@@ -1,10 +1,23 @@
+0.7.1 (January 29, 2020)
+========================
+
+ * Image QC summary data is produced for each output (#95)
+ * Update DSI Studio (#88)
+ * Update ANTs (#80)
+ * Include workflows for ss3t (#82)
+ * Add some boilerplate to the FSL workflow (#38)
+ * Reduce the number of calls to N4 (#74, #89)
+ * Add CUDA capability in the containers (#75)
+ * Add mrdegibbs and accompanying reports (#58)
+ * Fix reports graphics (#64)
+ * Rework the DWI grouping algorithm (#92)
+
 0.6.7 (January 9 2020)
 ======================
 This release adds some rather big updates to QSIPrep.
  * FSL is updated to version 6.0.3
  * CUDA v9.1 support is added to the image (works with GPUS in Docker and Singularity)
  * A new robust b=0 masking algorith is introduced.
- *
 
 0.6.5 (Nov 21, 2019)
 ====================
