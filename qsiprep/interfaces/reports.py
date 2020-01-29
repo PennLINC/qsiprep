@@ -480,7 +480,8 @@ class _SeriesQCInputSpec(BaseInterfaceInputSpec):
     t1_qc = File(exists=True, desc='qc file from preprocessed image in t1 space')
     mni_qc = File(exists=True, desc='qc file from preprocessed image in template space')
     confounds_file = File(exists=True, desc='confounds file')
-    coreg_score = traits.Float()
+    t1_dice_score = traits.Float()
+    mni_dice_score = traits.Float()
 
 
 class _SeriesQCOutputSpec(TraitedSpec):
@@ -499,6 +500,13 @@ class SeriesQC(SimpleInterface):
             image_qc.update(_load_qc_file(self.inputs.mni_qc, prefix="mni_"))
         motion_summary = calculate_motion_summary(self.inputs.confounds_file)
         image_qc.update(motion_summary)
+
+        # Add in Dice scores if available
+        if isdefined(self.inputs.t1_dice_score):
+            image_qc['t1_dice_distance'] = [self.inputs.t1_dice_score]
+        if isdefined(self.inputs.mni_dice_score):
+            image_qc['mni_dice_distance'] = [self.inputs.mni_dice_score]
+
         output = op.join(runtime.cwd, "dwi_qc.csv")
         pd.DataFrame(image_qc).to_csv(output, index=False)
         self._results['series_qc_file'] = output

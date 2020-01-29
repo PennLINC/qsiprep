@@ -24,6 +24,7 @@ from .util import _create_mem_gb
 from .resampling import init_dwi_trans_wf
 from .derivatives import init_dwi_derivatives_wf
 # from .qc import init_interactive_report_wf
+from .qc import init_mask_overlap_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger('nipype.workflow')
@@ -291,7 +292,6 @@ def init_dwi_finalize_wf(scan_groups,
             ('confounds', 'confounds_file')]),
         (series_qc, ds_series_qc, [('series_qc_file', 'in_file')]),
         (inputnode, dwi_derivatives_wf, [('dwi_files', 'inputnode.source_file')]),
-        (inputnode, series_qc, [('coreg_score', 'coreg_score')]),
         (inputnode, outputnode, [('hmc_optimization_data', 'hmc_optimization_data')]),
         (outputnode, dwi_derivatives_wf,
          [('dwi_t1', 'inputnode.dwi_t1'),
@@ -336,6 +336,7 @@ def init_dwi_finalize_wf(scan_groups,
                                               to_mni=False,
                                               write_local_bvecs=write_local_bvecs)
         gtab_t1 = pe.Node(MRTrixGradientTable(), name='gtab_t1')
+        t1_dice_calc = init_mask_overlap_wf(name='t1_dice_calc')
         workflow.connect([
             (inputnode, transform_dwis_t1, [
                 ('b0_indices', 'inputnode.b0_indices'),
@@ -369,6 +370,11 @@ def init_dwi_finalize_wf(scan_groups,
             (transform_dwis_t1, gtab_t1, [('outputnode.bvals', 'bval_file'),
                                           ('outputnode.rotated_bvecs', 'bvec_file')]),
             (transform_dwis_t1, series_qc, [('outputnode.resampled_qc', 't1_qc')]),
+            (transform_dwis_t1, t1_dice_calc, [
+                ('outputnode.resampled_dwi_mask', 'inputnode.dwi_mask')]),
+            (inputnode, t1_dice_calc, [
+                ('t1_mask', 'inputnode.anatomical_mask')]),
+            (t1_dice_calc, series_qc, [('outputnode.dice_score', 't1_dice_score')]),
             # (transform_dwis_t1, interactive_report_wf, [
             #     ('outputnode.dwi_resampled', 'inputnode.processed_dwi_file'),
             #     ('outputnode.resampled_dwi_mask', 'inputnode.mask_file'),
@@ -388,6 +394,7 @@ def init_dwi_finalize_wf(scan_groups,
                                                to_mni=True,
                                                write_local_bvecs=write_local_bvecs)
         gtab_mni = pe.Node(MRTrixGradientTable(), name='gtab_mni')
+        mni_dice_calc = init_mask_overlap_wf(name='mni_dice_calc')
         workflow.connect([
             (inputnode, transform_dwis_mni, [
                 ('b0_indices', 'inputnode.b0_indices'),
@@ -418,6 +425,11 @@ def init_dwi_finalize_wf(scan_groups,
             (transform_dwis_mni, gtab_mni, [('outputnode.bvals', 'bval_file'),
                                             ('outputnode.rotated_bvecs', 'bvec_file')]),
             (transform_dwis_mni, series_qc, [('outputnode.resampled_qc', 'mni_qc')]),
+            (transform_dwis_mni, mni_dice_calc, [
+                ('outputnode.resampled_dwi_mask', 'inputnode.dwi_mask')]),
+            (inputnode, mni_dice_calc, [
+                ('mni_mask', 'inputnode.anatomical_mask')]),
+            (mni_dice_calc, series_qc, [('outputnode.dice_score', 'mni_dice_score')]),
             (gtab_mni, outputnode, [('gradient_file', 'gradient_table_mni')])
         ])
         if "T1w" not in output_spaces:

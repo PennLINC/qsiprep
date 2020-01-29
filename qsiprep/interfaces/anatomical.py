@@ -9,9 +9,11 @@ Image tools interfaces
 
 """
 
-from nipype import logging
 import os.path as op
+from nipype import logging
 from glob import glob
+import nibabel as nb
+from scipy.spatial import distance
 from nipype.interfaces.base import (traits, TraitedSpec, BaseInterfaceInputSpec,
                                     SimpleInterface, File)
 
@@ -196,3 +198,28 @@ class QsiprepAnatomicalIngress(SimpleInterface):
 
         if len(files) == 1:
             self._results[name] = files[0]
+
+
+class _DiceOverlapInputSpec(BaseInterfaceInputSpec):
+    anatomical_mask = File(exists=True, mandatory=True, desc='Mask from a T1w image')
+    dwi_mask = File(exists=True, mandatory=True, desc='Mask from a DWI image')
+
+
+class _DiceOverlapOutputSpec(TraitedSpec):
+    dice_score = traits.Float()
+
+
+class DiceOverlap(SimpleInterface):
+    input_spec = _DiceOverlapInputSpec
+    output_spec = _DiceOverlapOutputSpec
+
+    def _run_interface(self, runtime):
+        t1_img = nb.load(self.inputs.anatomical_mask)
+        dwi_img = nb.load(self.inputs.dwi_mask)
+
+        if not t1_img.shape == dwi_img.shape:
+            raise Exception("Cannot compare masks with different shapes")
+
+        self._results['dice_score'] = distance.dice(t1_img.get_fdata().flatten(),
+                                                    dwi_img.get_fdata().flatten())
+        return runtime

@@ -122,7 +122,7 @@ export FS_LICENSE=${WORKDIR}/fslicense/license.txt
        participant \
       --sloppy --write-graph --use-syn-sdc --force-syn --mem_mb 4096 \
       --output-space T1w \
-      --hmc_model 3dSHORE \
+      --hmc_model none \
       --hmc-transform Rigid \
       --shoreline_iters 1 \
       --force-spatial-normalization \
