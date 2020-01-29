@@ -57,6 +57,10 @@ Nothing to cite yet...
           Deterministic Diffusion Fiber Tracking Improved By Quantitative Anisotropy, PLoS
           ONE 8(11): e80713. doi:10.1371/journal.pone.0080713
 
+.. [Yeh2019] Yeh, F. C., Zaydan, I. M., Suski, V. R., Lacomis, D., Richardson, R. M., Maroon, J.,
+          & Barrios-Martinez, J. (2019). Differential tractography as a track-based biomarker for
+          neuronal injury. NeuroImage, 576025.
+
 .. [Schaefer2017] Schaefer, A., Kong, R., Gordon, E. M., Laumann, T. O., Zuo, X. N., Holmes,
           A. J., ... & Yeo, B. T. (2017). Local-global parcellation of the human cerebral cortex
           from intrinsic functional connectivity MRI. Cerebral Cortex, 28(9), 3095-3114.
