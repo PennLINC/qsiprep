@@ -266,7 +266,7 @@ def init_dwi_finalize_wf(scan_groups,
         shoreline_iters=shoreline_iters)
 
     # Combine all the QC measures for a series QC
-    series_qc = pe.Node(SeriesQC(), name='series_qc')
+    series_qc = pe.Node(SeriesQC(output_file_name=output_prefix), name='series_qc')
     ds_series_qc = pe.Node(
         DerivativesDataSink(desc='ImageQC', suffix='dwi', source_file=source_file,
                             base_directory=output_dir),

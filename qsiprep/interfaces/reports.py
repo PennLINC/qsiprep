@@ -29,6 +29,7 @@ from nipype.interfaces.base import (
 from nipype.interfaces import freesurfer as fs
 from .gradients import concatenate_bvals, concatenate_bvecs
 from .qc import createB0_ColorFA_Mask_Sprites, createSprite4D
+from .bids import get_bids_params
 
 SUBJECT_TEMPLATE = """\t<ul class="elem-desc">
 \t\t<li>Subject ID: {subject_id}</li>
@@ -482,6 +483,7 @@ class _SeriesQCInputSpec(BaseInterfaceInputSpec):
     confounds_file = File(exists=True, desc='confounds file')
     t1_dice_score = traits.Float()
     mni_dice_score = traits.Float()
+    output_file_name = traits.File()
 
 
 class _SeriesQCOutputSpec(TraitedSpec):
@@ -507,6 +509,11 @@ class SeriesQC(SimpleInterface):
         if isdefined(self.inputs.mni_dice_score):
             image_qc['mni_dice_distance'] = [self.inputs.mni_dice_score]
 
+        # Get the metadata
+        output_file = self.inputs.output_file_name
+        image_qc['file_name'] = output_file
+        bids_info = get_bids_params(output_file)
+        image_qc.update(bids_info)
         output = op.join(runtime.cwd, "dwi_qc.csv")
         pd.DataFrame(image_qc).to_csv(output, index=False)
         self._results['series_qc_file'] = output
