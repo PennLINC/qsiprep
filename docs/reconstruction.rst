@@ -133,7 +133,7 @@ in the header. **Be sure to check for alignment and orientation** in your output
 .. _preconfigured_workflows:
 
 Pre-configured recon_workflows
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. note::
   The MRtrix workflows are identical up to the FOD estimation. In each case the fiber response
@@ -167,7 +167,7 @@ used for tractography and the T1w segmentation is used for anatomical constraint
 .. _mrtrix_multishell_msmt_noACT:
 
 ``mrtrix_multishell_msmt_noACT``
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 This workflow uses the ``msmt_csd`` algorithm [Jeurissen2014]_ to estimate FODs for white matter,
 gray matter and cerebrospinal fluid using *multi-shell acquisitions*. The white matter FODs are
@@ -177,7 +177,7 @@ used for tractography with no T1w-based anatomical constraints.
 .. _mrtrix_singleshell_ss3t:
 
 ``mrtrix_singleshell_ss3t``
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 This workflow uses the ``ss3t_csd_beta1`` algorithm [Dhollander2016]_ to estimate FODs for white
 matter, and cerebrospinal fluid using *single shell (DTI) acquisitions*. The white matter FODs are
