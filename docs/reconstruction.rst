@@ -166,12 +166,12 @@ used for tractography and the T1w segmentation is used for anatomical constraint
 
 .. _mrtrix_multishell_msmt_noACT:
 
-``mrtrix_multishell_msmt``
+``mrtrix_multishell_msmt_noACT``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-This workflow uses the ``msmt_csd`` algorithm [Jeurissen2014]_ to estimate FODs for white matter, gray matter and
-cerebrospinal fluid using *multi-shell acquisitions*. The white matter FODs are used for
-tractography with no T1w-based anatomical constraints.
+This workflow uses the ``msmt_csd`` algorithm [Jeurissen2014]_ to estimate FODs for white matter,
+gray matter and cerebrospinal fluid using *multi-shell acquisitions*. The white matter FODs are
+used for tractography with no T1w-based anatomical constraints.
 
 
 .. _mrtrix_singleshell_ss3t:
@@ -188,9 +188,9 @@ used for tractography and the T1w segmentation is used for anatomical constraint
 ``mrtrix_singleshell_ss3t_noACT``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-This workflow uses the ``ss3t_csd_beta1`` algorithm [Dhollander2016]_ to estimate FODs for white matter, and
-cerebrospinal fluid using *single shell (DTI) acquisitions*. The white matter FODs are used for
-tractography with no T1w-based anatomical constraints.
+This workflow uses the ``ss3t_csd_beta1`` algorithm [Dhollander2016]_ to estimate FODs for white
+matter, and cerebrospinal fluid using *single shell (DTI) acquisitions*. The white matter FODs are
+used for tractography with no T1w-based anatomical constraints.
 
 
 .. _dsi_studio_gqi:
