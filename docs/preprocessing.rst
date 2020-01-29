@@ -38,7 +38,8 @@ If ``combine_all_dwis`` is set to ``True``, two possibilities arise. If all DWIs
 are in the same PE direction, they will be merged into a single series. If there are
 two PE directions detected in the DWI scans and ``'fieldmaps'`` is not in ``ignore``,
 images are combined according to their PE direction, and their b0 reference images are used to
-perform SDC.
+perform SDC. Further complicating this is the FSL workflow, which combines distortion correction
+with eddy/motion correction and will merge scans with different PE directions.
 
 If you have some scans you want to combine and others you want to preprocess separately,
 consider creating fake sessions in your BIDS directory.
@@ -50,7 +51,7 @@ Susceptibility correction methods
 The are three kinds of SDC available in qsiprep:
 
   1. :ref:`sdc_pepolar` (also called **blip-up/blip-down**):
-     This is the implementation from FMRIPREP, using 3dQwarp to
+     This is the implementation from sdcflows, using 3dQwarp to
      correct a DWI series using a fieldmap in the fmaps directory [Jezzard1995]_.
      The reverse phase encoding direction scan can come from the fieldmaps directory
      or the dwi directory.
@@ -66,9 +67,7 @@ The are three kinds of SDC available in qsiprep:
 
 
 ``qsiprep`` determines if a fieldmap should be used based on the ``"IntendedFor"``
-fields in the JSON sidecars in the ``fmap/`` directory. If you have two DWI
-series with reverse phase encodings, but would rather use method 1 instead of
-1a, include the ``--prefer-dedicated-fmaps`` argument.
+fields in the JSON sidecars in the ``fmap/`` directory.
 
 
 .. _outputs:
@@ -89,6 +88,9 @@ qsiprep generates three broad classes of outcomes:
   3. **Additional data for subsequent analysis**, for instance the transformations
      between different spaces or the estimated head motion and model fit quality calculated
      during model-based head motion correction.
+  4. **Quantitative QA**:
+     A single-line csv file per subject summarizing subject motion, coregistration quality and
+     image quality.
 
 
 Visual Reports
@@ -201,13 +203,15 @@ preprocessing. Columns prefixed by ``t1_`` or ``mni_`` contain QC metrics calcul
 preprocessed data. Motion parameter summaries are also provided, such as the mean and max of
 framewise displacement (``mean_fd``, ``max_fd``). The max and mean absolute values for translation
 and rotation are ``max_translation`` and ``max_rotation`` and the maxima of their derivatives are
-in ``max_rel_translation`` and ``max_rel_rotation``.
+in ``max_rel_translation`` and ``max_rel_rotation``. Finally, the difference in spatial overlap
+between the anatomical mask and the anatomical brain mask and the DWI brain mask is calculated
+using the Dice distance in ``t1_dice_distance`` and ``mni_dice_distance``.
 
 Confounds and "carpet"-plot on the visual reports
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 fMRI has been using a "carpet" visualization of the
-:abbr:`DWI (blood-oxygen level-dependent)` time-series (see [Power2016]_),
+:abbr:`BOLD (blood-oxygen level-dependent)` time-series (see [Power2016]_),
 but this type of plot does not make sense for DWI data. Instead, we plot
 the cross-correlation value between each raw slice and the HMC model signal
 resampled into that slice.
@@ -228,8 +232,7 @@ Examples of these plots follow:
 .. figure:: _static/sub-pnc_carpetplot.png
     :scale: 40%
 
-    For eddy higher motion appears more yellow, while lower motion
-    is more blue.
+    For eddy slices with more outliers appear more yellow, while fewer outliers is more blue.
 
 Preprocessing pipeline details
 ---------------------------------

@@ -10,12 +10,13 @@ Utility workflows
 
 """
 from nipype.pipeline import engine as pe
-from nipype.interfaces import utility as niu
+from nipype.interfaces import utility as niu, afni
 from ...engine import Workflow
 from ...interfaces.nilearn import Merge
 from ...interfaces.dsi_studio import DSIStudioSrcQC, DSIStudioCreateSrc
 from ...interfaces.reports import InteractiveReport
 from ...interfaces.dipy import TensorReconstruction
+from ...interfaces.anatomical import DiceOverlap
 
 
 DEFAULT_MEMORY_MIN_GB = 0.01
@@ -133,4 +134,37 @@ def init_interactive_report_wf(name="interactive_report_wf"):
             ('mask_file', 'mask_file')]),
         (interactive_report, outputnode, [('out_report', 'out_report')])
     ])
+    return workflow
+
+
+def init_mask_overlap_wf(name="mask_overlap_wf"):
+    """Check the Dice overlap of a b=0 mask and a T1-based mask for QC.
+
+    **Inputs**
+        anatomical_mask
+            Path to a high-resolution brain mask from a T1w image
+        dwi_mask
+            Path to a mask based on diffusion-weighted images
+
+    **Outputs**
+        dice_score
+            float value of the dice overlap of the masks
+    """
+    inputnode = pe.Node(
+        niu.IdentityInterface(fields=['anatomical_mask', 'dwi_mask']),
+        name='inputnode')
+    outputnode = pe.Node(niu.IdentityInterface(fields=['dice_score']), name='outputnode')
+
+    downsample_t1_mask = pe.Node(afni.Resample(resample_mode="NN", outputtype="NIFTI_GZ"),
+                                 name='downsample_t1_mask')
+    calculate_dice = pe.Node(DiceOverlap(), name='calculate_dice')
+
+    workflow = Workflow(name=name)
+    workflow.connect([
+        (inputnode, downsample_t1_mask, [
+            ('anatomical_mask', 'in_file'),
+            ('dwi_mask', 'master')]),
+        (inputnode, calculate_dice, [('dwi_mask', 'dwi_mask')]),
+        (downsample_t1_mask, calculate_dice, [('out_file', 'anatomical_mask')]),
+        (calculate_dice, outputnode, [('dice_score', 'dice_score')])])
     return workflow
