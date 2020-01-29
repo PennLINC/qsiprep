@@ -27,7 +27,7 @@ The main features of this software are
      from Dipy_, MRTrix_, `DSI Studio`_  and others.
   4. A novel motion correction algorithm that works on DSI and random q-space sampling schemes
 
-.. figure:: https://raw.githubusercontent.com/PennBBL/qsiprep/master/docs/_static/workflow_full.svg
+.. figure:: https://github.com/PennBBL/qsiprep/raw/master/docs/_static/workflow_full.png
    :scale: 85%
 
 
