@@ -164,7 +164,7 @@ template [@fieldmapless3].
     workflow.connect([
         (inputnode, invert_t1w, [('t1_brain', 'in_file'),
                                  ('bold_ref', 'ref_file')]),
-        (inputnode, ref_2_t1, [('bold_ref_brain', 'moving_image')]),
+        (inputnode, ref_2_t1, [('bold_ref', 'moving_image')]),
         (invert_t1w, ref_2_t1, [('out_file', 'fixed_image')]),
         (inputnode, t1_2_ref, [('bold_ref', 'reference_image')]),
         (invert_t1w, t1_2_ref, [('out_file', 'input_image')]),
@@ -175,7 +175,7 @@ template [@fieldmapless3].
         (transform_list, atlas_2_ref, [('out', 'transforms')]),
         (atlas_2_ref, threshold_atlas, [('output_image', 'in_file')]),
         (threshold_atlas, fixed_image_masks, [('out_file', 'in2')]),
-        (inputnode, syn, [('bold_ref_brain', 'moving_image')]),
+        (inputnode, syn, [('bold_ref', 'moving_image')]),
         (t1_2_ref, syn, [('output_image', 'fixed_image')]),
         (fixed_image_masks, syn, [('out', 'fixed_image_masks')]),
         (syn, outputnode, [('forward_transforms', 'out_warp')]),

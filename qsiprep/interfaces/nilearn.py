@@ -170,9 +170,15 @@ class EnhanceAndSkullstripB0(SimpleInterface):
         else:
             mask_img = watershed_refined_b0_mask(input_img, show_plot=False,
                                                  cwd=runtime.cwd)
-        if mask_img.get_fdata().sum() < 100:
+
+        # The brain mask should occupy at least 10% of the image
+        min_size = np.prod(mask_img.shape) * 0.1
+        if mask_img.get_fdata().sum() < min_size:
             LOGGER.warning("Masking appears to have failed. Using a backup method")
             mask_img = compute_epi_mask(input_img)
+            if mask_img.get_fdata().sum() < min_size:
+                raise Exception('Unable to compute a reasonable mask on this b=0 image')
+
         out_mask = fname_presuffix(self.inputs.b0_file, suffix='_mask', newpath=runtime.cwd)
         # Ensure the header is ok
         good_header_mask = new_img_like(input_img, mask_img.get_fdata())
@@ -414,7 +420,7 @@ def calculate_gradmax_b0_mask(b0_nii, show_plot=False, quantile_max=0.8, pad_siz
         ax[1].plot(opening_values, edge_scores, 'o-')
         ax[1].set_title("MI Scores for different openings")
         vmax = np.percentile(values, quantile_max * 100)
-        display = plot_epi(b0_nii, cmap='gray', vmin=cutoff, vmax=vmax, display_mode='z',
+        display = plot_epi(b0_nii, cmap='gray', vmax=vmax, display_mode='z',
                            cut_coords=10)
         display.add_contours(mask_img, linewidths=2)
         disp2 = plot_epi(grad_img, cmap='gray', resampling_interpolation='nearest',
