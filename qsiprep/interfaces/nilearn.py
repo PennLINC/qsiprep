@@ -170,9 +170,15 @@ class EnhanceAndSkullstripB0(SimpleInterface):
         else:
             mask_img = watershed_refined_b0_mask(input_img, show_plot=False,
                                                  cwd=runtime.cwd)
-        if mask_img.get_fdata().sum() < 100:
+
+        # The brain mask should occupy at least 10% of the image
+        min_size = np.prod(mask_img.shape) * 0.1
+        if mask_img.get_fdata().sum() < min_size:
             LOGGER.warning("Masking appears to have failed. Using a backup method")
             mask_img = compute_epi_mask(input_img)
+            if mask_img.get_fdata().sum() < min_size:
+                raise Exception('Unable to compute a reasonable mask on this b=0 image')
+
         out_mask = fname_presuffix(self.inputs.b0_file, suffix='_mask', newpath=runtime.cwd)
         # Ensure the header is ok
         good_header_mask = new_img_like(input_img, mask_img.get_fdata())
@@ -330,7 +336,7 @@ def calculate_gradmax_b0_mask(b0_nii, show_plot=False, quantile_max=0.8, pad_siz
         gradient_nii: spatial image
             gradient image
     """
-
+    total_voxels = np.prod(b0_nii.shape)
     if pad_size:
         padded_nii = run_imagemath(b0_nii, 'PadImage', [str(pad_size)], copy_input_header=False,
                                    cwd=cwd)
@@ -374,6 +380,7 @@ def calculate_gradmax_b0_mask(b0_nii, show_plot=False, quantile_max=0.8, pad_siz
     edge_scores = []
     opening_values = np.array([2, 4, 6, 8, 10, 12], dtype=np.int)
     opened_masks = []
+    selected_voxels = []
     for opening_test in opening_values:
         processed_mask, _ = _post_process_mask(data, b0_nii.affine, opening=opening_test)
         # Make a mask around the edge of the mask
@@ -381,11 +388,17 @@ def calculate_gradmax_b0_mask(b0_nii, show_plot=False, quantile_max=0.8, pad_siz
         eroded_mask = ndimage.binary_erosion(processed_mask)
         mask_edge = dilated_mask ^ eroded_mask
         opened_masks.append(processed_mask)
+        selected_voxels.append(processed_mask.sum() / total_voxels * 100)
         # How many edges are captured by the mask edge?
         edge_scores.append(grad_data[mask_edge].mean())
 
     best_mask = np.argmax(edge_scores)
     processed_mask = opened_masks[best_mask]
+
+    if best_mask.sum() < 0.1 * total_voxels:
+        LOGGER.warning("Degenerate Mask case. Using compute_epi_mask")
+        epi_mask = compute_epi_mask(new_img_like(padded_nii, scaled_image))
+        processed_mask = epi_mask.get_fdata().astype(np.uint8)
 
     if pad_size:
         processed_mask = processed_mask[pad_size:-pad_size,
@@ -407,14 +420,16 @@ def calculate_gradmax_b0_mask(b0_nii, show_plot=False, quantile_max=0.8, pad_siz
         plot_epi(padded_nii, display_mode='z', cut_coords=10, title='Input Image')
         plot_epi(median_nii, display_mode='z', cut_coords=10, title='Median Filtered')
         plot_epi(bc_nii, display_mode='z', cut_coords=10, title='Bias Corrected')
-        fig, ax = plt.subplots(ncols=2)
+        fig, ax = plt.subplots(ncols=3)
         ax[0].hist(scaled, bins=256)
         ax[0].axvline(cutoff, color='k')
         ax[0].set_title("Step 2: BoxCox")
         ax[1].plot(opening_values, edge_scores, 'o-')
-        ax[1].set_title("MI Scores for different openings")
+        ax[1].set_title("Mean Boundary Gradient")
+        ax[2].plot(selected_voxels, 'o-')
+        ax[2].set_title("Mask Size (% FOV)")
         vmax = np.percentile(values, quantile_max * 100)
-        display = plot_epi(b0_nii, cmap='gray', vmin=cutoff, vmax=vmax, display_mode='z',
+        display = plot_epi(b0_nii, cmap='gray', vmax=vmax, display_mode='z',
                            cut_coords=10)
         display.add_contours(mask_img, linewidths=2)
         disp2 = plot_epi(grad_img, cmap='gray', resampling_interpolation='nearest',
