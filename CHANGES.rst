@@ -1,3 +1,7 @@
+0.7.2 (February 4, 2020)
+========================
+ * Fixed a bug in b=0 masking when images have high signal intensity in ventricles (#99)
+
 0.7.1 (January 29, 2020)
 ========================
 
