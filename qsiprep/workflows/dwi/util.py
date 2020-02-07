@@ -12,10 +12,11 @@ Utility workflows
 import os
 from pathlib import Path
 import nibabel as nb
+import pkg_resources as pkgr
 
 from nipype.pipeline import engine as pe
 from nipype.utils.filemanip import split_filename
-from nipype.interfaces import utility as niu, fsl
+from nipype.interfaces import utility as niu, fsl, ants
 from ...niworkflows.interfaces import SimpleBeforeAfter
 from ...engine import Workflow
 from ...interfaces.ants import ImageMath
@@ -26,14 +27,19 @@ from ...interfaces.nilearn import EnhanceAndSkullstripB0
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
-def init_dwi_reference_wf(omp_nthreads=1, dwi_file=None, name='dwi_reference_wf',
-                          gen_report=False, source_file=None, desc="initial"):
+def init_dwi_reference_wf(omp_nthreads=1, dwi_file=None, register_t1=False,
+                          name='dwi_reference_wf', gen_report=False, source_file=None,
+                          desc="initial"):
     """
-    This workflow generates reference b=0 image.
+    This workflow generates reference b=0 image and a mask.
 
     The raw reference image is the target of :abbr:`HMC (head motion correction)`, and a
     contrast-enhanced reference is the subject of distortion correction, as well as
     boundary-based registration to T1w and template spaces.
+
+    A skull-stripped T1w image is downsampled to the resolution of the b0 input image
+    and registered to it. The T1w mask is used as a starting point for generating
+    The b=0 mask.
 
     .. workflow::
         :graph2use: orig
@@ -57,6 +63,12 @@ def init_dwi_reference_wf(omp_nthreads=1, dwi_file=None, name='dwi_reference_wf'
 
         b0_template
             the b0 template used as the motion correction reference
+        t1_brain
+            skull-stripped T1w image from the same subject
+        t1_mask
+            mask image for t1_brain
+        wm_seg
+            white matter segmentation from the T1w image
 
     **Outputs**
 
@@ -81,7 +93,7 @@ def init_dwi_reference_wf(omp_nthreads=1, dwi_file=None, name='dwi_reference_wf'
     workflow.__desc__ = """\
 """
     inputnode = pe.Node(
-        niu.IdentityInterface(fields=['b0_template', 't1_prior_mask']),
+        niu.IdentityInterface(fields=['b0_template', 't1_brain', 't1_mask', 't1_seg']),
         name='inputnode')
     outputnode = pe.Node(
         niu.IdentityInterface(fields=['dwi_file', 'raw_ref_image', 'ref_image', 'bias_image',
@@ -91,6 +103,30 @@ def init_dwi_reference_wf(omp_nthreads=1, dwi_file=None, name='dwi_reference_wf'
     # Simplify manually setting input image
     if dwi_file is not None:
         inputnode.inputs.b0_template = dwi_file
+
+    # b=0 images are too diverse and tricky to reliably mask.
+    # Instead register the t1w to the b=0 and use that brain mask
+    if register_t1:
+        affine_transform = pkgr.resource_filename('qsiprep', 'data/affine.json')
+        register_t1_to_raw = pe.Node(ants.Registration(), name='register_t1_to_raw')
+        t1_mask_to_b0 = pe.Node(ants.ApplyTransforms(), name='t1_mask_to_b0')
+        workflow.connect([
+            (inputnode, register_t1_to_raw, [
+                ('t1_brain', 'moving_image'),
+                ('b0_template', 'fixed_image'),
+                ('t1_mask', 'moving_mask')]),
+            (register_t1_to_raw, t1_mask_to_b0, [
+                ('forward_transforms', 'transforms')])])
+    else:
+        # T1w is already aligned
+        t1_mask_to_b0 = pe.Node(
+            ants.ApplyTransforms(transforms='identity'),
+            name='t1_mask_to_b0')
+
+    workflow.connect([
+        (inputnode, t1_mask_to_b0, [
+            ('t1_mask', 'in_file'),
+            ('b0_template', 'reference_image')])])
 
     enhance_and_skullstrip_dwi_wf = init_enhance_and_skullstrip_dwi_wf(
         omp_nthreads=omp_nthreads)

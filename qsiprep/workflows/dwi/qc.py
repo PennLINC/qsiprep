@@ -6,7 +6,6 @@ Utility workflows
 ^^^^^^^^^^^^^^^^^
 
 .. autofunction:: init_dwi_reference_wf
-.. autofunction:: init_enhance_and_skullstrip_dwi_wf
 
 """
 from nipype.pipeline import engine as pe
@@ -25,13 +24,6 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 def init_modelfree_qc_wf(dwi_files=None, name='dwi_qc_wf'):
     """
     This workflow runs DSI Studio's QC metrics
-
-    .. workflow::
-        :graph2use: orig
-        :simple_form: yes
-
-        from qsiprep.workflows.dwi.util import init_dwi_reference_wf
-        wf = init_dwi_reference_wf(omp_nthreads=1)
 
     **Parameters**
 

@@ -74,7 +74,7 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
         niu.IdentityInterface(
             fields=['dwi_file', 'bvec_file', 'bval_file', 'rpe_b0',
                     'original_files', 'rpe_b0_info', 'hmc_optimization_data', 't1_brain',
-                    't1_2_mni_reverse_transform']),
+                    't1_2_mni_reverse_transform', 't1_mask']),
         name='inputnode')
 
     outputnode = pe.Node(
@@ -118,11 +118,6 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
         scan_groups['fieldmap_info'], dwi_metadata, omp_nthreads=omp_nthreads,
         fmap_demean=fmap_demean, fmap_bspline=fmap_bspline)
     b0_sdc_wf.inputs.inputnode.template = template
-
-    # Create a b=0 reference for coregistration
-    dwi_ref_wf = init_dwi_reference_wf(name="dwi_ref_wf",
-                                       gen_report=True,
-                                       source_file=source_file)
 
     # Impute slice data if requested
     slice_qc = pe.Node(SliceQC(impute_slice_threshold=impute_slice_threshold), name="slice_qc")
