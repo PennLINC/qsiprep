@@ -116,6 +116,7 @@ def init_dwi_reference_wf(omp_nthreads=1, dwi_file=None, register_t1=False,
         workflow.connect([
             (inputnode, register_t1_to_raw, [
                 ('t1_brain', 'fixed_image'),
+                ('t1_mask', 'fixed_image_masks'),
                 ('b0_template', 'moving_image')]),
             (register_t1_to_raw, t1_mask_to_b0, [
                 ('forward_transforms', 'transforms')])])

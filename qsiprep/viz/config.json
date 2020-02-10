@@ -115,7 +115,7 @@
               "name": "epi/b0ref",
               "file_pattern":"dwi/.*_b0ref\\.",
               "title": "b=0 Reference Image",
-              "description": "The b=0 image used for coregistration to T1 before and after sharpening. Tentative brain mask is in blue.",
+              "description": "b=0 template and final mask output.",
               "imgtype": "svg+xml"
             },
             {
