@@ -122,7 +122,7 @@ def init_fsl_hmc_wf(scan_groups,
     LOGGER.info("Using %d threads in eddy", omp_nthreads)
     eddy_args["num_threads"] = omp_nthreads
     pre_eddy_b0_ref_wf = init_dwi_reference_wf(register_t1=True, source_file=source_file,
-                                               name='pre_eddy_b0_ref_wf')
+                                               name='pre_eddy_b0_ref_wf', gen_report=False)
     eddy = pe.Node(ExtendedEddy(**eddy_args), name="eddy")
     spm_motion = pe.Node(Eddy2SPMMotion(), name="spm_motion")
 
@@ -130,6 +130,11 @@ def init_fsl_hmc_wf(scan_groups,
     back_to_lps = pe.Node(ConformDwi(orientation="LPS"), name='back_to_lps')
     cnr_lps = pe.Node(ConformDwi(orientation="LPS"), name='cnr_lps')
     split_eddy_lps = pe.Node(SplitDWIs(b0_threshold=b0_threshold), name="split_eddy_lps")
+
+    # Convert the b=0 template from pre_eddy_b0_ref to LPS+
+    b0_ref_to_lps = pe.Node(ConformDwi(orientation="LPS"), name='b0_ref_to_lps')
+    b0_ref_brain_to_lps = pe.Node(ConformDwi(orientation="LPS"), name='b0_ref_brain_to_lps')
+    b0_ref_mask_to_lps = pe.Node(ConformDwi(orientation="LPS"), name='b0_ref_mask_to_lps')
 
     workflow.connect([
         # These images and gradients should be in LAS+
@@ -142,6 +147,11 @@ def init_fsl_hmc_wf(scan_groups,
             ('t1_brain', 'inputnode.t1_brain'),
             ('t1_mask', 'inputnode.t1_mask'),
             ('t1_seg', 'inputnode.t1_seg')]),
+        # Convert distorted ref to LPS+
+        (pre_eddy_b0_ref_wf, b0_ref_to_lps, [
+            ('outputnode.ref_image', 'dwi_file')]),
+        (pre_eddy_b0_ref_wf, b0_ref_mask_to_lps, [
+            ('outputnode.dwi_mask', 'dwi_file')]),
         (gather_inputs, eddy, [
             ('eddy_indices', 'in_index'),
             ('eddy_acqp', 'in_acqp')]),
@@ -149,6 +159,7 @@ def init_fsl_hmc_wf(scan_groups,
             ('dwi_file', 'in_file'),
             ('bval_file', 'in_bval'),
             ('bvec_file', 'in_bvec')]),
+        (pre_eddy_b0_ref_wf, eddy, [('outputnode.dwi_mask', 'in_mask')]),
         (gather_inputs, outputnode, [
             ('forward_transforms', 'to_dwi_ref_affines')]),
         (eddy, back_to_lps, [
@@ -207,7 +218,8 @@ def init_fsl_hmc_wf(scan_groups,
             # Use corrected images from TOPUP to make a mask for eddy
             (topup, unwarped_mean, [('out_corrected', 'in_files')]),
             (unwarped_mean, pre_eddy_b0_ref_wf, [('out_file', 'inputnode.b0_template')]),
-            (pre_eddy_b0_ref_wf, eddy, [('outputnode.mask_file', 'in_mask')]),
+            (b0_ref_to_lps, outputnode, [('dwi_file', 'b0_template')]),
+            (b0_ref_mask_to_lps, outputnode, [('dwi_file', 'b0_template_mask')]),
             # Save reports
             (gather_inputs, topup_summary, [('topup_report', 'summary')]),
             (topup_summary, ds_report_topupsummary, [('out_report', 'in_file')]),
@@ -222,21 +234,7 @@ def init_fsl_hmc_wf(scan_groups,
         # Use the distorted mask for eddy
         (gather_inputs, distorted_merge, [('topup_imain', 'in_files')]),
         (distorted_merge, pre_eddy_b0_ref_wf, [('out_avg', 'inputnode.b0_template')]),
-        (pre_eddy_b0_ref_wf, eddy, [('outputnode.mask_file', 'in_mask')])])
-
-    # Convert the b=0 template from pre_eddy_b0_ref to LPS+
-    b0_ref_to_lps = pe.Node(ConformDwi(orientation="LPS"), name='b0_ref_to_lps')
-    b0_ref_brain_to_lps = pe.Node(ConformDwi(orientation="LPS"), name='b0_ref_brain_to_lps')
-    b0_ref_mask_to_lps = pe.Node(ConformDwi(orientation="LPS"), name='b0_ref_mask_to_lps')
-    workflow.connect([
-        # Convert distorted ref to LPS+
-        (pre_eddy_b0_ref_wf, b0_ref_to_lps, [
-            ('outputnode.bias_corrected_file', 'dwi_file')]),
-        (pre_eddy_b0_ref_wf, b0_ref_brain_to_lps, [
-            ('outputnode.skull_stripped_file', 'dwi_file')]),
-        (pre_eddy_b0_ref_wf, b0_ref_mask_to_lps, [
-            ('outputnode.mask_file', 'dwi_file')]),
-    ])
+        (pre_eddy_b0_ref_wf, eddy, [('outputnode.dwi_mask', 'in_mask')])])
 
     if fieldmap_type in ('fieldmap', 'phasediff', 'phase', 'syn'):
 

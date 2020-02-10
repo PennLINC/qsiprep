@@ -97,7 +97,7 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file,
     # Make a mask from the output template. It is bias-corrected, so good for masking
     # but bad for using as a b=0 for modeling.
     b0_template_mask = init_dwi_reference_wf(register_t1=True, name="b0_template_mask",
-                                             gen_report=True, source_file=source_file)
+                                             gen_report=False, source_file=source_file)
 
     workflow.connect([
         (inputnode, match_transforms, [('dwi_files', 'dwi_files'),
@@ -113,8 +113,8 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file,
         (b0_hmc_wf, b0_template_mask, [
             ('outputnode.final_template', 'inputnode.b0_template')]),
         (b0_template_mask, outputnode, [
-            ('outputnode.skull_stripped_file', 'final_template_brain'),
-            ('outputnode.mask_file', 'final_template_mask')
+            ('outputnode.ref_image_brain', 'final_template_brain'),
+            ('outputnode.dwi_mask', 'final_template_mask')
         ])
     ])
 

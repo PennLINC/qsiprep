@@ -181,7 +181,6 @@ def init_dwi_finalize_wf(scan_groups,
         all_dwis = ['/fake/testing/path.nii.gz']
         fieldmap_info = {'suffix': None}
 
-    fieldmap_type = fieldmap_info['suffix']
     mem_gb = {'filesize': 1, 'resampled': 1, 'largemem': 1}
     dwi_nvols = 10
 
@@ -229,8 +228,8 @@ def init_dwi_finalize_wf(scan_groups,
     outputnode = pe.Node(
         niu.IdentityInterface(fields=[
             'dwi_t1', 'dwi_mask_t1', 'cnr_map_t1', 'bvals_t1', 'bvecs_t1', 'local_bvecs_t1',
-            't1_b0_ref', 't1_b0_series', 'dwi_mni', 'dwi_mask_mni', 'cnr_map_mni', 'bvals_mni',
-            'bvecs_mni', 'local_bvecs_mni', 'mni_b0_ref', 'mni_b0_series', 'confounds',
+            't1_b0_ref', 'dwi_mni', 'dwi_mask_mni', 'cnr_map_mni', 'bvals_mni',
+            'bvecs_mni', 'local_bvecs_mni', 'mni_b0_ref', 'confounds',
             'gradient_table_mni', 'gradient_table_t1', 'hmc_optimization_data'
         ]),
         name='outputnode')
@@ -301,7 +300,6 @@ def init_dwi_finalize_wf(scan_groups,
           ('bvecs_t1', 'inputnode.bvecs_t1'),
           ('local_bvecs_t1', 'inputnode.local_bvecs_t1'),
           ('t1_b0_ref', 'inputnode.t1_b0_ref'),
-          ('t1_b0_series', 'inputnode.t1_b0_series'),
           ('gradient_table_t1', 'inputnode.gradient_table_t1'),
           ('dwi_mni', 'inputnode.dwi_mni'),
           ('dwi_mask_mni', 'inputnode.dwi_mask_mni'),
@@ -310,7 +308,6 @@ def init_dwi_finalize_wf(scan_groups,
           ('bvecs_mni', 'inputnode.bvecs_mni'),
           ('local_bvecs_mni', 'inputnode.local_bvecs_mni'),
           ('mni_b0_ref', 'inputnode.mni_b0_ref'),
-          ('mni_b0_series', 'inputnode.mni_b0_series'),
           ('gradient_table_mni', 'inputnode.gradient_table_mni'),
           ('confounds', 'inputnode.confounds'),
           ('hmc_optimization_data', 'inputnode.hmc_optimization_data')])
@@ -325,11 +322,10 @@ def init_dwi_finalize_wf(scan_groups,
     ])
 
     if "T1w" in output_spaces:
-        transform_dwis_t1 = init_dwi_trans_wf(name='transform_dwis_t1',
+        transform_dwis_t1 = init_dwi_trans_wf(source_file=source_file,
+                                              name='transform_dwis_t1',
                                               template="ACPC",
                                               mem_gb=mem_gb['resampled'],
-                                              use_fieldwarp=(fieldmap_type is not None
-                                                             or use_syn),
                                               omp_nthreads=omp_nthreads,
                                               output_resolution=output_resolution,
                                               use_compression=False,
@@ -383,11 +379,10 @@ def init_dwi_finalize_wf(scan_groups,
             (gtab_t1, outputnode, [('gradient_file', 'gradient_table_t1')])])
 
     if "template" in output_spaces:
-        transform_dwis_mni = init_dwi_trans_wf(name='transform_dwis_mni',
+        transform_dwis_mni = init_dwi_trans_wf(source_file=source_file,
+                                               name='transform_dwis_mni',
                                                template=template,
                                                mem_gb=mem_gb['resampled'],
-                                               use_fieldwarp=(fieldmap_type is not None
-                                                              or use_syn),
                                                omp_nthreads=omp_nthreads,
                                                output_resolution=output_resolution,
                                                use_compression=False,

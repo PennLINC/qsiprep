@@ -96,8 +96,8 @@ def init_dwi_reference_wf(omp_nthreads=1, dwi_file=None, register_t1=False,
         niu.IdentityInterface(fields=['b0_template', 't1_brain', 't1_mask', 't1_seg']),
         name='inputnode')
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=['dwi_file', 'raw_ref_image', 'ref_image', 'bias_image',
-                                      'ref_image_brain', 'dwi_mask', 'validation_report']),
+        niu.IdentityInterface(fields=['raw_ref_image', 'ref_image', 'ref_image_brain',
+                                      'dwi_mask', 'validation_report']),
         name='outputnode')
 
     # Simplify manually setting input image
@@ -108,15 +108,17 @@ def init_dwi_reference_wf(omp_nthreads=1, dwi_file=None, register_t1=False,
     # Instead register the t1w to the b=0 and use that brain mask
     if register_t1:
         affine_transform = pkgr.resource_filename('qsiprep', 'data/affine.json')
-        register_t1_to_raw = pe.Node(ants.Registration(), name='register_t1_to_raw')
-        t1_mask_to_b0 = pe.Node(ants.ApplyTransforms(), name='t1_mask_to_b0')
+        register_t1_to_raw = pe.Node(ants.Registration(from_file=affine_transform),
+                                     name='register_t1_to_raw')
+        t1_mask_to_b0 = pe.Node(ants.ApplyTransforms(interpolation='MultiLabel'),
+                                name='t1_mask_to_b0')
         workflow.connect([
             (inputnode, register_t1_to_raw, [
-                ('t1_brain', 'moving_image'),
-                ('b0_template', 'fixed_image'),
-                ('t1_mask', 'moving_mask')]),
+                ('t1_brain', 'fixed_image'),
+                ('b0_template', 'moving_image'),
+                ('t1_mask', 'fixed_image_masks')]),
             (register_t1_to_raw, t1_mask_to_b0, [
-                ('forward_transforms', 'transforms')])])
+                ('reverse_transforms', 'transforms')])])
     else:
         # T1w is already aligned
         t1_mask_to_b0 = pe.Node(
@@ -125,21 +127,25 @@ def init_dwi_reference_wf(omp_nthreads=1, dwi_file=None, register_t1=False,
 
     workflow.connect([
         (inputnode, t1_mask_to_b0, [
-            ('t1_mask', 'in_file'),
+            ('t1_mask', 'input_image'),
             ('b0_template', 'reference_image')])])
 
-    enhance_and_skullstrip_dwi_wf = init_enhance_and_skullstrip_dwi_wf(
-        omp_nthreads=omp_nthreads)
+    # Do a masking of the DWI by itself
+    enhance_and_mask_b0 = pe.Node(EnhanceAndSkullstripB0(), name='enhance_and_mask_b0')
 
     workflow.connect([
         (inputnode, outputnode, [('b0_template', 'raw_ref_image')]),
-        (inputnode, enhance_and_skullstrip_dwi_wf, [('b0_template', 'inputnode.in_file')]),
-        (enhance_and_skullstrip_dwi_wf, outputnode, [
-            ('outputnode.bias_corrected_file', 'ref_image'),
-            ('outputnode.skull_stripped_file', 'ref_image_brain'),
-            ('outputnode.mask_file', 'dwi_mask')])])
+        (inputnode, enhance_and_mask_b0, [('b0_template', 'b0_file')]),
+        (t1_mask_to_b0, enhance_and_mask_b0, [('output_image', 't1_mask')]),
+        (enhance_and_mask_b0, outputnode, [
+            ('bias_corrected_file', 'ref_image'),
+            ('skull_stripped_file', 'ref_image_brain'),
+            ('mask_file', 'dwi_mask')])
+    ])
 
     if gen_report:
+        if source_file is None:
+            raise Exception("Needs a source_file to write a report")
         b0ref_reportlet = pe.Node(SimpleBeforeAfter(), name='b0ref_reportlet', mem_gb=0.1)
         ds_report_b0_mask = pe.Node(
             DerivativesDataSink(desc=desc, suffix='b0ref', source_file=source_file),
@@ -149,9 +155,9 @@ def init_dwi_reference_wf(omp_nthreads=1, dwi_file=None, register_t1=False,
 
         workflow.connect([
             (inputnode, b0ref_reportlet, [('b0_template', 'before')]),
-            (enhance_and_skullstrip_dwi_wf, b0ref_reportlet, [
-                ('outputnode.bias_corrected_file', 'after'),
-                ('outputnode.mask_file', 'wm_seg')]),
+            (enhance_and_mask_b0, b0ref_reportlet, [
+                ('bias_corrected_file', 'after'),
+                ('plotting_mask_file', 'wm_seg')]),
             (b0ref_reportlet, outputnode, [('out_report', 'validation_report')]),
             (b0ref_reportlet, ds_report_b0_mask, [('out_report', 'in_file')])
         ])

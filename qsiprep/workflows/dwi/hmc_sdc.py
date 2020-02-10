@@ -18,7 +18,7 @@ from ...engine import Workflow
 
 # dwi workflows
 from .hmc import init_dwi_hmc_wf
-from .util import init_dwi_reference_wf, _list_squeeze
+from .util import _list_squeeze
 
 LOGGER = logging.getLogger('nipype.workflow')
 
@@ -74,7 +74,7 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
         niu.IdentityInterface(
             fields=['dwi_file', 'bvec_file', 'bval_file', 'rpe_b0',
                     'original_files', 'rpe_b0_info', 'hmc_optimization_data', 't1_brain',
-                    't1_2_mni_reverse_transform', 't1_mask']),
+                    't1_2_mni_reverse_transform', 't1_mask', 't1_seg']),
         name='inputnode')
 
     outputnode = pe.Node(
@@ -136,6 +136,10 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
             ('bvec_files', 'inputnode.bvecs'),
             ('b0_images', 'inputnode.b0_images'),
             ('b0_indices', 'inputnode.b0_indices')]),
+        (inputnode, dwi_hmc_wf, [
+            ('t1_brain', 'inputnode.t1_brain'),
+            ('t1_mask', 'inputnode.t1_mask'),
+            ('t1_seg', 'inputnode.t1_seg')]),
         (split_dwis, slice_qc, [('dwi_files', 'uncorrected_dwi_files')]),
         (dwi_hmc_wf, outputnode, [
             ('outputnode.final_template', 'pre_sdc_template'),
@@ -143,18 +147,17 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
              'to_dwi_ref_affines'),
             ('outputnode.optimization_data', "hmc_optimization_data"),
             ('outputnode.cnr_image', 'cnr_map')]),
-        (dwi_hmc_wf, dwi_ref_wf, [
-            ('outputnode.final_template', 'inputnode.b0_template')]),
         (dwi_hmc_wf, summarize_motion, [
             ('outputnode.final_template', 'ref_file'),
             (('outputnode.forward_transforms', _list_squeeze), 'transform_files')]),
         (inputnode, summarize_motion, [('original_files', 'source_files')]),
         (dwi_hmc_wf, slice_qc, [
-            ('outputnode.noise_free_dwis', 'ideal_image_files')]),
-        (dwi_ref_wf, b0_sdc_wf, [
-            ('outputnode.ref_image', 'inputnode.b0_ref'),
-            ('outputnode.ref_image_brain', 'inputnode.b0_ref_brain'),
-            ('outputnode.dwi_mask', 'inputnode.b0_mask')]),
+            ('outputnode.noise_free_dwis', 'ideal_image_files'),
+            ('outputnode.final_template_mask', 'mask_image')]),
+        (dwi_hmc_wf, b0_sdc_wf, [
+            ('outputnode.final_template', 'inputnode.b0_ref'),
+            ('outputnode.final_template_brain', 'inputnode.b0_ref_brain'),
+            ('outputnode.final_template_mask', 'inputnode.b0_mask')]),
         (inputnode, b0_sdc_wf, [
             ('t1_brain', 'inputnode.t1_brain'),
             ('t1_2_mni_reverse_transform',
@@ -164,7 +167,6 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
             ('outputnode.b0_ref', 'b0_template'),
             ('outputnode.out_warp', 'to_dwi_ref_warps'),
             ('outputnode.b0_mask', 'b0_template_mask')]),
-        (b0_sdc_wf, slice_qc, [('outputnode.b0_mask', 'mask_image')]),
         (summarize_motion, outputnode, [('spm_motion_file', 'motion_params')]),
         (split_dwis, outputnode, [
             ('bvec_files', 'bvec_files_to_transform'),

@@ -147,12 +147,15 @@ class Merge(SimpleInterface):
 
 class _EnhanceAndSkullstripB0InputSpec(BaseInterfaceInputSpec):
     b0_file = File(exists=True, mandatory=True)
+    t1_mask = File(exists=True, mandatory=True)
 
 
 class _EnhanceAndSkullstripB0OutputSpec(TraitedSpec):
     mask_file = File(exists=True)
     bias_corrected_file = File(exists=True)
+    enhanced_file = File(exists=True)
     skull_stripped_file = File(exists=True)
+    plotting_mask_file = File(exists=True)
 
 
 class EnhanceAndSkullstripB0(SimpleInterface):
@@ -161,6 +164,9 @@ class EnhanceAndSkullstripB0(SimpleInterface):
 
     def _run_interface(self, runtime):
         input_img = load_img(self.inputs.b0_file)
+        t1_mask = load_img(self.inputs.t1_mask)
+        t1_mask_data = t1_mask.get_fdata()
+        t1_brain_voxels = t1_mask_data.sum()
 
         # Get a mask. Choose a good method depending on the resolution
         voxel_size = np.array(input_img.header.get_zooms()[:3])
@@ -171,19 +177,27 @@ class EnhanceAndSkullstripB0(SimpleInterface):
             mask_img = watershed_refined_b0_mask(input_img, show_plot=False,
                                                  cwd=runtime.cwd)
 
-        # The brain mask should occupy at least 10% of the image
-        min_size = np.prod(mask_img.shape) * 0.1
-        if mask_img.get_fdata().sum() < min_size:
+        # The brain mask should occupy a similar size as the t1 mask
+        min_size = t1_brain_voxels * .7
+        max_size = t1_brain_voxels * 1.3
+        mask_voxels = mask_img.get_fdata().sum()
+        if mask_voxels < min_size or mask_voxels > max_size:
             LOGGER.warning("Masking appears to have failed. Using a backup method")
             mask_img = compute_epi_mask(input_img)
-            if mask_img.get_fdata().sum() < min_size:
-                raise Exception('Unable to compute a reasonable mask on this b=0 image')
-
+            mask_voxels = mask_img.get_fdata().sum()
+            if mask_voxels < min_size or mask_voxels > max_size:
+                LOGGER.warning('Unable to compute a reasonable mask on this b=0 image,'
+                               ' using the t1 mask')
+        plotting_data = mask_img.get_fdata() + t1_mask_data
+        binary_data = (plotting_data > 0).astype(np.uint8)
+        plotting_img = new_img_like(input_img, plotting_data)
+        binary_img = new_img_like(input_img, binary_data)
         out_mask = fname_presuffix(self.inputs.b0_file, suffix='_mask', newpath=runtime.cwd)
-        # Ensure the header is ok
-        good_header_mask = new_img_like(input_img, mask_img.get_fdata())
-        good_header_mask.to_filename(out_mask)
+        plotting_mask = fname_presuffix(self.inputs.b0_file, suffix='_mask', newpath=runtime.cwd)
+        binary_img.to_filename(out_mask)
+        plotting_img.to_filename(plotting_mask)
         self._results['mask_file'] = out_mask
+        self._results['plotting_mask_file'] = plotting_mask
 
         # Make a smoothed mask for N4
         dilated_mask = ndimage.binary_dilation(mask_img.get_fdata().astype(np.int),
@@ -200,10 +214,14 @@ class EnhanceAndSkullstripB0(SimpleInterface):
 
         # Enhance the input image via sharpening
         enhanced = run_imagemath(bias_corrected, 'Sharpen', [], cwd=runtime.cwd)
-        out_bias_corrected = fname_presuffix(self.inputs.b0_file, suffix='_unbiasedsharpened',
+        out_bias_corrected = fname_presuffix(self.inputs.b0_file, suffix='_unbiased',
                                              newpath=runtime.cwd)
-        enhanced.to_filename(out_bias_corrected)
+        out_enhanced = fname_presuffix(self.inputs.b0_file, suffix='_unbiasedsharpened',
+                                       newpath=runtime.cwd)
+        bias_corrected.to_filename(out_bias_corrected)
+        enhanced.to_filename(out_enhanced)
         self._results['bias_corrected_file'] = out_bias_corrected
+        self._results['enhanced_file'] = out_enhanced
 
         # Apply the soft mask to the bias-corrected, sharpened image
         skullstripped_img = math_img('weights * enhanced',
