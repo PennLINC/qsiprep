@@ -220,7 +220,7 @@ Examples of these plots follow:
 
 
 .. figure:: _static/sub-abcd_carpetplot.svg
-    :width: 100%
+    :scale: 100%
 
     For SHORELine higher scores appear more yellow, while lower scores
     are more blue. Not all slices contain the same number of voxels,
@@ -517,7 +517,7 @@ Susceptibility Distortion Correction (SDC)
 
 The PEPOLAR and SyN-SDC workflows from FMRIPREP are copied here.
 They operate on the output of reference estimation, after head
-motion correction. For a complete list of possibilties here, see
+motion correction. For a complete list of possibilities here, see
 :ref:`merging`.
 
 .. _resampling:
