@@ -161,7 +161,8 @@ def init_fsl_hmc_wf(scan_groups,
             ('bvec_file', 'in_bvec')]),
         (pre_eddy_b0_ref_wf, eddy, [('outputnode.dwi_mask', 'in_mask')]),
         (gather_inputs, outputnode, [
-            ('forward_transforms', 'to_dwi_ref_affines')]),
+            ('forward_transforms', 'to_dwi_ref_affines'),
+            ('pre_topup_image', 'pre_sdc_template')]),
         (eddy, back_to_lps, [
             ('out_corrected', 'dwi_file'),
             ('out_rotated_bvecs', 'bvec_file')]),
@@ -217,7 +218,7 @@ def init_fsl_hmc_wf(scan_groups,
                 ('out_field', 'field')]),
             # Use corrected images from TOPUP to make a mask for eddy
             (topup, unwarped_mean, [('out_corrected', 'in_files')]),
-            (unwarped_mean, pre_eddy_b0_ref_wf, [('out_file', 'inputnode.b0_template')]),
+            (unwarped_mean, pre_eddy_b0_ref_wf, [('out_avg', 'inputnode.b0_template')]),
             (b0_ref_to_lps, outputnode, [('dwi_file', 'b0_template')]),
             (b0_ref_mask_to_lps, outputnode, [('dwi_file', 'b0_template_mask')]),
             # Save reports

@@ -150,7 +150,7 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file,
         (b0_hmc_wf, dwi_model_hmc_wf, [
             ('outputnode.aligned_images', 'inputnode.warped_b0_images')]),
         (b0_template_mask, dwi_model_hmc_wf, [
-            ('outputnode.mask_file', 'inputnode.warped_b0_mask')]),
+            ('outputnode.dwi_mask', 'inputnode.warped_b0_mask')]),
         (inputnode, dwi_model_hmc_wf, [
             ('dwi_files', 'inputnode.dwi_files'),
             ('b0_indices', 'inputnode.b0_indices'),
