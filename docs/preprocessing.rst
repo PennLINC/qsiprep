@@ -220,7 +220,7 @@ Examples of these plots follow:
 
 
 .. figure:: _static/sub-abcd_carpetplot.svg
-    :scale: 100%
+    :width: 100%
 
     For SHORELine higher scores appear more yellow, while lower scores
     are more blue. Not all slices contain the same number of voxels,
