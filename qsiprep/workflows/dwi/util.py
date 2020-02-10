@@ -110,15 +110,15 @@ def init_dwi_reference_wf(omp_nthreads=1, dwi_file=None, register_t1=False,
         affine_transform = pkgr.resource_filename('qsiprep', 'data/affine.json')
         register_t1_to_raw = pe.Node(ants.Registration(from_file=affine_transform),
                                      name='register_t1_to_raw')
-        t1_mask_to_b0 = pe.Node(ants.ApplyTransforms(interpolation='MultiLabel'),
+        t1_mask_to_b0 = pe.Node(ants.ApplyTransforms(interpolation='MultiLabel',
+                                                     invert_transform_flags=[True]),
                                 name='t1_mask_to_b0')
         workflow.connect([
             (inputnode, register_t1_to_raw, [
                 ('t1_brain', 'fixed_image'),
-                ('b0_template', 'moving_image'),
-                ('t1_mask', 'fixed_image_masks')]),
+                ('b0_template', 'moving_image')]),
             (register_t1_to_raw, t1_mask_to_b0, [
-                ('reverse_transforms', 'transforms')])])
+                ('forward_transforms', 'transforms')])])
     else:
         # T1w is already aligned
         t1_mask_to_b0 = pe.Node(

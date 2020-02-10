@@ -234,8 +234,7 @@ def init_fsl_hmc_wf(scan_groups,
     workflow.connect([
         # Use the distorted mask for eddy
         (gather_inputs, distorted_merge, [('topup_imain', 'in_files')]),
-        (distorted_merge, pre_eddy_b0_ref_wf, [('out_avg', 'inputnode.b0_template')]),
-        (pre_eddy_b0_ref_wf, eddy, [('outputnode.dwi_mask', 'in_mask')])])
+        (distorted_merge, pre_eddy_b0_ref_wf, [('out_avg', 'inputnode.b0_template')])])
 
     if fieldmap_type in ('fieldmap', 'phasediff', 'phase', 'syn'):
 
