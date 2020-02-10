@@ -249,8 +249,6 @@ def init_fsl_hmc_wf(scan_groups,
                 ('dwi_file', 'inputnode.b0_ref')]),
             (b0_ref_brain_to_lps, b0_sdc_wf, [
                 ('dwi_file', 'b0_ref_brain')]),
-            (b0_ref_mask_to_lps, b0_sdc_wf, [
-                ('dwi_file', 'b0_mask')]),
             (inputnode, b0_sdc_wf, [
                 ('t1_brain', 'inputnode.t1_brain'),
                 ('t1_2_mni_reverse_transform',
