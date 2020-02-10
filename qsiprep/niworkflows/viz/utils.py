@@ -347,12 +347,13 @@ def plot_registration(anat_nii, div_id, plot_params=None,
 
     # dual mask
     dual_mask = contour is not None and np.array_equal(
-        np.unique(contour.get_data()), [0, 1, 2])
+        np.unique(contour.get_data().astype(np.uint8)), [0, 1, 2])
 
     if dual_mask:
         contour_data = contour.get_data()
         outer_mask = nlimage.new_img_like(contour, contour_data == 1)
         inner_mask = nlimage.new_img_like(contour, contour_data == 2)
+        all_mask = nlimage.new_img_like(contour, contour_data > 0)
 
     # Plot each cut axis
     for i, mode in enumerate(list(order)):
@@ -373,6 +374,7 @@ def plot_registration(anat_nii, div_id, plot_params=None,
             kwargs = {'levels': [0.5], 'linewidths': 0.75}
             display.add_contours(inner_mask, colors='b', **kwargs)
             display.add_contours(outer_mask, colors='r', **kwargs)
+            display.add_contours(all_mask, colors='c', **kwargs)
         elif contour is not None:
             display.add_contours(contour, colors='b', levels=[0.5],
                                  linewidths=0.5)

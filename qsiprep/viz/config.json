@@ -115,7 +115,7 @@
               "name": "epi/b0ref",
               "file_pattern":"dwi/.*_b0ref\\.",
               "title": "b=0 Reference Image",
-              "description": "b=0 template and final mask output.",
+              "description": "b=0 template and final mask output. The t1 and signal intersection mask is blue, their xor is red and the entire mask is plotted in cyan.",
               "imgtype": "svg+xml"
             },
             {
