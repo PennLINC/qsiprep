@@ -88,15 +88,10 @@ def init_intramodal_template_wf(inputs_list, t1w_source_file, reportlets_dir, tr
         runtime_opts = {'num_cores': omp_nthreads, 'parallel_control': 2}
     ants_mvtc2 = pe.Node(MultivariateTemplateConstruction2(dimension=3, **runtime_opts),
                          name='ants_mvtc2')
-    intramodal_template_mask = init_skullstrip_b0_wf(name="intramodal_template_mask")
 
     workflow.connect([
         (merge_inputs, rename_inputs, [('out', 'in_file')]),
         (rename_inputs, ants_mvtc2, [('out_file', 'input_images')]),
-        (intramodal_template_mask, outputnode, [
-            ('outputnode.mask_file', 'intramodal_template_mask')]),
-        (ants_mvtc2, intramodal_template_mask, [
-            ('templates', 'inputnode.in_file')]),
         (ants_mvtc2, split_outputs, [
             ('forward_transforms', 'inlist')]),
         (ants_mvtc2, outputnode, [
@@ -136,10 +131,10 @@ def init_intramodal_template_wf(inputs_list, t1w_source_file, reportlets_dir, tr
     return workflow
 
 
-def init_qsiprep_intramodal_template_wf(
-            inputs_list, transform="Rigid", num_iterations=2,
-            mem_gb=3, omp_nthreads=1, name="intramodal_template_wf"):
-    """Create an unbiased intramodal template for a subject. This aligns the b=0 references
+def init_qsiprep_intramodal_template_wf(inputs_list, transform="Rigid", num_iterations=2,
+                                        mem_gb=3, omp_nthreads=1, name="intramodal_template_wf"):
+    """Create an unbiased intramodal template for a subject.
+    This aligns the b=0 references
     from all the scans of a subject. Can be rigid, affine or nonlinear (BSplineSyN).
 
     **Parameters**
