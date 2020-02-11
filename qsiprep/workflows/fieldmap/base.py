@@ -130,8 +130,6 @@ def init_sdc_wf(fieldmap_info, dwi_meta, omp_nthreads=1,
             An unwarped b0 reference
         b0_mask
             The corresponding new mask after unwarping
-        b0_ref_brain
-            Brain-extracted, unwarped b0 reference
         out_warp
             The deformation field to unwarp the susceptibility distortions
         syn_b0_ref
@@ -152,8 +150,7 @@ def init_sdc_wf(fieldmap_info, dwi_meta, omp_nthreads=1,
         name='inputnode')
 
     outputnode = pe.Node(niu.IdentityInterface(
-        fields=['b0_ref', 'b0_mask', 'b0_ref_brain',
-                'out_warp', 'syn_b0_ref', 'method', 'fieldmap_hz']),
+        fields=['b0_ref', 'b0_mask', 'out_warp', 'syn_b0_ref', 'method', 'fieldmap_hz']),
         name='outputnode')
 
     # No fieldmaps - forward inputs to outputs
@@ -162,9 +159,7 @@ def init_sdc_wf(fieldmap_info, dwi_meta, omp_nthreads=1,
         outputnode.inputs.method = 'None'
         workflow.connect([
             (inputnode, outputnode, [('b0_ref', 'b0_ref'),
-                                     ('b0_mask', 'b0_mask'),
-                                     ('b0_ref_brain', 'b0_ref_brain')]),
-        ])
+                                     ('b0_mask', 'b0_mask')])])
         return workflow
 
     workflow.__postdesc__ = """\
@@ -224,8 +219,7 @@ co-registration with the anatomical reference.
                     outputnode.inputs.method = 'None'
                     workflow.connect([
                         (inputnode, outputnode, [('b0_ref', 'b0_ref'),
-                                                 ('b0_mask', 'b0_mask'),
-                                                 ('b0_ref_brain', 'b0_ref_brain')]),
+                                                 ('b0_mask', 'b0_mask')]),
                     ])
                     return workflow
                 if fmap_polarity is None:
@@ -269,7 +263,6 @@ co-registration with the anatomical reference.
                 ('t1_brain', 'inputnode.t1_brain'),
                 ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
                 ('b0_ref', 'inputnode.bold_ref'),
-                ('b0_ref_brain', 'inputnode.bold_ref_brain'),
                 ('template', 'inputnode.template')]),
         ])
         outputnode.inputs.method = 'FLB ("fieldmap-less", SyN-based)'
@@ -279,7 +272,6 @@ co-registration with the anatomical reference.
         (sdc_unwarp_wf, outputnode, [
             ('outputnode.out_warp', 'out_warp'),
             ('outputnode.out_reference', 'b0_ref'),
-            ('outputnode.out_reference_brain', 'b0_ref_brain'),
             ('outputnode.out_mask', 'b0_mask')]),
     ])
 

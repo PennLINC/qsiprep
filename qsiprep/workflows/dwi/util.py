@@ -16,10 +16,9 @@ import pkg_resources as pkgr
 
 from nipype.pipeline import engine as pe
 from nipype.utils.filemanip import split_filename
-from nipype.interfaces import utility as niu, fsl, ants
+from nipype.interfaces import utility as niu, ants
 from ...niworkflows.interfaces import SimpleBeforeAfter
 from ...engine import Workflow
-from ...interfaces.ants import ImageMath
 from ...interfaces import DerivativesDataSink
 from ...interfaces.nilearn import EnhanceAndSkullstripB0
 
@@ -126,20 +125,18 @@ def init_dwi_reference_wf(omp_nthreads=1, dwi_file=None, register_t1=False,
             ants.ApplyTransforms(transforms='identity'),
             name='t1_mask_to_b0')
 
-    workflow.connect([
-        (inputnode, t1_mask_to_b0, [
-            ('t1_mask', 'input_image'),
-            ('b0_template', 'reference_image')])])
-
     # Do a masking of the DWI by itself
     enhance_and_mask_b0 = pe.Node(EnhanceAndSkullstripB0(), name='enhance_and_mask_b0')
 
     workflow.connect([
+        (inputnode, t1_mask_to_b0, [
+            ('t1_mask', 'input_image'),
+            ('b0_template', 'reference_image')]),
         (inputnode, outputnode, [('b0_template', 'raw_ref_image')]),
         (inputnode, enhance_and_mask_b0, [('b0_template', 'b0_file')]),
         (t1_mask_to_b0, enhance_and_mask_b0, [('output_image', 't1_mask')]),
         (enhance_and_mask_b0, outputnode, [
-            ('bias_corrected_file', 'ref_image'),
+            ('enhanced_file', 'ref_image'),
             ('skull_stripped_file', 'ref_image_brain'),
             ('mask_file', 'dwi_mask')])
     ])
@@ -157,207 +154,11 @@ def init_dwi_reference_wf(omp_nthreads=1, dwi_file=None, register_t1=False,
         workflow.connect([
             (inputnode, b0ref_reportlet, [('b0_template', 'before')]),
             (enhance_and_mask_b0, b0ref_reportlet, [
-                ('bias_corrected_file', 'after'),
+                ('enhanced_file', 'after'),
                 ('plotting_mask_file', 'wm_seg')]),
             (b0ref_reportlet, outputnode, [('out_report', 'validation_report')]),
             (b0ref_reportlet, ds_report_b0_mask, [('out_report', 'in_file')])
         ])
-
-    return workflow
-
-
-def init_enhance_and_skullstrip_dwi_wf(name='enhance_and_skullstrip_dwi_wf', omp_nthreads=1):
-    """
-    https://community.mrtrix.org/t/
-        dwibiascorrect-with-ants-high-intensity-in-cerebellum-brainstem/1338/3
-
-    Truncates image intensities, runs N3, creates a rough initial mask
-
-    .. workflow ::
-        :graph2use: orig
-        :simple_form: yes
-
-        from qsiprep.workflows.dwi.util import init_enhance_and_skullstrip_dwi_wf
-        wf = init_enhance_and_skullstrip_dwi_wf(omp_nthreads=1)
-
-    **Parameters**
-        name : str
-            Name of workflow (default: ``enhance_and_skullstrip_dwi_wf``)
-        omp_nthreads : int
-            number of threads available to parallel nodes
-
-    **Inputs**
-
-        in_file
-            dwi image (single volume)
-
-
-    **Outputs**
-
-        bias_corrected_file
-            the ``in_file`` after N4BiasFieldCorrection and sharpening
-        skull_stripped_file
-            the ``bias_corrected_file`` after soft skull-stripping
-        mask_file
-            mask of the skull-stripped input file
-
-    """
-    workflow = Workflow(name=name)
-    inputnode = pe.Node(niu.IdentityInterface(fields=['in_file']),
-                        name='inputnode')
-    outputnode = pe.Node(niu.IdentityInterface(fields=[
-        'mask_file', 'skull_stripped_file', 'bias_corrected_file']), name='outputnode')
-
-    enhance_and_mask_b0 = pe.Node(EnhanceAndSkullstripB0(), name='enhance_and_mask_b0')
-
-    workflow.connect([
-        (inputnode, enhance_and_mask_b0, [('in_file', 'b0_file')]),
-        (enhance_and_mask_b0, outputnode, [
-            ('mask_file', 'mask_file'),
-            ('bias_corrected_file', 'bias_corrected_file'),
-            ('skull_stripped_file', 'skull_stripped_file')])
-        ])
-
-    return workflow
-
-
-def init_skullstrip_b0_wf(name='skullstrip_b0_wf', use_t1_prior=False, use_initial_mask=False):
-    """
-    This workflow applies fancy skull-stripping to a DWI image.
-
-    It is intended to be used on an image that has previously been
-    bias-corrected and enhanced with
-    :py:func:`~qsiprep.workflows.dwi.util.init_enhance_and_skullstrip_dwi_wf`
-
-    .. workflow ::
-        :graph2use: orig
-        :simple_form: yes
-
-        from qsiprep.workflows.bold.util import init_skullstrip_b0_wf
-        wf = init_skullstrip_b0_wf()
-
-
-    Inputs
-
-        in_file
-            b0 image (single volume)
-        initial_dwi_mask
-            A rough mask from a prior pipeline
-        t1_prior_mask
-            A brain mask from a co-registered T1 in the same voxel grid as in_file
-
-
-    Outputs
-
-        skull_stripped_file
-            the ``in_file`` after skull-stripping
-        mask_file
-            mask of the skull-stripped input file
-
-    """
-    workflow = Workflow(name=name)
-    inputnode = pe.Node(
-        niu.IdentityInterface(fields=['in_file', 't1_prior_mask', 'initial_dwi_mask']),
-        name='inputnode')
-    outputnode = pe.Node(
-        niu.IdentityInterface(
-            fields=['mask_file', 'skull_stripped_file', 'out_report']),
-        name='outputnode')
-
-    pad_image = pe.Node(
-        ImageMath(dimension=3,
-                  operation="PadImage",
-                  secondary_arg="10"),
-        name="pad_image")
-
-    unpad_image = pe.Node(
-        ImageMath(dimension=3,
-                  operation="PadImage",
-                  secondary_arg="-10"),
-        name="unpad_image")
-
-    if use_initial_mask:
-        workflow.connect([(inputnode, pad_image, [('initial_dwi_mask', 'in_file')])])
-    else:
-        initial_mask = pe.Node(EnhanceAndSkullstripB0(), name="initial_mask")
-        workflow.connect([
-            (inputnode, initial_mask, [('in_file', 'b0_file')]),
-            (initial_mask, pad_image, [('mask_file', 'in_file')])
-        ])
-
-    erode1 = pe.Node(
-        ImageMath(dimension=3,
-                  operation="ME",
-                  secondary_arg="2"),
-        name="erode1")
-
-    get_largest = pe.Node(
-        ImageMath(dimension=3,
-                  operation="GetLargestComponent"),
-        name='get_largest')
-
-    dilate1 = pe.Node(
-        ImageMath(dimension=3,
-                  operation="MD",
-                  secondary_arg="4"),
-        name='dilate1')
-
-    fill_holes = pe.Node(
-        ImageMath(dimension=3,
-                  operation="FillHoles",
-                  secondary_arg="2"),
-        name='fill_holes')
-
-    dilate2 = pe.Node(
-        ImageMath(dimension=3,
-                  operation="MD",
-                  secondary_arg="5"),
-        name='dilate2')
-
-    erode2 = pe.Node(
-        ImageMath(dimension=3,
-                  operation="ME",
-                  secondary_arg="7"),
-        name="erode2")
-
-    apply_mask = pe.Node(fsl.ApplyMask(), name='apply_mask')
-
-    # Do the prior-less parts
-    workflow.connect([
-        (pad_image, erode1, [('out_file', 'in_file')]),
-        (erode1, get_largest, [('out_file', 'in_file')]),
-        (get_largest, dilate1, [('out_file', 'in_file')]),
-        (dilate1, fill_holes, [('out_file', 'in_file')])
-    ])
-
-    # Add in a t1 prior if requested
-    if use_t1_prior:
-        pad_t1 = pe.Node(
-            ImageMath(dimension=3,
-                      operation="PadImage",
-                      secondary_arg="10"),
-            name="pad_t1")
-        add_t1_prior = pe.Node(
-            ImageMath(dimension=3,
-                      operation="addtozero"),
-            name="add_t1_prior")
-        workflow.connect([
-            (inputnode, pad_t1, [('t1_prior_mask', 'in_file')]),
-            (pad_t1, add_t1_prior, [('out_file', 'secondary_file')]),
-            (fill_holes, add_t1_prior, [('out_file', 'in_file')]),
-            (add_t1_prior, dilate2, [('out_file', 'in_file')])
-        ])
-    else:
-        workflow.connect(fill_holes, 'out_file', dilate2, 'in_file')
-
-    workflow.connect([
-        (dilate2, erode2, [('out_file', 'in_file')]),
-        (erode2, unpad_image, [('out_file', 'in_file')]),
-        (unpad_image, outputnode, [('out_file', 'mask_file')]),
-        (inputnode, apply_mask, [('in_file', 'in_file')]),
-        (unpad_image, apply_mask, [('out_file', 'mask_file')]),
-        (apply_mask, outputnode, [('out_file', 'skull_stripped_file')]),
-    ])
 
     return workflow
 

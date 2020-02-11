@@ -29,7 +29,6 @@ from ...niworkflows.interfaces.images import DemeanImage, FilledImageLike
 from ...niworkflows.interfaces.registration import ANTSApplyTransformsRPT, ANTSRegistrationRPT
 
 from ...interfaces import DerivativesDataSink
-from ..dwi.util import init_enhance_and_skullstrip_dwi_wf
 from ...interfaces.fmap import get_ees as _get_ees, FieldToRadS, FieldToHz
 
 

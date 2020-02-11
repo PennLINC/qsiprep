@@ -31,7 +31,6 @@ from nipype.interfaces import fsl, ants, utility as niu
 from nipype.interfaces.image import Rescale
 
 from ...engine import Workflow
-from ..dwi.util import init_skullstrip_b0_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger('nipype.workflow')
@@ -67,8 +66,6 @@ def init_syn_sdc_wf(omp_nthreads, bold_pe=None,
 
         b0_ref
             reference image
-        b0_ref_brain
-            skull-stripped reference image
         template : str
             Name of template targeted by ``template`` output space
         t1_brain
@@ -107,7 +104,7 @@ along the phase-encoding direction, and modulated with an average fieldmap
 template [@fieldmapless3].
 """.format(ants_ver=ants.Registration().version or '<ver>')
     inputnode = pe.Node(
-        niu.IdentityInterface(['bold_ref', 'bold_ref_brain', 'template',
+        niu.IdentityInterface(['bold_ref', 'template',
                                't1_brain', 't1_2_mni_reverse_transform']),
         name='inputnode')
     outputnode = pe.Node(
