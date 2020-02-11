@@ -12,7 +12,7 @@ from nipype import logging
 
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
-from nipype.interfaces import fsl, ants
+from nipype.interfaces import fsl
 
 from ...interfaces.eddy import GatherEddyInputs, ExtendedEddy, Eddy2SPMMotion
 from ...interfaces.images import SplitDWIs, ConformDwi, IntraModalMerge

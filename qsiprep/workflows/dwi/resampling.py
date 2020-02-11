@@ -13,7 +13,7 @@ from nipype.interfaces import utility as niu, ants
 
 from .util import init_dwi_reference_wf
 from ...engine import Workflow
-from ...interfaces.nilearn import Merge, MaskB0Series
+from ...interfaces.nilearn import Merge
 from ...interfaces.gradients import (ComposeTransforms, ExtractB0s, GradientRotation,
                                      LocalGradientRotation)
 from ...interfaces.itk import DisassembleTransform
