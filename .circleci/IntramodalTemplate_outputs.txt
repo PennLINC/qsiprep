@@ -17,13 +17,13 @@ qsiprep/sub-tester/figures/sub-tester_imtcoreg.svg
 qsiprep/sub-tester/figures/sub-tester_seg_brainmask.svg
 qsiprep/sub-tester/figures/sub-tester_ses-1_acq-HASC55PA_carpetplot.svg
 qsiprep/sub-tester/figures/sub-tester_ses-1_acq-HASC55PA_coreg.svg
-qsiprep/sub-tester/figures/sub-tester_ses-1_acq-HASC55PA_desc-initial_b0ref.svg
+qsiprep/sub-tester/figures/sub-tester_ses-1_acq-HASC55PA_desc-resampled_b0ref.svg
 qsiprep/sub-tester/figures/sub-tester_ses-1_acq-HASC55PA_merged_denoise_biascorr.svg
 qsiprep/sub-tester/figures/sub-tester_ses-1_acq-HASC55PA_sampling_scheme.gif
 qsiprep/sub-tester/figures/sub-tester_ses-1_acq-HASC55PA_tointramodal.svg
 qsiprep/sub-tester/figures/sub-tester_ses-2_acq-HASC55AP_carpetplot.svg
 qsiprep/sub-tester/figures/sub-tester_ses-2_acq-HASC55AP_coreg.svg
-qsiprep/sub-tester/figures/sub-tester_ses-2_acq-HASC55AP_desc-initial_b0ref.svg
+qsiprep/sub-tester/figures/sub-tester_ses-2_acq-HASC55AP_desc-resampled_b0ref.svg
 qsiprep/sub-tester/figures/sub-tester_ses-2_acq-HASC55AP_merged_denoise_biascorr.svg
 qsiprep/sub-tester/figures/sub-tester_ses-2_acq-HASC55AP_sampling_scheme.gif
 qsiprep/sub-tester/figures/sub-tester_ses-2_acq-HASC55AP_tointramodal.svg
