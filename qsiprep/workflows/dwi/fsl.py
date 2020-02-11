@@ -133,7 +133,6 @@ def init_fsl_hmc_wf(scan_groups,
 
     # Convert the b=0 template from pre_eddy_b0_ref to LPS+
     b0_ref_to_lps = pe.Node(ConformDwi(orientation="LPS"), name='b0_ref_to_lps')
-    b0_ref_brain_to_lps = pe.Node(ConformDwi(orientation="LPS"), name='b0_ref_brain_to_lps')
     b0_ref_mask_to_lps = pe.Node(ConformDwi(orientation="LPS"), name='b0_ref_mask_to_lps')
 
     workflow.connect([
@@ -184,6 +183,7 @@ def init_fsl_hmc_wf(scan_groups,
             (slice_quality, 'slice_quality'),
             (slice_quality, 'hmc_optimization_data')]),
         (eddy, spm_motion, [('out_parameter', 'eddy_motion')]),
+        (b0_ref_mask_to_lps, outputnode, [('dwi_file', 'b0_template_mask')]),
         (spm_motion, outputnode, [('spm_motion_file', 'motion_params')])
     ])
 
@@ -220,7 +220,6 @@ def init_fsl_hmc_wf(scan_groups,
             (topup, unwarped_mean, [('out_corrected', 'in_files')]),
             (unwarped_mean, pre_eddy_b0_ref_wf, [('out_avg', 'inputnode.b0_template')]),
             (b0_ref_to_lps, outputnode, [('dwi_file', 'b0_template')]),
-            (b0_ref_mask_to_lps, outputnode, [('dwi_file', 'b0_template_mask')]),
             # Save reports
             (gather_inputs, topup_summary, [('topup_report', 'summary')]),
             (topup_summary, ds_report_topupsummary, [('out_report', 'in_file')]),
@@ -256,15 +255,12 @@ def init_fsl_hmc_wf(scan_groups,
             (b0_sdc_wf, outputnode, [
                 ('outputnode.out_warp', 'to_dwi_ref_warps'),
                 ('outputnode.method', 'sdc_method'),
-                ('outputnode.b0_ref', 'b0_template'),
-                ('outputnode.b0_mask', 'b0_template_mask')])])
+                ('outputnode.b0_ref', 'b0_template')])])
 
     else:
         outputnode.inputs.sdc_method = "None"
         workflow.connect([
             (b0_ref_to_lps, outputnode, [
-                ('dwi_file', 'b0_template')]),
-            (b0_ref_mask_to_lps, outputnode, [
-                ('dwi_file', 'b0_template_mask')])])
+                ('dwi_file', 'b0_template')])])
 
     return workflow
