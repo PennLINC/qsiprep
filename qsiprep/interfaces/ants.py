@@ -5,7 +5,7 @@ import logging
 
 from nipype.interfaces.base import (TraitedSpec, CommandLineInputSpec, BaseInterfaceInputSpec,
                                     CommandLine, File, traits, isdefined, InputMultiObject,
-                                    OutputMultiObject)
+                                    OutputMultiObject, SimpleInterface)
 from nipype.interfaces import ants
 from nipype.utils.filemanip import split_filename
 LOGGER = logging.getLogger('nipype.interface')
@@ -144,3 +144,16 @@ class ImageMath(CommandLine):
         outputs = self.output_spec().get()
         outputs['out_file'] = op.abspath(self._gen_filename('out_file'))
         return outputs
+
+
+class _ANTsBBRInputSpec(ants.registration.RegistrationInputSpec):
+    wm_seg = File(exists=True)
+
+
+class _ANTsBBROutputSpec(TraitedSpec):
+    forward_transforms = OutputMultiObject(File())
+
+
+class ANTsBBR(SimpleInterface):
+    input_spec = _ANTsBBRInputSpec
+    output_spec = _ANTsBBROutputSpec

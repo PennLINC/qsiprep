@@ -23,13 +23,13 @@ from .qc import init_modelfree_qc_wf
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
-def init_dwi_trans_wf(template,
+def init_dwi_trans_wf(source_file,
+                      template,
                       mem_gb,
                       omp_nthreads,
                       output_resolution,
                       name='dwi_trans_wf',
                       use_compression=True,
-                      use_fieldwarp=False,
                       to_mni=False,
                       write_local_bvecs=False):
     """
@@ -41,7 +41,8 @@ def init_dwi_trans_wf(template,
         :simple_form: yes
 
         from qsiprep.workflows.dwi.resampling import init_dwi_trans_wf
-        wf = init_dwi_trans_wf(template='MNI152NLin2009cAsym',
+        wf = init_dwi_trans_wf(source_file='sub-1_dwi.nii.gz',
+                               template='MNI152NLin2009cAsym',
                                output_resolution=1.2,
                                mem_gb=3,
                                omp_nthreads=1)
@@ -128,6 +129,7 @@ generating a *preprocessed DWI run in {tpl} space*.
         niu.IdentityInterface(fields=[
             'itk_b0_to_t1',
             't1_mask',
+            't1_brain',
             'b0_to_intramodal_template_transforms',
             'intramodal_template_to_t1_warp',
             'intramodal_template_to_t1_affine',
@@ -232,15 +234,8 @@ generating a *preprocessed DWI run in {tpl} space*.
                     mem_gb=mem_gb * 3)
 
     extract_b0_series = pe.Node(ExtractB0s(), name="extract_b0_series")
-    mask_b0s = pe.Node(MaskB0Series(), name="mask_b0s")
-
-    # Use the T1w to make a final mask
-    resample_t1_mask = pe.Node(
-        ants.ApplyTransforms(dimension=3,
-                             transforms='identity',
-                             interpolation="MultiLabel"),
-        name='resample_t1_mask')
-    final_b0_ref = init_dwi_reference_wf()
+    final_b0_ref = init_dwi_reference_wf(register_t1=False, gen_report=True, desc='resampled',
+                                         name='final_b0_ref', source_file=source_file)
 
     workflow.connect([
         (inputnode, rotate_gradients, [('bvec_files', 'bvec_files'),
@@ -262,13 +257,10 @@ generating a *preprocessed DWI run in {tpl} space*.
         (merge, extract_b0_series, [('out_file', 'dwi_series')]),
         (inputnode, extract_b0_series, [('b0_indices', 'b0_indices')]),
         (extract_b0_series, final_b0_ref, [('b0_average', 'inputnode.b0_template')]),
-        (extract_b0_series, resample_t1_mask, [('b0_average', 'reference_image')]),
-        (inputnode, resample_t1_mask, [('t1_mask', 'input_image')]),
-        (resample_t1_mask, final_b0_ref, [('output_image', 'inputnode.t1_prior_mask')]),
-        (final_b0_ref, outputnode, [('outputnode.ref_image', 'dwi_ref_resampled')]),
-        (extract_b0_series, mask_b0s, [('b0_series', 'b0_series')]),
-        (mask_b0s, outputnode, [('mask_file', 'resampled_dwi_mask')]),
-        (extract_b0_series, outputnode, [('b0_series', 'b0_series')])])
+        (inputnode, final_b0_ref, [('t1_mask', 'inputnode.t1_mask')]),
+        (final_b0_ref, outputnode, [
+            ('outputnode.ref_image', 'dwi_ref_resampled'),
+            ('outputnode.dwi_mask', 'resampled_dwi_mask')])])
 
     # Calculate QC metrics on the resampled data
     calculate_qc = init_modelfree_qc_wf(name='calculate_qc')

@@ -377,6 +377,7 @@ Diffusion data preprocessing
             ('outputnode.original_files', 'inputnode.original_files')]),
         (inputnode, hmc_wf, [
             ('t1_brain', 'inputnode.t1_brain'),
+            ('t1_mask', 'inputnode.t1_mask'),
             ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform')]),
         (pre_hmc_wf, outputnode, [
             ('outputnode.qc_file', 'raw_qc_file'),

@@ -33,9 +33,9 @@ def init_dwi_derivatives_wf(output_prefix,
     inputnode = pe.Node(
         niu.IdentityInterface(fields=[
             'source_file', 'dwi_t1', 'dwi_mask_t1', 'cnr_map_t1', 'bvals_t1', 'bvecs_t1',
-            'local_bvecs_t1', 't1_b0_ref', 't1_b0_series', 'gradient_table_t1', 'dwi_mni',
+            'local_bvecs_t1', 't1_b0_ref', 'gradient_table_t1', 'dwi_mni',
             'dwi_mask_mni', 'cnr_map_mni', 'bvals_mni', 'bvecs_mni', 'local_bvecs_mni',
-            'mni_b0_ref', 'mni_b0_series', 'gradient_table_mni', 'confounds',
+            'mni_b0_ref', 'gradient_table_mni', 'confounds',
             'hmc_optimization_data', 'series_qc'
         ]),
         name='inputnode')
@@ -100,17 +100,6 @@ def init_dwi_derivatives_wf(output_prefix,
             name='ds_t1_b0_ref',
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
-        ds_t1_b0_series = pe.Node(
-            DerivativesDataSink(
-                source_file=source_file,
-                base_directory=output_dir,
-                space='T1w',
-                suffix='b0series',
-                extension='.nii.gz',
-                compress=True),
-            name='ds_t1_b0_series',
-            run_without_submitting=True,
-            mem_gb=DEFAULT_MEMORY_MIN_GB)
         ds_dwi_mask_t1 = pe.Node(
             DerivativesDataSink(
                 source_file=source_file,
@@ -152,7 +141,6 @@ def init_dwi_derivatives_wf(output_prefix,
             (inputnode, ds_bvals_t1, [('bvals_t1', 'in_file')]),
             (inputnode, ds_bvecs_t1, [('bvecs_t1', 'in_file')]),
             (inputnode, ds_t1_b0_ref, [('t1_b0_ref', 'in_file')]),
-            (inputnode, ds_t1_b0_series, [('t1_b0_series', 'in_file')]),
             (inputnode, ds_dwi_mask_t1, [('dwi_mask_t1', 'in_file')]),
             (inputnode, ds_cnr_map_t1, [('cnr_map_t1', 'in_file')]),
             (inputnode, ds_gradient_table_t1, [('gradient_table_t1', 'in_file')])
@@ -219,17 +207,6 @@ def init_dwi_derivatives_wf(output_prefix,
             name='ds_mni_b0_ref',
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
-        ds_mni_b0_series = pe.Node(
-            DerivativesDataSink(
-                source_file=source_file,
-                base_directory=output_dir,
-                space=template,
-                suffix='b0series',
-                extension='.nii.gz',
-                compress=True),
-            name='ds_mni_b0_series',
-            run_without_submitting=True,
-            mem_gb=DEFAULT_MEMORY_MIN_GB)
         ds_dwi_mask_mni = pe.Node(
             DerivativesDataSink(
                 source_file=source_file,
@@ -258,7 +235,6 @@ def init_dwi_derivatives_wf(output_prefix,
             (inputnode, ds_bvals_mni, [('bvals_mni', 'in_file')]),
             (inputnode, ds_bvecs_mni, [('bvecs_mni', 'in_file')]),
             (inputnode, ds_mni_b0_ref, [('mni_b0_ref', 'in_file')]),
-            (inputnode, ds_mni_b0_series, [('mni_b0_series', 'in_file')]),
             (inputnode, ds_dwi_mask_mni, [('dwi_mask_mni', 'in_file')]),
             (inputnode, ds_gradient_table_mni, [('gradient_table_mni', 'in_file')])
             ])

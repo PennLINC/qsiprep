@@ -12,16 +12,16 @@ from nipype import logging
 
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
-from nipype.interfaces import fsl, afni, ants
+from nipype.interfaces import fsl, ants
 
 from ...interfaces.eddy import GatherEddyInputs, ExtendedEddy, Eddy2SPMMotion
-from ...interfaces.images import SplitDWIs, ConformDwi
+from ...interfaces.images import SplitDWIs, ConformDwi, IntraModalMerge
 from ...interfaces.reports import TopupSummary
 from ...interfaces import DerivativesDataSink
 from ...engine import Workflow
 
 # dwi workflows
-from .util import init_enhance_and_skullstrip_dwi_wf
+from .util import init_dwi_reference_wf
 from ..fieldmap.base import init_sdc_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
@@ -84,14 +84,18 @@ def init_fsl_hmc_wf(scan_groups,
             List of single b=0 volumes
         original_files: list
             List of the files from which each DWI volume came.
-
+        t1_brain: str
+            Skull stripped T1w image
+        t1_mask: str
+            mask for t1_brain
 
     """
 
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=['dwi_file', 'bvec_file', 'bval_file', 'b0_indices', 'b0_images',
-                    'original_files', 't1_brain', 't1_2_mni_reverse_transform']),
+                    'original_files', 't1_brain', 't1_mask', 't1_seg',
+                    't1_2_mni_reverse_transform']),
         name='inputnode')
 
     outputnode = pe.Node(
@@ -114,19 +118,22 @@ def init_fsl_hmc_wf(scan_groups,
     with open(eddy_cfg_file, "r") as f:
         eddy_args = json.load(f)
 
-    # Use run in parallel if possible
+    # Run in parallel if possible
     LOGGER.info("Using %d threads in eddy", omp_nthreads)
     eddy_args["num_threads"] = omp_nthreads
+    pre_eddy_b0_ref_wf = init_dwi_reference_wf(register_t1=True, source_file=source_file,
+                                               name='pre_eddy_b0_ref_wf', gen_report=False)
     eddy = pe.Node(ExtendedEddy(**eddy_args), name="eddy")
     spm_motion = pe.Node(Eddy2SPMMotion(), name="spm_motion")
+
     # Convert eddy outputs back to LPS+, split them
-    pre_topup_lps = pe.Node(ConformDwi(orientation="LPS"), name='pre_topup_lps')
-    pre_topup_enhance = init_enhance_and_skullstrip_dwi_wf(name='pre_topup_enhance')
     back_to_lps = pe.Node(ConformDwi(orientation="LPS"), name='back_to_lps')
     cnr_lps = pe.Node(ConformDwi(orientation="LPS"), name='cnr_lps')
     split_eddy_lps = pe.Node(SplitDWIs(b0_threshold=b0_threshold), name="split_eddy_lps")
-    mean_b0_lps = pe.Node(ants.AverageImages(dimension=3, normalize=True), name='mean_b0_lps')
-    lps_b0_enhance = init_enhance_and_skullstrip_dwi_wf(name='lps_b0_enhance')
+
+    # Convert the b=0 template from pre_eddy_b0_ref to LPS+
+    b0_ref_to_lps = pe.Node(ConformDwi(orientation="LPS"), name='b0_ref_to_lps')
+    b0_ref_mask_to_lps = pe.Node(ConformDwi(orientation="LPS"), name='b0_ref_mask_to_lps')
 
     workflow.connect([
         # These images and gradients should be in LAS+
@@ -135,6 +142,15 @@ def init_fsl_hmc_wf(scan_groups,
             ('bval_file', 'bval_file'),
             ('bvec_file', 'bvec_file'),
             ('original_files', 'original_files')]),
+        (inputnode, pre_eddy_b0_ref_wf, [
+            ('t1_brain', 'inputnode.t1_brain'),
+            ('t1_mask', 'inputnode.t1_mask'),
+            ('t1_seg', 'inputnode.t1_seg')]),
+        # Convert distorted ref to LPS+
+        (pre_eddy_b0_ref_wf, b0_ref_to_lps, [
+            ('outputnode.ref_image', 'dwi_file')]),
+        (pre_eddy_b0_ref_wf, b0_ref_mask_to_lps, [
+            ('outputnode.dwi_mask', 'dwi_file')]),
         (gather_inputs, eddy, [
             ('eddy_indices', 'in_index'),
             ('eddy_acqp', 'in_acqp')]),
@@ -142,13 +158,10 @@ def init_fsl_hmc_wf(scan_groups,
             ('dwi_file', 'in_file'),
             ('bval_file', 'in_bval'),
             ('bvec_file', 'in_bvec')]),
-        (gather_inputs, pre_topup_lps, [
-            ('pre_topup_image', 'dwi_file')]),
-        (gather_inputs, outputnode, [('forward_transforms', 'to_dwi_ref_affines')]),
-        (pre_topup_lps, pre_topup_enhance, [
-            ('dwi_file', 'inputnode.in_file')]),
-        (pre_topup_enhance, outputnode, [
-            ('outputnode.bias_corrected_file', 'pre_sdc_template')]),
+        (pre_eddy_b0_ref_wf, eddy, [('outputnode.dwi_mask', 'in_mask')]),
+        (gather_inputs, outputnode, [
+            ('forward_transforms', 'to_dwi_ref_affines'),
+            ('pre_topup_image', 'pre_sdc_template')]),
         (eddy, back_to_lps, [
             ('out_corrected', 'dwi_file'),
             ('out_rotated_bvecs', 'bvec_file')]),
@@ -164,14 +177,13 @@ def init_fsl_hmc_wf(scan_groups,
             ('bvec_files', 'bvec_files_to_transform'),
             ('bval_files', 'bval_files'),
             ('b0_indices', 'b0_indices')]),
-        (split_eddy_lps, mean_b0_lps, [('b0_images', 'images')]),
-        (mean_b0_lps, lps_b0_enhance, [('output_average_image', 'inputnode.in_file')]),
         (eddy, cnr_lps, [('out_cnr_maps', 'dwi_file')]),
         (cnr_lps, outputnode, [('dwi_file', 'cnr_map')]),
         (eddy, outputnode, [
             (slice_quality, 'slice_quality'),
             (slice_quality, 'hmc_optimization_data')]),
         (eddy, spm_motion, [('out_parameter', 'eddy_motion')]),
+        (b0_ref_mask_to_lps, outputnode, [('dwi_file', 'b0_template_mask')]),
         (spm_motion, outputnode, [('spm_motion_file', 'motion_params')])
     ])
 
@@ -192,36 +204,37 @@ def init_fsl_hmc_wf(scan_groups,
             name='ds_report_topupsummary',
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
-        # Enhance and skullstrip the TOPUP output to get a mask for eddy
-        unwarped_mean = pe.Node(afni.TStat(outputtype='NIFTI_GZ'), name='unwarped_mean')
-        unwarped_enhance = init_enhance_and_skullstrip_dwi_wf(name='unwarped_enhance')
 
+        # Enhance and skullstrip the TOPUP output to get a mask for eddy
+        unwarped_mean = pe.Node(IntraModalMerge(hmc=False, to_lps=False), name='unwarped_mean')
         workflow.connect([
+            # There will be no SDC warps, they are applied by eddy
+            (gather_inputs, outputnode, [('forward_warps', 'to_dwi_ref_warps')]),
             (gather_inputs, topup, [
                 ('topup_datain', 'encoding_file'),
                 ('topup_imain', 'in_file'),
                 ('topup_config', 'config')]),
-            (gather_inputs, topup_summary, [('topup_report', 'summary')]),
-            (topup_summary, ds_report_topupsummary, [('out_report', 'in_file')]),
-            (gather_inputs, outputnode, [('forward_warps', 'to_dwi_ref_warps')]),
-            (topup, unwarped_mean, [('out_corrected', 'in_file')]),
-            (unwarped_mean, unwarped_enhance, [('out_file', 'inputnode.in_file')]),
-            (unwarped_enhance, eddy, [('outputnode.mask_file', 'in_mask')]),
             (topup, eddy, [
                 ('out_field', 'field')]),
-            (lps_b0_enhance, outputnode, [
-                ('outputnode.bias_corrected_file', 'b0_template'),
-                ('outputnode.mask_file', 'b0_template_mask')]),
-            ])
+            # Use corrected images from TOPUP to make a mask for eddy
+            (topup, unwarped_mean, [('out_corrected', 'in_files')]),
+            (unwarped_mean, pre_eddy_b0_ref_wf, [('out_avg', 'inputnode.b0_template')]),
+            (b0_ref_to_lps, outputnode, [('dwi_file', 'b0_template')]),
+            # Save reports
+            (gather_inputs, topup_summary, [('topup_report', 'summary')]),
+            (topup_summary, ds_report_topupsummary, [('out_report', 'in_file')]),
+        ])
         return workflow
 
-    # Enhance and skullstrip the TOPUP output to get a mask for eddy
-    distorted_enhance = init_enhance_and_skullstrip_dwi_wf(name='distorted_enhance')
+    # The topup inputs will only have one PE direction,
+    # so they can be used to make a b=0 reference to mask for eddy
+    distorted_merge = pe.Node(
+        IntraModalMerge(hmc=True, to_lps=False), name='distorted_merge')
     workflow.connect([
         # Use the distorted mask for eddy
-        (gather_inputs, distorted_enhance, [('pre_topup_image', 'inputnode.in_file')]),
-        (distorted_enhance, eddy, [('outputnode.mask_file', 'in_mask')]),
-    ])
+        (gather_inputs, distorted_merge, [('topup_imain', 'in_files')]),
+        (distorted_merge, pre_eddy_b0_ref_wf, [('out_avg', 'inputnode.b0_template')])])
+
     if fieldmap_type in ('fieldmap', 'phasediff', 'phase', 'syn'):
 
         outputnode.inputs.sdc_method = fieldmap_type
@@ -230,11 +243,9 @@ def init_fsl_hmc_wf(scan_groups,
             fmap_demean=fmap_demean, fmap_bspline=fmap_bspline)
 
         workflow.connect([
-            # Calculate distortion correction on eddy-corrected data
-            (lps_b0_enhance, b0_sdc_wf, [
-                ('outputnode.bias_corrected_file', 'inputnode.b0_ref'),
-                ('outputnode.skull_stripped_file', 'inputnode.b0_ref_brain'),
-                ('outputnode.mask_file', 'inputnode.b0_mask')]),
+            # Send to SDC workflow
+            (b0_ref_to_lps, b0_sdc_wf, [
+                ('dwi_file', 'inputnode.b0_ref')]),
             (inputnode, b0_sdc_wf, [
                 ('t1_brain', 'inputnode.t1_brain'),
                 ('t1_2_mni_reverse_transform',
@@ -244,15 +255,12 @@ def init_fsl_hmc_wf(scan_groups,
             (b0_sdc_wf, outputnode, [
                 ('outputnode.out_warp', 'to_dwi_ref_warps'),
                 ('outputnode.method', 'sdc_method'),
-                ('outputnode.b0_ref', 'b0_template'),
-                ('outputnode.b0_mask', 'b0_template_mask')])])
+                ('outputnode.b0_ref', 'b0_template')])])
 
     else:
         outputnode.inputs.sdc_method = "None"
         workflow.connect([
-            (lps_b0_enhance, outputnode, [
-                ('outputnode.skull_stripped_file', 'b0_template'),
-                ('outputnode.mask_file', 'b0_template_mask')]),
-            ])
+            (b0_ref_to_lps, outputnode, [
+                ('dwi_file', 'b0_template')])])
 
     return workflow

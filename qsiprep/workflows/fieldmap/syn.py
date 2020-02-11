@@ -159,8 +159,6 @@ template [@fieldmapless3].
         dimension=3, float=True, interpolation='LanczosWindowedSinc'),
         name='unwarp_ref')
 
-    skullstrip_b0_wf = init_skullstrip_b0_wf()
-
     workflow.connect([
         (inputnode, invert_t1w, [('t1_brain', 'in_file'),
                                  ('bold_ref', 'ref_file')]),
@@ -182,12 +180,9 @@ template [@fieldmapless3].
         (syn, unwarp_ref, [('forward_transforms', 'transforms')]),
         (inputnode, unwarp_ref, [('bold_ref', 'reference_image'),
                                  ('bold_ref', 'input_image')]),
-        (unwarp_ref, skullstrip_b0_wf, [
-            ('output_image', 'inputnode.in_file')]),
-        (unwarp_ref, outputnode, [('output_image', 'out_reference')]),
-        (skullstrip_b0_wf, outputnode, [
-            ('outputnode.skull_stripped_file', 'out_reference_brain'),
-            ('outputnode.mask_file', 'out_mask')]),
+        (unwarp_ref, outputnode, [
+            ('output_image', 'out_reference'),
+            ('output_image', 'out_reference_brain')])
     ])
 
     return workflow

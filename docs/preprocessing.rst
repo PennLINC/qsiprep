@@ -517,7 +517,7 @@ Susceptibility Distortion Correction (SDC)
 
 The PEPOLAR and SyN-SDC workflows from FMRIPREP are copied here.
 They operate on the output of reference estimation, after head
-motion correction. For a complete list of possibilties here, see
+motion correction. For a complete list of possibilities here, see
 :ref:`merging`.
 
 .. _resampling:
@@ -532,9 +532,9 @@ Pre-processed DWIs in a different space
     :simple_form: yes
 
     from qsiprep.workflows.dwi.resampling import init_dwi_trans_wf
-    wf = init_dwi_trans_wf(template="ACPC",
+    wf = init_dwi_trans_wf(source_file='sub-1_dwi.nii.gz',
+                           template="ACPC",
                            output_resolution=1.2,
-                           use_fieldwarp=True,
                            use_compression=True,
                            to_mni=False,
                            write_local_bvecs=True,

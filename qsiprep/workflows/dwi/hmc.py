@@ -14,7 +14,7 @@ from ...interfaces.gradients import MatchTransforms, GradientRotation, CombineMo
 from ...interfaces.shoreline import (SignalPrediction, ExtractDWIsForModel, ReorderOutputs,
                                      B0Mean, SHORELineReport, IterationSummary, CalculateCNR)
 from ...interfaces import DerivativesDataSink
-from .util import init_enhance_and_skullstrip_dwi_wf
+from .util import init_dwi_reference_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
@@ -78,13 +78,15 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file,
 
     inputnode = pe.Node(
         niu.IdentityInterface(
-            fields=['dwi_files', 'b0_indices', 'bvecs', 'bvals', 'b0_images', 'original_files']),
+            fields=['dwi_files', 'b0_indices', 'bvecs', 'bvals', 'b0_images', 'original_files',
+                    't1_brain', 't1_mask', 't1_seg']),
         name='inputnode')
 
     outputnode = pe.Node(
         niu.IdentityInterface(
             fields=["final_template", "forward_transforms", "noise_free_dwis",
-                    "cnr_image", "optimization_data"]),
+                    "cnr_image", "optimization_data", "final_template_brain",
+                    "final_template_mask"]),
         name='outputnode')
 
     workflow = Workflow(name=name)
@@ -94,7 +96,8 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file,
     match_transforms = pe.Node(MatchTransforms(), name="match_transforms")
     # Make a mask from the output template. It is bias-corrected, so good for masking
     # but bad for using as a b=0 for modeling.
-    b0_template_mask = init_enhance_and_skullstrip_dwi_wf(name="b0_template_mask")
+    b0_template_mask = init_dwi_reference_wf(register_t1=True, name="b0_template_mask",
+                                             gen_report=False, source_file=source_file)
 
     workflow.connect([
         (inputnode, match_transforms, [('dwi_files', 'dwi_files'),
@@ -103,7 +106,16 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file,
         (b0_hmc_wf, outputnode, [('outputnode.final_template', 'final_template')]),
         (b0_hmc_wf, match_transforms, [(('outputnode.forward_transforms', _list_squeeze),
                                         'transforms')]),
-        (b0_hmc_wf, b0_template_mask, [('outputnode.final_template', 'inputnode.in_file')])
+        (inputnode, b0_template_mask, [
+            ('t1_brain', 'inputnode.t1_brain'),
+            ('t1_mask', 'inputnode.t1_mask'),
+            ('t1_seg', 'inputnode.t1_seg')]),
+        (b0_hmc_wf, b0_template_mask, [
+            ('outputnode.final_template', 'inputnode.b0_template')]),
+        (b0_template_mask, outputnode, [
+            ('outputnode.ref_image_brain', 'final_template_brain'),
+            ('outputnode.dwi_mask', 'final_template_mask')
+        ])
     ])
 
     # If we're just aligning based on the b=0 images, compute the b=0 tsnr as the cnr
@@ -138,7 +150,7 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file,
         (b0_hmc_wf, dwi_model_hmc_wf, [
             ('outputnode.aligned_images', 'inputnode.warped_b0_images')]),
         (b0_template_mask, dwi_model_hmc_wf, [
-            ('outputnode.mask_file', 'inputnode.warped_b0_mask')]),
+            ('outputnode.dwi_mask', 'inputnode.warped_b0_mask')]),
         (inputnode, dwi_model_hmc_wf, [
             ('dwi_files', 'inputnode.dwi_files'),
             ('b0_indices', 'inputnode.b0_indices'),

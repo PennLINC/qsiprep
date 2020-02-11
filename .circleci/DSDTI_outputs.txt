@@ -24,7 +24,6 @@ qsiprep/sub-PNC/anat/sub-PNC_space-MNI152NLin2009cAsym_label-WM_probseg.nii.gz
 qsiprep/sub-PNC/dwi
 qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_confounds.tsv
 qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_desc-ImageQC_dwi.csv
-qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_b0series.nii.gz
 qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-brain_mask.nii.gz
 qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-eddy_cnr.nii.gz
 qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_dwi.b
@@ -35,6 +34,7 @@ qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_dwiref.nii.gz
 qsiprep/sub-PNC/figures
 qsiprep/sub-PNC/figures/sub-PNC_acq-realistic_carpetplot.svg
 qsiprep/sub-PNC/figures/sub-PNC_acq-realistic_coreg.svg
+qsiprep/sub-PNC/figures/sub-PNC_acq-realistic_desc-resampled_b0ref.svg
 qsiprep/sub-PNC/figures/sub-PNC_acq-realistic_desc-sdc_b0.svg
 qsiprep/sub-PNC/figures/sub-PNC_acq-realistic_merged_denoise_biascorr.svg
 qsiprep/sub-PNC/figures/sub-PNC_acq-realistic_merged_denoise_denoising.svg

@@ -145,8 +145,6 @@ def init_sdc_unwarp_wf(omp_nthreads, fmap_demean, debug, name='sdc_unwarp_wf'):
 
     apply_fov_mask = pe.Node(fsl.ApplyMask(), name="apply_fov_mask")
 
-    enhance_and_skullstrip_b0 = init_enhance_and_skullstrip_dwi_wf(omp_nthreads=omp_nthreads)
-
     workflow.connect([
         (inputnode, fmap2ref_reg, [('fmap_ref', 'moving_image')]),
         (inputnode, fmap2ref_apply, [('in_reference', 'reference_image')]),
@@ -182,11 +180,9 @@ def init_sdc_unwarp_wf(omp_nthreads, fmap_demean, debug, name='sdc_unwarp_wf'):
         (fmap2ref_reg, fmap_fov2ref_apply, [('composite_transform', 'transforms')]),
         (fmap_fov2ref_apply, apply_fov_mask, [('output_image', 'mask_file')]),
         (unwarp_reference, apply_fov_mask, [('output_image', 'in_file')]),
-        (apply_fov_mask, enhance_and_skullstrip_b0, [('out_file', 'inputnode.in_file')]),
-        (apply_fov_mask, outputnode, [('out_file', 'out_reference')]),
-        (enhance_and_skullstrip_b0, outputnode, [
-            ('outputnode.mask_file', 'out_mask'),
-            ('outputnode.skull_stripped_file', 'out_reference_brain')]),
+        (apply_fov_mask, outputnode, [
+            ('out_file', 'out_reference'),
+            ('out_file', 'out_reference_brain')]),
         (jac_dfm, outputnode, [('jacobian_image', 'out_jacobian')]),
     ])
 
