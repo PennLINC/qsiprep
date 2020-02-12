@@ -267,7 +267,7 @@ class ConformInputSpec(BaseInterfaceInputSpec):
                                 desc='Target zoom information')
     target_shape = traits.Tuple(traits.Int, traits.Int, traits.Int,
                                 desc='Target shape information')
-    deoublique_header = traits.Bool(False, usedfault=True)
+    deoblique_header = traits.Bool(False, usedfault=True)
 
 
 class ConformOutputSpec(TraitedSpec):
