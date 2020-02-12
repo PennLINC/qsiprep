@@ -271,8 +271,7 @@ co-registration with the anatomical reference.
     workflow.connect([
         (sdc_unwarp_wf, outputnode, [
             ('outputnode.out_warp', 'out_warp'),
-            ('outputnode.out_reference', 'b0_ref'),
-            ('outputnode.out_mask', 'b0_mask')]),
+            ('outputnode.out_reference', 'b0_ref')])
     ])
 
     return workflow

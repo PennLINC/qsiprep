@@ -6,7 +6,6 @@ Utility workflows
 ^^^^^^^^^^^^^^^^^
 
 .. autofunction:: init_dwi_reference_wf
-.. autofunction:: init_enhance_and_skullstrip_dwi_wf
 
 """
 import os
