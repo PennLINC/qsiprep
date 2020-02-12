@@ -533,7 +533,7 @@ A T1w-reference map was computed after registration of
 
     # 0. Reorient T1w image(s) to LPS and resample to common voxel space
     t1_template_dimensions = pe.Node(TemplateDimensions(), name='t1_template_dimensions')
-    t1_conform = pe.MapNode(Conform(deoublique_header=True), iterfield='in_file',
+    t1_conform = pe.MapNode(Conform(deoblique_header=True), iterfield='in_file',
                             name='t1_conform')
 
     workflow.connect([
