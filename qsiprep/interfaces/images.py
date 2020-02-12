@@ -345,7 +345,8 @@ class Conform(SimpleInterface):
                 LOGGER.warning("Removing obliquity from image affine")
                 new_affine = reoriented.affine.copy()
                 new_affine[:, :-1] = 0
-                new_affine[(0, 1, 2), (0, 1, 2)] = reoriented.header.get_zooms()[:3]
+                new_affine[(0, 1, 2), (0, 1, 2)] = reoriented.header.get_zooms()[:3] \
+                    * np.sign(reoriented.affine[(0, 1, 2), (0, 1, 2)])
                 reoriented = nb.Nifti1Image(reoriented.get_fdata(), new_affine, reoriented.header)
 
         # Image may be reoriented, rescaled, and/or resized
