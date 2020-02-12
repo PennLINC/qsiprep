@@ -57,6 +57,7 @@ class SeriesPreprocReport(reporting.ReportCapableInterface):
     input_spec = SeriesPreprocReportInputSpec
     output_spce = SeriesPreprocReportOutputSpec
     _n_cuts = 7
+    _n_contour_lines = None
 
     def __init__(self, **kwargs):
         """Instantiate SeriesPreprocReportlet."""
@@ -130,6 +131,7 @@ class SeriesPreprocReport(reporting.ReportCapableInterface):
                          label='Raw Image',
                          lowb_contour=lowb_field_nii,
                          highb_contour=highb_field_nii,
+                         n_contours=self._n_contour_lines,
                          compress=False),
             plot_denoise(denoised_lowb_nii, denoised_highb_nii, 'fixed-image',
                          estimate_brightness=True,
@@ -137,6 +139,7 @@ class SeriesPreprocReport(reporting.ReportCapableInterface):
                          label="Denoised",
                          lowb_contour=lowb_field_nii,
                          highb_contour=highb_field_nii,
+                         n_contours=self._n_contour_lines,
                          compress=False),
             out_file=self._out_report
         )
@@ -288,6 +291,7 @@ class DWIDenoise(SeriesPreprocReport, MRTrix3Base):
 
     """
     _cmd = 'dwidenoise'
+    _n_contour_lines = 4
     input_spec = DWIDenoiseInputSpec
     output_spec = DWIDenoiseOutputSpec
 

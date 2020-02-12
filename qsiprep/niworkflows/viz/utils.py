@@ -401,7 +401,7 @@ def plot_registration(anat_nii, div_id, plot_params=None,
 def plot_denoise(lowb_nii, highb_nii, div_id, plot_params=None, highb_plot_params=None,
                  order=('z', 'x', 'y'), cuts=None,
                  estimate_brightness=False, label=None, lowb_contour=None,
-                 highb_contour=None,
+                 highb_contour=None, n_contours=None,
                  compress='auto', overlay=None, overlay_params=None):
     """
     Plot the foreground and background views.
@@ -434,7 +434,10 @@ def plot_denoise(lowb_nii, highb_nii, div_id, plot_params=None, highb_plot_param
         # Generate nilearn figure
         display = plot_anat(lowb_nii, **plot_params)
         if lowb_contour is not None:
-            display.add_contours(lowb_contour, linewidths=1)
+            if n_contours is not None:
+                display.add_contours(lowb_contour, linewidths=1, levels=n_contours)
+            else:
+                display.add_contours(lowb_contour, linewidths=1)
 
         svg = extract_svg(display, compress=compress)
         display.close()
@@ -464,7 +467,10 @@ def plot_denoise(lowb_nii, highb_nii, div_id, plot_params=None, highb_plot_param
         # Generate nilearn figure
         display = plot_anat(highb_nii, **highb_plot_params)
         if highb_contour is not None:
-            display.add_contours(highb_contour, linewidths=1)
+            if n_contours is not None:
+                display.add_contours(highb_contour, linewidths=1, levels=n_contours)
+            else:
+                display.add_contours(highb_contour, linewidths=1)
 
         svg = extract_svg(display, compress=compress)
         display.close()
