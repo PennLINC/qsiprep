@@ -12,7 +12,6 @@ from nipype.interfaces import ants, utility as niu
 from ...engine import Workflow
 from ...interfaces import DerivativesDataSink
 from ...interfaces.ants import MultivariateTemplateConstruction2
-from .util import init_skullstrip_b0_wf
 from .hmc import init_b0_hmc_wf
 from .registration import init_b0_to_anat_registration_wf
 
@@ -74,7 +73,6 @@ def init_intramodal_template_wf(inputs_list, t1w_source_file, reportlets_dir, tr
     outputnode = pe.Node(
         niu.IdentityInterface(
             fields=output_names + ["intramodal_template",
-                                   "intramodal_template_mask",
                                    "intramodal_template_to_t1_affine",
                                    "intramodal_template_to_t1_warp"]),
         name='outputnode')
@@ -175,7 +173,6 @@ def init_qsiprep_intramodal_template_wf(inputs_list, transform="Rigid", num_iter
     outputnode = pe.Node(
         niu.IdentityInterface(
             fields=output_names + ["intramodal_template",
-                                   "intramodal_template_mask",
                                    "intramodal_template_to_t1w_transform"]),
         name='outputnode')
     split_outputs = pe.Node(niu.Split(splits=[1] * len(input_names), squeeze=True),
@@ -208,19 +205,13 @@ def init_qsiprep_intramodal_template_wf(inputs_list, transform="Rigid", num_iter
         spatial_bias_correct=True,
         name='intramodal_b0_affine_template')
 
-    intramodal_template_mask = init_skullstrip_b0_wf(name="intramodal_template_mask")
-
     workflow.connect([
         (merge_inputs, n4_correct, [('out', 'input_image')]),
         (n4_correct, intramodal_b0_affine_template, [
-            ('output_image', 'inputnode.b0_images')]),
-        (intramodal_template_mask, outputnode, [
-            ('outputnode.mask_file', 'intramodal_template_mask')])
+            ('output_image', 'inputnode.b0_images')])
     ])
     if not do_nonlinear:
         workflow.connect([
-            (intramodal_b0_affine_template, intramodal_template_mask, [
-                ('outputnode.final_template', 'inputnode.in_file')]),
             (intramodal_b0_affine_template, split_outputs, [
                 (('outputnode.forward_transforms', _list_squeeze), 'inlist')])
         ])
@@ -228,8 +219,6 @@ def init_qsiprep_intramodal_template_wf(inputs_list, transform="Rigid", num_iter
         nonlinear_alignment_wf = init_nonlinear_alignment_wf(num_iters=num_iterations)
         workflow.connect([
             (n4_correct, nonlinear_alignment_wf, [('output_image', 'inputnode.images')]),
-            (nonlinear_alignment_wf, intramodal_template_mask, [
-                ('outputnode.final_template', 'inputnode.in_file')]),
             (intramodal_b0_affine_template, nonlinear_alignment_wf, [
                 ('outputnode.final_template', 'inputnode.initial_template')]),
             (nonlinear_alignment_wf, split_outputs, [

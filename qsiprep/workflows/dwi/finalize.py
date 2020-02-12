@@ -176,10 +176,8 @@ def init_dwi_finalize_wf(scan_groups,
     # Check the inputs
     if layout is not None:
         all_dwis = scan_groups['dwi_series']
-        fieldmap_info = scan_groups['fieldmap_info']
     else:
         all_dwis = ['/fake/testing/path.nii.gz']
-        fieldmap_info = {'suffix': None}
 
     mem_gb = {'filesize': 1, 'resampled': 1, 'largemem': 1}
     dwi_nvols = 10

@@ -13,14 +13,14 @@ Phase Encoding POLARity (*PEPOLAR*) techniques
 import pkg_resources as pkgr
 
 from nipype.pipeline import engine as pe
-from nipype.interfaces import afni, ants, fsl, utility as niu
+from nipype.interfaces import afni, ants, utility as niu
 from ...niworkflows.interfaces import CopyHeader
 from ...niworkflows.interfaces.registration import ANTSApplyTransformsRPT
 
 from ...engine import Workflow
 from ...interfaces import StructuralReference
 from ...interfaces.fmap import B0RPEFieldmap
-from ..dwi.util import init_enhance_and_skullstrip_dwi_wf
+from ...interfaces.nilearn import EnhanceB0
 
 
 def init_pepolar_unwarp_wf(dwi_meta, epi_fmaps, omp_nthreads=1,
@@ -70,13 +70,9 @@ def init_pepolar_unwarp_wf(dwi_meta, epi_fmaps, omp_nthreads=1,
 
         out_reference
             the ``in_reference`` after unwarping
-        out_reference_brain
-            the ``in_reference`` after unwarping and skullstripping
         out_warp
             the corresponding :abbr:`DFM (displacements field map)` compatible with
             ANTs
-        out_mask
-            mask of the unwarped input file
 
     """
     dwi_file_pe = dwi_meta["PhaseEncodingDirection"]
@@ -98,8 +94,7 @@ directions, using `3dQwarp` @afni (AFNI {afni_ver}).
         fields=['in_reference', 'in_reference_brain', 'in_mask']), name='inputnode')
 
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=[
-            'out_reference', 'out_reference_brain', 'out_warp', 'out_mask']),
+        niu.IdentityInterface(fields=['out_reference', 'out_warp']),
         name='outputnode')
 
     prepare_epi_opposite_wf = init_prepare_dwi_epi_wf(omp_nthreads=omp_nthreads,
@@ -132,8 +127,6 @@ directions, using `3dQwarp` @afni (AFNI {afni_ver}).
                                                       interpolation='LanczosWindowedSinc'),
                                name='unwarp_reference')
 
-    enhance_and_skullstrip_dwi_wf = init_enhance_and_skullstrip_dwi_wf(omp_nthreads=omp_nthreads)
-
     workflow.connect([
         (inputnode, cphdr_warp, [('in_reference', 'hdr_file')]),
         (qwarp, cphdr_warp, [('source_warp', 'in_file')]),
@@ -141,93 +134,8 @@ directions, using `3dQwarp` @afni (AFNI {afni_ver}).
         (to_ants, unwarp_reference, [('out', 'transforms')]),
         (inputnode, unwarp_reference, [('in_reference', 'reference_image'),
                                        ('in_reference', 'input_image')]),
-        (unwarp_reference, enhance_and_skullstrip_dwi_wf, [
-            ('output_image', 'inputnode.in_file')]),
         (unwarp_reference, outputnode, [('output_image', 'out_reference')]),
-        (enhance_and_skullstrip_dwi_wf, outputnode, [
-            ('outputnode.mask_file', 'out_mask'),
-            ('outputnode.skull_stripped_file', 'out_reference_brain')]),
         (to_ants, outputnode, [('out', 'out_warp')]),
-    ])
-
-    return workflow
-
-
-def init_prepare_epi_wf(omp_nthreads, name="prepare_epi_wf"):
-    """
-    This workflow takes in a set of EPI files with with the same phase
-    encoding direction and returns a single 3D volume ready to be used in
-    field distortion estimation.
-
-    The procedure involves: estimating a robust template using FreeSurfer's
-    'mri_robust_template', bias field correction using ANTs N4BiasFieldCorrection
-    and AFNI 3dUnifize, skullstripping using FSL BET and AFNI 3dAutomask,
-    and rigid coregistration to the reference using ANTs.
-
-    .. workflow ::
-        :graph2use: orig
-        :simple_form: yes
-
-        from qsiprep.workflows.fieldmap.pepolar import init_prepare_epi_wf
-        wf = init_prepare_epi_wf(omp_nthreads=8)
-
-
-    Inputs
-
-        fmaps
-            list of 3D or 4D NIfTI images
-        ref_brain
-            coregistration reference (skullstripped and bias field corrected)
-
-    Outputs
-
-        out_file
-            single 3D NIfTI file
-
-    """
-    inputnode = pe.Node(niu.IdentityInterface(fields=['fmaps', 'ref_brain']),
-                        name='inputnode')
-
-    outputnode = pe.Node(niu.IdentityInterface(fields=['out_file']),
-                         name='outputnode')
-
-    split = pe.MapNode(fsl.Split(dimension='t'), iterfield='in_file',
-                       name='split')
-
-    merge = pe.Node(
-        StructuralReference(auto_detect_sensitivity=True,
-                            initial_timepoint=1,
-                            fixed_timepoint=True,  # Align to first image
-                            intensity_scaling=True,
-                            # 7-DOF (rigid + intensity)
-                            no_iteration=True,
-                            subsample_threshold=200,
-                            out_file='template.nii.gz'),
-        name='merge')
-
-    enhance_and_skullstrip_dwi_wf = init_enhance_and_skullstrip_dwi_wf(
-        omp_nthreads=omp_nthreads)
-
-    ants_settings = pkgr.resource_filename('qsiprep',
-                                           'data/translation_rigid.json')
-    fmap2ref_reg = pe.Node(ants.Registration(from_file=ants_settings,
-                                             output_warped_image=True),
-                           name='fmap2ref_reg', n_procs=omp_nthreads)
-
-    workflow = Workflow(name=name)
-
-    def _flatten(l):
-        from nipype.utils.filemanip import filename_to_list
-        return [item for sublist in l for item in filename_to_list(sublist)]
-
-    workflow.connect([
-        (inputnode, split, [('fmaps', 'in_file')]),
-        (split, merge, [(('out_files', _flatten), 'in_files')]),
-        (merge, enhance_and_skullstrip_dwi_wf, [('out_file', 'inputnode.in_file')]),
-        (enhance_and_skullstrip_dwi_wf, fmap2ref_reg, [
-            ('outputnode.skull_stripped_file', 'moving_image')]),
-        (inputnode, fmap2ref_reg, [('ref_brain', 'fixed_image')]),
-        (fmap2ref_reg, outputnode, [('warped_image', 'out_file')]),
     ])
 
     return workflow
@@ -265,15 +173,17 @@ def init_prepare_dwi_epi_wf(omp_nthreads, orientation="LPS", name="prepare_epi_w
                             out_file='template.nii.gz'),
         name='merge')
 
-    enhance_and_skullstrip_dwi_wf = init_enhance_and_skullstrip_dwi_wf(
-        omp_nthreads=omp_nthreads)
-
+    enhance_b0 = pe.Node(EnhanceB0(), name='enhance_b0')
     ants_settings = pkgr.resource_filename('qsiprep',
                                            'data/translation_rigid.json')
     fmap2ref_reg = pe.Node(ants.Registration(from_file=ants_settings,
                                              output_warped_image=True),
                            name='fmap2ref_reg', n_procs=omp_nthreads)
-
+    resample_epi_fmap = pe.Node(ANTSApplyTransformsRPT(dimension=3,
+                                                       generate_report=False,
+                                                       float=True,
+                                                       interpolation='LanczosWindowedSinc'),
+                                name='unwarp_reference')
     workflow = Workflow(name=name)
 
     def _flatten(l):
@@ -283,11 +193,13 @@ def init_prepare_dwi_epi_wf(omp_nthreads, orientation="LPS", name="prepare_epi_w
     workflow.connect([
         (inputnode, prepare_b0s, [('fmaps', 'b0_file')]),
         (prepare_b0s, merge, [(('fmap_file', _flatten), 'in_files')]),
-        (merge, enhance_and_skullstrip_dwi_wf, [('out_file', 'inputnode.in_file')]),
-        (enhance_and_skullstrip_dwi_wf, fmap2ref_reg, [
-            ('outputnode.skull_stripped_file', 'moving_image')]),
+        (merge, enhance_b0, [('out_file', 'b0_file')]),
+        (enhance_b0, fmap2ref_reg, [('enhanced_file', 'moving_image')]),
         (inputnode, fmap2ref_reg, [('ref_brain', 'fixed_image')]),
-        (fmap2ref_reg, outputnode, [('warped_image', 'out_file')]),
+        (fmap2ref_reg, resample_epi_fmap, [('forward_transforms', 'transforms')]),
+        (enhance_b0, resample_epi_fmap, [('enhanced_file', 'input_image')]),
+        (inputnode, resample_epi_fmap, [('ref_brain', 'reference_image')]),
+        (resample_epi_fmap, outputnode, [('output_image', 'out_file')])
     ])
 
     return workflow

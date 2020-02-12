@@ -193,7 +193,8 @@ class EnhanceAndSkullstripB0(SimpleInterface):
         plotting_img = new_img_like(input_img, plotting_data)
         binary_img = new_img_like(input_img, binary_data)
         out_mask = fname_presuffix(self.inputs.b0_file, suffix='_mask', newpath=runtime.cwd)
-        plotting_mask = fname_presuffix(self.inputs.b0_file, suffix='_mask', newpath=runtime.cwd)
+        plotting_mask = fname_presuffix(self.inputs.b0_file, suffix='_plottingmask',
+                                        newpath=runtime.cwd)
         binary_img.to_filename(out_mask)
         plotting_img.to_filename(plotting_mask)
         self._results['mask_file'] = out_mask
@@ -212,15 +213,17 @@ class EnhanceAndSkullstripB0(SimpleInterface):
         bias_corrected = math_img('np.nan_to_num(orig / biasfield)',
                                   orig=input_img, biasfield=bias_img)
 
-        # Enhance the input image via sharpening
-        enhanced = run_imagemath(bias_corrected, 'Sharpen', [], cwd=runtime.cwd)
+        # Apply the bias field correction to the whole image
         out_bias_corrected = fname_presuffix(self.inputs.b0_file, suffix='_unbiased',
                                              newpath=runtime.cwd)
+        bias_corrected.to_filename(out_bias_corrected)
+        self._results['bias_corrected_file'] = out_bias_corrected
+
+        # Sharpen the bias-corrected image
         out_enhanced = fname_presuffix(self.inputs.b0_file, suffix='_unbiasedsharpened',
                                        newpath=runtime.cwd)
-        bias_corrected.to_filename(out_bias_corrected)
+        enhanced = run_imagemath(bias_corrected, 'Sharpen', [], cwd=runtime.cwd)
         enhanced.to_filename(out_enhanced)
-        self._results['bias_corrected_file'] = out_bias_corrected
         self._results['enhanced_file'] = out_enhanced
 
         # Apply the soft mask to the bias-corrected, sharpened image
@@ -230,6 +233,38 @@ class EnhanceAndSkullstripB0(SimpleInterface):
                                             newpath=runtime.cwd)
         skullstripped_img.to_filename(out_skullstripped)
         self._results['skull_stripped_file'] = out_skullstripped
+
+        return runtime
+
+
+class _EnhanceB0InputSpec(BaseInterfaceInputSpec):
+    b0_file = File(exists=True, mandatory=True)
+
+
+class _EnhanceB0OutputSpec(TraitedSpec):
+    mask_file = File(exists=True)
+    bias_corrected_file = File(exists=True)
+    enhanced_file = File(exists=True)
+
+
+class EnhanceB0(SimpleInterface):
+    input_spec = _EnhanceB0InputSpec
+    output_spec = _EnhanceB0OutputSpec
+
+    def _run_interface(self, runtime):
+        input_img = load_img(self.inputs.b0_file)
+        bias_corrected, bias_img = biascorrect(input_img, cwd=runtime.cwd)
+        out_bias_corrected = fname_presuffix(self.inputs.b0_file, suffix='_unbiased',
+                                             newpath=runtime.cwd)
+        bias_corrected.to_filename(out_bias_corrected)
+        self._results['bias_corrected_file'] = out_bias_corrected
+
+        # Sharpen the bias-corrected image
+        out_enhanced = fname_presuffix(self.inputs.b0_file, suffix='_unbiasedsharpened',
+                                       newpath=runtime.cwd)
+        enhanced = run_imagemath(bias_corrected, 'Sharpen', [], cwd=runtime.cwd)
+        enhanced.to_filename(out_enhanced)
+        self._results['enhanced_file'] = out_enhanced
 
         return runtime
 

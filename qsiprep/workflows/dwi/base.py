@@ -251,8 +251,6 @@ def init_dwi_preproc_wf(scan_groups,
         * :py:func:`~qsiprep.workflows.dwi.registration.init_dwi_reg_wf`
         * :py:func:`~qsiprep.workflows.dwi.confounds.init_dwi_confounds_wf`
         * :py:func:`~qsiprep.workflows.dwi.resampling.init_dwi_trans_wf`
-        * :py:func:`~qsiprep.workflows.fieldmap.pepolar.init_pepolar_unwarp_wf`
-        * :py:func:`~qsiprep.workflows.fieldmap.init_nonlinear_sdc_wf`
 
     """
     # Check the inputs
