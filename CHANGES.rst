@@ -1,3 +1,8 @@
+0.8.0 (February 12, 2020)
+=========================
+
+ * Removes oblique angles from T1w headers to fix N4 bug (#103)
+
 0.7.2 (February 4, 2020)
 ========================
  * Fixed a bug in b=0 masking when images have high signal intensity in ventricles (#99)

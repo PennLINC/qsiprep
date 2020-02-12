@@ -267,6 +267,7 @@ class ConformInputSpec(BaseInterfaceInputSpec):
                                 desc='Target zoom information')
     target_shape = traits.Tuple(traits.Int, traits.Int, traits.Int,
                                 desc='Target shape information')
+    deoblique_header = traits.Bool(False, usedfault=True)
 
 
 class ConformOutputSpec(TraitedSpec):
@@ -337,6 +338,16 @@ class Conform(SimpleInterface):
             data = nli.resample_img(reoriented, target_affine, target_shape).get_data()
             conform_xfm = np.linalg.inv(reoriented.affine).dot(target_affine)
             reoriented = reoriented.__class__(data, target_affine, reoriented.header)
+
+        if self.inputs.deoblique_header:
+            is_oblique = np.any(np.abs(nb.affines.obliquity(reoriented.affine)) > 0)
+            if is_oblique:
+                LOGGER.warning("Removing obliquity from image affine")
+                new_affine = reoriented.affine.copy()
+                new_affine[:, :-1] = 0
+                new_affine[(0, 1, 2), (0, 1, 2)] = reoriented.header.get_zooms()[:3] \
+                    * np.sign(reoriented.affine[(0, 1, 2), (0, 1, 2)])
+                reoriented = nb.Nifti1Image(reoriented.get_fdata(), new_affine, reoriented.header)
 
         # Image may be reoriented, rescaled, and/or resized
         if reoriented is not orig_img:
