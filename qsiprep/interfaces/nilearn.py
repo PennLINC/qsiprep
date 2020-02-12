@@ -241,15 +241,15 @@ class _EnhanceB0InputSpec(BaseInterfaceInputSpec):
     b0_file = File(exists=True, mandatory=True)
 
 
-class EnhanceB0OutputSpec(TraitedSpec):
+class _EnhanceB0OutputSpec(TraitedSpec):
     mask_file = File(exists=True)
     bias_corrected_file = File(exists=True)
     enhanced_file = File(exists=True)
 
 
 class EnhanceB0(SimpleInterface):
-    input_spec = _EnhanceAndSkullstripB0InputSpec
-    output_spec = _EnhanceAndSkullstripB0OutputSpec
+    input_spec = _EnhanceB0InputSpec
+    output_spec = _EnhanceB0OutputSpec
 
     def _run_interface(self, runtime):
         input_img = load_img(self.inputs.b0_file)

@@ -17,6 +17,7 @@ from nipype.interfaces import fsl
 from ...interfaces.eddy import GatherEddyInputs, ExtendedEddy, Eddy2SPMMotion
 from ...interfaces.images import SplitDWIs, ConformDwi, IntraModalMerge
 from ...interfaces.reports import TopupSummary
+from ...interfaces.nilearn import EnhanceB0
 from ...interfaces import DerivativesDataSink
 from ...engine import Workflow
 
@@ -117,6 +118,7 @@ def init_fsl_hmc_wf(scan_groups,
 
     with open(eddy_cfg_file, "r") as f:
         eddy_args = json.load(f)
+    enhance_pre_sdc = pe.Node(EnhanceB0(), name='enhance_pre_sdc')
 
     # Run in parallel if possible
     LOGGER.info("Using %d threads in eddy", omp_nthreads)
@@ -160,8 +162,11 @@ def init_fsl_hmc_wf(scan_groups,
             ('bvec_file', 'in_bvec')]),
         (pre_eddy_b0_ref_wf, eddy, [('outputnode.dwi_mask', 'in_mask')]),
         (gather_inputs, outputnode, [
-            ('forward_transforms', 'to_dwi_ref_affines'),
-            ('pre_topup_image', 'pre_sdc_template')]),
+            ('forward_transforms', 'to_dwi_ref_affines')]),
+        (gather_inputs, enhance_pre_sdc, [
+            ('pre_topup_image', 'b0_file')]),
+        (enhance_pre_sdc, outputnode, [
+            ('enhanced_file', 'pre_sdc_template')]),
         (eddy, back_to_lps, [
             ('out_corrected', 'dwi_file'),
             ('out_rotated_bvecs', 'bvec_file')]),
