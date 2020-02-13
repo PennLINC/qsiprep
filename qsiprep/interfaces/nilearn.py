@@ -163,8 +163,8 @@ class EnhanceAndSkullstripB0(SimpleInterface):
     output_spec = _EnhanceAndSkullstripB0OutputSpec
 
     def _run_interface(self, runtime):
-        input_img = load_img(self.inputs.b0_file)
-        t1_mask = load_img(self.inputs.t1_mask)
+        input_img = nb.squeeze_image(load_img(self.inputs.b0_file))
+        t1_mask = nb.squeeze_image(load_img(self.inputs.t1_mask))
         t1_mask_data = t1_mask.get_fdata()
         t1_brain_voxels = t1_mask_data.sum()
 
@@ -179,8 +179,8 @@ class EnhanceAndSkullstripB0(SimpleInterface):
 
         # The brain mask should occupy a similar size as the t1 mask
         input_img = load_img(self.inputs.b0_file)
-        min_size = t1_brain_voxels * .7
-        max_size = t1_brain_voxels * 1.3
+        min_size = t1_brain_voxels * .6
+        max_size = t1_brain_voxels * 1.4
         mask_voxels = mask_img.get_fdata().sum()
         if mask_voxels < min_size or mask_voxels > max_size:
             LOGGER.warning("Masking appears to have failed. Using a backup method")
@@ -253,7 +253,7 @@ class EnhanceB0(SimpleInterface):
     output_spec = _EnhanceB0OutputSpec
 
     def _run_interface(self, runtime):
-        input_img = load_img(self.inputs.b0_file)
+        input_img = nb.squeeze_image(load_img(self.inputs.b0_file))
         bias_corrected, bias_img = biascorrect(input_img, cwd=runtime.cwd)
         out_bias_corrected = fname_presuffix(self.inputs.b0_file, suffix='_unbiased',
                                              newpath=runtime.cwd)
