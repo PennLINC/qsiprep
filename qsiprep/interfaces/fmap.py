@@ -889,7 +889,7 @@ def get_topup_inputs_from(dwi_file, bval_file, b0_threshold, topup_prefix,
         topup_text = dwi_report
 
     imain_output = topup_prefix + "imain.nii.gz"
-    imain_img = to_lps(nb.squeeze_image(topup_imain), new_axcodes=('L', 'A', 'S'))
+    imain_img = to_lps(topup_imain, new_axcodes=('L', 'A', 'S'))
     assert imain_img.shape[3] == len(topup_spec_lines)
     imain_img.to_filename(imain_output)
 

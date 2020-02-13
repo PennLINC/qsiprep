@@ -178,7 +178,7 @@ class EnhanceAndSkullstripB0(SimpleInterface):
                                                  cwd=runtime.cwd)
 
         # The brain mask should occupy a similar size as the t1 mask
-        input_img = load_img(self.inputs.b0_file)
+        input_img = nb.squeeze_image(load_img(self.inputs.b0_file))
         min_size = t1_brain_voxels * .6
         max_size = t1_brain_voxels * 1.4
         mask_voxels = mask_img.get_fdata().sum()
