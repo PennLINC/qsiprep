@@ -136,6 +136,7 @@ def init_fsl_hmc_wf(scan_groups,
     # Convert the b=0 template from pre_eddy_b0_ref to LPS+
     b0_ref_to_lps = pe.Node(ConformDwi(orientation="LPS"), name='b0_ref_to_lps')
     b0_ref_mask_to_lps = pe.Node(ConformDwi(orientation="LPS"), name='b0_ref_mask_to_lps')
+    b0_ref_brain_to_lps = pe.Node(ConformDwi(orientation="LPS"), name='b0_ref_brain_to_lps')
 
     workflow.connect([
         # These images and gradients should be in LAS+
@@ -153,6 +154,8 @@ def init_fsl_hmc_wf(scan_groups,
             ('outputnode.ref_image', 'dwi_file')]),
         (pre_eddy_b0_ref_wf, b0_ref_mask_to_lps, [
             ('outputnode.dwi_mask', 'dwi_file')]),
+        (pre_eddy_b0_ref_wf, b0_ref_brain_to_lps, [
+            ('outputnode.ref_image_brain', 'dwi_file')]),
         (gather_inputs, eddy, [
             ('eddy_indices', 'in_index'),
             ('eddy_acqp', 'in_acqp')]),
@@ -251,11 +254,12 @@ def init_fsl_hmc_wf(scan_groups,
             # Send to SDC workflow
             (b0_ref_to_lps, b0_sdc_wf, [
                 ('dwi_file', 'inputnode.b0_ref')]),
+            (b0_ref_brain_to_lps, b0_sdc_wf, [('dwi_file', 'inputnode.b0_ref_brain')]),
+            (b0_ref_mask_to_lps, b0_sdc_wf, [('dwi_file', 'inputnode.b0_mask')]),
             (inputnode, b0_sdc_wf, [
                 ('t1_brain', 'inputnode.t1_brain'),
                 ('t1_2_mni_reverse_transform',
                  'inputnode.t1_2_mni_reverse_transform')]),
-
             # These deformations will be applied later, use the unwarped image now
             (b0_sdc_wf, outputnode, [
                 ('outputnode.out_warp', 'to_dwi_ref_warps'),
