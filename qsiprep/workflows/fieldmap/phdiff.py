@@ -119,7 +119,7 @@ further improvements of HCP Pipelines [@hcppipelines].
             (inputnode, ds_report_fmap_mask, [('phasediff', 'source_file')]),
         ])
 
-    elif phasetype == "phase":
+    else:
         workflow.__desc__ += """\
 The phase difference used for unwarping was calculated using two separate phase measurements
  [@pncprocessing].

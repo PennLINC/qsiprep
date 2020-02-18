@@ -243,7 +243,7 @@ def init_fsl_hmc_wf(scan_groups,
         (gather_inputs, distorted_merge, [('topup_imain', 'in_files')]),
         (distorted_merge, pre_eddy_b0_ref_wf, [('out_avg', 'inputnode.b0_template')])])
 
-    if fieldmap_type in ('fieldmap', 'phasediff', 'phase', 'syn'):
+    if fieldmap_type in ('fieldmap', 'syn') or fieldmap_type.startswith("phase"):
 
         outputnode.inputs.sdc_method = fieldmap_type
         b0_sdc_wf = init_sdc_wf(
