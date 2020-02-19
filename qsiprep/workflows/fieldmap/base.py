@@ -41,7 +41,6 @@ from nipype.interfaces import utility as niu
 from nipype import logging
 
 from ...engine import Workflow
-from ...utils.grouping import FMAP_PRIORITY
 # Fieldmap workflows
 from .pepolar import init_pepolar_unwarp_wf
 from .syn import init_syn_sdc_wf
