@@ -10,6 +10,7 @@ import os
 from nipype import logging
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
+from nipype.interfaces.base import isdefined
 from ...interfaces import DerivativesDataSink
 
 from ...interfaces.reports import DiffusionSummary
@@ -513,6 +514,9 @@ Diffusion data preprocessing
     for node in workflow.list_node_names():
         if node.split('.')[-1].startswith('ds_report'):
             workflow.get_node(node).inputs.base_directory = str(reportlets_dir)
+            src_file = workflow.get_node(node).inputs.source_file
+            if not isdefined(src_file) or src_file is None:
+                workflow.get_node(node).inputs.source_file = source_file
     return workflow
 
 

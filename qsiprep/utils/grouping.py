@@ -83,6 +83,7 @@ FMAP_PRIORITY = {
     'fieldmap': 2,
     'phasediff': 3,
     'phase1': 4,
+    'phase': 4,
     'syn': 5
 }
 

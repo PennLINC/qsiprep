@@ -136,6 +136,7 @@ def init_fsl_hmc_wf(scan_groups,
     # Convert the b=0 template from pre_eddy_b0_ref to LPS+
     b0_ref_to_lps = pe.Node(ConformDwi(orientation="LPS"), name='b0_ref_to_lps')
     b0_ref_mask_to_lps = pe.Node(ConformDwi(orientation="LPS"), name='b0_ref_mask_to_lps')
+    b0_ref_brain_to_lps = pe.Node(ConformDwi(orientation="LPS"), name='b0_ref_brain_to_lps')
 
     workflow.connect([
         # These images and gradients should be in LAS+
@@ -153,6 +154,8 @@ def init_fsl_hmc_wf(scan_groups,
             ('outputnode.ref_image', 'dwi_file')]),
         (pre_eddy_b0_ref_wf, b0_ref_mask_to_lps, [
             ('outputnode.dwi_mask', 'dwi_file')]),
+        (pre_eddy_b0_ref_wf, b0_ref_brain_to_lps, [
+            ('outputnode.ref_image_brain', 'dwi_file')]),
         (gather_inputs, eddy, [
             ('eddy_indices', 'in_index'),
             ('eddy_acqp', 'in_acqp')]),
@@ -194,7 +197,7 @@ def init_fsl_hmc_wf(scan_groups,
 
     # Fieldmap correction to be done in LAS+: TOPUP for rpe series or epi fieldmap
     # If a topupref is provided, use it for TOPUP
-    fieldmap_type = scan_groups['fieldmap_info']['suffix']
+    fieldmap_type = scan_groups['fieldmap_info']['suffix'] or ''
     if fieldmap_type in ('epi', 'rpe_series'):
         # If there are EPI fieldmaps in fmaps/, make sure they get to TOPUP. It will always use
         # b=0 images from the DWI series regardless
@@ -240,7 +243,7 @@ def init_fsl_hmc_wf(scan_groups,
         (gather_inputs, distorted_merge, [('topup_imain', 'in_files')]),
         (distorted_merge, pre_eddy_b0_ref_wf, [('out_avg', 'inputnode.b0_template')])])
 
-    if fieldmap_type in ('fieldmap', 'phasediff', 'phase', 'syn'):
+    if fieldmap_type in ('fieldmap', 'syn') or fieldmap_type.startswith("phase"):
 
         outputnode.inputs.sdc_method = fieldmap_type
         b0_sdc_wf = init_sdc_wf(
@@ -251,11 +254,12 @@ def init_fsl_hmc_wf(scan_groups,
             # Send to SDC workflow
             (b0_ref_to_lps, b0_sdc_wf, [
                 ('dwi_file', 'inputnode.b0_ref')]),
+            (b0_ref_brain_to_lps, b0_sdc_wf, [('dwi_file', 'inputnode.b0_ref_brain')]),
+            (b0_ref_mask_to_lps, b0_sdc_wf, [('dwi_file', 'inputnode.b0_mask')]),
             (inputnode, b0_sdc_wf, [
                 ('t1_brain', 'inputnode.t1_brain'),
                 ('t1_2_mni_reverse_transform',
                  'inputnode.t1_2_mni_reverse_transform')]),
-
             # These deformations will be applied later, use the unwarped image now
             (b0_sdc_wf, outputnode, [
                 ('outputnode.out_warp', 'to_dwi_ref_warps'),

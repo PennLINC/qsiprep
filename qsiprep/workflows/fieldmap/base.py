@@ -41,22 +41,12 @@ from nipype.interfaces import utility as niu
 from nipype import logging
 
 from ...engine import Workflow
-
 # Fieldmap workflows
 from .pepolar import init_pepolar_unwarp_wf
 from .syn import init_syn_sdc_wf
 from .unwarp import init_sdc_unwarp_wf
 
 LOGGER = logging.getLogger('nipype.workflow')
-FMAP_PRIORITY = {
-    'epi': 0,
-    'rpe_series': 0,
-    'dwi': 0,
-    'fieldmap': 1,
-    'phasediff': 2,
-    'phase': 3,
-    'syn': 4
-}
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
@@ -190,7 +180,7 @@ co-registration with the anatomical reference.
         ])
 
     # FIELDMAP path
-    if fieldmap_info['suffix'] in ['fieldmap', 'phasediff', 'phase']:
+    if fieldmap_info['suffix'] == 'fieldmap' or fieldmap_info['suffix'].startswith('phase'):
         outputnode.inputs.method = 'FMB (%s-based)' % fieldmap_info['suffix']
         # Import specific workflows here, so we don't break everything with one
         # unused workflow.
@@ -203,14 +193,14 @@ co-registration with the anatomical reference.
             fmap_estimator_wf.inputs.inputnode.fieldmap = fieldmap_info['fieldmap']
             fmap_estimator_wf.inputs.inputnode.magnitude = fieldmap_info['magnitude']
 
-        if fieldmap_info['suffix'] in ('phasediff', 'phase'):
+        else:
             from .phdiff import init_phdiff_wf
             fmap_estimator_wf = init_phdiff_wf(omp_nthreads=omp_nthreads,
                                                phasetype=fieldmap_info['suffix'])
             # set inputs
             if fieldmap_info['suffix'] == 'phasediff':
                 fmap_estimator_wf.inputs.inputnode.phasediff = fieldmap_info['phasediff']
-            elif fieldmap_info['suffix'] == 'phase':
+            else:
                 # Check that fieldmap is not bipolar
                 fmap_polarity = fieldmap_info['metadata'].get('DiffusionScheme', None)
                 if fmap_polarity == 'Bipolar':

@@ -145,7 +145,7 @@ class DSIStudioReconstructionInputSpec(CommandLineInputSpec):
                             usedefault=True,
                             desc="ODF tesselation order")
     check_btable = traits.Enum(
-        (1, 0),
+        (0, 1),
         usedefault=True,
         argstr="--check_btable=%d",
         desc="Check if btable matches nifti orientation (not foolproof)")
