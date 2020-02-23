@@ -18,6 +18,8 @@ from nipype.utils.filemanip import fname_presuffix
 from dipy.core.geometry import cart2sphere
 from dipy.direction import peak_directions
 from dipy.core.sphere import HemiSphere
+from dipy.core.ndindex import ndindex
+from dipy.reconst.odf import gfa
 from scipy.io.matlab import loadmat, savemat
 from pkg_resources import resource_filename as pkgr
 
@@ -107,48 +109,12 @@ class FIBGZtoFOD(SimpleInterface):
         else:
             output_mif_file = fname_presuffix(fib_file, newpath=runtime.cwd, suffix=".mif",
                                               use_ext=False)
-        fibmat = fast_load_fibgz(fib_file)
-        dims = tuple(fibmat['dimension'].squeeze().astype(np.int))
-        directions = fibmat['odf_vertices'].T
-
-        odf_vars = [k for k in fibmat.keys() if re.match("odf\\d+", k)]
-        valid_odfs = []
-        flat_mask = fibmat["fa0"].squeeze() > 0
-        n_voxels = np.prod(dims)
-        for n in range(len(odf_vars)):
-            varname = "odf%d" % n
-            odfs = fibmat[varname]
-            odf_sum = odfs.sum(0)
-            odf_sum_mask = odf_sum > 0
-            valid_odfs.append(odfs[:, odf_sum_mask].T)
-        odf_array = np.row_stack(valid_odfs)
-        if self.inputs.subtract_iso:
-            odf_array = odf_array - odf_array.min(0)
-
-        # Convert each column to a 3d file, then concatenate them
-        odfs_3d = []
-        for odf_vals in odf_array.T:
-            new_data = np.zeros(n_voxels, dtype=np.float32)
-            new_data[flat_mask] = odf_vals
-            odfs_3d.append(new_data.reshape(dims, order="F"))
-
-        real_img = nb.load(self.inputs.ref_image)
-        odf4d = np.stack(odfs_3d, -1)
-        odf4d_img = nb.Nifti1Image(odf4d, real_img.affine, real_img.header)
-        odf_values_file = op.join(runtime.cwd, "odf_values.nii")
-        odf4d_img.to_filename(odf_values_file)
-
-        num_dirs, _ = directions.shape
-        hemisphere = num_dirs // 2
-        x, y, z = directions[:hemisphere].T
-        _, theta, phi = cart2sphere(-x, -y, z)
-        dirs_txt = op.join(runtime.cwd, "ras+directions.txt")
-        np.savetxt(dirs_txt, np.column_stack([phi, theta]))
-
-        popen_run(["amp2sh", "-quiet", "-force", "-directions", dirs_txt, "odf_values.nii",
-                   output_mif_file])
-        os.remove(odf_values_file)
-        os.remove(dirs_txt)
+        # Get the amplitudes as a Nifti1Image and sphere directions
+        amplitudes, directions = fib2amps(fib_file,
+                                          self.inputs.ref_image,
+                                          self.inputs.subtract_iso)
+        # convert them to MRTrix mif format
+        amplitudes_to_sh_mif(amplitudes, directions, output_mif_file, runtime.cwd)
         self._results['mif_file'] = output_mif_file
         return runtime
 
@@ -311,6 +277,34 @@ def amplitudes_to_sh_mif(amplitudes_img, odf_dirs, output_file, working_dir):
     os.remove(dirs_txt)
 
 
+def mif2amps(sh_mif_file, working_dir, dsi_studio_odf="odf8"):
+    """Convert a MRTrix SH mif file to a NiBabel amplitudes image.
+
+    Parameters:
+    ===========
+
+    sh_mif_file : str
+        path to the mif file with SH coefficients
+
+    """
+    verts, _ = get_dsi_studio_ODF_geometry(dsi_studio_odf)
+    num_dirs, _ = verts.shape
+    hemisphere = num_dirs // 2
+    directions = verts[:hemisphere]
+    x, y, z = directions.T
+    _, theta, phi = cart2sphere(x, y, -z)
+    dirs_txt = op.join(working_dir, "directions.txt")
+    np.savetxt(dirs_txt, np.column_stack([phi, theta]))
+
+    odf_amplitudes_nii = op.join(working_dir, "amplitudes.nii")
+    popen_run(["sh2amp", "-quiet", "-nonnegative", sh_mif_file, dirs_txt, odf_amplitudes_nii])
+
+    if not op.exists(odf_amplitudes_nii):
+        raise FileNotFoundError("Unable to create %s", odf_amplitudes_nii)
+    amplitudes_img = nb.load(odf_amplitudes_nii)
+    return amplitudes_img, directions
+
+
 def fast_load_fibgz(fib_file):
     """Load a potentially gzipped fibgz file more quickly than using built-in gzip.
     """
@@ -341,3 +335,86 @@ def fast_load_fibgz(fib_file):
     with gzip.open(fib_file, "r") as f:
         LOGGER.info("Loading with python gzip. To load faster install zcat or gzcat.")
         return loadmat(f)
+
+
+def fib2amps(fib_file, ref_image, subtract_iso=True):
+    fibmat = fast_load_fibgz(fib_file)
+    dims = tuple(fibmat['dimension'].squeeze().astype(np.int))
+    directions = fibmat['odf_vertices'].T
+
+    odf_vars = [k for k in fibmat.keys() if re.match("odf\\d+", k)]
+    valid_odfs = []
+    flat_mask = fibmat["fa0"].squeeze().ravel(order='F') > 0
+    n_voxels = np.prod(dims)
+    for n in range(len(odf_vars)):
+        varname = "odf%d" % n
+        odfs = fibmat[varname]
+        odf_sum = odfs.sum(0)
+        odf_sum_mask = odf_sum > 0
+        valid_odfs.append(odfs[:, odf_sum_mask].T)
+    odf_array = np.row_stack(valid_odfs)
+    if subtract_iso:
+        odf_array = odf_array - odf_array.min(0)
+
+    # Convert each column to a 3d file, then concatenate them
+    odfs_3d = []
+    for odf_vals in odf_array.T:
+        new_data = np.zeros(n_voxels, dtype=np.float32)
+        new_data[flat_mask] = odf_vals
+        odfs_3d.append(new_data.reshape(dims, order="F"))
+
+    real_img = nb.load(ref_image)
+    odf4d = np.stack(odfs_3d, -1)
+    odf4d_img = nb.Nifti1Image(odf4d, real_img.affine, real_img.header)
+
+    return odf4d_img, directions
+
+def peaks_from_odfs(odf4d, sphere, relative_peak_threshold,
+                    min_separation_angle, mask=None,
+                    gfa_thr=0, normalize_peaks=False,
+                    npeaks=5):
+
+    shape = odf4d.shape[:-1]
+    if mask is None:
+        mask = np.ones(shape, dtype='bool')
+    else:
+        if mask.shape != shape:
+            raise ValueError("Mask is not the same shape as data.")
+
+    gfa_array = np.zeros(shape)
+    qa_array = np.zeros((shape + (npeaks,)))
+
+    peak_dirs = np.zeros((shape + (npeaks, 3)))
+    peak_values = np.zeros((shape + (npeaks,)))
+    peak_indices = np.zeros((shape + (npeaks,)), dtype='int')
+    peak_indices.fill(-1)
+
+    global_max = -np.inf
+    for idx in ndindex(shape):
+        if not mask[idx]:
+            continue
+        odf = odf4d[idx]
+        gfa_array[idx] = gfa(odf)
+        if gfa_array[idx] < gfa_thr:
+            global_max = max(global_max, odf.max())
+            continue
+        # Get peaks of odf
+        direction, pk, ind = peak_directions(odf, sphere,
+                                             relative_peak_threshold,
+                                             min_separation_angle)
+        # Calculate peak metrics
+        if pk.shape[0] != 0:
+            global_max = max(global_max, pk[0])
+            n = min(npeaks, pk.shape[0])
+            qa_array[idx][:n] = pk[:n] - odf.min()
+            peak_dirs[idx][:n] = direction[:n]
+            peak_indices[idx][:n] = ind[:n]
+            peak_values[idx][:n] = pk[:n]
+
+            if normalize_peaks:
+                peak_values[idx][:n] /= pk[0]
+                peak_dirs[idx] *= peak_values[idx][:, None]
+
+    qa_array /= global_max
+
+    return peak_dirs, peak_values

@@ -21,6 +21,8 @@ from nilearn import image as nlimage
 from nilearn.plotting import plot_anat
 from svgutils.transform import SVGFigure
 from seaborn import color_palette
+import matplotlib.pyplot as plt
+from PIL import Image
 
 from .. import NIWORKFLOWS_LOG
 from nipype.utils import filemanip
@@ -196,18 +198,20 @@ def extract_svg(display_object, dpi=300, compress='auto'):
     return image_svg[start_idx:end_idx]
 
 
-def cuts_from_bbox(mask_nii, cuts=3):
+def cuts_from_bbox(mask_nii, cuts=3, padding=0, apply_affine=True):
     """Finds equi-spaced cuts for presenting images"""
     from nibabel.affines import apply_affine
-    mask_data = mask_nii.get_data()
+    mask_data = mask_nii.get_fdata()
     B = np.argwhere(mask_data > 0)
     start_coords = B.min(0)
     stop_coords = B.max(0) + 1
 
     vox_coords = []
     for start, stop in zip(start_coords, stop_coords):
-        inc = abs(stop - start) / (cuts + 1)
-        vox_coords.append([start + (i + 1) * inc for i in range(cuts)])
+        inc = abs(stop - start) / (cuts + 2 * padding + 1)
+        slices = [start + (i + 1) * inc for i in range(cuts + 2 * padding)]
+        vox_coords.append(slices[padding:-padding])
+    return {k: [int(_v) for _v in v] for k, v in zip(['x', 'y', 'z'], vox_coords)}
 
     ras_coords = []
     for cross in np.array(vox_coords).T:
@@ -726,3 +730,80 @@ def plot_melodic_components(melodic_dir, in_file, tr=None,
 
     with open(out_file, 'w' if PY3 else 'wb') as f:
         f.write(image_svg)
+
+
+def slices_from_bbox(mask_nii, cuts=3, padding=0):
+    """Finds equi-spaced cuts for presenting images"""
+    from nibabel.affines import apply_affine
+    mask_data = mask_nii.get_fdata()
+    B = np.argwhere(mask_data > 0)
+    start_coords = B.min(0)
+    stop_coords = B.max(0) + 1
+
+    vox_coords = []
+    for start, stop in zip(start_coords, stop_coords):
+        inc = abs(stop - start) / (cuts + 2 * padding + 1)
+        slices = [start + (i + 1) * inc for i in range(cuts + 2 * padding)]
+        vox_coords.append(slices[padding:-padding])
+    return {k: [int(_v) for _v in v] for k, v in zip(['x', 'y', 'z'], vox_coords)}
+
+
+def peak_slice_series(peak_directions, peak_values, background_image, out_file, mask_image=None,
+                      axis_num=0, prefix='odf', tile_size=1200, n_cuts=3, padding=4):
+    from fury import actor, window, ui
+    background_data = background_image.get_fdata()
+    peak_actor = actor.peak_slicer(peak_directions, peak_values, colors=None)
+    image_actor = actor.slicer(background_data, opacity=0.6, interpolation='nearest')
+    image_size = (tile_size, tile_size)
+    scene = window.Scene()
+    shape = background_data.shape
+    scene.add(image_actor)
+    scene.add(peak_actor)
+    midpoint = (shape[0] / 2., shape[1] / 2., shape[2] / 2.)
+    camera_z_dist = max(midpoint[0], midpoint[1]) * 3.5
+    camera_x_dist = max(midpoint[1], midpoint[2]) * 3.5
+    camera_y_dist = max(midpoint[0], midpoint[2]) * 3.5
+
+    slice_indices = slices_from_bbox(background_image, cuts=n_cuts, padding=padding)
+
+    # Render the axial slices
+    z_image = Image.new('RGB', (tile_size, tile_size * n_cuts))
+    for slicenum, z_slice in enumerate(slice_indices['z']):
+        image_actor.display_extent(0, shape[0] - 1, 0, shape[1] - 1, z_slice, z_slice)
+        peak_actor.display_extent(0, shape[0] - 1, 0, shape[1] - 1, z_slice + 1, z_slice + 1)
+        scene.set_camera(focal_point=(midpoint[0], midpoint[1], z_slice),
+                         position=(midpoint[0], midpoint[1], z_slice + camera_z_dist),
+                         view_up=(0., -1., 0.))
+        png_file = '{}_tra_{:03d}.png'.format(prefix, z_slice)
+        window.record(scene, out_path=png_file, reset_camera=False, size=image_size)
+        z_image.paste(Image.open(png_file), (0, slicenum * tile_size))
+
+    # Render the sagittal slices
+    x_image = Image.new('RGB', (tile_size, tile_size * n_cuts))
+    for slicenum, x_slice in enumerate(slice_indices['x']):
+        image_actor.display_extent(x_slice, x_slice, 0, shape[1] - 1, 0, shape[2] - 1)
+        peak_actor.display_extent(x_slice, x_slice, 0, shape[1] - 1, 0, shape[2] - 1)
+        scene.set_camera(focal_point=(x_slice, midpoint[1], midpoint[2]),
+                         position=(x_slice - camera_x_dist, midpoint[1], midpoint[2]),
+                         view_up=(0., 0, 1))
+        png_file = '{}_sag_{:03d}.png'.format(prefix, x_slice)
+        window.record(scene, out_path=png_file, reset_camera=False, size=image_size)
+        x_image.paste(Image.open(png_file), (0, slicenum * tile_size))
+
+    # Render the coronal slices
+    y_image = Image.new('RGB', (tile_size, tile_size * n_cuts))
+    for slicenum, y_slice in enumerate(slice_indices['y']):
+        image_actor.display_extent(0, shape[0] - 1, y_slice, y_slice, 0, shape[2] - 1)
+        peak_actor.display_extent(0, shape[0] - 1, y_slice - 4, y_slice - 4, 0, shape[2] - 1)
+        scene.set_camera(focal_point=(midpoint[0], y_slice, midpoint[2]),
+                         position=(midpoint[0], y_slice - camera_y_dist, midpoint[2]),
+                         view_up=(0., 0, 1))
+        png_file = '{}_cor_{:03d}.png'.format(prefix, y_slice)
+        window.record(scene, out_path=png_file, reset_camera=False, size=image_size)
+        y_image.paste(Image.open(png_file), (0, slicenum * tile_size))
+
+    final_image = Image.new('RGB', (tile_size * 3, tile_size * n_cuts))
+    final_image.paste(z_image, (0, 0))
+    final_image.paste(x_image, (tile_size, 0))
+    final_image.paste(y_image, (tile_size * 2, 0))
+    final_image.save(out_file)
