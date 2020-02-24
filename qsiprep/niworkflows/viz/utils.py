@@ -22,6 +22,7 @@ from nilearn.plotting import plot_anat
 from svgutils.transform import SVGFigure
 from seaborn import color_palette
 import matplotlib.pyplot as plt
+from matplotlib.image import imread
 from PIL import Image
 
 from .. import NIWORKFLOWS_LOG
@@ -198,20 +199,18 @@ def extract_svg(display_object, dpi=300, compress='auto'):
     return image_svg[start_idx:end_idx]
 
 
-def cuts_from_bbox(mask_nii, cuts=3, padding=0, apply_affine=True):
+def cuts_from_bbox(mask_nii, cuts=3):
     """Finds equi-spaced cuts for presenting images"""
     from nibabel.affines import apply_affine
-    mask_data = mask_nii.get_fdata()
+    mask_data = mask_nii.get_data()
     B = np.argwhere(mask_data > 0)
     start_coords = B.min(0)
     stop_coords = B.max(0) + 1
 
     vox_coords = []
     for start, stop in zip(start_coords, stop_coords):
-        inc = abs(stop - start) / (cuts + 2 * padding + 1)
-        slices = [start + (i + 1) * inc for i in range(cuts + 2 * padding)]
-        vox_coords.append(slices[padding:-padding])
-    return {k: [int(_v) for _v in v] for k, v in zip(['x', 'y', 'z'], vox_coords)}
+        inc = abs(stop - start) / (cuts + 1)
+        vox_coords.append([start + (i + 1) * inc for i in range(cuts)])
 
     ras_coords = []
     for cross in np.array(vox_coords).T:
@@ -732,10 +731,8 @@ def plot_melodic_components(melodic_dir, in_file, tr=None,
         f.write(image_svg)
 
 
-def slices_from_bbox(mask_nii, cuts=3, padding=0):
+def slices_from_bbox(mask_data, cuts=3, padding=0):
     """Finds equi-spaced cuts for presenting images"""
-    from nibabel.affines import apply_affine
-    mask_data = mask_nii.get_fdata()
     B = np.argwhere(mask_data > 0)
     start_coords = B.min(0)
     stop_coords = B.max(0) + 1
@@ -748,10 +745,13 @@ def slices_from_bbox(mask_nii, cuts=3, padding=0):
     return {k: [int(_v) for _v in v] for k, v in zip(['x', 'y', 'z'], vox_coords)}
 
 
-def peak_slice_series(peak_directions, peak_values, background_image, out_file, mask_image=None,
-                      axis_num=0, prefix='odf', tile_size=1200, n_cuts=3, padding=4):
+def peak_slice_series(peak_directions, peak_values, background_data, out_file, mask_image=None,
+                      axis_num=0, prefix='odf', tile_size=1200, n_cuts=3, padding=4,
+                      normalize_peaks=True):
     from fury import actor, window, ui
-    background_data = background_image.get_fdata()
+    if normalize_peaks:
+        peak_values = peak_values / peak_values.max() * np.pi
+
     peak_actor = actor.peak_slicer(peak_directions, peak_values, colors=None)
     image_actor = actor.slicer(background_data, opacity=0.6, interpolation='nearest')
     image_size = (tile_size, tile_size)
@@ -760,11 +760,11 @@ def peak_slice_series(peak_directions, peak_values, background_image, out_file, 
     scene.add(image_actor)
     scene.add(peak_actor)
     midpoint = (shape[0] / 2., shape[1] / 2., shape[2] / 2.)
-    camera_z_dist = max(midpoint[0], midpoint[1]) * 3.5
-    camera_x_dist = max(midpoint[1], midpoint[2]) * 3.5
-    camera_y_dist = max(midpoint[0], midpoint[2]) * 3.5
+    camera_z_dist = max(midpoint[0], midpoint[1]) * np.pi
+    camera_x_dist = max(midpoint[1], midpoint[2]) * np.pi
+    camera_y_dist = max(midpoint[0], midpoint[2]) * np.pi
 
-    slice_indices = slices_from_bbox(background_image, cuts=n_cuts, padding=padding)
+    slice_indices = slices_from_bbox(background_data, cuts=n_cuts, padding=padding)
 
     # Render the axial slices
     z_image = Image.new('RGB', (tile_size, tile_size * n_cuts))
@@ -806,4 +806,5 @@ def peak_slice_series(peak_directions, peak_values, background_image, out_file, 
     final_image.paste(z_image, (0, 0))
     final_image.paste(x_image, (tile_size, 0))
     final_image.paste(y_image, (tile_size * 2, 0))
-    final_image.save(out_file)
+    png_out_file = out_file + ".png"
+    final_image.save(png_out_file)

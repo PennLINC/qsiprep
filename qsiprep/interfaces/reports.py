@@ -29,6 +29,7 @@ from nipype.interfaces.base import (
 from nipype.interfaces import freesurfer as fs
 from nipype.interfaces.mixins import reporting
 import nibabel as nb
+from dipy.core.sphere import HemiSphere
 from .gradients import concatenate_bvals, concatenate_bvecs
 from .qc import createB0_ColorFA_Mask_Sprites, createSprite4D
 from .bids import get_bids_params
@@ -666,44 +667,41 @@ def _filename_to_colors(labels_column, colormap="rainbow"):
 class _ReconPeaksReportInputSpec(BaseInterfaceInputSpec):
     mif_file = File(exists=True)
     fib_file = File(exists=True)
+    odf_file = File(exists=True)
+    directions_file = File(exists=True)
     mask_file = File(exists=True)
     background_image = File(exists=True)
 
 
-class ReconPeaksReport(reporting.ReportCapableInterface):
+class ReconPeaksReport(SimpleInterface):
     input_spec = _ReconPeaksReportInputSpec
     output_spec = reporting.ReportCapableOutputSpec
     _ncuts = 4
+    _padding = 4
+    _redirect_x = True
 
-    def _generate_report(self, runtime):
+    def _run_interface(self, runtime):
         """Generate a reportlet."""
         if isdefined(self.inputs.mif_file):
-            odf_4d, directions = mif2amps(self.inputs.mif_file, runtime.cwd)
+            odf_img, directions = mif2amps(self.inputs.mif_file, runtime.cwd)
         elif isdefined(self.inputs.fib_file):
-            odf_4d, directions = fib2amps(self.inputs.fib_file, runtime.cwd)
+            odf_img, directions = fib2amps(self.inputs.fib_file,
+                                           self.inputs.background_image,
+                                           runtime.cwd)
+        elif isdefined(self.inputs.odf_file) and isdefined(self.inputs.directions_file):
+            odf_img = nb.load(self.inputs.odf_file)
+            directions = np.load(self.inputs.directions_file)
         else:
             raise Exception('Requires either a mif file or fib file')
-
+        odf_4d = odf_img.get_fdata()
+        sphere = HemiSphere(xyz=directions.astype(np.float))
         if not isdefined(self.inputs.background_image) or self.inputs.background_image is None:
             background_data = odf_4d.mean(3)
         else:
             background_data = nb.load(self.inputs.background_image).get_fdata()
-        peak_directions, peak_values = peaks_from_odfs(odf_4d, directions, 0.5, 15)
-
-        x_pngs, y_pngs, z_pngs = peak_slice_series(peak_directions, peak_values, background_data)
-
-
-def slices_from_bbox(mask_nii, cuts=3, padding=0):
-    """Finds equi-spaced cuts for presenting images"""
-    from nibabel.affines import apply_affine
-    mask_data = mask_nii.get_fdata()
-    B = np.argwhere(mask_data > 0)
-    start_coords = B.min(0)
-    stop_coords = B.max(0) + 1
-
-    vox_coords = []
-    for start, stop in zip(start_coords, stop_coords):
-        inc = abs(stop - start) / (cuts + 2 * padding + 1)
-        slices = [start + (i + 1) * inc for i in range(cuts + 2 * padding)]
-        vox_coords.append(slices[padding:-padding])
-    return {k: [int(_v) for _v in v] for k, v in zip(['x', 'y', 'z'], vox_coords)}
+        peak_directions, peak_values = peaks_from_odfs(odf_4d, sphere, 0.1, 15)
+        peak_report = op.join(runtime.cwd, 'peak_report.svg')
+        peak_slice_series(peak_directions, peak_values, background_data, peak_report,
+                          n_cuts=self._ncuts, padding=self._padding)
+        self._results['out_report'] = peak_report
+        return runtime
