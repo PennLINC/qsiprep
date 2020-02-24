@@ -586,6 +586,8 @@ def main():
 
     # No reports for recon mode yet
     if mode == "recon":
+        errno += generate_reports(subject_list, output_dir, work_dir, run_uuid,
+                                  pipeline_mode='qsirecon')
         sys.exit(int(errno > 0))
 
     # Generate reports phase
@@ -659,6 +661,8 @@ def main():
         if not opts.notrack:
             sentry_sdk.capture_message('QSIPostRecon finished without errors',
                                        level='info')
+    errno += generate_reports(subject_list, output_dir, work_dir, run_uuid,
+                              pipeline_mode='qsirecon')
     sys.exit(int(errno > 0))
 
 
