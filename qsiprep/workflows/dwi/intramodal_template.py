@@ -84,8 +84,10 @@ def init_intramodal_template_wf(inputs_list, t1w_source_file, reportlets_dir, tr
     runtime_opts = {'num_cores': 1, 'parallel_control': 0}
     if omp_nthreads > 1:
         runtime_opts = {'num_cores': omp_nthreads, 'parallel_control': 2}
-    ants_mvtc2 = pe.Node(MultivariateTemplateConstruction2(dimension=3, **runtime_opts),
-                         name='ants_mvtc2')
+    ants_mvtc2 = pe.Node(
+        MultivariateTemplateConstruction2(dimension=3, iteration_limit=num_iterations,
+                                          **runtime_opts),
+        name='ants_mvtc2')
 
     workflow.connect([
         (merge_inputs, rename_inputs, [('out', 'in_file')]),

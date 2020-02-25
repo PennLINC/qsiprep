@@ -280,22 +280,6 @@ qsiprep \
     --sloppy --write-graph --mem_mb 4096 \
     --nthreads 2 -vv --output-resolution 5
 
-# name: Run mrtrix on downsampled abcd
-# command: |
-  qsiprep -w /Users/mcieslak/Desktop/multishell_output/DSCSDSI/work \
-       /Users/mcieslak/Desktop/multishell_output/qsiprep \
-      --recon-input /Users/mcieslak/Desktop/multishell_output/qsiprep \
-       /Users/mcieslak/Desktop/multishell_output/multishell_output/derivatives \
-       participant \
-      --recon-spec mrtrix_msmt_csd \
-      --sloppy \
-      --recon-only \
-      --fs-license-file $FREESURFER_HOME/license.txt \
-      --mem_mb 4096 \
-      --output-resolution 5 \
-      --fs-license-file $FREESURFER_HOME/license.txt \
-      --nthreads 2 -vv
-
 #- run:
 #name: Run mrtrix_multishell_msmt
 #no_output_timeout: 2h

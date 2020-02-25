@@ -15,9 +15,11 @@ import os
 import os.path as op
 from glob import glob
 from copy import deepcopy
+from nipype import __version__ as nipype_ver
 from pkg_resources import resource_filename as pkgrf
 from ...engine import Workflow
 from ...utils.sloppy_recon import make_sloppy
+from ...__about__ import __version__
 
 import logging
 import json
@@ -165,6 +167,15 @@ def init_single_subject_wf(
         LOGGER.info("found %s in %s", dwi_files, recon_input)
 
     workflow = Workflow('sub-{}_{}'.format(subject_id, spec['name']))
+    workflow.__desc__ = """
+Results included in this manuscript come from reconstructions
+performed using *QSIprep* {qsiprep_ver},
+which is based on *Nipype* {nipype_ver}
+(@nipype1; @nipype2; RRID:SCR_002502).
+
+""".format(
+        qsiprep_ver=__version__, nipype_ver=nipype_ver)
+
     if len(dwi_files) == 0:
         LOGGER.info("No dwi files found for %s", subject_id)
         return workflow

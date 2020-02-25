@@ -369,6 +369,7 @@ def fib2amps(fib_file, ref_image, subtract_iso=True):
 
     return odf4d_img, directions
 
+
 def peaks_from_odfs(odf4d, sphere, relative_peak_threshold,
                     min_separation_angle, mask=None,
                     gfa_thr=0, normalize_peaks=False,

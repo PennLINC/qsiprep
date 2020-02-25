@@ -27,51 +27,11 @@
                 "title": "Brain mask and brain tissue segmentation of the T1w",
                 "description": "This panel shows the template T1-weighted image (if several T1w images were found), with contours delineating the detected brain mask and brain tissue segmentations.",
                 "imgtype": "svg+xml"
-            },
-            {
-                "name": "anat_preproc/t1_2_mni",
-                "file_pattern": "anat/.*t1_2_mni",
-                "title": "T1 to MNI registration",
-                "description": "Nonlinear mapping of the T1w image into MNI space. Hover on the panel with the mouse to transition between both spaces.",
-                "imgtype": "svg+xml"
-            },
-            {
-                "name": "anat_preproc/reconall",
-                "file_pattern": "anat/.*reconall",
-                "title": "Surface reconstruction",
-                "description": "Surfaces (white and pial) reconstructed with FreeSurfer (<code>recon-all</code>) overlaid on the participant's T1w template.",
-                "imgtype": "svg+xml"
-            },
-            {
-              "name": "anat_preproc/intramodal_template",
-              "file_pattern": "anat/.*imtcoreg\\.",
-              "title": "Intramodal B0 template to T1w registration",
-              "description": "The intramodal B0 template registered to the T1w image",
-              "imgtype": "svg+xml"
             }
         ]
     },
     {
-        "name": "Fieldmaps",
-        "reportlets":
-        [
-            {
-                "name": "fmap/magnitude_mask",
-                "file_pattern": "fmap/.*fmap_mask\\.",
-                "title": "Skull stripped magnitude image",
-                "description": "Brain extraction of the magnitude image from the fieldmap",
-                "imgtype": "svg+xml"
-            },
-            {
-                "name": "epi/topup_summary",
-                "title": "TOPUP Inputs",
-                "file_pattern": "dwi/.*_topupsummary\\.",
-                "raw": true
-            }
-        ]
-    },
-    {
-        "name": "Denoising",
+        "name": "Reconstruction",
         "reportlets":
         [
           {
@@ -98,7 +58,7 @@
         ]
     },
     {
-        "name": "Diffusion",
+        "name": "Connectome",
         "reportlets":
         [
             {

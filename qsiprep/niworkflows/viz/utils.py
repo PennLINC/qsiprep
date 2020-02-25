@@ -15,14 +15,13 @@ from io import open, StringIO
 
 import numpy as np
 import nibabel as nb
+import matplotlib.pyplot as plt
 
 from lxml import etree
 from nilearn import image as nlimage
 from nilearn.plotting import plot_anat
 from svgutils.transform import SVGFigure
 from seaborn import color_palette
-import matplotlib.pyplot as plt
-from matplotlib.image import imread
 from PIL import Image
 
 from .. import NIWORKFLOWS_LOG
@@ -593,7 +592,6 @@ def plot_melodic_components(melodic_dir, in_file, tr=None,
     from nilearn.image import index_img, iter_img
     import nibabel as nb
     import numpy as np
-    import pylab as plt
     import seaborn as sns
     from matplotlib.gridspec import GridSpec
     import os
@@ -748,7 +746,7 @@ def slices_from_bbox(mask_data, cuts=3, padding=0):
 def peak_slice_series(peak_directions, peak_values, background_data, out_file, mask_image=None,
                       axis_num=0, prefix='odf', tile_size=1200, n_cuts=3, padding=4,
                       normalize_peaks=True):
-    from fury import actor, window, ui
+    from fury import actor, window
     if normalize_peaks:
         peak_values = peak_values / peak_values.max() * np.pi
 

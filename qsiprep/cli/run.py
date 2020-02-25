@@ -505,8 +505,8 @@ def main():
     nlogging.getLogger('nipype.utils').setLevel(log_level)
 
     errno = 0
-    mode = "recon" if opts.recon_only else "prep"
-    if mode == "recon":
+    mode = "qsirecon" if opts.recon_only else "qsiprep"
+    if mode == "qsirecon":
         logger.info("running qsirecon")
         building_func = build_recon_workflow
     else:
@@ -548,7 +548,7 @@ def main():
     # Check workflow for missing commands
     missing = check_deps(qsiprep_wf)
     if missing:
-        print("Cannot run qsiprep. Missing dependencies:")
+        print("Cannot run {}. Missing dependencies:".format(mode))
         for iface, cmd in missing:
             print("\t{} (Interface: {})".format(cmd, iface))
         sys.exit(2)
@@ -567,7 +567,7 @@ def main():
     except Exception as e:
         if not opts.notrack:
             from ..utils.sentry import process_crashfile
-            crashfolders = [Path(output_dir) / 'qsiprep' / 'sub-{}'.format(s) / 'log' / run_uuid
+            crashfolders = [Path(output_dir) / mode / 'sub-{}'.format(s) / 'log' / run_uuid
                             for s in subject_list]
             for crashfolder in crashfolders:
                 for crashfile in crashfolder.glob('crash*.*'):
@@ -583,17 +583,13 @@ def main():
         if not opts.notrack:
             sentry_sdk.capture_message('QSI{} finished without errors'.format(mode),
                                        level='info')
-
-    # No reports for recon mode yet
-    if mode == "recon":
-        errno += generate_reports(subject_list, output_dir, work_dir, run_uuid,
-                                  pipeline_mode='qsirecon')
-        sys.exit(int(errno > 0))
-
     # Generate reports phase
-    errno += generate_reports(subject_list, output_dir, work_dir, run_uuid)
-    write_derivative_description(bids_dir, str(Path(output_dir) / 'qsiprep'))
-    if opts.recon_spec is None:
+    errno += generate_reports(subject_list, output_dir, work_dir, run_uuid,
+                              pipeline_mode=mode)
+    write_derivative_description(bids_dir, str(Path(output_dir) / mode))
+
+    # If we were recon-only, then we're done
+    if mode == "qsirecon" or opts.recon_spec is None:
         logger.info("No additional workflows to run.")
         sys.exit(int(errno > 0))
 
@@ -645,7 +641,7 @@ def main():
     except Exception as e:
         if not opts.notrack:
             from ..utils.sentry import process_crashfile
-            crashfolders = [output_dir / 'qsiprep' / 'sub-{}'.format(s) / 'log' / run_uuid
+            crashfolders = [output_dir / 'qsirecon' / 'sub-{}'.format(s) / 'log' / run_uuid
                             for s in subject_list]
             for crashfolder in crashfolders:
                 for crashfile in crashfolder.glob('crash*.*'):
@@ -653,7 +649,7 @@ def main():
 
             if "Workflow did not execute cleanly" not in str(e):
                 sentry_sdk.capture_exception(e)
-        logger.critical('QSIPrep failed: %s', e)
+        logger.critical('QSIRecon failed: %s', e)
         raise
     else:
         errno += 0
@@ -988,7 +984,7 @@ def build_recon_workflow(opts, retval):
 
     # Set up directories
     output_dir = op.abspath(opts.output_dir)
-    log_dir = op.join(output_dir, 'qsiprep', 'logs')
+    log_dir = op.join(output_dir, 'qsirecon', 'logs')
     work_dir = op.abspath(opts.work_dir or 'work')  # Set work/ as default
 
     # Check and create output and working directories
@@ -1054,7 +1050,7 @@ def build_recon_workflow(opts, retval):
     )
     retval['return_code'] = 0
 
-    logs_path = Path(output_dir) / 'qsiprep' / 'logs'
+    logs_path = Path(output_dir) / 'qsirecon' / 'logs'
     boilerplate = retval['workflow'].visit_desc()
     (logs_path / 'CITATION.md').write_text(boilerplate)
     logger.log(
