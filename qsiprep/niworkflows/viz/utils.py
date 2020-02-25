@@ -804,5 +804,4 @@ def peak_slice_series(peak_directions, peak_values, background_data, out_file, m
     final_image.paste(z_image, (0, 0))
     final_image.paste(x_image, (tile_size, 0))
     final_image.paste(y_image, (tile_size * 2, 0))
-    png_out_file = out_file + ".png"
-    final_image.save(png_out_file)
+    final_image.save(out_file)

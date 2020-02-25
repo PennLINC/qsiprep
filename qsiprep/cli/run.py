@@ -579,9 +579,9 @@ def main():
         raise
     else:
         errno = 0
-        logger.log(25, 'QSI{} finished without errors'.format(mode))
+        logger.log(25, 'QSI{} finished without errors'.format(mode[3:]))
         if not opts.notrack:
-            sentry_sdk.capture_message('QSI{} finished without errors'.format(mode),
+            sentry_sdk.capture_message('QSI{} finished without errors'.format(mode[3:]),
                                        level='info')
     # Generate reports phase
     errno += generate_reports(subject_list, output_dir, work_dir, run_uuid,

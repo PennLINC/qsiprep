@@ -9,15 +9,23 @@ import logging
 import nipype.pipeline.engine as pe
 import nipype.interfaces.utility as niu
 from nipype.interfaces import afni
-from qsiprep.interfaces.bids import ReconDerivativesDataSink
+from ...interfaces.bids import ReconDerivativesDataSink
+from ...interfaces.reports import ReconPeaksReport
 from qsiprep.interfaces.mrtrix import (
     EstimateFOD, SS3TEstimateFOD, MRTrixIngress, SS3TDwi2Response, GlobalTractography,
     MRTrixAtlasGraph, SIFT2, TckGen, MTNormalize)
 from .interchange import input_fields
+from ...engine import Workflow
 
 LOGGER = logging.getLogger('nipype.interface')
 MULTI_RESPONSE_ALGORITHMS = ('dhollander', 'msmt_5tt')
 
+CITATIONS = {
+    "dhollander": "(@dhollander2019response, @dhollander2016unsupervised)",
+    "msmt_5tt": "(@msmt5tt)",
+    "csd": "(@originalcsd, @tournier2007robust)",
+    "msmt_csd": "(@originalcsd, @msmt5tt)"
+}
 
 def init_mrtrix_csd_recon_wf(name="mrtrix_recon", output_suffix="", params={}):
     """Create FOD images for WM, GM and CSF.
@@ -67,6 +75,8 @@ def init_mrtrix_csd_recon_wf(name="mrtrix_recon", output_suffix="", params={}):
             fields=['fod_sh_mif', 'wm_odf', 'wm_txt', 'gm_odf', 'gm_txt', 'csf_odf',
                     'csf_txt']),
         name="outputnode")
+    workflow = Workflow(name=name)
+    desc = ''
 
     # Resample anat mask
     resample_mask = pe.Node(
@@ -76,6 +86,20 @@ def init_mrtrix_csd_recon_wf(name="mrtrix_recon", output_suffix="", params={}):
     response = params.get('response', {})
     response_algorithm = response.get('algorithm', 'dhollander')
     response['algorithm'] = response_algorithm
+    if response_algorithm == 'csd':
+        desc += 'Single-tissue '
+    else:
+        desc += 'Multi-tissue '
+
+    desc += """\
+fiber response functions were estimated using the {} algorithm.
+FODs were estimated via constrained spherical deconvolution
+(CSD, @originalcsd, @tournier2008csd) \
+""".format(response_algorithm)
+    if response_algorithm == 'msmt_5tt':
+        desc += 'using a T1w-based segmentation {}.'.format(CITATIONS[response_algorithm])
+    else:
+        desc += 'using an unsupervised multi-tissue method {}.'.format(CITATIONS[response_algorithm])
 
     # FOD estimation
     fod = params.get('fod', {})
@@ -86,7 +110,6 @@ def init_mrtrix_csd_recon_wf(name="mrtrix_recon", output_suffix="", params={}):
     # Intensity normalize?
     run_mtnormalize = params.get('mtnormalize', True) and using_multitissue
 
-    workflow = pe.Workflow(name=name)
     create_mif = pe.Node(MRTrixIngress(), name='create_mif')
     # Use dwi2response from 3Tissue for updated dhollander
     estimate_response = pe.Node(SS3TDwi2Response(**response), 'estimate_response')
@@ -95,10 +118,23 @@ def init_mrtrix_csd_recon_wf(name="mrtrix_recon", output_suffix="", params={}):
         workflow.connect([
             (inputnode, estimate_response, [('mrtrix_5tt', 'mtt_file')])])
 
-    if fod_algorithm == 'msmt_csd':
+    if fod_algorithm in ('msmt_csd', 'csd'):
         estimate_fod = pe.Node(EstimateFOD(**fod), 'estimate_fod')
+        desc += ' Reconstruction was done using MRtrix3 (@mrtrix3).'
     elif fod_algorithm == 'ss3t':
         estimate_fod = pe.Node(SS3TEstimateFOD(**fod), 'estimate_fod')
+        desc += """ \
+A single-shell-optimized multi-tissue CSD was performed using MRtrix3Tissue
+(https://3Tissue.github.io), a fork of MRtrix3 (@mrtrix3)"""
+
+    # Make a visual report of the model
+    plot_peaks = pe.Node(ReconPeaksReport(), name='plot_peaks')
+    ds_report_peaks = pe.Node(
+        ReconDerivativesDataSink(extension='.png',
+                                 desc="wmFOD",
+                                 suffix='peaks'),
+        name='ds_report_peaks',
+        run_without_submitting=True)
 
     workflow.connect([
         (estimate_response, estimate_fod, [('wm_file', 'wm_txt'),
@@ -110,6 +146,8 @@ def init_mrtrix_csd_recon_wf(name="mrtrix_recon", output_suffix="", params={}):
                                  ('bval_file', 'bval_file'),
                                  ('bvec_file', 'bvec_file'),
                                  ('b_file', 'b_file')]),
+        (inputnode, plot_peaks, [('dwi_ref', 'background_image')]),
+        (plot_peaks, ds_report_peaks, [('out_report', 'in_file')]),
         (create_mif, estimate_response, [('mif_file', 'in_file')]),
         (estimate_response, outputnode, [('wm_file', 'wm_txt'),
                                          ('gm_file', 'gm_txt'),
@@ -121,6 +159,7 @@ def init_mrtrix_csd_recon_wf(name="mrtrix_recon", output_suffix="", params={}):
 
     if not run_mtnormalize:
         workflow.connect([
+            (estimate_fod, plot_peaks, [('wm_odf', 'mif_file')]),
             (estimate_fod, outputnode, [('wm_odf', 'fod_sh_mif'),
                                         ('wm_odf', 'wm_odf'),
                                         ('gm_odf', 'gm_odf'),
@@ -134,11 +173,12 @@ def init_mrtrix_csd_recon_wf(name="mrtrix_recon", output_suffix="", params={}):
             (estimate_fod, intensity_norm, [('wm_odf', 'wm_odf'),
                                             ('gm_odf', 'gm_odf'),
                                             ('csf_odf', 'csf_odf')]),
+            (intensity_norm, plot_peaks, [('wm_normed_odf', 'mif_file')]),
             (intensity_norm, outputnode, [('wm_normed_odf', 'fod_sh_mif'),
                                           ('wm_normed_odf', 'wm_odf'),
                                           ('gm_normed_odf', 'gm_odf'),
-                                          ('csf_normed_odf', 'csf_odf')])
-        ])
+                                          ('csf_normed_odf', 'csf_odf')])])
+        desc += " FODs were intensity-normalized using mtnormalize (@mtnormalize)."
 
     if output_suffix:
         normed = '' if not run_mtnormalize else 'mtnormed'
@@ -210,6 +250,7 @@ def init_mrtrix_csd_recon_wf(name="mrtrix_recon", output_suffix="", params={}):
                     run_without_submitting=True)
                 workflow.connect(intensity_norm, 'inlier_mask', ds_inlier_mask, 'in_file')
 
+    workflow.__desc__ = desc
     return workflow
 
 

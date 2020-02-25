@@ -29,7 +29,7 @@ def _check_repeats(nodelist):
         raise Exception
 
 
-def init_dwi_recon_workflow(dwi_files, workflow_spec, output_dir, reportlets_dir,
+def init_dwi_recon_workflow(dwi_files, workflow_spec, output_dir, reportlets_dir, has_transform,
                             omp_nthreads, name="recon_wf"):
     atlas_names = workflow_spec.get('atlases', [])
     space = workflow_spec['space']
@@ -49,8 +49,8 @@ def init_dwi_recon_workflow(dwi_files, workflow_spec, output_dir, reportlets_dir
     workflow.connect([
         (scans_iter, qsiprep_preprocessed_dwi_data, ([('dwi_file', 'dwi_file')])),
         (qsiprep_preprocessed_dwi_data, inputnode, [
-            (trait, trait) for trait in qsiprep_output_names])
-    ])
+            (trait, trait) for trait in qsiprep_output_names])])
+
     # Resample all atlases to dwi_file's resolution
     get_atlases = pe.Node(
         GetConnectivityAtlases(atlas_names=atlas_names, space=space),
@@ -60,6 +60,9 @@ def init_dwi_recon_workflow(dwi_files, workflow_spec, output_dir, reportlets_dir
     # Save the atlases
     if len(atlas_names) > 0:
         if space == "T1w":
+            if not has_transform:
+                LOGGER.critical("No reverse transform found, unable to move atlases"
+                                " into DWI space")
             workflow.connect([
                 (inputnode, get_atlases,
                  [('t1_2_mni_reverse_transform', 'forward_transform')])])
@@ -140,8 +143,8 @@ def init_dwi_recon_workflow(dwi_files, workflow_spec, output_dir, reportlets_dir
             connect_from_upstream = upstream_outputs.intersection(downstream_inputs)
             connect_from_qsiprep = default_input_set - connect_from_upstream
 
-            LOGGER.info("connecting %s from %s to %s", connect_from_qsiprep,
-                        inputnode, node)
+            # LOGGER.info("connecting %s from %s to %s", connect_from_qsiprep,
+            #             inputnode, node)
             workflow.connect([
                 (inputnode, node,
                  _as_connections(connect_from_qsiprep, dest_prefix='inputnode.'))])
@@ -149,8 +152,8 @@ def init_dwi_recon_workflow(dwi_files, workflow_spec, output_dir, reportlets_dir
             #    workflow.connect(inputnode, qp_connection, node, 'inputnode.' + qp_connection)
             _check_repeats(workflow.list_node_names())
 
-            LOGGER.info("connecting %s from %s to %s", connect_from_upstream,
-                        upstream_outputnode_name, downstream_inputnode_name)
+            # LOGGER.info("connecting %s from %s to %s", connect_from_upstream,
+            #             upstream_outputnode_name, downstream_inputnode_name)
             workflow.connect([
                 (upstream_node, node,
                  _as_connections(

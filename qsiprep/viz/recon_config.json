@@ -35,11 +35,11 @@
         "reportlets":
         [
           {
-              "name": "epi/denoising",
-              "file_pattern": "dwi/.*_denoising\\.",
-              "title": "MP-PCA denoising",
-              "description": "Effect of MP-PCA denoising on a low and high-b image.",
-              "imgtype": "svg+xml"
+              "name": "epi/csd",
+              "file_pattern": "dwi/.*desc-wmFOD.*_peaks\\.",
+              "title": "Constrained Spherical Deconvolution",
+              "description": "Directionally color-coded FOD peaks overlaid on the dwiref.",
+              "imgtype": "png"
           },
           {
               "name": "epi/unringing",

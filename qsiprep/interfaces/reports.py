@@ -700,7 +700,7 @@ class ReconPeaksReport(SimpleInterface):
         else:
             background_data = nb.load(self.inputs.background_image).get_fdata()
         peak_directions, peak_values = peaks_from_odfs(odf_4d, sphere, 0.1, 15)
-        peak_report = op.join(runtime.cwd, 'peak_report.svg')
+        peak_report = op.join(runtime.cwd, 'peak_report.png')
         peak_slice_series(peak_directions, peak_values, background_data, peak_report,
                           n_cuts=self._ncuts, padding=self._padding)
         self._results['out_report'] = peak_report

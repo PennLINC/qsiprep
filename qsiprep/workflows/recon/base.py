@@ -162,7 +162,7 @@ def init_single_subject_wf(
         # Get all the output files that are in this space
         dwi_files = [f.path for f in
                      layout.get(suffix="dwi", subject=subject_id, absolute_paths=True,
-                                extensions=['nii', 'nii.gz'])
+                                extension=['nii', 'nii.gz'])
                      if 'space-' + space in f.filename]
         LOGGER.info("found %s in %s", dwi_files, recon_input)
 
@@ -180,6 +180,16 @@ which is based on *Nipype* {nipype_ver}
         LOGGER.info("No dwi files found for %s", subject_id)
         return workflow
 
+    # Was there a forced normalization during preprocessing?
+    template_transform = [f.path for f in
+                          layout.get(subject_id=subject_id, suffix='xfm', extension=['.h5'])
+                          if 'to-T1w' in f.path and 'from-MNI152NLin2009cAsym' in f.path]
+    if template_transform:
+        template_transform = template_transform[0]
+        has_transform = True
+    else:
+        has_transform = False
+
     anat_ingress_wf = init_recon_anatomical_wf(subject_id=subject_id,
                                                recon_input_dir=recon_input,
                                                extras_to_make=spec.get('anatomical', []),
@@ -191,6 +201,7 @@ which is based on *Nipype* {nipype_ver}
                                            workflow_spec=spec,
                                            reportlets_dir=reportlets_dir,
                                            output_dir=output_dir,
+                                           has_transform=has_transform,
                                            omp_nthreads=omp_nthreads)
     workflow.connect([(anat_ingress_wf, dwi_recon_wf, to_connect)])
 
