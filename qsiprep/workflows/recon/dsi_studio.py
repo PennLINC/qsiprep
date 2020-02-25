@@ -16,6 +16,8 @@ from qsiprep.interfaces.dsi_studio import (DSIStudioCreateSrc, DSIStudioGQIRecon
 import logging
 from qsiprep.interfaces.bids import ReconDerivativesDataSink
 from .interchange import input_fields
+from ...engine import Workflow
+from ...interfaces.reports import ReconPeaksReport
 
 LOGGER = logging.getLogger('nipype.interface')
 
@@ -47,12 +49,32 @@ def init_dsi_studio_recon_wf(name="dsi_studio_recon", output_suffix="", params={
         niu.IdentityInterface(
             fields=['fibgz']),
         name="outputnode")
-    workflow = pe.Workflow(name=name)
+    workflow = Workflow(name=name)
+    desc = """DSI Studio Reconstruction
+
+: """
     create_src = pe.Node(DSIStudioCreateSrc(), name="create_src")
-    gqi_recon = pe.Node(DSIStudioGQIReconstruction(), name="gqi_recon")
+    romdd = params.get("ratio_of_mean_diffusion_distance", 1.25)
+    gqi_recon = pe.Node(
+        DSIStudioGQIReconstruction(ratio_of_mean_diffusion_distance=romdd),
+        name="gqi_recon")
+    desc += """\
+Diffusion orientation distribution functions (ODFs) were reconstructed using
+generalized q-sampling imaging (GQI, @yeh2010gqi) with a ratio of mean diffusion
+distance of %02f.""" % romdd
+
     # Resample anat mask
     resample_mask = pe.Node(
         afni.Resample(outputtype='NIFTI_GZ', resample_mode="NN"), name='resample_mask')
+
+    # Make a visual report of the model
+    plot_peaks = pe.Node(ReconPeaksReport(), name='plot_peaks')
+    ds_report_peaks = pe.Node(
+        ReconDerivativesDataSink(extension='.png',
+                                 desc="GQIODF",
+                                 suffix='peaks'),
+        name='ds_report_peaks',
+        run_without_submitting=True)
 
     workflow.connect([
         (inputnode, create_src, [('dwi_file', 'input_nifti_file'),
@@ -62,7 +84,10 @@ def init_dsi_studio_recon_wf(name="dsi_studio_recon", output_suffix="", params={
                                     ('dwi_file', 'master')]),
         (create_src, gqi_recon, [('output_src', 'input_src_file')]),
         (resample_mask, gqi_recon, [('out_file', 'mask')]),
-        (gqi_recon, outputnode, [('output_fib', 'fibgz')])
+        (gqi_recon, outputnode, [('output_fib', 'fibgz')]),
+        (gqi_recon, plot_peaks, [('output_fib', 'fib_file')]),
+        (inputnode, plot_peaks, [('dwi_ref', 'background_image')]),
+        (plot_peaks, ds_report_peaks, [('out_report', 'in_file')])
     ])
 
     if output_suffix:
@@ -75,6 +100,7 @@ def init_dsi_studio_recon_wf(name="dsi_studio_recon", output_suffix="", params={
             name='ds_gqi_fibgz',
             run_without_submitting=True)
         workflow.connect(gqi_recon, 'output_fib', ds_gqi_fibgz, 'in_file')
+    workflow.__desc__ = desc
     return workflow
 
 

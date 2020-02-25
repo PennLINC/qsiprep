@@ -16,6 +16,8 @@ import os.path as op
 from glob import glob
 from copy import deepcopy
 from nipype import __version__ as nipype_ver
+from nilearn import __version__ as nilearn_ver
+from dipy import __version__ as dipy_ver
 from pkg_resources import resource_filename as pkgrf
 from ...engine import Workflow
 from ...utils.sloppy_recon import make_sloppy
@@ -175,6 +177,20 @@ which is based on *Nipype* {nipype_ver}
 
 """.format(
         qsiprep_ver=__version__, nipype_ver=nipype_ver)
+    workflow.__postdesc__ = """
+
+Many internal operations of *qsiprep* use
+*Nilearn* {nilearn_ver} [@nilearn, RRID:SCR_001362] and
+*Dipy* {dipy_ver}[@dipy].
+For more details of the pipeline, see [the section corresponding
+to workflows in *qsiprep*'s documentation]\
+(https://qsiprep.readthedocs.io/en/latest/workflows.html \
+"qsiprep's documentation").
+
+
+### References
+
+    """.format(nilearn_ver=nilearn_ver, dipy_ver=dipy_ver)
 
     if len(dwi_files) == 0:
         LOGGER.info("No dwi files found for %s", subject_id)

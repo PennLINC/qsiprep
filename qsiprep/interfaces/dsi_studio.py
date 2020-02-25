@@ -7,7 +7,7 @@ from nipype.interfaces.base import (TraitedSpec, CommandLineInputSpec, BaseInter
 import os
 import os.path as op
 from glob import glob
-from nipype.utils.filemanip import fname_presuffix
+from nipype.utils.filemanip import fname_presuffix, split_filename
 import logging
 from copy import deepcopy
 import numpy as np
@@ -20,8 +20,7 @@ class DSIStudioCreateSrcInputSpec(CommandLineInputSpec):
     test_trait = traits.Bool()
     input_nifti_file = File(
         desc="DWI Nifti file",
-        argstr="--source=%s",
-        copyfile=False)
+        argstr="--source=%s")
     input_dicom_dir = File(
         desc="Directory with DICOM data from only the dwi",
         exists=True,
@@ -42,12 +41,8 @@ class DSIStudioCreateSrcInputSpec(CommandLineInputSpec):
         argstr="--recursive=1")
     subject_id = traits.Str("data")
     output_src = File(
-        name_template="%s.src.gz",
-        default='',
-        usedefault=True,
         desc="Output file (.src.gz)",
         argstr="--output=%s",
-        name_source="subject_id",
         genfile=True)
     grad_dev = File(
         desc="Gradient deviation file",
@@ -59,9 +54,7 @@ class DSIStudioCreateSrcInputSpec(CommandLineInputSpec):
 
 class DSIStudioCreateSrcOutputSpec(TraitedSpec):
     output_src = File(
-        name_template="%s.src.gz",
         desc="Output file (.src.gz)",
-        argstr="--output=%s",
         name_source="subject_id")
 
 
@@ -70,26 +63,23 @@ class DSIStudioCreateSrc(CommandLine):
     output_spec = DSIStudioCreateSrcOutputSpec
     _cmd = "dsi_studio --action=src "
 
-    def _format_arg(self, name, spec, value):
-        if name == "output_src":
-            if not self.inputs.output_src:
-                return '--output=' + self._gen_filename()
-            return '--output=' + self.inputs.output_src
-        return super(DSIStudioCreateSrc, self)._format_arg(name, spec, value)
+    def _gen_filename(self, name):
+        if not name == 'output_src':
+            return None
+        if isdefined(self.inputs.input_nifti_file):
+            _, fname, ext = split_filename(self.inputs.input_nifti_file)
+        elif isdefined(self.inputs.input_dicom_dir):
+            fname = op.split(self.inputs.dicom_dir)[1]
+        else:
+            raise Exception('Need either an input dicom director or nifti')
 
-    def _gen_filename(self):
-        cwd = os.getcwd()
-        input_fname = self.inputs.input_dicom_dir if isdefined(self.inputs.input_dicom_dir) \
-            else self.inputs.input_nifti_file
-        if not isdefined(input_fname):
-            raise Exception()
-        return fname_presuffix(input_fname, newpath=cwd, suffix=".src.gz", use_ext=False)
+        output = op.abspath(fname) + ".src.gz"
+        return output
 
     def _list_outputs(self):
         outputs = self.output_spec().get()
-        outputs["output_src"] = self._gen_filename()
+        outputs['output_src'] = self._gen_filename('output_src')
         return outputs
-
 
 class _DSIStudioSrcQCInputSpec(CommandLineInputSpec):
     src_file = File(exists=True, copyfile=True, argstr="%s",

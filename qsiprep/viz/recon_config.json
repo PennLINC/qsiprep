@@ -31,14 +31,14 @@
         ]
     },
     {
-        "name": "Reconstruction",
+        "name": "MRtrix3",
         "reportlets":
         [
           {
               "name": "epi/csd",
               "file_pattern": "dwi/.*desc-wmFOD.*_peaks\\.",
               "title": "Constrained Spherical Deconvolution",
-              "description": "Directionally color-coded FOD peaks overlaid on the dwiref.",
+              "description": "Directionally color-coded FOD peaks overlaid on the b=0 reference image.",
               "imgtype": "png"
           },
           {
@@ -56,6 +56,18 @@
               "imgtype": "svg+xml"
           }
         ]
+    },
+    {
+      "name": "DSI Studio",
+      "reportlets":[
+        {
+            "name": "epi/csd",
+            "file_pattern": "dwi/.*desc-GQIODF.*_peaks\\.",
+            "title": "Generalized q-sampling Imaging (GQI)",
+            "description": "Directionally color-coded ODF peaks overlaid on the b=0 reference image.",
+            "imgtype": "png"
+        }
+      ]
     },
     {
         "name": "Connectome",

@@ -76,7 +76,9 @@ def init_mrtrix_csd_recon_wf(name="mrtrix_recon", output_suffix="", params={}):
                     'csf_txt']),
         name="outputnode")
     workflow = Workflow(name=name)
-    desc = ''
+    desc = """MRtrix3 Reconstruction
+
+: """
 
     # Resample anat mask
     resample_mask = pe.Node(
