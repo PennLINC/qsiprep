@@ -1,6 +1,7 @@
 import logging
 import nipype.pipeline.engine as pe
-import nipype.interfaces.utility as niu
+from pkg_resources import resource_filename as pkgr
+from nipype.interfaces import ants, utility as niu
 from nipype.utils.filemanip import split_filename
 from qsiprep.interfaces.bids import QsiReconIngress, ReconDerivativesDataSink
 from qsiprep.interfaces.utils import GetConnectivityAtlases
@@ -31,6 +32,9 @@ def _check_repeats(nodelist):
 
 def init_dwi_recon_workflow(dwi_files, workflow_spec, output_dir, reportlets_dir, has_transform,
                             omp_nthreads, name="recon_wf"):
+    """Convert a workflow spec into a nipype workflow.
+
+    """
     atlas_names = workflow_spec.get('atlases', [])
     space = workflow_spec['space']
     workflow = Workflow(name=name)
@@ -56,6 +60,22 @@ def init_dwi_recon_workflow(dwi_files, workflow_spec, output_dir, reportlets_dir
         GetConnectivityAtlases(atlas_names=atlas_names, space=space),
         name='get_atlases',
         run_without_submitting=True)
+
+    # Resample ROI targets to DWI resolution for ODF plotting
+    crossing_rois_file = pkgr('qsiprep', 'data/crossing_rois.nii.gz')
+    odf_rois = pe.Node(
+        ants.ApplyTransforms(interpolation="MultiLabel", dimension=3),
+        name="odf_rois")
+    odf_rois.inputs.input_image = crossing_rois_file
+    if has_transform and space == "T1w":
+        workflow.connect(inputnode, 't1_2_mni_reverse_transform', odf_rois, 'transforms')
+    elif space == 'template':
+        odf_rois.inputs.transforms = ['identity']
+    else:
+        LOGGER.warning("Unable to transform ODF ROIs to dwi data. "
+                       "No ODF reports will be created.")
+        odf_rois = pe.Node(niu.IdentityInterface(fields=['output_image']), name='odf_rois')
+    workflow.connect(scans_iter, 'dwi_file', odf_rois, 'reference_image')
 
     # Save the atlases
     if len(atlas_names) > 0:
@@ -108,7 +128,8 @@ def init_dwi_recon_workflow(dwi_files, workflow_spec, output_dir, reportlets_dir
     for node_spec in workflow_spec['nodes']:
         if not node_spec['name']:
             raise Exception("Node has no name [{}]".format(node_spec))
-        new_node = workflow_from_spec(node_spec)
+        new_node = workflow_from_spec(omp_nthreads, has_transform or space == 'template',
+                                      node_spec)
         if new_node is None:
             raise Exception("Unable to create a node for %s" % node_spec)
         nodes_to_add.append(new_node)
@@ -169,6 +190,12 @@ def init_dwi_recon_workflow(dwi_files, workflow_spec, output_dir, reportlets_dir
                                [('atlas_configs', 'inputnode.atlas_configs')])])
         _check_repeats(workflow.list_node_names())
 
+        # Send the ODF rois to reconstruction nodes
+        if node_spec['action'] == 'csd' or 'reconstruction' in node_spec['action']:
+            workflow.connect([(odf_rois, node,
+                               [('output_image', 'inputnode.odf_rois')])])
+        _check_repeats(workflow.list_node_names())
+
     # Fill-in datasinks and reportlet datasinks seen so far
     for node in workflow.list_node_names():
         node_suffix = node.split('.')[-1]
@@ -183,7 +210,7 @@ def init_dwi_recon_workflow(dwi_files, workflow_spec, output_dir, reportlets_dir
     return workflow
 
 
-def workflow_from_spec(node_spec):
+def workflow_from_spec(omp_nthreads, has_transform, node_spec):
     """Build a nipype workflow based on a json file."""
     software = node_spec.get("software", "qsiprep")
     output_suffix = node_spec.get("output_suffix", "")
@@ -199,29 +226,29 @@ def workflow_from_spec(node_spec):
     # DSI Studio operations
     if software == "DSI Studio":
         if node_spec["action"] == "reconstruction":
-            return init_dsi_studio_recon_wf(**kwargs)
+            return init_dsi_studio_recon_wf(omp_nthreads, has_transform, **kwargs)
         if node_spec["action"] == "export":
-            return init_dsi_studio_export_wf(**kwargs)
+            return init_dsi_studio_export_wf(omp_nthreads, has_transform, **kwargs)
         if node_spec["action"] == "connectivity":
-            return init_dsi_studio_connectivity_wf(**kwargs)
+            return init_dsi_studio_connectivity_wf(omp_nthreads, has_transform, **kwargs)
 
     # MRTrix3 operations
     elif software == "MRTrix3":
         if node_spec["action"] == "csd":
-            return init_mrtrix_csd_recon_wf(**kwargs)
+            return init_mrtrix_csd_recon_wf(omp_nthreads, has_transform, **kwargs)
         if node_spec["action"] == "global_tractography":
-            return init_global_tractography_wf(**kwargs)
+            return init_global_tractography_wf(omp_nthreads, has_transform, **kwargs)
         if node_spec["action"] == "tractography":
-            return init_mrtrix_tractography_wf(**kwargs)
+            return init_mrtrix_tractography_wf(omp_nthreads, has_transform, **kwargs)
         if node_spec["action"] == "connectivity":
-            return init_mrtrix_connectivity_wf(**kwargs)
+            return init_mrtrix_connectivity_wf(omp_nthreads, has_transform, **kwargs)
 
     # Dipy operations
     elif software == "Dipy":
         if node_spec["action"] == "3dSHORE_reconstruction":
-            return init_dipy_brainsuite_shore_recon_wf(**kwargs)
+            return init_dipy_brainsuite_shore_recon_wf(omp_nthreads, has_transform, **kwargs)
         if node_spec["action"] == "MAPMRI_reconstruction":
-            return init_dipy_mapmri_recon_wf(**kwargs)
+            return init_dipy_mapmri_recon_wf(omp_nthreads, has_transform, **kwargs)
 
     # qsiprep operations
     else:
@@ -233,7 +260,7 @@ def workflow_from_spec(node_spec):
             return init_conform_dwi_wf(**kwargs)
         if node_spec['action'] == 'mif_to_fib':
             return init_mif_to_fibgz_wf(**kwargs)
-    raise Exception("Unknown node %s", node_spec)
+    raise Exception("Unknown node %s" % node_spec)
 
 
 def _as_connections(attr_list, src_prefix='', dest_prefix=''):

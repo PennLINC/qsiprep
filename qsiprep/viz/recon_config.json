@@ -61,9 +61,28 @@
       "name": "DSI Studio",
       "reportlets":[
         {
-            "name": "epi/csd",
+            "name": "epi/gqi",
             "file_pattern": "dwi/.*desc-GQIODF.*_peaks\\.",
             "title": "Generalized q-sampling Imaging (GQI)",
+            "description": "Directionally color-coded ODF peaks overlaid on the b=0 reference image.",
+            "imgtype": "png"
+        }
+      ]
+    },
+    {
+      "name": "Dipy",
+      "reportlets":[
+        {
+            "name": "epi/shore",
+            "file_pattern": "dwi/.*desc-3dSHOREODF.*_peaks\\.",
+            "title": "3dSHORE",
+            "description": "Directionally color-coded ODF peaks overlaid on the b=0 reference image.",
+            "imgtype": "png"
+        },
+        {
+            "name": "epi/maplmri",
+            "file_pattern": "dwi/.*desc-MAPLMRIODF.*_peaks\\.",
+            "title": "MAP(L)MRI",
             "description": "Directionally color-coded ODF peaks overlaid on the b=0 reference image.",
             "imgtype": "png"
         }

@@ -22,7 +22,8 @@ from ...interfaces.reports import ReconPeaksReport
 LOGGER = logging.getLogger('nipype.interface')
 
 
-def init_dsi_studio_recon_wf(name="dsi_studio_recon", output_suffix="", params={}):
+def init_dsi_studio_recon_wf(omp_nthreads, has_transform, name="dsi_studio_recon",
+                             output_suffix="", params={}):
     """Reconstructs diffusion data using DSI Studio.
 
     This workflow creates a ``.src.gz`` file from the input dwi, bvals and bvecs,
@@ -43,7 +44,7 @@ def init_dsi_studio_recon_wf(name="dsi_studio_recon", output_suffix="", params={
             Default 1.25. Distance to sample EAP at.
 
     """
-    inputnode = pe.Node(niu.IdentityInterface(fields=input_fields),
+    inputnode = pe.Node(niu.IdentityInterface(fields=input_fields + ['odf_rois']),
                         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(
@@ -86,7 +87,8 @@ distance of %02f.""" % romdd
         (resample_mask, gqi_recon, [('out_file', 'mask')]),
         (gqi_recon, outputnode, [('output_fib', 'fibgz')]),
         (gqi_recon, plot_peaks, [('output_fib', 'fib_file')]),
-        (inputnode, plot_peaks, [('dwi_ref', 'background_image')]),
+        (inputnode, plot_peaks, [('dwi_ref', 'background_image'),
+                                 ('odf_rois', 'odf_rois')]),
         (plot_peaks, ds_report_peaks, [('out_report', 'in_file')])
     ])
 
@@ -104,7 +106,7 @@ distance of %02f.""" % romdd
     return workflow
 
 
-def init_dsi_studio_connectivity_wf(name="dsi_studio_connectivity", n_procs=1,
+def init_dsi_studio_connectivity_wf(omp_nthreads, has_transform, name="dsi_studio_connectivity",
                                     params={}, output_suffix=""):
     """Calculate streamline-based connectivity matrices using DSI Studio.
 
@@ -166,7 +168,7 @@ def init_dsi_studio_connectivity_wf(name="dsi_studio_connectivity", n_procs=1,
     outputnode = pe.Node(niu.IdentityInterface(fields=['matfile']),
                          name="outputnode")
     workflow = pe.Workflow(name=name)
-    calc_connectivity = pe.Node(DSIStudioAtlasGraph(n_procs=n_procs, **params),
+    calc_connectivity = pe.Node(DSIStudioAtlasGraph(n_procs=omp_nthreads, **params),
                                 name='calc_connectivity')
     workflow.connect([
         (inputnode, calc_connectivity, [('atlas_configs', 'atlas_configs'),
@@ -182,7 +184,8 @@ def init_dsi_studio_connectivity_wf(name="dsi_studio_connectivity", n_procs=1,
     return workflow
 
 
-def init_dsi_studio_export_wf(name="dsi_studio_export", params={}, output_suffix=""):
+def init_dsi_studio_export_wf(omp_nthreads, has_transform, name="dsi_studio_export",
+                              params={}, output_suffix=""):
     """Export scalar maps from a DSI Studio fib file into NIfTI files with correct headers.
 
     This workflow exports gfa, fa0, fa1, fa2 and iso.

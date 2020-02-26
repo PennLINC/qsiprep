@@ -805,3 +805,75 @@ def peak_slice_series(peak_directions, peak_values, background_data, out_file, m
     final_image.paste(x_image, (tile_size, 0))
     final_image.paste(y_image, (tile_size * 2, 0))
     final_image.save(out_file)
+
+def get_camera_for_roi(roi_data, roi_id, view_axis):
+    voxel_coords = np.row_stack(np.nonzero(roi_data == roi_id))
+    centroid = voxel_coords.mean(1)
+    other_axes = [[1, 2], [0, 2], [0, 1]][view_axis]
+    projected_x = voxel_coords[other_axes[0]]
+    projected_y = voxel_coords[other_axes[1]]
+    xspan = projected_x.max() - projected_x.min()
+    yspan = projected_y.max() - projected_y.min()
+    camera_distance = max(xspan, yspan) / 2 * np.pi
+    return centroid, camera_distance
+
+def odf_roi_plot(odf_4d, halfsphere, background_data, out_file, roi_image,
+                 prefix='odf', tile_size=1200):
+    from fury import actor, window
+
+    # Fill out the other half of the sphere
+    odf_sphere = halfsphere.mirror()
+    full_odfs = np.tile(odf_4d, (1, 1, 1, 2))
+    # Make graphics objects
+    odf_actor = actor.odf_slicer(full_odfs, sphere=odf_sphere, colormap=None)
+    image_actor = actor.slicer(background_data, opacity=0.6, interpolation='nearest')
+    image_size = (tile_size, tile_size)
+    scene = window.Scene()
+    shape = background_data.shape
+    scene.add(image_actor)
+    scene.add(odf_actor)
+    roi_data = nb.load(roi_image).get_fdata()
+    roi_image = Image.new('RGB', (tile_size, tile_size * 3))
+
+    # render the axial slice with the triple crossing
+    roi1_centroid, roi1_distance = get_camera_for_roi(roi_data, 1, 2)
+    z_slice = int(np.round(roi1_centroid[2]))
+    image_actor.display_extent(0, shape[0] - 1, 0, shape[1] - 1, z_slice - 1, z_slice - 1)
+    odf_actor.display_extent(0, shape[0] - 1, 0, shape[1] - 1, z_slice, z_slice)
+    scene.set_camera(focal_point=(roi1_centroid[0], roi1_centroid[1], roi1_centroid[2]),
+                     position=(roi1_centroid[0], roi1_centroid[1],
+                               roi1_centroid + roi1_distance),
+                     view_up=(0., -1., 0.))
+    png_file = '{}_semoivale_axial.png'.format(prefix)
+    window.record(scene, out_path=png_file, reset_camera=False, size=image_size)
+    roi_image.paste(Image.open(png_file), (0, 0))
+
+    # Render the coronal slice with a double-crossing
+    roi2_centroid, roi2_distance = get_camera_for_roi(roi_data, 2, 1)
+    y_slice = int(np.round(roi2_centroid[1]))
+    image_actor.display_extent(0, shape[0] - 1, y_slice + 1, y_slice + 1, 0, shape[2] - 1)
+    odf_actor.display_extent(0, shape[0] - 1, y_slice, y_slice, 0, shape[2] - 1)
+    scene.set_camera(focal_point=(roi2_centroid[0], roi2_centroid[1], roi_centroid[2]),
+                     position=(roi2_centroid[0], y_slice - camera_y_dist, roi2_centroid[2]),
+                     view_up=(0., 0, 1))
+    png_file = '{}_CSTxCC.png'.format(prefix)
+    window.record(scene, out_path=png_file, reset_camera=False, size=image_size)
+    roi_image.paste(Image.open(png_file), (0, tile_size))
+
+    # Render the coronal slice with a double-crossing
+    roi3_centroid, roi3_distance = get_camera_for_roi(roi_data, 3, 1)
+    y_slice = int(np.round(roi3_centroid[1]))
+    image_actor.display_extent(0, shape[0] - 1, y_slice + 1, y_slice + 1, 0, shape[2] - 1)
+    odf_actor.display_extent(0, shape[0] - 1, y_slice, y_slice, 0, shape[2] - 1)
+    scene.set_camera(focal_point=(roi3_centroid[0], roi3_centroid[1], roi_centroid[2]),
+                     position=(roi3_centroid[0], y_slice - camera_y_dist, roi3_centroid[2]),
+                     view_up=(0., 0, 1))
+    png_file = '{}_CSTxCC.png'.format(prefix)
+    window.record(scene, out_path=png_file, reset_camera=False, size=image_size)
+    roi_image.paste(Image.open(png_file), (0, tile_size))
+
+    final_image = Image.new('RGB', (tile_size * 3, tile_size * n_cuts))
+    final_image.paste(z_image, (0, 0))
+    final_image.paste(x_image, (tile_size, 0))
+    final_image.paste(y_image, (tile_size * 2, 0))
+    final_image.save(out_file)

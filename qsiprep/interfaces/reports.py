@@ -671,6 +671,7 @@ class _ReconPeaksReportInputSpec(BaseInterfaceInputSpec):
     directions_file = File(exists=True)
     mask_file = File(exists=True)
     background_image = File(exists=True)
+    odf_rois = File(exists=True)
 
 
 class ReconPeaksReport(SimpleInterface):

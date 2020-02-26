@@ -147,6 +147,8 @@ class DipyReconOutputSpec(TraitedSpec):
     extrapolated_bvals = File()
     extrapolated_bvecs = File()
     extrapolated_b = File()
+    odf_amplitudes = File()
+    odf_directions = File()
 
 
 class DipyReconInterface(SimpleInterface):
@@ -197,6 +199,14 @@ class DipyReconInterface(SimpleInterface):
         x, y, z = verts[:hemisphere].T
         hs = HemiSphere(x=x, y=y, z=z)
         odf_amplitudes = nb.Nifti1Image(fit_obj.odf(hs), mask_img.affine, mask_img.header)
+        output_amps_file = fname_presuffix(self.inputs.dwi_file, suffix=suffix+"_amp.nii.gz",
+                                           newpath=runtime.cwd, use_ext=False)
+        output_dirs_file = fname_presuffix(self.inputs.dwi_file, suffix=suffix+"_dirs.npy",
+                                           newpath=runtime.cwd, use_ext=False)
+        odf_amplitudes.to_filename(output_amps_file)
+        np.save(output_dirs_file, verts[:hemisphere])
+        self._results['odf_amplitudes'] = output_amps_file
+        self._results['odf_directions'] = output_dirs_file
 
         if self.inputs.write_fibgz:
             output_fib_file = fname_presuffix(self.inputs.dwi_file, suffix=suffix+".fib",

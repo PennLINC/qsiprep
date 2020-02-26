@@ -27,7 +27,8 @@ CITATIONS = {
     "msmt_csd": "(@originalcsd, @msmt5tt)"
 }
 
-def init_mrtrix_csd_recon_wf(name="mrtrix_recon", output_suffix="", params={}):
+def init_mrtrix_csd_recon_wf(omp_nthreads, has_transform, name="mrtrix_recon",
+                             output_suffix="", params={}):
     """Create FOD images for WM, GM and CSF.
 
     This workflow uses mrtrix tools to run csd on multishell data. At the end,
@@ -68,7 +69,7 @@ def init_mrtrix_csd_recon_wf(name="mrtrix_recon", output_suffix="", params={}):
 
 
     """
-    inputnode = pe.Node(niu.IdentityInterface(fields=input_fields),
+    inputnode = pe.Node(niu.IdentityInterface(fields=input_fields + ['odf_rois']),
                         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(
@@ -256,7 +257,8 @@ A single-shell-optimized multi-tissue CSD was performed using MRtrix3Tissue
     return workflow
 
 
-def init_global_tractography_wf(name="mrtrix_recon", output_suffix="", params={}):
+def init_global_tractography_wf(omp_nthreads, has_transform, name="mrtrix_recon",
+                                output_suffix="", params={}):
     """Run multi-shell, multi-tissue global tractography
 
     This workflow uses mrtrix tools to run csd on multishell data.
@@ -357,7 +359,8 @@ def init_global_tractography_wf(name="mrtrix_recon", output_suffix="", params={}
     return workflow
 
 
-def init_mrtrix_tractography_wf(name="mrtrix_tracking", output_suffix="", params={}):
+def init_mrtrix_tractography_wf(omp_nthreads, has_transform, name="mrtrix_tracking",
+                                output_suffix="", params={}):
     """Run tractography
 
     This workflow uses mrtrix tools to run csd on multishell data.
@@ -438,8 +441,8 @@ def init_mrtrix_tractography_wf(name="mrtrix_tracking", output_suffix="", params
     return workflow
 
 
-def init_mrtrix_connectivity_wf(name="mrtrix_connectiity", params={},
-                                output_suffix="", n_procs=1):
+def init_mrtrix_connectivity_wf(omp_nthreads, has_transform, name="mrtrix_connectiity",
+                                params={}, output_suffix=""):
     """Runs ``tck2connectome`` on a ``tck`` file.abs
 
     Inputs
