@@ -33,7 +33,7 @@ from dipy.core.sphere import HemiSphere
 from .gradients import concatenate_bvals, concatenate_bvecs
 from .qc import createB0_ColorFA_Mask_Sprites, createSprite4D
 from .bids import get_bids_params
-from ..niworkflows.viz.utils import peak_slice_series
+from ..niworkflows.viz.utils import peak_slice_series, odf_roi_plot
 from .converters import fib2amps, mif2amps, peaks_from_odfs
 
 SUBJECT_TEMPLATE = """\t<ul class="elem-desc">
@@ -674,9 +674,13 @@ class _ReconPeaksReportInputSpec(BaseInterfaceInputSpec):
     odf_rois = File(exists=True)
 
 
+class _ReconPeaksReportOutputSpec(reporting.ReportCapableOutputSpec):
+    odf_report = File(exists=True)
+
+
 class ReconPeaksReport(SimpleInterface):
     input_spec = _ReconPeaksReportInputSpec
-    output_spec = reporting.ReportCapableOutputSpec
+    output_spec = _ReconPeaksReportOutputSpec
     _ncuts = 4
     _padding = 4
     _redirect_x = True
@@ -705,4 +709,10 @@ class ReconPeaksReport(SimpleInterface):
         peak_slice_series(peak_directions, peak_values, background_data, peak_report,
                           n_cuts=self._ncuts, padding=self._padding)
         self._results['out_report'] = peak_report
+
+        # Plot ODFs in interesting regions
+        if isdefined(self.inputs.odf_rois):
+            odf_report = op.join(runtime.cwd, 'odf_report.png')
+            odf_roi_plot(odf_4d, sphere, background_data, odf_report, self.inputs.odf_rois)
+            self._results['odf_report'] = odf_report
         return runtime
