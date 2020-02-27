@@ -42,6 +42,13 @@
               "imgtype": "png"
           },
           {
+              "name": "epi/csd",
+              "file_pattern": "dwi/.*desc-wmFOD.*_odfs\\.",
+              "title": "Constrained Spherical Deconvolution",
+              "description": "Three views of ODFs in ROIs.",
+              "imgtype": "png"
+          },
+          {
               "name": "epi/unringing",
               "file_pattern": "dwi/.*_unringing\\.",
               "title": "Gibbs Ringing Removal",
@@ -80,10 +87,24 @@
             "imgtype": "png"
         },
         {
+            "name": "epi/shore",
+            "file_pattern": "dwi/.*desc-3dSHOREODF.*_odfs\\.",
+            "title": "3dSHORE",
+            "description": "Three views of ODFs in ROIs.",
+            "imgtype": "png"
+        },
+        {
             "name": "epi/maplmri",
             "file_pattern": "dwi/.*desc-MAPLMRIODF.*_peaks\\.",
             "title": "MAP(L)MRI",
             "description": "Directionally color-coded ODF peaks overlaid on the b=0 reference image.",
+            "imgtype": "png"
+        },
+        {
+            "name": "epi/maplmri",
+            "file_pattern": "dwi/.*desc-MAPLMRIODF.*_odfs\\.",
+            "title": "MAP(L)MRI",
+            "description": "Three views of ODFs in ROIs.",
             "imgtype": "png"
         }
       ]

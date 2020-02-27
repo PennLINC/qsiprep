@@ -139,6 +139,16 @@ A single-shell-optimized multi-tissue CSD was performed using MRtrix3Tissue
         name='ds_report_peaks',
         run_without_submitting=True)
 
+    # Plot targeted regions
+    if has_transform:
+        ds_report_odfs = pe.Node(
+            ReconDerivativesDataSink(extension='.png',
+                                     desc="wmFOD",
+                                     suffix='odfs'),
+            name='ds_report_odfs',
+            run_without_submitting=True)
+        workflow.connect(plot_peaks, 'odf_report', ds_report_odfs, 'in_file')
+
     workflow.connect([
         (estimate_response, estimate_fod, [('wm_file', 'wm_txt'),
                                            ('gm_file', 'gm_txt'),
@@ -149,7 +159,8 @@ A single-shell-optimized multi-tissue CSD was performed using MRtrix3Tissue
                                  ('bval_file', 'bval_file'),
                                  ('bvec_file', 'bvec_file'),
                                  ('b_file', 'b_file')]),
-        (inputnode, plot_peaks, [('dwi_ref', 'background_image')]),
+        (inputnode, plot_peaks, [('dwi_ref', 'background_image'),
+                                 ('odf_rois', 'odf_rois')]),
         (plot_peaks, ds_report_peaks, [('out_report', 'in_file')]),
         (create_mif, estimate_response, [('mif_file', 'in_file')]),
         (estimate_response, outputnode, [('wm_file', 'wm_txt'),

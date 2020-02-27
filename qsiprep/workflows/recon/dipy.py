@@ -139,10 +139,21 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, has_transform, name="dipy_
                                    ('extrapolated_bvals', 'bval_file'),
                                    ('extrapolated_bvecs', 'bvec_file'),
                                    ('extrapolated_b', 'b_file')]),
-        (inputnode, plot_peaks, [('dwi_ref', 'background_image')]),
+        (inputnode, plot_peaks, [('dwi_ref', 'background_image'),
+                                 ('odf_rois', 'odf_rois')]),
         (recon_shore, plot_peaks, [('odf_directions', 'directions_file'),
                                    ('odf_amplitudes', 'odf_file')]),
         (plot_peaks, ds_report_peaks, [('out_report', 'in_file')])])
+
+    # Plot targeted regions
+    if has_transform:
+        ds_report_odfs = pe.Node(
+            ReconDerivativesDataSink(extension='.png',
+                                     desc="3dSHOREODF",
+                                     suffix='odfs'),
+            name='ds_report_odfs',
+            run_without_submitting=True)
+        workflow.connect(plot_peaks, 'odf_report', ds_report_odfs, 'in_file')
 
     if output_suffix:
         external_format_datasinks(output_suffix, params, workflow)
@@ -357,6 +368,16 @@ def init_dipy_mapmri_recon_wf(omp_nthreads, has_transform, name="dipy_mapmri_rec
         (recon_map, plot_peaks, [('odf_directions', 'directions_file'),
                                  ('odf_amplitudes', 'odf_file')]),
         (plot_peaks, ds_report_peaks, [('out_report', 'in_file')])])
+
+    # Plot targeted regions
+    if has_transform:
+        ds_report_odfs = pe.Node(
+            ReconDerivativesDataSink(extension='.png',
+                                     desc="MAPLMRIODF",
+                                     suffix='odfs'),
+            name='ds_report_odfs',
+            run_without_submitting=True)
+        workflow.connect(plot_peaks, 'odf_report', ds_report_odfs, 'in_file')
 
     if output_suffix:
         external_format_datasinks(output_suffix, params, workflow)

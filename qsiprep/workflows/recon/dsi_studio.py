@@ -77,6 +77,16 @@ distance of %02f.""" % romdd
         name='ds_report_peaks',
         run_without_submitting=True)
 
+    # Plot targeted regions
+    if has_transform:
+        ds_report_odfs = pe.Node(
+            ReconDerivativesDataSink(extension='.png',
+                                     desc="GQIODF",
+                                     suffix='odfs'),
+            name='ds_report_odfs',
+            run_without_submitting=True)
+        workflow.connect(plot_peaks, 'odf_report', ds_report_odfs, 'in_file')
+
     workflow.connect([
         (inputnode, create_src, [('dwi_file', 'input_nifti_file'),
                                  ('bval_file', 'input_bvals_file'),

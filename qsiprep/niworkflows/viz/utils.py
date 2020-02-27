@@ -847,7 +847,7 @@ def odf_roi_plot(odf_4d, halfsphere, background_data, out_file, roi_file,
     image_actor.display_extent(0, shape[0] - 1, 0, shape[1] - 1, z_slice - 1, z_slice - 1)
     odf_actor.display_extent(0, shape[0] - 1, 0, shape[1] - 1, z_slice, z_slice)
     scene.set_camera(focal_point=(roi1_centroid[0], roi1_centroid[1], roi1_centroid[2]),
-                     position=(roi1_centroid[0], roi1_centroid[1],
+                     position=(roi1_centroid[0], roi1_centroid[1] - 2,  # Roll to get perspective
                                roi1_centroid[2] + camera_distance),
                      view_up=(0., -1., 0.))
     png_file = '{}_semoivale_axial.png'.format(prefix)
