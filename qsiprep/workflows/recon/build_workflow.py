@@ -6,7 +6,7 @@ from nipype.utils.filemanip import split_filename
 from qsiprep.interfaces.bids import QsiReconIngress, ReconDerivativesDataSink
 from qsiprep.interfaces.utils import GetConnectivityAtlases
 from .dsi_studio import (init_dsi_studio_recon_wf, init_dsi_studio_export_wf,
-                         init_dsi_studio_connectivity_wf)
+                         init_dsi_studio_connectivity_wf, init_dsi_studio_tractography_wf)
 from .dipy import init_dipy_brainsuite_shore_recon_wf, init_dipy_mapmri_recon_wf
 from .mrtrix import (init_mrtrix_csd_recon_wf, init_global_tractography_wf,
                      init_mrtrix_tractography_wf, init_mrtrix_connectivity_wf)
@@ -229,6 +229,8 @@ def workflow_from_spec(omp_nthreads, has_transform, node_spec):
             return init_dsi_studio_recon_wf(omp_nthreads, has_transform, **kwargs)
         if node_spec["action"] == "export":
             return init_dsi_studio_export_wf(omp_nthreads, has_transform, **kwargs)
+        if node_spec["action"] == "tractography":
+            return init_dsi_studio_tractography_wf(omp_nthreads, has_transform, **kwargs)
         if node_spec["action"] == "connectivity":
             return init_dsi_studio_connectivity_wf(omp_nthreads, has_transform, **kwargs)
 

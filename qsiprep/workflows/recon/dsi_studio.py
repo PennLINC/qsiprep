@@ -11,6 +11,7 @@ import nipype.pipeline.engine as pe
 from nipype.interfaces import afni, utility as niu
 from qsiprep.interfaces.dsi_studio import (DSIStudioCreateSrc, DSIStudioGQIReconstruction,
                                            DSIStudioAtlasGraph, DSIStudioExport,
+                                           DSIStudioTracking,
                                            FixDSIStudioExportHeader)
 
 import logging
@@ -116,6 +117,88 @@ distance of %02f.""" % romdd
     return workflow
 
 
+def init_dsi_studio_tractography_wf(omp_nthreads, has_transform, name="dsi_studio_tractography",
+                                    params={}, output_suffix=""):
+    """Calculate streamline-based connectivity matrices using DSI Studio.
+
+    DSI Studio has a deterministic tractography algorithm that can be used to
+    estimate pairwise regional connectivity. It calculates multiple connectivity
+    measures.
+
+    Inputs
+
+        fibgz
+            A DSI Studio fib file produced by DSI Studio reconstruction.
+        trk_file
+            a DSI Studio trk.gz file
+
+    Outputs
+
+        trk_file
+            A DSI-Studio format trk file
+        fibgz
+            The input fib file, as it is needed by downstream nodes in addition to
+            the trk file.
+
+    Params
+
+        fiber_count
+            number of streamlines to generate. Cannot also specify seed_count
+        seed_count
+            Number of seeds to track from. Does not guarantee a fixed number of
+            streamlines and cannot be used with the fiber_count option.
+        method
+            0: streamline (Euler) 4: Runge Kutta
+        seed_plan
+            0: = traits.Enum((0, 1), argstr="--seed_plan=%d")
+        initial_dir
+            Seeds begin oriented as 0: the primary orientation of the ODF 1: a random orientation
+            or 2: all orientations
+        connectivity_type
+            "pass" to count streamlines passing through a region. "end" to force
+            streamlines to terminate in regions they count as connecting.
+        connectivity_value
+            "count", "ncount", "fa" used to quantify connection strength.
+        random_seed
+            Setting to True generates truly random (not-reproducible) seeding.
+        fa_threshold
+            If not specified, will use the DSI Studio Otsu threshold. Otherwise
+            specigies the minimum qa value per fixed to be used for tracking.
+        step_size
+            Streamline propagation step size in millimeters.
+        turning_angle
+            Maximum turning angle in degrees for steamline propagation.
+        smoothing
+            DSI Studio smoothing factor
+        min_length
+            Minimum streamline length in millimeters.
+        max_length
+            Maximum streamline length in millimeters.
+
+    """
+    inputnode = pe.Node(
+        niu.IdentityInterface(
+            fields=input_fields + ['fibgz']),
+        name="inputnode")
+    outputnode = pe.Node(niu.IdentityInterface(fields=['trk_file', 'fibgz']),
+                         name="outputnode")
+    workflow = Workflow(name=name)
+    tracking = pe.Node(DSIStudioTracking(nthreads=omp_nthreads, **params),
+                       name='tracking')
+    workflow.connect([
+        (inputnode, tracking, [('fibgz', 'input_fib')]),
+        (tracking, outputnode, [('output_trk', 'trk_file')]),
+        (inputnode, outputnode, [('fibgz', 'fibgz')])
+    ])
+    if output_suffix:
+        # Save the output in the outputs directory
+        ds_tracking = pe.Node(ReconDerivativesDataSink(suffix=output_suffix),
+                              name='ds_' + name,
+                              run_without_submitting=True)
+        workflow.connect(tracking, 'output_trk', ds_tracking, 'in_file')
+    return workflow
+
+
 def init_dsi_studio_connectivity_wf(omp_nthreads, has_transform, name="dsi_studio_connectivity",
                                     params={}, output_suffix=""):
     """Calculate streamline-based connectivity matrices using DSI Studio.
@@ -128,6 +211,8 @@ def init_dsi_studio_connectivity_wf(omp_nthreads, has_transform, name="dsi_studi
 
         fibgz
             A DSI Studio fib file produced by DSI Studio reconstruction.
+        trk_file
+            a DSI Studio trk.gz file
 
     Outputs
 
@@ -173,16 +258,17 @@ def init_dsi_studio_connectivity_wf(omp_nthreads, has_transform, name="dsi_studi
     """
     inputnode = pe.Node(
         niu.IdentityInterface(
-            fields=input_fields + ['fibgz', 'atlas_configs']),
+            fields=input_fields + ['fibgz', 'trk_file', 'atlas_configs']),
         name="inputnode")
     outputnode = pe.Node(niu.IdentityInterface(fields=['matfile']),
                          name="outputnode")
     workflow = pe.Workflow(name=name)
-    calc_connectivity = pe.Node(DSIStudioAtlasGraph(n_procs=omp_nthreads, **params),
+    calc_connectivity = pe.Node(DSIStudioAtlasGraph(nthreads=omp_nthreads, **params),
                                 name='calc_connectivity')
     workflow.connect([
         (inputnode, calc_connectivity, [('atlas_configs', 'atlas_configs'),
-                                        ('fibgz', 'input_fib')]),
+                                        ('fibgz', 'input_fib'),
+                                        ('trk_file', 'trk_file')]),
         (calc_connectivity, outputnode, [('connectivity_matfile', 'matfile')])
     ])
     if output_suffix:

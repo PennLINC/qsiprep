@@ -16,7 +16,11 @@ import nibabel as nb
 LOGGER = logging.getLogger('nipype.interface')
 
 
-class DSIStudioCreateSrcInputSpec(CommandLineInputSpec):
+class DSIStudioCommandLineInputSpec(CommandLineInputSpec):
+    nthreads = traits.Int(1, usedefault=True, argstr="--threads=%d")
+
+
+class DSIStudioCreateSrcInputSpec(DSIStudioCommandLineInputSpec):
     test_trait = traits.Bool()
     input_nifti_file = File(
         desc="DWI Nifti file",
@@ -81,12 +85,13 @@ class DSIStudioCreateSrc(CommandLine):
         outputs['output_src'] = self._gen_filename('output_src')
         return outputs
 
-class _DSIStudioSrcQCInputSpec(CommandLineInputSpec):
+
+class _DSIStudioSrcQCInputSpec(DSIStudioCommandLineInputSpec):
     src_file = File(exists=True, copyfile=True, argstr="%s",
                     desc='DSI Studio src[.gz] file')
 
 
-class _DSIStudioSrcQCOutputSpec(CommandLineInputSpec):
+class _DSIStudioSrcQCOutputSpec(DSIStudioCommandLineInputSpec):
     qc_txt = File(exists=True, desc="Text file with QC measures")
 
 
@@ -107,7 +112,7 @@ class DSIStudioSrcQC(CommandLine):
 
 
 # Step 2 reonstruct ODFs
-class DSIStudioReconstructionInputSpec(CommandLineInputSpec):
+class DSIStudioReconstructionInputSpec(DSIStudioCommandLineInputSpec):
     input_src_file = File(
         desc="DSI Studio src file",
         mandatory=True,
@@ -229,13 +234,13 @@ class DSIStudioGQIReconstruction(DSIStudioReconstruction):
         return outputs
 
 
-class DSIStudioExportInputSpec(CommandLineInputSpec):
+class DSIStudioExportInputSpec(DSIStudioCommandLineInputSpec):
     input_file = File(
         exists=True, argstr="--source=%s", mandatory=True, copyfile=False)
     to_export = traits.Str(mandatory=True, argstr="--export=%s")
 
 
-class DSIStudioExportOutputSpec(CommandLineInputSpec):
+class DSIStudioExportOutputSpec(DSIStudioCommandLineInputSpec):
     gfa_file = File(desc="Exported files")
     fa0_file = File(desc="Exported files")
     fa1_file = File(desc="Exported files")
@@ -261,8 +266,8 @@ class DSIStudioExport(CommandLine):
         return outputs
 
 
-class DSIStudioConnectivityMatrixInputSpec(CommandLineInputSpec):
-    tract_file = File(exists=True, argstr="--tract=%s")
+class DSIStudioConnectivityMatrixInputSpec(DSIStudioCommandLineInputSpec):
+    trk_file = File(exists=True, argstr="--tract=%s")
     input_fib = File(
         exists=True, argstr="--source=%s", mandatory=True, copyfile=False)
     fiber_count = traits.Int(xor=["seed_count"], argstr="--fiber_count=%d")
@@ -322,7 +327,6 @@ class DSIStudioConnectivityMatrix(CommandLine):
 
 class DSIStudioAtlasGraphInputSpec(DSIStudioConnectivityMatrixInputSpec):
     atlas_configs = traits.Dict(desc='atlas configs for atlases to run connectivity for')
-    n_procs = traits.Int(1, usedefault=True)
 
 
 class DSIStudioAtlasGraphOutputSpec(TraitedSpec):
@@ -342,8 +346,10 @@ class DSIStudioAtlasGraph(SimpleInterface):
         ifargs['thread_count'] = 1
 
         # Get number of parallel jobs
-        num_threads = ifargs.pop('n_procs')
+        num_threads = ifargs.pop('nthreads')
         atlas_configs = ifargs.pop('atlas_configs')
+        if isdefined(self.inputs.trk_file):
+            ifargs['trk_file'] = self.inputs.trk_file
 
         # flatten the atlas_configs
         args = [(atlas_name, atlas_config, ifargs) for atlas_name, atlas_config
@@ -379,7 +385,7 @@ def _parse_network_file(txtfile):
         tokens = sanitized_line.split("\t")
         measure_name = tokens[0]
         if measure_name == 'network_measures':
-            network_data['region_ids'] = tokens[1:]
+            network_data['region_ids'] = [token.lstrip('region') for token in tokens[1:]]
             continue
 
         values = list(map(float, tokens[1:]))
@@ -429,7 +435,6 @@ def _merge_conmats(matfile_lists, recon_args, outfile):
         for network_txt in txtfiles:
             measure = "_".join(network_txt.split(".")[-4:-2])
             network_data = _parse_network_file(network_txt)
-
             # Make sure to get the full atlas
             region_ids = np.array(network_data.pop('region_ids')).astype(np.int)
             in_this_mask = np.in1d(labels, region_ids)
@@ -440,7 +445,7 @@ def _merge_conmats(matfile_lists, recon_args, outfile):
             for net_measure_name, net_measure_data in network_data.items():
                 variable_name = atlas_name + "_" + measure + "_" + net_measure_name
                 if type(net_measure_data) is np.ndarray:
-                    tmp = np.zeros_like(net_measure_data)
+                    tmp = np.zeros(n_atlas_labels)
                     tmp[in_this_mask] = net_measure_data
                     connectivity_values[variable_name] = tmp
                 else:
@@ -455,11 +460,24 @@ def _dsi_studio_connectivity(args):
     # Make a temporary directory for this node
     os.makedirs(rundir, exist_ok=True)
     ifargs = deepcopy(ifargs)
+
+    # Symlink in the fib file
     input_fib = ifargs.pop('input_fib')
     new_fib = op.join(rundir, op.split(input_fib)[1])
     os.symlink(input_fib, new_fib)
-    con = DSIStudioTracking(input_fib=new_fib, connectivity=atlas_config['dwi_resolution_file'],
-                            **ifargs)
+
+    # Symlink in the trk file if it's defined
+    if 'trk_file' in ifargs:
+        input_trk = ifargs.pop('trk_file')
+        new_trk = op.join(rundir, op.split(input_trk)[1])
+        os.symlink(input_trk, new_trk)
+        ifargs['trk_file'] = new_trk
+
+    con = DSIStudioConnectivityMatrix(
+        input_fib=new_fib,
+        connectivity=atlas_config['dwi_resolution_file'],
+        **ifargs)
+
     con.terminal_output = 'allatonce'
     con.resource_monitor = False
     LOGGER.info(con.cmdline)
@@ -533,6 +551,7 @@ class FixDSIStudioExportHeader(SimpleInterface):
 
         new_axcodes = nb.aff2axcodes(correct_img.affine)
         input_axcodes = nb.aff2axcodes(dsi_img.affine)
+
         # Is the input image oriented how we want?
         if not input_axcodes == new_axcodes:
             # Re-orient
@@ -541,10 +560,13 @@ class FixDSIStudioExportHeader(SimpleInterface):
             transform_orientation = nb.orientations.ornt_transform(input_orientation,
                                                                    desired_orientation)
             reoriented_img = dsi_img.as_reoriented(transform_orientation)
-            nb.Nifti1Image(reoriented_img.get_data(), correct_img.affine, correct_img.header
-                           ).to_filename(new_file)
-            self._results['out_file'] = new_file
+
         else:
-            self._results['out_file'] = dsi_studio_file
+            reoriented_img = dsi_img
+
+        # No matter what, still use the correct affine
+        nb.Nifti1Image(reoriented_img.get_data(), correct_img.affine, correct_img.header
+                       ).to_filename(new_file)
+        self._results['out_file '] = new_file
 
         return runtime
