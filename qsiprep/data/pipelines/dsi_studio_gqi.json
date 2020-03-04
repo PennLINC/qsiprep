@@ -19,9 +19,10 @@
       "output_suffix": "gqiscalar"
     },
     {
-      "name": "tracking",
+      "name": "tractography",
       "software": "DSI Studio",
       "action": "tractography",
+      "input": "dsistudio_gqi",
       "parameters": {
         "turning_angle": 35,
         "method": 0,
@@ -39,8 +40,8 @@
       "name": "streamline_connectivity",
       "software": "DSI Studio",
       "action": "connectivity",
-      "input": "dsistudio_gqi",
-      "output": "",
+      "input": "tractography",
+      "output_suffix": "gqinetwork",
       "parameters": {
         "connectivity_value": "count,ncount,mean_length,gfa",
         "connectivity_type": "pass,end"

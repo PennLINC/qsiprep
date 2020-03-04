@@ -354,7 +354,6 @@ class DSIStudioAtlasGraph(SimpleInterface):
         # flatten the atlas_configs
         args = [(atlas_name, atlas_config, ifargs) for atlas_name, atlas_config
                 in atlas_configs.items()]
-
         if num_threads == 1:
             outputs = [_dsi_studio_connectivity(arg) for arg in args]
         else:
@@ -405,10 +404,10 @@ def _merge_conmats(matfile_lists, recon_args, outfile):
         matfiles = [f for f in matfile_list if f.endswith('.mat')]
         txtfiles = [f for f in matfile_list if f.endswith('.txt')]
 
-        labels = np.array(atlas_config['node_ids']).astype(np.int)
-        connectivity_values[atlas_name + "_region_ids"] = labels
+        official_labels = np.array(atlas_config['node_ids']).astype(np.int)
+        connectivity_values[atlas_name + "_region_ids"] = official_labels
         connectivity_values[atlas_name + "_region_labels"] = np.array(atlas_config['node_names'])
-        n_atlas_labels = len(labels)
+        n_atlas_labels = len(official_labels)
 
         for conmat in matfiles:
             m = loadmat(conmat)
@@ -416,15 +415,15 @@ def _merge_conmats(matfile_lists, recon_args, outfile):
             # Column names are binary strings. Very confusing.
             column_names = "".join(
                 [s.decode('UTF-8') for s in m["name"].squeeze().view("S1")]).split("\n")[:-1]
-            region_ids = np.array([int(name[6:]) for name in column_names])
+            matfile_region_ids = np.array([int(name[6:]) for name in column_names])
 
             # Where does each column go? Make an index array
             connectivity = m['connectivity']
-            in_this_mask = np.in1d(labels, region_ids)
-            truncated_labels = labels[in_this_mask]
-            assert np.all(truncated_labels == region_ids)
+            in_this_mask = np.isin(matfile_region_ids, official_labels)
+            truncated_labels = official_labels[in_this_mask]
+            assert np.all(truncated_labels == matfile_region_ids)
             output = np.zeros((n_atlas_labels, n_atlas_labels))
-            new_row = np.searchsorted(labels, region_ids)
+            new_row = np.searchsorted(official_labels, matfile_region_ids)
 
             for row_index, conn in zip(new_row, connectivity):
                 tmp = np.zeros(n_atlas_labels)
@@ -436,11 +435,15 @@ def _merge_conmats(matfile_lists, recon_args, outfile):
             measure = "_".join(network_txt.split(".")[-4:-2])
             network_data = _parse_network_file(network_txt)
             # Make sure to get the full atlas
-            region_ids = np.array(network_data.pop('region_ids')).astype(np.int)
-            in_this_mask = np.in1d(labels, region_ids)
-            truncated_labels = labels[in_this_mask]
-            assert np.all(truncated_labels == region_ids)
-            new_row = np.searchsorted(labels, region_ids)
+            network_region_ids = np.array(network_data.pop('region_ids')).astype(np.int)
+            # If all the regions are found
+            in_this_mask = np.isin(network_region_ids, official_labels)
+            if np.all(in_this_mask):
+                truncated_labels = official_labels
+            else:
+                truncated_labels = network_region_ids[in_this_mask]
+            assert np.all(truncated_labels == network_region_ids)
+            new_row = np.searchsorted(official_labels, network_region_ids)
 
             for net_measure_name, net_measure_data in network_data.items():
                 variable_name = atlas_name + "_" + measure + "_" + net_measure_name
@@ -514,10 +517,12 @@ class DSIStudioTracking(CommandLine):
 
     def _list_outputs(self):
         outputs = self.output_spec().get()
-        results = glob(self.inputs.output_trk + "*src*fib*trk.gz")
+        results = glob("*trk.gz")
         if len(results) == 1:
             trk_out = os.path.abspath(results[0])
             outputs["output_trk"] = trk_out
+        else:
+            raise Exception("DSI Studio did not produce a trk.gz file")
         conmat_results = glob("*.connectivity.mat")
         outputs["connectivity_matrices"] = [
             os.path.abspath(c) for c in conmat_results
@@ -565,8 +570,7 @@ class FixDSIStudioExportHeader(SimpleInterface):
             reoriented_img = dsi_img
 
         # No matter what, still use the correct affine
-        nb.Nifti1Image(reoriented_img.get_data(), correct_img.affine, correct_img.header
-                       ).to_filename(new_file)
-        self._results['out_file '] = new_file
+        nb.Nifti1Image(reoriented_img.get_data(), correct_img.affine).to_filename(new_file)
+        self._results['out_file'] = new_file
 
         return runtime

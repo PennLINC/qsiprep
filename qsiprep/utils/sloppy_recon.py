@@ -13,6 +13,8 @@ def make_sloppy(spec):
 
         ("DSI Studio", "connectivity"): {
             "fiber_count": 5000},
+        ("DSI Studio", "tractography"): {
+            "fiber_count": 5000},
 
         ("MRTrix3", "tractography"): {
             "tckgen": {
