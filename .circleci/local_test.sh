@@ -314,6 +314,21 @@ qsiprep \
       --mem_mb 4096 \
       --nthreads 1 -vv
 
+
+  mkdir -p ${WORKDIR}/multishell_output/work ${WORKDIR}/multishell_output/derivatives/dsi_studio_gqi
+  qsiprep -w ${WORKDIR}/multishell_output/work \
+       ${WORKDIR}/data/multishell_output/qsiprep \
+       ${WORKDIR}/multishell_output/derivatives/dsi_studio_gqi \
+       participant \
+      --sloppy \
+      --recon-input ${WORKDIR}/data/multishell_output/qsiprep \
+      --recon-spec dsi_studio_gqi \
+      --recon-only \
+      --fs-license-file $FREESURFER_HOME/license.txt \
+      --mem_mb 4096 \
+      --nthreads 1 --omp-nthreads 1 -vv \
+      --stop-on-first-crash
+
 #- run:
 #name: Run mrtrix_singleshell_ss3t
 #no_output_timeout: 2h
@@ -329,7 +344,7 @@ qsiprep \
       --recon-only \
       --mem_mb 4096 \
       --fs-license-file $FREESURFER_HOME/license.txt \
-      --nthreads 1 -vv
+      --nthreads 1 --omp-nthreads 1 -vv
 
 #- run:
 #name: Run mrtrix_singleshell_ss3t_noACT
