@@ -13,7 +13,7 @@
       "parameters": {
         "mtnormalize": true,
         "response": {
-          "algorithm": "msmt_5tt"
+          "algorithm": "dhollander"
         },
         "fod": {
           "algorithm": "msmt_csd",

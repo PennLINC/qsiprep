@@ -18,7 +18,7 @@ import logging
 from qsiprep.interfaces.bids import ReconDerivativesDataSink
 from .interchange import input_fields
 from ...engine import Workflow
-from ...interfaces.reports import ReconPeaksReport
+from ...interfaces.reports import ReconPeaksReport, DSIStudioConnectivityReport
 
 LOGGER = logging.getLogger('nipype.interface')
 
@@ -265,10 +265,21 @@ def init_dsi_studio_connectivity_wf(omp_nthreads, has_transform, name="dsi_studi
     workflow = pe.Workflow(name=name)
     calc_connectivity = pe.Node(DSIStudioAtlasGraph(nthreads=omp_nthreads, **params),
                                 name='calc_connectivity')
+    plot_connectivity = pe.Node(DSIStudioConnectivityReport(), name='plot_connectivity')
+    ds_report_connectivity = pe.Node(
+        ReconDerivativesDataSink(extension='.svg',
+                                 desc="DSIStudioConnectivity",
+                                 suffix='matrices'),
+        name='ds_report_connectivity',
+        run_without_submitting=True)
+
     workflow.connect([
         (inputnode, calc_connectivity, [('atlas_configs', 'atlas_configs'),
                                         ('fibgz', 'input_fib'),
                                         ('trk_file', 'trk_file')]),
+        (calc_connectivity, plot_connectivity, [
+            ('connectivity_matfile', 'connectivity_matfile')]),
+        (plot_connectivity, ds_report_connectivity, [('out_report', 'in_file')]),
         (calc_connectivity, outputnode, [('connectivity_matfile', 'matfile')])
     ])
     if output_suffix:
