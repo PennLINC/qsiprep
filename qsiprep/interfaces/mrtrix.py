@@ -14,8 +14,10 @@ from copy import deepcopy
 import numpy as np
 import nibabel as nb
 import pandas as pd
-from scipy.io.matlab import savemat
+from scipy.io.matlab import savemat, loadmat
 from nilearn.image import load_img, threshold_img, iter_img
+import nipype.pipeline.engine as pe
+import nipype.interfaces.utility as niu
 from nipype import logging
 from nipype.utils.filemanip import fname_presuffix, split_filename, which
 from nipype.interfaces.base import (
@@ -763,6 +765,9 @@ class GlobalTractography(MRTrix3Base):
 
 
 class BuildConnectomeInputSpec(CommandLineInputSpec):
+    atlas_name = traits.Str(desc='name of atlas (for variables in matfile)')
+    atlas_config = traits.Dict(desc='atlas configs for atlases to run connectivity for')
+    measure = traits.Str(desc='Name of the connectivity measure')
     in_file = File(
         exists=True,
         argstr='%s',
@@ -814,6 +819,7 @@ class BuildConnectomeInputSpec(CommandLineInputSpec):
         argstr='-scale_file %s',
         desc='provide the associated image '
         'for the mean_scalar metric')
+    use_sift_weights = traits.Bool(default=False, usedefault=True)
     in_weights = File(
         exists=True,
         argstr='-tck_weights_in %s',
@@ -836,7 +842,8 @@ class BuildConnectomeInputSpec(CommandLineInputSpec):
 
 
 class BuildConnectomeOutputSpec(TraitedSpec):
-    out_file = File(exists=True, desc='the output response file')
+    out_file = File(exists=True, desc='the output connectivity csv')
+    connectivity_matfile = File(exists=True, desc='the matfile containing connectivity data')
     out_assignments = File(exists=True, desc='streamline assignment csv')
 
 
@@ -862,9 +869,30 @@ class BuildConnectome(MRTrix3Base):
     def _list_outputs(self):
         outputs = self.output_spec().get()
         outputs['out_file'] = op.abspath(self.inputs.out_file)
+        prefix = self.inputs.atlas_name + "_" + self.inputs.measure
+        outputs['connectivity_matfile'] = op.abspath(prefix + "_connectivity.mat")
         if isdefined(self.inputs.out_assignments):
             outputs['out_assignments'] = op.abspath(self.inputs.out_assignments)
         return outputs
+
+    def _post_run_hook(self, runtime):
+        atlas_config = self.inputs.atlas_config
+        atlas_name = self.inputs.atlas_name
+
+        # Aggregate the connectivity/network data from DSI Studio
+        official_labels = np.array(atlas_config['node_ids']).astype(np.int)
+        connectivity_data = {
+            atlas_name + "_region_ids": official_labels,
+            atlas_name + "_region_labels": np.array(atlas_config['node_names'])
+        }
+
+        # get the connectivity matrix
+        prefix = atlas_name + "_" + self.inputs.measure
+        connectivity_data[prefix + "_connectivity"] = np.loadtxt(self.inputs.out_file)
+        merged_matfile = op.join(runtime.cwd, prefix + "_connectivity.mat")
+        savemat(merged_matfile, connectivity_data, long_field_names=True)
+        return runtime
+
 
     def _format_arg(self, name, spec, val):
         if name == 'length_scale':
@@ -873,12 +901,16 @@ class BuildConnectome(MRTrix3Base):
             if val == 'invlength':
                 return '-scale_invlength'
             return ''
+        if name == 'in_weights':
+            if self.inputs.use_sift_weights:
+                return spec.argstr % val
         return super(BuildConnectome, self)._format_arg(name, spec, val)
 
 
 class MRTrixAtlasGraphInputSpec(BuildConnectomeInputSpec):
     atlas_configs = traits.Dict(desc='atlas configs for atlases to run connectivity for',
                                 mandatory=True)
+    tracking_params = traits.List(desc='list of sets of parameters for tck2connectome')
 
 
 class MRTrixAtlasGraphOutputSpec(TraitedSpec):
@@ -899,50 +931,61 @@ class MRTrixAtlasGraph(SimpleInterface):
         # Get number of parallel jobs
         num_threads = ifargs.pop('nthreads')
         atlas_configs = ifargs.pop('atlas_configs')
+        tracking_params = self.inputs.tracking_params
         del ifargs['in_parc']
 
-        # flatten the atlas_configs
-        args = [(atlas_name, atlas_config, self.inputs.in_file, ifargs) for atlas_name,
-                atlas_config in atlas_configs.items()]
+        # Make a workflow for each atlas and tracking parameter set
+        workflow = pe.Workflow(name='dsistudio_atlasgraph')
+        nodes = []
+        merge_mats = pe.Node(niu.Merge(len(tracking_params) * len(atlas_configs)),
+                             name='merge_mats')
+        outputnode = pe.Node(niu.IdentityInterface(fields=['matfiles']), name='outputnode')
+        workflow.connect(merge_mats, 'out', outputnode, 'matfiles')
+        in_num = 1
+        for atlas_name, atlas_config in atlas_configs.items():
+            for tracking_param_set in self.inputs.tracking_params:
+                node_args = deepcopy(ifargs)
+                # Symlink in the fib file
+                node_args.pop('atlas_config')
+                node_args.pop('atlas_name')
+                node_args.pop('tracking_params')
+                measure_name = tracking_param_set['measure']
+                node_args.update(tracking_param_set)
+                nodes.append(
+                    pe.Node(
+                        BuildConnectome(
+                            atlas_config=atlas_config,
+                            atlas_name=atlas_name,
+                            in_parc=atlas_config['dwi_resolution_mif'],
+                            **node_args),
+                        name=atlas_name + "_" + measure_name)
+                )
+                workflow.connect(nodes[-1], 'connectivity_matfile',
+                                 merge_mats, 'in%d' % in_num)
+                in_num += 1
 
-        if num_threads == 1:
-            outputs = [_mrtrix_connectivity(arg) for arg in args]
+        workflow.config['execution']['stop_on_first_crash'] = 'true'
+        workflow.config['execution']['remove_unnecessary_outputs'] = 'false'
+        workflow.base_dir = runtime.cwd
+        if num_threads > 1:
+            wf_result = workflow.run(plugin='MultiProc', plugin_args={'n_procs': num_threads})
         else:
-            from concurrent.futures import ThreadPoolExecutor
-            with ThreadPoolExecutor(max_workers=num_threads) as pool:
-                outputs = list(pool.map(_mrtrix_connectivity, args))
-
-        commands = [out[0] for out in outputs]
-        commands_file = op.join(runtime.cwd, "mrtrix_commands.txt")
-        with open(commands_file, "w") as f:
-            f.write("\n----------\n".join(commands))
-        self._results['commands'] = commands_file
-
-        matfile_list = [out[1] for out in outputs]
+            wf_result = workflow.run()
+        merge_node, = [node for node in list(wf_result.nodes) if node.name.endswith('merge_mats')]
         merged_connectivity_file = op.join(runtime.cwd, "combined_connectivity.mat")
-        _merge_conmats(matfile_list, args, merged_connectivity_file)
+        _merge_conmats(merge_node.result.outputs.out, merged_connectivity_file)
         self._results['connectivity_matfile'] = merged_connectivity_file
 
         return runtime
 
 
-def _merge_conmats(matfile_list, recon_args, outfile):
+def _merge_conmats(matfile_list, outfile):
     """Merge the many matfiles output by dsi studio and ensure they conform"""
     connectivity_values = {}
 
-    for matfile, (atlas_name, atlas_config, tck_file, ifargs) in zip(matfile_list, recon_args):
-        labels = np.array(atlas_config['node_ids']).astype(np.int)
-        connectivity_values[atlas_name + "_region_ids"] = labels
-        connectivity_values[atlas_name + "_region_labels"] = np.array(atlas_config['node_names'])
-        measure_name = atlas_name + '_' + ifargs['stat_edge']
-        if isdefined(ifargs['length_scale']):
-            measure_name += "_" + ifargs['length_scale']
-        if isdefined(ifargs['scale_invnodevol']):
-            measure_name += "_invroiscale"
-        connectivity_values[measure_name + "_connectivity"] = np.loadtxt(matfile)
-        connectivity_values[measure_name + "_tck"] = tck_file
-        connectivity_values[measure_name + "_image"] = atlas_config['dwi_resolution_mif']
-    savemat(outfile, connectivity_values, do_compression=True)
+    for matfile in matfile_list:
+        connectivity_values.update(loadmat(matfile))
+    savemat(outfile, connectivity_values, long_field_names=True, do_compression=True)
 
 
 def _mrtrix_connectivity(args):

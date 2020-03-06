@@ -18,7 +18,7 @@ import logging
 from qsiprep.interfaces.bids import ReconDerivativesDataSink
 from .interchange import input_fields
 from ...engine import Workflow
-from ...interfaces.reports import ReconPeaksReport, DSIStudioConnectivityReport
+from ...interfaces.reports import ReconPeaksReport, ConnectivityReport
 
 LOGGER = logging.getLogger('nipype.interface')
 
@@ -265,7 +265,7 @@ def init_dsi_studio_connectivity_wf(omp_nthreads, has_transform, name="dsi_studi
     workflow = pe.Workflow(name=name)
     calc_connectivity = pe.Node(DSIStudioAtlasGraph(nthreads=omp_nthreads, **params),
                                 name='calc_connectivity')
-    plot_connectivity = pe.Node(DSIStudioConnectivityReport(), name='plot_connectivity')
+    plot_connectivity = pe.Node(ConnectivityReport(), name='plot_connectivity')
     ds_report_connectivity = pe.Node(
         ReconDerivativesDataSink(extension='.svg',
                                  desc="DSIStudioConnectivity",

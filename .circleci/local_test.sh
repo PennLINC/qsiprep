@@ -295,7 +295,7 @@ qsiprep \
       --recon-only \
       --mem_mb 4096 \
       --fs-license-file $FREESURFER_HOME/license.txt \
-      --nthreads 1 -vv
+      --nthreads 2 -vv --stop-on-first-crash
 
 #- run:
 #name: Run mrtrix_multishell_msmt_noACT

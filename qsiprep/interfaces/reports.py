@@ -719,17 +719,17 @@ class ReconPeaksReport(SimpleInterface):
         return runtime
 
 
-class _DSIStudioConnectivityReportInputSpec(BaseInterfaceInputSpec):
+class _ConnectivityReportInputSpec(BaseInterfaceInputSpec):
     connectivity_matfile = File(exists=True)
 
 
-class _DSIStudioConnectivityReportOutputSpec(reporting.ReportCapableOutputSpec):
+class _ConnectivityReportOutputSpec(reporting.ReportCapableOutputSpec):
     odf_report = File(exists=True)
 
 
-class DSIStudioConnectivityReport(SimpleInterface):
-    input_spec = _DSIStudioConnectivityReportInputSpec
-    output_spec = _DSIStudioConnectivityReportOutputSpec
+class ConnectivityReport(SimpleInterface):
+    input_spec = _ConnectivityReportInputSpec
+    output_spec = _ConnectivityReportOutputSpec
 
     def _run_interface(self, runtime):
         """Generate a reportlet."""
@@ -739,7 +739,7 @@ class DSIStudioConnectivityReport(SimpleInterface):
         measures = sorted(set(["_".join(key.split("_")[1:-1]) for key in connectivity_keys]))
         nrows = len(atlases)
         ncols = len(measures)
-        fig, ax = plt.subplots(nrows=nrows, ncols=ncols)
+        fig, ax = plt.subplots(nrows=nrows, ncols=ncols, squeeze=False)
         for connectivity_key in connectivity_keys:
             atlas = connectivity_key.split("_")[0]
             measure = "_".join(connectivity_key.split("_")[1:-1])

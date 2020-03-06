@@ -18,8 +18,8 @@ def make_sloppy(spec):
 
         ("MRTrix3", "tractography"): {
             "tckgen": {
-                "select": 100,
-                "seed": 500,
+                "select": 1000,
+                "seed": 5000,
                 "backtrack": "DELETE",
                 "n_samples": "DELETE",
                 "n_trials": "DELETE",

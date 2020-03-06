@@ -10,7 +10,7 @@ import nipype.pipeline.engine as pe
 import nipype.interfaces.utility as niu
 from nipype.interfaces import afni
 from ...interfaces.bids import ReconDerivativesDataSink
-from ...interfaces.reports import ReconPeaksReport
+from ...interfaces.reports import ReconPeaksReport, ConnectivityReport
 from qsiprep.interfaces.mrtrix import (
     EstimateFOD, SS3TEstimateFOD, MRTrixIngress, SS3TDwi2Response, GlobalTractography,
     MRTrixAtlasGraph, SIFT2, TckGen, MTNormalize)
@@ -454,7 +454,7 @@ def init_mrtrix_tractography_wf(omp_nthreads, has_transform, name="mrtrix_tracki
 
 def init_mrtrix_connectivity_wf(omp_nthreads, has_transform, name="mrtrix_connectiity",
                                 params={}, output_suffix=""):
-    """Runs ``tck2connectome`` on a ``tck`` file.abs
+    """Runs ``tck2connectome`` on a ``tck`` file.
 
     Inputs
 
@@ -475,19 +475,24 @@ def init_mrtrix_connectivity_wf(omp_nthreads, has_transform, name="mrtrix_connec
                          name="outputnode")
     workflow = pe.Workflow(name=name)
     conmat_params = params.get("tck2connectome", {})
-    use_sift_weights = params.get("use_sift_weights", False)
-    calc_connectivity = pe.Node(MRTrixAtlasGraph(**conmat_params),
+    calc_connectivity = pe.Node(MRTrixAtlasGraph(tracking_params=conmat_params),
                                 name='calc_connectivity')
+    plot_connectivity = pe.Node(ConnectivityReport(), name='plot_connectivity')
+    ds_report_connectivity = pe.Node(
+        ReconDerivativesDataSink(extension='.svg',
+                                 desc="MRtrix3Connectivity",
+                                 suffix='matrices'),
+        name='ds_report_connectivity',
+        run_without_submitting=True)
     workflow.connect([
         (inputnode, calc_connectivity, [('atlas_configs', 'atlas_configs'),
-                                        ('tck_file', 'in_file')]),
+                                        ('tck_file', 'in_file'),
+                                        ('sift_weights', 'in_weights')]),
+        (calc_connectivity, plot_connectivity, [
+            ('connectivity_matfile', 'connectivity_matfile')]),
+        (plot_connectivity, ds_report_connectivity, [('out_report', 'in_file')]),
         (calc_connectivity, outputnode, [('connectivity_matfile', 'matfile')])
     ])
-
-    if use_sift_weights:
-        workflow.connect([
-            (inputnode, calc_connectivity, [('sift_weights', 'in_weights')])
-        ])
 
     if output_suffix:
         # Save the output in the outputs directory

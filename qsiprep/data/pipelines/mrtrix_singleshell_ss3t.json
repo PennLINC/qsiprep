@@ -48,27 +48,45 @@
       "output_suffix": "dhollanderconnectome",
       "input": "track_ifod2",
       "parameters":{
-        "use_sift_weights": true,
-        "tck2connectome": {
-          "zero_diagonal":false,
-          "search_radius": 2.0,
-          "scale_invnodevol":true,
-          "symmetric": true
-        }
-      }
-    },
-    {
-      "name": "mrtrix_invlen_conn",
-      "software": "MRTrix3",
-      "action": "connectivity",
-      "output_suffix": "msmtinvlenconnectome",
-      "input": "track_ifod2",
-      "parameters":{
-        "tck2connectome": {
-          "zero_diagonal":false,
-          "search_radius": 2.0,
-          "symmetric": true
-        }
+        "tck2connectome": [
+          {
+            "zero_diagonal": false,
+            "search_radius": 2,
+            "scale_invnodevol": true,
+            "symmetric": true,
+            "use_sift_weights": true,
+            "stat_edge": "sum",
+            "measure": "sift_invnodevol_radius2_count"
+          },
+          {
+            "zero_diagonal": false,
+            "search_radius": 2,
+            "scale_invnodevol": false,
+            "symmetric": true,
+            "length_scale": "length",
+            "use_sift_weights": false,
+            "stat_edge": "mean",
+            "measure": "radius2_meanlength"
+          },
+          {
+            "zero_diagonal": false,
+            "search_radius": 2,
+            "scale_invnodevol": false,
+            "symmetric": true,
+            "use_sift_weights": false,
+            "stat_edge": "sum",
+            "measure": "radius2_count"
+          },
+          {
+            "zero_diagonal": false,
+            "search_radius": 2,
+            "scale_invnodevol": false,
+            "symmetric": true,
+            "use_sift_weights": true,
+            "stat_edge": "sum",
+            "measure": "sift_radius2_count"
+          }
+        ]
       }
     }
   ]
