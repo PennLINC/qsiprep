@@ -50,7 +50,6 @@ def demean_image(in_file, in_mask=None, out_file=None):
     import numpy as np
     import nibabel as nb
     import os.path as op
-    import math
     from nipype.utils import NUMPY_MMAP
 
     if out_file is None:

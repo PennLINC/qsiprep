@@ -893,7 +893,6 @@ class BuildConnectome(MRTrix3Base):
         savemat(merged_matfile, connectivity_data, long_field_names=True)
         return runtime
 
-
     def _format_arg(self, name, spec, val):
         if name == 'length_scale':
             if val == 'length':

@@ -27,6 +27,7 @@ CITATIONS = {
     "msmt_csd": "(@originalcsd, @msmt5tt)"
 }
 
+
 def init_mrtrix_csd_recon_wf(omp_nthreads, has_transform, name="mrtrix_recon",
                              output_suffix="", params={}):
     """Create FOD images for WM, GM and CSF.
@@ -102,7 +103,8 @@ FODs were estimated via constrained spherical deconvolution
     if response_algorithm == 'msmt_5tt':
         desc += 'using a T1w-based segmentation {}.'.format(CITATIONS[response_algorithm])
     else:
-        desc += 'using an unsupervised multi-tissue method {}.'.format(CITATIONS[response_algorithm])
+        desc += 'using an unsupervised multi-tissue method {}.'.format(
+            CITATIONS[response_algorithm])
 
     # FOD estimation
     fod = params.get('fod', {})
