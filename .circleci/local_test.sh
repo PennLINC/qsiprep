@@ -280,22 +280,6 @@ qsiprep \
     --sloppy --write-graph --mem_mb 4096 \
     --nthreads 2 -vv --output-resolution 5
 
-# name: Run mrtrix on downsampled abcd
-# command: |
-  qsiprep -w /Users/mcieslak/Desktop/multishell_output/DSCSDSI/work \
-       /Users/mcieslak/Desktop/multishell_output/qsiprep \
-      --recon-input /Users/mcieslak/Desktop/multishell_output/qsiprep \
-       /Users/mcieslak/Desktop/multishell_output/multishell_output/derivatives \
-       participant \
-      --recon-spec mrtrix_msmt_csd \
-      --sloppy \
-      --recon-only \
-      --fs-license-file $FREESURFER_HOME/license.txt \
-      --mem_mb 4096 \
-      --output-resolution 5 \
-      --fs-license-file $FREESURFER_HOME/license.txt \
-      --nthreads 2 -vv
-
 #- run:
 #name: Run mrtrix_multishell_msmt
 #no_output_timeout: 2h
@@ -311,7 +295,7 @@ qsiprep \
       --recon-only \
       --mem_mb 4096 \
       --fs-license-file $FREESURFER_HOME/license.txt \
-      --nthreads 1 -vv
+      --nthreads 2 -vv --stop-on-first-crash
 
 #- run:
 #name: Run mrtrix_multishell_msmt_noACT
@@ -330,6 +314,21 @@ qsiprep \
       --mem_mb 4096 \
       --nthreads 1 -vv
 
+
+  mkdir -p ${WORKDIR}/multishell_output/work ${WORKDIR}/multishell_output/derivatives/dsi_studio_gqi
+  qsiprep -w ${WORKDIR}/multishell_output/work \
+       ${WORKDIR}/data/multishell_output/qsiprep \
+       ${WORKDIR}/multishell_output/derivatives/dsi_studio_gqi \
+       participant \
+      --sloppy \
+      --recon-input ${WORKDIR}/data/multishell_output/qsiprep \
+      --recon-spec dsi_studio_gqi \
+      --recon-only \
+      --fs-license-file $FREESURFER_HOME/license.txt \
+      --mem_mb 4096 \
+      --nthreads 1 --omp-nthreads 1 -vv \
+      --stop-on-first-crash
+
 #- run:
 #name: Run mrtrix_singleshell_ss3t
 #no_output_timeout: 2h
@@ -345,7 +344,7 @@ qsiprep \
       --recon-only \
       --mem_mb 4096 \
       --fs-license-file $FREESURFER_HOME/license.txt \
-      --nthreads 1 -vv
+      --nthreads 1 --omp-nthreads 1 -vv
 
 #- run:
 #name: Run mrtrix_singleshell_ss3t_noACT

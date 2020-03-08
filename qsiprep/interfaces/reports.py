@@ -20,6 +20,7 @@ import seaborn as sns
 import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib import animation
+from scipy.io.matlab import loadmat
 import pandas as pd
 import numpy as np
 from nipype.interfaces.base import (
@@ -27,9 +28,14 @@ from nipype.interfaces.base import (
     File, Directory, InputMultiPath, InputMultiObject, Str, isdefined,
     SimpleInterface)
 from nipype.interfaces import freesurfer as fs
+from nipype.interfaces.mixins import reporting
+import nibabel as nb
+from dipy.core.sphere import HemiSphere
 from .gradients import concatenate_bvals, concatenate_bvecs
 from .qc import createB0_ColorFA_Mask_Sprites, createSprite4D
 from .bids import get_bids_params
+from ..niworkflows.viz.utils import peak_slice_series, odf_roi_plot
+from .converters import fib2amps, mif2amps, peaks_from_odfs
 
 SUBJECT_TEMPLATE = """\t<ul class="elem-desc">
 \t\t<li>Subject ID: {subject_id}</li>
@@ -657,3 +663,102 @@ def _filename_to_colors(labels_column, colormap="rainbow"):
     labels = labels / max_label
     colors = np.array([cmap(label) for label in labels])
     return colors.tolist()
+
+
+class _ReconPeaksReportInputSpec(BaseInterfaceInputSpec):
+    mif_file = File(exists=True)
+    fib_file = File(exists=True)
+    odf_file = File(exists=True)
+    directions_file = File(exists=True)
+    mask_file = File(exists=True)
+    background_image = File(exists=True)
+    odf_rois = File(exists=True)
+
+
+class _ReconPeaksReportOutputSpec(reporting.ReportCapableOutputSpec):
+    odf_report = File(exists=True)
+
+
+class ReconPeaksReport(SimpleInterface):
+    input_spec = _ReconPeaksReportInputSpec
+    output_spec = _ReconPeaksReportOutputSpec
+    _ncuts = 4
+    _padding = 4
+    _redirect_x = True
+
+    def _run_interface(self, runtime):
+        """Generate a reportlet."""
+        if isdefined(self.inputs.mif_file):
+            odf_img, directions = mif2amps(self.inputs.mif_file, runtime.cwd)
+        elif isdefined(self.inputs.fib_file):
+            odf_img, directions = fib2amps(self.inputs.fib_file,
+                                           self.inputs.background_image,
+                                           runtime.cwd)
+        elif isdefined(self.inputs.odf_file) and isdefined(self.inputs.directions_file):
+            odf_img = nb.load(self.inputs.odf_file)
+            directions = np.load(self.inputs.directions_file)
+        else:
+            raise Exception('Requires either a mif file or fib file')
+        odf_4d = odf_img.get_fdata()
+        sphere = HemiSphere(xyz=directions.astype(np.float))
+        if not isdefined(self.inputs.background_image) or self.inputs.background_image is None:
+            background_data = odf_4d.mean(3)
+        else:
+            background_data = nb.load(self.inputs.background_image).get_fdata()
+        peak_directions, peak_values = peaks_from_odfs(odf_4d, sphere, 0.1, 15)
+        peak_report = op.join(runtime.cwd, 'peak_report.png')
+        peak_slice_series(peak_directions, peak_values, background_data, peak_report,
+                          n_cuts=self._ncuts, padding=self._padding)
+        self._results['out_report'] = peak_report
+
+        # Plot ODFs in interesting regions
+        if isdefined(self.inputs.odf_rois):
+            odf_report = op.join(runtime.cwd, 'odf_report.png')
+            odf_roi_plot(odf_4d, sphere, background_data, odf_report, self.inputs.odf_rois)
+            self._results['odf_report'] = odf_report
+        return runtime
+
+
+class _ConnectivityReportInputSpec(BaseInterfaceInputSpec):
+    connectivity_matfile = File(exists=True)
+
+
+class _ConnectivityReportOutputSpec(reporting.ReportCapableOutputSpec):
+    odf_report = File(exists=True)
+
+
+class ConnectivityReport(SimpleInterface):
+    input_spec = _ConnectivityReportInputSpec
+    output_spec = _ConnectivityReportOutputSpec
+
+    def _run_interface(self, runtime):
+        """Generate a reportlet."""
+        mat = loadmat(self.inputs.connectivity_matfile)
+        connectivity_keys = [key for key in mat.keys() if key.endswith('connectivity')]
+        atlases = sorted(set([key.split("_")[0] for key in connectivity_keys]))
+        measures = sorted(set(["_".join(key.split("_")[1:-1]) for key in connectivity_keys]))
+        nrows = len(atlases)
+        ncols = len(measures)
+        fig, ax = plt.subplots(nrows=nrows, ncols=ncols, squeeze=False)
+        for connectivity_key in connectivity_keys:
+            atlas = connectivity_key.split("_")[0]
+            measure = "_".join(connectivity_key.split("_")[1:-1])
+            row = atlases.index(atlas)
+            col = measures.index(measure)
+            ax[row, col].imshow(mat[connectivity_key], interpolation='nearest',
+                                cmap="Greys", aspect='equal')
+            ax[row, col].set_xticks([])
+            ax[row, col].set_yticks([])
+        fig.set_size_inches((ncols, nrows))
+        fig.subplots_adjust(left=0.05, top=0.95, wspace=0, hspace=0, bottom=0, right=1)
+
+        for measure_num, measure_name in enumerate(measures):
+            ax[0, measure_num].set_title(measure_name.replace('_', '/'),
+                                         fontdict={'fontsize': 6})
+        for atlas_num, atlas_name in enumerate(atlases):
+            ax[atlas_num, 0].set_ylabel(atlas_name, fontdict={'fontsize': 8})
+
+        conn_report = op.join(runtime.cwd, 'conn_report.svg')
+        fig.savefig(conn_report)
+        self._results['out_report'] = conn_report
+        return runtime

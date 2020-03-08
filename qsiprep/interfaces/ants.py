@@ -55,6 +55,7 @@ class MultivariateTemplateConstruction2InputSpec(CommandLineInputSpec):
                             argstr='-t %s', mandatory=True)
     output_prefix = traits.Str('antsBTP')
     gradient_step = traits.Float(0.25, usedefault=True, mandatory=True, argstr='-g %.3f')
+    use_full_affine = traits.Bool(False, usedefault=True, argstr='-y %d')
     usefloat = traits.Bool(True, argstr='-e %d', usedefault=True)
 
 

@@ -90,6 +90,7 @@ class QsiReconIngressOutputSpec(TraitedSpec):
     dwi_file = File(exists=True)
     local_bvec_file = File()
     mask_file = File()
+    dwi_ref = File(exists=True)
 
 
 class QsiReconIngress(SimpleInterface):
@@ -111,6 +112,7 @@ class QsiReconIngress(SimpleInterface):
         self._get_if_exists('local_bvec_file', op.join(out_root, fname[:-3]+'bvec.nii*'))
         self._get_if_exists('b_file', op.join(out_root, fname+".b"))
         self._get_if_exists('mask_file', op.join(out_root, fname[:-11] + 'brain_mask.nii.gz'))
+        self._get_if_exists('dwi_ref', op.join(out_root, fname[:-16] + 'dwiref.nii.gz'))
         self._results['dwi_file'] = self.inputs.dwi_file
 
         # Get the anatomical data

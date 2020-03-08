@@ -15,12 +15,14 @@ from io import open, StringIO
 
 import numpy as np
 import nibabel as nb
+import matplotlib.pyplot as plt
 
 from lxml import etree
 from nilearn import image as nlimage
 from nilearn.plotting import plot_anat
 from svgutils.transform import SVGFigure
 from seaborn import color_palette
+from PIL import Image
 
 from .. import NIWORKFLOWS_LOG
 from nipype.utils import filemanip
@@ -590,7 +592,6 @@ def plot_melodic_components(melodic_dir, in_file, tr=None,
     from nilearn.image import index_img, iter_img
     import nibabel as nb
     import numpy as np
-    import pylab as plt
     import seaborn as sns
     from matplotlib.gridspec import GridSpec
     import os
@@ -726,3 +727,153 @@ def plot_melodic_components(melodic_dir, in_file, tr=None,
 
     with open(out_file, 'w' if PY3 else 'wb') as f:
         f.write(image_svg)
+
+
+def slices_from_bbox(mask_data, cuts=3, padding=0):
+    """Finds equi-spaced cuts for presenting images"""
+    B = np.argwhere(mask_data > 0)
+    start_coords = B.min(0)
+    stop_coords = B.max(0) + 1
+
+    vox_coords = []
+    for start, stop in zip(start_coords, stop_coords):
+        inc = abs(stop - start) / (cuts + 2 * padding + 1)
+        slices = [start + (i + 1) * inc for i in range(cuts + 2 * padding)]
+        vox_coords.append(slices[padding:-padding])
+    return {k: [int(_v) for _v in v] for k, v in zip(['x', 'y', 'z'], vox_coords)}
+
+
+def peak_slice_series(peak_directions, peak_values, background_data, out_file, mask_image=None,
+                      axis_num=0, prefix='odf', tile_size=1200, n_cuts=3, padding=4,
+                      normalize_peaks=True):
+    from fury import actor, window
+    if normalize_peaks:
+        peak_values = peak_values / peak_values.max() * np.pi
+
+    peak_actor = actor.peak_slicer(peak_directions, peak_values, colors=None)
+    image_actor = actor.slicer(background_data, opacity=0.6, interpolation='nearest')
+    image_size = (tile_size, tile_size)
+    scene = window.Scene()
+    shape = background_data.shape
+    scene.add(image_actor)
+    scene.add(peak_actor)
+    midpoint = (shape[0] / 2., shape[1] / 2., shape[2] / 2.)
+    camera_z_dist = max(midpoint[0], midpoint[1]) * np.pi
+    camera_x_dist = max(midpoint[1], midpoint[2]) * np.pi
+    camera_y_dist = max(midpoint[0], midpoint[2]) * np.pi
+
+    slice_indices = slices_from_bbox(background_data, cuts=n_cuts, padding=padding)
+
+    # Render the axial slices
+    z_image = Image.new('RGB', (tile_size, tile_size * n_cuts))
+    for slicenum, z_slice in enumerate(slice_indices['z']):
+        image_actor.display_extent(0, shape[0] - 1, 0, shape[1] - 1, z_slice, z_slice)
+        peak_actor.display_extent(0, shape[0] - 1, 0, shape[1] - 1, z_slice + 1, z_slice + 1)
+        scene.set_camera(focal_point=(midpoint[0], midpoint[1], z_slice),
+                         position=(midpoint[0], midpoint[1], z_slice + camera_z_dist),
+                         view_up=(0., -1., 0.))
+        png_file = '{}_tra_{:03d}.png'.format(prefix, z_slice)
+        window.record(scene, out_path=png_file, reset_camera=False, size=image_size)
+        z_image.paste(Image.open(png_file), (0, slicenum * tile_size))
+
+    # Render the sagittal slices
+    x_image = Image.new('RGB', (tile_size, tile_size * n_cuts))
+    for slicenum, x_slice in enumerate(slice_indices['x']):
+        image_actor.display_extent(x_slice, x_slice, 0, shape[1] - 1, 0, shape[2] - 1)
+        peak_actor.display_extent(x_slice, x_slice, 0, shape[1] - 1, 0, shape[2] - 1)
+        scene.set_camera(focal_point=(x_slice, midpoint[1], midpoint[2]),
+                         position=(x_slice - camera_x_dist, midpoint[1], midpoint[2]),
+                         view_up=(0., 0, 1))
+        png_file = '{}_sag_{:03d}.png'.format(prefix, x_slice)
+        window.record(scene, out_path=png_file, reset_camera=False, size=image_size)
+        x_image.paste(Image.open(png_file), (0, slicenum * tile_size))
+
+    # Render the coronal slices
+    y_image = Image.new('RGB', (tile_size, tile_size * n_cuts))
+    for slicenum, y_slice in enumerate(slice_indices['y']):
+        image_actor.display_extent(0, shape[0] - 1, y_slice, y_slice, 0, shape[2] - 1)
+        peak_actor.display_extent(0, shape[0] - 1, y_slice - 4, y_slice - 4, 0, shape[2] - 1)
+        scene.set_camera(focal_point=(midpoint[0], y_slice, midpoint[2]),
+                         position=(midpoint[0], y_slice - camera_y_dist, midpoint[2]),
+                         view_up=(0., 0, 1))
+        png_file = '{}_cor_{:03d}.png'.format(prefix, y_slice)
+        window.record(scene, out_path=png_file, reset_camera=False, size=image_size)
+        y_image.paste(Image.open(png_file), (0, slicenum * tile_size))
+
+    final_image = Image.new('RGB', (tile_size * 3, tile_size * n_cuts))
+    final_image.paste(z_image, (0, 0))
+    final_image.paste(x_image, (tile_size, 0))
+    final_image.paste(y_image, (tile_size * 2, 0))
+    final_image.save(out_file)
+
+
+def get_camera_for_roi(roi_data, roi_id, view_axis):
+    voxel_coords = np.row_stack(np.nonzero(roi_data == roi_id))
+    centroid = voxel_coords.mean(1)
+    other_axes = [[1, 2], [0, 2], [0, 1]][view_axis]
+    projected_x = voxel_coords[other_axes[0]]
+    projected_y = voxel_coords[other_axes[1]]
+    xspan = projected_x.max() - projected_x.min()
+    yspan = projected_y.max() - projected_y.min()
+    camera_distance = max(xspan, yspan) * np.pi
+    return centroid, camera_distance
+
+
+def odf_roi_plot(odf_4d, halfsphere, background_data, out_file, roi_file,
+                 prefix='odf', tile_size=1200):
+    from fury import actor, window
+
+    # Fill out the other half of the sphere
+    odf_sphere = halfsphere.mirror()
+    full_odfs = np.tile(odf_4d, (1, 1, 1, 2))
+    # Make graphics objects
+    odf_actor = actor.odf_slicer(full_odfs, sphere=odf_sphere, colormap=None, scale=0.5)
+    image_actor = actor.slicer(background_data, opacity=0.6, interpolation='nearest')
+    image_size = (tile_size, tile_size)
+    scene = window.Scene()
+    shape = background_data.shape
+    scene.add(image_actor)
+    scene.add(odf_actor)
+    roi_data = nb.load(roi_file).get_fdata()
+    roi_image = Image.new('RGB', (tile_size * 3, tile_size))
+
+    roi1_centroid, roi1_distance = get_camera_for_roi(roi_data, 1, 2)
+    roi2_centroid, roi2_distance = get_camera_for_roi(roi_data, 2, 1)
+    roi3_centroid, roi3_distance = get_camera_for_roi(roi_data, 3, 1)
+
+    camera_distance = max(roi1_distance, roi2_distance, roi3_distance)
+    # render the axial slice with the triple crossing
+    z_slice = int(np.round(roi1_centroid[2]))
+    image_actor.display_extent(0, shape[0] - 1, 0, shape[1] - 1, z_slice - 1, z_slice - 1)
+    odf_actor.display_extent(0, shape[0] - 1, 0, shape[1] - 1, z_slice, z_slice)
+    scene.set_camera(focal_point=(roi1_centroid[0], roi1_centroid[1], roi1_centroid[2]),
+                     position=(roi1_centroid[0], roi1_centroid[1] - 2,  # Roll to get perspective
+                               roi1_centroid[2] + camera_distance),
+                     view_up=(0., -1., 0.))
+    png_file = '{}_semoivale_axial.png'.format(prefix)
+    window.record(scene, out_path=png_file, reset_camera=False, size=image_size)
+    roi_image.paste(Image.open(png_file), (0, 0))
+
+    # Render the coronal slice with a double-crossing
+    y_slice = int(np.round(roi2_centroid[1]))
+    image_actor.display_extent(0, shape[0] - 1, y_slice + 1, y_slice + 1, 0, shape[2] - 1)
+    odf_actor.display_extent(0, shape[0] - 1, y_slice, y_slice, 0, shape[2] - 1)
+    scene.set_camera(focal_point=(roi2_centroid[0], roi2_centroid[1], roi2_centroid[2]),
+                     position=(roi2_centroid[0], y_slice - camera_distance, roi2_centroid[2]),
+                     view_up=(0., 0, 1))
+    png_file = '{}_CSTxCC.png'.format(prefix)
+    window.record(scene, out_path=png_file, reset_camera=False, size=image_size)
+    roi_image.paste(Image.open(png_file), (tile_size, 0))
+
+    # Render the coronal slice with a double-crossing
+    y_slice = int(np.round(roi3_centroid[1]))
+    image_actor.display_extent(0, shape[0] - 1, y_slice + 1, y_slice + 1, 0, shape[2] - 1)
+    odf_actor.display_extent(0, shape[0] - 1, y_slice, y_slice, 0, shape[2] - 1)
+    scene.set_camera(focal_point=(roi3_centroid[0], roi3_centroid[1], roi2_centroid[2]),
+                     position=(roi3_centroid[0], y_slice - camera_distance, roi3_centroid[2]),
+                     view_up=(0., 0, 1))
+    png_file = '{}_CC.png'.format(prefix)
+    window.record(scene, out_path=png_file, reset_camera=False, size=image_size)
+    roi_image.paste(Image.open(png_file), (2 * tile_size, 0))
+
+    roi_image.save(out_file)

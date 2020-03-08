@@ -15,9 +15,13 @@ import os
 import os.path as op
 from glob import glob
 from copy import deepcopy
+from nipype import __version__ as nipype_ver
+from nilearn import __version__ as nilearn_ver
+from dipy import __version__ as dipy_ver
 from pkg_resources import resource_filename as pkgrf
 from ...engine import Workflow
 from ...utils.sloppy_recon import make_sloppy
+from ...__about__ import __version__
 
 import logging
 import json
@@ -160,14 +164,47 @@ def init_single_subject_wf(
         # Get all the output files that are in this space
         dwi_files = [f.path for f in
                      layout.get(suffix="dwi", subject=subject_id, absolute_paths=True,
-                                extensions=['nii', 'nii.gz'])
+                                extension=['nii', 'nii.gz'])
                      if 'space-' + space in f.filename]
         LOGGER.info("found %s in %s", dwi_files, recon_input)
 
     workflow = Workflow('sub-{}_{}'.format(subject_id, spec['name']))
+    workflow.__desc__ = """
+Results included in this manuscript come from reconstructions
+performed using *QSIprep* {qsiprep_ver},
+which is based on *Nipype* {nipype_ver}
+(@nipype1; @nipype2; RRID:SCR_002502).
+
+""".format(
+        qsiprep_ver=__version__, nipype_ver=nipype_ver)
+    workflow.__postdesc__ = """
+
+Many internal operations of *qsiprep* use
+*Nilearn* {nilearn_ver} [@nilearn, RRID:SCR_001362] and
+*Dipy* {dipy_ver}[@dipy].
+For more details of the pipeline, see [the section corresponding
+to workflows in *qsiprep*'s documentation]\
+(https://qsiprep.readthedocs.io/en/latest/workflows.html \
+"qsiprep's documentation").
+
+
+### References
+
+    """.format(nilearn_ver=nilearn_ver, dipy_ver=dipy_ver)
+
     if len(dwi_files) == 0:
         LOGGER.info("No dwi files found for %s", subject_id)
         return workflow
+
+    # Was there a forced normalization during preprocessing?
+    template_transform = [f.path for f in
+                          layout.get(subject_id=subject_id, suffix='xfm', extension=['.h5'])
+                          if 'to-T1w' in f.path and 'from-MNI152NLin2009cAsym' in f.path]
+    if template_transform:
+        template_transform = template_transform[0]
+        has_transform = True
+    else:
+        has_transform = False
 
     anat_ingress_wf = init_recon_anatomical_wf(subject_id=subject_id,
                                                recon_input_dir=recon_input,
@@ -180,6 +217,7 @@ def init_single_subject_wf(
                                            workflow_spec=spec,
                                            reportlets_dir=reportlets_dir,
                                            output_dir=output_dir,
+                                           has_transform=has_transform,
                                            omp_nthreads=omp_nthreads)
     workflow.connect([(anat_ingress_wf, dwi_recon_wf, to_connect)])
 
