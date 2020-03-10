@@ -73,6 +73,20 @@
             "title": "Generalized q-sampling Imaging (GQI)",
             "description": "Directionally color-coded ODF peaks overlaid on the b=0 reference image.",
             "imgtype": "png"
+        },
+        {
+            "name": "epi/gqi",
+            "file_pattern": "dwi/.*desc-GQIODF.*_odfs\\.",
+            "title": "GQI",
+            "description": "Three views of ODFs in ROIs.",
+            "imgtype": "png"
+        },
+        {
+            "name": "epi/gqi",
+            "file_pattern": "dwi/.*desc-DSIStudioConnectivity.*_matrices\\.",
+            "title": "Connectivity",
+            "description": "Connectivity estimated in DSI Studio",
+            "imgtype": "svg+xml"
         }
       ]
     },

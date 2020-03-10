@@ -50,7 +50,6 @@ qsirecon/logs/CITATION.md
 qsirecon/logs/CITATION.tex
 qsirecon/sub-PNC
 qsirecon/sub-PNC/dwi
-qsirecon/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_control.mat
 qsirecon/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_desc-aal116_atlas.mif.gz
 qsirecon/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_desc-aal116_atlas.nii.gz
 qsirecon/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_desc-aal116_mrtrixLUT.txt
@@ -101,7 +100,10 @@ qsirecon/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_desc
 qsirecon/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_desc-schaefer400x7_mrtrixLUT.txt
 qsirecon/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_desc-schaefer400x7_origLUT.txt
 qsirecon/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_gqi.fib.gz
+qsirecon/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_gqinetwork.mat
 qsirecon/sub-PNC/figures
+qsirecon/sub-PNC/figures/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_desc-DSIStudioConnectivity_matrices.svg
+qsirecon/sub-PNC/figures/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_desc-GQIODF_odfs.png
 qsirecon/sub-PNC/figures/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_desc-GQIODF_peaks.png
 qsirecon/sub-PNC.html
 /tmp/DSDTI/derivatives

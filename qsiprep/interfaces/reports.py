@@ -20,6 +20,7 @@ import seaborn as sns
 import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib import animation
+from scipy.io.matlab import loadmat
 import pandas as pd
 import numpy as np
 from nipype.interfaces.base import (
@@ -718,4 +719,49 @@ class ReconPeaksReport(SimpleInterface):
             odf_roi_plot(odf_4d, sphere, background_data, odf_report, self.inputs.odf_rois,
                          subtract_iso=self.inputs.subtract_iso)
             self._results['odf_report'] = odf_report
+        return runtime
+
+
+class _ConnectivityReportInputSpec(BaseInterfaceInputSpec):
+    connectivity_matfile = File(exists=True)
+
+
+class _ConnectivityReportOutputSpec(reporting.ReportCapableOutputSpec):
+    odf_report = File(exists=True)
+
+
+class ConnectivityReport(SimpleInterface):
+    input_spec = _ConnectivityReportInputSpec
+    output_spec = _ConnectivityReportOutputSpec
+
+    def _run_interface(self, runtime):
+        """Generate a reportlet."""
+        mat = loadmat(self.inputs.connectivity_matfile)
+        connectivity_keys = [key for key in mat.keys() if key.endswith('connectivity')]
+        atlases = sorted(set([key.split("_")[0] for key in connectivity_keys]))
+        measures = sorted(set(["_".join(key.split("_")[1:-1]) for key in connectivity_keys]))
+        nrows = len(atlases)
+        ncols = len(measures)
+        fig, ax = plt.subplots(nrows=nrows, ncols=ncols, squeeze=False)
+        for connectivity_key in connectivity_keys:
+            atlas = connectivity_key.split("_")[0]
+            measure = "_".join(connectivity_key.split("_")[1:-1])
+            row = atlases.index(atlas)
+            col = measures.index(measure)
+            ax[row, col].imshow(mat[connectivity_key], interpolation='nearest',
+                                cmap="Greys", aspect='equal')
+            ax[row, col].set_xticks([])
+            ax[row, col].set_yticks([])
+        fig.set_size_inches((ncols, nrows))
+        fig.subplots_adjust(left=0.05, top=0.95, wspace=0, hspace=0, bottom=0, right=1)
+
+        for measure_num, measure_name in enumerate(measures):
+            ax[0, measure_num].set_title(measure_name.replace('_', '/'),
+                                         fontdict={'fontsize': 6})
+        for atlas_num, atlas_name in enumerate(atlases):
+            ax[atlas_num, 0].set_ylabel(atlas_name, fontdict={'fontsize': 8})
+
+        conn_report = op.join(runtime.cwd, 'conn_report.svg')
+        fig.savefig(conn_report)
+        self._results['out_report'] = conn_report
         return runtime
