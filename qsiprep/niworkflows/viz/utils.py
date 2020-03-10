@@ -820,12 +820,14 @@ def get_camera_for_roi(roi_data, roi_id, view_axis):
 
 
 def odf_roi_plot(odf_4d, halfsphere, background_data, out_file, roi_file,
-                 prefix='odf', tile_size=1200):
+                 prefix='odf', tile_size=1200, subtract_iso=False):
     from fury import actor, window
 
     # Fill out the other half of the sphere
     odf_sphere = halfsphere.mirror()
     full_odfs = np.tile(odf_4d, (1, 1, 1, 2))
+    if subtract_iso:
+        full_odfs = full_odfs - full_odfs.min(3, keepdims=True)
     # Make graphics objects
     odf_actor = actor.odf_slicer(full_odfs, sphere=odf_sphere, colormap=None, scale=0.5)
     image_actor = actor.slicer(background_data, opacity=0.6, interpolation='nearest')

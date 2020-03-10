@@ -70,7 +70,7 @@ distance of %02f.""" % romdd
         afni.Resample(outputtype='NIFTI_GZ', resample_mode="NN"), name='resample_mask')
 
     # Make a visual report of the model
-    plot_peaks = pe.Node(ReconPeaksReport(), name='plot_peaks')
+    plot_peaks = pe.Node(ReconPeaksReport(subtract_iso=True), name='plot_peaks')
     ds_report_peaks = pe.Node(
         ReconDerivativesDataSink(extension='.png',
                                  desc="GQIODF",
