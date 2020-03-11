@@ -588,24 +588,11 @@ class FixDSIStudioExportHeader(SimpleInterface):
         new_file = fname_presuffix(dsi_studio_file, suffix="fixhdr", newpath=runtime.cwd)
         dsi_img = nb.load(dsi_studio_file)
         correct_img = nb.load(self.inputs.correct_header_nifti)
-
-        new_axcodes = nb.aff2axcodes(correct_img.affine)
-        input_axcodes = nb.aff2axcodes(dsi_img.affine)
-
-        # Is the input image oriented how we want?
-        if not input_axcodes == new_axcodes:
-            # Re-orient
-            input_orientation = nb.orientations.axcodes2ornt(input_axcodes)
-            desired_orientation = nb.orientations.axcodes2ornt(new_axcodes)
-            transform_orientation = nb.orientations.ornt_transform(input_orientation,
-                                                                   desired_orientation)
-            reoriented_img = dsi_img.as_reoriented(transform_orientation)
-
-        else:
-            reoriented_img = dsi_img
+        flipped_data = np.nan_to_num(dsi_img.get_fdata(dtype=np.float32))[::-1, ::-1, :]
 
         # No matter what, still use the correct affine
-        nb.Nifti1Image(reoriented_img.get_data(), correct_img.affine).to_filename(new_file)
+        nb.Nifti1Image(flipped_data, correct_img.affine,
+                       header=correct_img.header).to_filename(new_file)
         self._results['out_file'] = new_file
 
         return runtime

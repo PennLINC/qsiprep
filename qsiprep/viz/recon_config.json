@@ -49,18 +49,11 @@
               "imgtype": "png"
           },
           {
-              "name": "epi/unringing",
-              "file_pattern": "dwi/.*_unringing\\.",
-              "title": "Gibbs Ringing Removal",
-              "description": "Effect of removing Gibbs ringing on a low and high-b image.",
-              "imgtype": "svg+xml"
-          },
-          {
-              "name": "epi/bias_correction",
-              "file_pattern": "dwi/.*_biascorr\\.",
-              "title": "DWI Bias correction",
-              "description": "Effect of bias correction on a low and high-b image. Bias field contour lines are drawn as an overlay.",
-              "imgtype": "svg+xml"
+            "name": "epi/csd",
+            "file_pattern": "dwi/.*desc-MRtrix3Connectivity.*_matrices\\.",
+            "title": "Connectivity",
+            "description": "Connectivity estimated in MRtrix",
+            "imgtype": "svg+xml"
           }
         ]
     },
@@ -122,124 +115,6 @@
             "imgtype": "png"
         }
       ]
-    },
-    {
-        "name": "Connectome",
-        "reportlets":
-        [
-            {
-                "name": "epi/summary",
-                "file_pattern": "dwi/.*_summary",
-                "raw": true
-            },
-            {
-                "name": "epi/validation",
-                "file_pattern": "dwi/.*_validation\\.",
-                "raw": true
-            },
-            {
-              "name": "epi/b0ref",
-              "file_pattern":"dwi/.*_b0ref\\.",
-              "title": "b=0 Reference Image",
-              "description": "b=0 template and final mask output. The t1 and signal intersection mask is blue, their xor is red and the entire mask is plotted in cyan.",
-              "imgtype": "svg+xml"
-            },
-            {
-                "name": "epi/sampling_scheme",
-                "file_pattern": "dwi/.*sampling_scheme\\.",
-                "title": "DWI Sampling Scheme",
-                "description": "Animation of the DWI sampling scheme. Each separate scan is its own color.",
-                "imgtype": "gif"
-            },
-            {
-              "name": "epi/shoreline_convergence",
-              "file_pattern": "dwi/.*shoreline_iterdata\\.",
-              "title": "SHORELine Convergence",
-              "description": "Difference in motion estimates over SHORELine iterations. Values close to zero indicate good convergence.",
-              "imgtype": "svg+xml"
-            },
-            {
-              "name": "epi/intramodal_template",
-              "file_pattern": "dwi/.*tointramodal\\.",
-              "title": "Registration to Intramodal Template",
-              "description": "b0 reference image warped to the across-scan/session b0 template",
-              "imgtype": "svg+xml"
-            },
-            {
-              "name": "epi/shoreline_reg",
-              "file_pattern": "dwi/.*shoreline_animation\\.",
-              "title": "SHORELine Registration",
-              "description": "Maximum intensity projections of each DWI before and after SHORELine registration. Orange lines are from the observed image and magenta lines are from the model-based registration target.",
-              "imgtype": "gif"
-            },
-            {
-                "name": "epi/fmap_reg",
-                "file_pattern": "dwi/.*fmap_reg\\.",
-                "title": "Fieldmap to EPI registration",
-                "description": "Results of affine coregistration between the magnitude image of the fieldmap and the reference EPI image",
-                "imgtype": "svg+xml"
-            },
-            {
-                "name": "epi/fmap_reg",
-                "file_pattern": "dwi/.*fmap_reg_vsm\\.",
-                "title": "Fieldmap",
-                "description": "Overlaid on the reference EPI image",
-                "imgtype": "svg+xml"
-            },
-            {
-                "name": "epi/unwarp",
-                "file_pattern": "dwi/.*sdc_.*\\.",
-                "title": "Susceptibility distortion correction",
-                "description": "Results of performing susceptibility distortion correction (SDC) on the EPI",
-                "imgtype": "svg+xml"
-            },
-            {
-                "name": "epi/sdc_syn",
-                "file_pattern": "dwi/.*_forcedsyn\\.",
-                "title": "Experimental fieldmap-less susceptibility distortion correction",
-                "description": "The dataset contained some fieldmap information, but the argument <code>--force-syn</code> was used. The higher-priority SDC method was used. Here, we show the results of performing SyN-based SDC on the EPI for comparison.",
-                "imgtype": "svg+xml"
-            },
-            {
-                "name": "epi_mean_t1_registration/flirtbbr",
-                "file_pattern": "dwi/.*_coreg\\.",
-                "title": "b0 to T1 registration",
-                "description": "<code>antsRegistration</code> was used to generate transformations from b0I-space to T1w-space",
-                "imgtype": "svg+xml"
-            },
-            {
-              "name": "epi/intramodal_reg",
-              "file_pattern": "dwi/.*to_intramodal\\.",
-              "title": "Registration to the Intramodal Template",
-              "description": "The B0 template registered to the modpoint B=0 image",
-              "imgtype": "svg+xml"
-          },
-          {
-            "name": "epi/interactive_qc",
-            "file_pattern": "dwi/.*interactive\\.",
-            "title": "INTERACT",
-            "description": "Interactive QC Widgets",
-            "raw":true
-          },
-          {
-              "name": "epi/carpetplot",
-              "file_pattern": "dwi/.*carpetplot\\.",
-              "title": "DWI Summary",
-              "description": "Summary statistics are plotted, which may reveal trends or artifacts in the DWI data. Global signals calculated within the whole-brain (GS), within the white-matter (WM) and within cerebro-spinal fluid (CSF) show the mean DWI signal in their corresponding masks. DVARS and FD show the standardized DVARS and framewise-displacement measures for each time point.<br />A carpet plot shows the time series for all voxels within the brain mask. Voxels are grouped into cortical (blue), and subcortical (orange) gray matter, cerebellum (green) and white matter and CSF (red), indicated by the color map on the left-hand side.",
-              "imgtype": "svg+xml"
-          }
-        ]
-    },
-    {
-        "name": "About",
-        "reportlets":
-        [
-            {
-                "name": "anat/about",
-                "file_pattern": "anat/.*_about",
-                "raw": true
-            }
-        ]
-    }
+  }
 ]
 }
