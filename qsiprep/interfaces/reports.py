@@ -673,6 +673,8 @@ class _ReconPeaksReportInputSpec(BaseInterfaceInputSpec):
     mask_file = File(exists=True)
     background_image = File(exists=True)
     odf_rois = File(exists=True)
+    subtract_iso = traits.Bool(False, usedefault=True,
+                               desc='subtract isotropic component from ODFs')
 
 
 class _ReconPeaksReportOutputSpec(reporting.ReportCapableOutputSpec):
@@ -714,7 +716,8 @@ class ReconPeaksReport(SimpleInterface):
         # Plot ODFs in interesting regions
         if isdefined(self.inputs.odf_rois):
             odf_report = op.join(runtime.cwd, 'odf_report.png')
-            odf_roi_plot(odf_4d, sphere, background_data, odf_report, self.inputs.odf_rois)
+            odf_roi_plot(odf_4d, sphere, background_data, odf_report, self.inputs.odf_rois,
+                         subtract_iso=self.inputs.subtract_iso)
             self._results['odf_report'] = odf_report
         return runtime
 
