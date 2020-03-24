@@ -18,8 +18,6 @@ from nipype.utils.filemanip import fname_presuffix
 from dipy.core.geometry import cart2sphere
 from dipy.direction import peak_directions
 from dipy.core.sphere import HemiSphere
-from dipy.core.ndindex import ndindex
-from dipy.reconst.odf import gfa
 from scipy.io.matlab import loadmat, savemat
 from pkg_resources import resource_filename as pkgr
 
@@ -368,54 +366,3 @@ def fib2amps(fib_file, ref_image, subtract_iso=True):
     odf4d_img = nb.Nifti1Image(odf4d, real_img.affine, real_img.header)
 
     return odf4d_img, directions
-
-
-def peaks_from_odfs(odf4d, sphere, relative_peak_threshold,
-                    min_separation_angle, mask=None,
-                    gfa_thr=0, normalize_peaks=False,
-                    npeaks=5):
-
-    shape = odf4d.shape[:-1]
-    if mask is None:
-        mask = np.ones(shape, dtype='bool')
-    else:
-        if mask.shape != shape:
-            raise ValueError("Mask is not the same shape as data.")
-
-    gfa_array = np.zeros(shape)
-    qa_array = np.zeros((shape + (npeaks,)))
-
-    peak_dirs = np.zeros((shape + (npeaks, 3)))
-    peak_values = np.zeros((shape + (npeaks,)))
-    peak_indices = np.zeros((shape + (npeaks,)), dtype='int')
-    peak_indices.fill(-1)
-
-    global_max = -np.inf
-    for idx in ndindex(shape):
-        if not mask[idx]:
-            continue
-        odf = odf4d[idx]
-        gfa_array[idx] = gfa(odf)
-        if gfa_array[idx] < gfa_thr:
-            global_max = max(global_max, odf.max())
-            continue
-        # Get peaks of odf
-        direction, pk, ind = peak_directions(odf, sphere,
-                                             relative_peak_threshold,
-                                             min_separation_angle)
-        # Calculate peak metrics
-        if pk.shape[0] != 0:
-            global_max = max(global_max, pk[0])
-            n = min(npeaks, pk.shape[0])
-            qa_array[idx][:n] = pk[:n] - odf.min()
-            peak_dirs[idx][:n] = direction[:n]
-            peak_indices[idx][:n] = ind[:n]
-            peak_values[idx][:n] = pk[:n]
-
-            if normalize_peaks:
-                peak_values[idx][:n] /= pk[0]
-                peak_dirs[idx] *= peak_values[idx][:, None]
-
-    qa_array /= global_max
-
-    return peak_dirs, peak_values

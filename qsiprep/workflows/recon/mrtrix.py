@@ -163,6 +163,7 @@ A single-shell-optimized multi-tissue CSD was performed using MRtrix3Tissue
                                  ('b_file', 'b_file')]),
         (inputnode, plot_peaks, [('dwi_ref', 'background_image'),
                                  ('odf_rois', 'odf_rois')]),
+        (resample_mask, plot_peaks, [('out_file', 'mask_file')]),
         (plot_peaks, ds_report_peaks, [('out_report', 'in_file')]),
         (create_mif, estimate_response, [('mif_file', 'in_file')]),
         (estimate_response, outputnode, [('wm_file', 'wm_txt'),
