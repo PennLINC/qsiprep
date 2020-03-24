@@ -746,102 +746,103 @@ def slices_from_bbox(mask_data, cuts=3, padding=0):
     return {k: [int(_v) for _v in v] for k, v in zip(['x', 'y', 'z'], vox_coords)}
 
 
-def peak_slice_series(odf_4d, sphere, background_data, out_file, mask_image=None,
-                      axis_num=0, prefix='odf', tile_size=1200, n_cuts=3, padding=4,
-                      normalize_peaks=True):
+def plot_peak_slice(odf_4d, sphere, background_data, out_file, axis, slicenum, mask_data,
+                    tile_size=1200, normalize_peaks=True):
     from fury import actor, window
+    view_up = [(0., 0., 1.), (0., 0., 1.), (0., -1., 0.)]
 
     # Make a slice mask to reduce memory
-    odf_mask = np.zeros(background_data.shape)
-    if mask_image is None:
-        image_mask = np.ones(background_data.shape)
-    else:
-        image_mask = nb.load(mask_image).get_fdata()
+    new_shape = list(odf_4d.shape)
+    new_shape[axis] = 1
+    image_shape = new_shape[:3]
+    midpoint = (new_shape[0] / 2., new_shape[1] / 2., new_shape[2] / 2.)
 
-    # Enable slices that will be plotted
-    slice_indices = slices_from_bbox(background_data, cuts=n_cuts, padding=padding)
-    for x_slice in slice_indices['x']:
-        odf_mask[x_slice, :, :] = odf_mask[x_slice, :, :] + image_mask[x_slice, :, :]
-    for y_slice in slice_indices['y']:
-        odf_mask[:, y_slice, :] = odf_mask[:, y_slice, :] + image_mask[:, y_slice, :]
-    for z_slice in slice_indices['z']:
-        odf_mask[:, :, z_slice] = odf_mask[:, :, z_slice] + image_mask[:, :, z_slice]
+    if axis == 0:
+        odf_slice = odf_4d[slicenum, :, :, :].reshape(new_shape)
+        image_slice = background_data[slicenum, :, :].reshape(image_shape)
+        mask_slice = mask_data[slicenum, :, :].reshape(image_shape)
+        camera_dist = max(midpoint[1], midpoint[2]) * np.pi
+    elif axis == 1:
+        odf_slice = odf_4d[:, slicenum, :, :].reshape(new_shape)
+        image_slice = background_data[:, slicenum, :].reshape(image_shape)
+        mask_slice = mask_data[:, slicenum, :].reshape(image_shape)
+        camera_dist = max(midpoint[0], midpoint[2]) * np.pi
+    elif axis == 2:
+        odf_slice = odf_4d[:, :, slicenum, :].reshape(new_shape)
+        image_slice = background_data[:, :, slicenum].reshape(image_shape)
+        mask_slice = mask_data[:, :, slicenum].reshape(image_shape)
+        camera_dist = max(midpoint[0], midpoint[1]) * np.pi
+    position = list(midpoint)
+    position[axis] += camera_dist
 
     # Find the actual peaks
-    peak_dirs, peak_values = peaks_from_odfs(odf_4d, sphere,
+    peak_dirs, peak_values = peaks_from_odfs(odf_slice, sphere,
                                              relative_peak_threshold=.1,
                                              min_separation_angle=15,
-                                             mask=odf_mask,
+                                             mask=mask_slice,
                                              normalize_peaks=normalize_peaks,
                                              npeaks=3)
     if normalize_peaks:
         peak_values = peak_values / peak_values.max() * np.pi
     peak_actor = actor.peak_slicer(peak_dirs, peak_values, colors=None)
-    image_actor = actor.slicer(background_data, opacity=0.6, interpolation='nearest')
+    image_actor = actor.slicer(image_slice, opacity=0.6, interpolation='nearest')
     image_size = (tile_size, tile_size)
     scene = window.Scene()
-    shape = background_data.shape
     scene.add(image_actor)
     scene.add(peak_actor)
-    midpoint = (shape[0] / 2., shape[1] / 2., shape[2] / 2.)
-    camera_z_dist = max(midpoint[0], midpoint[1]) * np.pi
-    camera_x_dist = max(midpoint[1], midpoint[2]) * np.pi
-    camera_y_dist = max(midpoint[0], midpoint[2]) * np.pi
 
+    xfov_min, xfov_max = 0, new_shape[0] - 1
+    yfov_min, yfov_max = 0, new_shape[1] - 1
+    zfov_min, zfov_max = 0, new_shape[2] - 1
+    peak_actor.display_extent(xfov_min, xfov_max, yfov_min, yfov_max, zfov_min, zfov_max)
+    image_actor.display_extent(xfov_min, xfov_max, yfov_min, yfov_max, zfov_min, zfov_max)
+    scene.set_camera(focal_point=tuple(midpoint),
+                     position=tuple(position),
+                     view_up=view_up[axis])
+    window.record(scene, out_path=out_file, reset_camera=False, size=image_size)
+    scene.clear()
+
+
+def peak_slice_series(odf_4d, sphere, background_data, out_file, mask_image=None,
+                      prefix='odf', tile_size=1200, n_cuts=3, padding=4,
+                      normalize_peaks=True):
+
+    # Make a slice mask to reduce memory
+    if mask_image is None:
+        image_mask = np.ones(background_data.shape)
+    else:
+        image_mask = nb.load(mask_image).get_fdata()
+
+    slice_indices = slices_from_bbox(background_data, cuts=n_cuts, padding=padding)
     # Render the axial slices
     z_image = Image.new('RGB', (tile_size, tile_size * n_cuts))
     for slicenum, z_slice in enumerate(slice_indices['z']):
-        image_actor.display_extent(0, shape[0] - 1, 0, shape[1] - 1, z_slice, z_slice)
-        peak_actor.display_extent(0, shape[0] - 1, 0, shape[1] - 1, z_slice, z_slice)
-        scene.set_camera(focal_point=(midpoint[0], midpoint[1], z_slice),
-                         position=(midpoint[0], midpoint[1], z_slice + camera_z_dist),
-                         view_up=(0., -1., 0.))
         png_file = '{}_tra_{:03d}.png'.format(prefix, z_slice)
-        window.record(scene, out_path=png_file, reset_camera=False, size=image_size)
+        plot_peak_slice(odf_4d, sphere, background_data, png_file, 2, z_slice, image_mask,
+                        tile_size, normalize_peaks)
         z_image.paste(Image.open(png_file), (0, slicenum * tile_size))
 
     # Render the sagittal slices
     x_image = Image.new('RGB', (tile_size, tile_size * n_cuts))
     for slicenum, x_slice in enumerate(slice_indices['x']):
-        image_actor.display_extent(x_slice, x_slice, 0, shape[1] - 1, 0, shape[2] - 1)
-        peak_actor.display_extent(x_slice, x_slice, 0, shape[1] - 1, 0, shape[2] - 1)
-        scene.set_camera(focal_point=(x_slice, midpoint[1], midpoint[2]),
-                         position=(x_slice - camera_x_dist, midpoint[1], midpoint[2]),
-                         view_up=(0., 0, 1))
         png_file = '{}_sag_{:03d}.png'.format(prefix, x_slice)
-        window.record(scene, out_path=png_file, reset_camera=False, size=image_size)
+        plot_peak_slice(odf_4d, sphere, background_data, png_file, 0, x_slice, image_mask,
+                        tile_size, normalize_peaks)
         x_image.paste(Image.open(png_file), (0, slicenum * tile_size))
 
     # Render the coronal slices
     y_image = Image.new('RGB', (tile_size, tile_size * n_cuts))
     for slicenum, y_slice in enumerate(slice_indices['y']):
-        image_actor.display_extent(0, shape[0] - 1, y_slice, y_slice, 0, shape[2] - 1)
-        peak_actor.display_extent(0, shape[0] - 1, y_slice, y_slice, 0, shape[2] - 1)
-        scene.set_camera(focal_point=(midpoint[0], y_slice, midpoint[2]),
-                         position=(midpoint[0], y_slice - camera_y_dist, midpoint[2]),
-                         view_up=(0., 0, 1))
         png_file = '{}_cor_{:03d}.png'.format(prefix, y_slice)
-        window.record(scene, out_path=png_file, reset_camera=False, size=image_size)
+        plot_peak_slice(odf_4d, sphere, background_data, png_file, 1, y_slice, image_mask,
+                        tile_size, normalize_peaks)
         y_image.paste(Image.open(png_file), (0, slicenum * tile_size))
 
-    scene.clear()
     final_image = Image.new('RGB', (tile_size * 3, tile_size * n_cuts))
     final_image.paste(z_image, (0, 0))
     final_image.paste(x_image, (tile_size, 0))
     final_image.paste(y_image, (tile_size * 2, 0))
     final_image.save(out_file)
-
-
-def get_camera_for_roi(roi_data, roi_id, view_axis):
-    voxel_coords = np.row_stack(np.nonzero(roi_data == roi_id))
-    centroid = voxel_coords.mean(1)
-    other_axes = [[1, 2], [0, 2], [0, 1]][view_axis]
-    projected_x = voxel_coords[other_axes[0]]
-    projected_y = voxel_coords[other_axes[1]]
-    xspan = projected_x.max() - projected_x.min()
-    yspan = projected_y.max() - projected_y.min()
-    camera_distance = max(xspan, yspan) * np.pi
-    return centroid, camera_distance
 
 
 def peaks_from_odfs(odf4d, sphere, relative_peak_threshold,
@@ -895,8 +896,20 @@ def peaks_from_odfs(odf4d, sphere, relative_peak_threshold,
     return peak_dirs, peak_values
 
 
+def get_camera_for_roi(roi_data, roi_id, view_axis):
+    voxel_coords = np.row_stack(np.nonzero(roi_data == roi_id))
+    centroid = voxel_coords.mean(1)
+    other_axes = [[1, 2], [0, 2], [0, 1]][view_axis]
+    projected_x = voxel_coords[other_axes[0]]
+    projected_y = voxel_coords[other_axes[1]]
+    xspan = projected_x.max() - projected_x.min()
+    yspan = projected_y.max() - projected_y.min()
+    camera_distance = max(xspan, yspan) * np.pi
+    return centroid, camera_distance
+
+
 def plot_an_odf_slice(odf_4d, full_sphere, background_data, tile_size, filename,
-                      centroid, axis, camera_distance):
+                      centroid, axis, camera_distance, subtract_iso, mask_image):
     from fury import actor, window
     view_up = [(0., 0., 1.), (0., 0., 1.), (0., -1., 0.)]
 
@@ -926,9 +939,11 @@ def plot_an_odf_slice(odf_4d, full_sphere, background_data, tile_size, filename,
 
     # Tile to get the whole ODF
     odf_slice = np.tile(odf_slice, (1, 1, 1, 2))
+    if subtract_iso:
+        odf_slice = odf_slice - odf_slice.min(3, keepdims=True)
     # Make graphics objects
     odf_actor = actor.odf_slicer(odf_slice, sphere=full_sphere,
-                                 colormap=None, scale=0.6)
+                                 colormap=None, scale=0.6, mask=mask_image)
     image_actor = actor.slicer(image_slice, opacity=0.6, interpolation='nearest')
     image_size = (tile_size, tile_size)
     scene = window.Scene()
@@ -943,6 +958,8 @@ def plot_an_odf_slice(odf_4d, full_sphere, background_data, tile_size, filename,
                      position=tuple(position),
                      view_up=view_up[axis])
     window.record(scene, out_path=filename, reset_camera=False, size=image_size)
+    scene.clear()
+
 
 def odf_roi_plot(odf_4d, halfsphere, background_data, out_file, roi_file,
                  prefix='odf', tile_size=1200, subtract_iso=False, mask=None):
@@ -955,7 +972,6 @@ def odf_roi_plot(odf_4d, halfsphere, background_data, out_file, roi_file,
 
     camera_distance = max(roi1_distance, roi2_distance, roi3_distance)
     # Make a slice mask to reduce memory
-    odf_mask = np.zeros(roi_data.shape)
     if mask is None:
         image_mask = np.ones(roi_data.shape)
     else:
@@ -963,27 +979,27 @@ def odf_roi_plot(odf_4d, halfsphere, background_data, out_file, roi_file,
 
     # Fill out the other half of the sphere
     odf_sphere = halfsphere.mirror()
-    if subtract_iso:
-        odf_4d = odf_4d - odf_4d.min(3, keepdims=True)
-
     semiovale_axial_file = '{}_semoivale_axial.png'.format(prefix)
     plot_an_odf_slice(odf_4d, odf_sphere, background_data, tile_size,
                       semiovale_axial_file, centroid=roi1_centroid, axis=2,
-                      camera_distance=camera_distance)
+                      camera_distance=camera_distance, subtract_iso=subtract_iso,
+                      mask_image=image_mask)
     roi_image.paste(Image.open(semiovale_axial_file), (0, 0))
 
     # Render the coronal slice with a double-crossing
     cst_x_cc_file = '{}_CSTxCC.png'.format(prefix)
     plot_an_odf_slice(odf_4d, odf_sphere, background_data, tile_size,
                       cst_x_cc_file, centroid=roi2_centroid, axis=1,
-                      camera_distance=camera_distance)
+                      camera_distance=camera_distance, subtract_iso=subtract_iso,
+                      mask_image=image_mask)
     roi_image.paste(Image.open(cst_x_cc_file), (tile_size, 0))
 
     # Render the corpus callosum
     cc_file = '{}_CC.png'.format(prefix)
     plot_an_odf_slice(odf_4d, odf_sphere, background_data, tile_size,
                       cc_file, centroid=roi3_centroid, axis=1,
-                      camera_distance=camera_distance)
+                      camera_distance=camera_distance, subtract_iso=subtract_iso,
+                      mask_image=image_mask)
     roi_image.paste(Image.open(cc_file), (2 * tile_size, 0))
 
     roi_image.save(out_file)
