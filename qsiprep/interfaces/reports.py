@@ -35,7 +35,7 @@ from .gradients import concatenate_bvals, concatenate_bvecs
 from .qc import createB0_ColorFA_Mask_Sprites, createSprite4D
 from .bids import get_bids_params
 from ..niworkflows.viz.utils import peak_slice_series, odf_roi_plot
-from .converters import fib2amps, mif2amps, peaks_from_odfs
+from .converters import fib2amps, mif2amps
 
 SUBJECT_TEMPLATE = """\t<ul class="elem-desc">
 \t\t<li>Subject ID: {subject_id}</li>
@@ -707,17 +707,19 @@ class ReconPeaksReport(SimpleInterface):
             background_data = odf_4d.mean(3)
         else:
             background_data = nb.load(self.inputs.background_image).get_fdata()
-        peak_directions, peak_values = peaks_from_odfs(odf_4d, sphere, 0.1, 15)
+
         peak_report = op.join(runtime.cwd, 'peak_report.png')
-        peak_slice_series(peak_directions, peak_values, background_data, peak_report,
-                          n_cuts=self._ncuts, padding=self._padding)
+        peak_slice_series(odf_4d, sphere, background_data, peak_report,
+                          n_cuts=self._ncuts, mask_image=self.inputs.mask_file,
+                          padding=self._padding)
         self._results['out_report'] = peak_report
 
         # Plot ODFs in interesting regions
         if isdefined(self.inputs.odf_rois):
             odf_report = op.join(runtime.cwd, 'odf_report.png')
             odf_roi_plot(odf_4d, sphere, background_data, odf_report, self.inputs.odf_rois,
-                         subtract_iso=self.inputs.subtract_iso)
+                         subtract_iso=self.inputs.subtract_iso,
+                         mask=self.inputs.mask_file)
             self._results['odf_report'] = odf_report
         return runtime
 

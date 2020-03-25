@@ -90,6 +90,7 @@ def init_mrtrix_csd_recon_wf(omp_nthreads, has_transform, name="mrtrix_recon",
     response = params.get('response', {})
     response_algorithm = response.get('algorithm', 'dhollander')
     response['algorithm'] = response_algorithm
+    response['nthreads'] = omp_nthreads
     if response_algorithm == 'csd':
         desc += 'Single-tissue '
     else:
@@ -110,6 +111,7 @@ FODs were estimated via constrained spherical deconvolution
     fod = params.get('fod', {})
     fod_algorithm = fod.get('algorithm', 'msmt_csd')
     fod['algorithm'] = fod_algorithm
+    fod['nthreads'] = omp_nthreads
     using_multitissue = fod_algorithm in ('ss3t', 'msmt_csd')
 
     # Intensity normalize?
@@ -163,6 +165,7 @@ A single-shell-optimized multi-tissue CSD was performed using MRtrix3Tissue
                                  ('b_file', 'b_file')]),
         (inputnode, plot_peaks, [('dwi_ref', 'background_image'),
                                  ('odf_rois', 'odf_rois')]),
+        (resample_mask, plot_peaks, [('out_file', 'mask_file')]),
         (plot_peaks, ds_report_peaks, [('out_report', 'in_file')]),
         (create_mif, estimate_response, [('mif_file', 'in_file')]),
         (estimate_response, outputnode, [('wm_file', 'wm_txt'),
@@ -407,9 +410,11 @@ def init_mrtrix_tractography_wf(omp_nthreads, has_transform, name="mrtrix_tracki
     resample_mask = pe.Node(
         afni.Resample(outputtype='NIFTI_GZ', resample_mode="NN"), name='resample_mask')
     tracking_params = params.get("tckgen", {})
+    tracking_params['nthreads'] = omp_nthreads
     use_sift2 = params.get("use_sift2", True)
     use_5tt = params.get("use_5tt", False)
     sift_params = params.get("sift2", {})
+    sift_params['nthreads'] = omp_nthreads
     tracking = pe.Node(TckGen(**tracking_params), name='tractography')
     workflow.connect([
         (inputnode, resample_mask, [('t1_brain_mask', 'in_file'),

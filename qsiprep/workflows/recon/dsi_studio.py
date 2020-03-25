@@ -100,6 +100,7 @@ distance of %02f.""" % romdd
         (gqi_recon, plot_peaks, [('output_fib', 'fib_file')]),
         (inputnode, plot_peaks, [('dwi_ref', 'background_image'),
                                  ('odf_rois', 'odf_rois')]),
+        (resample_mask, plot_peaks, [('out_file', 'mask_file')]),
         (plot_peaks, ds_report_peaks, [('out_report', 'in_file')])
     ])
 
