@@ -943,7 +943,7 @@ def plot_an_odf_slice(odf_4d, full_sphere, background_data, tile_size, filename,
         odf_slice = odf_slice - odf_slice.min(3, keepdims=True)
     # Make graphics objects
     odf_actor = actor.odf_slicer(odf_slice, sphere=full_sphere,
-                                 colormap=None, scale=0.6, mask=mask_image)
+                                 colormap=None, scale=0.6, mask=image_slice)
     image_actor = actor.slicer(image_slice, opacity=0.6, interpolation='nearest')
     image_size = (tile_size, tile_size)
     scene = window.Scene()
