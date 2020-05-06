@@ -56,7 +56,7 @@ class dMRIPlot(object):
                              ).astype(np.int)
             slice_nums, slice_counts = np.unique(masked_slices[mask], return_counts=True)
             self.qc_data = {
-                'slice_scores': slice_scores.T,
+                'slice_scores': slice_scores,
                 'slice_counts': slice_counts}
 
         self.confounds = confounds
