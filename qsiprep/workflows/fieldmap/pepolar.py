@@ -183,7 +183,7 @@ def init_prepare_dwi_epi_wf(omp_nthreads, orientation="LPS", name="prepare_epi_w
                                                        generate_report=False,
                                                        float=True,
                                                        interpolation='LanczosWindowedSinc'),
-                                name='unwarp_reference')
+                                name='resample_epi_fmap')
     workflow = Workflow(name=name)
 
     def _flatten(l):
