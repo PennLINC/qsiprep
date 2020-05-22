@@ -217,9 +217,7 @@ def get_parser():
         default=['T1w'],
         help='volume and surface spaces to resample dwis into\n'
         ' - T1w: subject anatomical volume\n'
-        ' - template: normalization target specified by --template\n'
-        'this argument can be single value or a space delimited list,\n'
-        'for example: --output-space T1w template')
+        ' - template: deprecated. Will be ignored\n')
     g_conf.add_argument(
         '--template',
         required=False,
@@ -722,14 +720,18 @@ def build_qsiprep_workflow(opts, retval):
 
     output_spaces = opts.output_space or []
 
-    force_spatial_normalization = opts.force_spatial_normalization
+    force_spatial_normalization = opts.force_spatial_normalization or \
+        'template' in output_spaces
+
+    if 'template' in output_spaces:
+        logger.warning("Using 'template' as an output space is no longer supported.")
+        output_spaces = ["T1w"]
+
     # Check output_space
-    if ('template' not in output_spaces and not force_spatial_normalization) \
-            and (opts.use_syn_sdc or opts.force_syn):
+    if not force_spatial_normalization and (opts.use_syn_sdc or opts.force_syn):
         msg = [
-            'SyN SDC correction requires T1 to MNI registration, but '
-            '"template" is not specified in "--output-space" arguments.',
-            'Option --use-syn will be cowardly dismissed.'
+            'SyN SDC correction requires T1 to MNI registration.',
+            'Adding T1w-based normalization'
         ]
         force_spatial_normalization = True
         logger.warning(' '.join(msg))
