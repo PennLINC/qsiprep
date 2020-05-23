@@ -183,7 +183,7 @@ def init_prepare_dwi_epi_wf(omp_nthreads, orientation="LPS", name="prepare_epi_w
                                                        generate_report=False,
                                                        float=True,
                                                        interpolation='LanczosWindowedSinc'),
-                                name='unwarp_reference')
+                                name='resample_epi_fmap')
     workflow = Workflow(name=name)
 
     def _flatten(l):
@@ -196,7 +196,7 @@ def init_prepare_dwi_epi_wf(omp_nthreads, orientation="LPS", name="prepare_epi_w
         (merge, enhance_b0, [('out_file', 'b0_file')]),
         (enhance_b0, fmap2ref_reg, [('enhanced_file', 'moving_image')]),
         (inputnode, fmap2ref_reg, [('ref_brain', 'fixed_image')]),
-        (fmap2ref_reg, resample_epi_fmap, [('forward_transforms', 'transforms')]),
+        (fmap2ref_reg, resample_epi_fmap, [('composite_transform', 'transforms')]),
         (enhance_b0, resample_epi_fmap, [('enhanced_file', 'input_image')]),
         (inputnode, resample_epi_fmap, [('ref_brain', 'reference_image')]),
         (resample_epi_fmap, outputnode, [('output_image', 'out_file')])

@@ -92,7 +92,7 @@ jobs:
   get_data:
     machine:
       # Ubuntu 16.04, docker 18.09.3, docker-compose 1.23.1
-      image: ubuntu-1604:201903-01
+      image: ubuntu-1604:202004-01
     working_directory: /home/circleci/data
     steps:
       - restore_cache:
@@ -266,7 +266,7 @@ jobs:
 
   DSCSDSI:
     machine:
-      image: ubuntu-1604:201903-01
+      image: ubuntu-1604:202004-01
     working_directory: /tmp/DSCSDSI
     environment:
       - FS_LICENSE: /tmp/fslicense/license.txt
@@ -384,7 +384,7 @@ jobs:
 
   DSDTI_TOPUP:
     machine:
-      image: ubuntu-1604:201903-01
+      image: ubuntu-1604:202004-01
     working_directory: /tmp/DSDTI
     environment:
       - FS_LICENSE: /tmp/fslicense/license.txt
@@ -475,7 +475,7 @@ jobs:
 
   AllFieldmaps:
     machine:
-      image: ubuntu-1604:201903-01
+      image: ubuntu-1604:202004-01
     working_directory: /tmp/DSDTI_fmap
     environment:
       - FS_LICENSE: /tmp/fslicense/license.txt
@@ -589,7 +589,7 @@ jobs:
 
   DSDTI_nofmap:
     machine:
-      image: ubuntu-1604:201903-01
+      image: ubuntu-1604:202004-01
     working_directory: /tmp/DSDTI
     environment:
       - FS_LICENSE: /tmp/fslicense/license.txt
@@ -720,7 +720,7 @@ jobs:
 
   IntramodalTemplate:
     machine:
-      image: ubuntu-1604:201903-01
+      image: ubuntu-1604:202004-01
     working_directory: /tmp/twoses
     environment:
       - FS_LICENSE: /tmp/fslicense/license.txt
@@ -810,7 +810,7 @@ jobs:
 
   ReconTests:
     machine:
-      image: ubuntu-1604:201903-01
+      image: ubuntu-1604:202004-01
     working_directory: /tmp/multishell_output
     environment:
       - FS_LICENSE: /tmp/fslicense/license.txt
@@ -1133,7 +1133,7 @@ jobs:
 
   deploy_pypi:
     machine:
-      image: ubuntu-1604:201903-01
+      image: ubuntu-1604:202004-01
     working_directory: /tmp/src/qsiprep
     steps:
       - checkout
