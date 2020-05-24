@@ -391,6 +391,7 @@ class ConformDwi(SimpleInterface):
     #. Orient image to requested orientation
     #. Validate the qform and sform, set qform code to 1
     #. Flip bvecs accordingly
+    #. Convert bvecs to world coordinates if image axis is oblique
     #. Do nothing to the bvals
 
     Note: This is not as nuanced as fmriprep's version
@@ -420,8 +421,9 @@ class ConformDwi(SimpleInterface):
         validated = validator.run()
         self._results['out_report'] = validated.outputs.out_report
         input_img = nb.load(validated.outputs.out_file)
-
-        input_axcodes = nb.aff2axcodes(input_img.affine)
+        image_affine = input_img.affine
+        bvec_array = np.loadtxt(bvec_fname)
+        input_axcodes = nb.aff2axcodes(image_affine)
         # Is the input image oriented how we want?
         new_axcodes = tuple(orientation)
 
@@ -433,29 +435,33 @@ class ConformDwi(SimpleInterface):
             transform_orientation = nb.orientations.ornt_transform(
                 input_orientation, desired_orientation)
             reoriented_img = input_img.as_reoriented(transform_orientation)
+            # Use the affine from this image to check obliquity
+            image_affine = reoriented_img.affine
             reoriented_img.to_filename(out_fname)
             self._results['dwi_file'] = out_fname
 
             # Flip the bvecs
             if os.path.exists(bvec_fname):
                 LOGGER.info('Reorienting %s to %s', bvec_fname, orientation)
-                bvec_array = np.loadtxt(bvec_fname)
                 if not bvec_array.shape[0] == transform_orientation.shape[0]:
                     raise ValueError("Unrecognized bvec format")
                 output_array = np.zeros_like(bvec_array)
                 for this_axnum, (axnum, flip) in enumerate(transform_orientation):
                     output_array[this_axnum] = bvec_array[int(axnum)] * flip
-                np.savetxt(out_bvec_fname, output_array, fmt="%.8f ")
-                self._results['bvec_file'] = out_bvec_fname
-                self._results['bval_file'] = bval_fname
-
+                bvec_array = output_array
         else:
             LOGGER.info("Not applying reorientation to %s: already in %s", fname, orientation)
             self._results['dwi_file'] = fname
-            if os.path.exists(bvec_fname):
-                self._results['bvec_file'] = bvec_fname
-                self._results['bval_file'] = bval_fname
 
+        obliquity = nb.affines.obliquity(image_affine)
+        if np.any(obliquity > 1e-4):
+            LOGGER.warning("Image %s is an oblique acquisition. Adjusting bvecs. "
+                           "Please check results for accuracy", fname)
+            # Get the rotations
+
+        np.savetxt(out_bvec_fname, output_array, fmt="%.8f ")
+        self._results['bvec_file'] = out_bvec_fname
+        self._results['bval_file'] = bval_fname
         return runtime
 
 
