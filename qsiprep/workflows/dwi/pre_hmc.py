@@ -192,7 +192,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
             (merge_minus, pm_noise_images, [
                 ('outputnode.noise_images', 'in2')]),
             (merge_minus, pm_denoising_confounds, [
-                ('outputnode.denoising_confounds', 'denoising_con')]),
+                ('outputnode.denoising_confounds', 'in2')]),
             (merge_minus, pm_validation, [
                 ('outputnode.validation_reports', 'in2')]),
 
@@ -210,7 +210,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
                 ('original_images', 'original_files'),
                 ('merged_denoising_confounds', 'denoising_confounds')]),
             (pm_validation, outputnode, [
-                ('validation_reports', 'validation_reports')]),
+                ('out', 'validation_reports')]),
             (pm_noise_images, outputnode, [
                 ('out', 'noise_images')]),
             (pm_bias, outputnode, [
