@@ -37,6 +37,87 @@ class MergeDWIsOutputSpec(TraitedSpec):
     merged_denoising_confounds = File(exists=True)
 
 
+def harmonize_b0s(dwi_files, bvals, b0_threshold, harmonize_b0s):
+    """Find the mean intensity of b=0 images in a dwi file and calculate corrections.
+
+    Parameters
+    ----------
+
+        dwi_files: list
+            List of paths to dwi Nifti files that will be concatenated
+        bvals: list
+            List of paths to bval files corresponding to the files in ``dwi_files``
+        b0_threshold: int
+            maximum b values for an image to be considered a b=0
+        harmonize_b0s: bool
+            Apply a correction to each image so that their mean b=0 images are equal
+
+    Returns
+    -------
+        to_concat: list
+            List of NiftiImage objects to be concatenated. May have been harmonized.
+            Same length as the input ``dwi_files``.
+        corrections: list
+            The correction that would be applied to each image to harmonize their b=0's.
+            Same length as the input ``dwi_files``.
+
+    """
+    # Load the dwi data and get the mean values from the b=0 images
+    num_dwis = len(dwi_files)
+    dwi_niis = []
+    b0_means = []
+    for dwi_file, bval_file in zip(dwi_files, bvals):
+        dwi_nii = load_img(dwi_file)
+        _bvals = np.loadtxt(bval_file)
+        b0_indices = np.flatnonzero(_bvals < b0_threshold)
+        if b0_indices.size == 0:
+            b0_mean = np.nan
+        else:
+            b0_mean = index_img(dwi_nii, b0_indices).get_fdata().mean()
+        b0_means.append(b0_mean)
+        dwi_niis.append(dwi_nii)
+
+    # Apply the b0 harmonization if requested
+    if harmonize_b0s:
+        b0_all_mean = np.nanmean(b0_means)
+        corrections = b0_all_mean / np.array(b0_means)
+        harmonized_niis = []
+        for nii_img, correction in zip(dwi_niis, corrections):
+            if np.isnan(b0_mean):
+                harmonized_niis.append(nii_img)
+                LOGGER.warning('An image has no b=0 images and cannot be harmonized')
+            else:
+                harmonized_niis.append(math_img('img*%.32f' % correction, img=nii_img))
+        to_concat = harmonized_niis
+    else:
+        to_concat = dwi_niis
+        corrections = np.ones(num_dwis)
+
+    return to_concat, b0_means, corrections
+
+
+def create_provenance_dataframe(bids_sources, harmonized_niis, b0_means,
+                                harmonization_corrections):
+    series_confounds = []
+    nvols_per_image = [get_nvols(img) for img in harmonized_niis]
+    if not np.sum(nvols_per_image) == len(bids_sources):
+        raise Exception("Mismatch in number of images and BIDS sources")
+
+    for correction, harmonized_nii, b0_mean, nvols in zip(harmonization_corrections,
+                                                          harmonized_niis,
+                                                          b0_means,
+                                                          nvols_per_image):
+        series_confounds.append(
+            pd.DataFrame({
+                "image_mean": [img.get_fdata().mean() for img in iter_img(harmonized_nii)],
+                "series_b0_mean": [b0_mean] * nvols,
+                "series_b0_correction": [correction] * nvols}))
+
+    image_df = pd.concat(series_confounds, axis=0, ignore_index=True)
+    image_df['original_file'] = bids_sources
+    return image_df
+
+
 class MergeDWIs(SimpleInterface):
     input_spec = MergeDWIsInputSpec
     output_spec = MergeDWIsOutputSpec
@@ -46,62 +127,32 @@ class MergeDWIs(SimpleInterface):
         bvecs = self.inputs.bvec_files
         num_dwis = len(self.inputs.dwi_files)
 
-        # Load the dwi data and get the mean values from the b=0 images
-        dwi_niis = []
-        b0_means = []
-        for dwi_file, bval_file in zip(self.inputs.dwi_files, bvals):
-            dwi_nii = load_img(dwi_file)
-            _bvals = np.loadtxt(bval_file)
-            b0_indices = np.flatnonzero(_bvals < self.inputs.b0_threshold)
-            if b0_indices.size == 0:
-                b0_mean = np.nan
-            else:
-                b0_mean = index_img(dwi_nii, b0_indices).get_fdata().mean()
-            b0_means.append(b0_mean)
-            dwi_niis.append(dwi_nii)
-
-        # Apply the b0 harmonization if requested
-        if self.inputs.harmonize_b0_intensities:
-            b0_all_mean = np.nanmean(b0_means)
-            corrections = b0_all_mean / np.array(b0_means)
-            harmonized_niis = []
-            for nii_img, correction in zip(dwi_niis, corrections):
-                if np.isnan(b0_mean):
-                    harmonized_niis.append(nii_img)
-                    LOGGER.warning('An image has no b=0 images and cannot be harmonized')
-                else:
-                    harmonized_niis.append(math_img('img*%.32f' % correction, img=nii_img))
-            to_concat = harmonized_niis
-        else:
-            to_concat = dwi_niis
-            corrections = np.ones(num_dwis)
+        to_concat, b0_means, corrections = harmonize_b0s(self.inputs.dwi_files,
+                                                         bvals,
+                                                         self.inputs.b0_threshold,
+                                                         self.inputs.harmonize_b0_intensities)
 
         # Get basic qc / provenance per volume
-        sources = self.inputs.bids_dwi_files
-        series_confounds = []
-        for bids_source, b0_mean, correction, nii, bval, bvec in zip(
-                sources, b0_means, corrections, dwi_niis, bvals, bvecs):
-            nvols = get_nvols(bids_source)
-            bx, by, bz = np.loadtxt(bvec)
-            series_confounds.append(
-                pd.DataFrame({
-                    "original_file": [bids_source] * nvols,
-                    "original_bval": np.loadtxt(bval),
-                    "image_mean": [img.get_fdata().mean() for img in iter_img(nii)],
-                    "original_bx": bx,
-                    "original_by": by,
-                    "original_bz": bz,
-                    "series_b0_mean": [b0_mean] * nvols,
-                    "series_b0_correction": [correction] * nvols}))
-        image_df = pd.concat(series_confounds, axis=0, ignore_index=True)
+        provenance_df = create_provenance_dataframe(self.inputs.bids_dwi_files,
+                                                    to_concat,
+                                                    b0_means,
+                                                    corrections)
 
         # Collect the confounds
         if isdefined(self.inputs.denoising_confounds):
             confounds = [pd.read_csv(fname) for fname in self.inputs.denoising_confounds]
             _confounds_df = pd.concat(confounds, axis=0, ignore_index=True)
-            confounds_df = pd.concat([image_df, _confounds_df], axis=1, ignore_index=False)
+            confounds_df = pd.concat([provenance_df, _confounds_df], axis=1, ignore_index=False)
         else:
-            confounds_df = image_df
+            confounds_df = provenance_df
+
+        # Load the gradient information
+        all_bvals = combined_bval_array(self.inputs.bval_files)
+        all_bvecs = combined_bvec_array(self.inputs.bvec_files)
+        confounds_df['original_bval'] = all_bvals
+        confounds_df['original_bx'] = all_bvecs[0]
+        confounds_df['original_by'] = all_bvecs[1]
+        confounds_df['original_bz'] = all_bvecs[2]
 
         # Concatenate the gradient information
         if num_dwis > 1:
@@ -117,6 +168,7 @@ class MergeDWIs(SimpleInterface):
             merged_fname = self.inputs.dwi_files[0]
             out_bval = bvals[0]
             out_bvec = bvecs[0]
+
         merged_confounds = fname_presuffix(merged_fname, suffix="_confounds.csv", use_ext=False,
                                            newpath=runtime.cwd)
         confounds_df = confounds_df.drop('Unnamed: 0', axis=1, errors='ignore')
@@ -169,22 +221,30 @@ class StackConfounds(SimpleInterface):
         return runtime
 
 
+def combined_bval_array(bval_files):
+    collected_vals = []
+    for bval_file in bval_files:
+        collected_vals.append(np.atleast_1d(np.loadtxt(bval_file)))
+    return np.concatenate(collected_vals)
+
+
 def combine_bvals(bvals, output_file="restacked.bval"):
     """Load, merge and save fsl-style bvals files."""
-    collected_vals = []
-    for bval_file in bvals:
-        collected_vals.append(np.atleast_1d(np.loadtxt(bval_file)))
-    final_bvals = np.concatenate(collected_vals)
+    final_bvals = combined_bval_array(bvals)
     np.savetxt(output_file, final_bvals, fmt=str("%i"))
     return op.abspath(output_file)
 
 
+def combined_bvec_array(bvec_files):
+    collected_vecs = []
+    for bvec_file in bvec_files:
+        collected_vecs.append(np.loadtxt(bvec_file))
+    return np.column_stack(collected_vecs)
+
+
 def combine_bvecs(bvecs, output_file="restacked.bvec"):
     """Load, merge and save fsl-style bvecs files."""
-    collected_vecs = []
-    for bvec_file in bvecs:
-        collected_vecs.append(np.loadtxt(bvec_file))
-    final_bvecs = np.column_stack(collected_vecs)
+    final_bvecs = combined_bvec_array(bvecs)
     np.savetxt(output_file, final_bvecs, fmt=str("%.8f"))
     return op.abspath(output_file)
 
