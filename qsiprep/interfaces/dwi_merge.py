@@ -100,8 +100,15 @@ def create_provenance_dataframe(bids_sources, harmonized_niis, b0_means,
                                 harmonization_corrections):
     series_confounds = []
     nvols_per_image = [get_nvols(img) for img in harmonized_niis]
-    if not np.sum(nvols_per_image) == len(bids_sources):
-        raise Exception("Mismatch in number of images and BIDS sources")
+    total_vols = np.sum(nvols_per_image)
+    # Check whether the bids sources are per file or per volume
+    if not len(bids_sources) == total_vols:
+        images_per_volume = []
+        for source_image, img_nvols in zip(bids_sources, nvols_per_image):
+            images_per_volume.extend([source_image] * img_nvols)
+        if not len(images_per_volume) == total_vols:
+            raise Exception("Mismatch in number of images and BIDS sources")
+        bids_sources = images_per_volume
 
     for correction, harmonized_nii, b0_mean, nvols in zip(harmonization_corrections,
                                                           harmonized_niis,
@@ -153,6 +160,7 @@ class MergeDWIs(SimpleInterface):
         confounds_df['original_bx'] = all_bvecs[0]
         confounds_df['original_by'] = all_bvecs[1]
         confounds_df['original_bz'] = all_bvecs[2]
+        confounds_df = confounds_df.loc[:,~confounds_df.columns.duplicated()]
 
         # Concatenate the gradient information
         if num_dwis > 1:
@@ -251,7 +259,7 @@ def combine_bvecs(bvecs, output_file="restacked.bvec"):
 
 def get_nvols(img):
     """Returns the number of volumes in a 3/4D nifti file."""
-    shape = nb.load(img).shape
+    shape = img.shape
     if len(shape) < 4:
         return 1
     return shape[3]
