@@ -1041,7 +1041,7 @@ def get_evenly_spaced_b0s(b0_indices, max_per_spec):
 
 
 def add_epi_fmaps_to_dwi_b0s(epi_fmaps, b0_threshold, max_per_spec, dwi_spec_lines, dwi_imain):
-    """Add additional images from EPI fieldmaps or distortion correction.
+    """Add additional images from EPI fieldmaps for distortion correction.
 
     In order to fill out the maximum number of images per distortion group, images
     from files in the fmap/ directory can be added to those already extracted from the
@@ -1092,7 +1092,7 @@ def add_epi_fmaps_to_dwi_b0s(epi_fmaps, b0_threshold, max_per_spec, dwi_spec_lin
 
 
 def eddy_inputs_from_dwi_files(origin_file_list, eddy_prefix):
-    unique_files = list(set(origin_file_list))
+    unique_files = sorted(set(origin_file_list))
     line_lookup = {}
     acqp_data = []
     for line_num, unique_dwi in enumerate(unique_files):
