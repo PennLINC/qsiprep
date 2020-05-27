@@ -937,15 +937,18 @@ def get_concatenated_bids_name(dwi_group):
 
 
 def _get_common_bids_fields(fnames):
-    bids_keys = defaultdict(list)
+    bids_keys = defaultdict(set)
     for fname in fnames:
         basename = split_filename(fname)[1]
-        for key, value in [token.split("-") for token in basename.split("_")]:
-            bids_keys[key].append(value)
+        for token in basename.split("_"):
+            parts = token.split("-")
+            if len(parts) == 2:
+                key, value = parts
+                bids_keys[key].update((value,))
 
     # Find all the keys with a single unique value
     common_bids = []
     for key in ['sub', 'ses', 'acq', 'dir', 'run']:
         if len(bids_keys[key]) == 1:
-            common_bids.append(key + bids_keys[key][0])
+            common_bids.append(key + "-" + bids_keys[key].pop())
     return "_".join(common_bids)
