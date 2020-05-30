@@ -11,7 +11,7 @@ from nipype import logging
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
 
-from ...interfaces.images import ConcatRPESplits
+from ...interfaces.dwi_merge import MergeDWIs
 from ...engine import Workflow
 
 # dwi workflows
@@ -145,38 +145,79 @@ def init_dwi_pre_hmc_wf(scan_groups,
                                                 name="merge_minus")
 
         # Combine the original images from the splits into one 4D series + bvals/bvecs
-        concat_rpe_splits = pe.Node(ConcatRPESplits(), name="concat_rpe_splits")
+        pm_validation = pe.Node(niu.Merge(2), name='pm_validation')
+        pm_dwis = pe.Node(niu.Merge(2), name='pm_dwis')
+        pm_bids_dwis = pe.Node(niu.Merge(2), name='pm_bids_dwis')
+        pm_bvals = pe.Node(niu.Merge(2), name='pm_bvals')
+        pm_bvecs = pe.Node(niu.Merge(2), name='pm_bvecs')
+        pm_bias = pe.Node(niu.Merge(2), name='pm_bias')
+        pm_noise_images = pe.Node(niu.Merge(2), name='pm_noise')
+        pm_denoising_confounds = pe.Node(niu.Merge(2), name='pm_denoising_confounds')
+        rpe_concat = pe.Node(
+            MergeDWIs(harmonize_b0_intensities=not no_b0_harmonization,
+                      b0_threshold=b0_threshold),
+            name='rpe_concat')
         qc_wf = init_modelfree_qc_wf(dwi_files=plus_files + minus_files)
 
         workflow.connect([
-            # Merge, denoise, combine
-            (merge_plus, concat_rpe_splits, [
-                ('outputnode.merged_image', 'dwi_plus'),
-                ('outputnode.merged_bval', 'bval_plus'),
-                ('outputnode.merged_bvec', 'bvec_plus'),
-                ('outputnode.bias_images', 'bias_images_plus'),
-                ('outputnode.noise_images', 'noise_images_plus'),
-                ('outputnode.denoising_confounds', 'denoising_confounds_plus')]),
-            (merge_minus, concat_rpe_splits, [
-                ('outputnode.merged_image', 'dwi_minus'),
-                ('outputnode.merged_bval', 'bval_minus'),
-                ('outputnode.merged_bvec', 'bvec_minus'),
-                ('outputnode.bias_images', 'bias_images_minus'),
-                ('outputnode.noise_images', 'noise_images_minus'),
-                ('outputnode.denoising_confounds', 'denoising_confounds_minus')]),
+            # combine PE+
+            (merge_plus, pm_dwis, [
+                ('outputnode.merged_image', 'in1')]),
+            (merge_plus, pm_bids_dwis, [
+                ('outputnode.original_files', 'in1')]),
+            (merge_plus, pm_bvals, [
+                ('outputnode.merged_bval', 'in1')]),
+            (merge_plus, pm_bvecs, [
+                ('outputnode.merged_bvec', 'in1')]),
+            (merge_plus, pm_bias, [
+                ('outputnode.bias_images', 'in1')]),
+            (merge_plus, pm_noise_images, [
+                ('outputnode.noise_images', 'in1')]),
+            (merge_plus, pm_denoising_confounds, [
+                ('outputnode.denoising_confounds', 'in1')]),
+            (merge_plus, pm_validation, [
+                ('outputnode.validation_reports', 'in1')]),
+
+            # combine PE-
+            (merge_minus, pm_dwis, [
+                ('outputnode.merged_image', 'in2')]),
+            (merge_minus, pm_bids_dwis, [
+                ('outputnode.original_files', 'in2')]),
+            (merge_minus, pm_bvals, [
+                ('outputnode.merged_bval', 'in2')]),
+            (merge_minus, pm_bvecs, [
+                ('outputnode.merged_bvec', 'in2')]),
+            (merge_minus, pm_bias, [
+                ('outputnode.bias_images', 'in2')]),
+            (merge_minus, pm_noise_images, [
+                ('outputnode.noise_images', 'in2')]),
+            (merge_minus, pm_denoising_confounds, [
+                ('outputnode.denoising_confounds', 'in2')]),
+            (merge_minus, pm_validation, [
+                ('outputnode.validation_reports', 'in2')]),
+
+            (pm_dwis, rpe_concat, [('out', 'dwi_files')]),
+            (pm_bids_dwis, rpe_concat, [('out', 'bids_dwi_files')]),
+            (pm_bvals, rpe_concat, [('out', 'bval_files')]),
+            (pm_bvecs, rpe_concat, [('out', 'bvec_files')]),
+            (pm_denoising_confounds, rpe_concat, [('out', 'denoising_confounds')]),
+
             # Connect to the outputnode
-            (concat_rpe_splits, outputnode, [
-                ('dwi_file', 'dwi_file'),
-                ('bval_file', 'bval_file'),
-                ('bvec_file', 'bvec_file'),
-                ('original_files', 'original_files'),
-                ('denoising_confounds', 'denoising_confounds'),
-                ('validation_reports', 'validation_reports'),
-                ('noise_images', 'noise_images'),
-                ('bias_images', 'bias_images')]),
-            (concat_rpe_splits, qc_wf, [
-                ('bval_file', 'inputnode.bval_file'),
-                ('bvec_file', 'inputnode.bvec_file')]),
+            (rpe_concat, outputnode, [
+                ('out_dwi', 'dwi_file'),
+                ('out_bval', 'bval_file'),
+                ('out_bvec', 'bvec_file'),
+                ('original_images', 'original_files'),
+                ('merged_denoising_confounds', 'denoising_confounds')]),
+            (pm_validation, outputnode, [
+                ('out', 'validation_reports')]),
+            (pm_noise_images, outputnode, [
+                ('out', 'noise_images')]),
+            (pm_bias, outputnode, [
+                ('out', 'bias_images')]),
+            (rpe_concat, qc_wf, [
+                ('out_bval', 'inputnode.bval_file'),
+                ('out_bvec', 'inputnode.bvec_file')]),
             (qc_wf, outputnode, [('outputnode.qc_summary', 'qc_file')])])
         workflow.__postdesc__ = "Both groups were then merged into a single file, as required " \
                                 "for the FSL workflows. "

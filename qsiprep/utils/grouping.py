@@ -922,13 +922,7 @@ def get_concatenated_bids_name(dwi_group):
     """
     # If a single file, use its name, otherwise use the common prefix
     if len(dwi_group) > 1:
-        no_runs = []
-        for dwi in dwi_group:
-            no_runs.append(
-                "_".join([part for part in dwi.split("_")
-                          if not part.startswith("run")]))
-        input_fname = os.path.commonprefix(no_runs)
-        fname = split_filename(input_fname)[1]
+        fname = _get_common_bids_fields(dwi_group)
         parts = fname.split('_')
         full_parts = [part for part in parts if not part.endswith('-')]
         fname = '_'.join(full_parts)
@@ -940,3 +934,21 @@ def get_concatenated_bids_name(dwi_group):
         fname = fname[:-4]
 
     return fname.replace(".", "").replace(" ", "")
+
+
+def _get_common_bids_fields(fnames):
+    bids_keys = defaultdict(set)
+    for fname in fnames:
+        basename = split_filename(fname)[1]
+        for token in basename.split("_"):
+            parts = token.split("-")
+            if len(parts) == 2:
+                key, value = parts
+                bids_keys[key].update((value,))
+
+    # Find all the keys with a single unique value
+    common_bids = []
+    for key in ['sub', 'ses', 'acq', 'dir', 'run']:
+        if len(bids_keys[key]) == 1:
+            common_bids.append(key + "-" + bids_keys[key].pop())
+    return "_".join(common_bids)
