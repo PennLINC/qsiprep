@@ -33,6 +33,7 @@ from .anatomical import init_anat_preproc_wf
 from .dwi.base import init_dwi_preproc_wf
 from .dwi.finalize import init_dwi_finalize_wf
 from .dwi.intramodal_template import init_intramodal_template_wf
+from .dwi.distortion_group_merge import init_distortion_group_merge_wf
 from .dwi.util import get_source_file
 
 
@@ -43,11 +44,12 @@ def init_qsiprep_wf(
         subject_list, run_uuid, work_dir, output_dir, bids_dir, ignore, debug, low_mem, anat_only,
         longitudinal, b0_threshold, hires, denoise_before_combining, dwi_denoise_window,
         unringing_method, dwi_no_biascorr, no_b0_harmonization, output_resolution,
-        combine_all_dwis, omp_nthreads, force_spatial_normalization, skull_strip_template,
-        skull_strip_fixed_seed, freesurfer, hmc_model, impute_slice_threshold, hmc_transform,
-        shoreline_iters, eddy_config, write_local_bvecs, output_spaces, template, motion_corr_to,
-        b0_to_t1w_transform, intramodal_template_iters, intramodal_template_transform,
-        prefer_dedicated_fmaps, fmap_bspline, fmap_demean, use_syn, force_syn):
+        combine_all_dwis, distortion_group_merge, omp_nthreads, force_spatial_normalization,
+        skull_strip_template, skull_strip_fixed_seed, freesurfer, hmc_model,
+        impute_slice_threshold, hmc_transform, shoreline_iters, eddy_config, write_local_bvecs,
+        output_spaces, template, motion_corr_to, b0_to_t1w_transform, intramodal_template_iters,
+        intramodal_template_transform, prefer_dedicated_fmaps, fmap_bspline, fmap_demean, use_syn,
+        force_syn):
     """
     This workflow organizes the execution of qsiprep, with a sub-workflow for
     each subject.
@@ -78,6 +80,7 @@ def init_qsiprep_wf(
                               dwi_no_biascorr=False,
                               no_b0_harmonization=False,
                               combine_all_dwis=True,
+                              distortion_group_merge='concat',
                               omp_nthreads=1,
                               output_resolution=2.0,
                               hmc_model='3dSHORE',
@@ -140,6 +143,9 @@ def init_qsiprep_wf(
             'run ``dwidenoise`` before combining dwis. Requires ``combine_all_dwis``'
         combine_all_dwis : bool
             Combine all dwi sequences within a session into a single data set
+        distortion_group_merge : str
+            How to combine multiple distortion groups after correction. 'concat', 'average' or
+            'none'
         omp_nthreads : int
             Maximum number of threads an individual process may use
         skull_strip_template : str
@@ -231,6 +237,7 @@ def init_qsiprep_wf(
             freesurfer=freesurfer,
             hires=hires,
             combine_all_dwis=combine_all_dwis,
+            distortion_group_merge=distortion_group_merge,
             omp_nthreads=omp_nthreads,
             skull_strip_template=skull_strip_template,
             skull_strip_fixed_seed=skull_strip_fixed_seed,
@@ -269,11 +276,12 @@ def init_single_subject_wf(
         subject_id, name, reportlets_dir, output_dir, bids_dir, ignore, debug, write_local_bvecs,
         low_mem, anat_only, longitudinal, b0_threshold, denoise_before_combining,
         dwi_denoise_window, unringing_method, dwi_no_biascorr, no_b0_harmonization,
-        combine_all_dwis, omp_nthreads, skull_strip_template, force_spatial_normalization,
-        skull_strip_fixed_seed, freesurfer, hires, output_spaces, template, output_resolution,
-        prefer_dedicated_fmaps, motion_corr_to, b0_to_t1w_transform, intramodal_template_iters,
-        intramodal_template_transform, hmc_model, hmc_transform, shoreline_iters, eddy_config,
-        impute_slice_threshold, fmap_bspline, fmap_demean, use_syn, force_syn):
+        combine_all_dwis, distortion_group_merge, omp_nthreads, skull_strip_template,
+        force_spatial_normalization, skull_strip_fixed_seed, freesurfer, hires, output_spaces,
+        template, output_resolution, prefer_dedicated_fmaps, motion_corr_to, b0_to_t1w_transform,
+        intramodal_template_iters, intramodal_template_transform, hmc_model, hmc_transform,
+        shoreline_iters, eddy_config, impute_slice_threshold, fmap_bspline, fmap_demean, use_syn,
+        force_syn):
     """
     This workflow organizes the preprocessing pipeline for a single subject.
     It collects and reports information about the subject, and prepares
@@ -312,10 +320,11 @@ def init_single_subject_wf(
             hires=False,
             force_spatial_normalization=True,
             combine_all_dwis=True,
+            distortion_group_merge='none',
             omp_nthreads=1,
             skull_strip_template='OASIS',
             skull_strip_fixed_seed=False,
-            output_spaces=['T1w', 'template'],
+            output_spaces=['T1w'],
             template='MNI152NLin2009cAsym',
             prefer_dedicated_fmaps=False,
             motion_corr_to='iterative',
@@ -365,6 +374,9 @@ def init_single_subject_wf(
             'run ``dwidenoise`` before combining dwis. Requires ``combine_all_dwis``'
         combine_all_dwis : Bool
             Combine all dwi sequences within a session into a single data set
+        distortion_group_merge: str
+            How to combine preprocessed scans from different distortion groups. 'concat',
+            'average' or 'none'
         omp_nthreads : int
             Maximum number of threads an individual process may use
         skull_strip_template : str
@@ -390,7 +402,6 @@ def init_single_subject_wf(
             Valid spaces:
 
              - T1w
-             - template
 
         template : str
             Name of template targeted by ``template`` output space
@@ -478,6 +489,8 @@ to workflows in *qsiprep*'s documentation]\
 ### References
 
 """.format(nilearn_ver=nilearn_ver)
+
+    merging_distortion_groups = not distortion_group_merge.lower() == 'none'
 
     inputnode = pe.Node(
         niu.IdentityInterface(fields=['subjects_dir']), name='inputnode')
@@ -585,6 +598,15 @@ to workflows in *qsiprep*'s documentation]\
         inputs_list=sorted(outputs_to_files.keys()),
         name="intramodal_template_wf")
 
+    merge_distortion_groups_wf = init_distortion_group_merge_wf(
+        merging_strategy=distortion_group_merge,
+        hmc_model=hmc_model,
+        inputs_list=sorted(outputs_to_files.keys()),
+        omp_nthreads=omp_nthreads,
+        reportlets_dir=reportlets_dir,
+        name="merge_distortion_groups_wf"
+    )
+
     if make_intramodal_template:
         workflow.connect([
             (anat_preproc_wf, intramodal_template_wf, [
@@ -661,8 +683,8 @@ to workflows in *qsiprep*'s documentation]\
             use_syn=use_syn,
             low_mem=low_mem,
             make_intramodal_template=make_intramodal_template,
-            source_file=source_file
-        )
+            source_file=source_file,
+            write_derivatives=not merging_distortion_groups)
 
         workflow.connect([
             (
@@ -754,6 +776,30 @@ to workflows in *qsiprep*'s documentation]\
                      'inputnode.intramodal_template_to_t1_warp'),
                     ('outputnode.intramodal_template',
                      'inputnode.intramodal_template')])
+            ])
+
+        if merging_distortion_groups:
+            image_name = 'inputnode.{name}_image'.format(
+                name=output_fname.replace('-', '_'))
+            raw_concatenated_image_name = 'inputnode.{name}_raw_concatenated_image'.format(
+                name=output_fname.replace('-', '_'))
+            bval_name = 'inputnode.{name}_bval'.format(
+                name=output_fname.replace('-', '_'))
+            bvec_name = 'inputnode.{name}_bvec'.format(
+                name=output_fname.replace('-', '_'))
+            original_bvec_name = 'inputnode.{name}_original_bvec'.format(
+                name=output_fname.replace('-', '_'))
+            original_bids_name = 'inputnode.{name}_original_image'.format(
+                name=output_fname.replace('-', '_'))
+            workflow.connect([
+                (dwi_finalize_wf, merge_distortion_groups_wf, [
+                    ('outputnode.bvals_t1', bval_name),
+                    ('outputnode.bvecs_t1', bvec_name),
+                    ('outputnode.dwi_t1', image_name)]),
+                (dwi_preproc_wf, merge_distortion_groups_wf, [
+                    ('outputnode.raw_concatenated', raw_concatenated_image_name),
+                    ('outputnode.original_bvecs', original_bvec_name),
+                    ('outputnode.original_files', original_bids_name)])
             ])
 
     return workflow

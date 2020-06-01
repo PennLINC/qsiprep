@@ -7,7 +7,6 @@ from nipype.interfaces.base import (BaseInterfaceInputSpec, TraitedSpec, File, S
                                     InputMultiObject, traits, isdefined)
 from nipype.utils.filemanip import fname_presuffix
 from nipype import logging
-import nibabel as nb
 from ..workflows.dwi.util import _get_concatenated_bids_name
 LOGGER = logging.getLogger('nipype.workflow')
 
@@ -26,6 +25,8 @@ class MergeDWIsInputSpec(BaseInterfaceInputSpec):
         File(exists=True, desc='list of confound files associated with each input dwi'))
     harmonize_b0_intensities = traits.Bool(True, usedefault=True,
                                            desc='Force scans to have the same mean b=0 intensity')
+    raw_concatenated_files = InputMultiObject(
+        File(), mandatory=True, desc='list of raw concatenated images')
 
 
 class MergeDWIsOutputSpec(TraitedSpec):
@@ -35,6 +36,163 @@ class MergeDWIsOutputSpec(TraitedSpec):
     original_images = traits.List()
     merged_metadata = traits.Dict()
     merged_denoising_confounds = File(exists=True)
+
+
+class MergeDWIs(SimpleInterface):
+    input_spec = MergeDWIsInputSpec
+    output_spec = MergeDWIsOutputSpec
+
+    def _run_interface(self, runtime):
+        bvals = self.inputs.bval_files
+        bvecs = self.inputs.bvec_files
+        num_dwis = len(self.inputs.dwi_files)
+
+        to_concat, b0_means, corrections = harmonize_b0s(self.inputs.dwi_files,
+                                                         bvals,
+                                                         self.inputs.b0_threshold,
+                                                         self.inputs.harmonize_b0_intensities)
+
+        # Get basic qc / provenance per volume
+        provenance_df = create_provenance_dataframe(self.inputs.bids_dwi_files,
+                                                    to_concat,
+                                                    b0_means,
+                                                    corrections)
+
+        # Collect the confounds
+        if isdefined(self.inputs.denoising_confounds):
+            confounds = [pd.read_csv(fname) for fname in self.inputs.denoising_confounds]
+            _confounds_df = pd.concat(confounds, axis=0, ignore_index=True)
+            confounds_df = pd.concat([provenance_df, _confounds_df], axis=1, ignore_index=False)
+        else:
+            confounds_df = provenance_df
+
+        # Load the gradient information
+        all_bvals = combined_bval_array(self.inputs.bval_files)
+        all_bvecs = combined_bvec_array(self.inputs.bvec_files)
+        confounds_df['original_bval'] = all_bvals
+        confounds_df['original_bx'] = all_bvecs[0]
+        confounds_df['original_by'] = all_bvecs[1]
+        confounds_df['original_bz'] = all_bvecs[2]
+        confounds_df = confounds_df.loc[:,~confounds_df.columns.duplicated()]
+
+        # Concatenate the gradient information
+        if num_dwis > 1:
+            merged_output = _get_concatenated_bids_name(
+                {'dwi_series': self.inputs.dwi_files,
+                 'fieldmap_info': {'suffix': None}})
+            merged_fname = op.join(runtime.cwd, merged_output + "_merged.nii.gz")
+            out_bval = fname_presuffix(merged_fname, suffix=".bval", use_ext=False,
+                                       newpath=runtime.cwd)
+            out_bvec = fname_presuffix(merged_fname, suffix=".bvec", use_ext=False,
+                                       newpath=runtime.cwd)
+        else:
+            merged_fname = self.inputs.dwi_files[0]
+            out_bval = bvals[0]
+            out_bvec = bvecs[0]
+
+        merged_confounds = fname_presuffix(merged_fname, suffix="_confounds.csv", use_ext=False,
+                                           newpath=runtime.cwd)
+        confounds_df = confounds_df.drop('Unnamed: 0', axis=1, errors='ignore')
+        confounds_df.to_csv(merged_confounds, index=False)
+
+        self._results['merged_denoising_confounds'] = merged_confounds
+        self._results['original_images'] = confounds_df['original_file'].tolist()
+        self._results['out_dwi'] = merged_fname
+        self._results['out_bval'] = out_bval
+        self._results['out_bvec'] = out_bvec
+
+        if num_dwis == 1:
+            return runtime
+
+        # Write the merged gradients
+        combine_bvals(bvals, output_file=out_bval)
+        combine_bvecs(bvecs, output_file=out_bvec)
+        # Concatenate into a single file
+        merged_nii = concat_imgs(to_concat, auto_resample=True)
+        # Remove any negative values introduced during interpolation (if it occurrs)
+        pos_merged_nii = math_img('np.clip(img, 0, None)', img=merged_nii)
+        pos_merged_nii.to_filename(merged_fname)
+
+        return runtime
+
+
+class AveragePEPairsInputSpec(MergeDWIsInputSpec):
+    original_bvec_files = InputMultiObject(
+        File(exists=True), mandatory=True, desc='list of original bvec files')
+
+
+class AveragePEPairsOutputSpec(MergeDWIsOutputSpec):
+    pass
+
+
+class AveragePEPairs(SimpleInterface):
+    input_spec = AveragePEPairsInputSpec
+    output_spec = AveragePEPairsOutputSpec
+
+    def _run_interface(self, runtime):
+        return runtime
+
+
+class StackConfoundsInputSpec(BaseInterfaceInputSpec):
+    in_files = InputMultiObject(File(exists=True), mandatory=True)
+    axis = traits.Enum(0, 1, default=0, usedefault=True)
+    out_file = File()
+
+
+class StackConfoundsOutputSpec(TraitedSpec):
+    confounds_file = File(desc='the stacked confound data')
+
+
+class StackConfounds(SimpleInterface):
+    input_spec = StackConfoundsInputSpec
+    output_spec = StackConfoundsOutputSpec
+
+    def _run_interface(self, runtime):
+        if not self.inputs.in_files:
+            return runtime
+        dfs = [pd.read_csv(fname) for fname in self.inputs.in_files]
+        stacked = pd.concat(dfs, axis=self.inputs.axis, ignore_index=self.inputs.axis == 0)
+        out_file = op.join(runtime.cwd, 'confounds.csv')
+        stacked = stacked.drop('Unnamed: 0', axis=1, errors='ignore')
+        stacked.to_csv(out_file)
+        self._results['confounds_file'] = out_file
+        return runtime
+
+
+def combined_bval_array(bval_files):
+    collected_vals = []
+    for bval_file in bval_files:
+        collected_vals.append(np.atleast_1d(np.loadtxt(bval_file)))
+    return np.concatenate(collected_vals)
+
+
+def combine_bvals(bvals, output_file="restacked.bval"):
+    """Load, merge and save fsl-style bvals files."""
+    final_bvals = combined_bval_array(bvals)
+    np.savetxt(output_file, final_bvals, fmt=str("%i"))
+    return op.abspath(output_file)
+
+
+def combined_bvec_array(bvec_files):
+    collected_vecs = []
+    for bvec_file in bvec_files:
+        collected_vecs.append(np.loadtxt(bvec_file))
+    return np.column_stack(collected_vecs)
+
+
+def combine_bvecs(bvecs, output_file="restacked.bvec"):
+    """Load, merge and save fsl-style bvecs files."""
+    final_bvecs = combined_bvec_array(bvecs)
+    np.savetxt(output_file, final_bvecs, fmt=str("%.8f"))
+    return op.abspath(output_file)
+
+
+def get_nvols(img):
+    """Returns the number of volumes in a 3/4D nifti file."""
+    shape = img.shape
+    if len(shape) < 4:
+        return 1
+    return shape[3]
 
 
 def harmonize_b0s(dwi_files, bvals, b0_threshold, harmonize_b0s):
@@ -123,143 +281,3 @@ def create_provenance_dataframe(bids_sources, harmonized_niis, b0_means,
     image_df = pd.concat(series_confounds, axis=0, ignore_index=True)
     image_df['original_file'] = bids_sources
     return image_df
-
-
-class MergeDWIs(SimpleInterface):
-    input_spec = MergeDWIsInputSpec
-    output_spec = MergeDWIsOutputSpec
-
-    def _run_interface(self, runtime):
-        bvals = self.inputs.bval_files
-        bvecs = self.inputs.bvec_files
-        num_dwis = len(self.inputs.dwi_files)
-
-        to_concat, b0_means, corrections = harmonize_b0s(self.inputs.dwi_files,
-                                                         bvals,
-                                                         self.inputs.b0_threshold,
-                                                         self.inputs.harmonize_b0_intensities)
-
-        # Get basic qc / provenance per volume
-        provenance_df = create_provenance_dataframe(self.inputs.bids_dwi_files,
-                                                    to_concat,
-                                                    b0_means,
-                                                    corrections)
-
-        # Collect the confounds
-        if isdefined(self.inputs.denoising_confounds):
-            confounds = [pd.read_csv(fname) for fname in self.inputs.denoising_confounds]
-            _confounds_df = pd.concat(confounds, axis=0, ignore_index=True)
-            confounds_df = pd.concat([provenance_df, _confounds_df], axis=1, ignore_index=False)
-        else:
-            confounds_df = provenance_df
-
-        # Load the gradient information
-        all_bvals = combined_bval_array(self.inputs.bval_files)
-        all_bvecs = combined_bvec_array(self.inputs.bvec_files)
-        confounds_df['original_bval'] = all_bvals
-        confounds_df['original_bx'] = all_bvecs[0]
-        confounds_df['original_by'] = all_bvecs[1]
-        confounds_df['original_bz'] = all_bvecs[2]
-        confounds_df = confounds_df.loc[:,~confounds_df.columns.duplicated()]
-
-        # Concatenate the gradient information
-        if num_dwis > 1:
-            merged_output = _get_concatenated_bids_name(
-                {'dwi_series': self.inputs.dwi_files,
-                 'fieldmap_info': {'suffix': None}})
-            merged_fname = op.join(runtime.cwd, merged_output + "_merged.nii.gz")
-            out_bval = fname_presuffix(merged_fname, suffix=".bval", use_ext=False,
-                                       newpath=runtime.cwd)
-            out_bvec = fname_presuffix(merged_fname, suffix=".bvec", use_ext=False,
-                                       newpath=runtime.cwd)
-        else:
-            merged_fname = self.inputs.dwi_files[0]
-            out_bval = bvals[0]
-            out_bvec = bvecs[0]
-
-        merged_confounds = fname_presuffix(merged_fname, suffix="_confounds.csv", use_ext=False,
-                                           newpath=runtime.cwd)
-        confounds_df = confounds_df.drop('Unnamed: 0', axis=1, errors='ignore')
-        confounds_df.to_csv(merged_confounds, index=False)
-
-        self._results['merged_denoising_confounds'] = merged_confounds
-        self._results['original_images'] = confounds_df['original_file'].tolist()
-        self._results['out_dwi'] = merged_fname
-        self._results['out_bval'] = out_bval
-        self._results['out_bvec'] = out_bvec
-
-        if num_dwis == 1:
-            return runtime
-
-        # Write the merged gradients
-        combine_bvals(bvals, output_file=out_bval)
-        combine_bvecs(bvecs, output_file=out_bvec)
-        # Concatenate into a single file
-        merged_nii = concat_imgs(to_concat, auto_resample=True)
-        # Remove any negative values introduced during interpolation (if it occurrs)
-        pos_merged_nii = math_img('np.clip(img, 0, None)', img=merged_nii)
-        pos_merged_nii.to_filename(merged_fname)
-
-        return runtime
-
-
-class StackConfoundsInputSpec(BaseInterfaceInputSpec):
-    in_files = InputMultiObject(File(exists=True), mandatory=True)
-    axis = traits.Enum(0, 1, default=0, usedefault=True)
-    out_file = File()
-
-
-class StackConfoundsOutputSpec(TraitedSpec):
-    confounds_file = File(desc='the stacked confound data')
-
-
-class StackConfounds(SimpleInterface):
-    input_spec = StackConfoundsInputSpec
-    output_spec = StackConfoundsOutputSpec
-
-    def _run_interface(self, runtime):
-        if not self.inputs.in_files:
-            return runtime
-        dfs = [pd.read_csv(fname) for fname in self.inputs.in_files]
-        stacked = pd.concat(dfs, axis=self.inputs.axis, ignore_index=self.inputs.axis == 0)
-        out_file = op.join(runtime.cwd, 'confounds.csv')
-        stacked = stacked.drop('Unnamed: 0', axis=1, errors='ignore')
-        stacked.to_csv(out_file)
-        self._results['confounds_file'] = out_file
-        return runtime
-
-
-def combined_bval_array(bval_files):
-    collected_vals = []
-    for bval_file in bval_files:
-        collected_vals.append(np.atleast_1d(np.loadtxt(bval_file)))
-    return np.concatenate(collected_vals)
-
-
-def combine_bvals(bvals, output_file="restacked.bval"):
-    """Load, merge and save fsl-style bvals files."""
-    final_bvals = combined_bval_array(bvals)
-    np.savetxt(output_file, final_bvals, fmt=str("%i"))
-    return op.abspath(output_file)
-
-
-def combined_bvec_array(bvec_files):
-    collected_vecs = []
-    for bvec_file in bvec_files:
-        collected_vecs.append(np.loadtxt(bvec_file))
-    return np.column_stack(collected_vecs)
-
-
-def combine_bvecs(bvecs, output_file="restacked.bvec"):
-    """Load, merge and save fsl-style bvecs files."""
-    final_bvecs = combined_bvec_array(bvecs)
-    np.savetxt(output_file, final_bvecs, fmt=str("%.8f"))
-    return op.abspath(output_file)
-
-
-def get_nvols(img):
-    """Returns the number of volumes in a 3/4D nifti file."""
-    shape = img.shape
-    if len(shape) < 4:
-        return 1
-    return shape[3]

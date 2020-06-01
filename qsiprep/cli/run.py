@@ -204,6 +204,18 @@ def get_parser():
         help='combine dwis from across multiple runs for motion correction '
         'and reconstruction.')
     g_conf.add_argument(
+        '--distortion-group-merge', '--distortion_group_merge',
+        action='store',
+        choices=['concat', 'average', 'none'],
+        default='none',
+        help='How to combine images across distorted groups.\n'
+        ' - concatenate: append images in the 4th dimension\n '
+        ' - average: if a whole sequence was duplicated in both PE\n'
+        '            directions, average the corrected images of the same\n'
+        '            q-space coordinate\n'
+        ' - none: Default. Keep distorted groups separate'
+    )
+    g_conf.add_argument(
         '--write-local-bvecs', '--write_local_bvecs',
         action='store_true',
         default=False,
@@ -639,7 +651,7 @@ def main():
     except Exception as e:
         if not opts.notrack:
             from ..utils.sentry import process_crashfile
-            crashfolders = [output_dir / 'qsirecon' / 'sub-{}'.format(s) / 'log' / run_uuid
+            crashfolders = [Path(output_dir) / 'qsirecon' / 'sub-{}'.format(s) / 'log' / run_uuid
                             for s in subject_list]
             for crashfolder in crashfolders:
                 for crashfile in crashfolder.glob('crash*.*'):
@@ -841,6 +853,7 @@ def build_qsiprep_workflow(opts, retval):
         longitudinal=opts.longitudinal,
         b0_threshold=opts.b0_threshold,
         combine_all_dwis=opts.combine_all_dwis,
+        distortion_group_merge=opts.distortion_group_merge,
         dwi_denoise_window=opts.dwi_denoise_window,
         unringing_method=opts.unringing_method,
         dwi_no_biascorr=opts.dwi_no_biascorr,
