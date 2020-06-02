@@ -593,12 +593,18 @@ to workflows in *qsiprep*'s documentation]\
         omp_nthreads=omp_nthreads,
         t1w_source_file=fix_multi_T1w_source_name(subject_data['t1w']),
         reportlets_dir=reportlets_dir,
+        template=template,
         num_iterations=intramodal_template_iters,
         transform=intramodal_template_transform,
         inputs_list=sorted(outputs_to_files.keys()),
         name="intramodal_template_wf")
 
+    #TODO: Make this only merge within a session
     merge_distortion_groups_wf = init_distortion_group_merge_wf(
+        harmonize_b0_intensities=not no_b0_harmonization,
+        reportlets_dir=reportlets_dir,
+        b0_threshold=b0_threshold,
+        shoreline_iters=shoreline_iters,
         merging_strategy=distortion_group_merge,
         hmc_model=hmc_model,
         inputs_list=sorted(outputs_to_files.keys()),
