@@ -14,6 +14,7 @@ import logging
 import sys
 import os
 from copy import deepcopy
+from collections import defaultdict
 
 from nipype import __version__ as nipype_ver
 from nipype.pipeline import engine as pe
@@ -570,11 +571,32 @@ to workflows in *qsiprep*'s documentation]\
         impute_slice_threshold = 0
 
     # Handle the grouping of multiple dwi files within a session
-    dwi_fmap_groups = group_dwi_scans(layout, subject_data,
-                                      using_fsl=hmc_model == 'eddy',
-                                      combine_scans=combine_all_dwis,
-                                      ignore_fieldmaps="fieldmaps" in ignore)
+    # concatenation_scheme maps the outputs to their final concatenation group
+    dwi_fmap_groups, concatenation_scheme = group_dwi_scans(
+        layout, subject_data,
+        using_fsl=hmc_model == 'eddy',
+        combine_scans=combine_all_dwis,
+        ignore_fieldmaps="fieldmaps" in ignore,
+        concatenate_distortion_groups=merging_distortion_groups)
     LOGGER.info(dwi_fmap_groups)
+
+    # If a merge is happening at the end, make sure
+    if merging_distortion_groups:
+        # create a mapping of which across-distortion-groups are contained in each merge
+        merged_group_names = sorted(set(concatenation_scheme.values()))
+        merged_to_subgroups = defaultdict(list)
+        for subgroup_name, destination_name in concatenation_scheme.items():
+            merged_to_subgroups[destination_name].append(subgroup_name)
+
+        merging_group_workflows = {}
+        for merged_group in merged_group_names:
+            merging_group_workflows[merged_group] = init_distortion_group_merge_wf(
+                merging_strategy=distortion_group_merge,
+                hmc_model=hmc_model,
+                inputs_list=merged_to_subgroups[merged_group],
+                omp_nthreads=omp_nthreads,
+                reportlets_dir=reportlets_dir,
+                name=merged_group.replace('-', '_') + "_final_merge_wf")
 
     outputs_to_files = {dwi_group['concatenated_bids_name']: dwi_group
                         for dwi_group in dwi_fmap_groups}
@@ -597,15 +619,6 @@ to workflows in *qsiprep*'s documentation]\
         transform=intramodal_template_transform,
         inputs_list=sorted(outputs_to_files.keys()),
         name="intramodal_template_wf")
-
-    merge_distortion_groups_wf = init_distortion_group_merge_wf(
-        merging_strategy=distortion_group_merge,
-        hmc_model=hmc_model,
-        inputs_list=sorted(outputs_to_files.keys()),
-        omp_nthreads=omp_nthreads,
-        reportlets_dir=reportlets_dir,
-        name="merge_distortion_groups_wf"
-    )
 
     if make_intramodal_template:
         workflow.connect([
@@ -634,6 +647,7 @@ to workflows in *qsiprep*'s documentation]\
     # create a processing pipeline for the dwis in each session
     for output_fname, dwi_info in outputs_to_files.items():
         source_file = get_source_file(dwi_info['dwi_series'], output_fname, suffix="_dwi")
+        output_wfname = output_fname.replace('-', '_')
         dwi_preproc_wf = init_dwi_preproc_wf(
             scan_groups=dwi_info,
             output_prefix=output_fname,
@@ -761,10 +775,8 @@ to workflows in *qsiprep*'s documentation]\
         ])
 
         if make_intramodal_template:
-            input_name = 'inputnode.{name}_b0_template'.format(
-                name=output_fname.replace('-', '_'))
-            output_name = 'outputnode.{name}_transform'.format(
-                name=output_fname.replace('-', '_'))
+            input_name = 'inputnode.{name}_b0_template'.format(name=output_wfname)
+            output_name = 'outputnode.{name}_transform'.format(name=output_wfname)
             workflow.connect([
                 (dwi_preproc_wf, intramodal_template_wf, [
                     ('outputnode.b0_ref_image', input_name)]),
@@ -779,24 +791,22 @@ to workflows in *qsiprep*'s documentation]\
             ])
 
         if merging_distortion_groups:
-            image_name = 'inputnode.{name}_image'.format(
-                name=output_fname.replace('-', '_'))
+            image_name = 'inputnode.{name}_image'.format(name=output_wfname)
             raw_concatenated_image_name = 'inputnode.{name}_raw_concatenated_image'.format(
-                name=output_fname.replace('-', '_'))
-            bval_name = 'inputnode.{name}_bval'.format(
-                name=output_fname.replace('-', '_'))
-            bvec_name = 'inputnode.{name}_bvec'.format(
-                name=output_fname.replace('-', '_'))
+                name=output_wfname)
+            bval_name = 'inputnode.{name}_bval'.format(name=output_wfname)
+            bvec_name = 'inputnode.{name}_bvec'.format(name=output_wfname)
             original_bvec_name = 'inputnode.{name}_original_bvec'.format(
-                name=output_fname.replace('-', '_'))
+                name=output_wfname)
             original_bids_name = 'inputnode.{name}_original_image'.format(
-                name=output_fname.replace('-', '_'))
+                name=output_wfname)
+            final_merge_wf = merging_group_workflows[concatenation_scheme[output_fname]]
             workflow.connect([
-                (dwi_finalize_wf, merge_distortion_groups_wf, [
+                (dwi_finalize_wf, final_merge_wf, [
                     ('outputnode.bvals_t1', bval_name),
                     ('outputnode.bvecs_t1', bvec_name),
                     ('outputnode.dwi_t1', image_name)]),
-                (dwi_preproc_wf, merge_distortion_groups_wf, [
+                (dwi_preproc_wf, final_merge_wf, [
                     ('outputnode.raw_concatenated', raw_concatenated_image_name),
                     ('outputnode.original_bvecs', original_bvec_name),
                     ('outputnode.original_files', original_bids_name)])

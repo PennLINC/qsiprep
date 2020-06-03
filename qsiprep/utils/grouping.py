@@ -54,7 +54,10 @@ def group_dwi_scans(bids_layout, subject_data, using_fsl=False, combine_scans=Tr
     if using_fsl:
         return group_for_eddy(dwi_fmap_groups)
 
-    return dwi_fmap_groups
+    if concatenate_distortion_groups:
+        return dwi_fmap_groups, group_for_concatenation(dwi_fmap_groups)
+
+    return dwi_fmap_groups, {}
 
 
 def get_session_groups(layout, subject_data, combine_all_dwis):
@@ -887,7 +890,25 @@ def group_for_eddy(all_dwi_fmap_groups):
             if dwi_group['fieldmap_info'].get('suffix') not in eddy_compatible_suffixes:
                 eddy_dwi_groups.append(dwi_group)
 
-    return eddy_dwi_groups
+    return eddy_dwi_groups, {group['concatenated_bids_name']: group['concatenated_bids_name']
+                             for group in eddy_dwi_groups}
+
+
+def group_for_concatenation(all_dwi_fmap_groups):
+    """Find matched pairs of phase encoding directions that can be combined after SHORELine.
+    """
+    concatenation_grouping = {}
+    session_groups = _group_by_sessions(all_dwi_fmap_groups)
+    for _, dwi_fmap_groups in session_groups.items():
+        all_images = []
+        for group in dwi_fmap_groups:
+            all_images.extend(group['dwi_files'])
+        group_name = get_concatenated_bids_name(all_images)
+        # Add separate groups for non-compatible fieldmaps
+        for group in dwi_fmap_groups:
+            concatenation_grouping[group['concatenated_bids_name']] = group_name
+
+    return concatenation_grouping
 
 
 def get_concatenated_bids_name(dwi_group):
