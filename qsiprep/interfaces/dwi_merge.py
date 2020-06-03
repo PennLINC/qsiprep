@@ -26,7 +26,9 @@ class MergeDWIsInputSpec(BaseInterfaceInputSpec):
     harmonize_b0_intensities = traits.Bool(True, usedefault=True,
                                            desc='Force scans to have the same mean b=0 intensity')
     raw_concatenated_files = InputMultiObject(
-        File(), mandatory=True, desc='list of raw concatenated images')
+        File(), mandatory=False, desc='list of raw concatenated images')
+    b0_refs = InputMultiObject(
+        File(), mandatory=False, desc='list of b=0 reference images')
 
 
 class MergeDWIsOutputSpec(TraitedSpec):
@@ -36,6 +38,7 @@ class MergeDWIsOutputSpec(TraitedSpec):
     original_images = traits.List()
     merged_metadata = traits.Dict()
     merged_denoising_confounds = File(exists=True)
+    merged_b0_ref = File(exists=True)
 
 
 class MergeDWIs(SimpleInterface):
@@ -73,7 +76,7 @@ class MergeDWIs(SimpleInterface):
         confounds_df['original_bx'] = all_bvecs[0]
         confounds_df['original_by'] = all_bvecs[1]
         confounds_df['original_bz'] = all_bvecs[2]
-        confounds_df = confounds_df.loc[:,~confounds_df.columns.duplicated()]
+        confounds_df = confounds_df.loc[:, ~confounds_df.columns.duplicated()]
 
         # Concatenate the gradient information
         if num_dwis > 1:

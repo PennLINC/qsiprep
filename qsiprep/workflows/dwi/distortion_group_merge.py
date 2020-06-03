@@ -72,7 +72,7 @@ def init_distortion_group_merge_wf(merging_strategy, inputs_list, hmc_model, rep
     workflow = Workflow(name=name)
     sanitized_inputs = [name.replace('-', '_') for name in inputs_list]
     input_names = []
-    for suffix in ["_image", "_bval", "_bvec", "_original_bvec", "_b0_ref"
+    for suffix in ["_image", "_bval", "_bvec", "_original_bvec", "_b0_ref",
                    "_original_image", "_raw_concatenated_image"]:
         input_names += [name + suffix for name in sanitized_inputs]
     inputnode = pe.Node(niu.IdentityInterface(fields=input_names), name='inputnode')
@@ -101,7 +101,8 @@ def init_distortion_group_merge_wf(merging_strategy, inputs_list, hmc_model, rep
             (inputnode, merge_original_image, [(input_name + "_original_image",
                                                 merge_input_name)]),
             (inputnode, merge_raw_concatenated_image, [(input_name + "_raw_concatenated_image",
-                                                        merge_input_name)])
+                                                        merge_input_name)]),
+            (inputnode, merge_b0_refs, [(input_name + "_b0_ref", merge_input_name)])
         ])
 
     if merging_strategy.lower() == 'average':
@@ -117,7 +118,8 @@ def init_distortion_group_merge_wf(merging_strategy, inputs_list, hmc_model, rep
         (merge_bval, distortion_merger, [('out', 'bval_files')]),
         (merge_bvec, distortion_merger, [('out', 'bvec_files')]),
         (merge_original_image, distortion_merger, [('out', 'bids_dwi_files')]),
-        (merge_raw_concatenated_image, distortion_merger, [('out', 'raw_concatenated_files')])
+        (merge_raw_concatenated_image, distortion_merger, [('out', 'raw_concatenated_files')]),
+        (merge_b0_refs, distortion_merger, [('out', 'b0_refs')])
     ])
 
     # CONNECT TO DERIVATIVES

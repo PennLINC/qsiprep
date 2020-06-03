@@ -17,14 +17,13 @@ Examples:
 """
 from collections import defaultdict
 import logging
-import os
 from nipype.utils.filemanip import split_filename
-
+from ..interfaces.bids import get_bids_params
 LOGGER = logging.getLogger('nipype.workflow')
 
 
 def group_dwi_scans(bids_layout, subject_data, using_fsl=False, combine_scans=True,
-                    ignore_fieldmaps=False):
+                    ignore_fieldmaps=False, concatenate_distortion_groups=False):
     """Determine which scans can be concatenated based on their acquisition parameters.
 
     **Parameters**
@@ -34,6 +33,8 @@ def group_dwi_scans(bids_layout, subject_data, using_fsl=False, combine_scans=Tr
             Should a plus and minus series be grouped together for TOPUP/eddy?
         combine_scans : bool
             Should scan concatention happen?
+        concatenate_distortion_groups : bool
+            Will distortion groups get merged at the end of the pipeline?
 
     **Returns**
         scan_groups : list of dictionaries
@@ -769,7 +770,7 @@ def merge_dwi_groups(dwi_groups_plus, dwi_groups_minus):
     return merged_group
 
 
-def group_for_eddy(dwi_fmap_groups):
+def group_for_eddy(all_dwi_fmap_groups):
     """Find matched pairs of phase encoding directions that can be combined for TOPUP/eddy.
 
     Any groups that don't have a phase encoding direction won't be correctable by eddy/TOPUP.
@@ -863,25 +864,28 @@ def group_for_eddy(dwi_fmap_groups):
     """
     eddy_dwi_groups = []
     eddy_compatible_suffixes = ('dwi', 'epi')
-    for pe_dir in 'ijk':
-        plus_series = [dwi_group for dwi_group in dwi_fmap_groups if
-                       dwi_group.get('dwi_series_pedir') == pe_dir
-                       and dwi_group['fieldmap_info'].get('suffix') in eddy_compatible_suffixes]
-        minus_series = [dwi_group for dwi_group in dwi_fmap_groups if
-                        dwi_group.get('dwi_series_pedir') == pe_dir + '-'
-                        and dwi_group['fieldmap_info'].get('suffix') in eddy_compatible_suffixes]
+    session_groups = _group_by_sessions(all_dwi_fmap_groups)
+    for _, dwi_fmap_groups in session_groups.items():
+        for pe_dir in 'ijk':
+            plus_series = [dwi_group for dwi_group in dwi_fmap_groups if
+                           dwi_group.get('dwi_series_pedir') == pe_dir
+                           and dwi_group['fieldmap_info'].get('suffix') in
+                           eddy_compatible_suffixes]
+            minus_series = [dwi_group for dwi_group in dwi_fmap_groups if
+                            dwi_group.get('dwi_series_pedir') == pe_dir + '-'
+                            and dwi_group['fieldmap_info'].get('suffix') in
+                            eddy_compatible_suffixes]
 
-        # Can these be grouped?
+            # Can these be grouped?
+            if plus_series and minus_series:
+                eddy_dwi_groups.append(merge_dwi_groups(plus_series, minus_series))
+            else:
+                eddy_dwi_groups.extend(plus_series + minus_series)
 
-        if plus_series and minus_series:
-            eddy_dwi_groups.append(merge_dwi_groups(plus_series, minus_series))
-        else:
-            eddy_dwi_groups.extend(plus_series + minus_series)
-
-    # Add separate groups for non-compatible fieldmaps
-    for dwi_group in dwi_fmap_groups:
-        if dwi_group['fieldmap_info'].get('suffix') not in eddy_compatible_suffixes:
-            eddy_dwi_groups.append(dwi_group)
+        # Add separate groups for non-compatible fieldmaps
+        for dwi_group in dwi_fmap_groups:
+            if dwi_group['fieldmap_info'].get('suffix') not in eddy_compatible_suffixes:
+                eddy_dwi_groups.append(dwi_group)
 
     return eddy_dwi_groups
 
@@ -952,3 +956,44 @@ def _get_common_bids_fields(fnames):
         if len(bids_keys[key]) == 1:
             common_bids.append(key + "-" + bids_keys[key].pop())
     return "_".join(common_bids)
+
+
+def _group_by_sessions(dwi_fmap_groups):
+    """Create a lookup of distortion groups by session
+
+    Paired DWI series to correct each other:
+    >>> dwi_groups = [
+    ...  {'dwi_series': ['.../mixed_fmaps/sub-1/ses-1/dwi/sub-1_ses-1_dir-AP_run-1_dwi.nii.gz'],
+    ...      'fieldmap_info': {'suffix': 'dwi',
+    ...      'dwi': ['.../mixed_fmaps/sub-1/ses-1/dwi/sub-1_ses-1_dir-PA_run-2_dwi.nii.gz']},
+    ...   'dwi_series_pedir': 'j',
+    ...      'concatenated_bids_name': 'sub-1_ses-1_dir-AP_run-1'},
+    ...  {'dwi_series': ['.../mixed_fmaps/sub-1/ses-1/dwi/sub-1_ses-1_dir-PA_run-2_dwi.nii.gz'],
+    ...      'fieldmap_info': {'suffix': 'dwi',
+    ...      'dwi': ['.../mixed_fmaps/sub-1/ses-1/dwi/sub-1_ses-1_dir-AP_run-1_dwi.nii.gz']},
+    ...      'dwi_series_pedir': 'j-',
+    ...   'concatenated_bids_name': 'sub-1_ses-1_dir-PA_run-2'},
+    ...  {'dwi_series': [
+    ...          '.../opposite_concat/sub-1/ses-2/dwi/sub-1_ses-2/dir-AP_run-1_dwi.nii.gz',
+    ...          '.../opposite_concat/sub-1/ses-2/dwi/sub-1_ses-2/dir-AP_run-2_dwi.nii.gz'],
+    ...      'fieldmap_info': {'suffix': 'dwi',
+    ...       'dwi': ['.../opposite_concat/sub-1/ses-2/dwi/sub-1_ses-2_dir-PA_run-1_dwi.nii.gz',
+    ...               '.../opposite_concat/sub-1/ses-2/dwi/sub-1_ses-2_dir-PA_run-2_dwi.nii.gz']},
+    ...      'dwi_series_pedir': 'j',
+    ...      'concatenated_bids_name': 'sub-1_ses-2_dir-AP'},
+    ...     {'dwi_series': [
+    ...           '.../opposite_concat/sub-1/ses-2/dwi/sub-1_ses-2_dir-PA_run-1_dwi.nii.gz',
+    ...           '.../opposite_concat/sub-1/ses-2/dwi/sub-1_ses-2_dir-PA_run-2_dwi.nii.gz'],
+    ...      'fieldmap_info': {'suffix': 'dwi',
+    ...       'dwi': ['.../opposite_concat/sub-1/ses-2/dwi/sub-1_ses-2_dir-AP_run-1_dwi.nii.gz',
+    ...               '.../opposite_concat/sub-1/ses-2/dwi/sub-1_ses-2_dir-AP_run-2_dwi.nii.gz']},
+    ...      'dwi_series_pedir': 'j-',
+    ...      'concatenated_bids_name': 'sub-1_ses-2_dir-PA'}]
+
+
+    """
+    ses_lookup = defaultdict(list)
+    for group in dwi_fmap_groups:
+        bids_info = get_bids_params(group['concatenated_bids_name'])
+        ses_lookup[bids_info['session_id']].append(group)
+    return ses_lookup
