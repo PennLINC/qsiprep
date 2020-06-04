@@ -1091,26 +1091,35 @@ def add_epi_fmaps_to_dwi_b0s(epi_fmaps, b0_threshold, max_per_spec, dwi_spec_lin
     return topup_imain, topup_spec_lines, new_report
 
 
-def eddy_inputs_from_dwi_files(origin_file_list, eddy_prefix):
+def get_distortion_grouping(origin_file_list):
+    """Discover which distortion groups are present, then assign each volume to a group.
+    """
     unique_files = sorted(set(origin_file_list))
+    unique_acqps = []
     line_lookup = {}
-    acqp_data = []
-    for line_num, unique_dwi in enumerate(unique_files):
+    for unique_dwi in unique_files:
         spec = read_nifti_sidecar(unique_dwi)
         spec_line = acqp_lines[spec['PhaseEncodingDirection']]
         acqp_line = spec_line % spec['TotalReadoutTime']
-        line_lookup[unique_dwi] = line_num + 1
-        acqp_data.append(acqp_line)
+        if acqp_line not in unique_acqps:
+            unique_acqps.append(acqp_line)
+        line_lookup[unique_dwi] = unique_acqps.index(acqp_line) + 1
+
+    group_numbers = [line_lookup[dwi_file] for dwi_file in origin_file_list]
+    return unique_acqps, group_numbers
+
+
+def eddy_inputs_from_dwi_files(origin_file_list, eddy_prefix):
+    unique_acqps, group_numbers = get_distortion_grouping(origin_file_list)
 
     # Create the acqp file
     acqp_file = eddy_prefix + "acqp.txt"
     with open(acqp_file, "w") as f:
-        f.write("\n".join(acqp_data))
+        f.write("\n".join(unique_acqps))
 
     # Create the index file
     index_file = eddy_prefix + "index.txt"
-    index_numbers = [line_lookup[dwi_file] for dwi_file in origin_file_list]
     with open(index_file, "w") as f:
-        f.write(" ".join(map(str, index_numbers)))
+        f.write(" ".join(map(str, group_numbers)))
 
     return acqp_file, index_file

@@ -902,7 +902,7 @@ def group_for_concatenation(all_dwi_fmap_groups):
     for _, dwi_fmap_groups in session_groups.items():
         all_images = []
         for group in dwi_fmap_groups:
-            all_images.extend(group['dwi_files'])
+            all_images.extend(group['dwi_series'])
         group_name = get_concatenated_bids_name(all_images)
         # Add separate groups for non-compatible fieldmaps
         for group in dwi_fmap_groups:
