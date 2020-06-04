@@ -104,7 +104,7 @@ def init_distortion_group_merge_wf(merging_strategy, inputs_list, hmc_model, rep
             (inputnode, merge_raw_concatenated_image, [(input_name + "_raw_concatenated_image",
                                                         merge_input_name)]),
             (inputnode, merge_b0_refs, [(input_name + "_b0_ref", merge_input_name)]),
-            (inputnode, merge_confounds, [(input_name + "_b0_ref", merge_input_name)])
+            (inputnode, merge_confounds, [(input_name + "_confounds", merge_input_name)])
         ])
 
     if merging_strategy.lower() == 'average':
