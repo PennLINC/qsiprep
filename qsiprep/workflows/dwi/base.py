@@ -310,7 +310,8 @@ def init_dwi_preproc_wf(scan_groups,
             'confounds', 'hmc_optimization_data', 'itk_b0_to_t1', 'noise_images', 'bias_images',
             'dwi_files', 'cnr_map', 'bval_files', 'bvec_files', 'b0_ref_image', 'b0_indices',
             'dwi_mask', 'hmc_xforms', 'fieldwarps', 'sbref_file', 'original_files',
-            'raw_qc_file', 'coreg_score', 'raw_concatenated', 'carpetplot_data']),
+            'original_bvecs', 'raw_qc_file', 'coreg_score', 'raw_concatenated',
+            'carpetplot_data']),
         name='outputnode')
     workflow.__desc__ = """
 
@@ -381,6 +382,7 @@ Diffusion data preprocessing
         (pre_hmc_wf, outputnode, [
             ('outputnode.qc_file', 'raw_qc_file'),
             ('outputnode.original_files', 'original_files'),
+            ('outputnode.bvec_file', 'original_bvecs'),
             ('outputnode.bias_images', 'bias_images'),
             ('outputnode.noise_images', 'noise_images'),
             ('outputnode.raw_concatenated', 'raw_concatenated')])

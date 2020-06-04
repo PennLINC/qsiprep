@@ -592,6 +592,13 @@ to workflows in *qsiprep*'s documentation]\
         for merged_group in merged_group_names:
             merging_group_workflows[merged_group] = init_distortion_group_merge_wf(
                 merging_strategy=distortion_group_merge,
+                harmonize_b0_intensities=not no_b0_harmonization,
+                b0_threshold=b0_threshold,
+                template=template,
+                output_dir=output_dir,
+                output_prefix=merged_group,
+                source_file='',
+                shoreline_iters=shoreline_iters,
                 hmc_model=hmc_model,
                 inputs_list=merged_to_subgroups[merged_group],
                 omp_nthreads=omp_nthreads,
@@ -615,7 +622,6 @@ to workflows in *qsiprep*'s documentation]\
         omp_nthreads=omp_nthreads,
         t1w_source_file=fix_multi_T1w_source_name(subject_data['t1w']),
         reportlets_dir=reportlets_dir,
-        template=template,
         num_iterations=intramodal_template_iters,
         transform=intramodal_template_transform,
         inputs_list=sorted(outputs_to_files.keys()),
@@ -793,24 +799,29 @@ to workflows in *qsiprep*'s documentation]\
 
         if merging_distortion_groups:
             image_name = 'inputnode.{name}_image'.format(name=output_wfname)
-            raw_concatenated_image_name = 'inputnode.{name}_raw_concatenated_image'.format(
-                name=output_wfname)
             bval_name = 'inputnode.{name}_bval'.format(name=output_wfname)
             bvec_name = 'inputnode.{name}_bvec'.format(name=output_wfname)
             original_bvec_name = 'inputnode.{name}_original_bvec'.format(
                 name=output_wfname)
             original_bids_name = 'inputnode.{name}_original_image'.format(
                 name=output_wfname)
+            raw_concatenated_image_name = 'inputnode.{name}_raw_concatenated_image'.format(
+                name=output_wfname)
+            confounds_name = 'inputnode.{name}_confounds'.format(name=output_wfname)
+            b0_ref_name = 'inputnode.{name}_b0_ref'.format(name=output_wfname)
             final_merge_wf = merging_group_workflows[concatenation_scheme[output_fname]]
             workflow.connect([
                 (dwi_finalize_wf, final_merge_wf, [
                     ('outputnode.bvals_t1', bval_name),
                     ('outputnode.bvecs_t1', bvec_name),
-                    ('outputnode.dwi_t1', image_name)]),
+                    ('outputnode.dwi_t1', image_name),
+                    ('outputnode.t1_b0_ref', b0_ref_name),
+                    ]),
                 (dwi_preproc_wf, final_merge_wf, [
                     ('outputnode.raw_concatenated', raw_concatenated_image_name),
                     ('outputnode.original_bvecs', original_bvec_name),
-                    ('outputnode.original_files', original_bids_name)])
+                    ('outputnode.original_files', original_bids_name),
+                    ('outputnode.confounds', confounds_name)])
             ])
 
     return workflow

@@ -125,7 +125,7 @@ class AveragePEPairsInputSpec(MergeDWIsInputSpec):
 
 
 class AveragePEPairsOutputSpec(MergeDWIsOutputSpec):
-    pass
+    merged_raw_concatenated = File(exists=True)
 
 
 class AveragePEPairs(SimpleInterface):
@@ -133,6 +133,7 @@ class AveragePEPairs(SimpleInterface):
     output_spec = AveragePEPairsOutputSpec
 
     def _run_interface(self, runtime):
+        assert 0
         return runtime
 
 
