@@ -7,6 +7,7 @@ from nipype.interfaces.base import (BaseInterfaceInputSpec, TraitedSpec, File, S
                                     InputMultiObject, traits, isdefined)
 from nipype.utils.filemanip import fname_presuffix
 from nipype import logging
+from .fmap impport get_distortion_grouping
 from ..workflows.dwi.util import _get_concatenated_bids_name
 LOGGER = logging.getLogger('nipype.workflow')
 
@@ -133,8 +134,42 @@ class AveragePEPairs(SimpleInterface):
     output_spec = AveragePEPairsOutputSpec
 
     def _run_interface(self, runtime):
-        assert 0
+        distortion_groups, assignments = get_distortion_grouping(
+            self.inputs.bids_dwi_files)
+        num_distortion_groups = len(distortion_groups)
+        if not num_distortion_groups == 2:
+            raise Exception("Unable to merge using strategy 'average': exactly"
+                            " two distortion groups must be present in data."
+                            " Found %d" % num_distortion_groups)
+
+        # Get the gradient info for each PE group
+        original_bvecs = combined_bvec_array(self.inputs.original_bvec_files)
+        rotated_bvecs = combined_bvec_array(self.inputs.bvec_files)
+        bvals = combined_bval_array(self.inputs.bval_files)
+
+
+        image_pairs = find_image_pairs(original_bvecs, rotated_bvecs, bvals,
+                                       assignments)
+
+
+
         return runtime
+
+
+
+def find_image_pairs(original_bvecs, rotated_bvecs, bvals, assignments):
+    assignments = np.array(assignments)
+    group1_mask = assignments == 1
+    group2_mask = assignments == 2
+    image_nums = np.arange(len(assignments))
+    gradients = (
+        bvals[group1_mask], original_bvecs[:, group1_mask], rotated_bvecs[group1_mask],
+        image_nums[group1_mask],
+        bvals[group2_mask], original_bvecs[:, group2_mask], rotated_bvecs[group2_mask],
+        image_nums[group2_mask]
+    )
+    return gradients
+
 
 
 class StackConfoundsInputSpec(BaseInterfaceInputSpec):

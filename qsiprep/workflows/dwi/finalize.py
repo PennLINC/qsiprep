@@ -248,7 +248,7 @@ def init_dwi_finalize_wf(scan_groups,
                                           use_compression=False,
                                           to_mni=False,
                                           write_local_bvecs=write_local_bvecs,
-                                          concatenate=not write_derivatives)
+                                          concatenate=write_derivatives)
     workflow.connect([
         (inputnode, transform_dwis_t1, [
             ('b0_indices', 'inputnode.b0_indices'),
