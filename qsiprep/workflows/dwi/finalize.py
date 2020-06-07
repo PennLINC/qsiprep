@@ -377,5 +377,10 @@ def init_dwi_finalize_wf(scan_groups,
             ('original_files', 'source_files')]),
         (gradient_plot, ds_report_gradients, [('plot_file', 'in_file')])
     ])
+    # Fill-in datasinks of reportlets seen so far
+    for node in workflow.list_node_names():
+        if node.split('.')[-1].startswith('ds_report'):
+            workflow.get_node(node).inputs.base_directory = reportlets_dir
+            workflow.get_node(node).inputs.source_file = source_file
 
     return workflow
