@@ -24,7 +24,6 @@ from nipype.interfaces import fsl
 #    nii_ones_like, extract_wm, SignalExtraction, MatchHeader,
 #    FilledImageLike, DemeanImage, TemplateDimensions)
 from ..niworkflows.interfaces.images import ValidateImageInputSpec
-from .dwi_merge import MergeDWIs
 
 LOGGER = logging.getLogger('nipype.interface')
 

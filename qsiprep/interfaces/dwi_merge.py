@@ -7,7 +7,7 @@ from nipype.interfaces.base import (BaseInterfaceInputSpec, TraitedSpec, File, S
                                     InputMultiObject, traits, isdefined)
 from nipype.utils.filemanip import fname_presuffix
 from nipype import logging
-from .fmap impport get_distortion_grouping
+from .fmap import get_distortion_grouping
 from ..workflows.dwi.util import _get_concatenated_bids_name
 LOGGER = logging.getLogger('nipype.workflow')
 
@@ -147,29 +147,115 @@ class AveragePEPairs(SimpleInterface):
         rotated_bvecs = combined_bvec_array(self.inputs.bvec_files)
         bvals = combined_bval_array(self.inputs.bval_files)
 
-
-        image_pairs = find_image_pairs(original_bvecs, rotated_bvecs, bvals,
-                                       assignments)
-
+        image_pairs = find_image_pairs(original_bvecs, bvals, assignments)
+        combined_images, combined_bvals, combined_bvecs, error_report = \
+		average_image_pairs(image_pairs, self.inputs.dwi_files, rotated_bvecs)	
 
 
         return runtime
 
 
-
-def find_image_pairs(original_bvecs, rotated_bvecs, bvals, assignments):
+def find_image_pairs(original_bvecs, bvals, assignments):
     assignments = np.array(assignments)
     group1_mask = assignments == 1
     group2_mask = assignments == 2
     image_nums = np.arange(len(assignments))
-    gradients = (
-        bvals[group1_mask], original_bvecs[:, group1_mask], rotated_bvecs[group1_mask],
-        image_nums[group1_mask],
-        bvals[group2_mask], original_bvecs[:, group2_mask], rotated_bvecs[group2_mask],
-        image_nums[group2_mask]
-    )
-    return gradients
+    group1 = {
+        'bvals': bvals[group1_mask],
+        'original_bvecs': original_bvecs[:, group1_mask],
+        'indices': image_nums[group1_mask]
+    }
+    group2 = {
+        'bvals': bvals[group2_mask],
+        'original_bvecs': original_bvecs[:, group2_mask], 
+        'indices': image_nums[group2_mask]
+    }
 
+    # If this is HCP-style, the bvals and bvecs will match directly
+    if np.allclose(group2['bvals'], group1['bvals'], atol=50) and np.allclose(
+            group2['original_bvecs'], group1['original_bvecs'], atol=0.0001):
+        pairs = list(zip(group1['indices'], group2['indices']))
+
+    return pairs
+
+
+def unit_vector(vector):
+    """ Returns the unit vector of the vector.  """
+    return vector / np.linalg.norm(vector)
+
+
+def angle_between(v1, v2):
+    """ Returns the angle in degrees between vectors 'v1' and 'v2'::
+            >>> angle_between((1, 0, 0), (0, 1, 0))
+            90.0
+            >>> angle_between((1, 0, 0), (1, 0, 0))
+            0.0
+            >>> angle_between((1, 0, 0), (-1, 0, 0))
+            180.0
+    """
+    v1_u = unit_vector(v1)
+    v2_u = unit_vector(v2)
+    return np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0)) * 180 / np.pi
+
+
+def average_image_pairs(image_pairs, image_paths, rotated_bvecs, bvals, confounds_tsvs):
+    """Create 4D series of averaged images, gradients, and confounds"""
+    averaged_images = []
+    new_bvecs = []
+    bvec_errors = []
+    confounds = pd.concat([pd.read_csv(fname, delimiter='\t') for fname in
+                           confounds_tsvs])
+    merged_confounds = []
+    merged_bvals = []
+
+    confounds1_rename = {col: col + "_1" for col in confounds.columns}
+    confounds2_rename = {col: col + "_2" for col in confounds.columns}
+    for index1, index2 in image_pairs:
+        confounds1 = confounds.iloc[index1].copy().rename(confounds1_rename)
+        confounds2 = confounds.iloc[index2].copy().rename(confounds2_rename)
+        confounds_both = confounds1.append(confounds2)
+        averaged_images.append(math_img('(a+b)/2', a=image_paths[index1],
+                                        b=image_paths[index2]))
+
+        new_bval = (bvals[index1] + bvals[index2]) / 2.
+        merged_bvals.append(new_bval)
+        rotated1 = rotated_bvecs[:, index1]
+        rotated2 = rotated_bvecs[:, index2]
+        new_bvec, bvec_error = average_bvec(rotated1, rotated2)
+        new_bvecs.append(new_bvec)
+
+        confounds_both['vec_averaging_error'] = bvec_error
+        confounds_both['rotated_grad_x_1'] = rotated1[0]
+        confounds_both['rotated_grad_y_1'] = rotated1[1]
+        confounds_both['rotated_grad_z_1'] = rotated1[2]
+        confounds_both['rotated_grad_x_2'] = rotated2[0]
+        confounds_both['rotated_grad_y_2'] = rotated2[1]
+        confounds_both['rotated_grad_z_2'] = rotated2[2]
+        confounds_both['mean_grad_x'] = new_bvec[0]
+        confounds_both['mean_grad_y'] = new_bvec[1]
+        confounds_both['mean_grad_z'] = new_bvec[2]
+        confounds_both['mean_b'] = new_bval
+        merged_confounds.append(confounds_both)
+    averaged_confounds = pd.DataFrame(merged_confounds)
+    return concat_imgs(averaged_images), np.array(merged_bvals), np.array(new_bvecs).T, averaged_confounds
+
+
+def average_bvec(bvec1, bvec2):
+    bvec_diff = angle_between(bvec1, bvec2)
+    
+    mean_bvec_plus = (bvec1 + bvec2) / 2.
+    mean_bvec_plus = mean_bvec_plus / np.linalg.norm(mean_bvec_plus)
+    mean_bvec_minus = (bvec1 - bvec2) / 2.
+    mean_bvec_minus = mean_bvec_minus / np.linalg.norm(mean_bvec_minus)
+
+    if angle_between(bvec1, mean_bvec_plus) < angle_between(bvec1, mean_bvec_minus) and \
+            angle_between(bvec2, mean_bvec_plus) < angle_between(bvec2, mean_bvec_minus):
+        return mean_bvec_plus, bvec_diff
+    if angle_between(bvec1, mean_bvec_plus) > angle_between(bvec1, mean_bvec_minus) and \
+            angle_between(bvec2, mean_bvec_plus) < angle_between(bvec2, mean_bvec_minus):
+        return mean_bvec_minus, bvec_diff
+    LOGGER.warning("Ambiguous direcions of vectors: assuming plus")
+    return mean_bvec_plus, bvec_diff
 
 
 class StackConfoundsInputSpec(BaseInterfaceInputSpec):
