@@ -73,6 +73,7 @@ def init_distortion_group_merge_wf(merging_strategy, inputs_list, hmc_model, rep
 
     """
     workflow = Workflow(name=name)
+    source_file = "dwi/" + source_file
     sanitized_inputs = [name.replace('-', '_') for name in inputs_list]
     input_names = ['t1_brain', 't1_mask', 't1_seg']
     for suffix in ["_image", "_bval", "_bvec", "_original_bvec", "_b0_ref", "_cnr",

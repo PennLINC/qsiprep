@@ -36,6 +36,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
                         omp_nthreads,
                         source_file,
                         low_mem,
+                        calculate_qc=True,
                         name="pre_hmc_wf"):
     """
     This workflow merges and denoises dwi scans. The outputs from this workflow is
@@ -223,12 +224,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
             (pm_bias, outputnode, [
                 ('out', 'bias_images')]),
             (pm_raw_images, raw_rpe_concat, [('out', 'in_files')]),
-            (raw_rpe_concat, outputnode, [('out_file', 'raw_concatenated')]),
-            # (raw_rpe_concat, qc_wf, [('out_file', 'inputnode.dwi_file')]),
-            # (rpe_concat, qc_wf, [
-            #     ('out_bval', 'inputnode.bval_file'),
-            #     ('out_bvec', 'inputnode.bvec_file')]),
-            # (qc_wf, outputnode, [('outputnode.qc_summary', 'qc_file')])
+            (raw_rpe_concat, outputnode, [('out_file', 'raw_concatenated')])
         ])
         workflow.__postdesc__ = "Both groups were then merged into a single file, as required " \
                                 "for the FSL workflows. "
@@ -245,7 +241,6 @@ def init_dwi_pre_hmc_wf(scan_groups,
         orientation=orientation,
         calculate_qc=True,
         source_file=source_file)
-
 
     workflow.connect([
         (merge_dwis, outputnode, [
