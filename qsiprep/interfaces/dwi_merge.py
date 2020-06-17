@@ -6,6 +6,7 @@ from nilearn.image import concat_imgs, load_img, index_img, math_img, iter_img
 from nipype.interfaces.base import (BaseInterfaceInputSpec, TraitedSpec, File, SimpleInterface,
                                     InputMultiObject, traits, isdefined)
 from nipype.utils.filemanip import fname_presuffix
+from nipype.interfaces import ants
 from nipype import logging
 from .fmap import get_distortion_grouping
 from ..workflows.dwi.util import _get_concatenated_bids_name
@@ -125,6 +126,7 @@ class MergeDWIs(SimpleInterface):
 class AveragePEPairsInputSpec(MergeDWIsInputSpec):
     original_bvec_files = InputMultiObject(
         File(exists=True), mandatory=True, desc='list of original bvec files')
+    verbose = traits.Bool(False, usedefault=True)
 
 
 class AveragePEPairsOutputSpec(MergeDWIsOutputSpec):
@@ -150,11 +152,12 @@ class AveragePEPairs(SimpleInterface):
         bvals = combined_bval_array(self.inputs.bval_files)
         
         # Find which images should be averaged together in the output
-        image_pairs = find_image_pairs(original_bvecs, bvals, assignments)
+        image_pairs, averaged_raw_bvec = find_image_pairs(original_bvecs, bvals, assignments)
         combined_images, combined_raw_images, combined_bvals, combined_bvecs, error_report = \
 		average_image_pairs(image_pairs, self.inputs.dwi_files, rotated_bvecs,
                                     bvals, self.inputs.denoising_confounds,
-                                    self.inputs.raw_concatenated_files)	
+                                    self.inputs.raw_concatenated_files,
+                                    verbose=self.inputs.verbose)	
 
         # Save the averaged outputs
         out_dwi_path = op.join(runtime.cwd, "averaged_pairs.nii.gz")
@@ -165,7 +168,7 @@ class AveragePEPairs(SimpleInterface):
         out_bvec_path = op.join(runtime.cwd, "averaged_pairs.bvec")
         self._results['out_bvec'] = combine_bvecs(combined_bvecs, out_bvec_path)
         out_confounds_path = op.join(runtime.cwd, "averaged_pairs_confounds.tsv")
-        error_report.to_csv(out_confounds_path, index=False, delimiter="\t")
+        error_report.to_csv(out_confounds_path, index=False, sep="\t")
         self._results['merged_denoising_confounds'] = out_confounds_path
         self._results['original_images'] = self.inputs.bids_dwi_files
 
@@ -175,7 +178,7 @@ class AveragePEPairs(SimpleInterface):
         combined_raw_images.to_filename(out_raw_concatenated)
         out_raw_bvec = op.join(runtime.cwd, 'merged_raw.bvec')
         self._results['merged_raw_bvec'] = combine_bvecs(
-            self.inputs.original_bvec_files, out_raw_bvec)
+            averaged_raw_bvec, out_raw_bvec)
 
         # Make a new b=0 template
         b0_indices = np.flatnonzero(bvals < self.inputs.b0_threshold)
@@ -207,8 +210,9 @@ def find_image_pairs(original_bvecs, bvals, assignments):
     if np.allclose(group2['bvals'], group1['bvals'], atol=50) and np.allclose(
             group2['original_bvecs'], group1['original_bvecs'], atol=0.0001):
         pairs = list(zip(group1['indices'], group2['indices']))
+        bvecs = group1['original_bvecs']
 
-    return pairs
+    return pairs, bvecs
 
 
 def unit_vector(vector):
@@ -231,7 +235,7 @@ def angle_between(v1, v2):
 
 
 def average_image_pairs(image_pairs, image_paths, rotated_bvecs, bvals, confounds_tsvs,
-                        raw_concatenated_files):
+                        raw_concatenated_files, verbose=False):
     """Create 4D series of averaged images, gradients, and confounds"""
     averaged_images = []
     new_bvecs = []
@@ -252,7 +256,7 @@ def average_image_pairs(image_pairs, image_paths, rotated_bvecs, bvals, confound
         confounds_both = confounds1.append(confounds2)
         averaged_images.append(math_img('(a+b)/2', a=image_paths[index1],
                                         b=image_paths[index2]))
-        raw_averaged_images.append(math_img('(a[%d] + a[%d]) / 2' % (index1, index2),
+        raw_averaged_images.append(math_img('(a[..., %d] + a[..., %d]) / 2' % (index1, index2),
                                             a=raw_concatenated_img))
 
         new_bval = (bvals[index1] + bvals[index2]) / 2.
@@ -274,10 +278,14 @@ def average_image_pairs(image_pairs, image_paths, rotated_bvecs, bvals, confound
         confounds_both['mean_grad_z'] = new_bvec[2]
         confounds_both['mean_b'] = new_bval
         merged_confounds.append(confounds_both)
+        if verbose:
+            print('%d: %d [%.4fdeg error]\n\t%d (%.4f %.4f %.4f)' % (
+                     index1, index2, bvec_error, new_bval, new_bvec[0],
+                     new_bvec[1], new_bvec[2]))
 
     averaged_confounds = pd.DataFrame(merged_confounds)
     return concat_imgs(averaged_images), concat_imgs(raw_averaged_images), np.array(merged_bvals), \
-        np.array(new_bvecs).T, averaged_confounds
+        np.array(new_bvecs), averaged_confounds
 
 
 def average_bvec(bvec1, bvec2):
@@ -327,7 +335,10 @@ class StackConfounds(SimpleInterface):
 def combined_bval_array(bval_files):
     collected_vals = []
     for bval_file in bval_files:
-        collected_vals.append(np.atleast_1d(np.loadtxt(bval_file)))
+        if isinstance(bval_file, str):
+            collected_vals.append(np.atleast_1d(np.loadtxt(bval_file)))
+        else:
+            collected_vals.append(np.atleast_1d(bval_file))
     return np.concatenate(collected_vals)
 
 
@@ -341,7 +352,10 @@ def combine_bvals(bvals, output_file="restacked.bval"):
 def combined_bvec_array(bvec_files):
     collected_vecs = []
     for bvec_file in bvec_files:
-        collected_vecs.append(np.loadtxt(bvec_file))
+        if isinstance(bvec_file, str):
+            collected_vecs.append(np.loadtxt(bvec_file))
+        else:
+            collected_vecs.append(bvec_file)
     return np.column_stack(collected_vecs)
 
 

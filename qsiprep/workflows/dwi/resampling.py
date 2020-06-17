@@ -31,6 +31,7 @@ def init_dwi_trans_wf(source_file,
                       use_compression=True,
                       to_mni=False,
                       write_local_bvecs=False,
+                      write_reports=True,
                       concatenate=True):
     """
     This workflow samples dwi images to the ``output_grid`` in a "single shot"
@@ -213,8 +214,9 @@ generating a *preprocessed DWI run in {tpl} space*.
 
     merge = pe.Node(Merge(compress=use_compression), name='merge', mem_gb=mem_gb * 3)
     extract_b0_series = pe.Node(ExtractB0s(), name="extract_b0_series")
-    final_b0_ref = init_dwi_reference_wf(register_t1=False, gen_report=True, desc='resampled',
-                                         name='final_b0_ref', source_file=source_file)
+    final_b0_ref = init_dwi_reference_wf(register_t1=False, gen_report=write_reports, 
+                                         desc='resampled', name='final_b0_ref',
+                                         source_file=source_file)
 
     workflow.connect([
         (inputnode, merge, [('name_source', 'header_source')]),

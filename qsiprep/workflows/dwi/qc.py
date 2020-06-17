@@ -17,7 +17,6 @@ from ...interfaces.reports import InteractiveReport
 from ...interfaces.dipy import TensorReconstruction
 from ...interfaces.anatomical import DiceOverlap
 
-
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
@@ -44,8 +43,6 @@ def init_modelfree_qc_wf(dwi_files=None, name='dwi_qc_wf'):
 
         qc file
             DSI Studio's src QC metrics for the input data
-        concatenated_data
-            The concatenated images used to calculate QC
 
 
     """
@@ -56,26 +53,14 @@ def init_modelfree_qc_wf(dwi_files=None, name='dwi_qc_wf'):
         niu.IdentityInterface(fields=['dwi_file', 'bval_file', 'bvec_file']),
         name='inputnode')
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=['qc_summary', 'concatenated_data']),
+        niu.IdentityInterface(fields=['qc_summary']),
         name='outputnode')
 
     raw_src = pe.Node(DSIStudioCreateSrc(), name='raw_src')
     raw_qc = pe.Node(DSIStudioSrcQC(), name='raw_qc')
-
-    if dwi_files:
-        if len(dwi_files) > 1:
-            concat_raw_dwis = pe.Node(Merge(in_files=dwi_files, is_dwi=True),
-                                      name='concat_raw_dwis')
-            workflow.connect(concat_raw_dwis, "out_file", raw_src, "input_nifti_file")
-            workflow.connect(concat_raw_dwis, "out_file", outputnode, "concatenated_data")
-        else:
-            raw_src.inputs.input_nifti_file = dwi_files[0]
-            outputnode.inputs.concatenated_data = dwi_files[0]
-    else:
-        workflow.connect(inputnode, 'dwi_file', raw_src, 'input_nifti_file')
-
     workflow.connect([
         (inputnode, raw_src, [
+            ('dwi_file', 'input_nifti_file'),
             ('bval_file', 'input_bvals_file'),
             ('bvec_file', 'input_bvecs_file')]),
         (raw_src, raw_qc, [('output_src', 'src_file')]),

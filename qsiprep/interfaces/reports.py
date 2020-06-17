@@ -314,6 +314,10 @@ class GradientPlot(SummaryInterface):
         else:
             filenums = np.ones_like(bvals)
 
+        # Account for the possibility that this is a PE Pair average
+        if len(filenums) == len(bvals) * 2:
+            filenums = filenums[:len(bvals)]
+
         # Plot the final bvecs if provided
         final_bvecs = None
         if isdefined(self.inputs.final_bvec_file):
@@ -346,6 +350,8 @@ def plot_gradients(bvals, orig_bvecs, source_filenums, output_fname, final_bvecs
                     zorder=1, color='k')
 
     if final_bvecs is not None:
+        if final_bvecs.shape[0] == 3:
+            final_bvecs = final_bvecs.T
         fqx, fqy, fqz = (qrads[:, np.newaxis] * final_bvecs).T
         fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(10, 5),
                                  subplot_kw={"aspect": "equal", "projection": "3d"})
@@ -553,19 +559,8 @@ def _load_qc_file(fname, prefix=""):
     return data
 
 
-def calculate_motion_summary(confounds_tsv):
-    if not isdefined(confounds_tsv) or confounds_tsv is None:
-        return {
-            "mean_fd": [np.nan],
-            "max_fd": [np.nan],
-            "max_rotation": [np.nan],
-            "max_translation": [np.nan],
-            "max_rel_rotation": [np.nan],
-            "max_rel_translation": [np.nan]
-        }
-    df = pd.read_csv(confounds_tsv, delimiter="\t")
-    translations = df[['trans_x', 'trans_y', 'trans_z']].to_numpy()
-    rotations = df[['rot_x', 'rot_y', 'rot_z']].to_numpy()
+def motion_derivatives(translations, rotations, framewise_disp,
+                       original_files):
 
     def padded_diff(data):
         out = np.zeros_like(data)
@@ -577,7 +572,7 @@ def calculate_motion_summary(confounds_tsv):
 
     # We don't want the relative values across the boundaries of runs.
     # Determine which values should be ignored
-    file_labels, _ = pd.factorize(df['original_file'])
+    file_labels, _ = pd.factorize(original_files)
     new_files = padded_diff(file_labels)
 
     def file_masked(data):
@@ -585,8 +580,8 @@ def calculate_motion_summary(confounds_tsv):
         masked_data[new_files > 0] = 0
         return masked_data
 
-    framewise_disp = file_masked(df['framewise_displacement'].abs())
-    motion_summary = {
+    framewise_disp = file_masked(framewise_disp)
+    return {
         "mean_fd": [framewise_disp.mean()],
         "max_fd": [framewise_disp.max()],
         "max_rotation": [file_masked(np.abs(rotations)).max()],
@@ -594,6 +589,56 @@ def calculate_motion_summary(confounds_tsv):
         "max_rel_rotation": [file_masked(np.abs(drotations)).max()],
         "max_rel_translation": [file_masked(np.abs(dtranslations)).max()]
     }
+
+
+def calculate_motion_summary(confounds_tsv):
+    if not isdefined(confounds_tsv) or confounds_tsv is None:
+        return {
+            "mean_fd": [np.nan],
+            "max_fd": [np.nan],
+            "max_rotation": [np.nan],
+            "max_translation": [np.nan],
+            "max_rel_rotation": [np.nan],
+            "max_rel_translation": [np.nan]
+        }
+    df = pd.read_csv(confounds_tsv, delimiter="\t")
+
+    # the default case where each output image comes from one input image
+    if 'trans_x' in df.columns:
+        translations = df[['trans_x', 'trans_y', 'trans_z']].to_numpy()
+        rotations = df[['rot_x', 'rot_y', 'rot_z']].to_numpy()
+        return motion_derivatives(translations, rotations, df['framewise_displacement'],
+                                  df['original_file'])
+
+    # If there was a PE Pair averaging, get motion from both
+    motion1 = motion_derivatives(df[['trans_x_1', 'trans_y_1', 'trans_z_1']].to_numpy(),
+                                 df[['rot_x_1', 'rot_y_1', 'rot_z_1']].to_numpy(),
+                                 df['framewise_displacement_1'],
+                                 df['original_file_1'])
+
+    motion2 = motion_derivatives(df[['trans_x_2', 'trans_y_2', 'trans_z_2']].to_numpy(),
+                                 df[['rot_x_2', 'rot_y_2', 'rot_z_2']].to_numpy(),
+                                 df['framewise_displacement_2'],
+                                 df['original_file_2'])
+
+    # Combine the FDs from both PE directions
+    # both_fd = np.column_stack([m1, m2])
+    # framewise_disp = both_fd[np.nanargmax(np.abs(both_fd), axis=1)]
+   
+    def compare_series(key_name, comparator):
+        m1 = motion1[key_name][0]
+        m2 = motion2[key_name][0]
+        return [comparator(m1, m2)]
+
+    return {
+        "mean_fd": compare_series("mean_fd", lambda a,b: (a + b) / 2),
+        "max_fd": compare_series("max_fd", max),
+        "max_rotation": compare_series("max_rotation", max),
+        "max_translation": compare_series("max_translation", max),
+        "max_rel_rotation": compare_series("max_rel_rotation", max) ,
+        "max_rel_translation": compare_series("max_rel_translation", max)
+    }
+
     return motion_summary
 
 

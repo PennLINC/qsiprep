@@ -12,6 +12,7 @@ from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
 
 from ...interfaces.dwi_merge import MergeDWIs
+from ...interfaces.nilearn import Merge
 from ...engine import Workflow
 
 # dwi workflows
@@ -153,10 +154,12 @@ def init_dwi_pre_hmc_wf(scan_groups,
         pm_bias = pe.Node(niu.Merge(2), name='pm_bias')
         pm_noise_images = pe.Node(niu.Merge(2), name='pm_noise')
         pm_denoising_confounds = pe.Node(niu.Merge(2), name='pm_denoising_confounds')
+        pm_raw_images = pe.Node(niu.Merge(2), name='pm_raw_images')
         rpe_concat = pe.Node(
             MergeDWIs(harmonize_b0_intensities=not no_b0_harmonization,
                       b0_threshold=b0_threshold),
             name='rpe_concat')
+        raw_rpe_concat = pe.Node(Merge(is_dwi=True), name='raw_rpe_concat')
         qc_wf = init_modelfree_qc_wf(dwi_files=plus_files + minus_files)
 
         workflow.connect([
@@ -173,6 +176,8 @@ def init_dwi_pre_hmc_wf(scan_groups,
                 ('outputnode.bias_images', 'in1')]),
             (merge_plus, pm_noise_images, [
                 ('outputnode.noise_images', 'in1')]),
+            (merge_plus, pm_raw_images, [
+                ('outputnode.merged_raw_image', 'in1')]),
             (merge_plus, pm_denoising_confounds, [
                 ('outputnode.denoising_confounds', 'in1')]),
             (merge_plus, pm_validation, [
@@ -191,6 +196,8 @@ def init_dwi_pre_hmc_wf(scan_groups,
                 ('outputnode.bias_images', 'in2')]),
             (merge_minus, pm_noise_images, [
                 ('outputnode.noise_images', 'in2')]),
+            (merge_minus, pm_raw_images, [
+                ('outputnode.merged_raw_image', 'in2')]),
             (merge_minus, pm_denoising_confounds, [
                 ('outputnode.denoising_confounds', 'in2')]),
             (merge_minus, pm_validation, [
@@ -215,10 +222,14 @@ def init_dwi_pre_hmc_wf(scan_groups,
                 ('out', 'noise_images')]),
             (pm_bias, outputnode, [
                 ('out', 'bias_images')]),
-            (rpe_concat, qc_wf, [
-                ('out_bval', 'inputnode.bval_file'),
-                ('out_bvec', 'inputnode.bvec_file')]),
-            (qc_wf, outputnode, [('outputnode.qc_summary', 'qc_file')])])
+            (pm_raw_images, raw_rpe_concat, [('out', 'in_files')]),
+            (raw_rpe_concat, outputnode, [('out_file', 'raw_concatenated')]),
+            # (raw_rpe_concat, qc_wf, [('out_file', 'inputnode.dwi_file')]),
+            # (rpe_concat, qc_wf, [
+            #     ('out_bval', 'inputnode.bval_file'),
+            #     ('out_bvec', 'inputnode.bvec_file')]),
+            # (qc_wf, outputnode, [('outputnode.qc_summary', 'qc_file')])
+        ])
         workflow.__postdesc__ = "Both groups were then merged into a single file, as required " \
                                 "for the FSL workflows. "
         return workflow
@@ -235,7 +246,6 @@ def init_dwi_pre_hmc_wf(scan_groups,
         calculate_qc=True,
         source_file=source_file)
 
-    qc_wf = init_modelfree_qc_wf(dwi_files=dwi_series)
 
     workflow.connect([
         (merge_dwis, outputnode, [
@@ -246,8 +256,14 @@ def init_dwi_pre_hmc_wf(scan_groups,
             ('outputnode.noise_images', 'noise_images'),
             ('outputnode.validation_reports', 'validation_reports'),
             ('outputnode.denoising_confounds', 'denoising_confounds'),
-            ('outputnode.original_files', 'original_files')]),
+            ('outputnode.original_files', 'original_files')])
+    ])
+
+    if calculate_qc:
+        qc_wf = init_modelfree_qc_wf(dwi_files=dwi_series)
+        workflow.connect([
         (merge_dwis, qc_wf, [
+            ('outputnode.merged_raw_image', 'inputnode.dwi_file'),
             ('outputnode.merged_bval', 'inputnode.bval_file'),
             ('outputnode.merged_bvec', 'inputnode.bvec_file')]),
         (qc_wf, outputnode, [

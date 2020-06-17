@@ -10,11 +10,14 @@ import logging
 from nipype.interfaces import utility as niu
 import nipype.pipeline.engine as pe
 from .derivatives import init_dwi_derivatives_wf
+from .qc import init_modelfree_qc_wf
+from .util import init_dwi_reference_wf
 from ...engine import Workflow
 from ...interfaces import DerivativesDataSink
 from ...interfaces.mrtrix import MRTrixGradientTable
 from ...interfaces.reports import GradientPlot, SeriesQC
 from ...interfaces.dwi_merge import AveragePEPairs, MergeDWIs
+from ...interfaces.nilearn import Merge
 from .qc import init_mask_overlap_wf
 
 
@@ -71,13 +74,18 @@ def init_distortion_group_merge_wf(merging_strategy, inputs_list, hmc_model, rep
     """
     workflow = Workflow(name=name)
     sanitized_inputs = [name.replace('-', '_') for name in inputs_list]
-    input_names = []
-    for suffix in ["_image", "_bval", "_bvec", "_original_bvec", "_b0_ref",
+    input_names = ['t1_brain', 't1_mask', 't1_seg']
+    for suffix in ["_image", "_bval", "_bvec", "_original_bvec", "_b0_ref", "_cnr",
                    "_original_image", "_raw_concatenated_image", "_confounds"]:
         input_names += [name + suffix for name in sanitized_inputs]
     inputnode = pe.Node(niu.IdentityInterface(fields=input_names), name='inputnode')
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=["merged_image", "merged_bval", "merged_bvec", "merged_qc"]),
+        niu.IdentityInterface(
+            fields=["merged_image", "merged_bval", "merged_bvec", "merged_qc", "merged_cnr_map"
+                    'dwi_mask_t1', 'cnr_map_t1', 'merged_bval', 'bvecs_t1',
+                    'local_bvecs_t1', 't1_b0_ref', 'confounds',
+                    'gradient_table_t1', 'hmc_optimization_data'
+        ]),
         name='outputnode')
 
     num_inputs = len(input_names)
@@ -90,6 +98,7 @@ def init_distortion_group_merge_wf(merging_strategy, inputs_list, hmc_model, rep
     merge_raw_concatenated_image = pe.Node(niu.Merge(num_inputs),
                                            name='merge_raw_concatenated_image')
     merge_confounds = pe.Node(niu.Merge(num_inputs), name='merge_confounds')
+    merge_cnrs = pe.Node(niu.Merge(num_inputs), name='merge_cnrs')
 
     # Merge the input data from each distortion group: safe even if eddy was used
     for input_num, input_name in enumerate(sanitized_inputs):
@@ -104,6 +113,7 @@ def init_distortion_group_merge_wf(merging_strategy, inputs_list, hmc_model, rep
             (inputnode, merge_raw_concatenated_image, [(input_name + "_raw_concatenated_image",
                                                         merge_input_name)]),
             (inputnode, merge_b0_refs, [(input_name + "_b0_ref", merge_input_name)]),
+            (inputnode, merge_cnrs, [(input_name + "_cnr", merge_input_name)]),
             (inputnode, merge_confounds, [(input_name + "_confounds", merge_input_name)])
         ])
 
@@ -114,6 +124,9 @@ def init_distortion_group_merge_wf(merging_strategy, inputs_list, hmc_model, rep
         ])
     elif merging_strategy.startswith('concat'):
         distortion_merger = pe.Node(MergeDWIs(), name='distortion_merger')
+    b0_ref_wf = init_dwi_reference_wf(name='merged_b0_ref', register_t1=False,
+                                      gen_report=True, source_file=source_file)
+    concat_cnr_images = pe.Node(Merge(), name='concat_cnr_images')
 
     workflow.connect([
         (merge_images, distortion_merger, [('out', 'dwi_files')]),
@@ -122,8 +135,21 @@ def init_distortion_group_merge_wf(merging_strategy, inputs_list, hmc_model, rep
         (merge_original_image, distortion_merger, [('out', 'bids_dwi_files')]),
         (merge_raw_concatenated_image, distortion_merger, [('out', 'raw_concatenated_files')]),
         (merge_b0_refs, distortion_merger, [('out', 'b0_refs')]),
-        (merge_confounds, distortion_merger, [('out', 'denoising_confounds')])
+        (merge_confounds, distortion_merger, [('out', 'denoising_confounds')]),
+        (merge_cnrs, concat_cnr_images, [('out', 'in_files')]),
+        (concat_cnr_images, outputnode, [('out_file', 'cnr_map_t1')])
     ])
+
+    # Calculate QC on the merged raw and processed data
+    raw_qc_wf = init_modelfree_qc_wf(name='raw_qc_wf')
+    processed_qc_wf = init_modelfree_qc_wf(name='processed_qc_wf')
+    # Combine all the QC measures for a series QC
+    series_qc = pe.Node(SeriesQC(output_file_name=output_prefix), name='series_qc')
+    ds_series_qc = pe.Node(
+        DerivativesDataSink(desc='ImageQC', suffix='dwi', source_file=source_file,
+                            base_directory=output_dir),
+        name='ds_series_qc', run_without_submitting=True,
+        mem_gb=DEFAULT_MEMORY_MIN_GB)
 
     # CONNECT TO DERIVATIVES
     gtab_t1 = pe.Node(MRTrixGradientTable(), name='gtab_t1')
@@ -144,46 +170,72 @@ def init_distortion_group_merge_wf(merging_strategy, inputs_list, hmc_model, rep
         hmc_model=hmc_model,
         shoreline_iters=shoreline_iters)
 
-    # Combine all the QC measures for a series QC
-    series_qc = pe.Node(SeriesQC(output_file_name=output_prefix), name='series_qc')
-    ds_series_qc = pe.Node(
-        DerivativesDataSink(desc='ImageQC', suffix='dwi', source_file=source_file,
-                            base_directory=output_dir),
-        name='ds_series_qc', run_without_submitting=True,
-        mem_gb=DEFAULT_MEMORY_MIN_GB)
 
     workflow.connect([
-        #(inputnode, series_qc, [
-        #    ('raw_qc_file', 'pre_qc'),
-        #    ('confounds', 'confounds_file')]),
-        #(t1_dice_calc, series_qc, [('outputnode.dice_score', 't1_dice_score')]),
-        #(series_qc, ds_series_qc, [('series_qc_file', 'in_file')]),
-        #(inputnode, dwi_derivatives_wf, [('dwi_files', 'inputnode.source_file')]),
-        #(distortion_merger, series_qc, [('merged_raw_concatenated', 't1_qc')]),
-        # (transform_dwis_t1, t1_dice_calc, [
-        #     ('outputnode.resampled_dwi_mask', 'inputnode.dwi_mask')]),
-        # (outputnode, gradient_plot, [('bvecs_t1', 'final_bvec_file')]),
-        #(distortion_merger, gtab_t1, [('out_bval', 'bval_file'),
-        #                              ('out_bvec', 'bvec_file')]),
-        #(inputnode, t1_dice_calc, [
-        #    ('t1_mask', 'inputnode.anatomical_mask')]),
-        #(gtab_t1, outputnode, [('gradient_file', 'gradient_table_t1')]),
-        # (outputnode, dwi_derivatives_wf,
-        #  [('dwi_t1', 'inputnode.dwi_t1'),
-        #   ('dwi_mask_t1', 'inputnode.dwi_mask_t1'),
-        #   ('cnr_map_t1', 'inputnode.cnr_map_t1'),
-        #   ('bvals_t1', 'inputnode.bvals_t1'),
-        #   ('bvecs_t1', 'inputnode.bvecs_t1'),
-        #   ('local_bvecs_t1', 'inputnode.local_bvecs_t1'),
-        #   ('t1_b0_ref', 'inputnode.t1_b0_ref'),
-        #   ('gradient_table_t1', 'inputnode.gradient_table_t1'),
-        #   ('confounds', 'inputnode.confounds'),
-        #   ('hmc_optimization_data', 'inputnode.hmc_optimization_data')]),
-        # (distortion_merger, gradient_plot, [
-        #     ('out_bvec', 'orig_bvec_files'),
-        #     ('out_bval', 'orig_bval_files'),
-        #     ('original_images', 'source_files')]),
-        # (gradient_plot, ds_report_gradients, [('plot_file', 'in_file')])
+
+        # Mask the new b=0 reference
+        (distortion_merger, b0_ref_wf, [
+            ('merged_b0_ref', 'inputnode.b0_template')]),
+        (inputnode, b0_ref_wf, [
+            ('t1_brain', 'inputnode.t1_brain'),
+            ('t1_mask', 'inputnode.t1_mask'),
+            ('t1_seg', 'inputnode.t1_seg')]),
+        (b0_ref_wf, outputnode, [
+            ('outputnode.ref_image', 't1_b0_ref'),
+            ('outputnode.dwi_mask', 'dwi_mask_t1')]),
+
+        # QC connections
+        (distortion_merger, raw_qc_wf, [
+            ('merged_raw_dwi', 'inputnode.dwi_file'),
+            ('merged_raw_bvec', 'inputnode.bvec_file'),
+            ('out_bval', 'inputnode.bval_file')]),
+        (distortion_merger, processed_qc_wf, [
+            ('out_dwi', 'inputnode.dwi_file'),
+            ('out_bvec', 'inputnode.bvec_file'),
+            ('out_bval', 'inputnode.bval_file')]),
+        (distortion_merger, series_qc, [('merged_denoising_confounds', 'confounds_file')]),
+        (raw_qc_wf, series_qc, [
+            ('outputnode.qc_summary', 'pre_qc')]),
+        (processed_qc_wf, series_qc, [
+            ('outputnode.qc_summary', 't1_qc')]),
+        (b0_ref_wf, t1_dice_calc, [
+             ('outputnode.dwi_mask', 'inputnode.dwi_mask')]),
+        (inputnode, t1_dice_calc, [
+            ('t1_mask', 'inputnode.anatomical_mask')]),
+        (t1_dice_calc, series_qc, [('outputnode.dice_score', 't1_dice_score')]),
+        (series_qc, ds_series_qc, [('series_qc_file', 'in_file')]),
+
+        (distortion_merger, outputnode, [
+            ('out_bval', 'merged_bval'),
+            ('out_bvec', 'bvecs_t1'),
+            ('out_dwi', 'merged_image'),
+            ('merged_denoising_confounds', 'confounds')
+        ]),
+        
+        # Report the merged gradients
+        (outputnode, gradient_plot, [('bvecs_t1', 'final_bvec_file')]),
+        (distortion_merger, gradient_plot, [
+             ('out_bvec', 'orig_bvec_files'),
+             ('out_bval', 'orig_bval_files'),
+             ('original_images', 'source_files')]),
+        (gradient_plot, ds_report_gradients, [('plot_file', 'in_file')]),
+        (distortion_merger, gtab_t1, [('out_bval', 'bval_file'),
+                                      ('out_bvec', 'bvec_file')]),
+        (gtab_t1, outputnode, [('gradient_file', 'gradient_table_t1')]),
+
+        # Connect merged results to outputs
+        (outputnode, dwi_derivatives_wf,
+          [('merged_image', 'inputnode.dwi_t1'),
+           ('dwi_mask_t1', 'inputnode.dwi_mask_t1'),
+           ('cnr_map_t1', 'inputnode.cnr_map_t1'),
+           ('merged_bval', 'inputnode.bvals_t1'),
+           ('bvecs_t1', 'inputnode.bvecs_t1'),
+           ('local_bvecs_t1', 'inputnode.local_bvecs_t1'),
+           ('t1_b0_ref', 'inputnode.t1_b0_ref'),
+           ('gradient_table_t1', 'inputnode.gradient_table_t1'),
+           ('confounds', 'inputnode.confounds'),
+           ('hmc_optimization_data', 'inputnode.hmc_optimization_data')
+          ]),
     ])
 
     # Fill-in datasinks of reportlets seen so far

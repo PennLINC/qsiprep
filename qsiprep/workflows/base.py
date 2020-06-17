@@ -597,13 +597,21 @@ to workflows in *qsiprep*'s documentation]\
                 template=template,
                 output_dir=output_dir,
                 output_prefix=merged_group,
-                source_file='',
+                source_file=merged_group + '_dwi.nii.gz',
                 shoreline_iters=shoreline_iters,
                 hmc_model=hmc_model,
                 inputs_list=merged_to_subgroups[merged_group],
                 omp_nthreads=omp_nthreads,
                 reportlets_dir=reportlets_dir,
                 name=merged_group.replace('-', '_') + "_final_merge_wf")
+            workflow.connect([
+                (anat_preproc_wf, merging_group_workflows[merged_group], [
+                    ('outputnode.t1_brain', 'inputnode.t1_brain'),
+                    ('outputnode.t1_mask', 'inputnode.t1_mask'),
+                    ('outputnode.t1_seg', 'inputnode.t1_seg')])
+            ])
+                        
+
 
     outputs_to_files = {dwi_group['concatenated_bids_name']: dwi_group
                         for dwi_group in dwi_fmap_groups}
@@ -809,6 +817,7 @@ to workflows in *qsiprep*'s documentation]\
                 name=output_wfname)
             confounds_name = 'inputnode.{name}_confounds'.format(name=output_wfname)
             b0_ref_name = 'inputnode.{name}_b0_ref'.format(name=output_wfname)
+            cnr_name = 'inputnode.{name}_cnr'.format(name=output_wfname)
             final_merge_wf = merging_group_workflows[concatenation_scheme[output_fname]]
             workflow.connect([
                 (dwi_finalize_wf, final_merge_wf, [
@@ -816,6 +825,7 @@ to workflows in *qsiprep*'s documentation]\
                     ('outputnode.bvecs_t1', bvec_name),
                     ('outputnode.dwi_t1', image_name),
                     ('outputnode.t1_b0_ref', b0_ref_name),
+                    ('outputnode.cnr_map_t1', cnr_name)
                     ]),
                 (dwi_preproc_wf, final_merge_wf, [
                     ('outputnode.raw_concatenated', raw_concatenated_image_name),
