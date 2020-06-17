@@ -251,7 +251,8 @@ def init_dwi_pre_hmc_wf(scan_groups,
             ('outputnode.noise_images', 'noise_images'),
             ('outputnode.validation_reports', 'validation_reports'),
             ('outputnode.denoising_confounds', 'denoising_confounds'),
-            ('outputnode.original_files', 'original_files')])
+            ('outputnode.original_files', 'original_files'),
+            ('outputnode.merged_raw_image', 'raw_concatenated')])
     ])
 
     if calculate_qc:
@@ -261,9 +262,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
             ('outputnode.merged_raw_image', 'inputnode.dwi_file'),
             ('outputnode.merged_bval', 'inputnode.bval_file'),
             ('outputnode.merged_bvec', 'inputnode.bvec_file')]),
-        (qc_wf, outputnode, [
-            ('outputnode.qc_summary', 'qc_file'),
-            ('outputnode.concatenated_data', 'raw_concatenated')])
+        (qc_wf, outputnode, [('outputnode.qc_summary', 'qc_file')])
     ])
 
     return workflow
