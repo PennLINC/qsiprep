@@ -180,7 +180,7 @@ def get_parser():
         help='window size in voxels for ``dwidenoise``. Must be odd (default: 5). '
              'If 0, ``dwidwenoise`` will not be run')
     g_conf.add_argument(
-        '--unringing-method', '--unringing-method',
+        '--unringing-method', '--unringing_method',
         action='store',
         choices=['none', 'mrdegibbs'],
         help='Method for Gibbs-ringing removal.\n - none: no action\n - mrdegibbs: '
