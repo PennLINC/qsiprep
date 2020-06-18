@@ -624,22 +624,19 @@ def calculate_motion_summary(confounds_tsv):
     # Combine the FDs from both PE directions
     # both_fd = np.column_stack([m1, m2])
     # framewise_disp = both_fd[np.nanargmax(np.abs(both_fd), axis=1)]
-   
     def compare_series(key_name, comparator):
         m1 = motion1[key_name][0]
         m2 = motion2[key_name][0]
         return [comparator(m1, m2)]
 
     return {
-        "mean_fd": compare_series("mean_fd", lambda a,b: (a + b) / 2),
+        "mean_fd": compare_series("mean_fd", lambda a, b: (a + b) / 2),
         "max_fd": compare_series("max_fd", max),
         "max_rotation": compare_series("max_rotation", max),
         "max_translation": compare_series("max_translation", max),
-        "max_rel_rotation": compare_series("max_rel_rotation", max) ,
+        "max_rel_rotation": compare_series("max_rel_rotation", max),
         "max_rel_translation": compare_series("max_rel_translation", max)
     }
-
-    return motion_summary
 
 
 class _InteractiveReportInputSpec(TraitedSpec):

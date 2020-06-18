@@ -610,8 +610,6 @@ to workflows in *qsiprep*'s documentation]\
                     ('outputnode.t1_mask', 'inputnode.t1_mask'),
                     ('outputnode.t1_seg', 'inputnode.t1_seg')])
             ])
-                        
-
 
     outputs_to_files = {dwi_group['concatenated_bids_name']: dwi_group
                         for dwi_group in dwi_fmap_groups}

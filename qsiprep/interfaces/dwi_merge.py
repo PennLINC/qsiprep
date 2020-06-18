@@ -150,14 +150,14 @@ class AveragePEPairs(SimpleInterface):
         original_bvecs = combined_bvec_array(self.inputs.original_bvec_files)
         rotated_bvecs = combined_bvec_array(self.inputs.bvec_files)
         bvals = combined_bval_array(self.inputs.bval_files)
-        
+
         # Find which images should be averaged together in the output
         image_pairs, averaged_raw_bvec = find_image_pairs(original_bvecs, bvals, assignments)
         combined_images, combined_raw_images, combined_bvals, combined_bvecs, error_report = \
-		average_image_pairs(image_pairs, self.inputs.dwi_files, rotated_bvecs,
-                                    bvals, self.inputs.denoising_confounds,
-                                    self.inputs.raw_concatenated_files,
-                                    verbose=self.inputs.verbose)	
+            average_image_pairs(image_pairs, self.inputs.dwi_files, rotated_bvecs,
+                                bvals, self.inputs.denoising_confounds,
+                                self.inputs.raw_concatenated_files,
+                                verbose=self.inputs.verbose)
 
         # Save the averaged outputs
         out_dwi_path = op.join(runtime.cwd, "averaged_pairs.nii.gz")
@@ -182,7 +182,7 @@ class AveragePEPairs(SimpleInterface):
 
         # Make a new b=0 template
         b0_indices = np.flatnonzero(bvals < self.inputs.b0_threshold)
-        b0_ref = ants.AverageImages(dimension=3, normalize=True, 
+        b0_ref = ants.AverageImages(dimension=3, normalize=True,
                                     images=[self.inputs.dwi_files[idx] for idx in b0_indices])
         result = b0_ref.run()
         self._results['merged_b0_ref'] = result.outputs.output_average_image
@@ -202,7 +202,7 @@ def find_image_pairs(original_bvecs, bvals, assignments):
     }
     group2 = {
         'bvals': bvals[group2_mask],
-        'original_bvecs': original_bvecs[:, group2_mask], 
+        'original_bvecs': original_bvecs[:, group2_mask],
         'indices': image_nums[group2_mask]
     }
 
@@ -284,13 +284,13 @@ def average_image_pairs(image_pairs, image_paths, rotated_bvecs, bvals, confound
                      new_bvec[1], new_bvec[2]))
 
     averaged_confounds = pd.DataFrame(merged_confounds)
-    return concat_imgs(averaged_images), concat_imgs(raw_averaged_images), np.array(merged_bvals), \
-        np.array(new_bvecs), averaged_confounds
+    return concat_imgs(averaged_images), concat_imgs(raw_averaged_images), \
+        np.array(merged_bvals), np.array(new_bvecs), averaged_confounds
 
 
 def average_bvec(bvec1, bvec2):
     bvec_diff = angle_between(bvec1, bvec2)
-    
+
     mean_bvec_plus = (bvec1 + bvec2) / 2.
     mean_bvec_plus = mean_bvec_plus / np.linalg.norm(mean_bvec_plus)
     mean_bvec_minus = (bvec1 - bvec2) / 2.

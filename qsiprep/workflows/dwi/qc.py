@@ -11,7 +11,6 @@ Utility workflows
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu, afni
 from ...engine import Workflow
-from ...interfaces.nilearn import Merge
 from ...interfaces.dsi_studio import DSIStudioSrcQC, DSIStudioCreateSrc
 from ...interfaces.reports import InteractiveReport
 from ...interfaces.dipy import TensorReconstruction

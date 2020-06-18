@@ -258,11 +258,10 @@ def init_dwi_pre_hmc_wf(scan_groups,
     if calculate_qc:
         qc_wf = init_modelfree_qc_wf(dwi_files=dwi_series)
         workflow.connect([
-        (merge_dwis, qc_wf, [
-            ('outputnode.merged_raw_image', 'inputnode.dwi_file'),
-            ('outputnode.merged_bval', 'inputnode.bval_file'),
-            ('outputnode.merged_bvec', 'inputnode.bvec_file')]),
-        (qc_wf, outputnode, [('outputnode.qc_summary', 'qc_file')])
-    ])
+            (merge_dwis, qc_wf, [
+                ('outputnode.merged_raw_image', 'inputnode.dwi_file'),
+                ('outputnode.merged_bval', 'inputnode.bval_file'),
+                ('outputnode.merged_bvec', 'inputnode.bvec_file')]),
+            (qc_wf, outputnode, [('outputnode.qc_summary', 'qc_file')])])
 
     return workflow

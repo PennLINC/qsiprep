@@ -85,8 +85,7 @@ def init_distortion_group_merge_wf(merging_strategy, inputs_list, hmc_model, rep
             fields=["merged_image", "merged_bval", "merged_bvec", "merged_qc", "merged_cnr_map"
                     'dwi_mask_t1', 'cnr_map_t1', 'merged_bval', 'bvecs_t1',
                     'local_bvecs_t1', 't1_b0_ref', 'confounds',
-                    'gradient_table_t1', 'hmc_optimization_data'
-        ]),
+                    'gradient_table_t1', 'hmc_optimization_data']),
         name='outputnode')
 
     num_inputs = len(input_names)
@@ -171,9 +170,7 @@ def init_distortion_group_merge_wf(merging_strategy, inputs_list, hmc_model, rep
         hmc_model=hmc_model,
         shoreline_iters=shoreline_iters)
 
-
     workflow.connect([
-
         # Mask the new b=0 reference
         (distortion_merger, b0_ref_wf, [
             ('merged_b0_ref', 'inputnode.b0_template')]),
@@ -200,7 +197,7 @@ def init_distortion_group_merge_wf(merging_strategy, inputs_list, hmc_model, rep
         (processed_qc_wf, series_qc, [
             ('outputnode.qc_summary', 't1_qc')]),
         (b0_ref_wf, t1_dice_calc, [
-             ('outputnode.dwi_mask', 'inputnode.dwi_mask')]),
+            ('outputnode.dwi_mask', 'inputnode.dwi_mask')]),
         (inputnode, t1_dice_calc, [
             ('t1_mask', 'inputnode.anatomical_mask')]),
         (t1_dice_calc, series_qc, [('outputnode.dice_score', 't1_dice_score')]),
@@ -212,31 +209,30 @@ def init_distortion_group_merge_wf(merging_strategy, inputs_list, hmc_model, rep
             ('out_dwi', 'merged_image'),
             ('merged_denoising_confounds', 'confounds')
         ]),
-        
+
         # Report the merged gradients
         (outputnode, gradient_plot, [('bvecs_t1', 'final_bvec_file')]),
         (distortion_merger, gradient_plot, [
-             ('out_bvec', 'orig_bvec_files'),
-             ('out_bval', 'orig_bval_files'),
-             ('original_images', 'source_files')]),
+            ('out_bvec', 'orig_bvec_files'),
+            ('out_bval', 'orig_bval_files'),
+            ('original_images', 'source_files')]),
         (gradient_plot, ds_report_gradients, [('plot_file', 'in_file')]),
         (distortion_merger, gtab_t1, [('out_bval', 'bval_file'),
                                       ('out_bvec', 'bvec_file')]),
         (gtab_t1, outputnode, [('gradient_file', 'gradient_table_t1')]),
 
         # Connect merged results to outputs
-        (outputnode, dwi_derivatives_wf,
-          [('merged_image', 'inputnode.dwi_t1'),
-           ('dwi_mask_t1', 'inputnode.dwi_mask_t1'),
-           ('cnr_map_t1', 'inputnode.cnr_map_t1'),
-           ('merged_bval', 'inputnode.bvals_t1'),
-           ('bvecs_t1', 'inputnode.bvecs_t1'),
-           ('local_bvecs_t1', 'inputnode.local_bvecs_t1'),
-           ('t1_b0_ref', 'inputnode.t1_b0_ref'),
-           ('gradient_table_t1', 'inputnode.gradient_table_t1'),
-           ('confounds', 'inputnode.confounds'),
-           ('hmc_optimization_data', 'inputnode.hmc_optimization_data')
-          ]),
+        (outputnode, dwi_derivatives_wf, [
+            ('merged_image', 'inputnode.dwi_t1'),
+            ('dwi_mask_t1', 'inputnode.dwi_mask_t1'),
+            ('cnr_map_t1', 'inputnode.cnr_map_t1'),
+            ('merged_bval', 'inputnode.bvals_t1'),
+            ('bvecs_t1', 'inputnode.bvecs_t1'),
+            ('local_bvecs_t1', 'inputnode.local_bvecs_t1'),
+            ('t1_b0_ref', 'inputnode.t1_b0_ref'),
+            ('gradient_table_t1', 'inputnode.gradient_table_t1'),
+            ('confounds', 'inputnode.confounds'),
+            ('hmc_optimization_data', 'inputnode.hmc_optimization_data')]),
     ])
 
     # Fill-in datasinks of reportlets seen so far

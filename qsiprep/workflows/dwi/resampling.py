@@ -214,7 +214,7 @@ generating a *preprocessed DWI run in {tpl} space*.
 
     merge = pe.Node(Merge(compress=use_compression), name='merge', mem_gb=mem_gb * 3)
     extract_b0_series = pe.Node(ExtractB0s(), name="extract_b0_series")
-    final_b0_ref = init_dwi_reference_wf(register_t1=False, gen_report=write_reports, 
+    final_b0_ref = init_dwi_reference_wf(register_t1=False, gen_report=write_reports,
                                          desc='resampled', name='final_b0_ref',
                                          source_file=source_file)
 

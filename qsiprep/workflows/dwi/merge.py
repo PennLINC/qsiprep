@@ -196,7 +196,6 @@ def init_merge_and_denoise_wf(raw_dwi_files,
             (merge_dwis, qc_wf, [('out_bval', 'inputnode.bval_file'),
                                  ('out_bvec', 'inputnode.bvec_file')])])
 
-
     # We have denoised and combined, therefore we are done
     if denoise_before_combining:
         workflow.connect([
