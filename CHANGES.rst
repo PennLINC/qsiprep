@@ -1,3 +1,9 @@
+0.9.0beta1 (June 17, 2020)
+==========================
+
+ * Adds support for HCP lifespan sequences
+ * Introduces --distortion-group-merge option for combining paired scans
+
 0.8.0 (February 12, 2020)
 =========================
 
@@ -5,6 +11,7 @@
 
 0.7.2 (February 4, 2020)
 ========================
+
  * Fixed a bug in b=0 masking when images have high signal intensity in ventricles (#99)
 
 0.7.1 (January 29, 2020)

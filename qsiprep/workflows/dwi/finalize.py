@@ -47,6 +47,7 @@ def init_dwi_finalize_wf(scan_groups,
                          use_syn,
                          make_intramodal_template,
                          source_file,
+                         write_derivatives=True,
                          layout=None):
     """
     This workflow controls the resampling parts of the dwi preprocessing workflow.
@@ -63,7 +64,7 @@ def init_dwi_finalize_wf(scan_groups,
                                   output_dir='.',
                                   output_resolution=2.0,
                                   template='MNI152NLin2009cAsym',
-                                  output_spaces=['T1w', 'template'],
+                                  output_spaces=['T1w'],
                                   low_mem=False,
                                   output_prefix='',
                                   write_local_bvecs=False,
@@ -86,7 +87,6 @@ def init_dwi_finalize_wf(scan_groups,
             Valid spaces:
 
                 - T1w
-                - template
 
         template : str
             Name of template targeted by ``template`` output space
@@ -100,6 +100,10 @@ def init_dwi_finalize_wf(scan_groups,
             Write uncompressed .nii files in some cases to reduce memory usage
         layout : BIDSLayout
             BIDSLayout structure to enable metadata retrieval
+        write_derivatives: bool
+            Is this the final output? If so, write the final derivatives. If these
+            resampled outputs will be combined with other distortion groups at the end,
+            then return the resampled, non-concatenated images
 
     **Inputs**
 
@@ -148,7 +152,8 @@ def init_dwi_finalize_wf(scan_groups,
     **Outputs**
 
         dwi_t1
-            dwi series, resampled to T1w space
+            dwi series, resampled to T1w space. If write_derivitaves, this is a
+            4d file. Otherwise it's a list of resampled images.
         dwi_mask_t1
             dwi series mask in T1w space
         bvals_t1
@@ -158,18 +163,6 @@ def init_dwi_finalize_wf(scan_groups,
         local_bvecs_t1
             voxelwise bvecs accounting for local displacements
         gradient_table_t1
-            MRTrix-style gradient table
-        dwi_mni
-            dwi series, resampled to template space
-        dwi_mask_mni
-            dwi series mask in template space
-        bvals_mni
-            bvalues of the dwi series
-        bvecs_mni
-            bvecs after aligning to the T1w and resampling
-        local_bvecs_mni
-            voxelwise bvecs accounting for local displacements
-        gradient_table_mni
             MRTrix-style gradient table
 
     """
@@ -232,16 +225,11 @@ def init_dwi_finalize_wf(scan_groups,
         ]),
         name='outputnode')
 
-    gradient_plot = pe.Node(GradientPlot(), name='gradient_plot', run_without_submitting=True)
-    ds_report_gradients = pe.Node(
-        DerivativesDataSink(suffix='sampling_scheme', source_file=source_file),
-        name='ds_report_gradients', run_without_submitting=True,
-        mem_gb=DEFAULT_MEMORY_MIN_GB)
-
     if make_intramodal_template:
         b0_to_im_template = pe.Node(SimpleBeforeAfterRPT(), name='b0_to_im_template')
         ds_report_intramodal = pe.Node(
-            DerivativesDataSink(suffix='tointramodal', source_file=source_file),
+            DerivativesDataSink(suffix='tointramodal', source_file=source_file,
+                                base_directory=reportlets_dir),
             name='ds_report_intramodal', run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
         workflow.connect([
@@ -251,7 +239,71 @@ def init_dwi_finalize_wf(scan_groups,
             (b0_to_im_template, ds_report_intramodal, [('out_report', 'in_file')])
         ])
 
+    transform_dwis_t1 = init_dwi_trans_wf(source_file=source_file,
+                                          name='transform_dwis_t1',
+                                          template="ACPC",
+                                          mem_gb=mem_gb['resampled'],
+                                          omp_nthreads=omp_nthreads,
+                                          output_resolution=output_resolution,
+                                          use_compression=False,
+                                          to_mni=False,
+                                          write_local_bvecs=write_local_bvecs,
+                                          concatenate=write_derivatives)
+    workflow.connect([
+        (inputnode, transform_dwis_t1, [
+            ('b0_indices', 'inputnode.b0_indices'),
+            ('bval_files', 'inputnode.bval_files'),
+            ('bvec_files', 'inputnode.bvec_files'),
+            ('b0_ref_image', 'inputnode.b0_ref_image'),
+            ('cnr_map', 'inputnode.cnr_map'),
+            ('t1_mask', 'inputnode.t1_mask'),
+            ('dwi_mask', 'inputnode.dwi_mask'),
+            ('hmc_xforms', 'inputnode.hmc_xforms'),
+            ('fieldwarps', 'inputnode.fieldwarps'),
+            ('dwi_files', 'inputnode.dwi_files'),
+            ('dwi_sampling_grid', 'inputnode.output_grid'),
+            ('b0_to_intramodal_template_transforms',
+             'inputnode.b0_to_intramodal_template_transforms'),
+            ('intramodal_template_to_t1_affine',
+             'inputnode.intramodal_template_to_t1_affine'),
+            ('intramodal_template_to_t1_warp',
+             'inputnode.intramodal_template_to_t1_warp'),
+            ('itk_b0_to_t1', 'inputnode.itk_b0_to_t1')]),
+        (transform_dwis_t1, outputnode, [('outputnode.bvals', 'bvals_t1'),
+                                         ('outputnode.rotated_bvecs', 'bvecs_t1'),
+                                         ('outputnode.dwi_resampled', 'dwi_t1'),
+                                         ('outputnode.cnr_map_resampled', 'cnr_map_t1'),
+                                         ('outputnode.local_bvecs', 'local_bvecs_t1'),
+                                         ('outputnode.b0_series', 't1_b0_series'),
+                                         ('outputnode.dwi_ref_resampled', 't1_b0_ref'),
+                                         ('outputnode.resampled_dwi_mask', 'dwi_mask_t1'),
+                                         ('outputnode.resampled_qc', 'series_qc_t1')])
+        # (transform_dwis_t1, interactive_report_wf, [
+        #     ('outputnode.dwi_resampled', 'inputnode.processed_dwi_file'),
+        #     ('outputnode.resampled_dwi_mask', 'inputnode.mask_file'),
+        #     ('outputnode.bvals', 'inputnode.bval_file'),
+        #     ('outputnode.rotated_bvecs', 'inputnode.bvec_file')]),
+    ])
+
+    # Fill-in datasinks of reportlets seen so far
+    for node in workflow.list_node_names():
+        if node.split('.')[-1].startswith('ds_report'):
+            workflow.get_node(node).inputs.base_directory = reportlets_dir
+            workflow.get_node(node).inputs.source_file = source_file
+
+    if not write_derivatives:
+        # The list of transformed images is already attached to dwi_t1
+        return workflow
+
     # CONNECT TO DERIVATIVES #####################
+    gtab_t1 = pe.Node(MRTrixGradientTable(), name='gtab_t1')
+    t1_dice_calc = init_mask_overlap_wf(name='t1_dice_calc')
+    gradient_plot = pe.Node(GradientPlot(), name='gradient_plot', run_without_submitting=True)
+    ds_report_gradients = pe.Node(
+        DerivativesDataSink(suffix='sampling_scheme', source_file=source_file),
+        name='ds_report_gradients', run_without_submitting=True,
+        mem_gb=DEFAULT_MEMORY_MIN_GB)
+
     dwi_derivatives_wf = init_dwi_derivatives_wf(
         output_prefix=output_prefix,
         source_file=source_file,
@@ -287,9 +339,19 @@ def init_dwi_finalize_wf(scan_groups,
         (inputnode, series_qc, [
             ('raw_qc_file', 'pre_qc'),
             ('confounds', 'confounds_file')]),
+        (t1_dice_calc, series_qc, [('outputnode.dice_score', 't1_dice_score')]),
         (series_qc, ds_series_qc, [('series_qc_file', 'in_file')]),
         (inputnode, dwi_derivatives_wf, [('dwi_files', 'inputnode.source_file')]),
         (inputnode, outputnode, [('hmc_optimization_data', 'hmc_optimization_data')]),
+        (transform_dwis_t1, series_qc, [('outputnode.resampled_qc', 't1_qc')]),
+        (transform_dwis_t1, t1_dice_calc, [
+            ('outputnode.resampled_dwi_mask', 'inputnode.dwi_mask')]),
+        (outputnode, gradient_plot, [('bvecs_t1', 'final_bvec_file')]),
+        (transform_dwis_t1, gtab_t1, [('outputnode.bvals', 'bval_file'),
+                                      ('outputnode.rotated_bvecs', 'bvec_file')]),
+        (inputnode, t1_dice_calc, [
+            ('t1_mask', 'inputnode.anatomical_mask')]),
+        (gtab_t1, outputnode, [('gradient_file', 'gradient_table_t1')]),
         (outputnode, dwi_derivatives_wf,
          [('dwi_t1', 'inputnode.dwi_t1'),
           ('dwi_mask_t1', 'inputnode.dwi_mask_t1'),
@@ -308,129 +370,17 @@ def init_dwi_finalize_wf(scan_groups,
           ('mni_b0_ref', 'inputnode.mni_b0_ref'),
           ('gradient_table_mni', 'inputnode.gradient_table_mni'),
           ('confounds', 'inputnode.confounds'),
-          ('hmc_optimization_data', 'inputnode.hmc_optimization_data')])
-    ])
-
-    workflow.connect([
+          ('hmc_optimization_data', 'inputnode.hmc_optimization_data')]),
         (inputnode, gradient_plot, [
             ('bvec_files', 'orig_bvec_files'),
             ('bval_files', 'orig_bval_files'),
             ('original_files', 'source_files')]),
         (gradient_plot, ds_report_gradients, [('plot_file', 'in_file')])
     ])
-
-    if "T1w" in output_spaces:
-        transform_dwis_t1 = init_dwi_trans_wf(source_file=source_file,
-                                              name='transform_dwis_t1',
-                                              template="ACPC",
-                                              mem_gb=mem_gb['resampled'],
-                                              omp_nthreads=omp_nthreads,
-                                              output_resolution=output_resolution,
-                                              use_compression=False,
-                                              to_mni=False,
-                                              write_local_bvecs=write_local_bvecs)
-        gtab_t1 = pe.Node(MRTrixGradientTable(), name='gtab_t1')
-        t1_dice_calc = init_mask_overlap_wf(name='t1_dice_calc')
-        workflow.connect([
-            (inputnode, transform_dwis_t1, [
-                ('b0_indices', 'inputnode.b0_indices'),
-                ('bval_files', 'inputnode.bval_files'),
-                ('bvec_files', 'inputnode.bvec_files'),
-                ('b0_ref_image', 'inputnode.b0_ref_image'),
-                ('cnr_map', 'inputnode.cnr_map'),
-                ('t1_mask', 'inputnode.t1_mask'),
-                ('dwi_mask', 'inputnode.dwi_mask'),
-                ('hmc_xforms', 'inputnode.hmc_xforms'),
-                ('fieldwarps', 'inputnode.fieldwarps'),
-                ('dwi_files', 'inputnode.dwi_files'),
-                ('dwi_sampling_grid', 'inputnode.output_grid'),
-                ('b0_to_intramodal_template_transforms',
-                 'inputnode.b0_to_intramodal_template_transforms'),
-                ('intramodal_template_to_t1_affine',
-                 'inputnode.intramodal_template_to_t1_affine'),
-                ('intramodal_template_to_t1_warp',
-                 'inputnode.intramodal_template_to_t1_warp'),
-                ('itk_b0_to_t1', 'inputnode.itk_b0_to_t1')]),
-            (transform_dwis_t1, outputnode, [('outputnode.bvals', 'bvals_t1'),
-                                             ('outputnode.rotated_bvecs', 'bvecs_t1'),
-                                             ('outputnode.dwi_resampled', 'dwi_t1'),
-                                             ('outputnode.cnr_map_resampled', 'cnr_map_t1'),
-                                             ('outputnode.local_bvecs', 'local_bvecs_t1'),
-                                             ('outputnode.b0_series', 't1_b0_series'),
-                                             ('outputnode.dwi_ref_resampled', 't1_b0_ref'),
-                                             ('outputnode.resampled_dwi_mask', 'dwi_mask_t1'),
-                                             ('outputnode.resampled_qc', 'series_qc_t1')]),
-            (outputnode, gradient_plot, [('bvecs_t1', 'final_bvec_file')]),
-            (transform_dwis_t1, gtab_t1, [('outputnode.bvals', 'bval_file'),
-                                          ('outputnode.rotated_bvecs', 'bvec_file')]),
-            (transform_dwis_t1, series_qc, [('outputnode.resampled_qc', 't1_qc')]),
-            (transform_dwis_t1, t1_dice_calc, [
-                ('outputnode.resampled_dwi_mask', 'inputnode.dwi_mask')]),
-            (inputnode, t1_dice_calc, [
-                ('t1_mask', 'inputnode.anatomical_mask')]),
-            (t1_dice_calc, series_qc, [('outputnode.dice_score', 't1_dice_score')]),
-            # (transform_dwis_t1, interactive_report_wf, [
-            #     ('outputnode.dwi_resampled', 'inputnode.processed_dwi_file'),
-            #     ('outputnode.resampled_dwi_mask', 'inputnode.mask_file'),
-            #     ('outputnode.bvals', 'inputnode.bval_file'),
-            #     ('outputnode.rotated_bvecs', 'inputnode.bvec_file')]),
-            (gtab_t1, outputnode, [('gradient_file', 'gradient_table_t1')])])
-
-    if "template" in output_spaces:
-        transform_dwis_mni = init_dwi_trans_wf(source_file=source_file,
-                                               name='transform_dwis_mni',
-                                               template=template,
-                                               mem_gb=mem_gb['resampled'],
-                                               omp_nthreads=omp_nthreads,
-                                               output_resolution=output_resolution,
-                                               use_compression=False,
-                                               to_mni=True,
-                                               write_local_bvecs=write_local_bvecs)
-        gtab_mni = pe.Node(MRTrixGradientTable(), name='gtab_mni')
-        mni_dice_calc = init_mask_overlap_wf(name='mni_dice_calc')
-        workflow.connect([
-            (inputnode, transform_dwis_mni, [
-                ('b0_indices', 'inputnode.b0_indices'),
-                ('bval_files', 'inputnode.bval_files'),
-                ('bvec_files', 'inputnode.bvec_files'),
-                ('b0_ref_image', 'inputnode.b0_ref_image'),
-                ('cnr_map', 'inputnode.cnr_map'),
-                ('dwi_mask', 'inputnode.dwi_mask'),
-                ('hmc_xforms', 'inputnode.hmc_xforms'),
-                ('fieldwarps', 'inputnode.fieldwarps'),
-                ('dwi_files', 'inputnode.dwi_files'),
-                ('dwi_sampling_grid', 'inputnode.output_grid'),
-                ('b0_to_intramodal_template_transforms',
-                 'inputnode.b0_to_intramodal_template_transforms'),
-                ('intramodal_template_to_t1_affine',
-                 'inputnode.intramodal_template_to_t1_affine'),
-                ('intramodal_template_to_t1_warp',
-                 'inputnode.intramodal_template_to_t1_warp'),
-                ('itk_b0_to_t1', 'inputnode.itk_b0_to_t1'),
-                ('t1_2_mni_forward_transform', 'inputnode.t1_2_mni_forward_transform')]),
-            (transform_dwis_mni, outputnode, [('outputnode.bvals', 'bvals_mni'),
-                                              ('outputnode.rotated_bvecs', 'bvecs_mni'),
-                                              ('outputnode.dwi_resampled', 'dwi_mni'),
-                                              ('outputnode.dwi_mask_resampled', 'dwi_mask_mni'),
-                                              ('outputnode.b0_series', 'mni_b0_series'),
-                                              ('outputnode.local_bvecs', 'local_bvecs_mni'),
-                                              ('outputnode.dwi_ref_resampled', 'mni_b0_ref')]),
-            (transform_dwis_mni, gtab_mni, [('outputnode.bvals', 'bval_file'),
-                                            ('outputnode.rotated_bvecs', 'bvec_file')]),
-            (transform_dwis_mni, series_qc, [('outputnode.resampled_qc', 'mni_qc')]),
-            (transform_dwis_mni, mni_dice_calc, [
-                ('outputnode.resampled_dwi_mask', 'inputnode.dwi_mask')]),
-            (inputnode, mni_dice_calc, [
-                ('mni_mask', 'inputnode.anatomical_mask')]),
-            (mni_dice_calc, series_qc, [('outputnode.dice_score', 'mni_dice_score')]),
-            (gtab_mni, outputnode, [('gradient_file', 'gradient_table_mni')])
-        ])
-        if "T1w" not in output_spaces:
-            workflow.connect([(outputnode, gradient_plot, [('bvecs_mni', 'final_bvec_file')])])
-
     # Fill-in datasinks of reportlets seen so far
     for node in workflow.list_node_names():
         if node.split('.')[-1].startswith('ds_report'):
             workflow.get_node(node).inputs.base_directory = reportlets_dir
             workflow.get_node(node).inputs.source_file = source_file
+
     return workflow

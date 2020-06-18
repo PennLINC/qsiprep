@@ -281,6 +281,17 @@ class AddTSVHeader(SimpleInterface):
         return runtime
 
 
+class TestInputInputSpec(BaseInterfaceInputSpec):
+    test1 = traits.Any()
+
+
+class TestInput(SimpleInterface):
+    input_spec = TestInputInputSpec
+
+    def _run_interface(self, runtime):
+        return runtime
+
+
 class JoinTSVColumnsInputSpec(BaseInterfaceInputSpec):
     in_file = File(exists=True, mandatory=True, desc='input file')
     join_file = File(exists=True, mandatory=True, desc='file to be adjoined')

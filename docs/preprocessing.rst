@@ -56,6 +56,8 @@ The are three kinds of SDC available in qsiprep:
      The reverse phase encoding direction scan can come from the fieldmaps directory
      or the dwi directory.
 
+     1a. If using ``eddy``, then ``TOPUP`` is used for this correction.
+
   2. :ref:`sdc_phasediff`: Use a B0map sequence that includes at lease one magnitude
      image and two phase images or a phasediff image.
 
@@ -68,6 +70,22 @@ The are three kinds of SDC available in qsiprep:
 
 ``qsiprep`` determines if a fieldmap should be used based on the ``"IntendedFor"``
 fields in the JSON sidecars in the ``fmap/`` directory.
+
+Preprocessing HCP-style
+^^^^^^^^^^^^^^^^^^^^^^^
+
+QSIPrep can be configured to produce a very similar pipeline to the HCP dMRI pipelines.
+HCP and HCP-Lifespan scans acquire complete multi-shell sequences in opposing phase
+encoding directions, making them a special case where :ref:`sdc_pepolar` are used
+and the corrected images from both PE directions are averaged at the end. To produce
+output from ``qsiprep`` that is directly comparable to the HCP dMRI pipeline you
+will want to include::
+
+  --distortion-group-merge average \
+  --combine-all-dwis \
+
+If you want to disable the image pair averaging and get a result with twice as
+many images, you can substitute ``average`` with ``concat``.
 
 
 .. _outputs:

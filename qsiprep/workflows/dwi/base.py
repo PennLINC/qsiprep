@@ -15,6 +15,7 @@ from ...interfaces import DerivativesDataSink
 
 from ...interfaces.reports import DiffusionSummary
 from ...interfaces.confounds import DMRISummary
+from ...interfaces.utils import TestInput
 from ...engine import Workflow
 
 # dwi workflows
@@ -310,7 +311,8 @@ def init_dwi_preproc_wf(scan_groups,
             'confounds', 'hmc_optimization_data', 'itk_b0_to_t1', 'noise_images', 'bias_images',
             'dwi_files', 'cnr_map', 'bval_files', 'bvec_files', 'b0_ref_image', 'b0_indices',
             'dwi_mask', 'hmc_xforms', 'fieldwarps', 'sbref_file', 'original_files',
-            'raw_qc_file', 'coreg_score', 'raw_concatenated', 'carpetplot_data']),
+            'original_bvecs', 'raw_qc_file', 'coreg_score', 'raw_concatenated',
+            'carpetplot_data']),
         name='outputnode')
     workflow.__desc__ = """
 
@@ -330,6 +332,7 @@ Diffusion data preprocessing
                                      low_mem=low_mem,
                                      denoise_before_combining=denoise_before_combining,
                                      omp_nthreads=omp_nthreads)
+    test_pre_hmc_connect = pe.Node(TestInput(), name='test_pre_hmc_connect')
 
     if hmc_model in ('none', '3dSHORE'):
         if not hmc_model == 'none' and shoreline_iters < 1:
@@ -381,9 +384,11 @@ Diffusion data preprocessing
         (pre_hmc_wf, outputnode, [
             ('outputnode.qc_file', 'raw_qc_file'),
             ('outputnode.original_files', 'original_files'),
+            ('outputnode.bvec_file', 'original_bvecs'),
             ('outputnode.bias_images', 'bias_images'),
             ('outputnode.noise_images', 'noise_images'),
-            ('outputnode.raw_concatenated', 'raw_concatenated')])
+            ('outputnode.raw_concatenated', 'raw_concatenated')]),
+        (pre_hmc_wf, test_pre_hmc_connect, [('outputnode.raw_concatenated', 'test1')])
     ])
 
     # calculate dwi registration to T1w
