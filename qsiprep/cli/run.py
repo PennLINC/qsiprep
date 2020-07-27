@@ -180,7 +180,7 @@ def get_parser():
         help='window size in voxels for ``dwidenoise``. Must be odd (default: 5). '
              'If 0, ``dwidwenoise`` will not be run')
     g_conf.add_argument(
-        '--unringing-method', '--unringing-method',
+        '--unringing-method', '--unringing_method',
         action='store',
         choices=['none', 'mrdegibbs'],
         help='Method for Gibbs-ringing removal.\n - none: no action\n - mrdegibbs: '
@@ -204,6 +204,18 @@ def get_parser():
         help='combine dwis from across multiple runs for motion correction '
         'and reconstruction.')
     g_conf.add_argument(
+        '--distortion-group-merge', '--distortion_group_merge',
+        action='store',
+        choices=['concat', 'average', 'none'],
+        default='none',
+        help='How to combine images across distorted groups.\n'
+        ' - concatenate: append images in the 4th dimension\n '
+        ' - average: if a whole sequence was duplicated in both PE\n'
+        '            directions, average the corrected images of the same\n'
+        '            q-space coordinate\n'
+        ' - none: Default. Keep distorted groups separate'
+    )
+    g_conf.add_argument(
         '--write-local-bvecs', '--write_local_bvecs',
         action='store_true',
         default=False,
@@ -217,9 +229,7 @@ def get_parser():
         default=['T1w'],
         help='volume and surface spaces to resample dwis into\n'
         ' - T1w: subject anatomical volume\n'
-        ' - template: normalization target specified by --template\n'
-        'this argument can be single value or a space delimited list,\n'
-        'for example: --output-space T1w template')
+        ' - template: deprecated. Will be ignored\n')
     g_conf.add_argument(
         '--template',
         required=False,
@@ -641,7 +651,7 @@ def main():
     except Exception as e:
         if not opts.notrack:
             from ..utils.sentry import process_crashfile
-            crashfolders = [output_dir / 'qsirecon' / 'sub-{}'.format(s) / 'log' / run_uuid
+            crashfolders = [Path(output_dir) / 'qsirecon' / 'sub-{}'.format(s) / 'log' / run_uuid
                             for s in subject_list]
             for crashfolder in crashfolders:
                 for crashfile in crashfolder.glob('crash*.*'):
@@ -722,14 +732,18 @@ def build_qsiprep_workflow(opts, retval):
 
     output_spaces = opts.output_space or []
 
-    force_spatial_normalization = opts.force_spatial_normalization
+    force_spatial_normalization = opts.force_spatial_normalization or \
+        'template' in output_spaces
+
+    if 'template' in output_spaces:
+        logger.warning("Using 'template' as an output space is no longer supported.")
+        output_spaces = ["T1w"]
+
     # Check output_space
-    if ('template' not in output_spaces and not force_spatial_normalization) \
-            and (opts.use_syn_sdc or opts.force_syn):
+    if not force_spatial_normalization and (opts.use_syn_sdc or opts.force_syn):
         msg = [
-            'SyN SDC correction requires T1 to MNI registration, but '
-            '"template" is not specified in "--output-space" arguments.',
-            'Option --use-syn will be cowardly dismissed.'
+            'SyN SDC correction requires T1 to MNI registration.',
+            'Adding T1w-based normalization'
         ]
         force_spatial_normalization = True
         logger.warning(' '.join(msg))
@@ -839,6 +853,7 @@ def build_qsiprep_workflow(opts, retval):
         longitudinal=opts.longitudinal,
         b0_threshold=opts.b0_threshold,
         combine_all_dwis=opts.combine_all_dwis,
+        distortion_group_merge=opts.distortion_group_merge,
         dwi_denoise_window=opts.dwi_denoise_window,
         unringing_method=opts.unringing_method,
         dwi_no_biascorr=opts.dwi_no_biascorr,

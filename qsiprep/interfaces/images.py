@@ -10,10 +10,10 @@ Image tools interfaces
 """
 
 import os
+from textwrap import indent
 import numpy as np
 import nibabel as nb
 import nilearn.image as nli
-from textwrap import indent
 from dipy.io import read_bvals_bvecs
 from nipype import logging
 from nipype.utils.filemanip import fname_presuffix
@@ -65,81 +65,6 @@ class SplitDWIs(SimpleInterface):
         self._results['b0_images'] = b0_paths
         self._results['b0_indices'] = b0_indices.tolist()
 
-        return runtime
-
-
-class ConcatRPESplitsInputSpec(BaseInterfaceInputSpec):
-    # Plus images
-    dwi_plus = InputMultiObject(File(exists=True), desc='plus dwi file')
-    bvec_plus = InputMultiObject(File(exists=True), desc='plus bvec file')
-    bval_plus = InputMultiObject(File(exists=True), desc='plus bval file')
-    noise_images_plus = InputMultiObject(File(exists=True), desc='plus_noise_images')
-    bias_images_plus = InputMultiObject(File(exists=True), desc='plus bias images')
-    denoising_confounds_plus = File(exists=True, desc='confounds csv from merging plus')
-    validation_reports_plus = InputMultiObject(File(exists=True))
-
-    # Minus images
-    dwi_minus = InputMultiObject(File(exists=True), desc='minus dwi file')
-    bvec_minus = InputMultiObject(File(exists=True), desc='minus bvec file')
-    bval_minus = InputMultiObject(File(exists=True), desc='minus bval file')
-    noise_images_minus = InputMultiObject(File(exists=True), desc='minus_noise_images')
-    bias_images_minus = InputMultiObject(File(exists=True), desc='minus bias images')
-    denoising_confounds_minus = File(exists=True, desc='confounds csv from merging minus')
-    validation_reports_minus = InputMultiObject(File(exists=True))
-
-
-class ConcatRPESplitsOutputSpec(TraitedSpec):
-    dwi_file = OutputMultiObject(File(exists=True), desc='plus and minus merged into on series')
-    bvec_file = OutputMultiObject(File(exists=True), desc='concatenated bvec file')
-    bval_file = OutputMultiObject(File(exists=True), desc='concatenated bval file')
-    bias_images = OutputMultiObject(File(exists=True), desc='bias field images')
-    noise_images = OutputMultiObject(File(exists=True), desc='noise level images')
-    b0_images = OutputMultiObject(File(exists=True), desc='just the b0s')
-    b0_indices = traits.List(desc='list of indices for each b0 image')
-    original_files = traits.List(desc='list of source series for each dwi')
-    sdc_method = traits.Str("PEB/PEPOLAR Series (phase-encoding based / PE-POLARity)")
-    denoising_confounds = File(exists=True, desc='plus and minus confounds merged')
-    validation_reports = OutputMultiObject(File(exists=True))
-
-
-class ConcatRPESplits(SimpleInterface):
-    """Combine the outputs from the RPE series workflow into a SplitDWI-like object.
-
-    Plus series goes first, indices are adjusted for minus to be globally correct.
-    head motion affines are combined with to-ref affines and stored in dwi_to_ref_affines.
-    """
-
-    input_spec = ConcatRPESplitsInputSpec
-    output_spec = ConcatRPESplitsOutputSpec
-
-    def _run_interface(self, runtime):
-
-        plus_images = self.inputs.dwi_plus
-        plus_bvecs = self.inputs.bvec_plus
-        plus_bvals = self.inputs.bval_plus
-        plus_b0_images = self.inputs.b0_images_plus
-        plus_b0_indices = self.inputs.b0_indices_plus
-        plus_orig_files = self.inputs.original_images_plus
-        num_plus = len(plus_images)
-
-        minus_images = self.inputs.dwi_minus
-        minus_bvecs = self.inputs.bvec_minus
-        minus_bvals = self.inputs.bval_minus
-        minus_b0_images = self.inputs.b0_images_minus
-        minus_b0_indices = self.inputs.b0_indices_minus
-        minus_orig_files = self.inputs.original_images_minus
-
-        self._results['dwi_files'] = plus_images + minus_images
-        self._results['bval_files'] = plus_bvals + minus_bvals
-        self._results['bvec_files'] = plus_bvecs + minus_bvecs
-        self._results['b0_images'] = plus_b0_images + minus_b0_images
-        self._results['b0_indices'] = plus_b0_indices + [
-            num_plus + idx for idx in minus_b0_indices]
-        self._results['original_files'] = _flatten(plus_orig_files) \
-            + _flatten(minus_orig_files)
-        self._results['validation_reports'] = self.inputs.validation_reports_plus \
-            + self.inputs.validation_reports_minus
-        self._results['sdc_method'] = "PEB/PEPOLAR Series (TOPUP)"
         return runtime
 
 

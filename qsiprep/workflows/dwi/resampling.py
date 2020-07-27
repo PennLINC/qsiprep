@@ -16,7 +16,6 @@ from ...engine import Workflow
 from ...interfaces.nilearn import Merge
 from ...interfaces.gradients import (ComposeTransforms, ExtractB0s, GradientRotation,
                                      LocalGradientRotation)
-from ...interfaces.itk import DisassembleTransform
 from ...interfaces.images import ChooseInterpolator
 from .qc import init_modelfree_qc_wf
 
@@ -31,7 +30,9 @@ def init_dwi_trans_wf(source_file,
                       name='dwi_trans_wf',
                       use_compression=True,
                       to_mni=False,
-                      write_local_bvecs=False):
+                      write_local_bvecs=False,
+                      write_reports=True,
+                      concatenate=True):
     """
     This workflow samples dwi images to the ``output_grid`` in a "single shot"
     from the original DWI series.
@@ -103,7 +104,8 @@ def init_dwi_trans_wf(source_file,
     **Outputs**
 
         dwi_resampled
-            DWI series, resampled to template space
+            DWI series, resampled to template space. One file if ``concatenate``, otherwise a
+            list of files
         dwi_ref_resampled
             Reference, contrast-enhanced summary of the DWI series, resampled to template space
         dwi_mask_resampled
@@ -163,19 +165,18 @@ generating a *preprocessed DWI run in {tpl} space*.
             'resampled_qc']),
         name='outputnode')
 
-    def _aslist(in_value):
-        if isinstance(in_value, list):
-            return in_value
-        return [in_value]
-
     # get composite warps and composed affines for warping and rotating
     compose_transforms = pe.Node(ComposeTransforms(), name='compose_transforms')
-
-    def _get_first(lll):
-        from nipype.interfaces.base import isdefined
-        if isdefined(lll):
-            return lll[0]
-        return lll
+    get_interpolation = pe.Node(
+        ChooseInterpolator(output_resolution=output_resolution), name='get_interpolation')
+    dwi_transform = pe.MapNode(
+        ants.ApplyTransforms(float=True),
+        name='dwi_transform', iterfield=['input_image', 'transforms'])
+    rotate_gradients = pe.Node(GradientRotation(), name='rotate_gradients')
+    cnr_tfm = pe.Node(
+        ants.ApplyTransforms(interpolation='LanczosWindowedSinc', float=True),
+        name='cnr_tfm',
+        mem_gb=1)
 
     workflow.connect([
         (inputnode, compose_transforms, [
@@ -185,59 +186,10 @@ generating a *preprocessed DWI run in {tpl} space*.
             ('itk_b0_to_t1', 'hmcsdc_dwi_ref_to_t1w_affine'),
             ('fieldwarps', 'fieldwarps'),
             ('b0_to_intramodal_template_transforms', 'b0_to_intramodal_template_transforms'),
-            (('intramodal_template_to_t1_affine', _get_first), 'intramodal_template_to_t1_affine'),
-            ('intramodal_template_to_t1_warp', 'intramodal_template_to_t1_warp'),
-            ])
-    ])
-
-    # Rotate the bvecs
-    rotate_gradients = pe.Node(GradientRotation(), name='rotate_gradients')
-
-    cnr_tfm = pe.Node(
-        ants.ApplyTransforms(interpolation='LanczosWindowedSinc', float=True),
-        name='cnr_tfm',
-        mem_gb=1)
-
-    if to_mni:
-        # Disassemble the to-mni transform if it's a h5 (it should be!)
-        disassemble_mni_xform = pe.Node(DisassembleTransform(), name='disassemble_mni_xform')
-
-        # Write corrected file in the designated output dir
-        mask_merge_tfms = pe.Node(niu.Merge(2), name='mask_merge_tfms',
-                                  run_without_submitting=True,
-                                  mem_gb=DEFAULT_MEMORY_MIN_GB)
-        workflow.connect([
-            (inputnode, disassemble_mni_xform, [('t1_2_mni_forward_transform',
-                                                 'in_file')]),
-            (disassemble_mni_xform, compose_transforms, [('out_transforms',
-                                                          't1_2_mni_forward_transform')]),
-            (inputnode, mask_merge_tfms, [('t1_2_mni_forward_transform', 'in1'),
-                                          (('itk_b0_to_t1', _aslist), 'in2')]),
-            (mask_merge_tfms, cnr_tfm, [('out', 'transforms')])
-        ])
-    else:
-        workflow.connect([
-            (compose_transforms, cnr_tfm, [(('out_warps', _get_first), 'transforms')])
-        ])
-
-    def _get_first(items):
-        return items[0]
-
-    get_interpolation = pe.Node(
-        ChooseInterpolator(output_resolution=output_resolution), name='get_interpolation')
-
-    dwi_transform = pe.MapNode(
-        ants.ApplyTransforms(float=True),
-        name='dwi_transform', iterfield=['input_image', 'transforms'])
-
-    merge = pe.Node(Merge(compress=use_compression), name='merge',
-                    mem_gb=mem_gb * 3)
-
-    extract_b0_series = pe.Node(ExtractB0s(), name="extract_b0_series")
-    final_b0_ref = init_dwi_reference_wf(register_t1=False, gen_report=True, desc='resampled',
-                                         name='final_b0_ref', source_file=source_file)
-
-    workflow.connect([
+            (('intramodal_template_to_t1_affine', _get_first),
+             'intramodal_template_to_t1_affine'),
+            ('intramodal_template_to_t1_warp', 'intramodal_template_to_t1_warp')]),
+        (compose_transforms, cnr_tfm, [(('out_warps', _get_first), 'transforms')]),
         (inputnode, rotate_gradients, [('bvec_files', 'bvec_files'),
                                        ('bval_files', 'bval_files')]),
         (compose_transforms, rotate_gradients, [('out_affines', 'affine_transforms')]),
@@ -247,11 +199,27 @@ generating a *preprocessed DWI run in {tpl} space*.
                               ('output_grid', 'reference_image')]),
         (cnr_tfm, outputnode, [('output_image', 'cnr_map_resampled')]),
         (compose_transforms, dwi_transform, [('out_warps', 'transforms')]),
-        (inputnode, merge, [('name_source', 'header_source')]),
         (inputnode, dwi_transform, [('dwi_files', 'input_image'),
                                     ('output_grid', 'reference_image')]),
         (inputnode, get_interpolation, [('dwi_files', 'dwi_files')]),
         (get_interpolation, dwi_transform, [('interpolation_method', 'interpolation')]),
+    ])
+
+    # If concatenation is not happening here, send the still-split images to outputs
+    if not concatenate:
+        workflow.connect([
+            (dwi_transform, outputnode, [('output_image', 'dwi_resampled')])
+        ])
+        return workflow
+
+    merge = pe.Node(Merge(compress=use_compression), name='merge', mem_gb=mem_gb * 3)
+    extract_b0_series = pe.Node(ExtractB0s(), name="extract_b0_series")
+    final_b0_ref = init_dwi_reference_wf(register_t1=False, gen_report=write_reports,
+                                         desc='resampled', name='final_b0_ref',
+                                         source_file=source_file)
+
+    workflow.connect([
+        (inputnode, merge, [('name_source', 'header_source')]),
         (dwi_transform, merge, [('output_image', 'in_files')]),
         (merge, outputnode, [('out_file', 'dwi_resampled')]),
         (merge, extract_b0_series, [('out_file', 'dwi_series')]),
@@ -284,3 +252,16 @@ generating a *preprocessed DWI run in {tpl} space*.
 
 def _first(inlist):
     return inlist[0]
+
+
+def _get_first(lll):
+    from nipype.interfaces.base import isdefined
+    if isdefined(lll):
+        return lll[0]
+    return lll
+
+
+def _aslist(in_value):
+    if isinstance(in_value, list):
+        return in_value
+    return [in_value]

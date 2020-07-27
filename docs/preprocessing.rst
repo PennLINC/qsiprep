@@ -56,6 +56,8 @@ The are three kinds of SDC available in qsiprep:
      The reverse phase encoding direction scan can come from the fieldmaps directory
      or the dwi directory.
 
+     1a. If using ``eddy``, then ``TOPUP`` is used for this correction.
+
   2. :ref:`sdc_phasediff`: Use a B0map sequence that includes at lease one magnitude
      image and two phase images or a phasediff image.
 
@@ -68,6 +70,22 @@ The are three kinds of SDC available in qsiprep:
 
 ``qsiprep`` determines if a fieldmap should be used based on the ``"IntendedFor"``
 fields in the JSON sidecars in the ``fmap/`` directory.
+
+Preprocessing HCP-style
+^^^^^^^^^^^^^^^^^^^^^^^
+
+QSIPrep can be configured to produce a very similar pipeline to the HCP dMRI pipelines.
+HCP and HCP-Lifespan scans acquire complete multi-shell sequences in opposing phase
+encoding directions, making them a special case where :ref:`sdc_pepolar` are used
+and the corrected images from both PE directions are averaged at the end. To produce
+output from ``qsiprep`` that is directly comparable to the HCP dMRI pipeline you
+will want to include::
+
+  --distortion-group-merge average \
+  --combine-all-dwis \
+
+If you want to disable the image pair averaging and get a result with twice as
+many images, you can substitute ``average`` with ``concat``.
 
 
 .. _outputs:
@@ -255,8 +273,7 @@ T1w/T2w preprocessing
                               reportlets_dir='.',
                               output_dir='.',
                               template='MNI152NLin2009cAsym',
-                              output_spaces=['T1w', 'fsnative',
-                                             'template', 'fsaverage5'],
+                              output_spaces=['T1w'],
                               output_resolution=1.25,
                               skull_strip_template='OASIS',
                               force_spatial_normalization=True,
@@ -365,7 +382,7 @@ DWI preprocessing
                               impute_slice_threshold=0,
                               eddy_config=None,
                               reportlets_dir='.',
-                              output_spaces=['T1w', 'template'],
+                              output_spaces=['T1w'],
                               dwi_denoise_window=5,
                               unringing_method='mrdegibbs',
                               dwi_no_biascorr=False,

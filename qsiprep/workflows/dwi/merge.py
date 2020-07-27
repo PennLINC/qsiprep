@@ -18,7 +18,7 @@ from .qc import init_modelfree_qc_wf
 from ...interfaces import ConformDwi, DerivativesDataSink
 from ...interfaces.mrtrix import DWIDenoise, DWIBiasCorrect, MRDeGibbs
 from ...interfaces.gradients import ExtractB0s
-from ...interfaces.nilearn import MaskEPI
+from ...interfaces.nilearn import MaskEPI, Merge
 from ...interfaces.dwi_merge import MergeDWIs, StackConfounds
 from ...engine import Workflow
 
@@ -81,7 +81,9 @@ def init_merge_and_denoise_wf(raw_dwi_files,
     **Outputs**
 
         merged_image
-            dwi series, resampled to T1w space
+            dwi series, conformed, denoised if requested
+        merged_raw_image
+            dwi series, conformed, raw
         merged_bval
             bvals from merged images
         merged_bvec
@@ -98,8 +100,9 @@ def init_merge_and_denoise_wf(raw_dwi_files,
     workflow = Workflow(name=name)
     outputnode = pe.Node(
         niu.IdentityInterface(fields=[
-            'merged_image', 'merged_bval', 'merged_bvec', 'noise_images', 'bias_images',
-            'denoising_confounds', 'original_files', 'qc_summary', 'validation_reports']),
+            'merged_image', 'merged_raw_image', 'merged_bval', 'merged_bvec', 'noise_images',
+            'bias_images', 'denoising_confounds', 'original_files', 'qc_summary',
+            'validation_reports']),
         name='outputnode')
 
     # DWIs will be merged at some point.
@@ -113,6 +116,7 @@ def init_merge_and_denoise_wf(raw_dwi_files,
     conformed_bvals = pe.Node(niu.Merge(num_dwis), name='conformed_bvals')
     conformed_bvecs = pe.Node(niu.Merge(num_dwis), name='conformed_bvecs')
     conformed_images = pe.Node(niu.Merge(num_dwis), name='conformed_images')
+    conformed_raw_images = pe.Node(niu.Merge(num_dwis), name='conformed_raw_images')
     conformation_reports = pe.Node(niu.Merge(num_dwis), name='conformation_reports')
     # derivatives from denoising
     denoising_confounds = pe.Node(niu.Merge(num_dwis), name='denoising_confounds')
@@ -159,25 +163,22 @@ def init_merge_and_denoise_wf(raw_dwi_files,
             dwi_source = conformers[-1]
             edge_prefix = ''
 
-        print("merging source", dwi_source)
         workflow.connect([
             (dwi_source, conformed_images, [(edge_prefix + 'dwi_file', 'in%d' % dwi_num)]),
+            (conformers[-1], conformed_raw_images, [('dwi_file', 'in%d' % dwi_num)]),
             (dwi_source, conformed_bvals, [(edge_prefix + 'bval_file', 'in%d' % dwi_num)]),
             (dwi_source, conformed_bvecs, [(edge_prefix + 'bvec_file', 'in%d' % dwi_num)]),
             (conformers[-1], conformation_reports, [('out_report', 'in%d' % dwi_num)])
         ])
 
-    # Get a QC score for the raw data
-    if calculate_qc:
-        qc_wf = init_modelfree_qc_wf(dwi_files=raw_dwi_files)
-        workflow.connect([
-            (qc_wf, outputnode, [('outputnode.qc_summary', 'qc_summary')]),
-            (merge_dwis, qc_wf, [('out_bval', 'inputnode.bval_file'),
-                                 ('out_bvec', 'inputnode.bvec_file')])])
+    # Get an orientation-conformed version of the raw inputs and their gradients
+    raw_merge = pe.Node(Merge(is_dwi=True), name='raw_merge')
 
     # Merge the either conformed-only or conformed-and-denoised data
     workflow.connect([
         (conformed_images, merge_dwis, [('out', 'dwi_files')]),
+        (conformed_raw_images, raw_merge, [('out', 'in_files')]),
+        (raw_merge, outputnode, [('out_file', 'merged_raw_image')]),
         (conformed_bvals, merge_dwis, [('out', 'bval_files')]),
         (conformed_bvecs, merge_dwis, [('out', 'bvec_files')]),
         (conformation_reports, outputnode, [('out', 'validation_reports')]),
@@ -185,6 +186,15 @@ def init_merge_and_denoise_wf(raw_dwi_files,
             ('original_images', 'original_files'),
             ('out_bval', 'merged_bval'),
             ('out_bvec', 'merged_bvec')])])
+
+    # Get a QC score for the raw data
+    if calculate_qc:
+        qc_wf = init_modelfree_qc_wf()
+        workflow.connect([
+            (qc_wf, outputnode, [('outputnode.qc_summary', 'qc_summary')]),
+            (raw_merge, qc_wf, [('out_file', 'inputnode.dwi_file')]),
+            (merge_dwis, qc_wf, [('out_bval', 'inputnode.bval_file'),
+                                 ('out_bvec', 'inputnode.bvec_file')])])
 
     # We have denoised and combined, therefore we are done
     if denoise_before_combining:
