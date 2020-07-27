@@ -532,6 +532,8 @@ class ComposeTransforms(SimpleInterface):
 
 class GradientRotationInputSpec(BaseInterfaceInputSpec):
     affine_transforms = InputMultiObject(File(exists=True), desc='ITK affine transforms')
+    original_images = InputMultiObject(
+        File(exists=True), desc='NIfTI images corresponding to bvals, bvecs')
     bvec_files = InputMultiObject(File(exists=True), desc='list of split bvec files')
     bval_files = InputMultiObject(File(exists=True), desc='list of split bval files')
 
