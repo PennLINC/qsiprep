@@ -469,8 +469,7 @@ def init_single_subject_wf(
 
     workflow = Workflow(name=name)
     workflow.__desc__ = """
-Results included in this manuscript come from preprocessing
-performed using *QSIprep* {qsiprep_ver},
+Preprocessing was performed using *QSIPrep* {qsiprep_ver},
 which is based on *Nipype* {nipype_ver}
 (@nipype1; @nipype2; RRID:SCR_002502).
 
@@ -478,13 +477,13 @@ which is based on *Nipype* {nipype_ver}
         qsiprep_ver=__version__, nipype_ver=nipype_ver)
     workflow.__postdesc__ = """
 
-Many internal operations of *qsiprep* use
+Many internal operations of *QSIPrep* use
 *Nilearn* {nilearn_ver} [@nilearn, RRID:SCR_001362] and
 *Dipy* [@dipy].
 For more details of the pipeline, see [the section corresponding
-to workflows in *qsiprep*'s documentation]\
+to workflows in *QSIPrep*'s documentation]\
 (https://qsiprep.readthedocs.io/en/latest/workflows.html \
-"qsiprep's documentation").
+"QSIPrep's documentation").
 
 
 ### References
