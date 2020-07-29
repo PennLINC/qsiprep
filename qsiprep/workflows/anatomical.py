@@ -209,7 +209,7 @@ through nonlinear registration with `antsRegistration`
 brain-extracted versions of both T1w volume and template.
 Brain tissue segmentation of cerebrospinal fluid (CSF),
 white-matter (WM) and gray-matter (GM) was performed on
-the brain-extracted T1w using `fast` [FSL {fsl_ver}, RRID:SCR_002823,
+the brain-extracted T1w using `FAST` [FSL {fsl_ver}, RRID:SCR_002823,
 @fsl_fast].
 """.format(
         ants_ver=BrainExtraction().version or '<ver>',
