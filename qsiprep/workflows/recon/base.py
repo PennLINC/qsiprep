@@ -170,7 +170,7 @@ def init_single_subject_wf(
 
     workflow = Workflow('sub-{}_{}'.format(subject_id, spec['name']))
     workflow.__desc__ = """
-Results included in this manuscript come from reconstructions
+Reconstruction was 
 performed using *QSIprep* {qsiprep_ver},
 which is based on *Nipype* {nipype_ver}
 (@nipype1; @nipype2; RRID:SCR_002502).
