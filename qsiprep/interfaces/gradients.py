@@ -560,7 +560,8 @@ class GradientRotation(SimpleInterface):
 
         deobliqued_bvecs = deoblique_bvec(self.inputs.bval_files,
                                           self.inputs.bvec_files,
-                                          self.inputs.original_images)
+                                          self.inputs.original_images,
+                                          runtime.cwd)
 
         bvec_fname = out_root + ".bvec"
         commands = bvec_rotation(deobliqued_bvecs, self.inputs.affine_transforms,
