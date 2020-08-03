@@ -16,7 +16,7 @@ from dipy.sims.voxel import all_tensor_evecs
 from dipy.reconst.dti import decompose_tensor
 from dipy.core.geometry import normalized_vector
 from sklearn.metrics.regression import r2_score
-
+from .mrtrix import SS3T_ROOT
 from .itk import disassemble_transform
 
 LOGGER = logging.getLogger('nipype.interface')
@@ -560,8 +560,7 @@ class GradientRotation(SimpleInterface):
 
         deobliqued_bvecs = deoblique_bvec(self.inputs.bval_files,
                                           self.inputs.bvec_files,
-                                          self.inputs.original_images,
-                                          runtime.cwd)
+                                          self.inputs.original_images)
 
         bvec_fname = out_root + ".bvec"
         commands = bvec_rotation(deobliqued_bvecs, self.inputs.affine_transforms,
@@ -713,21 +712,27 @@ def bvec_rotation(ortho_bvecs, transforms, original_images, output_file, runtime
     return commands
 
 
-def bvec_to_rasb(bval_file, bvec_file, img_file):
+def bvec_to_rasb(bval_file, bvec_file, img_file, workdir):
     """Use mrinfo to convert a bvec to RAS+ world coordinate reference frame"""
 
+    # Make a temporary bvec file that mrtrix likes
+    temp_bvec = fname_presuffix(bvec_file, suffix="_fix", newpath=workdir)
+    lps_bvec = np.loadtxt(bvec_file).reshape(3, -1)
+    np.savetxt(temp_bvec, lps_bvec * np.array([[-1], [1], [1]]))
+
     # Run mrinfo to to get the RAS+ vector
-    cmd = ['mrinfo', '-dwgrad', '-fslgrad', bvec_file, bval_file, img_file]
+    cmd = [SS3T_ROOT + '/mrinfo', '-dwgrad',
+           '-fslgrad', temp_bvec, bval_file, img_file]
     proc = Popen(cmd, stdout=PIPE, stderr=PIPE)
     out, err = proc.communicate()
-
+    LOGGER.info(' '.join(cmd))
     if err:
         raise Exception(str(err))
 
     return np.fromstring(out, dtype=float, sep=' ')[:3]
 
 
-def deoblique_bvec(bval_files, bvec_files, original_images):
+def deoblique_bvec(bval_files, bvec_files, original_images, workdir):
     """Get a bvec relative to a non-oblique image.
 
     Parameters:
@@ -742,6 +747,10 @@ def deoblique_bvec(bval_files, bvec_files, original_images):
     original_images: list
         Paths to the original images corresponding to the bvec files
 
+    workdir: str
+        path to the working directory
+
+
     Returns:
     --------
 
@@ -750,9 +759,10 @@ def deoblique_bvec(bval_files, bvec_files, original_images):
 
     """
     deobliqued_bvecs = []
+    print(original_images)
     for bval_file, bvec_file, img_file in zip(bval_files, bvec_files, original_images):
         # Get the RAS vector from the input data using mrinfo
-        rasb = bvec_to_rasb(bval_file, bvec_file, img_file)
+        rasb = bvec_to_rasb(bval_file, bvec_file, img_file, workdir)
 
         # Convert to image axis orientation
         ornt = nb.aff2axcodes(nb.load(img_file).affine)
