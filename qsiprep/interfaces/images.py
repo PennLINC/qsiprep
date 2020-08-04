@@ -10,6 +10,7 @@ Image tools interfaces
 """
 
 import os
+from subprocess import Popen, PIPE
 from textwrap import indent
 import numpy as np
 import nibabel as nb
@@ -23,6 +24,7 @@ from nipype.interfaces import fsl
 # from qsiprep.interfaces.images import (
 #    nii_ones_like, extract_wm, SignalExtraction, MatchHeader,
 #    FilledImageLike, DemeanImage, TemplateDimensions)
+from .mrtrix import SS3T_ROOT
 from ..niworkflows.interfaces.images import ValidateImageInputSpec
 
 LOGGER = logging.getLogger('nipype.interface')
@@ -32,6 +34,8 @@ class SplitDWIsInputSpec(BaseInterfaceInputSpec):
     dwi_file = File(desc='the dwi image')
     bvec_file = File(desc='the bvec file')
     bval_file = File(desc='the bval file')
+    deoblique_bvecs = traits.Bool(False, usedefault=True,
+                                  desc='write LPS+ world coordinate bvecs')
     b0_threshold = traits.Int(50, usedefault=True,
                               desc='Maximum b-value that can be considered a b0')
 
@@ -54,7 +58,8 @@ class SplitDWIs(SimpleInterface):
         split_dwi_files = split.run().outputs.out_files
 
         split_bval_files, split_bvec_files = split_bvals_bvecs(
-            self.inputs.bval_file, self.inputs.bvec_file, runtime)
+            self.inputs.bval_file, self.inputs.bvec_file, split_dwi_files,
+            self.inputs.deoblique, runtime.cwd)
 
         bvalues = np.loadtxt(self.inputs.bval_file)
         b0_indices = np.flatnonzero(bvalues < self.inputs.b0_threshold)
@@ -541,16 +546,50 @@ class ValidateImage(SimpleInterface):
         return runtime
 
 
-def split_bvals_bvecs(bval_file, bvec_file, runtime):
+def bvec_to_rasb(bval_file, bvec_file, img_file, workdir):
+    """Use mrinfo to convert a bvec to RAS+ world coordinate reference frame"""
+
+    # Make a temporary bvec file that mrtrix likes
+    temp_bvec = fname_presuffix(bvec_file, suffix="_fix", newpath=workdir)
+    lps_bvec = np.loadtxt(bvec_file).reshape(3, -1)
+    np.savetxt(temp_bvec, lps_bvec * np.array([[-1], [1], [1]]))
+
+    # Run mrinfo to to get the RAS+ vector
+    cmd = [SS3T_ROOT + '/mrinfo', '-dwgrad',
+           '-fslgrad', temp_bvec, bval_file, img_file]
+    proc = Popen(cmd, stdout=PIPE, stderr=PIPE)
+    out, err = proc.communicate()
+    LOGGER.info(' '.join(cmd))
+    if err:
+        raise Exception(str(err))
+
+    return np.fromstring(out, dtype=float, sep=' ')[:3]
+
+
+def split_bvals_bvecs(bval_file, bvec_file, img_files, deoblique, working_dir):
     """Split bvals and bvecs into one text file per image."""
+    if deoblique:
+        LOGGER.info('Converting oblique-image bvecs to workd coordinate reference frame')
     bvals, bvecs = read_bvals_bvecs(bval_file, bvec_file)
     split_bval_files = []
     split_bvec_files = []
-    for nsample, (bval, bvec) in enumerate(zip(bvals[:, None], bvecs)):
-        bval_fname = fname_presuffix(bval_file, suffix='_%04d' % nsample, newpath=runtime.cwd)
-        bvec_fname = fname_presuffix(bvec_file, suffix='_%04d' % nsample, newpath=runtime.cwd)
+    for nsample, (bval, bvec, img_file) in enumerate(zip(bvals[:, None], bvecs, img_files)):
+        bval_fname = fname_presuffix(bval_file, suffix='_%04d' % nsample, newpath=working_dir)
+        bvec_suffix = '_ortho_%04d' % nsample if not deoblique else '_%04d' % nsample
+        bvec_fname = fname_presuffix(bvec_file, bvec_suffix, newpath=working_dir)
         np.savetxt(bval_fname, bval)
         np.savetxt(bvec_fname, bvec)
+
+        # re-write the bvec deobliqued, if requested
+        if deoblique:
+            rasb = bvec_to_rasb(bval_fname, bvec_fname, img_file, working_dir)
+            # Convert to image axis orientation
+            ornt = nb.aff2axcodes(nb.load(img_file).affine)
+            flippage = np.array(
+                [1 if ornt[n] == "RAS"[n] else -1 for n in [0, 1, 2]])
+            deobliqued_bvec = rasb * flippage
+            np.savetxt(bvec_fname, deobliqued_bvec)
+
         split_bval_files.append(bval_fname)
         split_bvec_files.append(bvec_fname)
 

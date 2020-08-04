@@ -103,8 +103,9 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
         LOGGER.log(25, 'SDC: fieldmap estimation of type "%s" intended for %s found.',
                    fieldmap_type, source_file)
 
-    # Split the input data into single volumes
-    split_dwis = pe.Node(SplitDWIs(b0_threshold=b0_threshold), name='split_dwis')
+    # Split the input data into single volumes, put bvecs in LPS+ world reference frame
+    split_dwis = pe.Node(SplitDWIs(b0_threshold=b0_threshold, deoblique_bvecs=True),
+                         name='split_dwis')
 
     # Motion correct the data
     dwi_hmc_wf = init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to,

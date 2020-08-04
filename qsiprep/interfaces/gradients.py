@@ -16,7 +16,6 @@ from dipy.sims.voxel import all_tensor_evecs
 from dipy.reconst.dti import decompose_tensor
 from dipy.core.geometry import normalized_vector
 from sklearn.metrics.regression import r2_score
-from .mrtrix import SS3T_ROOT
 from .itk import disassemble_transform
 
 LOGGER = logging.getLogger('nipype.interface')
@@ -534,7 +533,9 @@ class GradientRotationInputSpec(BaseInterfaceInputSpec):
     affine_transforms = InputMultiObject(File(exists=True), desc='ITK affine transforms')
     original_images = InputMultiObject(
         File(exists=True), desc='NIfTI images corresponding to bvals, bvecs')
-    bvec_files = InputMultiObject(File(exists=True), desc='list of split bvec files')
+    bvec_files = InputMultiObject(File(exists=True),
+                                  desc='list of split bvec files, must correspond to a '
+                                       'non-oblique image/reference frame.')
     bval_files = InputMultiObject(File(exists=True), desc='list of split bval files')
 
 
@@ -558,14 +559,9 @@ class GradientRotation(SimpleInterface):
         concatenate_bvals(self.inputs.bval_files, bval_fname)
         self._results['bvals'] = bval_fname
 
-        deobliqued_bvecs = deoblique_bvec(self.inputs.bval_files,
-                                          self.inputs.bvec_files,
-                                          self.inputs.original_images,
-                                          runtime.cwd)
-
         bvec_fname = out_root + ".bvec"
-        commands = bvec_rotation(deobliqued_bvecs, self.inputs.affine_transforms,
-                                 self.inputs.original_images, bvec_fname, runtime)
+        bvecs = concatenate_bvecs(self.inputs.bvec_files)
+        commands = bvec_rotation(bvecs, self.inputs.affine_transforms, bvec_fname, runtime)
         self._results['bvecs'] = bvec_fname
 
         self._results['log_cmdline'] = os.path.join(runtime.cwd, 'command.txt')
@@ -679,7 +675,7 @@ def concatenate_bvecs(input_files):
     return stacked
 
 
-def bvec_rotation(ortho_bvecs, transforms, original_images, output_file, runtime):
+def bvec_rotation(ortho_bvecs, transforms, output_file, runtime):
     """Rotate bvecs using antsApplyTransformsToPoints and antsTransformInfo.
 
     Parameters:
@@ -704,74 +700,13 @@ def bvec_rotation(ortho_bvecs, transforms, original_images, output_file, runtime
     """
     aattp_rotated = []
     commands = []
-    for bvec, orig_img, transform in zip(ortho_bvecs, original_images, transforms):
+    for bvec, transform in zip(ortho_bvecs, transforms):
         vec, cmd = aattp_rotate_vec(bvec, transform, runtime)
         aattp_rotated.append(vec)
         commands.append(cmd)
     rotated_vecs = np.row_stack(aattp_rotated)
     np.savetxt(output_file, rotated_vecs.T, fmt=str("%.8f"))
     return commands
-
-
-def bvec_to_rasb(bval_file, bvec_file, img_file, workdir):
-    """Use mrinfo to convert a bvec to RAS+ world coordinate reference frame"""
-
-    # Make a temporary bvec file that mrtrix likes
-    temp_bvec = fname_presuffix(bvec_file, suffix="_fix", newpath=workdir)
-    lps_bvec = np.loadtxt(bvec_file).reshape(3, -1)
-    np.savetxt(temp_bvec, lps_bvec * np.array([[-1], [1], [1]]))
-
-    # Run mrinfo to to get the RAS+ vector
-    cmd = [SS3T_ROOT + '/mrinfo', '-dwgrad',
-           '-fslgrad', temp_bvec, bval_file, img_file]
-    proc = Popen(cmd, stdout=PIPE, stderr=PIPE)
-    out, err = proc.communicate()
-    LOGGER.info(' '.join(cmd))
-    if err:
-        raise Exception(str(err))
-
-    return np.fromstring(out, dtype=float, sep=' ')[:3]
-
-
-def deoblique_bvec(bval_files, bvec_files, original_images, workdir):
-    """Get a bvec relative to a non-oblique image.
-
-    Parameters:
-    -----------
-
-    bval_files: list
-        Paths to single-volume bval files
-
-    bvec_files: list
-        Paths to single-volume bvec files
-
-    original_images: list
-        Paths to the original images corresponding to the bvec files
-
-    workdir: str
-        path to the working directory
-
-
-    Returns:
-    --------
-
-    deobliqued_bvecs: np.ndarray (N, 3)
-        bvec for a non-oblique version of the input images
-
-    """
-    deobliqued_bvecs = []
-    print(original_images)
-    for bval_file, bvec_file, img_file in zip(bval_files, bvec_files, original_images):
-        # Get the RAS vector from the input data using mrinfo
-        rasb = bvec_to_rasb(bval_file, bvec_file, img_file, workdir)
-
-        # Convert to image axis orientation
-        ornt = nb.aff2axcodes(nb.load(img_file).affine)
-        flippage = np.array(
-            [1 if ornt[n] == "RAS"[n] else -1 for n in [0, 1, 2]])
-
-        deobliqued_bvecs.append(rasb * flippage)
-    return np.row_stack(deobliqued_bvecs)
 
 
 def aattp_rotate_vec(orig_vec, transform, runtime):
