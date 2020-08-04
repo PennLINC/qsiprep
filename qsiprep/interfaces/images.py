@@ -59,7 +59,7 @@ class SplitDWIs(SimpleInterface):
 
         split_bval_files, split_bvec_files = split_bvals_bvecs(
             self.inputs.bval_file, self.inputs.bvec_file, split_dwi_files,
-            self.inputs.deoblique, runtime.cwd)
+            self.inputs.deoblique_bvecs, runtime.cwd)
 
         bvalues = np.loadtxt(self.inputs.bval_file)
         b0_indices = np.flatnonzero(bvalues < self.inputs.b0_threshold)
