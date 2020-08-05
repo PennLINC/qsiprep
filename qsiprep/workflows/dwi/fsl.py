@@ -131,7 +131,8 @@ def init_fsl_hmc_wf(scan_groups,
     # Convert eddy outputs back to LPS+, split them
     back_to_lps = pe.Node(ConformDwi(orientation="LPS"), name='back_to_lps')
     cnr_lps = pe.Node(ConformDwi(orientation="LPS"), name='cnr_lps')
-    split_eddy_lps = pe.Node(SplitDWIs(b0_threshold=b0_threshold), name="split_eddy_lps")
+    split_eddy_lps = pe.Node(SplitDWIs(b0_threshold=b0_threshold, deoblique_bvecs=True),
+                             name="split_eddy_lps")
 
     # Convert the b=0 template from pre_eddy_b0_ref to LPS+
     b0_ref_to_lps = pe.Node(ConformDwi(orientation="LPS"), name='b0_ref_to_lps')

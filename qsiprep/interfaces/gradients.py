@@ -16,7 +16,6 @@ from dipy.sims.voxel import all_tensor_evecs
 from dipy.reconst.dti import decompose_tensor
 from dipy.core.geometry import normalized_vector
 from sklearn.metrics.regression import r2_score
-
 from .itk import disassemble_transform
 
 LOGGER = logging.getLogger('nipype.interface')
@@ -532,7 +531,11 @@ class ComposeTransforms(SimpleInterface):
 
 class GradientRotationInputSpec(BaseInterfaceInputSpec):
     affine_transforms = InputMultiObject(File(exists=True), desc='ITK affine transforms')
-    bvec_files = InputMultiObject(File(exists=True), desc='list of split bvec files')
+    original_images = InputMultiObject(
+        File(exists=True), desc='NIfTI images corresponding to bvals, bvecs')
+    bvec_files = InputMultiObject(File(exists=True),
+                                  desc='list of split bvec files, must correspond to a '
+                                       'non-oblique image/reference frame.')
     bval_files = InputMultiObject(File(exists=True), desc='list of split bval files')
 
 
@@ -556,11 +559,9 @@ class GradientRotation(SimpleInterface):
         concatenate_bvals(self.inputs.bval_files, bval_fname)
         self._results['bvals'] = bval_fname
 
-        # Load and rotate the global gradient vectors
-        original_bvecs = concatenate_bvecs(self.inputs.bvec_files)
         bvec_fname = out_root + ".bvec"
-        commands = bvec_rotation(original_bvecs, self.inputs.affine_transforms, bvec_fname,
-                                 runtime)
+        bvecs = concatenate_bvecs(self.inputs.bvec_files)
+        commands = bvec_rotation(bvecs, self.inputs.affine_transforms, bvec_fname, runtime)
         self._results['bvecs'] = bvec_fname
 
         self._results['log_cmdline'] = os.path.join(runtime.cwd, 'command.txt')
@@ -674,11 +675,32 @@ def concatenate_bvecs(input_files):
     return stacked
 
 
-def bvec_rotation(original_bvecs, transforms, output_file, runtime):
-    """Rotate bvecs using antsApplyTransformsToPoints and antsTransformInfo."""
+def bvec_rotation(ortho_bvecs, transforms, output_file, runtime):
+    """Rotate bvecs using antsApplyTransformsToPoints and antsTransformInfo.
+
+    Parameters:
+    -----------
+
+    ortho_bvecs: np.ndarray (n, 3)
+        bvecs relative to a non-oblique output volume
+
+    transforms: list
+        List of transform files that will be applied to the vectors
+
+    original_images: list
+        List of images that correspond to the original bvecs. Used to
+        rotate the bvecs to world coordinates reference frame.
+
+    output_file: str
+        Path to write the new bvec file
+
+    runtime: runtime object
+        Nipype node runtime object
+
+    """
     aattp_rotated = []
     commands = []
-    for bvec, transform in zip(original_bvecs, transforms):
+    for bvec, transform in zip(ortho_bvecs, transforms):
         vec, cmd = aattp_rotate_vec(bvec, transform, runtime)
         aattp_rotated.append(vec)
         commands.append(cmd)
