@@ -1,3 +1,9 @@
+0.10.0 (August 4, 2020)
+=======================
+
+ * Adds support for oblique acquisitions (#)
+
+
 0.9.0beta1 (June 17, 2020)
 ==========================
 
