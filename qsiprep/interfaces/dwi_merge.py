@@ -207,6 +207,8 @@ def find_image_pairs(original_bvecs, bvals, assignments):
     }
 
     # If this is HCP-style, the bvals and bvecs will match directly
+    if not group2['bvals'].shape == group1['bvals'].shape:
+        raise Exception("Unable to perform HCP-style merge, sampling scheme mismatch")
     if np.allclose(group2['bvals'], group1['bvals'], atol=50) and np.allclose(
             group2['original_bvecs'], group1['original_bvecs'], atol=0.0001):
         pairs = list(zip(group1['indices'], group2['indices']))
