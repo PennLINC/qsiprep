@@ -36,7 +36,7 @@ qsiprep/sub-tester/figures/sub-tester_acq-HASC55AP_carpetplot.svg
 qsiprep/sub-tester/figures/sub-tester_acq-HASC55AP_coreg.svg
 qsiprep/sub-tester/figures/sub-tester_acq-HASC55AP_desc-resampled_b0ref.svg
 qsiprep/sub-tester/figures/sub-tester_acq-HASC55AP_desc-sdc_b0.svg
-qsiprep/sub-tester/figures/sub-tester_acq-HASC55AP_merged_denoise_denoising.svg
+qsiprep/sub-tester/figures/sub-tester_acq-HASC55AP_dwi_denoise_acq_HASC55AP_dwi_wf_denoising.svg
 qsiprep/sub-tester/figures/sub-tester_acq-HASC55AP_sampling_scheme.gif
 qsiprep/sub-tester/figures/sub-tester_acq-HASC55AP_shoreline_animation.gif
 qsiprep/sub-tester/figures/sub-tester_seg_brainmask.svg
