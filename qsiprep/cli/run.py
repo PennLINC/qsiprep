@@ -196,13 +196,24 @@ def get_parser():
     g_conf.add_argument(
         '--denoise-before-combining', '--denoise_before_combining',
         action='store_true',
-        help='run ``dwidenoise`` before combining dwis. Requires '
+        help='[DEPRECATED] run ``dwidenoise`` before combining dwis. Requires '
+             '``--combine-all-dwis``')
+    g_conf.add_argument(
+        '--denoise-after-combining', '--denoise_after_combining',
+        action='store_true',
+        help='run ``dwidenoise`` after combining dwis. Requires '
              '``--combine-all-dwis``')
     g_conf.add_argument(
         '--combine_all_dwis', '--combine-all-dwis',
         action='store_true',
-        help='combine dwis from across multiple runs for motion correction '
+        default=False,
+        help='[DEPRECATED] combine dwis from across multiple runs for motion correction '
         'and reconstruction.')
+    g_conf.add_argument(
+        '--separate_all_dwis', '--separate-all-dwis',
+        action='store_true',
+        help="don't attempt to combine dwis from multiple runs. Each will be "
+        'processed separately.')
     g_conf.add_argument(
         '--distortion-group-merge', '--distortion_group_merge',
         action='store',
@@ -335,10 +346,14 @@ def get_parser():
     g_ants.add_argument(
         '--force-spatial-normalization', '--force_spatial_normalization',
         action='store_true',
-        help='ensures that spatial normalization is run, even if template '
-        'is not specified in --output-space. Useful if you plan to warp '
-        'atlases into subject space.'
-    )
+        help='[DEPRECATED] ensures that spatial normalization is run, '
+        'Useful if you plan to warp atlases into subject space.')
+    g_ants.add_argument(
+        '--skip-t1-based-spatial-normalization', '--skip_t1_based_spatial_normalization',
+        action='store_true',
+        default=False,
+        help='skip running the t1w-based normalization to template space. '
+        'Default is to run the normalization.')
 
     # FreeSurfer options
     g_fs = parser.add_argument_group('Specific options for FreeSurfer preprocessing')
@@ -730,16 +745,17 @@ def build_qsiprep_workflow(opts, retval):
         layout, participant_label=opts.participant_label)
     retval['subject_list'] = subject_list
 
+    # Deprecated output space
     output_spaces = opts.output_space or []
-
-    force_spatial_normalization = opts.force_spatial_normalization or \
-        'template' in output_spaces
-
     if 'template' in output_spaces:
-        logger.warning("Using 'template' as an output space is no longer supported.")
+        logger.warning("Using 'template' as an output space is no longer supported. "
+                       "Spatial normalization should be done during reconstruction.")
         output_spaces = ["T1w"]
 
-    # Check output_space
+    # Deprecated --force-spatial-normalization
+    force_spatial_normalization = not opts.skip_t1_based_spatial_normalization
+    if opts.force_spatial_normalization:
+        logger.warning("[DEPRECATED] --force-spatial-normalization is now default")
     if not force_spatial_normalization and (opts.use_syn_sdc or opts.force_syn):
         msg = [
             'SyN SDC correction requires T1 to MNI registration.',
@@ -747,6 +763,14 @@ def build_qsiprep_workflow(opts, retval):
         ]
         force_spatial_normalization = True
         logger.warning(' '.join(msg))
+
+    # deprecated --combine-all-dwis
+    if opts.combine_all_dwis:
+        logger.warning("[DEPRECATED] DWIs are combined by default.")
+
+    # deprecated --denoise-before-combining
+    if opts.denoise_before_combining:
+        logger.warning("[DEPRECATED] DWIs are denoised before combining by default.")
 
     # Load base plugin_settings from file if --use-plugin
     if opts.use_plugin is not None:
@@ -852,13 +876,13 @@ def build_qsiprep_workflow(opts, retval):
         anat_only=opts.anat_only,
         longitudinal=opts.longitudinal,
         b0_threshold=opts.b0_threshold,
-        combine_all_dwis=opts.combine_all_dwis,
+        combine_all_dwis=not opts.separate_all_dwis,
         distortion_group_merge=opts.distortion_group_merge,
         dwi_denoise_window=opts.dwi_denoise_window,
         unringing_method=opts.unringing_method,
         dwi_no_biascorr=opts.dwi_no_biascorr,
         no_b0_harmonization=opts.no_b0_harmonization,
-        denoise_before_combining=opts.denoise_before_combining,
+        denoise_before_combining=not opts.denoise_after_combining,
         write_local_bvecs=opts.write_local_bvecs,
         omp_nthreads=omp_nthreads,
         skull_strip_template=opts.skull_strip_template,

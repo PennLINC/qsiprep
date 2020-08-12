@@ -5,9 +5,11 @@
 Preprocessing
 =========================
 
-There are some important considerations for how your diffusion data will be preprocessed.
+QSIPrep builds a pipeline based on your BIDS inputs. In general the pipeline will incorporate
+all the data it knows how to handle (i.e. fieldmaps, dMRI and anatomical data) automatically.
+There may be cases where you want to change the default behavior, particularly in regard to
 
-  1. You must choose how to combine dwi scans within a session (:ref:`merging`)
+  1. How to combine dwi scans within a session (:ref:`merging`)
   2. How to correct for susceptibility distortion.
   3. How to perform motion correction
 
@@ -26,15 +28,16 @@ a DWI scan (or scans) in the reverse phase encoding direction to use for
 susceptibility distortion correction (SDC).
 
 This creates a number of possible scenarios for preprocessing your DWIs. These
-scenarios can be controlled by the ``combine_all_dwis`` argument. If your study
+scenarios can be controlled by the ``--separate_all_dwis`` argument. If your study
 has multiple sessions, DWI scans will *never* be combined across sessions.
 Merging only occurs within a session.
 
-If ``combine_all_dwis`` is ``False`` (not present in the commandline call), each dwi
+If ``--separate-all-dwis`` is present in the commandline call, each dwi
 scan in the ``dwi`` directories will be processed independently. You will have one
 preprocessed output per each DWI file in your input.
 
-If ``combine_all_dwis`` is set to ``True``, two possibilities arise. If all DWIs in a session
+Otherwise (default) the DWI scans will be merged (i.e. their images will be concatenated).
+The merging affects the pipeline at different stages.  If all DWIs in a session
 are in the same PE direction, they will be merged into a single series. If there are
 two PE directions detected in the DWI scans and ``'fieldmaps'`` is not in ``ignore``,
 images are combined according to their PE direction, and their b0 reference images are used to
@@ -62,7 +65,7 @@ The are three kinds of SDC available in qsiprep:
      image and two phase images or a phasediff image.
 
   3. :ref:`sdc_fieldmapless`: The SyN-based susceptibility distortion correction
-     implemented in FMRIPREP. To use this method, include argument --use-syn-sdc when
+     implemented in FMRIPREP. To use this method, include argument ``--use-syn-sdc`` when
      calling qsiprep. Briefly, this method estimates a SDC warp using ANTS SyN based
      on an average fieldmap in MNI space. For details on this method, see
      `fmriprep's documentation <https://fmriprep.readthedocs.io/en/latest/api/index.html#sdc-fieldmapless>`_
@@ -164,13 +167,11 @@ Volumetric output spaces include ``T1w`` (default) and ``MNI152NLin2009cAsym``.
 - ``*desc-brain_mask.nii.gz`` The generous brain mask that should be reduced probably
 - ``*desc-preproc_dwi.nii.gz`` Resampled DWI series including all b0 images.
 - ``*desc-preproc_dwi.bval``, ``*desc-preproc_dwi.bvec`` FSL-style bvals and bvecs files.
-  *These will be incorrectly interpreted by MRTrix, but will work with DSI Studio.* Use the
-  ``.b`` file for MRTrix.
+  *These will be incorrectly interpreted by MRTrix, but will work with DSI Studio and Dipy.*
+  Use the ``.b`` file for MRTrix.
 - ``desc-preproc_dwi.b`` The gradient table to import data into MRTrix. This and the
   ``_dwi.nii.gz`` can be converted directly to a ``.mif`` file using the ``mrconvert -grad _dwi.b``
   command.
-- ``*b0series.nii.gz`` The b0 images from the series in a 4d image. Useful to see how much the
-  images are impacted by Eddy currents.
 - ``*bvecs.nii.gz`` Each voxel contains a gradient table that has been adjusted for local
   rotations introduced by spatial warping.
 - ``*cnr.nii.gz`` Each voxel contains a contrast-to-noise model defined as the variance of the

@@ -46,7 +46,7 @@ To use a pre-packaged workflow, simply provide the name from the leftmost column
 ``--recon-spec`` argument. For example::
 
   $ qsiprep-docker \
-      --bids_dir /path/to/bids \
+      /path/to/bids /path/for/reconstruction/outputs participant \
       --recon_input /output/from/qsiprep \
       --recon_spec mrtrix_msmt_csd \
       --output_dir /where/my/reconstructed/data/goes \

@@ -36,8 +36,8 @@ qsiprep/sub-PNC/figures/sub-PNC_acq-realistic_carpetplot.svg
 qsiprep/sub-PNC/figures/sub-PNC_acq-realistic_coreg.svg
 qsiprep/sub-PNC/figures/sub-PNC_acq-realistic_desc-resampled_b0ref.svg
 qsiprep/sub-PNC/figures/sub-PNC_acq-realistic_desc-sdc_b0.svg
-qsiprep/sub-PNC/figures/sub-PNC_acq-realistic_merged_denoise_biascorr.svg
-qsiprep/sub-PNC/figures/sub-PNC_acq-realistic_merged_denoise_denoising.svg
+qsiprep/sub-PNC/figures/sub-PNC_acq-realistic_dwi_denoise_acq_realistic_dwi_wf_biascorr.svg
+qsiprep/sub-PNC/figures/sub-PNC_acq-realistic_dwi_denoise_acq_realistic_dwi_wf_denoising.svg
 qsiprep/sub-PNC/figures/sub-PNC_acq-realistic_sampling_scheme.gif
 qsiprep/sub-PNC/figures/sub-PNC_seg_brainmask.svg
 qsiprep/sub-PNC/figures/sub-PNC_t1_2_mni.svg

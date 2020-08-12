@@ -323,7 +323,6 @@ jobs:
                 --config $PWD/nipype.cfg -w /tmp/DSCSDSI/work \
                  /tmp/data/DSCSDSI_nofmap  /tmp/DSCSDSI/derivatives \
                  participant \
-                --force-spatial-normalization \
                 --sloppy --write-graph --mem_mb 4096 \
                 --nthreads 2 --anat-only -vv --output-resolution 5
 
@@ -352,7 +351,6 @@ jobs:
                 --hmc_model 3dSHORE \
                 --hmc-transform Rigid \
                 --shoreline_iters 1 \
-                --force-spatial-normalization \
                 --output-resolution 5 \
                 --nthreads 2 -vv
 
@@ -440,7 +438,6 @@ jobs:
                  participant \
                 --sloppy --mem_mb 4096 \
                 --unringing-method mrdegibbs \
-                --force-spatial-normalization \
                 --output-space T1w \
                 --recon-spec dsi_studio_gqi \
                 --eddy_config /tmp/data/eddy_config.json \
@@ -546,7 +543,6 @@ jobs:
                  /tmp/data/fmaptests/DSDTI_fmap  /tmp/DTI_SDC/derivatives \
                  participant \
                 --boilerplate \
-                --combine-all-dwis \
                 --sloppy --write-graph --mem_mb 4096 \
                 --nthreads 2 -vv --output-resolution 5
 
@@ -565,7 +561,6 @@ jobs:
                  /tmp/data/fmaptests/DSDTI_fmap  /tmp/DTI_SDC/derivatives \
                  participant \
                 --boilerplate \
-                --combine-all-dwis \
                 --prefer-dedicated-fmaps \
                 --sloppy --write-graph --mem_mb 4096 \
                 --nthreads 2 -vv --output-resolution 5
@@ -642,7 +637,6 @@ jobs:
                  /tmp/data/DSDTI  /tmp/DSDTI/nofmap_derivatives \
                  participant \
                 --sloppy --mem_mb 4096 \
-                --force-spatial-normalization \
                 --output-space T1w \
                 --output-resolution 5 \
                 --nthreads 2 -vv
@@ -685,7 +679,6 @@ jobs:
                  participant \
                 --sloppy --mem_mb 4096 \
                 --force-syn \
-                --force-spatial-normalization \
                 --output-space T1w \
                 --hmc_model eddy \
                 --eddy_config /tmp/data/eddy_config.json \
