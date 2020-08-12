@@ -1126,39 +1126,35 @@ jobs:
 
   deploy_pypi:
     machine:
-      image: ubuntu-1604:202004-01
+      image: circleci/python:3.7.4
     working_directory: /tmp/src/qsiprep
     steps:
       - checkout
       - run:
           name: Build qsiprep
           command: |
-            pyenv local 3.8.2
             THISVERSION=$( python get_version.py )
-            virtualenv --python=python3 build
+            virtualenv --python=python build
             source build/bin/activate
-            pip install --upgrade "pip>=19.1"
+            pip install --upgrade "pip>=19.1" numpy
             echo "${CIRCLE_TAG:-$THISVERSION}" > qsiprep/VERSION
             python setup.py sdist
             pip wheel --no-deps -w dist/ .
       - run:
           name: Build qsiprep-container
           command: |
-            pyenv local 3.8.2
             THISVERSION=$( python get_version.py )
             cd wrapper
-            virtualenv --python=python3 build
+            virtualenv --python=python build
             source build/bin/activate
             pip install --upgrade "pip>=19.1"
-            sed -i -E "s/(__version__ = )'[A-Za-z0-9.-]+'/\1'${CIRCLE_TAG:-$THISVERSION}'/" qsiprep_docker.py
+            sed -i -E "s/(__version__ = )'[A-Za-z0-9.-]+'/\1'${CIRCLE_TAG:-$THISVERSION}'/" fmriprep_docker.py
             python setup.py sdist
             pip wheel --no-deps -w dist/ .
       - run:
           name: Upload packages to PyPI
           command: |
-            pyenv local 3.8.2
-            source build/bin/activate
-            pip install twine
+            pip install --user twine
             twine upload dist/qsiprep* wrapper/dist/qsiprep*
 
   deployable:
