@@ -36,8 +36,8 @@ If ``--separate-all-dwis`` is present in the commandline call, each dwi
 scan in the ``dwi`` directories will be processed independently. You will have one
 preprocessed output per each DWI file in your input.
 
-Otherwise (default) the DWI scans will be merged. The merging affects the pipeline at different
-stages.  If all DWIs in a session
+Otherwise (default) the DWI scans will be merged (i.e. their images will be concatenated).
+The merging affects the pipeline at different stages.  If all DWIs in a session
 are in the same PE direction, they will be merged into a single series. If there are
 two PE directions detected in the DWI scans and ``'fieldmaps'`` is not in ``ignore``,
 images are combined according to their PE direction, and their b0 reference images are used to
