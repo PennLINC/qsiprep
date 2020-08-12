@@ -1,7 +1,18 @@
+0.11.0 (August 12, 2020)
+========================
+NEW: Workflow defaults have changed. T1w-based spatial normalization is done by
+default (disabled by ``--skip-t1-based-spatial-normalization``) and dwi scans
+are merged before motion correction by default (disabled by ``--separate-all-dwis``).
+
+* Deprecate some commandline arguments, change defaults (#168)
+* Fix typo in workflow names (#162)
+* Fix bug from 0.10.0 where ODFs were not appearing in plots (#160)
+
+
 0.10.0 (August 4, 2020)
 =======================
 
- * Adds support for oblique acquisitions (#)
+ * Adds support for oblique acquisitions (#156)
 
 
 0.9.0beta1 (June 17, 2020)
