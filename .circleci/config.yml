@@ -1155,7 +1155,7 @@ jobs:
           name: Upload packages to PyPI
           command: |
             pip install --user twine
-            twine upload dist/qsiprep* wrapper/dist/qsiprep*
+            twine upload dist/qsiprep*gz wrapper/dist/qsiprep*
 
   deployable:
     docker:
