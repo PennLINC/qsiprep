@@ -1148,7 +1148,7 @@ jobs:
             virtualenv --python=python build
             source build/bin/activate
             pip install --upgrade "pip>=19.1"
-            sed -i -E "s/(__version__ = )'[A-Za-z0-9.-]+'/\1'${CIRCLE_TAG:-$THISVERSION}'/" fmriprep_docker.py
+            sed -i -E "s/(__version__ = )'[A-Za-z0-9.-]+'/\1'${CIRCLE_TAG:-$THISVERSION}'/" qsiprep_docker.py
             python setup.py sdist
             pip wheel --no-deps -w dist/ .
       - run:
