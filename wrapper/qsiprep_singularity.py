@@ -377,7 +377,7 @@ def main():
     if opts.eddy_config:
         config_dir, config_fname = op.split(opts.eddy_config)
         mounted_config = "/sngl/eddy/" + config_fname
-        command.extend(['-B', ':'.join((spec_dir, '/sngl/eddy'))])
+        command.extend(['-B', ':'.join((config_dir, '/sngl/eddy'))])
         main_args.extend(['--eddy-config', mounted_config])
     if opts.output_dir:
         mkdir(opts.output_dir)
