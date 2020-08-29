@@ -43,7 +43,7 @@ LOGGER = logging.getLogger('nipype.workflow')
 
 def init_qsiprep_wf(
         subject_list, run_uuid, work_dir, output_dir, bids_dir, ignore, debug, low_mem, anat_only,
-        longitudinal, b0_threshold, hires, denoise_before_combining, dwi_denoise_window,
+        dwi_only, longitudinal, b0_threshold, hires, denoise_before_combining, dwi_denoise_window,
         unringing_method, dwi_no_biascorr, no_b0_harmonization, output_resolution,
         combine_all_dwis, distortion_group_merge, omp_nthreads, force_spatial_normalization,
         skull_strip_template, skull_strip_fixed_seed, freesurfer, hmc_model,
@@ -70,6 +70,7 @@ def init_qsiprep_wf(
                               ignore=[],
                               debug=False,
                               low_mem=False,
+                              dwi_only=False,
                               anat_only=False,
                               longitudinal=False,
                               b0_threshold=100,
@@ -126,6 +127,8 @@ def init_qsiprep_wf(
             Write uncompressed .nii files in some cases to reduce memory usage
         anat_only : bool
             Disable diffusion workflows
+        dwi_only : bool
+            Disable the anatomical (T1w/T2w) workflows
         longitudinal : bool
             Treat multiple sessions as longitudinal (may increase runtime)
             See sub-workflows for specific differences
@@ -232,6 +235,7 @@ def init_qsiprep_wf(
             unringing_method=unringing_method,
             dwi_no_biascorr=dwi_no_biascorr,
             no_b0_harmonization=no_b0_harmonization,
+            dwi_only=dwi_only,
             anat_only=anat_only,
             longitudinal=longitudinal,
             b0_threshold=b0_threshold,
@@ -275,7 +279,7 @@ def init_qsiprep_wf(
 
 def init_single_subject_wf(
         subject_id, name, reportlets_dir, output_dir, bids_dir, ignore, debug, write_local_bvecs,
-        low_mem, anat_only, longitudinal, b0_threshold, denoise_before_combining,
+        low_mem, dwi_only, anat_only, longitudinal, b0_threshold, denoise_before_combining,
         dwi_denoise_window, unringing_method, dwi_no_biascorr, no_b0_harmonization,
         combine_all_dwis, distortion_group_merge, omp_nthreads, skull_strip_template,
         force_spatial_normalization, skull_strip_fixed_seed, freesurfer, hires, output_spaces,
@@ -314,6 +318,7 @@ def init_single_subject_wf(
             unringing_method='mrdegibbs',
             dwi_no_biascorr=False,
             no_b0_harmonization=False,
+            dwi_only=False,
             anat_only=False,
             longitudinal=False,
             b0_threshold=100,
@@ -357,6 +362,8 @@ def init_single_subject_wf(
             Write uncompressed .nii files in some cases to reduce memory usage
         anat_only : bool
             Disable functional workflows
+        dwi_only : bool
+            Disable anatomical workflows
         longitudinal : bool
             Treat multiple sessions as longitudinal (may increase runtime)
             See sub-workflows for specific differences
@@ -461,11 +468,12 @@ def init_single_subject_wf(
     # Make sure we always go through these two checks
     if not anat_only and subject_data['dwi'] == []:
         raise Exception("No dwi images found for participant {}. "
-                        "All workflows require dwi images.".format(subject_id))
+                        "All workflows require dwi images unless "
+                        "--anat-only is specified.".format(subject_id))
 
-    if not subject_data['t1w']:
+    if not dwi_only and not subject_data['t1w']:
         raise Exception("No T1w images found for participant {}. "
-                        "All workflows require T1w images.".format(subject_id))
+                        "To bypass T1w processing choose --dwi-only.".format(subject_id))
 
     workflow = Workflow(name=name)
     workflow.__desc__ = """
@@ -496,7 +504,8 @@ to workflows in *QSIPrep*'s documentation]\
         niu.IdentityInterface(fields=['subjects_dir']), name='inputnode')
 
     bidssrc = pe.Node(
-        BIDSDataGrabber(subject_data=subject_data, anat_only=anat_only),
+        BIDSDataGrabber(
+            subject_data=subject_data, dwi_only=dwi_only, anat_only=anat_only),
         name='bidssrc')
 
     bids_info = pe.Node(
@@ -525,6 +534,7 @@ to workflows in *QSIPrep*'s documentation]\
     # Preprocessing of T1w (includes registration to MNI)
     anat_preproc_wf = init_anat_preproc_wf(
         name="anat_preproc_wf",
+        dwi_only=dwi_only,
         skull_strip_template=skull_strip_template,
         skull_strip_fixed_seed=skull_strip_fixed_seed,
         output_spaces=output_spaces,

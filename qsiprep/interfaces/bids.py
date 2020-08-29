@@ -225,9 +225,11 @@ class BIDSDataGrabber(SimpleInterface):
 
     def __init__(self, *args, **kwargs):
         anat_only = kwargs.pop('anat_only')
+        dwi_only = kwargs.pop('dwi_only')
         super(BIDSDataGrabber, self).__init__(*args, **kwargs)
         if anat_only is not None:
             self._require_funcs = not anat_only
+        self._no_anat_necessary = bool(dwi_only)
 
     def _run_interface(self, runtime):
         bids_dict = self.inputs.subject_data
@@ -236,11 +238,16 @@ class BIDSDataGrabber(SimpleInterface):
         self._results.update(bids_dict)
 
         if not bids_dict['t1w']:
-            raise FileNotFoundError('No T1w images found for subject sub-{}'.format(
-                self.inputs.subject_id))
+            message = 'No T1w images found for subject sub-{}'.format(
+                self.inputs.subject_id)
+            if self._no_anat_necessary:
+                LOGGER.info(message + ', but no problem because --dwi-only was '
+                            'selected.')
+            else:
+                raise FileNotFoundError(message)
 
-        if self._require_funcs and not bids_dict['dwi']:
-            raise FileNotFoundError('No functional images found for subject sub-{}'.format(
+        if self._no_anat_necessary and not bids_dict['dwi']:
+            raise FileNotFoundError('No DWI images found for subject sub-{}'.format(
                 self.inputs.subject_id))
 
         for imtype in ['t2w', 'flair', 'fmap', 'sbref', 'roi', 'dwi']:

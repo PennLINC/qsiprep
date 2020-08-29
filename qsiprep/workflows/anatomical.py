@@ -58,7 +58,7 @@ TEMPLATE_MAP = {
 
 
 #  pylint: disable=R0914
-def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug,
+def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug, dwi_only,
                          freesurfer, longitudinal, omp_nthreads, hires, reportlets_dir,
                          output_dir, num_t1w, output_resolution, force_spatial_normalization,
                          skull_strip_fixed_seed=False, name='anat_preproc_wf'):
@@ -88,6 +88,7 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug,
                                   output_spaces=['T1w', 'fsnative',
                                                  'template', 'fsaverage5'],
                                   output_resolution=1.25,
+                                  dwi_only=False,
                                   skull_strip_template='OASIS',
                                   force_spatial_normalization=True,
                                   freesurfer=True,
@@ -108,9 +109,9 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug,
             Valid spaces:
 
               - T1w
-              - template
-              - fsnative
-              - fsaverage (or other pre-existing FreeSurfer templates)
+
+        dwi_only : bool
+            Do not perform any anatomical operations and return all <undefined> outputs
         force_spatial_normalization : bool
             Run spatial normalization even if "template" is not in ``output_spaces``
         output_resolution : float
@@ -201,6 +202,22 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug,
     """
 
     workflow = Workflow(name=name)
+    inputnode = pe.Node(
+        niu.IdentityInterface(fields=['t1w', 't2w', 'roi', 'flair', 'subjects_dir', 'subject_id']),
+        name='inputnode')
+    outputnode = pe.Node(niu.IdentityInterface(
+        fields=['t1_preproc', 't1_brain', 't1_mask', 't1_seg', 't1_tpms',
+                't1_2_mni', 't1_2_mni_forward_transform', 't1_2_mni_reverse_transform',
+                'mni_mask', 'mni_seg', 'mni_tpms',
+                'template_transforms', 'dwi_sampling_grid',
+                'subjects_dir', 'subject_id', 't1_2_fsnative_forward_transform',
+                't1_2_fsnative_reverse_transform', 'surfaces', 't1_aseg', 't1_aparc']),
+        name='outputnode')
+
+    if dwi_only:
+        workflow.add_nodes([inputnode, outputnode])
+        return workflow
+
     workflow.__postdesc__ = """\
 Spatial normalization to the ICBM 152 Nonlinear Asymmetrical
 template version 2009c [@mni, RRID:SCR_008796] was performed
@@ -236,17 +253,6 @@ and used as T1w-reference throughout the workflow.
     # Get the template image
     ref_img = pkgr('qsiprep', 'data/mni_1mm_t1w_lps.nii.gz')
     ref_img_brain = pkgr('qsiprep', 'data/mni_1mm_t1w_lps_brain.nii.gz')
-    inputnode = pe.Node(
-        niu.IdentityInterface(fields=['t1w', 't2w', 'roi', 'flair', 'subjects_dir', 'subject_id']),
-        name='inputnode')
-    outputnode = pe.Node(niu.IdentityInterface(
-        fields=['t1_preproc', 't1_brain', 't1_mask', 't1_seg', 't1_tpms',
-                't1_2_mni', 't1_2_mni_forward_transform', 't1_2_mni_reverse_transform',
-                'mni_mask', 'mni_seg', 'mni_tpms',
-                'template_transforms', 'dwi_sampling_grid',
-                'subjects_dir', 'subject_id', 't1_2_fsnative_forward_transform',
-                't1_2_fsnative_reverse_transform', 'surfaces', 't1_aseg', 't1_aparc']),
-        name='outputnode')
 
     buffernode = pe.Node(niu.IdentityInterface(
         fields=['t1_brain', 't1_mask']), name='buffernode')
