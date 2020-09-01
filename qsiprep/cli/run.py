@@ -141,6 +141,14 @@ def get_parser():
         action='store_true',
         help='run anatomical workflows only')
     g_perfm.add_argument(
+        '--dwi-only', '--dwi_only',
+        action='store_true',
+        help='ignore anatomical (T1w/T2w) data and process DWIs only')
+    g_perfm.add_argument(
+        '--infant',
+        action='store_true',
+        help='configure pipelines to process infant brains')
+    g_perfm.add_argument(
         '--boilerplate', action='store_true', help='generate boilerplate only')
     g_perfm.add_argument(
         "-v",
@@ -873,6 +881,8 @@ def build_qsiprep_workflow(opts, retval):
         freesurfer=opts.do_reconall,
         debug=opts.sloppy,
         low_mem=opts.low_mem,
+        dwi_only=opts.dwi_only,
+        infant_mode=opts.infant,
         anat_only=opts.anat_only,
         longitudinal=opts.longitudinal,
         b0_threshold=opts.b0_threshold,

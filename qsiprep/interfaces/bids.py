@@ -241,8 +241,8 @@ class BIDSDataGrabber(SimpleInterface):
             message = 'No T1w images found for subject sub-{}'.format(
                 self.inputs.subject_id)
             if self._no_anat_necessary:
-                LOGGER.info(message + ', but no problem because --dwi-only was '
-                            'selected.')
+                LOGGER.info('%s, but no problem because --dwi-only was selected.',
+                            message)
             else:
                 raise FileNotFoundError(message)
 
@@ -252,8 +252,8 @@ class BIDSDataGrabber(SimpleInterface):
 
         for imtype in ['t2w', 'flair', 'fmap', 'sbref', 'roi', 'dwi']:
             if not bids_dict[imtype]:
-                LOGGER.warning('No \'{}\' images found for sub-{}'.format(
-                    imtype, self.inputs.subject_id))
+                LOGGER.warning('No \'%s\' images found for sub-%s',
+                               imtype, self.inputs.subject_id)
 
         return runtime
 

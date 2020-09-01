@@ -44,7 +44,7 @@ LOGGER = logging.getLogger('nipype.workflow')
 def init_qsiprep_wf(
         subject_list, run_uuid, work_dir, output_dir, bids_dir, ignore, debug, low_mem, anat_only,
         dwi_only, longitudinal, b0_threshold, hires, denoise_before_combining, dwi_denoise_window,
-        unringing_method, dwi_no_biascorr, no_b0_harmonization, output_resolution,
+        unringing_method, dwi_no_biascorr, no_b0_harmonization, output_resolution, infant_mode,
         combine_all_dwis, distortion_group_merge, omp_nthreads, force_spatial_normalization,
         skull_strip_template, skull_strip_fixed_seed, freesurfer, hmc_model,
         impute_slice_threshold, hmc_transform, shoreline_iters, eddy_config, write_local_bvecs,
@@ -95,6 +95,7 @@ def init_qsiprep_wf(
                               intramodal_template_iters=0,
                               intramodal_template_transform="Rigid",
                               hmc_transform='Affine',
+                              infant_mode=False,
                               eddy_config=None,
                               shoreline_iters=2,
                               impute_slice_threshold=0,
@@ -132,6 +133,8 @@ def init_qsiprep_wf(
         longitudinal : bool
             Treat multiple sessions as longitudinal (may increase runtime)
             See sub-workflows for specific differences
+        infant_mode : bool
+            Run the pipeline for infant DWIs
         b0_threshold : int
             Images with b-values less than this value will be treated as a b=0 image.
         dwi_denoise_window : int
@@ -238,6 +241,7 @@ def init_qsiprep_wf(
             dwi_only=dwi_only,
             anat_only=anat_only,
             longitudinal=longitudinal,
+            infant_mode=infant_mode,
             b0_threshold=b0_threshold,
             freesurfer=freesurfer,
             hires=hires,
@@ -280,7 +284,7 @@ def init_qsiprep_wf(
 def init_single_subject_wf(
         subject_id, name, reportlets_dir, output_dir, bids_dir, ignore, debug, write_local_bvecs,
         low_mem, dwi_only, anat_only, longitudinal, b0_threshold, denoise_before_combining,
-        dwi_denoise_window, unringing_method, dwi_no_biascorr, no_b0_harmonization,
+        dwi_denoise_window, unringing_method, dwi_no_biascorr, no_b0_harmonization, infant_mode,
         combine_all_dwis, distortion_group_merge, omp_nthreads, skull_strip_template,
         force_spatial_normalization, skull_strip_fixed_seed, freesurfer, hires, output_spaces,
         template, output_resolution, prefer_dedicated_fmaps, motion_corr_to, b0_to_t1w_transform,
@@ -465,6 +469,9 @@ def init_single_subject_wf(
     else:
         subject_data, layout = collect_data(bids_dir, subject_id)
 
+    if anat_only and dwi_only:
+        raise Exception("--anat-only and --dwi-only are mutually exclusive.")
+
     # Make sure we always go through these two checks
     if not anat_only and subject_data['dwi'] == []:
         raise Exception("No dwi images found for participant {}. "
@@ -535,6 +542,7 @@ to workflows in *QSIPrep*'s documentation]\
     anat_preproc_wf = init_anat_preproc_wf(
         name="anat_preproc_wf",
         dwi_only=dwi_only,
+        infant_mode=infant_mode,
         skull_strip_template=skull_strip_template,
         skull_strip_fixed_seed=skull_strip_fixed_seed,
         output_spaces=output_spaces,
