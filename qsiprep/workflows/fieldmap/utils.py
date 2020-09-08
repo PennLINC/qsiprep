@@ -50,7 +50,6 @@ def demean_image(in_file, in_mask=None, out_file=None):
     import numpy as np
     import nibabel as nb
     import os.path as op
-    from nipype.utils import NUMPY_MMAP
 
     if out_file is None:
         fname, fext = op.splitext(op.basename(in_file))
@@ -58,12 +57,12 @@ def demean_image(in_file, in_mask=None, out_file=None):
             fname, _ = op.splitext(fname)
         out_file = op.abspath('./%s_demean.nii.gz' % fname)
 
-    im = nb.load(in_file, mmap=NUMPY_MMAP)
+    im = nb.load(in_file)
     data = im.get_data().astype(np.float32)
     msk = np.ones_like(data)
 
     if in_mask is not None:
-        msk = nb.load(in_mask, mmap=NUMPY_MMAP).get_data().astype(np.float32)
+        msk = nb.load(in_mask).get_data().astype(np.float32)
         msk[msk > 0] = 1.0
         msk[msk < 1] = 0.0
 
