@@ -1,5 +1,5 @@
 {
-  "creators": [
+  "contributors": [
     {
       "name": "Cieslak, Matthew",
       "affiliation": "Department of Neuropsychiatry, University of Pennsylvania",
@@ -21,15 +21,14 @@
       "orcid": "0000-0001-7491-9798"
     },
     {
-      "affiliation": "Perelman School of Medicine, University of Pennsylvania, PA, USA",
-      "name": "Satterthwaite, Theodore D.",
-      "orcid": "0000-0001-7072-9399",
-      "type": "Researcher"
-    },
-    {
       "name": "Magnussen, Fredrik",
       "affiliation": "Department of Psychology, University of Oslo",
       "orcid": "0000-0003-2574-1705"
+    },
+    {
+      "affiliation": "Perelman School of Medicine, University of Pennsylvania, PA, USA",
+      "name": "Satterthwaite, Theodore D.",
+      "orcid": "0000-0001-7072-9399"
     }
   ],
   "keywords": [
@@ -40,6 +39,7 @@
     "dMRI",
     "BIDS"
   ],
+  "title": "QSIPrep: An integrative platform for preprocessing and reconstructing diffusion MRI",
   "license": "BSD-3-Clause",
   "upload_type": "software"
 }
