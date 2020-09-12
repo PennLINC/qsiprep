@@ -23,6 +23,31 @@ from nipype.interfaces.ants.resampling import ApplyTransformsInputSpec
 LOGGER = logging.getLogger('nipype.interface')
 
 
+class _AffineToRigidInputSpec(BaseInterfaceInputSpec):
+    fixed_image = File(exists=True)
+    moving_image = File(exists=True)
+    affine_transform = File(exists=True)
+
+
+class _AffineToRigidOutputSpec(TraitedSpec):
+    rigid_transform = File(exists=True)
+    rigid_transform_inverse = File(exists=True)
+
+
+class AffineToRigid(SimpleInterface):
+    input_spec = _AffineToRigidInputSpec
+    output_spec = _AffineToRigidOutputSpec
+
+    def _run_interface(self, runtime):
+        rigid_itk, rigid_itk_inverse = itk_affine_to_rigid(
+            self.inputs.affine_transform,
+            self.inputs.moving_image,
+            self.inputs.fixed_image,
+            runtime.cwd)
+        self._results['rigid_transform'] = rigid_itk
+        self._results['rigid_transform_inverse'] = rigid_itk_inverse
+
+
 class DisassembleTransformInputSpec(BaseInterfaceInputSpec):
     in_file = File(exists=True, mandatory=True, desc='ANTs composite transform (h5)')
 
@@ -249,3 +274,49 @@ def rotation_matrix_from_transform(transform):
     start_line = start_lines[0]
     matrix_lines = lines[(start_line+1):(start_line+4)]
     return np.array([list(map(float, line.split())) for line in matrix_lines])
+
+
+def itk_affine_to_rigid(transform_file, src, ref, cwd):
+    """uses c3d_affine_tool and FSL's aff2rigid to convert an itk linear
+    transform from affine to rigid"""
+
+    # created file names
+    full_fsl_xfm = cwd + "/full_fsl.xfm"
+    rigid_fsl_xfm = cwd + "/rigid_fsl.xfm"
+    rigid_itk_mat = cwd + "/rigid_itk.mat"
+    rigid_itk_mat_inverse = cwd + "/rigid_itk_inverse.mat"
+
+    # Convert to full 12dof FSL transform
+    to_fsl = ['c3d_affine_tool', '-src', src, '-ref', ref, "-itk", transform_file,
+              '-ras2fsl', '-o', full_fsl_xfm]
+    proc = subprocess.Popen(to_fsl, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    LOGGER.info(" ".join(to_fsl))
+    out, err = proc.communicate()
+
+    # Convert to rigid transform
+    to_rigid = ['aff2rigid', full_fsl_xfm, rigid_fsl_xfm]
+    proc = subprocess.Popen(to_rigid, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    LOGGER.info(" ".join(to_rigid))
+    out, err = proc.communicate()
+
+    # Convert rigid back to itk
+    rigid_fsl_to_itk = ['c3d_affine_tool', '-ref', ref, '-src', src,
+                        rigid_fsl_xfm,
+                        '-fsl2ras', '-oitk', rigid_itk_mat]
+    proc = subprocess.Popen(rigid_fsl_to_itk, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE)
+    LOGGER.info(" ".join(rigid_fsl_to_itk))
+    out, err = proc.communicate()
+
+    # Get the inverse of it
+    invert_rigid = ['antsApplyTransforms', '-d', '3', '-r', ref,
+                    '-o', 'Linear[%s,1]' % rigid_itk_mat_inverse,
+                    '--transform', rigid_itk_mat]
+    proc = subprocess.Popen(invert_rigid, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE)
+    LOGGER.info(" ".join(invert_rigid))
+    out, err = proc.communicate()
+
+    if False in (op.exists(rigid_itk_mat), op.exists(rigid_itk_mat_inverse)):
+        raise Exception("unable to create rigid AC-PC transform")
+    return rigid_itk_mat, rigid_itk_mat_inverse
