@@ -43,6 +43,7 @@ from qsiprep.interfaces import Conform
 from ..utils.misc import fix_multi_T1w_source_name, add_suffix
 from ..interfaces.freesurfer import (
         PatchedLTAConvert as LTAConvert)
+from ..interfaces.anatomical import FakeSegmentation
 
 from nipype import logging
 LOGGER = logging.getLogger('nipype.workflow')
@@ -232,7 +233,8 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug, d
         (reference_grid_wf, outputnode, [('outputnode.grid_image', 'dwi_sampling_grid')])])
 
     if dwi_only:
-        dummy_outputnode = dummy_anat_outputs(outputnode, infant_mode=infant_mode)
+        seg_node = dummy_anat_outputs(outputnode, infant_mode=infant_mode)
+        workflow.connect([(seg_node, outputnode, [("dseg_file", "t1_seg")])])
         workflow.add_nodes([inputnode])
         return workflow
 
@@ -1605,6 +1607,7 @@ def _seg2msks(in_file, newpath=None):
 
 def dummy_anat_outputs(outputnode, infant_mode=False):
     """Fill an outputnode with dummy data."""
+    fake_seg = pe.Node(FakeSegmentation(), name="fake_seg")
     if infant_mode:
         outputnode.inputs.t1_preproc = pkgr(
             'qsiprep', 'data/mni_1mm_t1w_lps_infant.nii.gz')
@@ -1612,7 +1615,7 @@ def dummy_anat_outputs(outputnode, infant_mode=False):
             'qsiprep', 'data/mni_1mm_t1w_lps_brain_infant.nii.gz')
         outputnode.inputs.t1_mask = pkgr(
             'qsiprep', 'data/mni_1mm_t1w_lps_brainmask_infant.nii.gz')
-        outputnode.inputs.t1_seg = pkgr(
+        fake_seg.inputs.mask_file = pkgr(
             'qsiprep', 'data/mni_1mm_t1w_lps_brainmask_infant.nii.gz')
     else:
         outputnode.inputs.t1_preproc = pkgr(
@@ -1621,7 +1624,7 @@ def dummy_anat_outputs(outputnode, infant_mode=False):
             'qsiprep', 'data/mni_1mm_t1w_lps_brain.nii.gz')
         outputnode.inputs.t1_mask = pkgr(
             'qsiprep', 'data/mni_1mm_t1w_lps_brainmask.nii.gz')
-        outputnode.inputs.t1_seg = pkgr(
+        fake_seg.inputs.mask_file = pkgr(
             'qsiprep', 'data/mni_1mm_t1w_lps_brainmask.nii.gz')
 
-    return outputnode
+    return fake_seg

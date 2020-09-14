@@ -209,7 +209,7 @@ def init_dwi_finalize_wf(scan_groups,
             'fieldwarps',
             'output_grid',
             'sbref_file', 'subjects_dir', 'subject_id',
-            't1_preproc', 't1_brain', 't1_mask', 'mni_mask', 't1_seg', 't1_tpms',
+            't1_preproc', 't1_brain', 't1_mask', 't1_seg', 't1_tpms',
             't1_aseg', 't1_aparc',
             't1_2_mni_reverse_transform', 't1_2_fsnative_forward_transform',
             't1_2_fsnative_reverse_transform', 'dwi_sampling_grid', 'raw_qc_file',
@@ -219,9 +219,7 @@ def init_dwi_finalize_wf(scan_groups,
     outputnode = pe.Node(
         niu.IdentityInterface(fields=[
             'dwi_t1', 'dwi_mask_t1', 'cnr_map_t1', 'bvals_t1', 'bvecs_t1', 'local_bvecs_t1',
-            't1_b0_ref', 'dwi_mni', 'dwi_mask_mni', 'cnr_map_mni', 'bvals_mni',
-            'bvecs_mni', 'local_bvecs_mni', 'mni_b0_ref', 'confounds',
-            'gradient_table_mni', 'gradient_table_t1', 'hmc_optimization_data'
+            't1_b0_ref', 'confounds', 'gradient_table_t1', 'hmc_optimization_data'
         ]),
         name='outputnode')
 
@@ -361,14 +359,6 @@ def init_dwi_finalize_wf(scan_groups,
           ('local_bvecs_t1', 'inputnode.local_bvecs_t1'),
           ('t1_b0_ref', 'inputnode.t1_b0_ref'),
           ('gradient_table_t1', 'inputnode.gradient_table_t1'),
-          ('dwi_mni', 'inputnode.dwi_mni'),
-          ('dwi_mask_mni', 'inputnode.dwi_mask_mni'),
-          ('cnr_map_mni', 'inputnode.cnr_map_mni'),
-          ('bvals_mni', 'inputnode.bvals_mni'),
-          ('bvecs_mni', 'inputnode.bvecs_mni'),
-          ('local_bvecs_mni', 'inputnode.local_bvecs_mni'),
-          ('mni_b0_ref', 'inputnode.mni_b0_ref'),
-          ('gradient_table_mni', 'inputnode.gradient_table_mni'),
           ('confounds', 'inputnode.confounds'),
           ('hmc_optimization_data', 'inputnode.hmc_optimization_data')]),
         (inputnode, gradient_plot, [

@@ -10,12 +10,15 @@ Image tools interfaces
 """
 
 import os.path as op
+import numpy as np
 from nipype import logging
 from glob import glob
 import nibabel as nb
 from scipy.spatial import distance
+from scipy import ndimage
 from nipype.interfaces.base import (traits, TraitedSpec, BaseInterfaceInputSpec,
                                     SimpleInterface, File)
+from nipype.utils.filemanip import fname_presuffix
 
 LOGGER = logging.getLogger('nipype.interface')
 
@@ -222,4 +225,31 @@ class DiceOverlap(SimpleInterface):
 
         self._results['dice_score'] = distance.dice(t1_img.get_fdata().flatten(),
                                                     dwi_img.get_fdata().flatten())
+        return runtime
+
+
+class _FakeSegmentationInputSpec(BaseInterfaceInputSpec):
+    mask_file = File(exists=True, mandatory=True)
+
+
+class _FakeSegmentationOutputSpec(TraitedSpec):
+    dseg_file = File(exists=True)
+
+
+class FakeSegmentation(SimpleInterface):
+    input_spec = _FakeSegmentationInputSpec
+    output_spec = _FakeSegmentationOutputSpec
+
+    def _run_interface(self, runtime):
+        img = nb.load(self.inputs.mask_file)
+        orig_mask = img.get_fdata() > 0
+        eroded1 = ndimage.binary_erosion(orig_mask, iterations=3)
+        eroded2 = ndimage.binary_erosion(eroded1, iterations=3)
+        final = orig_mask.astype(np.int) + eroded1 + eroded2
+        out_img = nb.Nifti1Image(final, img.affine, header=img.header)
+        out_fname = fname_presuffix(self.inputs.mask_file, suffix="_dseg",
+                                    newpath=runtime.cwd)
+        out_img.to_filename(out_fname)
+        self._results['dseg_file'] = out_fname
+
         return runtime

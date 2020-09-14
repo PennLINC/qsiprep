@@ -121,7 +121,7 @@ def init_b0_to_anat_registration_wf(mem_gb=3, omp_nthreads=1, write_report=True,
     return workflow
 
 
-def init_direct_b0_acpc_wf(baby_mode=False, mem_gb=3, omp_nthreads=1, write_report=True,
+def init_direct_b0_acpc_wf(mem_gb=3, omp_nthreads=1, write_report=True,
                            name="b0_anat_coreg"):
     """
     Re-orients a b=0 image directly to AC-PC. A full affine registration is run,
@@ -132,8 +132,7 @@ def init_direct_b0_acpc_wf(baby_mode=False, mem_gb=3, omp_nthreads=1, write_repo
         :simple_form: yes
 
         from qsiprep.workflows.dwi.registration import init_direct_b0_acpc_wf
-        wf = init_direct_b0_acpc_wf(baby_mode=False,
-                                    mem_gb=3,
+        wf = init_direct_b0_acpc_wf(mem_gb=3,
                                     omp_nthreads=1,
                                     write_report=False)
 
@@ -157,7 +156,7 @@ def init_direct_b0_acpc_wf(baby_mode=False, mem_gb=3, omp_nthreads=1, write_repo
             Reference image to which DWI series is aligned
             If ``fieldwarp == True``, ``ref_bold_brain`` should be unwarped
         t1_brain
-            Skull-stripped ``t1_preproc``
+            Standard space brain, either adult or infant template
         t1_seg
             Segmentation of preprocessed structural image, including
             gray-matter (GM), white-matter (WM) and cerebrospinal fluid (CSF)
@@ -195,27 +194,24 @@ def init_direct_b0_acpc_wf(baby_mode=False, mem_gb=3, omp_nthreads=1, write_repo
 
     # Defines a coregistration operation
     ants_settings = pkgrf("qsiprep", "data/intermodal_ACPC.json")
-    fixed_image = pkgrf("qsiprep", "data/mni_1mm_lps_brain_infant.nii.gz" if baby_mode
-                        else "data/mni_1mm_lps_brain.nii.gz")
-    fixed_mask = pkgrf("qsiprep", "data/mni_1mm_lps_brainmask_infant.nii.gz" if baby_mode
-                       else "data/mni_1mm_lps_brainmask.nii.gz")
-
-    acpc_reg = pe.Node(ANTSRegistrationRPT(from_file=ants_settings,
-                                           fixed_image=fixed_image,
-                                           fixed_image_masks=["NULL", fixed_mask]),
+    acpc_reg = pe.Node(ANTSRegistrationRPT(generate_report=write_report, 
+                                           from_file=ants_settings),
                        name="acpc_reg")
 
     # Extract the rigid components of the transform
-    itk_to_rigid = pe.Node(AffineToRigid(fixed_image=fixed_image), name="itk_to_rigid")
+    itk_to_rigid = pe.Node(AffineToRigid(), name="itk_to_rigid")
 
     workflow.connect([
         (inputnode, acpc_reg, [
+            ("t1_brain", "fixed_image"),
+            (("t1_seg", _format_masks), "fixed_image_masks"),
             ("ref_b0_brain", "moving_image")]),
         (acpc_reg, itk_to_rigid, [
-            (("forward_transforms", _get_first), "affine_transform")]),
+            ("forward_transforms", "affine_transform")]),
         (acpc_reg, outputnode, [
             ("out_report", "report")]),
         (inputnode, itk_to_rigid, [
+            ("t1_brain", "fixed_image"),
             ("ref_b0_brain", "moving_image")]),
         (itk_to_rigid, outputnode, [
             ("rigid_transform", "itk_b0_to_t1"),
@@ -224,5 +220,5 @@ def init_direct_b0_acpc_wf(baby_mode=False, mem_gb=3, omp_nthreads=1, write_repo
     return workflow
 
 
-def format_masks(mask_file):
+def _format_masks(mask_file):
     return ['NULL', mask_file]

@@ -18,20 +18,20 @@ from nipype import logging
 from nipype.utils.filemanip import fname_presuffix
 from nipype.interfaces.base import (
     traits, TraitedSpec, BaseInterfaceInputSpec, File, InputMultiPath, OutputMultiPath,
-    OutputMultiObject, SimpleInterface)
+    InputMultiObject, OutputMultiObject, SimpleInterface)
 from nipype.interfaces.ants.resampling import ApplyTransformsInputSpec
 LOGGER = logging.getLogger('nipype.interface')
 
 
 class _AffineToRigidInputSpec(BaseInterfaceInputSpec):
-    fixed_image = File(exists=True)
-    moving_image = File(exists=True)
-    affine_transform = File(exists=True)
+    fixed_image = File(exists=True, mandatory=True)
+    moving_image = File(exists=True, mandatory=True)
+    affine_transform = InputMultiObject(File(exists=True, mandatory=True))
 
 
 class _AffineToRigidOutputSpec(TraitedSpec):
-    rigid_transform = File(exists=True)
-    rigid_transform_inverse = File(exists=True)
+    rigid_transform = OutputMultiObject(File(exists=True))
+    rigid_transform_inverse = OutputMultiObject(File(exists=True))
 
 
 class AffineToRigid(SimpleInterface):
@@ -39,13 +39,17 @@ class AffineToRigid(SimpleInterface):
     output_spec = _AffineToRigidOutputSpec
 
     def _run_interface(self, runtime):
+        if len(self.inputs.affine_transform) > 1:
+            raise Exception("Only one transform allowed")
+        affine_transform = self.inputs.affine_transform[0]
         rigid_itk, rigid_itk_inverse = itk_affine_to_rigid(
-            self.inputs.affine_transform,
+            affine_transform,
             self.inputs.moving_image,
             self.inputs.fixed_image,
             runtime.cwd)
-        self._results['rigid_transform'] = rigid_itk
-        self._results['rigid_transform_inverse'] = rigid_itk_inverse
+        self._results['rigid_transform'] = [rigid_itk]
+        self._results['rigid_transform_inverse'] = [rigid_itk_inverse]
+        return runtime
 
 
 class DisassembleTransformInputSpec(BaseInterfaceInputSpec):

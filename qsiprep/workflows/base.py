@@ -680,6 +680,7 @@ to workflows in *QSIPrep*'s documentation]\
         output_wfname = output_fname.replace('-', '_')
         dwi_preproc_wf = init_dwi_preproc_wf(
             scan_groups=dwi_info,
+            dwi_only=dwi_only,
             output_prefix=output_fname,
             layout=layout,
             ignore=ignore,
@@ -773,7 +774,6 @@ to workflows in *QSIPrep*'s documentation]\
                      'inputnode.t1_2_mni_reverse_transform'),
                     ('outputnode.dwi_sampling_grid',
                      'inputnode.dwi_sampling_grid'),
-                    ('outputnode.mni_mask', 'inputnode.mni_mask'),
                     # Undefined if --no-freesurfer, but this is safe
                     ('outputnode.subjects_dir', 'inputnode.subjects_dir'),
                     ('outputnode.subject_id', 'inputnode.subject_id'),

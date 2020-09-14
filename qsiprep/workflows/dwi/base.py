@@ -399,7 +399,6 @@ Diffusion data preprocessing
                                                       write_report=True)
     else:
         b0_coreg_wf = init_direct_b0_acpc_wf(omp_nthreads=omp_nthreads,
-                                             baby_mode=baby_mode,
                                              mem_gb=mem_gb['resampled'],
                                              write_report=True)
     ds_report_coreg = pe.Node(
