@@ -30,8 +30,8 @@ class _AffineToRigidInputSpec(BaseInterfaceInputSpec):
 
 
 class _AffineToRigidOutputSpec(TraitedSpec):
-    rigid_transform = OutputMultiObject(File(exists=True))
-    rigid_transform_inverse = OutputMultiObject(File(exists=True))
+    rigid_transform = traits.List(File(exists=True))
+    rigid_transform_inverse = traits.List(File(exists=True))
 
 
 class AffineToRigid(SimpleInterface):

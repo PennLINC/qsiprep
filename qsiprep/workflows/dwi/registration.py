@@ -8,7 +8,6 @@ from nipype.interfaces import utility as niu, ants
 from ...interfaces.itk import AffineToRigid
 from ...engine import Workflow
 from ...interfaces.niworkflows import ANTSRegistrationRPT
-from .util import _get_first
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
