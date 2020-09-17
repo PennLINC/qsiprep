@@ -4,7 +4,7 @@
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 from pkg_resources import resource_filename as pkgrf
 from nipype.pipeline import engine as pe
-from nipype.interfaces import utility as niu, ants, afni
+from nipype.interfaces import utility as niu, ants
 from ...interfaces.itk import AffineToRigid
 from ...engine import Workflow
 from ...interfaces.niworkflows import ANTSRegistrationRPT
@@ -191,14 +191,6 @@ def init_direct_b0_acpc_wf(mem_gb=3, omp_nthreads=1, write_report=True,
 
     workflow = Workflow(name=name)
 
-    # Get everything in fsl orientation so conversion works
-    b0_to_fsl = pe.Node(afni.Resample(orientation="LAS", output_type="NIFTI_GZ"),
-                        name='b0_to_fsl')
-    ref_to_fsl = pe.Node(afni.Resample(orientation="LAS", output_type="NIFTI_GZ"),
-                         name='ref_to_fsl')
-    mask_to_fsl = pe.Node(afni.Resample(orientation="LAS", output_type="NIFTI_GZ"),
-                          name='mask_to_fsl')
-
     # Defines a coregistration operation
     ants_settings = pkgrf("qsiprep", "data/intermodal_ACPC.json")
     acpc_reg = pe.Node(ANTSRegistrationRPT(generate_report=write_report,
@@ -209,24 +201,17 @@ def init_direct_b0_acpc_wf(mem_gb=3, omp_nthreads=1, write_report=True,
     itk_to_rigid = pe.Node(AffineToRigid(), name="itk_to_rigid")
 
     workflow.connect([
-        (inputnode, b0_to_fsl, [('ref_b0_brain', 'in_file')]),
-        (inputnode, ref_to_fsl, [('ref_b0_brain', 'in_file')]),
-        (inputnode, mask_to_fsl, [('t1_seg', 'in_file')]),
-
-        (ref_to_fsl, acpc_reg, [
-            ("out_file", "fixed_image")]),
-        (mask_to_fsl, acpc_reg, [
-            (("out_file", _format_masks), "fixed_image_masks")]),
-        (b0_to_fsl, acpc_reg, [
-            ("out_file", "moving_image")]),
+        (inputnode, acpc_reg, [
+            ("t1_brain", "fixed_image"),
+            (("t1_seg", _format_masks), "fixed_image_masks"),
+            ("ref_b0_brain", "moving_image")]),
         (acpc_reg, itk_to_rigid, [
             ("forward_transforms", "affine_transform")]),
         (acpc_reg, outputnode, [
             ("out_report", "report")]),
-        (ref_to_fsl, itk_to_rigid, [
-            ("out_file", "fixed_image")]),
-        (b0_to_fsl, itk_to_rigid, [
-            ("out_file", "moving_image")]),
+        (inputnode, itk_to_rigid, [
+            ("t1_brain", "fixed_image"),
+            ("ref_b0_brain", "moving_image")]),
         (itk_to_rigid, outputnode, [
             ("rigid_transform", "itk_b0_to_t1"),
             ("rigid_transform_inverse", "itk_t1_to_b0")])])
