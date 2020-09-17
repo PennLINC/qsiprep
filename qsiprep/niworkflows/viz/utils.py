@@ -512,7 +512,7 @@ def plot_acpc(acpc_registered_img, div_id, plot_params=None,
             plot_params['title'] = label
 
         # Generate nilearn figure
-        display = plot_anat(, **plot_params)
+        display = plot_anat(None, **plot_params)
         svg = extract_svg(display, compress=compress)
         display.close()
 
