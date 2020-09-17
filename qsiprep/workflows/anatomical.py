@@ -228,6 +228,7 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug, d
 
     # 3a. Create the output reference grid_image
     reference_grid_wf = init_output_grid_wf(voxel_size=output_resolution,
+                                            infant_mode=infant_mode,
                                             template_image=ref_img)
     workflow.connect([
         (reference_grid_wf, outputnode, [('outputnode.grid_image', 'dwi_sampling_grid')])])
@@ -927,13 +928,14 @@ The T1w-reference was then skull-stripped using `3dSkullStrip`
     return workflow
 
 
-def init_output_grid_wf(voxel_size, template_image, name='output_grid_wf'):
+def init_output_grid_wf(voxel_size, infant_mode, template_image, name='output_grid_wf'):
     """Generate a non-oblique, uniform voxel-size grid around a brain."""
     workflow = Workflow(name=name)
     inputnode = pe.Node(niu.IdentityInterface(fields=['template_image']), name='inputnode')
     outputnode = pe.Node(niu.IdentityInterface(fields=['grid_image']), name='outputnode')
     inputnode.inputs.template_image = template_image
-    autobox_template = pe.Node(afni.Autobox(outputtype="NIFTI_GZ", padding=8),
+    padding = 4 if infant_mode else 8
+    autobox_template = pe.Node(afni.Autobox(outputtype="NIFTI_GZ", padding=padding),
                                name='autobox_template')
     deoblique_autobox = pe.Node(afni.Warp(outputtype="NIFTI_GZ", deoblique=True),
                                 name="deoblique_autobox")
