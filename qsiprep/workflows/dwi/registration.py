@@ -5,7 +5,7 @@
 from pkg_resources import resource_filename as pkgrf
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu, ants
-from ...interfaces.itk import AffineToRigid
+from ...interfaces.itk import AffineToRigid, ACPCReport
 from ...engine import Workflow
 from ...interfaces.niworkflows import ANTSRegistrationRPT
 
@@ -200,6 +200,13 @@ def init_direct_b0_acpc_wf(mem_gb=3, omp_nthreads=1, write_report=True,
     # Extract the rigid components of the transform
     itk_to_rigid = pe.Node(AffineToRigid(), name="itk_to_rigid")
 
+    # Apply the rigid transform to the b=0 ref
+    translation_warp = pe.Node(ants.ApplyTransforms(dimension=3, interpolation="BSpline"),
+                               name="translation_warp")
+    rigid_warp = pe.Node(ants.ApplyTransforms(dimension=3, interpolation="BSpline"),
+                         name="rigid_warp")
+    acpc_report = pe.Node(ACPCReport(), name="acpc_report")
+
     workflow.connect([
         (inputnode, acpc_reg, [
             ("t1_brain", "fixed_image"),
@@ -207,14 +214,24 @@ def init_direct_b0_acpc_wf(mem_gb=3, omp_nthreads=1, write_report=True,
             ("ref_b0_brain", "moving_image")]),
         (acpc_reg, itk_to_rigid, [
             ("forward_transforms", "affine_transform")]),
-        (acpc_reg, outputnode, [
-            ("out_report", "report")]),
-        (inputnode, itk_to_rigid, [
-            ("t1_brain", "fixed_image"),
-            ("ref_b0_brain", "moving_image")]),
+        (itk_to_rigid, rigid_warp, [
+            ('rigid_transform', 'transforms')]),
+        (itk_to_rigid, translation_warp, [
+            ('translation_transform', 'transforms')]),
+        (inputnode, rigid_warp, [
+            ("ref_b0_brain", "input_image"),
+            ("t1_brain", "reference_image")]),
+        (inputnode, translation_warp, [
+            ("ref_b0_brain", "input_image"),
+            ("t1_brain", "reference_image")]),
+        (translation_warp, acpc_report, [("output_image", "translation_image")]),
+        (rigid_warp, acpc_report, [("output_image", "rigid_image")]),
         (itk_to_rigid, outputnode, [
             ("rigid_transform", "itk_b0_to_t1"),
-            ("rigid_transform_inverse", "itk_t1_to_b0")])])
+            ("rigid_transform_inverse", "itk_t1_to_b0")]),
+        (acpc_report, outputnode, [
+            ("out_report", "report")])
+        ])
 
     return workflow
 

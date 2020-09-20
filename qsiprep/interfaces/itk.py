@@ -13,25 +13,29 @@ import os.path as op
 import subprocess
 from mimetypes import guess_type
 from tempfile import TemporaryDirectory
+import SimpleITK as sitk
 import numpy as np
+import nibabel as nb
 from nipype import logging
 from nipype.utils.filemanip import fname_presuffix
 from nipype.interfaces.base import (
     traits, TraitedSpec, BaseInterfaceInputSpec, File, InputMultiPath, OutputMultiPath,
     InputMultiObject, OutputMultiObject, SimpleInterface)
 from nipype.interfaces.ants.resampling import ApplyTransformsInputSpec
+from dipy.core import geometry as geom
+from ..niworkflows.viz.utils import compose_view, plot_acpc
+
 LOGGER = logging.getLogger('nipype.interface')
 
 
 class _AffineToRigidInputSpec(BaseInterfaceInputSpec):
-    fixed_image = File(exists=True, mandatory=True)
-    moving_image = File(exists=True, mandatory=True)
     affine_transform = InputMultiObject(File(exists=True, mandatory=True))
 
 
 class _AffineToRigidOutputSpec(TraitedSpec):
     rigid_transform = traits.List(File(exists=True))
     rigid_transform_inverse = traits.List(File(exists=True))
+    translation_transform = traits.List(File(exists=True))
 
 
 class AffineToRigid(SimpleInterface):
@@ -42,13 +46,44 @@ class AffineToRigid(SimpleInterface):
         if len(self.inputs.affine_transform) > 1:
             raise Exception("Only one transform allowed")
         affine_transform = self.inputs.affine_transform[0]
-        rigid_itk, rigid_itk_inverse = itk_affine_to_rigid(
+        rigid_itk, rigid_itk_inverse, translation_itk = itk_affine_to_rigid(
             affine_transform,
-            self.inputs.moving_image,
-            self.inputs.fixed_image,
             runtime.cwd)
         self._results['rigid_transform'] = [rigid_itk]
         self._results['rigid_transform_inverse'] = [rigid_itk_inverse]
+        self._results['translation_transform'] = [translation_itk]
+        return runtime
+
+
+class _ACPCReportInputSpec(BaseInterfaceInputSpec):
+    translation_image = File(exists=True, desc='only translated to ACPC', mandatory=True)
+    rigid_image = File(exists=True, desc='rigid transformed to ACPC')
+
+
+class _ACPCReportOutputSpec(TraitedSpec):
+    out_report = File(exists=True)
+
+
+class ACPCReport(SimpleInterface):
+    input_spec = _ACPCReportInputSpec
+    output_spec = _ACPCReportOutputSpec
+
+    def _run_interface(self, runtime):
+        out_report = runtime.cwd + "ACPCReport.svg"
+        # Call composer
+        compose_view(
+            plot_acpc(nb.load(self.inputs.translation_image),
+                      'moving-image',
+                      estimate_brightness=True,
+                      label='Original',
+                      compress=False),
+            plot_acpc(nb.load(self.inputs.rigid_image),
+                      'fixed-image',
+                      estimate_brightness=True,
+                      label="AC-PC",
+                      compress=False),
+            out_file=out_report)
+
         return runtime
 
 
@@ -280,47 +315,35 @@ def rotation_matrix_from_transform(transform):
     return np.array([list(map(float, line.split())) for line in matrix_lines])
 
 
-def itk_affine_to_rigid(transform_file, src, ref, cwd):
+def itk_affine_to_rigid(transform_file, cwd):
     """uses c3d_affine_tool and FSL's aff2rigid to convert an itk linear
     transform from affine to rigid"""
 
-    # created file names
-    full_fsl_xfm = cwd + "/full_fsl.xfm"
-    rigid_fsl_xfm = cwd + "/rigid_fsl.xfm"
-    rigid_itk_mat = cwd + "/rigid_itk.mat"
-    rigid_itk_mat_inverse = cwd + "/rigid_itk_inverse.mat"
+    rigid_mat_file = cwd + "/6DOFrigid.mat"
+    translation_mat_file = cwd + '/translation.mat'
+    inverse_mat_file = cwd + '/6DOFinverse.mat'
+    raw_transform = sitk.ReadTransform(transform_file)
+    aff_transform = sitk.AffineTransform(3)
+    aff_transform.SetFixedParameters(raw_transform.GetFixedParameters())
+    aff_transform.SetParameters(raw_transform.GetParameters())
 
-    # Convert to full 12dof FSL transform
-    to_fsl = ['c3d_affine_tool', '-src', src, '-ref', ref, "-itk", transform_file,
-              '-ras2fsl', '-o', full_fsl_xfm]
-    proc = subprocess.Popen(to_fsl, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    LOGGER.info(" ".join(to_fsl))
-    out, err = proc.communicate()
+    full_matrix = np.eye(4)
+    full_matrix[:3, :3] = np.array(aff_transform.GetMatrix()).reshape((3, 3), order="C")
+    _, _, angles, _, _ = geom.decompose_matrix(full_matrix)
+    rot_mat = geom.euler_matrix(angles[0], angles[1], angles[2])
 
-    # Convert to rigid transform
-    to_rigid = ['aff2rigid', full_fsl_xfm, rigid_fsl_xfm]
-    proc = subprocess.Popen(to_rigid, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    LOGGER.info(" ".join(to_rigid))
-    out, err = proc.communicate()
+    rigid = sitk.Euler3DTransform()
+    rigid.SetCenter(aff_transform.GetCenter())
+    rigid.SetTranslation(aff_transform.GetTranslation())
+    # Write a translation-only transform
+    sitk.WriteTransform(rigid, translation_mat_file)
+    # Write the full rigid (translation + rotation) transform
+    rigid.SetMatrix(tuple(rot_mat[:3, :3].flatten(order="C")))
+    sitk.WriteTransform(rigid, rigid_mat_file)
+    # Write the inverse rigid transform
+    sitk.WriteTransform(rigid.GetInverse(), inverse_mat_file)
 
-    # Convert rigid back to itk
-    rigid_fsl_to_itk = ['c3d_affine_tool', '-ref', ref, '-src', src,
-                        rigid_fsl_xfm,
-                        '-fsl2ras', '-oitk', rigid_itk_mat]
-    proc = subprocess.Popen(rigid_fsl_to_itk, stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE)
-    LOGGER.info(" ".join(rigid_fsl_to_itk))
-    out, err = proc.communicate()
-
-    # Get the inverse of it
-    invert_rigid = ['antsApplyTransforms', '-d', '3', '-r', ref,
-                    '-o', 'Linear[%s,1]' % rigid_itk_mat_inverse,
-                    '--transform', rigid_itk_mat]
-    proc = subprocess.Popen(invert_rigid, stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE)
-    LOGGER.info(" ".join(invert_rigid))
-    out, err = proc.communicate()
-
-    if False in (op.exists(rigid_itk_mat), op.exists(rigid_itk_mat_inverse)):
+    if False in (op.exists(rigid_mat_file), op.exists(translation_mat_file),
+                 op.exists(inverse_mat_file)):
         raise Exception("unable to create rigid AC-PC transform")
-    return rigid_itk_mat, rigid_itk_mat_inverse
+    return rigid_mat_file, inverse_mat_file, translation_mat_file

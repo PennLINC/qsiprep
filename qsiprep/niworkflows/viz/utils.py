@@ -491,10 +491,7 @@ def plot_acpc(acpc_registered_img, div_id, plot_params=None,
               estimate_brightness=False, label=None,
               compress='auto'):
     """
-    Plot the foreground and background views.
-    Default order is: axial, coronal, sagittal
-
-    Updated version from sdcflows
+    Plot the results of an AC-PC transformation.
     """
     plot_params = plot_params or {}
 
@@ -504,45 +501,21 @@ def plot_acpc(acpc_registered_img, div_id, plot_params=None,
         plot_params = robust_set_limits(
             acpc_registered_img.get_fdata(dtype='float32').reshape(-1),
             plot_params)
+
     # Plot each cut axis for low-b
     for i, mode in enumerate(list(order)):
         plot_params['display_mode'] = mode
-        plot_params['cut_coords'] = cuts[mode]
+        plot_params['cut_coords'] = [-20.0, 0.0, 20.0]
         if i == 0:
             plot_params['title'] = label
-
-        # Generate nilearn figure
-        display = plot_anat(None, **plot_params)
-        svg = extract_svg(display, compress=compress)
-        display.close()
-
-        # Find and replace the figure_1 id.
-        xml_data = etree.fromstring(svg)
-        find_text = etree.ETXPath("//{%s}g[@id='figure_1']" % SVGNS)
-        find_text(xml_data)[0].set('id', '%s-%s-%s' % (div_id, mode, uuid4()))
-
-        svg_fig = SVGFigure()
-        svg_fig.root = xml_data
-        out_files.append(svg_fig)
-
-    # Plot each cut axis for high-b
-    if estimate_brightness:
-        highb_plot_params = robust_set_limits(
-            highb_nii.get_fdata(dtype='float32').reshape(-1),
-            highb_plot_params)
-    for i, mode in enumerate(list(order)):
-        highb_plot_params['display_mode'] = mode
-        highb_plot_params['cut_coords'] = cuts[mode]
-        if i == 0:
-            highb_plot_params['title'] = label + ': high-b'
         else:
-            highb_plot_params['title'] = None
+            plot_params['title'] = None
 
         # Generate nilearn figure
-        display = plot_anat(highb_nii, **highb_plot_params)
-        if highb_contour is not None:
-            display.add_contours(highb_contour, linewidths=1)
-
+        display = plot_anat(acpc_registered_img, **plot_params)
+        for coord, axis in display.axes.items():
+            axis.ax.axvline(0, lw=1)
+            axis.ax.axhline(0, lw=1)
         svg = extract_svg(display, compress=compress)
         display.close()
 
