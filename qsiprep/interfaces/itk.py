@@ -69,7 +69,7 @@ class ACPCReport(SimpleInterface):
     output_spec = _ACPCReportOutputSpec
 
     def _run_interface(self, runtime):
-        out_report = runtime.cwd + "ACPCReport.svg"
+        out_report = runtime.cwd + "/ACPCReport.svg"
         # Call composer
         compose_view(
             plot_acpc(nb.load(self.inputs.translation_image),
@@ -83,6 +83,7 @@ class ACPCReport(SimpleInterface):
                       label="AC-PC",
                       compress=False),
             out_file=out_report)
+        self._results['out_report'] = out_report
 
         return runtime
 
