@@ -460,7 +460,7 @@ def _sanitized_connectivity_matrix(conmat, official_labels):
     # Column names are binary strings. Very confusing.
     column_names = "".join(
         [s.decode('UTF-8') for s in m["name"].squeeze().view("S1")]).split("\n")[:-1]
-    matfile_region_ids = np.array([int(name[6:]) for name in column_names])
+    matfile_region_ids = np.array([int(name.split("_")[-1]) for name in column_names])
 
     # Where does each column go? Make an index array
     connectivity = m['connectivity']
