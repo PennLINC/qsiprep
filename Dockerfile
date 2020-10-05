@@ -95,12 +95,12 @@ RUN curl -sSL https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/6.0.1/frees
     --exclude='freesurfer/lib/cuda' \
     --exclude='freesurfer/lib/qt'
 
-  ENV FSLDIR="/opt/fsl-6.0.4" \
-      PATH="/opt/fsl-6.0.4/bin:$PATH"
+  ENV FSLDIR="/opt/fsl-6.0.2" \
+      PATH="/opt/fsl-6.0.2/bin:$PATH"
   RUN echo "Downloading FSL ..." \
-      && mkdir -p /opt/fsl-6.0.4 \
-      && curl -fsSL --retry 5 https://fsl.fmrib.ox.ac.uk/fsldownloads/fsl-6.0.4-centos6_64.tar.gz \
-      | tar -xz -C /opt/fsl-6.0.4 --strip-components 1 \
+      && mkdir -p /opt/fsl-6.0.2 \
+      && curl -fsSL --retry 5 https://fsl.fmrib.ox.ac.uk/fsldownloads/fsl-6.0.2-centos6_64.tar.gz \
+      | tar -xz -C /opt/fsl-6.0.2 --strip-components 1 \
       --exclude='fsl/doc' \
       --exclude='fsl/data/atlases' \
       --exclude='fsl/data/possum' \
@@ -111,7 +111,7 @@ RUN curl -sSL https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/6.0.1/frees
       && echo "Installing FSL conda environment ..." \
       && sed -i -e "/fsleyes/d" -e "/wxpython/d" \
          ${FSLDIR}/etc/fslconf/fslpython_environment.yml \
-      && bash /opt/fsl-6.0.4/etc/fslconf/fslpython_install.sh -f /opt/fsl-6.0.4 \
+      && bash /opt/fsl-6.0.2/etc/fslconf/fslpython_install.sh -f /opt/fsl-6.0.2 \
       && find ${FSLDIR}/fslpython/envs/fslpython/lib/python3.7/site-packages/ -type d -name "tests"  -print0 | xargs -0 rm -r \
       && ${FSLDIR}/fslpython/bin/conda clean --all
 
@@ -147,7 +147,7 @@ ENV QTDIR="$QT_BASE_DIR" \
     PATH="$QT_BASE_DIR/bin:$PATH:/opt/dsi-studio/dsi_studio_64" \
     LD_LIBRARY_PATH="$QT_BASE_DIR/lib/x86_64-linux-gnu:$QT_BASE_DIR/lib:$LD_LIBRARY_PATH" \
     PKG_CONFIG_PATH="$QT_BASE_DIR/lib/pkgconfig:$PKG_CONFIG_PATH"
-ARG DSI_SHA=5901d5868bc69baf019c96f611a080583c0ab578
+ARG DSI_SHA=eb8433e8923d4bb26bd6ee04d0da4bdede55ed85
 ARG TIPL_SHA=f94d2df66acba0fa929351a0a2bdfaa40faf66e8
 RUN mkdir /opt/dsi-studio \
   && cd /opt/dsi-studio \
@@ -320,7 +320,7 @@ RUN python -c "from matplotlib import font_manager" && \
 RUN find $HOME -type d -exec chmod go=u {} + && \
     find $HOME -type f -exec chmod go=u {} +
 
-RUN ln -s /opt/fsl-6.0.4/bin/eddy_cuda9.1 /opt/fsl-6.0.4/bin/eddy_cuda
+RUN ln -s /opt/fsl-6.0.2/bin/eddy_cuda9.1 /opt/fsl-6.0.2/bin/eddy_cuda
 
 ENV AFNI_INSTALLDIR=/usr/lib/afni \
     PATH=${PATH}:/usr/lib/afni/bin \
