@@ -418,7 +418,7 @@ def _parse_network_file(txtfile):
         tokens = sanitized_line.split("\t")
         measure_name = tokens[0]
         if measure_name == 'network_measures':
-            network_data['region_ids'] = [token.lstrip('region') for token in tokens[1:]]
+            network_data['region_ids'] = [token.split('_')[-1] for token in tokens[1:]]
             continue
 
         values = list(map(float, tokens[1:]))
