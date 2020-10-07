@@ -646,6 +646,7 @@ class _InteractiveReportInputSpec(TraitedSpec):
     mask_file = File(exists=True, mandatory=True)
     color_fa = File(exists=True, mandatory=True)
     carpetplot_data = File(exists=True, mandatory=True)
+    qc_file = File(exists=True, mandatory=True)
 
 
 class InteractiveReport(SimpleInterface):
@@ -688,9 +689,9 @@ class InteractiveReport(SimpleInterface):
         report['color'] = _filename_to_colors(df['original_file'])
 
         safe_json = json.dumps(report)
-        out_file = op.join(runtime.cwd, "interactive_report.html")
+        out_file = op.join(runtime.cwd, "interactive_report.json")
         with open(out_file, "w") as out_html:
-            out_html.write(INTERACTIVE_TEMPLATE.replace("REPORT", safe_json))
+            out_html.write(safe_json)
         self._results['out_report'] = out_file
         return runtime
 

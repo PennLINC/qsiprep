@@ -322,23 +322,18 @@ def init_dwi_finalize_wf(scan_groups,
         name='ds_series_qc', run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB)
 
-    # Gather files for creating an interactive report
-    # interactive_report_wf = init_interactive_report_wf()
-    # ds_report_interactive = pe.Node(
-    #     DerivativesDataSink(suffix='interactive', source_file=source_file,
-    #                         base_directory=reportlets_dir),
-    #     name='ds_report_interactive', run_without_submitting=True,
-    #     mem_gb=DEFAULT_MEMORY_MIN_GB)
+    # Write the carpetplot data
+    ds_carpetplot = pe.Node(
+        DerivativesDataSink(desc='SliceQC', suffix='dwi', source_file=source_file,
+                            base_directory=output_dir),
+        name='ds_carpetplot', run_without_submitting=True,
+        mem_gb=DEFAULT_MEMORY_MIN_GB)
 
     workflow.connect([
-        # (inputnode, interactive_report_wf, [
-        #     ('raw_concatenated', 'inputnode.raw_dwi_file'),
-        #     ('confounds', 'inputnode.confounds_file'),
-        #     ('carpetplot_data', 'inputnode.carpetplot_data')]),
-        # (interactive_report_wf, ds_report_interactive, [('outputnode.out_report', 'in_file')]),
         (inputnode, series_qc, [
             ('raw_qc_file', 'pre_qc'),
             ('confounds', 'confounds_file')]),
+        (inputnode, ds_carpetplot, [('carpetplot_data', 'in_file')]),
         (t1_dice_calc, series_qc, [('outputnode.dice_score', 't1_dice_score')]),
         (series_qc, ds_series_qc, [('series_qc_file', 'in_file')]),
         (inputnode, dwi_derivatives_wf, [('dwi_files', 'inputnode.source_file')]),
