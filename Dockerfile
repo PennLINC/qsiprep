@@ -95,12 +95,12 @@ RUN curl -sSL https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/6.0.1/frees
     --exclude='freesurfer/lib/cuda' \
     --exclude='freesurfer/lib/qt'
 
-  ENV FSLDIR="/opt/fsl-6.0.3" \
-      PATH="/opt/fsl-6.0.3/bin:$PATH"
+  ENV FSLDIR="/opt/fsl-6.0.4" \
+      PATH="/opt/fsl-6.0.4/bin:$PATH"
   RUN echo "Downloading FSL ..." \
-      && mkdir -p /opt/fsl-6.0.3 \
-      && curl -fsSL --retry 5 https://fsl.fmrib.ox.ac.uk/fsldownloads/fsl-6.0.3-centos6_64.tar.gz \
-      | tar -xz -C /opt/fsl-6.0.3 --strip-components 1 \
+      && mkdir -p /opt/fsl-6.0.4 \
+      && curl -fsSL --retry 5 https://fsl.fmrib.ox.ac.uk/fsldownloads/fsl-6.0.4-centos6_64.tar.gz \
+      | tar -xz -C /opt/fsl-6.0.4 --strip-components 1 \
       --exclude='fsl/doc' \
       --exclude='fsl/data/atlases' \
       --exclude='fsl/data/possum' \
@@ -111,7 +111,7 @@ RUN curl -sSL https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/6.0.1/frees
       && echo "Installing FSL conda environment ..." \
       && sed -i -e "/fsleyes/d" -e "/wxpython/d" \
          ${FSLDIR}/etc/fslconf/fslpython_environment.yml \
-      && bash /opt/fsl-6.0.3/etc/fslconf/fslpython_install.sh -f /opt/fsl-6.0.3 \
+      && bash /opt/fsl-6.0.4/etc/fslconf/fslpython_install.sh -f /opt/fsl-6.0.4 \
       && find ${FSLDIR}/fslpython/envs/fslpython/lib/python3.7/site-packages/ -type d -name "tests"  -print0 | xargs -0 rm -r \
       && ${FSLDIR}/fslpython/bin/conda clean --all
 
@@ -147,8 +147,8 @@ ENV QTDIR="$QT_BASE_DIR" \
     PATH="$QT_BASE_DIR/bin:$PATH:/opt/dsi-studio/dsi_studio_64" \
     LD_LIBRARY_PATH="$QT_BASE_DIR/lib/x86_64-linux-gnu:$QT_BASE_DIR/lib:$LD_LIBRARY_PATH" \
     PKG_CONFIG_PATH="$QT_BASE_DIR/lib/pkgconfig:$PKG_CONFIG_PATH"
-ARG DSI_SHA=bf710d594527f64c125beb7f8990570c769cd3a8
-ARG TIPL_SHA=686f194a1a4244bf09364abc7943f3233704c55f
+ARG DSI_SHA=5901d5868bc69baf019c96f611a080583c0ab578
+ARG TIPL_SHA=f94d2df66acba0fa929351a0a2bdfaa40faf66e8
 RUN mkdir /opt/dsi-studio \
   && cd /opt/dsi-studio \
   && curl -sSLO https://github.com/frankyeh/DSI-Studio/archive/${DSI_SHA}.zip \
@@ -184,8 +184,7 @@ RUN cd /opt \
     && ./build
 
 # Install 3Tissue from source
-ARG MRTRIX_SHA=c1367255f51a3cbe774c8317448cdc0b0aa587be
-ENV PATH="/opt/mrtrix3-latest/bin:$PATH"
+ARG MRTRIX_SHA=c82903bb8c7cfaea40b369974e3aa3ab04809e6e
 RUN cd /opt \
     && curl -sSLO https://github.com/3Tissue/MRtrix3Tissue/archive/${MRTRIX_SHA}.zip \
     && unzip ${MRTRIX_SHA}.zip \
@@ -321,7 +320,7 @@ RUN python -c "from matplotlib import font_manager" && \
 RUN find $HOME -type d -exec chmod go=u {} + && \
     find $HOME -type f -exec chmod go=u {} +
 
-RUN ln -s /opt/fsl-6.0.3/bin/eddy_cuda9.1 /opt/fsl-6.0.3/bin/eddy_cuda
+RUN ln -s /opt/fsl-6.0.4/bin/eddy_cuda9.1 /opt/fsl-6.0.4/bin/eddy_cuda
 
 ENV AFNI_INSTALLDIR=/usr/lib/afni \
     PATH=${PATH}:/usr/lib/afni/bin \
