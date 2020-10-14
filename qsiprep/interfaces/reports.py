@@ -646,7 +646,7 @@ class _InteractiveReportInputSpec(TraitedSpec):
     mask_file = File(exists=True, mandatory=True)
     color_fa = File(exists=True, mandatory=True)
     carpetplot_data = File(exists=True, mandatory=True)
-    qc_file = File(exists=True, mandatory=True)
+    series_qc_file = File(exists=True, mandatory=True)
 
 
 class InteractiveReport(SimpleInterface):
