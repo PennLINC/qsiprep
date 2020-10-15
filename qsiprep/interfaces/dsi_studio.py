@@ -4,7 +4,6 @@ import os.path as op
 import logging
 from glob import glob
 from copy import deepcopy
-from subprocess import Popen, PIPE
 import numpy as np
 from nipype.interfaces.base import (TraitedSpec, CommandLineInputSpec, BaseInterfaceInputSpec,
                                     CommandLine, File, traits, isdefined, SimpleInterface)
@@ -95,25 +94,20 @@ class _DSIStudioSrcQCOutputSpec(DSIStudioCommandLineInputSpec):
     qc_txt = File(exists=True, desc="Text file with QC measures")
 
 
-class DSIStudioSrcQC(SimpleInterface):
+class DSIStudioSrcQC(CommandLine):
+    _cmd = 'dsi_studio --action=qc'
     input_spec = _DSIStudioSrcQCInputSpec
     output_spec = _DSIStudioSrcQCOutputSpec
 
-    def _run_interface(self, runtime):
-        # Create a temp directory for the src file to go
-        tmp_dir = runtime.cwd + "/src_qc"
-        os.makedirs(tmp_dir, exist_ok=True)
-        linked_src_file = fname_presuffix(self.inputs.src_file, newpath=tmp_dir)
-        os.link(self.inputs.src_file, linked_src_file)
-        cmd = ['dsi_studio', '--action=qc', '--source='+tmp_dir]
-        proc = Popen(cmd, cwd=runtime.cwd, stdout=PIPE, stderr=PIPE)
-        out, err = proc.communicate()
-        if out:
-            LOGGER.info(str(out))
-        if err:
-            LOGGER.critical(str(err))
-        self._results['qc_txt'] = tmp_dir + '.qc.txt'
-        return runtime
+    def _format_arg(self, name, trait_spec, value):
+        if name == 'src_file':
+            return '--source=' + op.dirname(value)
+        return super(DSIStudioSrcQC, self)._format_arg(name, trait_spec, value)
+
+    def _list_outputs(self):
+        outputs = self.output_spec().get()
+        outputs['qc_txt'] = op.abspath("src_report.txt")
+        return outputs
 
 
 # Step 2 reonstruct ODFs

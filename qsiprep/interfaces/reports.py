@@ -536,8 +536,8 @@ def _load_qc_file(fname, prefix=""):
     with open(fname, "r") as qc_file:
         qc_data = qc_file.readlines()
     data = qc_data[2]
-    parts = data.strip().split('\t')
-    _, dims, voxel_size, dirs, max_b, ndc, bad_slices = parts
+    parts = data.split('\t')
+    _, dims, voxel_size, dirs, max_b, _, ndc, bad_slices, _ = parts
     voxelsx, voxelsy, voxelsz = map(float, voxel_size.strip().split())
     dimx, dimy, dimz = map(float, dims.strip().split())
     n_dirs = float(dirs)
