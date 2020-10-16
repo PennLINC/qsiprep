@@ -143,11 +143,13 @@ def create_sprite_from_tiles(tile, out_file=None, as_bytes=False):
         xmax = (x[0] + 1) * pix
         ymin = y[0] * pix
         ymax = (y[0] + 1) * pix
+        x_span = xmax - xmin
+        y_span = ymax - ymin
 
         if len(tile.shape) == 3:
-            mosaic[xmin:xmax, ymin:ymax] = tile[:, :, t]
+            mosaic[xmin:xmax, ymin:ymax] = tile[:x_span, :y_span, t]
         else:
-            mosaic[xmin:xmax, ymin:ymax, :] = tile[:, :, :, t]
+            mosaic[xmin:xmax, ymin:ymax, :] = tile[:x_span, :y_span, :, t]
 
     if as_bytes:
         img = mplfig(mosaic, out_file, as_bytes=as_bytes)

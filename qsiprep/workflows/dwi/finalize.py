@@ -23,8 +23,7 @@ from ...engine import Workflow
 from .util import _create_mem_gb
 from .resampling import init_dwi_trans_wf
 from .derivatives import init_dwi_derivatives_wf
-# from .qc import init_interactive_report_wf
-from .qc import init_mask_overlap_wf
+from .qc import init_mask_overlap_wf, init_interactive_report_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger('nipype.workflow')
@@ -249,6 +248,8 @@ def init_dwi_finalize_wf(scan_groups,
                                           to_mni=False,
                                           write_local_bvecs=write_local_bvecs,
                                           concatenate=write_derivatives)
+    interactive_report_wf = init_interactive_report_wf()
+
     workflow.connect([
         (inputnode, transform_dwis_t1, [
             ('b0_indices', 'inputnode.b0_indices'),
@@ -277,12 +278,17 @@ def init_dwi_finalize_wf(scan_groups,
                                          ('outputnode.b0_series', 't1_b0_series'),
                                          ('outputnode.dwi_ref_resampled', 't1_b0_ref'),
                                          ('outputnode.resampled_dwi_mask', 'dwi_mask_t1'),
-                                         ('outputnode.resampled_qc', 'series_qc_t1')])
-        # (transform_dwis_t1, interactive_report_wf, [
-        #     ('outputnode.dwi_resampled', 'inputnode.processed_dwi_file'),
-        #     ('outputnode.resampled_dwi_mask', 'inputnode.mask_file'),
-        #     ('outputnode.bvals', 'inputnode.bval_file'),
-        #     ('outputnode.rotated_bvecs', 'inputnode.bvec_file')]),
+                                         ('outputnode.resampled_qc', 'series_qc_t1')]),
+        (inputnode, interactive_report_wf, [
+            ('raw_concatenated', 'inputnode.raw_dwi_file'),
+            ('carpetplot_data', 'inputnode.carpetplot_data'),
+            ('confounds', 'inputnode.confounds_file')]),
+        (transform_dwis_t1, interactive_report_wf, [
+             ('outputnode.dwi_resampled', 'inputnode.processed_dwi_file'),
+             ('outputnode.resampled_dwi_mask', 'inputnode.mask_file'),
+             ('outputnode.bvals', 'inputnode.bval_file'),
+             ('outputnode.rotated_bvecs', 'inputnode.bvec_file')]),
+        (interactive_report_wf, outputnode, [('outputnode.out_report', 'interactive_report')])
     ])
 
     # Fill-in datasinks of reportlets seen so far
@@ -336,6 +342,7 @@ def init_dwi_finalize_wf(scan_groups,
         (inputnode, ds_carpetplot, [('carpetplot_data', 'in_file')]),
         (t1_dice_calc, series_qc, [('outputnode.dice_score', 't1_dice_score')]),
         (series_qc, ds_series_qc, [('series_qc_file', 'in_file')]),
+        (series_qc, interactive_report_wf, [('series_qc_file', 'inputnode.series_qc_file')]),
         (inputnode, dwi_derivatives_wf, [('dwi_files', 'inputnode.source_file')]),
         (inputnode, outputnode, [('hmc_optimization_data', 'hmc_optimization_data')]),
         (transform_dwis_t1, series_qc, [('outputnode.resampled_qc', 't1_qc')]),

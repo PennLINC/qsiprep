@@ -536,8 +536,14 @@ def _load_qc_file(fname, prefix=""):
     with open(fname, "r") as qc_file:
         qc_data = qc_file.readlines()
     data = qc_data[2]
-    parts = data.split('\t')
-    _, dims, voxel_size, dirs, max_b, _, ndc, bad_slices, _ = parts
+    parts = data.strip().split('\t')
+    if len(parts) == 7:
+        _, dims, voxel_size, dirs, max_b, ndc, bad_slices = parts
+    elif len(parts) == 8:
+        _, dims, voxel_size, dirs, max_b, _, ndc,bad_slices = parts
+    else:
+        raise Exception("Unknown QC File format")
+
     voxelsx, voxelsy, voxelsz = map(float, voxel_size.strip().split())
     dimx, dimy, dimz = map(float, dims.strip().split())
     n_dirs = float(dirs)
@@ -605,19 +611,19 @@ def calculate_motion_summary(confounds_tsv):
 
     # the default case where each output image comes from one input image
     if 'trans_x' in df.columns:
-        translations = df[['trans_x', 'trans_y', 'trans_z']].to_numpy()
-        rotations = df[['rot_x', 'rot_y', 'rot_z']].to_numpy()
+        translations = df[['trans_x', 'trans_y', 'trans_z']].as_matrix()
+        rotations = df[['rot_x', 'rot_y', 'rot_z']].as_matrix()
         return motion_derivatives(translations, rotations, df['framewise_displacement'],
                                   df['original_file'])
 
     # If there was a PE Pair averaging, get motion from both
-    motion1 = motion_derivatives(df[['trans_x_1', 'trans_y_1', 'trans_z_1']].to_numpy(),
-                                 df[['rot_x_1', 'rot_y_1', 'rot_z_1']].to_numpy(),
+    motion1 = motion_derivatives(df[['trans_x_1', 'trans_y_1', 'trans_z_1']].as_matrix(),
+                                 df[['rot_x_1', 'rot_y_1', 'rot_z_1']].as_matrix(),
                                  df['framewise_displacement_1'],
                                  df['original_file_1'])
 
-    motion2 = motion_derivatives(df[['trans_x_2', 'trans_y_2', 'trans_z_2']].to_numpy(),
-                                 df[['rot_x_2', 'rot_y_2', 'rot_z_2']].to_numpy(),
+    motion2 = motion_derivatives(df[['trans_x_2', 'trans_y_2', 'trans_z_2']].as_matrix(),
+                                 df[['rot_x_2', 'rot_y_2', 'rot_z_2']].as_matrix(),
                                  df['framewise_displacement_2'],
                                  df['original_file_2'])
 
@@ -673,17 +679,21 @@ class InteractiveReport(SimpleInterface):
         report['eddy_params'] = [[i, i] for i in range(30)]
         eddy_qc = {}
         report['eddy_quad'] = eddy_qc
+        report['subject_id'] = "sub-test"
+        report['analysis_level'] = "participant"
+        report['pipeline'] = "qsiprep"
+        report['boilerplate'] = "boilerplate"
 
         df = pd.read_csv(self.inputs.confounds_file, delimiter="\t")
-        translations = df[['trans_x', 'trans_y', 'trans_z']].to_numpy()
+        translations = df[['trans_x', 'trans_y', 'trans_z']].as_matrix()
         rms = np.sqrt((translations ** 2).sum(1))
         fdisp = df['framewise_displacement'].tolist()
         fdisp[0] = None
         report['eddy_params'] = [[fd_, rms_] for fd_, rms_ in zip(fdisp, rms)]
 
         # Get the sampling scheme
-        xyz = df[["grad_x", "grad_y", "grad_z"]].to_numpy()
-        bval = df['bval'].to_numpy()
+        xyz = df[["grad_x", "grad_y", "grad_z"]].as_matrix()
+        bval = df['bval'].as_matrix()
         qxyz = np.sqrt(bval)[:, None] * xyz
         report['q_coords'] = qxyz.tolist()
         report['color'] = _filename_to_colors(df['original_file'])
