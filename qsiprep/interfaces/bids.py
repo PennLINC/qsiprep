@@ -167,7 +167,7 @@ class QsiReconIngress(SimpleInterface):
     def _get_qc_filename(self, out_root, params, desc, suffix):
         used_keys = ['subject_id', 'session_id', 'acq_id', 'dir_id', 'run_id']
         fname = "_".join([params[key] for key in used_keys if params[key]])
-        return out_root + "/" + fname + "_desc-%desc_dwi.%s" % (desc, suffix)
+        return out_root + "/" + fname + "_desc-%s_dwi.%s" % (desc, suffix)
 
 
 class BIDSInfoInputSpec(BaseInterfaceInputSpec):

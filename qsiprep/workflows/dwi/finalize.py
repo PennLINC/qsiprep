@@ -335,7 +335,16 @@ def init_dwi_finalize_wf(scan_groups,
         name='ds_carpetplot', run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB)
 
+    # Write the interactive report json
+    ds_interactive_report = pe.Node(
+        DerivativesDataSink(suffix='dwiqc', source_file=source_file,
+                            base_directory=output_dir),
+        name='ds_interactive_report', run_without_submitting=True,
+        mem_gb=DEFAULT_MEMORY_MIN_GB)
+
     workflow.connect([
+        (interactive_report_wf, ds_interactive_report, [
+            ('outputnode.out_report', 'in_file')]),
         (inputnode, series_qc, [
             ('raw_qc_file', 'pre_qc'),
             ('confounds', 'confounds_file')]),
