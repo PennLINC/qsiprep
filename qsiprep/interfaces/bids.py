@@ -109,7 +109,7 @@ class QsiReconIngress(SimpleInterface):
             raise Exception("Unable to detect space of %s" % self.inputs.dwi_file)
 
         # Find the additional files
-        out_root, fname, ext = split_filename(self.inputs.dwi_file)
+        out_root, fname, _ = split_filename(self.inputs.dwi_file)
         self._results['bval_file'] = op.join(out_root, fname+".bval")
         self._results['bvec_file'] = op.join(out_root, fname+".bvec")
         self._get_if_exists('confounds_file', op.join(out_root, "*confounds.tsv"))

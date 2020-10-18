@@ -310,7 +310,7 @@ class GradientPlot(SummaryInterface):
         bvals = concatenate_bvals(self.inputs.orig_bval_files, None)
         if isdefined(self.inputs.source_files):
             file_array = np.array(self.inputs.source_files)
-            unique_files, filenums = np.unique(file_array, return_inverse=True)
+            _, filenums = np.unique(file_array, return_inverse=True)
         else:
             filenums = np.ones_like(bvals)
 
