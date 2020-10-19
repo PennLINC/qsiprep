@@ -671,6 +671,10 @@ class InteractiveReport(SimpleInterface):
             with open(self.inputs.carpetplot_data, 'r') as carpet_f:
                 carpet_data = json.load(carpet_f)
             report.update(carpet_data)
+        
+        # Load the QC file
+        report['qc_scores'] = json.loads(
+            pd.read_csv(self.inputs.series_qc_file).to_json(orient="records"))[0]
 
         report['b0'] = b0
         report['colorFA'] = colorFA

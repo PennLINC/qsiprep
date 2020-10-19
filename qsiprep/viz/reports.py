@@ -321,6 +321,7 @@ def generate_reports(subject_list, output_dir, work_dir, run_uuid, pipeline_mode
     ]
 
     errno = sum(report_errors)
+    errno += generate_interactive_report_summary(output_dir)
     if errno:
         import logging
         logger = logging.getLogger('cli')
@@ -328,4 +329,34 @@ def generate_reports(subject_list, output_dir, work_dir, run_uuid, pipeline_mode
             'Errors occurred while generating reports for participants: %s.',
             ', '.join(['%s (%d)' % (subid, err)
                        for subid, err in zip(subject_list, report_errors)]))
+    return errno
+
+
+def generate_interactive_report_summary(output_dir):
+    """
+    Gather the dwiqc values from the outputs in a 
+    """
+    report_errors = []
+    qc_values = []
+    output_path = Path(output_dir)
+    dwiqc_jsons = output_path.rglob("**/sub-*dwiqc.json")
+
+    for qc_file in dwiqc_jsons:
+        try:
+            with open(qc_file, "r") as qc_json:
+                dwi_qc = json.load(qc_json)["qc_scores"]
+            qc_values.append(dwi_qc)
+        except Exception:
+            report_errors.append(1)
+
+    errno = sum(report_errors)
+    if errno:
+        import logging
+        logger = logging.getLogger('cli')
+        logger.warning(
+            'Errors occurred while generating interactive report summary.')
+
+    with open(output_path / "dwiqc.json") as project_qc:
+        json.dump(qc_values, project_qc, indent=2)
+    
     return errno
