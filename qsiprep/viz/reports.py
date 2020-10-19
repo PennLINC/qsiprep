@@ -356,7 +356,7 @@ def generate_interactive_report_summary(output_dir):
         logger.warning(
             'Errors occurred while generating interactive report summary.')
 
-    with open(output_path / "dwiqc.json") as project_qc:
+    with open(output_path / "dwiqc.json", "w") as project_qc:
         json.dump(qc_values, project_qc, indent=2)
     
     return errno
