@@ -248,19 +248,20 @@ jobs:
           name: Check Python version and upgrade pip
           command: |
             python --version
-            python -m pip install -U pip numpy
+            sudo python -m pip install -U pip numpy
       - run:
           name: Install graphviz
           command: |
-              apt-get update
-              apt-get install -y graphviz
+              sudo apt-get update
+              sudo apt-get install -y graphviz
       - run:
           name: Install qsiprep.
-          command: python -m pip install ".[doc]" --no-cache-dir --progress-bar off
+          command: sudo python -m pip install ".[doc]" --no-cache-dir --progress-bar off
       - run:
           name: Build documentation
           no_output_timeout: 45m
           command: |
+            export NIPYPE_NO_ET=1
             make SPHINXOPTS="-W" -C docs html
       - store_artifacts:
           path: /tmp/src/qsiprep/docs/_build/html
