@@ -259,6 +259,7 @@ jobs:
           command: python -m pip install ".[doc]" --no-cache-dir --progress-bar off
       - run:
           name: Build documentation
+          no_output_timeout: 45m
           command: |
             make SPHINXOPTS="-W" -C docs html
       - store_artifacts:
