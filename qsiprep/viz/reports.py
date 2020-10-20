@@ -321,7 +321,7 @@ def generate_reports(subject_list, output_dir, work_dir, run_uuid, pipeline_mode
     ]
 
     errno = sum(report_errors)
-    errno += generate_interactive_report_summary(output_dir)
+    errno += generate_interactive_report_summary(Path(output_dir) / pipeline_mode)
     if errno:
         import logging
         logger = logging.getLogger('cli')
