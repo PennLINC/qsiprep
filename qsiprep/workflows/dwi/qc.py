@@ -89,7 +89,7 @@ def init_interactive_report_wf(name="interactive_report_wf"):
     inputnode = pe.Node(
         niu.IdentityInterface(fields=[
             "raw_dwi_file", "processed_dwi_file", "confounds_file", "bval_file",
-            "bvec_file", "mask_file", "carpetplot_data"]),
+            "bvec_file", "mask_file", "carpetplot_data", "series_qc_file"]),
         name="inputnode")
     outputnode = pe.Node(niu.IdentityInterface(fields=["out_report"]), name="outputnode")
     interactive_report = pe.Node(InteractiveReport(), name='interactive_report')
@@ -103,6 +103,7 @@ def init_interactive_report_wf(name="interactive_report_wf"):
             ('mask_file', 'mask_file')]),
         (tensor_fit, interactive_report, [('color_fa_image', 'color_fa')]),
         (inputnode, interactive_report, [
+            ('series_qc_file', 'series_qc_file'),
             ('carpetplot_data', 'carpetplot_data'),
             ('raw_dwi_file', 'raw_dwi_file'),
             ('processed_dwi_file', 'processed_dwi_file'),
