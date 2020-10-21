@@ -208,6 +208,7 @@ jobs:
             printf "[execution]\nstop_on_first_crash = true\n" > /tmp/DSCSDSI/nipype.cfg
             echo "poll_sleep_duration = 0.01" >> /tmp/DSCSDSI/nipype.cfg
             echo "hash_method = content" >> /tmp/DSCSDSI/nipype.cfg
+            echo "check_version = false" >> /tmp/DSCSDSI/nipype.cfg
             cp /tmp/DSCSDSI/nipype.cfg /tmp/DSDTI_fmap/nipype.cfg
             cp /tmp/DSCSDSI/nipype.cfg /tmp/DSDTI/nipype.cfg
             cp /tmp/DSCSDSI/nipype.cfg /tmp/twoses/nipype.cfg
