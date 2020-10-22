@@ -51,9 +51,10 @@ def get_bids_params(fullpath):
         '^.*_(?P<acq_id>acq-[a-zA-Z0-9]+)',
         '^.*_(?P<space_id>space-[a-zA-Z0-9]+)',
         '^.*_(?P<rec_id>rec-[a-zA-Z0-9]+)',
-        '^.*_(?P<run_id>run-[a-zA-Z0-9]+)'
+        '^.*_(?P<run_id>run-[a-zA-Z0-9]+)',
+        '^.*_(?P<dir_id>dir-[a-zA-Z0-9]+)'
     ]
-    matches = {"subject_id": None, "session_id": None, "task_id": None,
+    matches = {"subject_id": None, "session_id": None, "task_id": None, "dir_id": None,
                "acq_id": None, "space_id": None, "rec_id": None, "run_id": None}
     for pattern in bids_patterns:
         pat = re.compile(pattern)
@@ -91,6 +92,8 @@ class QsiReconIngressOutputSpec(TraitedSpec):
     local_bvec_file = File()
     mask_file = File()
     dwi_ref = File(exists=True)
+    qc_file = File(exists=True)
+    slice_qc_file = File(exists=True)
 
 
 class QsiReconIngress(SimpleInterface):
@@ -104,8 +107,9 @@ class QsiReconIngress(SimpleInterface):
         space = self._results.get("space_id")
         if space is None:
             raise Exception("Unable to detect space of %s" % self.inputs.dwi_file)
+
         # Find the additional files
-        out_root, fname, ext = split_filename(self.inputs.dwi_file)
+        out_root, fname, _ = split_filename(self.inputs.dwi_file)
         self._results['bval_file'] = op.join(out_root, fname+".bval")
         self._results['bvec_file'] = op.join(out_root, fname+".bvec")
         self._get_if_exists('confounds_file', op.join(out_root, "*confounds.tsv"))
@@ -114,6 +118,12 @@ class QsiReconIngress(SimpleInterface):
         self._get_if_exists('mask_file', op.join(out_root, fname[:-11] + 'brain_mask.nii.gz'))
         self._get_if_exists('dwi_ref', op.join(out_root, fname[:-16] + 'dwiref.nii.gz'))
         self._results['dwi_file'] = self.inputs.dwi_file
+
+        # Image QC doesn't include space
+        self._get_if_exists('qc_file',
+                            self._get_qc_filename(out_root, params, "ImageQC", "csv"))
+        self._get_if_exists('slice_qc_file',
+                            self._get_qc_filename(out_root, params, "SliceQC", "json"))
 
         # Get the anatomical data
         path_parts = out_root.split(op.sep)[:-1]  # remove "dwi"
@@ -153,6 +163,11 @@ class QsiReconIngress(SimpleInterface):
             self._results[name] = files[0]
         if len(files) > 1 and multi_ok:
             self._results[name] = files[0]
+
+    def _get_qc_filename(self, out_root, params, desc, suffix):
+        used_keys = ['subject_id', 'session_id', 'acq_id', 'dir_id', 'run_id']
+        fname = "_".join([params[key] for key in used_keys if params[key]])
+        return out_root + "/" + fname + "_desc-%s_dwi.%s" % (desc, suffix)
 
 
 class BIDSInfoInputSpec(BaseInterfaceInputSpec):

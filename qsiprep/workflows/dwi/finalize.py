@@ -23,8 +23,7 @@ from ...engine import Workflow
 from .util import _create_mem_gb
 from .resampling import init_dwi_trans_wf
 from .derivatives import init_dwi_derivatives_wf
-# from .qc import init_interactive_report_wf
-from .qc import init_mask_overlap_wf
+from .qc import init_mask_overlap_wf, init_interactive_report_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger('nipype.workflow')
@@ -249,6 +248,8 @@ def init_dwi_finalize_wf(scan_groups,
                                           to_mni=False,
                                           write_local_bvecs=write_local_bvecs,
                                           concatenate=write_derivatives)
+    interactive_report_wf = init_interactive_report_wf()
+
     workflow.connect([
         (inputnode, transform_dwis_t1, [
             ('b0_indices', 'inputnode.b0_indices'),
@@ -277,12 +278,17 @@ def init_dwi_finalize_wf(scan_groups,
                                          ('outputnode.b0_series', 't1_b0_series'),
                                          ('outputnode.dwi_ref_resampled', 't1_b0_ref'),
                                          ('outputnode.resampled_dwi_mask', 'dwi_mask_t1'),
-                                         ('outputnode.resampled_qc', 'series_qc_t1')])
-        # (transform_dwis_t1, interactive_report_wf, [
-        #     ('outputnode.dwi_resampled', 'inputnode.processed_dwi_file'),
-        #     ('outputnode.resampled_dwi_mask', 'inputnode.mask_file'),
-        #     ('outputnode.bvals', 'inputnode.bval_file'),
-        #     ('outputnode.rotated_bvecs', 'inputnode.bvec_file')]),
+                                         ('outputnode.resampled_qc', 'series_qc_t1')]),
+        (inputnode, interactive_report_wf, [
+            ('raw_concatenated', 'inputnode.raw_dwi_file'),
+            ('carpetplot_data', 'inputnode.carpetplot_data'),
+            ('confounds', 'inputnode.confounds_file')]),
+        (transform_dwis_t1, interactive_report_wf, [
+             ('outputnode.dwi_resampled', 'inputnode.processed_dwi_file'),
+             ('outputnode.resampled_dwi_mask', 'inputnode.mask_file'),
+             ('outputnode.bvals', 'inputnode.bval_file'),
+             ('outputnode.rotated_bvecs', 'inputnode.bvec_file')]),
+        (interactive_report_wf, outputnode, [('outputnode.out_report', 'interactive_report')])
     ])
 
     # Fill-in datasinks of reportlets seen so far
@@ -322,25 +328,30 @@ def init_dwi_finalize_wf(scan_groups,
         name='ds_series_qc', run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB)
 
-    # Gather files for creating an interactive report
-    # interactive_report_wf = init_interactive_report_wf()
-    # ds_report_interactive = pe.Node(
-    #     DerivativesDataSink(suffix='interactive', source_file=source_file,
-    #                         base_directory=reportlets_dir),
-    #     name='ds_report_interactive', run_without_submitting=True,
-    #     mem_gb=DEFAULT_MEMORY_MIN_GB)
+    # Write the carpetplot data
+    ds_carpetplot = pe.Node(
+        DerivativesDataSink(desc='SliceQC', suffix='dwi', source_file=source_file,
+                            base_directory=output_dir),
+        name='ds_carpetplot', run_without_submitting=True,
+        mem_gb=DEFAULT_MEMORY_MIN_GB)
+
+    # Write the interactive report json
+    ds_interactive_report = pe.Node(
+        DerivativesDataSink(suffix='dwiqc', source_file=source_file,
+                            base_directory=output_dir),
+        name='ds_interactive_report', run_without_submitting=True,
+        mem_gb=DEFAULT_MEMORY_MIN_GB)
 
     workflow.connect([
-        # (inputnode, interactive_report_wf, [
-        #     ('raw_concatenated', 'inputnode.raw_dwi_file'),
-        #     ('confounds', 'inputnode.confounds_file'),
-        #     ('carpetplot_data', 'inputnode.carpetplot_data')]),
-        # (interactive_report_wf, ds_report_interactive, [('outputnode.out_report', 'in_file')]),
+        (interactive_report_wf, ds_interactive_report, [
+            ('outputnode.out_report', 'in_file')]),
         (inputnode, series_qc, [
             ('raw_qc_file', 'pre_qc'),
             ('confounds', 'confounds_file')]),
+        (inputnode, ds_carpetplot, [('carpetplot_data', 'in_file')]),
         (t1_dice_calc, series_qc, [('outputnode.dice_score', 't1_dice_score')]),
         (series_qc, ds_series_qc, [('series_qc_file', 'in_file')]),
+        (series_qc, interactive_report_wf, [('series_qc_file', 'inputnode.series_qc_file')]),
         (inputnode, dwi_derivatives_wf, [('dwi_files', 'inputnode.source_file')]),
         (inputnode, outputnode, [('hmc_optimization_data', 'hmc_optimization_data')]),
         (transform_dwis_t1, series_qc, [('outputnode.resampled_qc', 't1_qc')]),
