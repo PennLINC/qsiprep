@@ -13,6 +13,7 @@ import nipype.interfaces.utility as niu
 from nipype.utils.filemanip import fname_presuffix, split_filename
 from scipy.io.matlab import loadmat, savemat
 import nibabel as nb
+import pandas as pd
 LOGGER = logging.getLogger('nipype.interface')
 
 
@@ -113,6 +114,33 @@ class DSIStudioSrcQC(SimpleInterface):
         if err:
             LOGGER.critical(str(err))
         self._results['qc_txt'] = tmp_dir + '.qc.txt'
+        return runtime
+
+
+class _DSIStudioFibQCInputSpec(DSIStudioCommandLineInputSpec):
+    fib_file = File(exists=True, argstr="%s", desc='DSI Studio fib[.gz] file')
+
+
+class _DSIStudioFibQCOutputSpec(DSIStudioCommandLineInputSpec):
+    qc_txt = File(exists=True, desc="Text file with QC measures")
+
+
+class DSIStudioFibQC(SimpleInterface):
+    input_spec = _DSIStudioFibQCInputSpec
+    output_spec = _DSIStudioFibQCOutputSpec
+
+    def _run_interface(self, runtime):
+        # Create a temp directory for the src file to go
+        linked_fib_file = fname_presuffix(self.inputs.fib_file, newpath=runtime.cwd)
+        os.link(self.inputs.fib_file, linked_fib_file)
+        cmd = ['dsi_studio', '--action=qc', '--source='+runtime.cwd]
+        proc = Popen(cmd, cwd=runtime.cwd, stdout=PIPE, stderr=PIPE)
+        out, err = proc.communicate()
+        if out:
+            LOGGER.info(str(out))
+        if err:
+            LOGGER.critical(str(err))
+        self._results['qc_txt'] = linked_fib_file.replace('.fib.gz', '.qc.txt')
         return runtime
 
 
@@ -612,3 +640,68 @@ class FixDSIStudioExportHeader(SimpleInterface):
         self._results['out_file'] = new_file
 
         return runtime
+
+
+class _DSIStudioQCMergeInputSpec(BaseInterfaceInputSpec):
+    src_qc = File(exists=True, mandatory=True)
+    fib_qc = File(exists=True, mandatory=True)
+
+
+class _DSIStudioQCMergeOutputSpec(TraitedSpec):
+    qc_file = File(exists=True)
+
+
+class DSIStudioMergeQC(SimpleInterface):
+    input_spec = _DSIStudioQCMergeInputSpec
+    output_spec = _DSIStudioQCMergeOutputSpec
+
+    def _run_interface(self, runtime):
+        output_csv = runtime.cwd + "/merged_qc.csv"
+        src_qc = load_src_qc_file(self.inputs.src_qc)
+        fib_qc = load_fib_qc_file(self.inputs.fib_qc)
+        src_qc.update(fib_qc)
+        qc_df = pd.DataFrame(src_qc)
+        qc_df.to_csv(output_csv, index=False)
+        self._results['qc_file'] = output_csv
+        return runtime
+
+
+def load_src_qc_file(fname, prefix=""):
+    with open(fname, "r") as qc_file:
+        qc_data = qc_file.readlines()
+    data = qc_data[2]
+    parts = data.strip().split('\t')
+    if len(parts) == 7:
+        _, dims, voxel_size, dirs, max_b, ndc, bad_slices = parts
+    elif len(parts) == 8:
+        _, dims, voxel_size, dirs, max_b, _, ndc,bad_slices = parts
+    else:
+        raise Exception("Unknown QC File format")
+
+    voxelsx, voxelsy, voxelsz = map(float, voxel_size.strip().split())
+    dimx, dimy, dimz = map(float, dims.strip().split())
+    n_dirs = float(dirs)
+    max_b = float(max_b)
+    dwi_corr = float(ndc)
+    n_bad_slices = float(bad_slices)
+    data = {
+        prefix + 'dimension_x': [dimx],
+        prefix + 'dimension_y': [dimy],
+        prefix + 'dimension_z': [dimz],
+        prefix + 'voxel_size_x': [voxelsx],
+        prefix + 'voxel_size_y': [voxelsy],
+        prefix + 'voxel_size_z': [voxelsz],
+        prefix + 'max_b': [max_b],
+        prefix + 'neighbor_corr': [dwi_corr],
+        prefix + 'num_bad_slices': [n_bad_slices],
+        prefix + 'num_directions': [n_dirs]
+    }
+    return data
+
+
+def load_fib_qc_file(fname):
+    with open(fname, "r") as fibqc_f:
+        lines = [line.strip().split() for line in fibqc_f]
+    return {'coherence_index': [float(lines[0][-1])],
+            'incoherence_index': [float(lines[1][-1])]}
+    

@@ -11,7 +11,8 @@ Utility workflows
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu, afni
 from ...engine import Workflow
-from ...interfaces.dsi_studio import DSIStudioSrcQC, DSIStudioCreateSrc
+from ...interfaces.dsi_studio import (DSIStudioSrcQC, DSIStudioCreateSrc, 
+    DSIStudioGQIReconstruction, DSIStudioFibQC, DSIStudioMergeQC)
 from ...interfaces.reports import InteractiveReport
 from ...interfaces.dipy import TensorReconstruction
 from ...interfaces.anatomical import DiceOverlap
@@ -56,14 +57,21 @@ def init_modelfree_qc_wf(dwi_files=None, name='dwi_qc_wf'):
         name='outputnode')
 
     raw_src = pe.Node(DSIStudioCreateSrc(), name='raw_src')
-    raw_qc = pe.Node(DSIStudioSrcQC(), name='raw_qc')
+    raw_src_qc = pe.Node(DSIStudioSrcQC(), name='raw_src_qc')
+    raw_gqi = pe.Node(DSIStudioGQIReconstruction(), name='raw_gqi')
+    raw_fib_qc = pe.Node(DSIStudioFibQC(), name='raw_fib_qc')
+    merged_qc = pe.Node(DSIStudioMergeQC(), name= 'merged_qc')
     workflow.connect([
         (inputnode, raw_src, [
             ('dwi_file', 'input_nifti_file'),
             ('bval_file', 'input_bvals_file'),
             ('bvec_file', 'input_bvecs_file')]),
-        (raw_src, raw_qc, [('output_src', 'src_file')]),
-        (raw_qc, outputnode, [('qc_txt', 'qc_summary')]),
+        (raw_src, raw_src_qc, [('output_src', 'src_file')]),
+        (raw_src, raw_gqi, [('output_src', 'input_src_file')]),
+        (raw_gqi, raw_fib_qc, [('output_fib', 'fib_file')]),
+        (raw_fib_qc, merged_qc, [('qc_txt', 'fib_qc')]),
+        (raw_src_qc, merged_qc, [('qc_txt', 'src_qc')]),
+        (merged_qc, outputnode, [('qc_file', 'qc_summary')]),
     ])
 
     return workflow
