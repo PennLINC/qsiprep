@@ -95,12 +95,12 @@ RUN curl -sSL https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/6.0.1/frees
     --exclude='freesurfer/lib/cuda' \
     --exclude='freesurfer/lib/qt'
 
-  ENV FSLDIR="/opt/fsl-6.0.2" \
-      PATH="/opt/fsl-6.0.2/bin:$PATH"
+  ENV FSLDIR="/opt/fsl-6.0.3" \
+      PATH="/opt/fsl-6.0.3/bin:$PATH"
   RUN echo "Downloading FSL ..." \
-      && mkdir -p /opt/fsl-6.0.2 \
-      && curl -fsSL --retry 5 https://fsl.fmrib.ox.ac.uk/fsldownloads/fsl-6.0.2-centos6_64.tar.gz \
-      | tar -xz -C /opt/fsl-6.0.2 --strip-components 1 \
+      && mkdir -p /opt/fsl-6.0.3 \
+      && curl -fsSL --retry 5 https://fsl.fmrib.ox.ac.uk/fsldownloads/fsl-6.0.3-centos6_64.tar.gz \
+      | tar -xz -C /opt/fsl-6.0.3 --strip-components 1 \
       --exclude='fsl/doc' \
       --exclude='fsl/data/atlases' \
       --exclude='fsl/data/possum' \
@@ -111,7 +111,7 @@ RUN curl -sSL https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/6.0.1/frees
       && echo "Installing FSL conda environment ..." \
       && sed -i -e "/fsleyes/d" -e "/wxpython/d" \
          ${FSLDIR}/etc/fslconf/fslpython_environment.yml \
-      && bash /opt/fsl-6.0.2/etc/fslconf/fslpython_install.sh -f /opt/fsl-6.0.2 \
+      && bash /opt/fsl-6.0.3/etc/fslconf/fslpython_install.sh -f /opt/fsl-6.0.3 \
       && find ${FSLDIR}/fslpython/envs/fslpython/lib/python3.7/site-packages/ -type d -name "tests"  -print0 | xargs -0 rm -r \
       && ${FSLDIR}/fslpython/bin/conda clean --all
 
@@ -184,7 +184,8 @@ RUN cd /opt \
     && ./build
 
 # Install 3Tissue from source
-ARG MRTRIX_SHA=c82903bb8c7cfaea40b369974e3aa3ab04809e6e
+ARG MRTRIX_SHA=c1367255f51a3cbe774c8317448cdc0b0aa587be
+ENV PATH="/opt/mrtrix3-latest/bin:$PATH"
 RUN cd /opt \
     && curl -sSLO https://github.com/3Tissue/MRtrix3Tissue/archive/${MRTRIX_SHA}.zip \
     && unzip ${MRTRIX_SHA}.zip \
@@ -320,7 +321,7 @@ RUN python -c "from matplotlib import font_manager" && \
 RUN find $HOME -type d -exec chmod go=u {} + && \
     find $HOME -type f -exec chmod go=u {} +
 
-RUN ln -s /opt/fsl-6.0.2/bin/eddy_cuda9.1 /opt/fsl-6.0.2/bin/eddy_cuda
+RUN ln -s /opt/fsl-6.0.3/bin/eddy_cuda9.1 /opt/fsl-6.0.3/bin/eddy_cuda
 
 ENV AFNI_INSTALLDIR=/usr/lib/afni \
     PATH=${PATH}:/usr/lib/afni/bin \
