@@ -108,19 +108,6 @@ def make_a_square(data_mat, include_last_dim=True):
     return np.pad(data_mat, padding, "constant", constant_values=(0, 0))
 
 
-def get_middle_slices(data, slice_direction):
-    slicer = {"ax": 0, "cor": 1, "sag": 2}
-    all_data_slicer = [slice(None), slice(None), slice(None)]
-    num_slices = data.shape[slicer[slice_direction]]
-    slice_num = int(num_slices / 2)
-    all_data_slicer[slicer[slice_direction]] = slice_num
-    tile = data[tuple(all_data_slicer)]
-
-    # make it a square
-    tile = make_a_square(tile, include_last_dim=False)
-    return tile
-
-
 def nearest_square(limit):
     answer = 0
     while (answer + 1) ** 2 < limit:
@@ -180,10 +167,9 @@ def createSprite4D(dwi_file):
 
     # create tiles from center slice on each orientation
     for orient in ['sag', 'ax', 'cor']:
-        tile = get_middle_slices(dwi, orient)
-
-        # create sprite images for each
-        results = create_sprite_from_tiles(tile, as_bytes=True)
+        axis_tiles = get_middle_slice_tiles(dwi, orient)
+        # create sprite images for the axis
+        results = embed_tiles_in_json_sprite(axis_tiles, as_bytes=True)
         results['img_type'] = '4dsprite'
         results['orientation'] = orient
         output.append(results)
@@ -198,14 +184,21 @@ def square_and_normalize_slice(slice2d):
     return tile_data / max_value
 
 
-def embed_tiles_in_mosaic(tile_list):
+def embed_tiles_in_json_sprite(tile_list, as_bytes=True, out_file=None):
     """Make a big rectangle containing the images for a brainsprite.
     
     Parameters:
     -----------
     
         tile_list : list
-          List of 2d square numpy arrays to stick in a 
+          List of 2d square numpy arrays to stick in a mosaic
+    
+    Returns:
+    --------
+
+        mosaic : np.ndarray
+            Mosaic of tile images
+
     """
     # Tiles are squares
     tile_size = tile_list[0].shape[0]
@@ -224,12 +217,17 @@ def embed_tiles_in_mosaic(tile_list):
                                         j_tile_offsets):
         mosaic[i_offset:(i_offset + tile_size),
                j_offset:(j_offset + tile_size)] = tile
-    
+
+    if as_bytes:
+        img = mplfig(mosaic, out_file, as_bytes=as_bytes)
+        return dict(img=img, N=num_tile_rows, M=num_tile_cols, 
+                    pix=tile_size, num_slices=num_tiles)
+
     return dict(mosaic=mosaic, N=num_tile_rows, M=num_tile_cols, 
                 pix=tile_size, num_slices=num_tiles)
 
 
-def get_middle_slices(data, slice_direction):
+def get_middle_slice_tiles(data, slice_direction):
     """Create a strip of intensity-normalized, square middle slices.
     
     """
@@ -243,7 +241,7 @@ def get_middle_slices(data, slice_direction):
     slice_tiles = [square_and_normalize_slice(middle_slices[..., mid_slice]) 
                    for mid_slice in range(num_slices)]
     
-    return embed_tiles_in_mosaic(slice_tiles)
+    return slice_tiles
 
 
 def createB0_ColorFA_Mask_Sprites(b0_file, colorFA_file, mask_file):
