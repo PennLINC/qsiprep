@@ -533,36 +533,10 @@ class SeriesQC(SimpleInterface):
 
 
 def _load_qc_file(fname, prefix=""):
-    with open(fname, "r") as qc_file:
-        qc_data = qc_file.readlines()
-    data = qc_data[2]
-    parts = data.strip().split('\t')
-    if len(parts) == 7:
-        _, dims, voxel_size, dirs, max_b, ndc, bad_slices = parts
-    elif len(parts) == 8:
-        _, dims, voxel_size, dirs, max_b, _, ndc,bad_slices = parts
-    else:
-        raise Exception("Unknown QC File format")
-
-    voxelsx, voxelsy, voxelsz = map(float, voxel_size.strip().split())
-    dimx, dimy, dimz = map(float, dims.strip().split())
-    n_dirs = float(dirs)
-    max_b = float(max_b)
-    dwi_corr = float(ndc)
-    n_bad_slices = float(bad_slices)
-    data = {
-        prefix + 'dimension_x': [dimx],
-        prefix + 'dimension_y': [dimy],
-        prefix + 'dimension_z': [dimz],
-        prefix + 'voxel_size_x': [voxelsx],
-        prefix + 'voxel_size_y': [voxelsy],
-        prefix + 'voxel_size_z': [voxelsz],
-        prefix + 'max_b': [max_b],
-        prefix + 'neighbor_corr': [dwi_corr],
-        prefix + 'num_bad_slices': [n_bad_slices],
-        prefix + 'num_directions': [n_dirs]
-    }
-    return data
+    qc_data = pd.read_csv(fname).to_dict(orient='records')[0]
+    renamed = dict([
+        (prefix + key, value) for key, value in qc_data.items()])
+    return renamed
 
 
 def motion_derivatives(translations, rotations, framewise_disp,
