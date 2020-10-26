@@ -189,6 +189,15 @@ def createSprite4D(dwi_file):
         output.append(results)
 
     return output
+
+
+def square_and_normalize_slice(slice2d):    
+    tile_data = make_a_square(slice2d)
+    max_value = np.percentile(tile_data, 98)
+    tile_data[tile_data > max_value] = max_value
+    return tile_data / max_value
+
+
 def embed_tiles_in_mosaic(tile_list):
     """Make a big rectangle containing the images for a brainsprite.
     
@@ -200,7 +209,7 @@ def embed_tiles_in_mosaic(tile_list):
     """
     # Tiles are squares
     tile_size = tile_list[0].shape[0]
-    num_tiles = list(tile_list)
+    num_tiles = len(tile_list)
     num_tile_rows = nearest_square(num_tiles)
     num_tile_cols = int(np.ceil(num_tiles/num_tile_rows))
     mosaic = np.zeros((num_tile_rows * tile_size, 
@@ -231,10 +240,11 @@ def get_middle_slices(data, slice_direction):
     all_data_slicer[slicer[slice_direction]] = slice_num
     middle_slices = data[tuple(all_data_slicer)]
     num_slices = middle_slices.shape[2]
-    slice_tiles = [square_and_normalize_slice(mid_slice) for 
-                   mid_slice in range(middle_slices)]
+    slice_tiles = [square_and_normalize_slice(middle_slices[..., mid_slice]) 
+                   for mid_slice in range(num_slices)]
     
     return embed_tiles_in_mosaic(slice_tiles)
+
 
 def createB0_ColorFA_Mask_Sprites(b0_file, colorFA_file, mask_file):
     colorfa = load_and_reorient(colorFA_file)
