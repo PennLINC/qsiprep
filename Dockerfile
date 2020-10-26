@@ -147,8 +147,8 @@ ENV QTDIR="$QT_BASE_DIR" \
     PATH="$QT_BASE_DIR/bin:$PATH:/opt/dsi-studio/dsi_studio_64" \
     LD_LIBRARY_PATH="$QT_BASE_DIR/lib/x86_64-linux-gnu:$QT_BASE_DIR/lib:$LD_LIBRARY_PATH" \
     PKG_CONFIG_PATH="$QT_BASE_DIR/lib/pkgconfig:$PKG_CONFIG_PATH"
-ARG DSI_SHA=bf710d594527f64c125beb7f8990570c769cd3a8
-ARG TIPL_SHA=686f194a1a4244bf09364abc7943f3233704c55f
+ARG DSI_SHA=eb8433e8923d4bb26bd6ee04d0da4bdede55ed85
+ARG TIPL_SHA=f94d2df66acba0fa929351a0a2bdfaa40faf66e8
 RUN mkdir /opt/dsi-studio \
   && cd /opt/dsi-studio \
   && curl -sSLO https://github.com/frankyeh/DSI-Studio/archive/${DSI_SHA}.zip \
