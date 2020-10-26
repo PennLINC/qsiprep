@@ -245,12 +245,11 @@ def get_middle_slice_tiles(data, slice_direction):
 
 
 def createB0_ColorFA_Mask_Sprites(b0_file, colorFA_file, mask_file):
-    colorfa = load_and_reorient(colorFA_file)
-    b0 = load_and_reorient(b0_file)[:, :, :, 0]
-    anat_mask = load_and_reorient(mask_file)
+    colorfa = make_a_square(load_and_reorient(colorFA_file), include_last_dim=False)
+    b0 = make_a_square(load_and_reorient(b0_file)[:, :, :, 0])
+    anat_mask = make_a_square(load_and_reorient(mask_file))
 
     # make a b0 sprite
-    b0 = make_a_square(b0, include_last_dim=False)
     _, mask = median_otsu(b0)
     outb0 = create_sprite_from_tiles(b0, as_bytes=True)
     outb0['img_type'] = 'brainsprite'
