@@ -133,7 +133,7 @@ class DSIStudioFibQC(SimpleInterface):
         # Create a temp directory for the src file to go
         linked_fib_file = fname_presuffix(self.inputs.fib_file, newpath=runtime.cwd)
         os.link(self.inputs.fib_file, linked_fib_file)
-        cmd = ['dsi_studio', '--action=qc', '--source='+runtime.cwd]
+        cmd = ['dsi_studio', '--action=qc', '--source='+linked_fib_file]
         proc = Popen(cmd, cwd=runtime.cwd, stdout=PIPE, stderr=PIPE)
         out, err = proc.communicate()
         if out:
