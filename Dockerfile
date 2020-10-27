@@ -19,6 +19,7 @@ RUN apt-get update && \
                     bc \
                     dc \
                     file \
+                    graphviz \
                     libopenblas-base \
                     libfontconfig1 \
                     libfreetype6 \
@@ -266,7 +267,7 @@ RUN conda install -y python=3.7.1 \
                      pandas=0.24.0 \
                      libxml2=2.9.9 \
                      libxslt=1.1.33 \
-                     graphviz=2.40.1 \
+                     graphviz \
                      cython=0.29.2 \
                      imageio=2.5.0 \
                      olefile=0.46 \
