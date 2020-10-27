@@ -585,19 +585,19 @@ def calculate_motion_summary(confounds_tsv):
 
     # the default case where each output image comes from one input image
     if 'trans_x' in df.columns:
-        translations = df[['trans_x', 'trans_y', 'trans_z']].as_matrix()
-        rotations = df[['rot_x', 'rot_y', 'rot_z']].as_matrix()
+        translations = df[['trans_x', 'trans_y', 'trans_z']].values
+        rotations = df[['rot_x', 'rot_y', 'rot_z']].values
         return motion_derivatives(translations, rotations, df['framewise_displacement'],
                                   df['original_file'])
 
     # If there was a PE Pair averaging, get motion from both
-    motion1 = motion_derivatives(df[['trans_x_1', 'trans_y_1', 'trans_z_1']].as_matrix(),
-                                 df[['rot_x_1', 'rot_y_1', 'rot_z_1']].as_matrix(),
+    motion1 = motion_derivatives(df[['trans_x_1', 'trans_y_1', 'trans_z_1']].values,
+                                 df[['rot_x_1', 'rot_y_1', 'rot_z_1']].values,
                                  df['framewise_displacement_1'],
                                  df['original_file_1'])
 
-    motion2 = motion_derivatives(df[['trans_x_2', 'trans_y_2', 'trans_z_2']].as_matrix(),
-                                 df[['rot_x_2', 'rot_y_2', 'rot_z_2']].as_matrix(),
+    motion2 = motion_derivatives(df[['trans_x_2', 'trans_y_2', 'trans_z_2']].values,
+                                 df[['rot_x_2', 'rot_y_2', 'rot_z_2']].values,
                                  df['framewise_displacement_2'],
                                  df['original_file_2'])
 
@@ -663,15 +663,15 @@ class InteractiveReport(SimpleInterface):
         report['boilerplate'] = "boilerplate"
 
         df = pd.read_csv(self.inputs.confounds_file, delimiter="\t")
-        translations = df[['trans_x', 'trans_y', 'trans_z']].as_matrix()
+        translations = df[['trans_x', 'trans_y', 'trans_z']].values
         rms = np.sqrt((translations ** 2).sum(1))
         fdisp = df['framewise_displacement'].tolist()
         fdisp[0] = None
         report['eddy_params'] = [[fd_, rms_] for fd_, rms_ in zip(fdisp, rms)]
 
         # Get the sampling scheme
-        xyz = df[["grad_x", "grad_y", "grad_z"]].as_matrix()
-        bval = df['bval'].as_matrix()
+        xyz = df[["grad_x", "grad_y", "grad_z"]].values
+        bval = df['bval'].values
         qxyz = np.sqrt(bval)[:, None] * xyz
         report['q_coords'] = qxyz.tolist()
         report['color'] = _filename_to_colors(df['original_file'])
