@@ -19,7 +19,6 @@ RUN apt-get update && \
                     bc \
                     dc \
                     file \
-                    graphviz \
                     libopenblas-base \
                     libfontconfig1 \
                     libfreetype6 \
@@ -257,7 +256,7 @@ ENV PATH=/usr/local/miniconda/bin:$PATH \
 
 # Installing precomputed python packages
 RUN conda install -y python=3.7.1 \
-                     numpy=1.17.5 \
+                     numpy=1.18.5 \
                      scipy=1.2.0 \
                      mkl=2019.1 \
                      mkl-service \
@@ -267,7 +266,7 @@ RUN conda install -y python=3.7.1 \
                      pandas=0.24.0 \
                      libxml2=2.9.9 \
                      libxslt=1.1.33 \
-                     graphviz \
+                     graphviz=2.40.1 \
                      cython=0.29.2 \
                      imageio=2.5.0 \
                      olefile=0.46 \
