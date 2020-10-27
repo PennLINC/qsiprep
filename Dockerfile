@@ -256,7 +256,7 @@ ENV PATH=/usr/local/miniconda/bin:$PATH \
 
 # Installing precomputed python packages
 RUN conda install -y python=3.7.1 \
-                     numpy=1.15.4 \
+                     numpy=1.17.5 \
                      scipy=1.2.0 \
                      mkl=2019.1 \
                      mkl-service \
