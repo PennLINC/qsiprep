@@ -255,7 +255,7 @@ class DSIStudioGQIReconstruction(DSIStudioReconstruction):
         srcname = os.path.split(self.inputs.input_src_file)[-1]
         print("input src", self.inputs.input_src_file)
         print("split src name", srcname)
-        target = os.path.join(os.getcwd(), srcname) + "*gqi*.fib.gz" 
+        target = os.path.join(os.getcwd(), srcname) + "*gqi*.fib.gz"
         print("search target", target)
         results = glob(target)
         assert len(results) == 1
@@ -674,7 +674,7 @@ def load_src_qc_file(fname, prefix=""):
     if len(parts) == 7:
         _, dims, voxel_size, dirs, max_b, ndc, bad_slices = parts
     elif len(parts) == 8:
-        _, dims, voxel_size, dirs, max_b, _, ndc,bad_slices = parts
+        _, dims, voxel_size, dirs, max_b, _, ndc, bad_slices = parts
     else:
         raise Exception("Unknown QC File format")
 
@@ -704,4 +704,3 @@ def load_fib_qc_file(fname):
         lines = [line.strip().split() for line in fibqc_f]
     return {'coherence_index': [float(lines[0][-1])],
             'incoherence_index': [float(lines[1][-1])]}
-    

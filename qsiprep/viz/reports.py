@@ -334,7 +334,7 @@ def generate_reports(subject_list, output_dir, work_dir, run_uuid, pipeline_mode
 
 def generate_interactive_report_summary(output_dir):
     """
-    Gather the dwiqc values from the outputs in a 
+    Gather the dwiqc values from the outputs in a
     """
     report_errors = []
     qc_report = {
@@ -369,7 +369,8 @@ def generate_interactive_report_summary(output_dir):
             "max_translation": "Maximum translation from head motion",
             "max_rel_rotation": "Maximum rotation relative to the previous head position",
             "max_rel_translation": "Maximum translation relative to the previous head position",
-            "t1_dice_distance": "Dice score for the overlap of the T1w-based brain mask and the b=0 ref mask"
+            "t1_dice_distance": "Dice score for the overlap of the T1w-based brain mask "
+                                "and the b=0 ref mask"
         }
     }
     qc_values = []
@@ -394,5 +395,5 @@ def generate_interactive_report_summary(output_dir):
     qc_report["subjects"] = qc_values
     with open(output_path / "dwiqc.json", "w") as project_qc:
         json.dump(qc_report, project_qc, indent=2)
-    
+
     return errno

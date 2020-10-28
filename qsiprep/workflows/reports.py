@@ -10,8 +10,6 @@ qsiprep interactive report workflow
 
 """
 import logging
-import sys
-import os
 from copy import deepcopy
 
 from nipype.pipeline import engine as pe
@@ -22,7 +20,7 @@ from ..interfaces import DerivativesDataSink
 from ..interfaces.bids import QsiReconIngress
 from ..interfaces.reports import InteractiveReport
 from ..utils.bids import collect_data
-from .recon.interchange import (qsiprep_output_names, input_fields, default_input_set)
+from .recon.interchange import qsiprep_output_names, input_fields
 
 
 LOGGER = logging.getLogger('nipype.workflow')
@@ -40,7 +38,6 @@ def init_json_preproc_report_wf(subject_list, work_dir, output_dir):
         from qsiprep.workflows.reports import init_json_preproc_report_wf
         wf = init_json_preproc_report_wf(
             subject_list=['qsipreptest'],
-            run_uuid='X',
             work_dir='.',
             output_dir='.')
 
@@ -49,8 +46,6 @@ def init_json_preproc_report_wf(subject_list, work_dir, output_dir):
 
         subject_list : list
             List of subject labels
-        run_uuid : str
-            Unique identifier for execution instance
         work_dir : str
             Directory in which to store workflow execution state and temporary
             files
@@ -61,16 +56,12 @@ def init_json_preproc_report_wf(subject_list, work_dir, output_dir):
     qsiprep_wf = Workflow(name='json_reports_wf')
     qsiprep_wf.base_dir = work_dir
 
-    reportlets_dir = os.path.join(work_dir, 'reportlets')
     for subject_id in subject_list:
         single_subject_wf = init_single_subject_json_report_wf(
             subject_id=subject_id,
             name="single_subject_" + subject_id + "json_report_wf",
-            reportlets_dir=reportlets_dir,
             output_dir=output_dir)
 
-        single_subject_wf.config['execution']['crashdump_dir'] = (os.path.join(
-            output_dir, "qsiprep", "sub-" + subject_id, 'log', run_uuid))
         for node in single_subject_wf._get_all_nodes():
             node.config = deepcopy(single_subject_wf.config)
             qsiprep_wf.add_nodes([single_subject_wf])

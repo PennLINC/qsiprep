@@ -71,7 +71,7 @@ def load_and_reorient(filename):
 
 def make_a_square(data_mat, include_last_dim=True):
     """Applies zero padding to make a 2d matrix a square.
-    
+
     Examples:
     ---------
     >>> too_long = np.arange(4 * 7).reshape((4, 7))
@@ -97,7 +97,7 @@ def make_a_square(data_mat, include_last_dim=True):
     largest_side = np.argmax(shapes)
     sides_to_pad = np.arange(n_dims_to_pad).tolist()
     sides_to_pad.pop(largest_side)
-    
+
     # Must specify padding for all dims
     padding = [(0, 0)] * data_mat.ndim
     for side_to_pad in sides_to_pad:
@@ -177,7 +177,7 @@ def createSprite4D(dwi_file):
     return output
 
 
-def square_and_normalize_slice(slice2d):    
+def square_and_normalize_slice(slice2d):
     tile_data = make_a_square(slice2d)
     max_value = np.percentile(tile_data, 98)
     tile_data[tile_data > max_value] = max_value
@@ -186,13 +186,13 @@ def square_and_normalize_slice(slice2d):
 
 def embed_tiles_in_json_sprite(tile_list, as_bytes=True, out_file=None):
     """Make a big rectangle containing the images for a brainsprite.
-    
+
     Parameters:
     -----------
-    
+
         tile_list : list
           List of 2d square numpy arrays to stick in a mosaic
-    
+
     Returns:
     --------
 
@@ -205,31 +205,31 @@ def embed_tiles_in_json_sprite(tile_list, as_bytes=True, out_file=None):
     num_tiles = len(tile_list)
     num_tile_rows = nearest_square(num_tiles)
     num_tile_cols = int(np.ceil(num_tiles/num_tile_rows))
-    mosaic = np.zeros((num_tile_rows * tile_size, 
+    mosaic = np.zeros((num_tile_rows * tile_size,
                        num_tile_cols * tile_size))
-    
-    i_indices, j_indices = np.unravel_index(np.arange(num_tiles), 
+
+    i_indices, j_indices = np.unravel_index(np.arange(num_tiles),
                                             (num_tile_rows, num_tile_cols))
     i_tile_offsets = tile_size * i_indices
     j_tile_offsets = tile_size * j_indices
-    
-    for tile, i_offset, j_offset in zip(tile_list, i_tile_offsets, 
+
+    for tile, i_offset, j_offset in zip(tile_list, i_tile_offsets,
                                         j_tile_offsets):
         mosaic[i_offset:(i_offset + tile_size),
                j_offset:(j_offset + tile_size)] = tile
 
     if as_bytes:
         img = mplfig(mosaic, out_file, as_bytes=as_bytes)
-        return dict(img=img, N=num_tile_rows, M=num_tile_cols, 
+        return dict(img=img, N=num_tile_rows, M=num_tile_cols,
                     pix=tile_size, num_slices=num_tiles)
 
-    return dict(mosaic=mosaic, N=num_tile_rows, M=num_tile_cols, 
+    return dict(mosaic=mosaic, N=num_tile_rows, M=num_tile_cols,
                 pix=tile_size, num_slices=num_tiles)
 
 
 def get_middle_slice_tiles(data, slice_direction):
     """Create a strip of intensity-normalized, square middle slices.
-    
+
     """
     slicer = {"ax": 0, "cor": 1, "sag": 2}
     all_data_slicer = [slice(None), slice(None), slice(None)]
@@ -238,9 +238,9 @@ def get_middle_slice_tiles(data, slice_direction):
     all_data_slicer[slicer[slice_direction]] = slice_num
     middle_slices = data[tuple(all_data_slicer)]
     num_slices = middle_slices.shape[2]
-    slice_tiles = [square_and_normalize_slice(middle_slices[..., mid_slice]) 
+    slice_tiles = [square_and_normalize_slice(middle_slices[..., mid_slice])
                    for mid_slice in range(num_slices)]
-    
+
     return slice_tiles
 
 

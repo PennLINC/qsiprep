@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 import warnings
-import os
 import sys
 from pathlib import Path
 from argparse import ArgumentParser
@@ -25,4 +24,3 @@ def aggregate_reports():
     opts = parser.parse_args()
     sys.exit(
         generate_interactive_report_summary(opts.qsiprep_derivatives_dir))
-    
