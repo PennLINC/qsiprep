@@ -258,7 +258,7 @@ ENV PATH=/usr/local/miniconda/bin:$PATH \
 RUN conda install -y python=3.7.1 \
                      numpy=1.18.5 \
                      scipy=1.2.0 \
-                     mkl=2019.1 \
+                     mkl=2019.4 \
                      mkl-service \
                      scikit-learn=0.20.2 \
                      matplotlib=2.2.3 \
