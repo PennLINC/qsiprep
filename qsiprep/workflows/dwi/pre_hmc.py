@@ -233,7 +233,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
                 ('out_bvec', 'inputnode.bvec_file')]),
             (qc_wf, outputnode, [('outputnode.qc_summary', 'qc_file')])
         ])
-        
+
         workflow.__postdesc__ = "Both groups were then merged into a single file, as required " \
                                 "for the FSL workflows. "
         return workflow

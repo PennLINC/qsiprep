@@ -91,6 +91,7 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug, d
                                   output_resolution=1.25,
                                   dwi_only=False,
                                   skull_strip_template='OASIS',
+                                  infant_mode=False,
                                   force_spatial_normalization=True,
                                   freesurfer=True,
                                   longitudinal=False,

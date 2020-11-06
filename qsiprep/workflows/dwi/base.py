@@ -69,7 +69,8 @@ def init_dwi_preproc_wf(dwi_only,
         :simple_form: yes
 
         from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
-        wf = init_dwi_preproc_wf({'dwi_series': ['fake.nii'],
+        wf = init_dwi_preproc_wf(dwi_only=False,
+                                 scan_groups={'dwi_series': ['fake.nii'],
                                   'fieldmap_info': {'suffix': None},
                                   'dwi_series_pedir': 'j'},
                                   output_prefix='',

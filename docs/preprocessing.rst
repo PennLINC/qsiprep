@@ -3,7 +3,7 @@
 .. _preprocessing:
 
 Preprocessing
-=========================
+=============
 
 QSIPrep builds a pipeline based on your BIDS inputs. In general the pipeline will incorporate
 all the data it knows how to handle (i.e. fieldmaps, dMRI and anatomical data) automatically.
@@ -273,6 +273,8 @@ T1w/T2w preprocessing
     wf = init_anat_preproc_wf(omp_nthreads=1,
                               reportlets_dir='.',
                               output_dir='.',
+                              dwi_only=False,
+                              infant_mode=False,
                               template='MNI152NLin2009cAsym',
                               output_spaces=['T1w'],
                               output_resolution=1.25,
@@ -368,7 +370,8 @@ DWI preprocessing
     :simple_form: yes
 
     from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
-    wf = init_dwi_preproc_wf({'dwi_series': ['fake.nii'],
+    wf = init_dwi_preproc_wf(dwi_only=False,
+                             scan_groups={'dwi_series': ['fake.nii'],
                               'fieldmap_info': {'suffix': None},
                               'dwi_series_pedir': 'j'},
                               source_file='/data/sub-1/dwi/sub-1_dwi.nii.gz',

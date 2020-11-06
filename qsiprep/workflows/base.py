@@ -345,6 +345,7 @@ def init_single_subject_wf(
             hmc_transform='Affine',
             eddy_config=None,
             shoreline_iters=2,
+            infant_mode=False,
             impute_slice_threshold=0.0,
             write_local_bvecs=False,
             fmap_bspline=False,
