@@ -85,6 +85,15 @@ def get_parser():
                         help='select a specific acquisition type to be processed')
 
     # arguments for reconstructing QSI data
+    g_ireports = parser.add_argument_group('Options for interactive report outputs')
+    g_ireports.add_argument(
+        '--interactive-reports-only', '--interactive_reports_only',
+        action='store_true',
+        default=False,
+        help='create interactive report json files on already preprocessed data.'
+    )
+
+    # arguments for reconstructing QSI data
     g_recon = parser.add_argument_group('Options for reconstructing qsiprep outputs')
     g_recon.add_argument(
         '--recon-only', '--recon_only',

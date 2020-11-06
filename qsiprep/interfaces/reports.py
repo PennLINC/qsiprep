@@ -310,7 +310,7 @@ class GradientPlot(SummaryInterface):
         bvals = concatenate_bvals(self.inputs.orig_bval_files, None)
         if isdefined(self.inputs.source_files):
             file_array = np.array(self.inputs.source_files)
-            unique_files, filenums = np.unique(file_array, return_inverse=True)
+            _, filenums = np.unique(file_array, return_inverse=True)
         else:
             filenums = np.ones_like(bvals)
 
@@ -533,30 +533,10 @@ class SeriesQC(SimpleInterface):
 
 
 def _load_qc_file(fname, prefix=""):
-    with open(fname, "r") as qc_file:
-        qc_data = qc_file.readlines()
-    data = qc_data[2]
-    parts = data.split('\t')
-    _, dims, voxel_size, dirs, max_b, _, ndc, bad_slices, _ = parts
-    voxelsx, voxelsy, voxelsz = map(float, voxel_size.strip().split())
-    dimx, dimy, dimz = map(float, dims.strip().split())
-    n_dirs = float(dirs)
-    max_b = float(max_b)
-    dwi_corr = float(ndc)
-    n_bad_slices = float(bad_slices)
-    data = {
-        prefix + 'dimension_x': [dimx],
-        prefix + 'dimension_y': [dimy],
-        prefix + 'dimension_z': [dimz],
-        prefix + 'voxel_size_x': [voxelsx],
-        prefix + 'voxel_size_y': [voxelsy],
-        prefix + 'voxel_size_z': [voxelsz],
-        prefix + 'max_b': [max_b],
-        prefix + 'neighbor_corr': [dwi_corr],
-        prefix + 'num_bad_slices': [n_bad_slices],
-        prefix + 'num_directions': [n_dirs]
-    }
-    return data
+    qc_data = pd.read_csv(fname).to_dict(orient='records')[0]
+    renamed = dict([
+        (prefix + key, value) for key, value in qc_data.items()])
+    return renamed
 
 
 def motion_derivatives(translations, rotations, framewise_disp,
@@ -605,19 +585,19 @@ def calculate_motion_summary(confounds_tsv):
 
     # the default case where each output image comes from one input image
     if 'trans_x' in df.columns:
-        translations = df[['trans_x', 'trans_y', 'trans_z']].to_numpy()
-        rotations = df[['rot_x', 'rot_y', 'rot_z']].to_numpy()
+        translations = df[['trans_x', 'trans_y', 'trans_z']].values
+        rotations = df[['rot_x', 'rot_y', 'rot_z']].values
         return motion_derivatives(translations, rotations, df['framewise_displacement'],
                                   df['original_file'])
 
     # If there was a PE Pair averaging, get motion from both
-    motion1 = motion_derivatives(df[['trans_x_1', 'trans_y_1', 'trans_z_1']].to_numpy(),
-                                 df[['rot_x_1', 'rot_y_1', 'rot_z_1']].to_numpy(),
+    motion1 = motion_derivatives(df[['trans_x_1', 'trans_y_1', 'trans_z_1']].values,
+                                 df[['rot_x_1', 'rot_y_1', 'rot_z_1']].values,
                                  df['framewise_displacement_1'],
                                  df['original_file_1'])
 
-    motion2 = motion_derivatives(df[['trans_x_2', 'trans_y_2', 'trans_z_2']].to_numpy(),
-                                 df[['rot_x_2', 'rot_y_2', 'rot_z_2']].to_numpy(),
+    motion2 = motion_derivatives(df[['trans_x_2', 'trans_y_2', 'trans_z_2']].values,
+                                 df[['rot_x_2', 'rot_y_2', 'rot_z_2']].values,
                                  df['framewise_displacement_2'],
                                  df['original_file_2'])
 
@@ -646,6 +626,7 @@ class _InteractiveReportInputSpec(TraitedSpec):
     mask_file = File(exists=True, mandatory=True)
     color_fa = File(exists=True, mandatory=True)
     carpetplot_data = File(exists=True, mandatory=True)
+    series_qc_file = File(exists=True, mandatory=True)
 
 
 class InteractiveReport(SimpleInterface):
@@ -665,6 +646,10 @@ class InteractiveReport(SimpleInterface):
                 carpet_data = json.load(carpet_f)
             report.update(carpet_data)
 
+        # Load the QC file
+        report['qc_scores'] = json.loads(
+            pd.read_csv(self.inputs.series_qc_file).to_json(orient="records"))[0]
+
         report['b0'] = b0
         report['colorFA'] = colorFA
         report['anat_mask'] = mask
@@ -672,25 +657,29 @@ class InteractiveReport(SimpleInterface):
         report['eddy_params'] = [[i, i] for i in range(30)]
         eddy_qc = {}
         report['eddy_quad'] = eddy_qc
+        report['subject_id'] = "sub-test"
+        report['analysis_level'] = "participant"
+        report['pipeline'] = "qsiprep"
+        report['boilerplate'] = "boilerplate"
 
         df = pd.read_csv(self.inputs.confounds_file, delimiter="\t")
-        translations = df[['trans_x', 'trans_y', 'trans_z']].to_numpy()
+        translations = df[['trans_x', 'trans_y', 'trans_z']].values
         rms = np.sqrt((translations ** 2).sum(1))
         fdisp = df['framewise_displacement'].tolist()
         fdisp[0] = None
         report['eddy_params'] = [[fd_, rms_] for fd_, rms_ in zip(fdisp, rms)]
 
         # Get the sampling scheme
-        xyz = df[["grad_x", "grad_y", "grad_z"]].to_numpy()
-        bval = df['bval'].to_numpy()
+        xyz = df[["grad_x", "grad_y", "grad_z"]].values
+        bval = df['bval'].values
         qxyz = np.sqrt(bval)[:, None] * xyz
         report['q_coords'] = qxyz.tolist()
         report['color'] = _filename_to_colors(df['original_file'])
 
         safe_json = json.dumps(report)
-        out_file = op.join(runtime.cwd, "interactive_report.html")
+        out_file = op.join(runtime.cwd, "interactive_report.json")
         with open(out_file, "w") as out_html:
-            out_html.write(INTERACTIVE_TEMPLATE.replace("REPORT", safe_json))
+            out_html.write(safe_json)
         self._results['out_report'] = out_file
         return runtime
 

@@ -1,5 +1,6 @@
 qsiprep
 qsiprep/dataset_description.json
+qsiprep/dwiqc.json
 qsiprep/logs
 qsiprep/logs/CITATION.html
 qsiprep/logs/CITATION.md
@@ -24,6 +25,8 @@ qsiprep/sub-tester/anat/sub-tester_space-MNI152NLin2009cAsym_label-WM_probseg.ni
 qsiprep/sub-tester/dwi
 qsiprep/sub-tester/dwi/sub-tester_acq-HASC55AP_confounds.tsv
 qsiprep/sub-tester/dwi/sub-tester_acq-HASC55AP_desc-ImageQC_dwi.csv
+qsiprep/sub-tester/dwi/sub-tester_acq-HASC55AP_desc-SliceQC_dwi.json
+qsiprep/sub-tester/dwi/sub-tester_acq-HASC55AP_dwiqc.json
 qsiprep/sub-tester/dwi/sub-tester_acq-HASC55AP_space-T1w_desc-3dSHORE_cnr.nii.gz
 qsiprep/sub-tester/dwi/sub-tester_acq-HASC55AP_space-T1w_desc-brain_mask.nii.gz
 qsiprep/sub-tester/dwi/sub-tester_acq-HASC55AP_space-T1w_desc-preproc_dwi.b
