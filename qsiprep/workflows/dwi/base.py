@@ -24,14 +24,15 @@ from .hmc_sdc import init_qsiprep_hmcsdc_wf
 from .fsl import init_fsl_hmc_wf
 from .pre_hmc import init_dwi_pre_hmc_wf
 from .util import _create_mem_gb, _get_wf_name
-from .registration import init_b0_to_anat_registration_wf
+from .registration import init_b0_to_anat_registration_wf, init_direct_b0_acpc_wf
 from .confounds import init_dwi_confs_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger('nipype.workflow')
 
 
-def init_dwi_preproc_wf(scan_groups,
+def init_dwi_preproc_wf(dwi_only,
+                        scan_groups,
                         output_prefix,
                         ignore,
                         b0_threshold,
@@ -68,7 +69,8 @@ def init_dwi_preproc_wf(scan_groups,
         :simple_form: yes
 
         from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
-        wf = init_dwi_preproc_wf({'dwi_series': ['fake.nii'],
+        wf = init_dwi_preproc_wf(dwi_only=False,
+                                 scan_groups={'dwi_series': ['fake.nii'],
                                   'fieldmap_info': {'suffix': None},
                                   'dwi_series_pedir': 'j'},
                                   output_prefix='',
@@ -391,12 +393,18 @@ Diffusion data preprocessing
         (pre_hmc_wf, test_pre_hmc_connect, [('outputnode.raw_concatenated', 'test1')])
     ])
 
-    # calculate dwi registration to T1w
-    b0_coreg_wf = init_b0_to_anat_registration_wf(omp_nthreads=omp_nthreads,
-                                                  mem_gb=mem_gb['resampled'],
-                                                  write_report=True)
+    if not dwi_only:
+        # calculate dwi registration to T1w
+        b0_coreg_wf = init_b0_to_anat_registration_wf(omp_nthreads=omp_nthreads,
+                                                      mem_gb=mem_gb['resampled'],
+                                                      write_report=True)
+    else:
+        b0_coreg_wf = init_direct_b0_acpc_wf(omp_nthreads=omp_nthreads,
+                                             mem_gb=mem_gb['resampled'],
+                                             write_report=True)
     ds_report_coreg = pe.Node(
-        DerivativesDataSink(suffix="coreg", source_file=source_file),
+        DerivativesDataSink(suffix="acpc" if dwi_only else "coreg",
+                            source_file=source_file),
         name='ds_report_coreg', run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB)
 

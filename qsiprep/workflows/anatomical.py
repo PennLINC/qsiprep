@@ -43,6 +43,7 @@ from qsiprep.interfaces import Conform
 from ..utils.misc import fix_multi_T1w_source_name, add_suffix
 from ..interfaces.freesurfer import (
         PatchedLTAConvert as LTAConvert)
+from ..interfaces.anatomical import FakeSegmentation
 
 from nipype import logging
 LOGGER = logging.getLogger('nipype.workflow')
@@ -58,10 +59,10 @@ TEMPLATE_MAP = {
 
 
 #  pylint: disable=R0914
-def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug,
-                         freesurfer, longitudinal, omp_nthreads, hires, reportlets_dir,
+def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug, dwi_only,
+                         infant_mode, freesurfer, longitudinal, omp_nthreads, hires,
                          output_dir, num_t1w, output_resolution, force_spatial_normalization,
-                         skull_strip_fixed_seed=False, name='anat_preproc_wf'):
+                         reportlets_dir, skull_strip_fixed_seed=False, name='anat_preproc_wf'):
     r"""
     This workflow controls the anatomical preprocessing stages of qsiprep. It differs from
     the FMRIPREP preprocessing in that a rigid alignment to MNI is performed before declaring
@@ -88,7 +89,9 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug,
                                   output_spaces=['T1w', 'fsnative',
                                                  'template', 'fsaverage5'],
                                   output_resolution=1.25,
+                                  dwi_only=False,
                                   skull_strip_template='OASIS',
+                                  infant_mode=False,
                                   force_spatial_normalization=True,
                                   freesurfer=True,
                                   longitudinal=False,
@@ -108,9 +111,12 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug,
             Valid spaces:
 
               - T1w
-              - template
-              - fsnative
-              - fsaverage (or other pre-existing FreeSurfer templates)
+
+        dwi_only : bool
+            Do not process any anatomical data. Outputs will simply be the template
+            and all transforms will be 'identity'
+        infant_mode : bool
+            Use infant templates
         force_spatial_normalization : bool
             Run spatial normalization even if "template" is not in ``output_spaces``
         output_resolution : float
@@ -201,6 +207,39 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug,
     """
 
     workflow = Workflow(name=name)
+    inputnode = pe.Node(
+        niu.IdentityInterface(fields=['t1w', 't2w', 'roi', 'flair', 'subjects_dir', 'subject_id']),
+        name='inputnode')
+    outputnode = pe.Node(niu.IdentityInterface(
+        fields=['t1_preproc', 't1_brain', 't1_mask', 't1_seg', 't1_tpms',
+                't1_2_mni', 't1_2_mni_forward_transform', 't1_2_mni_reverse_transform',
+                'mni_mask', 'mni_seg', 'mni_tpms',
+                'template_transforms', 'dwi_sampling_grid',
+                'subjects_dir', 'subject_id', 't1_2_fsnative_forward_transform',
+                't1_2_fsnative_reverse_transform', 'surfaces', 't1_aseg', 't1_aparc']),
+        name='outputnode')
+
+    # Get the template image
+    if not infant_mode:
+        ref_img = pkgr('qsiprep', 'data/mni_1mm_t1w_lps.nii.gz')
+        ref_img_brain = pkgr('qsiprep', 'data/mni_1mm_t1w_lps_brain.nii.gz')
+    else:
+        ref_img = pkgr('qsiprep', 'data/mni_1mm_t1w_lps.nii.gz')
+        ref_img_brain = pkgr('qsiprep', 'data/mni_1mm_t1w_lps_brain.nii.gz')
+
+    # 3a. Create the output reference grid_image
+    reference_grid_wf = init_output_grid_wf(voxel_size=output_resolution,
+                                            infant_mode=infant_mode,
+                                            template_image=ref_img)
+    workflow.connect([
+        (reference_grid_wf, outputnode, [('outputnode.grid_image', 'dwi_sampling_grid')])])
+
+    if dwi_only:
+        seg_node = dummy_anat_outputs(outputnode, infant_mode=infant_mode)
+        workflow.connect([(seg_node, outputnode, [("dseg_file", "t1_seg")])])
+        workflow.add_nodes([inputnode])
+        return workflow
+
     workflow.__postdesc__ = """\
 Spatial normalization to the ICBM 152 Nonlinear Asymmetrical
 template version 2009c [@mni, RRID:SCR_008796] was performed
@@ -233,20 +272,6 @@ and used as T1w-reference throughout the workflow.
         num_t1w=num_t1w,
         ants_ver=BrainExtraction().version or '<ver>'
     )
-    # Get the template image
-    ref_img = pkgr('qsiprep', 'data/mni_1mm_t1w_lps.nii.gz')
-    ref_img_brain = pkgr('qsiprep', 'data/mni_1mm_t1w_lps_brain.nii.gz')
-    inputnode = pe.Node(
-        niu.IdentityInterface(fields=['t1w', 't2w', 'roi', 'flair', 'subjects_dir', 'subject_id']),
-        name='inputnode')
-    outputnode = pe.Node(niu.IdentityInterface(
-        fields=['t1_preproc', 't1_brain', 't1_mask', 't1_seg', 't1_tpms',
-                't1_2_mni', 't1_2_mni_forward_transform', 't1_2_mni_reverse_transform',
-                'mni_mask', 'mni_seg', 'mni_tpms',
-                'template_transforms', 'dwi_sampling_grid',
-                'subjects_dir', 'subject_id', 't1_2_fsnative_forward_transform',
-                't1_2_fsnative_reverse_transform', 'surfaces', 't1_aseg', 't1_aparc']),
-        name='outputnode')
 
     buffernode = pe.Node(niu.IdentityInterface(
         fields=['t1_brain', 't1_mask']), name='buffernode')
@@ -268,10 +293,6 @@ and used as T1w-reference throughout the workflow.
                                                 debug=debug,
                                                 omp_nthreads=omp_nthreads)
 
-    # 3a. Create the output reference grid_image
-    reference_grid_wf = init_output_grid_wf(voxel_size=output_resolution,
-                                            template_image=ref_img)
-
     workflow.connect([
         (inputnode, anat_template_wf, [('t1w', 'inputnode.t1w')]),
         (anat_template_wf, skullstrip_wf, [('outputnode.t1_template', 'inputnode.in_file')]),
@@ -279,8 +300,7 @@ and used as T1w-reference throughout the workflow.
         (anat_template_wf, outputnode, [
             ('outputnode.template_transforms', 't1_template_transforms')]),
         (buffernode, outputnode, [('t1_brain', 't1_brain'),
-                                  ('t1_mask', 't1_mask')]),
-        (reference_grid_wf, outputnode, [('outputnode.grid_image', 'dwi_sampling_grid')])
+                                  ('t1_mask', 't1_mask')])
     ])
 
     # 4. Surface reconstruction
@@ -909,13 +929,14 @@ The T1w-reference was then skull-stripped using `3dSkullStrip`
     return workflow
 
 
-def init_output_grid_wf(voxel_size, template_image, name='output_grid_wf'):
+def init_output_grid_wf(voxel_size, infant_mode, template_image, name='output_grid_wf'):
     """Generate a non-oblique, uniform voxel-size grid around a brain."""
     workflow = Workflow(name=name)
     inputnode = pe.Node(niu.IdentityInterface(fields=['template_image']), name='inputnode')
     outputnode = pe.Node(niu.IdentityInterface(fields=['grid_image']), name='outputnode')
     inputnode.inputs.template_image = template_image
-    autobox_template = pe.Node(afni.Autobox(outputtype="NIFTI_GZ", padding=8),
+    padding = 4 if infant_mode else 8
+    autobox_template = pe.Node(afni.Autobox(outputtype="NIFTI_GZ", padding=padding),
                                name='autobox_template')
     deoblique_autobox = pe.Node(afni.Warp(outputtype="NIFTI_GZ", deoblique=True),
                                 name="deoblique_autobox")
@@ -1585,3 +1606,28 @@ def _seg2msks(in_file, newpath=None):
         nii.__class__(ldata, nii.affine, nii.header).to_filename(out_files[-1])
 
     return out_files
+
+
+def dummy_anat_outputs(outputnode, infant_mode=False):
+    """Fill an outputnode with dummy data."""
+    fake_seg = pe.Node(FakeSegmentation(), name="fake_seg")
+    if infant_mode:
+        outputnode.inputs.t1_preproc = pkgr(
+            'qsiprep', 'data/mni_1mm_t1w_lps_infant.nii.gz')
+        outputnode.inputs.t1_brain = pkgr(
+            'qsiprep', 'data/mni_1mm_t1w_lps_brain_infant.nii.gz')
+        outputnode.inputs.t1_mask = pkgr(
+            'qsiprep', 'data/mni_1mm_t1w_lps_brainmask_infant.nii.gz')
+        fake_seg.inputs.mask_file = pkgr(
+            'qsiprep', 'data/mni_1mm_t1w_lps_brainmask_infant.nii.gz')
+    else:
+        outputnode.inputs.t1_preproc = pkgr(
+            'qsiprep', 'data/mni_1mm_t1w_lps.nii.gz')
+        outputnode.inputs.t1_brain = pkgr(
+            'qsiprep', 'data/mni_1mm_t1w_lps_brain.nii.gz')
+        outputnode.inputs.t1_mask = pkgr(
+            'qsiprep', 'data/mni_1mm_t1w_lps_brainmask.nii.gz')
+        fake_seg.inputs.mask_file = pkgr(
+            'qsiprep', 'data/mni_1mm_t1w_lps_brainmask.nii.gz')
+
+    return fake_seg
