@@ -1158,6 +1158,7 @@ jobs:
           name: Upload packages to PyPI
           command: |
             pip install --user twine
+            pip install --user --upgrade importlib-metadata
             twine upload dist/qsiprep*gz wrapper/dist/qsiprep*
 
   deployable:
