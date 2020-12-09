@@ -173,6 +173,7 @@ jobs:
 
       - run:
           name: Get MultiShell outputs
+          no_output_timeout: 40m
           command: |
             if [[ ! -d /tmp/data/multishell_output ]]; then
               wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
@@ -184,6 +185,7 @@ jobs:
 
       - run:
           name: Get SingleShell outputs
+          no_output_timeout: 40m
           command: |
             if [[ ! -d /tmp/data/singleshell_output ]]; then
               mkdir -p /tmp/data/singleshell_output
