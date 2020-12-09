@@ -1066,6 +1066,7 @@ jobs:
           name: Build qsiprep
           command: |
             pip install --user twine  # For use in checking distributions
+            pip install --user --upgrade importlib-metadata
             THISVERSION=$( python3 get_version.py )
             THISVERSION=${THISVERSION%.dirty*}
             THISVERSION=${CIRCLE_TAG:-$THISVERSION}
