@@ -258,27 +258,27 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type):
 
     # Basic eddy setup
     desc.append(
-        "Eddy was configured with a q-space \"fudge factor\" "
+        "Eddy was configured with a $q$-space smoothing factor "
         "of %d," % ext_eddy.inputs.fudge_factor)
-    desc.append("%d iterations," % ext_eddy.inputs.niter)
-    desc.append("%d voxels used to estimate hyperparameters," %
+    desc.append("a total of %d iterations," % ext_eddy.inputs.niter)
+    desc.append("and %d voxels used to estimate hyperparameters." %
                 ext_eddy.inputs.nvoxhp)
 
     # Specify flm/slm model types
     slm = "was" if ext_eddy.inputs.slm == "none" else \
             "and a %s second-level were" % ext_eddy.inputs.slm
-    desc.append("A %s first level model %s used." % (
-        ext_eddy.inputs.flm, slm))
+    desc.append("A %s first level model %s used to characterize Eddy current-"
+                "related spatial distortion." % (ext_eddy.inputs.flm, slm))
 
     # fwhm of pre-conditioning filter
     if isdefined(ext_eddy.inputs.fwhm):
-        desc.append("A filter with fwhm=%04f used to pre-condition the "
+        desc.append("A filter with fwhm=%04f was used to pre-condition the "
                     "data before using it to estimate distortions."
                     % ext_eddy.inputs.fwhm)
 
     # force shelled scheme
     if isdefined(ext_eddy.inputs.is_shelled) and ext_eddy.inputs.is_shelled:
-        desc.append("Data were forcefully assigned to shells.")
+        desc.append("$q$-space coordinates were forcefully assigned to shells.")
 
     if isdefined(ext_eddy.inputs.fep) and ext_eddy.inputs.fep:
         desc.append("Any empty planes detected in images were filled.")
@@ -328,9 +328,9 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type):
             isdefined(ext_eddy.inputs.outlier_nstd) else 4
         ssq = " sum-of-squares" if isdefined(ext_eddy.inputs.outlier_sqr) \
             and ext_eddy.inputs.outlier_sqr else ""
-        pos = "" if isdefined(ext_eddy.inputs.outlier_pos) \
-            and ext_eddy.inputs.outlier_pos else " (positive or negative%s)" % ssq
-        desc.append("Groups %d standard deviations%s from the prediction "
+        pos = " (positively or negatively%s)" % ssq if isdefined(ext_eddy.inputs.outlier_pos) \
+            and ext_eddy.inputs.outlier_pos else ""
+        desc.append("Groups deviating by more than %d standard deviations%s from the prediction "
                     "had their data replaced with imputed values."
                     % (std_threshold, pos))
 
@@ -348,16 +348,21 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type):
                     "and lambda=%.3f [@eddys2v]." % (ext_eddy.inputs.mporder, niter,
                                      s2v_interp,lam))
 
+    # TOPUP
     if fieldmap_type in ("rpe_series", "epi"):
+        desc.append("Data was collected with reversed phase-encode blips, resulting "
+                    "in pairs of images with distortions going in opposite directions.")
         if fieldmap_type == "epi":
-            desc.append("Dedicated b=0 images were used as input to TOPUP, "
-                        "along with b=0 images from the DWI scans with the opposite "
-                        "phase encoding direction.")
+            desc.append("Here, b=0 reference images with reversed "
+                        "phase encoding directions were used "
+                        "along with an equal number of b=0 images extracted "
+                        "from the DWI scans.")
         else:
-            desc.append("DWI series were acquired with opposite phase encoding "
-                        "directions, so b=0 images were extracted from each and "
-                        "used by TOPUP to estimate a B0 fieldmap.")
-        desc.append("Fieldmaps from TOPUP [@topup] were incorporated into the "
+            desc.append("Here, multiple DWI series were acquired with opposite phase encoding "
+                        "directions, so b=0 images were extracted from each.")
+        desc.append("From these pairs the susceptibility-induced off-resonance field was "
+                    "estimated using a method similar to that described in [@topup]."
+                    "The fieldmaps were ultimately incorporated into the "
                     "Eddy current and head motion correction interpolation.")
 
     # move by susceptibility
@@ -376,7 +381,7 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type):
 
     # Format the interpolation
     lsr_ref = ' [@fsllsr]' if ext_eddy.inputs.method == 'lsr' else ''
-    desc.append("Final interpolation was performed using the '%s' method%s." %(
+    desc.append("Final interpolation was performed using the '%s' method%s.\n\n" %(
         ext_eddy.inputs.method, lsr_ref))
 
     return " ".join(desc)
