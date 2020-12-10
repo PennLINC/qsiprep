@@ -110,7 +110,8 @@ def init_dwi_pre_hmc_wf(scan_groups,
     dwi_series_pedir = scan_groups['dwi_series_pedir']
     dwi_series = scan_groups['dwi_series']
     workflow.__postdesc__ = gen_denoising_boilerplate(dwi_denoise_window, unringing_method,
-        dwi_no_biascorr, no_b0_harmonization, b0_threshold)
+                                                      dwi_no_biascorr, no_b0_harmonization,
+                                                      b0_threshold)
     # Special case: Two reverse PE DWI series are going to get combined for eddy
     if preprocess_rpe_series:
         workflow.__desc__ = "Images were grouped into two phase encoding polarity groups. "
@@ -241,7 +242,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
         ])
 
         workflow.__postdesc__ += "Both distortion groups were then merged into a " \
-                                "single file, as required for the FSL workflows.\n\n"
+                                 "single file, as required for the FSL workflows.\n\n"
         return workflow
     workflow.__postdesc__ += "\n\n"
     merge_dwis = init_merge_and_denoise_wf(
@@ -254,7 +255,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
         denoise_before_combining=denoise_before_combining,
         orientation=orientation,
         calculate_qc=True,
-        phase_id = dwi_series_pedir,
+        phase_id=dwi_series_pedir,
         source_file=source_file)
 
     workflow.connect([

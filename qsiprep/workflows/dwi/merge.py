@@ -373,6 +373,7 @@ def init_dwi_denoising_wf(dwi_denoise_window,
 def _as_list(item):
     return [item]
 
+
 def gen_denoising_boilerplate(dwi_denoise_window,
                               unringing_method,
                               dwi_no_biascorr,
@@ -418,4 +419,3 @@ def gen_denoising_boilerplate(dwi_denoise_window,
         return "No denoising steps were applied to the DWI data."
 
     return " ".join(desc)
-
