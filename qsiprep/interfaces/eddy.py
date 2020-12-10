@@ -266,7 +266,7 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type):
 
     # Specify flm/slm model types
     slm = "was" if ext_eddy.inputs.slm == "none" else \
-            "and a %s second-level were" % ext_eddy.inputs.slm
+        "and a %s second-level were" % ext_eddy.inputs.slm
     desc.append("A %s first level model %s used to characterize Eddy current-"
                 "related spatial distortion." % (ext_eddy.inputs.flm, slm))
 
@@ -303,14 +303,14 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type):
         desc.append("Eddy's outlier replacement was run [@eddyrepol].")
 
         ol_group = {
-            "sw":"slice", "gw": "multi-band group",
+            "sw": "slice", "gw": "multi-band group",
             "both": "both slice and multi-band group",
             traits.Undefined: "slice"}[ext_eddy.inputs.outlier_type]
         nvox = ext_eddy.inputs.outlier_nstd if \
             isdefined(ext_eddy.inputs.outlier_nstd) else 250
         desc.append("Data were grouped by %s, only including values from "
                     "slices determined to contain at least %d intracerebral "
-                    "voxels."% (ol_group, nvox))
+                    "voxels." % (ol_group, nvox))
         mbf = ext_eddy.inputs.multiband_factor if \
             isdefined(ext_eddy.inputs.multiband_factor) else 1
         mb_off = ext_eddy.inputs.multiband_offset if \
@@ -318,7 +318,7 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type):
         if mbf > 1 and "multi-band group" in ol_group:
             offs_txt = "was"
             if mb_off != 0:
-                offs_txt = {-1:"bottom", 1:"top"}
+                offs_txt = {-1: "bottom", 1: "top"}
                 offs_txt = "and slices removed from the %s of the volume were" % offs_txt
             desc.append("A multi-band accelleration factor of %d "
                         "%s assumed." % (mbf, offs_txt))
@@ -345,8 +345,8 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type):
             isdefined(ext_eddy.inputs.slice2vol_interp) else "trilinear"
         desc.append("Slice-to-volume correction was estimated with "
                     "temporal order %d, %d iterations, %s interpolation "
-                    "and lambda=%.3f [@eddys2v]." % (ext_eddy.inputs.mporder, niter,
-                                     s2v_interp,lam))
+                    "and lambda=%.3f [@eddys2v]."
+                    % (ext_eddy.inputs.mporder, niter, s2v_interp, lam))
 
     # TOPUP
     if fieldmap_type in ("rpe_series", "epi"):
@@ -377,11 +377,11 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type):
         desc.append("Dynamic susceptibility distortion correction was "
                     "applied with %d iterations, lambda=%.2f and spline "
                     "knot-spacing of %.2fmm [@eddysus]."
-                    %(mbs_niter, mbs_lambda, mbs_ksp))
+                    % (mbs_niter, mbs_lambda, mbs_ksp))
 
     # Format the interpolation
     lsr_ref = ' [@fsllsr]' if ext_eddy.inputs.method == 'lsr' else ''
-    desc.append("Final interpolation was performed using the '%s' method%s.\n\n" %(
+    desc.append("Final interpolation was performed using the '%s' method%s.\n\n" % (
         ext_eddy.inputs.method, lsr_ref))
 
     return " ".join(desc)
