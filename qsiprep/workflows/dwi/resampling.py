@@ -124,8 +124,8 @@ def init_dwi_trans_wf(source_file,
     workflow = Workflow(name=name)
     workflow.__desc__ = """\
 The DWI time-series were resampled to {tpl},
-generating a *preprocessed DWI run in {tpl} space*.
-""".format(tpl=template)
+generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels.
+""".format(tpl=template, vox=str(output_resolution).rstrip("0"))
 
     inputnode = pe.Node(
         niu.IdentityInterface(fields=[

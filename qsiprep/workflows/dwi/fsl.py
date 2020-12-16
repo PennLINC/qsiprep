@@ -1,6 +1,6 @@
 """
-Orchestrating the dwi-preprocessing workflow
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Implementing the FSL preprocessing workflow
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. autofunction:: init_fsl_dwi_preproc_wf
 
@@ -14,7 +14,8 @@ from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
 from nipype.interfaces import fsl
 
-from ...interfaces.eddy import GatherEddyInputs, ExtendedEddy, Eddy2SPMMotion
+from ...interfaces.eddy import (GatherEddyInputs, ExtendedEddy, Eddy2SPMMotion,
+                                boilerplate_from_eddy_config)
 from ...interfaces.images import SplitDWIs, ConformDwi, IntraModalMerge
 from ...interfaces.reports import TopupSummary
 from ...interfaces.nilearn import EnhanceB0
@@ -199,6 +200,7 @@ def init_fsl_hmc_wf(scan_groups,
     # Fieldmap correction to be done in LAS+: TOPUP for rpe series or epi fieldmap
     # If a topupref is provided, use it for TOPUP
     fieldmap_type = scan_groups['fieldmap_info']['suffix'] or ''
+    workflow.__desc__ = boilerplate_from_eddy_config(eddy_args, fieldmap_type)
     if fieldmap_type in ('epi', 'rpe_series'):
         # If there are EPI fieldmaps in fmaps/, make sure they get to TOPUP. It will always use
         # b=0 images from the DWI series regardless
@@ -233,6 +235,7 @@ def init_fsl_hmc_wf(scan_groups,
             (gather_inputs, topup_summary, [('topup_report', 'summary')]),
             (topup_summary, ds_report_topupsummary, [('out_report', 'in_file')]),
         ])
+
         return workflow
 
     # The topup inputs will only have one PE direction,
@@ -272,5 +275,4 @@ def init_fsl_hmc_wf(scan_groups,
         workflow.connect([
             (b0_ref_to_lps, outputnode, [
                 ('dwi_file', 'b0_template')])])
-
     return workflow
