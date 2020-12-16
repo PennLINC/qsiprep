@@ -380,8 +380,8 @@ def gen_denoising_boilerplate(dwi_denoise_window,
                               no_b0_harmonization,
                               b0_threshold):
     """Generates methods boilerplate for the denoising workflow."""
-    desc = ["Any images with a b-value less than %d were treated as a "
-            "b=0 image."]
+    desc = ["Any images with a b-value less than %d s/mm^2 were treated as a "
+            "b=0 image." % b0_threshold]
     do_denoise = dwi_denoise_window > 0
     do_unringing = unringing_method in ('mrdegibbs', 'dipy')
     do_biascorr = not dwi_no_biascorr
@@ -389,14 +389,14 @@ def gen_denoising_boilerplate(dwi_denoise_window,
     last_step = ""
     if do_denoise:
         desc.append("MP-PCA denoising as implemented in MRtrix3's `dwidenoise`"
-                    "[@dwidenoise1, @dwidenoise2] was applied with "
-                    "a %d-voxel window" % dwi_denoise_window)
+                    "[@dwidenoise1] was applied with "
+                    "a %d-voxel window." % dwi_denoise_window)
         last_step = "After MP-PCA, "
 
     if do_unringing:
         unringing_txt = {
-            "mrdegibbs": "MRtrix3's `mrdegibbs` [@mrdegibbs]",
-            "dipy": "Dipy [@dipy]"
+            "mrdegibbs": "MRtrix3's `mrdegibbs` [@mrdegibbs].",
+            "dipy": "Dipy [@dipy]."
         }[unringing_method]
 
         desc.append(last_step + "Gibbs unringing was performed using "
@@ -406,7 +406,7 @@ def gen_denoising_boilerplate(dwi_denoise_window,
     if do_biascorr:
         desc.append(last_step + "B1 field inhomogeneity was corrected using "
                     "`dwibiascorrect` from MRtrix3 with the N4 algorithm"
-                    "[@n4]")
+                    "[@n4].")
         last_step = "After B1 bias correction, "
 
     if harmonize_b0s:
