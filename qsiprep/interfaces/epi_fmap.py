@@ -233,8 +233,8 @@ def get_best_b0_topup_inputs_from(
     dwi_b0_df.drop("nii_3d_files", 1).to_csv(b0_csv, index=False)
 
     topup_report = topup_selection_to_report(
-        sdc_selections["original_volume"],
-        sdc_selections["bids_origin_file"],
+        np.flatnonzero(dwi_b0_df["selected_for_sdc"]),
+        dwi_b0_df["bids_origin_file"],
         spec_lookup,
         image_source="data")
     return datain_file, imain_output, topup_report, b0_csv
