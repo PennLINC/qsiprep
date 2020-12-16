@@ -19,6 +19,7 @@ from dipy.segment.mask import median_otsu
 from dipy.core.sphere import HemiSphere
 from dipy.core.gradients import gradient_table
 from dipy.reconst import mapmri, dti
+from dipy.denoise.patch2self import patch2self
 from nipype import logging
 from nipype.utils.filemanip import fname_presuffix
 from nipype.interfaces.base import (
@@ -80,8 +81,54 @@ class MedianOtsu(SimpleInterface):
         masked_img = nb.Nifti1Image(masked_data, b0_img.affine, b0_img.header)
         masked_img.to_filename(self._results['masked_input'])
 
-        mask_img = nb.Nifti1Image(data_mask.astype('f8'), b0_img.affine, b0_img.header)
+        mask_img = nb.Nifti1Image(data_mask.astype('f8'), b0_img.affine,
+                                  b0_img.header)
         mask_img.to_filename(self._results['out_mask'])
+
+        return runtime
+
+
+class Patch2SelfInputSpec(BaseInterfaceInputSpec):
+    in_file = File(exists=True, mandatory=True, 
+                   desc="4D diffusion MRI data file")
+    bval_file = File(exists=True, mandatory=True, 
+                     desc="bval file containing b-values")
+    model = traits.Int('ridge', usedefault=True, 
+                       desc='Regression model for Patch2Self')
+    alpha = traits.Int(1.0, usedefault=True, 
+                       desc='Regularization parameter for Ridge and Lasso')
+    b0_threshold = traits.Int(50, usedefault=True, 
+                              desc='Threshold to segregate b0s from DWI volumes')
+
+
+class Patch2SelfOutputSpec(TraitedSpec):
+    denoised_arr = File(exists=True, desc='Denoised version of the input image')
+
+
+class Patch2Self(SimpleInterface):
+    input_spec = Patch2SelfInputSpec
+    output_spec = Patch2SelfOutputSpec
+
+    def _run_interface(self, runtime):
+
+        in_file = self.inputs.in_file
+        bval_file = self.inputs.bval_file
+        noisy_img = nb.load(in_file)
+        noisy_arr = noisy_img.get_fdata()
+        bvals = np.loadtxt(bval_file)
+
+        denoised_arr = patch2self(noisy_arr, bvals,
+								  model=self.inputs.model,
+                                  alpha=self.inputs.alpha,
+                                  b0_threshold=self.inputs.b0_threshold)
+        
+
+        self._results['denoised_arr'] = fname_presuffix(
+            in_file, suffix='_denoised_patch2self', newpath=runtime.cwd)
+
+        denoised_img = nb.Nifti1Image(denoised_arr, noisy_img.affine, 
+                                      noisy_img.header)
+        denoised_img.to_filename(self._results['denoised_arr'])
 
         return runtime
 
