@@ -93,7 +93,7 @@ class Patch2SelfInputSpec(BaseInterfaceInputSpec):
                    desc="4D diffusion MRI data file")
     bval_file = File(exists=True, mandatory=True, 
                      desc="bval file containing b-values")
-    model = traits.Int('ridge', usedefault=True, 
+    model = traits.Str('ridge', usedefault=True, 
                        desc='Regression model for Patch2Self')
     alpha = traits.Int(1.0, usedefault=True, 
                        desc='Regularization parameter for Ridge and Lasso')
