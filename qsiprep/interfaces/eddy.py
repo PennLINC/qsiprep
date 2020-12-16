@@ -19,7 +19,8 @@ from nipype.interfaces import fsl
 from nipype.interfaces.base import (
     traits, TraitedSpec, BaseInterfaceInputSpec, File, InputMultiObject, SimpleInterface,
     isdefined)
-from .fmap import get_topup_inputs_from, eddy_inputs_from_dwi_files
+from .fmap import eddy_inputs_from_dwi_files
+from .epi_fmap import get_best_b0_topup_inputs_from
 LOGGER = logging.getLogger('nipype.interface')
 
 
@@ -41,6 +42,7 @@ class GatherEddyInputsOutputSpec(TraitedSpec):
     topup_config = traits.Str()
     pre_topup_image = File(exists=True)
     eddy_acqp = File(exists=True)
+    b0_csv = File(exists=True)
     eddy_indices = File(exists=True)
     forward_transforms = traits.List()
     forward_warps = traits.List()
@@ -67,18 +69,20 @@ class GatherEddyInputs(SimpleInterface):
 
         # Gather inputs for TOPUP
         topup_prefix = op.join(runtime.cwd, "topup_")
-        topup_datain_file, topup_imain_file, topup_text = get_topup_inputs_from(
-            dwi_file=self.inputs.dwi_file,
-            bval_file=self.inputs.bval_file,
-            b0_threshold=self.inputs.b0_threshold,
-            topup_prefix=topup_prefix,
-            bids_origin_files=self.inputs.original_files,
-            epi_fmaps=self.inputs.epi_fmaps,
-            max_per_spec=self.inputs.topup_max_b0s_per_spec,
-            topup_requested=self.inputs.topup_requested)
+        topup_datain_file, topup_imain_file, topup_text, b0_csv = \
+            get_best_b0_topup_inputs_from(
+                dwi_file=self.inputs.dwi_file,
+                bval_file=self.inputs.bval_file,
+                b0_threshold=self.inputs.b0_threshold,
+                cwd=runtime.cwd,
+                bids_origin_files=self.inputs.original_files,
+                epi_fmaps=self.inputs.epi_fmaps,
+                max_per_spec=self.inputs.topup_max_b0s_per_spec,
+                topup_requested=self.inputs.topup_requested)
         self._results['topup_datain'] = topup_datain_file
         self._results['topup_imain'] = topup_imain_file
         self._results['topup_report'] = topup_text
+        self._results['b0_csv'] = b0_csv
 
         # If there are an odd number of slices, use b02b0_1.cnf
         example_b0 = nb.load(self.inputs.dwi_file)
