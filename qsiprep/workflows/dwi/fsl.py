@@ -224,7 +224,7 @@ def init_fsl_hmc_wf(scan_groups,
         # Enhance and skullstrip the TOPUP output to get a mask for eddy
         unwarped_mean = pe.Node(IntraModalMerge(hmc=False, to_lps=False), name='unwarped_mean')
         # Register the first volume of topup imain to the first volume of the merged dwi
-        topup_to_eddy_reg = pe.Node(fsl.FLIRT(output_type="NIFTI_GZ"),
+        topup_to_eddy_reg = pe.Node(fsl.FLIRT(dof=6, output_type="NIFTI_GZ"),
                                     name="topup_to_eddy_reg")
         workflow.connect([
             # There will be no SDC warps, they are applied by eddy

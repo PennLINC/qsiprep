@@ -221,6 +221,8 @@ def get_best_b0_topup_inputs_from(
     sdc_selections = dwi_b0_df[dwi_b0_df["selected_for_sdc"]].reset_index()
     # Make sure the first image in topup imain has the same distortion as the
     # first b=0 volume in the eddy inputs
+    sdc_selections['same_as_first'] = \
+        sdc_selections['fsl_spec'] == dwi_b0_df.loc[0, 'fsl_spec']
     sdc_selections.sort_values(by=["same_as_first", 'index'],
                                ascending=[False, True], inplace=True)
 
