@@ -215,9 +215,17 @@ def init_fsl_hmc_wf(scan_groups,
             name='ds_report_topupsummary',
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
+        ds_topupcsv = pe.Node(
+            DerivativesDataSink(suffix='topupcsv', source_file=source_file),
+            name='ds_topupcsv',
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB)
 
         # Enhance and skullstrip the TOPUP output to get a mask for eddy
         unwarped_mean = pe.Node(IntraModalMerge(hmc=False, to_lps=False), name='unwarped_mean')
+        # Register the first volume of topup imain to the first volume of the merged dwi
+        topup_to_eddy_reg = pe.Node(fsl.FLIRT(output_type="NIFTI_GZ"),
+                                    name="topup_to_eddy_reg")
         workflow.connect([
             # There will be no SDC warps, they are applied by eddy
             (gather_inputs, outputnode, [('forward_warps', 'to_dwi_ref_warps')]),
@@ -227,6 +235,11 @@ def init_fsl_hmc_wf(scan_groups,
                 ('topup_config', 'config')]),
             (topup, eddy, [
                 ('out_field', 'field')]),
+            (gather_inputs, topup_to_eddy_reg, [
+                ('topup_first', 'in_file'),
+                ('eddy_first', 'reference')]),
+            (gather_inputs, ds_topupcsv, [('b0_csv', 'in_file')]),
+            (topup_to_eddy_reg, eddy, [('out_matrix_file', 'field_mat')]),
             # Use corrected images from TOPUP to make a mask for eddy
             (topup, unwarped_mean, [('out_corrected', 'in_files')]),
             (unwarped_mean, pre_eddy_b0_ref_wf, [('out_avg', 'inputnode.b0_template')]),

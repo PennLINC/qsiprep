@@ -39,9 +39,11 @@ class GatherEddyInputsInputSpec(BaseInterfaceInputSpec):
 class GatherEddyInputsOutputSpec(TraitedSpec):
     topup_datain = File(exists=True)
     topup_imain = File(exists=True)
+    topup_first = File(exists=True)
     topup_config = traits.Str()
     pre_topup_image = File(exists=True)
     eddy_acqp = File(exists=True)
+    eddy_first = File(exists=True)
     b0_csv = File(exists=True)
     eddy_indices = File(exists=True)
     forward_transforms = traits.List()
@@ -69,7 +71,7 @@ class GatherEddyInputs(SimpleInterface):
 
         # Gather inputs for TOPUP
         topup_prefix = op.join(runtime.cwd, "topup_")
-        topup_datain_file, topup_imain_file, topup_text, b0_csv = \
+        topup_datain_file, topup_imain_file, topup_text, b0_csv, topup0, eddy0 = \
             get_best_b0_topup_inputs_from(
                 dwi_file=self.inputs.dwi_file,
                 bval_file=self.inputs.bval_file,
@@ -83,6 +85,8 @@ class GatherEddyInputs(SimpleInterface):
         self._results['topup_imain'] = topup_imain_file
         self._results['topup_report'] = topup_text
         self._results['b0_csv'] = b0_csv
+        self._results['topup_first'] = topup0
+        self._results['eddy_first'] = eddy0
 
         # If there are an odd number of slices, use b02b0_1.cnf
         example_b0 = nb.load(self.inputs.dwi_file)

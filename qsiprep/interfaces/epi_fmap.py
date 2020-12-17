@@ -215,9 +215,14 @@ def get_best_b0_topup_inputs_from(
     # Calculate the "quality" of each image:
     dwi_b0_df["qc_score"] = spec_groups["nii_3d_files"].transform(calculate_best_b0s)
     dwi_b0_df["qc_rank"] = spec_groups["qc_score"].transform(np.argsort)
+
     # Select only the top
     dwi_b0_df["selected_for_sdc"] = dwi_b0_df["qc_rank"] < max_per_spec
     sdc_selections = dwi_b0_df[dwi_b0_df["selected_for_sdc"]].reset_index()
+    # Make sure the first image in topup imain has the same distortion as the
+    # first b=0 volume in the eddy inputs
+    sdc_selections.sort_values(by=["same_as_first", 'index'],
+                               ascending=[False, True], inplace=True)
 
     imain_output = cwd + "/topup_imain.nii.gz"
     imain_img = concat_imgs(
@@ -232,12 +237,17 @@ def get_best_b0_topup_inputs_from(
     b0_csv = cwd + "/b0_selection_info.csv"
     dwi_b0_df.drop("nii_3d_files", 1).to_csv(b0_csv, index=False)
 
+    # get out reference images from the topup and eddy data
+    topup_reg_file = cwd + "/topup_reg_image.nii.gz"
+    index_img(imain_output, 0).to_filename(topup_reg_file)
+
     topup_report = topup_selection_to_report(
         np.flatnonzero(dwi_b0_df["selected_for_sdc"]),
         dwi_b0_df["bids_origin_file"],
         spec_lookup,
         image_source="data")
-    return datain_file, imain_output, topup_report, b0_csv
+    return datain_file, imain_output, topup_report, b0_csv, \
+        topup_reg_file, dwi_b0_df.loc[0, 'nii_3d_files']
 
 
 def relative_b0_index(b0_indices, original_files):
