@@ -476,9 +476,9 @@ from sub-1_dir-PA_dwi.nii.gz.
             formatted_indices = ", ".join(map(str, image_indices))
             plural = 's' if len(image_indices) > 1 else ''
             group_desc += [
-                "image{plural} {imgnums} from {img_name}".format(plural=plural,
-                                                                 imgnums=formatted_indices,
-                                                                 img_name=image_name),
+                "image{plural} {imgnums} from {img_name}".format(
+                    plural=plural, imgnums=formatted_indices,
+                    img_name=op.split(image_name)[-1]),
                 ", "]
         group_desc[-1] = ". "
         if len(image_list) > 1:
