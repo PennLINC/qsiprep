@@ -19,13 +19,12 @@ from dipy.segment.mask import median_otsu
 from dipy.core.sphere import HemiSphere
 from dipy.core.gradients import gradient_table
 from dipy.reconst import mapmri, dti
-from interfaces.patch2self import patch2self
 from nipype import logging
 from nipype.utils.filemanip import fname_presuffix
 from nipype.interfaces.base import (
     traits, TraitedSpec, BaseInterfaceInputSpec, File, SimpleInterface, isdefined
 )
-
+from .patch2self import patch2self
 from .converters import get_dsi_studio_ODF_geometry, amplitudes_to_fibgz, amplitudes_to_sh_mif
 from ..utils.brainsuite_shore import BrainSuiteShoreModel, brainsuite_shore_basis
 from ..interfaces.mrtrix import _convert_fsl_to_mrtrix
@@ -118,10 +117,9 @@ class Patch2Self(SimpleInterface):
         bvals = np.loadtxt(bval_file)
 
         denoised_arr = patch2self(noisy_arr, bvals,
-								  model=self.inputs.model,
+                                  model=self.inputs.model,
                                   alpha=self.inputs.alpha,
                                   b0_threshold=self.inputs.b0_threshold)
-
 
         self._results['denoised_arr'] = fname_presuffix(
             in_file, suffix='_denoised_patch2self', newpath=runtime.cwd)

@@ -13,9 +13,8 @@ import os.path as op
 from copy import deepcopy
 import numpy as np
 import nibabel as nb
-import pandas as pd
 from scipy.io.matlab import savemat, loadmat
-from nilearn.image import load_img, threshold_img, iter_img
+from nilearn.image import load_img, threshold_img
 import nipype.pipeline.engine as pe
 import nipype.interfaces.utility as niu
 from nipype import logging
@@ -28,9 +27,9 @@ from nipype.interfaces.mrtrix3.utils import Generate5ttInputSpec
 from nipype.interfaces.mrtrix3.base import MRTrix3Base, MRTrix3BaseInputSpec
 from nipype.interfaces.mrtrix3.preprocess import ResponseSDInputSpec
 from nipype.interfaces.mrtrix3.tracking import TractographyInputSpec, Tractography
-from nipype.interfaces.mixins import reporting
 from ..niworkflows.viz.utils import cuts_from_bbox, compose_view, plot_denoise
-from .denoise import SeriesPreprocReport, SeriesPreprocReportInputSpec, SeriesPreprocReportOutputSpec
+from .denoise import (SeriesPreprocReport, SeriesPreprocReportInputSpec,
+                      SeriesPreprocReportOutputSpec)
 
 LOGGER = logging.getLogger('nipype.interface')
 RC3_ROOT = which('average_response')  # Only exists in RC3

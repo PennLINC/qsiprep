@@ -45,12 +45,12 @@ def init_qsiprep_wf(
         subject_list, run_uuid, work_dir, output_dir, bids_dir, ignore, debug, low_mem, anat_only,
         dwi_only, longitudinal, b0_threshold, hires, denoise_before_combining, dwi_denoise_window,
         denoise_method, unringing_method, dwi_no_biascorr, no_b0_harmonization, output_resolution,
-        infant_mode, combine_all_dwis, distortion_group_merge, omp_nthreads, force_spatial_normalization,
-        skull_strip_template, skull_strip_fixed_seed, freesurfer, hmc_model,
-        impute_slice_threshold, hmc_transform, shoreline_iters, eddy_config, write_local_bvecs,
-        output_spaces, template, motion_corr_to, b0_to_t1w_transform, intramodal_template_iters,
-        intramodal_template_transform, prefer_dedicated_fmaps, fmap_bspline, fmap_demean, use_syn,
-        force_syn):
+        infant_mode, combine_all_dwis, distortion_group_merge, omp_nthreads,
+        force_spatial_normalization, skull_strip_template, skull_strip_fixed_seed, freesurfer,
+        hmc_model, impute_slice_threshold, hmc_transform, shoreline_iters, eddy_config,
+        write_local_bvecs, output_spaces, template, motion_corr_to, b0_to_t1w_transform,
+        intramodal_template_iters, intramodal_template_transform, prefer_dedicated_fmaps,
+        fmap_bspline, fmap_demean, use_syn, force_syn):
     """
     This workflow organizes the execution of qsiprep, with a sub-workflow for
     each subject.
