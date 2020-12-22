@@ -1,6 +1,6 @@
 """
-Orchestrating the dwi-preprocessing workflow
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Implementing the FSL preprocessing workflow
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. autofunction:: init_fsl_dwi_preproc_wf
 
@@ -14,7 +14,8 @@ from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
 from nipype.interfaces import fsl
 
-from ...interfaces.eddy import GatherEddyInputs, ExtendedEddy, Eddy2SPMMotion
+from ...interfaces.eddy import (GatherEddyInputs, ExtendedEddy, Eddy2SPMMotion,
+                                boilerplate_from_eddy_config)
 from ...interfaces.images import SplitDWIs, ConformDwi, IntraModalMerge
 from ...interfaces.reports import TopupSummary
 from ...interfaces.nilearn import EnhanceB0
@@ -199,6 +200,7 @@ def init_fsl_hmc_wf(scan_groups,
     # Fieldmap correction to be done in LAS+: TOPUP for rpe series or epi fieldmap
     # If a topupref is provided, use it for TOPUP
     fieldmap_type = scan_groups['fieldmap_info']['suffix'] or ''
+    workflow.__desc__ = boilerplate_from_eddy_config(eddy_args, fieldmap_type)
     if fieldmap_type in ('epi', 'rpe_series'):
         # If there are EPI fieldmaps in fmaps/, make sure they get to TOPUP. It will always use
         # b=0 images from the DWI series regardless
@@ -213,9 +215,17 @@ def init_fsl_hmc_wf(scan_groups,
             name='ds_report_topupsummary',
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
+        ds_topupcsv = pe.Node(
+            DerivativesDataSink(suffix='topupcsv', source_file=source_file),
+            name='ds_topupcsv',
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB)
 
         # Enhance and skullstrip the TOPUP output to get a mask for eddy
         unwarped_mean = pe.Node(IntraModalMerge(hmc=False, to_lps=False), name='unwarped_mean')
+        # Register the first volume of topup imain to the first volume of the merged dwi
+        topup_to_eddy_reg = pe.Node(fsl.FLIRT(dof=6, output_type="NIFTI_GZ"),
+                                    name="topup_to_eddy_reg")
         workflow.connect([
             # There will be no SDC warps, they are applied by eddy
             (gather_inputs, outputnode, [('forward_warps', 'to_dwi_ref_warps')]),
@@ -225,6 +235,11 @@ def init_fsl_hmc_wf(scan_groups,
                 ('topup_config', 'config')]),
             (topup, eddy, [
                 ('out_field', 'field')]),
+            (gather_inputs, topup_to_eddy_reg, [
+                ('topup_first', 'in_file'),
+                ('eddy_first', 'reference')]),
+            (gather_inputs, ds_topupcsv, [('b0_csv', 'in_file')]),
+            (topup_to_eddy_reg, eddy, [('out_matrix_file', 'field_mat')]),
             # Use corrected images from TOPUP to make a mask for eddy
             (topup, unwarped_mean, [('out_corrected', 'in_files')]),
             (unwarped_mean, pre_eddy_b0_ref_wf, [('out_avg', 'inputnode.b0_template')]),
@@ -233,6 +248,7 @@ def init_fsl_hmc_wf(scan_groups,
             (gather_inputs, topup_summary, [('topup_report', 'summary')]),
             (topup_summary, ds_report_topupsummary, [('out_report', 'in_file')]),
         ])
+
         return workflow
 
     # The topup inputs will only have one PE direction,
@@ -272,5 +288,4 @@ def init_fsl_hmc_wf(scan_groups,
         workflow.connect([
             (b0_ref_to_lps, outputnode, [
                 ('dwi_file', 'b0_template')])])
-
     return workflow

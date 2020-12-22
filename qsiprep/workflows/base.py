@@ -26,7 +26,7 @@ from ..engine import Workflow
 from ..interfaces import (BIDSDataGrabber, BIDSInfo, BIDSFreeSurferDir,
                           SubjectSummary, AboutSummary, DerivativesDataSink)
 from ..utils.bids import collect_data
-from ..utils.misc import fix_multi_T1w_source_name
+from ..utils.misc import fix_multi_T1w_source_name, fix_multi_source_name
 from ..utils.grouping import group_dwi_scans
 from ..__about__ import __version__
 
@@ -566,10 +566,11 @@ to workflows in *QSIPrep*'s documentation]\
         output_dir=output_dir,
         num_t1w=len(subject_data['t1w']))
 
+    info_modality = "dwi" if dwi_only else "t1w"
     workflow.connect([
         (inputnode, anat_preproc_wf, [('subjects_dir',
                                        'inputnode.subjects_dir')]),
-        (bidssrc, bids_info, [(('t1w', fix_multi_T1w_source_name),
+        (bidssrc, bids_info, [((info_modality, fix_multi_source_name, dwi_only),
                                'in_file')]),
         (inputnode, summary, [('subjects_dir', 'subjects_dir')]),
         (bidssrc, summary, [('t1w', 't1w'), ('t2w', 't2w')]),
@@ -579,12 +580,12 @@ to workflows in *QSIPrep*'s documentation]\
                                     ('roi', 'inputnode.roi'),
                                     ('flair', 'inputnode.flair')]),
         (summary, anat_preproc_wf, [('subject_id', 'inputnode.subject_id')]),
-        (bidssrc, ds_report_summary, [(('t1w', fix_multi_T1w_source_name),
+        (bidssrc, ds_report_summary, [((info_modality, fix_multi_source_name, dwi_only),
                                        'source_file')]),
         (summary, ds_report_summary, [('out_report', 'in_file')]),
-        (bidssrc, ds_report_about, [(('t1w', fix_multi_T1w_source_name),
+        (bidssrc, ds_report_about, [((info_modality, fix_multi_source_name, dwi_only),
                                      'source_file')]),
-        (about, ds_report_about, [('out_report', 'in_file')]),
+        (about, ds_report_about, [('out_report', 'in_file')])
     ])
 
     if anat_only:

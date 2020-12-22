@@ -40,6 +40,7 @@ def init_merge_and_denoise_wf(raw_dwi_files,
                               mem_gb=1,
                               omp_nthreads=1,
                               calculate_qc=False,
+                              phase_id="same",
                               name="merge_and_denoise_wf"):
     """
 
@@ -109,6 +110,7 @@ def init_merge_and_denoise_wf(raw_dwi_files,
             'bias_images', 'denoising_confounds', 'original_files', 'qc_summary',
             'validation_reports']),
         name='outputnode')
+    desc = []
 
     # DWIs will be merged at some point.
     merge_dwis = pe.Node(
@@ -118,6 +120,15 @@ def init_merge_and_denoise_wf(raw_dwi_files,
         name='merge_dwis')
     # Create a denoising workflow for each input image
     num_dwis = len(raw_dwi_files)
+    if num_dwis > 1:
+        if denoise_before_combining:
+            order = "on individual DWI series before concatenation"
+        else:
+            order = "on the concatenated DWI series"
+        desc.append("A total of %d DWI series in the %s distortion group were "
+                    "concatenated, with preprocessing operations performed %s."
+                    % (num_dwis, phase_id, order))
+    workflow.__desc__ = " ".join(desc)
     conformed_bvals = pe.Node(niu.Merge(num_dwis), name='conformed_bvals')
     conformed_bvecs = pe.Node(niu.Merge(num_dwis), name='conformed_bvecs')
     conformed_images = pe.Node(niu.Merge(num_dwis), name='conformed_images')
@@ -368,9 +379,55 @@ def init_dwi_denoising_wf(dwi_denoise_window,
             (merge_confounds, hstack_confounds, [('out', 'in_files')]),
             (hstack_confounds, outputnode, [('confounds_file', 'confounds')])])
 
-    # workflow.__desc__ = desc + denoise_boilerplate
     return workflow
 
 
 def _as_list(item):
     return [item]
+
+
+def gen_denoising_boilerplate(dwi_denoise_window,
+                              unringing_method,
+                              dwi_no_biascorr,
+                              no_b0_harmonization,
+                              b0_threshold):
+    """Generates methods boilerplate for the denoising workflow."""
+    desc = ["Any images with a b-value less than %d s/mm^2 were treated as a "
+            "b=0 image." % b0_threshold]
+    do_denoise = dwi_denoise_window > 0
+    do_unringing = unringing_method in ('mrdegibbs', 'dipy')
+    do_biascorr = not dwi_no_biascorr
+    harmonize_b0s = not no_b0_harmonization
+    last_step = ""
+    if do_denoise:
+        desc.append("MP-PCA denoising as implemented in MRtrix3's `dwidenoise`"
+                    "[@dwidenoise1] was applied with "
+                    "a %d-voxel window." % dwi_denoise_window)
+        last_step = "After MP-PCA, "
+
+    if do_unringing:
+        unringing_txt = {
+            "mrdegibbs": "MRtrix3's `mrdegibbs` [@mrdegibbs].",
+            "dipy": "Dipy [@dipy]."
+        }[unringing_method]
+
+        desc.append(last_step + "Gibbs unringing was performed using "
+                    + unringing_txt)
+        last_step = "Following unringing, "
+
+    if do_biascorr:
+        desc.append(last_step + "B1 field inhomogeneity was corrected using "
+                    "`dwibiascorrect` from MRtrix3 with the N4 algorithm"
+                    "[@n4].")
+        last_step = "After B1 bias correction, "
+
+    if harmonize_b0s:
+        desc.append(last_step + "the mean intensity of the DWI series was adjusted "
+                    "so all the mean intensity of the b=0 images matched across each"
+                    "separate DWI scanning sequence.")
+        last_step = True
+
+    if not last_step:
+        return "No denoising steps were applied to the DWI data."
+
+    return " ".join(desc)

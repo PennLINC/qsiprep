@@ -1,12 +1,24 @@
+0.13.0
+======
+
+
+0.12.2 (November 7, 2020)
+=========================
+Adds options for processing infant dMRI data. Also enables running without a T1w
+image.
+
+ * Adds ``--dwi-only`` and ``--infant`` options to QSIPrep. (#177)
+
+
 0.11.0 (August 12, 2020)
 ========================
 NEW: Workflow defaults have changed. T1w-based spatial normalization is done by
 default (disabled by ``--skip-t1-based-spatial-normalization``) and dwi scans
 are merged before motion correction by default (disabled by ``--separate-all-dwis``).
 
-* Deprecate some commandline arguments, change defaults (#168)
-* Fix typo in workflow names (#162)
-* Fix bug from 0.10.0 where ODFs were not appearing in plots (#160)
+ * Deprecate some commandline arguments, change defaults (#168)
+ * Fix typo in workflow names (#162)
+ * Fix bug from 0.10.0 where ODFs were not appearing in plots (#160)
 
 
 0.10.0 (August 4, 2020)

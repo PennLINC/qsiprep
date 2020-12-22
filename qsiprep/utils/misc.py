@@ -24,6 +24,27 @@ def fix_multi_T1w_source_name(in_files):
     return os.path.join(base, "sub-%s_T1w.nii.gz" % subject_label)
 
 
+def fix_multi_source_name(in_files, dwi_only):
+    """
+    Make up a generic source name when there are multiple T1s
+
+    >>> fix_multi_T1w_source_name([
+    ...     '/path/to/sub-045_ses-test_T1w.nii.gz',
+    ...     '/path/to/sub-045_ses-retest_T1w.nii.gz'])
+    '/path/to/sub-045_T1w.nii.gz'
+
+    """
+    print('!' * 1000)
+    import os
+    from nipype.utils.filemanip import filename_to_list
+    base, in_file = os.path.split(filename_to_list(in_files)[0])
+    subject_label = in_file.split("_", 1)[0].split("-")[1]
+    if dwi_only:
+        base = base.replace("/dwi", "/anat")
+    print(base)
+    return os.path.join(base, "sub-%s_T1w.nii.gz" % subject_label)
+
+
 def add_suffix(in_files, suffix):
     """
     Wrap nipype's fname_presuffix to conveniently just add a prefix
