@@ -44,8 +44,8 @@ LOGGER = logging.getLogger('nipype.workflow')
 def init_qsiprep_wf(
         subject_list, run_uuid, work_dir, output_dir, bids_dir, ignore, debug, low_mem, anat_only,
         dwi_only, longitudinal, b0_threshold, hires, denoise_before_combining, dwi_denoise_window,
-        unringing_method, dwi_no_biascorr, no_b0_harmonization, output_resolution, infant_mode,
-        combine_all_dwis, distortion_group_merge, omp_nthreads, force_spatial_normalization,
+        denoise_method, unringing_method, dwi_no_biascorr, no_b0_harmonization, output_resolution,
+        infant_mode, combine_all_dwis, distortion_group_merge, omp_nthreads, force_spatial_normalization,
         skull_strip_template, skull_strip_fixed_seed, freesurfer, hmc_model,
         impute_slice_threshold, hmc_transform, shoreline_iters, eddy_config, write_local_bvecs,
         output_spaces, template, motion_corr_to, b0_to_t1w_transform, intramodal_template_iters,
@@ -78,6 +78,7 @@ def init_qsiprep_wf(
                               hires=False,
                               denoise_before_combining=True,
                               dwi_denoise_window=7,
+                              denoise_method='patch2self',
                               unringing_method='mrdegibbs',
                               dwi_no_biascorr=False,
                               no_b0_harmonization=False,
@@ -138,8 +139,10 @@ def init_qsiprep_wf(
         b0_threshold : int
             Images with b-values less than this value will be treated as a b=0 image.
         dwi_denoise_window : int
-            window size in voxels for ``dwidenoise``. Must be odd. If 0, '
-            '``dwidwenoise`` will not be run'
+            window size in voxels for image-based denoising. Must be odd. If 0, '
+            'denoising will not be run'
+        denoise_method : str
+            Either 'dwidenoise', 'patch2self' or 'none'
         unringing_method : str
             algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
         dwi_no_biascorr : bool
@@ -235,6 +238,7 @@ def init_qsiprep_wf(
             output_resolution=output_resolution,
             denoise_before_combining=denoise_before_combining,
             dwi_denoise_window=dwi_denoise_window,
+            denoise_method=denoise_method,
             unringing_method=unringing_method,
             dwi_no_biascorr=dwi_no_biascorr,
             no_b0_harmonization=no_b0_harmonization,
@@ -284,8 +288,8 @@ def init_qsiprep_wf(
 def init_single_subject_wf(
         subject_id, name, reportlets_dir, output_dir, bids_dir, ignore, debug, write_local_bvecs,
         low_mem, dwi_only, anat_only, longitudinal, b0_threshold, denoise_before_combining,
-        dwi_denoise_window, unringing_method, dwi_no_biascorr, no_b0_harmonization, infant_mode,
-        combine_all_dwis, distortion_group_merge, omp_nthreads, skull_strip_template,
+        dwi_denoise_window, denoise_method, unringing_method, dwi_no_biascorr, no_b0_harmonization,
+        infant_mode, combine_all_dwis, distortion_group_merge, omp_nthreads, skull_strip_template,
         force_spatial_normalization, skull_strip_fixed_seed, freesurfer, hires, output_spaces,
         template, output_resolution, prefer_dedicated_fmaps, motion_corr_to, b0_to_t1w_transform,
         intramodal_template_iters, intramodal_template_transform, hmc_model, hmc_transform,
@@ -319,6 +323,7 @@ def init_single_subject_wf(
             output_resolution=1.25,
             denoise_before_combining=True,
             dwi_denoise_window=7,
+            denoise_method='patch2self',
             unringing_method='mrdegibbs',
             dwi_no_biascorr=False,
             no_b0_harmonization=False,
@@ -375,8 +380,10 @@ def init_single_subject_wf(
         b0_threshold : int
             Images with b-values less than this value will be treated as a b=0 image.
         dwi_denoise_window : int
-            window size in voxels for ``dwidenoise``. Must be odd. If 0, '
-            '``dwidwenoise`` will not be run'
+            window size in voxels for image-based denoising. Must be odd. If 0, '
+            'denoising will not be run'
+        denoise_method : str
+            Either 'dwidenoise', 'patch2self' or 'none'
         unringing_method : str
             algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
         dwi_no_biascorr : bool
@@ -687,6 +694,7 @@ to workflows in *QSIPrep*'s documentation]\
             ignore=ignore,
             b0_threshold=b0_threshold,
             dwi_denoise_window=dwi_denoise_window,
+            denoise_method=denoise_method,
             unringing_method=unringing_method,
             dwi_no_biascorr=dwi_no_biascorr,
             no_b0_harmonization=no_b0_harmonization,

@@ -47,6 +47,7 @@ def init_dwi_preproc_wf(dwi_only,
                         output_spaces,
                         output_dir,
                         dwi_denoise_window,
+                        denoise_method,
                         unringing_method,
                         dwi_no_biascorr,
                         no_b0_harmonization,
@@ -86,6 +87,7 @@ def init_dwi_preproc_wf(dwi_only,
                                   reportlets_dir='.',
                                   output_spaces=['T1w', 'template'],
                                   dwi_denoise_window=5,
+                                  denoise_method='dwidenoise',
                                   unringing_method='none',
                                   dwi_no_biascorr=False,
                                   no_b0_harmonization=False,
@@ -131,8 +133,10 @@ def init_dwi_preproc_wf(dwi_only,
         eddy_config: str
             Path to a JSON file containing config options for eddy
         dwi_denoise_window : int
-            window size in voxels for ``dwidenoise``. Must be odd. If 0, '
-            '``dwidwenoise`` will not be run'
+            window size in voxels for image-based denoising. Must be odd. If 0, '
+            'denoising will not be run'
+        denoise_method : str
+            Either 'dwidenoise', 'patch2self' or 'none'
         unringing_method : str
             algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
         dwi_no_biascorr : bool
@@ -326,6 +330,7 @@ Diffusion data preprocessing
                                      b0_threshold=b0_threshold,
                                      preprocess_rpe_series=preprocess_rpe_series,
                                      dwi_denoise_window=dwi_denoise_window,
+                                     denoise_method=denoise_method,
                                      unringing_method=unringing_method,
                                      dwi_no_biascorr=dwi_no_biascorr,
                                      no_b0_harmonization=no_b0_harmonization,

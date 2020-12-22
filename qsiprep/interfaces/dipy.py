@@ -19,7 +19,7 @@ from dipy.segment.mask import median_otsu
 from dipy.core.sphere import HemiSphere
 from dipy.core.gradients import gradient_table
 from dipy.reconst import mapmri, dti
-from dipy.denoise.patch2self import patch2self
+from dipy.denoise.patch2self import Patch2Self
 from nipype import logging
 from nipype.utils.filemanip import fname_presuffix
 from nipype.interfaces.base import (
@@ -89,15 +89,15 @@ class MedianOtsu(SimpleInterface):
 
 
 class Patch2SelfInputSpec(BaseInterfaceInputSpec):
-    in_file = File(exists=True, mandatory=True, 
+    in_file = File(exists=True, mandatory=True,
                    desc="4D diffusion MRI data file")
-    bval_file = File(exists=True, mandatory=True, 
+    bval_file = File(exists=True, mandatory=True,
                      desc="bval file containing b-values")
-    model = traits.Str('ridge', usedefault=True, 
+    model = traits.Str('ridge', usedefault=True,
                        desc='Regression model for Patch2Self')
-    alpha = traits.Int(1.0, usedefault=True, 
+    alpha = traits.Int(1.0, usedefault=True,
                        desc='Regularization parameter for Ridge and Lasso')
-    b0_threshold = traits.Int(50, usedefault=True, 
+    b0_threshold = traits.Int(50, usedefault=True,
                               desc='Threshold to segregate b0s from DWI volumes')
 
 
@@ -121,12 +121,12 @@ class Patch2Self(SimpleInterface):
 								  model=self.inputs.model,
                                   alpha=self.inputs.alpha,
                                   b0_threshold=self.inputs.b0_threshold)
-        
+
 
         self._results['denoised_arr'] = fname_presuffix(
             in_file, suffix='_denoised_patch2self', newpath=runtime.cwd)
 
-        denoised_img = nb.Nifti1Image(denoised_arr, noisy_img.affine, 
+        denoised_img = nb.Nifti1Image(denoised_arr, noisy_img.affine,
                                       noisy_img.header)
         denoised_img.to_filename(self._results['denoised_arr'])
 
