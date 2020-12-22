@@ -19,7 +19,7 @@ from dipy.segment.mask import median_otsu
 from dipy.core.sphere import HemiSphere
 from dipy.core.gradients import gradient_table
 from dipy.reconst import mapmri, dti
-from dipy.denoise.patch2self import Patch2Self
+from interfaces.patch2self import patch2self
 from nipype import logging
 from nipype.utils.filemanip import fname_presuffix
 from nipype.interfaces.base import (
