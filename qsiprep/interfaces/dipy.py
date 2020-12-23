@@ -25,6 +25,8 @@ from nipype.interfaces.base import (
     traits, TraitedSpec, BaseInterfaceInputSpec, File, SimpleInterface, isdefined
 )
 from .patch2self import patch2self
+from .denoise import (SeriesPreprocReport, SeriesPreprocReportInputSpec,
+                      SeriesPreprocReportOutputSpec)
 from .converters import get_dsi_studio_ODF_geometry, amplitudes_to_fibgz, amplitudes_to_sh_mif
 from ..utils.brainsuite_shore import BrainSuiteShoreModel, brainsuite_shore_basis
 from ..interfaces.mrtrix import _convert_fsl_to_mrtrix
@@ -87,7 +89,7 @@ class MedianOtsu(SimpleInterface):
         return runtime
 
 
-class Patch2SelfInputSpec(BaseInterfaceInputSpec):
+class Patch2SelfInputSpec(SeriesPreprocReportInputSpec):
     in_file = File(exists=True, mandatory=True,
                    desc="4D diffusion MRI data file")
     bval_file = File(exists=True, mandatory=True,
@@ -100,11 +102,11 @@ class Patch2SelfInputSpec(BaseInterfaceInputSpec):
                               desc='Threshold to segregate b0s from DWI volumes')
 
 
-class Patch2SelfOutputSpec(TraitedSpec):
+class Patch2SelfOutputSpec(SeriesPreprocReportOutputSpec):
     denoised_arr = File(exists=True, desc='Denoised version of the input image')
 
 
-class Patch2Self(SimpleInterface):
+class Patch2Self(SimpleInterface, SeriesPreprocReport):
     input_spec = Patch2SelfInputSpec
     output_spec = Patch2SelfOutputSpec
 
