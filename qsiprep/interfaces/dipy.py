@@ -97,14 +97,16 @@ class Patch2SelfInputSpec(BaseInterfaceInputSpec):
     alpha = traits.Int(1.0, usedefault=True,
                        desc='Regularization parameter for Ridge and Lasso')
     b0_threshold = traits.Int(50, usedefault=True,
-                              desc='Threshold to segregate b0s from DWI volumes')
+                              desc='Threshold to segregate b0s')
     residuals = traits.Bool(False, usedefault=True,
                             desc='Returns residuals of suppressed noise')
 
 
 class Patch2SelfOutputSpec(TraitedSpec):
-    denoised_arr = File(exists=True, desc='Denoised version of the input image')
-    noise_residuals = File(exists=True, desc='Residuals depicting suppressed noise from Patch2Self')
+    denoised_arr = File(exists=True,
+                        desc='Denoised version of the input image')
+    noise_residuals = File(exists=True,
+                           desc='Residuals depicting suppressed noise')
 
 
 class Patch2Self(SimpleInterface):
@@ -120,11 +122,12 @@ class Patch2Self(SimpleInterface):
         bvals = np.loadtxt(bval_file)
 
         if self.inputs.residuals:
-            denoised_arr, noise_residuals = patch2self(noisy_arr, bvals,
-                                                       model=self.inputs.model,
-                                                       alpha=self.inputs.alpha,
-                                                       b0_threshold=self.inputs.b0_threshold,
-                                                       residuals=self.inputs.residuals)
+            denoised_arr, noise_residuals = \
+                patch2self(noisy_arr, bvals,
+                           model=self.inputs.model,
+                           alpha=self.inputs.alpha,
+                           b0_threshold=self.inputs.b0_threshold,
+                           residuals=self.inputs.residuals)
 
             self._results['denoised_arr'] = fname_presuffix(
                 in_file, suffix='_denoised_patch2self', newpath=runtime.cwd)
