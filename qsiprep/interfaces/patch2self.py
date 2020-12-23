@@ -164,7 +164,8 @@ def _extract_3d_patches(arr, patch_radius):
 
 
 def patch2self(data, bvals, patch_radius=[0, 0, 0], model='ridge',
-               b0_threshold=50, out_dtype=None, alpha=1.0, verbose=False):
+               b0_threshold=50, out_dtype=None, alpha=1.0, verbose=False,
+               residuals=False):
     """ Patch2Self Denoiser
 
     Parameters
@@ -317,4 +318,9 @@ def patch2self(data, bvals, patch_radius=[0, 0, 0], model='ridge',
     # clip out the negative values from the denoised output
     denoised_arr.clip(min=0, out=denoised_arr)
 
-    return np.array(denoised_arr, dtype=out_dtype)
+    if residuals:
+        return np.array(denoised_arr, dtype=out_dtype), \
+               np.sqrt((data - denoised_arr) ** 2)
+
+    else:
+        return np.array(denoised_arr, dtype=out_dtype)
