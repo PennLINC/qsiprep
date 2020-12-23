@@ -98,10 +98,13 @@ class Patch2SelfInputSpec(BaseInterfaceInputSpec):
                        desc='Regularization parameter for Ridge and Lasso')
     b0_threshold = traits.Int(50, usedefault=True,
                               desc='Threshold to segregate b0s from DWI volumes')
+    residuals = traits.Bool(False, usedefault=True,
+                            desc='Returns residuals of suppressed noise')
 
 
 class Patch2SelfOutputSpec(TraitedSpec):
     denoised_arr = File(exists=True, desc='Denoised version of the input image')
+    noise_residuals = File(exists=True, desc='Residuals depicting suppressed noise from Patch2Self')
 
 
 class Patch2Self(SimpleInterface):
@@ -116,17 +119,40 @@ class Patch2Self(SimpleInterface):
         noisy_arr = noisy_img.get_fdata()
         bvals = np.loadtxt(bval_file)
 
-        denoised_arr = patch2self(noisy_arr, bvals,
-                                  model=self.inputs.model,
-                                  alpha=self.inputs.alpha,
-                                  b0_threshold=self.inputs.b0_threshold)
+        if self.inputs.residuals:
+            denoised_arr, noise_residuals = patch2self(noisy_arr, bvals,
+                                                       model=self.inputs.model,
+                                                       alpha=self.inputs.alpha,
+                                                       b0_threshold=self.inputs.b0_threshold,
+                                                       residuals=self.inputs.residuals)
 
-        self._results['denoised_arr'] = fname_presuffix(
-            in_file, suffix='_denoised_patch2self', newpath=runtime.cwd)
+            self._results['denoised_arr'] = fname_presuffix(
+                in_file, suffix='_denoised_patch2self', newpath=runtime.cwd)
+            self._results['noise_residuals'] = fname_presuffix(
+                in_file, suffix='_denoised_residuals_patch2self',
+                newpath=runtime.cwd)
 
-        denoised_img = nb.Nifti1Image(denoised_arr, noisy_img.affine,
-                                      noisy_img.header)
-        denoised_img.to_filename(self._results['denoised_arr'])
+            denoised_img = nb.Nifti1Image(denoised_arr, noisy_img.affine,
+                                          noisy_img.header)
+            denoised_img.to_filename(self._results['denoised_arr'])
+
+            p2s_residuals = nb.Nifti1Image(noise_residuals, noisy_img.affine,
+                                           noisy_img.header)
+            p2s_residuals.to_filename(self._results['noise_residuals'])
+
+        else:
+            denoised_arr = patch2self(noisy_arr, bvals,
+                                      model=self.inputs.model,
+                                      alpha=self.inputs.alpha,
+                                      b0_threshold=self.inputs.b0_threshold,
+                                      residuals=self.inputs.residuals)
+
+            self._results['denoised_arr'] = fname_presuffix(
+                in_file, suffix='_denoised_patch2self', newpath=runtime.cwd)
+
+            denoised_img = nb.Nifti1Image(denoised_arr, noisy_img.affine,
+                                          noisy_img.header)
+            denoised_img.to_filename(self._results['denoised_arr'])
 
         return runtime
 
@@ -157,7 +183,8 @@ class HistEQ(SimpleInterface):
         data_voxels = uneq_data[bool_mask]
 
         # Do a clip on 2 to 98th percentile
-        bottom_2, top_98 = np.percentile(data_voxels, np.array([1, 99]), axis=None)
+        bottom_2, top_98 = np.percentile(data_voxels, np.array([1, 99]),
+                                         axis=None)
         clipped_b0 = np.clip(data_voxels, 0, top_98)
         eq_data = histeq(clipped_b0, num_bins=512)
         output = np.zeros_like(mask.get_data())
