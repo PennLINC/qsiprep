@@ -310,8 +310,9 @@ def init_dwi_denoising_wf(dwi_denoise_window,
                                    dwi_denoise_window)),
                 name='denoiser')
         else:
-            denoiser = pe.Node(Patch2Self(), name='denoiser')
-
+            denoiser = pe.Node(Patch2Self(residuals=True), name='denoiser')
+            workflow.connect([
+                (inputnode, denoiser, [('bval_file', 'bval_file')])])
         ds_report_denoising = pe.Node(
             DerivativesDataSink(suffix=name + '_denoising',
                                 source_file=source_file),

@@ -19,6 +19,7 @@ from dipy.segment.mask import median_otsu
 from dipy.core.sphere import HemiSphere
 from dipy.core.gradients import gradient_table
 from dipy.reconst import mapmri, dti
+from nilearn.image import load_img
 from nipype import logging
 from nipype.utils.filemanip import fname_presuffix
 from nipype.interfaces.base import (
@@ -96,22 +97,24 @@ class Patch2SelfInputSpec(SeriesPreprocReportInputSpec):
                      desc="bval file containing b-values")
     model = traits.Str('ridge', usedefault=True,
                        desc='Regression model for Patch2Self')
-    alpha = traits.Int(1.0, usedefault=True,
+    alpha = traits.Float(1., usedefault=True,
                        desc='Regularization parameter for Ridge and Lasso')
-    b0_threshold = traits.Int(50, usedefault=True,
+    b0_threshold = traits.Float(50., usedefault=True,
                               desc='Threshold to segregate b0s')
-    residuals = traits.Bool(False, usedefault=True,
+    residuals = traits.Bool(True, usedefault=True,
                             desc='Returns residuals of suppressed noise')
+    mask = File(desc='mask image (unused)')
+    out_report = File('patch2self_report.svg', usedefault=True,
+                      desc='filename for the visual report')
+
+class Patch2SelfOutputSpec(SeriesPreprocReportOutputSpec):
+    out_file = File(exists=True,
+                    desc='Denoised version of the input image')
+    noise_image = File(exists=True,
+                       desc='Residuals depicting suppressed noise')
 
 
-class Patch2SelfOutputSpec(TraitedSpec):
-    denoised_arr = File(exists=True,
-                        desc='Denoised version of the input image')
-    noise_residuals = File(exists=True,
-                           desc='Residuals depicting suppressed noise')
-
-
-class Patch2Self(SimpleInterface, SeriesPreprocReport):
+class Patch2Self(SeriesPreprocReport, SimpleInterface):
     input_spec = Patch2SelfInputSpec
     output_spec = Patch2SelfOutputSpec
 
@@ -119,48 +122,41 @@ class Patch2Self(SimpleInterface, SeriesPreprocReport):
 
         in_file = self.inputs.in_file
         bval_file = self.inputs.bval_file
+        denoised_file = fname_presuffix(
+            in_file, suffix='_denoised_patch2self', newpath=runtime.cwd)
+        noise_file = fname_presuffix(
+            in_file, suffix='_denoised_residuals_patch2self',
+            newpath=runtime.cwd)
         noisy_img = nb.load(in_file)
         noisy_arr = noisy_img.get_fdata()
         bvals = np.loadtxt(bval_file)
 
-        if self.inputs.residuals:
-            denoised_arr, noise_residuals = \
-                patch2self(noisy_arr, bvals,
-                           model=self.inputs.model,
-                           alpha=self.inputs.alpha,
-                           b0_threshold=self.inputs.b0_threshold,
-                           residuals=self.inputs.residuals)
+        denoised_arr, noise_residuals = \
+            patch2self(noisy_arr, bvals,
+                        model=self.inputs.model,
+                        alpha=self.inputs.alpha,
+                        b0_threshold=self.inputs.b0_threshold,
+                        residuals=self.inputs.residuals)
 
-            self._results['denoised_arr'] = fname_presuffix(
-                in_file, suffix='_denoised_patch2self', newpath=runtime.cwd)
-            self._results['noise_residuals'] = fname_presuffix(
-                in_file, suffix='_denoised_residuals_patch2self',
-                newpath=runtime.cwd)
-
-            denoised_img = nb.Nifti1Image(denoised_arr, noisy_img.affine,
-                                          noisy_img.header)
-            denoised_img.to_filename(self._results['denoised_arr'])
-
-            p2s_residuals = nb.Nifti1Image(noise_residuals, noisy_img.affine,
-                                           noisy_img.header)
-            p2s_residuals.to_filename(self._results['noise_residuals'])
-
-        else:
-            denoised_arr = patch2self(noisy_arr, bvals,
-                                      model=self.inputs.model,
-                                      alpha=self.inputs.alpha,
-                                      b0_threshold=self.inputs.b0_threshold,
-                                      residuals=self.inputs.residuals)
-
-            self._results['denoised_arr'] = fname_presuffix(
-                in_file, suffix='_denoised_patch2self', newpath=runtime.cwd)
-
-            denoised_img = nb.Nifti1Image(denoised_arr, noisy_img.affine,
-                                          noisy_img.header)
-            denoised_img.to_filename(self._results['denoised_arr'])
-
+        # Back to nifti
+        denoised_img = nb.Nifti1Image(denoised_arr, noisy_img.affine,
+                                      noisy_img.header)
+        p2s_residuals = nb.Nifti1Image(noise_residuals, noisy_img.affine,
+                                       noisy_img.header)
+        denoised_img.to_filename(denoised_file)
+        p2s_residuals.to_filename(noise_file)
+        self._results['out_file'] = denoised_file
+        self._results['noise_image'] = noise_file
         return runtime
 
+    def _get_plotting_images(self):
+        input_dwi = load_img(self.inputs.in_file)
+        outputs = self._list_outputs()
+        ref_name = outputs.get('out_file')
+        denoised_nii = load_img(ref_name)
+        noise_name = outputs['noise_image']
+        noisenii = load_img(noise_name)
+        return input_dwi, denoised_nii, noisenii
 
 class HistEQInputSpec(BaseInterfaceInputSpec):
     in_file = File(exists=True, mandatory=True,

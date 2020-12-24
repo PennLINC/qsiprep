@@ -212,10 +212,13 @@ def patch2self(data, bvals, patch_radius=[0, 0, 0], model='ridge',
         This is the denoised array of the same size as that of the input data,
         clipped to non-negative values.
 
+    noise_level_image : ndarray
+        RMS of the estimated noise across all images. A 3D matrix.
+
     References
     ----------
 
-    [Fadnavis20] S. Fadnavis, J. Batson, E. Garyfallidis, Patch2Self:
+    [patch2self] S. Fadnavis, J. Batson, E. Garyfallidis, Patch2Self:
                     Denoising Diffusion MRI with Self-supervised Learning,
                     Advances in Neural Information Processing Systems 33 (2020)
     """
@@ -318,9 +321,7 @@ def patch2self(data, bvals, patch_radius=[0, 0, 0], model='ridge',
     # clip out the negative values from the denoised output
     denoised_arr.clip(min=0, out=denoised_arr)
 
-    if residuals:
-        return np.array(denoised_arr, dtype=out_dtype), \
-               np.sqrt((data - denoised_arr) ** 2)
+    # Calculate a "noise level" image
+    noise_level_image = np.sqrt(np.mean((data - denoised_arr) ** 2, axis=3))
 
-    else:
-        return np.array(denoised_arr, dtype=out_dtype)
+    return np.array(denoised_arr, dtype=out_dtype), noise_level_image

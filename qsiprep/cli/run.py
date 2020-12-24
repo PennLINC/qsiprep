@@ -200,6 +200,7 @@ def get_parser():
         '--denoise-method', '--denoise_method',
         action='store',
         choices=['dwidenoise', 'patch2self'],
+        default='dwidenoise',
         help='Image-based denoising method. Either dwidenoise (MRtrix) or patch2self (DIPY)')
     g_conf.add_argument(
         '--unringing-method', '--unringing_method',
@@ -900,6 +901,7 @@ def build_qsiprep_workflow(opts, retval):
         anat_only=opts.anat_only,
         longitudinal=opts.longitudinal,
         b0_threshold=opts.b0_threshold,
+        denoise_method=opts.denoise_method,
         combine_all_dwis=not opts.separate_all_dwis,
         distortion_group_merge=opts.distortion_group_merge,
         dwi_denoise_window=opts.dwi_denoise_window,
