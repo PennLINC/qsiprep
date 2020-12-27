@@ -194,20 +194,20 @@ def get_parser():
         action='store',
         type=int,
         default=5,
-        help='window size in voxels for ``dwidenoise``. Must be odd (default: 5). '
-             'If 0, ``dwidwenoise`` will not be run')
+        help='window size in voxels for image-based denoising (default: 5).')
     g_conf.add_argument(
         '--denoise-method', '--denoise_method',
         action='store',
-        choices=['dwidenoise', 'patch2self'],
+        choices=['dwidenoise', 'patch2self', 'none'],
         default='dwidenoise',
-        help='Image-based denoising method. Either dwidenoise (MRtrix) or patch2self (DIPY)')
+        help='Image-based denoising method. Either dwidenoise (MRtrix), patch2self (DIPY) '
+             'or none (default: dwidenoise).')
     g_conf.add_argument(
         '--unringing-method', '--unringing_method',
         action='store',
         choices=['none', 'mrdegibbs'],
         help='Method for Gibbs-ringing removal.\n - none: no action\n - mrdegibbs: '
-             'use mrdegibbs from mrtrix3')
+             'use mrdegibbs from mrtrix3 (default: none).')
     g_conf.add_argument(
         '--dwi-no-biascorr', '--dwi_no_biascorr',
         action='store_true',
@@ -247,8 +247,7 @@ def get_parser():
         ' - average: if a whole sequence was duplicated in both PE\n'
         '            directions, average the corrected images of the same\n'
         '            q-space coordinate\n'
-        ' - none: Default. Keep distorted groups separate'
-    )
+        ' - none: Default. Keep distorted groups separate')
     g_conf.add_argument(
         '--write-local-bvecs', '--write_local_bvecs',
         action='store_true',
