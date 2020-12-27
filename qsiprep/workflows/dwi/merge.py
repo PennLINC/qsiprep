@@ -396,16 +396,21 @@ def gen_denoising_boilerplate(dwi_denoise_window,
     desc = ["Any images with a b-value less than %d s/mm^2 were treated as a "
             "b=0 image." % b0_threshold]
     do_denoise = dwi_denoise_window > 0
-    do_unringing = unringing_method in ('mrdegibbs', 'dipy')
+    do_unringing = unringing_method in ('mrdegibbs', 'patch2self')
     do_biascorr = not dwi_no_biascorr
     harmonize_b0s = not no_b0_harmonization
     last_step = ""
     if do_denoise:
-        desc.append("MP-PCA denoising as implemented in MRtrix3's `dwidenoise`"
-                    "[@dwidenoise1] was applied with "
-                    "a %d-voxel window." % dwi_denoise_window)
-        last_step = "After MP-PCA, "
-
+        if unringing_method == 'mrdegibbs':
+            desc.append("MP-PCA denoising as implemented in MRtrix3's `dwidenoise`"
+                        "[@dwidenoise1] was applied with "
+                        "a %d-voxel window." % dwi_denoise_window)
+            last_step = "After MP-PCA, "
+        if unringing_method == 'patch2self':
+            desc.append("Denoising was performed using `patch2self`"
+                        "[@patch2self] was applied with "
+                        "a %d-voxel window." % dwi_denoise_window)
+            last_step = "After `patch2self`, "
     if do_unringing:
         unringing_txt = {
             "mrdegibbs": "MRtrix3's `mrdegibbs` [@mrdegibbs].",

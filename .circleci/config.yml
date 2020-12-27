@@ -441,6 +441,7 @@ jobs:
                 --config $PWD/nipype.cfg -w /tmp/DSDTI/work \
                  /tmp/data/DSDTI  /tmp/DSDTI/derivatives \
                  participant \
+                --denoise-method patch2self \
                 --sloppy --mem_mb 4096 \
                 --unringing-method mrdegibbs \
                 --output-space T1w \
