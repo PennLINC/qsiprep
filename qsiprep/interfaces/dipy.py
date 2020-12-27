@@ -98,14 +98,15 @@ class Patch2SelfInputSpec(SeriesPreprocReportInputSpec):
     model = traits.Str('ridge', usedefault=True,
                        desc='Regression model for Patch2Self')
     alpha = traits.Float(1., usedefault=True,
-                       desc='Regularization parameter for Ridge and Lasso')
+                         desc='Regularization parameter for Ridge and Lasso')
     b0_threshold = traits.Float(50., usedefault=True,
-                              desc='Threshold to segregate b0s')
+                                desc='Threshold to segregate b0s')
     residuals = traits.Bool(True, usedefault=True,
                             desc='Returns residuals of suppressed noise')
     mask = File(desc='mask image (unused)')
     out_report = File('patch2self_report.svg', usedefault=True,
                       desc='filename for the visual report')
+
 
 class Patch2SelfOutputSpec(SeriesPreprocReportOutputSpec):
     out_file = File(exists=True,
@@ -133,10 +134,10 @@ class Patch2Self(SeriesPreprocReport, SimpleInterface):
 
         denoised_arr, noise_residuals = \
             patch2self(noisy_arr, bvals,
-                        model=self.inputs.model,
-                        alpha=self.inputs.alpha,
-                        b0_threshold=self.inputs.b0_threshold,
-                        residuals=self.inputs.residuals)
+                       model=self.inputs.model,
+                       alpha=self.inputs.alpha,
+                       b0_threshold=self.inputs.b0_threshold,
+                       residuals=self.inputs.residuals)
 
         # Back to nifti
         denoised_img = nb.Nifti1Image(denoised_arr, noisy_img.affine,
@@ -157,6 +158,7 @@ class Patch2Self(SeriesPreprocReport, SimpleInterface):
         noise_name = outputs['noise_image']
         noisenii = load_img(noise_name)
         return input_dwi, denoised_nii, noisenii
+
 
 class HistEQInputSpec(BaseInterfaceInputSpec):
     in_file = File(exists=True, mandatory=True,
