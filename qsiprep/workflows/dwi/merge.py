@@ -396,8 +396,8 @@ def gen_denoising_boilerplate(denoise_method,
     """Generates methods boilerplate for the denoising workflow."""
     desc = ["Any images with a b-value less than %d s/mm^2 were treated as a "
             "b=0 image." % b0_threshold]
-    do_denoise = dwi_denoise_window > 0
-    do_unringing = unringing_method in ('mrdegibbs', 'patch2self')
+    do_denoise = denoise_method in ('dwidenoise', 'patch2self')
+    do_unringing = unringing_method == 'mrdegibbs'
     do_biascorr = not dwi_no_biascorr
     harmonize_b0s = not no_b0_harmonization
     last_step = ""
