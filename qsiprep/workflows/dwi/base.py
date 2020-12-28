@@ -440,6 +440,7 @@ Diffusion data preprocessing
             b0_to_t1w_transform=b0_to_t1w_transform,
             hmc_transform=hmc_transform,
             impute_slice_threshold=impute_slice_threshold,
+            denoise_method=denoise_method,
             dwi_denoise_window=dwi_denoise_window,
             output_spaces=output_spaces),
         name='summary',
