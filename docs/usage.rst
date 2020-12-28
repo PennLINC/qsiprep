@@ -1,7 +1,7 @@
 .. include:: links.rst
 
 Usage
-------------------------
+-----
 
 The ``qsiprep`` preprocessing workflow takes as principal input the
 path of the dataset that is to be processed.
@@ -50,7 +50,7 @@ The singularity wrapper CLI
    :nodefaultconst:
 
 Note on using CUDA
-===================
+==================
 
 The CUDA runtime version 9.1 is included in the QSIPrep docker image.
 The CUDA version of eddy is dramatically faster than the openmp version.
@@ -68,7 +68,7 @@ Information on how to customize and understand these files can be found on the
 page.
 
 CUDA Support
-=============
+============
 
 As of version 0.6.7 CUDA version 9.1 is supported in the QSIPrep container! To run locally
 using docker you will need the nvidia container runtime installed for Docker version 19.0.3

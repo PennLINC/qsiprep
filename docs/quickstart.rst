@@ -46,15 +46,8 @@ there will be one output in the derivatives directory for each input image in th
 directory.
 
 It is beneficial to have as much data as possible available for head motion correction. However,
-the denoising preprocessing step has important caveats that should be considered. It is up to the
-user whether ``dwidenoise`` and ``mrdegibbs`` are run on ``run-01``, ``run-02``, ``run-03``
-individually before they are concatenated, or whether to combine these scans and run ``dwidenoise``
-on the concatenated DWI series. This is an unexplored trade-off space. The more volumes available,
-the more data MP-PCA has to work with and a larger window size (specified with
-``--dwi-denoise-window``) can be safely used. However, if there if the head is in a vastly
-different location in different scans, performance may be impacted. By default the scans in the
-same warped space are individually denoised before they  are concatenated. To denoise/unring after
-the scans are concatenated
+the denoising preprocessing step has important caveats that should be considered. For a
+discussion see :ref:`merge_denoise`.
 
 
 Specifying outputs

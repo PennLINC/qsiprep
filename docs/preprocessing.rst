@@ -47,6 +47,60 @@ with eddy/motion correction and will merge scans with different PE directions.
 If you have some scans you want to combine and others you want to preprocess separately,
 consider creating fake sessions in your BIDS directory.
 
+.. _merge_denoise:
+
+Denoising and Merging Images
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The user can decide *whether* to do certain preprocessing steps and, if so,
+whether they are performed *before* or *after* the DWI series are
+concatenated. Specifically, image denoising (using ``dwidenoise`` or
+``patch2self``) can be disabled with ``--denoise-method none``. Gibbs
+unringing (using ``mrdegibbs``) is disabled by default but can be enabled
+with ``--unringing-method mrdegibbs``. B1 bias field correction is applied by
+default (using ``dwibiascorrect``), and can be disabled with the
+``--dwi-no-biascorr`` option. The intensity of b=0 images is harmonized
+across scans (i.e. scaled to an average value) by default, but this can be
+turned off using ``--dwi-no-b0-harmonization``.
+
+Together, denoising (MP-PCA or patch2self), Gibbs unringing B1 bias field
+correction and b=0 intensity normalization are referred to as *denoising* in
+QSIPrep. Each of these image processing operations brings with with is own
+set of assumptions about its inputs and changes the distribution of noise in
+its outputs. Although the inclusion of each operation can be decided by the
+user, the order in which they are applied relative to one another is fixed.
+MP-PCA or patch2self are applied directly to the BIDS inputs, which should be
+uninterpolated and as "raw" as possible. Although Gibbs unringing should be
+performed on "raw" data, it is recommended in the MRtrix3 documentation to
+apply MP-PCA before Gibbs unringing. B1 bias field correction and b=0
+intensitity harmonization don't have as specific requirements about their
+inputs so are run last.
+
+The last, and potentially very important decision, is whether the denoising
+operations are applied to each input DWI file individually or whether the
+denoising operations are applied to the concatenated input DWI files. This is
+an unexplored trade-off space. The more volumes available, the more data
+MP-PCA/patch2self have to work with. However, if there if the head is in a
+vastly different location in different scans, denoising can be impacted in
+unpredictable ways.
+
+Consider MP-PCA. If a voxel contains CSF in one DWI series and the subject
+repositions their head between scans so that the voxel contains corpus
+callosum in the next DWI series, the non-noise signal will be very different
+in the two series. Similarly, if the head is repositioned different areas
+will be closer to the head coil and therefore be inconsistently affected by
+B1 bias field. Similar problems can also occur *within* a DWI series due to
+subject head motion, but these methods have been shown to work well even in
+the presence of within-scan head movement. If the head position changes
+across scans is of a similar magnitude to that of within-scan head motion, it
+is likely fine to use the ``--combine-before-denoising`` option. To guage how
+much between-scan motion occurred, users can inspect the :ref:`qc_data` to see
+whether Framewise Displacement is large where a new series begins.
+
+By default the scans in the same warped space are individually denoised before
+they are concatenated. When warped groups are concatenated an additional b=0
+image intensity normalization is performed.
+
 
 Susceptibility correction methods
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -73,6 +127,7 @@ The are three kinds of SDC available in qsiprep:
 
 ``qsiprep`` determines if a fieldmap should be used based on the ``"IntendedFor"``
 fields in the JSON sidecars in the ``fmap/`` directory.
+
 
 Preprocessing HCP-style
 ^^^^^^^^^^^^^^^^^^^^^^^
@@ -109,6 +164,7 @@ qsiprep generates three broad classes of outcomes:
   3. **Additional data for subsequent analysis**, for instance the transformations
      between different spaces or the estimated head motion and model fit quality calculated
      during model-based head motion correction.
+
   4. **Quantitative QA**:
      A single-line csv file per subject summarizing subject motion, coregistration quality and
      image quality.
@@ -117,17 +173,18 @@ qsiprep generates three broad classes of outcomes:
 Visual Reports
 ^^^^^^^^^^^^^^^
 
-qsiprep outputs summary reports, written to ``<output dir>/qsiprep/sub-<subject_label>.html``.
-These reports provide a quick way to make visual inspection of the results easy.  One useful
-graphic is the animation of the q-space sampling scheme before and after the pipeline. Here is
-a sampling scheme from a DSI scan:
+qsiprep outputs summary reports, written to ``<output
+dir>/qsiprep/sub-<subject_label>.html``. These reports provide a quick way to
+make visual inspection of the results easy. One useful graphic is the
+animation of the q-space sampling scheme before and after the pipeline. Here
+is a sampling scheme from a DSI scan:
 
 .. figure:: _static/sampling_scheme.gif
     :scale: 75%
 
-    A Q5 DSI sampling scheme before (left) and after (right) preprocessing. This is useful to
-    confirm that the gradients have indeed been rotated and that head motion correction has not
-    disrupted the scheme extensively.
+    A Q5 DSI sampling scheme before (left) and after (right) preprocessing.
+    This is useful to confirm that the gradients have indeed been rotated and
+    that head motion correction has not disrupted the scheme extensively.
 
 
 Preprocessed data (qsiprep *derivatives*)
@@ -188,8 +245,8 @@ See implementation on :mod:`~qsiprep.workflows.dwi.confounds.init_dwi_confs_wf`.
 
 For each DWI processed by qsiprep, a
 ``<output_folder>/qsiprep/sub-<sub_id>/func/sub-<sub_id>_task-<task_id>_run-<run_id>_confounds.tsv``
-file will be generated.
-These are :abbr:`TSV (tab-separated values)` tables, which look like the example below::
+file will be generated. These are :abbr:`TSV (tab-separated values)` tables,
+which look like the example below::
 
   framewise_displacement	trans_x	trans_y	trans_z	rot_x	rot_y	rot_z	hmc_r2	hmc_xcorr	original_file	grad_x	grad_y	grad_z	bval
 
@@ -200,31 +257,36 @@ These are :abbr:`TSV (tab-separated values)` tables, which look like the example
   37.506	-0.184	0.117	0.723	0.305	0.138	0.964	0.895	0.896	sub-abcd_dwi.nii.gz	-0.187	-0.957	-0.223	2000.000
   16.388	-0.447	0.020	0.847	0.217	0.129	0.743	0.792	0.800	sub-abcd_dwi.nii.gz	-0.111	-0.119	0.987	3000.000
 
-The motion parameters come from the model-based head motion estimation workflow. The ``hmc_r2`` and
-``hmc_xcorr`` are whole-brain r^2 values and cross correlation scores (using the ANTs definition)
-between the model-generated target image and the motion-corrected empirical image. The final
-columns are not really confounds, but book-keeping information that reminds us which 4d DWI series
-the image originally came from and what gradient direction (``grad_x``, ``grad_y``, ``grad_z``)
-and gradient strength ``bval`` the image came from. This can be useful for tracking down
-mostly-corrupted scans and can indicate if the head motion model isn't working on specific
-gradient strengths or directions.
+The motion parameters come from the model-based head motion estimation
+workflow. The ``hmc_r2`` and ``hmc_xcorr`` are whole-brain r^2 values and
+cross correlation scores (using the ANTs definition) between the
+model-generated target image and the motion-corrected empirical image. The
+final columns are not really confounds, but book-keeping information that
+reminds us which 4d DWI series the image originally came from and what
+gradient direction (``grad_x``, ``grad_y``, ``grad_z``) and gradient strength
+``bval`` the image came from. This can be useful for tracking down
+mostly-corrupted scans and can indicate if the head motion model isn't
+working on specific gradient strengths or directions.
 
 .. _qc_data:
 
 Quality Control data
 ^^^^^^^^^^^^^^^^^^^^^
 
-A single-line csv file (``desc-ImageQC_dwi.csv``) is created for each output image. This file is
-particularly useful for comparing the relative quality across subjects before deciding who to
-include in a group analysis. The columns in this file come from DSI Studio's QC calculation and is
-described in [Yeh2019]_. Columns prefixed by ``raw_`` reflect QC measurements from the data before
-preprocessing. Columns prefixed by ``t1_`` or ``mni_`` contain QC metrics calculated on the
-preprocessed data. Motion parameter summaries are also provided, such as the mean and max of
-framewise displacement (``mean_fd``, ``max_fd``). The max and mean absolute values for translation
-and rotation are ``max_translation`` and ``max_rotation`` and the maxima of their derivatives are
-in ``max_rel_translation`` and ``max_rel_rotation``. Finally, the difference in spatial overlap
-between the anatomical mask and the anatomical brain mask and the DWI brain mask is calculated
-using the Dice distance in ``t1_dice_distance`` and ``mni_dice_distance``.
+A single-line csv file (``desc-ImageQC_dwi.csv``) is created for each output
+image. This file is particularly useful for comparing the relative quality
+across subjects before deciding who to include in a group analysis. The
+columns in this file come from DSI Studio's QC calculation and is described
+in [Yeh2019]_. Columns prefixed by ``raw_`` reflect QC measurements from the
+data before preprocessing. Columns prefixed by ``t1_`` or ``mni_`` contain QC
+metrics calculated on the preprocessed data. Motion parameter summaries are
+also provided, such as the mean and max of framewise displacement
+(``mean_fd``, ``max_fd``). The max and mean absolute values for translation
+and rotation are ``max_translation`` and ``max_rotation`` and the maxima of
+their derivatives are in ``max_rel_translation`` and ``max_rel_rotation``.
+Finally, the difference in spatial overlap between the anatomical mask and
+the anatomical brain mask and the DWI brain mask is calculated using the Dice
+distance in ``t1_dice_distance`` and ``mni_dice_distance``.
 
 Confounds and "carpet"-plot on the visual reports
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -251,7 +313,8 @@ Examples of these plots follow:
 .. figure:: _static/sub-pnc_carpetplot.png
     :scale: 40%
 
-    For eddy slices with more outliers appear more yellow, while fewer outliers is more blue.
+    For eddy slices with more outliers appear more yellow, while fewer
+    outliers is more blue.
 
 Preprocessing pipeline details
 ---------------------------------
@@ -261,7 +324,7 @@ available and are used as the input.
 
 
 T1w/T2w preprocessing
-^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^
 
 :mod:`qsiprep.workflows.anatomical.init_anat_preproc_wf`
 
@@ -358,6 +421,29 @@ flag, which forces the estimation of an unbiased template.
     with any of the original images.
     Reconstructed surfaces and functional datasets will be registered to the
     ``T1w`` space, and not to the input images.
+
+
+Using only DWI data (bypassing the T1w workflows)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+It is possible to use QSIPrep to process *only* diffusion-weighted images. In
+the case of infant data, where robust skull-stripping methods are not
+currently available, or where anatomical preprocessing has already been
+performed in another pipeline, the user can specify ``--dwi-only``.
+
+Instead of registering the b=0 template image to the skull-stripped T1w
+image, the b=0 template is registered directly to a template and only the
+rigid part of the transformation is kept. This results in an AC-PC aligned
+b=0 template that maintains the shape and size of the original image.
+
+
+Processing Infant Data
+^^^^^^^^^^^^^^^^^^^^^^
+
+When processing infant DWI data, users may add ``--infant`` to their
+QSIPrep call. This will swap the default MNI152NLin2009cAsym template
+with the MNI infant template. It is highly advisable to also include
+``--dwi-only`` to avoid problems with T1w skull-stripping.
 
 
 DWI preprocessing
@@ -521,9 +607,8 @@ DWI reference image estimation
 This workflow estimates a reference image for a DWI series. This
 procedure is different from the DWI reference image workflow in the
 sense that true brain masking isn't usually done until later in the
-pipeline for DWIs. It performs a generous automasking and uses
-Dipy's histogram equalization on the b0 template generated during
-motion correction.
+pipeline for DWIs.
+
 
 Susceptibility Distortion Correction (SDC)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -536,10 +621,7 @@ Susceptibility Distortion Correction (SDC)
     Applying susceptibility-derived distortion correction, based on
     fieldmap estimation.
 
-The PEPOLAR and SyN-SDC workflows from FMRIPREP are copied here.
-They operate on the output of reference estimation, after head
-motion correction. For a complete list of possibilities here, see
-:ref:`merging`.
+
 
 .. _resampling:
 

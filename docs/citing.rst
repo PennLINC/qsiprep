@@ -6,8 +6,6 @@
 Citing qsiprep
 ===============
 
-Nothing to cite yet...
-
 .. [Fonov2011] Fonov VS, Evans AC, Botteron K, Almli CR, McKinstry RC, Collins DL and BDCG,
     Unbiased average age-appropriate atlases for pediatric studies, NeuroImage 54(1), 2011
     doi:`10.1016/j.neuroimage.2010.07.033 <https://doi.org/10.1016/j.neuroimage.2010.07.033>`_.
