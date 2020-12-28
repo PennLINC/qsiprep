@@ -111,9 +111,20 @@ def init_dwi_pre_hmc_wf(scan_groups,
         name='outputnode')
     dwi_series_pedir = scan_groups['dwi_series_pedir']
     dwi_series = scan_groups['dwi_series']
-    workflow.__postdesc__ = gen_denoising_boilerplate(dwi_denoise_window, unringing_method,
-                                                      dwi_no_biascorr, no_b0_harmonization,
-                                                      b0_threshold)
+
+    # Configure the denoising window
+    if denoise_method == 'dwidenoise' and dwi_denoise_window == 'auto':
+        dwi_denoise_window = 5
+        LOGGER.info("Automatically using 5, 5, 5 window for dwidenoise")
+    if dwi_denoise_window != 'auto':
+        try:
+            dwi_denoise_window = int(dwi_denoise_window)
+        except ValueError:
+            raise Exception("dwi denoise window must be an integer or 'auto'")
+    workflow.__postdesc__ = gen_denoising_boilerplate(denoise_method, dwi_denoise_window,
+                                                      unringing_method, dwi_no_biascorr,
+                                                      no_b0_harmonization, b0_threshold)
+
     # Special case: Two reverse PE DWI series are going to get combined for eddy
     if preprocess_rpe_series:
         workflow.__desc__ = "Images were grouped into two phase encoding polarity groups. "

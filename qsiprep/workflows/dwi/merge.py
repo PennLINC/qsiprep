@@ -387,7 +387,8 @@ def _as_list(item):
     return [item]
 
 
-def gen_denoising_boilerplate(dwi_denoise_window,
+def gen_denoising_boilerplate(denoise_method,
+                              dwi_denoise_window,
                               unringing_method,
                               dwi_no_biascorr,
                               no_b0_harmonization,
@@ -401,15 +402,18 @@ def gen_denoising_boilerplate(dwi_denoise_window,
     harmonize_b0s = not no_b0_harmonization
     last_step = ""
     if do_denoise:
-        if unringing_method == 'mrdegibbs':
+        if denoise_method == 'dwidenoise':
             desc.append("MP-PCA denoising as implemented in MRtrix3's `dwidenoise`"
                         "[@dwidenoise1] was applied with "
                         "a %d-voxel window." % dwi_denoise_window)
             last_step = "After MP-PCA, "
-        if unringing_method == 'patch2self':
+        if denoise_method == 'patch2self':
             desc.append("Denoising was performed using `patch2self`"
-                        "[@patch2self] was applied with "
-                        "a %d-voxel window." % dwi_denoise_window)
+                        "[@patch2self] was applied")
+            if dwi_denoise_window == "auto":
+                desc.append("with settings based on developer recommendations.")
+            else:
+                desc.append("with a %d-voxel window." % dwi_denoise_window)
             last_step = "After `patch2self`, "
     if do_unringing:
         unringing_txt = {

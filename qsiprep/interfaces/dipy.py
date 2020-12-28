@@ -93,6 +93,8 @@ class MedianOtsu(SimpleInterface):
 class Patch2SelfInputSpec(SeriesPreprocReportInputSpec):
     in_file = File(exists=True, mandatory=True,
                    desc="4D diffusion MRI data file")
+    patch_radius = traits.Either(traits.Int(0), traits.Str('auto'),
+                                 desc='patch radius in voxels.')
     bval_file = File(exists=True, mandatory=True,
                      desc="bval file containing b-values")
     model = traits.Str('ridge', usedefault=True,
@@ -132,10 +134,34 @@ class Patch2Self(SeriesPreprocReport, SimpleInterface):
         noisy_arr = noisy_img.get_fdata()
         bvals = np.loadtxt(bval_file)
 
+        # Determine the patch radius
+        num_non_b0 = (bvals > self.inputs.b0_threshold).sum()
+        very_few_directions = num_non_b0 < 20
+        few_directions = num_non_b0 < 50
+        if self.inputs.patch_radius == 'auto':
+            if very_few_directions:
+                patch_radius = [3, 3, 3]
+            elif few_directions:
+                patch_radius = [1, 1, 1]
+            else:
+                patch_radius = [0, 0, 0]
+        else:
+            patch_radius = [self.inputs.patch_radius] * 3
+            if self.inputs.patch_radius > 3 and not very_few_directions:
+                LOGGER.info("a very large patch radius is not necessary when more than "
+                            "20 gradient directions have been sampled.")
+            elif self.inputs.patch_radius > 1 and not few_directions:
+                LOGGER.info("a large patch radius is not necessary when more than "
+                            "50 gradient directions have been sampled.")
+            elif self.inputs.patch_radius == 0 and few_directions:
+                LOGGER.warning("When < 50 gradient directions are available, it is "
+                               "recommended to increase patch_radius to > 0.")
+
         denoised_arr, noise_residuals = \
             patch2self(noisy_arr, bvals,
                        model=self.inputs.model,
                        alpha=self.inputs.alpha,
+                       patch_radius=patch_radius,
                        b0_threshold=self.inputs.b0_threshold,
                        residuals=self.inputs.residuals)
 

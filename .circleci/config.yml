@@ -427,7 +427,7 @@ jobs:
             fi
 
       - run:
-          name: Run full qsiprep/recon (TOPUP/eddy) on DSDTI
+          name: Run full qsiprep/recon (TOPUP/eddy) on DSDTI + patch2self
           no_output_timeout: 2h
           command: |
             mkdir -p /tmp/DSDTI/work /tmp/DSDTI/derivatives

@@ -192,16 +192,17 @@ def get_parser():
     g_conf.add_argument(
         '--dwi_denoise_window', '--dwi-denoise-window',
         action='store',
-        type=int,
-        default=5,
-        help='window size in voxels for image-based denoising (default: 5).')
+        default='auto',
+        help='window size in voxels for image-based denoising, integer or "auto".'
+             'If "auto", 5 will be used for dwidenoise and auto-configured for '
+             'patch2self based on the number of b>0 images.')
     g_conf.add_argument(
         '--denoise-method', '--denoise_method',
         action='store',
         choices=['dwidenoise', 'patch2self', 'none'],
         default='dwidenoise',
-        help='Image-based denoising method. Either dwidenoise (MRtrix), patch2self (DIPY) '
-             'or none (default: dwidenoise).')
+        help='Image-based denoising method. Either "dwidenoise" (MRtrix), '
+             '"patch2self" (DIPY) or none. (default: dwidenoise)')
     g_conf.add_argument(
         '--unringing-method', '--unringing_method',
         action='store',
