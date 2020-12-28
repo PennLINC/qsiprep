@@ -1,7 +1,7 @@
 .. include:: links.rst
 
 Quick Start
-------------------------
+-----------
 
 There are many options for running ``qsiprep`` but most have sensible defaults and
 don't need to be changed. This page describes the options most most likely to be
@@ -23,7 +23,7 @@ One way to process these data would be to call ``qsiprep`` like this::
 
 
 Grouping scans
-======================
+==============
 
 .. note::
    This section explains ``--separate-all-dwis``, ``--denoise-after-combining`` and
@@ -51,7 +51,7 @@ discussion see :ref:`merge_denoise`.
 
 
 Specifying outputs
-=====================
+==================
 
 .. note::
    This section covers ``--output-resolution 1.2``, and
@@ -68,7 +68,7 @@ spatially normalized by default during preprocessing. The transform from the T1w
 ``MNI152NLin2009cAsym`` template is included in the derivatives. This can be used during
 reconstruction to map cortical parcellations from the template into the DWI in order to estimate
 brain graphs. If you want to save ~20 minutes of computation time, this normalization can be
-disabled with the ``--skip-tq-based-spatial-normalization`` option.
+disabled with the ``--skip-t1-based-spatial-normalization`` option.
 
 The ``--output-resolution`` argument determines the spatial resolution of the preprocessed dwi
 series. You can specify the resolution of the original data or choose to upsample the dwi to a
@@ -92,3 +92,31 @@ schemes. The ``3dSHORE`` (aka "SHORELine") option works for multi-shell, Cartesi
 The option ``none`` will register all the b=0 images to one another and the b>0 images will
 have the transform from the nearest b=0 image applied. This is not recommended. Between ``eddy``
 and ``3dSHORE``, all sampling schemes can be motion corrected.
+
+
+Enabling and disabling preprocessing steps
+==========================================
+
++-----------------+-----------------------------+---------------------------+------------------------------+-----------------------------------+
+|                 |      Denoising              |   Gibbs Unringing         |    B1 Bias Field Correction  |  b=0 Intensity Harmonization      |
++=================+=============================+===========================+==============================+===================================+
+| Description     |   Reduce random noise       |   Remove spatial ringing  |    Remove spatial non-       |  Adjust the signal intensity      |
+|                 |   in images.                |   artifact from images.   |    uniformity of images.     |  across separate scans to match.  |
++-----------------+-----------------------------+---------------------------+------------------------------+-----------------------------------+
+| Algorithms      |  ``dwidenoise`` (MRtrix3)   | ``mrdegibbs`` (MRtrix3)   | ``dwibiascorrect``           | Simple math                       |
+|                 |  patch2self (DIPY)          |                           | (ANTs/MRtrix3)               |                                   |
++-----------------+-----------------------------+---------------------------+------------------------------+-----------------------------------+
+| Default         |  ``dwidenoise`` (MRtrix3)   | None applied              | ``dwibiascorrect``           |  Apply b=0 intensity              |
+|                 |                             |                           | (ANTs/MRtrix3)               |  harmonization                    |
++-----------------+-----------------------------+---------------------------+------------------------------+-----------------------------------+
+| Enable/Disable  |  ``--denoise-method none``  | Disabled by default       | ``--dwi-no-biascorr``        |  ``--no-b0-harmonization``        |
++-----------------+-----------------------------+---------------------------+------------------------------+-----------------------------------+
+| Change behavior |  ``--dwi-denoise-window``   | ``--unringing-method``    | No parameters                |  No parameters                    |
+| with            |  changes denoising window   | enables Gibbs unringing   |                              |                                   |
++-----------------+-----------------------------+---------------------------+------------------------------+-----------------------------------+
+| Notes           |  Set the window to ``auto`` | Technically only supposed | Uses                         | Only applied when there is        |
+|                 |  or a specific voxel number | to be run on full Fourier | N4BiasFieldCorrection on     | more than 1 DWI acquisition       |
+|                 |                             | acquisitions.             | b=0 images, applies          |                                   |
+|                 |                             |                           | correction to the whole      |                                   |
+|                 |                             |                           | series                       |                                   |
++-----------------+-----------------------------+---------------------------+------------------------------+-----------------------------------+

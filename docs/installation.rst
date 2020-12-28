@@ -4,9 +4,8 @@
 Installation
 ------------
 
-There are three ways to use qsiprep:
-in a `Docker Container`_, in a `Singularity Container`_, or in a `Manually
-Prepared Environment (Python 3.6+)`_.
+There are two easy ways to use qsiprep:
+in a `Docker Container`_, or in a `Singularity Container`_.
 Using a local container method is highly recommended.
 Once you are ready to run qsiprep, see Usage_ for details.
 
@@ -24,7 +23,7 @@ In order to run qsiprep in a Docker container, Docker must be `installed
 Once Docker is installed, the recommended way to run qsiprep is to use the
 ``qsiprep-docker`` wrapper, which requires Python and an Internet connection.
 
-.. note: If running Docker Desktop on MacOS, be sure to set the memory to 6 or more GB.
+.. note:: If running Docker Desktop on MacOS, be sure to set the memory to 6 or more GB.
     Too little memory assigned to Docker Desktop can result in a message like ``Killed.``
 
 When run, ``qsiprep-docker`` will generate a Docker command line for you,
@@ -79,4 +78,6 @@ qsiprep requires some other non-python neuroimaging software tools:
 - ANTs_ (version 2.3.9)
 - AFNI_ (version Debian-16.2.07)
 - FreeSurfer_ (6.0.1)
-- FSL_ (5.0.11)
+- FSL_ (6.0.3)
+- `DSI Studio`_
+- MRtrix_
