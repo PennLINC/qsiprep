@@ -28,6 +28,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
                         b0_threshold,
                         preprocess_rpe_series,
                         dwi_denoise_window,
+                        denoise_method,
                         unringing_method,
                         dwi_no_biascorr,
                         no_b0_harmonization,
@@ -56,6 +57,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
                                   b0_threshold=100,
                                   preprocess_rpe_series=False,
                                   dwi_denoise_window=7,
+                                  denoise_method='dwidenoise',
                                   unringing_method='mrdegibbs',
                                   dwi_no_biascorr=False,
                                   no_b0_harmonization=False,
@@ -109,9 +111,20 @@ def init_dwi_pre_hmc_wf(scan_groups,
         name='outputnode')
     dwi_series_pedir = scan_groups['dwi_series_pedir']
     dwi_series = scan_groups['dwi_series']
-    workflow.__postdesc__ = gen_denoising_boilerplate(dwi_denoise_window, unringing_method,
-                                                      dwi_no_biascorr, no_b0_harmonization,
-                                                      b0_threshold)
+
+    # Configure the denoising window
+    if denoise_method == 'dwidenoise' and dwi_denoise_window == 'auto':
+        dwi_denoise_window = 5
+        LOGGER.info("Automatically using 5, 5, 5 window for dwidenoise")
+    if dwi_denoise_window != 'auto':
+        try:
+            dwi_denoise_window = int(dwi_denoise_window)
+        except ValueError:
+            raise Exception("dwi denoise window must be an integer or 'auto'")
+    workflow.__postdesc__ = gen_denoising_boilerplate(denoise_method, dwi_denoise_window,
+                                                      unringing_method, dwi_no_biascorr,
+                                                      no_b0_harmonization, b0_threshold)
+
     # Special case: Two reverse PE DWI series are going to get combined for eddy
     if preprocess_rpe_series:
         workflow.__desc__ = "Images were grouped into two phase encoding polarity groups. "
@@ -121,37 +134,37 @@ def init_dwi_pre_hmc_wf(scan_groups,
             else (dwi_series, rpe_series)
         pe_axis = dwi_series_pedir[0]
         plus_source_file = get_source_file(plus_files, suffix='_PEplus')
-        merge_plus = init_merge_and_denoise_wf(
-            raw_dwi_files=plus_files,
-            b0_threshold=b0_threshold,
-            dwi_denoise_window=dwi_denoise_window,
-            unringing_method=unringing_method,
-            dwi_no_biascorr=dwi_no_biascorr,
-            no_b0_harmonization=no_b0_harmonization,
-            denoise_before_combining=denoise_before_combining,
-            orientation=orientation,
-            omp_nthreads=omp_nthreads,
-            source_file=plus_source_file,
-            phase_id=pe_axis + "+ phase-encoding direction",
-            calculate_qc=False,
-            name="merge_plus")
+        merge_plus = init_merge_and_denoise_wf(raw_dwi_files=plus_files,
+                                               b0_threshold=b0_threshold,
+                                               dwi_denoise_window=dwi_denoise_window,
+                                               unringing_method=unringing_method,
+                                               dwi_no_biascorr=dwi_no_biascorr,
+                                               denoise_method=denoise_method,
+                                               no_b0_harmonization=no_b0_harmonization,
+                                               denoise_before_combining=denoise_before_combining,
+                                               orientation=orientation,
+                                               omp_nthreads=omp_nthreads,
+                                               source_file=plus_source_file,
+                                               phase_id=pe_axis + "+ phase-encoding direction",
+                                               calculate_qc=False,
+                                               name="merge_plus")
 
         # Merge, denoise, split, hmc on the minus series
         minus_source_file = get_source_file(minus_files, suffix='_PEminus')
-        merge_minus = init_merge_and_denoise_wf(
-            raw_dwi_files=minus_files,
-            b0_threshold=b0_threshold,
-            dwi_denoise_window=dwi_denoise_window,
-            unringing_method=unringing_method,
-            dwi_no_biascorr=dwi_no_biascorr,
-            no_b0_harmonization=no_b0_harmonization,
-            denoise_before_combining=denoise_before_combining,
-            orientation=orientation,
-            omp_nthreads=omp_nthreads,
-            source_file=minus_source_file,
-            phase_id=pe_axis + "- phase-encoding direction",
-            calculate_qc=False,
-            name="merge_minus")
+        merge_minus = init_merge_and_denoise_wf(raw_dwi_files=minus_files,
+                                                b0_threshold=b0_threshold,
+                                                dwi_denoise_window=dwi_denoise_window,
+                                                denoise_method=denoise_method,
+                                                unringing_method=unringing_method,
+                                                dwi_no_biascorr=dwi_no_biascorr,
+                                                no_b0_harmonization=no_b0_harmonization,
+                                                denoise_before_combining=denoise_before_combining,
+                                                orientation=orientation,
+                                                omp_nthreads=omp_nthreads,
+                                                source_file=minus_source_file,
+                                                phase_id=pe_axis + "- phase-encoding direction",
+                                                calculate_qc=False,
+                                                name="merge_minus")
 
         # Combine the original images from the splits into one 4D series + bvals/bvecs
         pm_validation = pe.Node(niu.Merge(2), name='pm_validation')
@@ -249,6 +262,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
         raw_dwi_files=dwi_series,
         b0_threshold=b0_threshold,
         dwi_denoise_window=dwi_denoise_window,
+        denoise_method=denoise_method,
         unringing_method=unringing_method,
         dwi_no_biascorr=dwi_no_biascorr,
         no_b0_harmonization=no_b0_harmonization,

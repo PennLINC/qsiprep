@@ -52,6 +52,7 @@ DIFFUSION_TEMPLATE = """\t\t<h3 class="elem-title">Summary</h3>
 \t\t\t<li>Phase-encoding (PE) direction: {pedir}</li>
 \t\t\t<li>Susceptibility distortion correction: {sdc}</li>
 \t\t\t<li>Coregistration Transform: {coregistration}</li>
+\t\t\t<li>Denoising Method: {denoise_method}</li>
 \t\t\t<li>Denoising Window: {denoise_window}</li>
 \t\t\t<li>HMC Transform: {hmc_transform}</li>
 \t\t\t<li>HMC Model: {hmc_model}</li>
@@ -217,7 +218,9 @@ class DiffusionSummaryInputSpec(BaseInterfaceInputSpec):
     hmc_transform = traits.Str(mandatory=True, desc='transform used during HMC')
     hmc_model = traits.Str(desc='model used for hmc')
     b0_to_t1w_transform = traits.Enum("Rigid", "Affine", desc='Transform type for coregistration')
-    dwi_denoise_window = traits.Int(desc='window size for dwidenoise')
+    denoise_method = traits.Str(desc='method used for image denoising')
+    dwi_denoise_window = traits.Either(traits.Int(), traits.Str(),
+                                       desc='window size for dwidenoise')
     output_spaces = traits.List(desc='Target spaces')
     confounds_file = File(exists=True, desc='Confounds file')
     validation_reports = InputMultiObject(File(exists=True))
@@ -250,6 +253,7 @@ class DiffusionSummary(SummaryInterface):
             coregistration=self.inputs.b0_to_t1w_transform,
             hmc_transform=self.inputs.hmc_transform,
             hmc_model=self.inputs.hmc_model,
+            denoise_method=self.inputs.denoise_method,
             denoise_window=self.inputs.dwi_denoise_window,
             output_spaces=', '.join(self.inputs.output_spaces),
             confounds=re.sub(r'[\t ]+', ', ', conflist),

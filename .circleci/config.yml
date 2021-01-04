@@ -427,7 +427,7 @@ jobs:
             fi
 
       - run:
-          name: Run full qsiprep/recon (TOPUP/eddy) on DSDTI
+          name: Run full qsiprep/recon (TOPUP/eddy) on DSDTI + patch2self
           no_output_timeout: 2h
           command: |
             mkdir -p /tmp/DSDTI/work /tmp/DSDTI/derivatives
@@ -441,6 +441,7 @@ jobs:
                 --config $PWD/nipype.cfg -w /tmp/DSDTI/work \
                  /tmp/data/DSDTI  /tmp/DSDTI/derivatives \
                  participant \
+                --denoise-method patch2self \
                 --sloppy --mem_mb 4096 \
                 --unringing-method mrdegibbs \
                 --output-space T1w \
@@ -771,7 +772,7 @@ jobs:
                  /tmp/data/twoses  /tmp/twoses/derivatives \
                  participant \
                 --sloppy --mem_mb 4096 \
-                --dwi-denoise-window 0 \
+                --denoise-method none \
                 --output-space T1w \
                 --hmc_model none \
                 --b0-motion-corr-to first \

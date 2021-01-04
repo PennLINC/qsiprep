@@ -388,6 +388,7 @@ DWI preprocessing
                               reportlets_dir='.',
                               output_spaces=['T1w'],
                               dwi_denoise_window=5,
+                              denoise_method='dwidenoise',
                               unringing_method='mrdegibbs',
                               dwi_no_biascorr=False,
                               no_b0_harmonization=False,

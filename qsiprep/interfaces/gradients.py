@@ -15,7 +15,7 @@ from nipype.interfaces.ants.resampling import ApplyTransformsInputSpec
 from dipy.sims.voxel import all_tensor_evecs
 from dipy.reconst.dti import decompose_tensor
 from dipy.core.geometry import normalized_vector
-from sklearn.metrics.regression import r2_score
+from sklearn.metrics import r2_score
 from .itk import disassemble_transform
 
 LOGGER = logging.getLogger('nipype.interface')
