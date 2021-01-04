@@ -17,7 +17,6 @@ One way to process these data would be to call ``qsiprep`` like this::
 
   qsiprep \
     /path/to/inputs /path/to/outputs participant \
-    --dwi-denoise-window 7 \
     --output-resolution 1.2 \
     --fs-license-file /path/to/license.txt
 
@@ -144,3 +143,33 @@ Each of these steps can be applied at the same time, which by default is
 before any images are concatenated. The user can instead run these steps
 together *after* images are concatenated by specifying
 ``--denoise-after-combining``. See :ref:`merge_denoise` for more info.
+
+What is happening??
+===================
+
+While QSIPrep runs with `-v -v`, you will see lots of seemingly-nonsensical output
+in the terminal like::
+
+  [Node] Setting-up "qsiprep_wf.single_subject_PNC_wf.dwi_finalize_acq_realistic_wf.transform_dwis_t1.final_b0_ref.b0ref_reportlet" in "/scratch/qsiprep_wf/single_subject_PNC_wf/dwi_finalize_acq_realistic_wf/transform_dwis_t1/final_b0_ref/b0ref_reportlet".
+    201229-21:33:46,213 nipype.workflow INFO:
+      [Node] Running "b0ref_reportlet" ("qsiprep.niworkflows.interfaces.registration.SimpleBeforeAfterRPT")
+    201229-21:33:48,51 nipype.workflow INFO:
+      [MultiProc] Running 2 tasks, and 3 jobs ready. Free memory (GB): 3.70/4.00, Free processors: 0/2.
+                        Currently running:
+                          * qsiprep_wf.single_subject_PNC_wf.dwi_finalize_acq_realistic_wf.transform_dwis_t1.final_b0_ref.b0ref_reportlet
+                          * qsiprep_wf.single_subject_PNC_wf.anat_preproc_wf.mni_mask
+
+These print-outs describe what is currently running. In this case, we can see that
+``b0ref_reportlet`` and ``mni_mask`` are being run simultaneously. What exactly
+are these steps and how do they fit into the overall workflow?
+
+We can find the name of the node (aka "job") being run in the quotation marks.
+This task can be found in the workflow diagrams in :ref:`workflow_details`.
+In the case of ``mni_mask`` it is part of :ref:`t1preproc_steps`, while
+``b0ref_reportlet`` is part of :ref:`dwi_ref`. The relative place of these
+jobs' parent workflows in the overall workflow can be seen in the graph of
+:ref:`dwi_overview`.
+
+Also in this example you can see that QSIPrep was run with ``--nthreads 2``
+(``Free processors: 0/2``) and that both open slots are running a job.
+

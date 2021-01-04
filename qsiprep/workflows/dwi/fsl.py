@@ -2,7 +2,7 @@
 Implementing the FSL preprocessing workflow
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. autofunction:: init_fsl_dwi_preproc_wf
+.. autofunction:: init_fsl_hmc_wf
 
 """
 
