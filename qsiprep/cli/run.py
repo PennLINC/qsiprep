@@ -192,16 +192,23 @@ def get_parser():
     g_conf.add_argument(
         '--dwi_denoise_window', '--dwi-denoise-window',
         action='store',
-        type=int,
-        default=5,
-        help='window size in voxels for ``dwidenoise``. Must be odd (default: 5). '
-             'If 0, ``dwidwenoise`` will not be run')
+        default='auto',
+        help='window size in voxels for image-based denoising, integer or "auto".'
+             'If "auto", 5 will be used for dwidenoise and auto-configured for '
+             'patch2self based on the number of b>0 images.')
+    g_conf.add_argument(
+        '--denoise-method', '--denoise_method',
+        action='store',
+        choices=['dwidenoise', 'patch2self', 'none'],
+        default='dwidenoise',
+        help='Image-based denoising method. Either "dwidenoise" (MRtrix), '
+             '"patch2self" (DIPY) or none. (default: dwidenoise)')
     g_conf.add_argument(
         '--unringing-method', '--unringing_method',
         action='store',
         choices=['none', 'mrdegibbs'],
         help='Method for Gibbs-ringing removal.\n - none: no action\n - mrdegibbs: '
-             'use mrdegibbs from mrtrix3')
+             'use mrdegibbs from mrtrix3 (default: none).')
     g_conf.add_argument(
         '--dwi-no-biascorr', '--dwi_no_biascorr',
         action='store_true',
@@ -241,8 +248,7 @@ def get_parser():
         ' - average: if a whole sequence was duplicated in both PE\n'
         '            directions, average the corrected images of the same\n'
         '            q-space coordinate\n'
-        ' - none: Default. Keep distorted groups separate'
-    )
+        ' - none: Default. Keep distorted groups separate')
     g_conf.add_argument(
         '--write-local-bvecs', '--write_local_bvecs',
         action='store_true',
@@ -895,6 +901,7 @@ def build_qsiprep_workflow(opts, retval):
         anat_only=opts.anat_only,
         longitudinal=opts.longitudinal,
         b0_threshold=opts.b0_threshold,
+        denoise_method=opts.denoise_method,
         combine_all_dwis=not opts.separate_all_dwis,
         distortion_group_merge=opts.distortion_group_merge,
         dwi_denoise_window=opts.dwi_denoise_window,

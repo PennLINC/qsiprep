@@ -16,6 +16,7 @@ from nipype.interfaces import utility as niu
 from .util import _get_wf_name
 from .qc import init_modelfree_qc_wf
 from ...interfaces import ConformDwi, DerivativesDataSink
+from ...interfaces.dipy import Patch2Self
 from ...interfaces.mrtrix import DWIDenoise, DWIBiasCorrect, MRDeGibbs
 from ...interfaces.gradients import ExtractB0s
 from ...interfaces.nilearn import MaskEPI, Merge
@@ -30,6 +31,7 @@ def init_merge_and_denoise_wf(raw_dwi_files,
                               dwi_denoise_window,
                               unringing_method,
                               dwi_no_biascorr,
+                              denoise_method,
                               no_b0_harmonization,
                               denoise_before_combining,
                               orientation,
@@ -50,6 +52,7 @@ def init_merge_and_denoise_wf(raw_dwi_files,
         wf = init_merge_and_dwnoise_wf(['/path/to/dwi/sub-1_dwi.nii.gz'],
                                        source_file='/data/sub-1/dwi/sub-1_dwi.nii.gz',
                                        dwi_denoise_window=7,
+                                       denoise_method='patch2self',
                                        b0_threshold=100,
                                        unringing_method='mrdegibbs',
                                        dwi_no_biascorr=False,
@@ -64,8 +67,10 @@ def init_merge_and_denoise_wf(raw_dwi_files,
         b0_threshold : int
             Maximum b value for an image to be considered a b=0
         dwi_denoise_window : int
-            window size in voxels for ``dwidenoise``. Must be odd. If 0,
-            ``dwidwenoise`` will not be run
+            window size in voxels for image-based denoising. Must be odd. If 0, '
+            'denoising will not be run'
+        denoise_method : str
+            Either 'dwidenoise', 'patch2self' or 'none'
         unringing_method : str
             algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
         dwi_no_biascorr : bool
@@ -149,6 +154,7 @@ def init_merge_and_denoise_wf(raw_dwi_files,
             wf_name = _get_wf_name(fname).replace('preproc', 'denoise')
             denoising_wfs.append(
                 init_dwi_denoising_wf(dwi_denoise_window=dwi_denoise_window,
+                                      denoise_method=denoise_method,
                                       unringing_method=unringing_method,
                                       dwi_no_biascorr=dwi_no_biascorr,
                                       no_b0_harmonization=no_b0_harmonization,
@@ -224,6 +230,7 @@ def init_merge_and_denoise_wf(raw_dwi_files,
     hstack_confounds = pe.Node(StackConfounds(axis=1), name='hstack_confounds')
     denoising_wf = init_dwi_denoising_wf(
         dwi_denoise_window=dwi_denoise_window,
+        denoise_method=denoise_method,
         unringing_method=unringing_method,
         dwi_no_biascorr=dwi_no_biascorr,
         no_b0_harmonization=no_b0_harmonization,
@@ -251,6 +258,7 @@ def init_merge_and_denoise_wf(raw_dwi_files,
 
 
 def init_dwi_denoising_wf(dwi_denoise_window,
+                          denoise_method,
                           unringing_method,
                           dwi_no_biascorr,
                           no_b0_harmonization,
@@ -285,8 +293,8 @@ def init_dwi_denoising_wf(dwi_denoise_window,
             ('bvec_file', 'bvec_file')])])
 
     # Which steps to apply?
-    do_denoise = dwi_denoise_window > 0
-    do_unringing = unringing_method in ('mrdegibbs', 'dipy')
+    do_denoise = denoise_method in ('patch2self', 'dwidenoise')
+    do_unringing = unringing_method == 'mrdegibbs'
     do_biascorr = not dwi_no_biascorr
     harmonize_b0s = not no_b0_harmonization
     # How many steps in the denoising pipeline
@@ -295,11 +303,18 @@ def init_dwi_denoising_wf(dwi_denoise_window,
 
     # Add the steps
     step_num = 1  # Merge inputs start at 1
-    if dwi_denoise_window > 0:
-        denoiser = pe.Node(
-            DWIDenoise(extent=(dwi_denoise_window, dwi_denoise_window,
-                               dwi_denoise_window)),
-            name='denoiser')
+    if do_denoise:
+        if denoise_method == 'dwidenoise':
+            denoiser = pe.Node(
+                DWIDenoise(extent=(dwi_denoise_window, dwi_denoise_window,
+                                   dwi_denoise_window)),
+                name='denoiser')
+        else:
+            denoiser = pe.Node(
+                Patch2Self(residuals=True, patch_radius=dwi_denoise_window),
+                name='denoiser')
+            workflow.connect([
+                (inputnode, denoiser, [('bval_file', 'bval_file')])])
         ds_report_denoising = pe.Node(
             DerivativesDataSink(suffix=name + '_denoising',
                                 source_file=source_file),
@@ -374,7 +389,8 @@ def _as_list(item):
     return [item]
 
 
-def gen_denoising_boilerplate(dwi_denoise_window,
+def gen_denoising_boilerplate(denoise_method,
+                              dwi_denoise_window,
                               unringing_method,
                               dwi_no_biascorr,
                               no_b0_harmonization,
@@ -382,17 +398,25 @@ def gen_denoising_boilerplate(dwi_denoise_window,
     """Generates methods boilerplate for the denoising workflow."""
     desc = ["Any images with a b-value less than %d s/mm^2 were treated as a "
             "b=0 image." % b0_threshold]
-    do_denoise = dwi_denoise_window > 0
-    do_unringing = unringing_method in ('mrdegibbs', 'dipy')
+    do_denoise = denoise_method in ('dwidenoise', 'patch2self')
+    do_unringing = unringing_method == 'mrdegibbs'
     do_biascorr = not dwi_no_biascorr
     harmonize_b0s = not no_b0_harmonization
     last_step = ""
     if do_denoise:
-        desc.append("MP-PCA denoising as implemented in MRtrix3's `dwidenoise`"
-                    "[@dwidenoise1] was applied with "
-                    "a %d-voxel window." % dwi_denoise_window)
-        last_step = "After MP-PCA, "
-
+        if denoise_method == 'dwidenoise':
+            desc.append("MP-PCA denoising as implemented in MRtrix3's `dwidenoise`"
+                        "[@dwidenoise1] was applied with "
+                        "a %d-voxel window." % dwi_denoise_window)
+            last_step = "After MP-PCA, "
+        if denoise_method == 'patch2self':
+            desc.append("Denoising was performed using `patch2self`"
+                        "[@patch2self] was applied")
+            if dwi_denoise_window == "auto":
+                desc.append("with settings based on developer recommendations.")
+            else:
+                desc.append("with a %d-voxel window." % dwi_denoise_window)
+            last_step = "After `patch2self`, "
     if do_unringing:
         unringing_txt = {
             "mrdegibbs": "MRtrix3's `mrdegibbs` [@mrdegibbs].",

@@ -61,7 +61,7 @@ REQUIRES = [
     'scikit-image',
     'scipy',
     'seaborn',
-    'svgutils',
+    'svgutils<=0.3.0',
 ]
 
 SETUP_REQUIRES = []

@@ -2,6 +2,6 @@ grabbit==0.2.3
 pybids==0.6.5
 versioneer
 dipy==1.0.0
-svgutils
+svgutils==0.3.0
 nipype==1.2.0
 sentry_sdk==0.13.1
