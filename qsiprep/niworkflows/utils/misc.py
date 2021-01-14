@@ -19,7 +19,6 @@ def fix_multi_T1w_source_name(in_files, fake_t1w=False):
     ...     '/path/to/sub-045_ses-test_T1w.nii.gz',
     ...     '/path/to/sub-045_ses-retest_T1w.nii.gz'])
     '/path/to/sub-045_T1w.nii.gz'
-    >>> fix_multi_T1w_souce_name([])
 
     """
     import os
