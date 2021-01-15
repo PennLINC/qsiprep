@@ -106,7 +106,7 @@ Enabling and disabling preprocessing steps
 ==========================================
 
 The image processing operations performed by QSIPrep are configured by default
-to apply to the most generic sequences possible. Depending on your sequence
+to apply to most generic sequences. Depending on your sequence
 and sampling scheme, you can elect to enable, disable or alter the behavior
 of these steps to better match your data.
 

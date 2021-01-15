@@ -3,14 +3,13 @@
 Usage
 -----
 
-The ``qsiprep`` preprocessing workflow takes as principal input the
-path of the dataset that is to be processed.
-The input dataset is required to be in valid :abbr:`BIDS (Brain Imaging Data
-Structure)` format, and it must include at least one T1w structural image and
-(unless disabled with a flag) a diffusion MRI series. The T1w image and the DWI
-may be in separate BIDS <session> folders for a given subject.
-We highly recommend that you validate your dataset with the free, online
-`BIDS Validator <http://bids-standard.github.io/bids-validator/>`_.
+The ``qsiprep`` preprocessing workflow takes as principal input the path of
+the dataset that is to be processed. The input dataset is required to be in
+valid :abbr:`BIDS (Brain Imaging Data Structure)` formate at least one
+diffusion MRI series. The T1w image and the DWI may be in separate BIDS
+<session> folders for a given subject. We highly recommend that you validate
+your dataset with the free, online `BIDS Validator
+<http://bids-standard.github.io/bids-validator/>`_.
 
 The exact command to run ``qsiprep`` depends on the Installation_ method.
 The common parts of the command are similar to the `BIDS-Apps

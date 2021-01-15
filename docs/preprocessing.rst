@@ -58,7 +58,7 @@ consider creating fake sessions in your BIDS directory.
 Denoising and Merging Images
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The user can decide *whether* to do certain preprocessing steps and, if so,
+The user can decide whether to do certain preprocessing steps and, if so,
 whether they are performed *before* or *after* the DWI series are
 concatenated. Specifically, image denoising (using ``dwidenoise`` or
 ``patch2self``) can be disabled with ``--denoise-method none``. Gibbs
@@ -71,24 +71,23 @@ turned off using ``--dwi-no-b0-harmonization``.
 
 Together, denoising (MP-PCA or patch2self), Gibbs unringing B1 bias field
 correction and b=0 intensity normalization are referred to as *denoising* in
-QSIPrep. Each of these image processing operations brings with with is own
-set of assumptions about its inputs and changes the distribution of noise in
-its outputs. Although the inclusion of each operation can be decided by the
-user, the order in which they are applied relative to one another is fixed.
-MP-PCA or patch2self are applied directly to the BIDS inputs, which should be
-uninterpolated and as "raw" as possible. Although Gibbs unringing should be
-performed on "raw" data, it is recommended in the MRtrix3 documentation to
-apply MP-PCA before Gibbs unringing. B1 bias field correction and b=0
-intensitity harmonization don't have as specific requirements about their
-inputs so are run last.
+QSIPrep. Each of these image processing operations has assumptions about its
+inputs and changes the distribution of noise in its outputs. Although the
+inclusion of each operation can be decided by the user, the order in which
+they are applied relative to one another is fixed. MP-PCA or patch2self are
+applied directly to the BIDS inputs, which should be uninterpolated and as
+"raw" as possible. Although Gibbs unringing should be performed on "raw"
+data, it is recommended in the MRtrix3 documentation to apply MP-PCA before
+Gibbs unringing. B1 bias field correction and b=0 intensity harmonization
+do not have as specific requirements about their inputs so are run last.
 
 The last, and potentially very important decision, is whether the denoising
 operations are applied to each input DWI file individually or whether the
-denoising operations are applied to the concatenated input DWI files. This is
-an unexplored trade-off space. The more volumes available, the more data
-MP-PCA/patch2self have to work with. However, if there if the head is in a
-vastly different location in different scans, denoising can be impacted in
-unpredictable ways.
+denoising operations are applied to the concatenated input DWI files. At
+present, there is little data to guide this choice. The more volumes
+available, the more data MP-PCA/patch2self have to work with. However, if
+there if the head is in a vastly different location in different scans,
+denoising can be impacted in unpredictable ways.
 
 Consider MP-PCA. If a voxel contains CSF in one DWI series and the subject
 repositions their head between scans so that the voxel contains corpus
@@ -99,11 +98,11 @@ B1 bias field. Similar problems can also occur *within* a DWI series due to
 subject head motion, but these methods have been shown to work well even in
 the presence of within-scan head movement. If the head position changes
 across scans is of a similar magnitude to that of within-scan head motion, it
-is likely fine to use the ``--combine-before-denoising`` option. To guage how
+is likely fine to use the ``--combine-before-denoising`` option. To gauge how
 much between-scan motion occurred, users can inspect the :ref:`qc_data` to see
 whether Framewise Displacement is large where a new series begins.
 
-By default the scans in the same warped space are individually denoised before
+By default, the scans in the same warped space are individually denoised before
 they are concatenated. When warped groups are concatenated an additional b=0
 image intensity normalization is performed.
 
@@ -687,17 +686,17 @@ registration has plenty of accurate anatomical features to work with.
 
 For diffusion-weighted MRI, the b=0 images are used as input to TOPUP. While
 these contain a lot of anatomical detail, they can also contain troublesome
-artefacts such as spin history, head motion and slice droupout.
+artefacts such as spin history, head motion and slice dropout.
 
 In QSIPrep versions up until 0.13, up to 3 b=0 images were selected per
 warped group as input to ``TOPUP``. The images were selected to be
-evenly-spaced within their acquisitions.
+evenly spaced within their acquisitions.
 
 In versions 0.13 and later, QSIPrep finds the "most representative" b=0
-images per warped group. A nearly-identical approach is used in the
+images per warped group. A nearly identical approach is used in the
 developmental HCP pipelines, where a pairwise spatial correlation score is
 calculated between all b=0 images of the same warped group and the images
-with the *highest average correlation* to the other images are used as input
+with the highest average correlation to the other images are used as input
 to ``TOPUP``. To see which images were selected, examine the ``selected_for_topup``
 column in the confounds tsv file.
 
