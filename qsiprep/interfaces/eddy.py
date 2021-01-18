@@ -274,7 +274,7 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type):
 
     # Specify flm/slm model types
     slm = "was" if ext_eddy.inputs.slm == "none" else \
-        "and a %s second-level were" % ext_eddy.inputs.slm
+        "and a %s second level model were" % ext_eddy.inputs.slm
     desc.append("A %s first level model %s used to characterize Eddy current-"
                 "related spatial distortion." % (ext_eddy.inputs.flm, slm))
 
@@ -369,7 +369,7 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type):
             desc.append("Here, multiple DWI series were acquired with opposite phase encoding "
                         "directions, so b=0 images were extracted from each.")
         desc.append("From these pairs the susceptibility-induced off-resonance field was "
-                    "estimated using a method similar to that described in [@topup]."
+                    "estimated using a method similar to that described in [@topup]. "
                     "The fieldmaps were ultimately incorporated into the "
                     "Eddy current and head motion correction interpolation.")
 
@@ -389,7 +389,7 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type):
 
     # Format the interpolation
     lsr_ref = ' [@fsllsr]' if ext_eddy.inputs.method == 'lsr' else ''
-    desc.append("Final interpolation was performed using the '%s' method%s.\n\n" % (
+    desc.append("Final interpolation was performed using the `%s` method%s.\n\n" % (
         ext_eddy.inputs.method, lsr_ref))
 
     return " ".join(desc)

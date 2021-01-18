@@ -5,16 +5,22 @@
 Preprocessing
 =============
 
+Building a pipeline
+--------------------
+
 QSIPrep builds a pipeline based on your BIDS inputs. In general the pipeline will incorporate
 all the data it knows how to handle (i.e. fieldmaps, dMRI and anatomical data) automatically.
 There may be cases where you want to change the default behavior, particularly in regard to
 
-  1. How to combine dwi scans within a session (:ref:`merging`)
-  2. How to correct for susceptibility distortion.
-  3. How to perform motion correction
+  1. :ref:`merging`
+  2. :ref:`merge_denoise`
+  3. Head motion correction, either
 
-Building a pipeline
---------------------
+    a. :ref:`fsl_wf`
+    b. :ref:`dwi_hmc`
+
+  4. :ref:`dwi_only`
+
 
 .. _merging:
 
@@ -47,32 +53,62 @@ with eddy/motion correction and will merge scans with different PE directions.
 If you have some scans you want to combine and others you want to preprocess separately,
 consider creating fake sessions in your BIDS directory.
 
+.. _merge_denoise:
 
-Susceptibility correction methods
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Denoising and Merging Images
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The are three kinds of SDC available in qsiprep:
+The user can decide whether to do certain preprocessing steps and, if so,
+whether they are performed *before* or *after* the DWI series are
+concatenated. Specifically, image denoising (using ``dwidenoise`` or
+``patch2self``) can be disabled with ``--denoise-method none``. Gibbs
+unringing (using ``mrdegibbs``) is disabled by default but can be enabled
+with ``--unringing-method mrdegibbs``. B1 bias field correction is applied by
+default (using ``dwibiascorrect``), and can be disabled with the
+``--dwi-no-biascorr`` option. The intensity of b=0 images is harmonized
+across scans (i.e. scaled to an average value) by default, but this can be
+turned off using ``--dwi-no-b0-harmonization``.
 
-  1. :ref:`sdc_pepolar` (also called **blip-up/blip-down**):
-     This is the implementation from sdcflows, using 3dQwarp to
-     correct a DWI series using a fieldmap in the fmaps directory [Jezzard1995]_.
-     The reverse phase encoding direction scan can come from the fieldmaps directory
-     or the dwi directory.
+Together, denoising (MP-PCA or patch2self), Gibbs unringing B1 bias field
+correction and b=0 intensity normalization are referred to as *denoising* in
+QSIPrep. Each of these image processing operations has assumptions about its
+inputs and changes the distribution of noise in its outputs. Although the
+inclusion of each operation can be decided by the user, the order in which
+they are applied relative to one another is fixed. MP-PCA or patch2self are
+applied directly to the BIDS inputs, which should be uninterpolated and as
+"raw" as possible. Although Gibbs unringing should be performed on "raw"
+data, it is recommended in the MRtrix3 documentation to apply MP-PCA before
+Gibbs unringing. B1 bias field correction and b=0 intensity harmonization
+do not have as specific requirements about their inputs so are run last.
 
-     1a. If using ``eddy``, then ``TOPUP`` is used for this correction.
+The last, and potentially very important decision, is whether the denoising
+operations are applied to each input DWI file individually or whether the
+denoising operations are applied to the concatenated input DWI files. At
+present, there is little data to guide this choice. The more volumes
+available, the more data MP-PCA/patch2self have to work with. However, if
+there if the head is in a vastly different location in different scans,
+denoising can be impacted in unpredictable ways.
 
-  2. :ref:`sdc_phasediff`: Use a B0map sequence that includes at lease one magnitude
-     image and two phase images or a phasediff image.
+Consider MP-PCA. If a voxel contains CSF in one DWI series and the subject
+repositions their head between scans so that the voxel contains corpus
+callosum in the next DWI series, the non-noise signal will be very different
+in the two series. Similarly, if the head is repositioned different areas
+will be closer to the head coil and therefore be inconsistently affected by
+B1 bias field. Similar problems can also occur *within* a DWI series due to
+subject head motion, but these methods have been shown to work well even in
+the presence of within-scan head movement. If the head position changes
+across scans is of a similar magnitude to that of within-scan head motion, it
+is likely fine to use the ``--combine-before-denoising`` option. To gauge how
+much between-scan motion occurred, users can inspect the :ref:`qc_data` to see
+whether Framewise Displacement is large where a new series begins.
 
-  3. :ref:`sdc_fieldmapless`: The SyN-based susceptibility distortion correction
-     implemented in FMRIPREP. To use this method, include argument ``--use-syn-sdc`` when
-     calling qsiprep. Briefly, this method estimates a SDC warp using ANTS SyN based
-     on an average fieldmap in MNI space. For details on this method, see
-     `fmriprep's documentation <https://fmriprep.readthedocs.io/en/latest/api/index.html#sdc-fieldmapless>`_
+By default, the scans in the same warped space are individually denoised before
+they are concatenated. When warped groups are concatenated an additional b=0
+image intensity normalization is performed.
 
 
-``qsiprep`` determines if a fieldmap should be used based on the ``"IntendedFor"``
-fields in the JSON sidecars in the ``fmap/`` directory.
+
+
 
 Preprocessing HCP-style
 ^^^^^^^^^^^^^^^^^^^^^^^
@@ -109,6 +145,7 @@ qsiprep generates three broad classes of outcomes:
   3. **Additional data for subsequent analysis**, for instance the transformations
      between different spaces or the estimated head motion and model fit quality calculated
      during model-based head motion correction.
+
   4. **Quantitative QA**:
      A single-line csv file per subject summarizing subject motion, coregistration quality and
      image quality.
@@ -117,17 +154,18 @@ qsiprep generates three broad classes of outcomes:
 Visual Reports
 ^^^^^^^^^^^^^^^
 
-qsiprep outputs summary reports, written to ``<output dir>/qsiprep/sub-<subject_label>.html``.
-These reports provide a quick way to make visual inspection of the results easy.  One useful
-graphic is the animation of the q-space sampling scheme before and after the pipeline. Here is
-a sampling scheme from a DSI scan:
+qsiprep outputs summary reports, written to ``<output
+dir>/qsiprep/sub-<subject_label>.html``. These reports provide a quick way to
+make visual inspection of the results easy. One useful graphic is the
+animation of the q-space sampling scheme before and after the pipeline. Here
+is a sampling scheme from a DSI scan:
 
 .. figure:: _static/sampling_scheme.gif
     :scale: 75%
 
-    A Q5 DSI sampling scheme before (left) and after (right) preprocessing. This is useful to
-    confirm that the gradients have indeed been rotated and that head motion correction has not
-    disrupted the scheme extensively.
+    A Q5 DSI sampling scheme before (left) and after (right) preprocessing.
+    This is useful to confirm that the gradients have indeed been rotated and
+    that head motion correction has not disrupted the scheme extensively.
 
 
 Preprocessed data (qsiprep *derivatives*)
@@ -188,8 +226,8 @@ See implementation on :mod:`~qsiprep.workflows.dwi.confounds.init_dwi_confs_wf`.
 
 For each DWI processed by qsiprep, a
 ``<output_folder>/qsiprep/sub-<sub_id>/func/sub-<sub_id>_task-<task_id>_run-<run_id>_confounds.tsv``
-file will be generated.
-These are :abbr:`TSV (tab-separated values)` tables, which look like the example below::
+file will be generated. These are :abbr:`TSV (tab-separated values)` tables,
+which look like the example below::
 
   framewise_displacement	trans_x	trans_y	trans_z	rot_x	rot_y	rot_z	hmc_r2	hmc_xcorr	original_file	grad_x	grad_y	grad_z	bval
 
@@ -200,31 +238,36 @@ These are :abbr:`TSV (tab-separated values)` tables, which look like the example
   37.506	-0.184	0.117	0.723	0.305	0.138	0.964	0.895	0.896	sub-abcd_dwi.nii.gz	-0.187	-0.957	-0.223	2000.000
   16.388	-0.447	0.020	0.847	0.217	0.129	0.743	0.792	0.800	sub-abcd_dwi.nii.gz	-0.111	-0.119	0.987	3000.000
 
-The motion parameters come from the model-based head motion estimation workflow. The ``hmc_r2`` and
-``hmc_xcorr`` are whole-brain r^2 values and cross correlation scores (using the ANTs definition)
-between the model-generated target image and the motion-corrected empirical image. The final
-columns are not really confounds, but book-keeping information that reminds us which 4d DWI series
-the image originally came from and what gradient direction (``grad_x``, ``grad_y``, ``grad_z``)
-and gradient strength ``bval`` the image came from. This can be useful for tracking down
-mostly-corrupted scans and can indicate if the head motion model isn't working on specific
-gradient strengths or directions.
+The motion parameters come from the model-based head motion estimation
+workflow. The ``hmc_r2`` and ``hmc_xcorr`` are whole-brain r^2 values and
+cross correlation scores (using the ANTs definition) between the
+model-generated target image and the motion-corrected empirical image. The
+final columns are not really confounds, but book-keeping information that
+reminds us which 4d DWI series the image originally came from and what
+gradient direction (``grad_x``, ``grad_y``, ``grad_z``) and gradient strength
+``bval`` the image came from. This can be useful for tracking down
+mostly-corrupted scans and can indicate if the head motion model isn't
+working on specific gradient strengths or directions.
 
 .. _qc_data:
 
 Quality Control data
 ^^^^^^^^^^^^^^^^^^^^^
 
-A single-line csv file (``desc-ImageQC_dwi.csv``) is created for each output image. This file is
-particularly useful for comparing the relative quality across subjects before deciding who to
-include in a group analysis. The columns in this file come from DSI Studio's QC calculation and is
-described in [Yeh2019]_. Columns prefixed by ``raw_`` reflect QC measurements from the data before
-preprocessing. Columns prefixed by ``t1_`` or ``mni_`` contain QC metrics calculated on the
-preprocessed data. Motion parameter summaries are also provided, such as the mean and max of
-framewise displacement (``mean_fd``, ``max_fd``). The max and mean absolute values for translation
-and rotation are ``max_translation`` and ``max_rotation`` and the maxima of their derivatives are
-in ``max_rel_translation`` and ``max_rel_rotation``. Finally, the difference in spatial overlap
-between the anatomical mask and the anatomical brain mask and the DWI brain mask is calculated
-using the Dice distance in ``t1_dice_distance`` and ``mni_dice_distance``.
+A single-line csv file (``desc-ImageQC_dwi.csv``) is created for each output
+image. This file is particularly useful for comparing the relative quality
+across subjects before deciding who to include in a group analysis. The
+columns in this file come from DSI Studio's QC calculation and is described
+in [Yeh2019]_. Columns prefixed by ``raw_`` reflect QC measurements from the
+data before preprocessing. Columns prefixed by ``t1_`` or ``mni_`` contain QC
+metrics calculated on the preprocessed data. Motion parameter summaries are
+also provided, such as the mean and max of framewise displacement
+(``mean_fd``, ``max_fd``). The max and mean absolute values for translation
+and rotation are ``max_translation`` and ``max_rotation`` and the maxima of
+their derivatives are in ``max_rel_translation`` and ``max_rel_rotation``.
+Finally, the difference in spatial overlap between the anatomical mask and
+the anatomical brain mask and the DWI brain mask is calculated using the Dice
+distance in ``t1_dice_distance`` and ``mni_dice_distance``.
 
 Confounds and "carpet"-plot on the visual reports
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -251,17 +294,20 @@ Examples of these plots follow:
 .. figure:: _static/sub-pnc_carpetplot.png
     :scale: 40%
 
-    For eddy slices with more outliers appear more yellow, while fewer outliers is more blue.
+    For eddy slices with more outliers appear more yellow, while fewer
+    outliers is more blue.
+
+.. _workflow_details:
 
 Preprocessing pipeline details
----------------------------------
+------------------------------
 
 ``qsiprep`` adapts its pipeline depending on what data and metadata are
 available and are used as the input.
 
 
 T1w/T2w preprocessing
-^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^
 
 :mod:`qsiprep.workflows.anatomical.init_anat_preproc_wf`
 
@@ -288,9 +334,9 @@ T1w/T2w preprocessing
 
 
 The anatomical sub-workflow begins by constructing an average image by
-:ref:`conforming <conformation>` all found T1w images to LPS orientation and
+:ref:`conforming <conformation>` all found T1w images to LPS+ orientation and
 a common voxel size, and, in the case of multiple images, averages them into a
-single reference template (see `Longitudinal processing`_).
+single reference template (see `Longitudinal T1w processing`_).
 
 .. _t1preproc_steps:
 
@@ -337,8 +383,8 @@ to be run through ``qsiprep``.
     Animation showing T1w to MNI normalization
 
 
-Longitudinal processing
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+Longitudinal T1w processing
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 In the case of multiple T1w images (across sessions and/or runs), T1w images are
 merged into a single template image using FreeSurfer's ``mri_robust_template``.
@@ -360,8 +406,18 @@ flag, which forces the estimation of an unbiased template.
     ``T1w`` space, and not to the input images.
 
 
+Processing Infant Data
+^^^^^^^^^^^^^^^^^^^^^^
+
+When processing infant DWI data, users may add ``--infant`` to their
+QSIPrep call. This will swap the default MNI152NLin2009cAsym template
+with the MNI infant template. It is highly advisable to also include
+``--dwi-only`` to avoid problems with T1w skull-stripping.
+
+.. _dwi_overview:
+
 DWI preprocessing
-^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^
 
 :mod:`qsiprep.workflows.dwi.base.init_dwi_preproc_wf`
 
@@ -408,36 +464,127 @@ DWI preprocessing
 Preprocessing of :abbr:`DWI (Diffusion Weighted Image)` files is
 split into multiple sub-workflows described below.
 
+.. _fsl_wf:
+
+Head-motion / Eddy Current/ Distortion correction (FSL)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+:mod:`qsiprep.workflows.dwi.fsl.init_fsl_hmc_wf`
+
+FSL provides the most widely-used tools for head motion correction, eddy
+current correction and susceptibility distortion correction. These tools
+are designed to work directly with one another and share a file format that
+is unique to their workflow.
+
+To ensure that the FSL workflow works as intended, all inputs are forced into
+to the FSL standard orientation. The head motion, eddy current and suscebtibility
+distortion corrections are applied at the end of ``eddy``, which means that
+there will be *two* total interpolations in the FSL-based qsiprep workflow, as
+the final interpolation into T1w/AC-PC space is done externally in ANTs.
+
+The FSL workflow can take three different forms.
+
+ 1. No distortion correction
+ 2. PEPOLAR distortion correction (using topup)
+ 3. Fieldmap-based distortion correction
+
+No distortion correction
+++++++++++++++++++++++++
+
+If there are no fieldmap images or the user has specified ``--ignore fieldmaps``,
+no distortion correction will occur. In this case, only head motion correction
+and eddy current correction will be performed. The workflow looks like this:
+
+.. workflow::
+    :graph2use: colored
+    :simple_form: yes
+
+    from qsiprep.workflows.dwi.fsl import init_fsl_hmc_wf
+    wf = init_fsl_hmc_wf({'dwi_series':['dwi1.nii', 'dwi2.nii'],
+                                'fieldmap_info': {'suffix': None},
+                                'dwi_series_pedir': 'j'},
+                         b0_threshold=100,
+                         impute_slice_threshold=0.,
+                         fmap_demean=False,
+                         fmap_bspline=False,
+                         eddy_config=None,
+                         source_file='/path/to/dwi/sub-X_dwi.nii.gz',
+                         omp_nthreads=1)
+
+
+PEPOLAR (TOPUP) Distortion Correction
++++++++++++++++++++++++++++++++++++++
+
+When images with different phase encoding directions are available, either
+dedicated fieldmaps (in the ``fmap/`` directory) or DWI series
+(in the ``dwi/`` directory), example b=0 images can be
+
+.. workflow::
+    :graph2use: colored
+    :simple_form: yes
+
+    from qsiprep.workflows.dwi.fsl import init_fsl_hmc_wf
+    wf = init_fsl_hmc_wf({'dwi_series': [
+                          '.../opposite/sub-1/dwi/sub-1_dir-AP_dwi.nii.gz'],
+                         'dwi_series_pedir': 'j',
+                         'fieldmap_info': {'suffix': 'rpe_series',
+                          'rpe_series': ['.../opposite/sub-1/dwi/sub-1_dir-PA_dwi.nii.gz']},
+                         'concatenated_bids_name': 'sub-1'},
+                         b0_threshold=100,
+                         impute_slice_threshold=0.,
+                         fmap_demean=False,
+                         fmap_bspline=False,
+                         eddy_config=None,
+                         source_file='/path/to/dwi/sub-X_dwi.nii.gz',
+                         omp_nthreads=1)
+
+
+Fieldmap-based Distortion Correction
+++++++++++++++++++++++++++++++++++++
+
+If a GRE fieldmap or SyN-based fieldmapless distortion correction
+are detected, these will be performed on the outputs of ``eddy``.
+For details see :ref:`dwi_sdc`.
+
+.. workflow::
+    :graph2use: orig
+    :simple_form: yes
+
+    from qsiprep.workflows.dwi.fsl import init_fsl_hmc_wf
+    wf = init_fsl_hmc_wf({'dwi_series': ['.../phasediff/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
+                                        '.../phasediff/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
+                          'fieldmap_info': {'phasediff': '.../phasediff/sub-1/fmap/sub-1_phasediff.nii.gz',
+                                            'magnitude1': '.../magnitude1/sub-1/fmap/sub-1_magnitude1.nii.gz',
+                                            'suffix': 'phasediff'},
+                          'dwi_series_pedir': 'j',
+                          'concatenated_bids_name': 'sub-1_dir-AP'},
+                         b0_threshold=100,
+                         impute_slice_threshold=0.,
+                         fmap_demean=False,
+                         fmap_bspline=False,
+                         eddy_config=None,
+                         source_file='/path/to/dwi/sub-X_dwi.nii.gz',
+                         omp_nthreads=1)
+
+.. _configure_eddy:
+
+Configuring ``eddy``
++++++++++++++++++++++
+
+``eddy`` has many configuration options. Instead of making these commandline
+options, you can specify them in a JSON file and pass that to ``qsiprep``
+using the ``--eddy-config`` option. An example (default) eddy config json can
+be viewed or downloaded `here
+<https://github.com/PennBBL/qsiprep/blob/master/qsiprep/data/eddy_params.json>`_
+
+
+
 .. _dwi_hmc:
 
 Head-motion estimation (SHORELine)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 :mod:`qsiprep.workflows.dwi.hmc.init_dwi_hmc_wf`
-
-.. workflow::
-    :graph2use: colored
-    :simple_form: yes
-
-    from qsiprep.workflows.dwi.hmc_sdc import init_qsiprep_hmcsdc_wf
-    wf = init_qsiprep_hmcsdc_wf({'dwi_series':['dwi1.nii', 'dwi2.nii'],
-                                'fieldmap_info': {'suffix': None},
-                                'dwi_series_pedir': 'j'},
-                                source_file='/data/sub-1/dwi/sub-1_dwi.nii.gz',
-                                b0_threshold=100,
-                                hmc_transform='Affine',
-                                hmc_model='3dSHORE',
-                                hmc_align_to='iterative',
-                                template='MNI152NLin2009cAsym',
-                                shoreline_iters=1,
-                                impute_slice_threshold=0,
-                                omp_nthreads=1,
-                                fmap_bspline=False,
-                                fmap_demean=False,
-                                use_syn=True,
-                                force_syn=False,
-                                name='qsiprep_hmcsdc_wf',
-                                dwi_metadata={})
 
 
 A long-standing issue for q-space imaging techniques, particularly DSI, has
@@ -473,37 +620,105 @@ estimate framewise displacement.  Additionally, measures of model fits
 are saved for each slice for display in a carpet plot-like thing.
 
 
-Head-motion estimation (TOPUP/eddy)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-:mod:`qsiprep.workflows.dwi.hmc.init_dwi_hmc_wf`
-
 .. workflow::
     :graph2use: colored
     :simple_form: yes
 
-    from qsiprep.workflows.dwi.hmc import init_dwi_hmc_wf
-    wf = init_dwi_hmc_wf(hmc_transform="Affine",
-                         hmc_model="eddy",
-                         hmc_align_to="iterative",
-                         mem_gb=3,
-                         source_file='/path/to/dwi/sub-X_dwi.nii.gz',
-                         omp_nthreads=1)
+    from qsiprep.workflows.dwi.hmc_sdc import init_qsiprep_hmcsdc_wf
+    wf = init_qsiprep_hmcsdc_wf({'dwi_series':['dwi1.nii', 'dwi2.nii'],
+                                'fieldmap_info': {'suffix': None},
+                                'dwi_series_pedir': 'j'},
+                                source_file='/data/sub-1/dwi/sub-1_dwi.nii.gz',
+                                b0_threshold=100,
+                                hmc_transform='Affine',
+                                hmc_model='3dSHORE',
+                                hmc_align_to='iterative',
+                                template='MNI152NLin2009cAsym',
+                                shoreline_iters=1,
+                                impute_slice_threshold=0,
+                                omp_nthreads=1,
+                                fmap_bspline=False,
+                                fmap_demean=False,
+                                use_syn=True,
+                                force_syn=False,
+                                name='qsiprep_hmcsdc_wf',
+                                dwi_metadata={})
 
-DTI and multi-shell HARDI can be passed to ``TOPUP`` and ``eddy`` for
-head motion correction, susceptibility distortion correction and eddy current
-correction. ``qsiprep`` will use the BIDS-specified fieldmaps to configure and
-run ``TOPUP`` before passing the fieldmap to ``eddy`` if fieldmaps are available.
 
-.. _configure_eddy:
+.. _dwi_sdc:
 
-Configuring ``eddy``
-+++++++++++++++++++++
+Susceptibility correction methods
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-``eddy`` has many configuration options. Instead of making these commandline options,
-you can specify them in a JSON file and pass that to ``qsiprep`` using the ``--eddy_config``
-option. An example (default) eddy config json can be viewed or downloaded
-`here <https://github.com/PennBBL/qsiprep/blob/master/qsiprep/data/eddy_params.json>`_
+:mod:`qsiprep.workflows.fieldmap.base.init_sdc_wf`
+
+.. figure:: _static/unwarping.svg
+
+The are three kinds of SDC available in qsiprep:
+
+  1. :ref:`sdc_pepolar` (also called **blip-up/blip-down**):
+     This is the implementation from sdcflows, using 3dQwarp to
+     correct a DWI series using a fieldmap in the fmaps directory [Jezzard1995]_.
+     The reverse phase encoding direction scan can come from the fieldmaps directory
+     or the dwi directory. If using :ref:`fsl_wf`, then ``TOPUP`` is used for this correction.
+     Also relevant is :ref:`best_b0`.
+
+  2. :ref:`sdc_phasediff`: Use a B0map sequence that includes at lease one magnitude
+     image and two phase images or a phasediff image.
+
+  3. :ref:`sdc_fieldmapless`: The SyN-based susceptibility distortion correction
+     implemented in FMRIPREP. To use this method, include argument ``--use-syn-sdc`` when
+     calling qsiprep. Briefly, this method estimates a SDC warp using ANTS SyN based
+     on an average fieldmap in MNI space. For details on this method.
+
+``qsiprep`` determines if a fieldmap should be used based on the ``"IntendedFor"``
+fields in the JSON sidecars in the ``fmap/`` directory.
+
+.. _best_b0:
+
+Selecting representative images for PEPOLAR
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``TOPUP`` estimates EPI distortion based on the shapes of images with
+different phase encoding directions and total readout times (i.e. warped
+groups). It is therefore ideal to provide less-noisy images as inputs, so the
+registration has plenty of accurate anatomical features to work with.
+
+For diffusion-weighted MRI, the b=0 images are used as input to TOPUP. While
+these contain a lot of anatomical detail, they can also contain troublesome
+artefacts such as spin history, head motion and slice dropout.
+
+In QSIPrep versions up until 0.13, up to 3 b=0 images were selected per
+warped group as input to ``TOPUP``. The images were selected to be
+evenly spaced within their acquisitions.
+
+In versions 0.13 and later, QSIPrep finds the "most representative" b=0
+images per warped group. A nearly identical approach is used in the
+developmental HCP pipelines, where a pairwise spatial correlation score is
+calculated between all b=0 images of the same warped group and the images
+with the highest average correlation to the other images are used as input
+to ``TOPUP``. To see which images were selected, examine the ``selected_for_topup``
+column in the confounds tsv file.
+
+
+.. _dwi_only:
+
+Using only DWI data (bypassing the T1w workflows)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+It is possible to use QSIPrep to process *only* diffusion-weighted images. In
+the case of infant data, where robust skull-stripping methods are not
+currently available, or where anatomical preprocessing has already been
+performed in another pipeline, the user can specify ``--dwi-only``.
+
+Instead of registering the b=0 template image to the skull-stripped T1w
+image, the b=0 template is registered directly to a template and only the
+rigid part of the transformation is kept. This results in an AC-PC aligned
+b=0 template that maintains the shape and size of the original image.
+
+In this case the ``b0_anat_coreg`` workflow instead registers the b=0 reference
+to an AC-PC-oriented template and the rigid components of the coregistration
+transform are extracted.
 
 .. _dwi_ref:
 
@@ -517,30 +732,16 @@ DWI reference image estimation
     :simple_form: yes
 
     from qsiprep.workflows.dwi.util import init_dwi_reference_wf
-    wf = init_dwi_reference_wf(omp_nthreads=1)
+    wf = init_dwi_reference_wf(omp_nthreads=1,
+                               gen_report=True,
+                               source_file="sub-1_dwi.nii.gz",
+                               register_t1=True)
 
 This workflow estimates a reference image for a DWI series. This
 procedure is different from the DWI reference image workflow in the
 sense that true brain masking isn't usually done until later in the
-pipeline for DWIs. It performs a generous automasking and uses
-Dipy's histogram equalization on the b0 template generated during
-motion correction.
+pipeline for DWIs
 
-Susceptibility Distortion Correction (SDC)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-:mod:`qsiprep.workflows.fieldmap.base.init_sdc_wf`
-
-.. figure:: _static/unwarping.svg
-    :scale: 100%
-
-    Applying susceptibility-derived distortion correction, based on
-    fieldmap estimation.
-
-The PEPOLAR and SyN-SDC workflows from FMRIPREP are copied here.
-They operate on the output of reference estimation, after head
-motion correction. For a complete list of possibilities here, see
-:ref:`merging`.
 
 .. _resampling:
 
@@ -579,7 +780,7 @@ use these yet, but it's an interesting idea.
 .. _b0_reg:
 
 b0 to T1w registration
-^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^
 
 :mod:`qsiprep.workflows.dwi.registration.init_b0_to_anat_registration_wf`
 

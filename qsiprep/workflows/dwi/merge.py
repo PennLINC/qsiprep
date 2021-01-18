@@ -397,7 +397,7 @@ def gen_denoising_boilerplate(denoise_method,
                               b0_threshold):
     """Generates methods boilerplate for the denoising workflow."""
     desc = ["Any images with a b-value less than %d s/mm^2 were treated as a "
-            "b=0 image." % b0_threshold]
+            "*b*=0 image." % b0_threshold]
     do_denoise = denoise_method in ('dwidenoise', 'patch2self')
     do_unringing = unringing_method == 'mrdegibbs'
     do_biascorr = not dwi_no_biascorr
@@ -410,7 +410,7 @@ def gen_denoising_boilerplate(denoise_method,
                         "a %d-voxel window." % dwi_denoise_window)
             last_step = "After MP-PCA, "
         if denoise_method == 'patch2self':
-            desc.append("Denoising was performed using `patch2self`"
+            desc.append("Denoising using `patch2self` "
                         "[@patch2self] was applied")
             if dwi_denoise_window == "auto":
                 desc.append("with settings based on developer recommendations.")
@@ -429,7 +429,7 @@ def gen_denoising_boilerplate(denoise_method,
 
     if do_biascorr:
         desc.append(last_step + "B1 field inhomogeneity was corrected using "
-                    "`dwibiascorrect` from MRtrix3 with the N4 algorithm"
+                    "`dwibiascorrect` from MRtrix3 with the N4 algorithm "
                     "[@n4].")
         last_step = "After B1 bias correction, "
 

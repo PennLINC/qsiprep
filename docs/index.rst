@@ -21,4 +21,5 @@ Contents
    citing
    changes
    api/index.rst
+   comparisons
    license

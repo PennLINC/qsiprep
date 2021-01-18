@@ -1,16 +1,15 @@
 .. include:: links.rst
 
 Usage
-------------------------
+-----
 
-The ``qsiprep`` preprocessing workflow takes as principal input the
-path of the dataset that is to be processed.
-The input dataset is required to be in valid :abbr:`BIDS (Brain Imaging Data
-Structure)` format, and it must include at least one T1w structural image and
-(unless disabled with a flag) a diffusion MRI series. The T1w image and the DWI
-may be in separate BIDS <session> folders for a given subject.
-We highly recommend that you validate your dataset with the free, online
-`BIDS Validator <http://bids-standard.github.io/bids-validator/>`_.
+The ``qsiprep`` preprocessing workflow takes as principal input the path of
+the dataset that is to be processed. The input dataset is required to be in
+valid :abbr:`BIDS (Brain Imaging Data Structure)` formate at least one
+diffusion MRI series. The T1w image and the DWI may be in separate BIDS
+<session> folders for a given subject. We highly recommend that you validate
+your dataset with the free, online `BIDS Validator
+<http://bids-standard.github.io/bids-validator/>`_.
 
 The exact command to run ``qsiprep`` depends on the Installation_ method.
 The common parts of the command are similar to the `BIDS-Apps
@@ -50,7 +49,7 @@ The singularity wrapper CLI
    :nodefaultconst:
 
 Note on using CUDA
-===================
+==================
 
 The CUDA runtime version 9.1 is included in the QSIPrep docker image.
 The CUDA version of eddy is dramatically faster than the openmp version.
@@ -68,7 +67,7 @@ Information on how to customize and understand these files can be found on the
 page.
 
 CUDA Support
-=============
+============
 
 As of version 0.6.7 CUDA version 9.1 is supported in the QSIPrep container! To run locally
 using docker you will need the nvidia container runtime installed for Docker version 19.0.3

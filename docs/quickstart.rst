@@ -1,7 +1,7 @@
 .. include:: links.rst
 
 Quick Start
-------------------------
+-----------
 
 There are many options for running ``qsiprep`` but most have sensible defaults and
 don't need to be changed. This page describes the options most most likely to be
@@ -17,13 +17,12 @@ One way to process these data would be to call ``qsiprep`` like this::
 
   qsiprep \
     /path/to/inputs /path/to/outputs participant \
-    --dwi-denoise-window 7 \
     --output-resolution 1.2 \
     --fs-license-file /path/to/license.txt
 
 
 Grouping scans
-======================
+==============
 
 .. note::
    This section explains ``--separate-all-dwis``, ``--denoise-after-combining`` and
@@ -46,56 +45,131 @@ there will be one output in the derivatives directory for each input image in th
 directory.
 
 It is beneficial to have as much data as possible available for head motion correction. However,
-the denoising preprocessing step has important caveats that should be considered. It is up to the
-user whether ``dwidenoise`` and ``mrdegibbs`` are run on ``run-01``, ``run-02``, ``run-03``
-individually before they are concatenated, or whether to combine these scans and run ``dwidenoise``
-on the concatenated DWI series. This is an unexplored trade-off space. The more volumes available,
-the more data MP-PCA has to work with and a larger window size (specified with
-``--dwi-denoise-window``) can be safely used. However, if there if the head is in a vastly
-different location in different scans, performance may be impacted. By default the scans in the
-same warped space are individually denoised before they  are concatenated. To denoise/unring after
-the scans are concatenated
+the denoising preprocessing step has important caveats that should be considered. For a
+discussion see :ref:`merge_denoise`.
 
 
 Specifying outputs
-=====================
+==================
 
 .. note::
    This section covers ``--output-resolution 1.2``, and
    ``--skip-t1-based-spatial-normalization``.
 
-Unlike with fMRI, which can be coregistered to a T1w image and warped to a template using the
-T1w image's spatial normalization, the T1w images do not contain enough contrast to accurately
-align white matter structures to a template. For this reason, spatial normalization is typically
-done *after* models are fit. Therefore we omit the ``--output-spaces`` argument from preprocessing.
-All outputs will be registered to the T1w image but will have an isotropic voxel size.
+Unlike with fMRI, which can be coregistered to a T1w image and warped to a
+template using the T1w image's spatial normalization, the T1w images do not
+contain enough contrast to accurately align white matter structures to a
+template. For this reason, spatial normalization is typically done *after*
+models are fit. Therefore we omit the ``--output-spaces`` argument from
+preprocessing. All outputs will be registered to the T1w image (or the
+AC-PC aligned b=0 template if ``--dwi-only`` was specified) but will have
+an isotropic voxel size.
 
-Cortex can be accurately spatially-normalized using the T1w image, so the T1w image is still
-spatially normalized by default during preprocessing. The transform from the T1w image to the
-``MNI152NLin2009cAsym`` template is included in the derivatives. This can be used during
-reconstruction to map cortical parcellations from the template into the DWI in order to estimate
-brain graphs. If you want to save ~20 minutes of computation time, this normalization can be
-disabled with the ``--skip-tq-based-spatial-normalization`` option.
+Cortex can be accurately spatially-normalized using the T1w image, so the T1w
+image is still spatially normalized by default during preprocessing. The
+transform from the T1w image to the ``MNI152NLin2009cAsym`` template is
+included in the derivatives. This can be used during reconstruction to map
+cortical parcellations from the template into the DWI in order to estimate
+brain graphs. If you want to save ~20 minutes of computation time, this
+normalization can be disabled with the
+``--skip-t1-based-spatial-normalization`` option.
 
-The ``--output-resolution`` argument determines the spatial resolution of the preprocessed dwi
-series. You can specify the resolution of the original data or choose to upsample the dwi to a
-higher spatial resolution. Some post-processing pipelines such as fixel-based analysis recommend
-resampling your output to at least 1.3mm resolution. By choosing this resolution here, it means
-your data will only be interpolated once: head motion correction, susceptibility distortion
-correction, coregistration and upsampling will be done in a single step. If your are upsampling
-your data by more than 10%, QSIPrep will use BSpline interpolation instead of Lanczos windowed
-sinc interpolation.
+The ``--output-resolution`` argument determines the spatial resolution of the
+preprocessed dwi series. You can specify the resolution of the original data
+or choose to upsample the dwi to a higher spatial resolution. Some
+post-processing pipelines such as fixel-based analysis recommend resampling
+your output to at least 1.3mm resolution. By choosing this resolution here,
+it means your data will only be interpolated once: head motion correction,
+susceptibility distortion correction, coregistration and upsampling will be
+done in a single step. If your are upsampling your data by more than 10%,
+QSIPrep will use BSpline interpolation instead of Lanczos windowed sinc
+interpolation.
 
 
 Head motion correction model
 ===============================
 
-Although FSL's ``eddy`` is technically model-free, it is an option for ``--hmc-model`` along with
-``3dSHORE`` and ``none``. Choosing ``eddy`` (the default) runs FSL's ``eddy`` for head motion
-correction and eddy current correction. This will work for single-shell and multi-shell sampling
-schemes. The ``3dSHORE`` (aka "SHORELine") option works for multi-shell, Cartesian grid sampling
-(DSI) and random q-space sampling (CS-DSI).
+Although FSL's ``eddy`` is technically model-free, it is an option for
+``--hmc-model`` along with ``3dSHORE`` and ``none``. Choosing ``eddy`` (the
+default) runs FSL's ``eddy`` for head motion correction and eddy current
+correction. This will work for single-shell and multi-shell sampling schemes.
+The ``3dSHORE`` (aka "SHORELine") option works for multi-shell, Cartesian
+grid sampling (DSI) and random q-space sampling (CS-DSI).
 
-The option ``none`` will register all the b=0 images to one another and the b>0 images will
-have the transform from the nearest b=0 image applied. This is not recommended. Between ``eddy``
-and ``3dSHORE``, all sampling schemes can be motion corrected.
+The option ``none`` will register all the b=0 images to one another and the
+b>0 images will have the transform from the nearest b=0 image applied. This
+is not recommended. Between ``eddy`` and ``3dSHORE``, all sampling schemes
+can be motion corrected.
+
+
+Enabling and disabling preprocessing steps
+==========================================
+
+The image processing operations performed by QSIPrep are configured by default
+to apply to most generic sequences. Depending on your sequence
+and sampling scheme, you can elect to enable, disable or alter the behavior
+of these steps to better match your data.
+
++-----------------+-----------------------------+---------------------------+------------------------------+
+|                 |         Denoising           |      Gibbs Unringing      |    B1 Bias Field Correction  |
++=================+=============================+===========================+==============================+
+| Description     |   Reduce random noise       |   Remove spatial ringing  |    Remove spatial non-       |
+|                 |   in images.                |   artifact from images.   |    uniformity of images.     |
++-----------------+-----------------------------+---------------------------+------------------------------+
+| Algorithms      |  ``dwidenoise`` (MRtrix3)   | ``mrdegibbs`` (MRtrix3)   | ``dwibiascorrect``           |
+|                 |  patch2self (DIPY)          |                           | (ANTs/MRtrix3)               |
++-----------------+-----------------------------+---------------------------+------------------------------+
+| Default         |  ``dwidenoise`` (MRtrix3)   | None applied              | ``dwibiascorrect``           |
+|                 |                             |                           | (ANTs/MRtrix3)               |
++-----------------+-----------------------------+---------------------------+------------------------------+
+| Disable with    |  ``--denoise-method none``  | Disabled by default       | ``--dwi-no-biascorr``        |
++-----------------+-----------------------------+---------------------------+------------------------------+
+| Change behavior |  ``--dwi-denoise-window N`` | ``--unringing-method``    | No parameters                |
+| with            |  changes denoising window   | enables Gibbs unringing   |                              |
+|                 |  to N voxels                |                           |                              |
++-----------------+-----------------------------+---------------------------+------------------------------+
+| Notes           |  Set the window to ``auto`` | Technically only supposed | Uses                         |
+|                 |  or a specific voxel number | to be run on full Fourier | N4BiasFieldCorrection on     |
+|                 |                             | acquisitions.             | b=0 images, applies          |
+|                 |                             |                           | correction to the whole      |
+|                 |                             |                           | series                       |
++-----------------+-----------------------------+---------------------------+------------------------------+
+
+Not included in this table is the b=0 intensity harmonization step, which
+applies simple scaling if there is more than one NIfTI file being processed.
+It can be disabled with ``--no-b0-harmonization``.
+
+Each of these steps can be applied at the same time, which by default is
+before any images are concatenated. The user can instead run these steps
+together *after* images are concatenated by specifying
+``--denoise-after-combining``. See :ref:`merge_denoise` for more info.
+
+What is happening??
+===================
+
+While QSIPrep runs with `-v -v`, you will see lots of seemingly-nonsensical output
+in the terminal like::
+
+  [Node] Setting-up "qsiprep_wf.single_subject_PNC_wf.dwi_finalize_acq_realistic_wf.transform_dwis_t1.final_b0_ref.b0ref_reportlet" in "/scratch/qsiprep_wf/single_subject_PNC_wf/dwi_finalize_acq_realistic_wf/transform_dwis_t1/final_b0_ref/b0ref_reportlet".
+    201229-21:33:46,213 nipype.workflow INFO:
+      [Node] Running "b0ref_reportlet" ("qsiprep.niworkflows.interfaces.registration.SimpleBeforeAfterRPT")
+    201229-21:33:48,51 nipype.workflow INFO:
+      [MultiProc] Running 2 tasks, and 3 jobs ready. Free memory (GB): 3.70/4.00, Free processors: 0/2.
+                        Currently running:
+                          * qsiprep_wf.single_subject_PNC_wf.dwi_finalize_acq_realistic_wf.transform_dwis_t1.final_b0_ref.b0ref_reportlet
+                          * qsiprep_wf.single_subject_PNC_wf.anat_preproc_wf.mni_mask
+
+These print-outs describe what is currently running. In this case, we can see that
+``b0ref_reportlet`` and ``mni_mask`` are being run simultaneously. What exactly
+are these steps and how do they fit into the overall workflow?
+
+We can find the name of the node (aka "job") being run in the quotation marks.
+This task can be found in the workflow diagrams in :ref:`workflow_details`.
+In the case of ``mni_mask`` it is part of :ref:`t1preproc_steps`, while
+``b0ref_reportlet`` is part of :ref:`dwi_ref`. The relative place of these
+jobs' parent workflows in the overall workflow can be seen in the graph of
+:ref:`dwi_overview`.
+
+Also in this example you can see that QSIPrep was run with ``--nthreads 2``
+(``Free processors: 0/2``) and that both open slots are running a job.
+

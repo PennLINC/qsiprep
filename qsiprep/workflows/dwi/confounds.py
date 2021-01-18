@@ -75,7 +75,7 @@ def init_dwi_confs_wf(mem_gb, metadata, impute_slice_threshold, name="dwi_confs_
     workflow = Workflow(name=name)
     workflow.__desc__ = """\
 Several confounding time-series were calculated based on the
-*preprocessed DWI*: framewise displacement (FD) using the
+preprocessed DWI: framewise displacement (FD) using the
 implementation in *Nipype* [following the definitions by @power_fd_dvars].
 The head-motion estimates calculated in the correction step were also
 placed within the corresponding confounds file. Slicewise cross correlation

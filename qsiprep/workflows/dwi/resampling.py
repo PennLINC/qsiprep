@@ -118,14 +118,14 @@ def init_dwi_trans_wf(source_file,
             bvecs rotated for transforms to ``output_grid``
         local_bvecs
             NIfTI file containing the bvec rotation matrix (due to transforms) in each voxel.
-            Includes rotations introduced by warping
+            Includes rotations introduced by warpingdenoisin
 
     """
     workflow = Workflow(name=name)
     workflow.__desc__ = """\
 The DWI time-series were resampled to {tpl},
 generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels.
-""".format(tpl=template, vox=str(output_resolution).rstrip("0"))
+""".format(tpl=template, vox=str(output_resolution).rstrip("0").rstrip("."))
 
     inputnode = pe.Node(
         niu.IdentityInterface(fields=[

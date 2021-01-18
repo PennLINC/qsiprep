@@ -11,7 +11,7 @@ __all__ = ['fix_multi_T1w_source_name', 'add_suffix', 'read_crashfile',
            'splitext', '_copy_any']
 
 
-def fix_multi_T1w_source_name(in_files):
+def fix_multi_T1w_source_name(in_files, fake_t1w=False):
     """
     Make up a generic source name when there are multiple T1s
 
@@ -25,6 +25,10 @@ def fix_multi_T1w_source_name(in_files):
     from nipype.utils.filemanip import filename_to_list
     base, in_file = os.path.split(filename_to_list(in_files)[0])
     subject_label = in_file.split("_", 1)[0].split("-")[1]
+
+    # Make up a fake file name that will make this an anat/ report
+    if fake_t1w:
+        base.replace("/dwi", "/anat")
     return os.path.join(base, "sub-%s_T1w.nii.gz" % subject_label)
 
 
