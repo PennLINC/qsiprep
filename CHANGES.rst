@@ -1,5 +1,12 @@
-0.13.0
-======
+0.13.0RC1 (January 19, 2021)
+============================
+This version introduces major changes to the TOPUP/eddy workflow. Feedback would be greatly
+appreciated!
+
+ * Added new algorithm for selecting b=0 images for distortion corretion (#202)
+ * Added the Patch2Self denoising method (#203, credit to @ShreyasFadnavis)
+ * Documentation has been expanded significantly (#212)
+ * Boilerplate for DWI preprocessing is greatly expanded (#200)
 
 
 0.12.2 (November 7, 2020)
