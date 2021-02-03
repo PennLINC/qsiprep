@@ -18,4 +18,4 @@ Preprocessing Workflows
 Reconstruction Workflows
 --------------------------
 
-..automodule:: qsiprep.workflows.recon
+.. automodule:: qsiprep.workflows.recon
