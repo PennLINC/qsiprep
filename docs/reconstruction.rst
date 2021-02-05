@@ -17,21 +17,21 @@ Instead of specifying a path to a file you can choose from the following:
 +-------------------------------------+--------------+-------------+---------+-----------------+----------------+
 | Option                              | Requires SDC | MultiShell  |   DSI   | DTI             |  Tractography  |
 +=====================================+==============+=============+=========+=================+================+
-|:ref:`mrtrix_multishell_msmt`        |    Yes       |  Required   |    No   |      No         | Probabilistic  |
+|:ref:`mrtrix_multishell_msmt`        |    Yes       |     Yes     |    No   |      No         | Probabilistic  |
 +-------------------------------------+--------------+-------------+---------+-----------------+----------------+
-|:ref:`mrtrix_multishell_msmt_noACT`  |    No        |  Required   |    No   |      No         | Probabilistic  |
+|:ref:`mrtrix_multishell_msmt_noACT`  |    No        |     Yes     |    No   |      No         | Probabilistic  |
 +-------------------------------------+--------------+-------------+---------+-----------------+----------------+
-|:ref:`mrtrix_singleshell_ss3t`       |    Yes       |  No         |    No   |      Yes        | Probabilistic  |
+|:ref:`mrtrix_singleshell_ss3t`       |    Yes       |     No      |    No   |      Yes        | Probabilistic  |
 +-------------------------------------+--------------+-------------+---------+-----------------+----------------+
-|:ref:`mrtrix_singleshell_ss3t_noACT` |    No        |  No         |    No   |      Yes        | Probabilistic  |
+|:ref:`mrtrix_singleshell_ss3t_noACT` |    No        |     No      |    No   |      Yes        | Probabilistic  |
 +-------------------------------------+--------------+-------------+---------+-----------------+----------------+
-|:ref:`dsi_studio_gqi`                | Recommended  |    Yes      |   Yes   |    Yes*         | Deterministic  |
+|:ref:`dsi_studio_gqi`                | Recommended  |     Yes     |   Yes   |    Yes*         | Deterministic  |
 +-------------------------------------+--------------+-------------+---------+-----------------+----------------+
-|:ref:`dipy_mapmri`                   | Recommended  |    Yes      |   Yes   |      No         |   Both         |
+|:ref:`dipy_mapmri`                   | Recommended  |     Yes     |   Yes   |      No         |   Both         |
 +-------------------------------------+--------------+-------------+---------+-----------------+----------------+
-|:ref:`dipy_3dshore`                  | Recommended  |    Yes      |   Yes   |      No         |   Both         |
+|:ref:`dipy_3dshore`                  | Recommended  |     Yes     |   Yes   |      No         |   Both         |
 +-------------------------------------+--------------+-------------+---------+-----------------+----------------+
-|:ref:`csdsi_3dshore`                 | Recommended  |    Yes      |   Yes   |      No         |   Both         |
+|:ref:`csdsi_3dshore`                 | Recommended  |     Yes     |   Yes   |      No         |   Both         |
 +-------------------------------------+--------------+-------------+---------+-----------------+----------------+
 
 \* Not recommended
