@@ -84,6 +84,7 @@ class QsiReconIngressOutputSpec(TraitedSpec):
     acq_id = traits.Str()
     rec_id = traits.Str()
     run_id = traits.Str()
+    dir_id = traits.Str()
     bval_file = File(exists=True)
     bvec_file = File(exists=True)
     b_file = File(exists=True)
@@ -115,8 +116,8 @@ class QsiReconIngress(SimpleInterface):
         self._get_if_exists('confounds_file', op.join(out_root, "*confounds.tsv"))
         self._get_if_exists('local_bvec_file', op.join(out_root, fname[:-3]+'bvec.nii*'))
         self._get_if_exists('b_file', op.join(out_root, fname+".b"))
-        self._get_if_exists('mask_file', op.join(out_root, fname[:-11] + 'brain_mask.nii.gz'))
-        self._get_if_exists('dwi_ref', op.join(out_root, fname[:-16] + 'dwiref.nii.gz'))
+        self._get_if_exists('mask_file', op.join(out_root, fname[:-11] + 'brain_mask.nii*'))
+        self._get_if_exists('dwi_ref', op.join(out_root, fname[:-16] + 'dwiref.nii*'))
         self._results['dwi_file'] = self.inputs.dwi_file
 
         # Image QC doesn't include space
@@ -130,31 +131,6 @@ class QsiReconIngress(SimpleInterface):
         # Anat is above ses
         if path_parts[-1].startswith('ses'):
             path_parts.pop()
-        """
-        qp_root = op.sep.join(path_parts)
-        anat_root = op.join(qp_root, 'anat')
-        sub = self._results['subject_id']
-        if space == "space-T1w":
-            self._get_if_exists('tpms', anat_root + "/%s_label-*_probseg.nii*" % sub)
-            self._get_if_exists('t1_brain',
-                '%s/%s_desc-preproc_T1w.nii*' % (anat_root, sub))
-            self._get_if_exists('anat_mask',
-                '%s/%s_desc-brain_mask.nii*' % (anat_root, sub))
-        else:
-            self._get_if_exists('tpms',
-                anat_root + "/%s_space-MNI152NLin2009cAsym_label-CSF_probseg.nii*" % sub,
-                multi_ok=True)
-            self._get_if_exists('seg',
-                '%s/%s_space-MNI152NLin2009cAsym_dseg.nii*' % (anat_root, sub))[0]
-            self._get_if_exists('t1_brain',
-                '%s/%s_space-MNI152NLin2009cAsym_desc-preproc_T1w.nii*' % (anat_root, sub))
-            self._get_if_exists('anat_mask',
-                '%s/%s_space-MNI152NLin2009cAsym_desc-brain_mask.nii*' % (anat_root, sub))
-        self._get_if_exists('t1_2_mni_reverse_transform',
-            '%s/%s_from-MNI152NLin2009cAsym_to-T1w*_xfm.h5' % (anat_root, sub))
-        self._get_if_exists('t1_2_mni_forward_transform',
-            '%s/%s_from-T1w_to-MNI152NLin2009cAsym*_xfm.h5' % (anat_root, sub))
-        """
         return runtime
 
     def _get_if_exists(self, name, pattern, multi_ok=False):
