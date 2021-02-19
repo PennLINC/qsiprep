@@ -221,7 +221,7 @@ RUN mkdir /opt/cmake \
     && cd ANTS-build \
     && make install \
     && rm -rf /tmp/ants \
-    && rm -rf /opt/cmake /usr/local/bin/cmake cmake-3.11.4-Linux-x86_64.sh
+    && rm -rf /opt/cmake /usr/local/bin/cmake
 
 ENV C3DPATH="/opt/convert3d-nightly" \
     PATH="/opt/convert3d-nightly/bin:$PATH"
