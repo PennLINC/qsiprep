@@ -233,9 +233,9 @@ def patch2self(data, bvals, patch_radius=[0, 0, 0], model='ridge',
     References
     ----------
 
-    [Fadnavis20] S. Fadnavis, J. Batson, E. Garyfallidis, Patch2Self:
-                    Denoising Diffusion MRI with Self-supervised Learning,
-                    Advances in Neural Information Processing Systems 33 (2020)
+    [patch2self] S. Fadnavis, J. Batson, E. Garyfallidis, Patch2Self:
+                 Denoising Diffusion MRI with Self-supervised Learning,
+                 Advances in Neural Information Processing Systems 33 (2020)
     """
     patch_radius = np.asarray(patch_radius, dtype=np.int)
 
