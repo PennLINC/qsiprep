@@ -311,7 +311,7 @@ def init_dwi_denoising_wf(dwi_denoise_window,
                 name='denoiser')
         else:
             denoiser = pe.Node(
-                Patch2Self(residuals=True, patch_radius=dwi_denoise_window),
+                Patch2Self(patch_radius=dwi_denoise_window),
                 name='denoiser')
             workflow.connect([
                 (inputnode, denoiser, [('bval_file', 'bval_file')])])
