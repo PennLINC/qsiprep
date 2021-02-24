@@ -271,7 +271,7 @@ def patch2self(data, bvals, patch_radius=[0, 0, 0], model='ridge',
 
     denoised_arr = np.empty((data.shape), dtype=calc_dtype)
 
-    if verbose is True:
+    if verbose:
         t1 = time.time()
 
     # if only 1 b0 volume, skip denoising it
@@ -296,7 +296,7 @@ def patch2self(data, bvals, patch_radius=[0, 0, 0], model='ridge',
                                                       data_b0s.shape,
                                                       alpha=alpha)
 
-            if verbose is True:
+            if verbose:
                 print("Denoised b0 Volume: ", vol_idx)
 
     # Separate denoising for DWI volumes
@@ -317,10 +317,10 @@ def patch2self(data, bvals, patch_radius=[0, 0, 0], model='ridge',
                                                   data_dwi.shape,
                                                   alpha=alpha)
 
-        if verbose is True:
+        if verbose:
             print("Denoised DWI Volume: ", vol_idx)
 
-    if verbose is True:
+    if verbose:
         t2 = time.time()
         print('Total time taken for Patch2Self: ', t2-t1, " seconds")
 

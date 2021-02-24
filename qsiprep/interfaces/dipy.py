@@ -103,9 +103,14 @@ class Patch2SelfInputSpec(SeriesPreprocReportInputSpec):
                          desc='Regularization parameter for Ridge and Lasso')
     b0_threshold = traits.Float(50., usedefault=True,
                                 desc='Threshold to segregate b0s')
-    residuals = traits.Bool(True, usedefault=True,
-                            desc='Returns residuals of suppressed noise')
     mask = File(desc='mask image (unused)')
+    b0_denoising = traits.Bool(True, usedefault=True,
+                               desc='denoise the b=0 images too')
+    clip_negative_vals = traits.Bool(True, usedefault=True,
+                                     desc='Sets negative values after denoising to 0')
+    shift_intensity = traits.Bool(False, usedefault=True,
+                                  desc='Shifts the distribution of intensities per '
+                                  'volume to give non-negative values')
     out_report = File('patch2self_report.svg', usedefault=True,
                       desc='filename for the visual report')
 
@@ -163,7 +168,11 @@ class Patch2Self(SeriesPreprocReport, SimpleInterface):
                        alpha=self.inputs.alpha,
                        patch_radius=patch_radius,
                        b0_threshold=self.inputs.b0_threshold,
-                       residuals=self.inputs.residuals)
+                       verbose=True,
+                       b0_denoising=self.inputs.b0_denoising,
+                       clip_negative_vals=self.inputs.clip_negative_vals,
+                       shift_intensity=self.inputs.shift_intensity
+                       )
 
         # Back to nifti
         denoised_img = nb.Nifti1Image(denoised_arr, noisy_img.affine,
