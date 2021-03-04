@@ -108,7 +108,6 @@ distance of %02f.""" % romdd
     elif mask_strategy == 'none':
         desc += "DSI Studio's automatic masking method was used during ODF estimation. "
 
-
     workflow.connect([
         (inputnode, create_src, [('dwi_file', 'input_nifti_file'),
                                  ('bval_file', 'input_bvals_file'),
@@ -135,7 +134,8 @@ distance of %02f.""" % romdd
     return workflow
 
 
-def init_dsi_studio_tractography_wf(omp_nthreads, has_t1w_transform, name="dsi_studio_tractography",
+def init_dsi_studio_tractography_wf(omp_nthreads, has_t1w_transform,
+                                    name="dsi_studio_tractography",
                                     params={}, output_suffix=""):
     """Calculate streamline-based connectivity matrices using DSI Studio.
 
@@ -217,7 +217,8 @@ def init_dsi_studio_tractography_wf(omp_nthreads, has_t1w_transform, name="dsi_s
     return workflow
 
 
-def init_dsi_studio_connectivity_wf(omp_nthreads, has_t1w_transform, name="dsi_studio_connectivity",
+def init_dsi_studio_connectivity_wf(omp_nthreads, has_t1w_transform,
+                                    name="dsi_studio_connectivity",
                                     params={}, output_suffix=""):
     """Calculate streamline-based connectivity matrices using DSI Studio.
 
