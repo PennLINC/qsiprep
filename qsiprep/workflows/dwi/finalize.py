@@ -276,17 +276,7 @@ def init_dwi_finalize_wf(scan_groups,
                                          ('outputnode.b0_series', 't1_b0_series'),
                                          ('outputnode.dwi_ref_resampled', 't1_b0_ref'),
                                          ('outputnode.resampled_dwi_mask', 'dwi_mask_t1'),
-                                         ('outputnode.resampled_qc', 'series_qc_t1')]),
-        (inputnode, interactive_report_wf, [
-            ('raw_concatenated', 'inputnode.raw_dwi_file'),
-            ('carpetplot_data', 'inputnode.carpetplot_data'),
-            ('confounds', 'inputnode.confounds_file')]),
-        (transform_dwis_t1, interactive_report_wf, [
-             ('outputnode.dwi_resampled', 'inputnode.processed_dwi_file'),
-             ('outputnode.resampled_dwi_mask', 'inputnode.mask_file'),
-             ('outputnode.bvals', 'inputnode.bval_file'),
-             ('outputnode.rotated_bvecs', 'inputnode.bvec_file')]),
-        (interactive_report_wf, outputnode, [('outputnode.out_report', 'interactive_report')])
+                                         ('outputnode.resampled_qc', 'series_qc_t1')])
     ])
 
     # Fill-in datasinks of reportlets seen so far
@@ -298,6 +288,20 @@ def init_dwi_finalize_wf(scan_groups,
     if not write_derivatives:
         # The list of transformed images is already attached to dwi_t1
         return workflow
+
+    # We need to attach outputs to the interactive report
+    workflow.connect([
+        (inputnode, interactive_report_wf, [
+            ('raw_concatenated', 'inputnode.raw_dwi_file'),
+            ('carpetplot_data', 'inputnode.carpetplot_data'),
+            ('confounds', 'inputnode.confounds_file')]),
+        (transform_dwis_t1, interactive_report_wf, [
+             ('outputnode.dwi_resampled', 'inputnode.processed_dwi_file'),
+             ('outputnode.resampled_dwi_mask', 'inputnode.mask_file'),
+             ('outputnode.bvals', 'inputnode.bval_file'),
+             ('outputnode.rotated_bvecs', 'inputnode.bvec_file')]),
+        (interactive_report_wf, outputnode, [('outputnode.out_report', 'interactive_report')])
+    ])
 
     # CONNECT TO DERIVATIVES #####################
     gtab_t1 = pe.Node(MRTrixGradientTable(), name='gtab_t1')
