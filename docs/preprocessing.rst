@@ -64,7 +64,7 @@ concatenated. Specifically, image denoising (using ``dwidenoise`` or
 ``patch2self``) can be disabled with ``--denoise-method none``. Gibbs
 unringing (using ``mrdegibbs``) is disabled by default but can be enabled
 with ``--unringing-method mrdegibbs``. B1 bias field correction is applied by
-default (using ``dwibiascorrect``), and can be disabled with the
+default (using ``dwibiascorrect``) and can be disabled with the
 ``--dwi-no-biascorr`` option. The intensity of b=0 images is harmonized
 across scans (i.e. scaled to an average value) by default, but this can be
 turned off using ``--dwi-no-b0-harmonization``.
@@ -82,12 +82,12 @@ Gibbs unringing. B1 bias field correction and b=0 intensity harmonization
 do not have as specific requirements about their inputs so are run last.
 
 The last, and potentially very important decision, is whether the denoising
-operations are applied to each input DWI file individually or whether the
+operations are applied to each input DWI series individually or whether the
 denoising operations are applied to the concatenated input DWI files. At
 present, there is little data to guide this choice. The more volumes
 available, the more data MP-PCA/patch2self have to work with. However, if
 there if the head is in a vastly different location in different scans,
-denoising can be impacted in unpredictable ways.
+denoising might be impacted in unpredictable ways.
 
 Consider MP-PCA. If a voxel contains CSF in one DWI series and the subject
 repositions their head between scans so that the voxel contains corpus

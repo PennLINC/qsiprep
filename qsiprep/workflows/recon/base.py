@@ -168,6 +168,8 @@ def init_single_subject_wf(
                      if 'space-' + space in f.filename]
         LOGGER.info("found %s in %s", dwi_files, recon_input)
 
+        # Find the corresponding mask files
+
     workflow = Workflow('sub-{}_{}'.format(subject_id, spec['name']))
     workflow.__desc__ = """
 Reconstruction was
@@ -206,6 +208,10 @@ to workflows in *qsiprep*'s documentation]\
     else:
         has_transform = False
 
+    t1w_brain_mask = layout.get(subject_id=subject_id, desc='brain', extension=['nii', 'nii.gz'],
+                                modality='anat')
+    has_t1w_brain_mask = bool(t1w_brain_mask)
+
     anat_ingress_wf = init_recon_anatomical_wf(subject_id=subject_id,
                                                recon_input_dir=recon_input,
                                                extras_to_make=spec.get('anatomical', []),
@@ -217,7 +223,8 @@ to workflows in *qsiprep*'s documentation]\
                                            workflow_spec=spec,
                                            reportlets_dir=reportlets_dir,
                                            output_dir=output_dir,
-                                           has_transform=has_transform,
+                                           has_t1w=has_t1w_brain_mask,
+                                           has_t1w_transform=has_transform,
                                            omp_nthreads=omp_nthreads)
     workflow.connect([(anat_ingress_wf, dwi_recon_wf, to_connect)])
 
