@@ -843,6 +843,7 @@ to workflows in *QSIPrep*'s documentation]\
             confounds_name = 'inputnode.{name}_confounds'.format(name=output_wfname)
             b0_ref_name = 'inputnode.{name}_b0_ref'.format(name=output_wfname)
             cnr_name = 'inputnode.{name}_cnr'.format(name=output_wfname)
+            carpetplot_name = 'inputnode.{name}_carpetplot_data'.format(name=output_wfname)
             final_merge_wf = merging_group_workflows[concatenation_scheme[output_fname]]
             workflow.connect([
                 (dwi_finalize_wf, final_merge_wf, [
@@ -856,6 +857,7 @@ to workflows in *QSIPrep*'s documentation]\
                     ('outputnode.raw_concatenated', raw_concatenated_image_name),
                     ('outputnode.original_bvecs', original_bvec_name),
                     ('outputnode.original_files', original_bids_name),
+                    ('outputnode.carpetplot_data', carpetplot_name),
                     ('outputnode.confounds', confounds_name)])
             ])
 

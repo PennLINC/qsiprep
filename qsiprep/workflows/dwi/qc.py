@@ -92,7 +92,7 @@ def init_interactive_report_wf(name="interactive_report_wf"):
     **Outputs**
 
         qc file
-            DSI Studio's src QC metrics for the input data
+            A JSON file that can be opened by dmriprep-viewer
     """
 
     inputnode = pe.Node(
