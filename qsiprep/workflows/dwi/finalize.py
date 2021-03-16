@@ -246,7 +246,6 @@ def init_dwi_finalize_wf(scan_groups,
                                           to_mni=False,
                                           write_local_bvecs=write_local_bvecs,
                                           concatenate=write_derivatives)
-    interactive_report_wf = init_interactive_report_wf()
 
     workflow.connect([
         (inputnode, transform_dwis_t1, [
@@ -285,9 +284,13 @@ def init_dwi_finalize_wf(scan_groups,
             workflow.get_node(node).inputs.base_directory = reportlets_dir
             workflow.get_node(node).inputs.source_file = source_file
 
+    # The workflow is done if we will be concatenating images later
     if not write_derivatives:
         # The list of transformed images is already attached to dwi_t1
         return workflow
+
+    # Finish up the derivatives process
+    interactive_report_wf = init_interactive_report_wf()
 
     # We need to attach outputs to the interactive report
     workflow.connect([

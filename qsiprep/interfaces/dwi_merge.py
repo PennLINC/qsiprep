@@ -126,6 +126,8 @@ class MergeDWIs(SimpleInterface):
 class AveragePEPairsInputSpec(MergeDWIsInputSpec):
     original_bvec_files = InputMultiObject(
         File(exists=True), mandatory=True, desc='list of original bvec files')
+    carpetplot_data = InputMultiObject(
+        File(exists=True), mandatory=True, desc='list of carpetplot_data files')
     verbose = traits.Bool(False, usedefault=True)
 
 
@@ -151,12 +153,14 @@ class AveragePEPairs(SimpleInterface):
         rotated_bvecs = combined_bvec_array(self.inputs.bvec_files)
         bvals = combined_bval_array(self.inputs.bval_files)
 
-        # Find which images should be averaged together in the output
+        # Find which images should be averaged together in the o
+        # Also, average the carpetplot matrices and motion params
         image_pairs, averaged_raw_bvec = find_image_pairs(original_bvecs, bvals, assignments)
         combined_images, combined_raw_images, combined_bvals, combined_bvecs, error_report = \
             average_image_pairs(image_pairs, self.inputs.dwi_files, rotated_bvecs,
                                 bvals, self.inputs.denoising_confounds,
                                 self.inputs.raw_concatenated_files,
+                                self.inputs.carpetplot_data,
                                 verbose=self.inputs.verbose)
 
         # Save the averaged outputs
@@ -237,7 +241,7 @@ def angle_between(v1, v2):
 
 
 def average_image_pairs(image_pairs, image_paths, rotated_bvecs, bvals, confounds_tsvs,
-                        raw_concatenated_files, verbose=False):
+                        raw_concatenated_files, carpetplots, verbose=False):
     """Create 4D series of averaged images, gradients, and confounds"""
     averaged_images = []
     new_bvecs = []
@@ -255,6 +259,7 @@ def average_image_pairs(image_pairs, image_paths, rotated_bvecs, bvals, confound
     for index1, index2 in image_pairs:
         confounds1 = confounds.iloc[index1].copy().rename(confounds1_rename)
         confounds2 = confounds.iloc[index2].copy().rename(confounds2_rename)
+        # Make a single row containing both 1 and 2
         confounds_both = confounds1.append(confounds2)
         averaged_images.append(math_img('(a+b)/2', a=image_paths[index1],
                                         b=image_paths[index2]))
@@ -275,17 +280,24 @@ def average_image_pairs(image_pairs, image_paths, rotated_bvecs, bvals, confound
         confounds_both['rotated_grad_x_2'] = rotated2[0]
         confounds_both['rotated_grad_y_2'] = rotated2[1]
         confounds_both['rotated_grad_z_2'] = rotated2[2]
-        confounds_both['mean_grad_x'] = new_bvec[0]
-        confounds_both['mean_grad_y'] = new_bvec[1]
-        confounds_both['mean_grad_z'] = new_bvec[2]
-        confounds_both['mean_b'] = new_bval
+        confounds_both['grad_x'] = new_bvec[0]
+        confounds_both['grad_y'] = new_bvec[1]
+        confounds_both['grad_z'] = new_bvec[2]
+        confounds_both['bval'] = new_bval
         merged_confounds.append(confounds_both)
         if verbose:
             print('%d: %d [%.4fdeg error]\n\t%d (%.4f %.4f %.4f)' % (
                      index1, index2, bvec_error, new_bval, new_bvec[0],
                      new_bvec[1], new_bvec[2]))
 
+    # Make columns that can be used in the interactive report
     averaged_confounds = pd.DataFrame(merged_confounds)
+    needed_for_interactive_report = ["trans_x", "trans_y", "trans_z",
+                                     "framewise_displacement"]
+    for key in needed_for_interactive_report:
+        averaged_confounds[key] = (averaged_confounds[key + "_1"] +
+                                   averaged_confounds[key + "_2"]) / 2.
+
     return concat_imgs(averaged_images), concat_imgs(raw_averaged_images), \
         np.array(merged_bvals), np.array(new_bvecs), averaged_confounds
 
