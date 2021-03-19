@@ -121,7 +121,8 @@ def init_distortion_group_merge_wf(merging_strategy, inputs_list, hmc_model, rep
             (inputnode, merge_b0_refs, [(input_name + "_b0_ref", merge_input_name)]),
             (inputnode, merge_cnrs, [(input_name + "_cnr", merge_input_name)]),
             (inputnode, merge_confounds, [(input_name + "_confounds", merge_input_name)]),
-            (inputnode, merge_carpetplot_data, [(input_name + "_carpetplot_data", merge_input_name)])
+            (inputnode, merge_carpetplot_data, [
+                (input_name + "_carpetplot_data", merge_input_name)])
         ])
 
     if merging_strategy.lower() == 'average':
@@ -237,7 +238,7 @@ def init_distortion_group_merge_wf(merging_strategy, inputs_list, hmc_model, rep
         (gtab_t1, outputnode, [('gradient_file', 'gradient_table_t1')]),
 
         # Connections for the interactive report
-        (distortion_merger, interactive_report_wf,[
+        (distortion_merger, interactive_report_wf, [
             ('merged_raw_dwi', 'inputnode.raw_dwi_file'),
             ('out_dwi', 'inputnode.processed_dwi_file'),
             ('out_bval', 'inputnode.bval_file'),
