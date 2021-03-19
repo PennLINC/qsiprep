@@ -228,7 +228,7 @@ def workflow_from_spec(omp_nthreads, has_t1w, has_t1w_transform, node_spec):
     # DSI Studio operations
     if software == "DSI Studio":
         if node_spec["action"] == "reconstruction":
-            return init_dsi_studio_recon_wf(omp_nthreads, has_t1w, has_t1w_transform, **kwargs)
+            return init_dsi_studio_recon_wf(omp_nthreads, has_t1w_transform, **kwargs)
         if node_spec["action"] == "export":
             return init_dsi_studio_export_wf(omp_nthreads, has_t1w_transform, **kwargs)
         if node_spec["action"] == "tractography":
