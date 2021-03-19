@@ -106,9 +106,9 @@ class Patch2SelfInputSpec(SeriesPreprocReportInputSpec):
     mask = File(desc='mask image (unused)')
     b0_denoising = traits.Bool(True, usedefault=True,
                                desc='denoise the b=0 images too')
-    clip_negative_vals = traits.Bool(True, usedefault=True,
+    clip_negative_vals = traits.Bool(False, usedefault=True,
                                      desc='Sets negative values after denoising to 0')
-    shift_intensity = traits.Bool(False, usedefault=True,
+    shift_intensity = traits.Bool(True, usedefault=True,
                                   desc='Shifts the distribution of intensities per '
                                   'volume to give non-negative values')
     out_report = File('patch2self_report.svg', usedefault=True,
