@@ -23,7 +23,7 @@ from ...interfaces.reports import ReconPeaksReport, ConnectivityReport
 LOGGER = logging.getLogger('nipype.interface')
 
 
-def init_dsi_studio_recon_wf(omp_nthreads, has_t1w, has_t1w_transform, name="dsi_studio_recon",
+def init_dsi_studio_recon_wf(omp_nthreads, has_transform, name="dsi_studio_recon",
                              output_suffix="", params={}):
     """Reconstructs diffusion data using DSI Studio.
 
@@ -55,7 +55,6 @@ def init_dsi_studio_recon_wf(omp_nthreads, has_t1w, has_t1w_transform, name="dsi
     desc = """DSI Studio Reconstruction
 
 : """
-    mask_strategy = params.get("mask_source", "t1w")
     create_src = pe.Node(DSIStudioCreateSrc(), name="create_src")
     romdd = params.get("ratio_of_mean_diffusion_distance", 1.25)
     gqi_recon = pe.Node(
@@ -80,7 +79,7 @@ distance of %02f.""" % romdd
         run_without_submitting=True)
 
     # Plot targeted regions
-    if has_t1w_transform:
+    if has_transform:
         ds_report_odfs = pe.Node(
             ReconDerivativesDataSink(extension='.png',
                                      desc="GQIODF",
@@ -89,34 +88,19 @@ distance of %02f.""" % romdd
             run_without_submitting=True)
         workflow.connect(plot_peaks, 'odf_report', ds_report_odfs, 'in_file')
 
-    if has_t1w and mask_strategy == 't1w':
-        desc += "A brain mask from the T1w image was used for ODF estimation. "
-        workflow.connect([
-            (inputnode, resample_mask, [('t1_brain_mask', 'in_file'),
-                                        ('dwi_file', 'master')]),
-            (resample_mask, gqi_recon, [('out_file', 'mask')]),
-            (resample_mask, plot_peaks, [('out_file', 'mask_file')]),
-        ])
-    elif mask_strategy == 't1w' and not has_t1w:
-        raise Exception("T1w mask is not available. Consider changing masking_strategy.")
-    elif mask_strategy == 'b=0':
-        desc += "A brain mask based on b=0 images was used for ODF estimation. "
-        workflow.connect([
-            (inputnode, gqi_recon, [('mask_file', 'mask')]),
-            (inputnode, plot_peaks, [('mask_file', 'mask_file')])
-        ])
-    elif mask_strategy == 'none':
-        desc += "DSI Studio's automatic masking method was used during ODF estimation. "
-
     workflow.connect([
         (inputnode, create_src, [('dwi_file', 'input_nifti_file'),
                                  ('bval_file', 'input_bvals_file'),
                                  ('bvec_file', 'input_bvecs_file')]),
+        (inputnode, resample_mask, [('t1_brain_mask', 'in_file'),
+                                    ('dwi_file', 'master')]),
         (create_src, gqi_recon, [('output_src', 'input_src_file')]),
+        (resample_mask, gqi_recon, [('out_file', 'mask')]),
         (gqi_recon, outputnode, [('output_fib', 'fibgz')]),
         (gqi_recon, plot_peaks, [('output_fib', 'fib_file')]),
         (inputnode, plot_peaks, [('dwi_ref', 'background_image'),
                                  ('odf_rois', 'odf_rois')]),
+        (resample_mask, plot_peaks, [('out_file', 'mask_file')]),
         (plot_peaks, ds_report_peaks, [('out_report', 'in_file')])
     ])
 
@@ -134,8 +118,7 @@ distance of %02f.""" % romdd
     return workflow
 
 
-def init_dsi_studio_tractography_wf(omp_nthreads, has_t1w_transform,
-                                    name="dsi_studio_tractography",
+def init_dsi_studio_tractography_wf(omp_nthreads, has_transform, name="dsi_studio_tractography",
                                     params={}, output_suffix=""):
     """Calculate streamline-based connectivity matrices using DSI Studio.
 
@@ -217,8 +200,7 @@ def init_dsi_studio_tractography_wf(omp_nthreads, has_t1w_transform,
     return workflow
 
 
-def init_dsi_studio_connectivity_wf(omp_nthreads, has_t1w_transform,
-                                    name="dsi_studio_connectivity",
+def init_dsi_studio_connectivity_wf(omp_nthreads, has_transform, name="dsi_studio_connectivity",
                                     params={}, output_suffix=""):
     """Calculate streamline-based connectivity matrices using DSI Studio.
 
@@ -310,7 +292,7 @@ def init_dsi_studio_connectivity_wf(omp_nthreads, has_t1w_transform,
     return workflow
 
 
-def init_dsi_studio_export_wf(omp_nthreads, has_t1w_transform, name="dsi_studio_export",
+def init_dsi_studio_export_wf(omp_nthreads, has_transform, name="dsi_studio_export",
                               params={}, output_suffix=""):
     """Export scalar maps from a DSI Studio fib file into NIfTI files with correct headers.
 
