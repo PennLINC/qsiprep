@@ -128,7 +128,7 @@ def init_distortion_group_merge_wf(merging_strategy, inputs_list, hmc_model, rep
         distortion_merger = pe.Node(AveragePEPairs(), name='distortion_merger')
         workflow.connect([
             (merge_original_bvec, distortion_merger, [('out', 'original_bvec_files')]),
-            (merge_carpetplot_data, distortion_merger, [('out', '')])
+            (merge_carpetplot_data, distortion_merger, [('out', 'carpetplot_data')])
         ])
     elif merging_strategy.startswith('concat'):
         distortion_merger = pe.Node(MergeDWIs(), name='distortion_merger')
@@ -242,14 +242,15 @@ def init_distortion_group_merge_wf(merging_strategy, inputs_list, hmc_model, rep
             ('out_dwi', 'inputnode.processed_dwi_file'),
             ('out_bval', 'inputnode.bval_file'),
             ('out_bvec', 'inputnode.bvec_file'),
-        ]),
-        (outputnode, interactive_report_wf, [
-            ('carpetplot_data', 'inputnode.carpetplot_data'),
-            ('confounds', 'inputnode.confounds_file')]),
-        (transform_dwis_t1, interactive_report_wf, [
-            ('outputnode.resampled_dwi_mask', 'inputnode.mask_file')
+            ('merged_carpetplot_data', 'inputnode.carpetplot_data'),
+            ('merged_denoising_confounds', 'inputnode.confounds_file')]),
         (interactive_report_wf, outputnode, [
             ('outputnode.out_report', 'interactive_report')]),
+        (b0_ref_wf, interactive_report_wf, [
+            ('outputnode.dwi_mask', 'inputnode.mask_file')]),
+        (series_qc, interactive_report_wf, [('series_qc_file', 'inputnode.series_qc_file')]),
+        (interactive_report_wf, ds_interactive_report, [
+            ('outputnode.out_report', 'in_file')]),
 
         # Connect merged results to outputs
         (outputnode, dwi_derivatives_wf, [

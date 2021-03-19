@@ -34,14 +34,12 @@ def fix_multi_source_name(in_files, dwi_only):
     '/path/to/sub-045_T1w.nii.gz'
 
     """
-    print('!' * 1000)
     import os
     from nipype.utils.filemanip import filename_to_list
     base, in_file = os.path.split(filename_to_list(in_files)[0])
     subject_label = in_file.split("_", 1)[0].split("-")[1]
     if dwi_only:
         base = base.replace("/dwi", "/anat")
-    print(base)
     return os.path.join(base, "sub-%s_T1w.nii.gz" % subject_label)
 
 
