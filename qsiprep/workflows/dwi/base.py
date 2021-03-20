@@ -258,7 +258,6 @@ def init_dwi_preproc_wf(dwi_only,
         * :py:func:`~qsiprep.workflows.dwi.registration.init_dwi_t1_trans_wf`
         * :py:func:`~qsiprep.workflows.dwi.registration.init_dwi_reg_wf`
         * :py:func:`~qsiprep.workflows.dwi.confounds.init_dwi_confounds_wf`
-        * :py:func:`~qsiprep.workflows.dwi.resampling.init_dwi_trans_wf`
 
     """
     # Check the inputs

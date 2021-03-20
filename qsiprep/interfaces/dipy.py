@@ -281,7 +281,11 @@ class DipyReconInterface(SimpleInterface):
         if not isdefined(self.inputs.mask_file):
             dwi_data = amplitudes_img.get_data()
             LOGGER.warning("Creating an Otsu mask, check that the whole brain is covered.")
-            _, mask_array = median_otsu(dwi_data[..., gtab.b0s_mask], 3, 2)
+            _, mask_array = median_otsu(dwi_data,
+                                        vol_idx=gtab.b0s_mask,
+                                        median_radius=3,
+                                        numpass=2)
+
             # Needed for synthetic data
             mask_array = mask_array * (dwi_data.sum(3) > 0)
             mask_img = nb.Nifti1Image(mask_array.astype(np.float32), amplitudes_img.affine,

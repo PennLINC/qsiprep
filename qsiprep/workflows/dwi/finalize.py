@@ -246,7 +246,6 @@ def init_dwi_finalize_wf(scan_groups,
                                           to_mni=False,
                                           write_local_bvecs=write_local_bvecs,
                                           concatenate=write_derivatives)
-    interactive_report_wf = init_interactive_report_wf()
 
     workflow.connect([
         (inputnode, transform_dwis_t1, [
@@ -276,7 +275,25 @@ def init_dwi_finalize_wf(scan_groups,
                                          ('outputnode.b0_series', 't1_b0_series'),
                                          ('outputnode.dwi_ref_resampled', 't1_b0_ref'),
                                          ('outputnode.resampled_dwi_mask', 'dwi_mask_t1'),
-                                         ('outputnode.resampled_qc', 'series_qc_t1')]),
+                                         ('outputnode.resampled_qc', 'series_qc_t1')])
+    ])
+
+    # Fill-in datasinks of reportlets seen so far
+    for node in workflow.list_node_names():
+        if node.split('.')[-1].startswith('ds_report'):
+            workflow.get_node(node).inputs.base_directory = reportlets_dir
+            workflow.get_node(node).inputs.source_file = source_file
+
+    # The workflow is done if we will be concatenating images later
+    if not write_derivatives:
+        # The list of transformed images is already attached to dwi_t1
+        return workflow
+
+    # Finish up the derivatives process
+    interactive_report_wf = init_interactive_report_wf()
+
+    # We need to attach outputs to the interactive report
+    workflow.connect([
         (inputnode, interactive_report_wf, [
             ('raw_concatenated', 'inputnode.raw_dwi_file'),
             ('carpetplot_data', 'inputnode.carpetplot_data'),
@@ -288,16 +305,6 @@ def init_dwi_finalize_wf(scan_groups,
              ('outputnode.rotated_bvecs', 'inputnode.bvec_file')]),
         (interactive_report_wf, outputnode, [('outputnode.out_report', 'interactive_report')])
     ])
-
-    # Fill-in datasinks of reportlets seen so far
-    for node in workflow.list_node_names():
-        if node.split('.')[-1].startswith('ds_report'):
-            workflow.get_node(node).inputs.base_directory = reportlets_dir
-            workflow.get_node(node).inputs.source_file = source_file
-
-    if not write_derivatives:
-        # The list of transformed images is already attached to dwi_t1
-        return workflow
 
     # CONNECT TO DERIVATIVES #####################
     gtab_t1 = pe.Node(MRTrixGradientTable(), name='gtab_t1')

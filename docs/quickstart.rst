@@ -147,7 +147,7 @@ together *after* images are concatenated by specifying
 What is happening??
 ===================
 
-While QSIPrep runs with `-v -v`, you will see lots of seemingly-nonsensical output
+While QSIPrep runs with `-v -v`, you will see lots of unintuitive output
 in the terminal like::
 
   [Node] Setting-up "qsiprep_wf.single_subject_PNC_wf.dwi_finalize_acq_realistic_wf.transform_dwis_t1.final_b0_ref.b0ref_reportlet" in "/scratch/qsiprep_wf/single_subject_PNC_wf/dwi_finalize_acq_realistic_wf/transform_dwis_t1/final_b0_ref/b0ref_reportlet".
