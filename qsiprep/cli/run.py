@@ -6,6 +6,7 @@ QSI workflow
 """
 import warnings
 import os
+import re
 import os.path as op
 from pathlib import Path
 import logging
@@ -83,6 +84,10 @@ def get_parser():
         'identifier (the sub- prefix can be removed)')
     g_bids.add_argument('--acquisition_type', '--acquisition_type', action='store',
                         help='select a specific acquisition type to be processed')
+    g_bids.add_argument('--bids-database-dir', '--bids_database_dir',
+                        help="path to a saved BIDS database directory",
+                        type=Path,
+                        action='store')
 
     # arguments for reconstructing QSI data
     g_ireports = parser.add_argument_group('Options for interactive report outputs')
@@ -762,8 +767,21 @@ def build_qsiprep_workflow(opts, retval):
     run_uuid = '%s_%s' % (strftime('%Y%m%d-%H%M%S'), uuid.uuid4())
     retval['run_uuid'] = run_uuid
 
+    _db_path = opts.bids_database_dir or (
+        work_dir / run_uuid / "bids_db")
+    _db_path.mkdir(exist_ok=True, parents=True)
+
     # First check that bids_dir looks like a BIDS folder
-    layout = BIDSLayout(str(bids_dir), validate=False)
+    layout = BIDSLayout(str(bids_dir),
+                validate=False,
+                database_path=_db_path,
+                reset_database=opts.bids_database_dir is None,
+                ignore=(
+                    "code",
+                    "stimuli",
+                    "sourcedata",
+                    "models",
+                    re.compile(r"^\.")))
     subject_list = collect_participants(
         layout, participant_label=opts.participant_label)
     retval['subject_list'] = subject_list
@@ -985,7 +1003,7 @@ def build_recon_workflow(opts, retval):
     """
     from subprocess import check_call, CalledProcessError, TimeoutExpired
     from pkg_resources import resource_filename as pkgrf
-
+    from bids import BIDSLayout
     from nipype import logging, config as ncfg
     from ..__about__ import __version__
     from ..workflows.recon import init_qsirecon_wf
@@ -1003,10 +1021,25 @@ def build_recon_workflow(opts, retval):
     # Set up some instrumental utilities
     run_uuid = '%s_%s' % (strftime('%Y%m%d-%H%M%S'), uuid.uuid4())
 
+    _db_path = opts.bids_database_dir or (
+        work_dir / run_uuid / "bids_db")
+    _db_path.mkdir(exist_ok=True, parents=True)
+
     # First check that bids_dir looks like a BIDS folder
-    bids_dir = os.path.abspath(opts.bids_dir)
+    bids_dir = opts.bids_dir.resolve()
+    layout = BIDSLayout(str(bids_dir),
+                validate=False,
+                database_path=_db_path,
+                reset_database=opts.bids_database_dir is None,
+                ignore=(
+                    "code",
+                    "stimuli",
+                    "sourcedata",
+                    "models",
+                    re.compile(r"^\.")))
     subject_list = collect_participants(
-        bids_dir, participant_label=opts.participant_label, bids_validate=False)
+        layout, participant_label=opts.participant_label)
+    retval['subject_list'] = subject_list
 
     # Load base plugin_settings from file if --use-plugin
     if opts.use_plugin is not None:
