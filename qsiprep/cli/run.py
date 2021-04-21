@@ -772,7 +772,8 @@ def build_qsiprep_workflow(opts, retval):
     _db_path.mkdir(exist_ok=True, parents=True)
 
     # First check that bids_dir looks like a BIDS folder
-    layout = BIDSLayout(str(bids_dir),
+    layout = BIDSLayout(
+                str(bids_dir),
                 validate=False,
                 database_path=_db_path,
                 reset_database=opts.bids_database_dir is None,
@@ -1020,6 +1021,10 @@ def build_recon_workflow(opts, retval):
 
     # Set up some instrumental utilities
     run_uuid = '%s_%s' % (strftime('%Y%m%d-%H%M%S'), uuid.uuid4())
+    # Set up directories
+    output_dir = op.abspath(opts.output_dir)
+    log_dir = op.join(output_dir, 'qsirecon', 'logs')
+    work_dir = op.abspath(opts.work_dir or 'work')  # Set work/ as default
 
     _db_path = opts.bids_database_dir or (
         work_dir / run_uuid / "bids_db")
@@ -1027,7 +1032,8 @@ def build_recon_workflow(opts, retval):
 
     # First check that bids_dir looks like a BIDS folder
     bids_dir = opts.bids_dir.resolve()
-    layout = BIDSLayout(str(bids_dir),
+    layout = BIDSLayout(
+                str(bids_dir),
                 validate=False,
                 database_path=_db_path,
                 reset_database=opts.bids_database_dir is None,
@@ -1079,11 +1085,6 @@ def build_recon_workflow(opts, retval):
         logger.warning(
             'Per-process threads (--omp-nthreads=%d) exceed total '
             'threads (--nthreads/--n_cpus=%d)', omp_nthreads, nthreads)
-
-    # Set up directories
-    output_dir = op.abspath(opts.output_dir)
-    log_dir = op.join(output_dir, 'qsirecon', 'logs')
-    work_dir = op.abspath(opts.work_dir or 'work')  # Set work/ as default
 
     # Check and create output and working directories
     os.makedirs(output_dir, exist_ok=True)
