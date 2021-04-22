@@ -105,7 +105,7 @@ class DSIStudioSrcQC(SimpleInterface):
         tmp_dir = runtime.cwd + "/src_qc"
         os.makedirs(tmp_dir, exist_ok=True)
         linked_src_file = fname_presuffix(self.inputs.src_file, newpath=tmp_dir)
-        os.link(self.inputs.src_file, linked_src_file)
+        os.symlink(self.inputs.src_file, linked_src_file)
         cmd = ['dsi_studio', '--action=qc', '--source='+tmp_dir]
         proc = Popen(cmd, cwd=runtime.cwd, stdout=PIPE, stderr=PIPE)
         out, err = proc.communicate()
@@ -132,7 +132,7 @@ class DSIStudioFibQC(SimpleInterface):
     def _run_interface(self, runtime):
         # Create a temp directory for the src file to go
         linked_fib_file = fname_presuffix(self.inputs.fib_file, newpath=runtime.cwd)
-        os.link(self.inputs.fib_file, linked_fib_file)
+        os.symlink(self.inputs.fib_file, linked_fib_file)
         cmd = ['dsi_studio', '--action=qc', '--source='+linked_fib_file]
         proc = Popen(cmd, cwd=runtime.cwd, stdout=PIPE, stderr=PIPE)
         out, err = proc.communicate()
