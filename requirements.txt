@@ -1,5 +1,5 @@
 grabbit==0.2.3
-pybids==0.6.5
+pybids=>0.11.1
 versioneer
 dipy==1.0.0
 svgutils==0.3.0
