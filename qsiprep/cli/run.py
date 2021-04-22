@@ -1024,7 +1024,7 @@ def build_recon_workflow(opts, retval):
     # Set up directories
     output_dir = op.abspath(opts.output_dir)
     log_dir = op.join(output_dir, 'qsirecon', 'logs')
-    work_dir = op.abspath(opts.work_dir or 'work')  # Set work/ as default
+    work_dir = Path(opts.work_dir or 'work')  # Set work/ as default
 
     _db_path = opts.bids_database_dir or (
         work_dir / run_uuid / "bids_db")
