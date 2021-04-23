@@ -200,7 +200,7 @@ to workflows in *qsiprep*'s documentation]\
 
     # Was there a forced normalization during preprocessing?
     template_transform = [f.path for f in
-                          layout.get(subject_id=subject_id, suffix='xfm', extension=['.h5'])
+                          layout.get(subject=subject_id, suffix='xfm', extension=['.h5'])
                           if 'to-T1w' in f.path and 'from-MNI152NLin2009cAsym' in f.path]
     if template_transform:
         template_transform = template_transform[0]
@@ -208,7 +208,7 @@ to workflows in *qsiprep*'s documentation]\
     else:
         has_transform = False
 
-    t1w_brain_mask = layout.get(subject_id=subject_id, desc='brain', extension=['nii', 'nii.gz'],
+    t1w_brain_mask = layout.get(subject=subject_id, desc='brain', extension=['nii', 'nii.gz'],
                                 modality='anat')
     has_t1w_brain_mask = bool(t1w_brain_mask)
 
