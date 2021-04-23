@@ -208,7 +208,10 @@ to workflows in *qsiprep*'s documentation]\
     else:
         has_transform = False
 
-    t1w_brain_mask = layout.get(subject=subject_id, desc='brain', extension=['nii', 'nii.gz'],
+    t1w_brain_mask = layout.get(subject=subject_id,
+                                invalid_filters='allow',
+                                desc='brain',
+                                extension=['nii', 'nii.gz'],
                                 modality='anat')
     has_t1w_brain_mask = bool(t1w_brain_mask)
 
