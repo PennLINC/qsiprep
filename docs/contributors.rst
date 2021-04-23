@@ -94,12 +94,6 @@ pre-compiled binaries, `conda <https://github.com/conda/conda>`_ packages
 may also be added to the ``conda install`` line in the `Dockerfile
 <https://github.com/pennbbl/qsiprep/blob/29133e5e9f92aae4b23dd897f9733885a60be311/Dockerfile#L46>`_.
 
-Finally, if a specific version of a repository needs to be pinned, edit
-the ``requirements.txt`` file.
-See the `current
-<https://github.com/pennbbl/qsiprep/blob/master/requirements.txt>`_
-file for examples.
-
 Non-Python dependencies must also be installed in the Dockerfile, via a
 ``RUN`` command.
 For example, installing an ``apt`` package may be done as follows: ::
