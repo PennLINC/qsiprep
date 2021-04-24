@@ -25,6 +25,7 @@
       "software": "DSI Studio",
       "action": "connectivity",
       "input": "csdsi_3dshore",
+      "output_suffix": "3dSHOREConn",
       "parameters": {
         "turning_angle": 35,
         "method": 0,
@@ -37,15 +38,8 @@
         "initial_dir": 2,
         "fiber_count": 5000000,
         "connectivity_value": "count,ncount,mean_length,gfa",
-        "connectivity_type": "pass,end",
-        "output_trk": "no_trk"
-      }
-    },
-    {
-        "name": "controlability",
-        "input": "streamline_connectivity",
-        "action": "controllability",
-        "output_suffix": "rec-3dshore_control"
+        "connectivity_type": "pass,end"
+       }
     }
   ]
 }
