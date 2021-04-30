@@ -87,61 +87,48 @@ class DSIStudioCreateSrc(CommandLine):
         return outputs
 
 
+class _DSIStudioQCOutputSpec(TraitedSpec):
+    qc_txt = File(exists=True, desc="Text file with QC measures")
+
+
+class DSIStudioQC(SimpleInterface):
+    output_spec = _DSIStudioQCOutputSpec
+
+    def _run_interface(self, runtime):
+        # DSI Studio (0.12.2) action=qc has two modes, depending on wether the
+        # input is a file (src.gz|nii.gz)|(fib.gz) or a directory. For
+        # directories, the action will be run on a number of detected files
+        # (which *cannot* be symbolic links for some reason).
+        src_file = fname_presuffix(self.inputs.src_file, newpath=runtime.cwd)
+        cmd = ['dsi_studio', '--action=qc', '--source='+src_file]
+        proc = Popen(cmd, cwd=runtime.cwd, stdout=PIPE, stderr=PIPE)
+        out, err = proc.communicate()
+        if out:
+            LOGGER.info(out.decode())
+        if err:
+            LOGGER.critical(err.decode())
+        self._results['qc_txt'] = src_file.replace(self.ext, '.qc.txt')
+        return runtime
+
+
 class _DSIStudioSrcQCInputSpec(DSIStudioCommandLineInputSpec):
-    src_file = File(exists=True, copyfile=True, argstr="%s",
+    src_file = File(exists=True, copyfile=False, argstr="%s",
                     desc='DSI Studio src[.gz] file')
 
 
-class _DSIStudioSrcQCOutputSpec(DSIStudioCommandLineInputSpec):
-    qc_txt = File(exists=True, desc="Text file with QC measures")
-
-
-class DSIStudioSrcQC(SimpleInterface):
+class DSIStudioSrcQC(DSIStudioQC):
     input_spec = _DSIStudioSrcQCInputSpec
-    output_spec = _DSIStudioSrcQCOutputSpec
-
-    def _run_interface(self, runtime):
-        # Create a temp directory for the src file to go
-        tmp_dir = runtime.cwd + "/src_qc"
-        os.makedirs(tmp_dir, exist_ok=True)
-        linked_src_file = fname_presuffix(self.inputs.src_file, newpath=tmp_dir)
-        os.link(self.inputs.src_file, linked_src_file)
-        cmd = ['dsi_studio', '--action=qc', '--source='+tmp_dir]
-        proc = Popen(cmd, cwd=runtime.cwd, stdout=PIPE, stderr=PIPE)
-        out, err = proc.communicate()
-        if out:
-            LOGGER.info(str(out))
-        if err:
-            LOGGER.critical(str(err))
-        self._results['qc_txt'] = tmp_dir + '.qc.txt'
-        return runtime
+    ext = '.src.gz'
 
 
 class _DSIStudioFibQCInputSpec(DSIStudioCommandLineInputSpec):
-    fib_file = File(exists=True, argstr="%s", desc='DSI Studio fib[.gz] file')
+    src_file = File(exists=True, copyfile=False, argstr="%s",
+                    desc='DSI Studio fib[.gz] file')
 
 
-class _DSIStudioFibQCOutputSpec(DSIStudioCommandLineInputSpec):
-    qc_txt = File(exists=True, desc="Text file with QC measures")
-
-
-class DSIStudioFibQC(SimpleInterface):
+class DSIStudioFibQC(DSIStudioQC):
     input_spec = _DSIStudioFibQCInputSpec
-    output_spec = _DSIStudioFibQCOutputSpec
-
-    def _run_interface(self, runtime):
-        # Create a temp directory for the src file to go
-        linked_fib_file = fname_presuffix(self.inputs.fib_file, newpath=runtime.cwd)
-        os.link(self.inputs.fib_file, linked_fib_file)
-        cmd = ['dsi_studio', '--action=qc', '--source='+linked_fib_file]
-        proc = Popen(cmd, cwd=runtime.cwd, stdout=PIPE, stderr=PIPE)
-        out, err = proc.communicate()
-        if out:
-            LOGGER.info(str(out))
-        if err:
-            LOGGER.critical(str(err))
-        self._results['qc_txt'] = linked_fib_file.replace('.fib.gz', '.qc.txt')
-        return runtime
+    ext = '.fib.gz'
 
 
 # Step 2 reonstruct ODFs
@@ -669,7 +656,7 @@ class DSIStudioMergeQC(SimpleInterface):
 def load_src_qc_file(fname, prefix=""):
     with open(fname, "r") as qc_file:
         qc_data = qc_file.readlines()
-    data = qc_data[2]
+    data = qc_data[1]
     parts = data.strip().split('\t')
     if len(parts) == 7:
         _, dims, voxel_size, dirs, max_b, ndc, bad_slices = parts
