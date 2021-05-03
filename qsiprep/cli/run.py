@@ -1144,7 +1144,6 @@ def build_recon_workflow(opts, retval):
         recon_spec=opts.recon_spec,
         low_mem=opts.low_mem,
         omp_nthreads=omp_nthreads,
-        bids_dir=bids_dir,
         sloppy=opts.sloppy
     )
     retval['return_code'] = 0
