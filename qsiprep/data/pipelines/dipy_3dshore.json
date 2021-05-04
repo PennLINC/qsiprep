@@ -4,7 +4,7 @@
   "atlases": ["schaefer100x7", "schaefer100x17", "schaefer200x7", "schaefer200x17", "schaefer400x7", "schaefer400x17", "brainnetome246", "aicha384", "gordon333", "aal116", "power264"],
   "nodes": [
     {
-      "name": "csdsi_3dshore",
+      "name": "recon_3dshore",
       "software": "Dipy",
       "action": "3dSHORE_reconstruction",
       "input": "qsiprep",
@@ -21,25 +21,33 @@
       }
     },
     {
-      "name": "streamline_connectivity",
+      "name": "tractography",
       "software": "DSI Studio",
-      "action": "connectivity",
-      "input": "csdsi_3dshore",
-      "output_suffix": "3dSHOREConn",
+      "action": "tractography",
+      "input": "recon_3dshore",
       "parameters": {
         "turning_angle": 35,
         "method": 0,
         "smoothing": 0.0,
         "step_size": 1.0,
-        "min_length": 10,
+        "min_length": 30,
         "max_length": 250,
         "seed_plan": 0,
         "interpolation": 0,
         "initial_dir": 2,
-        "fiber_count": 5000000,
+        "fiber_count": 5000000
+      }
+    },
+    {
+      "name": "streamline_connectivity",
+      "software": "DSI Studio",
+      "action": "connectivity",
+      "input": "tractography",
+      "output_suffix": "3dshorenetwork",
+      "parameters": {
         "connectivity_value": "count,ncount,mean_length,gfa",
         "connectivity_type": "pass,end"
-       }
+      }
     }
   ]
 }
