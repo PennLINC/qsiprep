@@ -32,6 +32,8 @@ class MergeDWIsInputSpec(BaseInterfaceInputSpec):
         File(), mandatory=False, desc='list of raw concatenated images')
     b0_refs = InputMultiObject(
         File(), mandatory=False, desc='list of b=0 reference images')
+    carpetplot_data = InputMultiObject(
+        File(exists=True), mandatory=False, desc='list of carpetplot_data files')
 
 
 class MergeDWIsOutputSpec(TraitedSpec):
@@ -44,6 +46,7 @@ class MergeDWIsOutputSpec(TraitedSpec):
     merged_b0_ref = File(exists=True)
     merged_raw_dwi = File(exists=True, mandatory=False)
     merged_raw_bvec = File(exists=True, mandatory=False)
+    merged_carpetplot_data = File(exists=True)
 
 
 class MergeDWIs(SimpleInterface):
@@ -109,6 +112,12 @@ class MergeDWIs(SimpleInterface):
         self._results['out_bval'] = out_bval
         self._results['out_bvec'] = out_bvec
 
+        # If one and only one carpetplot data was specified, add it to outputs
+        if len(self.inputs.carpetplot_data) > 1:
+            raise NotImplementedError("Can't handle multiple carpetplots in merging")
+        if len(self.inputs.carpetplot_data) == 1:
+            self._results['merged_carpetplot_data'] = self.inputs.carpetplot_data[0]
+
         if num_dwis == 1:
             return runtime
 
@@ -168,6 +177,7 @@ class AveragePEPairs(SimpleInterface):
             self.inputs.raw_concatenated_files,
             self.inputs.carpetplot_data,
             verbose=self.inputs.verbose)
+
 
         # Save the averaged outputs
         out_dwi_path = op.join(runtime.cwd, "averaged_pairs.nii.gz")
@@ -331,7 +341,7 @@ def get_worst(values1, values2):
 
 def average_carpetplots(carpet_list, image_pairs):
     """Averages carpetplot data for display when pe pairs are averaged.
-    
+
     Reminder: incoming data is a dict of
     {"carpetplot": [[one image's slice scores],
                     [next image's slice scores],

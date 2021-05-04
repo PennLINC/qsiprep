@@ -34,7 +34,8 @@ LOGGER = logging.getLogger('nipype.workflow')
 
 
 def init_qsirecon_wf(subject_list, run_uuid, work_dir, output_dir, recon_input,
-                     recon_spec, low_mem, omp_nthreads, bids_dir, sloppy, name="qsirecon_wf"):
+                     recon_spec, low_mem, omp_nthreads, sloppy,
+                     name="qsirecon_wf"):
     """
     This workflow organizes the execution of qsiprep, with a sub-workflow for
     each subject.
@@ -50,7 +51,6 @@ def init_qsirecon_wf(subject_list, run_uuid, work_dir, output_dir, recon_input,
                               recon_input='.',
                               recon_spec='doctest_spec.json',
                               output_dir='.',
-                              bids_dir='.',
                               low_mem=False,
                               omp_nthreads=1)
 
@@ -66,8 +66,6 @@ def init_qsirecon_wf(subject_list, run_uuid, work_dir, output_dir, recon_input,
             files
         output_dir : str
             Directory in which to save derivatives
-        bids_dir : str
-            Root directory of BIDS dataset
         recon_input : str
             Root directory of the output from qsiprep
         recon_spec : str
@@ -89,7 +87,6 @@ def init_qsirecon_wf(subject_list, run_uuid, work_dir, output_dir, recon_input,
             name="single_subject_" + subject_id + "_recon_wf",
             reportlets_dir=reportlets_dir,
             output_dir=output_dir,
-            bids_dir=bids_dir,
             omp_nthreads=omp_nthreads,
             low_mem=low_mem,
             sloppy=sloppy
@@ -106,7 +103,7 @@ def init_qsirecon_wf(subject_list, run_uuid, work_dir, output_dir, recon_input,
 
 
 def init_single_subject_wf(
-        subject_id, name, reportlets_dir, output_dir, bids_dir,
+        subject_id, name, reportlets_dir, output_dir,
         low_mem, omp_nthreads, recon_input, recon_spec, sloppy):
     """
     This workflow organizes the reconstruction pipeline for a single subject.
@@ -126,8 +123,6 @@ def init_single_subject_wf(
             Directory in which to save reportlets
         output_dir : str
             Directory in which to save derivatives
-        bids_dir : str
-            Root directory of BIDS dataset
         recon_input : str
             Root directory of the output from qsiprep
         recon_spec : str
@@ -200,7 +195,7 @@ to workflows in *qsiprep*'s documentation]\
 
     # Was there a forced normalization during preprocessing?
     template_transform = [f.path for f in
-                          layout.get(subject_id=subject_id, suffix='xfm', extension=['.h5'])
+                          layout.get(subject=subject_id, suffix='xfm', extension=['.h5'])
                           if 'to-T1w' in f.path and 'from-MNI152NLin2009cAsym' in f.path]
     if template_transform:
         template_transform = template_transform[0]
@@ -208,7 +203,10 @@ to workflows in *qsiprep*'s documentation]\
     else:
         has_transform = False
 
-    t1w_brain_mask = layout.get(subject_id=subject_id, desc='brain', extension=['nii', 'nii.gz'],
+    t1w_brain_mask = layout.get(subject=subject_id,
+                                invalid_filters='allow',
+                                desc='brain',
+                                extension=['nii', 'nii.gz'],
                                 modality='anat')
     has_t1w_brain_mask = bool(t1w_brain_mask)
 
