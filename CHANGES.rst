@@ -1,3 +1,16 @@
+0.13.0 (May 5, 2021)
+====================
+Many bugfixes
+
+ * Fix bug that produced flipped scalar images (#251)
+ * Added a default working directory to prevent uninterpretable error message (#250)
+ * Fix a bug in the `dipy_3dshore` reconstruction workflow (#249)
+ * Remove hardlinking from DSI Studio interfaces (#214)
+ * Add an option to use a BIDS database directory (#247)
+ * Fix bug in interactive reports for HCP-style acquisitions (#238)
+ * Update defaults for `Patch2Self` (#230, #239)
+ * Remove cmake installer from docker image after compiling ANTS (#229)
+
 0.13.0RC1 (January 19, 2021)
 ============================
 This version introduces major changes to the TOPUP/eddy workflow. Feedback would be greatly
