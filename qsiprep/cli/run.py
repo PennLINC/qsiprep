@@ -223,21 +223,10 @@ def get_parser():
         action='store_true',
         help='skip re-scaling dwi scans to have matching b=0 intensities')
     g_conf.add_argument(
-        '--denoise-before-combining', '--denoise_before_combining',
-        action='store_true',
-        help='[DEPRECATED] run ``dwidenoise`` before combining dwis. Requires '
-             '``--combine-all-dwis``')
-    g_conf.add_argument(
         '--denoise-after-combining', '--denoise_after_combining',
         action='store_true',
         help='run ``dwidenoise`` after combining dwis. Requires '
              '``--combine-all-dwis``')
-    g_conf.add_argument(
-        '--combine_all_dwis', '--combine-all-dwis',
-        action='store_true',
-        default=False,
-        help='[DEPRECATED] combine dwis from across multiple runs for motion correction '
-        'and reconstruction.')
     g_conf.add_argument(
         '--separate_all_dwis', '--separate-all-dwis',
         action='store_true',
@@ -371,11 +360,6 @@ def get_parser():
         action='store_true',
         help='do not use a random seed for skull-stripping - will ensure '
         'run-to-run replicability when used with --omp-nthreads 1')
-    g_ants.add_argument(
-        '--force-spatial-normalization', '--force_spatial_normalization',
-        action='store_true',
-        help='[DEPRECATED] ensures that spatial normalization is run, '
-        'Useful if you plan to warp atlases into subject space.')
     g_ants.add_argument(
         '--skip-t1-based-spatial-normalization', '--skip_t1_based_spatial_normalization',
         action='store_true',
@@ -794,10 +778,7 @@ def build_qsiprep_workflow(opts, retval):
                        "Spatial normalization should be done during reconstruction.")
         output_spaces = ["T1w"]
 
-    # Deprecated --force-spatial-normalization
     force_spatial_normalization = not opts.skip_t1_based_spatial_normalization
-    if opts.force_spatial_normalization:
-        logger.warning("[DEPRECATED] --force-spatial-normalization is now default")
     if not force_spatial_normalization and (opts.use_syn_sdc or opts.force_syn):
         msg = [
             'SyN SDC correction requires T1 to MNI registration.',
@@ -805,14 +786,6 @@ def build_qsiprep_workflow(opts, retval):
         ]
         force_spatial_normalization = True
         logger.warning(' '.join(msg))
-
-    # deprecated --combine-all-dwis
-    if opts.combine_all_dwis:
-        logger.warning("[DEPRECATED] DWIs are combined by default.")
-
-    # deprecated --denoise-before-combining
-    if opts.denoise_before_combining:
-        logger.warning("[DEPRECATED] DWIs are denoised before combining by default.")
 
     # Load base plugin_settings from file if --use-plugin
     if opts.use_plugin is not None:
