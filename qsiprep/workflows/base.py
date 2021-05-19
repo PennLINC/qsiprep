@@ -26,7 +26,7 @@ from ..engine import Workflow
 from ..interfaces import (BIDSDataGrabber, BIDSInfo, BIDSFreeSurferDir,
                           SubjectSummary, AboutSummary, DerivativesDataSink)
 from ..utils.bids import collect_data
-from ..utils.misc import fix_multi_T1w_source_name, fix_multi_source_name
+from ..utils.misc import fix_multi_source_name
 from ..utils.grouping import group_dwi_scans
 from ..__about__ import __version__
 
@@ -652,7 +652,7 @@ to workflows in *QSIPrep*'s documentation]\
 
     intramodal_template_wf = init_intramodal_template_wf(
         omp_nthreads=omp_nthreads,
-        t1w_source_file=fix_multi_T1w_source_name(subject_data['t1w']),
+        t1w_source_file=fix_multi_source_name(subject_data[info_modality]),
         reportlets_dir=reportlets_dir,
         num_iterations=intramodal_template_iters,
         transform=intramodal_template_transform,
