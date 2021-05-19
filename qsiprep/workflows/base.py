@@ -652,7 +652,7 @@ to workflows in *QSIPrep*'s documentation]\
 
     intramodal_template_wf = init_intramodal_template_wf(
         omp_nthreads=omp_nthreads,
-        t1w_source_file=fix_multi_source_name(subject_data[info_modality]),
+        t1w_source_file=fix_multi_source_name(subject_data[info_modality], dwi_only),
         reportlets_dir=reportlets_dir,
         num_iterations=intramodal_template_iters,
         transform=intramodal_template_transform,
