@@ -45,7 +45,7 @@ def init_qsiprep_wf(
         subject_list, run_uuid, work_dir, output_dir, bids_dir, ignore, debug, low_mem, anat_only,
         dwi_only, longitudinal, b0_threshold, hires, denoise_before_combining, dwi_denoise_window,
         denoise_method, unringing_method, dwi_no_biascorr, no_b0_harmonization, output_resolution,
-        infant_mode, combine_all_dwis, distortion_group_merge, omp_nthreads,
+        infant_mode, combine_all_dwis, distortion_group_merge, omp_nthreads, bids_filters,
         force_spatial_normalization, skull_strip_template, skull_strip_fixed_seed, freesurfer,
         hmc_model, impute_slice_threshold, hmc_transform, shoreline_iters, eddy_config,
         write_local_bvecs, output_spaces, template, motion_corr_to, b0_to_t1w_transform,
@@ -68,6 +68,7 @@ def init_qsiprep_wf(
                               output_dir='.',
                               bids_dir='.',
                               ignore=[],
+                              bids_filters=None,
                               debug=False,
                               low_mem=False,
                               dwi_only=False,
@@ -231,6 +232,7 @@ def init_qsiprep_wf(
             reportlets_dir=reportlets_dir,
             output_dir=output_dir,
             bids_dir=bids_dir,
+            bids_filters=bids_filters,
             ignore=ignore,
             debug=debug,
             low_mem=low_mem,
@@ -286,15 +288,18 @@ def init_qsiprep_wf(
 
 
 def init_single_subject_wf(
-        subject_id, name, reportlets_dir, output_dir, bids_dir, ignore, debug, write_local_bvecs,
-        low_mem, dwi_only, anat_only, longitudinal, b0_threshold, denoise_before_combining,
-        dwi_denoise_window, denoise_method, unringing_method, dwi_no_biascorr, no_b0_harmonization,
-        infant_mode, combine_all_dwis, distortion_group_merge, omp_nthreads, skull_strip_template,
-        force_spatial_normalization, skull_strip_fixed_seed, freesurfer, hires, output_spaces,
-        template, output_resolution, prefer_dedicated_fmaps, motion_corr_to, b0_to_t1w_transform,
-        intramodal_template_iters, intramodal_template_transform, hmc_model, hmc_transform,
-        shoreline_iters, eddy_config, impute_slice_threshold, fmap_bspline, fmap_demean, use_syn,
-        force_syn):
+        subject_id, name, reportlets_dir, output_dir, bids_dir, ignore, debug,
+        write_local_bvecs, low_mem, dwi_only, anat_only, longitudinal,
+        b0_threshold, denoise_before_combining, bids_filters,
+        dwi_denoise_window, denoise_method, unringing_method, dwi_no_biascorr,
+        no_b0_harmonization, infant_mode, combine_all_dwis,
+        distortion_group_merge, omp_nthreads, skull_strip_template,
+        force_spatial_normalization, skull_strip_fixed_seed, freesurfer, hires,
+        output_spaces, template, output_resolution, prefer_dedicated_fmaps,
+        motion_corr_to, b0_to_t1w_transform, intramodal_template_iters,
+        intramodal_template_transform, hmc_model, hmc_transform,
+        shoreline_iters, eddy_config, impute_slice_threshold, fmap_bspline,
+        fmap_demean, use_syn, force_syn):
     """
     This workflow organizes the preprocessing pipeline for a single subject.
     It collects and reports information about the subject, and prepares
@@ -317,6 +322,7 @@ def init_single_subject_wf(
             reportlets_dir='.',
             output_dir='.',
             bids_dir='.',
+            bids_filters=None,
             ignore=[],
             debug=False,
             low_mem=False,
@@ -425,7 +431,7 @@ def init_single_subject_wf(
 
         template : str
             Name of template targeted by ``template`` output space
-        hmc_model : 'none', '3dSHORE' or 'MAPMRI'
+        hmc_model : 'none', '3dSHORE' or 'eddy'
             Model used to generate target images for head motion correction. If 'none'
             the transform from the nearest b0 will be used.
         hmc_transform : "Rigid" or "Affine"
@@ -475,7 +481,7 @@ def init_single_subject_wf(
         layout = None
         LOGGER.warning("Building a test workflow")
     else:
-        subject_data, layout = collect_data(bids_dir, subject_id)
+        subject_data, layout = collect_data(bids_dir, subject_id, filters=bids_filters)
 
     if anat_only and dwi_only:
         raise Exception("--anat-only and --dwi-only are mutually exclusive.")
