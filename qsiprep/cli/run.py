@@ -929,6 +929,7 @@ def build_qsiprep_workflow(opts, retval):
         ignore=opts.ignore,
         hires=False,
         freesurfer=opts.do_reconall,
+        bids_filters=opts.bids_filter_file,
         debug=opts.sloppy,
         low_mem=opts.low_mem,
         dwi_only=opts.dwi_only,
