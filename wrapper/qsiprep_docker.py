@@ -396,7 +396,8 @@ def main():
             main_args.extend(['--recon-spec', opts.recon_spec])
     if opts.bids_filter_file:
         if os.path.exists(opts.bids_filter_file):
-            command.extend(['-v', ':'.join((opts.bids_filter_file, '/sngl/filter/filter.json', 'ro'))])
+            command.extend(['-v', ':'.join((opts.bids_filter_file,
+                            '/sngl/filter/filter.json', 'ro'))])
             main_args.extend(['--bids-filter-file', '/sngl/filter/filter.json'])
     if opts.eddy_config:
         command.extend(['-v', ':'.join((opts.eddy_config, '/sngl/eddy/eddy_config.json', 'ro'))])

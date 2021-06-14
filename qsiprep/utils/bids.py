@@ -77,7 +77,7 @@ def collect_participants(bids_dir, participant_label=None, strict=False,
     if isinstance(bids_dir, BIDSLayout):
         layout = bids_dir
     else:
-       raise Exception("A layout is required")
+        raise Exception("A layout is required")
 
     all_participants = set(layout.get_subjects())
 
