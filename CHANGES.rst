@@ -1,3 +1,9 @@
+0.13.1 (June 14, 2021)
+======================
+
+ * Adds a flag for a BIDS filter file #256
+ * Fixes a bug where --dwi-only is selected along with --intramodal-template
+
 0.13.0 (May 5, 2021)
 ====================
 Many bugfixes
