@@ -39,6 +39,40 @@ def check_deps(workflow):
                       and which(node.interface._cmd.split()[0]) is None))
 
 
+def _filter_pybids_none_any(dct):
+    import bids
+    return {
+        k: bids.layout.Query.NONE
+        if v is None
+        else (bids.layout.Query.ANY if v == "*" else v)
+        for k, v in dct.items()
+    }
+
+
+def _bids_filter(value):
+    from json import loads
+    from bids.layout import Query
+
+    if value and Path(value).exists():
+        try:
+            filters = loads(Path(value).read_text(), object_hook=_filter_pybids_none_any)
+        except Exception as e:
+            raise Exception("Unable to parse BIDS filter file. Check that it is "
+                            "valid JSON.")
+    else:
+        raise Exception("Unable to load BIDS filter file " + value)
+
+    # unserialize pybids Query enum values
+    for acq, _filters in filters.items():
+        filters[acq] = {
+            k: getattr(Query, v[7:-4])
+            if not isinstance(v, Query) and "Query" in v
+            else v
+            for k, v in _filters.items()
+        }
+    return filters
+
+
 def get_parser():
     """Build parser object"""
     from ..__about__ import __version__
@@ -46,7 +80,7 @@ def get_parser():
     verstr = 'qsiprep v{}'.format(__version__)
 
     parser = ArgumentParser(
-        description='qsiprep: q-Space Image PREProcessing workflows',
+        description='qsiprep: q-Space Image Preprocessing workflows',
         formatter_class=ArgumentDefaultsHelpFormatter)
 
     # Arguments as specified by BIDS-Apps
@@ -88,6 +122,16 @@ def get_parser():
                         help="path to a saved BIDS database directory",
                         type=Path,
                         action='store')
+    g_bids.add_argument(
+        "--bids-filter-file",
+        dest="bids_filters",
+        action="store",
+        type=_bids_filter,
+        metavar="FILE",
+        help="a JSON file describing custom BIDS input filters using PyBIDS. "
+        "For further details, please check out "
+        "https://fmriprep.readthedocs.io/en/latest/faq.html#"
+        "how-do-I-select-only-certain-files-to-be-input-to-fMRIPrep")
 
     # arguments for reconstructing QSI data
     g_ireports = parser.add_argument_group('Options for interactive report outputs')
@@ -767,6 +811,7 @@ def build_qsiprep_workflow(opts, retval):
                     "sourcedata",
                     "models",
                     re.compile(r"^\.")))
+
     subject_list = collect_participants(
         layout, participant_label=opts.participant_label)
     retval['subject_list'] = subject_list
@@ -886,6 +931,7 @@ def build_qsiprep_workflow(opts, retval):
         ignore=opts.ignore,
         hires=False,
         freesurfer=opts.do_reconall,
+        bids_filters=opts.bids_filters,
         debug=opts.sloppy,
         low_mem=opts.low_mem,
         dwi_only=opts.dwi_only,

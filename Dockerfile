@@ -356,4 +356,5 @@ RUN  mkdir -p /sngl/data \
   && mkdir /sngl/scratch \
   && mkdir /sngl/spec \
   && mkdir /sngl/eddy \
+  && mkdir /sngl/filter \
   && chmod a+rwx /sngl/*
