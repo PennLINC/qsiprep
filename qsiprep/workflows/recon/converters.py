@@ -12,6 +12,7 @@ import logging
 from qsiprep.interfaces.converters import FODtoFIBGZ
 from .interchange import input_fields
 from ...engine import Workflow
+from ...interfaces.images import ConformDwi
 LOGGER = logging.getLogger('nipype.workflow')
 
 
@@ -59,3 +60,34 @@ def init_fibgz_to_mif_wf(name="fibgz_to_mif", output_suffix="", params={}):
         (convert_to_fib, outputnode, [('fib_file', 'fib_file')])
     ])
     return workflow
+
+
+def init_qsiprep_to_fsl_wf(name="qsiprep_to_fsl", output_suffix="", params={}):
+    """Converts QSIPrep outputs (images, bval, bvec) to fsl standard orientation"""
+    inputnode = pe.Node(niu.IdentityInterface(fields=input_fields),
+                        name="inputnode")
+    to_reorient = ["mask_file", "dwi_file", "bval_file", "bvec_file"]
+    outputnode = pe.Node(
+        niu.IdentityInterface(
+            fields=to_reorient),
+            name="outputnode")
+    workflow = Workflow(name=name)
+
+    convert_dwi_to_fsl = pe.Node(
+        ConformDwi(orientation="LAS"), name="convert_to_fsl")
+    convert_mask_to_fsl = pe.Node(
+        ConformDwi(orientation="LAS"),name="convert_mask_to_fsl")
+    workflow.connect([
+        (inputnode, convert_dwi_to_fsl, [
+            ('dwi_file', 'dwi_file')
+            ('bval_file', 'bval_file'),
+            ('bvec_file', 'bvec_file')]),
+        (convert_dwi_to_fsl, outputnode, [
+            ('dwi_file', 'dwi_file')
+            ('bval_file', 'bval_file'),
+            ('bvec_file', 'bvec_file')]),
+        (inputnode, convert_mask_to_fsl, [('mask_file', 'dwi_file')]),
+        (convert_mask_to_fsl, outputnode, [('dwi_file', 'mask_file')])
+    ])
+
+    if output_suffix:

@@ -318,6 +318,9 @@ RUN echo "${VERSION}" > /src/qsiprep/qsiprep/VERSION && \
 RUN python -c "from matplotlib import font_manager" && \
     sed -i 's/\(backend *: \).*$/\1Agg/g' $( python -c "import matplotlib; print(matplotlib.matplotlib_fname())" )
 
+RUN mkdir -p ${HOME}/.dipy
+RUN python -c "import amico; amico.core.setup()"
+
 RUN find $HOME -type d -exec chmod go=u {} + && \
     find $HOME -type f -exec chmod go=u {} +
 
