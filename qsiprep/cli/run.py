@@ -59,14 +59,16 @@ def _bids_filter(value):
         except Exception as e:
             raise Exception("Unable to parse BIDS filter file. Check that it is "
                             "valid JSON.")
+    else:
+        raise Exception("Unable to load BIDS filter file " + value)
 
     # unserialize pybids Query enum values
-    for acq, filters in filters.items():
+    for acq, _filters in filters.items():
         filters[acq] = {
             k: getattr(Query, v[7:-4])
             if not isinstance(v, Query) and "Query" in v
             else v
-            for k, v in filters.items()
+            for k, v in _filters.items()
         }
     return filters
 
