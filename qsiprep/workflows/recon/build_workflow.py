@@ -10,7 +10,7 @@ from .dsi_studio import (init_dsi_studio_recon_wf, init_dsi_studio_export_wf,
 from .dipy import init_dipy_brainsuite_shore_recon_wf, init_dipy_mapmri_recon_wf
 from .mrtrix import (init_mrtrix_csd_recon_wf, init_global_tractography_wf,
                      init_mrtrix_tractography_wf, init_mrtrix_connectivity_wf)
-from .converters import init_mif_to_fibgz_wf
+from .converters import init_mif_to_fibgz_wf, init_qsiprep_to_fsl_wf
 from .dynamics import init_controllability_wf
 from .utils import init_conform_dwi_wf, init_discard_repeated_samples_wf
 from ...engine import Workflow
@@ -264,6 +264,9 @@ def workflow_from_spec(omp_nthreads, has_t1w, has_t1w_transform, node_spec):
             return init_conform_dwi_wf(**kwargs)
         if node_spec['action'] == 'mif_to_fib':
             return init_mif_to_fibgz_wf(**kwargs)
+        if node_spec['action'] == 'reorient_fslstd':
+            return init_qsiprep_to_fsl_wf(**kwargs)
+
     raise Exception("Unknown node %s" % node_spec)
 
 

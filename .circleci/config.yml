@@ -872,6 +872,28 @@ jobs:
                 --nthreads 1 -vv
 
       - run:
+          name: Run reorient_fslstd
+          no_output_timeout: 2h
+          command: |
+            mkdir -p /tmp/multishell_output/work /tmp/multishell_output/derivatives/reorient_fslstd
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/reorient_fslstd && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/reorient_fslstd
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/work && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/work
+            qsiprep-docker -i pennbbl/qsiprep:latest \
+                -e qsiprep_DEV 1 -u $(id -u) \
+                --config $PWD/nipype.cfg -w /tmp/multishell_output/work \
+                 /tmp/data/multishell_output/qsiprep  \
+                 /tmp/multishell_output/derivatives/reorient_fslstd \
+                 participant \
+                --recon-input /tmp/data/multishell_output/qsiprep \
+                --sloppy \
+                --recon-spec reorient_fslstd \
+                --recon-only \
+                --mem_mb 4096 \
+                --nthreads 1 -vv
+
+      - run:
           name: Run mrtrix_multishell_msmt_noACT
           no_output_timeout: 2h
           command: |

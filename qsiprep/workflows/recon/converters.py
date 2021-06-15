@@ -9,7 +9,8 @@ Converting between file formats
 import nipype.pipeline.engine as pe
 import nipype.interfaces.utility as niu
 import logging
-from qsiprep.interfaces.converters import FODtoFIBGZ
+from ...interfaces.converters import FODtoFIBGZ
+from ...interfaces.bids import ReconDerivativesDataSink
 from .interchange import input_fields
 from ...engine import Workflow
 from ...interfaces.images import ConformDwi
@@ -91,3 +92,30 @@ def init_qsiprep_to_fsl_wf(name="qsiprep_to_fsl", output_suffix="", params={}):
     ])
 
     if output_suffix:
+        # Save the output in the outputs directory
+        ds_dwi_file = pe.Node(
+            ReconDerivativesDataSink(
+                suffix=output_suffix),
+                name='ds_dwi_' + name,
+                run_without_submitting=True)
+        ds_bval_file = pe.Node(
+            ReconDerivativesDataSink(
+                suffix=output_suffix),
+                name='ds_bval_' + name,
+                run_without_submitting=True)
+        ds_bvec_file = pe.Node(
+            ReconDerivativesDataSink(
+                suffix=output_suffix),
+                name='ds_bvec_' + name,
+                run_without_submitting=True)
+        ds_mask_file = pe.Node(
+            ReconDerivativesDataSink(
+                suffix=output_suffix),
+                name='ds_mask_' + name,
+                run_without_submitting=True)
+        workflow.connect([
+            (convert_dwi_to_fsl, ds_bval_file, [('bval_file', 'in_file')])
+            (convert_dwi_to_fsl, ds_bvec_file, [('bvec_file', 'in_file')])
+            (convert_dwi_to_fsl, ds_dwi_file, [('dwi_file', 'in_file')])
+            (convert_mask_to_fsl, ds_mask_file, [('dwi_file', 'in_file')])
+        ])
