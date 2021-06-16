@@ -132,13 +132,13 @@ many images, you can substitute ``average`` with ``concat``.
 Outputs of qsiprep
 -------------------
 
-qsiprep generates three broad classes of outcomes:
+qsiprep generates four broad classes of outcomes:
 
   1. **Visual QA (quality assessment) reports**:
      one :abbr:`HTML (hypertext markup language)` per subject,
      depicting images that provide a sanity check for each step of the pipeline.
 
-  2. **Pre-processed imaging data** such as anatomical segmentations, realigned and resampled
+  2. **Preprocessed imaging data** such as anatomical segmentations, realigned and resampled
      diffusion weighted images and the corresponding corrected gradient files in FSL and MRTrix
      format.
 
@@ -149,9 +149,12 @@ qsiprep generates three broad classes of outcomes:
   4. **Quantitative QA**:
      A single-line csv file per subject summarizing subject motion, coregistration quality and
      image quality.
+     
+  5. **Subject's specific json file**:
+     A dwiqc.json file per subject to be used with dmriprep-viewer for an interactive quality 
+     assessment visualization and scan quality rating.
 
-
-Visual Reports
+Visual QA Reports
 ^^^^^^^^^^^^^^^
 
 qsiprep outputs summary reports, written to ``<output
@@ -168,7 +171,7 @@ is a sampling scheme from a DSI scan:
     that head motion correction has not disrupted the scheme extensively.
 
 
-Preprocessed data (qsiprep *derivatives*)
+Preprocessed imaging data (qsiprep *derivatives*)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 There are additional files, called "Derivatives", written to
@@ -296,6 +299,26 @@ Examples of these plots follow:
 
     For eddy slices with more outliers appear more yellow, while fewer
     outliers is more blue.
+
+Subject's specific json file for interactive visual QA assessment and rating
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+This json file is created with recent versions of QSIPrep. In order to use 
+dmriprep-viewer for visual QA and rating, the group ``dwiqc.json`` file needs 
+to be created in the main directory of the QSIPrep output directory. To do 
+this, use the following command:
+  
+  qsiprep_group_report </path/to/QSIPrep/output/directory/>
+  
+To use the dmriprep-viewer, download the QSIPrep output directory to your
+local machine. To reduce the size of data to be downloaded, only 
+download the group ``dwiqc.json`` and each participant's unique json file
+while keeping the data within the same tree structure as the QSIPrep output
+directory.
+
+Watch the following youtube video on how to open dmriprep-viewer, load 
+data, rate preprocessed diffusion scans, and download the csv rating file:
+https://www.youtube.com/watch?v=SQ0v-O-e5b8
 
 .. _workflow_details:
 
