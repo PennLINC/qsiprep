@@ -119,7 +119,7 @@ class NODDIInputSpec(AmicoInputSpec):
 
 class NODDIOutputSpec(AmicoOutputSpec):
     directions_image = File()
-    ivcf_image = File()
+    icvf_image = File()
     od_image = File()
     isovf_image = File()
     config_file = File()
@@ -147,12 +147,14 @@ class NODDI(AmicoReconInterface):
         os.symlink(self.inputs.dwi_file, dwi_file)
         os.symlink(self.inputs.mask_file, mask_file)
 
+        # Prevent a ton of deprecation warnings
+        os.environ['KMP_WARNINGS'] = '0'
         # Set up the AMICO evaluation
         aeval = amico.Evaluation("study", "subject")
         scheme_file = amico.util.fsl2scheme(bval_file, bvec_file,
                                             flipAxes=[False, True, True])
         aeval.load_data(dwi_filename=dwi_file, scheme_filename=scheme_file,
-                        mask_filename=mask_file, b0_thr=self.inputs.bval_threshold)
+                        mask_filename=mask_file, b0_thr=self.inputs.b0_threshold)
         LOGGER.info("Fitting NODDI Model.")
         aeval.set_model("NODDI")
         # set the parameters

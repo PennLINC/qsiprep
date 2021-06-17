@@ -77,7 +77,7 @@ def init_amico_noddi_fit_wf(omp_nthreads, has_transform,
 : """
     resample_mask = pe.Node(
         afni.Resample(outputtype='NIFTI_GZ', resample_mode="NN"), name='resample_mask')
-    noddi_fit = pe.Node(NODDI(**params), name="recon_shore")
+    noddi_fit = pe.Node(NODDI(**params), name="recon_noddi")
     desc += """\
 The NODDI model (@noddi) was fit using the AMICO implementation (@amico).
 A value was %.1E was used for parallel diffusivity and %.1E for isotropic
@@ -101,18 +101,12 @@ diffusivity.""" % (params['dPar'], params['dIso'])
                                     ('dwi_file', 'master')]),
         (resample_mask, noddi_fit, [('out_file', 'mask_file')]),
         (noddi_fit, outputnode, [
-            ('shore_coeffs_image', 'shore_coeffs_image'),
-            ('rtop_image', 'rtop_image'),
-            ('alpha_image', 'alpha_image'),
-            ('r2_image', 'r2_image'),
-            ('cnr_image', 'cnr_image'),
-            ('regularization_image', 'regularization_image'),
-            ('fibgz', 'fibgz'),
-            ('fod_sh_mif', 'fod_sh_mif'),
-            ('extrapolated_dwi', 'dwi_file'),
-            ('extrapolated_bvals', 'bval_file'),
-            ('extrapolated_bvecs', 'bvec_file'),
-            ('extrapolated_b', 'b_file')]),
+            ('directions_image', 'directions_image'),
+            ('icvf_image', 'icvf_image'),
+            ('od_image', 'od_image'),
+            ('isovf_image', 'isovf_image'),
+            ('config_file', 'config_file'),
+            ]),
         # (inputnode, plot_peaks, [('dwi_ref', 'background_image'),
         #                          ('odf_rois', 'odf_rois')]),
         # (resample_mask, plot_peaks, [('out_file', 'mask_file')]),
@@ -168,7 +162,7 @@ diffusivity.""" % (params['dPar'], params['dIso'])
                                      compress=True),
             name='ds_noddi_od',
             run_without_submitting=True)
-        workflow.connect(outputnode, 'r2_image', ds_od, 'in_file')
+        workflow.connect(outputnode, 'od_image', ds_od, 'in_file')
 
         ds_config = pe.Node(
             ReconDerivativesDataSink(extension='.nii.gz',

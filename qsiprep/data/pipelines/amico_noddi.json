@@ -10,7 +10,7 @@
       "input": "qsiprep",
       "output_suffix": "NODDI",
       "parameters": {
-        "is_exvivo": false,
+        "isExvivo": false,
         "dPar": 1.7E-3,
         "dIso": 3.0E-3
       }

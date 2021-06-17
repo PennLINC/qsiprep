@@ -283,7 +283,8 @@ RUN conda install -y python=3.7.1 \
 # will handle parallelization
 ENV MKL_NUM_THREADS=1 \
     OMP_NUM_THREADS=1 \
-    MRTRIX_NTHREADS=1
+    MRTRIX_NTHREADS=1 \
+    KMP_WARNINGS=0
 
 WORKDIR /root/
 
