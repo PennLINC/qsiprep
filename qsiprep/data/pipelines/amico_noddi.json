@@ -1,0 +1,19 @@
+{ "description": "Reorients DWI, bvecs and mask into fsl standard orientation",
+  "space": "T1w",
+  "name": "reorient2fslstd",
+  "atlases": [],
+  "nodes": [
+    {
+      "name": "fit_noddi",
+      "action": "fit_noddi",
+      "software": "AMICO",
+      "input": "qsiprep",
+      "output_suffix": "NODDI",
+      "parameters": {
+        "is_exvivo": false,
+        "dPar": 1.7E-3,
+        "dIso": 3.0E-3
+      }
+    }
+  ]
+}

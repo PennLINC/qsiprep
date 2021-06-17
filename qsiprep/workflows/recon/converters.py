@@ -80,11 +80,11 @@ def init_qsiprep_to_fsl_wf(name="qsiprep_to_fsl", output_suffix="", params={}):
         ConformDwi(orientation="LAS"),name="convert_mask_to_fsl")
     workflow.connect([
         (inputnode, convert_dwi_to_fsl, [
-            ('dwi_file', 'dwi_file')
+            ('dwi_file', 'dwi_file'),
             ('bval_file', 'bval_file'),
             ('bvec_file', 'bvec_file')]),
         (convert_dwi_to_fsl, outputnode, [
-            ('dwi_file', 'dwi_file')
+            ('dwi_file', 'dwi_file'),
             ('bval_file', 'bval_file'),
             ('bvec_file', 'bvec_file')]),
         (inputnode, convert_mask_to_fsl, [('mask_file', 'dwi_file')]),
@@ -95,27 +95,28 @@ def init_qsiprep_to_fsl_wf(name="qsiprep_to_fsl", output_suffix="", params={}):
         # Save the output in the outputs directory
         ds_dwi_file = pe.Node(
             ReconDerivativesDataSink(
-                suffix=output_suffix),
+                suffix=output_suffix + "_dwi"),
                 name='ds_dwi_' + name,
                 run_without_submitting=True)
         ds_bval_file = pe.Node(
             ReconDerivativesDataSink(
-                suffix=output_suffix),
+                suffix=output_suffix + "_dwi"),
                 name='ds_bval_' + name,
                 run_without_submitting=True)
         ds_bvec_file = pe.Node(
             ReconDerivativesDataSink(
-                suffix=output_suffix),
+                suffix=output_suffix + "_dwi"),
                 name='ds_bvec_' + name,
                 run_without_submitting=True)
         ds_mask_file = pe.Node(
             ReconDerivativesDataSink(
-                suffix=output_suffix),
+                suffix=output_suffix + "_mask"),
                 name='ds_mask_' + name,
                 run_without_submitting=True)
         workflow.connect([
-            (convert_dwi_to_fsl, ds_bval_file, [('bval_file', 'in_file')])
-            (convert_dwi_to_fsl, ds_bvec_file, [('bvec_file', 'in_file')])
-            (convert_dwi_to_fsl, ds_dwi_file, [('dwi_file', 'in_file')])
+            (convert_dwi_to_fsl, ds_bval_file, [('bval_file', 'in_file')]),
+            (convert_dwi_to_fsl, ds_bvec_file, [('bvec_file', 'in_file')]),
+            (convert_dwi_to_fsl, ds_dwi_file, [('dwi_file', 'in_file')]),
             (convert_mask_to_fsl, ds_mask_file, [('dwi_file', 'in_file')])
         ])
+    return workflow

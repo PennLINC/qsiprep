@@ -256,7 +256,8 @@ jobs:
           name: Install graphviz
           command: |
               sudo apt-get update
-              sudo apt-get install -y graphviz
+              sudo apt-get install -y graphviz libblas-dev \
+               liblapack-dev gfortran
       - run:
           name: Install qsiprep.
           command: sudo python -m pip install ".[doc]" --no-cache-dir --progress-bar off
