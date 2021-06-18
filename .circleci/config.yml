@@ -1091,7 +1091,7 @@ jobs:
       - run:
           name: Build qsiprep
           command: |
-            sudo apt-get install install -y libblas-dev liblapack-dev gfortran
+            sudo apt-get install -y libblas-dev liblapack-dev gfortran
             pip install --user twine  # For use in checking distributions
             pip install --user --upgrade importlib-metadata
             THISVERSION=$( python3 get_version.py )
