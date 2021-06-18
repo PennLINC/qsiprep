@@ -323,7 +323,7 @@ def init_dsi_studio_export_wf(omp_nthreads, has_transform, name="dsi_studio_expo
         name="inputnode")
     scalar_names = ['gfa', 'fa0', 'fa1', 'fa2', 'iso', 'dti_fa', 'md', 'rd', 'ad']
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=scalar_names),
+        niu.IdentityInterface(fields=[name + "_file" for name in scalar_names]),
         name="outputnode")
     workflow = pe.Workflow(name=name)
     export = pe.Node(DSIStudioExport(to_export=",".join(scalar_names)), name='export')
