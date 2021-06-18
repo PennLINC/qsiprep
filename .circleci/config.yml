@@ -1091,6 +1091,7 @@ jobs:
       - run:
           name: Build qsiprep
           command: |
+            sudo apt-get install install -y libblas-dev liblapack-dev gfortran
             pip install --user twine  # For use in checking distributions
             pip install --user --upgrade importlib-metadata
             THISVERSION=$( python3 get_version.py )
@@ -1099,7 +1100,6 @@ jobs:
             virtualenv --python=python build
             source build/bin/activate
             pip install --upgrade "pip>=19.1" numpy
-            sudo apt-get install -y libblas-dev liblapack-dev gfortran
             echo "${CIRCLE_TAG:-$THISVERSION}" > qsiprep/VERSION
             python setup.py sdist
             pip wheel --no-deps -w dist/ .
@@ -1108,6 +1108,7 @@ jobs:
       - run:
           name: Check sdist distribution
           command: |
+            sudo apt-get install -y libblas-dev liblapack-dev gfortran
             THISVERSION=$( python get_version.py )
             THISVERSION=${THISVERSION%.dirty*}
             THISVERSION=${CIRCLE_TAG:-$THISVERSION}
@@ -1115,7 +1116,6 @@ jobs:
             virtualenv --python=python sdist
             source sdist/bin/activate
             pip install --progress-bar off --upgrade "pip>=19.1" numpy
-            apt-get install -y libblas-dev liblapack-dev gfortran
             pip install dist/qsiprep*.tar.gz
             which qsiprep | grep sdist\\/bin
             INSTALLED_VERSION=$(qsiprep --version)
@@ -1127,6 +1127,7 @@ jobs:
       - run:
           name: Check wheel distribution
           command: |
+            sudo apt-get install -y libblas-dev liblapack-dev gfortran
             THISVERSION=$( python get_version.py )
             THISVERSION=${THISVERSION%.dirty*}
             THISVERSION=${CIRCLE_TAG:-$THISVERSION}
@@ -1169,6 +1170,7 @@ jobs:
             virtualenv --python=python build
             source build/bin/activate
             pip install --upgrade "pip>=19.1" numpy
+            sudo apt-get install -y libblas-dev liblapack-dev gfortran
             echo "${CIRCLE_TAG:-$THISVERSION}" > qsiprep/VERSION
             python setup.py sdist
             pip wheel --no-deps -w dist/ .
@@ -1180,6 +1182,7 @@ jobs:
             virtualenv --python=python build
             source build/bin/activate
             pip install --upgrade "pip>=19.1"
+            sudo apt-get install -y libblas-dev liblapack-dev gfortran
             sed -i -E "s/(__version__ = )'[A-Za-z0-9.-]+'/\1'${CIRCLE_TAG:-$THISVERSION}'/" qsiprep_docker.py
             python setup.py sdist
             pip wheel --no-deps -w dist/ .
