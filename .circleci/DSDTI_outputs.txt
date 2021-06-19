@@ -58,6 +58,7 @@ qsirecon/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_desc
 qsirecon/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_desc-aal116_atlas.nii.gz
 qsirecon/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_desc-aal116_mrtrixLUT.txt
 qsirecon/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_desc-aal116_origLUT.txt
+qsirecon/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_desc-ad_gqiscalar.nii.gz
 qsirecon/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_desc-aicha384_atlas.mif.gz
 qsirecon/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_desc-aicha384_atlas.nii.gz
 qsirecon/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_desc-aicha384_mrtrixLUT.txt
@@ -66,6 +67,7 @@ qsirecon/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_desc
 qsirecon/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_desc-brainnetome246_atlas.nii.gz
 qsirecon/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_desc-brainnetome246_mrtrixLUT.txt
 qsirecon/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_desc-brainnetome246_origLUT.txt
+qsirecon/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_desc-dti_fa_gqiscalar.nii.gz
 qsirecon/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_desc-fa0_gqiscalar.nii.gz
 qsirecon/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_desc-fa1_gqiscalar.nii.gz
 qsirecon/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_desc-fa2_gqiscalar.nii.gz
@@ -75,10 +77,12 @@ qsirecon/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_desc
 qsirecon/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_desc-gordon333_mrtrixLUT.txt
 qsirecon/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_desc-gordon333_origLUT.txt
 qsirecon/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_desc-iso_gqiscalar.nii.gz
+qsirecon/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_desc-md_gqiscalar.nii.gz
 qsirecon/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_desc-power264_atlas.mif.gz
 qsirecon/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_desc-power264_atlas.nii.gz
 qsirecon/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_desc-power264_mrtrixLUT.txt
 qsirecon/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_desc-power264_origLUT.txt
+qsirecon/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_desc-rd_gqiscalar.nii.gz
 qsirecon/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_desc-schaefer100x17_atlas.mif.gz
 qsirecon/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_desc-schaefer100x17_atlas.nii.gz
 qsirecon/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_space-T1w_desc-schaefer100x17_mrtrixLUT.txt
