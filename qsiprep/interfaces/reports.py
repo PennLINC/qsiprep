@@ -339,6 +339,13 @@ def plot_gradients(bvals, orig_bvecs, source_filenums, output_fname, final_bvecs
     qx, qy, qz = qvecs.T
     maxvals = qvecs.max(0)
     minvals = qvecs.min(0)
+    total_max = max(np.abs(maxvals).max(), np.abs(minvals).max())
+
+    def force_scaling(ax):
+        # trick to force equal aspect on all 3 axes
+        for direction in (-1, 1):
+            for point in np.diag(direction * total_max * np.array([1,1,1])):
+                ax.plot([point[0]], [point[1]], [point[2]], 'w')
 
     def add_lines(ax):
         labels = ['L', 'P', 'S']
@@ -375,6 +382,7 @@ def plot_gradients(bvals, orig_bvecs, source_filenums, output_fname, final_bvecs
     orig_ax.axis('off')
     orig_ax.set_title("Original Scheme")
     add_lines(orig_ax)
+    force_scaling(orig_ax)
     # Animate rotating the axes
     rotate_amount = np.ones(frames) * 180 / frames
     stay_put = np.zeros_like(rotate_amount)
