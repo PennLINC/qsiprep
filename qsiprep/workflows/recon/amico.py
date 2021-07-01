@@ -18,27 +18,6 @@ from ...interfaces.converters import NODDItoFIBGZ
 LOGGER = logging.getLogger('nipype.interface')
 
 
-def external_format_datasinks(output_suffix, params, wf):
-    """Add datasinks for Dipy Reconstructions in other formats."""
-    outputnode = wf.get_node("outputnode")
-    if params["write_fibgz"]:
-        ds_fibgz = pe.Node(
-            ReconDerivativesDataSink(extension='.fib.gz',
-                                     suffix=output_suffix,
-                                     compress=True),
-            name='ds_{}_fibgz'.format(output_suffix),
-            run_without_submitting=True)
-        wf.connect(outputnode, 'fibgz', ds_fibgz, 'in_file')
-    if params["write_mif"]:
-        ds_mif = pe.Node(
-            ReconDerivativesDataSink(extension='.mif',
-                                     suffix=output_suffix,
-                                     compress=False),
-            name='ds_{}_mif'.format(output_suffix),
-            run_without_submitting=True)
-        wf.connect(outputnode, 'fod_sh_mif', ds_mif, 'in_file')
-
-
 def init_amico_noddi_fit_wf(omp_nthreads, has_transform,
                             name="amico_noddi_recon",
                             output_suffix="", params={}):
@@ -60,7 +39,7 @@ def init_amico_noddi_fit_wf(omp_nthreads, has_transform,
             Voxelwise ISOVF
         config_file
             Pickle file with model configurations in it
-
+        fibgz
 
     """
 
@@ -69,7 +48,7 @@ def init_amico_noddi_fit_wf(omp_nthreads, has_transform,
     outputnode = pe.Node(
         niu.IdentityInterface(
             fields=['directions_image', 'icvf_image', 'od_image',
-                    'isovf_image', 'config_file']),
+                    'isovf_image', 'config_file', 'fibgz']),
         name="outputnode")
 
     workflow = Workflow(name=name)
@@ -81,7 +60,7 @@ def init_amico_noddi_fit_wf(omp_nthreads, has_transform,
     noddi_fit = pe.Node(NODDI(**params), name="recon_noddi")
     desc += """\
 The NODDI model (@noddi) was fit using the AMICO implementation (@amico).
-A value was %.1E was used for parallel diffusivity and %.1E for isotropic
+A value of %.1E was used for parallel diffusivity and %.1E for isotropic
 diffusivity.""" % (params['dPar'], params['dIso'])
     if params.get('is_exvivo'):
         desc += " An additional component was added to the model foe ex-vivo data."
@@ -118,19 +97,19 @@ diffusivity.""" % (params['dPar'], params['dIso'])
             ]),
         (resample_mask, convert_to_fibgz, [('out_file', 'mask_file')]),
         (convert_to_fibgz, plot_peaks, [('fibgz_file', 'fib_file')]),
+        (convert_to_fibgz, outputnode, [('fibgz_file', 'fibgz')]),
         (resample_mask, plot_peaks, [('out_file', 'mask_file')]),
         (plot_peaks, ds_report_peaks, [('out_report', 'in_file')]),
         ])
 
     if output_suffix:
-        if params["write_fibgz"]:
-            ds_fibgz = pe.Node(
-            ReconDerivativesDataSink(extension='.fib.gz',
-                                     suffix=output_suffix,
-                                     compress=True),
-            name='ds_{}_fibgz'.format(output_suffix),
-            run_without_submitting=True)
-            workflow.connect(outputnode, 'fibgz', ds_fibgz, 'in_file')
+        ds_fibgz = pe.Node(
+        ReconDerivativesDataSink(extension='.fib.gz',
+                                    suffix=output_suffix,
+                                    compress=True),
+        name='ds_{}_fibgz'.format(output_suffix),
+        run_without_submitting=True)
+        workflow.connect(outputnode, 'fibgz', ds_fibgz, 'in_file')
 
         # Niftis from AMICO
         ds_directions = pe.Node(
