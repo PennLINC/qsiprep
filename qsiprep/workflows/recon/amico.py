@@ -13,6 +13,7 @@ from .interchange import input_fields
 from ...engine import Workflow
 from ...interfaces.amico import NODDI
 from ...interfaces.reports import ReconPeaksReport
+from ...interfaces.converters import NODDItoFIBGZ
 
 LOGGER = logging.getLogger('nipype.interface')
 
@@ -85,10 +86,12 @@ diffusivity.""" % (params['dPar'], params['dIso'])
     if params.get('is_exvivo'):
         desc += " An additional component was added to the model foe ex-vivo data."
 
+    convert_to_fibgz = pe.Node(NODDItoFIBGZ(), name='convert_to_fibgz')
+
     plot_peaks = pe.Node(ReconPeaksReport(), name='plot_peaks')
     ds_report_peaks = pe.Node(
         ReconDerivativesDataSink(extension='.png',
-                                 desc="3dSHOREODF",
+                                 desc="NODDI",
                                  suffix='peaks'),
         name='ds_report_peaks',
         run_without_submitting=True)
@@ -107,27 +110,29 @@ diffusivity.""" % (params['dPar'], params['dIso'])
             ('isovf_image', 'isovf_image'),
             ('config_file', 'config_file'),
             ]),
-        # (inputnode, plot_peaks, [('dwi_ref', 'background_image'),
-        #                          ('odf_rois', 'odf_rois')]),
-        # (resample_mask, plot_peaks, [('out_file', 'mask_file')]),
-        # (noddi_fit, plot_peaks, [('odf_directions', 'directions_file'),
-        #                            ('odf_amplitudes', 'odf_file')]),
-        # (plot_peaks, ds_report_peaks, [('out_report', 'in_file')]),
+        (noddi_fit, convert_to_fibgz, [
+            ('directions_image', 'directions_file'),
+            ('icvf_image', 'icvf_file'),
+            ('od_image', 'od_file'),
+            ('isovf_image', 'isovf_file'),
+            ]),
+        (resample_mask, convert_to_fibgz, [('out_file', 'mask_file')]),
+        (convert_to_fibgz, plot_peaks, [('fibgz_file', 'fib_file')]),
+        (resample_mask, plot_peaks, [('out_file', 'mask_file')]),
+        (plot_peaks, ds_report_peaks, [('out_report', 'in_file')]),
         ])
 
-    # Plot targeted regions
-    # if has_transform:
-    #     ds_report_odfs = pe.Node(
-    #         ReconDerivativesDataSink(extension='.png',
-    #                                  desc="3dSHOREODF",
-    #                                  suffix='odfs'),
-    #         name='ds_report_odfs',
-    #         run_without_submitting=True)
-    #     workflow.connect(plot_peaks, 'odf_report', ds_report_odfs, 'in_file')
-
     if output_suffix:
-        # external_format_datasinks(output_suffix, params, workflow)
+        if params["write_fibgz"]:
+            ds_fibgz = pe.Node(
+            ReconDerivativesDataSink(extension='.fib.gz',
+                                     suffix=output_suffix,
+                                     compress=True),
+            name='ds_{}_fibgz'.format(output_suffix),
+            run_without_submitting=True)
+            workflow.connect(outputnode, 'fibgz', ds_fibgz, 'in_file')
 
+        # Niftis from AMICO
         ds_directions = pe.Node(
             ReconDerivativesDataSink(extension='.nii.gz',
                                      desc="directions",
