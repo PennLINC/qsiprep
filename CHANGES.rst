@@ -1,3 +1,10 @@
+0.13.2 (July 2, 2021)
+=====================
+Adds a new reconstruction workflow for the NODDI model.
+
+ * Adds NODDI reconstruction workflow (#257). Thanks @cookpa!
+ * Fixes issue with unequal aspect ratios in q-space plots (#266)
+
 0.13.1 (June 14, 2021)
 ======================
 
