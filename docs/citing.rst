@@ -89,3 +89,9 @@ Citing qsiprep
 .. [Power2011] Power, J. D., Cohen, A. L., Nelson, S. M., Wig, G. S., Barnes, K. A., Church,
           J. A., ... & Petersen, S. E. (2011). Functional network organization of the human brain.
           Neuron, 72(4), 665-678.
+
+.. [Daducci2015] Daducci, Alessandro, et al. "Accelerated microstructure imaging via convex
+          optimization (AMICO) from diffusion MRI data." NeuroImage 105 (2015): 32-44.
+
+.. [Zhang2012] Zhang, Hui, et al. "NODDI: practical in vivo neurite orientation dispersion
+          and density imaging of the human brain." Neuroimage 61.4 (2012): 1000-1016.

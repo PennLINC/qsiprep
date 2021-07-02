@@ -265,6 +265,10 @@ class DSIStudioExportOutputSpec(DSIStudioCommandLineInputSpec):
     fa3_file = File(desc="Exported files")
     fa4_file = File(desc="Exported files")
     iso_file = File(desc="Exported files")
+    dti_fa_file = File(desc="Exported files")
+    md_file = File(desc="Exported files")
+    rd_file = File(desc="Exported files")
+    ad_file = File(desc="Exported files")
     image0_file = File(desc="Exported files")
 
 

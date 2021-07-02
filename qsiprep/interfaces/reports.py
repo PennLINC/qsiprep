@@ -716,6 +716,8 @@ class _ReconPeaksReportInputSpec(BaseInterfaceInputSpec):
     mask_file = File(exists=True)
     background_image = File(exists=True)
     odf_rois = File(exists=True)
+    peaks_only = traits.Bool(False, usedefault=True,
+                             desc='only produce a peak directions report')
     subtract_iso = traits.Bool(False, usedefault=True,
                                desc='subtract isotropic component from ODFs')
 
@@ -744,6 +746,7 @@ class ReconPeaksReport(SimpleInterface):
             directions = np.load(self.inputs.directions_file)
         else:
             raise Exception('Requires either a mif file or fib file')
+
         odf_4d = odf_img.get_fdata()
         sphere = HemiSphere(xyz=directions.astype(np.float))
         if not isdefined(self.inputs.background_image) or self.inputs.background_image is None:
@@ -758,7 +761,7 @@ class ReconPeaksReport(SimpleInterface):
         self._results['out_report'] = peak_report
 
         # Plot ODFs in interesting regions
-        if isdefined(self.inputs.odf_rois):
+        if isdefined(self.inputs.odf_rois) and not self.inputs.peaks_only:
             odf_report = op.join(runtime.cwd, 'odf_report.png')
             odf_roi_plot(odf_4d, sphere, background_data, odf_report, self.inputs.odf_rois,
                          subtract_iso=self.inputs.subtract_iso,

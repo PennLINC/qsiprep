@@ -124,6 +124,18 @@
       ]
     },
     {
+        "name": "AMICO",
+        "reportlets":[
+          {
+              "name": "epi/noddi",
+              "file_pattern": "dwi/.*desc-NODDI.*_peaks\\.",
+              "title": "NODDI",
+              "description": "Directionally color-coded NODDI peak directions overlaid on the ICVF image.",
+              "imgtype": "png"
+          }
+        ]
+      },
+    {
         "name": "Connectome",
         "reportlets":
         [

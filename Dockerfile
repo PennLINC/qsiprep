@@ -283,7 +283,8 @@ RUN conda install -y python=3.7.1 \
 # will handle parallelization
 ENV MKL_NUM_THREADS=1 \
     OMP_NUM_THREADS=1 \
-    MRTRIX_NTHREADS=1
+    MRTRIX_NTHREADS=1 \
+    KMP_WARNINGS=0
 
 WORKDIR /root/
 
@@ -317,6 +318,9 @@ RUN echo "${VERSION}" > /src/qsiprep/qsiprep/VERSION && \
 # Precaching fonts, set 'Agg' as default backend for matplotlib
 RUN python -c "from matplotlib import font_manager" && \
     sed -i 's/\(backend *: \).*$/\1Agg/g' $( python -c "import matplotlib; print(matplotlib.matplotlib_fname())" )
+
+RUN mkdir -p ${HOME}/.dipy
+RUN python -c "import amico; amico.core.setup()"
 
 RUN find $HOME -type d -exec chmod go=u {} + && \
     find $HOME -type f -exec chmod go=u {} +

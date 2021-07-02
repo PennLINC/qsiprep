@@ -256,7 +256,8 @@ jobs:
           name: Install graphviz
           command: |
               sudo apt-get update
-              sudo apt-get install -y graphviz
+              sudo apt-get install -y graphviz libblas-dev \
+               liblapack-dev gfortran
       - run:
           name: Install qsiprep.
           command: sudo python -m pip install ".[doc]" --no-cache-dir --progress-bar off
@@ -379,7 +380,7 @@ jobs:
           when: on_fail
           command: |
             sudo chown $(id -un):$(id -gn) -R /tmp/DSCSDSI
-            find /tmp/DSCSDSI/work \( -name "*.nii.gz" -or -name "*.nii" -or "*.h5" \) \
+            find /tmp/DSCSDSI/work \( -name "*.nii.gz" -or -name "*.nii" -or -name "*.h5" \) \
                 -exec sh -c 'rm -f {}; touch {}' \;
 
       - store_artifacts:
@@ -470,7 +471,7 @@ jobs:
           when: on_fail
           command: |
             sudo chown $(id -un):$(id -gn) -R /tmp/DSDTI
-            find /tmp/DSDTI/work \( -name "*.nii.gz" -or -name "*.nii" -or "*.h5" \) \
+            find /tmp/DSDTI/work \( -name "*.nii.gz" -or -name "*.nii" -or -name "*.h5" \) \
                 -exec sh -c 'rm -f {}; touch {}' \;
 
       - store_artifacts:
@@ -666,7 +667,7 @@ jobs:
           when: on_fail
           command: |
             sudo chown $(id -un):$(id -gn) -R /tmp/DSCSDSI
-            find /tmp/DSDTI/nofmap_work \( -name "*.nii.gz" -or -name "*.nii" -or "*.h5" \) \
+            find /tmp/DSDTI/nofmap_work \( -name "*.nii.gz" -or -name "*.nii" -or -name "*.h5" \) \
                 -exec sh -c 'rm -f {}; touch {}' \;
 
       - run:
@@ -711,7 +712,7 @@ jobs:
           when: on_fail
           command: |
             sudo chown $(id -un):$(id -gn) -R /tmp/DSCSDSI
-            find /tmp/DSDTI/nofmap_work \( -name "*.nii.gz" -or -name "*.nii" -or "*.h5" \) \
+            find /tmp/DSDTI/nofmap_work \( -name "*.nii.gz" -or -name "*.nii" -or -name "*.h5" \) \
                 -exec sh -c 'rm -f {}; touch {}' \;
 
       - store_artifacts:
@@ -801,7 +802,7 @@ jobs:
           when: on_fail
           command: |
             sudo chown $(id -un):$(id -gn) -R /tmp/twoses
-            find /tmp/twoses/work \( -name "*.nii.gz" -or -name "*.nii" -or "*.h5" \) \
+            find /tmp/twoses/work \( -name "*.nii.gz" -or -name "*.nii" -or -name "*.h5" \) \
                 -exec sh -c 'rm -f {}; touch {}' \;
 
       - store_artifacts:
@@ -867,6 +868,50 @@ jobs:
                 --recon-input /tmp/data/multishell_output/qsiprep \
                 --sloppy \
                 --recon-spec mrtrix_multishell_msmt \
+                --recon-only \
+                --mem_mb 4096 \
+                --nthreads 1 -vv
+
+      - run:
+          name: Run amico_noddi
+          no_output_timeout: 2h
+          command: |
+            mkdir -p /tmp/multishell_output/work /tmp/multishell_output/derivatives/amico_noddi
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/amico_noddi && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/amico_noddi
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/work && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/work
+            qsiprep-docker -i pennbbl/qsiprep:latest \
+                -e qsiprep_DEV 1 -u $(id -u) \
+                --config $PWD/nipype.cfg -w /tmp/multishell_output/work \
+                 /tmp/data/multishell_output/qsiprep  \
+                 /tmp/multishell_output/derivatives/amico_noddi \
+                 participant \
+                --recon-input /tmp/data/multishell_output/qsiprep \
+                --sloppy \
+                --recon-spec amico_noddi \
+                --recon-only \
+                --mem_mb 4096 \
+                --nthreads 1 -vv
+
+      - run:
+          name: Run reorient_fslstd
+          no_output_timeout: 2h
+          command: |
+            mkdir -p /tmp/multishell_output/work /tmp/multishell_output/derivatives/reorient_fslstd
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/reorient_fslstd && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/reorient_fslstd
+            sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/work && \
+                sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/work
+            qsiprep-docker -i pennbbl/qsiprep:latest \
+                -e qsiprep_DEV 1 -u $(id -u) \
+                --config $PWD/nipype.cfg -w /tmp/multishell_output/work \
+                 /tmp/data/multishell_output/qsiprep  \
+                 /tmp/multishell_output/derivatives/reorient_fslstd \
+                 participant \
+                --recon-input /tmp/data/multishell_output/qsiprep \
+                --sloppy \
+                --recon-spec reorient_fslstd \
                 --recon-only \
                 --mem_mb 4096 \
                 --nthreads 1 -vv
@@ -1068,6 +1113,7 @@ jobs:
       - run:
           name: Build qsiprep
           command: |
+            sudo apt-get install -y libblas-dev liblapack-dev gfortran
             pip install --user twine  # For use in checking distributions
             pip install --user --upgrade importlib-metadata
             THISVERSION=$( python3 get_version.py )
@@ -1084,6 +1130,7 @@ jobs:
       - run:
           name: Check sdist distribution
           command: |
+            sudo apt-get install -y libblas-dev liblapack-dev gfortran
             THISVERSION=$( python get_version.py )
             THISVERSION=${THISVERSION%.dirty*}
             THISVERSION=${CIRCLE_TAG:-$THISVERSION}
@@ -1102,6 +1149,7 @@ jobs:
       - run:
           name: Check wheel distribution
           command: |
+            sudo apt-get install -y libblas-dev liblapack-dev gfortran
             THISVERSION=$( python get_version.py )
             THISVERSION=${THISVERSION%.dirty*}
             THISVERSION=${CIRCLE_TAG:-$THISVERSION}
@@ -1144,6 +1192,7 @@ jobs:
             virtualenv --python=python build
             source build/bin/activate
             pip install --upgrade "pip>=19.1" numpy
+            sudo apt-get install -y libblas-dev liblapack-dev gfortran
             echo "${CIRCLE_TAG:-$THISVERSION}" > qsiprep/VERSION
             python setup.py sdist
             pip wheel --no-deps -w dist/ .
@@ -1155,6 +1204,7 @@ jobs:
             virtualenv --python=python build
             source build/bin/activate
             pip install --upgrade "pip>=19.1"
+            sudo apt-get install -y libblas-dev liblapack-dev gfortran
             sed -i -E "s/(__version__ = )'[A-Za-z0-9.-]+'/\1'${CIRCLE_TAG:-$THISVERSION}'/" qsiprep_docker.py
             python setup.py sdist
             pip wheel --no-deps -w dist/ .
