@@ -99,7 +99,7 @@ diffusivity.""" % (params['dPar'], params['dIso'])
         (convert_to_fibgz, plot_peaks, [('fibgz_file', 'fib_file')]),
         (convert_to_fibgz, outputnode, [('fibgz_file', 'fibgz')]),
         (resample_mask, plot_peaks, [('out_file', 'mask_file')]),
-        (noddi_fit, plot_peaks, [('icvf_file', 'background_image')]),
+        (noddi_fit, plot_peaks, [('icvf_image', 'background_image')]),
         (plot_peaks, ds_report_peaks, [('out_report', 'in_file')]),
         ])
 
