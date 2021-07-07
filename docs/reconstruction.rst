@@ -355,19 +355,27 @@ Assuming this file is called ``qgi_scalar_export.json`` and you've installed
 
 .. _transforms:
 
-Spaces and transforms
-^^^^^^^^^^^^^^^^^^^^^^^
+Reconstructing preprocessed HCP data
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Transforming the a reconstruction output to template space requires that the
-spatial normalization transform is calculated. This can be accomplished in
-two ways
+The HCP pipeline performs many similar steps to QSIPrep's preprocessing workflow
+(when run on HCP-style acquisitions). Data processed by the HCP pipelines and
+following the naming conventions can be used as input to QSIPrep's reconstruction
+workflows.
 
-  1. During preprocessing you included ``--output-spaces template``. This will also
-     result in your preprocessed DWI series being written in template space, which
-     you likely don't want.
-  2. You include the ``--force-spatial-normalization`` argument during preprocessing.
-     This will create the warp to your template and store it in the derivatives directory
-     but will not write your preprocessed DWI series in template space.
+  1. The FNIRT transform is converted into an ANTs transform. It is used to
+     transform atlases from MNI space to the acpc_dc space of the DWIs.
+  2. Images (DWI, T1w, masks, segmentations) and bvecs are reoriented to LPS+
 
-Some of the workflows require a warp to a template. For example, connectivity_ will use
-this warp to transform atlases into T1w space for calculating a connectivity matrix.
+Information on how the FNIRT files are converted to ANTs was found in the following
+sources
+
+
+
+ * https://www.jiscmail.ac.uk/cgi-bin/webadmin?A2=fsl;6efbf618.1511
+ * https://community.mrtrix.org/t/clarification-on-hcp-mni-nonlinear-warps-and-tcktransform-incorrect-scaling-on-single-axis/2857
+ * https://community.mrtrix.org/t/registration-using-transformations-generated-from-other-packages/2259
+ * https://mrtrix.readthedocs.io/en/latest/reference/commands/warpconvert.html
+ * https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/FNIRT/UserGuide#fnirtfileutils
+ * https://community.mrtrix.org/t/warping-tck-files-using-ants-warps/162/7
+ *
