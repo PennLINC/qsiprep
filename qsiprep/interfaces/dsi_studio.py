@@ -265,6 +265,10 @@ class DSIStudioExportOutputSpec(DSIStudioCommandLineInputSpec):
     fa3_file = File(desc="Exported files")
     fa4_file = File(desc="Exported files")
     iso_file = File(desc="Exported files")
+    dti_fa_file = File(desc="Exported files")
+    md_file = File(desc="Exported files")
+    rd_file = File(desc="Exported files")
+    ad_file = File(desc="Exported files")
     image0_file = File(desc="Exported files")
 
 
@@ -623,7 +627,9 @@ class FixDSIStudioExportHeader(SimpleInterface):
             reoriented_img = dsi_img
 
         # No matter what, still use the correct affine
-        nb.Nifti1Image(reoriented_img.get_data(), correct_img.affine).to_filename(new_file)
+        nb.Nifti1Image(
+            reoriented_img.get_data()[::-1, ::-1, :],
+            correct_img.affine).to_filename(new_file)
         self._results['out_file'] = new_file
 
         return runtime

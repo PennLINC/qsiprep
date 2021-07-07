@@ -1,3 +1,29 @@
+0.13.2 (July 2, 2021)
+=====================
+Adds a new reconstruction workflow for the NODDI model.
+
+ * Adds NODDI reconstruction workflow (#257). Thanks @cookpa!
+ * Fixes issue with unequal aspect ratios in q-space plots (#266)
+
+0.13.1 (June 14, 2021)
+======================
+
+ * Adds a flag for a BIDS filter file #256
+ * Fixes a bug where --dwi-only is selected along with --intramodal-template
+
+0.13.0 (May 5, 2021)
+====================
+Many bugfixes
+
+ * Fix bug that produced flipped scalar images (#251)
+ * Added a default working directory to prevent uninterpretable error message (#250)
+ * Fix a bug in the `dipy_3dshore` reconstruction workflow (#249)
+ * Remove hardlinking from DSI Studio interfaces (#214)
+ * Add an option to use a BIDS database directory (#247)
+ * Fix bug in interactive reports for HCP-style acquisitions (#238)
+ * Update defaults for `Patch2Self` (#230, #239)
+ * Remove cmake installer from docker image after compiling ANTS (#229)
+
 0.13.0RC1 (January 19, 2021)
 ============================
 This version introduces major changes to the TOPUP/eddy workflow. Feedback would be greatly

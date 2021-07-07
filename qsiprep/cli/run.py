@@ -39,6 +39,40 @@ def check_deps(workflow):
                       and which(node.interface._cmd.split()[0]) is None))
 
 
+def _filter_pybids_none_any(dct):
+    import bids
+    return {
+        k: bids.layout.Query.NONE
+        if v is None
+        else (bids.layout.Query.ANY if v == "*" else v)
+        for k, v in dct.items()
+    }
+
+
+def _bids_filter(value):
+    from json import loads
+    from bids.layout import Query
+
+    if value and Path(value).exists():
+        try:
+            filters = loads(Path(value).read_text(), object_hook=_filter_pybids_none_any)
+        except Exception as e:
+            raise Exception("Unable to parse BIDS filter file. Check that it is "
+                            "valid JSON.")
+    else:
+        raise Exception("Unable to load BIDS filter file " + value)
+
+    # unserialize pybids Query enum values
+    for acq, _filters in filters.items():
+        filters[acq] = {
+            k: getattr(Query, v[7:-4])
+            if not isinstance(v, Query) and "Query" in v
+            else v
+            for k, v in _filters.items()
+        }
+    return filters
+
+
 def get_parser():
     """Build parser object"""
     from ..__about__ import __version__
@@ -46,7 +80,7 @@ def get_parser():
     verstr = 'qsiprep v{}'.format(__version__)
 
     parser = ArgumentParser(
-        description='qsiprep: q-Space Image PREProcessing workflows',
+        description='qsiprep: q-Space Image Preprocessing workflows',
         formatter_class=ArgumentDefaultsHelpFormatter)
 
     # Arguments as specified by BIDS-Apps
@@ -88,6 +122,16 @@ def get_parser():
                         help="path to a saved BIDS database directory",
                         type=Path,
                         action='store')
+    g_bids.add_argument(
+        "--bids-filter-file",
+        dest="bids_filters",
+        action="store",
+        type=_bids_filter,
+        metavar="FILE",
+        help="a JSON file describing custom BIDS input filters using PyBIDS. "
+        "For further details, please check out "
+        "https://fmriprep.readthedocs.io/en/latest/faq.html#"
+        "how-do-I-select-only-certain-files-to-be-input-to-fMRIPrep")
 
     # arguments for reconstructing QSI data
     g_ireports = parser.add_argument_group('Options for interactive report outputs')
@@ -223,21 +267,10 @@ def get_parser():
         action='store_true',
         help='skip re-scaling dwi scans to have matching b=0 intensities')
     g_conf.add_argument(
-        '--denoise-before-combining', '--denoise_before_combining',
-        action='store_true',
-        help='[DEPRECATED] run ``dwidenoise`` before combining dwis. Requires '
-             '``--combine-all-dwis``')
-    g_conf.add_argument(
         '--denoise-after-combining', '--denoise_after_combining',
         action='store_true',
         help='run ``dwidenoise`` after combining dwis. Requires '
              '``--combine-all-dwis``')
-    g_conf.add_argument(
-        '--combine_all_dwis', '--combine-all-dwis',
-        action='store_true',
-        default=False,
-        help='[DEPRECATED] combine dwis from across multiple runs for motion correction '
-        'and reconstruction.')
     g_conf.add_argument(
         '--separate_all_dwis', '--separate-all-dwis',
         action='store_true',
@@ -371,11 +404,6 @@ def get_parser():
         action='store_true',
         help='do not use a random seed for skull-stripping - will ensure '
         'run-to-run replicability when used with --omp-nthreads 1')
-    g_ants.add_argument(
-        '--force-spatial-normalization', '--force_spatial_normalization',
-        action='store_true',
-        help='[DEPRECATED] ensures that spatial normalization is run, '
-        'Useful if you plan to warp atlases into subject space.')
     g_ants.add_argument(
         '--skip-t1-based-spatial-normalization', '--skip_t1_based_spatial_normalization',
         action='store_true',
@@ -783,6 +811,7 @@ def build_qsiprep_workflow(opts, retval):
                     "sourcedata",
                     "models",
                     re.compile(r"^\.")))
+
     subject_list = collect_participants(
         layout, participant_label=opts.participant_label)
     retval['subject_list'] = subject_list
@@ -794,10 +823,7 @@ def build_qsiprep_workflow(opts, retval):
                        "Spatial normalization should be done during reconstruction.")
         output_spaces = ["T1w"]
 
-    # Deprecated --force-spatial-normalization
     force_spatial_normalization = not opts.skip_t1_based_spatial_normalization
-    if opts.force_spatial_normalization:
-        logger.warning("[DEPRECATED] --force-spatial-normalization is now default")
     if not force_spatial_normalization and (opts.use_syn_sdc or opts.force_syn):
         msg = [
             'SyN SDC correction requires T1 to MNI registration.',
@@ -805,14 +831,6 @@ def build_qsiprep_workflow(opts, retval):
         ]
         force_spatial_normalization = True
         logger.warning(' '.join(msg))
-
-    # deprecated --combine-all-dwis
-    if opts.combine_all_dwis:
-        logger.warning("[DEPRECATED] DWIs are combined by default.")
-
-    # deprecated --denoise-before-combining
-    if opts.denoise_before_combining:
-        logger.warning("[DEPRECATED] DWIs are denoised before combining by default.")
 
     # Load base plugin_settings from file if --use-plugin
     if opts.use_plugin is not None:
@@ -913,6 +931,7 @@ def build_qsiprep_workflow(opts, retval):
         ignore=opts.ignore,
         hires=False,
         freesurfer=opts.do_reconall,
+        bids_filters=opts.bids_filters,
         debug=opts.sloppy,
         low_mem=opts.low_mem,
         dwi_only=opts.dwi_only,
