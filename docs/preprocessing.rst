@@ -98,7 +98,7 @@ B1 bias field. Similar problems can also occur *within* a DWI series due to
 subject head motion, but these methods have been shown to work well even in
 the presence of within-scan head movement. If the head position changes
 across scans is of a similar magnitude to that of within-scan head motion, it
-is likely fine to use the ``--combine-before-denoising`` option. To gauge how
+is likely fine to use the ``--denoise-after-combining`` option. To gauge how
 much between-scan motion occurred, users can inspect the :ref:`qc_data` to see
 whether Framewise Displacement is large where a new series begins.
 
