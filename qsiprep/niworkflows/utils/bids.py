@@ -88,11 +88,11 @@ def collect_participants(bids_dir, participant_label=None, strict=False):
     return found_label
 
 
-def get_metadata_for_nifti(in_file):
+def get_metadata_for_nifti(in_file, logger=None):
     """Fetch metadata for a given nifti file
 
     """
-    in_file = Path(in_file).resolve()
+    in_file = Path(in_file).absolute()
     fname = splitext(in_file)[0]
     fname_comps = fname.split("_")
 
@@ -121,6 +121,14 @@ def get_metadata_for_nifti(in_file):
 
     top_json = bids_dir / jsonext("_".join(top_comp_list))
     potential_json = [top_json]
+    
+    if logger:
+    
+        logger.info("ABOUT TO FAIL")
+        logger.info("BIDS DIR: ", bids_dir)
+        logger.info("SUBID: ", sub)
+        logger.info("NIFTI: ", in_file)
+        logger.info("JSON: ", subject_comp_list)
 
     subject_json = bids_dir / sub / jsonext("_".join(subject_comp_list))
     potential_json.append(subject_json)
