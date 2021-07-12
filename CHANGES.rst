@@ -1,5 +1,5 @@
-0.14.1 (July 11, 2021)
-=====================
+0.14.2 (July 11, 2021)
+======================
 Bugfixes and documentation
 
  * Updates documentation for containers (#270)
