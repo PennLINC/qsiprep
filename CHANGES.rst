@@ -1,4 +1,12 @@
-0.13.2 (July 2, 2021)
+0.14.1 (July 11, 2021)
+=====================
+Bugfixes and documentation
+
+ * Updates documentation for containers (#270)
+ * Fixes a bug when reading fieldmap metadata from datalad inputs (#271)
+ * Change incorrect option in the documentation (#272)
+
+0.14.0 (July 2, 2021)
 =====================
 Adds a new reconstruction workflow for the NODDI model.
 
