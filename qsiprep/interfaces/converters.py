@@ -8,6 +8,7 @@ import os
 import os.path as op
 import numpy as np
 import nibabel as nb
+from numpy.core.fromnumeric import _mean_dispatcher
 try:
     from StringIO import StringIO
 except ImportError:
@@ -506,3 +507,45 @@ def peaks_to_odfs(fibdict):
     return odfs
 
 
+class _FNIRT2ITKInputSpec(BaseInterfaceInputSpec):
+    fnirt_file = File(exists=True, mandatory=True, desc='HCP transform file')
+
+
+class _FNIRT2ITKOutputSpec(TraitedSpec):
+    itk_warp = File(exists=True, desc='FNIRT transform converted to ITK format')
+
+
+class FNIRT2ITK(SimpleInterface):
+    input_spec = _FNIRT2ITKInputSpec
+    output_spec = _FNIRT2ITKOutputSpec
+
+    def _run_interface(self, runtime):
+        itk_warp_file = fname_presuffix(self.inputs.fnirt_file, newpath=runtime.cwd,
+                                        suffix="ITK")
+        convert_fnirt_to_itk(self.inputs.fnirt_file, itk_warp_file)
+        self._results['itk_warp'] = itk_warp_file
+        return runtime
+
+
+def convert_fnirt_to_itk(fnirt_transform, itk_transform):
+    """Converts an FNIRT warp to an ITK warp file.
+    WARNING: Only tested on MNI -> acpc_dc with ALL data in RPI."""
+
+    # This is a 4D nifti file. Load it and flip y
+    fnirt_img = nb.load(fnirt_transform)
+    fnirt_warp = fnirt_img.get_fdata()
+    fnirt_warp[..., 1] = -fnirt_warp[..., 1]
+
+    # Convert it to vector type
+    new_shape = fnirt_img.shape[:3] + (1, 3)
+    new_header = fnirt_img.header.copy()
+    new_header.set_intent('vector')
+    # Zero out some padding
+    new_header['pixdim'][4:] = 0.
+    new_header.set_xyzt_units(xyz='mm')
+    new_header.set_sform(np.zeros((4, 4)), code='unknown')
+    new_header.set_qform(fnirt_img.affine, 'scanner')
+    itk_warp = fnirt_warp.reshape(new_shape)
+    itk_img = nb.Nifti1Image(itk_warp, affine=fnirt_img.affine,
+                             header=new_header)
+    itk_img.to_filename(itk_transform)
