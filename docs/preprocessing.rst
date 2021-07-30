@@ -65,38 +65,46 @@ Filters modify "queries", which are used to find data for each data type. The
 queries in QSIPrep are::
 
   {
-      'fmap': {'datatype': 'fmap'},
-      'sbref': {'datatype': 'func', 'suffix': 'sbref'},
-      'flair': {'datatype': 'anat', 'suffix': 'FLAIR'},
-      't2w': {'datatype': 'anat', 'suffix': 'T2w'},
-      't1w': {'datatype': 'anat', 'suffix': 'T1w'},
-      'roi': {'datatype': 'anat', 'suffix': 'roi'},
-      'dwi': {'datatype': 'dwi', 'suffix': 'dwi'}
+      "fmap": {"datatype": "fmap"},
+      "sbref": {"datatype": "func", "suffix": "sbref"},
+      "flair": {"datatype": "anat", "suffix": "FLAIR"},
+      "t2w": {"datatype": "anat", "suffix": "T2w"},
+      "t1w": {"datatype": "anat", "suffix": "T1w"},
+      "roi": {"datatype": "anat", "suffix": "roi"},
+      "dwi": {"datatype": "dwi", "suffix": "dwi"}
   }
 
 Each query has several "entities", which can be modified by filters. The list of
 supported entities is `here
 <https://github.com/bids-standard/pybids/blob/master/bids/layout/config/bids.json>`_.
-To filter data, modify any entity for one or more of the above queries, and
-store the result in the BIDS filter file. For example::
+To filter data, modify the queries by changing one or more of the supported
+entities in the BIDS filter file. The general format of the filter file is::
 
   {
-      "t1w": { "session" : "MR1" },
-      "dwi": { "session": "MR1", "run" : "1" }
+    "query": { "entity": "value" }
+  }
+
+For example::
+
+  {
+      "t1w": { "session": "MR1" },
+      "dwi": { "session": "MR1", "run": "1" }
   }
 
 modifies the "t1w" and "dwi" queries, and filters T1w and DWI scans to select
-session "MR1". It also filters on the run number for DWI scans. Multiple runs
-can be selected by passing arrays, for example::
+session "MR1". It also filters on the run number for DWI scans only. Multiple runs
+can be selected by passing arrays. For example::
 
   {
-      "dwi": { "run" : [2,3] }
+      "dwi": { "run": [2,3] }
   }
+
+filters the "dwi" query for runs 2 and 3.
 
 You can enable regular expressions for more detailed filtering, for example::
 
   {
-      "t1w": { "acquisition" : "(?i)mprage", "regex_search" : "true" },
+      "t1w": { "acquisition": "(?i)mprage", "regex_search": "true" },
   }
 
 will do a case-insensitive match of "mprage" within the "t1w" query.
