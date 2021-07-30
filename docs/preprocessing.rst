@@ -64,15 +64,15 @@ the ``--bids-filter-file`` option.
 Filters modify "queries", which are used to find data for each data type. The
 queries in QSIPrep are::
 
-{
-    'fmap': {'datatype': 'fmap'},
-    'sbref': {'datatype': 'func', 'suffix': 'sbref'},
-    'flair': {'datatype': 'anat', 'suffix': 'FLAIR'},
-    't2w': {'datatype': 'anat', 'suffix': 'T2w'},
-    't1w': {'datatype': 'anat', 'suffix': 'T1w'},
-    'roi': {'datatype': 'anat', 'suffix': 'roi'},
-    'dwi': {'datatype': 'dwi', 'suffix': 'dwi'}
-}
+  {
+      'fmap': {'datatype': 'fmap'},
+      'sbref': {'datatype': 'func', 'suffix': 'sbref'},
+      'flair': {'datatype': 'anat', 'suffix': 'FLAIR'},
+      't2w': {'datatype': 'anat', 'suffix': 'T2w'},
+      't1w': {'datatype': 'anat', 'suffix': 'T1w'},
+      'roi': {'datatype': 'anat', 'suffix': 'roi'},
+      'dwi': {'datatype': 'dwi', 'suffix': 'dwi'}
+  }
 
 Each query has several "entities", which can be modified by filters. The list of
 supported entities is `here
