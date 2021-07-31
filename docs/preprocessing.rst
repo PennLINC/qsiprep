@@ -61,8 +61,9 @@ Using BIDS filters
 BIDS filters allow users to filter the set of images available to QSIPrep at run
 time. BIDS filters should be stored in a json file and passed to QSIPrep with
 the ``--bids-filter-file`` option.
-Filters modify "queries", which are used to find data for each data type. The
-queries in QSIPrep are::
+Filters modify "queries", which are used to find data for each data type. 
+NOTE: this is illustrating how modalities are queried in general, and is not the format
+of the file you will send to ``--bids-filter-file``. The queries in QSIPrep are::
 
   {
       "fmap": {"datatype": "fmap"},
@@ -84,7 +85,7 @@ entities in the BIDS filter file. The general format of the filter file is::
     "query": { "entity": "value" }
   }
 
-For example::
+For example, this could be the contents of a valid BIDS filter file::
 
   {
       "t1w": { "session": "MR1" },
