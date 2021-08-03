@@ -1,0 +1,11 @@
+version: 2
+
+conda:
+  environment: .readthedocs/environment.yaml
+
+python:
+  install:
+    - method: pip
+      path: .
+      extra_requirements:
+        - doc
