@@ -320,6 +320,7 @@ RUN python -c "from matplotlib import font_manager" && \
     sed -i 's/\(backend *: \).*$/\1Agg/g' $( python -c "import matplotlib; print(matplotlib.matplotlib_fname())" )
 
 RUN mkdir -p ${HOME}/.dipy
+
 RUN python -c "import amico; amico.core.setup()"
 
 RUN find $HOME -type d -exec chmod go=u {} + && \
@@ -335,7 +336,8 @@ ENV AFNI_INSTALLDIR=/usr/lib/afni \
     AFNI_IMSAVE_WARNINGS=NO \
     FSLOUTPUTTYPE=NIFTI_GZ \
     MRTRIX_NTHREADS=1 \
-    IS_DOCKER_8395080871=1
+    IS_DOCKER_8395080871=1 \
+    DIPY_HOME=/home/qsiprep/.dipy
 
 RUN ldconfig
 WORKDIR /tmp/

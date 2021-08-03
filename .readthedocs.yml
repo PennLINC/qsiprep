@@ -1,4 +1,12 @@
 version: 2
+name: qsiprep
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python-spams<=2.6.1
+  - python=3.7
+  - pip>=20.1  # pip is needed as dependency
 
 python:
   install:
