@@ -1,5 +1,4 @@
 version: 2
-name: qsiprep
 channels:
   - conda-forge
   - defaults
