@@ -781,7 +781,8 @@ class BuildConnectome(MRTrix3Base):
 
         # get the connectivity matrix
         prefix = atlas_name + "_" + self.inputs.measure
-        connectivity_data[prefix + "_connectivity"] = np.loadtxt(self.inputs.out_file)
+        connectivity_data[prefix + "_connectivity"] = np.loadtxt(self.inputs.out_file,
+                                                                delimiter=',')
         merged_matfile = op.join(runtime.cwd, prefix + "_connectivity.mat")
         savemat(merged_matfile, connectivity_data, long_field_names=True)
         return runtime
