@@ -349,7 +349,7 @@ def init_dwi_denoising_wf(dwi_denoise_window,
         step_num += 1
 
     if do_biascorr:
-        biascorr = pe.Node(DWIBiasCorrect(use_ants=True), name='biascorr')
+        biascorr = pe.Node(DWIBiasCorrect(method='ants'), name='biascorr')
         ds_report_biascorr = pe.Node(
             DerivativesDataSink(suffix=name + '_biascorr',
                                 source_file=source_file),
