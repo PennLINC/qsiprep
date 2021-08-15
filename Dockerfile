@@ -196,6 +196,15 @@ RUN cd /opt \
     && echo "Compiling MRtrix3-3Tissue ..." \
     && ./build
 
+# Download minified ART ACPCdetect (V2.0).
+WORKDIR /opt/art
+ENV PATH="/opt/art/bin:$PATH"
+RUN mkdir /opt/art \
+    && cd /opt/art \
+    && curl -fsSL https://osf.io/73h5s/download \
+    | tar xz --strip-components 1
+
+
 # Installing ANTs latest from source
 ARG ANTS_SHA=e00e8164d7a92f048e5d06e388a15c1ee8e889c4
 ADD https://cmake.org/files/v3.11/cmake-3.11.4-Linux-x86_64.sh /cmake-3.11.4-Linux-x86_64.sh
@@ -251,6 +260,7 @@ RUN curl -sSLO https://repo.continuum.io/miniconda/Miniconda3-4.5.12-Linux-x86_6
 ENV PATH=/usr/local/miniconda/bin:$PATH \
     CPATH="/usr/local/miniconda/include/:$CPATH" \
     LANG=C.UTF-8 \
+    ARTHOME="/opt/art" \
     LC_ALL=C.UTF-8 \
     PYTHONNOUSERSITE=1
 

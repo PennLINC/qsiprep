@@ -162,6 +162,12 @@ def get_parser():
         type=os.path.abspath,
         help='use this directory as inputs to qsirecon. This option skips qsiprep.'
     )
+    g_recon.add_argument(
+        '--freesurfer-input', '--freesurfer_input',
+        action='store',
+        type=os.path.abspath,
+        help='Directory containing freesurfer outputs to be integrated into recon.'
+    )
 
     g_perfm = parser.add_argument_group('Options to handle performance')
     g_perfm.add_argument(
@@ -223,7 +229,7 @@ def get_parser():
         action='store',
         nargs="+",
         default=[],
-        choices=['fieldmaps', 'sbref'],
+        choices=['fieldmaps'],
         help='ignore selected aspects of the input dataset to disable '
         'corresponding parts of the workflow (a space delimited list)')
     g_conf.add_argument(
