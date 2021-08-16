@@ -255,8 +255,8 @@ jobs:
       - run:
           name: Install graphviz
           command: |
-              sudo apt-get update
-              sudo apt-get install -y graphviz libblas-dev \
+              sudo apt update
+              sudo apt install -y graphviz libblas-dev \
                liblapack-dev gfortran
       - run:
           name: Install qsiprep.
