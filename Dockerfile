@@ -199,8 +199,7 @@ RUN cd /opt \
 # Download minified ART ACPCdetect (V2.0).
 WORKDIR /opt/art
 ENV PATH="/opt/art/bin:$PATH"
-RUN mkdir /opt/art \
-    && cd /opt/art \
+RUN cd /opt/art \
     && curl -fsSL https://osf.io/73h5s/download \
     | tar xz --strip-components 1
 
