@@ -908,7 +908,7 @@ class DWIBiasCorrectInputSpec(MRTrix3BaseInputSpec, SeriesPreprocReportInputSpec
     mask = File(
         argstr='-mask %s',
         desc='input mask image for bias field estimation')
-    method = traits.Enum('ants', 'fsl', argstr='-%s', usedefault=True)
+    method = traits.Enum('ants', 'fsl', argstr='%s', position=1, usedefault=True)
     bias_image = File(
         argstr='-bias %s',
         name_source='in_file',
