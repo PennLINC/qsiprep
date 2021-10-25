@@ -552,6 +552,15 @@ to workflows in *QSIPrep*'s documentation]\
         name='ds_report_about',
         run_without_submitting=True)
 
+    ds_t1w_acpc_transform = pe.Node(
+            DerivativesDataSink(
+                base_directory=output_dir,
+                space='T1w',
+                suffix='dwi',
+                desc='orig2T1w'),
+            name='ds_acpc_transform',
+            run_without_submitting=True)
+
     # Preprocessing of T1w (includes registration to MNI)
     anat_preproc_wf = init_anat_preproc_wf(
         name="anat_preproc_wf",
@@ -591,7 +600,9 @@ to workflows in *QSIPrep*'s documentation]\
         (summary, ds_report_summary, [('out_report', 'in_file')]),
         (bidssrc, ds_report_about, [((info_modality, fix_multi_source_name, dwi_only),
                                      'source_file')]),
-        (about, ds_report_about, [('out_report', 'in_file')])
+        (about, ds_report_about, [('out_report', 'in_file')]),
+        (anat_preproc_wf, ds_t1w_acpc_transform, [
+            ('outputnode.t1w_acpc_transform', 'in_file')])
     ])
 
     if anat_only:
@@ -795,6 +806,8 @@ to workflows in *QSIPrep*'s documentation]\
                     ('outputnode.subject_id', 'inputnode.subject_id'),
                     ('outputnode.t1_2_fsnative_forward_transform',
                      'inputnode.t1_2_fsnative_forward_transform'),
+                    ('outputnode.t1_2_fsnative_reverse_transform',
+                     'inputnode.t1_2_fsnative_reverse_transform'),
                     ('outputnode.t1_2_fsnative_reverse_transform',
                      'inputnode.t1_2_fsnative_reverse_transform')
                 ]),

@@ -198,6 +198,8 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug, d
             Image of the preprocessed t1 to be used as the reference output for dwis
         t1_mni_resampling_grid
             Image of the preprocessed t1 to be used as the reference output for dwis
+        t1w_acpc_transform
+            Path to the itk transform file that moves the T1w into ac-pc alignment
 
     **Subworkflows**
 
@@ -216,7 +218,8 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug, d
                 'mni_mask', 'mni_seg', 'mni_tpms',
                 'template_transforms', 'dwi_sampling_grid',
                 'subjects_dir', 'subject_id', 't1_2_fsnative_forward_transform',
-                't1_2_fsnative_reverse_transform', 'surfaces', 't1_aseg', 't1_aparc']),
+                't1_2_fsnative_reverse_transform', 'surfaces', 't1_aseg', 't1_aparc',
+                't1w_acpc_transform']),
         name='outputnode')
 
     # Get the template image
@@ -296,7 +299,9 @@ and used as T1w-reference throughout the workflow.
     workflow.connect([
         (inputnode, anat_template_wf, [('t1w', 'inputnode.t1w')]),
         (anat_template_wf, skullstrip_wf, [('outputnode.t1_template', 'inputnode.in_file')]),
-        (skullstrip_wf, outputnode, [('outputnode.bias_corrected', 't1_preproc')]),
+        (skullstrip_wf, outputnode, [
+            ('outputnode.bias_corrected', 't1_preproc'),
+            ('outputnode.t1w_acpc_transform', 't1w_acpc_transform')]),
         (anat_template_wf, outputnode, [
             ('outputnode.template_transforms', 't1_template_transforms')]),
         (buffernode, outputnode, [('t1_brain', 't1_brain'),
@@ -712,7 +717,8 @@ The T1w-reference was then skull-stripped using `antsBrainExtraction.sh`
                         name='inputnode')
     outputnode = pe.Node(
         niu.IdentityInterface(fields=[
-            'bias_corrected', 'out_file', 'out_mask', 'out_segs', 'out_report']),
+            'bias_corrected', 'out_file', 'out_mask', 'out_segs', 'out_report',
+            't1w_acpc_transform']),
         name='outputnode')
 
     t1_skull_strip = pe.Node(
@@ -781,6 +787,7 @@ The T1w-reference was then skull-stripped using `antsBrainExtraction.sh`
         (rigid_acpc_align, rigid_acpc_resample_head, [('forward_transforms', 'transforms')]),
         (rigid_acpc_align, rigid_acpc_resample_mask, [('forward_transforms', 'transforms')]),
         (rigid_acpc_align, rigid_acpc_resample_seg, [('forward_transforms', 'transforms')]),
+        (rigid_acpc_align, outputnode, [('forward_transforms', 't1w_acpc_transform')]),
         (t1_skull_strip, rigid_acpc_resample_brain, [('BrainExtractionBrain', 'input_image')]),
         (t1_skull_strip, rigid_acpc_resample_head, [('N4Corrected0', 'input_image')]),
         (t1_skull_strip, rigid_acpc_resample_mask, [('BrainExtractionMask', 'input_image')]),
@@ -849,7 +856,8 @@ The T1w-reference was then skull-stripped using `3dSkullStrip`
                         name='inputnode')
     outputnode = pe.Node(
         niu.IdentityInterface(fields=[
-            'bias_corrected', 'out_file', 'out_mask', 'out_segs', 'out_report']),
+            'bias_corrected', 'out_file', 'out_mask', 'out_segs', 'out_report',
+            't1w_acpc_transform']),
         name='outputnode')
 
     inu_n4 = pe.Node(
@@ -915,6 +923,7 @@ The T1w-reference was then skull-stripped using `3dSkullStrip`
         (rigid_acpc_align, rigid_acpc_resample_head, [('forward_transforms', 'transforms')]),
         (rigid_acpc_align, rigid_acpc_resample_mask, [('forward_transforms', 'transforms')]),
         (rigid_acpc_align, rigid_acpc_resample_seg, [('forward_transforms', 'transforms')]),
+        (rigid_acpc_align, outputnode, [('forward_transforms', 't1w_acpc_transform')]),
         (skullstrip, rigid_acpc_resample_brain, [('out_file', 'input_image')]),
         (inu_n4, rigid_acpc_resample_head, [('output_image', 'input_image')]),
         (skullstrip, rigid_acpc_resample_mask, [('mask_file', 'input_image')]),
