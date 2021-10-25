@@ -229,10 +229,9 @@ class CombineMotions(SimpleInterface):
         output_fname = os.path.join(runtime.cwd, "motion_params.csv")
         output_spm_fname = os.path.join(runtime.cwd, "spm_movpar.txt")
         ref_file = self.inputs.ref_file
-        for motion_file, src_file in zip(self.inputs.transform_files,
-                                         self.inputs.source_files):
+        for motion_file in self.inputs.transform_files:
             collected_motion.append(
-                get_fsl_motion_params(motion_file, src_file, ref_file, runtime.cwd))
+                get_fsl_motion_params(motion_file, ref_file, ref_file, runtime.cwd))
 
         final_motion = np.row_stack(collected_motion)
         cols = ["scaleX", "scaleY", "scaleZ", "shearXY", "shearXZ",
