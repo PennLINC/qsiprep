@@ -807,8 +807,6 @@ to workflows in *QSIPrep*'s documentation]\
                     ('outputnode.t1_2_fsnative_forward_transform',
                      'inputnode.t1_2_fsnative_forward_transform'),
                     ('outputnode.t1_2_fsnative_reverse_transform',
-                     'inputnode.t1_2_fsnative_reverse_transform'),
-                    ('outputnode.t1_2_fsnative_reverse_transform',
                      'inputnode.t1_2_fsnative_reverse_transform')
                 ]),
             (

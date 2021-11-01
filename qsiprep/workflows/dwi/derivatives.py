@@ -34,7 +34,7 @@ def init_dwi_derivatives_wf(output_prefix,
         niu.IdentityInterface(fields=[
             'source_file', 'dwi_t1', 'dwi_mask_t1', 'cnr_map_t1', 'bvals_t1', 'bvecs_t1',
             'local_bvecs_t1', 't1_b0_ref', 'gradient_table_t1', 'confounds',
-            'hmc_optimization_data', 'series_qc'
+            'hmc_optimization_data', 'series_qc', 'b0ref_to_t1w_transform'
         ]),
         name='inputnode')
 
@@ -98,6 +98,16 @@ def init_dwi_derivatives_wf(output_prefix,
             name='ds_t1_b0_ref',
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
+        ds_b0ref_to_t1w = pe.Node(
+            DerivativesDataSink(
+                source_file=source_file,
+                base_directory=output_dir,
+                desc='b0ref2t1w',
+                suffix='from-b0ref_to-t1w_xfm'),
+            name='ds_b0ref_to_t1w',
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB)
+
         ds_dwi_mask_t1 = pe.Node(
             DerivativesDataSink(
                 source_file=source_file,
@@ -141,6 +151,7 @@ def init_dwi_derivatives_wf(output_prefix,
             (inputnode, ds_t1_b0_ref, [('t1_b0_ref', 'in_file')]),
             (inputnode, ds_dwi_mask_t1, [('dwi_mask_t1', 'in_file')]),
             (inputnode, ds_cnr_map_t1, [('cnr_map_t1', 'in_file')]),
+            (inputnode, ds_b0ref_to_t1w, [('b0ref_to_t1w_transform', 'in_file')]),
             (inputnode, ds_gradient_table_t1, [('gradient_table_t1', 'in_file')])
             ])
         # If requested, write local bvecs
