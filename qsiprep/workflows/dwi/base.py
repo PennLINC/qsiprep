@@ -429,7 +429,8 @@ Diffusion data preprocessing
                 ('outputnode.b0_template', 'inputnode.in_post')]),
             (b0_coreg_wf, fmap_unwarp_report_wf, [
                 ('outputnode.itk_b0_to_t1', 'inputnode.in_xfm')]),
-            (fmap_unwarp_report_wf, ds_report_sdc, [('outputnode.report', 'in_file')])
+            (fmap_unwarp_report_wf, ds_report_sdc, [('outputnode.report', 'in_file')]),
+            (b0_coreg_wf, outputnode, [('outputnode.itk_b0_to_t1', 'itk_b0_to_t1')])
         ])
 
     summary = pe.Node(
