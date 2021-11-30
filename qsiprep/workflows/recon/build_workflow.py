@@ -11,6 +11,7 @@ from .dipy import init_dipy_brainsuite_shore_recon_wf, init_dipy_mapmri_recon_wf
 from .mrtrix import (init_mrtrix_csd_recon_wf, init_global_tractography_wf,
                      init_mrtrix_tractography_wf, init_mrtrix_connectivity_wf)
 from .amico import init_amico_noddi_fit_wf
+from .pyafq import init_pyafq_wf
 from .converters import init_mif_to_fibgz_wf, init_qsiprep_to_fsl_wf
 from .dynamics import init_controllability_wf
 from .utils import init_conform_dwi_wf, init_discard_repeated_samples_wf
@@ -259,6 +260,11 @@ def workflow_from_spec(omp_nthreads, has_t1w, has_t1w_transform, node_spec):
     elif software == "AMICO":
         if node_spec["action"] == "fit_noddi":
             return init_amico_noddi_fit_wf(omp_nthreads, has_t1w_transform, **kwargs)
+
+    elif software == "pyAFQ":
+        if node_spec["action"] == "pyAFQ_full":
+            return init_pyafq_wf(omp_nthreads, has_t1w_transform, **kwargs)
+
     # qsiprep operations
     else:
         if node_spec['action'] == "controllability":
