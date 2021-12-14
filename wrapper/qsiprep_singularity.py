@@ -213,6 +213,10 @@ def get_parser():
                         required=False,
                         action='store',
                         type=os.path.abspath)
+    parser.add_argument('--bids-filter-file', '--bids_filter_file',
+                        required=False,
+                        action='store',
+                        type=os.path.abspath)
 
     parser.add_argument('-h', '--help', action='store_true',
                         help="show this help message and exit")
@@ -379,6 +383,11 @@ def main():
         mounted_config = "/sngl/eddy/" + config_fname
         command.extend(['-B', ':'.join((config_dir, '/sngl/eddy'))])
         main_args.extend(['--eddy-config', mounted_config])
+    if opts.bids_filter_file:
+        filter_dir, filter_fname = op.split(opts.bids_filter_file)
+        mounted_filter = "/sngl/filter/" + filter_fname
+        command.extend(['-B', ':'.join((filter_dir, '/sngl/filter'))])
+        main_args.extend(['--bids-filter-file', mounted_filter])
     if opts.output_dir:
         mkdir(opts.output_dir)
         command.extend(['-B', ':'.join((opts.output_dir, '/sngl/out'))])

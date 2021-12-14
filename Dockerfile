@@ -171,7 +171,7 @@ RUN mkdir /opt/dsi-studio \
 
 
 # Install mrtrix3 from source
-ARG MRTRIX_SHA=5d6b3a6ffc6ee651151779539c8fd1e2e03fad81
+ARG MRTRIX_SHA=3498ff469b843d5b023c3675f1d955ba4105c5d1
 ENV PATH="/opt/mrtrix3-latest/bin:$PATH"
 RUN cd /opt \
     && curl -sSLO https://github.com/MRtrix3/mrtrix3/archive/${MRTRIX_SHA}.zip \
@@ -283,7 +283,8 @@ RUN conda install -y python=3.7.1 \
 # will handle parallelization
 ENV MKL_NUM_THREADS=1 \
     OMP_NUM_THREADS=1 \
-    MRTRIX_NTHREADS=1
+    MRTRIX_NTHREADS=1 \
+    KMP_WARNINGS=0
 
 WORKDIR /root/
 
@@ -318,6 +319,10 @@ RUN echo "${VERSION}" > /src/qsiprep/qsiprep/VERSION && \
 RUN python -c "from matplotlib import font_manager" && \
     sed -i 's/\(backend *: \).*$/\1Agg/g' $( python -c "import matplotlib; print(matplotlib.matplotlib_fname())" )
 
+RUN mkdir -p ${HOME}/.dipy
+
+RUN python -c "import amico; amico.core.setup()"
+
 RUN find $HOME -type d -exec chmod go=u {} + && \
     find $HOME -type f -exec chmod go=u {} +
 
@@ -331,7 +336,8 @@ ENV AFNI_INSTALLDIR=/usr/lib/afni \
     AFNI_IMSAVE_WARNINGS=NO \
     FSLOUTPUTTYPE=NIFTI_GZ \
     MRTRIX_NTHREADS=1 \
-    IS_DOCKER_8395080871=1
+    IS_DOCKER_8395080871=1 \
+    DIPY_HOME=/home/qsiprep/.dipy
 
 RUN ldconfig
 WORKDIR /tmp/
@@ -356,4 +362,5 @@ RUN  mkdir -p /sngl/data \
   && mkdir /sngl/scratch \
   && mkdir /sngl/spec \
   && mkdir /sngl/eddy \
+  && mkdir /sngl/filter \
   && chmod a+rwx /sngl/*

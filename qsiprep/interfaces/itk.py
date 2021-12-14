@@ -297,25 +297,6 @@ def compose_affines(reference_image, affine_list, output_file):
     return output_file
 
 
-def rotation_matrix_from_transform(transform):
-    """Get the rotation matrix from an itk transform."""
-    cmd = "antsTransformInfo " + transform
-    proc = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    out, err = proc.communicate()
-    result = str(out)
-    if not len(result):
-        raise ValueError("%s returned no transform info" % transform)
-    lines = [line.strip() for line in result.split("\\n")]
-    start_lines = [linenum for linenum, contents in enumerate(lines) if contents == "Matrix:"]
-    if not len(start_lines):
-        raise ValueError("Unable to read rotation matrix from " + transform)
-    if len(start_lines) > 1:
-        raise ValueError("Too many rotation matrices in " + transform)
-    start_line = start_lines[0]
-    matrix_lines = lines[(start_line+1):(start_line+4)]
-    return np.array([list(map(float, line.split())) for line in matrix_lines])
-
-
 def itk_affine_to_rigid(transform_file, cwd):
     """uses c3d_affine_tool and FSL's aff2rigid to convert an itk linear
     transform from affine to rigid"""

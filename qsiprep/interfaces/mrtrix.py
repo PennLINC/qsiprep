@@ -781,7 +781,8 @@ class BuildConnectome(MRTrix3Base):
 
         # get the connectivity matrix
         prefix = atlas_name + "_" + self.inputs.measure
-        connectivity_data[prefix + "_connectivity"] = np.loadtxt(self.inputs.out_file)
+        connectivity_data[prefix + "_connectivity"] = np.loadtxt(self.inputs.out_file,
+                                                                delimiter=',')
         merged_matfile = op.join(runtime.cwd, prefix + "_connectivity.mat")
         savemat(merged_matfile, connectivity_data, long_field_names=True)
         return runtime
@@ -907,16 +908,7 @@ class DWIBiasCorrectInputSpec(MRTrix3BaseInputSpec, SeriesPreprocReportInputSpec
     mask = File(
         argstr='-mask %s',
         desc='input mask image for bias field estimation')
-    use_ants = traits.Bool(
-        argstr='-ants',
-        mandatory=True,
-        desc='use ANTS N4 to estimate the inhomogeneity field',
-        xor=['use_fsl'])
-    use_fsl = traits.Bool(
-        argstr='-fsl',
-        mandatory=True,
-        desc='use FSL FAST to estimate the inhomogeneity field',
-        xor=['use_ants'])
+    method = traits.Enum('ants', 'fsl', argstr='%s', position=1, usedefault=True)
     bias_image = File(
         argstr='-bias %s',
         name_source='in_file',
@@ -960,9 +952,9 @@ class DWIBiasCorrect(SeriesPreprocReport, MRTrix3Base):
     >>> import nipype.interfaces.mrtrix3 as mrt
     >>> bias_correct = mrt.DWIBiasCorrect()
     >>> bias_correct.inputs.in_file = 'dwi.mif'
-    >>> bias_correct.inputs.use_ants = True
+    >>> bias_correct.inputs.method = 'ants'
     >>> bias_correct.cmdline
-    'dwibiascorrect -ants dwi.mif dwi_biascorr.mif'
+    'dwibiascorrect ants dwi.mif dwi_biascorr.mif'
     >>> bias_correct.run()                             # doctest: +SKIP
     """
     _cmd = 'dwibiascorrect'

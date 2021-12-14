@@ -69,7 +69,7 @@ def init_modelfree_qc_wf(dwi_files=None, name='dwi_qc_wf'):
             ('bvec_file', 'input_bvecs_file')]),
         (raw_src, raw_src_qc, [('output_src', 'src_file')]),
         (raw_src, raw_gqi, [('output_src', 'input_src_file')]),
-        (raw_gqi, raw_fib_qc, [('output_fib', 'fib_file')]),
+        (raw_gqi, raw_fib_qc, [('output_fib', 'src_file')]),
         (raw_fib_qc, merged_qc, [('qc_txt', 'fib_qc')]),
         (raw_src_qc, merged_qc, [('qc_txt', 'src_qc')]),
         (merged_qc, outputnode, [('qc_file', 'qc_summary')]),
@@ -92,7 +92,7 @@ def init_interactive_report_wf(name="interactive_report_wf"):
     **Outputs**
 
         qc file
-            DSI Studio's src QC metrics for the input data
+            A JSON file that can be opened by dmriprep-viewer
     """
 
     inputnode = pe.Node(

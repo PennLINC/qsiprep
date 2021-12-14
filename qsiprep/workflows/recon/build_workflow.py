@@ -10,7 +10,8 @@ from .dsi_studio import (init_dsi_studio_recon_wf, init_dsi_studio_export_wf,
 from .dipy import init_dipy_brainsuite_shore_recon_wf, init_dipy_mapmri_recon_wf
 from .mrtrix import (init_mrtrix_csd_recon_wf, init_global_tractography_wf,
                      init_mrtrix_tractography_wf, init_mrtrix_connectivity_wf)
-from .converters import init_mif_to_fibgz_wf
+from .amico import init_amico_noddi_fit_wf
+from .converters import init_mif_to_fibgz_wf, init_qsiprep_to_fsl_wf
 from .dynamics import init_controllability_wf
 from .utils import init_conform_dwi_wf, init_discard_repeated_samples_wf
 from ...engine import Workflow
@@ -30,8 +31,8 @@ def _check_repeats(nodelist):
         raise Exception
 
 
-def init_dwi_recon_workflow(dwi_files, workflow_spec, output_dir, reportlets_dir, has_transform,
-                            omp_nthreads, name="recon_wf"):
+def init_dwi_recon_workflow(dwi_files, workflow_spec, output_dir, reportlets_dir, has_t1w,
+                            has_t1w_transform, omp_nthreads, name="recon_wf"):
     """Convert a workflow spec into a nipype workflow.
 
     """
@@ -67,7 +68,7 @@ def init_dwi_recon_workflow(dwi_files, workflow_spec, output_dir, reportlets_dir
         ants.ApplyTransforms(interpolation="MultiLabel", dimension=3),
         name="odf_rois")
     odf_rois.inputs.input_image = crossing_rois_file
-    if has_transform and space == "T1w":
+    if has_t1w_transform and space == "T1w":
         workflow.connect(inputnode, 't1_2_mni_reverse_transform', odf_rois, 'transforms')
     elif space == 'template':
         odf_rois.inputs.transforms = ['identity']
@@ -80,7 +81,7 @@ def init_dwi_recon_workflow(dwi_files, workflow_spec, output_dir, reportlets_dir
     # Save the atlases
     if len(atlas_names) > 0:
         if space == "T1w":
-            if not has_transform:
+            if not has_t1w_transform:
                 LOGGER.critical("No reverse transform found, unable to move atlases"
                                 " into DWI space")
             workflow.connect([
@@ -123,12 +124,14 @@ def init_dwi_recon_workflow(dwi_files, workflow_spec, output_dir, reportlets_dir
                  [(('atlas_configs', _get_resampled, atlas, 'orig_lut'), 'in_file')]),
             ])
         workflow.connect(inputnode, "dwi_file", get_atlases, "reference_image")
+
     # Read nodes from workflow spec, make sure we can implement them
     nodes_to_add = []
     for node_spec in workflow_spec['nodes']:
         if not node_spec['name']:
             raise Exception("Node has no name [{}]".format(node_spec))
-        new_node = workflow_from_spec(omp_nthreads, has_transform or space == 'template',
+        new_node = workflow_from_spec(omp_nthreads, has_t1w,
+                                      has_t1w_transform or space == 'template',
                                       node_spec)
         if new_node is None:
             raise Exception("Unable to create a node for %s" % node_spec)
@@ -210,7 +213,7 @@ def init_dwi_recon_workflow(dwi_files, workflow_spec, output_dir, reportlets_dir
     return workflow
 
 
-def workflow_from_spec(omp_nthreads, has_transform, node_spec):
+def workflow_from_spec(omp_nthreads, has_t1w, has_t1w_transform, node_spec):
     """Build a nipype workflow based on a json file."""
     software = node_spec.get("software", "qsiprep")
     output_suffix = node_spec.get("output_suffix", "")
@@ -226,32 +229,36 @@ def workflow_from_spec(omp_nthreads, has_transform, node_spec):
     # DSI Studio operations
     if software == "DSI Studio":
         if node_spec["action"] == "reconstruction":
-            return init_dsi_studio_recon_wf(omp_nthreads, has_transform, **kwargs)
+            return init_dsi_studio_recon_wf(omp_nthreads, has_t1w_transform, **kwargs)
         if node_spec["action"] == "export":
-            return init_dsi_studio_export_wf(omp_nthreads, has_transform, **kwargs)
+            return init_dsi_studio_export_wf(omp_nthreads, has_t1w_transform, **kwargs)
         if node_spec["action"] == "tractography":
-            return init_dsi_studio_tractography_wf(omp_nthreads, has_transform, **kwargs)
+            return init_dsi_studio_tractography_wf(omp_nthreads, has_t1w_transform, **kwargs)
         if node_spec["action"] == "connectivity":
-            return init_dsi_studio_connectivity_wf(omp_nthreads, has_transform, **kwargs)
+            return init_dsi_studio_connectivity_wf(omp_nthreads, has_t1w_transform, **kwargs)
 
     # MRTrix3 operations
     elif software == "MRTrix3":
         if node_spec["action"] == "csd":
-            return init_mrtrix_csd_recon_wf(omp_nthreads, has_transform, **kwargs)
+            return init_mrtrix_csd_recon_wf(omp_nthreads, has_t1w_transform, **kwargs)
         if node_spec["action"] == "global_tractography":
-            return init_global_tractography_wf(omp_nthreads, has_transform, **kwargs)
+            return init_global_tractography_wf(omp_nthreads, has_t1w_transform, **kwargs)
         if node_spec["action"] == "tractography":
-            return init_mrtrix_tractography_wf(omp_nthreads, has_transform, **kwargs)
+            return init_mrtrix_tractography_wf(omp_nthreads, has_t1w_transform, **kwargs)
         if node_spec["action"] == "connectivity":
-            return init_mrtrix_connectivity_wf(omp_nthreads, has_transform, **kwargs)
+            return init_mrtrix_connectivity_wf(omp_nthreads, has_t1w_transform, **kwargs)
 
     # Dipy operations
     elif software == "Dipy":
         if node_spec["action"] == "3dSHORE_reconstruction":
-            return init_dipy_brainsuite_shore_recon_wf(omp_nthreads, has_transform, **kwargs)
+            return init_dipy_brainsuite_shore_recon_wf(omp_nthreads, has_t1w_transform, **kwargs)
         if node_spec["action"] == "MAPMRI_reconstruction":
-            return init_dipy_mapmri_recon_wf(omp_nthreads, has_transform, **kwargs)
+            return init_dipy_mapmri_recon_wf(omp_nthreads, has_t1w_transform, **kwargs)
 
+    # AMICO operations
+    elif software == "AMICO":
+        if node_spec["action"] == "fit_noddi":
+            return init_amico_noddi_fit_wf(omp_nthreads, has_t1w_transform, **kwargs)
     # qsiprep operations
     else:
         if node_spec['action'] == "controllability":
@@ -262,6 +269,9 @@ def workflow_from_spec(omp_nthreads, has_transform, node_spec):
             return init_conform_dwi_wf(**kwargs)
         if node_spec['action'] == 'mif_to_fib':
             return init_mif_to_fibgz_wf(**kwargs)
+        if node_spec['action'] == 'reorient_fslstd':
+            return init_qsiprep_to_fsl_wf(**kwargs)
+
     raise Exception("Unknown node %s" % node_spec)
 
 

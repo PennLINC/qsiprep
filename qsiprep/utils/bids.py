@@ -77,7 +77,7 @@ def collect_participants(bids_dir, participant_label=None, strict=False,
     if isinstance(bids_dir, BIDSLayout):
         layout = bids_dir
     else:
-        layout = BIDSLayout(str(bids_dir), validate=bids_validate)
+        raise Exception("A layout is required")
 
     all_participants = set(layout.get_subjects())
 
@@ -120,7 +120,7 @@ def collect_participants(bids_dir, participant_label=None, strict=False,
     return found_label
 
 
-def collect_data(bids_dir, participant_label, task=None, bids_validate=True):
+def collect_data(bids_dir, participant_label, filters=None, bids_validate=True):
     """
     Uses pybids to retrieve the input data for a given participant
 
@@ -139,11 +139,21 @@ def collect_data(bids_dir, participant_label, task=None, bids_validate=True):
         'roi': {'datatype': 'anat', 'suffix': 'roi'},
         'dwi': {'datatype': 'dwi', 'suffix': 'dwi'}
     }
+    bids_filters = filters or {}
+    for acq, entities in bids_filters.items():
+        queries[acq].update(entities)
 
     subj_data = {
-        dtype: sorted(layout.get(return_type='file', subject=participant_label,
-                                 extension=['nii', 'nii.gz'], **query))
-        for dtype, query in queries.items()}
+        dtype: sorted(
+            layout.get(
+                return_type="file",
+                subject=participant_label,
+                extension=["nii", "nii.gz"],
+                **query,
+            )
+        )
+        for dtype, query in queries.items()
+    }
 
     return subj_data, layout
 

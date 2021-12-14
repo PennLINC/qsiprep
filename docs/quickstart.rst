@@ -8,10 +8,10 @@ don't need to be changed. This page describes the options most most likely to be
 needed to be adjusted for your specific data. Suppose the following data is available
 in the BIDS input::
 
-  sub-1/dwi/sub-1_acq-multishell_run-01_dwi.nii.gz
-  sub-1/dwi/sub-1_acq-multishell_run-01_dwi.nii.gz
-  sub-1/dwi/sub-1_acq-multishell_run-03_dwi.nii.gz
-  sub-1/fmap/sub-1_dir-PA_epi.nii.gz
+  sub-1/ses-1/dwi/sub-1_ses-1_acq-multishell_run-01_dwi.nii.gz
+  sub-1/ses-1/dwi/sub-1_ses-1_acq-multishell_run-01_dwi.nii.gz
+  sub-1/ses-1/dwi/sub-1_ses-1_acq-multishell_run-03_dwi.nii.gz
+  sub-1/ses-1/fmap/sub-1_ses-1_dir-PA_epi.nii.gz
 
 One way to process these data would be to call ``qsiprep`` like this::
 
@@ -28,19 +28,19 @@ Grouping scans
    This section explains ``--separate-all-dwis``, ``--denoise-after-combining`` and
    ``--dwi-denoise-window``
 
-Assuming that ``sub-1/fmap/sub-1_dir-PA_epi.nii.gz`` has a JSON sidecar that contains::
+Assuming that ``sub-1/ses-1/fmap/sub-1_dir-PA_epi.nii.gz`` has a JSON sidecar containing the ``IntendedFor`` field for fieldmap correction (`see here <https://bids-specification.readthedocs.io/en/stable/04-modality-specific-files/01-magnetic-resonance-imaging-data.html#expressing-the-mr-protocol-intent-for-fieldmaps>`__)::
 
   "IntendedFor": [
-    "dwi/sub-1_acq-multishell_run-01_dwi.nii.gz",
-    "dwi/sub-1_acq-multishell_run-02_dwi.nii.gz",
-    "dwi/sub-1_acq-multishell_run-03_dwi.nii.gz"
+    "ses-1/dwi/sub-1_ses-1_acq-multishell_run-01_dwi.nii.gz",
+    "ses-1/dwi/sub-1_ses-1_acq-multishell_run-02_dwi.nii.gz",
+    "ses-1/dwi/sub-1_ses-1_acq-multishell_run-03_dwi.nii.gz"
   ]
 
 ``qsiprep`` will infer that the dwi scans are in the same **warped space** - that their
 susceptibility distortions are shared and they can be combined before head motion correction. Since
 we didn't specify ``--separate-all-dwis`` the separate scans will be merged together before head motion
 correction and the fully preprocessed outputs will be written to
-``derivitaves/qsiprep/sub-1/dwi/sub-1_acq-multishell_desc-preproc_dwi.nii.gz``. otherwise
+``derivitaves/qsiprep/sub-1/ses-1/dwi/sub-1_ses-1_acq-multishell_desc-preproc_dwi.nii.gz``. otherwise
 there will be one output in the derivatives directory for each input image in the bids input
 directory.
 
@@ -147,7 +147,7 @@ together *after* images are concatenated by specifying
 What is happening??
 ===================
 
-While QSIPrep runs with `-v -v`, you will see lots of seemingly-nonsensical output
+While QSIPrep runs with `-v -v`, you will see lots of unintuitive output
 in the terminal like::
 
   [Node] Setting-up "qsiprep_wf.single_subject_PNC_wf.dwi_finalize_acq_realistic_wf.transform_dwis_t1.final_b0_ref.b0ref_reportlet" in "/scratch/qsiprep_wf/single_subject_PNC_wf/dwi_finalize_acq_realistic_wf/transform_dwis_t1/final_b0_ref/b0ref_reportlet".

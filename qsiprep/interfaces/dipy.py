@@ -97,15 +97,20 @@ class Patch2SelfInputSpec(SeriesPreprocReportInputSpec):
                                  desc='patch radius in voxels.')
     bval_file = File(exists=True, mandatory=True,
                      desc="bval file containing b-values")
-    model = traits.Str('ridge', usedefault=True,
+    model = traits.Str('ols', usedefault=True,
                        desc='Regression model for Patch2Self')
     alpha = traits.Float(1., usedefault=True,
                          desc='Regularization parameter for Ridge and Lasso')
     b0_threshold = traits.Float(50., usedefault=True,
                                 desc='Threshold to segregate b0s')
-    residuals = traits.Bool(True, usedefault=True,
-                            desc='Returns residuals of suppressed noise')
     mask = File(desc='mask image (unused)')
+    b0_denoising = traits.Bool(True, usedefault=True,
+                               desc='denoise the b=0 images too')
+    clip_negative_vals = traits.Bool(False, usedefault=True,
+                                     desc='Sets negative values after denoising to 0')
+    shift_intensity = traits.Bool(True, usedefault=True,
+                                  desc='Shifts the distribution of intensities per '
+                                  'volume to give non-negative values')
     out_report = File('patch2self_report.svg', usedefault=True,
                       desc='filename for the visual report')
 
@@ -163,7 +168,11 @@ class Patch2Self(SeriesPreprocReport, SimpleInterface):
                        alpha=self.inputs.alpha,
                        patch_radius=patch_radius,
                        b0_threshold=self.inputs.b0_threshold,
-                       residuals=self.inputs.residuals)
+                       verbose=True,
+                       b0_denoising=self.inputs.b0_denoising,
+                       clip_negative_vals=self.inputs.clip_negative_vals,
+                       shift_intensity=self.inputs.shift_intensity
+                       )
 
         # Back to nifti
         denoised_img = nb.Nifti1Image(denoised_arr, noisy_img.affine,
@@ -272,7 +281,11 @@ class DipyReconInterface(SimpleInterface):
         if not isdefined(self.inputs.mask_file):
             dwi_data = amplitudes_img.get_data()
             LOGGER.warning("Creating an Otsu mask, check that the whole brain is covered.")
-            _, mask_array = median_otsu(dwi_data[..., gtab.b0s_mask], 3, 2)
+            _, mask_array = median_otsu(dwi_data,
+                                        vol_idx=gtab.b0s_mask,
+                                        median_radius=3,
+                                        numpass=2)
+
             # Needed for synthetic data
             mask_array = mask_array * (dwi_data.sum(3) > 0)
             mask_img = nb.Nifti1Image(mask_array.astype(np.float32), amplitudes_img.affine,

@@ -1,5 +1,6 @@
 """Handle merging and spliting of DSI files."""
 import os.path as op
+import json
 import numpy as np
 import pandas as pd
 from nilearn.image import concat_imgs, load_img, index_img, math_img, iter_img
@@ -31,6 +32,8 @@ class MergeDWIsInputSpec(BaseInterfaceInputSpec):
         File(), mandatory=False, desc='list of raw concatenated images')
     b0_refs = InputMultiObject(
         File(), mandatory=False, desc='list of b=0 reference images')
+    carpetplot_data = InputMultiObject(
+        File(exists=True), mandatory=False, desc='list of carpetplot_data files')
 
 
 class MergeDWIsOutputSpec(TraitedSpec):
@@ -43,6 +46,7 @@ class MergeDWIsOutputSpec(TraitedSpec):
     merged_b0_ref = File(exists=True)
     merged_raw_dwi = File(exists=True, mandatory=False)
     merged_raw_bvec = File(exists=True, mandatory=False)
+    merged_carpetplot_data = File(exists=True)
 
 
 class MergeDWIs(SimpleInterface):
@@ -108,6 +112,12 @@ class MergeDWIs(SimpleInterface):
         self._results['out_bval'] = out_bval
         self._results['out_bvec'] = out_bvec
 
+        # If one and only one carpetplot data was specified, add it to outputs
+        if len(self.inputs.carpetplot_data) > 1:
+            raise NotImplementedError("Can't handle multiple carpetplots in merging")
+        if len(self.inputs.carpetplot_data) == 1:
+            self._results['merged_carpetplot_data'] = self.inputs.carpetplot_data[0]
+
         if num_dwis == 1:
             return runtime
 
@@ -126,6 +136,8 @@ class MergeDWIs(SimpleInterface):
 class AveragePEPairsInputSpec(MergeDWIsInputSpec):
     original_bvec_files = InputMultiObject(
         File(exists=True), mandatory=True, desc='list of original bvec files')
+    carpetplot_data = InputMultiObject(
+        File(exists=True), mandatory=True, desc='list of carpetplot_data files')
     verbose = traits.Bool(False, usedefault=True)
 
 
@@ -151,13 +163,19 @@ class AveragePEPairs(SimpleInterface):
         rotated_bvecs = combined_bvec_array(self.inputs.bvec_files)
         bvals = combined_bval_array(self.inputs.bval_files)
 
-        # Find which images should be averaged together in the output
+        # Find which images should be averaged together in the o
+        # Also, average the carpetplot matrices and motion params
         image_pairs, averaged_raw_bvec = find_image_pairs(original_bvecs, bvals, assignments)
-        combined_images, combined_raw_images, combined_bvals, combined_bvecs, error_report = \
-            average_image_pairs(image_pairs, self.inputs.dwi_files, rotated_bvecs,
-                                bvals, self.inputs.denoising_confounds,
-                                self.inputs.raw_concatenated_files,
-                                verbose=self.inputs.verbose)
+        combined_images, combined_raw_images, combined_bvals, \
+            combined_bvecs, error_report, avg_carpetplot = average_image_pairs(
+                image_pairs,
+                self.inputs.dwi_files,
+                rotated_bvecs,
+                bvals,
+                self.inputs.denoising_confounds,
+                self.inputs.raw_concatenated_files,
+                self.inputs.carpetplot_data,
+                verbose=self.inputs.verbose)
 
         # Save the averaged outputs
         out_dwi_path = op.join(runtime.cwd, "averaged_pairs.nii.gz")
@@ -171,6 +189,12 @@ class AveragePEPairs(SimpleInterface):
         error_report.to_csv(out_confounds_path, index=False, sep="\t")
         self._results['merged_denoising_confounds'] = out_confounds_path
         self._results['original_images'] = self.inputs.bids_dwi_files
+
+        # Write the merged carpetplot data
+        out_carpetplot_path = op.join(runtime.cwd, "merged_carpetplot.json")
+        with open(out_carpetplot_path, "w") as carpet_f:
+            json.dump(avg_carpetplot, carpet_f)
+        self._results['merged_carpetplot_data'] = out_carpetplot_path
 
         # write the averaged raw data
         out_raw_concatenated = op.join(runtime.cwd, 'merged_raw.nii.gz')
@@ -208,11 +232,13 @@ def find_image_pairs(original_bvecs, bvals, assignments):
 
     # If this is HCP-style, the bvals and bvecs will match directly
     if not group2['bvals'].shape == group1['bvals'].shape:
-        raise Exception("Unable to perform HCP-style merge, sampling scheme mismatch")
+        raise Exception("Unable to perform HCP-style merge, different numbers of images")
     if np.allclose(group2['bvals'], group1['bvals'], atol=50) and np.allclose(
             group2['original_bvecs'], group1['original_bvecs'], atol=0.0001):
         pairs = list(zip(group1['indices'], group2['indices']))
         bvecs = group1['original_bvecs']
+    else:
+        raise Exception("Bvecs do not match - ensure matching bvecs")
 
     return pairs, bvecs
 
@@ -237,7 +263,7 @@ def angle_between(v1, v2):
 
 
 def average_image_pairs(image_pairs, image_paths, rotated_bvecs, bvals, confounds_tsvs,
-                        raw_concatenated_files, verbose=False):
+                        raw_concatenated_files, carpetplots, verbose=False):
     """Create 4D series of averaged images, gradients, and confounds"""
     averaged_images = []
     new_bvecs = []
@@ -255,6 +281,7 @@ def average_image_pairs(image_pairs, image_paths, rotated_bvecs, bvals, confound
     for index1, index2 in image_pairs:
         confounds1 = confounds.iloc[index1].copy().rename(confounds1_rename)
         confounds2 = confounds.iloc[index2].copy().rename(confounds2_rename)
+        # Make a single row containing both 1 and 2
         confounds_both = confounds1.append(confounds2)
         averaged_images.append(math_img('(a+b)/2', a=image_paths[index1],
                                         b=image_paths[index2]))
@@ -275,19 +302,66 @@ def average_image_pairs(image_pairs, image_paths, rotated_bvecs, bvals, confound
         confounds_both['rotated_grad_x_2'] = rotated2[0]
         confounds_both['rotated_grad_y_2'] = rotated2[1]
         confounds_both['rotated_grad_z_2'] = rotated2[2]
-        confounds_both['mean_grad_x'] = new_bvec[0]
-        confounds_both['mean_grad_y'] = new_bvec[1]
-        confounds_both['mean_grad_z'] = new_bvec[2]
-        confounds_both['mean_b'] = new_bval
+        confounds_both['grad_x'] = new_bvec[0]
+        confounds_both['grad_y'] = new_bvec[1]
+        confounds_both['grad_z'] = new_bvec[2]
+        confounds_both['bval'] = new_bval
         merged_confounds.append(confounds_both)
         if verbose:
             print('%d: %d [%.4fdeg error]\n\t%d (%.4f %.4f %.4f)' % (
                      index1, index2, bvec_error, new_bval, new_bvec[0],
                      new_bvec[1], new_bvec[2]))
 
+    # Make columns that can be used in the interactive report
     averaged_confounds = pd.DataFrame(merged_confounds)
+    needed_for_interactive_report = ["trans_x", "trans_y", "trans_z",
+                                     "rot_x", "rot_y", "rot_z",
+                                     "framewise_displacement"]
+    for key in needed_for_interactive_report:
+        confs1, confs2 = averaged_confounds[[key + "_1", key + "_2"]].to_numpy().T
+        averaged_confounds[key] = get_worst(confs1, confs2)
+
+    # Original file is actually two files!
+    averaged_confounds['original_file'] = averaged_confounds[
+        ['original_file_1', 'original_file_2']].agg('+'.join, axis=1)
+
+    # Get the averaged carpetplot data for the interactive report
+    averaged_carpetplot = average_carpetplots(carpetplots, np.array(image_pairs))
     return concat_imgs(averaged_images), concat_imgs(raw_averaged_images), \
-        np.array(merged_bvals), np.array(new_bvecs), averaged_confounds
+        np.array(merged_bvals), np.array(new_bvecs), averaged_confounds, \
+        averaged_carpetplot
+
+
+def get_worst(values1, values2):
+    """finds the highest magnitude value per index in values1, values2"""
+    values = np.column_stack([values1, values2])
+    highest_index = np.argmax(np.abs(values), axis=1)
+    return values[np.arange(values.shape[0]), highest_index]
+
+
+def average_carpetplots(carpet_list, image_pairs):
+    """Averages carpetplot data for display when pe pairs are averaged.
+
+    Reminder: incoming data is a dict of
+    {"carpetplot": [[one image's slice scores],
+                    [next image's slice scores],
+                    ...
+                    [last image's slice scores]]}
+    and the image_pairs should be a n x 2 matrix where the columns
+    are the first image index and second image index.
+
+    """
+    if not isinstance(carpet_list, list) and len(carpet_list) == 1:
+        raise Exception("Not implemented for SHORELine")
+    carpet_path = carpet_list[0]
+    with open(carpet_path, "r") as carpet_f:
+        carpet_dict = json.load(carpet_f)
+    carpet_data = np.array(carpet_dict['carpetplot'])
+    worst_rows = []
+    for index1, index2 in image_pairs:
+        worst_rows.append(
+            get_worst(carpet_data[index1], carpet_data[index2]).tolist())
+    return {"carpetplot": worst_rows}
 
 
 def average_bvec(bvec1, bvec2):
@@ -412,7 +486,10 @@ def harmonize_b0s(dwi_files, bvals, b0_threshold, harmonize_b0s):
         if b0_indices.size == 0:
             b0_mean = np.nan
         else:
-            b0_mean = index_img(dwi_nii, b0_indices).get_fdata().mean()
+            if len(b0_indices) > 1:
+                b0_mean = index_img(dwi_nii, b0_indices).get_fdata().mean()
+            else:
+                b0_mean = dwi_nii.get_fdata().mean()
         b0_means.append(b0_mean)
         dwi_niis.append(dwi_nii)
 

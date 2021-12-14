@@ -51,7 +51,67 @@ perform SDC. Further complicating this is the FSL workflow, which combines disto
 with eddy/motion correction and will merge scans with different PE directions.
 
 If you have some scans you want to combine and others you want to preprocess separately,
-consider creating fake sessions in your BIDS directory.
+you can call qsiprep more than once with BIDS filters to process the different scans.
+
+.. _bids_filters:
+
+Using BIDS filters
+^^^^^^^^^^^^^^^^^^^
+
+BIDS filters allow users to filter the set of images available to QSIPrep at run
+time. BIDS filters should be stored in a json file and passed to QSIPrep with
+the ``--bids-filter-file`` option.
+Filters modify "queries", which are used to find data for each data type.
+NOTE: this is illustrating how modalities are queried in general, and is not the format
+of the file you will send to ``--bids-filter-file``. The queries in QSIPrep are::
+
+  {
+      "fmap": {"datatype": "fmap"},
+      "sbref": {"datatype": "func", "suffix": "sbref"},
+      "flair": {"datatype": "anat", "suffix": "FLAIR"},
+      "t2w": {"datatype": "anat", "suffix": "T2w"},
+      "t1w": {"datatype": "anat", "suffix": "T1w"},
+      "roi": {"datatype": "anat", "suffix": "roi"},
+      "dwi": {"datatype": "dwi", "suffix": "dwi"}
+  }
+
+Each query has several "entities", which can be modified by filters. The list of
+supported entities is `here
+<https://github.com/bids-standard/pybids/blob/master/bids/layout/config/bids.json>`__.
+To filter data, modify the queries by changing one or more of the supported
+entities in the BIDS filter file. The general format of the filter file is::
+
+  {
+    "query": { "entity": "value" }
+  }
+
+The entities specified in the filter file are added to the queries, so you only
+need to include entities you want to use for filtering. For example, this could
+be the contents of a valid BIDS filter file::
+
+  {
+      "t1w": { "session": "MR1" },
+      "dwi": { "session": "MR1", "run": "1" }
+  }
+
+this modifies the "t1w" and "dwi" queries, and filters both T1w and DWI scans to
+select session "MR1". It also filters on the run number for DWI scans only.
+
+Multiple runs can be selected by passing arrays. For example::
+
+  {
+      "dwi": { "run": [2,3] }
+  }
+
+filters the "dwi" query for runs 2 and 3.
+
+You can enable regular expressions for more detailed filtering, for example::
+
+  {
+      "t1w": { "acquisition": "(?i)mprage", "regex_search": "true" },
+  }
+
+will do a case-insensitive match of "mprage" within the "t1w" query.
 
 .. _merge_denoise:
 
@@ -64,7 +124,7 @@ concatenated. Specifically, image denoising (using ``dwidenoise`` or
 ``patch2self``) can be disabled with ``--denoise-method none``. Gibbs
 unringing (using ``mrdegibbs``) is disabled by default but can be enabled
 with ``--unringing-method mrdegibbs``. B1 bias field correction is applied by
-default (using ``dwibiascorrect``), and can be disabled with the
+default (using ``dwibiascorrect``) and can be disabled with the
 ``--dwi-no-biascorr`` option. The intensity of b=0 images is harmonized
 across scans (i.e. scaled to an average value) by default, but this can be
 turned off using ``--dwi-no-b0-harmonization``.
@@ -82,12 +142,12 @@ Gibbs unringing. B1 bias field correction and b=0 intensity harmonization
 do not have as specific requirements about their inputs so are run last.
 
 The last, and potentially very important decision, is whether the denoising
-operations are applied to each input DWI file individually or whether the
+operations are applied to each input DWI series individually or whether the
 denoising operations are applied to the concatenated input DWI files. At
 present, there is little data to guide this choice. The more volumes
 available, the more data MP-PCA/patch2self have to work with. However, if
 there if the head is in a vastly different location in different scans,
-denoising can be impacted in unpredictable ways.
+denoising might be impacted in unpredictable ways.
 
 Consider MP-PCA. If a voxel contains CSF in one DWI series and the subject
 repositions their head between scans so that the voxel contains corpus
@@ -98,7 +158,7 @@ B1 bias field. Similar problems can also occur *within* a DWI series due to
 subject head motion, but these methods have been shown to work well even in
 the presence of within-scan head movement. If the head position changes
 across scans is of a similar magnitude to that of within-scan head motion, it
-is likely fine to use the ``--combine-before-denoising`` option. To gauge how
+is likely fine to use the ``--denoise-after-combining`` option. To gauge how
 much between-scan motion occurred, users can inspect the :ref:`qc_data` to see
 whether Framewise Displacement is large where a new series begins.
 
@@ -386,13 +446,13 @@ to be run through ``qsiprep``.
 Longitudinal T1w processing
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-In the case of multiple T1w images (across sessions and/or runs), T1w images are
-merged into a single template image using FreeSurfer's ``mri_robust_template``.
-This template may be *unbiased*, or equidistant from all source images, or
-aligned to the first image (determined lexicographically by session label).
-For two images, the additional cost of estimating an unbiased template is
-trivial and is the default behavior, but, for greater than two images, the cost
-can be a slowdown of an order of magnitude.
+In the case of multiple T1w images (across sessions and/or within a session),
+T1w images are merged into a single template image using FreeSurfer's
+``mri_robust_template``. This template may be *unbiased*, or equidistant from
+all source images, or aligned to the first image (determined lexicographically
+by session label). For two images, the additional cost of estimating an unbiased
+template is trivial and is the default behavior, but, for greater than two
+images, the cost can be a slowdown of an order of magnitude.
 Therefore, in the case of three or more images, ``qsiprep`` constructs
 templates aligned to the first image, unless passed the ``--longitudinal``
 flag, which forces the estimation of an unbiased template.
@@ -575,7 +635,7 @@ Configuring ``eddy``
 options, you can specify them in a JSON file and pass that to ``qsiprep``
 using the ``--eddy-config`` option. An example (default) eddy config json can
 be viewed or downloaded `here
-<https://github.com/PennBBL/qsiprep/blob/master/qsiprep/data/eddy_params.json>`_
+<https://github.com/PennBBL/qsiprep/blob/master/qsiprep/data/eddy_params.json>`__
 
 
 

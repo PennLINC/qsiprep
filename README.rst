@@ -7,8 +7,8 @@ QSIprep: Preprocessing and analysis of q-space images
   :target: http://qsiprep.readthedocs.io/en/latest/?badge=latest
   :alt: Documentation Status
 
-.. image:: https://circleci.com/gh/PennBBL/qsiprep/tree/master.svg?style=svg
-  :target: https://circleci.com/gh/PennBBL/qsiprep/tree/master
+.. image:: https://circleci.com/gh/PennLINC/qsiprep/tree/master.svg?style=svg
+  :target: https://circleci.com/gh/PennLINC/qsiprep/tree/master
 
 
 Full documentation at https://qsiprep.readthedocs.io

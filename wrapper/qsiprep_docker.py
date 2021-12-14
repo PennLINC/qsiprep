@@ -238,6 +238,12 @@ def get_parser():
                         action='store',
                         type=os.path.abspath)
 
+    # For BIDS filters
+    parser.add_argument('--bids-filter-file', '--bids_filter_file',
+                        required=False,
+                        action='store',
+                        type=os.path.abspath)
+
     parser.add_argument('-h', '--help', action='store_true',
                         help="show this help message and exit")
     parser.add_argument('--version', action='store_true',
@@ -388,6 +394,11 @@ def main():
             main_args.extend(['--recon-spec', '/sngl/spec/spec.json'])
         else:
             main_args.extend(['--recon-spec', opts.recon_spec])
+    if opts.bids_filter_file:
+        if os.path.exists(opts.bids_filter_file):
+            command.extend(['-v', ':'.join((opts.bids_filter_file,
+                            '/sngl/filter/filter.json', 'ro'))])
+            main_args.extend(['--bids-filter-file', '/sngl/filter/filter.json'])
     if opts.eddy_config:
         command.extend(['-v', ':'.join((opts.eddy_config, '/sngl/eddy/eddy_config.json', 'ro'))])
         main_args.extend(['--eddy-config', '/sngl/eddy/eddy_config.json'])

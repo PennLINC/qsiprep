@@ -17,21 +17,23 @@ Instead of specifying a path to a file you can choose from the following:
 +-------------------------------------+--------------+-------------+---------+-----------------+----------------+
 | Option                              | Requires SDC | MultiShell  |   DSI   | DTI             |  Tractography  |
 +=====================================+==============+=============+=========+=================+================+
-|:ref:`mrtrix_multishell_msmt`        |    Yes       |  Required   |    No   |      No         | Probabilistic  |
+|:ref:`mrtrix_multishell_msmt`        |    Yes       |     Yes     |    No   |      No         | Probabilistic  |
 +-------------------------------------+--------------+-------------+---------+-----------------+----------------+
-|:ref:`mrtrix_multishell_msmt_noACT`  |    No        |  Required   |    No   |      No         | Probabilistic  |
+|:ref:`mrtrix_multishell_msmt_noACT`  |    No        |     Yes     |    No   |      No         | Probabilistic  |
 +-------------------------------------+--------------+-------------+---------+-----------------+----------------+
-|:ref:`mrtrix_singleshell_ss3t`       |    Yes       |  No         |    No   |      Yes        | Probabilistic  |
+|:ref:`mrtrix_singleshell_ss3t`       |    Yes       |     No      |    No   |      Yes        | Probabilistic  |
 +-------------------------------------+--------------+-------------+---------+-----------------+----------------+
-|:ref:`mrtrix_singleshell_ss3t_noACT` |    No        |  No         |    No   |      Yes        | Probabilistic  |
+|:ref:`mrtrix_singleshell_ss3t_noACT` |    No        |     No      |    No   |      Yes        | Probabilistic  |
 +-------------------------------------+--------------+-------------+---------+-----------------+----------------+
-|:ref:`dsi_studio_gqi`                | Recommended  |    Yes      |   Yes   |    Yes*         | Deterministic  |
+|:ref:`amico_noddi`                   |    No        |     Yes     |    No   |      No         |     None       |
 +-------------------------------------+--------------+-------------+---------+-----------------+----------------+
-|:ref:`dipy_mapmri`                   | Recommended  |    Yes      |   Yes   |      No         |   Both         |
+|:ref:`dsi_studio_gqi`                | Recommended  |     Yes     |   Yes   |    Yes*         | Deterministic  |
 +-------------------------------------+--------------+-------------+---------+-----------------+----------------+
-|:ref:`dipy_3dshore`                  | Recommended  |    Yes      |   Yes   |      No         |   Both         |
+|:ref:`dipy_mapmri`                   | Recommended  |     Yes     |   Yes   |      No         |   Both         |
 +-------------------------------------+--------------+-------------+---------+-----------------+----------------+
-|:ref:`csdsi_3dshore`                 | Recommended  |    Yes      |   Yes   |      No         |   Both         |
+|:ref:`dipy_3dshore`                  | Recommended  |     Yes     |   Yes   |      No         |   Both         |
++-------------------------------------+--------------+-------------+---------+-----------------+----------------+
+|:ref:`csdsi_3dshore`                 | Recommended  |     Yes     |   Yes   |      No         |   Both         |
 +-------------------------------------+--------------+-------------+---------+-----------------+----------------+
 
 \* Not recommended
@@ -192,6 +194,16 @@ This workflow uses the ``ss3t_csd_beta1`` algorithm [Dhollander2016]_ to estimat
 matter, and cerebrospinal fluid using *single shell (DTI) acquisitions*. The white matter FODs are
 used for tractography with no T1w-based anatomical constraints.
 
+.. _amico_noddi:
+
+``amico_noddi``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+This workflow estimates the NODDI [Zhang2012]_ model using the implementation from
+AMICO [Daducci2015]_. Images with intra-cellular volume fraction (ICVF), isotropic volume
+fraction (ISOVF), orientation dispersion (OD) are written to outputs. Additionally, a DSI
+Studio fib file is created using the peak directions and ICVF as a stand-in for QA to be
+used for tractography.
 
 .. _dsi_studio_gqi:
 

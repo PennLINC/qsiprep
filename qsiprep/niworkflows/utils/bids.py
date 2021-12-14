@@ -12,7 +12,6 @@ import warnings
 import re
 import simplejson as json
 
-from bids import BIDSLayout
 from .misc import splitext
 
 __all__ = ['BIDS_NAME']
@@ -89,49 +88,11 @@ def collect_participants(bids_dir, participant_label=None, strict=False):
     return found_label
 
 
-def collect_data(dataset, participant_label, task=None, echo=None):
-    """
-    Uses pybids to retrieve the input data for a given participant
-    """
-    layout = BIDSLayout(dataset, exclude=['derivatives', 'sourcedata'])
-    queries = {
-        'fmap': {'subject': participant_label, 'modality': 'fmap',
-                 'extensions': ['nii', 'nii.gz']},
-        'bold': {'subject': participant_label, 'modality': 'func', 'type': 'bold',
-                 'extensions': ['nii', 'nii.gz']},
-        'sbref': {'subject': participant_label, 'modality': 'func', 'type': 'sbref',
-                  'extensions': ['nii', 'nii.gz']},
-        'flair': {'subject': participant_label, 'modality': 'anat', 'type': 'FLAIR',
-                  'extensions': ['nii', 'nii.gz']},
-        't2w': {'subject': participant_label, 'modality': 'anat', 'type': 'T2w',
-                'extensions': ['nii', 'nii.gz']},
-        't1w': {'subject': participant_label, 'modality': 'anat', 'type': 'T1w',
-                'extensions': ['nii', 'nii.gz']},
-        'roi': {'subject': participant_label, 'modality': 'anat', 'type': 'roi',
-                'extensions': ['nii', 'nii.gz']},
-    }
-
-    if task:
-        queries['bold']['task'] = task
-
-    if echo:
-        queries['bold']['echo'] = echo
-
-    subj_data = {modality: [x.filename for x in layout.get(**query)]
-                 for modality, query in queries.items()}
-
-    # Special case: multi-echo BOLD, grouping echos
-    if any(['_echo-' in bold for bold in subj_data['bold']]):
-        subj_data['bold'] = group_multiecho(subj_data['bold'])
-
-    return subj_data, layout
-
-
-def get_metadata_for_nifti(in_file):
+def get_metadata_for_nifti(in_file, logger=None):
     """Fetch metadata for a given nifti file
 
     """
-    in_file = Path(in_file).resolve()
+    in_file = Path(in_file).absolute()
     fname = splitext(in_file)[0]
     fname_comps = fname.split("_")
 
@@ -160,6 +121,14 @@ def get_metadata_for_nifti(in_file):
 
     top_json = bids_dir / jsonext("_".join(top_comp_list))
     potential_json = [top_json]
+    
+    if logger:
+    
+        logger.info("ABOUT TO FAIL")
+        logger.info("BIDS DIR: ", bids_dir)
+        logger.info("SUBID: ", sub)
+        logger.info("NIFTI: ", in_file)
+        logger.info("JSON: ", subject_comp_list)
 
     subject_json = bids_dir / sub / jsonext("_".join(subject_comp_list))
     potential_json.append(subject_json)

@@ -10,6 +10,15 @@ their current feature sets. These other
 
  dMRIPrep exclusively performs preprocessing and is therefore omitted from the [reconstruction](#reconstruction) and [tractography](#tractography) sections.
 
+## Supported Sampling Schemes
+
+|                             | QSIPrep | Tractoflow | PreQual | MRtrix3_connectome | dMRIPrep |
+| --------------------------- | :-----: | :--------: | :-----: | :----------------: | :------: |
+| Single Shell                |    ✔    |     ✔      |    ✔    |         ✔          |    ✔     |
+| Multi Shell                 |    ✔    |     ✔      |    ✔    |         ✔          |    ✔     |
+| Cartesian                   |    ✔    |     ✘      |    ✘    |         ✘          |    ✘     |
+| Random (Compressed Sensing) |    ✔    |     ✘      |    ✘    |         ✘          |    ✘     |
+
 ## Preprocessing
 
 |                                                     | QSIPrep                  | Tractoflow             | PreQual                 | MRtrix3_connectome | dMRIPrep         |
