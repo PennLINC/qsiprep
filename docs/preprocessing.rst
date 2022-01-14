@@ -51,7 +51,7 @@ perform SDC. Further complicating this is the FSL workflow, which combines disto
 with eddy/motion correction and will merge scans with different PE directions.
 
 If you have some scans you want to combine and others you want to preprocess separately,
-you can call qsiprep more than once with BIDS filters to process the different scans.
+you can call qsiprep more than once with BIDS filters to process the different scans. Note that subject-level preprocessing (eg, of anatomical images) will be overwritten by subsequent calls to qsiprep for the same subject. This can be avoided by using an independent output directory for each call.
 
 .. _bids_filters:
 
@@ -75,11 +75,9 @@ of the file you will send to ``--bids-filter-file``. The queries in QSIPrep are:
       "dwi": {"datatype": "dwi", "suffix": "dwi"}
   }
 
-Each query has several "entities", which can be modified by filters. The list of
-supported entities is `here
-<https://github.com/bids-standard/pybids/blob/master/bids/layout/config/bids.json>`__.
-To filter data, modify the queries by changing one or more of the supported
-entities in the BIDS filter file. The general format of the filter file is::
+Each query has several "entities", which can be modified by filters. Here is a link to the `full list of supported entities in PyBids <https://github.com/bids-standard/pybids/blob/master/bids/layout/config/bids.json>`_, but note that not all of these entities are valid BIDS for MRI data. Refer to the `BIDS specification for MRI data <https://bids-specification.readthedocs.io/en/stable/04-modality-specific-files/01-magnetic-resonance-imaging-data.html>`_ to see which entities are valid BIDS for a particular data type. If filters are not working as expected, check that the file names are valid using a BIDS validator.
+
+To filter data, modify the queries by changing one or more valid entities in the BIDS filter file. The general format of the filter file is::
 
   {
     "query": { "entity": "value" }
