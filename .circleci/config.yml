@@ -76,7 +76,7 @@ jobs:
           no_output_timeout: 40m
           command: |
             mkdir -p /tmp/cache
-            docker save nvidia/cuda:9.1-runtime-ubuntu16.04 pennbbl/qsiprep:latest \
+            docker save nvidia/cuda:10.2-runtime-ubuntu18.04 pennbbl/qsiprep:latest \
             | pigz -3 > /tmp/cache/docker.tar.gz
 
       - persist_to_workspace:

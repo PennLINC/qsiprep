@@ -1,5 +1,5 @@
-# Use Ubuntu 16.04 LTS
-FROM nvidia/cuda:9.1-runtime-ubuntu16.04
+# Use Ubuntu 18.04 LTS
+FROM nvidia/cuda:10.2-runtime-ubuntu18.04
 
 # Pre-cache neurodebian key
 COPY docker/files/neurodebian.gpg /usr/local/etc/neurodebian.gpg
@@ -65,7 +65,7 @@ RUN curl -o pandoc-2.2.2.1-1-amd64.deb -sSL "https://github.com/jgm/pandoc/relea
     rm pandoc-2.2.2.1-1-amd64.deb
 
 # Install qt5.12.2
-RUN add-apt-repository ppa:beineri/opt-qt-5.12.2-xenial \
+RUN add-apt-repository ppa:beineri/opt-qt-5.12.0-bionic \
     && apt-get update \
     && apt install -y --no-install-recommends \
     freetds-common libclang1-5.0 libllvm5.0 libodbc1 libsdl2-2.0-0 libsndio6.1 \
@@ -95,12 +95,12 @@ RUN curl -sSL https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/6.0.1/frees
     --exclude='freesurfer/lib/cuda' \
     --exclude='freesurfer/lib/qt'
 
-  ENV FSLDIR="/opt/fsl-6.0.3" \
-      PATH="/opt/fsl-6.0.3/bin:$PATH"
+  ENV FSLDIR="/opt/fsl-6.0.5" \
+      PATH="/opt/fsl-6.0.5/bin:$PATH"
   RUN echo "Downloading FSL ..." \
-      && mkdir -p /opt/fsl-6.0.3 \
-      && curl -fsSL --retry 5 https://fsl.fmrib.ox.ac.uk/fsldownloads/fsl-6.0.3-centos6_64.tar.gz \
-      | tar -xz -C /opt/fsl-6.0.3 --strip-components 1 \
+      && mkdir -p /opt/fsl-6.0.5 \
+      && curl -fsSL --retry 5 https://fsl.fmrib.ox.ac.uk/fsldownloads/fsl-6.0.5-centos7_64.tar.gz \
+      | tar -xz -C /opt/fsl-6.0.5 --strip-components 1 \
       --exclude='fsl/doc' \
       --exclude='fsl/data/atlases' \
       --exclude='fsl/data/possum' \
@@ -111,8 +111,8 @@ RUN curl -sSL https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/6.0.1/frees
       && echo "Installing FSL conda environment ..." \
       && sed -i -e "/fsleyes/d" -e "/wxpython/d" \
          ${FSLDIR}/etc/fslconf/fslpython_environment.yml \
-      && bash /opt/fsl-6.0.3/etc/fslconf/fslpython_install.sh -f /opt/fsl-6.0.3 \
-      && find ${FSLDIR}/fslpython/envs/fslpython/lib/python3.7/site-packages/ -type d -name "tests"  -print0 | xargs -0 rm -r \
+      && bash /opt/fsl-6.0.5/etc/fslconf/fslpython_install.sh -f /opt/fsl-6.0.5 \
+      && find ${FSLDIR}/fslpython/envs/fslpython/lib/python3*/site-packages/ -type d -name "tests"  -print0 | xargs -0 rm -r \
       && ${FSLDIR}/fslpython/bin/conda clean --all
 
 ENV FREESURFER_HOME=/opt/freesurfer \
@@ -136,7 +136,7 @@ RUN curl -sSL "http://neuro.debian.net/lists/$( lsb_release -c | cut -f2 ).us-ca
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-                    afni=16.2.07~dfsg.1-5~nd16.04+1 \
+                    afni \
                     git-annex-standalone && \
     apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
@@ -326,7 +326,7 @@ RUN python -c "import amico; amico.core.setup()"
 RUN find $HOME -type d -exec chmod go=u {} + && \
     find $HOME -type f -exec chmod go=u {} +
 
-RUN ln -s /opt/fsl-6.0.3/bin/eddy_cuda9.1 /opt/fsl-6.0.3/bin/eddy_cuda
+RUN ln -s /opt/fsl-6.0.5/bin/eddy_cuda10.2 /opt/fsl-6.0.5/bin/eddy_cuda
 
 ENV AFNI_INSTALLDIR=/usr/lib/afni \
     PATH=${PATH}:/usr/lib/afni/bin \

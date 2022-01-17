@@ -76,8 +76,8 @@ nipype_.
 qsiprep requires some other non-python neuroimaging software tools:
 
 - ANTs_ (version 2.3.9)
-- AFNI_ (version Debian-16.2.07)
+- AFNI_ (version Debian-18.0.05)
 - FreeSurfer_ (6.0.1)
-- FSL_ (6.0.3)
+- FSL_ (6.0.5)
 - `DSI Studio`_
 - MRtrix_
