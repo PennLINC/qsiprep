@@ -28,7 +28,7 @@ from ...niworkflows.interfaces.images import IntraModalMerge
 from ...niworkflows.interfaces.masks import BETRPT
 
 from ...interfaces import (
-    FieldEnhance, FieldToRadS, FieldToHz, DerivativesDataSink
+    FieldToRadS, FieldToHz, DerivativesDataSink
 )
 
 
@@ -79,44 +79,31 @@ def init_fmap_wf(omp_nthreads, fmap_bspline, name='fmap_wf'):
         (bet, ds_report_fmap_mask, [('out_report', 'in_file')]),
     ])
 
-    if fmap_bspline:
-        # despike_threshold=1.0, mask_erode=1),
-        fmapenh = pe.Node(FieldEnhance(unwrap=False, despike=False),
-                          name='fmapenh', mem_gb=4, n_procs=omp_nthreads)
+    torads = pe.Node(FieldToRadS(), name='torads')
+    prelude = pe.Node(fsl.PRELUDE(), name='prelude')
+    tohz = pe.Node(FieldToHz(), name='tohz')
 
-        workflow.connect([
-            (bet, fmapenh, [('mask_file', 'in_mask'),
-                            ('out_file', 'in_magnitude')]),
-            (fmapmrg, fmapenh, [('out_file', 'in_file')]),
-            (fmapenh, outputnode, [('out_file', 'fmap')]),
-        ])
+    denoise = pe.Node(fsl.SpatialFilter(operation='median', kernel_shape='sphere',
+                                        kernel_size=3), name='denoise')
+    demean = pe.Node(niu.Function(function=demean_image), name='demean')
+    cleanup_wf = cleanup_edge_pipeline(name='cleanup_wf')
 
-    else:
-        torads = pe.Node(FieldToRadS(), name='torads')
-        prelude = pe.Node(fsl.PRELUDE(), name='prelude')
-        tohz = pe.Node(FieldToHz(), name='tohz')
+    applymsk = pe.Node(fsl.ApplyMask(), name='applymsk')
 
-        denoise = pe.Node(fsl.SpatialFilter(operation='median', kernel_shape='sphere',
-                                            kernel_size=3), name='denoise')
-        demean = pe.Node(niu.Function(function=demean_image), name='demean')
-        cleanup_wf = cleanup_edge_pipeline(name='cleanup_wf')
-
-        applymsk = pe.Node(fsl.ApplyMask(), name='applymsk')
-
-        workflow.connect([
-            (bet, prelude, [('mask_file', 'mask_file'),
-                            ('out_file', 'magnitude_file')]),
-            (fmapmrg, torads, [('out_file', 'in_file')]),
-            (torads, tohz, [('fmap_range', 'range_hz')]),
-            (torads, prelude, [('out_file', 'phase_file')]),
-            (prelude, tohz, [('unwrapped_phase_file', 'in_file')]),
-            (tohz, denoise, [('out_file', 'in_file')]),
-            (denoise, demean, [('out_file', 'in_file')]),
-            (demean, cleanup_wf, [('out', 'inputnode.in_file')]),
-            (bet, cleanup_wf, [('mask_file', 'inputnode.in_mask')]),
-            (cleanup_wf, applymsk, [('outputnode.out_file', 'in_file')]),
-            (bet, applymsk, [('mask_file', 'mask_file')]),
-            (applymsk, outputnode, [('out_file', 'fmap')]),
-        ])
+    workflow.connect([
+        (bet, prelude, [('mask_file', 'mask_file'),
+                        ('out_file', 'magnitude_file')]),
+        (fmapmrg, torads, [('out_file', 'in_file')]),
+        (torads, tohz, [('fmap_range', 'range_hz')]),
+        (torads, prelude, [('out_file', 'phase_file')]),
+        (prelude, tohz, [('unwrapped_phase_file', 'in_file')]),
+        (tohz, denoise, [('out_file', 'in_file')]),
+        (denoise, demean, [('out_file', 'in_file')]),
+        (demean, cleanup_wf, [('out', 'inputnode.in_file')]),
+        (bet, cleanup_wf, [('mask_file', 'inputnode.in_mask')]),
+        (cleanup_wf, applymsk, [('outputnode.out_file', 'in_file')]),
+        (bet, applymsk, [('mask_file', 'mask_file')]),
+        (applymsk, outputnode, [('out_file', 'fmap')]),
+    ])
 
     return workflow
