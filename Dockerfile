@@ -17,18 +17,18 @@ RUN python -c "from matplotlib import font_manager" && \
 RUN find $HOME -type d -exec chmod go=u {} + && \
     find $HOME -type f -exec chmod go=u {} +
 
-# RUN ldconfig
-# WORKDIR /tmp/
-# ENTRYPOINT ["/usr/local/miniconda/bin/qsiprep"]
+RUN ldconfig
+WORKDIR /tmp/
+ENTRYPOINT ["/usr/local/miniconda/bin/qsiprep"]
 
-# ARG BUILD_DATE
-# ARG VCS_REF
-# ARG VERSION
-# LABEL org.label-schema.build-date=$BUILD_DATE \
-#       org.label-schema.name="qsiprep" \
-#       org.label-schema.description="qsiprep - q Space Images preprocessing tool" \
-#       org.label-schema.url="http://qsiprep.readthedocs.io" \
-#       org.label-schema.vcs-ref=$VCS_REF \
-#       org.label-schema.vcs-url="https://github.com/pennbbl/qsiprep" \
-#       org.label-schema.version=$VERSION \
-#       org.label-schema.schema-version="1.0"
+ARG BUILD_DATE
+ARG VCS_REF
+ARG VERSION
+LABEL org.label-schema.build-date=$BUILD_DATE \
+      org.label-schema.name="qsiprep" \
+      org.label-schema.description="qsiprep - q Space Images preprocessing tool" \
+      org.label-schema.url="http://qsiprep.readthedocs.io" \
+      org.label-schema.vcs-ref=$VCS_REF \
+      org.label-schema.vcs-url="https://github.com/pennbbl/qsiprep" \
+      org.label-schema.version=$VERSION \
+      org.label-schema.schema-version="1.0"
