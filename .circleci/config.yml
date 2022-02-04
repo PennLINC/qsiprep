@@ -9,7 +9,7 @@ install: &install
       - run:
           name: Install qsiprep
           command: |
-            VERSION=latest
+            VERSION=0+build
             if [[ -n "$CIRCLE_TAG" ]]; then
               VERSION="$CIRCLE_TAG"
             fi
