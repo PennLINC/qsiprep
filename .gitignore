@@ -4,7 +4,6 @@ __pycache__/
 *$py.class
 .pytest_cache/
 test_docker.sh
-tests
 
 # C extensions
 *.so

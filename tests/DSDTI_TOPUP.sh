@@ -1,0 +1,50 @@
+#!/bin/bash
+
+cat << DOC
+
+DSCDTI_TOPUP test
+=================
+
+This tests the following features:
+ - TOPUP on a single-shell sequence
+ - Eddy is run on a CPU
+ - mrdegibbs is run
+ - A follow-up reconstruction using the dsi_studio_gqi workflow
+
+Inputs:
+-------
+
+ - DSDTI BIDS data (data/DSDTI)
+
+DOC
+
+source ./get_data.sh
+TESTDIR=${PWD}
+TESTNAME=DSDTI_TOPUP
+get_config_data ${TESTDIR}
+get_bids_data ${TESTDIR} DSDTI
+CFG=${TESTDIR}/data/nipype.cfg
+EDDY_CFG=${TESTDIR}/data/eddy_config.json
+
+# For the run
+setup_dir ${TESTDIR}/${TESTNAME}
+TEMPDIR=${TESTDIR}/${TESTNAME}/work
+OUTPUT_DIR=${TESTDIR}/${TESTNAME}/derivatives
+BIDS_INPUT_DIR=${TESTDIR}/data/DSDTI
+export FS_LICENSE=${TESTDIR}/data/license.txt
+
+# Do the anatomical run on its own
+qsiprep-docker -i pennbbl/qsiprep:latest \
+	-e qsiprep_DEV 1 -u $(id -u) \
+	--config ${CFG} ${PATCH} -w ${TEMPDIR} \
+	 ${BIDS_INPUT_DIR} ${OUTPUT_DIR} \
+	 participant \
+	--sloppy --mem_mb 4096 \
+	--unringing-method mrdegibbs \
+	--output-space T1w \
+	--recon-spec dsi_studio_gqi \
+	--eddy_config ${EDDY_CFG} \
+	--output-resolution 5 \
+    --nthreads ${NTHREADS} -vv
+
+
