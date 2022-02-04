@@ -3,7 +3,9 @@ version: 2.1
 install: &install
     docker:
       - image: pennbbl/qsiprep_build:22.2.2
+    working_directory: /src
     steps:
+      - checkout
       - run:
           name: Install qsiprep
           command: |
