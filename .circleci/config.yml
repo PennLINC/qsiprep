@@ -1,23 +1,23 @@
 version: 2.1
 
 install: &install
-  docker:
-    - image: pennbbl/qsiprep_build:22.2.2
-  working_directory: /src/qsiprep_build
-    - run:
-        name: Install qsiprep
-        command: |
-          VERSION=latest
-          if [[ -n "$CIRCLE_TAG" ]]; then
-            VERSION="$CIRCLE_TAG"
-          fi
-          echo "${VERSION}" > /src/qsiprep/qsiprep/VERSION
-          echo "include qsiprep/VERSION" >> /src/qsiprep/MANIFEST.in
-          pip install --no-cache-dir "/src/qsiprep"
+    docker:
+      - image: pennbbl/qsiprep_build:22.2.2
+    working_directory: /src/qsiprep_build
+      - run:
+          name: Install qsiprep
+          command: |
+            VERSION=latest
+            if [[ -n "$CIRCLE_TAG" ]]; then
+              VERSION="$CIRCLE_TAG"
+            fi
+            echo "${VERSION}" > /src/qsiprep/qsiprep/VERSION
+            echo "include qsiprep/VERSION" >> /src/qsiprep/MANIFEST.in
+            pip install --no-cache-dir "/src/qsiprep"
 
-          # Precaching fonts, set 'Agg' as default backend for matplotlib
-          python -c "from matplotlib import font_manager"
-          sed -i 's/\(backend *: \).*$/\1Agg/g' $( python -c "import matplotlib; print(matplotlib.matplotlib_fname())" )
+            # Precaching fonts, set 'Agg' as default backend for matplotlib
+            python -c "from matplotlib import font_manager"
+            sed -i 's/\(backend *: \).*$/\1Agg/g' $( python -c "import matplotlib; print(matplotlib.matplotlib_fname())" )
 
 jobs:
 
