@@ -2,7 +2,7 @@ version: 2.1
 
 .dockersetup: &dockersetup
   docker:
-    - image: pennbbl/qsiprep_build:22.2.2
+    - image: pennbbl/qsiprep_build:22.2.3
   working_directory: /src/qsiprep
 
 runinstall: &runinstall
@@ -26,6 +26,7 @@ runinstall: &runinstall
       printf "[execution]\nstop_on_first_crash = true\n" > ${CFG}
       echo "poll_sleep_duration = 0.01" >> ${CFG}
       echo "hash_method = content" >> ${CFG}
+      ln -s /home/qsiprep/.dipy /root/.dipy
 
 
 jobs:
