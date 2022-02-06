@@ -21,6 +21,7 @@ runinstall: &runinstall
       sed -i 's/\(backend *: \).*$/\1Agg/g' $( python -c "import matplotlib; print(matplotlib.matplotlib_fname())" )
       
       # Write the config file
+      mkdir /root/.nipype
       CFG=/root/.nipype/nipype.cfg
       printf "[execution]\nstop_on_first_crash = true\n" > ${CFG}
       echo "poll_sleep_duration = 0.01" >> ${CFG}
@@ -56,6 +57,7 @@ workflows:
           filters:
             tags:
               only: /.*/
+
       - DSCSDSI:
           requires:
             - build
