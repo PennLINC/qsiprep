@@ -2,7 +2,7 @@ version: 2.1
 
 install: &install
     docker:
-      - image: pennbbl/qsiprep_build:22.2.2
+      image: pennbbl/qsiprep_build:22.2.2
     working_directory: /src/qsiprep
     steps:
       - checkout
@@ -36,10 +36,10 @@ jobs:
   DSCSDSI:
     <<: *install
       - run:
-        name: Run DSCSDSI test
-        command: |
-          cd /src/qsiprep/tests
-          bash DSCSDSI.sh
+          name: Run DSCSDSI test
+          command: |
+            cd /src/qsiprep/tests
+            bash DSCSDSI.sh
   
 workflows:
   version: 2
