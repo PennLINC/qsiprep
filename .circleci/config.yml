@@ -1,45 +1,42 @@
 version: 2.1
 
-install: &install
+.dockersetup: &dockersetup
     docker:
-      image: pennbbl/qsiprep_build:22.2.2
+      - image: pennbbl/qsiprep_build:22.2.2
     working_directory: /src/qsiprep
-    steps:
-      - checkout
-      - run:
-          name: Install qsiprep
-          command: |
-            VERSION=0+build
-            if [[ -n "$CIRCLE_TAG" ]]; then
-              VERSION="$CIRCLE_TAG"
-            fi
-            echo "${VERSION}" > /src/qsiprep/qsiprep/VERSION
-            echo "include qsiprep/VERSION" >> /src/qsiprep/MANIFEST.in
-            pip install . --progress-bar off
 
-            # Precaching fonts, set 'Agg' as default backend for matplotlib
-            python -c "from matplotlib import font_manager"
-            sed -i 's/\(backend *: \).*$/\1Agg/g' $( python -c "import matplotlib; print(matplotlib.matplotlib_fname())" )
-            
-            # Write the config file
-            CFG=/root/.nipype/nipype.cfg
-            printf "[execution]\nstop_on_first_crash = true\n" > ${CFG}
-            echo "poll_sleep_duration = 0.01" >> ${CFG}
-            echo "hash_method = content" >> ${CFG}
+installsteps: &installsteps
+- checkout
+- run:
+    name: Install qsiprep
+    command: |
+      VERSION=0+build
+      if [[ -n "$CIRCLE_TAG" ]]; then
+        VERSION="$CIRCLE_TAG"
+      fi
+      echo "${VERSION}" > /src/qsiprep/qsiprep/VERSION
+      echo "include qsiprep/VERSION" >> /src/qsiprep/MANIFEST.in
+      pip install . --progress-bar off
+
+      # Precaching fonts, set 'Agg' as default backend for matplotlib
+      python -c "from matplotlib import font_manager"
+      sed -i 's/\(backend *: \).*$/\1Agg/g' $( python -c "import matplotlib; print(matplotlib.matplotlib_fname())" )
+      
+      # Write the config file
+      CFG=/root/.nipype/nipype.cfg
+      printf "[execution]\nstop_on_first_crash = true\n" > ${CFG}
+      echo "poll_sleep_duration = 0.01" >> ${CFG}
+      echo "hash_method = content" >> ${CFG}
 
 
 jobs:
 
   build:
-    <<: *install
+    <<: *dockersetup
+    steps:
+      - *installsteps
 
-  DSCSDSI:
-    <<: *install
-      - run:
-          name: Run DSCSDSI test
-          command: |
-            cd /src/qsiprep/tests
-            bash DSCSDSI.sh
+
   
 workflows:
   version: 2
