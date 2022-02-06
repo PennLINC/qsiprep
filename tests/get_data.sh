@@ -1,7 +1,30 @@
 # Edit these for project-wide testing
-IMAGE=pennbbl/qsiprep:latest
-PATCH='--patch-qsiprep /home/mcieslak/projects/qsiprep/qsiprep'
-NTHREADS=8
+LOCAL_PATCH=/home/mcieslak/projects/qsiprep/qsiprep
+
+# Determine if we're in a CI test
+if [[ "${CIRCLECI}" = "true" ]]; then
+  IN_CI=true
+  NTHREADS=2
+else
+  IN_CI="false"
+  NTHREADS=8
+fi
+export IN_CI NTHREADS
+
+run_qsiprep_cmd () {
+  # Defines a call to qsiprep that works on circleci OR for a local
+  # test that uses 
+  if [[ "${CIRCLECI}" = "true" ]]; then
+    QSIPREP_RUN="/usr/local/miniconda/bin/qsiprep"
+  else
+    QSIPREP_RUN="qsiprep-docker -e qsiprep_DEV 1 $1 -u $(id -u)"
+    if [[ -n "${}" ]]; then
+      QSIPREP_RUN="${QSIPREP_RUN} --patch-qsiprep ${LOCAL_PATCH}"
+    fi
+  fi
+  echo ${QSIPREP_RUN}
+}
+
 WGET="wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q"
 
 

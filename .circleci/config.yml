@@ -20,18 +20,40 @@ install: &install
             # Precaching fonts, set 'Agg' as default backend for matplotlib
             python -c "from matplotlib import font_manager"
             sed -i 's/\(backend *: \).*$/\1Agg/g' $( python -c "import matplotlib; print(matplotlib.matplotlib_fname())" )
+            
+            # Write the config file
+            CFG=/root/.nipype/nipype.cfg
+            printf "[execution]\nstop_on_first_crash = true\n" > ${CFG}
+            echo "poll_sleep_duration = 0.01" >> ${CFG}
+            echo "hash_method = content" >> ${CFG}
 
 jobs:
 
   build:
     <<: *install
- 
 
+  DSCSDSI:
+    <<: *install
+      - run:
+        name: Run DSCSDSI test
+        command: |
+          cd /src/qsiprep/tests
+          bash DSCSDSI.sh
+  
 workflows:
   version: 2
   build_test_deploy:
     jobs:
       - build:
           filters:
+            tags:
+              only: /.*/
+      - DSCSDSI:
+          requires:
+            - build
+          filters:
+            branches:
+              ignore:
+                - /recon?/\.*/
             tags:
               only: /.*/

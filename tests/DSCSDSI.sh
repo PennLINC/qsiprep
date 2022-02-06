@@ -27,6 +27,7 @@ TESTNAME=DSCSDSI
 get_config_data ${TESTDIR}
 get_bids_data ${TESTDIR} DSCSDSI
 CFG=${TESTDIR}/data/nipype.cfg
+QSIPREP_CMD=$(run_qsiprep_cmd ${CFG})
 
 # For the run
 setup_dir ${TESTDIR}/${TESTNAME}
@@ -36,26 +37,24 @@ BIDS_INPUT_DIR=${TESTDIR}/data/DSCSDSI_nofmap
 export FS_LICENSE=${TESTDIR}/data/license.txt
 
 # Do the anatomical run on its own
-qsiprep-docker -i ${IMAGE} \
-	-e qsiprep_DEV 1 -u $(id -u) \
-    --config ${CFG} ${PATCH} -w ${TEMPDIR} \
-    ${BIDS_INPUT_DIR} ${OUTPUT_DIR} participant \
-	--sloppy --write-graph --mem_mb 4096 \
-    --stop-on-first-crash \
-	--nthreads ${NTHREADS} --anat-only -vv --output-resolution 5
+${QSIPREP_CMD} \
+   ${BIDS_INPUT_DIR} ${OUTPUT_DIR} participant \
+   -w ${TEMPDIR} \
+   --sloppy --write-graph --mem_mb 4096 \
+   --stop-on-first-crash \
+   --nthreads ${NTHREADS} --anat-only -vv --output-resolution 5
 
 # name: Run full qsiprep on DSCSDSI
-qsiprep-docker -i ${IMAGE} \
-    -e qsiprep_DEV 1 -u $(id -u) \
-    --config $PWD/nipype.cfg ${PATCH} -w ${TESTDIR}/DSCSDSI/work \
-     ${BIDS_INPUT_DIR} ${OUTPUT_DIR} participant \
-     --sloppy --write-graph --use-syn-sdc --force-syn --mem_mb 4096 \
-	 --output-space T1w \
-	 --dwi-no-biascorr \
-	 --hmc_model 3dSHORE \
-	 --hmc-transform Rigid \
-	 --shoreline_iters 1 \
-	 --output-resolution 5 \
-     --stop-on-first-crash \
-	 --nthreads ${NTHREADS} -vv
+${QSIPREP_CMD} \
+   ${BIDS_INPUT_DIR} ${OUTPUT_DIR} participant \
+   -w ${TESTDIR}/DSCSDSI/work \
+   --sloppy --write-graph --use-syn-sdc --force-syn --mem_mb 4096 \
+   --output-space T1w \
+   --dwi-no-biascorr \
+   --hmc_model 3dSHORE \
+   --hmc-transform Rigid \
+   --shoreline_iters 1 \
+   --output-resolution 5 \
+   --stop-on-first-crash \
+   --nthreads ${NTHREADS} -vv
 
