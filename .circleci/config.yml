@@ -54,6 +54,6 @@ workflows:
           filters:
             branches:
               ignore:
-                - /recon?/\.*/
+                - /recon\/.*/
             tags:
               only: /.*/
