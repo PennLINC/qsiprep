@@ -27,6 +27,7 @@ install: &install
             echo "poll_sleep_duration = 0.01" >> ${CFG}
             echo "hash_method = content" >> ${CFG}
 
+
 jobs:
 
   build:
