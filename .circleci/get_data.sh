@@ -1,7 +1,30 @@
 # Edit these for project-wide testing
-IMAGE=pennbbl/qsiprep:latest
-PATCH='--patch-qsiprep /home/mcieslak/projects/qsiprep/qsiprep'
-NTHREADS=8
+LOCAL_PATCH=/home/mcieslak/projects/qsiprep/qsiprep
+
+# Determine if we're in a CI test
+if [[ "${CIRCLECI}" = "true" ]]; then
+  IN_CI=true
+  NTHREADS=2
+else
+  IN_CI="false"
+  NTHREADS=8
+fi
+export IN_CI NTHREADS
+
+run_qsiprep_cmd () {
+  # Defines a call to qsiprep that works on circleci OR for a local
+  # test that uses 
+  if [[ "${CIRCLECI}" = "true" ]]; then
+    QSIPREP_RUN="/usr/local/miniconda/bin/qsiprep"
+  else
+    QSIPREP_RUN="qsiprep-docker -e qsiprep_DEV 1 $1 -u $(id -u)"
+    if [[ -n "${}" ]]; then
+      QSIPREP_RUN="${QSIPREP_RUN} --patch-qsiprep ${LOCAL_PATCH}"
+    fi
+  fi
+  echo ${QSIPREP_RUN}
+}
+
 WGET="wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q"
 
 
@@ -28,7 +51,6 @@ DOC
 
 get_config_data() {
     WORKDIR=$1
-    DS=$2
     ENTRYDIR=`pwd`
     mkdir -p ${WORKDIR}/data
     cd ${WORKDIR}/data
@@ -214,6 +236,7 @@ Preprocessed data from a single-shell dataset
 
 Contents:
 ^^^^^^^^^
+
  - data/singleshell_output/qsiprep/dataset_description.json
  - data/singleshell_output/qsiprep/logs/CITATION.html
  - data/singleshell_output/qsiprep/logs/CITATION.md
@@ -314,18 +337,56 @@ get_bids_data() {
       tar xvfz singleshell_output.tar.gz -C ${WORKDIR}/data/singleshell_output
       rm singleshell_output.tar.gz
     fi
+
+    #  name: Get data for fieldmap tests
+    if [[ ${DS} = fmaps ]]; then
+      mkdir -p ${WORKDIR}/data/fmaptests
+
+      # Get shelled data that will go to TOPUP/eddy
+      ${WGET} \
+      -O DSDTI_fmap.tar.gz \
+      "https://upenn.box.com/shared/static/rxr6qbi6ezku9gw3esfpnvqlcxaw7n5n.gz"
+      tar xvfz DSDTI_fmap.tar.gz -C ${WORKDIR}/data/fmaptests
+      rm DSDTI_fmap.tar.gz
+
+      # Get non-shelled data that will go through SHORELine/sdcflows
+      ${WGET} \
+      -O DSCSDSI_fmap.tar.gz \
+      "https://upenn.box.com/shared/static/l561psez1ojzi4p3a12eidaw9vbizwdc.gz"
+      tar xvfz DSCSDSI_fmap.tar.gz -C ${WORKDIR}/data/fmaptests
+      rm DSCSDSI_fmap.tar.gz
+    fi
+
     cd ${ENTRYDIR}
 }
 
+
+cat << DOC
+
+Docker can be tricky with permissions, so this function will
+create two directories under the specified directory that
+have accessible group and user permissions. eg
+
+setup_dir my_test
+
+will create:
+
+ - my_test/derivatives
+ - my_test/work
+
+with all the permissions set such that they will be accessible
+regardless of what docker does
+
+DOC
+
 setup_dir(){
     # Create the output and working directories for 
-    WORKDIR=$1
-    DS=$2
-    mkdir -p ${WORKDIR}/${DS}/work ${WORKDIR}/${DS}/derivatives
-    setfacl -d -m group:$(id -gn):rwx ${WORKDIR}/${DS}/derivatives && \
-        setfacl -m group:$(id -gn):rwx ${WORKDIR}/${DS}/derivatives
-    setfacl -d -m group:$(id -gn):rwx ${WORKDIR}/${DS}/work && \
-        setfacl -m group:$(id -gn):rwx ${WORKDIR}/${DS}/work
+    DIR=$1
+    mkdir -p ${DIR}/derivatives
+    mkdir -p ${DIR}/work
+    setfacl -d -m group:$(id -gn):rwx ${DIR}/derivatives && \
+        setfacl -m group:$(id -gn):rwx ${DIR}/derivatives
+    setfacl -d -m group:$(id -gn):rwx ${DIR}/work && \
+        setfacl -m group:$(id -gn):rwx ${DIR}/work
 
 }
-
