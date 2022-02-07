@@ -15,9 +15,7 @@ runinstall: &runinstall
       git checkout $CIRCLE_BRANCH
       echo "${VERSION}" > /src/qsiprep/qsiprep/VERSION
       echo "include qsiprep/VERSION" >> /src/qsiprep/MANIFEST.in
-      find . | sort
       pip install . --progress-bar off
-      git checkout -- tests
 
       # Precaching fonts, set 'Agg' as default backend for matplotlib
       python -c "from matplotlib import font_manager"
