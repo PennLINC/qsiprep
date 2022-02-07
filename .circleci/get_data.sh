@@ -5,6 +5,7 @@ LOCAL_PATCH=/home/mcieslak/projects/qsiprep/qsiprep
 if [[ "${CIRCLECI}" = "true" ]]; then
   IN_CI=true
   NTHREADS=2
+  OMP_NTHREADS=2
   if [[ -n "${CIRCLE_CPUS}" ]]; then
     NTHREADS=${CIRCLE_CPUS}
     OMP_NTHREADS=$(expr $NTHREADS - 1)
