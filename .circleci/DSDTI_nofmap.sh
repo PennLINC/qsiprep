@@ -25,6 +25,7 @@ get_config_data ${TESTDIR}
 get_bids_data ${TESTDIR} DSDTI
 CFG=${TESTDIR}/data/nipype.cfg
 EDDY_CFG=${TESTDIR}/data/eddy_config.json
+QSIPREP_CMD=$(run_qsiprep_cmd ${CFG})
 
 # For the run
 setup_dir ${TESTDIR}/${TESTNAME}
@@ -37,11 +38,9 @@ export FS_LICENSE=${TESTDIR}/data/license.txt
 rm -rf data/DSDTI/sub-PNC/fmap
 
 # Do the anatomical run on its own
-qsiprep-docker -i pennbbl/qsiprep:latest \
-	-e qsiprep_DEV 1 -u $(id -u) \
-	--config ${CFG} ${PATCH} -w ${TEMPDIR} \
-	 ${BIDS_INPUT_DIR} ${OUTPUT_DIR} \
-	 participant \
+${QSIPREP_CMD} \
+	 ${BIDS_INPUT_DIR} ${OUTPUT_DIR} participant \
+	 -w ${TEMPDIR} \
      --eddy-config ${EDDY_CFG} \
      --denoise-method none \
      --sloppy --mem_mb 4096 \
@@ -52,11 +51,9 @@ qsiprep-docker -i pennbbl/qsiprep:latest \
 rm -rf ${TESTDIR}/${TESTNAME}
 setup_dir ${TESTDIR}/${TESTNAME}
 
-qsiprep-docker -i pennbbl/qsiprep:latest \
-	-e qsiprep_DEV 1 -u $(id -u) \
-	--config ${CFG} ${PATCH} -w ${TEMPDIR} \
-	 ${BIDS_INPUT_DIR} ${OUTPUT_DIR} \
-	 participant \
+${QSIPREP_CMD} \
+	 ${BIDS_INPUT_DIR} ${OUTPUT_DIR} participant \
+	 -w ${TEMPDIR} \
      --eddy-config ${EDDY_CFG} \
      --sloppy --mem_mb 4096 \
 	 --force-syn \

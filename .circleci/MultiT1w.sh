@@ -22,6 +22,7 @@ get_config_data ${TESTDIR}
 get_bids_data ${TESTDIR} DSDTI
 CFG=${TESTDIR}/data/nipype.cfg
 EDDY_CFG=${TESTDIR}/data/eddy_config.json
+QSIPREP_CMD=$(run_qsiprep_cmd ${CFG})
 
 # For the run
 setup_dir ${TESTDIR}/${TESTNAME}
@@ -34,24 +35,33 @@ export FS_LICENSE=${TESTDIR}/data/license.txt
 rm -rf data/DSDTI/sub-PNC/fmap
 
 # Create a shifted version of the t1w
-docker run -u $(id -u) \
-    -v ${BIDS_INPUT_DIR}:/BIDS \
-    --rm -ti --entrypoint 3dWarp \
-    ${IMAGE} \
-    -matvec_in2out 'MATRIX(1,0,0,2,0,1,0,4,0,0,1,1)' \
-    -gridset /BIDS/sub-PNC/anat/sub-PNC_T1w.nii.gz \
-    -prefix /BIDS/sub-PNC/anat/sub-PNC_run-02_T1w.nii.gz \
-    /BIDS/sub-PNC/anat/sub-PNC_T1w.nii.gz
+if [[ "${IN_CI}" = 'true' ]]; then
+    3dWarp \
+        ${IMAGE} \
+        -matvec_in2out 'MATRIX(1,0,0,2,0,1,0,4,0,0,1,1)' \
+        -gridset ${BIDS_INPUT_DIR}/sub-PNC/anat/sub-PNC_T1w.nii.gz \
+        -prefix ${BIDS_INPUT_DIR}/sub-PNC/anat/sub-PNC_run-02_T1w.nii.gz \
+        ${BIDS_INPUT_DIR}/sub-PNC/anat/sub-PNC_T1w.nii.gz
+else
+    docker run -u $(id -u) \
+        -v ${BIDS_INPUT_DIR}:/BIDS \
+        --rm -ti --entrypoint 3dWarp \
+        ${IMAGE} \
+        -matvec_in2out 'MATRIX(1,0,0,2,0,1,0,4,0,0,1,1)' \
+        -gridset /BIDS/sub-PNC/anat/sub-PNC_T1w.nii.gz \
+        -prefix /BIDS/sub-PNC/anat/sub-PNC_run-02_T1w.nii.gz \
+        /BIDS/sub-PNC/anat/sub-PNC_T1w.nii.gz
+
+fi
 
 cp ${BIDS_INPUT_DIR}/sub-PNC/anat/sub-PNC_T1w.json \
    ${BIDS_INPUT_DIR}/sub-PNC/anat/sub-PNC_run-02_T1w.json
 
 # Do the anatomical run on its own
-qsiprep-docker -i ${IMAGE} \
-	-e qsiprep_DEV 1 -u $(id -u) \
-	--config ${CFG} ${PATCH} -w ${TEMPDIR} \
+${QSIPREP_CMD} \
 	 ${BIDS_INPUT_DIR} ${OUTPUT_DIR} \
 	 participant \
+	 -w ${TEMPDIR} \
      --eddy-config ${EDDY_CFG} \
      --denoise-method none \
      --sloppy --mem_mb 4096 \
@@ -61,16 +71,16 @@ qsiprep-docker -i ${IMAGE} \
      --nthreads ${NTHREADS} -vv
 
 
-# For the run
+# Explicitly test --longitudinal
 TESTNAME=Longitudinal
 setup_dir ${TESTDIR}/${TESTNAME}
 TEMPDIR=${TESTDIR}/${TESTNAME}/work
 OUTPUT_DIR=${TESTDIR}/${TESTNAME}/derivatives
-qsiprep-docker -i ${IMAGE} \
-	-e qsiprep_DEV 1 -u $(id -u) \
-	--config ${CFG} ${PATCH} -w ${TEMPDIR} \
+
+${QSIPREP_CMD} \
 	 ${BIDS_INPUT_DIR} ${OUTPUT_DIR} \
 	 participant \
+	 -w ${TEMPDIR} \
      --eddy-config ${EDDY_CFG} \
      --denoise-method none \
      --sloppy --mem_mb 4096 \

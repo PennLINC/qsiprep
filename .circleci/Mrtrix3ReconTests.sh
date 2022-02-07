@@ -29,6 +29,7 @@ get_bids_data ${TESTDIR} multishell_output
 CFG=${TESTDIR}/data/nipype.cfg
 EDDY_CFG=${TESTDIR}/data/eddy_config.json
 export FS_LICENSE=${TESTDIR}/data/license.txt
+QSIPREP_CMD=$(run_qsiprep_cmd ${CFG})
 
 # Test MRtrix3 multishell msmt with ACT
 TESTNAME=mrtrix_multishell_msmt_test
@@ -37,11 +38,10 @@ TEMPDIR=${TESTDIR}/${TESTNAME}/work
 OUTPUT_DIR=${TESTDIR}/${TESTNAME}/derivatives
 BIDS_INPUT_DIR=${TESTDIR}/data/multishell_output/qsiprep
 
-qsiprep-docker -i pennbbl/qsiprep:latest \
-	-e qsiprep_DEV 1 -u $(id -u) \
-	--config ${CFG} ${PATCH} -w ${TEMPDIR} \
+${QSIPREP_CMD} \
 	 ${BIDS_INPUT_DIR} ${OUTPUT_DIR} \
 	 participant \
+	 -w ${TEMPDIR} \
 	 --recon-input ${BIDS_INPUT_DIR} \
 	 --sloppy \
      --stop-on-first-crash \
@@ -57,11 +57,10 @@ TEMPDIR=${TESTDIR}/${TESTNAME}/work
 OUTPUT_DIR=${TESTDIR}/${TESTNAME}/derivatives
 BIDS_INPUT_DIR=${TESTDIR}/data/multishell_output/qsiprep
 
-qsiprep-docker -i pennbbl/qsiprep:latest \
-	-e qsiprep_DEV 1 \
-	--config ${CFG} ${PATCH} -w ${TEMPDIR} \
+${QSIPREP_CMD} \
 	 ${BIDS_INPUT_DIR} ${OUTPUT_DIR} \
 	 participant \
+	 -w ${TEMPDIR} \
 	 --recon-input ${BIDS_INPUT_DIR} \
 	 --sloppy \
 	 --recon-spec mrtrix_multishell_msmt_noACT \

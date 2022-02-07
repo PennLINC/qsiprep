@@ -36,19 +36,12 @@ OUTPUT_DIR=${TESTDIR}/${TESTNAME}/derivatives
 BIDS_INPUT_DIR=${TESTDIR}/data/DSCSDSI_nofmap
 export FS_LICENSE=${TESTDIR}/data/license.txt
 
-# Do the anatomical run on its own
-${QSIPREP_CMD} \
-   ${BIDS_INPUT_DIR} ${OUTPUT_DIR} participant \
-   -w ${TEMPDIR} \
-   --sloppy --write-graph --mem_mb 4096 \
-   --stop-on-first-crash \
-   --nthreads ${NTHREADS} --anat-only -vv --output-resolution 5
-
 # name: Run full qsiprep on DSCSDSI
 ${QSIPREP_CMD} \
    ${BIDS_INPUT_DIR} ${OUTPUT_DIR} participant \
-   -w ${TESTDIR}/DSCSDSI/work \
-   --sloppy --write-graph --use-syn-sdc --force-syn --mem_mb 4096 \
+   -w ${TEMPDIR} \
+   --sloppy --write-graph --use-syn-sdc \
+   --force-syn --mem_mb 4096 \
    --output-space T1w \
    --dwi-no-biascorr \
    --hmc_model 3dSHORE \

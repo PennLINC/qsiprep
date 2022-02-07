@@ -27,6 +27,7 @@ get_config_data ${TESTDIR}
 get_bids_data ${TESTDIR} singleshell_output
 get_bids_data ${TESTDIR} multishell_output
 CFG=${TESTDIR}/data/nipype.cfg
+QSIPREP_CMD=$(run_qsiprep_cmd ${CFG})
 EDDY_CFG=${TESTDIR}/data/eddy_config.json
 export FS_LICENSE=${TESTDIR}/data/license.txt
 
@@ -38,11 +39,9 @@ TEMPDIR=${TESTDIR}/${TESTNAME}/work
 OUTPUT_DIR=${TESTDIR}/${TESTNAME}/derivatives
 BIDS_INPUT_DIR=${TESTDIR}/data/multishell_output/qsiprep
 
-qsiprep-docker -i pennbbl/qsiprep:latest \
-	-e qsiprep_DEV 1 -u $(id -u) \
-	--config ${CFG} ${PATCH} -w ${TEMPDIR} \
-	 ${BIDS_INPUT_DIR} ${OUTPUT_DIR} \
-	 participant \
+${QSIPREP_CMD}  \
+	 ${BIDS_INPUT_DIR} ${OUTPUT_DIR} participant \
+	 -w ${TEMPDIR} \
 	 --recon-input ${BIDS_INPUT_DIR} \
 	 --sloppy \
 	 --recon-spec amico_noddi \

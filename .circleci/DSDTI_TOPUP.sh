@@ -25,6 +25,7 @@ get_config_data ${TESTDIR}
 get_bids_data ${TESTDIR} DSDTI
 CFG=${TESTDIR}/data/nipype.cfg
 EDDY_CFG=${TESTDIR}/data/eddy_config.json
+QSIPREP_CMD=$(run_qsiprep_cmd ${CFG})
 
 # For the run
 setup_dir ${TESTDIR}/${TESTNAME}
@@ -34,11 +35,10 @@ BIDS_INPUT_DIR=${TESTDIR}/data/DSDTI
 export FS_LICENSE=${TESTDIR}/data/license.txt
 
 # Do the anatomical run on its own
-qsiprep-docker -i pennbbl/qsiprep:latest \
-	-e qsiprep_DEV 1 -u $(id -u) \
-	--config ${CFG} ${PATCH} -w ${TEMPDIR} \
+${QSIPREP_CMD} \
 	 ${BIDS_INPUT_DIR} ${OUTPUT_DIR} \
 	 participant \
+	-w ${TEMPDIR} \
 	--sloppy --mem_mb 4096 \
 	--unringing-method mrdegibbs \
 	--output-space T1w \
