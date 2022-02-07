@@ -16,11 +16,12 @@ runinstall: &runinstall
       echo "${VERSION}" > /src/qsiprep/qsiprep/VERSION
       echo "include qsiprep/VERSION" >> /src/qsiprep/MANIFEST.in
       find . | sort
-      # pip install . --progress-bar off
+      pip install . --progress-bar off
+      git checkout -- tests
 
       # Precaching fonts, set 'Agg' as default backend for matplotlib
-      # python -c "from matplotlib import font_manager"
-      # sed -i 's/\(backend *: \).*$/\1Agg/g' $( python -c "import matplotlib; print(matplotlib.matplotlib_fname())" )
+      python -c "from matplotlib import font_manager"
+      sed -i 's/\(backend *: \).*$/\1Agg/g' $( python -c "import matplotlib; print(matplotlib.matplotlib_fname())" )
       
       # Write the config file
       mkdir /root/.nipype
