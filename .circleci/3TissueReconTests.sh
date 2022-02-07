@@ -29,6 +29,7 @@ get_bids_data ${TESTDIR} multishell_output
 CFG=${TESTDIR}/data/nipype.cfg
 EDDY_CFG=${TESTDIR}/data/eddy_config.json
 export FS_LICENSE=${TESTDIR}/data/license.txt
+QSIPREP_CMD=$(run_qsiprep_cmd ${CFG})
 
 # Test 3tissue with ACT
 TESTNAME=mrtrix_singleshell_ss3t_test
@@ -37,17 +38,15 @@ TEMPDIR=${TESTDIR}/${TESTNAME}/work
 OUTPUT_DIR=${TESTDIR}/${TESTNAME}/derivatives
 BIDS_INPUT_DIR=${TESTDIR}/data/singleshell_output/qsiprep
 
-qsiprep-docker -i pennbbl/qsiprep:latest \
-	-e qsiprep_DEV 1 -u $(id -u) \
-	--config ${CFG} ${PATCH} -w ${TEMPDIR} \
+${QSIPREP_CMD} \
 	 ${BIDS_INPUT_DIR} ${OUTPUT_DIR} \
 	 participant \
+	 -w ${TEMPDIR} \
 	 --recon-input ${BIDS_INPUT_DIR} \
 	 --sloppy \
 	 --recon-spec mrtrix_singleshell_ss3t \
 	 --recon-only \
-	 --mem_mb 4096 \
-	 --nthreads 1 -vv
+	 -vv
 
 
 # Test 3tissue without ACT
@@ -57,14 +56,12 @@ TEMPDIR=${TESTDIR}/${TESTNAME}/work
 OUTPUT_DIR=${TESTDIR}/${TESTNAME}/derivatives
 BIDS_INPUT_DIR=${TESTDIR}/data/singleshell_output/qsiprep
 
-qsiprep-docker -i pennbbl/qsiprep:latest \
-	-e qsiprep_DEV 1 -u $(id -u) \
-	--config ${CFG} ${PATCH} -w ${TEMPDIR} \
+${QSIPREP_CMD} \
 	 ${BIDS_INPUT_DIR} ${OUTPUT_DIR} \
 	 participant \
+	 -w ${TEMPDIR} \
 	 --recon-input ${BIDS_INPUT_DIR} \
 	 --sloppy \
 	 --recon-spec mrtrix_singleshell_ss3t_noACT \
 	 --recon-only \
-	 --mem_mb 4096 \
-	 --nthreads 1 -vv
+	 -vv

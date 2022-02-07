@@ -39,28 +39,28 @@ rm -rf data/DSDTI/sub-PNC/fmap
 
 # Do the anatomical run on its own
 ${QSIPREP_CMD} \
-	 ${BIDS_INPUT_DIR} ${OUTPUT_DIR} participant \
-	 -w ${TEMPDIR} \
+	${BIDS_INPUT_DIR} ${OUTPUT_DIR} participant \
+	-w ${TEMPDIR} \
      --eddy-config ${EDDY_CFG} \
      --denoise-method none \
-     --sloppy --mem_mb 4096 \
+     --sloppy \
      --output-space T1w \
      --output-resolution 5 \
-     --nthreads ${NTHREADS} -vv
+     -vv
 
 rm -rf ${TESTDIR}/${TESTNAME}
 setup_dir ${TESTDIR}/${TESTNAME}
 
 ${QSIPREP_CMD} \
-	 ${BIDS_INPUT_DIR} ${OUTPUT_DIR} participant \
-	 -w ${TEMPDIR} \
+	${BIDS_INPUT_DIR} ${OUTPUT_DIR} participant \
+	-w ${TEMPDIR} \
      --eddy-config ${EDDY_CFG} \
-     --sloppy --mem_mb 4096 \
-	 --force-syn \
+     --sloppy \
+	--force-syn \
      --denoise-method none \
-	 --output-space T1w \
-	 --output-resolution 5 \
-	 --nthreads ${NTHREADS} -vv
+	--output-space T1w \
+	--output-resolution 5 \
+	-vv
 
 
 

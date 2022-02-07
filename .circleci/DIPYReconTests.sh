@@ -45,8 +45,7 @@ ${QSIPREP_CMD} \
 	 --sloppy \
 	 --recon-spec dipy_mapmri \
 	 --recon-only \
-	 --mem_mb 4096 \
-	 --nthreads 1 -vv
+	 -vv
 
 
 

@@ -39,12 +39,12 @@ ${QSIPREP_CMD} \
 	 ${BIDS_INPUT_DIR} ${OUTPUT_DIR} \
 	 participant \
 	-w ${TEMPDIR} \
-	--sloppy --mem_mb 4096 \
+	--sloppy \
 	--unringing-method mrdegibbs \
 	--output-space T1w \
 	--recon-spec dsi_studio_gqi \
 	--eddy_config ${EDDY_CFG} \
 	--output-resolution 5 \
-    --nthreads ${NTHREADS} -vv
+    -vv
 
 

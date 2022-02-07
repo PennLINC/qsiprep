@@ -64,11 +64,11 @@ ${QSIPREP_CMD} \
 	 -w ${TEMPDIR} \
      --eddy-config ${EDDY_CFG} \
      --denoise-method none \
-     --sloppy --mem_mb 4096 \
+     --sloppy \
      --output-space T1w \
      --output-resolution 5 \
      --anat-only \
-     --nthreads ${NTHREADS} -vv
+     -vv
 
 
 # Explicitly test --longitudinal
@@ -83,11 +83,11 @@ ${QSIPREP_CMD} \
 	 -w ${TEMPDIR} \
      --eddy-config ${EDDY_CFG} \
      --denoise-method none \
-     --sloppy --mem_mb 4096 \
+     --sloppy \
      --output-space T1w \
      --output-resolution 5 \
      --anat-only \
      --longitudinal \
-     --nthreads ${NTHREADS} -vv
+     -vv
 
 

@@ -136,12 +136,14 @@ jobs:
 
   Recon_AMICO:
     <<: *dockersetup
+    resource_class: medium+
+    environment:
+      CIRCLE_CPUS: 3
     steps:
       - checkout
       - run: *runinstall
       - run:
           name: Test the DIPY recon workflows
-          no_output_timeout: 1h
           command: |
             cd .circleci
             bash AMICOReconTests.sh  

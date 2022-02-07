@@ -41,7 +41,7 @@ ${QSIPREP_CMD} \
    ${BIDS_INPUT_DIR} ${OUTPUT_DIR} participant \
    -w ${TEMPDIR} \
    --sloppy --write-graph --use-syn-sdc \
-   --force-syn --mem_mb 4096 \
+   --force-syn \
    --output-space T1w \
    --dwi-no-biascorr \
    --hmc_model 3dSHORE \
@@ -49,5 +49,5 @@ ${QSIPREP_CMD} \
    --shoreline_iters 1 \
    --output-resolution 5 \
    --stop-on-first-crash \
-   --nthreads ${NTHREADS} -vv
+   -vv
 

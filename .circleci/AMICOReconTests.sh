@@ -46,5 +46,4 @@ ${QSIPREP_CMD}  \
 	 --sloppy \
 	 --recon-spec amico_noddi \
 	 --recon-only \
-	 --mem_mb 4096 \
-	 --nthreads ${NTHREADS} -vv
+	 -vv

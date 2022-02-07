@@ -28,6 +28,7 @@ CFG=${TESTDIR}/data/nipype.cfg
 EDDY_CFG=${TESTDIR}/data/eddy_config.json
 export FS_LICENSE=${TESTDIR}/data/license.txt
 get_bids_data ${TESTDIR} fmaps
+QSIPREP_CMD=$(run_qsiprep_cmd ${CFG})
 
 # Test blip-up blip-down shelled series (TOPUP/eddy)
 TESTNAME=DTI_SDC
@@ -36,14 +37,13 @@ TEMPDIR=${TESTDIR}/${TESTNAME}/work
 OUTPUT_DIR=${TESTDIR}/${TESTNAME}/derivatives
 BIDS_INPUT_DIR=${TESTDIR}/data/fmaptests/DSDTI_fmap
 
-qsiprep-docker -i pennbbl/qsiprep:latest \
-	-e qsiprep_DEV 1 -u $(id -u) \
-	--config ${CFG} ${PATCH} -w ${TEMPDIR} \
+${QSIPREP_CMD} \
 	 ${BIDS_INPUT_DIR} ${OUTPUT_DIR} \
 	 participant \
+	 -w ${TEMPDIR} \
 	 --boilerplate \
 	 --sloppy --write-graph --mem_mb 4096 \
-	 --nthreads 2 -vv --output-resolution 5
+	 -vv --output-resolution 5
 
 # Test blip-up blip-down non-shelled series (SHORELine/sdcflows)
 TESTNAME=DSI_SDC
@@ -53,15 +53,14 @@ OUTPUT_DIR=${TESTDIR}/${TESTNAME}/derivatives
 BIDS_INPUT_DIR=${TESTDIR}/data/fmaptests/DSCSDSI_fmap
 
 # Test blip-up blip-down shelled series (TOPUP/eddy)
-qsiprep-docker -i pennbbl/qsiprep:latest \
-	-e qsiprep_DEV 1 -u $(id -u) \
-	--config ${CFG} ${PATCH} -w ${TEMPDIR} \
+${QSIPREP_CMD} \
 	 ${BIDS_INPUT_DIR} ${OUTPUT_DIR} \
 	 participant \
+	 -w ${TEMPDIR} \
 	 --boilerplate \
      --hmc-model 3dSHORE \
 	 --sloppy --write-graph --mem_mb 4096 \
-	 --nthreads 2 -vv --output-resolution 5
+	 -vv --output-resolution 5
 
 
 

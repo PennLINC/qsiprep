@@ -5,11 +5,16 @@ LOCAL_PATCH=/home/mcieslak/projects/qsiprep/qsiprep
 if [[ "${CIRCLECI}" = "true" ]]; then
   IN_CI=true
   NTHREADS=2
+  if [[ -n "${CIRCLE_CPUS}" ]]; then
+    NTHREADS=${CIRCLE_CPUS}
+    OMP_NTHREADS=$(expr $NTHREADS - 1)
+  fi
 else
   IN_CI="false"
-  NTHREADS=8
+  NTHREADS=9
+  OMP_NTHREADS=8
 fi
-export IN_CI NTHREADS
+export IN_CI NTHREADS OMP_NTHREADS
 
 run_qsiprep_cmd () {
   # Defines a call to qsiprep that works on circleci OR for a local
@@ -22,7 +27,7 @@ run_qsiprep_cmd () {
       QSIPREP_RUN="${QSIPREP_RUN} --patch-qsiprep ${LOCAL_PATCH}"
     fi
   fi
-  echo ${QSIPREP_RUN}
+  echo "${QSIPREP_RUN} --nthreads ${NTHREADS} --omp-nthreads ${OMP_NTHREADS}"
 }
 
 WGET="wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q"

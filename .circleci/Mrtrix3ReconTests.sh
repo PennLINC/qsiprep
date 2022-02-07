@@ -47,8 +47,7 @@ ${QSIPREP_CMD} \
      --stop-on-first-crash \
 	 --recon-spec mrtrix_multishell_msmt \
 	 --recon-only \
-	 --mem_mb 4096 \
-	 --nthreads 1 -vv
+	 -vv
 
 # Test MRtrix3 multishell msmt without ACT
 TESTNAME=mrtrix_multishell_msmt_noACT_test
@@ -65,6 +64,5 @@ ${QSIPREP_CMD} \
 	 --sloppy \
 	 --recon-spec mrtrix_multishell_msmt_noACT \
 	 --recon-only \
-	 --mem_mb 4096 \
-	 --nthreads 1 -vv
+	 -vv
 
