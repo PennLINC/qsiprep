@@ -50,8 +50,102 @@ jobs:
             cd .circleci
             bash DSCSDSI.sh
 
+  DSDTI_nofmap:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run: *runinstall
+      - run:
+          name: Run DTI with no-fieldmap tests
+          no_output_timeout: 1h
+          command: |
+            cd .circleci
+            bash DSDTI_nofmap.sh
 
+  DSDTI_TOPUP:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run: *runinstall
+      - run:
+          name: Run DTI with TOPUP/Eddy
+          no_output_timeout: 1h
+          command: |
+            cd .circleci
+            bash DSDTI_TOPUP.sh
   
+  IntramodalTemplate:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run: *runinstall
+      - run:
+          name: Test the intramodal template workflow
+          no_output_timeout: 1h
+          command: |
+            cd .circleci
+            bash IntramodalTemplate.sh
+  
+  MultiT1w:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run: *runinstall
+      - run:
+          name: Test the mri robust template for T1w images
+          no_output_timeout: 1h
+          command: |
+            cd .circleci
+            bash MultiT1w.sh
+  
+  Recon_3Tissue:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run: *runinstall
+      - run:
+          name: Test the 3Tissue recon workflows
+          no_output_timeout: 1h
+          command: |
+            cd .circleci
+            bash 3TissueReconTests.sh
+
+  Recon_MRtrix3:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run: *runinstall
+      - run:
+          name: Test the 3Tissue recon workflows
+          no_output_timeout: 1h
+          command: |
+            cd .circleci
+            bash Mrtrix3ReconTests.sh  
+
+  Recon_DIPY:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run: *runinstall
+      - run:
+          name: Test the DIPY recon workflows
+          no_output_timeout: 1h
+          command: |
+            cd .circleci
+            bash DIPYReconTests.sh
+
+  Recon_AMICO:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run: *runinstall
+      - run:
+          name: Test the DIPY recon workflows
+          no_output_timeout: 1h
+          command: |
+            cd .circleci
+            bash AMICOReconTests.sh  
+
 workflows:
   version: 2
   build_test_deploy:
@@ -62,6 +156,86 @@ workflows:
               only: /.*/
 
       - DSCSDSI:
+          requires:
+            - build
+          filters:
+            branches:
+              ignore:
+                - /recon\/.*/
+            tags:
+              only: /.*/
+
+      - DSDTI_nofmap:
+          requires:
+            - build
+          filters:
+            branches:
+              ignore:
+                - /recon\/.*/
+            tags:
+              only: /.*/
+
+      - DSDTI_TOPUP:
+          requires:
+            - build
+          filters:
+            branches:
+              ignore:
+                - /recon\/.*/
+            tags:
+              only: /.*/
+
+      - IntramodalTemplate:
+          requires:
+            - build
+          filters:
+            branches:
+              ignore:
+                - /recon\/.*/
+            tags:
+              only: /.*/
+
+      - MultiT1w:
+          requires:
+            - build
+          filters:
+            branches:
+              ignore:
+                - /recon\/.*/
+            tags:
+              only: /.*/
+
+      - Recon_3Tissue:
+          requires:
+            - build
+          filters:
+            branches:
+              ignore:
+                - /recon\/.*/
+            tags:
+              only: /.*/
+
+      - Recon_MRtrix3:
+          requires:
+            - build
+          filters:
+            branches:
+              ignore:
+                - /recon\/.*/
+            tags:
+              only: /.*/
+
+      - Recon_DIPY:
+          requires:
+            - build
+          filters:
+            branches:
+              ignore:
+                - /recon\/.*/
+            tags:
+              only: /.*/
+
+      - Recon_AMICO:
           requires:
             - build
           filters:
