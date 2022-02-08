@@ -50,6 +50,7 @@ jobs:
       - run:
           name: Build documentation
           command: |
+            apt-get update && apt-get install make
             pip install ".[doc]"
             make -C docs html  
   
