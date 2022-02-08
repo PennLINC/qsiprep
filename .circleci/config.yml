@@ -38,6 +38,21 @@ jobs:
       - checkout
       - run: *runinstall
   
+  build_docs:
+    environment:
+      FSLOUTPUTTYPE: NIFTI
+      SPHINXOPTS: "-W"
+      NIPYPE_NO_ET: "1"
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run: *runinstall
+      - run:
+          name: Build documentation
+          command: |
+            pip install ".[doc]"
+            make -C docs html  
+  
   DSCSDSI:
     <<: *dockersetup
     steps:
@@ -219,32 +234,6 @@ jobs:
             echo "DOCKERVERSION: \"${DOCKERVERSION}\""
             test "$DOCKERVERSION" = "$THISVERSION"
 
-  build_docs:
-    docker:
-      - image: cimg/python:3.8.10
-    working_directory: /src/qsiprep
-    environment:
-      FSLOUTPUTTYPE: 'NIFTI'
-    steps:
-      - checkout
-      - run:
-          name: Install graphviz
-          command: |
-              sudo apt update
-              sudo apt install -y graphviz libblas-dev \
-               liblapack-dev gfortran
-      - run:
-          name: Install qsiprep.
-          command: sudo python -m pip install ".[doc]" --no-cache-dir --progress-bar off
-      - run:
-          name: Build documentation
-          no_output_timeout: 45m
-          command: |
-            export NIPYPE_NO_ET=1
-            make SPHINXOPTS="-W" -C docs html
-      - store_artifacts:
-          path: /tmp/src/qsiprep/docs/_build/html
-
   test_deploy_pypi:
     docker:
       - image: cimg/python:3.8.10
@@ -254,6 +243,7 @@ jobs:
       - run:
           name: Build qsiprep
           command: |
+            sudo apt-get update
             sudo apt-get install -y libblas-dev liblapack-dev gfortran
             pip install --user twine  # For use in checking distributions
             pip install --user --upgrade importlib-metadata
