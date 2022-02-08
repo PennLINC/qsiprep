@@ -27,7 +27,6 @@ TESTNAME=DSCSDSI
 get_config_data ${TESTDIR}
 get_bids_data ${TESTDIR} DSCSDSI
 CFG=${TESTDIR}/data/nipype.cfg
-QSIPREP_CMD=$(run_qsiprep_cmd ${CFG})
 
 # For the run
 setup_dir ${TESTDIR}/${TESTNAME}
@@ -35,10 +34,10 @@ TEMPDIR=${TESTDIR}/${TESTNAME}/work
 OUTPUT_DIR=${TESTDIR}/${TESTNAME}/derivatives
 BIDS_INPUT_DIR=${TESTDIR}/data/DSCSDSI_nofmap
 export FS_LICENSE=${TESTDIR}/data/license.txt
+QSIPREP_CMD=$(run_qsiprep_cmd ${BIDS_INPUT_DIR} ${OUTPUT_DIR})
 
 # name: Run full qsiprep on DSCSDSI
 ${QSIPREP_CMD} \
-   ${BIDS_INPUT_DIR} ${OUTPUT_DIR} participant \
    -w ${TEMPDIR} \
    --sloppy --write-graph --use-syn-sdc \
    --force-syn \

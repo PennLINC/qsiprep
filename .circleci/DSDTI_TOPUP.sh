@@ -25,7 +25,6 @@ get_config_data ${TESTDIR}
 get_bids_data ${TESTDIR} DSDTI
 CFG=${TESTDIR}/data/nipype.cfg
 EDDY_CFG=${TESTDIR}/data/eddy_config.json
-QSIPREP_CMD=$(run_qsiprep_cmd ${CFG})
 
 # For the run
 setup_dir ${TESTDIR}/${TESTNAME}
@@ -33,11 +32,10 @@ TEMPDIR=${TESTDIR}/${TESTNAME}/work
 OUTPUT_DIR=${TESTDIR}/${TESTNAME}/derivatives
 BIDS_INPUT_DIR=${TESTDIR}/data/DSDTI
 export FS_LICENSE=${TESTDIR}/data/license.txt
+QSIPREP_CMD=$(run_qsiprep_cmd ${BIDS_INPUT_DIR} ${OUTPUT_DIR})
 
 # Do the anatomical run on its own
 ${QSIPREP_CMD} \
-	 ${BIDS_INPUT_DIR} ${OUTPUT_DIR} \
-	 participant \
 	-w ${TEMPDIR} \
 	--sloppy \
 	--unringing-method mrdegibbs \

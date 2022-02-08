@@ -29,7 +29,6 @@ get_bids_data ${TESTDIR} multishell_output
 CFG=${TESTDIR}/data/nipype.cfg
 EDDY_CFG=${TESTDIR}/data/eddy_config.json
 export FS_LICENSE=${TESTDIR}/data/license.txt
-QSIPREP_CMD=$(run_qsiprep_cmd ${CFG})
 
 # Test MRtrix3 multishell msmt with ACT
 TESTNAME=mrtrix_multishell_msmt_test
@@ -37,10 +36,9 @@ setup_dir ${TESTDIR}/${TESTNAME}
 TEMPDIR=${TESTDIR}/${TESTNAME}/work
 OUTPUT_DIR=${TESTDIR}/${TESTNAME}/derivatives
 BIDS_INPUT_DIR=${TESTDIR}/data/multishell_output/qsiprep
+QSIPREP_CMD=$(run_qsiprep_cmd ${BIDS_INPUT_DIR} ${OUTPUT_DIR})
 
 ${QSIPREP_CMD} \
-	 ${BIDS_INPUT_DIR} ${OUTPUT_DIR} \
-	 participant \
 	 -w ${TEMPDIR} \
 	 --recon-input ${BIDS_INPUT_DIR} \
 	 --sloppy \
@@ -55,10 +53,9 @@ setup_dir ${TESTDIR}/${TESTNAME}
 TEMPDIR=${TESTDIR}/${TESTNAME}/work
 OUTPUT_DIR=${TESTDIR}/${TESTNAME}/derivatives
 BIDS_INPUT_DIR=${TESTDIR}/data/multishell_output/qsiprep
+QSIPREP_CMD=$(run_qsiprep_cmd ${BIDS_INPUT_DIR} ${OUTPUT_DIR})
 
 ${QSIPREP_CMD} \
-	 ${BIDS_INPUT_DIR} ${OUTPUT_DIR} \
-	 participant \
 	 -w ${TEMPDIR} \
 	 --recon-input ${BIDS_INPUT_DIR} \
 	 --sloppy \
