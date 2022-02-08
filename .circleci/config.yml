@@ -233,6 +233,20 @@ jobs:
             echo "VERSION: \"$THISVERSION\""
             echo "DOCKERVERSION: \"${DOCKERVERSION}\""
             test "$DOCKERVERSION" = "$THISVERSION"
+      - run:
+          name: Deploy to Docker Hub
+          no_output_timeout: 40m
+          command: |
+            if [[ -n "$DOCKER_PASS" ]]; then
+              docker login -u $DOCKER_USER -p $DOCKER_PASS
+              docker tag pennbbl/qsiprep pennbbl/qsiprep:unstable
+              docker push pennbbl/qsiprep:unstable
+              if [[ -n "$CIRCLE_TAG" ]]; then
+                docker push pennbbl/qsiprep:latest
+                docker tag pennbbl/qsiprep pennbbl/qsiprep:$CIRCLE_TAG
+                docker push pennbbl/qsiprep:$CIRCLE_TAG
+              fi
+            fi
 
   test_deploy_pypi:
     docker:
