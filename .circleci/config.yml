@@ -227,11 +227,11 @@ jobs:
             THISVERSION=$( python3 get_version.py )
             THISVERSION=${THISVERSION%.dirty*}
             THISVERSION=${CIRCLE_TAG:-$THISVERSION}
-            DOCKERVERSION=$(docker run --rm -it pennbbl/qsiprep:latest --version)
-            DOCKERVERSION=${DOCKERVERSION%$'\r'}
-            DOCKERVERSION=${DOCKERVERSION#*"qsiprep v"}
-            echo "VERSION: \"$THISVERSION\""
-            echo "DOCKERVERSION: \"${DOCKERVERSION}\""
+            # WTF strings coming out of here
+            docker run --rm -it pennbbl/qsiprep:latest --version > dockerv.txt
+            DOCKERVERSION=$(tr -d "\n\r" < dockerv.txt | sed 's/qsiprep v//')
+            echo VERSION: \"${THISVERSION}\"
+            echo DOCKERVERSION: \"${DOCKERVERSION}\"
             test "$DOCKERVERSION" = "$THISVERSION"
       - run:
           name: Deploy to Docker Hub
