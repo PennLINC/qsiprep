@@ -487,7 +487,7 @@ workflows:
             tags:
               only: /.*/
     
-      - buld_and_deploy:
+      - build_and_deploy:
           requires:
             - deployable
           filters:
