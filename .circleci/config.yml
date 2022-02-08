@@ -76,7 +76,7 @@ jobs:
   
   IntramodalTemplate:
     <<: *dockersetup
-    resource_class: medium+
+    resource_class: large
     environment:
       CIRCLE_CPUS: 3
     steps:

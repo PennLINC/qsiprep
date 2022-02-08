@@ -27,7 +27,6 @@ get_bids_data ${TESTDIR} twoses
 CFG=${TESTDIR}/data/nipype.cfg
 EDDY_CFG=${TESTDIR}/data/eddy_config.json
 export FS_LICENSE=${TESTDIR}/data/license.txt
-QSIPREP_CMD=$(run_qsiprep_cmd ${CFG})
 
 # Test blip-up blip-down shelled series (TOPUP/eddy)
 TESTNAME=imtemplate
@@ -35,10 +34,9 @@ setup_dir ${TESTDIR}/${TESTNAME}
 TEMPDIR=${TESTDIR}/${TESTNAME}/work
 OUTPUT_DIR=${TESTDIR}/${TESTNAME}/derivatives
 BIDS_INPUT_DIR=${TESTDIR}/data/twoses
+QSIPREP_CMD=$(run_qsiprep_cmd ${BIDS_INPUT_DIR} ${OUTPUT_DIR})
 
 ${QSIPREP_CMD} \
-	 ${BIDS_INPUT_DIR} ${OUTPUT_DIR} \
-	 participant \
 	 -w ${TEMPDIR} \
 	 --sloppy \
 	 --denoise-method none \
@@ -48,4 +46,4 @@ ${QSIPREP_CMD} \
 	 --output-resolution 5 \
 	 --intramodal-template-transform BSplineSyN \
 	 --intramodal-template-iters 2 \
-	 -vv
+	 -vv 

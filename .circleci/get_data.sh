@@ -1,5 +1,7 @@
 # Edit these for project-wide testing
+WGET="wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q"
 LOCAL_PATCH=/home/mcieslak/projects/qsiprep/qsiprep
+IMAGE=pennbbl/qsiprep:latest
 
 # Determine if we're in a CI test
 if [[ "${CIRCLECI}" = "true" ]]; then
@@ -18,20 +20,29 @@ fi
 export IN_CI NTHREADS OMP_NTHREADS
 
 run_qsiprep_cmd () {
+  bids_dir="$1"
+  output_dir="$2"
   # Defines a call to qsiprep that works on circleci OR for a local
   # test that uses 
   if [[ "${CIRCLECI}" = "true" ]]; then
-    QSIPREP_RUN="/usr/local/miniconda/bin/qsiprep"
+    # In circleci we're running from inside the container. call directly
+    QSIPREP_RUN="/usr/local/miniconda/bin/qsiprep ${bids_dir} ${output_dir} participant"
   else
-    QSIPREP_RUN="qsiprep-docker -e qsiprep_DEV 1 $1 -u $(id -u)"
-    if [[ -n "${}" ]]; then
+    # Otherwise we're going to use docker from the outside
+    QSIPREP_RUN="qsiprep-docker ${bids_dir} ${output_dir} participant -e qsiprep_DEV 1 -u $(id -u)"
+    CFG=$(printenv NIPYPE_CONFIG)
+    if [[ -n "${CFG}" ]]; then
+        QSIPREP_RUN="${QSIPREP_RUN} --config ${CFG}"
+    fi
+
+    if [[ -n "${LOCAL_PATCH}" ]]; then
+      #echo "Using qsiprep patch: ${LOCAL_PATCH}"
       QSIPREP_RUN="${QSIPREP_RUN} --patch-qsiprep ${LOCAL_PATCH}"
     fi
   fi
   echo "${QSIPREP_RUN} --nthreads ${NTHREADS} --omp-nthreads ${OMP_NTHREADS}"
 }
 
-WGET="wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q"
 
 
 cat << DOC
@@ -66,6 +77,7 @@ get_config_data() {
     printf "[execution]\nstop_on_first_crash = true\n" > ${CFG}
     echo "poll_sleep_duration = 0.01" >> ${CFG}
     echo "hash_method = content" >> ${CFG}
+    export NIPYPE_CONFIG=$CFG
 
     # Get an eddy config. It's used for some tests
     cat > ${WORKDIR}/data/eddy_config.json << "EOT"
