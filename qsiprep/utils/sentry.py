@@ -39,6 +39,11 @@ KNOWN_ERRORS = {
     ],
 }
 
+# Not useful for error reports
+USELESS_OPTS=['bids_dir', 'output_dir', 'participant_label',
+              'bids_database_dir', 'bids_filter_file', 
+              'recon_input', 'use_plugin', 'eddy_config',
+              'fs_license_file', 'work_dir']
 
 def start_ping(run_uuid, npart):
     with sentry_sdk.configure_scope() as scope:
@@ -72,11 +77,6 @@ def sentry_setup(opts, exec_env):
 
         if exec_env == 'qsiprep-docker':
             scope.set_tag('docker_version', os.getenv('DOCKER_VERSION_8395080871'))
-
-        dset_desc_path = Path(opts.bids_dir) / 'dataset_description.json'
-        if dset_desc_path.exists():
-            desc_content = dset_desc_path.read_bytes()
-            scope.set_tag('dset_desc_sha256', hashlib.sha256(desc_content).hexdigest())
 
         free_mem_at_start = round(psutil.virtual_memory().free / 1024**3, 1)
         scope.set_tag('free_mem_at_start', free_mem_at_start)

@@ -36,12 +36,17 @@ RC3_ROOT = which('average_response')  # Only exists in RC3
 if RC3_ROOT is not None:
     # Use the directory containing average_response
     RC3_ROOT = os.path.split(RC3_ROOT)[0]
-SS3T_ROOT = which('ss3t_csd_beta1')
-if SS3T_ROOT is None:
+
+_SS3T_EXE = which('ss3t_csd_beta1')
+if _SS3T_EXE is None:
     if os.getenv('SS3T_HOME'):
         SS3T_ROOT = os.getenv('SS3T_HOME')
-    elif os.path.exists('/opt/3Tissue/bin/ss3t_csd_beta1'):
+    else:
+        if not os.path.exists('/opt/3Tissue/bin/ss3t_csd_beta1'):
+            LOGGER.warn("Check installation of 3Tissue")
         SS3T_ROOT = '/opt/3Tissue/bin'
+else:
+    SS3T_ROOT = os.path.split(_SS3T_EXE)[0]
 
 
 class TckGenInputSpec(TractographyInputSpec):

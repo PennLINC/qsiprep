@@ -18,7 +18,7 @@ from .surf import NormalizeSurf, GiftiNameSource, GiftiSetAnatomicalStructure
 from .utils import (TPM2ROI, AddTPMs, AddTSVHeader, ConcatAffines,
                     JoinTSVColumns)
 from .fmap import (
-    FieldEnhance, FieldToRadS, FieldToHz, Phases2Fieldmap, Phasediff2Fieldmap)
+    FieldToRadS, FieldToHz, Phases2Fieldmap, Phasediff2Fieldmap)
 from .itk import MultiApplyTransforms
 from .confounds import GatherConfounds, DMRISummary
 from .reports import SubjectSummary, AboutSummary

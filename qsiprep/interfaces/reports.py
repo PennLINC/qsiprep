@@ -15,7 +15,7 @@ import time
 import json
 import re
 from collections import defaultdict
-from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+#from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 import seaborn as sns
 import matplotlib
 import matplotlib.pyplot as plt
@@ -365,7 +365,7 @@ def plot_gradients(bvals, orig_bvecs, source_filenums, output_fname, final_bvecs
             final_bvecs = final_bvecs.T
         fqx, fqy, fqz = (qrads[:, np.newaxis] * final_bvecs).T
         fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(10, 5),
-                                 subplot_kw={"aspect": "equal", "projection": "3d"})
+                                 subplot_kw={"projection": "3d"})
         orig_ax = axes[0]
         final_ax = axes[1]
         axes_list = [orig_ax, final_ax]
