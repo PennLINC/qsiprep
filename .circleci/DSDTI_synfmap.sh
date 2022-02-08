@@ -37,12 +37,15 @@ QSIPREP_CMD=$(run_qsiprep_cmd ${BIDS_INPUT_DIR} ${OUTPUT_DIR})
 # CRITICAL: delete the fieldmap data
 rm -rf data/DSDTI/sub-PNC/fmap
 
-# Do the anatomical run on its own
 ${QSIPREP_CMD} \
 	-w ${TEMPDIR} \
      --eddy-config ${EDDY_CFG} \
-     --denoise-method none \
      --sloppy \
-     --output-space T1w \
-     --output-resolution 5 \
-     -vv
+	--force-syn \
+     --denoise-method none \
+	--output-space T1w \
+	--output-resolution 5 \
+	-vv
+
+
+
