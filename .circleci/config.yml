@@ -41,7 +41,6 @@ jobs:
   build_docs:
     environment:
       FSLOUTPUTTYPE: NIFTI
-      SPHINXOPTS: "-W"
       NIPYPE_NO_ET: "1"
     <<: *dockersetup
     steps:
@@ -52,7 +51,7 @@ jobs:
           command: |
             apt-get update && apt-get install make
             pip install ".[doc]"
-            make -C docs html  
+            make SHPINXOPTS="-W" -C docs html  
   
   DSCSDSI:
     <<: *dockersetup
