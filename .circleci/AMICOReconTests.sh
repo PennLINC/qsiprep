@@ -40,7 +40,6 @@ BIDS_INPUT_DIR=${TESTDIR}/data/multishell_output/qsiprep
 QSIPREP_CMD=$(run_qsiprep_cmd ${BIDS_INPUT_DIR} ${OUTPUT_DIR})
 
 ${QSIPREP_CMD}  \
-	 ${BIDS_INPUT_DIR} ${OUTPUT_DIR} participant \
 	 -w ${TEMPDIR} \
 	 --recon-input ${BIDS_INPUT_DIR} \
 	 --sloppy \
