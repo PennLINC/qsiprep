@@ -97,7 +97,7 @@ class Patch2SelfInputSpec(SeriesPreprocReportInputSpec):
                                  desc='patch radius in voxels.')
     bval_file = File(exists=True, mandatory=True,
                      desc="bval file containing b-values")
-    model = traits.Str('ridge', usedefault=True,
+    model = traits.Str('ols', usedefault=True,
                        desc='Regression model for Patch2Self')
     alpha = traits.Float(1., usedefault=True,
                          desc='Regularization parameter for Ridge and Lasso')

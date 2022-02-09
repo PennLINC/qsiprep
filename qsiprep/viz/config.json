@@ -77,8 +77,8 @@
           {
               "name": "epi/denoising",
               "file_pattern": "dwi/.*_denoising\\.",
-              "title": "MP-PCA denoising",
-              "description": "Effect of MP-PCA denoising on a low and high-b image.",
+              "title": "DWI denoising",
+              "description": "Effect of denoising on a low and high-b image.",
               "imgtype": "svg+xml"
           },
           {

@@ -1,3 +1,9 @@
+0.14.3 (September 16, 2021)
+===========================
+Change in behavior in Patch2Self:
+
+ * Updates Patch2Self with optimal parameters (use OLS instead of ridge)
+
 0.14.2 (July 11, 2021)
 ======================
 Bugfixes and documentation

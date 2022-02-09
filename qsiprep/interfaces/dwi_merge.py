@@ -232,11 +232,13 @@ def find_image_pairs(original_bvecs, bvals, assignments):
 
     # If this is HCP-style, the bvals and bvecs will match directly
     if not group2['bvals'].shape == group1['bvals'].shape:
-        raise Exception("Unable to perform HCP-style merge, sampling scheme mismatch")
+        raise Exception("Unable to perform HCP-style merge, different numbers of images")
     if np.allclose(group2['bvals'], group1['bvals'], atol=50) and np.allclose(
             group2['original_bvecs'], group1['original_bvecs'], atol=0.0001):
         pairs = list(zip(group1['indices'], group2['indices']))
         bvecs = group1['original_bvecs']
+    else:
+        raise Exception("Bvecs do not match - ensure matching bvecs")
 
     return pairs, bvecs
 
@@ -484,7 +486,10 @@ def harmonize_b0s(dwi_files, bvals, b0_threshold, harmonize_b0s):
         if b0_indices.size == 0:
             b0_mean = np.nan
         else:
-            b0_mean = index_img(dwi_nii, b0_indices).get_fdata().mean()
+            if len(b0_indices) > 1:
+                b0_mean = index_img(dwi_nii, b0_indices).get_fdata().mean()
+            else:
+                b0_mean = dwi_nii.get_fdata().mean()
         b0_means.append(b0_mean)
         dwi_niis.append(dwi_nii)
 

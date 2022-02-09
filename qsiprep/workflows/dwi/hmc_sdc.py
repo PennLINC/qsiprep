@@ -151,8 +151,8 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
             ('outputnode.final_template_mask', 'b0_template_mask')]),
         (dwi_hmc_wf, summarize_motion, [
             ('outputnode.final_template', 'ref_file'),
+            ('outputnode.final_template', 'source_files'),
             (('outputnode.forward_transforms', _list_squeeze), 'transform_files')]),
-        (inputnode, summarize_motion, [('original_files', 'source_files')]),
         (dwi_hmc_wf, slice_qc, [
             ('outputnode.noise_free_dwis', 'ideal_image_files'),
             ('outputnode.final_template_mask', 'mask_image')]),

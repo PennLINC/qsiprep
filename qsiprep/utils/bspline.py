@@ -208,27 +208,7 @@ def tbspl_eval(points, knots, zooms, njobs=None):
     """
     Evaluate tensor product BSpline
     """
-    from scipy.sparse import vstack
-    from qsiprep.utils.maths import bspl
-
-    points = np.array(points, dtype=float)
-    knots = np.array(knots, dtype=float)
-    vbspl = np.vectorize(bspl)
-
-    if njobs is not None and njobs < 1:
-        njobs = None
-
-    if njobs == 1:
-        coeffs = [_evalp((p, knots, vbspl, zooms)) for p in points]
-    else:
-        from multiprocessing import Pool
-        pool = Pool(processes=njobs, maxtasksperchild=100)
-        coeffs = pool.map(
-            _evalp, [(p, knots, vbspl, zooms) for p in points])
-        pool.close()
-        pool.join()
-
-    return vstack(coeffs)
+    raise Exception("Removed BSpline")
 
 
 def _evalp(args):
