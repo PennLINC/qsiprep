@@ -229,7 +229,7 @@ jobs:
             THISVERSION=${CIRCLE_TAG:-$THISVERSION}
             # WTF strings coming out of here
             docker run --rm -it pennbbl/qsiprep:latest --version > dockerv.txt
-            DOCKERVERSION=$(tr -d "\n\r" < dockerv.txt | sed 's/qsiprep v//')
+            DOCKERVERSION=$(tr -d "\n\r" < dockerv.txt | sed 's/^.*qsiprep v//')
             echo VERSION: \"${THISVERSION}\"
             echo DOCKERVERSION: \"${DOCKERVERSION}\"
             test "$DOCKERVERSION" = "$THISVERSION"
