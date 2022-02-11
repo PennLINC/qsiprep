@@ -1,5 +1,10 @@
 from qsiprep.interfaces.bids import QsiReconIngress
+from nipype.interfaces.io import FreeSurferSource
+
 qsiprep_output_names = QsiReconIngress().output_spec.class_editable_traits()
+freesurfer_output_names = FreeSurferSource.output_spec.class_editable_traits()
+
+# Fields from a previous prep run
 anatomical_input_fields = [
     't1_aparc',
     't1_seg',
@@ -28,7 +33,8 @@ anatomical_input_fields = [
     'template_csf_probseg',
     'template_gm_probseg',
     'template_wm_probseg',
-]
-default_input_set = set(qsiprep_output_names + anatomical_input_fields)
+] + freesurfer_output_names
+
+default_input_set = set(qsiprep_output_names + anatomical_input_fields )
 input_fields = list(default_input_set)
 default_connections = [(trait, trait) for trait in input_fields]
