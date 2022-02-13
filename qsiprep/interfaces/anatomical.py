@@ -46,24 +46,6 @@ class QsiprepAnatomicalIngressOutputSpec(TraitedSpec):
     t1_gm_probseg = File()
     # sub-1_label-WM_probseg.nii.gz
     t1_wm_probseg = File()
-
-    # sub-1_hemi-L_inflated.surf.gii
-    left_inflated_surf = File()
-    # sub-1_hemi-L_midthickness.surf.gii
-    left_midthickness_surf = File()
-    # sub-1_hemi-L_pial.surf.gii
-    left_pial_surf = File()
-    # sub-1_hemi-L_smoothwm.surf.gii
-    left_smoothwm_surf = File()
-    # sub-1_hemi-R_inflated.surf.gii
-    right_inflated_surf = File()
-    # sub-1_hemi-R_midthickness.surf.gii
-    right_midthickness_surf = File()
-    # sub-1_hemi-R_pial.surf.gii
-    right_pial_surf = File()
-    # sub-1_hemi-R_smoothwm.surf.gii
-    right_smoothwm_surf = File()
-
     # sub-1_from-orig_to-T1w_mode-image_xfm.txt
     orig_to_t1_mode_forward_transform = File()
     # sub-1_from-T1w_to-fsnative_mode-image_xfm.txt
@@ -72,22 +54,13 @@ class QsiprepAnatomicalIngressOutputSpec(TraitedSpec):
     t1_2_mni_reverse_transform = File()
     # sub-1_from-T1w_to-MNI152NLin2009cAsym_mode-image_xfm.h5
     t1_2_mni_forward_transform = File()
-    # sub-1_space-MNI152NLin2009cAsym_desc-brain_mask.nii.gz
-    template_brain_mask = File()
-    # sub-1_space-MNI152NLin2009cAsym_desc-preproc_T1w.nii.gz
-    template_preproc = File()
-    # sub-1_space-MNI152NLin2009cAsym_dseg.nii.gz
-    template_seg = File()
-    # sub-1_space-MNI152NLin2009cAsym_label-CSF_probseg.nii.gz
-    template_csf_probseg = File()
-    # sub-1_space-MNI152NLin2009cAsym_label-GM_probseg.nii.gz
-    template_gm_probseg = File()
-    # sub-1_space-MNI152NLin2009cAsym_label-WM_probseg.nii.gz
-    template_wm_probseg = File()
 
 
 class QsiprepAnatomicalIngress(SimpleInterface):
-    """
+    """ Get only the useful files from a QSIPrep anatomical output.
+
+    Many of the preprocessed outputs aren't useful for reconstruction
+    (mainly anything that has been mapped forward into template space).
     """
     input_spec = QsiprepAnatomicalIngressInputSpec
     output_spec = QsiprepAnatomicalIngressOutputSpec
@@ -132,51 +105,6 @@ class QsiprepAnatomicalIngress(SimpleInterface):
             't1_wm_probseg',
             "%s/sub-%s*_label-WM_probseg.nii*" % (anat_root, sub),
             excludes=["space-MNI"])
-
-        # space-template files
-        self._get_if_exists(
-            'template_brain_mask',
-            '%s/sub-%s_*space-MNI152NLin2009cAsym_desc-brain_mask.nii*' % (anat_root, sub))
-        self._get_if_exists(
-            'template_preproc',
-            "%s/sub-%s_space-MNI152NLin2009cAsym_desc-preproc_T1w.nii*" % (anat_root, sub))
-        self._get_if_exists(
-            't1_seg',
-            '%s/sub-%s*_space-MNI152NLin2009cAsym_dseg*' % (anat_root, sub))
-        self._get_if_exists(
-            'template_csf_probseg',
-            "%s/sub-%s*_space-MNI152NLin2009cAsym_label-CSF_probseg.nii*" % (anat_root, sub))
-        self._get_if_exists(
-            'template_gm_probseg',
-            "%s/sub-%s*_space-MNI152NLin2009cAsym_label-GM_probseg.nii*" % (anat_root, sub))
-        self._get_if_exists(
-            'template_wm_probseg',
-            "%s/sub-%s*_space-MNI152NLin2009cAsym_label-WM_probseg.nii*" % (anat_root, sub))
-
-        self._get_if_exists(
-            'left_inflated_surf',
-            "%s/sub-%s*_hemi-L_inflated.surf.gii" % (anat_root, sub))
-        self._get_if_exists(
-            'left_midthickness_surf',
-            "%s/sub-%s*_hemi-L_midthickness.surf.gii" % (anat_root, sub))
-        self._get_if_exists(
-            'left_pial_surf',
-            "%s/sub-%s*_hemi-L_pial.surf.gii" % (anat_root, sub))
-        self._get_if_exists(
-            'left_smoothwm_surf',
-            "%s/sub-%s*_hemi-L_smoothwm.surf.gii" % (anat_root, sub))
-        self._get_if_exists(
-            'right_inflated_surf',
-            "%s/sub-%s*_hemi-R_inflated.surf.gii" % (anat_root, sub))
-        self._get_if_exists(
-            'right_midthickness_surf',
-            "%s/sub-%s*_hemi-R_midthickness.surf.gii" % (anat_root, sub))
-        self._get_if_exists(
-            'right_pial_surf',
-            "%s/sub-%s*_hemi-R_pial.surf.gii" % (anat_root, sub))
-        self._get_if_exists(
-            'right_smoothwm_surf',
-            "%s/sub-%s*_hemi-R_smoothwm.surf.gii" % (anat_root, sub))
 
         self._get_if_exists(
             'orig_to_t1_mode_forward_transform',

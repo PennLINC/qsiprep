@@ -21,7 +21,7 @@ from nipype import logging
 from nipype.utils.filemanip import fname_presuffix, split_filename, which
 from nipype.interfaces.base import (
     traits, TraitedSpec, BaseInterfaceInputSpec, File, SimpleInterface, InputMultiObject,
-    isdefined, CommandLineInputSpec)
+    isdefined, CommandLineInputSpec, CommandLine)
 from nipype.interfaces.mrtrix3 import Generate5tt, ResponseSD, MRConvert
 from nipype.interfaces.mrtrix3.utils import Generate5ttInputSpec
 from nipype.interfaces.mrtrix3.base import MRTrix3Base, MRTrix3BaseInputSpec
@@ -1082,3 +1082,44 @@ class MRDeGibbs(SeriesPreprocReport, MRTrix3Base):
         )
 
         self._calculate_nmse(input_dwi, denoised_nii)
+
+
+class _ITKTransformConvertInputSpec(CommandLineInputSpec):
+    in_transform = traits.File(exists=True, mandatory=True, position=0)
+    operation = traits.Enum(["itk_import"], default="itk_import", 
+                            usedefault=True, posision=1)
+    out_transform = traits.File(position=2)
+
+
+class _ITKTransformConvertOutputSpec(TraitedSpec):
+    out_transform = traits.File(exists=True)
+
+
+class ITKTransformConvert(CommandLine):
+    _cmd = "transformconvert"
+    input_spec = _ITKTransformConvertInputSpec
+    output_spec = _ITKTransformConvertOutputSpec
+
+
+class _TransformHeaderInputSpec(CommandLineInputSpec):
+    transform_file = traits.File(
+        exists=True, 
+        position=0, 
+        mandatory=True)
+    in_image = traits.File(
+        exists=True, 
+        mandatory=True, 
+        position=1)
+    out_image = traits.File(
+        exists=True, 
+        position=2,)
+
+
+class _TransformHeaderOutputSpec(TraitedSpec):
+    out_image = File(exists=True)
+
+
+class TransformHeader(CommandLine):
+    input_spec = _TransformHeaderInputSpec
+    output_spec = _TransformHeaderOutputSpec
+    _cmd = "mrtransform -linear -strides -1,-2,3"
