@@ -28,6 +28,7 @@
       "input": "ss3t_csd",
       "parameters": {
         "use_5tt": true,
+        "method_5tt": "hsvs",
         "use_sift2": true,
         "tckgen":{
           "algorithm": "iFOD2",

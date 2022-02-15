@@ -1,6 +1,11 @@
+
+if [[ "$SHELL" =~ zsh ]]; then
+  setopt SH_WORD_SPLIT
+fi
+
 # Edit these for project-wide testing
 WGET="wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q"
-LOCAL_PATCH=/home/mcieslak/projects/qsiprep/qsiprep
+LOCAL_PATCH=/Users/mcieslak/projects/qsiprep/qsiprep
 IMAGE=pennbbl/qsiprep:latest
 
 # Determine if we're in a CI test

@@ -201,28 +201,25 @@ to workflows in *qsiprep*'s documentation]\
         LOGGER.info("No dwi files found for %s", subject_id)
         return workflow
 
-    # Was there a forced normalization during preprocessing?
-    template_transform = [f.path for f in
-                          layout.get(subject=subject_id, suffix='xfm', extension=['.h5'])
-                          if 'to-T1w' in f.path and 'from-MNI152NLin2009cAsym' in f.path]
-    if template_transform:
-        template_transform = template_transform[0]
-        has_transform = True
-    else:
-        has_transform = False
-
-    t1w_brain_mask = layout.get(subject=subject_id,
-                                invalid_filters='allow',
-                                desc='brain',
-                                extension=['nii', 'nii.gz'],
-                                modality='anat')
-    has_t1w_brain_mask = bool(t1w_brain_mask)
-
-    anat_ingress_wf = init_recon_anatomical_wf(subject_id=subject_id,
-                                               recon_input_dir=recon_input,
-                                               extras_to_make=spec.get('anatomical', []),
-                                               freesurfer_dir=freesurfer_input,
-                                               name='anat_ingress_wf')
+    anat_ingress_wf, available_anatomical_data = init_recon_anatomical_wf(
+        subject_id=subject_id,
+        recon_input_dir=recon_input,
+        extras_to_make=spec.get('anatomical', []),
+        freesurfer_dir=freesurfer_input,
+        name='anat_ingress_wf')
+    
+    # Fill-in datasinks and reportlet datasinks for the anatomical workflow
+    for _node in anat_ingress_wf.list_node_names():
+        node_suffix = _node.split('.')[-1]
+        if node_suffix.startswith('ds_'):
+            node = anat_ingress_wf.get_node(_node)
+            node.inputs.source_file = "anat/sub-{}_desc-preproc_T1w.nii.gz".format(subject_id)
+            if "report" in node_suffix:
+                node.inputs.base_directory = reportlets_dir
+            else:
+                node.inputs.base_directory = output_dir
+    
+    LOGGER.info("Anatomical (T1w) available for recon: %s", available_anatomical_data)
 
     to_connect = [('outputnode.' + name, 'inputnode.' + name) for name in anatomical_input_fields]
     # create a processing pipeline for the dwis in each session
@@ -230,10 +227,11 @@ to workflows in *qsiprep*'s documentation]\
                                            workflow_spec=spec,
                                            reportlets_dir=reportlets_dir,
                                            output_dir=output_dir,
-                                           has_t1w=has_t1w_brain_mask,
-                                           has_t1w_transform=has_transform,
+                                           has_t1w=available_anatomical_data['has_qsiprep_t1w'],
+                                           has_t1w_transform=available_anatomical_data["has_qsiprep_t1w_transforms"],
                                            omp_nthreads=omp_nthreads)
     workflow.connect([(anat_ingress_wf, dwi_recon_wf, to_connect)])
+
 
     return workflow
 

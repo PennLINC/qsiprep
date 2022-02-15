@@ -39,6 +39,13 @@ def init_mrtrix_csd_recon_wf(omp_nthreads, has_transform, name="mrtrix_recon",
 
         *Default qsiprep inputs*
 
+        qsiprep_5tt_hsvs
+            A hybrid surface volume segmentation 5tt image aligned with the 
+            QSIPrep T1w
+        
+        qsiprep_5tt_fast
+            A FSL-FAST-based 5tt image aligned with the QSIPrep T1w image
+
     Outputs
 
         wm_txt
@@ -95,6 +102,7 @@ def init_mrtrix_csd_recon_wf(omp_nthreads, has_transform, name="mrtrix_recon",
         desc += 'Single-tissue '
     else:
         desc += 'Multi-tissue '
+    LOGGER.info("Response configuration: %s", response)
 
     desc += """\
 fiber response functions were estimated using the {} algorithm.
@@ -118,12 +126,19 @@ FODs were estimated via constrained spherical deconvolution
     run_mtnormalize = params.get('mtnormalize', True) and using_multitissue
 
     create_mif = pe.Node(MRTrixIngress(), name='create_mif')
+    method_5tt = response.pop("method_5tt", "fast")
     # Use dwi2response from 3Tissue for updated dhollander
     estimate_response = pe.Node(SS3TDwi2Response(**response), 'estimate_response')
 
     if response_algorithm == 'msmt_5tt':
-        workflow.connect([
-            (inputnode, estimate_response, [('mrtrix_5tt', 'mtt_file')])])
+        if method_5tt == "hsvs":
+            workflow.connect([
+                (inputnode, estimate_response, [('qsiprep_5tt_hsvs', 'mtt_file')])])
+        elif method_5tt == "fsl":
+            workflow.connect([
+                (inputnode, estimate_response, [('qsiprep_5tt_fast', 'mtt_file')])])
+        else:
+            raise Exception("Unrecognized 5tt method: " + method_5tt)
 
     if fod_algorithm in ('msmt_csd', 'csd'):
         estimate_fod = pe.Node(EstimateFOD(**fod), 'estimate_fod')
@@ -424,8 +439,16 @@ def init_mrtrix_tractography_wf(omp_nthreads, has_transform, name="mrtrix_tracki
             ('fod_sh_mif', 'seed_dynamic')]),
         (tracking, outputnode, [("out_file", "tck_file")])])
 
+    # Which 5tt image should be used?
+    method_5tt = params.get("method_5tt", "hsvs")
     if use_5tt:
-        workflow.connect(inputnode, 'mrtrix_5tt', tracking, 'act_file')
+        if method_5tt == "hsvs":
+            connect_5tt = "qsiprep_5tt_hsvs"
+        elif method_5tt == "fsl":
+            connect_5tt = 'qsiprep_5tt_fast'
+        else:
+            raise Exception("Unrecognized 5tt method: " + method_5tt)
+        workflow.connect(inputnode, connect_5tt, tracking, 'act_file')
 
     if use_sift2:
         tck_sift2 = pe.Node(SIFT2(**sift_params), name="tck_sift2")
