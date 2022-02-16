@@ -220,19 +220,20 @@ to workflows in *qsiprep*'s documentation]\
                 node.inputs.base_directory = output_dir
     
     LOGGER.info("Anatomical (T1w) available for recon: %s", available_anatomical_data)
-
-    to_connect = [('outputnode.' + name, 'inputnode.' + name) 
+    to_connect = [('outputnode.' + name, 'qsirecon_anat_wf.inputnode.' + name) 
                   for name in anatomical_workflow_outputs]
+
     # create a processing pipeline for the dwis in each session
-    dwi_recon_wf = init_dwi_recon_workflow(
-        dwi_files=dwi_files,
-        workflow_spec=spec,
-        reportlets_dir=reportlets_dir,
-        output_dir=output_dir,
-        has_t1w=available_anatomical_data['has_qsiprep_t1w'],
-        has_t1w_transform=available_anatomical_data["has_qsiprep_t1w_transforms"],
-        omp_nthreads=omp_nthreads)
-    workflow.connect([(anat_ingress_wf, dwi_recon_wf, to_connect)])
+    for dwi_file in dwi_files:
+
+        dwi_recon_wf = init_dwi_recon_workflow(
+            dwi_file=dwi_file,
+            available_anatomical_data=available_anatomical_data,
+            workflow_spec=spec,
+            reportlets_dir=reportlets_dir,
+            output_dir=output_dir,
+            omp_nthreads=omp_nthreads)
+        workflow.connect([(anat_ingress_wf, dwi_recon_wf, to_connect)])
 
 
     return workflow

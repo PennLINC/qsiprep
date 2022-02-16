@@ -14,7 +14,8 @@ from pathlib import Path
 from pkg_resources import resource_filename as pkgrf
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
-from nipype.interfaces import mrtrix3, ants
+from nipype.interfaces import mrtrix3, ants, afni
+from ...niworkflows.interfaces.registration import RobustMNINormalizationRPT
 import nipype.interfaces.io as nio
 from ...engine import Workflow
 import logging
@@ -26,6 +27,8 @@ from ...interfaces.ants import ConvertTransformFile
 from ...interfaces.freesurfer import find_fs_path
 from .interchange import (qsiprep_anatomical_ingressed_fields,
     FS_FILES_TO_REGISTER, anatomical_workflow_outputs)
+from qsiprep.interfaces.utils import GetConnectivityAtlases
+
 
 LOGGER = logging.getLogger('nipype.workflow')
 
@@ -83,7 +86,8 @@ def init_recon_anatomical_wf(subject_id, recon_input_dir, extras_to_make,
     status = {
         "has_qsiprep_5tt_fast": False,
         "has_qsiprep_5tt_hsvs": False,
-        "has_freesurfer_5tt_hsvs": False
+        "has_freesurfer_5tt_hsvs": False,
+        "has_freesurfer": False
     }
 
     # Check to see if we have a T1w preprocessed by QSIPrep
@@ -334,7 +338,185 @@ def init_register_fs_to_qsiprep_wf(use_qsiprep_reference_mask=False,
     return workflow
 
 
+def init_dwi_recon_anatomical_workflow(
+    atlas_names, omp_nthreads, has_qsiprep_5tt_fast, has_qsiprep_5tt_hsvs, 
+    has_freesurfer_5tt_hsvs, has_qsiprep_t1w, has_qsiprep_t1w_transforms,
+    infant_mode, has_freesurfer, sloppy=False, prefer_dwi_mask=False, name="qsirecon_anat_wf"):
+    """Ensure that anatomical data is available for the reconstruction workflows.
+    
+    Critically, the DWI mask needs to be created in the voxel space of the DWI data.
+
+    Parameters:
+    ===========
+    
+        has_qsiprep_5tt_fast: bool
+            Is there a FAST 5tt file in qsiprep space
+        has_qsiprep_5tt_hsvs: 
+        has_freesurfer_5tt_hsvs: True, 
+        has_qsiprep_t1w: 
+        has_qsiprep_t1w_transforms: True}
+    """
+    inputnode = pe.Node(
+        niu.IdentityInterface(fields=anatomical_workflow_outputs + ['dwi_file']),
+        name='inputnode')
+    outputnode = pe.Node(
+        niu.IdentityInterface(
+            fields=anatomical_workflow_outputs + [
+                'dwi_mask', 'atlas_configs', 'odf_rois']),
+        name="outputnode")
+    workflow = Workflow(name=name)
+    skull_strip_method = "antsBrainExtraction"
+    desc = ""
+
+    if not (has_qsiprep_t1w or has_freesurfer) or prefer_dwi_mask:
+        desc += "No T1w weighted images were available for masking, so a mask " \
+            "was estimated based on the DWI data itself."
+        
+        if prefer_dwi_mask:
+            return workflow
+    
+    elif has_freesurfer and not has_qsiprep_t1w and not prefer_dwi_mask:
+        desc += "A brainmasked T1w image from FreeSurfer was registered to the " \
+            "preprocessed DWI data. Brainmasks from FreeSurfer were used in all " \
+            "subsequent reconstruction steps. "
+        
+        if atlas_names:
+            desc += "In order to warp brain parcellations from template space into " \
+                "alignment with the DWI data, the DWI-aligned FreeSurfer brain was " \
+                "registered to template space. "
+
+            # Spatial normalization (T1w to MNI registration)
+            if sloppy:
+                LOGGER.info("Using QuickSyN")
+                # Requires a warp file: make an inaccurate one
+                settings = pkgrf('qsiprep', 'data/quick_syn.json')
+                t1_2_mni = pe.Node(
+                    RobustMNINormalizationRPT(
+                        float=True,
+                        generate_report=True,
+                        settings=[settings],
+                    ),
+                    name='t1_2_mni',
+                    n_procs=omp_nthreads,
+                    mem_gb=2
+                )
+            else:
+                t1_2_mni = pe.Node(
+                    RobustMNINormalizationRPT(
+                        float=True,
+                        generate_report=True,
+                        flavor='precise',
+                    ),
+                    name='t1_2_mni',
+                    n_procs=omp_nthreads,
+                    mem_gb=2
+                )
+                # Get the template image
+            if not infant_mode:
+                ref_img_brain = pkgrf('qsiprep', 'data/mni_1mm_t1w_lps_brain.nii.gz')
+            else:
+                ref_img_brain = pkgrf('qsiprep', 'data/mni_1mm_t1w_lps_brain_infant.nii.gz')
+
+            t1_2_mni.inputs.template = 'MNI152NLin2009cAsym'
+            t1_2_mni.inputs.reference_image = ref_img_brain
+            t1_2_mni.inputs.orientation = "LPS"
+
+            # We now have qsiprep t1w and transforms!!
+            has_qsiprep_t1w = has_qsiprep_t1w_transforms = True
+            skull_strip_method = "FreeSurfer"
+
+    # Simply resample the T1w mask into the DWI resolution. This was the default 
+    # up to version 0.14.3
+    if has_qsiprep_t1w and not prefer_dwi_mask:
+        desc += "Brainmasks from {} were used in all " \
+            "subsequent reconstruction steps.".format(skull_strip_method)
+            # Resample anat mask
+        resample_mask = pe.Node(
+            afni.Resample(outputtype='NIFTI_GZ', resample_mode="NN"),
+            name='resample_mask')
+        workflow.connect(resample_mask, "out_file", outputnode, "dwi_mask")
+
+    # If we have transforms to the template space, use them to get ROIs/atlases
+    if has_qsiprep_t1w_transforms:
+        # Resample ROI targets to DWI resolution for ODF plotting
+        crossing_rois_file = pkgrf('qsiprep', 'data/crossing_rois.nii.gz')
+        odf_rois = pe.Node(
+            ants.ApplyTransforms(interpolation="MultiLabel", dimension=3),
+            name="odf_rois")
+        odf_rois.inputs.input_image = crossing_rois_file
+        workflow.connect([
+            (inputnode, odf_rois, [
+                ('t1_2_mni_reverse_transform', 'transforms'),
+                ("dwi_file", "reference_image")])
+        ])
+
+        # Similarly, if we need atlases, transform them into DWI space
+        if atlas_names:
+            desc += "Cortical parcellations were mapped from template space to DWIS " \
+                "using the T1w-based spatial normalization. "
+
+            # Resample all atlases to dwi_file's resolution
+            get_atlases = pe.Node(
+                GetConnectivityAtlases(atlas_names=atlas_names),
+                name='get_atlases',
+                run_without_submitting=True)
+            for atlas in atlas_names:
+                workflow.connect([
+                    (get_atlases,
+                    pe.Node(ReconDerivativesDataSink(desc=atlas,
+                                                    suffix="atlas",
+                                                    compress=True),
+                            name='dsatlas_'+atlas,
+                            run_without_submitting=True),
+                    [(('atlas_configs', _get_resampled, atlas, 'dwi_resolution_file'), 'in_file'),
+                     ('source_file', 'dwi_file')]),
+                    (get_atlases,
+                    pe.Node(ReconDerivativesDataSink(
+                                                    desc=atlas,
+                                                    suffix="atlas",
+                                                    extension=".mif.gz",
+                                                    compress=True),
+                            name='dsatlas_mifs_'+atlas,
+                            run_without_submitting=True),
+                    [(('atlas_configs', _get_resampled, atlas, 'dwi_resolution_mif'), 'in_file')]),
+                    (get_atlases,
+                    pe.Node(ReconDerivativesDataSink(
+                                                    desc=atlas,
+                                                    extension=".txt",
+                                                    suffix="mrtrixLUT"),
+                            name='dsatlas_mrtrix_lut_' + atlas,
+                            run_without_submitting=True),
+                    [(('atlas_configs', _get_resampled, atlas, 'mrtrix_lut'), 'in_file')]),
+                    (get_atlases,
+                    pe.Node(ReconDerivativesDataSink(
+                                                    desc=atlas,
+                                                    extension=".txt",
+                                                    suffix="origLUT"),
+                            name='dsatlas_orig_lut_' + atlas,
+                            run_without_submitting=True),
+                    [(('atlas_configs', _get_resampled, atlas, 'orig_lut'), 'in_file')]),
+                ])
+            
+            workflow.connect([
+                (inputnode, get_atlases,[
+                    ('t1_2_mni_reverse_transform', 'forward_transform'),
+                    ('dwi_file', 'reference_image')])
+            ])
+
+            # Fill-in datasinks and reportlet datasinks seen so far
+            for node in workflow.list_node_names():
+                node_suffix = node.split('.')[-1]
+                if node_suffix.startswith('dsatlas_'):
+                    workflow.connect(
+                        inputnode, 'dwi_file', workflow.get_node(node), 'source_file')
+
+
+
 def _get_first(item):
     if isinstance(item, (list, tuple)):
         return item[0]
     return item
+
+
+def _get_resampled(atlas_configs, atlas_name, to_retrieve):
+    return atlas_configs[atlas_name][to_retrieve]

@@ -18,7 +18,7 @@ from ...interfaces.converters import NODDItoFIBGZ
 LOGGER = logging.getLogger('nipype.interface')
 
 
-def init_amico_noddi_fit_wf(omp_nthreads, has_transform,
+def init_amico_noddi_fit_wf(omp_nthreads, input_fields, available_anatomical_data,
                             name="amico_noddi_recon",
                             output_suffix="", params={}):
     """Reconstruct EAPs, ODFs, using 3dSHORE (brainsuite-style basis set).

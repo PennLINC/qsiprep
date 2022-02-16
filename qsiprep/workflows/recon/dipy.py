@@ -38,7 +38,7 @@ def external_format_datasinks(output_suffix, params, wf):
         wf.connect(outputnode, 'fod_sh_mif', ds_mif, 'in_file')
 
 
-def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, has_transform, name="dipy_3dshore_recon",
+def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, input_fields, available_anatomical_data, name="dipy_3dshore_recon",
                                         output_suffix="", params={}):
     """Reconstruct EAPs, ODFs, using 3dSHORE (brainsuite-style basis set).
 
@@ -246,7 +246,7 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, has_transform, name="dipy_
     return workflow
 
 
-def init_dipy_mapmri_recon_wf(omp_nthreads, has_transform, name="dipy_mapmri_recon",
+def init_dipy_mapmri_recon_wf(omp_nthreads, input_fields, available_anatomical_data, name="dipy_mapmri_recon",
                               output_suffix="", params={}):
     """Reconstruct EAPs, ODFs, using 3dSHORE (brainsuite-style basis set).
 

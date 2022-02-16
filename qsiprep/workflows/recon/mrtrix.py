@@ -28,7 +28,7 @@ CITATIONS = {
 }
 
 
-def init_mrtrix_csd_recon_wf(omp_nthreads, has_transform, name="mrtrix_recon",
+def init_mrtrix_csd_recon_wf(omp_nthreads, input_fields, available_anatomical_data, name="mrtrix_recon",
                              output_suffix="", params={}):
     """Create FOD images for WM, GM and CSF.
 
@@ -288,7 +288,7 @@ A single-shell-optimized multi-tissue CSD was performed using MRtrix3Tissue
     return workflow
 
 
-def init_global_tractography_wf(omp_nthreads, has_transform, name="mrtrix_recon",
+def init_global_tractography_wf(omp_nthreads, input_fields, available_anatomical_data, name="mrtrix_recon",
                                 output_suffix="", params={}):
     """Run multi-shell, multi-tissue global tractography
 
@@ -390,7 +390,7 @@ def init_global_tractography_wf(omp_nthreads, has_transform, name="mrtrix_recon"
     return workflow
 
 
-def init_mrtrix_tractography_wf(omp_nthreads, has_transform, name="mrtrix_tracking",
+def init_mrtrix_tractography_wf(omp_nthreads, input_fields, available_anatomical_data, name="mrtrix_tracking",
                                 output_suffix="", params={}):
     """Run tractography
 
@@ -482,7 +482,7 @@ def init_mrtrix_tractography_wf(omp_nthreads, has_transform, name="mrtrix_tracki
     return workflow
 
 
-def init_mrtrix_connectivity_wf(omp_nthreads, has_transform, name="mrtrix_connectiity",
+def init_mrtrix_connectivity_wf(omp_nthreads, input_fields, available_anatomical_data, name="mrtrix_connectiity",
                                 params={}, output_suffix=""):
     """Runs ``tck2connectome`` on a ``tck`` file.
 
