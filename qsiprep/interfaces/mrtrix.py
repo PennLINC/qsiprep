@@ -1141,7 +1141,7 @@ class _TransformHeaderInputSpec(CommandLineInputSpec):
         exists=True, 
         position=0, 
         mandatory=True,
-        argstr="%s")
+        argstr="-linear %s")
     in_image = traits.File(
         exists=True, 
         mandatory=True, 
@@ -1162,4 +1162,4 @@ class _TransformHeaderOutputSpec(TraitedSpec):
 class TransformHeader(CommandLine):
     input_spec = _TransformHeaderInputSpec
     output_spec = _TransformHeaderOutputSpec
-    _cmd = "mrtransform -linear -strides -1,-2,3"
+    _cmd = "mrtransform -strides -1,-2,3"

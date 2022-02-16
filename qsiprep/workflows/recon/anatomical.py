@@ -24,8 +24,8 @@ from ...interfaces.mrtrix import (GenerateMasked5tt, ITKTransformConvert,
     TransformHeader)
 from ...interfaces.ants import ConvertTransformFile
 from ...interfaces.freesurfer import find_fs_path
-from .interchange import (anatomical_input_fields, CREATEABLE_ANATOMICAL_OUTPUTS,
-    FS_FILES_TO_REGISTER)
+from .interchange import (qsiprep_anatomical_ingressed_fields,
+    FS_FILES_TO_REGISTER, anatomical_workflow_outputs)
 
 LOGGER = logging.getLogger('nipype.workflow')
 
@@ -50,9 +50,6 @@ QSIPREP_NORMALIZED_ANAT_REQUIREMENTS = [
     "sub-{subject_id}/anat/sub-{subject_id}_from-T1w_to-MNI152NLin2009cAsym_mode-image_xfm.h5",
     "sub-{subject_id}/anat/sub-{subject_id}_from-MNI152NLin2009cAsym_to-T1w_mode-image_xfm.h5"
 ]
-
-workflow_outputs = anatomical_input_fields + \
-    FS_FILES_TO_REGISTER + CREATEABLE_ANATOMICAL_OUTPUTS
 
 def init_recon_anatomical_wf(subject_id, recon_input_dir, extras_to_make,
                              freesurfer_dir="", needs_t1w_transform=False,
@@ -80,7 +77,7 @@ def init_recon_anatomical_wf(subject_id, recon_input_dir, extras_to_make,
 
     workflow = Workflow(name=name)
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=workflow_outputs),
+        niu.IdentityInterface(fields=anatomical_workflow_outputs),
         name="outputnode")
     desc = ""
     status = {
@@ -107,7 +104,7 @@ def init_recon_anatomical_wf(subject_id, recon_input_dir, extras_to_make,
 
         workflow.connect([
             (anat_ingress, outputnode,
-                [(name, name) for name in anatomical_input_fields])
+                [(name, name) for name in qsiprep_anatomical_ingressed_fields])
         ])
 
         # If FAST 5tt is requested, make this 
@@ -185,14 +182,12 @@ def init_recon_anatomical_wf(subject_id, recon_input_dir, extras_to_make,
             ds_qsiprep_5tt_hsvs = pe.Node(
                 ReconDerivativesDataSink(
                     desc="hsvs",
-                    source_file="anat/sub-{}_desc-preproc_T1w.nii.gz".format(subject_id),
                     suffix="5tt"),
                 name='ds_qsiprep_5tt_hsvs',
                 run_without_submitting=True)
             ds_fs_5tt_hsvs = pe.Node(
                 ReconDerivativesDataSink(
                     desc="hsvs",
-                    source_file="anat/sub-{}_desc-preproc_T1w.nii.gz".format(subject_id),
                     space="fsnative",
                     suffix="5tt"),
                 name='ds_fs_5tt_hsvs',
@@ -206,24 +201,29 @@ def init_recon_anatomical_wf(subject_id, recon_input_dir, extras_to_make,
                 register_fs_to_qsiprep_wf = init_register_fs_to_qsiprep_wf(
                     use_qsiprep_reference_mask=True)
                 workflow.connect([
+                ])
+                apply_header_to_5tt = pe.Node(
+                    TransformHeader(), name="apply_header_to_5tt")
+                workflow.connect([
                     (anat_ingress, register_fs_to_qsiprep_wf, [
                         ("t1_preproc", "inputnode.qsiprep_reference_image"),
                         ("t1_brain_mask", "inputnode.qsiprep_reference_mask")]),
                     (fs_source, register_fs_to_qsiprep_wf, [
                         (field, "inputnode." + field) for field in FS_FILES_TO_REGISTER]),
                     (register_fs_to_qsiprep_wf, outputnode, [
-                        ("outputnode." + field, field) for field in FS_FILES_TO_REGISTER])
-                ])
-                apply_header_to_5tt = pe.Node(
-                    TransformHeader(), name="apply_header_to_5tt")
-                workflow.connect([
+                        ("outputnode.fs_to_qsiprep_transform_mrtrix", 
+                         "fs_to_qsiprep_transform_mrtrix"),
+                        ("outputnode.fs_to_qsiprep_transform_itk",
+                         "fs_to_qsiprep_transform_itk")] + [
+                        ("outputnode." + field, field) for field in FS_FILES_TO_REGISTER]),
                     (create_5tt_hsvs, apply_header_to_5tt, [("out_file", "in_image")]),
+                    (create_5tt_hsvs, ds_fs_5tt_hsvs, [("out_file", "in_file")]),
+
                     (register_fs_to_qsiprep_wf, apply_header_to_5tt,[
                         ("outputnode.fs_to_qsiprep_transform_mrtrix", "transform_file")]),
                     (apply_header_to_5tt, outputnode, [
-                        ("out_image", "qsiprep_5tt")]),
+                        ("out_image", "qsiprep_5tt_hsvs")]),
                     (apply_header_to_5tt, ds_qsiprep_5tt_hsvs, [("out_image", "in_file")]),
-                    (create_5tt_hsvs, ds_fs_5tt_hsvs, [("out_file", "in_file")])
                 ])
                 desc += "A hybrid surface/volume segmentation was created [Smith 2020]."
 
@@ -304,14 +304,14 @@ def init_register_fs_to_qsiprep_wf(use_qsiprep_reference_mask=False,
     
     # Adjust the headers of all the input images so they're aligned to the qsiprep ref
     transform_nodes = {}
-    for image_name in []:
+    for image_name in FS_FILES_TO_REGISTER:
         transform_nodes[image_name] = pe.Node(
             TransformHeader(), name="transform_" + image_name)
         workflow.connect([
             (inputnode, transform_nodes[image_name], [(image_name, "in_image")]),
             (convert_ants_to_mrtrix_transform, 
              transform_nodes[image_name], [("out_transform", "transform_file")]),
-            (convert_ants_to_mrtrix_transform, outputnode, [("out_image", image_name)])
+            (transform_nodes[image_name], outputnode, [("out_image", image_name)])
         ])
 
     workflow.connect([
