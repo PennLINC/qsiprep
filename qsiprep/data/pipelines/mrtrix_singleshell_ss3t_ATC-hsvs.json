@@ -1,28 +1,14 @@
 {
-  "name": "mrtrix_multishell_msmt",
+  "name": "mrtrix_singleshell_ss3_hsvst",
   "space": "T1w",
-  "atlases": [
-    "schaefer100x7",
-    "schaefer100x17",
-    "schaefer200x7",
-    "schaefer200x17",
-    "schaefer400x7",
-    "schaefer400x17",
-    "brainnetome246",
-    "aicha384",
-    "gordon333",
-    "aal116",
-    "power264"
-  ],
-  "anatomical": [
-    "mrtrix_5tt"
-  ],
+  "atlases": ["schaefer100x7", "schaefer100x17", "schaefer200x7", "schaefer200x17", "schaefer400x7", "schaefer400x17", "brainnetome246", "aicha384", "gordon333", "aal116", "power264"],
+  "anatomical": ["mrtrix_5tt_hsvs"],
   "nodes": [
     {
-      "name": "msmt_csd",
+      "name": "ss3t_csd",
       "software": "MRTrix3",
       "action": "csd",
-      "output_suffix": "msmtcsd",
+      "output_suffix": "ss3tcsd",
       "input": "qsiprep",
       "parameters": {
         "mtnormalize": true,
@@ -30,12 +16,7 @@
           "algorithm": "dhollander"
         },
         "fod": {
-          "algorithm": "msmt_csd",
-          "max_sh": [
-            4,
-            8,
-            8
-          ]
+          "algorithm": "ss3t"
         }
       }
     },
@@ -44,29 +25,30 @@
       "software": "MRTrix3",
       "action": "tractography",
       "output_suffix": "ifod2",
-      "input": "msmt_csd",
+      "input": "ss3t_csd",
       "parameters": {
         "use_5tt": true,
+        "method_5tt": "hsvs",
         "use_sift2": true,
-        "tckgen": {
+        "tckgen":{
           "algorithm": "iFOD2",
-          "select": 10000000,
+          "select": 1e7,
           "max_length": 250,
           "min_length": 30,
-          "power": 0.33,
+          "power":0.33,
           "crop_at_gmwmi": true,
           "backtrack": true
         },
-        "sift2": {}
+        "sift2":{}
       }
     },
     {
       "name": "mrtrix_conn",
       "software": "MRTrix3",
       "action": "connectivity",
-      "output_suffix": "msmtconnectome",
+      "output_suffix": "dhollanderconnectome",
       "input": "track_ifod2",
-      "parameters": {
+      "parameters":{
         "tck2connectome": [
           {
             "zero_diagonal": false,
