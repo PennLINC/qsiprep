@@ -16,14 +16,14 @@ from qsiprep.interfaces.dsi_studio import (DSIStudioCreateSrc, DSIStudioGQIRecon
 
 import logging
 from qsiprep.interfaces.bids import ReconDerivativesDataSink
-from .interchange import input_fields
+from .interchange import recon_workflow_input_fields
 from ...engine import Workflow
 from ...interfaces.reports import ReconPeaksReport, ConnectivityReport
 
 LOGGER = logging.getLogger('nipype.interface')
 
 
-def init_dsi_studio_recon_wf(omp_nthreads, input_fields, available_anatomical_data, name="dsi_studio_recon",
+def init_dsi_studio_recon_wf(omp_nthreads, available_anatomical_data, name="dsi_studio_recon",
                              output_suffix="", params={}):
     """Reconstructs diffusion data using DSI Studio.
 
@@ -45,7 +45,7 @@ def init_dsi_studio_recon_wf(omp_nthreads, input_fields, available_anatomical_da
             Default 1.25. Distance to sample EAP at.
 
     """
-    inputnode = pe.Node(niu.IdentityInterface(fields=input_fields + ['odf_rois']),
+    inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields + ['odf_rois']),
                         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(
@@ -75,7 +75,7 @@ distance of %02f.""" % romdd
         run_without_submitting=True)
 
     # Plot targeted regions
-    if has_transform:
+    if available_anatomical_data['has_qsiprep_t1w_transforms']:
         ds_report_odfs = pe.Node(
             ReconDerivativesDataSink(extension='.png',
                                      desc="GQIODF",
@@ -112,7 +112,7 @@ distance of %02f.""" % romdd
     return workflow
 
 
-def init_dsi_studio_tractography_wf(omp_nthreads, input_fields, available_anatomical_data, name="dsi_studio_tractography",
+def init_dsi_studio_tractography_wf(omp_nthreads, available_anatomical_data, name="dsi_studio_tractography",
                                     params={}, output_suffix=""):
     """Calculate streamline-based connectivity matrices using DSI Studio.
 
@@ -173,7 +173,7 @@ def init_dsi_studio_tractography_wf(omp_nthreads, input_fields, available_anatom
     """
     inputnode = pe.Node(
         niu.IdentityInterface(
-            fields=input_fields + ['fibgz']),
+            fields=recon_workflow_input_fields + ['fibgz']),
         name="inputnode")
     outputnode = pe.Node(niu.IdentityInterface(fields=['trk_file', 'fibgz']),
                          name="outputnode")
@@ -194,7 +194,7 @@ def init_dsi_studio_tractography_wf(omp_nthreads, input_fields, available_anatom
     return workflow
 
 
-def init_dsi_studio_connectivity_wf(omp_nthreads, input_fields, available_anatomical_data, name="dsi_studio_connectivity",
+def init_dsi_studio_connectivity_wf(omp_nthreads, available_anatomical_data, name="dsi_studio_connectivity",
                                     params={}, output_suffix=""):
     """Calculate streamline-based connectivity matrices using DSI Studio.
 
@@ -253,7 +253,7 @@ def init_dsi_studio_connectivity_wf(omp_nthreads, input_fields, available_anatom
     """
     inputnode = pe.Node(
         niu.IdentityInterface(
-            fields=input_fields + ['fibgz', 'trk_file', 'atlas_configs']),
+            fields=recon_workflow_input_fields + ['fibgz', 'trk_file', 'atlas_configs']),
         name="inputnode")
     outputnode = pe.Node(niu.IdentityInterface(fields=['matfile']),
                          name="outputnode")
@@ -286,7 +286,7 @@ def init_dsi_studio_connectivity_wf(omp_nthreads, input_fields, available_anatom
     return workflow
 
 
-def init_dsi_studio_export_wf(omp_nthreads, input_fields, available_anatomical_data, name="dsi_studio_export",
+def init_dsi_studio_export_wf(omp_nthreads, available_anatomical_data, name="dsi_studio_export",
                               params={}, output_suffix=""):
     """Export scalar maps from a DSI Studio fib file into NIfTI files with correct headers.
 
@@ -313,7 +313,7 @@ def init_dsi_studio_export_wf(omp_nthreads, input_fields, available_anatomical_d
     """
     inputnode = pe.Node(
         niu.IdentityInterface(
-            fields=input_fields + ['fibgz']),
+            fields=recon_workflow_input_fields + ['fibgz']),
         name="inputnode")
     scalar_names = ['gfa', 'fa0', 'fa1', 'fa2', 'iso', 'dti_fa', 'md', 'rd', 'ad']
     outputnode = pe.Node(

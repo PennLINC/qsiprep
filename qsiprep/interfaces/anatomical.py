@@ -48,8 +48,6 @@ class QsiprepAnatomicalIngressOutputSpec(TraitedSpec):
     t1_wm_probseg = File()
     # sub-1_from-orig_to-T1w_mode-image_xfm.txt
     orig_to_t1_mode_forward_transform = File()
-    # sub-1_from-T1w_to-fsnative_mode-image_xfm.txt
-    t1_2_fsnative_forward_transform = File()
     # sub-1_from-MNI152NLin2009cAsym_to-T1w_mode-image_xfm.h5
     t1_2_mni_reverse_transform = File()
     # sub-1_from-T1w_to-MNI152NLin2009cAsym_mode-image_xfm.h5
@@ -109,9 +107,6 @@ class QsiprepAnatomicalIngress(SimpleInterface):
         self._get_if_exists(
             'orig_to_t1_mode_forward_transform',
             "%s/sub-%s*_from-orig_to-T1w_mode-image_xfm.txt" % (anat_root, sub))
-        self._get_if_exists(
-            't1_2_fsnative_forward_transform',
-            "%s/sub-%s*_from-T1w_to-fsnative_mode-image_xfm.txt" % (anat_root, sub))
         self._get_if_exists(
             't1_2_mni_reverse_transform',
             "%s/sub-%s*_from-MNI152NLin2009cAsym_to-T1w*_xfm.h5" % (anat_root, sub))

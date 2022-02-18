@@ -16,7 +16,8 @@ from .dynamics import init_controllability_wf
 from .utils import init_conform_dwi_wf, init_discard_repeated_samples_wf
 from ...engine import Workflow
 from .interchange import (qsiprep_output_names, default_input_set,
-    )
+    recon_workflow_input_fields, recon_workflow_anatomical_input_fields,
+    ReconWorkflowInputs)
 from .anatomical import init_dwi_recon_anatomical_workflow
 
 LOGGER = logging.getLogger('nipype.interface')
@@ -30,11 +31,10 @@ def _check_repeats(nodelist):
 
 def init_dwi_recon_workflow(dwi_file, workflow_spec, output_dir, prefer_dwi_mask,
                             reportlets_dir, available_anatomical_data, omp_nthreads,
-                            infant_mode, sloppy=False, name="recon_wf"):
+                            infant_mode, freesurfer_dir=None, sloppy=False, name="recon_wf"):
     """Convert a workflow spec into a nipype workflow.
 
     """
-
     # Get the preprocessed DWI and all the related preprocessed images
     qsiprep_preprocessed_dwi_data = pe.Node(
         QsiReconIngress(dwi_file=dwi_file), 
@@ -42,40 +42,33 @@ def init_dwi_recon_workflow(dwi_file, workflow_spec, output_dir, prefer_dwi_mask
 
     # Get the anatomical data (masks, atlases, etc)
     atlas_names = workflow_spec.get('atlases', [])
-    registered_anat_wf = init_dwi_recon_anatomical_workflow(
+    registered_anat_wf, available_anatomical_data = init_dwi_recon_anatomical_workflow(
         atlas_names=atlas_names,
         omp_nthreads=omp_nthreads,
         infant_mode=infant_mode,
         prefer_dwi_mask=prefer_dwi_mask,
         sloppy=sloppy,
+        extras_to_make=workflow_spec.get('anatomical', []),
+        freesurfer_dir=freesurfer_dir,
         name="qsirecon_anat_wf",
         **available_anatomical_data)
-    anatomical_output_names = registered_anat_wf.get_node(
-        "outputnode").interface.inputs.copyable_trait_names()
     
-    # Check that no conflicts have been introduced
-    overlapping_names = set(qsiprep_output_names).intersection(anatomical_output_names)
-    if overlapping_names:
-        raise Exception("Someone has added overlapping outputs between the anatomical "
-            "and dwi inputs: " + " ".join(overlapping_names))
-    
-    input_fields = qsiprep_output_names + anatomical_output_names
     # For doctests
     # if not workflow_spec['name'] == 'fake':
     #     inputnode.inputs.dwi_file = dwi_file
 
     workflow = Workflow(name=_get_wf_name(dwi_file) + "_" + name)
     inputnode = pe.Node(
-        niu.IdentityInterface(fields=input_fields),
+        niu.IdentityInterface(fields=recon_workflow_input_fields),
         name='inputnode')
     
     # Connect the collected diffusion data (gradients, etc) to the inputnode
     workflow.connect([
-        (inputnode, qsiprep_preprocessed_dwi_data, ([('dwi_file', 'dwi_file')])),
-        (qsiprep_preprocessed_dwi_data, inputnode, [
-            (trait, trait) for trait in qsiprep_output_names]),
+        (qsiprep_preprocessed_dwi_data, registered_anat_wf, [
+            (trait, 'inputnode.' + trait) for trait in qsiprep_output_names]),
         (registered_anat_wf, inputnode, [
-            ('outputnode.'+trait, trait) for trait in anatomical_output_names])
+            ('outputnode.'+trait, trait) for trait in 
+            recon_workflow_input_fields])
     ])
 
     # Read nodes from workflow spec, make sure we can implement them
@@ -85,7 +78,6 @@ def init_dwi_recon_workflow(dwi_file, workflow_spec, output_dir, prefer_dwi_mask
             raise Exception("Node has no name [{}]".format(node_spec))
         new_node = workflow_from_spec(
             omp_nthreads=omp_nthreads,
-            input_fields=input_fields,
             available_anatomical_data=available_anatomical_data,
             node_spec=node_spec)
         if new_node is None:
@@ -105,7 +97,7 @@ def init_dwi_recon_workflow(dwi_file, workflow_spec, output_dir, prefer_dwi_mask
             # directly connect all the qsiprep outputs to every node
             workflow.connect([
                 (inputnode, node,
-                 _as_connections(input_fields, dest_prefix='inputnode.'))])
+                 _as_connections(recon_workflow_input_fields, dest_prefix='inputnode.'))])
             # for from_conn, to_conn in default_connections:
             #     workflow.connect(inputnode, from_conn, node, 'inputnode.' + to_conn)
             #     _check_repeats(workflow.list_node_names())
@@ -143,18 +135,6 @@ def init_dwi_recon_workflow(dwi_file, workflow_spec, output_dir, prefer_dwi_mask
             #                      node, 'inputnode.' + upstream_connection)
             _check_repeats(workflow.list_node_names())
 
-        # If it's a connectivity calculation, send it the atlas configs
-        if node_spec['action'] == 'connectivity':
-            workflow.connect([(inputnode, node,
-                               [('atlas_configs', 'inputnode.atlas_configs')])])
-        _check_repeats(workflow.list_node_names())
-
-        # Send the ODF rois to reconstruction nodes
-        if node_spec['action'] == 'csd' or 'reconstruction' in node_spec['action']:
-            workflow.connect([(inputnode, node,
-                               [('odf_rois', 'inputnode.odf_rois')])])
-        _check_repeats(workflow.list_node_names())
-
     # Fill-in datasinks and reportlet datasinks seen so far
     for node in workflow.list_node_names():
         node_suffix = node.split('.')[-1]
@@ -168,7 +148,7 @@ def init_dwi_recon_workflow(dwi_file, workflow_spec, output_dir, prefer_dwi_mask
     return workflow
 
 
-def workflow_from_spec(omp_nthreads, input_fields, available_anatomical_data, node_spec):
+def workflow_from_spec(omp_nthreads, available_anatomical_data, node_spec):
     """Build a nipype workflow based on a json file."""
     software = node_spec.get("software", "qsiprep")
     output_suffix = node_spec.get("output_suffix", "")
@@ -179,7 +159,6 @@ def workflow_from_spec(omp_nthreads, input_fields, available_anatomical_data, no
         raise Exception('Node %s must have a "name" attribute' % node_spec)
     kwargs = {
         "omp_nthreads": omp_nthreads,
-        "input_fields": input_fields,
         "available_anatomical_data": available_anatomical_data,
         "name": node_name,
         "output_suffix": output_suffix,

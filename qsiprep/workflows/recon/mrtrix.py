@@ -14,7 +14,7 @@ from ...interfaces.reports import ReconPeaksReport, ConnectivityReport
 from qsiprep.interfaces.mrtrix import (
     EstimateFOD, SS3TEstimateFOD, MRTrixIngress, SS3TDwi2Response, GlobalTractography,
     MRTrixAtlasGraph, SIFT2, TckGen, MTNormalize)
-from .interchange import input_fields
+from .interchange import recon_workflow_input_fields
 from ...engine import Workflow
 
 LOGGER = logging.getLogger('nipype.interface')
@@ -28,7 +28,7 @@ CITATIONS = {
 }
 
 
-def init_mrtrix_csd_recon_wf(omp_nthreads, input_fields, available_anatomical_data, name="mrtrix_recon",
+def init_mrtrix_csd_recon_wf(omp_nthreads, available_anatomical_data, name="mrtrix_recon",
                              output_suffix="", params={}):
     """Create FOD images for WM, GM and CSF.
 
@@ -77,7 +77,7 @@ def init_mrtrix_csd_recon_wf(omp_nthreads, input_fields, available_anatomical_da
 
 
     """
-    inputnode = pe.Node(niu.IdentityInterface(fields=input_fields + ['odf_rois']),
+    inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields + ['odf_rois']),
                         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(
@@ -159,7 +159,7 @@ A single-shell-optimized multi-tissue CSD was performed using MRtrix3Tissue
         run_without_submitting=True)
 
     # Plot targeted regions
-    if has_transform:
+    if available_anatomical_data['has_qsiprep_t1w_transforms']:
         ds_report_odfs = pe.Node(
             ReconDerivativesDataSink(extension='.png',
                                      desc="wmFOD",
@@ -288,7 +288,7 @@ A single-shell-optimized multi-tissue CSD was performed using MRtrix3Tissue
     return workflow
 
 
-def init_global_tractography_wf(omp_nthreads, input_fields, available_anatomical_data, name="mrtrix_recon",
+def init_global_tractography_wf(omp_nthreads, available_anatomical_data, name="mrtrix_recon",
                                 output_suffix="", params={}):
     """Run multi-shell, multi-tissue global tractography
 
@@ -318,7 +318,7 @@ def init_global_tractography_wf(omp_nthreads, input_fields, available_anatomical
 
     """
     inputnode = pe.Node(
-        niu.IdentityInterface(fields=input_fields + ['gm_txt', 'wm_txt', 'csf_txt']),
+        niu.IdentityInterface(fields=recon_workflow_input_fields + ['gm_txt', 'wm_txt', 'csf_txt']),
         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(
@@ -390,7 +390,7 @@ def init_global_tractography_wf(omp_nthreads, input_fields, available_anatomical
     return workflow
 
 
-def init_mrtrix_tractography_wf(omp_nthreads, input_fields, available_anatomical_data, name="mrtrix_tracking",
+def init_mrtrix_tractography_wf(omp_nthreads, available_anatomical_data, name="mrtrix_tracking",
                                 output_suffix="", params={}):
     """Run tractography
 
@@ -414,7 +414,7 @@ def init_mrtrix_tractography_wf(omp_nthreads, input_fields, available_anatomical
 
     """
     inputnode = pe.Node(
-        niu.IdentityInterface(fields=input_fields + ['fod_sh_mif']),
+        niu.IdentityInterface(fields=recon_workflow_input_fields + ['fod_sh_mif']),
         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(fields=['tck_file', 'sift_weights']),
@@ -482,7 +482,7 @@ def init_mrtrix_tractography_wf(omp_nthreads, input_fields, available_anatomical
     return workflow
 
 
-def init_mrtrix_connectivity_wf(omp_nthreads, input_fields, available_anatomical_data, name="mrtrix_connectiity",
+def init_mrtrix_connectivity_wf(omp_nthreads, available_anatomical_data, name="mrtrix_connectiity",
                                 params={}, output_suffix=""):
     """Runs ``tck2connectome`` on a ``tck`` file.
 
@@ -499,7 +499,7 @@ def init_mrtrix_connectivity_wf(omp_nthreads, input_fields, available_anatomical
     """
     inputnode = pe.Node(
         niu.IdentityInterface(
-            fields=input_fields + ['tck_file', 'sift_weights', 'atlas_configs']),
+            fields=recon_workflow_input_fields + ['tck_file', 'sift_weights', 'atlas_configs']),
         name="inputnode")
     outputnode = pe.Node(niu.IdentityInterface(fields=['matfile']),
                          name="outputnode")

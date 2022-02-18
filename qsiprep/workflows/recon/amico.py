@@ -9,7 +9,7 @@ import logging
 import nipype.pipeline.engine as pe
 from nipype.interfaces import afni, utility as niu
 from qsiprep.interfaces.bids import ReconDerivativesDataSink
-from .interchange import input_fields
+from .interchange import recon_workflow_input_fields
 from ...engine import Workflow
 from ...interfaces.amico import NODDI
 from ...interfaces.reports import ReconPeaksReport
@@ -18,7 +18,7 @@ from ...interfaces.converters import NODDItoFIBGZ
 LOGGER = logging.getLogger('nipype.interface')
 
 
-def init_amico_noddi_fit_wf(omp_nthreads, input_fields, available_anatomical_data,
+def init_amico_noddi_fit_wf(omp_nthreads, available_anatomical_data,
                             name="amico_noddi_recon",
                             output_suffix="", params={}):
     """Reconstruct EAPs, ODFs, using 3dSHORE (brainsuite-style basis set).
@@ -43,7 +43,7 @@ def init_amico_noddi_fit_wf(omp_nthreads, input_fields, available_anatomical_dat
 
     """
 
-    inputnode = pe.Node(niu.IdentityInterface(fields=input_fields + ['odf_rois']),
+    inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields + ['odf_rois']),
                         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(

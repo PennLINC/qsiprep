@@ -219,6 +219,7 @@ to workflows in *qsiprep*'s documentation]\
             else:
                 node.inputs.base_directory = output_dir
     
+    # Connect the anatomical-only inputs. NOTE this is not to the inputnode!
     LOGGER.info("Anatomical (T1w) available for recon: %s", available_anatomical_data)
     to_connect = [('outputnode.' + name, 'qsirecon_anat_wf.inputnode.' + name) 
                   for name in anatomical_workflow_outputs]
@@ -230,11 +231,13 @@ to workflows in *qsiprep*'s documentation]\
             dwi_file=dwi_file,
             available_anatomical_data=available_anatomical_data,
             workflow_spec=spec,
+            sloppy=sloppy,
+            prefer_dwi_mask=False,
+            infant_mode=False,
             reportlets_dir=reportlets_dir,
             output_dir=output_dir,
             omp_nthreads=omp_nthreads)
         workflow.connect([(anat_ingress_wf, dwi_recon_wf, to_connect)])
-
 
     return workflow
 

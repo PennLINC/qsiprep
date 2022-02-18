@@ -10,7 +10,7 @@ import nipype.pipeline.engine as pe
 from nipype.interfaces import afni, utility as niu
 from qsiprep.interfaces.bids import ReconDerivativesDataSink
 from ...interfaces.dipy import BrainSuiteShoreReconstruction, MAPMRIReconstruction
-from .interchange import input_fields
+from .interchange import recon_workflow_input_fields
 from ...engine import Workflow
 from ...interfaces.reports import ReconPeaksReport
 
@@ -38,7 +38,7 @@ def external_format_datasinks(output_suffix, params, wf):
         wf.connect(outputnode, 'fod_sh_mif', ds_mif, 'in_file')
 
 
-def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, input_fields, available_anatomical_data, name="dipy_3dshore_recon",
+def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, available_anatomical_data, name="dipy_3dshore_recon",
                                         output_suffix="", params={}):
     """Reconstruct EAPs, ODFs, using 3dSHORE (brainsuite-style basis set).
 
@@ -94,7 +94,7 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, input_fields, available_an
 
     """
 
-    inputnode = pe.Node(niu.IdentityInterface(fields=input_fields + ['odf_rois']),
+    inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields + ['odf_rois']),
                         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(
@@ -147,7 +147,7 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, input_fields, available_an
         (plot_peaks, ds_report_peaks, [('out_report', 'in_file')])])
 
     # Plot targeted regions
-    if has_transform:
+    if available_anatomical_data['has_qsiprep_t1w_transforms']:
         ds_report_odfs = pe.Node(
             ReconDerivativesDataSink(extension='.png',
                                      desc="3dSHOREODF",
@@ -246,7 +246,7 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, input_fields, available_an
     return workflow
 
 
-def init_dipy_mapmri_recon_wf(omp_nthreads, input_fields, available_anatomical_data, name="dipy_mapmri_recon",
+def init_dipy_mapmri_recon_wf(omp_nthreads, available_anatomical_data, name="dipy_mapmri_recon",
                               output_suffix="", params={}):
     """Reconstruct EAPs, ODFs, using 3dSHORE (brainsuite-style basis set).
 
@@ -322,7 +322,7 @@ def init_dipy_mapmri_recon_wf(omp_nthreads, input_fields, available_anatomical_d
             Default: None (cvxpy chooses its own solver)
     """
 
-    inputnode = pe.Node(niu.IdentityInterface(fields=input_fields + ['odf_rois']),
+    inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields + ['odf_rois']),
                         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(
@@ -372,7 +372,7 @@ def init_dipy_mapmri_recon_wf(omp_nthreads, input_fields, available_anatomical_d
         (plot_peaks, ds_report_peaks, [('out_report', 'in_file')])])
 
     # Plot targeted regions
-    if has_transform:
+    if available_anatomical_data['has_qsiprep_t1w_transforms']:
         ds_report_odfs = pe.Node(
             ReconDerivativesDataSink(extension='.png',
                                      desc="MAPLMRIODF",

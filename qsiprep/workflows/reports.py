@@ -20,7 +20,7 @@ from ..interfaces import DerivativesDataSink
 from ..interfaces.bids import QsiReconIngress
 from ..interfaces.reports import InteractiveReport
 from ..utils.bids import collect_data
-from .recon.interchange import qsiprep_output_names, input_fields
+from .recon.interchange import qsiprep_output_names, recon_workflow_input_fields
 
 
 LOGGER = logging.getLogger('nipype.workflow')
@@ -111,7 +111,7 @@ def init_single_subject_json_report_wf(subject_id, name, output_dir):
     workflow = Workflow(name=name)
     scans_iter = pe.Node(niu.IdentityInterface(fields=['dwi_file']), name='scans_iter')
     scans_iter.iterables = ("dwi_file", dwi_files)
-    inputnode = pe.Node(niu.IdentityInterface(fields=input_fields + ['dwi_file']),
+    inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields),
                         name='inputnode')
     qsiprep_preprocessed_dwi_data = pe.Node(
         QsiReconIngress(), name="qsiprep_preprocessed_dwi_data")
