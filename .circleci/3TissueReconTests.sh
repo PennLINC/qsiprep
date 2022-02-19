@@ -42,7 +42,7 @@ ${QSIPREP_CMD} \
 	 -w ${TEMPDIR} \
 	 --recon-input ${BIDS_INPUT_DIR} \
 	 --sloppy \
-	 --recon-spec mrtrix_singleshell_ss3t \
+	 --recon-spec mrtrix_singleshell_ss3t_ACT-fast \
 	 --recon-only \
 	 -vv
 

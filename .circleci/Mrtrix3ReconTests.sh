@@ -43,7 +43,7 @@ ${QSIPREP_CMD} \
 	 --recon-input ${BIDS_INPUT_DIR} \
 	 --sloppy \
      --stop-on-first-crash \
-	 --recon-spec mrtrix_multishell_msmt \
+	 --recon-spec mrtrix_multishell_msmt_ACT-fast \
 	 --recon-only \
 	 -vv
 

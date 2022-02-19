@@ -107,8 +107,6 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, available_anatomical_data,
     desc = """Dipy Reconstruction
 
 : """
-    resample_mask = pe.Node(
-        afni.Resample(outputtype='NIFTI_GZ', resample_mode="NN"), name='resample_mask')
     recon_shore = pe.Node(BrainSuiteShoreReconstruction(**params), name="recon_shore")
     doing_extrapolation = params.get("extrapolate_scheme") in ("HCP", "ABCD")
 
@@ -123,10 +121,8 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, available_anatomical_data,
     workflow.connect([
         (inputnode, recon_shore, [('dwi_file', 'dwi_file'),
                                   ('bval_file', 'bval_file'),
-                                  ('bvec_file', 'bvec_file')]),
-        (inputnode, resample_mask, [('t1_brain_mask', 'in_file'),
-                                    ('dwi_file', 'master')]),
-        (resample_mask, recon_shore, [('out_file', 'mask_file')]),
+                                  ('bvec_file', 'bvec_file'),
+                                  ('dwi_mask', 'mask_file')]),
         (recon_shore, outputnode, [('shore_coeffs_image', 'shore_coeffs_image'),
                                    ('rtop_image', 'rtop_image'),
                                    ('alpha_image', 'alpha_image'),
@@ -141,7 +137,7 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, available_anatomical_data,
                                    ('extrapolated_b', 'b_file')]),
         (inputnode, plot_peaks, [('dwi_ref', 'background_image'),
                                  ('odf_rois', 'odf_rois')]),
-        (resample_mask, plot_peaks, [('out_file', 'mask_file')]),
+        (inputnode, plot_peaks, [('dwi_mask', 'mask_file')]),
         (recon_shore, plot_peaks, [('odf_directions', 'directions_file'),
                                    ('odf_amplitudes', 'odf_file')]),
         (plot_peaks, ds_report_peaks, [('out_report', 'in_file')])])
