@@ -19,6 +19,7 @@ Inputs:
  - twoses BIDS data (data/DSDTI_fmap)
 
 DOC
+set +e
 
 source ./get_data.sh
 TESTDIR=${PWD}

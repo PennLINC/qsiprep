@@ -18,6 +18,7 @@ Inputs:
 
 DOC
 
+set +e
 source ./get_data.sh
 TESTDIR=${PWD}
 TESTNAME=DSDTI_TOPUP

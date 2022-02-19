@@ -407,9 +407,9 @@ setup_dir(){
     DIR=$1
     mkdir -p ${DIR}/derivatives
     mkdir -p ${DIR}/work
-    setfacl -d -m group:$(id -gn):rwx ${DIR}/derivatives && \
-        setfacl -m group:$(id -gn):rwx ${DIR}/derivatives
-    setfacl -d -m group:$(id -gn):rwx ${DIR}/work && \
-        setfacl -m group:$(id -gn):rwx ${DIR}/work
+    # setfacl -d -m group:$(id -gn):rwx ${DIR}/derivatives && \
+    #     setfacl -m group:$(id -gn):rwx ${DIR}/derivatives
+    # setfacl -d -m group:$(id -gn):rwx ${DIR}/work && \
+    #     setfacl -m group:$(id -gn):rwx ${DIR}/work
 
 }

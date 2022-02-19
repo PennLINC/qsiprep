@@ -14,6 +14,7 @@ Inputs:
  - DSDTI BIDS data (data/DSDTI)
 
 DOC
+set +e
 
 source ./get_data.sh
 TESTDIR=${PWD}

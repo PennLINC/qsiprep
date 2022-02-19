@@ -19,7 +19,7 @@ Inputs:
  - DSCSDSI BIDS data (data/DSCSDSI_nofmap)
 
 DOC
-
+set +e 
 # Setup environment and get data
 source ./get_data.sh
 TESTDIR=${PWD}
