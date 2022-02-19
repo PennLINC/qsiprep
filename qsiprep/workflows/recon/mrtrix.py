@@ -468,7 +468,7 @@ def init_mrtrix_tractography_wf(omp_nthreads, available_anatomical_data, name="m
                 run_without_submitting=True)
             workflow.connect(outputnode, 'sift_weights', ds_sift_weights, 'in_file')
         if use_5tt:
-            workflow.connect(inputnode, "mrtrix_5tt", tck_sift2, "act_file")
+            workflow.connect(inputnode, connect_5tt, tck_sift2, "act_file")
 
     if output_suffix:
         ds_tck_file = pe.Node(

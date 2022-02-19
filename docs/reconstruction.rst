@@ -369,7 +369,7 @@ file similar to the following::
   {
     "name": "dsistudio_pipeline",
     "space": "T1w",
-    "anatomical": ["mrtrix_5tt"],
+    "anatomical": ["mrtrix_5tt_fast"],
     "atlases": ["schaefer100x7", "schaefer100x17", "schaefer200x7", "schaefer200x7", "schaefer400x7", "schaefer400x17", "brainnetome246", "aicha384", "gordon333", "aal116", "power264"],
     "nodes": [
       {
