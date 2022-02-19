@@ -95,3 +95,7 @@ Citing qsiprep
 
 .. [Zhang2012] Zhang, Hui, et al. "NODDI: practical in vivo neurite orientation dispersion
           and density imaging of the human brain." Neuroimage 61.4 (2012): 1000-1016.
+
+.. [Smith2020] Smith, R.; Skoch, A.; Bajada, C.; Caspers, S.; Connelly, A. Hybrid Surface-
+     Volume Segmentation for improved Anatomically-Constrained Tractography. In
+     Proc OHBM 2020

@@ -14,27 +14,33 @@ from the preprocessed diffusion data.
 The easiest way to get started is to use one of the :ref:`preconfigured_workflows`.
 Instead of specifying a path to a file you can choose from the following:
 
-+-------------------------------------+--------------+-------------+---------+-----------------+----------------+
-| Option                              | Requires SDC | MultiShell  |   DSI   | DTI             |  Tractography  |
-+=====================================+==============+=============+=========+=================+================+
-|:ref:`mrtrix_multishell_msmt`        |    Yes       |     Yes     |    No   |      No         | Probabilistic  |
-+-------------------------------------+--------------+-------------+---------+-----------------+----------------+
-|:ref:`mrtrix_multishell_msmt_noACT`  |    No        |     Yes     |    No   |      No         | Probabilistic  |
-+-------------------------------------+--------------+-------------+---------+-----------------+----------------+
-|:ref:`mrtrix_singleshell_ss3t`       |    Yes       |     No      |    No   |      Yes        | Probabilistic  |
-+-------------------------------------+--------------+-------------+---------+-----------------+----------------+
-|:ref:`mrtrix_singleshell_ss3t_noACT` |    No        |     No      |    No   |      Yes        | Probabilistic  |
-+-------------------------------------+--------------+-------------+---------+-----------------+----------------+
-|:ref:`amico_noddi`                   |    No        |     Yes     |    No   |      No         |     None       |
-+-------------------------------------+--------------+-------------+---------+-----------------+----------------+
-|:ref:`dsi_studio_gqi`                | Recommended  |     Yes     |   Yes   |    Yes*         | Deterministic  |
-+-------------------------------------+--------------+-------------+---------+-----------------+----------------+
-|:ref:`dipy_mapmri`                   | Recommended  |     Yes     |   Yes   |      No         |   Both         |
-+-------------------------------------+--------------+-------------+---------+-----------------+----------------+
-|:ref:`dipy_3dshore`                  | Recommended  |     Yes     |   Yes   |      No         |   Both         |
-+-------------------------------------+--------------+-------------+---------+-----------------+----------------+
-|:ref:`csdsi_3dshore`                 | Recommended  |     Yes     |   Yes   |      No         |   Both         |
-+-------------------------------------+--------------+-------------+---------+-----------------+----------------+
++-------------------------------------------+-------------+---------+-----------------+----------------+
+| Option                                    | MultiShell  |   DSI   | DTI             |  Tractography  |
++===========================================+=============+=========+=================+================+
+|:ref:`mrtrix_multishell_msmt_ACT-fast`\*   |     Yes     |    No   |      No         | Probabilistic  |
++-------------------------------------------+-------------+---------+-----------------+----------------+
+|:ref:`mrtrix_multishell_msmt_ACT-hsvs`     |     Yes     |    No   |      No         | Probabilistic  |
++-------------------------------------------+-------------+---------+-----------------+----------------+
+|:ref:`mrtrix_multishell_msmt_noACT`        |     Yes     |    No   |      No         | Probabilistic  |
++-------------------------------------------+-------------+---------+-----------------+----------------+
+|:ref:`mrtrix_singleshell_ss3t_noACT`       |     No      |    No   |      Yes        | Probabilistic  |
++-------------------------------------------+-------------+---------+-----------------+----------------+
+|:ref:`mrtrix_singleshell_ss3t_ACT-hsvs`    |     No      |    No   |      Yes        | Probabilistic  |
++-------------------------------------------+-------------+---------+-----------------+----------------+
+|:ref:`mrtrix_singleshell_ss3t_ACT-fast`\*  |     No      |    No   |      Yes        | Probabilistic  |
++-------------------------------------------+-------------+---------+-----------------+----------------+
+|:ref:`amico_noddi`                         |     Yes     |    No   |      No         |     None       |
++-------------------------------------------+-------------+---------+-----------------+----------------+
+|:ref:`dsi_studio_gqi`                      |     Yes     |   Yes   |    Yes*         | Deterministic  |
++-------------------------------------------+-------------+---------+-----------------+----------------+
+|:ref:`dipy_mapmri`                         |     Yes     |   Yes   |      No         |   Both         |
++-------------------------------------------+-------------+---------+-----------------+----------------+
+|:ref:`dipy_3dshore`                        |     Yes     |   Yes   |      No         |   Both         |
++-------------------------------------------+-------------+---------+-----------------+----------------+
+|:ref:`csdsi_3dshore`                       |     Yes     |   Yes   |      No         |   Both         |
++-------------------------------------------+-------------+---------+-----------------+----------------+
+|:ref:`reorient_fslstd`                     |     Yes     |   Yes   |      Yes        |   None         |
++-------------------------------------------+-------------+---------+-----------------+----------------+
 
 \* Not recommended
 
@@ -50,9 +56,7 @@ To use a pre-packaged workflow, simply provide the name from the leftmost column
   $ qsiprep-docker \
       /path/to/bids /path/for/reconstruction/outputs participant \
       --recon_input /output/from/qsiprep \
-      --recon_spec mrtrix_msmt_csd \
-      --output_dir /where/my/reconstructed/data/goes \
-      --analysis_level participant \
+      --recon_spec dsi_studio_gqi \
       --fs-license-file /path/to/license.txt
 
 
@@ -64,72 +68,126 @@ the downstream workflow. The :ref:`recon_workflows` section lists all the
 available workflows and their inputs and outputs.
 
 
-.. _connectivity:
+.. _anat_reqs:
 
-Reconstruction Outputs: Connectivity matrices
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Anatomical Data for Reconstruction Workflows
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Instead of offering a bewildering number of options for constructing connectivity matrices,
-``qsiprep`` will construct as many connectivity matrices as it can given the reconstruction
-methods. It is **highly** recommended that you pick a weighting scheme before you run
-these pipelines and only look at those numbers. If you look at more than one weighting method
-be sure to adjust your statistics for the additional comparisons.
+Some reconstruction workflows require additional anatomical data to work properly.
+This table shows which reconstruction workflows depend on the availibility of 
+anatomical data:
 
-.. _connectivity_atlases:
 
-Atlases
-^^^^^^^
++-----------------------------------------+-------------------+-------------------+--------------+
+| Option                                  |    Req. T1w       |  Req. FreeSurfer  |   Req. SDC   |
++=========================================+===================+===================+==============+
+|:ref:`mrtrix_multishell_msmt_ACT-hsvs`   |       Yes         |       Yes         |    Yes       |
++-----------------------------------------+-------------------+-------------------+--------------+
+|:ref:`mrtrix_multishell_msmt_ACT-fast`   |       Yes         |       No          |    Yes       |
++-----------------------------------------+-------------------+-------------------+--------------+
+|:ref:`mrtrix_multishell_msmt_noACT`      |       No          |       Yes         |    No        |
++-----------------------------------------+-------------------+-------------------+--------------+
+|:ref:`mrtrix_singleshell_ss3t_ACT-hsvs`  |       Yes         |       No          |    No        |
++-----------------------------------------+-------------------+-------------------+--------------+
+|:ref:`mrtrix_singleshell_ss3t_ACT-fast`  |       Yes         |       No          |    No        |
++-----------------------------------------+-------------------+-------------------+--------------+
+|:ref:`mrtrix_singleshell_ss3t_noACT`     |       Yes         |       No          |    No        |
++-----------------------------------------+-------------------+-------------------+--------------+
+|:ref:`amico_noddi`                       |       No          |       No          |    No        |
++-----------------------------------------+-------------------+-------------------+--------------+
+|:ref:`dsi_studio_gqi`                    |       No          |       No          | Recommended  |
++-----------------------------------------+-------------------+-------------------+--------------+
+|:ref:`dipy_mapmri`                       |       No          |       No          | Recommended  |
++-----------------------------------------+-------------------+-------------------+--------------+
+|:ref:`dipy_3dshore`                      |       No          |       No          | Recommended  |
++-----------------------------------------+-------------------+-------------------+--------------+
+|:ref:`csdsi_3dshore`                     |       No          |       No          | Recommended  |
++-----------------------------------------+-------------------+-------------------+--------------+
+|:ref:`reorient_fslstd`                   |       No          |       No          |    No        |
++-----------------------------------------+-------------------+-------------------+--------------+
 
-The following atlases are included in ``qsiprep`` and are used by default in the
-:ref:`preconfigured_workflows`. If you use one of them please be sure to cite
-the relevant publication.
+Data preprocessed by ``qsiprep`` may be missing a preprocessed T1w image if the ``--dwi-only`` flag
+was used. This is not a problem because anatomical data can be introduced during the Reconstruction
+workflows! Suppose you ran FreeSurfer on your data separately (e.g. as part of fmriprep). You can
+specify the directory containing freesurfer outputs with the ``--freesurfer-input`` flag. If you 
+have::
+  
+    derivatives/freesurfer/sub-x
+    derivatives/freesurfer/sub-y
+    derivatives/freesurfer/sub-z
 
- * ``schaefer100x7``, ``schaefer100x17``, ``schaefer200x7``, ``schaefer200x17``,
-   ``schaefer400x7``, ``schaefer400x17``: [Schaefer2017]_, [Yeo2011]_
- * ``brainnetome246``: [Fan2016]_
- * ``aicha384``: [Joliot2015]_
- * ``gordon333``: [Gordon2014]_
- * ``aal116``: [TzourioMazoyer2002]_
- * ``power264``: [Power2011]_
+and from ``qsiprep``::
 
-.. _custom_atlases:
+    derivatives/qsiprep/sub-x
+    derivatives/qsiprep/sub-y
+    derivatives/qsiprep/sub-z
 
-Using custom atlases
-^^^^^^^^^^^^^^^^^^^^
+You can run::
 
-It's possible to use your own atlases provided you can match the format ``qsiprep`` uses to
-read atlases. The ``qsiprep`` atlas set can be downloaded directly from
-`box  <https://upenn.box.com/shared/static/8k17yt2rfeqm3emzol5sa0j9fh3dhs0i.xz>`_.
+  $ qsiprep-docker \
+      derivatives/qsiprep derivatives participant \
+      --recon_input derivatives/qsiprep \
+      --recon_spec mrtrix_multishell_msmt_ACT-hsvs \
+      --freesurfer-input derivatives/freesurfer \
+      --fs-license-file /path/to/license.txt
 
-In this directory there must exist a JSON file called ``atlas_config.json`` containing an
-entry for each atlas you would like included. The format is::
+This will read the FreeSurfer data, align it to the ``qsiprep`` results and use it
+for subsequent reconstruction steps. The ``--freesurfer-input`` flag can be included
+regardless even if the ``--dwi-only`` flag wasn't used. This means two possible
+things can happen
 
-  {
-    "my_custom_atlas": {
-      "file": "file_in_this_directory.nii.gz",
-      "node_names": ["Region1_L", "Region1_R" ... "RegionN_R"],
-      "node_ids": [1, 2, ..., N]
-    }
-    ...
-  }
+If ``qsiprep`` performed anatomical preprocessing
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Where ``"node_names"`` are the text names of the regions in ``"my_custom_atlas"`` and
-``"node_ids"`` are the numbers in the nifti file that correspond to each region. When
-:ref:`custom_reconstruction` you can then inclued ``"my_custom_atlas"`` in the ``"atlases":[]``
-section.
+In most cases human MRI experiments include a T1-weighted anatomical image.
+By default ``qsiprep`` performs some processing steps on this image, 
+including brain extraction and spatial normalization to the MNI152NLin2009cAsym
+template (unless ``--infant`` was specified, then the infant template is used).
 
-The directory containing ``atlas_config.json`` and the atlas nifti files should be mounted in
-the container at ``/atlas/qsirecon_atlases``. If using ``qsiprep-docker`` or
-``qsiprep-singularity`` this can be done with ``--custom-atlases /path/to/my/atlases`` or
-if you're running on your own system (not recommended) you can set the environment variable
-``QSIRECON_ATLAS=/path/to/my/atlases``.
+If a T1w image is available in the input BIDS data and was preprocessed by 
+``qsiprep``, the ``brain.mgz`` image from freesurfer is registered to the 
+AC-PC and DWI-aligned ``desc-preproc_T1w.nii`` image in the ``qsiprep`` outputs.
+The transform from freesurfer native space into alignment with the ``qsiprep`` 
+outputs is achieved by converting ``brain.mgz`` into NIfTI format and adjusting
+the affine matrix such that the images are aligned in world coordinates. This 
+prevents an extra interpolation.
 
-The nifti images should be registered to the
-`MNI152NLin2009cAsym <https://github.com/PennBBL/qsiprep/blob/master/qsiprep/data/mni_1mm_t1w_lps.nii.gz>`_
-included in ``qsiprep``.
-It is essential that your images are in the LPS+ orientation and have the sform zeroed-out
-in the header. **Be sure to check for alignment and orientation** in your outputs.
 
+If ``--dwi-only`` was used
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If ``--dwi-only`` was used, there will be no preprocessed T1w data in the 
+``qsiprep`` results. Instead the DWI images have been aligned to AC-PC 
+as closely as possibly (likely imperfectly). In this case, the FreeSurfer
+skull-stripped ``brain.mgz`` is rigidly registered to ``dwiref`` of each
+preprocessed DWI. The FreeSurfer brain mask is resampled to the grid of
+the DWI. 
+
+If structural connectivity is calculated during the reconstruction workflow
+(or any atlases are specified in the ``"anatomical": []`` section of the 
+workflow's ``.json`` file), the coregistered-to-DWI ``brain.mgz`` image will be 
+normalized to the MNI152NLin2009cAsym template using ``antsRegistration``.
+The reverse transform is used to get parcellations aligned to the DWI.
+
+.. _masking:
+
+How masking is incorporated
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A brain mask is provided as default input to all reconstruction workflows.
+The source of the brain mask depends on available data and user options.
+
+  * If ``qsiprep`` ran normally and the reconstruction workflows are run
+    without ``--dwi-only``, the brain mask estimated by ``antsBrainExtraction``
+    during preprocessing is used.
+  * If no T1w data is available in the ``qsiprep`` outputs and the user 
+    supplies FreeSurfer data with ``--freesurfer-input``, the brain mask 
+    created by FreeSurfer is used.
+  * If you specify ``--dwi-only`` when ``qsiprep`` performs the reconstruction
+    OR if no preprocessed T1w images (either via ``qsiprep`` outputs or 
+    ``--freesurfer-input``) are available, a mask is estimated based on the
+    preprocessed DWI data. This is the least robust option and should be 
+    avoided if at all possible.
 
 
 .. _preconfigured_workflows:
@@ -145,7 +203,7 @@ Pre-configured recon_workflows
     * the CSD algorithm used in dwi2fod (msmt_csd or ss3t_csd)
     * whether a T1w-based tissue segmentation is used during tractography
 
-  In the ``*_noact`` versions of the pipelines, no T1w-based segmentation is used during
+  In the ``*_noACT`` versions of the pipelines, no T1w-based segmentation is used during
   tractography. Otherwise, cropping is performed at the GM/WM interface, along with backtracking.
 
   In all pipelines, tractography is performed using
@@ -155,15 +213,31 @@ Pre-configured recon_workflows
   structural connectivity matrix.
 
 
+.. warning::
+  We don't recommend using ACT with FAST segmentations. The full benefits of ACT
+  require very precise tissue boundaries and FAST just doesn't do this reliably
+  enough. We strongly recommend the ``hsvs`` segmentation if you're going to 
+  use ACT. Note that this requires ``--freesurfer-input``
 
-.. _mrtrix_multishell_msmt:
+.. _mrtrix_multishell_msmt_ACT-hsvs:
 
-``mrtrix_multishell_msmt``
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+``mrtrix_multishell_msmt_ACT-hsvs``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 This workflow uses the ``msmt_csd`` algorithm [Jeurissen2014]_ to estimate FODs for white matter,
 gray matter and cerebrospinal fluid using *multi-shell acquisitions*. The white matter FODs are
 used for tractography and the T1w segmentation is used for anatomical constraints [Smith2012]_.
+The T1w segmentation uses the hybrid surface volume segmentation (hsvs) [Smith2020]_ and 
+requires ``--freesurfer-input``.
+
+
+.. _mrtrix_multishell_msmt_ACT-fast:
+
+``mrtrix_multishell_msmt_ACT-fast``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Identical to :ref:`mrtrix_multishell_msmt_ACT-hsvs` except FSL's FAST is used for 
+tissue segmentation. This workflow is not recommended.
 
 
 .. _mrtrix_multishell_msmt_noACT:
@@ -176,14 +250,24 @@ gray matter and cerebrospinal fluid using *multi-shell acquisitions*. The white 
 used for tractography with no T1w-based anatomical constraints.
 
 
-.. _mrtrix_singleshell_ss3t:
+.. _mrtrix_singleshell_ss3t_ACT-hsvs:
 
-``mrtrix_singleshell_ss3t``
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
+``mrtrix_singleshell_ss3t_ACT-hsvs``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 This workflow uses the ``ss3t_csd_beta1`` algorithm [Dhollander2016]_ to estimate FODs for white
 matter, and cerebrospinal fluid using *single shell (DTI) acquisitions*. The white matter FODs are
 used for tractography and the T1w segmentation is used for anatomical constraints [Smith2012]_.
+The T1w segmentation uses the hybrid surface volume segmentation (hsvs) [Smith2020]_ and 
+requires ``--freesurfer-input``.
+
+.. _mrtrix_singleshell_ss3t_ACT-fast:
+
+``mrtrix_multishell_msmt_ACT-fast``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Identical to :ref:`mrtrix_singleshell_ss3t_ACT-hsvs` except FSL's FAST is used for 
+tissue segmentation. This workflow is not recommended.
 
 .. _mrtrix_singleshell_ss3t_noACT:
 
@@ -193,6 +277,7 @@ used for tractography and the T1w segmentation is used for anatomical constraint
 This workflow uses the ``ss3t_csd_beta1`` algorithm [Dhollander2016]_ to estimate FODs for white
 matter, and cerebrospinal fluid using *single shell (DTI) acquisitions*. The white matter FODs are
 used for tractography with no T1w-based anatomical constraints.
+
 
 .. _amico_noddi:
 
@@ -241,6 +326,15 @@ The ODFs are saved in DSI Studio format and tractography is run identically to t
 This uses the BrainSuite 3dSHORE basis in a Dipy reconstruction. Much like :ref:`dipy_mapmri`,
 a slew of anisotropy scalars are estimated. Here the :ref:`dsi_studio_gqi` fiber tracking is
 again run on the 3dSHORE-estimated ODFs.
+
+.. _reorient_fslstd:
+
+``reorient_fslstd``
+^^^^^^^^^^^^^^^^^^^
+
+Reorients the ``qsiprep`` preprocessed DWI and bval/bvec to the standard FSL orientation.
+This can be useful if FSL tools will be applied outside of ``qsiprep``.
+
 
 .. _csdsi_3dshore:
 
@@ -345,11 +439,9 @@ Assuming this file is called ``qgi_scalar_export.json`` and you've installed
 ``qsiprep-container`` you can execute this pipeline with::
 
   $ qsiprep-docker \
-      --bids_dir /path/to/bids \
+      /path/to/bids /where/my/reconstructed/data/goes participant \
       --recon_input /output/from/qsiprep \
       --recon_spec gqi_scalar_export.json \
-      --output_dir /where/my/reconstructed/data/goes \
-      --analysis_level participant \
       --fs-license-file /path/to/license.txt
 
 
@@ -371,3 +463,70 @@ two ways
 
 Some of the workflows require a warp to a template. For example, connectivity_ will use
 this warp to transform atlases into T1w space for calculating a connectivity matrix.
+
+
+.. _connectivity:
+
+Reconstruction Outputs: Connectivity matrices
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Instead of offering a bewildering number of options for constructing connectivity matrices,
+``qsiprep`` will construct as many connectivity matrices as it can given the reconstruction
+methods. It is **highly** recommended that you pick a weighting scheme before you run
+these pipelines and only look at those numbers. If you look at more than one weighting method
+be sure to adjust your statistics for the additional comparisons.
+
+.. _connectivity_atlases:
+
+Atlases
+^^^^^^^
+
+The following atlases are included in ``qsiprep`` and are used by default in the
+:ref:`preconfigured_workflows`. If you use one of them please be sure to cite
+the relevant publication.
+
+ * ``schaefer100x7``, ``schaefer100x17``, ``schaefer200x7``, ``schaefer200x17``,
+   ``schaefer400x7``, ``schaefer400x17``: [Schaefer2017]_, [Yeo2011]_
+ * ``brainnetome246``: [Fan2016]_
+ * ``aicha384``: [Joliot2015]_
+ * ``gordon333``: [Gordon2014]_
+ * ``aal116``: [TzourioMazoyer2002]_
+ * ``power264``: [Power2011]_
+
+.. _custom_atlases:
+
+Using custom atlases
+^^^^^^^^^^^^^^^^^^^^
+
+It's possible to use your own atlases provided you can match the format ``qsiprep`` uses to
+read atlases. The ``qsiprep`` atlas set can be downloaded directly from
+`box  <https://upenn.box.com/shared/static/8k17yt2rfeqm3emzol5sa0j9fh3dhs0i.xz>`_.
+
+In this directory there must exist a JSON file called ``atlas_config.json`` containing an
+entry for each atlas you would like included. The format is::
+
+  {
+    "my_custom_atlas": {
+      "file": "file_in_this_directory.nii.gz",
+      "node_names": ["Region1_L", "Region1_R" ... "RegionN_R"],
+      "node_ids": [1, 2, ..., N]
+    }
+    ...
+  }
+
+Where ``"node_names"`` are the text names of the regions in ``"my_custom_atlas"`` and
+``"node_ids"`` are the numbers in the nifti file that correspond to each region. When
+:ref:`custom_reconstruction` you can then inclued ``"my_custom_atlas"`` in the ``"atlases":[]``
+section.
+
+The directory containing ``atlas_config.json`` and the atlas nifti files should be mounted in
+the container at ``/atlas/qsirecon_atlases``. If using ``qsiprep-docker`` or
+``qsiprep-singularity`` this can be done with ``--custom-atlases /path/to/my/atlases`` or
+if you're running on your own system (not recommended) you can set the environment variable
+``QSIRECON_ATLAS=/path/to/my/atlases``.
+
+The nifti images should be registered to the
+`MNI152NLin2009cAsym <https://github.com/PennBBL/qsiprep/blob/master/qsiprep/data/mni_1mm_t1w_lps.nii.gz>`_
+included in ``qsiprep``.
+It is essential that your images are in the LPS+ orientation and have the sform zeroed-out
+in the header. **Be sure to check for alignment and orientation** in your outputs.
