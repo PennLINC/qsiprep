@@ -1,4 +1,4 @@
-FROM pennbbl/qsiprep_build:22.2.7
+FROM pennbbl/qsiprep_build:22.2.8
 
 # WORKDIR /root/
 # # Installing qsiprep

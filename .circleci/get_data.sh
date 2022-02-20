@@ -6,7 +6,7 @@ fi
 # Edit these for project-wide testing
 WGET="wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q"
 LOCAL_PATCH=/Users/mcieslak/projects/qsiprep/qsiprep
-IMAGE=pennbbl/qsiprep:latest
+IMAGE=pennbbl/qsiprep:unstable
 
 # Determine if we're in a CI test
 if [[ "${CIRCLECI}" = "true" ]]; then
@@ -34,7 +34,7 @@ run_qsiprep_cmd () {
     QSIPREP_RUN="/usr/local/miniconda/bin/qsiprep ${bids_dir} ${output_dir} participant"
   else
     # Otherwise we're going to use docker from the outside
-    QSIPREP_RUN="qsiprep-docker ${bids_dir} ${output_dir} participant -e qsiprep_DEV 1 -u $(id -u)"
+    QSIPREP_RUN="qsiprep-docker ${bids_dir} ${output_dir} participant -e qsiprep_DEV 1 -u $(id -u) -i ${IMAGE}"
     CFG=$(printenv NIPYPE_CONFIG)
     if [[ -n "${CFG}" ]]; then
         QSIPREP_RUN="${QSIPREP_RUN} --config ${CFG}"
