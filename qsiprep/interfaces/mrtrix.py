@@ -21,7 +21,7 @@ from nipype import logging
 from nipype.utils.filemanip import fname_presuffix, split_filename, which
 from nipype.interfaces.base import (
     traits, TraitedSpec, BaseInterfaceInputSpec, File, SimpleInterface, InputMultiObject,
-    isdefined, CommandLineInputSpec)
+    isdefined, CommandLineInputSpec, CommandLine, )
 from nipype.interfaces.mrtrix3 import Generate5tt, ResponseSD, MRConvert
 from nipype.interfaces.mrtrix3.utils import Generate5ttInputSpec
 from nipype.interfaces.mrtrix3.base import MRTrix3Base, MRTrix3BaseInputSpec
@@ -206,15 +206,37 @@ class GenerateMasked5ttInputSpec(Generate5ttInputSpec):
         'fsl',
         'gif',
         'freesurfer',
+        'hsvs',
         argstr='%s',
         position=0,
         mandatory=True,
         desc='tissue segmentation algorithm')
-    in_file = File(
-        exists=True, argstr='%s', mandatory=True, position=1, desc='input image')
+    in_file = traits.Either(
+        File(exists=True), 
+        traits.Directory(exists=True),
+        argstr='%s',
+        mandatory=True,
+        position=1,
+        desc='input T1w image or FreeSurfer directory')
     out_file = File(
-        argstr='%s', genfile=True, position=2, desc='output image')
+        argstr='%s', 
+        genfile=True, 
+        position=2, 
+        desc='output image')
     mask = File(exists=True, argstr='-mask %s')
+    amygdala_hipppocampi_subcortical_gm = traits.Bool(
+        argstr="-sgm_amyg_hipp")
+    white_stem = traits.Bool(argstr="-white_stem")
+    thalami_method = traits.Enum(
+        "nuclei",
+        "first",
+        "aseg", 
+        argstr="-thalami %s")
+    hippocampi_method = traits.Enum(
+        "subfields",
+        "first",
+        "aseg",
+        argstr="-hippocampi %s")
 
 
 class GenerateMasked5tt(Generate5tt):
@@ -1082,3 +1104,62 @@ class MRDeGibbs(SeriesPreprocReport, MRTrix3Base):
         )
 
         self._calculate_nmse(input_dwi, denoised_nii)
+
+
+class _ITKTransformConvertInputSpec(CommandLineInputSpec):
+    in_transform = traits.File(
+        exists=True,
+        argstr="%s",
+        mandatory=True,
+        position=0)
+    operation = traits.Enum(
+        "itk_import", 
+        default="itk_import", 
+        usedefault=True, 
+        posision=1,
+        argstr="%s")
+    out_transform = traits.File(
+        argstr="%s",
+        name_source='in_transform',
+        name_template='%s.txt',
+        keep_extension=False,
+        position=-1)
+
+
+class _ITKTransformConvertOutputSpec(TraitedSpec):
+    out_transform = traits.File(exists=True)
+
+
+class ITKTransformConvert(CommandLine):
+    _cmd = "transformconvert"
+    input_spec = _ITKTransformConvertInputSpec
+    output_spec = _ITKTransformConvertOutputSpec
+
+
+class _TransformHeaderInputSpec(CommandLineInputSpec):
+    transform_file = traits.File(
+        exists=True, 
+        position=0, 
+        mandatory=True,
+        argstr="-linear %s")
+    in_image = traits.File(
+        exists=True, 
+        mandatory=True, 
+        position=1,
+        argstr="%s")
+    out_image = traits.File(
+        argstr="%s",
+        name_source="in_image",
+        name_template="%s_hdrxform.nii.gz",
+        keep_extension=False,
+        position=-1)
+
+
+class _TransformHeaderOutputSpec(TraitedSpec):
+    out_image = File(exists=True)
+
+
+class TransformHeader(CommandLine):
+    input_spec = _TransformHeaderInputSpec
+    output_spec = _TransformHeaderOutputSpec
+    _cmd = "mrtransform -strides -1,-2,3"

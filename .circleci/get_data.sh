@@ -1,6 +1,11 @@
+
+if [[ "$SHELL" =~ zsh ]]; then
+  setopt SH_WORD_SPLIT
+fi
+
 # Edit these for project-wide testing
 WGET="wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q"
-LOCAL_PATCH=/home/mcieslak/projects/qsiprep/qsiprep
+LOCAL_PATCH=/Users/mcieslak/projects/qsiprep/qsiprep
 IMAGE=pennbbl/qsiprep:latest
 
 # Determine if we're in a CI test
@@ -14,8 +19,8 @@ if [[ "${CIRCLECI}" = "true" ]]; then
   fi
 else
   IN_CI="false"
-  NTHREADS=9
-  OMP_NTHREADS=8
+  NTHREADS=1
+  OMP_NTHREADS=2
 fi
 export IN_CI NTHREADS OMP_NTHREADS
 
@@ -402,9 +407,9 @@ setup_dir(){
     DIR=$1
     mkdir -p ${DIR}/derivatives
     mkdir -p ${DIR}/work
-    setfacl -d -m group:$(id -gn):rwx ${DIR}/derivatives && \
-        setfacl -m group:$(id -gn):rwx ${DIR}/derivatives
-    setfacl -d -m group:$(id -gn):rwx ${DIR}/work && \
-        setfacl -m group:$(id -gn):rwx ${DIR}/work
+    # setfacl -d -m group:$(id -gn):rwx ${DIR}/derivatives && \
+    #     setfacl -m group:$(id -gn):rwx ${DIR}/derivatives
+    # setfacl -d -m group:$(id -gn):rwx ${DIR}/work && \
+    #     setfacl -m group:$(id -gn):rwx ${DIR}/work
 
 }

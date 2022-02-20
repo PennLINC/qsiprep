@@ -20,7 +20,7 @@ Inputs:
  - qsiprep multi shell results (data/DSDTI_fmap)
 
 DOC
-
+set +e
 source ./get_data.sh
 TESTDIR=${PWD}
 get_config_data ${TESTDIR}

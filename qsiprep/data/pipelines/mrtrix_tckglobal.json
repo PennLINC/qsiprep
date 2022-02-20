@@ -2,7 +2,7 @@
   "name": "mrtrix_msmt",
   "space": "T1w",
   "atlases": ["schaefer100x7", "schaefer100x17", "schaefer200x7", "schaefer200x17", "schaefer400x7", "schaefer400x17", "brainnetome246", "aicha384", "gordon333", "aal116", "power264"],
-  "anatomical": ["mrtrix_5tt"],
+  "anatomical": [],
   "nodes": [
     {
       "name": "msmt_csd",
@@ -13,7 +13,7 @@
       "parameters": {
         "mtnormalize": true,
         "response": {
-          "algorithm": "msmt_5tt"
+          "algorithm": "dhollander"
         },
         "fod": {
           "algorithm": "msmt_csd",

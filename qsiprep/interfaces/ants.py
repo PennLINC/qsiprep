@@ -158,3 +158,34 @@ class _ANTsBBROutputSpec(TraitedSpec):
 class ANTsBBR(SimpleInterface):
     input_spec = _ANTsBBRInputSpec
     output_spec = _ANTsBBROutputSpec
+
+
+class _ConvertTransformFileInputSpec(CommandLineInputSpec):
+    dimension = traits.Enum(
+        (3, 2),
+        default= 3,
+        usedefault=True,
+        argstr="%d",
+        position=0)
+    in_transform = traits.File(
+        exists=True,
+        argstr="%s",
+        mandatory=True,
+        position=1)
+    out_transform = traits.File(
+        argstr="%s",
+        name_source='in_transform',
+        name_template='%s.txt',
+        keep_extension=False,
+        position=2)
+
+
+class _ConvertTransformFileOutputSpec(TraitedSpec):
+    out_transform = traits.File(exists=True)
+
+
+class ConvertTransformFile(CommandLine):
+    _cmd = "ConvertTransformFile"
+    input_spec = _ConvertTransformFileInputSpec
+    output_spec = _ConvertTransformFileOutputSpec
+

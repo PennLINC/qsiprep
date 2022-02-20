@@ -16,14 +16,14 @@ from qsiprep.interfaces.dsi_studio import (DSIStudioCreateSrc, DSIStudioGQIRecon
 
 import logging
 from qsiprep.interfaces.bids import ReconDerivativesDataSink
-from .interchange import input_fields
+from .interchange import recon_workflow_input_fields
 from ...engine import Workflow
 from ...interfaces.reports import ReconPeaksReport, ConnectivityReport
 
 LOGGER = logging.getLogger('nipype.interface')
 
 
-def init_dsi_studio_recon_wf(omp_nthreads, has_transform, name="dsi_studio_recon",
+def init_dsi_studio_recon_wf(omp_nthreads, available_anatomical_data, name="dsi_studio_recon",
                              output_suffix="", params={}):
     """Reconstructs diffusion data using DSI Studio.
 
@@ -45,7 +45,7 @@ def init_dsi_studio_recon_wf(omp_nthreads, has_transform, name="dsi_studio_recon
             Default 1.25. Distance to sample EAP at.
 
     """
-    inputnode = pe.Node(niu.IdentityInterface(fields=input_fields + ['odf_rois']),
+    inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields + ['odf_rois']),
                         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(
@@ -65,10 +65,6 @@ Diffusion orientation distribution functions (ODFs) were reconstructed using
 generalized q-sampling imaging (GQI, @yeh2010gqi) with a ratio of mean diffusion
 distance of %02f.""" % romdd
 
-    # Resample anat mask
-    resample_mask = pe.Node(
-        afni.Resample(outputtype='NIFTI_GZ', resample_mode="NN"), name='resample_mask')
-
     # Make a visual report of the model
     plot_peaks = pe.Node(ReconPeaksReport(subtract_iso=True), name='plot_peaks')
     ds_report_peaks = pe.Node(
@@ -79,7 +75,7 @@ distance of %02f.""" % romdd
         run_without_submitting=True)
 
     # Plot targeted regions
-    if has_transform:
+    if available_anatomical_data['has_qsiprep_t1w_transforms']:
         ds_report_odfs = pe.Node(
             ReconDerivativesDataSink(extension='.png',
                                      desc="GQIODF",
@@ -92,15 +88,13 @@ distance of %02f.""" % romdd
         (inputnode, create_src, [('dwi_file', 'input_nifti_file'),
                                  ('bval_file', 'input_bvals_file'),
                                  ('bvec_file', 'input_bvecs_file')]),
-        (inputnode, resample_mask, [('t1_brain_mask', 'in_file'),
-                                    ('dwi_file', 'master')]),
         (create_src, gqi_recon, [('output_src', 'input_src_file')]),
-        (resample_mask, gqi_recon, [('out_file', 'mask')]),
+        (inputnode, gqi_recon, [('dwi_mask', 'mask')]),
         (gqi_recon, outputnode, [('output_fib', 'fibgz')]),
         (gqi_recon, plot_peaks, [('output_fib', 'fib_file')]),
         (inputnode, plot_peaks, [('dwi_ref', 'background_image'),
-                                 ('odf_rois', 'odf_rois')]),
-        (resample_mask, plot_peaks, [('out_file', 'mask_file')]),
+                                 ('odf_rois', 'odf_rois'),
+                                 ('dwi_mask', 'mask_file')]),
         (plot_peaks, ds_report_peaks, [('out_report', 'in_file')])
     ])
 
@@ -118,7 +112,7 @@ distance of %02f.""" % romdd
     return workflow
 
 
-def init_dsi_studio_tractography_wf(omp_nthreads, has_transform, name="dsi_studio_tractography",
+def init_dsi_studio_tractography_wf(omp_nthreads, available_anatomical_data, name="dsi_studio_tractography",
                                     params={}, output_suffix=""):
     """Calculate streamline-based connectivity matrices using DSI Studio.
 
@@ -179,7 +173,7 @@ def init_dsi_studio_tractography_wf(omp_nthreads, has_transform, name="dsi_studi
     """
     inputnode = pe.Node(
         niu.IdentityInterface(
-            fields=input_fields + ['fibgz']),
+            fields=recon_workflow_input_fields + ['fibgz']),
         name="inputnode")
     outputnode = pe.Node(niu.IdentityInterface(fields=['trk_file', 'fibgz']),
                          name="outputnode")
@@ -200,7 +194,7 @@ def init_dsi_studio_tractography_wf(omp_nthreads, has_transform, name="dsi_studi
     return workflow
 
 
-def init_dsi_studio_connectivity_wf(omp_nthreads, has_transform, name="dsi_studio_connectivity",
+def init_dsi_studio_connectivity_wf(omp_nthreads, available_anatomical_data, name="dsi_studio_connectivity",
                                     params={}, output_suffix=""):
     """Calculate streamline-based connectivity matrices using DSI Studio.
 
@@ -259,7 +253,7 @@ def init_dsi_studio_connectivity_wf(omp_nthreads, has_transform, name="dsi_studi
     """
     inputnode = pe.Node(
         niu.IdentityInterface(
-            fields=input_fields + ['fibgz', 'trk_file', 'atlas_configs']),
+            fields=recon_workflow_input_fields + ['fibgz', 'trk_file', 'atlas_configs']),
         name="inputnode")
     outputnode = pe.Node(niu.IdentityInterface(fields=['matfile']),
                          name="outputnode")
@@ -292,7 +286,7 @@ def init_dsi_studio_connectivity_wf(omp_nthreads, has_transform, name="dsi_studi
     return workflow
 
 
-def init_dsi_studio_export_wf(omp_nthreads, has_transform, name="dsi_studio_export",
+def init_dsi_studio_export_wf(omp_nthreads, available_anatomical_data, name="dsi_studio_export",
                               params={}, output_suffix=""):
     """Export scalar maps from a DSI Studio fib file into NIfTI files with correct headers.
 
@@ -319,7 +313,7 @@ def init_dsi_studio_export_wf(omp_nthreads, has_transform, name="dsi_studio_expo
     """
     inputnode = pe.Node(
         niu.IdentityInterface(
-            fields=input_fields + ['fibgz']),
+            fields=recon_workflow_input_fields + ['fibgz']),
         name="inputnode")
     scalar_names = ['gfa', 'fa0', 'fa1', 'fa2', 'iso', 'dti_fa', 'md', 'rd', 'ad']
     outputnode = pe.Node(

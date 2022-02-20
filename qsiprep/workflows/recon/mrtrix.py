@@ -14,7 +14,7 @@ from ...interfaces.reports import ReconPeaksReport, ConnectivityReport
 from qsiprep.interfaces.mrtrix import (
     EstimateFOD, SS3TEstimateFOD, MRTrixIngress, SS3TDwi2Response, GlobalTractography,
     MRTrixAtlasGraph, SIFT2, TckGen, MTNormalize)
-from .interchange import input_fields
+from .interchange import recon_workflow_input_fields
 from ...engine import Workflow
 
 LOGGER = logging.getLogger('nipype.interface')
@@ -28,7 +28,7 @@ CITATIONS = {
 }
 
 
-def init_mrtrix_csd_recon_wf(omp_nthreads, has_transform, name="mrtrix_recon",
+def init_mrtrix_csd_recon_wf(omp_nthreads, available_anatomical_data, name="mrtrix_recon",
                              output_suffix="", params={}):
     """Create FOD images for WM, GM and CSF.
 
@@ -38,6 +38,13 @@ def init_mrtrix_csd_recon_wf(omp_nthreads, has_transform, name="mrtrix_recon",
     Inputs
 
         *Default qsiprep inputs*
+
+        qsiprep_5tt_hsvs
+            A hybrid surface volume segmentation 5tt image aligned with the 
+            QSIPrep T1w
+        
+        qsiprep_5tt_fast
+            A FSL-FAST-based 5tt image aligned with the QSIPrep T1w image
 
     Outputs
 
@@ -70,7 +77,7 @@ def init_mrtrix_csd_recon_wf(omp_nthreads, has_transform, name="mrtrix_recon",
 
 
     """
-    inputnode = pe.Node(niu.IdentityInterface(fields=input_fields + ['odf_rois']),
+    inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields + ['odf_rois']),
                         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(
@@ -95,6 +102,7 @@ def init_mrtrix_csd_recon_wf(omp_nthreads, has_transform, name="mrtrix_recon",
         desc += 'Single-tissue '
     else:
         desc += 'Multi-tissue '
+    LOGGER.info("Response configuration: %s", response)
 
     desc += """\
 fiber response functions were estimated using the {} algorithm.
@@ -118,12 +126,19 @@ FODs were estimated via constrained spherical deconvolution
     run_mtnormalize = params.get('mtnormalize', True) and using_multitissue
 
     create_mif = pe.Node(MRTrixIngress(), name='create_mif')
+    method_5tt = response.pop("method_5tt", "fast")
     # Use dwi2response from 3Tissue for updated dhollander
     estimate_response = pe.Node(SS3TDwi2Response(**response), 'estimate_response')
 
     if response_algorithm == 'msmt_5tt':
-        workflow.connect([
-            (inputnode, estimate_response, [('mrtrix_5tt', 'mtt_file')])])
+        if method_5tt == "hsvs":
+            workflow.connect([
+                (inputnode, estimate_response, [('qsiprep_5tt_hsvs', 'mtt_file')])])
+        elif method_5tt == "fast":
+            workflow.connect([
+                (inputnode, estimate_response, [('qsiprep_5tt_fast', 'mtt_file')])])
+        else:
+            raise Exception("Unrecognized 5tt method: " + method_5tt)
 
     if fod_algorithm in ('msmt_csd', 'csd'):
         estimate_fod = pe.Node(EstimateFOD(**fod), 'estimate_fod')
@@ -144,7 +159,7 @@ A single-shell-optimized multi-tissue CSD was performed using MRtrix3Tissue
         run_without_submitting=True)
 
     # Plot targeted regions
-    if has_transform:
+    if available_anatomical_data['has_qsiprep_t1w_transforms']:
         ds_report_odfs = pe.Node(
             ReconDerivativesDataSink(extension='.png',
                                      desc="wmFOD",
@@ -273,7 +288,7 @@ A single-shell-optimized multi-tissue CSD was performed using MRtrix3Tissue
     return workflow
 
 
-def init_global_tractography_wf(omp_nthreads, has_transform, name="mrtrix_recon",
+def init_global_tractography_wf(omp_nthreads, available_anatomical_data, name="mrtrix_recon",
                                 output_suffix="", params={}):
     """Run multi-shell, multi-tissue global tractography
 
@@ -303,7 +318,7 @@ def init_global_tractography_wf(omp_nthreads, has_transform, name="mrtrix_recon"
 
     """
     inputnode = pe.Node(
-        niu.IdentityInterface(fields=input_fields + ['gm_txt', 'wm_txt', 'csf_txt']),
+        niu.IdentityInterface(fields=recon_workflow_input_fields + ['gm_txt', 'wm_txt', 'csf_txt']),
         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(
@@ -375,7 +390,7 @@ def init_global_tractography_wf(omp_nthreads, has_transform, name="mrtrix_recon"
     return workflow
 
 
-def init_mrtrix_tractography_wf(omp_nthreads, has_transform, name="mrtrix_tracking",
+def init_mrtrix_tractography_wf(omp_nthreads, available_anatomical_data, name="mrtrix_tracking",
                                 output_suffix="", params={}):
     """Run tractography
 
@@ -399,7 +414,7 @@ def init_mrtrix_tractography_wf(omp_nthreads, has_transform, name="mrtrix_tracki
 
     """
     inputnode = pe.Node(
-        niu.IdentityInterface(fields=input_fields + ['fod_sh_mif']),
+        niu.IdentityInterface(fields=recon_workflow_input_fields + ['fod_sh_mif']),
         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(fields=['tck_file', 'sift_weights']),
@@ -424,8 +439,16 @@ def init_mrtrix_tractography_wf(omp_nthreads, has_transform, name="mrtrix_tracki
             ('fod_sh_mif', 'seed_dynamic')]),
         (tracking, outputnode, [("out_file", "tck_file")])])
 
+    # Which 5tt image should be used?
+    method_5tt = params.get("method_5tt", "hsvs")
     if use_5tt:
-        workflow.connect(inputnode, 'mrtrix_5tt', tracking, 'act_file')
+        if method_5tt == "hsvs":
+            connect_5tt = "qsiprep_5tt_hsvs"
+        elif method_5tt == "fast":
+            connect_5tt = 'qsiprep_5tt_fast'
+        else:
+            raise Exception("Unrecognized 5tt method: " + method_5tt)
+        workflow.connect(inputnode, connect_5tt, tracking, 'act_file')
 
     if use_sift2:
         tck_sift2 = pe.Node(SIFT2(**sift_params), name="tck_sift2")
@@ -445,7 +468,7 @@ def init_mrtrix_tractography_wf(omp_nthreads, has_transform, name="mrtrix_tracki
                 run_without_submitting=True)
             workflow.connect(outputnode, 'sift_weights', ds_sift_weights, 'in_file')
         if use_5tt:
-            workflow.connect(inputnode, "mrtrix_5tt", tck_sift2, "act_file")
+            workflow.connect(inputnode, connect_5tt, tck_sift2, "act_file")
 
     if output_suffix:
         ds_tck_file = pe.Node(
@@ -459,7 +482,7 @@ def init_mrtrix_tractography_wf(omp_nthreads, has_transform, name="mrtrix_tracki
     return workflow
 
 
-def init_mrtrix_connectivity_wf(omp_nthreads, has_transform, name="mrtrix_connectiity",
+def init_mrtrix_connectivity_wf(omp_nthreads, available_anatomical_data, name="mrtrix_connectiity",
                                 params={}, output_suffix=""):
     """Runs ``tck2connectome`` on a ``tck`` file.
 
@@ -476,7 +499,7 @@ def init_mrtrix_connectivity_wf(omp_nthreads, has_transform, name="mrtrix_connec
     """
     inputnode = pe.Node(
         niu.IdentityInterface(
-            fields=input_fields + ['tck_file', 'sift_weights', 'atlas_configs']),
+            fields=recon_workflow_input_fields + ['tck_file', 'sift_weights', 'atlas_configs']),
         name="inputnode")
     outputnode = pe.Node(niu.IdentityInterface(fields=['matfile']),
                          name="outputnode")

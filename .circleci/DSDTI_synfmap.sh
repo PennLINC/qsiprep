@@ -17,6 +17,7 @@ Inputs:
  - DSDTI BIDS data (data/DSDTI)
 
 DOC
+set +e
 
 source ./get_data.sh
 TESTDIR=${PWD}
@@ -36,6 +37,7 @@ QSIPREP_CMD=$(run_qsiprep_cmd ${BIDS_INPUT_DIR} ${OUTPUT_DIR})
 
 # CRITICAL: delete the fieldmap data
 rm -rf data/DSDTI/sub-PNC/fmap
+
 
 ${QSIPREP_CMD} \
 	-w ${TEMPDIR} \

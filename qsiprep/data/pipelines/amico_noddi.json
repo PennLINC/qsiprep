@@ -1,6 +1,6 @@
-{ "description": "Reorients DWI, bvecs and mask into fsl standard orientation",
+{ "description": "Runs the AMICO implementation of NODDI",
   "space": "T1w",
-  "name": "reorient2fslstd",
+  "name": "amico_noddi",
   "atlases": [],
   "nodes": [
     {

@@ -9,7 +9,7 @@ import logging
 import nipype.pipeline.engine as pe
 from nipype.interfaces import afni, utility as niu
 from qsiprep.interfaces.bids import ReconDerivativesDataSink
-from .interchange import input_fields
+from .interchange import recon_workflow_input_fields
 from ...engine import Workflow
 from ...interfaces.amico import NODDI
 from ...interfaces.reports import ReconPeaksReport
@@ -18,7 +18,7 @@ from ...interfaces.converters import NODDItoFIBGZ
 LOGGER = logging.getLogger('nipype.interface')
 
 
-def init_amico_noddi_fit_wf(omp_nthreads, has_transform,
+def init_amico_noddi_fit_wf(omp_nthreads, available_anatomical_data,
                             name="amico_noddi_recon",
                             output_suffix="", params={}):
     """Reconstruct EAPs, ODFs, using 3dSHORE (brainsuite-style basis set).
@@ -43,7 +43,7 @@ def init_amico_noddi_fit_wf(omp_nthreads, has_transform,
 
     """
 
-    inputnode = pe.Node(niu.IdentityInterface(fields=input_fields + ['odf_rois']),
+    inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields + ['odf_rois']),
                         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(
@@ -55,8 +55,6 @@ def init_amico_noddi_fit_wf(omp_nthreads, has_transform,
     desc = """NODDI Reconstruction
 
 : """
-    resample_mask = pe.Node(
-        afni.Resample(outputtype='NIFTI_GZ', resample_mode="NN"), name='resample_mask')
     noddi_fit = pe.Node(NODDI(**params), name="recon_noddi")
     desc += """\
 The NODDI model (@noddi) was fit using the AMICO implementation (@amico).
@@ -78,10 +76,8 @@ diffusivity.""" % (params['dPar'], params['dIso'])
     workflow.connect([
         (inputnode, noddi_fit, [('dwi_file', 'dwi_file'),
                                 ('bval_file', 'bval_file'),
-                                ('bvec_file', 'bvec_file')]),
-        (inputnode, resample_mask, [('t1_brain_mask', 'in_file'),
-                                    ('dwi_file', 'master')]),
-        (resample_mask, noddi_fit, [('out_file', 'mask_file')]),
+                                ('bvec_file', 'bvec_file'),
+                                ('dwi_mask', 'mask_file')]),
         (noddi_fit, outputnode, [
             ('directions_image', 'directions_image'),
             ('icvf_image', 'icvf_image'),
@@ -95,10 +91,10 @@ diffusivity.""" % (params['dPar'], params['dIso'])
             ('od_image', 'od_file'),
             ('isovf_image', 'isovf_file'),
             ]),
-        (resample_mask, convert_to_fibgz, [('out_file', 'mask_file')]),
+        (inputnode, convert_to_fibgz, [('dwi_mask', 'mask_file')]),
         (convert_to_fibgz, plot_peaks, [('fibgz_file', 'fib_file')]),
         (convert_to_fibgz, outputnode, [('fibgz_file', 'fibgz')]),
-        (resample_mask, plot_peaks, [('out_file', 'mask_file')]),
+        (inputnode, plot_peaks, [('dwi_mask', 'mask_file')]),
         (noddi_fit, plot_peaks, [('icvf_image', 'background_image')]),
         (plot_peaks, ds_report_peaks, [('out_report', 'in_file')]),
         ])

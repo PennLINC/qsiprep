@@ -20,7 +20,7 @@ Inputs:
  - qsiprep multi shell results (data/DSDTI_fmap)
 
 DOC
-
+set +e
 source ./get_data.sh
 TESTDIR=${PWD}
 get_config_data ${TESTDIR}
@@ -43,7 +43,7 @@ ${QSIPREP_CMD} \
 	 --recon-input ${BIDS_INPUT_DIR} \
 	 --sloppy \
      --stop-on-first-crash \
-	 --recon-spec mrtrix_multishell_msmt \
+	 --recon-spec mrtrix_multishell_msmt_ACT-fast \
 	 --recon-only \
 	 -vv
 
