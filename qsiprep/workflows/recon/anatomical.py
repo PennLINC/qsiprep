@@ -26,6 +26,8 @@ from ...interfaces.mrtrix import (GenerateMasked5tt, ITKTransformConvert,
     TransformHeader)
 from ...interfaces.ants import ConvertTransformFile
 from ...interfaces.freesurfer import find_fs_path
+from ...interfaces.gradients import ExtractB0s
+from ...interfaces.nilearn import MaskB0Series
 from .interchange import (qsiprep_anatomical_ingressed_fields,
     FS_FILES_TO_REGISTER, anatomical_workflow_outputs, recon_workflow_input_fields)
 from qsiprep.interfaces.utils import GetConnectivityAtlases
@@ -343,8 +345,8 @@ def init_register_fs_to_qsiprep_wf(use_qsiprep_reference_mask=False,
 def init_dwi_recon_anatomical_workflow(
     atlas_names, omp_nthreads, has_qsiprep_5tt_fast, has_qsiprep_5tt_hsvs, 
     has_freesurfer_5tt_hsvs, has_qsiprep_t1w, has_qsiprep_t1w_transforms,
-    infant_mode, has_freesurfer, extras_to_make, freesurfer_dir, sloppy=False,
-    prefer_dwi_mask=False, name="qsirecon_anat_wf"):
+    infant_mode, has_freesurfer, extras_to_make, freesurfer_dir, b0_threshold, 
+    sloppy=False, prefer_dwi_mask=False, name="qsirecon_anat_wf"):
     """Ensure that anatomical data is available for the reconstruction workflows.
     
     This workflow calculates images/transforms that require a DWI spatial reference.
@@ -406,10 +408,21 @@ def init_dwi_recon_anatomical_workflow(
     # Missing Freesurfer AND QSIPrep T1ws, or the user wants a DWI-based mask
     if not (has_qsiprep_t1w or has_freesurfer) or prefer_dwi_mask:
         desc += "No T1w weighted images were available for masking, so a mask " \
-            "was estimated based on the DWI data itself."
-
-        if prefer_dwi_mask:
-            return workflow, _get_status()
+            "was estimated based on the b=0 images in the DWI data itself."
+        extract_b0s = pe.Node(
+            ExtractB0s(b0_threshold=b0_threshold),
+            name='extract_b0s')
+        mask_b0s = pe.Node(
+            afni.Automask(outputtype="NIFTI_GZ"),
+            name="mask_b0s")
+        workflow.connect([
+            (inputnode, extract_b0s, [
+                ("dwi_file", "dwi_series"),
+                ("bval_file", "bval_file")]),
+            (extract_b0s, mask_b0s, [("b0_series", "in_file")]),
+            (mask_b0s, outputnode, [("out_file", "dwi_mask")])
+        ])
+        return workflow, _get_status()
 
     # No data from QSIPrep was available, BUT we have freesurfer! register it and
     # get the brain, masks and possibly a to-MNI transform.
