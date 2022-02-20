@@ -30,7 +30,7 @@ def _check_repeats(nodelist):
 
 
 def init_dwi_recon_workflow(dwi_file, workflow_spec, output_dir, prefer_dwi_mask,
-                            reportlets_dir, available_anatomical_data, omp_nthreads,
+                            reportlets_dir, available_anatomical_data, omp_nthreads, b0_threshold,
                             infant_mode, freesurfer_dir=None, sloppy=False, name="recon_wf"):
     """Convert a workflow spec into a nipype workflow.
 
@@ -48,6 +48,7 @@ def init_dwi_recon_workflow(dwi_file, workflow_spec, output_dir, prefer_dwi_mask
         infant_mode=infant_mode,
         prefer_dwi_mask=prefer_dwi_mask,
         sloppy=sloppy,
+        b0_threshold=b0_threshold,
         extras_to_make=workflow_spec.get('anatomical', []),
         freesurfer_dir=freesurfer_dir,
         name="qsirecon_anat_wf",

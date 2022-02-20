@@ -35,7 +35,7 @@ LOGGER = logging.getLogger('nipype.workflow')
 
 def init_qsirecon_wf(subject_list, run_uuid, work_dir, output_dir, recon_input,
                      recon_spec, low_mem, omp_nthreads, sloppy, freesurfer_input,
-                     name="qsirecon_wf"):
+                     b0_threshold, name="qsirecon_wf"):
     """
     This workflow organizes the execution of qsiprep, with a sub-workflow for
     each subject.
@@ -95,6 +95,7 @@ def init_qsirecon_wf(subject_list, run_uuid, work_dir, output_dir, recon_input,
             omp_nthreads=omp_nthreads,
             low_mem=low_mem,
             sloppy=sloppy,
+            b0_threshold=b0_threshold,
             freesurfer_input=freesurfer_input
             )
 
@@ -110,7 +111,7 @@ def init_qsirecon_wf(subject_list, run_uuid, work_dir, output_dir, recon_input,
 
 def init_single_subject_wf(
         subject_id, name, reportlets_dir, output_dir, freesurfer_input,
-        low_mem, omp_nthreads, recon_input, recon_spec, sloppy):
+        low_mem, omp_nthreads, recon_input, recon_spec, sloppy, b0_threshold):
     """
     This workflow organizes the reconstruction pipeline for a single subject.
     Reconstruction is performed using a separate workflow for each dwi series.
@@ -234,6 +235,7 @@ to workflows in *qsiprep*'s documentation]\
             sloppy=sloppy,
             prefer_dwi_mask=False,
             infant_mode=False,
+            b0_threshold=b0_threshold,
             reportlets_dir=reportlets_dir,
             output_dir=output_dir,
             omp_nthreads=omp_nthreads)

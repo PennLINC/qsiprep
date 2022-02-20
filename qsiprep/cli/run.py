@@ -1170,6 +1170,7 @@ def build_recon_workflow(opts, retval):
         low_mem=opts.low_mem,
         omp_nthreads=omp_nthreads,
         sloppy=opts.sloppy,
+        b0_threshold=opts.b0_threshold,
         freesurfer_input=opts.freesurfer_input
     )
     retval['return_code'] = 0
