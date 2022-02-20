@@ -35,7 +35,7 @@ export FS_LICENSE=${TESTDIR}/data/license.txt
 
 # Test dipy_mapmri
 TESTNAME=fs_ingress_test
-#setup_dir ${TESTDIR}/${TESTNAME}
+# setup_dir ${TESTDIR}/${TESTNAME}
 TEMPDIR=${TESTDIR}/${TESTNAME}/work
 OUTPUT_DIR=${TESTDIR}/${TESTNAME}/derivatives
 BIDS_INPUT_DIR=${TESTDIR}/data/qsiprep_with_anat
@@ -49,6 +49,7 @@ ${QSIPREP_CMD} \
 	 --recon-spec ${PWD}/test_5tt_hsv.json \
 	 --freesurfer-input ${SUBJECTS_DIR} \
 	 --recon-only \
+         --shell \
 	 -vv
 
 
