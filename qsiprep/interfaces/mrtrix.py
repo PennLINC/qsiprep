@@ -810,6 +810,7 @@ class BuildConnectome(MRTrix3Base):
         prefix = atlas_name + "_" + self.inputs.measure
         connectivity_data[prefix + "_connectivity"] = np.loadtxt(self.inputs.out_file,
                                                                 delimiter=',')
+        connectivity_data["command"] = self.cmdline
         merged_matfile = op.join(runtime.cwd, prefix + "_connectivity.mat")
         savemat(merged_matfile, connectivity_data, long_field_names=True)
         return runtime
@@ -824,6 +825,7 @@ class BuildConnectome(MRTrix3Base):
         if name == 'in_weights':
             if self.inputs.use_sift_weights:
                 return spec.argstr % val
+            return ''
         return super(BuildConnectome, self)._format_arg(name, spec, val)
 
 
@@ -839,7 +841,7 @@ class MRTrixAtlasGraphOutputSpec(TraitedSpec):
 
 
 class MRTrixAtlasGraph(SimpleInterface):
-    """Produce one connectivity matrix per atlas based on DSI Studio tractography"""
+    """Produce one connectivity matrix per atlas based on MRtrix tractography"""
     input_spec = MRTrixAtlasGraphInputSpec
     output_spec = MRTrixAtlasGraphOutputSpec
 
@@ -855,7 +857,7 @@ class MRTrixAtlasGraph(SimpleInterface):
         del ifargs['in_parc']
 
         # Make a workflow for each atlas and tracking parameter set
-        workflow = pe.Workflow(name='dsistudio_atlasgraph')
+        workflow = pe.Workflow(name='mrtrix_atlasgraph')
         nodes = []
         merge_mats = pe.Node(niu.Merge(len(tracking_params) * len(atlas_configs)),
                              name='merge_mats')
@@ -865,10 +867,12 @@ class MRTrixAtlasGraph(SimpleInterface):
         for atlas_name, atlas_config in atlas_configs.items():
             for tracking_param_set in self.inputs.tracking_params:
                 node_args = deepcopy(ifargs)
-                # Symlink in the fib file
+
+                # These are overwritten in each node
                 node_args.pop('atlas_config')
                 node_args.pop('atlas_name')
                 node_args.pop('tracking_params')
+
                 measure_name = tracking_param_set['measure']
                 node_args.update(tracking_param_set)
                 nodes.append(
