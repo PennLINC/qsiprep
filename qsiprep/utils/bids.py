@@ -247,9 +247,9 @@ def validate_input_dir(exec_env, bids_dir, participant_label):
             "SUSPICIOUSLY_LONG_EVENT_DESIGN",
             "SUSPICIOUSLY_SHORT_EVENT_DESIGN",
             "MISSING_TSV_COLUMN_EEG_ELECTRODES",
-            "MISSING_SESSION"
+            "MISSING_SESSION",
+            "NO_T1W"
         ],
-        "error": ["NO_T1W"],
         "ignoredFiles": ['/README', '/dataset_description.json', '/participants.tsv']
     }
     # Limit validation only to data from requested participants
