@@ -161,6 +161,7 @@ def init_single_subject_wf(
                 raise Exception(
                     "Unable to find subject directory in %s or %s" % (
                         recon_input, qp_recon_input))
+            recon_input = qp_recon_input
 
         spec = _load_recon_spec(recon_spec, sloppy=sloppy)
         space = spec['space']
