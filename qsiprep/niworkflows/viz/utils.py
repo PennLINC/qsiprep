@@ -846,7 +846,6 @@ def plot_peak_slice(odf_4d, sphere, background_data, out_file, axis, slicenum, m
                      view_up=view_up[axis])
     window.record(scene, out_path=out_file, reset_camera=False, size=image_size)
     scene.clear()
-    del peak_actor, image_actor, scene
 
 
 def peak_slice_series(odf_4d, sphere, background_data, out_file, mask_image=None,
@@ -1005,7 +1004,6 @@ def plot_an_odf_slice(odf_4d, full_sphere, background_data, tile_size, filename,
                      view_up=view_up[axis])
     window.record(scene, out_path=filename, reset_camera=False, size=image_size)
     scene.clear()
-    del odf_actor, image_actor, scene
 
 
 def odf_roi_plot(odf_4d, halfsphere, background_data, out_file, roi_file,
