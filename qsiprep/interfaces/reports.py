@@ -26,16 +26,12 @@ import numpy as np
 from nipype.interfaces.base import (
     traits, TraitedSpec, BaseInterfaceInputSpec,
     File, Directory, InputMultiPath, InputMultiObject, Str, isdefined,
-    SimpleInterface)
+    SimpleInterface, CommandLine)
 from nipype.interfaces import freesurfer as fs
 from nipype.interfaces.mixins import reporting
-import nibabel as nb
-from dipy.core.sphere import HemiSphere
 from .gradients import concatenate_bvals, concatenate_bvecs
 from .qc import createB0_ColorFA_Mask_Sprites, createSprite4D
 from .bids import get_bids_params
-from ..niworkflows.viz.utils import peak_slice_series, odf_roi_plot
-from .converters import fib2amps, mif2amps
 
 SUBJECT_TEMPLATE = """\t<ul class="elem-desc">
 \t\t<li>Subject ID: {subject_id}</li>
@@ -709,65 +705,34 @@ def _filename_to_colors(labels_column, colormap="rainbow"):
 
 
 class _ReconPeaksReportInputSpec(BaseInterfaceInputSpec):
-    mif_file = File(exists=True)
-    fib_file = File(exists=True)
-    odf_file = File(exists=True)
-    directions_file = File(exists=True)
-    mask_file = File(exists=True)
-    background_image = File(exists=True)
-    odf_rois = File(exists=True)
+    mif_file = File(exists=True, argstr='--mif %s')
+    fib_file = File(exists=True, argstr='--fib %s')
+    odf_file = File(exists=True, argstr='--amplitudes %s')
+    directions_file = File(exists=True, argstr='--directions %s')
+    mask_file = File(exists=True, argstr='--mask_file %s')
+    background_image = File(exists=True, argstr='--background_image %s')
+    odf_rois = File(exists=True, argstr='--odf_rois')
     peaks_only = traits.Bool(False, usedefault=True,
+                             argstr='--peaks-only',
                              desc='only produce a peak directions report')
     subtract_iso = traits.Bool(False, usedefault=True,
+                               argstr="--subtract-iso",
                                desc='subtract isotropic component from ODFs')
+    out_report = File(
+        default="odf_report.png",
+        argstr="--out_report %s",
+        usedefault=True)
 
 
-class _ReconPeaksReportOutputSpec(reporting.ReportCapableOutputSpec):
+class _ReconPeaksReportOutputSpec(TraitedSpec):
     odf_report = File(exists=True)
 
 
-class ReconPeaksReport(SimpleInterface):
+class CLIReconPeaksReport(CommandLine):
     input_spec = _ReconPeaksReportInputSpec
     output_spec = _ReconPeaksReportOutputSpec
-    _ncuts = 4
-    _padding = 4
-    _redirect_x = True
-
-    def _run_interface(self, runtime):
-        """Generate a reportlet."""
-        if isdefined(self.inputs.mif_file):
-            odf_img, directions = mif2amps(self.inputs.mif_file, runtime.cwd)
-        elif isdefined(self.inputs.fib_file):
-            odf_img, directions = fib2amps(self.inputs.fib_file,
-                                           self.inputs.background_image,
-                                           runtime.cwd)
-        elif isdefined(self.inputs.odf_file) and isdefined(self.inputs.directions_file):
-            odf_img = nb.load(self.inputs.odf_file)
-            directions = np.load(self.inputs.directions_file)
-        else:
-            raise Exception('Requires either a mif file or fib file')
-
-        odf_4d = odf_img.get_fdata()
-        sphere = HemiSphere(xyz=directions.astype(np.float))
-        if not isdefined(self.inputs.background_image) or self.inputs.background_image is None:
-            background_data = odf_4d.mean(3)
-        else:
-            background_data = nb.load(self.inputs.background_image).get_fdata()
-
-        peak_report = op.join(runtime.cwd, 'peak_report.png')
-        peak_slice_series(odf_4d, sphere, background_data, peak_report,
-                          n_cuts=self._ncuts, mask_image=self.inputs.mask_file,
-                          padding=self._padding)
-        self._results['out_report'] = peak_report
-
-        # Plot ODFs in interesting regions
-        if isdefined(self.inputs.odf_rois) and not self.inputs.peaks_only:
-            odf_report = op.join(runtime.cwd, 'odf_report.png')
-            odf_roi_plot(odf_4d, sphere, background_data, odf_report, self.inputs.odf_rois,
-                         subtract_iso=self.inputs.subtract_iso,
-                         mask=self.inputs.mask_file)
-            self._results['odf_report'] = odf_report
-        return runtime
+    _cmd = "recon_plot"
+    _redirect_x = True 
 
 
 class _ConnectivityReportInputSpec(BaseInterfaceInputSpec):
