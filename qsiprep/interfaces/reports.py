@@ -26,9 +26,10 @@ import numpy as np
 from nipype.interfaces.base import (
     traits, TraitedSpec, BaseInterfaceInputSpec,
     File, Directory, InputMultiPath, InputMultiObject, Str, isdefined,
-    SimpleInterface, CommandLine)
+    SimpleInterface, CommandLine, CommandLineInputSpec)
 from nipype.interfaces import freesurfer as fs
 from nipype.interfaces.mixins import reporting
+from setuptools import Command
 from .gradients import concatenate_bvals, concatenate_bvecs
 from .qc import createB0_ColorFA_Mask_Sprites, createSprite4D
 from .bids import get_bids_params
@@ -704,27 +705,33 @@ def _filename_to_colors(labels_column, colormap="rainbow"):
     return colors.tolist()
 
 
-class _ReconPeaksReportInputSpec(BaseInterfaceInputSpec):
+class _ReconPeaksReportInputSpec(CommandLineInputSpec):
     mif_file = File(exists=True, argstr='--mif %s')
     fib_file = File(exists=True, argstr='--fib %s')
     odf_file = File(exists=True, argstr='--amplitudes %s')
     directions_file = File(exists=True, argstr='--directions %s')
     mask_file = File(exists=True, argstr='--mask_file %s')
     background_image = File(exists=True, argstr='--background_image %s')
-    odf_rois = File(exists=True, argstr='--odf_rois')
+    odf_rois = File(exists=True, argstr='--odf_rois %s')
+    peak_report = File(
+        "peaks_mosaic.png",
+        argstr="--peaks_image %s",
+        usedefault=True)
+    odf_report = File(
+        "odfs_mosaic.png",
+        argstr="--odfs_image %s",
+        usedefault=True)
     peaks_only = traits.Bool(False, usedefault=True,
-                             argstr='--peaks-only',
+                             argstr='--peaks_only',
                              desc='only produce a peak directions report')
     subtract_iso = traits.Bool(False, usedefault=True,
                                argstr="--subtract-iso",
                                desc='subtract isotropic component from ODFs')
-    out_report = File(
-        default="odf_report.png",
-        argstr="--out_report %s",
-        usedefault=True)
+
 
 
 class _ReconPeaksReportOutputSpec(TraitedSpec):
+    peak_report = File(exists=True)
     odf_report = File(exists=True)
 
 
@@ -732,7 +739,14 @@ class CLIReconPeaksReport(CommandLine):
     input_spec = _ReconPeaksReportInputSpec
     output_spec = _ReconPeaksReportOutputSpec
     _cmd = "recon_plot"
-    _redirect_x = True 
+    _redirect_x = True
+
+    def _list_outputs(self):
+        outputs = self.output_spec().get()
+        outputs['peak_report'] = op.abspath(self.inputs.peak_report)
+        if not self.inputs.peaks_only:
+            outputs['odf_report'] = op.abspath(self.inputs.odf_report)
+        return outputs
 
 
 class _ConnectivityReportInputSpec(BaseInterfaceInputSpec):

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import warnings
 import os
+import sys
 import os.path as op
 from argparse import ArgumentParser
 from argparse import RawTextHelpFormatter
@@ -57,11 +58,21 @@ def recon_plot():
     parser.add_argument('--mask_file',
                         action='store',
                         type=os.path.abspath,
-                        help='a NIfTI-1 format file with a valid q/sform.')
-    parser.add_argument('--out_file',
+                        help='a NIfTI-1 format file defining a brain mask.')
+    parser.add_argument('--odf_rois',
                         action='store',
                         type=os.path.abspath,
-                        help='png file for results')
+                        help='a NIfTI-1 format file with ROIs for plotting ODFs')
+    parser.add_argument('--peaks_image',
+                        action='store',
+                        default="peaks_mosiac.png",
+                        type=os.path.abspath,
+                        help='png file for odf peaks image')
+    parser.add_argument('--odfs_image',
+                        action='store',
+                        default="odfs_mosaic.png",
+                        type=os.path.abspath,
+                        help='png file for odf results')
     parser.add_argument('--background_image',
                         action='store',
                         type=os.path.abspath,
@@ -79,14 +90,14 @@ def recon_plot():
     opts = parser.parse_args()
 
     if opts.mif:
-        odf_img, directions = mif2amps(opts.mif_file, os.getcwd())
-    elif opts.fib_file:
-        odf_img, directions = fib2amps(opts.fib_file,
+        odf_img, directions = mif2amps(opts.mif, os.getcwd())
+    elif opts.fib:
+        odf_img, directions = fib2amps(opts.fib,
                                         opts.background_image,
                                         os.getcwd())
-    elif opts.odf_file and opts.directions_file:
-        odf_img = nb.load(opts.odf_file)
-        directions = np.load(opts.directions_file)
+    elif opts.amplitudes and opts.directions:
+        odf_img = nb.load(opts.amplitudes)
+        directions = np.load(opts.directions)
     else:
         raise Exception('Requires either a mif file or fib file')
 
@@ -97,17 +108,17 @@ def recon_plot():
     else:
         background_data = nb.load(opts.background_image).get_fdata()
 
-    peak_report = op.join(os.getcwd(), 'peak_report.png')
-    peak_slice_series(odf_4d, sphere, background_data, peak_report,
+    peak_slice_series(odf_4d, sphere, background_data, opts.peaks_image,
                         n_cuts=opts.ncuts, mask_image=opts.mask_file,
                         padding=opts.padding)
 
     # Plot ODFs in interesting regions
     if opts.odf_rois and not opts.peaks_only:
-        odf_report = op.join(os.getcwd(), 'odf_report.png')
-        odf_roi_plot(odf_4d, sphere, background_data, odf_report, opts.odf_rois,
-                        subtract_iso=opts.subtract_iso,
-                        mask=opts.mask_file)
+        odf_roi_plot(odf_4d, sphere, background_data, opts.odfs_image, 
+                     opts.odf_rois,
+                     subtract_iso=opts.subtract_iso,
+                     mask=opts.mask_file)
+    sys.exit(0)
 
 
 def plot_peak_slice(odf_4d, sphere, background_data, out_file, axis, slicenum, mask_data,
