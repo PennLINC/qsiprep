@@ -10,7 +10,7 @@ import nipype.pipeline.engine as pe
 import nipype.interfaces.utility as niu
 from nipype.interfaces import afni
 from ...interfaces.bids import ReconDerivativesDataSink
-from ...interfaces.reports import ReconPeaksReport, ConnectivityReport
+from ...interfaces.reports import CLIReconPeaksReport, ConnectivityReport
 from qsiprep.interfaces.mrtrix import (
     EstimateFOD, SS3TEstimateFOD, MRTrixIngress, SS3TDwi2Response, GlobalTractography,
     MRTrixAtlasGraph, SIFT2, TckGen, MTNormalize)
@@ -150,7 +150,7 @@ A single-shell-optimized multi-tissue CSD was performed using MRtrix3Tissue
 (https://3Tissue.github.io), a fork of MRtrix3 (@mrtrix3)"""
 
     # Make a visual report of the model
-    plot_peaks = pe.Node(ReconPeaksReport(), name='plot_peaks')
+    plot_peaks = pe.Node(CLIReconPeaksReport(), name='plot_peaks')
     ds_report_peaks = pe.Node(
         ReconDerivativesDataSink(extension='.png',
                                  desc="wmFOD",
