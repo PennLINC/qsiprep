@@ -12,7 +12,7 @@ from qsiprep.interfaces.bids import ReconDerivativesDataSink
 from ...interfaces.dipy import BrainSuiteShoreReconstruction, MAPMRIReconstruction
 from .interchange import recon_workflow_input_fields
 from ...engine import Workflow
-from ...interfaces.reports import ReconPeaksReport
+from ...interfaces.reports import CLIReconPeaksReport
 
 LOGGER = logging.getLogger('nipype.interface')
 
@@ -110,7 +110,7 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, available_anatomical_data,
     recon_shore = pe.Node(BrainSuiteShoreReconstruction(**params), name="recon_shore")
     doing_extrapolation = params.get("extrapolate_scheme") in ("HCP", "ABCD")
 
-    plot_peaks = pe.Node(ReconPeaksReport(), name='plot_peaks')
+    plot_peaks = pe.Node(CLIReconPeaksReport(), name='plot_peaks')
     ds_report_peaks = pe.Node(
         ReconDerivativesDataSink(extension='.png',
                                  desc="3dSHOREODF",
@@ -140,7 +140,7 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, available_anatomical_data,
         (inputnode, plot_peaks, [('dwi_mask', 'mask_file')]),
         (recon_shore, plot_peaks, [('odf_directions', 'directions_file'),
                                    ('odf_amplitudes', 'odf_file')]),
-        (plot_peaks, ds_report_peaks, [('out_report', 'in_file')])])
+        (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')])])
 
     # Plot targeted regions
     if available_anatomical_data['has_qsiprep_t1w_transforms']:
@@ -333,7 +333,7 @@ def init_dipy_mapmri_recon_wf(omp_nthreads, available_anatomical_data, name="dip
     recon_map = pe.Node(MAPMRIReconstruction(**params), name="recon_map")
     resample_mask = pe.Node(
         afni.Resample(outputtype='NIFTI_GZ', resample_mode="NN"), name='resample_mask')
-    plot_peaks = pe.Node(ReconPeaksReport(), name='plot_peaks')
+    plot_peaks = pe.Node(CLIReconPeaksReport(), name='plot_peaks')
     ds_report_peaks = pe.Node(
         ReconDerivativesDataSink(extension='.png',
                                  desc="MAPLMRIODF",
@@ -365,7 +365,7 @@ def init_dipy_mapmri_recon_wf(omp_nthreads, available_anatomical_data, name="dip
                                  ('odf_rois', 'odf_rois')]),
         (recon_map, plot_peaks, [('odf_directions', 'directions_file'),
                                  ('odf_amplitudes', 'odf_file')]),
-        (plot_peaks, ds_report_peaks, [('out_report', 'in_file')])])
+        (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')])])
 
     # Plot targeted regions
     if available_anatomical_data['has_qsiprep_t1w_transforms']:

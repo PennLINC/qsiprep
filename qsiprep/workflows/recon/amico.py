@@ -12,7 +12,7 @@ from qsiprep.interfaces.bids import ReconDerivativesDataSink
 from .interchange import recon_workflow_input_fields
 from ...engine import Workflow
 from ...interfaces.amico import NODDI
-from ...interfaces.reports import ReconPeaksReport
+from ...interfaces.reports import CLIReconPeaksReport
 from ...interfaces.converters import NODDItoFIBGZ
 
 LOGGER = logging.getLogger('nipype.interface')
@@ -65,7 +65,7 @@ diffusivity.""" % (params['dPar'], params['dIso'])
 
     convert_to_fibgz = pe.Node(NODDItoFIBGZ(), name='convert_to_fibgz')
 
-    plot_peaks = pe.Node(ReconPeaksReport(), name='plot_peaks')
+    plot_peaks = pe.Node(CLIReconPeaksReport(), name='plot_peaks')
     ds_report_peaks = pe.Node(
         ReconDerivativesDataSink(extension='.png',
                                  desc="NODDI",
@@ -96,7 +96,7 @@ diffusivity.""" % (params['dPar'], params['dIso'])
         (convert_to_fibgz, outputnode, [('fibgz_file', 'fibgz')]),
         (inputnode, plot_peaks, [('dwi_mask', 'mask_file')]),
         (noddi_fit, plot_peaks, [('icvf_image', 'background_image')]),
-        (plot_peaks, ds_report_peaks, [('out_report', 'in_file')]),
+        (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')]),
         ])
 
     if output_suffix:

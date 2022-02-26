@@ -18,7 +18,7 @@ import logging
 from qsiprep.interfaces.bids import ReconDerivativesDataSink
 from .interchange import recon_workflow_input_fields
 from ...engine import Workflow
-from ...interfaces.reports import ReconPeaksReport, ConnectivityReport
+from ...interfaces.reports import CLIReconPeaksReport, ConnectivityReport
 
 LOGGER = logging.getLogger('nipype.interface')
 
@@ -66,7 +66,7 @@ generalized q-sampling imaging (GQI, @yeh2010gqi) with a ratio of mean diffusion
 distance of %02f.""" % romdd
 
     # Make a visual report of the model
-    plot_peaks = pe.Node(ReconPeaksReport(subtract_iso=True), name='plot_peaks')
+    plot_peaks = pe.Node(CLIReconPeaksReport(subtract_iso=True), name='plot_peaks')
     ds_report_peaks = pe.Node(
         ReconDerivativesDataSink(extension='.png',
                                  desc="GQIODF",
@@ -95,7 +95,7 @@ distance of %02f.""" % romdd
         (inputnode, plot_peaks, [('dwi_ref', 'background_image'),
                                  ('odf_rois', 'odf_rois'),
                                  ('dwi_mask', 'mask_file')]),
-        (plot_peaks, ds_report_peaks, [('out_report', 'in_file')])
+        (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')])
     ])
 
     if output_suffix:
