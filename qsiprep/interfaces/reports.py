@@ -732,7 +732,7 @@ class _ReconPeaksReportInputSpec(CommandLineInputSpec):
 
 class _ReconPeaksReportOutputSpec(TraitedSpec):
     peak_report = File(exists=True)
-    odf_report = File(exists=True)
+    odf_report = File()
 
 
 class CLIReconPeaksReport(CommandLine):
