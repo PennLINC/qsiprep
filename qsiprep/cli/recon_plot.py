@@ -15,6 +15,8 @@ from dipy.reconst.odf import gfa
 from dipy.direction import peak_directions
 from PIL import Image
 from fury import actor, window
+import logging
+logger = logging.getLogger('cli')
 
 warnings.filterwarnings("ignore", category=ImportWarning)
 warnings.filterwarnings("ignore", category=PendingDeprecationWarning)
@@ -38,22 +40,18 @@ def recon_plot():
     parser.add_argument('--fib',
                         action='store',
                         type=os.path.abspath,
-                        default='',
                         help='DSI Studio fib file to convert')
     parser.add_argument('--mif',
                         type=os.path.abspath,
                         action='store',
-                        default='',
                         help='path to a MRtrix mif file')
     parser.add_argument('--amplitudes',
                         type=os.path.abspath,
                         action='store',
-                        default='',
                         help='4D ampliudes corresponding to --directions')
     parser.add_argument('--directions',
                         type=os.path.abspath,
                         action='store',
-                        default='',
                         help='text file of directions corresponding to --amplitudes')
     parser.add_argument('--mask_file',
                         action='store',
@@ -91,11 +89,15 @@ def recon_plot():
 
     if opts.mif:
         odf_img, directions = mif2amps(opts.mif, os.getcwd())
+        logger.info("converting %s to plot ODF/peaks", opts.mif)
     elif opts.fib:
         odf_img, directions = fib2amps(opts.fib,
                                         opts.background_image,
                                         os.getcwd())
+        logger.info("converting %s to plot ODF/peaks", opts.fib)
     elif opts.amplitudes and opts.directions:
+        logger.info("loading amplitudes=%s, directions=%s "
+                    "to plot ODF/peaks", opts.amplitudes, opts.directions)
         odf_img = nb.load(opts.amplitudes)
         directions = np.load(opts.directions)
     else:
@@ -108,12 +110,14 @@ def recon_plot():
     else:
         background_data = nb.load(opts.background_image).get_fdata()
 
+    logger.info("saving peaks image to %s", opts.peaks_image)
     peak_slice_series(odf_4d, sphere, background_data, opts.peaks_image,
                         n_cuts=opts.ncuts, mask_image=opts.mask_file,
                         padding=opts.padding)
 
     # Plot ODFs in interesting regions
     if opts.odf_rois and not opts.peaks_only:
+        logger.info("saving odfs image to %s", opts.odfs_image)
         odf_roi_plot(odf_4d, sphere, background_data, opts.odfs_image, 
                      opts.odf_rois,
                      subtract_iso=opts.subtract_iso,
