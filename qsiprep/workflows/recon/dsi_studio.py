@@ -95,7 +95,7 @@ distance of %02f.""" % romdd
         (inputnode, plot_peaks, [('dwi_ref', 'background_image'),
                                  ('odf_rois', 'odf_rois'),
                                  ('dwi_mask', 'mask_file')]),
-        (plot_peaks, ds_report_peaks, [('out_report', 'in_file')])
+        (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')])
     ])
 
     if output_suffix:

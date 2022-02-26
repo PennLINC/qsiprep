@@ -140,7 +140,7 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, available_anatomical_data,
         (inputnode, plot_peaks, [('dwi_mask', 'mask_file')]),
         (recon_shore, plot_peaks, [('odf_directions', 'directions_file'),
                                    ('odf_amplitudes', 'odf_file')]),
-        (plot_peaks, ds_report_peaks, [('out_report', 'in_file')])])
+        (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')])])
 
     # Plot targeted regions
     if available_anatomical_data['has_qsiprep_t1w_transforms']:

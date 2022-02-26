@@ -96,7 +96,7 @@ diffusivity.""" % (params['dPar'], params['dIso'])
         (convert_to_fibgz, outputnode, [('fibgz_file', 'fibgz')]),
         (inputnode, plot_peaks, [('dwi_mask', 'mask_file')]),
         (noddi_fit, plot_peaks, [('icvf_image', 'background_image')]),
-        (plot_peaks, ds_report_peaks, [('out_report', 'in_file')]),
+        (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')]),
         ])
 
     if output_suffix:
