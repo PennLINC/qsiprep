@@ -222,18 +222,6 @@ jobs:
               && e=0 && break || sleep 15
             done && [ "$e" -eq "0" ]
       - run:
-          name: Smoke test Docker image
-          command: |
-            THISVERSION=$( python3 get_version.py )
-            THISVERSION=${THISVERSION%.dirty*}
-            THISVERSION=${CIRCLE_TAG:-$THISVERSION}
-            # WTF strings coming out of here
-            docker run --rm -it pennbbl/qsiprep:latest --version > dockerv.txt
-            DOCKERVERSION=$(tr -d "\n\r" < dockerv.txt | sed 's/^.*qsiprep v//')
-            echo VERSION: \"${THISVERSION}\"
-            echo DOCKERVERSION: \"${DOCKERVERSION}\"
-            test "$DOCKERVERSION" = "$THISVERSION"
-      - run:
           name: Deploy to Docker Hub
           no_output_timeout: 40m
           command: |
