@@ -15,8 +15,9 @@ from dipy.reconst.odf import gfa
 from dipy.direction import peak_directions
 from PIL import Image
 from fury import actor, window
-import logging
-logger = logging.getLogger('cli')
+from nipype import logging
+
+LOGGER = logging.getLogger('nipype.interface')
 
 warnings.filterwarnings("ignore", category=ImportWarning)
 warnings.filterwarnings("ignore", category=PendingDeprecationWarning)
@@ -89,14 +90,14 @@ def recon_plot():
 
     if opts.mif:
         odf_img, directions = mif2amps(opts.mif, os.getcwd())
-        logger.info("converting %s to plot ODF/peaks", opts.mif)
+        LOGGER.info("converting %s to plot ODF/peaks", opts.mif)
     elif opts.fib:
         odf_img, directions = fib2amps(opts.fib,
                                         opts.background_image,
                                         os.getcwd())
-        logger.info("converting %s to plot ODF/peaks", opts.fib)
+        LOGGER.info("converting %s to plot ODF/peaks", opts.fib)
     elif opts.amplitudes and opts.directions:
-        logger.info("loading amplitudes=%s, directions=%s "
+        LOGGER.info("loading amplitudes=%s, directions=%s "
                     "to plot ODF/peaks", opts.amplitudes, opts.directions)
         odf_img = nb.load(opts.amplitudes)
         directions = np.load(opts.directions)
@@ -110,14 +111,14 @@ def recon_plot():
     else:
         background_data = nb.load(opts.background_image).get_fdata()
 
-    logger.info("saving peaks image to %s", opts.peaks_image)
+    LOGGER.info("saving peaks image to %s", opts.peaks_image)
     peak_slice_series(odf_4d, sphere, background_data, opts.peaks_image,
                         n_cuts=opts.ncuts, mask_image=opts.mask_file,
                         padding=opts.padding)
 
     # Plot ODFs in interesting regions
     if opts.odf_rois and not opts.peaks_only:
-        logger.info("saving odfs image to %s", opts.odfs_image)
+        LOGGER.info("saving odfs image to %s", opts.odfs_image)
         odf_roi_plot(odf_4d, sphere, background_data, opts.odfs_image, 
                      opts.odf_rois,
                      subtract_iso=opts.subtract_iso,
@@ -186,11 +187,13 @@ def peak_slice_series(odf_4d, sphere, background_data, out_file, mask_image=None
 
     # Make a slice mask to reduce memory
     if mask_image is None:
+        LOGGER.info("No mask image for plotting peaks")
         image_mask = np.ones(background_data.shape)
     else:
         image_mask = nb.load(mask_image).get_fdata()
 
     slice_indices = slices_from_bbox(background_data, cuts=n_cuts, padding=padding)
+    LOGGER.info("Plotting slice indices %s", slice_indices)
     # Render the axial slices
     z_image = Image.new('RGB', (tile_size, tile_size * n_cuts))
     for slicenum, z_slice in enumerate(slice_indices['z']):
@@ -285,10 +288,8 @@ def get_camera_for_roi(roi_data, roi_id, view_axis):
     return centroid, camera_distance
 
 
-
 def plot_an_odf_slice(odf_4d, full_sphere, background_data, tile_size, filename,
                       centroid, axis, camera_distance, subtract_iso, mask_image):
-    from fury import actor, window
     view_up = [(0., 0., 1.), (0., 0., 1.), (0., -1., 0.)]
 
     # Adjust the centroid so it's only a single slice
@@ -337,7 +338,6 @@ def plot_an_odf_slice(odf_4d, full_sphere, background_data, tile_size, filename,
                      view_up=view_up[axis])
     window.record(scene, out_path=filename, reset_camera=False, size=image_size)
     scene.clear()
-    del odf_actor, image_actor, scene
 
 
 def odf_roi_plot(odf_4d, halfsphere, background_data, out_file, roi_file,
