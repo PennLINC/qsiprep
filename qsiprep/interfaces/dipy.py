@@ -303,9 +303,6 @@ class DipyReconInterface(SimpleInterface):
 
     def _write_external_formats(self, runtime, fit_obj, mask_img, suffix):
 
-        if not (self.inputs.write_fibgz or self.inputs.write_mif):
-            return
-
         # Convert to amplitudes for other software
         verts, faces = get_dsi_studio_ODF_geometry("odf8")
         num_dirs, _ = verts.shape

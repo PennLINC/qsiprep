@@ -14,6 +14,7 @@ from .amico import init_amico_noddi_fit_wf
 from .converters import init_mif_to_fibgz_wf, init_qsiprep_to_fsl_wf
 from .dynamics import init_controllability_wf
 from .utils import init_conform_dwi_wf, init_discard_repeated_samples_wf
+from .steinhardt import init_steinhardt_order_param_wf
 from ...engine import Workflow
 from .interchange import (qsiprep_output_names, default_input_set,
     recon_workflow_input_fields, recon_workflow_anatomical_input_fields,
@@ -211,6 +212,8 @@ def workflow_from_spec(omp_nthreads, available_anatomical_data, node_spec):
             return init_mif_to_fibgz_wf(**kwargs)
         if node_spec['action'] == 'reorient_fslstd':
             return init_qsiprep_to_fsl_wf(**kwargs)
+        if node_spec['action'] == 'steinhardt_order_parameters':
+            return init_steinhardt_order_param_wf(**kwargs)
 
     raise Exception("Unknown node %s" % node_spec)
 
