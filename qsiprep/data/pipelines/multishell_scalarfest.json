@@ -41,7 +41,7 @@
       "output_suffix": "gmNODDI",
       "parameters": {
         "isExvivo": false,
-        "dPar": 1.2E-3,
+        "dPar": 1.1E-3,
         "dIso": 3.0E-3
       }
     },
