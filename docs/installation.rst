@@ -52,8 +52,21 @@ For example: ::
         /data /out participant \
         --ignore fieldmaps
 
+If you are running Freesurfer as part of QSIPrep, 
+you will need to mount your Freesurfer license.txt file when invoking ``docker`` ::
+
+    $ docker run -ti --rm \
+        -v $HOME/fullds005:/data:ro \
+        -v $HOME/dockerout:/out \
+        -v ${FREESURFER_HOME}/license.txt:/opt/freesurfer/license.txt \
+        pennbbl/qsiprep:latest \
+        /data /out participant \
+        --fs-license-file /opt/freesurfer/license.txt
+
+
 See `External Dependencies`_ for more information (e.g., specific versions) on
 what is included in the latest Docker images.
+
 
 
 Singularity Container
@@ -65,6 +78,14 @@ The easiest way to get a Sigularity image is to run::
 
 Where ``<version>`` should be replaced with the desired version of qsiprep that you want to download.
 Do not use ``latest``.
+
+As with Docker, you will need to bind the Freesurfer license.txt when running Singularity ::
+
+    $ singularity run --cleanenv \
+        -B $HOME/fullds005:/data:ro,$HOME/dockerout:/out,${FREESURFER_HOME}/license.txt:/opt/freesurfer/license.txt \
+        qsiprep-<version>.sif \
+        /data /out participant \
+        --fs-license-file /opt/freesurfer/license.txt
 
 
 External Dependencies
