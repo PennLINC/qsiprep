@@ -390,3 +390,112 @@ def init_dipy_mapmri_recon_wf(omp_nthreads, available_anatomical_data, name="dip
         workflow.connect(connections)
     workflow.__desc__ = desc
     return workflow
+
+
+def init_dipy_dki_recon_wf(omp_nthreads, available_anatomical_data, name="dipy_dki_recon",
+                              output_suffix="", params={}):
+    """Fit DKI
+
+    Inputs
+
+        *qsiprep outputs*
+
+    Outputs
+
+        shore_coeffs
+            3dSHORE coefficients
+        rtop
+            Voxelwise Return-to-origin probability.
+        rtap
+            Voxelwise Return-to-axis probability.
+        rtpp
+            Voxelwise Return-to-plane probability.
+        msd
+            Voxelwise MSD
+        qiv
+            q-space inverse variance
+        lapnorm
+            Voxelwise norm of the Laplacian
+
+    Params
+
+        write_fibgz: bool
+            True writes out a DSI Studio fib file
+        write_mif: bool
+            True writes out a MRTrix mif file with sh coefficients
+        radial_order: int
+            An even integer that represent the order of the basis
+    """
+
+    inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields + ['odf_rois']),
+                        name="inputnode")
+    outputnode = pe.Node(
+        niu.IdentityInterface(
+            fields=['mapmri_coeffs', 'rtop', 'rtap', 'rtpp', 'fibgz', 'fod_sh_mif',
+                    'parng', 'perng', 'ng', 'qiv', 'lapnorm', 'msd']),
+        name="outputnode")
+
+    workflow = Workflow(name=name)
+    desc = """Dipy Reconstruction
+
+: """
+    recon_map = pe.Node(MAPMRIReconstruction(**params), name="recon_map")
+    resample_mask = pe.Node(
+        afni.Resample(outputtype='NIFTI_GZ', resample_mode="NN"), name='resample_mask')
+    plot_peaks = pe.Node(CLIReconPeaksReport(), name='plot_peaks')
+    ds_report_peaks = pe.Node(
+        ReconDerivativesDataSink(extension='.png',
+                                 desc="MAPLMRIODF",
+                                 suffix='peaks'),
+        name='ds_report_peaks',
+        run_without_submitting=True)
+
+    workflow.connect([
+        (inputnode, recon_map, [('dwi_file', 'dwi_file'),
+                                ('bval_file', 'bval_file'),
+                                ('bvec_file', 'bvec_file')]),
+        (inputnode, resample_mask, [('t1_brain_mask', 'in_file'),
+                                    ('dwi_file', 'master')]),
+        (resample_mask, recon_map, [('out_file', 'mask_file')]),
+        (recon_map, outputnode, [('mapmri_coeffs', 'mapmri_coeffs'),
+                                 ('rtop', 'rtop'),
+                                 ('rtap', 'rtap'),
+                                 ('rtpp', 'rtpp'),
+                                 ('parng', 'parng'),
+                                 ('perng', 'perng'),
+                                 ('msd', 'msd'),
+                                 ('ng', 'ng'),
+                                 ('qiv', 'qiv'),
+                                 ('lapnorm', 'lapnorm'),
+                                 ('fibgz', 'fibgz'),
+                                 ('fod_sh_mif', 'fod_sh_mif')]),
+        (resample_mask, plot_peaks, [('out_file', 'mask_file')]),
+        (inputnode, plot_peaks, [('dwi_ref', 'background_image'),
+                                 ('odf_rois', 'odf_rois')]),
+        (recon_map, plot_peaks, [('odf_directions', 'directions_file'),
+                                 ('odf_amplitudes', 'odf_file')]),
+        (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')])])
+
+    # Plot targeted regions
+    if available_anatomical_data['has_qsiprep_t1w_transforms']:
+        ds_report_odfs = pe.Node(
+            ReconDerivativesDataSink(extension='.png',
+                                     desc="MAPLMRIODF",
+                                     suffix='odfs'),
+            name='ds_report_odfs',
+            run_without_submitting=True)
+        workflow.connect(plot_peaks, 'odf_report', ds_report_odfs, 'in_file')
+
+    if output_suffix:
+        external_format_datasinks(output_suffix, params, workflow)
+        connections = []
+        for scalar_name in ['rtop', 'rtap', 'rtpp', 'qiv', 'msd', 'lapnorm']:
+            connections += [(outputnode,
+                             pe.Node(
+                                 ReconDerivativesDataSink(desc=scalar_name,
+                                                          suffix=output_suffix),
+                                 name='ds_%s_%s' % (name, scalar_name)),
+                             [(scalar_name, 'in_file')])]
+        workflow.connect(connections)
+    workflow.__desc__ = desc
+    return workflow

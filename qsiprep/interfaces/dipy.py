@@ -675,3 +675,69 @@ class TensorReconstruction(DipyReconInterface):
             self._results[metric + "_image"] = out_name
 
         return runtime
+
+class TensorReconstruction(DipyReconInterface):
+    input_spec = TensorReconstructionInputSpec
+    output_spec = TensorReconstructionOutputSpec
+
+    def _run_interface(self, runtime):
+        gtab = self._get_gtab()
+        dwi_img = nb.load(self.inputs.dwi_file)
+        dwi_data = dwi_img.get_fdata(dtype=np.float32)
+        mask_img, mask_array = self._get_mask(dwi_img, gtab)
+
+        # Fit it
+        tenmodel = dti.TensorModel(gtab)
+        ten_fit = tenmodel.fit(dwi_data, mask_array)
+        lower_triangular = ten_fit.lower_triangular()
+        tensor_img = nifti1_symmat(lower_triangular, dwi_img.affine)
+        output_tensor_file = fname_presuffix(self.inputs.dwi_file,
+                                             suffix='tensor',
+                                             newpath=runtime.cwd, use_ext=True)
+        tensor_img.to_filename(output_tensor_file)
+
+        # FA MD RD and AD
+        for metric in ["fa", "md", "rd", "ad", "color_fa"]:
+            data = getattr(ten_fit, metric).astype("float32")
+            out_name = fname_presuffix(self.inputs.dwi_file,
+                                       suffix=metric,
+                                       newpath=runtime.cwd, use_ext=True)
+            nb.Nifti1Image(data, dwi_img.affine).to_filename(out_name)
+            self._results[metric + "_image"] = out_name
+
+        return runtime
+
+
+class _KurtisisReconstructionInputSpec(TensorReconstructionInputSpec):
+    pass
+
+class KurtosisReconstruction(DipyReconInterface):
+    input_spec = TensorReconstructionInputSpec
+    output_spec = TensorReconstructionOutputSpec
+
+    def _run_interface(self, runtime):
+        gtab = self._get_gtab()
+        dwi_img = nb.load(self.inputs.dwi_file)
+        dwi_data = dwi_img.get_fdata(dtype=np.float32)
+        mask_img, mask_array = self._get_mask(dwi_img, gtab)
+
+        # Fit it
+        tenmodel = dti.TensorModel(gtab)
+        ten_fit = tenmodel.fit(dwi_data, mask_array)
+        lower_triangular = ten_fit.lower_triangular()
+        tensor_img = nifti1_symmat(lower_triangular, dwi_img.affine)
+        output_tensor_file = fname_presuffix(self.inputs.dwi_file,
+                                             suffix='tensor',
+                                             newpath=runtime.cwd, use_ext=True)
+        tensor_img.to_filename(output_tensor_file)
+
+        # FA MD RD and AD
+        for metric in ["fa", "md", "rd", "ad", "color_fa"]:
+            data = getattr(ten_fit, metric).astype("float32")
+            out_name = fname_presuffix(self.inputs.dwi_file,
+                                       suffix=metric,
+                                       newpath=runtime.cwd, use_ext=True)
+            nb.Nifti1Image(data, dwi_img.affine).to_filename(out_name)
+            self._results[metric + "_image"] = out_name
+
+        return runtime
