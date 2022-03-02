@@ -168,6 +168,12 @@ def get_parser():
         type=os.path.abspath,
         help='Directory containing freesurfer outputs to be integrated into recon.'
     )
+    g_recon.add_argument(
+        '--skip-odf-reports', '--skip_odf_reports',
+        action='store_true',
+        default=False,
+        help='run only reconstruction, assumes preprocessing has already completed.'
+    )
 
     g_perfm = parser.add_argument_group('Options to handle performance')
     g_perfm.add_argument(
@@ -1171,7 +1177,8 @@ def build_recon_workflow(opts, retval):
         omp_nthreads=omp_nthreads,
         sloppy=opts.sloppy,
         b0_threshold=opts.b0_threshold,
-        freesurfer_input=opts.freesurfer_input
+        freesurfer_input=opts.freesurfer_input,
+        skip_odf_plots=opts.skip_odf_plots
     )
     retval['return_code'] = 0
 
