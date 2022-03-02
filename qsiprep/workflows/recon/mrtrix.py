@@ -185,8 +185,8 @@ A single-shell-optimized multi-tissue CSD was performed using MRtrix3Tissue
         workflow.connect([
 
         (inputnode, plot_peaks, [('dwi_ref', 'background_image'),
-                                 ('odf_rois', 'odf_rois')]),
-        (resample_mask, plot_peaks, [('out_file', 'mask_file')]),
+                                 ('odf_rois', 'odf_rois'),
+                                 ('dwi_mask', 'mask_file')]),
         (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')])])
 
 
@@ -202,7 +202,7 @@ A single-shell-optimized multi-tissue CSD was performed using MRtrix3Tissue
             MTNormalize(inlier_mask='inliers.nii.gz', norm_image='norm.nii.gz'),
             name='intensity_norm')
         workflow.connect([
-            (resample_mask, intensity_norm, [('out_file', 'mask_file')]),
+            (inputnode, intensity_norm, [('dwi_mask', 'mask_file')]),
             (estimate_fod, intensity_norm, [('wm_odf', 'wm_odf'),
                                             ('gm_odf', 'gm_odf'),
                                             ('csf_odf', 'csf_odf')]),
@@ -328,18 +328,14 @@ def init_global_tractography_wf(omp_nthreads, available_anatomical_data, name="m
     create_mif = pe.Node(MRTrixIngress(), name='create_mif')
 
     # Resample anat mask
-    resample_mask = pe.Node(
-        afni.Resample(outputtype='NIFTI_GZ', resample_mode="NN"), name='resample_mask')
     tck_global = pe.Node(GlobalTractography(**params), name='tck_global')
     workflow.connect([
-        (inputnode, resample_mask, [('t1_brain_mask', 'in_file'),
-                                    ('dwi_file', 'master')]),
         (inputnode, create_mif, [('dwi_file', 'dwi_file'),
                                  ('bval_file', 'bval_file'),
                                  ('bvec_file', 'bvec_file'),
                                  ('b_file', 'b_file')]),
         (create_mif, tck_global, [('mif_file', 'dwi_file')]),
-        (resample_mask, tck_global, [('out_file', 'mask')]),
+        (inputnode, tck_global, [('dwi_mask', 'mask')]),
         (inputnode, tck_global, [("wm_txt", "wm_txt"),
                                  ("gm_txt", "gm_txt"),
                                  ("csf_txt", "csf_txt")]),
@@ -421,8 +417,6 @@ def init_mrtrix_tractography_wf(omp_nthreads, available_anatomical_data, name="m
 
     workflow = pe.Workflow(name=name)
     # Resample anat mask
-    resample_mask = pe.Node(
-        afni.Resample(outputtype='NIFTI_GZ', resample_mode="NN"), name='resample_mask')
     tracking_params = params.get("tckgen", {})
     tracking_params['nthreads'] = omp_nthreads
     use_sift2 = params.get("use_sift2", True)
@@ -431,8 +425,6 @@ def init_mrtrix_tractography_wf(omp_nthreads, available_anatomical_data, name="m
     sift_params['nthreads'] = omp_nthreads
     tracking = pe.Node(TckGen(**tracking_params), name='tractography')
     workflow.connect([
-        (inputnode, resample_mask, [('t1_brain_mask', 'in_file'),
-                                    ('dwi_file', 'master')]),
         (inputnode, tracking, [
             ('fod_sh_mif', 'in_file'),
             ('fod_sh_mif', 'seed_dynamic')]),
