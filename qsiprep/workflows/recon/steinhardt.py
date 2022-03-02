@@ -50,6 +50,7 @@ def init_steinhardt_order_param_wf(omp_nthreads, available_anatomical_data,
 
     workflow = Workflow(name=name)
     sop_order = params.get("order", 8)
+    plot_reports = params.pop("plot_reports", True)
     desc = """Steinhardt Order Parameter Calculation:
 
 : """

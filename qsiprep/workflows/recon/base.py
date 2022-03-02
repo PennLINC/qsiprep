@@ -35,7 +35,7 @@ LOGGER = logging.getLogger('nipype.workflow')
 
 def init_qsirecon_wf(subject_list, run_uuid, work_dir, output_dir, recon_input,
                      recon_spec, low_mem, omp_nthreads, sloppy, freesurfer_input,
-                     b0_threshold, name="qsirecon_wf"):
+                     b0_threshold, skip_odf_plots, name="qsirecon_wf"):
     """
     This workflow organizes the execution of qsiprep, with a sub-workflow for
     each subject.
@@ -55,6 +55,7 @@ def init_qsirecon_wf(subject_list, run_uuid, work_dir, output_dir, recon_input,
                               freesurfer_input="freesurfer",
                               sloppy=False,
                               omp_nthreads=1,
+                              skip_odf_plots=False
                               )
 
 
@@ -96,7 +97,8 @@ def init_qsirecon_wf(subject_list, run_uuid, work_dir, output_dir, recon_input,
             low_mem=low_mem,
             sloppy=sloppy,
             b0_threshold=b0_threshold,
-            freesurfer_input=freesurfer_input
+            freesurfer_input=freesurfer_input,
+            skip_odf_plots=skip_odf_plots
             )
 
         single_subject_wf.config['execution']['crashdump_dir'] = (os.path.join(
@@ -110,7 +112,7 @@ def init_qsirecon_wf(subject_list, run_uuid, work_dir, output_dir, recon_input,
 
 
 def init_single_subject_wf(
-        subject_id, name, reportlets_dir, output_dir, freesurfer_input,
+        subject_id, name, reportlets_dir, output_dir, freesurfer_input, skip_odf_plots,
         low_mem, omp_nthreads, recon_input, recon_spec, sloppy, b0_threshold):
     """
     This workflow organizes the reconstruction pipeline for a single subject.
@@ -239,7 +241,8 @@ to workflows in *qsiprep*'s documentation]\
             b0_threshold=b0_threshold,
             reportlets_dir=reportlets_dir,
             output_dir=output_dir,
-            omp_nthreads=omp_nthreads)
+            omp_nthreads=omp_nthreads,
+            skip_odf_plots=skip_odf_plots)
         workflow.connect([(anat_ingress_wf, dwi_recon_wf, to_connect)])
 
     return workflow
