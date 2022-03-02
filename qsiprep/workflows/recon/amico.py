@@ -93,11 +93,11 @@ diffusivity.""" % (params['dPar'], params['dIso'])
             ('isovf_image', 'isovf_file'),
             ]),
         (inputnode, convert_to_fibgz, [('dwi_mask', 'mask_file')]),
-        (convert_to_fibgz, plot_peaks, [('fibgz_file', 'fib_file')]),
         (convert_to_fibgz, outputnode, [('fibgz_file', 'fibgz')])])
     if plot_reports:
         workflow.connect([
             (inputnode, plot_peaks, [('dwi_mask', 'mask_file')]),
+            (convert_to_fibgz, plot_peaks, [('fibgz_file', 'fib_file')]),
             (noddi_fit, plot_peaks, [('icvf_image', 'background_image')]),
             (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')])])
 

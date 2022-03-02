@@ -146,25 +146,6 @@ FODs were estimated via constrained spherical deconvolution
 A single-shell-optimized multi-tissue CSD was performed using MRtrix3Tissue
 (https://3Tissue.github.io), a fork of MRtrix3 (@mrtrix3)"""
 
-    # Make a visual report of the model
-    plot_peaks = pe.Node(CLIReconPeaksReport(), name='plot_peaks')
-    ds_report_peaks = pe.Node(
-        ReconDerivativesDataSink(extension='.png',
-                                 desc="wmFOD",
-                                 suffix='peaks'),
-        name='ds_report_peaks',
-        run_without_submitting=True)
-
-    # Plot targeted regions
-    if available_anatomical_data['has_qsiprep_t1w_transforms'] and plot_reports:
-        ds_report_odfs = pe.Node(
-            ReconDerivativesDataSink(extension='.png',
-                                     desc="wmFOD",
-                                     suffix='odfs'),
-            name='ds_report_odfs',
-            run_without_submitting=True)
-        workflow.connect(plot_peaks, 'odf_report', ds_report_odfs, 'in_file')
-
     workflow.connect([
         (estimate_response, estimate_fod, [('wm_file', 'wm_txt'),
                                            ('gm_file', 'gm_txt'),
@@ -180,14 +161,6 @@ A single-shell-optimized multi-tissue CSD was performed using MRtrix3Tissue
                                          ('gm_file', 'gm_txt'),
                                          ('csf_file', 'csf_txt')]),
         (inputnode, estimate_response, [('dwi_mask', 'in_mask')])])
-
-    if plot_reports:
-        workflow.connect([
-
-        (inputnode, plot_peaks, [('dwi_ref', 'background_image'),
-                                 ('odf_rois', 'odf_rois'),
-                                 ('dwi_mask', 'mask_file')]),
-        (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')])])
 
 
     if not run_mtnormalize:
@@ -206,12 +179,40 @@ A single-shell-optimized multi-tissue CSD was performed using MRtrix3Tissue
             (estimate_fod, intensity_norm, [('wm_odf', 'wm_odf'),
                                             ('gm_odf', 'gm_odf'),
                                             ('csf_odf', 'csf_odf')]),
-            (intensity_norm, plot_peaks, [('wm_normed_odf', 'mif_file')]),
             (intensity_norm, outputnode, [('wm_normed_odf', 'fod_sh_mif'),
                                           ('wm_normed_odf', 'wm_odf'),
                                           ('gm_normed_odf', 'gm_odf'),
                                           ('csf_normed_odf', 'csf_odf')])])
         desc += " FODs were intensity-normalized using mtnormalize (@mtnormalize)."
+
+    if plot_reports:
+        # Make a visual report of the model
+        plot_peaks = pe.Node(CLIReconPeaksReport(), name='plot_peaks')
+        ds_report_peaks = pe.Node(
+            ReconDerivativesDataSink(extension='.png',
+                                    desc="wmFOD",
+                                    suffix='peaks'),
+            name='ds_report_peaks',
+            run_without_submitting=True)
+        workflow.connect([
+            (inputnode, plot_peaks, [('dwi_ref', 'background_image'),
+                                    ('odf_rois', 'odf_rois'),
+                                    ('dwi_mask', 'mask_file')]),
+            (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')])])
+
+        # Plot targeted regions
+        if available_anatomical_data['has_qsiprep_t1w_transforms']:
+            ds_report_odfs = pe.Node(
+                ReconDerivativesDataSink(extension='.png',
+                                        desc="wmFOD",
+                                        suffix='odfs'),
+                name='ds_report_odfs',
+                run_without_submitting=True)
+            workflow.connect(plot_peaks, 'odf_report', ds_report_odfs, 'in_file')
+        
+        fod_source, fod_key = (estimate_fod, "wm_odf") if not run_mtnormalize \
+            else (intensity_norm, "wm_normed_odf")
+        workflow.connect(fod_source, fod_key, plot_peaks, "mif_file")
 
     if output_suffix:
         normed = '' if not run_mtnormalize else 'mtnormed'
