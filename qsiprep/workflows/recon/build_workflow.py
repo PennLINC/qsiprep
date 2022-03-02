@@ -32,7 +32,8 @@ def _check_repeats(nodelist):
 
 def init_dwi_recon_workflow(dwi_file, workflow_spec, output_dir, prefer_dwi_mask,
                             reportlets_dir, available_anatomical_data, omp_nthreads, b0_threshold,
-                            infant_mode, freesurfer_dir=None, sloppy=False, name="recon_wf"):
+                            infant_mode, skip_odf_plots, freesurfer_dir=None, 
+                            sloppy=False, name="recon_wf"):
     """Convert a workflow spec into a nipype workflow.
 
     """
@@ -81,7 +82,8 @@ def init_dwi_recon_workflow(dwi_file, workflow_spec, output_dir, prefer_dwi_mask
         new_node = workflow_from_spec(
             omp_nthreads=omp_nthreads,
             available_anatomical_data=available_anatomical_data,
-            node_spec=node_spec)
+            node_spec=node_spec,
+            skip_odf_plots=skip_odf_plots)
         if new_node is None:
             raise Exception("Unable to create a node for %s" % node_spec)
         nodes_to_add.append(new_node)
@@ -150,12 +152,16 @@ def init_dwi_recon_workflow(dwi_file, workflow_spec, output_dir, prefer_dwi_mask
     return workflow
 
 
-def workflow_from_spec(omp_nthreads, available_anatomical_data, node_spec):
+def workflow_from_spec(omp_nthreads, available_anatomical_data, node_spec,
+                       skip_odf_plots):
     """Build a nipype workflow based on a json file."""
     software = node_spec.get("software", "qsiprep")
     output_suffix = node_spec.get("output_suffix", "")
     node_name = node_spec.get("name", None)
     parameters = node_spec.get("parameters", {})
+    if skip_odf_plots:
+        LOGGER.info("skipping ODF plots for %s", node_name)
+        parameters['plot_reports'] = False
 
     if node_name is None:
         raise Exception('Node %s must have a "name" attribute' % node_spec)

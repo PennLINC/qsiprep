@@ -52,6 +52,7 @@ def init_amico_noddi_fit_wf(omp_nthreads, available_anatomical_data,
         name="outputnode")
 
     workflow = Workflow(name=name)
+    plot_reports = params.pop("plot_reports", True)
     desc = """NODDI Reconstruction
 
 : """
@@ -92,12 +93,13 @@ diffusivity.""" % (params['dPar'], params['dIso'])
             ('isovf_image', 'isovf_file'),
             ]),
         (inputnode, convert_to_fibgz, [('dwi_mask', 'mask_file')]),
-        (convert_to_fibgz, plot_peaks, [('fibgz_file', 'fib_file')]),
-        (convert_to_fibgz, outputnode, [('fibgz_file', 'fibgz')]),
-        (inputnode, plot_peaks, [('dwi_mask', 'mask_file')]),
-        (noddi_fit, plot_peaks, [('icvf_image', 'background_image')]),
-        (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')]),
-        ])
+        (convert_to_fibgz, outputnode, [('fibgz_file', 'fibgz')])])
+    if plot_reports:
+        workflow.connect([
+            (inputnode, plot_peaks, [('dwi_mask', 'mask_file')]),
+            (convert_to_fibgz, plot_peaks, [('fibgz_file', 'fib_file')]),
+            (noddi_fit, plot_peaks, [('icvf_image', 'background_image')]),
+            (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')])])
 
     if output_suffix:
         ds_fibgz = pe.Node(
