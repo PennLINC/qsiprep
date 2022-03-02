@@ -1178,7 +1178,7 @@ def build_recon_workflow(opts, retval):
         sloppy=opts.sloppy,
         b0_threshold=opts.b0_threshold,
         freesurfer_input=opts.freesurfer_input,
-        skip_odf_plots=opts.skip_odf_plots
+        skip_odf_plots=opts.skip_odf_reports
     )
     retval['return_code'] = 0
 
