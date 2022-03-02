@@ -38,6 +38,7 @@ def init_controllability_wf(name="controllability", output_suffix="", params={},
     outputnode = pe.Node(
         niu.IdentityInterface(fields=['matfile']),
         name="outputnode")
+    plot_reports = params.pop("plot_reports", True)
 
     calc_control = pe.Node(Controllability(**params), name='calc_control')
     workflow = pe.Workflow(name=name)

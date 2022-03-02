@@ -179,6 +179,7 @@ def init_dsi_studio_tractography_wf(omp_nthreads, available_anatomical_data, nam
         name="inputnode")
     outputnode = pe.Node(niu.IdentityInterface(fields=['trk_file', 'fibgz']),
                          name="outputnode")
+    plot_reports = params.pop("plot_reports", True)
     workflow = Workflow(name=name)
     tracking = pe.Node(DSIStudioTracking(nthreads=omp_nthreads, **params),
                        name='tracking')
@@ -259,6 +260,7 @@ def init_dsi_studio_connectivity_wf(omp_nthreads, available_anatomical_data, nam
         name="inputnode")
     outputnode = pe.Node(niu.IdentityInterface(fields=['matfile']),
                          name="outputnode")
+    plot_reports = params.pop("plot_reports", True)
     workflow = pe.Workflow(name=name)
     calc_connectivity = pe.Node(DSIStudioAtlasGraph(nthreads=omp_nthreads, **params),
                                 name='calc_connectivity')
@@ -317,6 +319,7 @@ def init_dsi_studio_export_wf(omp_nthreads, available_anatomical_data, name="dsi
         niu.IdentityInterface(
             fields=recon_workflow_input_fields + ['fibgz']),
         name="inputnode")
+    plot_reports = params.pop("plot_reports", True)
     scalar_names = ['gfa', 'fa0', 'fa1', 'fa2', 'iso', 'dti_fa', 'md', 'rd', 'ad']
     outputnode = pe.Node(
         niu.IdentityInterface(fields=[name + "_file" for name in scalar_names]),

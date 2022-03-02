@@ -325,6 +325,8 @@ def init_global_tractography_wf(omp_nthreads, available_anatomical_data, name="m
         name="outputnode")
 
     workflow = pe.Workflow(name=name)
+    plot_reports = params.pop("plot_reports", True)
+
     create_mif = pe.Node(MRTrixIngress(), name='create_mif')
 
     # Resample anat mask
@@ -416,6 +418,7 @@ def init_mrtrix_tractography_wf(omp_nthreads, available_anatomical_data, name="m
         name="outputnode")
 
     workflow = pe.Workflow(name=name)
+    plot_reports = params.pop("plot_reports", True)
     # Resample anat mask
     tracking_params = params.get("tckgen", {})
     tracking_params['nthreads'] = omp_nthreads
@@ -494,6 +497,7 @@ def init_mrtrix_connectivity_wf(omp_nthreads, available_anatomical_data, name="m
         name="inputnode")
     outputnode = pe.Node(niu.IdentityInterface(fields=['matfile']),
                          name="outputnode")
+    plot_reports = params.pop("plot_reports", True)
     workflow = pe.Workflow(name=name)
     conmat_params = params.get("tck2connectome", {})
     calc_connectivity = pe.Node(MRTrixAtlasGraph(tracking_params=conmat_params),
