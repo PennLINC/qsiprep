@@ -52,7 +52,7 @@ def init_amico_noddi_fit_wf(omp_nthreads, available_anatomical_data,
         name="outputnode")
 
     workflow = Workflow(name=name)
-    plot_reports = params.get("plot_reports", True)
+    plot_reports = params.pop("plot_reports", True)
     desc = """NODDI Reconstruction
 
 : """

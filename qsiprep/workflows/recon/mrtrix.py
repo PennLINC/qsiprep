@@ -85,7 +85,7 @@ def init_mrtrix_csd_recon_wf(omp_nthreads, available_anatomical_data, name="mrtr
                     'csf_txt']),
         name="outputnode")
     workflow = Workflow(name=name)
-    plot_reports = params.get("plot_reports", True)
+    plot_reports = params.pop("plot_reports", True)
     desc = """MRtrix3 Reconstruction
 
 : """

@@ -52,7 +52,7 @@ def init_dsi_studio_recon_wf(omp_nthreads, available_anatomical_data, name="dsi_
             fields=['fibgz']),
         name="outputnode")
     workflow = Workflow(name=name)
-    plot_reports = params.get("plot_reports", True)
+    plot_reports = params.pop("plot_reports", True)
     desc = """DSI Studio Reconstruction
 
 : """
