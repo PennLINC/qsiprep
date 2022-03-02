@@ -109,6 +109,7 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, available_anatomical_data,
 : """
     recon_shore = pe.Node(BrainSuiteShoreReconstruction(**params), name="recon_shore")
     doing_extrapolation = params.get("extrapolate_scheme") in ("HCP", "ABCD")
+    plot_reports = params.get("plot_reports", True)
 
     plot_peaks = pe.Node(CLIReconPeaksReport(), name='plot_peaks')
     ds_report_peaks = pe.Node(
@@ -134,16 +135,19 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, available_anatomical_data,
                                    ('extrapolated_dwi', 'dwi_file'),
                                    ('extrapolated_bvals', 'bval_file'),
                                    ('extrapolated_bvecs', 'bvec_file'),
-                                   ('extrapolated_b', 'b_file')]),
-        (inputnode, plot_peaks, [('dwi_ref', 'background_image'),
-                                 ('odf_rois', 'odf_rois')]),
-        (inputnode, plot_peaks, [('dwi_mask', 'mask_file')]),
-        (recon_shore, plot_peaks, [('odf_directions', 'directions_file'),
-                                   ('odf_amplitudes', 'odf_file')]),
-        (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')])])
+                                   ('extrapolated_b', 'b_file')])
+        ])
+    if plot_reports:
+        workflow.connect([
+            (inputnode, plot_peaks, [('dwi_ref', 'background_image'),
+                                     ('odf_rois', 'odf_rois')]),
+            (inputnode, plot_peaks, [('dwi_mask', 'mask_file')]),
+            (recon_shore, plot_peaks, [('odf_directions', 'directions_file'),
+                                       ('odf_amplitudes', 'odf_file')]),
+            (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')])])
 
     # Plot targeted regions
-    if available_anatomical_data['has_qsiprep_t1w_transforms']:
+    if available_anatomical_data['has_qsiprep_t1w_transforms'] and plot_reports:
         ds_report_odfs = pe.Node(
             ReconDerivativesDataSink(extension='.png',
                                      desc="3dSHOREODF",
@@ -331,9 +335,8 @@ def init_dipy_mapmri_recon_wf(omp_nthreads, available_anatomical_data, name="dip
 
 : """
     recon_map = pe.Node(MAPMRIReconstruction(**params), name="recon_map")
-    resample_mask = pe.Node(
-        afni.Resample(outputtype='NIFTI_GZ', resample_mode="NN"), name='resample_mask')
     plot_peaks = pe.Node(CLIReconPeaksReport(), name='plot_peaks')
+    plot_reports = params.get("plot_reports", True)
     ds_report_peaks = pe.Node(
         ReconDerivativesDataSink(extension='.png',
                                  desc="MAPLMRIODF",
@@ -344,10 +347,8 @@ def init_dipy_mapmri_recon_wf(omp_nthreads, available_anatomical_data, name="dip
     workflow.connect([
         (inputnode, recon_map, [('dwi_file', 'dwi_file'),
                                 ('bval_file', 'bval_file'),
-                                ('bvec_file', 'bvec_file')]),
-        (inputnode, resample_mask, [('t1_brain_mask', 'in_file'),
-                                    ('dwi_file', 'master')]),
-        (resample_mask, recon_map, [('out_file', 'mask_file')]),
+                                ('bvec_file', 'bvec_file'),
+                                ('dwi_mask', 'mask_file')]),
         (recon_map, outputnode, [('mapmri_coeffs', 'mapmri_coeffs'),
                                  ('rtop', 'rtop'),
                                  ('rtap', 'rtap'),
@@ -359,16 +360,18 @@ def init_dipy_mapmri_recon_wf(omp_nthreads, available_anatomical_data, name="dip
                                  ('qiv', 'qiv'),
                                  ('lapnorm', 'lapnorm'),
                                  ('fibgz', 'fibgz'),
-                                 ('fod_sh_mif', 'fod_sh_mif')]),
-        (resample_mask, plot_peaks, [('out_file', 'mask_file')]),
-        (inputnode, plot_peaks, [('dwi_ref', 'background_image'),
-                                 ('odf_rois', 'odf_rois')]),
-        (recon_map, plot_peaks, [('odf_directions', 'directions_file'),
-                                 ('odf_amplitudes', 'odf_file')]),
-        (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')])])
+                                 ('fod_sh_mif', 'fod_sh_mif')])])
+    if plot_reports:
+        workflow.connect([
+            (inputnode, plot_peaks, [('dwi_mask', 'mask_file'),
+                                     ('dwi_ref', 'background_image'),
+                                     ('odf_rois', 'odf_rois')]),
+            (recon_map, plot_peaks, [('odf_directions', 'directions_file'),
+                                     ('odf_amplitudes', 'odf_file')]),
+            (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')])])
 
     # Plot targeted regions
-    if available_anatomical_data['has_qsiprep_t1w_transforms']:
+    if available_anatomical_data['has_qsiprep_t1w_transforms'] and plot_reports:
         ds_report_odfs = pe.Node(
             ReconDerivativesDataSink(extension='.png',
                                      desc="MAPLMRIODF",

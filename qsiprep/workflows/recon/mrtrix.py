@@ -85,13 +85,10 @@ def init_mrtrix_csd_recon_wf(omp_nthreads, available_anatomical_data, name="mrtr
                     'csf_txt']),
         name="outputnode")
     workflow = Workflow(name=name)
+    plot_reports = params.get("plot_reports", True)
     desc = """MRtrix3 Reconstruction
 
 : """
-
-    # Resample anat mask
-    resample_mask = pe.Node(
-        afni.Resample(outputtype='NIFTI_GZ', resample_mode="NN"), name='resample_mask')
 
     # Response estimation
     response = params.get('response', {})
@@ -159,7 +156,7 @@ A single-shell-optimized multi-tissue CSD was performed using MRtrix3Tissue
         run_without_submitting=True)
 
     # Plot targeted regions
-    if available_anatomical_data['has_qsiprep_t1w_transforms']:
+    if available_anatomical_data['has_qsiprep_t1w_transforms'] and plot_reports:
         ds_report_odfs = pe.Node(
             ReconDerivativesDataSink(extension='.png',
                                      desc="wmFOD",
@@ -172,24 +169,26 @@ A single-shell-optimized multi-tissue CSD was performed using MRtrix3Tissue
         (estimate_response, estimate_fod, [('wm_file', 'wm_txt'),
                                            ('gm_file', 'gm_txt'),
                                            ('csf_file', 'csf_txt')]),
-        (inputnode, resample_mask, [('t1_brain_mask', 'in_file'),
-                                    ('dwi_file', 'master')]),
         (inputnode, create_mif, [('dwi_file', 'dwi_file'),
                                  ('bval_file', 'bval_file'),
                                  ('bvec_file', 'bvec_file'),
                                  ('b_file', 'b_file')]),
-        (inputnode, plot_peaks, [('dwi_ref', 'background_image'),
-                                 ('odf_rois', 'odf_rois')]),
-        (resample_mask, plot_peaks, [('out_file', 'mask_file')]),
-        (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')]),
+        (create_mif, estimate_fod, [('mif_file', 'in_file')]),
+        (inputnode, estimate_fod, [('dwi_mask', 'mask_file')]),
         (create_mif, estimate_response, [('mif_file', 'in_file')]),
         (estimate_response, outputnode, [('wm_file', 'wm_txt'),
                                          ('gm_file', 'gm_txt'),
                                          ('csf_file', 'csf_txt')]),
+        (inputnode, estimate_response, [('dwi_mask', 'in_mask')])])
 
-        (create_mif, estimate_fod, [('mif_file', 'in_file')]),
-        (resample_mask, estimate_fod, [('out_file', 'mask_file')]),
-        (resample_mask, estimate_response, [('out_file', 'in_mask')])])
+    if plot_reports:
+        workflow.connect([
+
+        (inputnode, plot_peaks, [('dwi_ref', 'background_image'),
+                                 ('odf_rois', 'odf_rois')]),
+        (resample_mask, plot_peaks, [('out_file', 'mask_file')]),
+        (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')])])
+
 
     if not run_mtnormalize:
         workflow.connect([

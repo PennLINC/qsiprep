@@ -52,6 +52,7 @@ def init_dsi_studio_recon_wf(omp_nthreads, available_anatomical_data, name="dsi_
             fields=['fibgz']),
         name="outputnode")
     workflow = Workflow(name=name)
+    plot_reports = params.get("plot_reports", True)
     desc = """DSI Studio Reconstruction
 
 : """
@@ -75,7 +76,7 @@ distance of %02f.""" % romdd
         run_without_submitting=True)
 
     # Plot targeted regions
-    if available_anatomical_data['has_qsiprep_t1w_transforms']:
+    if available_anatomical_data['has_qsiprep_t1w_transforms'] and plot_reports:
         ds_report_odfs = pe.Node(
             ReconDerivativesDataSink(extension='.png',
                                      desc="GQIODF",
@@ -90,13 +91,14 @@ distance of %02f.""" % romdd
                                  ('bvec_file', 'input_bvecs_file')]),
         (create_src, gqi_recon, [('output_src', 'input_src_file')]),
         (inputnode, gqi_recon, [('dwi_mask', 'mask')]),
-        (gqi_recon, outputnode, [('output_fib', 'fibgz')]),
-        (gqi_recon, plot_peaks, [('output_fib', 'fib_file')]),
-        (inputnode, plot_peaks, [('dwi_ref', 'background_image'),
-                                 ('odf_rois', 'odf_rois'),
-                                 ('dwi_mask', 'mask_file')]),
-        (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')])
-    ])
+        (gqi_recon, outputnode, [('output_fib', 'fibgz')])])
+    if plot_reports:
+        workflow.connect([
+            (gqi_recon, plot_peaks, [('output_fib', 'fib_file')]),
+            (inputnode, plot_peaks, [('dwi_ref', 'background_image'),
+                                     ('odf_rois', 'odf_rois'),
+                                     ('dwi_mask', 'mask_file')]),
+            (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')])])
 
     if output_suffix:
         # Save the output in the outputs directory
