@@ -334,9 +334,9 @@ def init_dipy_mapmri_recon_wf(omp_nthreads, available_anatomical_data, name="dip
     desc = """Dipy Reconstruction
 
 : """
+    plot_reports = params.pop("plot_reports", True)
     recon_map = pe.Node(MAPMRIReconstruction(**params), name="recon_map")
     plot_peaks = pe.Node(CLIReconPeaksReport(), name='plot_peaks')
-    plot_reports = params.pop("plot_reports", True)
     ds_report_peaks = pe.Node(
         ReconDerivativesDataSink(extension='.png',
                                  desc="MAPLMRIODF",
