@@ -107,9 +107,9 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, available_anatomical_data,
     desc = """Dipy Reconstruction
 
 : """
+    plot_reports = params.pop("plot_reports", True)
     recon_shore = pe.Node(BrainSuiteShoreReconstruction(**params), name="recon_shore")
     doing_extrapolation = params.get("extrapolate_scheme") in ("HCP", "ABCD")
-    plot_reports = params.pop("plot_reports", True)
 
     plot_peaks = pe.Node(CLIReconPeaksReport(), name='plot_peaks')
     ds_report_peaks = pe.Node(
