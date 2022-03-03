@@ -1,4 +1,16 @@
-0.15.0 (February 28, 2022)
+0.15.2 (March 3, 2022)
+==========================
+Due to persistent difficulties with crashing ODF plots in the reconstruction workflows,
+there is now a `--skip-odf-reports` option that will disable the ODF and peak plots
+in the html reports. This should only be used once you've run some test workflows 
+with the reports still enabled, so you know that your ODFs are correctly oriented.
+
+ * Make ODF Plots optional (#364)
+ * Bugfix: ABCD gradient data for extrapolation (#363)
+ * Adds `dipy_dki` reconstruction workflow (#366)
+
+
+0.15.1 (February 28, 2022)
 ==========================
 A lot of changes in QSIPrep. The big-picture changes are 
 
