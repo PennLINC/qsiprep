@@ -709,10 +709,10 @@ class TensorReconstruction(DipyReconInterface):
 
 
 class _KurtisisReconstructionInputSpec(DipyReconInputSpec):
-    kurtosis_clip_min = traits.float(
+    kurtosis_clip_min = traits.Float(
         default=-0.42857142857142855,
         usedefault=True)
-    kurtosis_clip_max = traits.float(
+    kurtosis_clip_max = traits.Float(
         default=10.0,
         usedefault=True)
 
@@ -732,8 +732,6 @@ class _KurtisisReconstructionOutputSpec(DipyReconOutputSpec):
     mkt_image = File()
 
 
-
-
 class KurtosisReconstruction(DipyReconInterface):
     input_spec = _KurtisisReconstructionInputSpec
     output_spec = _KurtisisReconstructionOutputSpec
@@ -745,7 +743,7 @@ class KurtosisReconstruction(DipyReconInterface):
         mask_img, mask_array = self._get_mask(dwi_img, gtab)
 
         # Fit it
-        dkimodel = dti.TensorModel(gtab)
+        dkimodel = dki.DiffusionKurtosisModel(gtab)
         dkifit = dkimodel.fit(dwi_data, mask_array)
         lower_triangular = dkifit.lower_triangular()
         tensor_img = nifti1_symmat(lower_triangular, dwi_img.affine)
@@ -770,7 +768,7 @@ class KurtosisReconstruction(DipyReconInterface):
             data = np.nan_to_num(
                 getattr(dkifit, metric)(
                     self.inputs.kurtosis_clip_min,
-                    self.inputs.kurtosis_clip_max).astype("float32"), 0)
+                    self.inputs.kurtosis_clip_max), 0)
             out_name = fname_presuffix(self.inputs.dwi_file,
                                        suffix="DKI" + metric,
                                        newpath=runtime.cwd, use_ext=True)
