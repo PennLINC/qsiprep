@@ -7,7 +7,8 @@ from qsiprep.interfaces import anatomical
 from qsiprep.interfaces.bids import QsiReconIngress, ReconDerivativesDataSink
 from .dsi_studio import (init_dsi_studio_recon_wf, init_dsi_studio_export_wf,
                          init_dsi_studio_connectivity_wf, init_dsi_studio_tractography_wf)
-from .dipy import init_dipy_brainsuite_shore_recon_wf, init_dipy_mapmri_recon_wf
+from .dipy import (init_dipy_brainsuite_shore_recon_wf, init_dipy_mapmri_recon_wf,
+    init_dipy_dki_recon_wf)
 from .mrtrix import (init_mrtrix_csd_recon_wf, init_global_tractography_wf,
                      init_mrtrix_tractography_wf, init_mrtrix_connectivity_wf)
 from .amico import init_amico_noddi_fit_wf
@@ -201,6 +202,8 @@ def workflow_from_spec(omp_nthreads, available_anatomical_data, node_spec,
             return init_dipy_brainsuite_shore_recon_wf(**kwargs)
         if node_spec["action"] == "MAPMRI_reconstruction":
             return init_dipy_mapmri_recon_wf(**kwargs)
+        if node_spec["action"] == "DKI_reconstruction":
+            return init_dipy_dki_recon_wf(**kwargs)
 
     # AMICO operations
     elif software == "AMICO":

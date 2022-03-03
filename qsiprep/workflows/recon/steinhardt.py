@@ -80,6 +80,7 @@ A series of Steinhardt order parameters (up to order %d) were calculated.
             sop_sinks[key] = pe.Node(
                 ReconDerivativesDataSink(suffix="q-%d_SOP" % sop_order),
                     name='ds_sop_q%d' % sop_order,
+                    compress=True,
                     run_without_submitting=True)
             workflow.connect(outputnode, key, sop_sinks[key], 'in_file')
 

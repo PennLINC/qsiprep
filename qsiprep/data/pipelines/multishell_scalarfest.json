@@ -72,6 +72,17 @@
       }
     },
     {
+      "name": "dki_recon",
+      "software": "Dipy",
+      "action": "DKI_reconstruction",
+      "input": "qsiprep",
+      "output_suffix": "DKI",
+      "parameters": {
+        "write_mif": false,
+        "write_fibgz": false
+      }
+    },
+    {
       "name": "csdsi_3dshore",
       "software": "Dipy",
       "action": "3dSHORE_reconstruction",

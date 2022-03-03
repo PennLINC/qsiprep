@@ -9,7 +9,7 @@ import logging
 import nipype.pipeline.engine as pe
 from nipype.interfaces import afni, utility as niu
 from qsiprep.interfaces.bids import ReconDerivativesDataSink
-from ...interfaces.dipy import BrainSuiteShoreReconstruction, MAPMRIReconstruction
+from ...interfaces.dipy import BrainSuiteShoreReconstruction, KurtosisReconstruction, MAPMRIReconstruction
 from .interchange import recon_workflow_input_fields
 from ...engine import Workflow
 from ...interfaces.reports import CLIReconPeaksReport
@@ -94,7 +94,7 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, available_anatomical_data,
 
     """
 
-    inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields + ['odf_rois']),
+    inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields),
                         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(
@@ -322,7 +322,7 @@ def init_dipy_mapmri_recon_wf(omp_nthreads, available_anatomical_data, name="dip
             Default: None (cvxpy chooses its own solver)
     """
 
-    inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields + ['odf_rois']),
+    inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields),
                         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(
@@ -335,8 +335,8 @@ def init_dipy_mapmri_recon_wf(omp_nthreads, available_anatomical_data, name="dip
 
 : """
     plot_reports = params.pop("plot_reports", True)
-    recon_map = pe.Node(MAPMRIReconstruction(**params), name="recon_map")
     plot_peaks = pe.Node(CLIReconPeaksReport(), name='plot_peaks')
+    recon_map = pe.Node(MAPMRIReconstruction(**params), name="recon_map")
     ds_report_peaks = pe.Node(
         ReconDerivativesDataSink(extension='.png',
                                  desc="MAPLMRIODF",
@@ -391,5 +391,108 @@ def init_dipy_mapmri_recon_wf(omp_nthreads, available_anatomical_data, name="dip
                                  name='ds_%s_%s' % (name, scalar_name)),
                              [(scalar_name, 'in_file')])]
         workflow.connect(connections)
+    workflow.__desc__ = desc
+    return workflow
+
+
+def init_dipy_dki_recon_wf(omp_nthreads, available_anatomical_data, name="dipy_dki_recon",
+                              output_suffix="", params={}):
+    """Fit DKI
+
+    Inputs
+
+        *qsiprep outputs*
+
+    Outputs
+
+        tensor_image
+        fa_image
+        md_image
+        rd_image
+        ad_image
+        color_fa_image
+        kfa_image
+        mk_image
+        ak_image
+        rk_image
+        mkt_image
+
+    Params
+
+        write_fibgz: bool
+            True writes out a DSI Studio fib file
+        write_mif: bool
+            True writes out a MRTrix mif file with sh coefficients
+        radial_order: int
+            An even integer that represent the order of the basis
+        
+    """
+
+    inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields),
+                        name="inputnode")
+    outputnode = pe.Node(
+        niu.IdentityInterface(
+            fields=['tensor_image', 'fa_image', 'md_image', 'rd_image', 'ad_image',
+                    'color_fa_image', 'kfa_image', 'mk_image', 'ak_image', 'rk_image',
+                    'mkt_image']),
+        name="outputnode")
+
+    workflow = Workflow(name=name)
+    desc = """Dipy Reconstruction
+
+: """
+    plot_reports = params.pop("plot_reports", True)
+    recon_dki = pe.Node(KurtosisReconstruction(**params), name="recon_dki")
+
+
+    workflow.connect([
+        (inputnode, recon_dki, [('dwi_file', 'dwi_file'),
+                                ('bval_file', 'bval_file'),
+                                ('bvec_file', 'bvec_file'),
+                                ('dwi_mask', 'mask_file')]),
+        (recon_dki, outputnode, [('tensor_image', 'tensor_image'),
+                                 ('fa_image', 'fa_image'),
+                                 ('md_image', 'md_image'),
+                                 ('rd_image', 'rd_image'),
+                                 ('ad_image', 'ad_image'),
+                                 ('color_fa_image', 'color_fa_image'),
+                                 ('kfa_image', 'kfa_image'),
+                                 ('mk_image', 'mk_image'),
+                                 ('ak_image', 'ak_image'),
+                                 ('rk_image', 'rk_image'),
+                                 ('mkt_image', 'mkt_image'),
+                                 ('fibgz', 'fibgz')])
+    ])
+
+    if plot_reports:
+        plot_peaks = pe.Node(CLIReconPeaksReport(peaks_only=True), name='plot_peaks')
+        ds_report_peaks = pe.Node(
+            ReconDerivativesDataSink(extension='.png',
+                                     desc="DKI",
+                                     suffix='peaks'),
+            name='ds_report_peaks',
+            run_without_submitting=True)
+        workflow.connect([
+            (inputnode, plot_peaks, [('dwi_ref', 'background_image'),
+                                     ('odf_rois', 'odf_rois')]),
+            (inputnode, plot_peaks, [('dwi_mask', 'mask_file')]),
+            (recon_dki, plot_peaks, [('odf_directions', 'directions_file'),
+                                     ('odf_amplitudes', 'odf_file')]),
+            (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')])])
+
+    if output_suffix:
+        external_format_datasinks(output_suffix, params, workflow)
+        connections = []
+        for scalar_name in ['tensor_image', 'fa_image', 'md_image', 'rd_image', 'ad_image',
+                    'color_fa_image', 'kfa_image', 'mk_image', 'ak_image', 'rk_image',
+                    'mkt_image']:
+            connections += [(outputnode,
+                             pe.Node(
+                                 ReconDerivativesDataSink(desc=scalar_name,
+                                                          suffix=output_suffix),
+                                 name='ds_%s_%s' % (name, scalar_name)),
+                             [(scalar_name, 'in_file')])]
+        workflow.connect(connections)
+
     workflow.__desc__ = desc
     return workflow
