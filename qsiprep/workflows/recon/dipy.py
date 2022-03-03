@@ -9,7 +9,7 @@ import logging
 import nipype.pipeline.engine as pe
 from nipype.interfaces import afni, utility as niu
 from qsiprep.interfaces.bids import ReconDerivativesDataSink
-from ...interfaces.dipy import BrainSuiteShoreReconstruction, MAPMRIReconstruction
+from ...interfaces.dipy import BrainSuiteShoreReconstruction, KurtosisReconstruction, MAPMRIReconstruction
 from .interchange import recon_workflow_input_fields
 from ...engine import Workflow
 from ...interfaces.reports import CLIReconPeaksReport
@@ -335,8 +335,8 @@ def init_dipy_mapmri_recon_wf(omp_nthreads, available_anatomical_data, name="dip
 
 : """
     plot_reports = params.pop("plot_reports", True)
-    recon_map = pe.Node(MAPMRIReconstruction(**params), name="recon_map")
     plot_peaks = pe.Node(CLIReconPeaksReport(), name='plot_peaks')
+    recon_map = pe.Node(MAPMRIReconstruction(**params), name="recon_map")
     ds_report_peaks = pe.Node(
         ReconDerivativesDataSink(extension='.png',
                                  desc="MAPLMRIODF",
@@ -442,9 +442,8 @@ def init_dipy_dki_recon_wf(omp_nthreads, available_anatomical_data, name="dipy_d
     desc = """Dipy Reconstruction
 
 : """
-    recon_map = pe.Node(MAPMRIReconstruction(**params), name="recon_map")
-    resample_mask = pe.Node(
-        afni.Resample(outputtype='NIFTI_GZ', resample_mode="NN"), name='resample_mask')
+    plot_reports = params.pop("plot_reports", True)
+    recon_dki = pe.Node(KurtosisReconstruction(**params), name="recon_dki")
     plot_peaks = pe.Node(CLIReconPeaksReport(), name='plot_peaks')
     ds_report_peaks = pe.Node(
         ReconDerivativesDataSink(extension='.png',
