@@ -163,6 +163,7 @@ class NODDI(AmicoReconInterface):
         LOGGER.info("Fitting NODDI Model.")
         aeval.set_model("NODDI")
         aeval.set_config('parallel_jobs', self.inputs.num_threads)
+        aeval.set_config('parallel_backend', 'multiprocessing')
         # set the parameters
         aeval.model.dPar = self.inputs.dPar
         aeval.model.dIso = self.inputs.dIso
