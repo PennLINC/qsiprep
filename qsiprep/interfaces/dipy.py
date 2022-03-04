@@ -720,7 +720,7 @@ class KurtosisReconstruction(DipyReconInterface):
                                              suffix='DKItensor',
                                              newpath=runtime.cwd, use_ext=True)
         tensor_img.to_filename(output_tensor_file)
-        self._results['tensor_image'] = output_tensor_file
+        self._results['tensor'] = output_tensor_file
 
         # FA MD RD and AD
         for metric in ["fa", "md", "rd", "ad", "colorFA", "kfa"]:
