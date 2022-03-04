@@ -18,7 +18,11 @@ LOGGER = logging.getLogger('nipype.interface')
 
 
 class DSIStudioCommandLineInputSpec(CommandLineInputSpec):
-    num_threads = traits.Int(1, usedefault=True, argstr="--thread_count=%d")
+    num_threads = traits.Int(
+        1, 
+        usedefault=True, 
+        argstr="--thread_count=%d",
+        nohash=True)
 
 
 class DSIStudioCreateSrcInputSpec(DSIStudioCommandLineInputSpec):
@@ -389,7 +393,7 @@ class DSIStudioAtlasGraph(SimpleInterface):
         ifargs['thread_count'] = 1
 
         # Get number of parallel jobs
-        num_threads = ifargs.pop('nthreads')
+        num_threads = ifargs.pop('num_threads')
         atlas_configs = ifargs.pop('atlas_configs')
         workflow = pe.Workflow(name='dsistudio_atlasgraph')
         nodes = []

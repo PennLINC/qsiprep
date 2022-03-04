@@ -56,7 +56,10 @@ def init_amico_noddi_fit_wf(omp_nthreads, available_anatomical_data,
     desc = """NODDI Reconstruction
 
 : """
-    noddi_fit = pe.Node(NODDI(**params), name="recon_noddi")
+    noddi_fit = pe.Node(
+        NODDI(**params), 
+        name="recon_noddi",
+        n_procs=omp_nthreads)
     desc += """\
 The NODDI model (@noddi) was fit using the AMICO implementation (@amico).
 A value of %.1E was used for parallel diffusivity and %.1E for isotropic
