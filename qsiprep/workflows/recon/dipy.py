@@ -411,17 +411,17 @@ def init_dipy_dki_recon_wf(omp_nthreads, available_anatomical_data, name="dipy_d
 
     Outputs
 
-        tensor_image
-        fa_image
-        md_image
-        rd_image
-        ad_image
-        color_fa_image
-        kfa_image
-        mk_image
-        ak_image
-        rk_image
-        mkt_image
+        tensor
+        fa
+        md
+        rd
+        ad
+        color_fa
+        kfa
+        mk
+        ak
+        rk
+        mkt
 
     Params
 
@@ -438,9 +438,9 @@ def init_dipy_dki_recon_wf(omp_nthreads, available_anatomical_data, name="dipy_d
                         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(
-            fields=['tensor_image', 'fa_image', 'md_image', 'rd_image', 'ad_image',
-                    'color_fa_image', 'kfa_image', 'mk_image', 'ak_image', 'rk_image',
-                    'mkt_image']),
+            fields=['tensor', 'fa', 'md', 'rd', 'ad',
+                    'colorFA', 'kfa', 'mk', 'ak', 'rk',
+                    'mkt']),
         name="outputnode")
 
     workflow = Workflow(name=name)
@@ -456,17 +456,17 @@ def init_dipy_dki_recon_wf(omp_nthreads, available_anatomical_data, name="dipy_d
                                 ('bval_file', 'bval_file'),
                                 ('bvec_file', 'bvec_file'),
                                 ('dwi_mask', 'mask_file')]),
-        (recon_dki, outputnode, [('tensor_image', 'tensor_image'),
-                                 ('fa_image', 'fa_image'),
-                                 ('md_image', 'md_image'),
-                                 ('rd_image', 'rd_image'),
-                                 ('ad_image', 'ad_image'),
-                                 ('color_fa_image', 'color_fa_image'),
-                                 ('kfa_image', 'kfa_image'),
-                                 ('mk_image', 'mk_image'),
-                                 ('ak_image', 'ak_image'),
-                                 ('rk_image', 'rk_image'),
-                                 ('mkt_image', 'mkt_image'),
+        (recon_dki, outputnode, [('tensor', 'tensor'),
+                                 ('fa', 'fa'),
+                                 ('md', 'md'),
+                                 ('rd', 'rd'),
+                                 ('ad', 'ad'),
+                                 ('colorFA', 'colorFA'),
+                                 ('kfa', 'kfa'),
+                                 ('mk', 'mk'),
+                                 ('ak', 'ak'),
+                                 ('rk', 'rk'),
+                                 ('mkt', 'mkt'),
                                  ('fibgz', 'fibgz')])
     ])
 
@@ -492,9 +492,9 @@ def init_dipy_dki_recon_wf(omp_nthreads, available_anatomical_data, name="dipy_d
     if output_suffix:
         external_format_datasinks(output_suffix, params, workflow)
         connections = []
-        for scalar_name in ['tensor_image', 'fa_image', 'md_image', 'rd_image', 'ad_image',
-                    'color_fa_image', 'kfa_image', 'mk_image', 'ak_image', 'rk_image',
-                    'mkt_image']:
+        for scalar_name in ['tensor', 'fa', 'md', 'rd', 'ad',
+                    'colorFA', 'kfa', 'mk', 'ak', 'rk',
+                    'mkt']:
             connections += [(outputnode,
                              pe.Node(
                                  ReconDerivativesDataSink(desc=scalar_name,
