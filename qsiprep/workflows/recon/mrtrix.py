@@ -209,7 +209,10 @@ A single-shell-optimized multi-tissue CSD was performed using MRtrix3Tissue
 
     if plot_reports:
         # Make a visual report of the model
-        plot_peaks = pe.Node(CLIReconPeaksReport(), name='plot_peaks')
+        plot_peaks = pe.Node(
+            CLIReconPeaksReport(), 
+            name='plot_peaks',
+            n_procs=omp_nthreads)
         ds_report_peaks = pe.Node(
             ReconDerivativesDataSink(extension='.png',
                                     desc="wmFOD",
@@ -542,7 +545,10 @@ def init_mrtrix_connectivity_wf(omp_nthreads, available_anatomical_data, name="m
     ])
 
     if plot_reports:
-        plot_connectivity = pe.Node(ConnectivityReport(), name='plot_connectivity')
+        plot_connectivity = pe.Node(
+            ConnectivityReport(), 
+            name='plot_connectivity',
+            n_procs=omp_nthreads)
         ds_report_connectivity = pe.Node(
             ReconDerivativesDataSink(extension='.svg',
                                     desc="MRtrix3Connectivity",

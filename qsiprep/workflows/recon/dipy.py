@@ -111,14 +111,6 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, available_anatomical_data,
     recon_shore = pe.Node(BrainSuiteShoreReconstruction(**params), name="recon_shore")
     doing_extrapolation = params.get("extrapolate_scheme") in ("HCP", "ABCD")
 
-    plot_peaks = pe.Node(CLIReconPeaksReport(), name='plot_peaks')
-    ds_report_peaks = pe.Node(
-        ReconDerivativesDataSink(extension='.png',
-                                 desc="3dSHOREODF",
-                                 suffix='peaks'),
-        name='ds_report_peaks',
-        run_without_submitting=True)
-
     workflow.connect([
         (inputnode, recon_shore, [('dwi_file', 'dwi_file'),
                                   ('bval_file', 'bval_file'),
@@ -138,6 +130,17 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, available_anatomical_data,
                                    ('extrapolated_b', 'b_file')])
         ])
     if plot_reports:
+
+        plot_peaks = pe.Node(
+            CLIReconPeaksReport(),
+            name='plot_peaks',
+            n_procs=omp_nthreads)
+        ds_report_peaks = pe.Node(
+            ReconDerivativesDataSink(extension='.png',
+                                    desc="3dSHOREODF",
+                                    suffix='peaks'),
+            name='ds_report_peaks',
+            run_without_submitting=True)
         workflow.connect([
             (inputnode, plot_peaks, [('dwi_ref', 'background_image'),
                                      ('odf_rois', 'odf_rois')]),
@@ -335,14 +338,7 @@ def init_dipy_mapmri_recon_wf(omp_nthreads, available_anatomical_data, name="dip
 
 : """
     plot_reports = params.pop("plot_reports", True)
-    plot_peaks = pe.Node(CLIReconPeaksReport(), name='plot_peaks')
     recon_map = pe.Node(MAPMRIReconstruction(**params), name="recon_map")
-    ds_report_peaks = pe.Node(
-        ReconDerivativesDataSink(extension='.png',
-                                 desc="MAPLMRIODF",
-                                 suffix='peaks'),
-        name='ds_report_peaks',
-        run_without_submitting=True)
 
     workflow.connect([
         (inputnode, recon_map, [('dwi_file', 'dwi_file'),
@@ -362,6 +358,16 @@ def init_dipy_mapmri_recon_wf(omp_nthreads, available_anatomical_data, name="dip
                                  ('fibgz', 'fibgz'),
                                  ('fod_sh_mif', 'fod_sh_mif')])])
     if plot_reports:
+        plot_peaks = pe.Node(
+            CLIReconPeaksReport(), 
+            name='plot_peaks',
+            n_procs=omp_nthreads)
+        ds_report_peaks = pe.Node(
+            ReconDerivativesDataSink(extension='.png',
+                                    desc="MAPLMRIODF",
+                                    suffix='peaks'),
+            name='ds_report_peaks',
+            run_without_submitting=True)
         workflow.connect([
             (inputnode, plot_peaks, [('dwi_mask', 'mask_file'),
                                      ('dwi_ref', 'background_image'),
@@ -464,8 +470,11 @@ def init_dipy_dki_recon_wf(omp_nthreads, available_anatomical_data, name="dipy_d
                                  ('fibgz', 'fibgz')])
     ])
 
-    if plot_reports:
-        plot_peaks = pe.Node(CLIReconPeaksReport(peaks_only=True), name='plot_peaks')
+    if plot_reports and False:
+        plot_peaks = pe.Node(
+            CLIReconPeaksReport(peaks_only=True), 
+            name='plot_peaks',
+            n_procs=omp_nthreads)
         ds_report_peaks = pe.Node(
             ReconDerivativesDataSink(extension='.png',
                                      desc="DKI",

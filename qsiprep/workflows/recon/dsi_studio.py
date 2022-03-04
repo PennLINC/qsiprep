@@ -79,7 +79,10 @@ distance of %02f.""" % romdd
         (gqi_recon, outputnode, [('output_fib', 'fibgz')])])
     if plot_reports:
         # Make a visual report of the model
-        plot_peaks = pe.Node(CLIReconPeaksReport(subtract_iso=True), name='plot_peaks')
+        plot_peaks = pe.Node(
+            CLIReconPeaksReport(subtract_iso=True), 
+            name='plot_peaks',
+            n_procs=omp_nthreads)
         ds_report_peaks = pe.Node(
             ReconDerivativesDataSink(extension='.png',
                                     desc="GQIODF",
