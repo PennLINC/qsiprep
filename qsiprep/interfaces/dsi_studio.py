@@ -18,7 +18,7 @@ LOGGER = logging.getLogger('nipype.interface')
 
 
 class DSIStudioCommandLineInputSpec(CommandLineInputSpec):
-    nthreads = traits.Int(1, usedefault=True, argstr="--threads=%d")
+    num_threads = traits.Int(1, usedefault=True, argstr="--thread_count=%d")
 
 
 class DSIStudioCreateSrcInputSpec(DSIStudioCommandLineInputSpec):

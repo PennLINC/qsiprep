@@ -56,24 +56,19 @@ def init_dsi_studio_recon_wf(omp_nthreads, available_anatomical_data, name="dsi_
     desc = """DSI Studio Reconstruction
 
 : """
-    create_src = pe.Node(DSIStudioCreateSrc(), name="create_src")
+    create_src = pe.Node(
+        DSIStudioCreateSrc(), 
+        name="create_src")
     romdd = params.get("ratio_of_mean_diffusion_distance", 1.25)
     gqi_recon = pe.Node(
-        DSIStudioGQIReconstruction(ratio_of_mean_diffusion_distance=romdd),
-        name="gqi_recon")
+        DSIStudioGQIReconstruction(
+            ratio_of_mean_diffusion_distance=romdd),
+        name="gqi_recon",
+        n_procs=omp_nthreads)
     desc += """\
 Diffusion orientation distribution functions (ODFs) were reconstructed using
 generalized q-sampling imaging (GQI, @yeh2010gqi) with a ratio of mean diffusion
 distance of %02f.""" % romdd
-
-    # Make a visual report of the model
-    plot_peaks = pe.Node(CLIReconPeaksReport(subtract_iso=True), name='plot_peaks')
-    ds_report_peaks = pe.Node(
-        ReconDerivativesDataSink(extension='.png',
-                                 desc="GQIODF",
-                                 suffix='peaks'),
-        name='ds_report_peaks',
-        run_without_submitting=True)
 
     # Plot targeted regions
     if available_anatomical_data['has_qsiprep_t1w_transforms'] and plot_reports:
@@ -93,6 +88,15 @@ distance of %02f.""" % romdd
         (inputnode, gqi_recon, [('dwi_mask', 'mask')]),
         (gqi_recon, outputnode, [('output_fib', 'fibgz')])])
     if plot_reports:
+        # Make a visual report of the model
+        plot_peaks = pe.Node(CLIReconPeaksReport(subtract_iso=True), name='plot_peaks')
+        ds_report_peaks = pe.Node(
+            ReconDerivativesDataSink(extension='.png',
+                                    desc="GQIODF",
+                                    suffix='peaks'),
+            name='ds_report_peaks',
+            run_without_submitting=True)
+
         workflow.connect([
             (gqi_recon, plot_peaks, [('output_fib', 'fib_file')]),
             (inputnode, plot_peaks, [('dwi_ref', 'background_image'),
@@ -181,8 +185,12 @@ def init_dsi_studio_tractography_wf(omp_nthreads, available_anatomical_data, nam
                          name="outputnode")
     plot_reports = params.pop("plot_reports", True)
     workflow = Workflow(name=name)
-    tracking = pe.Node(DSIStudioTracking(nthreads=omp_nthreads, **params),
-                       name='tracking')
+    tracking = pe.Node(
+        DSIStudioTracking(
+            num_threads=omp_nthreads,
+            **params),
+        name='tracking',
+        n_procs=omp_nthreads)
     workflow.connect([
         (inputnode, tracking, [('fibgz', 'input_fib')]),
         (tracking, outputnode, [('output_trk', 'trk_file')]),
@@ -262,25 +270,30 @@ def init_dsi_studio_connectivity_wf(omp_nthreads, available_anatomical_data, nam
                          name="outputnode")
     plot_reports = params.pop("plot_reports", True)
     workflow = pe.Workflow(name=name)
-    calc_connectivity = pe.Node(DSIStudioAtlasGraph(nthreads=omp_nthreads, **params),
-                                name='calc_connectivity')
-    plot_connectivity = pe.Node(ConnectivityReport(), name='plot_connectivity')
-    ds_report_connectivity = pe.Node(
-        ReconDerivativesDataSink(extension='.svg',
-                                 desc="DSIStudioConnectivity",
-                                 suffix='matrices'),
-        name='ds_report_connectivity',
-        run_without_submitting=True)
+    calc_connectivity = pe.Node(
+        DSIStudioAtlasGraph(num_threads=omp_nthreads, **params),
+        name='calc_connectivity',
+        n_procs=omp_nthreads)
 
     workflow.connect([
         (inputnode, calc_connectivity, [('atlas_configs', 'atlas_configs'),
                                         ('fibgz', 'input_fib'),
                                         ('trk_file', 'trk_file')]),
-        (calc_connectivity, plot_connectivity, [
-            ('connectivity_matfile', 'connectivity_matfile')]),
-        (plot_connectivity, ds_report_connectivity, [('out_report', 'in_file')]),
-        (calc_connectivity, outputnode, [('connectivity_matfile', 'matfile')])
-    ])
+        (calc_connectivity, outputnode, [('connectivity_matfile', 'matfile')])])
+
+    if plot_reports:
+        plot_connectivity = pe.Node(ConnectivityReport(), name='plot_connectivity')
+        ds_report_connectivity = pe.Node(
+            ReconDerivativesDataSink(extension='.svg',
+                                    desc="DSIStudioConnectivity",
+                                    suffix='matrices'),
+            name='ds_report_connectivity',
+            run_without_submitting=True)
+        workflow.connect([
+            (calc_connectivity, plot_connectivity, [
+                ('connectivity_matfile', 'connectivity_matfile')]),
+            (plot_connectivity, ds_report_connectivity, [('out_report', 'in_file')]),
+        ])
     if output_suffix:
         # Save the output in the outputs directory
         ds_connectivity = pe.Node(ReconDerivativesDataSink(suffix=output_suffix),
