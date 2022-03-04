@@ -47,5 +47,16 @@ ${QSIPREP_CMD} \
 	 --recon-only \
 	 -vv
 
+if [ $? -gt 0 ]; then
+   exit 1
+fi
 
+# Test dipy DKI
+${QSIPREP_CMD} \
+	 -w ${TEMPDIR} \
+	 --recon-input ${BIDS_INPUT_DIR} \
+	 --sloppy \
+	 --recon-spec dipy_dki \
+	 --recon-only \
+	 -vv
 
