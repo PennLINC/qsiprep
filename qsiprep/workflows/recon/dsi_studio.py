@@ -70,16 +70,6 @@ Diffusion orientation distribution functions (ODFs) were reconstructed using
 generalized q-sampling imaging (GQI, @yeh2010gqi) with a ratio of mean diffusion
 distance of %02f.""" % romdd
 
-    # Plot targeted regions
-    if available_anatomical_data['has_qsiprep_t1w_transforms'] and plot_reports:
-        ds_report_odfs = pe.Node(
-            ReconDerivativesDataSink(extension='.png',
-                                     desc="GQIODF",
-                                     suffix='odfs'),
-            name='ds_report_odfs',
-            run_without_submitting=True)
-        workflow.connect(plot_peaks, 'odf_report', ds_report_odfs, 'in_file')
-
     workflow.connect([
         (inputnode, create_src, [('dwi_file', 'input_nifti_file'),
                                  ('bval_file', 'input_bvals_file'),
@@ -103,6 +93,16 @@ distance of %02f.""" % romdd
                                      ('odf_rois', 'odf_rois'),
                                      ('dwi_mask', 'mask_file')]),
             (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')])])
+        # Plot targeted regions
+        if available_anatomical_data['has_qsiprep_t1w_transforms']:
+            ds_report_odfs = pe.Node(
+                ReconDerivativesDataSink(extension='.png',
+                                        desc="GQIODF",
+                                        suffix='odfs'),
+                name='ds_report_odfs',
+                run_without_submitting=True)
+            workflow.connect(plot_peaks, 'odf_report', ds_report_odfs, 'in_file')
+
 
     if output_suffix:
         # Save the output in the outputs directory
