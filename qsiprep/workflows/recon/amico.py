@@ -56,7 +56,10 @@ def init_amico_noddi_fit_wf(omp_nthreads, available_anatomical_data,
     desc = """NODDI Reconstruction
 
 : """
-    noddi_fit = pe.Node(NODDI(**params), name="recon_noddi")
+    noddi_fit = pe.Node(
+        NODDI(**params), 
+        name="recon_noddi",
+        n_procs=omp_nthreads)
     desc += """\
 The NODDI model (@noddi) was fit using the AMICO implementation (@amico).
 A value of %.1E was used for parallel diffusivity and %.1E for isotropic
@@ -65,14 +68,6 @@ diffusivity.""" % (params['dPar'], params['dIso'])
         desc += " An additional component was added to the model foe ex-vivo data."
 
     convert_to_fibgz = pe.Node(NODDItoFIBGZ(), name='convert_to_fibgz')
-
-    plot_peaks = pe.Node(CLIReconPeaksReport(), name='plot_peaks')
-    ds_report_peaks = pe.Node(
-        ReconDerivativesDataSink(extension='.png',
-                                 desc="NODDI",
-                                 suffix='peaks'),
-        name='ds_report_peaks',
-        run_without_submitting=True)
 
     workflow.connect([
         (inputnode, noddi_fit, [('dwi_file', 'dwi_file'),
@@ -95,6 +90,17 @@ diffusivity.""" % (params['dPar'], params['dIso'])
         (inputnode, convert_to_fibgz, [('dwi_mask', 'mask_file')]),
         (convert_to_fibgz, outputnode, [('fibgz_file', 'fibgz')])])
     if plot_reports:
+        plot_peaks = pe.Node(
+            CLIReconPeaksReport(), 
+            name='plot_peaks',
+            n_procs=omp_nthreads)
+        ds_report_peaks = pe.Node(
+            ReconDerivativesDataSink(extension='.png',
+                                    desc="NODDI",
+                                    suffix='peaks'),
+            name='ds_report_peaks',
+            run_without_submitting=True)
+
         workflow.connect([
             (inputnode, plot_peaks, [('dwi_mask', 'mask_file')]),
             (convert_to_fibgz, plot_peaks, [('fibgz_file', 'fib_file')]),
