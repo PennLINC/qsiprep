@@ -18,7 +18,7 @@ from dipy.core.histeq import histeq
 from dipy.segment.mask import median_otsu
 from dipy.core.sphere import HemiSphere
 from dipy.core.gradients import gradient_table
-from dipy.reconst import mapmri, dti
+from dipy.reconst import mapmri, dti, dki
 from nilearn.image import load_img
 from nipype import logging
 from nipype.utils.filemanip import fname_presuffix
@@ -302,9 +302,6 @@ class DipyReconInterface(SimpleInterface):
         return output_fname
 
     def _write_external_formats(self, runtime, fit_obj, mask_img, suffix):
-
-        if not (self.inputs.write_fibgz or self.inputs.write_mif):
-            return
 
         # Convert to amplitudes for other software
         verts, faces = get_dsi_studio_ODF_geometry("odf8")
@@ -676,5 +673,76 @@ class TensorReconstruction(DipyReconInterface):
                                        newpath=runtime.cwd, use_ext=True)
             nb.Nifti1Image(data, dwi_img.affine).to_filename(out_name)
             self._results[metric + "_image"] = out_name
+
+        return runtime
+
+
+class _KurtosisReconstructionInputSpec(DipyReconInputSpec):
+    kurtosis_clip_min = traits.Float(
+        -0.42857142857142855,
+        usedefault=True)
+    kurtosis_clip_max = traits.Float(
+        10.0,
+        usedefault=True)
+
+
+
+class _KurtosisReconstructionOutputSpec(DipyReconOutputSpec):
+    tensor = File()
+    fa = File()
+    md = File()
+    rd = File()
+    ad = File()
+    colorFA = File()
+    kfa = File()
+    mk = File()
+    ak = File()
+    rk = File()
+    mkt = File()
+
+
+class KurtosisReconstruction(DipyReconInterface):
+    input_spec = _KurtosisReconstructionInputSpec
+    output_spec = _KurtosisReconstructionOutputSpec
+
+    def _run_interface(self, runtime):
+        gtab = self._get_gtab()
+        dwi_img = nb.load(self.inputs.dwi_file)
+        dwi_data = dwi_img.get_fdata(dtype=np.float32)
+        mask_img, mask_array = self._get_mask(dwi_img, gtab)
+
+        # Fit it
+        dkimodel = dki.DiffusionKurtosisModel(gtab)
+        dkifit = dkimodel.fit(dwi_data, mask_array)
+        lower_triangular = dkifit.lower_triangular()
+        tensor_img = nifti1_symmat(lower_triangular, dwi_img.affine)
+        output_tensor_file = fname_presuffix(self.inputs.dwi_file,
+                                             suffix='DKItensor',
+                                             newpath=runtime.cwd, use_ext=True)
+        tensor_img.to_filename(output_tensor_file)
+        self._results['tensor'] = output_tensor_file
+
+        # FA MD RD and AD
+        for metric in ["fa", "md", "rd", "ad", "colorFA", "kfa"]:
+            metric_attr = metric if metric != "colorFA" else "color_fa"
+            data = np.nan_to_num(
+                getattr(dkifit, metric_attr).astype("float32"), 0)
+            out_name = fname_presuffix(self.inputs.dwi_file,
+                                       suffix="DKI" + metric,
+                                       newpath=runtime.cwd, use_ext=True)
+            nb.Nifti1Image(data, dwi_img.affine).to_filename(out_name)
+            self._results[metric] = out_name
+        
+        # Get the kurtosis metrics
+        for metric in ["mk", "ak", "rk", "mkt"]:
+            data = np.nan_to_num(
+                getattr(dkifit, metric)(
+                    float(self.inputs.kurtosis_clip_min),
+                    float(self.inputs.kurtosis_clip_max)), 0)
+            out_name = fname_presuffix(self.inputs.dwi_file,
+                                       suffix="DKI" + metric,
+                                       newpath=runtime.cwd, use_ext=True)
+            nb.Nifti1Image(data, dwi_img.affine).to_filename(out_name)
+            self._results[metric] = out_name
 
         return runtime

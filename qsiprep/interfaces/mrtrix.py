@@ -21,7 +21,7 @@ from nipype import logging
 from nipype.utils.filemanip import fname_presuffix, split_filename, which
 from nipype.interfaces.base import (
     traits, TraitedSpec, BaseInterfaceInputSpec, File, SimpleInterface, InputMultiObject,
-    isdefined, CommandLineInputSpec)
+    isdefined, CommandLineInputSpec, CommandLine, )
 from nipype.interfaces.mrtrix3 import Generate5tt, ResponseSD, MRConvert
 from nipype.interfaces.mrtrix3.utils import Generate5ttInputSpec
 from nipype.interfaces.mrtrix3.base import MRTrix3Base, MRTrix3BaseInputSpec
@@ -36,12 +36,17 @@ RC3_ROOT = which('average_response')  # Only exists in RC3
 if RC3_ROOT is not None:
     # Use the directory containing average_response
     RC3_ROOT = os.path.split(RC3_ROOT)[0]
-SS3T_ROOT = which('ss3t_csd_beta1')
-if SS3T_ROOT is None:
+
+_SS3T_EXE = which('ss3t_csd_beta1')
+if _SS3T_EXE is None:
     if os.getenv('SS3T_HOME'):
         SS3T_ROOT = os.getenv('SS3T_HOME')
-    elif os.path.exists('/opt/3Tissue/bin/ss3t_csd_beta1'):
+    else:
+        if not os.path.exists('/opt/3Tissue/bin/ss3t_csd_beta1'):
+            LOGGER.warn("Check installation of 3Tissue")
         SS3T_ROOT = '/opt/3Tissue/bin'
+else:
+    SS3T_ROOT = os.path.split(_SS3T_EXE)[0]
 
 
 class TckGenInputSpec(TractographyInputSpec):
@@ -201,15 +206,37 @@ class GenerateMasked5ttInputSpec(Generate5ttInputSpec):
         'fsl',
         'gif',
         'freesurfer',
+        'hsvs',
         argstr='%s',
         position=0,
         mandatory=True,
         desc='tissue segmentation algorithm')
-    in_file = File(
-        exists=True, argstr='%s', mandatory=True, position=1, desc='input image')
+    in_file = traits.Either(
+        File(exists=True), 
+        traits.Directory(exists=True),
+        argstr='%s',
+        mandatory=True,
+        position=1,
+        desc='input T1w image or FreeSurfer directory')
     out_file = File(
-        argstr='%s', genfile=True, position=2, desc='output image')
+        argstr='%s', 
+        genfile=True, 
+        position=2, 
+        desc='output image')
     mask = File(exists=True, argstr='-mask %s')
+    amygdala_hipppocampi_subcortical_gm = traits.Bool(
+        argstr="-sgm_amyg_hipp")
+    white_stem = traits.Bool(argstr="-white_stem")
+    thalami_method = traits.Enum(
+        "nuclei",
+        "first",
+        "aseg", 
+        argstr="-thalami %s")
+    hippocampi_method = traits.Enum(
+        "subfields",
+        "first",
+        "aseg",
+        argstr="-hippocampi %s")
 
 
 class GenerateMasked5tt(Generate5tt):
@@ -783,6 +810,7 @@ class BuildConnectome(MRTrix3Base):
         prefix = atlas_name + "_" + self.inputs.measure
         connectivity_data[prefix + "_connectivity"] = np.loadtxt(self.inputs.out_file,
                                                                 delimiter=',')
+        connectivity_data["command"] = self.cmdline
         merged_matfile = op.join(runtime.cwd, prefix + "_connectivity.mat")
         savemat(merged_matfile, connectivity_data, long_field_names=True)
         return runtime
@@ -797,6 +825,7 @@ class BuildConnectome(MRTrix3Base):
         if name == 'in_weights':
             if self.inputs.use_sift_weights:
                 return spec.argstr % val
+            return ''
         return super(BuildConnectome, self)._format_arg(name, spec, val)
 
 
@@ -812,7 +841,7 @@ class MRTrixAtlasGraphOutputSpec(TraitedSpec):
 
 
 class MRTrixAtlasGraph(SimpleInterface):
-    """Produce one connectivity matrix per atlas based on DSI Studio tractography"""
+    """Produce one connectivity matrix per atlas based on MRtrix tractography"""
     input_spec = MRTrixAtlasGraphInputSpec
     output_spec = MRTrixAtlasGraphOutputSpec
 
@@ -828,7 +857,7 @@ class MRTrixAtlasGraph(SimpleInterface):
         del ifargs['in_parc']
 
         # Make a workflow for each atlas and tracking parameter set
-        workflow = pe.Workflow(name='dsistudio_atlasgraph')
+        workflow = pe.Workflow(name='mrtrix_atlasgraph')
         nodes = []
         merge_mats = pe.Node(niu.Merge(len(tracking_params) * len(atlas_configs)),
                              name='merge_mats')
@@ -838,10 +867,12 @@ class MRTrixAtlasGraph(SimpleInterface):
         for atlas_name, atlas_config in atlas_configs.items():
             for tracking_param_set in self.inputs.tracking_params:
                 node_args = deepcopy(ifargs)
-                # Symlink in the fib file
+
+                # These are overwritten in each node
                 node_args.pop('atlas_config')
                 node_args.pop('atlas_name')
                 node_args.pop('tracking_params')
+
                 measure_name = tracking_param_set['measure']
                 node_args.update(tracking_param_set)
                 nodes.append(
@@ -1077,3 +1108,62 @@ class MRDeGibbs(SeriesPreprocReport, MRTrix3Base):
         )
 
         self._calculate_nmse(input_dwi, denoised_nii)
+
+
+class _ITKTransformConvertInputSpec(CommandLineInputSpec):
+    in_transform = traits.File(
+        exists=True,
+        argstr="%s",
+        mandatory=True,
+        position=0)
+    operation = traits.Enum(
+        "itk_import", 
+        default="itk_import", 
+        usedefault=True, 
+        posision=1,
+        argstr="%s")
+    out_transform = traits.File(
+        argstr="%s",
+        name_source='in_transform',
+        name_template='%s.txt',
+        keep_extension=False,
+        position=-1)
+
+
+class _ITKTransformConvertOutputSpec(TraitedSpec):
+    out_transform = traits.File(exists=True)
+
+
+class ITKTransformConvert(CommandLine):
+    _cmd = "transformconvert"
+    input_spec = _ITKTransformConvertInputSpec
+    output_spec = _ITKTransformConvertOutputSpec
+
+
+class _TransformHeaderInputSpec(CommandLineInputSpec):
+    transform_file = traits.File(
+        exists=True, 
+        position=0, 
+        mandatory=True,
+        argstr="-linear %s")
+    in_image = traits.File(
+        exists=True, 
+        mandatory=True, 
+        position=1,
+        argstr="%s")
+    out_image = traits.File(
+        argstr="%s",
+        name_source="in_image",
+        name_template="%s_hdrxform.nii.gz",
+        keep_extension=False,
+        position=-1)
+
+
+class _TransformHeaderOutputSpec(TraitedSpec):
+    out_image = File(exists=True)
+
+
+class TransformHeader(CommandLine):
+    input_spec = _TransformHeaderInputSpec
+    output_spec = _TransformHeaderOutputSpec
+    _cmd = "mrtransform -strides -1,-2,3"

@@ -11,16 +11,17 @@ import nipype.pipeline.engine as pe
 import nipype.interfaces.utility as niu
 import logging
 from qsiprep.interfaces.gradients import RemoveDuplicates
-from .interchange import input_fields
+from .interchange import recon_workflow_input_fields
 from qsiprep.interfaces import ConformDwi
 from qsiprep.interfaces.mrtrix import MRTrixGradientTable
 LOGGER = logging.getLogger('nipype.workflow')
 
 
-def init_conform_dwi_wf(name="conform_dwi", output_suffix="", params={}):
+def init_conform_dwi_wf(omp_nthreads, available_anatomical_data, 
+                        name="conform_dwi", output_suffix="", params={}):
     """If data were preprocessed elsewhere, ensure the gradients and images
     conform to LPS+ before running other parts of the pipeline."""
-    inputnode = pe.Node(niu.IdentityInterface(fields=input_fields),
+    inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields),
                         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(fields=['dwi_file', 'bval_file', 'bvec_file', 'b_file']),
@@ -40,10 +41,11 @@ def init_conform_dwi_wf(name="conform_dwi", output_suffix="", params={}):
     return workflow
 
 
-def init_discard_repeated_samples_wf(name="discard_repeats", output_suffix="",
+def init_discard_repeated_samples_wf(omp_nthreads, available_anatomical_data,
+                                     name="discard_repeats", output_suffix="",
                                      space="T1w", params={}):
     """Remove a sample if a similar direction/gradient has already been sampled."""
-    inputnode = pe.Node(niu.IdentityInterface(fields=input_fields),
+    inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields),
                         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(fields=['dwi_file', 'bval_file', 'bvec_file', 'local_bvec_file']),

@@ -56,7 +56,7 @@ CLASSIFIERS = [
 MISSING = """
 Image '{}' is missing
 Would you like to download? [Y/n] """
-PKG_PATH = '/usr/local/miniconda/lib/python3.7/site-packages'
+PKG_PATH = '/usr/local/miniconda/lib/python3.8/site-packages'
 
 # Monkey-patch Py2 subprocess
 if not hasattr(subprocess, 'DEVNULL'):
@@ -244,6 +244,12 @@ def get_parser():
                         action='store',
                         type=os.path.abspath)
 
+    # For FreeSurfer input
+    parser.add_argument('--freesurfer-input', '--freesurfer_input',
+                        required=False,
+                        action='store',
+                        type=os.path.abspath)
+
     parser.add_argument('-h', '--help', action='store_true',
                         help="show this help message and exit")
     parser.add_argument('--version', action='store_true',
@@ -386,6 +392,9 @@ def main():
     if opts.recon_input:
         command.extend(['-v', ':'.join((opts.recon_input, '/qsiprep-output', 'ro'))])
         main_args.extend(['--recon-input', '/qsiprep-output'])
+    if opts.freesurfer_input:
+        command.extend(['-v', ':'.join((opts.freesurfer_input, '/sngl/freesurfer-input', 'ro'))])
+        main_args.extend(['--freesurfer-input', '/sngl/freesurfer-input'])
     if opts.gpus:
         command.extend(['--gpus', opts.gpus])
     if opts.recon_spec:

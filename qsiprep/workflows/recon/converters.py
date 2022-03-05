@@ -11,13 +11,14 @@ import nipype.interfaces.utility as niu
 import logging
 from ...interfaces.converters import FODtoFIBGZ
 from ...interfaces.bids import ReconDerivativesDataSink
-from .interchange import input_fields
+from .interchange import recon_workflow_input_fields
 from ...engine import Workflow
 from ...interfaces.images import ConformDwi
 LOGGER = logging.getLogger('nipype.workflow')
 
 
-def init_mif_to_fibgz_wf(name="mif_to_fibgz", output_suffix="", params={}):
+def init_mif_to_fibgz_wf(omp_nthreads, available_anatomical_data,
+                         name="mif_to_fibgz", output_suffix="", params={}):
     """Converts a MRTrix mif file to DSI Studio fib file.
 
     This workflow uses ``sh2amp`` to sample the FODs on the standard DSI Studio
@@ -35,7 +36,7 @@ def init_mif_to_fibgz_wf(name="mif_to_fibgz", output_suffix="", params={}):
             DSI Studio fib file containing the FODs from the input ``mif_file``.
 
     """
-    inputnode = pe.Node(niu.IdentityInterface(fields=input_fields + ["mif_file"]),
+    inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields + ["mif_file"]),
                         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(fields=['fib_file']), name="outputnode")
@@ -50,7 +51,7 @@ def init_mif_to_fibgz_wf(name="mif_to_fibgz", output_suffix="", params={}):
 
 def init_fibgz_to_mif_wf(name="fibgz_to_mif", output_suffix="", params={}):
     """Needs Documentation"""
-    inputnode = pe.Node(niu.IdentityInterface(fields=input_fields + ["mif_file"]),
+    inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields + ["mif_file"]),
                         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(fields=['fib_file']), name="outputnode")
@@ -63,9 +64,10 @@ def init_fibgz_to_mif_wf(name="fibgz_to_mif", output_suffix="", params={}):
     return workflow
 
 
-def init_qsiprep_to_fsl_wf(name="qsiprep_to_fsl", output_suffix="", params={}):
+def init_qsiprep_to_fsl_wf(omp_nthreads, available_anatomical_data,
+                           name="qsiprep_to_fsl", output_suffix="", params={}):
     """Converts QSIPrep outputs (images, bval, bvec) to fsl standard orientation"""
-    inputnode = pe.Node(niu.IdentityInterface(fields=input_fields),
+    inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields),
                         name="inputnode")
     to_reorient = ["mask_file", "dwi_file", "bval_file", "bvec_file"]
     outputnode = pe.Node(

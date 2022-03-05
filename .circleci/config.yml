@@ -1,38 +1,200 @@
-version: 2
+version: 2.1
+
+.dockersetup: &dockersetup
+  docker:
+    - image: pennbbl/qsiprep_build:22.2.16
+  working_directory: /src/qsiprep
+
+runinstall: &runinstall
+    name: Install qsiprep
+    command: |
+      VERSION=0+build
+      if [[ -n "$CIRCLE_TAG" ]]; then
+        VERSION="$CIRCLE_TAG"
+      fi
+      git checkout $CIRCLE_BRANCH
+      echo "${VERSION}" > /src/qsiprep/qsiprep/VERSION
+      echo "include qsiprep/VERSION" >> /src/qsiprep/MANIFEST.in
+      pip install . --progress-bar off
+
+      # Precaching fonts, set 'Agg' as default backend for matplotlib
+      python -c "from matplotlib import font_manager"
+      sed -i 's/\(backend *: \).*$/\1Agg/g' $( python -c "import matplotlib; print(matplotlib.matplotlib_fname())" )
+      
+      # Write the config file
+      mkdir /root/.nipype
+      CFG=/root/.nipype/nipype.cfg
+      printf "[execution]\nstop_on_first_crash = true\n" > ${CFG}
+      echo "poll_sleep_duration = 0.01" >> ${CFG}
+      echo "hash_method = content" >> ${CFG}
+      ln -s /home/qsiprep/.dipy /root/.dipy
+
+
 jobs:
 
   build:
-    environment:
-      TZ: "/usr/share/zoneinfo/America/New_York"
-      SCRATCH: "/scratch"
-    docker:
-      - image: docker:18.06.1-ce-git
-    working_directory: /tmp/src/qsiprep
+    <<: *dockersetup
     steps:
       - checkout
+      - run: *runinstall
+  
+  build_docs:
+    environment:
+      FSLOUTPUTTYPE: NIFTI
+      NIPYPE_NO_ET: "1"
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run: *runinstall
       - run:
-          name: Install parallel gzip and python3
+          name: Build documentation
           command: |
-            apk add --no-cache pigz python3 tar
-      - restore_cache:
-          keys:
-            - docker-v10-{{ .Branch }}-{{ .Revision }}
-            - docker-v10-{{ .Branch }}-
-            - docker-v10-master-
-            - docker-v10-
-          paths:
-            - /tmp/cache/docker.tar.gz
-      - setup_remote_docker
+            apt-get update && apt-get install make
+            pip install ".[doc]"
+            make SHPINXOPTS="-W" -C docs html  
+  
+  DSCSDSI:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run: *runinstall
       - run:
-          name: Load Docker image layer cache
-          no_output_timeout: 30m
+          name: Run DSCSDSI tests
+          no_output_timeout: 1h
           command: |
-            docker info
-            set +o pipefail
-            if [ -f /tmp/cache/docker.tar.gz ]; then
-              pigz -d --stdout /tmp/cache/docker.tar.gz | docker load
-              docker images
-            fi
+            cd .circleci
+            bash DSCSDSI.sh
+
+  DSDTI_nofmap:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run: *runinstall
+      - run:
+          name: Run DTI with no fieldmap
+          no_output_timeout: 1h
+          command: |
+            cd .circleci
+            bash DSDTI_nofmap.sh
+
+  DSDTI_synfmap:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run: *runinstall
+      - run:
+          name: Run DTI with SyN SDC
+          no_output_timeout: 1h
+          command: |
+            cd .circleci
+            bash DSDTI_synfmap.sh
+
+  DSDTI_TOPUP:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run: *runinstall
+      - run:
+          name: Run DTI with TOPUP/Eddy
+          no_output_timeout: 1h
+          command: |
+            cd .circleci
+            bash DSDTI_TOPUP.sh
+  
+  IntramodalTemplate:
+    <<: *dockersetup
+    resource_class: large
+    environment:
+      CIRCLE_CPUS: 3
+    steps:
+      - checkout
+      - run: *runinstall
+      - run:
+          name: Test the intramodal template workflow
+          no_output_timeout: 1h
+          command: |
+            cd .circleci
+            bash IntramodalTemplate.sh
+  
+  MultiT1w:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run: *runinstall
+      - run:
+          name: Test the mri robust template for T1w images
+          no_output_timeout: 1h
+          command: |
+            cd .circleci
+            bash MultiT1w.sh
+  
+  Recon_3Tissue:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run: *runinstall
+      - run:
+          name: Test the 3Tissue recon workflows
+          no_output_timeout: 1h
+          command: |
+            cd .circleci
+            bash 3TissueReconTests.sh
+
+  Recon_MRtrix3:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run: *runinstall
+      - run:
+          name: Test the CSD recon workflows
+          no_output_timeout: 1h
+          command: |
+            cd .circleci
+            bash Mrtrix3ReconTests.sh  
+
+  Recon_DIPY:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run: *runinstall
+      - run:
+          name: Test the DIPY recon workflows
+          no_output_timeout: 1h
+          command: |
+            cd .circleci
+            bash DIPYReconTests.sh
+
+  Recon_AMICO:
+    <<: *dockersetup
+    resource_class: medium+
+    environment:
+      CIRCLE_CPUS: 3
+    steps:
+      - checkout
+      - run: *runinstall
+      - run:
+          name: Test the DIPY recon workflows
+          command: |
+            cd .circleci
+            bash AMICOReconTests.sh
+  
+  deployable:
+    docker:
+      - image: busybox:latest
+    steps:
+      - run: echo Deploying!
+  
+  build_and_deploy:
+    environment:
+      TZ: "/usr/share/zoneinfo/America/New_York"
+    docker:
+      - image: cimg/base:2020.09
+    working_directory: /tmp/src/qsiprep_build
+    steps:
+      - checkout
+      - setup_remote_docker:
+         version: 19.03.12
+         docker_layer_caching: true
       - run:
           name: Build Docker image
           no_output_timeout: 3h
@@ -60,1036 +222,6 @@ jobs:
               && e=0 && break || sleep 15
             done && [ "$e" -eq "0" ]
       - run:
-          name: Smoke test Docker image
-          command: |
-            THISVERSION=$( python3 get_version.py )
-            THISVERSION=${THISVERSION%.dirty*}
-            THISVERSION=${CIRCLE_TAG:-$THISVERSION}
-            DOCKERVERSION=$(docker run --rm -it pennbbl/qsiprep:latest --version)
-            DOCKERVERSION=${DOCKERVERSION%$'\r'}
-            DOCKERVERSION=${DOCKERVERSION#*"qsiprep v"}
-            echo "VERSION: \"$THISVERSION\""
-            echo "DOCKERVERSION: \"${DOCKERVERSION}\""
-            test "$DOCKERVERSION" = "$THISVERSION"
-      - run:
-          name: Docker save
-          no_output_timeout: 40m
-          command: |
-            mkdir -p /tmp/cache
-            docker save nvidia/cuda:9.1-runtime-ubuntu16.04 pennbbl/qsiprep:latest \
-            | pigz -3 > /tmp/cache/docker.tar.gz
-
-      - persist_to_workspace:
-          root: /tmp
-          paths:
-            - src/qsiprep
-
-      - save_cache:
-         key: docker-v10-{{ .Branch }}-{{ .Revision }}-{{ epoch }}
-         paths:
-           - /tmp/cache/docker.tar.gz
-
-  get_data:
-    machine:
-      # Ubuntu 16.04, docker 18.09.3, docker-compose 1.23.1
-      image: ubuntu-1604:202004-01
-    working_directory: /home/circleci/data
-    steps:
-      - restore_cache:
-          keys:
-            - data-v11-{{ .Revision }}
-            - data-v11-
-      - run:
-          name: Get single scan from downsampled CS-DSI
-          command: |
-            mkdir -p /tmp/data
-            if [[ ! -d /tmp/data/DSCSDSI ]]; then
-              wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
-                -O DSCSDSI_nofmap.tar.xz "https://upenn.box.com/shared/static/eq6nvnyazi2zlt63uowqd0zhnlh6z4yv.xz"
-              tar xvfJ DSCSDSI_nofmap.tar.xz -C /tmp/data/
-            else
-              echo "Dataset DSCSDSI was cached"
-            fi
-
-      - run:
-          name: Get all kinds of fieldmaps for DTI data
-          command: |
-            if [[ ! -d /tmp/data/fmaptests/DSDTI_fmap ]]; then
-              mkdir -p /tmp/data/fmaptests/
-              wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
-                -O DSDTI_fmap.tar.gz "https://upenn.box.com/shared/static/rxr6qbi6ezku9gw3esfpnvqlcxaw7n5n.gz"
-              tar xvfz DSDTI_fmap.tar.gz -C /tmp/data/fmaptests
-            else
-              echo "Dataset DSDTI_fmap was cached"
-            fi
-
-      - run:
-          name: Get all kinds of fieldmaps for DSI data
-          command: |
-            if [[ ! -d /tmp/data/fmaptests/DSCSDSI_fmap ]]; then
-              mkdir -p /tmp/data/fmaptests/
-              wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
-                -O DSCSDSI_fmap.tar.gz "https://upenn.box.com/shared/static/l561psez1ojzi4p3a12eidaw9vbizwdc.gz"
-              tar xvfz DSCSDSI_fmap.tar.gz -C /tmp/data/fmaptests
-            else
-              echo "Dataset DSCSDSI_fmap was cached"
-            fi
-
-      - run:
-          name: Get downsampled DTI
-          command: |
-            if [[ ! -d /tmp/data/DSDTI ]]; then
-              wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
-                -O DSDTI.tar.xz "https://upenn.box.com/shared/static/iefjtvfez0c2oug0g1a9ulozqe5il5xy.xz"
-              tar xvfJ DSDTI.tar.xz -C /tmp/data/
-              wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
-                -O /tmp/data/eddy_config.json \
-                "https://upenn.box.com/shared/static/93g89mug6cejzn6jtq0v7wkupz86iafh.json"
-              chmod a+r /tmp/data/eddy_config.json
-            else
-              echo "Dataset DSDTI was cached"
-            fi
-
-      - run:
-          name: Create no-fieldmap DTI
-          command: |
-            if [[ ! -d /tmp/data/nofmap_DSDTI ]]; then
-              cp -r /tmp/data/DSDTI /tmp/data/nofmap_DSDTI
-              rm -rf /tmp/data/nofmap_DSDTI/sub-PNC/fmap
-            else
-              echo "Dataset nofmap_DSDTI was cached"
-            fi
-
-      - run:
-          name: Get multisession CS-DSI
-          command: |
-            if [[ ! -d /tmp/data/twoses ]]; then
-              wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
-                -O twoses.tar.xz "https://upenn.box.com/shared/static/c949fjjhhen3ihgnzhkdw5jympm327pp.xz"
-              tar xvfJ twoses.tar.xz -C /tmp/data/
-            else
-              echo "Dataset twoses was cached"
-            fi
-
-      - run:
-          name: Get MultiShell outputs
-          no_output_timeout: 40m
-          command: |
-            if [[ ! -d /tmp/data/multishell_output ]]; then
-              wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
-                -O multishell_output.tar.gz "https://upenn.box.com/shared/static/nwxdn4ale8dkebvpjmxbx99dqjzwvlmh.gz"
-              tar xvfz multishell_output.tar.gz -C /tmp/data/
-            else
-              echo "Dataset multishell_output was cached"
-            fi
-
-      - run:
-          name: Get SingleShell outputs
-          no_output_timeout: 40m
-          command: |
-            if [[ ! -d /tmp/data/singleshell_output ]]; then
-              mkdir -p /tmp/data/singleshell_output
-              wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
-                -O singleshell_output.tar.gz "https://upenn.box.com/shared/static/9jhf0eo3ml6ojrlxlz6lej09ny12efgg.gz"
-              tar xvfz singleshell_output.tar.gz -C /tmp/data/singleshell_output
-            else
-              echo "Dataset singleshell_output was cached"
-            fi
-
-      - run:
-          name: Store FreeSurfer license file
-          command: |
-            mkdir -p /tmp/fslicense
-            cd /tmp/fslicense
-            echo "cHJpbnRmICJtYXR0aGV3LmNpZXNsYWtAcHN5Y2gudWNzYi5lZHVcbjIwNzA2XG4gKkNmZVZkSDVVVDhyWVxuIEZTQllaLlVrZVRJQ3dcbiIgPiBsaWNlbnNlLnR4dAo=" | base64 -d | sh
-
-      - run:
-          name: Create Nipype config files
-          command: |
-            mkdir -p /tmp/DSCSDSI /tmp/DSDTI /tmp/twoses /tmp/multishell_output /tmp/nofmap_DSDTI /tmp/DSDTI_fmap
-            printf "[execution]\nstop_on_first_crash = true\n" > /tmp/DSCSDSI/nipype.cfg
-            echo "poll_sleep_duration = 0.01" >> /tmp/DSCSDSI/nipype.cfg
-            echo "hash_method = content" >> /tmp/DSCSDSI/nipype.cfg
-            echo "check_version = false" >> /tmp/DSCSDSI/nipype.cfg
-            cp /tmp/DSCSDSI/nipype.cfg /tmp/DSDTI_fmap/nipype.cfg
-            cp /tmp/DSCSDSI/nipype.cfg /tmp/DSDTI/nipype.cfg
-            cp /tmp/DSCSDSI/nipype.cfg /tmp/twoses/nipype.cfg
-            cp /tmp/DSCSDSI/nipype.cfg /tmp/nofmap_DSDTI/nipype.cfg
-            cp /tmp/DSCSDSI/nipype.cfg /tmp/multishell_output/nipype.cfg
-
-      - persist_to_workspace:
-          root: /tmp
-          paths:
-            - data
-            - fslicense
-            - DSCSDSI/nipype.cfg
-            - DSDTI_fmap/nipype.cfg
-            - DSDTI/nipype.cfg
-            - twoses/nipype.cfg
-
-      - save_cache:
-         key: data-v11-{{ epoch }}
-         paths:
-            - /tmp/data
-
-  build_docs:
-    docker:
-      - image: circleci/python:3.7.4
-    working_directory: /tmp/src/qsiprep
-    environment:
-      - FSLOUTPUTTYPE: 'NIFTI'
-    steps:
-      - checkout
-      - run:
-          name: Check whether build should be skipped
-          command: |
-            if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?docs\]' )" != "" ]]; then
-              echo "Skipping doc building job"
-              circleci step halt
-            fi
-      - run:
-          name: Check Python version and upgrade pip
-          command: |
-            python --version
-            sudo python -m pip install -U pip numpy
-      - run:
-          name: Install graphviz
-          command: |
-              sudo apt update
-              sudo apt install -y graphviz libblas-dev \
-               liblapack-dev gfortran
-      - run:
-          name: Install qsiprep.
-          command: sudo python -m pip install ".[doc]" --no-cache-dir --progress-bar off
-      - run:
-          name: Build documentation
-          no_output_timeout: 45m
-          command: |
-            export NIPYPE_NO_ET=1
-            make SPHINXOPTS="-W" -C docs html
-      - store_artifacts:
-          path: /tmp/src/qsiprep/docs/_build/html
-
-  DSCSDSI:
-    machine:
-      image: ubuntu-1604:202004-01
-    working_directory: /tmp/DSCSDSI
-    environment:
-      - FS_LICENSE: /tmp/fslicense/license.txt
-    steps:
-      - checkout:
-          path: /home/circleci/src/qsiprep
-      - run:
-          name: Check whether build should be skipped
-          command: |
-            cd /home/circleci/src/qsiprep
-            if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?DSCSDSI\]' )" != "" ]]; then
-              echo "Skipping DSCSDSI build"
-              circleci step halt
-            fi
-      - attach_workspace:
-          at: /tmp
-      - restore_cache:
-          keys:
-            - DSCSDSI-anat-v1-{{ .Branch }}-{{ epoch }}
-            - DSCSDSI-anat-v1-{{ .Branch }}
-            - DSCSDSI-anat-v1-master
-            - DSCSDSI-anat-v1-
-      - restore_cache:
-          keys:
-            - docker-v10-{{ .Branch }}-{{ .Revision }}
-      - run:
-          name: Setting up test
-          command: |
-            mkdir -p /tmp/DSCSDSI/derivatives && sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSCSDSI/derivatives && sudo setfacl -m group:$(id -gn):rwx /tmp/DSCSDSI/derivatives
-            pip install future numpy==1.16.4
-            pip install --upgrade /tmp/src/qsiprep/wrapper/
-      - run:
-          name: Load Docker image layer cache
-          no_output_timeout: 30m
-          command: |
-            docker info
-            set +o pipefail
-            if [ -f /tmp/cache/docker.tar.gz ]; then
-              sudo apt update && sudo apt -y install pigz
-              pigz -d --stdout /tmp/cache/docker.tar.gz | docker load
-              docker images
-            fi
-      - run:
-          name: Run anatomical workflow on DSCSDSI
-          no_output_timeout: 2h
-          command: |
-            mkdir -p /tmp/DSCSDSI/work /tmp/DSCSDSI/derivatives
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSCSDSI/derivatives && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/DSCSDSI/derivatives
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSCSDSI/work && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/DSCSDSI/work
-            qsiprep-docker -i pennbbl/qsiprep:latest \
-                -e qsiprep_DEV 1 -u $(id -u) \
-                --config $PWD/nipype.cfg -w /tmp/DSCSDSI/work \
-                 /tmp/data/DSCSDSI_nofmap  /tmp/DSCSDSI/derivatives \
-                 participant \
-                --sloppy --write-graph --mem_mb 4096 \
-                --nthreads 2 --anat-only -vv --output-resolution 5
-
-      - save_cache:
-         key: DSCSDSI-anat-v1-{{ .Branch }}-{{ epoch }}
-         paths:
-            - /tmp/DSCSDSI/work
-            - /tmp/DSCSDSI/derivatives/qsiprep
-
-      - run:
-          name: Run full qsiprep on DSCSDSI
-          no_output_timeout: 2h
-          command: |
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSCSDSI/derivatives && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/DSCSDSI/derivatives
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSCSDSI/work && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/DSCSDSI/work
-            qsiprep-docker -i pennbbl/qsiprep:latest \
-                -e qsiprep_DEV 1 -u $(id -u) \
-                --config $PWD/nipype.cfg -w /tmp/DSCSDSI/work \
-                 /tmp/data/DSCSDSI_nofmap  /tmp/DSCSDSI/derivatives \
-                 participant \
-                --sloppy --write-graph --use-syn-sdc --force-syn --mem_mb 4096 \
-                --output-space T1w \
-                --dwi-no-biascorr \
-                --hmc_model 3dSHORE \
-                --hmc-transform Rigid \
-                --shoreline_iters 1 \
-                --output-resolution 5 \
-                --nthreads 2 -vv
-
-      - run:
-          name: Checking outputs of DSCSDSI run
-          command: |
-            mkdir -p /tmp/DSCSDSI/test
-            find /tmp/DSCSDSI/derivatives -name "*" -print | sed s+/tmp/DSCSDSI/derivatives/++ | sort > /tmp/DSCSDSI/test/outputs.out
-            diff /tmp/src/qsiprep/.circleci/DSCSDSI_outputs.txt /tmp/DSCSDSI/test/outputs.out
-            exit $?
-
-      - run:
-          name: Clean working directory
-          when: on_success
-          command: |
-            sudo chown $(id -un):$(id -gn) -R /tmp/DSCSDSI
-            sudo rm -rf /tmp/DSCSDSI/work
-
-      - run:
-          name: Clean working directory
-          when: on_fail
-          command: |
-            sudo chown $(id -un):$(id -gn) -R /tmp/DSCSDSI
-            find /tmp/DSCSDSI/work \( -name "*.nii.gz" -or -name "*.nii" -or -name "*.h5" \) \
-                -exec sh -c 'rm -f {}; touch {}' \;
-
-      - store_artifacts:
-         path: /tmp/DSCSDSI
-
-  DSDTI_TOPUP:
-    machine:
-      image: ubuntu-1604:202004-01
-    working_directory: /tmp/DSDTI
-    environment:
-      - FS_LICENSE: /tmp/fslicense/license.txt
-    steps:
-      - checkout:
-          path: /home/circleci/src/qsiprep
-      - run:
-          name: Check whether build should be skipped
-          command: |
-            cd /home/circleci/src/qsiprep
-            if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?DSDTI\]' )" != "" ]]; then
-              echo "Skipping DSDTI build"
-              circleci step halt
-            fi
-      - attach_workspace:
-          at: /tmp
-      - restore_cache:
-          keys:
-            - docker-v10-{{ .Branch }}-{{ .Revision }}
-
-      - run:
-          name: Setting up test
-          command: |
-            mkdir -p /tmp/DSDTI/derivatives && sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSDTI/derivatives && sudo setfacl -m group:$(id -gn):rwx /tmp/DSDTI/derivatives
-            pip install future numpy==1.16.4
-            pip install --upgrade /tmp/src/qsiprep/wrapper/
-      - run:
-          name: Load Docker image layer cache
-          no_output_timeout: 30m
-          command: |
-            docker info
-            set +o pipefail
-            if [ -f /tmp/cache/docker.tar.gz ]; then
-              sudo apt update && sudo apt -y install pigz
-              pigz -d --stdout /tmp/cache/docker.tar.gz | docker load
-              docker images
-            fi
-
-      - run:
-          name: Run full qsiprep/recon (TOPUP/eddy) on DSDTI + patch2self
-          no_output_timeout: 2h
-          command: |
-            mkdir -p /tmp/DSDTI/work /tmp/DSDTI/derivatives
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSDTI/derivatives && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/DSDTI/derivatives
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSDTI/work && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/DSDTI/work && \
-            sudo chmod a+rw /tmp/data/eddy_config.json
-            qsiprep-docker -i pennbbl/qsiprep:latest \
-                -e qsiprep_DEV 1 -u $(id -u) \
-                --config $PWD/nipype.cfg -w /tmp/DSDTI/work \
-                 /tmp/data/DSDTI  /tmp/DSDTI/derivatives \
-                 participant \
-                --denoise-method patch2self \
-                --sloppy --mem_mb 4096 \
-                --unringing-method mrdegibbs \
-                --output-space T1w \
-                --recon-spec dsi_studio_gqi \
-                --eddy_config /tmp/data/eddy_config.json \
-                --output-resolution 5 \
-                --nthreads 2 -vv
-
-      - run:
-          name: Checking outputs of DSDTI with TOPUP/eddy
-          command: |
-            mkdir -p /tmp/DSDTI/test
-            find /tmp/DSDTI/derivatives -name "*" -print | sed s+/tmp/DSDTI/derivatives/++ | sort > /tmp/DSDTI/test/outputs.out
-            diff /tmp/src/qsiprep/.circleci/DSDTI_outputs.txt /tmp/DSDTI/test/outputs.out
-            exit $?
-
-      - run:
-          name: Clean working directory
-          when: on_success
-          command: |
-            sudo chown $(id -un):$(id -gn) -R /tmp/DSDTI
-            sudo rm -rf /tmp/DSDTI/work
-
-      - run:
-          name: Clean working directory
-          when: on_fail
-          command: |
-            sudo chown $(id -un):$(id -gn) -R /tmp/DSDTI
-            find /tmp/DSDTI/work \( -name "*.nii.gz" -or -name "*.nii" -or -name "*.h5" \) \
-                -exec sh -c 'rm -f {}; touch {}' \;
-
-      - store_artifacts:
-          path: /tmp/DSDTI
-
-  AllFieldmaps:
-    machine:
-      image: ubuntu-1604:202004-01
-    working_directory: /tmp/DSDTI_fmap
-    environment:
-      - FS_LICENSE: /tmp/fslicense/license.txt
-    steps:
-      - checkout:
-          path: /home/circleci/src/qsiprep
-      - run:
-          name: Check whether build should be skipped
-          command: |
-            cd /home/circleci/src/qsiprep
-            if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?AllFieldmaps\]' )" != "" ]]; then
-              echo "Skipping AllFieldmaps build"
-              circleci step halt
-            fi
-      - attach_workspace:
-          at: /tmp
-      - restore_cache:
-          keys:
-            - docker-v10-{{ .Branch }}-{{ .Revision }}
-      - run:
-          name: Setting up test
-          command: |
-            mkdir -p /tmp/DSDTI/derivatives && sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSDTI/derivatives && sudo setfacl -m group:$(id -gn):rwx /tmp/DSDTI/derivatives
-            pip install future numpy==1.16.4
-            pip install --upgrade /tmp/src/qsiprep/wrapper/
-      - run:
-          name: Load Docker image layer cache
-          no_output_timeout: 30m
-          command: |
-            docker info
-            set +o pipefail
-            if [ -f /tmp/cache/docker.tar.gz ]; then
-              sudo apt update && sudo apt -y install pigz
-              pigz -d --stdout /tmp/cache/docker.tar.gz | docker load
-              docker images
-            fi
-
-      - run:
-          name: Test Fieldmap setups for DTI (using BUDS)
-          no_output_timeout: 2h
-          command: |
-            mkdir -p /tmp/DTI_SDC/work /tmp/DTI_SDC/derivatives
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DTI_SDC/derivatives && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/DTI_SDC/derivatives
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DTI_SDC/work && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/DTI_SDC/work
-            qsiprep-docker -i pennbbl/qsiprep:latest \
-                -e qsiprep_DEV 1 -u $(id -u) \
-                --config $PWD/nipype.cfg -w /tmp/DTI_SDC/work \
-                 /tmp/data/fmaptests/DSDTI_fmap  /tmp/DTI_SDC/derivatives \
-                 participant \
-                --boilerplate \
-                --sloppy --write-graph --mem_mb 4096 \
-                --nthreads 2 -vv --output-resolution 5
-
-      - run:
-          name: Test Fieldmap setups for DTI merging (using BUDS)
-          no_output_timeout: 2h
-          command: |
-            mkdir -p /tmp/DTI_SDC/work /tmp/DTI_SDC/derivatives
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DTI_SDC/derivatives && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/DTI_SDC/derivatives
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DTI_SDC/work && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/DTI_SDC/work
-            qsiprep-docker -i pennbbl/qsiprep:latest \
-                -e qsiprep_DEV 1 -u $(id -u) \
-                --config $PWD/nipype.cfg -w /tmp/DTI_SDC/work \
-                 /tmp/data/fmaptests/DSDTI_fmap  /tmp/DTI_SDC/derivatives \
-                 participant \
-                --boilerplate \
-                --sloppy --write-graph --mem_mb 4096 \
-                --nthreads 2 -vv --output-resolution 5
-
-      - run:
-          name: Test Fieldmap setups for DTI merging (prefer fmaps)
-          no_output_timeout: 2h
-          command: |
-            mkdir -p /tmp/DTI_SDC/work /tmp/DTI_SDC/derivatives
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DTI_SDC/derivatives && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/DTI_SDC/derivatives
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DTI_SDC/work && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/DTI_SDC/work
-            qsiprep-docker -i pennbbl/qsiprep:latest \
-                -e qsiprep_DEV 1 -u $(id -u) \
-                --config $PWD/nipype.cfg -w /tmp/DTI_SDC/work \
-                 /tmp/data/fmaptests/DSDTI_fmap  /tmp/DTI_SDC/derivatives \
-                 participant \
-                --boilerplate \
-                --prefer-dedicated-fmaps \
-                --sloppy --write-graph --mem_mb 4096 \
-                --nthreads 2 -vv --output-resolution 5
-      - run:
-          name: Test Fieldmap setups for DSI (using BUDS)
-          no_output_timeout: 2h
-          command: |
-            mkdir -p /tmp/DSI_SDC/work /tmp/DSI_SDC/derivatives
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSI_SDC/derivatives && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/DSI_SDC/derivatives
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSI_SDC/work && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/DSI_SDC/work
-            qsiprep-docker -i pennbbl/qsiprep:latest \
-                -e qsiprep_DEV 1 -u $(id -u) \
-                --config $PWD/nipype.cfg -w /tmp/DSI_SDC/work \
-                 /tmp/data/fmaptests/DSCSDSI_fmap  /tmp/DSI_SDC/derivatives \
-                 participant \
-                --boilerplate \
-                --sloppy --write-graph --mem_mb 4096 \
-                --nthreads 2 -vv --output-resolution 5
-
-  DSDTI_nofmap:
-    machine:
-      image: ubuntu-1604:202004-01
-    working_directory: /tmp/DSDTI
-    environment:
-      - FS_LICENSE: /tmp/fslicense/license.txt
-    steps:
-      - checkout:
-          path: /home/circleci/src/qsiprep
-      - run:
-          name: Check whether build should be skipped
-          command: |
-            cd /home/circleci/src/qsiprep
-            if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?DSDTI\]' )" != "" ]]; then
-              echo "Skipping DSDTI build"
-              circleci step halt
-            fi
-      - attach_workspace:
-          at: /tmp
-      - restore_cache:
-          keys:
-            - docker-v10-{{ .Branch }}-{{ .Revision }}
-      - run:
-          name: Setting up test
-          command: |
-            mkdir -p /tmp/DSDTI/derivatives && sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSDTI/derivatives && sudo setfacl -m group:$(id -gn):rwx /tmp/DSDTI/derivatives
-            pip install future numpy==1.16.4
-            pip install --upgrade /tmp/src/qsiprep/wrapper/
-      - run:
-          name: Load Docker image layer cache
-          no_output_timeout: 30m
-          command: |
-            docker info
-            set +o pipefail
-            if [ -f /tmp/cache/docker.tar.gz ]; then
-              sudo apt update && sudo apt -y install pigz
-              pigz -d --stdout /tmp/cache/docker.tar.gz | docker load
-              docker images
-            fi
-
-      - run:
-          name: Run qsiprep on no-fieldmap DTI
-          no_output_timeout: 2h
-          command: |
-            mkdir /tmp/DSDTI/nofmap_work /tmp/DSDTI/nofmap_derivatives
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSDTI/nofmap_derivatives && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/DSDTI/nofmap_derivatives
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSDTI/nofmap_work && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/DSDTI/nofmap_work && \
-            qsiprep-docker -i pennbbl/qsiprep:latest \
-                -e qsiprep_DEV 1 -u $(id -u) \
-                --config $PWD/nipype.cfg -w /tmp/DSDTI/nofmap_work \
-                 /tmp/data/DSDTI  /tmp/DSDTI/nofmap_derivatives \
-                 participant \
-                --sloppy --mem_mb 4096 \
-                --output-space T1w \
-                --output-resolution 5 \
-                --nthreads 2 -vv
-
-      - run:
-          name: Checking outputs of DSDTI (no fieldmaps)
-          command: |
-            mkdir -p /tmp/DSDTI/nofmap_test
-            find /tmp/DSDTI/nofmap_derivatives -name "*" -print | sed s+/tmp/DSDTI/nofmap_derivatives/++ | sort > /tmp/DSDTI/nofmap_test/outputs.out
-            diff /tmp/src/qsiprep/.circleci/DSDTI_nofmap_outputs.txt /tmp/DSDTI/nofmap_test/outputs.out
-            exit $?
-
-      - run:
-          name: copy workdir for artifacts
-          when: on_success
-          command: |
-            cp -r /tmp/DSDTI/nofmap_work /tmp/DSDTI/nofmap_work_
-
-      - run:
-          name: Clean working directory
-          when: on_fail
-          command: |
-            sudo chown $(id -un):$(id -gn) -R /tmp/DSCSDSI
-            find /tmp/DSDTI/nofmap_work \( -name "*.nii.gz" -or -name "*.nii" -or -name "*.h5" \) \
-                -exec sh -c 'rm -f {}; touch {}' \;
-
-      - run:
-          name: Run qsiprep SyN SDC on no-fieldmap DTI
-          no_output_timeout: 2h
-          command: |
-            mkdir /tmp/DSDTI/synfmap_derivatives
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/DSDTI/synfmap_derivatives && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/DSDTI/synfmap_derivatives
-            rm -rf /tmp/DSDTI/nofmap_work/qsiprep_wf/single_subject_PNC_wf/dwi_preproc_acq_realistic_wf
-            sudo chmod a+rw /tmp/data/eddy_config.json
-            qsiprep-docker -i pennbbl/qsiprep:latest \
-                -e qsiprep_DEV 1 -u $(id -u) \
-                --config $PWD/nipype.cfg -w /tmp/DSDTI/nofmap_work \
-                 /tmp/data/DSDTI  /tmp/DSDTI/synfmap_derivatives \
-                 participant \
-                --sloppy --mem_mb 4096 \
-                --force-syn \
-                --output-space T1w \
-                --hmc_model eddy \
-                --eddy_config /tmp/data/eddy_config.json \
-                --output-resolution 5 \
-                --nthreads 2 -vv
-
-      - run:
-          name: Checking outputs of DSDTI (SyN-SDC)
-          command: |
-            mkdir -p /tmp/DSDTI/synsdc_test
-            find /tmp/DSDTI/synfmap_derivatives -name "*" -print | sed s+/tmp/DSDTI/synfmap_derivatives/++ | sort > /tmp/DSDTI/synsdc_test/outputs.out
-            diff /tmp/src/qsiprep/.circleci/DSDTI_synsdc_outputs.txt /tmp/DSDTI/synsdc_test/outputs.out
-            exit $?
-
-      - run:
-          name: Clean working directory
-          when: on_success
-          command: |
-            sudo chown $(id -un):$(id -gn) -R /tmp/DSDTI
-            sudo rm -rf /tmp/DSDTI/nofmap_work
-
-      - run:
-          name: Clean working directory
-          when: on_fail
-          command: |
-            sudo chown $(id -un):$(id -gn) -R /tmp/DSCSDSI
-            find /tmp/DSDTI/nofmap_work \( -name "*.nii.gz" -or -name "*.nii" -or -name "*.h5" \) \
-                -exec sh -c 'rm -f {}; touch {}' \;
-
-      - store_artifacts:
-          path: /tmp/DSDTI
-
-  IntramodalTemplate:
-    machine:
-      image: ubuntu-1604:202004-01
-    working_directory: /tmp/twoses
-    environment:
-      - FS_LICENSE: /tmp/fslicense/license.txt
-    steps:
-      - checkout:
-          path: /home/circleci/src/qsiprep
-      - run:
-          name: Check whether build should be skipped
-          command: |
-            cd /home/circleci/src/qsiprep
-            if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?IntramodalTemplate\]' )" != "" ]]; then
-              echo "Skipping IntramodalTemplate build"
-              circleci step halt
-            fi
-      - attach_workspace:
-          at: /tmp
-      - restore_cache:
-          keys:
-            - docker-v10-{{ .Branch }}-{{ .Revision }}
-      - run:
-          name: Setting up test
-          command: |
-            mkdir -p /tmp/twoses/derivatives && sudo setfacl -d -m group:$(id -gn):rwx /tmp/twoses/derivatives && sudo setfacl -m group:$(id -gn):rwx /tmp/twoses/derivatives
-            pip install future numpy==1.16.4
-            pip install --upgrade /tmp/src/qsiprep/wrapper/
-      - run:
-          name: Load Docker image layer cache
-          no_output_timeout: 30m
-          command: |
-            docker info
-            set +o pipefail
-            if [ -f /tmp/cache/docker.tar.gz ]; then
-              sudo apt update && sudo apt -y install pigz
-              pigz -d --stdout /tmp/cache/docker.tar.gz | docker load
-              docker images
-            fi
-
-      - run:
-          name: Run full qsiprep with an intramodal template
-          no_output_timeout: 2h
-          command: |
-            mkdir -p /tmp/twoses/work /tmp/twoses/derivatives && \
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/twoses/derivatives && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/twoses/derivatives
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/twoses/work && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/twoses/work && \
-            qsiprep-docker -i pennbbl/qsiprep:latest \
-                -e qsiprep_DEV 1 -u $(id -u) \
-                --config $PWD/nipype.cfg -w /tmp/twoses/work \
-                 /tmp/data/twoses  /tmp/twoses/derivatives \
-                 participant \
-                --sloppy --mem_mb 4096 \
-                --denoise-method none \
-                --output-space T1w \
-                --hmc_model none \
-                --b0-motion-corr-to first \
-                --output-resolution 5 \
-                --intramodal-template-transform BSplineSyN \
-                --intramodal-template-iters 2 \
-                --nthreads 2 -vv
-
-      - run:
-          name: Checking outputs of IntramodalTemplate
-          command: |
-            mkdir -p /tmp/twoses/test
-            find /tmp/twoses/derivatives -name "*" -print | sed s+/tmp/twoses/derivatives/++ | sort > /tmp/twoses/test/outputs.out
-            diff /tmp/src/qsiprep/.circleci/IntramodalTemplate_outputs.txt /tmp/twoses/test/outputs.out
-            exit $?
-
-      - run:
-          name: Clean working directory
-          when: on_success
-          command: |
-            sudo chown $(id -un):$(id -gn) -R /tmp/twoses
-            sudo rm -rf /tmp/twoses/work
-
-      - run:
-          name: Clean working directory
-          when: on_fail
-          command: |
-            sudo chown $(id -un):$(id -gn) -R /tmp/twoses
-            find /tmp/twoses/work \( -name "*.nii.gz" -or -name "*.nii" -or -name "*.h5" \) \
-                -exec sh -c 'rm -f {}; touch {}' \;
-
-      - store_artifacts:
-          path: /tmp/twoses
-
-  ReconTests:
-    machine:
-      image: ubuntu-1604:202004-01
-    working_directory: /tmp/multishell_output
-    environment:
-      - FS_LICENSE: /tmp/fslicense/license.txt
-    steps:
-      - checkout:
-          path: /home/circleci/src/qsiprep
-      - run:
-          name: Check whether build should be skipped
-          command: |
-            cd /home/circleci/src/qsiprep
-            if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?DIPY_3dSHORE_Recon\]' )" != "" ]]; then
-              echo "Skipping DIPY_3dSHORE_Recon build"
-              circleci step halt
-            fi
-      - attach_workspace:
-          at: /tmp
-
-      - restore_cache:
-          keys:
-            - docker-v10-{{ .Branch }}-{{ .Revision }}
-      - run:
-          name: Setting up test
-          command: |
-            mkdir -p /tmp/multishell_output/derivatives && sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/derivatives && sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/derivatives
-            pip install future numpy==1.16.4
-            pip install --upgrade /tmp/src/qsiprep/wrapper/
-
-      - run:
-          name: Load Docker image layer cache
-          no_output_timeout: 30m
-          command: |
-            docker info
-            set +o pipefail
-            if [ -f /tmp/cache/docker.tar.gz ]; then
-              sudo apt update && sudo apt -y install pigz
-              pigz -d --stdout /tmp/cache/docker.tar.gz | docker load
-              docker images
-            fi
-
-      - run:
-          name: Run mrtrix_multishell_msmt
-          no_output_timeout: 2h
-          command: |
-            mkdir -p /tmp/multishell_output/work /tmp/multishell_output/derivatives/mrtrix_multishell_msmt
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/mrtrix_multishell_msmt && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/mrtrix_multishell_msmt
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/work && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/work
-            qsiprep-docker -i pennbbl/qsiprep:latest \
-                -e qsiprep_DEV 1 -u $(id -u) \
-                --config $PWD/nipype.cfg -w /tmp/multishell_output/work \
-                 /tmp/data/multishell_output/qsiprep  \
-                 /tmp/multishell_output/derivatives/mrtrix_multishell_msmt \
-                 participant \
-                --recon-input /tmp/data/multishell_output/qsiprep \
-                --sloppy \
-                --recon-spec mrtrix_multishell_msmt \
-                --recon-only \
-                --mem_mb 4096 \
-                --nthreads 1 -vv
-
-      - run:
-          name: Run amico_noddi
-          no_output_timeout: 2h
-          command: |
-            mkdir -p /tmp/multishell_output/work /tmp/multishell_output/derivatives/amico_noddi
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/amico_noddi && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/amico_noddi
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/work && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/work
-            qsiprep-docker -i pennbbl/qsiprep:latest \
-                -e qsiprep_DEV 1 -u $(id -u) \
-                --config $PWD/nipype.cfg -w /tmp/multishell_output/work \
-                 /tmp/data/multishell_output/qsiprep  \
-                 /tmp/multishell_output/derivatives/amico_noddi \
-                 participant \
-                --recon-input /tmp/data/multishell_output/qsiprep \
-                --sloppy \
-                --recon-spec amico_noddi \
-                --recon-only \
-                --mem_mb 4096 \
-                --nthreads 1 -vv
-
-      - run:
-          name: Run reorient_fslstd
-          no_output_timeout: 2h
-          command: |
-            mkdir -p /tmp/multishell_output/work /tmp/multishell_output/derivatives/reorient_fslstd
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/reorient_fslstd && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/reorient_fslstd
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/work && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/work
-            qsiprep-docker -i pennbbl/qsiprep:latest \
-                -e qsiprep_DEV 1 -u $(id -u) \
-                --config $PWD/nipype.cfg -w /tmp/multishell_output/work \
-                 /tmp/data/multishell_output/qsiprep  \
-                 /tmp/multishell_output/derivatives/reorient_fslstd \
-                 participant \
-                --recon-input /tmp/data/multishell_output/qsiprep \
-                --sloppy \
-                --recon-spec reorient_fslstd \
-                --recon-only \
-                --mem_mb 4096 \
-                --nthreads 1 -vv
-
-      - run:
-          name: Run mrtrix_multishell_msmt_noACT
-          no_output_timeout: 2h
-          command: |
-            mkdir -p /tmp/multishell_output/work /tmp/multishell_output/derivatives/mrtrix_multishell_msmt_noACT
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/mrtrix_multishell_msmt_noACT && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/mrtrix_multishell_msmt_noACT
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/work && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/work
-            qsiprep-docker -i pennbbl/qsiprep:latest \
-                -e qsiprep_DEV 1 -u $(id -u) \
-                --config $PWD/nipype.cfg -w /tmp/multishell_output/work \
-                 /tmp/data/multishell_output/qsiprep \
-                 /tmp/multishell_output/derivatives/mrtrix_multishell_msmt_noACT \
-                 participant \
-                --sloppy \
-                --recon-input /tmp/data/multishell_output/qsiprep \
-                --recon-spec mrtrix_multishell_msmt_noACT \
-                --recon-only \
-                --mem_mb 4096 \
-                --nthreads 1 -vv
-
-      - run:
-          name: Run mrtrix_singleshell_ss3t
-          no_output_timeout: 2h
-          command: |
-            mkdir -p /tmp/singleshell_output/work /tmp/singleshell_output/derivatives/mrtrix_singleshell_ss3t
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/singleshell_output/derivatives/mrtrix_singleshell_ss3t && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/singleshell_output/derivatives/mrtrix_singleshell_ss3t
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/singleshell_output/work && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/singleshell_output/work
-            qsiprep-docker -i pennbbl/qsiprep:latest \
-                -e qsiprep_DEV 1 -u $(id -u) \
-                --config $PWD/nipype.cfg -w /tmp/singleshell_output/work \
-                 /tmp/data/singleshell_output/qsiprep \
-                 /tmp/singleshell_output/derivatives/mrtrix_singleshell_ss3t \
-                 participant \
-                --sloppy \
-                --recon-input /tmp/data/singleshell_output/qsiprep \
-                --recon-spec mrtrix_singleshell_ss3t \
-                --recon-only \
-                --mem_mb 4096 \
-                --nthreads 1 -vv
-
-      - run:
-          name: Run mrtrix_singleshell_ss3t_noACT
-          no_output_timeout: 2h
-          command: |
-            mkdir -p /tmp/singleshell_output/work /tmp/singleshell_output/derivatives/mrtrix_singleshell_ss3t_noACT
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/singleshell_output/derivatives/mrtrix_singleshell_ss3t_noACT && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/singleshell_output/derivatives/mrtrix_singleshell_ss3t_noACT
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/singleshell_output/work && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/singleshell_output/work
-            qsiprep-docker -i pennbbl/qsiprep:latest \
-                -e qsiprep_DEV 1 -u $(id -u) \
-                --config $PWD/nipype.cfg -w /tmp/singleshell_output/work \
-                 /tmp/data/singleshell_output/qsiprep \
-                 /tmp/singleshell_output/derivatives/mrtrix_singleshell_ss3t_noACT \
-                 participant \
-                --sloppy \
-                --recon-input /tmp/data/singleshell_output/qsiprep \
-                --recon-spec mrtrix_singleshell_ss3t_noACT \
-                --recon-only \
-                --mem_mb 4096 \
-                --nthreads 1 -vv
-
-      - run:
-          name: Run dsi_studio_gqi
-          no_output_timeout: 2h
-          command: |
-            mkdir -p /tmp/multishell_output/work /tmp/multishell_output/derivatives/dsi_studio_gqi
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/dsi_studio_gqi && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/dsi_studio_gqi
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/work && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/work
-            qsiprep-docker -i pennbbl/qsiprep:latest \
-                -e qsiprep_DEV 1 -u $(id -u) \
-                --config $PWD/nipype.cfg -w /tmp/multishell_output/work \
-                 /tmp/data/multishell_output/qsiprep \
-                 /tmp/multishell_output/derivatives/dsi_studio_gqi \
-                 participant \
-                --sloppy \
-                --recon-spec dsi_studio_gqi \
-                --recon-input /tmp/data/multishell_output/qsiprep \
-                --recon-only \
-                --mem_mb 4096 \
-                --nthreads 1 -vv
-
-      - run:
-          name: Run dipy_mapmri
-          no_output_timeout: 2h
-          command: |
-            mkdir -p /tmp/multishell_output/work /tmp/multishell_output/derivatives/dipy_mapmri
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/dipy_mapmri && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/derivatives/dipy_mapmri
-            sudo setfacl -d -m group:$(id -gn):rwx /tmp/multishell_output/work && \
-                sudo setfacl -m group:$(id -gn):rwx /tmp/multishell_output/work
-            qsiprep-docker -i pennbbl/qsiprep:latest \
-                -e qsiprep_DEV 1 -u $(id -u) \
-                --config $PWD/nipype.cfg -w /tmp/multishell_output/work \
-                 /tmp/data/multishell_output/qsiprep \
-                 /tmp/multishell_output/derivatives/dipy_mapmri \
-                 participant \
-                --recon-input /tmp/data/multishell_output/qsiprep \
-                --sloppy \
-                --recon-spec dipy_mapmri \
-                --recon-only \
-                --mem_mb 4096 \
-                --nthreads 1 -vv
-
-
-      - store_artifacts:
-         path: /tmp/multishell_output/derivatives
-
-  deploy_docker_patches:
-    machine:
-      image: circleci/classic:201711-01
-    working_directory: /tmp/src/qsiprep
-    steps:
-
-      - restore_cache:
-          keys:
-            - docker-v10-{{ .Branch }}-{{ .Revision }}
-      - run:
-          name: Load Docker image layer cache
-          no_output_timeout: 30m
-          command: |
-            docker info
-            set +o pipefail
-            if [ -f /tmp/cache/docker.tar.gz ]; then
-              sudo apt update && sudo apt -y install pigz
-              pigz -d --stdout /tmp/cache/docker.tar.gz | docker load
-              docker images
-            fi
-      - run:
-          name: Deploy to Docker Hub
-          no_output_timeout: 40m
-          command: |
-            if [[ -n "$DOCKER_PASS" ]]; then
-              docker login -u $DOCKER_USER -p $DOCKER_PASS
-              docker tag pennbbl/qsiprep pennbbl/qsiprep:${CIRCLE_BRANCH#docker/}
-              docker push pennbbl/qsiprep:${CIRCLE_BRANCH#docker/}
-            fi
-
-  deploy_docker:
-    machine:
-      image: circleci/classic:201711-01
-    working_directory: /tmp/src/qsiprep
-    steps:
-      - checkout:
-          path: /home/circleci/src/qsiprep
-      - run:
-          name: Check whether build should be skipped
-          command: |
-            cd /home/circleci/src/qsiprep
-            if [[ "$( git log --format='format:%s' -n 1 $CIRCLE_SHA1 | grep -i -E '^docs?(\(\w+\))?:' )" != "" ]]; then
-              echo "Only docs build"
-              circleci step halt
-            fi
-      - restore_cache:
-          keys:
-            - docker-v10-{{ .Branch }}-{{ .Revision }}
-      - run:
-          name: Load Docker image layer cache
-          no_output_timeout: 30m
-          command: |
-            docker info
-            set +o pipefail
-            if [ -f /tmp/cache/docker.tar.gz ]; then
-              sudo apt update && sudo apt -y install pigz
-              pigz -d --stdout /tmp/cache/docker.tar.gz | docker load
-              docker images
-            fi
-      - run:
           name: Deploy to Docker Hub
           no_output_timeout: 40m
           command: |
@@ -1106,13 +238,14 @@ jobs:
 
   test_deploy_pypi:
     docker:
-      - image: circleci/python:3.7.4
+      - image: cimg/python:3.8.10
     working_directory: /tmp/src/qsiprep
     steps:
       - checkout
       - run:
           name: Build qsiprep
           command: |
+            sudo apt-get update
             sudo apt-get install -y libblas-dev liblapack-dev gfortran
             pip install --user twine  # For use in checking distributions
             pip install --user --upgrade importlib-metadata
@@ -1181,7 +314,7 @@ jobs:
 
   deploy_pypi:
     docker:
-      - image: circleci/python:3.7.4
+      - image: circleci/python:3.8.10
     working_directory: /tmp/src/qsiprep
     steps:
       - checkout
@@ -1215,145 +348,138 @@ jobs:
             pip install --user --upgrade importlib-metadata
             twine upload dist/qsiprep*gz wrapper/dist/qsiprep*
 
-  deployable:
-    docker:
-      - image: busybox:latest
-    steps:
-      - run: echo Deploying!
-
 
 workflows:
   version: 2
   build_test_deploy:
     jobs:
+
       - build:
           filters:
             tags:
               only: /.*/
 
-      - get_data:
-          filters:
-            branches:
-              ignore:
-                - /docs?\/.*/
-                - /tests?\/.*/
-            tags:
-              only: /.*/
-
       - build_docs:
+          requires:
+            - build
           filters:
-            branches:
-              ignore:
-                - /tests?\/.*/
-                - /docker\/.*/
             tags:
               only: /.*/
 
       - test_deploy_pypi:
           filters:
-            branches:
-              ignore:
-                - /docs\/.*/
-                - /docker\/.*/
             tags:
               only: /.*/
 
       - DSCSDSI:
           requires:
-            - get_data
             - build
           filters:
             branches:
               ignore:
-                - /docs?\/.*/
-                - /tests?\/.*/
-            tags:
-              only: /.*/
-
-      - DSDTI_TOPUP:
-          requires:
-            - get_data
-            - build
-          filters:
-            branches:
-              ignore:
-                - /docs?\/.*/
-                - /tests?\/.*/
+                - /recon\/.*/
             tags:
               only: /.*/
 
       - DSDTI_nofmap:
           requires:
-            - get_data
             - build
           filters:
             branches:
               ignore:
-                - /docs?\/.*/
-                - /tests?\/.*/
+                - /recon\/.*/
+            tags:
+              only: /.*/
+
+      - DSDTI_synfmap:
+          requires:
+            - build
+          filters:
+            branches:
+              ignore:
+                - /recon\/.*/
+            tags:
+              only: /.*/
+
+      - DSDTI_TOPUP:
+          requires:
+            - build
+          filters:
+            branches:
+              ignore:
+                - /recon\/.*/
             tags:
               only: /.*/
 
       - IntramodalTemplate:
           requires:
-            - get_data
             - build
           filters:
             branches:
               ignore:
-                - /docs?\/.*/
-                - /tests?\/.*/
+                - /recon\/.*/
             tags:
               only: /.*/
 
-      - ReconTests:
+      - MultiT1w:
           requires:
-            - get_data
             - build
           filters:
             branches:
               ignore:
-                - /docs?\/.*/
-                - /tests?\/.*/
+                - /recon\/.*/
             tags:
               only: /.*/
 
-      - AllFieldmaps:
+      - Recon_3Tissue:
           requires:
-            - get_data
             - build
           filters:
-            branches:
-              ignore:
-                - /docs?\/.*/
-                - /tests?\/.*/
             tags:
               only: /.*/
 
-      - deploy_docker_patches:
+      - Recon_MRtrix3:
           requires:
             - build
           filters:
-            branches:
-              only: /docker\/.*/
+            tags:
+              only: /.*/
 
+      - Recon_DIPY:
+          requires:
+            - build
+          filters:
+            tags:
+              only: /.*/
+
+      - Recon_AMICO:
+          requires:
+            - build
+          filters:
+            tags:
+              only: /.*/
+      
       - deployable:
           requires:
-            - test_deploy_pypi
             - build_docs
-            - DSDTI_TOPUP
-            - DSDTI_nofmap
+            - test_deploy_pypi
             - DSCSDSI
+            - DSDTI_nofmap
+            - DSDTI_synfmap
+            - DSDTI_TOPUP
             - IntramodalTemplate
-            - ReconTests
-            - AllFieldmaps
+            - MultiT1w
+            - Recon_3Tissue
+            - Recon_MRtrix3
+            - Recon_DIPY
+            - Recon_AMICO
           filters:
             branches:
               only: master
             tags:
               only: /.*/
-
-      - deploy_docker:
+    
+      - build_and_deploy:
           requires:
             - deployable
           filters:

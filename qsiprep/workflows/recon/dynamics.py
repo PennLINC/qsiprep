@@ -10,11 +10,11 @@ import nipype.interfaces.utility as niu
 import logging
 from qsiprep.interfaces.connectivity import Controllability
 from qsiprep.interfaces.bids import ReconDerivativesDataSink
-from .interchange import input_fields
+from .interchange import recon_workflow_input_fields
 LOGGER = logging.getLogger('nipype.workflow')
 
 
-def init_controllability_wf(name="controllability", output_suffix="", params={}):
+def init_controllability_wf(name="controllability", output_suffix="", params={}, **kwargs):
     """Calculates network controllability from connectivity matrices.
 
     Calculates modal and average controllability using the method of Gu et al. 2015.
@@ -33,11 +33,12 @@ def init_controllability_wf(name="controllability", output_suffix="", params={})
 
 
     """
-    inputnode = pe.Node(niu.IdentityInterface(fields=input_fields + ['matfile']),
+    inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields + ['matfile']),
                         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(fields=['matfile']),
         name="outputnode")
+    plot_reports = params.pop("plot_reports", True)
 
     calc_control = pe.Node(Controllability(**params), name='calc_control')
     workflow = pe.Workflow(name=name)

@@ -46,48 +46,19 @@ class QsiprepAnatomicalIngressOutputSpec(TraitedSpec):
     t1_gm_probseg = File()
     # sub-1_label-WM_probseg.nii.gz
     t1_wm_probseg = File()
-
-    # sub-1_hemi-L_inflated.surf.gii
-    left_inflated_surf = File()
-    # sub-1_hemi-L_midthickness.surf.gii
-    left_midthickness_surf = File()
-    # sub-1_hemi-L_pial.surf.gii
-    left_pial_surf = File()
-    # sub-1_hemi-L_smoothwm.surf.gii
-    left_smoothwm_surf = File()
-    # sub-1_hemi-R_inflated.surf.gii
-    right_inflated_surf = File()
-    # sub-1_hemi-R_midthickness.surf.gii
-    right_midthickness_surf = File()
-    # sub-1_hemi-R_pial.surf.gii
-    right_pial_surf = File()
-    # sub-1_hemi-R_smoothwm.surf.gii
-    right_smoothwm_surf = File()
-
     # sub-1_from-orig_to-T1w_mode-image_xfm.txt
     orig_to_t1_mode_forward_transform = File()
-    # sub-1_from-T1w_to-fsnative_mode-image_xfm.txt
-    t1_2_fsnative_forward_transform = File()
     # sub-1_from-MNI152NLin2009cAsym_to-T1w_mode-image_xfm.h5
     t1_2_mni_reverse_transform = File()
     # sub-1_from-T1w_to-MNI152NLin2009cAsym_mode-image_xfm.h5
     t1_2_mni_forward_transform = File()
-    # sub-1_space-MNI152NLin2009cAsym_desc-brain_mask.nii.gz
-    template_brain_mask = File()
-    # sub-1_space-MNI152NLin2009cAsym_desc-preproc_T1w.nii.gz
-    template_preproc = File()
-    # sub-1_space-MNI152NLin2009cAsym_dseg.nii.gz
-    template_seg = File()
-    # sub-1_space-MNI152NLin2009cAsym_label-CSF_probseg.nii.gz
-    template_csf_probseg = File()
-    # sub-1_space-MNI152NLin2009cAsym_label-GM_probseg.nii.gz
-    template_gm_probseg = File()
-    # sub-1_space-MNI152NLin2009cAsym_label-WM_probseg.nii.gz
-    template_wm_probseg = File()
 
 
 class QsiprepAnatomicalIngress(SimpleInterface):
-    """
+    """ Get only the useful files from a QSIPrep anatomical output.
+
+    Many of the preprocessed outputs aren't useful for reconstruction
+    (mainly anything that has been mapped forward into template space).
     """
     input_spec = QsiprepAnatomicalIngressInputSpec
     output_spec = QsiprepAnatomicalIngressOutputSpec
@@ -133,57 +104,9 @@ class QsiprepAnatomicalIngress(SimpleInterface):
             "%s/sub-%s*_label-WM_probseg.nii*" % (anat_root, sub),
             excludes=["space-MNI"])
 
-        # space-template files
-        self._get_if_exists(
-            'template_brain_mask',
-            '%s/sub-%s_*space-MNI152NLin2009cAsym_desc-brain_mask.nii*' % (anat_root, sub))
-        self._get_if_exists(
-            'template_preproc',
-            "%s/sub-%s_space-MNI152NLin2009cAsym_desc-preproc_T1w.nii*" % (anat_root, sub))
-        self._get_if_exists(
-            't1_seg',
-            '%s/sub-%s*_space-MNI152NLin2009cAsym_dseg*' % (anat_root, sub))
-        self._get_if_exists(
-            'template_csf_probseg',
-            "%s/sub-%s*_space-MNI152NLin2009cAsym_label-CSF_probseg.nii*" % (anat_root, sub))
-        self._get_if_exists(
-            'template_gm_probseg',
-            "%s/sub-%s*_space-MNI152NLin2009cAsym_label-GM_probseg.nii*" % (anat_root, sub))
-        self._get_if_exists(
-            'template_wm_probseg',
-            "%s/sub-%s*_space-MNI152NLin2009cAsym_label-WM_probseg.nii*" % (anat_root, sub))
-
-        self._get_if_exists(
-            'left_inflated_surf',
-            "%s/sub-%s*_hemi-L_inflated.surf.gii" % (anat_root, sub))
-        self._get_if_exists(
-            'left_midthickness_surf',
-            "%s/sub-%s*_hemi-L_midthickness.surf.gii" % (anat_root, sub))
-        self._get_if_exists(
-            'left_pial_surf',
-            "%s/sub-%s*_hemi-L_pial.surf.gii" % (anat_root, sub))
-        self._get_if_exists(
-            'left_smoothwm_surf',
-            "%s/sub-%s*_hemi-L_smoothwm.surf.gii" % (anat_root, sub))
-        self._get_if_exists(
-            'right_inflated_surf',
-            "%s/sub-%s*_hemi-R_inflated.surf.gii" % (anat_root, sub))
-        self._get_if_exists(
-            'right_midthickness_surf',
-            "%s/sub-%s*_hemi-R_midthickness.surf.gii" % (anat_root, sub))
-        self._get_if_exists(
-            'right_pial_surf',
-            "%s/sub-%s*_hemi-R_pial.surf.gii" % (anat_root, sub))
-        self._get_if_exists(
-            'right_smoothwm_surf',
-            "%s/sub-%s*_hemi-R_smoothwm.surf.gii" % (anat_root, sub))
-
         self._get_if_exists(
             'orig_to_t1_mode_forward_transform',
             "%s/sub-%s*_from-orig_to-T1w_mode-image_xfm.txt" % (anat_root, sub))
-        self._get_if_exists(
-            't1_2_fsnative_forward_transform',
-            "%s/sub-%s*_from-T1w_to-fsnative_mode-image_xfm.txt" % (anat_root, sub))
         self._get_if_exists(
             't1_2_mni_reverse_transform',
             "%s/sub-%s*_from-MNI152NLin2009cAsym_to-T1w*_xfm.h5" % (anat_root, sub))
@@ -252,4 +175,120 @@ class FakeSegmentation(SimpleInterface):
         out_img.to_filename(out_fname)
         self._results['dseg_file'] = out_fname
 
+        return runtime
+
+
+"""
+
+The spherical harmonic coefficients are stored as follows. First, since the
+signal attenuation profile is real, it has conjugate symmetry, i.e. Y(l,-m) =
+Y(l,m)* (where * denotes the complex conjugate). Second, the diffusion profile
+should be antipodally symmetric (i.e. S(x) = S(-x)), implying that all odd l
+components should be zero. Therefore, only the even elements are computed. Note
+that the spherical harmonics equations used here differ slightly from those
+conventionally used, in that the (-1)^m factor has been omitted. This should be
+taken into account in all subsequent calculations. Each volume in the output
+image corresponds to a different spherical harmonic component.
+
+Each volume will
+correspond to the following:
+
+volume 0: l = 0, m = 0 ;
+volume 1: l = 2, m = -2 (imaginary part of m=2 SH) ;
+volume 2: l = 2, m = -1 (imaginary part of m=1 SH)
+volume 3: l = 2, m = 0 ;
+volume 4: l = 2, m = 1 (real part of m=1 SH) ;
+volume 5: l = 2, m = 2 (real part of m=2 SH) ; etc…
+
+
+lmax = 2
+
+vol	l	m
+0	0	0
+1	2	-2
+2	2	-1
+3	2	0
+4	2	1
+5	2	2
+
+"""
+
+
+lmax_lut = {
+    6: 2,
+    15: 4,
+    28: 6,
+    45: 8
+}
+
+
+def get_l_m(lmax):
+    ell = []
+    m = []
+    for _ell in range(0, lmax + 1, 2):
+        for _m in range(-_ell, _ell+1):
+            ell.append(_ell)
+            m.append(_m)
+
+    return np.array(ell), np.array(m)
+
+
+def calculate_steinhardt(sh_l, sh_m, data, q_num):
+    l_mask = sh_l == q_num
+    images = data[..., l_mask]
+    scalar = 4 * np.pi / (2 * q_num + 1)
+    s_param = scalar * np.sum(images ** 2, 3)
+    return np.sqrt(s_param)
+
+
+class CalculateSOPInputSpec(BaseInterfaceInputSpec):
+    sh_nifti = traits.File(mandatory=True, exists=True)
+    order = traits.Enum(2,4,6,8, default=6, usedefault=True)
+
+
+class CalculateSOPOutputSpec(TraitedSpec):
+    q2_file = traits.File()
+    q4_file = traits.File()
+    q6_file = traits.File()
+    q8_file = traits.File()
+
+
+class CalculateSOP(SimpleInterface):
+    input_spec = CalculateSOPInputSpec
+    output_spec = CalculateSOPOutputSpec
+    
+    def _run_interface(self, runtime):
+
+        # load the input nifti image
+        img = nb.load(self.inputs.sh_nifti)
+        
+        # determine what the lmax was based on the number of volumes
+        num_vols = img.shape[3]
+        if not num_vols in lmax_lut:
+            raise ValueError("Not an SH image")
+        lmax = lmax_lut[num_vols]
+
+        # Do we have enough SH coeffs to calculate all the SOPs?
+        if self.inputs.order > lmax:
+            raise Exception("Not enough SH coefficients (found {}) "
+                            "to calculate SOP order {}".format(
+                                num_vols, self.inputs.order))
+        sh_l, sh_m = get_l_m(lmax)
+        sh_data = img.get_fdata()
+
+        # to get a specific order
+        def calculate_order(order):
+            out_fname = fname_presuffix(
+                self.inputs.sh_nifti, suffix="q-%d_SOP.nii.gz" % order,
+                use_ext=False,
+                newpath=runtime.cwd)
+            order_data = calculate_steinhardt(sh_l, sh_m, sh_data, order)
+            # Save with the new name in the sandbox
+            nb.Nifti1Image(order_data, img.affine).to_filename(out_fname)
+            self._results["q%d_file" % order] = out_fname
+
+        # calculate!
+        for order in range(2, self.inputs.order + 2, 2):
+            calculate_order(order)
+        
         return runtime

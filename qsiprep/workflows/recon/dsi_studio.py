@@ -16,14 +16,14 @@ from qsiprep.interfaces.dsi_studio import (DSIStudioCreateSrc, DSIStudioGQIRecon
 
 import logging
 from qsiprep.interfaces.bids import ReconDerivativesDataSink
-from .interchange import input_fields
+from .interchange import recon_workflow_input_fields
 from ...engine import Workflow
-from ...interfaces.reports import ReconPeaksReport, ConnectivityReport
+from ...interfaces.reports import CLIReconPeaksReport, ConnectivityReport
 
 LOGGER = logging.getLogger('nipype.interface')
 
 
-def init_dsi_studio_recon_wf(omp_nthreads, has_transform, name="dsi_studio_recon",
+def init_dsi_studio_recon_wf(omp_nthreads, available_anatomical_data, name="dsi_studio_recon",
                              output_suffix="", params={}):
     """Reconstructs diffusion data using DSI Studio.
 
@@ -45,64 +45,67 @@ def init_dsi_studio_recon_wf(omp_nthreads, has_transform, name="dsi_studio_recon
             Default 1.25. Distance to sample EAP at.
 
     """
-    inputnode = pe.Node(niu.IdentityInterface(fields=input_fields + ['odf_rois']),
+    inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields + ['odf_rois']),
                         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(
             fields=['fibgz']),
         name="outputnode")
     workflow = Workflow(name=name)
+    plot_reports = params.pop("plot_reports", True)
     desc = """DSI Studio Reconstruction
 
 : """
-    create_src = pe.Node(DSIStudioCreateSrc(), name="create_src")
+    create_src = pe.Node(
+        DSIStudioCreateSrc(), 
+        name="create_src")
     romdd = params.get("ratio_of_mean_diffusion_distance", 1.25)
     gqi_recon = pe.Node(
-        DSIStudioGQIReconstruction(ratio_of_mean_diffusion_distance=romdd),
-        name="gqi_recon")
+        DSIStudioGQIReconstruction(
+            ratio_of_mean_diffusion_distance=romdd),
+        name="gqi_recon",
+        n_procs=omp_nthreads)
     desc += """\
 Diffusion orientation distribution functions (ODFs) were reconstructed using
 generalized q-sampling imaging (GQI, @yeh2010gqi) with a ratio of mean diffusion
 distance of %02f.""" % romdd
 
-    # Resample anat mask
-    resample_mask = pe.Node(
-        afni.Resample(outputtype='NIFTI_GZ', resample_mode="NN"), name='resample_mask')
-
-    # Make a visual report of the model
-    plot_peaks = pe.Node(ReconPeaksReport(subtract_iso=True), name='plot_peaks')
-    ds_report_peaks = pe.Node(
-        ReconDerivativesDataSink(extension='.png',
-                                 desc="GQIODF",
-                                 suffix='peaks'),
-        name='ds_report_peaks',
-        run_without_submitting=True)
-
-    # Plot targeted regions
-    if has_transform:
-        ds_report_odfs = pe.Node(
-            ReconDerivativesDataSink(extension='.png',
-                                     desc="GQIODF",
-                                     suffix='odfs'),
-            name='ds_report_odfs',
-            run_without_submitting=True)
-        workflow.connect(plot_peaks, 'odf_report', ds_report_odfs, 'in_file')
-
     workflow.connect([
         (inputnode, create_src, [('dwi_file', 'input_nifti_file'),
                                  ('bval_file', 'input_bvals_file'),
                                  ('bvec_file', 'input_bvecs_file')]),
-        (inputnode, resample_mask, [('t1_brain_mask', 'in_file'),
-                                    ('dwi_file', 'master')]),
         (create_src, gqi_recon, [('output_src', 'input_src_file')]),
-        (resample_mask, gqi_recon, [('out_file', 'mask')]),
-        (gqi_recon, outputnode, [('output_fib', 'fibgz')]),
-        (gqi_recon, plot_peaks, [('output_fib', 'fib_file')]),
-        (inputnode, plot_peaks, [('dwi_ref', 'background_image'),
-                                 ('odf_rois', 'odf_rois')]),
-        (resample_mask, plot_peaks, [('out_file', 'mask_file')]),
-        (plot_peaks, ds_report_peaks, [('out_report', 'in_file')])
-    ])
+        (inputnode, gqi_recon, [('dwi_mask', 'mask')]),
+        (gqi_recon, outputnode, [('output_fib', 'fibgz')])])
+    if plot_reports:
+        # Make a visual report of the model
+        plot_peaks = pe.Node(
+            CLIReconPeaksReport(subtract_iso=True), 
+            name='plot_peaks',
+            n_procs=omp_nthreads)
+        ds_report_peaks = pe.Node(
+            ReconDerivativesDataSink(extension='.png',
+                                    desc="GQIODF",
+                                    suffix='peaks'),
+            name='ds_report_peaks',
+            run_without_submitting=True)
+
+        workflow.connect([
+            (gqi_recon, plot_peaks, [('output_fib', 'fib_file')]),
+            (inputnode, plot_peaks, [('dwi_ref', 'background_image'),
+                                     ('odf_rois', 'odf_rois'),
+                                     ('dwi_mask', 'mask_file')]),
+            (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')])])
+        # Plot targeted regions
+        if available_anatomical_data['has_qsiprep_t1w_transforms']:
+            ds_report_odfs = pe.Node(
+                ReconDerivativesDataSink(extension='.png',
+                                        desc="GQIODF",
+                                        suffix='odfs'),
+                name='ds_report_odfs',
+                run_without_submitting=True)
+            workflow.connect(plot_peaks, 'odf_report', ds_report_odfs, 'in_file')
+
 
     if output_suffix:
         # Save the output in the outputs directory
@@ -118,7 +121,7 @@ distance of %02f.""" % romdd
     return workflow
 
 
-def init_dsi_studio_tractography_wf(omp_nthreads, has_transform, name="dsi_studio_tractography",
+def init_dsi_studio_tractography_wf(omp_nthreads, available_anatomical_data, name="dsi_studio_tractography",
                                     params={}, output_suffix=""):
     """Calculate streamline-based connectivity matrices using DSI Studio.
 
@@ -179,13 +182,18 @@ def init_dsi_studio_tractography_wf(omp_nthreads, has_transform, name="dsi_studi
     """
     inputnode = pe.Node(
         niu.IdentityInterface(
-            fields=input_fields + ['fibgz']),
+            fields=recon_workflow_input_fields + ['fibgz']),
         name="inputnode")
     outputnode = pe.Node(niu.IdentityInterface(fields=['trk_file', 'fibgz']),
                          name="outputnode")
+    plot_reports = params.pop("plot_reports", True)
     workflow = Workflow(name=name)
-    tracking = pe.Node(DSIStudioTracking(nthreads=omp_nthreads, **params),
-                       name='tracking')
+    tracking = pe.Node(
+        DSIStudioTracking(
+            num_threads=omp_nthreads,
+            **params),
+        name='tracking',
+        n_procs=omp_nthreads)
     workflow.connect([
         (inputnode, tracking, [('fibgz', 'input_fib')]),
         (tracking, outputnode, [('output_trk', 'trk_file')]),
@@ -200,7 +208,7 @@ def init_dsi_studio_tractography_wf(omp_nthreads, has_transform, name="dsi_studi
     return workflow
 
 
-def init_dsi_studio_connectivity_wf(omp_nthreads, has_transform, name="dsi_studio_connectivity",
+def init_dsi_studio_connectivity_wf(omp_nthreads, available_anatomical_data, name="dsi_studio_connectivity",
                                     params={}, output_suffix=""):
     """Calculate streamline-based connectivity matrices using DSI Studio.
 
@@ -259,30 +267,36 @@ def init_dsi_studio_connectivity_wf(omp_nthreads, has_transform, name="dsi_studi
     """
     inputnode = pe.Node(
         niu.IdentityInterface(
-            fields=input_fields + ['fibgz', 'trk_file', 'atlas_configs']),
+            fields=recon_workflow_input_fields + ['fibgz', 'trk_file', 'atlas_configs']),
         name="inputnode")
     outputnode = pe.Node(niu.IdentityInterface(fields=['matfile']),
                          name="outputnode")
+    plot_reports = params.pop("plot_reports", True)
     workflow = pe.Workflow(name=name)
-    calc_connectivity = pe.Node(DSIStudioAtlasGraph(nthreads=omp_nthreads, **params),
-                                name='calc_connectivity')
-    plot_connectivity = pe.Node(ConnectivityReport(), name='plot_connectivity')
-    ds_report_connectivity = pe.Node(
-        ReconDerivativesDataSink(extension='.svg',
-                                 desc="DSIStudioConnectivity",
-                                 suffix='matrices'),
-        name='ds_report_connectivity',
-        run_without_submitting=True)
+    calc_connectivity = pe.Node(
+        DSIStudioAtlasGraph(num_threads=omp_nthreads, **params),
+        name='calc_connectivity',
+        n_procs=omp_nthreads)
 
     workflow.connect([
         (inputnode, calc_connectivity, [('atlas_configs', 'atlas_configs'),
                                         ('fibgz', 'input_fib'),
                                         ('trk_file', 'trk_file')]),
-        (calc_connectivity, plot_connectivity, [
-            ('connectivity_matfile', 'connectivity_matfile')]),
-        (plot_connectivity, ds_report_connectivity, [('out_report', 'in_file')]),
-        (calc_connectivity, outputnode, [('connectivity_matfile', 'matfile')])
-    ])
+        (calc_connectivity, outputnode, [('connectivity_matfile', 'matfile')])])
+
+    if plot_reports:
+        plot_connectivity = pe.Node(ConnectivityReport(), name='plot_connectivity')
+        ds_report_connectivity = pe.Node(
+            ReconDerivativesDataSink(extension='.svg',
+                                    desc="DSIStudioConnectivity",
+                                    suffix='matrices'),
+            name='ds_report_connectivity',
+            run_without_submitting=True)
+        workflow.connect([
+            (calc_connectivity, plot_connectivity, [
+                ('connectivity_matfile', 'connectivity_matfile')]),
+            (plot_connectivity, ds_report_connectivity, [('out_report', 'in_file')]),
+        ])
     if output_suffix:
         # Save the output in the outputs directory
         ds_connectivity = pe.Node(ReconDerivativesDataSink(suffix=output_suffix),
@@ -292,7 +306,7 @@ def init_dsi_studio_connectivity_wf(omp_nthreads, has_transform, name="dsi_studi
     return workflow
 
 
-def init_dsi_studio_export_wf(omp_nthreads, has_transform, name="dsi_studio_export",
+def init_dsi_studio_export_wf(omp_nthreads, available_anatomical_data, name="dsi_studio_export",
                               params={}, output_suffix=""):
     """Export scalar maps from a DSI Studio fib file into NIfTI files with correct headers.
 
@@ -319,8 +333,9 @@ def init_dsi_studio_export_wf(omp_nthreads, has_transform, name="dsi_studio_expo
     """
     inputnode = pe.Node(
         niu.IdentityInterface(
-            fields=input_fields + ['fibgz']),
+            fields=recon_workflow_input_fields + ['fibgz']),
         name="inputnode")
+    plot_reports = params.pop("plot_reports", True)
     scalar_names = ['gfa', 'fa0', 'fa1', 'fa2', 'iso', 'dti_fa', 'md', 'rd', 'ad']
     outputnode = pe.Node(
         niu.IdentityInterface(fields=[name + "_file" for name in scalar_names]),

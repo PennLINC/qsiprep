@@ -1,3 +1,56 @@
+0.15.2 (March 3, 2022)
+==========================
+Due to persistent difficulties with crashing ODF plots in the reconstruction workflows,
+there is now a `--skip-odf-reports` option that will disable the ODF and peak plots
+in the html reports. This should only be used once you've run some test workflows 
+with the reports still enabled, so you know that your ODFs are correctly oriented.
+
+ * Make ODF Plots optional (#364)
+ * Bugfix: ABCD gradient data for extrapolation (#363)
+ * Adds `dipy_dki` reconstruction workflow (#366)
+
+
+0.15.1 (February 28, 2022)
+==========================
+A lot of changes in QSIPrep. The big-picture changes are 
+
+ 1. The build system was redone so a multistage build is used in a 
+    different repository (https://github.com/PennLINC/qsiprep_build).
+    The container should be about half as big as the last release.
+ 2. The way anatomical masks are handled in reconstruction workflows
+    has been changed so that FreeSurfer data can be incorporated.
+ 3. FAST-based anatomically-constrained tractography is now deprecated in
+    QSIPrep. If you're going to use anatomical constraints, they should be
+    very accurate. The hybrid surface-volume segmentation (HSVS) is 
+    *amazing* and should be considered the default way to use the 
+    MRtrix3/3Tissue workflows. The 
+    [documentation](https://qsiprep.readthedocs.io/en/latest/reconstruction.html)
+    describes the new built-in workflow names.
+ 4. The reconstruction workflows have been totally refactored. This won't 
+    affect the outputs of the reconstruction workflows, but will affect
+    anyone who is using intermediate files from the working directory.
+    The working directories no longer have those unfortunate `..`'s in
+    their names.
+ 5. FSL is updated to 6.0.5.1!
+
+Since these are a lot of changes, please be vigilant and check your results!
+The QSIPrep preprocessing workflows have not changed with this release, but 
+the dependencies have been upgraded for almost everything.
+
+ * Update FSL to 6.0.5.1 (#334) 
+ * Move ODF plotting to a cli tool so xvfb is handled more robustly (#357)
+ * Better FreeSurfer license documentation (#355)
+ * Edited libQt5Core.so.5 so it's loadable in singularity on CentOS (#336)
+ * Fixed typo in patch2self (#338)
+ * Inaccurate bids-validator errors were removed (#340)
+ * Bug in `--recon-input` fixed #286
+ * Correct streamline count is reported in the mrtrix connectivity matrices (#330)
+ * Add option to ingress freesurfer data (#287)
+ * Add Nature Methods citation to dataset_description.json
+ * Refactor build system (#341)
+ * SHORELine bugfixes (#301)
+ * Bugfix: handle cases where there is only one b=0 (#279)
+
 0.14.3 (September 16, 2021)
 ===========================
 Change in behavior in Patch2Self:

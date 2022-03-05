@@ -479,3 +479,15 @@ def medial_wall_to_nan(in_file, subjects_dir, target_subject, newpath=None):
     out_file = os.path.join(newpath or os.getcwd(), fn)
     func.to_filename(out_file)
     return out_file
+
+
+def find_fs_path(freesurfer_dir, subject_id):
+    if freesurfer_dir is None:
+        return None
+    nosub = op.join(freesurfer_dir, subject_id)
+    if op.exists(nosub):
+        return nosub
+    withsub = op.join(freesurfer_dir, "sub-" + subject_id)
+    if op.exists(withsub):
+        return withsub
+    return None
