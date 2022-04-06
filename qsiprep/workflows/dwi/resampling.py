@@ -14,6 +14,7 @@ from nipype.interfaces import utility as niu, ants
 from .util import init_dwi_reference_wf
 from ...engine import Workflow
 from ...interfaces.nilearn import Merge
+from ...interfaces.ants import GetImageType
 from ...interfaces.gradients import (ComposeTransforms, ExtractB0s, GradientRotation,
                                      LocalGradientRotation)
 from ...interfaces.images import ChooseInterpolator
@@ -173,6 +174,7 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
         ants.ApplyTransforms(float=True),
         name='dwi_transform', iterfield=['input_image', 'transforms'])
     rotate_gradients = pe.Node(GradientRotation(), name='rotate_gradients')
+    cnr_image_type = pe.Node(GetImageType(), name='cnr_image_type')
     cnr_tfm = pe.Node(
         ants.ApplyTransforms(interpolation='LanczosWindowedSinc', float=True),
         name='cnr_tfm',
@@ -196,6 +198,8 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
         (compose_transforms, rotate_gradients, [('out_affines', 'affine_transforms')]),
         (rotate_gradients, outputnode, [('bvals', 'bvals'),
                                         ('bvecs', 'rotated_bvecs')]),
+        (inputnode, cnr_image_type, [('cnr_map', 'image')]),
+        (cnr_image_type, cnr_tfm, [('image_type', 'input_image_type')]),
         (inputnode, cnr_tfm, [('cnr_map', 'input_image'),
                               ('output_grid', 'reference_image')]),
         (cnr_tfm, outputnode, [('output_image', 'cnr_map_resampled')]),

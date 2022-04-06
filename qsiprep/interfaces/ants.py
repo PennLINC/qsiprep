@@ -8,6 +8,8 @@ from nipype.interfaces.base import (TraitedSpec, CommandLineInputSpec, BaseInter
                                     OutputMultiObject, SimpleInterface)
 from nipype.interfaces import ants
 from nipype.utils.filemanip import split_filename
+from sklearn import manifold
+import nibabel as nb
 LOGGER = logging.getLogger('nipype.interface')
 
 
@@ -189,3 +191,24 @@ class ConvertTransformFile(CommandLine):
     input_spec = _ConvertTransformFileInputSpec
     output_spec = _ConvertTransformFileOutputSpec
 
+
+class _GetImageTypeInputSpec(BaseInterfaceInputSpec):
+    image = File(exists=True, mandatory=True)
+
+
+class _GetImageTypeOutputSpec(TraitedSpec):
+    image_type = traits.Enum(0, 1, 2, 3)
+
+
+class GetImageType(SimpleInterface):
+    """Use to determine what to send to --input-image-type."""
+    input_spec = _GetImageTypeInputSpec
+    output_spec = _GetImageTypeOutputSpec
+
+    def _run_interface(self, runtime):
+        img = nb.load(self.inputs.image)
+        if img.ndim == 4:
+            self._results['image_type'] = 3
+        else:
+            self._results['image_type'] = 0
+        return runtime
