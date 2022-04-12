@@ -20,7 +20,7 @@ set +e
 source ./get_data.sh
 TESTDIR=${PWD}
 get_config_data ${TESTDIR}
-get_bids_data ${TESTDIR} multishell_output
+# get_bids_data ${TESTDIR} multishell_output
 CFG=${TESTDIR}/data/nipype.cfg
 EDDY_CFG=${TESTDIR}/data/eddy_config.json
 export FS_LICENSE=${TESTDIR}/data/license.txt
@@ -38,6 +38,6 @@ ${QSIPREP_CMD}  \
 	 -w ${TEMPDIR} \
 	 --recon-input ${BIDS_INPUT_DIR} \
 	 --sloppy \
-	 --recon-spec pyAFQ_full \
+	 --recon-spec pyafq \
 	 --recon-only \
 	 -vv

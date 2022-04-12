@@ -14,7 +14,12 @@ from ...interfaces.bids import ReconDerivativesDataSink
 LOGGER = logging.getLogger('nipype.workflow')
 
 
-def init_pyafq_wf(name="afq", output_suffix="", params={}):
+# TODO: look at desc from mrtrix workflow.__desc__ = desc
+# TODO: add pyafq citation to qsiprep/data/biolerplate.bib
+# TODO: make two different json files auto-generate depending on if external track or not, replace external track with import track
+
+def init_pyafq_wf(omp_nthreads, available_anatomical_data,
+                  name="afq", output_suffix="", params={}):
     """Run PyAFQ on some qsiprep outputs
 
     Inputs
@@ -27,31 +32,34 @@ def init_pyafq_wf(name="afq", output_suffix="", params={}):
 
     """
     inputnode = pe.Node(niu.IdentityInterface(
-        fields=recon_workflow_input_fields + ['trk_file']),
+        fields=recon_workflow_input_fields + ['tck_file']),
         name="inputnode")
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=['profiles_csv']),
+        niu.IdentityInterface(fields=['afq_dir']),
         name="outputnode")
 
-    run_afq = pe.Node(PyAFQRecon(**params), name='run_afq')
+    params["omp_nthreads"] = omp_nthreads
+    run_afq = pe.Node(PyAFQRecon(kwargs=params), name='run_afq')
     workflow = pe.Workflow(name=name)
+    if params.get("use_external_tracking", False):
+        workflow.connect([
+            (inputnode, run_afq, [('tck_file', 'tck_file')]),
+        ])
     workflow.connect([
         (inputnode, run_afq, [
             ('dwi_file', 'dwi_file'),
             ('bval_file', 'bval_file'),
             ('bvec_file', 'bvec_file'),
             ('dwi_mask', 'mask_file'),
-            ('fs_to_qsiprep_transform_itk', 'itk_file'),
-            ('trk_file', 'trk_file')]),
-        (run_afq, outputnode, [('profiles_csv', 'profiles_csv')])
+            ('t1_2_mni_reverse_transform', 'itk_file')]),
+        (run_afq, outputnode, [('afq_dir', 'afq_dir')])
     ])
     if output_suffix:
         # Save the output in the outputs directory
+        # TODO: make this send back the full folder path
         ds_afq = pe.Node(
-            ReconDerivativesDataSink(
-                suffix=output_suffix,
-                extension='.csv'),
-            name='ds_' + name + '_profiles',
+            ReconDerivativesDataSink(),
+            name='ds_' + name,
             run_without_submitting=True)
-        workflow.connect(run_afq, 'profiles_csv', ds_afq, 'in_file')
+        workflow.connect(run_afq, 'afq_dir', ds_afq, 'in_file')
     return workflow

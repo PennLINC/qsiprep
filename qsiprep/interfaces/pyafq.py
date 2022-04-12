@@ -62,7 +62,7 @@ class PyAFQInputSpec(BaseInterfaceInputSpec):
     mask_file = File(exists=True, mandatory=True)
     itk_file = File(exists=True, mandatory=True)
     kwargs = traits.Dict(exists=True, mandatory=True)
-    trk_file = traits.Either(None, File(exists=True))
+    tck_file = traits.Either(None, File(exists=True))
 
 
 class PyAFQOutputSpec(TraitedSpec):
@@ -86,7 +86,7 @@ class PyAFQRecon(SimpleInterface):
                                    newpath=shim_dir)
         mask_file = fname_presuffix(self.inputs.mask_file,
                                     newpath=shim_dir)
-        trk_file = fname_presuffix(self.inputs.trk_file,
+        tck_file = fname_presuffix(self.inputs.tck_file,
                                    newpath=shim_dir)
         itk_file = fname_presuffix(self.inputs.itk_file,
                                    newpath=shim_dir)
@@ -95,24 +95,32 @@ class PyAFQRecon(SimpleInterface):
         os.symlink(self.inputs.dwi_file, dwi_file)
         os.symlink(self.inputs.mask_file, mask_file)
         os.symlink(self.inputs.itk_file, itk_file)
-        if self.inputs.trk_file and isdefined(self.inputs.trk_file):
-            os.symlink(self.inputs.trk_file, trk_file)
+        if self.inputs.tck_file and isdefined(self.inputs.tck_file):
+            os.symlink(self.inputs.tck_file, tck_file)
         else:
-            trk_file = None
+            tck_file = None
 
         brain_mask_definition = MaskFile(path=mask_file)
         itk_map = ItkMap(warp_path=itk_file)
         output_dir = shim_dir + "/PYAFQ/"
+        os.makedirs(output_dir, exist_ok=True)
 
         kwargs = parse_qsiprep_params_dict(self.inputs.kwargs)
+        if 'parallel_segmentation' in kwargs:
+            if 'n_jobs' not in kwargs['parallel_segmentation']\
+                    or kwargs['parallel_segmentation']['n_jobs'] == -1:
+                kwargs['parallel_segmentation']['n_jobs'] = self.inputs.kwargs["omp_nthreads"]
+        else:
+            kwargs['parallel_segmentation'] = {}
+            kwargs['parallel_segmentation']['n_jobs'] = self.inputs.kwargs["omp_nthreads"]
 
         myafq = ParticipantAFQ(
             dwi_file, bval_file, bvec_file, output_dir,
-            import_tract=trk_file,
+            import_tract=tck_file,
             brain_mask_definition=brain_mask_definition,
             mapping_definition=itk_map,
             **kwargs)
-        myafq.export_all() # TODO: add this to parameter file
+        myafq.profiles
 
         self._results['afq_dir'] = output_dir
 
