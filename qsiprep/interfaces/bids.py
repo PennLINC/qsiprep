@@ -252,8 +252,10 @@ class BIDSDataGrabber(SimpleInterface):
 class DerivativesDataSinkInputSpec(BaseInterfaceInputSpec):
     base_directory = traits.Directory(
         desc='Path to the base directory for storing data.')
-    in_file = InputMultiObject(File(exists=True), mandatory=True,
-                               desc='the object to be saved')
+    in_file = traits.Either(traits.Directory(exists=True),
+                            InputMultiObject(File(exists=True)), 
+                            mandatory=True,
+                            desc='the object to be saved')
     source_file = File(mandatory=True, desc='the original file or name of merged files')
     space = traits.Str('', usedefault=True, desc='Label for space field')
     desc = traits.Str('', usedefault=True, desc='Label for description field')
@@ -354,6 +356,20 @@ desc-preproc_bold.nii.gz'
         suffix = '_{}'.format(self.inputs.suffix) if self.inputs.suffix else ''
         dtype = '' if not self.inputs.keep_dtype else ('_%s' % dtype)
 
+        # If the derivative is a directory, copy it over
+        if isinstance(self.inputs.in_file, traits.Directory):
+            out_file = formatstr.format(
+                bname=base_fname,
+                space=space,
+                desc=desc,
+                suffix=suffix,
+                dtype=dtype,
+                ext='')
+            copytree(self.inputs.in_file, out_file)
+            self._results['out_file'].append(out_file)
+            return runtime
+        
+        # Otherwise it's file(s)
         self._results['compression'] = []
         for i, fname in enumerate(self.inputs.in_file):
             out_file = formatstr.format(
