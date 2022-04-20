@@ -8,13 +8,42 @@ PyAFQ tractometry and visualization
 import nipype.pipeline.engine as pe
 import nipype.interfaces.utility as niu
 import logging
+import AFQ
+import AFQ.utils.bin as afb
 from qsiprep.interfaces.pyafq import PyAFQRecon
 from .interchange import recon_workflow_input_fields
 from ...interfaces.bids import ReconDerivativesDataSink
 LOGGER = logging.getLogger('nipype.workflow')
 
 
-# TODO: look at desc from mrtrix workflow.__desc__ = desc
+def _parse_qsiprep_params_dict(params_dict):
+    arg_dict = afb.func_dict_to_arg_dict()
+    kwargs = {}
+
+    special_args = {
+        "CLEANING": "clean_params",
+        "SEGMENTATION": "segmentation_params",
+        "TRACTOGRAPHY": "tracking_params"}
+
+    for section, args in arg_dict.items():
+        if section == "AFQ_desc":
+            continue
+        for arg, arg_info in args.items():
+            if arg in special_args.keys():
+                kwargs[special_args[arg]] = {}
+                for actual_arg in arg_info.keys():
+                    if actual_arg in params_dict:
+                        kwargs[special_args[arg]][actual_arg] = afb.toml_to_val(
+                            params_dict[actual_arg])
+            else:
+                if arg in params_dict:
+                    kwargs[arg] = afb.toml_to_val(params_dict[arg])
+
+    for ignore_param in afb.qsi_prep_ignore_params:
+        kwargs.pop(ignore_param, None)
+
+    return kwargs
+
 
 def init_pyafq_wf(omp_nthreads, available_anatomical_data,
                   name="afq", output_suffix="", params={}):
@@ -36,8 +65,9 @@ def init_pyafq_wf(omp_nthreads, available_anatomical_data,
         niu.IdentityInterface(fields=['afq_dir']),
         name="outputnode")
 
-    params["omp_nthreads"] = omp_nthreads
-    run_afq = pe.Node(PyAFQRecon(kwargs=params), name='run_afq')
+    kwargs = _parse_qsiprep_params_dict(params)
+    kwargs["omp_nthreads"] = omp_nthreads
+    run_afq = pe.Node(PyAFQRecon(kwargs=kwargs), name='run_afq')
     workflow = pe.Workflow(name=name)
     if params.get("use_external_tracking", False):
         workflow.connect([
@@ -59,4 +89,8 @@ def init_pyafq_wf(omp_nthreads, available_anatomical_data,
             name='ds_' + name,
             run_without_submitting=True)
         workflow.connect(run_afq, 'afq_dir', ds_afq, 'in_file')
+
+    workflow.__desc__ = (
+        f"PyAFQ run on version {AFQ.__version__}"
+        f" with the following configuration: {str(kwargs)}")
     return workflow

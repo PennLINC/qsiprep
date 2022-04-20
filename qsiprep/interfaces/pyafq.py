@@ -14,7 +14,6 @@ import os.path as op
 from AFQ.api.participant import ParticipantAFQ
 from AFQ.definitions.mask import MaskFile
 from AFQ.definitions.mapping import ItkMap
-import AFQ.utils.bin as afb
 
 from nipype import logging
 from nipype.utils.filemanip import fname_presuffix
@@ -24,35 +23,6 @@ from nipype.interfaces.base import (
 
 
 LOGGER = logging.getLogger('nipype.interface')
-
-
-def parse_qsiprep_params_dict(params_dict):
-    arg_dict = afb.func_dict_to_arg_dict()
-    kwargs = {}
-
-    special_args = {
-        "CLEANING": "clean_params",
-        "SEGMENTATION": "segmentation_params",
-        "TRACTOGRAPHY": "tracking_params"}
-
-    for section, args in arg_dict.items():
-        if section == "AFQ_desc":
-            continue
-        for arg, arg_info in args.items():
-            if arg in special_args.keys():
-                kwargs[special_args[arg]] = {}
-                for actual_arg in arg_info.keys():
-                    if actual_arg in params_dict:
-                        kwargs[special_args[arg]][actual_arg] = afb.toml_to_val(
-                            params_dict[actual_arg])
-            else:
-                if arg in params_dict:
-                    kwargs[arg] = afb.toml_to_val(params_dict[arg])
-
-    for ignore_param in afb.qsi_prep_ignore_params:
-        kwargs.pop(ignore_param, None)
-
-    return kwargs
 
 
 class PyAFQInputSpec(BaseInterfaceInputSpec):
@@ -105,7 +75,7 @@ class PyAFQRecon(SimpleInterface):
         output_dir = shim_dir + "/PYAFQ/"
         os.makedirs(output_dir, exist_ok=True)
 
-        kwargs = parse_qsiprep_params_dict(self.inputs.kwargs)
+        kwargs = self.inputs.kwargs
         if 'parallel_segmentation' in kwargs:
             if 'n_jobs' not in kwargs['parallel_segmentation']\
                     or kwargs['parallel_segmentation']['n_jobs'] == -1:
