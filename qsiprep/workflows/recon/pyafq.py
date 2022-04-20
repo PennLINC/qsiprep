@@ -15,8 +15,6 @@ LOGGER = logging.getLogger('nipype.workflow')
 
 
 # TODO: look at desc from mrtrix workflow.__desc__ = desc
-# TODO: add pyafq citation to qsiprep/data/biolerplate.bib
-# TODO: make two different json files auto-generate depending on if external track or not, replace external track with import track
 
 def init_pyafq_wf(omp_nthreads, available_anatomical_data,
                   name="afq", output_suffix="", params={}):
@@ -56,7 +54,6 @@ def init_pyafq_wf(omp_nthreads, available_anatomical_data,
     ])
     if output_suffix:
         # Save the output in the outputs directory
-        # TODO: make this send back the full folder path
         ds_afq = pe.Node(
             ReconDerivativesDataSink(),
             name='ds_' + name,
