@@ -65,17 +65,29 @@ class PyAFQRecon(SimpleInterface):
         os.symlink(self.inputs.dwi_file, dwi_file)
         os.symlink(self.inputs.mask_file, mask_file)
         os.symlink(self.inputs.itk_file, itk_file)
+
+        kwargs = self.inputs.kwargs
+
         if self.inputs.tck_file and isdefined(self.inputs.tck_file):
             os.symlink(self.inputs.tck_file, tck_file)
         else:
             tck_file = None
-
         brain_mask_definition = MaskFile(path=mask_file)
         itk_map = ItkMap(warp_path=itk_file)
-        output_dir = shim_dir + "/PYAFQ/"
-        os.makedirs(output_dir, exist_ok=True)
 
-        kwargs = self.inputs.kwargs
+        if tck_file is None:
+            tck_file = kwargs['import_tract']
+        else:
+            kwargs.pop('import_tract', None)
+        if brain_mask_definition is None:
+            brain_mask_definition = kwargs['brain_mask_definition']
+        else:
+            kwargs.pop('brain_mask_definition', None)
+        if itk_map is None:
+            itk_map = kwargs['mapping_definition']
+        else:
+            kwargs.pop('mapping_definition', None)
+
         if 'parallel_segmentation' in kwargs:
             if 'n_jobs' not in kwargs['parallel_segmentation']\
                     or kwargs['parallel_segmentation']['n_jobs'] == -1:
@@ -84,6 +96,8 @@ class PyAFQRecon(SimpleInterface):
             kwargs['parallel_segmentation'] = {}
             kwargs['parallel_segmentation']['n_jobs'] = self.inputs.kwargs["omp_nthreads"]
 
+        output_dir = shim_dir + "/PYAFQ/"
+        os.makedirs(output_dir, exist_ok=True)
         myafq = ParticipantAFQ(
             dwi_file, bval_file, bvec_file, output_dir,
             import_tract=tck_file,

@@ -20,14 +20,14 @@ set +e
 source ./get_data.sh
 TESTDIR=${PWD}
 get_config_data ${TESTDIR}
-# get_bids_data ${TESTDIR} multishell_output
+get_bids_data ${TESTDIR} multishell_output
 CFG=${TESTDIR}/data/nipype.cfg
 EDDY_CFG=${TESTDIR}/data/eddy_config.json
 export FS_LICENSE=${TESTDIR}/data/license.txt
 
 
 # Test pyAFQ_full
-TESTNAME=pyAFQ_import_trk_test
+TESTNAME=pyafq_input_trk_test
 setup_dir ${TESTDIR}/${TESTNAME}
 TEMPDIR=${TESTDIR}/${TESTNAME}/work
 OUTPUT_DIR=${TESTDIR}/${TESTNAME}/derivatives
@@ -38,6 +38,6 @@ ${QSIPREP_CMD}  \
 	 -w ${TEMPDIR} \
 	 --recon-input ${BIDS_INPUT_DIR} \
 	 --sloppy \
-	 --recon-spec pyAFQ_import_trk \
+	 --recon-spec pyafq_input_trk \
 	 --recon-only \
 	 -vv
