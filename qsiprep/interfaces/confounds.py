@@ -166,9 +166,12 @@ def _gather_confounds(fdisp=None, motion=None, sliceqc_file=None, newpath=None,
         confound_check = confounds_data[['grad_x', 'grad_y', 'grad_z', 'bval']]
 
         # Check that the gradients and original files match after recombining
-        if not np.allclose(denoising_check.to_numpy(), confound_check.to_numpy()) or \
-                not (denoising['original_file'] == confounds_data['original_file']).all():
-            raise Exception("Gradients or original files don't match. File a bug report!")
+        denoising.to_csv(newpath + "/denoising.csv")
+        confounds_data.to_csv(newpath + "/confounds_data.csv")
+        if not np.allclose(denoising_check.to_numpy(), confound_check.to_numpy()):
+            raise Exception("Gradients don't match. File a bug report!")
+        if not denoising['original_file'].eq(confounds_data['original_file']).all():
+            raise Exception("Original files don't match. File a bug report!")
         denoising.drop(columns=['original_file', 'original_bval', 'original_bx',
                                 'original_by', 'original_bz'],
                        inplace=True)

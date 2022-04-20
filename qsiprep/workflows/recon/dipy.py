@@ -9,10 +9,10 @@ import logging
 import nipype.pipeline.engine as pe
 from nipype.interfaces import afni, utility as niu
 from qsiprep.interfaces.bids import ReconDerivativesDataSink
-from ...interfaces.dipy import BrainSuiteShoreReconstruction, MAPMRIReconstruction
-from .interchange import input_fields
+from ...interfaces.dipy import BrainSuiteShoreReconstruction, KurtosisReconstruction, MAPMRIReconstruction
+from .interchange import recon_workflow_input_fields
 from ...engine import Workflow
-from ...interfaces.reports import ReconPeaksReport
+from ...interfaces.reports import CLIReconPeaksReport
 
 LOGGER = logging.getLogger('nipype.interface')
 
@@ -38,7 +38,7 @@ def external_format_datasinks(output_suffix, params, wf):
         wf.connect(outputnode, 'fod_sh_mif', ds_mif, 'in_file')
 
 
-def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, has_transform, name="dipy_3dshore_recon",
+def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, available_anatomical_data, name="dipy_3dshore_recon",
                                         output_suffix="", params={}):
     """Reconstruct EAPs, ODFs, using 3dSHORE (brainsuite-style basis set).
 
@@ -94,7 +94,7 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, has_transform, name="dipy_
 
     """
 
-    inputnode = pe.Node(niu.IdentityInterface(fields=input_fields + ['odf_rois']),
+    inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields),
                         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(
@@ -107,26 +107,15 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, has_transform, name="dipy_
     desc = """Dipy Reconstruction
 
 : """
-    resample_mask = pe.Node(
-        afni.Resample(outputtype='NIFTI_GZ', resample_mode="NN"), name='resample_mask')
+    plot_reports = params.pop("plot_reports", True)
     recon_shore = pe.Node(BrainSuiteShoreReconstruction(**params), name="recon_shore")
     doing_extrapolation = params.get("extrapolate_scheme") in ("HCP", "ABCD")
-
-    plot_peaks = pe.Node(ReconPeaksReport(), name='plot_peaks')
-    ds_report_peaks = pe.Node(
-        ReconDerivativesDataSink(extension='.png',
-                                 desc="3dSHOREODF",
-                                 suffix='peaks'),
-        name='ds_report_peaks',
-        run_without_submitting=True)
 
     workflow.connect([
         (inputnode, recon_shore, [('dwi_file', 'dwi_file'),
                                   ('bval_file', 'bval_file'),
-                                  ('bvec_file', 'bvec_file')]),
-        (inputnode, resample_mask, [('t1_brain_mask', 'in_file'),
-                                    ('dwi_file', 'master')]),
-        (resample_mask, recon_shore, [('out_file', 'mask_file')]),
+                                  ('bvec_file', 'bvec_file'),
+                                  ('dwi_mask', 'mask_file')]),
         (recon_shore, outputnode, [('shore_coeffs_image', 'shore_coeffs_image'),
                                    ('rtop_image', 'rtop_image'),
                                    ('alpha_image', 'alpha_image'),
@@ -138,16 +127,30 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, has_transform, name="dipy_
                                    ('extrapolated_dwi', 'dwi_file'),
                                    ('extrapolated_bvals', 'bval_file'),
                                    ('extrapolated_bvecs', 'bvec_file'),
-                                   ('extrapolated_b', 'b_file')]),
-        (inputnode, plot_peaks, [('dwi_ref', 'background_image'),
-                                 ('odf_rois', 'odf_rois')]),
-        (resample_mask, plot_peaks, [('out_file', 'mask_file')]),
-        (recon_shore, plot_peaks, [('odf_directions', 'directions_file'),
-                                   ('odf_amplitudes', 'odf_file')]),
-        (plot_peaks, ds_report_peaks, [('out_report', 'in_file')])])
+                                   ('extrapolated_b', 'b_file')])
+        ])
+    if plot_reports:
+
+        plot_peaks = pe.Node(
+            CLIReconPeaksReport(),
+            name='plot_peaks',
+            n_procs=omp_nthreads)
+        ds_report_peaks = pe.Node(
+            ReconDerivativesDataSink(extension='.png',
+                                    desc="3dSHOREODF",
+                                    suffix='peaks'),
+            name='ds_report_peaks',
+            run_without_submitting=True)
+        workflow.connect([
+            (inputnode, plot_peaks, [('dwi_ref', 'background_image'),
+                                     ('odf_rois', 'odf_rois')]),
+            (inputnode, plot_peaks, [('dwi_mask', 'mask_file')]),
+            (recon_shore, plot_peaks, [('odf_directions', 'directions_file'),
+                                       ('odf_amplitudes', 'odf_file')]),
+            (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')])])
 
     # Plot targeted regions
-    if has_transform:
+    if available_anatomical_data['has_qsiprep_t1w_transforms'] and plot_reports:
         ds_report_odfs = pe.Node(
             ReconDerivativesDataSink(extension='.png',
                                      desc="3dSHOREODF",
@@ -246,7 +249,7 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, has_transform, name="dipy_
     return workflow
 
 
-def init_dipy_mapmri_recon_wf(omp_nthreads, has_transform, name="dipy_mapmri_recon",
+def init_dipy_mapmri_recon_wf(omp_nthreads, available_anatomical_data, name="dipy_mapmri_recon",
                               output_suffix="", params={}):
     """Reconstruct EAPs, ODFs, using 3dSHORE (brainsuite-style basis set).
 
@@ -322,7 +325,7 @@ def init_dipy_mapmri_recon_wf(omp_nthreads, has_transform, name="dipy_mapmri_rec
             Default: None (cvxpy chooses its own solver)
     """
 
-    inputnode = pe.Node(niu.IdentityInterface(fields=input_fields + ['odf_rois']),
+    inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields),
                         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(
@@ -334,24 +337,14 @@ def init_dipy_mapmri_recon_wf(omp_nthreads, has_transform, name="dipy_mapmri_rec
     desc = """Dipy Reconstruction
 
 : """
+    plot_reports = params.pop("plot_reports", True)
     recon_map = pe.Node(MAPMRIReconstruction(**params), name="recon_map")
-    resample_mask = pe.Node(
-        afni.Resample(outputtype='NIFTI_GZ', resample_mode="NN"), name='resample_mask')
-    plot_peaks = pe.Node(ReconPeaksReport(), name='plot_peaks')
-    ds_report_peaks = pe.Node(
-        ReconDerivativesDataSink(extension='.png',
-                                 desc="MAPLMRIODF",
-                                 suffix='peaks'),
-        name='ds_report_peaks',
-        run_without_submitting=True)
 
     workflow.connect([
         (inputnode, recon_map, [('dwi_file', 'dwi_file'),
                                 ('bval_file', 'bval_file'),
-                                ('bvec_file', 'bvec_file')]),
-        (inputnode, resample_mask, [('t1_brain_mask', 'in_file'),
-                                    ('dwi_file', 'master')]),
-        (resample_mask, recon_map, [('out_file', 'mask_file')]),
+                                ('bvec_file', 'bvec_file'),
+                                ('dwi_mask', 'mask_file')]),
         (recon_map, outputnode, [('mapmri_coeffs', 'mapmri_coeffs'),
                                  ('rtop', 'rtop'),
                                  ('rtap', 'rtap'),
@@ -363,16 +356,28 @@ def init_dipy_mapmri_recon_wf(omp_nthreads, has_transform, name="dipy_mapmri_rec
                                  ('qiv', 'qiv'),
                                  ('lapnorm', 'lapnorm'),
                                  ('fibgz', 'fibgz'),
-                                 ('fod_sh_mif', 'fod_sh_mif')]),
-        (resample_mask, plot_peaks, [('out_file', 'mask_file')]),
-        (inputnode, plot_peaks, [('dwi_ref', 'background_image'),
-                                 ('odf_rois', 'odf_rois')]),
-        (recon_map, plot_peaks, [('odf_directions', 'directions_file'),
-                                 ('odf_amplitudes', 'odf_file')]),
-        (plot_peaks, ds_report_peaks, [('out_report', 'in_file')])])
+                                 ('fod_sh_mif', 'fod_sh_mif')])])
+    if plot_reports:
+        plot_peaks = pe.Node(
+            CLIReconPeaksReport(), 
+            name='plot_peaks',
+            n_procs=omp_nthreads)
+        ds_report_peaks = pe.Node(
+            ReconDerivativesDataSink(extension='.png',
+                                    desc="MAPLMRIODF",
+                                    suffix='peaks'),
+            name='ds_report_peaks',
+            run_without_submitting=True)
+        workflow.connect([
+            (inputnode, plot_peaks, [('dwi_mask', 'mask_file'),
+                                     ('dwi_ref', 'background_image'),
+                                     ('odf_rois', 'odf_rois')]),
+            (recon_map, plot_peaks, [('odf_directions', 'directions_file'),
+                                     ('odf_amplitudes', 'odf_file')]),
+            (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')])])
 
     # Plot targeted regions
-    if has_transform:
+    if available_anatomical_data['has_qsiprep_t1w_transforms'] and plot_reports:
         ds_report_odfs = pe.Node(
             ReconDerivativesDataSink(extension='.png',
                                      desc="MAPLMRIODF",
@@ -392,5 +397,111 @@ def init_dipy_mapmri_recon_wf(omp_nthreads, has_transform, name="dipy_mapmri_rec
                                  name='ds_%s_%s' % (name, scalar_name)),
                              [(scalar_name, 'in_file')])]
         workflow.connect(connections)
+    workflow.__desc__ = desc
+    return workflow
+
+
+def init_dipy_dki_recon_wf(omp_nthreads, available_anatomical_data, name="dipy_dki_recon",
+                              output_suffix="", params={}):
+    """Fit DKI
+
+    Inputs
+
+        *qsiprep outputs*
+
+    Outputs
+
+        tensor
+        fa
+        md
+        rd
+        ad
+        color_fa
+        kfa
+        mk
+        ak
+        rk
+        mkt
+
+    Params
+
+        write_fibgz: bool
+            True writes out a DSI Studio fib file
+        write_mif: bool
+            True writes out a MRTrix mif file with sh coefficients
+        radial_order: int
+            An even integer that represent the order of the basis
+        
+    """
+
+    inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields),
+                        name="inputnode")
+    outputnode = pe.Node(
+        niu.IdentityInterface(
+            fields=['tensor', 'fa', 'md', 'rd', 'ad',
+                    'colorFA', 'kfa', 'mk', 'ak', 'rk',
+                    'mkt']),
+        name="outputnode")
+
+    workflow = Workflow(name=name)
+    desc = """Dipy Reconstruction
+
+: """
+    plot_reports = params.pop("plot_reports", True)
+    recon_dki = pe.Node(KurtosisReconstruction(**params), name="recon_dki")
+
+
+    workflow.connect([
+        (inputnode, recon_dki, [('dwi_file', 'dwi_file'),
+                                ('bval_file', 'bval_file'),
+                                ('bvec_file', 'bvec_file'),
+                                ('dwi_mask', 'mask_file')]),
+        (recon_dki, outputnode, [('tensor', 'tensor'),
+                                 ('fa', 'fa'),
+                                 ('md', 'md'),
+                                 ('rd', 'rd'),
+                                 ('ad', 'ad'),
+                                 ('colorFA', 'colorFA'),
+                                 ('kfa', 'kfa'),
+                                 ('mk', 'mk'),
+                                 ('ak', 'ak'),
+                                 ('rk', 'rk'),
+                                 ('mkt', 'mkt'),
+                                 ('fibgz', 'fibgz')])
+    ])
+
+    if plot_reports and False:
+        plot_peaks = pe.Node(
+            CLIReconPeaksReport(peaks_only=True), 
+            name='plot_peaks',
+            n_procs=omp_nthreads)
+        ds_report_peaks = pe.Node(
+            ReconDerivativesDataSink(extension='.png',
+                                     desc="DKI",
+                                     suffix='peaks'),
+            name='ds_report_peaks',
+            run_without_submitting=True)
+        workflow.connect([
+            (inputnode, plot_peaks, [('dwi_ref', 'background_image'),
+                                     ('odf_rois', 'odf_rois')]),
+            (inputnode, plot_peaks, [('dwi_mask', 'mask_file')]),
+            (recon_dki, plot_peaks, [('odf_directions', 'directions_file'),
+                                     ('odf_amplitudes', 'odf_file')]),
+            (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')])])
+
+    if output_suffix:
+        external_format_datasinks(output_suffix, params, workflow)
+        connections = []
+        for scalar_name in ['tensor', 'fa', 'md', 'rd', 'ad',
+                    'colorFA', 'kfa', 'mk', 'ak', 'rk',
+                    'mkt']:
+            connections += [(outputnode,
+                             pe.Node(
+                                 ReconDerivativesDataSink(desc=scalar_name,
+                                                          suffix=output_suffix),
+                                 name='ds_%s_%s' % (name, scalar_name)),
+                             [(scalar_name, 'in_file')])]
+        workflow.connect(connections)
+
     workflow.__desc__ = desc
     return workflow

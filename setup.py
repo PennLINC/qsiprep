@@ -19,16 +19,8 @@ SETUP_REQUIRES += ['wheel'] if 'bdist_wheel' in sys.argv else []
 if __name__ == '__main__':
     from numpy import get_include
 
-    extensions = [Extension(
-        "qsiprep.utils.maths",
-        ["qsiprep/utils/maths.pyx"],
-        include_dirs=[get_include(), "/usr/local/include/"],
-        library_dirs=["/usr/lib/"]),
-    ]
-
     setup(name='qsiprep',
           version=versioneer.get_version(),
           cmdclass=versioneer.get_cmdclass(),
-          setup_requires=SETUP_REQUIRES,
-          ext_modules=extensions,
+          setup_requires=SETUP_REQUIRES
           )

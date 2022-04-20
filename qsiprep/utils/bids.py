@@ -172,7 +172,7 @@ def write_derivative_description(bids_dir, deriv_dir):
             },
         'CodeURL': 'https://github.com/pennbbl/qsiprep',
         'HowToAcknowledge':
-            'Please cite our paper (), and '
+            'Please cite our paper (https://www.nature.com/articles/s41592-021-01185-5#citeas), and '
             'include the generated citation boilerplate within the Methods '
             'section of the text.',
         }
@@ -247,9 +247,9 @@ def validate_input_dir(exec_env, bids_dir, participant_label):
             "SUSPICIOUSLY_LONG_EVENT_DESIGN",
             "SUSPICIOUSLY_SHORT_EVENT_DESIGN",
             "MISSING_TSV_COLUMN_EEG_ELECTRODES",
-            "MISSING_SESSION"
+            "MISSING_SESSION",
+            "NO_T1W"
         ],
-        "error": ["NO_T1W"],
         "ignoredFiles": ['/README', '/dataset_description.json', '/participants.tsv']
     }
     # Limit validation only to data from requested participants

@@ -13,7 +13,6 @@ import os.path as op
 from pkg_resources import resource_filename as pkgr
 import nibabel as nb
 import numpy as np
-import amico
 from nipype import logging
 from nipype.utils.filemanip import fname_presuffix
 from nipype.interfaces.base import (
@@ -115,6 +114,7 @@ class NODDIInputSpec(AmicoInputSpec):
     dPar = traits.Float(mandatory=True)
     dIso =  traits.Float(mandatory=True)
     isExvivo = traits.Bool(False, usedefault=True)
+    num_threads = traits.Int(1, usedefault=True, nohash=True)
 
 
 class NODDIOutputSpec(AmicoOutputSpec):
@@ -149,6 +149,11 @@ class NODDI(AmicoReconInterface):
 
         # Prevent a ton of deprecation warnings
         os.environ['KMP_WARNINGS'] = '0'
+        os.environ["OMP_NUM_THREADS"] = str(self.inputs.num_threads)
+        os.environ["MKL_NUM_THREADS"] = str(self.inputs.num_threads)
+        import amico
+        if hasattr(amico, "set_verbose"):
+            amico.set_verbose(2)
         # Set up the AMICO evaluation
         aeval = amico.Evaluation("study", "subject")
         scheme_file = amico.util.fsl2scheme(bval_file, bvec_file,
@@ -157,6 +162,8 @@ class NODDI(AmicoReconInterface):
                         mask_filename=mask_file, b0_thr=self.inputs.b0_threshold)
         LOGGER.info("Fitting NODDI Model.")
         aeval.set_model("NODDI")
+        aeval.set_config('parallel_jobs', self.inputs.num_threads)
+        aeval.set_config('parallel_backend', 'loky')
         # set the parameters
         aeval.model.dPar = self.inputs.dPar
         aeval.model.dIso = self.inputs.dIso

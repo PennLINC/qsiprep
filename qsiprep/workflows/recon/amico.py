@@ -9,16 +9,16 @@ import logging
 import nipype.pipeline.engine as pe
 from nipype.interfaces import afni, utility as niu
 from qsiprep.interfaces.bids import ReconDerivativesDataSink
-from .interchange import input_fields
+from .interchange import recon_workflow_input_fields
 from ...engine import Workflow
 from ...interfaces.amico import NODDI
-from ...interfaces.reports import ReconPeaksReport
+from ...interfaces.reports import CLIReconPeaksReport
 from ...interfaces.converters import NODDItoFIBGZ
 
 LOGGER = logging.getLogger('nipype.interface')
 
 
-def init_amico_noddi_fit_wf(omp_nthreads, has_transform,
+def init_amico_noddi_fit_wf(omp_nthreads, available_anatomical_data,
                             name="amico_noddi_recon",
                             output_suffix="", params={}):
     """Reconstruct EAPs, ODFs, using 3dSHORE (brainsuite-style basis set).
@@ -43,7 +43,7 @@ def init_amico_noddi_fit_wf(omp_nthreads, has_transform,
 
     """
 
-    inputnode = pe.Node(niu.IdentityInterface(fields=input_fields + ['odf_rois']),
+    inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields + ['odf_rois']),
                         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(
@@ -52,12 +52,14 @@ def init_amico_noddi_fit_wf(omp_nthreads, has_transform,
         name="outputnode")
 
     workflow = Workflow(name=name)
+    plot_reports = params.pop("plot_reports", True)
     desc = """NODDI Reconstruction
 
 : """
-    resample_mask = pe.Node(
-        afni.Resample(outputtype='NIFTI_GZ', resample_mode="NN"), name='resample_mask')
-    noddi_fit = pe.Node(NODDI(**params), name="recon_noddi")
+    noddi_fit = pe.Node(
+        NODDI(**params), 
+        name="recon_noddi",
+        n_procs=omp_nthreads)
     desc += """\
 The NODDI model (@noddi) was fit using the AMICO implementation (@amico).
 A value of %.1E was used for parallel diffusivity and %.1E for isotropic
@@ -67,21 +69,11 @@ diffusivity.""" % (params['dPar'], params['dIso'])
 
     convert_to_fibgz = pe.Node(NODDItoFIBGZ(), name='convert_to_fibgz')
 
-    plot_peaks = pe.Node(ReconPeaksReport(), name='plot_peaks')
-    ds_report_peaks = pe.Node(
-        ReconDerivativesDataSink(extension='.png',
-                                 desc="NODDI",
-                                 suffix='peaks'),
-        name='ds_report_peaks',
-        run_without_submitting=True)
-
     workflow.connect([
         (inputnode, noddi_fit, [('dwi_file', 'dwi_file'),
                                 ('bval_file', 'bval_file'),
-                                ('bvec_file', 'bvec_file')]),
-        (inputnode, resample_mask, [('t1_brain_mask', 'in_file'),
-                                    ('dwi_file', 'master')]),
-        (resample_mask, noddi_fit, [('out_file', 'mask_file')]),
+                                ('bvec_file', 'bvec_file'),
+                                ('dwi_mask', 'mask_file')]),
         (noddi_fit, outputnode, [
             ('directions_image', 'directions_image'),
             ('icvf_image', 'icvf_image'),
@@ -95,13 +87,25 @@ diffusivity.""" % (params['dPar'], params['dIso'])
             ('od_image', 'od_file'),
             ('isovf_image', 'isovf_file'),
             ]),
-        (resample_mask, convert_to_fibgz, [('out_file', 'mask_file')]),
-        (convert_to_fibgz, plot_peaks, [('fibgz_file', 'fib_file')]),
-        (convert_to_fibgz, outputnode, [('fibgz_file', 'fibgz')]),
-        (resample_mask, plot_peaks, [('out_file', 'mask_file')]),
-        (noddi_fit, plot_peaks, [('icvf_image', 'background_image')]),
-        (plot_peaks, ds_report_peaks, [('out_report', 'in_file')]),
-        ])
+        (inputnode, convert_to_fibgz, [('dwi_mask', 'mask_file')]),
+        (convert_to_fibgz, outputnode, [('fibgz_file', 'fibgz')])])
+    if plot_reports:
+        plot_peaks = pe.Node(
+            CLIReconPeaksReport(), 
+            name='plot_peaks',
+            n_procs=omp_nthreads)
+        ds_report_peaks = pe.Node(
+            ReconDerivativesDataSink(extension='.png',
+                                    desc="NODDI",
+                                    suffix='peaks'),
+            name='ds_report_peaks',
+            run_without_submitting=True)
+
+        workflow.connect([
+            (inputnode, plot_peaks, [('dwi_mask', 'mask_file')]),
+            (convert_to_fibgz, plot_peaks, [('fibgz_file', 'fib_file')]),
+            (noddi_fit, plot_peaks, [('icvf_image', 'background_image')]),
+            (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')])])
 
     if output_suffix:
         ds_fibgz = pe.Node(

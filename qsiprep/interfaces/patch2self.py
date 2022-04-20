@@ -1,15 +1,16 @@
 import numpy as np
-from warnings import warn
 import time
 from dipy.utils.optpkg import optional_package
 import dipy.core.optimize as opt
+from nipype import logging
 
+LOGGER = logging.getLogger('nipype.interface')
 sklearn, has_sklearn, _ = optional_package('sklearn')
 linear_model, _, _ = optional_package('sklearn.linear_model')
 
 if not has_sklearn:
     w = "Scikit-Learn is required to denoise the data via Patch2Self."
-    warn(w)
+    LOGGER.critical(w)
 
 
 def _vol_split(train, vol_idx):
@@ -244,7 +245,7 @@ def patch2self(data, bvals, patch_radius=[0, 0, 0], model='ols',
                          data.shape)
 
     if data.shape[3] < 10:
-        warn("The intput data has less than 10 3D volumes. Patch2Self may not",
+        LOGGER.warning("The intput data has less than 10 3D volumes. Patch2Self may not",
              "give denoising performance.")
 
     if out_dtype is None:
@@ -344,8 +345,8 @@ def patch2self(data, bvals, patch_radius=[0, 0, 0], model='ols',
         denoised_arr.clip(min=0, out=denoised_arr)
 
     elif clip_negative_vals and shift_intensity:
-        warn('Both `clip_negative_vals` and `shift_intensity` cannot be True.')
-        warn('Defaulting to `clip_negative_bvals`...')
+        LOGGER.warning('Both `clip_negative_vals` and `shift_intensity` cannot be True.')
+        LOGGER.warning('Defaulting to `clip_negative_bvals`...')
         denoised_arr.clip(min=0, out=denoised_arr)
 
     # Calculate a "noise level" image

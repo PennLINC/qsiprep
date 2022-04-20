@@ -15,6 +15,7 @@ import numpy as np
 from scipy import ndimage
 from scipy.ndimage.morphology import binary_fill_holes
 from skimage import morphology as sim
+from skimage.segmentation import watershed
 from dipy.segment.threshold import otsu
 from sklearn.preprocessing import robust_scale, power_transform
 
@@ -544,7 +545,7 @@ def watershed_refined_b0_mask(b0_nii, show_plot=False, pad_size=10, quantile_max
         * smoothed_weights
 
     markers = select_markers_for_rw(morph_grad, eroded_mask, ribbon_mask, definitely_outer)
-    watershed_seg = sim.watershed(morph_grad, markers)
+    watershed_seg = watershed(morph_grad, markers)
     ws_mask = watershed_seg == 2
 
     if pad_size:
