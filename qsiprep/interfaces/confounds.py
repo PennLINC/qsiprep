@@ -131,6 +131,12 @@ def _gather_confounds(fdisp=None, motion=None, sliceqc_file=None, newpath=None,
         _adjust_indices(confounds_data, new)
         confounds_data = pd.concat((confounds_data, new), axis=1)
 
+    # Sort the confounds by index so that the remaining columns align properly.
+    # confounds_data['some_col'] = some_vector doesn't account for the index
+    # being out of sequence. pd.concat does respect indices, but eventually we
+    # want to write to csv in sequential order anyway
+    confounds_data.sort_index(axis=0, inplace=True)
+
     # Add in the sliceqc measures
     if isdefined(sliceqc_file) and sliceqc_file is not None:
         if sliceqc_file.endswith(".npz"):
