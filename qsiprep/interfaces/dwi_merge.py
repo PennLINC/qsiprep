@@ -365,6 +365,11 @@ def average_carpetplots(carpet_list, image_pairs):
 
 
 def average_bvec(bvec1, bvec2):
+    # return straight away if the bvecs are identical
+    # This prevents comparison of zero vectors
+    if (bvec1 == bvec2).all():
+        return np.copy(bvec1), 0.0
+
     bvec_diff = angle_between(bvec1, bvec2)
 
     mean_bvec_plus = (bvec1 + bvec2) / 2.
