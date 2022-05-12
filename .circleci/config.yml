@@ -49,7 +49,7 @@ jobs:
       - run:
           name: Build documentation
           command: |
-            apt-get update && apt-get install -y make
+            conda install -y make
             pip install ".[doc]"
             make SHPINXOPTS="-W" -C docs html  
   
