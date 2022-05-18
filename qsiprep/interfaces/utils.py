@@ -30,7 +30,7 @@ class GetConnectivityAtlasesInputSpec(BaseInterfaceInputSpec):
     atlas_names = traits.List(mandatory=True, desc='atlas names to be used')
     forward_transform = File(exists=True, desc='transform to get atlas into T1w space if desired')
     reference_image = File(exists=True, desc='')
-    space = traits.Str('T1w')
+    space = traits.Str('T1w', usedefault=True)
 
 
 class GetConnectivityAtlasesOutputSpec(TraitedSpec):
