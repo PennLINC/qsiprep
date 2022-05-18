@@ -12,7 +12,7 @@ import os
 import os.path as op
 
 from AFQ.api.participant import ParticipantAFQ
-from AFQ.definitions.mask import MaskFile
+from AFQ.definitions.image import ImageFile
 from AFQ.definitions.mapping import ItkMap
 
 from nipype import logging
@@ -72,7 +72,7 @@ class PyAFQRecon(SimpleInterface):
             os.symlink(self.inputs.tck_file, tck_file)
         else:
             tck_file = None
-        brain_mask_definition = MaskFile(path=mask_file)
+        brain_mask_definition = ImageFile(path=mask_file)
         itk_map = ItkMap(warp_path=itk_file)
 
         if tck_file is None:
