@@ -164,6 +164,18 @@ jobs:
             cd .circleci
             bash DIPYReconTests.sh
 
+  Recon_PYAFQ:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run: *runinstall
+      - run:
+          name: Test the PYAFQ recon workflows
+          no_output_timeout: 1h
+          command: |
+            cd .circleci
+            bash PyAFQReconTests.sh
+
   Recon_AMICO:
     <<: *dockersetup
     resource_class: medium+
@@ -458,6 +470,13 @@ workflows:
           filters:
             tags:
               only: /.*/
+
+      - Recon_PYAFQ:
+          requires:
+            - build
+          filters:
+            tags:
+              only: /.*/
       
       - deployable:
           requires:
@@ -473,6 +492,7 @@ workflows:
             - Recon_MRtrix3
             - Recon_DIPY
             - Recon_AMICO
+            - Recon_PYAFQ
           filters:
             branches:
               only: master

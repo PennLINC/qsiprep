@@ -29,6 +29,10 @@ Instead of specifying a path to a file you can choose from the following:
 +-------------------------------------------+-------------+---------+-----------------+----------------+
 |:ref:`mrtrix_singleshell_ss3t_ACT-fast`\*  |     No      |    No   |      Yes        | Probabilistic  |
 +-------------------------------------------+-------------+---------+-----------------+----------------+
+|:ref:`pyafq`                               |     Yes     |    No   |      Yes        |   Both         |
++-------------------------------------------+-------------+---------+-----------------+----------------+
+|:ref:`pyafq_input_trk`                     |     Yes     |    No   |      Yes        |   Both         |
++-------------------------------------------+-------------+---------+-----------------+----------------+
 |:ref:`amico_noddi`                         |     Yes     |    No   |      No         |     None       |
 +-------------------------------------------+-------------+---------+-----------------+----------------+
 |:ref:`dsi_studio_gqi`                      |     Yes     |   Yes   |    Yes*         | Deterministic  |
@@ -92,6 +96,10 @@ anatomical data:
 |:ref:`mrtrix_singleshell_ss3t_ACT-fast`  |       Yes         |       No          |    No        |
 +-----------------------------------------+-------------------+-------------------+--------------+
 |:ref:`mrtrix_singleshell_ss3t_noACT`     |       Yes         |       No          |    No        |
++-----------------------------------------+-------------------+-------------------+--------------+
+|:ref:`pyafq`                             |       No          |       No          |    No        |
++-----------------------------------------+-------------------+-------------------+--------------+
+|:ref:`pyafq_input_trk`                   |       No          |       No          |    No        |
 +-----------------------------------------+-------------------+-------------------+--------------+
 |:ref:`amico_noddi`                       |       No          |       No          |    No        |
 +-----------------------------------------+-------------------+-------------------+--------------+
@@ -277,6 +285,23 @@ tissue segmentation. This workflow is not recommended.
 This workflow uses the ``ss3t_csd_beta1`` algorithm [Dhollander2016]_ to estimate FODs for white
 matter, and cerebrospinal fluid using *single shell (DTI) acquisitions*. The white matter FODs are
 used for tractography with no T1w-based anatomical constraints.
+
+.. _pyafq:
+
+``pyafq``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+This workflow uses the AFQ [Yeatman2012]_ implemented in Python [Kruper2021]_ to recognize
+major white matter pathways within the tractography, and then extract tissue properties along
+those pathways. See the `pyAFQ documentation <https://yeatmanlab.github.io/pyAFQ/>`_ .
+
+.. _pyafq_input_trk:
+
+``pyafq_input_trk``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Identical to :ref:`pyafq` except that tractography generated using another reconstruciton pipeline
+(such as MRTrix3), instead of using pyAFQ's default DIPY tractography.
 
 
 .. _amico_noddi:

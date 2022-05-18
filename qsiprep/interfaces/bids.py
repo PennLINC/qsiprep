@@ -252,8 +252,10 @@ class BIDSDataGrabber(SimpleInterface):
 class DerivativesDataSinkInputSpec(BaseInterfaceInputSpec):
     base_directory = traits.Directory(
         desc='Path to the base directory for storing data.')
-    in_file = InputMultiObject(File(exists=True), mandatory=True,
-                               desc='the object to be saved')
+    in_file = traits.Either(traits.Directory(exists=True),
+                            InputMultiObject(File(exists=True)), 
+                            mandatory=True,
+                            desc='the object to be saved')
     source_file = File(mandatory=True, desc='the original file or name of merged files')
     space = traits.Str('', usedefault=True, desc='Label for space field')
     desc = traits.Str('', usedefault=True, desc='Label for description field')
@@ -266,7 +268,9 @@ class DerivativesDataSinkInputSpec(BaseInterfaceInputSpec):
 
 
 class DerivativesDataSinkOutputSpec(TraitedSpec):
-    out_file = OutputMultiObject(File(exists=True, desc='written file path'))
+    out_file = traits.Either(traits.Directory(exists=True),
+                             InputMultiObject(File(exists=True)),
+                             desc='written file path')
     compression = OutputMultiPath(
         traits.Bool, desc='whether ``in_file`` was compressed/uncompressed '
                           'or `it was copied directly.')
@@ -346,14 +350,31 @@ desc-preproc_bold.nii.gz'
         base_fname = op.join(out_path, src_fname)
 
         formatstr = '{bname}{space}{desc}{suffix}{dtype}{ext}'
-        if len(self.inputs.in_file) > 1 and not isdefined(self.inputs.extra_values):
-            formatstr = '{bname}{space}{desc}{suffix}{i:04d}{dtype}{ext}'
 
         space = '_space-{}'.format(self.inputs.space) if self.inputs.space else ''
         desc = '_desc-{}'.format(self.inputs.desc) if self.inputs.desc else ''
         suffix = '_{}'.format(self.inputs.suffix) if self.inputs.suffix else ''
         dtype = '' if not self.inputs.keep_dtype else ('_%s' % dtype)
 
+        # If the derivative is a directory, copy it over
+        copy_dir = op.isdir(str(self.inputs.in_file))
+        if copy_dir:
+            out_file = formatstr.format(
+                bname=base_fname,
+                space=space,
+                desc=desc,
+                suffix=suffix,
+                dtype=dtype,
+                ext='')
+            #os.makedirs(out_file, exist_ok=True)
+            copytree(str(self.inputs.in_file), out_file, dirs_exist_ok=True)
+            self._results['out_file'] = out_file
+            return runtime
+
+        if len(self.inputs.in_file) > 1 and not isdefined(self.inputs.extra_values):
+            formatstr = '{bname}{space}{desc}{suffix}{i:04d}{dtype}{ext}'
+        
+        # Otherwise it's file(s)
         self._results['compression'] = []
         for i, fname in enumerate(self.inputs.in_file):
             out_file = formatstr.format(
