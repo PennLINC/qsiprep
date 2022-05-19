@@ -215,23 +215,21 @@ to workflows in *qsiprep*'s documentation]\
     # Fill-in datasinks and reportlet datasinks for the anatomical workflow
     for _node in anat_ingress_wf.list_node_names():
         node_suffix = _node.split('.')[-1]
-        if node_suffix.startswith('ds_'):
-            node = anat_ingress_wf.get_node(_node)
-            node.inputs.source_file = "anat/sub-{}_desc-preproc_T1w.nii.gz".format(subject_id)
-            if "report" in node_suffix:
-                node.inputs.base_directory = reportlets_dir
-            else:
-                node.inputs.base_directory = output_dir
-    
+        if node_suffix.startswith('ds'):
+            base_dir = reportlets_dir if "report" in node_suffix else output_dir
+            anat_ingress_wf.get_node(_node).inputs.base_directory = base_dir
+            anat_ingress_wf.get_node(_node).inputs.source_file = \
+                "anat/sub-{}_desc-preproc_T1w.nii.gz".format(subject_id)
+
     # Connect the anatomical-only inputs. NOTE this is not to the inputnode!
     LOGGER.info("Anatomical (T1w) available for recon: %s", available_anatomical_data)
     to_connect = [('outputnode.' + name, 'qsirecon_anat_wf.inputnode.' + name) 
                   for name in anatomical_workflow_outputs]
 
     # create a processing pipeline for the dwis in each session
+    dwi_recon_wfs = {}
     for dwi_file in dwi_files:
-
-        dwi_recon_wf = init_dwi_recon_workflow(
+        dwi_recon_wfs[dwi_file] = init_dwi_recon_workflow(
             dwi_file=dwi_file,
             available_anatomical_data=available_anatomical_data,
             workflow_spec=spec,
@@ -243,7 +241,7 @@ to workflows in *qsiprep*'s documentation]\
             output_dir=output_dir,
             omp_nthreads=omp_nthreads,
             skip_odf_plots=skip_odf_plots)
-        workflow.connect([(anat_ingress_wf, dwi_recon_wf, to_connect)])
+        workflow.connect([(anat_ingress_wf, dwi_recon_wfs[dwi_file], to_connect)])
 
     return workflow
 

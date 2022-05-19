@@ -14,7 +14,6 @@ dependencies:
 - mock
 - future
 - nibabel
-- statsmodels
 - xvfbwrapper
 - funcsigs
 - networkx>=2.0.0
