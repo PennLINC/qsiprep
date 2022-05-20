@@ -61,7 +61,14 @@
               "title": "DWI Bias correction",
               "description": "Effect of bias correction on a low and high-b image. Bias field contour lines are drawn as an overlay.",
               "imgtype": "svg+xml"
-          }
+          },
+          {
+            "name": "epi/mrtrixconmats",
+            "file_pattern": "dwi/.*desc-MRtrix3Connectivity.*_matrices\\.",
+            "title": "MRtrix3 Connectivity",
+            "description": "Connectivity estimated by tck2connectome",
+            "imgtype": "svg+xml"
+        }
         ]
     },
     {

@@ -124,10 +124,18 @@ def init_recon_anatomical_wf(subject_id, recon_input_dir, extras_to_make,
             create_5tt_fast = pe.Node(
                 GenerateMasked5tt(algorithm='fsl'), 
                 name='create_5tt_fast')
+            ds_5tt_fast = pe.Node(
+                ReconDerivativesDataSink(
+                    desc="FAST",
+                    compress=True,
+                    suffix="5tt"),
+                name='ds_5tt_fast',
+                run_without_submitting=True)
             workflow.connect([
                 (anat_ingress, create_5tt_fast, [('t1_brain_mask', 'mask'),
                                                  ('t1_preproc', 'in_file')]),
-                (create_5tt_fast, outputnode, [('out_file', 'qsiprep_5tt_fast')])
+                (create_5tt_fast, outputnode, [('out_file', 'qsiprep_5tt_fast')]),
+                (create_5tt_fast, ds_5tt_fast, [('out_file', 'in_file')])
             ])
 
 
