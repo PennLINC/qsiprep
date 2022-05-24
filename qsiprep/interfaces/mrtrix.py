@@ -12,6 +12,7 @@ import os
 import os.path as op
 from copy import deepcopy
 import numpy as np
+import zipfile
 import nibabel as nb
 from scipy.io.matlab import savemat, loadmat
 from nilearn.image import load_img, threshold_img
@@ -21,7 +22,7 @@ from nipype import logging
 from nipype.utils.filemanip import fname_presuffix, split_filename, which
 from nipype.interfaces.base import (
     traits, TraitedSpec, BaseInterfaceInputSpec, File, SimpleInterface, InputMultiObject,
-    isdefined, CommandLineInputSpec, CommandLine, )
+    isdefined, CommandLineInputSpec, CommandLine, OutputMultiObject)
 from nipype.interfaces.mrtrix3 import Generate5tt, ResponseSD, MRConvert
 from nipype.interfaces.mrtrix3.utils import Generate5ttInputSpec
 from nipype.interfaces.mrtrix3.base import MRTrix3Base, MRTrix3BaseInputSpec
@@ -30,6 +31,7 @@ from nipype.interfaces.mrtrix3.tracking import TractographyInputSpec, Tractograp
 from ..niworkflows.viz.utils import cuts_from_bbox, compose_view, plot_denoise
 from .denoise import (SeriesPreprocReport, SeriesPreprocReportInputSpec,
                       SeriesPreprocReportOutputSpec)
+from .utils import MakeTarball
 
 LOGGER = logging.getLogger('nipype.interface')
 RC3_ROOT = which('average_response')  # Only exists in RC3
@@ -837,6 +839,7 @@ class MRTrixAtlasGraphInputSpec(BuildConnectomeInputSpec):
 
 class MRTrixAtlasGraphOutputSpec(TraitedSpec):
     connectivity_matfile = File(exists=True)
+    exemplar_files = OutputMultiObject(File(exists=True))
     commands = File()
 
 
@@ -847,22 +850,39 @@ class MRTrixAtlasGraph(SimpleInterface):
 
     def _run_interface(self, runtime):
         # Get all inputs from the ApplyTransforms object
+        cwd = runtime.cwd
         ifargs = self.inputs.get()
+        # We're hard-coding this to 1 
         ifargs['nthreads'] = 1
-
-        # Get number of parallel jobs
-        num_threads = ifargs.pop('nthreads')
         atlas_configs = ifargs.pop('atlas_configs')
         tracking_params = self.inputs.tracking_params
         del ifargs['in_parc']
+        using_weights = isdefined(ifargs['in_weights'])
+        c2t_args = {'input_tck_weights': ifargs['in_weights']} \
+            if using_weights else {}
+        ifargs['out_assignments'] = "assignments.txt"
 
         # Make a workflow for each atlas and tracking parameter set
         workflow = pe.Workflow(name='mrtrix_atlasgraph')
         nodes = []
-        merge_mats = pe.Node(niu.Merge(len(tracking_params) * len(atlas_configs)),
+        c2t_nodes = []
+        num_nodes = len(tracking_params) * len(atlas_configs)
+        merge_mats = pe.Node(niu.Merge(num_nodes),
                              name='merge_mats')
-        outputnode = pe.Node(niu.IdentityInterface(fields=['matfiles']), name='outputnode')
+        merge_csvs = pe.Node(niu.Merge(num_nodes),
+                             name='merge_csvs')
+        merge_tcks = pe.Node(niu.Merge(num_nodes),
+                             name='merge_tcks')
+        merge_weights = pe.Node(niu.Merge(num_nodes),
+                                name='merge_weights')
+        merge_exemplars = pe.Node(niu.Merge(3), name='merge_exemplars')
+        tar_exemplars = pe.Node(MakeTarball(relative_path=cwd), name='tar_exemplars')
+        outputnode = pe.Node(
+            niu.IdentityInterface(fields=['matfiles', 'exemplar_files']), 
+            name='outputnode')
         workflow.connect(merge_mats, 'out', outputnode, 'matfiles')
+        workflow.connect(merge_tcks, 'out', outputnode, 'tckfiles')
+        workflow.connect(merge_weights, 'out', outputnode, 'weights')
         in_num = 1
         for atlas_name, atlas_config in atlas_configs.items():
             for tracking_param_set in self.inputs.tracking_params:
@@ -884,21 +904,55 @@ class MRTrixAtlasGraph(SimpleInterface):
                             **node_args),
                         name=atlas_name + "_" + measure_name)
                 )
-                workflow.connect(nodes[-1], 'connectivity_matfile',
-                                 merge_mats, 'in%d' % in_num)
+                c2t_nodes.append(
+                    pe.Node(
+                        Connectome2Tck(
+                            in_tck=node_args['in_file'],
+                            in_parc=atlas_config['dwi_resolution_mif'],
+                            output_files='single',
+                            **c2t_args),
+                        name=atlas_name + "_" + measure_name + "_c2t")
+                )
+                workflow.connect([
+                    (nodes[-1], c2t_nodes[-1], [
+                        ('out_assignments', 'in_assignments')]),
+                    (nodes[-1], merge_mats,[
+                        ('connectivity_matfile', 'in%d' % in_num)]),
+                    (nodes[-1], merge_csvs,[
+                        ('out_file', 'in%d' % in_num)]),
+                    (c2t_nodes[-1], merge_tcks,[
+                        ('exemplar_tck', 'in%d' % in_num)])
+                ])
+                if using_weights:
+                    workflow.connect(c2t_nodes[-1], 'exemplar_weights',
+                                    merge_weights, 'in%d' % in_num)
                 in_num += 1
+        
+        # Get the exemplar tcks and weights
+        workflow.connect([
+            (merge_tcks, merge_exemplars, [('out', "in1")]),
+            (merge_weights, merge_exemplars, [('out', "in2")]),
+            (merge_csvs, merge_exemplars, [('out', "in3")]),
+            (merge_exemplars, tar_exemplars, [('out', 'files')]),
+            (tar_exemplars, outputnode, [("out_tar", "exemplar_files")])
+        ])
 
         workflow.config['execution']['stop_on_first_crash'] = 'true'
         workflow.config['execution']['remove_unnecessary_outputs'] = 'false'
-        workflow.base_dir = runtime.cwd
-        if num_threads > 1:
-            wf_result = workflow.run(plugin='MultiProc', plugin_args={'n_procs': num_threads})
-        else:
-            wf_result = workflow.run()
+        workflow.base_dir = cwd
+        # We're only going to run this serially for now
+        wf_result = workflow.run()
+        
+        # Merge the connectivity matrices into a single file
         merge_node, = [node for node in list(wf_result.nodes) if node.name.endswith('merge_mats')]
-        merged_connectivity_file = op.join(runtime.cwd, "combined_connectivity.mat")
+        merged_connectivity_file = op.join(cwd, "combined_connectivity.mat")
         _merge_conmats(merge_node.result.outputs.out, merged_connectivity_file)
         self._results['connectivity_matfile'] = merged_connectivity_file
+
+        # Get the list of exemplars (+ weights if they exist)
+        exemplar_node, = [node for node in list(wf_result.nodes) if node.name.endswith('merge_exemplars')]
+        rt = exemplar_node.run()
+        self._results['exemplar_files'] = rt.outputs.out
 
         return runtime
 
@@ -912,21 +966,116 @@ def _merge_conmats(matfile_list, outfile):
     savemat(outfile, connectivity_values, long_field_names=True, do_compression=True)
 
 
-def _mrtrix_connectivity(args):
-    atlas_name, atlas_config, _, ifargs = args
-    csv_name = 'atlas_{}_length_{}_roiscale_{}_stat_{}.csv'.format(
-        atlas_name, ifargs['length_scale'], ifargs['scale_invnodevol'],
-        ifargs['stat_edge']).replace("<undefined>", "None")
-    ifargs = deepcopy(ifargs)
-    ifargs['out_file'] = csv_name
-    con = BuildConnectome(in_parc=atlas_config['dwi_resolution_mif'], **ifargs)
-    con.terminal_output = 'allatonce'
-    con.resource_monitor = False
-    LOGGER.info(con.cmdline)
-    run = con.run(cwd=os.getcwd())
-    runtime = run.runtime
+class _Connectome2TckInputSpec(MRTrix3BaseInputSpec):
+    in_tck = File(
+        exists=True,
+        argstr='%s',
+        position=0,
+        mandatory=True,
+        desc='input tck file')
+    in_assignments = File(
+        exists=True,
+        argstr='%s',
+        position=1,
+        mandatory=True,
+        desc='input tck assignments file')
+    out_prefix = traits.Str(
+        name_source="in_parc",
+        name_template="%s_exemplars.tck",
+        argstr='%s',
+        keep_extension=False,
+        position=2,
+        desc='this is a .tck file if "-files single"')
+    output_files = traits.Enum("single", "per_edge", "per_node",
+        default="single",
+        argstr="-files %s")
+    input_tck_weights = File(
+        exists=True,
+        argstr='-tck_weights_in %s')
+    output_tck_weights = File(
+        name_source="input_tck_weights",
+        name_template="%s",
+        argstr="-prefix_tck_weights_out %s",
+        keep_extension=False,
+        requires=["input_tck_weights"])
+    in_parc = File(
+        exists=True,
+        argstr="-exemplars %s")
+    keep_self = traits.Bool(
+        argstr="-keep_self")
 
-    return runtime.cmdline, run.outputs.out_file
+
+class _Connectome2TckOutputSpec(TraitedSpec):
+    output_tck_weights = traits.Any()
+    exemplar_tck = File(exists=True)
+    out_prefix = traits.Any()
+    exemplar_weights = File(exists=True)
+
+
+class Connectome2Tck(MRTrix3Base):
+    input_spec = _Connectome2TckInputSpec
+    output_spec = _Connectome2TckOutputSpec
+    _cmd = "connectome2tck"
+
+    def _list_outputs(self):
+        if not self.inputs.output_files == "single":
+            raise NotImplementedError("Interface only supports single file output")
+        outputs = super(Connectome2Tck, self)._list_outputs()
+        exemplar_weights = outputs['output_tck_weights'] + ".csv"
+        if op.exists(exemplar_weights):
+            outputs['exemplar_weights'] = exemplar_weights
+        exemplar_tck = outputs['out_prefix'] # This is a tck file in single mode
+        outputs['exemplar_tck'] = exemplar_tck
+        return outputs
+
+
+class _CompressConnectome2TckInputSpec(BaseInterfaceInputSpec):
+    files = InputMultiObject(File(exists=True), mandatory=True)
+    out_zip = File("connectome2tck.zip", usedefault=True, exists=False)
+    relative_path = traits.Directory(argstr='-C %s', position=1)
+
+
+class _CompressConnectome2TckOutputSpec(TraitedSpec):
+    out_zip = File(exists=True)
+
+
+class MakeTarball(SimpleInterface):
+    input_spec = _CompressConnectome2TckInputSpec
+    output_spec = _CompressConnectome2TckOutputSpec
+    
+    def _run_interface(self, runtime):
+        zipfh = zipfile.ZipFile(self.inputs.out_tar)
+        # Get the matrix csvs and add them to the zip
+        csvfiles = [fname for fname in self.inputs.files if fname.endswith(".csv")]
+        for csvfile in csvfiles:
+            zipfh.write(csvfile, arcname=_rename_csv(csvfile), compress_type=zipfile.ZIP_LZMA)
+        return super()._run_interface(runtime)
+
+
+def _rename_csv(connectome_csv):
+    """
+    >>> pth = "/a/b/c/qsirecon_wf/sub-X_mrtrix_multishell_msmt_fast/" \
+    ...    "sub_X_ses_1_space_T1w_desc_preproc_recon_wf/mrtrix_conn/" \
+    ...    "calc_connectivity/mrtrix_atlasgraph/" \
+    ...    "schaefer200x17_sift_invnodevol_radius2_count/connectome.csv"
+    >>> _rename_csv(pth)
+    'sub-X_ses-1_space-T1w_desc-preproc_schaefer200x17_sift_invnodevol_radius2_count.csv'
+    """
+    parts = connectome_csv.split(os.sep)
+    conn_name = parts[-2]
+    image_name, = [part for part in parts if part.startswith("sub_") and part.endswith("recon_wf")]
+    image_name = image_name[:-len("_recon_wf")]
+    return _rebids(image_name) + "_" + conn_name + ".csv"
+
+
+
+def _rebids(name):
+    parts = name.split("_")
+    bidsified = ''
+    for partnum, part in enumerate(parts):
+        bidsified += part
+        bidsified += '-_'[partnum % 2]
+    return bidsified[:-1]
 
 
 class DWIBiasCorrectInputSpec(MRTrix3BaseInputSpec, SeriesPreprocReportInputSpec):
