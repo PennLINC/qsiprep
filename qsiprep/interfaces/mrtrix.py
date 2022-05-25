@@ -31,7 +31,6 @@ from nipype.interfaces.mrtrix3.tracking import TractographyInputSpec, Tractograp
 from ..niworkflows.viz.utils import cuts_from_bbox, compose_view, plot_denoise
 from .denoise import (SeriesPreprocReport, SeriesPreprocReportInputSpec,
                       SeriesPreprocReportOutputSpec)
-from .utils import MakeTarball
 
 LOGGER = logging.getLogger('nipype.interface')
 RC3_ROOT = which('average_response')  # Only exists in RC3
@@ -876,9 +875,10 @@ class MRTrixAtlasGraph(SimpleInterface):
         merge_weights = pe.Node(niu.Merge(num_nodes),
                                 name='merge_weights')
         merge_exemplars = pe.Node(niu.Merge(3), name='merge_exemplars')
-        tar_exemplars = pe.Node(MakeTarball(relative_path=cwd), name='tar_exemplars')
+        compress_exemplars = pe.Node(CompressConnectome2Tck(), 
+                                     name='compress_exemplars')
         outputnode = pe.Node(
-            niu.IdentityInterface(fields=['matfiles', 'exemplar_files']), 
+            niu.IdentityInterface(fields=['matfiles', 'tckfiles', 'weights']), 
             name='outputnode')
         workflow.connect(merge_mats, 'out', outputnode, 'matfiles')
         workflow.connect(merge_tcks, 'out', outputnode, 'tckfiles')
@@ -925,7 +925,7 @@ class MRTrixAtlasGraph(SimpleInterface):
                 ])
                 if using_weights:
                     workflow.connect(c2t_nodes[-1], 'exemplar_weights',
-                                    merge_weights, 'in%d' % in_num)
+                                     merge_weights, 'in%d' % in_num)
                 in_num += 1
         
         # Get the exemplar tcks and weights
@@ -933,8 +933,8 @@ class MRTrixAtlasGraph(SimpleInterface):
             (merge_tcks, merge_exemplars, [('out', "in1")]),
             (merge_weights, merge_exemplars, [('out', "in2")]),
             (merge_csvs, merge_exemplars, [('out', "in3")]),
-            (merge_exemplars, tar_exemplars, [('out', 'files')]),
-            (tar_exemplars, outputnode, [("out_tar", "exemplar_files")])
+            (merge_exemplars, compress_exemplars, [('out', 'files')]),
+            (compress_exemplars, outputnode, [("out_zip", "exemplar_files")])
         ])
 
         workflow.config['execution']['stop_on_first_crash'] = 'true'
@@ -950,9 +950,9 @@ class MRTrixAtlasGraph(SimpleInterface):
         self._results['connectivity_matfile'] = merged_connectivity_file
 
         # Get the list of exemplars (+ weights if they exist)
-        exemplar_node, = [node for node in list(wf_result.nodes) if node.name.endswith('merge_exemplars')]
-        rt = exemplar_node.run()
-        self._results['exemplar_files'] = rt.outputs.out
+        compress_node, = [node for node in list(wf_result.nodes) if node.name.endswith('compress_exemplars')]
+        rt = compress_node.run()
+        self._results['exemplar_files'] = rt.outputs.out_zip
 
         return runtime
 
@@ -1032,41 +1032,58 @@ class Connectome2Tck(MRTrix3Base):
 class _CompressConnectome2TckInputSpec(BaseInterfaceInputSpec):
     files = InputMultiObject(File(exists=True), mandatory=True)
     out_zip = File("connectome2tck.zip", usedefault=True, exists=False)
-    relative_path = traits.Directory(argstr='-C %s', position=1)
 
 
 class _CompressConnectome2TckOutputSpec(TraitedSpec):
     out_zip = File(exists=True)
 
 
-class MakeTarball(SimpleInterface):
+class CompressConnectome2Tck(SimpleInterface):
     input_spec = _CompressConnectome2TckInputSpec
     output_spec = _CompressConnectome2TckOutputSpec
     
     def _run_interface(self, runtime):
-        zipfh = zipfile.ZipFile(self.inputs.out_tar)
+        out_zip = op.join(runtime.cwd, self.inputs.out_zip)
+        zipfh = zipfile.ZipFile(out_zip, "w")
         # Get the matrix csvs and add them to the zip
-        csvfiles = [fname for fname in self.inputs.files if fname.endswith(".csv")]
+        csvfiles = [fname for fname in self.inputs.files if fname.endswith(".csv") 
+                    and not fname.endswith("weights.csv")]
         for csvfile in csvfiles:
-            zipfh.write(csvfile, arcname=_rename_csv(csvfile), compress_type=zipfile.ZIP_LZMA)
-        return super()._run_interface(runtime)
+            zipfh.write(csvfile, arcname=_rename_connectome(csvfile, suffix='connectome.csv'),
+                        compresslevel=8, compress_type=zipfile.ZIP_DEFLATED)
+        
+        # Get the sift weights if they exist
+        weightfiles = [fname for fname in self.inputs.files if fname.endswith("weights.csv")]
+        for weightfile in weightfiles:
+            zipfh.write(weightfile, arcname=_rename_connectome(weightfile, suffix='_weights.csv'),
+                        compresslevel=8, compress_type=zipfile.ZIP_DEFLATED)
+        
+        # Get the tck files
+        tckfiles = [fname for fname in self.inputs.files if fname.endswith(".tck")
+                    or fname.endswith(".tck.gz")]
+        for tckfile in tckfiles:
+            zipfh.write(tckfile, arcname=_rename_connectome(tckfile, suffix='_exemplars.tck'), 
+                        compresslevel=8, compress_type=zipfile.ZIP_DEFLATED)
+        
+        zipfh.close()
+        self._results["out_zip"] = out_zip
+        return runtime
 
 
-def _rename_csv(connectome_csv):
+def _rename_connectome(connectome_csv, suffix="_connectome.csv"):
     """
     >>> pth = "/a/b/c/qsirecon_wf/sub-X_mrtrix_multishell_msmt_fast/" \
     ...    "sub_X_ses_1_space_T1w_desc_preproc_recon_wf/mrtrix_conn/" \
     ...    "calc_connectivity/mrtrix_atlasgraph/" \
     ...    "schaefer200x17_sift_invnodevol_radius2_count/connectome.csv"
-    >>> _rename_csv(pth)
-    'sub-X_ses-1_space-T1w_desc-preproc_schaefer200x17_sift_invnodevol_radius2_count.csv'
+    >>> _rename_connectome(pth)
+    'sub-X_ses-1_space-T1w_desc-preproc_schaefer200x17_sift_invnodevol_radius2_count_connectome.csv'
     """
     parts = connectome_csv.split(os.sep)
     conn_name = parts[-2]
     image_name, = [part for part in parts if part.startswith("sub_") and part.endswith("recon_wf")]
     image_name = image_name[:-len("_recon_wf")]
-    return _rebids(image_name) + "_" + conn_name + ".csv"
-
+    return "connectome2tck/" +_rebids(image_name) + "_" + conn_name + suffix
 
 
 def _rebids(name):
