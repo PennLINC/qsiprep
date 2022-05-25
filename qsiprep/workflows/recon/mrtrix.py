@@ -565,6 +565,15 @@ def init_mrtrix_connectivity_wf(omp_nthreads, available_anatomical_data, name="m
         ds_connectivity = pe.Node(ReconDerivativesDataSink(suffix=output_suffix),
                                   name='ds_' + name,
                                   run_without_submitting=True)
-        workflow.connect(calc_connectivity, 'connectivity_matfile', ds_connectivity, 'in_file')
+        ds_exemplars = pe.Node(
+            ReconDerivativesDataSink(
+                suffix=output_suffix,
+                desc="exemplarbundles"),
+            name='ds_exemplars',
+            run_without_submitting=True)
+        workflow.connect([
+            (calc_connectivity, ds_connectivity, [('connectivity_matfile', 'in_file')]),
+            (calc_connectivity, ds_exemplars, [('exemplar_files', 'in_file')])
+        ])
 
     return workflow
