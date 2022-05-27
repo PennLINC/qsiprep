@@ -10,6 +10,7 @@ Interface for running a PyAFQ workflow
 """
 import os
 import os.path as op
+import shutil
 
 from AFQ.api.participant import ParticipantAFQ
 from AFQ.definitions.image import ImageFile
@@ -105,6 +106,10 @@ class PyAFQRecon(SimpleInterface):
             mapping_definition=itk_map,
             **kwargs)
         myafq.export("profiles")
+        viz_fname = myafq.export("all_bundles_figure")
+        if isinstance(viz_fname, list):
+            # TODO: somehow get viz_fname into the reportlets_dir
+            shutil.copy(viz_fname[1], os.path.join(reportlets_dir, 'reportlets'))
 
         self._results['afq_dir'] = output_dir
 
