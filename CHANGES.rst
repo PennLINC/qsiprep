@@ -1,17 +1,45 @@
-0.15.2 (March 3, 2022)
-==========================
+0.16.0RC1 (May 30, 2022)
+========================
+
+Major additions to the reconstruction workflows! Most notably PyAFQ is available
+as a reconstruction workflow. The default atlases included in QSIPrep have been
+updated to include subcortical regions if they weren't already present in the
+original atlas.
+
+ * Add PyAFQ reconstruction workflows #398 Credit: @36000 
+ * Make sure all recon workflows respect omp_nthreads #368
+ * Add DKI derivatives #371
+ * Properly transform 4D CNR images from Eddy #393
+ * Update amico to version 22.4.1 #394
+ * Fix concatenation bug #403 credit: @cookpa
+ * Prevent divide by zero error #405 credit: @cookpa
+ * Critical Fix, use correct transform to get atlases into T1w space #417
+ * Add resampled atlases back into derivatives #418
+ * Add connectome2tck exemplar streamlines for mrtrix connectivity workflows #420
+ * Update the atlases to include subcortical regions #426 [details here](https://github.com/PennLINC/qsiprep-atlas/blob/main/QSIRecon%20atlases.ipynb)
+
+0.15.2 (March 3, 2022) DEPRECATED
+==================================
+
+**WARNING** There is an bug in the connectome pipelines that makes the connectivity
+matrices unreliable. Do not use this version for connectome estimation.
+
 Due to persistent difficulties with crashing ODF plots in the reconstruction workflows,
 there is now a `--skip-odf-reports` option that will disable the ODF and peak plots
 in the html reports. This should only be used once you've run some test workflows 
 with the reports still enabled, so you know that your ODFs are correctly oriented.
 
- * Make ODF Plots optional (#364)
+ * Make ODF Plots optional (#364) 
  * Bugfix: ABCD gradient data for extrapolation (#363)
  * Adds `dipy_dki` reconstruction workflow (#366)
 
 
-0.15.1 (February 28, 2022)
-==========================
+0.15.1 (February 28, 2022) DEPRECATED
+======================================
+
+**WARNING** There is an bug in the connectome pipelines that makes the connectivity
+matrices unreliable. Do not use this version for connectome estimation.
+
 A lot of changes in QSIPrep. The big-picture changes are 
 
  1. The build system was redone so a multistage build is used in a 
