@@ -1,19 +1,7 @@
 {
   "name": "mrtrix_multishell_msmt_fast",
   "space": "T1w",
-  "atlases": [
-    "schaefer100x7",
-    "schaefer100x17",
-    "schaefer200x7",
-    "schaefer200x17",
-    "schaefer400x7",
-    "schaefer400x17",
-    "brainnetome246",
-    "aicha384",
-    "gordon333",
-    "aal116",
-    "power264"
-  ],
+  "atlases": ["schaefer100", "schaefer200", "schaefer400", "brainnetome246", "aicha384", "gordon333", "aal116"],
   "anatomical": [
     "mrtrix_5tt_fast"
   ],
@@ -32,7 +20,7 @@
         "fod": {
           "algorithm": "msmt_csd",
           "max_sh": [
-            4,
+            8,
             8,
             8
           ]
