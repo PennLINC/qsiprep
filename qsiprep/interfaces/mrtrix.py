@@ -854,7 +854,7 @@ class MRTrixAtlasGraph(SimpleInterface):
         # Get all inputs from the ApplyTransforms object
         cwd = runtime.cwd
         ifargs = self.inputs.get()
-        nthreads = ifargs['nthreads']
+        nthreads = ifargs.get('nthreads', 1)
         atlas_configs = ifargs.pop('atlas_configs')
         tracking_params = self.inputs.tracking_params
         del ifargs['in_parc']
