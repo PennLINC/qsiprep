@@ -532,6 +532,7 @@ def init_mrtrix_connectivity_wf(omp_nthreads, available_anatomical_data, name="m
     plot_reports = params.pop("plot_reports", True)
     workflow = pe.Workflow(name=name)
     conmat_params = params.get("tck2connectome", {})
+    conmat_params['nthreads'] = omp_nthreads
     calc_connectivity = pe.Node(
         MRTrixAtlasGraph(tracking_params=conmat_params),
         name='calc_connectivity',
