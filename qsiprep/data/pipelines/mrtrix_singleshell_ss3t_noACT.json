@@ -34,7 +34,8 @@
           "select": 1e7,
           "max_length": 250,
           "min_length": 30,
-          "power":0.33
+          "power":0.33,
+          "quiet": true
         },
         "sift2":{}
       }

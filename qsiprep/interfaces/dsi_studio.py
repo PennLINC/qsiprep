@@ -421,7 +421,15 @@ class DSIStudioAtlasGraph(SimpleInterface):
         workflow.config['execution']['remove_unnecessary_outputs'] = 'false'
         workflow.base_dir = runtime.cwd
         if num_threads > 1:
-            wf_result = workflow.run(plugin='MultiProc', plugin_args={'n_procs': num_threads})
+            plugin_settings = {
+                'plugin': 'MultiProc',
+                'plugin_args': {
+                    'raise_insufficient': False,
+                    'maxtasksperchild': 1,
+                    'n_procs': num_threads
+                }
+            }
+            wf_result = workflow.run(**plugin_settings)
         else:
             wf_result = workflow.run()
         merge_node, = [node for node in list(wf_result.nodes) if node.name.endswith('merge_mats')]

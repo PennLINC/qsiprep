@@ -37,7 +37,8 @@
           "min_length": 30,
           "power":0.33,
           "crop_at_gmwmi": true,
-          "backtrack": true
+          "backtrack": true,
+          "quiet": true
         },
         "sift2":{}
       }

@@ -60,6 +60,7 @@ class TckGenInputSpec(TractographyInputSpec):
               'selected and written to the output file'))
     n_tracks = traits.Int(
         desc='NOT supported, do not use')
+    quiet = traits.Bool(argstr="-quiet")
 
 
 class TckGen(Tractography):
@@ -760,6 +761,8 @@ class BuildConnectomeInputSpec(CommandLineInputSpec):
     symmetric = traits.Bool(
         argstr='-symmetric',
         desc='Make matrices symmetric on output')
+    quiet = traits.Bool(
+        argstr='-quiet')
 
 
 class BuildConnectomeOutputSpec(TraitedSpec):
@@ -851,14 +854,16 @@ class MRTrixAtlasGraph(SimpleInterface):
         # Get all inputs from the ApplyTransforms object
         cwd = runtime.cwd
         ifargs = self.inputs.get()
-        # We're hard-coding this to 1 
-        ifargs['nthreads'] = 1
+        nthreads = ifargs.get('nthreads', 1)
         atlas_configs = ifargs.pop('atlas_configs')
         tracking_params = self.inputs.tracking_params
         del ifargs['in_parc']
         using_weights = isdefined(ifargs['in_weights'])
         c2t_args = {'input_tck_weights': ifargs['in_weights']} \
             if using_weights else {}
+        c2t_args['nthreads'] = nthreads
+        c2t_args['quiet'] = True
+        ifargs['quiet'] = True
         ifargs['out_assignments'] = "assignments.txt"
 
         # Make a workflow for each atlas and tracking parameter set
@@ -902,7 +907,9 @@ class MRTrixAtlasGraph(SimpleInterface):
                             atlas_name=atlas_name,
                             in_parc=atlas_config['dwi_resolution_mif'],
                             **node_args),
-                        name=atlas_name + "_" + measure_name)
+                        name=atlas_name + "_" + measure_name,
+                        n_procs=nthreads
+                        )
                 )
                 c2t_nodes.append(
                     pe.Node(
@@ -911,7 +918,8 @@ class MRTrixAtlasGraph(SimpleInterface):
                             in_parc=atlas_config['dwi_resolution_mif'],
                             output_files='single',
                             **c2t_args),
-                        name=atlas_name + "_" + measure_name + "_c2t")
+                        name=atlas_name + "_" + measure_name + "_c2t",
+                        n_procs=nthreads)
                 )
                 workflow.connect([
                     (nodes[-1], c2t_nodes[-1], [
@@ -940,8 +948,18 @@ class MRTrixAtlasGraph(SimpleInterface):
         workflow.config['execution']['stop_on_first_crash'] = 'true'
         workflow.config['execution']['remove_unnecessary_outputs'] = 'false'
         workflow.base_dir = cwd
-        # We're only going to run this serially for now
-        wf_result = workflow.run()
+        if nthreads > 1:
+            plugin_settings = {
+                'plugin': 'MultiProc',
+                'plugin_args': {
+                    'raise_insufficient': False,
+                    'maxtasksperchild': 1,
+                    'n_procs': nthreads
+                }
+            }
+            wf_result = workflow.run(**plugin_settings)
+        else:
+            wf_result = workflow.run()
         
         # Merge the connectivity matrices into a single file
         merge_node, = [node for node in list(wf_result.nodes) if node.name.endswith('merge_mats')]
@@ -1003,6 +1021,8 @@ class _Connectome2TckInputSpec(MRTrix3BaseInputSpec):
         argstr="-exemplars %s")
     keep_self = traits.Bool(
         argstr="-keep_self")
+    quiet = traits.Bool(
+        argstr='-quiet')
 
 
 class _Connectome2TckOutputSpec(TraitedSpec):
