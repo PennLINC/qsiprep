@@ -1,6 +1,11 @@
 0.16.0RC2 (June 1, 2022)
 ========================
 
+ * Adds multithreading to connectome2tck #429
+
+0.16.0RC2 (June 1, 2022)
+========================
+
 Fixes a naming error in the schaefer 400 atlas #428
 
 0.16.0RC1 (May 30, 2022)
