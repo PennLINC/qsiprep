@@ -597,6 +597,82 @@ class SIFT2(MRTrix3Base):
             return output
         return None
 
+class SIFT1InputSpec(MRTrix3BaseInputSpec):
+    in_tracks = File(
+        argstr='%s', exists=True, mandatory=True, position=-3, desc='input tck file')
+    in_fod = File(
+        argstr='%s', position=-2, exists=True, mandatory=True, desc='input FOD SH file')
+    out_tracks = File(
+        argstr='%s', position=-1, genfile=True, desc='the output filtered tracks file')
+    term_number = traits.Int(
+        argstr='-term_number %i', desc='number of streamlines - continue filtering until this number of streamlines remain ')
+    act_file = File(
+        exists=True,
+        argstr='-act %s',
+        desc=('use the Anatomically-Constrained Tractography framework during'
+              ' tracking; provided image must be in the 5TT '
+              '(five - tissue - type) format'))
+    fd_scale_gm = traits.Bool(
+        requires=['act_file'], argstr='-fd_scale_gm', desc='provide this option '
+        '(in conjunction with -act) to heuristically downsize the fibre density estimates '
+        'based on the presence of GM in the voxel. This can assist in reducing tissue interface '
+        'effects when using a single-tissue deconvolution algorithm')
+    no_dilate_lut = traits.Bool(
+        argstr='-no_dilate_lut', desc='do NOT dilate FOD lobe lookup tables; only map '
+        'streamlines to FOD lobes if the precise tangent lies within the angular spread of '
+        'that lobe')
+    make_null_lobes = traits.Bool(
+        argstr='-make_null_lobes', desc='add an additional FOD lobe to each voxel, with zero '
+        'integral, that covers all directions with zero / negative FOD amplitudes')
+    remove_untracked = traits.Bool(
+        argstr='-remove_untracked', desc='remove FOD lobes that do not have any streamline '
+        'density attributed to them; this improves filtering slightly, at the expense of longer '
+        'computation time (and you can no longer do quantitative comparisons between '
+        'reconstructions if this is enabled)')
+    fd_thresh = traits.Float(
+        argstr='-fd_thresh %f', desc='fibre density threshold; exclude an FOD lobe from '
+        'filtering processing if its integral is less than this amount (streamlines will still '
+        'be mapped to it, but it will not contribute to the cost function or the filtering)')
+    out_mu = traits.File(
+        argstr='-out_mu %s', genfile=True, desc='output the final value of SIFT proportionality '
+        'coefficient mu to a text file')
+    out_selection = traits.File(
+        argstr='-out_selection %s', genfile=True, desc='output a text file containing the binary selection of streamlines ')
+
+
+class SIFT1OutputSpec(TraitedSpec):
+    out_mu = File(exists=True)
+    out_tracks = File(exists=True)
+    out_selection = File(exists=True)
+
+class SIFT1(MRTrix3Base):
+    input_spec = SIFT1InputSpec
+    output_spec = SIFT1OutputSpec
+    _cmd = 'tcksift'
+
+    def _list_outputs(self):
+        outputs = self.output_spec().get()
+        outputs['out_mu'] = op.abspath(self._gen_filename('out_mu'))
+        outputs['out_tracks'] = op.abspath(self._gen_filename('out_tracks'))
+        outputs['out_selection'] = op.abspath(self._gen_filename('out_selection'))
+        return outputs
+
+    def _gen_filename(self, name):
+        _, fname, _ = split_filename(self.inputs.in_fod)
+        output = getattr(self.inputs, name)
+        if name == 'out_mu':
+            if not isdefined(output):
+                output = fname + "_mu.txt"
+            return output
+        if name == 'out_tracks':
+            if not isdefined(output):
+                output = fname + "_sift-tracks.tck"
+            return output
+        if name == 'out_selection':
+            if not isdefined(output):
+                output = fname + "_sift-selection.txt"
+            return output
+        return None    
 
 class GlobalTractographyInputSpec(MRTrix3BaseInputSpec):
     dwi_file = File(
