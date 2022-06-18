@@ -20,7 +20,7 @@ from ...interfaces.bids import ReconDerivativesDataSink
 from ...interfaces.reports import CLIReconPeaksReport, ConnectivityReport
 from qsiprep.interfaces.mrtrix import (
     EstimateFOD, SS3TEstimateFOD, MRTrixIngress, SS3TDwi2Response, GlobalTractography,
-    MRTrixAtlasGraph, SIFT2, TckGen, MTNormalize)
+    MRTrixAtlasGraph, SIFT1, SIFT2, TckGen, MTNormalize)
 from .interchange import recon_workflow_input_fields
 from ...engine import Workflow
 
@@ -448,9 +448,9 @@ def init_mrtrix_tractography_wf(omp_nthreads, available_anatomical_data, name="m
     # Resample anat mask
     tracking_params = params.get("tckgen", {})
     tracking_params['nthreads'] = omp_nthreads
-    use_sift2 = params.get("use_sift2", True)
+    use_sift = params.get("use_sift", "2")
     use_5tt = params.get("use_5tt", False)
-    sift_params = params.get("sift2", {})
+    sift_params = params.get("sift", {"term_number": 1000000})
     sift_params['nthreads'] = omp_nthreads
     tracking = pe.Node(
         TckGen(**tracking_params), 
@@ -473,7 +473,7 @@ def init_mrtrix_tractography_wf(omp_nthreads, available_anatomical_data, name="m
             raise Exception("Unrecognized 5tt method: " + method_5tt)
         workflow.connect(inputnode, connect_5tt, tracking, 'act_file')
 
-    if use_sift2:
+    if use_sift=="2":
         tck_sift2 = pe.Node(
             SIFT2(**sift_params), 
             name="tck_sift2",
@@ -493,18 +493,59 @@ def init_mrtrix_tractography_wf(omp_nthreads, available_anatomical_data, name="m
                 name='ds_sift_weights',
                 run_without_submitting=True)
             workflow.connect(outputnode, 'sift_weights', ds_sift_weights, 'in_file')
+            
+            ds_tck_file = pe.Node(
+                ReconDerivativesDataSink(extension='.tck',
+                                         desc="tracks",
+                                         suffix=output_suffix),
+                name='ds_tck_file',
+                run_without_submitting=True)
+            workflow.connect(outputnode, 'tck_file', ds_tck_file, 'in_file')
         if use_5tt:
             workflow.connect(inputnode, connect_5tt, tck_sift2, "act_file")
 
-    if output_suffix:
-        ds_tck_file = pe.Node(
-            ReconDerivativesDataSink(extension='.tck',
-                                     desc="tracks",
-                                     suffix=output_suffix),
-            name='ds_tck_file',
-            run_without_submitting=True)
-        workflow.connect(outputnode, 'tck_file', ds_tck_file, 'in_file')
+            
+    elif use_sift=="1":
+        tck_sift1 = pe.Node(
+            SIFT1(**sift_params), 
+            name="tck_sift1",
+            n_procs=omp_nthreads)
+        workflow.connect([
+            (inputnode, tck_sift1, [('fod_sh_mif', 'in_fod')]),
+            (tracking, tck_sift1, [('out_file', 'in_tracks')]),
+            (tck_sift1, outputnode, [
+                ('out_mu', 'mu')])
+        ])
+        if output_suffix:
+            ds_tck_file = pe.Node(
+                ReconDerivativesDataSink(extension='.tck',
+                                         desc="tracks",
+                                         suffix=output_suffix),
+                name='ds_tck_file',
+                run_without_submitting=True)
+        
+            ds_sift_tracks = pe.Node(
+                ReconDerivativesDataSink(extension='.tck',
+                                         desc="sifttracks",
+                                         suffix=output_suffix),
+                name='ds_sift_tracks',
+                run_without_submitting=True)
+            workflow.connect(outputnode, 'tck_file', ds_sift_tracks, 'in_file')
+        if use_5tt:
+            workflow.connect(inputnode, connect_5tt, tck_sift1, "act_file")
 
+    else:
+        if output_suffix:
+            ds_tck_file = pe.Node(
+                ReconDerivativesDataSink(extension='.tck',
+                                         desc="tracks",
+                                         suffix=output_suffix),
+                name='ds_tck_file',
+                run_without_submitting=True)
+            workflow.connect(outputnode, 'tck_file', ds_tck_file, 'in_file')
+        if use_5tt:
+            workflow.connect(inputnode, connect_5tt, tck_sift1, "act_file")
+            
     return workflow
 
 
