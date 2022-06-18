@@ -603,7 +603,7 @@ class SIFT1InputSpec(MRTrix3BaseInputSpec):
     in_fod = File(
         argstr='%s', position=-2, exists=True, mandatory=True, desc='input FOD SH file')
     out_tracks = File(
-        argstr='%s', position=-1, genfile=True, desc='the output filtered tracks file')
+        argstr='%s', position=-1, genfile=True, mandatory=True, desc='the output filtered tracks file')
     term_number = traits.Int(
         argstr='-term_number %i', desc='number of streamlines - continue filtering until this number of streamlines remain ')
     act_file = File(
