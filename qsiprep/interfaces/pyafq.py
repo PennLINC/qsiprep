@@ -104,7 +104,7 @@ class PyAFQRecon(SimpleInterface):
             brain_mask_definition=brain_mask_definition,
             mapping_definition=itk_map,
             **kwargs)
-        myafq.export("profiles")
+        myafq.export_all()
 
         self._results['afq_dir'] = output_dir
 
