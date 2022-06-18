@@ -450,7 +450,7 @@ def init_mrtrix_tractography_wf(omp_nthreads, available_anatomical_data, name="m
     tracking_params['nthreads'] = omp_nthreads
     use_sift = params.get("use_sift", "2")
     use_5tt = params.get("use_5tt", False)
-    sift_params = params.get("sift", {"term_number": 1000000})
+    sift_params = params.get("sift", {})
     sift_params['nthreads'] = omp_nthreads
     tracking = pe.Node(
         TckGen(**tracking_params), 
