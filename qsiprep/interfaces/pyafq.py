@@ -105,7 +105,11 @@ class PyAFQRecon(SimpleInterface):
             brain_mask_definition=brain_mask_definition,
             mapping_definition=itk_map,
             **kwargs)
-        myafq.export("profiles")
+        if "export" not in kwargs or kwargs["export"] == "all":
+            myafq.export_all()
+        else:
+            myafq.export(kwargs["export"])
+
         viz_fname = myafq.export("all_bundles_figure")
         if isinstance(viz_fname, list):
             # TODO: somehow get viz_fname into the reportlets_dir

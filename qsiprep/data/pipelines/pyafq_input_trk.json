@@ -48,6 +48,7 @@
             "output_suffix": "PYAFQ_FULL_ET",
             "parameters": {
                 "use_external_tracking": true,
+                "export": "all",
                 "directions": "prob",
                 "max_angle": 30.0,
                 "sphere": "",

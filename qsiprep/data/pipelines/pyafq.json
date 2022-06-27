@@ -12,6 +12,7 @@
             "output_suffix": "PYAFQ_FULL",
             "parameters": {
                 "use_external_tracking": false,
+                "export": "all",
                 "directions": "prob",
                 "max_angle": 30.0,
                 "sphere": "",
