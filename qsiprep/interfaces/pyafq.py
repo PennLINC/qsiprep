@@ -78,16 +78,13 @@ class PyAFQRecon(SimpleInterface):
 
         if tck_file is None:
             tck_file = kwargs['import_tract']
-        else:
-            kwargs.pop('import_tract', None)
+        kwargs.pop('import_tract', None)
         if brain_mask_definition is None:
             brain_mask_definition = kwargs['brain_mask_definition']
-        else:
-            kwargs.pop('brain_mask_definition', None)
+        kwargs.pop('brain_mask_definition', None)
         if itk_map is None:
             itk_map = kwargs['mapping_definition']
-        else:
-            kwargs.pop('mapping_definition', None)
+        kwargs.pop('mapping_definition', None)
 
         if 'parallel_segmentation' in kwargs:
             if 'n_jobs' not in kwargs['parallel_segmentation']\
@@ -103,18 +100,18 @@ class PyAFQRecon(SimpleInterface):
             dwi_file, bval_file, bvec_file, output_dir,
             import_tract=tck_file,
             brain_mask_definition=brain_mask_definition,
-            mapping_definition=itk_map,
+            mapping_definition=None,  # try in-house mapping
             **kwargs)
         if "export" not in kwargs or kwargs["export"] == "all":
             myafq.export_all()
         else:
             myafq.export(kwargs["export"])
 
-        viz_fname = myafq.export("all_bundles_figure")
-        if isinstance(viz_fname, list):
-            # TODO: somehow get viz_fname into the reportlets_dir
-            shutil.copy(viz_fname[1], os.path.join(reportlets_dir, 'reportlets'))
-
+        # viz_fname = myafq.export("all_bundles_figure")
+        # if isinstance(viz_fname, list):
+        #     pass
+        #     # TODO: somehow get viz_fname into the reportlets_dir
+        #     # shutil.copy(viz_fname[1], os.path.join(reportlets_dir, 'reportlets'))
         self._results['afq_dir'] = output_dir
 
         return runtime
