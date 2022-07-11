@@ -5,6 +5,7 @@
 ===============
 Citing qsiprep
 ===============
+.. [Cieslak2022] Cieslak, M., Cook, P.A., He, X. et al. (2021) QSIPrep: an integrative platform for preprocessing and reconstructing diffusion MRI data.     Nat Methods 18 (775–778) doi: https://doi.org/10.1038/s41592-021-01185-5
 
 .. [Fonov2011] Fonov VS, Evans AC, Botteron K, Almli CR, McKinstry RC, Collins DL and BDCG,
     Unbiased average age-appropriate atlases for pediatric studies, NeuroImage 54(1), 2011
