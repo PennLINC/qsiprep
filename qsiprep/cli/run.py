@@ -846,7 +846,7 @@ def build_qsiprep_workflow(opts, retval):
 
     # Load base plugin_settings from file if --use-plugin
     if opts.use_plugin is not None:
-        from yaml import load as loadyml
+        from yaml import safe_load as loadyml
         with open(opts.use_plugin) as f:
             plugin_settings = loadyml(f)
         plugin_settings.setdefault('plugin_args', {})
@@ -1080,7 +1080,7 @@ def build_recon_workflow(opts, retval):
 
     # Load base plugin_settings from file if --use-plugin
     if opts.use_plugin is not None:
-        from yaml import load as loadyml
+        from yaml import safe_load as loadyml
         with open(opts.use_plugin) as f:
             plugin_settings = loadyml(f)
         plugin_settings.setdefault('plugin_args', {})
