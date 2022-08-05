@@ -2,7 +2,7 @@ version: 2.1
 
 .dockersetup: &dockersetup
   docker:
-    - image: pennbbl/qsiprep_build:22.6.0
+    - image: pennbbl/qsiprep_build:22.8.3
   working_directory: /src/qsiprep
 
 runinstall: &runinstall
@@ -20,7 +20,7 @@ runinstall: &runinstall
       # Precaching fonts, set 'Agg' as default backend for matplotlib
       python -c "from matplotlib import font_manager"
       sed -i 's/\(backend *: \).*$/\1Agg/g' $( python -c "import matplotlib; print(matplotlib.matplotlib_fname())" )
-      
+
       # Write the config file
       mkdir /root/.nipype
       CFG=/root/.nipype/nipype.cfg
@@ -37,7 +37,7 @@ jobs:
     steps:
       - checkout
       - run: *runinstall
-  
+
   build_docs:
     environment:
       FSLOUTPUTTYPE: NIFTI
@@ -51,8 +51,8 @@ jobs:
           command: |
             conda install -y make
             pip install ".[doc]"
-            make SHPINXOPTS="-W" -C docs html  
-  
+            make SHPINXOPTS="-W" -C docs html
+
   DSCSDSI:
     <<: *dockersetup
     steps:
@@ -100,7 +100,7 @@ jobs:
           command: |
             cd .circleci
             bash DSDTI_TOPUP.sh
-  
+
   IntramodalTemplate:
     <<: *dockersetup
     resource_class: large
@@ -115,7 +115,7 @@ jobs:
           command: |
             cd .circleci
             bash IntramodalTemplate.sh
-  
+
   MultiT1w:
     <<: *dockersetup
     steps:
@@ -127,7 +127,7 @@ jobs:
           command: |
             cd .circleci
             bash MultiT1w.sh
-  
+
   Recon_3Tissue:
     <<: *dockersetup
     steps:
@@ -150,7 +150,7 @@ jobs:
           no_output_timeout: 1h
           command: |
             cd .circleci
-            bash Mrtrix3ReconTests.sh  
+            bash Mrtrix3ReconTests.sh
 
   Recon_DIPY:
     <<: *dockersetup
@@ -189,13 +189,13 @@ jobs:
           command: |
             cd .circleci
             bash AMICOReconTests.sh
-  
+
   deployable:
     docker:
       - image: busybox:latest
     steps:
       - run: echo Deploying!
-  
+
   build_and_deploy:
     environment:
       TZ: "/usr/share/zoneinfo/America/New_York"
@@ -477,7 +477,7 @@ workflows:
           filters:
             tags:
               only: /.*/
-      
+
       - deployable:
           requires:
             - build_docs
@@ -498,7 +498,7 @@ workflows:
               only: master
             tags:
               only: /.*/
-    
+
       - build_and_deploy:
           requires:
             - deployable
