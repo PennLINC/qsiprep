@@ -34,6 +34,7 @@ class GatherEddyInputsInputSpec(BaseInterfaceInputSpec):
                                  desc='files from fmaps/ for distortion correction')
     topup_max_b0s_per_spec = traits.CInt(3, usedefault=True)
     topup_requested = traits.Bool(False, usedefault=True)
+    raw_image_sdc = traits.Bool(True, usedefault=True)
 
 
 class GatherEddyInputsOutputSpec(TraitedSpec):
@@ -49,7 +50,6 @@ class GatherEddyInputsOutputSpec(TraitedSpec):
     forward_transforms = traits.List()
     forward_warps = traits.List()
     topup_report = traits.Str(desc="description of where data came from")
-    raw_image_sdc = traits.Bool(True, usedefault=True)
 
 
 class GatherEddyInputs(SimpleInterface):
