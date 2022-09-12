@@ -37,6 +37,7 @@ def init_fsl_hmc_wf(scan_groups,
                     fmap_demean,
                     fmap_bspline,
                     eddy_config,
+                    raw_image_sdc,
                     mem_gb=3,
                     omp_nthreads=1,
                     dwi_metadata=None,
@@ -110,7 +111,8 @@ def init_fsl_hmc_wf(scan_groups,
 
     workflow = Workflow(name=name)
     gather_inputs = pe.Node(
-        GatherEddyInputs(b0_threshold=b0_threshold), name="gather_inputs")
+        GatherEddyInputs(b0_threshold=b0_threshold, raw_image_sdc=raw_image_sdc),
+        name="gather_inputs")
     if eddy_config is None:
         # load from the defaults
         eddy_cfg_file = pkgr_fn('qsiprep.data', 'eddy_params.json')

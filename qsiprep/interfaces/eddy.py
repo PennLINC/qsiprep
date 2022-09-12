@@ -49,6 +49,7 @@ class GatherEddyInputsOutputSpec(TraitedSpec):
     forward_transforms = traits.List()
     forward_warps = traits.List()
     topup_report = traits.Str(desc="description of where data came from")
+    raw_image_sdc = traits.Bool(True, usedefault=True)
 
 
 class GatherEddyInputs(SimpleInterface):
