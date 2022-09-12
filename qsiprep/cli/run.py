@@ -378,9 +378,7 @@ def get_parser():
         choices=['none', '3dSHORE', 'eddy'],
         help='model used to generate target images for hmc. If "none" the '
         'non-b0 images will be warped using the same transform as their '
-        'nearest b0 image. If "3dSHORE", SHORELine will be used. If '
-        '"eddy_ingress", the dwis are assumed to have been run through '
-        'fsls eddy. ')
+        'nearest b0 image. If "3dSHORE", SHORELine will be used.')
     g_moco.add_argument(
         '--eddy-config', '--eddy_config',
         action='store',
@@ -435,7 +433,14 @@ def get_parser():
 
     # Fieldmap options
     g_fmap = parser.add_argument_group(
-        'Specific options for handling fieldmaps')
+        'Specific options for handling fieldmaps and distortion correction')
+    g_fmap.add_argument(
+        '--pepolar-method', '--pepolar_method',
+        action='store',
+        default='TOPUP',
+        choices=['TOPUP', 'DRBUDDI'],
+        help='select which SDC method to use for PEPOLAR fieldmaps (default: OASIS)')
+
     g_fmap.add_argument(
         '--prefer_dedicated_fmaps', '--prefer-dedicated-fmaps',
         action='store_true',
