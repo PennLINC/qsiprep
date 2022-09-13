@@ -442,6 +442,11 @@ def get_parser():
         help='select which SDC method to use for PEPOLAR fieldmaps (default: OASIS)')
 
     g_fmap.add_argument(
+        '--denoised_image_sdc', '--denoised_image_sdc',
+        action='store_true',
+        default=False,
+        help='use denoised b=0 images if available instead of raw (from BIDS) images in SDC')
+    g_fmap.add_argument(
         '--prefer_dedicated_fmaps', '--prefer-dedicated-fmaps',
         action='store_true',
         default=False,
@@ -977,6 +982,7 @@ def build_qsiprep_workflow(opts, retval):
         hmc_transform=opts.hmc_transform,
         hmc_model=opts.hmc_model,
         eddy_config=opts.eddy_config,
+        raw_image_sdc=not opts.denoised_image_sdc,
         shoreline_iters=opts.shoreline_iters,
         impute_slice_threshold=opts.impute_slice_threshold,
         b0_to_t1w_transform=opts.b0_to_t1w_transform,
