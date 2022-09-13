@@ -50,7 +50,7 @@ def init_qsiprep_wf(
         hmc_model, impute_slice_threshold, hmc_transform, shoreline_iters, eddy_config,
         write_local_bvecs, output_spaces, template, motion_corr_to, b0_to_t1w_transform,
         intramodal_template_iters, intramodal_template_transform, prefer_dedicated_fmaps,
-        fmap_bspline, fmap_demean, use_syn, force_syn):
+        fmap_bspline, fmap_demean, use_syn, force_syn, raw_image_sdc):
     """
     This workflow organizes the execution of qsiprep, with a sub-workflow for
     each subject.
@@ -99,6 +99,7 @@ def init_qsiprep_wf(
                               hmc_transform='Affine',
                               infant_mode=False,
                               eddy_config=None,
+                              raw_image_sdc=False,
                               shoreline_iters=2,
                               impute_slice_threshold=0,
                               write_local_bvecs=False,
@@ -195,6 +196,8 @@ def init_qsiprep_wf(
             will be imputed.
         eddy_config: str
             Path to a JSON file containing config options for eddy
+        raw_image_sdc: bool
+            Use raw (direct from BIDS) images for distortion
         prefer_dedicated_fmaps: bool
             If a reverse PE fieldmap is available in fmap, use that even if a reverse PE
             DWI series is available
@@ -267,6 +270,7 @@ def init_qsiprep_wf(
             hmc_transform=hmc_transform,
             shoreline_iters=shoreline_iters,
             eddy_config=eddy_config,
+            raw_image_sdc=raw_image_sdc,
             impute_slice_threshold=impute_slice_threshold,
             write_local_bvecs=write_local_bvecs,
             fmap_bspline=fmap_bspline,
@@ -292,7 +296,7 @@ def init_single_subject_wf(
         write_local_bvecs, low_mem, dwi_only, anat_only, longitudinal,
         b0_threshold, denoise_before_combining, bids_filters,
         dwi_denoise_window, denoise_method, unringing_method, dwi_no_biascorr,
-        no_b0_harmonization, infant_mode, combine_all_dwis,
+        no_b0_harmonization, infant_mode, combine_all_dwis, raw_image_sdc,
         distortion_group_merge, omp_nthreads, skull_strip_template,
         force_spatial_normalization, skull_strip_fixed_seed, freesurfer, hires,
         output_spaces, template, output_resolution, prefer_dedicated_fmaps,
@@ -444,6 +448,8 @@ def init_single_subject_wf(
             method to motion correct to the midpoint of the b0 images
         eddy_config: str
             Path to a JSON file containing config options for eddy
+        raw_image_sdc: bool
+            Use raw (direct from BIDS) images for distortion
         fmap_bspline : bool
             **Experimental**: Fit B-Spline field using least-squares
         fmap_demean : bool
@@ -712,6 +718,7 @@ to workflows in *QSIPrep*'s documentation]\
             hmc_transform=hmc_transform,
             shoreline_iters=shoreline_iters,
             eddy_config=eddy_config,
+            raw_image_sdc=raw_image_sdc,
             impute_slice_threshold=impute_slice_threshold,
             reportlets_dir=reportlets_dir,
             output_spaces=output_spaces,
