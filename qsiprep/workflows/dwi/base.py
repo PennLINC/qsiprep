@@ -11,6 +11,8 @@ from nipype import logging
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
 from nipype.interfaces.base import isdefined
+
+from qsiprep.workflows.fieldmap import pepolar
 from ...interfaces import DerivativesDataSink
 
 from ...interfaces.reports import DiffusionSummary
@@ -50,6 +52,7 @@ def init_dwi_preproc_wf(dwi_only,
                         dwi_denoise_window,
                         denoise_method,
                         unringing_method,
+                        pepolar_method,
                         dwi_no_biascorr,
                         no_b0_harmonization,
                         denoise_before_combining,
@@ -141,6 +144,8 @@ def init_dwi_preproc_wf(dwi_only,
             Either 'dwidenoise', 'patch2self' or 'none'
         unringing_method : str
             algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
+        pepolar_method : str
+            Either 'DRBUDDI' or 'TOPUP'. The method for SDC when EPI fieldmaps are used.
         dwi_no_biascorr : bool
             run spatial bias correction (N4) on dwi series
         no_b0_harmonization : bool
@@ -360,6 +365,7 @@ Diffusion data preprocessing
             fmap_demean=fmap_demean,
             use_syn=use_syn,
             force_syn=force_syn,
+            pepolar_method=pepolar_method,
             dwi_metadata=dwi_metadata,
             sloppy=sloppy,
             name="hmc_sdc_wf")
@@ -376,6 +382,7 @@ Diffusion data preprocessing
             omp_nthreads=omp_nthreads,
             fmap_bspline=fmap_bspline,
             fmap_demean=fmap_demean,
+            pepolar_method=pepolar_method,
             dwi_metadata=dwi_metadata,
             sloppy=sloppy,
             name="hmc_sdc_wf")

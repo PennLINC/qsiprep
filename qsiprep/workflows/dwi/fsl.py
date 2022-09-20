@@ -38,6 +38,7 @@ def init_fsl_hmc_wf(scan_groups,
                     fmap_bspline,
                     eddy_config,
                     raw_image_sdc,
+                    pepolar_method,
                     mem_gb=3,
                     omp_nthreads=1,
                     dwi_metadata=None,
@@ -66,9 +67,8 @@ def init_fsl_hmc_wf(scan_groups,
         impute_slice_threshold: float
             threshold for a slice to be replaced with imputed values. Overrides the
             parameter in ``eddy_config`` if set to a number > 0.
-        do_topup: bool
-            Should topup be performed before eddy? requires an rpe series or an
-            rpe_b0.
+        pepolar_method : str
+            Either 'DRBUDDI' or 'TOPUP'. The method for SDC when EPI fieldmaps are used.
         eddy_config: str
             Path to a JSON file containing settings for the call to ``eddy``.
 
@@ -209,49 +209,96 @@ def init_fsl_hmc_wf(scan_groups,
         gather_inputs.inputs.topup_requested = True
         if 'epi' in scan_groups['fieldmap_info']:
             gather_inputs.inputs.epi_fmaps = scan_groups['fieldmap_info']['epi']
-        outputnode.inputs.sdc_method = "TOPUP"
-        topup = pe.Node(fsl.TOPUP(out_field="fieldmap_HZ.nii.gz", scale=1), name="topup")
-        topup_summary = pe.Node(TopupSummary(), name='topup_summary')
-        ds_report_topupsummary = pe.Node(
-            DerivativesDataSink(suffix='topupsummary', source_file=source_file),
-            name='ds_report_topupsummary',
-            run_without_submitting=True,
-            mem_gb=DEFAULT_MEMORY_MIN_GB)
-        ds_topupcsv = pe.Node(
-            DerivativesDataSink(suffix='topupcsv', source_file=source_file),
-            name='ds_topupcsv',
-            run_without_submitting=True,
-            mem_gb=DEFAULT_MEMORY_MIN_GB)
 
-        # Enhance and skullstrip the TOPUP output to get a mask for eddy
-        unwarped_mean = pe.Node(IntraModalMerge(hmc=False, to_lps=False), name='unwarped_mean')
-        # Register the first volume of topup imain to the first volume of the merged dwi
-        topup_to_eddy_reg = pe.Node(fsl.FLIRT(dof=6, output_type="NIFTI_GZ"),
-                                    name="topup_to_eddy_reg")
-        workflow.connect([
-            # There will be no SDC warps, they are applied by eddy
-            (gather_inputs, outputnode, [('forward_warps', 'to_dwi_ref_warps')]),
-            (gather_inputs, topup, [
-                ('topup_datain', 'encoding_file'),
-                ('topup_imain', 'in_file'),
-                ('topup_config', 'config')]),
-            (topup, eddy, [
-                ('out_field', 'field')]),
-            (gather_inputs, topup_to_eddy_reg, [
-                ('topup_first', 'in_file'),
-                ('eddy_first', 'reference')]),
-            (gather_inputs, ds_topupcsv, [('b0_csv', 'in_file')]),
-            (topup_to_eddy_reg, eddy, [('out_matrix_file', 'field_mat')]),
-            # Use corrected images from TOPUP to make a mask for eddy
-            (topup, unwarped_mean, [('out_corrected', 'in_files')]),
-            (unwarped_mean, pre_eddy_b0_ref_wf, [('out_avg', 'inputnode.b0_template')]),
-            (b0_ref_to_lps, outputnode, [('dwi_file', 'b0_template')]),
-            # Save reports
-            (gather_inputs, topup_summary, [('topup_report', 'summary')]),
-            (topup_summary, ds_report_topupsummary, [('out_report', 'in_file')]),
-        ])
+        if pepolar_method.lower() == "topup":
+            outputnode.inputs.sdc_method = "TOPUP"
+            topup = pe.Node(fsl.TOPUP(out_field="fieldmap_HZ.nii.gz", scale=1), name="topup")
+            topup_summary = pe.Node(TopupSummary(), name='topup_summary')
+            ds_report_topupsummary = pe.Node(
+                DerivativesDataSink(suffix='topupsummary', source_file=source_file),
+                name='ds_report_topupsummary',
+                run_without_submitting=True,
+                mem_gb=DEFAULT_MEMORY_MIN_GB)
+            ds_topupcsv = pe.Node(
+                DerivativesDataSink(suffix='topupcsv', source_file=source_file),
+                name='ds_topupcsv',
+                run_without_submitting=True,
+                mem_gb=DEFAULT_MEMORY_MIN_GB)
 
-        return workflow
+            # Enhance and skullstrip the TOPUP output to get a mask for eddy
+            unwarped_mean = pe.Node(IntraModalMerge(hmc=False, to_lps=False), name='unwarped_mean')
+            # Register the first volume of topup imain to the first volume of the merged dwi
+            topup_to_eddy_reg = pe.Node(fsl.FLIRT(dof=6, output_type="NIFTI_GZ"),
+                                        name="topup_to_eddy_reg")
+            workflow.connect([
+                # There will be no SDC warps, they are applied by eddy
+                (gather_inputs, outputnode, [('forward_warps', 'to_dwi_ref_warps')]),
+                (gather_inputs, topup, [
+                    ('topup_datain', 'encoding_file'),
+                    ('topup_imain', 'in_file'),
+                    ('topup_config', 'config')]),
+                (topup, eddy, [
+                    ('out_field', 'field')]),
+                (gather_inputs, topup_to_eddy_reg, [
+                    ('topup_first', 'in_file'),
+                    ('eddy_first', 'reference')]),
+                (gather_inputs, ds_topupcsv, [('b0_csv', 'in_file')]),
+                (topup_to_eddy_reg, eddy, [('out_matrix_file', 'field_mat')]),
+                # Use corrected images from TOPUP to make a mask for eddy
+                (topup, unwarped_mean, [('out_corrected', 'in_files')]),
+                (unwarped_mean, pre_eddy_b0_ref_wf, [('out_avg', 'inputnode.b0_template')]),
+                (b0_ref_to_lps, outputnode, [('dwi_file', 'b0_template')]),
+                # Save reports
+                (gather_inputs, topup_summary, [('topup_report', 'summary')]),
+                (topup_summary, ds_report_topupsummary, [('out_report', 'in_file')]),
+            ])
+
+            return workflow
+        if pepolar_method.lower() == "drbuddi":
+            outputnode.inputs.sdc_method = "DRBUDDI"
+
+            topup = pe.Node(fsl.TOPUP(out_field="fieldmap_HZ.nii.gz", scale=1), name="topup")
+            topup_summary = pe.Node(TopupSummary(), name='topup_summary')
+            ds_report_topupsummary = pe.Node(
+                DerivativesDataSink(suffix='topupsummary', source_file=source_file),
+                name='ds_report_topupsummary',
+                run_without_submitting=True,
+                mem_gb=DEFAULT_MEMORY_MIN_GB)
+            ds_topupcsv = pe.Node(
+                DerivativesDataSink(suffix='topupcsv', source_file=source_file),
+                name='ds_topupcsv',
+                run_without_submitting=True,
+                mem_gb=DEFAULT_MEMORY_MIN_GB)
+
+            # Enhance and skullstrip the TOPUP output to get a mask for eddy
+            unwarped_mean = pe.Node(IntraModalMerge(hmc=False, to_lps=False), name='unwarped_mean')
+            # Register the first volume of topup imain to the first volume of the merged dwi
+            topup_to_eddy_reg = pe.Node(fsl.FLIRT(dof=6, output_type="NIFTI_GZ"),
+                                        name="topup_to_eddy_reg")
+            workflow.connect([
+                # There will be no SDC warps, they are applied by eddy
+                (gather_inputs, outputnode, [('forward_warps', 'to_dwi_ref_warps')]),
+                (gather_inputs, topup, [
+                    ('topup_datain', 'encoding_file'),
+                    ('topup_imain', 'in_file'),
+                    ('topup_config', 'config')]),
+                (topup, eddy, [
+                    ('out_field', 'field')]),
+                (gather_inputs, topup_to_eddy_reg, [
+                    ('topup_first', 'in_file'),
+                    ('eddy_first', 'reference')]),
+                (gather_inputs, ds_topupcsv, [('b0_csv', 'in_file')]),
+                (topup_to_eddy_reg, eddy, [('out_matrix_file', 'field_mat')]),
+                # Use corrected images from TOPUP to make a mask for eddy
+                (topup, unwarped_mean, [('out_corrected', 'in_files')]),
+                (unwarped_mean, pre_eddy_b0_ref_wf, [('out_avg', 'inputnode.b0_template')]),
+                (b0_ref_to_lps, outputnode, [('dwi_file', 'b0_template')]),
+                # Save reports
+                (gather_inputs, topup_summary, [('topup_report', 'summary')]),
+                (topup_summary, ds_report_topupsummary, [('out_report', 'in_file')]),
+            ])
+
+            return workflow
 
     # The topup inputs will only have one PE direction,
     # so they can be used to make a b=0 reference to mask for eddy

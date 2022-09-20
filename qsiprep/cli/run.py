@@ -964,6 +964,7 @@ def build_qsiprep_workflow(opts, retval):
         denoise_method=opts.denoise_method,
         combine_all_dwis=not opts.separate_all_dwis,
         distortion_group_merge=opts.distortion_group_merge,
+        pepolar_method=opts.pepolar_method,
         dwi_denoise_window=opts.dwi_denoise_window,
         unringing_method=opts.unringing_method,
         dwi_no_biascorr=opts.dwi_no_biascorr,

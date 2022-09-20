@@ -28,7 +28,7 @@ run_qsiprep_cmd () {
   bids_dir="$1"
   output_dir="$2"
   # Defines a call to qsiprep that works on circleci OR for a local
-  # test that uses 
+  # test that uses
   if [[ "${CIRCLECI}" = "true" ]]; then
     # In circleci we're running from inside the container. call directly
     QSIPREP_RUN="/usr/local/miniconda/bin/qsiprep ${bids_dir} ${output_dir} participant"
@@ -53,7 +53,7 @@ run_qsiprep_cmd () {
 cat << DOC
 
 Create input data for tests. A few files are automatically
-created because they're used in all/most of the tests. 
+created because they're used in all/most of the tests.
 Imaging data is only downloaded as needed based on the
 second argument to the function.
 
@@ -63,7 +63,7 @@ Default data:
 data/nipype.cfg
   Instructs nipype to stop on the first crash
 data/eddy_config.json
-  Configures eddy to perform few iterations so it 
+  Configures eddy to perform few iterations so it
   finishes quickly.
 data/license.txt
   A freesurfer license file
@@ -120,8 +120,8 @@ cat << DOC
 DSDTI:
 ------
 
-Downsampled DTI (single shell) data along with an EPI 
-fieldmap. 
+Downsampled DTI (single shell) data along with an EPI
+fieldmap.
 
 Contents:
 ^^^^^^^^^
@@ -145,7 +145,7 @@ Contents:
 DSCSDSI:
 --------
 
-Downsampled CS-DSI data. 
+Downsampled CS-DSI data.
 
 Contents:
 ^^^^^^^^^
@@ -361,6 +361,16 @@ get_bids_data() {
       rm singleshell_output.tar.gz
     fi
 
+    #  name: Get tinytensors data
+    if [[ ${DS} = tinytensors ]]; then
+      mkdir -p ${WORKDIR}/data
+      ${WGET} \
+        -O tinytensors.tar.xz \
+        "https://upenn.box.com/shared/static/lpt8m25dsgtdae70o3to4tuosh05k6zo.xz"
+      tar xvfJ tinytensors.tar.xz -C ${WORKDIR}/data
+      rm tinytensors.tar.xz
+    fi
+
     #  name: Get data for fieldmap tests
     if [[ ${DS} = fmaps ]]; then
       mkdir -p ${WORKDIR}/data/fmaptests
@@ -403,7 +413,7 @@ regardless of what docker does
 DOC
 
 setup_dir(){
-    # Create the output and working directories for 
+    # Create the output and working directories for
     DIR=$1
     mkdir -p ${DIR}/derivatives
     mkdir -p ${DIR}/work

@@ -22,6 +22,8 @@ from nipype.interfaces import utility as niu
 
 from nilearn import __version__ as nilearn_ver
 
+from qsiprep.workflows.fieldmap import pepolar
+
 from ..engine import Workflow
 from ..interfaces import (BIDSDataGrabber, BIDSInfo, BIDSFreeSurferDir,
                           SubjectSummary, AboutSummary, DerivativesDataSink)
@@ -42,15 +44,19 @@ LOGGER = logging.getLogger('nipype.workflow')
 
 
 def init_qsiprep_wf(
-        subject_list, run_uuid, work_dir, output_dir, bids_dir, ignore, debug, low_mem, anat_only,
-        dwi_only, longitudinal, b0_threshold, hires, denoise_before_combining, dwi_denoise_window,
-        denoise_method, unringing_method, dwi_no_biascorr, no_b0_harmonization, output_resolution,
-        infant_mode, combine_all_dwis, distortion_group_merge, omp_nthreads, bids_filters,
-        force_spatial_normalization, skull_strip_template, skull_strip_fixed_seed, freesurfer,
-        hmc_model, impute_slice_threshold, hmc_transform, shoreline_iters, eddy_config,
-        write_local_bvecs, output_spaces, template, motion_corr_to, b0_to_t1w_transform,
-        intramodal_template_iters, intramodal_template_transform, prefer_dedicated_fmaps,
-        fmap_bspline, fmap_demean, use_syn, force_syn, raw_image_sdc):
+        subject_list, run_uuid, work_dir, output_dir, bids_dir, ignore, debug,
+        low_mem, anat_only, dwi_only, longitudinal, b0_threshold, hires,
+        denoise_before_combining, dwi_denoise_window, denoise_method,
+        unringing_method, dwi_no_biascorr, no_b0_harmonization,
+        output_resolution, infant_mode, combine_all_dwis,
+        distortion_group_merge, pepolar_method, omp_nthreads, bids_filters,
+        force_spatial_normalization, skull_strip_template,
+        skull_strip_fixed_seed, freesurfer, hmc_model, impute_slice_threshold,
+        hmc_transform, shoreline_iters, eddy_config, write_local_bvecs,
+        output_spaces, template, motion_corr_to, b0_to_t1w_transform,
+        intramodal_template_iters, intramodal_template_transform,
+        prefer_dedicated_fmaps, fmap_bspline, fmap_demean, use_syn, force_syn,
+        raw_image_sdc):
     """
     This workflow organizes the execution of qsiprep, with a sub-workflow for
     each subject.
@@ -85,6 +91,7 @@ def init_qsiprep_wf(
                               no_b0_harmonization=False,
                               combine_all_dwis=True,
                               distortion_group_merge='concat',
+                              pepolar_method='TOPUP',
                               omp_nthreads=1,
                               output_resolution=2.0,
                               hmc_model='3dSHORE',
@@ -158,6 +165,8 @@ def init_qsiprep_wf(
         distortion_group_merge : str
             How to combine multiple distortion groups after correction. 'concat', 'average' or
             'none'
+        pepolar_method : str
+            Either 'DRBUDDI' or 'TOPUP'. The method for SDC when EPI fieldmaps are used.
         omp_nthreads : int
             Maximum number of threads an individual process may use
         skull_strip_template : str
@@ -256,6 +265,7 @@ def init_qsiprep_wf(
             hires=hires,
             combine_all_dwis=combine_all_dwis,
             distortion_group_merge=distortion_group_merge,
+            pepolar_method=pepolar_method,
             omp_nthreads=omp_nthreads,
             skull_strip_template=skull_strip_template,
             skull_strip_fixed_seed=skull_strip_fixed_seed,
@@ -297,7 +307,7 @@ def init_single_subject_wf(
         b0_threshold, denoise_before_combining, bids_filters,
         dwi_denoise_window, denoise_method, unringing_method, dwi_no_biascorr,
         no_b0_harmonization, infant_mode, combine_all_dwis, raw_image_sdc,
-        distortion_group_merge, omp_nthreads, skull_strip_template,
+        distortion_group_merge, pepolar_method, omp_nthreads, skull_strip_template,
         force_spatial_normalization, skull_strip_fixed_seed, freesurfer, hires,
         output_spaces, template, output_resolution, prefer_dedicated_fmaps,
         motion_corr_to, b0_to_t1w_transform, intramodal_template_iters,
@@ -346,6 +356,7 @@ def init_single_subject_wf(
             force_spatial_normalization=True,
             combine_all_dwis=True,
             distortion_group_merge='none',
+            pepolar_method='TOPUP',
             omp_nthreads=1,
             skull_strip_template='OASIS',
             skull_strip_fixed_seed=False,
@@ -407,6 +418,8 @@ def init_single_subject_wf(
         distortion_group_merge: str
             How to combine preprocessed scans from different distortion groups. 'concat',
             'average' or 'none'
+        pepolar_method : str
+            Either 'DRBUDDI' or 'TOPUP'. The method for SDC when EPI fieldmaps are used.
         omp_nthreads : int
             Maximum number of threads an individual process may use
         skull_strip_template : str
@@ -719,6 +732,7 @@ to workflows in *QSIPrep*'s documentation]\
             shoreline_iters=shoreline_iters,
             eddy_config=eddy_config,
             raw_image_sdc=raw_image_sdc,
+            pepolar_method=pepolar_method,
             impute_slice_threshold=impute_slice_threshold,
             reportlets_dir=reportlets_dir,
             output_spaces=output_spaces,
@@ -750,6 +764,7 @@ to workflows in *QSIPrep*'s documentation]\
             omp_nthreads=omp_nthreads,
             use_syn=use_syn,
             low_mem=low_mem,
+            pepolar_method=pepolar_method,
             make_intramodal_template=make_intramodal_template,
             source_file=source_file,
             write_derivatives=not merging_distortion_groups)
