@@ -19,7 +19,7 @@ DOC
 set +e
 source ./get_data.sh
 TESTDIR=${PWD}
-TESTNAME=DSDTI_TOPUP
+TESTNAME=HBCD_DRBUDDI
 get_config_data ${TESTDIR}
 get_bids_data ${TESTDIR} tinytensors
 CFG=${TESTDIR}/data/nipype.cfg
@@ -29,7 +29,7 @@ EDDY_CFG=${TESTDIR}/data/eddy_config.json
 setup_dir ${TESTDIR}/${TESTNAME}
 TEMPDIR=${TESTDIR}/${TESTNAME}/work
 OUTPUT_DIR=${TESTDIR}/${TESTNAME}/derivatives
-BIDS_INPUT_DIR=${TESTDIR}/data/DSDTI
+BIDS_INPUT_DIR=${TESTDIR}/data/tinytensor
 export FS_LICENSE=${TESTDIR}/data/license.txt
 QSIPREP_CMD=$(run_qsiprep_cmd ${BIDS_INPUT_DIR} ${OUTPUT_DIR})
 

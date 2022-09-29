@@ -21,6 +21,7 @@ from nipype.interfaces.base import (
     isdefined)
 from .fmap import eddy_inputs_from_dwi_files
 from .epi_fmap import get_best_b0_topup_inputs_from
+from .tortoise import drbuddi_boilerplate
 LOGGER = logging.getLogger('nipype.interface')
 
 
@@ -256,7 +257,7 @@ class Eddy2SPMMotion(SimpleInterface):
         return runtime
 
 
-def boilerplate_from_eddy_config(eddy_config, fieldmap_type):
+def boilerplate_from_eddy_config(eddy_config, fieldmap_type, pepolar_method):
     """Write boilerplate text based on an eddy config dict.
     """
     ext_eddy = ExtendedEddy(**eddy_config)
@@ -357,22 +358,10 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type):
                     "and lambda=%.3f [@eddys2v]."
                     % (ext_eddy.inputs.mporder, niter, s2v_interp, lam))
 
-    # TOPUP
-    if fieldmap_type in ("rpe_series", "epi"):
-        desc.append("Data was collected with reversed phase-encode blips, resulting "
-                    "in pairs of images with distortions going in opposite directions.")
-        if fieldmap_type == "epi":
-            desc.append("Here, b=0 reference images with reversed "
-                        "phase encoding directions were used "
-                        "along with an equal number of b=0 images extracted "
-                        "from the DWI scans.")
-        else:
-            desc.append("Here, multiple DWI series were acquired with opposite phase encoding "
-                        "directions, so b=0 images were extracted from each.")
-        desc.append("From these pairs the susceptibility-induced off-resonance field was "
-                    "estimated using a method similar to that described in [@topup]. "
-                    "The fieldmaps were ultimately incorporated into the "
-                    "Eddy current and head motion correction interpolation.")
+    # distortion correction
+    if pepolar_method.lower() == 'topup':
+        desc.append(topup_boilerplate(fieldmap_type))
+    # DRBUDDI is described in its own workflow
 
     # move by susceptibility
     if isdefined(ext_eddy.inputs.estimate_move_by_susceptibility) and \
@@ -393,4 +382,26 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type):
     desc.append("Final interpolation was performed using the `%s` method%s.\n\n" % (
         ext_eddy.inputs.method, lsr_ref))
 
+    return " ".join(desc)
+
+
+def topup_boilerplate(fieldmap_type):
+    """Write boilerplate text based on fieldmaps
+    """
+    desc = []
+    if fieldmap_type in ("rpe_series", "epi"):
+        desc.append("Data was collected with reversed phase-encode blips, resulting "
+                    "in pairs of images with distortions going in opposite directions.")
+        if fieldmap_type == "epi":
+            desc.append("Here, b=0 reference images with reversed "
+                        "phase encoding directions were used "
+                        "along with an equal number of b=0 images extracted "
+                        "from the DWI scans.")
+        else:
+            desc.append("Here, multiple DWI series were acquired with opposite phase encoding "
+                        "directions, so b=0 images were extracted from each.")
+        desc.append("From these pairs the susceptibility-induced off-resonance field was "
+                    "estimated using a method similar to that described in [@topup]. "
+                    "The fieldmaps were ultimately incorporated into the "
+                    "Eddy current and head motion correction interpolation.")
     return " ".join(desc)

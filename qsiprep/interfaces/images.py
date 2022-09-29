@@ -46,7 +46,6 @@ class SplitDWIsOutputSpec(TraitedSpec):
     bvec_files = OutputMultiObject(File(exists=True), desc='single volume bvecs')
     b0_images = OutputMultiObject(File(exists=True), desc='just the b0s')
     b0_indices = traits.List(desc='list of original indices for each b0 image')
-    original_files = OutputMultiObject(File(exists=True))
 
 
 class SplitDWIs(SimpleInterface):
