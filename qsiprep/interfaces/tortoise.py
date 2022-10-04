@@ -35,14 +35,18 @@ class _GatherDRBUDDIInputsInputSpec(TORTOISEInputSpec):
                                  desc='files from fmaps/ for distortion correction')
     raw_image_sdc = traits.Bool(True, usedefault=True)
     fieldmap_type = traits.Enum("epi", "rpe_series", mandatory=True)
+    dwi_series_pedir = traits.Enum(
+        "i", "i-", "j", "j-", "k", "k-",
+        mandatory=True)
 
 
 class _GatherDRBUDDIInputsOutputSpec(TORTOISEInputSpec):
     blip_up_image = File(exists=True)
     blip_up_bmat = File(exists=True)
+    blip_up_json = File(exists=True)
     blip_down_image = File(exists=True)
     blip_down_bmat = File(exists=True)
-    blip_up_json = File(exists=True)
+    blip_assignments = traits.List()
     report = traits.Str()
 
 
@@ -52,52 +56,80 @@ class GatherDRBUDDIInputs(SimpleInterface):
 
     def _run_interface(self, runtime):
         if self.inputs.fieldmap_type == "rpe_series":
-            self._results["blip_up_image"], self.results["blip_up_bmat"], \
-                self._results["blip_down_image"], self.results["blip_down_bmat"] = \
-                    split_into_up_and_down_niis(
-                        dwi_files=self.inputs.dwi_files,
-                        bval_files=self.inputs.bval_files,
-                        bvec_files=self.inputs.bvec_files,
-                        original_images=self.inputs.original_images,
-                        prefix=op.join(runtime.cwd, "drbuddi"),
-                        make_bmat=True
-                    )
-
-
+            self._results["blip_assignments"], self._results["blip_up_image"], \
+                self._results["blip_up_bmat"], self._results["blip_down_image"], \
+                    self._results["blip_down_bmat"] = \
+                        split_into_up_and_down_niis(
+                            dwi_files=self.inputs.dwi_files,
+                            bval_files=self.inputs.bval_files,
+                            bvec_files=self.inputs.bvec_files,
+                            original_images=self.inputs.original_files,
+                            prefix=op.join(runtime.cwd, "drbuddi"),
+                            make_bmat=True
+                        )
+        up_json = op.join(runtime.cwd, "blip_up.json")
+        with open(up_json, "w") as up_jsonf:
+            up_jsonf.write('{"PhaseEncodingDirection": "%s"}\n' % self.inputs.dwi_series_pedir)
+        self._results["blip_up_json"] = up_json
         return runtime
 
 class _DRBUDDIInputSpec(TORTOISEInputSpec):
     blip_up_image = File(
         exists=True,
         help="Full path to the input UP NIFTI file to be corrected.",
-        argstr="-d %s",
-        mandatory=True)
+        argstr="-u %s",
+        mandatory=True,
+        copyfile=True)
+    blip_up_bmat = File(
+        exists=True,
+        help="Full path to the input UP NIFTI bmtxt file.",
+        mandatory=False,
+        copyfile=True)
     blip_up_json = File(
         exists=True,
         help="Phase encoding information will be read from this",
-        argstr="-up_json %s",
-        mandatory=True)
+        argstr="--up_json %s",
+        mandatory=True,
+        copyfile=True)
     blip_down_image = File(
         exists=True,
         help="Full path to the input DOWN NIFTI file to be corrected.",
         argstr="-d %s",
-        mandatory=True)
+        mandatory=True,
+        copyfile=True)
+    blip_down_bmat = File(
+        exists=True,
+        help="Full path to the input DOWN NIFTI bmtxt file.",
+        mandatory=False,
+        copyfile=True)
     structural_image = InputMultiObject(
-        File(exists=True),
+        File(exists=True, copyfile=False),
         help="Path(s) to anatomical image files. Can provide more than one. NO T1W's!!"
     )
-    nthreads=traits.Int(1, usedefault=True)
+    nthreads=traits.Int(1, usedefault=True, hash_files=False)
+    sloppy = traits.Bool(
+        False,
+        usedefault=True,
+        desc="use underpowered (sloppy) registration for speed")
+    blip_assignments = traits.List()
 
 
 class _DRBUDDIOutputSpec(TraitedSpec):
     sdc_warps = OutputMultiObject(File(exists=True))
     undistorted_reference = File(exists=True)
+    sdc_scaling_images = OutputMultiObject(File(exists=True))
 
 
 class DRBUDDI(CommandLine):
     input_spec = _DRBUDDIInputSpec
     output_spec = _DRBUDDIOutputSpec
+    _cmd = "DRBUDDI"
 
+    def _format_arg(self, name, spec, value):
+        """Trick to get blip_down_bmat symlinked without an arg"""
+        if name in ("blip_down_bmat", "blip_up_bmat"):
+            return ""
+        return super(DRBUDDI, self)._format_arg(name, spec, value)
 
 def drbuddi_boilerplate(fieldmap_type):
     desc = []
@@ -131,20 +163,17 @@ def split_into_up_and_down_niis(dwi_files, bval_files, bvec_files, original_imag
     up_bvecs = []
     up_prefix = prefix + "_up_dwi"
     up_dwi_file = up_prefix + ".nii"
-    up_bval_file = up_prefix + ".bval"
-    up_bvec_file = up_prefix + ".bvec"
     up_bmat_file = up_prefix + ".bmtxt"
     down_images = []
     down_bvals = []
     down_bvecs = []
     down_prefix = prefix + "_down_dwi"
     down_dwi_file = down_prefix + ".nii"
-    down_bval_file = down_prefix + ".bval"
-    down_bvec_file = down_prefix + ".bvec"
     down_bmat_file = down_prefix + ".bmtxt"
 
     # We know up is first because we concatenated them ourselves
     up_group_name = group_assignments[0]
+    blip_assignments = []
     for dwi_file, bval_file, bvec_file, distortion_group in \
             zip(dwi_files, bval_files, bvec_files, group_assignments):
 
@@ -152,35 +181,40 @@ def split_into_up_and_down_niis(dwi_files, bval_files, bvec_files, original_imag
             up_images.append(dwi_file)
             up_bvals.append(bval_file)
             up_bvecs.append(bvec_file)
+            blip_assignments.append("up")
         else:
             down_images.append(dwi_file)
             down_bvals.append(bval_file)
             down_bvecs.append(bvec_file)
+            blip_assignments.append("down")
 
     # Write the 4d up image
     up_4d = nim.concat_imgs(up_images, dtype=np.float32, auto_resample=False)
     up_4d.to_filename(up_dwi_file)
-    write_concatenated_fsl_gradients(up_bvals, up_bvecs, up_prefix)
+    up_bval_file, up_bvec_file = write_concatenated_fsl_gradients(
+        up_bvals, up_bvecs, up_prefix)
 
     # Write the 4d down image
     down_4d = nim.concat_imgs(down_images, dtype=np.float32, auto_resample=False)
     down_4d.to_filename(down_dwi_file)
-    write_concatenated_fsl_gradients(down_bvals, down_bvecs, down_prefix)
+    down_bval_file, down_bvec_file = write_concatenated_fsl_gradients(
+        down_bvals, down_bvecs, down_prefix)
 
     # Send back FSL-style gradients
     if not make_bmat:
-        return up_dwi_file, up_bval_file, up_bvec_file, \
+        return blip_assignments, up_dwi_file, up_bval_file, up_bvec_file, \
             down_dwi_file, down_bval_file, down_bvec_file
 
     # Convert to bmatrix text file
-    make_bmat(up_bval_file, up_bvec_file)
-    make_bmat(down_bval_file, down_bvec_file)
+    make_bmat_file(up_bval_file, up_bvec_file)
+    make_bmat_file(down_bval_file, down_bvec_file)
 
-    return up_dwi_file, up_bmat_file, down_dwi_file, down_bmat_file
+    return blip_assignments, up_dwi_file, up_bmat_file, down_dwi_file, down_bmat_file
 
 
-def make_bmat(bvals, bvecs):
+def make_bmat_file(bvals, bvecs):
     pout = subprocess.run(
         ["FSLBVecsToTORTOISEBmatrix", op.abspath(bvals), op.abspath(bvecs)])
+    print(pout)
     return bvals.replace("bval", "bmtxt")
 

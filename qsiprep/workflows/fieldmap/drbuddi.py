@@ -98,12 +98,12 @@ def init_drbuddi_wf(scan_groups, b0_threshold, raw_image_sdc, omp_nthreads=1,
 
     workflow = Workflow(name=name)
     inputnode = pe.Node(niu.IdentityInterface(
-        fields=['dwi_file', 'bval_file', 'bvec_file', 'original_files',
+        fields=['dwi_files', 'bval_files', 'bvec_files', 'original_files',
                 't1_brain', 't2_brain']),
         name='inputnode')
 
     outputnode = pe.Node(niu.IdentityInterface(
-        fields=['b0_ref', 'b0_mask', 'out_warp']),
+        fields=['b0_ref', 'b0_mask', 'sdc_warps', 'sdc_scaling_images', 'report']),
         name='outputnode')
 
     workflow.__postdesc__ = """\
@@ -118,11 +118,12 @@ co-registration with the anatomical reference.
     outputnode.inputs.method = \
         'PEB/PEPOLAR (phase-encoding based / PE-POLARity): %s' % fieldmap_info['suffix']
 
-    if raw_image_sdc:
+    if raw_image_sdc and fieldmap_info['suffix'] == 'epi':
         raise NotImplementedError()
 
     gather_drbuddi_inputs = pe.Node(
         GatherDRBUDDIInputs(
+            dwi_series_pedir=scan_groups['dwi_series_pedir'],
             epi_fmaps=fieldmap_info[fieldmap_info['suffix']],
             b0_threshold=b0_threshold,
             raw_image_sdc=raw_image_sdc,
@@ -144,15 +145,22 @@ co-registration with the anatomical reference.
             ("bvec_files", "bvec_files"),
             ("original_files", "original_files")]),
         (gather_drbuddi_inputs, drbuddi, [
+            ("blip_assignments", "blip_assignments"),
             ("blip_up_image", "blip_up_image"),
-            ("blip_down_image", "blip_down_image"),
             ("blip_up_json", "blip_up_json"),
-            ("blip_up_image", "blip_up_image"),
+            ("blip_up_bmat", "blip_up_bmat"),
+            ("blip_down_image", "blip_down_image"),
+            ("blip_down_bmat", "blip_down_bmat"),
         ]),
         (inputnode, drbuddi, ([
             ("t2_brain", "structural_image")])),
         (gather_drbuddi_inputs, drbuddi_summary, [
-            ("report", )])
+            ("report", "summary")]),
+        (drbuddi, outputnode, [
+            ("undistorted_reference", "b0_ref"),
+            ("sdc_warps", "sdc_warps"),
+            ("sdc_scaling_images", "sdc_scaling_images")
+        ])
 
     ])
 
@@ -170,23 +178,23 @@ co-registration with the anatomical reference.
     #         ('b0_ref_brain', 'inputnode.in_reference_brain')]),
     # ])
 
-    workflow.connect([
-        (inputnode, sdc_unwarp_wf, [
-            ('b0_ref', 'inputnode.in_reference'),
-            ('b0_ref_brain', 'inputnode.in_reference_brain'),
-            ('b0_mask', 'inputnode.in_mask')]),
-        (fmap_estimator_wf, sdc_unwarp_wf, [
-            ('outputnode.fmap', 'inputnode.fmap'),
-            ('outputnode.fmap_ref', 'inputnode.fmap_ref'),
-            ('outputnode.fmap_mask', 'inputnode.fmap_mask')]),
-        (sdc_unwarp_wf, outputnode, [
-            ('outputnode.out_hz', 'fieldmap_hz')])
-    ])
+    # workflow.connect([
+    #     (inputnode, sdc_unwarp_wf, [
+    #         ('b0_ref', 'inputnode.in_reference'),
+    #         ('b0_ref_brain', 'inputnode.in_reference_brain'),
+    #         ('b0_mask', 'inputnode.in_mask')]),
+    #     (fmap_estimator_wf, sdc_unwarp_wf, [
+    #         ('outputnode.fmap', 'inputnode.fmap'),
+    #         ('outputnode.fmap_ref', 'inputnode.fmap_ref'),
+    #         ('outputnode.fmap_mask', 'inputnode.fmap_mask')]),
+    #     (sdc_unwarp_wf, outputnode, [
+    #         ('outputnode.out_hz', 'fieldmap_hz')])
+    # ])
 
-    workflow.connect([
-        (sdc_unwarp_wf, outputnode, [
-            ('outputnode.out_warp', 'out_warp'),
-            ('outputnode.out_reference', 'b0_ref')])
-    ])
+    # workflow.connect([
+    #     (sdc_unwarp_wf, outputnode, [
+    #         ('outputnode.out_warp', 'out_warp'),
+    #         ('outputnode.out_reference', 'b0_ref')])
+    # ])
 
     return workflow

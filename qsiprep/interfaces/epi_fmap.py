@@ -99,17 +99,25 @@ def load_epi_dwi_fieldmaps(fmap_list, b0_threshold):
 
         # Which images are b=0 images?
         if op.exists(potential_bval_file):
+            # If there is a secret bval file, check that it's allowed
             bvals = np.loadtxt(potential_bval_file)
-            too_large = np.flatnonzero(bvals > b0_threshold)
-            too_large_values = bvals[too_large]
-            if too_large.size:
-                LOGGER.warning("Excluding volumes %s from the %s because b=%s is greater than %d",
-                               str(too_large), fmap_file, str(too_large_values), b0_threshold)
-            _b0_indices = np.flatnonzero(bvals < b0_threshold) + starting_index
+            if fmap_img.ndim == 3 and len(bvals) == 1:
+                _b0_indices = np.arange(num_images) + starting_index
+            elif fmap_img.ndim == 4 and len(bvals) == fmap_img.shape[3]:
+                too_large = np.flatnonzero(bvals > b0_threshold)
+                too_large_values = bvals[too_large]
+                if too_large.size:
+                    LOGGER.warning("Excluding volumes %s from the %s because b=%s is greater than %d",
+                                str(too_large), fmap_file, str(too_large_values), b0_threshold)
+                _b0_indices = np.flatnonzero(bvals < b0_threshold) + starting_index
+            else:
+                raise Exception("Secret fieldmap file %s mismatches its image file %s" % (
+                                potential_bval_file, fmap_file))
         else:
             _b0_indices = np.arange(num_images) + starting_index
         b0_indices += _b0_indices.tolist()
 
+    print(image_series)
     concatenated_images = concat_imgs(image_series, auto_resample=True)
     return concatenated_images, b0_indices, original_files
 

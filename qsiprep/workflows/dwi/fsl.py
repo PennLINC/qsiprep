@@ -275,6 +275,7 @@ def init_fsl_hmc_wf(scan_groups,
             gather_inputs.inputs.epi_fmaps = scan_groups['fieldmap_info']['epi']
 
         drbuddi_wf = init_drbuddi_wf(scan_groups=scan_groups, omp_nthreads=omp_nthreads,
+                                     b0_threshold=b0_threshold, raw_image_sdc=raw_image_sdc,
                                      sloppy=sloppy)
         ds_report_drbuddi = pe.Node(
             DerivativesDataSink(suffix='drbuddisummary', source_file=source_file),
@@ -292,14 +293,14 @@ def init_fsl_hmc_wf(scan_groups,
                 ('t1_brain', 'inputnode.t1_brain'),
                 ('t2_brain', 'inputnode.t2_brain'),
                 ('original_files', 'inputnode.original_files')]),
-            (drbuddi_wf, ds_report_drbuddi, [
-                ('outputnode.report', 'in_file')]),
+            #(drbuddi_wf, ds_report_drbuddi, [
+            #    ('outputnode.report', 'in_file')]),
             (drbuddi_wf, outputnode, [
-                ('outputnode.undistorted_reference', 'b0_template')]),
+                ('outputnode.b0_ref', 'b0_template')]),
 
             # Save reports
-            (gather_inputs, topup_summary, [('topup_report', 'summary')]),
-            (topup_summary, ds_report_topupsummary, [('out_report', 'in_file')]),
+            #(gather_inputs, drbuddi_summary, [('topup_report', 'summary')]),
+            #(topup_summary, ds_report_topupsummary, [('out_report', 'in_file')]),
         ])
 
         return workflow

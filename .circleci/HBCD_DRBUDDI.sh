@@ -37,10 +37,11 @@ QSIPREP_CMD=$(run_qsiprep_cmd ${BIDS_INPUT_DIR} ${OUTPUT_DIR})
 ${QSIPREP_CMD} \
 	-w ${TEMPDIR} \
 	--sloppy \
+	--dwi-only \
 	--output-space T1w \
 	--pepolar-method DRBUDDI \
 	--eddy_config ${EDDY_CFG} \
-	--output-resolution 5 \
-    -vv
+	--output-resolution 2 \
+    -vv --stop-on-first-crash
 
 

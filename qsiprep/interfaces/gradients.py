@@ -667,11 +667,20 @@ def concatenate_bvecs(input_files):
     else:
         collected_vecs = []
         for bvec_file in input_files:
-            collected_vecs.append(np.loadtxt(bvec_file))
+            collected_vecs.append(np.loadtxt(bvec_file).astype(np.float))
             stacked = np.row_stack(collected_vecs)
     if not stacked.shape[1] == 3:
         stacked = stacked.T
     return stacked
+
+
+def write_concatenated_fsl_gradients(bval_files, bvec_files, out_prefix):
+    bvec_file = out_prefix + ".bvec"
+    bval_file = out_prefix + ".bval"
+    stacked_bvecs = concatenate_bvecs(bvec_files)
+    np.savetxt(bvec_file, stacked_bvecs.T, fmt="%.8f", delimiter=" ")
+    concatenate_bvals(bval_files, bval_file)
+    return bval_file, bvec_file
 
 
 def bvec_rotation(ortho_bvecs, transforms, output_file, runtime):
