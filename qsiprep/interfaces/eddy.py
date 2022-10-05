@@ -33,7 +33,7 @@ class GatherEddyInputsInputSpec(BaseInterfaceInputSpec):
     original_files = InputMultiObject(File(exists=True))
     epi_fmaps = InputMultiObject(File(exists=True),
                                  desc='files from fmaps/ for distortion correction')
-    topup_max_b0s_per_spec = traits.CInt(3, usedefault=True)
+    topup_max_b0s_per_spec = traits.CInt(1, usedefault=True)
     topup_requested = traits.Bool(False, usedefault=True)
     raw_image_sdc = traits.Bool(True, usedefault=True)
 

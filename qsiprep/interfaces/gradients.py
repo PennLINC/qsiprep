@@ -401,7 +401,13 @@ class ComposeTransforms(SimpleInterface):
         hmc_affines = self.inputs.hmc_affines
         fieldwarps = self.inputs.fieldwarps
         if isdefined(fieldwarps):
-            fieldwarps = fieldwarps * num_dwis
+            if len(fieldwarps) == 1:
+                LOGGER.info("using a single fieldwarp for all DWI files")
+                fieldwarps = fieldwarps * num_dwis
+            elif len(fieldwarps) == num_dwis:
+                LOGGER.info("using DRBUDDI warps!")
+            else:
+                LOGGER.info("No Fieldwarps will be used")
 
         # The affine transform to the t1 can come from hmcsdc or the intramodal template
         coreg_to_t1 = traits.Undefined

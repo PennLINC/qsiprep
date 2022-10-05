@@ -3,6 +3,7 @@
 Wrappers for the TORTOISE programs
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 """
+from curses import use_default_colors
 import os
 import os.path as op
 import subprocess
@@ -107,17 +108,57 @@ class _DRBUDDIInputSpec(TORTOISEInputSpec):
         help="Path(s) to anatomical image files. Can provide more than one. NO T1W's!!"
     )
     nthreads=traits.Int(1, usedefault=True, hash_files=False)
+    fieldmap_type = traits.Enum("epi", "rpe_series", mandatory=True)
     sloppy = traits.Bool(
         False,
         usedefault=True,
         desc="use underpowered (sloppy) registration for speed")
     blip_assignments = traits.List()
+    tensor_fit_bval_max = traits.Int(
+        0,
+        argstr="--DRBUDDI_DWI_bval_tensor_fitting %d",
+        desc="Up to which b-value should be used for DRBUDDI's tensor fitting. "
+             "Default: 0 , meaning use all b-values")
+    disable_initial_rigid = traits.Bool(
+        False,
+        argstr="--DRBUDDI_disable_initial_rigid %d",
+        desc="DRBUDDI performs an initial registration between the up and down data."
+             "This registration starts with rigid, followed by a quick diffeomorphic "
+             "and finalized by another rigid. This parameter, when set to 1 disables "
+             "all these registrations. Default: False")
+    start_with_diffeomorphic_for_rigid_reg = traits.Bool(
+        False,
+        argstr="--DRBUDDI_start_with_diffeomorphic_for_rigid_reg",
+        desc="DRBUDDI performs an initial registration between the up and down data. "
+             "This registration starts with rigid, followed by a quick diffeomorphic "
+             "and finalized by another rigid. This parameter, when set to 1 disables "
+             "the very initial rigid registration and starts with the quick diffemorphic. "
+             "This is helpful with VERY DISTORTED data, for which the initial rigid "
+             "registration is problematic. Default: False")
+    estimate_learning_rate_per_iteration = traits.Bool(
+        False,
+        argstr="--DRBUDDI_estimate_LR_per_iteration %d",
+        desc="Flat to estimate learning rate at every iteration. "
+             "Makes DRBUDDI slower but better results. Default: False")
 
 
 class _DRBUDDIOutputSpec(TraitedSpec):
-    sdc_warps = OutputMultiObject(File(exists=True))
+    # Direct outputs from DRBUDDI
     undistorted_reference = File(exists=True)
-    sdc_scaling_images = OutputMultiObject(File(exists=True))
+    bdown_to_bup_rigid_trans_h5 = File(exists=True)
+    undistorted_reference = File(exists=True)
+    blip_down_b0 = File(exists=True)
+    blip_down_b0_corrected = File(exists=True)
+    blip_down_b0_corrected_jac = File(exists=True)
+    blip_down_b0_quad = File(exists=True)
+    blip_up_b0 = File(exists=True)
+    blip_up_b0_corrected = File(exists=True)
+    blip_up_b0_corrected_jac = File(exists=True)
+    blip_up_b0_quad = File(exists=True)
+    deformation_finv = File(exists=True)
+    deformation_minv = File(exists=True)
+    blip_up_FA = File(exists=True)
+    blip_down_FA = File(exists=True)
 
 
 class DRBUDDI(CommandLine):
@@ -130,6 +171,92 @@ class DRBUDDI(CommandLine):
         if name in ("blip_down_bmat", "blip_up_bmat"):
             return ""
         return super(DRBUDDI, self)._format_arg(name, spec, value)
+
+    def _list_outputs(self):
+        outputs = self.output_spec().get()
+        outputs["undistorted_reference"] = op.abspath("b0_corrected_final.nii")
+        outputs["blip_down_b0"] = op.abspath("blip_down_b0.nii")
+        outputs["blip_down_b0_corrected"] = op.abspath("blip_down_b0_corrected.nii")
+        outputs["blip_down_b0_corrected_jac"] = op.abspath("blip_down_b0_corrected_JAC.nii")
+        outputs["blip_down_b0_quad"] = op.abspath("blip_down_b0_quad.nii")
+        outputs["blip_up_b0"] = op.abspath("blip_up_b0.nii")
+        outputs["blip_up_b0_corrected"] = op.abspath("blip_up_b0_corrected.nii")
+        outputs["blip_up_b0_corrected_jac"] = op.abspath("blip_up_b0_corrected_JAC.nii")
+        outputs["blip_up_b0_quad"] = op.abspath("blip_up_b0_quad.nii")
+        outputs["deformation_finv"] = op.abspath("deformation_FINV.nii.gz")
+        outputs["deformation_minv"] = op.abspath("deformation_MINV.nii.gz")
+
+        # There will be an hdf5 transform file if there is an initial rigid
+        if not self.inputs.disable_initial_rigid:
+            outputs["bdown_to_bup_rigid_trans_h5"] = op.abspath("bdown_to_bup_rigidtrans.hdf5")
+
+        # There will be FA images created if two DWI series were used as inputs
+        if self.inputs.fieldmap_type == 'rpe_series':
+            outputs["blip_up_FA"] = op.abspath("blip_up_FA.nii")
+            outputs["blip_down_FA"] = op.abspath("blip_down_FA.nii")
+
+        return outputs
+
+
+class _DRBUDDIAggregateOutputsInputSpec(TORTOISEInputSpec):
+    blip_assignments = traits.List()
+    undistorted_reference = File(exists=True)
+    bdown_to_bup_rigid_trans_h5 = File(exists=True)
+    undistorted_reference = File(exists=True)
+    blip_down_b0 = File(exists=True)
+    blip_down_b0_corrected = File(exists=True)
+    blip_down_b0_corrected_jac = File(exists=True)
+    blip_down_b0_quad = File(exists=True)
+    blip_up_b0 = File(exists=True)
+    blip_up_b0_corrected = File(exists=True)
+    blip_up_b0_corrected_jac = File(exists=True)
+    blip_up_b0_quad = File(exists=True)
+    deformation_finv = File(exists=True, desc="blip up to b0_corrected")
+    deformation_minv = File(exists=True)
+    blip_up_FA = File(exists=True)
+    blip_down_FA = File(exists=True)
+    fieldmap_type = traits.Enum("epi", "rpe_series", mandatory=True)
+
+
+class _DRBUDDIAggregateOutputsOutputSpec(TraitedSpec):
+    # Aggregated outputs for convenience
+    sdc_warps = OutputMultiObject(File(exists=True))
+    sdc_scaling_images = OutputMultiObject(File(exists=True))
+
+
+class DRBUDDIAggregateOutputs(SimpleInterface):
+    input_spec = _DRBUDDIAggregateOutputsInputSpec
+    output_spec = _DRBUDDIAggregateOutputsOutputSpec
+
+    def _run_interface(self, runtime):
+
+        # there may be 2 transforms for the blip down data. If so, compose them
+        if isdefined(self.inputs.bdown_to_bup_rigid_trans_h5):
+            # combine the rigid with displacement
+            down_warp = op.join(runtime.cwd, "blip_down_composite.nii.gz")
+            xfm = ants.ApplyTransforms(
+                # input_image is ignored because print_out_composite_warp_file is True
+                input_image=self.inputs.blip_down_FA,
+                transforms=[self.inputs.deformation_minv,
+                            self.inputs.bdown_to_bup_rigid_trans_h5],
+                reference_image=self.inputs.undistorted_reference,
+                output_image=down_warp,
+                print_out_composite_warp_file=True,
+                interpolation='LanczosWindowedSinc'
+            )
+            xfm.terminal_output = 'allatonce'
+            xfm.resource_monitor = False
+            runtime = xfm.run().runtime
+        else:
+            down_warp = self.inputs.deformation_minv
+
+        self._results["sdc_warps"] = [
+            self.inputs.deformation_finv if blip_dir == "up" else
+            down_warp for blip_dir in
+            self.inputs.blip_assignments]
+
+        return runtime
+
 
 def drbuddi_boilerplate(fieldmap_type):
     desc = []

@@ -26,7 +26,8 @@ from nipype import logging
 
 from ...engine import Workflow
 from ...interfaces.fmap import get_distortion_grouping
-from ...interfaces.tortoise import GatherDRBUDDIInputs, DRBUDDI
+from ...interfaces.tortoise import (
+    GatherDRBUDDIInputs, DRBUDDI, DRBUDDIAggregateOutputs)
 from ...interfaces.reports import TopupSummary
 
 LOGGER = logging.getLogger('nipype.workflow')
@@ -91,9 +92,10 @@ def init_drbuddi_wf(scan_groups, b0_threshold, raw_image_sdc, omp_nthreads=1,
             An unwarped b0 reference
         b0_mask
             The corresponding new mask after unwarping
-        out_warps
+        sdc_warps
             The deformation fields to unwarp the susceptibility distortions in each image
             in dwi_file
+
     """
 
     workflow = Workflow(name=name)
@@ -102,8 +104,9 @@ def init_drbuddi_wf(scan_groups, b0_threshold, raw_image_sdc, omp_nthreads=1,
                 't1_brain', 't2_brain']),
         name='inputnode')
 
-    outputnode = pe.Node(niu.IdentityInterface(
-        fields=['b0_ref', 'b0_mask', 'sdc_warps', 'sdc_scaling_images', 'report']),
+    outputnode = pe.Node(
+        niu.IdentityInterface(
+            fields=['b0_ref', 'b0_mask', 'sdc_warps', 'sdc_scaling_images', 'report']),
         name='outputnode')
 
     workflow.__postdesc__ = """\
@@ -132,9 +135,16 @@ co-registration with the anatomical reference.
 
     drbuddi = pe.Node(
         DRBUDDI(
+            fieldmap_type=fieldmap_info['suffix'],
             nthreads=omp_nthreads,
             sloppy=sloppy),
         name='drbuddi')
+
+    aggregate_drbuddi = pe.Node(
+        DRBUDDIAggregateOutputs(
+            fieldmap_type=fieldmap_info['suffix']),
+        name="aggregate_drbuddi"
+    )
 
     drbuddi_summary = pe.Node(TopupSummary(), name='drbuddi_summary')
 
@@ -156,12 +166,29 @@ co-registration with the anatomical reference.
             ("t2_brain", "structural_image")])),
         (gather_drbuddi_inputs, drbuddi_summary, [
             ("report", "summary")]),
+        (drbuddi, aggregate_drbuddi, [
+            ("undistorted_reference", "undistorted_reference"),
+            ('bdown_to_bup_rigid_trans_h5', 'bdown_to_bup_rigid_trans_h5'),
+            ('blip_down_b0', 'blip_down_b0'),
+            ('blip_down_b0_corrected', 'blip_down_b0_corrected'),
+            ('blip_down_b0_corrected_jac', 'blip_down_b0_corrected_jac'),
+            ('blip_down_b0_quad', 'blip_down_b0_quad'),
+            ('blip_up_b0', 'blip_up_b0'),
+            ('blip_up_b0_corrected', 'blip_up_b0_corrected'),
+            ('blip_up_b0_corrected_jac', 'blip_up_b0_corrected_jac'),
+            ('blip_up_b0_quad', 'blip_up_b0_quad'),
+            ('deformation_finv', 'deformation_finv'),
+            ('deformation_minv', 'deformation_minv'),
+            ('blip_up_FA', 'blip_up_FA'),
+            ('blip_down_FA', 'blip_down_FA')
+        ]),
+        (gather_drbuddi_inputs, aggregate_drbuddi, [
+            ('blip_assignments', 'blip_assignments')]),
         (drbuddi, outputnode, [
-            ("undistorted_reference", "b0_ref"),
+            ("undistorted_reference", "b0_ref")]),
+        (aggregate_drbuddi, outputnode, [
             ("sdc_warps", "sdc_warps"),
-            ("sdc_scaling_images", "sdc_scaling_images")
-        ])
-
+            ("sdc_scaling_images", "sdc_scaling_images")])
     ])
 
     # # We have already sorted by compatible

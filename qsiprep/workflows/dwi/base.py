@@ -423,6 +423,7 @@ Diffusion data preprocessing
         mem_gb=DEFAULT_MEMORY_MIN_GB)
 
     # Make a fieldmap report, save the transforms. Do it here because we need wm
+    # If DRBUDDI is used, a second report will be written with the second modalities
     if fieldmap_type is not None:
         fmap_unwarp_report_wf = init_fmap_unwarp_report_wf()
         ds_report_sdc = pe.Node(

@@ -277,11 +277,11 @@ def init_fsl_hmc_wf(scan_groups,
         drbuddi_wf = init_drbuddi_wf(scan_groups=scan_groups, omp_nthreads=omp_nthreads,
                                      b0_threshold=b0_threshold, raw_image_sdc=raw_image_sdc,
                                      sloppy=sloppy)
-        ds_report_drbuddi = pe.Node(
-            DerivativesDataSink(suffix='drbuddisummary', source_file=source_file),
-            name='ds_report_drbuddisummary',
-            run_without_submitting=True,
-            mem_gb=DEFAULT_MEMORY_MIN_GB)
+        # ds_report_drbuddi = pe.Node(
+        #     DerivativesDataSink(suffix='drbuddisummary', source_file=source_file),
+        #     name='ds_report_drbuddisummary',
+        #     run_without_submitting=True,
+        #     mem_gb=DEFAULT_MEMORY_MIN_GB)
 
 
         workflow.connect([
@@ -296,7 +296,8 @@ def init_fsl_hmc_wf(scan_groups,
             #(drbuddi_wf, ds_report_drbuddi, [
             #    ('outputnode.report', 'in_file')]),
             (drbuddi_wf, outputnode, [
-                ('outputnode.b0_ref', 'b0_template')]),
+                ('outputnode.b0_ref', 'b0_template'),
+                ('outputnode.sdc_warps', 'to_dwi_ref_warps')]),
 
             # Save reports
             #(gather_inputs, drbuddi_summary, [('topup_report', 'summary')]),
