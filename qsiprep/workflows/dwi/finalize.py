@@ -215,7 +215,8 @@ def init_dwi_finalize_wf(scan_groups,
             't1_aseg', 't1_aparc',
             't1_2_mni_reverse_transform', 't1_2_fsnative_forward_transform',
             't1_2_fsnative_reverse_transform', 'dwi_sampling_grid', 'raw_qc_file',
-            'coreg_score', 'raw_concatenated', 'confounds', 'carpetplot_data'
+            'coreg_score', 'raw_concatenated', 'confounds', 'carpetplot_data',
+            'sdc_scaling_images'
         ]),
         name='inputnode')
     outputnode = pe.Node(

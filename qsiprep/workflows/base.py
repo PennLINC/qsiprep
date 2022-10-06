@@ -838,7 +838,8 @@ to workflows in *QSIPrep*'s documentation]\
                     ('outputnode.coreg_score', 'inputnode.coreg_score'),
                     ('outputnode.raw_concatenated', 'inputnode.raw_concatenated'),
                     ('outputnode.confounds', 'inputnode.confounds'),
-                    ('outputnode.carpetplot_data', 'inputnode.carpetplot_data')
+                    ('outputnode.carpetplot_data', 'inputnode.carpetplot_data'),
+                    ('outputnode.sdc_scaling_images', 'inputnode.sdc_scaling_images')
                     ])
         ])
 

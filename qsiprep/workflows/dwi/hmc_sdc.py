@@ -84,7 +84,7 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
             fields=["b0_template", "b0_template_mask", "pre_sdc_template",
                     "hmc_optimization_data", "sdc_method", 'slice_quality', 'motion_params',
                     "cnr_map", "bvec_files_to_transform", "dwi_files_to_transform", "b0_indices",
-                    "bval_files", "to_dwi_ref_affines", "to_dwi_ref_warps"]),
+                    "bval_files", "to_dwi_ref_affines", "to_dwi_ref_warps", "sdc_scaling_images"]),
         name='outputnode')
 
     workflow = Workflow(name=name)

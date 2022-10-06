@@ -107,7 +107,8 @@ def init_fsl_hmc_wf(scan_groups,
             fields=["b0_template", "b0_template_mask", "pre_sdc_template", "bval_files",
                     "hmc_optimization_data", "sdc_method", 'slice_quality', 'motion_params',
                     "cnr_map", "bvec_files_to_transform", "dwi_files_to_transform", "b0_indices",
-                    "to_dwi_ref_affines", "to_dwi_ref_warps", "rpe_b0_info"]),
+                    "to_dwi_ref_affines", "to_dwi_ref_warps", "rpe_b0_info",
+                    "sdc_scaling_images"]),
         name='outputnode')
 
     workflow = Workflow(name=name)
@@ -297,7 +298,8 @@ def init_fsl_hmc_wf(scan_groups,
             #    ('outputnode.report', 'in_file')]),
             (drbuddi_wf, outputnode, [
                 ('outputnode.b0_ref', 'b0_template'),
-                ('outputnode.sdc_warps', 'to_dwi_ref_warps')]),
+                ('outputnode.sdc_warps', 'to_dwi_ref_warps')
+                ('outputnode.sdc_scaling_images', 'sdc_scaling_images')]),
 
             # Save reports
             #(gather_inputs, drbuddi_summary, [('topup_report', 'summary')]),

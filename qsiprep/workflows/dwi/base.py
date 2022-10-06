@@ -324,7 +324,7 @@ def init_dwi_preproc_wf(dwi_only,
             'dwi_files', 'cnr_map', 'bval_files', 'bvec_files', 'b0_ref_image', 'b0_indices',
             'dwi_mask', 'hmc_xforms', 'fieldwarps', 'sbref_file', 'original_files',
             'original_bvecs', 'raw_qc_file', 'coreg_score', 'raw_concatenated',
-            'carpetplot_data']),
+            'carpetplot_data', 'sdc_scaling_images']),
         name='outputnode')
     workflow.__desc__ = """
 
@@ -435,6 +435,8 @@ Diffusion data preprocessing
         workflow.connect([
             (inputnode, fmap_unwarp_report_wf, [
                 ('t1_seg', 'inputnode.in_seg')]),
+            (hmc_wf, outputnode, [
+                ('outputnode.sdc_scaling_images', 'sdc_scaling_images')]),
             (hmc_wf, fmap_unwarp_report_wf, [
                 ('outputnode.pre_sdc_template', 'inputnode.in_pre'),
                 ('outputnode.b0_template', 'inputnode.in_post')]),
