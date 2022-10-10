@@ -298,7 +298,7 @@ def init_fsl_hmc_wf(scan_groups,
             #    ('outputnode.report', 'in_file')]),
             (drbuddi_wf, outputnode, [
                 ('outputnode.b0_ref', 'b0_template'),
-                ('outputnode.sdc_warps', 'to_dwi_ref_warps')
+                ('outputnode.sdc_warps', 'to_dwi_ref_warps'),
                 ('outputnode.sdc_scaling_images', 'sdc_scaling_images')]),
 
             # Save reports

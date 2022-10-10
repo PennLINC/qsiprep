@@ -74,6 +74,7 @@ class GatherDRBUDDIInputs(SimpleInterface):
         self._results["blip_up_json"] = up_json
         return runtime
 
+
 class _DRBUDDIInputSpec(TORTOISEInputSpec):
     blip_up_image = File(
         exists=True,
@@ -222,6 +223,7 @@ class _DRBUDDIAggregateOutputsOutputSpec(TraitedSpec):
     # Aggregated outputs for convenience
     sdc_warps = OutputMultiObject(File(exists=True))
     sdc_scaling_images = OutputMultiObject(File(exists=True))
+    visual_report = File(exists=True)
 
 
 class DRBUDDIAggregateOutputs(SimpleInterface):
@@ -253,12 +255,12 @@ class DRBUDDIAggregateOutputs(SimpleInterface):
         # Calculate the scaling images
         scaling_blip_up_file = op.join(runtime.cwd, "blip_up_scale.nii.gz")
         scaling_blip_down_file = op.join(runtime.cwd, "blip_down_scale.nii.gz")
-        scaling_blip_up_img = nim.img_math(
+        scaling_blip_up_img = nim.math_img(
             "a/b",
             a=self.inputs.undistorted_reference,
             b=self.inputs.blip_up_b0_corrected)
         scaling_blip_up_img.to_filename(scaling_blip_up_file)
-        scaling_blip_down_img = nim.img_math(
+        scaling_blip_down_img = nim.math_img(
             "a/b",
             a=self.inputs.undistorted_reference,
             b=self.inputs.blip_down_b0_corrected)
@@ -268,12 +270,30 @@ class DRBUDDIAggregateOutputs(SimpleInterface):
             self.inputs.deformation_finv if blip_dir == "up" else
             down_warp for blip_dir in
             self.inputs.blip_assignments]
-        self.results["sdc_scaling_images"] = [
+        self._results["sdc_scaling_images"] = [
             scaling_blip_up_file if blip_dir == "up" else
             scaling_blip_down_file for blip_dir in
             self.inputs.blip_assignments]
 
+        report_file = op.join(runtime.cwd, "drbuddi_report.svg")
+        up_ref, down_ref = self.inputs.blip_up_FA, self.inputs.blip_down_FA if \
+            self.inputs.fieldmap_type == "rpe_series" else self.inputs.blip_up_b0_corrected, \
+                self.inputs.blip_down_corrected
+
         return runtime
+
+
+def plot_drbuddi(
+    blip_up_orig_file, blip_up_transforms, blip_up_scaling_file,
+    blip_down_orig_file, blip_down_transforms, blip_down_scaling_image,
+    b0_corrected_file, cwd):
+
+    def resample_to_reference(data_img, fname):
+        resample = ants.ApplyTransforms(
+            dimension=3,
+            reference=b0_corrected_file
+        )
+    pass
 
 
 def drbuddi_boilerplate(fieldmap_type):

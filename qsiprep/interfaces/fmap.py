@@ -24,9 +24,11 @@ from nipype.utils.filemanip import fname_presuffix, split_filename
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec, TraitedSpec, File, isdefined, traits,
     SimpleInterface, InputMultiObject, OutputMultiObject)
+from nipype.interfaces.ants.resampling import ApplyTransformsInputSpec
+from nipype.interfaces import ants
 from .images import to_lps
 from .reports import topup_selection_to_report
-from nilearn.image import load_img, index_img, concat_imgs, iter_img
+from nilearn.image import load_img, index_img, concat_imgs, iter_img, math_img
 
 LOGGER = logging.getLogger('nipype.interface')
 CRITICAL_KEYS = ["PhaseEncodingDirection", "TotalReadoutTime", "EffectiveEchoSpacing"]
@@ -1014,3 +1016,129 @@ def eddy_inputs_from_dwi_files(origin_file_list, eddy_prefix):
         f.write(" ".join(map(str, group_numbers)))
 
     return acqp_file, index_file
+
+
+class _ApplyScalingImagesInputSpec(ApplyTransformsInputSpec):
+    input_image = traits.File(mandatory=False)
+    scaling_image_files = InputMultiObject(
+        File(exists=True),
+        mandatory=True,
+        desc='list of sdc scaling image files in undistorted b0ref space')
+    dwi_files = InputMultiObject(
+        File(exists=True),
+        mandatory=True,
+        desc='list of dwi files, already resampled into their output space')
+    reference_image = File(exists=True, mandatory=True, desc='output grid')
+
+    # Transforms to apply
+    b0_to_intramodal_template_transforms = InputMultiObject(
+        File(exists=True),
+        mandtory=False,
+        desc='list of transforms to register the b=0 to the intramodal template.')
+    intramodal_template_to_t1_affine = File(
+        exists=True,
+        mandatory=False,
+        desc='affine from the intramodal template to t1')
+    intramodal_template_to_t1_warp = File(
+        exists=True,
+        desc='warp from the intramodal template to t1')
+    hmcsdc_dwi_ref_to_t1w_affine = File(
+        exists=True,
+        desc='affine from dwi ref to t1w')
+
+    save_cmd = traits.Bool(True, usedefault=True,
+                           desc='write a log of command lines that were applied')
+    copy_dtype = traits.Bool(False, usedefault=True,
+                             desc='copy dtype from inputs to outputs')
+    num_threads = traits.Int(1, usedefault=True, nohash=True,
+                             desc='number of parallel processes')
+    transforms = File(mandatory=False)
+
+
+class _ApplyScalingImagesOutputSpec(TraitedSpec):
+    scaled_images = OutputMultiObject(
+        File(exists=True),
+        desc="Scaled dwi files")
+
+
+class ApplyScalingImages(SimpleInterface):
+    input_spec = _ApplyScalingImagesInputSpec
+    output_spec = _ApplyScalingImagesOutputSpec
+
+    def _run_interface(self, runtime):
+
+        if not isdefined(self.inputs.scaling_image_files):
+            LOGGER.info("Not applying scaling to resampled DWIs")
+            self._results["scaled_images"] = self.inputs.dwi_files
+            return runtime
+        LOGGER.info("Applying scaling to resampled dwis")
+
+        if not len(self.inputs.scaling_image_files) == len(self.inputs.dwi_files):
+            raise Exception("Mismatch between scaling images and dwis")
+
+        # The affine transform to the t1 can come from hmcsdc or the intramodal template
+        coreg_to_t1 = traits.Undefined
+        if isdefined(self.inputs.intramodal_template_to_t1_affine):
+            if isdefined(self.inputs.hmcsdc_dwi_ref_to_t1w_affine):
+                LOGGER.warning('Two b0 to t1 transforms are provided: using intramodal')
+            coreg_to_t1 = self.inputs.intramodal_template_to_t1_affine
+        else:
+            coreg_to_t1 = self.inputs.hmcsdc_dwi_ref_to_t1w_affine
+
+        # Handle transforms to intramodal transforms
+        intramodal_transforms = self.inputs.b0_to_intramodal_template_transforms
+        intramodal_affine = traits.Undefined
+        intramodal_warp = traits.Undefined
+        if isdefined(intramodal_transforms):
+            intramodal_affine = intramodal_transforms[0]
+            if len(intramodal_transforms) == 2:
+                intramodal_warp = intramodal_transforms[1]
+            elif len(intramodal_transforms) > 2:
+                raise Exception("Unsupported intramodal template transform")
+
+        # Find the chain of transforms from undistorted b=0 reference to the output space
+        transform_stack = [
+            transform for transform in [
+                intramodal_affine,
+                intramodal_warp,
+                coreg_to_t1] if isdefined(transform)][::-1]
+
+        # There are a few unique scaling images. Find them
+        scaling_images_to_dwis = defaultdict(list)
+        for dwi_image, scaling_image in zip(self.inputs.dwi_files,
+                                            self.inputs.scaling_image_files):
+            scaling_images_to_dwis[scaling_image].append(dwi_image)
+
+        # Apply the transform, link the resampled scaling image to resampled dwis
+        dwi_files_to_scalings = {}
+        for scaling_image in scaling_images_to_dwis:
+            resampled_scaling_image = fname_presuffix(
+                scaling_image, suffix="_resampled", newpath=runtime.cwd)
+            xfm = ants.ApplyTransforms(
+                input_image=scaling_image,
+                transforms=transform_stack,
+                reference_image=self.inputs.reference_image,
+                output_image=resampled_scaling_image,
+                interpolation='LanczosWindowedSinc',
+                dimension=3)
+            xfm.terminal_output = 'allatonce'
+            xfm.resource_monitor = False
+            runtime = xfm.run().runtime
+            LOGGER.info(runtime.cmdline)
+            for dwi_file in scaling_images_to_dwis[scaling_image]:
+                dwi_files_to_scalings[dwi_file] = resampled_scaling_image
+
+        # Do the math
+        scaled_dwi_images = []
+        for dwi_file in self.inputs.dwi_files:
+            scaled_dwi_file = fname_presuffix(
+                dwi_file, newpath=runtime.cwd, suffix="_scaled")
+            math_img(
+                "a*b",
+                a=dwi_file,
+                b=dwi_files_to_scalings[dwi_file]).to_filename(scaled_dwi_file)
+
+            scaled_dwi_images.append(scaled_dwi_file)
+        self._results["scaled_images"] = scaled_dwi_images
+
+        return runtime
