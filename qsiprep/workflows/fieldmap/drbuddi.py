@@ -101,7 +101,7 @@ def init_drbuddi_wf(scan_groups, b0_threshold, raw_image_sdc, omp_nthreads=1,
     workflow = Workflow(name=name)
     inputnode = pe.Node(niu.IdentityInterface(
         fields=['dwi_files', 'bval_files', 'bvec_files', 'original_files',
-                't1_brain', 't2_brain']),
+                't1_brain', 't2_brain', 'topup_imain']),
         name='inputnode')
 
     outputnode = pe.Node(
@@ -120,9 +120,6 @@ co-registration with the anatomical reference.
 
     outputnode.inputs.method = \
         'PEB/PEPOLAR (phase-encoding based / PE-POLARity): %s' % fieldmap_info['suffix']
-
-    if raw_image_sdc and fieldmap_info['suffix'] == 'epi':
-        raise NotImplementedError()
 
     gather_drbuddi_inputs = pe.Node(
         GatherDRBUDDIInputs(
@@ -143,8 +140,7 @@ co-registration with the anatomical reference.
     aggregate_drbuddi = pe.Node(
         DRBUDDIAggregateOutputs(
             fieldmap_type=fieldmap_info['suffix']),
-        name="aggregate_drbuddi"
-    )
+        name="aggregate_drbuddi")
 
     drbuddi_summary = pe.Node(TopupSummary(), name='drbuddi_summary')
 
@@ -190,38 +186,5 @@ co-registration with the anatomical reference.
             ("sdc_warps", "sdc_warps"),
             ("sdc_scaling_images", "sdc_scaling_images")])
     ])
-
-    # # We have already sorted by compatible
-    # sdc_unwarp_wf = init_pepolar_unwarp_wf(
-    #     dwi_meta=dwi_meta,
-    #     epi_fmaps=epi_fmaps,
-    #     omp_nthreads=omp_nthreads,
-    #     name='pepolar_unwarp_wf')
-
-    # workflow.connect([
-    #     (inputnode, sdc_unwarp_wf, [
-    #         ('b0_ref', 'inputnode.in_reference'),
-    #         ('b0_mask', 'inputnode.in_mask'),
-    #         ('b0_ref_brain', 'inputnode.in_reference_brain')]),
-    # ])
-
-    # workflow.connect([
-    #     (inputnode, sdc_unwarp_wf, [
-    #         ('b0_ref', 'inputnode.in_reference'),
-    #         ('b0_ref_brain', 'inputnode.in_reference_brain'),
-    #         ('b0_mask', 'inputnode.in_mask')]),
-    #     (fmap_estimator_wf, sdc_unwarp_wf, [
-    #         ('outputnode.fmap', 'inputnode.fmap'),
-    #         ('outputnode.fmap_ref', 'inputnode.fmap_ref'),
-    #         ('outputnode.fmap_mask', 'inputnode.fmap_mask')]),
-    #     (sdc_unwarp_wf, outputnode, [
-    #         ('outputnode.out_hz', 'fieldmap_hz')])
-    # ])
-
-    # workflow.connect([
-    #     (sdc_unwarp_wf, outputnode, [
-    #         ('outputnode.out_warp', 'out_warp'),
-    #         ('outputnode.out_reference', 'b0_ref')])
-    # ])
 
     return workflow

@@ -16,6 +16,7 @@ from nipype.interfaces import ants
 from nipype.utils.filemanip import split_filename
 import nibabel as nb
 from .fmap import get_distortion_grouping
+from .epi_fmap import get_best_b0_topup_inputs_from
 from .gradients import write_concatenated_fsl_gradients
 import nilearn.image as nim
 
@@ -28,6 +29,7 @@ class TORTOISEInputSpec(BaseInterfaceInputSpec):
 
 class _GatherDRBUDDIInputsInputSpec(TORTOISEInputSpec):
     dwi_files = InputMultiObject(File(exists=True))
+    original_files = InputMultiObject(File(exists=True))
     bval_files = InputMultiObject(File(exists=True))
     bvec_files = InputMultiObject(File(exists=True))
     original_files = InputMultiObject(File(exists=True))
@@ -56,6 +58,7 @@ class GatherDRBUDDIInputs(SimpleInterface):
     output_spec = _GatherDRBUDDIInputsOutputSpec
 
     def _run_interface(self, runtime):
+        up_json = op.join(runtime.cwd, "blip_up.json")
         if self.inputs.fieldmap_type == "rpe_series":
             self._results["blip_assignments"], self._results["blip_up_image"], \
                 self._results["blip_up_bmat"], self._results["blip_down_image"], \
@@ -66,11 +69,22 @@ class GatherDRBUDDIInputs(SimpleInterface):
                             bvec_files=self.inputs.bvec_files,
                             original_images=self.inputs.original_files,
                             prefix=op.join(runtime.cwd, "drbuddi"),
-                            make_bmat=True
-                        )
-        up_json = op.join(runtime.cwd, "blip_up.json")
-        with open(up_json, "w") as up_jsonf:
-            up_jsonf.write('{"PhaseEncodingDirection": "%s"}\n' % self.inputs.dwi_series_pedir)
+                            make_bmat=True)
+            with open(up_json, "w") as up_jsonf:
+                up_jsonf.write('{"PhaseEncodingDirection": "%s"}\n' % self.inputs.dwi_series_pedir)
+
+        elif self.inputs.fieldmap_type == 'epi':
+            topup_datain_file, topup_imain_file, topup_text, b0_csv, topup0, eddy0 = \
+                get_best_b0_topup_inputs_from(
+                    dwi_file=self.inputs.dwi_files,
+                    bval_file=self.inputs.bval_files,
+                    b0_threshold=self.inputs.b0_threshold,
+                    cwd=runtime.cwd,
+                    bids_origin_files=self.inputs.original_files,
+                    epi_fmaps=self.inputs.epi_fmaps,
+                    max_per_spec=self.inputs.topup_max_b0s_per_spec,
+                    topup_requested=self.inputs.topup_requested)
+
         self._results["blip_up_json"] = up_json
         return runtime
 
