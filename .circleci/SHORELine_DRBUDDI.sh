@@ -40,7 +40,7 @@ ${QSIPREP_CMD} \
 	--dwi-only \
 	--output-space T1w \
 	--pepolar-method DRBUDDI \
-	--eddy_config ${EDDY_CFG} \
+	--hmc-model none \
 	--output-resolution 2 \
     -vv --stop-on-first-crash
 

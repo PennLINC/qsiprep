@@ -82,7 +82,8 @@ class GatherEddyInputs(SimpleInterface):
                 bids_origin_files=self.inputs.original_files,
                 epi_fmaps=self.inputs.epi_fmaps,
                 max_per_spec=self.inputs.topup_max_b0s_per_spec,
-                topup_requested=self.inputs.topup_requested)
+                topup_requested=self.inputs.topup_requested,
+                raw_image_sdc=self.inputs.raw_image_sdc)
         self._results['topup_datain'] = topup_datain_file
         self._results['topup_imain'] = topup_imain_file
         self._results['topup_report'] = topup_text

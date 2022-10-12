@@ -13,12 +13,15 @@ from nipype.interfaces.base import (TraitedSpec, CommandLineInputSpec, BaseInter
                                     CommandLine, File, traits, isdefined, InputMultiObject,
                                     OutputMultiObject, SimpleInterface)
 from nipype.interfaces import ants
-from nipype.utils.filemanip import split_filename
+from nipype.utils.filemanip import split_filename, fname_presuffix
+import nilearn.image as nim
 import nibabel as nb
 from .fmap import get_distortion_grouping
-from .epi_fmap import get_best_b0_topup_inputs_from
+from .images import to_lps
+from .epi_fmap import get_best_b0_topup_inputs_from, safe_get_3d_image
 from .gradients import write_concatenated_fsl_gradients
 import nilearn.image as nim
+import pandas as pd
 
 LOGGER = logging.getLogger('nipype.interface')
 
@@ -58,7 +61,13 @@ class GatherDRBUDDIInputs(SimpleInterface):
     output_spec = _GatherDRBUDDIInputsOutputSpec
 
     def _run_interface(self, runtime):
+
+        # Write the metadata
         up_json = op.join(runtime.cwd, "blip_up.json")
+        with open(up_json, "w") as up_jsonf:
+            up_jsonf.write('{"PhaseEncodingDirection": "%s"}\n' % self.inputs.dwi_series_pedir)
+        self._results["blip_up_json"] = up_json
+
         if self.inputs.fieldmap_type == "rpe_series":
             self._results["blip_assignments"], self._results["blip_up_image"], \
                 self._results["blip_up_bmat"], self._results["blip_down_image"], \
@@ -70,11 +79,10 @@ class GatherDRBUDDIInputs(SimpleInterface):
                             original_images=self.inputs.original_files,
                             prefix=op.join(runtime.cwd, "drbuddi"),
                             make_bmat=True)
-            with open(up_json, "w") as up_jsonf:
-                up_jsonf.write('{"PhaseEncodingDirection": "%s"}\n' % self.inputs.dwi_series_pedir)
-
         elif self.inputs.fieldmap_type == 'epi':
-            topup_datain_file, topup_imain_file, topup_text, b0_csv, topup0, eddy0 = \
+            # Use the same function that was used to get images for TOPUP, but get the images
+            # directly from the CSV
+            _, _, _, b0_csv, _, _ = \
                 get_best_b0_topup_inputs_from(
                     dwi_file=self.inputs.dwi_files,
                     bval_file=self.inputs.bval_files,
@@ -82,11 +90,41 @@ class GatherDRBUDDIInputs(SimpleInterface):
                     cwd=runtime.cwd,
                     bids_origin_files=self.inputs.original_files,
                     epi_fmaps=self.inputs.epi_fmaps,
-                    max_per_spec=self.inputs.topup_max_b0s_per_spec,
-                    topup_requested=self.inputs.topup_requested)
+                    max_per_spec=True,
+                    raw_image_sdc=self.inputs.raw_image_sdc)
 
-        self._results["blip_up_json"] = up_json
+            b0s_df = pd.read_csv(b0_csv)
+            selected_images = b0s_df[b0s_df.selected_for_sdc].reset_index(drop=True)
+            up_row = selected_images.loc[0]
+            down_row = selected_images.loc[1]
+            up_img = to_lps(
+                safe_get_3d_image(up_row.bids_origin_file, up_row.original_volume))
+            up_img.set_data_dtype(np.float32)
+            down_img = to_lps(
+                safe_get_3d_image(down_row.bids_origin_file, down_row.original_volume))
+            down_img.set_data_dtype(np.float32)
+
+            # Save the images
+            blip_up_nii = op.join(runtime.cwd, "blip_up_b0.nii")
+            blip_down_nii = op.join(runtime.cwd, "blip_down_b0.nii")
+            up_img.to_filename(blip_up_nii)
+            down_img.to_filename(blip_down_nii)
+            self._results["blip_up_image"] = blip_up_nii
+            self._results["blip_down_image"] = blip_down_nii
+            self._results["blip_assignments"] = ["up"] * len(self.inputs.dwi_files)
+            self._results["blip_up_bmat"] = write_dummy_bmtxt(blip_up_nii)
+            self._results["blip_down_bmat"] = write_dummy_bmtxt(blip_down_nii)
+
         return runtime
+
+
+def write_dummy_bmtxt(nii_file):
+    new_fname = fname_presuffix(nii_file, suffix=".bmtxt", use_ext=False)
+    img = nim.load_img(nii_file)
+    nvols = 1 if img.ndim < 4 else img.ndim.shape[3]
+    with open(new_fname, "w") as bmtxt_f:
+        bmtxt_f.write("\n".join(["0 0 0 0 0 0"] * nvols) + "\n")
+    return new_fname
 
 
 class _DRBUDDIInputSpec(TORTOISEInputSpec):

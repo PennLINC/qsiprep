@@ -399,8 +399,6 @@ def plot_registration(anat_nii, div_id, plot_params=None,
     return out_files
 
 
-def get_canvas()
-
 def plot_rpe_sdc(blip_up_nii, blip_down_nii, blip_up_nii_corrected, blip_down_nii_corrected,
                  div_id,
                  order=('z', 'x', 'y'), cuts=None,
