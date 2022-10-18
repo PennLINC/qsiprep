@@ -20,6 +20,7 @@ from .fmap import get_distortion_grouping
 from .images import to_lps
 from .epi_fmap import get_best_b0_topup_inputs_from, safe_get_3d_image
 from .gradients import write_concatenated_fsl_gradients
+from .images import split_bvals_bvecs
 import nilearn.image as nim
 import pandas as pd
 
@@ -33,8 +34,12 @@ class TORTOISEInputSpec(BaseInterfaceInputSpec):
 class _GatherDRBUDDIInputsInputSpec(TORTOISEInputSpec):
     dwi_files = InputMultiObject(File(exists=True))
     original_files = InputMultiObject(File(exists=True))
-    bval_files = InputMultiObject(File(exists=True))
-    bvec_files = InputMultiObject(File(exists=True))
+    bval_files = traits.Either(
+        InputMultiObject(File(exists=True)),
+        File(exists=True))
+    bvec_files = traits.Either(
+        InputMultiObject(File(exists=True)),
+        File(exists=True))
     original_files = InputMultiObject(File(exists=True))
     b0_threshold = traits.CInt(100, usedefault=True)
     epi_fmaps = InputMultiObject(File(exists=True),
@@ -68,24 +73,36 @@ class GatherDRBUDDIInputs(SimpleInterface):
             up_jsonf.write('{"PhaseEncodingDirection": "%s"}\n' % self.inputs.dwi_series_pedir)
         self._results["blip_up_json"] = up_json
 
+        # Coerce the bvals and bvecs into lists of files
+        if isinstance(self.inputs.bval_files, list) and len(self.inputs.bval_files) == 1:
+            bval_files, bvec_files = split_bvals_bvecs(
+                self.inputs.bval_files[0],
+                self.inputs.bvec_files[0],
+                deoblique=False,
+                img_files=self.inputs.dwi_files,
+                working_dir=runtime.cwd)
+        else:
+            bval_files, bvec_files = self.inputs.bval_files, self.inputs.bvec_files
+
         if self.inputs.fieldmap_type == "rpe_series":
             self._results["blip_assignments"], self._results["blip_up_image"], \
                 self._results["blip_up_bmat"], self._results["blip_down_image"], \
                     self._results["blip_down_bmat"] = \
                         split_into_up_and_down_niis(
                             dwi_files=self.inputs.dwi_files,
-                            bval_files=self.inputs.bval_files,
-                            bvec_files=self.inputs.bvec_files,
+                            bval_files=bval_files,
+                            bvec_files=bvec_files,
                             original_images=self.inputs.original_files,
                             prefix=op.join(runtime.cwd, "drbuddi"),
                             make_bmat=True)
+
         elif self.inputs.fieldmap_type == 'epi':
             # Use the same function that was used to get images for TOPUP, but get the images
             # directly from the CSV
             _, _, _, b0_csv, _, _ = \
                 get_best_b0_topup_inputs_from(
                     dwi_file=self.inputs.dwi_files,
-                    bval_file=self.inputs.bval_files,
+                    bval_file=bval_files,
                     b0_threshold=self.inputs.b0_threshold,
                     cwd=runtime.cwd,
                     bids_origin_files=self.inputs.original_files,
@@ -327,10 +344,10 @@ class DRBUDDIAggregateOutputs(SimpleInterface):
             scaling_blip_down_file for blip_dir in
             self.inputs.blip_assignments]
 
-        report_file = op.join(runtime.cwd, "drbuddi_report.svg")
-        up_ref, down_ref = self.inputs.blip_up_FA, self.inputs.blip_down_FA if \
-            self.inputs.fieldmap_type == "rpe_series" else self.inputs.blip_up_b0_corrected, \
-                self.inputs.blip_down_corrected
+        # report_file = op.join(runtime.cwd, "drbuddi_report.svg")
+        # up_ref, down_ref = self.inputs.blip_up_FA, self.inputs.blip_down_FA if \
+        #     self.inputs.fieldmap_type == "rpe_series" else self.inputs.blip_up_b0_corrected, \
+        #         self.inputs.blip_down_corrected
 
         return runtime
 
@@ -407,12 +424,14 @@ def split_into_up_and_down_niis(dwi_files, bval_files, bvec_files, original_imag
 
     # Write the 4d up image
     up_4d = nim.concat_imgs(up_images, dtype=np.float32, auto_resample=False)
+    up_4d.set_data_dtype(np.float32)
     up_4d.to_filename(up_dwi_file)
     up_bval_file, up_bvec_file = write_concatenated_fsl_gradients(
         up_bvals, up_bvecs, up_prefix)
 
     # Write the 4d down image
     down_4d = nim.concat_imgs(down_images, dtype=np.float32, auto_resample=False)
+    down_4d.set_data_dtype(np.float32)
     down_4d.to_filename(down_dwi_file)
     down_bval_file, down_bvec_file = write_concatenated_fsl_gradients(
         down_bvals, down_bvecs, down_prefix)

@@ -79,7 +79,7 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file,
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=['dwi_files', 'b0_indices', 'bvecs', 'bvals', 'b0_images', 'original_files',
-                    't1_brain', 't1_mask', 't1_seg']),
+                    't1_brain', 't1_mask', 't1_seg', 'original_files']),
         name='inputnode')
 
     outputnode = pe.Node(

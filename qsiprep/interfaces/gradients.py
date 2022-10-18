@@ -540,8 +540,11 @@ class GradientRotationInputSpec(BaseInterfaceInputSpec):
         File(exists=True), desc='NIfTI images corresponding to bvals, bvecs')
     bvec_files = InputMultiObject(File(exists=True),
                                   desc='list of split bvec files, must correspond to a '
-                                       'non-oblique image/reference frame.')
-    bval_files = InputMultiObject(File(exists=True), desc='list of split bval files')
+                                       'non-oblique image/reference frame.',
+                                  mandatory=True)
+    bval_files = InputMultiObject(File(exists=True),
+                                  desc='list of split bval files',
+                                  mandatory=True)
 
 
 class GradientRotationOutputSpec(TraitedSpec):

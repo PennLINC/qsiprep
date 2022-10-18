@@ -625,7 +625,7 @@ to workflows in *QSIPrep*'s documentation]\
     # concatenation_scheme maps the outputs to their final concatenation group
     dwi_fmap_groups, concatenation_scheme = group_dwi_scans(
         layout, subject_data,
-        using_fsl=hmc_model == 'eddy',
+        using_fsl=True,
         combine_scans=combine_all_dwis,
         ignore_fieldmaps="fieldmaps" in ignore,
         concatenate_distortion_groups=merging_distortion_groups)

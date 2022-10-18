@@ -106,7 +106,7 @@ def init_drbuddi_wf(scan_groups, b0_threshold, raw_image_sdc, omp_nthreads=1,
 
     outputnode = pe.Node(
         niu.IdentityInterface(
-            fields=['b0_ref', 'b0_mask', 'sdc_warps', 'sdc_scaling_images', 'report']),
+            fields=['b0_ref', 'b0_mask', 'sdc_warps', 'sdc_scaling_images', 'report', 'method']),
         name='outputnode')
 
     workflow.__postdesc__ = """\

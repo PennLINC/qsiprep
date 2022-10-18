@@ -279,7 +279,6 @@ def init_dwi_preproc_wf(dwi_only,
 
     fieldmap_type = fieldmap_info['suffix']
     doing_bidirectional_pepolar = fieldmap_type == 'rpe_series'
-    preprocess_rpe_series = doing_bidirectional_pepolar and hmc_model == 'eddy'
     if fieldmap_type is not None:
         fmap_key = "phase1" if fieldmap_type == "phase" else fieldmap_type
 
@@ -334,7 +333,7 @@ Diffusion data preprocessing
 
     pre_hmc_wf = init_dwi_pre_hmc_wf(scan_groups=scan_groups,
                                      b0_threshold=b0_threshold,
-                                     preprocess_rpe_series=preprocess_rpe_series,
+                                     preprocess_rpe_series=doing_bidirectional_pepolar,
                                      dwi_denoise_window=dwi_denoise_window,
                                      denoise_method=denoise_method,
                                      unringing_method=unringing_method,
@@ -357,6 +356,7 @@ Diffusion data preprocessing
             hmc_transform=hmc_transform,
             hmc_model=hmc_model,
             hmc_align_to=motion_corr_to,
+            raw_image_sdc=raw_image_sdc,
             template=template,
             shoreline_iters=shoreline_iters,
             impute_slice_threshold=impute_slice_threshold,
