@@ -1022,7 +1022,7 @@ class _ApplyScalingImagesInputSpec(ApplyTransformsInputSpec):
     input_image = traits.File(mandatory=False)
     scaling_image_files = InputMultiObject(
         File(exists=True),
-        mandatory=True,
+        mandatory=False,
         desc='list of sdc scaling image files in undistorted b0ref space')
     dwi_files = InputMultiObject(
         File(exists=True),
