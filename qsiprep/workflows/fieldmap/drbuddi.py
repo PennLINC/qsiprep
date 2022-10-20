@@ -135,7 +135,8 @@ co-registration with the anatomical reference.
             fieldmap_type=fieldmap_info['suffix'],
             nthreads=omp_nthreads,
             sloppy=sloppy),
-        name='drbuddi')
+        name='drbuddi',
+        n_procs=omp_nthreads)
 
     aggregate_drbuddi = pe.Node(
         DRBUDDIAggregateOutputs(
