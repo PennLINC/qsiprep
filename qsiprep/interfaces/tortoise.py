@@ -26,6 +26,25 @@ import pandas as pd
 
 LOGGER = logging.getLogger('nipype.interface')
 
+SLOPPY_DRBUDDI = \
+"--DRBUDDI_stage " \
+    "\[learning_rate=\{0.1\},cfs=\{100:8:4\},field_smoothing=\{9:0\}," \
+    "metrics=\{MSJac,CC\},restrict_constrain=\{1:1\}\] " \
+"--DRBUDDI_stage " \
+    "\[learning_rate=\{0.25\},cfs=\{100:6:3\},field_smoothing=\{8:0\}," \
+    "metrics=\{MSJac,CC\},restrict_constrain=\{1:1\}\] " \
+"--DRBUDDI_stage " \
+    "\[learning_rate=\{0.5\},cfs=\{100:4:2\},field_smoothing=\{7:0\}," \
+    "metrics=\{MSJac,CC\},restrict_constrain=\{1:1\}\] " \
+"--DRBUDDI_stage " \
+    "\[learning_rate=\{1.25\},cfs=\{100:2:1\},field_smoothing=\{6:0\}," \
+    "metrics=\{MSJac,CC\},restrict_constrain=\{1:1\}\] " \
+"--DRBUDDI_stage " \
+    "\[learning_rate=\{1.\},cfs=\{100:1:0\},field_smoothing=\{5:0\}," \
+    "metrics=\{MSJac,CC\},restrict_constrain=\{1:1\}\] " \
+"--DRBUDDI_stage " \
+    "\[learning_rate=\{1.\},cfs=\{20:1:0\},field_smoothing=\{4:0\}," \
+    "metrics=\{MSJac,CC\},restrict_constrain=\{0:0\}\]"
 
 class TORTOISEInputSpec(BaseInterfaceInputSpec):
     pass
@@ -179,10 +198,6 @@ class _DRBUDDIInputSpec(TORTOISEInputSpec):
     )
     nthreads=traits.Int(1, usedefault=True, hash_files=False)
     fieldmap_type = traits.Enum("epi", "rpe_series", mandatory=True)
-    sloppy = traits.Bool(
-        False,
-        usedefault=True,
-        desc="use underpowered (sloppy) registration for speed")
     blip_assignments = traits.List()
     tensor_fit_bval_max = traits.Int(
         0,
@@ -210,6 +225,10 @@ class _DRBUDDIInputSpec(TORTOISEInputSpec):
         argstr="--DRBUDDI_estimate_LR_per_iteration %d",
         desc="Flat to estimate learning rate at every iteration. "
              "Makes DRBUDDI slower but better results. Default: False")
+    sloppy = traits.Bool(
+        False,
+        argstr=SLOPPY_DRBUDDI,
+        desc="use underpowered (sloppy) registration for speed")
 
 
 class _DRBUDDIOutputSpec(TraitedSpec):
