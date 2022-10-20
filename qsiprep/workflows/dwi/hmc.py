@@ -279,7 +279,7 @@ def init_b0_hmc_wf(align_to="iterative", transform="Rigid", spatial_bias_correct
         initial_reg = linear_alignment_workflow(
             transform=transform,
             metric=metric,
-            precision="coarse",
+            precision="coarse" if not sloppy else "sloppy",
             iternum=0)
         alignment_wf.connect(initial_template, "output_average_image",
                              initial_reg, "inputnode.template_image")
@@ -291,7 +291,7 @@ def init_b0_hmc_wf(align_to="iterative", transform="Rigid", spatial_bias_correct
                 linear_alignment_workflow(
                     transform=transform,
                     metric=metric,
-                    precision="precise",
+                    precision="precise" if not sloppy else "sloppy",
                     iternum=iternum))
             alignment_wf.connect(reg_iters[-2], "outputnode.updated_template",
                                  reg_iters[-1], "inputnode.template_image")
@@ -316,7 +316,7 @@ def init_b0_hmc_wf(align_to="iterative", transform="Rigid", spatial_bias_correct
         reg_to_first = linear_alignment_workflow(
             transform=transform,
             metric=metric,
-            precision="coarse",
+            precision="coarse" if not sloppy else 'sloppy',
             iternum=0)
 
         alignment_wf.connect([

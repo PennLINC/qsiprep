@@ -2,33 +2,28 @@
 
 cat << DOC
 
-Test paired DWI series
-======================
+Test EPI fieldmap correction with SHORELine + DRBUDDI
+=====================================================
 
 This tests the following features:
- - Eddy is run on a CPU
- - A follow-up reconstruction using the dsi_studio_gqi workflow
-
-Inputs:
--------
-
- - DSDTI BIDS data (data/DSDTI)
+ - SHORELine (here, just b=0 registration) motion correction
+ -
 
 DOC
 
 set +e
 source ./get_data.sh
 TESTDIR=${PWD}
-TESTNAME=HBCD_DRBUDDI_BUDS_SHORELINE
+TESTNAME=DRBUDDI_SHORELINE_EPI
 get_config_data ${TESTDIR}
-get_bids_data ${TESTDIR} tinytensors
+get_bids_data ${TESTDIR} drbuddi_epi
 CFG=${TESTDIR}/data/nipype.cfg
 
 # For the run
 setup_dir ${TESTDIR}/${TESTNAME}
 TEMPDIR=${TESTDIR}/${TESTNAME}/work
 OUTPUT_DIR=${TESTDIR}/${TESTNAME}/derivatives
-BIDS_INPUT_DIR=${TESTDIR}/data/tinytensor_buds
+BIDS_INPUT_DIR=${TESTDIR}/data/tinytensor_epi
 export FS_LICENSE=${TESTDIR}/data/license.txt
 QSIPREP_CMD=$(run_qsiprep_cmd ${BIDS_INPUT_DIR} ${OUTPUT_DIR})
 
@@ -37,10 +32,13 @@ ${QSIPREP_CMD} \
 	-w ${TEMPDIR} \
 	--sloppy \
 	--dwi-only \
+	--denoise-method none \
+	--dwi-no-biascorr \
 	--output-space T1w \
 	--pepolar-method DRBUDDI \
 	--hmc-model none \
 	--output-resolution 2 \
+	--shoreline-iters 1 \
     -vv --stop-on-first-crash
 
 

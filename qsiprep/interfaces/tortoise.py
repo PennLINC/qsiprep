@@ -307,7 +307,7 @@ class DRBUDDIAggregateOutputs(SimpleInterface):
             down_warp = op.join(runtime.cwd, "blip_down_composite.nii.gz")
             xfm = ants.ApplyTransforms(
                 # input_image is ignored because print_out_composite_warp_file is True
-                input_image=self.inputs.blip_down_FA,
+                input_image=self.inputs.blip_down_b0,
                 transforms=[self.inputs.deformation_minv,
                             self.inputs.bdown_to_bup_rigid_trans_h5],
                 reference_image=self.inputs.undistorted_reference,

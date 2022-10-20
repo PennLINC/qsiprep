@@ -2,26 +2,21 @@
 
 cat << DOC
 
-Test paired DWI series
-======================
+Test paired DWI series with DRBUDDI
+===================================
 
 This tests the following features:
  - Eddy is run on a CPU
- - A follow-up reconstruction using the dsi_studio_gqi workflow
-
-Inputs:
--------
-
- - DSDTI BIDS data (data/DSDTI)
+ - DRBUDDI is run with two DWI series
 
 DOC
 
 set +e
 source ./get_data.sh
 TESTDIR=${PWD}
-TESTNAME=HBCD_DRBUDDI_EPI
+TESTNAME=DRBUDDI_RPE
 get_config_data ${TESTDIR}
-get_bids_data ${TESTDIR} tinytensors
+get_bids_data ${TESTDIR} drbuddi_rpe_series
 CFG=${TESTDIR}/data/nipype.cfg
 EDDY_CFG=${TESTDIR}/data/eddy_config.json
 
@@ -29,7 +24,7 @@ EDDY_CFG=${TESTDIR}/data/eddy_config.json
 setup_dir ${TESTDIR}/${TESTNAME}
 TEMPDIR=${TESTDIR}/${TESTNAME}/work
 OUTPUT_DIR=${TESTDIR}/${TESTNAME}/derivatives
-BIDS_INPUT_DIR=${TESTDIR}/data/tinytensor
+BIDS_INPUT_DIR=${TESTDIR}/data/tinytensor_rpe_series
 export FS_LICENSE=${TESTDIR}/data/license.txt
 QSIPREP_CMD=$(run_qsiprep_cmd ${BIDS_INPUT_DIR} ${OUTPUT_DIR})
 
@@ -38,6 +33,8 @@ ${QSIPREP_CMD} \
 	-w ${TEMPDIR} \
 	--sloppy \
 	--dwi-only \
+	--denoise-method none \
+	--dwi-no-biascorr \
 	--output-space T1w \
 	--pepolar-method DRBUDDI \
 	--eddy_config ${EDDY_CFG} \

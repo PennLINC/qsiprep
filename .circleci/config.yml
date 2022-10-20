@@ -101,6 +101,30 @@ jobs:
             cd .circleci
             bash DSDTI_TOPUP.sh
 
+  DRBUDDI_SHORELine_EPI:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run: *runinstall
+      - run:
+          name: Run SHORELine with epi fmaps and DRBUDDI
+          no_output_timeout: 1h
+          command: |
+            cd .circleci
+            bash DRBUDDI_SHORELine_epi.sh
+
+  DRBUDDI_eddy_rpe_series:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run: *runinstall
+      - run:
+          name: Run Eddy with rpe series fmaps and DRBUDDI
+          no_output_timeout: 1h
+          command: |
+            cd .circleci
+            bash DRBUDDI_eddy_rpe_series.sh
+
   IntramodalTemplate:
     <<: *dockersetup
     resource_class: large
@@ -205,7 +229,7 @@ jobs:
     steps:
       - checkout
       - setup_remote_docker:
-         version: 19.03.12
+         version: 19.03.13
          docker_layer_caching: true
       - run:
           name: Build Docker image
@@ -393,6 +417,26 @@ workflows:
             tags:
               only: /.*/
 
+      - DRBUDDI_SHORELine_EPI:
+          requires:
+            - build
+          filters:
+            branches:
+              ignore:
+                - /recon\/.*/
+            tags:
+              only: /.*/
+
+      - DRBUDDI_eddy_rpe_series:
+          requires:
+            - build
+          filters:
+            branches:
+              ignore:
+                - /recon\/.*/
+            tags:
+              only: /.*/
+
       - DSDTI_nofmap:
           requires:
             - build
@@ -486,6 +530,8 @@ workflows:
             - DSDTI_nofmap
             - DSDTI_synfmap
             - DSDTI_TOPUP
+            - DRBUDDI_SHORELine_EPI
+            - DRBUDDI_eddy_rpe_series
             - IntramodalTemplate
             - MultiT1w
             - Recon_3Tissue

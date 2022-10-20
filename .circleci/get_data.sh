@@ -19,7 +19,7 @@ if [[ "${CIRCLECI}" = "true" ]]; then
   fi
 else
   IN_CI="false"
-  NTHREADS=1
+  NTHREADS=2
   OMP_NTHREADS=2
 fi
 export IN_CI NTHREADS OMP_NTHREADS
@@ -351,7 +351,7 @@ get_bids_data() {
       rm multishell_output.tar.gz
     fi
 
-    #  name: Get Single Shell outputs
+    # Get Single Shell outputs
     if [[ ${DS} = singleshell_output ]]; then
       mkdir -p ${WORKDIR}/data/singleshell_output
       ${WGET} \
@@ -361,14 +361,24 @@ get_bids_data() {
       rm singleshell_output.tar.gz
     fi
 
-    #  name: Get tinytensors data
-    if [[ ${DS} = tinytensors ]]; then
+    # Get drbuddi testing data: up/down dwi series
+    if [[ ${DS} = drbuddi_rpe_series ]]; then
       mkdir -p ${WORKDIR}/data
       ${WGET} \
-        -O tinytensors.tar.xz \
-        "https://upenn.box.com/shared/static/lpt8m25dsgtdae70o3to4tuosh05k6zo.xz"
-      tar xvfJ tinytensors.tar.xz -C ${WORKDIR}/data
-      rm tinytensors.tar.xz
+        -O tinytensors_rpe.tar.xz \
+        "https://upenn.box.com/shared/static/j5mxts5wu0em1toafmrlzdndves1jnfv.xz"
+      tar xvfJ tinytensors_rpe.tar.xz -C ${WORKDIR}/data
+      rm tinytensors_rpe.tar.xz
+    fi
+
+    # Get drbuddi testing data: epi fieldmap
+    if [[ ${DS} = drbuddi_epi ]]; then
+      mkdir -p ${WORKDIR}/data
+      ${WGET} \
+        -O tinytensors_epi.tar.xz \
+        "https://upenn.box.com/shared/static/plyuee1nbj9v8eck03s38ojji8tkspwr.xz"
+      tar xvfJ tinytensors_epi.tar.xz -C ${WORKDIR}/data
+      rm tinytensors_epi.tar.xz
     fi
 
     #  name: Get data for fieldmap tests
