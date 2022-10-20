@@ -28,23 +28,23 @@ LOGGER = logging.getLogger('nipype.interface')
 
 SLOPPY_DRBUDDI = \
     r"--DRBUDDI_stage " \
-        r"[learning_rate={0.1},cfs={100:8:4},field_smoothing={9:0}," \
-        r"metrics={MSJac,CC},restrict_constrain={1:1}] " \
+        r"'[learning_rate={0.1},cfs={100:8:4},field_smoothing={9:0}," \
+        r"metrics={MSJac,CC},restrict_constrain={1:1}]' " \
     r"--DRBUDDI_stage " \
-        r"[learning_rate={0.25},cfs={100:6:3},field_smoothing={8:0}," \
-        r"metrics={MSJac,CC},restrict_constrain={1:1}] " \
+        r"'[learning_rate={0.25},cfs={100:6:3},field_smoothing={8:0}," \
+        r"metrics={MSJac,CC},restrict_constrain={1:1}]' " \
     r"--DRBUDDI_stage " \
-        r"[learning_rate={0.5},cfs={100:4:2},field_smoothing={7:0}," \
-        r"metrics={MSJac,CC},restrict_constrain={1:1}] " \
+        r"'[learning_rate={0.5},cfs={100:4:2},field_smoothing={7:0}," \
+        r"metrics={MSJac,CC},restrict_constrain={1:1}]' " \
     r"--DRBUDDI_stage " \
-        r"[learning_rate={1.25},cfs={100:2:1},field_smoothing={6:0}," \
-        r"metrics={MSJac,CC},restrict_constrain={1:1}] " \
+        r"'[learning_rate={1.25},cfs={100:2:1},field_smoothing={6:0}," \
+        r"metrics={MSJac,CC},restrict_constrain={1:1}]' " \
     r"--DRBUDDI_stage " \
-        r"[learning_rate={1.},cfs={100:1:0},field_smoothing={5:0}," \
-        r"metrics={MSJac,CC},restrict_constrain={1:1}] " \
+        r"'[learning_rate={1.},cfs={100:1:0},field_smoothing={5:0}," \
+        r"metrics={MSJac,CC},restrict_constrain={1:1}]' " \
     r"--DRBUDDI_stage " \
-        r"[learning_rate={1.},cfs={20:1:0},field_smoothing={4:0}," \
-        r"metrics={MSJac,CC},restrict_constrain={0:0}]"
+        r"'[learning_rate={1.},cfs={20:1:0},field_smoothing={4:0}," \
+        r"metrics={MSJac,CC},restrict_constrain={0:0}]'"
 
 class TORTOISEInputSpec(BaseInterfaceInputSpec):
     pass
