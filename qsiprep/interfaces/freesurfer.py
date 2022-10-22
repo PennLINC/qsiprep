@@ -19,7 +19,7 @@ Disable warnings:
     >>> logging.getLogger('nipype.interface').setLevel('ERROR')
 
 """
-
+import os
 import os.path as op
 import nibabel as nb
 import numpy as np
@@ -29,7 +29,7 @@ from scipy.ndimage.morphology import binary_fill_holes
 from nilearn.image import resample_to_img, new_img_like
 
 from nipype.utils.filemanip import copyfile, filename_to_list, fname_presuffix
-from nipype.interfaces.base import (
+from nipype.interfaces.base import (CommandLine,
     isdefined, InputMultiPath, BaseInterfaceInputSpec, TraitedSpec, File, traits, Directory
 )
 from nipype.interfaces import freesurfer as fs
@@ -37,7 +37,7 @@ from nipype.interfaces.base import SimpleInterface
 from nipype.interfaces.freesurfer.preprocess import ConcatenateLTA, RobustRegister
 from nipype.interfaces.freesurfer.utils import LTAConvert
 from ..niworkflows.interfaces.registration import BBRegisterRPT, MRICoregRPT
-
+from ..niworkflows.interfaces.utils import _copyxform
 
 class StructuralReference(fs.RobustTemplate):
     """ Variation on RobustTemplate that simply copies the source if a single
@@ -491,3 +491,60 @@ def find_fs_path(freesurfer_dir, subject_id):
     if op.exists(withsub):
         return withsub
     return None
+
+
+class _SynthStripInputSpec(BaseInterfaceInputSpec):
+    input_image = File(
+        argstr="-i %s",
+        exists=True,
+        mandatory=True)
+    no_csf = traits.Bool(
+        argstr='--no-csf',
+        desc="Exclude CSF from brain border.")
+    border = traits.Int(
+        argstr='-b %d',
+        desc="Mask border threshold in mm. Default is 1.")
+    gpu = traits.Bool(argstr="-g")
+    out_brain = File(
+        argstr="-o %s",
+        name_template="%s_brain.nii.gz",
+        name_source=["input_image"],
+        keep_extension=False,
+        desc="skull stripped image with corrupt sform")
+    out_brain_mask = File(
+        argstr="-m %s",
+        name_template="%s_mask.nii.gz",
+        name_source=["input_image"],
+        keep_extension=False,
+        desc="mask image with corrupt sform")
+
+
+class _SynthStripOutputSpec(TraitedSpec):
+    out_brain = File(exists=True)
+    out_brain_mask = File(exists=True)
+
+
+class SynthStrip(CommandLine):
+    input_spec = _SynthStripInputSpec
+    output_spec = _SynthStripOutputSpec
+    _cmd = os.getenv("FREESURFER_HOME") + "/mri_synthstrip"
+
+
+class FixHeaderSynthStrip(SynthStrip):
+
+    def _run_interface(self, runtime, correct_return_codes=(0,)):
+        # Run normally
+        runtime = super(FixHeaderSynthStrip, self)._run_interface(
+            runtime, correct_return_codes)
+
+        outputs = self._list_outputs()
+        if outputs.get("out_brain_mask"):
+            _copyxform(
+                self.inputs.input_image,
+                outputs["out_brain_mask"])
+
+        _copyxform(
+            self.inputs.input_image,
+            outputs["out_brain"])
+
+        return runtime
