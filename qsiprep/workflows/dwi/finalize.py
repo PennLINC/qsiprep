@@ -41,6 +41,7 @@ def init_dwi_finalize_wf(scan_groups,
                          template,
                          output_dir,
                          omp_nthreads,
+                         pepolar_method,
                          write_local_bvecs,
                          low_mem,
                          use_syn,
@@ -93,6 +94,8 @@ def init_dwi_finalize_wf(scan_groups,
             Directory in which to save derivatives
         output_resolution : float
             Output voxel resolution in mm
+        pepolar_method : str
+            Either 'DRBUDDI' or 'TOPUP'. The method for SDC when EPI fieldmaps are used.
         omp_nthreads : int
             Maximum number of threads an individual process may use
         low_mem : bool
@@ -212,7 +215,8 @@ def init_dwi_finalize_wf(scan_groups,
             't1_aseg', 't1_aparc',
             't1_2_mni_reverse_transform', 't1_2_fsnative_forward_transform',
             't1_2_fsnative_reverse_transform', 'dwi_sampling_grid', 'raw_qc_file',
-            'coreg_score', 'raw_concatenated', 'confounds', 'carpetplot_data'
+            'coreg_score', 'raw_concatenated', 'confounds', 'carpetplot_data',
+            'sdc_scaling_images'
         ]),
         name='inputnode')
     outputnode = pe.Node(
@@ -266,7 +270,8 @@ def init_dwi_finalize_wf(scan_groups,
              'inputnode.intramodal_template_to_t1_affine'),
             ('intramodal_template_to_t1_warp',
              'inputnode.intramodal_template_to_t1_warp'),
-            ('itk_b0_to_t1', 'inputnode.itk_b0_to_t1')]),
+            ('itk_b0_to_t1', 'inputnode.itk_b0_to_t1'),
+            ('sdc_scaling_images', 'inputnode.sdc_scaling_images')]),
         (transform_dwis_t1, outputnode, [('outputnode.bvals', 'bvals_t1'),
                                          ('outputnode.rotated_bvecs', 'bvecs_t1'),
                                          ('outputnode.dwi_resampled', 'dwi_t1'),

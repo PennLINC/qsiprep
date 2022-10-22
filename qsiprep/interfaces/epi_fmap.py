@@ -11,6 +11,7 @@ import pandas as pd
 from nipype.utils.filemanip import fname_presuffix, split_filename
 from .images import to_lps
 from .reports import topup_selection_to_report
+from .gradients import concatenate_bvals
 from nilearn.image import load_img, index_img, concat_imgs
 import nibabel as nb
 
@@ -99,17 +100,25 @@ def load_epi_dwi_fieldmaps(fmap_list, b0_threshold):
 
         # Which images are b=0 images?
         if op.exists(potential_bval_file):
+            # If there is a secret bval file, check that it's allowed
             bvals = np.loadtxt(potential_bval_file)
-            too_large = np.flatnonzero(bvals > b0_threshold)
-            too_large_values = bvals[too_large]
-            if too_large.size:
-                LOGGER.warning("Excluding volumes %s from the %s because b=%s is greater than %d",
-                               str(too_large), fmap_file, str(too_large_values), b0_threshold)
-            _b0_indices = np.flatnonzero(bvals < b0_threshold) + starting_index
+            if fmap_img.ndim == 3 and len(bvals) == 1:
+                _b0_indices = np.arange(num_images) + starting_index
+            elif fmap_img.ndim == 4 and len(bvals) == fmap_img.shape[3]:
+                too_large = np.flatnonzero(bvals > b0_threshold)
+                too_large_values = bvals[too_large]
+                if too_large.size:
+                    LOGGER.warning("Excluding volumes %s from the %s because b=%s is greater than %d",
+                                str(too_large), fmap_file, str(too_large_values), b0_threshold)
+                _b0_indices = np.flatnonzero(bvals < b0_threshold) + starting_index
+            else:
+                raise Exception("Secret fieldmap file %s mismatches its image file %s" % (
+                                potential_bval_file, fmap_file))
         else:
             _b0_indices = np.arange(num_images) + starting_index
         b0_indices += _b0_indices.tolist()
 
+    print(image_series)
     concatenated_images = concat_imgs(image_series, auto_resample=True)
     return concatenated_images, b0_indices, original_files
 
@@ -307,6 +316,22 @@ def calculate_best_b0s(b0_list, radius=4):
     return pairwise.mean(0)
 
 
+def _get_bvals(bval_input):
+    if isinstance(bval_input, list):
+        return concatenate_bvals(bval_input, None)
+    return np.loadtxt(bval_input)
+
+
+# In case of a 3d image
+def safe_get_3d_image(img_file, b0_index):
+    _img = nb.load(img_file)
+    if _img.ndim < 4:
+        if b0_index > 0:
+            raise Exception("Impossible b=0 index in a 3d image")
+        return _img
+    return index_img(_img, b0_index)
+
+
 def split_into_b0s_and_origins(b0_threshold, original_files, img_file, cwd,
                                b0_indices=None, bval_file=None,
                                use_original_files=True):
@@ -320,7 +345,7 @@ def split_into_b0s_and_origins(b0_threshold, original_files, img_file, cwd,
     if b0_indices is None:
         if bval_file is not None:
             # Start with the DWI file. Determine which images are b=0
-            bvals = np.loadtxt(bval_file)
+            bvals = _get_bvals(bval_file)
             b0_indices = np.flatnonzero(bvals < b0_threshold)
             if not b0_indices.size:
                 raise RuntimeError("No b=0 images available.")
@@ -330,15 +355,6 @@ def split_into_b0s_and_origins(b0_threshold, original_files, img_file, cwd,
                 np.arange(full_img.shape[3], dtype=np.int)
 
     relative_indices = relative_b0_index(b0_indices, original_files)
-
-    # In case of a 3d image
-    def safe_get_3d_image(img_file, b0_index):
-        _img = nb.load(img_file)
-        if _img.ndim < 4:
-            if b0_index > 0:
-                raise Exception("Impossible b=0 index in a 3d image")
-            return _img
-        return index_img(_img, b0_index)
 
     # find the original files accompanying each b=0
     for b0_index, original_index in zip(b0_indices, relative_indices):

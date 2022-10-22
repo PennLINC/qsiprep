@@ -25,6 +25,7 @@ from ...engine import Workflow
 # dwi workflows
 from .util import init_dwi_reference_wf
 from ..fieldmap.base import init_sdc_wf
+from ..fieldmap.drbuddi import init_drbuddi_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger('nipype.workflow')
@@ -38,6 +39,7 @@ def init_fsl_hmc_wf(scan_groups,
                     fmap_bspline,
                     eddy_config,
                     raw_image_sdc,
+                    pepolar_method,
                     mem_gb=3,
                     omp_nthreads=1,
                     dwi_metadata=None,
@@ -66,9 +68,8 @@ def init_fsl_hmc_wf(scan_groups,
         impute_slice_threshold: float
             threshold for a slice to be replaced with imputed values. Overrides the
             parameter in ``eddy_config`` if set to a number > 0.
-        do_topup: bool
-            Should topup be performed before eddy? requires an rpe series or an
-            rpe_b0.
+        pepolar_method : str
+            Either 'DRBUDDI' or 'TOPUP'. The method for SDC when EPI fieldmaps are used.
         eddy_config: str
             Path to a JSON file containing settings for the call to ``eddy``.
 
@@ -76,7 +77,7 @@ def init_fsl_hmc_wf(scan_groups,
     **Inputs**
 
         dwi_file: str
-            DWI series
+            DWI series. Possibly concatenated, denoised, etc
         bvec_file: str
             bvec file
         bval_file: str
@@ -86,7 +87,7 @@ def init_fsl_hmc_wf(scan_groups,
         b0_images: list
             List of single b=0 volumes
         original_files: list
-            List of the files from which each DWI volume came.
+            List of the files from which each DWI volume came. One per original file
         t1_brain: str
             Skull stripped T1w image
         t1_mask: str
@@ -97,7 +98,7 @@ def init_fsl_hmc_wf(scan_groups,
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=['dwi_file', 'bvec_file', 'bval_file', 'b0_indices', 'b0_images',
-                    'original_files', 't1_brain', 't1_mask', 't1_seg',
+                    'original_files', 't1_brain', 't1_mask', 't1_seg', 't2_brain',
                     't1_2_mni_reverse_transform']),
         name='inputnode')
 
@@ -106,7 +107,8 @@ def init_fsl_hmc_wf(scan_groups,
             fields=["b0_template", "b0_template_mask", "pre_sdc_template", "bval_files",
                     "hmc_optimization_data", "sdc_method", 'slice_quality', 'motion_params',
                     "cnr_map", "bvec_files_to_transform", "dwi_files_to_transform", "b0_indices",
-                    "to_dwi_ref_affines", "to_dwi_ref_warps", "rpe_b0_info"]),
+                    "to_dwi_ref_affines", "to_dwi_ref_warps", "rpe_b0_info",
+                    "sdc_scaling_images"]),
         name='outputnode')
 
     workflow = Workflow(name=name)
@@ -202,13 +204,15 @@ def init_fsl_hmc_wf(scan_groups,
     # Fieldmap correction to be done in LAS+: TOPUP for rpe series or epi fieldmap
     # If a topupref is provided, use it for TOPUP
     fieldmap_type = scan_groups['fieldmap_info']['suffix'] or ''
-    workflow.__desc__ = boilerplate_from_eddy_config(eddy_args, fieldmap_type)
-    if fieldmap_type in ('epi', 'rpe_series'):
+    workflow.__desc__ = boilerplate_from_eddy_config(eddy_args, fieldmap_type,
+                                                     pepolar_method)
+    if fieldmap_type in ('epi', 'rpe_series') and pepolar_method.lower() == "topup":
         # If there are EPI fieldmaps in fmaps/, make sure they get to TOPUP. It will always use
         # b=0 images from the DWI series regardless
         gather_inputs.inputs.topup_requested = True
         if 'epi' in scan_groups['fieldmap_info']:
             gather_inputs.inputs.epi_fmaps = scan_groups['fieldmap_info']['epi']
+
         outputnode.inputs.sdc_method = "TOPUP"
         topup = pe.Node(fsl.TOPUP(out_field="fieldmap_HZ.nii.gz", scale=1), name="topup")
         topup_summary = pe.Node(TopupSummary(), name='topup_summary')
@@ -248,19 +252,63 @@ def init_fsl_hmc_wf(scan_groups,
             (b0_ref_to_lps, outputnode, [('dwi_file', 'b0_template')]),
             # Save reports
             (gather_inputs, topup_summary, [('topup_report', 'summary')]),
-            (topup_summary, ds_report_topupsummary, [('out_report', 'in_file')]),
+            (topup_summary, ds_report_topupsummary, [('out_report', 'in_file')])
         ])
 
         return workflow
 
-    # The topup inputs will only have one PE direction,
-    # so they can be used to make a b=0 reference to mask for eddy
+    # All the following distortion correction methods operate on images
+    # *already processed by eddy*. Therefore we need to make a mask for
+    # eddy that contains both distorted brain shapes
     distorted_merge = pe.Node(
         IntraModalMerge(hmc=True, to_lps=False), name='distorted_merge')
     workflow.connect([
         # Use the distorted mask for eddy
         (gather_inputs, distorted_merge, [('topup_imain', 'in_files')]),
         (distorted_merge, pre_eddy_b0_ref_wf, [('out_avg', 'inputnode.b0_template')])])
+
+    if fieldmap_type in ('epi', 'rpe_series') and pepolar_method.lower() == "drbuddi":
+        outputnode.inputs.sdc_method = "DRBUDDI"
+
+        # Let gather_inputs know we're doing pepolar, even though it's not topup
+        gather_inputs.inputs.topup_requested = True
+        if 'epi' in scan_groups['fieldmap_info']:
+            gather_inputs.inputs.epi_fmaps = scan_groups['fieldmap_info']['epi']
+
+        drbuddi_wf = init_drbuddi_wf(scan_groups=scan_groups, omp_nthreads=omp_nthreads,
+                                     b0_threshold=b0_threshold, raw_image_sdc=raw_image_sdc,
+                                     sloppy=sloppy)
+        # ds_report_drbuddi = pe.Node(
+        #     DerivativesDataSink(suffix='drbuddisummary', source_file=source_file),
+        #     name='ds_report_drbuddisummary',
+        #     run_without_submitting=True,
+        #     mem_gb=DEFAULT_MEMORY_MIN_GB)
+
+
+        workflow.connect([
+            (split_eddy_lps, drbuddi_wf, [
+                ('dwi_files', 'inputnode.dwi_files'),
+                ('bval_files', 'inputnode.bval_files'),
+                ('bvec_files', 'inputnode.bvec_files')]),
+            (inputnode, drbuddi_wf, [
+                ('t1_brain', 'inputnode.t1_brain'),
+                ('t2_brain', 'inputnode.t2_brain'),
+                ('original_files', 'inputnode.original_files')]),
+            #(drbuddi_wf, ds_report_drbuddi, [
+            #    ('outputnode.report', 'in_file')]),
+            (drbuddi_wf, outputnode, [
+                ('outputnode.b0_ref', 'b0_template'),
+                ('outputnode.sdc_warps', 'to_dwi_ref_warps'),
+                ('outputnode.sdc_scaling_images', 'sdc_scaling_images')]),
+
+            # Save reports
+            #(gather_inputs, drbuddi_summary, [('topup_report', 'summary')]),
+            #(topup_summary, ds_report_topupsummary, [('out_report', 'in_file')]),
+        ])
+
+        return workflow
+
+
 
     if fieldmap_type in ('fieldmap', 'syn') or fieldmap_type.startswith("phase"):
 

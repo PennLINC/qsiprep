@@ -11,6 +11,8 @@ from nipype import logging
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
 from nipype.interfaces.base import isdefined
+
+from qsiprep.workflows.fieldmap import pepolar
 from ...interfaces import DerivativesDataSink
 
 from ...interfaces.reports import DiffusionSummary
@@ -50,6 +52,7 @@ def init_dwi_preproc_wf(dwi_only,
                         dwi_denoise_window,
                         denoise_method,
                         unringing_method,
+                        pepolar_method,
                         dwi_no_biascorr,
                         no_b0_harmonization,
                         denoise_before_combining,
@@ -141,6 +144,8 @@ def init_dwi_preproc_wf(dwi_only,
             Either 'dwidenoise', 'patch2self' or 'none'
         unringing_method : str
             algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
+        pepolar_method : str
+            Either 'DRBUDDI' or 'TOPUP'. The method for SDC when EPI fieldmaps are used.
         dwi_no_biascorr : bool
             run spatial bias correction (N4) on dwi series
         no_b0_harmonization : bool
@@ -274,7 +279,6 @@ def init_dwi_preproc_wf(dwi_only,
 
     fieldmap_type = fieldmap_info['suffix']
     doing_bidirectional_pepolar = fieldmap_type == 'rpe_series'
-    preprocess_rpe_series = doing_bidirectional_pepolar and hmc_model == 'eddy'
     if fieldmap_type is not None:
         fmap_key = "phase1" if fieldmap_type == "phase" else fieldmap_type
 
@@ -319,7 +323,7 @@ def init_dwi_preproc_wf(dwi_only,
             'dwi_files', 'cnr_map', 'bval_files', 'bvec_files', 'b0_ref_image', 'b0_indices',
             'dwi_mask', 'hmc_xforms', 'fieldwarps', 'sbref_file', 'original_files',
             'original_bvecs', 'raw_qc_file', 'coreg_score', 'raw_concatenated',
-            'carpetplot_data']),
+            'carpetplot_data', 'sdc_scaling_images']),
         name='outputnode')
     workflow.__desc__ = """
 
@@ -329,7 +333,7 @@ Diffusion data preprocessing
 
     pre_hmc_wf = init_dwi_pre_hmc_wf(scan_groups=scan_groups,
                                      b0_threshold=b0_threshold,
-                                     preprocess_rpe_series=preprocess_rpe_series,
+                                     preprocess_rpe_series=doing_bidirectional_pepolar,
                                      dwi_denoise_window=dwi_denoise_window,
                                      denoise_method=denoise_method,
                                      unringing_method=unringing_method,
@@ -352,6 +356,7 @@ Diffusion data preprocessing
             hmc_transform=hmc_transform,
             hmc_model=hmc_model,
             hmc_align_to=motion_corr_to,
+            raw_image_sdc=raw_image_sdc,
             template=template,
             shoreline_iters=shoreline_iters,
             impute_slice_threshold=impute_slice_threshold,
@@ -360,6 +365,7 @@ Diffusion data preprocessing
             fmap_demean=fmap_demean,
             use_syn=use_syn,
             force_syn=force_syn,
+            pepolar_method=pepolar_method,
             dwi_metadata=dwi_metadata,
             sloppy=sloppy,
             name="hmc_sdc_wf")
@@ -376,6 +382,7 @@ Diffusion data preprocessing
             omp_nthreads=omp_nthreads,
             fmap_bspline=fmap_bspline,
             fmap_demean=fmap_demean,
+            pepolar_method=pepolar_method,
             dwi_metadata=dwi_metadata,
             sloppy=sloppy,
             name="hmc_sdc_wf")
@@ -416,6 +423,7 @@ Diffusion data preprocessing
         mem_gb=DEFAULT_MEMORY_MIN_GB)
 
     # Make a fieldmap report, save the transforms. Do it here because we need wm
+    # If DRBUDDI is used, a second report will be written with the second modalities
     if fieldmap_type is not None:
         fmap_unwarp_report_wf = init_fmap_unwarp_report_wf()
         ds_report_sdc = pe.Node(
@@ -427,6 +435,8 @@ Diffusion data preprocessing
         workflow.connect([
             (inputnode, fmap_unwarp_report_wf, [
                 ('t1_seg', 'inputnode.in_seg')]),
+            (hmc_wf, outputnode, [
+                ('outputnode.sdc_scaling_images', 'sdc_scaling_images')]),
             (hmc_wf, fmap_unwarp_report_wf, [
                 ('outputnode.pre_sdc_template', 'inputnode.in_pre'),
                 ('outputnode.b0_template', 'inputnode.in_post')]),

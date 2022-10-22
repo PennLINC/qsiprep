@@ -19,7 +19,7 @@ if [[ "${CIRCLECI}" = "true" ]]; then
   fi
 else
   IN_CI="false"
-  NTHREADS=1
+  NTHREADS=2
   OMP_NTHREADS=2
 fi
 export IN_CI NTHREADS OMP_NTHREADS
@@ -28,7 +28,7 @@ run_qsiprep_cmd () {
   bids_dir="$1"
   output_dir="$2"
   # Defines a call to qsiprep that works on circleci OR for a local
-  # test that uses 
+  # test that uses
   if [[ "${CIRCLECI}" = "true" ]]; then
     # In circleci we're running from inside the container. call directly
     QSIPREP_RUN="/usr/local/miniconda/bin/qsiprep ${bids_dir} ${output_dir} participant"
@@ -53,7 +53,7 @@ run_qsiprep_cmd () {
 cat << DOC
 
 Create input data for tests. A few files are automatically
-created because they're used in all/most of the tests. 
+created because they're used in all/most of the tests.
 Imaging data is only downloaded as needed based on the
 second argument to the function.
 
@@ -63,7 +63,7 @@ Default data:
 data/nipype.cfg
   Instructs nipype to stop on the first crash
 data/eddy_config.json
-  Configures eddy to perform few iterations so it 
+  Configures eddy to perform few iterations so it
   finishes quickly.
 data/license.txt
   A freesurfer license file
@@ -120,8 +120,8 @@ cat << DOC
 DSDTI:
 ------
 
-Downsampled DTI (single shell) data along with an EPI 
-fieldmap. 
+Downsampled DTI (single shell) data along with an EPI
+fieldmap.
 
 Contents:
 ^^^^^^^^^
@@ -145,7 +145,7 @@ Contents:
 DSCSDSI:
 --------
 
-Downsampled CS-DSI data. 
+Downsampled CS-DSI data.
 
 Contents:
 ^^^^^^^^^
@@ -351,7 +351,7 @@ get_bids_data() {
       rm multishell_output.tar.gz
     fi
 
-    #  name: Get Single Shell outputs
+    # Get Single Shell outputs
     if [[ ${DS} = singleshell_output ]]; then
       mkdir -p ${WORKDIR}/data/singleshell_output
       ${WGET} \
@@ -359,6 +359,26 @@ get_bids_data() {
         "https://upenn.box.com/shared/static/9jhf0eo3ml6ojrlxlz6lej09ny12efgg.gz"
       tar xvfz singleshell_output.tar.gz -C ${WORKDIR}/data/singleshell_output
       rm singleshell_output.tar.gz
+    fi
+
+    # Get drbuddi testing data: up/down dwi series
+    if [[ ${DS} = drbuddi_rpe_series ]]; then
+      mkdir -p ${WORKDIR}/data
+      ${WGET} \
+        -O tinytensors_rpe.tar.xz \
+        "https://upenn.box.com/shared/static/j5mxts5wu0em1toafmrlzdndves1jnfv.xz"
+      tar xvfJ tinytensors_rpe.tar.xz -C ${WORKDIR}/data
+      rm tinytensors_rpe.tar.xz
+    fi
+
+    # Get drbuddi testing data: epi fieldmap
+    if [[ ${DS} = drbuddi_epi ]]; then
+      mkdir -p ${WORKDIR}/data
+      ${WGET} \
+        -O tinytensors_epi.tar.xz \
+        "https://upenn.box.com/shared/static/plyuee1nbj9v8eck03s38ojji8tkspwr.xz"
+      tar xvfJ tinytensors_epi.tar.xz -C ${WORKDIR}/data
+      rm tinytensors_epi.tar.xz
     fi
 
     #  name: Get data for fieldmap tests
@@ -403,7 +423,7 @@ regardless of what docker does
 DOC
 
 setup_dir(){
-    # Create the output and working directories for 
+    # Create the output and working directories for
     DIR=$1
     mkdir -p ${DIR}/derivatives
     mkdir -p ${DIR}/work

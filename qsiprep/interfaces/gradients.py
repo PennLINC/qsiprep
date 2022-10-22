@@ -401,7 +401,13 @@ class ComposeTransforms(SimpleInterface):
         hmc_affines = self.inputs.hmc_affines
         fieldwarps = self.inputs.fieldwarps
         if isdefined(fieldwarps):
-            fieldwarps = fieldwarps * num_dwis
+            if len(fieldwarps) == 1:
+                LOGGER.info("using a single fieldwarp for all DWI files")
+                fieldwarps = fieldwarps * num_dwis
+            elif len(fieldwarps) == num_dwis:
+                LOGGER.info("using DRBUDDI warps!")
+            else:
+                LOGGER.info("No Fieldwarps will be used")
 
         # The affine transform to the t1 can come from hmcsdc or the intramodal template
         coreg_to_t1 = traits.Undefined
@@ -534,8 +540,11 @@ class GradientRotationInputSpec(BaseInterfaceInputSpec):
         File(exists=True), desc='NIfTI images corresponding to bvals, bvecs')
     bvec_files = InputMultiObject(File(exists=True),
                                   desc='list of split bvec files, must correspond to a '
-                                       'non-oblique image/reference frame.')
-    bval_files = InputMultiObject(File(exists=True), desc='list of split bval files')
+                                       'non-oblique image/reference frame.',
+                                  mandatory=True)
+    bval_files = InputMultiObject(File(exists=True),
+                                  desc='list of split bval files',
+                                  mandatory=True)
 
 
 class GradientRotationOutputSpec(TraitedSpec):
@@ -667,11 +676,20 @@ def concatenate_bvecs(input_files):
     else:
         collected_vecs = []
         for bvec_file in input_files:
-            collected_vecs.append(np.loadtxt(bvec_file))
+            collected_vecs.append(np.loadtxt(bvec_file).astype(np.float))
             stacked = np.row_stack(collected_vecs)
     if not stacked.shape[1] == 3:
         stacked = stacked.T
     return stacked
+
+
+def write_concatenated_fsl_gradients(bval_files, bvec_files, out_prefix):
+    bvec_file = out_prefix + ".bvec"
+    bval_file = out_prefix + ".bval"
+    stacked_bvecs = concatenate_bvecs(bvec_files)
+    np.savetxt(bvec_file, stacked_bvecs.T, fmt="%.8f", delimiter=" ")
+    concatenate_bvals(bval_files, bval_file)
+    return bval_file, bvec_file
 
 
 def bvec_rotation(ortho_bvecs, transforms, output_file, runtime):

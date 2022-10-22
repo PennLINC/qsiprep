@@ -46,7 +46,6 @@ class SplitDWIsOutputSpec(TraitedSpec):
     bvec_files = OutputMultiObject(File(exists=True), desc='single volume bvecs')
     b0_images = OutputMultiObject(File(exists=True), desc='just the b0s')
     b0_indices = traits.List(desc='list of original indices for each b0 image')
-    original_files = OutputMultiObject(File(exists=True))
 
 
 class SplitDWIs(SimpleInterface):
@@ -569,7 +568,7 @@ def bvec_to_rasb(bval_file, bvec_file, img_file, workdir):
 def split_bvals_bvecs(bval_file, bvec_file, img_files, deoblique, working_dir):
     """Split bvals and bvecs into one text file per image."""
     if deoblique:
-        LOGGER.info('Converting oblique-image bvecs to workd coordinate reference frame')
+        LOGGER.info('Converting oblique-image bvecs to world coordinate reference frame')
     bvals, bvecs = read_bvals_bvecs(bval_file, bvec_file)
     split_bval_files = []
     split_bvec_files = []
