@@ -54,6 +54,7 @@ jobs:
             make SHPINXOPTS="-W" -C docs html
 
   DSCSDSI:
+    resource_class: medium+
     <<: *dockersetup
     steps:
       - checkout
