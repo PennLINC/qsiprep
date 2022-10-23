@@ -107,10 +107,14 @@ def init_dwi_reference_wf(omp_nthreads=1, dwi_file=None, register_t1=False,
     if register_t1:
         affine_transform = pkgr.resource_filename('qsiprep', 'data/affine.json')
         register_t1_to_raw = pe.Node(ants.Registration(from_file=affine_transform),
-                                     name='register_t1_to_raw')
-        t1_mask_to_b0 = pe.Node(ants.ApplyTransforms(interpolation='MultiLabel',
-                                                     invert_transform_flags=[True]),
-                                name='t1_mask_to_b0')
+                                     name='register_t1_to_raw',
+                                     n_proces=omp_nthreads)
+        t1_mask_to_b0 = pe.Node(
+            ants.ApplyTransforms(
+                interpolation='MultiLabel',
+                invert_transform_flags=[True]),
+            name='t1_mask_to_b0',
+            n_procs=omp_nthreads)
         workflow.connect([
             (inputnode, register_t1_to_raw, [
                 ('t1_brain', 'fixed_image'),
@@ -122,10 +126,14 @@ def init_dwi_reference_wf(omp_nthreads=1, dwi_file=None, register_t1=False,
         # T1w is already aligned
         t1_mask_to_b0 = pe.Node(
             ants.ApplyTransforms(transforms='identity'),
-            name='t1_mask_to_b0')
+            name='t1_mask_to_b0',
+            n_procs=omp_nthreads)
 
     # Do a masking of the DWI by itself
-    enhance_and_mask_b0 = pe.Node(FixHeaderSynthStrip(), name='enhance_and_mask_b0')
+    enhance_and_mask_b0 = pe.Node(
+        FixHeaderSynthStrip(),
+        name='enhance_and_mask_b0',
+        n_procs=omp_nthreads)
 
     workflow.connect([
         (inputnode, t1_mask_to_b0, [
