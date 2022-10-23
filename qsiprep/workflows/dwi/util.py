@@ -132,12 +132,11 @@ def init_dwi_reference_wf(omp_nthreads=1, dwi_file=None, register_t1=False,
             ('t1_mask', 'input_image'),
             ('b0_template', 'reference_image')]),
         (inputnode, outputnode, [('b0_template', 'raw_ref_image')]),
-        (inputnode, enhance_and_mask_b0, [('b0_template', 'b0_file')]),
-        (t1_mask_to_b0, enhance_and_mask_b0, [('output_image', 't1_mask')]),
+        (inputnode, enhance_and_mask_b0, [('b0_template', 'input_image')]),
+        (inputnode, outputnode, [('b0_template', 'ref_image')]),
         (enhance_and_mask_b0, outputnode, [
-            ('enhanced_file', 'ref_image'),
-            ('skull_stripped_file', 'ref_image_brain'),
-            ('mask_file', 'dwi_mask')])
+            ('out_brain', 'ref_image_brain'),
+            ('out_brain_mask', 'dwi_mask')])
     ])
 
     if gen_report:
@@ -153,8 +152,8 @@ def init_dwi_reference_wf(omp_nthreads=1, dwi_file=None, register_t1=False,
         workflow.connect([
             (inputnode, b0ref_reportlet, [('b0_template', 'before')]),
             (enhance_and_mask_b0, b0ref_reportlet, [
-                ('enhanced_file', 'after'),
-                ('plotting_mask_file', 'wm_seg')]),
+                ('out_brain', 'after'),
+                ('out_brain_mask', 'wm_seg')]),
             (b0ref_reportlet, outputnode, [('out_report', 'validation_report')]),
             (b0ref_reportlet, ds_report_b0_mask, [('out_report', 'in_file')])
         ])
