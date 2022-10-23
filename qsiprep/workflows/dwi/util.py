@@ -16,10 +16,10 @@ import pkg_resources as pkgr
 from nipype.pipeline import engine as pe
 from nipype.utils.filemanip import split_filename
 from nipype.interfaces import utility as niu, ants
+from ...interfaces.freesurfer import FixHeaderSynthStrip
 from ...niworkflows.interfaces import SimpleBeforeAfter
 from ...engine import Workflow
 from ...interfaces import DerivativesDataSink
-from ...interfaces.nilearn import EnhanceAndSkullstripB0
 
 
 DEFAULT_MEMORY_MIN_GB = 0.01
@@ -125,7 +125,7 @@ def init_dwi_reference_wf(omp_nthreads=1, dwi_file=None, register_t1=False,
             name='t1_mask_to_b0')
 
     # Do a masking of the DWI by itself
-    enhance_and_mask_b0 = pe.Node(EnhanceAndSkullstripB0(), name='enhance_and_mask_b0')
+    enhance_and_mask_b0 = pe.Node(FixHeaderSynthStrip(), name='enhance_and_mask_b0')
 
     workflow.connect([
         (inputnode, t1_mask_to_b0, [
