@@ -38,7 +38,7 @@ ${QSIPREP_CMD} \
 	--output-space T1w \
 	--pepolar-method DRBUDDI \
 	--eddy_config ${EDDY_CFG} \
-	--output-resolution 2 \
+	--output-resolution 5 \
     -vv --stop-on-first-crash
 
 

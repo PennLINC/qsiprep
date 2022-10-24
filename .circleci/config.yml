@@ -67,7 +67,9 @@ jobs:
             bash DSCSDSI.sh
 
   DSDTI_nofmap:
-    resource_class: medium+
+    environment:
+      CIRCLE_CPUS: 4
+    resource_class: large
     <<: *dockersetup
     steps:
       - checkout
@@ -80,7 +82,9 @@ jobs:
             bash DSDTI_nofmap.sh
 
   DSDTI_synfmap:
-    resource_class: medium+
+    resource_class: large
+    environment:
+      CIRCLE_CPUS: 4
     <<: *dockersetup
     steps:
       - checkout
@@ -93,7 +97,9 @@ jobs:
             bash DSDTI_synfmap.sh
 
   DSDTI_TOPUP:
-    resource_class: medium+
+    resource_class: large
+    environment:
+      CIRCLE_CPUS: 4
     <<: *dockersetup
     steps:
       - checkout
@@ -106,7 +112,9 @@ jobs:
             bash DSDTI_TOPUP.sh
 
   DRBUDDI_SHORELine_EPI:
-    resource_class: medium+
+    resource_class: large
+    environment:
+      CIRCLE_CPUS: 4
     <<: *dockersetup
     steps:
       - checkout
@@ -119,7 +127,9 @@ jobs:
             bash DRBUDDI_SHORELine_epi.sh
 
   DRBUDDI_eddy_rpe_series:
-    resource_class: medium+
+    resource_class: large
+    environment:
+      CIRCLE_CPUS: 4
     <<: *dockersetup
     steps:
       - checkout
@@ -135,7 +145,7 @@ jobs:
     resource_class: large
     <<: *dockersetup
     environment:
-      CIRCLE_CPUS: 3
+      CIRCLE_CPUS: 4
     steps:
       - checkout
       - run: *runinstall
