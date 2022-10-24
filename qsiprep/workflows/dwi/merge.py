@@ -117,7 +117,8 @@ def init_merge_and_denoise_wf(raw_dwi_files,
         MergeDWIs(bids_dwi_files=raw_dwi_files,
                   b0_threshold=b0_threshold,
                   harmonize_b0_intensities=not no_b0_harmonization),
-        name='merge_dwis')
+        name='merge_dwis',
+        n_procs=omp_nthreads)
     # Create a denoising workflow for each input image
     num_dwis = len(raw_dwi_files)
     if num_dwis > 1:
@@ -189,7 +190,7 @@ def init_merge_and_denoise_wf(raw_dwi_files,
         ])
 
     # Get an orientation-conformed version of the raw inputs and their gradients
-    raw_merge = pe.Node(Merge(is_dwi=True), name='raw_merge')
+    raw_merge = pe.Node(Merge(is_dwi=True), name='raw_merge', n_procs=omp_nthreads)
 
     # Merge the either conformed-only or conformed-and-denoised data
     workflow.connect([
@@ -307,12 +308,13 @@ def init_dwi_denoising_wf(dwi_denoise_window,
         if denoise_method == 'dwidenoise':
             denoiser = pe.Node(
                 DWIDenoise(extent=(dwi_denoise_window, dwi_denoise_window,
-                                   dwi_denoise_window)),
+                                   dwi_denoise_window), n_procs=omp_nthreads),
                 name='denoiser')
         else:
             denoiser = pe.Node(
                 Patch2Self(patch_radius=dwi_denoise_window),
-                name='denoiser')
+                name='denoiser',
+                n_procs=omp_nthreads)
             workflow.connect([
                 (inputnode, denoiser, [('bval_file', 'bval_file')])])
         ds_report_denoising = pe.Node(
@@ -349,7 +351,7 @@ def init_dwi_denoising_wf(dwi_denoise_window,
         step_num += 1
 
     if do_biascorr:
-        biascorr = pe.Node(DWIBiasCorrect(method='ants'), name='biascorr')
+        biascorr = pe.Node(DWIBiasCorrect(method='ants'), name='biascorr', n_procs=omp_nthreads)
         ds_report_biascorr = pe.Node(
             DerivativesDataSink(suffix=name + '_biascorr',
                                 source_file=source_file),
