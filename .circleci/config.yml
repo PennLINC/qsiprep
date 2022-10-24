@@ -82,9 +82,9 @@ jobs:
             bash DSDTI_nofmap.sh
 
   DSDTI_synfmap:
-    resource_class: large
+    resource_class: medium+
     environment:
-      CIRCLE_CPUS: 4
+      CIRCLE_CPUS: 3
     <<: *dockersetup
     steps:
       - checkout
@@ -231,6 +231,7 @@ jobs:
             bash AMICOReconTests.sh
 
   deployable:
+    resource_class: small
     docker:
       - image: busybox:latest
     steps:
