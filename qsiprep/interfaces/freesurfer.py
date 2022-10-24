@@ -34,6 +34,7 @@ from nipype.interfaces.base import (CommandLine,
 )
 from nipype.interfaces import freesurfer as fs
 from nipype.interfaces.base import SimpleInterface
+from nipype.interfaces.freesurfer.base import FSTraitedSpecOpenMP, FSCommandOpenMP
 from nipype.interfaces.freesurfer.preprocess import ConcatenateLTA, RobustRegister
 from nipype.interfaces.freesurfer.utils import LTAConvert
 from ..niworkflows.interfaces.registration import BBRegisterRPT, MRICoregRPT
@@ -493,7 +494,7 @@ def find_fs_path(freesurfer_dir, subject_id):
     return None
 
 
-class _SynthStripInputSpec(BaseInterfaceInputSpec):
+class _SynthStripInputSpec(FSTraitedSpecOpenMP):
     input_image = File(
         argstr="-i %s",
         exists=True,
@@ -524,11 +525,16 @@ class _SynthStripOutputSpec(TraitedSpec):
     out_brain_mask = File(exists=True)
 
 
-class SynthStrip(CommandLine):
+class SynthStrip(FSTraitedSpecOpenMP):
     input_spec = _SynthStripInputSpec
     output_spec = _SynthStripOutputSpec
     _cmd = os.getenv("FREESURFER_HOME") + "/mri_synthstrip"
 
+    def _num_threads_update(self):
+        if self.inputs.num_threads:
+            self.inputs.environ.update(
+                {"OMP_NUM_THREADS": "1"}
+            )
 
 class FixHeaderSynthStrip(SynthStrip):
 
