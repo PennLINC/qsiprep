@@ -525,7 +525,7 @@ class _SynthStripOutputSpec(TraitedSpec):
     out_brain_mask = File(exists=True)
 
 
-class SynthStrip(FSTraitedSpecOpenMP):
+class SynthStrip(FSCommandOpenMP):
     input_spec = _SynthStripInputSpec
     output_spec = _SynthStripOutputSpec
     _cmd = os.getenv("FREESURFER_HOME") + "/mri_synthstrip"
