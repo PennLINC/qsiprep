@@ -308,8 +308,9 @@ def init_dwi_denoising_wf(dwi_denoise_window,
         if denoise_method == 'dwidenoise':
             denoiser = pe.Node(
                 DWIDenoise(extent=(dwi_denoise_window, dwi_denoise_window,
-                                   dwi_denoise_window), n_procs=omp_nthreads),
-                name='denoiser')
+                                   dwi_denoise_window)),
+                name='denoiser',
+                n_procs=omp_nthreads)
         else:
             denoiser = pe.Node(
                 Patch2Self(patch_radius=dwi_denoise_window),
