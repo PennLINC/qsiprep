@@ -55,6 +55,8 @@ jobs:
 
   DSCSDSI:
     resource_class: medium+
+    environment:
+      CIRCLE_CPUS: 4
     <<: *dockersetup
     steps:
       - checkout
@@ -82,9 +84,9 @@ jobs:
             bash DSDTI_nofmap.sh
 
   DSDTI_synfmap:
-    resource_class: medium+
+    resource_class: large
     environment:
-      CIRCLE_CPUS: 3
+      CIRCLE_CPUS: 4
     <<: *dockersetup
     steps:
       - checkout
