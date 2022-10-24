@@ -25,7 +25,7 @@ from ...interfaces import DerivativesDataSink
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
-def init_dwi_reference_wf(omp_nthreads=1, dwi_file=None, register_t1=False,
+def init_dwi_reference_wf(omp_nthreads, dwi_file=None, register_t1=False,
                           name='dwi_reference_wf', gen_report=False, source_file=None,
                           desc="initial"):
     """
