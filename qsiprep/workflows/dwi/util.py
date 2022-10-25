@@ -16,7 +16,8 @@ import pkg_resources as pkgr
 from nipype.pipeline import engine as pe
 from nipype.utils.filemanip import split_filename
 from nipype.interfaces import utility as niu, ants
-from ...interfaces.freesurfer import FixHeaderSynthStrip
+from nipype.interfaces.afni import Autobox
+from ...interfaces.freesurfer import FixHeaderSynthStrip, PrepareForSynthStrip
 from ...niworkflows.interfaces import SimpleBeforeAfter
 from ...engine import Workflow
 from ...interfaces import DerivativesDataSink
@@ -27,17 +28,10 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 
 def init_dwi_reference_wf(omp_nthreads, dwi_file=None, register_t1=False,
                           name='dwi_reference_wf', gen_report=False, source_file=None,
-                          desc="initial"):
+                          desc="initial", sloppy=False):
     """
-    This workflow generates reference b=0 image and a mask.
-
-    The raw reference image is the target of :abbr:`HMC (head motion correction)`, and a
-    contrast-enhanced reference is the subject of distortion correction, as well as
-    boundary-based registration to T1w and template spaces.
-
-    A skull-stripped T1w image is downsampled to the resolution of the b0 input image
-    and registered to it. The T1w mask is used as a starting point for generating
-    The b=0 mask.
+    If ``register_t2``, a skull-stripped T1w image is downsampled to the resolution
+    of the b=0 input image and registered to it.
 
     .. workflow::
         :graph2use: orig
@@ -129,20 +123,31 @@ def init_dwi_reference_wf(omp_nthreads, dwi_file=None, register_t1=False,
             name='t1_mask_to_b0',
             n_procs=omp_nthreads)
 
+    synthstrip_autobox = pe.Node(Autobox(padding=3), name="synthstrip_autobox")
+    prepare_for_masking = pe.Node(
+        PrepareForSynthStrip(sloppy=sloppy),
+        name="prepare_for_synthstrip")
+
     # Do a masking of the DWI by itself
-    enhance_and_mask_b0 = pe.Node(
+    synthstrip_b0 = pe.Node(
         FixHeaderSynthStrip(),
-        name='enhance_and_mask_b0',
+        name='synthstrip_b0',
         n_procs=omp_nthreads)
+
+
 
     workflow.connect([
         (inputnode, t1_mask_to_b0, [
             ('t1_mask', 'input_image'),
             ('b0_template', 'reference_image')]),
         (inputnode, outputnode, [('b0_template', 'raw_ref_image')]),
-        (inputnode, enhance_and_mask_b0, [('b0_template', 'input_image')]),
+        (inputnode, synthstrip_autobox, [('b0_template', 'in_file')]),
+        (synthstrip_autobox, prepare_for_masking, [('out_file', 'input_image')]),
+        (prepare_for_masking, synthstrip_b0, [('prepared_image', 'input_image')]),
+        (synthstrip_b0, original_bbox_mask, [('dwi_mask', 'input_image')]),
+        (original_bbox_mask, outputnode, [('output_image', 'dwi_mask')]),
         (inputnode, outputnode, [('b0_template', 'ref_image')]),
-        (enhance_and_mask_b0, outputnode, [
+        (synthstrip_b0, outputnode, [
             ('out_brain', 'ref_image_brain'),
             ('out_brain_mask', 'dwi_mask')])
     ])
@@ -159,7 +164,7 @@ def init_dwi_reference_wf(omp_nthreads, dwi_file=None, register_t1=False,
 
         workflow.connect([
             (inputnode, b0ref_reportlet, [('b0_template', 'before')]),
-            (enhance_and_mask_b0, b0ref_reportlet, [
+            (synthstrip_b0, b0ref_reportlet, [
                 ('out_brain', 'after'),
                 ('out_brain_mask', 'wm_seg')]),
             (b0ref_reportlet, outputnode, [('out_report', 'validation_report')]),

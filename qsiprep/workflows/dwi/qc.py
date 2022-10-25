@@ -5,8 +5,6 @@
 Utility workflows
 ^^^^^^^^^^^^^^^^^
 
-.. autofunction:: init_dwi_reference_wf
-
 """
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu, afni

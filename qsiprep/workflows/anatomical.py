@@ -9,7 +9,6 @@ Anatomical reference preprocessing workflows
 .. autofunction:: init_skullstrip_ants_wf
 
 """
-
 from pkg_resources import resource_filename as pkgr
 
 from nipype.pipeline import engine as pe
@@ -42,7 +41,8 @@ from ..interfaces import (
 from qsiprep.interfaces import Conform
 from ..utils.misc import fix_multi_T1w_source_name, add_suffix
 from ..interfaces.freesurfer import (
-        PatchedLTAConvert as LTAConvert)
+        PatchedLTAConvert as LTAConvert, PrepareSynthStripGrid,
+        FixHeaderSynthStrip)
 from ..interfaces.anatomical import FakeSegmentation
 
 from nipype import logging
@@ -929,6 +929,84 @@ The T1w-reference was then skull-stripped using `3dSkullStrip`
     return workflow
 
 
+def init_synthstrip_wf(omp_nthreads, in_file=None, unfatsat=False, name="synthseg_wf"):
+    workflow = Workflow(name=name)
+    inputnode = pe.Node(
+        niu.IdentityInterface(fields=['skulled_image']),
+        name='inputnode')
+    outputnode = pe.Node(
+        niu.IdentityInterface(fields=['brain_image', 'brain_mask', 'unfatsat']),
+        name='outputnode')
+
+    if in_file:
+        inputnode.inputs.skulled_image=in_file
+
+    skulled_1mm_resample = pe.Node(
+        afni.Resample(
+            outputtype="NIFTI_GZ",
+            voxel_size=(1.0, 1.0, 1.0)),
+        name="skulled_1mm_resample")
+    skulled_autobox = pe.Node(
+        afni.Autobox(outputtype="NIFTI_GZ", padding=3),
+        name='skulled_autobox')
+    prepare_synthstrip_reference = pe.Node(
+        PrepareSynthStripGrid(),
+        name="prepare_synthstrip_reference")
+    resample_skulled_to_reference = pe.Node(
+        ants.ApplyTransforms(
+            dimension=3,
+            interpolation="BSpline",
+            transforms=['identity']),
+        name="resample_skulled_to_reference")
+    synthstrip = pe.Node(
+        FixHeaderSynthStrip(),
+        name="synthstrip",
+        n_procs=omp_nthreads)
+    mask_to_original_grid = pe.Node(
+        ants.ApplyTransforms(
+            dimension=3,
+            transforms=['identity'],
+            interpolation="NearestNeighbor"),
+        name="mask_to_original_grid")
+    mask_brain = pe.Node(
+        ants.MultiplyImages(
+            dimension=3,
+            output_product_image="masked_brain.nii"),
+        name="mask_brain")
+
+    # For T2w images, create an artificially skull-downweighted image
+    if unfatsat:
+        merge_images = pe.Node(niu.Merge(2), name='merge_images')
+        unfatsat = pe.Node(
+            ants.AverageImages(dimension=3, normalize=False),
+            name='unfatsat')
+        workflow.connect([
+            (mask_brain, merge_images, [('output_product_image', 'in1')])
+            (inputnode, merge_images, [('skulled_image', 'in2')]),
+            (merge_images, unfatsat, [('out', 'images')]),
+            (unfatsat, outputnode, [('output_average_image', 'unfatsat')])
+        ])
+
+    workflow.connect([
+        (inputnode, skulled_1mm_resample, [('skulled_image', 'in_file')]),
+        (skulled_1mm_resample, skulled_autobox, [('out_file', 'in_file')]),
+        (skulled_autobox, prepare_synthstrip_reference, [('out_file', 'input_image')]),
+        (prepare_synthstrip_reference, resample_skulled_to_reference, [
+            ('prepared_image', 'reference_image')]),
+        (inputnode, resample_skulled_to_reference, [('skulled_image', 'input_image')]),
+        (resample_skulled_to_reference, synthstrip, [('output_image', 'input_image')]),
+        (synthstrip, mask_to_original_grid, [('out_brain_mask', 'input_image')]),
+        (inputnode, mask_to_original_grid, [('skulled_image', 'reference_image')]),
+        (mask_to_original_grid, outputnode, [('output_image', 'brain_mask')]),
+        (inputnode, mask_brain, [('skulled_image', 'first_input')]),
+        (mask_to_original_grid, mask_brain, [("output_image", "second_input")]),
+        (mask_brain, outputnode, [('output_product_image', 'brain_image')])
+
+    ])
+
+    return workflow
+
+
 def init_output_grid_wf(voxel_size, infant_mode, template_image, name='output_grid_wf'):
     """Generate a non-oblique, uniform voxel-size grid around a brain."""
     workflow = Workflow(name=name)
@@ -1631,3 +1709,4 @@ def dummy_anat_outputs(outputnode, infant_mode=False):
             'qsiprep', 'data/mni_1mm_t1w_lps_brainmask.nii.gz')
 
     return fake_seg
+
