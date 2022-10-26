@@ -571,6 +571,7 @@ to workflows in *QSIPrep*'s documentation]\
         name='ds_report_about',
         run_without_submitting=True)
 
+    process_t2ws = subject_data['t2w'] and pepolar_method.lower() == 'drbuddi'
     # Preprocessing of T1w (includes registration to MNI)
     anat_preproc_wf = init_anat_preproc_wf(
         name="anat_preproc_wf",
@@ -587,6 +588,7 @@ to workflows in *QSIPrep*'s documentation]\
         omp_nthreads=omp_nthreads,
         freesurfer=freesurfer,
         hires=hires,
+        process_t2ws=process_t2ws,
         reportlets_dir=reportlets_dir,
         output_dir=output_dir,
         num_t1w=len(subject_data['t1w']))

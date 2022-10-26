@@ -17,10 +17,10 @@ from nipype.pipeline import engine as pe
 from nipype.utils.filemanip import split_filename
 from nipype.interfaces import utility as niu, ants
 from nipype.interfaces.afni import Autobox
-from ...interfaces.freesurfer import FixHeaderSynthStrip, PrepareForSynthStrip
 from ...niworkflows.interfaces import SimpleBeforeAfter
 from ...engine import Workflow
 from ...interfaces import DerivativesDataSink
+from ..anatomical import init_synthstrip_wf
 
 
 DEFAULT_MEMORY_MIN_GB = 0.01
@@ -123,17 +123,9 @@ def init_dwi_reference_wf(omp_nthreads, dwi_file=None, register_t1=False,
             name='t1_mask_to_b0',
             n_procs=omp_nthreads)
 
-    synthstrip_autobox = pe.Node(Autobox(padding=3), name="synthstrip_autobox")
-    prepare_for_masking = pe.Node(
-        PrepareForSynthStrip(sloppy=sloppy),
-        name="prepare_for_synthstrip")
-
-    # Do a masking of the DWI by itself
-    synthstrip_b0 = pe.Node(
-        FixHeaderSynthStrip(),
-        name='synthstrip_b0',
-        n_procs=omp_nthreads)
-
+    synthstrip_wf = init_synthstrip_wf(
+        omp_nthreads=omp_nthreads,
+        name="synthstrip_wf")
 
 
     workflow.connect([
@@ -141,15 +133,11 @@ def init_dwi_reference_wf(omp_nthreads, dwi_file=None, register_t1=False,
             ('t1_mask', 'input_image'),
             ('b0_template', 'reference_image')]),
         (inputnode, outputnode, [('b0_template', 'raw_ref_image')]),
-        (inputnode, synthstrip_autobox, [('b0_template', 'in_file')]),
-        (synthstrip_autobox, prepare_for_masking, [('out_file', 'input_image')]),
-        (prepare_for_masking, synthstrip_b0, [('prepared_image', 'input_image')]),
-        (synthstrip_b0, original_bbox_mask, [('dwi_mask', 'input_image')]),
-        (original_bbox_mask, outputnode, [('output_image', 'dwi_mask')]),
         (inputnode, outputnode, [('b0_template', 'ref_image')]),
-        (synthstrip_b0, outputnode, [
-            ('out_brain', 'ref_image_brain'),
-            ('out_brain_mask', 'dwi_mask')])
+        (inputnode, synthstrip_wf, [('b0_template', 'inputnode.skulled_image')]),
+        (synthstrip_wf, outputnode, [
+            ('outputnode.brain_image', 'ref_image_brain'),
+            ('outputnode.brain_mask', 'dwi_mask')])
     ])
 
     if gen_report:
@@ -164,9 +152,9 @@ def init_dwi_reference_wf(omp_nthreads, dwi_file=None, register_t1=False,
 
         workflow.connect([
             (inputnode, b0ref_reportlet, [('b0_template', 'before')]),
-            (synthstrip_b0, b0ref_reportlet, [
-                ('out_brain', 'after'),
-                ('out_brain_mask', 'wm_seg')]),
+            (synthstrip_wf, b0ref_reportlet, [
+                ('outputnode.brain_image', 'after'),
+                ('outputnode.brain_mask', 'wm_seg')]),
             (b0ref_reportlet, outputnode, [('out_report', 'validation_report')]),
             (b0ref_reportlet, ds_report_b0_mask, [('out_report', 'in_file')])
         ])

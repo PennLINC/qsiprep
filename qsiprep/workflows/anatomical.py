@@ -62,7 +62,8 @@ TEMPLATE_MAP = {
 def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug, dwi_only,
                          infant_mode, freesurfer, longitudinal, omp_nthreads, hires,
                          output_dir, num_t1w, output_resolution, force_spatial_normalization,
-                         reportlets_dir, skull_strip_fixed_seed=False, name='anat_preproc_wf'):
+                         reportlets_dir, process_t2ws, skull_strip_fixed_seed=False,
+                         name='anat_preproc_wf'):
     r"""
     This workflow controls the anatomical preprocessing stages of qsiprep. It differs from
     the FMRIPREP preprocessing in that a rigid alignment to MNI is performed before declaring
@@ -92,6 +93,7 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug, d
                                   dwi_only=False,
                                   skull_strip_template='OASIS',
                                   infant_mode=False,
+                                  process_t2ws=False,
                                   force_spatial_normalization=True,
                                   freesurfer=True,
                                   longitudinal=False,
@@ -224,8 +226,8 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug, d
         ref_img = pkgr('qsiprep', 'data/mni_1mm_t1w_lps.nii.gz')
         ref_img_brain = pkgr('qsiprep', 'data/mni_1mm_t1w_lps_brain.nii.gz')
     else:
-        ref_img = pkgr('qsiprep', 'data/mni_1mm_t1w_lps.nii.gz')
-        ref_img_brain = pkgr('qsiprep', 'data/mni_1mm_t1w_lps_brain.nii.gz')
+        ref_img = pkgr('qsiprep', 'data/mni_1mm_t1w_lps_infant.nii.gz')
+        ref_img_brain = pkgr('qsiprep', 'data/mni_1mm_t1w_lps_brain_infant.nii.gz')
 
     # 3a. Create the output reference grid_image
     reference_grid_wf = init_output_grid_wf(voxel_size=output_resolution,
@@ -929,7 +931,7 @@ The T1w-reference was then skull-stripped using `3dSkullStrip`
     return workflow
 
 
-def init_synthstrip_wf(omp_nthreads, in_file=None, unfatsat=False, name="synthseg_wf"):
+def init_synthstrip_wf(omp_nthreads, in_file=None, unfatsat=False, name="synthstrip_wf"):
     workflow = Workflow(name=name)
     inputnode = pe.Node(
         niu.IdentityInterface(fields=['skulled_image']),
@@ -981,7 +983,7 @@ def init_synthstrip_wf(omp_nthreads, in_file=None, unfatsat=False, name="synthse
             ants.AverageImages(dimension=3, normalize=False),
             name='unfatsat')
         workflow.connect([
-            (mask_brain, merge_images, [('output_product_image', 'in1')])
+            (mask_brain, merge_images, [('output_product_image', 'in1')]),
             (inputnode, merge_images, [('skulled_image', 'in2')]),
             (merge_images, unfatsat, [('out', 'images')]),
             (unfatsat, outputnode, [('output_average_image', 'unfatsat')])
@@ -1003,6 +1005,39 @@ def init_synthstrip_wf(omp_nthreads, in_file=None, unfatsat=False, name="synthse
         (mask_brain, outputnode, [('output_product_image', 'brain_image')])
 
     ])
+
+    return workflow
+
+
+def init_t2w_preproc_wf(omp_nthreads, t2w_images, name="t2w_preproc_wf"):
+    workflow = Workflow(name=name)
+    inputnode = pe.Node(
+        niu.IdentityInterface(fields=['t2w_images']),
+        name='inputnode')
+    outputnode = pe.Node(
+        niu.IdentityInterface(fields=['brain_image', 'brain_mask', 'unfatsat']),
+        name='outputnode')
+
+    unfatsats = pe.Node(
+        niu.Merge(len(t2w_images)),
+        name='unfatsats')
+    workflow.connect([
+        (unfatsats, outputnode, [('out', 'unfatsat')])
+    ])
+
+    workflows = {}
+    for imagenum, t2w_image in enumerate(t2w_images, start=1):
+
+        workflows[t2w_image] = init_synthstrip_wf(
+            omp_nthreads=omp_nthreads,
+            in_file=t2w_image,
+            unfatsat=True,
+            name='synthstrip_t2w_%d' % imagenum)
+
+        workflow.connect([
+            (workflows[t2w_image], unfatsats, [
+                ('outputnode.unfatsat', 'in%d' % imagenum)])
+        ])
 
     return workflow
 
