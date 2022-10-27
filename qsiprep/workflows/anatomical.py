@@ -43,7 +43,7 @@ from ..utils.misc import fix_multi_T1w_source_name, add_suffix
 from ..interfaces.freesurfer import (
         PatchedLTAConvert as LTAConvert, PrepareSynthStripGrid,
         FixHeaderSynthStrip)
-from ..interfaces.anatomical import FakeSegmentation
+from ..interfaces.anatomical import FakeSegmentation, DesaturateSkull
 
 from nipype import logging
 LOGGER = logging.getLogger('nipype.workflow')
@@ -978,15 +978,11 @@ def init_synthstrip_wf(omp_nthreads, in_file=None, unfatsat=False, name="synthst
 
     # For T2w images, create an artificially skull-downweighted image
     if unfatsat:
-        merge_images = pe.Node(niu.Merge(2), name='merge_images')
-        unfatsat = pe.Node(
-            ants.AverageImages(dimension=3, normalize=False),
-            name='unfatsat')
+        desaturate_skull = pe.Node(DesaturateSkull(), name='desaturate_skull')
         workflow.connect([
-            (mask_brain, merge_images, [('output_product_image', 'in1')]),
-            (inputnode, merge_images, [('skulled_image', 'in2')]),
-            (merge_images, unfatsat, [('out', 'images')]),
-            (unfatsat, outputnode, [('output_average_image', 'unfatsat')])
+            (mask_brain, desaturate_skull, [('output_product_image', 'brain_mask_image')]),
+            (inputnode, desaturate_skull, [('skulled_image', 'skulled_t2w_image')]),
+            (desaturate_skull, outputnode, [('desaturated_t2w', 'unfatsat')])
         ])
 
     workflow.connect([
