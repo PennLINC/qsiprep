@@ -77,9 +77,9 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
     """
     inputnode = pe.Node(
         niu.IdentityInterface(
-            fields=['dwi_file', 'bvec_file', 'bval_file', 'rpe_b0',
+            fields=['dwi_file', 'bvec_file', 'bval_file', 'rpe_b0', 't2w_files',
                     'original_files', 'rpe_b0_info', 'hmc_optimization_data', 't1_brain',
-                    't1_2_mni_reverse_transform', 't1_mask', 't1_seg', 't2_brain']),
+                    't1_2_mni_reverse_transform', 't1_mask', 't1_seg']),
         name='inputnode')
 
     outputnode = pe.Node(
@@ -187,7 +187,7 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
                 ('bvecs', 'inputnode.bvec_files')]),
             (inputnode, drbuddi_wf, [
                 ('t1_brain', 'inputnode.t1_brain'),
-                ('t2_brain', 'inputnode.t2_brain'),
+                ('t2w_files', 'inputnode.t2w_files'),
                 ('original_files', 'inputnode.original_files')]),
             #(drbuddi_wf, ds_report_drbuddi, [
             #    ('outputnode.report', 'in_file')]),

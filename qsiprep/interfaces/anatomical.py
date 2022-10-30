@@ -308,13 +308,14 @@ class _DesaturateSkullInputSpec(BaseInterfaceInputSpec):
         mandatory=True,
         desc='Binary brain mask in the same grid as skulled_t2w_image')
     brain_to_skull_ratio = traits.CFloat(
-        default=5.0,
+        8.0,
         usedefault=True,
         desc="Ratio of signal in the brain to signal in the skull")
 
 
 class _DesaturateSkullOutputSpec(TraitedSpec):
     desaturated_t2w = File(exists=True)
+    head_scaling_factor = traits.Float(0.)
 
 
 class DesaturateSkull(SimpleInterface):
@@ -334,11 +335,13 @@ class DesaturateSkull(SimpleInterface):
             skulled_img, brainmask_img)
 
         actual_brain_to_skull_ratio = brain_median / nonbrain_head_median
-        desat_data = skulled_img.get_fdata(dtype=np.float32)
-
-        if actual_brain_to_skull_ratio > self.inputs.brain_to_skull_ratio:
+        LOGGER.info("found brain to skull ratio:", actual_brain_to_skull_ratio)
+        desat_data = skulled_img.get_fdata(dtype=np.float32).copy()
+        adjustment = 1.
+        if actual_brain_to_skull_ratio < self.inputs.brain_to_skull_ratio:
             # We need to downweight the non-brain voxels
             adjustment = actual_brain_to_skull_ratio / self.inputs.brain_to_skull_ratio
+            LOGGER.info("Desaturating outside-brain signal by %.5f" % adjustment)
             nonbrain_mask = brainmask_img.get_fdata() < 1
             # Apply the adjustment
             desat_data[nonbrain_mask] = desat_data[nonbrain_mask] * adjustment
@@ -347,6 +350,7 @@ class DesaturateSkull(SimpleInterface):
         desat_img.header.set_data_dtype(np.float32)
         desat_img.to_filename(out_file)
         self._results['desaturated_t2w'] = out_file
+        self._results['head_scaling_factor'] = adjustment
         return runtime
 
 

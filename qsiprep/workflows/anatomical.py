@@ -62,7 +62,7 @@ TEMPLATE_MAP = {
 def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug, dwi_only,
                          infant_mode, freesurfer, longitudinal, omp_nthreads, hires,
                          output_dir, num_t1w, output_resolution, force_spatial_normalization,
-                         reportlets_dir, process_t2ws, skull_strip_fixed_seed=False,
+                         reportlets_dir, t2w_files, skull_strip_fixed_seed=False,
                          name='anat_preproc_wf'):
     r"""
     This workflow controls the anatomical preprocessing stages of qsiprep. It differs from
@@ -86,6 +86,7 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug, d
         wf = init_anat_preproc_wf(omp_nthreads=1,
                                   reportlets_dir='.',
                                   output_dir='.',
+                                  t2w_files=[],
                                   template='MNI152NLin2009cAsym',
                                   output_spaces=['T1w', 'fsnative',
                                                  'template', 'fsaverage5'],
@@ -93,7 +94,6 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug, d
                                   dwi_only=False,
                                   skull_strip_template='OASIS',
                                   infant_mode=False,
-                                  process_t2ws=False,
                                   force_spatial_normalization=True,
                                   freesurfer=True,
                                   longitudinal=False,
@@ -174,6 +174,8 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug, d
             gray-matter (GM), white-matter (WM) and cerebrospinal fluid (CSF)
         t1_tpms
             List of tissue probability maps in T1w space
+        t2w_files
+            List of preprocessed t2w files
         t1_2_mni
             T1w template, normalized to MNI space
         t1_2_mni_forward_transform
@@ -215,7 +217,7 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug, d
     outputnode = pe.Node(niu.IdentityInterface(
         fields=['t1_preproc', 't1_brain', 't1_mask', 't1_seg', 't1_tpms',
                 't1_2_mni', 't1_2_mni_forward_transform', 't1_2_mni_reverse_transform',
-                'mni_mask', 'mni_seg', 'mni_tpms',
+                'mni_mask', 'mni_seg', 'mni_tpms', 't2w_files',
                 'template_transforms', 'dwi_sampling_grid',
                 'subjects_dir', 'subject_id', 't1_2_fsnative_forward_transform',
                 't1_2_fsnative_reverse_transform', 'surfaces', 't1_aseg', 't1_aparc']),
@@ -235,6 +237,16 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug, d
                                             template_image=ref_img)
     workflow.connect([
         (reference_grid_wf, outputnode, [('outputnode.grid_image', 'dwi_sampling_grid')])])
+
+    # Process the t2w images
+    if t2w_files:
+        t2w_preproc_wf = init_t2w_preproc_wf(
+            omp_nthreads=omp_nthreads,
+            t2w_images=t2w_files)
+        workflow.connect([
+            (t2w_preproc_wf, outputnode, [
+                ('outputnode.unfatsat', 't2w_files')])])
+
 
     if dwi_only:
         seg_node = dummy_anat_outputs(outputnode, infant_mode=infant_mode)

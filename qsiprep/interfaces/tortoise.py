@@ -68,6 +68,9 @@ class _GatherDRBUDDIInputsInputSpec(TORTOISEInputSpec):
     dwi_series_pedir = traits.Enum(
         "i", "i-", "j", "j-", "k", "k-",
         mandatory=True)
+    t2w_files = InputMultiObject(
+        File(exists=True),
+        desc="List of brain-enhanced T2w images")
 
 
 class _GatherDRBUDDIInputsOutputSpec(TORTOISEInputSpec):
@@ -78,6 +81,7 @@ class _GatherDRBUDDIInputsOutputSpec(TORTOISEInputSpec):
     blip_down_bmat = File(exists=True)
     blip_assignments = traits.List()
     report = traits.Str()
+    t2w_files = OutputMultiObject(File(exists=True))
 
 
 class GatherDRBUDDIInputs(SimpleInterface):
@@ -151,6 +155,9 @@ class GatherDRBUDDIInputs(SimpleInterface):
             self._results["blip_up_bmat"] = write_dummy_bmtxt(blip_up_nii)
             self._results["blip_down_bmat"] = write_dummy_bmtxt(blip_down_nii)
 
+            # Someday, maybe we'll need to filter these
+            self._results["t2w_files"] = self.inputs.t2w_files
+
         return runtime
 
 
@@ -194,8 +201,8 @@ class _DRBUDDIInputSpec(TORTOISEInputSpec):
         copyfile=True)
     structural_image = InputMultiObject(
         File(exists=True, copyfile=False),
-        help="Path(s) to anatomical image files. Can provide more than one. NO T1W's!!"
-    )
+        argstr='-s %s',
+        help="Path(s) to anatomical image files. Can provide more than one. NO T1W's!!")
     nthreads=traits.Int(1, usedefault=True, hash_files=False)
     fieldmap_type = traits.Enum("epi", "rpe_series", mandatory=True)
     blip_assignments = traits.List()
@@ -248,6 +255,7 @@ class _DRBUDDIOutputSpec(TraitedSpec):
     deformation_minv = File(exists=True)
     blip_up_FA = File(exists=True)
     blip_down_FA = File(exists=True)
+    structural_image = File(exists=True)
 
 
 class DRBUDDI(CommandLine):
@@ -259,6 +267,8 @@ class DRBUDDI(CommandLine):
         """Trick to get blip_down_bmat symlinked without an arg"""
         if name in ("blip_down_bmat", "blip_up_bmat"):
             return ""
+        if name == "structural_image":
+            return "-s " + " ".join(value)
         return super(DRBUDDI, self)._format_arg(name, spec, value)
 
     def _list_outputs(self):
@@ -284,6 +294,9 @@ class DRBUDDI(CommandLine):
             outputs["blip_up_FA"] = op.abspath("blip_up_FA.nii")
             outputs["blip_down_FA"] = op.abspath("blip_down_FA.nii")
 
+        # If there was a T2w
+        if self.inputs.structural_image:
+            outputs['structural_image'] = op.abspath("structural_used.nii")
         return outputs
 
 
@@ -305,6 +318,7 @@ class _DRBUDDIAggregateOutputsInputSpec(TORTOISEInputSpec):
     blip_up_FA = File(exists=True)
     blip_down_FA = File(exists=True)
     fieldmap_type = traits.Enum("epi", "rpe_series", mandatory=True)
+    structural_image = File(exists=True)
 
 
 class _DRBUDDIAggregateOutputsOutputSpec(TraitedSpec):

@@ -101,7 +101,7 @@ def init_drbuddi_wf(scan_groups, b0_threshold, raw_image_sdc, omp_nthreads=1,
     workflow = Workflow(name=name)
     inputnode = pe.Node(niu.IdentityInterface(
         fields=['dwi_files', 'bval_files', 'bvec_files', 'original_files',
-                't1_brain', 't2_brain', 'topup_imain']),
+                't1_brain', 't2w_files']),
         name='inputnode')
 
     outputnode = pe.Node(
@@ -150,6 +150,7 @@ co-registration with the anatomical reference.
             ("dwi_files", "dwi_files"),
             ("bval_files", "bval_files"),
             ("bvec_files", "bvec_files"),
+            ("t2w_files", "t2w_files"),
             ("original_files", "original_files")]),
         (gather_drbuddi_inputs, drbuddi, [
             ("blip_assignments", "blip_assignments"),
@@ -158,9 +159,8 @@ co-registration with the anatomical reference.
             ("blip_up_bmat", "blip_up_bmat"),
             ("blip_down_image", "blip_down_image"),
             ("blip_down_bmat", "blip_down_bmat"),
+            ("t2w_files", "structural_image")
         ]),
-        (inputnode, drbuddi, ([
-            ("t2_brain", "structural_image")])),
         (gather_drbuddi_inputs, drbuddi_summary, [
             ("report", "summary")]),
         (drbuddi, aggregate_drbuddi, [
@@ -177,7 +177,8 @@ co-registration with the anatomical reference.
             ('deformation_finv', 'deformation_finv'),
             ('deformation_minv', 'deformation_minv'),
             ('blip_up_FA', 'blip_up_FA'),
-            ('blip_down_FA', 'blip_down_FA')
+            ('blip_down_FA', 'blip_down_FA'),
+            ('structural_image', 'structural_image')
         ]),
         (gather_drbuddi_inputs, aggregate_drbuddi, [
             ('blip_assignments', 'blip_assignments')]),
