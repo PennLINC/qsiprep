@@ -98,8 +98,8 @@ def init_fsl_hmc_wf(scan_groups,
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=['dwi_file', 'bvec_file', 'bval_file', 'b0_indices', 'b0_images',
-                    'original_files', 't1_brain', 't1_mask', 't1_seg', 't2_brain',
-                    't1_2_mni_reverse_transform']),
+                    'original_files', 't1_brain', 't1_mask', 't1_seg',
+                    't1_2_mni_reverse_transform', 't2w_files']),
         name='inputnode')
 
     outputnode = pe.Node(
@@ -128,8 +128,12 @@ def init_fsl_hmc_wf(scan_groups,
     # Run in parallel if possible
     LOGGER.info("Using %d threads in eddy", omp_nthreads)
     eddy_args["num_threads"] = omp_nthreads
-    pre_eddy_b0_ref_wf = init_dwi_reference_wf(register_t1=True, source_file=source_file,
-                                               name='pre_eddy_b0_ref_wf', gen_report=False)
+    pre_eddy_b0_ref_wf = init_dwi_reference_wf(
+        omp_nthreads=omp_nthreads,
+        register_t1=True,
+        source_file=source_file,
+        name='pre_eddy_b0_ref_wf',
+        gen_report=False)
     eddy = pe.Node(ExtendedEddy(**eddy_args), name="eddy")
     spm_motion = pe.Node(Eddy2SPMMotion(), name="spm_motion")
 
@@ -292,7 +296,7 @@ def init_fsl_hmc_wf(scan_groups,
                 ('bvec_files', 'inputnode.bvec_files')]),
             (inputnode, drbuddi_wf, [
                 ('t1_brain', 'inputnode.t1_brain'),
-                ('t2_brain', 'inputnode.t2_brain'),
+                ('t2w_files', 'inputnode.t2w_files'),
                 ('original_files', 'inputnode.original_files')]),
             #(drbuddi_wf, ds_report_drbuddi, [
             #    ('outputnode.report', 'in_file')]),

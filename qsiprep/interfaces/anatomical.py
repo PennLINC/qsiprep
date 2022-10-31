@@ -9,6 +9,8 @@ Image tools interfaces
 
 """
 
+from copy import copy
+from email import header
 import os.path as op
 import numpy as np
 from nipype import logging
@@ -19,6 +21,8 @@ from scipy import ndimage
 from nipype.interfaces.base import (traits, TraitedSpec, BaseInterfaceInputSpec,
                                     SimpleInterface, File)
 from nipype.utils.filemanip import fname_presuffix
+from dipy.segment.threshold import otsu
+import nilearn.image as nim
 
 LOGGER = logging.getLogger('nipype.interface')
 
@@ -256,12 +260,12 @@ class CalculateSOPOutputSpec(TraitedSpec):
 class CalculateSOP(SimpleInterface):
     input_spec = CalculateSOPInputSpec
     output_spec = CalculateSOPOutputSpec
-    
+
     def _run_interface(self, runtime):
 
         # load the input nifti image
         img = nb.load(self.inputs.sh_nifti)
-        
+
         # determine what the lmax was based on the number of volumes
         num_vols = img.shape[3]
         if not num_vols in lmax_lut:
@@ -290,5 +294,85 @@ class CalculateSOP(SimpleInterface):
         # calculate!
         for order in range(2, self.inputs.order + 2, 2):
             calculate_order(order)
-        
+
         return runtime
+
+
+class _DesaturateSkullInputSpec(BaseInterfaceInputSpec):
+    skulled_t2w_image = File(
+        exists=True,
+        mandatory=True,
+        desc="Skull-on T2w image")
+    brain_mask_image = File(
+        exists=True,
+        mandatory=True,
+        desc='Binary brain mask in the same grid as skulled_t2w_image')
+    brain_to_skull_ratio = traits.CFloat(
+        8.0,
+        usedefault=True,
+        desc="Ratio of signal in the brain to signal in the skull")
+
+
+class _DesaturateSkullOutputSpec(TraitedSpec):
+    desaturated_t2w = File(exists=True)
+    head_scaling_factor = traits.Float(0.)
+
+
+class DesaturateSkull(SimpleInterface):
+    input_spec = _DesaturateSkullInputSpec
+    output_spec = _DesaturateSkullOutputSpec
+
+    def _run_interface(self, runtime):
+
+        out_file = fname_presuffix(
+            self.inputs.skulled_t2w_image,
+            newpath=runtime.cwd,
+            suffix='_desaturated.nii',
+            use_ext=False)
+        skulled_img = nim.load_img(self.inputs.skulled_t2w_image)
+        brainmask_img = nim.load_img(self.inputs.brain_mask_image)
+        brain_median, nonbrain_head_median = calculate_nonbrain_saturation(
+            skulled_img, brainmask_img)
+
+        actual_brain_to_skull_ratio = brain_median / nonbrain_head_median
+        LOGGER.info("found brain to skull ratio:", actual_brain_to_skull_ratio)
+        desat_data = skulled_img.get_fdata(dtype=np.float32).copy()
+        adjustment = 1.
+        if actual_brain_to_skull_ratio < self.inputs.brain_to_skull_ratio:
+            # We need to downweight the non-brain voxels
+            adjustment = actual_brain_to_skull_ratio / self.inputs.brain_to_skull_ratio
+            LOGGER.info("Desaturating outside-brain signal by %.5f" % adjustment)
+            nonbrain_mask = brainmask_img.get_fdata() < 1
+            # Apply the adjustment
+            desat_data[nonbrain_mask] = desat_data[nonbrain_mask] * adjustment
+
+        desat_img = nim.new_img_like(skulled_img, desat_data, copy_header=True)
+        desat_img.header.set_data_dtype(np.float32)
+        desat_img.to_filename(out_file)
+        self._results['desaturated_t2w'] = out_file
+        self._results['head_scaling_factor'] = adjustment
+        return runtime
+
+
+def calculate_nonbrain_saturation(head_img, brain_mask_img):
+    # Calculate the
+    head_data = head_img.get_fdata()
+    brain_mask = brain_mask_img.get_fdata() > 0
+
+    def clip_values(values):
+        _, top_percent = np.percentile(
+            values, np.array([0, 99.75]), axis=None)
+        return np.clip(values, 0, top_percent)
+
+    nonbrain_voxels = head_data[np.logical_not(brain_mask)]
+    winsorized_nonbrain_voxels = clip_values(nonbrain_voxels)
+    threshold = otsu(winsorized_nonbrain_voxels) * 0.5
+
+    nbmask = np.zeros_like(head_img.get_fdata())
+    nbmask[head_data > threshold] = 2
+    nbmask[brain_mask] = 0
+
+    in_brain_median = np.median(head_data[brain_mask])
+    non_brain_head_median = np.median(head_data[nbmask > 0])
+
+    return in_brain_median, non_brain_head_median

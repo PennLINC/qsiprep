@@ -240,7 +240,7 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
     extract_b0_series = pe.Node(ExtractB0s(), name="extract_b0_series")
     final_b0_ref = init_dwi_reference_wf(register_t1=False, gen_report=write_reports,
                                          desc='resampled', name='final_b0_ref',
-                                         source_file=source_file)
+                                         source_file=source_file, omp_nthreads=omp_nthreads)
 
     workflow.connect([
         (inputnode, merge, [('name_source', 'header_source')]),
@@ -255,7 +255,7 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
             ('outputnode.dwi_mask', 'resampled_dwi_mask')])])
 
     # Calculate QC metrics on the resampled data
-    calculate_qc = init_modelfree_qc_wf(name='calculate_qc')
+    calculate_qc = init_modelfree_qc_wf(omp_nthreads=omp_nthreads, name='calculate_qc')
     workflow.connect([
         (rotate_gradients, calculate_qc, [
             ('bvals', 'inputnode.bval_file'),

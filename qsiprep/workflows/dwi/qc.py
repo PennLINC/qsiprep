@@ -5,8 +5,6 @@
 Utility workflows
 ^^^^^^^^^^^^^^^^^
 
-.. autofunction:: init_dwi_reference_wf
-
 """
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu, afni
@@ -21,12 +19,13 @@ from ...interfaces.anatomical import DiceOverlap
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
-def init_modelfree_qc_wf(dwi_files=None, name='dwi_qc_wf'):
+def init_modelfree_qc_wf(omp_nthreads, dwi_files=None, name='dwi_qc_wf'):
     """
     This workflow runs DSI Studio's QC metrics
 
     **Parameters**
-
+        omp_nthreads : int
+            maximum number of threads
         dwi_files : list of DWI Files
             A b=0 image
         name : str
@@ -57,11 +56,26 @@ def init_modelfree_qc_wf(dwi_files=None, name='dwi_qc_wf'):
         niu.IdentityInterface(fields=['qc_summary']),
         name='outputnode')
 
-    raw_src = pe.Node(DSIStudioCreateSrc(), name='raw_src')
-    raw_src_qc = pe.Node(DSIStudioSrcQC(), name='raw_src_qc')
-    raw_gqi = pe.Node(DSIStudioGQIReconstruction(), name='raw_gqi')
-    raw_fib_qc = pe.Node(DSIStudioFibQC(), name='raw_fib_qc')
-    merged_qc = pe.Node(DSIStudioMergeQC(), name='merged_qc')
+    raw_src = pe.Node(
+        DSIStudioCreateSrc(),
+        name='raw_src',
+        n_procs=omp_nthreads)
+    raw_src_qc = pe.Node(
+        DSIStudioSrcQC(),
+        name='raw_src_qc',
+        n_procs=omp_nthreads)
+    raw_gqi = pe.Node(
+        DSIStudioGQIReconstruction(thread_count=omp_nthreads),
+        name='raw_gqi',
+        n_procs=omp_nthreads)
+    raw_fib_qc = pe.Node(
+        DSIStudioFibQC(),
+        name='raw_fib_qc',
+        n_procs=omp_nthreads)
+    merged_qc = pe.Node(
+        DSIStudioMergeQC(),
+        name='merged_qc',
+        n_procs=omp_nthreads)
     workflow.connect([
         (inputnode, raw_src, [
             ('dwi_file', 'input_nifti_file'),

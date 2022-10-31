@@ -9,7 +9,6 @@ Anatomical reference preprocessing workflows
 .. autofunction:: init_skullstrip_ants_wf
 
 """
-
 from pkg_resources import resource_filename as pkgr
 
 from nipype.pipeline import engine as pe
@@ -42,8 +41,9 @@ from ..interfaces import (
 from qsiprep.interfaces import Conform
 from ..utils.misc import fix_multi_T1w_source_name, add_suffix
 from ..interfaces.freesurfer import (
-        PatchedLTAConvert as LTAConvert)
-from ..interfaces.anatomical import FakeSegmentation
+        PatchedLTAConvert as LTAConvert, PrepareSynthStripGrid,
+        FixHeaderSynthStrip)
+from ..interfaces.anatomical import FakeSegmentation, DesaturateSkull
 
 from nipype import logging
 LOGGER = logging.getLogger('nipype.workflow')
@@ -62,7 +62,8 @@ TEMPLATE_MAP = {
 def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug, dwi_only,
                          infant_mode, freesurfer, longitudinal, omp_nthreads, hires,
                          output_dir, num_t1w, output_resolution, force_spatial_normalization,
-                         reportlets_dir, skull_strip_fixed_seed=False, name='anat_preproc_wf'):
+                         reportlets_dir, t2w_files, skull_strip_fixed_seed=False,
+                         name='anat_preproc_wf'):
     r"""
     This workflow controls the anatomical preprocessing stages of qsiprep. It differs from
     the FMRIPREP preprocessing in that a rigid alignment to MNI is performed before declaring
@@ -85,6 +86,7 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug, d
         wf = init_anat_preproc_wf(omp_nthreads=1,
                                   reportlets_dir='.',
                                   output_dir='.',
+                                  t2w_files=[],
                                   template='MNI152NLin2009cAsym',
                                   output_spaces=['T1w', 'fsnative',
                                                  'template', 'fsaverage5'],
@@ -172,6 +174,8 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug, d
             gray-matter (GM), white-matter (WM) and cerebrospinal fluid (CSF)
         t1_tpms
             List of tissue probability maps in T1w space
+        t2w_files
+            List of preprocessed t2w files
         t1_2_mni
             T1w template, normalized to MNI space
         t1_2_mni_forward_transform
@@ -213,7 +217,7 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug, d
     outputnode = pe.Node(niu.IdentityInterface(
         fields=['t1_preproc', 't1_brain', 't1_mask', 't1_seg', 't1_tpms',
                 't1_2_mni', 't1_2_mni_forward_transform', 't1_2_mni_reverse_transform',
-                'mni_mask', 'mni_seg', 'mni_tpms',
+                'mni_mask', 'mni_seg', 'mni_tpms', 't2w_files',
                 'template_transforms', 'dwi_sampling_grid',
                 'subjects_dir', 'subject_id', 't1_2_fsnative_forward_transform',
                 't1_2_fsnative_reverse_transform', 'surfaces', 't1_aseg', 't1_aparc']),
@@ -224,8 +228,8 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug, d
         ref_img = pkgr('qsiprep', 'data/mni_1mm_t1w_lps.nii.gz')
         ref_img_brain = pkgr('qsiprep', 'data/mni_1mm_t1w_lps_brain.nii.gz')
     else:
-        ref_img = pkgr('qsiprep', 'data/mni_1mm_t1w_lps.nii.gz')
-        ref_img_brain = pkgr('qsiprep', 'data/mni_1mm_t1w_lps_brain.nii.gz')
+        ref_img = pkgr('qsiprep', 'data/mni_1mm_t1w_lps_infant.nii.gz')
+        ref_img_brain = pkgr('qsiprep', 'data/mni_1mm_t1w_lps_brain_infant.nii.gz')
 
     # 3a. Create the output reference grid_image
     reference_grid_wf = init_output_grid_wf(voxel_size=output_resolution,
@@ -233,6 +237,16 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug, d
                                             template_image=ref_img)
     workflow.connect([
         (reference_grid_wf, outputnode, [('outputnode.grid_image', 'dwi_sampling_grid')])])
+
+    # Process the t2w images
+    if t2w_files:
+        t2w_preproc_wf = init_t2w_preproc_wf(
+            omp_nthreads=omp_nthreads,
+            t2w_images=t2w_files)
+        workflow.connect([
+            (t2w_preproc_wf, outputnode, [
+                ('outputnode.unfatsat', 't2w_files')])])
+
 
     if dwi_only:
         seg_node = dummy_anat_outputs(outputnode, infant_mode=infant_mode)
@@ -925,6 +939,113 @@ The T1w-reference was then skull-stripped using `3dSkullStrip`
         (rigid_acpc_resample_mask, outputnode, [('output_image', 'out_mask')]),
         (rigid_acpc_resample_seg, outputnode, [('output_image', 'out_segs')]),
     ])
+
+    return workflow
+
+
+def init_synthstrip_wf(omp_nthreads, in_file=None, unfatsat=False, name="synthstrip_wf"):
+    workflow = Workflow(name=name)
+    inputnode = pe.Node(
+        niu.IdentityInterface(fields=['skulled_image']),
+        name='inputnode')
+    outputnode = pe.Node(
+        niu.IdentityInterface(fields=['brain_image', 'brain_mask', 'unfatsat']),
+        name='outputnode')
+
+    if in_file:
+        inputnode.inputs.skulled_image=in_file
+
+    skulled_1mm_resample = pe.Node(
+        afni.Resample(
+            outputtype="NIFTI_GZ",
+            voxel_size=(1.0, 1.0, 1.0)),
+        name="skulled_1mm_resample")
+    skulled_autobox = pe.Node(
+        afni.Autobox(outputtype="NIFTI_GZ", padding=3),
+        name='skulled_autobox')
+    prepare_synthstrip_reference = pe.Node(
+        PrepareSynthStripGrid(),
+        name="prepare_synthstrip_reference")
+    resample_skulled_to_reference = pe.Node(
+        ants.ApplyTransforms(
+            dimension=3,
+            interpolation="BSpline",
+            transforms=['identity']),
+        name="resample_skulled_to_reference")
+    synthstrip = pe.Node(
+        FixHeaderSynthStrip(),
+        name="synthstrip",
+        n_procs=omp_nthreads)
+    mask_to_original_grid = pe.Node(
+        ants.ApplyTransforms(
+            dimension=3,
+            transforms=['identity'],
+            interpolation="NearestNeighbor"),
+        name="mask_to_original_grid")
+    mask_brain = pe.Node(
+        ants.MultiplyImages(
+            dimension=3,
+            output_product_image="masked_brain.nii"),
+        name="mask_brain")
+
+    # For T2w images, create an artificially skull-downweighted image
+    if unfatsat:
+        desaturate_skull = pe.Node(DesaturateSkull(), name='desaturate_skull')
+        workflow.connect([
+            (mask_brain, desaturate_skull, [('output_product_image', 'brain_mask_image')]),
+            (inputnode, desaturate_skull, [('skulled_image', 'skulled_t2w_image')]),
+            (desaturate_skull, outputnode, [('desaturated_t2w', 'unfatsat')])
+        ])
+
+    workflow.connect([
+        (inputnode, skulled_1mm_resample, [('skulled_image', 'in_file')]),
+        (skulled_1mm_resample, skulled_autobox, [('out_file', 'in_file')]),
+        (skulled_autobox, prepare_synthstrip_reference, [('out_file', 'input_image')]),
+        (prepare_synthstrip_reference, resample_skulled_to_reference, [
+            ('prepared_image', 'reference_image')]),
+        (inputnode, resample_skulled_to_reference, [('skulled_image', 'input_image')]),
+        (resample_skulled_to_reference, synthstrip, [('output_image', 'input_image')]),
+        (synthstrip, mask_to_original_grid, [('out_brain_mask', 'input_image')]),
+        (inputnode, mask_to_original_grid, [('skulled_image', 'reference_image')]),
+        (mask_to_original_grid, outputnode, [('output_image', 'brain_mask')]),
+        (inputnode, mask_brain, [('skulled_image', 'first_input')]),
+        (mask_to_original_grid, mask_brain, [("output_image", "second_input")]),
+        (mask_brain, outputnode, [('output_product_image', 'brain_image')])
+
+    ])
+
+    return workflow
+
+
+def init_t2w_preproc_wf(omp_nthreads, t2w_images, name="t2w_preproc_wf"):
+    workflow = Workflow(name=name)
+    inputnode = pe.Node(
+        niu.IdentityInterface(fields=['t2w_images']),
+        name='inputnode')
+    outputnode = pe.Node(
+        niu.IdentityInterface(fields=['brain_image', 'brain_mask', 'unfatsat']),
+        name='outputnode')
+
+    unfatsats = pe.Node(
+        niu.Merge(len(t2w_images)),
+        name='unfatsats')
+    workflow.connect([
+        (unfatsats, outputnode, [('out', 'unfatsat')])
+    ])
+
+    workflows = {}
+    for imagenum, t2w_image in enumerate(t2w_images, start=1):
+
+        workflows[t2w_image] = init_synthstrip_wf(
+            omp_nthreads=omp_nthreads,
+            in_file=t2w_image,
+            unfatsat=True,
+            name='synthstrip_t2w_%d' % imagenum)
+
+        workflow.connect([
+            (workflows[t2w_image], unfatsats, [
+                ('outputnode.unfatsat', 'in%d' % imagenum)])
+        ])
 
     return workflow
 
@@ -1631,3 +1752,4 @@ def dummy_anat_outputs(outputnode, infant_mode=False):
             'qsiprep', 'data/mni_1mm_t1w_lps_brainmask.nii.gz')
 
     return fake_seg
+

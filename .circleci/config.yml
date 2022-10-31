@@ -2,7 +2,7 @@ version: 2.1
 
 .dockersetup: &dockersetup
   docker:
-    - image: pennbbl/qsiprep_build:22.10.0
+    - image: pennbbl/qsiprep_build:22.10.5
   working_directory: /src/qsiprep
 
 runinstall: &runinstall
@@ -54,6 +54,9 @@ jobs:
             make SHPINXOPTS="-W" -C docs html
 
   DSCSDSI:
+    resource_class: large
+    environment:
+      CIRCLE_CPUS: 4
     <<: *dockersetup
     steps:
       - checkout
@@ -66,6 +69,9 @@ jobs:
             bash DSCSDSI.sh
 
   DSDTI_nofmap:
+    environment:
+      CIRCLE_CPUS: 4
+    resource_class: large
     <<: *dockersetup
     steps:
       - checkout
@@ -78,6 +84,9 @@ jobs:
             bash DSDTI_nofmap.sh
 
   DSDTI_synfmap:
+    resource_class: large
+    environment:
+      CIRCLE_CPUS: 4
     <<: *dockersetup
     steps:
       - checkout
@@ -90,6 +99,9 @@ jobs:
             bash DSDTI_synfmap.sh
 
   DSDTI_TOPUP:
+    resource_class: large
+    environment:
+      CIRCLE_CPUS: 4
     <<: *dockersetup
     steps:
       - checkout
@@ -102,6 +114,9 @@ jobs:
             bash DSDTI_TOPUP.sh
 
   DRBUDDI_SHORELine_EPI:
+    resource_class: large
+    environment:
+      CIRCLE_CPUS: 4
     <<: *dockersetup
     steps:
       - checkout
@@ -114,6 +129,9 @@ jobs:
             bash DRBUDDI_SHORELine_epi.sh
 
   DRBUDDI_eddy_rpe_series:
+    resource_class: large
+    environment:
+      CIRCLE_CPUS: 4
     <<: *dockersetup
     steps:
       - checkout
@@ -126,10 +144,10 @@ jobs:
             bash DRBUDDI_eddy_rpe_series.sh
 
   IntramodalTemplate:
-    <<: *dockersetup
     resource_class: large
+    <<: *dockersetup
     environment:
-      CIRCLE_CPUS: 3
+      CIRCLE_CPUS: 4
     steps:
       - checkout
       - run: *runinstall
@@ -215,6 +233,7 @@ jobs:
             bash AMICOReconTests.sh
 
   deployable:
+    resource_class: small
     docker:
       - image: busybox:latest
     steps:

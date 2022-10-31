@@ -15,7 +15,7 @@ if [[ "${CIRCLECI}" = "true" ]]; then
   OMP_NTHREADS=2
   if [[ -n "${CIRCLE_CPUS}" ]]; then
     NTHREADS=${CIRCLE_CPUS}
-    OMP_NTHREADS=$(expr $NTHREADS - 1)
+    OMP_NTHREADS=${NTHREADS}
   fi
 else
   IN_CI="false"
