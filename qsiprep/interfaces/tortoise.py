@@ -151,7 +151,14 @@ class GatherDRBUDDIInputs(SimpleInterface):
             down_img.to_filename(blip_down_nii)
             self._results["blip_up_image"] = blip_up_nii
             self._results["blip_down_image"] = blip_down_nii
-            self._results["blip_assignments"] = ["up"] * len(self.inputs.dwi_files)
+            self._results["blip_assignments"] = split_into_up_and_down_niis(
+                            dwi_files=self.inputs.dwi_files,
+                            bval_files=bval_files,
+                            bvec_files=bvec_files,
+                            original_images=self.inputs.original_files,
+                            prefix=op.join(runtime.cwd, "drbuddi"),
+                            make_bmat=False,
+                            assignments_only=True)
             self._results["blip_up_bmat"] = write_dummy_bmtxt(blip_up_nii)
             self._results["blip_down_bmat"] = write_dummy_bmtxt(blip_down_nii)
 
@@ -417,12 +424,12 @@ def drbuddi_boilerplate(fieldmap_type):
 
 
 def split_into_up_and_down_niis(dwi_files, bval_files, bvec_files, original_images,
-                                prefix, make_bmat=True):
+                                prefix, make_bmat=True, assignments_only=False):
     """Takes the concatenated output from pre_hmc_wf and split it into "up" and "down"
     decompressed nifti files with float32 datatypes."""
     group_names, group_assignments = get_distortion_grouping(original_images)
 
-    if not len(set(group_names)) == 2:
+    if not len(set(group_names)) == 2 and not assignments_only:
         raise Exception("DRBUDDI requires exactly one blip up and one blip down")
 
     up_images = []
@@ -454,6 +461,9 @@ def split_into_up_and_down_niis(dwi_files, bval_files, bvec_files, original_imag
             down_bvals.append(bval_file)
             down_bvecs.append(bvec_file)
             blip_assignments.append("down")
+
+    if assignments_only:
+        return blip_assignments
 
     # Write the 4d up image
     up_4d = nim.concat_imgs(up_images, dtype=np.float32, auto_resample=False)
