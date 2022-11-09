@@ -3,7 +3,7 @@
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 from .bids import (
     ReadSidecarJSON, DerivativesDataSink, BIDSDataGrabber, BIDSFreeSurferDir,
-    BIDSInfo
+    BIDSInfo, DerivativesMaybeDataSink
 )
 
 from ..niworkflows.interfaces.images import (TemplateDimensions, MatchHeader)

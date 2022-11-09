@@ -253,7 +253,7 @@ class DerivativesDataSinkInputSpec(BaseInterfaceInputSpec):
     base_directory = traits.Directory(
         desc='Path to the base directory for storing data.')
     in_file = traits.Either(traits.Directory(exists=True),
-                            InputMultiObject(File(exists=True)), 
+                            InputMultiObject(File(exists=True)),
                             mandatory=True,
                             desc='the object to be saved')
     source_file = File(mandatory=True, desc='the original file or name of merged files')
@@ -373,7 +373,7 @@ desc-preproc_bold.nii.gz'
 
         if len(self.inputs.in_file) > 1 and not isdefined(self.inputs.extra_values):
             formatstr = '{bname}{space}{desc}{suffix}{i:04d}{dtype}{ext}'
-        
+
         # Otherwise it's file(s)
         self._results['compression'] = []
         for i, fname in enumerate(self.inputs.in_file):
@@ -390,6 +390,22 @@ desc-preproc_bold.nii.gz'
             self._results['out_file'].append(out_file)
             self._results['compression'].append(_copy_any(fname, out_file))
         return runtime
+
+
+class _DerivativesMaybeDataSinkInputSpec(DerivativesDataSinkInputSpec):
+    in_file = traits.Either(traits.Directory(exists=True),
+                            InputMultiObject(File(exists=True)),
+                            mandatory=False,
+                            desc='the object to be saved')
+
+
+class DerivativesMaybeDataSink(DerivativesDataSink):
+    input_spec = _DerivativesMaybeDataSinkInputSpec
+
+    def _run_interface(self, runtime):
+        if not isdefined(self.inputs.in_file):
+            return runtime
+        return super(DerivativesMaybeDataSink, self)._run_interface(runtime)
 
 
 class ReconDerivativesDataSink(DerivativesDataSink):

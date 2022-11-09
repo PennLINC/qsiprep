@@ -454,7 +454,8 @@ def plot_rpe_sdc(blip_up_nii, blip_down_nii, blip_up_nii_corrected, blip_down_ni
 def plot_denoise(lowb_nii, highb_nii, div_id, plot_params=None, highb_plot_params=None,
                  order=('z', 'x', 'y'), cuts=None,
                  estimate_brightness=False, label=None, lowb_contour=None,
-                 highb_contour=None,
+                 highb_contour=None, upper_label_suffix=": low-b",
+                 lower_label_suffix=": high-b",
                  compress='auto', overlay=None, overlay_params=None):
     """
     Plot the foreground and background views.
@@ -480,7 +481,7 @@ def plot_denoise(lowb_nii, highb_nii, div_id, plot_params=None, highb_plot_param
         plot_params['display_mode'] = mode
         plot_params['cut_coords'] = cuts[mode]
         if i == 0:
-            plot_params['title'] = label + ": low-b"
+            plot_params['title'] = label + upper_label_suffix
         else:
             plot_params['title'] = None
 
@@ -510,7 +511,7 @@ def plot_denoise(lowb_nii, highb_nii, div_id, plot_params=None, highb_plot_param
         highb_plot_params['display_mode'] = mode
         highb_plot_params['cut_coords'] = cuts[mode]
         if i == 0:
-            highb_plot_params['title'] = label + ': high-b'
+            highb_plot_params['title'] = label + lower_label_suffix
         else:
             highb_plot_params['title'] = None
 

@@ -16,11 +16,12 @@ from nipype.interfaces import ants
 from nipype.utils.filemanip import split_filename, fname_presuffix
 import nilearn.image as nim
 import nibabel as nb
-from .fmap import get_distortion_grouping
+from .fmap import get_distortion_grouping, plot_fa_reg, plot_pepolar
 from .images import to_lps
 from .epi_fmap import get_best_b0_topup_inputs_from, safe_get_3d_image
 from .gradients import write_concatenated_fsl_gradients
 from .images import split_bvals_bvecs
+from ..niworkflows.viz.utils import compose_view, cuts_from_bbox
 import nilearn.image as nim
 import pandas as pd
 
@@ -326,13 +327,25 @@ class _DRBUDDIAggregateOutputsInputSpec(TORTOISEInputSpec):
     blip_down_FA = File(exists=True)
     fieldmap_type = traits.Enum("epi", "rpe_series", mandatory=True)
     structural_image = File(exists=True)
+    wm_seg = File(exists=True, desc="White matter segmentation image")
 
 
 class _DRBUDDIAggregateOutputsOutputSpec(TraitedSpec):
     # Aggregated outputs for convenience
     sdc_warps = OutputMultiObject(File(exists=True))
     sdc_scaling_images = OutputMultiObject(File(exists=True))
-    visual_report = File(exists=True)
+    # Fieldmap outputs for the reports
+    fieldmap_type = File(exists=True)
+    b0_up_image = File(exists=True)
+    b0_up_corrected_image = File(exists=True)
+    b0_down_image = File(exists=True)
+    b0_down_corrected_image = File(exists=True)
+    up_fa_image = File(exists=True)
+    up_fa_corrected_image = File(exists=True)
+    down_fa_image = File(exists=True)
+    down_fa_corrected_image = File(exists=True)
+    t2w_image = File(exists=True)
+    b0_ref = File(exists=True)
 
 
 class DRBUDDIAggregateOutputs(SimpleInterface):
@@ -384,6 +397,47 @@ class DRBUDDIAggregateOutputs(SimpleInterface):
             scaling_blip_down_file for blip_dir in
             self.inputs.blip_assignments]
 
+        # Get a segmentation from an undistorted image to see how we did
+        ref_segmentation = self.inputs.wm_seg
+        if isdefined(self.inputs.structural_file):
+            ref_segmentation = fname_presuffix(
+                self.inputs.structural_file, suffix="_segmentation",
+                newpath=runtime.cwd)
+
+        if self.inputs.fieldmap_type == 'rpe_series':
+            fa_up_warped = fname_presuffix(
+                self.inputs.blip_up_fa,
+                newpath=runtime.cwd(),
+                suffix="_corrected")
+            xfm_fa_up = ants.ApplyTransforms(
+                # input_image is ignored because print_out_composite_warp_file is True
+                input_image=self.inputs.blip_up_fa,
+                transforms=[self.inputs.deformation_finv],
+                reference_image=self.inputs.undistorted_reference,
+                output_image=fa_up_warped,
+                interpolation='NearestNeighbor'
+            )
+            xfm_fa_up.terminal_output = 'allatonce'
+            xfm_fa_up.resource_monitor = False
+            xfm_fa_up_runtime = xfm_fa_up.run().runtime
+
+            fa_down_warped = fname_presuffix(
+                self.inputs.blip_down_fa,
+                newpath=runtime.cwd(),
+                suffix="_corrected")
+            xfm_fa_down = ants.ApplyTransforms(
+                # input_image is ignored because print_out_composite_warp_file is True
+                input_image=self.inputs.blip_down_fa,
+                transforms=[self.inputs.deformation_minv,
+                            self.inputs.bdown_to_bup_rigid_trans_h5],
+                reference_image=self.inputs.undistorted_reference,
+                output_image=fa_down_warped,
+                interpolation='NearestNeighbor'
+            )
+            xfm_fa_down.terminal_output = 'allatonce'
+            xfm_fa_down.resource_monitor = False
+            xfm_fa_down_runtime = xfm_fa_down.run().runtime
+
         # report_file = op.join(runtime.cwd, "drbuddi_report.svg")
         # up_ref, down_ref = self.inputs.blip_up_FA, self.inputs.blip_down_FA if \
         #     self.inputs.fieldmap_type == "rpe_series" else self.inputs.blip_up_b0_corrected, \
@@ -392,17 +446,40 @@ class DRBUDDIAggregateOutputs(SimpleInterface):
         return runtime
 
 
-def plot_drbuddi(
-    blip_up_orig_file, blip_up_transforms, blip_up_scaling_file,
-    blip_down_orig_file, blip_down_transforms, blip_down_scaling_image,
-    b0_corrected_file, cwd):
+def plot_fa_registration(up_fa_uncorrected, down_fa_uncorrected, up_fa_corrected, down_fa_corrected,
+                         wm_seg, out_svg_file, ncuts):
+    uncorrected_up_fa_img = nim.load_img(up_fa_uncorrected)
+    uncorrected_down_fa_img = nim.load_img(down_fa_uncorrected)
+    uncorrected_fa = nim.math_img("(a+b)/2", a=uncorrected_down_fa_img, b=uncorrected_up_fa_img)
+    corrected_down_fa_img = nim.load_img(down_fa_corrected)
+    corrected_up_fa_img = nim.load_img(up_fa_corrected)
+    corrected_fa = nim.math_img("(a+b)/2", a=corrected_up_fa_img, b=corrected_down_fa_img)
+    wm_seg_img = nim.load_img(wm_seg)
+    cuts = cuts_from_bbox(wm_seg_img, ncuts)
+    compose_view(
+        plot_fa_reg(
+            corrected_fa, wm_seg_img, 'moving-image', estimate_brightness=False,
+            label="FA: After",
+            cuts=cuts),
+        plot_fa_reg(
+            uncorrected_fa, wm_seg_img, 'fixed-image', estimate_brightness=False,
+            label="FA: Before",
+            cuts=cuts),
 
-    def resample_to_reference(data_img, fname):
-        resample = ants.ApplyTransforms(
-            dimension=3,
-            reference=b0_corrected_file
-        )
-    pass
+        out_file=out_svg_file)
+
+
+def plot_b0_registration():
+
+    # b=0's
+    up_b0_uncorrected = "drbuddi/blip_up_b0.nii"
+    down_b0_uncorrected = "drbuddi/blip_down_b0.nii"
+    up_b0_corrected = "drbuddi/blip_up_b0_corrected.nii"
+    down_b0_corrected = "drbuddi/blip_down_b0_corrected.nii"
+
+    wm_seg = "drbuddi/highres001_BrainExtractionBrain_trans_seg_trans_wm.nii.gz"
+    t2w_image = "drbuddi/structural_used.nii"
+    final_corrected = "drbuddi/b0_corrected_final.nii"
 
 
 def drbuddi_boilerplate(fieldmap_type):
@@ -496,4 +573,3 @@ def make_bmat_file(bvals, bvecs):
         ["FSLBVecsToTORTOISEBmatrix", op.abspath(bvals), op.abspath(bvecs)])
     print(pout)
     return bvals.replace("bval", "bmtxt")
-

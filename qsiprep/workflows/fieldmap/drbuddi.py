@@ -9,13 +9,14 @@ Correcting Susceptibility Distortion with DRBUDDI
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 DRBUDDI is part of the TORTOISE software that estimates and corrects
-susceptibility distortion. It has two different modes of operation
+susceptibility distortion. It has multiple modes of operation
 
   1. Use $b=0$ images to estimate distortion.
 
   2. Perform a multimodal registration using $b=0$ images and FA images.
      This requires two DWI series with opposite phase encoding directions
 
+  3. Either (1) or (2) but a t2w image is used as well
 
 """
 
@@ -101,12 +102,17 @@ def init_drbuddi_wf(scan_groups, b0_threshold, raw_image_sdc, omp_nthreads=1,
     workflow = Workflow(name=name)
     inputnode = pe.Node(niu.IdentityInterface(
         fields=['dwi_files', 'bval_files', 'bvec_files', 'original_files',
-                't1_brain', 't2w_files']),
+                't1_brain', 't1_wm_seg', 't2w_files']),
         name='inputnode')
 
     outputnode = pe.Node(
         niu.IdentityInterface(
-            fields=['b0_ref', 'b0_mask', 'sdc_warps', 'sdc_scaling_images', 'report', 'method']),
+            fields=['b0_ref', 'b0_mask', 'sdc_warps', 'sdc_scaling_images', 'report', 'method',
+                    # From SDC
+                    "fieldmap_type", "b0_up_image", "b0_up_corrected_image", "b0_down_image",
+                    "b0_down_corrected_image", "up_fa_image", "up_fa_corrected_image", "down_fa_image",
+                    "down_fa_corrected_image", "t2w_image"
+            ]),
         name='outputnode')
 
     workflow.__postdesc__ = """\
@@ -159,8 +165,7 @@ co-registration with the anatomical reference.
             ("blip_up_bmat", "blip_up_bmat"),
             ("blip_down_image", "blip_down_image"),
             ("blip_down_bmat", "blip_down_bmat"),
-            ("t2w_files", "structural_image")
-        ]),
+            ("t2w_files", "structural_image")]),
         (gather_drbuddi_inputs, drbuddi_summary, [
             ("report", "summary")]),
         (drbuddi, aggregate_drbuddi, [
@@ -178,15 +183,24 @@ co-registration with the anatomical reference.
             ('deformation_minv', 'deformation_minv'),
             ('blip_up_FA', 'blip_up_FA'),
             ('blip_down_FA', 'blip_down_FA'),
-            ('structural_image', 'structural_image')
-        ]),
+            ('structural_image', 'structural_image')]),
         (gather_drbuddi_inputs, aggregate_drbuddi, [
             ('blip_assignments', 'blip_assignments')]),
-        (drbuddi, outputnode, [
-            ("undistorted_reference", "b0_ref")]),
         (aggregate_drbuddi, outputnode, [
             ("sdc_warps", "sdc_warps"),
-            ("sdc_scaling_images", "sdc_scaling_images")])
+            ("sdc_scaling_images", "sdc_scaling_images"),
+            ("fieldmap_type", "fieldmap_type"),
+            ("b0_up_image", "b0_up_image"),
+            ("b0_up_corrected_image", "b0_up_corrected_image"),
+            ("b0_down_image", "b0_down_image"),
+            ("b0_down_corrected_image", "b0_down_corrected_image"),
+            ("up_fa_image", "up_fa_image"),
+            ("up_fa_corrected_image", "up_fa_corrected_image"),
+            ("down_fa_image", "down_fa_image"),
+            ("down_fa_corrected_image", "down_fa_corrected_image"),
+            ("t2w_image", "t2w_image"),
+            ("b0_ref", "b0_ref")
+            ])
     ])
 
     return workflow

@@ -13,11 +13,12 @@ from nipype.interfaces import utility as niu
 from nipype.interfaces.base import isdefined
 
 from qsiprep.workflows.fieldmap import pepolar
-from ...interfaces import DerivativesDataSink
+from ...interfaces import DerivativesDataSink, DerivativesMaybeDataSink
 
 from ...interfaces.reports import DiffusionSummary
 from ...interfaces.confounds import DMRISummary
 from ...interfaces.utils import TestInput
+from ...interfaces.fmap import PEPOLARReport
 from ...engine import Workflow
 
 # dwi workflows
@@ -363,8 +364,6 @@ Diffusion data preprocessing
             omp_nthreads=omp_nthreads,
             fmap_bspline=fmap_bspline,
             fmap_demean=fmap_demean,
-            use_syn=use_syn,
-            force_syn=force_syn,
             pepolar_method=pepolar_method,
             dwi_metadata=dwi_metadata,
             sloppy=sloppy,
@@ -423,9 +422,9 @@ Diffusion data preprocessing
         name='ds_report_coreg', run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB)
 
-    # Make a fieldmap report, save the transforms. Do it here because we need wm
-    # If DRBUDDI is used, a second report will be written with the second modalities
-    if fieldmap_type is not None:
+    # Fieldmap reports should vary depending on which type of correction is performed
+    # PEPOLAR (epi, rpe series) will produce potentially much more detailed reports
+    if fieldmap_type not in ("epi", "rpe_series", None):
         fmap_unwarp_report_wf = init_fmap_unwarp_report_wf()
         ds_report_sdc = pe.Node(
             DerivativesDataSink(desc="sdc", suffix='b0', source_file=source_file),
@@ -445,6 +444,43 @@ Diffusion data preprocessing
                 ('outputnode.itk_b0_to_t1', 'inputnode.in_xfm')]),
             (fmap_unwarp_report_wf, ds_report_sdc, [('outputnode.report', 'in_file')])
         ])
+
+    elif fieldmap_type in ("epi", "rpe_series"):
+        pepolar_report = pe.Node(
+            PEPOLARReport(fieldmap_type=fieldmap_type),
+            name="peoplar_report")
+
+        ds_report_fa_sdc = pe.Node(
+            DerivativesMaybeDataSink(desc="sdc", suffix='fa', source_file=source_file),
+            name='ds_report_fa_sdc',
+            mem_gb=DEFAULT_MEMORY_MIN_GB,
+            run_without_submitting=True)
+
+        ds_report_b0_sdc = pe.Node(
+            DerivativesMaybeDataSink(desc="sdc", suffix='b0', source_file=source_file),
+            name='ds_report_b0_sdc',
+            mem_gb=DEFAULT_MEMORY_MIN_GB,
+            run_without_submitting=True)
+
+        workflow.connect([
+            (hmc_wf, pepolar_report,[
+                ("outputnode.fieldmap_type", "fieldmap_type"),
+                ("outputnode.b0_up_image", "b0_up_image"),
+                ("outputnode.b0_up_corrected_image", "b0_up_corrected_image"),
+                ("outputnode.b0_down_image", "b0_down_image"),
+                ("outputnode.b0_down_corrected_image", "b0_down_corrected_image"),
+                ("outputnode.up_fa_image", "up_fa_image"),
+                ("outputnode.up_fa_corrected_image", "up_fa_corrected_image"),
+                ("outputnode.down_fa_image", "down_fa_image"),
+                ("outputnode.down_fa_corrected_image", "down_fa_corrected_image"),
+                ("outputnode.t2w_image", "t2w_image"),
+                ("outputnode.b0_ref", "b0_ref")]),
+            (pepolar_report, ds_report_fa_sdc, [
+                ("fa_sdc_report", "in_file")]),
+            (pepolar_report, ds_report_b0_sdc, [
+                ("b0_sdc_report", "in_file")])
+        ])
+
 
     summary = pe.Node(
         DiffusionSummary(
