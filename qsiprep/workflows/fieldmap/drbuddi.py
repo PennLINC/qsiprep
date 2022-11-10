@@ -36,7 +36,7 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 
 
 def init_drbuddi_wf(scan_groups, b0_threshold, raw_image_sdc, omp_nthreads=1,
-                    name="drbuddi_sdc_wf", sloppy=False):
+                    segment_t2w, name="drbuddi_sdc_wf", sloppy=False):
     """
     This workflow implements the heuristics to choose a
     :abbr:`SDC (susceptibility distortion correction)` strategy.
@@ -151,6 +151,10 @@ co-registration with the anatomical reference.
 
     drbuddi_summary = pe.Node(TopupSummary(), name='drbuddi_summary')
 
+    # If we had a T2w, let's get a segmentation
+    if segment_t2w:
+        t2_n4 = pe.Node()
+
     workflow.connect([
         (inputnode, gather_drbuddi_inputs, [
             ("dwi_files", "dwi_files"),
@@ -168,6 +172,13 @@ co-registration with the anatomical reference.
             ("t2w_files", "structural_image")]),
         (gather_drbuddi_inputs, drbuddi_summary, [
             ("report", "summary")]),
+        (drbuddi, outputnode, [
+            ('blip_down_b0', 'b0_down_image'),
+            ('blip_down_b0_corrected', 'b0_down_corrected_image'),
+            ('blip_up_b0', 'b0_up_image'),
+            ('blip_up_b0_corrected', 'b0_up_corrected_corrected_image'),
+            ('blip_up_FA', 'up_fa_image'),
+            ('blip_down_FA', 'down_fa_image')]),
         (drbuddi, aggregate_drbuddi, [
             ("undistorted_reference", "undistorted_reference"),
             ('bdown_to_bup_rigid_trans_h5', 'bdown_to_bup_rigid_trans_h5'),
@@ -192,15 +203,12 @@ co-registration with the anatomical reference.
             ("fieldmap_type", "fieldmap_type"),
             ("b0_up_image", "b0_up_image"),
             ("b0_up_corrected_image", "b0_up_corrected_image"),
-            ("b0_down_image", "b0_down_image"),
-            ("b0_down_corrected_image", "b0_down_corrected_image"),
             ("up_fa_image", "up_fa_image"),
             ("up_fa_corrected_image", "up_fa_corrected_image"),
             ("down_fa_image", "down_fa_image"),
             ("down_fa_corrected_image", "down_fa_corrected_image"),
             ("t2w_image", "t2w_image"),
-            ("b0_ref", "b0_ref")
-            ])
+            ("b0_ref", "b0_ref")])
     ])
 
     return workflow

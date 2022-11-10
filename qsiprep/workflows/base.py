@@ -745,8 +745,7 @@ to workflows in *QSIPrep*'s documentation]\
             low_mem=low_mem,
             fmap_bspline=fmap_bspline,
             fmap_demean=fmap_demean,
-            use_syn=use_syn,
-            force_syn=force_syn,
+            t2w_sdc=bool(t2w_files),
             sloppy=debug,
             source_file=source_file
         )

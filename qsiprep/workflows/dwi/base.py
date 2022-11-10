@@ -18,11 +18,11 @@ from ...interfaces import DerivativesDataSink, DerivativesMaybeDataSink
 from ...interfaces.reports import DiffusionSummary
 from ...interfaces.confounds import DMRISummary
 from ...interfaces.utils import TestInput
-from ...interfaces.fmap import PEPOLARReport
 from ...engine import Workflow
 
 # dwi workflows
 from ..fieldmap.unwarp import init_fmap_unwarp_report_wf
+from ..fieldmap.pepolar import init_extended_pepolar_report_wf
 from .hmc_sdc import init_qsiprep_hmcsdc_wf
 from .fsl import init_fsl_hmc_wf
 from .pre_hmc import init_dwi_pre_hmc_wf
@@ -61,8 +61,7 @@ def init_dwi_preproc_wf(dwi_only,
                         omp_nthreads,
                         fmap_bspline,
                         fmap_demean,
-                        use_syn,
-                        force_syn,
+                        t2w_files,
                         low_mem,
                         sloppy,
                         source_file,
@@ -103,8 +102,7 @@ def init_dwi_preproc_wf(dwi_only,
                                   omp_nthreads=1,
                                   fmap_bspline=False,
                                   fmap_demean=True,
-                                  use_syn=True,
-                                  force_syn=False,
+                                  t2w_sdc=False,
                                   low_mem=False,
                                   sloppy=True,
                                   source_file='/data/bids/sub-1/dwi/sub-1_dwi.nii.gz',
@@ -175,12 +173,8 @@ def init_dwi_preproc_wf(dwi_only,
             **Experimental**: Fit B-Spline field using least-squares
         fmap_demean : bool
             Demean voxel-shift map during unwarp
-        use_syn : bool
-            **Experimental**: Enable ANTs SyN-based susceptibility distortion
-            correction (SDC). If fieldmaps are present and enabled, this is not
-            run, by default.
-        force_syn : bool
-            **Temporary**: Always run SyN-based SDC
+        t2w_sdc : bool
+            Are t2w's going to be included in SDC?
         low_mem : bool
             Write uncompressed .nii files in some cases to reduce memory usage
         layout : BIDSLayout
@@ -346,7 +340,6 @@ Diffusion data preprocessing
                                      denoise_before_combining=denoise_before_combining,
                                      omp_nthreads=omp_nthreads)
     test_pre_hmc_connect = pe.Node(TestInput(), name='test_pre_hmc_connect')
-
     if hmc_model in ('none', '3dSHORE'):
         if not hmc_model == 'none' and shoreline_iters < 1:
             raise Exception("--shoreline-iters must be > 0 when --hmc-model is " + hmc_model)
@@ -424,7 +417,8 @@ Diffusion data preprocessing
 
     # Fieldmap reports should vary depending on which type of correction is performed
     # PEPOLAR (epi, rpe series) will produce potentially much more detailed reports
-    if fieldmap_type not in ("epi", "rpe_series", None):
+    doing_topup = fieldmap_type in ("epi", "rpe_series") and pepolar_method.lower() == "topup"
+    if fieldmap_type not in ("epi", "rpe_series", None) or doing_topup:
         fmap_unwarp_report_wf = init_fmap_unwarp_report_wf()
         ds_report_sdc = pe.Node(
             DerivativesDataSink(desc="sdc", suffix='b0', source_file=source_file),
@@ -446,9 +440,10 @@ Diffusion data preprocessing
         ])
 
     elif fieldmap_type in ("epi", "rpe_series"):
-        pepolar_report = pe.Node(
-            PEPOLARReport(fieldmap_type=fieldmap_type),
-            name="peoplar_report")
+        segment_t2w = len(t2w_files) and dwi_only
+
+        extended_pepolar_report_wf = init_extended_pepolar_report_wf(
+            segment_t2w=segment_t2w, omp_nthreads=omp_nthreads)
 
         ds_report_fa_sdc = pe.Node(
             DerivativesMaybeDataSink(desc="sdc", suffix='fa', source_file=source_file),
@@ -463,22 +458,25 @@ Diffusion data preprocessing
             run_without_submitting=True)
 
         workflow.connect([
-            (hmc_wf, pepolar_report,[
-                ("outputnode.fieldmap_type", "fieldmap_type"),
-                ("outputnode.b0_up_image", "b0_up_image"),
-                ("outputnode.b0_up_corrected_image", "b0_up_corrected_image"),
-                ("outputnode.b0_down_image", "b0_down_image"),
-                ("outputnode.b0_down_corrected_image", "b0_down_corrected_image"),
-                ("outputnode.up_fa_image", "up_fa_image"),
-                ("outputnode.up_fa_corrected_image", "up_fa_corrected_image"),
-                ("outputnode.down_fa_image", "down_fa_image"),
-                ("outputnode.down_fa_corrected_image", "down_fa_corrected_image"),
-                ("outputnode.t2w_image", "t2w_image"),
-                ("outputnode.b0_ref", "b0_ref")]),
-            (pepolar_report, ds_report_fa_sdc, [
-                ("fa_sdc_report", "in_file")]),
-            (pepolar_report, ds_report_b0_sdc, [
-                ("b0_sdc_report", "in_file")])
+            (hmc_wf, extended_pepolar_report_wf,[
+                ("outputnode.fieldmap_type", "inputnode.fieldmap_type"),
+                ("outputnode.b0_up_image", "inputnode.b0_up_image"),
+                ("outputnode.b0_up_corrected_image", "inputnode.b0_up_corrected_image"),
+                ("outputnode.b0_down_image", "inputnode.b0_down_image"),
+                ("outputnode.b0_down_corrected_image", "inputnode.b0_down_corrected_image"),
+                ("outputnode.up_fa_image", "inputnode.up_fa_image"),
+                ("outputnode.up_fa_corrected_image", "inputnode.up_fa_corrected_image"),
+                ("outputnode.down_fa_image", "inputnode.down_fa_image"),
+                ("outputnode.down_fa_corrected_image", "inputnode.down_fa_corrected_image"),
+                ("outputnode.t2w_image", "inputnode.t2w_image")]),
+            (b0_coreg_wf, extended_pepolar_report_wf, [
+                ('outputnode.itk_b0_to_t1', 'inputnode.t1w_seg_transform')]),
+            (inputnode, extended_pepolar_report_wf, [
+                ("t1_seg", "inputnode.t1w_seg")]),
+            (extended_pepolar_report_wf, ds_report_fa_sdc, [
+                ("outputnode.fa_sdc_report", "in_file")]),
+            (extended_pepolar_report_wf, ds_report_b0_sdc, [
+                ("outputnode.b0_sdc_report", "in_file")])
         ])
 
 

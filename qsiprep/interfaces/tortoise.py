@@ -335,14 +335,9 @@ class _DRBUDDIAggregateOutputsOutputSpec(TraitedSpec):
     sdc_warps = OutputMultiObject(File(exists=True))
     sdc_scaling_images = OutputMultiObject(File(exists=True))
     # Fieldmap outputs for the reports
-    fieldmap_type = File(exists=True)
-    b0_up_image = File(exists=True)
     b0_up_corrected_image = File(exists=True)
-    b0_down_image = File(exists=True)
     b0_down_corrected_image = File(exists=True)
-    up_fa_image = File(exists=True)
     up_fa_corrected_image = File(exists=True)
-    down_fa_image = File(exists=True)
     down_fa_corrected_image = File(exists=True)
     t2w_image = File(exists=True)
     b0_ref = File(exists=True)
@@ -370,7 +365,7 @@ class DRBUDDIAggregateOutputs(SimpleInterface):
             )
             xfm.terminal_output = 'allatonce'
             xfm.resource_monitor = False
-            runtime = xfm.run().runtime
+            _ = xfm.run()
         else:
             down_warp = self.inputs.deformation_minv
 
@@ -397,13 +392,6 @@ class DRBUDDIAggregateOutputs(SimpleInterface):
             scaling_blip_down_file for blip_dir in
             self.inputs.blip_assignments]
 
-        # Get a segmentation from an undistorted image to see how we did
-        ref_segmentation = self.inputs.wm_seg
-        if isdefined(self.inputs.structural_file):
-            ref_segmentation = fname_presuffix(
-                self.inputs.structural_file, suffix="_segmentation",
-                newpath=runtime.cwd)
-
         if self.inputs.fieldmap_type == 'rpe_series':
             fa_up_warped = fname_presuffix(
                 self.inputs.blip_up_fa,
@@ -415,11 +403,10 @@ class DRBUDDIAggregateOutputs(SimpleInterface):
                 transforms=[self.inputs.deformation_finv],
                 reference_image=self.inputs.undistorted_reference,
                 output_image=fa_up_warped,
-                interpolation='NearestNeighbor'
-            )
+                interpolation='NearestNeighbor')
             xfm_fa_up.terminal_output = 'allatonce'
             xfm_fa_up.resource_monitor = False
-            xfm_fa_up_runtime = xfm_fa_up.run().runtime
+            xfm_fa_up.run()
 
             fa_down_warped = fname_presuffix(
                 self.inputs.blip_down_fa,
@@ -432,16 +419,12 @@ class DRBUDDIAggregateOutputs(SimpleInterface):
                             self.inputs.bdown_to_bup_rigid_trans_h5],
                 reference_image=self.inputs.undistorted_reference,
                 output_image=fa_down_warped,
-                interpolation='NearestNeighbor'
-            )
+                interpolation='NearestNeighbor')
             xfm_fa_down.terminal_output = 'allatonce'
             xfm_fa_down.resource_monitor = False
-            xfm_fa_down_runtime = xfm_fa_down.run().runtime
-
-        # report_file = op.join(runtime.cwd, "drbuddi_report.svg")
-        # up_ref, down_ref = self.inputs.blip_up_FA, self.inputs.blip_down_FA if \
-        #     self.inputs.fieldmap_type == "rpe_series" else self.inputs.blip_up_b0_corrected, \
-        #         self.inputs.blip_down_corrected
+            xfm_fa_down.run()
+            self._results['up_fa_corrected_image'] = fa_up_warped
+            self._results["down_fa_corrected_image"] = fa_down_warped
 
         return runtime
 

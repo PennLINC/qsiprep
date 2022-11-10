@@ -1150,7 +1150,7 @@ class ApplyScalingImages(SimpleInterface):
         return runtime
 
 
-class _PEPOLARReportInputSpec(reporting.ReportCapableInputSpec):
+class _PEPOLARReportInputSpec():
     fieldmap_type = traits.Enum('rpe_series', 'epi')
     b0_up_image = File(exists=True)
     b0_up_corrected_image = File(exists=True)
@@ -1160,9 +1160,8 @@ class _PEPOLARReportInputSpec(reporting.ReportCapableInputSpec):
     up_fa_corrected_image = File(exists=True)
     down_fa_image = File(exists=True)
     down_fa_corrected_image = File(exists=True)
-    t2w_image = File(exists=True)
+    t2w_seg = File(exists=True)
     t1w_seg = File(exists=True)
-    t1w_coreg_transform = File(exists=True)
 
 
 class _PEPOLARReportOutputSpec(reporting.ReportCapableOutputSpec):
@@ -1170,9 +1169,9 @@ class _PEPOLARReportOutputSpec(reporting.ReportCapableOutputSpec):
     b0_sdc_report = File(exists=True)
 
 
-class PEPOLARReport(reporting.ReportCapableInterface):
+class PEPOLARReport(SimpleInterface):
     input_spec = _PEPOLARReportInputSpec
-    output_spce = _PEPOLARReportOutputSpec
+    output_spec = _PEPOLARReportOutputSpec
     _n_cuts = 7
 
     def __init__(self, **kwargs):
@@ -1181,45 +1180,16 @@ class PEPOLARReport(reporting.ReportCapableInterface):
         super(PEPOLARReport, self).__init__(generate_report=True, **kwargs)
 
 
-    def _generate_report(self):
+    def _run_interface(self, runtime):
         """Generate a reportlet."""
-        LOGGER.info('Generating ')
+        LOGGER.info('Generating a PEPOLAR visual report')
 
-        # Find spatial extent of the image
-        contour_nii = mask_nii = None
-        contour_nii = load_img(self.inputs.wm_seg)
+        # Get a segmentation from an undistorted image to see how we did
+        ref_segmentation = self.inputs.t1w_seg if not \
+            isdefined(self.inputs.t2w_seg) else self.inputs.t2w_seg
 
-        cuts = cuts_from_bbox(contour_nii or mask_nii, cuts=self._n_cuts)
 
-        # What image should be contoured?
-        if field_nii is None:
-            blip_up_field_nii = nb.Nifti1Image(denoised_blip_up_nii.get_fdata()
-                                            - orig_blip_up_nii.get_fdata(),
-                                            affine=denoised_blip_up_nii.affine)
-            blip_down_field_nii = nb.Nifti1Image(denoised_blip_down_nii.get_fdata()
-                                             - orig_blip_down_nii.get_fdata(),
-                                             affine=denoised_blip_down_nii.affine)
-        else:
-            blip_up_field_nii = blip_down_field_nii = field_nii
-
-        # Call composer
-        compose_view(
-            plot_denoise(orig_blip_up_nii, orig_blip_down_nii, 'moving-image',
-                         estimate_brightness=True,
-                         cuts=cuts,
-                         label='Raw Image',
-                         blip_up_contour=blip_up_field_nii,
-                         blip_down_contour=blip_down_field_nii,
-                         compress=False),
-            plot_denoise(denoised_blip_up_nii, denoised_blip_down_nii, 'fixed-image',
-                         estimate_brightness=True,
-                         cuts=cuts,
-                         label="Denoised",
-                         blip_up_contour=blip_up_field_nii,
-                         blip_down_contour=blip_down_field_nii,
-                         compress=False),
-            out_file=self._out_report
-        )
+        return runtime
 
 
 def plot_pepolar(blip_up_img, blip_down_img, seg_contour_img,

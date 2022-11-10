@@ -19,8 +19,9 @@ from ...niworkflows.interfaces.registration import ANTSApplyTransformsRPT
 
 from ...engine import Workflow
 from ...interfaces import StructuralReference
-from ...interfaces.fmap import B0RPEFieldmap
+from ...interfaces.fmap import B0RPEFieldmap, PEPOLARReport
 from ...interfaces.nilearn import EnhanceB0
+from ..anatomical import init_synthstrip_wf
 
 
 def init_pepolar_unwarp_wf(dwi_meta, epi_fmaps, omp_nthreads=1,
@@ -201,6 +202,92 @@ def init_prepare_dwi_epi_wf(omp_nthreads, orientation="LPS", name="prepare_epi_w
         (inputnode, resample_epi_fmap, [('ref_brain', 'reference_image')]),
         (resample_epi_fmap, outputnode, [('output_image', 'out_file')])
     ])
+
+    return workflow
+
+
+def init_extended_pepolar_report_wf(segment_t2w, omp_nthreads=1,
+                                    name="extended_pepolar_report_wf"):
+    workflow = Workflow(name=name)
+    inputnode = pe.Node(niu.IdentityInterface(
+        fields=[
+            "t1w_seg_transform", "t1w_seg", "b0_ref",
+            "fieldmap_type", "b0_up_image", "b0_up_corrected_image", "b0_down_image",
+            "b0_down_corrected_image", "up_fa_image", "up_fa_corrected_image", "down_fa_image",
+            "down_fa_corrected_image", "t2w_image"]),
+        name='inputnode')
+    outputnode = pe.Node(niu.IdentityInterface(
+        fields=["fa_sdc_report", "b0_sdc_report"]),
+        name="outputnode")
+
+    map_seg = pe.Node(
+        ants.ApplyTransforms(
+            dimension=3, float=True, interpolation='MultiLabel',
+            invert_transform_flags=[True]),
+        name='map_seg',
+        mem_gb=0.3)
+
+    pepolar_report = pe.Node(
+        PEPOLARReport(),
+        name="peoplar_report")
+
+    workflow.connect([
+        (inputnode, map_seg, [
+            ('t1w_seg_transform', 'transforms'),
+            ('t1w_seg', 'input_image'),
+            ('b0_ref', 'reference_image')]),
+        (map_seg, pepolar_report, [('output_image', 't1w_seg')]),
+        (inputnode, pepolar_report, [
+            ("fieldmap_type", "fieldmap_type"),
+            ("b0_up_image", "b0_up_image"),
+            ("b0_up_corrected_image", "b0_up_corrected_image"),
+            ("b0_down_image", "b0_down_image"),
+            ("b0_down_corrected_image", "b0_down_corrected_image"),
+            ("up_fa_image", "up_fa_image"),
+            ("up_fa_corrected_image", "up_fa_corrected_image"),
+            ("down_fa_image", "down_fa_image"),
+            ("down_fa_corrected_image", "down_fa_corrected_image")]),
+        (pepolar_report, outputnode, [
+            ("b0_sdc_report", "b0_sdc_report"),
+            ("fa_sdc_report", "fa_sdc_report")])
+    ])
+
+    # If we don't have a T1w segmentation, make one from the t2w
+    if segment_t2w:
+        t2w_n4 = pe.Node(
+            ants.N4BiasFieldCorrection(dimension=3),
+            name="t2w_n4",
+            n_procs=omp_nthreads)
+
+        strip_t2w_wf = init_synthstrip_wf(omp_nthreads=omp_nthreads)
+
+        t2w_atropos = pe.Node(
+            ants.Atropos(
+                dimension=3,
+                initialization="Otsu",
+                mrf_radius=[1,1,1],
+                posterior_formulation="Socrates",
+                use_mixture_model_proportions=0,
+                mrf_smoothing_factor=0.1
+            ),
+            name="t2w_atropos")
+
+        workflow.connect([
+            (inputnode, t2w_n4, [
+                ("t2w_image", "input_image")]),
+            (t2w_n4, strip_t2w_wf, [("output_image", "inputnode.skulled_image")]),
+            (strip_t2w_wf, t2w_atropos, [
+                ("outputnode.brain_image", "intensity_images"),
+                ("outputnode.brain_mask", "mask_image")]),
+            (t2w_atropos, pepolar_report, [("classified_image", "t2w_seg")])
+        ])
+    else:
+        transform_t1w_seg = pe.Node(
+            ants.ApplyTransforms()
+        )
+        workflow.connect([
+            (inputnode, pepolar_report, [()])])
+
 
     return workflow
 
