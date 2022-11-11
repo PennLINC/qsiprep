@@ -15,49 +15,6 @@ from nipype.interfaces.mixins import reporting
 from . import report_base as nrc
 from .. import NIWORKFLOWS_LOG
 
-
-class FASTInputSpecRPT(nrc.SVGReportCapableInputSpec,
-                       fsl.preprocess.FASTInputSpec):
-    pass
-
-
-class FASTOutputSpecRPT(reporting.ReportCapableOutputSpec,
-                        fsl.preprocess.FASTOutputSpec):
-    pass
-
-
-class FASTRPT(nrc.SegmentationRC,
-              fsl.FAST):
-    input_spec = FASTInputSpecRPT
-    output_spec = FASTOutputSpecRPT
-
-    def _run_interface(self, runtime):
-        if self.generate_report:
-            self.inputs.segments = True
-
-        return super(FASTRPT, self)._run_interface(runtime)
-
-    def _post_run_hook(self, runtime):
-        ''' generates a report showing nine slices, three per axis, of an
-        arbitrary volume of `in_files`, with the resulting segmentation
-        overlaid '''
-        self._anat_file = self.inputs.in_files[0]
-        outputs = self.aggregate_outputs(runtime=runtime)
-        self._mask_file = outputs.tissue_class_map
-        # We are skipping the CSF class because with combination with others
-        # it only shows the skullstriping mask
-        self._seg_files = outputs.tissue_class_files[1:]
-        self._masked = False
-
-        NIWORKFLOWS_LOG.info('Generating report for FAST (in_files %s, '
-                             'segmentation %s, individual tissue classes %s).',
-                             self.inputs.in_files,
-                             outputs.tissue_class_map,
-                             outputs.tissue_class_files)
-
-        return super(FASTRPT, self)._post_run_hook(runtime)
-
-
 class ReconAllInputSpecRPT(nrc.SVGReportCapableInputSpec,
                            freesurfer.preprocess.ReconAllInputSpec):
     pass

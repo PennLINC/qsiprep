@@ -79,7 +79,7 @@ def init_distortion_group_merge_wf(merging_strategy, inputs_list, hmc_model, rep
     workflow = Workflow(name=name)
     source_file = "dwi/" + source_file
     sanitized_inputs = [name.replace('-', '_') for name in inputs_list]
-    input_names = ['t1_brain', 't1_mask', 't1_seg']
+    input_names = ['t1_brain', 't1_mask']
     for suffix in ["_image", "_bval", "_bvec", "_original_bvec", "_b0_ref", "_cnr",
                    "_carpetplot_data", "_original_image", "_raw_concatenated_image",
                    "_confounds"]:
@@ -192,8 +192,7 @@ def init_distortion_group_merge_wf(merging_strategy, inputs_list, hmc_model, rep
             ('merged_b0_ref', 'inputnode.b0_template')]),
         (inputnode, b0_ref_wf, [
             ('t1_brain', 'inputnode.t1_brain'),
-            ('t1_mask', 'inputnode.t1_mask'),
-            ('t1_seg', 'inputnode.t1_seg')]),
+            ('t1_mask', 'inputnode.t1_mask')]),
         (b0_ref_wf, outputnode, [
             ('outputnode.ref_image', 't1_b0_ref'),
             ('outputnode.dwi_mask', 'dwi_mask_t1')]),

@@ -50,9 +50,6 @@ def init_b0_to_anat_registration_wf(mem_gb=3, omp_nthreads=1, write_report=True,
             If ``fieldwarp == True``, ``ref_bold_brain`` should be unwarped
         t1_brain
             Skull-stripped ``t1_preproc``
-        t1_seg
-            Segmentation of preprocessed structural image, including
-            gray-matter (GM), white-matter (WM) and cerebrospinal fluid (CSF)
         subjects_dir
             FreeSurfer SUBJECTS_DIR
         subject_id
@@ -75,7 +72,7 @@ def init_b0_to_anat_registration_wf(mem_gb=3, omp_nthreads=1, write_report=True,
     """
     inputnode = pe.Node(
         niu.IdentityInterface(
-            fields=['ref_b0_brain', 't1_brain', 't1_seg',
+            fields=['ref_b0_brain', 't1_brain',
                     'subjects_dir', 'subject_id', 't1_2_fsnative_reverse_transform']),
         name='inputnode'
     )
@@ -156,9 +153,6 @@ def init_direct_b0_acpc_wf(mem_gb=3, omp_nthreads=1, write_report=True,
             If ``fieldwarp == True``, ``ref_bold_brain`` should be unwarped
         t1_brain
             Standard space brain, either adult or infant template
-        t1_seg
-            Segmentation of preprocessed structural image, including
-            gray-matter (GM), white-matter (WM) and cerebrospinal fluid (CSF)
         subjects_dir
             FreeSurfer SUBJECTS_DIR
         subject_id
@@ -179,7 +173,7 @@ def init_direct_b0_acpc_wf(mem_gb=3, omp_nthreads=1, write_report=True,
     """
     inputnode = pe.Node(
         niu.IdentityInterface(
-            fields=['ref_b0_brain', 't1_brain', 't1_seg',
+            fields=['ref_b0_brain', 't1_brain',
                     'subjects_dir', 'subject_id', 't1_2_fsnative_reverse_transform']),
         name='inputnode'
     )
@@ -210,7 +204,6 @@ def init_direct_b0_acpc_wf(mem_gb=3, omp_nthreads=1, write_report=True,
     workflow.connect([
         (inputnode, acpc_reg, [
             ("t1_brain", "fixed_image"),
-            (("t1_seg", _format_masks), "fixed_image_masks"),
             ("ref_b0_brain", "moving_image")]),
         (acpc_reg, itk_to_rigid, [
             ("forward_transforms", "affine_transform")]),

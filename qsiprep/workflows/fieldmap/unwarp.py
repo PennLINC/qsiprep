@@ -260,11 +260,11 @@ def init_fmap_unwarp_report_wf(name='fmap_unwarp_report_wf', suffix='hmcsdc'):
 
     workflow.connect([
         (inputnode, dwi_rpt, [('in_pre', 'before'), ('in_post', 'after')]),
-        (inputnode, map_seg, [('in_post', 'reference_image'),
-                              ('in_seg', 'input_image'),
-                              ('in_xfm', 'transforms')]),
-        (map_seg, sel_wm, [('output_image', 'in_seg')]),
-        (sel_wm, dwi_rpt, [('out', 'wm_seg')]),
+        #(inputnode, map_seg, [('in_post', 'reference_image'),
+        #                      ('in_seg', 'input_image'),
+        #                      ('in_xfm', 'transforms')]),
+        #(map_seg, sel_wm, [('output_image', 'in_seg')]),
+        #(sel_wm, dwi_rpt, [('out', 'wm_seg')]),
         (dwi_rpt, outputnode, [('out_report', 'report')])
     ])
 

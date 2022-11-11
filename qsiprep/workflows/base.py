@@ -658,8 +658,7 @@ to workflows in *QSIPrep*'s documentation]\
             workflow.connect([
                 (anat_preproc_wf, merging_group_workflows[merged_group], [
                     ('outputnode.t1_brain', 'inputnode.t1_brain'),
-                    ('outputnode.t1_mask', 'inputnode.t1_mask'),
-                    ('outputnode.t1_seg', 'inputnode.t1_seg')])
+                    ('outputnode.t1_mask', 'inputnode.t1_mask')])
             ])
 
     outputs_to_files = {dwi_group['concatenated_bids_name']: dwi_group
@@ -690,10 +689,8 @@ to workflows in *QSIPrep*'s documentation]\
                 ('outputnode.t1_preproc', 'inputnode.t1_preproc'),
                 ('outputnode.t1_brain', 'inputnode.t1_brain'),
                 ('outputnode.t1_mask', 'inputnode.t1_mask'),
-                ('outputnode.t1_seg', 'inputnode.t1_seg'),
                 ('outputnode.t1_aseg', 'inputnode.t1_aseg'),
                 ('outputnode.t1_aparc', 'inputnode.t1_aparc'),
-                ('outputnode.t1_tpms', 'inputnode.t1_tpms'),
                 ('outputnode.t1_2_mni_forward_transform',
                  'inputnode.t1_2_mni_forward_transform'),
                 ('outputnode.t1_2_mni_reverse_transform',
@@ -777,10 +774,8 @@ to workflows in *QSIPrep*'s documentation]\
                     ('outputnode.t1_preproc', 'inputnode.t1_preproc'),
                     ('outputnode.t1_brain', 'inputnode.t1_brain'),
                     ('outputnode.t1_mask', 'inputnode.t1_mask'),
-                    ('outputnode.t1_seg', 'inputnode.t1_seg'),
                     ('outputnode.t1_aseg', 'inputnode.t1_aseg'),
                     ('outputnode.t1_aparc', 'inputnode.t1_aparc'),
-                    ('outputnode.t1_tpms', 'inputnode.t1_tpms'),
                     ('outputnode.t1_2_mni_forward_transform',
                      'inputnode.t1_2_mni_forward_transform'),
                     ('outputnode.t1_2_mni_reverse_transform',
@@ -802,10 +797,8 @@ to workflows in *QSIPrep*'s documentation]\
                     ('outputnode.t1_preproc', 'inputnode.t1_preproc'),
                     ('outputnode.t1_brain', 'inputnode.t1_brain'),
                     ('outputnode.t1_mask', 'inputnode.t1_mask'),
-                    ('outputnode.t1_seg', 'inputnode.t1_seg'),
                     ('outputnode.t1_aseg', 'inputnode.t1_aseg'),
                     ('outputnode.t1_aparc', 'inputnode.t1_aparc'),
-                    ('outputnode.t1_tpms', 'inputnode.t1_tpms'),
                     ('outputnode.t1_2_mni_forward_transform',
                      'inputnode.t1_2_mni_forward_transform'),
                     ('outputnode.t1_2_mni_reverse_transform',

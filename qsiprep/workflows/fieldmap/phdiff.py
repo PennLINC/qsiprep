@@ -19,13 +19,13 @@ Fieldmap preprocessing workflow for fieldmap data structure
 
 """
 
-from nipype.interfaces import ants, fsl, utility as niu
+from nipype.interfaces import ants, fsl, afni, utility as niu
 from nipype.pipeline import engine as pe
 from .utils import cleanup_edge_pipeline, siemens2rads, demean_image
 from ...niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from ...niworkflows.interfaces.bids import ReadSidecarJSON
 from ...niworkflows.interfaces.images import IntraModalMerge
-from ...niworkflows.interfaces.masks import BETRPT
+from ...niworkflows.interfaces.masks import BrainExtractionRPT
 
 from ...interfaces import Phasediff2Fieldmap, Phases2Fieldmap, DerivativesDataSink
 
@@ -75,12 +75,15 @@ further improvements of HCP Pipelines [@hcppipelines].
     # de-gradient the fields ("bias/illumination artifact")
     n4 = pe.Node(ants.N4BiasFieldCorrection(dimension=3, copy_header=True),
                  name='n4', n_procs=omp_nthreads)
-    bet = pe.Node(BETRPT(generate_report=True, frac=0.6, mask=True),
-                  name='bet')
+    ANTS_BERPT = pe.Node(BrainExtractionRPT(generate_report=True, dimension=3, use_floatingpoint_precision=1, debug=debug,
+                         keep_temporary_files=1, use_random_seeding=not skull_strip_fixed_seed),
+                         name='ants_berpt', n_procs=omp_nthreads)
+    skullstrip = pe.Node(afni.SkullStrip(outputtype='NIFTI_GZ'), name='skullstrip')
+    automask = pe.Node(afni.Automask(outputtype='NIFTI_GZ'), name='automask')
     ds_report_fmap_mask = pe.Node(DerivativesDataSink(
         desc='brain', suffix='mask'), name='ds_report_fmap_mask',
         mem_gb=0.01, run_without_submitting=True)
-    # uses mask from bet; outputs a mask
+    
     # dilate = pe.Node(fsl.maths.MathsCommand(
     #     nan2zeros=True, args='-kernel sphere 5 -dilM'), name='MskDilate')
 
@@ -140,17 +143,19 @@ The phase difference used for unwarping was calculated using two separate phase 
         (inputnode, magmrg, [('magnitude', 'in_files')]),
         (magmrg, n4, [('out_avg', 'input_image')]),
         (n4, prelude, [('output_image', 'magnitude_file')]),
-        (n4, bet, [('output_image', 'in_file')]),
-        (bet, prelude, [('mask_file', 'mask_file')]),
+        (n4, ANTS_BERPT, [('output_image', 'anatomical_image')]),
+        (n4, skullstrip, [('output_image', 'in_file')]),
+        (skullstrip, automask, [('out_file', 'in_file')]),
+        (automask, prelude, [('out_file', 'mask_file')]),
         (prelude, denoise, [('unwrapped_phase_file', 'in_file')]),
         (denoise, demean, [('out_file', 'in_file')]),
         (demean, cleanup_wf, [('out', 'inputnode.in_file')]),
-        (bet, cleanup_wf, [('mask_file', 'inputnode.in_mask')]),
+        (automask, cleanup_wf, [('out_file', 'inputnode.in_mask')]),
         (cleanup_wf, compfmap, [('outputnode.out_file', 'in_file')]),
         (compfmap, outputnode, [('out_file', 'fmap')]),
-        (bet, outputnode, [('mask_file', 'fmap_mask'),
-                           ('out_file', 'fmap_ref')]),
-        (bet, ds_report_fmap_mask, [('out_report', 'in_file')]),
+        (automask, outputnode, [('out_file', 'fmap_mask')]),
+        (skullstrip, outputnode, [('out_file', 'fmap_ref')]),
+        (ANTS_BERPT, ds_report_fmap_mask, [('out_report', 'in_file')]),
     ])
 
     return workflow

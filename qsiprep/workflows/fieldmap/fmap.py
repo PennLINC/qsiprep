@@ -21,11 +21,11 @@ of the BIDS specification.
 """
 
 from nipype.pipeline import engine as pe
-from nipype.interfaces import utility as niu, fsl, ants
+from nipype.interfaces import utility as niu, ants, afni
 from .utils import demean_image, cleanup_edge_pipeline
 from ...niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from ...niworkflows.interfaces.images import IntraModalMerge
-from ...niworkflows.interfaces.masks import BETRPT
+from ...niworkflows.interfaces.masks import BrainExtractionRPT
 
 from ...interfaces import (
     FieldToRadS, FieldToHz, DerivativesDataSink
@@ -62,8 +62,12 @@ def init_fmap_wf(omp_nthreads, fmap_bspline, name='fmap_wf'):
     # de-gradient the fields ("bias/illumination artifact")
     n4_correct = pe.Node(ants.N4BiasFieldCorrection(dimension=3, copy_header=True),
                          name='n4_correct', n_procs=omp_nthreads)
-    bet = pe.Node(BETRPT(generate_report=True, frac=0.6, mask=True),
-                  name='bet')
+    ANTS_BERPT = pe.Node(BrainExtractionRPT(generate_report=True, dimension=3, use_floatingpoint_precision=1, debug=debug,
+                         keep_temporary_files=1, use_random_seeding=not skull_strip_fixed_seed),
+                         name='ants_berpt', n_procs=omp_nthreads)
+    skullstrip = pe.Node(afni.SkullStrip(outputtype='NIFTI_GZ'), name='skullstrip')
+    automask = pe.Node(afni.Automask(outputtype='NIFTI_GZ'), name='automask')
+
     ds_report_fmap_mask = pe.Node(DerivativesDataSink(
         desc='brain', suffix='mask'), name='ds_report_fmap_mask',
         run_without_submitting=True)
@@ -72,11 +76,13 @@ def init_fmap_wf(omp_nthreads, fmap_bspline, name='fmap_wf'):
         (inputnode, magmrg, [('magnitude', 'in_files')]),
         (inputnode, fmapmrg, [('fieldmap', 'in_files')]),
         (magmrg, n4_correct, [('out_file', 'input_image')]),
-        (n4_correct, bet, [('output_image', 'in_file')]),
-        (bet, outputnode, [('mask_file', 'fmap_mask'),
-                           ('out_file', 'fmap_ref')]),
+        (n4_correct, ANTS_BERPT, [('output_image', 'anatomical_image')]),
+        (n4_correct, skullstrip, [('out_file', 'in_file')]),
+        (skullstrip, automask, [('out_file', 'in_file')]),
+        (skullstrip, outputnode, [('out_file', 'fmap_ref')]),
+        (automask, outputnode, [('out_file', 'fmap_mask')]),
         (inputnode, ds_report_fmap_mask, [('fieldmap', 'source_file')]),
-        (bet, ds_report_fmap_mask, [('out_report', 'in_file')]),
+        (ANTS_BERPT, ds_report_fmap_mask, [('out_report', 'in_file')]),
     ])
 
     torads = pe.Node(FieldToRadS(), name='torads')
@@ -91,8 +97,8 @@ def init_fmap_wf(omp_nthreads, fmap_bspline, name='fmap_wf'):
     applymsk = pe.Node(fsl.ApplyMask(), name='applymsk')
 
     workflow.connect([
-        (bet, prelude, [('mask_file', 'mask_file'),
-                        ('out_file', 'magnitude_file')]),
+        (skullstrip, prelude, [('out_file', 'magnitude_file')]),
+        (automask, prelude, [('out_file','mask_file')]),
         (fmapmrg, torads, [('out_file', 'in_file')]),
         (torads, tohz, [('fmap_range', 'range_hz')]),
         (torads, prelude, [('out_file', 'phase_file')]),
@@ -100,9 +106,9 @@ def init_fmap_wf(omp_nthreads, fmap_bspline, name='fmap_wf'):
         (tohz, denoise, [('out_file', 'in_file')]),
         (denoise, demean, [('out_file', 'in_file')]),
         (demean, cleanup_wf, [('out', 'inputnode.in_file')]),
-        (bet, cleanup_wf, [('mask_file', 'inputnode.in_mask')]),
+        (automask, cleanup_wf, [('out_file', 'inputnode.in_mask')]),
         (cleanup_wf, applymsk, [('outputnode.out_file', 'in_file')]),
-        (bet, applymsk, [('mask_file', 'mask_file')]),
+        (automask, applymsk, [('out_file', 'mask_file')]),
         (applymsk, outputnode, [('out_file', 'fmap')]),
     ])
 
