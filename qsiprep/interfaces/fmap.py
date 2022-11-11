@@ -1150,12 +1150,12 @@ class ApplyScalingImages(SimpleInterface):
         return runtime
 
 
-class _PEPOLARReportInputSpec():
+class _PEPOLARReportInputSpec(BaseInterfaceInputSpec):
     fieldmap_type = traits.Enum('rpe_series', 'epi')
-    b0_up_image = File(exists=True)
-    b0_up_corrected_image = File(exists=True)
-    b0_down_image = File(exists=True)
-    b0_down_corrected_image = File(exists=True)
+    b0_up_image = File(exists=True, mandatory=True)
+    b0_up_corrected_image = File(exists=True, mandatory=True)
+    b0_down_image = File(exists=True, mandatory=True)
+    b0_down_corrected_image = File(exists=True, mandatory=True)
     up_fa_image = File(exists=True)
     up_fa_corrected_image = File(exists=True)
     down_fa_image = File(exists=True)
@@ -1172,23 +1172,77 @@ class _PEPOLARReportOutputSpec(reporting.ReportCapableOutputSpec):
 class PEPOLARReport(SimpleInterface):
     input_spec = _PEPOLARReportInputSpec
     output_spec = _PEPOLARReportOutputSpec
-    _n_cuts = 7
-
-    def __init__(self, **kwargs):
-        """Instantiate PEPOLARReportlet."""
-        self._n_cuts = kwargs.pop('n_cuts', self._n_cuts)
-        super(PEPOLARReport, self).__init__(generate_report=True, **kwargs)
-
+    _n_cuts = 5
 
     def _run_interface(self, runtime):
         """Generate a reportlet."""
         LOGGER.info('Generating a PEPOLAR visual report')
 
-        # Get a segmentation from an undistorted image to see how we did
+        # Get a segmentation from an undistorted image as a reference
         ref_segmentation = self.inputs.t1w_seg if not \
             isdefined(self.inputs.t2w_seg) else self.inputs.t2w_seg
 
+        seg_img = nb.load(ref_segmentation)
+        b0_up_img = nb.load(self.inputs.b0_up_image)
+        b0_down_img = nb.load(self.inputs.b0_down_image)
+        b0_up_corrected_img = nb.load(self.inputs.b0_up_corrected_image)
+        b0_down_corrected_img = nb.load(self.inputs.b0_down_corrected_image)
+        cuts = cuts_from_bbox(seg_img, self._n_cuts)
+        b0_sdc_svg = op.join(runtime.cwd, "b0_blipupdown_sdc.svg")
+        compose_view(
+            plot_pepolar(
+                b0_up_img,
+                b0_down_img,
+                seg_img,
+                'moving-image',
+                estimate_brightness=True,
+                cuts=cuts,
+                label='Original',
+                upper_label_suffix=": Blip Up",
+                lower_label_suffix=": Blip Down",
+                compress=False),
+            plot_pepolar(
+                b0_up_corrected_img,
+                b0_down_corrected_img,
+                seg_img,
+                'fixed-image',
+                estimate_brightness=True,
+                cuts=cuts,
+                label="Corrected",
+                upper_label_suffix=": Blip Up",
+                lower_label_suffix=": Blip Down",
+                compress=False),
+            out_file=b0_sdc_svg)
+        self._results["b0_sdc_report"] = b0_sdc_svg
 
+        if False in map(
+            isdefined,
+            (self.inputs.up_fa_image,
+             self.inputs.up_fa_corrected_image,
+             self.inputs.down_fa_image,
+             self.inputs.down_fa_corrected_image)):
+            LOGGER.info("No FA images available for SDC report")
+            return runtime
+
+        # Prepare the FA images for plotting
+        fa_sdc_svg = op.join(runtime.cwd, "FA_reg.svg")
+        fa_up_img = nb.load(self.inputs.up_fa_image)
+        fa_up_corrected_img = nb.load(self.inputs.up_fa_corrected_image)
+        fa_down_img = nb.load(self.inputs.down_fa_image)
+        fa_down_corrected_img = nb.load(self.inputs.down_fa_corrected_image)
+        uncorrected_fa = nim.math_img("(a+b)/2", a=fa_up_img, b=fa_down_img)
+        corrected_fa = nim.math_img("(a+b)/2", a=fa_up_corrected_img, b=fa_down_corrected_img)
+        compose_view(
+            plot_fa_reg(
+                corrected_fa, seg_img, 'moving-image', estimate_brightness=False,
+                label="FA: After",
+                cuts=cuts),
+            plot_fa_reg(
+                uncorrected_fa, seg_img, 'fixed-image', estimate_brightness=False,
+                label="FA: Before",
+                cuts=cuts),
+            out_file=fa_sdc_svg)
+        self._results["fa_sdc_report"] = fa_sdc_svg
         return runtime
 
 

@@ -16,6 +16,7 @@ from nipype.pipeline import engine as pe
 from nipype.interfaces import afni, ants, utility as niu
 from ...niworkflows.interfaces import CopyHeader
 from ...niworkflows.interfaces.registration import ANTSApplyTransformsRPT
+from ...niworkflows.interfaces.images import extract_wm
 
 from ...engine import Workflow
 from ...interfaces import StructuralReference
@@ -220,23 +221,11 @@ def init_extended_pepolar_report_wf(segment_t2w, omp_nthreads=1,
         fields=["fa_sdc_report", "b0_sdc_report"]),
         name="outputnode")
 
-    map_seg = pe.Node(
-        ants.ApplyTransforms(
-            dimension=3, float=True, interpolation='MultiLabel',
-            invert_transform_flags=[True]),
-        name='map_seg',
-        mem_gb=0.3)
-
     pepolar_report = pe.Node(
         PEPOLARReport(),
         name="peoplar_report")
 
     workflow.connect([
-        (inputnode, map_seg, [
-            ('t1w_seg_transform', 'transforms'),
-            ('t1w_seg', 'input_image'),
-            ('b0_ref', 'reference_image')]),
-        (map_seg, pepolar_report, [('output_image', 't1w_seg')]),
         (inputnode, pepolar_report, [
             ("fieldmap_type", "fieldmap_type"),
             ("b0_up_image", "b0_up_image"),
@@ -267,10 +256,12 @@ def init_extended_pepolar_report_wf(segment_t2w, omp_nthreads=1,
                 initialization="Otsu",
                 mrf_radius=[1,1,1],
                 posterior_formulation="Socrates",
-                use_mixture_model_proportions=0,
-                mrf_smoothing_factor=0.1
+                use_mixture_model_proportions=False,
+                mrf_smoothing_factor=0.1,
+                number_of_tissue_classes=3
             ),
-            name="t2w_atropos")
+            name="t2w_atropos",
+            n_procs=omp_nthreads)
 
         workflow.connect([
             (inputnode, t2w_n4, [
@@ -282,11 +273,24 @@ def init_extended_pepolar_report_wf(segment_t2w, omp_nthreads=1,
             (t2w_atropos, pepolar_report, [("classified_image", "t2w_seg")])
         ])
     else:
-        transform_t1w_seg = pe.Node(
-            ants.ApplyTransforms()
-        )
+        map_seg = pe.Node(
+            ants.ApplyTransforms(
+                dimension=3, float=True, interpolation='MultiLabel',
+                invert_transform_flags=[True]),
+            name='map_seg',
+            mem_gb=0.3)
+
+        sel_wm = pe.Node(niu.Function(function=extract_wm), name='sel_wm')
+
         workflow.connect([
-            (inputnode, pepolar_report, [()])])
+            (inputnode, map_seg, [
+                ("b0_ref", "reference_image"),
+                ("t1w_seg_transform", "transforms"),
+                ("t1w_seg", "input_image")]),
+            (map_seg, sel_wm, [('output_image', 'in_seg')]),
+            (sel_wm, pepolar_report, [('out', 't1w_seg')])
+        ])
+
 
 
     return workflow

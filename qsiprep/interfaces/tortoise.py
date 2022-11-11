@@ -335,11 +335,9 @@ class _DRBUDDIAggregateOutputsOutputSpec(TraitedSpec):
     sdc_warps = OutputMultiObject(File(exists=True))
     sdc_scaling_images = OutputMultiObject(File(exists=True))
     # Fieldmap outputs for the reports
-    b0_up_corrected_image = File(exists=True)
-    b0_down_corrected_image = File(exists=True)
     up_fa_corrected_image = File(exists=True)
     down_fa_corrected_image = File(exists=True)
-    t2w_image = File(exists=True)
+    # The best image for coregistration to the corrected DWI
     b0_ref = File(exists=True)
 
 
@@ -348,6 +346,11 @@ class DRBUDDIAggregateOutputs(SimpleInterface):
     output_spec = _DRBUDDIAggregateOutputsOutputSpec
 
     def _run_interface(self, runtime):
+
+        # If the structural image has been used, return that as the b0ref, otherwise
+        # it's the b0_corrected_final
+        self._results["b0_ref"] = self.inputs.structural_image if \
+            isdefined(self.inputs.structural_image) else self.inputs.undistorted_reference
 
         # there may be 2 transforms for the blip down data. If so, compose them
         if isdefined(self.inputs.bdown_to_bup_rigid_trans_h5):
@@ -427,42 +430,6 @@ class DRBUDDIAggregateOutputs(SimpleInterface):
             self._results["down_fa_corrected_image"] = fa_down_warped
 
         return runtime
-
-
-def plot_fa_registration(up_fa_uncorrected, down_fa_uncorrected, up_fa_corrected, down_fa_corrected,
-                         wm_seg, out_svg_file, ncuts):
-    uncorrected_up_fa_img = nim.load_img(up_fa_uncorrected)
-    uncorrected_down_fa_img = nim.load_img(down_fa_uncorrected)
-    uncorrected_fa = nim.math_img("(a+b)/2", a=uncorrected_down_fa_img, b=uncorrected_up_fa_img)
-    corrected_down_fa_img = nim.load_img(down_fa_corrected)
-    corrected_up_fa_img = nim.load_img(up_fa_corrected)
-    corrected_fa = nim.math_img("(a+b)/2", a=corrected_up_fa_img, b=corrected_down_fa_img)
-    wm_seg_img = nim.load_img(wm_seg)
-    cuts = cuts_from_bbox(wm_seg_img, ncuts)
-    compose_view(
-        plot_fa_reg(
-            corrected_fa, wm_seg_img, 'moving-image', estimate_brightness=False,
-            label="FA: After",
-            cuts=cuts),
-        plot_fa_reg(
-            uncorrected_fa, wm_seg_img, 'fixed-image', estimate_brightness=False,
-            label="FA: Before",
-            cuts=cuts),
-
-        out_file=out_svg_file)
-
-
-def plot_b0_registration():
-
-    # b=0's
-    up_b0_uncorrected = "drbuddi/blip_up_b0.nii"
-    down_b0_uncorrected = "drbuddi/blip_down_b0.nii"
-    up_b0_corrected = "drbuddi/blip_up_b0_corrected.nii"
-    down_b0_corrected = "drbuddi/blip_down_b0_corrected.nii"
-
-    wm_seg = "drbuddi/highres001_BrainExtractionBrain_trans_seg_trans_wm.nii.gz"
-    t2w_image = "drbuddi/structural_used.nii"
-    final_corrected = "drbuddi/b0_corrected_final.nii"
 
 
 def drbuddi_boilerplate(fieldmap_type):

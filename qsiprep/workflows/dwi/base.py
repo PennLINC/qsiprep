@@ -61,7 +61,7 @@ def init_dwi_preproc_wf(dwi_only,
                         omp_nthreads,
                         fmap_bspline,
                         fmap_demean,
-                        t2w_files,
+                        t2w_sdc,
                         low_mem,
                         sloppy,
                         source_file,
@@ -440,19 +440,24 @@ Diffusion data preprocessing
         ])
 
     elif fieldmap_type in ("epi", "rpe_series"):
-        segment_t2w = len(t2w_files) and dwi_only
 
         extended_pepolar_report_wf = init_extended_pepolar_report_wf(
-            segment_t2w=segment_t2w, omp_nthreads=omp_nthreads)
+            segment_t2w=t2w_sdc, omp_nthreads=omp_nthreads)
 
         ds_report_fa_sdc = pe.Node(
-            DerivativesMaybeDataSink(desc="sdc", suffix='fa', source_file=source_file),
+            DerivativesMaybeDataSink(
+                desc="sdc",
+                suffix='fa',
+                source_file=source_file),
             name='ds_report_fa_sdc',
             mem_gb=DEFAULT_MEMORY_MIN_GB,
             run_without_submitting=True)
 
         ds_report_b0_sdc = pe.Node(
-            DerivativesMaybeDataSink(desc="sdc", suffix='b0', source_file=source_file),
+            DerivativesMaybeDataSink(
+                desc="sdc",
+                suffix='b0' if not t2w_sdc else 'b0t2w',
+                source_file=source_file),
             name='ds_report_b0_sdc',
             mem_gb=DEFAULT_MEMORY_MIN_GB,
             run_without_submitting=True)
