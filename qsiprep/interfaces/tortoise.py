@@ -69,9 +69,6 @@ class _GatherDRBUDDIInputsInputSpec(TORTOISEInputSpec):
     dwi_series_pedir = traits.Enum(
         "i", "i-", "j", "j-", "k", "k-",
         mandatory=True)
-    t2w_files = InputMultiObject(
-        File(exists=True),
-        desc="List of brain-enhanced T2w images")
 
 
 class _GatherDRBUDDIInputsOutputSpec(TORTOISEInputSpec):
@@ -82,7 +79,6 @@ class _GatherDRBUDDIInputsOutputSpec(TORTOISEInputSpec):
     blip_down_bmat = File(exists=True)
     blip_assignments = traits.List()
     report = traits.Str()
-    t2w_files = OutputMultiObject(File(exists=True))
 
 
 class GatherDRBUDDIInputs(SimpleInterface):
@@ -162,9 +158,6 @@ class GatherDRBUDDIInputs(SimpleInterface):
                             assignments_only=True)
             self._results["blip_up_bmat"] = write_dummy_bmtxt(blip_up_nii)
             self._results["blip_down_bmat"] = write_dummy_bmtxt(blip_down_nii)
-
-            # Someday, maybe we'll need to filter these
-            self._results["t2w_files"] = self.inputs.t2w_files
 
         return runtime
 
@@ -397,12 +390,12 @@ class DRBUDDIAggregateOutputs(SimpleInterface):
 
         if self.inputs.fieldmap_type == 'rpe_series':
             fa_up_warped = fname_presuffix(
-                self.inputs.blip_up_fa,
-                newpath=runtime.cwd(),
+                self.inputs.blip_up_FA,
+                newpath=runtime.cwd,
                 suffix="_corrected")
             xfm_fa_up = ants.ApplyTransforms(
                 # input_image is ignored because print_out_composite_warp_file is True
-                input_image=self.inputs.blip_up_fa,
+                input_image=self.inputs.blip_up_FA,
                 transforms=[self.inputs.deformation_finv],
                 reference_image=self.inputs.undistorted_reference,
                 output_image=fa_up_warped,
@@ -412,12 +405,12 @@ class DRBUDDIAggregateOutputs(SimpleInterface):
             xfm_fa_up.run()
 
             fa_down_warped = fname_presuffix(
-                self.inputs.blip_down_fa,
-                newpath=runtime.cwd(),
+                self.inputs.blip_down_FA,
+                newpath=runtime.cwd,
                 suffix="_corrected")
             xfm_fa_down = ants.ApplyTransforms(
                 # input_image is ignored because print_out_composite_warp_file is True
-                input_image=self.inputs.blip_down_fa,
+                input_image=self.inputs.blip_down_FA,
                 transforms=[self.inputs.deformation_minv,
                             self.inputs.bdown_to_bup_rigid_trans_h5],
                 reference_image=self.inputs.undistorted_reference,

@@ -154,7 +154,6 @@ co-registration with the anatomical reference.
             ("dwi_files", "dwi_files"),
             ("bval_files", "bval_files"),
             ("bvec_files", "bvec_files"),
-            ("t2w_files", "t2w_files"),
             ("original_files", "original_files")]),
         (gather_drbuddi_inputs, drbuddi, [
             ("blip_assignments", "blip_assignments"),
@@ -162,8 +161,8 @@ co-registration with the anatomical reference.
             ("blip_up_json", "blip_up_json"),
             ("blip_up_bmat", "blip_up_bmat"),
             ("blip_down_image", "blip_down_image"),
-            ("blip_down_bmat", "blip_down_bmat"),
-            ("t2w_files", "structural_image")]),
+            ("blip_down_bmat", "blip_down_bmat")]),
+        (inputnode, drbuddi, [('t2w_files', 'structural_image')]),
         (drbuddi, outputnode, [
             ('blip_down_b0', 'b0_down_image'),
             ('blip_up_b0', 'b0_up_image'),

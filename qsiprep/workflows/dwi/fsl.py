@@ -298,7 +298,6 @@ def init_fsl_hmc_wf(scan_groups,
                 ('t2w_files', 'inputnode.t2w_files'),
                 ('original_files', 'inputnode.original_files')]),
             (drbuddi_wf, outputnode, [
-                ('outputnode.b0_ref', 'b0_template'),
                 ('outputnode.sdc_warps', 'to_dwi_ref_warps'),
                 ('outputnode.sdc_scaling_images', 'sdc_scaling_images'),
                 ('outputnode.method', 'sdc_method'),
