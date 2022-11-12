@@ -464,6 +464,7 @@ Diffusion data preprocessing
 
         workflow.connect([
             (hmc_wf, extended_pepolar_report_wf,[
+                ("outputnode.b0_template", "inputnode.b0_ref"),
                 ("outputnode.fieldmap_type", "inputnode.fieldmap_type"),
                 ("outputnode.b0_up_image", "inputnode.b0_up_image"),
                 ("outputnode.b0_up_corrected_image", "inputnode.b0_up_corrected_image"),
