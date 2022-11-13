@@ -360,6 +360,7 @@ Diffusion data preprocessing
             pepolar_method=pepolar_method,
             dwi_metadata=dwi_metadata,
             sloppy=sloppy,
+            t2w_sdc=t2w_sdc,
             name="hmc_sdc_wf")
 
     elif hmc_model == 'eddy':
@@ -377,6 +378,7 @@ Diffusion data preprocessing
             pepolar_method=pepolar_method,
             dwi_metadata=dwi_metadata,
             sloppy=sloppy,
+            t2w_sdc=t2w_sdc,
             name="hmc_sdc_wf")
 
     workflow.connect([

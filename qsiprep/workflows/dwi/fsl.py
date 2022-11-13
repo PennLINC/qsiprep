@@ -41,6 +41,7 @@ def init_fsl_hmc_wf(scan_groups,
                     eddy_config,
                     raw_image_sdc,
                     pepolar_method,
+                    t2w_sdc,
                     mem_gb=3,
                     omp_nthreads=1,
                     dwi_metadata=None,
@@ -285,7 +286,8 @@ def init_fsl_hmc_wf(scan_groups,
             gather_inputs.inputs.epi_fmaps = scan_groups['fieldmap_info']['epi']
 
         drbuddi_wf = init_drbuddi_wf(scan_groups=scan_groups, omp_nthreads=omp_nthreads,
-                                     b0_threshold=b0_threshold, raw_image_sdc=raw_image_sdc,
+                                     t2w_sdc=t2w_sdc, b0_threshold=b0_threshold,
+                                     raw_image_sdc=raw_image_sdc,
                                      sloppy=sloppy)
 
         workflow.connect([

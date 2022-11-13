@@ -425,24 +425,6 @@ class DRBUDDIAggregateOutputs(SimpleInterface):
         return runtime
 
 
-def drbuddi_boilerplate(fieldmap_type):
-    desc = []
-    if fieldmap_type in ("rpe_series", "epi"):
-        desc.append("Data was collected with reversed phase-encode blips, resulting "
-                    "in pairs of images with distortions going in opposite directions.")
-        if fieldmap_type == "epi":
-            desc.append("Here, b=0 reference images with reversed "
-                        "phase encoding directions were used to estimate ")
-        else:
-            desc.append("Here, multiple DWI series were acquired with opposite phase encoding "
-                        "directions. A b=0 image **and** the Fractional Anisotropy "
-                        "images from both phase encoding diesctions were used together in "
-                        "a multi-modal registration to estimate ")
-        desc.append("the susceptibility-induced off-resonance "
-                    "field [@drbuddi]. ")
-    return " ".join(desc)
-
-
 def split_into_up_and_down_niis(dwi_files, bval_files, bvec_files, original_images,
                                 prefix, make_bmat=True, assignments_only=False):
     """Takes the concatenated output from pre_hmc_wf and split it into "up" and "down"

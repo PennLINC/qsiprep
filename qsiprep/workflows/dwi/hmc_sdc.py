@@ -39,6 +39,7 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
                            fmap_demean,
                            pepolar_method,
                            source_file,
+                           t2w_sdc,
                            dwi_metadata=None,
                            sloppy=False,
                            name='qsiprep_hmcsdc_wf'):
@@ -71,6 +72,7 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
             fmap_demean=False,
             name='qsiprep_hmcsdc_wf',
             sloppy=False,
+            t2w_sdc=False,
             dwi_metadata={})
     """
     inputnode = pe.Node(
@@ -162,7 +164,7 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
 
         drbuddi_wf = init_drbuddi_wf(scan_groups=scan_groups, omp_nthreads=omp_nthreads,
                                      b0_threshold=b0_threshold, raw_image_sdc=raw_image_sdc,
-                                     sloppy=sloppy)
+                                     sloppy=sloppy, t2w_sdc=t2w_sdc)
 
         # apply the head motion correction transforms
         apply_hmc_transforms = pe.MapNode(

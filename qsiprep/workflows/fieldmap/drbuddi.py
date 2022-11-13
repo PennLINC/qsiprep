@@ -35,7 +35,7 @@ LOGGER = logging.getLogger('nipype.workflow')
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
-def init_drbuddi_wf(scan_groups, b0_threshold, raw_image_sdc, omp_nthreads=1,
+def init_drbuddi_wf(scan_groups, b0_threshold, raw_image_sdc, t2w_sdc, omp_nthreads=1,
                     name="drbuddi_sdc_wf", sloppy=False):
     """
     This workflow implements the heuristics to choose a
@@ -114,15 +114,29 @@ def init_drbuddi_wf(scan_groups, b0_threshold, raw_image_sdc, omp_nthreads=1,
                     "down_fa_corrected_image", "t2w_image"
             ]),
         name='outputnode')
+    desc = ["Data was collected with reversed phase-encode blips, resulting "
+            "in pairs of images with distortions going in opposite directions."]
 
-    workflow.__postdesc__ = """\
-Based on the estimated susceptibility distortion, an
-unwarped b=0 reference was calculated for a more accurate
-co-registration with the anatomical reference.
-"""
     fieldmap_info = scan_groups['fieldmap_info']
     if fieldmap_info['suffix'] not in ('epi', 'rpe_series', 'dwi'):
         raise Exception("DRBUDDI workflow requires epi, rpe_series or dwi fieldmaps")
+
+    # Describe what's going on
+    if fieldmap_info["suffix"] == "epi":
+        desc.append("Here, b=0 reference images with reversed "
+                    "phase encoding directions were used to estimate ")
+    else:
+        desc.append("Here, multiple DWI series were acquired with opposite phase encoding "
+                    "directions. A b=0 image **and** the Fractional Anisotropy "
+                    "images from both phase encoding diesctions were used together in "
+                    "a multi-modal registration to estimate ")
+    desc.append("the susceptibility-induced off-resonance field. ")
+    if t2w_sdc:
+        desc.append("A T2-weighted image was included in the multimodal registration. ")
+    desc.append("An updated version of DRBUDDI [@drbuddi], part of the TORTOISE [@tortoisev3] "
+                "software package was used to estimate distortion. Signal intensity was adjusted"
+                "in the final interpolated images using a method similar to LSR.\n" )
+    workflow.__desc__ = " ".join(desc)
 
     outputnode.inputs.method = \
         'PEB/PEPOLAR (phase-encoding based / PE-POLARity): %s' % fieldmap_info['suffix']

@@ -21,7 +21,6 @@ from nipype.interfaces.base import (
     isdefined)
 from .fmap import eddy_inputs_from_dwi_files
 from .epi_fmap import get_best_b0_topup_inputs_from
-from .tortoise import drbuddi_boilerplate
 LOGGER = logging.getLogger('nipype.interface')
 
 
