@@ -11,6 +11,7 @@ from nipype import logging
 from nipype.pipeline import engine as pe
 from nipype.interfaces import ants, utility as niu
 
+from .registration import init_b0_to_anat_registration_wf, init_direct_b0_acpc_wf
 from ...interfaces.gradients import SliceQC, CombineMotions, GradientRotation
 from ...interfaces.images import SplitDWIs
 from ..fieldmap.base import init_sdc_wf
@@ -36,10 +37,9 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
                            fmap_bspline,
                            raw_image_sdc,
                            fmap_demean,
-                           use_syn,
-                           force_syn,
                            pepolar_method,
                            source_file,
+                           t2w_sdc,
                            dwi_metadata=None,
                            sloppy=False,
                            name='qsiprep_hmcsdc_wf'):
@@ -52,28 +52,28 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
         :graph2use: orig
         :simple_form: yes
 
-        from qsiprep.workflows.dwi.shoreline import init_qsiprep_hmcsdc_wf
-        wf = init_qsiprep_hmcsdc_wf({'dwi_series':[dwi1.nii, dwi2.nii],
-                                          'fieldmap_info': {'suffix': None},
-                                          'dwi_series_pedir': j},
-                                         source_file='/data/sub-1/dwi/sub-1_dwi.nii.gz',
-                                         b0_threshold=100,
-                                         hmc_transform='Affine',
-                                         hmc_model='3dSHORE',
-                                         hmc_align_to='iterative',
-                                         template='MNI152NLin2009cAsym',
-                                         shoreline_iters=1,
-                                         raw_image_sdc=True,
-                                         impute_slice_threshold=0,
-                                         pepolar_method='TOPUP',
-                                         omp_nthreads=1,
-                                         fmap_bspline=False,
-                                         fmap_demean=False,
-                                         use_syn=True,
-                                         force_syn=False,
-                                         name='qsiprep_hmcsdc_wf',
-                                         sloppy=False,
-                                         dwi_metadata={})
+        from qsiprep.workflows.dwi.shoreline import init_qsiprep_hmcsdc_coreg_wf
+        wf = init_qsiprep_hmcsdc_wf(
+            {'dwi_series':[dwi1.nii, dwi2.nii],
+             'fieldmap_info': {'suffix': None},
+             'dwi_series_pedir': j},
+            source_file='/data/sub-1/dwi/sub-1_dwi.nii.gz',
+            b0_threshold=100,
+            hmc_transform='Affine',
+            hmc_model='3dSHORE',
+            hmc_align_to='iterative',
+            template='MNI152NLin2009cAsym',
+            shoreline_iters=1,
+            raw_image_sdc=True,
+            impute_slice_threshold=0,
+            pepolar_method='DRBUDDI',
+            omp_nthreads=1,
+            fmap_bspline=False,
+            fmap_demean=False,
+            name='qsiprep_hmcsdc_wf',
+            sloppy=False,
+            t2w_sdc=False,
+            dwi_metadata={})
     """
     inputnode = pe.Node(
         niu.IdentityInterface(
@@ -87,7 +87,11 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
             fields=["b0_template", "b0_template_mask", "pre_sdc_template",
                     "hmc_optimization_data", "sdc_method", 'slice_quality', 'motion_params',
                     "cnr_map", "bvec_files_to_transform", "dwi_files_to_transform", "b0_indices",
-                    "bval_files", "to_dwi_ref_affines", "to_dwi_ref_warps", "sdc_scaling_images"]),
+                    "bval_files", "to_dwi_ref_affines", "to_dwi_ref_warps", "sdc_scaling_images",
+                    # From SDC
+                    "fieldmap_type", "b0_up_image", "b0_up_corrected_image", "b0_down_image",
+                    "b0_down_corrected_image", "up_fa_image", "up_fa_corrected_image", "down_fa_image",
+                    "down_fa_corrected_image", "t2w_image"]),
         name='outputnode')
 
     workflow = Workflow(name=name)
@@ -155,12 +159,12 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
     fieldmap_type = fieldmap_info['suffix']
 
     if fieldmap_type in ('epi', 'rpe_series'):
-        if pepolar_method.lower() == "TOPUP":
+        if pepolar_method.lower() == "topup":
             raise Exception("TOPUP is not supported with SHORELine ")
 
         drbuddi_wf = init_drbuddi_wf(scan_groups=scan_groups, omp_nthreads=omp_nthreads,
                                      b0_threshold=b0_threshold, raw_image_sdc=raw_image_sdc,
-                                     sloppy=sloppy)
+                                     sloppy=sloppy, t2w_sdc=t2w_sdc)
 
         # apply the head motion correction transforms
         apply_hmc_transforms = pe.MapNode(
@@ -189,13 +193,21 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
                 ('t1_brain', 'inputnode.t1_brain'),
                 ('t2w_files', 'inputnode.t2w_files'),
                 ('original_files', 'inputnode.original_files')]),
-            #(drbuddi_wf, ds_report_drbuddi, [
-            #    ('outputnode.report', 'in_file')]),
             (drbuddi_wf, outputnode, [
-                ('outputnode.b0_ref', 'b0_template'),
                 ('outputnode.sdc_warps', 'to_dwi_ref_warps'),
                 ('outputnode.sdc_scaling_images', 'sdc_scaling_images'),
-                ('outputnode.method', 'sdc_method')]),
+                ('outputnode.method', 'sdc_method'),
+                ('outputnode.fieldmap_type', 'fieldmap_type'),
+                ('outputnode.b0_up_image', 'b0_up_image'),
+                ('outputnode.b0_up_corrected_image', 'b0_up_corrected_image'),
+                ('outputnode.b0_down_image', 'b0_down_image'),
+                ('outputnode.b0_down_corrected_image', 'b0_down_corrected_image'),
+                ('outputnode.up_fa_image', 'up_fa_image'),
+                ('outputnode.up_fa_corrected_image', 'up_fa_corrected_image'),
+                ('outputnode.down_fa_image', 'down_fa_image'),
+                ('outputnode.down_fa_corrected_image', 'down_fa_corrected_image'),
+                ('outputnode.t2w_image', 't2w_image'),
+                ('outputnode.b0_ref', 'b0_template')])
         ])
         return workflow
 
@@ -230,7 +242,8 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
         (b0_sdc_wf, outputnode, [
             ('outputnode.method', 'sdc_method'),
             ('outputnode.b0_ref', 'b0_template'),
-            ('outputnode.out_warp', 'to_dwi_ref_warps')])])
+            ('outputnode.out_warp', 'to_dwi_ref_warps')])
+        ])
 
     return workflow
 

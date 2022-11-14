@@ -108,7 +108,7 @@ def init_b0_to_anat_registration_wf(mem_gb=3, omp_nthreads=1, write_report=True,
     coreg.inputs.collapse_output_transforms = True
     coreg.inputs.write_composite_transform = False
     coreg.inputs.output_warped_image = True
-    b0_to_anat = pe.Node(coreg, name="b0_to_anat")
+    b0_to_anat = pe.Node(coreg, name="b0_to_anat", n_procs=omp_nthreads)
 
     workflow.connect(inputnode, "t1_brain", b0_to_anat, "fixed_image")
     workflow.connect(inputnode, "ref_b0_brain", b0_to_anat, "moving_image")
@@ -195,7 +195,8 @@ def init_direct_b0_acpc_wf(mem_gb=3, omp_nthreads=1, write_report=True,
     ants_settings = pkgrf("qsiprep", "data/intermodal_ACPC.json")
     acpc_reg = pe.Node(ANTSRegistrationRPT(generate_report=write_report,
                                            from_file=ants_settings),
-                       name="acpc_reg")
+                       name="acpc_reg",
+                       n_procs=omp_nthreads)
 
     # Extract the rigid components of the transform
     itk_to_rigid = pe.Node(AffineToRigid(), name="itk_to_rigid")
