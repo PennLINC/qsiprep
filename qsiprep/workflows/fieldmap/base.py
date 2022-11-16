@@ -192,36 +192,7 @@ co-registration with the anatomical reference.
             # set inputs
             fmap_estimator_wf.inputs.inputnode.fieldmap = fieldmap_info['fieldmap']
             fmap_estimator_wf.inputs.inputnode.magnitude = fieldmap_info['magnitude']
-
-        else:
-            from .phdiff import init_phdiff_wf
-            fmap_estimator_wf = init_phdiff_wf(omp_nthreads=omp_nthreads,
-                                               phasetype=fieldmap_info['suffix'])
-            # set inputs
-            if fieldmap_info['suffix'] == 'phasediff':
-                fmap_estimator_wf.inputs.inputnode.phasediff = fieldmap_info['phasediff']
-            else:
-                # Check that fieldmap is not bipolar
-                fmap_polarity = fieldmap_info['metadata'].get('DiffusionScheme', None)
-                if fmap_polarity == 'Bipolar':
-                    LOGGER.warning("Bipolar fieldmaps are not supported. Ignoring")
-                    workflow.__postdesc__ = ""
-                    outputnode.inputs.method = 'None'
-                    workflow.connect([
-                        (inputnode, outputnode, [('b0_ref', 'b0_ref'),
-                                                 ('b0_mask', 'b0_mask')]),
-                    ])
-                    return workflow
-                if fmap_polarity is None:
-                    LOGGER.warning("Assuming phase images are Monopolar")
-
-                fmap_estimator_wf.inputs.inputnode.phasediff = [
-                    fieldmap_info['phase1'], fieldmap_info['phase2']]
-            fmap_estimator_wf.inputs.inputnode.magnitude = [
-                fmap_ for key, fmap_ in sorted(fieldmap_info.items())
-                if key.startswith("magnitude")
-            ]
-
+        
         sdc_unwarp_wf = init_sdc_unwarp_wf(
             omp_nthreads=omp_nthreads,
             fmap_demean=fmap_demean,
