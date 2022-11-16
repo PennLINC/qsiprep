@@ -86,7 +86,6 @@ def init_fmap_wf(omp_nthreads, fmap_bspline, name='fmap_wf'):
     ])
 
     torads = pe.Node(FieldToRadS(), name='torads')
-    prelude = pe.Node(fsl.PRELUDE(), name='prelude')
     tohz = pe.Node(FieldToHz(), name='tohz')
 
     denoise = pe.Node(fsl.SpatialFilter(operation='median', kernel_shape='sphere',
@@ -97,12 +96,10 @@ def init_fmap_wf(omp_nthreads, fmap_bspline, name='fmap_wf'):
     applymsk = pe.Node(fsl.ApplyMask(), name='applymsk')
 
     workflow.connect([
-        (skullstrip, prelude, [('out_file', 'magnitude_file')]),
-        (automask, prelude, [('out_file','mask_file')]),
         (fmapmrg, torads, [('out_file', 'in_file')]),
-        (torads, tohz, [('fmap_range', 'range_hz')]),
-        (torads, prelude, [('out_file', 'phase_file')]),
-        (prelude, tohz, [('unwrapped_phase_file', 'in_file')]),
+        (torads, tohz, [
+            ('fmap_range', 'range_hz'),
+            ('out_file', 'in_file')]),
         (tohz, denoise, [('out_file', 'in_file')]),
         (denoise, demean, [('out_file', 'in_file')]),
         (demean, cleanup_wf, [('out', 'inputnode.in_file')]),
