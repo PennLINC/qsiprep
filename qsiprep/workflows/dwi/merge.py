@@ -402,7 +402,7 @@ def gen_denoising_boilerplate(denoise_method,
     desc = ["Any images with a b-value less than %d s/mm^2 were treated as a "
             "*b*=0 image." % b0_threshold]
     do_denoise = denoise_method in ('dwidenoise', 'patch2self')
-    do_unringing = unringing_method == 'mrdegibbs'
+    do_unringing = unringing_method in ('rpg', 'mrdegibbs')
     do_biascorr = not dwi_no_biascorr
     harmonize_b0s = not no_b0_harmonization
     last_step = ""
@@ -423,7 +423,8 @@ def gen_denoising_boilerplate(denoise_method,
     if do_unringing:
         unringing_txt = {
             "mrdegibbs": "MRtrix3's `mrdegibbs` [@mrdegibbs].",
-            "dipy": "Dipy [@dipy]."
+            "dipy": "Dipy [@dipy].",
+            "rpg": "TORTOISE's `Gibbs` [@pfgibbs]."
         }[unringing_method]
 
         desc.append(last_step + "Gibbs unringing was performed using "
