@@ -96,8 +96,12 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file,
     match_transforms = pe.Node(MatchTransforms(), name="match_transforms")
     # Make a mask from the output template. It is bias-corrected, so good for masking
     # but bad for using as a b=0 for modeling.
-    b0_template_mask = init_dwi_reference_wf(register_t1=True, name="b0_template_mask",
-                                             gen_report=False, source_file=source_file)
+    b0_template_mask = init_dwi_reference_wf(
+        omp_nthreads=omp_nthreads,
+        register_t1=True,
+        name="b0_template_mask",
+        gen_report=False,
+        source_file=source_file)
 
     workflow.connect([
         (inputnode, match_transforms, [('dwi_files', 'dwi_files'),

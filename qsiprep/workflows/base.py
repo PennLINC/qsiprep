@@ -495,7 +495,8 @@ def init_single_subject_wf(
         # for documentation purposes
         subject_data = {
             't1w': ['/completely/made/up/path/sub-01_T1w.nii.gz'],
-            'dwi': ['/completely/made/up/path/sub-01_dwi.nii.gz']
+            'dwi': ['/completely/made/up/path/sub-01_dwi.nii.gz'],
+            't2w': ['/completely/made/up/path/sub-01_T2w.nii.gz']
         }
         layout = None
         LOGGER.warning("Building a test workflow")
@@ -571,9 +572,11 @@ to workflows in *QSIPrep*'s documentation]\
         name='ds_report_about',
         run_without_submitting=True)
 
+    t2w_files = subject_data['t2w'] if pepolar_method.lower() == 'drbuddi' else []
     # Preprocessing of T1w (includes registration to MNI)
     anat_preproc_wf = init_anat_preproc_wf(
         name="anat_preproc_wf",
+        t2w_files=t2w_files,
         dwi_only=dwi_only,
         infant_mode=infant_mode,
         skull_strip_template=skull_strip_template,
@@ -739,8 +742,7 @@ to workflows in *QSIPrep*'s documentation]\
             low_mem=low_mem,
             fmap_bspline=fmap_bspline,
             fmap_demean=fmap_demean,
-            use_syn=use_syn,
-            force_syn=force_syn,
+            t2w_sdc=bool(t2w_files),
             sloppy=debug,
             source_file=source_file
         )
@@ -782,6 +784,7 @@ to workflows in *QSIPrep*'s documentation]\
                      'inputnode.t1_2_mni_reverse_transform'),
                     ('outputnode.dwi_sampling_grid',
                      'inputnode.dwi_sampling_grid'),
+                    ('outputnode.t2w_files', 'inputnode.t2w_files'),
                     # Undefined if --no-freesurfer, but this is safe
                     ('outputnode.subjects_dir', 'inputnode.subjects_dir'),
                     ('outputnode.subject_id', 'inputnode.subject_id'),

@@ -16,11 +16,12 @@ from nipype.interfaces import ants
 from nipype.utils.filemanip import split_filename, fname_presuffix
 import nilearn.image as nim
 import nibabel as nb
-from .fmap import get_distortion_grouping
+from .fmap import get_distortion_grouping, plot_fa_reg, plot_pepolar
 from .images import to_lps
 from .epi_fmap import get_best_b0_topup_inputs_from, safe_get_3d_image
 from .gradients import write_concatenated_fsl_gradients
 from .images import split_bvals_bvecs
+from ..niworkflows.viz.utils import compose_view, cuts_from_bbox
 import nilearn.image as nim
 import pandas as pd
 
@@ -147,7 +148,14 @@ class GatherDRBUDDIInputs(SimpleInterface):
             down_img.to_filename(blip_down_nii)
             self._results["blip_up_image"] = blip_up_nii
             self._results["blip_down_image"] = blip_down_nii
-            self._results["blip_assignments"] = ["up"] * len(self.inputs.dwi_files)
+            self._results["blip_assignments"] = split_into_up_and_down_niis(
+                            dwi_files=self.inputs.dwi_files,
+                            bval_files=bval_files,
+                            bvec_files=bvec_files,
+                            original_images=self.inputs.original_files,
+                            prefix=op.join(runtime.cwd, "drbuddi"),
+                            make_bmat=False,
+                            assignments_only=True)
             self._results["blip_up_bmat"] = write_dummy_bmtxt(blip_up_nii)
             self._results["blip_down_bmat"] = write_dummy_bmtxt(blip_down_nii)
 
@@ -194,8 +202,8 @@ class _DRBUDDIInputSpec(TORTOISEInputSpec):
         copyfile=True)
     structural_image = InputMultiObject(
         File(exists=True, copyfile=False),
-        help="Path(s) to anatomical image files. Can provide more than one. NO T1W's!!"
-    )
+        argstr='-s %s',
+        help="Path(s) to anatomical image files. Can provide more than one. NO T1W's!!")
     nthreads=traits.Int(1, usedefault=True, hash_files=False)
     fieldmap_type = traits.Enum("epi", "rpe_series", mandatory=True)
     blip_assignments = traits.List()
@@ -248,6 +256,7 @@ class _DRBUDDIOutputSpec(TraitedSpec):
     deformation_minv = File(exists=True)
     blip_up_FA = File(exists=True)
     blip_down_FA = File(exists=True)
+    structural_image = File(exists=True)
 
 
 class DRBUDDI(CommandLine):
@@ -259,6 +268,8 @@ class DRBUDDI(CommandLine):
         """Trick to get blip_down_bmat symlinked without an arg"""
         if name in ("blip_down_bmat", "blip_up_bmat"):
             return ""
+        if name == "structural_image":
+            return "-s " + " ".join(value)
         return super(DRBUDDI, self)._format_arg(name, spec, value)
 
     def _list_outputs(self):
@@ -284,6 +295,9 @@ class DRBUDDI(CommandLine):
             outputs["blip_up_FA"] = op.abspath("blip_up_FA.nii")
             outputs["blip_down_FA"] = op.abspath("blip_down_FA.nii")
 
+        # If there was a T2w
+        if self.inputs.structural_image:
+            outputs['structural_image'] = op.abspath("structural_used.nii")
         return outputs
 
 
@@ -305,13 +319,19 @@ class _DRBUDDIAggregateOutputsInputSpec(TORTOISEInputSpec):
     blip_up_FA = File(exists=True)
     blip_down_FA = File(exists=True)
     fieldmap_type = traits.Enum("epi", "rpe_series", mandatory=True)
+    structural_image = File(exists=True)
+    wm_seg = File(exists=True, desc="White matter segmentation image")
 
 
 class _DRBUDDIAggregateOutputsOutputSpec(TraitedSpec):
     # Aggregated outputs for convenience
     sdc_warps = OutputMultiObject(File(exists=True))
     sdc_scaling_images = OutputMultiObject(File(exists=True))
-    visual_report = File(exists=True)
+    # Fieldmap outputs for the reports
+    up_fa_corrected_image = File(exists=True)
+    down_fa_corrected_image = File(exists=True)
+    # The best image for coregistration to the corrected DWI
+    b0_ref = File(exists=True)
 
 
 class DRBUDDIAggregateOutputs(SimpleInterface):
@@ -319,6 +339,11 @@ class DRBUDDIAggregateOutputs(SimpleInterface):
     output_spec = _DRBUDDIAggregateOutputsOutputSpec
 
     def _run_interface(self, runtime):
+
+        # If the structural image has been used, return that as the b0ref, otherwise
+        # it's the b0_corrected_final
+        self._results["b0_ref"] = self.inputs.structural_image if \
+            isdefined(self.inputs.structural_image) else self.inputs.undistorted_reference
 
         # there may be 2 transforms for the blip down data. If so, compose them
         if isdefined(self.inputs.bdown_to_bup_rigid_trans_h5):
@@ -336,7 +361,7 @@ class DRBUDDIAggregateOutputs(SimpleInterface):
             )
             xfm.terminal_output = 'allatonce'
             xfm.resource_monitor = False
-            runtime = xfm.run().runtime
+            _ = xfm.run()
         else:
             down_warp = self.inputs.deformation_minv
 
@@ -363,52 +388,50 @@ class DRBUDDIAggregateOutputs(SimpleInterface):
             scaling_blip_down_file for blip_dir in
             self.inputs.blip_assignments]
 
-        # report_file = op.join(runtime.cwd, "drbuddi_report.svg")
-        # up_ref, down_ref = self.inputs.blip_up_FA, self.inputs.blip_down_FA if \
-        #     self.inputs.fieldmap_type == "rpe_series" else self.inputs.blip_up_b0_corrected, \
-        #         self.inputs.blip_down_corrected
+        if self.inputs.fieldmap_type == 'rpe_series':
+            fa_up_warped = fname_presuffix(
+                self.inputs.blip_up_FA,
+                newpath=runtime.cwd,
+                suffix="_corrected")
+            xfm_fa_up = ants.ApplyTransforms(
+                # input_image is ignored because print_out_composite_warp_file is True
+                input_image=self.inputs.blip_up_FA,
+                transforms=[self.inputs.deformation_finv],
+                reference_image=self.inputs.undistorted_reference,
+                output_image=fa_up_warped,
+                interpolation='NearestNeighbor')
+            xfm_fa_up.terminal_output = 'allatonce'
+            xfm_fa_up.resource_monitor = False
+            xfm_fa_up.run()
+
+            fa_down_warped = fname_presuffix(
+                self.inputs.blip_down_FA,
+                newpath=runtime.cwd,
+                suffix="_corrected")
+            xfm_fa_down = ants.ApplyTransforms(
+                # input_image is ignored because print_out_composite_warp_file is True
+                input_image=self.inputs.blip_down_FA,
+                transforms=[self.inputs.deformation_minv,
+                            self.inputs.bdown_to_bup_rigid_trans_h5],
+                reference_image=self.inputs.undistorted_reference,
+                output_image=fa_down_warped,
+                interpolation='NearestNeighbor')
+            xfm_fa_down.terminal_output = 'allatonce'
+            xfm_fa_down.resource_monitor = False
+            xfm_fa_down.run()
+            self._results['up_fa_corrected_image'] = fa_up_warped
+            self._results["down_fa_corrected_image"] = fa_down_warped
 
         return runtime
 
 
-def plot_drbuddi(
-    blip_up_orig_file, blip_up_transforms, blip_up_scaling_file,
-    blip_down_orig_file, blip_down_transforms, blip_down_scaling_image,
-    b0_corrected_file, cwd):
-
-    def resample_to_reference(data_img, fname):
-        resample = ants.ApplyTransforms(
-            dimension=3,
-            reference=b0_corrected_file
-        )
-    pass
-
-
-def drbuddi_boilerplate(fieldmap_type):
-    desc = []
-    if fieldmap_type in ("rpe_series", "epi"):
-        desc.append("Data was collected with reversed phase-encode blips, resulting "
-                    "in pairs of images with distortions going in opposite directions.")
-        if fieldmap_type == "epi":
-            desc.append("Here, b=0 reference images with reversed "
-                        "phase encoding directions were used to estimate ")
-        else:
-            desc.append("Here, multiple DWI series were acquired with opposite phase encoding "
-                        "directions. A b=0 image **and** the Fractional Anisotropy "
-                        "images from both phase encoding diesctions were used together in "
-                        "a multi-modal registration to estimate ")
-        desc.append("the susceptibility-induced off-resonance "
-                    "field [@drbuddi]. ")
-    return " ".join(desc)
-
-
 def split_into_up_and_down_niis(dwi_files, bval_files, bvec_files, original_images,
-                                prefix, make_bmat=True):
+                                prefix, make_bmat=True, assignments_only=False):
     """Takes the concatenated output from pre_hmc_wf and split it into "up" and "down"
     decompressed nifti files with float32 datatypes."""
     group_names, group_assignments = get_distortion_grouping(original_images)
 
-    if not len(set(group_names)) == 2:
+    if not len(set(group_names)) == 2 and not assignments_only:
         raise Exception("DRBUDDI requires exactly one blip up and one blip down")
 
     up_images = []
@@ -441,6 +464,9 @@ def split_into_up_and_down_niis(dwi_files, bval_files, bvec_files, original_imag
             down_bvecs.append(bvec_file)
             blip_assignments.append("down")
 
+    if assignments_only:
+        return blip_assignments
+
     # Write the 4d up image
     up_4d = nim.concat_imgs(up_images, dtype=np.float32, auto_resample=False)
     up_4d.set_data_dtype(np.float32)
@@ -472,4 +498,3 @@ def make_bmat_file(bvals, bvecs):
         ["FSLBVecsToTORTOISEBmatrix", op.abspath(bvals), op.abspath(bvecs)])
     print(pout)
     return bvals.replace("bval", "bmtxt")
-

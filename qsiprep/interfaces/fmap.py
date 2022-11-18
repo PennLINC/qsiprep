@@ -29,6 +29,12 @@ from nipype.interfaces import ants
 from .images import to_lps
 from .reports import topup_selection_to_report
 from nilearn.image import load_img, index_img, concat_imgs, iter_img, math_img
+import nilearn.image as nim
+import nilearn.plotting as nip
+from lxml import etree
+from nipype.interfaces.mixins import reporting
+from ..niworkflows.viz.utils import (cuts_from_bbox, compose_view,
+plot_denoise, robust_set_limits, extract_svg, SVGFigure, uuid4, SVGNS)
 
 LOGGER = logging.getLogger('nipype.interface')
 CRITICAL_KEYS = ["PhaseEncodingDirection", "TotalReadoutTime", "EffectiveEchoSpacing"]
@@ -1118,3 +1124,245 @@ class ApplyScalingImages(SimpleInterface):
         self._results["scaled_images"] = scaled_dwi_images
 
         return runtime
+
+
+class _PEPOLARReportInputSpec(BaseInterfaceInputSpec):
+    fieldmap_type = traits.Enum('rpe_series', 'epi')
+    b0_up_image = File(exists=True, mandatory=True)
+    b0_up_corrected_image = File(exists=True, mandatory=True)
+    b0_down_image = File(exists=True, mandatory=True)
+    b0_down_corrected_image = File(exists=True, mandatory=True)
+    up_fa_image = File(exists=True)
+    up_fa_corrected_image = File(exists=True)
+    down_fa_image = File(exists=True)
+    down_fa_corrected_image = File(exists=True)
+    t2w_seg = File(exists=True)
+    t1w_seg = File(exists=True)
+
+
+class _PEPOLARReportOutputSpec(reporting.ReportCapableOutputSpec):
+    fa_sdc_report = File(exists=True)
+    b0_sdc_report = File(exists=True)
+
+
+class PEPOLARReport(SimpleInterface):
+    input_spec = _PEPOLARReportInputSpec
+    output_spec = _PEPOLARReportOutputSpec
+    _n_cuts = 5
+
+    def _run_interface(self, runtime):
+        """Generate a reportlet."""
+        LOGGER.info('Generating a PEPOLAR visual report')
+
+        # Get a segmentation from an undistorted image as a reference
+        ref_segmentation = self.inputs.t1w_seg if not \
+            isdefined(self.inputs.t2w_seg) else self.inputs.t2w_seg
+
+        seg_img = nb.load(ref_segmentation)
+        b0_up_img = nb.load(self.inputs.b0_up_image)
+        b0_down_img = nb.load(self.inputs.b0_down_image)
+        b0_up_corrected_img = nb.load(self.inputs.b0_up_corrected_image)
+        b0_down_corrected_img = nb.load(self.inputs.b0_down_corrected_image)
+        cuts = cuts_from_bbox(seg_img, self._n_cuts)
+        b0_sdc_svg = op.join(runtime.cwd, "b0_blipupdown_sdc.svg")
+        compose_view(
+            plot_pepolar(
+                b0_up_img,
+                b0_down_img,
+                seg_img,
+                'moving-image',
+                estimate_brightness=True,
+                cuts=cuts,
+                label='Original',
+                upper_label_suffix=": Blip Up",
+                lower_label_suffix=": Blip Down",
+                compress=False),
+            plot_pepolar(
+                b0_up_corrected_img,
+                b0_down_corrected_img,
+                seg_img,
+                'fixed-image',
+                estimate_brightness=True,
+                cuts=cuts,
+                label="Corrected",
+                upper_label_suffix=": Blip Up",
+                lower_label_suffix=": Blip Down",
+                compress=False),
+            out_file=b0_sdc_svg)
+        self._results["b0_sdc_report"] = b0_sdc_svg
+
+        if False in map(
+            isdefined,
+            (self.inputs.up_fa_image,
+             self.inputs.up_fa_corrected_image,
+             self.inputs.down_fa_image,
+             self.inputs.down_fa_corrected_image)):
+            LOGGER.info("No FA images available for SDC report")
+            return runtime
+
+        # Prepare the FA images for plotting
+        fa_sdc_svg = op.join(runtime.cwd, "FA_reg.svg")
+        fa_up_img = nb.load(self.inputs.up_fa_image)
+        fa_up_corrected_img = nb.load(self.inputs.up_fa_corrected_image)
+        fa_down_img = nb.load(self.inputs.down_fa_image)
+        fa_down_corrected_img = nb.load(self.inputs.down_fa_corrected_image)
+        uncorrected_fa = nim.math_img("(a+b)/2", a=fa_up_img, b=fa_down_img)
+        corrected_fa = nim.math_img("(a+b)/2", a=fa_up_corrected_img, b=fa_down_corrected_img)
+        compose_view(
+            plot_fa_reg(
+                corrected_fa, seg_img, 'moving-image', estimate_brightness=False,
+                label="FA: After",
+                cuts=cuts),
+            plot_fa_reg(
+                uncorrected_fa, seg_img, 'fixed-image', estimate_brightness=False,
+                label="FA: Before",
+                cuts=cuts),
+            out_file=fa_sdc_svg)
+        self._results["fa_sdc_report"] = fa_sdc_svg
+        return runtime
+
+
+def plot_pepolar(blip_up_img, blip_down_img, seg_contour_img,
+                 div_id, plot_params=None, blip_down_plot_params=None,
+                 order=('z', 'x', 'y'), cuts=None,
+                 estimate_brightness=False, label=None,
+                 blip_down_contour=None, upper_label_suffix=": low-b",
+                 lower_label_suffix=": high-b",
+                 compress='auto', overlay=None, overlay_params=None):
+    """
+    Plot the foreground and background views.
+    Default order is: axial, coronal, sagittal
+
+    Updated version from sdcflows and different from in qsiprep.niworkflows.viz.utils
+    so that the contour lines never move. This is accomplished by making an empty
+    image in the grid of the segmentation image and using this as the background.
+
+    """
+    plot_params = plot_params or {}
+    blip_down_plot_params = blip_down_plot_params or {}
+
+    if cuts is None:
+        raise NotImplementedError
+
+    out_files = []
+    if estimate_brightness:
+        plot_params = robust_set_limits(
+            blip_up_img.get_fdata(dtype='float32').reshape(-1),
+            plot_params)
+
+    zeros_bg_img = nim.new_img_like(
+        seg_contour_img,
+        np.zeros(seg_contour_img.shape),
+        copy_header=True)
+
+    # Plot each cut axis for low-b
+    image_plot_params = plot_params.copy()
+    for i, mode in enumerate(list(order)):
+        plot_params['display_mode'] = mode
+        plot_params['cut_coords'] = cuts[mode]
+        if i == 0:
+            plot_params['title'] = label + upper_label_suffix
+        else:
+            plot_params['title'] = None
+
+        # Generate nilearn figure
+        display = nip.plot_anat(zeros_bg_img, **plot_params)
+        display.add_overlay(blip_up_img, cmap="gray", **image_plot_params)
+        display.add_contours(seg_contour_img, colors='b', linewidths=0.5)
+
+        svg = extract_svg(display, compress=compress)
+        display.close()
+
+        # Find and replace the figure_1 id.
+        xml_data = etree.fromstring(svg)
+        find_text = etree.ETXPath("//{%s}g[@id='figure_1']" % SVGNS)
+        find_text(xml_data)[0].set('id', '%s-%s-%s' % (div_id, mode, uuid4()))
+
+        svg_fig = SVGFigure()
+        svg_fig.root = xml_data
+        out_files.append(svg_fig)
+
+    # Plot each cut axis for high-b
+    if estimate_brightness:
+        blip_down_plot_params = robust_set_limits(
+            blip_down_img.get_fdata(dtype='float32').reshape(-1),
+            blip_down_plot_params)
+    image_blip_down_plot_params = blip_down_plot_params.copy()
+    for i, mode in enumerate(list(order)):
+        blip_down_plot_params['display_mode'] = mode
+        blip_down_plot_params['cut_coords'] = cuts[mode]
+        if i == 0:
+            blip_down_plot_params['title'] = label + lower_label_suffix
+        else:
+            blip_down_plot_params['title'] = None
+
+        # Generate nilearn figure
+        display = nip.plot_anat(zeros_bg_img, **blip_down_plot_params)
+        display.add_overlay(blip_down_img, cmap="gray", **image_blip_down_plot_params)
+        display.add_contours(seg_contour_img, colors='b', linewidths=0.5)
+        svg = extract_svg(display, compress=compress)
+        display.close()
+
+        # Find and replace the figure_1 id.
+        xml_data = etree.fromstring(svg)
+        find_text = etree.ETXPath("//{%s}g[@id='figure_1']" % SVGNS)
+        find_text(xml_data)[0].set('id', '%s-%s-%s' % (div_id, mode, uuid4()))
+
+        svg_fig = SVGFigure()
+        svg_fig.root = xml_data
+        out_files.append(svg_fig)
+
+    return out_files
+
+def plot_fa_reg(fa_img, seg_contour_img,
+                div_id, plot_params=None, blip_down_plot_params=None,
+                order=('z', 'x', 'y'), cuts=None,
+                estimate_brightness=False, label=None,
+                compress='auto'):
+    """
+    Plot the foreground and background views.
+    Default order is: axial, coronal, sagittal
+
+    Updated version from sdcflows and different from in qsiprep.niworkflows.viz.utils
+    so that the contour lines never move. This is accomplished by making an empty
+    image in the grid of the segmentation image and using this as the background.
+
+    """
+    plot_params = {"vmin":0.01, "vmax":0.85, "cmap": "gray"}
+    if cuts is None:
+        raise NotImplementedError
+
+    out_files = []
+    zeros_bg_img = nim.new_img_like(
+        seg_contour_img,
+        np.zeros(seg_contour_img.shape),
+        copy_header=True)
+
+    # Plot each cut axis for low-b
+    image_plot_params = plot_params.copy()
+    for i, mode in enumerate(list(order)):
+        plot_params['display_mode'] = mode
+        plot_params['cut_coords'] = cuts[mode]
+        if i == 0:
+            plot_params['title'] = label
+        else:
+            plot_params['title'] = None
+
+        # Generate nilearn figure
+        display = nip.plot_anat(zeros_bg_img, **plot_params)
+        display.add_overlay(fa_img, **image_plot_params)
+        #display.add_contours(seg_contour_img, colors='b', linewidths=0.5)
+
+        svg = extract_svg(display, compress=compress)
+        display.close()
+
+        # Find and replace the figure_1 id.
+        xml_data = etree.fromstring(svg)
+        find_text = etree.ETXPath("//{%s}g[@id='figure_1']" % SVGNS)
+        find_text(xml_data)[0].set('id', '%s-%s-%s' % (div_id, mode, uuid4()))
+
+        svg_fig = SVGFigure()
+        svg_fig.root = xml_data
+        out_files.append(svg_fig)
+
+    return out_files

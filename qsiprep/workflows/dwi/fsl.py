@@ -14,6 +14,7 @@ from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
 from nipype.interfaces import fsl
 
+from .registration import init_b0_to_anat_registration_wf, init_direct_b0_acpc_wf
 from ...interfaces.eddy import (GatherEddyInputs, ExtendedEddy, Eddy2SPMMotion,
                                 boilerplate_from_eddy_config)
 from ...interfaces.images import SplitDWIs, ConformDwi, IntraModalMerge
@@ -40,6 +41,7 @@ def init_fsl_hmc_wf(scan_groups,
                     eddy_config,
                     raw_image_sdc,
                     pepolar_method,
+                    t2w_sdc,
                     mem_gb=3,
                     omp_nthreads=1,
                     dwi_metadata=None,
@@ -107,8 +109,11 @@ def init_fsl_hmc_wf(scan_groups,
             fields=["b0_template", "b0_template_mask", "pre_sdc_template", "bval_files",
                     "hmc_optimization_data", "sdc_method", 'slice_quality', 'motion_params',
                     "cnr_map", "bvec_files_to_transform", "dwi_files_to_transform", "b0_indices",
-                    "to_dwi_ref_affines", "to_dwi_ref_warps", "rpe_b0_info",
-                    "sdc_scaling_images"]),
+                    "to_dwi_ref_affines", "to_dwi_ref_warps", "rpe_b0_info", "sdc_scaling_images",
+                    # From SDC
+                    "fieldmap_type", "b0_up_image", "b0_up_corrected_image", "b0_down_image",
+                    "b0_down_corrected_image", "up_fa_image", "up_fa_corrected_image", "down_fa_image",
+                    "down_fa_corrected_image", "t2w_image"]),
         name='outputnode')
 
     workflow = Workflow(name=name)
@@ -128,8 +133,12 @@ def init_fsl_hmc_wf(scan_groups,
     # Run in parallel if possible
     LOGGER.info("Using %d threads in eddy", omp_nthreads)
     eddy_args["num_threads"] = omp_nthreads
-    pre_eddy_b0_ref_wf = init_dwi_reference_wf(register_t1=True, source_file=source_file,
-                                               name='pre_eddy_b0_ref_wf', gen_report=False)
+    pre_eddy_b0_ref_wf = init_dwi_reference_wf(
+        omp_nthreads=omp_nthreads,
+        register_t1=True,
+        source_file=source_file,
+        name='pre_eddy_b0_ref_wf',
+        gen_report=False)
     eddy = pe.Node(ExtendedEddy(**eddy_args), name="eddy")
     spm_motion = pe.Node(Eddy2SPMMotion(), name="spm_motion")
 
@@ -252,6 +261,7 @@ def init_fsl_hmc_wf(scan_groups,
             # Save reports
             (gather_inputs, topup_summary, [('topup_report', 'summary')]),
             (topup_summary, ds_report_topupsummary, [('out_report', 'in_file')])
+
         ])
 
         return workflow
@@ -275,14 +285,9 @@ def init_fsl_hmc_wf(scan_groups,
             gather_inputs.inputs.epi_fmaps = scan_groups['fieldmap_info']['epi']
 
         drbuddi_wf = init_drbuddi_wf(scan_groups=scan_groups, omp_nthreads=omp_nthreads,
-                                     b0_threshold=b0_threshold, raw_image_sdc=raw_image_sdc,
+                                     t2w_sdc=t2w_sdc, b0_threshold=b0_threshold,
+                                     raw_image_sdc=raw_image_sdc,
                                      sloppy=sloppy)
-        # ds_report_drbuddi = pe.Node(
-        #     DerivativesDataSink(suffix='drbuddisummary', source_file=source_file),
-        #     name='ds_report_drbuddisummary',
-        #     run_without_submitting=True,
-        #     mem_gb=DEFAULT_MEMORY_MIN_GB)
-
 
         workflow.connect([
             (split_eddy_lps, drbuddi_wf, [
@@ -291,18 +296,23 @@ def init_fsl_hmc_wf(scan_groups,
                 ('bvec_files', 'inputnode.bvec_files')]),
             (inputnode, drbuddi_wf, [
                 ('t1_brain', 'inputnode.t1_brain'),
-                ('t2_brain', 'inputnode.t2_brain'),
+                ('t2w_files', 'inputnode.t2w_files'),
                 ('original_files', 'inputnode.original_files')]),
-            #(drbuddi_wf, ds_report_drbuddi, [
-            #    ('outputnode.report', 'in_file')]),
             (drbuddi_wf, outputnode, [
-                ('outputnode.b0_ref', 'b0_template'),
                 ('outputnode.sdc_warps', 'to_dwi_ref_warps'),
-                ('outputnode.sdc_scaling_images', 'sdc_scaling_images')]),
-
-            # Save reports
-            #(gather_inputs, drbuddi_summary, [('topup_report', 'summary')]),
-            #(topup_summary, ds_report_topupsummary, [('out_report', 'in_file')]),
+                ('outputnode.sdc_scaling_images', 'sdc_scaling_images'),
+                ('outputnode.method', 'sdc_method'),
+                ('outputnode.fieldmap_type', 'fieldmap_type'),
+                ('outputnode.b0_up_image', 'b0_up_image'),
+                ('outputnode.b0_up_corrected_image', 'b0_up_corrected_image'),
+                ('outputnode.b0_down_image', 'b0_down_image'),
+                ('outputnode.b0_down_corrected_image', 'b0_down_corrected_image'),
+                ('outputnode.up_fa_image', 'up_fa_image'),
+                ('outputnode.up_fa_corrected_image', 'up_fa_corrected_image'),
+                ('outputnode.down_fa_image', 'down_fa_image'),
+                ('outputnode.down_fa_corrected_image', 'down_fa_corrected_image'),
+                ('outputnode.t2w_image', 't2w_image'),
+                ('outputnode.b0_ref', 'b0_template')])
         ])
 
         return workflow

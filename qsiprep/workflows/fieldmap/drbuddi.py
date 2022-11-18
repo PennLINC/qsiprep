@@ -9,13 +9,14 @@ Correcting Susceptibility Distortion with DRBUDDI
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 DRBUDDI is part of the TORTOISE software that estimates and corrects
-susceptibility distortion. It has two different modes of operation
+susceptibility distortion. It has multiple modes of operation
 
   1. Use $b=0$ images to estimate distortion.
 
   2. Perform a multimodal registration using $b=0$ images and FA images.
      This requires two DWI series with opposite phase encoding directions
 
+  3. Either (1) or (2) but a t2w image is used as well
 
 """
 
@@ -34,7 +35,7 @@ LOGGER = logging.getLogger('nipype.workflow')
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
-def init_drbuddi_wf(scan_groups, b0_threshold, raw_image_sdc, omp_nthreads=1,
+def init_drbuddi_wf(scan_groups, b0_threshold, raw_image_sdc, t2w_sdc, omp_nthreads=1,
                     name="drbuddi_sdc_wf", sloppy=False):
     """
     This workflow implements the heuristics to choose a
@@ -101,22 +102,41 @@ def init_drbuddi_wf(scan_groups, b0_threshold, raw_image_sdc, omp_nthreads=1,
     workflow = Workflow(name=name)
     inputnode = pe.Node(niu.IdentityInterface(
         fields=['dwi_files', 'bval_files', 'bvec_files', 'original_files',
-                't1_brain', 't2_brain', 'topup_imain']),
+                't1_brain', 't1_wm_seg', 't2w_files']),
         name='inputnode')
 
     outputnode = pe.Node(
         niu.IdentityInterface(
-            fields=['b0_ref', 'b0_mask', 'sdc_warps', 'sdc_scaling_images', 'report', 'method']),
+            fields=['b0_ref', 'b0_mask', 'sdc_warps', 'sdc_scaling_images', 'report', 'method',
+                    # From SDC
+                    "fieldmap_type", "b0_up_image", "b0_up_corrected_image", "b0_down_image",
+                    "b0_down_corrected_image", "up_fa_image", "up_fa_corrected_image", "down_fa_image",
+                    "down_fa_corrected_image", "t2w_image"
+            ]),
         name='outputnode')
+    desc = ["Data was collected with reversed phase-encode blips, resulting "
+            "in pairs of images with distortions going in opposite directions."]
 
-    workflow.__postdesc__ = """\
-Based on the estimated susceptibility distortion, an
-unwarped b=0 reference was calculated for a more accurate
-co-registration with the anatomical reference.
-"""
     fieldmap_info = scan_groups['fieldmap_info']
     if fieldmap_info['suffix'] not in ('epi', 'rpe_series', 'dwi'):
         raise Exception("DRBUDDI workflow requires epi, rpe_series or dwi fieldmaps")
+
+    # Describe what's going on
+    if fieldmap_info["suffix"] == "epi":
+        desc.append("Here, b=0 reference images with reversed "
+                    "phase encoding directions were used to estimate ")
+    else:
+        desc.append("Here, multiple DWI series were acquired with opposite phase encoding "
+                    "directions. A b=0 image **and** the Fractional Anisotropy "
+                    "images from both phase encoding diesctions were used together in "
+                    "a multi-modal registration to estimate ")
+    desc.append("the susceptibility-induced off-resonance field. ")
+    if t2w_sdc:
+        desc.append("A T2-weighted image was included in the multimodal registration. ")
+    desc.append("An updated version of DRBUDDI [@drbuddi], part of the TORTOISE [@tortoisev3] "
+                "software package was used to estimate distortion. Signal intensity was adjusted"
+                "in the final interpolated images using a method similar to LSR.\n" )
+    workflow.__desc__ = " ".join(desc)
 
     outputnode.inputs.method = \
         'PEB/PEPOLAR (phase-encoding based / PE-POLARity): %s' % fieldmap_info['suffix']
@@ -143,8 +163,6 @@ co-registration with the anatomical reference.
             fieldmap_type=fieldmap_info['suffix']),
         name="aggregate_drbuddi")
 
-    drbuddi_summary = pe.Node(TopupSummary(), name='drbuddi_summary')
-
     workflow.connect([
         (inputnode, gather_drbuddi_inputs, [
             ("dwi_files", "dwi_files"),
@@ -157,12 +175,16 @@ co-registration with the anatomical reference.
             ("blip_up_json", "blip_up_json"),
             ("blip_up_bmat", "blip_up_bmat"),
             ("blip_down_image", "blip_down_image"),
-            ("blip_down_bmat", "blip_down_bmat"),
-        ]),
-        (inputnode, drbuddi, ([
-            ("t2_brain", "structural_image")])),
-        (gather_drbuddi_inputs, drbuddi_summary, [
-            ("report", "summary")]),
+            ("blip_down_bmat", "blip_down_bmat")]),
+        (inputnode, drbuddi, [('t2w_files', 'structural_image')]),
+        (drbuddi, outputnode, [
+            ('blip_down_b0', 'b0_down_image'),
+            ('blip_up_b0', 'b0_up_image'),
+            ('blip_down_b0_corrected', 'b0_down_corrected_image'),
+            ('blip_up_b0_corrected', 'b0_up_corrected_image'),
+            ('blip_down_FA', 'down_fa_image'),
+            ('blip_up_FA', 'up_fa_image'),
+            ('structural_image', 't2w_image')]),
         (drbuddi, aggregate_drbuddi, [
             ("undistorted_reference", "undistorted_reference"),
             ('bdown_to_bup_rigid_trans_h5', 'bdown_to_bup_rigid_trans_h5'),
@@ -177,15 +199,16 @@ co-registration with the anatomical reference.
             ('deformation_finv', 'deformation_finv'),
             ('deformation_minv', 'deformation_minv'),
             ('blip_up_FA', 'blip_up_FA'),
-            ('blip_down_FA', 'blip_down_FA')
-        ]),
+            ('blip_down_FA', 'blip_down_FA'),
+            ('structural_image', 'structural_image')]),
         (gather_drbuddi_inputs, aggregate_drbuddi, [
             ('blip_assignments', 'blip_assignments')]),
-        (drbuddi, outputnode, [
-            ("undistorted_reference", "b0_ref")]),
         (aggregate_drbuddi, outputnode, [
             ("sdc_warps", "sdc_warps"),
-            ("sdc_scaling_images", "sdc_scaling_images")])
+            ("sdc_scaling_images", "sdc_scaling_images"),
+            ("up_fa_corrected_image", "up_fa_corrected_image"),
+            ("down_fa_corrected_image", "down_fa_corrected_image"),
+            ("b0_ref", "b0_ref")])
     ])
 
     return workflow
