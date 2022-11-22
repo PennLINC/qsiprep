@@ -41,7 +41,7 @@ rm -rf data/DSDTI/sub-PNC/fmap
 ${QSIPREP_CMD} \
 	-w ${TEMPDIR} \
      --eddy-config ${EDDY_CFG} \
-     --denoise-method none \
+     --denoise-method rpg \
      --sloppy \
      --output-space T1w \
      --output-resolution 5 \

@@ -50,51 +50,7 @@ SLOPPY_DRBUDDI = \
         "metrics=\{MSJac:CC\},restrict_constrain=\{0:0\}\]"
 
 class TORTOISEInputSpec(BaseInterfaceInputSpec):
-    in_file = File(exists=True, mandatory=True)
-    convert_to_unzipped = traits.Bool(
-        True,
-        usedefault=True,
-        desc='should the file be converted into TORTOISE format before running?')
-
-
-class TORTOISECommandline(CommandLine):
-    input_spec = TORTOISEInputSpec
-
-    def _pre_run_hook(self, runtime):
-        # If the image is not zipped and float32, convert it
-        is_zipped = self.inputs.in_file.endswith(".gz")
-        is_float32 = nb.load(self.inputs.in_file).get_data_dtype() == np.float32
-        needs_conversion = is_zipped or is_float32
-        if self.inputs.convert_to_unzipped and needs_conversion:
-            unzipped3d = fname_presuffix(
-                self.inputs.in_file,
-                suffix="_converted.nii",
-                use_ext=False,
-                newpath=runtime.cwd)
-            LOGGER.info("Creating TORTOISE-compatible file %s", unzipped3d)
-            self._in_file = unzipped3d
-            proc_out = subprocess.run(
-                ["ConvertImage", "3", self.inputs.in_file, unzipped3d, "0"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE)
-            if proc_out.stderr:
-                raise Exception(proc_out.stderr)
-        else:
-            self._in_file = str(self.inputs.in_file)
-
-        return super()._pre_run_hook(runtime)
-
-    def _format_arg(self, name, trait_spec, value):
-        if name == "in_file":
-            return self._in_file
-        return super()._format_arg(name, trait_spec, value)
-
-    def _post_run_hook(self, runtime):
-        # If we had to make a float unzipped file, clean it up on exit
-        if not self._in_file == str(self.inputs.in_file):
-            os.remove(self._in_file)
-
-        return super()._post_run_hook(runtime)
+    pass
 
 
 class _GatherDRBUDDIInputsInputSpec(TORTOISEInputSpec):
