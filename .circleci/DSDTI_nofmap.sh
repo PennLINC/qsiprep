@@ -42,6 +42,7 @@ ${QSIPREP_CMD} \
 	-w ${TEMPDIR} \
      --eddy-config ${EDDY_CFG} \
      --denoise-method none \
+     --unringing-method rpg \
      --sloppy \
      --output-space T1w \
      --output-resolution 5 \

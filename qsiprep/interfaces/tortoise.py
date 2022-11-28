@@ -21,8 +21,10 @@ from .images import to_lps
 from .epi_fmap import get_best_b0_topup_inputs_from, safe_get_3d_image
 from .gradients import write_concatenated_fsl_gradients
 from .images import split_bvals_bvecs
-from ..niworkflows.viz.utils import compose_view, cuts_from_bbox
+from .denoise import (SeriesPreprocReport, SeriesPreprocReportInputSpec,
+                      SeriesPreprocReportOutputSpec)
 import nilearn.image as nim
+from ..niworkflows.viz.utils import cuts_from_bbox, compose_view, plot_denoise
 import pandas as pd
 
 LOGGER = logging.getLogger('nipype.interface')
@@ -423,6 +425,109 @@ class DRBUDDIAggregateOutputs(SimpleInterface):
             self._results["down_fa_corrected_image"] = fa_down_warped
 
         return runtime
+
+
+class _GibbsInputSpec(SeriesPreprocReportInputSpec):
+    """Gibbs input_nifti  output_nifti kspace_coverage(1,0.875,0.75) phase_encoding_dir nsh minW(optional) maxW(optional)"""
+    in_file = traits.File(
+        exists=True,
+        mandatory=True,
+        position=0,
+        argstr="%s")
+    out_file = traits.File(
+        argstr="%s",
+        position=1,
+        name_source="in_file",
+        name_template="%s_unrung.nii",
+        use_extension=False)
+    kspace_coverage = traits.Float(
+        mandatory=True,
+        position=2,
+        argstr="%.4f")
+    phase_encoding_dir = traits.Enum(
+        0, 1,
+        mandatory=True,
+        argstr="%d",
+        position=3,
+        desc="0: horizontal, 1:vertical")
+    nsh = traits.Int(
+        argstr="%d",
+        position=4)
+    min_w = traits.Int()
+    mask = File()
+
+
+class _GibbsOutputSpec(SeriesPreprocReportOutputSpec):
+    out_file = File(exists=True)
+
+
+class Gibbs(SeriesPreprocReport, CommandLine):
+    input_spec = _GibbsInputSpec
+    output_spec = _GibbsOutputSpec
+    _cmd = "Gibbs"
+
+    def _get_plotting_images(self):
+        input_dwi = nim.load_img(self.inputs.in_file)
+        outputs = self._list_outputs()
+        ref_name = outputs.get('out_file')
+        denoised_nii = nim.load_img(ref_name)
+        return input_dwi, denoised_nii, None
+
+    def _generate_report(self):
+        """Generate a reportlet."""
+        LOGGER.info('Generating denoising visual report')
+
+        input_dwi, denoised_nii, _ = self._get_plotting_images()
+
+        # find an image to use as the background
+        image_data = input_dwi.get_fdata()
+        image_intensities = np.array([img.mean() for img in image_data.T])
+        lowb_index = int(np.argmax(image_intensities))
+        highb_index = int(np.argmin(image_intensities))
+
+        # Original images
+        orig_lowb_nii = input_dwi.slicer[..., lowb_index]
+        orig_highb_nii = input_dwi.slicer[..., highb_index]
+
+        # Denoised images
+        denoised_lowb_nii = denoised_nii.slicer[..., lowb_index]
+        denoised_highb_nii = denoised_nii.slicer[..., highb_index]
+
+        # Find spatial extent of the image
+        contour_nii = mask_nii = None
+        if isdefined(self.inputs.mask):
+            contour_nii = nim.load_img(self.inputs.mask)
+        else:
+            mask_nii = nim.threshold_img(denoised_lowb_nii, 50)
+        cuts = cuts_from_bbox(contour_nii or mask_nii, cuts=self._n_cuts)
+
+        diff_lowb_nii = nb.Nifti1Image(orig_lowb_nii.get_fdata()
+                                       - denoised_lowb_nii.get_fdata(),
+                                       affine=denoised_lowb_nii.affine)
+        diff_highb_nii = nb.Nifti1Image(orig_highb_nii.get_fdata()
+                                        - denoised_highb_nii.get_fdata(),
+                                        affine=denoised_highb_nii.affine)
+
+        # Call composer
+        compose_view(
+            plot_denoise(denoised_lowb_nii, denoised_highb_nii, 'moving-image',
+                         estimate_brightness=True,
+                         cuts=cuts,
+                         label='De-Gibbs',
+                         lowb_contour=None,
+                         highb_contour=None,
+                         compress=False),
+            plot_denoise(diff_lowb_nii, diff_highb_nii, 'fixed-image',
+                         estimate_brightness=True,
+                         cuts=cuts,
+                         label="Estimated Ringing",
+                         lowb_contour=None,
+                         highb_contour=None,
+                         compress=False),
+            out_file=self._out_report
+        )
+
+        self._calculate_nmse(input_dwi, denoised_nii)
 
 
 def split_into_up_and_down_niis(dwi_files, bval_files, bvec_files, original_images,

@@ -9,19 +9,25 @@ Merge and denoise dwi images
 .. autofunction:: init_dwi_derivatives_wf
 
 """
+import pandas as pd
 from nipype import logging
+from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from nipype.utils.filemanip import split_filename
-from nipype.interfaces import utility as niu
-from .util import _get_wf_name
-from .qc import init_modelfree_qc_wf
-from ...interfaces import ConformDwi, DerivativesDataSink
-from ...interfaces.dipy import Patch2Self
-from ...interfaces.mrtrix import DWIDenoise, DWIBiasCorrect, MRDeGibbs
-from ...interfaces.gradients import ExtractB0s
-from ...interfaces.nilearn import MaskEPI, Merge
-from ...interfaces.dwi_merge import MergeDWIs, StackConfounds
+
 from ...engine import Workflow
+from ...interfaces import ConformDwi, DerivativesDataSink
+from ...interfaces.bids import get_metadata_for_nifti
+from ...interfaces.dipy import Patch2Self
+from ...interfaces.dwi_merge import MergeDWIs, StackConfounds
+from ...interfaces.gradients import ExtractB0s
+from ...interfaces.mrtrix import DWIBiasCorrect, DWIDenoise, MRDeGibbs
+from ...interfaces.nilearn import MaskEPI, Merge
+from ...interfaces.tortoise import Gibbs
+from ...utils.bids import (IMPORTANT_DWI_FIELDS,
+                           update_metadata_from_nifti_header)
+from .qc import init_modelfree_qc_wf
+from .util import _get_wf_name
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger('nipype.workflow')
@@ -142,7 +148,13 @@ def init_merge_and_denoise_wf(raw_dwi_files,
     # Collect conformers and denoisers
     conformers = []
     denoising_wfs = []
-    for dwi_num, dwi_file in enumerate(raw_dwi_files, start=1):
+
+    # Get a data frame of the raw_dwi_files and their imaging parameters:
+    dwi_df = get_acq_parameters_df(raw_dwi_files)
+    for dwi_num, row in dwi_df.iterrows():
+        dwi_num += 1  # start at 1
+        dwi_file = row.BIDSFile
+
         # Conform each image to the requested orientation
         conformers.append(
             pe.Node(ConformDwi(orientation=orientation),
@@ -161,6 +173,8 @@ def init_merge_and_denoise_wf(raw_dwi_files,
                                       no_b0_harmonization=no_b0_harmonization,
                                       b0_threshold=b0_threshold,
                                       mem_gb=mem_gb,
+                                      partial_fourier=row.PartialFourier,
+                                      phase_encoding_direction=row.PhaseEncodingAxis,
                                       omp_nthreads=omp_nthreads,
                                       source_file=dwi_file,
                                       name=wf_name))
@@ -233,6 +247,8 @@ def init_merge_and_denoise_wf(raw_dwi_files,
         dwi_denoise_window=dwi_denoise_window,
         denoise_method=denoise_method,
         unringing_method=unringing_method,
+        partial_fourier=get_merged_parameter(dwi_df, 'PartialFourier', 'all'),
+        phase_encoding_direction=get_merged_parameter(dwi_df, 'PhaseEncodingAxis', 'all'),
         dwi_no_biascorr=dwi_no_biascorr,
         no_b0_harmonization=no_b0_harmonization,
         b0_threshold=b0_threshold,
@@ -240,6 +256,7 @@ def init_merge_and_denoise_wf(raw_dwi_files,
         omp_nthreads=omp_nthreads,
         source_file=source_file,
         name='merged_denoise')
+
     workflow.connect([
         (merge_dwis, denoising_wf, [
             ('out_bval', 'inputnode.bval_file'),
@@ -265,6 +282,8 @@ def init_dwi_denoising_wf(dwi_denoise_window,
                           no_b0_harmonization,
                           b0_threshold,
                           source_file,
+                          partial_fourier,
+                          phase_encoding_direction,
                           mem_gb=1,
                           omp_nthreads=1,
                           name="denoise_wf"):
@@ -295,7 +314,7 @@ def init_dwi_denoising_wf(dwi_denoise_window,
 
     # Which steps to apply?
     do_denoise = denoise_method in ('patch2self', 'dwidenoise')
-    do_unringing = unringing_method == 'mrdegibbs'
+    do_unringing = unringing_method in ('mrdegibbs', 'rpg')
     do_biascorr = not dwi_no_biascorr
     harmonize_b0s = not no_b0_harmonization
     # How many steps in the denoising pipeline
@@ -335,7 +354,23 @@ def init_dwi_denoising_wf(dwi_denoise_window,
 
     if do_unringing:
         if unringing_method == 'mrdegibbs':
-            degibbser = pe.Node(MRDeGibbs(), name='degibbser')
+            degibbser = pe.Node(
+                MRDeGibbs(),
+                name='degibbser',
+                n_procs=omp_nthreads)
+        elif unringing_method == 'rpg':
+            pe_code = {'i': 0, 'i-': 0,
+                       'j': 1, 'j-': 1, 'k':2}.get(phase_encoding_direction)
+            if pe_code is None:
+                raise Exception(
+                    'rpg requires an i[-],j[-] or k[-] PhaseEncodingDirection')
+            degibbser = pe.Node(
+                Gibbs(
+                    kspace_coverage=partial_fourier,
+                    phase_encoding_dir=pe_code),
+                name='degibbser',
+                n_procs=omp_nthreads)
+
         ds_report_unringing = pe.Node(
             DerivativesDataSink(suffix=name + '_unringing',
                                 source_file=source_file),
@@ -402,7 +437,7 @@ def gen_denoising_boilerplate(denoise_method,
     desc = ["Any images with a b-value less than %d s/mm^2 were treated as a "
             "*b*=0 image." % b0_threshold]
     do_denoise = denoise_method in ('dwidenoise', 'patch2self')
-    do_unringing = unringing_method == 'mrdegibbs'
+    do_unringing = unringing_method in ('rpg', 'mrdegibbs')
     do_biascorr = not dwi_no_biascorr
     harmonize_b0s = not no_b0_harmonization
     last_step = ""
@@ -423,7 +458,8 @@ def gen_denoising_boilerplate(denoise_method,
     if do_unringing:
         unringing_txt = {
             "mrdegibbs": "MRtrix3's `mrdegibbs` [@mrdegibbs].",
-            "dipy": "Dipy [@dipy]."
+            "dipy": "Dipy [@dipy].",
+            "rpg": "TORTOISE's `Gibbs` [@pfgibbs]."
         }[unringing_method]
 
         desc.append(last_step + "Gibbs unringing was performed using "
@@ -446,3 +482,44 @@ def gen_denoising_boilerplate(denoise_method,
         return "No denoising steps were applied to the DWI data."
 
     return " ".join(desc)
+
+
+def get_acq_parameters_df(dwi_file_list):
+    """Figure out what the """
+    file_rows = []
+    for dwi_file in dwi_file_list:
+        meta = get_metadata_for_nifti(dwi_file)
+        update_metadata_from_nifti_header(meta, dwi_file)
+        meta["BIDSFile"] = dwi_file
+        file_rows.append(meta)
+
+    merged_acq_params = pd.DataFrame(
+        file_rows, columns=["BIDSFile"] + IMPORTANT_DWI_FIELDS)
+    merged_acq_params['PhaseEncodingAxis'] = \
+        merged_acq_params['PhaseEncodingDirection'].str.replace("-","")
+    return merged_acq_params
+
+
+def get_merged_parameter(parameter_df, parameter_name,
+                         selection_mode='all'):
+    """Return a single parameter from a parameter dataframe.
+
+    """
+
+    col = parameter_df[parameter_name]
+    unique_values = col.unique()
+    if len(unique_values) > 1:
+        LOGGER.warn("Found %d unique values for %s",
+                    parameter_name,
+                    len(unique_values))
+    # Require that all the values are the same
+    if selection_mode == "all":
+        if len(unique_values) > 1:
+            raise Exception("More than one value for %s was found: exiting!" % (
+                    parameter_name, str(unique_values)))
+        return unique_values[0]
+
+    if selection_mode == 'mode':
+        return col.mode()[0]
+
+    raise Exception("selection_mode must be 'all' or 'mode'")

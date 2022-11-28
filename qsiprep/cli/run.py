@@ -267,9 +267,10 @@ def get_parser():
     g_conf.add_argument(
         '--unringing-method', '--unringing_method',
         action='store',
-        choices=['none', 'mrdegibbs'],
+        choices=['none', 'mrdegibbs', 'rpg'],
         help='Method for Gibbs-ringing removal.\n - none: no action\n - mrdegibbs: '
-             'use mrdegibbs from mrtrix3 (default: none).')
+             'use mrdegibbs from mrtrix3\n - rpg: Gibbs from TORTOISE, suggested for partial'
+             ' Fourier acquisitions (default: none).')
     g_conf.add_argument(
         '--dwi-no-biascorr', '--dwi_no_biascorr',
         action='store_true',

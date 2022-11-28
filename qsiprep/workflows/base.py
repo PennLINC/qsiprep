@@ -516,6 +516,9 @@ def init_single_subject_wf(
         raise Exception("No T1w images found for participant {}. "
                         "To bypass T1w processing choose --dwi-only.".format(subject_id))
 
+    # Inspect the dwi data and provide advice on pipeline choices
+    #provide_processing_advice(subject_data, layout, unringing_method)
+
     workflow = Workflow(name=name)
     workflow.__desc__ = """
 Preprocessing was performed using *QSIPrep* {qsiprep_ver},
@@ -894,3 +897,7 @@ to workflows in *QSIPrep*'s documentation]\
             ])
 
     return workflow
+
+def provide_processing_advice(subject_data, layout, unringing_method):
+    metadata = {dwi_file: layout.get_metadata(dwi_file) for dwi_file in subject_data['dwi']}
+    LOGGER.warn("Partial Fourier acquisitions found for %s. Consider using --unringing-method rpg")
