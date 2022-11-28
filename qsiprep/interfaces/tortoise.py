@@ -434,7 +434,7 @@ class _GibbsInputSpec(SeriesPreprocReportInputSpec):
         mandatory=True,
         position=0,
         argstr="%s")
-    unrung_image = traits.File(
+    out_file = traits.File(
         argstr="%s",
         position=1,
         name_source="in_file",
@@ -458,7 +458,7 @@ class _GibbsInputSpec(SeriesPreprocReportInputSpec):
 
 
 class _GibbsOutputSpec(SeriesPreprocReportOutputSpec):
-    unrung_image = File(exists=True)
+    out_file = File(exists=True)
 
 
 class Gibbs(SeriesPreprocReport, CommandLine):
@@ -469,7 +469,7 @@ class Gibbs(SeriesPreprocReport, CommandLine):
     def _get_plotting_images(self):
         input_dwi = nim.load_img(self.inputs.in_file)
         outputs = self._list_outputs()
-        ref_name = outputs.get('unrung_image')
+        ref_name = outputs.get('out_file')
         denoised_nii = nim.load_img(ref_name)
         return input_dwi, denoised_nii, None
 
