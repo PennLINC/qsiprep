@@ -305,7 +305,7 @@ def init_dwi_preproc_wf(dwi_only,
             't1_preproc', 't1_brain', 't1_mask',
             't1_aseg', 't1_aparc', 't1_2_mni_forward_transform',
             't1_2_mni_reverse_transform', 't1_2_fsnative_forward_transform',
-            't1_2_fsnative_reverse_transform', 'dwi_sampling_grid']),
+            't1_2_fsnative_reverse_transform', 't2w_files', 'dwi_sampling_grid']),
         name='inputnode')
     outputnode = pe.Node(
         niu.IdentityInterface(fields=[

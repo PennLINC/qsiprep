@@ -213,7 +213,7 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug, d
     outputnode = pe.Node(niu.IdentityInterface(
         fields=['t1_preproc', 't1_brain', 't1_mask',
                 't1_2_mni', 't1_2_mni_forward_transform', 't1_2_mni_reverse_transform',
-                'mni_mask',
+                'mni_mask', 't2w_files',
                 'template_transforms', 'dwi_sampling_grid',
                 'subjects_dir', 'subject_id', 't1_2_fsnative_forward_transform',
                 't1_2_fsnative_reverse_transform', 'surfaces', 't1_aseg', 't1_aparc']),
