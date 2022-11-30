@@ -621,11 +621,6 @@ def get_fsl_motion_params(itk_file, src_file, ref_file, working_dir):
     proc = Popen(['avscale', '--allparams', tmp_fsl_file, src_file], stdout=PIPE,
                  stderr=PIPE)
     stdout, _ = proc.communicate()
-    print(itk_file)
-    print(tmp_fsl_file)
-    print(stdout)
-    1/0
-
 
     def get_measures(line):
         line = line.strip().split()
