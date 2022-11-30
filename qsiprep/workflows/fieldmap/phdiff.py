@@ -18,7 +18,7 @@ Fieldmap preprocessing workflow for fieldmap data structure
 8.9.2 in BIDS 1.0.0: two phases and at least one magnitude image
 
 """
-
+import os
 from nipype.interfaces import ants, fsl, afni, utility as niu
 from nipype.pipeline import engine as pe
 from .utils import cleanup_edge_pipeline, siemens2rads, demean_image
@@ -53,7 +53,11 @@ def init_phdiff_wf(omp_nthreads, phasetype='phasediff', name='phdiff_wf'):
 
 
     """
-
+    # Check for FSL binary
+    fsl_check = os.environ.get('FSLDIR', False)
+    if not fsl_check:
+        raise Exception("Container in use does not have FSL. To use this workflow, please download the qsiprep container with FSL installed.")
+    
     workflow = Workflow(name=name)
     workflow.__desc__ = """\
 A deformation field to correct for susceptibility distortions was estimated
@@ -62,6 +66,7 @@ using a custom workflow of *fMRIPrep* derived from D. Greve's `epidewarp.fsl`
 [script](http://www.nmr.mgh.harvard.edu/~greve/fbirn/b0/epidewarp.fsl) and
 further improvements of HCP Pipelines [@hcppipelines].
 """
+
 
     inputnode = pe.Node(niu.IdentityInterface(fields=['magnitude', 'phasediff']),
                         name='inputnode')

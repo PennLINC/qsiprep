@@ -77,6 +77,13 @@ def cleanup_edge_pipeline(name='Cleanup'):
     Perform some de-spiking filtering to clean up the edge of the fieldmap
     (copied from fsl_prepare_fieldmap)
     """
+    import os
+    
+    # Check for FSL binary
+    fsl_check = os.environ.get('FSLDIR', False)
+    if not fsl_check:
+        raise Exception("Container in use does not have FSL. To use this workflow, please download the qsiprep container with FSL installed.")
+
     inputnode = pe.Node(
         niu.IdentityInterface(fields=['in_file', 'in_mask']), name='inputnode')
     outputnode = pe.Node(

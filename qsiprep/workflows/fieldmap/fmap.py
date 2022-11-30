@@ -21,7 +21,8 @@ of the BIDS specification.
 """
 
 from nipype.pipeline import engine as pe
-from nipype.interfaces import utility as niu, ants, afni
+from nipype.interfaces import utility as niu, ants, afni, fsl
+import os
 from .utils import demean_image, cleanup_edge_pipeline
 from ...niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from ...niworkflows.interfaces.images import IntraModalMerge
@@ -46,6 +47,12 @@ def init_fmap_wf(omp_nthreads, fmap_bspline, name='fmap_wf'):
         wf = init_fmap_wf(omp_nthreads=6, fmap_bspline=False)
 
     """
+
+    # Check for FSL binary
+    fsl_check = os.environ.get('FSLDIR', False)
+    if not fsl_check:
+        raise Exception("Container in use does not have FSL. To use this workflow, please download the qsiprep container with FSL installed.")
+    
 
     workflow = Workflow(name=name)
     inputnode = pe.Node(niu.IdentityInterface(
