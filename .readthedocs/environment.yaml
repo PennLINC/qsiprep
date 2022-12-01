@@ -3,5 +3,5 @@ channels:
   - defaults
 dependencies:
   - python-spams<=2.6.1
-  - python=3.7
+  - python=3.8
   - pip>=20.1  # pip is needed as dependency
