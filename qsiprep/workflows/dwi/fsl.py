@@ -6,7 +6,7 @@ Implementing the FSL preprocessing workflow
 
 """
 
-import json
+import json, os
 from pkg_resources import resource_filename as pkgr_fn
 from nipype import logging
 
@@ -96,6 +96,10 @@ def init_fsl_hmc_wf(scan_groups,
             mask for t1_brain
 
     """
+    # Check for FSL binary
+    fsl_check = os.environ.get('FSLDIR', False)
+    if not fsl_check:
+        raise Exception("Container in use does not have FSL. To use this workflow, please download the qsiprep container with FSL installed.")
 
     inputnode = pe.Node(
         niu.IdentityInterface(
