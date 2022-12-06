@@ -53,8 +53,26 @@ class SplitDWIs(SimpleInterface):
     output_spec = SplitDWIsOutputSpec
 
     def _run_interface(self, runtime):
-        split = fsl.Split(dimension='t', in_file=self.inputs.dwi_file)
-        split_dwi_files = split.run().outputs.out_files
+        #split = fsl.Split(dimension='t', in_file=self.inputs.dwi_file)
+        #split_dwi_files = split.run().outputs.out_files
+        #replace with AFNI
+        
+        #make directory to store split 3d images
+        os.makedirs('split_{0}'.format(
+            self.inputs.dwi_file))
+        #split 3dimages
+        split_cmd = '3dTsplit4D -prefix split_{0}/{0} -digits 4 {0}'.format(
+            self.inputs.dwi_file)
+        proc = Popen(split_cmd, stdout=PIPE, stderr=PIPE)
+        out, err = proc.communicate()
+        LOGGER.info(' '.join(split_cmd))
+        if err:
+            raise Exception(str(err))
+        
+        
+        #grab 3dimages, in order
+        split_dwi_files = sorted(glob.glob('split_{0}/**'.format(
+                self.inputs.dwi_file)))
 
         split_bval_files, split_bvec_files = split_bvals_bvecs(
             self.inputs.bval_file, self.inputs.bvec_file, split_dwi_files,
@@ -121,6 +139,10 @@ class IntraModalMerge(SimpleInterface):
     output_spec = IntraModalMergeOutputSpec
 
     def _run_interface(self, runtime):
+        fsl_check = os.environ.get('FSLDIR', False)
+        if not fsl_check:
+            raise Exception("Container in use does not have FSL. To use this workflow, please download the qsiprep container with FSL installed.")
+    
         in_files = self.inputs.in_files
         if not isinstance(in_files, list):
             in_files = [self.inputs.in_files]
