@@ -105,7 +105,7 @@ def init_fsl_hmc_wf(scan_groups,
         niu.IdentityInterface(
             fields=['dwi_file', 'bvec_file', 'bval_file', 'b0_indices', 'b0_images',
                     'original_files', 't1_brain', 't1_mask', 't2_brain',
-                    't1_2_mni_reverse_transform']),
+                    't1_2_mni_reverse_transform', 't2w_files']),
         name='inputnode')
 
     outputnode = pe.Node(
