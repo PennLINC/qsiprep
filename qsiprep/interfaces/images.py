@@ -15,6 +15,7 @@ from textwrap import indent
 import numpy as np
 import nibabel as nb
 import nilearn.image as nli
+import glob
 from dipy.io import read_bvals_bvecs
 from nipype import logging
 from nipype.utils.filemanip import fname_presuffix
@@ -53,16 +54,19 @@ class SplitDWIs(SimpleInterface):
     output_spec = SplitDWIsOutputSpec
 
     def _run_interface(self, runtime):
-        #split = fsl.Split(dimension='t', in_file=self.inputs.dwi_file)
-        #split_dwi_files = split.run().outputs.out_files
-        #replace with AFNI
         
+        input_fname = os.path.basename(self.inputs.dwi_file)
+        input_path = os.path.dirname(self.inputs.dwi_file)
+
         #make directory to store split 3d images
-        os.makedirs('split_{0}'.format(
-            self.inputs.dwi_file))
+        os.makedirs('{inpath}/split_{fname}'.format(
+           inpath = input_path,
+           fname = input_fname))
         #split 3dimages
-        split_cmd = '3dTsplit4D -prefix split_{0}/{0} -digits 4 {0}'.format(
-            self.inputs.dwi_file)
+        split_cmd = '3dTsplit4D -prefix {inpath}/split_{fname}/{fname} -digits 4 {infile}'.format(
+            inpath = input_path,
+            fname = input_fname,
+            infile=self.inputs.dwi_file)
         proc = Popen(split_cmd, stdout=PIPE, stderr=PIPE)
         out, err = proc.communicate()
         LOGGER.info(' '.join(split_cmd))
@@ -71,8 +75,9 @@ class SplitDWIs(SimpleInterface):
         
         
         #grab 3dimages, in order
-        split_dwi_files = sorted(glob.glob('split_{0}/**'.format(
-                self.inputs.dwi_file)))
+        split_dwi_files = sorted(glob.glob('{inpath}/split_{fname}/*{fname}*'.format(
+                inpath = input_path,
+                fname = input_fname)))
 
         split_bval_files, split_bvec_files = split_bvals_bvecs(
             self.inputs.bval_file, self.inputs.bvec_file, split_dwi_files,
