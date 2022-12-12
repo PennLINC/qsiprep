@@ -288,10 +288,7 @@ and used as T1w-reference throughout the workflow.
     # 3. Skull-stripping
     # Bias field correction is handled in skull strip workflows.
     if debug:
-        skullstrip_wf = init_skullstrip_afni_wf(name='skullstrip_wf',
-                                                acpc_template=ref_img_brain,
-                                                debug=debug,
-                                                omp_nthreads=omp_nthreads)
+        skullstrip_wf = init_synthstrip_wf(omp_nthreads=omp_nthreads,name="skullstrip_wf")
     else:
         skullstrip_wf = init_skullstrip_ants_wf(name='skullstrip_wf',
                                                 skull_strip_template=skull_strip_template,

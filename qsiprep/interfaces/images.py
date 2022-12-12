@@ -56,31 +56,20 @@ class SplitDWIs(SimpleInterface):
     def _run_interface(self, runtime):
         
         input_fname = os.path.basename(self.inputs.dwi_file)
-        input_path = os.path.dirname(self.inputs.dwi_file)
 
-        fname_noext = input_fname.split('.')[0]
-
-        #make directory to store split 3d images
-        os.makedirs('{inpath}/split_{fname}'.format(
-           inpath = input_path,
-           fname = fname_noext))
         #split 3dimages
-        split_cmd = '3dTsplit4D -prefix {inpath}/split_{fname_noext}/{fname} -digits 4 {infile}'.format(
-            inpath = input_path,
-            fname_noext=fname_noext,
-            fname = input_fname,
+        split_cmd = '3dTsplit4D -prefix vol.nii.gz -digits 4 {infile}'.format(
             infile=self.inputs.dwi_file)
+        print(split_cmd)
         proc = Popen(split_cmd, stdout=PIPE, stderr=PIPE)
         out, err = proc.communicate()
         LOGGER.info(' '.join(split_cmd))
         if err:
             raise Exception(str(err))
         
-        
         #grab 3dimages, in order
-        split_dwi_files = sorted(glob.glob('{inpath}/split_{fname_noext}/*{fname}*'.format(
-                inpath = input_path,
-                fname_noext=fname_noext,
+        split_dwi_files = sorted(glob.glob('{inpath}/*{fname}*'.format(
+                inpath = runtime.cwd,
                 fname = input_fname)))
 
         split_bval_files, split_bvec_files = split_bvals_bvecs(
