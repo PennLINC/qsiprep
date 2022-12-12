@@ -899,7 +899,7 @@ def init_synthstrip_wf(omp_nthreads, in_file=None, unfatsat=False, name="synthst
         niu.IdentityInterface(fields=['skulled_image', 'in_file']),
         name='inputnode')
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=['brain_image', 'brain_mask', 'out_mask', 'bias_corrected' 'unfatsat']),
+        niu.IdentityInterface(fields=['brain_image', 'brain_mask', 'out_mask', 'bias_corrected', 'unfatsat']),
         name='outputnode')
 
     if in_file:
