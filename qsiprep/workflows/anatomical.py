@@ -899,7 +899,7 @@ def init_synthstrip_wf(omp_nthreads, in_file=None, unfatsat=False, name="synthst
         niu.IdentityInterface(fields=['skulled_image', 'in_file']),
         name='inputnode')
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=['brain_image', 'brain_mask', 'out_mask', 'bias_corrected', 'unfatsat']),
+        niu.IdentityInterface(fields=['brain_image', 'brain_mask', 'out_file', 'out_mask', 'bias_corrected', 'unfatsat']),
         name='outputnode')
 
     if in_file:
@@ -958,10 +958,12 @@ def init_synthstrip_wf(omp_nthreads, in_file=None, unfatsat=False, name="synthst
         (synthstrip, mask_to_original_grid, [('out_brain_mask', 'input_image')]),
         (inputnode, mask_to_original_grid, [('skulled_image', 'reference_image')]),
         (mask_to_original_grid, outputnode, [('output_image', 'brain_mask')]),
+        (mask_to_original_grid, outputnode, [('output_image', 'out_mask')]),
         (inputnode, mask_brain, [('skulled_image', 'first_input')]),
         (mask_to_original_grid, mask_brain, [("output_image", "second_input")]),
         (mask_brain, outputnode, [('output_product_image', 'brain_image')]),
-        (mask_brain, outputnode, [('output_product_image', 'bias_corrected')])
+        (mask_brain, outputnode, [('output_product_image', 'bias_corrected')]),
+        (mask_brain, outputnode, [('output_product_image', 'out_file')])
 
     ])
 
