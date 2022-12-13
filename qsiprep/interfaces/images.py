@@ -55,8 +55,6 @@ class SplitDWIs(SimpleInterface):
 
     def _run_interface(self, runtime):
         
-        input_fname = os.path.basename(self.inputs.dwi_file)
-
         #split 3dimages
         split_cmd = '3dTsplit4D -prefix vol.nii.gz -digits 4 {infile}'.format(
             infile=self.inputs.dwi_file)
@@ -68,9 +66,7 @@ class SplitDWIs(SimpleInterface):
             raise Exception(str(err))
         
         #grab 3dimages, in order
-        split_dwi_files = sorted(glob.glob('{inpath}/*{fname}*'.format(
-                inpath = runtime.cwd,
-                fname = input_fname)))
+        split_dwi_files = sorted(glob.glob('vol.**.nii.gz'))
 
         split_bval_files, split_bvec_files = split_bvals_bvecs(
             self.inputs.bval_file, self.inputs.bvec_file, split_dwi_files,
