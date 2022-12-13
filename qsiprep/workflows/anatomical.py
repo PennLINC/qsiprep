@@ -893,7 +893,7 @@ The T1w-reference was then skull-stripped using `3dSkullStrip`
     return workflow
 
 
-def init_synthstrip_wf(omp_nthreads, in_file=None, unfatsat=False, name="synthstrip_wf"):
+def init_synthstrip_wf(omp_nthreads, in_image=None, unfatsat=False, name="synthstrip_wf"):
     workflow = Workflow(name=name)
     inputnode = pe.Node(
         niu.IdentityInterface(fields=['skulled_image', 'in_file']),
@@ -902,8 +902,12 @@ def init_synthstrip_wf(omp_nthreads, in_file=None, unfatsat=False, name="synthst
         niu.IdentityInterface(fields=['brain_image', 'brain_mask', 'out_file', 'out_mask', 'bias_corrected', 'unfatsat']),
         name='outputnode')
 
-    if inputnode.inputs.in_file or in_file:
-        inputnode.inputs.skulled_image=inputnode.inputs.in_file
+    if in_image:
+        inputnode.inputs.in_file = in_image
+        inputnode.inputs.skulled_image = in_image
+
+    if not inputnode.inputs.in_file:
+        inputnode.inputs.in_file=inputnode.inputs.skulled_image
 
     print("synth skulled_image: {}".format(inputnode.inputs.skulled_image))
     print("synth in_file: {}".format(inputnode.inputs.in_file))
@@ -951,7 +955,7 @@ def init_synthstrip_wf(omp_nthreads, in_file=None, unfatsat=False, name="synthst
         ])
 
     workflow.connect([
-        (inputnode, skulled_1mm_resample, [('skulled_image', 'in_file')]),
+        (inputnode, skulled_1mm_resample, [('in_file', 'in_file')]),
         (skulled_1mm_resample, skulled_autobox, [('out_file', 'in_file')]),
         (skulled_autobox, prepare_synthstrip_reference, [('out_file', 'input_image')]),
         (prepare_synthstrip_reference, resample_skulled_to_reference, [
@@ -994,7 +998,7 @@ def init_t2w_preproc_wf(omp_nthreads, t2w_images, name="t2w_preproc_wf"):
 
         workflows[t2w_image] = init_synthstrip_wf(
             omp_nthreads=omp_nthreads,
-            in_file=t2w_image,
+            in_image=t2w_image,
             unfatsat=True,
             name='synthstrip_t2w_%d' % imagenum)
 
