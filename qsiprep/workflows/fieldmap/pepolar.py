@@ -272,26 +272,6 @@ def init_extended_pepolar_report_wf(segment_t2w, omp_nthreads=1,
                 ("outputnode.brain_mask", "mask_image")]),
             (t2w_atropos, pepolar_report, [("classified_image", "t2w_seg")])
         ])
-    else:
-        map_seg = pe.Node(
-            ants.ApplyTransforms(
-                dimension=3, float=True, interpolation='MultiLabel',
-                invert_transform_flags=[True]),
-            name='map_seg',
-            mem_gb=0.3)
-
-        sel_wm = pe.Node(niu.Function(function=extract_wm), name='sel_wm')
-
-        workflow.connect([
-            (inputnode, map_seg, [
-                ("b0_ref", "reference_image"),
-                ("t1w_seg_transform", "transforms"),
-                ("t1w_seg", "input_image")]),
-            (map_seg, sel_wm, [('output_image', 'in_seg')]),
-            (sel_wm, pepolar_report, [('out', 't1w_seg')])
-        ])
-
-
 
     return workflow
 

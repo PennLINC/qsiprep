@@ -130,6 +130,7 @@ FODs were estimated via constrained spherical deconvolution
     run_mtnormalize = params.get('mtnormalize', True) and using_multitissue
 
     create_mif = pe.Node(MRTrixIngress(), name='create_mif')
+    method_5tt = response.pop("method_5tt")
     # Use dwi2response from 3Tissue for updated dhollander
     estimate_response = pe.Node(
         SS3TDwi2Response(**response), 
