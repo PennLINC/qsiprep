@@ -99,6 +99,10 @@ def init_mrtrix_csd_recon_wf(omp_nthreads, available_anatomical_data, name="mrtr
     # Response estimation
     response = params.get('response', {})
     response_algorithm = response.get('algorithm', 'dhollander')
+
+    if response_algorithm == "fast":
+        response_algorithm = "dhollander"
+
     response['algorithm'] = response_algorithm
     response['nthreads'] = omp_nthreads
     if response_algorithm == 'csd':
@@ -130,7 +134,7 @@ FODs were estimated via constrained spherical deconvolution
     run_mtnormalize = params.get('mtnormalize', True) and using_multitissue
 
     create_mif = pe.Node(MRTrixIngress(), name='create_mif')
-    method_5tt = response.pop("method_5tt")
+    method_5tt = response.pop("method_5tt","dhollander")
     # Use dwi2response from 3Tissue for updated dhollander
     estimate_response = pe.Node(
         SS3TDwi2Response(**response), 
