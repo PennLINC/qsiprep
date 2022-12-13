@@ -902,8 +902,11 @@ def init_synthstrip_wf(omp_nthreads, in_file=None, unfatsat=False, name="synthst
         niu.IdentityInterface(fields=['brain_image', 'brain_mask', 'out_file', 'out_mask', 'bias_corrected', 'unfatsat']),
         name='outputnode')
 
-    if in_file:
-        inputnode.inputs.skulled_image=in_file
+    if inputnode.inputs.in_file or in_file:
+        inputnode.inputs.skulled_image=inputnode.inputs.in_file
+
+    print("synth skulled_image: {}".format(inputnode.inputs.skulled_image))
+    print("synth in_file: {}".format(inputnode.inputs.in_file))
 
     skulled_1mm_resample = pe.Node(
         afni.Resample(

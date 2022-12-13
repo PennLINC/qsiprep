@@ -340,6 +340,33 @@ def _despike2d(data, thres, neigh=None):
                     data[i, j, k] = patch_med
     return data
 
+def _unwrap(fmap_data, mag_file, mask=None):
+    import os
+    fsl_check = os.environ.get('FSLDIR', False)
+    if not fsl_check:
+        raise Exception("Container in use does not have FSL. To use this workflow, please download the qsiprep container with FSL installed.")
+
+    from math import pi
+    from nipype.interfaces.fsl import PRELUDE
+    magnii = nb.load(mag_file)
+
+    if mask is None:
+        mask = np.ones_like(fmap_data, dtype=np.uint8)
+
+    fmapmax = max(abs(fmap_data[mask > 0].min()), fmap_data[mask > 0].max())
+    fmap_data *= pi / fmapmax
+
+    nb.Nifti1Image(fmap_data, magnii.affine).to_filename('fmap_rad.nii.gz')
+    nb.Nifti1Image(mask, magnii.affine).to_filename('fmap_mask.nii.gz')
+    nb.Nifti1Image(magnii.get_data(), magnii.affine).to_filename('fmap_mag.nii.gz')
+
+    # Run prelude
+    res = PRELUDE(phase_file='fmap_rad.nii.gz',
+                  magnitude_file='fmap_mag.nii.gz',
+                  mask_file='fmap_mask.nii.gz').run()
+
+    unwrapped = nb.load(res.outputs.unwrapped_phase_file).get_data() * (fmapmax / pi)
+    return unwrapped
 
 def get_ees(in_meta, in_file=None):
     """
