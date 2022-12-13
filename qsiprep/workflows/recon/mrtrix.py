@@ -463,6 +463,9 @@ def init_mrtrix_tractography_wf(omp_nthreads, available_anatomical_data, name="m
 
     # Which 5tt image should be used?
     method_5tt = params.get("method_5tt", "hsvs")
+    if method_5tt == "fast":
+        method_5tt = "hsvs"
+
     if use_5tt:
         if method_5tt == "hsvs":
             connect_5tt = "qsiprep_5tt_hsvs"

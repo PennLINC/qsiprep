@@ -55,6 +55,8 @@ class SplitDWIs(SimpleInterface):
 
     def _run_interface(self, runtime):
         
+        assert(os.path.exists(self.inputs.dwi_file))
+
         #split 3dimages
         split_cmd = '3dTsplit4D -prefix vol.nii -digits 4 {infile}'.format(
             infile=self.inputs.dwi_file)
