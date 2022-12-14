@@ -59,18 +59,17 @@ class SplitDWIs(SimpleInterface):
         #split 3dimages
         split_cmd = '3dTsplit4D -prefix vol.nii -digits 4 {infile}'.format(
             infile=self.inputs.dwi_file)
-        subprocess.call(split_cmd,shell=True)
-        #proc = Popen(split_cmd, cwd=runtime.cwd, stdout=PIPE, stderr=PIPE)
-        #out, err = proc.communicate()
+        proc = Popen(split_cmd, cwd=runtime.cwd, stdout=PIPE, stderr=PIPE)
+        out, err = proc.communicate()
         LOGGER.info(' '.join(split_cmd))
-        #if err:
-            #raise Exception(str(err))
+        if err:
+            raise Exception(str(err))
         
         #grab 3dimages, in order
         split_dwi_files = sorted(glob.glob('vol.**.nii'))
 
-        if len(split_dwi_files)==0:
-            raise Exception("No SplitDWIs (AFNI 3dTsplit4d) outputs detected!")
+        #if len(split_dwi_files)==0:
+         #   raise Exception("No SplitDWIs (AFNI 3dTsplit4d) outputs detected!")
 
         split_bval_files, split_bvec_files = split_bvals_bvecs(
             self.inputs.bval_file, self.inputs.bvec_file, split_dwi_files,
