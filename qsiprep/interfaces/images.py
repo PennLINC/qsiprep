@@ -11,6 +11,7 @@ Image tools interfaces
 
 import os
 from subprocess import Popen, PIPE
+import subprocess
 from textwrap import indent
 import numpy as np
 import nibabel as nb
@@ -58,7 +59,7 @@ class SplitDWIs(SimpleInterface):
         #split 3dimages
         split_cmd = '3dTsplit4D -prefix vol.nii -digits 4 {infile}'.format(
             infile=self.inputs.dwi_file)
-        os.system(split_cmd)
+        subprocess.call(split_cmd,shell=True)
         #proc = Popen(split_cmd, cwd=runtime.cwd, stdout=PIPE, stderr=PIPE)
         #out, err = proc.communicate()
         LOGGER.info(' '.join(split_cmd))
