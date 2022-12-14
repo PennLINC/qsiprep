@@ -58,7 +58,7 @@ class SplitDWIs(SimpleInterface):
         #split 3dimages
         split_cmd = '3dTsplit4D -prefix vol.nii -digits 4 {infile}'.format(
             infile=self.inputs.dwi_file)
-
+        os.system(split_cmd)
         #proc = Popen(split_cmd, cwd=runtime.cwd, stdout=PIPE, stderr=PIPE)
         #out, err = proc.communicate()
         LOGGER.info(' '.join(split_cmd))
