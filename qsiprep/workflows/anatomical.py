@@ -909,8 +909,11 @@ def init_synthstrip_wf(omp_nthreads, in_image=None, unfatsat=False, name="synths
     if not inputnode.inputs.in_file:
         inputnode.inputs.in_file=inputnode.inputs.skulled_image
 
-    print("synth skulled_image: {}".format(inputnode.inputs.skulled_image))
-    print("synth in_file: {}".format(inputnode.inputs.in_file))
+    if not inputnode.inputs.skulled_image:
+        inputnode.inputs.skulled_image = inputnode.inputs.in_file
+
+    LOGGER.info("synth skulled_image: {}".format(inputnode.inputs.skulled_image))
+    LOGGER.info("synth in_file: {}".format(inputnode.inputs.in_file))
 
     skulled_1mm_resample = pe.Node(
         afni.Resample(
@@ -955,7 +958,7 @@ def init_synthstrip_wf(omp_nthreads, in_image=None, unfatsat=False, name="synths
         ])
 
     workflow.connect([
-        (inputnode, skulled_1mm_resample, [('in_file', 'in_file')]),
+        (inputnode, skulled_1mm_resample, [('skulled_image', 'in_file')]),
         (skulled_1mm_resample, skulled_autobox, [('out_file', 'in_file')]),
         (skulled_autobox, prepare_synthstrip_reference, [('out_file', 'input_image')]),
         (prepare_synthstrip_reference, resample_skulled_to_reference, [

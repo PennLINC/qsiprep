@@ -55,14 +55,14 @@ class SplitDWIs(SimpleInterface):
 
     def _run_interface(self, runtime):
         
-        assert(os.path.exists(self.inputs.dwi_file))
-
         #split 3dimages
         split_cmd = '3dTsplit4D -prefix vol.nii -digits 4 {infile}'.format(
             infile=self.inputs.dwi_file)
         print(split_cmd)
-        proc = Popen(split_cmd, stdout=PIPE, stderr=PIPE)
+        proc = Popen(split_cmd, cwd=runtime.cwd, stdout=PIPE, stderr=PIPE)
         out, err = proc.communicate()
+        LOGGER.info(out)
+        LOGGER.info(err)
         LOGGER.info(' '.join(split_cmd))
         if err:
             raise Exception(str(err))
