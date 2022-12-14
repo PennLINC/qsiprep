@@ -289,14 +289,21 @@ and used as T1w-reference throughout the workflow.
     # Bias field correction is handled in skull strip workflows.
     if debug:
         skullstrip_wf = init_synthstrip_wf(omp_nthreads=omp_nthreads,name="skullstrip_wf")
+        workflow.connect([
+            (inputnode, anat_template_wf, [('t1w', 'inputnode.t1w')]),
+            (anat_template_wf, skullstrip_wf, [('outputnode.t1_template', 'inputnode.skulled_image')]),
+            (skullstrip_wf, outputnode, [('outputnode.bias_corrected', 't1_preproc')]),
+            (anat_template_wf, outputnode, [('outputnode.template_transforms', 't1_template_transforms')]),
+            (buffernode, outputnode, [('t1_brain', 't1_brain'),
+                                      ('t1_mask', 't1_mask')])
+        ])
     else:
         skullstrip_wf = init_skullstrip_ants_wf(name='skullstrip_wf',
                                                 skull_strip_template=skull_strip_template,
                                                 acpc_template=ref_img_brain,
                                                 debug=debug,
                                                 omp_nthreads=omp_nthreads)
-
-    workflow.connect([
+        workflow.connect([
         (inputnode, anat_template_wf, [('t1w', 'inputnode.t1w')]),
         (anat_template_wf, skullstrip_wf, [('outputnode.t1_template', 'inputnode.in_file')]),
         (skullstrip_wf, outputnode, [('outputnode.bias_corrected', 't1_preproc')]),
@@ -304,7 +311,8 @@ and used as T1w-reference throughout the workflow.
             ('outputnode.template_transforms', 't1_template_transforms')]),
         (buffernode, outputnode, [('t1_brain', 't1_brain'),
                                   ('t1_mask', 't1_mask')])
-    ])
+        ])
+
 
     # 4. Surface reconstruction
     if freesurfer:
@@ -896,24 +904,14 @@ The T1w-reference was then skull-stripped using `3dSkullStrip`
 def init_synthstrip_wf(omp_nthreads, in_image=None, unfatsat=False, name="synthstrip_wf"):
     workflow = Workflow(name=name)
     inputnode = pe.Node(
-        niu.IdentityInterface(fields=['skulled_image', 'in_file']),
+        niu.IdentityInterface(fields=['skulled_image']),
         name='inputnode')
     outputnode = pe.Node(
         niu.IdentityInterface(fields=['brain_image', 'brain_mask', 'out_file', 'out_mask', 'bias_corrected', 'unfatsat']),
         name='outputnode')
 
     if in_image:
-        inputnode.inputs.in_file = in_image
         inputnode.inputs.skulled_image = in_image
-
-    if not inputnode.inputs.in_file:
-        inputnode.inputs.in_file=inputnode.inputs.skulled_image
-
-    if not inputnode.inputs.skulled_image:
-        inputnode.inputs.skulled_image = inputnode.inputs.in_file
-
-    LOGGER.info("synth skulled_image: {}".format(inputnode.inputs.skulled_image))
-    LOGGER.info("synth in_file: {}".format(inputnode.inputs.in_file))
 
     skulled_1mm_resample = pe.Node(
         afni.Resample(
