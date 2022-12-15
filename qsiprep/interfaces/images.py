@@ -59,9 +59,9 @@ class SplitDWIs(SimpleInterface):
     def _run_interface(self, runtime):
         
         #split 3dimages
-        split = TSplit(in_file=self.inputs.dwi_file, out_name='vol', digits=4)
+        split = TSplit(in_file=self.inputs.dwi_file, out_name='vol.nii', digits=4)
         print(split.cmdline)
-        split_dwi_files = split.run()
+        split.run()
         
         #grab 3dimages, in order
         split_dwi_files = sorted(glob.glob('vol.**.nii'))
@@ -647,7 +647,6 @@ class TSplitInputSpec(AFNICommandInputSpec):
         copyfile=False,
     )
     out_name = File(
-        name_template="%s.nii",
         mandatory=True,
         desc="output image file name",
         argstr="-prefix %s",
