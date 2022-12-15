@@ -21,7 +21,8 @@ from dipy.io import read_bvals_bvecs
 from nipype import logging
 from nipype.utils.filemanip import fname_presuffix
 from nipype.interfaces.base import (isdefined, traits, TraitedSpec, BaseInterfaceInputSpec,
-                                    SimpleInterface, File, InputMultiObject, OutputMultiObject)
+                                    SimpleInterface, File, InputMultiObject, OutputMultiObject,
+                                    OutputMultiPath)
 from nipype.interfaces.afni.base import (AFNICommand, AFNICommandInputSpec, AFNICommandOutputSpec)
 from nipype.interfaces import fsl
 # from qsiprep.interfaces.images import (
@@ -58,7 +59,8 @@ class SplitDWIs(SimpleInterface):
     def _run_interface(self, runtime):
         
         #split 3dimages
-        split = TSplit(in_file=self.inputs.dwi_file, out_file='vol', digits=4)
+        split = TSplit(in_file=self.inputs.dwi_file, out_name='vol', digits=4)
+        print(split.cmdline)
         split_dwi_files = split.run()
         
         #grab 3dimages, in order
@@ -644,7 +646,7 @@ class TSplitInputSpec(AFNICommandInputSpec):
         mandatory=True,
         copyfile=False,
     )
-    out_file = File(
+    out_name = File(
         name_template="%s.nii",
         mandatory=True,
         desc="output image file name",
