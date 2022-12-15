@@ -22,6 +22,7 @@ from nipype import logging
 from nipype.utils.filemanip import fname_presuffix
 from nipype.interfaces.base import (isdefined, traits, TraitedSpec, BaseInterfaceInputSpec,
                                     SimpleInterface, File, InputMultiObject, OutputMultiObject)
+from nipype.interfaces.afni.base import (AFNICommand, AFNICommandInputSpec, AFNICommandOutputSpec)
 from nipype.interfaces import fsl
 # from qsiprep.interfaces.images import (
 #    nii_ones_like, extract_wm, SignalExtraction, MatchHeader,
@@ -57,19 +58,11 @@ class SplitDWIs(SimpleInterface):
     def _run_interface(self, runtime):
         
         #split 3dimages
-        split_cmd = '3dTsplit4D -prefix vol.nii -digits 4 {infile}'.format(
-            infile=self.inputs.dwi_file)
-        proc = Popen(split_cmd, cwd=runtime.cwd, stdout=PIPE, stderr=PIPE)
-        out, err = proc.communicate()
-        LOGGER.info(' '.join(split_cmd))
-        if err:
-            raise Exception(str(err))
+        split = TSplit(in_file=self.inputs.dwi_file, out_file='vol', digits=4)
+        split_dwi_files = split.run()
         
         #grab 3dimages, in order
         split_dwi_files = sorted(glob.glob('vol.**.nii'))
-
-        #if len(split_dwi_files)==0:
-         #   raise Exception("No SplitDWIs (AFNI 3dTsplit4d) outputs detected!")
 
         split_bval_files, split_bvec_files = split_bvals_bvecs(
             self.inputs.bval_file, self.inputs.bvec_file, split_dwi_files,
@@ -642,3 +635,32 @@ def to_lps(input_img, new_axcodes=("L", "P", "S")):
         return reoriented_img
     else:
         return input_img
+
+class TSplitInputSpec(AFNICommandInputSpec):
+    in_file = File(
+        desc="input file to 3dTsplit4D",
+        argstr=" %s",
+        position=-1,
+        mandatory=True,
+        copyfile=False,
+    )
+    out_file = File(
+        name_template="%s.nii",
+        mandatory=True,
+        desc="output image file name",
+        argstr="-prefix %s",
+        name_source="in_file",
+    )
+    digits = traits.Int(
+        argstr="-digits %d", desc="Number of digits to include in split file names"
+    )
+
+class TSplit(AFNICommand):
+    """Converts a 3D + time dataset into multiple 3D volumes (one volume per file).
+    For complete details, see the `3dTsplit4D Documentation.
+    <https://afni.nimh.nih.gov/pub/dist/doc/program_help/3dTsplit4D.html>`_
+    """
+
+    _cmd = "3dTsplit4D"
+    input_spec = TSplitInputSpec
+    output_spec = AFNICommandOutputSpec
