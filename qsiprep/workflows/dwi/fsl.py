@@ -17,7 +17,7 @@ from nipype.interfaces import fsl
 from .registration import init_b0_to_anat_registration_wf, init_direct_b0_acpc_wf
 from ...interfaces.eddy import (GatherEddyInputs, ExtendedEddy, Eddy2SPMMotion,
                                 boilerplate_from_eddy_config)
-from ...interfaces.images import SplitDWIs, ConformDwi, IntraModalMerge
+from ...interfaces.images import SplitDWIs_FSL, ConformDwi, IntraModalMerge
 from ...interfaces.reports import TopupSummary
 from ...interfaces.nilearn import EnhanceB0
 from ...interfaces import DerivativesDataSink
@@ -149,7 +149,7 @@ def init_fsl_hmc_wf(scan_groups,
     # Convert eddy outputs back to LPS+, split them
     back_to_lps = pe.Node(ConformDwi(orientation="LPS"), name='back_to_lps')
     cnr_lps = pe.Node(ConformDwi(orientation="LPS"), name='cnr_lps')
-    split_eddy_lps = pe.Node(SplitDWIs(b0_threshold=b0_threshold, deoblique_bvecs=True),
+    split_eddy_lps = pe.Node(SplitDWIs_FSL(b0_threshold=b0_threshold, deoblique_bvecs=True),
                              name="split_eddy_lps")
 
     # Convert the b=0 template from pre_eddy_b0_ref to LPS+
