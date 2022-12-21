@@ -610,6 +610,14 @@ class LocalGradientRotation(SimpleInterface):
 def get_fsl_motion_params(itk_file, src_file, ref_file, working_dir):
     tmp_fsl_file = fname_presuffix(itk_file, newpath=working_dir,
                                    suffix='_FSL.xfm', use_ext=False)
+
+    #debugging
+    print('tmp fsl file: {}'.format(tmp_fsl_file))
+    print('src file: {}'.format(src_file))
+    print('ref file: {}'.format(ref_file))
+    print('itk file: {}'.format(itk_file))
+    print('workdir file: {}'.format(working_dir))
+
     fsl_convert_cmd = "c3d_affine_tool " \
         "-ref {ref_file} " \
         "-src {src_file} " \
@@ -627,12 +635,21 @@ def get_fsl_motion_params(itk_file, src_file, ref_file, working_dir):
         return np.array([float(num) for num in line[-3:]])
 
     lines = stdout.decode("utf-8").split("\n")
+    
+    print('avscale raw output: {}'.format(lines))
+
     flip = np.array([1, -1, -1])
     rotation = get_measures(lines[6]) * flip
     translation = get_measures(lines[8]) * flip
     scale = get_measures(lines[10])
     shear = get_measures(lines[12])
 
+    print('avscale rot: {}'.format(rotation))
+    print('avscale trans: {}'.format(translation))
+    print('avscale scale: {}'.format(scale))
+    print('avscale shear: {}'.format(shear))
+
+    1/0
     return np.concatenate([scale, shear, rotation, translation])
 
 
