@@ -117,7 +117,7 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
 
     workflow.connect([
         (inputnode, split_dwis, [
-            ('dwi_file', 'in_file'),
+            ('dwi_file', 'dwi_file'),
             ('bval_file', 'bval_file'),
             ('bvec_file', 'bvec_file')]),
         (split_dwis, dwi_hmc_wf, [

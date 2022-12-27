@@ -6,6 +6,7 @@ from subprocess import Popen, PIPE
 import nibabel as nb
 import numpy as np
 import pandas as pd
+from transforms3d.affines import decompose44
 from nilearn import image as nim
 from nipype.interfaces.base import (BaseInterfaceInputSpec, TraitedSpec, File, SimpleInterface,
                                     InputMultiObject, OutputMultiObject, traits, isdefined)
@@ -16,6 +17,7 @@ from dipy.sims.voxel import all_tensor_evecs
 from dipy.reconst.dti import decompose_tensor
 from dipy.core.geometry import normalized_vector
 from sklearn.metrics import r2_score
+from scipy.spatial.transform import Rotation as R
 from .itk import disassemble_transform
 
 LOGGER = logging.getLogger('nipype.interface')
@@ -611,13 +613,6 @@ def get_fsl_motion_params(itk_file, src_file, ref_file, working_dir):
     tmp_fsl_file = fname_presuffix(itk_file, newpath=working_dir,
                                    suffix='_FSL.xfm', use_ext=False)
 
-    #debugging
-    print('tmp fsl file: {}'.format(tmp_fsl_file))
-    print('src file: {}'.format(src_file))
-    print('ref file: {}'.format(ref_file))
-    print('itk file: {}'.format(itk_file))
-    print('workdir file: {}'.format(working_dir))
-
     fsl_convert_cmd = "c3d_affine_tool " \
         "-ref {ref_file} " \
         "-src {src_file} " \
@@ -626,30 +621,45 @@ def get_fsl_motion_params(itk_file, src_file, ref_file, working_dir):
             src_file=src_file, ref_file=ref_file, itk_file=itk_file,
             fsl_file=tmp_fsl_file)
     os.system(fsl_convert_cmd)
-    proc = Popen(['avscale', '--allparams', tmp_fsl_file, src_file], stdout=PIPE,
-                 stderr=PIPE)
-    stdout, _ = proc.communicate()
 
     def get_measures(line):
         line = line.strip().split()
         return np.array([float(num) for num in line[-3:]])
 
-    lines = stdout.decode("utf-8").split("\n")
-    
-    print('avscale raw output: {}'.format(lines))
+    def get_image_center(src_fname):
+        src_img = nb.load(src_fname)
+        src_aff = src_img.get_affine()
+        src_center = (np.array(src_img.shape)-1)/2
+        src_center_mm = nb.affines.apply_affine(src_aff, src_center)
+        src_offsets = src_aff[0:3,3]
+        src_center_mm -= src_offsets
+        return src_center_mm
+
+    def get_trans_from_offset(image_center, rotmat):
+        # offset[0] = trans[0] + center[0] - [rot[0,0]*center[0] +rot[0,1]*center[1] + rot[0,2]*center[2]]
+        trans = np.zeros((3,1))
+        offsets = rotmat[0:3,3]
+        for i in range(3):
+            offpart = offsets[i] - image_center[i]
+            rotpart = rotmat[i,0]*image_center[0] + rotmat[i,1]*image_center[1] + rotmat[i,2]*image_center[2]
+            trans[i] = offpart + rotpart
+        return trans
+
+    img_center = get_image_center(src_file)
+    c3d_out_xfm = np.loadtxt(fname=tmp_fsl_file,dtype='float')
+    [T,Rotmat,Z,S] = decompose44(c3d_out_xfm)
+    T = get_trans_from_offset(img_center,c3d_out_xfm)
 
     flip = np.array([1, -1, -1])
-    rotation = get_measures(lines[6]) * flip
-    translation = get_measures(lines[8]) * flip
-    scale = get_measures(lines[10])
-    shear = get_measures(lines[12])
+    negflip = np.array([-1, 1, 1])
+    Rotmat_to_convert = R.from_matrix(Rotmat)
+    Rotvec = Rotmat_to_convert.as_rotvec()
 
-    print('avscale rot: {}'.format(rotation))
-    print('avscale trans: {}'.format(translation))
-    print('avscale scale: {}'.format(scale))
-    print('avscale shear: {}'.format(shear))
+    rotation = Rotvec * negflip
+    translation = T * flip
+    scale = Z
+    shear = S
 
-    1/0
     return np.concatenate([scale, shear, rotation, translation])
 
 
