@@ -127,6 +127,7 @@ def init_sdc_unwarp_wf(omp_nthreads, fmap_demean, debug, name='sdc_unwarp_wf'):
 
     get_ees = pe.Node(niu.Function(function=_get_ees, output_names=['ees']), name='get_ees')
 
+    gen_vsm = pe.Node(fsl.FUGUE(save_unmasked_shift=True, save_fmap=True), name='gen_vsm')
     # Convert the VSM into a DFM (displacements field map)
     # or: FUGUE shift to ANTS warping.
     vsm2dfm = pe.Node(itk.FUGUEvsm2ANTSwarp(), name='vsm2dfm')
@@ -166,7 +167,12 @@ def init_sdc_unwarp_wf(omp_nthreads, fmap_demean, debug, name='sdc_unwarp_wf'):
         (tohz, outputnode, [('out_file', 'out_hz')]),
         (inputnode, get_ees, [('in_reference', 'in_file'),
                               ('metadata', 'in_meta')]),
+        (fmap_mask2ref_apply, gen_vsm, [('output_image', 'mask_file')]),
+        (get_ees, gen_vsm, [('ees', 'dwell_time')]),
+        (inputnode, gen_vsm, [(('metadata', _get_pedir_fugue), 'unwarp_direction')]),                      
         (inputnode, vsm2dfm, [(('metadata', _get_pedir_bids), 'pe_dir')]),
+        (torads, gen_vsm, [('out_file', 'fmap_in_file')]),
+        (gen_vsm, outputnode, [('fmap_out_file', 'fieldcoef')]),
         (vsm2dfm, unwarp_reference, [('out_file', 'transforms')]),
         (inputnode, unwarp_reference, [('in_reference', 'reference_image')]),
         (inputnode, unwarp_reference, [('in_reference', 'input_image')]),
@@ -189,14 +195,14 @@ def init_sdc_unwarp_wf(omp_nthreads, fmap_demean, debug, name='sdc_unwarp_wf'):
         demean = pe.Node(DemeanImage(), name='demean')
 
         workflow.connect([
-            (torads, demean, [('shift_out_file', 'in_file')]),
+            (gen_vsm, demean, [('shift_out_file', 'in_file')]),
             (fmap_mask2ref_apply, demean, [('output_image', 'in_mask')]),
             (demean, vsm2dfm, [('out_file', 'in_file')]),
         ])
 
     else:
         workflow.connect([
-            (torads, vsm2dfm, [('shift_out_file', 'in_file')]),
+            (gen_vsm, vsm2dfm, [('shift_out_file', 'in_file')]),
         ])
 
     return workflow
@@ -276,3 +282,6 @@ def init_fmap_unwarp_report_wf(name='fmap_unwarp_report_wf', suffix='hmcsdc'):
 
 def _get_pedir_bids(in_dict):
     return in_dict['PhaseEncodingDirection']
+
+def _get_pedir_fugue(in_dict):
+    return in_dict['PhaseEncodingDirection'].replace('i', 'x').replace('j', 'y').replace('k', 'z')
