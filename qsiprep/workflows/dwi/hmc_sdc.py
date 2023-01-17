@@ -182,9 +182,9 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
             (dwi_hmc_wf, rotate_gradients, [
                 ('outputnode.forward_transforms', 'affine_transforms')]),
             (split_dwis, apply_hmc_transforms, [
-                ('dwi_files', 'input_image'),
-                ('dwi_files', 'reference_image')]),
-            (split_dwis, rotate_gradients, [
+                ('out_files', 'input_image'),
+                ('out_files', 'reference_image')]),
+            (split_bvals, rotate_gradients, [
                 ('bvec_files', 'bvec_files'),
                 ('bval_files', 'bval_files')]),
             (apply_hmc_transforms, drbuddi_wf, [
