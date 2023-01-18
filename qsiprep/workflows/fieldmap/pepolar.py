@@ -215,7 +215,7 @@ def init_extended_pepolar_report_wf(segment_t2w, omp_nthreads=1,
             "t1w_seg_transform", "b0_ref",
             "fieldmap_type", "b0_up_image", "b0_up_corrected_image", "b0_down_image",
             "b0_down_corrected_image", "up_fa_image", "up_fa_corrected_image", "down_fa_image",
-            "down_fa_corrected_image", "t2w_image"]),
+            "down_fa_corrected_image", "t2w_image", "t1w_image"]),
         name='inputnode')
     outputnode = pe.Node(niu.IdentityInterface(
         fields=["fa_sdc_report", "b0_sdc_report"]),
@@ -272,6 +272,8 @@ def init_extended_pepolar_report_wf(segment_t2w, omp_nthreads=1,
                 ("outputnode.brain_mask", "mask_image")]),
             (t2w_atropos, pepolar_report, [("classified_image", "t2w_seg")])
         ])
+    else:
+        workflow.connect([inputnode,pepolar_report,[("t1w_image","t1")]])
 
     return workflow
 

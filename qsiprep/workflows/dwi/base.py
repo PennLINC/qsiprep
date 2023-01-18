@@ -436,8 +436,11 @@ Diffusion data preprocessing
 
     elif fieldmap_type in ("epi", "rpe_series"):
 
-        extended_pepolar_report_wf = init_extended_pepolar_report_wf(
-            segment_t2w=t2w_sdc, omp_nthreads=omp_nthreads)
+        if os.path.exists(t2w_sdc):
+            extended_pepolar_report_wf = init_extended_pepolar_report_wf(
+                segment_t2w=t2w_sdc, omp_nthreads=omp_nthreads)
+        else:
+            extended_pepolar_report_wf = init_extended_pepolar_report_wf(omp_nthreads=omp_nthreads)
 
         ds_report_fa_sdc = pe.Node(
             DerivativesMaybeDataSink(
@@ -472,6 +475,8 @@ Diffusion data preprocessing
                 ("outputnode.t2w_image", "inputnode.t2w_image")]),
             (b0_coreg_wf, extended_pepolar_report_wf, [
                 ('outputnode.itk_b0_to_t1', 'inputnode.t1w_seg_transform')]),
+            (inputnode, extended_pepolar_report_wf, [
+                ('t1_brain','inputnode.t1w_image')]),
             (extended_pepolar_report_wf, ds_report_fa_sdc, [
                 ("outputnode.fa_sdc_report", "in_file")]),
             (extended_pepolar_report_wf, ds_report_b0_sdc, [
