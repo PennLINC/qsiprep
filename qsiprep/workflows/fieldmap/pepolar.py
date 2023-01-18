@@ -273,7 +273,8 @@ def init_extended_pepolar_report_wf(segment_t2w, omp_nthreads=1,
             (t2w_atropos, pepolar_report, [("classified_image", "t2w_seg")])
         ])
     else:
-        workflow.connect([inputnode,pepolar_report,[("t1w_image","t1")]])
+        workflow.connect([
+            (inputnode,pepolar_report,[("t1w_image","t1")])])
 
     return workflow
 
