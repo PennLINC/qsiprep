@@ -600,9 +600,6 @@ class FixHeaderSynthStrip(SynthStrip):
         runtime = super(FixHeaderSynthStrip, self)._run_interface(
             runtime, correct_return_codes)
 
-        if not op.exists(self.inputs.input_image):
-            raise Exception("synthstrip input not found!")
-
         outputs = self._list_outputs()
         if not op.exists(outputs["out_brain"]):
             raise Exception("mri_synthstrip failed! no outputs detected.")
