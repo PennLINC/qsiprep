@@ -1182,10 +1182,7 @@ class PEPOLARReport(SimpleInterface):
         LOGGER.info('Generating a PEPOLAR visual report')
 
         # Get a segmentation from an undistorted image as a reference
-        if op.exists(self.inputs.t2w_seg):
-            ref_segmentation = self.inputs.t2w_seg
-        else:
-            ref_segmentation = self.inputs.t1
+        ref_segmentation = self.inputs.t1
 
         seg_img = nb.load(ref_segmentation)
         b0_up_img = nb.load(self.inputs.b0_up_image)
