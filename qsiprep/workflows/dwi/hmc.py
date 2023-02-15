@@ -6,8 +6,6 @@ Head motion correction
 .. autofunction:: init_dwi_model_hmc_wf
 
 """
-from typing import Iterable
-from pathlib import Path
 import nipype.pipeline.engine as pe
 from pkg_resources import resource_filename as pkgrf
 from nipype.interfaces import ants, afni, utility as niu
@@ -687,6 +685,8 @@ def init_dwi_model_hmc_wf(modelname, transform, mem_gb, omp_nthreads,
 
 
 def _list_squeeze(in_list):
+    from typing import Iterable
+    from pathlib import Path
     def flatten(items):
         """Yield items from any nested iterable; see
         Beazley, D. and B. Jones. Recipe 4.14, Python Cookbook 3rd Ed.,
