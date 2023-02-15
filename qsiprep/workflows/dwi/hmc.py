@@ -686,11 +686,6 @@ def init_dwi_model_hmc_wf(modelname, transform, mem_gb, omp_nthreads,
     return workflow
 
 
-def _list_squeeze(in_list):
-    return list(flatten(in_list))
-
-
-
 def flatten(items):
     """Yield items from any nested iterable; see
     Beazley, D. and B. Jones. Recipe 4.14, Python Cookbook 3rd Ed.,
@@ -704,3 +699,7 @@ def flatten(items):
                 yield sub_x
         else:
             yield x
+
+
+def _list_squeeze(in_list):
+    return list(flatten(in_list))
