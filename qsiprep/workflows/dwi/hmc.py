@@ -686,20 +686,18 @@ def init_dwi_model_hmc_wf(modelname, transform, mem_gb, omp_nthreads,
     return workflow
 
 
-def flatten(items):
-    """Yield items from any nested iterable; see
-    Beazley, D. and B. Jones. Recipe 4.14, Python Cookbook 3rd Ed.,
-    O'Reilly Media Inc. Sebastopol, CA: 2013..
-
-    https://stackoverflow.com/questions/952914/how-do-i-make-a-flat-list-out-of-a-list-of-lists
-    """
-    for x in items:
-        if isinstance(x, Iterable) and not isinstance(x, (str, bytes, Path)):
-            for sub_x in flatten(x):
-                yield sub_x
-        else:
-            yield x
-
-
 def _list_squeeze(in_list):
+    def flatten(items):
+        """Yield items from any nested iterable; see
+        Beazley, D. and B. Jones. Recipe 4.14, Python Cookbook 3rd Ed.,
+        O'Reilly Media Inc. Sebastopol, CA: 2013..
+
+        https://stackoverflow.com/questions/952914/how-do-i-make-a-flat-list-out-of-a-list-of-lists
+        """
+        for x in items:
+            if isinstance(x, Iterable) and not isinstance(x, (str, bytes, Path)):
+                for sub_x in flatten(x):
+                    yield sub_x
+            else:
+                yield x
     return list(flatten(in_list))
