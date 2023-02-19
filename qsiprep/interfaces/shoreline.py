@@ -27,7 +27,6 @@ from .reports import SummaryInterface, SummaryOutputSpec
 import seaborn as sns
 import matplotlib.pyplot as plt
 import dipy.reconst.dti as dti
-from dipy.sims.voxel import single_tensor
 
 LOGGER = logging.getLogger('nipype.interface')
 
@@ -219,17 +218,11 @@ class SignalPrediction(SimpleInterface):
             output_data = np.zeros(mask_array.shape)
             output_data[mask_array] = np.dot(shore_array, prediction_dir)
         
-        elif self.inputs.model == 'hmcDTI':
+        elif self.inputs.model == 'tensor':
             dti_wls = dti.TensorModel(training_gtab)
             fit_wls = dti_wls.fit(training_data, mask=mask_array)
-            evals1 = fit_wls.evals
-            evecs1 = fit_wls.evecs
-            output_data = np.zeros(mask_array.shape)
-            for ii in range(mask_array.shape[0]):
-                for jj in range(mask_array.shape[1]):
-                    for kk in range(mask_array.shape[2]):
-                        if mask_array[ii,jj,kk] == 1:
-                            output_data[ii,jj,kk] = single_tensor(prediction_gtab, S0 = training_data[ii,jj,kk,0], evals=evals1[ii,jj,kk,:],evecs=evecs1[ii,jj,kk,:])[0]
+            dti_params = fit_wls.model_params
+            output_data = dti.tensor_prediction(dti_params, prediction_gtab, training_data[:,:,:,0])
 
         else:
             raise NotImplementedError('Unsupported model: ' + self.inputs.model)

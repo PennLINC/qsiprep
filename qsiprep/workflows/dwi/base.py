@@ -340,7 +340,7 @@ Diffusion data preprocessing
                                      denoise_before_combining=denoise_before_combining,
                                      omp_nthreads=omp_nthreads)
     test_pre_hmc_connect = pe.Node(TestInput(), name='test_pre_hmc_connect')
-    if hmc_model in ('none', '3dSHORE','hmcDTI'):
+    if hmc_model in ('none', '3dSHORE','tensor'):
         if not hmc_model == 'none' and shoreline_iters < 1:
             raise Exception("--shoreline-iters must be > 0 when --hmc-model is " + hmc_model)
         hmc_wf = init_qsiprep_hmcsdc_wf(

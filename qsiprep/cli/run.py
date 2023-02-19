@@ -376,10 +376,10 @@ def get_parser():
         '--hmc_model', '--hmc-model',
         action='store',
         default='eddy',
-        choices=['none', '3dSHORE', 'eddy', 'hmcDTI'],
+        choices=['none', '3dSHORE', 'eddy', 'tensor'],
         help='model used to generate target images for hmc. If "none" the '
         'non-b0 images will be warped using the same transform as their '
-        'nearest b0 image. If "3dSHORE", SHORELine will be used. if "hmcDTI", '
+        'nearest b0 image. If "3dSHORE", SHORELine will be used. if "tensor", '
         'SHORELine iterations with a tensor model will be used')
     g_moco.add_argument(
         '--eddy-config', '--eddy_config',
