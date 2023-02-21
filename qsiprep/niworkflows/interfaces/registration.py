@@ -196,10 +196,7 @@ class ApplyXFMRPT(FLIRTRPT, fsl.ApplyXFM):
     output_spec = FLIRTOutputSpecRPT
 
 
-if LooseVersion("0.0.0") < fs.Info.looseversion() < LooseVersion("6.0.0"):
-    _BBRegisterInputSpec = fs.preprocess.BBRegisterInputSpec
-else:
-    _BBRegisterInputSpec = fs.preprocess.BBRegisterInputSpec6
+_BBRegisterInputSpec = fs.preprocess.BBRegisterInputSpec6
 
 
 class BBRegisterInputSpecRPT(nrc.SVGReportCapableInputSpec,
