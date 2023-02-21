@@ -177,7 +177,8 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
             (dwi_hmc_wf, apply_hmc_transforms, [
                 ('outputnode.forward_transforms', 'transforms')]),
             (dwi_hmc_wf, rotate_gradients, [
-                ('outputnode.forward_transforms', 'affine_transforms')]),
+                (('outputnode.forward_transforms', _list_squeeze), 
+                 'affine_transforms')]),
             (split_dwis, apply_hmc_transforms, [
                 ('dwi_files', 'input_image'),
                 ('dwi_files', 'reference_image')]),
@@ -250,3 +251,21 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
 
 def _get_first(in_list):
     return in_list[0]
+
+
+def _list_squeeze(in_list):
+    from typing import Iterable
+    from pathlib import Path
+    def flatten(items):
+        """Yield items from any nested iterable; see
+        Beazley, D. and B. Jones. Recipe 4.14, Python Cookbook 3rd Ed.,
+        O'Reilly Media Inc. Sebastopol, CA: 2013..
+        https://stackoverflow.com/questions/952914/how-do-i-make-a-flat-list-out-of-a-list-of-lists
+        """
+        for x in items:
+            if isinstance(x, Iterable) and not isinstance(x, (str, bytes, Path)):
+                for sub_x in flatten(x):
+                    yield sub_x
+            else:
+                yield x
+    return list(flatten(in_list))
