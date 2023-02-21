@@ -15,8 +15,6 @@
     "sigma_units": [ "vox", "vox", "vox" ],
     "winsorize_upper_quantile": 0.9995,
     "winsorize_lower_quantile": 0.01,
-    "use_estimate_learning_rate_once": [ true, true, false ],
-    "use_histogram_matching": [ true, true, true ],
     "collapse_output_transforms": true,
     "write_composite_transform": false,
     "output_transform_prefix": "epi_to_mni",
