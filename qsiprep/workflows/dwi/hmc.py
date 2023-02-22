@@ -31,10 +31,11 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file,
 
         hmc_transform: 'Rigid' or 'Affine'
             How many degrees of freedom to incorporate into motion correction
-        hmc_model: '3dSHORE', 'none' or 'SH'
+        hmc_model: '3dSHORE', 'none' , 'tensor' or 'SH'
             Which model to use for generating signal predictions for hmc. '3dSHORE' requires
-            multiple b-values, 'none' will only use b0 images for motion correction and
-            'SH' uses spherical harmonics (not implemented yet).
+            multiple b-values, 'none' will only use b0 images for motion correction, 'tensor'
+            uses a tensor model for signal predictions for hmc, and 'SH' uses spherical harmonics 
+            (not implemented yet).
         hmc_align_to: 'first' or 'iterative'
             Which volume should be used to determine the motion-corrected space?
         source_file: str
