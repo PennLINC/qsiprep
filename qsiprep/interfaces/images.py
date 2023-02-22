@@ -35,7 +35,7 @@ LOGGER = logging.getLogger('nipype.interface')
 
 
 class SplitDWIsBvalsInputSpec(BaseInterfaceInputSpec):
-    split_files = File(desc='the dwi image')
+    split_files = InputMultiObject(desc='pre-split DWI images')
     bvec_file = File(desc='the bvec file')
     bval_file = File(desc='the bval file')
     deoblique_bvecs = traits.Bool(False, usedefault=True,
@@ -58,8 +58,9 @@ class SplitDWIsBvals(SimpleInterface):
     def _run_interface(self, runtime):
 
         split_bval_files, split_bvec_files = split_bvals_bvecs(
-            self.inputs.bval_file, self.inputs.bvec_file, split_dwi_files,
-            self.inputs.deoblique_bvecs, runtime.cwd)
+            self.inputs.bval_file, self.inputs.bvec_file, 
+            self.inputs.split_files, self.inputs.deoblique_bvecs, 
+            runtime.cwd)
 
         bvalues = np.loadtxt(self.inputs.bval_file)
         b0_indices = np.flatnonzero(bvalues < self.inputs.b0_threshold)
