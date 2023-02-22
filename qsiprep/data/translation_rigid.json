@@ -6,7 +6,6 @@
     "collapse_output_transforms": true,
     "write_composite_transform": true,
     "use_histogram_matching": [ true, true ],
-    "use_estimate_learning_rate_once": [ true, true ],
     "transforms": [ "Translation", "Rigid" ],
     "number_of_iterations": [ [ 500 ], [ 200 ] ],
     "transform_parameters": [ [ 0.05 ], [ 0.01 ] ],

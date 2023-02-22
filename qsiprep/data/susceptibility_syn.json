@@ -14,7 +14,6 @@
     "shrink_factors": [ [ 2, 1 ], [ 1, 1 ] ],
     "winsorize_upper_quantile": 1.0,
     "winsorize_lower_quantile": 0.001,
-    "use_estimate_learning_rate_once": [ true, true ],
     "use_histogram_matching": [ true, true ],
     "collapse_output_transforms": true,
     "write_composite_transform": false,

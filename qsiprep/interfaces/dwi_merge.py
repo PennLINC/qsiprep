@@ -38,8 +38,8 @@ class MergeDWIsInputSpec(BaseInterfaceInputSpec):
 
 class MergeDWIsOutputSpec(TraitedSpec):
     out_dwi = File(desc='the merged dwi image')
-    out_bval = File(desc='the merged bvec file')
-    out_bvec = File(desc='the merged bval file')
+    out_bval = File(desc='the merged bval file')
+    out_bvec = File(desc='the merged bvec file')
     original_images = traits.List()
     merged_metadata = traits.Dict()
     merged_denoising_confounds = File(exists=True)
