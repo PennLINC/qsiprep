@@ -13,7 +13,6 @@
     "shrink_factors": [ [ 2 ], [ 1 ] ],
     "smoothing_sigmas": [ [ 4 ], [ 0 ] ],
     "sigma_units": [ "mm", "mm" ],
-    "use_estimate_learning_rate_once": [ true, true ],
     "use_histogram_matching": [ true, true ],
     "winsorize_upper_quantile": 0.999,
     "winsorize_lower_quantile": 0.005,
