@@ -22,8 +22,6 @@ from nipype.interfaces import utility as niu
 
 from nilearn import __version__ as nilearn_ver
 
-from qsiprep.workflows.fieldmap import pepolar
-
 from ..engine import Workflow
 from ..interfaces import (BIDSDataGrabber, BIDSInfo, BIDSFreeSurferDir,
                           SubjectSummary, AboutSummary, DerivativesDataSink)
@@ -47,7 +45,7 @@ def init_qsiprep_wf(
         subject_list, run_uuid, work_dir, output_dir, bids_dir, ignore, debug,
         low_mem, anat_only, dwi_only, longitudinal, b0_threshold, hires,
         denoise_before_combining, dwi_denoise_window, denoise_method,
-        unringing_method, dwi_no_biascorr, no_b0_harmonization,
+        unringing_method, b1_biascorr_stage, no_b0_harmonization,
         output_resolution, infant_mode, combine_all_dwis,
         distortion_group_merge, pepolar_method, omp_nthreads, bids_filters,
         force_spatial_normalization, skull_strip_template,
@@ -87,7 +85,7 @@ def init_qsiprep_wf(
                               dwi_denoise_window=7,
                               denoise_method='patch2self',
                               unringing_method='mrdegibbs',
-                              dwi_no_biascorr=False,
+                              b1_biascorr_stage=False,
                               no_b0_harmonization=False,
                               combine_all_dwis=True,
                               distortion_group_merge='concat',
@@ -154,8 +152,8 @@ def init_qsiprep_wf(
             Either 'dwidenoise', 'patch2self' or 'none'
         unringing_method : str
             algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
-        dwi_no_biascorr : bool
-            run spatial bias correction (N4) on dwi series
+        b1_biascorr_stage : str
+            'final', 'none' or 'legacy'
         no_b0_harmonization : bool
             skip rescaling dwi scans to have matching b=0 intensities across scans
         denoise_before_combining : bool
@@ -254,7 +252,7 @@ def init_qsiprep_wf(
             dwi_denoise_window=dwi_denoise_window,
             denoise_method=denoise_method,
             unringing_method=unringing_method,
-            dwi_no_biascorr=dwi_no_biascorr,
+            b1_biascorr_stage=b1_biascorr_stage,
             no_b0_harmonization=no_b0_harmonization,
             dwi_only=dwi_only,
             anat_only=anat_only,
@@ -305,7 +303,7 @@ def init_single_subject_wf(
         subject_id, name, reportlets_dir, output_dir, bids_dir, ignore, debug,
         write_local_bvecs, low_mem, dwi_only, anat_only, longitudinal,
         b0_threshold, denoise_before_combining, bids_filters,
-        dwi_denoise_window, denoise_method, unringing_method, dwi_no_biascorr,
+        dwi_denoise_window, denoise_method, unringing_method, b1_biascorr_stage,
         no_b0_harmonization, infant_mode, combine_all_dwis, raw_image_sdc,
         distortion_group_merge, pepolar_method, omp_nthreads, skull_strip_template,
         force_spatial_normalization, skull_strip_fixed_seed, freesurfer, hires,
@@ -345,7 +343,7 @@ def init_single_subject_wf(
             dwi_denoise_window=7,
             denoise_method='patch2self',
             unringing_method='mrdegibbs',
-            dwi_no_biascorr=False,
+            b1_biascorr_stage=False,
             no_b0_harmonization=False,
             dwi_only=False,
             anat_only=False,
@@ -407,8 +405,8 @@ def init_single_subject_wf(
             Either 'dwidenoise', 'patch2self' or 'none'
         unringing_method : str
             algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
-        dwi_no_biascorr : bool
-            run spatial bias correction (N4) on dwi series
+        b1_biascorr_stage : str
+            'final', 'none' or 'legacy'
         no_b0_harmonization : bool
             skip rescaling dwi scans to have matching b=0 intensities across scans
         denoise_before_combining : bool
@@ -728,7 +726,7 @@ to workflows in *QSIPrep*'s documentation]\
             dwi_denoise_window=dwi_denoise_window,
             denoise_method=denoise_method,
             unringing_method=unringing_method,
-            dwi_no_biascorr=dwi_no_biascorr,
+            b1_biascorr_stage=b1_biascorr_stage,
             no_b0_harmonization=no_b0_harmonization,
             denoise_before_combining=denoise_before_combining,
             motion_corr_to=motion_corr_to,
@@ -769,6 +767,7 @@ to workflows in *QSIPrep*'s documentation]\
             omp_nthreads=omp_nthreads,
             use_syn=use_syn,
             low_mem=low_mem,
+            do_biascorr=b1_biascorr_stage=='final',
             pepolar_method=pepolar_method,
             make_intramodal_template=make_intramodal_template,
             source_file=source_file,

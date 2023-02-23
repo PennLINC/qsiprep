@@ -41,6 +41,7 @@ ${QSIPREP_CMD} \
 	--sloppy \
 	--unringing-method mrdegibbs \
 	--output-space T1w \
+	--b1-biascorr-stage legacy \
 	--recon-spec dsi_studio_gqi \
 	--eddy_config ${EDDY_CFG} \
 	--output-resolution 5 \

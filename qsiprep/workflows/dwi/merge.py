@@ -430,7 +430,7 @@ def _as_list(item):
 def gen_denoising_boilerplate(denoise_method,
                               dwi_denoise_window,
                               unringing_method,
-                              dwi_no_biascorr,
+                              b1_biascorr_stage,
                               no_b0_harmonization,
                               b0_threshold):
     """Generates methods boilerplate for the denoising workflow."""
@@ -438,7 +438,6 @@ def gen_denoising_boilerplate(denoise_method,
             "*b*=0 image." % b0_threshold]
     do_denoise = denoise_method in ('dwidenoise', 'patch2self')
     do_unringing = unringing_method in ('rpg', 'mrdegibbs')
-    do_biascorr = not dwi_no_biascorr
     harmonize_b0s = not no_b0_harmonization
     last_step = ""
     if do_denoise:
@@ -466,7 +465,7 @@ def gen_denoising_boilerplate(denoise_method,
                     + unringing_txt)
         last_step = "Following unringing, "
 
-    if do_biascorr:
+    if b1_biascorr_stage == "legacy":
         desc.append(last_step + "B1 field inhomogeneity was corrected using "
                     "`dwibiascorrect` from MRtrix3 with the N4 algorithm "
                     "[@n4].")
@@ -476,6 +475,12 @@ def gen_denoising_boilerplate(denoise_method,
         desc.append(last_step + "the mean intensity of the DWI series was adjusted "
                     "so all the mean intensity of the b=0 images matched across each"
                     "separate DWI scanning sequence.")
+        last_step = True
+
+    if b1_biascorr_stage == 'final':
+        desc.append("B1 field inhomogeneity was corrected using "
+                    "`dwibiascorrect` from MRtrix3 with the N4 algorithm "
+                    "[@n4] after corrected images were resampled.")
         last_step = True
 
     if not last_step:

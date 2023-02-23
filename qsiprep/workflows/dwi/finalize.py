@@ -45,6 +45,7 @@ def init_dwi_finalize_wf(scan_groups,
                          write_local_bvecs,
                          low_mem,
                          use_syn,
+                         do_biascorr,
                          make_intramodal_template,
                          source_file,
                          write_derivatives=True,
@@ -250,6 +251,30 @@ def init_dwi_finalize_wf(scan_groups,
                                           to_mni=False,
                                           write_local_bvecs=write_local_bvecs,
                                           concatenate=write_derivatives)
+
+    if do_biascorr:
+        biascorr = pe.Node(DWIBiasCorrect(method='ants'), name='biascorr', n_procs=omp_nthreads)
+        ds_report_biascorr = pe.Node(
+            DerivativesDataSink(suffix=name + '_biascorr',
+                                source_file=source_file),
+            name='ds_report_' + name + '_biascorr',
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB)
+        get_b0s = pe.Node(ExtractB0s(b0_threshold=b0_threshold), name='get_b0s')
+        quick_mask = pe.Node(MaskEPI(lower_cutoff=0.02), name='quick_mask')
+        buffernodes.append(get_buffernode())
+        workflow.connect([
+            (buffernodes[-2], biascorr, [('dwi_file', 'in_file')]),
+            (buffernodes[-2], get_b0s, [('dwi_file', 'dwi_series')]),
+            (inputnode, get_b0s, [('bval_file', 'bval_file')]),
+            (get_b0s, quick_mask, [('b0_series', 'in_files')]),
+            (quick_mask, biascorr, [('out_mask', 'mask')]),
+            (biascorr, buffernodes[-1], [('out_file', 'dwi_file')]),
+            (biascorr, ds_report_biascorr, [('out_report', 'in_file')]),
+            (biascorr, merge_confounds, [('nmse_text', 'in%d' % step_num)]),
+            (inputnode, biascorr, [('bval_file', 'in_bval'), ('bvec_file', 'in_bvec')])
+        ])
+        step_num += 1
 
     workflow.connect([
         (inputnode, transform_dwis_t1, [

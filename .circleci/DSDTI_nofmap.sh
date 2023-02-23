@@ -43,6 +43,7 @@ ${QSIPREP_CMD} \
      --eddy-config ${EDDY_CFG} \
      --denoise-method none \
      --unringing-method rpg \
+     --b1-biascorr-stage none \
      --sloppy \
      --output-space T1w \
      --output-resolution 5 \
