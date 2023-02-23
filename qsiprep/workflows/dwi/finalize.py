@@ -69,6 +69,7 @@ def init_dwi_finalize_wf(scan_groups,
                                   low_mem=False,
                                   output_prefix='',
                                   write_local_bvecs=False,
+                                  do_biascorr=True,
                                   source_file='/data/sub-1/dwi/sub-1_dwi.nii.gz',
                                   num_dwi=1)
 
