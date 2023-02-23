@@ -628,7 +628,7 @@ def get_fsl_motion_params(itk_file, src_file, ref_file, working_dir):
 
     def get_image_center(src_fname):
         src_img = nb.load(src_fname)
-        src_aff = src_img.get_affine()
+        src_aff = src_img.affine
         src_center = (np.array(src_img.shape)-1)/2
         src_center_mm = nb.affines.apply_affine(src_aff, src_center)
         src_offsets = src_aff[0:3,3]
