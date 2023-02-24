@@ -332,6 +332,7 @@ Diffusion data preprocessing
                                      dwi_denoise_window=dwi_denoise_window,
                                      denoise_method=denoise_method,
                                      unringing_method=unringing_method,
+                                     no_b0_harmonization=no_b0_harmonization,
                                      b1_biascorr_stage=b1_biascorr_stage,
                                      orientation='LAS' if hmc_model == 'eddy' else 'LPS',
                                      source_file=source_file,
