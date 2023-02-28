@@ -11,6 +11,7 @@
 | N4BiasFieldCorrection | https://doi.org/10.1109/TMI.2010.2046908 | |
 | antsBrainExtraction.sh | https://doi.org/10.1038/sdata.2015.3 | https://github.com/ANTsX/ANTs/blob/v2.2.0/Scripts/antsBrainExtraction.sh |
 | **FSL** | | https://doi.org/10.1016/j.neuroimage.2004.07.051 https://doi.org/10.1016/j.neuroimage.2008.10.055 https://doi.org/10.1016/j.neuroimage.2011.09.015
+| FAST | https://doi.org/10.1109/42.906424 | https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/FAST |
 | BET | https://doi.org/10.1002/hbm.10062 | https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/BET |
 | FLIRT | https://doi.org/10.1006/nimg.2002.1132 https://doi.org/10.1016/S1361-8415(01)00036-6 | https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/FLIRT; https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/FLIRT_BBR |
 | MCFLIRT | https://doi.org/10.1006/nimg.2002.1132 | https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/MCFLIRT |

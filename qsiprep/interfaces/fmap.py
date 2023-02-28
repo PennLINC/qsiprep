@@ -1170,6 +1170,8 @@ class _PEPOLARReportInputSpec(BaseInterfaceInputSpec):
 class _PEPOLARReportOutputSpec(reporting.ReportCapableOutputSpec):
     fa_sdc_report = File(exists=True)
     b0_sdc_report = File(exists=True)
+    ref_segmentation = self.inputs.t1 if not \
+        isdefined(self.inputs.t2w_seg) else self.inputs.t2w_seg
 
 
 class PEPOLARReport(SimpleInterface):

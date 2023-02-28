@@ -314,10 +314,8 @@ class _DesaturateSkullInputSpec(BaseInterfaceInputSpec):
 
 
 class _DesaturateSkullOutputSpec(TraitedSpec):
-    in_file = File(exists=True)
-    mask_file = traits.Float(0.)
     desaturated_t2w = File(exists=True)
-    head_scaling_factor = traits.Float(1.)
+    head_scaling_factor = traits.Float(0.)
 
 class DesaturateSkull(SimpleInterface):
     input_spec = _DesaturateSkullInputSpec

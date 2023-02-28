@@ -205,6 +205,7 @@ class DWIDenoise(SeriesPreprocReport, MRTrix3Base):
 
 class GenerateMasked5ttInputSpec(Generate5ttInputSpec):
     algorithm = traits.Enum(
+        'fsl',
         'gif',
         'freesurfer',
         'hsvs',

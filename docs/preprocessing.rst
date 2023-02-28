@@ -238,6 +238,10 @@ Derivatives related to T1w files are nearly identical to those produced by ``FMR
 can be found in the ``anat`` subfolder:
 
 - ``*T1w_brainmask.nii.gz`` Brain mask derived using ANTs' ``antsBrainExtraction.sh``.
+- ``*T1w_class-CSF_probtissue.nii.gz``
+- ``*T1w_class-GM_probtissue.nii.gz``
+- ``*T1w_class-WM_probtissue.nii.gz`` tissue-probability maps.
+- ``*T1w_dtissue.nii.gz`` Tissue class map derived using FAST.
 - ``*T1w_preproc.nii.gz`` Bias field corrected T1w file, using ANTS' N4BiasFieldCorrection
 - ``*T1w_space-MNI152NLin2009cAsym_brainmask.nii.gz`` Same as ``_brainmask`` above, but in MNI space.
 - ``*T1w_space-MNI152NLin2009cAsym_class-CSF_probtissue.nii.gz``
@@ -407,6 +411,13 @@ which is an atlas-based brain extraction workflow.
 
     Brain extraction
 
+Once the brain mask is computed, FSL ``fast`` is utilized for brain tissue segmentation.
+FSL ``fast`` is not used in the nofsl version of QSIprep.
+
+.. figure:: _static/segmentation.svg
+    :scale: 100%
+
+    Brain tissue segmentation.
 
 Finally, spatial normalization to MNI-space is performed using ANTs' ``antsRegistration``
 in a multiscale, mutual-information based, nonlinear registration scheme.
