@@ -1163,15 +1163,13 @@ class _PEPOLARReportInputSpec(BaseInterfaceInputSpec):
     up_fa_corrected_image = File(exists=True)
     down_fa_image = File(exists=True)
     down_fa_corrected_image = File(exists=True)
-    t1 = File(exists=True)
+    t1w_seg = File(exists=True)
     t2w_seg = File(exists=True)
 
 
 class _PEPOLARReportOutputSpec(reporting.ReportCapableOutputSpec):
     fa_sdc_report = File(exists=True)
     b0_sdc_report = File(exists=True)
-    ref_segmentation = self.inputs.t1 if not \
-        isdefined(self.inputs.t2w_seg) else self.inputs.t2w_seg
 
 
 class PEPOLARReport(SimpleInterface):
@@ -1183,10 +1181,10 @@ class PEPOLARReport(SimpleInterface):
         """Generate a reportlet."""
         LOGGER.info('Generating a PEPOLAR visual report')
 
+        ref_segmentation = self.inputs.t1w_seg if not \
+            isdefined(self.inputs.t2w_seg) else self.inputs.t2w_seg
         # Get a segmentation from an undistorted image as a reference
-        ref_segmentation = self.inputs.t1
-
-        seg_img = nb.load(ref_segmentation)
+        seg_img = nb.load(self.inputs.ref_segmentation)
         b0_up_img = nb.load(self.inputs.b0_up_image)
         b0_down_img = nb.load(self.inputs.b0_down_image)
         b0_up_corrected_img = nb.load(self.inputs.b0_up_corrected_image)

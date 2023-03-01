@@ -241,6 +241,8 @@ def init_extended_pepolar_report_wf(segment_t2w, omp_nthreads=1,
             ("fa_sdc_report", "fa_sdc_report")])
     ])
 
+    
+
     # If we don't have a T1w segmentation, make one from the t2w
     if segment_t2w:
         t2w_n4 = pe.Node(
@@ -273,8 +275,33 @@ def init_extended_pepolar_report_wf(segment_t2w, omp_nthreads=1,
             (t2w_atropos, pepolar_report, [("classified_image", "t2w_seg")])
         ])
     else:
+        #segment the T1 with atropos
+        t1w_n4 = pe.Node(ants.N4BiasFieldCorrection(dimension=3),
+                        name="t1w_n4",
+                        n_procs=omp_nthreads)
+        strip_t1w_wf = init_synthstrip_wf(omp_nthreads=omp_nthreads)
+
+        t1w_atropos = pe.Node(
+            ants.Atropos(dimension=3,
+                        initialization="Otsu",
+                        mrf_radius=[1,1,1],
+                        posterior_formulation="Socrates",
+                        use_mixture_model_proportions=False,
+                        mrf_smoothing_factor=0.1,
+                        number_of_tissue_classes=3
+                        ),
+            name="t1w_atropos",
+            n_procs=omp_nthreads)
+
         workflow.connect([
-            (inputnode,pepolar_report,[("t1w_image","t1")])])
+            (inputnode, t2w_n4, [
+                ("t1w_image", "input_image")]),
+            (t1w_n4, strip_t1w_wf, [("output_image", "inputnode.skulled_image")]),
+            (strip_t1w_wf, t1w_atropos, [
+                ("outputnode.brain_image", "intensity_images"),
+                ("outputnode.brain_mask", "mask_image")]),
+            (t1w_atropos, pepolar_report, [("classified_image", "t1w_seg")])
+        ])
 
     return workflow
 
