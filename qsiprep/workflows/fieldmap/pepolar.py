@@ -294,7 +294,7 @@ def init_extended_pepolar_report_wf(segment_t2w, omp_nthreads=1,
             n_procs=omp_nthreads)
 
         workflow.connect([
-            (inputnode, t2w_n4, [
+            (inputnode, t1w_n4, [
                 ("t1w_image", "input_image")]),
             (t1w_n4, strip_t1w_wf, [("output_image", "inputnode.skulled_image")]),
             (strip_t1w_wf, t1w_atropos, [
