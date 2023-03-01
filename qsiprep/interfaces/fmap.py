@@ -1184,7 +1184,7 @@ class PEPOLARReport(SimpleInterface):
         ref_segmentation = self.inputs.t1w_seg if not \
             isdefined(self.inputs.t2w_seg) else self.inputs.t2w_seg
         # Get a segmentation from an undistorted image as a reference
-        seg_img = nb.load(self.inputs.ref_segmentation)
+        seg_img = nb.load(ref_segmentation)
         b0_up_img = nb.load(self.inputs.b0_up_image)
         b0_down_img = nb.load(self.inputs.b0_down_image)
         b0_up_corrected_img = nb.load(self.inputs.b0_up_corrected_image)
