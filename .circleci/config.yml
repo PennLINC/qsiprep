@@ -159,6 +159,7 @@ jobs:
             bash IntramodalTemplate.sh
 
   MultiT1w:
+  resource_class: large
     <<: *dockersetup
     steps:
       - checkout
