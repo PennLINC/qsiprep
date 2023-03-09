@@ -56,8 +56,6 @@ class PyAFQRecon(SimpleInterface):
                                    newpath=shim_dir)
         mask_file = fname_presuffix(self.inputs.mask_file,
                                     newpath=shim_dir)
-        tck_file = fname_presuffix(self.inputs.tck_file,
-                                   newpath=shim_dir)
         itk_file = fname_presuffix(self.inputs.itk_file,
                                    newpath=shim_dir)
         os.symlink(self.inputs.bval_file, bval_file)
@@ -69,6 +67,8 @@ class PyAFQRecon(SimpleInterface):
         kwargs = self.inputs.kwargs
 
         if self.inputs.tck_file and isdefined(self.inputs.tck_file):
+            tck_file = fname_presuffix(self.inputs.tck_file,
+                                    newpath=shim_dir)
             os.symlink(self.inputs.tck_file, tck_file)
         else:
             tck_file = None
