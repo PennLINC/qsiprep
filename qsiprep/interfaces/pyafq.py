@@ -83,10 +83,10 @@ class PyAFQRecon(SimpleInterface):
             brain_mask_definition = kwargs['brain_mask_definition']
         else:
             kwargs.pop('brain_mask_definition', None)
-        if itk_map is None:
-            itk_map = kwargs['mapping_definition']
-        else:
-            kwargs.pop('mapping_definition', None)
+        # if itk_map is None:  # Use pyAFQ internal mapping
+        #     itk_map = kwargs['mapping_definition']
+        # else:
+        #     kwargs.pop('mapping_definition', None)
 
         if 'parallel_segmentation' in kwargs:
             if 'n_jobs' not in kwargs['parallel_segmentation']\
@@ -102,7 +102,7 @@ class PyAFQRecon(SimpleInterface):
             dwi_file, bval_file, bvec_file, output_dir,
             import_tract=tck_file,
             brain_mask_definition=brain_mask_definition,
-            mapping_definition=itk_map,
+            # mapping_definition=itk_map,
             **kwargs)
         myafq.export("profiles")
 

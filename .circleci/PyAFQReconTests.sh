@@ -27,6 +27,23 @@ export FS_LICENSE=${TESTDIR}/data/license.txt
 
 
 # Test pyAFQ_full
+TESTNAME=pyafq_full
+setup_dir ${TESTDIR}/${TESTNAME}
+TEMPDIR=${TESTDIR}/${TESTNAME}/work
+OUTPUT_DIR=${TESTDIR}/${TESTNAME}/derivatives
+BIDS_INPUT_DIR=${TESTDIR}/data/multishell_output/qsiprep
+QSIPREP_CMD=$(run_qsiprep_cmd ${BIDS_INPUT_DIR} ${OUTPUT_DIR})
+
+${QSIPREP_CMD}  \
+	 -w ${TEMPDIR} \
+	 --recon-input ${BIDS_INPUT_DIR} \
+	 --sloppy \
+	 --recon-spec pyafq_full \
+	 --recon-only \
+	 -vv
+
+
+# Test pyAFQ_input_trk
 TESTNAME=pyafq_input_trk_test
 setup_dir ${TESTDIR}/${TESTNAME}
 TEMPDIR=${TESTDIR}/${TESTNAME}/work
