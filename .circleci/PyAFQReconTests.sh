@@ -27,7 +27,7 @@ export FS_LICENSE=${TESTDIR}/data/license.txt
 
 
 # Test pyafq_tractometry
-TESTNAME=pyafq_tractometry
+TESTNAME=pyafq_tractometry_test
 setup_dir ${TESTDIR}/${TESTNAME}
 TEMPDIR=${TESTDIR}/${TESTNAME}/work
 OUTPUT_DIR=${TESTDIR}/${TESTNAME}/derivatives
@@ -44,7 +44,7 @@ ${QSIPREP_CMD}  \
 
 
 # Test mrtrix_multishell_msmt_pyafq_tractometry
-TESTNAME=mrtrix_multishell_msmt_pyafq_tractometry
+TESTNAME=mrtrix_multishell_msmt_pyafq_tractometry_test
 setup_dir ${TESTDIR}/${TESTNAME}
 TEMPDIR=${TESTDIR}/${TESTNAME}/work
 OUTPUT_DIR=${TESTDIR}/${TESTNAME}/derivatives
