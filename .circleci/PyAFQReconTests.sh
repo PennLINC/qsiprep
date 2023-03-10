@@ -26,8 +26,8 @@ EDDY_CFG=${TESTDIR}/data/eddy_config.json
 export FS_LICENSE=${TESTDIR}/data/license.txt
 
 
-# Test pyAFQ_full
-TESTNAME=pyafq_full
+# Test pyafq_tractometry
+TESTNAME=pyafq_tractometry
 setup_dir ${TESTDIR}/${TESTNAME}
 TEMPDIR=${TESTDIR}/${TESTNAME}/work
 OUTPUT_DIR=${TESTDIR}/${TESTNAME}/derivatives
@@ -38,13 +38,13 @@ ${QSIPREP_CMD}  \
 	 -w ${TEMPDIR} \
 	 --recon-input ${BIDS_INPUT_DIR} \
 	 --sloppy \
-	 --recon-spec pyafq_full \
+	 --recon-spec pyafq_tractometry \
 	 --recon-only \
 	 -vv
 
 
-# Test pyAFQ_input_trk
-TESTNAME=pyafq_input_trk_test
+# Test mrtrix_multishell_msmt_pyafq_tractometry
+TESTNAME=mrtrix_multishell_msmt_pyafq_tractometry
 setup_dir ${TESTDIR}/${TESTNAME}
 TEMPDIR=${TESTDIR}/${TESTNAME}/work
 OUTPUT_DIR=${TESTDIR}/${TESTNAME}/derivatives
@@ -55,6 +55,6 @@ ${QSIPREP_CMD}  \
 	 -w ${TEMPDIR} \
 	 --recon-input ${BIDS_INPUT_DIR} \
 	 --sloppy \
-	 --recon-spec pyafq_input_trk \
+	 --recon-spec mrtrix_multishell_msmt_pyafq_tractometry \
 	 --recon-only \
 	 -vv
