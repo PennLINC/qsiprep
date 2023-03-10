@@ -77,16 +77,13 @@ class PyAFQRecon(SimpleInterface):
 
         if tck_file is None:
             tck_file = kwargs['import_tract']
-        else:
-            kwargs.pop('import_tract', None)
+        kwargs.pop('import_tract', None)
         if brain_mask_definition is None:
             brain_mask_definition = kwargs['brain_mask_definition']
-        else:
-            kwargs.pop('brain_mask_definition', None)
+        kwargs.pop('brain_mask_definition', None)
         # if itk_map is None:  # Use pyAFQ internal mapping
         #     itk_map = kwargs['mapping_definition']
-        # else:
-        #     kwargs.pop('mapping_definition', None)
+        # kwargs.pop('mapping_definition', None)
 
         if 'parallel_segmentation' in kwargs:
             if 'n_jobs' not in kwargs['parallel_segmentation']\
