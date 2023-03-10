@@ -212,7 +212,7 @@ def workflow_from_spec(omp_nthreads, available_anatomical_data, node_spec,
             return init_amico_noddi_fit_wf(**kwargs)
 
     elif software == "pyAFQ":
-        if node_spec["action"] == "pyAFQ_full":
+        if node_spec["action"] == "pyafq_tractometry":
             return init_pyafq_wf(**kwargs)
 
     # qsiprep operations

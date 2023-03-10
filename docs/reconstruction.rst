@@ -288,7 +288,7 @@ used for tractography with no T1w-based anatomical constraints.
 
 .. _pyafq:
 
-``pyafq``
+``pyafq_tractometry``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 This workflow uses the AFQ [Yeatman2012]_ implemented in Python [Kruper2021]_ to recognize
@@ -297,11 +297,13 @@ those pathways. See the `pyAFQ documentation <https://yeatmanlab.github.io/pyAFQ
 
 .. _pyafq_input_trk:
 
-``pyafq_input_trk``
+``mrtrix_multishell_msmt_pyafq_tractometry``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Identical to :ref:`pyafq` except that tractography generated using another reconstruciton pipeline
-(such as MRTrix3), instead of using pyAFQ's default DIPY tractography.
+Identical to :ref:`pyafq` except that tractography generated using IFOD2 from MRTrix3,
+instead of using pyAFQ's default DIPY tractography.
+This can also be used as an example for how to import tractographies from other
+reconstruciton pipelines to pyAFQ.
 
 
 .. _amico_noddi:
