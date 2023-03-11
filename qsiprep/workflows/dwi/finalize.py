@@ -1,8 +1,8 @@
 """
-Orchestrating the dwi-preprocessing workflow
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Final steps on the preprocessed data
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. autofunction:: init_dwi_preproc_wf
+.. autofunction:: init_dwi_finalize_wf
 
 """
 
@@ -17,6 +17,7 @@ from ...interfaces import DerivativesDataSink
 from ...niworkflows.interfaces.registration import SimpleBeforeAfterRPT
 from ...interfaces.reports import GradientPlot, SeriesQC
 from ...interfaces.mrtrix import MRTrixGradientTable, DWIBiasCorrect
+from ...interfaces.dwi_merge import StackConfounds
 from ...engine import Workflow
 
 # dwi workflows
@@ -32,7 +33,6 @@ LOGGER = logging.getLogger('nipype.workflow')
 def init_dwi_finalize_wf(scan_groups,
                          name,
                          output_prefix,
-                         ignore,
                          hmc_model,
                          shoreline_iters,
                          reportlets_dir,
@@ -41,10 +41,8 @@ def init_dwi_finalize_wf(scan_groups,
                          template,
                          output_dir,
                          omp_nthreads,
-                         pepolar_method,
+                         b0_threshold,
                          write_local_bvecs,
-                         low_mem,
-                         use_syn,
                          do_biascorr,
                          make_intramodal_template,
                          source_file,
@@ -60,14 +58,15 @@ def init_dwi_finalize_wf(scan_groups,
         from qsiprep.workflows.dwi.base import init_dwi_finalize_wf
         wf = init_dwi_finalize_wf(name='finalize_wf',
                                   omp_nthreads=1,
-                                  ignore=[],
                                   reportlets_dir='.',
                                   output_dir='.',
                                   output_resolution=2.0,
                                   template='MNI152NLin2009cAsym',
+                                  b0_threshold=100,
                                   output_spaces=['T1w'],
                                   low_mem=False,
                                   output_prefix='',
+                                  make_intramodal_template=False,
                                   write_local_bvecs=False,
                                   do_biascorr=True,
                                   source_file='/data/sub-1/dwi/sub-1_dwi.nii.gz',
@@ -253,30 +252,6 @@ def init_dwi_finalize_wf(scan_groups,
                                           write_local_bvecs=write_local_bvecs,
                                           concatenate=write_derivatives)
 
-    if do_biascorr:
-        biascorr = pe.Node(DWIBiasCorrect(method='ants'), name='biascorr', n_procs=omp_nthreads)
-        ds_report_biascorr = pe.Node(
-            DerivativesDataSink(suffix=name + '_biascorr',
-                                source_file=source_file),
-            name='ds_report_' + name + '_biascorr',
-            run_without_submitting=True,
-            mem_gb=DEFAULT_MEMORY_MIN_GB)
-        get_b0s = pe.Node(ExtractB0s(b0_threshold=b0_threshold), name='get_b0s')
-        quick_mask = pe.Node(MaskEPI(lower_cutoff=0.02), name='quick_mask')
-        buffernodes.append(get_buffernode())
-        workflow.connect([
-            (buffernodes[-2], biascorr, [('dwi_file', 'in_file')]),
-            (buffernodes[-2], get_b0s, [('dwi_file', 'dwi_series')]),
-            (inputnode, get_b0s, [('bval_file', 'bval_file')]),
-            (get_b0s, quick_mask, [('b0_series', 'in_files')]),
-            (quick_mask, biascorr, [('out_mask', 'mask')]),
-            (biascorr, buffernodes[-1], [('out_file', 'dwi_file')]),
-            (biascorr, ds_report_biascorr, [('out_report', 'in_file')]),
-            (biascorr, merge_confounds, [('nmse_text', 'in%d' % step_num)]),
-            (inputnode, biascorr, [('bval_file', 'in_bval'), ('bvec_file', 'in_bvec')])
-        ])
-        step_num += 1
-
     workflow.connect([
         (inputnode, transform_dwis_t1, [
             ('b0_indices', 'inputnode.b0_indices'),
@@ -298,6 +273,34 @@ def init_dwi_finalize_wf(scan_groups,
              'inputnode.intramodal_template_to_t1_warp'),
             ('itk_b0_to_t1', 'inputnode.itk_b0_to_t1'),
             ('sdc_scaling_images', 'inputnode.sdc_scaling_images')]),
+        (transform_dwis_t1, outputnode, [
+            ('outputnode.bvals', 'bvals_t1'),
+            ('outputnode.rotated_bvecs', 'bvecs_t1'),
+            ('outputnode.cnr_map_resampled', 'cnr_map_t1'),
+            ('outputnode.local_bvecs', 'local_bvecs_t1')])
+    ])
+
+
+    if do_biascorr:
+        merge_confounds = pe.Node(niu.Merge(2), name="merge_confounds")
+        hstack_confounds = pe.Node(StackConfounds(axis=1), name='hstack_confounds')
+        biascorr = pe.Node(DWIBiasCorrect(method='ants'), name='biascorr', n_procs=omp_nthreads)
+        ds_report_biascorr = pe.Node(
+            DerivativesDataSink(suffix=name + '_biascorr',
+                                source_file=source_file),
+            name='ds_report_' + name + '_biascorr',
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB)
+        workflow.connect([
+            (inputnode, merge_confounds, [('confounds', 'in1')]),
+            (transform_dwis_t1, biascorr, [
+                ('outputnode.dwi_resampled', 'in_file'),
+                ('outputnode.resampled_dwi_mask', 'mask'),
+                ('bval_file', 'in_bval')]),
+            (biascorr, outputnode, [('out_file', 'dwi_t1')]),
+            (biascorr, ds_report_biascorr, [('out_report', 'in_file')]),
+            (biascorr, merge_confounds, [('nmse_text', 'in2')]),
+            (inputnode, biascorr, [ ]),
         (transform_dwis_t1, outputnode, [('outputnode.bvals', 'bvals_t1'),
                                          ('outputnode.rotated_bvecs', 'bvecs_t1'),
                                          ('outputnode.dwi_resampled', 'dwi_t1'),
@@ -307,7 +310,17 @@ def init_dwi_finalize_wf(scan_groups,
                                          ('outputnode.dwi_ref_resampled', 't1_b0_ref'),
                                          ('outputnode.resampled_dwi_mask', 'dwi_mask_t1'),
                                          ('outputnode.resampled_qc', 'series_qc_t1')])
-    ])
+        ])
+
+    else:
+        workflow.connect([
+            (transform_dwis_t1, outputnode, [
+                ('outputnode.dwi_resampled', 'dwi_t1'),
+                ('outputnode.b0_series', 't1_b0_series'),
+                ('outputnode.dwi_ref_resampled', 't1_b0_ref'),
+                ('outputnode.resampled_dwi_mask', 'dwi_mask_t1'),
+                ('outputnode.resampled_qc', 'series_qc_t1')])
+        ])
 
     # Fill-in datasinks of reportlets seen so far
     for node in workflow.list_node_names():

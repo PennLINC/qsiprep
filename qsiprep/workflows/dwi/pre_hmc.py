@@ -126,8 +126,10 @@ def init_dwi_pre_hmc_wf(scan_groups,
                                                       no_b0_harmonization, b0_threshold)
 
     # Doing biascorr here is the old way.
-    dwi_no_biascorr = not b1_biascorr_stage == 'legacy'
-    LOGGER.warning("Applying bias correction before merging. Check results!")
+    dwi_no_biascorr = True
+    if b1_biascorr_stage == 'legacy':
+        dwi_no_biascorr = False
+        LOGGER.warning("Applying bias correction before merging. Check results!")
 
     # Special case: Two reverse PE DWI series are going to get combined for eddy
     if preprocess_rpe_series:
