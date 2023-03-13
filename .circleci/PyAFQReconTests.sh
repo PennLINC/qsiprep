@@ -27,20 +27,21 @@ export FS_LICENSE=${TESTDIR}/data/license.txt
 
 
 # Test pyafq_tractometry
-TESTNAME=pyafq_tractometry_test
-setup_dir ${TESTDIR}/${TESTNAME}
-TEMPDIR=${TESTDIR}/${TESTNAME}/work
-OUTPUT_DIR=${TESTDIR}/${TESTNAME}/derivatives
-BIDS_INPUT_DIR=${TESTDIR}/data/multishell_output/qsiprep
-QSIPREP_CMD=$(run_qsiprep_cmd ${BIDS_INPUT_DIR} ${OUTPUT_DIR})
+# Using MSMT is likely prefered
+# TESTNAME=pyafq_tractometry_test
+# setup_dir ${TESTDIR}/${TESTNAME}
+# TEMPDIR=${TESTDIR}/${TESTNAME}/work
+# OUTPUT_DIR=${TESTDIR}/${TESTNAME}/derivatives
+# BIDS_INPUT_DIR=${TESTDIR}/data/multishell_output/qsiprep
+# QSIPREP_CMD=$(run_qsiprep_cmd ${BIDS_INPUT_DIR} ${OUTPUT_DIR})
 
-${QSIPREP_CMD}  \
-	 -w ${TEMPDIR} \
-	 --recon-input ${BIDS_INPUT_DIR} \
-	 --sloppy \
-	 --recon-spec pyafq_tractometry \
-	 --recon-only \
-	 -vv
+# ${QSIPREP_CMD}  \
+# 	 -w ${TEMPDIR} \
+# 	 --recon-input ${BIDS_INPUT_DIR} \
+# 	 --sloppy \
+# 	 --recon-spec pyafq_tractometry \
+# 	 --recon-only \
+# 	 -vv
 
 
 # Test mrtrix_multishell_msmt_pyafq_tractometry
