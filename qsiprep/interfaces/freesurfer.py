@@ -584,7 +584,7 @@ class _SynthStripOutputSpec(TraitedSpec):
 class SynthStrip(FSCommandOpenMP):
     input_spec = _SynthStripInputSpec
     output_spec = _SynthStripOutputSpec
-    _cmd = os.getenv("FREESURFER_HOME") + "/mri_synthstrip"
+    _cmd = os.getenv("FREESURFER_HOME") + "/bin/mri_synthstrip"
 
     def _num_threads_update(self):
         if self.inputs.num_threads:
