@@ -553,7 +553,7 @@ workflows:
             tags:
               only: /.*/
 
-      - Recon_PYAFQ:
+      - Recon_PYAFQExternalTrk:
           requires:
             - build
           filters:
