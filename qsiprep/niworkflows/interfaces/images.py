@@ -59,7 +59,7 @@ class IntraModalMerge(SimpleInterface):
 
         if len(in_files) == 1:
             filenii = nb.load(in_files[0])
-            filedata = filenii.get_data()
+            filedata = filenii.get_fdata()
 
             # magnitude files can have an extra dimension empty
             if filedata.ndim == 5:
@@ -72,7 +72,7 @@ class IntraModalMerge(SimpleInterface):
                     nb.Nifti1Image(sqdata, filenii.affine,
                                    filenii.header).to_filename(in_files[0])
 
-            if np.squeeze(nb.load(in_files[0]).get_data()).ndim < 4:
+            if np.squeeze(nb.load(in_files[0]).get_fdata()).ndim < 4:
                 self._results['out_file'] = in_files[0]
                 self._results['out_avg'] = in_files[0]
                 # TODO: generate identity out_mats and zero-filled out_movpar
@@ -89,7 +89,7 @@ class IntraModalMerge(SimpleInterface):
         self._results['out_file'] = mcres.outputs.out_file
 
         hmcnii = nb.load(mcres.outputs.out_file)
-        hmcdat = hmcnii.get_data().mean(axis=3)
+        hmcdat = hmcnii.get_fdata().mean(axis=3)
         if self.inputs.zero_based_avg:
             hmcdat -= hmcdat.min()
 
@@ -272,7 +272,7 @@ class Conform(SimpleInterface):
                 offset = (reoriented.affine[:3, 3] * size_factor - reoriented.affine[:3, 3])
                 target_affine[:3, 3] = reoriented.affine[:3, 3] + offset.astype(int)
 
-            data = nli.resample_img(reoriented, target_affine, target_shape).get_data()
+            data = nli.resample_img(reoriented, target_affine, target_shape).get_fdata()
             conform_xfm = np.linalg.inv(reoriented.affine).dot(target_affine)
             reoriented = reoriented.__class__(data, target_affine, reoriented.header)
 
@@ -524,7 +524,7 @@ class MatchHeader(SimpleInterface):
         out_file = fname_presuffix(self.inputs.in_file, suffix='_hdr',
                                    newpath=runtime.cwd)
 
-        imgnii.__class__(imgnii.get_data(), imghdr.get_best_affine(),
+        imgnii.__class__(imgnii.get_fdata(), imghdr.get_best_affine(),
                          imghdr).to_filename(out_file)
         self._results['out_file'] = out_file
         return runtime
@@ -544,7 +544,7 @@ def extract_wm(in_seg, wm_label=3, newpath=None):
 
     nii = nb.load(in_seg)
     data = np.zeros(nii.shape, dtype=np.uint8)
-    data[nii.get_data() == wm_label] = 1
+    data[nii.get_fdata() == wm_label] = 1
 
     out_file = fname_presuffix(in_seg, suffix='_wm', newpath=newpath)
     new = nb.Nifti1Image(data, nii.affine, nii.header)
@@ -580,7 +580,7 @@ def normalize_xform(img):
             int(qform_code) == xform_code, int(sform_code) == xform_code)):
         return img
 
-    new_img = img.__class__(img.get_data(), xform, img.header)
+    new_img = img.__class__(img.get_fdata(), xform, img.header)
     # Unconditionally set sform/qform
     new_img.set_sform(xform, xform_code)
     new_img.set_qform(xform, xform_code)
@@ -597,8 +597,8 @@ def demean(in_file, in_mask, only_mask=False, newpath=None):
     out_file = fname_presuffix(in_file, suffix='_demeaned',
                                newpath=os.getcwd())
     nii = nb.load(in_file)
-    msk = nb.load(in_mask).get_data()
-    data = nii.get_data()
+    msk = nb.load(in_mask).get_fdata()
+    data = nii.get_fdata()
     if only_mask:
         data[msk > 0] -= np.median(data[msk > 0])
     else:
@@ -675,7 +675,7 @@ class SignalExtraction(SimpleInterface):
         if len(mask_imgs) == 1:
             mask_imgs = nb.four_to_three(mask_imgs[0])
 
-        masks = [mask_img.get_data().astype(np.bool) for mask_img in mask_imgs]
+        masks = [mask_img.get_fdata().astype(np.bool) for mask_img in mask_imgs]
 
         n_masks = len(masks)
 
@@ -686,7 +686,7 @@ class SignalExtraction(SimpleInterface):
 
         series = np.zeros((img.shape[3], n_masks))
 
-        data = img.get_data()
+        data = img.get_fdata()
         for j in range(n_masks):
             series[:, j] = data[masks[j], :].mean(axis=0)
 
