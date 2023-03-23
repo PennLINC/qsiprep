@@ -101,7 +101,11 @@ class PyAFQRecon(SimpleInterface):
             brain_mask_definition=brain_mask_definition,
             # mapping_definition=itk_map,
             **kwargs)
-        myafq.export("profiles")
+
+        if "export" not in kwargs or kwargs["export"] == "all":
+            myafq.export_all()
+        else:
+            myafq.export(kwargs["export"])
 
         self._results['afq_dir'] = output_dir
 
