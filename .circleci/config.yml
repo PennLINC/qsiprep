@@ -212,11 +212,23 @@ jobs:
       - checkout
       - run: *runinstall
       - run:
-          name: Test the PYAFQ recon workflows
+          name: Test the PYAFQ standalone recon workflow
           no_output_timeout: 1h
           command: |
             cd .circleci
             bash PyAFQReconTests.sh
+
+  Recon_PYAFQExternalTrk:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run: *runinstall
+      - run:
+          name: Test the PYAFQ workflow with mrtrix tractography
+          no_output_timeout: 1h
+          command: |
+            cd .circleci
+            bash PyAFQReconExternalTrk.sh
 
   Recon_AMICO:
     <<: *dockersetup
@@ -541,6 +553,13 @@ workflows:
             tags:
               only: /.*/
 
+      - Recon_PYAFQExternalTrk:
+          requires:
+            - build
+          filters:
+            tags:
+              only: /.*/
+
       - deployable:
           requires:
             - build_docs
@@ -558,6 +577,7 @@ workflows:
             - Recon_DIPY
             - Recon_AMICO
             - Recon_PYAFQ
+            - Recon_PYAFQExternalTrk
           filters:
             branches:
               only: master
