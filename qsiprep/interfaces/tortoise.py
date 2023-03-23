@@ -49,7 +49,7 @@ SLOPPY_DRBUDDI = \
         "\[learning_rate=\{1.\},cfs=\{20:1:0\},field_smoothing=\{4:0\}," \
         "metrics=\{MSJac:CC\},restrict_constrain=\{0:0\}\]"
 
-class TORTOISEInputSpec(BaseInterfaceInputSpec):
+class TORTOISEInputSpec(CommandLineInputSpec):
     num_threads = traits.Int(desc="numpy of OMP threads")
 
 class TORTOISECommandLine(CommandLine):
@@ -82,7 +82,7 @@ class TORTOISECommandLine(CommandLine):
         if "num_threads" in inputs:
             self.inputs.num_threads = inputs["num_threads"]
         self._num_threads_update()
-        return super(FSCommandOpenMP, self).run(**inputs)
+        return super(TORTOISECommandLine, self).run(**inputs)
 
 
 class _GatherDRBUDDIInputsInputSpec(TORTOISEInputSpec):
@@ -458,7 +458,7 @@ class DRBUDDIAggregateOutputs(SimpleInterface):
         return runtime
 
 
-class _GibbsInputSpec(SeriesPreprocReportInputSpec):
+class _GibbsInputSpec(TORTOISEInputSpec, SeriesPreprocReportInputSpec):
     """Gibbs input_nifti  output_nifti kspace_coverage(1,0.875,0.75) phase_encoding_dir nsh minW(optional) maxW(optional)"""
     in_file = traits.File(
         exists=True,

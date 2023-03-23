@@ -153,7 +153,7 @@ def init_drbuddi_wf(scan_groups, b0_threshold, raw_image_sdc, t2w_sdc, omp_nthre
     drbuddi = pe.Node(
         DRBUDDI(
             fieldmap_type=fieldmap_info['suffix'],
-            nthreads=omp_nthreads,
+            num_threads=omp_nthreads,
             sloppy=sloppy),
         name='drbuddi',
         n_procs=omp_nthreads)
