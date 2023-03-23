@@ -305,6 +305,6 @@ def _fix_hdr(in_file, newpath=None):
     hdr.set_data_dtype('<f4')
     hdr.set_intent('vector', (), '')
     out_file = fname_presuffix(in_file, "_warpfield", newpath=newpath)
-    nb.Nifti1Image(nii.get_data().astype('<f4'), nii.affine, hdr).to_filename(
+    nb.Nifti1Image(nii.get_fdata().astype('<f4'), nii.affine, hdr).to_filename(
         out_file)
     return out_file

@@ -39,7 +39,7 @@ class BSplineFieldmap(object):
 
         # Pad data with zeros
         self._data = np.zeros(tuple(np.array(
-            self._fmapnii.get_data().shape) + 2 * padding))
+            self._fmapnii.get_fdata().shape) + 2 * padding))
 
         # The list of ijk coordinates
         self._fmapijk = get_ijk(self._data)
@@ -53,7 +53,7 @@ class BSplineFieldmap(object):
         # Set data
         self._data[padding:-padding,
                    padding:-padding,
-                   padding:-padding] = fmapnii.get_data()
+                   padding:-padding] = fmapnii.get_fdata()
 
         # Get ijk in homogeneous coords
         ijk_h = np.hstack((self._fmapijk, np.array([1.0] * len(self._fmapijk))[..., np.newaxis]))

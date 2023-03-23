@@ -19,8 +19,8 @@ LOGGER = logging.getLogger('nipype.interface')
 
 class DSIStudioCommandLineInputSpec(CommandLineInputSpec):
     num_threads = traits.Int(
-        1, 
-        usedefault=True, 
+        1,
+        usedefault=True,
         argstr="--thread_count=%d",
         nohash=True)
 
@@ -640,7 +640,7 @@ class FixDSIStudioExportHeader(SimpleInterface):
 
         # No matter what, still use the correct affine
         nb.Nifti1Image(
-            reoriented_img.get_data()[::-1, ::-1, :],
+            reoriented_img.get_fdata()[::-1, ::-1, :],
             correct_img.affine).to_filename(new_file)
         self._results['out_file'] = new_file
 
