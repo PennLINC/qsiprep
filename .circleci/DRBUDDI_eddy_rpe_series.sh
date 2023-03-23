@@ -34,7 +34,7 @@ ${QSIPREP_CMD} \
 	--sloppy \
 	--dwi-only \
 	--denoise-method none \
-	--dwi-no-biascorr \
+	--b1_biascorrect_stage none \
 	--output-space T1w \
 	--pepolar-method DRBUDDI \
 	--eddy_config ${EDDY_CFG} \
