@@ -562,7 +562,7 @@ def _select_labels(in_segm, labels):
     cwd = getcwd()
     nii = nb.load(in_segm)
     for l in labels:
-        data = (nii.get_data() == l).astype(np.uint8)
+        data = (nii.get_fdata() == l).astype(np.uint8)
         newnii = nii.__class__(data, nii.affine, nii.header)
         newnii.set_data_dtype('uint8')
         out_file = fname_presuffix(in_segm, suffix='class-%02d' % l,

@@ -51,7 +51,7 @@ class dMRIPlot(object):
             slice_scores = np.loadtxt(sliceqc_file, skiprows=1)
             # Get the slice counts
             mask_img = nb.load(mask_file)
-            mask = mask_img.get_data() > 0
+            mask = mask_img.get_fdata() > 0
             masked_slices = (mask * np.arange(mask_img.shape[2])[np.newaxis, np.newaxis, :]
                              ).astype(np.int)
             slice_nums, slice_counts = np.unique(masked_slices[mask], return_counts=True)

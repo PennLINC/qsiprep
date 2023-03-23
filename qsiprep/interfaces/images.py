@@ -135,7 +135,7 @@ class IntraModalMerge(SimpleInterface):
 
         if len(in_files) == 1:
             filenii = nb.load(in_files[0])
-            filedata = filenii.get_data()
+            filedata = filenii.get_fdata()
 
             # magnitude files can have an extra dimension empty
             if filedata.ndim == 5:
@@ -148,7 +148,7 @@ class IntraModalMerge(SimpleInterface):
                     nb.Nifti1Image(sqdata, filenii.affine,
                                    filenii.header).to_filename(in_files[0])
 
-            if np.squeeze(nb.load(in_files[0]).get_data()).ndim < 4:
+            if np.squeeze(nb.load(in_files[0]).get_fdata()).ndim < 4:
                 self._results['out_file'] = in_files[0]
                 self._results['out_avg'] = in_files[0]
                 # TODO: generate identity out_mats and zero-filled out_movpar
@@ -165,7 +165,7 @@ class IntraModalMerge(SimpleInterface):
         self._results['out_file'] = mcres.outputs.out_file
 
         hmcnii = nb.load(mcres.outputs.out_file)
-        hmcdat = hmcnii.get_data().mean(axis=3)
+        hmcdat = hmcnii.get_fdata().mean(axis=3)
         if self.inputs.zero_based_avg:
             hmcdat -= hmcdat.min()
 
@@ -264,7 +264,7 @@ class Conform(SimpleInterface):
                 offset = (reoriented.affine[:3, 3] * size_factor - reoriented.affine[:3, 3])
                 target_affine[:3, 3] = reoriented.affine[:3, 3] + offset.astype(int)
 
-            data = nli.resample_img(reoriented, target_affine, target_shape).get_data()
+            data = nli.resample_img(reoriented, target_affine, target_shape).get_fdata()
             conform_xfm = np.linalg.inv(reoriented.affine).dot(target_affine)
             reoriented = reoriented.__class__(data, target_affine, reoriented.header)
 

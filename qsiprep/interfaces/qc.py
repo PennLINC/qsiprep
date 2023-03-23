@@ -64,7 +64,7 @@ def mplfigcontour(data, outfile=None, as_bytes=False):
 
 def load_and_reorient(filename):
     img = nib.load(filename)
-    data, aff = img.get_data(), img.affine
+    data, aff = img.get_fdata(), img.affine
     data = reorient_array(data, aff)
     return data
 

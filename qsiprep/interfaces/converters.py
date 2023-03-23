@@ -72,7 +72,7 @@ class FODtoFIBGZ(SimpleInterface):
         if isdefined(mask_file):
             mask_img = nb.load(mask_file)
         else:
-            ampl_data = amplitudes_img.get_data()
+            ampl_data = amplitudes_img.get_fdata()
             ampl_mask = ampl_data.sum(3) > 1e-6
             mask_img = nb.Nifti1Image(ampl_mask.astype(np.float),
                                       amplitudes_img.affine)
@@ -179,7 +179,7 @@ def amplitudes_to_fibgz(amplitudes_img, odf_dirs, odf_faces, output_file,
     odf_dirs: np.ndarray
         N x 3 array containing the directions corresponding to the
         amplitudes in ``amplitudes_img``. The values in
-        ``amplitudes_img.get_data()[..., i]`` are for the
+        ``amplitudes_img.get_fdata()[..., i]`` are for the
         direction in ``odf_dirs[i]``.
     odf_faces: np.ndarray
         triangles connecting the vertices in ``odf_dirs``
@@ -208,8 +208,8 @@ def amplitudes_to_fibgz(amplitudes_img, odf_dirs, odf_faces, output_file,
         raise ValueError("Differing grid between mask and amplitudes")
 
     # Get the flat mask
-    ampl_data = amplitudes_img.get_data()
-    flat_mask = mask_img.get_data().flatten(order="F") > 0
+    ampl_data = amplitudes_img.get_fdata()
+    flat_mask = mask_img.get_fdata().flatten(order="F") > 0
     odf_array = ampl_data.reshape(-1, ampl_data.shape[3], order='F')
     del ampl_data
     masked_odfs = odf_array[flat_mask, :]
@@ -285,7 +285,7 @@ def amico_directions_to_fibgz(directions_img, od_img, icvf_img, isovf_img,
     odf_dirs: np.ndarray
         N x 3 array containing the directions corresponding to the
         amplitudes in ``amplitudes_img``. The values in
-        ``amplitudes_img.get_data()[..., i]`` are for the
+        ``amplitudes_img.get_fdata()[..., i]`` are for the
         direction in ``odf_dirs[i]``.
     odf_faces: np.ndarray
         triangles connecting the vertices in ``odf_dirs``
@@ -361,7 +361,7 @@ def amplitudes_to_sh_mif(amplitudes_img, odf_dirs, output_file, working_dir):
     odf_dirs: np.ndarray
         2*N x 3 array containing the directions corresponding to the
         amplitudes in ``amplitudes_img``. The values in
-        ``amplitudes_img.get_data()[..., i]`` are for the
+        ``amplitudes_img.get_fdata()[..., i]`` are for the
         direction in ``odf_dirs[i]``. Here the second half of the
         directions are the opposite of the fist and therefore have the
         same amplitudes.
