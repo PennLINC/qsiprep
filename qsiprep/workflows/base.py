@@ -45,7 +45,7 @@ def init_qsiprep_wf(
         subject_list, run_uuid, work_dir, output_dir, bids_dir, ignore, debug,
         low_mem, anat_only, dwi_only, longitudinal, b0_threshold, hires,
         denoise_before_combining, dwi_denoise_window, denoise_method,
-        unringing_method, b1_biascorr_stage, no_b0_harmonization,
+        unringing_method, b1_biascorrect_stage, no_b0_harmonization,
         output_resolution, infant_mode, combine_all_dwis,
         distortion_group_merge, pepolar_method, omp_nthreads, bids_filters,
         force_spatial_normalization, skull_strip_template,
@@ -85,7 +85,7 @@ def init_qsiprep_wf(
                               dwi_denoise_window=7,
                               denoise_method='patch2self',
                               unringing_method='mrdegibbs',
-                              b1_biascorr_stage=False,
+                              b1_biascorrect_stage=False,
                               no_b0_harmonization=False,
                               combine_all_dwis=True,
                               distortion_group_merge='concat',
@@ -152,7 +152,7 @@ def init_qsiprep_wf(
             Either 'dwidenoise', 'patch2self' or 'none'
         unringing_method : str
             algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
-        b1_biascorr_stage : str
+        b1_biascorrect_stage : str
             'final', 'none' or 'legacy'
         no_b0_harmonization : bool
             skip rescaling dwi scans to have matching b=0 intensities across scans
@@ -252,7 +252,7 @@ def init_qsiprep_wf(
             dwi_denoise_window=dwi_denoise_window,
             denoise_method=denoise_method,
             unringing_method=unringing_method,
-            b1_biascorr_stage=b1_biascorr_stage,
+            b1_biascorrect_stage=b1_biascorrect_stage,
             no_b0_harmonization=no_b0_harmonization,
             dwi_only=dwi_only,
             anat_only=anat_only,
@@ -303,7 +303,7 @@ def init_single_subject_wf(
         subject_id, name, reportlets_dir, output_dir, bids_dir, ignore, debug,
         write_local_bvecs, low_mem, dwi_only, anat_only, longitudinal,
         b0_threshold, denoise_before_combining, bids_filters,
-        dwi_denoise_window, denoise_method, unringing_method, b1_biascorr_stage,
+        dwi_denoise_window, denoise_method, unringing_method, b1_biascorrect_stage,
         no_b0_harmonization, infant_mode, combine_all_dwis, raw_image_sdc,
         distortion_group_merge, pepolar_method, omp_nthreads, skull_strip_template,
         force_spatial_normalization, skull_strip_fixed_seed, freesurfer, hires,
@@ -343,7 +343,7 @@ def init_single_subject_wf(
             dwi_denoise_window=7,
             denoise_method='patch2self',
             unringing_method='mrdegibbs',
-            b1_biascorr_stage=False,
+            b1_biascorrect_stage=False,
             no_b0_harmonization=False,
             dwi_only=False,
             anat_only=False,
@@ -405,7 +405,7 @@ def init_single_subject_wf(
             Either 'dwidenoise', 'patch2self' or 'none'
         unringing_method : str
             algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
-        b1_biascorr_stage : str
+        b1_biascorrect_stage : str
             'final', 'none' or 'legacy'
         no_b0_harmonization : bool
             skip rescaling dwi scans to have matching b=0 intensities across scans
@@ -726,7 +726,7 @@ to workflows in *QSIPrep*'s documentation]\
             dwi_denoise_window=dwi_denoise_window,
             denoise_method=denoise_method,
             unringing_method=unringing_method,
-            b1_biascorr_stage=b1_biascorr_stage,
+            b1_biascorrect_stage=b1_biascorrect_stage,
             no_b0_harmonization=no_b0_harmonization,
             denoise_before_combining=denoise_before_combining,
             motion_corr_to=motion_corr_to,
@@ -764,7 +764,7 @@ to workflows in *QSIPrep*'s documentation]\
             output_resolution=output_resolution,
             output_dir=output_dir,
             omp_nthreads=omp_nthreads,
-            do_biascorr=b1_biascorr_stage=='final',
+            do_biascorr=b1_biascorrect_stage=='final',
             b0_threshold=b0_threshold,
             make_intramodal_template=make_intramodal_template,
             source_file=source_file,

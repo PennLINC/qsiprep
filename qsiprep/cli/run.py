@@ -276,7 +276,7 @@ def get_parser():
         action='store_true',
         help='DEPRECATED: see --b1-biascorr-stage')
     g_conf.add_argument(
-        "--b1-biascorr-stage", "--b1_biascorr_stage",
+        "--b1-biascorrect-stage", "--b1_biascorrect_stage",
         action="store",
         choices=["final", "none", "legacy"],
         default="final",
@@ -978,7 +978,7 @@ def build_qsiprep_workflow(opts, retval):
         pepolar_method=opts.pepolar_method,
         dwi_denoise_window=opts.dwi_denoise_window,
         unringing_method=opts.unringing_method,
-        b1_biascorr_stage=opts.b1_biascorr_stage,
+        b1_biascorrect_stage=opts.b1_biascorrect_stage,
         no_b0_harmonization=opts.no_b0_harmonization,
         denoise_before_combining=not opts.denoise_after_combining,
         write_local_bvecs=opts.write_local_bvecs,

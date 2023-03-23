@@ -54,7 +54,7 @@ def init_dwi_preproc_wf(dwi_only,
                         denoise_method,
                         unringing_method,
                         pepolar_method,
-                        b1_biascorr_stage,
+                        b1_biascorrect_stage,
                         no_b0_harmonization,
                         denoise_before_combining,
                         template,
@@ -94,7 +94,7 @@ def init_dwi_preproc_wf(dwi_only,
                                   dwi_denoise_window=5,
                                   denoise_method='dwidenoise',
                                   unringing_method='none',
-                                  b1_biascorr_stage='final',
+                                  b1_biascorrect_stage='final',
                                   no_b0_harmonization=False,
                                   denoise_before_combining=True,
                                   template='MNI152NLin2009cAsym',
@@ -145,7 +145,7 @@ def init_dwi_preproc_wf(dwi_only,
             algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
         pepolar_method : str
             Either 'DRBUDDI' or 'TOPUP'. The method for SDC when EPI fieldmaps are used.
-        b1_biascorr_stage : str
+        b1_biascorrect_stage : str
             'final', 'none' or 'legacy'
         no_b0_harmonization : bool
             skip rescaling dwi scans to have matching b=0 intensities across scans
@@ -333,7 +333,7 @@ Diffusion data preprocessing
                                      denoise_method=denoise_method,
                                      unringing_method=unringing_method,
                                      no_b0_harmonization=no_b0_harmonization,
-                                     b1_biascorr_stage=b1_biascorr_stage,
+                                     b1_biascorrect_stage=b1_biascorrect_stage,
                                      orientation='LAS' if hmc_model == 'eddy' else 'LPS',
                                      source_file=source_file,
                                      low_mem=low_mem,

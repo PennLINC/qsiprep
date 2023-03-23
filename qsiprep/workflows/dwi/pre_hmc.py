@@ -31,7 +31,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
                         denoise_method,
                         unringing_method,
                         no_b0_harmonization,
-                        b1_biascorr_stage,
+                        b1_biascorrect_stage,
                         denoise_before_combining,
                         orientation,
                         omp_nthreads,
@@ -59,7 +59,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
                                   dwi_denoise_window=7,
                                   denoise_method='dwidenoise',
                                   unringing_method='mrdegibbs',
-                                  b1_biascorr_stage='final',
+                                  b1_biascorrect_stage='final',
                                   no_b0_harmonization=False,
                                   denoise_before_combining=True,
                                   omp_nthreads=1,
@@ -122,12 +122,12 @@ def init_dwi_pre_hmc_wf(scan_groups,
         except ValueError:
             raise Exception("dwi denoise window must be an integer or 'auto'")
     workflow.__postdesc__ = gen_denoising_boilerplate(denoise_method, dwi_denoise_window,
-                                                      unringing_method, b1_biascorr_stage,
+                                                      unringing_method, b1_biascorrect_stage,
                                                       no_b0_harmonization, b0_threshold)
 
     # Doing biascorr here is the old way.
     dwi_no_biascorr = True
-    if b1_biascorr_stage == 'legacy':
+    if b1_biascorrect_stage == 'legacy':
         dwi_no_biascorr = False
         LOGGER.warning("Applying bias correction before merging. Check results!")
 
