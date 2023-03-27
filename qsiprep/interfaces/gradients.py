@@ -110,7 +110,7 @@ class RemoveDuplicates(SimpleInterface):
         np.savetxt(output_bval, unique_bvals, fmt='%d', newline=' ')
         unique_bvecs = bvecs[unique_indices]
         np.savetxt(output_bvec, unique_bvecs.T, fmt='%.8f')
-        unique_data = original_image.get_data()[..., unique_indices]
+        unique_data = original_image.get_fdata()[..., unique_indices]
         nb.Nifti1Image(unique_data, original_image.affine, original_image.header
                        ).to_filename(output_nii)
         self._results['bval_file'] = output_bval
@@ -149,7 +149,7 @@ class SliceQC(SimpleInterface):
 
         output_npz = os.path.join(runtime.cwd, "slice_stats.npz")
         mask_img = nb.load(self.inputs.mask_image)
-        mask = mask_img.get_data() > 0
+        mask = mask_img.get_fdata() > 0
         masked_slices = (mask * np.arange(mask_img.shape[2])[np.newaxis, np.newaxis, :]
                          ).astype(np.int)
         slice_nums, slice_counts = np.unique(masked_slices[mask], return_counts=True)
@@ -840,7 +840,7 @@ def create_tensor_image(mask_img, direction, prefix):
     for direction in ['xx', 'xy', 'xz', 'yy', 'yz', 'zz']:
         this_component = prefix + '_temp_dtiComp_%s.nii.gz' % direction
         LOGGER.info("writing %s", this_component)
-        nb.Nifti1Image(mask_img.get_data()*tensor[tensor_index[direction]], mask_img.affine,
+        nb.Nifti1Image(mask_img.get_fdata()*tensor[tensor_index[direction]], mask_img.affine,
                        mask_img.header).to_filename(this_component)
         temp_components.append(this_component)
 
@@ -868,9 +868,9 @@ def reorient_tensor_image(tensor_image, warp_file, mask_img, prefix, output_fnam
 
     # Load the reoriented tensor and get the principal directions out
     reoriented_dt_img = nb.load(reoriented_tensor_fname)
-    reoriented_tensor_data = reoriented_dt_img.get_data().squeeze()
+    reoriented_tensor_data = reoriented_dt_img.get_fdata().squeeze()
 
-    mask_data = mask_img.get_data() > 0
+    mask_data = mask_img.get_fdata() > 0
     output_data = np.zeros(mask_img.shape + (3,))
 
     reoriented_tensors = reoriented_tensor_data[mask_data]
@@ -909,7 +909,7 @@ def local_bvec_rotation(original_bvecs, warp_transforms, mask_image, runtime, ou
     """Create a vector in each voxel that accounts for nonlinear warps."""
     prefix = os.path.join(runtime.cwd, "local_bvec_")
     mask_img = nb.load(mask_image)
-    mask_data = mask_img.get_data()
+    mask_data = mask_img.get_fdata()
     b0_image = get_vector_nii(np.stack([np.zeros_like(mask_data)] * 3, -1), mask_img.affine,
                               mask_img.header)
     commands = []
@@ -934,7 +934,7 @@ def local_bvec_rotation(original_bvecs, warp_transforms, mask_image, runtime, ou
         commands.append(rotate_cmd)
         rotated_vec_files.append(out_fname)
     concatenated = np.stack(
-        [nb.load(img, mmap=False).get_data().astype("<f4") for img in rotated_vec_files], -1)
+        [nb.load(img, mmap=False).get_fdata().astype("<f4") for img in rotated_vec_files], -1)
     nb.Nifti1Image(concatenated, mask_img.affine, mask_img.header).to_filename(output_fname)
     for temp_file in rotated_vec_files:
         os.remove(temp_file)

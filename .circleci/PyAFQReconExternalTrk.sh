@@ -8,7 +8,7 @@ Reconstruction workflow tests
 All supported reconstruction workflows get tested
 
 This tests the following features:
- - Full pyAFQ pipeline
+ - pyAFQ pipeline with tractography done in mrtrix
 
 Inputs:
 -------
@@ -25,9 +25,8 @@ CFG=${TESTDIR}/data/nipype.cfg
 EDDY_CFG=${TESTDIR}/data/eddy_config.json
 export FS_LICENSE=${TESTDIR}/data/license.txt
 
-
-# Test pyafq_tractometry
-TESTNAME=pyafq_tractometry_test
+# Test mrtrix_multishell_msmt_pyafq_tractometry
+TESTNAME=mrtrix_multishell_msmt_pyafq_tractometry_test
 setup_dir ${TESTDIR}/${TESTNAME}
 TEMPDIR=${TESTDIR}/${TESTNAME}/work
 OUTPUT_DIR=${TESTDIR}/${TESTNAME}/derivatives
@@ -38,6 +37,6 @@ ${QSIPREP_CMD}  \
 	 -w ${TEMPDIR} \
 	 --recon-input ${BIDS_INPUT_DIR} \
 	 --sloppy \
-	 --recon-spec pyafq_tractometry \
+	 --recon-spec mrtrix_multishell_msmt_pyafq_tractometry \
 	 --recon-only \
 	 -vv

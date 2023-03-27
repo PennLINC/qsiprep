@@ -108,7 +108,7 @@ class ComputeEPIMask(nrc.SegmentationRC):
 
     def _run_interface(self, runtime):
         orig_file_nii = nb.load(self.inputs.in_file)
-        in_file_data = orig_file_nii.get_data()
+        in_file_data = orig_file_nii.get_fdata()
 
         # pad the data to avoid the mask estimation running into edge effects
         in_file_data_padded = np.pad(in_file_data, (1, 1), 'constant',
@@ -119,7 +119,7 @@ class ComputeEPIMask(nrc.SegmentationRC):
 
         mask_nii = compute_epi_mask(padded_nii, exclude_zeros=True)
 
-        mask_data = mask_nii.get_data()
+        mask_data = mask_nii.get_fdata()
         if isdefined(self.inputs.dilation):
             mask_data = nd.morphology.binary_dilation(mask_data).astype(np.uint8)
 
@@ -273,7 +273,7 @@ class ROIsPlot(nrc.ReportingInterface):
             nsegs = len(levels)
             if nsegs == 0:
                 levels = np.unique(np.round(
-                    nb.load(seg_files[0]).get_data()).astype(int))
+                    nb.load(seg_files[0]).get_fdata()).astype(int))
                 levels = (levels[levels > 0] - 0.5).tolist()
                 nsegs = len(levels)
 

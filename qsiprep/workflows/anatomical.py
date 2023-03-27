@@ -1642,7 +1642,7 @@ def _seg2msks(in_file, newpath=None):
     from nipype.utils.filemanip import fname_presuffix
 
     nii = nb.load(in_file)
-    labels = nii.get_data()
+    labels = nii.get_fdata()
 
     out_files = []
     for i in range(1, 4):

@@ -1,7 +1,7 @@
 {
     "description": "Use pyAFQ to perform the Tractometry pipeline, with tractography from qsiprep",
     "space": "T1w",
-    "name": "pyAFQ_import_trk",
+    "name": "mrtrix_multishell_msmt_pyafq_tractometry",
     "atlases": [],
     "nodes": [
         {
@@ -41,13 +41,14 @@
             }
         },
         {
-            "name": "pyAFQ_full",
+            "name": "pyafq_tractometry",
             "software": "pyAFQ",
-            "action": "pyAFQ_full",
+            "action": "pyafq_tractometry",
             "input": "track_ifod2",
-            "output_suffix": "PYAFQ_FULL_ET",
+            "output_suffix": "PYAFQ_TRACTOMETRY_ET",
             "parameters": {
                 "use_external_tracking": true,
+                "export": "all",
                 "directions": "prob",
                 "max_angle": 30.0,
                 "sphere": "",
@@ -59,8 +60,8 @@
                 "stop_mask": "",
                 "stop_threshold": 0,
                 "step_size": 0.5,
-                "min_length": 10,
-                "max_length": 1000,
+                "min_length": 50,
+                "max_length": 250,
                 "odf_model": "CSD",
                 "tracker": "local",
                 "nb_points": false,
@@ -89,7 +90,7 @@
                 "save_intermediates": "",
                 "n_points": 100,
                 "clean_rounds": 5,
-                "distance_threshold": 5,
+                "distance_threshold": 3,
                 "length_threshold": 4,
                 "min_sl": 20,
                 "stat": "mean",
