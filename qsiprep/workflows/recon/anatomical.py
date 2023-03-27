@@ -49,7 +49,7 @@ HSV_REQUIREMENTS = [
 # Files that must exist if QSIPrep ran the anatomical workflow
 QSIPREP_ANAT_REQUIREMENTS = [
     "sub-{subject_id}/anat/sub-{subject_id}_desc-brain_mask.nii.gz",
-    "sub-{subject_id}/anat/sub-{subject_id}_desc-preproc_T1w.nii.gz"
+    "sub-{subject_id}/anat/sub-{subject_id}_desc-preproc_T1w.ni*"
 ]
 
 QSIPREP_NORMALIZED_ANAT_REQUIREMENTS = [
