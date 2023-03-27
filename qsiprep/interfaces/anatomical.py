@@ -75,37 +75,37 @@ class QsiprepAnatomicalIngress(SimpleInterface):
         # space-T1w files
         self._get_if_exists(
             't1_aparc',
-            '%s/sub-%s*desc-aparcaseg_dseg.nii.*' % (anat_root, sub),
+            '%s/sub-%s*desc-aparcaseg_dseg.ni*' % (anat_root, sub),
             excludes=['space-MNI'])
         self._get_if_exists(
             't1_seg',
-            '%s/sub-%s_*dseg.nii*' % (anat_root, sub),
+            '%s/sub-%s_*dseg.ni*' % (anat_root, sub),
             excludes=['space-MNI', 'aseg'])
         self._get_if_exists(
             't1_aseg',
-            '%s/sub-%s_*aseg_dseg.nii*' % (anat_root, sub),
+            '%s/sub-%s_*aseg_dseg.ni*' % (anat_root, sub),
             excludes=['space-MNI', 'aparc'])
         self._get_if_exists(
             't1_brain_mask',
-            '%s/sub-%s*_desc-brain_mask.nii*' % (anat_root, sub),
+            '%s/sub-%s*_desc-brain_mask.ni*' % (anat_root, sub),
             excludes=['space-MNI'])
         self._get_if_exists(
             't1_preproc',
-            "%s/sub-%s_desc-preproc_T1w.nii" % (anat_root, sub),
+            "%s/sub-%s_desc-preproc_T1w.ni*" % (anat_root, sub),
             excludes=['space-MNI'])
         if 't1_preproc' not in self._results:
             LOGGER.warning("Unable to find a preprocessed T1w in %s", qp_root)
         self._get_if_exists(
             't1_csf_probseg',
-            "%s/sub-%s*_label-CSF_probseg.nii*" % (anat_root, sub),
+            "%s/sub-%s*_label-CSF_probseg.ni*" % (anat_root, sub),
             excludes=["space-MNI"])
         self._get_if_exists(
             't1_gm_probseg',
-            "%s/sub-%s*_label-GM_probseg.nii*" % (anat_root, sub),
+            "%s/sub-%s*_label-GM_probseg.ni*" % (anat_root, sub),
             excludes=["space-MNI"])
         self._get_if_exists(
             't1_wm_probseg',
-            "%s/sub-%s*_label-WM_probseg.nii*" % (anat_root, sub),
+            "%s/sub-%s*_label-WM_probseg.ni*" % (anat_root, sub),
             excludes=["space-MNI"])
         self._get_if_exists(
             'orig_to_t1_mode_forward_transform',
