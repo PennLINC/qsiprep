@@ -943,7 +943,7 @@ def init_synthstrip_wf(omp_nthreads, in_image=None, unfatsat=False, name="synths
     mask_brain = pe.Node(
         ants.MultiplyImages(
             dimension=3,
-            output_product_image="masked_brain.nii"),
+            output_product_image="masked_brain.nii.gz"),
         name="mask_brain")
 
     # For T2w images, create an artificially skull-downweighted image

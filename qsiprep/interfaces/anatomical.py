@@ -91,7 +91,7 @@ class QsiprepAnatomicalIngress(SimpleInterface):
             excludes=['space-MNI'])
         self._get_if_exists(
             't1_preproc',
-            "%s/sub-%s_desc-preproc_T1w.ni*" % (anat_root, sub),
+            "%s/sub-%s_desc-preproc_T1w.nii.gz" % (anat_root, sub),
             excludes=['space-MNI'])
         if 't1_preproc' not in self._results:
             LOGGER.warning("Unable to find a preprocessed T1w in %s", qp_root)

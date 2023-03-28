@@ -218,12 +218,8 @@ to workflows in *qsiprep*'s documentation]\
         if node_suffix.startswith('ds'):
             base_dir = reportlets_dir if "report" in node_suffix else output_dir
             anat_ingress_wf.get_node(_node).inputs.base_directory = base_dir
-            if os.path.exists("anat/sub-{}_desc-preproc_T1w.nii".format(subject_id)):
-                anat_ingress_wf.get_node(_node).inputs.source_file = \
-                    "anat/sub-{}_desc-preproc_T1w.nii".format(subject_id)
-            else:
-                anat_ingress_wf.get_node(_node).inputs.source_file = \
-                    "anat/sub-{}_desc-preproc_T1w.nii.gz".format(subject_id)
+            anat_ingress_wf.get_node(_node).inputs.source_file = \
+                "anat/sub-{}_desc-preproc_T1w.nii.gz".format(subject_id)
 
     # Connect the anatomical-only inputs. NOTE this is not to the inputnode!
     LOGGER.info("Anatomical (T1w) available for recon: %s", available_anatomical_data)
