@@ -12,6 +12,7 @@ from nipype import logging
 from .fmap import get_distortion_grouping
 from ..workflows.dwi.util import _get_concatenated_bids_name
 LOGGER = logging.getLogger('nipype.workflow')
+MAX_COMBINED_SCANS = 100
 
 
 class MergeDWIsInputSpec(BaseInterfaceInputSpec):
@@ -214,6 +215,62 @@ class AveragePEPairs(SimpleInterface):
         return runtime
 
 
+class _SplitResampledDWIsInputSpec(BaseInterfaceInputSpec):
+    dwi_file = File(exists=True, mandatory=True)
+    bval_file = File(exists=True, mandatory=True)
+    bvec_file = File(exists=True, mandatory=True)
+    confounds = File(exists=True, mandatory=True)
+    n_images = traits.Int(1)
+
+
+class _SplitResampledDWIsOutputSpec(TraitedSpec):
+    pass
+
+
+# Add slots for the possibly
+for subscan in np.arange(MAX_COMBINED_SCANS) + 1:
+    _SplitResampledDWIsOutputSpec.add_class_trait(
+        "dwi_file_%d" % subscan, File(exists=True))
+    _SplitResampledDWIsOutputSpec.add_class_trait(
+        "bval_file_%d" % subscan, File(exists=True))
+    _SplitResampledDWIsOutputSpec.add_class_trait(
+        "bvec_file_%d" % subscan, File(exists=True))
+    _SplitResampledDWIsOutputSpec.add_class_trait(
+        "source_file_%d" % subscan, traits.Str())
+
+
+class SplitResampledDWIs(SimpleInterface):
+    input_spec = _SplitResampledDWIsInputSpec
+    output_spec = _SplitResampledDWIsOutputSpec
+
+    def _run_interface(self, runtime):
+        # Load the confounds
+        confounds_df = pd.read_csv(self.inputs.confounds, sep="\t")
+        original_files = confounds_df['original_file'].unique().tolist()
+        if not len(original_files) == self.inputs.n_images:
+            raise Exception(
+                "Found %d files in confounds file, but expected %d" % (
+                    len(original_files), self.inputs.n_images))
+        resampled_img = load_img(self.inputs.dwi_file)
+        for file_num, original_file in enumerate(original_files, start=1):
+            image_indices = np.flatnonzero(
+                (confounds_df['original_file'] == original_file).to_numpy())
+            dwi_subfile = fname_presuffix(
+                original_file, prefix="resampled_", suffix=".nii.gz",
+                use_ext=False, newpath=runtime.cwd)
+            bval_subfile = dwi_subfile.replace(".nii.gz", ".bval")
+            bvec_subfile = dwi_subfile.replace(".nii.gz", ".bvec")
+            index_img(resampled_img, image_indices).to_filename(dwi_subfile)
+            subset_bvals(self.inputs.bval_file, image_indices, bval_subfile)
+            subset_bvecs(self.inputs.bvec_file, image_indices, bvec_subfile)
+
+            self._results["dwi_file_%d" % file_num] = dwi_subfile
+            self._results["bval_file_%d" % file_num] = bval_subfile
+            self._results["bvec_file_%d" % file_num] = bvec_subfile
+            self._results["source_file_%d" % file_num] = original_file
+        return runtime
+
+
 def find_image_pairs(original_bvecs, bvals, assignments):
     assignments = np.array(assignments)
     group1_mask = assignments == 1
@@ -411,6 +468,18 @@ class StackConfounds(SimpleInterface):
         stacked.to_csv(out_file)
         self._results['confounds_file'] = out_file
         return runtime
+
+
+def subset_bvals(bval_file, indices, out_bval_file):
+    original_bvals = np.loadtxt(bval_file)
+    bval_subset = original_bvals[indices]
+    np.savetxt(out_bval_file, bval_subset, fmt=str("%i"))
+
+
+def subset_bvecs(bvec_file, indices, out_bvec_file):
+    original_bvecs = np.loadtxt(bvec_file)
+    bvec_subset = original_bvecs[:, indices]
+    np.savetxt(out_bvec_file, bvec_subset, fmt=str("%.8f"))
 
 
 def combined_bval_array(bval_files):
