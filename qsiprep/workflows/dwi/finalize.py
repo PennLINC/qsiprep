@@ -300,7 +300,7 @@ def init_dwi_finalize_wf(scan_groups,
                 ('outputnode.b0_series', 'inputnode.t1_b0_series'),
                 ('outputnode.dwi_ref_resampled', 'inputnode.t1_b0_ref'),
                 ('outputnode.resampled_dwi_mask', 'inputnode.dwi_mask_t1'),
-                ('outputnode.resampled_qc', 'inputnode.series_qc_t1')])
+                ('outputnode.resampled_qc', 'inputnode.series_qc_t1')]),
         (final_denoise_wf, outputnode, [
                 ('outputnode.dwi_t1', 'dwi_t1'),
                 ('outputnode.t1_b0_series', 't1_b0_series'),
