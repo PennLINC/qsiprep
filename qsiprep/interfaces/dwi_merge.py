@@ -271,6 +271,52 @@ class SplitResampledDWIs(SimpleInterface):
         return runtime
 
 
+class _MergeFinalConfoundsInputSpec(BaseInterfaceInputSpec):
+    confounds = File(exists=True, mandatory=True)
+    bias_correction_confounds = InputMultiObject(File(exists=True), mandatory=False)
+    patch2self_correction_confounds = File(exists=True, mandatory=False)
+
+
+class _MergeFinalConfoundsOutputSpec(TraitedSpec):
+    confounds = File(exists=True)
+
+
+class MergeFinalConfounds(SimpleInterface):
+    input_spec = _MergeFinalConfoundsInputSpec
+    output_spec = _MergeFinalConfoundsOutputSpec
+
+    def _run_interface(self, runtime):
+
+        to_concat_horizontally = []
+        # New confounds from bias correction
+        if isdefined(self.inputs.bias_correction_confounds):
+            # There may be multuple files that need to be vertically stacked
+            biascorrection_df = pd.concat(
+                [pd.read_csv(bc_csv) for bc_csv in self.inputs.bias_correction_confounds],
+                axis=0, ignore_index=True)
+            to_concat_horizontally.append(biascorrection_df)
+        # New confounds from patch2self
+        if isdefined(self.inputs.patch2self_correction_confounds):
+            to_concat_horizontally.append(
+                pd.read_csv(self.inputs.patch2self_correction_confounds))
+
+        # If we have new ones, append the columns, prefixed by "final_"
+        if to_concat_horizontally:
+            new_confounds_file = fname_presuffix(
+                self.inputs.confounds, newpath=runtime.cwd, prefix="final_")
+            original_confounds = pd.read_csv(self.inputs.confounds, sep="\t")
+            extra_confounds = pd.concat(to_concat_horizontally, axis=1)
+            extra_confounds.columns = [
+                "final_" + col for col in extra_confounds.columns.tolist()]
+            final_confounds = pd.concat([original_confounds, extra_confounds], axis=1)
+            final_confounds.to_csv(new_confounds_file, sep="\t", index=False)
+            self._results['confounds'] = new_confounds_file
+        else:
+            self._results['confounds'] = self.inputs.confounds
+
+        return runtime
+
+
 def find_image_pairs(original_bvecs, bvals, assignments):
     assignments = np.array(assignments)
     group1_mask = assignments == 1

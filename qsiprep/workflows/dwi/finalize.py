@@ -12,20 +12,23 @@ from nipype import logging
 
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
-
+from nipype.interfaces.base import isdefined
 from ...interfaces import DerivativesDataSink
 from ...niworkflows.interfaces.registration import SimpleBeforeAfterRPT
 from ...interfaces.reports import GradientPlot, SeriesQC
 from ...interfaces.mrtrix import MRTrixGradientTable, DWIBiasCorrect
-from ...interfaces.dwi_merge import StackConfounds, SplitResampledDWIs
+from ...interfaces.dwi_merge import SplitResampledDWIs, MergeFinalConfounds
 from ...interfaces.confounds import GatherConfounds
+from ...interfaces.gradients import ExtractB0s
+from ...interfaces.nilearn import Merge
 from ...engine import Workflow
+from .util import init_dwi_reference_wf
 
 # dwi workflows
 from .util import _create_mem_gb
 from .resampling import init_dwi_trans_wf
 from .derivatives import init_dwi_derivatives_wf
-from .qc import init_mask_overlap_wf, init_interactive_report_wf
+from .qc import init_mask_overlap_wf, init_interactive_report_wf, init_modelfree_qc_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger('nipype.workflow')
@@ -418,7 +421,8 @@ def init_dwi_finalize_wf(scan_groups,
     for node in workflow.list_node_names():
         if node.split('.')[-1].startswith('ds_report'):
             workflow.get_node(node).inputs.base_directory = reportlets_dir
-            workflow.get_node(node).inputs.source_file = source_file
+            if not isdefined(workflow.get_node(node).inputs.source_file):
+                workflow.get_node(node).inputs.source_file = source_file
 
     return workflow
 
@@ -449,12 +453,10 @@ def init_finalize_denoising_wf(name,
         niu.IdentityInterface(fields=[
             'confounds',
             'dwi_t1',
-            'dwi_t1_bval',
-            'dwi_t1_bvec',
             't1_b0_series',
             't1_b0_ref',
             'dwi_mask_t1',
-            'series_qc_t1']),
+            'series_qc_postproc']),
         name="outputnode")
     workflow = Workflow(name=name)
     # If no denoising, send it back
@@ -463,12 +465,9 @@ def init_finalize_denoising_wf(name,
             (inputnode, outputnode, [
                 ('confounds', 'confounds'),
                 ('dwi_t1', 'dwi_t1'),
-                ('dwi_t1_bval', 'dwi_t1_bval'),
-                ('dwi_t1_bvec', 'dwi_t1_bvec'),
                 ('t1_b0_series', 't1_b0_series'),
                 ('t1_b0_ref', 't1_b0_ref'),
-                ('dwi_mask_t1', 'dwi_mask_t1'),
-                ('series_qc_t1', 'series_qc_t1')
+                ('dwi_mask_t1', 'dwi_mask_t1')
             ])
         ])
         return workflow
@@ -479,8 +478,6 @@ def init_finalize_denoising_wf(name,
             fields=["dwi_t1", "bias_field", "bias_confounds"]),
         name="bias_corrected")
 
-    merge_confounds = pe.Node(niu.Merge(2), name="merge_confounds")
-    hstack_confounds = pe.Node(StackConfounds(axis=1), name='hstack_confounds')
     if do_biascorr:
         if not split_biascorr:
             biascorr = pe.Node(
@@ -502,7 +499,7 @@ def init_finalize_denoising_wf(name,
                 (biascorr, bias_corrected, [
                     ('out_file', 'dwi_t1'),
                     ('bias_image', 'bias_field'),
-                    ('nmse_txt', 'bias_confounds')])
+                    ('nmse_text', 'bias_confounds')])
             ])
 
         else:
@@ -511,10 +508,21 @@ def init_finalize_denoising_wf(name,
             scan_split = pe.Node(
                 SplitResampledDWIs(n_images=num_dwi_acquisitions),
                 name="scan_split")
-            image_merge = pe.Node(niu.Merge(num_dwi_acquisitions), name="image_merge")
+            gather_corrected_images = pe.Node(niu.Merge(num_dwi_acquisitions),
+                                              name="gather_corrected_images")
+            gather_nmse_txts = pe.Node(niu.Merge(num_dwi_acquisitions),
+                                       name="gather_nmse_txts")
+            gather_bias_images = pe.Node(niu.Merge(num_dwi_acquisitions),
+                                         name="gather_bias_images")
+
+            merge_corrected_images = pe.Node(Merge(is_dwi=True, dtype="f4"),
+                                             name="merge_corrected_images")
+            merge_bias_images = pe.Node(Merge(is_dwi=True, dtype="f4"),
+                                        name="merge_bias_images")
 
             # Loop over each original image
             for scan_num in range(num_dwi_acquisitions):
+                scan_num += 1
                 biascorrs.append(
                     pe.Node(DWIBiasCorrect(method='ants'),
                             name='biascorr%d' % scan_num,
@@ -529,23 +537,80 @@ def init_finalize_denoising_wf(name,
                     (scan_split, biascorrs[-1], [
                         ('dwi_file_%d'%scan_num, 'in_file'),
                         ('bval_file_%d'%scan_num, 'in_bval'),
-                        ('bvec_file_%d'%scan_num), 'in_bvec']),
+                        ('bvec_file_%d'%scan_num, 'in_bvec')]),
+                    (biascorrs[-1], gather_corrected_images, [
+                        ('out_file', 'in%d'%scan_num)]),
+                    (biascorrs[-1], gather_nmse_txts, [
+                        ('nmse_text', 'in%d'%scan_num)]),
+                    (biascorrs[-1], gather_bias_images, [
+                        ('bias_image', 'in%d'%scan_num)]),
                     (biascorrs[-1], reports[-1], [
                         ('out_report', 'in_file')]),
-                    (biascorrs[-1], image_merge, [('out_file', 'in%d'%scan_num)]),
                     (scan_split, reports[-1], [
                         ("source_file_%d"%scan_num, "source_file")]),
                 ])
+            workflow.connect([
+                (inputnode, scan_split, [
+                    ("dwi_t1", "dwi_file"),
+                    ("dwi_t1_bval", "bval_file"),
+                    ("dwi_t1_bvec", "bvec_file"),
+                    ("confounds", "confounds")
+                ]),
+                (gather_corrected_images, merge_corrected_images, [("out", "in_files")]),
+                (merge_corrected_images, bias_corrected, [("out_file", "dwi_t1")]),
+                (gather_nmse_txts, bias_corrected, [("out", "bias_confounds")]),
+                (gather_bias_images, merge_bias_images, [("out", "in_files")]),
+                (merge_bias_images, bias_corrected, [("out_file", "bias_field")])
+            ])
+
+    p2s_buffernode = pe.Node(
+        niu.IdentityInterface(fields=["denoised_image", "noise_image", "nmse_text"]),
+        name="p2s_buffernode")
+    if do_patch2self:
+        raise NotImplementedError()
+    else:
+        workflow.connect([
+            (bias_corrected, p2s_buffernode, [("dwi_t1", "dwi_t1")])
+        ])
+
+    # Extract some additional derivatives from the corrected
+    extract_b0_series = pe.Node(ExtractB0s(), name="extract_b0_series")
+    final_b0_ref = init_dwi_reference_wf(register_t1=False, gen_report=True,
+                                         desc='resampled', name='final_b0_ref',
+                                         source_file=source_file, omp_nthreads=omp_nthreads)
+
+    # Calculate QC metrics on the resampled data
+    calculate_qc = init_modelfree_qc_wf(omp_nthreads=omp_nthreads, name='calculate_qc')
+    update_confounds = pe.Node(MergeFinalConfounds(), name='update_confounds')
 
     workflow.connect([
-        (inputnode, merge_confounds, [('confounds', 'in1')]),
-        (inputnode, biascorr, [
-            ('outputnode.dwi_resampled', 'in_file'),
-            ('outputnode.resampled_dwi_mask', 'mask'),
-            ('bval_file', 'in_bval')]),
-        (biascorr, outputnode, [('out_file', 'dwi_t1')]),
-        (biascorr, ds_report_biascorr, [('out_report', 'in_file')]),
-        (biascorr, merge_confounds, [('nmse_text', 'in2')]),
-        (inputnode, biascorr, [ ]),
+        # Get the new b=0 data from the denoised images
+        (p2s_buffernode, extract_b0_series, [("dwi_t1", "dwi_series")]),
+        (inputnode, extract_b0_series, [("dwi_t1_bval", "bval_file")]),
+        (extract_b0_series, final_b0_ref, [('b0_average', 'inputnode.b0_template')]),
+        (inputnode, final_b0_ref, [('dwi_mask_t1', 'inputnode.t1_mask')]),
+        (extract_b0_series, outputnode, [('b0_series', 't1_b0_series')]),
+        (final_b0_ref, outputnode, [
+            ('outputnode.ref_image', 't1_b0_ref'),
+            ('outputnode.dwi_mask', 'dwi_mask_t1')]),
+
+        # New QC on the whole series
+        (inputnode, calculate_qc, [
+            ('dwi_t1_bval', 'inputnode.bval_file'),
+            ('dwi_t1_bvec', 'inputnode.bvec_file')]),
+        (p2s_buffernode, calculate_qc, [('dwi_t1', 'inputnode.dwi_file')]),
+        (calculate_qc, outputnode, [('outputnode.qc_summary', 'series_qc_postproc')]),
+
+        # Update confounds with new nmse's
+        (inputnode, update_confounds, [("confounds", "confounds")]),
+        (bias_corrected, update_confounds, [
+            ("bias_confounds", "bias_correction_confounds")]),
+        (p2s_buffernode, update_confounds, [
+            ("nmse_text", "patch2self_correction_confounds")]),
+
+        # The final version
+        (p2s_buffernode, outputnode, [
+            ('dwi_t1', 'dwi_t1')]),
 
     ])
+    return workflow
