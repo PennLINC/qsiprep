@@ -296,19 +296,20 @@ def init_dwi_finalize_wf(scan_groups,
             ('outputnode.local_bvecs', 'local_bvecs_t1')]),
         (inputnode, final_denoise_wf, [('confounds', 'inputnode.confounds')]),
         (transform_dwis_t1, final_denoise_wf, [
-                ('outputnode.dwi_resampled', 'inputnode.dwi_t1'),
-                ('outputnode.b0_series', 'inputnode.t1_b0_series'),
-                ('outputnode.dwi_ref_resampled', 'inputnode.t1_b0_ref'),
-                ('outputnode.resampled_dwi_mask', 'inputnode.dwi_mask_t1'),
-                ('outputnode.resampled_qc', 'inputnode.series_qc_t1')]),
+            ('outputnode.dwi_resampled', 'inputnode.dwi_t1'),
+            ('outputnode.bvals', 'inputnode.dwi_t1_bval'),
+            ('outputnode.rotated_bvecs', 'inputnode.dwi_t1_bvec'),
+            ('outputnode.b0_series', 'inputnode.t1_b0_series'),
+            ('outputnode.dwi_ref_resampled', 'inputnode.t1_b0_ref'),
+            ('outputnode.resampled_dwi_mask', 'inputnode.dwi_mask_t1'),
+            ('outputnode.resampled_qc', 'inputnode.series_qc_t1')]),
         (final_denoise_wf, outputnode, [
-                ('outputnode.dwi_t1', 'dwi_t1'),
-                ('outputnode.t1_b0_series', 't1_b0_series'),
-                ('outputnode.t1_b0_ref', 't1_b0_ref'),
-                ('outputnode.dwi_mask_t1', 'dwi_mask_t1'),
-                ('outputnode.series_qc_t1', 'series_qc_t1'),
-                ('outputnode.confounds', 'confounds')])
-        ])
+            ('outputnode.confounds', 'confounds'),
+            ('outputnode.dwi_t1', 'dwi_t1'),
+            ('outputnode.t1_b0_ref', 't1_b0_ref'),
+            ('outputnode.dwi_mask_t1', 'dwi_mask_t1'),
+            ])
+    ])
 
     # Fill-in datasinks of reportlets seen so far
     for node in workflow.list_node_names():
@@ -318,7 +319,6 @@ def init_dwi_finalize_wf(scan_groups,
 
     # The workflow is done if we will be concatenating images later
     if not write_derivatives:
-        # The list of transformed images is already attached to dwi_t1
         return workflow
 
     # Finish up the derivatives process
@@ -387,7 +387,14 @@ def init_dwi_finalize_wf(scan_groups,
             ('confounds', 'confounds_file')]),
         (inputnode, ds_carpetplot, [('carpetplot_data', 'in_file')]),
         (t1_dice_calc, series_qc, [('outputnode.dice_score', 't1_dice_score')]),
+        (final_denoise_wf, series_qc, [
+            ('outputnode.series_qc_postproc', 't1_qc_postproc')]),
         (series_qc, ds_series_qc, [('series_qc_file', 'in_file')]),
+        (transform_dwis_t1, series_qc, [
+            ('outputnode.cnr_map_resampled', 't1_cnr_file')]),
+        (final_denoise_wf, series_qc, [
+            ('outputnode.dwi_mask_t1', 't1_mask_file'),
+            ('outputnode.t1_b0_series', 't1_b0_series')]),
         (series_qc, interactive_report_wf, [('series_qc_file', 'inputnode.series_qc_file')]),
         (inputnode, dwi_derivatives_wf, [('dwi_files', 'inputnode.source_file')]),
         (inputnode, outputnode, [('hmc_optimization_data', 'hmc_optimization_data')]),
@@ -494,7 +501,8 @@ def init_finalize_denoising_wf(name,
                 (inputnode, biascorr, [
                     ("dwi_t1", "in_file"),
                     ("dwi_t1_bval", "in_bval"),
-                    ("dwi_t1_bvec", "in_bvec")]),
+                    ("dwi_t1_bvec", "in_bvec"),
+                    ("dwi_mask_t1", "mask")]),
                 (biascorr, ds_report_biascorr, [('out_report', 'in_file')]),
                 (biascorr, bias_corrected, [
                     ('out_file', 'dwi_t1'),
@@ -534,6 +542,7 @@ def init_finalize_denoising_wf(name,
                         run_without_submitting=True,
                         mem_gb=DEFAULT_MEMORY_MIN_GB))
                 workflow.connect([
+                    (inputnode, biascorrs[-1], [("dwi_mask_t1", "mask")]),
                     (scan_split, biascorrs[-1], [
                         ('dwi_file_%d'%scan_num, 'in_file'),
                         ('bval_file_%d'%scan_num, 'in_bval'),
