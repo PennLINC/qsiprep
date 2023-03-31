@@ -49,8 +49,40 @@ SLOPPY_DRBUDDI = \
         "\[learning_rate=\{1.\},cfs=\{20:1:0\},field_smoothing=\{4:0\}," \
         "metrics=\{MSJac:CC\},restrict_constrain=\{0:0\}\]"
 
-class TORTOISEInputSpec(BaseInterfaceInputSpec):
-    pass
+class TORTOISEInputSpec(CommandLineInputSpec):
+    num_threads = traits.Int(desc="numpy of OMP threads")
+
+class TORTOISECommandLine(CommandLine):
+    """Support for TORTOISE commands that utilize OpenMP
+    Sets the environment variable 'OMP_NUM_THREADS' to the number
+    of threads specified by the input num_threads.
+    """
+
+    input_spec = TORTOISEInputSpec
+    _num_threads = None
+
+    def __init__(self, **inputs):
+        super(TORTOISECommandLine, self).__init__(**inputs)
+        self.inputs.on_trait_change(self._num_threads_update, "num_threads")
+        if not self._num_threads:
+            self._num_threads = os.environ.get("OMP_NUM_THREADS", None)
+            if not self._num_threads:
+                self._num_threads = os.environ.get("NSLOTS", None)
+        if not isdefined(self.inputs.num_threads) and self._num_threads:
+            self.inputs.num_threads = int(self._num_threads)
+        self._num_threads_update()
+
+    def _num_threads_update(self):
+        if self.inputs.num_threads:
+            self.inputs.environ.update(
+                {"OMP_NUM_THREADS": str(self.inputs.num_threads)}
+            )
+
+    def run(self, **inputs):
+        if "num_threads" in inputs:
+            self.inputs.num_threads = inputs["num_threads"]
+        self._num_threads_update()
+        return super(TORTOISECommandLine, self).run(**inputs)
 
 
 class _GatherDRBUDDIInputsInputSpec(TORTOISEInputSpec):
@@ -206,7 +238,6 @@ class _DRBUDDIInputSpec(TORTOISEInputSpec):
         File(exists=True, copyfile=False),
         argstr='-s %s',
         help="Path(s) to anatomical image files. Can provide more than one. NO T1W's!!")
-    nthreads=traits.Int(1, usedefault=True, hash_files=False)
     fieldmap_type = traits.Enum("epi", "rpe_series", mandatory=True)
     blip_assignments = traits.List()
     tensor_fit_bval_max = traits.Int(
@@ -261,7 +292,7 @@ class _DRBUDDIOutputSpec(TraitedSpec):
     structural_image = File(exists=True)
 
 
-class DRBUDDI(CommandLine):
+class DRBUDDI(TORTOISECommandLine):
     input_spec = _DRBUDDIInputSpec
     output_spec = _DRBUDDIOutputSpec
     _cmd = "DRBUDDI"
@@ -427,7 +458,7 @@ class DRBUDDIAggregateOutputs(SimpleInterface):
         return runtime
 
 
-class _GibbsInputSpec(SeriesPreprocReportInputSpec):
+class _GibbsInputSpec(TORTOISEInputSpec, SeriesPreprocReportInputSpec):
     """Gibbs input_nifti  output_nifti kspace_coverage(1,0.875,0.75) phase_encoding_dir nsh minW(optional) maxW(optional)"""
     in_file = traits.File(
         exists=True,
@@ -455,13 +486,14 @@ class _GibbsInputSpec(SeriesPreprocReportInputSpec):
         position=4)
     min_w = traits.Int()
     mask = File()
+    num_threads = traits.Int(1, usedefault=True, nohash=True)
 
 
 class _GibbsOutputSpec(SeriesPreprocReportOutputSpec):
     out_file = File(exists=True)
 
 
-class Gibbs(SeriesPreprocReport, CommandLine):
+class Gibbs(SeriesPreprocReport, TORTOISECommandLine):
     input_spec = _GibbsInputSpec
     output_spec = _GibbsOutputSpec
     _cmd = "Gibbs"

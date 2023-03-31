@@ -356,7 +356,7 @@ def init_dwi_denoising_wf(dwi_denoise_window,
     if do_unringing:
         if unringing_method == 'mrdegibbs':
             degibbser = pe.Node(
-                MRDeGibbs(),
+                MRDeGibbs(nthreads=omp_nthreads),
                 name='degibbser',
                 n_procs=omp_nthreads)
         elif unringing_method == 'rpg':
