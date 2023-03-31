@@ -498,10 +498,13 @@ from sub-1_dir-PA_dwi.nii.gz.
 
 
 class _SeriesQCInputSpec(BaseInterfaceInputSpec):
-    pre_qc = File(exists=True, desc='qc file from the raw data')
+    pre_qc = File(exists=True, desc='qc file from the raw data', mandatory=True)
     t1_qc = File(exists=True, desc='qc file from preprocessed image in t1 space')
-    mni_qc = File(exists=True, desc='qc file from preprocessed image in template space')
-    confounds_file = File(exists=True, desc='confounds file')
+    t1_qc_postproc = File(exists=True, desc='qc file from preprocessed image in template space')
+    confounds_file = File(exists=True, desc='confounds file', mandatory=True)
+    t1_mask_file = File(exists=True, desc='brain mask in t1 space')
+    t1_cnr_file = File(exists=True, desc='CNR file in t1 space')
+    t1_b0_series = File(exists=True, desc='time series of b=0 images')
     t1_dice_score = traits.Float()
     mni_dice_score = traits.Float()
     output_file_name = traits.File()
@@ -519,8 +522,8 @@ class SeriesQC(SimpleInterface):
         image_qc = _load_qc_file(self.inputs.pre_qc, prefix="raw_")
         if isdefined(self.inputs.t1_qc):
             image_qc.update(_load_qc_file(self.inputs.t1_qc, prefix="t1_"))
-        if isdefined(self.inputs.mni_qc):
-            image_qc.update(_load_qc_file(self.inputs.mni_qc, prefix="mni_"))
+        if isdefined(self.inputs.t1_qc_postproc):
+            image_qc.update(_load_qc_file(self.inputs.t1_qc_postproc, prefix="t1post_"))
         motion_summary = calculate_motion_summary(self.inputs.confounds_file)
         image_qc.update(motion_summary)
 
@@ -529,6 +532,14 @@ class SeriesQC(SimpleInterface):
             image_qc['t1_dice_distance'] = [self.inputs.t1_dice_score]
         if isdefined(self.inputs.mni_dice_score):
             image_qc['mni_dice_distance'] = [self.inputs.mni_dice_score]
+
+        if isdefined(self.inputs.t1_mask_file):
+            if isdefined(self.inputs.t1_cnr_file):
+                # Add a function here to get CNR
+                pass
+            if isdefined(self.inputs.t1_b0_series):
+                # Add a function to get b=0 TSNR
+                pass
 
         # Get the metadata
         output_file = self.inputs.output_file_name

@@ -12,6 +12,7 @@ from nipype import logging
 from .fmap import get_distortion_grouping
 from ..workflows.dwi.util import _get_concatenated_bids_name
 LOGGER = logging.getLogger('nipype.workflow')
+MAX_COMBINED_SCANS = 100
 
 
 class MergeDWIsInputSpec(BaseInterfaceInputSpec):
@@ -214,6 +215,108 @@ class AveragePEPairs(SimpleInterface):
         return runtime
 
 
+class _SplitResampledDWIsInputSpec(BaseInterfaceInputSpec):
+    dwi_file = File(exists=True, mandatory=True)
+    bval_file = File(exists=True, mandatory=True)
+    bvec_file = File(exists=True, mandatory=True)
+    confounds = File(exists=True, mandatory=True)
+    n_images = traits.Int(1)
+
+
+class _SplitResampledDWIsOutputSpec(TraitedSpec):
+    pass
+
+
+# Add slots for the possibly
+for subscan in np.arange(MAX_COMBINED_SCANS) + 1:
+    _SplitResampledDWIsOutputSpec.add_class_trait(
+        "dwi_file_%d" % subscan, File(exists=True))
+    _SplitResampledDWIsOutputSpec.add_class_trait(
+        "bval_file_%d" % subscan, File(exists=True))
+    _SplitResampledDWIsOutputSpec.add_class_trait(
+        "bvec_file_%d" % subscan, File(exists=True))
+    _SplitResampledDWIsOutputSpec.add_class_trait(
+        "source_file_%d" % subscan, traits.Str())
+
+
+class SplitResampledDWIs(SimpleInterface):
+    input_spec = _SplitResampledDWIsInputSpec
+    output_spec = _SplitResampledDWIsOutputSpec
+
+    def _run_interface(self, runtime):
+        # Load the confounds
+        confounds_df = pd.read_csv(self.inputs.confounds, sep="\t")
+        original_files = confounds_df['original_file'].unique().tolist()
+        if not len(original_files) == self.inputs.n_images:
+            raise Exception(
+                "Found %d files in confounds file, but expected %d" % (
+                    len(original_files), self.inputs.n_images))
+        resampled_img = load_img(self.inputs.dwi_file)
+        for file_num, original_file in enumerate(original_files, start=1):
+            image_indices = np.flatnonzero(
+                (confounds_df['original_file'] == original_file).to_numpy())
+            dwi_subfile = fname_presuffix(
+                original_file, prefix="resampled_", suffix=".nii.gz",
+                use_ext=False, newpath=runtime.cwd)
+            bval_subfile = dwi_subfile.replace(".nii.gz", ".bval")
+            bvec_subfile = dwi_subfile.replace(".nii.gz", ".bvec")
+            index_img(resampled_img, image_indices).to_filename(dwi_subfile)
+            subset_bvals(self.inputs.bval_file, image_indices, bval_subfile)
+            subset_bvecs(self.inputs.bvec_file, image_indices, bvec_subfile)
+
+            self._results["dwi_file_%d" % file_num] = dwi_subfile
+            self._results["bval_file_%d" % file_num] = bval_subfile
+            self._results["bvec_file_%d" % file_num] = bvec_subfile
+            self._results["source_file_%d" % file_num] = original_file
+        return runtime
+
+
+class _MergeFinalConfoundsInputSpec(BaseInterfaceInputSpec):
+    confounds = File(exists=True, mandatory=True)
+    bias_correction_confounds = InputMultiObject(File(exists=True), mandatory=False)
+    patch2self_correction_confounds = File(exists=True, mandatory=False)
+
+
+class _MergeFinalConfoundsOutputSpec(TraitedSpec):
+    confounds = File(exists=True)
+
+
+class MergeFinalConfounds(SimpleInterface):
+    input_spec = _MergeFinalConfoundsInputSpec
+    output_spec = _MergeFinalConfoundsOutputSpec
+
+    def _run_interface(self, runtime):
+
+        to_concat_horizontally = []
+        # New confounds from bias correction
+        if isdefined(self.inputs.bias_correction_confounds):
+            # There may be multuple files that need to be vertically stacked
+            biascorrection_df = pd.concat(
+                [pd.read_csv(bc_csv) for bc_csv in self.inputs.bias_correction_confounds],
+                axis=0, ignore_index=True)
+            to_concat_horizontally.append(biascorrection_df)
+        # New confounds from patch2self
+        if isdefined(self.inputs.patch2self_correction_confounds):
+            to_concat_horizontally.append(
+                pd.read_csv(self.inputs.patch2self_correction_confounds))
+
+        # If we have new ones, append the columns, prefixed by "final_"
+        if to_concat_horizontally:
+            new_confounds_file = fname_presuffix(
+                self.inputs.confounds, newpath=runtime.cwd, prefix="final_")
+            original_confounds = pd.read_csv(self.inputs.confounds, sep="\t")
+            extra_confounds = pd.concat(to_concat_horizontally, axis=1)
+            extra_confounds.columns = [
+                "final_" + col for col in extra_confounds.columns.tolist()]
+            final_confounds = pd.concat([original_confounds, extra_confounds], axis=1)
+            final_confounds.to_csv(new_confounds_file, sep="\t", index=False)
+            self._results['confounds'] = new_confounds_file
+        else:
+            self._results['confounds'] = self.inputs.confounds
+
+        return runtime
+
+
 def find_image_pairs(original_bvecs, bvals, assignments):
     assignments = np.array(assignments)
     group1_mask = assignments == 1
@@ -411,6 +514,18 @@ class StackConfounds(SimpleInterface):
         stacked.to_csv(out_file)
         self._results['confounds_file'] = out_file
         return runtime
+
+
+def subset_bvals(bval_file, indices, out_bval_file):
+    original_bvals = np.loadtxt(bval_file)
+    bval_subset = original_bvals[indices]
+    np.savetxt(out_bval_file, bval_subset, fmt=str("%i"))
+
+
+def subset_bvecs(bvec_file, indices, out_bvec_file):
+    original_bvecs = np.loadtxt(bvec_file)
+    bvec_subset = original_bvecs[:, indices]
+    np.savetxt(out_bvec_file, bvec_subset, fmt=str("%.8f"))
 
 
 def combined_bval_array(bval_files):
