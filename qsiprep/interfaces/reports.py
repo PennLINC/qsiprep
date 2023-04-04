@@ -17,8 +17,10 @@ import re
 from collections import defaultdict
 #from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 import seaborn as sns
+import nibabel as nb
 import matplotlib
 import matplotlib.pyplot as plt
+from nilearn.maskers import NiftiLabelsMasker
 from matplotlib import animation
 from scipy.io.matlab import loadmat
 import pandas as pd
@@ -535,8 +537,9 @@ class SeriesQC(SimpleInterface):
 
         if isdefined(self.inputs.t1_mask_file):
             if isdefined(self.inputs.t1_cnr_file):
-                # Add a function here to get CNR
-                pass
+                image_qc.update(
+                    get_cnr_values(self.inputs.t1_cnr_file,
+                                   self.inputs.t1_mask_file))
             if isdefined(self.inputs.t1_b0_series):
                 # Add a function to get b=0 TSNR
                 pass
@@ -557,6 +560,29 @@ def _load_qc_file(fname, prefix=""):
     renamed = dict([
         (prefix + key, value) for key, value in qc_data.items()])
     return renamed
+
+
+def get_cnr_values(cnr_image, brain_mask):
+    cnr_img = nb.load(cnr_image)
+    mask_img = nb.load(brain_mask)
+
+    # Determine which CNRs we's getting
+    num_cnrs = 1 if cnr_img.ndim == 3 else cnr_img.shape[3]
+    if num_cnrs == 1:
+        cnr_labels = ["CNR"]
+    else:
+        cnr_labels = [ "CNR%d" % value for value in
+                      range(num_cnrs)]
+
+    cnrs = {}
+    strategies = ["mean", "median", "standard_deviation"]
+    for strategy in strategies:
+        masker = NiftiLabelsMasker(mask_img, strategy=strategy)
+        cnr_values = masker.fit_transform(cnr_img).flatten()
+        for cnr_name, cnr_value in zip(cnr_labels, cnr_values):
+            cnrs[cnr_name + "_" + strategy] = cnr_value
+
+    return cnrs
 
 
 def motion_derivatives(translations, rotations, framewise_disp,
