@@ -17,6 +17,7 @@ from dipy.sims.voxel import all_tensor_evecs
 from dipy.reconst.dti import decompose_tensor
 from dipy.core.geometry import normalized_vector
 from sklearn.metrics import r2_score
+from transforms3d.affines import decompose44
 from scipy.spatial.transform import Rotation as R
 from .itk import disassemble_transform
 
@@ -627,6 +628,7 @@ def get_fsl_motion_params(itk_file, src_file, ref_file, working_dir):
         return np.array([float(num) for num in line[-3:]])
 
     def get_image_center(src_fname):
+        #returns image center in mm
         src_img = nb.load(src_fname)
         src_aff = src_img.affine
         src_center = (np.array(src_img.shape)-1)/2
