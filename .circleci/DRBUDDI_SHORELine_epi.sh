@@ -33,7 +33,7 @@ ${QSIPREP_CMD} \
 	--sloppy \
 	--dwi-only \
 	--denoise-method none \
-	--dwi-no-biascorr \
+	--b1-biascorrect-stage none \
 	--output-space T1w \
 	--pepolar-method DRBUDDI \
 	--hmc-model none \

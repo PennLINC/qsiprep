@@ -17,8 +17,10 @@ import re
 from collections import defaultdict
 #from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 import seaborn as sns
+import nibabel as nb
 import matplotlib
 import matplotlib.pyplot as plt
+from nilearn.maskers import NiftiLabelsMasker
 from matplotlib import animation
 from scipy.io.matlab import loadmat
 import pandas as pd
@@ -498,10 +500,13 @@ from sub-1_dir-PA_dwi.nii.gz.
 
 
 class _SeriesQCInputSpec(BaseInterfaceInputSpec):
-    pre_qc = File(exists=True, desc='qc file from the raw data')
+    pre_qc = File(exists=True, desc='qc file from the raw data', mandatory=True)
     t1_qc = File(exists=True, desc='qc file from preprocessed image in t1 space')
-    mni_qc = File(exists=True, desc='qc file from preprocessed image in template space')
-    confounds_file = File(exists=True, desc='confounds file')
+    t1_qc_postproc = File(exists=True, desc='qc file from preprocessed image in template space')
+    confounds_file = File(exists=True, desc='confounds file', mandatory=True)
+    t1_mask_file = File(exists=True, desc='brain mask in t1 space')
+    t1_cnr_file = File(exists=True, desc='CNR file in t1 space')
+    t1_b0_series = File(exists=True, desc='time series of b=0 images')
     t1_dice_score = traits.Float()
     mni_dice_score = traits.Float()
     output_file_name = traits.File()
@@ -519,8 +524,8 @@ class SeriesQC(SimpleInterface):
         image_qc = _load_qc_file(self.inputs.pre_qc, prefix="raw_")
         if isdefined(self.inputs.t1_qc):
             image_qc.update(_load_qc_file(self.inputs.t1_qc, prefix="t1_"))
-        if isdefined(self.inputs.mni_qc):
-            image_qc.update(_load_qc_file(self.inputs.mni_qc, prefix="mni_"))
+        if isdefined(self.inputs.t1_qc_postproc):
+            image_qc.update(_load_qc_file(self.inputs.t1_qc_postproc, prefix="t1post_"))
         motion_summary = calculate_motion_summary(self.inputs.confounds_file)
         image_qc.update(motion_summary)
 
@@ -529,6 +534,15 @@ class SeriesQC(SimpleInterface):
             image_qc['t1_dice_distance'] = [self.inputs.t1_dice_score]
         if isdefined(self.inputs.mni_dice_score):
             image_qc['mni_dice_distance'] = [self.inputs.mni_dice_score]
+
+        if isdefined(self.inputs.t1_mask_file):
+            if isdefined(self.inputs.t1_cnr_file):
+                image_qc.update(
+                    get_cnr_values(self.inputs.t1_cnr_file,
+                                   self.inputs.t1_mask_file))
+            if isdefined(self.inputs.t1_b0_series):
+                # Add a function to get b=0 TSNR
+                pass
 
         # Get the metadata
         output_file = self.inputs.output_file_name
@@ -546,6 +560,29 @@ def _load_qc_file(fname, prefix=""):
     renamed = dict([
         (prefix + key, value) for key, value in qc_data.items()])
     return renamed
+
+
+def get_cnr_values(cnr_image, brain_mask):
+    cnr_img = nb.load(cnr_image)
+    mask_img = nb.load(brain_mask)
+
+    # Determine which CNRs we's getting
+    num_cnrs = 1 if cnr_img.ndim == 3 else cnr_img.shape[3]
+    if num_cnrs == 1:
+        cnr_labels = ["CNR"]
+    else:
+        cnr_labels = [ "CNR%d" % value for value in
+                      range(num_cnrs)]
+
+    cnrs = {}
+    strategies = ["mean", "median", "standard_deviation"]
+    for strategy in strategies:
+        masker = NiftiLabelsMasker(mask_img, strategy=strategy)
+        cnr_values = masker.fit_transform(cnr_img).flatten()
+        for cnr_name, cnr_value in zip(cnr_labels, cnr_values):
+            cnrs[cnr_name + "_" + strategy] = cnr_value
+
+    return cnrs
 
 
 def motion_derivatives(translations, rotations, framewise_disp,

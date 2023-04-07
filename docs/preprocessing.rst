@@ -505,7 +505,7 @@ DWI preprocessing
                               dwi_denoise_window=5,
                               denoise_method='dwidenoise',
                               unringing_method='mrdegibbs',
-                              dwi_no_biascorr=False,
+                              b1_biascorr_stage='final',
                               no_b0_harmonization=False,
                               denoise_before_combining=True,
                               template='MNI152NLin2009cAsym',

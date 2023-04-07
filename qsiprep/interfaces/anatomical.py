@@ -333,7 +333,7 @@ class DesaturateSkull(SimpleInterface):
             skulled_img, brainmask_img)
 
         actual_brain_to_skull_ratio = brain_median / nonbrain_head_median
-        LOGGER.info("found brain to skull ratio:", actual_brain_to_skull_ratio)
+        LOGGER.info("found brain to skull ratio: %.3f", actual_brain_to_skull_ratio)
         desat_data = skulled_img.get_fdata(dtype=np.float32).copy()
         adjustment = 1.
         if actual_brain_to_skull_ratio < self.inputs.brain_to_skull_ratio:

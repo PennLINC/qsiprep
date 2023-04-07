@@ -274,7 +274,16 @@ def get_parser():
     g_conf.add_argument(
         '--dwi-no-biascorr', '--dwi_no_biascorr',
         action='store_true',
-        help='skip b0-based dwi spatial bias correction')
+        help='DEPRECATED: see --b1-biascorr-stage')
+    g_conf.add_argument(
+        "--b1-biascorrect-stage", "--b1_biascorrect_stage",
+        action="store",
+        choices=["final", "none", "legacy"],
+        default="final",
+        help="Which stage to apply B1 bias correction. The default 'final' will "
+             "apply it after all the data has been resampled to its final space. "
+             "'none' will skip B1 bias correction and 'legacy' will behave consistent "
+             "with qsiprep < 0.17.")
     g_conf.add_argument(
         '--no-b0-harmonization', '--no_b0_harmonization',
         action='store_true',
@@ -969,7 +978,7 @@ def build_qsiprep_workflow(opts, retval):
         pepolar_method=opts.pepolar_method,
         dwi_denoise_window=opts.dwi_denoise_window,
         unringing_method=opts.unringing_method,
-        dwi_no_biascorr=opts.dwi_no_biascorr,
+        b1_biascorrect_stage=opts.b1_biascorrect_stage,
         no_b0_harmonization=opts.no_b0_harmonization,
         denoise_before_combining=not opts.denoise_after_combining,
         write_local_bvecs=opts.write_local_bvecs,
