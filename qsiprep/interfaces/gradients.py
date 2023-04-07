@@ -6,7 +6,6 @@ from subprocess import Popen, PIPE
 import nibabel as nb
 import numpy as np
 import pandas as pd
-from transforms3d.affines import decompose44
 from nilearn import image as nim
 from nipype.interfaces.base import (BaseInterfaceInputSpec, TraitedSpec, File, SimpleInterface,
                                     InputMultiObject, OutputMultiObject, traits, isdefined)
@@ -613,7 +612,6 @@ class LocalGradientRotation(SimpleInterface):
 def get_fsl_motion_params(itk_file, src_file, ref_file, working_dir):
     tmp_fsl_file = fname_presuffix(itk_file, newpath=working_dir,
                                    suffix='_FSL.xfm', use_ext=False)
-
     fsl_convert_cmd = "c3d_affine_tool " \
         "-ref {ref_file} " \
         "-src {src_file} " \
