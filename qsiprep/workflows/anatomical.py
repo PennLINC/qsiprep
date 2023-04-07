@@ -43,7 +43,7 @@ from ..utils.misc import fix_multi_T1w_source_name, add_suffix
 from ..interfaces.freesurfer import (
         PatchedLTAConvert as LTAConvert, PrepareSynthStripGrid,
         FixHeaderSynthStrip)
-from ..interfaces.anatomical import FakeSegmentation, DesaturateSkull
+from ..interfaces.anatomical import FakeSegmentation, DesaturateSkull, CustomApplyMask
 
 from nipype import logging
 LOGGER = logging.getLogger('nipype.workflow')
@@ -321,7 +321,7 @@ and used as T1w-reference throughout the workflow.
     if freesurfer:
         surface_recon_wf = init_surface_recon_wf(name='surface_recon_wf',
                                                  omp_nthreads=omp_nthreads, hires=hires)
-        applyrefined = pe.Node(fsl.ApplyMask(), name='applyrefined')
+        applyrefined = pe.Node(CustomApplyMask(), name='applyrefined')
         workflow.connect([
             (inputnode, surface_recon_wf, [
                 ('t2w', 'inputnode.t2w'),
