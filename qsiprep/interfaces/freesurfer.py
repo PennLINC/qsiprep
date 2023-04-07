@@ -602,7 +602,7 @@ class FixHeaderSynthStrip(SynthStrip):
 
         outputs = self._list_outputs()
         if not op.exists(outputs["out_brain"]):
-            raise Exception("mri_synthstrip failed! no outputs detected.")
+            raise Exception("mri_synthstrip failed!")
 
         if outputs.get("out_brain_mask"):
             _copyxform(
