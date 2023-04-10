@@ -20,7 +20,7 @@ Unwarping
 """
 
 import pkg_resources as pkgr
-import os
+import osimport os
 from nipype.pipeline import engine as pe
 from nipype.interfaces import ants, fsl, utility as niu
 from ...niworkflows.engine.workflows import LiterateWorkflow as Workflow
@@ -78,12 +78,11 @@ def init_sdc_unwarp_wf(omp_nthreads, fmap_demean, debug, name='sdc_unwarp_wf'):
             fieldmap in Hz that can be sent to eddy
 
     """
-    # Check for FSL binary
     fsl_check = os.environ.get('FSLDIR', False)
     if not fsl_check:
-        raise Exception("Container in use does not have FSL. To use this workflow, please download the qsiprep container with FSL installed.")
-    
-
+        raise Exception(
+            """Container in use does not have FSL. To use this workflow, 
+            please download the qsiprep container with FSL installed.""")
     workflow = Workflow(name=name)
     inputnode = pe.Node(niu.IdentityInterface(
         fields=['in_reference', 'in_reference_brain', 'in_mask', 'metadata',

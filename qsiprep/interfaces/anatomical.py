@@ -401,7 +401,7 @@ class CustomApplyMask(SimpleInterface):
             newpath=runtime.cwd,
             suffix='_masked.nii.gz',
             use_ext=False)
-        
+
         #load in input and mask
         input_img = nb.load(self.inputs.in_file)
         input_data = input_img.get_fdata()

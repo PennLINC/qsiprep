@@ -19,7 +19,7 @@ This corresponds to the section 8.9.3 --fieldmap image (and one magnitude image)
 of the BIDS specification.
 
 """
-
+import os
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu, ants, afni, fsl
 import os
@@ -47,13 +47,11 @@ def init_fmap_wf(omp_nthreads, fmap_bspline, name='fmap_wf'):
         wf = init_fmap_wf(omp_nthreads=6, fmap_bspline=False)
 
     """
-
-    # Check for FSL binary
     fsl_check = os.environ.get('FSLDIR', False)
     if not fsl_check:
-        raise Exception("Container in use does not have FSL. To use this workflow, please download the qsiprep container with FSL installed.")
-    
-
+        raise Exception(
+            """Container in use does not have FSL. To use this workflow, 
+            please download the qsiprep container with FSL installed.""")
     workflow = Workflow(name=name)
     inputnode = pe.Node(niu.IdentityInterface(
         fields=['magnitude', 'fieldmap']), name='inputnode')
