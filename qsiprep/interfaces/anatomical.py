@@ -376,3 +376,41 @@ def calculate_nonbrain_saturation(head_img, brain_mask_img):
     non_brain_head_median = np.median(head_data[nbmask > 0])
 
     return in_brain_median, non_brain_head_median
+
+class _CustomApplyMaskInputSpec(BaseInterfaceInputSpec):
+    in_file = File(
+        exists=True,
+        mandatory=True,
+        desc="Image to be masked")
+    mask_file = File(
+        exists=True,
+        mandatory=True,
+        desc='Mask to be applied')
+
+
+class _CustomApplyMaskOutputSpec(TraitedSpec):
+    out_file = File(exist=True, desc="Image with mask applied")
+
+
+class CustomApplyMask(SimpleInterface):
+    input_spec = _CustomApplyMaskInputSpec
+    output_spec = _CustomApplyMaskOutputSpec
+
+    def _run_interface(self, runtime):
+        #define masked output name
+        out_file = fname_presuffix(
+            self.inputs.in_file,
+            newpath=runtime.cwd,
+            suffix='_masked.nii.gz',
+            use_ext=False)
+
+        #load in input and mask
+        input_img = nb.load(self.inputs.in_file)
+        input_data = input_img.get_fdata()
+        mask_data = nb.load(self.inputs.mask_file).get_fdata()
+        #elementwise multiplication to apply mask
+        out_data = input_data*mask_data
+        #save out masked image and pass on file name
+        nb.Nifti1Image(out_data, input_img.affine, header=input_img.header).to_filename(out_file)
+        self._results['out_file'] = out_file
+        return runtime
