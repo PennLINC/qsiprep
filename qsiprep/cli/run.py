@@ -450,7 +450,7 @@ def get_parser():
         action='store',
         default='TOPUP',
         choices=['TOPUP', 'DRBUDDI'],
-        help='select which SDC method to use for PEPOLAR fieldmaps (default: OASIS)')
+        help='select which SDC method to use for PEPOLAR fieldmaps (default: TOPUP)')
 
     g_fmap.add_argument(
         '--denoised_image_sdc', '--denoised_image_sdc',
@@ -483,6 +483,12 @@ def get_parser():
         default=False,
         help='EXPERIMENTAL: Use fieldmap-free distortion correction. To use '
         'this option, "template" must be passed to --output-space')
+    g_syn.add_argument(
+        '--syn-method', '-syn_method',
+        action='store_true',
+        default='synb0',
+        help='Mehtod for SYN unwarping.  Options are '
+        'synb0 (default) and ANTs')
     g_syn.add_argument(
         '--force-syn', '--force_syn',
         action='store_true',
@@ -1004,6 +1010,7 @@ def build_qsiprep_workflow(opts, retval):
         fmap_bspline=opts.fmap_bspline,
         fmap_demean=opts.fmap_no_demean,
         use_syn=opts.use_syn_sdc,
+        syn_method=opts.syn_method,
         force_syn=opts.force_syn
     )
     retval['return_code'] = 0
