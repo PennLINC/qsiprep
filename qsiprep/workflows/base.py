@@ -44,9 +44,9 @@ LOGGER = logging.getLogger('nipype.workflow')
 def init_qsiprep_wf(
         subject_list, run_uuid, work_dir, output_dir, bids_dir, ignore, debug,
         low_mem, anat_only, dwi_only, longitudinal, b0_threshold, hires,
-        denoise_before_combining, dwi_denoise_window, denoise_method,
-        unringing_method, b1_biascorrect_stage, no_b0_harmonization,
-        output_resolution, infant_mode, combine_all_dwis,
+        anatomical_contrast, denoise_before_combining, dwi_denoise_window,
+        denoise_method, unringing_method, b1_biascorrect_stage,
+        no_b0_harmonization, output_resolution, infant_mode, combine_all_dwis,
         distortion_group_merge, pepolar_method, omp_nthreads, bids_filters,
         force_spatial_normalization, skull_strip_template,
         skull_strip_fixed_seed, freesurfer, hmc_model, impute_slice_threshold,
@@ -73,6 +73,7 @@ def init_qsiprep_wf(
                               bids_dir='.',
                               ignore=[],
                               bids_filters=None,
+                              anatomical_contrast="T1w",
                               debug=False,
                               low_mem=False,
                               dwi_only=False,
@@ -129,6 +130,8 @@ def init_qsiprep_wf(
             Directory in which to save derivatives
         bids_dir : str
             Root directory of BIDS dataset
+        anatomical_contrst : str
+            Which contrast to use for the anatomical reference
         ignore : list
             Preprocessing steps to skip (may include "slicetiming",
             "fieldmaps")
@@ -302,7 +305,7 @@ def init_qsiprep_wf(
 def init_single_subject_wf(
         subject_id, name, reportlets_dir, output_dir, bids_dir, ignore, debug,
         write_local_bvecs, low_mem, dwi_only, anat_only, longitudinal,
-        b0_threshold, denoise_before_combining, bids_filters,
+        b0_threshold, denoise_before_combining, bids_filters, anatomical_contrast,
         dwi_denoise_window, denoise_method, unringing_method, b1_biascorrect_stage,
         no_b0_harmonization, infant_mode, combine_all_dwis, raw_image_sdc,
         distortion_group_merge, pepolar_method, omp_nthreads, skull_strip_template,
@@ -335,6 +338,7 @@ def init_single_subject_wf(
             output_dir='.',
             bids_dir='.',
             bids_filters=None,
+            anatomical_contrast="T1w",
             ignore=[],
             debug=False,
             low_mem=False,
@@ -390,7 +394,9 @@ def init_single_subject_wf(
         low_mem : bool
             Write uncompressed .nii files in some cases to reduce memory usage
         anat_only : bool
-            Disable functional workflows
+            Disable dMRI workflows
+        anatomical_contrast : str
+            Which contrast to use for the anatomical reference
         dwi_only : bool
             Disable anatomical workflows
         longitudinal : bool
@@ -501,6 +507,11 @@ def init_single_subject_wf(
     else:
         subject_data, layout = collect_data(bids_dir, subject_id, filters=bids_filters)
 
+    # Warn about --dwi-only and non-none --anatomical-contrast
+    if dwi_only and anatomical_contrast != "none":
+        raise Exception(
+            "--dwi-only is deprecated and is only compatible with "
+            "--anatomical-contrast none. You specified %s" % anatomical_contrast)
     if anat_only and dwi_only:
         raise Exception("--anat-only and --dwi-only are mutually exclusive.")
 
@@ -510,9 +521,11 @@ def init_single_subject_wf(
                         "All workflows require dwi images unless "
                         "--anat-only is specified.".format(subject_id))
 
-    if not dwi_only and not subject_data['t1w']:
-        raise Exception("No T1w images found for participant {}. "
-                        "To bypass T1w processing choose --dwi-only.".format(subject_id))
+    if not dwi_only and not subject_data.get(anatomical_contrast.lower()):
+        raise Exception("No {} images found for participant {}. "
+                        "To bypass anatomical processing choose "
+                        "--anatomical-contrast none".format(
+            anatomical_contrast, subject_id))
 
     # Inspect the dwi data and provide advice on pipeline choices
     #provide_processing_advice(subject_data, layout, unringing_method)
@@ -547,7 +560,10 @@ to workflows in *QSIPrep*'s documentation]\
 
     bidssrc = pe.Node(
         BIDSDataGrabber(
-            subject_data=subject_data, dwi_only=dwi_only, anat_only=anat_only),
+            subject_data=subject_data,
+            dwi_only=dwi_only,
+            anat_only=anat_only,
+            anatomical_contrast=anatomical_contrast),
         name='bidssrc')
 
     bids_info = pe.Node(
@@ -573,15 +589,11 @@ to workflows in *QSIPrep*'s documentation]\
         name='ds_report_about',
         run_without_submitting=True)
 
-    t2w_files = subject_data['t2w'] if pepolar_method.lower() == 'drbuddi' else []
     # Preprocessing of T1w (includes registration to MNI)
     anat_preproc_wf = init_anat_preproc_wf(
         name="anat_preproc_wf",
-        t2w_files=t2w_files,
         dwi_only=dwi_only,
         infant_mode=infant_mode,
-        skull_strip_template=skull_strip_template,
-        skull_strip_fixed_seed=skull_strip_fixed_seed,
         output_spaces=output_spaces,
         template=template,
         output_resolution=output_resolution,
@@ -590,16 +602,16 @@ to workflows in *QSIPrep*'s documentation]\
         longitudinal=longitudinal,
         omp_nthreads=omp_nthreads,
         freesurfer=freesurfer,
-        hires=hires,
         reportlets_dir=reportlets_dir,
         output_dir=output_dir,
-        num_t1w=len(subject_data['t1w']))
+        num_anat_images=len(subject_data[anatomical_contrast.lower()]))
 
-    info_modality = "dwi" if dwi_only else "t1w"
+    info_modality = "dwi" if dwi_only else anatomical_contrast.lower()
     workflow.connect([
         (inputnode, anat_preproc_wf, [('subjects_dir',
                                        'inputnode.subjects_dir')]),
-        (bidssrc, bids_info, [((info_modality, fix_multi_source_name, dwi_only),
+        (bidssrc, bids_info, [((info_modality, fix_multi_source_name,
+                                dwi_only, anatomical_contrast),
                                'in_file')]),
         (inputnode, summary, [('subjects_dir', 'subjects_dir')]),
         (bidssrc, summary, [('t1w', 't1w'), ('t2w', 't2w')]),
@@ -609,10 +621,12 @@ to workflows in *QSIPrep*'s documentation]\
                                     ('roi', 'inputnode.roi'),
                                     ('flair', 'inputnode.flair')]),
         (summary, anat_preproc_wf, [('subject_id', 'inputnode.subject_id')]),
-        (bidssrc, ds_report_summary, [((info_modality, fix_multi_source_name, dwi_only),
+        (bidssrc, ds_report_summary, [((info_modality, fix_multi_source_name,
+                                        dwi_only, anatomical_contrast),
                                        'source_file')]),
         (summary, ds_report_summary, [('out_report', 'in_file')]),
-        (bidssrc, ds_report_about, [((info_modality, fix_multi_source_name, dwi_only),
+        (bidssrc, ds_report_about, [((info_modality, fix_multi_source_name,
+                                      dwi_only, anatomical_contrast),
                                      'source_file')]),
         (about, ds_report_about, [('out_report', 'in_file')])
     ])
@@ -746,7 +760,7 @@ to workflows in *QSIPrep*'s documentation]\
             low_mem=low_mem,
             fmap_bspline=fmap_bspline,
             fmap_demean=fmap_demean,
-            t2w_sdc=bool(t2w_files),
+            t2w_sdc=bool(subject_data.get('t2w')),
             sloppy=debug,
             source_file=source_file
         )

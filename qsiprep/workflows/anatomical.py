@@ -28,13 +28,13 @@ from ..niworkflows.interfaces.registration import RobustMNINormalizationRPT
 from ..niworkflows.interfaces.masks import ROIsPlot
 from ..niworkflows.interfaces.freesurfer import RobustRegister
 from ..niworkflows.interfaces.segmentation import ReconAllRPT
-
+from .dwi.hmc import init_b0_hmc_wf
 from ..niworkflows.interfaces.fixes import FixHeaderApplyTransforms as ApplyTransforms
 
 from ..engine import Workflow
 from ..interfaces import (
     StructuralReference, MakeMidthickness, FSInjectBrainExtracted,
-    FSDetectInputs, NormalizeSurf, GiftiNameSource, TemplateDimensions,
+    FSDetectInputs, NormalizeSurf, TemplateDimensions,
     ConcatAffines, RefineBrainMask, DerivativesDataSink as FDerivativesDataSink
 )
 
@@ -59,16 +59,13 @@ TEMPLATE_MAP = {
 
 
 #  pylint: disable=R0914
-def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug, dwi_only,
-                         infant_mode, freesurfer, longitudinal, omp_nthreads, hires,
-                         output_dir, num_t1w, output_resolution, force_spatial_normalization,
-                         reportlets_dir, t2w_files, skull_strip_fixed_seed=False,
+def init_anat_preproc_wf(output_spaces, template, debug, dwi_only,
+                         infant_mode, freesurfer, longitudinal, omp_nthreads,
+                         output_dir, num_anat_images, output_resolution, force_spatial_normalization,
+                         reportlets_dir, anatomical_contrast,
                          name='anat_preproc_wf'):
     r"""
-    This workflow controls the anatomical preprocessing stages of qsiprep. It differs from
-    the FMRIPREP preprocessing in that a rigid alignment to MNI is performed before declaring
-    the skull-stripped brain as the official preprocessed T1. This is done so that all brains
-    are canonically oriented. This aids in comparing model coefficients later on.
+    This workflow controls the anatomical preprocessing stages of qsiprep.
 
     This includes:
 
@@ -76,7 +73,6 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug, d
      - Skull-stripping and bias correction
      - Tissue segmentation
      - Normalization
-     - Surface reconstruction with FreeSurfer
 
     .. workflow::
         :graph2use: orig
@@ -86,34 +82,17 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug, d
         wf = init_anat_preproc_wf(omp_nthreads=1,
                                   reportlets_dir='.',
                                   output_dir='.',
-                                  t2w_files=[],
+                                  anatomical_contrast="T1w",
                                   template='MNI152NLin2009cAsym',
-                                  output_spaces=['T1w', 'fsnative',
-                                                 'template', 'fsaverage5'],
                                   output_resolution=1.25,
                                   dwi_only=False,
-                                  skull_strip_template='OASIS',
                                   infant_mode=False,
                                   force_spatial_normalization=True,
-                                  freesurfer=True,
                                   longitudinal=False,
                                   debug=False,
-                                  hires=True,
-                                  num_t1w=1)
+                                  num_anat_images=1)
 
     **Parameters**
-
-        skull_strip_template : str
-            Name of ANTs skull-stripping template ('OASIS' or 'NKI')
-        output_spaces : list
-            List of output spaces functional images are to be resampled to.
-
-            Some pipeline components will only be instantiated for some output spaces.
-
-            Valid spaces:
-
-              - T1w
-
         dwi_only : bool
             Do not process any anatomical data. Outputs will simply be the template
             and all transforms will be 'identity'
@@ -137,17 +116,12 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug, d
             (may increase runtime)
         omp_nthreads : int
             Maximum number of threads an individual process may use
-        hires : bool
-            Enable sub-millimeter preprocessing in FreeSurfer
         reportlets_dir : str
             Directory in which to save reportlets
         output_dir : str
             Directory in which to save derivatives
         name : str, optional
             Workflow name (default: anat_preproc_wf)
-        skull_strip_fixed_seed : bool
-            Do not use a random seed for skull-stripping - will ensure
-            run-to-run replicability when used with --omp-nthreads 1 (default: ``False``)
 
     **Inputs**
 
@@ -224,12 +198,8 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug, d
         name='outputnode')
 
     # Get the template image
-    if not infant_mode:
-        ref_img = pkgr('qsiprep', 'data/mni_1mm_t1w_lps.nii.gz')
-        ref_img_brain = pkgr('qsiprep', 'data/mni_1mm_t1w_lps_brain.nii.gz')
-    else:
-        ref_img = pkgr('qsiprep', 'data/mni_1mm_t1w_lps_infant.nii.gz')
-        ref_img_brain = pkgr('qsiprep', 'data/mni_1mm_t1w_lps_brain_infant.nii.gz')
+    ref_img, ref_img_brain = get_reference_images(infant_mode, anatomical_contrast)
+
 
     # 3a. Create the output reference grid_image
     reference_grid_wf = init_output_grid_wf(voxel_size=output_resolution,
@@ -238,126 +208,56 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug, d
     workflow.connect([
         (reference_grid_wf, outputnode, [('outputnode.grid_image', 'dwi_sampling_grid')])])
 
-    # Process the t2w images
-    if t2w_files:
-        t2w_preproc_wf = init_t2w_preproc_wf(
-            omp_nthreads=omp_nthreads,
-            t2w_images=t2w_files)
-        workflow.connect([
-            (t2w_preproc_wf, outputnode, [
-                ('outputnode.unfatsat', 't2w_files')])])
-
-
     if dwi_only:
+        LOGGER.info("No anatomical scans available! Visual reports will show template masks.")
         seg_node = dummy_anat_outputs(outputnode, infant_mode=infant_mode)
         workflow.connect([(seg_node, outputnode, [("dseg_file", "t1_seg")])])
         workflow.add_nodes([inputnode])
         return workflow
 
     workflow.__postdesc__ = """\
-Spatial normalization to the ICBM 152 Nonlinear Asymmetrical
-template version 2009c [@mni, RRID:SCR_008796] was performed
-through nonlinear registration with `antsRegistration`
-[ANTs {ants_ver}, RRID:SCR_004757, @ants], using
-brain-extracted versions of both T1w volume and template.
 Brain tissue segmentation of cerebrospinal fluid (CSF),
 white-matter (WM) and gray-matter (GM) was performed on
-the brain-extracted T1w using `FAST` [FSL {fsl_ver}, RRID:SCR_002823,
-@fsl_fast].
+the {contrast} using `SynthSeg` [FreeSurfer, @synthseg].
+Brain extraction was performed on the {contrast} image
+using `SynthStrip` [FreeSurfer, @synthstrip]
 """.format(
         ants_ver=BrainExtraction().version or '<ver>',
-        fsl_ver=fsl.FAST().version or '<ver>',
+        contrast=anatomical_contrast
     )
     desc = """Anatomical data preprocessing
 
 : """
     desc += """\
-A total of {num_t1w} T1-weighted (T1w) images were found within the input
+A total of {num_anats} {contrast}-weighted ({contrast}w) images were found within the input
 BIDS dataset.
 All of them were corrected for intensity non-uniformity (INU)
 using `N4BiasFieldCorrection` [@n4, ANTs {ants_ver}].
-""" if num_t1w > 1 else """\
-The T1-weighted (T1w) image was corrected for intensity non-uniformity (INU)
+""" if num_anat_images > 1 else """\
+The {contrast}-weighted ({contrast}w) image was corrected for intensity non-uniformity (INU)
 using `N4BiasFieldCorrection` [@n4, ANTs {ants_ver}],
-and used as T1w-reference throughout the workflow.
+and used as an anatomical reference throughout the workflow.
 """
 
     workflow.__desc__ = desc.format(
-        num_t1w=num_t1w,
-        ants_ver=BrainExtraction().version or '<ver>'
+        num_anats=num_anat_images,
+        ants_ver=BrainExtraction().version or '<ver>',
+        contrast=anatomical_contrast[:-1]  # remove the "w"
     )
 
-    buffernode = pe.Node(niu.IdentityInterface(
-        fields=['t1_brain', 't1_mask']), name='buffernode')
-
     anat_template_wf = init_anat_template_wf(longitudinal=longitudinal, omp_nthreads=omp_nthreads,
-                                             num_t1w=num_t1w)
-
-    # 3. Skull-stripping
-    # Bias field correction is handled in skull strip workflows.
-    if debug:
-        skullstrip_wf = init_skullstrip_afni_wf(name='skullstrip_wf',
-                                                acpc_template=ref_img_brain,
-                                                debug=debug,
-                                                omp_nthreads=omp_nthreads)
-    else:
-        skullstrip_wf = init_skullstrip_ants_wf(name='skullstrip_wf',
-                                                skull_strip_template=skull_strip_template,
-                                                acpc_template=ref_img_brain,
-                                                debug=debug,
-                                                omp_nthreads=omp_nthreads)
+                                             num_anat_images=num_anat_images)
+    skullstrip_wf = init_synthstrip_wf()
 
     workflow.connect([
-        (inputnode, anat_template_wf, [('t1w', 'inputnode.t1w')]),
-        (anat_template_wf, skullstrip_wf, [('outputnode.t1_template', 'inputnode.in_file')]),
+        (inputnode, anat_template_wf, [(anatomical_contrast.lower(), 'inputnode.images')]),
+        (anat_template_wf, skullstrip_wf, [('outputnode.template', 'inputnode.in_file')]),
         (skullstrip_wf, outputnode, [('outputnode.bias_corrected', 't1_preproc')]),
         (anat_template_wf, outputnode, [
             ('outputnode.template_transforms', 't1_template_transforms')]),
         (buffernode, outputnode, [('t1_brain', 't1_brain'),
                                   ('t1_mask', 't1_mask')])
     ])
-
-    # 4. Surface reconstruction
-    if freesurfer:
-        surface_recon_wf = init_surface_recon_wf(name='surface_recon_wf',
-                                                 omp_nthreads=omp_nthreads, hires=hires)
-        applyrefined = pe.Node(CustomApplyMask(), name='applyrefined')
-        workflow.connect([
-            (inputnode, surface_recon_wf, [
-                ('t2w', 'inputnode.t2w'),
-                ('flair', 'inputnode.flair'),
-                ('subjects_dir', 'inputnode.subjects_dir'),
-                ('subject_id', 'inputnode.subject_id')]),
-
-            # Change so it's using ACPC (or not) input
-            (skullstrip_wf, surface_recon_wf, [
-                ('outputnode.bias_corrected', 'inputnode.t1w'),
-                ('outputnode.out_file', 'inputnode.skullstripped_t1'),
-                ('outputnode.out_segs', 'inputnode.ants_segs'),
-                ('outputnode.bias_corrected', 'inputnode.corrected_t1')]),
-
-            (skullstrip_wf, applyrefined, [
-                ('outputnode.bias_corrected', 'in_file')]),
-            (surface_recon_wf, applyrefined, [
-                ('outputnode.out_brainmask', 'mask_file')]),
-            (surface_recon_wf, outputnode, [
-                ('outputnode.subjects_dir', 'subjects_dir'),
-                ('outputnode.subject_id', 'subject_id'),
-                ('outputnode.t1_2_fsnative_forward_transform', 't1_2_fsnative_forward_transform'),
-                ('outputnode.t1_2_fsnative_reverse_transform', 't1_2_fsnative_reverse_transform'),
-                ('outputnode.surfaces', 'surfaces'),
-                ('outputnode.out_aseg', 't1_aseg'),
-                ('outputnode.out_aparc', 't1_aparc')]),
-            (applyrefined, buffernode, [('out_file', 't1_brain')]),
-            (surface_recon_wf, buffernode, [
-                ('outputnode.out_brainmask', 't1_mask')]),
-        ])
-    else:
-        workflow.connect([
-            (skullstrip_wf, buffernode, [
-                ('outputnode.out_file', 't1_brain'),
-                ('outputnode.out_mask', 't1_mask')]),
-        ])
 
     # 5. Segmentation
     t1_seg = pe.Node(fsl.FAST(segments=True, no_bias=True, probability_maps=True),
@@ -498,21 +398,22 @@ and used as T1w-reference throughout the workflow.
         ]),
     ])
 
-    if freesurfer:
-        workflow.connect([
-            (surface_recon_wf, anat_derivatives_wf, [
-                ('outputnode.out_aseg', 'inputnode.t1_fs_aseg'),
-                ('outputnode.out_aparc', 'inputnode.t1_fs_aparc'),
-            ]),
-        ])
+    # if freesurfer:
+    #     workflow.connect([
+    #         (surface_recon_wf, anat_derivatives_wf, [
+    #             ('outputnode.out_aseg', 'inputnode.t1_fs_aseg'),
+    #             ('outputnode.out_aparc', 'inputnode.t1_fs_aparc'),
+    #         ]),
+    #     ])
 
     return workflow
 
 
-def init_anat_template_wf(longitudinal, omp_nthreads, num_t1w, name='anat_template_wf'):
+def init_anat_template_wf(longitudinal, omp_nthreads, num_images,
+                          anatomical_contrast, sloppy, name='anat_template_wf'):
     r"""
     This workflow generates a canonically oriented structural template from
-    input T1w images.
+    input anatomical images.
 
 
     .. workflow::
@@ -520,7 +421,8 @@ def init_anat_template_wf(longitudinal, omp_nthreads, num_t1w, name='anat_templa
         :simple_form: yes
 
         from qsiprep.workflows.anatomical import init_anat_template_wf
-        wf = init_anat_template_wf(longitudinal=False, omp_nthreads=1, num_t1w=1)
+        wf = init_anat_template_wf(longitudinal=False, omp_nthreads=1,
+                                   anatomical_contrast="T1w", num_images=1)
 
     **Parameters**
 
@@ -529,58 +431,61 @@ def init_anat_template_wf(longitudinal, omp_nthreads, num_t1w, name='anat_templa
             (may increase runtime)
         omp_nthreads : int
             Maximum number of threads an individual process may use
-        num_t1w : int
-            Number of T1w images
+        anatomical_contrast : str
+            Contrast to use for anatomical images
+        num_images : int
+            Number of anatomical images
         name : str, optional
             Workflow name (default: anat_template_wf)
 
 
     **Inputs**
 
-        t1w
-            List of T1-weighted structural images
+        anatomical_images
+            List of structural images
 
 
     **Outputs**
 
-        t1_template
+        template
             Structural template, defining T1w space
         template_transforms
-            List of affine transforms from ``t1_template`` to original T1w images
+            List of affine transforms from ``template`` to original images
         out_report
             Conformation report
     """
 
     workflow = Workflow(name=name)
 
-    if num_t1w > 1:
+    if num_images > 1:
         workflow.__desc__ = """\
-A T1w-reference map was computed after registration of
-{num_t1w} T1w images (after INU-correction) using
-`mri_robust_template` [FreeSurfer {fs_ver}, @fs_template].
-""".format(num_t1w=num_t1w, fs_ver=fs.Info().looseversion() or '<ver>')
+A {contrast}-reference map was computed after registration of
+{num_images} {contrast} images (after INU-correction) using
+`antsRegistration` [ANTs {ants_ver}].
+""".format(contrast=anatomical_contrast, num_images=num_images,
+           ants_ver=BrainExtraction().version or '<ver>',)
 
-    inputnode = pe.Node(niu.IdentityInterface(fields=['t1w']), name='inputnode')
+    inputnode = pe.Node(niu.IdentityInterface(fields=['images']), name='inputnode')
     outputnode = pe.Node(niu.IdentityInterface(
-        fields=['t1_template', 't1w_valid_list', 'template_transforms', 'out_report']),
+        fields=['template', 'valid_list', 'template_transforms', 'out_report']),
         name='outputnode')
 
-    # 0. Reorient T1w image(s) to LPS and resample to common voxel space
-    t1_template_dimensions = pe.Node(TemplateDimensions(), name='t1_template_dimensions')
-    t1_conform = pe.MapNode(Conform(deoblique_header=True), iterfield='in_file',
-                            name='t1_conform')
+    # 0. Reorient anatomical image(s) to LPS and resample to common voxel space
+    template_dimensions = pe.Node(TemplateDimensions(), name='template_dimensions')
+    anat_conform = pe.MapNode(Conform(deoblique_header=True), iterfield='in_file',
+                              name='anat_conform')
 
     workflow.connect([
-        (inputnode, t1_template_dimensions, [('t1w', 't1w_list')]),
-        (t1_template_dimensions, t1_conform, [
+        (inputnode, template_dimensions, [('images', 't1w_list')]),
+        (template_dimensions, anat_conform, [
             ('t1w_valid_list', 'in_file'),
             ('target_zooms', 'target_zooms'),
             ('target_shape', 'target_shape')]),
-        (t1_template_dimensions, outputnode, [('out_report', 'out_report'),
-                                              ('t1w_valid_list', 't1w_valid_list')]),
+        (template_dimensions, outputnode, [('out_report', 'out_report'),
+                                           ('valid_list', 'valid_list')]),
     ])
 
-    if num_t1w == 1:
+    if num_images == 1:
         def _get_first(in_list):
             if isinstance(in_list, (list, tuple)):
                 return in_list[0]
@@ -589,12 +494,12 @@ A T1w-reference map was computed after registration of
         outputnode.inputs.template_transforms = [pkgr('qsiprep', 'data/itkIdentityTransform.txt')]
 
         workflow.connect([
-            (t1_conform, outputnode, [(('out_file', _get_first), 't1_template')]),
+            (anat_conform, outputnode, [(('out_file', _get_first), 'template')]),
         ])
 
         return workflow
 
-    # 1. Template (only if several T1w images)
+    # 1. Template (only if several images)
     # 1a. Correct for bias field: the bias field is an additive factor
     #     in log-transformed intensity units. Therefore, it is not a linear
     #     combination of fields and N4 fails with merged images.
@@ -603,54 +508,25 @@ A T1w-reference map was computed after registration of
         N4BiasFieldCorrection(dimension=3, copy_header=True),
         iterfield='input_image', name='n4_correct',
         n_procs=1)  # n_procs=1 for reproducibility
+
+
     # StructuralReference is fs.RobustTemplate if > 1 volume, copying otherwise
-    t1_merge = pe.Node(
-        StructuralReference(auto_detect_sensitivity=True,
-                            initial_timepoint=1,      # For deterministic behavior
-                            intensity_scaling=True,   # 7-DOF (rigid + intensity)
-                            subsample_threshold=200,
-                            fixed_timepoint=not longitudinal,
-                            no_iteration=not longitudinal,
-                            transform_outputs=True,
-                            ),
-        mem_gb=2 * num_t1w - 1,
-        name='t1_merge')
-
-    # 2. Reorient template to LPS, if needed (mri_robust_template may set to LIA)
-    t1_reorient = pe.Node(image.Reorient(orientation='LPS'), name='t1_reorient')
-
-    lta_to_fsl = pe.MapNode(LTAConvert(out_fsl=True), iterfield=['in_lta'],
-                            name='lta_to_fsl')
-
-    concat_affines = pe.MapNode(
-        ConcatAffines(3, invert=True), iterfield=['mat_AtoB', 'mat_BtoC'],
-        name='concat_affines', run_without_submitting=True)
-
-    fsl_to_itk = pe.MapNode(c3.C3dAffineTool(fsl2ras=True, itk_transform=True),
-                            iterfield=['transform_file', 'source_file'], name='fsl_to_itk')
-
-    def _set_threads(in_list, maximum):
-        return min(len(in_list), maximum)
+    anat_merge_wf = init_b0_hmc_wf(
+        align_to="first" if not longitudinal else "iterative",
+        transform="Rigid",
+        sloppy=sloppy,
+        name="anat_merge_wf",
+        num_iters=2,
+        omp_nthreads=omp_nthreads,
+        boilerplate=False
+    )
 
     workflow.connect([
-        (t1_conform, n4_correct, [('out_file', 'input_image')]),
-        (t1_conform, t1_merge, [
-            (('out_file', _set_threads, omp_nthreads), 'num_threads'),
-            (('out_file', add_suffix, '_template'), 'out_file')]),
-        (n4_correct, t1_merge, [('output_image', 'in_files')]),
-        (t1_merge, t1_reorient, [('out_file', 'in_file')]),
-        # Combine orientation and template transforms
-        (t1_merge, lta_to_fsl, [('transform_outputs', 'in_lta')]),
-        (t1_conform, concat_affines, [('transform', 'mat_AtoB')]),
-        (lta_to_fsl, concat_affines, [('out_fsl', 'mat_BtoC')]),
-        (t1_reorient, concat_affines, [('transform', 'mat_CtoD')]),
-        (t1_template_dimensions, fsl_to_itk, [('t1w_valid_list', 'source_file')]),
-        (t1_reorient, fsl_to_itk, [('out_file', 'reference_file')]),
-        (concat_affines, fsl_to_itk, [('out_mat', 'transform_file')]),
-        # Output
-        (t1_reorient, outputnode, [('out_file', 't1_template')]),
-        (fsl_to_itk, outputnode, [('itk_transform', 'template_transforms')]),
-    ])
+        (anat_conform, n4_correct, [('out_file', 'input_image')]),
+        (n4_correct, anat_merge_wf, [('output_image', 'b0_images')]),
+        (anat_merge_wf, outputnode, [
+            ('final_template', 't1_template'),
+            ('forward_transforms', 'template_transforms')])])
 
     return workflow
 
@@ -1637,24 +1513,10 @@ def init_anat_derivatives_wf(output_dir, output_spaces, template, freesurfer,
         name='ds_t1_template_transforms', run_without_submitting=True)
 
     ds_t1_mni_warp = pe.Node(
-        DerivativesDataSink(base_directory=output_dir, suffix=suffix_fmt('T1w', template)),
+        DerivativesDataSink(
+            base_directory=output_dir,
+            suffix=suffix_fmt('T1w', template)),
         name='ds_t1_mni_warp', run_without_submitting=True)
-
-    lta_2_itk = pe.Node(LTAConvert(out_itk=True), name='lta_2_itk')
-
-    ds_t1_fsnative = pe.Node(
-        DerivativesDataSink(base_directory=output_dir, suffix=suffix_fmt('T1w', 'fsnative')),
-        name='ds_t1_fsnative', run_without_submitting=True)
-
-    name_surfs = pe.MapNode(GiftiNameSource(pattern=r'(?P<LR>[lr])h.(?P<surf>.+)_converted.gii',
-                                            template='hemi-{LR}_{surf}.surf'),
-                            iterfield='in_file',
-                            name='name_surfs',
-                            run_without_submitting=True)
-
-    ds_surfs = pe.MapNode(
-        DerivativesDataSink(base_directory=output_dir),
-        iterfield=['in_file', 'suffix'], name='ds_surfs', run_without_submitting=True)
 
     workflow.connect([
         (inputnode, t1_name, [('source_files', 'in_files')]),
@@ -1670,26 +1532,6 @@ def init_anat_derivatives_wf(output_dir, output_spaces, template, freesurfer,
         (t1_name, ds_t1_tpms, [('out', 'source_file')]),
     ])
 
-    if freesurfer:
-        ds_t1_fsaseg = pe.Node(
-            DerivativesDataSink(base_directory=output_dir, desc='aseg', suffix='dseg'),
-            name='ds_t1_fsaseg', run_without_submitting=True)
-        ds_t1_fsparc = pe.Node(
-            DerivativesDataSink(base_directory=output_dir, desc='aparcaseg', suffix='dseg'),
-            name='ds_t1_fsparc', run_without_submitting=True)
-        workflow.connect([
-            (inputnode, lta_2_itk, [('t1_2_fsnative_forward_transform', 'in_lta')]),
-            (t1_name, ds_t1_fsnative, [('out', 'source_file')]),
-            (lta_2_itk, ds_t1_fsnative, [('out_itk', 'in_file')]),
-            (inputnode, name_surfs, [('surfaces', 'in_file')]),
-            (inputnode, ds_surfs, [('surfaces', 'in_file')]),
-            (t1_name, ds_surfs, [('out', 'source_file')]),
-            (name_surfs, ds_surfs, [('out_name', 'suffix')]),
-            (inputnode, ds_t1_fsaseg, [('t1_fs_aseg', 'in_file')]),
-            (inputnode, ds_t1_fsparc, [('t1_fs_aparc', 'in_file')]),
-            (t1_name, ds_t1_fsaseg, [('out', 'source_file')]),
-            (t1_name, ds_t1_fsparc, [('out', 'source_file')]),
-        ])
     if 'template' in output_spaces or force_spatial_normalization:
         workflow.connect([
             (inputnode, ds_t1_mni_warp, [('t1_2_mni_forward_transform', 'in_file')]),
@@ -1753,3 +1595,18 @@ def dummy_anat_outputs(outputnode, infant_mode=False):
 
     return fake_seg
 
+
+def get_reference_images(infant_mode, anatomical_contrast):
+    contrast_name = anatomical_contrast.lower()
+    if not infant_mode:
+        ref_img = pkgr('qsiprep',
+                       'data/mni_1mm_%s_lps.nii.gz' % contrast_name)
+        ref_img_brain = pkgr('qsiprep',
+                             'data/mni_1mm_%s_lps_brain.nii.gz' % contrast_name)
+    else:
+        ref_img = pkgr('qsiprep',
+                       'data/mni_1mm_%s_lps_infant.nii.gz' % contrast_name)
+        ref_img_brain = pkgr('qsiprep',
+                             'data/mni_1mm_%s_lps_brain_infant.nii.gz' % contrast_name)
+
+    return ref_img, ref_img_brain

@@ -230,6 +230,14 @@ def get_parser():
 
     g_conf = parser.add_argument_group('Workflow configuration')
     g_conf.add_argument(
+        '--anat-modality',
+        '--anat_modality',
+        choices=["T1w", "T2w", "none"],
+        default="T1w",
+        help="Modality to use as the anatomical reference. Images of this "
+             "contrast will be skull stripped and segmented for use in the "
+             "visual reports and reconstruction. If --infant, T2w is forced.")
+    g_conf.add_argument(
         '--ignore',
         required=False,
         action='store',
@@ -291,8 +299,8 @@ def get_parser():
     g_conf.add_argument(
         '--denoise-after-combining', '--denoise_after_combining',
         action='store_true',
-        help='run ``dwidenoise`` after combining dwis. Requires '
-             '``--combine-all-dwis``')
+        help='run ``dwidenoise`` after combining dwis, but before motion correction. '
+             'Requires ``--combine-all-dwis``')
     g_conf.add_argument(
         '--separate_all_dwis', '--separate-all-dwis',
         action='store_true',
@@ -341,13 +349,13 @@ def get_parser():
         'after preprocessing. If set to a lower value than the original voxel '
         'size, your data will be upsampled using BSpline interpolation.')
 
-    g_coreg = parser.add_argument_group('Options for dwi-to-T1w coregistration')
+    g_coreg = parser.add_argument_group('Options for dwi-to-Anatomical coregistration')
     g_coreg.add_argument(
         '--b0-to-t1w-transform', '--b0_to_t1w_transform',
         action='store',
         default="Rigid",
         choices=["Rigid", "Affine"],
-        help='Degrees of freedom when registering b0 to T1w images. '
+        help='Degrees of freedom when registering b0 to anatomical images. '
         '6 degrees (rotation and translation) are used by default.')
     g_coreg.add_argument(
         '--intramodal-template-iters', '--intramodal_template_iters',
@@ -440,7 +448,7 @@ def get_parser():
         'at https://surfer.nmr.mgh.harvard.edu/registration.html')
     g_fs.add_argument(
         '--do-reconall', '--do_reconall', action='store_true',
-        help='Run the FreeSurfer recon-all pipeline')
+        help='Run the FreeSurfer recon-all pipeline (IGNORED)')
 
     # Fieldmap options
     g_fmap = parser.add_argument_group(
@@ -859,8 +867,8 @@ def build_qsiprep_workflow(opts, retval):
     force_spatial_normalization = not opts.skip_t1_based_spatial_normalization
     if not force_spatial_normalization and (opts.use_syn_sdc or opts.force_syn):
         msg = [
-            'SyN SDC correction requires T1 to MNI registration.',
-            'Adding T1w-based normalization'
+            'SyN SDC correction requires anatomical to template registration.',
+            'Adding anatomical-based normalization'
         ]
         force_spatial_normalization = True
         logger.warning(' '.join(msg))
@@ -963,6 +971,7 @@ def build_qsiprep_workflow(opts, retval):
         output_dir=str(output_dir),
         ignore=opts.ignore,
         hires=False,
+        anatomical_contrast=opts.anatomical_contrast,
         freesurfer=opts.do_reconall,
         bids_filters=opts.bids_filters,
         debug=opts.sloppy,
