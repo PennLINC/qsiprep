@@ -75,6 +75,46 @@ class SplitDWIs(SimpleInterface):
 
         return runtime
 
+class SplitDWIsFSLInputSpec(BaseInterfaceInputSpec):
+    dwi_file = File(desc='the dwi image')
+    bvec_file = File(desc='the bvec file')
+    bval_file = File(desc='the bval file')
+    deoblique_bvecs = traits.Bool(False, usedefault=True,
+                                  desc='write LPS+ world coordinate bvecs')
+    b0_threshold = traits.Int(50, usedefault=True,
+                              desc='Maximum b-value that can be considered a b0')
+
+
+class SplitDWIsFSLOutputSpec(TraitedSpec):
+    dwi_files = OutputMultiObject(File(exists=True), desc='single volume dwis')
+    bval_files = OutputMultiObject(File(exists=True), desc='single volume bvals')
+    bvec_files = OutputMultiObject(File(exists=True), desc='single volume bvecs')
+    b0_images = OutputMultiObject(File(exists=True), desc='just the b0s')
+    b0_indices = traits.List(desc='list of original indices for each b0 image')
+
+
+class SplitDWIsFSL(SimpleInterface):
+    input_spec = SplitDWIsInputSpec
+    output_spec = SplitDWIsOutputSpec
+
+    def _run_interface(self, runtime):
+        split = fsl.Split(dimension='t', in_file=self.inputs.dwi_file)
+        split_dwi_files = split.run().outputs.out_files
+
+        split_bval_files, split_bvec_files = split_bvals_bvecs(
+            self.inputs.bval_file, self.inputs.bvec_file, split_dwi_files,
+            self.inputs.deoblique_bvecs, runtime.cwd)
+
+        bvalues = np.loadtxt(self.inputs.bval_file)
+        b0_indices = np.flatnonzero(bvalues < self.inputs.b0_threshold)
+        b0_paths = [split_dwi_files[idx] for idx in b0_indices]
+        self._results['dwi_files'] = split_dwi_files
+        self._results['bval_files'] = split_bval_files
+        self._results['bvec_files'] = split_bvec_files
+        self._results['b0_images'] = b0_paths
+        self._results['b0_indices'] = b0_indices.tolist()
+
+        return runtime
 
 def _flatten(in_list):
     out_list = []
