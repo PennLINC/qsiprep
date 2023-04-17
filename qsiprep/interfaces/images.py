@@ -91,8 +91,8 @@ class SplitDWIsFSLOutputSpec(TraitedSpec):
 
 
 class SplitDWIsFSL(SimpleInterface):
-    input_spec = SplitDWIsInputSpec
-    output_spec = SplitDWIsOutputSpec
+    input_spec = SplitDWIsFSLInputSpec
+    output_spec = SplitDWIsFSLOutputSpec
 
     def _run_interface(self, runtime):
         split = fsl.Split(dimension='t', in_file=self.inputs.dwi_file)
