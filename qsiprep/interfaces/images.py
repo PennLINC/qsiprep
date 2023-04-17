@@ -34,8 +34,8 @@ from ..niworkflows.interfaces.images import ValidateImageInputSpec
 LOGGER = logging.getLogger('nipype.interface')
 
 
-class SplitDWIsInputSpec(BaseInterfaceInputSpec):
-    dwi_file = File(desc='the dwi image')
+class SplitDWIsBvalsInputSpec(BaseInterfaceInputSpec):
+    split_files = InputMultiObject(desc='pre-split DWI images')
     bvec_file = File(desc='the bvec file')
     bval_file = File(desc='the bval file')
     deoblique_bvecs = traits.Bool(False, usedefault=True,
@@ -44,30 +44,27 @@ class SplitDWIsInputSpec(BaseInterfaceInputSpec):
                               desc='Maximum b-value that can be considered a b0')
 
 
-class SplitDWIsOutputSpec(TraitedSpec):
-    dwi_files = OutputMultiObject(File(exists=True), desc='single volume dwis')
+class SplitDWIsBvalsOutputSpec(TraitedSpec):
     bval_files = OutputMultiObject(File(exists=True), desc='single volume bvals')
     bvec_files = OutputMultiObject(File(exists=True), desc='single volume bvecs')
     b0_images = OutputMultiObject(File(exists=True), desc='just the b0s')
     b0_indices = traits.List(desc='list of original indices for each b0 image')
 
 
-class SplitDWIs(SimpleInterface):
-    input_spec = SplitDWIsInputSpec
-    output_spec = SplitDWIsOutputSpec
+class SplitDWIsBvals(SimpleInterface):
+    input_spec = SplitDWIsBvalsInputSpec
+    output_spec = SplitDWIsBvalsOutputSpec
 
     def _run_interface(self, runtime):
-        split = fsl.Split(dimension='t', in_file=self.inputs.dwi_file)
-        split_dwi_files = split.run().outputs.out_files
 
         split_bval_files, split_bvec_files = split_bvals_bvecs(
-            self.inputs.bval_file, self.inputs.bvec_file, split_dwi_files,
-            self.inputs.deoblique_bvecs, runtime.cwd)
+            self.inputs.bval_file, self.inputs.bvec_file, 
+            self.inputs.split_files, self.inputs.deoblique_bvecs, 
+            runtime.cwd)
 
         bvalues = np.loadtxt(self.inputs.bval_file)
         b0_indices = np.flatnonzero(bvalues < self.inputs.b0_threshold)
-        b0_paths = [split_dwi_files[idx] for idx in b0_indices]
-        self._results['dwi_files'] = split_dwi_files
+        b0_paths = [self.inputs.split_files[idx] for idx in b0_indices]
         self._results['bval_files'] = split_bval_files
         self._results['bvec_files'] = split_bvec_files
         self._results['b0_images'] = b0_paths
