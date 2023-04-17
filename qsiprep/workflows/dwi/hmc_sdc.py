@@ -13,7 +13,7 @@ from nipype.interfaces import ants, utility as niu
 
 from .registration import init_b0_to_anat_registration_wf, init_direct_b0_acpc_wf
 from ...interfaces.gradients import SliceQC, CombineMotions, GradientRotation
-from ...interfaces.images import SplitDWIsBvals, Tsplit
+from ...interfaces.images import SplitDWIsBvals, TSplit
 from ..fieldmap.base import init_sdc_wf
 from ..fieldmap.drbuddi import init_drbuddi_wf
 from ...engine import Workflow
