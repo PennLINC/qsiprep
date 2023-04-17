@@ -24,7 +24,6 @@ from nipype.interfaces.base import (isdefined, traits, TraitedSpec, BaseInterfac
                                     SimpleInterface, File, InputMultiObject, OutputMultiObject,
                                     OutputMultiPath)
 from nipype.interfaces.afni.base import (AFNICommand, AFNICommandInputSpec, AFNICommandOutputSpec)
-from nipype.interfaces import fsl
 # from qsiprep.interfaces.images import (
 #    nii_ones_like, extract_wm, SignalExtraction, MatchHeader,
 #    FilledImageLike, DemeanImage, TemplateDimensions)
@@ -93,7 +92,12 @@ class SplitDWIs_FSL(SimpleInterface):
     output_spec = SplitDWIsFSLOutputSpec
 
     def _run_interface(self, runtime):
-        
+        fsl_check = os.environ.get('FSL_BUILD')
+        if fsl_check=="no_fsl":
+            raise Exception(
+                """Container in use does not have FSL. To use this workflow, 
+                please download the qsiprep container with FSL installed.""")
+        from nipype.interfaces import fsl
         split = fsl.Split(dimension='t', in_file=self.inputs.dwi_file)
         split_dwi_files = split.run().outputs.out_files
 
@@ -161,10 +165,12 @@ class IntraModalMerge(SimpleInterface):
     output_spec = IntraModalMergeOutputSpec
 
     def _run_interface(self, runtime):
-        fsl_check = os.environ.get('FSLDIR', False)
-        if not fsl_check:
-            raise Exception("Container in use does not have FSL. To use this workflow, please download the qsiprep container with FSL installed.")
-    
+        fsl_check = os.environ.get('FSL_BUILD')
+        if fsl_check=="no_fsl":
+            raise Exception(
+                """Container in use does not have FSL. To use this workflow, 
+                please download the qsiprep container with FSL installed.""")
+        from nipype.interfaces import fsl
         in_files = self.inputs.in_files
         if not isinstance(in_files, list):
             in_files = [self.inputs.in_files]

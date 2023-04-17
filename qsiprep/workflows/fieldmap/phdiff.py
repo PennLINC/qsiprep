@@ -54,10 +54,11 @@ def init_phdiff_wf(omp_nthreads, phasetype='phasediff', name='phdiff_wf'):
 
     """
     # Check for FSL binary
-    fsl_check = os.environ.get('FSLDIR', False)
-    if not fsl_check:
-        raise Exception("Container in use does not have FSL. To use this workflow, please download the qsiprep container with FSL installed.")
-    
+    fsl_check = os.environ.get('FSL_BUILD')
+    if fsl_check=="no_fsl":
+        raise Exception(
+            """Container in use does not have FSL. To use this workflow, 
+            please download the qsiprep container with FSL installed.""")
     workflow = Workflow(name=name)
     workflow.__desc__ = """\
 A deformation field to correct for susceptibility distortions was estimated

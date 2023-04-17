@@ -3,7 +3,7 @@
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 from __future__ import absolute_import, division, print_function, unicode_literals
 import os
-from nipype.interfaces import ants, afni, fsl, utility as niu
+from nipype.interfaces import ants, afni, utility as niu
 from nipype.pipeline import engine as pe
 
 
@@ -20,10 +20,12 @@ quality-assessment-protocol/blob/master/qap/anatomical_preproc.py#L105>`_.
 
 
     """
-    fsl_check = os.environ.get('FSLDIR', False)
-    if not fsl_check:
-        raise Exception("Container in use does not have FSL. To use this workflow, please download the qsiprep container with FSL installed.")
-
+    fsl_check = os.environ.get('FSL_BUILD')
+    if fsl_check=="no_fsl":
+        raise Exception(
+            """Container in use does not have FSL. To use this workflow, 
+            please download the qsiprep container with FSL installed.""")
+    from nipype.interfaces import fsl
     workflow = pe.Workflow(name=name)
     inputnode = pe.Node(niu.IdentityInterface(fields=['in_file']),
                         name='inputnode')

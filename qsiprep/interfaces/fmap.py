@@ -342,10 +342,11 @@ def _despike2d(data, thres, neigh=None):
 
 def _unwrap(fmap_data, mag_file, mask=None):
     import os
-    fsl_check = os.environ.get('FSLDIR', False)
-    if not fsl_check:
-        raise Exception("Container in use does not have FSL. To use this workflow, please download the qsiprep container with FSL installed.")
-
+    fsl_check = os.environ.get('FSL_BUILD')
+    if fsl_check=="no_fsl":
+        raise Exception(
+            """Container in use does not have FSL. To use this workflow, 
+            please download the qsiprep container with FSL installed.""")
     from math import pi
     from nipype.interfaces.fsl import PRELUDE
     magnii = nb.load(mag_file)

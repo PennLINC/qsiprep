@@ -79,7 +79,7 @@ class QsiprepAnatomicalIngress(SimpleInterface):
             excludes=['space-MNI'])
         self._get_if_exists(
             't1_seg',
-            '%s/sub-%s_*dseg.nii**' % (anat_root, sub),
+            '%s/sub-%s_*dseg.nii*' % (anat_root, sub),
             excludes=['space-MNI', 'aseg'])
         self._get_if_exists(
             't1_aseg',

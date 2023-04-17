@@ -160,8 +160,8 @@ def init_brain_extraction_wf(name='brain_extraction_wf',
 
 
     """
-    fsl_check = os.environ.get('FSLDIR', False)
-    if not fsl_check:
+    fsl_check = os.environ.get('FSL_BUILD')
+    if fsl_check=="no_fsl":
         raise Exception(
             """Container in use does not have FSL. To use this workflow, 
             please download the qsiprep container with FSL installed.""")

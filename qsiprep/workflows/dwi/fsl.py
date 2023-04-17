@@ -97,10 +97,11 @@ def init_fsl_hmc_wf(scan_groups,
 
     """
     # Check for FSL binary
-    fsl_check = os.environ.get('FSLDIR', False)
-    if not fsl_check:
-        raise Exception("Container in use does not have FSL. To use this workflow, please download the qsiprep container with FSL installed.")
-
+    fsl_check = os.environ.get('FSL_BUILD')
+    if fsl_check=="no_fsl":
+        raise Exception(
+            """Container in use does not have FSL. To use this workflow, 
+            please download the qsiprep container with FSL installed.""")
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=['dwi_file', 'bvec_file', 'bval_file', 'b0_indices', 'b0_images',
