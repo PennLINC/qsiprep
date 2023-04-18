@@ -21,6 +21,7 @@ Fieldmap preprocessing workflow for fieldmap data structure
 
 from nipype.interfaces import ants, fsl, utility as niu
 from nipype.pipeline import engine as pe
+import os
 from .utils import cleanup_edge_pipeline, siemens2rads, demean_image
 from ...niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from ...niworkflows.interfaces.bids import ReadSidecarJSON
@@ -62,7 +63,11 @@ using a custom workflow of *fMRIPrep* derived from D. Greve's `epidewarp.fsl`
 [script](http://www.nmr.mgh.harvard.edu/~greve/fbirn/b0/epidewarp.fsl) and
 further improvements of HCP Pipelines [@hcppipelines].
 """
-
+    fsl_check = os.environ.get('FSLDIR', False)
+    if not fsl_check:
+        raise Exception(
+            """Container in use does not have FSL. To use this workflow, 
+            please download the qsiprep container with FSL installed.""")
     inputnode = pe.Node(niu.IdentityInterface(fields=['magnitude', 'phasediff']),
                         name='inputnode')
 
