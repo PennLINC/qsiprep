@@ -12,6 +12,7 @@ Image tools interfaces
 import os
 from subprocess import Popen, PIPE
 import subprocess
+import glob
 from textwrap import indent
 import numpy as np
 import nibabel as nb
@@ -24,6 +25,7 @@ from nipype.interfaces.base import (isdefined, traits, TraitedSpec, BaseInterfac
                                     SimpleInterface, File, InputMultiObject, OutputMultiObject,
                                     OutputMultiPath)
 from nipype.interfaces.afni.base import (AFNICommand, AFNICommandInputSpec, AFNICommandOutputSpec)
+from nipype.interfaces import fsl
 # from qsiprep.interfaces.images import (
 #    nii_ones_like, extract_wm, SignalExtraction, MatchHeader,
 #    FilledImageLike, DemeanImage, TemplateDimensions)
@@ -80,6 +82,7 @@ class SplitDWIsFSLInputSpec(BaseInterfaceInputSpec):
     b0_threshold = traits.Int(50, usedefault=True,
                               desc='Maximum b-value that can be considered a b0')
 
+
 class SplitDWIsFSLOutputSpec(TraitedSpec):
     dwi_files = OutputMultiObject(File(exists=True), desc='single volume dwis')
     bval_files = OutputMultiObject(File(exists=True), desc='single volume bvals')
@@ -87,7 +90,8 @@ class SplitDWIsFSLOutputSpec(TraitedSpec):
     b0_images = OutputMultiObject(File(exists=True), desc='just the b0s')
     b0_indices = traits.List(desc='list of original indices for each b0 image')
 
-class SplitDWIs_FSL(SimpleInterface):
+
+class SplitDWIsFSL(SimpleInterface):
     input_spec = SplitDWIsFSLInputSpec
     output_spec = SplitDWIsFSLOutputSpec
 
@@ -97,18 +101,14 @@ class SplitDWIs_FSL(SimpleInterface):
             raise Exception(
                 """Container in use does not have FSL. To use this workflow, 
                 please download the qsiprep container with FSL installed.""")
-        from nipype.interfaces import fsl
-        split = fsl.Split(dimension='t', in_file=self.inputs.dwi_file)
-        split_dwi_files = split.run().outputs.out_files
-
         split_bval_files, split_bvec_files = split_bvals_bvecs(
-            self.inputs.bval_file, self.inputs.bvec_file, split_dwi_files,
-            self.inputs.deoblique_bvecs, runtime.cwd)
+            self.inputs.bval_file, self.inputs.bvec_file, 
+            self.inputs.split_files, self.inputs.deoblique_bvecs, 
+            runtime.cwd)
 
         bvalues = np.loadtxt(self.inputs.bval_file)
         b0_indices = np.flatnonzero(bvalues < self.inputs.b0_threshold)
-        b0_paths = [split_dwi_files[idx] for idx in b0_indices]
-        self._results['dwi_files'] = split_dwi_files
+        b0_paths = [self.inputs.split_files[idx] for idx in b0_indices]
         self._results['bval_files'] = split_bval_files
         self._results['bvec_files'] = split_bvec_files
         self._results['b0_images'] = b0_paths
