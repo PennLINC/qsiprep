@@ -324,16 +324,7 @@ def get_parser():
         help='write a series of voxelwise bvecs, relevant if '
         'writing preprocessed dwis to template space')
     g_conf.add_argument(
-        '--output-space', '--output_space',
-        action='store',
-        choices=['T1w', 'template'],
-        nargs='+',
-        default=['T1w'],
-        help='volume and surface spaces to resample dwis into\n'
-        ' - T1w: subject anatomical volume\n'
-        ' - template: deprecated. Will be ignored\n')
-    g_conf.add_argument(
-        '--template',
+        '--anatomical-template',
         required=False,
         action='store',
         choices=['MNI152NLin2009cAsym'],
@@ -434,7 +425,7 @@ def get_parser():
         help='do not use a random seed for skull-stripping - will ensure '
         'run-to-run replicability when used with --omp-nthreads 1')
     g_ants.add_argument(
-        '--skip-t1-based-spatial-normalization', '--skip_t1_based_spatial_normalization',
+        '--skip-anat-based-spatial-normalization', '--skip_anat_based_spatial_normalization',
         action='store_true',
         default=False,
         help='skip running the t1w-based normalization to template space. '
@@ -864,7 +855,7 @@ def build_qsiprep_workflow(opts, retval):
                        "Spatial normalization should be done during reconstruction.")
         output_spaces = ["T1w"]
 
-    force_spatial_normalization = not opts.skip_t1_based_spatial_normalization
+    force_spatial_normalization = not opts.skip_anat_based_spatial_normalization
     if not force_spatial_normalization and (opts.use_syn_sdc or opts.force_syn):
         msg = [
             'SyN SDC correction requires anatomical to template registration.',
