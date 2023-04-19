@@ -48,8 +48,8 @@ TEMPLATE_MAP = {
 
 
 #  pylint: disable=R0914
-def init_anat_preproc_wf(output_spaces, template, debug, dwi_only,
-                         infant_mode, freesurfer, longitudinal, omp_nthreads,
+def init_anat_preproc_wf(template, debug, dwi_only,
+                         infant_mode, longitudinal, omp_nthreads,
                          output_dir, num_anat_images, output_resolution,
                          nonlinear_register_to_template,
                          reportlets_dir, anatomical_contrast,
@@ -185,7 +185,7 @@ def init_anat_preproc_wf(output_spaces, template, debug, dwi_only,
     # Get the template image
     ref_img, ref_img_brain = get_reference_images(infant_mode, anatomical_contrast)
 
-    # 3a. Create the output reference grid_image
+    # Create the output reference grid_image
     reference_grid_wf = init_output_grid_wf(voxel_size=output_resolution,
                                             infant_mode=infant_mode,
                                             template_image=ref_img)
@@ -232,7 +232,9 @@ and used as an anatomical reference throughout the workflow.
     # Ensure there is 1 and only 1 anatomical reference
     anat_reference_wf = init_anat_template_wf(longitudinal=longitudinal,
                                               omp_nthreads=omp_nthreads,
-                                              num_anat_images=num_anat_images)
+                                              num_images=num_anat_images,
+                                              sloppy=debug,
+                                              anatomical_contrast=anatomical_contrast)
 
     # Do some padding to prevent memory issues in the synth workflows
     pad_anat_reference_wf = init_dl_prep_wf(name="pad_anat_reference_wf")
@@ -246,6 +248,7 @@ and used as an anatomical reference throughout the workflow.
     # Segment the anatomical reference
     synthseg_anat_wf = init_synthseg_wf(
         omp_nthreads=omp_nthreads,
+        sloppy=debug,
         name="synthseg_anat_wf")
 
     # Perform registrations
@@ -274,17 +277,17 @@ and used as an anatomical reference throughout the workflow.
             ('outputnode.brain_image', 't1_brain'),
             ('outputnode.brain_mask', 't1_mask'),
             ('outputnode.unfatsat', 't2w_unfatsat')]),
-        (anat_reference_wf, synthseg_anat_wf, [
+        (anat_reference_wf, synthstrip_anat_wf, [
             ('outputnode.template', 'inputnode.original_image')]),
 
         # SynthSeg
         (pad_anat_reference_wf, synthseg_anat_wf,[
-            ('outputnode.padded_image', 'inputnode.image')]),
+            ('outputnode.padded_image', 'inputnode.padded_image')]),
         (anat_reference_wf, synthseg_anat_wf, [
             ('outputnode.template', 'inputnode.original_image')]),
         (synthseg_anat_wf, outputnode, [
-            ('outputnode.seg_3class', 't1_seg'),
-            ('outputnode.seg_aparc', 't1_aseg'),
+            #('outputnode.posterior_image', 't1_probseg'),
+            #('outputnode.aparc_image', 't1_aseg'),
             ('outputnode.qc_file', 'segmentation_qc')]),
 
         # Make AC-PC transform, nonlinear if requested
@@ -294,28 +297,28 @@ and used as an anatomical reference throughout the workflow.
             ('outputnode.bias_corrected', 'inputnode.anatomical_reference')])
     ])
 
-    seg2msks = pe.Node(niu.Function(function=_seg2msks), name='seg2msks')
-    seg_rpt = pe.Node(ROIsPlot(colors=['r', 'magenta', 'b', 'g']), name='seg_rpt')
-    anat_reports_wf = init_anat_reports_wf(
-        reportlets_dir=reportlets_dir, output_spaces=output_spaces, template=template,
-        freesurfer=freesurfer, nonlinear_register_to_template=nonlinear_register_to_template)
-    workflow.connect([
-        (inputnode, anat_reports_wf, [
-            (('t1w', fix_multi_T1w_source_name), 'inputnode.source_file')]),
-        (anat_reference_wf, anat_reports_wf, [
-            ('outputnode.out_report', 'inputnode.t1_conform_report')]),
-        (anat_reference_wf, seg_rpt, [
-            ('outputnode.bias_corrected', 'in_file')]),
-        (, seg2msks, [('tissue_class_map', 'in_file')]),
-        (seg2msks, seg_rpt, [('out', 'in_rois')]),
-        (outputnode, seg_rpt, [('t1_mask', 'in_mask')]),
-        (seg_rpt, anat_reports_wf, [('out_report', 'inputnode.seg_report')]),
-    ])
+    # seg2msks = pe.Node(niu.Function(function=_seg2msks), name='seg2msks')
+    # seg_rpt = pe.Node(ROIsPlot(colors=['r', 'magenta', 'b', 'g']), name='seg_rpt')
+    # anat_reports_wf = init_anat_reports_wf(
+    #     reportlets_dir=reportlets_dir, output_spaces=output_spaces, template=template,
+    #     freesurfer=freesurfer, nonlinear_register_to_template=nonlinear_register_to_template)
+    # workflow.connect([
+    #     (inputnode, anat_reports_wf, [
+    #         (('t1w', fix_multi_T1w_source_name), 'inputnode.source_file')]),
+    #     (anat_reference_wf, anat_reports_wf, [
+    #         ('outputnode.out_report', 'inputnode.t1_conform_report')]),
+    #     (anat_reference_wf, seg_rpt, [
+    #         ('outputnode.bias_corrected', 'in_file')]),
+    #     (, seg2msks, [('tissue_class_map', 'in_file')]),
+    #     (seg2msks, seg_rpt, [('out', 'in_rois')]),
+    #     (outputnode, seg_rpt, [('t1_mask', 'in_mask')]),
+    #     (seg_rpt, anat_reports_wf, [('out_report', 'inputnode.seg_report')]),
+    # ])
 
-    if nonlinear_register_to_template:
-        workflow.connect([
-            (anat_normalization_wf, anat_reports_wf, [
-                ('outputnode.out_report', 'inputnode.t1_2_mni_report')])])
+    # if nonlinear_register_to_template:
+    #     workflow.connect([
+    #         (anat_normalization_wf, anat_reports_wf, [
+    #             ('outputnode.out_report', 'inputnode.t1_2_mni_report')])])
 
     # anat_derivatives_wf = init_anat_derivatives_wf(
     #     output_dir=output_dir,
@@ -417,7 +420,7 @@ A {contrast}-reference map was computed after registration of
             ('target_zooms', 'target_zooms'),
             ('target_shape', 'target_shape')]),
         (template_dimensions, outputnode, [('out_report', 'out_report'),
-                                           ('valid_list', 'valid_list')]),
+                                           ('t1w_valid_list', 'valid_list')]),
     ])
 
     # To match what was done in antsBrainExtraction.sh
@@ -540,6 +543,10 @@ def init_anat_normalization_wf(template_image, sloppy, template_name, omp_nthrea
             'to_template_nonlinear_transform', 'to_template_rigid_transform',
             'out_report']),
         name='outputnode')
+    # Extract the rigid component as the AC-PC transform
+    extract_rigid_transform = pe.Node(
+        AffineToRigid(),
+        name="extract_rigid_transform")
 
     if do_nonlinear:
         if sloppy:
@@ -548,11 +555,13 @@ def init_anat_normalization_wf(template_image, sloppy, template_name, omp_nthrea
             settings = pkgr('qsiprep', 'data/quick_syn.json')
             anat_nlin_interface = RobustMNINormalizationRPT(
                 float=True,
+                reference_image=template_image,
                 generate_report=True,
                 settings=[settings])
         else:
             anat_nlin_interface = RobustMNINormalizationRPT(
                     float=True,
+                    reference_image=template_image,
                     generate_report=True,
                     flavor='precise')
 
@@ -563,16 +572,11 @@ def init_anat_normalization_wf(template_image, sloppy, template_name, omp_nthrea
             n_procs=omp_nthreads,
             mem_gb=2)
         anat_nlin_normalization.inputs.template = template_name
-        anat_nlin_normalization.inputs.reference_image = template_image
         anat_nlin_normalization.inputs.orientation = "LPS"
-
-        # Extract the rigid component as the AC-PC transform
         disassemble_transform = pe.Node(
             DisassembleTransform(),
             name="disassemble_transform")
-        extract_rigid_transform = pe.Node(
-            AffineToRigid(),
-            name="extract_rigid_transform")
+
         workflow.connect([
             (inputnode, anat_nlin_normalization, [
                 ('anatomical_reference', 'moving_image'),
@@ -580,78 +584,68 @@ def init_anat_normalization_wf(template_image, sloppy, template_name, omp_nthrea
                 ('brain_mask', 'moving_mask')]),
             (anat_nlin_interface, disassemble_transform, [
                 ('composite_transform', 'in_file')]),
-            (disassemble_transform, ),
+            (disassemble_transform, extract_rigid_transform, [
+                (('out_transforms', _get_affine_component), 'affine_transform')]),
             (anat_nlin_normalization, outputnode, [
-                ('composite_transform', 'anat_nlin_normalization_forward_transform'),
-                ('inverse_composite_transform', 'anat_nlin_normalization_reverse_transform')]),
-        ])
+                ('composite_transform', 'to_template_nonlinear_transform'),
+                ('inverse_composite_transform', 'from_template_nonlinear_transform')])])
 
-
+        anat_nlin_normalization.inputs.reference_image = template_image
     else:
         ants_settings = pkgr("qsiprep", "data/intermodal_ACPC.json")
-        acpc_reg = pe.Node(ANTSRegistrationRPT(generate_report=write_report,
-                                               from_file=ants_settings),
-                        name="acpc_reg",
-                        n_procs=omp_nthreads)
-
-
-    # Get everything in ACPC before sending to output
-    rigid_acpc_align = pe.Node(ants.Registration(), name='rigid_acpc_align', n_procs=omp_nthreads)
-    rigid_acpc_align.inputs.metric = ["Mattes"]
-    rigid_acpc_align.inputs.transforms = ["Rigid"]
-    rigid_acpc_align.inputs.shrink_factors = [[8, 4, 2, 1]]
-    rigid_acpc_align.inputs.smoothing_sigmas = [[7., 3., 1., 0.]]
-    rigid_acpc_align.inputs.sigma_units = ["vox"]
-    rigid_acpc_align.inputs.sampling_strategy = ['Random']
-    rigid_acpc_align.inputs.sampling_percentage = [0.25]
-    rigid_acpc_align.inputs.radius_or_number_of_bins = [32]
-    rigid_acpc_align.inputs.initial_moving_transform_com = 1
-    rigid_acpc_align.inputs.interpolation = 'LanczosWindowedSinc'
-    rigid_acpc_align.inputs.dimension = 3
-    rigid_acpc_align.inputs.winsorize_lower_quantile = 0.025
-    rigid_acpc_align.inputs.winsorize_upper_quantile = 0.975
-    rigid_acpc_align.inputs.number_of_iterations = [[10000, 1000, 10000, 10000]]
-    rigid_acpc_align.inputs.transform_parameters = [[0.2]]
-    rigid_acpc_align.inputs.convergence_threshold = [1e-06]
-    rigid_acpc_align.inputs.collapse_output_transforms = True
-    rigid_acpc_align.inputs.write_composite_transform = False
-    rigid_acpc_align.inputs.output_warped_image = True
-    rigid_acpc_align.inputs.fixed_image = acpc_template
-    # Resampling
-    rigid_acpc_resample_brain = pe.Node(
-        ants.ApplyTransforms(reference_image=acpc_template,
-                             input_image_type=0,
-                             interpolation='LanczosWindowedSinc'),
-        name='rigid_acpc_resample_brain')
-    rigid_acpc_resample_head = pe.Node(
-        ants.ApplyTransforms(reference_image=acpc_template,
-                             input_image_type=0,
-                             interpolation='LanczosWindowedSinc'),
-        name='rigid_acpc_resample_head')
-    rigid_acpc_resample_seg = pe.Node(
-        ants.ApplyTransforms(reference_image=acpc_template,
-                             input_image_type=0,
-                             interpolation='MultiLabel'),
-        name='rigid_acpc_resample_seg')
-    rigid_acpc_resample_mask = pe.Node(
-        ants.ApplyTransforms(reference_image=acpc_template,
-                             input_image_type=0,
-                             interpolation='MultiLabel'),
-        name='rigid_acpc_resample_mask')
+        acpc_reg = pe.Node(
+            ants.Registration(from_file=ants_settings),
+            name="acpc_reg",
+            n_procs=omp_nthreads)
+        workflow.connect([
+            (inputnode, acpc_reg, [
+                ('anatomical_reference', 'moving_image'),
+                ('brain_mask', 'moving_image_mask')]),
+            (acpc_reg, extract_rigid_transform, [
+                ("forward_transforms", "affine_transform")]),
+        ])
+        acpc_reg.inputs.fixed_image = template_image
 
     workflow.connect([
-        (inputnode, t1_skull_strip, [('in_file', 'anatomical_image')]),
-        (t1_skull_strip, rigid_acpc_align, [('N4Corrected0', 'moving_image')]),
-        # Resampling
-        (rigid_acpc_align, rigid_acpc_resample_brain, [('forward_transforms', 'transforms')]),
-        (rigid_acpc_align, rigid_acpc_resample_head, [('forward_transforms', 'transforms')]),
-        (rigid_acpc_align, rigid_acpc_resample_mask, [('forward_transforms', 'transforms')]),
-        (rigid_acpc_align, rigid_acpc_resample_seg, [('forward_transforms', 'transforms')]),
-        (rigid_acpc_resample_brain, outputnode, [('output_image', 'out_file')]),
-        (rigid_acpc_resample_head, outputnode, [('output_image', 'bias_corrected')]),
-        (rigid_acpc_resample_mask, outputnode, [('output_image', 'out_mask')]),
-        (rigid_acpc_resample_seg, outputnode, [('output_image', 'out_segs')]),
-    ])
+        (extract_rigid_transform, outputnode, [
+            ('rigid_transform', 'to_template_rigid_transform'),
+            ('rigid_transform_inverse', 'from_template_rigid_transform')])])
+
+    # # Resampling
+    # rigid_acpc_resample_brain = pe.Node(
+    #     ants.ApplyTransforms(reference_image=acpc_template,
+    #                          input_image_type=0,
+    #                          interpolation='LanczosWindowedSinc'),
+    #     name='rigid_acpc_resample_brain')
+    # rigid_acpc_resample_head = pe.Node(
+    #     ants.ApplyTransforms(reference_image=acpc_template,
+    #                          input_image_type=0,
+    #                          interpolation='LanczosWindowedSinc'),
+    #     name='rigid_acpc_resample_head')
+    # rigid_acpc_resample_seg = pe.Node(
+    #     ants.ApplyTransforms(reference_image=acpc_template,
+    #                          input_image_type=0,
+    #                          interpolation='MultiLabel'),
+    #     name='rigid_acpc_resample_seg')
+    # rigid_acpc_resample_mask = pe.Node(
+    #     ants.ApplyTransforms(reference_image=acpc_template,
+    #                          input_image_type=0,
+    #                          interpolation='MultiLabel'),
+    #     name='rigid_acpc_resample_mask')
+
+    # workflow.connect([
+    #     (inputnode, t1_skull_strip, [('in_file', 'anatomical_image')]),
+    #     (t1_skull_strip, rigid_acpc_align, [('N4Corrected0', 'moving_image')]),
+    #     # Resampling
+    #     (rigid_acpc_align, rigid_acpc_resample_brain, [('forward_transforms', 'transforms')]),
+    #     (rigid_acpc_align, rigid_acpc_resample_head, [('forward_transforms', 'transforms')]),
+    #     (rigid_acpc_align, rigid_acpc_resample_mask, [('forward_transforms', 'transforms')]),
+    #     (rigid_acpc_align, rigid_acpc_resample_seg, [('forward_transforms', 'transforms')]),
+    #     (rigid_acpc_resample_brain, outputnode, [('output_image', 'out_file')]),
+    #     (rigid_acpc_resample_head, outputnode, [('output_image', 'bias_corrected')]),
+    #     (rigid_acpc_resample_mask, outputnode, [('output_image', 'out_mask')]),
+    #     (rigid_acpc_resample_seg, outputnode, [('output_image', 'out_segs')]),
+    # ])
 
     return workflow
 
@@ -1133,6 +1127,11 @@ def dummy_anat_outputs(outputnode, infant_mode=False):
             'qsiprep', 'data/mni_1mm_t1w_lps_brainmask.nii.gz')
 
     return fake_seg
+
+
+def _get_affine_component(transform_list):
+    # The disassembled transform will have the affine transform as the first element
+    return transform_list[0]
 
 
 def get_reference_images(infant_mode, anatomical_contrast):
