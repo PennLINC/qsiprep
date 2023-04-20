@@ -20,6 +20,7 @@ from packaging.version import parse as parseversion, Version
 # nipype
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
+from nipype.interfaces.fsl.maths import ApplyMask
 from nipype.interfaces.ants import N4BiasFieldCorrection, Atropos, MultiplyImages
 
 # niworkflows
@@ -34,7 +35,6 @@ from ..interfaces.fixes import (
     FixHeaderRegistration as Registration,
     FixHeaderApplyTransforms as ApplyTransforms,
 )
-from ...interfaces.anatomical import CustomApplyMask
 
 ATROPOS_MODELS = {
     'T1': OrderedDict([
@@ -282,7 +282,7 @@ def init_brain_extraction_wf(name='brain_extraction_wf',
                             name='get_brainmask')
 
     # Apply mask
-    apply_mask = pe.MapNode(CustomApplyMask(), iterfield=['in_file'], name='apply_mask')
+    apply_mask = pe.MapNode(ApplyMask(), iterfield=['in_file'], name='apply_mask')
 
     wf.connect([
         (inputnode, trunc, [('in_files', 'op1')]),

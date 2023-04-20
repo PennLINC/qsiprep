@@ -13,7 +13,7 @@ import nibabel as nb
 from nilearn.masking import compute_epi_mask
 import scipy.ndimage as nd
 
-from nipype.interfaces import fsl, ants, afni
+from nipype.interfaces import fsl, ants
 from nipype.interfaces.base import (
     File, BaseInterfaceInputSpec, traits, isdefined, InputMultiPath, Str)
 from nipype.interfaces.mixins import reporting
