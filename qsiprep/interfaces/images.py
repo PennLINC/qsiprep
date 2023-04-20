@@ -94,19 +94,17 @@ class SplitDWIsFSL(SimpleInterface):
     output_spec = SplitDWIsFSLOutputSpec
 
     def _run_interface(self, runtime):
-        fsl_check = os.environ.get('FSL_BUILD')
-        if fsl_check=="no_fsl":
-            raise Exception(
-                """Container in use does not have FSL. To use this workflow, 
-                please download the qsiprep container with FSL installed.""")
+        split = fsl.Split(dimension='t', in_file=self.inputs.dwi_file)
+        split_dwi_files = split.run().outputs.out_files
+
         split_bval_files, split_bvec_files = split_bvals_bvecs(
-            self.inputs.bval_file, self.inputs.bvec_file, 
-            self.inputs.split_files, self.inputs.deoblique_bvecs, 
-            runtime.cwd)
+            self.inputs.bval_file, self.inputs.bvec_file, split_dwi_files,
+            self.inputs.deoblique_bvecs, runtime.cwd)
 
         bvalues = np.loadtxt(self.inputs.bval_file)
         b0_indices = np.flatnonzero(bvalues < self.inputs.b0_threshold)
-        b0_paths = [self.inputs.split_files[idx] for idx in b0_indices]
+        b0_paths = [split_dwi_files[idx] for idx in b0_indices]
+        self._results['dwi_files'] = split_dwi_files
         self._results['bval_files'] = split_bval_files
         self._results['bvec_files'] = split_bvec_files
         self._results['b0_images'] = b0_paths
