@@ -11,13 +11,11 @@ Image tools interfaces
 
 import os
 from subprocess import Popen, PIPE
-import subprocess
 import glob
 from textwrap import indent
 import numpy as np
 import nibabel as nb
 import nilearn.image as nli
-import glob
 from dipy.io import read_bvals_bvecs
 from nipype import logging
 from nipype.utils.filemanip import fname_presuffix

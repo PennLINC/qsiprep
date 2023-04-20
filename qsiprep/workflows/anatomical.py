@@ -288,30 +288,25 @@ and used as T1w-reference throughout the workflow.
     # 3. Skull-stripping
     # Bias field correction is handled in skull strip workflows.
     if debug:
-        skullstrip_wf = init_synthstrip_wf(omp_nthreads=omp_nthreads,name="skullstrip_wf")
-        workflow.connect([
-            (inputnode, anat_template_wf, [('t1w', 'inputnode.t1w')]),
-            (anat_template_wf, skullstrip_wf, [('outputnode.t1_template', 'inputnode.skulled_image')]),
-            (skullstrip_wf, outputnode, [('outputnode.bias_corrected', 't1_preproc')]),
-            (anat_template_wf, outputnode, [('outputnode.template_transforms', 't1_template_transforms')]),
-            (buffernode, outputnode, [('t1_brain', 't1_brain'),
-                                      ('t1_mask', 't1_mask')])
-        ])
+        skullstrip_wf = init_skullstrip_afni_wf(name='skullstrip_wf',
+                                        acpc_template=ref_img_brain,
+                                        debug=debug,
+                                        omp_nthreads=omp_nthreads)
     else:
         skullstrip_wf = init_skullstrip_ants_wf(name='skullstrip_wf',
                                                 skull_strip_template=skull_strip_template,
                                                 acpc_template=ref_img_brain,
                                                 debug=debug,
                                                 omp_nthreads=omp_nthreads)
-        workflow.connect([
-        (inputnode, anat_template_wf, [('t1w', 'inputnode.t1w')]),
-        (anat_template_wf, skullstrip_wf, [('outputnode.t1_template', 'inputnode.in_file')]),
-        (skullstrip_wf, outputnode, [('outputnode.bias_corrected', 't1_preproc')]),
-        (anat_template_wf, outputnode, [
-            ('outputnode.template_transforms', 't1_template_transforms')]),
-        (buffernode, outputnode, [('t1_brain', 't1_brain'),
-                                  ('t1_mask', 't1_mask')])
-        ])
+    workflow.connect([
+    (inputnode, anat_template_wf, [('t1w', 'inputnode.t1w')]),
+    (anat_template_wf, skullstrip_wf, [('outputnode.t1_template', 'inputnode.in_file')]),
+    (skullstrip_wf, outputnode, [('outputnode.bias_corrected', 't1_preproc')]),
+    (anat_template_wf, outputnode, [
+        ('outputnode.template_transforms', 't1_template_transforms')]),
+    (buffernode, outputnode, [('t1_brain', 't1_brain'),
+                                ('t1_mask', 't1_mask')])
+    ])
 
 
     # 4. Surface reconstruction
@@ -810,7 +805,13 @@ def init_skullstrip_afni_wf(debug, omp_nthreads, acpc_template, name='skullstrip
 The T1w-reference was then skull-stripped using `3dSkullStrip`
 (AFNI {ants_ver}).
 """.format(ants_ver=BrainExtraction().version or '<ver>')
-
+    # Check for FSL binary
+    import os
+    fsl_check = os.environ.get('FSL_BUILD')
+    if fsl_check=="no_fsl":
+        raise Exception(
+            """Container in use does not have FSL. To use this workflow, 
+            please download the qsiprep container with FSL installed.""")
     # For docs building
     if acpc_template == "test":
         acpc_template = "brain_template"
@@ -827,13 +828,11 @@ The T1w-reference was then skull-stripped using `3dSkullStrip`
         n_procs=omp_nthreads,
         name='inu_n4')
 
-    skullstrip = pe.Node(afni.SkullStrip(outputtype='NIFTI_GZ'), name='skullstrip')
-    automask = pe.Node(afni.Automask(outputtype='NIFTI_GZ'), name='automask')
+    skullstrip = pe.Node(fsl.BET(output_type="NIFTI_GZ", mask=True), name='skullstrip')
 
     workflow.connect([
         (inputnode, inu_n4, [('in_file', 'input_image')]),
         (inu_n4, skullstrip, [('output_image', 'in_file')]),
-        (skullstrip, automask, [('out_file', 'in_file')])
     ])
 
     # Get everything in ACPC before sending to output
@@ -889,9 +888,9 @@ The T1w-reference was then skull-stripped using `3dSkullStrip`
         (rigid_acpc_align, rigid_acpc_resample_seg, [('forward_transforms', 'transforms')]),
         (skullstrip, rigid_acpc_resample_brain, [('out_file', 'input_image')]),
         (inu_n4, rigid_acpc_resample_head, [('output_image', 'input_image')]),
-        (automask, rigid_acpc_resample_mask, [('out_file', 'input_image')]),
-        (automask, rigid_acpc_resample_seg, [
-            ('out_file', 'input_image')]),
+        (skullstrip, rigid_acpc_resample_mask, [('mask_file', 'input_image')]),
+        (skullstrip, rigid_acpc_resample_seg, [
+            ('mask_file', 'input_image')]),
         (rigid_acpc_resample_brain, outputnode, [('output_image', 'out_file')]),
         (rigid_acpc_resample_head, outputnode, [('output_image', 'bias_corrected')]),
         (rigid_acpc_resample_mask, outputnode, [('output_image', 'out_mask')]),
@@ -901,13 +900,13 @@ The T1w-reference was then skull-stripped using `3dSkullStrip`
     return workflow
 
 
-def init_synthstrip_wf(omp_nthreads, in_image=None, unfatsat=False, name="synthstrip_wf"):
+def init_synthstrip_wf(omp_nthreads, in_file=None, unfatsat=False, name="synthstrip_wf"):
     workflow = Workflow(name=name)
     inputnode = pe.Node(
         niu.IdentityInterface(fields=['skulled_image']),
         name='inputnode')
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=['brain_image', 'brain_mask', 'out_file', 'out_mask', 'bias_corrected', 'unfatsat']),
+        niu.IdentityInterface(fields=['brain_image', 'brain_mask', 'unfatsat']),
         name='outputnode')
 
     if in_image:
@@ -966,13 +965,9 @@ def init_synthstrip_wf(omp_nthreads, in_image=None, unfatsat=False, name="synths
         (synthstrip, mask_to_original_grid, [('out_brain_mask', 'input_image')]),
         (inputnode, mask_to_original_grid, [('skulled_image', 'reference_image')]),
         (mask_to_original_grid, outputnode, [('output_image', 'brain_mask')]),
-        (mask_to_original_grid, outputnode, [('output_image', 'out_mask')]),
         (inputnode, mask_brain, [('skulled_image', 'first_input')]),
         (mask_to_original_grid, mask_brain, [("output_image", "second_input")]),
         (mask_brain, outputnode, [('output_product_image', 'brain_image')]),
-        (mask_brain, outputnode, [('output_product_image', 'bias_corrected')]),
-        (mask_brain, outputnode, [('output_product_image', 'out_file')])
-
     ])
 
     return workflow
@@ -999,7 +994,7 @@ def init_t2w_preproc_wf(omp_nthreads, t2w_images, name="t2w_preproc_wf"):
 
         workflows[t2w_image] = init_synthstrip_wf(
             omp_nthreads=omp_nthreads,
-            in_image=t2w_image,
+            in_file=t2w_image,
             unfatsat=True,
             name='synthstrip_t2w_%d' % imagenum)
 
