@@ -440,7 +440,7 @@ def init_mrtrix_tractography_wf(omp_nthreads, available_anatomical_data, name="m
         niu.IdentityInterface(fields=recon_workflow_input_fields + ['fod_sh_mif']),
         name="inputnode")
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=['tck_file', 'sift_weights']),
+        niu.IdentityInterface(fields=['tck_file', 'sift_weights', 'sift_tracts']),
         name="outputnode")
 
     workflow = pe.Workflow(name=name)
@@ -514,7 +514,9 @@ def init_mrtrix_tractography_wf(omp_nthreads, available_anatomical_data, name="m
             (inputnode, tck_sift1, [('fod_sh_mif', 'in_fod')]),
             (tracking, tck_sift1, [('out_file', 'in_tracks')]),
             (tck_sift1, outputnode, [
-                ('out_mu', 'mu')])
+	 	('out_selection', 'selection'),
+                ('out_mu', 'mu'),
+                ('out_tracks', 'sift_tracks')])
         ])
         if output_suffix:
             ds_tck_file = pe.Node(
@@ -523,6 +525,7 @@ def init_mrtrix_tractography_wf(omp_nthreads, available_anatomical_data, name="m
                                          suffix=output_suffix),
                 name='ds_tck_file',
                 run_without_submitting=True)
+            workflow.connect(outputnode, 'tck_file', ds_tck_file, 'in_file')
         
             ds_sift_tracks = pe.Node(
                 ReconDerivativesDataSink(extension='.tck',
@@ -530,7 +533,7 @@ def init_mrtrix_tractography_wf(omp_nthreads, available_anatomical_data, name="m
                                          suffix=output_suffix),
                 name='ds_sift_tracks',
                 run_without_submitting=True)
-            workflow.connect(outputnode, 'tck_file', ds_sift_tracks, 'out_tracks')
+            workflow.connect(outputnode, 'sift_tracks', ds_sift_tracks, 'in_file')
         if use_5tt:
             workflow.connect(inputnode, connect_5tt, tck_sift1, "act_file")
 
