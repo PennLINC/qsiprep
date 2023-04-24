@@ -122,6 +122,9 @@ def init_dwi_finalize_wf(scan_groups,
             Mask of the skull-stripped template image
         t1_output_grid
             Image to write out DWIs aligned to t1
+        t1_seg
+            Segmentation of preprocessed structural image, including
+            gray-matter (GM), white-matter (WM) and cerebrospinal fluid (CSF)
         t1_2_mni_forward_transform
             ANTs-compatible affine-and-warp transform file
         t1_2_mni_reverse_transform
@@ -213,7 +216,7 @@ def init_dwi_finalize_wf(scan_groups,
             'fieldwarps',
             'output_grid',
             'sbref_file', 'subjects_dir', 'subject_id',
-            't1_preproc', 't1_brain', 't1_mask',
+            't1_preproc', 't1_brain', 't1_mask', 't1_seg',
             't1_aseg', 't1_aparc',
             't1_2_mni_reverse_transform', 't1_2_fsnative_forward_transform',
             't1_2_fsnative_reverse_transform', 'dwi_sampling_grid', 'raw_qc_file',

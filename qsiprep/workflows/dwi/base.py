@@ -197,6 +197,9 @@ def init_dwi_preproc_wf(dwi_only,
             Mask of the skull-stripped template image
         t1_output_grid
             Image to write out DWIs aligned to t1
+        t1_seg
+            Segmentation of preprocessed structural image, including
+            gray-matter (GM), white-matter (WM) and cerebrospinal fluid (CSF)
         t1_2_mni_forward_transform
             ANTs-compatible affine-and-warp transform file
         t1_2_mni_reverse_transform
@@ -302,7 +305,7 @@ def init_dwi_preproc_wf(dwi_only,
     inputnode = pe.Node(
         niu.IdentityInterface(fields=[
             'dwi_files', 'sbref_file', 'subjects_dir', 'subject_id',
-            't1_preproc', 't1_brain', 't1_mask',
+            't1_preproc', 't1_brain', 't1_mask', 't1_seg',
             't1_aseg', 't1_aparc', 't1_2_mni_forward_transform',
             't1_2_mni_reverse_transform', 't1_2_fsnative_forward_transform',
             't1_2_fsnative_reverse_transform', 't2w_files', 'dwi_sampling_grid']),
@@ -424,6 +427,8 @@ Diffusion data preprocessing
             run_without_submitting=True)
 
         workflow.connect([
+            (inputnode, fmap_unwarp_report_wf, [
+                ('t1_seg', 'inputnode.in_seg')]),
             (hmc_wf, outputnode, [
                 ('outputnode.sdc_scaling_images', 'sdc_scaling_images')]),
             (hmc_wf, fmap_unwarp_report_wf, [
@@ -476,6 +481,7 @@ Diffusion data preprocessing
             (b0_coreg_wf, extended_pepolar_report_wf, [
                 ('outputnode.itk_b0_to_t1', 'inputnode.t1w_seg_transform')]),
             (inputnode, extended_pepolar_report_wf, [
+                ("t1_seg", "inputnode.t1w_seg"),
                 ('t1_brain','inputnode.t1w_image')]),
             (extended_pepolar_report_wf, ds_report_fa_sdc, [
                 ("outputnode.fa_sdc_report", "in_file")]),
@@ -501,6 +507,7 @@ Diffusion data preprocessing
     workflow.connect([
         (inputnode, b0_coreg_wf, [
             ('t1_brain', 'inputnode.t1_brain'),
+            ('t1_seg', 'inputnode.t1_seg'),
             ('subjects_dir', 'inputnode.subjects_dir'),
             ('subject_id', 'inputnode.subject_id'),
             ('t1_2_fsnative_reverse_transform',

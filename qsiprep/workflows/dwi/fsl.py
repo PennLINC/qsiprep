@@ -105,7 +105,7 @@ def init_fsl_hmc_wf(scan_groups,
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=['dwi_file', 'bvec_file', 'bval_file', 'b0_indices', 'b0_images',
-                    'original_files', 't1_brain', 't1_mask', 't2_brain',
+                    'original_files', 't1_brain', 't1_mask', 't2_brain', 't1_seg',
                     't1_2_mni_reverse_transform', 't2w_files']),
         name='inputnode')
 
@@ -167,6 +167,7 @@ def init_fsl_hmc_wf(scan_groups,
             ('original_files', 'original_files')]),
         (inputnode, pre_eddy_b0_ref_wf, [
             ('t1_brain', 'inputnode.t1_brain'),
+            ('t1_seg', 'inputnode.t1_seg'),
             ('t1_mask', 'inputnode.t1_mask')]),
         # Convert distorted ref to LPS+
         (pre_eddy_b0_ref_wf, b0_ref_to_lps, [

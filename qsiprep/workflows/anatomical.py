@@ -40,7 +40,6 @@ from ..interfaces import (
 
 from qsiprep.interfaces import Conform
 from ..utils.misc import fix_multi_T1w_source_name, add_suffix
-
 from ..interfaces.freesurfer import (
         PatchedLTAConvert as LTAConvert, PrepareSynthStripGrid,
         FixHeaderSynthStrip)
@@ -185,6 +184,8 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug, d
             ANTs-compatible affine-and-warp transform file (inverse)
         mni_mask
             Mask of skull-stripped template, in MNI space
+        mni_seg
+            Segmentation, resampled into MNI space
         subjects_dir
             FreeSurfer SUBJECTS_DIR
         subject_id
@@ -212,9 +213,9 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug, d
         niu.IdentityInterface(fields=['t1w', 't2w', 'roi', 'flair', 'subjects_dir', 'subject_id']),
         name='inputnode')
     outputnode = pe.Node(niu.IdentityInterface(
-        fields=['t1_preproc', 't1_brain', 't1_mask',
+        fields=['t1_preproc', 't1_brain', 't1_mask', 't1_seg',
                 't1_2_mni', 't1_2_mni_forward_transform', 't1_2_mni_reverse_transform',
-                'mni_mask', 't2w_files',
+                'mni_mask', 'mni_seg', 't2w_files',
                 'template_transforms', 'dwi_sampling_grid',
                 'subjects_dir', 'subject_id', 't1_2_fsnative_forward_transform',
                 't1_2_fsnative_reverse_transform', 'surfaces', 't1_aseg', 't1_aparc']),
@@ -247,6 +248,7 @@ def init_anat_preproc_wf(skull_strip_template, output_spaces, template, debug, d
 
     if dwi_only:
         seg_node = dummy_anat_outputs(outputnode, infant_mode=infant_mode)
+        workflow.connect([(seg_node, outputnode, [("dseg_file", "t1_seg")])])
         workflow.add_nodes([inputnode])
         return workflow
 
@@ -289,9 +291,9 @@ and used as T1w-reference throughout the workflow.
     # Bias field correction is handled in skull strip workflows.
     if debug:
         skullstrip_wf = init_skullstrip_afni_wf(name='skullstrip_wf',
-                                        acpc_template=ref_img_brain,
-                                        debug=debug,
-                                        omp_nthreads=omp_nthreads)
+                                                acpc_template=ref_img_brain,
+                                                debug=debug,
+                                                omp_nthreads=omp_nthreads)
     else:
         skullstrip_wf = init_skullstrip_ants_wf(name='skullstrip_wf',
                                                 skull_strip_template=skull_strip_template,
@@ -352,7 +354,11 @@ and used as T1w-reference throughout the workflow.
         ])
 
     # 5. Segmentation
-
+    workflow.connect([
+        (buffernode, t1_seg, [('t1_brain', 'in_files')]),
+        (t1_seg, outputnode, [('tissue_class_map', 't1_seg'),
+                              ('probability_maps', 't1_tpms')]),
+    ])
     # 6. Spatial normalization (T1w to MNI registration)
     if debug:
         LOGGER.info("Using QuickSyN")
@@ -387,11 +393,18 @@ and used as T1w-reference throughout the workflow.
         name='mni_mask'
     )
 
+    mni_seg = pe.Node(
+        ApplyTransforms(dimension=3, default_value=0, float=True,
+                        interpolation='MultiLabel'),
+        name='mni_seg'
+    )
+
     if 'template' in output_spaces or force_spatial_normalization:
         t1_2_mni.inputs.template = 'MNI152NLin2009cAsym'
         t1_2_mni.inputs.reference_image = ref_img_brain
         t1_2_mni.inputs.orientation = "LPS"
         mni_mask.inputs.reference_image = ref_img
+        mni_seg.inputs.reference_image = ref_img
 
         workflow.connect([
             (inputnode, t1_2_mni, [('roi', 'lesion_mask')]),
@@ -399,13 +412,18 @@ and used as T1w-reference throughout the workflow.
             (buffernode, t1_2_mni, [('t1_mask', 'moving_mask')]),
             (buffernode, mni_mask, [('t1_mask', 'input_image')]),
             (t1_2_mni, mni_mask, [('composite_transform', 'transforms')]),
+            (t1_seg, mni_seg, [('tissue_class_map', 'input_image')]),
+            (t1_2_mni, mni_seg, [('composite_transform', 'transforms')]),
             (t1_2_mni, outputnode, [
                 ('warped_image', 't1_2_mni'),
                 ('composite_transform', 't1_2_mni_forward_transform'),
                 ('inverse_composite_transform', 't1_2_mni_reverse_transform')]),
             (mni_mask, outputnode, [('output_image', 'mni_mask')])
+            (mni_seg, outputnode, [('output_image', 'mni_seg')]),
         ])
 
+    seg2msks = pe.Node(niu.Function(function=_seg2msks), name='seg2msks')
+    seg_rpt = pe.Node(ROIsPlot(colors=['r', 'magenta', 'b', 'g']), name='seg_rpt')
     anat_reports_wf = init_anat_reports_wf(
         reportlets_dir=reportlets_dir, output_spaces=output_spaces, template=template,
         freesurfer=freesurfer, force_spatial_normalization=force_spatial_normalization)
@@ -413,7 +431,13 @@ and used as T1w-reference throughout the workflow.
         (inputnode, anat_reports_wf, [
             (('t1w', fix_multi_T1w_source_name), 'inputnode.source_file')]),
         (anat_template_wf, anat_reports_wf, [
-            ('outputnode.out_report', 'inputnode.t1_conform_report')])
+            ('outputnode.out_report', 'inputnode.t1_conform_report')]),
+        (skullstrip_wf, seg_rpt, [
+            ('outputnode.bias_corrected', 'in_file')]),
+        (t1_seg, seg2msks, [('tissue_class_map', 'in_file')]),
+        (seg2msks, seg_rpt, [('out', 'in_rois')]),
+        (outputnode, seg_rpt, [('t1_mask', 'in_mask')]),
+        (seg_rpt, anat_reports_wf, [('out_report', 'inputnode.seg_report')]),
     ])
 
     if freesurfer:
@@ -440,10 +464,12 @@ and used as T1w-reference throughout the workflow.
             ('t1_template_transforms', 'inputnode.t1_template_transforms'),
             ('t1_preproc', 'inputnode.t1_preproc'),
             ('t1_mask', 'inputnode.t1_mask'),
+            ('t1_seg', 'inputnode.t1_seg'),
             ('t1_2_mni_forward_transform', 'inputnode.t1_2_mni_forward_transform'),
             ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
             ('t1_2_mni', 'inputnode.t1_2_mni'),
             ('mni_mask', 'inputnode.mni_mask'),
+            ('mni_seg', 'inputnode.mni_seg'),
             ('t1_2_fsnative_forward_transform', 'inputnode.t1_2_fsnative_forward_transform'),
             ('surfaces', 'inputnode.surfaces'),
         ]),
@@ -1492,6 +1518,10 @@ def init_anat_reports_wf(reportlets_dir, output_spaces, force_spatial_normalizat
     ds_t1_2_mni_report = pe.Node(
         DerivativesDataSink(base_directory=reportlets_dir, suffix='t1_2_mni'),
         name='ds_t1_2_mni_report', run_without_submitting=True)
+    
+    ds_t1_seg_mask_report = pe.Node(
+        DerivativesDataSink(base_directory=reportlets_dir, suffix='seg_brainmask'),
+        name='ds_t1_seg_mask_report', run_without_submitting=True)
 
     ds_recon_report = pe.Node(
         DerivativesDataSink(base_directory=reportlets_dir, suffix='reconall'),
@@ -1500,6 +1530,8 @@ def init_anat_reports_wf(reportlets_dir, output_spaces, force_spatial_normalizat
     workflow.connect([
         (inputnode, ds_t1_conform_report, [('source_file', 'source_file'),
                                            ('t1_conform_report', 'in_file')]),
+        (inputnode, ds_t1_seg_mask_report, [('source_file', 'source_file'),
+                                            ('seg_report', 'in_file')])
     ])
 
     if freesurfer:
@@ -1526,9 +1558,9 @@ def init_anat_derivatives_wf(output_dir, output_spaces, template, freesurfer,
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=['source_files', 't1_template_transforms',
-                    't1_preproc', 't1_mask',
+                    't1_preproc', 't1_mask', 't1_seg',
                     't1_2_mni_forward_transform', 't1_2_mni_reverse_transform',
-                    't1_2_mni', 'mni_mask',
+                    't1_2_mni', 'mni_mask', 'mni_seg',
                     't1_2_fsnative_forward_transform', 'surfaces',
                     't1_fs_aseg', 't1_fs_aparc']),
         name='inputnode')
@@ -1543,10 +1575,19 @@ def init_anat_derivatives_wf(output_dir, output_spaces, template, freesurfer,
         DerivativesDataSink(base_directory=output_dir, desc='brain', suffix='mask'),
         name='ds_t1_mask', run_without_submitting=True)
 
+    ds_t1_seg = pe.Node(
+        DerivativesDataSink(base_directory=output_dir, suffix='dseg'),
+        name='ds_t1_seg', run_without_submitting=True)
+
     ds_t1_mni = pe.Node(
         DerivativesDataSink(base_directory=output_dir,
                             space=template, desc='preproc', keep_dtype=True),
         name='ds_t1_mni', run_without_submitting=True)
+    
+    ds_mni_seg = pe.Node(
+        DerivativesDataSink(base_directory=output_dir,
+                            space=template, suffix='dseg'),
+        name='ds_mni_seg', run_without_submitting=True)
 
     ds_mni_mask = pe.Node(
         DerivativesDataSink(base_directory=output_dir,
@@ -1591,8 +1632,10 @@ def init_anat_derivatives_wf(output_dir, output_spaces, template, freesurfer,
                                                 ('t1_template_transforms', 'in_file')]),
         (inputnode, ds_t1_preproc, [('t1_preproc', 'in_file')]),
         (inputnode, ds_t1_mask, [('t1_mask', 'in_file')]),
+        (inputnode, ds_t1_seg, [('t1_seg', 'in_file')]),
         (t1_name, ds_t1_preproc, [('out', 'source_file')]),
         (t1_name, ds_t1_mask, [('out', 'source_file')]),
+        (t1_name, ds_t1_seg, [('out', 'source_file')])
     ])
 
     if freesurfer:
@@ -1613,7 +1656,7 @@ def init_anat_derivatives_wf(output_dir, output_spaces, template, freesurfer,
             (inputnode, ds_t1_fsaseg, [('t1_fs_aseg', 'in_file')]),
             (inputnode, ds_t1_fsparc, [('t1_fs_aparc', 'in_file')]),
             (t1_name, ds_t1_fsaseg, [('out', 'source_file')]),
-            (t1_name, ds_t1_fsparc, [('out', 'source_file')]),
+            (t1_name, ds_t1_fsparc, [('out', 'source_file')])
         ])
     if 'template' in output_spaces or force_spatial_normalization:
         workflow.connect([
@@ -1621,10 +1664,12 @@ def init_anat_derivatives_wf(output_dir, output_spaces, template, freesurfer,
             (inputnode, ds_t1_mni_inv_warp, [('t1_2_mni_reverse_transform', 'in_file')]),
             (inputnode, ds_t1_mni, [('t1_2_mni', 'in_file')]),
             (inputnode, ds_mni_mask, [('mni_mask', 'in_file')]),
+            (inputnode, ds_mni_seg, [('mni_seg', 'in_file')]),
             (t1_name, ds_t1_mni_warp, [('out', 'source_file')]),
             (t1_name, ds_t1_mni_inv_warp, [('out', 'source_file')]),
             (t1_name, ds_t1_mni, [('out', 'source_file')]),
             (t1_name, ds_mni_mask, [('out', 'source_file')]),
+            (t1_name, ds_mni_seg, [('out', 'source_file')])
         ])
 
     return workflow

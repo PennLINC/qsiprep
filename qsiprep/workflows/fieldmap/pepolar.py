@@ -212,7 +212,7 @@ def init_extended_pepolar_report_wf(segment_t2w, omp_nthreads=1,
     workflow = Workflow(name=name)
     inputnode = pe.Node(niu.IdentityInterface(
         fields=[
-            "t1w_seg_transform", "b0_ref",
+            "t1w_seg_transform", "t1w_seg", "b0_ref",
             "fieldmap_type", "b0_up_image", "b0_up_corrected_image", "b0_down_image",
             "b0_down_corrected_image", "up_fa_image", "up_fa_corrected_image", "down_fa_image",
             "down_fa_corrected_image", "t2w_image", "t1w_image"]),
@@ -275,32 +275,22 @@ def init_extended_pepolar_report_wf(segment_t2w, omp_nthreads=1,
             (t2w_atropos, pepolar_report, [("classified_image", "t2w_seg")])
         ])
     else:
-        #segment the T1 with atropos
-        t1w_n4 = pe.Node(ants.N4BiasFieldCorrection(dimension=3),
-                        name="t1w_n4",
-                        n_procs=omp_nthreads)
-        strip_t1w_wf = init_synthstrip_wf(omp_nthreads=omp_nthreads)
+        map_seg = pe.Node(
+            ants.ApplyTransforms(
+                dimension=3, float=True, interpolation='MultiLabel',
+                invert_transform_flags=[True]),
+            name='map_seg',
+            mem_gb=0.3)
 
-        t1w_atropos = pe.Node(
-            ants.Atropos(dimension=3,
-                        initialization="Otsu",
-                        mrf_radius=[1,1,1],
-                        posterior_formulation="Socrates",
-                        use_mixture_model_proportions=False,
-                        mrf_smoothing_factor=0.1,
-                        number_of_tissue_classes=3
-                        ),
-            name="t1w_atropos",
-            n_procs=omp_nthreads)
+        sel_wm = pe.Node(niu.Function(function=extract_wm), name='sel_wm')
 
         workflow.connect([
-            (inputnode, t1w_n4, [
-                ("t1w_image", "input_image")]),
-            (t1w_n4, strip_t1w_wf, [("output_image", "inputnode.skulled_image")]),
-            (strip_t1w_wf, t1w_atropos, [
-                ("outputnode.brain_image", "intensity_images"),
-                ("outputnode.brain_mask", "mask_image")]),
-            (t1w_atropos, pepolar_report, [("classified_image", "t1w_seg")])
+            (inputnode, map_seg, [
+                ("b0_ref", "reference_image"),
+                ("t1w_seg_transform", "transforms"),
+                ("t1w_seg", "input_image")]),
+            (map_seg, sel_wm, [('output_image', 'in_seg')]),
+            (sel_wm, pepolar_report, [('out', 't1w_seg')])
         ])
 
     return workflow
