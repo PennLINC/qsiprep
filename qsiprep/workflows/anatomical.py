@@ -301,13 +301,13 @@ and used as T1w-reference throughout the workflow.
                                                 debug=debug,
                                                 omp_nthreads=omp_nthreads)
     workflow.connect([
-    (inputnode, anat_template_wf, [('t1w', 'inputnode.t1w')]),
-    (anat_template_wf, skullstrip_wf, [('outputnode.t1_template', 'inputnode.in_file')]),
-    (skullstrip_wf, outputnode, [('outputnode.bias_corrected', 't1_preproc')]),
-    (anat_template_wf, outputnode, [
-        ('outputnode.template_transforms', 't1_template_transforms')]),
-    (buffernode, outputnode, [('t1_brain', 't1_brain'),
-                                ('t1_mask', 't1_mask')])
+        (inputnode, anat_template_wf, [('t1w', 'inputnode.t1w')]),
+        (anat_template_wf, skullstrip_wf, [('outputnode.t1_template', 'inputnode.in_file')]),
+        (skullstrip_wf, outputnode, [('outputnode.bias_corrected', 't1_preproc')]),
+        (anat_template_wf, outputnode, [
+            ('outputnode.template_transforms', 't1_template_transforms')]),
+        (buffernode, outputnode, [('t1_brain', 't1_brain'),
+                                    ('t1_mask', 't1_mask')])
     ])
 
 
