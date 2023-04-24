@@ -201,7 +201,7 @@ class AddTPMs(SimpleInterface):
             return runtime
 
         im = nb.concat_images([in_files[i] for i in indices])
-        data = im.get_data().astype(float).sum(axis=3)
+        data = im.get_fdata().sum(axis=3)
         data = np.clip(data, a_min=0.0, a_max=1.0)
 
         out_file = fname_presuffix(first_fname, suffix='_tpmsum',
@@ -457,7 +457,7 @@ def _tpm2roi(in_tpm, in_mask, mask_erosion_mm=None, erosion_mm=None,
     Generate a mask from a tissue probability map
     """
     tpm_img = nb.load(in_tpm)
-    roi_mask = (tpm_img.get_data() >= pthres).astype(np.uint8)
+    roi_mask = (tpm_img.get_fdata() >= pthres).astype(np.uint8)
 
     eroded_mask_file = None
     erode_in = (mask_erosion_mm is not None and mask_erosion_mm > 0 or
@@ -466,7 +466,7 @@ def _tpm2roi(in_tpm, in_mask, mask_erosion_mm=None, erosion_mm=None,
         eroded_mask_file = fname_presuffix(in_mask, suffix='_eroded',
                                            newpath=newpath)
         mask_img = nb.load(in_mask)
-        mask_data = mask_img.get_data().astype(np.uint8)
+        mask_data = mask_img.get_fdata().astype(np.uint8)
         if mask_erosion_mm:
             iter_n = max(int(mask_erosion_mm / max(mask_img.header.get_zooms())), 1)
             mask_data = nd.binary_erosion(mask_data, iterations=iter_n)

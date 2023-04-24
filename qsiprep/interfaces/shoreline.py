@@ -26,6 +26,7 @@ from ..utils.brainsuite_shore import BrainSuiteShoreModel, brainsuite_shore_basi
 from .reports import SummaryInterface, SummaryOutputSpec
 import seaborn as sns
 import matplotlib.pyplot as plt
+import dipy.reconst.dti as dti
 
 LOGGER = logging.getLogger('nipype.interface')
 
@@ -174,7 +175,7 @@ class SignalPrediction(SimpleInterface):
         pred_val = self.inputs.bval_to_predict
         # Load the mask image:
         mask_img = nb.load(self.inputs.aligned_mask)
-        mask_array = mask_img.get_data() > 1e-6
+        mask_array = mask_img.get_fdata() > 1e-6
         all_images = self.inputs.aligned_dwis
         if isinstance(self.inputs.aligned_bvecs, np.ndarray):
             bvecs = self.inputs.aligned_bvecs
@@ -200,25 +201,32 @@ class SignalPrediction(SimpleInterface):
         # Load training data and fit the model
         training_data = quick_load_images(training_image_paths)
         training_gtab = gradient_table(bvals=training_bvals, bvecs=training_bvecs)
-        if self.inputs.model == '3dSHORE':
-            shore_model = BrainSuiteShoreModel(training_gtab, regularization="L2")
-        else:
-            raise NotImplementedError('Unsupported model: ' + self.inputs.model)
-        shore_fit = shore_model.fit(training_data, mask=mask_array)
-
-        # Get the shore vector for the desired coordinate
+        #set up prediction variables
         prediction_bvecs = np.tile(pred_vec, (10, 1))
         prediction_bvals = np.ones(10) * pred_val
         prediction_bvals[9] = 0  # prevent warning
         prediction_gtab = gradient_table(bvals=prediction_bvals, bvecs=prediction_bvecs)
-        prediction_shore = brainsuite_shore_basis(shore_model.radial_order, shore_model.zeta,
+        if self.inputs.model == '3dSHORE':
+            shore_model = BrainSuiteShoreModel(training_gtab, regularization="L2")
+            shore_fit = shore_model.fit(training_data, mask=mask_array)
+            # Get the shore vector for the desired coordinate
+            prediction_shore = brainsuite_shore_basis(shore_model.radial_order, shore_model.zeta,
                                                   prediction_gtab, shore_model.tau)
-        prediction_dir = prediction_shore[0]
+            prediction_dir = prediction_shore[0]
+            # Calculate the signal prediction, reshape to 3D and save
+            shore_array = shore_fit._shore_coef[mask_array]
+            output_data = np.zeros(mask_array.shape)
+            output_data[mask_array] = np.dot(shore_array, prediction_dir)
 
-        # Calculate the signal prediction, reshape to 3D and save
-        shore_array = shore_fit._shore_coef[mask_array]
-        output_data = np.zeros(mask_array.shape)
-        output_data[mask_array] = np.dot(shore_array, prediction_dir)
+        elif self.inputs.model == 'tensor':
+            dti_wls = dti.TensorModel(training_gtab)
+            fit_wls = dti_wls.fit(training_data, mask=mask_array)
+            dti_params = fit_wls.model_params
+            output_data = dti.tensor_prediction(dti_params, prediction_gtab, training_data[:,:,:,0])
+
+        else:
+            raise NotImplementedError('Unsupported model: ' + self.inputs.model)
+
         prediction_file = op.join(
             runtime.cwd,
             "predicted_b%d_%.2f_%.2f_%.2f.nii.gz" % (
@@ -249,7 +257,7 @@ class CalculateCNR(SimpleInterface):
         model_images = quick_load_images(self.inputs.predicted_images)
         observed_images = quick_load_images(self.inputs.hmc_warped_images)
         mask_image = nb.load(self.inputs.mask_image)
-        mask = mask_image.get_data() > 1e-6
+        mask = mask_image.get_fdata() > 1e-6
         signal_vals = model_images[mask]
         b0 = signal_vals[:, 0][:, np.newaxis]
         signal_vals = signal_vals / b0

@@ -267,13 +267,23 @@ def get_parser():
     g_conf.add_argument(
         '--unringing-method', '--unringing_method',
         action='store',
-        choices=['none', 'mrdegibbs'],
+        choices=['none', 'mrdegibbs', 'rpg'],
         help='Method for Gibbs-ringing removal.\n - none: no action\n - mrdegibbs: '
-             'use mrdegibbs from mrtrix3 (default: none).')
+             'use mrdegibbs from mrtrix3\n - rpg: Gibbs from TORTOISE, suggested for partial'
+             ' Fourier acquisitions (default: none).')
     g_conf.add_argument(
         '--dwi-no-biascorr', '--dwi_no_biascorr',
         action='store_true',
-        help='skip b0-based dwi spatial bias correction')
+        help='DEPRECATED: see --b1-biascorr-stage')
+    g_conf.add_argument(
+        "--b1-biascorrect-stage", "--b1_biascorrect_stage",
+        action="store",
+        choices=["final", "none", "legacy"],
+        default="final",
+        help="Which stage to apply B1 bias correction. The default 'final' will "
+             "apply it after all the data has been resampled to its final space. "
+             "'none' will skip B1 bias correction and 'legacy' will behave consistent "
+             "with qsiprep < 0.17.")
     g_conf.add_argument(
         '--no-b0-harmonization', '--no_b0_harmonization',
         action='store_true',
@@ -375,12 +385,11 @@ def get_parser():
         '--hmc_model', '--hmc-model',
         action='store',
         default='eddy',
-        choices=['none', '3dSHORE', 'eddy'],
+        choices=['none', '3dSHORE', 'eddy', 'tensor'],
         help='model used to generate target images for hmc. If "none" the '
         'non-b0 images will be warped using the same transform as their '
-        'nearest b0 image. If "3dSHORE", SHORELine will be used. If '
-        '"eddy_ingress", the dwis are assumed to have been run through '
-        'fsls eddy. ')
+        'nearest b0 image. If "3dSHORE", SHORELine will be used. if "tensor", '
+        'SHORELine iterations with a tensor model will be used')
     g_moco.add_argument(
         '--eddy-config', '--eddy_config',
         action='store',
@@ -435,7 +444,19 @@ def get_parser():
 
     # Fieldmap options
     g_fmap = parser.add_argument_group(
-        'Specific options for handling fieldmaps')
+        'Specific options for handling fieldmaps and distortion correction')
+    g_fmap.add_argument(
+        '--pepolar-method', '--pepolar_method',
+        action='store',
+        default='TOPUP',
+        choices=['TOPUP', 'DRBUDDI'],
+        help='select which SDC method to use for PEPOLAR fieldmaps (default: OASIS)')
+
+    g_fmap.add_argument(
+        '--denoised_image_sdc', '--denoised_image_sdc',
+        action='store_true',
+        default=False,
+        help='use denoised b=0 images if available instead of raw (from BIDS) images in SDC')
     g_fmap.add_argument(
         '--prefer_dedicated_fmaps', '--prefer-dedicated-fmaps',
         action='store_true',
@@ -846,7 +867,7 @@ def build_qsiprep_workflow(opts, retval):
 
     # Load base plugin_settings from file if --use-plugin
     if opts.use_plugin is not None:
-        from yaml import load as loadyml
+        from yaml import safe_load as loadyml
         with open(opts.use_plugin) as f:
             plugin_settings = loadyml(f)
         plugin_settings.setdefault('plugin_args', {})
@@ -954,9 +975,10 @@ def build_qsiprep_workflow(opts, retval):
         denoise_method=opts.denoise_method,
         combine_all_dwis=not opts.separate_all_dwis,
         distortion_group_merge=opts.distortion_group_merge,
+        pepolar_method=opts.pepolar_method,
         dwi_denoise_window=opts.dwi_denoise_window,
         unringing_method=opts.unringing_method,
-        dwi_no_biascorr=opts.dwi_no_biascorr,
+        b1_biascorrect_stage=opts.b1_biascorrect_stage,
         no_b0_harmonization=opts.no_b0_harmonization,
         denoise_before_combining=not opts.denoise_after_combining,
         write_local_bvecs=opts.write_local_bvecs,
@@ -972,6 +994,7 @@ def build_qsiprep_workflow(opts, retval):
         hmc_transform=opts.hmc_transform,
         hmc_model=opts.hmc_model,
         eddy_config=opts.eddy_config,
+        raw_image_sdc=not opts.denoised_image_sdc,
         shoreline_iters=opts.shoreline_iters,
         impute_slice_threshold=opts.impute_slice_threshold,
         b0_to_t1w_transform=opts.b0_to_t1w_transform,
@@ -1080,7 +1103,7 @@ def build_recon_workflow(opts, retval):
 
     # Load base plugin_settings from file if --use-plugin
     if opts.use_plugin is not None:
-        from yaml import load as loadyml
+        from yaml import safe_load as loadyml
         with open(opts.use_plugin) as f:
             plugin_settings = loadyml(f)
         plugin_settings.setdefault('plugin_args', {})

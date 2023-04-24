@@ -16,6 +16,8 @@ from dipy.sims.voxel import all_tensor_evecs
 from dipy.reconst.dti import decompose_tensor
 from dipy.core.geometry import normalized_vector
 from sklearn.metrics import r2_score
+from transforms3d.affines import decompose44
+from scipy.spatial.transform import Rotation as R
 from .itk import disassemble_transform
 
 LOGGER = logging.getLogger('nipype.interface')
@@ -108,7 +110,7 @@ class RemoveDuplicates(SimpleInterface):
         np.savetxt(output_bval, unique_bvals, fmt='%d', newline=' ')
         unique_bvecs = bvecs[unique_indices]
         np.savetxt(output_bvec, unique_bvecs.T, fmt='%.8f')
-        unique_data = original_image.get_data()[..., unique_indices]
+        unique_data = original_image.get_fdata()[..., unique_indices]
         nb.Nifti1Image(unique_data, original_image.affine, original_image.header
                        ).to_filename(output_nii)
         self._results['bval_file'] = output_bval
@@ -147,7 +149,7 @@ class SliceQC(SimpleInterface):
 
         output_npz = os.path.join(runtime.cwd, "slice_stats.npz")
         mask_img = nb.load(self.inputs.mask_image)
-        mask = mask_img.get_data() > 0
+        mask = mask_img.get_fdata() > 0
         masked_slices = (mask * np.arange(mask_img.shape[2])[np.newaxis, np.newaxis, :]
                          ).astype(np.int)
         slice_nums, slice_counts = np.unique(masked_slices[mask], return_counts=True)
@@ -401,7 +403,13 @@ class ComposeTransforms(SimpleInterface):
         hmc_affines = self.inputs.hmc_affines
         fieldwarps = self.inputs.fieldwarps
         if isdefined(fieldwarps):
-            fieldwarps = fieldwarps * num_dwis
+            if len(fieldwarps) == 1:
+                LOGGER.info("using a single fieldwarp for all DWI files")
+                fieldwarps = fieldwarps * num_dwis
+            elif len(fieldwarps) == num_dwis:
+                LOGGER.info("using DRBUDDI warps!")
+            else:
+                LOGGER.info("No Fieldwarps will be used")
 
         # The affine transform to the t1 can come from hmcsdc or the intramodal template
         coreg_to_t1 = traits.Undefined
@@ -534,8 +542,11 @@ class GradientRotationInputSpec(BaseInterfaceInputSpec):
         File(exists=True), desc='NIfTI images corresponding to bvals, bvecs')
     bvec_files = InputMultiObject(File(exists=True),
                                   desc='list of split bvec files, must correspond to a '
-                                       'non-oblique image/reference frame.')
-    bval_files = InputMultiObject(File(exists=True), desc='list of split bval files')
+                                       'non-oblique image/reference frame.',
+                                  mandatory=True)
+    bval_files = InputMultiObject(File(exists=True),
+                                  desc='list of split bval files',
+                                  mandatory=True)
 
 
 class GradientRotationOutputSpec(TraitedSpec):
@@ -609,20 +620,45 @@ def get_fsl_motion_params(itk_file, src_file, ref_file, working_dir):
             src_file=src_file, ref_file=ref_file, itk_file=itk_file,
             fsl_file=tmp_fsl_file)
     os.system(fsl_convert_cmd)
-    proc = Popen(['avscale', '--allparams', tmp_fsl_file, src_file], stdout=PIPE,
-                 stderr=PIPE)
-    stdout, _ = proc.communicate()
 
     def get_measures(line):
         line = line.strip().split()
         return np.array([float(num) for num in line[-3:]])
 
-    lines = stdout.decode("utf-8").split("\n")
+    def get_image_center(src_fname):
+        #returns image center in mm
+        src_img = nb.load(src_fname)
+        src_aff = src_img.affine
+        src_center = (np.array(src_img.shape)-1)/2
+        src_center_mm = nb.affines.apply_affine(src_aff, src_center)
+        src_offsets = src_aff[0:3,3]
+        src_center_mm -= src_offsets
+        return src_center_mm
+
+    def get_trans_from_offset(image_center, rotmat):
+        # offset[0] = trans[0] + center[0] - [rot[0,0]*center[0] +rot[0,1]*center[1] + rot[0,2]*center[2]]
+        trans = np.zeros((3,))
+        offsets = rotmat[0:3,3]
+        for i in range(3):
+            offpart = offsets[i] - image_center[i]
+            rotpart = rotmat[i,0]*image_center[0] + rotmat[i,1]*image_center[1] + rotmat[i,2]*image_center[2]
+            trans[i] = offpart + rotpart
+        return trans
+
+    img_center = get_image_center(src_file)
+    c3d_out_xfm = np.loadtxt(fname=tmp_fsl_file,dtype='float')
+    [T,Rotmat,Z,S] = decompose44(c3d_out_xfm)
+    T = get_trans_from_offset(img_center,c3d_out_xfm)
+
     flip = np.array([1, -1, -1])
-    rotation = get_measures(lines[6]) * flip
-    translation = get_measures(lines[8]) * flip
-    scale = get_measures(lines[10])
-    shear = get_measures(lines[12])
+    negflip = np.array([-1, 1, 1])
+    Rotmat_to_convert = R.from_matrix(Rotmat)
+    Rotvec = Rotmat_to_convert.as_rotvec()
+
+    rotation = Rotvec * negflip
+    translation = T * flip
+    scale = Z
+    shear = S
 
     return np.concatenate([scale, shear, rotation, translation])
 
@@ -667,11 +703,20 @@ def concatenate_bvecs(input_files):
     else:
         collected_vecs = []
         for bvec_file in input_files:
-            collected_vecs.append(np.loadtxt(bvec_file))
+            collected_vecs.append(np.loadtxt(bvec_file).astype(np.float))
             stacked = np.row_stack(collected_vecs)
     if not stacked.shape[1] == 3:
         stacked = stacked.T
     return stacked
+
+
+def write_concatenated_fsl_gradients(bval_files, bvec_files, out_prefix):
+    bvec_file = out_prefix + ".bvec"
+    bval_file = out_prefix + ".bval"
+    stacked_bvecs = concatenate_bvecs(bvec_files)
+    np.savetxt(bvec_file, stacked_bvecs.T, fmt="%.8f", delimiter=" ")
+    concatenate_bvals(bval_files, bval_file)
+    return bval_file, bvec_file
 
 
 def bvec_rotation(ortho_bvecs, transforms, output_file, runtime):
@@ -795,7 +840,7 @@ def create_tensor_image(mask_img, direction, prefix):
     for direction in ['xx', 'xy', 'xz', 'yy', 'yz', 'zz']:
         this_component = prefix + '_temp_dtiComp_%s.nii.gz' % direction
         LOGGER.info("writing %s", this_component)
-        nb.Nifti1Image(mask_img.get_data()*tensor[tensor_index[direction]], mask_img.affine,
+        nb.Nifti1Image(mask_img.get_fdata()*tensor[tensor_index[direction]], mask_img.affine,
                        mask_img.header).to_filename(this_component)
         temp_components.append(this_component)
 
@@ -823,9 +868,9 @@ def reorient_tensor_image(tensor_image, warp_file, mask_img, prefix, output_fnam
 
     # Load the reoriented tensor and get the principal directions out
     reoriented_dt_img = nb.load(reoriented_tensor_fname)
-    reoriented_tensor_data = reoriented_dt_img.get_data().squeeze()
+    reoriented_tensor_data = reoriented_dt_img.get_fdata().squeeze()
 
-    mask_data = mask_img.get_data() > 0
+    mask_data = mask_img.get_fdata() > 0
     output_data = np.zeros(mask_img.shape + (3,))
 
     reoriented_tensors = reoriented_tensor_data[mask_data]
@@ -864,7 +909,7 @@ def local_bvec_rotation(original_bvecs, warp_transforms, mask_image, runtime, ou
     """Create a vector in each voxel that accounts for nonlinear warps."""
     prefix = os.path.join(runtime.cwd, "local_bvec_")
     mask_img = nb.load(mask_image)
-    mask_data = mask_img.get_data()
+    mask_data = mask_img.get_fdata()
     b0_image = get_vector_nii(np.stack([np.zeros_like(mask_data)] * 3, -1), mask_img.affine,
                               mask_img.header)
     commands = []
@@ -889,7 +934,7 @@ def local_bvec_rotation(original_bvecs, warp_transforms, mask_image, runtime, ou
         commands.append(rotate_cmd)
         rotated_vec_files.append(out_fname)
     concatenated = np.stack(
-        [nb.load(img, mmap=False).get_data().astype("<f4") for img in rotated_vec_files], -1)
+        [nb.load(img, mmap=False).get_fdata().astype("<f4") for img in rotated_vec_files], -1)
     nb.Nifti1Image(concatenated, mask_img.affine, mask_img.header).to_filename(output_fname)
     for temp_file in rotated_vec_files:
         os.remove(temp_file)

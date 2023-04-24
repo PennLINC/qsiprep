@@ -16,28 +16,22 @@ import pkg_resources as pkgr
 from nipype.pipeline import engine as pe
 from nipype.utils.filemanip import split_filename
 from nipype.interfaces import utility as niu, ants
+from nipype.interfaces.afni import Autobox
 from ...niworkflows.interfaces import SimpleBeforeAfter
 from ...engine import Workflow
 from ...interfaces import DerivativesDataSink
-from ...interfaces.nilearn import EnhanceAndSkullstripB0
+from ..anatomical import init_synthstrip_wf
 
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
-def init_dwi_reference_wf(omp_nthreads=1, dwi_file=None, register_t1=False,
+def init_dwi_reference_wf(omp_nthreads, dwi_file=None, register_t1=False,
                           name='dwi_reference_wf', gen_report=False, source_file=None,
-                          desc="initial"):
+                          desc="initial", sloppy=False):
     """
-    This workflow generates reference b=0 image and a mask.
-
-    The raw reference image is the target of :abbr:`HMC (head motion correction)`, and a
-    contrast-enhanced reference is the subject of distortion correction, as well as
-    boundary-based registration to T1w and template spaces.
-
-    A skull-stripped T1w image is downsampled to the resolution of the b0 input image
-    and registered to it. The T1w mask is used as a starting point for generating
-    The b=0 mask.
+    If ``register_t2``, a skull-stripped T1w image is downsampled to the resolution
+    of the b=0 input image and registered to it.
 
     .. workflow::
         :graph2use: orig
@@ -107,10 +101,14 @@ def init_dwi_reference_wf(omp_nthreads=1, dwi_file=None, register_t1=False,
     if register_t1:
         affine_transform = pkgr.resource_filename('qsiprep', 'data/affine.json')
         register_t1_to_raw = pe.Node(ants.Registration(from_file=affine_transform),
-                                     name='register_t1_to_raw')
-        t1_mask_to_b0 = pe.Node(ants.ApplyTransforms(interpolation='MultiLabel',
-                                                     invert_transform_flags=[True]),
-                                name='t1_mask_to_b0')
+                                     name='register_t1_to_raw',
+                                     n_proces=omp_nthreads)
+        t1_mask_to_b0 = pe.Node(
+            ants.ApplyTransforms(
+                interpolation='MultiLabel',
+                invert_transform_flags=[True]),
+            name='t1_mask_to_b0',
+            n_procs=omp_nthreads)
         workflow.connect([
             (inputnode, register_t1_to_raw, [
                 ('t1_brain', 'fixed_image'),
@@ -122,22 +120,24 @@ def init_dwi_reference_wf(omp_nthreads=1, dwi_file=None, register_t1=False,
         # T1w is already aligned
         t1_mask_to_b0 = pe.Node(
             ants.ApplyTransforms(transforms='identity'),
-            name='t1_mask_to_b0')
+            name='t1_mask_to_b0',
+            n_procs=omp_nthreads)
 
-    # Do a masking of the DWI by itself
-    enhance_and_mask_b0 = pe.Node(EnhanceAndSkullstripB0(), name='enhance_and_mask_b0')
+    synthstrip_wf = init_synthstrip_wf(
+        omp_nthreads=omp_nthreads,
+        name="synthstrip_wf")
+
 
     workflow.connect([
         (inputnode, t1_mask_to_b0, [
             ('t1_mask', 'input_image'),
             ('b0_template', 'reference_image')]),
         (inputnode, outputnode, [('b0_template', 'raw_ref_image')]),
-        (inputnode, enhance_and_mask_b0, [('b0_template', 'b0_file')]),
-        (t1_mask_to_b0, enhance_and_mask_b0, [('output_image', 't1_mask')]),
-        (enhance_and_mask_b0, outputnode, [
-            ('enhanced_file', 'ref_image'),
-            ('skull_stripped_file', 'ref_image_brain'),
-            ('mask_file', 'dwi_mask')])
+        (inputnode, outputnode, [('b0_template', 'ref_image')]),
+        (inputnode, synthstrip_wf, [('b0_template', 'inputnode.skulled_image')]),
+        (synthstrip_wf, outputnode, [
+            ('outputnode.brain_image', 'ref_image_brain'),
+            ('outputnode.brain_mask', 'dwi_mask')])
     ])
 
     if gen_report:
@@ -152,9 +152,9 @@ def init_dwi_reference_wf(omp_nthreads=1, dwi_file=None, register_t1=False,
 
         workflow.connect([
             (inputnode, b0ref_reportlet, [('b0_template', 'before')]),
-            (enhance_and_mask_b0, b0ref_reportlet, [
-                ('enhanced_file', 'after'),
-                ('plotting_mask_file', 'wm_seg')]),
+            (synthstrip_wf, b0ref_reportlet, [
+                ('outputnode.brain_image', 'after'),
+                ('outputnode.brain_mask', 'wm_seg')]),
             (b0ref_reportlet, outputnode, [('out_report', 'validation_report')]),
             (b0ref_reportlet, ds_report_b0_mask, [('out_report', 'in_file')])
         ])

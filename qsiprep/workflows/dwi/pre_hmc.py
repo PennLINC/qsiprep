@@ -30,8 +30,8 @@ def init_dwi_pre_hmc_wf(scan_groups,
                         dwi_denoise_window,
                         denoise_method,
                         unringing_method,
-                        dwi_no_biascorr,
                         no_b0_harmonization,
+                        b1_biascorrect_stage,
                         denoise_before_combining,
                         orientation,
                         omp_nthreads,
@@ -59,7 +59,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
                                   dwi_denoise_window=7,
                                   denoise_method='dwidenoise',
                                   unringing_method='mrdegibbs',
-                                  dwi_no_biascorr=False,
+                                  b1_biascorrect_stage='final',
                                   no_b0_harmonization=False,
                                   denoise_before_combining=True,
                                   omp_nthreads=1,
@@ -72,8 +72,8 @@ def init_dwi_pre_hmc_wf(scan_groups,
             '``dwidwenoise`` will not be run'
         unringing_method : str
             algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
-        dwi_no_biascorr : bool
-            run spatial bias correction (N4) on dwi series
+        b1_biascorr_phase : str
+            'final', 'none' or 'legacy'
         no_b0_harmonization : bool
             skip rescaling dwi scans to have matching b=0 intensities across scans
         denoise_before_combining : bool
@@ -122,8 +122,14 @@ def init_dwi_pre_hmc_wf(scan_groups,
         except ValueError:
             raise Exception("dwi denoise window must be an integer or 'auto'")
     workflow.__postdesc__ = gen_denoising_boilerplate(denoise_method, dwi_denoise_window,
-                                                      unringing_method, dwi_no_biascorr,
+                                                      unringing_method, b1_biascorrect_stage,
                                                       no_b0_harmonization, b0_threshold)
+
+    # Doing biascorr here is the old way.
+    dwi_no_biascorr = True
+    if b1_biascorrect_stage == 'legacy':
+        dwi_no_biascorr = False
+        LOGGER.warning("Applying bias correction before merging. Check results!")
 
     # Special case: Two reverse PE DWI series are going to get combined for eddy
     if preprocess_rpe_series:
@@ -181,7 +187,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
                       b0_threshold=b0_threshold),
             name='rpe_concat')
         raw_rpe_concat = pe.Node(Merge(is_dwi=True), name='raw_rpe_concat')
-        qc_wf = init_modelfree_qc_wf(dwi_files=plus_files + minus_files)
+        qc_wf = init_modelfree_qc_wf(omp_nthreads=omp_nthreads, dwi_files=plus_files + minus_files)
 
         workflow.connect([
             # combine PE+
@@ -286,7 +292,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
     ])
 
     if calculate_qc:
-        qc_wf = init_modelfree_qc_wf(dwi_files=dwi_series)
+        qc_wf = init_modelfree_qc_wf(omp_nthreads=omp_nthreads, dwi_files=dwi_series)
         workflow.connect([
             (merge_dwis, qc_wf, [
                 ('outputnode.merged_raw_image', 'inputnode.dwi_file'),

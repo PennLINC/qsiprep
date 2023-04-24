@@ -76,7 +76,7 @@ class CopyHeader(SimpleInterface):
     def _run_interface(self, runtime):
         in_img = nb.load(self.inputs.hdr_file)
         out_img = nb.load(self.inputs.in_file)
-        new_img = out_img.__class__(out_img.get_data(), in_img.affine, in_img.header)
+        new_img = out_img.__class__(out_img.get_fdata(), in_img.affine, in_img.header)
         new_img.set_data_dtype(out_img.get_data_dtype())
 
         out_name = fname_presuffix(self.inputs.in_file,
@@ -178,7 +178,7 @@ def _copyxform(ref_image, out_image, message=None):
     header.set_sform(sform, int(sform_code))
     header['descrip'] = 'xform matrices modified by %s.' % (message or '(unknown)')
 
-    newimg = resampled.__class__(resampled.get_data(), orig.affine, header)
+    newimg = resampled.__class__(resampled.get_fdata(), orig.affine, header)
     newimg.to_filename(out_image)
 
 
@@ -225,7 +225,7 @@ def _gen_reference(fixed_image, moving_image, fov_mask=None, out_file=None,
 
         # Calculate a bounding box for the input mask
         # with an offset of 2 voxels per face
-        bbox = np.argwhere(masknii.get_data() > 0)
+        bbox = np.argwhere(masknii.get_fdata() > 0)
         new_origin = np.clip(bbox.min(0) - 2, a_min=0, a_max=None)
         new_end = np.clip(bbox.max(0) + 2, a_min=0,
                           a_max=res_shape - 1)
@@ -511,7 +511,7 @@ class AddTPMs(SimpleInterface):
             return runtime
 
         im = nb.concat_images([in_files[i] for i in indices])
-        data = im.get_data().astype(float).sum(axis=3)
+        data = im.get_fdata().astype(float).sum(axis=3)
         data = np.clip(data, a_min=0.0, a_max=1.0)
 
         out_file = fname_presuffix(first_fname, suffix='_tpmsum',
@@ -710,7 +710,7 @@ def _tpm2roi(in_tpm, in_mask, mask_erosion_mm=None, erosion_mm=None,
     Generate a mask from a tissue probability map
     """
     tpm_img = nb.load(in_tpm)
-    roi_mask = (tpm_img.get_data() >= pthres).astype(np.uint8)
+    roi_mask = (tpm_img.get_fdata() >= pthres).astype(np.uint8)
 
     eroded_mask_file = None
     erode_in = (mask_erosion_mm is not None and mask_erosion_mm > 0 or
@@ -719,7 +719,7 @@ def _tpm2roi(in_tpm, in_mask, mask_erosion_mm=None, erosion_mm=None,
         eroded_mask_file = fname_presuffix(in_mask, suffix='_eroded',
                                            newpath=newpath)
         mask_img = nb.load(in_mask)
-        mask_data = mask_img.get_data().astype(np.uint8)
+        mask_data = mask_img.get_fdata().astype(np.uint8)
         if mask_erosion_mm:
             iter_n = max(int(mask_erosion_mm / max(mask_img.header.get_zooms())), 1)
             mask_data = nd.binary_erosion(mask_data, iterations=iter_n)

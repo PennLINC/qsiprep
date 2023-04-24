@@ -200,7 +200,7 @@ def extract_svg(display_object, dpi=300, compress='auto'):
 def cuts_from_bbox(mask_nii, cuts=3):
     """Finds equi-spaced cuts for presenting images"""
     from nibabel.affines import apply_affine
-    mask_data = mask_nii.get_data()
+    mask_data = mask_nii.get_fdata()
     B = np.argwhere(mask_data > 0)
     start_coords = B.min(0)
     stop_coords = B.max(0) + 1
@@ -233,7 +233,7 @@ def _3d_in_file(in_file):
     except AttributeError:
         in_file = in_file
 
-    if in_file.get_data().ndim == 3:
+    if in_file.get_fdata().ndim == 3:
         return in_file
 
     return nlimage.index_img(in_file, 0)
@@ -249,7 +249,7 @@ def plot_segs(image_nii, seg_niis, out_file, bbox_nii=None, masked=False,
     plot_params = {} if plot_params is None else plot_params
 
     image_nii = _3d_in_file(image_nii)
-    data = image_nii.get_data()
+    data = image_nii.get_fdata()
 
     plot_params = robust_set_limits(data, plot_params)
 
@@ -334,24 +334,24 @@ def plot_registration(anat_nii, div_id, plot_params=None,
 
     out_files = []
     if estimate_brightness:
-        plot_params = robust_set_limits(anat_nii.get_data().reshape(-1),
+        plot_params = robust_set_limits(anat_nii.get_fdata().reshape(-1),
                                         plot_params)
 
     # FreeSurfer ribbon.mgz
     ribbon = contour is not None and np.array_equal(
-        np.unique(contour.get_data()), [0, 2, 3, 41, 42])
+        np.unique(contour.get_fdata()), [0, 2, 3, 41, 42])
 
     if ribbon:
-        contour_data = contour.get_data() % 39
+        contour_data = contour.get_fdata() % 39
         white = nlimage.new_img_like(contour, contour_data == 2)
         pial = nlimage.new_img_like(contour, contour_data >= 2)
 
     # dual mask
     dual_mask = contour is not None and np.array_equal(
-        np.unique(contour.get_data().astype(np.uint8)), [0, 1, 2])
+        np.unique(contour.get_fdata().astype(np.uint8)), [0, 1, 2])
 
     if dual_mask:
-        contour_data = contour.get_data()
+        contour_data = contour.get_fdata()
         outer_mask = nlimage.new_img_like(contour, contour_data == 1)
         inner_mask = nlimage.new_img_like(contour, contour_data == 2)
         all_mask = nlimage.new_img_like(contour, contour_data > 0)
@@ -399,10 +399,63 @@ def plot_registration(anat_nii, div_id, plot_params=None,
     return out_files
 
 
+def plot_rpe_sdc(blip_up_nii, blip_down_nii, blip_up_nii_corrected, blip_down_nii_corrected,
+                 div_id,
+                 order=('z', 'x', 'y'), cuts=None,
+                 estimate_brightness=False, label=None, lowb_contour=None,
+                 compress='auto', overlay=None, overlay_params=None):
+    """
+    Plots the before and after of reverse phase encoding susceptibility distortion correction.
+    Default order is: axial, coronal, sagittal
+    """
+    plot_params = plot_params or {}
+
+    # Use default MNI cuts if none defined
+    if cuts is None:
+        raise NotImplementedError
+
+    # Do the low-b image first
+    out_files = []
+    if estimate_brightness:
+        plot_params = robust_set_limits(
+            lowb_nii.get_fdata(dtype='float32').reshape(-1),
+            plot_params)
+    # Plot each cut axis for low-b
+    for i, mode in enumerate(list(order)):
+        plot_params['display_mode'] = mode
+        plot_params['cut_coords'] = cuts[mode]
+        if i == 0:
+            plot_params['title'] = label + ": low-b"
+        else:
+            plot_params['title'] = None
+
+        # Generate nilearn figure
+        display = plot_anat(lowb_nii, **plot_params)
+
+        svg = extract_svg(display, compress=compress)
+        display.close()
+
+        # Find and replace the figure_1 id.
+        xml_data = etree.fromstring(svg)
+        find_text = etree.ETXPath("//{%s}g[@id='figure_1']" % SVGNS)
+        find_text(xml_data)[0].set('id', '%s-%s-%s' % (div_id, mode, uuid4()))
+
+        svg_fig = SVGFigure()
+        svg_fig.root = xml_data
+        out_files.append(svg_fig)
+
+        svg_fig = SVGFigure()
+        svg_fig.root = xml_data
+        out_files.append(svg_fig)
+
+    return out_files
+
+
 def plot_denoise(lowb_nii, highb_nii, div_id, plot_params=None, highb_plot_params=None,
                  order=('z', 'x', 'y'), cuts=None,
                  estimate_brightness=False, label=None, lowb_contour=None,
-                 highb_contour=None,
+                 highb_contour=None, upper_label_suffix=": low-b",
+                 lower_label_suffix=": high-b",
                  compress='auto', overlay=None, overlay_params=None):
     """
     Plot the foreground and background views.
@@ -428,7 +481,7 @@ def plot_denoise(lowb_nii, highb_nii, div_id, plot_params=None, highb_plot_param
         plot_params['display_mode'] = mode
         plot_params['cut_coords'] = cuts[mode]
         if i == 0:
-            plot_params['title'] = label + ": low-b"
+            plot_params['title'] = label + upper_label_suffix
         else:
             plot_params['title'] = None
 
@@ -458,7 +511,7 @@ def plot_denoise(lowb_nii, highb_nii, div_id, plot_params=None, highb_plot_param
         highb_plot_params['display_mode'] = mode
         highb_plot_params['cut_coords'] = cuts[mode]
         if i == 0:
-            highb_plot_params['title'] = label + ': high-b'
+            highb_plot_params['title'] = label + lower_label_suffix
         else:
             highb_plot_params['title'] = None
 
@@ -671,7 +724,7 @@ def plot_melodic_components(melodic_dir, in_file, tr=None,
 
     mask_sl = []
     for j in range(3):
-        mask_sl.append(transform_to_2d(mask_img.get_data(), j))
+        mask_sl.append(transform_to_2d(mask_img.get_fdata(), j))
 
     timeseries = np.loadtxt(os.path.join(melodic_dir, "melodic_mix"))
     power = np.loadtxt(os.path.join(melodic_dir, "melodic_FTmix"))
@@ -709,7 +762,7 @@ def plot_melodic_components(melodic_dir, in_file, tr=None,
             color_title = color_time = color_power = (
                 'r' if (i + 1) in noise_components else 'g')
 
-        data = img.get_data()
+        data = img.get_fdata()
         for j in range(3):
             ax1 = fig.add_subplot(gs[l_row:l_row + 2, j + col * 5])
             sl = transform_to_2d(data, j)

@@ -15,7 +15,6 @@
     "sigma_units": [ "mm", "mm", "mm" ],
     "winsorize_upper_quantile": 0.995,
     "winsorize_lower_quantile": 0.001,
-    "use_estimate_learning_rate_once": [ true, true, true ],
     "use_histogram_matching": [ true, true, true ],
     "collapse_output_transforms": true,
     "write_composite_transform": false,

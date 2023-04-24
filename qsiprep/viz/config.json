@@ -162,9 +162,23 @@
             },
             {
                 "name": "epi/unwarp",
-                "file_pattern": "dwi/.*sdc_.*\\.",
+                "file_pattern": "dwi/.*sdc_b0.*\\.",
                 "title": "Susceptibility distortion correction",
-                "description": "Results of performing susceptibility distortion correction (SDC) on the EPI",
+                "description": "Results of performing susceptibility distortion correction (SDC) using b=0 images",
+                "imgtype": "svg+xml"
+            },
+            {
+                "name": "epi/unwarp",
+                "file_pattern": "dwi/.*sdc_b0t2w.*\\.",
+                "title": "Susceptibility distortion correction",
+                "description": "Results of performing susceptibility distortion correction (SDC) using b=0 images. The overlay shown is an ad-hoc segmentation of a t2w image and is only for display purposes.",
+                "imgtype": "svg+xml"
+            },
+            {
+                "name": "epi/unwarp",
+                "file_pattern": "dwi/.*sdc_fa.*\\.",
+                "title": "Susceptibility distortion correction",
+                "description": "Results of performing susceptibility distortion correction (SDC) on Fractional Anisotropy (FA) images.",
                 "imgtype": "svg+xml"
             },
             {

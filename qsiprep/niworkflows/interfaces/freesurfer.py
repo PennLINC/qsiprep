@@ -283,9 +283,9 @@ class RefineBrainMask(SimpleInterface):
 
         anatnii = nb.load(self.inputs.in_anat)
         msknii = nb.Nifti1Image(
-            grow_mask(anatnii.get_data(),
-                      nb.load(self.inputs.in_aseg).get_data(),
-                      nb.load(self.inputs.in_ants).get_data()),
+            grow_mask(anatnii.get_fdata(),
+                      nb.load(self.inputs.in_aseg).get_fdata(),
+                      nb.load(self.inputs.in_ants).get_fdata()),
             anatnii.affine,
             anatnii.header
         )
@@ -330,9 +330,9 @@ def inject_skullstripped(subjects_dir, subject_id, skullstripped):
     if not op.exists(bm_auto):
         img = nb.load(t1)
         mask = nb.load(skullstripped)
-        bmask = new_img_like(mask, mask.get_data() > 0)
+        bmask = new_img_like(mask, mask.get_fdata() > 0)
         resampled_mask = resample_to_img(bmask, img, 'nearest')
-        masked_image = new_img_like(img, img.get_data() * resampled_mask.get_data())
+        masked_image = new_img_like(img, img.get_fdata() * resampled_mask.get_fdata())
         masked_image.to_filename(bm_auto)
 
     if not op.exists(bm):

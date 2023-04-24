@@ -2,7 +2,7 @@ version: 2.1
 
 .dockersetup: &dockersetup
   docker:
-    - image: pennbbl/qsiprep_build:22.6.0
+    - image: pennbbl/qsiprep_build:23.3.1
   working_directory: /src/qsiprep
 
 runinstall: &runinstall
@@ -20,7 +20,7 @@ runinstall: &runinstall
       # Precaching fonts, set 'Agg' as default backend for matplotlib
       python -c "from matplotlib import font_manager"
       sed -i 's/\(backend *: \).*$/\1Agg/g' $( python -c "import matplotlib; print(matplotlib.matplotlib_fname())" )
-      
+
       # Write the config file
       mkdir /root/.nipype
       CFG=/root/.nipype/nipype.cfg
@@ -37,7 +37,7 @@ jobs:
     steps:
       - checkout
       - run: *runinstall
-  
+
   build_docs:
     environment:
       FSLOUTPUTTYPE: NIFTI
@@ -51,9 +51,12 @@ jobs:
           command: |
             conda install -y make
             pip install ".[doc]"
-            make SHPINXOPTS="-W" -C docs html  
-  
+            make SHPINXOPTS="-W" -C docs html
+
   DSCSDSI:
+    resource_class: large
+    environment:
+      CIRCLE_CPUS: 4
     <<: *dockersetup
     steps:
       - checkout
@@ -66,6 +69,9 @@ jobs:
             bash DSCSDSI.sh
 
   DSDTI_nofmap:
+    environment:
+      CIRCLE_CPUS: 4
+    resource_class: large
     <<: *dockersetup
     steps:
       - checkout
@@ -78,6 +84,9 @@ jobs:
             bash DSDTI_nofmap.sh
 
   DSDTI_synfmap:
+    resource_class: large
+    environment:
+      CIRCLE_CPUS: 4
     <<: *dockersetup
     steps:
       - checkout
@@ -90,6 +99,9 @@ jobs:
             bash DSDTI_synfmap.sh
 
   DSDTI_TOPUP:
+    resource_class: large
+    environment:
+      CIRCLE_CPUS: 4
     <<: *dockersetup
     steps:
       - checkout
@@ -100,12 +112,42 @@ jobs:
           command: |
             cd .circleci
             bash DSDTI_TOPUP.sh
-  
-  IntramodalTemplate:
-    <<: *dockersetup
+
+  DRBUDDI_SHORELine_EPI:
     resource_class: large
     environment:
-      CIRCLE_CPUS: 3
+      CIRCLE_CPUS: 4
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run: *runinstall
+      - run:
+          name: Run SHORELine with epi fmaps and DRBUDDI
+          no_output_timeout: 1h
+          command: |
+            cd .circleci
+            bash DRBUDDI_SHORELine_epi.sh
+
+  DRBUDDI_eddy_rpe_series:
+    resource_class: large
+    environment:
+      CIRCLE_CPUS: 4
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run: *runinstall
+      - run:
+          name: Run Eddy with rpe series fmaps and DRBUDDI
+          no_output_timeout: 1h
+          command: |
+            cd .circleci
+            bash DRBUDDI_eddy_rpe_series.sh
+
+  IntramodalTemplate:
+    resource_class: large
+    <<: *dockersetup
+    environment:
+      CIRCLE_CPUS: 4
     steps:
       - checkout
       - run: *runinstall
@@ -115,7 +157,7 @@ jobs:
           command: |
             cd .circleci
             bash IntramodalTemplate.sh
-  
+
   MultiT1w:
     <<: *dockersetup
     steps:
@@ -127,7 +169,7 @@ jobs:
           command: |
             cd .circleci
             bash MultiT1w.sh
-  
+
   Recon_3Tissue:
     <<: *dockersetup
     steps:
@@ -150,7 +192,7 @@ jobs:
           no_output_timeout: 1h
           command: |
             cd .circleci
-            bash Mrtrix3ReconTests.sh  
+            bash Mrtrix3ReconTests.sh
 
   Recon_DIPY:
     <<: *dockersetup
@@ -170,11 +212,23 @@ jobs:
       - checkout
       - run: *runinstall
       - run:
-          name: Test the PYAFQ recon workflows
+          name: Test the PYAFQ standalone recon workflow
           no_output_timeout: 1h
           command: |
             cd .circleci
             bash PyAFQReconTests.sh
+
+  Recon_PYAFQExternalTrk:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run: *runinstall
+      - run:
+          name: Test the PYAFQ workflow with mrtrix tractography
+          no_output_timeout: 1h
+          command: |
+            cd .circleci
+            bash PyAFQReconExternalTrk.sh
 
   Recon_AMICO:
     <<: *dockersetup
@@ -189,13 +243,14 @@ jobs:
           command: |
             cd .circleci
             bash AMICOReconTests.sh
-  
+
   deployable:
+    resource_class: small
     docker:
       - image: busybox:latest
     steps:
       - run: echo Deploying!
-  
+
   build_and_deploy:
     environment:
       TZ: "/usr/share/zoneinfo/America/New_York"
@@ -205,7 +260,7 @@ jobs:
     steps:
       - checkout
       - setup_remote_docker:
-         version: 19.03.12
+         version: 19.03.13
          docker_layer_caching: true
       - run:
           name: Build Docker image
@@ -266,7 +321,7 @@ jobs:
             THISVERSION=${CIRCLE_TAG:-$THISVERSION}
             virtualenv --python=python build
             source build/bin/activate
-            pip install --upgrade "pip>=19.1" numpy
+            pip install --upgrade "setuptools<65.6.0" "pip>=19.1" numpy
             echo "${CIRCLE_TAG:-$THISVERSION}" > qsiprep/VERSION
             python setup.py sdist
             pip wheel --no-deps -w dist/ .
@@ -282,7 +337,7 @@ jobs:
             twine check dist/qsiprep*.tar.gz
             virtualenv --python=python sdist
             source sdist/bin/activate
-            pip install --progress-bar off --upgrade "pip>=19.1" numpy
+            pip install --progress-bar off --upgrade "setuptools<65.6.0" "pip>=19.1" numpy
             pip install dist/qsiprep*.tar.gz
             which qsiprep | grep sdist\\/bin
             INSTALLED_VERSION=$(qsiprep --version)
@@ -393,6 +448,26 @@ workflows:
             tags:
               only: /.*/
 
+      - DRBUDDI_SHORELine_EPI:
+          requires:
+            - build
+          filters:
+            branches:
+              ignore:
+                - /recon\/.*/
+            tags:
+              only: /.*/
+
+      - DRBUDDI_eddy_rpe_series:
+          requires:
+            - build
+          filters:
+            branches:
+              ignore:
+                - /recon\/.*/
+            tags:
+              only: /.*/
+
       - DSDTI_nofmap:
           requires:
             - build
@@ -477,7 +552,14 @@ workflows:
           filters:
             tags:
               only: /.*/
-      
+
+      - Recon_PYAFQExternalTrk:
+          requires:
+            - build
+          filters:
+            tags:
+              only: /.*/
+
       - deployable:
           requires:
             - build_docs
@@ -486,6 +568,8 @@ workflows:
             - DSDTI_nofmap
             - DSDTI_synfmap
             - DSDTI_TOPUP
+            - DRBUDDI_SHORELine_EPI
+            - DRBUDDI_eddy_rpe_series
             - IntramodalTemplate
             - MultiT1w
             - Recon_3Tissue
@@ -493,12 +577,13 @@ workflows:
             - Recon_DIPY
             - Recon_AMICO
             - Recon_PYAFQ
+            - Recon_PYAFQExternalTrk
           filters:
             branches:
               only: master
             tags:
               only: /.*/
-    
+
       - build_and_deploy:
           requires:
             - deployable

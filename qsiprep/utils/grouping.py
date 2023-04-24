@@ -82,8 +82,8 @@ def get_session_groups(layout, subject_data, combine_all_dwis):
 
 
 FMAP_PRIORITY = {
-    'epi': 0,
-    'dwi': 1,
+    'dwi': 0,
+    'epi': 1,
     'fieldmap': 2,
     'phasediff': 3,
     'phase1': 4,

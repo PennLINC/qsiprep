@@ -6,7 +6,6 @@
     "winsorize_upper_quantile": 0.995,
     "collapse_output_transforms": true,
     "use_histogram_matching": [ false, false ],
-    "use_estimate_learning_rate_once": [ false, false ],
     "transforms": [ "Rigid", "Affine" ],
     "number_of_iterations": [ [ 1000, 500, 250, 100 ], [ 1000, 500, 250, 100 ] ],
     "transform_parameters": [ [ 0.1 ], [ 0.1 ] ],

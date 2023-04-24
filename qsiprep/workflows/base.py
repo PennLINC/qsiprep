@@ -42,15 +42,19 @@ LOGGER = logging.getLogger('nipype.workflow')
 
 
 def init_qsiprep_wf(
-        subject_list, run_uuid, work_dir, output_dir, bids_dir, ignore, debug, low_mem, anat_only,
-        dwi_only, longitudinal, b0_threshold, hires, denoise_before_combining, dwi_denoise_window,
-        denoise_method, unringing_method, dwi_no_biascorr, no_b0_harmonization, output_resolution,
-        infant_mode, combine_all_dwis, distortion_group_merge, omp_nthreads, bids_filters,
-        force_spatial_normalization, skull_strip_template, skull_strip_fixed_seed, freesurfer,
-        hmc_model, impute_slice_threshold, hmc_transform, shoreline_iters, eddy_config,
-        write_local_bvecs, output_spaces, template, motion_corr_to, b0_to_t1w_transform,
-        intramodal_template_iters, intramodal_template_transform, prefer_dedicated_fmaps,
-        fmap_bspline, fmap_demean, use_syn, force_syn):
+        subject_list, run_uuid, work_dir, output_dir, bids_dir, ignore, debug,
+        low_mem, anat_only, dwi_only, longitudinal, b0_threshold, hires,
+        denoise_before_combining, dwi_denoise_window, denoise_method,
+        unringing_method, b1_biascorrect_stage, no_b0_harmonization,
+        output_resolution, infant_mode, combine_all_dwis,
+        distortion_group_merge, pepolar_method, omp_nthreads, bids_filters,
+        force_spatial_normalization, skull_strip_template,
+        skull_strip_fixed_seed, freesurfer, hmc_model, impute_slice_threshold,
+        hmc_transform, shoreline_iters, eddy_config, write_local_bvecs,
+        output_spaces, template, motion_corr_to, b0_to_t1w_transform,
+        intramodal_template_iters, intramodal_template_transform,
+        prefer_dedicated_fmaps, fmap_bspline, fmap_demean, use_syn, force_syn,
+        raw_image_sdc):
     """
     This workflow organizes the execution of qsiprep, with a sub-workflow for
     each subject.
@@ -81,10 +85,11 @@ def init_qsiprep_wf(
                               dwi_denoise_window=7,
                               denoise_method='patch2self',
                               unringing_method='mrdegibbs',
-                              dwi_no_biascorr=False,
+                              b1_biascorrect_stage=False,
                               no_b0_harmonization=False,
                               combine_all_dwis=True,
                               distortion_group_merge='concat',
+                              pepolar_method='TOPUP',
                               omp_nthreads=1,
                               output_resolution=2.0,
                               hmc_model='3dSHORE',
@@ -99,6 +104,7 @@ def init_qsiprep_wf(
                               hmc_transform='Affine',
                               infant_mode=False,
                               eddy_config=None,
+                              raw_image_sdc=False,
                               shoreline_iters=2,
                               impute_slice_threshold=0,
                               write_local_bvecs=False,
@@ -146,8 +152,8 @@ def init_qsiprep_wf(
             Either 'dwidenoise', 'patch2self' or 'none'
         unringing_method : str
             algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
-        dwi_no_biascorr : bool
-            run spatial bias correction (N4) on dwi series
+        b1_biascorrect_stage : str
+            'final', 'none' or 'legacy'
         no_b0_harmonization : bool
             skip rescaling dwi scans to have matching b=0 intensities across scans
         denoise_before_combining : bool
@@ -157,6 +163,8 @@ def init_qsiprep_wf(
         distortion_group_merge : str
             How to combine multiple distortion groups after correction. 'concat', 'average' or
             'none'
+        pepolar_method : str
+            Either 'DRBUDDI' or 'TOPUP'. The method for SDC when EPI fieldmaps are used.
         omp_nthreads : int
             Maximum number of threads an individual process may use
         skull_strip_template : str
@@ -195,6 +203,8 @@ def init_qsiprep_wf(
             will be imputed.
         eddy_config: str
             Path to a JSON file containing config options for eddy
+        raw_image_sdc: bool
+            Use raw (direct from BIDS) images for distortion
         prefer_dedicated_fmaps: bool
             If a reverse PE fieldmap is available in fmap, use that even if a reverse PE
             DWI series is available
@@ -242,7 +252,7 @@ def init_qsiprep_wf(
             dwi_denoise_window=dwi_denoise_window,
             denoise_method=denoise_method,
             unringing_method=unringing_method,
-            dwi_no_biascorr=dwi_no_biascorr,
+            b1_biascorrect_stage=b1_biascorrect_stage,
             no_b0_harmonization=no_b0_harmonization,
             dwi_only=dwi_only,
             anat_only=anat_only,
@@ -253,6 +263,7 @@ def init_qsiprep_wf(
             hires=hires,
             combine_all_dwis=combine_all_dwis,
             distortion_group_merge=distortion_group_merge,
+            pepolar_method=pepolar_method,
             omp_nthreads=omp_nthreads,
             skull_strip_template=skull_strip_template,
             skull_strip_fixed_seed=skull_strip_fixed_seed,
@@ -267,6 +278,7 @@ def init_qsiprep_wf(
             hmc_transform=hmc_transform,
             shoreline_iters=shoreline_iters,
             eddy_config=eddy_config,
+            raw_image_sdc=raw_image_sdc,
             impute_slice_threshold=impute_slice_threshold,
             write_local_bvecs=write_local_bvecs,
             fmap_bspline=fmap_bspline,
@@ -291,9 +303,9 @@ def init_single_subject_wf(
         subject_id, name, reportlets_dir, output_dir, bids_dir, ignore, debug,
         write_local_bvecs, low_mem, dwi_only, anat_only, longitudinal,
         b0_threshold, denoise_before_combining, bids_filters,
-        dwi_denoise_window, denoise_method, unringing_method, dwi_no_biascorr,
-        no_b0_harmonization, infant_mode, combine_all_dwis,
-        distortion_group_merge, omp_nthreads, skull_strip_template,
+        dwi_denoise_window, denoise_method, unringing_method, b1_biascorrect_stage,
+        no_b0_harmonization, infant_mode, combine_all_dwis, raw_image_sdc,
+        distortion_group_merge, pepolar_method, omp_nthreads, skull_strip_template,
         force_spatial_normalization, skull_strip_fixed_seed, freesurfer, hires,
         output_spaces, template, output_resolution, prefer_dedicated_fmaps,
         motion_corr_to, b0_to_t1w_transform, intramodal_template_iters,
@@ -331,7 +343,7 @@ def init_single_subject_wf(
             dwi_denoise_window=7,
             denoise_method='patch2self',
             unringing_method='mrdegibbs',
-            dwi_no_biascorr=False,
+            b1_biascorrect_stage=False,
             no_b0_harmonization=False,
             dwi_only=False,
             anat_only=False,
@@ -342,6 +354,7 @@ def init_single_subject_wf(
             force_spatial_normalization=True,
             combine_all_dwis=True,
             distortion_group_merge='none',
+            pepolar_method='TOPUP',
             omp_nthreads=1,
             skull_strip_template='OASIS',
             skull_strip_fixed_seed=False,
@@ -392,8 +405,8 @@ def init_single_subject_wf(
             Either 'dwidenoise', 'patch2self' or 'none'
         unringing_method : str
             algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
-        dwi_no_biascorr : bool
-            run spatial bias correction (N4) on dwi series
+        b1_biascorrect_stage : str
+            'final', 'none' or 'legacy'
         no_b0_harmonization : bool
             skip rescaling dwi scans to have matching b=0 intensities across scans
         denoise_before_combining : bool
@@ -403,6 +416,8 @@ def init_single_subject_wf(
         distortion_group_merge: str
             How to combine preprocessed scans from different distortion groups. 'concat',
             'average' or 'none'
+        pepolar_method : str
+            Either 'DRBUDDI' or 'TOPUP'. The method for SDC when EPI fieldmaps are used.
         omp_nthreads : int
             Maximum number of threads an individual process may use
         skull_strip_template : str
@@ -444,6 +459,8 @@ def init_single_subject_wf(
             method to motion correct to the midpoint of the b0 images
         eddy_config: str
             Path to a JSON file containing config options for eddy
+        raw_image_sdc: bool
+            Use raw (direct from BIDS) images for distortion
         fmap_bspline : bool
             **Experimental**: Fit B-Spline field using least-squares
         fmap_demean : bool
@@ -476,7 +493,8 @@ def init_single_subject_wf(
         # for documentation purposes
         subject_data = {
             't1w': ['/completely/made/up/path/sub-01_T1w.nii.gz'],
-            'dwi': ['/completely/made/up/path/sub-01_dwi.nii.gz']
+            'dwi': ['/completely/made/up/path/sub-01_dwi.nii.gz'],
+            't2w': ['/completely/made/up/path/sub-01_T2w.nii.gz']
         }
         layout = None
         LOGGER.warning("Building a test workflow")
@@ -495,6 +513,9 @@ def init_single_subject_wf(
     if not dwi_only and not subject_data['t1w']:
         raise Exception("No T1w images found for participant {}. "
                         "To bypass T1w processing choose --dwi-only.".format(subject_id))
+
+    # Inspect the dwi data and provide advice on pipeline choices
+    #provide_processing_advice(subject_data, layout, unringing_method)
 
     workflow = Workflow(name=name)
     workflow.__desc__ = """
@@ -552,9 +573,11 @@ to workflows in *QSIPrep*'s documentation]\
         name='ds_report_about',
         run_without_submitting=True)
 
+    t2w_files = subject_data['t2w'] if pepolar_method.lower() == 'drbuddi' else []
     # Preprocessing of T1w (includes registration to MNI)
     anat_preproc_wf = init_anat_preproc_wf(
         name="anat_preproc_wf",
+        t2w_files=t2w_files,
         dwi_only=dwi_only,
         infant_mode=infant_mode,
         skull_strip_template=skull_strip_template,
@@ -606,7 +629,7 @@ to workflows in *QSIPrep*'s documentation]\
     # concatenation_scheme maps the outputs to their final concatenation group
     dwi_fmap_groups, concatenation_scheme = group_dwi_scans(
         layout, subject_data,
-        using_fsl=hmc_model == 'eddy',
+        using_fsl=True,
         combine_scans=combine_all_dwis,
         ignore_fieldmaps="fieldmaps" in ignore,
         concatenate_distortion_groups=merging_distortion_groups)
@@ -703,7 +726,7 @@ to workflows in *QSIPrep*'s documentation]\
             dwi_denoise_window=dwi_denoise_window,
             denoise_method=denoise_method,
             unringing_method=unringing_method,
-            dwi_no_biascorr=dwi_no_biascorr,
+            b1_biascorrect_stage=b1_biascorrect_stage,
             no_b0_harmonization=no_b0_harmonization,
             denoise_before_combining=denoise_before_combining,
             motion_corr_to=motion_corr_to,
@@ -712,6 +735,8 @@ to workflows in *QSIPrep*'s documentation]\
             hmc_transform=hmc_transform,
             shoreline_iters=shoreline_iters,
             eddy_config=eddy_config,
+            raw_image_sdc=raw_image_sdc,
+            pepolar_method=pepolar_method,
             impute_slice_threshold=impute_slice_threshold,
             reportlets_dir=reportlets_dir,
             output_spaces=output_spaces,
@@ -721,8 +746,7 @@ to workflows in *QSIPrep*'s documentation]\
             low_mem=low_mem,
             fmap_bspline=fmap_bspline,
             fmap_demean=fmap_demean,
-            use_syn=use_syn,
-            force_syn=force_syn,
+            t2w_sdc=bool(t2w_files),
             sloppy=debug,
             source_file=source_file
         )
@@ -731,7 +755,6 @@ to workflows in *QSIPrep*'s documentation]\
             name=dwi_preproc_wf.name.replace('dwi_preproc', 'dwi_finalize'),
             output_prefix=output_fname,
             layout=layout,
-            ignore=ignore,
             hmc_model=hmc_model,
             shoreline_iters=shoreline_iters,
             write_local_bvecs=write_local_bvecs,
@@ -741,8 +764,8 @@ to workflows in *QSIPrep*'s documentation]\
             output_resolution=output_resolution,
             output_dir=output_dir,
             omp_nthreads=omp_nthreads,
-            use_syn=use_syn,
-            low_mem=low_mem,
+            do_biascorr=b1_biascorrect_stage=='final',
+            b0_threshold=b0_threshold,
             make_intramodal_template=make_intramodal_template,
             source_file=source_file,
             write_derivatives=not merging_distortion_groups)
@@ -765,6 +788,7 @@ to workflows in *QSIPrep*'s documentation]\
                      'inputnode.t1_2_mni_reverse_transform'),
                     ('outputnode.dwi_sampling_grid',
                      'inputnode.dwi_sampling_grid'),
+                    ('outputnode.t2w_files', 'inputnode.t2w_files'),
                     # Undefined if --no-freesurfer, but this is safe
                     ('outputnode.subjects_dir', 'inputnode.subjects_dir'),
                     ('outputnode.subject_id', 'inputnode.subject_id'),
@@ -816,7 +840,8 @@ to workflows in *QSIPrep*'s documentation]\
                     ('outputnode.coreg_score', 'inputnode.coreg_score'),
                     ('outputnode.raw_concatenated', 'inputnode.raw_concatenated'),
                     ('outputnode.confounds', 'inputnode.confounds'),
-                    ('outputnode.carpetplot_data', 'inputnode.carpetplot_data')
+                    ('outputnode.carpetplot_data', 'inputnode.carpetplot_data'),
+                    ('outputnode.sdc_scaling_images', 'inputnode.sdc_scaling_images')
                     ])
         ])
 
@@ -868,3 +893,7 @@ to workflows in *QSIPrep*'s documentation]\
             ])
 
     return workflow
+
+def provide_processing_advice(subject_data, layout, unringing_method):
+    metadata = {dwi_file: layout.get_metadata(dwi_file) for dwi_file in subject_data['dwi']}
+    LOGGER.warn("Partial Fourier acquisitions found for %s. Consider using --unringing-method rpg")

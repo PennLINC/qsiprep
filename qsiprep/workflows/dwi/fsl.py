@@ -14,9 +14,10 @@ from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
 from nipype.interfaces import fsl
 
+from .registration import init_b0_to_anat_registration_wf, init_direct_b0_acpc_wf
 from ...interfaces.eddy import (GatherEddyInputs, ExtendedEddy, Eddy2SPMMotion,
                                 boilerplate_from_eddy_config)
-from ...interfaces.images import SplitDWIs, ConformDwi, IntraModalMerge
+from ...interfaces.images import SplitDWIsFSL, ConformDwi, IntraModalMerge
 from ...interfaces.reports import TopupSummary
 from ...interfaces.nilearn import EnhanceB0
 from ...interfaces import DerivativesDataSink
@@ -25,6 +26,7 @@ from ...engine import Workflow
 # dwi workflows
 from .util import init_dwi_reference_wf
 from ..fieldmap.base import init_sdc_wf
+from ..fieldmap.drbuddi import init_drbuddi_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger('nipype.workflow')
@@ -37,6 +39,9 @@ def init_fsl_hmc_wf(scan_groups,
                     fmap_demean,
                     fmap_bspline,
                     eddy_config,
+                    raw_image_sdc,
+                    pepolar_method,
+                    t2w_sdc,
                     mem_gb=3,
                     omp_nthreads=1,
                     dwi_metadata=None,
@@ -65,9 +70,8 @@ def init_fsl_hmc_wf(scan_groups,
         impute_slice_threshold: float
             threshold for a slice to be replaced with imputed values. Overrides the
             parameter in ``eddy_config`` if set to a number > 0.
-        do_topup: bool
-            Should topup be performed before eddy? requires an rpe series or an
-            rpe_b0.
+        pepolar_method : str
+            Either 'DRBUDDI' or 'TOPUP'. The method for SDC when EPI fieldmaps are used.
         eddy_config: str
             Path to a JSON file containing settings for the call to ``eddy``.
 
@@ -75,7 +79,7 @@ def init_fsl_hmc_wf(scan_groups,
     **Inputs**
 
         dwi_file: str
-            DWI series
+            DWI series. Possibly concatenated, denoised, etc
         bvec_file: str
             bvec file
         bval_file: str
@@ -85,7 +89,7 @@ def init_fsl_hmc_wf(scan_groups,
         b0_images: list
             List of single b=0 volumes
         original_files: list
-            List of the files from which each DWI volume came.
+            List of the files from which each DWI volume came. One per original file
         t1_brain: str
             Skull stripped T1w image
         t1_mask: str
@@ -97,7 +101,7 @@ def init_fsl_hmc_wf(scan_groups,
         niu.IdentityInterface(
             fields=['dwi_file', 'bvec_file', 'bval_file', 'b0_indices', 'b0_images',
                     'original_files', 't1_brain', 't1_mask', 't1_seg',
-                    't1_2_mni_reverse_transform']),
+                    't1_2_mni_reverse_transform', 't2w_files']),
         name='inputnode')
 
     outputnode = pe.Node(
@@ -105,12 +109,17 @@ def init_fsl_hmc_wf(scan_groups,
             fields=["b0_template", "b0_template_mask", "pre_sdc_template", "bval_files",
                     "hmc_optimization_data", "sdc_method", 'slice_quality', 'motion_params',
                     "cnr_map", "bvec_files_to_transform", "dwi_files_to_transform", "b0_indices",
-                    "to_dwi_ref_affines", "to_dwi_ref_warps", "rpe_b0_info"]),
+                    "to_dwi_ref_affines", "to_dwi_ref_warps", "rpe_b0_info", "sdc_scaling_images",
+                    # From SDC
+                    "fieldmap_type", "b0_up_image", "b0_up_corrected_image", "b0_down_image",
+                    "b0_down_corrected_image", "up_fa_image", "up_fa_corrected_image", "down_fa_image",
+                    "down_fa_corrected_image", "t2w_image"]),
         name='outputnode')
 
     workflow = Workflow(name=name)
     gather_inputs = pe.Node(
-        GatherEddyInputs(b0_threshold=b0_threshold), name="gather_inputs")
+        GatherEddyInputs(b0_threshold=b0_threshold, raw_image_sdc=raw_image_sdc),
+        name="gather_inputs")
     if eddy_config is None:
         # load from the defaults
         eddy_cfg_file = pkgr_fn('qsiprep.data', 'eddy_params.json')
@@ -124,15 +133,19 @@ def init_fsl_hmc_wf(scan_groups,
     # Run in parallel if possible
     LOGGER.info("Using %d threads in eddy", omp_nthreads)
     eddy_args["num_threads"] = omp_nthreads
-    pre_eddy_b0_ref_wf = init_dwi_reference_wf(register_t1=True, source_file=source_file,
-                                               name='pre_eddy_b0_ref_wf', gen_report=False)
+    pre_eddy_b0_ref_wf = init_dwi_reference_wf(
+        omp_nthreads=omp_nthreads,
+        register_t1=True,
+        source_file=source_file,
+        name='pre_eddy_b0_ref_wf',
+        gen_report=False)
     eddy = pe.Node(ExtendedEddy(**eddy_args), name="eddy")
     spm_motion = pe.Node(Eddy2SPMMotion(), name="spm_motion")
 
     # Convert eddy outputs back to LPS+, split them
     back_to_lps = pe.Node(ConformDwi(orientation="LPS"), name='back_to_lps')
     cnr_lps = pe.Node(ConformDwi(orientation="LPS"), name='cnr_lps')
-    split_eddy_lps = pe.Node(SplitDWIs(b0_threshold=b0_threshold, deoblique_bvecs=True),
+    split_eddy_lps = pe.Node(SplitDWIsFSL(b0_threshold=b0_threshold, deoblique_bvecs=True),
                              name="split_eddy_lps")
 
     # Convert the b=0 template from pre_eddy_b0_ref to LPS+
@@ -200,13 +213,15 @@ def init_fsl_hmc_wf(scan_groups,
     # Fieldmap correction to be done in LAS+: TOPUP for rpe series or epi fieldmap
     # If a topupref is provided, use it for TOPUP
     fieldmap_type = scan_groups['fieldmap_info']['suffix'] or ''
-    workflow.__desc__ = boilerplate_from_eddy_config(eddy_args, fieldmap_type)
-    if fieldmap_type in ('epi', 'rpe_series'):
+    workflow.__desc__ = boilerplate_from_eddy_config(eddy_args, fieldmap_type,
+                                                     pepolar_method)
+    if fieldmap_type in ('epi', 'rpe_series') and pepolar_method.lower() == "topup":
         # If there are EPI fieldmaps in fmaps/, make sure they get to TOPUP. It will always use
         # b=0 images from the DWI series regardless
         gather_inputs.inputs.topup_requested = True
         if 'epi' in scan_groups['fieldmap_info']:
             gather_inputs.inputs.epi_fmaps = scan_groups['fieldmap_info']['epi']
+
         outputnode.inputs.sdc_method = "TOPUP"
         topup = pe.Node(fsl.TOPUP(out_field="fieldmap_HZ.nii.gz", scale=1), name="topup")
         topup_summary = pe.Node(TopupSummary(), name='topup_summary')
@@ -246,19 +261,64 @@ def init_fsl_hmc_wf(scan_groups,
             (b0_ref_to_lps, outputnode, [('dwi_file', 'b0_template')]),
             # Save reports
             (gather_inputs, topup_summary, [('topup_report', 'summary')]),
-            (topup_summary, ds_report_topupsummary, [('out_report', 'in_file')]),
+            (topup_summary, ds_report_topupsummary, [('out_report', 'in_file')])
+
         ])
 
         return workflow
 
-    # The topup inputs will only have one PE direction,
-    # so they can be used to make a b=0 reference to mask for eddy
+    # All the following distortion correction methods operate on images
+    # *already processed by eddy*. Therefore we need to make a mask for
+    # eddy that contains both distorted brain shapes
     distorted_merge = pe.Node(
         IntraModalMerge(hmc=True, to_lps=False), name='distorted_merge')
     workflow.connect([
         # Use the distorted mask for eddy
         (gather_inputs, distorted_merge, [('topup_imain', 'in_files')]),
         (distorted_merge, pre_eddy_b0_ref_wf, [('out_avg', 'inputnode.b0_template')])])
+
+    if fieldmap_type in ('epi', 'rpe_series') and pepolar_method.lower() == "drbuddi":
+        outputnode.inputs.sdc_method = "DRBUDDI"
+
+        # Let gather_inputs know we're doing pepolar, even though it's not topup
+        gather_inputs.inputs.topup_requested = True
+        if 'epi' in scan_groups['fieldmap_info']:
+            gather_inputs.inputs.epi_fmaps = scan_groups['fieldmap_info']['epi']
+
+        drbuddi_wf = init_drbuddi_wf(scan_groups=scan_groups, omp_nthreads=omp_nthreads,
+                                     t2w_sdc=t2w_sdc, b0_threshold=b0_threshold,
+                                     raw_image_sdc=raw_image_sdc,
+                                     sloppy=sloppy)
+
+        workflow.connect([
+            (split_eddy_lps, drbuddi_wf, [
+                ('dwi_files', 'inputnode.dwi_files'),
+                ('bval_files', 'inputnode.bval_files'),
+                ('bvec_files', 'inputnode.bvec_files')]),
+            (inputnode, drbuddi_wf, [
+                ('t1_brain', 'inputnode.t1_brain'),
+                ('t2w_files', 'inputnode.t2w_files'),
+                ('original_files', 'inputnode.original_files')]),
+            (drbuddi_wf, outputnode, [
+                ('outputnode.sdc_warps', 'to_dwi_ref_warps'),
+                ('outputnode.sdc_scaling_images', 'sdc_scaling_images'),
+                ('outputnode.method', 'sdc_method'),
+                ('outputnode.fieldmap_type', 'fieldmap_type'),
+                ('outputnode.b0_up_image', 'b0_up_image'),
+                ('outputnode.b0_up_corrected_image', 'b0_up_corrected_image'),
+                ('outputnode.b0_down_image', 'b0_down_image'),
+                ('outputnode.b0_down_corrected_image', 'b0_down_corrected_image'),
+                ('outputnode.up_fa_image', 'up_fa_image'),
+                ('outputnode.up_fa_corrected_image', 'up_fa_corrected_image'),
+                ('outputnode.down_fa_image', 'down_fa_image'),
+                ('outputnode.down_fa_corrected_image', 'down_fa_corrected_image'),
+                ('outputnode.t2w_image', 't2w_image'),
+                ('outputnode.b0_ref', 'b0_template')])
+        ])
+
+        return workflow
+
+
 
     if fieldmap_type in ('fieldmap', 'syn') or fieldmap_type.startswith("phase"):
 

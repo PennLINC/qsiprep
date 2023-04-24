@@ -192,7 +192,7 @@ class FUGUEvsm2ANTSwarp(SimpleInterface):
         hdr.set_intent('vector', (), '')
 
         # Get data, convert to mm
-        data = nii.get_data()
+        data = nii.get_fdata()
 
         aff = np.diag([1.0, 1.0, -1.0])
         if np.linalg.det(aff) < 0 and phaseEncDim != 0:
