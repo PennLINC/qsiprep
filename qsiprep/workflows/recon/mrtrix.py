@@ -530,7 +530,7 @@ def init_mrtrix_tractography_wf(omp_nthreads, available_anatomical_data, name="m
                                          suffix=output_suffix),
                 name='ds_sift_tracks',
                 run_without_submitting=True)
-            workflow.connect(outputnode, 'tck_file', ds_sift_tracks, 'in_file')
+            workflow.connect(outputnode, 'tck_file', ds_sift_tracks, 'out_tracks')
         if use_5tt:
             workflow.connect(inputnode, connect_5tt, tck_sift1, "act_file")
 
