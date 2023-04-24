@@ -480,7 +480,7 @@ def init_mrtrix_tractography_wf(omp_nthreads, available_anatomical_data, name="m
         workflow.connect([
             (inputnode, tck_sift2, [('fod_sh_mif', 'in_fod')]),
             (tracking, tck_sift2, [('out_file', 'in_tracks')]),
-            (tracking, outputnode, [("out_file", "tck_file")])
+            (tracking, outputnode, [("out_file", "tck_file")]),
             (tck_sift2, outputnode, [
                 ('out_mu', 'mu'),
                 ('out_weights', 'sift_weights')])
