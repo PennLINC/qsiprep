@@ -603,7 +603,7 @@ class SIFT1InputSpec(MRTrix3BaseInputSpec):
     in_fod = File(
         argstr='%s', position=-2, exists=True, mandatory=True, desc='input FOD SH file')
     out_tracks = File(
-        argstr='%s', position=-1, genfile=True, mandatory=True, desc='the output filtered tracks file')
+        argstr='%s', position=-1, genfile=True, mandatory=False, desc='the output filtered tracks file')
     term_number = traits.Int(
         argstr='-term_number %i', desc='number of streamlines - continue filtering until this number of streamlines remain ')
     act_file = File(
@@ -641,8 +641,8 @@ class SIFT1InputSpec(MRTrix3BaseInputSpec):
 
 
 class SIFT1OutputSpec(TraitedSpec):
-    out_mu = File(exists=True)
     out_tracks = File(exists=True)
+    out_mu = File(exists=True)
     out_selection = File(exists=True)
 
 class SIFT1(MRTrix3Base):
@@ -652,21 +652,21 @@ class SIFT1(MRTrix3Base):
 
     def _list_outputs(self):
         outputs = self.output_spec().get()
-        outputs['out_mu'] = op.abspath(self._gen_filename('out_mu'))
         outputs['out_tracks'] = op.abspath(self._gen_filename('out_tracks'))
+        outputs['out_mu'] = op.abspath(self._gen_filename('out_mu'))
         outputs['out_selection'] = op.abspath(self._gen_filename('out_selection'))
         return outputs
 
     def _gen_filename(self, name):
         _, fname, _ = split_filename(self.inputs.in_fod)
         output = getattr(self.inputs, name)
-        if name == 'out_mu':
-            if not isdefined(output):
-                output = fname + "_mu.txt"
-            return output
         if name == 'out_tracks':
             if not isdefined(output):
                 output = fname + "_sift-tracks.tck"
+            return output
+        if name == 'out_mu':
+            if not isdefined(output):
+                output = fname + "_mu.txt"
             return output
         if name == 'out_selection':
             if not isdefined(output):
