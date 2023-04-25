@@ -475,7 +475,6 @@ Diffusion data preprocessing
                 ("outputnode.b0_sdc_report", "in_file")])
         ])
 
-
     summary = pe.Node(
         DiffusionSummary(
             pe_direction=scan_groups['dwi_series_pedir'],
@@ -484,7 +483,7 @@ Diffusion data preprocessing
             hmc_transform=hmc_transform,
             impute_slice_threshold=impute_slice_threshold,
             denoise_method=denoise_method,
-            dwi_denoise_window=dwi_denoise_window)
+            dwi_denoise_window=dwi_denoise_window),
         name='summary',
         mem_gb=DEFAULT_MEMORY_MIN_GB,
         run_without_submitting=True)
