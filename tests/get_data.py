@@ -66,7 +66,6 @@ def get_default_cli_args():
         skull_strip_template="OASIS",
         skull_strip_fixed_seed=False,
         force_spatial_normalization=False,
-        output_space=['T1w', 'template'],
         output_resolution=5,
         template="MNI152NLin2009cAsym",
         b0_motion_corr_to="iterative",

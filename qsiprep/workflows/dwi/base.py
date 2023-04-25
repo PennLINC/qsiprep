@@ -48,7 +48,6 @@ def init_dwi_preproc_wf(dwi_only,
                         eddy_config,
                         raw_image_sdc,
                         reportlets_dir,
-                        output_spaces,
                         output_dir,
                         dwi_denoise_window,
                         denoise_method,
@@ -90,7 +89,6 @@ def init_dwi_preproc_wf(dwi_only,
                                   eddy_config=None,
                                   raw_image_sdc=False,
                                   reportlets_dir='.',
-                                  output_spaces=['T1w', 'template'],
                                   dwi_denoise_window=5,
                                   denoise_method='dwidenoise',
                                   unringing_method='none',
@@ -153,16 +151,6 @@ def init_dwi_preproc_wf(dwi_only,
             'run ``dwidenoise`` before combining dwis. Requires ``combine_all_dwis``'
         reportlets_dir : str
             Directory in which to save reportlets
-        output_spaces : list
-            List of output spaces functional images are to be resampled to.
-            Some parts of pipeline will only be instantiated for some output s
-            paces.
-
-            Valid spaces:
-
-                - T1w
-                - template
-
         template : str
             Name of template targeted by ``template`` output space
         output_dir : str
@@ -496,8 +484,7 @@ Diffusion data preprocessing
             hmc_transform=hmc_transform,
             impute_slice_threshold=impute_slice_threshold,
             denoise_method=denoise_method,
-            dwi_denoise_window=dwi_denoise_window,
-            output_spaces=output_spaces),
+            dwi_denoise_window=dwi_denoise_window)
         name='summary',
         mem_gb=DEFAULT_MEMORY_MIN_GB,
         run_without_submitting=True)

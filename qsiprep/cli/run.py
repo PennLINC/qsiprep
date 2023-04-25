@@ -848,13 +848,6 @@ def build_qsiprep_workflow(opts, retval):
         layout, participant_label=opts.participant_label)
     retval['subject_list'] = subject_list
 
-    # Deprecated output space
-    output_spaces = opts.output_space or []
-    if 'template' in output_spaces:
-        logger.warning("Using 'template' as an output space is no longer supported. "
-                       "Spatial normalization should be done during reconstruction.")
-        output_spaces = ["T1w"]
-
     force_spatial_normalization = not opts.skip_anat_based_spatial_normalization
     if not force_spatial_normalization and (opts.use_syn_sdc or opts.force_syn):
         msg = [
@@ -986,7 +979,6 @@ def build_qsiprep_workflow(opts, retval):
         skull_strip_template=opts.skull_strip_template,
         skull_strip_fixed_seed=opts.skull_strip_fixed_seed,
         force_spatial_normalization=force_spatial_normalization,
-        output_spaces=output_spaces,
         output_resolution=opts.output_resolution,
         template=opts.template,
         bids_dir=bids_dir,

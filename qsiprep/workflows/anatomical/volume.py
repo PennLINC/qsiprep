@@ -89,7 +89,7 @@ def init_anat_preproc_wf(template, debug, dwi_only,
         infant_mode : bool
             Use infant templates
         nonlinear_register_to_template : bool
-            Run spatial normalization even if "template" is not in ``output_spaces``
+            Run spatial normalization to template anatomical reference
         output_resolution : float
             A float describing the isotropic voxel size of the output data.
             Sometimes it can be nice to upsample DWIs. If you choose to upsample, be
