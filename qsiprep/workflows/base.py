@@ -500,6 +500,10 @@ def init_single_subject_wf(
                         "--anatomical-contrast none".format(
             anatomical_contrast, subject_id))
 
+    additional_t2ws = 0
+    if 'drbuddi' in pepolar_method.lower() and subject_data['t2w']:
+        additional_t2ws = len(subject_data['t2w'])
+
     # Inspect the dwi data and provide advice on pipeline choices
     #provide_processing_advice(subject_data, layout, unringing_method)
 
@@ -577,6 +581,7 @@ to workflows in *QSIPrep*'s documentation]\
         nonlinear_register_to_template=force_spatial_normalization,
         reportlets_dir=reportlets_dir,
         anatomical_contrast=anatomical_contrast,
+        num_additional_t2ws=additional_t2ws,
         name="anat_preproc_wf")
 
     workflow.connect([
@@ -762,7 +767,7 @@ to workflows in *QSIPrep*'s documentation]\
                      'inputnode.t1_2_mni_reverse_transform'),
                     ('outputnode.dwi_sampling_grid',
                      'inputnode.dwi_sampling_grid'),
-                    ('outputnode.t2w_files', 'inputnode.t2w_files'),
+                    ('outputnode.t2w_unfatsat', 'inputnode.t2w_unfatsat'),
                 ]),
             (
                 anat_preproc_wf,

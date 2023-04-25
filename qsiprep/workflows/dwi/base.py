@@ -296,7 +296,7 @@ def init_dwi_preproc_wf(dwi_only,
         niu.IdentityInterface(fields=[
             'dwi_files', 'sbref_file', 'subjects_dir', 'subject_id',
             't1_preproc', 't1_brain', 't1_mask', 't1_seg', 't1_tpms',
-            't1_aseg', 't1_aparc', 't1_2_mni_forward_transform', 't2w_files',
+            't1_aseg', 't1_aparc', 't1_2_mni_forward_transform', 't2w_unfatsat',
             't1_2_mni_reverse_transform', 't1_2_fsnative_forward_transform',
             't1_2_fsnative_reverse_transform', 'dwi_sampling_grid']),
         name='inputnode')
@@ -378,7 +378,7 @@ Diffusion data preprocessing
         (inputnode, hmc_wf, [
             ('t1_brain', 'inputnode.t1_brain'),
             ('t1_mask', 'inputnode.t1_mask'),
-            ('t2w_files', 'inputnode.t2w_files'),
+            ('t2w_unfatsat', 'inputnode.t2w_unfatsat'),
             ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform')]),
         (pre_hmc_wf, outputnode, [
             ('outputnode.qc_file', 'raw_qc_file'),

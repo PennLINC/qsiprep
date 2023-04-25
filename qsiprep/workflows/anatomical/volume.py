@@ -52,6 +52,7 @@ def init_anat_preproc_wf(template, debug, dwi_only,
                          output_dir, num_anat_images, output_resolution,
                          nonlinear_register_to_template,
                          reportlets_dir, anatomical_contrast,
+                         num_additional_t2ws,
                          name='anat_preproc_wf'):
     r"""
     This workflow controls the anatomical preprocessing stages of qsiprep.
@@ -98,8 +99,6 @@ def init_anat_preproc_wf(template, debug, dwi_only,
             Name of template targeted by ``template`` output space
         debug : bool
             Enable debugging outputs
-        freesurfer : bool
-            Enable FreeSurfer surface reconstruction (may increase runtime)
         longitudinal : bool
             Create unbiased structural template, regardless of number of inputs
             (may increase runtime)
@@ -137,7 +136,7 @@ def init_anat_preproc_wf(template, debug, dwi_only,
             gray-matter (GM), white-matter (WM) and cerebrospinal fluid (CSF)
         t1_tpms
             List of tissue probability maps in T1w space
-        t2w_files
+        t2_preproc
             List of preprocessed t2w files
         t1_2_mni
             T1w template, normalized to MNI space
@@ -155,7 +154,7 @@ def init_anat_preproc_wf(template, debug, dwi_only,
         niu.IdentityInterface(fields=['t1w', 't2w', 'roi', 'flair', 'subjects_dir', 'subject_id']),
         name='inputnode')
     outputnode = pe.Node(niu.IdentityInterface(
-        fields=['t1_preproc', 't1_brain', 't1_mask', 't1_seg', 't1_aseg',
+        fields=['t1_preproc', 't2_preproc', 't1_brain', 't1_mask', 't1_seg', 't1_aseg',
                 't1_2_mni', 't1_2_mni_forward_transform', 't1_2_mni_reverse_transform',
                 't2w_unfatsat', 'segmentation_qc',
                 'template_transforms', 'acpc_transform', 'acpc_inv_transform',
@@ -280,13 +279,31 @@ and used as an anatomical reference throughout the workflow.
             out_file="acpc_dseg.nii.gz"),
         name='acpc_aseg_to_dseg')
 
+    # What to do about T2w's?
     if anatomical_contrast == "T2w":
         workflow.connect([
             (synthstrip_anat_wf, rigid_acpc_resample_unfatsat, [
                 ('outputnode.t2w_unfatsat', 'input_image')]),
             (anat_normalization_wf, rigid_acpc_resample_unfatsat, [
                 ('forward_transforms', 'transforms')]),
-            (rigid_acpc_resample_brain, outputnode, [('output_image', 't2w_unfatsat')])])
+            (rigid_acpc_resample_unfatsat, outputnode, [('output_image', 't2w_unfatsat')]),
+            (rigid_acpc_resample_head, outputnode, [('output_image', 't2_preproc')])])
+    else:
+        if num_additional_t2ws > 0:
+            t2w_preproc_wf = init_t2w_preproc_wf(
+                omp_nthreads=omp_nthreads,
+                num_t2ws=num_additional_t2ws,
+                longitudinal=longitudinal,
+                sloppy=debug,
+                name="t2w_preproc_wf")
+            workflow.connect([
+                (rigid_acpc_resample_brain, t2w_preproc_wf, [
+                    ('output_image', 'inputnode.t1_brain')]),
+                (inputnode, t2w_preproc_wf, [('t2w', 'inputnode.t2w_images')]),
+                (t2w_preproc_wf, outputnode, [
+                    ('outputnode.t2_preproc', 't2_preproc'),
+                    ('outputnode.t2w_unfatsat', 't2w_unfatsat')])
+            ])
 
     seg2msks = pe.Node(niu.Function(function=_seg2msks), name='seg2msks')
     seg_rpt = pe.Node(ROIsPlot(colors=['r', 'magenta', 'b', 'g']), name='seg_rpt')
@@ -319,9 +336,9 @@ and used as an anatomical reference throughout the workflow.
         (synthseg_anat_wf, outputnode, [
             ('outputnode.qc_file', 'segmentation_qc')]),
 
-        # Make AC-PC transform, nonlinear if requested
+        # Make AC-PC transform, do nonlinear registration if requested
         (synthstrip_anat_wf, anat_normalization_wf, [
-            ('outputnode.brain_image', 'inputnode.brain_mask')]),
+            ('outputnode.brain_mask', 'inputnode.brain_mask')]),
         (anat_reference_wf, anat_normalization_wf, [
             ('outputnode.bias_corrected', 'inputnode.anatomical_reference')]),
         (get_template_image, anat_normalization_wf, [
@@ -406,6 +423,101 @@ and used as an anatomical reference throughout the workflow.
     ])
 
     return workflow
+
+
+def init_t2w_preproc_wf(omp_nthreads, num_t2ws, longitudinal, sloppy,
+                        name="t2w_preproc_wf"):
+    """If T1w is the anatomical contrast, you may also want to process the T2ws for
+    worlflows that can use them (ie DRBUDDI). This """
+    workflow = Workflow(name=name)
+    inputnode = pe.Node(
+        niu.IdentityInterface(fields=['t2w_images', 't1_brain']),
+        name='inputnode')
+    outputnode = pe.Node(niu.IdentityInterface(
+        fields=['t2_preproc', 't2w_unfatsat']),
+        name='outputnode')
+
+#     desc = """\
+# Additionally, a total of {num_t2ws} T2-weighted (T2w) images were found within the input
+# BIDS dataset.
+# All of them were corrected for intensity non-uniformity (INU)
+# using `N4BiasFieldCorrection` [@n4, ANTs {ants_ver}].
+# """ if num_t2ws > 1 else """\
+# The T2-weighted (T2w) image was corrected for intensity non-uniformity (INU)
+# using `N4BiasFieldCorrection` [@n4, ANTs {ants_ver}],
+# and used as an anatomical reference throughout the workflow.
+# """
+#     workflow.__desc__ = desc.format(
+#         num_anats=num_t2ws,
+#         ants_ver=BrainExtraction().version or '<ver>'
+#     )
+
+    # Ensure there is 1 and only 1 anatomical reference
+    anat_reference_wf = init_anat_template_wf(longitudinal=longitudinal,
+                                              omp_nthreads=omp_nthreads,
+                                              num_images=num_t2ws,
+                                              sloppy=sloppy,
+                                              anatomical_contrast="T2w")
+
+    # Skull strip the anatomical reference
+    synthstrip_anat_wf = init_synthstrip_wf(
+        do_padding=True,
+        omp_nthreads=omp_nthreads,
+        unfatsat=True,
+        name="synthstrip_anat_wf")
+
+    # Perform registrations
+    settings = pkgr("qsiprep", "data/affine.json")
+    t2_brain_to_t1_brain = pe.Node(
+        ants.Registration(),
+        name="t2_brain_to_t1_brain",
+        n_procs=omp_nthreads)
+
+    # Resampling
+    rigid_resample_t2w = pe.Node(
+        ants.ApplyTransforms(input_image_type=0,
+                             interpolation='LanczosWindowedSinc'),
+        name='rigid_resample_t2w')
+    rigid_resample_unfatsat = pe.Node(
+        ants.ApplyTransforms(input_image_type=0,
+                             interpolation='LanczosWindowedSinc'),
+        name='rigid_resample_unfatsat')
+
+    workflow.connect([
+        (inputnode, anat_reference_wf, [
+            ('t2w_images', 'inputnode.images')]),
+
+        # Make a single anatomical reference. Pad it.
+        (anat_reference_wf, synthstrip_anat_wf, [
+            ('outputnode.template', 'inputnode.original_image')]),
+        # (anat_reference_wf, outputnode, [
+        #    ('outputnode.template_transforms', 'anat_template_transforms')]),
+
+        # Register the skull-stripped T2w to the skull-stripped T2w
+        (synthstrip_anat_wf, t2_brain_to_t1_brain, [
+            ('outputnode.brain_image', 'moving_image')]),
+        (inputnode, t2_brain_to_t1_brain, [
+            ('t1_brain', 'fixed_image')]),
+
+        # Resampling
+        (synthstrip_anat_wf, rigid_resample_unfatsat, [
+            ('outputnode.unfatsat', 'input_image')]),
+        (anat_reference_wf, rigid_resample_t2w, [
+            ('outputnode.bias_corrected', 'input_image')]),
+        (inputnode, rigid_resample_unfatsat, [
+            ('t1_brain', 'reference_image')]),
+        (inputnode, rigid_resample_t2w, [
+            ('t1_brain', 'reference_image')]),
+        (t2_brain_to_t1_brain, rigid_resample_unfatsat, [
+            ('forward_transforms', 'transforms')]),
+        (t2_brain_to_t1_brain, rigid_resample_t2w, [
+            ('forward_transforms', 'transforms')]),
+        (rigid_resample_unfatsat, outputnode, [('output_image', 't2w_unfatsat')]),
+        (rigid_resample_t2w, outputnode, [('output_image', 't2_preproc')])
+    ])
+
+    return workflow
+
 
 
 def init_anat_template_wf(longitudinal, omp_nthreads, num_images,
