@@ -986,7 +986,7 @@ def build_qsiprep_workflow(opts, retval):
         skull_strip_fixed_seed=opts.skull_strip_fixed_seed,
         force_spatial_normalization=force_spatial_normalization,
         output_resolution=opts.output_resolution,
-        template=opts.template,
+        template=opts.anatomical_template,
         bids_dir=bids_dir,
         motion_corr_to=opts.b0_motion_corr_to,
         hmc_transform=opts.hmc_transform,
