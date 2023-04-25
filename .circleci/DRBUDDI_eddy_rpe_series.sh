@@ -35,7 +35,6 @@ ${QSIPREP_CMD} \
 	--dwi-only \
 	--denoise-method none \
 	--b1_biascorrect_stage none \
-	--output-space T1w \
 	--pepolar-method DRBUDDI \
 	--eddy_config ${EDDY_CFG} \
 	--output-resolution 5 \

@@ -34,7 +34,6 @@ ${QSIPREP_CMD} \
 	--dwi-only \
 	--denoise-method none \
 	--b1-biascorrect-stage none \
-	--output-space T1w \
 	--pepolar-method DRBUDDI \
 	--hmc-model none \
 	--output-resolution 2 \
