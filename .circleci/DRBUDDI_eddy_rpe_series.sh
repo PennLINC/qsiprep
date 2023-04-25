@@ -32,7 +32,7 @@ QSIPREP_CMD=$(run_qsiprep_cmd ${BIDS_INPUT_DIR} ${OUTPUT_DIR})
 ${QSIPREP_CMD} \
 	-w ${TEMPDIR} \
 	--sloppy \
-	--dwi-only \
+	--anatomical-contrast none \
 	--denoise-method none \
 	--b1_biascorrect_stage none \
 	--pepolar-method DRBUDDI \

@@ -22,7 +22,6 @@ from nipype.interfaces.ants import BrainExtraction, N4BiasFieldCorrection
 
 from ...niworkflows.interfaces.registration import RobustMNINormalizationRPT
 from ...niworkflows.interfaces.masks import ROIsPlot
-from ...niworkflows.interfaces.fixes import FixHeaderApplyTransforms as ApplyTransforms
 
 from ...engine import Workflow
 from ...interfaces import (TemplateDimensions, DerivativesDataSink as FDerivativesDataSink
@@ -672,142 +671,6 @@ def init_anat_normalization_wf(sloppy, template_name, omp_nthreads,
     return workflow
 
 
-def init_dwi_reference_wf(omp_nthreads, dwi_file=None, register_t1=False,
-                          name='dwi_reference_wf', gen_report=False, source_file=None,
-                          desc="initial", sloppy=False):
-    """
-    If ``register_t2``, a skull-stripped T1w image is downsampled to the resolution
-    of the b=0 input image and registered to it.
-
-    .. workflow::
-        :graph2use: orig
-        :simple_form: yes
-
-        from qsiprep.workflows.dwi.util import init_dwi_reference_wf
-        wf = init_dwi_reference_wf(omp_nthreads=1)
-
-    **Parameters**
-
-        dwi_file : str
-            A b=0 image
-        omp_nthreads : int
-            Maximum number of threads an individual process may use
-        name : str
-            Name of workflow (default: ``dwi_reference_wf``)
-        gen_report : bool
-            Whether a mask report node should be appended in the end
-
-    **Inputs**
-
-        b0_template
-            the b0 template used as the motion correction reference
-        t1_brain
-            skull-stripped T1w image from the same subject
-        t1_mask
-            mask image for t1_brain
-        wm_seg
-            white matter segmentation from the T1w image
-
-    **Outputs**
-
-        raw_ref_image
-            Reference image to which dwi series is motion corrected
-        ref_image
-            Contrast-enhanced reference image
-        ref_image_brain
-            Skull-stripped reference image
-        dwi_mask
-            Skull-stripping (rough) mask of reference image
-        validation_report
-            HTML reportlet indicating whether ``dwi_file`` had a valid affine
-
-
-    **Subworkflows**
-
-        * :py:func:`~qsiprep.workflows.dwi.util.init_enhance_and_skullstrip_wf`
-
-    """
-    workflow = Workflow(name=name)
-    workflow.__desc__ = """\
-"""
-    inputnode = pe.Node(
-        niu.IdentityInterface(fields=['b0_template', 't1_brain', 't1_mask', 't1_seg']),
-        name='inputnode')
-    outputnode = pe.Node(
-        niu.IdentityInterface(fields=['raw_ref_image', 'ref_image', 'ref_image_brain',
-                                      'dwi_mask', 'validation_report']),
-        name='outputnode')
-
-    # Simplify manually setting input image
-    if dwi_file is not None:
-        inputnode.inputs.b0_template = dwi_file
-
-    # b=0 images are too diverse and tricky to reliably mask.
-    # Instead register the t1w to the b=0 and use that brain mask
-    if register_t1:
-        affine_transform = pkgr.resource_filename('qsiprep', 'data/affine.json')
-        register_t1_to_raw = pe.Node(ants.Registration(from_file=affine_transform),
-                                     name='register_t1_to_raw',
-                                     n_proces=omp_nthreads)
-        t1_mask_to_b0 = pe.Node(
-            ants.ApplyTransforms(
-                interpolation='MultiLabel',
-                invert_transform_flags=[True]),
-            name='t1_mask_to_b0',
-            n_procs=omp_nthreads)
-        workflow.connect([
-            (inputnode, register_t1_to_raw, [
-                ('t1_brain', 'fixed_image'),
-                ('t1_mask', 'fixed_image_masks'),
-                ('b0_template', 'moving_image')]),
-            (register_t1_to_raw, t1_mask_to_b0, [
-                ('forward_transforms', 'transforms')])])
-    else:
-        # T1w is already aligned
-        t1_mask_to_b0 = pe.Node(
-            ants.ApplyTransforms(transforms='identity'),
-            name='t1_mask_to_b0',
-            n_procs=omp_nthreads)
-
-    synthstrip_wf = init_synthstrip_wf(
-        omp_nthreads=omp_nthreads,
-        name="synthstrip_wf")
-
-
-    workflow.connect([
-        (inputnode, t1_mask_to_b0, [
-            ('t1_mask', 'input_image'),
-            ('b0_template', 'reference_image')]),
-        (inputnode, outputnode, [('b0_template', 'raw_ref_image')]),
-        (inputnode, outputnode, [('b0_template', 'ref_image')]),
-        (inputnode, synthstrip_wf, [('b0_template', 'inputnode.skulled_image')]),
-        (synthstrip_wf, outputnode, [
-            ('outputnode.brain_image', 'ref_image_brain'),
-            ('outputnode.brain_mask', 'dwi_mask')])
-    ])
-
-    if gen_report:
-        if source_file is None:
-            raise Exception("Needs a source_file to write a report")
-        b0ref_reportlet = pe.Node(SimpleBeforeAfter(), name='b0ref_reportlet', mem_gb=0.1)
-        ds_report_b0_mask = pe.Node(
-            DerivativesDataSink(desc=desc, suffix='b0ref', source_file=source_file),
-            name='ds_report_b0_mask',
-            mem_gb=DEFAULT_MEMORY_MIN_GB, run_without_submitting=True
-        )
-
-        workflow.connect([
-            (inputnode, b0ref_reportlet, [('b0_template', 'before')]),
-            (synthstrip_wf, b0ref_reportlet, [
-                ('outputnode.brain_image', 'after'),
-                ('outputnode.brain_mask', 'wm_seg')]),
-            (b0ref_reportlet, outputnode, [('out_report', 'validation_report')]),
-            (b0ref_reportlet, ds_report_b0_mask, [('out_report', 'in_file')])
-        ])
-
-    return workflow
-
-
 def init_dl_prep_wf(name='dl_prep_wf'):
     """Prepare images for use in the FreeSurfer deep learning functions"""
     workflow = Workflow(name=name)
@@ -845,7 +708,8 @@ def init_dl_prep_wf(name='dl_prep_wf'):
     return workflow
 
 
-def init_synthstrip_wf(omp_nthreads, in_file=None, unfatsat=False, name="synthstrip_wf"):
+def init_synthstrip_wf(omp_nthreads, do_padding=False,
+                       unfatsat=False, name="synthstrip_wf"):
     workflow = Workflow(name=name)
     inputnode = pe.Node(
         niu.IdentityInterface(fields=['padded_image', 'original_image']),
@@ -853,9 +717,6 @@ def init_synthstrip_wf(omp_nthreads, in_file=None, unfatsat=False, name="synthst
     outputnode = pe.Node(
         niu.IdentityInterface(fields=['brain_image', 'brain_mask', 'unfatsat']),
         name='outputnode')
-
-    if in_file:
-        inputnode.inputs.skulled_image=in_file
 
     synthstrip = pe.Node(
         FixHeaderSynthStrip(),
@@ -882,8 +743,16 @@ def init_synthstrip_wf(omp_nthreads, in_file=None, unfatsat=False, name="synthst
             (desaturate_skull, outputnode, [('desaturated_t2w', 'unfatsat')])
         ])
 
+    # If the input image isn't already padded, do it here
+    if do_padding:
+        padding_wf = init_dl_prep_wf(name="pad_before_"+name)
+        workflow.connect([
+            (inputnode, padding_wf, [('original_image', 'inputnode.image')]),
+            (padding_wf, synthstrip, [('outputnode.padded_image', 'input_image')])])
+    else:
+        workflow.connect([(inputnode, synthstrip, [('padded_image', 'input_image')])])
+
     workflow.connect([
-        (inputnode, synthstrip, [('padded_image', 'input_image')]),
         (synthstrip, mask_to_original_grid, [('out_brain_mask', 'input_image')]),
         (inputnode, mask_to_original_grid, [('original_image', 'reference_image')]),
         (mask_to_original_grid, outputnode, [('output_image', 'brain_mask')]),

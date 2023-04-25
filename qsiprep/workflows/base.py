@@ -481,9 +481,10 @@ def init_single_subject_wf(
 
     # Warn about --dwi-only and non-none --anatomical-contrast
     if dwi_only and anatomical_contrast != "none":
-        raise Exception(
+        LOGGER.warn(
             "--dwi-only is deprecated and is only compatible with "
-            "--anatomical-contrast none. You specified %s" % anatomical_contrast)
+            "--anatomical-contrast none. Setting --anatomical-contrast none")
+        anatomical_contrast = "none"
     if anat_only and dwi_only:
         raise Exception("--anat-only and --dwi-only are mutually exclusive.")
 
