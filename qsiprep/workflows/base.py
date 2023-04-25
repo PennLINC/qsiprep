@@ -236,6 +236,7 @@ def init_qsiprep_wf(
             debug=debug,
             low_mem=low_mem,
             force_spatial_normalization=force_spatial_normalization,
+            anatomical_contrast=anatomical_contrast,
             output_resolution=output_resolution,
             denoise_before_combining=denoise_before_combining,
             dwi_denoise_window=dwi_denoise_window,
