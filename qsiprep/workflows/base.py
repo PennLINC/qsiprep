@@ -561,23 +561,23 @@ to workflows in *QSIPrep*'s documentation]\
         name='ds_report_about',
         run_without_submitting=True)
 
-    # Preprocessing of T1w (includes registration to MNI)
+    # Preprocessing of anatomical data (includes possible registration template)
+    info_modality = "dwi" if dwi_only else anatomical_contrast.lower()
     anat_preproc_wf = init_anat_preproc_wf(
-        name="anat_preproc_wf",
+        template=template,
+        debug=debug,
         dwi_only=dwi_only,
         infant_mode=infant_mode,
-        template=template,
-        output_resolution=output_resolution,
-        force_spatial_normalization=force_spatial_normalization,
-        debug=debug,
         longitudinal=longitudinal,
         omp_nthreads=omp_nthreads,
-        freesurfer=freesurfer,
-        reportlets_dir=reportlets_dir,
         output_dir=output_dir,
-        num_anat_images=len(subject_data[anatomical_contrast.lower()]))
+        num_anat_images=len(subject_data[anatomical_contrast.lower()]),
+        output_resolution=output_resolution,
+        nonlinear_register_to_template=force_spatial_normalization,
+        reportlets_dir=reportlets_dir,
+        anatomical_contrast=anatomical_contrast,
+        name="anat_preproc_wf")
 
-    info_modality = "dwi" if dwi_only else anatomical_contrast.lower()
     workflow.connect([
         (inputnode, anat_preproc_wf, [('subjects_dir',
                                        'inputnode.subjects_dir')]),
@@ -681,21 +681,13 @@ to workflows in *QSIPrep*'s documentation]\
                 ('outputnode.t1_mask', 'inputnode.t1_mask'),
                 ('outputnode.t1_seg', 'inputnode.t1_seg'),
                 ('outputnode.t1_aseg', 'inputnode.t1_aseg'),
-                ('outputnode.t1_aparc', 'inputnode.t1_aparc'),
-                ('outputnode.t1_tpms', 'inputnode.t1_tpms'),
                 ('outputnode.t1_2_mni_forward_transform',
                  'inputnode.t1_2_mni_forward_transform'),
                 ('outputnode.t1_2_mni_reverse_transform',
                  'inputnode.t1_2_mni_reverse_transform'),
                 ('outputnode.dwi_sampling_grid',
-                 'inputnode.dwi_sampling_grid'),
-                # Undefined if --no-freesurfer, but this is safe
-                ('outputnode.subjects_dir', 'inputnode.subjects_dir'),
-                ('outputnode.subject_id', 'inputnode.subject_id'),
-                ('outputnode.t1_2_fsnative_forward_transform',
-                 'inputnode.t1_2_fsnative_forward_transform'),
-                ('outputnode.t1_2_fsnative_reverse_transform',
-                 'inputnode.t1_2_fsnative_reverse_transform')])])
+                 'inputnode.dwi_sampling_grid')])
+        ])
 
     # create a processing pipeline for the dwis in each session
     for output_fname, dwi_info in outputs_to_files.items():
@@ -763,8 +755,6 @@ to workflows in *QSIPrep*'s documentation]\
                     ('outputnode.t1_mask', 'inputnode.t1_mask'),
                     ('outputnode.t1_seg', 'inputnode.t1_seg'),
                     ('outputnode.t1_aseg', 'inputnode.t1_aseg'),
-                    ('outputnode.t1_aparc', 'inputnode.t1_aparc'),
-                    ('outputnode.t1_tpms', 'inputnode.t1_tpms'),
                     ('outputnode.t1_2_mni_forward_transform',
                      'inputnode.t1_2_mni_forward_transform'),
                     ('outputnode.t1_2_mni_reverse_transform',
@@ -772,13 +762,6 @@ to workflows in *QSIPrep*'s documentation]\
                     ('outputnode.dwi_sampling_grid',
                      'inputnode.dwi_sampling_grid'),
                     ('outputnode.t2w_files', 'inputnode.t2w_files'),
-                    # Undefined if --no-freesurfer, but this is safe
-                    ('outputnode.subjects_dir', 'inputnode.subjects_dir'),
-                    ('outputnode.subject_id', 'inputnode.subject_id'),
-                    ('outputnode.t1_2_fsnative_forward_transform',
-                     'inputnode.t1_2_fsnative_forward_transform'),
-                    ('outputnode.t1_2_fsnative_reverse_transform',
-                     'inputnode.t1_2_fsnative_reverse_transform')
                 ]),
             (
                 anat_preproc_wf,
@@ -789,21 +772,12 @@ to workflows in *QSIPrep*'s documentation]\
                     ('outputnode.t1_mask', 'inputnode.t1_mask'),
                     ('outputnode.t1_seg', 'inputnode.t1_seg'),
                     ('outputnode.t1_aseg', 'inputnode.t1_aseg'),
-                    ('outputnode.t1_aparc', 'inputnode.t1_aparc'),
-                    ('outputnode.t1_tpms', 'inputnode.t1_tpms'),
                     ('outputnode.t1_2_mni_forward_transform',
                      'inputnode.t1_2_mni_forward_transform'),
                     ('outputnode.t1_2_mni_reverse_transform',
                      'inputnode.t1_2_mni_reverse_transform'),
                     ('outputnode.dwi_sampling_grid',
                      'inputnode.dwi_sampling_grid'),
-                    # Undefined if --no-freesurfer, but this is safe
-                    ('outputnode.subjects_dir', 'inputnode.subjects_dir'),
-                    ('outputnode.subject_id', 'inputnode.subject_id'),
-                    ('outputnode.t1_2_fsnative_forward_transform',
-                     'inputnode.t1_2_fsnative_forward_transform'),
-                    ('outputnode.t1_2_fsnative_reverse_transform',
-                     'inputnode.t1_2_fsnative_reverse_transform')
                 ]),
             (
                 dwi_preproc_wf,
@@ -876,6 +850,7 @@ to workflows in *QSIPrep*'s documentation]\
             ])
 
     return workflow
+
 
 def provide_processing_advice(subject_data, layout, unringing_method):
     metadata = {dwi_file: layout.get_metadata(dwi_file) for dwi_file in subject_data['dwi']}
