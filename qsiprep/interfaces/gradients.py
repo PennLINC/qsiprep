@@ -151,7 +151,7 @@ class SliceQC(SimpleInterface):
         mask_img = nb.load(self.inputs.mask_image)
         mask = mask_img.get_fdata() > 0
         masked_slices = (mask * np.arange(mask_img.shape[2])[np.newaxis, np.newaxis, :]
-                         ).astype(np.int)
+                         ).astype(int)
         slice_nums, slice_counts = np.unique(masked_slices[mask], return_counts=True)
         min_size = np.percentile(slice_counts, self.inputs.min_slice_size_percentile)
         too_small = slice_nums[slice_counts < min_size]
@@ -295,7 +295,7 @@ class ExtractB0s(SimpleInterface):
         output_mean_fname = fname_presuffix(output_fname, suffix='_mean',
                                             use_ext=True, newpath=runtime.cwd)
         if isdefined(self.inputs.b0_indices):
-            indices = np.array(self.inputs.b0_indices).astype(np.int)
+            indices = np.array(self.inputs.b0_indices).astype(int)
         elif isdefined(self.inputs.bval_file):
             bvals = np.loadtxt(self.inputs.bval_file)
             indices = np.flatnonzero(bvals < self.inputs.b0_threshold)
