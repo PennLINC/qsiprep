@@ -247,19 +247,19 @@ def amplitudes_to_fibgz(amplitudes_img, odf_dirs, odf_faces, output_file,
         # fill in the "fa" values
         fa_n = np.zeros(n_voxels)
         fa_n[flat_mask] = peak_vals[:, nfib]
-        dsi_mat['fa%d' % nfib] = fa_n.astype(np.float32)
+        dsi_mat['fa%d' % nfib] = fa_n.astype('float32')
 
         # Fill in the index values
         index_n = np.zeros(n_voxels)
         index_n[flat_mask] = peak_indices[:, nfib]
-        dsi_mat['index%d' % nfib] = index_n.astype(np.int16)
+        dsi_mat['index%d' % nfib] = index_n.astype('int16')
 
     # Add in the ODFs
     num_odf_matrices = n_odfs // ODF_COLS
     split_indices = (np.arange(num_odf_matrices) + 1) * ODF_COLS
     odf_splits = np.array_split(masked_odfs, split_indices, axis=0)
     for splitnum, odfs in enumerate(odf_splits):
-        dsi_mat['odf%d' % splitnum] = odfs.T.astype(np.float32)
+        dsi_mat['odf%d' % splitnum] = odfs.T.astype('float32')
 
     dsi_mat['odf_vertices'] = odf_dirs.T
     dsi_mat['odf_faces'] = odf_faces.T
@@ -340,7 +340,7 @@ def amico_directions_to_fibgz(directions_img, od_img, icvf_img, isovf_img,
     # fill in the "dir" values
     dir0 = np.zeros(n_voxels)
     dir0[flat_mask] = peak_indices
-    dsi_mat['index0'] = dir0.astype(np.int16)
+    dsi_mat['index0'] = dir0.astype('int16')
     dsi_mat['fa0'] = icvf_vec
     dsi_mat['ICVF0'] = icvf_vec
     dsi_mat['ISOVF0'] = isovf_vec
@@ -454,7 +454,7 @@ def fast_load_fibgz(fib_file):
 
 def fib2amps(fib_file, ref_image, subtract_iso=True):
     fibmat = fast_load_fibgz(fib_file)
-    dims = tuple(fibmat['dimension'].squeeze().astype(np.int))
+    dims = tuple(fibmat['dimension'].squeeze().astype(int))
     directions = fibmat['odf_vertices'].T
 
     odf_vars = [k for k in fibmat.keys() if re.match("odf\\d+", k)]
@@ -477,7 +477,7 @@ def fib2amps(fib_file, ref_image, subtract_iso=True):
     # Convert each column to a 3d file, then concatenate them
     odfs_3d = []
     for odf_vals in odf_array.T:
-        new_data = np.zeros(n_voxels, dtype=np.float32)
+        new_data = np.zeros(n_voxels, dtype='float32')
         new_data[flat_mask] = odf_vals
         odfs_3d.append(new_data.reshape(dims, order="F"))
 
@@ -495,7 +495,7 @@ def peaks_to_odfs(fibdict):
     flat_mask = fibdict['fa0'].squeeze().ravel(order='F') > 0
     num_directions = fibdict['odf_vertices'].shape[1]
     num_odfs = flat_mask.sum()
-    odfs = np.zeros((num_odfs, num_directions), dtype=np.float32)
+    odfs = np.zeros((num_odfs, num_directions), dtype='float32')
     row_indices = np.arange(num_odfs)
     for peak_num in range(num_indexes):
         fa_values = fibdict[
