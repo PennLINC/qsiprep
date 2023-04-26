@@ -161,6 +161,8 @@ jobs:
   MultiT1w:
     resource_class: large
     <<: *dockersetup
+    environment:
+      CIRCLE_CPUS: 4
     steps:
       - checkout
       - run: *runinstall

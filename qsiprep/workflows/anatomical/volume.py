@@ -346,7 +346,9 @@ and used as an anatomical reference throughout the workflow.
             ('template_mask_file', 'inputnode.template_mask')]),
         (anat_normalization_wf, outputnode, [
             ('outputnode.to_template_rigid_transform', 'acpc_transform'),
-            ('outputnode.from_template_rigid_transform', 'acpc_inv_transform')]),
+            ('outputnode.from_template_rigid_transform', 'acpc_inv_transform'),
+            ('outputnode.to_template_nonlinear_transform', 't1_2_mni_forward_transform'),
+            ('outputnode.from_template_nonlinear_transform', 't1_2_mni_reverse_transform')]),
 
         # Resampling
         (synthstrip_anat_wf, rigid_acpc_resample_brain, [
@@ -517,7 +519,6 @@ def init_t2w_preproc_wf(omp_nthreads, num_t2ws, longitudinal, sloppy,
     ])
 
     return workflow
-
 
 
 def init_anat_template_wf(longitudinal, omp_nthreads, num_images,
