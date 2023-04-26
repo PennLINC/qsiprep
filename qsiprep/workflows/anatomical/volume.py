@@ -185,7 +185,7 @@ reference image. """
             (get_template_image, outputnode, [
                 ('template_file', 't1_preproc'),
                 ('template_brain_file', 't1_brain'),
-                ('template_mask_file', 't1_mask')
+                ('template_mask_file', 't1_mask'),
                 ('template_mask_file', 't1_seg')])])
         workflow.add_nodes([inputnode])
         return workflow
