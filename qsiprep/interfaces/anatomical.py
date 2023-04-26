@@ -444,7 +444,7 @@ class GetTemplate(SimpleInterface):
         contrast_name = self.inputs.anatomical_contrast.lower()
         if contrast_name == "none":
             LOGGER.info("Using T1w modality template for ACPC alignment")
-            contrast_name = "T1w"
+            contrast_name = "t1w"
 
         # Cover the cases where the template images are actually in the
         # qsiprep package. This is for common use cases (MNI2009cAsym and Infant)
