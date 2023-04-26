@@ -703,7 +703,7 @@ def concatenate_bvecs(input_files):
     else:
         collected_vecs = []
         for bvec_file in input_files:
-            collected_vecs.append(np.loadtxt(bvec_file).astype(np.float))
+            collected_vecs.append(np.loadtxt(bvec_file).astype(float))
             stacked = np.row_stack(collected_vecs)
     if not stacked.shape[1] == 3:
         stacked = stacked.T
