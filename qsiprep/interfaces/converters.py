@@ -74,7 +74,7 @@ class FODtoFIBGZ(SimpleInterface):
         else:
             ampl_data = amplitudes_img.get_fdata()
             ampl_mask = ampl_data.sum(3) > 1e-6
-            mask_img = nb.Nifti1Image(ampl_mask.astype(np.float),
+            mask_img = nb.Nifti1Image(ampl_mask.astype(float),
                                       amplitudes_img.affine)
 
         self._results['fib_file'] = output_fib_file
@@ -216,7 +216,7 @@ def amplitudes_to_fibgz(amplitudes_img, odf_dirs, odf_faces, output_file,
     z0 = np.nanmax(masked_odfs)
     masked_odfs = masked_odfs / z0
     masked_odfs[masked_odfs < 0] = 0
-    masked_odfs = np.nan_to_num(masked_odfs).astype(np.float)
+    masked_odfs = np.nan_to_num(masked_odfs).astype(float)
 
     if unit_odf:
         sums = masked_odfs.sum(1)
