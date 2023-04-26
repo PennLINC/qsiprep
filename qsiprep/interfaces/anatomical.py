@@ -172,7 +172,7 @@ class FakeSegmentation(SimpleInterface):
         orig_mask = img.get_fdata() > 0
         eroded1 = ndimage.binary_erosion(orig_mask, iterations=3)
         eroded2 = ndimage.binary_erosion(eroded1, iterations=3)
-        final = orig_mask.astype(np.int) + eroded1 + eroded2
+        final = orig_mask.astype(int) + eroded1 + eroded2
         out_img = nb.Nifti1Image(final, img.affine, header=img.header)
         out_fname = fname_presuffix(self.inputs.mask_file, suffix="_dseg",
                                     newpath=runtime.cwd)
