@@ -569,6 +569,7 @@ to workflows in *QSIPrep*'s documentation]\
         name='ds_report_about',
         run_without_submitting=True)
 
+    num_anat_images = 0 if dwi_only else len(subject_data[anatomical_contrast.lower()])
     # Preprocessing of anatomical data (includes possible registration template)
     info_modality = "dwi" if dwi_only else anatomical_contrast.lower()
     anat_preproc_wf = init_anat_preproc_wf(
@@ -579,7 +580,7 @@ to workflows in *QSIPrep*'s documentation]\
         longitudinal=longitudinal,
         omp_nthreads=omp_nthreads,
         output_dir=output_dir,
-        num_anat_images=len(subject_data[anatomical_contrast.lower()]),
+        num_anat_images=num_anat_images,
         output_resolution=output_resolution,
         nonlinear_register_to_template=force_spatial_normalization,
         reportlets_dir=reportlets_dir,
