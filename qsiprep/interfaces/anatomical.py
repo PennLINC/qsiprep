@@ -336,7 +336,7 @@ class DesaturateSkull(SimpleInterface):
 
         actual_brain_to_skull_ratio = brain_median / nonbrain_head_median
         LOGGER.info("found brain to skull ratio: %.3f", actual_brain_to_skull_ratio)
-        desat_data = skulled_img.get_fdata(dtype=np.float32).copy()
+        desat_data = skulled_img.get_fdata(dtype='float32').copy()
         adjustment = 1.
         if actual_brain_to_skull_ratio < self.inputs.brain_to_skull_ratio:
             # We need to downweight the non-brain voxels
@@ -347,7 +347,7 @@ class DesaturateSkull(SimpleInterface):
             desat_data[nonbrain_mask] = desat_data[nonbrain_mask] * adjustment
 
         desat_img = nim.new_img_like(skulled_img, desat_data, copy_header=True)
-        desat_img.header.set_data_dtype(np.float32)
+        desat_img.header.set_data_dtype('float32')
         desat_img.to_filename(out_file)
         self._results['desaturated_t2w'] = out_file
         self._results['head_scaling_factor'] = adjustment
