@@ -205,7 +205,7 @@ class EnhanceAndSkullstripB0(SimpleInterface):
         # Make a smoothed mask for N4
         dilated_mask = ndimage.binary_dilation(mask_img.get_fdata().astype(int),
                                                structure=sim.cube(3))
-        smoothed_dilated_mask = ndimage.gaussian_filter(dilated_mask.astype(np.float), sigma=3)
+        smoothed_dilated_mask = ndimage.gaussian_filter(dilated_mask.astype(float), sigma=3)
         weight_img = new_img_like(input_img, smoothed_dilated_mask)
 
         # Find a bias field and correct the original input
@@ -526,7 +526,7 @@ def watershed_refined_b0_mask(b0_nii, show_plot=False, pad_size=10, quantile_max
     ribbon_mask = (dilated_mask ^ eroded_mask)
 
     # Down-weight data deep in the mask
-    inner_weights = ndimage.gaussian_filter(eroded_mask.astype(np.float), sigma=morph_size)
+    inner_weights = ndimage.gaussian_filter(eroded_mask.astype(float), sigma=morph_size)
     inner_weights = 1. - inner_weights / inner_weights.max()
 
     # Down-weight data as it gets far from the mask
