@@ -472,7 +472,8 @@ def init_single_subject_wf(
         subject_data = {
             't1w': ['/completely/made/up/path/sub-01_T1w.nii.gz'],
             'dwi': ['/completely/made/up/path/sub-01_dwi.nii.gz'],
-            't2w': ['/completely/made/up/path/sub-01_T2w.nii.gz']
+            't2w': ['/completely/made/up/path/sub-01_T2w.nii.gz'],
+            'roi': []
         }
         layout = None
         LOGGER.warning("Building a test workflow")
@@ -586,6 +587,7 @@ to workflows in *QSIPrep*'s documentation]\
         reportlets_dir=reportlets_dir,
         anatomical_contrast=anatomical_contrast,
         num_additional_t2ws=additional_t2ws,
+        has_rois=bool(subject_data['roi']),
         name="anat_preproc_wf")
 
     workflow.connect([

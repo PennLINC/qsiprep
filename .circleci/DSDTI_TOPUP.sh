@@ -22,8 +22,8 @@ set +e
 source ./get_data.sh
 TESTDIR=${PWD}
 TESTNAME=DSDTI_TOPUP
-get_config_data ${TESTDIR}
-get_bids_data ${TESTDIR} DSDTI
+#get_config_data ${TESTDIR}
+#get_bids_data ${TESTDIR} DSDTI
 CFG=${TESTDIR}/data/nipype.cfg
 EDDY_CFG=${TESTDIR}/data/eddy_config.json
 

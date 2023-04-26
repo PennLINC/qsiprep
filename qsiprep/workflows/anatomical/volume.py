@@ -52,7 +52,7 @@ def init_anat_preproc_wf(template, debug, dwi_only,
                          output_dir, num_anat_images, output_resolution,
                          nonlinear_register_to_template,
                          reportlets_dir, anatomical_contrast,
-                         num_additional_t2ws,
+                         num_additional_t2ws, has_rois,
                          name='anat_preproc_wf'):
     r"""
     This workflow controls the anatomical preprocessing stages of qsiprep.
@@ -248,6 +248,7 @@ and used as an anatomical reference throughout the workflow.
         template_name=template,
         omp_nthreads=omp_nthreads,
         do_nonlinear=nonlinear_register_to_template,
+        has_rois=has_rois,
         name='anat_normalization_wf')
 
     # Resampling
@@ -667,7 +668,8 @@ A {contrast}-reference map was computed after registration of
 
 
 def init_anat_normalization_wf(sloppy, template_name, omp_nthreads,
-                               do_nonlinear, name='anat_normalization_wf'):
+                               do_nonlinear, has_rois=False,
+                               name='anat_normalization_wf'):
     r"""
     This workflow performs registration from the original anatomical reference to the
     template anatomical reference.
@@ -721,65 +723,115 @@ def init_anat_normalization_wf(sloppy, template_name, omp_nthreads,
             'from_template_nonlinear_transform', 'from_template_rigid_transform',
             'out_report']),
         name='outputnode')
-    # Extract the rigid component as the AC-PC transform
+
+
+    # get a good ACPC transform
+    acpc_settings = pkgr(
+        "qsiprep",
+        "data/intermodal_ACPC.json" if not sloppy else "data/intermodal_ACPC_sloppy.json")
+    acpc_reg = pe.Node(
+        RobustMNINormalizationRPT(
+            float=True,
+            generate_report=False,
+            settings=[acpc_settings]),
+        name="acpc_reg",
+        n_procs=omp_nthreads)
+    disassemble_transform = pe.Node(
+        DisassembleTransform(),
+        name="disassemble_transform")
     extract_rigid_transform = pe.Node(
         AffineToRigid(),
         name="extract_rigid_transform")
 
-    if do_nonlinear:
-        LOGGER.info("Running nonlinear normalization to template")
-        if sloppy:
-            LOGGER.info("Using QuickSyN")
-            # Requires a warp file: make an inaccurate one
-            settings = pkgr('qsiprep', 'data/quick_syn.json')
-            anat_norm_interface = RobustMNINormalizationRPT(
-                float=True,
-                generate_report=True,
-                settings=[settings])
-        else:
-            anat_norm_interface = RobustMNINormalizationRPT(
-                    float=True,
-                    generate_report=True,
-                    flavor='precise')
-        node_name = 'anat_nlin_normalization'
-    else:
-        ants_settings = pkgr("qsiprep", "data/intermodal_ACPC.json")
-        anat_norm_interface = RobustMNINormalizationRPT(
-                    float=True,
-                    generate_report=True,
-                    settings=[ants_settings])
-        node_name = "acpc_reg"
-
-    # Do the registration and get the results
-    anat_normalization = pe.Node(
-        anat_norm_interface,
-        name=node_name,
-        n_procs=omp_nthreads,
-        mem_gb=2)
-    anat_normalization.inputs.template = template_name
-    anat_normalization.inputs.orientation = "LPS"
-    disassemble_transform = pe.Node(
-        DisassembleTransform(),
-        name="disassemble_transform")
-
     workflow.connect([
-        (inputnode, anat_normalization, [
+        (inputnode, acpc_reg, [
             ('template_image', 'reference_image'),
             ('template_mask', 'reference_mask'),
             ('anatomical_reference', 'moving_image'),
             ('roi', 'lesion_mask'),
             ('brain_mask', 'moving_mask')]),
-        (anat_normalization, disassemble_transform, [
+        (acpc_reg, disassemble_transform, [
             ('composite_transform', 'in_file')]),
         (disassemble_transform, extract_rigid_transform, [
             (('out_transforms', _get_affine_component), 'affine_transform')]),
-        (anat_normalization, outputnode, [
-            ('composite_transform', 'to_template_nonlinear_transform'),
-            ('inverse_composite_transform', 'from_template_nonlinear_transform'),
-            ('out_report', 'out_report')]),
         (extract_rigid_transform, outputnode, [
             ('rigid_transform', 'to_template_rigid_transform'),
-            ('rigid_transform_inverse', 'from_template_rigid_transform')])])
+            ('rigid_transform_inverse', 'from_template_rigid_transform')]),
+        ])
+
+    if not do_nonlinear:
+        return workflow
+
+    rigid_acpc_resample_anat = pe.Node(
+        ants.ApplyTransforms(input_image_type=0,
+                             interpolation='LanczosWindowedSinc'),
+        name='rigid_acpc_resample_anat')
+    LOGGER.info("Running nonlinear normalization to template")
+    rigid_acpc_resample_mask = pe.Node(
+        ants.ApplyTransforms(input_image_type=0,
+                             interpolation='MultiLabel'),
+        name='rigid_acpc_resample_mask')
+
+    if sloppy:
+        LOGGER.info("Using QuickSyN")
+        # Requires a warp file: make an inaccurate one
+        settings = pkgr('qsiprep', 'data/quick_syn.json')
+        anat_norm_interface = RobustMNINormalizationRPT(
+            float=True,
+            generate_report=True,
+            settings=[settings])
+    else:
+        anat_norm_interface = RobustMNINormalizationRPT(
+                float=True,
+                generate_report=True,
+                flavor='precise')
+
+    anat_nlin_normalization = pe.Node(
+        anat_norm_interface,
+        name='anat_nlin_normalization',
+        n_procs=omp_nthreads)
+    anat_nlin_normalization.inputs.template = template_name
+    anat_nlin_normalization.inputs.orientation = "LPS"
+
+    workflow.connect([
+        (inputnode, anat_nlin_normalization, [
+            ('template_image', 'reference_image'),
+            ('template_mask', 'reference_mask')]),
+        (inputnode, rigid_acpc_resample_mask, [
+            ('template_image', 'reference_image'),
+            ('brain_mask', 'input_image')]),
+        (inputnode, rigid_acpc_resample_anat, [
+            ('template_image', 'reference_image'),
+            ('anatomical_reference', 'input_image')]),
+        (extract_rigid_transform, rigid_acpc_resample_anat, [
+            ('rigid_transform', 'transforms')]),
+        (extract_rigid_transform, rigid_acpc_resample_mask, [
+            ('rigid_transform', 'transforms')]),
+        (rigid_acpc_resample_anat, anat_nlin_normalization, [
+            ('output_image', 'moving_image')]),
+        (rigid_acpc_resample_mask, anat_nlin_normalization, [
+            ('output_image', 'moving_mask')]),
+        (anat_nlin_normalization, outputnode, [
+            ('composite_transform', 'to_template_nonlinear_transform'),
+            ('inverse_composite_transform', 'from_template_nonlinear_transform'),
+            ('out_report', 'out_report')])
+    ])
+
+    if has_rois:
+        rigid_acpc_resample_roi = pe.Node(
+            ants.ApplyTransforms(input_image_type=0,
+                                interpolation='MultiLabel'),
+            name='rigid_acpc_resample_roi')
+        workflow.connect([
+            (rigid_acpc_resample_roi, anat_nlin_normalization, [
+                ('output_image', 'lesion_mask')]),
+            (extract_rigid_transform, rigid_acpc_resample_roi, [
+                ('rigid_transform', 'transforms')]),
+            (inputnode, rigid_acpc_resample_roi, [
+                ('template_image', 'reference_image'),
+                ('roi', 'input_image')]),
+        ])
+
 
     return workflow
 
