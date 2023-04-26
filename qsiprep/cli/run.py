@@ -915,6 +915,7 @@ def build_qsiprep_workflow(opts, retval):
             'crashdump_dir': str(log_dir),
             'crashfile_format': 'txt',
             'get_linked_libs': False,
+            'remove_unnecessary_outputs': False,
             'stop_on_first_crash':
             opts.stop_on_first_crash or opts.work_dir is None,
         },
@@ -1144,14 +1145,11 @@ def build_recon_workflow(opts, retval):
             'log_to_file': True
         },
         'execution': {
-            'crashdump_dir':
-            log_dir,
-            'crashfile_format':
-            'txt',
-            'get_linked_libs':
-            False,
-            'stop_on_first_crash':
-            opts.stop_on_first_crash or opts.work_dir is None,
+            'crashdump_dir':log_dir,
+            'crashfile_format':'txt',
+            'get_linked_libs':False,
+            'remove_unnecessary_outputs': False,
+            'stop_on_first_crash':opts.stop_on_first_crash or opts.work_dir is None,
         },
         'monitoring': {
             'enabled': opts.resource_monitor,

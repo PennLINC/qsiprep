@@ -425,7 +425,7 @@ class _GetTemplateInputSpec(BaseInterfaceInputSpec):
     t2_file = File(exists=True)
     mask_file = File(exists=True)
     infant_mode = traits.Bool(False, usedefault=True)
-    anatomical_contrast = traits.Enum("T1w", "T2w")
+    anatomical_contrast = traits.Enum("T1w", "T2w", "none")
 
 
 class _GetTemplateOutputSpec(BaseInterfaceInputSpec):
@@ -442,6 +442,9 @@ class GetTemplate(SimpleInterface):
     def _run_interface(self, runtime):
         self._results['template_name'] = self.inputs.template_name
         contrast_name = self.inputs.anatomical_contrast.lower()
+        if contrast_name == "none":
+            LOGGER.info("Using T1w modality template for ACPC alignment")
+            contrast_name = "T1w"
 
         # Cover the cases where the template images are actually in the
         # qsiprep package. This is for common use cases (MNI2009cAsym and Infant)
