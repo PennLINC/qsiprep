@@ -203,7 +203,7 @@ class EnhanceAndSkullstripB0(SimpleInterface):
         self._results['plotting_mask_file'] = plotting_mask
 
         # Make a smoothed mask for N4
-        dilated_mask = ndimage.binary_dilation(mask_img.get_fdata().astype(np.int),
+        dilated_mask = ndimage.binary_dilation(mask_img.get_fdata().astype(int),
                                                structure=sim.cube(3))
         smoothed_dilated_mask = ndimage.gaussian_filter(dilated_mask.astype(np.float), sigma=3)
         weight_img = new_img_like(input_img, smoothed_dilated_mask)
@@ -433,7 +433,7 @@ def calculate_gradmax_b0_mask(b0_nii, show_plot=False, quantile_max=0.8, pad_siz
 
     # Send it out for post processing
     edge_scores = []
-    opening_values = np.array([2, 4, 6, 8, 10, 12], dtype=np.int)
+    opening_values = np.array([2, 4, 6, 8, 10, 12], dtype=int)
     opened_masks = []
     selected_voxels = []
     for opening_test in opening_values:
@@ -575,8 +575,8 @@ def select_markers_for_rw(image, inner_mask, empty_mask, outer_mask,
     markers = np.zeros_like(image) - 1.
     use_as_inner_marker = np.random.rand(inner_mask.sum()) < sample_proportion
     use_as_outer_marker = np.random.rand(outer_mask.sum()) < sample_proportion
-    markers[inner_mask > 0] = use_as_inner_marker.astype(np.int) * 2
-    markers[outer_mask > 0] = use_as_outer_marker.astype(np.int) * 1
+    markers[inner_mask > 0] = use_as_inner_marker.astype(int) * 2
+    markers[outer_mask > 0] = use_as_outer_marker.astype(int) * 1
     markers[empty_mask > 0] = 0
 
     return markers
