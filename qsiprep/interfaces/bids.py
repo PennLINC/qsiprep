@@ -237,7 +237,7 @@ class BIDSDataGrabber(SimpleInterface):
                 LOGGER.info('%s, but no problem because --dwi-only was selected.',
                             message)
             elif self._anatomical_contrast != "T1w":
-                LOGGER.info('%s, but no problem because --anatomical_contrast %s was selected.',
+                LOGGER.info('%s, but no problem because --anat-modality %s was selected.',
                             message, self._anatomical_contrast)
             else:
                 raise FileNotFoundError(message)
@@ -249,7 +249,7 @@ class BIDSDataGrabber(SimpleInterface):
                 LOGGER.info('%s, but no problem because --dwi-only was selected.',
                             message)
             elif self._anatomical_contrast != "T2w":
-                LOGGER.info('%s, but no problem because --anatomical_contrast %s was selected.',
+                LOGGER.info('%s, but no problem because --anat-modality %s was selected.',
                             message, self._anatomical_contrast)
             else:
                 raise FileNotFoundError(message)

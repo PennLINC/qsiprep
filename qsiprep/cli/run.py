@@ -331,12 +331,6 @@ def get_parser():
         default='MNI152NLin2009cAsym',
         help='volume template space (default: MNI152NLin2009cAsym)')
     g_conf.add_argument(
-        '--anatomical-contrast', '--anatomical_contrast',
-        action='store',
-        choices=["T1w", "T2w"],
-        default="T1w",
-        help='which contrast to use for anatomical workflows')
-    g_conf.add_argument(
         '--output-resolution', '--output_resolution',
         action='store',
         # required when not recon-only (which can be specified in sysargs 2 ways)
@@ -961,7 +955,7 @@ def build_qsiprep_workflow(opts, retval):
         output_dir=str(output_dir),
         ignore=opts.ignore,
         hires=False,
-        anatomical_contrast=opts.anatomical_contrast,
+        anatomical_contrast=opts.anat_modality,
         freesurfer=opts.do_reconall,
         bids_filters=opts.bids_filters,
         debug=opts.sloppy,

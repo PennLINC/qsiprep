@@ -31,7 +31,7 @@ QSIPREP_CMD=$(run_qsiprep_cmd ${BIDS_INPUT_DIR} ${OUTPUT_DIR})
 ${QSIPREP_CMD} \
 	-w ${TEMPDIR} \
 	--sloppy \
-	--anatomical-contrast none \
+	--anat-modality none \
 	--denoise-method none \
 	--b1-biascorrect-stage none \
 	--pepolar-method DRBUDDI \

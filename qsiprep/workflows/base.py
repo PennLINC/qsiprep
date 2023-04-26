@@ -479,11 +479,11 @@ def init_single_subject_wf(
     else:
         subject_data, layout = collect_data(bids_dir, subject_id, filters=bids_filters)
 
-    # Warn about --dwi-only and non-none --anatomical-contrast
+    # Warn about --dwi-only and non-none --anat-modality
     if dwi_only and anatomical_contrast != "none":
         LOGGER.warn(
             "--dwi-only is deprecated and is only compatible with "
-            "--anatomical-contrast none. Setting --anatomical-contrast none")
+            "--anat-modality none. Setting --anat-modality none")
         anatomical_contrast = "none"
     if anat_only and dwi_only:
         raise Exception("--anat-only and --dwi-only are mutually exclusive.")
@@ -497,7 +497,7 @@ def init_single_subject_wf(
     if not dwi_only and not subject_data.get(anatomical_contrast.lower()):
         raise Exception("No {} images found for participant {}. "
                         "To bypass anatomical processing choose "
-                        "--anatomical-contrast none".format(
+                        "--anat-modality none".format(
             anatomical_contrast, subject_id))
 
     additional_t2ws = 0
