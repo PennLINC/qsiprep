@@ -485,6 +485,9 @@ def init_single_subject_wf(
             "--dwi-only is deprecated and is only compatible with "
             "--anat-modality none. Setting --anat-modality none")
         anatomical_contrast = "none"
+    if anatomical_contrast == "none":
+        dwi_only = True
+
     if anat_only and dwi_only:
         raise Exception("--anat-only and --dwi-only are mutually exclusive.")
 
