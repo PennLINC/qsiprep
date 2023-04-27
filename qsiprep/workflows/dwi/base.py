@@ -48,7 +48,6 @@ def init_dwi_preproc_wf(dwi_only,
                         eddy_config,
                         raw_image_sdc,
                         reportlets_dir,
-                        output_spaces,
                         output_dir,
                         dwi_denoise_window,
                         denoise_method,
@@ -90,7 +89,6 @@ def init_dwi_preproc_wf(dwi_only,
                                   eddy_config=None,
                                   raw_image_sdc=False,
                                   reportlets_dir='.',
-                                  output_spaces=['T1w', 'template'],
                                   dwi_denoise_window=5,
                                   denoise_method='dwidenoise',
                                   unringing_method='none',
@@ -153,16 +151,6 @@ def init_dwi_preproc_wf(dwi_only,
             'run ``dwidenoise`` before combining dwis. Requires ``combine_all_dwis``'
         reportlets_dir : str
             Directory in which to save reportlets
-        output_spaces : list
-            List of output spaces functional images are to be resampled to.
-            Some parts of pipeline will only be instantiated for some output s
-            paces.
-
-            Valid spaces:
-
-                - T1w
-                - template
-
         template : str
             Name of template targeted by ``template`` output space
         output_dir : str
@@ -306,7 +294,7 @@ def init_dwi_preproc_wf(dwi_only,
         niu.IdentityInterface(fields=[
             'dwi_files', 'sbref_file', 'subjects_dir', 'subject_id',
             't1_preproc', 't1_brain', 't1_mask', 't1_seg',
-            't1_aseg', 't1_aparc', 't1_2_mni_forward_transform',
+            't1_aseg', 't1_aparc', 't1_2_mni_forward_transform', 't2w_unfatsat',
             't1_2_mni_reverse_transform', 't1_2_fsnative_forward_transform',
             't1_2_fsnative_reverse_transform', 't2w_files', 'dwi_sampling_grid']),
         name='inputnode')
@@ -388,7 +376,7 @@ Diffusion data preprocessing
         (inputnode, hmc_wf, [
             ('t1_brain', 'inputnode.t1_brain'),
             ('t1_mask', 'inputnode.t1_mask'),
-            ('t2w_files', 'inputnode.t2w_files'),
+            ('t2w_unfatsat', 'inputnode.t2w_unfatsat'),
             ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform')]),
         (pre_hmc_wf, outputnode, [
             ('outputnode.qc_file', 'raw_qc_file'),
@@ -489,7 +477,6 @@ Diffusion data preprocessing
                 ("outputnode.b0_sdc_report", "in_file")])
         ])
 
-
     summary = pe.Node(
         DiffusionSummary(
             pe_direction=scan_groups['dwi_series_pedir'],
@@ -498,8 +485,7 @@ Diffusion data preprocessing
             hmc_transform=hmc_transform,
             impute_slice_threshold=impute_slice_threshold,
             denoise_method=denoise_method,
-            dwi_denoise_window=dwi_denoise_window,
-            output_spaces=output_spaces),
+            dwi_denoise_window=dwi_denoise_window),
         name='summary',
         mem_gb=DEFAULT_MEMORY_MIN_GB,
         run_without_submitting=True)

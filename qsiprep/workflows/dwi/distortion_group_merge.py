@@ -180,7 +180,6 @@ def init_distortion_group_merge_wf(merging_strategy, inputs_list, hmc_model, rep
         output_prefix=output_prefix,
         source_file=source_file,
         output_dir=output_dir,
-        output_spaces=["T1w"],
         template=template,
         write_local_bvecs=False,
         hmc_model=hmc_model,

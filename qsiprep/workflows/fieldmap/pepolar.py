@@ -16,12 +16,12 @@ from nipype.pipeline import engine as pe
 from nipype.interfaces import afni, ants, utility as niu
 from ...niworkflows.interfaces import CopyHeader
 from ...niworkflows.interfaces.registration import ANTSApplyTransformsRPT
-from ...niworkflows.interfaces.images import extract_wm
 
 from ...engine import Workflow
 from ...interfaces import StructuralReference
 from ...interfaces.fmap import B0RPEFieldmap, PEPOLARReport
 from ...interfaces.nilearn import EnhanceB0
+from ...interfaces.images import ExtractWM
 from ..anatomical import init_synthstrip_wf
 
 
@@ -250,7 +250,8 @@ def init_extended_pepolar_report_wf(segment_t2w, omp_nthreads=1,
             name="t2w_n4",
             n_procs=omp_nthreads)
 
-        strip_t2w_wf = init_synthstrip_wf(omp_nthreads=omp_nthreads)
+        strip_t2w_wf = init_synthstrip_wf(do_padding=True,
+                                          omp_nthreads=omp_nthreads)
 
         t2w_atropos = pe.Node(
             ants.Atropos(
@@ -268,7 +269,7 @@ def init_extended_pepolar_report_wf(segment_t2w, omp_nthreads=1,
         workflow.connect([
             (inputnode, t2w_n4, [
                 ("t2w_image", "input_image")]),
-            (t2w_n4, strip_t2w_wf, [("output_image", "inputnode.skulled_image")]),
+            (t2w_n4, strip_t2w_wf, [("output_image", "inputnode.original_image")]),
             (strip_t2w_wf, t2w_atropos, [
                 ("outputnode.brain_image", "intensity_images"),
                 ("outputnode.brain_mask", "mask_image")]),
@@ -282,7 +283,7 @@ def init_extended_pepolar_report_wf(segment_t2w, omp_nthreads=1,
             name='map_seg',
             mem_gb=0.3)
 
-        sel_wm = pe.Node(niu.Function(function=extract_wm), name='sel_wm')
+        sel_wm = pe.Node(ExtractWM(), name='sel_wm')
 
         workflow.connect([
             (inputnode, map_seg, [

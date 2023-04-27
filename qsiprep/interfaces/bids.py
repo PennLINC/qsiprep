@@ -217,10 +217,12 @@ class BIDSDataGrabber(SimpleInterface):
     def __init__(self, *args, **kwargs):
         anat_only = kwargs.pop('anat_only')
         dwi_only = kwargs.pop('dwi_only')
+        anatomical_contrast = kwargs.pop('anatomical_contrast')
+        self._anatomical_contrast = anatomical_contrast
         super(BIDSDataGrabber, self).__init__(*args, **kwargs)
         if anat_only is not None:
             self._require_funcs = not anat_only
-        self._no_anat_necessary = bool(dwi_only)
+        self._no_anat_necessary = bool(dwi_only) or anatomical_contrast == "none"
 
     def _run_interface(self, runtime):
         bids_dict = self.inputs.subject_data
@@ -234,6 +236,21 @@ class BIDSDataGrabber(SimpleInterface):
             if self._no_anat_necessary:
                 LOGGER.info('%s, but no problem because --dwi-only was selected.',
                             message)
+            elif self._anatomical_contrast != "T1w":
+                LOGGER.info('%s, but no problem because --anat-modality %s was selected.',
+                            message, self._anatomical_contrast)
+            else:
+                raise FileNotFoundError(message)
+
+        if not bids_dict['t2w']:
+            message = 'No T2w images found for subject sub-{}'.format(
+                self.inputs.subject_id)
+            if self._no_anat_necessary:
+                LOGGER.info('%s, but no problem because --dwi-only was selected.',
+                            message)
+            elif self._anatomical_contrast != "T2w":
+                LOGGER.info('%s, but no problem because --anat-modality %s was selected.',
+                            message, self._anatomical_contrast)
             else:
                 raise FileNotFoundError(message)
 
@@ -241,7 +258,7 @@ class BIDSDataGrabber(SimpleInterface):
             raise FileNotFoundError('No DWI images found for subject sub-{}'.format(
                 self.inputs.subject_id))
 
-        for imtype in ['t2w', 'flair', 'fmap', 'sbref', 'roi', 'dwi']:
+        for imtype in ['flair', 'fmap', 'sbref', 'roi', 'dwi']:
             if not bids_dict[imtype]:
                 LOGGER.warning('No \'%s\' images found for sub-%s',
                                imtype, self.inputs.subject_id)

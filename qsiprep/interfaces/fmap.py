@@ -939,7 +939,7 @@ def get_evenly_spaced_b0s(b0_indices, max_per_spec):
     if len(b0_indices) <= max_per_spec:
         return b0_indices
     selected_indices = np.linspace(0, len(b0_indices)-1, num=max_per_spec,
-                                   endpoint=True, dtype=np.int)
+                                   endpoint=True, dtype=int)
     return [b0_indices[idx] for idx in selected_indices]
 
 

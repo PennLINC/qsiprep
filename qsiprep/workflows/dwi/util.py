@@ -123,10 +123,11 @@ def init_dwi_reference_wf(omp_nthreads, dwi_file=None, register_t1=False,
             name='t1_mask_to_b0',
             n_procs=omp_nthreads)
 
+    # Use synthstrip to extract the brain
     synthstrip_wf = init_synthstrip_wf(
+        do_padding=True,
         omp_nthreads=omp_nthreads,
         name="synthstrip_wf")
-
 
     workflow.connect([
         (inputnode, t1_mask_to_b0, [
@@ -134,7 +135,7 @@ def init_dwi_reference_wf(omp_nthreads, dwi_file=None, register_t1=False,
             ('b0_template', 'reference_image')]),
         (inputnode, outputnode, [('b0_template', 'raw_ref_image')]),
         (inputnode, outputnode, [('b0_template', 'ref_image')]),
-        (inputnode, synthstrip_wf, [('b0_template', 'inputnode.skulled_image')]),
+        (inputnode, synthstrip_wf, [('b0_template', 'inputnode.original_image')]),
         (synthstrip_wf, outputnode, [
             ('outputnode.brain_image', 'ref_image_brain'),
             ('outputnode.brain_mask', 'dwi_mask')])

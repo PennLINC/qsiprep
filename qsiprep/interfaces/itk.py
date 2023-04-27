@@ -103,8 +103,8 @@ class DisassembleTransform(SimpleInterface):
     output_spec = DisassembleTransformOutputSpec
 
     def _run_interface(self, runtime):
-        affine_out, warp_out = disassemble_transform(self.inputs.in_file, runtime.cwd)
-        self._results['out_transforms'] = [affine_out, warp_out]
+        transforms = disassemble_transform(self.inputs.in_file, runtime.cwd)
+        self._results['out_transforms'] = transforms
         return runtime
 
 
@@ -282,9 +282,13 @@ def disassemble_transform(transform_file, cwd):
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     LOGGER.info(" ".join(cmd))
     out, err = proc.communicate()
-    if False in (op.exists(affine_out), op.exists(warp_out)):
+
+    if not op.exists(affine_out):
         raise Exception("unable to unpack composite transform")
-    return [affine_out, warp_out]
+    transforms = [affine_out]
+    if op.exists(warp_out):
+        transforms.append(warp_out)
+    return transforms
 
 
 def compose_affines(reference_image, affine_list, output_file):

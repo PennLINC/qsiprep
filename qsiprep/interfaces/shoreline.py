@@ -389,7 +389,7 @@ class SHORELineReport(SummaryInterface):
             images.extend(before_after_images(orig_file, aligned_file, model_file, imagenum))
 
         out_file = op.join(runtime.cwd, "shoreline_reg.gif")
-        imageio.mimsave(out_file, images, fps=1)
+        imageio.mimsave(out_file, images, duration=1000)
         self._results['plot_file'] = out_file
         return runtime
 

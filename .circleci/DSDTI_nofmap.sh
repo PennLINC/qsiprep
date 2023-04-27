@@ -45,6 +45,5 @@ ${QSIPREP_CMD} \
      --unringing-method rpg \
      --b1-biascorrect-stage none \
      --sloppy \
-     --output-space T1w \
      --output-resolution 5 \
      -vv

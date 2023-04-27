@@ -105,8 +105,8 @@ def init_fsl_hmc_wf(scan_groups,
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=['dwi_file', 'bvec_file', 'bval_file', 'b0_indices', 'b0_images',
-                    'original_files', 't1_brain', 't1_mask', 't2_brain', 't1_seg',
-                    't1_2_mni_reverse_transform', 't2w_files']),
+                    'original_files', 't1_brain', 't1_mask', 't1_seg',
+                    't1_2_mni_reverse_transform', 't2w_unfatsat']),
         name='inputnode')
 
     outputnode = pe.Node(
@@ -302,7 +302,7 @@ def init_fsl_hmc_wf(scan_groups,
                 ('bvec_files', 'inputnode.bvec_files')]),
             (inputnode, drbuddi_wf, [
                 ('t1_brain', 'inputnode.t1_brain'),
-                ('t2w_files', 'inputnode.t2w_files'),
+                ('t2w_unfatsat', 'inputnode.t2w_unfatsat'),
                 ('original_files', 'inputnode.original_files')]),
             (drbuddi_wf, outputnode, [
                 ('outputnode.sdc_warps', 'to_dwi_ref_warps'),

@@ -207,7 +207,7 @@ class AddTPMs(SimpleInterface):
         out_file = fname_presuffix(first_fname, suffix='_tpmsum',
                                    newpath=runtime.cwd)
         newnii = im.__class__(data, im.affine, im.header)
-        newnii.set_data_dtype(np.float32)
+        newnii.set_data_dtype('float32')
 
         # Set visualization thresholds
         newnii.header['cal_max'] = 1.0
