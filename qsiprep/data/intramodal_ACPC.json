@@ -20,6 +20,5 @@
     "metric_weight": [ 1, 1 ],
     "smoothing_sigmas": [ [ 0, 0 ], [ 2, 2 ] ],
     "radius_or_number_of_bins": [ 32, 32],
-    "interpolation": "Linear",
-    "initial_moving_transform_com": 1
+    "interpolation": "Linear"
 }

@@ -26,12 +26,50 @@ from nipype.interfaces.base import (isdefined, traits, TraitedSpec, BaseInterfac
 from nipype.interfaces.afni.base import (AFNICommand, AFNICommandInputSpec, AFNICommandOutputSpec)
 from nipype.interfaces import fsl
 # from qsiprep.interfaces.images import (
-#    nii_ones_like, extract_wm, SignalExtraction, MatchHeader,
+#    nii_ones_like, SignalExtraction, MatchHeader,
 #    FilledImageLike, DemeanImage, TemplateDimensions)
 from .mrtrix import SS3T_ROOT
 from ..niworkflows.interfaces.images import ValidateImageInputSpec
 
 LOGGER = logging.getLogger('nipype.interface')
+
+
+class _ExtractWMInputSpec(BaseInterfaceInputSpec):
+    in_seg = File(exists=True, mandatory=True)
+    wm_label = traits.Int(3, usedefault=True)
+    allow_fallback_mask = traits.Bool(True, usedefault=True)
+
+
+class _ExtractWMOutputSpec(TraitedSpec):
+    out = File(exists=True)
+
+
+class ExtractWM(SimpleInterface):
+    input_spec = _ExtractWMInputSpec
+    output_spec = _ExtractWMOutputSpec
+
+    def _run_interface(self, runtime):
+        out_file = fname_presuffix(self.inputs.in_seg, newpath=runtime.cwd,
+                                   suffix="_wm")
+
+        nii = nb.load(self.inputs.in_seg)
+        nii_data = nii.get_fdata()
+        wm_mask = nii_data == self.inputs.wm_label
+        label_sum = wm_mask.sum()
+        if label_sum < 30:
+            if not self.inputs.allow_fallback_mask:
+                raise Exception("Very little white matter found: %d voxels" % wm_mask.sum())
+            wm_mask = nii_data > 0
+            label_sum = wm_mask.sum()
+            if label_sum < 30:
+                raise Exception("Very little white matter found: %d voxels" % wm_mask.sum())
+        data = np.zeros(nii.shape, dtype=np.uint8)
+        data[wm_mask] = 1
+        new = nb.Nifti1Image(data, nii.affine, nii.header)
+        new.set_data_dtype(np.uint8)
+        new.to_filename(out_file)
+        self._results['out'] = out_file
+        return runtime
 
 
 class SplitDWIsBvalsInputSpec(BaseInterfaceInputSpec):
@@ -58,8 +96,8 @@ class SplitDWIsBvals(SimpleInterface):
     def _run_interface(self, runtime):
 
         split_bval_files, split_bvec_files = split_bvals_bvecs(
-            self.inputs.bval_file, self.inputs.bvec_file, 
-            self.inputs.split_files, self.inputs.deoblique_bvecs, 
+            self.inputs.bval_file, self.inputs.bvec_file,
+            self.inputs.split_files, self.inputs.deoblique_bvecs,
             runtime.cwd)
 
         bvalues = np.loadtxt(self.inputs.bval_file)
