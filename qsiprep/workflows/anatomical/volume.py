@@ -728,7 +728,7 @@ def init_anat_normalization_wf(sloppy, template_name, omp_nthreads,
     # get a good ACPC transform
     acpc_settings = pkgr(
         "qsiprep",
-        "data/intermodal_ACPC.json" if not sloppy else "data/intermodal_ACPC_sloppy.json")
+        "data/intramodal_ACPC.json" if not sloppy else "data/intramodal_ACPC_sloppy.json")
     acpc_reg = pe.Node(
         RobustMNINormalizationRPT(
             float=True,

@@ -16,12 +16,12 @@ from nipype.pipeline import engine as pe
 from nipype.interfaces import afni, ants, utility as niu
 from ...niworkflows.interfaces import CopyHeader
 from ...niworkflows.interfaces.registration import ANTSApplyTransformsRPT
-from ...niworkflows.interfaces.images import extract_wm
 
 from ...engine import Workflow
 from ...interfaces import StructuralReference
 from ...interfaces.fmap import B0RPEFieldmap, PEPOLARReport
 from ...interfaces.nilearn import EnhanceB0
+from ...interfaces.images import ExtractWM
 from ..anatomical import init_synthstrip_wf
 
 
@@ -281,7 +281,7 @@ def init_extended_pepolar_report_wf(segment_t2w, omp_nthreads=1,
             name='map_seg',
             mem_gb=0.3)
 
-        sel_wm = pe.Node(niu.Function(function=extract_wm), name='sel_wm')
+        sel_wm = pe.Node(ExtractWM(), name='sel_wm')
 
         workflow.connect([
             (inputnode, map_seg, [
