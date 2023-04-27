@@ -105,7 +105,7 @@ def recon_plot():
         raise Exception('Requires either a mif file or fib file')
 
     odf_4d = odf_img.get_fdata()
-    sphere = HemiSphere(xyz=directions.astype(np.float))
+    sphere = HemiSphere(xyz=directions.astype(float))
     if not opts.background_image:
         background_data = odf_4d.mean(3)
     else:

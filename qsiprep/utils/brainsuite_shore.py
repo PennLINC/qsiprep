@@ -622,7 +622,7 @@ def create_rspace(gridsize, radius_max):
             for k in range(-radius, radius + 1):
                 vecs.append([i, j, k])
 
-    vecs = np.array(vecs, dtype=np.float32)
+    vecs = np.array(vecs, dtype='float32')
     tab = vecs / radius
     tab = tab * radius_max
     vecs = vecs + radius
@@ -636,7 +636,7 @@ def shore_index_matrix(radial_order):
         for l in range(0, n + 1, 2):
             for m in range(-l, l + 1):
                 indices.append((n, l, m))
-    return np.array(indices).astype(np.int)
+    return np.array(indices).astype(int)
 
 
 def shore_matrix_pdf(radial_order, zeta, rtab):
