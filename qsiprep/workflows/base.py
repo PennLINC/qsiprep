@@ -659,6 +659,7 @@ to workflows in *QSIPrep*'s documentation]\
             workflow.connect([
                 (anat_preproc_wf, merging_group_workflows[merged_group], [
                     ('outputnode.t1_brain', 'inputnode.t1_brain'),
+                    ('outputnode.t1_seg', 'inputnode.t1_seg'),
                     ('outputnode.t1_mask', 'inputnode.t1_mask')])
             ])
 

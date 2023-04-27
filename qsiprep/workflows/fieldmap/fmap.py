@@ -21,7 +21,7 @@ of the BIDS specification.
 """
 import os
 from nipype.pipeline import engine as pe
-from nipype.interfaces import utility as niu, ants, afni, fsl
+from nipype.interfaces import utility as niu, ants, fsl
 import os
 from .utils import demean_image, cleanup_edge_pipeline
 from ...niworkflows.engine.workflows import LiterateWorkflow as Workflow

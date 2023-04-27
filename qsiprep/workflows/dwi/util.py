@@ -85,7 +85,7 @@ def init_dwi_reference_wf(omp_nthreads, dwi_file=None, register_t1=False,
     workflow.__desc__ = """\
 """
     inputnode = pe.Node(
-        niu.IdentityInterface(fields=['b0_template', 't1_brain', 't1_mask']),
+        niu.IdentityInterface(fields=['b0_template', 't1_brain', 't1_mask', 't1_seg']),
         name='inputnode')
     outputnode = pe.Node(
         niu.IdentityInterface(fields=['raw_ref_image', 'ref_image', 'ref_image_brain',
