@@ -11,6 +11,8 @@ Image tools interfaces
 
 import os
 from subprocess import Popen, PIPE
+import subprocess
+import glob
 from textwrap import indent
 import numpy as np
 import nibabel as nb
@@ -19,7 +21,9 @@ from dipy.io import read_bvals_bvecs
 from nipype import logging
 from nipype.utils.filemanip import fname_presuffix
 from nipype.interfaces.base import (isdefined, traits, TraitedSpec, BaseInterfaceInputSpec,
-                                    SimpleInterface, File, InputMultiObject, OutputMultiObject)
+                                    SimpleInterface, File, InputMultiObject, OutputMultiObject,
+                                    OutputMultiPath)
+from nipype.interfaces.afni.base import (AFNICommand, AFNICommandInputSpec, AFNICommandOutputSpec)
 from nipype.interfaces import fsl
 # from qsiprep.interfaces.images import (
 #    nii_ones_like, SignalExtraction, MatchHeader,
@@ -68,7 +72,45 @@ class ExtractWM(SimpleInterface):
         return runtime
 
 
-class SplitDWIsInputSpec(BaseInterfaceInputSpec):
+class SplitDWIsBvalsInputSpec(BaseInterfaceInputSpec):
+    split_files = InputMultiObject(desc='pre-split DWI images')
+    bvec_file = File(desc='the bvec file')
+    bval_file = File(desc='the bval file')
+    deoblique_bvecs = traits.Bool(False, usedefault=True,
+                                  desc='write LPS+ world coordinate bvecs')
+    b0_threshold = traits.Int(50, usedefault=True,
+                              desc='Maximum b-value that can be considered a b0')
+
+
+class SplitDWIsBvalsOutputSpec(TraitedSpec):
+    bval_files = OutputMultiObject(File(exists=True), desc='single volume bvals')
+    bvec_files = OutputMultiObject(File(exists=True), desc='single volume bvecs')
+    b0_images = OutputMultiObject(File(exists=True), desc='just the b0s')
+    b0_indices = traits.List(desc='list of original indices for each b0 image')
+
+
+class SplitDWIsBvals(SimpleInterface):
+    input_spec = SplitDWIsBvalsInputSpec
+    output_spec = SplitDWIsBvalsOutputSpec
+
+    def _run_interface(self, runtime):
+
+        split_bval_files, split_bvec_files = split_bvals_bvecs(
+            self.inputs.bval_file, self.inputs.bvec_file,
+            self.inputs.split_files, self.inputs.deoblique_bvecs,
+            runtime.cwd)
+
+        bvalues = np.loadtxt(self.inputs.bval_file)
+        b0_indices = np.flatnonzero(bvalues < self.inputs.b0_threshold)
+        b0_paths = [self.inputs.split_files[idx] for idx in b0_indices]
+        self._results['bval_files'] = split_bval_files
+        self._results['bvec_files'] = split_bvec_files
+        self._results['b0_images'] = b0_paths
+        self._results['b0_indices'] = b0_indices.tolist()
+
+        return runtime
+
+class SplitDWIsFSLInputSpec(BaseInterfaceInputSpec):
     dwi_file = File(desc='the dwi image')
     bvec_file = File(desc='the bvec file')
     bval_file = File(desc='the bval file')
@@ -78,7 +120,7 @@ class SplitDWIsInputSpec(BaseInterfaceInputSpec):
                               desc='Maximum b-value that can be considered a b0')
 
 
-class SplitDWIsOutputSpec(TraitedSpec):
+class SplitDWIsFSLOutputSpec(TraitedSpec):
     dwi_files = OutputMultiObject(File(exists=True), desc='single volume dwis')
     bval_files = OutputMultiObject(File(exists=True), desc='single volume bvals')
     bvec_files = OutputMultiObject(File(exists=True), desc='single volume bvecs')
@@ -86,9 +128,9 @@ class SplitDWIsOutputSpec(TraitedSpec):
     b0_indices = traits.List(desc='list of original indices for each b0 image')
 
 
-class SplitDWIs(SimpleInterface):
-    input_spec = SplitDWIsInputSpec
-    output_spec = SplitDWIsOutputSpec
+class SplitDWIsFSL(SimpleInterface):
+    input_spec = SplitDWIsFSLInputSpec
+    output_spec = SplitDWIsFSLOutputSpec
 
     def _run_interface(self, runtime):
         split = fsl.Split(dimension='t', in_file=self.inputs.dwi_file)
@@ -108,7 +150,6 @@ class SplitDWIs(SimpleInterface):
         self._results['b0_indices'] = b0_indices.tolist()
 
         return runtime
-
 
 def _flatten(in_list):
     out_list = []
@@ -661,3 +702,52 @@ def to_lps(input_img, new_axcodes=("L", "P", "S")):
         return reoriented_img
     else:
         return input_img
+
+class TSplitInputSpec(AFNICommandInputSpec):
+    in_file = File(
+        desc="input file to 3dTsplit4D",
+        argstr=" %s",
+        position=-1,
+        mandatory=True,
+        copyfile=False,
+    )
+    out_name = File(
+        mandatory=True,
+        desc="output image file name",
+        argstr="-prefix %s.nii",
+    )
+    digits = traits.Int(
+        argstr="-digits %d", desc="Number of digits to include in split file names"
+    )
+
+class TSplitOutputSpec(TraitedSpec):
+    out_files = OutputMultiPath(File(exists=True))
+
+class TSplit(AFNICommand):
+    """Converts a 3D + time dataset into multiple 3D volumes (one volume per file).
+    For complete details, see the `3dTsplit4D Documentation.
+    <https://afni.nimh.nih.gov/pub/dist/doc/program_help/3dTsplit4D.html>`_
+    """
+
+    _cmd = "3dTsplit4D"
+    input_spec = TSplitInputSpec
+    output_spec = TSplitOutputSpec
+
+    def _list_outputs(self):
+        """Create a Bunch which contains all possible files generated
+        by running the interface.  Some files are always generated, others
+        depending on which ``inputs`` options are set.
+        Returns
+        -------
+        outputs : Bunch object
+            Bunch object containing all possible files generated by
+            interface object.
+            If None, file was not generated
+            Else, contains path, filename of generated outputfile
+        """
+        outputs = self._outputs().get()
+        ext = '.nii'
+        outputs["out_files"] = sorted(glob.glob(
+            os.path.join(os.getcwd(),'{outname}.**.nii'.format(
+            outname=self.inputs.out_name))))
+        return outputs
