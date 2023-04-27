@@ -172,7 +172,7 @@ class FakeSegmentation(SimpleInterface):
         orig_mask = img.get_fdata() > 0
         eroded1 = ndimage.binary_erosion(orig_mask, iterations=3)
         eroded2 = ndimage.binary_erosion(eroded1, iterations=3)
-        final = orig_mask.astype(np.int) + eroded1 + eroded2
+        final = orig_mask.astype(int) + eroded1 + eroded2
         out_img = nb.Nifti1Image(final, img.affine, header=img.header)
         out_fname = fname_presuffix(self.inputs.mask_file, suffix="_dseg",
                                     newpath=runtime.cwd)
@@ -336,7 +336,7 @@ class DesaturateSkull(SimpleInterface):
 
         actual_brain_to_skull_ratio = brain_median / nonbrain_head_median
         LOGGER.info("found brain to skull ratio: %.3f", actual_brain_to_skull_ratio)
-        desat_data = skulled_img.get_fdata(dtype=np.float32).copy()
+        desat_data = skulled_img.get_fdata(dtype='float32').copy()
         adjustment = 1.
         if actual_brain_to_skull_ratio < self.inputs.brain_to_skull_ratio:
             # We need to downweight the non-brain voxels
@@ -347,7 +347,7 @@ class DesaturateSkull(SimpleInterface):
             desat_data[nonbrain_mask] = desat_data[nonbrain_mask] * adjustment
 
         desat_img = nim.new_img_like(skulled_img, desat_data, copy_header=True)
-        desat_img.header.set_data_dtype(np.float32)
+        desat_img.header.set_data_dtype('float32')
         desat_img.to_filename(out_file)
         self._results['desaturated_t2w'] = out_file
         self._results['head_scaling_factor'] = adjustment
@@ -415,7 +415,6 @@ class CustomApplyMask(SimpleInterface):
         self._results['out_file'] = out_file
         return runtime
 
-
 class _GetTemplateInputSpec(BaseInterfaceInputSpec):
     template_name = traits.Str(
         'MNI152NLin2009cAsym',
@@ -471,3 +470,4 @@ class GetTemplate(SimpleInterface):
             raise NotImplementedError("Arbitrary templates not available yet")
 
         return runtime
+

@@ -804,7 +804,7 @@ class BuildConnectome(MRTrix3Base):
         atlas_name = self.inputs.atlas_name
 
         # Aggregate the connectivity/network data from DSI Studio
-        official_labels = np.array(atlas_config['node_ids']).astype(np.int)
+        official_labels = np.array(atlas_config['node_ids']).astype(int)
         connectivity_data = {
             atlas_name + "_region_ids": official_labels,
             atlas_name + "_region_labels": np.array(atlas_config['node_names'])

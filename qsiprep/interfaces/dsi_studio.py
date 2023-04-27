@@ -341,7 +341,7 @@ class DSIStudioConnectivityMatrix(CommandLine):
         atlas_name = self.inputs.atlas_name
 
         # Aggregate the connectivity/network data from DSI Studio
-        official_labels = np.array(atlas_config['node_ids']).astype(np.int)
+        official_labels = np.array(atlas_config['node_ids']).astype(int)
         connectivity_data = {
             atlas_name + "_region_ids": official_labels,
             atlas_name + "_region_labels": np.array(atlas_config['node_names'])
@@ -533,7 +533,7 @@ def _sanitized_network_measures(network_txt, official_labels, atlas_name, measur
     n_atlas_labels = len(official_labels)
     network_data = _parse_network_file(network_txt)
     # Make sure to get the full atlas
-    network_region_ids = np.array(network_data['region_ids']).astype(np.int)
+    network_region_ids = np.array(network_data['region_ids']).astype(int)
     # If all the regions are found
     in_this_mask = np.isin(official_labels, network_region_ids)
     if np.all(in_this_mask):
