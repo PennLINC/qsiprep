@@ -116,8 +116,6 @@ def get_parser():
         nargs='+',
         help='a space delimited list of participant identifiers or a single '
         'identifier (the sub- prefix can be removed)')
-    g_bids.add_argument('--acquisition_type', '--acquisition_type', action='store',
-                        help='select a specific acquisition type to be processed')
     g_bids.add_argument('--bids-database-dir', '--bids_database_dir',
                         help="path to a saved BIDS database directory",
                         type=Path,
