@@ -230,6 +230,14 @@ def get_parser():
 
     g_conf = parser.add_argument_group('Workflow configuration')
     g_conf.add_argument(
+        '--anat-modality',
+        '--anat_modality',
+        choices=["T1w", "T2w", "none"],
+        default="T1w",
+        help="Modality to use as the anatomical reference. Images of this "
+             "contrast will be skull stripped and segmented for use in the "
+             "visual reports and reconstruction. If --infant, T2w is forced.")
+    g_conf.add_argument(
         '--ignore',
         required=False,
         action='store',
@@ -291,8 +299,8 @@ def get_parser():
     g_conf.add_argument(
         '--denoise-after-combining', '--denoise_after_combining',
         action='store_true',
-        help='run ``dwidenoise`` after combining dwis. Requires '
-             '``--combine-all-dwis``')
+        help='run ``dwidenoise`` after combining dwis, but before motion correction. '
+             'Requires ``--combine-all-dwis``')
     g_conf.add_argument(
         '--separate_all_dwis', '--separate-all-dwis',
         action='store_true',
@@ -316,16 +324,7 @@ def get_parser():
         help='write a series of voxelwise bvecs, relevant if '
         'writing preprocessed dwis to template space')
     g_conf.add_argument(
-        '--output-space', '--output_space',
-        action='store',
-        choices=['T1w', 'template'],
-        nargs='+',
-        default=['T1w'],
-        help='volume and surface spaces to resample dwis into\n'
-        ' - T1w: subject anatomical volume\n'
-        ' - template: deprecated. Will be ignored\n')
-    g_conf.add_argument(
-        '--template',
+        '--anatomical-template',
         required=False,
         action='store',
         choices=['MNI152NLin2009cAsym'],
@@ -341,13 +340,13 @@ def get_parser():
         'after preprocessing. If set to a lower value than the original voxel '
         'size, your data will be upsampled using BSpline interpolation.')
 
-    g_coreg = parser.add_argument_group('Options for dwi-to-T1w coregistration')
+    g_coreg = parser.add_argument_group('Options for dwi-to-Anatomical coregistration')
     g_coreg.add_argument(
         '--b0-to-t1w-transform', '--b0_to_t1w_transform',
         action='store',
         default="Rigid",
         choices=["Rigid", "Affine"],
-        help='Degrees of freedom when registering b0 to T1w images. '
+        help='Degrees of freedom when registering b0 to anatomical images. '
         '6 degrees (rotation and translation) are used by default.')
     g_coreg.add_argument(
         '--intramodal-template-iters', '--intramodal_template_iters',
@@ -426,7 +425,7 @@ def get_parser():
         help='do not use a random seed for skull-stripping - will ensure '
         'run-to-run replicability when used with --omp-nthreads 1')
     g_ants.add_argument(
-        '--skip-t1-based-spatial-normalization', '--skip_t1_based_spatial_normalization',
+        '--skip-anat-based-spatial-normalization', '--skip_anat_based_spatial_normalization',
         action='store_true',
         default=False,
         help='skip running the t1w-based normalization to template space. '
@@ -440,7 +439,7 @@ def get_parser():
         'at https://surfer.nmr.mgh.harvard.edu/registration.html')
     g_fs.add_argument(
         '--do-reconall', '--do_reconall', action='store_true',
-        help='Run the FreeSurfer recon-all pipeline')
+        help='Run the FreeSurfer recon-all pipeline (IGNORED)')
 
     # Fieldmap options
     g_fmap = parser.add_argument_group(
@@ -849,18 +848,11 @@ def build_qsiprep_workflow(opts, retval):
         layout, participant_label=opts.participant_label)
     retval['subject_list'] = subject_list
 
-    # Deprecated output space
-    output_spaces = opts.output_space or []
-    if 'template' in output_spaces:
-        logger.warning("Using 'template' as an output space is no longer supported. "
-                       "Spatial normalization should be done during reconstruction.")
-        output_spaces = ["T1w"]
-
-    force_spatial_normalization = not opts.skip_t1_based_spatial_normalization
+    force_spatial_normalization = not opts.skip_anat_based_spatial_normalization
     if not force_spatial_normalization and (opts.use_syn_sdc or opts.force_syn):
         msg = [
-            'SyN SDC correction requires T1 to MNI registration.',
-            'Adding T1w-based normalization'
+            'SyN SDC correction requires anatomical to template registration.',
+            'Adding anatomical-based normalization'
         ]
         force_spatial_normalization = True
         logger.warning(' '.join(msg))
@@ -923,6 +915,7 @@ def build_qsiprep_workflow(opts, retval):
             'crashdump_dir': str(log_dir),
             'crashfile_format': 'txt',
             'get_linked_libs': False,
+            'remove_unnecessary_outputs': False,
             'stop_on_first_crash':
             opts.stop_on_first_crash or opts.work_dir is None,
         },
@@ -963,6 +956,7 @@ def build_qsiprep_workflow(opts, retval):
         output_dir=str(output_dir),
         ignore=opts.ignore,
         hires=False,
+        anatomical_contrast=opts.anat_modality,
         freesurfer=opts.do_reconall,
         bids_filters=opts.bids_filters,
         debug=opts.sloppy,
@@ -986,9 +980,8 @@ def build_qsiprep_workflow(opts, retval):
         skull_strip_template=opts.skull_strip_template,
         skull_strip_fixed_seed=opts.skull_strip_fixed_seed,
         force_spatial_normalization=force_spatial_normalization,
-        output_spaces=output_spaces,
         output_resolution=opts.output_resolution,
-        template=opts.template,
+        template=opts.anatomical_template,
         bids_dir=bids_dir,
         motion_corr_to=opts.b0_motion_corr_to,
         hmc_transform=opts.hmc_transform,
@@ -1152,14 +1145,11 @@ def build_recon_workflow(opts, retval):
             'log_to_file': True
         },
         'execution': {
-            'crashdump_dir':
-            log_dir,
-            'crashfile_format':
-            'txt',
-            'get_linked_libs':
-            False,
-            'stop_on_first_crash':
-            opts.stop_on_first_crash or opts.work_dir is None,
+            'crashdump_dir':log_dir,
+            'crashfile_format':'txt',
+            'get_linked_libs':False,
+            'remove_unnecessary_outputs': False,
+            'stop_on_first_crash':opts.stop_on_first_crash or opts.work_dir is None,
         },
         'monitoring': {
             'enabled': opts.resource_monitor,

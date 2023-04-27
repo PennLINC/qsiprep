@@ -9,8 +9,7 @@ Image tools interfaces
 
 """
 
-from copy import copy
-from email import header
+from pkg_resources import resource_filename as pkgr
 import os.path as op
 import numpy as np
 from nipype import logging
@@ -25,6 +24,7 @@ from dipy.segment.threshold import otsu
 import nilearn.image as nim
 
 LOGGER = logging.getLogger('nipype.interface')
+KNOWN_TEMPLATES = ['MNI152NLin2009cAsym', 'infant']
 
 
 class QsiprepAnatomicalIngressInputSpec(BaseInterfaceInputSpec):
@@ -413,4 +413,61 @@ class CustomApplyMask(SimpleInterface):
         #save out masked image and pass on file name
         nb.Nifti1Image(out_data, input_img.affine, header=input_img.header).to_filename(out_file)
         self._results['out_file'] = out_file
+        return runtime
+
+
+class _GetTemplateInputSpec(BaseInterfaceInputSpec):
+    template_name = traits.Str(
+        'MNI152NLin2009cAsym',
+        usedefault=True,
+        mandatory=True)
+    t1_file = File(exists=True)
+    t2_file = File(exists=True)
+    mask_file = File(exists=True)
+    infant_mode = traits.Bool(False, usedefault=True)
+    anatomical_contrast = traits.Enum("T1w", "T2w", "none")
+
+
+class _GetTemplateOutputSpec(BaseInterfaceInputSpec):
+    template_name = traits.Str()
+    template_file = File(exists=True)
+    template_brain_file = File(exists=True)
+    template_mask_file = File(exists=True)
+
+
+class GetTemplate(SimpleInterface):
+    input_spec = _GetTemplateInputSpec
+    output_spec = _GetTemplateOutputSpec
+
+    def _run_interface(self, runtime):
+        self._results['template_name'] = self.inputs.template_name
+        contrast_name = self.inputs.anatomical_contrast.lower()
+        if contrast_name == "none":
+            LOGGER.info("Using T1w modality template for ACPC alignment")
+            contrast_name = "t1w"
+
+        # Cover the cases where the template images are actually in the
+        # qsiprep package. This is for common use cases (MNI2009cAsym and Infant)
+        # and legacy
+        if self.inputs.template_name in KNOWN_TEMPLATES or self.inputs.infant_mode:
+            if not self.inputs.infant_mode:
+                ref_img = pkgr('qsiprep',
+                                'data/mni_1mm_%s_lps.nii.gz' % contrast_name)
+                ref_img_brain = pkgr('qsiprep',
+                                        'data/mni_1mm_%s_lps_brain.nii.gz' % contrast_name)
+                ref_img_mask = pkgr('qsiprep',
+                                        'data/mni_1mm_%s_lps_brainmask.nii.gz' % contrast_name)
+            else:
+                ref_img = pkgr('qsiprep',
+                                'data/mni_1mm_%s_lps_infant.nii.gz' % contrast_name)
+                ref_img_brain = pkgr('qsiprep',
+                                        'data/mni_1mm_%s_lps_brain_infant.nii.gz' % contrast_name)
+                ref_img_mask = pkgr('qsiprep',
+                                        'data/mni_1mm_%s_lps_brainmask_infant.nii.gz' % contrast_name)
+            self._results['template_file'] = ref_img
+            self._results['template_brain_file'] = ref_img_brain
+            self._results['template_mask_file'] = ref_img_mask
+        else:
+            raise NotImplementedError("Arbitrary templates not available yet")
+
         return runtime

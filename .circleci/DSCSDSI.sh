@@ -41,7 +41,6 @@ ${QSIPREP_CMD} \
    -w ${TEMPDIR} \
    --sloppy --write-graph --use-syn-sdc \
    --force-syn \
-   --output-space T1w \
    --b1_biascorrect_stage none \
    --hmc_model 3dSHORE \
    --hmc-transform Rigid \

@@ -40,7 +40,6 @@ def init_dwi_finalize_wf(scan_groups,
                          hmc_model,
                          shoreline_iters,
                          reportlets_dir,
-                         output_spaces,
                          output_resolution,
                          template,
                          output_dir,
@@ -67,7 +66,6 @@ def init_dwi_finalize_wf(scan_groups,
                                   output_resolution=2.0,
                                   template='MNI152NLin2009cAsym',
                                   b0_threshold=100,
-                                  output_spaces=['T1w'],
                                   low_mem=False,
                                   output_prefix='',
                                   make_intramodal_template=False,
@@ -84,15 +82,6 @@ def init_dwi_finalize_wf(scan_groups,
             Preprocessing steps to skip (eg "fieldmaps")
         reportlets_dir : str
             Directory in which to save reportlets
-        output_spaces : list
-            List of output spaces functional images are to be resampled to.
-            Some parts of pipeline will only be instantiated for some output s
-            paces.
-
-            Valid spaces:
-
-                - T1w
-
         template : str
             Name of template targeted by ``template`` output space
         output_dir : str
@@ -351,7 +340,6 @@ def init_dwi_finalize_wf(scan_groups,
         output_prefix=output_prefix,
         source_file=source_file,
         output_dir=output_dir,
-        output_spaces=output_spaces,
         template=template,
         write_local_bvecs=write_local_bvecs,
         hmc_model=hmc_model,
