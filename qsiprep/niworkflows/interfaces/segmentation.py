@@ -15,7 +15,6 @@ from nipype.interfaces.mixins import reporting
 from . import report_base as nrc
 from .. import NIWORKFLOWS_LOG
 
-
 class FASTInputSpecRPT(nrc.SVGReportCapableInputSpec,
                        fsl.preprocess.FASTInputSpec):
     pass

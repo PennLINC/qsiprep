@@ -21,7 +21,8 @@ of the BIDS specification.
 """
 import os
 from nipype.pipeline import engine as pe
-from nipype.interfaces import utility as niu, fsl, ants
+from nipype.interfaces import utility as niu, ants, fsl
+import os
 from .utils import demean_image, cleanup_edge_pipeline
 from ...niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from ...niworkflows.interfaces.images import IntraModalMerge
@@ -46,8 +47,9 @@ def init_fmap_wf(omp_nthreads, fmap_bspline, name='fmap_wf'):
         wf = init_fmap_wf(omp_nthreads=6, fmap_bspline=False)
 
     """
-    fsl_check = os.environ.get('FSLDIR', False)
-    if not fsl_check:
+    # Check for FSL binary
+    fsl_check = os.environ.get('FSL_BUILD')
+    if fsl_check=="no_fsl":
         raise Exception(
             """Container in use does not have FSL. To use this workflow, 
             please download the qsiprep container with FSL installed.""")
@@ -68,6 +70,7 @@ def init_fmap_wf(omp_nthreads, fmap_bspline, name='fmap_wf'):
                          name='n4_correct', n_procs=omp_nthreads)
     bet = pe.Node(BETRPT(generate_report=True, frac=0.6, mask=True),
                   name='bet')
+
     ds_report_fmap_mask = pe.Node(DerivativesDataSink(
         desc='brain', suffix='mask'), name='ds_report_fmap_mask',
         run_without_submitting=True)

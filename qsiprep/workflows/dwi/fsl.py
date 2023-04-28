@@ -6,7 +6,7 @@ Implementing the FSL preprocessing workflow
 
 """
 
-import json
+import json, os
 from pkg_resources import resource_filename as pkgr_fn
 from nipype import logging
 
@@ -96,7 +96,12 @@ def init_fsl_hmc_wf(scan_groups,
             mask for t1_brain
 
     """
-
+    # Check for FSL binary
+    fsl_check = os.environ.get('FSL_BUILD')
+    if fsl_check=="no_fsl":
+        raise Exception(
+            """Container in use does not have FSL. To use this workflow, 
+            please download the qsiprep container with FSL installed.""")
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=['dwi_file', 'bvec_file', 'bval_file', 'b0_indices', 'b0_images',
@@ -162,8 +167,8 @@ def init_fsl_hmc_wf(scan_groups,
             ('original_files', 'original_files')]),
         (inputnode, pre_eddy_b0_ref_wf, [
             ('t1_brain', 'inputnode.t1_brain'),
-            ('t1_mask', 'inputnode.t1_mask'),
-            ('t1_seg', 'inputnode.t1_seg')]),
+            ('t1_seg', 'inputnode.t1_seg'),
+            ('t1_mask', 'inputnode.t1_mask')]),
         # Convert distorted ref to LPS+
         (pre_eddy_b0_ref_wf, b0_ref_to_lps, [
             ('outputnode.ref_image', 'dwi_file')]),

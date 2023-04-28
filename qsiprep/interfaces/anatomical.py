@@ -107,7 +107,6 @@ class QsiprepAnatomicalIngress(SimpleInterface):
             't1_wm_probseg',
             "%s/sub-%s*_label-WM_probseg.nii*" % (anat_root, sub),
             excludes=["space-MNI"])
-
         self._get_if_exists(
             'orig_to_t1_mode_forward_transform',
             "%s/sub-%s*_from-orig_to-T1w_mode-image_xfm.txt" % (anat_root, sub))
@@ -316,7 +315,6 @@ class _DesaturateSkullInputSpec(BaseInterfaceInputSpec):
 class _DesaturateSkullOutputSpec(TraitedSpec):
     desaturated_t2w = File(exists=True)
     head_scaling_factor = traits.Float(0.)
-
 
 class DesaturateSkull(SimpleInterface):
     input_spec = _DesaturateSkullInputSpec
