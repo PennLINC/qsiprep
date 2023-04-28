@@ -469,8 +469,7 @@ Diffusion data preprocessing
             (b0_coreg_wf, extended_pepolar_report_wf, [
                 ('outputnode.itk_b0_to_t1', 'inputnode.t1w_seg_transform')]),
             (inputnode, extended_pepolar_report_wf, [
-                ("t1_seg", "inputnode.t1w_seg"),
-                ('t1_brain','inputnode.t1w_image')]),
+                ("t1_seg", "inputnode.t1w_seg")]),
             (extended_pepolar_report_wf, ds_report_fa_sdc, [
                 ("outputnode.fa_sdc_report", "in_file")]),
             (extended_pepolar_report_wf, ds_report_b0_sdc, [
