@@ -30,7 +30,7 @@ from ..utils.misc import fix_multi_source_name
 from ..utils.grouping import group_dwi_scans
 from ..__about__ import __version__
 
-from .anatomical import init_anat_preproc_wf
+from .anatomical.volume import init_anat_preproc_wf
 from .dwi.base import init_dwi_preproc_wf
 from .dwi.finalize import init_dwi_finalize_wf
 from .dwi.intramodal_template import init_intramodal_template_wf

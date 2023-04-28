@@ -154,7 +154,7 @@ def init_anat_preproc_wf(template, debug, dwi_only,
         niu.IdentityInterface(fields=['t1w', 't2w', 'roi', 'flair', 'subjects_dir', 'subject_id']),
         name='inputnode')
     outputnode = pe.Node(niu.IdentityInterface(
-        fields=['t1_preproc', 't2_preproc', 't1_brain', 't1_mask', 't1_seg', 't1_aseg',
+        fields=['t1_preproc', 't2_preproc', 't1_brain', 't1_mask', 't1_seg', 't1_aseg', 't1_aparc',
                 't1_2_mni', 't1_2_mni_forward_transform', 't1_2_mni_reverse_transform',
                 't2w_unfatsat', 'segmentation_qc',
                 'template_transforms', 'acpc_transform', 'acpc_inv_transform',
