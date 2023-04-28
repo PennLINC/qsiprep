@@ -352,7 +352,7 @@ def split_into_b0s_and_origins(b0_threshold, original_files, img_file, cwd,
         else:
             # Assume they're all b=0
             b0_indices = np.array([0]) if full_img.ndim < 4 else \
-                np.arange(full_img.shape[3], dtype=np.int)
+                np.arange(full_img.shape[3], dtype=int)
 
     relative_indices = relative_b0_index(b0_indices, original_files)
 

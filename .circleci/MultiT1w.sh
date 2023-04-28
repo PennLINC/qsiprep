@@ -64,7 +64,6 @@ ${QSIPREP_CMD} \
      --eddy-config ${EDDY_CFG} \
      --denoise-method none \
      --sloppy \
-     --output-space T1w \
      --output-resolution 5 \
      --anat-only \
      -vv
@@ -81,7 +80,6 @@ ${QSIPREP_CMD} \
      --eddy-config ${EDDY_CFG} \
      --denoise-method none \
      --sloppy \
-     --output-space T1w \
      --output-resolution 5 \
      --anat-only \
      --longitudinal \

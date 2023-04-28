@@ -41,7 +41,6 @@ ${QSIPREP_CMD} \
 	 -w ${TEMPDIR} \
 	 --sloppy \
 	 --b1_biascorrect_stage none \
-	 --output-space T1w \
 	 --hmc_model none \
 	 --b0-motion-corr-to first \
 	 --output-resolution 5 \

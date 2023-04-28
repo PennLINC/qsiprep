@@ -170,10 +170,10 @@ class GatherDRBUDDIInputs(SimpleInterface):
             down_row = selected_images.loc[1]
             up_img = to_lps(
                 safe_get_3d_image(up_row.bids_origin_file, up_row.original_volume))
-            up_img.set_data_dtype(np.float32)
+            up_img.set_data_dtype('float32')
             down_img = to_lps(
                 safe_get_3d_image(down_row.bids_origin_file, down_row.original_volume))
-            down_img.set_data_dtype(np.float32)
+            down_img.set_data_dtype('float32')
 
             # Save the images
             blip_up_nii = op.join(runtime.cwd, "blip_up_b0.nii")
@@ -605,15 +605,15 @@ def split_into_up_and_down_niis(dwi_files, bval_files, bvec_files, original_imag
         return blip_assignments
 
     # Write the 4d up image
-    up_4d = nim.concat_imgs(up_images, dtype=np.float32, auto_resample=False)
-    up_4d.set_data_dtype(np.float32)
+    up_4d = nim.concat_imgs(up_images, dtype='float32', auto_resample=False)
+    up_4d.set_data_dtype('float32')
     up_4d.to_filename(up_dwi_file)
     up_bval_file, up_bvec_file = write_concatenated_fsl_gradients(
         up_bvals, up_bvecs, up_prefix)
 
     # Write the 4d down image
-    down_4d = nim.concat_imgs(down_images, dtype=np.float32, auto_resample=False)
-    down_4d.set_data_dtype(np.float32)
+    down_4d = nim.concat_imgs(down_images, dtype='float32', auto_resample=False)
+    down_4d.set_data_dtype('float32')
     down_4d.to_filename(down_dwi_file)
     down_bval_file, down_bvec_file = write_concatenated_fsl_gradients(
         down_bvals, down_bvecs, down_prefix)

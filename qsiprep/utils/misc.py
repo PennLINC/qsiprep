@@ -24,7 +24,7 @@ def fix_multi_T1w_source_name(in_files):
     return os.path.join(base, "sub-%s_T1w.nii.gz" % subject_label)
 
 
-def fix_multi_source_name(in_files, dwi_only):
+def fix_multi_source_name(in_files, dwi_only, anatomical_contrast="T1w"):
     """
     Make up a generic source name when there are multiple T1s
 
@@ -39,8 +39,9 @@ def fix_multi_source_name(in_files, dwi_only):
     base, in_file = os.path.split(filename_to_list(in_files)[0])
     subject_label = in_file.split("_", 1)[0].split("-")[1]
     if dwi_only:
+        anatomical_contrast = "dwi"
         base = base.replace("/dwi", "/anat")
-    return os.path.join(base, "sub-%s_T1w.nii.gz" % subject_label)
+    return os.path.join(base, "sub-%s_%s.nii.gz" % (subject_label, anatomical_contrast))
 
 
 def add_suffix(in_files, suffix):

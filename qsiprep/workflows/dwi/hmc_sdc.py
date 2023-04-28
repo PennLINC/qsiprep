@@ -77,7 +77,7 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
     """
     inputnode = pe.Node(
         niu.IdentityInterface(
-            fields=['dwi_file', 'bvec_file', 'bval_file', 'rpe_b0', 't2w_files',
+            fields=['dwi_file', 'bvec_file', 'bval_file', 'rpe_b0', 't2w_unfatsat',
                     'original_files', 'rpe_b0_info', 'hmc_optimization_data', 't1_brain',
                     't1_2_mni_reverse_transform', 't1_mask', 't1_seg']),
         name='inputnode')
@@ -181,7 +181,7 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
             (dwi_hmc_wf, apply_hmc_transforms, [
                 ('outputnode.forward_transforms', 'transforms')]),
             (dwi_hmc_wf, rotate_gradients, [
-                (('outputnode.forward_transforms', _list_squeeze), 
+                (('outputnode.forward_transforms', _list_squeeze),
                  'affine_transforms')]),
             (split_dwis, apply_hmc_transforms, [
                 ('out_files', 'input_image'),
@@ -196,7 +196,7 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
                 ('bvecs', 'inputnode.bvec_files')]),
             (inputnode, drbuddi_wf, [
                 ('t1_brain', 'inputnode.t1_brain'),
-                ('t2w_files', 'inputnode.t2w_files'),
+                ('t2w_unfatsat', 'inputnode.t2w_unfatsat'),
                 ('original_files', 'inputnode.original_files')]),
             (drbuddi_wf, outputnode, [
                 ('outputnode.sdc_warps', 'to_dwi_ref_warps'),
