@@ -81,7 +81,7 @@ def init_sdc_unwarp_wf(omp_nthreads, fmap_demean, debug, name='sdc_unwarp_wf'):
     fsl_check = os.environ.get('FSLDIR', False)
     if not fsl_check:
         raise Exception(
-            """Container in use does not have FSL. To use this workflow, 
+            """Container in use does not have FSL. To use this workflow,
             please download the qsiprep container with FSL installed.""")
     workflow = Workflow(name=name)
     inputnode = pe.Node(niu.IdentityInterface(
@@ -168,7 +168,7 @@ def init_sdc_unwarp_wf(omp_nthreads, fmap_demean, debug, name='sdc_unwarp_wf'):
                               ('metadata', 'in_meta')]),
         (fmap_mask2ref_apply, gen_vsm, [('output_image', 'mask_file')]),
         (get_ees, gen_vsm, [('ees', 'dwell_time')]),
-        (inputnode, gen_vsm, [(('metadata', _get_pedir_fugue), 'unwarp_direction')]),
+        (inputnode, gen_vsm, [(('metadata', _get_pedir_fugue), 'unwarp_direction')]),                      
         (inputnode, vsm2dfm, [(('metadata', _get_pedir_bids), 'pe_dir')]),
         (torads, gen_vsm, [('out_file', 'fmap_in_file')]),
         (gen_vsm, outputnode, [('fmap_out_file', 'fieldcoef')]),
@@ -240,7 +240,7 @@ def init_fmap_unwarp_report_wf(name='fmap_unwarp_report_wf', suffix='hmcsdc'):
 
     """
     from ...niworkflows.interfaces import SimpleBeforeAfter
-    from ...niworkflows.interfaces.images import extract_wm
+    from ...interfaces.images import ExtractWM
     from ...niworkflows.interfaces.fixes import FixHeaderApplyTransforms as ApplyTransforms
 
     DEFAULT_MEMORY_MIN_GB = 0.01
@@ -256,7 +256,7 @@ def init_fmap_unwarp_report_wf(name='fmap_unwarp_report_wf', suffix='hmcsdc'):
         name='map_seg',
         mem_gb=0.3)
 
-    sel_wm = pe.Node(niu.Function(function=extract_wm), name='sel_wm',
+    sel_wm = pe.Node(ExtractWM(), name='sel_wm',
                      mem_gb=DEFAULT_MEMORY_MIN_GB)
 
     dwi_rpt = pe.Node(SimpleBeforeAfter(), name='dwi_rpt',
@@ -281,7 +281,6 @@ def init_fmap_unwarp_report_wf(name='fmap_unwarp_report_wf', suffix='hmcsdc'):
 
 def _get_pedir_bids(in_dict):
     return in_dict['PhaseEncodingDirection']
-
 
 def _get_pedir_fugue(in_dict):
     return in_dict['PhaseEncodingDirection'].replace('i', 'x').replace('j', 'y').replace('k', 'z')

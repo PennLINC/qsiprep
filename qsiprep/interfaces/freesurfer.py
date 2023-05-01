@@ -584,7 +584,7 @@ class _SynthStripOutputSpec(TraitedSpec):
 class SynthStrip(FSCommandOpenMP):
     input_spec = _SynthStripInputSpec
     output_spec = _SynthStripOutputSpec
-    _cmd = os.getenv("FREESURFER_HOME") + "/bin/mri_synthstrip"
+    _cmd = "mri_synthstrip"
 
     def _num_threads_update(self):
         if self.inputs.num_threads:
@@ -614,3 +614,58 @@ class FixHeaderSynthStrip(SynthStrip):
             outputs["out_brain"])
 
         return runtime
+
+
+class _SynthSegInputSpec(FSTraitedSpecOpenMP):
+    input_image = File(
+        argstr="--i %s",
+        exists=True,
+        mandatory=True)
+    num_threads = traits.Int(
+        default=1,
+        argstr="--threads %d",
+        usedefault=True,
+        desc="Number of threads to use")
+    fast = traits.Bool(
+        argstr='--fast',
+        desc="fast predictions (lower quality).")
+    robust = traits.Bool(
+        argstr='--robust',
+        desc="use robust predictions (slower).")
+    out_seg = File(
+        argstr="--o %s",
+        name_template="%s_aseg.nii.gz",
+        name_source=["input_image"],
+        keep_extension=False,
+        desc="segmentation image")
+    out_post = File(
+        argstr="--post %s",
+        name_template="%s_post.nii.gz",
+        name_source=["input_image"],
+        keep_extension=False,
+        desc="posteriors image")
+    out_qc = File(
+        argstr="--qc %s",
+        name_template="%s_qc.csv",
+        name_source=["input_image"],
+        keep_extension=False,
+        desc="qc csv")
+
+
+
+class _SynthSegOutputSpec(TraitedSpec):
+    out_seg = File(exists=True)
+    out_post = File(exists=True)
+    out_qc = File(exists=True)
+
+
+class SynthSeg(FSCommandOpenMP):
+    input_spec = _SynthSegInputSpec
+    output_spec = _SynthSegOutputSpec
+    _cmd = "mri_synthseg"
+
+    def _num_threads_update(self):
+        if self.inputs.num_threads:
+            self.inputs.environ.update(
+                {"OMP_NUM_THREADS": "1"}
+            )

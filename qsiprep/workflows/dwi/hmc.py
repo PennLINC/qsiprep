@@ -34,7 +34,7 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file,
         hmc_model: '3dSHORE', 'none' , 'tensor' or 'SH'
             Which model to use for generating signal predictions for hmc. '3dSHORE' requires
             multiple b-values, 'none' will only use b0 images for motion correction, 'tensor'
-            uses a tensor model for signal predictions for hmc, and 'SH' uses spherical harmonics 
+            uses a tensor model for signal predictions for hmc, and 'SH' uses spherical harmonics
             (not implemented yet).
         hmc_align_to: 'first' or 'iterative'
             Which volume should be used to determine the motion-corrected space?
@@ -113,8 +113,8 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file,
                                         'transforms')]),
         (inputnode, b0_template_mask, [
             ('t1_brain', 'inputnode.t1_brain'),
-            ('t1_mask', 'inputnode.t1_mask'),
-            ('t1_seg', 'inputnode.t1_seg')]),
+            ('t1_seg', 'inputnode.t1_seg'),
+            ('t1_mask', 'inputnode.t1_mask')]),
         (b0_hmc_wf, b0_template_mask, [
             ('outputnode.final_template', 'inputnode.b0_template')]),
         (b0_template_mask, outputnode, [
@@ -182,7 +182,8 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file,
     return workflow
 
 
-def linear_alignment_workflow(transform="Rigid", metric="Mattes", iternum=0, precision="precise"):
+def linear_alignment_workflow(transform="Rigid", metric="Mattes",
+                              iternum=0, precision="precise", omp_nthreads=1):
     """
     Takes a template image and a set of input images, does
     a linear alignment to the template and updates it with the
@@ -203,7 +204,7 @@ def linear_alignment_workflow(transform="Rigid", metric="Mattes", iternum=0, pre
         "qsiprep",
         "data/shoreline_{precision}_{transform}.json".format(precision=precision,
                                                              transform=transform))
-    reg = ants.Registration(from_file=ants_settings)
+    reg = ants.Registration(from_file=ants_settings, num_threads=omp_nthreads)
     iter_reg = pe.MapNode(
         reg, name="reg_%03d" % iternum, iterfield=["moving_image"])
 
@@ -248,8 +249,9 @@ def linear_alignment_workflow(transform="Rigid", metric="Mattes", iternum=0, pre
     return iteration_wf
 
 
-def init_b0_hmc_wf(align_to="iterative", transform="Rigid", spatial_bias_correct=False,
-                   sloppy=False, metric="Mattes", num_iters=3, name="b0_hmc_wf"):
+def init_b0_hmc_wf(align_to="iterative", transform="Rigid",
+                   sloppy=False, metric="Mattes", num_iters=3,
+                   omp_nthreads=1, boilerplate=True, name="b0_hmc_wf"):
 
     if align_to == "iterative" and num_iters < 2:
         raise ValueError("Must specify a positive number of iterations")
@@ -285,6 +287,7 @@ def init_b0_hmc_wf(align_to="iterative", transform="Rigid", spatial_bias_correct
             transform=transform,
             metric=metric,
             precision="coarse" if not sloppy else "sloppy",
+            omp_nthreads=omp_nthreads,
             iternum=0)
         alignment_wf.connect(initial_template, "output_average_image",
                              initial_reg, "inputnode.template_image")
@@ -333,7 +336,8 @@ def init_b0_hmc_wf(align_to="iterative", transform="Rigid", spatial_bias_correct
                 ('outputnode.affine_transforms', 'forward_transforms'),
                 ('outputnode.registered_image_paths', 'aligned_images')])
         ])
-    alignment_wf.__desc__ = desc
+    if boilerplate:
+        alignment_wf.__desc__ = desc
     return alignment_wf
 
 

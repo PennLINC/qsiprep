@@ -74,7 +74,7 @@ def init_recon_anatomical_wf(subject_id, recon_input_dir, extras_to_make,
             Root directory of the output from qsiprep
         extras_to_make : list
             list of optional derivatives that will be shared across images.
-            For example ['mrtrix_5tt_fast', 'mrtrix_5tt_hsv'].
+            For example ['mrtrix_5tt_hsv'].
         needs_t1w_transform :  bool
             If MNI-Space atlases need to get mapped to the DWI.
         freesurfer_dir : pathlike
@@ -87,7 +87,6 @@ def init_recon_anatomical_wf(subject_id, recon_input_dir, extras_to_make,
         name="outputnode")
     desc = ""
     status = {
-        "has_qsiprep_5tt_fast": False,
         "has_qsiprep_5tt_hsvs": False,
         "has_freesurfer_5tt_hsvs": False,
         "has_freesurfer": False
@@ -113,30 +112,6 @@ def init_recon_anatomical_wf(subject_id, recon_input_dir, extras_to_make,
             (anat_ingress, outputnode,
                 [(name, name) for name in qsiprep_anatomical_ingressed_fields])
         ])
-
-        # If FAST 5tt is requested, make this 
-        if "mrtrix_5tt_fast" in extras_to_make:
-            LOGGER.info("Creating a FSL-FAST 5tt image based on the QSIPrep T1w")
-            status['has_qsiprep_5tt_fast'] = True
-            desc += "FSL FAST was used to segment the brain into 5 tissue types. "
-            LOGGER.warn("Using FAST for ACT is strongly discouraged!!! " +
-                        "Consider using HSVS and FreeSurfer.")
-            create_5tt_fast = pe.Node(
-                GenerateMasked5tt(algorithm='fsl'), 
-                name='create_5tt_fast')
-            ds_5tt_fast = pe.Node(
-                ReconDerivativesDataSink(
-                    desc="FAST",
-                    compress=True,
-                    suffix="5tt"),
-                name='ds_5tt_fast',
-                run_without_submitting=True)
-            workflow.connect([
-                (anat_ingress, create_5tt_fast, [('t1_brain_mask', 'mask'),
-                                                 ('t1_preproc', 'in_file')]),
-                (create_5tt_fast, outputnode, [('out_file', 'qsiprep_5tt_fast')]),
-                (create_5tt_fast, ds_5tt_fast, [('out_file', 'in_file')])
-            ])
 
 
     # Check if the T1w-to-MNI transforms are in the QSIPrep outputs
@@ -351,7 +326,7 @@ def init_register_fs_to_qsiprep_wf(use_qsiprep_reference_mask=False,
 
 
 def init_dwi_recon_anatomical_workflow(
-    atlas_names, omp_nthreads, has_qsiprep_5tt_fast, has_qsiprep_5tt_hsvs, 
+    atlas_names, omp_nthreads, has_qsiprep_5tt_hsvs, 
     has_freesurfer_5tt_hsvs, has_qsiprep_t1w, has_qsiprep_t1w_transforms,
     infant_mode, has_freesurfer, extras_to_make, freesurfer_dir, b0_threshold, 
     sloppy=False, prefer_dwi_mask=False, name="qsirecon_anat_wf"):
@@ -367,9 +342,6 @@ def init_dwi_recon_anatomical_workflow(
 
     Parameters:
     ===========
-    
-        has_qsiprep_5tt_fast: bool
-            Is there a FAST 5tt file in qsiprep space
         has_qsiprep_5tt_hsvs: 
         has_freesurfer_5tt_hsvs: True, 
         has_qsiprep_t1w: 
@@ -407,8 +379,7 @@ def init_dwi_recon_anatomical_workflow(
     skull_strip_method = "antsBrainExtraction"
     desc = ""
     def _get_status():
-        return {"has_qsiprep_5tt_fast": has_qsiprep_5tt_fast, 
-                "has_qsiprep_5tt_hsvs": has_qsiprep_5tt_hsvs, 
+        return {"has_qsiprep_5tt_hsvs": has_qsiprep_5tt_hsvs, 
                 "has_freesurfer_5tt_hsvs": has_freesurfer_5tt_hsvs, 
                 "has_qsiprep_t1w": has_qsiprep_t1w, 
                 "has_qsiprep_t1w_transforms": has_qsiprep_t1w_transforms}
@@ -494,26 +465,6 @@ def init_dwi_recon_anatomical_workflow(
             (apply_header_to_5tt_hsvs, ds_qsiprep_5tt_hsvs, [("out_image", "in_file")]),
         ])
         desc += "A hybrid surface/volume segmentation was created [Smith 2020]."
-
-    # If FAST 5tt is requested, make this 
-    if "mrtrix_5tt_fast" in extras_to_make and not has_qsiprep_5tt_fast:
-        if not has_qsiprep_t1w:
-            raise Exception("Must have a T1w registered to ")
-        _exchange_fields(["qsiprep_5tt_fast"])
-        LOGGER.info("Creating a FSL-FAST 5tt image based on the QSIPrep T1w")
-        desc += "FSL FAST was used to segment the brain into 5 tissue types. "
-        LOGGER.warn("Using FAST for ACT is strongly discouraged!!! " +
-                    "Consider using HSVS and FreeSurfer.")
-        create_5tt_fast = pe.Node(
-            GenerateMasked5tt(algorithm='fsl'), 
-            name='create_5tt_fast')
-        workflow.connect([
-            (_get_source_node('t1_brain_mask'), create_5tt_fast, [
-                ('t1_brain_mask', 'mask')]),
-            (_get_source_node('t1_preproc'), create_5tt_fast, [
-                ('t1_preproc', 'in_file')]),
-            (create_5tt_fast, buffernode, [('out_file', 'qsiprep_5tt_fast')])
-        ])
 
     # If we have transforms to the template space, use them to get ROIs/atlases
     if not has_qsiprep_t1w_transforms and has_qsiprep_t1w:
@@ -641,8 +592,6 @@ def init_dwi_recon_anatomical_workflow(
     
     if "mrtrix_5tt_hsv" in extras_to_make and not has_qsiprep_5tt_hsvs:
         raise Exception("Unable to create a 5tt HSV image given input data.")
-    if "mrtrix_5tt_fast" in extras_to_make and not has_qsiprep_5tt_fast:
-        raise Exception("Unable to create a 5tt FAST image given input data.")
 
     # Directly connect anything from the inputs that we haven't created here
     workflow.connect([

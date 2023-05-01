@@ -24,17 +24,52 @@ Feedback will be enthusiastically received.
 
 """
 import pkg_resources as pkgr
-
+import nibabel as nb
+from nipype.utils.filemanip import fname_presuffix
 from nipype import logging
 from nipype.pipeline import engine as pe
 from nipype.interfaces import fsl, ants, utility as niu
 from nipype.interfaces.image import Rescale
+from nipype.interfaces.base import (isdefined, traits, TraitedSpec, BaseInterfaceInputSpec,
+                                    SimpleInterface, File, InputMultiObject, OutputMultiObject)
 
 from ...engine import Workflow
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger('nipype.workflow')
 
+class ThreshAndBinInputSpec(BaseInterfaceInputSpec):
+    atlas_threshold = traits.Int(2, desc='threshold value')
+    in_file = File(desc='file to modify, atlas', mandatory=True)
+
+
+class ThreshAndBinOutputSpec(TraitedSpec):
+    out_file = File(exists=True,desc='file with threshold and binarization applied')
+
+
+class ThreshAndBin(SimpleInterface):
+    input_spec = ThreshAndBinInputSpec
+    output_spec = ThreshAndBinOutputSpec
+
+    def _run_interface(self, runtime):
+        #specify output fname
+        out_file = fname_presuffix(
+            self.inputs.in_file,
+            newpath=runtime.cwd,
+            suffix='_threshbin.nii.gz',
+            use_ext=False)
+        #load in data
+        input_img = nb.load(self.inputs.in_file)
+        out_data = input_img.get_fdata()
+        #apply threshold and binarize
+        out_data[out_data < self.inputs.atlas_threshold] = 0
+        out_data[out_data > 0] = 1
+
+        #save out new image
+        nb.Nifti1Image(out_data, input_img.affine, header=input_img.header).to_filename(out_file)
+        self._results['out_file'] = out_file
+
+        return runtime
 
 def init_syn_sdc_wf(omp_nthreads, bold_pe=None,
                     atlas_threshold=2, name='syn_sdc_wf'):
@@ -139,9 +174,9 @@ template [@fieldmapless3].
     atlas_2_ref.inputs.input_image = atlas_img
     atlas_2_ref.inputs.invert_transform_flags = [True, False]
     threshold_atlas = pe.Node(
-        fsl.maths.MathsCommand(args='-thr {:.8g} -bin'.format(atlas_threshold),
-                               output_datatype='char'),
-        name='threshold_atlas', mem_gb=0.3)
+        ThreshAndBin(atlas_threshold=atlas_threshold),
+        name='threshold_atlas', mem_gb=0.3
+        )
 
     fixed_image_masks = pe.Node(niu.Merge(2), name='fixed_image_masks',
                                 mem_gb=DEFAULT_MEMORY_MIN_GB)

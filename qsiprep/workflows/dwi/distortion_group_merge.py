@@ -133,7 +133,7 @@ def init_distortion_group_merge_wf(merging_strategy, inputs_list, hmc_model, rep
         ])
     elif merging_strategy.startswith('concat'):
         distortion_merger = pe.Node(MergeDWIs(), name='distortion_merger')
-    b0_ref_wf = init_dwi_reference_wf(name='merged_b0_ref', register_t1=False,
+    b0_ref_wf = init_dwi_reference_wf(omp_nthreads, name='merged_b0_ref', register_t1=False,
                                       gen_report=True, source_file=source_file)
     concat_cnr_images = pe.Node(Merge(), name='concat_cnr_images')
 
@@ -180,7 +180,6 @@ def init_distortion_group_merge_wf(merging_strategy, inputs_list, hmc_model, rep
         output_prefix=output_prefix,
         source_file=source_file,
         output_dir=output_dir,
-        output_spaces=["T1w"],
         template=template,
         write_local_bvecs=False,
         hmc_model=hmc_model,

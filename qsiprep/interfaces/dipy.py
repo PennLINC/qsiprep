@@ -288,7 +288,7 @@ class DipyReconInterface(SimpleInterface):
 
             # Needed for synthetic data
             mask_array = mask_array * (dwi_data.sum(3) > 0)
-            mask_img = nb.Nifti1Image(mask_array.astype(np.float32), amplitudes_img.affine,
+            mask_img = nb.Nifti1Image(mask_array.astype('float32'), amplitudes_img.affine,
                                       amplitudes_img.header)
         else:
             mask_img = nb.load(self.inputs.mask_file)
@@ -403,7 +403,7 @@ class MAPMRIReconstruction(DipyReconInterface):
     def _run_interface(self, runtime):
         gtab = self._get_gtab()
         dwi_img = nb.load(self.inputs.dwi_file)
-        data = dwi_img.get_fdata(dtype=np.float32)
+        data = dwi_img.get_fdata(dtype='float32')
         mask_img, mask_array = self._get_mask(dwi_img, gtab)
         weighting = "GCV" if self.inputs.laplacian_weighting == "GCV" else \
             self.inputs.laplacian_weighting
@@ -549,7 +549,7 @@ class BrainSuiteShoreReconstruction(DipyReconInterface):
         b0s_mask = gtab.b0s_mask
         dwis_mask = np.logical_not(b0s_mask)
         dwi_img = nb.load(self.inputs.dwi_file)
-        dwi_data = dwi_img.get_fdata(dtype=np.float32)
+        dwi_data = dwi_img.get_fdata(dtype='float32')
         b0_images = dwi_data[..., b0s_mask]
         b0_mean = b0_images.mean(3)
         dwi_images = dwi_data[..., dwis_mask]
@@ -652,7 +652,7 @@ class TensorReconstruction(DipyReconInterface):
     def _run_interface(self, runtime):
         gtab = self._get_gtab()
         dwi_img = nb.load(self.inputs.dwi_file)
-        dwi_data = dwi_img.get_fdata(dtype=np.float32)
+        dwi_data = dwi_img.get_fdata(dtype='float32')
         mask_img, mask_array = self._get_mask(dwi_img, gtab)
 
         # Fit it
@@ -708,7 +708,7 @@ class KurtosisReconstruction(DipyReconInterface):
     def _run_interface(self, runtime):
         gtab = self._get_gtab()
         dwi_img = nb.load(self.inputs.dwi_file)
-        dwi_data = dwi_img.get_fdata(dtype=np.float32)
+        dwi_data = dwi_img.get_fdata(dtype='float32')
         mask_img, mask_array = self._get_mask(dwi_img, gtab)
 
         # Fit it

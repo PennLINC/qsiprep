@@ -102,7 +102,7 @@ def init_drbuddi_wf(scan_groups, b0_threshold, raw_image_sdc, t2w_sdc, omp_nthre
     workflow = Workflow(name=name)
     inputnode = pe.Node(niu.IdentityInterface(
         fields=['dwi_files', 'bval_files', 'bvec_files', 'original_files',
-                't1_brain', 't1_wm_seg', 't2w_files']),
+                't1_brain', 't1_wm_seg', 't2w_unfatsat']),
         name='inputnode')
 
     outputnode = pe.Node(
@@ -176,7 +176,7 @@ def init_drbuddi_wf(scan_groups, b0_threshold, raw_image_sdc, t2w_sdc, omp_nthre
             ("blip_up_bmat", "blip_up_bmat"),
             ("blip_down_image", "blip_down_image"),
             ("blip_down_bmat", "blip_down_bmat")]),
-        (inputnode, drbuddi, [('t2w_files', 'structural_image')]),
+        (inputnode, drbuddi, [('t2w_unfatsat', 'structural_image')]),
         (drbuddi, outputnode, [
             ('blip_down_b0', 'b0_down_image'),
             ('blip_up_b0', 'b0_up_image'),

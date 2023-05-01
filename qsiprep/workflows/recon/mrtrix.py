@@ -50,8 +50,6 @@ def init_mrtrix_csd_recon_wf(omp_nthreads, available_anatomical_data, name="mrtr
             A hybrid surface volume segmentation 5tt image aligned with the 
             QSIPrep T1w
         
-        qsiprep_5tt_fast
-            A FSL-FAST-based 5tt image aligned with the QSIPrep T1w image
 
     Outputs
 
@@ -101,6 +99,10 @@ def init_mrtrix_csd_recon_wf(omp_nthreads, available_anatomical_data, name="mrtr
     # Response estimation
     response = params.get('response', {})
     response_algorithm = response.get('algorithm', 'dhollander')
+
+    if response_algorithm == "fast":
+        response_algorithm = "dhollander"
+
     response['algorithm'] = response_algorithm
     response['nthreads'] = omp_nthreads
     if response_algorithm == 'csd':
@@ -132,7 +134,7 @@ FODs were estimated via constrained spherical deconvolution
     run_mtnormalize = params.get('mtnormalize', True) and using_multitissue
 
     create_mif = pe.Node(MRTrixIngress(), name='create_mif')
-    method_5tt = response.pop("method_5tt", "fast")
+    method_5tt = response.pop("method_5tt","dhollander")
     # Use dwi2response from 3Tissue for updated dhollander
     estimate_response = pe.Node(
         SS3TDwi2Response(**response), 
@@ -143,9 +145,6 @@ FODs were estimated via constrained spherical deconvolution
         if method_5tt == "hsvs":
             workflow.connect([
                 (inputnode, estimate_response, [('qsiprep_5tt_hsvs', 'mtt_file')])])
-        elif method_5tt == "fast":
-            workflow.connect([
-                (inputnode, estimate_response, [('qsiprep_5tt_fast', 'mtt_file')])])
         else:
             raise Exception("Unrecognized 5tt method: " + method_5tt)
 
@@ -464,11 +463,12 @@ def init_mrtrix_tractography_wf(omp_nthreads, available_anatomical_data, name="m
 
     # Which 5tt image should be used?
     method_5tt = params.get("method_5tt", "hsvs")
+    if method_5tt == "fast":
+        method_5tt = "hsvs"
+
     if use_5tt:
         if method_5tt == "hsvs":
             connect_5tt = "qsiprep_5tt_hsvs"
-        elif method_5tt == "fast":
-            connect_5tt = 'qsiprep_5tt_fast'
         else:
             raise Exception("Unrecognized 5tt method: " + method_5tt)
         workflow.connect(inputnode, connect_5tt, tracking, 'act_file')

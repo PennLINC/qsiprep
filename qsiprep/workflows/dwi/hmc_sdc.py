@@ -13,7 +13,7 @@ from nipype.interfaces import ants, utility as niu
 
 from .registration import init_b0_to_anat_registration_wf, init_direct_b0_acpc_wf
 from ...interfaces.gradients import SliceQC, CombineMotions, GradientRotation
-from ...interfaces.images import SplitDWIs
+from ...interfaces.images import SplitDWIsBvals, TSplit
 from ..fieldmap.base import init_sdc_wf
 from ..fieldmap.drbuddi import init_drbuddi_wf
 from ...engine import Workflow
@@ -77,9 +77,9 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
     """
     inputnode = pe.Node(
         niu.IdentityInterface(
-            fields=['dwi_file', 'bvec_file', 'bval_file', 'rpe_b0', 't2w_files',
+            fields=['dwi_file', 'bvec_file', 'bval_file', 'rpe_b0', 't2w_unfatsat',
                     'original_files', 'rpe_b0_info', 'hmc_optimization_data', 't1_brain',
-                    't1_2_mni_reverse_transform', 't1_mask', 't1_seg']),
+                    't1_2_mni_reverse_transform', 't1_mask','t1_seg','t2_brain']),
         name='inputnode')
 
     outputnode = pe.Node(
@@ -97,8 +97,8 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
     workflow = Workflow(name=name)
 
     # Split the input data into single volumes, put bvecs in LPS+ world reference frame
-    split_dwis = pe.Node(SplitDWIs(b0_threshold=b0_threshold, deoblique_bvecs=True),
-                         name='split_dwis')
+    split_dwis = pe.Node(TSplit(digits=4, out_name='vol'),name='split_dwis')
+    split_bvals = pe.Node(SplitDWIsBvals(b0_threshold=b0_threshold, deoblique_bvecs=True),name='split_bvals')
 
     # Motion correct the data
     dwi_hmc_wf = init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to,
@@ -115,21 +115,25 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
 
     workflow.connect([
         (inputnode, split_dwis, [
-            ('dwi_file', 'dwi_file'),
+            ('dwi_file', 'in_file')]),
+        (inputnode, split_bvals, [
             ('bval_file', 'bval_file'),
             ('bvec_file', 'bvec_file')]),
-        (split_dwis, dwi_hmc_wf, [
-            ('dwi_files', 'inputnode.dwi_files'),
+        (split_dwis, split_bvals, [
+            ('out_files','split_files')]),
+        (split_bvals, dwi_hmc_wf, [
             ('bval_files', 'inputnode.bvals'),
             ('bvec_files', 'inputnode.bvecs'),
             ('b0_images', 'inputnode.b0_images'),
             ('b0_indices', 'inputnode.b0_indices')]),
+        (split_dwis, dwi_hmc_wf, [
+            ('out_files', 'inputnode.dwi_files')]),
         (inputnode, dwi_hmc_wf, [
             ('t1_brain', 'inputnode.t1_brain'),
             ('t1_mask', 'inputnode.t1_mask'),
             ('t1_seg', 'inputnode.t1_seg'),
             ('original_files', 'inputnode.original_files')]),
-        (split_dwis, slice_qc, [('dwi_files', 'uncorrected_dwi_files')]),
+        (split_dwis, slice_qc, [('out_files', 'uncorrected_dwi_files')]),
         (dwi_hmc_wf, outputnode, [
             ('outputnode.final_template', 'pre_sdc_template'),
             (('outputnode.forward_transforms', _list_squeeze),
@@ -145,7 +149,7 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
             ('outputnode.noise_free_dwis', 'ideal_image_files'),
             ('outputnode.final_template_mask', 'mask_image')]),
         (summarize_motion, outputnode, [('spm_motion_file', 'motion_params')]),
-        (split_dwis, outputnode, [
+        (split_bvals, outputnode, [
             ('bvec_files', 'bvec_files_to_transform'),
             ('bval_files', 'bval_files'),
             ('b0_indices', 'b0_indices')]),
@@ -177,12 +181,12 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
             (dwi_hmc_wf, apply_hmc_transforms, [
                 ('outputnode.forward_transforms', 'transforms')]),
             (dwi_hmc_wf, rotate_gradients, [
-                (('outputnode.forward_transforms', _list_squeeze), 
+                (('outputnode.forward_transforms', _list_squeeze),
                  'affine_transforms')]),
             (split_dwis, apply_hmc_transforms, [
-                ('dwi_files', 'input_image'),
-                ('dwi_files', 'reference_image')]),
-            (split_dwis, rotate_gradients, [
+                ('out_files', 'input_image'),
+                ('out_files', 'reference_image')]),
+            (split_bvals, rotate_gradients, [
                 ('bvec_files', 'bvec_files'),
                 ('bval_files', 'bval_files')]),
             (apply_hmc_transforms, drbuddi_wf, [
@@ -192,7 +196,7 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
                 ('bvecs', 'inputnode.bvec_files')]),
             (inputnode, drbuddi_wf, [
                 ('t1_brain', 'inputnode.t1_brain'),
-                ('t2w_files', 'inputnode.t2w_files'),
+                ('t2w_unfatsat', 'inputnode.t2w_unfatsat'),
                 ('original_files', 'inputnode.original_files')]),
             (drbuddi_wf, outputnode, [
                 ('outputnode.sdc_warps', 'to_dwi_ref_warps'),

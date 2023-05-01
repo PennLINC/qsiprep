@@ -6,7 +6,7 @@ Implementing the FSL preprocessing workflow
 
 """
 
-import json
+import json, os
 from pkg_resources import resource_filename as pkgr_fn
 from nipype import logging
 
@@ -17,7 +17,7 @@ from nipype.interfaces import fsl
 from .registration import init_b0_to_anat_registration_wf, init_direct_b0_acpc_wf
 from ...interfaces.eddy import (GatherEddyInputs, ExtendedEddy, Eddy2SPMMotion,
                                 boilerplate_from_eddy_config)
-from ...interfaces.images import SplitDWIs, ConformDwi, IntraModalMerge
+from ...interfaces.images import SplitDWIsFSL, ConformDwi, IntraModalMerge
 from ...interfaces.reports import TopupSummary
 from ...interfaces.nilearn import EnhanceB0
 from ...interfaces import DerivativesDataSink
@@ -96,12 +96,17 @@ def init_fsl_hmc_wf(scan_groups,
             mask for t1_brain
 
     """
-
+    # Check for FSL binary
+    fsl_check = os.environ.get('FSL_BUILD')
+    if fsl_check=="no_fsl":
+        raise Exception(
+            """Container in use does not have FSL. To use this workflow, 
+            please download the qsiprep container with FSL installed.""")
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=['dwi_file', 'bvec_file', 'bval_file', 'b0_indices', 'b0_images',
                     'original_files', 't1_brain', 't1_mask', 't1_seg',
-                    't1_2_mni_reverse_transform', 't2w_files']),
+                    't1_2_mni_reverse_transform', 't2w_unfatsat']),
         name='inputnode')
 
     outputnode = pe.Node(
@@ -145,7 +150,7 @@ def init_fsl_hmc_wf(scan_groups,
     # Convert eddy outputs back to LPS+, split them
     back_to_lps = pe.Node(ConformDwi(orientation="LPS"), name='back_to_lps')
     cnr_lps = pe.Node(ConformDwi(orientation="LPS"), name='cnr_lps')
-    split_eddy_lps = pe.Node(SplitDWIs(b0_threshold=b0_threshold, deoblique_bvecs=True),
+    split_eddy_lps = pe.Node(SplitDWIsFSL(b0_threshold=b0_threshold, deoblique_bvecs=True),
                              name="split_eddy_lps")
 
     # Convert the b=0 template from pre_eddy_b0_ref to LPS+
@@ -162,8 +167,8 @@ def init_fsl_hmc_wf(scan_groups,
             ('original_files', 'original_files')]),
         (inputnode, pre_eddy_b0_ref_wf, [
             ('t1_brain', 'inputnode.t1_brain'),
-            ('t1_mask', 'inputnode.t1_mask'),
-            ('t1_seg', 'inputnode.t1_seg')]),
+            ('t1_seg', 'inputnode.t1_seg'),
+            ('t1_mask', 'inputnode.t1_mask')]),
         # Convert distorted ref to LPS+
         (pre_eddy_b0_ref_wf, b0_ref_to_lps, [
             ('outputnode.ref_image', 'dwi_file')]),
@@ -297,7 +302,7 @@ def init_fsl_hmc_wf(scan_groups,
                 ('bvec_files', 'inputnode.bvec_files')]),
             (inputnode, drbuddi_wf, [
                 ('t1_brain', 'inputnode.t1_brain'),
-                ('t2w_files', 'inputnode.t2w_files'),
+                ('t2w_unfatsat', 'inputnode.t2w_unfatsat'),
                 ('original_files', 'inputnode.original_files')]),
             (drbuddi_wf, outputnode, [
                 ('outputnode.sdc_warps', 'to_dwi_ref_warps'),
