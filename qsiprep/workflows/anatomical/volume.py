@@ -284,9 +284,11 @@ and used as an anatomical reference throughout the workflow.
     if anatomical_contrast == "T2w":
         workflow.connect([
             (synthstrip_anat_wf, rigid_acpc_resample_unfatsat, [
-                ('outputnode.t2w_unfatsat', 'input_image')]),
+                ('outputnode.unfatsat', 'input_image')]),
             (anat_normalization_wf, rigid_acpc_resample_unfatsat, [
-                ('forward_transforms', 'transforms')]),
+                ('outputnode.to_template_rigid_transform', 'transforms')]),
+            (get_template_image, rigid_acpc_resample_unfatsat, [
+                ('template_file', 'reference_image')]),
             (rigid_acpc_resample_unfatsat, outputnode, [('output_image', 't2w_unfatsat')]),
             (rigid_acpc_resample_head, outputnode, [('output_image', 't2_preproc')])])
     else:
