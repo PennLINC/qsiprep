@@ -453,14 +453,14 @@ class GetTemplate(SimpleInterface):
                 ref_img_brain = pkgr('qsiprep',
                                         'data/mni_1mm_%s_lps_brain.nii.gz' % contrast_name)
                 ref_img_mask = pkgr('qsiprep',
-                                        'data/mni_1mm_%s_lps_brainmask.nii.gz' % contrast_name)
+                                        'data/mni_1mm_t1w_lps_brainmask.nii.gz')
             else:
                 ref_img = pkgr('qsiprep',
                                 'data/mni_1mm_%s_lps_infant.nii.gz' % contrast_name)
                 ref_img_brain = pkgr('qsiprep',
                                         'data/mni_1mm_%s_lps_brain_infant.nii.gz' % contrast_name)
                 ref_img_mask = pkgr('qsiprep',
-                                        'data/mni_1mm_%s_lps_brainmask_infant.nii.gz' % contrast_name)
+                                        'data/mni_1mm_t1w_lps_brainmask_infant.nii.gz')
             self._results['template_file'] = ref_img
             self._results['template_brain_file'] = ref_img_brain
             self._results['template_mask_file'] = ref_img_mask
