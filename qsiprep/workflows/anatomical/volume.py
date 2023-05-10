@@ -660,11 +660,11 @@ A {contrast}-reference map was computed after registration of
 
     workflow.connect([
         (anat_conform, n4_correct, [('out_file', 'input_image')]),
-        (n4_correct, anat_merge_wf, [('output_image', 'b0_images')]),
+        (n4_correct, anat_merge_wf, [('output_image', 'inputnode.b0_images')]),
         (anat_merge_wf, outputnode, [
-            ('final_template', 'template'),
-            ('final_template', 'bias_corrected'),
-            ('forward_transforms', 'template_transforms')])])
+            ('outputnode.final_template', 'template'),
+            ('outputnode.final_template', 'bias_corrected'),
+            ('outputnode.forward_transforms', 'template_transforms')])])
 
     return workflow
 
