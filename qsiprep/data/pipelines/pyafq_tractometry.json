@@ -16,7 +16,7 @@
                 "directions": "prob",
                 "max_angle": 30.0,
                 "sphere": "",
-                "seed_mask": "MaskFile('probseg', {'label': 'WM', 'space': None})",
+                "seed_mask": "ImageFile('suffix': 'WM', {'scope': 'qsiprep', 'space': None})",
                 "seed_threshold": 0,
                 "n_seeds": 1,
                 "random_seeds": false,
