@@ -35,6 +35,10 @@ class DSIStudioCreateSrcInputSpec(DSIStudioCommandLineInputSpec):
         desc="Directory with DICOM data from only the dwi",
         exists=True,
         argstr="--source=%s")
+    bvec_convention = traits.Enum(
+        ("DIPY", "FSL"),
+        usedefault=True,
+        desc="Convention used for bvecs. FSL assumes LAS+ no matter image orientation")
     input_bvals_file = File(
         desc="Text file containing b values", exists=True, argstr="--bval=%s")
     input_bvecs_file = File(
@@ -85,6 +89,9 @@ class DSIStudioCreateSrc(CommandLine):
                 isdefined(self.inputs.input_bvecs_file):
             raise Exception("without a b_table or dicom directory, both bvals and bvecs "
                             "must be specified")
+
+        if self.inputs.bvec_convention == "AUTO":
+            self.inputs.check
 
         btable_file = self._gen_filename('output_src').replace(".src.gz", ".b_table.txt")
 

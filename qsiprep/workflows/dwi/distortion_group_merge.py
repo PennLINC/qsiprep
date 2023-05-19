@@ -150,8 +150,12 @@ def init_distortion_group_merge_wf(merging_strategy, inputs_list, hmc_model, rep
     ])
 
     # Calculate QC on the merged raw and processed data
-    raw_qc_wf = init_modelfree_qc_wf(omp_nthreads=omp_nthreads, name='raw_qc_wf')
-    processed_qc_wf = init_modelfree_qc_wf(omp_nthreads=omp_nthreads, name='processed_qc_wf')
+    raw_qc_wf = init_modelfree_qc_wf(omp_nthreads=omp_nthreads,
+                                     bvec_convention="auto",
+                                     name='raw_qc_wf')
+    processed_qc_wf = init_modelfree_qc_wf(omp_nthreads=omp_nthreads,
+                                           bvec_convention="DIPY",  # Always LPS+ when resampled
+                                           name='processed_qc_wf')
     # Combine all the QC measures for a series QC
     series_qc = pe.Node(SeriesQC(output_file_name=output_prefix), name='series_qc')
     ds_series_qc = pe.Node(

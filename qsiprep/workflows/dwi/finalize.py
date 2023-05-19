@@ -575,7 +575,9 @@ def init_finalize_denoising_wf(name,
                                          source_file=source_file, omp_nthreads=omp_nthreads)
 
     # Calculate QC metrics on the resampled data
-    calculate_qc = init_modelfree_qc_wf(omp_nthreads=omp_nthreads, name='calculate_qc')
+    calculate_qc = init_modelfree_qc_wf(omp_nthreads=omp_nthreads,
+                                        bvec_convention="DIPY",  # Resampled is always LPS+
+                                        name='calculate_qc')
     update_confounds = pe.Node(MergeFinalConfounds(), name='update_confounds')
 
     workflow.connect([
