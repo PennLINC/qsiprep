@@ -1,5 +1,6 @@
 #!python
 import os
+from pathlib import Path
 import os.path as op
 import logging
 from glob import glob
@@ -71,6 +72,31 @@ class DSIStudioCreateSrc(CommandLine):
     input_spec = DSIStudioCreateSrcInputSpec
     output_spec = DSIStudioCreateSrcOutputSpec
     _cmd = "dsi_studio --action=src "
+
+    def _pre_run_hook(self, runtime):
+        """As of QSIPrep > 0.17 DSI Studio changed from DIPY bvecs to FSL bvecs."""
+
+        # b_table files and dicom directories are ok
+        if isdefined(self.inputs.input_b_table_file) or \
+                isdefined(self.inputs.input_dicom_dir):
+            return runtime
+
+        if not isdefined(self.inputs.input_bvals_file) and \
+                isdefined(self.inputs.input_bvecs_file):
+            raise Exception("without a b_table or dicom directory, both bvals and bvecs "
+                            "must be specified")
+
+        btable_file = self._gen_filename('output_src').replace(".src.gz", ".b_table.txt")
+
+        btable_from_bvals_bvecs(self.inputs.input_bvals_file,
+                                self.inputs.input_bvecs_file,
+                                btable_file)
+        self.inputs.input_b_table_file = btable_file
+        self.inputs.input_bvals_file = traits.Undefined
+        self.inputs.input_bvecs_file = traits.Undefined
+        LOGGER.info("Converted DIPY bval/bvec to DSI Studio b_table")
+        return runtime
+
 
     def _gen_filename(self, name):
         if not name == 'output_src':
@@ -155,6 +181,19 @@ class DSIStudioReconstructionInputSpec(DSIStudioCommandLineInputSpec):
         position=-1,
         argstr="#%s")
     thread_count = traits.Int(1, usedefault=True, argstr="--thread_count=%d")
+
+    dti_no_high_b = traits.Bool(
+        True,
+        usedefault=True,
+        argstr="--dti_no_high_b=%d",
+        desc="specify whether the construction of DTI should ignore high b-value (b>1500)")
+    r2_weighted = traits.Bool(
+        False,
+        usedefault=True,
+        argstr="--r2_weighted=%d",
+        desc="specify whether GQI and QSDR uses r2-weighted to calculate SDF")
+
+    # Outputs
     output_odf = traits.Bool(
         True,
         usedefault=True,
@@ -163,39 +202,30 @@ class DSIStudioReconstructionInputSpec(DSIStudioCommandLineInputSpec):
     odf_order = traits.Enum((8, 4, 5, 6, 10, 12, 16, 20),
                             usedefault=True,
                             desc="ODF tesselation order")
+    # Which scalars to include
+    other_output = traits.Str(
+        "all",
+        argstr="--other_output=%s",
+        desc="additional diffusion metrics to calculate",
+        usedefault=True
+    )
+    align_acpc = traits.Bool(
+        False,
+        usedefault=True,
+        argstr="--align_acpc=%d",
+        desc="rotate image volume to align ap-pc"
+    )
     check_btable = traits.Enum(
         (0, 1),
         usedefault=True,
         argstr="--check_btable=%d",
         desc="Check if btable matches nifti orientation (not foolproof)")
+
     num_fibers = traits.Int(
         3,
         usedefault=True,
         argstr="--num_fiber=%d",
         desc="number of fiber populations estimated at each voxel")
-
-    # Decomposition traits
-    decomposition = traits.Bool(
-        False, argstr="--decomposition=1", desc="Apply ODF Decomposition")
-    decomp_fraction = traits.Float(
-        0.05,
-        desc="Decomposition Fraction",
-        argstr="--param3=%.2f",
-        requires=["decomposition"])
-    decomp_m_value = traits.Int(
-        10,
-        desc="Decomposition m value",
-        argstr="--param4=%d",
-        requires=["decomposition"])
-
-    # Deconvolution traits
-    deconvolution = traits.Bool(
-        False, argstr="--deconvolution=1", desc="Apply ODF Deconvolution")
-    deconv_regularization = traits.Float(
-        0.5,
-        requires=["deconvolution"],
-        desc="Deconvolution regularization parameter",
-        argstr="--param2=%.2f")
 
 
 class DSIStudioReconstructionOutputSpec(TraitedSpec):
@@ -262,17 +292,27 @@ class DSIStudioExportInputSpec(DSIStudioCommandLineInputSpec):
 
 
 class DSIStudioExportOutputSpec(DSIStudioCommandLineInputSpec):
-    gfa_file = File(desc="Exported files")
-    fa0_file = File(desc="Exported files")
-    fa1_file = File(desc="Exported files")
-    fa2_file = File(desc="Exported files")
-    fa3_file = File(desc="Exported files")
-    fa4_file = File(desc="Exported files")
-    iso_file = File(desc="Exported files")
-    dti_fa_file = File(desc="Exported files")
-    md_file = File(desc="Exported files")
-    rd_file = File(desc="Exported files")
-    ad_file = File(desc="Exported files")
+    qa_file = File(desc="Exported scalar nifti")
+    color_file = File(desc="Exported scalar nifti")
+    dti_fa_file = File(desc="Exported scalar nifti")
+    txx_file = File(desc="Exported scalar nifti")
+    txy_file = File(desc="Exported scalar nifti")
+    txz_file = File(desc="Exported scalar nifti")
+    tyy_file = File(desc="Exported scalar nifti")
+    tyz_file = File(desc="Exported scalar nifti")
+    tzz_file = File(desc="Exported scalar nifti")
+    rd1_file = File(desc="Exported scalar nifti")
+    rd2_file = File(desc="Exported scalar nifti")
+    ha_file = File(desc="Exported scalar nifti")
+    md_file = File(desc="Exported scalar nifti")
+    ad_file = File(desc="Exported scalar nifti")
+    rd_file = File(desc="Exported scalar nifti")
+    gfa_file = File(desc="Exported scalar nifti")
+    iso_file = File(desc="Exported scalar nifti")
+    rdi_file = File(desc="Exported scalar nifti")
+    nrdi02L_file = File(desc="Exported scalar nifti")
+    nrdi04L_file = File(desc="Exported scalar nifti")
+    nrdi06L_file = File(desc="Exported scalar nifti")
     image0_file = File(desc="Exported files")
 
 
@@ -284,22 +324,29 @@ class DSIStudioExport(CommandLine):
     def _list_outputs(self):
         outputs = self.output_spec().get()
         to_expect = self.inputs.to_export.split(",")
+        cwd = Path()
+        results = list(cwd.glob("*.nii.gz"))
         for expected in to_expect:
-            matches = glob("*" + expected + "*.nii.gz")
+            matches = [fname.absolute().name for fname in results if
+                       fname.name.endswith("." + expected + ".nii.gz")]
             if len(matches) == 1:
-                outputs[expected + "_file"] = os.path.abspath(matches[0])
+                outputs[expected + "_file"] = matches[0]
+            elif len(matches) == 0:
+                raise Exception("No exported scalar found matching " + expected)
+            else:
+                raise Exception("Found too mand scalar files matching " + expected)
+
         return outputs
 
 
 class DSIStudioConnectivityMatrixInputSpec(DSIStudioCommandLineInputSpec):
-    trk_file = File(exists=True, argstr="--tract=%s")
+    trk_file = File(exists=True, argstr="--tract=%s", copyfile=False)
     atlas_config = traits.Dict(desc='atlas configs for atlases to run connectivity for')
     atlas_name = traits.Str()
     input_fib = File(
         exists=True, argstr="--source=%s", mandatory=True, copyfile=False)
     fiber_count = traits.Int(xor=["seed_count"], argstr="--fiber_count=%d")
     seed_count = traits.Int(xor=["fiber_count"], argstr="--seed_count=%d")
-    method = traits.Enum((0, 4), argstr="--method=%d", usedefault=True)
     seed_plan = traits.Enum((0, 1), argstr="--seed_plan=%d")
     initial_dir = traits.Enum((0, 1, 2), argstr="--initial_dir=%d")
     interpolation = traits.Enum((0, 1, 2), argstr="--interpolation=%d")
@@ -640,7 +687,7 @@ class FixDSIStudioExportHeader(SimpleInterface):
 
         # No matter what, still use the correct affine
         nb.Nifti1Image(
-            reoriented_img.get_fdata()[::-1, ::-1, :],
+            reoriented_img.get_fdata(),
             correct_img.affine).to_filename(new_file)
         self._results['out_file'] = new_file
 
@@ -709,3 +756,29 @@ def load_fib_qc_file(fname):
         lines = [line.strip().split() for line in fibqc_f]
     return {'coherence_index': [float(lines[0][-1])],
             'incoherence_index': [float(lines[1][-1])]}
+
+
+def btable_from_bvals_bvecs(bval_file, bvec_file, output_file):
+    """Create a b-table from DIPY-style bvals/bvecs.
+
+    Assuming these come from qsiprep they will be in LPS+, which
+    is the same convention as DSI Studio's btable.
+    """
+    bvals = np.loadtxt(bval_file).squeeze()
+    bvecs = np.loadtxt(bvec_file).squeeze()
+    if not 3 in bvecs.shape:
+        raise Exception(
+            "uninterpretable bval/bvec files\n\t{}\n\t{}".format(bval_file, bvec_file))
+    if not bvecs.shape[1] == 3:
+        bvecs = bvecs.T
+
+    if not bvecs.shape[0] == bvals.shape[0]:
+        raise Exception("Bval/Bvec mismatch")
+
+    rows = []
+    for row in map(tuple, np.column_stack([bvals, bvecs])):
+        rows.append("%d %.6f %.6f %.6f" % row)
+
+    # Write the actual file:
+    with open(output_file, "w") as btablef:
+        btablef.write("\n".join(rows) + "\n")
