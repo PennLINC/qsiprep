@@ -745,6 +745,7 @@ class DSIStudioBTable(SimpleInterface):
             raise NotImplementedError("Only DIPY Bvecs supported for now")
         btab_file = op.join(runtime.cwd, "btable.txt")
         btable_from_bvals_bvecs(self.inputs.bval_file, self.inputs.bvec_file, btab_file)
+        self._results['btable_file'] = btab_file
         return runtime
 
 
