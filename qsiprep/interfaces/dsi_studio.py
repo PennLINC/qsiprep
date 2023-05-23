@@ -85,23 +85,21 @@ class DSIStudioCreateSrc(CommandLine):
                 isdefined(self.inputs.input_dicom_dir):
             return runtime
 
-        if not isdefined(self.inputs.input_bvals_file) and \
-                isdefined(self.inputs.input_bvecs_file):
+        if not (isdefined(self.inputs.input_bvals_file) and \
+                isdefined(self.inputs.input_bvecs_file)):
             raise Exception("without a b_table or dicom directory, both bvals and bvecs "
                             "must be specified")
 
-        if self.inputs.bvec_convention == "AUTO":
-            self.inputs.check
-
-        btable_file = self._gen_filename('output_src').replace(".src.gz", ".b_table.txt")
-
-        btable_from_bvals_bvecs(self.inputs.input_bvals_file,
-                                self.inputs.input_bvecs_file,
-                                btable_file)
-        self.inputs.input_b_table_file = btable_file
-        self.inputs.input_bvals_file = traits.Undefined
-        self.inputs.input_bvecs_file = traits.Undefined
-        LOGGER.info("Converted DIPY bval/bvec to DSI Studio b_table")
+        # If the bvecs are in DIPY format, convert them to a b_table.txt
+        if self.inputs.bvec_convention == "DIPY":
+            btable_file = self._gen_filename('output_src').replace(".src.gz", ".b_table.txt")
+            btable_from_bvals_bvecs(self.inputs.input_bvals_file,
+                                    self.inputs.input_bvecs_file,
+                                    btable_file)
+            self.inputs.input_b_table_file = btable_file
+            self.inputs.input_bvals_file = traits.Undefined
+            self.inputs.input_bvecs_file = traits.Undefined
+            LOGGER.info("Converted DIPY LPS+ bval/bvec to DSI Studio b_table")
         return runtime
 
 
@@ -722,6 +720,31 @@ class DSIStudioMergeQC(SimpleInterface):
         qc_df = pd.DataFrame(src_qc)
         qc_df.to_csv(output_csv, index=False)
         self._results['qc_file'] = output_csv
+        return runtime
+
+
+class _DSIStudioBTableInputSpec(BaseInterfaceInputSpec):
+    bval_file = File(exists=True, mandatory=True)
+    bvec_file = File(exists=True, mandatory=True)
+    bvec_convention = traits.Enum(
+        ("DIPY", "FSL"),
+        usedefault=True,
+        desc="Convention used for bvecs. FSL assumes LAS+ no matter image orientation")
+
+
+class _DSIStudioBTableOutputSpec(TraitedSpec):
+    btable_file = File(exists=True)
+
+
+class DSIStudioBTable(SimpleInterface):
+    input_spec = _DSIStudioBTableInputSpec
+    output_spec = _DSIStudioBTableOutputSpec
+
+    def _run_interface(self, runtime):
+        if self.inputs.bvec_convention != "DIPY":
+            raise NotImplementedError("Only DIPY Bvecs supported for now")
+        btab_file = op.join(runtime.cwd, "btable.txt")
+        btable_from_bvals_bvecs(self.inputs.bval_file, self.inputs.bvec_file, btab_file)
         return runtime
 
 
