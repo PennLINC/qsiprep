@@ -21,6 +21,7 @@ from ...interfaces.dwi_merge import SplitResampledDWIs, MergeFinalConfounds
 from ...interfaces.confounds import GatherConfounds
 from ...interfaces.gradients import ExtractB0s
 from ...interfaces.nilearn import Merge
+from ...interfaces.dsi_studio import DSIStudioBTable
 from ...engine import Workflow
 from .util import init_dwi_reference_wf
 
@@ -216,7 +217,7 @@ def init_dwi_finalize_wf(scan_groups,
     outputnode = pe.Node(
         niu.IdentityInterface(fields=[
             'dwi_t1', 'dwi_mask_t1', 'cnr_map_t1', 'bvals_t1', 'bvecs_t1', 'local_bvecs_t1',
-            't1_b0_ref', 'confounds', 'gradient_table_t1', 'hmc_optimization_data'
+            't1_b0_ref', 'confounds', 'gradient_table_t1', 'btable_t1', 'hmc_optimization_data'
         ]),
         name='outputnode')
 
@@ -327,6 +328,7 @@ def init_dwi_finalize_wf(scan_groups,
 
     # CONNECT TO DERIVATIVES #####################
     gtab_t1 = pe.Node(MRTrixGradientTable(), name='gtab_t1')
+    btab_t1 = pe.Node(DSIStudioBTable(bvec_convention="DIPY"), name='btab_t1')
     t1_dice_calc = init_mask_overlap_wf(name='t1_dice_calc')
     gradient_plot = pe.Node(GradientPlot(), name='gradient_plot', run_without_submitting=True)
     ds_report_gradients = pe.Node(
@@ -390,9 +392,12 @@ def init_dwi_finalize_wf(scan_groups,
         (outputnode, gradient_plot, [('bvecs_t1', 'final_bvec_file')]),
         (transform_dwis_t1, gtab_t1, [('outputnode.bvals', 'bval_file'),
                                       ('outputnode.rotated_bvecs', 'bvec_file')]),
+        (transform_dwis_t1, btab_t1, [('outputnode.bvals', 'bval_file'),
+                                      ('outputnode.rotated_bvecs', 'bvec_file')]),
         (inputnode, t1_dice_calc, [
             ('t1_mask', 'inputnode.anatomical_mask')]),
         (gtab_t1, outputnode, [('gradient_file', 'gradient_table_t1')]),
+        (btab_t1, outputnode, [('btable_file', 'btable_t1')]),
         (outputnode, dwi_derivatives_wf,
          [('dwi_t1', 'inputnode.dwi_t1'),
           ('dwi_mask_t1', 'inputnode.dwi_mask_t1'),
@@ -402,6 +407,7 @@ def init_dwi_finalize_wf(scan_groups,
           ('local_bvecs_t1', 'inputnode.local_bvecs_t1'),
           ('t1_b0_ref', 'inputnode.t1_b0_ref'),
           ('gradient_table_t1', 'inputnode.gradient_table_t1'),
+          ('btable_t1', 'inputnode.btable_t1'),
           ('confounds', 'inputnode.confounds'),
           ('hmc_optimization_data', 'inputnode.hmc_optimization_data')]),
         (inputnode, gradient_plot, [
@@ -575,7 +581,9 @@ def init_finalize_denoising_wf(name,
                                          source_file=source_file, omp_nthreads=omp_nthreads)
 
     # Calculate QC metrics on the resampled data
-    calculate_qc = init_modelfree_qc_wf(omp_nthreads=omp_nthreads, name='calculate_qc')
+    calculate_qc = init_modelfree_qc_wf(omp_nthreads=omp_nthreads,
+                                        bvec_convention="DIPY",  # Resampled is always LPS+
+                                        name='calculate_qc')
     update_confounds = pe.Node(MergeFinalConfounds(), name='update_confounds')
 
     workflow.connect([

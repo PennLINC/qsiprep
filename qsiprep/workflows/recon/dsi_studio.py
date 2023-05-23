@@ -57,7 +57,7 @@ def init_dsi_studio_recon_wf(omp_nthreads, available_anatomical_data, name="dsi_
 
 : """
     create_src = pe.Node(
-        DSIStudioCreateSrc(), 
+        DSIStudioCreateSrc(),
         name="create_src")
     romdd = params.get("ratio_of_mean_diffusion_distance", 1.25)
     gqi_recon = pe.Node(
@@ -80,7 +80,7 @@ distance of %02f.""" % romdd
     if plot_reports:
         # Make a visual report of the model
         plot_peaks = pe.Node(
-            CLIReconPeaksReport(subtract_iso=True), 
+            CLIReconPeaksReport(subtract_iso=True),
             name='plot_peaks',
             n_procs=omp_nthreads)
         ds_report_peaks = pe.Node(
@@ -336,7 +336,9 @@ def init_dsi_studio_export_wf(omp_nthreads, available_anatomical_data, name="dsi
             fields=recon_workflow_input_fields + ['fibgz']),
         name="inputnode")
     plot_reports = params.pop("plot_reports", True)
-    scalar_names = ['gfa', 'fa0', 'fa1', 'fa2', 'iso', 'dti_fa', 'md', 'rd', 'ad']
+    scalar_names = ["qa", "dti_fa", "txx", "txy", "txz", "tyy", "tyz", "tzz", "rd1",
+                    "rd2", "ha", "md", "ad", "rd", "gfa", "iso", "rdi", "nrdi02L", "nrdi04L",
+                    "nrdi06L"]
     outputnode = pe.Node(
         niu.IdentityInterface(fields=[name + "_file" for name in scalar_names]),
         name="outputnode")
