@@ -1,0 +1,33 @@
+{
+  "name": "dsistudio_pipeline",
+  "space": "T1w",
+  "atlases": ["schaefer100", "schaefer200", "schaefer400", "brainnetome246", "aicha384", "gordon333", "aal116"],
+  "nodes": [
+    {
+      "name": "dsistudio_gqi",
+      "software": "DSI Studio",
+      "action": "reconstruction",
+      "input": "qsiprep",
+      "output_suffix": "gqi",
+      "parameters": {"method": "gqi"}
+    },
+    {
+      "name": "autotrackgqi",
+      "software": "DSI Studio",
+      "action": "autotrack",
+      "input": "dsistudio_gqi",
+      "output_suffix": "autotrackgqi",
+      "parameters": {
+        "track_id": "Fasciculus,Cingulum,Aslant,Corticos,Thalamic_R,Reticular,Optic,Fornix,Corpus",
+        "tolerance": "22,26,30",
+        "track_voxel_ratio": 2.0,
+        "check_ending": "auto",
+        "yield_rate": 0.000001,
+        "default_mask": false,
+        "export_stat": true,
+        "export_trk": true,
+        "export_template_trk": false
+      }
+    }
+  ]
+}

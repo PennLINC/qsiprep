@@ -749,6 +749,48 @@ class DSIStudioBTable(SimpleInterface):
         return runtime
 
 
+class _AutoTrackInputSpec(DSIStudioCommandLineInputSpec):
+    fib_file = File(exists=True, mandatory=True)
+    track_id = traits.Str(
+        "Fasciculus,Cingulum,Aslant,Corticos,Thalamic_R,Reticular,Optic,Fornix,Corpus",
+        usedefault=True,
+        argstr="--track_id=%s",
+        desc="""specify the id number or the name of the bundle. The id can be found in
+            /atlas/ICBM152/HCP1065.tt.gz.txt . This text file is included in DSI
+            Studio package (For Mac, right-click on dsi_studio_64.app to find
+            content). You can specify partial name of the bundle:
+
+            example:
+            for tracking left and right arcuate fasciculus, assign
+            --track_id=0,1 or --track_id=arcuate (DSI Studio will find bundles
+            with names containing "arcuate", case insensitive)
+
+            example:
+            for tracking left and right arcuate and cingulum, assign
+            -track_id=0,1,2,3 or -track_id=arcuate,cingulum""")
+    track_voxel_ratio = traits.CFloat(
+        2.0,
+        usedefault=True,
+        argstr="--track_voxel_ratio=%.2f",
+        desc="the track-voxel ratio for the total number of streamline count. A larger " \
+            "value gives better mapping with the expense of computation time.")
+    tolerance = traits.Str(
+        "22,26,30",
+        argstr="--tolerance=%s",
+        desc="""the tolerance for the bundle recognition. The unit is in mm. Multiple values
+            can be assigned using comma separator. A larger value may include larger track
+            variation but also subject to more false results.""")
+    yield_rate = traits.CFloat(
+        0.00001,
+        argstr="--yield_rate=%.10f",
+        desc="This rate will be used to terminate tracking early if DSI Studio find the " \
+            "fiber trackings is not generating results")
+    export_trk = traits.Bool(
+        True,
+        usedefault=True,
+        argstr="--export_trk=%d")
+
+
 def load_src_qc_file(fname, prefix=""):
     with open(fname, "r") as qc_file:
         qc_data = qc_file.readlines()
