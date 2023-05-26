@@ -15,6 +15,8 @@ def make_sloppy(spec):
             "fiber_count": 5000},
         ("DSI Studio", "tractography"): {
             "fiber_count": 5000},
+        ("DSI Studio", "autotrack"): {
+            "track_id": "0,1,2"},
 
         ("MRTrix3", "tractography"): {
             "tckgen": {

@@ -856,7 +856,7 @@ class AutoTrackInit(AutoTrack):
             raise Exception("Too many map files generated")
         if not map_files:
             raise Exception("No map files found in " + str(cwd.absolute()))
-        outputs["map_file"] = map_files[0]
+        outputs["map_file"] = str(map_files[0].absolute())
         return outputs
 
 
