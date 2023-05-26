@@ -8,13 +8,15 @@ from copy import deepcopy
 from subprocess import Popen, PIPE
 import numpy as np
 from nipype.interfaces.base import (TraitedSpec, CommandLineInputSpec, BaseInterfaceInputSpec,
-                                    CommandLine, File, traits, isdefined, SimpleInterface)
+                                    CommandLine, File, traits, isdefined, SimpleInterface,
+                                    InputMultiObject, OutputMultiObject)
 import nipype.pipeline.engine as pe
 import nipype.interfaces.utility as niu
-from nipype.utils.filemanip import fname_presuffix, split_filename
+from nipype.utils.filemanip import fname_presuffix, split_filename, which
 from scipy.io.matlab import loadmat, savemat
 import nibabel as nb
 import pandas as pd
+from .bids import get_bids_params
 LOGGER = logging.getLogger('nipype.interface')
 
 
@@ -749,6 +751,180 @@ class DSIStudioBTable(SimpleInterface):
         return runtime
 
 
+class _AutoTrackInputSpec(DSIStudioCommandLineInputSpec):
+    fib_file = File(exists=True,
+                    mandatory=True,
+                    copyfile=False,
+                    argstr="--source=%s")
+    map_file = File(exists=True,
+                    mandatory=True,
+                    copyfile=False)
+    track_id = traits.Str(
+        "Fasciculus,Cingulum,Aslant,Corticos,Thalamic_R,Reticular,Optic,Fornix,Corpus",
+        usedefault=True,
+        argstr="--track_id=%s",
+        desc="""specify the id number or the name of the bundle. The id can be found in
+            /atlas/ICBM152/HCP1065.tt.gz.txt . This text file is included in DSI
+            Studio package (For Mac, right-click on dsi_studio_64.app to find
+            content). You can specify partial name of the bundle:
+
+            example:
+            for tracking left and right arcuate fasciculus, assign
+            --track_id=0,1 or --track_id=arcuate (DSI Studio will find bundles
+            with names containing "arcuate", case insensitive)
+
+            example:
+            for tracking left and right arcuate and cingulum, assign
+            -track_id=0,1,2,3 or -track_id=arcuate,cingulum""")
+    track_voxel_ratio = traits.CFloat(
+        2.0,
+        usedefault=True,
+        argstr="--track_voxel_ratio=%.2f",
+        desc="the track-voxel ratio for the total number of streamline count. A larger " \
+            "value gives better mapping with the expense of computation time.")
+    tolerance = traits.Str(
+        "22,26,30",
+        argstr="--tolerance=%s",
+        desc="""the tolerance for the bundle recognition. The unit is in mm. Multiple values
+            can be assigned using comma separator. A larger value may include larger track
+            variation but also subject to more false results.""")
+    yield_rate = traits.CFloat(
+        0.00001,
+        argstr="--yield_rate=%.10f",
+        desc="This rate will be used to terminate tracking early if DSI Studio find the " \
+            "fiber trackings is not generating results")
+    export_trk = traits.Bool(
+        True,
+        usedefault=True,
+        argstr="--export_trk=%d")
+    trk_format = traits.Enum(
+        ("trk.gz", "tt.gz"),
+        default="trk.gz",
+        usedefault=True,
+        argstr="--trk_format=%s")
+    output_dir = traits.Str(
+        "cwd",
+        argstr="%s",
+        usedefault=True,
+        desc="Forces DSI Studio to write results in cwd")
+
+
+class _AutoTrackOutputSpec(DSIStudioCommandLineInputSpec):
+    native_trk_files = OutputMultiObject(File(exists=True))
+    stat_files = OutputMultiObject(File(exists=True))
+
+
+class AutoTrack(CommandLine):
+    input_spec = _AutoTrackInputSpec
+    output_spec = _AutoTrackOutputSpec
+    _cmd = "dsi_studio --action=atk"
+
+    def _format_arg(self, name, trait_spec, value):
+        if name == "output_dir":
+            return "--output=" + str(Path(".").absolute())
+        return super()._format_arg(name, trait_spec, value)
+
+    def _list_outputs(self):
+        outputs = self.output_spec().get()
+        cwd = Path(".")
+        trk_files = [str(fname.absolute()) for fname in cwd.rglob("*."+self.inputs.trk_format)]
+        stat_files = [str(fname.absolute()) for fname in cwd.rglob("*.stat.txt")]
+        outputs["native_trk_files"] = trk_files
+        outputs["stat_files"] = stat_files
+        return outputs
+
+
+class _AutoTrackInitInputSpec(_AutoTrackInputSpec):
+    num_threads = 1  # Force this so it doesn't use a ton of threads
+    map_file = File(mandatory=False)
+    track_id = "0"
+
+
+class _AutoTrackInitOutputSpec(_AutoTrackOutputSpec):
+    map_file = File(exists=True)
+
+
+class AutoTrackInit(AutoTrack):
+    input_spec = _AutoTrackInitInputSpec
+    output_spec = _AutoTrackInitOutputSpec
+
+    def _list_outputs(self):
+        outputs = self.output_spec().get()
+        cwd = Path(".")
+        map_files = list(cwd.glob("*.map.gz"))
+        if len(map_files) > 1:
+            raise Exception("Too many map files generated")
+        if not map_files:
+            raise Exception("No map files found in " + str(cwd.absolute()))
+        outputs["map_file"] = str(map_files[0].absolute())
+        return outputs
+
+
+class _AggregateAutoTrackResultsInputSpec(BaseInterfaceInputSpec):
+    expected_bundles = InputMultiObject(traits.Str())
+    trk_files = InputMultiObject(File(exists=True))
+    stat_files = InputMultiObject(File(exists=True))
+    source_file = File(exists=True)
+
+
+class _AggregateAutoTrackResultsOutputSpec(TraitedSpec):
+    bundle_csv = File(exists=True)
+    found_bundle_names = OutputMultiObject(traits.Str())
+    found_bundle_files = OutputMultiObject(File(exists=True))
+
+
+class AggregateAutoTrackResults(SimpleInterface):
+    input_spec = _AggregateAutoTrackResultsInputSpec
+    output_spec = _AggregateAutoTrackResultsOutputSpec
+
+    def _run_interface(self, runtime):
+
+        def bundle_from_file(file_name):
+            return Path(file_name).parts[-2]
+
+        trk_map = {bundle_from_file(fname): fname for fname in self.inputs.trk_files}
+        stat_map ={bundle_from_file(fname): fname for fname in self.inputs.stat_files}
+
+        stats_rows = []
+        found_bundle_files = []
+        found_bundle_names = []
+        for bundle_name in self.inputs.expected_bundles:
+            if bundle_name in trk_map:
+                found_bundle_files.append(trk_map[bundle_name])
+                found_bundle_names.append(bundle_name)
+            stats_rows.append(
+                stat_txt_to_df(stat_map.get(bundle_name, "NA"), bundle_name))
+
+        stats_df = pd.DataFrame(stats_rows)
+        bids_info = get_bids_params(self.inputs.source_file)
+        for name, value in bids_info.items():
+            stats_df[name] = value
+        stats_df["source_file"] = op.split(self.inputs.source_file)[1]
+        csv_file = fname_presuffix(self.inputs.source_file, newpath=runtime.cwd,
+                                   suffix="_bundlestats.csv", use_ext=False)
+        stats_df.to_csv(csv_file, index=False)
+        self._results["found_bundle_names"] = found_bundle_names
+        self._results["found_bundle_files"] = found_bundle_files
+        self._results["bundle_csv"] = csv_file
+        return runtime
+
+
+def stat_txt_to_df(stat_txt_file, bundle_name):
+    bundle_stats = {'bundle_name': bundle_name}
+    if stat_txt_file == "NA":
+        return bundle_stats
+    with open(stat_txt_file, "r") as statf:
+        lines = [
+            line.strip().replace(" ", "_").replace("^", "").replace("(", "_").replace(")", "")
+            for line in statf]
+
+    for line in lines:
+        name, value = line.split("\t")
+        bundle_stats[name] = float(value)
+
+    return bundle_stats
+
+
 def load_src_qc_file(fname, prefix=""):
     with open(fname, "r") as qc_file:
         qc_data = qc_file.readlines()
@@ -813,3 +989,42 @@ def btable_from_bvals_bvecs(bval_file, bvec_file, output_file):
     # Write the actual file:
     with open(output_file, "w") as btablef:
         btablef.write("\n".join(rows) + "\n")
+
+
+def _get_dsi_studio_bundles(desired_bundles=""):
+
+    dsi_studio_exe = which('dsi_studio')
+    if not dsi_studio_exe:
+        raise Exception("No dsi_studio executable found in $PATH")
+    bundle_dir = op.split(dsi_studio_exe)[0]
+    bundle_file = os.getenv(
+        "DSI_STUDIO_BUNDLES",
+        op.join(bundle_dir, "atlas/ICBM152_adult/ICBM152_adult.tt.gz.txt"))
+    if not op.exists(bundle_file):
+        raise Exception("No such file {} for loading bundles".format(bundle_file))
+
+    with open(bundle_file, "r") as bundlef:
+        all_bundles = [line.strip() for line in bundlef]
+
+    if not desired_bundles:
+        LOGGER.info("Using all {} bundles from {}".format(len(all_bundles), bundle_file))
+        return all_bundles
+
+    def get_bundles(search_string):
+        return [bundle for bundle in all_bundles if search_string.lower() in bundle.lower()]
+
+    # Figure out which bundles we'll be tracking
+    bundles_to_track = []
+    for bundle in desired_bundles.split(","):
+        if bundle.isdigit():
+            bundle_index = int(bundle)
+            if bundle_index < 0 or bundle_index > len(all_bundles):
+                raise Exception("{} is not a valid bundle index, check {}".format(
+                    bundle_index, bundle_file))
+            bundles_to_track.append(all_bundles[bundle_index])
+        else:
+            matching_bundles = get_bundles(bundle)
+            if not matching_bundles:
+                LOGGER.warn("No matching bundles found for " + bundle)
+            bundles_to_track.extend(matching_bundles)
+    return bundles_to_track

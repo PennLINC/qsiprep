@@ -8,14 +8,16 @@ DSI Studio workflows
 
 """
 import nipype.pipeline.engine as pe
-from nipype.interfaces import afni, utility as niu
+from nipype.interfaces import utility as niu
 from qsiprep.interfaces.dsi_studio import (DSIStudioCreateSrc, DSIStudioGQIReconstruction,
                                            DSIStudioAtlasGraph, DSIStudioExport,
-                                           DSIStudioTracking,
-                                           FixDSIStudioExportHeader)
+                                           DSIStudioTracking, AutoTrack, _get_dsi_studio_bundles,
+                                           FixDSIStudioExportHeader, AggregateAutoTrackResults,
+                                           AutoTrackInit)
 
 import logging
-from qsiprep.interfaces.bids import ReconDerivativesDataSink
+from ...interfaces.bids import ReconDerivativesDataSink
+from ...interfaces.converters import DSIStudioTrkToTck
 from .interchange import recon_workflow_input_fields
 from ...engine import Workflow
 from ...interfaces.reports import CLIReconPeaksReport, ConnectivityReport
@@ -205,6 +207,109 @@ def init_dsi_studio_tractography_wf(omp_nthreads, available_anatomical_data, nam
                               name='ds_' + name,
                               run_without_submitting=True)
         workflow.connect(tracking, 'output_trk', ds_tracking, 'in_file')
+    return workflow
+
+
+def init_dsi_studio_autotrack_wf(omp_nthreads, available_anatomical_data,
+                                 params={}, output_suffix="", name="dsi_studio_autotrack_wf"):
+    """Calculate streamline-based connectivity matrices using DSI Studio.
+
+    DSI Studio has a deterministic tractography algorithm that can be used to
+    estimate pairwise regional connectivity. It calculates multiple connectivity
+    measures.
+
+    Inputs
+
+        fibgz
+            A DSI Studio fib file produced by DSI Studio reconstruction.
+
+    Outputs
+
+
+    Params:
+
+    """
+    if omp_nthreads < 3:
+        LOGGER.warn("Please set --omp-nthreads to 3 or greater and ensure you have enough CPU "
+                    "resources. Without at least 3 cpus this workflow will likely fail!!")
+    inputnode = pe.Node(
+        niu.IdentityInterface(
+            fields=recon_workflow_input_fields + ['fibgz']),
+        name="inputnode")
+    outputnode = pe.Node(niu.IdentityInterface(fields=['tck_files', "bundle_names"]),
+                         name="outputnode")
+
+    bundle_names = _get_dsi_studio_bundles(params.get("track_id", ""))
+    LOGGER.info("Running AutoTrack on the following bundles:\n\t" + "\n\t".join(bundle_names))
+
+    workflow = Workflow(name=name)
+
+    # This initial autotrack is used to calculate the registration to the template
+    register_bundles = pe.Node(
+        AutoTrackInit(),
+        name="register_bundles",
+        n_procs=omp_nthreads)  # This process intrinsically uses ~3 cpus if you specify thread_count=1
+
+    # Real autotrack is run here on all the bundles
+    actual_trk = pe.Node(
+        AutoTrack(num_threads=max(1, omp_nthreads-1), **params),
+        name="actual_trk",
+        n_procs=omp_nthreads)  # An extra thread is needed
+
+    # Create a single
+    aggregate_atk_results = pe.Node(
+        AggregateAutoTrackResults(
+            expected_bundles=bundle_names),
+        name="aggregate_atk_results")
+
+    convert_to_tck = pe.MapNode(
+        DSIStudioTrkToTck(),
+        name="convert_to_tck",
+        iterfield="trk_file"
+    )
+
+    # Save tck files of the bundles into the outputs
+    ds_tckfiles = pe.MapNode(
+        ReconDerivativesDataSink(
+            suffix=output_suffix),
+        iterfield=["in_file", "bundle"],
+        name="ds_tckfiles")
+
+    # Save the bundle csv
+    ds_bundle_csv = pe.Node(
+        ReconDerivativesDataSink(
+            suffix=output_suffix),
+        name="ds_bundle_csv",
+        run_without_submitting=True)
+
+    # Save the mapping file
+    ds_mapping = pe.Node(
+        ReconDerivativesDataSink(
+            suffix=output_suffix),
+        name="ds__csv",
+        run_without_submitting=True)
+
+    workflow.connect([
+        (inputnode, register_bundles, [('fibgz', 'fib_file')]),
+        (inputnode, actual_trk, [('fibgz', 'fib_file')]),
+        (inputnode, aggregate_atk_results, [('dwi_file', 'source_file')]),
+        (inputnode, convert_to_tck, [('dwi_file', 'reference_nifti')]),
+        (register_bundles, actual_trk, [
+            ('map_file', 'map_file')]),
+        (actual_trk, aggregate_atk_results, [
+            ("native_trk_files", "trk_files"),
+            ("stat_files", "stat_files")]),
+        (aggregate_atk_results, convert_to_tck, [
+            ("found_bundle_files", "trk_file")]),
+        (aggregate_atk_results, ds_tckfiles, [
+            ("found_bundle_names", "bundle")]),
+        (convert_to_tck, ds_tckfiles, [
+            ("tck_file", "in_file")]),
+        (aggregate_atk_results, ds_bundle_csv, [("bundle_csv", "in_file")]),
+        (convert_to_tck, outputnode, [("tck_file", "tck_files")]),
+        (aggregate_atk_results, outputnode, [("found_bundle_names", "bundle_names")])
+    ])
+
     return workflow
 
 

@@ -197,6 +197,18 @@ jobs:
             cd .circleci
             bash Mrtrix3ReconTests.sh
 
+  Recon_AutoTrack:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run: *runinstall
+      - run:
+          name: Test the CSD recon workflows
+          no_output_timeout: 1h
+          command: |
+            cd .circleci
+            bash AutoTrackTest.sh
+
   Recon_DIPY:
     <<: *dockersetup
     steps:
@@ -535,6 +547,13 @@ workflows:
             tags:
               only: /.*/
 
+      - Recon_AutoTrack:
+          requires:
+            - build
+          filters:
+            tags:
+              only: /.*/
+
       - Recon_DIPY:
           requires:
             - build
@@ -577,6 +596,7 @@ workflows:
             - MultiT1w
             - Recon_3Tissue
             - Recon_MRtrix3
+            - Recon_AutoTrack
             - Recon_DIPY
             - Recon_AMICO
             - Recon_PYAFQ

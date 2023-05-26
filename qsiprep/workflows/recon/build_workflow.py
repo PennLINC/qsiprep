@@ -6,7 +6,8 @@ from nipype.utils.filemanip import split_filename
 from qsiprep.interfaces import anatomical
 from qsiprep.interfaces.bids import QsiReconIngress, ReconDerivativesDataSink
 from .dsi_studio import (init_dsi_studio_recon_wf, init_dsi_studio_export_wf,
-                         init_dsi_studio_connectivity_wf, init_dsi_studio_tractography_wf)
+                         init_dsi_studio_connectivity_wf, init_dsi_studio_tractography_wf,
+                         init_dsi_studio_autotrack_wf)
 from .dipy import (init_dipy_brainsuite_shore_recon_wf, init_dipy_mapmri_recon_wf,
     init_dipy_dki_recon_wf)
 from .mrtrix import (init_mrtrix_csd_recon_wf, init_global_tractography_wf,
@@ -34,14 +35,14 @@ def _check_repeats(nodelist):
 
 def init_dwi_recon_workflow(dwi_file, workflow_spec, output_dir, prefer_dwi_mask,
                             reportlets_dir, available_anatomical_data, omp_nthreads, b0_threshold,
-                            infant_mode, skip_odf_plots, freesurfer_dir=None, 
+                            infant_mode, skip_odf_plots, freesurfer_dir=None,
                             sloppy=False, name="recon_wf"):
     """Convert a workflow spec into a nipype workflow.
 
     """
     # Get the preprocessed DWI and all the related preprocessed images
     qsiprep_preprocessed_dwi_data = pe.Node(
-        QsiReconIngress(dwi_file=dwi_file), 
+        QsiReconIngress(dwi_file=dwi_file),
         name="qsiprep_preprocessed_dwi_data")
 
     # Get the anatomical data (masks, atlases, etc)
@@ -57,7 +58,7 @@ def init_dwi_recon_workflow(dwi_file, workflow_spec, output_dir, prefer_dwi_mask
         freesurfer_dir=freesurfer_dir,
         name="qsirecon_anat_wf",
         **available_anatomical_data)
-    
+
     # For doctests
     # if not workflow_spec['name'] == 'fake':
     #     inputnode.inputs.dwi_file = dwi_file
@@ -66,13 +67,13 @@ def init_dwi_recon_workflow(dwi_file, workflow_spec, output_dir, prefer_dwi_mask
     inputnode = pe.Node(
         niu.IdentityInterface(fields=recon_workflow_input_fields),
         name='inputnode')
-    
+
     # Connect the collected diffusion data (gradients, etc) to the inputnode
     workflow.connect([
         (qsiprep_preprocessed_dwi_data, registered_anat_wf, [
             (trait, 'inputnode.' + trait) for trait in qsiprep_output_names]),
         (registered_anat_wf, inputnode, [
-            ('outputnode.'+trait, trait) for trait in 
+            ('outputnode.'+trait, trait) for trait in
             recon_workflow_input_fields])
     ])
 
@@ -185,6 +186,8 @@ def workflow_from_spec(omp_nthreads, available_anatomical_data, node_spec,
             return init_dsi_studio_tractography_wf(**kwargs)
         if node_spec["action"] == "connectivity":
             return init_dsi_studio_connectivity_wf(**kwargs)
+        if node_spec["action"] == "autotrack":
+            return init_dsi_studio_autotrack_wf(**kwargs)
 
     # MRTrix3 operations
     elif software == "MRTrix3":
