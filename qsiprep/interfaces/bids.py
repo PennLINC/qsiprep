@@ -276,6 +276,7 @@ class DerivativesDataSinkInputSpec(BaseInterfaceInputSpec):
     source_file = File(mandatory=True, desc='the original file or name of merged files')
     space = traits.Str('', usedefault=True, desc='Label for space field')
     desc = traits.Str('', usedefault=True, desc='Label for description field')
+    bundle = traits.Str('', usedefault=True, desc='Label for bundle field')
     suffix = traits.Str('', usedefault=True, desc='suffix appended to source_file')
     keep_dtype = traits.Bool(False, usedefault=True, desc='keep datatype suffix')
     extra_values = traits.List(traits.Str)
@@ -366,10 +367,12 @@ desc-preproc_bold.nii.gz'
         os.makedirs(out_path, exist_ok=True)
         base_fname = op.join(out_path, src_fname)
 
-        formatstr = '{bname}{space}{desc}{suffix}{dtype}{ext}'
+        formatstr = '{bname}{space}{desc}{bundle}{suffix}{dtype}{ext}'
 
         space = '_space-{}'.format(self.inputs.space) if self.inputs.space else ''
         desc = '_desc-{}'.format(self.inputs.desc) if self.inputs.desc else ''
+        bundle = '_bundle-{}'.format(
+            self.inputs.bundle.replace("_", "")) if self.inputs.bundle else ''
         suffix = '_{}'.format(self.inputs.suffix) if self.inputs.suffix else ''
         dtype = '' if not self.inputs.keep_dtype else ('_%s' % dtype)
 
@@ -380,6 +383,7 @@ desc-preproc_bold.nii.gz'
                 bname=base_fname,
                 space=space,
                 desc=desc,
+                bundle=bundle,
                 suffix=suffix,
                 dtype=dtype,
                 ext='')
@@ -389,7 +393,7 @@ desc-preproc_bold.nii.gz'
             return runtime
 
         if len(self.inputs.in_file) > 1 and not isdefined(self.inputs.extra_values):
-            formatstr = '{bname}{space}{desc}{suffix}{i:04d}{dtype}{ext}'
+            formatstr = '{bname}{space}{desc}{bundle}{suffix}{i:04d}{dtype}{ext}'
 
         # Otherwise it's file(s)
         self._results['compression'] = []
@@ -398,6 +402,7 @@ desc-preproc_bold.nii.gz'
                 bname=base_fname,
                 space=space,
                 desc=desc,
+                bundle=bundle,
                 suffix=suffix,
                 i=i,
                 dtype=dtype,

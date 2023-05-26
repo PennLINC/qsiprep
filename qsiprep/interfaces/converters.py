@@ -160,7 +160,7 @@ class _DSIStudioTrkToTckOutputSpec(TraitedSpec):
     tck_file = File()
 
 
-class DSIStudioTrkToTckOutputSpec(SimpleInterface):
+class DSIStudioTrkToTck(SimpleInterface):
     input_spec = _DSIStudioTrkToTckInputSpec
     output_spec = _DSIStudioTrkToTckOutputSpec
 
@@ -172,6 +172,9 @@ class DSIStudioTrkToTckOutputSpec(SimpleInterface):
         else:
             dsi_trk = nb.streamlines.load(self.inputs.trk_file)
 
+        #load preprocessed dwi image
+        dwi_img = nb.load(self.inputs.reference_nifti)
+
         #convert to voxel coordinates
         pts = dsi_trk.streamlines._data
         zooms = np.abs(np.diag(dsi_trk.header['voxel_to_rasmm'])[:3])
@@ -179,18 +182,15 @@ class DSIStudioTrkToTckOutputSpec(SimpleInterface):
         voxel_coords[:, 0] = dwi_img.shape[0] - voxel_coords[:, 0]
         voxel_coords[:, 1] = dwi_img.shape[1] - voxel_coords[:, 1]
 
-        #load preprocessed dwi image
-        dwi_img = nb.load(self.inputs.reference_nifti)
-
         #create new tck
         new_data = nb.affines.apply_affine(dwi_img.affine, voxel_coords)
         dsi_trk.tractogram.streamlines._data = new_data
         tck = nb.streamlines.TckFile(dsi_trk.tractogram)
-        tck_file = fname_presuffix(self.inputs.trk_file,
+        tck_file = fname_presuffix(self.inputs.trk_file.rstrip(".gz"),
                                    newpath=runtime.cwd,
                                    use_ext=False,
                                    suffix=".tck")
-
+        tck.save(tck_file)
         self._results['tck_file'] = tck_file
         return runtime
 
