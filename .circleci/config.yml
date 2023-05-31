@@ -428,7 +428,7 @@ jobs:
           command: |
             pip install --user twine
             pip install --user --upgrade importlib-metadata
-            twine upload dist/qsiprep*gz wrapper/dist/qsiprep*
+            twine upload -u __token__ -p ${PYPI_PASS} dist/qsiprep*gz wrapper/dist/qsiprep*
 
 
 workflows:
