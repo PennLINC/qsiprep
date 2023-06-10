@@ -237,7 +237,9 @@ and used as an anatomical reference throughout the workflow.
 Brain extraction was performed on the {contrast} image using
 SynthStrip [@synthstrip] and automated segmentation was
 performed using SynthSeg [@synthseg1, @synthseg2] from
-FreeSurfer version {fs_version}. """.format(fs_version=FS_VERSION)
+FreeSurfer version {fs_version}. """.format(
+        fs_version=FS_VERSION,
+        contrast=anatomical_contrast)
 
     # Perform registrations
     anat_normalization_wf = init_anat_normalization_wf(
