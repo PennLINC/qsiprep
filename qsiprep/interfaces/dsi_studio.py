@@ -18,6 +18,7 @@ import nibabel as nb
 import pandas as pd
 from .bids import get_bids_params
 LOGGER = logging.getLogger('nipype.interface')
+DSI_STUDIO_VERSION = "94b9c79"
 
 
 class DSIStudioCommandLineInputSpec(CommandLineInputSpec):
@@ -807,6 +808,7 @@ class _AutoTrackInputSpec(DSIStudioCommandLineInputSpec):
         argstr="%s",
         usedefault=True,
         desc="Forces DSI Studio to write results in cwd")
+    _boilerplate_traits = ["track_id", "track_voxel_ratio", "tolerance", "yield_rate"]
 
 
 class _AutoTrackOutputSpec(DSIStudioCommandLineInputSpec):

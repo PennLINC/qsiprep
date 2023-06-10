@@ -1,3 +1,49 @@
+0.18.0 (June 9, 2023)
+=====================
+
+No technical changes to the pipeline here, but citations and methods boilerplate have been updated to
+reflect the changes in 0.18.0alpha0.
+
+
+
+0.18.0alpha0 (May 26, 2023)
+===========================
+
+First release moving towards 1.0! Please open bug reports if anything suspicious comes up. This release
+changes the anatomical workflow significantly, synthstrip and synthseg are used. The recon workflow
+"dsi_studio_autotrack" has also been added.
+
+## What's Changed
+* Bump sentry-sdk from 0.13.1 to 1.14.0 by @dependabot in https://github.com/PennLINC/qsiprep/pull/539
+* [ENH] Update FreeSurfer to 7.3.1, dmri-amico to 1.5.4 by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/537
+* WIP: ENH: Make pyAFQ tests faster, add export all by @36000 in https://github.com/PennLINC/qsiprep/pull/534
+* [ENH] move biascorrect so it runs on resampled data by default by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/527
+* [Fix] Fix threading on DRBUDDI interface by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/540
+* [ENH] add CNR to the imageqc.csv by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/541
+* [FIX] pin pandas version to < 2.0.0 by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/543
+* ENH: Replace avscale with non-fsl tools by @jbh1091 in https://github.com/PennLINC/qsiprep/pull/542
+* ENH: Replace fsl applymask by @jbh1091 in https://github.com/PennLINC/qsiprep/pull/544
+* Replace fsl split by @jbh1091 in https://github.com/PennLINC/qsiprep/pull/548
+* [FIX] Update distortion_group_merge.py by @smeisler in https://github.com/PennLINC/qsiprep/pull/555
+* [ENH] Redo anatomical workflow by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/553
+* [FIX] remove pre bids-filter acq type argument by @octomike in https://github.com/PennLINC/qsiprep/pull/557
+* FIX: Replace deprecated `np.int` instances by @smeisler in https://github.com/PennLINC/qsiprep/pull/558
+* [WIP] ENH: 482 remove fsl dependency by @jbh1091 in https://github.com/PennLINC/qsiprep/pull/498
+* [ENH] Update TORTOISE for improved T2w registration by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/564
+* [FIX] T2w anat-modality issues by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/565
+* [FIX] update boost in tortoise by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/569
+* [FIX] connections on multi-anat workflow by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/572
+* [ENH] Update DSI Studio to the latest commit by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/573
+* [ENH] Add DSI Studio AutoTrack recon workflow by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/576
+
+## New Contributors
+* @dependabot made their first contribution in https://github.com/PennLINC/qsiprep/pull/539
+* @jbh1091 made their first contribution in https://github.com/PennLINC/qsiprep/pull/542
+* @smeisler made their first contribution in https://github.com/PennLINC/qsiprep/pull/555
+
+**Full Changelog**: https://github.com/PennLINC/qsiprep/compare/0.17.0...0.18.0alpha0
+
+
 0.16.1 (October 10, 2022)
 =========================
 

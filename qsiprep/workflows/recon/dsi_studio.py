@@ -13,7 +13,7 @@ from qsiprep.interfaces.dsi_studio import (DSIStudioCreateSrc, DSIStudioGQIRecon
                                            DSIStudioAtlasGraph, DSIStudioExport,
                                            DSIStudioTracking, AutoTrack, _get_dsi_studio_bundles,
                                            FixDSIStudioExportHeader, AggregateAutoTrackResults,
-                                           AutoTrackInit)
+                                           AutoTrackInit, DSI_STUDIO_VERSION)
 
 import logging
 from ...interfaces.bids import ReconDerivativesDataSink
@@ -70,7 +70,7 @@ def init_dsi_studio_recon_wf(omp_nthreads, available_anatomical_data, name="dsi_
     desc += """\
 Diffusion orientation distribution functions (ODFs) were reconstructed using
 generalized q-sampling imaging (GQI, @yeh2010gqi) with a ratio of mean diffusion
-distance of %02f.""" % romdd
+distance of %02f in DSI Studio (version %s). """ % (romdd, DSI_STUDIO_VERSION)
 
     workflow.connect([
         (inputnode, create_src, [('dwi_file', 'input_nifti_file'),
@@ -190,6 +190,10 @@ def init_dsi_studio_tractography_wf(omp_nthreads, available_anatomical_data, nam
                          name="outputnode")
     plot_reports = params.pop("plot_reports", True)
     workflow = Workflow(name=name)
+    desc = """DSI Studio Tractography
+
+: Tractography was run in DSI Studio (version %s) using a deterministic algorithm
+[@yeh2013deterministic]. """ %  DSI_STUDIO_VERSION
     tracking = pe.Node(
         DSIStudioTracking(
             num_threads=omp_nthreads,
@@ -212,11 +216,7 @@ def init_dsi_studio_tractography_wf(omp_nthreads, available_anatomical_data, nam
 
 def init_dsi_studio_autotrack_wf(omp_nthreads, available_anatomical_data,
                                  params={}, output_suffix="", name="dsi_studio_autotrack_wf"):
-    """Calculate streamline-based connectivity matrices using DSI Studio.
-
-    DSI Studio has a deterministic tractography algorithm that can be used to
-    estimate pairwise regional connectivity. It calculates multiple connectivity
-    measures.
+    """Run DSI Studio's AutoTrack method to produce bundles and bundle stats.
 
     Inputs
 
@@ -225,9 +225,40 @@ def init_dsi_studio_autotrack_wf(omp_nthreads, available_anatomical_data,
 
     Outputs
 
+        tck_files
+            MRtrix3 format tck files for each bundle
+        bundle_names
+            Names that describe which bundles are present in `tck_files`
 
     Params:
 
+        track_id: str
+            specify the id number or the name of the bundle. The id can be found in
+            /atlas/ICBM152/HCP1065.tt.gz.txt . This text file is included in DSI
+            Studio package (For Mac, right-click on dsi_studio_64.app to find
+            content). You can specify partial name of the bundle:
+
+            example:
+            for tracking left and right arcuate fasciculus, assign
+            --track_id=0,1 or --track_id=arcuate (DSI Studio will find bundles
+            with names containing "arcuate", case insensitive)
+
+            example:
+            for tracking left and right arcuate and cingulum, assign
+            -track_id=0,1,2,3 or -track_id=arcuate,cingulum
+
+        track_voxel_ratio: float
+            the track-voxel ratio for the total number of streamline count. A larger
+            value gives better mapping with the expense of computation time. (default: 2.0)
+
+        tolerance: str
+            the tolerance for the bundle recognition. The unit is in mm. Multiple values
+            can be assigned using comma separator. A larger value may include larger track
+            variation but also subject to more false results. (default: "22,26,30")
+
+        yield_rate: float
+            This rate will be used to terminate tracking early if DSI Studio finds that the
+            fiber tracking is not generating results. (default: 0.00001)
     """
     if omp_nthreads < 3:
         LOGGER.warn("Please set --omp-nthreads to 3 or greater and ensure you have enough CPU "
@@ -238,11 +269,18 @@ def init_dsi_studio_autotrack_wf(omp_nthreads, available_anatomical_data,
         name="inputnode")
     outputnode = pe.Node(niu.IdentityInterface(fields=['tck_files', "bundle_names"]),
                          name="outputnode")
+    desc = """DSI Studio Automatic Tractography
 
+: Automatic Tractography was run in DSI Studio (version %s) and
+bundle shape statistics were calculated [@autotrack]. """ %  DSI_STUDIO_VERSION
+    plot_reports = params.pop("plot_reports", True)
     bundle_names = _get_dsi_studio_bundles(params.get("track_id", ""))
-    LOGGER.info("Running AutoTrack on the following bundles:\n\t" + "\n\t".join(bundle_names))
+    bundle_desc = "AutoTrack attempted to reconstruct the following bundles:\n  * " \
+        + "\n  * ".join(bundle_names) + "\n\n"
+    LOGGER.info(bundle_desc)
 
     workflow = Workflow(name=name)
+    workflow.__desc__ = desc + bundle_desc
 
     # This initial autotrack is used to calculate the registration to the template
     register_bundles = pe.Node(
@@ -286,7 +324,7 @@ def init_dsi_studio_autotrack_wf(omp_nthreads, available_anatomical_data,
     ds_mapping = pe.Node(
         ReconDerivativesDataSink(
             suffix=output_suffix),
-        name="ds__csv",
+        name="ds_mapping",
         run_without_submitting=True)
 
     workflow.connect([
