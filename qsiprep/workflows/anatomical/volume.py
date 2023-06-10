@@ -45,6 +45,8 @@ TEMPLATE_MAP = {
     'MNI152NLin2009cAsym': 'mni_icbm152_nlin_asym_09c',
     }
 
+ANTS_VERSION=BrainExtraction().version or '<ver>'
+FS_VERSION="7.3.1"
 
 #  pylint: disable=R0914
 def init_anat_preproc_wf(template, debug, dwi_only,
@@ -162,9 +164,6 @@ def init_anat_preproc_wf(template, debug, dwi_only,
         name='outputnode')
 
     # Make sure we have usable anatomical reference images/masks
-    desc = """\
-A template {contrast}w image in {template} space was selected as a standard
-reference image. """
     get_template_image = pe.Node(
         GetTemplate(template_name=template,
                     infant_mode=infant_mode,
@@ -180,7 +179,7 @@ reference image. """
         (reference_grid_wf, outputnode, [('outputnode.grid_image', 'dwi_sampling_grid')])])
 
     if dwi_only:
-        LOGGER.info("No anatomical scans available! Visual reports will show template masks.")
+        LOGGER.info("No anatomical scans will be processed! Visual reports will show template masks.")
         workflow.connect([
             (get_template_image, outputnode, [
                 ('template_file', 't1_preproc'),
@@ -190,16 +189,6 @@ reference image. """
         workflow.add_nodes([inputnode])
         return workflow
 
-    workflow.__postdesc__ = """\
-Brain tissue segmentation of cerebrospinal fluid (CSF),
-white-matter (WM) and gray-matter (GM) was performed on
-the {contrast} using `SynthSeg` [FreeSurfer, @synthseg].
-Brain extraction was performed on the {contrast} image
-using `SynthStrip` [FreeSurfer, @synthstrip]
-""".format(
-        ants_ver=BrainExtraction().version or '<ver>',
-        contrast=anatomical_contrast
-    )
     desc = """Anatomical data preprocessing
 
 : """
@@ -215,7 +204,7 @@ and used as an anatomical reference throughout the workflow.
 """
     workflow.__desc__ = desc.format(
         num_anats=num_anat_images,
-        ants_ver=BrainExtraction().version or '<ver>',
+        ants_ver=ANTS_VERSION,
         contrast=anatomical_contrast[:-1],  # remove the "w"
         template=template
     )
@@ -241,6 +230,14 @@ and used as an anatomical reference throughout the workflow.
         omp_nthreads=omp_nthreads,
         sloppy=debug,
         name="synthseg_anat_wf")
+
+    # Synthstrip is used a lot elsewhere, so make boilerplate for the anatomy-specific
+    # version here. TODO: get version number automatically
+    workflow.__postdesc__ = """\
+Brain extraction was performed on the {contrast} image using
+SynthStrip [@synthstrip] and automated segmentation was
+performed using SynthSeg [@synthseg1, @synthseg2] from
+FreeSurfer version {fs_version}. """.format(fs_version=FS_VERSION)
 
     # Perform registrations
     anat_normalization_wf = init_anat_normalization_wf(
@@ -442,28 +439,17 @@ def init_t2w_preproc_wf(omp_nthreads, num_t2ws, longitudinal, sloppy,
         fields=['t2_preproc', 't2w_unfatsat']),
         name='outputnode')
 
-#     desc = """\
-# Additionally, a total of {num_t2ws} T2-weighted (T2w) images were found within the input
-# BIDS dataset.
-# All of them were corrected for intensity non-uniformity (INU)
-# using `N4BiasFieldCorrection` [@n4, ANTs {ants_ver}].
-# """ if num_t2ws > 1 else """\
-# The T2-weighted (T2w) image was corrected for intensity non-uniformity (INU)
-# using `N4BiasFieldCorrection` [@n4, ANTs {ants_ver}],
-# and used as an anatomical reference throughout the workflow.
-# """
-#     workflow.__desc__ = desc.format(
-#         num_anats=num_t2ws,
-#         ants_ver=BrainExtraction().version or '<ver>'
-#     )
-
-    # Ensure there is 1 and only 1 anatomical reference
+    # Ensure there is 1 and only 1 T2w reference
     anat_reference_wf = init_anat_template_wf(longitudinal=longitudinal,
                                               omp_nthreads=omp_nthreads,
                                               num_images=num_t2ws,
                                               sloppy=sloppy,
                                               anatomical_contrast="T2w")
-
+    # ^ this also provides some boilerplate.
+    workflow.__postdesc__ = """\
+The additional T2w reference image was registered to the T1w-ACPC reference
+image using an affine transformation in antsRegistration.
+"""
     # Skull strip the anatomical reference
     synthstrip_anat_wf = init_synthstrip_wf(
         do_padding=True,
@@ -474,7 +460,7 @@ def init_t2w_preproc_wf(omp_nthreads, num_t2ws, longitudinal, sloppy,
     # Perform registrations
     settings = pkgr("qsiprep", "data/affine.json")
     t2_brain_to_t1_brain = pe.Node(
-        ants.Registration(),
+        ants.Registration(from_file=settings),
         name="t2_brain_to_t1_brain",
         n_procs=omp_nthreads)
 
@@ -728,6 +714,10 @@ def init_anat_normalization_wf(sloppy, template_name, omp_nthreads,
 
 
     # get a good ACPC transform
+    desc = """\
+The anatomical reference image was reoriented into AC-PC alignment via
+a 6-DOF transform extracted from a full Affine registration to the
+{} template. """.format(template_name)
     acpc_settings = pkgr(
         "qsiprep",
         "data/intramodal_ACPC.json" if not sloppy else "data/intramodal_ACPC_sloppy.json")
@@ -762,8 +752,11 @@ def init_anat_normalization_wf(sloppy, template_name, omp_nthreads,
         ])
 
     if not do_nonlinear:
+        workflow.__desc__ = desc
         return workflow
-
+    desc += """\
+A full nonlinear registration to the template from AC-PC space was
+estimated via symmetric nonlinear registration (SyN) using antsRegistration. """
     rigid_acpc_resample_anat = pe.Node(
         ants.ApplyTransforms(input_image_type=0,
                              interpolation='LanczosWindowedSinc'),
@@ -820,6 +813,7 @@ def init_anat_normalization_wf(sloppy, template_name, omp_nthreads,
     ])
 
     if has_rois:
+        desc += "ROI masks of abnormal tissue were incorporated into the registration. "
         rigid_acpc_resample_roi = pe.Node(
             ants.ApplyTransforms(input_image_type=0,
                                 interpolation='MultiLabel'),
@@ -834,7 +828,7 @@ def init_anat_normalization_wf(sloppy, template_name, omp_nthreads,
                 ('roi', 'input_image')]),
         ])
 
-
+    workflow.__desc__ = desc
     return workflow
 
 
