@@ -100,6 +100,7 @@ def init_recon_anatomical_wf(subject_id, recon_input_dir, extras_to_make,
     if missing_qsiprep_anats:
         LOGGER.info("Missing T1w QSIPrep outputs found: %s",
                     " ".join(missing_qsiprep_anats))
+        workflow.add_nodes([outputnode])
     else:
         LOGGER.info("Found usable QSIPrep-preprocessed T1w image and mask.")
         desc += "QSIPrep-preprocessed T1w images and brain masks were used. "
@@ -407,7 +408,8 @@ def init_dwi_recon_anatomical_workflow(
                 ("dwi_file", "dwi_series"),
                 ("bval_file", "bval_file")]),
             (extract_b0s, mask_b0s, [("b0_series", "in_file")]),
-            (mask_b0s, outputnode, [("out_file", "dwi_mask")])
+            (mask_b0s, outputnode, [("out_file", "dwi_mask")]),
+            (inputnode, outputnode, [(field, field) for field in connect_from_inputnode])
         ])
         return workflow, _get_status()
 
