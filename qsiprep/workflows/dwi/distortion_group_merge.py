@@ -17,6 +17,7 @@ from ...interfaces import DerivativesDataSink
 from ...interfaces.mrtrix import MRTrixGradientTable
 from ...interfaces.reports import GradientPlot, SeriesQC
 from ...interfaces.dwi_merge import AveragePEPairs, MergeDWIs
+from ...interfaces.dsi_studio import DSIStudioBTable
 from ...interfaces.nilearn import Merge
 from .qc import init_mask_overlap_wf, init_interactive_report_wf
 
@@ -88,7 +89,7 @@ def init_distortion_group_merge_wf(merging_strategy, inputs_list, hmc_model, rep
     outputnode = pe.Node(
         niu.IdentityInterface(
             fields=["merged_image", "merged_bval", "merged_bvec", "merged_qc", "merged_cnr_map"
-                    'dwi_mask_t1', 'cnr_map_t1', 'merged_bval', 'bvecs_t1',
+                    'dwi_mask_t1', 'cnr_map_t1', 'merged_bval', 'bvecs_t1', 'btable_t1',
                     'local_bvecs_t1', 't1_b0_ref', 'confounds',
                     'gradient_table_t1', 'hmc_optimization_data']),
         name='outputnode')
@@ -173,6 +174,7 @@ def init_distortion_group_merge_wf(merging_strategy, inputs_list, hmc_model, rep
         mem_gb=DEFAULT_MEMORY_MIN_GB)
     # CONNECT TO DERIVATIVES
     gtab_t1 = pe.Node(MRTrixGradientTable(), name='gtab_t1')
+    btab_t1 = pe.Node(DSIStudioBTable(bvec_convention="DIPY"), name='btab_t1')
     t1_dice_calc = init_mask_overlap_wf(name='t1_dice_calc')
     gradient_plot = pe.Node(GradientPlot(), name='gradient_plot', run_without_submitting=True)
     ds_report_gradients = pe.Node(
@@ -238,7 +240,10 @@ def init_distortion_group_merge_wf(merging_strategy, inputs_list, hmc_model, rep
         (gradient_plot, ds_report_gradients, [('plot_file', 'in_file')]),
         (distortion_merger, gtab_t1, [('out_bval', 'bval_file'),
                                       ('out_bvec', 'bvec_file')]),
+        (distortion_merger, btab_t1, [('out_bval', 'bval_file'),
+                                      ('out_bvec', 'bvec_file')]),
         (gtab_t1, outputnode, [('gradient_file', 'gradient_table_t1')]),
+        (btab_t1, outputnode, [('btable_t1', 'btable_t1')]),
 
         # Connections for the interactive report
         (distortion_merger, interactive_report_wf, [
