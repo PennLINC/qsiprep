@@ -243,7 +243,7 @@ def init_distortion_group_merge_wf(merging_strategy, inputs_list, hmc_model, rep
         (distortion_merger, btab_t1, [('out_bval', 'bval_file'),
                                       ('out_bvec', 'bvec_file')]),
         (gtab_t1, outputnode, [('gradient_file', 'gradient_table_t1')]),
-        (btab_t1, outputnode, [('btable_t1', 'btable_t1')]),
+        (btab_t1, outputnode, [('btable_file', 'btable_t1')]),
 
         # Connections for the interactive report
         (distortion_merger, interactive_report_wf, [
