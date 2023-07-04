@@ -255,7 +255,9 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
             ('outputnode.dwi_mask', 'resampled_dwi_mask')])])
 
     # Calculate QC metrics on the resampled data
-    calculate_qc = init_modelfree_qc_wf(omp_nthreads=omp_nthreads, name='calculate_qc')
+    calculate_qc = init_modelfree_qc_wf(omp_nthreads=omp_nthreads,
+                                        bvec_convention="DIPY",  # Resampled is always LPS+
+                                        name='calculate_qc')
     workflow.connect([
         (rotate_gradients, calculate_qc, [
             ('bvals', 'inputnode.bval_file'),

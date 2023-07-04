@@ -30,7 +30,7 @@ from ..utils.misc import fix_multi_source_name
 from ..utils.grouping import group_dwi_scans
 from ..__about__ import __version__
 
-from .anatomical import init_anat_preproc_wf
+from .anatomical.volume import init_anat_preproc_wf
 from .dwi.base import init_dwi_preproc_wf
 from .dwi.finalize import init_dwi_finalize_wf
 from .dwi.intramodal_template import init_intramodal_template_wf
@@ -659,8 +659,8 @@ to workflows in *QSIPrep*'s documentation]\
             workflow.connect([
                 (anat_preproc_wf, merging_group_workflows[merged_group], [
                     ('outputnode.t1_brain', 'inputnode.t1_brain'),
-                    ('outputnode.t1_mask', 'inputnode.t1_mask'),
-                    ('outputnode.t1_seg', 'inputnode.t1_seg')])
+                    ('outputnode.t1_seg', 'inputnode.t1_seg'),
+                    ('outputnode.t1_mask', 'inputnode.t1_mask')])
             ])
 
     outputs_to_files = {dwi_group['concatenated_bids_name']: dwi_group
@@ -693,6 +693,7 @@ to workflows in *QSIPrep*'s documentation]\
                 ('outputnode.t1_mask', 'inputnode.t1_mask'),
                 ('outputnode.t1_seg', 'inputnode.t1_seg'),
                 ('outputnode.t1_aseg', 'inputnode.t1_aseg'),
+                ('outputnode.t1_aparc', 'inputnode.t1_aparc'),
                 ('outputnode.t1_2_mni_forward_transform',
                  'inputnode.t1_2_mni_forward_transform'),
                 ('outputnode.t1_2_mni_reverse_transform',
@@ -767,6 +768,7 @@ to workflows in *QSIPrep*'s documentation]\
                     ('outputnode.t1_mask', 'inputnode.t1_mask'),
                     ('outputnode.t1_seg', 'inputnode.t1_seg'),
                     ('outputnode.t1_aseg', 'inputnode.t1_aseg'),
+                    ('outputnode.t1_aparc', 'inputnode.t1_aparc'),
                     ('outputnode.t1_2_mni_forward_transform',
                      'inputnode.t1_2_mni_forward_transform'),
                     ('outputnode.t1_2_mni_reverse_transform',
@@ -784,6 +786,7 @@ to workflows in *QSIPrep*'s documentation]\
                     ('outputnode.t1_mask', 'inputnode.t1_mask'),
                     ('outputnode.t1_seg', 'inputnode.t1_seg'),
                     ('outputnode.t1_aseg', 'inputnode.t1_aseg'),
+                    ('outputnode.t1_aparc', 'inputnode.t1_aparc'),
                     ('outputnode.t1_2_mni_forward_transform',
                      'inputnode.t1_2_mni_forward_transform'),
                     ('outputnode.t1_2_mni_reverse_transform',

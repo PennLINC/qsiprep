@@ -11,7 +11,6 @@ Image tools interfaces
 
 import os
 from subprocess import Popen, PIPE
-import subprocess
 import glob
 from textwrap import indent
 import numpy as np
@@ -200,6 +199,12 @@ class IntraModalMerge(SimpleInterface):
     output_spec = IntraModalMergeOutputSpec
 
     def _run_interface(self, runtime):
+        fsl_check = os.environ.get('FSL_BUILD')
+        if fsl_check=="no_fsl":
+            raise Exception(
+                """Container in use does not have FSL. To use this workflow, 
+                please download the qsiprep container with FSL installed.""")
+        from nipype.interfaces import fsl
         in_files = self.inputs.in_files
         if not isinstance(in_files, list):
             in_files = [self.inputs.in_files]

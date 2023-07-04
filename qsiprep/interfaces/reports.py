@@ -574,7 +574,8 @@ def get_cnr_values(cnr_image, brain_mask):
     cnrs = {}
     strategies = ["mean", "median", "standard_deviation"]
     for strategy in strategies:
-        masker = NiftiLabelsMasker(mask_img, strategy=strategy)
+        masker = NiftiLabelsMasker(mask_img, strategy=strategy,
+                                   resampling_target="data")
         cnr_values = masker.fit_transform(cnr_img).flatten()
         for cnr_name, cnr_value in zip(cnr_labels, cnr_values):
             cnrs[cnr_name + "_" + strategy] = cnr_value

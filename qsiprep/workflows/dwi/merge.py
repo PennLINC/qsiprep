@@ -221,7 +221,8 @@ def init_merge_and_denoise_wf(raw_dwi_files,
 
     # Get a QC score for the raw data
     if calculate_qc:
-        qc_wf = init_modelfree_qc_wf(omp_nthreads=omp_nthreads)
+        qc_wf = init_modelfree_qc_wf(omp_nthreads=omp_nthreads,
+                                     bvec_convention="DIPY" if orientation == "LPS" else "FSL")
         workflow.connect([
             (qc_wf, outputnode, [('outputnode.qc_summary', 'qc_summary')]),
             (raw_merge, qc_wf, [('out_file', 'inputnode.dwi_file')]),

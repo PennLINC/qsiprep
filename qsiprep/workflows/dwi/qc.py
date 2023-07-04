@@ -19,15 +19,15 @@ from ...interfaces.anatomical import DiceOverlap
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
-def init_modelfree_qc_wf(omp_nthreads, dwi_files=None, name='dwi_qc_wf'):
+def init_modelfree_qc_wf(omp_nthreads, bvec_convention="DIPY", name='dwi_qc_wf'):
     """
     This workflow runs DSI Studio's QC metrics
 
     **Parameters**
         omp_nthreads : int
             maximum number of threads
-        dwi_files : list of DWI Files
-            A b=0 image
+        bvec_convention : "DIPY", "FSL" or "auto"
+            What kind of bvecs
         name : str
             Name of workflow (default: ``dwi_qc_wf``)
 
@@ -57,7 +57,8 @@ def init_modelfree_qc_wf(omp_nthreads, dwi_files=None, name='dwi_qc_wf'):
         name='outputnode')
 
     raw_src = pe.Node(
-        DSIStudioCreateSrc(),
+        DSIStudioCreateSrc(
+            bvec_convention="FSL" if bvec_convention=="auto" else bvec_convention),
         name='raw_src',
         n_procs=omp_nthreads)
     raw_src_qc = pe.Node(
@@ -65,7 +66,9 @@ def init_modelfree_qc_wf(omp_nthreads, dwi_files=None, name='dwi_qc_wf'):
         name='raw_src_qc',
         n_procs=omp_nthreads)
     raw_gqi = pe.Node(
-        DSIStudioGQIReconstruction(thread_count=omp_nthreads),
+        DSIStudioGQIReconstruction(
+            thread_count=omp_nthreads,
+            check_btable=1 if bvec_convention=="auto" else 0),
         name='raw_gqi',
         n_procs=omp_nthreads)
     raw_fib_qc = pe.Node(

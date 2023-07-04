@@ -18,7 +18,7 @@ Fieldmap preprocessing workflow for fieldmap data structure
 8.9.2 in BIDS 1.0.0: two phases and at least one magnitude image
 
 """
-
+import os
 from nipype.interfaces import ants, fsl, utility as niu
 from nipype.pipeline import engine as pe
 from .utils import cleanup_edge_pipeline, siemens2rads, demean_image
@@ -53,7 +53,7 @@ def init_phdiff_wf(omp_nthreads, phasetype='phasediff', name='phdiff_wf'):
 
 
     """
-
+    
     workflow = Workflow(name=name)
     workflow.__desc__ = """\
 A deformation field to correct for susceptibility distortions was estimated
@@ -63,6 +63,12 @@ using a custom workflow of *fMRIPrep* derived from D. Greve's `epidewarp.fsl`
 further improvements of HCP Pipelines [@hcppipelines].
 """
 
+    # Check for FSL binary
+    fsl_check = os.environ.get('FSL_BUILD')
+    if fsl_check=="no_fsl":
+        raise Exception(
+            """Container in use does not have FSL. To use this workflow, 
+            please download the qsiprep container with FSL installed.""")
     inputnode = pe.Node(niu.IdentityInterface(fields=['magnitude', 'phasediff']),
                         name='inputnode')
 
@@ -76,11 +82,12 @@ further improvements of HCP Pipelines [@hcppipelines].
     n4 = pe.Node(ants.N4BiasFieldCorrection(dimension=3, copy_header=True),
                  name='n4', n_procs=omp_nthreads)
     bet = pe.Node(BETRPT(generate_report=True, frac=0.6, mask=True),
-                  name='bet')
+                name='bet')
     ds_report_fmap_mask = pe.Node(DerivativesDataSink(
         desc='brain', suffix='mask'), name='ds_report_fmap_mask',
         mem_gb=0.01, run_without_submitting=True)
     # uses mask from bet; outputs a mask
+    
     # dilate = pe.Node(fsl.maths.MathsCommand(
     #     nan2zeros=True, args='-kernel sphere 5 -dilM'), name='MskDilate')
 

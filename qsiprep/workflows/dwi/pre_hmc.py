@@ -187,7 +187,8 @@ def init_dwi_pre_hmc_wf(scan_groups,
                       b0_threshold=b0_threshold),
             name='rpe_concat')
         raw_rpe_concat = pe.Node(Merge(is_dwi=True), name='raw_rpe_concat')
-        qc_wf = init_modelfree_qc_wf(omp_nthreads=omp_nthreads, dwi_files=plus_files + minus_files)
+        qc_wf = init_modelfree_qc_wf(omp_nthreads=omp_nthreads,
+                                     bvec_convention="DIPY" if orientation == "LPS" else "FSL")
 
         workflow.connect([
             # combine PE+
@@ -292,7 +293,8 @@ def init_dwi_pre_hmc_wf(scan_groups,
     ])
 
     if calculate_qc:
-        qc_wf = init_modelfree_qc_wf(omp_nthreads=omp_nthreads, dwi_files=dwi_series)
+        qc_wf = init_modelfree_qc_wf(omp_nthreads=omp_nthreads,
+                                     bvec_convention="DIPY" if orientation == "LPS" else "FSL")
         workflow.connect([
             (merge_dwis, qc_wf, [
                 ('outputnode.merged_raw_image', 'inputnode.dwi_file'),

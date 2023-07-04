@@ -340,8 +340,13 @@ def _despike2d(data, thres, neigh=None):
                     data[i, j, k] = patch_med
     return data
 
-
 def _unwrap(fmap_data, mag_file, mask=None):
+    import os
+    fsl_check = os.environ.get('FSL_BUILD')
+    if fsl_check=="no_fsl":
+        raise Exception(
+            """Container in use does not have FSL. To use this workflow, 
+            please download the qsiprep container with FSL installed.""")
     from math import pi
     from nipype.interfaces.fsl import PRELUDE
     magnii = nb.load(mag_file)
@@ -363,7 +368,6 @@ def _unwrap(fmap_data, mag_file, mask=None):
 
     unwrapped = nb.load(res.outputs.unwrapped_phase_file).get_fdata() * (fmapmax / pi)
     return unwrapped
-
 
 def get_ees(in_meta, in_file=None):
     """
@@ -1160,8 +1164,8 @@ class _PEPOLARReportInputSpec(BaseInterfaceInputSpec):
     up_fa_corrected_image = File(exists=True)
     down_fa_image = File(exists=True)
     down_fa_corrected_image = File(exists=True)
-    t2w_seg = File(exists=True)
     t1w_seg = File(exists=True)
+    t2w_seg = File(exists=True)
 
 
 class _PEPOLARReportOutputSpec(reporting.ReportCapableOutputSpec):
@@ -1178,10 +1182,9 @@ class PEPOLARReport(SimpleInterface):
         """Generate a reportlet."""
         LOGGER.info('Generating a PEPOLAR visual report')
 
-        # Get a segmentation from an undistorted image as a reference
         ref_segmentation = self.inputs.t1w_seg if not \
             isdefined(self.inputs.t2w_seg) else self.inputs.t2w_seg
-
+        # Get a segmentation from an undistorted image as a reference
         seg_img = nb.load(ref_segmentation)
         b0_up_img = nb.load(self.inputs.b0_up_image)
         b0_down_img = nb.load(self.inputs.b0_down_image)

@@ -107,7 +107,6 @@ class QsiprepAnatomicalIngress(SimpleInterface):
             't1_wm_probseg',
             "%s/sub-%s*_label-WM_probseg.nii*" % (anat_root, sub),
             excludes=["space-MNI"])
-
         self._get_if_exists(
             'orig_to_t1_mode_forward_transform',
             "%s/sub-%s*_from-orig_to-T1w_mode-image_xfm.txt" % (anat_root, sub))
@@ -317,7 +316,6 @@ class _DesaturateSkullOutputSpec(TraitedSpec):
     desaturated_t2w = File(exists=True)
     head_scaling_factor = traits.Float(0.)
 
-
 class DesaturateSkull(SimpleInterface):
     input_spec = _DesaturateSkullInputSpec
     output_spec = _DesaturateSkullOutputSpec
@@ -455,14 +453,14 @@ class GetTemplate(SimpleInterface):
                 ref_img_brain = pkgr('qsiprep',
                                         'data/mni_1mm_%s_lps_brain.nii.gz' % contrast_name)
                 ref_img_mask = pkgr('qsiprep',
-                                        'data/mni_1mm_%s_lps_brainmask.nii.gz' % contrast_name)
+                                        'data/mni_1mm_t1w_lps_brainmask.nii.gz')
             else:
                 ref_img = pkgr('qsiprep',
                                 'data/mni_1mm_%s_lps_infant.nii.gz' % contrast_name)
                 ref_img_brain = pkgr('qsiprep',
                                         'data/mni_1mm_%s_lps_brain_infant.nii.gz' % contrast_name)
                 ref_img_mask = pkgr('qsiprep',
-                                        'data/mni_1mm_%s_lps_brainmask_infant.nii.gz' % contrast_name)
+                                        'data/mni_1mm_t1w_lps_brainmask_infant.nii.gz')
             self._results['template_file'] = ref_img
             self._results['template_brain_file'] = ref_img_brain
             self._results['template_mask_file'] = ref_img_mask

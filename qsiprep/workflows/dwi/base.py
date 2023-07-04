@@ -188,8 +188,6 @@ def init_dwi_preproc_wf(dwi_only,
         t1_seg
             Segmentation of preprocessed structural image, including
             gray-matter (GM), white-matter (WM) and cerebrospinal fluid (CSF)
-        t1_tpms
-            List of tissue probability maps in T1w space
         t1_2_mni_forward_transform
             ANTs-compatible affine-and-warp transform file
         t1_2_mni_reverse_transform
@@ -295,10 +293,10 @@ def init_dwi_preproc_wf(dwi_only,
     inputnode = pe.Node(
         niu.IdentityInterface(fields=[
             'dwi_files', 'sbref_file', 'subjects_dir', 'subject_id',
-            't1_preproc', 't1_brain', 't1_mask', 't1_seg', 't1_tpms',
+            't1_preproc', 't1_brain', 't1_mask', 't1_seg',
             't1_aseg', 't1_aparc', 't1_2_mni_forward_transform', 't2w_unfatsat',
             't1_2_mni_reverse_transform', 't1_2_fsnative_forward_transform',
-            't1_2_fsnative_reverse_transform', 'dwi_sampling_grid']),
+            't1_2_fsnative_reverse_transform', 't2w_files', 'dwi_sampling_grid']),
         name='inputnode')
     outputnode = pe.Node(
         niu.IdentityInterface(fields=[
@@ -431,8 +429,11 @@ Diffusion data preprocessing
 
     elif fieldmap_type in ("epi", "rpe_series"):
 
-        extended_pepolar_report_wf = init_extended_pepolar_report_wf(
-            segment_t2w=t2w_sdc, omp_nthreads=omp_nthreads)
+        if os.path.exists(t2w_sdc):
+            extended_pepolar_report_wf = init_extended_pepolar_report_wf(
+                segment_t2w=t2w_sdc, omp_nthreads=omp_nthreads)
+        else:
+            extended_pepolar_report_wf = init_extended_pepolar_report_wf(omp_nthreads=omp_nthreads)
 
         ds_report_fa_sdc = pe.Node(
             DerivativesMaybeDataSink(

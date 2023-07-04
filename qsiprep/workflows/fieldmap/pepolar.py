@@ -241,6 +241,8 @@ def init_extended_pepolar_report_wf(segment_t2w, omp_nthreads=1,
             ("fa_sdc_report", "fa_sdc_report")])
     ])
 
+    
+
     # If we don't have a T1w segmentation, make one from the t2w
     if segment_t2w:
         t2w_n4 = pe.Node(
