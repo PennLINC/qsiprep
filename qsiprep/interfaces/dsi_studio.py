@@ -1,5 +1,6 @@
 #!python
 import os
+import time
 from pathlib import Path
 import os.path as op
 import logging
@@ -840,6 +841,8 @@ class _AutoTrackInitInputSpec(_AutoTrackInputSpec):
     num_threads = 1  # Force this so it doesn't use a ton of threads
     map_file = File(mandatory=False)
     track_id = "0"
+    num_retries = traits.Int(3, usedefault=True)
+    seconds_between_retries = traits.Int(500, usedefault=True)
 
 
 class _AutoTrackInitOutputSpec(_AutoTrackOutputSpec):
@@ -860,6 +863,27 @@ class AutoTrackInit(AutoTrack):
             raise Exception("No map files found in " + str(cwd.absolute()))
         outputs["map_file"] = str(map_files[0].absolute())
         return outputs
+
+    def _run_interface(self, runtime, correct_return_codes=(0,)):
+        if self.inputs.num_retries < 2:
+            return super(AutoTrackInit, self)._run_interface(
+                runtime, correct_return_codes)
+
+        for try_num in range(self.inputs.num_retries):
+            runtime = super(AutoTrackInit, self)._run_interface(
+                runtime, correct_return_codes)
+            succeeded = False
+            try:
+                self._list_outputs()
+                succeeded = True
+            except Exception:
+                LOGGER.info("Autotrack init has failed attempt {}".format(try_num + 1))
+                time.sleep(self.inputs.seconds_between_retries)
+
+            if succeeded:
+                return runtime
+
+        raise Exception("Autotrack was unable to run successfully.")
 
 
 class _AggregateAutoTrackResultsInputSpec(BaseInterfaceInputSpec):
