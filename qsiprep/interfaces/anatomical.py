@@ -279,6 +279,9 @@ class CalculateSOP(SimpleInterface):
         sh_l, sh_m = get_l_m(lmax)
         sh_data = img.get_fdata()
 
+        # Normalize the FODs so they integrate to 1
+        sh_data = sh_data / sh_data[:, :, :, 0, None]
+
         # to get a specific order
         def calculate_order(order):
             out_fname = fname_presuffix(
@@ -286,6 +289,7 @@ class CalculateSOP(SimpleInterface):
                 use_ext=False,
                 newpath=runtime.cwd)
             order_data = calculate_steinhardt(sh_l, sh_m, sh_data, order)
+
             # Save with the new name in the sandbox
             nb.Nifti1Image(order_data, img.affine).to_filename(out_fname)
             self._results["q%d_file" % order] = out_fname
@@ -468,4 +472,3 @@ class GetTemplate(SimpleInterface):
             raise NotImplementedError("Arbitrary templates not available yet")
 
         return runtime
-
