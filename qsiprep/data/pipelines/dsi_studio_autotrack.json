@@ -1,0 +1,28 @@
+{
+  "name": "dsistudio_pipeline",
+  "space": "T1w",
+  "atlases": [],
+  "nodes": [
+    {
+      "name": "dsistudio_gqi",
+      "software": "DSI Studio",
+      "action": "reconstruction",
+      "input": "qsiprep",
+      "output_suffix": "gqi",
+      "parameters": {"method": "gqi"}
+    },
+    {
+      "name": "autotrackgqi",
+      "software": "DSI Studio",
+      "action": "autotrack",
+      "input": "dsistudio_gqi",
+      "output_suffix": "AutoTrackGQI",
+      "parameters": {
+        "track_id": "Fasciculus,Cingulum,Aslant,Corticos,Thalamic_R,Reticular,Optic,Fornix,Corpus",
+        "tolerance": "22,26,30",
+        "track_voxel_ratio": 2.0,
+        "yield_rate": 0.000001
+      }
+    }
+  ]
+}

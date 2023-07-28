@@ -214,10 +214,10 @@ class HistEQ(SimpleInterface):
         in_file = self.inputs.in_file
 
         uneq_img = nb.load(in_file)
-        uneq_data = uneq_img.get_data()
+        uneq_data = uneq_img.get_fdata()
 
         mask = nb.load(self.inputs.mask_file)
-        bool_mask = mask.get_data() > 0
+        bool_mask = mask.get_fdata() > 0
         data_voxels = uneq_data[bool_mask]
 
         # Do a clip on 2 to 98th percentile
@@ -225,7 +225,7 @@ class HistEQ(SimpleInterface):
                                          axis=None)
         clipped_b0 = np.clip(data_voxels, 0, top_98)
         eq_data = histeq(clipped_b0, num_bins=512)
-        output = np.zeros_like(mask.get_data())
+        output = np.zeros_like(mask.get_fdata())
         output[bool_mask] = eq_data
         eq_img = nb.Nifti1Image(output, uneq_img.affine, uneq_img.header)
         self._results['out_file'] = fname_presuffix(
@@ -279,7 +279,7 @@ class DipyReconInterface(SimpleInterface):
 
     def _get_mask(self, amplitudes_img, gtab):
         if not isdefined(self.inputs.mask_file):
-            dwi_data = amplitudes_img.get_data()
+            dwi_data = amplitudes_img.get_fdata()
             LOGGER.warning("Creating an Otsu mask, check that the whole brain is covered.")
             _, mask_array = median_otsu(dwi_data,
                                         vol_idx=gtab.b0s_mask,
@@ -288,11 +288,11 @@ class DipyReconInterface(SimpleInterface):
 
             # Needed for synthetic data
             mask_array = mask_array * (dwi_data.sum(3) > 0)
-            mask_img = nb.Nifti1Image(mask_array.astype(np.float32), amplitudes_img.affine,
+            mask_img = nb.Nifti1Image(mask_array.astype('float32'), amplitudes_img.affine,
                                       amplitudes_img.header)
         else:
             mask_img = nb.load(self.inputs.mask_file)
-            mask_array = mask_img.get_data() > 0
+            mask_array = mask_img.get_fdata() > 0
         return mask_img, mask_array
 
     def _save_scalar(self, data, suffix, runtime, ref_img):
@@ -403,7 +403,7 @@ class MAPMRIReconstruction(DipyReconInterface):
     def _run_interface(self, runtime):
         gtab = self._get_gtab()
         dwi_img = nb.load(self.inputs.dwi_file)
-        data = dwi_img.get_fdata(dtype=np.float32)
+        data = dwi_img.get_fdata(dtype='float32')
         mask_img, mask_array = self._get_mask(dwi_img, gtab)
         weighting = "GCV" if self.inputs.laplacian_weighting == "GCV" else \
             self.inputs.laplacian_weighting
@@ -549,7 +549,7 @@ class BrainSuiteShoreReconstruction(DipyReconInterface):
         b0s_mask = gtab.b0s_mask
         dwis_mask = np.logical_not(b0s_mask)
         dwi_img = nb.load(self.inputs.dwi_file)
-        dwi_data = dwi_img.get_fdata(dtype=np.float32)
+        dwi_data = dwi_img.get_fdata(dtype='float32')
         b0_images = dwi_data[..., b0s_mask]
         b0_mean = b0_images.mean(3)
         dwi_images = dwi_data[..., dwis_mask]
@@ -652,7 +652,7 @@ class TensorReconstruction(DipyReconInterface):
     def _run_interface(self, runtime):
         gtab = self._get_gtab()
         dwi_img = nb.load(self.inputs.dwi_file)
-        dwi_data = dwi_img.get_fdata(dtype=np.float32)
+        dwi_data = dwi_img.get_fdata(dtype='float32')
         mask_img, mask_array = self._get_mask(dwi_img, gtab)
 
         # Fit it
@@ -708,7 +708,7 @@ class KurtosisReconstruction(DipyReconInterface):
     def _run_interface(self, runtime):
         gtab = self._get_gtab()
         dwi_img = nb.load(self.inputs.dwi_file)
-        dwi_data = dwi_img.get_fdata(dtype=np.float32)
+        dwi_data = dwi_img.get_fdata(dtype='float32')
         mask_img, mask_array = self._get_mask(dwi_img, gtab)
 
         # Fit it
@@ -732,7 +732,7 @@ class KurtosisReconstruction(DipyReconInterface):
                                        newpath=runtime.cwd, use_ext=True)
             nb.Nifti1Image(data, dwi_img.affine).to_filename(out_name)
             self._results[metric] = out_name
-        
+
         # Get the kurtosis metrics
         for metric in ["mk", "ak", "rk", "mkt"]:
             data = np.nan_to_num(

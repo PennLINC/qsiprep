@@ -1,3 +1,72 @@
+0.18.0 (June 9, 2023)
+=====================
+
+No technical changes to the pipeline here, but citations and methods boilerplate have been updated to
+reflect the changes in 0.18.0alpha0.
+
+
+
+0.18.0alpha0 (May 26, 2023)
+===========================
+
+First release moving towards 1.0! Please open bug reports if anything suspicious comes up. This release
+changes the anatomical workflow significantly, synthstrip and synthseg are used. The recon workflow
+"dsi_studio_autotrack" has also been added.
+
+## What's Changed
+* Bump sentry-sdk from 0.13.1 to 1.14.0 by @dependabot in https://github.com/PennLINC/qsiprep/pull/539
+* [ENH] Update FreeSurfer to 7.3.1, dmri-amico to 1.5.4 by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/537
+* WIP: ENH: Make pyAFQ tests faster, add export all by @36000 in https://github.com/PennLINC/qsiprep/pull/534
+* [ENH] move biascorrect so it runs on resampled data by default by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/527
+* [Fix] Fix threading on DRBUDDI interface by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/540
+* [ENH] add CNR to the imageqc.csv by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/541
+* [FIX] pin pandas version to < 2.0.0 by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/543
+* ENH: Replace avscale with non-fsl tools by @jbh1091 in https://github.com/PennLINC/qsiprep/pull/542
+* ENH: Replace fsl applymask by @jbh1091 in https://github.com/PennLINC/qsiprep/pull/544
+* Replace fsl split by @jbh1091 in https://github.com/PennLINC/qsiprep/pull/548
+* [FIX] Update distortion_group_merge.py by @smeisler in https://github.com/PennLINC/qsiprep/pull/555
+* [ENH] Redo anatomical workflow by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/553
+* [FIX] remove pre bids-filter acq type argument by @octomike in https://github.com/PennLINC/qsiprep/pull/557
+* FIX: Replace deprecated `np.int` instances by @smeisler in https://github.com/PennLINC/qsiprep/pull/558
+* [WIP] ENH: 482 remove fsl dependency by @jbh1091 in https://github.com/PennLINC/qsiprep/pull/498
+* [ENH] Update TORTOISE for improved T2w registration by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/564
+* [FIX] T2w anat-modality issues by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/565
+* [FIX] update boost in tortoise by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/569
+* [FIX] connections on multi-anat workflow by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/572
+* [ENH] Update DSI Studio to the latest commit by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/573
+* [ENH] Add DSI Studio AutoTrack recon workflow by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/576
+
+## New Contributors
+* @dependabot made their first contribution in https://github.com/PennLINC/qsiprep/pull/539
+* @jbh1091 made their first contribution in https://github.com/PennLINC/qsiprep/pull/542
+* @smeisler made their first contribution in https://github.com/PennLINC/qsiprep/pull/555
+
+**Full Changelog**: https://github.com/PennLINC/qsiprep/compare/0.17.0...0.18.0alpha0
+
+
+0.16.1 (October 10, 2022)
+=========================
+
+Adds a critical fix for ABCD-style acquisitions (described in #449). This change forces
+TOPUP to use the raw, unprocessed b=0 images from the DWI series and the epi fieldmaps to
+estimate distortion. Previously, the most-denoised version of each image was used in
+TOPUP. To disable this change and return to the previous behavior, use the
+`--denoised-image-sdc` flag.
+
+Note, **this is a change in the default behavior of QSIPrep!!**
+
+*Upgrades*
+
+ * Update ITK to 5.3, update ANTs #449
+ * Add `--denoised-image-sdc` #465
+
+
+*Bug fixes*
+
+ * Use safe_load instead of load for yaml #443
+ * Add fugue and prelude back to the qsiprep image #463
+
+
 0.16.0RC2 (June 1, 2022)
 ========================
 
@@ -16,7 +85,7 @@ as a reconstruction workflow. The default atlases included in QSIPrep have been
 updated to include subcortical regions if they weren't already present in the
 original atlas.
 
- * Add PyAFQ reconstruction workflows #398 Credit: @36000 
+ * Add PyAFQ reconstruction workflows #398 Credit: @36000
  * Make sure all recon workflows respect omp_nthreads #368
  * Add DKI derivatives #371
  * Properly transform 4D CNR images from Eddy #393
@@ -36,10 +105,10 @@ matrices unreliable. Do not use this version for connectome estimation.
 
 Due to persistent difficulties with crashing ODF plots in the reconstruction workflows,
 there is now a `--skip-odf-reports` option that will disable the ODF and peak plots
-in the html reports. This should only be used once you've run some test workflows 
+in the html reports. This should only be used once you've run some test workflows
 with the reports still enabled, so you know that your ODFs are correctly oriented.
 
- * Make ODF Plots optional (#364) 
+ * Make ODF Plots optional (#364)
  * Bugfix: ABCD gradient data for extrapolation (#363)
  * Adds `dipy_dki` reconstruction workflow (#366)
 
@@ -50,21 +119,21 @@ with the reports still enabled, so you know that your ODFs are correctly oriente
 **WARNING** There is an bug in the connectome pipelines that makes the connectivity
 matrices unreliable. Do not use this version for connectome estimation.
 
-A lot of changes in QSIPrep. The big-picture changes are 
+A lot of changes in QSIPrep. The big-picture changes are
 
- 1. The build system was redone so a multistage build is used in a 
+ 1. The build system was redone so a multistage build is used in a
     different repository (https://github.com/PennLINC/qsiprep_build).
     The container should be about half as big as the last release.
  2. The way anatomical masks are handled in reconstruction workflows
     has been changed so that FreeSurfer data can be incorporated.
  3. FAST-based anatomically-constrained tractography is now deprecated in
     QSIPrep. If you're going to use anatomical constraints, they should be
-    very accurate. The hybrid surface-volume segmentation (HSVS) is 
-    *amazing* and should be considered the default way to use the 
-    MRtrix3/3Tissue workflows. The 
+    very accurate. The hybrid surface-volume segmentation (HSVS) is
+    *amazing* and should be considered the default way to use the
+    MRtrix3/3Tissue workflows. The
     [documentation](https://qsiprep.readthedocs.io/en/latest/reconstruction.html)
     describes the new built-in workflow names.
- 4. The reconstruction workflows have been totally refactored. This won't 
+ 4. The reconstruction workflows have been totally refactored. This won't
     affect the outputs of the reconstruction workflows, but will affect
     anyone who is using intermediate files from the working directory.
     The working directories no longer have those unfortunate `..`'s in
@@ -72,10 +141,10 @@ A lot of changes in QSIPrep. The big-picture changes are
  5. FSL is updated to 6.0.5.1!
 
 Since these are a lot of changes, please be vigilant and check your results!
-The QSIPrep preprocessing workflows have not changed with this release, but 
+The QSIPrep preprocessing workflows have not changed with this release, but
 the dependencies have been upgraded for almost everything.
 
- * Update FSL to 6.0.5.1 (#334) 
+ * Update FSL to 6.0.5.1 (#334)
  * Move ODF plotting to a cli tool so xvfb is handled more robustly (#357)
  * Better FreeSurfer license documentation (#355)
  * Edited libQt5Core.so.5 so it's loadable in singularity on CentOS (#336)

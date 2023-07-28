@@ -2,7 +2,7 @@
 Functions copied from nipype
 
 """
-
+import os
 from nipype.interfaces import fsl, utility as niu
 from nipype.pipeline import engine as pe
 
@@ -24,11 +24,11 @@ def siemens2rads(in_file, out_file=None):
 
     in_file = np.atleast_1d(in_file).tolist()
     im = nb.load(in_file[0])
-    data = im.get_data().astype(np.float32)
+    data = im.get_fdata().astype(np.float32)
     hdr = im.header.copy()
 
     if len(in_file) == 2:
-        data = nb.load(in_file[1]).get_data().astype(np.float32) - data
+        data = nb.load(in_file[1]).get_fdata().astype(np.float32) - data
     elif (data.ndim == 4) and (data.shape[-1] == 2):
         data = np.squeeze(data[..., 1] - data[..., 0])
         hdr.set_data_shape(data.shape[:3])
@@ -58,11 +58,11 @@ def demean_image(in_file, in_mask=None, out_file=None):
         out_file = op.abspath('./%s_demean.nii.gz' % fname)
 
     im = nb.load(in_file)
-    data = im.get_data().astype(np.float32)
+    data = im.get_fdata().astype(np.float32)
     msk = np.ones_like(data)
 
     if in_mask is not None:
-        msk = nb.load(in_mask).get_data().astype(np.float32)
+        msk = nb.load(in_mask).get_fdata().astype(np.float32)
         msk[msk > 0] = 1.0
         msk[msk < 1] = 0.0
 
@@ -77,6 +77,11 @@ def cleanup_edge_pipeline(name='Cleanup'):
     Perform some de-spiking filtering to clean up the edge of the fieldmap
     (copied from fsl_prepare_fieldmap)
     """
+    fsl_check = os.environ.get('FSLDIR', False)
+    if not fsl_check:
+        raise Exception(
+            """Container in use does not have FSL. To use this workflow, 
+            please download the qsiprep container with FSL installed.""")
     inputnode = pe.Node(
         niu.IdentityInterface(fields=['in_file', 'in_mask']), name='inputnode')
     outputnode = pe.Node(

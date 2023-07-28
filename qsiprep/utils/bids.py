@@ -18,8 +18,22 @@ import os
 import sys
 import json
 import warnings
+import numpy as np
+import nibabel as nb
 from bids import BIDSLayout
 
+IMPORTANT_DWI_FIELDS = [
+    # From image headers:
+    "Obliquity", "ImageOrientation", "NumVolumes", "Dim1Size", "Dim2Size", "Dim3Size",
+    "VoxelSizeDim1", "VoxelSizeDim2", "VoxelSizeDim3",
+
+    # From sidecars:
+    "ParallelReductionFactorInPlane", "ParallelAcquisitionTechnique",
+    "ParallelAcquisitionTechnique", "PartialFourier", "PhaseEncodingDirection",
+    "EffectiveEchoSpacing", "TotalReadoutTime", "EchoTime",
+    "SliceEncodingDirection", "DwellTime", "FlipAngle",
+    "MultibandAccelerationFactor", "RepetitionTime"
+]
 
 class BIDSError(ValueError):
     def __init__(self, message, bids_root):
@@ -289,3 +303,31 @@ def validate_input_dir(exec_env, bids_dir, participant_label):
 
 def _get_shub_version(singularity_url):
     raise ValueError("Not yet implemented")
+
+
+def update_metadata_from_nifti_header(metadata, nifti_file):
+    """Update a BIDS metadata dictionary with info from a NIfTI header.
+
+    Code borrowed from CuBIDS.
+    """
+    img = nb.load(nifti_file)
+    # get important info from niftis
+    obliquity = np.any(nb.affines.obliquity(img.affine)
+                        > 1e-4)
+    voxel_sizes = img.header.get_zooms()
+    matrix_dims = img.shape
+    # add nifti info to corresponding sidecars​
+
+    metadata["Obliquity"] = str(obliquity)
+    metadata["VoxelSizeDim1"] = float(voxel_sizes[0])
+    metadata["VoxelSizeDim2"] = float(voxel_sizes[1])
+    metadata["VoxelSizeDim3"] = float(voxel_sizes[2])
+    metadata["Dim1Size"] = matrix_dims[0]
+    metadata["Dim2Size"] = matrix_dims[1]
+    metadata["Dim3Size"] = matrix_dims[2]
+    if img.ndim == 4:
+        metadata["NumVolumes"] = matrix_dims[3]
+    elif img.ndim == 3:
+        metadata["NumVolumes"] = 1.0
+    orient = nb.orientations.aff2axcodes(img.affine)
+    metadata["ImageOrientation"] = ''.join(orient) + '+'

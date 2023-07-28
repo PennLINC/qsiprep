@@ -160,6 +160,12 @@ def init_brain_extraction_wf(name='brain_extraction_wf',
 
 
     """
+    fsl_check = os.environ.get('FSL_BUILD')
+    if fsl_check=="no_fsl":
+        raise Exception(
+            """Container in use does not have FSL. To use this workflow, 
+            please download the qsiprep container with FSL installed.""")
+
     wf = pe.Workflow(name)
 
     template_path = None
@@ -562,7 +568,7 @@ def _select_labels(in_segm, labels):
     cwd = getcwd()
     nii = nb.load(in_segm)
     for l in labels:
-        data = (nii.get_data() == l).astype(np.uint8)
+        data = (nii.get_fdata() == l).astype(np.uint8)
         newnii = nii.__class__(data, nii.affine, nii.header)
         newnii.set_data_dtype('uint8')
         out_file = fname_presuffix(in_segm, suffix='class-%02d' % l,

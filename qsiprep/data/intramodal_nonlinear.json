@@ -7,7 +7,6 @@
     "write_composite_transform": false,
     "initial_moving_transform_com": 1,
     "use_histogram_matching": [true, true, true],
-    "use_estimate_learning_rate_once": [ true, true, true ],
     "transforms": [ "Rigid", "Affine", "BSplineSyN" ],
     "number_of_iterations": [ [ 1000, 500, 250, 0 ], [ 1000, 500, 250, 0 ], [100, 100, 70, 20] ],
     "output_warped_image": true,

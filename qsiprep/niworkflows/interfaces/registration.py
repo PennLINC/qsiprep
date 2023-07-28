@@ -196,10 +196,7 @@ class ApplyXFMRPT(FLIRTRPT, fsl.ApplyXFM):
     output_spec = FLIRTOutputSpecRPT
 
 
-if LooseVersion("0.0.0") < fs.Info.looseversion() < LooseVersion("6.0.0"):
-    _BBRegisterInputSpec = fs.preprocess.BBRegisterInputSpec
-else:
-    _BBRegisterInputSpec = fs.preprocess.BBRegisterInputSpec6
+_BBRegisterInputSpec = fs.preprocess.BBRegisterInputSpec6
 
 
 class BBRegisterInputSpecRPT(nrc.SVGReportCapableInputSpec,
@@ -402,7 +399,7 @@ class EstimateReferenceImage(SimpleInterface):
                                   ref_vol=0, interpolation='sinc').run()
             mc_slice_nii = nb.load(res.outputs.out_file)
 
-            median_image_data = np.median(mc_slice_nii.get_data(), axis=3)
+            median_image_data = np.median(mc_slice_nii.get_fdata(), axis=3)
         else:
             median_image_data = np.median(
                 in_nii.dataobj[:, :, :, :n_volumes_to_discard], axis=3)

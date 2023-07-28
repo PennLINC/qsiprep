@@ -11,7 +11,9 @@ from nipype import logging
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
 from nipype.interfaces.base import isdefined
-from ...interfaces import DerivativesDataSink
+
+from qsiprep.workflows.fieldmap import pepolar
+from ...interfaces import DerivativesDataSink, DerivativesMaybeDataSink
 
 from ...interfaces.reports import DiffusionSummary
 from ...interfaces.confounds import DMRISummary
@@ -20,6 +22,7 @@ from ...engine import Workflow
 
 # dwi workflows
 from ..fieldmap.unwarp import init_fmap_unwarp_report_wf
+from ..fieldmap.pepolar import init_extended_pepolar_report_wf
 from .hmc_sdc import init_qsiprep_hmcsdc_wf
 from .fsl import init_fsl_hmc_wf
 from .pre_hmc import init_dwi_pre_hmc_wf
@@ -43,21 +46,21 @@ def init_dwi_preproc_wf(dwi_only,
                         shoreline_iters,
                         impute_slice_threshold,
                         eddy_config,
+                        raw_image_sdc,
                         reportlets_dir,
-                        output_spaces,
                         output_dir,
                         dwi_denoise_window,
                         denoise_method,
                         unringing_method,
-                        dwi_no_biascorr,
+                        pepolar_method,
+                        b1_biascorrect_stage,
                         no_b0_harmonization,
                         denoise_before_combining,
                         template,
                         omp_nthreads,
                         fmap_bspline,
                         fmap_demean,
-                        use_syn,
-                        force_syn,
+                        t2w_sdc,
                         low_mem,
                         sloppy,
                         source_file,
@@ -84,12 +87,12 @@ def init_dwi_preproc_wf(dwi_only,
                                   shoreline_iters=2,
                                   impute_slice_threshold=0,
                                   eddy_config=None,
+                                  raw_image_sdc=False,
                                   reportlets_dir='.',
-                                  output_spaces=['T1w', 'template'],
                                   dwi_denoise_window=5,
                                   denoise_method='dwidenoise',
                                   unringing_method='none',
-                                  dwi_no_biascorr=False,
+                                  b1_biascorrect_stage='final',
                                   no_b0_harmonization=False,
                                   denoise_before_combining=True,
                                   template='MNI152NLin2009cAsym',
@@ -97,8 +100,7 @@ def init_dwi_preproc_wf(dwi_only,
                                   omp_nthreads=1,
                                   fmap_bspline=False,
                                   fmap_demean=True,
-                                  use_syn=True,
-                                  force_syn=False,
+                                  t2w_sdc=False,
                                   low_mem=False,
                                   sloppy=True,
                                   source_file='/data/bids/sub-1/dwi/sub-1_dwi.nii.gz',
@@ -139,24 +141,16 @@ def init_dwi_preproc_wf(dwi_only,
             Either 'dwidenoise', 'patch2self' or 'none'
         unringing_method : str
             algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
-        dwi_no_biascorr : bool
-            run spatial bias correction (N4) on dwi series
+        pepolar_method : str
+            Either 'DRBUDDI' or 'TOPUP'. The method for SDC when EPI fieldmaps are used.
+        b1_biascorrect_stage : str
+            'final', 'none' or 'legacy'
         no_b0_harmonization : bool
             skip rescaling dwi scans to have matching b=0 intensities across scans
         denoise_before_combining : bool
             'run ``dwidenoise`` before combining dwis. Requires ``combine_all_dwis``'
         reportlets_dir : str
             Directory in which to save reportlets
-        output_spaces : list
-            List of output spaces functional images are to be resampled to.
-            Some parts of pipeline will only be instantiated for some output s
-            paces.
-
-            Valid spaces:
-
-                - T1w
-                - template
-
         template : str
             Name of template targeted by ``template`` output space
         output_dir : str
@@ -167,12 +161,8 @@ def init_dwi_preproc_wf(dwi_only,
             **Experimental**: Fit B-Spline field using least-squares
         fmap_demean : bool
             Demean voxel-shift map during unwarp
-        use_syn : bool
-            **Experimental**: Enable ANTs SyN-based susceptibility distortion
-            correction (SDC). If fieldmaps are present and enabled, this is not
-            run, by default.
-        force_syn : bool
-            **Temporary**: Always run SyN-based SDC
+        t2w_sdc : bool
+            Are t2w's going to be included in SDC?
         low_mem : bool
             Write uncompressed .nii files in some cases to reduce memory usage
         layout : BIDSLayout
@@ -198,8 +188,6 @@ def init_dwi_preproc_wf(dwi_only,
         t1_seg
             Segmentation of preprocessed structural image, including
             gray-matter (GM), white-matter (WM) and cerebrospinal fluid (CSF)
-        t1_tpms
-            List of tissue probability maps in T1w space
         t1_2_mni_forward_transform
             ANTs-compatible affine-and-warp transform file
         t1_2_mni_reverse_transform
@@ -272,7 +260,6 @@ def init_dwi_preproc_wf(dwi_only,
 
     fieldmap_type = fieldmap_info['suffix']
     doing_bidirectional_pepolar = fieldmap_type == 'rpe_series'
-    preprocess_rpe_series = doing_bidirectional_pepolar and hmc_model == 'eddy'
     if fieldmap_type is not None:
         fmap_key = "phase1" if fieldmap_type == "phase" else fieldmap_type
 
@@ -306,10 +293,10 @@ def init_dwi_preproc_wf(dwi_only,
     inputnode = pe.Node(
         niu.IdentityInterface(fields=[
             'dwi_files', 'sbref_file', 'subjects_dir', 'subject_id',
-            't1_preproc', 't1_brain', 't1_mask', 't1_seg', 't1_tpms',
-            't1_aseg', 't1_aparc', 't1_2_mni_forward_transform',
+            't1_preproc', 't1_brain', 't1_mask', 't1_seg',
+            't1_aseg', 't1_aparc', 't1_2_mni_forward_transform', 't2w_unfatsat',
             't1_2_mni_reverse_transform', 't1_2_fsnative_forward_transform',
-            't1_2_fsnative_reverse_transform', 'dwi_sampling_grid']),
+            't1_2_fsnative_reverse_transform', 't2w_files', 'dwi_sampling_grid']),
         name='inputnode')
     outputnode = pe.Node(
         niu.IdentityInterface(fields=[
@@ -317,7 +304,7 @@ def init_dwi_preproc_wf(dwi_only,
             'dwi_files', 'cnr_map', 'bval_files', 'bvec_files', 'b0_ref_image', 'b0_indices',
             'dwi_mask', 'hmc_xforms', 'fieldwarps', 'sbref_file', 'original_files',
             'original_bvecs', 'raw_qc_file', 'coreg_score', 'raw_concatenated',
-            'carpetplot_data']),
+            'carpetplot_data', 'sdc_scaling_images']),
         name='outputnode')
     workflow.__desc__ = """
 
@@ -327,20 +314,19 @@ Diffusion data preprocessing
 
     pre_hmc_wf = init_dwi_pre_hmc_wf(scan_groups=scan_groups,
                                      b0_threshold=b0_threshold,
-                                     preprocess_rpe_series=preprocess_rpe_series,
+                                     preprocess_rpe_series=doing_bidirectional_pepolar,
                                      dwi_denoise_window=dwi_denoise_window,
                                      denoise_method=denoise_method,
                                      unringing_method=unringing_method,
-                                     dwi_no_biascorr=dwi_no_biascorr,
                                      no_b0_harmonization=no_b0_harmonization,
+                                     b1_biascorrect_stage=b1_biascorrect_stage,
                                      orientation='LAS' if hmc_model == 'eddy' else 'LPS',
                                      source_file=source_file,
                                      low_mem=low_mem,
                                      denoise_before_combining=denoise_before_combining,
                                      omp_nthreads=omp_nthreads)
     test_pre_hmc_connect = pe.Node(TestInput(), name='test_pre_hmc_connect')
-
-    if hmc_model in ('none', '3dSHORE'):
+    if hmc_model in ('none', '3dSHORE','tensor'):
         if not hmc_model == 'none' and shoreline_iters < 1:
             raise Exception("--shoreline-iters must be > 0 when --hmc-model is " + hmc_model)
         hmc_wf = init_qsiprep_hmcsdc_wf(
@@ -350,16 +336,17 @@ Diffusion data preprocessing
             hmc_transform=hmc_transform,
             hmc_model=hmc_model,
             hmc_align_to=motion_corr_to,
+            raw_image_sdc=raw_image_sdc,
             template=template,
             shoreline_iters=shoreline_iters,
             impute_slice_threshold=impute_slice_threshold,
             omp_nthreads=omp_nthreads,
             fmap_bspline=fmap_bspline,
             fmap_demean=fmap_demean,
-            use_syn=use_syn,
-            force_syn=force_syn,
+            pepolar_method=pepolar_method,
             dwi_metadata=dwi_metadata,
             sloppy=sloppy,
+            t2w_sdc=t2w_sdc,
             name="hmc_sdc_wf")
 
     elif hmc_model == 'eddy':
@@ -369,12 +356,15 @@ Diffusion data preprocessing
             source_file=source_file,
             impute_slice_threshold=impute_slice_threshold,
             eddy_config=eddy_config,
+            raw_image_sdc=raw_image_sdc,
             mem_gb=mem_gb,
             omp_nthreads=omp_nthreads,
             fmap_bspline=fmap_bspline,
             fmap_demean=fmap_demean,
+            pepolar_method=pepolar_method,
             dwi_metadata=dwi_metadata,
             sloppy=sloppy,
+            t2w_sdc=t2w_sdc,
             name="hmc_sdc_wf")
 
     workflow.connect([
@@ -386,6 +376,7 @@ Diffusion data preprocessing
         (inputnode, hmc_wf, [
             ('t1_brain', 'inputnode.t1_brain'),
             ('t1_mask', 'inputnode.t1_mask'),
+            ('t2w_unfatsat', 'inputnode.t2w_unfatsat'),
             ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform')]),
         (pre_hmc_wf, outputnode, [
             ('outputnode.qc_file', 'raw_qc_file'),
@@ -412,8 +403,10 @@ Diffusion data preprocessing
         name='ds_report_coreg', run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB)
 
-    # Make a fieldmap report, save the transforms. Do it here because we need wm
-    if fieldmap_type is not None:
+    # Fieldmap reports should vary depending on which type of correction is performed
+    # PEPOLAR (epi, rpe series) will produce potentially much more detailed reports
+    doing_topup = fieldmap_type in ("epi", "rpe_series") and pepolar_method.lower() == "topup"
+    if fieldmap_type not in ("epi", "rpe_series", None) or doing_topup:
         fmap_unwarp_report_wf = init_fmap_unwarp_report_wf()
         ds_report_sdc = pe.Node(
             DerivativesDataSink(desc="sdc", suffix='b0', source_file=source_file),
@@ -424,12 +417,63 @@ Diffusion data preprocessing
         workflow.connect([
             (inputnode, fmap_unwarp_report_wf, [
                 ('t1_seg', 'inputnode.in_seg')]),
+            (hmc_wf, outputnode, [
+                ('outputnode.sdc_scaling_images', 'sdc_scaling_images')]),
             (hmc_wf, fmap_unwarp_report_wf, [
                 ('outputnode.pre_sdc_template', 'inputnode.in_pre'),
                 ('outputnode.b0_template', 'inputnode.in_post')]),
             (b0_coreg_wf, fmap_unwarp_report_wf, [
                 ('outputnode.itk_b0_to_t1', 'inputnode.in_xfm')]),
             (fmap_unwarp_report_wf, ds_report_sdc, [('outputnode.report', 'in_file')])
+        ])
+
+    elif fieldmap_type in ("epi", "rpe_series"):
+
+        if os.path.exists(t2w_sdc):
+            extended_pepolar_report_wf = init_extended_pepolar_report_wf(
+                segment_t2w=t2w_sdc, omp_nthreads=omp_nthreads)
+        else:
+            extended_pepolar_report_wf = init_extended_pepolar_report_wf(omp_nthreads=omp_nthreads)
+
+        ds_report_fa_sdc = pe.Node(
+            DerivativesMaybeDataSink(
+                desc="sdc",
+                suffix='fa',
+                source_file=source_file),
+            name='ds_report_fa_sdc',
+            mem_gb=DEFAULT_MEMORY_MIN_GB,
+            run_without_submitting=True)
+
+        ds_report_b0_sdc = pe.Node(
+            DerivativesMaybeDataSink(
+                desc="sdc",
+                suffix='b0' if not t2w_sdc else 'b0t2w',
+                source_file=source_file),
+            name='ds_report_b0_sdc',
+            mem_gb=DEFAULT_MEMORY_MIN_GB,
+            run_without_submitting=True)
+
+        workflow.connect([
+            (hmc_wf, extended_pepolar_report_wf,[
+                ("outputnode.b0_template", "inputnode.b0_ref"),
+                ("outputnode.fieldmap_type", "inputnode.fieldmap_type"),
+                ("outputnode.b0_up_image", "inputnode.b0_up_image"),
+                ("outputnode.b0_up_corrected_image", "inputnode.b0_up_corrected_image"),
+                ("outputnode.b0_down_image", "inputnode.b0_down_image"),
+                ("outputnode.b0_down_corrected_image", "inputnode.b0_down_corrected_image"),
+                ("outputnode.up_fa_image", "inputnode.up_fa_image"),
+                ("outputnode.up_fa_corrected_image", "inputnode.up_fa_corrected_image"),
+                ("outputnode.down_fa_image", "inputnode.down_fa_image"),
+                ("outputnode.down_fa_corrected_image", "inputnode.down_fa_corrected_image"),
+                ("outputnode.t2w_image", "inputnode.t2w_image")]),
+            (b0_coreg_wf, extended_pepolar_report_wf, [
+                ('outputnode.itk_b0_to_t1', 'inputnode.t1w_seg_transform')]),
+            (inputnode, extended_pepolar_report_wf, [
+                ("t1_seg", "inputnode.t1w_seg")]),
+            (extended_pepolar_report_wf, ds_report_fa_sdc, [
+                ("outputnode.fa_sdc_report", "in_file")]),
+            (extended_pepolar_report_wf, ds_report_b0_sdc, [
+                ("outputnode.b0_sdc_report", "in_file")])
         ])
 
     summary = pe.Node(
@@ -440,8 +484,7 @@ Diffusion data preprocessing
             hmc_transform=hmc_transform,
             impute_slice_threshold=impute_slice_threshold,
             denoise_method=denoise_method,
-            dwi_denoise_window=dwi_denoise_window,
-            output_spaces=output_spaces),
+            dwi_denoise_window=dwi_denoise_window),
         name='summary',
         mem_gb=DEFAULT_MEMORY_MIN_GB,
         run_without_submitting=True)

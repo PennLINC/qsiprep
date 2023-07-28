@@ -9,6 +9,7 @@ Image tools interfaces
 
 """
 
+from pkg_resources import resource_filename as pkgr
 import os.path as op
 import numpy as np
 from nipype import logging
@@ -19,8 +20,11 @@ from scipy import ndimage
 from nipype.interfaces.base import (traits, TraitedSpec, BaseInterfaceInputSpec,
                                     SimpleInterface, File)
 from nipype.utils.filemanip import fname_presuffix
+from dipy.segment.threshold import otsu
+import nilearn.image as nim
 
 LOGGER = logging.getLogger('nipype.interface')
+KNOWN_TEMPLATES = ['MNI152NLin2009cAsym', 'infant']
 
 
 class QsiprepAnatomicalIngressInputSpec(BaseInterfaceInputSpec):
@@ -103,7 +107,6 @@ class QsiprepAnatomicalIngress(SimpleInterface):
             't1_wm_probseg',
             "%s/sub-%s*_label-WM_probseg.nii*" % (anat_root, sub),
             excludes=["space-MNI"])
-
         self._get_if_exists(
             'orig_to_t1_mode_forward_transform',
             "%s/sub-%s*_from-orig_to-T1w_mode-image_xfm.txt" % (anat_root, sub))
@@ -168,7 +171,7 @@ class FakeSegmentation(SimpleInterface):
         orig_mask = img.get_fdata() > 0
         eroded1 = ndimage.binary_erosion(orig_mask, iterations=3)
         eroded2 = ndimage.binary_erosion(eroded1, iterations=3)
-        final = orig_mask.astype(np.int) + eroded1 + eroded2
+        final = orig_mask.astype(int) + eroded1 + eroded2
         out_img = nb.Nifti1Image(final, img.affine, header=img.header)
         out_fname = fname_presuffix(self.inputs.mask_file, suffix="_dseg",
                                     newpath=runtime.cwd)
@@ -294,5 +297,178 @@ class CalculateSOP(SimpleInterface):
         # calculate!
         for order in range(2, self.inputs.order + 2, 2):
             calculate_order(order)
+
+        return runtime
+
+
+class _DesaturateSkullInputSpec(BaseInterfaceInputSpec):
+    skulled_t2w_image = File(
+        exists=True,
+        mandatory=True,
+        desc="Skull-on T2w image")
+    brain_mask_image = File(
+        exists=True,
+        mandatory=True,
+        desc='Binary brain mask in the same grid as skulled_t2w_image')
+    brain_to_skull_ratio = traits.CFloat(
+        8.0,
+        usedefault=True,
+        desc="Ratio of signal in the brain to signal in the skull")
+
+
+class _DesaturateSkullOutputSpec(TraitedSpec):
+    desaturated_t2w = File(exists=True)
+    head_scaling_factor = traits.Float(0.)
+
+class DesaturateSkull(SimpleInterface):
+    input_spec = _DesaturateSkullInputSpec
+    output_spec = _DesaturateSkullOutputSpec
+
+    def _run_interface(self, runtime):
+
+        out_file = fname_presuffix(
+            self.inputs.skulled_t2w_image,
+            newpath=runtime.cwd,
+            suffix='_desaturated.nii',
+            use_ext=False)
+        skulled_img = nim.load_img(self.inputs.skulled_t2w_image)
+        brainmask_img = nim.load_img(self.inputs.brain_mask_image)
+        brain_median, nonbrain_head_median = calculate_nonbrain_saturation(
+            skulled_img, brainmask_img)
+
+        actual_brain_to_skull_ratio = brain_median / nonbrain_head_median
+        LOGGER.info("found brain to skull ratio: %.3f", actual_brain_to_skull_ratio)
+        desat_data = skulled_img.get_fdata(dtype='float32').copy()
+        adjustment = 1.
+        if actual_brain_to_skull_ratio < self.inputs.brain_to_skull_ratio:
+            # We need to downweight the non-brain voxels
+            adjustment = actual_brain_to_skull_ratio / self.inputs.brain_to_skull_ratio
+            LOGGER.info("Desaturating outside-brain signal by %.5f" % adjustment)
+            nonbrain_mask = brainmask_img.get_fdata() < 1
+            # Apply the adjustment
+            desat_data[nonbrain_mask] = desat_data[nonbrain_mask] * adjustment
+
+        desat_img = nim.new_img_like(skulled_img, desat_data, copy_header=True)
+        desat_img.header.set_data_dtype('float32')
+        desat_img.to_filename(out_file)
+        self._results['desaturated_t2w'] = out_file
+        self._results['head_scaling_factor'] = adjustment
+        return runtime
+
+
+def calculate_nonbrain_saturation(head_img, brain_mask_img):
+    # Calculate the
+    head_data = head_img.get_fdata()
+    brain_mask = brain_mask_img.get_fdata() > 0
+
+    def clip_values(values):
+        _, top_percent = np.percentile(
+            values, np.array([0, 99.75]), axis=None)
+        return np.clip(values, 0, top_percent)
+
+    nonbrain_voxels = head_data[np.logical_not(brain_mask)]
+    winsorized_nonbrain_voxels = clip_values(nonbrain_voxels)
+    threshold = otsu(winsorized_nonbrain_voxels) * 0.5
+
+    nbmask = np.zeros_like(head_img.get_fdata())
+    nbmask[head_data > threshold] = 2
+    nbmask[brain_mask] = 0
+
+    in_brain_median = np.median(head_data[brain_mask])
+    non_brain_head_median = np.median(head_data[nbmask > 0])
+
+    return in_brain_median, non_brain_head_median
+
+class _CustomApplyMaskInputSpec(BaseInterfaceInputSpec):
+    in_file = File(
+        exists=True,
+        mandatory=True,
+        desc="Image to be masked")
+    mask_file = File(
+        exists=True,
+        mandatory=True,
+        desc='Mask to be applied')
+
+
+class _CustomApplyMaskOutputSpec(TraitedSpec):
+    out_file = File(exist=True, desc="Image with mask applied")
+
+
+class CustomApplyMask(SimpleInterface):
+    input_spec = _CustomApplyMaskInputSpec
+    output_spec = _CustomApplyMaskOutputSpec
+
+    def _run_interface(self, runtime):
+        #define masked output name
+        out_file = fname_presuffix(
+            self.inputs.in_file,
+            newpath=runtime.cwd,
+            suffix='_masked.nii.gz',
+            use_ext=False)
+
+        #load in input and mask
+        input_img = nb.load(self.inputs.in_file)
+        input_data = input_img.get_fdata()
+        mask_data = nb.load(self.inputs.mask_file).get_fdata()
+        #elementwise multiplication to apply mask
+        out_data = input_data*mask_data
+        #save out masked image and pass on file name
+        nb.Nifti1Image(out_data, input_img.affine, header=input_img.header).to_filename(out_file)
+        self._results['out_file'] = out_file
+        return runtime
+
+class _GetTemplateInputSpec(BaseInterfaceInputSpec):
+    template_name = traits.Str(
+        'MNI152NLin2009cAsym',
+        usedefault=True,
+        mandatory=True)
+    t1_file = File(exists=True)
+    t2_file = File(exists=True)
+    mask_file = File(exists=True)
+    infant_mode = traits.Bool(False, usedefault=True)
+    anatomical_contrast = traits.Enum("T1w", "T2w", "none")
+
+
+class _GetTemplateOutputSpec(BaseInterfaceInputSpec):
+    template_name = traits.Str()
+    template_file = File(exists=True)
+    template_brain_file = File(exists=True)
+    template_mask_file = File(exists=True)
+
+
+class GetTemplate(SimpleInterface):
+    input_spec = _GetTemplateInputSpec
+    output_spec = _GetTemplateOutputSpec
+
+    def _run_interface(self, runtime):
+        self._results['template_name'] = self.inputs.template_name
+        contrast_name = self.inputs.anatomical_contrast.lower()
+        if contrast_name == "none":
+            LOGGER.info("Using T1w modality template for ACPC alignment")
+            contrast_name = "t1w"
+
+        # Cover the cases where the template images are actually in the
+        # qsiprep package. This is for common use cases (MNI2009cAsym and Infant)
+        # and legacy
+        if self.inputs.template_name in KNOWN_TEMPLATES or self.inputs.infant_mode:
+            if not self.inputs.infant_mode:
+                ref_img = pkgr('qsiprep',
+                                'data/mni_1mm_%s_lps.nii.gz' % contrast_name)
+                ref_img_brain = pkgr('qsiprep',
+                                        'data/mni_1mm_%s_lps_brain.nii.gz' % contrast_name)
+                ref_img_mask = pkgr('qsiprep',
+                                        'data/mni_1mm_t1w_lps_brainmask.nii.gz')
+            else:
+                ref_img = pkgr('qsiprep',
+                                'data/mni_1mm_%s_lps_infant.nii.gz' % contrast_name)
+                ref_img_brain = pkgr('qsiprep',
+                                        'data/mni_1mm_%s_lps_brain_infant.nii.gz' % contrast_name)
+                ref_img_mask = pkgr('qsiprep',
+                                        'data/mni_1mm_t1w_lps_brainmask_infant.nii.gz')
+            self._results['template_file'] = ref_img
+            self._results['template_brain_file'] = ref_img_brain
+            self._results['template_mask_file'] = ref_img_mask
+        else:
+            raise NotImplementedError("Arbitrary templates not available yet")
 
         return runtime

@@ -366,8 +366,8 @@ Preprocessing pipeline details
 available and are used as the input.
 
 
-T1w/T2w preprocessing
-^^^^^^^^^^^^^^^^^^^^^
+Processing the *Subject Anatomical Reference* T1w or T2w images
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 :mod:`qsiprep.workflows.anatomical.init_anat_preproc_wf`
 
@@ -392,38 +392,75 @@ T1w/T2w preprocessing
                               hires=True,
                               num_t1w=1)
 
+As of version 0.18 QSIPrep has been changed to be very flexible with anatomical
+processing workflows. Versions prior to 0.18 were focused on the T1w images and
+provided only 2 possible templates. Version 0.18 introduces 2 terms that
+simplify the anatomical processing and open up new opportunities for choosing
+a template. First, is the *subject anatomical reference* and the second is the
+*template anatomical reference*.
 
-The anatomical sub-workflow begins by constructing an average image by
-:ref:`conforming <conformation>` all found T1w images to LPS+ orientation and
-a common voxel size, and, in the case of multiple images, averages them into a
-single reference template (see `Longitudinal T1w processing`_).
+As a dMRI-focused tool, QSIPrep only uses an *anatomical reference* image for an
+extra-robust brain extraction and to get a tissue segmentation for visualizing
+the susceptibility distortion correction results.  The anatomical worflows
+leverage fast and powerful tools from FreeSurfer, namely ``SynthStrip`` and
+``SynthSeg`` to perform brain extraction and segmentation.
 
-.. _t1preproc_steps:
+Many imaging protocols acquire some high-resolution, undistorted anatomical
+reference scans. QSIPrep can use either T1-weighted ot T2-weighted 3D images as
+the *anatomical reference*. To specify which contrast you'd like to use for your
+anatomical reference, be sure to specify ``--anatomical-contrast`` as either
+``T1w``, ``T2w`` or ``none``. Specifying ``none`` is equivalent to the previous
+option of ``--dwi-only``, where no anatomical images are used from the input
+data and the AC-PC alignment is based either on the adult or infant MNI
+templates.
 
-Brain extraction, brain tissue segmentation and spatial normalization
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+We discourage the use of ``--anatomical-contrast none`` in most cases. It is
+very rare to have dMRI data without any kind of T1w or T2w image from the
+same individual.
 
-Then, the T1w image/average is skull-stripped using ANTs' ``antsBrainExtraction.sh``,
-which is an atlas-based brain extraction workflow.
+Regardless of whether you are using T1w or T2w images as your anatomical reference,
+the following steps will be applied to the anatomical reference images:
+Processing the *Anatomical Reference* images
+
+  1. The anatomical sub-workflow begins by constructing an average image by
+     :ref:`conforming <conformation>` all found T1w or T2w images to LPS+
+     orientation and a common voxel size.
+  2. If there are multiple images of the preferred anatomical contrast, they will
+     be bias corrected using N4 and aligned to one another. If ``--longitudinal``
+     is specified they will be unbiasedly registered to each other using ANTs.
+     Otherwise all the images are registered to the first image (see
+     `Longitudinal T1w processing`_).
+  3. Brain extraction is performed using ``SynthStrip``.
 
 .. figure:: _static/brainextraction_t1.svg
     :scale: 100%
 
     Brain extraction
 
-
-Once the brain mask is computed, FSL ``fast`` is utilized for brain tissue segmentation.
+  4. Brain tissue segmentation is performed using ``SynthStrip``
 
 .. figure:: _static/segmentation.svg
     :scale: 100%
 
     Brain tissue segmentation.
 
+  5. Rigid alignment to the *subject anatomical reference*. This can take
+     two forms. If the *template anatomical reference* is a standard
+     template, this will effectively AC-PC align the output data. If the
+     *template anatomical reference* is another scan of the same
+     individual (e.g. the output of fmriprep), the output will be aligned
+     to this externam image.
 
-Finally, spatial normalization to MNI-space is performed using ANTs' ``antsRegistration``
-in a multiscale, mutual-information based, nonlinear registration scheme.
-In particular, spatial normalization is done using the `ICBM 2009c Nonlinear
-Asymmetric template (1×1×1mm) <http://nist.mni.mcgill.ca/?p=904>`_ [Fonov2011]_.
+  6. If the template anatomical reference is not a native scan, then ANTs'
+     ``antsRegistration`` will register the subject images to the template
+     anatomical reference in a multiscale, mutual-information based, nonlinear
+     registration scheme.
+
+
+.. _t1preproc_steps:
+
+Handling Lesions and abnormalities
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 When processing images from patients with focal brain lesions (e.g. stroke, tumor
 resection), it is possible to provide a lesion mask to be used during spatial
@@ -506,7 +543,7 @@ DWI preprocessing
                               dwi_denoise_window=5,
                               denoise_method='dwidenoise',
                               unringing_method='mrdegibbs',
-                              dwi_no_biascorr=False,
+                              b1_biascorr_stage='final',
                               no_b0_harmonization=False,
                               denoise_before_combining=True,
                               template='MNI152NLin2009cAsym',
@@ -791,7 +828,7 @@ DWI reference image estimation
     :graph2use: orig
     :simple_form: yes
 
-    from qsiprep.workflows.dwi.util import init_dwi_reference_wf
+    from qsiprep.workflows.anatomical import init_dwi_reference_wf
     wf = init_dwi_reference_wf(omp_nthreads=1,
                                gen_report=True,
                                source_file="sub-1_dwi.nii.gz",

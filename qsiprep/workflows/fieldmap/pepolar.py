@@ -19,8 +19,10 @@ from ...niworkflows.interfaces.registration import ANTSApplyTransformsRPT
 
 from ...engine import Workflow
 from ...interfaces import StructuralReference
-from ...interfaces.fmap import B0RPEFieldmap
+from ...interfaces.fmap import B0RPEFieldmap, PEPOLARReport
 from ...interfaces.nilearn import EnhanceB0
+from ...interfaces.images import ExtractWM
+from ..anatomical import init_synthstrip_wf
 
 
 def init_pepolar_unwarp_wf(dwi_meta, epi_fmaps, omp_nthreads=1,
@@ -205,6 +207,96 @@ def init_prepare_dwi_epi_wf(omp_nthreads, orientation="LPS", name="prepare_epi_w
     return workflow
 
 
+def init_extended_pepolar_report_wf(segment_t2w, omp_nthreads=1,
+                                    name="extended_pepolar_report_wf"):
+    workflow = Workflow(name=name)
+    inputnode = pe.Node(niu.IdentityInterface(
+        fields=[
+            "t1w_seg_transform", "t1w_seg", "b0_ref",
+            "fieldmap_type", "b0_up_image", "b0_up_corrected_image", "b0_down_image",
+            "b0_down_corrected_image", "up_fa_image", "up_fa_corrected_image", "down_fa_image",
+            "down_fa_corrected_image", "t2w_image"]),
+        name='inputnode')
+    outputnode = pe.Node(niu.IdentityInterface(
+        fields=["fa_sdc_report", "b0_sdc_report"]),
+        name="outputnode")
+
+    pepolar_report = pe.Node(
+        PEPOLARReport(),
+        name="peoplar_report")
+
+    workflow.connect([
+        (inputnode, pepolar_report, [
+            ("fieldmap_type", "fieldmap_type"),
+            ("b0_up_image", "b0_up_image"),
+            ("b0_up_corrected_image", "b0_up_corrected_image"),
+            ("b0_down_image", "b0_down_image"),
+            ("b0_down_corrected_image", "b0_down_corrected_image"),
+            ("up_fa_image", "up_fa_image"),
+            ("up_fa_corrected_image", "up_fa_corrected_image"),
+            ("down_fa_image", "down_fa_image"),
+            ("down_fa_corrected_image", "down_fa_corrected_image")]),
+        (pepolar_report, outputnode, [
+            ("b0_sdc_report", "b0_sdc_report"),
+            ("fa_sdc_report", "fa_sdc_report")])
+    ])
+
+    
+
+    # If we don't have a T1w segmentation, make one from the t2w
+    if segment_t2w:
+        t2w_n4 = pe.Node(
+            ants.N4BiasFieldCorrection(dimension=3),
+            name="t2w_n4",
+            n_procs=omp_nthreads)
+
+        strip_t2w_wf = init_synthstrip_wf(do_padding=True,
+                                          omp_nthreads=omp_nthreads)
+
+        t2w_atropos = pe.Node(
+            ants.Atropos(
+                dimension=3,
+                initialization="Otsu",
+                mrf_radius=[1,1,1],
+                posterior_formulation="Socrates",
+                use_mixture_model_proportions=False,
+                mrf_smoothing_factor=0.1,
+                number_of_tissue_classes=3
+            ),
+            name="t2w_atropos",
+            n_procs=omp_nthreads)
+
+        workflow.connect([
+            (inputnode, t2w_n4, [
+                ("t2w_image", "input_image")]),
+            (t2w_n4, strip_t2w_wf, [("output_image", "inputnode.original_image")]),
+            (strip_t2w_wf, t2w_atropos, [
+                ("outputnode.brain_image", "intensity_images"),
+                ("outputnode.brain_mask", "mask_image")]),
+            (t2w_atropos, pepolar_report, [("classified_image", "t2w_seg")])
+        ])
+    else:
+        map_seg = pe.Node(
+            ants.ApplyTransforms(
+                dimension=3, float=True, interpolation='MultiLabel',
+                invert_transform_flags=[True]),
+            name='map_seg',
+            mem_gb=0.3)
+
+        sel_wm = pe.Node(ExtractWM(), name='sel_wm')
+
+        workflow.connect([
+            (inputnode, map_seg, [
+                ("b0_ref", "reference_image"),
+                ("t1w_seg_transform", "transforms"),
+                ("t1w_seg", "input_image")]),
+            (map_seg, sel_wm, [('output_image', 'in_seg')]),
+            (sel_wm, pepolar_report, [('out', 't1w_seg')])
+        ])
+
+    return workflow
+
+
 def _fix_hdr(in_file, newpath=None):
     import nibabel as nb
     from nipype.utils.filemanip import fname_presuffix
@@ -214,6 +306,6 @@ def _fix_hdr(in_file, newpath=None):
     hdr.set_data_dtype('<f4')
     hdr.set_intent('vector', (), '')
     out_file = fname_presuffix(in_file, "_warpfield", newpath=newpath)
-    nb.Nifti1Image(nii.get_data().astype('<f4'), nii.affine, hdr).to_filename(
+    nb.Nifti1Image(nii.get_fdata().astype('<f4'), nii.affine, hdr).to_filename(
         out_file)
     return out_file

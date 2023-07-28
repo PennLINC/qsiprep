@@ -392,8 +392,8 @@ class RobustMNINormalization(BaseInterface):
                               transforms=forward_transform,
                               interpolation='NearestNeighbor',
                               resource_monitor=False).run()
-        input_mask_data = (nb.load(res.outputs.output_image).get_data() != 0)
-        target_mask_data = (nb.load(target_mask).get_data() != 0)
+        input_mask_data = (nb.load(res.outputs.output_image).get_fdata() != 0)
+        target_mask_data = (nb.load(target_mask).get_fdata() != 0)
 
         overlap_voxel_count = np.logical_and(input_mask_data, target_mask_data)
 
@@ -434,8 +434,8 @@ def mask(in_file, mask_file, new_name):
     # Load the mask image
     mask_nii = nb.load(mask_file)
     # Set all non-mask voxels in the input file to zero.
-    data = in_nii.get_data()
-    data[mask_nii.get_data() == 0] = 0
+    data = in_nii.get_fdata()
+    data[mask_nii.get_fdata() == 0] = 0
     # Save the new masked image.
     new_nii = nb.Nifti1Image(data, in_nii.affine, in_nii.header)
     new_nii.to_filename(new_name)
@@ -488,7 +488,7 @@ def create_cfm(in_file, lesion_mask=None, global_mask=True, out_path=None):
     in_img = nb.load(in_file)
 
     # If we want a global mask, create one based on the input image.
-    data = np.ones(in_img.shape, dtype=np.uint8) if global_mask else in_img.get_data()
+    data = np.ones(in_img.shape, dtype=np.uint8) if global_mask else in_img.get_fdata()
     if set(np.unique(data)) - {0, 1}:
         raise ValueError("`global_mask` must be true if `in_file` is not a binary mask")
 
@@ -498,7 +498,7 @@ def create_cfm(in_file, lesion_mask=None, global_mask=True, out_path=None):
         lm_img = nb.as_closest_canonical(nb.load(lesion_mask))
 
         # Subtract lesion mask from secondary mask, set negatives to 0
-        data = np.fmax(data - lm_img.get_data(), 0)
+        data = np.fmax(data - lm_img.get_fdata(), 0)
         # Cost function mask will be created from subtraction
     # Otherwise, CFM will be created from global mask
 

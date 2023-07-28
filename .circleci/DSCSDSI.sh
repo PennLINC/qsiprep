@@ -19,7 +19,7 @@ Inputs:
  - DSCSDSI BIDS data (data/DSCSDSI_nofmap)
 
 DOC
-set +e 
+set +e
 # Setup environment and get data
 source ./get_data.sh
 TESTDIR=${PWD}
@@ -41,8 +41,7 @@ ${QSIPREP_CMD} \
    -w ${TEMPDIR} \
    --sloppy --write-graph --use-syn-sdc \
    --force-syn \
-   --output-space T1w \
-   --dwi-no-biascorr \
+   --b1_biascorrect_stage none \
    --hmc_model 3dSHORE \
    --hmc-transform Rigid \
    --shoreline_iters 1 \

@@ -82,13 +82,13 @@ class MaskEPI(SimpleInterface):
         )
 
         if self.inputs.closing:
-            closed = sim.binary_closing(masknii.get_data().astype(
+            closed = sim.binary_closing(masknii.get_fdata().astype(
                 np.uint8), sim.ball(1)).astype(np.uint8)
             masknii = masknii.__class__(closed, masknii.affine,
                                         masknii.header)
 
         if self.inputs.fill_holes:
-            filled = binary_fill_holes(masknii.get_data().astype(
+            filled = binary_fill_holes(masknii.get_fdata().astype(
                 np.uint8), sim.ball(6)).astype(np.uint8)
             masknii = masknii.__class__(filled, masknii.affine,
                                         masknii.header)
@@ -139,7 +139,7 @@ class Merge(SimpleInterface):
             new_nii.header.set_zooms(list(new_nii.header.get_zooms()[:3]) +
                                      [src_hdr.get_zooms()[3]])
         if self.inputs.is_dwi:
-            new_nii = nb.Nifti1Image(np.abs(new_nii.get_data()), new_nii.affine, new_nii.header)
+            new_nii = nb.Nifti1Image(np.abs(new_nii.get_fdata()), new_nii.affine, new_nii.header)
 
         new_nii.to_filename(self._results['out_file'])
 
@@ -203,9 +203,9 @@ class EnhanceAndSkullstripB0(SimpleInterface):
         self._results['plotting_mask_file'] = plotting_mask
 
         # Make a smoothed mask for N4
-        dilated_mask = ndimage.binary_dilation(mask_img.get_fdata().astype(np.int),
+        dilated_mask = ndimage.binary_dilation(mask_img.get_fdata().astype(int),
                                                structure=sim.cube(3))
-        smoothed_dilated_mask = ndimage.gaussian_filter(dilated_mask.astype(np.float), sigma=3)
+        smoothed_dilated_mask = ndimage.gaussian_filter(dilated_mask.astype(float), sigma=3)
         weight_img = new_img_like(input_img, smoothed_dilated_mask)
 
         # Find a bias field and correct the original input
@@ -317,7 +317,7 @@ def _enhance_t2_contrast(in_file, newpath=None, offset=0.5):
     out_file = fname_presuffix(in_file, suffix='_t1enh',
                                newpath=newpath)
     nii = nb.load(in_file)
-    data = nii.get_data()
+    data = nii.get_fdata()
     maxd = data.max()
     newdata = np.log(offset + data / maxd)
     newdata -= newdata.min()
@@ -433,7 +433,7 @@ def calculate_gradmax_b0_mask(b0_nii, show_plot=False, quantile_max=0.8, pad_siz
 
     # Send it out for post processing
     edge_scores = []
-    opening_values = np.array([2, 4, 6, 8, 10, 12], dtype=np.int)
+    opening_values = np.array([2, 4, 6, 8, 10, 12], dtype=int)
     opened_masks = []
     selected_voxels = []
     for opening_test in opening_values:
@@ -526,7 +526,7 @@ def watershed_refined_b0_mask(b0_nii, show_plot=False, pad_size=10, quantile_max
     ribbon_mask = (dilated_mask ^ eroded_mask)
 
     # Down-weight data deep in the mask
-    inner_weights = ndimage.gaussian_filter(eroded_mask.astype(np.float), sigma=morph_size)
+    inner_weights = ndimage.gaussian_filter(eroded_mask.astype(float), sigma=morph_size)
     inner_weights = 1. - inner_weights / inner_weights.max()
 
     # Down-weight data as it gets far from the mask
@@ -575,8 +575,8 @@ def select_markers_for_rw(image, inner_mask, empty_mask, outer_mask,
     markers = np.zeros_like(image) - 1.
     use_as_inner_marker = np.random.rand(inner_mask.sum()) < sample_proportion
     use_as_outer_marker = np.random.rand(outer_mask.sum()) < sample_proportion
-    markers[inner_mask > 0] = use_as_inner_marker.astype(np.int) * 2
-    markers[outer_mask > 0] = use_as_outer_marker.astype(np.int) * 1
+    markers[inner_mask > 0] = use_as_inner_marker.astype(int) * 2
+    markers[outer_mask > 0] = use_as_outer_marker.astype(int) * 1
     markers[empty_mask > 0] = 0
 
     return markers

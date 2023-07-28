@@ -24,9 +24,17 @@ from nipype.utils.filemanip import fname_presuffix, split_filename
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec, TraitedSpec, File, isdefined, traits,
     SimpleInterface, InputMultiObject, OutputMultiObject)
+from nipype.interfaces.ants.resampling import ApplyTransformsInputSpec
+from nipype.interfaces import ants
 from .images import to_lps
 from .reports import topup_selection_to_report
-from nilearn.image import load_img, index_img, concat_imgs, iter_img
+from nilearn.image import load_img, index_img, concat_imgs, iter_img, math_img
+import nilearn.image as nim
+import nilearn.plotting as nip
+from lxml import etree
+from nipype.interfaces.mixins import reporting
+from ..niworkflows.viz.utils import (cuts_from_bbox, compose_view,
+plot_denoise, robust_set_limits, extract_svg, SVGFigure, uuid4, SVGNS)
 
 LOGGER = logging.getLogger('nipype.interface')
 CRITICAL_KEYS = ["PhaseEncodingDirection", "TotalReadoutTime", "EffectiveEchoSpacing"]
@@ -332,8 +340,13 @@ def _despike2d(data, thres, neigh=None):
                     data[i, j, k] = patch_med
     return data
 
-
 def _unwrap(fmap_data, mag_file, mask=None):
+    import os
+    fsl_check = os.environ.get('FSL_BUILD')
+    if fsl_check=="no_fsl":
+        raise Exception(
+            """Container in use does not have FSL. To use this workflow, 
+            please download the qsiprep container with FSL installed.""")
     from math import pi
     from nipype.interfaces.fsl import PRELUDE
     magnii = nb.load(mag_file)
@@ -346,16 +359,15 @@ def _unwrap(fmap_data, mag_file, mask=None):
 
     nb.Nifti1Image(fmap_data, magnii.affine).to_filename('fmap_rad.nii.gz')
     nb.Nifti1Image(mask, magnii.affine).to_filename('fmap_mask.nii.gz')
-    nb.Nifti1Image(magnii.get_data(), magnii.affine).to_filename('fmap_mag.nii.gz')
+    nb.Nifti1Image(magnii.get_fdata(), magnii.affine).to_filename('fmap_mag.nii.gz')
 
     # Run prelude
     res = PRELUDE(phase_file='fmap_rad.nii.gz',
                   magnitude_file='fmap_mag.nii.gz',
                   mask_file='fmap_mask.nii.gz').run()
 
-    unwrapped = nb.load(res.outputs.unwrapped_phase_file).get_data() * (fmapmax / pi)
+    unwrapped = nb.load(res.outputs.unwrapped_phase_file).get_fdata() * (fmapmax / pi)
     return unwrapped
-
 
 def get_ees(in_meta, in_file=None):
     """
@@ -531,7 +543,7 @@ def _torads(in_file, fmap_range=None, newpath=None):
 
     out_file = fname_presuffix(in_file, suffix='_rad', newpath=newpath)
     fmapnii = nb.load(in_file)
-    fmapdata = fmapnii.get_data()
+    fmapdata = fmapnii.get_fdata()
 
     if fmap_range is None:
         fmap_range = max(abs(fmapdata.min()), fmapdata.max())
@@ -550,7 +562,7 @@ def _tohz(in_file, range_hz, newpath=None):
 
     out_file = fname_presuffix(in_file, suffix='_hz', newpath=newpath)
     fmapnii = nb.load(in_file)
-    fmapdata = fmapnii.get_data()
+    fmapdata = fmapnii.get_fdata()
     fmapdata = fmapdata * (range_hz / pi)
     out_img = nb.Nifti1Image(fmapdata, fmapnii.affine, fmapnii.header)
     out_img.set_data_dtype('float32')
@@ -584,7 +596,7 @@ def phdiff2fmap(in_file, delta_te, newpath=None):
 
     out_file = fname_presuffix(in_file, suffix='_fmap', newpath=newpath)
     image = nb.load(in_file)
-    data = (image.get_data().astype(np.float32) / (2. * math.pi * delta_te))
+    data = (image.get_fdata().astype(np.float32) / (2. * math.pi * delta_te))
     nii = nb.Nifti1Image(data, image.affine, image.header)
     nii.set_data_dtype(np.float32)
     nii.to_filename(out_file)
@@ -927,7 +939,7 @@ def get_evenly_spaced_b0s(b0_indices, max_per_spec):
     if len(b0_indices) <= max_per_spec:
         return b0_indices
     selected_indices = np.linspace(0, len(b0_indices)-1, num=max_per_spec,
-                                   endpoint=True, dtype=np.int)
+                                   endpoint=True, dtype=int)
     return [b0_indices[idx] for idx in selected_indices]
 
 
@@ -1014,3 +1026,370 @@ def eddy_inputs_from_dwi_files(origin_file_list, eddy_prefix):
         f.write(" ".join(map(str, group_numbers)))
 
     return acqp_file, index_file
+
+
+class _ApplyScalingImagesInputSpec(ApplyTransformsInputSpec):
+    input_image = traits.File(mandatory=False)
+    scaling_image_files = InputMultiObject(
+        File(exists=True),
+        mandatory=False,
+        desc='list of sdc scaling image files in undistorted b0ref space')
+    dwi_files = InputMultiObject(
+        File(exists=True),
+        mandatory=True,
+        desc='list of dwi files, already resampled into their output space')
+    reference_image = File(exists=True, mandatory=True, desc='output grid')
+
+    # Transforms to apply
+    b0_to_intramodal_template_transforms = InputMultiObject(
+        File(exists=True),
+        mandtory=False,
+        desc='list of transforms to register the b=0 to the intramodal template.')
+    intramodal_template_to_t1_affine = File(
+        exists=True,
+        mandatory=False,
+        desc='affine from the intramodal template to t1')
+    intramodal_template_to_t1_warp = File(
+        exists=True,
+        desc='warp from the intramodal template to t1')
+    hmcsdc_dwi_ref_to_t1w_affine = File(
+        exists=True,
+        desc='affine from dwi ref to t1w')
+
+    save_cmd = traits.Bool(True, usedefault=True,
+                           desc='write a log of command lines that were applied')
+    copy_dtype = traits.Bool(False, usedefault=True,
+                             desc='copy dtype from inputs to outputs')
+    num_threads = traits.Int(1, usedefault=True, nohash=True,
+                             desc='number of parallel processes')
+    transforms = File(mandatory=False)
+
+
+class _ApplyScalingImagesOutputSpec(TraitedSpec):
+    scaled_images = OutputMultiObject(
+        File(exists=True),
+        desc="Scaled dwi files")
+
+
+class ApplyScalingImages(SimpleInterface):
+    input_spec = _ApplyScalingImagesInputSpec
+    output_spec = _ApplyScalingImagesOutputSpec
+
+    def _run_interface(self, runtime):
+
+        if not isdefined(self.inputs.scaling_image_files):
+            LOGGER.info("Not applying scaling to resampled DWIs")
+            self._results["scaled_images"] = self.inputs.dwi_files
+            return runtime
+        LOGGER.info("Applying scaling to resampled dwis")
+
+        if not len(self.inputs.scaling_image_files) == len(self.inputs.dwi_files):
+            raise Exception("Mismatch between scaling images and dwis")
+
+        # The affine transform to the t1 can come from hmcsdc or the intramodal template
+        coreg_to_t1 = traits.Undefined
+        if isdefined(self.inputs.intramodal_template_to_t1_affine):
+            if isdefined(self.inputs.hmcsdc_dwi_ref_to_t1w_affine):
+                LOGGER.warning('Two b0 to t1 transforms are provided: using intramodal')
+            coreg_to_t1 = self.inputs.intramodal_template_to_t1_affine
+        else:
+            coreg_to_t1 = self.inputs.hmcsdc_dwi_ref_to_t1w_affine
+
+        # Handle transforms to intramodal transforms
+        intramodal_transforms = self.inputs.b0_to_intramodal_template_transforms
+        intramodal_affine = traits.Undefined
+        intramodal_warp = traits.Undefined
+        if isdefined(intramodal_transforms):
+            intramodal_affine = intramodal_transforms[0]
+            if len(intramodal_transforms) == 2:
+                intramodal_warp = intramodal_transforms[1]
+            elif len(intramodal_transforms) > 2:
+                raise Exception("Unsupported intramodal template transform")
+
+        # Find the chain of transforms from undistorted b=0 reference to the output space
+        transform_stack = [
+            transform for transform in [
+                intramodal_affine,
+                intramodal_warp,
+                coreg_to_t1] if isdefined(transform)][::-1]
+
+        # There are a few unique scaling images. Find them
+        scaling_images_to_dwis = defaultdict(list)
+        for dwi_image, scaling_image in zip(self.inputs.dwi_files,
+                                            self.inputs.scaling_image_files):
+            scaling_images_to_dwis[scaling_image].append(dwi_image)
+
+        # Apply the transform, link the resampled scaling image to resampled dwis
+        dwi_files_to_scalings = {}
+        for scaling_image in scaling_images_to_dwis:
+            resampled_scaling_image = fname_presuffix(
+                scaling_image, suffix="_resampled", newpath=runtime.cwd)
+            xfm = ants.ApplyTransforms(
+                input_image=scaling_image,
+                transforms=transform_stack,
+                reference_image=self.inputs.reference_image,
+                output_image=resampled_scaling_image,
+                interpolation='LanczosWindowedSinc',
+                dimension=3)
+            xfm.terminal_output = 'allatonce'
+            xfm.resource_monitor = False
+            runtime = xfm.run().runtime
+            LOGGER.info(runtime.cmdline)
+            for dwi_file in scaling_images_to_dwis[scaling_image]:
+                dwi_files_to_scalings[dwi_file] = resampled_scaling_image
+
+        # Do the math
+        scaled_dwi_images = []
+        for dwi_file in self.inputs.dwi_files:
+            scaled_dwi_file = fname_presuffix(
+                dwi_file, newpath=runtime.cwd, suffix="_scaled")
+            math_img(
+                "a*b",
+                a=dwi_file,
+                b=dwi_files_to_scalings[dwi_file]).to_filename(scaled_dwi_file)
+
+            scaled_dwi_images.append(scaled_dwi_file)
+        self._results["scaled_images"] = scaled_dwi_images
+
+        return runtime
+
+
+class _PEPOLARReportInputSpec(BaseInterfaceInputSpec):
+    fieldmap_type = traits.Enum('rpe_series', 'epi')
+    b0_up_image = File(exists=True, mandatory=True)
+    b0_up_corrected_image = File(exists=True, mandatory=True)
+    b0_down_image = File(exists=True, mandatory=True)
+    b0_down_corrected_image = File(exists=True, mandatory=True)
+    up_fa_image = File(exists=True)
+    up_fa_corrected_image = File(exists=True)
+    down_fa_image = File(exists=True)
+    down_fa_corrected_image = File(exists=True)
+    t1w_seg = File(exists=True)
+    t2w_seg = File(exists=True)
+
+
+class _PEPOLARReportOutputSpec(reporting.ReportCapableOutputSpec):
+    fa_sdc_report = File(exists=True)
+    b0_sdc_report = File(exists=True)
+
+
+class PEPOLARReport(SimpleInterface):
+    input_spec = _PEPOLARReportInputSpec
+    output_spec = _PEPOLARReportOutputSpec
+    _n_cuts = 5
+
+    def _run_interface(self, runtime):
+        """Generate a reportlet."""
+        LOGGER.info('Generating a PEPOLAR visual report')
+
+        ref_segmentation = self.inputs.t1w_seg if not \
+            isdefined(self.inputs.t2w_seg) else self.inputs.t2w_seg
+        # Get a segmentation from an undistorted image as a reference
+        seg_img = nb.load(ref_segmentation)
+        b0_up_img = nb.load(self.inputs.b0_up_image)
+        b0_down_img = nb.load(self.inputs.b0_down_image)
+        b0_up_corrected_img = nb.load(self.inputs.b0_up_corrected_image)
+        b0_down_corrected_img = nb.load(self.inputs.b0_down_corrected_image)
+        cuts = cuts_from_bbox(seg_img, self._n_cuts)
+        b0_sdc_svg = op.join(runtime.cwd, "b0_blipupdown_sdc.svg")
+        compose_view(
+            plot_pepolar(
+                b0_up_img,
+                b0_down_img,
+                seg_img,
+                'moving-image',
+                estimate_brightness=True,
+                cuts=cuts,
+                label='Original',
+                upper_label_suffix=": Blip Up",
+                lower_label_suffix=": Blip Down",
+                compress=False),
+            plot_pepolar(
+                b0_up_corrected_img,
+                b0_down_corrected_img,
+                seg_img,
+                'fixed-image',
+                estimate_brightness=True,
+                cuts=cuts,
+                label="Corrected",
+                upper_label_suffix=": Blip Up",
+                lower_label_suffix=": Blip Down",
+                compress=False),
+            out_file=b0_sdc_svg)
+        self._results["b0_sdc_report"] = b0_sdc_svg
+
+        if False in map(
+            isdefined,
+            (self.inputs.up_fa_image,
+             self.inputs.up_fa_corrected_image,
+             self.inputs.down_fa_image,
+             self.inputs.down_fa_corrected_image)):
+            LOGGER.info("No FA images available for SDC report")
+            return runtime
+
+        # Prepare the FA images for plotting
+        fa_sdc_svg = op.join(runtime.cwd, "FA_reg.svg")
+        fa_up_img = nb.load(self.inputs.up_fa_image)
+        fa_up_corrected_img = nb.load(self.inputs.up_fa_corrected_image)
+        fa_down_img = nb.load(self.inputs.down_fa_image)
+        fa_down_corrected_img = nb.load(self.inputs.down_fa_corrected_image)
+        uncorrected_fa = nim.math_img("(a+b)/2", a=fa_up_img, b=fa_down_img)
+        corrected_fa = nim.math_img("(a+b)/2", a=fa_up_corrected_img, b=fa_down_corrected_img)
+        compose_view(
+            plot_fa_reg(
+                corrected_fa, seg_img, 'moving-image', estimate_brightness=False,
+                label="FA: After",
+                cuts=cuts),
+            plot_fa_reg(
+                uncorrected_fa, seg_img, 'fixed-image', estimate_brightness=False,
+                label="FA: Before",
+                cuts=cuts),
+            out_file=fa_sdc_svg)
+        self._results["fa_sdc_report"] = fa_sdc_svg
+        return runtime
+
+
+def plot_pepolar(blip_up_img, blip_down_img, seg_contour_img,
+                 div_id, plot_params=None, blip_down_plot_params=None,
+                 order=('z', 'x', 'y'), cuts=None,
+                 estimate_brightness=False, label=None,
+                 blip_down_contour=None, upper_label_suffix=": low-b",
+                 lower_label_suffix=": high-b",
+                 compress='auto', overlay=None, overlay_params=None):
+    """
+    Plot the foreground and background views.
+    Default order is: axial, coronal, sagittal
+
+    Updated version from sdcflows and different from in qsiprep.niworkflows.viz.utils
+    so that the contour lines never move. This is accomplished by making an empty
+    image in the grid of the segmentation image and using this as the background.
+
+    """
+    plot_params = plot_params or {}
+    blip_down_plot_params = blip_down_plot_params or {}
+
+    if cuts is None:
+        raise NotImplementedError
+
+    out_files = []
+    if estimate_brightness:
+        plot_params = robust_set_limits(
+            blip_up_img.get_fdata(dtype='float32').reshape(-1),
+            plot_params)
+
+    zeros_bg_img = nim.new_img_like(
+        seg_contour_img,
+        np.zeros(seg_contour_img.shape),
+        copy_header=True)
+
+    # Plot each cut axis for low-b
+    image_plot_params = plot_params.copy()
+    for i, mode in enumerate(list(order)):
+        plot_params['display_mode'] = mode
+        plot_params['cut_coords'] = cuts[mode]
+        if i == 0:
+            plot_params['title'] = label + upper_label_suffix
+        else:
+            plot_params['title'] = None
+
+        # Generate nilearn figure
+        display = nip.plot_anat(zeros_bg_img, **plot_params)
+        display.add_overlay(blip_up_img, cmap="gray", **image_plot_params)
+        display.add_contours(seg_contour_img, colors='b', linewidths=0.5)
+
+        svg = extract_svg(display, compress=compress)
+        display.close()
+
+        # Find and replace the figure_1 id.
+        xml_data = etree.fromstring(svg)
+        find_text = etree.ETXPath("//{%s}g[@id='figure_1']" % SVGNS)
+        find_text(xml_data)[0].set('id', '%s-%s-%s' % (div_id, mode, uuid4()))
+
+        svg_fig = SVGFigure()
+        svg_fig.root = xml_data
+        out_files.append(svg_fig)
+
+    # Plot each cut axis for high-b
+    if estimate_brightness:
+        blip_down_plot_params = robust_set_limits(
+            blip_down_img.get_fdata(dtype='float32').reshape(-1),
+            blip_down_plot_params)
+    image_blip_down_plot_params = blip_down_plot_params.copy()
+    for i, mode in enumerate(list(order)):
+        blip_down_plot_params['display_mode'] = mode
+        blip_down_plot_params['cut_coords'] = cuts[mode]
+        if i == 0:
+            blip_down_plot_params['title'] = label + lower_label_suffix
+        else:
+            blip_down_plot_params['title'] = None
+
+        # Generate nilearn figure
+        display = nip.plot_anat(zeros_bg_img, **blip_down_plot_params)
+        display.add_overlay(blip_down_img, cmap="gray", **image_blip_down_plot_params)
+        display.add_contours(seg_contour_img, colors='b', linewidths=0.5)
+        svg = extract_svg(display, compress=compress)
+        display.close()
+
+        # Find and replace the figure_1 id.
+        xml_data = etree.fromstring(svg)
+        find_text = etree.ETXPath("//{%s}g[@id='figure_1']" % SVGNS)
+        find_text(xml_data)[0].set('id', '%s-%s-%s' % (div_id, mode, uuid4()))
+
+        svg_fig = SVGFigure()
+        svg_fig.root = xml_data
+        out_files.append(svg_fig)
+
+    return out_files
+
+def plot_fa_reg(fa_img, seg_contour_img,
+                div_id, plot_params=None, blip_down_plot_params=None,
+                order=('z', 'x', 'y'), cuts=None,
+                estimate_brightness=False, label=None,
+                compress='auto'):
+    """
+    Plot the foreground and background views.
+    Default order is: axial, coronal, sagittal
+
+    Updated version from sdcflows and different from in qsiprep.niworkflows.viz.utils
+    so that the contour lines never move. This is accomplished by making an empty
+    image in the grid of the segmentation image and using this as the background.
+
+    """
+    plot_params = {"vmin":0.01, "vmax":0.85, "cmap": "gray"}
+    if cuts is None:
+        raise NotImplementedError
+
+    out_files = []
+    zeros_bg_img = nim.new_img_like(
+        seg_contour_img,
+        np.zeros(seg_contour_img.shape),
+        copy_header=True)
+
+    # Plot each cut axis for low-b
+    image_plot_params = plot_params.copy()
+    for i, mode in enumerate(list(order)):
+        plot_params['display_mode'] = mode
+        plot_params['cut_coords'] = cuts[mode]
+        if i == 0:
+            plot_params['title'] = label
+        else:
+            plot_params['title'] = None
+
+        # Generate nilearn figure
+        display = nip.plot_anat(zeros_bg_img, **plot_params)
+        display.add_overlay(fa_img, **image_plot_params)
+        #display.add_contours(seg_contour_img, colors='b', linewidths=0.5)
+
+        svg = extract_svg(display, compress=compress)
+        display.close()
+
+        # Find and replace the figure_1 id.
+        xml_data = etree.fromstring(svg)
+        find_text = etree.ETXPath("//{%s}g[@id='figure_1']" % SVGNS)
+        find_text(xml_data)[0].set('id', '%s-%s-%s' % (div_id, mode, uuid4()))
+
+        svg_fig = SVGFigure()
+        svg_fig.root = xml_data
+        out_files.append(svg_fig)
+
+    return out_files

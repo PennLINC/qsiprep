@@ -8,14 +8,16 @@ DSI Studio workflows
 
 """
 import nipype.pipeline.engine as pe
-from nipype.interfaces import afni, utility as niu
+from nipype.interfaces import utility as niu
 from qsiprep.interfaces.dsi_studio import (DSIStudioCreateSrc, DSIStudioGQIReconstruction,
                                            DSIStudioAtlasGraph, DSIStudioExport,
-                                           DSIStudioTracking,
-                                           FixDSIStudioExportHeader)
+                                           DSIStudioTracking, AutoTrack, _get_dsi_studio_bundles,
+                                           FixDSIStudioExportHeader, AggregateAutoTrackResults,
+                                           AutoTrackInit, DSI_STUDIO_VERSION)
 
 import logging
-from qsiprep.interfaces.bids import ReconDerivativesDataSink
+from ...interfaces.bids import ReconDerivativesDataSink
+from ...interfaces.converters import DSIStudioTrkToTck
 from .interchange import recon_workflow_input_fields
 from ...engine import Workflow
 from ...interfaces.reports import CLIReconPeaksReport, ConnectivityReport
@@ -57,7 +59,7 @@ def init_dsi_studio_recon_wf(omp_nthreads, available_anatomical_data, name="dsi_
 
 : """
     create_src = pe.Node(
-        DSIStudioCreateSrc(), 
+        DSIStudioCreateSrc(),
         name="create_src")
     romdd = params.get("ratio_of_mean_diffusion_distance", 1.25)
     gqi_recon = pe.Node(
@@ -68,7 +70,7 @@ def init_dsi_studio_recon_wf(omp_nthreads, available_anatomical_data, name="dsi_
     desc += """\
 Diffusion orientation distribution functions (ODFs) were reconstructed using
 generalized q-sampling imaging (GQI, @yeh2010gqi) with a ratio of mean diffusion
-distance of %02f.""" % romdd
+distance of %02f in DSI Studio (version %s). """ % (romdd, DSI_STUDIO_VERSION)
 
     workflow.connect([
         (inputnode, create_src, [('dwi_file', 'input_nifti_file'),
@@ -80,7 +82,7 @@ distance of %02f.""" % romdd
     if plot_reports:
         # Make a visual report of the model
         plot_peaks = pe.Node(
-            CLIReconPeaksReport(subtract_iso=True), 
+            CLIReconPeaksReport(subtract_iso=True),
             name='plot_peaks',
             n_procs=omp_nthreads)
         ds_report_peaks = pe.Node(
@@ -188,6 +190,10 @@ def init_dsi_studio_tractography_wf(omp_nthreads, available_anatomical_data, nam
                          name="outputnode")
     plot_reports = params.pop("plot_reports", True)
     workflow = Workflow(name=name)
+    desc = """DSI Studio Tractography
+
+: Tractography was run in DSI Studio (version %s) using a deterministic algorithm
+[@yeh2013deterministic]. """ %  DSI_STUDIO_VERSION
     tracking = pe.Node(
         DSIStudioTracking(
             num_threads=omp_nthreads,
@@ -205,6 +211,143 @@ def init_dsi_studio_tractography_wf(omp_nthreads, available_anatomical_data, nam
                               name='ds_' + name,
                               run_without_submitting=True)
         workflow.connect(tracking, 'output_trk', ds_tracking, 'in_file')
+    return workflow
+
+
+def init_dsi_studio_autotrack_wf(omp_nthreads, available_anatomical_data,
+                                 params={}, output_suffix="", name="dsi_studio_autotrack_wf"):
+    """Run DSI Studio's AutoTrack method to produce bundles and bundle stats.
+
+    Inputs
+
+        fibgz
+            A DSI Studio fib file produced by DSI Studio reconstruction.
+
+    Outputs
+
+        tck_files
+            MRtrix3 format tck files for each bundle
+        bundle_names
+            Names that describe which bundles are present in `tck_files`
+
+    Params:
+
+        track_id: str
+            specify the id number or the name of the bundle. The id can be found in
+            /atlas/ICBM152/HCP1065.tt.gz.txt . This text file is included in DSI
+            Studio package (For Mac, right-click on dsi_studio_64.app to find
+            content). You can specify partial name of the bundle:
+
+            example:
+            for tracking left and right arcuate fasciculus, assign
+            --track_id=0,1 or --track_id=arcuate (DSI Studio will find bundles
+            with names containing "arcuate", case insensitive)
+
+            example:
+            for tracking left and right arcuate and cingulum, assign
+            -track_id=0,1,2,3 or -track_id=arcuate,cingulum
+
+        track_voxel_ratio: float
+            the track-voxel ratio for the total number of streamline count. A larger
+            value gives better mapping with the expense of computation time. (default: 2.0)
+
+        tolerance: str
+            the tolerance for the bundle recognition. The unit is in mm. Multiple values
+            can be assigned using comma separator. A larger value may include larger track
+            variation but also subject to more false results. (default: "22,26,30")
+
+        yield_rate: float
+            This rate will be used to terminate tracking early if DSI Studio finds that the
+            fiber tracking is not generating results. (default: 0.00001)
+    """
+    if omp_nthreads < 3:
+        LOGGER.warn("Please set --omp-nthreads to 3 or greater and ensure you have enough CPU "
+                    "resources. Without at least 3 cpus this workflow will likely fail!!")
+    inputnode = pe.Node(
+        niu.IdentityInterface(
+            fields=recon_workflow_input_fields + ['fibgz']),
+        name="inputnode")
+    outputnode = pe.Node(niu.IdentityInterface(fields=['tck_files', "bundle_names"]),
+                         name="outputnode")
+    desc = """DSI Studio Automatic Tractography
+
+: Automatic Tractography was run in DSI Studio (version %s) and
+bundle shape statistics were calculated [@autotrack]. """ %  DSI_STUDIO_VERSION
+    plot_reports = params.pop("plot_reports", True)
+    bundle_names = _get_dsi_studio_bundles(params.get("track_id", ""))
+    bundle_desc = "AutoTrack attempted to reconstruct the following bundles:\n  * " \
+        + "\n  * ".join(bundle_names) + "\n\n"
+    LOGGER.info(bundle_desc)
+
+    workflow = Workflow(name=name)
+    workflow.__desc__ = desc + bundle_desc
+
+    # This initial autotrack is used to calculate the registration to the template
+    register_bundles = pe.Node(
+        AutoTrackInit(),
+        name="register_bundles",
+        n_procs=omp_nthreads)  # This process intrinsically uses ~3 cpus if you specify thread_count=1
+
+    # Real autotrack is run here on all the bundles
+    actual_trk = pe.Node(
+        AutoTrack(num_threads=max(1, omp_nthreads-1), **params),
+        name="actual_trk",
+        n_procs=omp_nthreads)  # An extra thread is needed
+
+    # Create a single
+    aggregate_atk_results = pe.Node(
+        AggregateAutoTrackResults(
+            expected_bundles=bundle_names),
+        name="aggregate_atk_results")
+
+    convert_to_tck = pe.MapNode(
+        DSIStudioTrkToTck(),
+        name="convert_to_tck",
+        iterfield="trk_file"
+    )
+
+    # Save tck files of the bundles into the outputs
+    ds_tckfiles = pe.MapNode(
+        ReconDerivativesDataSink(
+            suffix=output_suffix),
+        iterfield=["in_file", "bundle"],
+        name="ds_tckfiles")
+
+    # Save the bundle csv
+    ds_bundle_csv = pe.Node(
+        ReconDerivativesDataSink(
+            suffix=output_suffix),
+        name="ds_bundle_csv",
+        run_without_submitting=True)
+
+    # Save the mapping file
+    ds_mapping = pe.Node(
+        ReconDerivativesDataSink(
+            suffix=output_suffix),
+        name="ds_mapping",
+        run_without_submitting=True)
+
+    workflow.connect([
+        (inputnode, register_bundles, [('fibgz', 'fib_file')]),
+        (inputnode, actual_trk, [('fibgz', 'fib_file')]),
+        (inputnode, aggregate_atk_results, [('dwi_file', 'source_file')]),
+        (inputnode, convert_to_tck, [('dwi_file', 'reference_nifti')]),
+        (register_bundles, actual_trk, [
+            ('map_file', 'map_file')]),
+        (actual_trk, aggregate_atk_results, [
+            ("native_trk_files", "trk_files"),
+            ("stat_files", "stat_files")]),
+        (aggregate_atk_results, convert_to_tck, [
+            ("found_bundle_files", "trk_file")]),
+        (aggregate_atk_results, ds_tckfiles, [
+            ("found_bundle_names", "bundle")]),
+        (convert_to_tck, ds_tckfiles, [
+            ("tck_file", "in_file")]),
+        (aggregate_atk_results, ds_bundle_csv, [("bundle_csv", "in_file")]),
+        (convert_to_tck, outputnode, [("tck_file", "tck_files")]),
+        (aggregate_atk_results, outputnode, [("found_bundle_names", "bundle_names")])
+    ])
+
     return workflow
 
 
@@ -336,7 +479,9 @@ def init_dsi_studio_export_wf(omp_nthreads, available_anatomical_data, name="dsi
             fields=recon_workflow_input_fields + ['fibgz']),
         name="inputnode")
     plot_reports = params.pop("plot_reports", True)
-    scalar_names = ['gfa', 'fa0', 'fa1', 'fa2', 'iso', 'dti_fa', 'md', 'rd', 'ad']
+    scalar_names = ["qa", "dti_fa", "txx", "txy", "txz", "tyy", "tyz", "tzz", "rd1",
+                    "rd2", "ha", "md", "ad", "rd", "gfa", "iso", "rdi", "nrdi02L", "nrdi04L",
+                    "nrdi06L"]
     outputnode = pe.Node(
         niu.IdentityInterface(fields=[name + "_file" for name in scalar_names]),
         name="outputnode")

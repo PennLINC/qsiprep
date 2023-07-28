@@ -19,7 +19,7 @@ Disable warnings:
     >>> logging.getLogger('nipype.interface').setLevel('ERROR')
 
 """
-
+import os
 import os.path as op
 import nibabel as nb
 import numpy as np
@@ -29,15 +29,17 @@ from scipy.ndimage.morphology import binary_fill_holes
 from nilearn.image import resample_to_img, new_img_like
 
 from nipype.utils.filemanip import copyfile, filename_to_list, fname_presuffix
-from nipype.interfaces.base import (
+from nipype.interfaces.base import (CommandLine,
     isdefined, InputMultiPath, BaseInterfaceInputSpec, TraitedSpec, File, traits, Directory
 )
 from nipype.interfaces import freesurfer as fs
 from nipype.interfaces.base import SimpleInterface
+from nipype.interfaces.freesurfer.base import FSTraitedSpecOpenMP, FSCommandOpenMP
 from nipype.interfaces.freesurfer.preprocess import ConcatenateLTA, RobustRegister
 from nipype.interfaces.freesurfer.utils import LTAConvert
 from ..niworkflows.interfaces.registration import BBRegisterRPT, MRICoregRPT
-
+from ..niworkflows.interfaces.utils import _copyxform
+from nipype.interfaces.afni import Resample, Zeropad
 
 class StructuralReference(fs.RobustTemplate):
     """ Variation on RobustTemplate that simply copies the source if a single
@@ -305,9 +307,9 @@ class RefineBrainMask(SimpleInterface):
 
         anatnii = nb.load(self.inputs.in_anat)
         msknii = nb.Nifti1Image(
-            grow_mask(anatnii.get_data(),
-                      nb.load(self.inputs.in_aseg).get_data(),
-                      nb.load(self.inputs.in_ants).get_data()),
+            grow_mask(anatnii.get_fdata(),
+                      nb.load(self.inputs.in_aseg).get_fdata(),
+                      nb.load(self.inputs.in_ants).get_fdata()),
             anatnii.affine,
             anatnii.header
         )
@@ -352,9 +354,9 @@ def inject_skullstripped(subjects_dir, subject_id, skullstripped):
     if not op.exists(bm_auto):
         img = nb.load(t1)
         mask = nb.load(skullstripped)
-        bmask = new_img_like(mask, mask.get_data() > 0)
+        bmask = new_img_like(mask, mask.get_fdata() > 0)
         resampled_mask = resample_to_img(bmask, img, 'nearest')
-        masked_image = new_img_like(img, img.get_data() * resampled_mask.get_data())
+        masked_image = new_img_like(img, img.get_fdata() * resampled_mask.get_fdata())
         masked_image.to_filename(bm_auto)
 
     if not op.exists(bm):
@@ -491,3 +493,179 @@ def find_fs_path(freesurfer_dir, subject_id):
     if op.exists(withsub):
         return withsub
     return None
+
+
+class _PrepareSynthStripGridInputSpec(BaseInterfaceInputSpec):
+    input_image = File(exists=True, mandatory=True)
+
+
+class _PrepareSynthStripGridOutputSpec(TraitedSpec):
+    prepared_image = File(exists=True)
+
+
+class PrepareSynthStripGrid(SimpleInterface):
+    input_spec = _PrepareSynthStripGridInputSpec
+    output_spec = _PrepareSynthStripGridOutputSpec
+
+    def _run_interface(self, runtime):
+        out_fname = fname_presuffix(
+            self.inputs.input_image,
+            newpath=runtime.cwd,
+            suffix="_SynthStripGrid.nii",
+            use_ext=False)
+        self._results['prepared_image'] = out_fname
+
+        # possibly downsample the image for sloppy mode. Always ensure float32
+        img = nb.load(self.inputs.input_image)
+        if not img.ndim == 3:
+            raise Exception("3D inputs are required for Synthstrip")
+        xvoxels, yvoxels, zvoxels = img.shape
+
+        def get_padding(nvoxels):
+            extra_slices = nvoxels % 64
+            if extra_slices == 0:
+                return 0
+            complete_64s = nvoxels // 64
+            return 64 * (complete_64s + 1) - nvoxels
+
+        def split_padding(padding):
+            halfpad = padding // 2
+            return halfpad, halfpad + halfpad % 2
+
+        spad = get_padding(zvoxels)
+        rpad, lpad = split_padding(get_padding(xvoxels))
+        apad, ppad = split_padding(get_padding(yvoxels))
+
+        zeropad = Zeropad(
+            S=spad,
+            R=rpad,
+            L=lpad,
+            A=apad,
+            P=ppad,
+            in_files=self.inputs.input_image,
+            out_file=out_fname)
+
+        _ = zeropad.run()
+        assert op.exists(out_fname)
+        return runtime
+
+
+class _SynthStripInputSpec(FSTraitedSpecOpenMP):
+    input_image = File(
+        argstr="-i %s",
+        exists=True,
+        mandatory=True)
+    no_csf = traits.Bool(
+        argstr='--no-csf',
+        desc="Exclude CSF from brain border.")
+    border = traits.Int(
+        argstr='-b %d',
+        desc="Mask border threshold in mm. Default is 1.")
+    gpu = traits.Bool(argstr="-g")
+    out_brain = File(
+        argstr="-o %s",
+        name_template="%s_brain.nii.gz",
+        name_source=["input_image"],
+        keep_extension=False,
+        desc="skull stripped image with corrupt sform")
+    out_brain_mask = File(
+        argstr="-m %s",
+        name_template="%s_mask.nii.gz",
+        name_source=["input_image"],
+        keep_extension=False,
+        desc="mask image with corrupt sform")
+
+
+class _SynthStripOutputSpec(TraitedSpec):
+    out_brain = File(exists=True)
+    out_brain_mask = File(exists=True)
+
+
+class SynthStrip(FSCommandOpenMP):
+    input_spec = _SynthStripInputSpec
+    output_spec = _SynthStripOutputSpec
+    _cmd = "mri_synthstrip"
+
+    def _num_threads_update(self):
+        if self.inputs.num_threads:
+            self.inputs.environ.update(
+                {"OMP_NUM_THREADS": "1"}
+            )
+
+
+class FixHeaderSynthStrip(SynthStrip):
+
+    def _run_interface(self, runtime, correct_return_codes=(0,)):
+        # Run normally
+        runtime = super(FixHeaderSynthStrip, self)._run_interface(
+            runtime, correct_return_codes)
+
+        outputs = self._list_outputs()
+        if not op.exists(outputs["out_brain"]):
+            raise Exception("mri_synthstrip failed!")
+
+        if outputs.get("out_brain_mask"):
+            _copyxform(
+                self.inputs.input_image,
+                outputs["out_brain_mask"])
+
+        _copyxform(
+            self.inputs.input_image,
+            outputs["out_brain"])
+
+        return runtime
+
+
+class _SynthSegInputSpec(FSTraitedSpecOpenMP):
+    input_image = File(
+        argstr="--i %s",
+        exists=True,
+        mandatory=True)
+    num_threads = traits.Int(
+        default=1,
+        argstr="--threads %d",
+        usedefault=True,
+        desc="Number of threads to use")
+    fast = traits.Bool(
+        argstr='--fast',
+        desc="fast predictions (lower quality).")
+    robust = traits.Bool(
+        argstr='--robust',
+        desc="use robust predictions (slower).")
+    out_seg = File(
+        argstr="--o %s",
+        name_template="%s_aseg.nii.gz",
+        name_source=["input_image"],
+        keep_extension=False,
+        desc="segmentation image")
+    out_post = File(
+        argstr="--post %s",
+        name_template="%s_post.nii.gz",
+        name_source=["input_image"],
+        keep_extension=False,
+        desc="posteriors image")
+    out_qc = File(
+        argstr="--qc %s",
+        name_template="%s_qc.csv",
+        name_source=["input_image"],
+        keep_extension=False,
+        desc="qc csv")
+
+
+
+class _SynthSegOutputSpec(TraitedSpec):
+    out_seg = File(exists=True)
+    out_post = File(exists=True)
+    out_qc = File(exists=True)
+
+
+class SynthSeg(FSCommandOpenMP):
+    input_spec = _SynthSegInputSpec
+    output_spec = _SynthSegOutputSpec
+    _cmd = "mri_synthseg"
+
+    def _num_threads_update(self):
+        if self.inputs.num_threads:
+            self.inputs.environ.update(
+                {"OMP_NUM_THREADS": "1"}
+            )

@@ -15,6 +15,5 @@
     "sigma_units": ["mm", "mm", "mm"],
     "shrink_factors": [[2]],
     "sampling_percentage": [0.2],
-    "use_histogram_matching": [true],
-    "use_estimate_learning_rate_once": [true]
+    "use_histogram_matching": [true]
 }

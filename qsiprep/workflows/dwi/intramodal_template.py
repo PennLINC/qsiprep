@@ -110,8 +110,8 @@ def init_intramodal_template_wf(inputs_list, t1w_source_file, reportlets_dir, tr
     workflow.connect([
         (inputnode, b0_coreg_wf, [
             ('t1_brain', 'inputnode.t1_brain'),
-            ('t1_seg', 'inputnode.t1_seg'),
             ('subjects_dir', 'inputnode.subjects_dir'),
+            ('t1_seg', 'inputnode.t1_seg'),
             ('subject_id', 'inputnode.subject_id'),
             ('t1_2_fsnative_reverse_transform',
              'inputnode.t1_2_fsnative_reverse_transform')]),

@@ -44,8 +44,8 @@ ${QSIPREP_CMD} \
      --eddy-config ${EDDY_CFG} \
      --sloppy \
 	--force-syn \
+	--b1-biascorrect-stage final \
      --denoise-method none \
-	--output-space T1w \
 	--output-resolution 5 \
 	-vv
 

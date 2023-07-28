@@ -40,11 +40,10 @@ QSIPREP_CMD=$(run_qsiprep_cmd ${BIDS_INPUT_DIR} ${OUTPUT_DIR})
 ${QSIPREP_CMD} \
 	 -w ${TEMPDIR} \
 	 --sloppy \
-	 --denoise-method none \
-	 --output-space T1w \
+	 --b1_biascorrect_stage none \
 	 --hmc_model none \
 	 --b0-motion-corr-to first \
 	 --output-resolution 5 \
 	 --intramodal-template-transform BSplineSyN \
 	 --intramodal-template-iters 2 \
-	 -vv 
+	 -vv

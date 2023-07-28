@@ -5,14 +5,11 @@
     "winsorize_upper_quantile": 0.998,
     "collapse_output_transforms": true,
     "write_composite_transform": false,
-    "initial_moving_transform_com": 1,
     "use_histogram_matching": [true, true],
-    "use_estimate_learning_rate_once": [ true, true],
     "transforms": [ "Similarity", "Affine"],
     "number_of_iterations": [ [ 100000, 100000 ], [ 10000, 10000 ] ],
     "output_warped_image": true,
     "transform_parameters": [ [ 0.3 ], [ 0.1 ] ],
-    "output_warped_image": true,
     "convergence_threshold": [ 1e-6, 1e-6 ],
     "convergence_window_size": [ 10, 10 ],
     "metric": [ "MI", "MI" ],
@@ -23,5 +20,6 @@
     "metric_weight": [ 1, 1 ],
     "smoothing_sigmas": [ [ 0, 0 ], [ 2, 2 ] ],
     "radius_or_number_of_bins": [ 32, 32],
-    "interpolation": "Linear"
+    "interpolation": "Linear",
+    "initial_moving_transform_com": 1
 }

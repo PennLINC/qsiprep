@@ -72,9 +72,9 @@ class FODtoFIBGZ(SimpleInterface):
         if isdefined(mask_file):
             mask_img = nb.load(mask_file)
         else:
-            ampl_data = amplitudes_img.get_data()
+            ampl_data = amplitudes_img.get_fdata()
             ampl_mask = ampl_data.sum(3) > 1e-6
-            mask_img = nb.Nifti1Image(ampl_mask.astype(np.float),
+            mask_img = nb.Nifti1Image(ampl_mask.astype(float),
                                       amplitudes_img.affine)
 
         self._results['fib_file'] = output_fib_file
@@ -151,6 +151,50 @@ class NODDItoFIBGZ(SimpleInterface):
         return runtime
 
 
+class _DSIStudioTrkToTckInputSpec(BaseInterfaceInputSpec):
+    trk_file = File(exists=True, mandatory=True)
+    reference_nifti = File(exists=True, mandatory=True)
+
+
+class _DSIStudioTrkToTckOutputSpec(TraitedSpec):
+    tck_file = File()
+
+
+class DSIStudioTrkToTck(SimpleInterface):
+    input_spec = _DSIStudioTrkToTckInputSpec
+    output_spec = _DSIStudioTrkToTckOutputSpec
+
+    def _run_interface(self, runtime):
+
+        if self.inputs.trk_file.endswith(".gz"):
+            with gzip.open(self.inputs.trk_file, "r") as trkf:
+                dsi_trk = nb.streamlines.load(trkf)
+        else:
+            dsi_trk = nb.streamlines.load(self.inputs.trk_file)
+
+        #load preprocessed dwi image
+        dwi_img = nb.load(self.inputs.reference_nifti)
+
+        #convert to voxel coordinates
+        pts = dsi_trk.streamlines._data
+        zooms = np.abs(np.diag(dsi_trk.header['voxel_to_rasmm'])[:3])
+        voxel_coords = pts / zooms
+        voxel_coords[:, 0] = dwi_img.shape[0] - voxel_coords[:, 0]
+        voxel_coords[:, 1] = dwi_img.shape[1] - voxel_coords[:, 1]
+
+        #create new tck
+        new_data = nb.affines.apply_affine(dwi_img.affine, voxel_coords)
+        dsi_trk.tractogram.streamlines._data = new_data
+        tck = nb.streamlines.TckFile(dsi_trk.tractogram)
+        tck_file = fname_presuffix(self.inputs.trk_file.rstrip(".gz"),
+                                   newpath=runtime.cwd,
+                                   use_ext=False,
+                                   suffix=".tck")
+        tck.save(tck_file)
+        self._results['tck_file'] = tck_file
+        return runtime
+
+
 def get_dsi_studio_ODF_geometry(odf_key):
     mat_path = pkgr('qsiprep', 'data/odfs.mat')
     m = loadmat(mat_path)
@@ -179,7 +223,7 @@ def amplitudes_to_fibgz(amplitudes_img, odf_dirs, odf_faces, output_file,
     odf_dirs: np.ndarray
         N x 3 array containing the directions corresponding to the
         amplitudes in ``amplitudes_img``. The values in
-        ``amplitudes_img.get_data()[..., i]`` are for the
+        ``amplitudes_img.get_fdata()[..., i]`` are for the
         direction in ``odf_dirs[i]``.
     odf_faces: np.ndarray
         triangles connecting the vertices in ``odf_dirs``
@@ -208,15 +252,15 @@ def amplitudes_to_fibgz(amplitudes_img, odf_dirs, odf_faces, output_file,
         raise ValueError("Differing grid between mask and amplitudes")
 
     # Get the flat mask
-    ampl_data = amplitudes_img.get_data()
-    flat_mask = mask_img.get_data().flatten(order="F") > 0
+    ampl_data = amplitudes_img.get_fdata()
+    flat_mask = mask_img.get_fdata().flatten(order="F") > 0
     odf_array = ampl_data.reshape(-1, ampl_data.shape[3], order='F')
     del ampl_data
     masked_odfs = odf_array[flat_mask, :]
     z0 = np.nanmax(masked_odfs)
     masked_odfs = masked_odfs / z0
     masked_odfs[masked_odfs < 0] = 0
-    masked_odfs = np.nan_to_num(masked_odfs).astype(np.float)
+    masked_odfs = np.nan_to_num(masked_odfs).astype(float)
 
     if unit_odf:
         sums = masked_odfs.sum(1)
@@ -247,19 +291,19 @@ def amplitudes_to_fibgz(amplitudes_img, odf_dirs, odf_faces, output_file,
         # fill in the "fa" values
         fa_n = np.zeros(n_voxels)
         fa_n[flat_mask] = peak_vals[:, nfib]
-        dsi_mat['fa%d' % nfib] = fa_n.astype(np.float32)
+        dsi_mat['fa%d' % nfib] = fa_n.astype('float32')
 
         # Fill in the index values
         index_n = np.zeros(n_voxels)
         index_n[flat_mask] = peak_indices[:, nfib]
-        dsi_mat['index%d' % nfib] = index_n.astype(np.int16)
+        dsi_mat['index%d' % nfib] = index_n.astype('int16')
 
     # Add in the ODFs
     num_odf_matrices = n_odfs // ODF_COLS
     split_indices = (np.arange(num_odf_matrices) + 1) * ODF_COLS
     odf_splits = np.array_split(masked_odfs, split_indices, axis=0)
     for splitnum, odfs in enumerate(odf_splits):
-        dsi_mat['odf%d' % splitnum] = odfs.T.astype(np.float32)
+        dsi_mat['odf%d' % splitnum] = odfs.T.astype('float32')
 
     dsi_mat['odf_vertices'] = odf_dirs.T
     dsi_mat['odf_faces'] = odf_faces.T
@@ -285,7 +329,7 @@ def amico_directions_to_fibgz(directions_img, od_img, icvf_img, isovf_img,
     odf_dirs: np.ndarray
         N x 3 array containing the directions corresponding to the
         amplitudes in ``amplitudes_img``. The values in
-        ``amplitudes_img.get_data()[..., i]`` are for the
+        ``amplitudes_img.get_fdata()[..., i]`` are for the
         direction in ``odf_dirs[i]``.
     odf_faces: np.ndarray
         triangles connecting the vertices in ``odf_dirs``
@@ -340,7 +384,7 @@ def amico_directions_to_fibgz(directions_img, od_img, icvf_img, isovf_img,
     # fill in the "dir" values
     dir0 = np.zeros(n_voxels)
     dir0[flat_mask] = peak_indices
-    dsi_mat['index0'] = dir0.astype(np.int16)
+    dsi_mat['index0'] = dir0.astype('int16')
     dsi_mat['fa0'] = icvf_vec
     dsi_mat['ICVF0'] = icvf_vec
     dsi_mat['ISOVF0'] = isovf_vec
@@ -361,7 +405,7 @@ def amplitudes_to_sh_mif(amplitudes_img, odf_dirs, output_file, working_dir):
     odf_dirs: np.ndarray
         2*N x 3 array containing the directions corresponding to the
         amplitudes in ``amplitudes_img``. The values in
-        ``amplitudes_img.get_data()[..., i]`` are for the
+        ``amplitudes_img.get_fdata()[..., i]`` are for the
         direction in ``odf_dirs[i]``. Here the second half of the
         directions are the opposite of the fist and therefore have the
         same amplitudes.
@@ -454,7 +498,7 @@ def fast_load_fibgz(fib_file):
 
 def fib2amps(fib_file, ref_image, subtract_iso=True):
     fibmat = fast_load_fibgz(fib_file)
-    dims = tuple(fibmat['dimension'].squeeze().astype(np.int))
+    dims = tuple(fibmat['dimension'].squeeze().astype(int))
     directions = fibmat['odf_vertices'].T
 
     odf_vars = [k for k in fibmat.keys() if re.match("odf\\d+", k)]
@@ -477,7 +521,7 @@ def fib2amps(fib_file, ref_image, subtract_iso=True):
     # Convert each column to a 3d file, then concatenate them
     odfs_3d = []
     for odf_vals in odf_array.T:
-        new_data = np.zeros(n_voxels, dtype=np.float32)
+        new_data = np.zeros(n_voxels, dtype='float32')
         new_data[flat_mask] = odf_vals
         odfs_3d.append(new_data.reshape(dims, order="F"))
 
@@ -495,7 +539,7 @@ def peaks_to_odfs(fibdict):
     flat_mask = fibdict['fa0'].squeeze().ravel(order='F') > 0
     num_directions = fibdict['odf_vertices'].shape[1]
     num_odfs = flat_mask.sum()
-    odfs = np.zeros((num_odfs, num_directions), dtype=np.float32)
+    odfs = np.zeros((num_odfs, num_directions), dtype='float32')
     row_indices = np.arange(num_odfs)
     for peak_num in range(num_indexes):
         fa_values = fibdict[

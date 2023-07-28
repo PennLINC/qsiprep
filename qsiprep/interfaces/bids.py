@@ -217,10 +217,12 @@ class BIDSDataGrabber(SimpleInterface):
     def __init__(self, *args, **kwargs):
         anat_only = kwargs.pop('anat_only')
         dwi_only = kwargs.pop('dwi_only')
+        anatomical_contrast = kwargs.pop('anatomical_contrast')
+        self._anatomical_contrast = anatomical_contrast
         super(BIDSDataGrabber, self).__init__(*args, **kwargs)
         if anat_only is not None:
             self._require_funcs = not anat_only
-        self._no_anat_necessary = bool(dwi_only)
+        self._no_anat_necessary = bool(dwi_only) or anatomical_contrast == "none"
 
     def _run_interface(self, runtime):
         bids_dict = self.inputs.subject_data
@@ -234,6 +236,21 @@ class BIDSDataGrabber(SimpleInterface):
             if self._no_anat_necessary:
                 LOGGER.info('%s, but no problem because --dwi-only was selected.',
                             message)
+            elif self._anatomical_contrast != "T1w":
+                LOGGER.info('%s, but no problem because --anat-modality %s was selected.',
+                            message, self._anatomical_contrast)
+            else:
+                raise FileNotFoundError(message)
+
+        if not bids_dict['t2w']:
+            message = 'No T2w images found for subject sub-{}'.format(
+                self.inputs.subject_id)
+            if self._no_anat_necessary:
+                LOGGER.info('%s, but no problem because --dwi-only was selected.',
+                            message)
+            elif self._anatomical_contrast != "T2w":
+                LOGGER.info('%s, but no problem because --anat-modality %s was selected.',
+                            message, self._anatomical_contrast)
             else:
                 raise FileNotFoundError(message)
 
@@ -241,7 +258,7 @@ class BIDSDataGrabber(SimpleInterface):
             raise FileNotFoundError('No DWI images found for subject sub-{}'.format(
                 self.inputs.subject_id))
 
-        for imtype in ['t2w', 'flair', 'fmap', 'sbref', 'roi', 'dwi']:
+        for imtype in ['flair', 'fmap', 'sbref', 'roi', 'dwi']:
             if not bids_dict[imtype]:
                 LOGGER.warning('No \'%s\' images found for sub-%s',
                                imtype, self.inputs.subject_id)
@@ -253,12 +270,13 @@ class DerivativesDataSinkInputSpec(BaseInterfaceInputSpec):
     base_directory = traits.Directory(
         desc='Path to the base directory for storing data.')
     in_file = traits.Either(traits.Directory(exists=True),
-                            InputMultiObject(File(exists=True)), 
+                            InputMultiObject(File(exists=True)),
                             mandatory=True,
                             desc='the object to be saved')
     source_file = File(mandatory=True, desc='the original file or name of merged files')
     space = traits.Str('', usedefault=True, desc='Label for space field')
     desc = traits.Str('', usedefault=True, desc='Label for description field')
+    bundle = traits.Str('', usedefault=True, desc='Label for bundle field')
     suffix = traits.Str('', usedefault=True, desc='suffix appended to source_file')
     keep_dtype = traits.Bool(False, usedefault=True, desc='keep datatype suffix')
     extra_values = traits.List(traits.Str)
@@ -349,10 +367,12 @@ desc-preproc_bold.nii.gz'
         os.makedirs(out_path, exist_ok=True)
         base_fname = op.join(out_path, src_fname)
 
-        formatstr = '{bname}{space}{desc}{suffix}{dtype}{ext}'
+        formatstr = '{bname}{space}{desc}{bundle}{suffix}{dtype}{ext}'
 
         space = '_space-{}'.format(self.inputs.space) if self.inputs.space else ''
         desc = '_desc-{}'.format(self.inputs.desc) if self.inputs.desc else ''
+        bundle = '_bundle-{}'.format(
+            self.inputs.bundle.replace("_", "")) if self.inputs.bundle else ''
         suffix = '_{}'.format(self.inputs.suffix) if self.inputs.suffix else ''
         dtype = '' if not self.inputs.keep_dtype else ('_%s' % dtype)
 
@@ -363,6 +383,7 @@ desc-preproc_bold.nii.gz'
                 bname=base_fname,
                 space=space,
                 desc=desc,
+                bundle=bundle,
                 suffix=suffix,
                 dtype=dtype,
                 ext='')
@@ -372,8 +393,8 @@ desc-preproc_bold.nii.gz'
             return runtime
 
         if len(self.inputs.in_file) > 1 and not isdefined(self.inputs.extra_values):
-            formatstr = '{bname}{space}{desc}{suffix}{i:04d}{dtype}{ext}'
-        
+            formatstr = '{bname}{space}{desc}{bundle}{suffix}{i:04d}{dtype}{ext}'
+
         # Otherwise it's file(s)
         self._results['compression'] = []
         for i, fname in enumerate(self.inputs.in_file):
@@ -381,6 +402,7 @@ desc-preproc_bold.nii.gz'
                 bname=base_fname,
                 space=space,
                 desc=desc,
+                bundle=bundle,
                 suffix=suffix,
                 i=i,
                 dtype=dtype,
@@ -390,6 +412,22 @@ desc-preproc_bold.nii.gz'
             self._results['out_file'].append(out_file)
             self._results['compression'].append(_copy_any(fname, out_file))
         return runtime
+
+
+class _DerivativesMaybeDataSinkInputSpec(DerivativesDataSinkInputSpec):
+    in_file = traits.Either(traits.Directory(exists=True),
+                            InputMultiObject(File(exists=True)),
+                            mandatory=False,
+                            desc='the object to be saved')
+
+
+class DerivativesMaybeDataSink(DerivativesDataSink):
+    input_spec = _DerivativesMaybeDataSinkInputSpec
+
+    def _run_interface(self, runtime):
+        if not isdefined(self.inputs.in_file):
+            return runtime
+        return super(DerivativesMaybeDataSink, self)._run_interface(runtime)
 
 
 class ReconDerivativesDataSink(DerivativesDataSink):

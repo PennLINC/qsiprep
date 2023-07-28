@@ -15,6 +15,8 @@ def make_sloppy(spec):
             "fiber_count": 5000},
         ("DSI Studio", "tractography"): {
             "fiber_count": 5000},
+        ("DSI Studio", "autotrack"): {
+            "track_id": "0,1,2"},
 
         ("MRTrix3", "tractography"): {
             "tckgen": {
@@ -30,7 +32,16 @@ def make_sloppy(spec):
                 "search_radius": "DELETE"}},
 
         ("MRTrix3", "global_tractography"): {
-            "niters": 10000}
+            "niters": 10000},
+
+        ("pyAFQ", "pyafq_tractometry"): {
+            "mapping_definition":
+                'AffMap(affine_kwargs={"level_iters": [10, 10, 10]})',
+            "bundle_info": '["SLF_L", "ARC_L", "CST_L", "CST_R"]',
+            "n_seeds": 10000,
+            "random_seeds": True,
+            "export": "all_bundles_figure",
+        }
     }
     sloppy_spec = deepcopy(spec)
     sloppy_nodes = []
