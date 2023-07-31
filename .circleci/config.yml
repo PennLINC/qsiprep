@@ -113,7 +113,7 @@ jobs:
             cd .circleci
             bash DSDTI_TOPUP.sh
 
-  DRBUDDI_SHORELine_EPI:
+  DRBUDDI_TENSORLine_EPI:
     resource_class: large
     environment:
       CIRCLE_CPUS: 4
@@ -122,11 +122,11 @@ jobs:
       - checkout
       - run: *runinstall
       - run:
-          name: Run SHORELine with epi fmaps and DRBUDDI
+          name: Run TENSORLine with epi fmaps and DRBUDDI
           no_output_timeout: 1h
           command: |
             cd .circleci
-            bash DRBUDDI_SHORELine_epi.sh
+            bash DRBUDDI_TENSORLine_epi.sh
 
   DRBUDDI_eddy_rpe_series:
     resource_class: large
@@ -483,6 +483,16 @@ workflows:
             tags:
               only: /.*/
 
+      - DRBUDDI_TENSORLine_EPI:
+          requires:
+            - build
+          filters:
+            branches:
+              ignore:
+                - /recon\/.*/
+            tags:
+              only: /.*/
+
       - DSDTI_nofmap:
           requires:
             - build
@@ -592,6 +602,7 @@ workflows:
             - DSDTI_TOPUP
             - DRBUDDI_SHORELine_EPI
             - DRBUDDI_eddy_rpe_series
+            - DRBUDDI_TENSORLine_EPI
             - IntramodalTemplate
             - MultiT1w
             - Recon_3Tissue
