@@ -128,6 +128,21 @@ jobs:
             cd .circleci
             bash DRBUDDI_TENSORLine_epi.sh
 
+  DRBUDDI_SHORELine_EPI:
+    resource_class: large
+    environment:
+      CIRCLE_CPUS: 4
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run: *runinstall
+      - run:
+          name: Run SHORELine with epi fmaps and DRBUDDI
+          no_output_timeout: 1h
+          command: |
+            cd .circleci
+            bash DRBUDDI_SHORELine_epi.sh
+
   DRBUDDI_eddy_rpe_series:
     resource_class: large
     environment:
