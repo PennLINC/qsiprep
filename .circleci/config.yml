@@ -113,6 +113,21 @@ jobs:
             cd .circleci
             bash DSDTI_TOPUP.sh
 
+  DRBUDDI_TENSORLine_EPI:
+    resource_class: large
+    environment:
+      CIRCLE_CPUS: 4
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run: *runinstall
+      - run:
+          name: Run TENSORLine with epi fmaps and DRBUDDI
+          no_output_timeout: 1h
+          command: |
+            cd .circleci
+            bash DRBUDDI_TENSORLine_epi.sh
+
   DRBUDDI_SHORELine_EPI:
     resource_class: large
     environment:
@@ -483,6 +498,16 @@ workflows:
             tags:
               only: /.*/
 
+      - DRBUDDI_TENSORLine_EPI:
+          requires:
+            - build
+          filters:
+            branches:
+              ignore:
+                - /recon\/.*/
+            tags:
+              only: /.*/
+
       - DSDTI_nofmap:
           requires:
             - build
@@ -592,6 +617,7 @@ workflows:
             - DSDTI_TOPUP
             - DRBUDDI_SHORELine_EPI
             - DRBUDDI_eddy_rpe_series
+            - DRBUDDI_TENSORLine_EPI
             - IntramodalTemplate
             - MultiT1w
             - Recon_3Tissue
