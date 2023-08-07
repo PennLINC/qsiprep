@@ -222,7 +222,8 @@ class SignalPrediction(SimpleInterface):
             dti_wls = dti.TensorModel(training_gtab)
             fit_wls = dti_wls.fit(training_data, mask=mask_array)
             dti_params = fit_wls.model_params
-            output_data = dti.tensor_prediction(dti_params, prediction_gtab, training_data[:,:,:,0])
+            output_data = dti.tensor_prediction(
+                dti_params, prediction_gtab, training_data[:,:,:,0])[..., 0]
 
         else:
             raise NotImplementedError('Unsupported model: ' + self.inputs.model)
