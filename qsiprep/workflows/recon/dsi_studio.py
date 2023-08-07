@@ -13,7 +13,7 @@ from qsiprep.interfaces.dsi_studio import (DSIStudioCreateSrc, DSIStudioGQIRecon
                                            DSIStudioAtlasGraph, DSIStudioExport,
                                            DSIStudioTracking, AutoTrack, _get_dsi_studio_bundles,
                                            FixDSIStudioExportHeader, AggregateAutoTrackResults,
-                                           AutoTrackInit, DSI_STUDIO_VERSION)
+                                           DSI_STUDIO_VERSION)
 
 import logging
 from ...interfaces.bids import ReconDerivativesDataSink
@@ -260,9 +260,6 @@ def init_dsi_studio_autotrack_wf(omp_nthreads, available_anatomical_data,
             This rate will be used to terminate tracking early if DSI Studio finds that the
             fiber tracking is not generating results. (default: 0.00001)
     """
-    if omp_nthreads < 3:
-        LOGGER.warn("Please set --omp-nthreads to 3 or greater and ensure you have enough CPU "
-                    "resources. Without at least 3 cpus this workflow will likely fail!!")
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=recon_workflow_input_fields + ['fibgz']),
@@ -282,19 +279,13 @@ bundle shape statistics were calculated [@autotrack]. """ %  DSI_STUDIO_VERSION
     workflow = Workflow(name=name)
     workflow.__desc__ = desc + bundle_desc
 
-    # This initial autotrack is used to calculate the registration to the template
-    register_bundles = pe.Node(
-        AutoTrackInit(),
-        name="register_bundles",
-        n_procs=omp_nthreads)  # This process intrinsically uses ~3 cpus if you specify thread_count=1
-
-    # Real autotrack is run here on all the bundles
+    # Run autotrack!
     actual_trk = pe.Node(
-        AutoTrack(num_threads=max(1, omp_nthreads-1), **params),
+        AutoTrack(num_threads=omp_nthreads, **params),
         name="actual_trk",
         n_procs=omp_nthreads)  # An extra thread is needed
 
-    # Create a single
+    # Create a single output
     aggregate_atk_results = pe.Node(
         AggregateAutoTrackResults(
             expected_bundles=bundle_names),
@@ -303,8 +294,7 @@ bundle shape statistics were calculated [@autotrack]. """ %  DSI_STUDIO_VERSION
     convert_to_tck = pe.MapNode(
         DSIStudioTrkToTck(),
         name="convert_to_tck",
-        iterfield="trk_file"
-    )
+        iterfield="trk_file")
 
     # Save tck files of the bundles into the outputs
     ds_tckfiles = pe.MapNode(
@@ -328,12 +318,10 @@ bundle shape statistics were calculated [@autotrack]. """ %  DSI_STUDIO_VERSION
         run_without_submitting=True)
 
     workflow.connect([
-        (inputnode, register_bundles, [('fibgz', 'fib_file')]),
         (inputnode, actual_trk, [('fibgz', 'fib_file')]),
         (inputnode, aggregate_atk_results, [('dwi_file', 'source_file')]),
         (inputnode, convert_to_tck, [('dwi_file', 'reference_nifti')]),
-        (register_bundles, actual_trk, [
-            ('map_file', 'map_file')]),
+        (actual_trk, ds_mapping, [('map_file', 'in_file')]),
         (actual_trk, aggregate_atk_results, [
             ("native_trk_files", "trk_files"),
             ("stat_files", "stat_files")]),
