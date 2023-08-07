@@ -17,7 +17,7 @@ def make_sloppy(spec):
             "fiber_count": 5000},
         ("DSI Studio", "autotrack"): {
             "track_id": "Cortico_Spinal_Tract_L,Cortico_Spinal_Tract_R",
-            "tolerance": "30, 40",
+            "tolerance": "30,40",
             "track_voxel_ratio": 0.8},
 
         ("MRTrix3", "tractography"): {
