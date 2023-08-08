@@ -882,7 +882,7 @@ def init_synthstrip_wf(omp_nthreads, do_padding=False,
         name='outputnode')
 
     synthstrip = pe.Node(
-        FixHeaderSynthStrip(),
+        FixHeaderSynthStrip(), # Threads are always fixed to 1 in the run
         name="synthstrip",
         n_procs=omp_nthreads)
     mask_to_original_grid = pe.Node(
@@ -940,7 +940,7 @@ def init_synthseg_wf(omp_nthreads, sloppy, name="synthseg_wf"):
     synthseg = pe.Node(
         SynthSeg(
             fast=sloppy,
-            num_threads=omp_nthreads),
+            num_threads=1), # Hard code to 1
         n_procs=omp_nthreads,
         name='synthseg')
 
