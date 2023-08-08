@@ -25,7 +25,7 @@ CFG=${TESTDIR}/data/nipype.cfg
 EDDY_CFG=${TESTDIR}/data/eddy_config.json
 export FS_LICENSE=${TESTDIR}/data/license.txt
 
-# Test MRtrix3 multishell msmt with ACT
+# Test AutoTrack
 TESTNAME=autotrack
 setup_dir ${TESTDIR}/${TESTNAME}
 TEMPDIR=${TESTDIR}/${TESTNAME}/work
@@ -37,7 +37,7 @@ ${QSIPREP_CMD} \
 	 -w ${TEMPDIR} \
 	 --recon-input ${BIDS_INPUT_DIR} \
 	 --sloppy \
-     --stop-on-first-crash \
+         --stop-on-first-crash \
 	 --recon-spec dsi_studio_autotrack \
 	 --recon-only \
 	 -vv

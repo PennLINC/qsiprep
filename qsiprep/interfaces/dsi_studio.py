@@ -759,7 +759,6 @@ class _AutoTrackInputSpec(DSIStudioCommandLineInputSpec):
                     copyfile=False,
                     argstr="--source=%s")
     map_file = File(exists=True,
-                    mandatory=True,
                     copyfile=False)
     track_id = traits.Str(
         "Fasciculus,Cingulum,Aslant,Corticos,Thalamic_R,Reticular,Optic,Fornix,Corpus",
@@ -812,9 +811,10 @@ class _AutoTrackInputSpec(DSIStudioCommandLineInputSpec):
     _boilerplate_traits = ["track_id", "track_voxel_ratio", "tolerance", "yield_rate"]
 
 
-class _AutoTrackOutputSpec(DSIStudioCommandLineInputSpec):
+class _AutoTrackOutputSpec(TraitedSpec):
     native_trk_files = OutputMultiObject(File(exists=True))
     stat_files = OutputMultiObject(File(exists=True))
+    map_file = File(exists=True)
 
 
 class AutoTrack(CommandLine):
@@ -834,28 +834,8 @@ class AutoTrack(CommandLine):
         stat_files = [str(fname.absolute()) for fname in cwd.rglob("*.stat.txt")]
         outputs["native_trk_files"] = trk_files
         outputs["stat_files"] = stat_files
-        return outputs
 
-
-class _AutoTrackInitInputSpec(_AutoTrackInputSpec):
-    num_threads = 1  # Force this so it doesn't use a ton of threads
-    map_file = File(mandatory=False)
-    track_id = "0"
-    num_retries = traits.Int(3, usedefault=True)
-    seconds_between_retries = traits.Int(500, usedefault=True)
-
-
-class _AutoTrackInitOutputSpec(_AutoTrackOutputSpec):
-    map_file = File(exists=True)
-
-
-class AutoTrackInit(AutoTrack):
-    input_spec = _AutoTrackInitInputSpec
-    output_spec = _AutoTrackInitOutputSpec
-
-    def _list_outputs(self):
-        outputs = self.output_spec().get()
-        cwd = Path(".")
+        # Find any mappings
         map_files = list(cwd.glob("*.map.gz"))
         if len(map_files) > 1:
             raise Exception("Too many map files generated")
@@ -863,27 +843,6 @@ class AutoTrackInit(AutoTrack):
             raise Exception("No map files found in " + str(cwd.absolute()))
         outputs["map_file"] = str(map_files[0].absolute())
         return outputs
-
-    def _run_interface(self, runtime, correct_return_codes=(0,)):
-        if self.inputs.num_retries < 2:
-            return super(AutoTrackInit, self)._run_interface(
-                runtime, correct_return_codes)
-
-        for try_num in range(self.inputs.num_retries):
-            runtime = super(AutoTrackInit, self)._run_interface(
-                runtime, correct_return_codes)
-            succeeded = False
-            try:
-                self._list_outputs()
-                succeeded = True
-            except Exception:
-                LOGGER.info("Autotrack init has failed attempt {}".format(try_num + 1))
-                time.sleep(self.inputs.seconds_between_retries)
-
-            if succeeded:
-                return runtime
-
-        raise Exception("Autotrack was unable to run successfully.")
 
 
 class _AggregateAutoTrackResultsInputSpec(BaseInterfaceInputSpec):

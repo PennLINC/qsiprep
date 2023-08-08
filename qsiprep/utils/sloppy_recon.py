@@ -16,7 +16,9 @@ def make_sloppy(spec):
         ("DSI Studio", "tractography"): {
             "fiber_count": 5000},
         ("DSI Studio", "autotrack"): {
-            "track_id": "0,1,2"},
+            "track_id": "Arcuate_Fasciculus_L,Arcuate_Fasciculus_R",
+            "tolerance": "30,40",
+            "track_voxel_ratio": 0.8},
 
         ("MRTrix3", "tractography"): {
             "tckgen": {
