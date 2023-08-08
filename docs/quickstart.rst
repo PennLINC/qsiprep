@@ -4,7 +4,7 @@ Quick Start
 -----------
 
 There are many options for running ``qsiprep`` but most have sensible defaults and
-don't need to be changed. This page describes the options most most likely to be
+don't need to be changed. This page describes the options most likely to be
 needed to be adjusted for your specific data. Suppose the following data is available
 in the BIDS input::
 
