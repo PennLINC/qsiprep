@@ -1,3 +1,24 @@
+0.19.0 (August 10, 2023)
+========================
+
+Addresses stability issues in the 0.18 releases. Huge improvements to AutoTrack recon workflow
+CPU use and improvements in memory use for synthseg and synthstrip
+
+ * [ENH] limit the synths to 1 thread (#608)
+ * [DOC] fix typo in docs (#606)
+ * [ENH] Stabilize autotrack performance (#604)
+ * [CI] Add test for tensor-based head motion correction (#605)
+ * [FIX] fixes steinhardt computation (#603)
+
+
+0.18.1 (June 26, 2023)
+======================
+
+Bugfixes since 0.18.0
+
+Bugfix:
+ * [FIX] add btable to merge when averaging outputs (#594)
+
 0.18.0 (June 9, 2023)
 =====================
 
