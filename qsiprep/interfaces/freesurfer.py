@@ -664,6 +664,12 @@ class SynthSeg(FSCommandOpenMP):
     output_spec = _SynthSegOutputSpec
     _cmd = "mri_synthseg"
 
+    def _format_arg(self, name, trait_spec, value):
+        # Hardcode threads to be 1
+        if name == "num_threads":
+            return "--threads 1"
+        return super()._format_arg(name, trait_spec, value)
+
     def _num_threads_update(self):
         if self.inputs.num_threads:
             self.inputs.environ.update(
