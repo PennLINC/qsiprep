@@ -51,7 +51,7 @@ def init_qsiprep_wf(
         force_spatial_normalization, skull_strip_template,
         skull_strip_fixed_seed, freesurfer, hmc_model, impute_slice_threshold,
         hmc_transform, shoreline_iters, eddy_config, write_local_bvecs,
-        template, motion_corr_to, b0_to_t1w_transform,
+        template, native_template, motion_corr_to, b0_to_t1w_transform,
         intramodal_template_iters, intramodal_template_transform,
         prefer_dedicated_fmaps, fmap_bspline, fmap_demean, use_syn, force_syn,
         raw_image_sdc):
@@ -97,6 +97,7 @@ def init_qsiprep_wf(
                               skull_strip_template='OASIS',
                               skull_strip_fixed_seed=False,
                               template='MNI152NLin2009cAsym',
+                              native_template=None,
                               motion_corr_to='iterative',
                               b0_to_t1w_transform='Rigid',
                               intramodal_template_iters=0,
@@ -258,6 +259,7 @@ def init_qsiprep_wf(
             skull_strip_template=skull_strip_template,
             skull_strip_fixed_seed=skull_strip_fixed_seed,
             template=template,
+            native_template=native_template,
             prefer_dedicated_fmaps=prefer_dedicated_fmaps,
             motion_corr_to=motion_corr_to,
             b0_to_t1w_transform=b0_to_t1w_transform,
@@ -292,7 +294,7 @@ def init_single_subject_wf(
         no_b0_harmonization, infant_mode, combine_all_dwis, raw_image_sdc,
         distortion_group_merge, pepolar_method, omp_nthreads, skull_strip_template,
         force_spatial_normalization, skull_strip_fixed_seed, freesurfer, hires,
-        template, output_resolution, prefer_dedicated_fmaps,
+        template, native_template, output_resolution, prefer_dedicated_fmaps,
         motion_corr_to, b0_to_t1w_transform, intramodal_template_iters,
         intramodal_template_transform, hmc_model, hmc_transform,
         shoreline_iters, eddy_config, impute_slice_threshold, fmap_bspline,
@@ -345,6 +347,7 @@ def init_single_subject_wf(
             skull_strip_template='OASIS',
             skull_strip_fixed_seed=False,
             template='MNI152NLin2009cAsym',
+            native_template=None,
             prefer_dedicated_fmaps=False,
             motion_corr_to='iterative',
             b0_to_t1w_transform='Rigid',
@@ -424,6 +427,8 @@ def init_single_subject_wf(
             Root directory of BIDS dataset
         template : str
             Name of template targeted by ``template`` output space
+        native_template : str or None
+            Either a path to an existing image or None
         hmc_model : 'none', '3dSHORE' or 'eddy'
             Model used to generate target images for head motion correction. If 'none'
             the transform from the nearest b0 will be used.
@@ -575,6 +580,7 @@ to workflows in *QSIPrep*'s documentation]\
     info_modality = "dwi" if dwi_only else anatomical_contrast.lower()
     anat_preproc_wf = init_anat_preproc_wf(
         template=template,
+        native_template=native_template,
         debug=debug,
         dwi_only=dwi_only,
         infant_mode=infant_mode,

@@ -49,7 +49,7 @@ ANTS_VERSION=BrainExtraction().version or '<ver>'
 FS_VERSION="7.3.1"
 
 #  pylint: disable=R0914
-def init_anat_preproc_wf(template, debug, dwi_only,
+def init_anat_preproc_wf(template, native_template, debug, dwi_only,
                          infant_mode, longitudinal, omp_nthreads,
                          output_dir, num_anat_images, output_resolution,
                          nonlinear_register_to_template,
@@ -76,12 +76,14 @@ def init_anat_preproc_wf(template, debug, dwi_only,
                                   output_dir='.',
                                   anatomical_contrast="T1w",
                                   template='MNI152NLin2009cAsym',
+                                  native_template=None,
                                   output_resolution=1.25,
                                   dwi_only=False,
                                   infant_mode=False,
                                   nonlinear_register_to_template=True,
                                   longitudinal=False,
                                   debug=False,
+                                  native_reference=None,
                                   num_anat_images=1)
 
     **Parameters**
@@ -98,7 +100,8 @@ def init_anat_preproc_wf(template, debug, dwi_only,
             sure to choose a robust option for ``interpolation`` to avoid ringing
             artifacts. One option is 'BSpline', which matches mrtrix.
         template : str
-            Name of template targeted by ``template`` output space
+            Name of template targeted by ``template`` output space.
+        native_template : str or None
         debug : bool
             Enable debugging outputs
         longitudinal : bool
@@ -110,6 +113,9 @@ def init_anat_preproc_wf(template, debug, dwi_only,
             Directory in which to save reportlets
         output_dir : str
             Directory in which to save derivatives
+        native_reference : str or None
+            Image containing the reference for AC-PC alignment. By default is
+            just the template image.
         name : str, optional
             Workflow name (default: anat_preproc_wf)
 
@@ -167,7 +173,8 @@ def init_anat_preproc_wf(template, debug, dwi_only,
     get_template_image = pe.Node(
         GetTemplate(template_name=template,
                     infant_mode=infant_mode,
-                    anatomical_contrast=anatomical_contrast),
+                    anatomical_contrast=anatomical_contrast,
+                    native_template=native_template),
         name="get_template_image")
 
     # Create the output reference grid_image
@@ -249,6 +256,9 @@ FreeSurfer version {fs_version}. """.format(
         do_nonlinear=nonlinear_register_to_template,
         has_rois=has_rois,
         name='anat_normalization_wf')
+
+    if native_reference is not None:
+        LOGGER.info("An special reference image was used to define subject native space")
 
     # Resampling
     rigid_acpc_resample_brain = pe.Node(
@@ -344,6 +354,8 @@ FreeSurfer version {fs_version}. """.format(
         (anat_reference_wf, anat_normalization_wf, [
             ('outputnode.bias_corrected', 'inputnode.anatomical_reference')]),
         (get_template_image, anat_normalization_wf, [
+            ('native_template_image', 'inputnode.native_template_image'),
+            ('native_template_mask', 'inputnode.native_template_mask'),
             ('template_file', 'inputnode.template_image'),
             ('template_mask_file', 'inputnode.template_mask')]),
         (anat_normalization_wf, outputnode, [
@@ -705,6 +717,7 @@ def init_anat_normalization_wf(sloppy, template_name, omp_nthreads,
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=['template_image', 'template_mask',
+                    'native_template_image', 'native_template_mask',
                     'anatomical_reference', 'brain_mask', 'roi']),
         name='inputnode')
     outputnode = pe.Node(
@@ -739,8 +752,8 @@ a 6-DOF transform extracted from a full Affine registration to the
 
     workflow.connect([
         (inputnode, acpc_reg, [
-            ('template_image', 'reference_image'),
-            ('template_mask', 'reference_mask'),
+            ('native_template_image', 'reference_image'),
+            ('native_template_mask', 'reference_mask'),
             ('anatomical_reference', 'moving_image'),
             ('roi', 'lesion_mask'),
             ('brain_mask', 'moving_mask')]),
@@ -795,10 +808,10 @@ estimated via symmetric nonlinear registration (SyN) using antsRegistration. """
             ('template_image', 'reference_image'),
             ('template_mask', 'reference_mask')]),
         (inputnode, rigid_acpc_resample_mask, [
-            ('template_image', 'reference_image'),
+            ('native_template_image', 'reference_image'),
             ('brain_mask', 'input_image')]),
         (inputnode, rigid_acpc_resample_anat, [
-            ('template_image', 'reference_image'),
+            ('native_template_image', 'reference_image'),
             ('anatomical_reference', 'input_image')]),
         (extract_rigid_transform, rigid_acpc_resample_anat, [
             ('rigid_transform', 'transforms')]),
