@@ -30,24 +30,24 @@ When run, ``qsiprep-docker`` will generate a Docker command line for you,
 print it out for reporting purposes, and then run the command, e.g.::
 
     $ qsiprep-docker /path/to/data/dir /path/to/output/dir participant
-    RUNNING: docker run --rm -it -v /path/to/data/dir:/data:ro \
-        -v /path/to_output/dir:/out pennbbl/qsiprep:1.0.0 \
+    RUNNING: docker run --rm -it -v /path/to/data/dir \
+        -v /path/to_output/dir pennbbl/qsiprep:1.0.0 \
         /data /out participant
     ...
 
 You may also invoke ``docker`` directly::
 
     $ docker run -ti --rm \
-        -v filepath/to/data/dir:/data:ro \
-        -v filepath/to/output/dir:/out \
+        -v filepath/to/data/dir \
+        -v filepath/to/output/dir \
         pennbbl/qsiprep:latest \
         /data /out participant
 
 For example: ::
 
     $ docker run -ti --rm \
-        -v $HOME/fullds005:/data:ro \
-        -v $HOME/dockerout:/out \
+        -v $HOME/fullds005 \
+        -v $HOME/dockerout \
         pennbbl/qsiprep:latest \
         /data /out participant \
         --ignore fieldmaps
@@ -56,8 +56,8 @@ If you are running Freesurfer as part of QSIPrep,
 you will need to mount your Freesurfer license.txt file when invoking ``docker`` ::
 
     $ docker run -ti --rm \
-        -v $HOME/fullds005:/data:ro \
-        -v $HOME/dockerout:/out \
+        -v $HOME/fullds005 \
+        -v $HOME/dockerout \
         -v ${FREESURFER_HOME}/license.txt:/opt/freesurfer/license.txt \
         pennbbl/qsiprep:latest \
         /data /out participant \
@@ -82,7 +82,7 @@ Do not use ``latest``.
 As with Docker, you will need to bind the Freesurfer license.txt when running Singularity ::
 
     $ singularity run --cleanenv \
-        -B $HOME/fullds005:/data:ro,$HOME/dockerout:/out,${FREESURFER_HOME}/license.txt:/opt/freesurfer/license.txt \
+        -B $HOME/fullds005,$HOME/dockerout,${FREESURFER_HOME}/license.txt:/opt/freesurfer/license.txt \
         qsiprep-<version>.sif \
         /data /out participant \
         --fs-license-file /opt/freesurfer/license.txt
