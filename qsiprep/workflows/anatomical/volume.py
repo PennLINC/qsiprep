@@ -174,7 +174,7 @@ def init_anat_preproc_wf(template, native_template, debug, dwi_only,
         GetTemplate(template_name=template,
                     infant_mode=infant_mode,
                     anatomical_contrast=anatomical_contrast,
-                    native_template=native_template),
+                    native_template_file=native_template),
         name="get_template_image")
 
     # Create the output reference grid_image
