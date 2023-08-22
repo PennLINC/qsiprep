@@ -689,8 +689,6 @@ def init_anat_normalization_wf(sloppy, template_name, omp_nthreads,
     Parameters
         template_image: str
             Path to an image that will be used for Rigid ACPC align
-        skull_strip_template : str
-            Name of ANTs skull-stripping template ('OASIS' or 'NKI')
         debug : bool
             Enable debugging outputs
         omp_nthreads : int
