@@ -6,28 +6,43 @@ newPRWelcomeComment: >
   We have detected this is the first time for you to contribute
   to *qsiprep*.
   Please check out our [contributing guidelines](https://github.com/pennbbl/qsiprep/blob/master/CONTRIBUTING.md).
-  
+
+  These are guidelines intended to make communication easier by describing a
+  consistent process, but don't worry if you don't get it everything exactly
+  "right" on the first try.
+
   We invite you to list yourself as a *qsiprep* contributor, so if your name
   is not already mentioned, please modify the
   [``.zenodo.json``](https://github.com/pennbbl/qsiprep/blob/master/.zenodo.json)
-  file with your data right above Russ' entry. Example:
+  file with your data. If you do so, your name will be listed as an author
+  at the next release. Please add yourself to the list in alphabetical order,
+  keeping Cieslak, Matthew as first and Satterthwaite, Theodore D. as last
+  authors, e.g.:
 
   ```
-
-  {
-     "name": "Contributor, New qsiprep",
-     "affiliation": "Department of fMRI prep'ing, Open Science Made-Up University",
-     "orcid": "<your id>"
-  },
-
-  {
-     "name": "Poldrack, Russell A.",
-     "affiliation": "Department of Psychology, Stanford University",
-     "orcid": "0000-0001-6755-0259"
-  },
-
+    {
+      (...)
+    },
+    {
+     {
+        "name": "<LastName>, <FirstName>",
+        "affiliation": "<Affiliation>",
+        "orcid": "<Id>"
+     },
+    {
+      (...)
+    }
+  ],
+  "keywords": [
+    "neuroimaging",
+    "workflow",
+    "pipeline",
+    "preprocessing",
+    "dMRI",
+    "BIDS"
+  ],
+  (...)
   ```
-
 
   Of course, if you want to opt-out this time there is no
   problem at all with adding your name later.
