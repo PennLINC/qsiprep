@@ -423,7 +423,7 @@ class _GetTemplateInputSpec(BaseInterfaceInputSpec):
         'MNI152NLin2009cAsym',
         usedefault=True,
         mandatory=True)
-    native_template_file = File(exists = True)
+    native_template_file = traits.Str()
     mask_file = File(exists=True)
     infant_mode = traits.Bool(False, usedefault=True)
     anatomical_contrast = traits.Enum("T1w", "T2w", "none")
@@ -435,7 +435,7 @@ class _GetTemplateOutputSpec(BaseInterfaceInputSpec):
     template_brain_file = File(exists=True)
     template_mask_file = File(exists=True)
     native_template_file = File(exists=True)
-    native_template_brain_file = File(exists=True)
+    native_template_mask_file = File(exists=True)
 
 
 class GetTemplate(SimpleInterface):
@@ -474,13 +474,16 @@ class GetTemplate(SimpleInterface):
             raise NotImplementedError("Arbitrary templates not available yet")
 
         if isdefined(self.inputs.native_template):
-            self._results["native_template_file"] = str(
-                Path(self.inputs.native_template).absolute())
-            self._results["native_template_brain_file"] = _get_corresponding_mask(
-                self._results["native_template_file"])
+            native_template = Path(self.inputs.native_template)
+            if native_template.exists():
+                self._results["native_template_file"] = str(
+                    native_template.absolute())
+                self._results["native_template_brain_file"] = _get_corresponding_mask(
+                    self._results["native_template_file"])
         else:
             self._results["native_template_file"] = self._results["template_file"]
-            self._results["native_template_brain_file"] = self._results["native_template_brain_file"]
+            #self._results["native_template_brain_file"] = self._results["template_brain_file"]
+            self._results["native_template_mask_file"] = self._results["template_mask_file"]
         return runtime
 
 

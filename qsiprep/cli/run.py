@@ -332,7 +332,6 @@ def get_parser():
         "--native-template",
         required=False,
         action='store',
-        type=Path,
         help="A preprocessed native space image from fmriprep or previous qsiprep"
         "that will be used instead of AC-PC to define subject native space.")
     g_conf.add_argument(

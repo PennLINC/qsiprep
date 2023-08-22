@@ -174,7 +174,7 @@ def init_anat_preproc_wf(template, native_template, debug, dwi_only,
         GetTemplate(template_name=template,
                     infant_mode=infant_mode,
                     anatomical_contrast=anatomical_contrast,
-                    native_template_file=native_template),
+                    native_template_file=str(native_template)),
         name="get_template_image")
 
     # Create the output reference grid_image
@@ -257,7 +257,7 @@ FreeSurfer version {fs_version}. """.format(
         has_rois=has_rois,
         name='anat_normalization_wf')
 
-    if native_reference is not None:
+    if native_template is not None:
         LOGGER.info("An special reference image was used to define subject native space")
 
     # Resampling
@@ -354,8 +354,8 @@ FreeSurfer version {fs_version}. """.format(
         (anat_reference_wf, anat_normalization_wf, [
             ('outputnode.bias_corrected', 'inputnode.anatomical_reference')]),
         (get_template_image, anat_normalization_wf, [
-            ('native_template_image', 'inputnode.native_template_image'),
-            ('native_template_mask', 'inputnode.native_template_mask'),
+            ('native_template_file', 'inputnode.native_template_image'),
+            ('native_template_mask_file', 'inputnode.native_template_mask'),
             ('template_file', 'inputnode.template_image'),
             ('template_mask_file', 'inputnode.template_mask')]),
         (anat_normalization_wf, outputnode, [
