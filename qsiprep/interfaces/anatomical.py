@@ -473,17 +473,17 @@ class GetTemplate(SimpleInterface):
         else:
             raise NotImplementedError("Arbitrary templates not available yet")
 
-        if isdefined(self.inputs.native_template):
-            native_template = Path(self.inputs.native_template)
+        # By default set the native template file and mask to the template file and template mask
+        self._results["native_template_file"] = ref_img
+        self._results["native_template_mask_file"] = ref_img_mask
+        if isdefined(self.inputs.native_template_file):
+            native_template = Path(self.inputs.native_template_file)
             if native_template.exists():
                 self._results["native_template_file"] = str(
                     native_template.absolute())
                 self._results["native_template_brain_file"] = _get_corresponding_mask(
                     self._results["native_template_file"])
-        else:
-            self._results["native_template_file"] = self._results["template_file"]
-            #self._results["native_template_brain_file"] = self._results["template_brain_file"]
-            self._results["native_template_mask_file"] = self._results["template_mask_file"]
+
         return runtime
 
 
