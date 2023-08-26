@@ -4,14 +4,25 @@
 Installation
 ------------
 
-There are two easy ways to use qsiprep:
-in a `Docker Container`_, or in a `Singularity Container`_.
-Using a local container method is highly recommended.
-Once you are ready to run qsiprep, see Usage_ for details.
+qsiprep can be installed from the Python Package Index (PyPI) by running the
+following command on a terminal::
 
-To install::
+    $ pip install --user --upgrade qsiprep
+
+Users need to install the rest of the required dependencies.
+
+In order to avoid installing manually the additional required dependencies,
+users can use the containerized versions of qsiprep. Using a local container
+method is highly recommended. There are two easy ways to use qsiprep:
+in a `Docker Container`_, or in a `Singularity Container`_.
+
+In order to use the containerized version, the ``qsiprep-container`` package
+needs to be installed from the Python Package Index (PyPI) by running the
+following command on a terminal::
 
     $ pip install --user --upgrade qsiprep-container
+
+Once you are ready to run qsiprep, see Usage_ for details.
 
 .. _`Docker Container`:
 
