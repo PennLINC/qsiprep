@@ -79,6 +79,7 @@ def init_pyafq_wf(omp_nthreads, available_anatomical_data,
             ('bval_file', 'bval_file'),
             ('bvec_file', 'bvec_file'),
             ('dwi_mask', 'mask_file'),
+            ('wm_mask', 'wm_mask_file'),
             ('t1_2_mni_reverse_transform', 'itk_file')]),
         (run_afq, outputnode, [('afq_dir', 'afq_dir')])
     ])

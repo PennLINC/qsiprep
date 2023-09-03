@@ -30,6 +30,7 @@ class PyAFQInputSpec(BaseInterfaceInputSpec):
     bvec_file = File(exists=True, mandatory=True)
     dwi_file = File(exists=True, mandatory=True)
     mask_file = File(exists=True, mandatory=True)
+    wm_mask_file = File(exists=True, mandatory=True)
     itk_file = File(exists=True, mandatory=True)
     kwargs = traits.Dict(exists=True, mandatory=True)
     tck_file = traits.Either(None, File(exists=True))
@@ -56,6 +57,8 @@ class PyAFQRecon(SimpleInterface):
                                    newpath=shim_dir)
         mask_file = fname_presuffix(self.inputs.mask_file,
                                     newpath=shim_dir)
+        wm_mask_file = fname_presuffix(self.inputs.wm_mask_file,
+                                       newpath=shim_dir)
         itk_file = fname_presuffix(self.inputs.itk_file,
                                    newpath=shim_dir)
         os.symlink(self.inputs.bval_file, bval_file)
@@ -63,24 +66,35 @@ class PyAFQRecon(SimpleInterface):
         os.symlink(self.inputs.dwi_file, dwi_file)
         os.symlink(self.inputs.mask_file, mask_file)
         os.symlink(self.inputs.itk_file, itk_file)
-
+        os.symlink(self.inputs.wm_mask_file, wm_mask_file)
         kwargs = self.inputs.kwargs
 
         if self.inputs.tck_file and isdefined(self.inputs.tck_file):
             tck_file = fname_presuffix(self.inputs.tck_file,
-                                    newpath=shim_dir)
+                                       newpath=shim_dir)
             os.symlink(self.inputs.tck_file, tck_file)
         else:
             tck_file = None
+
         brain_mask_definition = ImageFile(path=mask_file)
-        itk_map = ItkMap(warp_path=itk_file)
+        seed_mask_definition = ImageFile(path=wm_mask_file)
+        stop_mask_definition = ImageFile(path=wm_mask_file)
+
+        # XXX Make ItkMap work at some point
+        # itk_map = ItkMap(warp_path=itk_file)
 
         if tck_file is None:
             tck_file = kwargs['import_tract']
         kwargs.pop('import_tract', None)
-        if brain_mask_definition is None:
-            brain_mask_definition = kwargs['brain_mask_definition']
         kwargs.pop('brain_mask_definition', None)
+
+        tracking_params = kwargs.pop('tracking_params', None)
+        if tracking_params is not None:
+            if tracking_params["seed_mask"] == "WM_prob":
+                tracking_params["seed_mask"] = seed_mask_definition
+            if tracking_params["stop_mask"] == "WM_prob":
+                tracking_params["stop_mask"] = stop_mask_definition
+
         # if itk_map is None:  # Use pyAFQ internal mapping
         #     itk_map = kwargs['mapping_definition']
         # kwargs.pop('mapping_definition', None)
@@ -100,6 +114,7 @@ class PyAFQRecon(SimpleInterface):
             import_tract=tck_file,
             brain_mask_definition=brain_mask_definition,
             # mapping_definition=itk_map,
+            tracking_params=tracking_params,
             **kwargs)
 
         if "export" not in kwargs or kwargs["export"] == "all":
