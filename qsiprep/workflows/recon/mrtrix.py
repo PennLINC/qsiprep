@@ -2,10 +2,10 @@
 MRTrix workflows
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Note that in nipype interfaces the threading-controlling attribute is 
-``nthreads``, not the typical ``num_threads`` expected by nipype. 
-To keep threading consistent between nipype and mrtrix, the 
-``nthreads`` attribute needs to be set in the interface and the 
+Note that in nipype interfaces the threading-controlling attribute is
+``nthreads``, not the typical ``num_threads`` expected by nipype.
+To keep threading consistent between nipype and mrtrix, the
+``nthreads`` attribute needs to be set in the interface and the
 ``n_procs`` attribute needs to be set on the Node.
 
 
@@ -21,7 +21,7 @@ from ...interfaces.reports import CLIReconPeaksReport, ConnectivityReport
 from qsiprep.interfaces.mrtrix import (
     EstimateFOD, SS3TEstimateFOD, MRTrixIngress, SS3TDwi2Response, GlobalTractography,
     MRTrixAtlasGraph, SIFT2, TckGen, MTNormalize)
-from .interchange import recon_workflow_input_fields
+from ...interfaces.interchange import recon_workflow_input_fields
 from ...engine import Workflow
 
 LOGGER = logging.getLogger('nipype.interface')
@@ -47,9 +47,9 @@ def init_mrtrix_csd_recon_wf(omp_nthreads, available_anatomical_data, name="mrtr
         *Default qsiprep inputs*
 
         qsiprep_5tt_hsvs
-            A hybrid surface volume segmentation 5tt image aligned with the 
+            A hybrid surface volume segmentation 5tt image aligned with the
             QSIPrep T1w
-        
+
 
     Outputs
 
@@ -137,7 +137,7 @@ FODs were estimated via constrained spherical deconvolution
     method_5tt = response.pop("method_5tt","dhollander")
     # Use dwi2response from 3Tissue for updated dhollander
     estimate_response = pe.Node(
-        SS3TDwi2Response(**response), 
+        SS3TDwi2Response(**response),
         name='estimate_response',
         n_procs=omp_nthreads)
 
@@ -150,13 +150,13 @@ FODs were estimated via constrained spherical deconvolution
 
     if fod_algorithm in ('msmt_csd', 'csd'):
         estimate_fod = pe.Node(
-            EstimateFOD(**fod), 
+            EstimateFOD(**fod),
             name='estimate_fod',
             n_procs=omp_nthreads)
         desc += ' Reconstruction was done using MRtrix3 (@mrtrix3).'
     elif fod_algorithm == 'ss3t':
         estimate_fod = pe.Node(
-            SS3TEstimateFOD(**fod), 
+            SS3TEstimateFOD(**fod),
             name='estimate_fod',
             n_procs=omp_nthreads)
         desc += """ \
@@ -191,7 +191,7 @@ A single-shell-optimized multi-tissue CSD was performed using MRtrix3Tissue
         intensity_norm = pe.Node(
             MTNormalize(
                 nthreads=omp_nthreads,
-                inlier_mask='inliers.nii.gz', 
+                inlier_mask='inliers.nii.gz',
                 norm_image='norm.nii.gz'),
             name='intensity_norm',
             n_procs=omp_nthreads)
@@ -209,7 +209,7 @@ A single-shell-optimized multi-tissue CSD was performed using MRtrix3Tissue
     if plot_reports:
         # Make a visual report of the model
         plot_peaks = pe.Node(
-            CLIReconPeaksReport(), 
+            CLIReconPeaksReport(),
             name='plot_peaks',
             n_procs=omp_nthreads)
         ds_report_peaks = pe.Node(
@@ -233,7 +233,7 @@ A single-shell-optimized multi-tissue CSD was performed using MRtrix3Tissue
                 name='ds_report_odfs',
                 run_without_submitting=True)
             workflow.connect(plot_peaks, 'odf_report', ds_report_odfs, 'in_file')
-        
+
         fod_source, fod_key = (estimate_fod, "wm_odf") if not run_mtnormalize \
             else (intensity_norm, "wm_normed_odf")
         workflow.connect(fod_source, fod_key, plot_peaks, "mif_file")
@@ -452,7 +452,7 @@ def init_mrtrix_tractography_wf(omp_nthreads, available_anatomical_data, name="m
     sift_params = params.get("sift2", {})
     sift_params['nthreads'] = omp_nthreads
     tracking = pe.Node(
-        TckGen(**tracking_params), 
+        TckGen(**tracking_params),
         name='tractography',
         n_procs=omp_nthreads)
     workflow.connect([
@@ -475,7 +475,7 @@ def init_mrtrix_tractography_wf(omp_nthreads, available_anatomical_data, name="m
 
     if use_sift2:
         tck_sift2 = pe.Node(
-            SIFT2(**sift_params), 
+            SIFT2(**sift_params),
             name="tck_sift2",
             n_procs=omp_nthreads)
         workflow.connect([
@@ -542,13 +542,13 @@ def init_mrtrix_connectivity_wf(omp_nthreads, available_anatomical_data, name="m
         (inputnode, calc_connectivity, [('atlas_configs', 'atlas_configs'),
                                         ('tck_file', 'in_file'),
                                         ('sift_weights', 'in_weights')]),
-        
+
         (calc_connectivity, outputnode, [('connectivity_matfile', 'matfile')])
     ])
 
     if plot_reports:
         plot_connectivity = pe.Node(
-            ConnectivityReport(), 
+            ConnectivityReport(),
             name='plot_connectivity',
             n_procs=omp_nthreads)
         ds_report_connectivity = pe.Node(

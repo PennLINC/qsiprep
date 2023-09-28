@@ -28,7 +28,7 @@ import json
 from bids.layout import BIDSLayout
 from .build_workflow import init_dwi_recon_workflow
 from .anatomical import init_recon_anatomical_wf
-from .interchange import anatomical_workflow_outputs
+from ...interfaces.interchange import anatomical_workflow_outputs
 
 LOGGER = logging.getLogger('nipype.workflow')
 
@@ -211,7 +211,7 @@ to workflows in *qsiprep*'s documentation]\
         extras_to_make=spec.get('anatomical', []),
         freesurfer_dir=freesurfer_input,
         name='anat_ingress_wf')
-    
+
     # Fill-in datasinks and reportlet datasinks for the anatomical workflow
     for _node in anat_ingress_wf.list_node_names():
         node_suffix = _node.split('.')[-1]
@@ -223,7 +223,7 @@ to workflows in *qsiprep*'s documentation]\
 
     # Connect the anatomical-only inputs. NOTE this is not to the inputnode!
     LOGGER.info("Anatomical (T1w) available for recon: %s", available_anatomical_data)
-    to_connect = [('outputnode.' + name, 'qsirecon_anat_wf.inputnode.' + name) 
+    to_connect = [('outputnode.' + name, 'qsirecon_anat_wf.inputnode.' + name)
                   for name in anatomical_workflow_outputs]
 
     # create a processing pipeline for the dwis in each session

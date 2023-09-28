@@ -9,7 +9,7 @@ import logging
 import nipype.pipeline.engine as pe
 from nipype.interfaces import afni, utility as niu
 from qsiprep.interfaces.bids import ReconDerivativesDataSink
-from .interchange import recon_workflow_input_fields
+from ...interfaces.interchange import recon_workflow_input_fields
 from ...engine import Workflow
 from ...interfaces.mrtrix import MRConvert
 from ...interfaces.anatomical import CalculateSOP
@@ -55,7 +55,7 @@ def init_steinhardt_order_param_wf(omp_nthreads, available_anatomical_data,
 
 : """
     sh_mif_to_nifti = pe.Node(
-        MRConvert(out_file="SH.nii", args="-strides -1,-2,3"), 
+        MRConvert(out_file="SH.nii", args="-strides -1,-2,3"),
         name="sh_mif_to_nifti")
     calc_sop = pe.Node(CalculateSOP(**params), name="calc_sop")
     desc += """\

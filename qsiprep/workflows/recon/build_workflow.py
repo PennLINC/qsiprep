@@ -19,7 +19,7 @@ from .dynamics import init_controllability_wf
 from .utils import init_conform_dwi_wf, init_discard_repeated_samples_wf
 from .steinhardt import init_steinhardt_order_param_wf
 from ...engine import Workflow
-from .interchange import (qsiprep_output_names, default_input_set,
+from ...interfaces.interchange import (qsiprep_output_names, default_input_set,
     recon_workflow_input_fields, recon_workflow_anatomical_input_fields,
     ReconWorkflowInputs)
 from .anatomical import init_dwi_recon_anatomical_workflow

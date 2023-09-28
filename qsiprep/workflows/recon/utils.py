@@ -11,13 +11,13 @@ import nipype.pipeline.engine as pe
 import nipype.interfaces.utility as niu
 import logging
 from qsiprep.interfaces.gradients import RemoveDuplicates
-from .interchange import recon_workflow_input_fields
+from ...interfaces.interchange import recon_workflow_input_fields
 from qsiprep.interfaces import ConformDwi
 from qsiprep.interfaces.mrtrix import MRTrixGradientTable
 LOGGER = logging.getLogger('nipype.workflow')
 
 
-def init_conform_dwi_wf(omp_nthreads, available_anatomical_data, 
+def init_conform_dwi_wf(omp_nthreads, available_anatomical_data,
                         name="conform_dwi", output_suffix="", params={}):
     """If data were preprocessed elsewhere, ensure the gradients and images
     conform to LPS+ before running other parts of the pipeline."""

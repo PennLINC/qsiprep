@@ -10,7 +10,7 @@ import nipype.interfaces.utility as niu
 import logging
 from qsiprep.interfaces.connectivity import Controllability
 from qsiprep.interfaces.bids import ReconDerivativesDataSink
-from .interchange import recon_workflow_input_fields
+from ...interfaces.interchange import recon_workflow_input_fields
 LOGGER = logging.getLogger('nipype.workflow')
 
 

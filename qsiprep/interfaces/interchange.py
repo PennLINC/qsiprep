@@ -34,7 +34,7 @@ overlapping_names = set(qsiprep_output_names
 if overlapping_names:
     raise Exception("Someone has added overlapping outputs between the anatomical "
         "and dwi inputs: " + " ".join(overlapping_names))
-    
+
 recon_workflow_input_fields = qsiprep_output_names + \
     recon_workflow_anatomical_input_fields
 default_input_set = set(recon_workflow_input_fields)

@@ -11,7 +11,7 @@ import nipype.interfaces.utility as niu
 import logging
 from ...interfaces.converters import FODtoFIBGZ
 from ...interfaces.bids import ReconDerivativesDataSink
-from .interchange import recon_workflow_input_fields
+from ...interfaces.interchange import recon_workflow_input_fields
 from ...engine import Workflow
 from ...interfaces.images import ConformDwi
 LOGGER = logging.getLogger('nipype.workflow')
