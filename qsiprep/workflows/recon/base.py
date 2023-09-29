@@ -16,19 +16,23 @@ import os.path as op
 from glob import glob
 from copy import deepcopy
 from nipype import __version__ as nipype_ver
+import nipype.pipeline.engine as pe
+from nipype.utils.filemanip import split_filename
 from nilearn import __version__ as nilearn_ver
 from dipy import __version__ as dipy_ver
 from pkg_resources import resource_filename as pkgrf
 from ...engine import Workflow
 from ...utils.sloppy_recon import make_sloppy
 from ...__about__ import __version__
-
+from ...interfaces.bids import QsiReconIngress
 import logging
 import json
 from bids.layout import BIDSLayout
 from .build_workflow import init_dwi_recon_workflow
-from .anatomical import init_recon_anatomical_wf
-from ...interfaces.interchange import anatomical_workflow_outputs
+from .anatomical import init_recon_anatomical_wf, init_dwi_recon_anatomical_workflow
+from ...interfaces.interchange import (anatomical_workflow_outputs, recon_workflow_anatomical_input_fields,
+                                       ReconWorkflowInputs,
+                                       qsiprep_output_names, recon_workflow_input_fields)
 
 LOGGER = logging.getLogger('nipype.workflow')
 
@@ -212,6 +216,9 @@ to workflows in *qsiprep*'s documentation]\
         freesurfer_dir=freesurfer_input,
         name='anat_ingress_wf')
 
+    # Connect the anatomical-only inputs. NOTE this is not to the inputnode!
+    LOGGER.info("Anatomical (T1w) available for recon: %s", available_anatomical_data)
+
     # Fill-in datasinks and reportlet datasinks for the anatomical workflow
     for _node in anat_ingress_wf.list_node_names():
         node_suffix = _node.split('.')[-1]
@@ -221,29 +228,79 @@ to workflows in *qsiprep*'s documentation]\
             anat_ingress_wf.get_node(_node).inputs.source_file = \
                 "anat/sub-{}_desc-preproc_T1w.nii.gz".format(subject_id)
 
-    # Connect the anatomical-only inputs. NOTE this is not to the inputnode!
-    LOGGER.info("Anatomical (T1w) available for recon: %s", available_anatomical_data)
-    to_connect = [('outputnode.' + name, 'qsirecon_anat_wf.inputnode.' + name)
-                  for name in anatomical_workflow_outputs]
+    # Get the anatomical data (masks, atlases, etc)
+    atlas_names = spec.get('atlases', [])
 
     # create a processing pipeline for the dwis in each session
     dwi_recon_wfs = {}
+    dwi_individual_anatomical_wfs = {}
+    recon_full_inputs = {}
+    dwi_ingress_nodes = {}
     for dwi_file in dwi_files:
+        wf_name = _get_wf_name(dwi_file)
+
+        # Get the preprocessed DWI and all the related preprocessed images
+        dwi_ingress_nodes[dwi_file] = pe.Node(
+            QsiReconIngress(dwi_file=dwi_file),
+            name=wf_name + "_ingressed_dwi_data")
+
+        # Create scan-specific anatomical data (mask, atlas configs, odf ROIs for reports)
+        dwi_individual_anatomical_wfs[dwi_file], dwi_available_anatomical_data = \
+            init_dwi_recon_anatomical_workflow(
+                atlas_names=atlas_names,
+                omp_nthreads=omp_nthreads,
+                infant_mode=False,
+                prefer_dwi_mask=False,
+                sloppy=sloppy,
+                b0_threshold=b0_threshold,
+                freesurfer_dir=freesurfer_input,
+                extras_to_make=spec.get('anatomical', []),
+                name=wf_name + "_anat_wf",
+                **available_anatomical_data)
+
+        # This node holds all the inputs that will go to the recon workflow.
+        # It is the definitive place to check what the input files are
+        recon_full_inputs[dwi_file] = pe.Node(ReconWorkflowInputs(), name=wf_name + "_recon_inputs")
+
+        # This is the actual recon workflow for this dwi file
         dwi_recon_wfs[dwi_file] = init_dwi_recon_workflow(
-            dwi_file=dwi_file,
-            available_anatomical_data=available_anatomical_data,
+            available_anatomical_data=dwi_available_anatomical_data,
             workflow_spec=spec,
-            sloppy=sloppy,
-            prefer_dwi_mask=False,
-            infant_mode=False,
-            b0_threshold=b0_threshold,
+            name=wf_name,
             reportlets_dir=reportlets_dir,
             output_dir=output_dir,
             omp_nthreads=omp_nthreads,
             skip_odf_plots=skip_odf_plots)
-        workflow.connect([(anat_ingress_wf, dwi_recon_wfs[dwi_file], to_connect)])
+
+        # Connect the collected diffusion data (gradients, etc) to the inputnode
+        workflow.connect([
+
+            # The dwi data
+            (dwi_ingress_nodes[dwi_file], recon_full_inputs[dwi_file], [
+                (trait, trait) for trait in qsiprep_output_names]),
+
+            # subject anatomical data to dwi
+            (anat_ingress_wf, dwi_individual_anatomical_wfs[dwi_file],
+             [("outputnode."+trait, "inputnode."+trait) for trait in anatomical_workflow_outputs]),
+            (dwi_ingress_nodes[dwi_file], dwi_individual_anatomical_wfs[dwi_file],
+             [(trait, "inputnode." + trait) for trait in qsiprep_output_names]),
+
+            # subject dwi-specific anatomical to recon inputs
+            (dwi_individual_anatomical_wfs[dwi_file], recon_full_inputs[dwi_file], [
+                ("outputnode." + trait, trait) for trait in recon_workflow_anatomical_input_fields]),
+
+            # recon inputs to recon workflow
+            (recon_full_inputs[dwi_file], dwi_recon_wfs[dwi_file],
+             [(trait, "inputnode." + trait) for trait in recon_workflow_input_fields])
+        ])
 
     return workflow
+
+
+def _get_wf_name(dwi_file):
+    basedir, fname, ext = split_filename(dwi_file)
+    tokens = fname.split("_")
+    return "_".join(tokens[:-1]).replace("-", "_")
 
 
 def _load_recon_spec(spec_name, sloppy=False):
