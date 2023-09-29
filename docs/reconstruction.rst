@@ -11,6 +11,10 @@ by specifying a JSON file with the ``--recon-spec`` option. Here we use
 "reconstruction" to mean reconstructing ODFs/FODs/EAPs and connectivity matrices
 from the preprocessed diffusion data.
 
+.. note::
+   In the current implementation, if you want to only run reconstruction, you will
+   need to pass the ``--recon-only`` argument as well.
+
 The easiest way to get started is to use one of the :ref:`preconfigured_workflows`.
 Instead of specifying a path to a file you can choose from the following:
 
