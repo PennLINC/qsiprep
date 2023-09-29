@@ -22,4 +22,5 @@ Contents
    changes
    api/index.rst
    comparisons
+   help
    license
