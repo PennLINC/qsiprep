@@ -34,7 +34,7 @@ overlapping_names = set(qsiprep_output_names
 if overlapping_names:
     raise Exception("Someone has added overlapping outputs between the anatomical "
         "and dwi inputs: " + " ".join(overlapping_names))
-    
+
 recon_workflow_input_fields = qsiprep_output_names + \
     recon_workflow_anatomical_input_fields
 default_input_set = set(recon_workflow_input_fields)
@@ -53,10 +53,34 @@ class ReconWorkflowInputs(SimpleInterface):
     output_spec = _ReconWorkflowInputsOutputSpec
 
     def _run_interface(self, runtime):
+        inputs = self.inputs.get()
         for name in recon_workflow_input_fields:
-            self._results[name] = self.inputs.get(name)
+            self._results[name] = inputs.get(name)
         return runtime
 
 for name in recon_workflow_input_fields:
     _ReconWorkflowInputsInputSpec.add_class_trait(name, traits.Any)
     _ReconWorkflowInputsOutputSpec.add_class_trait(name, traits.Any)
+
+
+class _ReconAnatomicalDataInputSpec(BaseInterfaceInputSpec):
+    pass
+
+
+class _ReconAnatomicalDataOutputSpec(TraitedSpec):
+    pass
+
+
+class ReconAnatomicalData(SimpleInterface):
+    input_spec = _ReconAnatomicalDataInputSpec
+    output_spec = _ReconAnatomicalDataOutputSpec
+
+    def _run_interface(self, runtime):
+        inputs = self.inputs.get()
+        for name in anatomical_workflow_outputs:
+            self._results[name] = inputs.get(name)
+        return runtime
+
+for name in anatomical_workflow_outputs:
+    _ReconAnatomicalDataInputSpec.add_class_trait(name, traits.Any)
+    _ReconAnatomicalDataOutputSpec.add_class_trait(name, traits.Any)

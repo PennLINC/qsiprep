@@ -6,19 +6,14 @@
       "orcid": "0000-0002-1931-4734"
     },
     {
+      "name": "Camacho, Paul B.",
+      "affiliation": "Beckman Institute for Advanced Science & Technology, University of Illinois at Urbana-Champaign, IL, USA",
+      "orcid": "0000-0001-9048-7307"
+    },
+    {
       "name": "Covitz, Sydney",
-      "affiliation":"Department of Neuropsychiatry, University of Pennsylvania",
+      "affiliation": "Perelman School of Medicine, University of Pennsylvania, PA, USA",
       "orcid": "0000-0002-7430-4125"
-    },
-    {
-      "name": "Sydnor, Valerie Jill",
-      "affiliation": "Perelman School of Medicine, University of Pennsylvania",
-      "orcid": "0000-0002-8640-668X"
-    },
-    {
-      "name": "He, Xiaosong",
-      "affiliation": "Department of Bioengineering, University of Pennsylvania",
-      "orcid": "0000-0002-7941-2918"
     },
     {
       "name": "Foran, William",
@@ -26,9 +21,9 @@
       "orcid": "0000-0001-7491-9798"
     },
     {
-      "name": "Magnussen, Fredrik",
-      "affiliation": "Department of Psychology, University of Oslo",
-      "orcid": "0000-0003-2574-1705"
+      "name": "He, Xiaosong",
+      "affiliation": "Department of Bioengineering, University of Pennsylvania",
+      "orcid": "0000-0002-7941-2918"
     },
     {
       "name": "Humphries, Joseph",
@@ -36,29 +31,24 @@
       "orcid": "0000-0002-10257956"
     },
     {
+      "name": "Magnussen, Fredrik",
+      "affiliation": "Department of Psychology, University of Oslo",
+      "orcid": "0000-0003-2574-1705"
+    },
+    {
       "name": "Krause, Michael",
       "affiliation": "Max Planck Institute for Human Development, Berlin, Germany",
       "orcid": "0000-0002-3878-6542"
     },
     {
-      "affiliation": "Perelman School of Medicine, University of Pennsylvania, PA, USA",
+      "name": "Sydnor, Valerie Jill",
+      "affiliation": "Perelman School of Medicine, University of Pennsylvania",
+      "orcid": "0000-0002-8640-668X"
+    },
+    {
       "name": "Satterthwaite, Theodore D.",
-      "orcid": "0000-0001-7072-9399"
-    },
-    {
-      "affiliation": "Beckman Institute for Advanced Science & Technology, University of Illinois at Urbana-Champaign, IL, USA",
-      "name": "Camacho, Paul B.",
-      "orcid": "0000-0001-9048-7307"
-    },
-    {
       "affiliation": "Perelman School of Medicine, University of Pennsylvania, PA, USA",
-      "name": "Covitz, Sydney",
-      "orcid": "0000-0002-7430-4125"
-    },
-    {
-      "affiliation": "University of California, San Francisco, San Francisco, CA, USA",
-      "name": "Nedelec, Pierre",
-      "orcid": "0000-0002-8535-1541"
+      "orcid": "0000-0001-7072-9399"
     }
   ],
   "keywords": [

@@ -10,7 +10,7 @@ import nipype.pipeline.engine as pe
 from nipype.interfaces import afni, utility as niu
 from qsiprep.interfaces.bids import ReconDerivativesDataSink
 from ...interfaces.dipy import BrainSuiteShoreReconstruction, KurtosisReconstruction, MAPMRIReconstruction
-from .interchange import recon_workflow_input_fields
+from ...interfaces.interchange import recon_workflow_input_fields
 from ...engine import Workflow
 from ...interfaces.reports import CLIReconPeaksReport
 
@@ -359,7 +359,7 @@ def init_dipy_mapmri_recon_wf(omp_nthreads, available_anatomical_data, name="dip
                                  ('fod_sh_mif', 'fod_sh_mif')])])
     if plot_reports:
         plot_peaks = pe.Node(
-            CLIReconPeaksReport(), 
+            CLIReconPeaksReport(),
             name='plot_peaks',
             n_procs=omp_nthreads)
         ds_report_peaks = pe.Node(
@@ -431,7 +431,7 @@ def init_dipy_dki_recon_wf(omp_nthreads, available_anatomical_data, name="dipy_d
             True writes out a MRTrix mif file with sh coefficients
         radial_order: int
             An even integer that represent the order of the basis
-        
+
     """
 
     inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields),
@@ -472,7 +472,7 @@ def init_dipy_dki_recon_wf(omp_nthreads, available_anatomical_data, name="dipy_d
 
     if plot_reports and False:
         plot_peaks = pe.Node(
-            CLIReconPeaksReport(peaks_only=True), 
+            CLIReconPeaksReport(peaks_only=True),
             name='plot_peaks',
             n_procs=omp_nthreads)
         ds_report_peaks = pe.Node(

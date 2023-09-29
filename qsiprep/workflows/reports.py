@@ -20,7 +20,7 @@ from ..interfaces import DerivativesDataSink
 from ..interfaces.bids import QsiReconIngress
 from ..interfaces.reports import InteractiveReport
 from ..utils.bids import collect_data
-from .recon.interchange import qsiprep_output_names, recon_workflow_input_fields
+from ..interfaces.interchange import qsiprep_output_names, recon_workflow_input_fields
 
 
 LOGGER = logging.getLogger('nipype.workflow')

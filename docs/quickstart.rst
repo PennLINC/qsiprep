@@ -61,9 +61,14 @@ template using the T1w image's spatial normalization, the T1w images do not
 contain enough contrast to accurately align white matter structures to a
 template. For this reason, spatial normalization is typically done *after*
 models are fit. Therefore we omit the ``--output-spaces`` argument from
-preprocessing. All outputs will be registered to the T1w image (or the
+preprocessing: i.e. **no template warping takes place by default**.
+
+All outputs will be registered to the T1w image (or the
 AC-PC aligned b=0 template if ``--dwi-only`` was specified) but will have
-an isotropic voxel size.
+an isotropic voxel size. Furthermore, all outputs are aligned according to the
+AC-PC convention: the coordinates are changed from the native scanner
+coordinates to a new system where $0, 0, 0$ is where the midline intersects
+the anterior commissure (AC).
 
 Cortex can be accurately spatially-normalized using the T1w image, so the T1w
 image is still spatially normalized by default during preprocessing. The

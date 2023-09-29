@@ -11,7 +11,7 @@ import logging
 import AFQ
 import AFQ.utils.bin as afb
 from qsiprep.interfaces.pyafq import PyAFQRecon
-from .interchange import recon_workflow_input_fields
+from ...interfaces.interchange import recon_workflow_input_fields
 from ...interfaces.bids import ReconDerivativesDataSink
 LOGGER = logging.getLogger('nipype.workflow')
 

@@ -183,7 +183,14 @@ def write_derivative_description(bids_dir, deriv_dir):
             'Name': 'qsiprep',
             'Version': __version__,
             'CodeURL': DOWNLOAD_URL,
-            },
+        },
+        'GeneratedBy': [
+            {
+                'Name': 'qsiprep',
+                'Version': __version__,
+                'CodeURL': DOWNLOAD_URL,
+            }
+        ],
         'CodeURL': 'https://github.com/pennbbl/qsiprep',
         'HowToAcknowledge':
             'Please cite our paper (https://www.nature.com/articles/s41592-021-01185-5#citeas), and '
