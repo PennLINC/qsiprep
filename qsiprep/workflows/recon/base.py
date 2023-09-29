@@ -266,7 +266,7 @@ to workflows in *qsiprep*'s documentation]\
         dwi_recon_wfs[dwi_file] = init_dwi_recon_workflow(
             available_anatomical_data=dwi_available_anatomical_data,
             workflow_spec=spec,
-            name=wf_name,
+            name=wf_name + "_recon_wf",
             reportlets_dir=reportlets_dir,
             output_dir=output_dir,
             omp_nthreads=omp_nthreads,
