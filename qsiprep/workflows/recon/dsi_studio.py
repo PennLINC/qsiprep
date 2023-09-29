@@ -18,7 +18,7 @@ from qsiprep.interfaces.dsi_studio import (DSIStudioCreateSrc, DSIStudioGQIRecon
 import logging
 from ...interfaces.bids import ReconDerivativesDataSink
 from ...interfaces.converters import DSIStudioTrkToTck
-from .interchange import recon_workflow_input_fields
+from ...interfaces.interchange import recon_workflow_input_fields
 from ...engine import Workflow
 from ...interfaces.reports import CLIReconPeaksReport, ConnectivityReport
 

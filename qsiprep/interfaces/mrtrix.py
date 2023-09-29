@@ -214,16 +214,16 @@ class GenerateMasked5ttInputSpec(Generate5ttInputSpec):
         mandatory=True,
         desc='tissue segmentation algorithm')
     in_file = traits.Either(
-        File(exists=True), 
+        File(exists=True),
         traits.Directory(exists=True),
         argstr='%s',
         mandatory=True,
         position=1,
         desc='input T1w image or FreeSurfer directory')
     out_file = File(
-        argstr='%s', 
-        genfile=True, 
-        position=2, 
+        argstr='%s',
+        genfile=True,
+        position=2,
         desc='output image')
     mask = File(exists=True, argstr='-mask %s')
     amygdala_hipppocampi_subcortical_gm = traits.Bool(
@@ -232,7 +232,7 @@ class GenerateMasked5ttInputSpec(Generate5ttInputSpec):
     thalami_method = traits.Enum(
         "nuclei",
         "first",
-        "aseg", 
+        "aseg",
         argstr="-thalami %s")
     hippocampi_method = traits.Enum(
         "subfields",
@@ -880,10 +880,10 @@ class MRTrixAtlasGraph(SimpleInterface):
         merge_weights = pe.Node(niu.Merge(num_nodes),
                                 name='merge_weights')
         merge_exemplars = pe.Node(niu.Merge(3), name='merge_exemplars')
-        compress_exemplars = pe.Node(CompressConnectome2Tck(), 
+        compress_exemplars = pe.Node(CompressConnectome2Tck(),
                                      name='compress_exemplars')
         outputnode = pe.Node(
-            niu.IdentityInterface(fields=['matfiles', 'tckfiles', 'weights']), 
+            niu.IdentityInterface(fields=['matfiles', 'tckfiles', 'weights']),
             name='outputnode')
         workflow.connect(merge_mats, 'out', outputnode, 'matfiles')
         workflow.connect(merge_tcks, 'out', outputnode, 'tckfiles')
@@ -935,7 +935,7 @@ class MRTrixAtlasGraph(SimpleInterface):
                     workflow.connect(c2t_nodes[-1], 'exemplar_weights',
                                      merge_weights, 'in%d' % in_num)
                 in_num += 1
-        
+
         # Get the exemplar tcks and weights
         workflow.connect([
             (merge_tcks, merge_exemplars, [('out', "in1")]),
@@ -960,7 +960,7 @@ class MRTrixAtlasGraph(SimpleInterface):
             wf_result = workflow.run(**plugin_settings)
         else:
             wf_result = workflow.run()
-        
+
         # Merge the connectivity matrices into a single file
         merge_node, = [node for node in list(wf_result.nodes) if node.name.endswith('merge_mats')]
         merged_connectivity_file = op.join(cwd, "combined_connectivity.mat")
@@ -1061,30 +1061,30 @@ class _CompressConnectome2TckOutputSpec(TraitedSpec):
 class CompressConnectome2Tck(SimpleInterface):
     input_spec = _CompressConnectome2TckInputSpec
     output_spec = _CompressConnectome2TckOutputSpec
-    
+
     def _run_interface(self, runtime):
         out_zip = op.join(runtime.cwd, self.inputs.out_zip)
         zipfh = zipfile.ZipFile(out_zip, "w")
         # Get the matrix csvs and add them to the zip
-        csvfiles = [fname for fname in self.inputs.files if fname.endswith(".csv") 
+        csvfiles = [fname for fname in self.inputs.files if fname.endswith(".csv")
                     and not fname.endswith("weights.csv")]
         for csvfile in csvfiles:
             zipfh.write(csvfile, arcname=_rename_connectome(csvfile, suffix='connectome.csv'),
                         compresslevel=8, compress_type=zipfile.ZIP_DEFLATED)
-        
+
         # Get the sift weights if they exist
         weightfiles = [fname for fname in self.inputs.files if fname.endswith("weights.csv")]
         for weightfile in weightfiles:
             zipfh.write(weightfile, arcname=_rename_connectome(weightfile, suffix='_weights.csv'),
                         compresslevel=8, compress_type=zipfile.ZIP_DEFLATED)
-        
+
         # Get the tck files
         tckfiles = [fname for fname in self.inputs.files if fname.endswith(".tck")
                     or fname.endswith(".tck.gz")]
         for tckfile in tckfiles:
-            zipfh.write(tckfile, arcname=_rename_connectome(tckfile, suffix='_exemplars.tck'), 
+            zipfh.write(tckfile, arcname=_rename_connectome(tckfile, suffix='_exemplars.tck'),
                         compresslevel=8, compress_type=zipfile.ZIP_DEFLATED)
-        
+
         zipfh.close()
         self._results["out_zip"] = out_zip
         return runtime
@@ -1101,7 +1101,10 @@ def _rename_connectome(connectome_csv, suffix="_connectome.csv"):
     """
     parts = connectome_csv.split(os.sep)
     conn_name = parts[-2]
-    image_name, = [part for part in parts if part.startswith("sub_") and part.endswith("recon_wf")]
+    try:
+        image_name, = [part for part in parts if part.startswith("sub_") and part.endswith("recon_wf")]
+    except Exception as ex:
+        raise Exception(f"unable to detect image name from these parts {parts}")
     image_name = image_name[:-len("_recon_wf")]
     return "connectome2tck/" +_rebids(image_name) + "_" + conn_name + suffix
 
@@ -1303,9 +1306,9 @@ class _ITKTransformConvertInputSpec(CommandLineInputSpec):
         mandatory=True,
         position=0)
     operation = traits.Enum(
-        "itk_import", 
-        default="itk_import", 
-        usedefault=True, 
+        "itk_import",
+        default="itk_import",
+        usedefault=True,
         posision=1,
         argstr="%s")
     out_transform = traits.File(
@@ -1328,13 +1331,13 @@ class ITKTransformConvert(CommandLine):
 
 class _TransformHeaderInputSpec(CommandLineInputSpec):
     transform_file = traits.File(
-        exists=True, 
-        position=0, 
+        exists=True,
+        position=0,
         mandatory=True,
         argstr="-linear %s")
     in_image = traits.File(
-        exists=True, 
-        mandatory=True, 
+        exists=True,
+        mandatory=True,
         position=1,
         argstr="%s")
     out_image = traits.File(

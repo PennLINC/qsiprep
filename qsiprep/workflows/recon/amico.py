@@ -9,7 +9,7 @@ import logging
 import nipype.pipeline.engine as pe
 from nipype.interfaces import afni, utility as niu
 from qsiprep.interfaces.bids import ReconDerivativesDataSink
-from .interchange import recon_workflow_input_fields
+from ...interfaces.interchange import recon_workflow_input_fields
 from ...engine import Workflow
 from ...interfaces.amico import NODDI
 from ...interfaces.reports import CLIReconPeaksReport
@@ -57,7 +57,7 @@ def init_amico_noddi_fit_wf(omp_nthreads, available_anatomical_data,
 
 : """
     noddi_fit = pe.Node(
-        NODDI(**params), 
+        NODDI(**params),
         name="recon_noddi",
         n_procs=omp_nthreads)
     desc += """\
@@ -91,7 +91,7 @@ diffusivity.""" % (params['dPar'], params['dIso'])
         (convert_to_fibgz, outputnode, [('fibgz_file', 'fibgz')])])
     if plot_reports:
         plot_peaks = pe.Node(
-            CLIReconPeaksReport(), 
+            CLIReconPeaksReport(),
             name='plot_peaks',
             n_procs=omp_nthreads)
         ds_report_peaks = pe.Node(

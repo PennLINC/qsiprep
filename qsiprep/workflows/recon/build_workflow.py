@@ -4,7 +4,7 @@ from pkg_resources import resource_filename as pkgr
 from nipype.interfaces import ants, utility as niu
 from nipype.utils.filemanip import split_filename
 from qsiprep.interfaces import anatomical
-from qsiprep.interfaces.bids import QsiReconIngress, ReconDerivativesDataSink
+
 from .dsi_studio import (init_dsi_studio_recon_wf, init_dsi_studio_export_wf,
                          init_dsi_studio_connectivity_wf, init_dsi_studio_tractography_wf,
                          init_dsi_studio_autotrack_wf)
@@ -19,10 +19,7 @@ from .dynamics import init_controllability_wf
 from .utils import init_conform_dwi_wf, init_discard_repeated_samples_wf
 from .steinhardt import init_steinhardt_order_param_wf
 from ...engine import Workflow
-from .interchange import (qsiprep_output_names, default_input_set,
-    recon_workflow_input_fields, recon_workflow_anatomical_input_fields,
-    ReconWorkflowInputs)
-from .anatomical import init_dwi_recon_anatomical_workflow
+from ...interfaces.interchange import (default_input_set, recon_workflow_input_fields)
 
 LOGGER = logging.getLogger('nipype.interface')
 
@@ -33,49 +30,17 @@ def _check_repeats(nodelist):
         raise Exception
 
 
-def init_dwi_recon_workflow(dwi_file, workflow_spec, output_dir, prefer_dwi_mask,
-                            reportlets_dir, available_anatomical_data, omp_nthreads, b0_threshold,
-                            infant_mode, skip_odf_plots, freesurfer_dir=None,
-                            sloppy=False, name="recon_wf"):
+def init_dwi_recon_workflow(workflow_spec, output_dir,
+                            reportlets_dir, available_anatomical_data, omp_nthreads,
+                            skip_odf_plots, name="recon_wf"):
     """Convert a workflow spec into a nipype workflow.
 
     """
-    # Get the preprocessed DWI and all the related preprocessed images
-    qsiprep_preprocessed_dwi_data = pe.Node(
-        QsiReconIngress(dwi_file=dwi_file),
-        name="qsiprep_preprocessed_dwi_data")
 
-    # Get the anatomical data (masks, atlases, etc)
-    atlas_names = workflow_spec.get('atlases', [])
-    registered_anat_wf, available_anatomical_data = init_dwi_recon_anatomical_workflow(
-        atlas_names=atlas_names,
-        omp_nthreads=omp_nthreads,
-        infant_mode=infant_mode,
-        prefer_dwi_mask=prefer_dwi_mask,
-        sloppy=sloppy,
-        b0_threshold=b0_threshold,
-        extras_to_make=workflow_spec.get('anatomical', []),
-        freesurfer_dir=freesurfer_dir,
-        name="qsirecon_anat_wf",
-        **available_anatomical_data)
-
-    # For doctests
-    # if not workflow_spec['name'] == 'fake':
-    #     inputnode.inputs.dwi_file = dwi_file
-
-    workflow = Workflow(name=_get_wf_name(dwi_file) + "_" + name)
+    workflow = Workflow(name=name)
     inputnode = pe.Node(
         niu.IdentityInterface(fields=recon_workflow_input_fields),
         name='inputnode')
-
-    # Connect the collected diffusion data (gradients, etc) to the inputnode
-    workflow.connect([
-        (qsiprep_preprocessed_dwi_data, registered_anat_wf, [
-            (trait, 'inputnode.' + trait) for trait in qsiprep_output_names]),
-        (registered_anat_wf, inputnode, [
-            ('outputnode.'+trait, trait) for trait in
-            recon_workflow_input_fields])
-    ])
 
     # Read nodes from workflow spec, make sure we can implement them
     nodes_to_add = []
@@ -239,8 +204,3 @@ def workflow_from_spec(omp_nthreads, available_anatomical_data, node_spec,
 def _as_connections(attr_list, src_prefix='', dest_prefix=''):
     return [(src_prefix + item, dest_prefix + item) for item in attr_list]
 
-
-def _get_wf_name(dwi_file):
-    basedir, fname, ext = split_filename(dwi_file)
-    tokens = fname.split("_")
-    return "_".join(tokens[:-1]).replace("-", "_")

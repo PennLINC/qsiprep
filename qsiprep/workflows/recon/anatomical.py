@@ -28,7 +28,7 @@ from ...interfaces.ants import ConvertTransformFile
 from ...interfaces.freesurfer import find_fs_path
 from ...interfaces.gradients import ExtractB0s
 from ...interfaces.nilearn import MaskB0Series
-from .interchange import (qsiprep_anatomical_ingressed_fields,
+from ...interfaces.interchange import (qsiprep_anatomical_ingressed_fields,
     FS_FILES_TO_REGISTER, anatomical_workflow_outputs, recon_workflow_input_fields)
 from qsiprep.interfaces.utils import GetConnectivityAtlases
 
