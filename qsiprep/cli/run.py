@@ -840,7 +840,7 @@ def build_qsiprep_workflow(opts, retval):
                     "stimuli",
                     "sourcedata",
                     "models",
-                    re.compile(r"^\.")))
+                    re.compile(r"\/\.\w+|^\.\w+")))
 
     subject_list = collect_participants(
         layout, participant_label=opts.participant_label)
@@ -1087,7 +1087,7 @@ def build_recon_workflow(opts, retval):
                     "stimuli",
                     "sourcedata",
                     "models",
-                    re.compile(r"^\.")))
+                    re.compile(r"\/\.\w+|^\.\w+")))
     subject_list = collect_participants(
         layout, participant_label=opts.participant_label)
     retval['subject_list'] = subject_list
