@@ -11,7 +11,6 @@ qsiprep base reconstruction workflows
 
 """
 from pathlib import Path
-from matplotlib.pyplot import connect
 from pkg_resources import resource_filename as pkgrf
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
@@ -58,8 +57,19 @@ QSIPREP_NORMALIZED_ANAT_REQUIREMENTS = [
 ]
 
 def init_recon_anatomical_wf(subject_id, recon_input_dir, extras_to_make,
+                             pipeline_source,
                              freesurfer_dir="", needs_t1w_transform=False,
                              name='recon_anatomical_wf'):
+    if pipeline_source == "qsiprep":
+        return init_recon_anatomical_wf(
+            subject_id, recon_input_dir, extras_to_make,
+            freesurfer_dir="", needs_t1w_transform=False,
+            name='recon_anatomical_wf')
+
+def init_qsiprep_recon_anatomical_wf(
+        subject_id, recon_input_dir, extras_to_make,
+        freesurfer_dir="", needs_t1w_transform=False,
+        name='recon_anatomical_wf'):
     """
     This grabs anatomical outputs from qsiprep and calculates optional
     additional outputs like a dwi-resolution

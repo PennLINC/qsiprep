@@ -59,6 +59,7 @@ class QsiReconIngressOutputSpec(TraitedSpec):
     bval_file = File(exists=True)
     bvec_file = File(exists=True)
     b_file = File(exists=True)
+    btable_file = File(exists=True)
     confounds_file = File(exists=True)
     dwi_file = File(exists=True)
     local_bvec_file = File()
@@ -115,3 +116,16 @@ class QsiReconIngress(SimpleInterface):
         used_keys = ['subject_id', 'session_id', 'acq_id', 'dir_id', 'run_id']
         fname = "_".join([params[key] for key in used_keys if params[key]])
         return out_root + "/" + fname + "_desc-%s_dwi.%s" % (desc, suffix)
+
+
+class _UKBioBankIngressInputSpec(QsiReconIngressInputSpec):
+    dwi_file = File(exists=True,
+                    help="Instead of the DWI file, send the path to the UKB outputs for a subject")
+
+
+class UKBioBankIngress(SimpleInterface):
+    input_spec = _UKBioBankIngressInputSpec
+    output_spec = QsiReconIngressOutputSpec
+
+    def _run_interface(self, runtime):
+        return super()._run_interface(runtime)
