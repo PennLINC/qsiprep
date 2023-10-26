@@ -1,2 +1,175 @@
 [build-system]
-requires = ["setuptools<65.6.0", "wheel", "numpy", "cython"]
+requires = ["hatchling", "hatch-vcs", "nipreps-versions", "cython", "numpy"]
+build-backend = "hatchling.build"
+
+[project]
+name = "qsiprep"
+description = "qsiprep builds workflows for preprocessing and reconstructing q-space images"
+authors = [{name = "The PennBBL developers"}]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+    "License :: OSI Approved :: BSD License",
+    "Programming Language :: Python :: 3.8",
+]
+license = {file = "LICENSE"}
+requires-python = ">=3.5"
+dependencies = [
+    "setuptools <= 65.5.1",
+    "nibabel >=3.0.0",
+    "indexed_gzip >=0.8.8",
+    "nilearn >= 0.10.1",
+    "nipype >=1.3.1",
+    "psutil >=5.4",
+    "pybids < 0.16.1",
+    "matplotlib",
+    "svgutils <= 0.3.0",
+    "numpy >= 1.18.5",
+    "dipy >= 1.0",
+    "vtk",
+    "sentry_sdk",
+    "fury",
+    "networkx <= 2.6.3",
+    "dmri-amico == 1.5.4",
+    "seaborn",
+    "SimpleITK",
+    "pandas < 2.0.0",
+    "pyyaml",
+    "jinja2 < 3.1",
+    "xvfbwrapper",
+    "scikit-learn >=0.20.2",
+    "scikit-image",
+    "SimpleITK",
+    "pyAFQ >= 1.0.1",
+    "transforms3d",
+]
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/pennbbl/qsiprep"
+Documentation = "https://www.qsiprep.readthedocs.io"
+Paper = "https://doi.org/10.1038/s41592-022-01458-7"
+"Docker Images" = "https://hub.docker.com/r/pennlinc/qsiprep/tags/"
+
+[project.optional-dependencies]
+doc = [
+    "dipy",
+    "nbsphinx",
+    "packaging",
+    "pydot >=1.2.3",
+    "pydotplus",
+    "sphinx <=2.2.0",
+    "sphinx-argparse",
+    "sphinx_rtd_theme",
+    "sphinx_markdown_tables",
+    "recommonmark",
+]
+tests = [
+    "coverage",
+    "codecov",
+    "pytest",
+]
+maint = [
+    "fuzzywuzzy",
+    "python-Levenshtein",
+]
+
+# Aliases
+all = ["qsiprep[doc,maint,tests]"]
+
+[project.scripts]
+qsiprep = "qsiprep.cli.run:main"
+mif2fib = "qsiprep.cli.convertODFs:mif_to_fib"
+fib2mif = "qsiprep.cli.convertODFs:fib_to_mif"
+qsiprep_group_report = "qsiprep.cli.group_report:aggregate_reports"
+recon_plot = "qsiprep.cli.recon_plot:recon_plot"
+
+#
+# Hatch configurations
+#
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.sdist]
+exclude = [".git_archival.txt"]  # No longer needed in sdist
+
+[tool.hatch.build.targets.wheel]
+packages = ["qsiprep"]
+exclude = [
+    "qsiprep/tests/data",  # Large test data directory
+]
+
+##  The following two sections configure setuptools_scm in the hatch way
+
+[tool.hatch.version]
+source = "vcs"
+# raw-options = { version_scheme = "nipreps-calver" }
+
+[tool.hatch.build.hooks.vcs]
+version-file = "qsiprep/_version.py"
+
+#
+# Developer tool configurations
+#
+
+[tool.black]
+line-length = 99
+target-version = ['py38']
+include = '\.pyi?$'
+exclude = '''
+(
+  /(
+      \.eggs         # exclude a few common directories in the
+    | \.git          # root of the project
+    | \.github
+    | \.hg
+    | \.pytest_cache
+    | _build
+    | build
+    | dist
+  )/
+  | qsiprep/_version.py
+)
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+src_paths = ["isort", "test"]
+known_local_folder = ["qsiprep"]
+
+[tool.flake8]
+max-line-length = "99"
+doctests = "False"
+exclude = [
+    "*build/",
+    "qsiprep/_version.py",
+    "qsiprep/_warnings.py",
+    "qsiprep/config.py",
+    "qsiprep/data/",
+    "qsiprep/tests/",
+    "qsiprep/utils/sentry.py",
+]
+ignore = ["D107", "E203", "E402", "E722", "W503", "N803", "N806", "N815"]
+per-file-ignores = [
+    "**/__init__.py : F401",
+    "docs/conf.py : E265",
+]
+
+[tool.coverage.run]
+branch = true
+omit = [
+    "*/tests/*",
+    "*/__init__.py",
+    "*/conftest.py",
+    "qsiprep/_version.py"
+]
+
+[tool.coverage.report]
+# Regexes for lines to exclude from consideration
+exclude_lines = [
+    'raise NotImplementedError',
+    'warnings\.warn',
+]
