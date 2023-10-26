@@ -54,15 +54,17 @@ Paper = "https://doi.org/10.1038/s41592-022-01458-7"
 [project.optional-dependencies]
 doc = [
     "dipy",
+    "doctest-ignore-unicode",
     "nbsphinx",
-    "packaging",
     "pydot >= 1.2.3",
     "pydotplus",
     "recommonmark",
     "sphinx >= 4.2.0",
     "sphinx-argparse",
-    "sphinx_rtd_theme",
     "sphinx_markdown_tables",
+    "sphinx_rtd_theme",
+    "sphinxcontrib-apidoc",
+    "sphinxcontrib-bibtex",
 ]
 tests = [
     "codecov",
