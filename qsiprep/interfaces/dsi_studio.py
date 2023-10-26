@@ -794,6 +794,10 @@ class _AutoTrackInputSpec(DSIStudioCommandLineInputSpec):
         argstr="--yield_rate=%.10f",
         desc="This rate will be used to terminate tracking early if DSI Studio find the " \
             "fiber trackings is not generating results")
+    tip_iteration = traits.Int(
+        16,
+        argstr="--tip_iteration=%d",
+        desc="Specify topology-informed pruning iterations")
     export_trk = traits.Bool(
         True,
         usedefault=True,
