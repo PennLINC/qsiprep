@@ -1,8 +1,5 @@
 version: 2
 
-conda:
-  environment: .readthedocs/environment.yaml
-
 build:
   os: ubuntu-22.04
   tools:
