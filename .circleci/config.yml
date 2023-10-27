@@ -335,40 +335,33 @@ jobs:
 
   test_deploy_pypi:
     docker:
-      - image: cimg/python:3.8.10
+      - image: circleci/python:3.8.10
     working_directory: /tmp/src/qsiprep
     steps:
       - checkout
       - run:
-          name: Build qsiprep
-          command: |
-            sudo apt-get update
-            sudo apt-get install -y libblas-dev liblapack-dev gfortran
-            pip install --user twine  # For use in checking distributions
-            pip install --user --upgrade importlib-metadata
-            THISVERSION=$(python3 -c "from qsiprep import __version__; print(__version__)")
-            THISVERSION=${THISVERSION%.dirty*}
-            THISVERSION=${CIRCLE_TAG:-$THISVERSION}
-            virtualenv --python=python build
-            source build/bin/activate
-            pip install --upgrade "pip>=19.1" numpy
-            echo "${CIRCLE_TAG:-$THISVERSION}" > qsiprep/VERSION
-            pip install .
-            pip wheel --no-deps -w dist/ .
+          name: Update build tools
+          command: pip install --upgrade build twine hatch
+      - run:
+          name: Build QSIPrep
+          command: python -m build
+      - run:
+          name: Twine check qsiprep
+          command: twine check dist/*
+      - run:
+          name: Pre-run hatch version
+          command: hatch version
       - store_artifacts:
           path: /tmp/src/qsiprep/dist
       - run:
           name: Check sdist distribution
           command: |
-            sudo apt-get install -y libblas-dev liblapack-dev gfortran
-            THISVERSION=$(python3 -c "from qsiprep import __version__; print(__version__)")
-            THISVERSION=${THISVERSION%.dirty*}
+            THISVERSION=$( hatch version )
             THISVERSION=${CIRCLE_TAG:-$THISVERSION}
-            twine check dist/qsiprep*.tar.gz
             virtualenv --python=python sdist
             source sdist/bin/activate
-            pip install --progress-bar off --upgrade "setuptools<65.6.0" "pip>=19.1" numpy
-            pip install dist/qsiprep*.tar.gz
+            python -m pip install --upgrade pip
+            python -m pip install dist/qsiprep*.tar.gz
             which qsiprep | grep sdist\\/bin
             INSTALLED_VERSION=$(qsiprep --version)
             INSTALLED_VERSION=${INSTALLED_VERSION%$'\r'}
@@ -379,14 +372,11 @@ jobs:
       - run:
           name: Check wheel distribution
           command: |
-            sudo apt-get install -y libblas-dev liblapack-dev gfortran
-            THISVERSION=$(python3 -c "from qsiprep import __version__; print(__version__)")
-            THISVERSION=${THISVERSION%.dirty*}
+            THISVERSION=$( hatch version )
             THISVERSION=${CIRCLE_TAG:-$THISVERSION}
-            twine check dist/qsiprep*.whl
             virtualenv --python=python wheel
             source wheel/bin/activate
-            pip install dist/qsiprep*.whl
+            python -m pip install dist/qsiprep*.whl
             which qsiprep | grep wheel\\/bin
             INSTALLED_VERSION=$(qsiprep --version)
             INSTALLED_VERSION=${INSTALLED_VERSION%$'\r'}
@@ -395,17 +385,11 @@ jobs:
             echo "INSTALLED: \"$INSTALLED_VERSION\""
             test "$INSTALLED_VERSION" = "$THISVERSION"
       - run:
-          name: Build qsiprep-container
-          command: |
-            THISVERSION=$(python3 -c "from qsiprep import __version__; print(__version__)")
-            THISVERSION=${THISVERSION%.dirty*}
-            cd wrapper
-            virtualenv --python=python build
-            source build/bin/activate
-            pip install --upgrade "pip>=19.1"
-            sed -i -E "s/(__version__ = )'[A-Za-z0-9.-]+'/\1'${CIRCLE_TAG:-$THISVERSION}'/" qsiprep_docker.py
-            python setup.py sdist
-            pip wheel --no-deps -w dist/ .
+          name: Build qsiprep-docker
+          command: python -m build wrapper
+      - run:
+          name: Twine check wrapper
+          command: twine check wrapper/dist/*
       - store_artifacts:
           path: /tmp/src/qsiprep/wrapper/dist
 
@@ -416,35 +400,17 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Build qsiprep
-          command: |
-            THISVERSION=$(python3 -c "from qsiprep import __version__; print(__version__)")
-            virtualenv --python=python build
-            source build/bin/activate
-            pip install --upgrade "pip>=19.1" numpy
-            sudo apt-get install -y libblas-dev liblapack-dev gfortran
-            echo "${CIRCLE_TAG:-$THISVERSION}" > qsiprep/VERSION
-            python setup.py sdist
-            pip wheel --no-deps -w dist/ .
+          name: Update build tools
+          command: pip install --upgrade build twine
       - run:
-          name: Build qsiprep-container
-          command: |
-            THISVERSION=$(python3 -c "from qsiprep import __version__; print(__version__)")
-            cd wrapper
-            virtualenv --python=python build
-            source build/bin/activate
-            pip install --upgrade "pip>=19.1"
-            sudo apt-get install -y libblas-dev liblapack-dev gfortran
-            sed -i -E "s/(__version__ = )'[A-Za-z0-9.-]+'/\1'${CIRCLE_TAG:-$THISVERSION}'/" qsiprep_docker.py
-            python setup.py sdist
-            pip wheel --no-deps -w dist/ .
+          name: Build QSIPrep
+          command: python -m build
+      - run:
+          name: Build qsiprep-docker
+          command: python -m build wrapper/
       - run:
           name: Upload packages to PyPI
-          command: |
-            pip install --user twine
-            pip install --user --upgrade importlib-metadata
-            twine upload -u __token__ -p ${PYPI_PASS} dist/qsiprep*gz wrapper/dist/qsiprep*
-
+          command: python -m twine upload -u __token__ -p ${PYPI_PASS} dist/qsiprep* wrapper/dist/qsiprep*
 
 workflows:
   version: 2
