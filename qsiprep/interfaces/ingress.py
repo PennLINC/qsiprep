@@ -19,13 +19,8 @@ Disable warnings:
 
 """
 
-import os
+from pathlib import Path
 import os.path as op
-import re
-import simplejson as json
-import gzip
-from shutil import copytree, rmtree, copyfileobj
-
 from nipype import logging
 from nipype.interfaces.base import (
     traits, isdefined, TraitedSpec, BaseInterfaceInputSpec,
@@ -119,8 +114,10 @@ class QsiReconIngress(SimpleInterface):
 
 
 class _UKBioBankIngressInputSpec(QsiReconIngressInputSpec):
-    dwi_file = File(exists=True,
-                    help="Instead of the DWI file, send the path to the UKB outputs for a subject")
+    dwi_file = File(exists=False,
+                    help="The name of what a BIDS dwi file may have been")
+    data_dir = File(exists=True,
+                    help="The UKB data directory for a subject. Must contain DTI/ and T1/")
 
 
 class UKBioBankIngress(SimpleInterface):
@@ -128,4 +125,19 @@ class UKBioBankIngress(SimpleInterface):
     output_spec = QsiReconIngressOutputSpec
 
     def _run_interface(self, runtime):
-        return super()._run_interface(runtime)
+        in_dir = Path(self.inputs.data_dir)
+        dwi_dir = in_dir / "DTI" / "dMRI" / "dMRI"
+        bval_file = dwi_dir / "bvals"
+        ukb_bvec_file = dwi_dir / "bvecs" # These are the same as eddy rotated
+        ukb_dwi_file = dwi_dir / "data_ud.nii.gz"
+
+        # Reorient the dwi file to LPS+
+        self._results['dwi_file'] = None
+
+        # Create a btable_txt file for DSI Studio
+        self._results['btable_file'] = None
+
+        # Create a mrtrix .b file from the original LAS+ data
+        self._results['b_file'] = None
+
+        return runtime

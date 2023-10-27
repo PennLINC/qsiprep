@@ -17,7 +17,7 @@ from nipype.interfaces import utility as niu
 
 from ..engine import Workflow
 from ..interfaces import DerivativesDataSink
-from ..interfaces.bids import QsiReconIngress
+from ..interfaces.ingress import QsiReconIngress
 from ..interfaces.reports import InteractiveReport
 from ..utils.bids import collect_data
 from ..interfaces.interchange import qsiprep_output_names, recon_workflow_input_fields

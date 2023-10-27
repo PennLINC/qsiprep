@@ -1,5 +1,5 @@
 from http.server import SimpleHTTPRequestHandler
-from qsiprep.interfaces.bids import QsiReconIngress
+from qsiprep.interfaces.ingress import QsiReconIngress
 from nipype.interfaces.io import FreeSurferSource
 from qsiprep.interfaces.anatomical import QsiprepAnatomicalIngress
 from nipype.interfaces.base import (TraitedSpec, BaseInterfaceInputSpec,

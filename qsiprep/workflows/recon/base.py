@@ -21,6 +21,7 @@ from nipype.utils.filemanip import split_filename
 from nilearn import __version__ as nilearn_ver
 from dipy import __version__ as dipy_ver
 from pkg_resources import resource_filename as pkgrf
+from ...utils.ingress import create_ukb_layout
 from ...engine import Workflow
 from ...utils.sloppy_recon import make_sloppy
 from ...__about__ import __version__
@@ -39,8 +40,7 @@ LOGGER = logging.getLogger('nipype.workflow')
 
 def init_qsirecon_wf(subject_list, run_uuid, work_dir, output_dir, recon_input,
                      recon_spec, low_mem, omp_nthreads, sloppy, freesurfer_input,
-                     b0_threshold, skip_odf_plots, pipeline_source="qsiprep",
-                     name="qsirecon_wf"):
+                     b0_threshold, skip_odf_plots, pipeline_source, name="qsirecon_wf"):
     """
     This workflow organizes the execution of qsiprep, with a sub-workflow for
     each subject.
@@ -82,7 +82,7 @@ def init_qsirecon_wf(subject_list, run_uuid, work_dir, output_dir, recon_input,
             Path to a JSON file that specifies how to run reconstruction
         pipeline_source : str
             The pipeline used to process the input data. Default is "qsiprep",
-            someday it can be "ukb", "hcp" or "dhcp"
+            someday it can be "ukb", "hcp"
         low_mem : bool
             Write uncompressed .nii files in some cases to reduce memory usage
         freesurfer_input : Pathlib.Path
@@ -163,12 +163,12 @@ def init_single_subject_wf(
                 "nodes": []}
         space = spec['space']
         # for documentation purposes
-        dwi_files = ['/made/up/outputs/sub-X_dwi.nii.gz']
+        dwi_recon_inputs = [{"bids_dwi_file": '/made/up/outputs/sub-X_dwi.nii.gz'}]
     else:
         # TODO: Change this to handle multiple input types
         spec = _load_recon_spec(recon_spec, sloppy=sloppy)
         space = spec['space']
-        dwi_files = _get_iterable_dwi_inputs(recon_input, subject_id, pipeline_source, space)
+        dwi_recon_inputs = _get_iterable_dwi_inputs(recon_input, subject_id, pipeline_source, space)
 
     workflow = Workflow('sub-{}_{}'.format(subject_id, spec['name']))
     workflow.__desc__ = """
@@ -194,7 +194,7 @@ to workflows in *qsiprep*'s documentation]\
 
     """.format(nilearn_ver=nilearn_ver, dipy_ver=dipy_ver)
 
-    if len(dwi_files) == 0:
+    if len(dwi_recon_inputs) == 0:
         LOGGER.info("No dwi files found for %s", subject_id)
         return workflow
 
@@ -221,23 +221,27 @@ to workflows in *qsiprep*'s documentation]\
     # Get the anatomical data (masks, atlases, etc)
     atlas_names = spec.get('atlases', [])
 
-    if pipeline_source == "qsiprep":
-        recon_ingressor = QsiReconIngress
-    elif pipeline_source == "ukb":
-        recon_ingressor = UKBioBankIngress
-
     # create a processing pipeline for the dwis in each session
     dwi_recon_wfs = {}
     dwi_individual_anatomical_wfs = {}
     recon_full_inputs = {}
     dwi_ingress_nodes = {}
-    for dwi_file in dwi_files:
+
+    for dwi_input in dwi_recon_inputs:
+        dwi_file = dwi_input['bids_dwi_file']
         wf_name = _get_wf_name(dwi_file)
 
         # Get the preprocessed DWI and all the related preprocessed images
-        dwi_ingress_nodes[dwi_file] = pe.Node(
-            recon_ingressor(dwi_file=dwi_file),
-            name=wf_name + "_ingressed_dwi_data")
+
+        if pipeline_source == "qsiprep":
+            dwi_ingress_nodes[dwi_file] = pe.Node(
+                QsiReconIngress(dwi_file=dwi_file),
+                name=wf_name + "_ingressed_dwi_data")
+        elif pipeline_source == "ukb":
+            dwi_ingress_nodes[dwi_file] = pe.Node(
+                UKBioBankIngress(dwi_file=dwi_file,
+                                 data_dir=str(dwi_input['path'].absolute())),
+                name=wf_name + "_ingressed_dwi_data")
 
         # Create scan-specific anatomical data (mask, atlas configs, odf ROIs for reports)
         dwi_individual_anatomical_wfs[dwi_file], dwi_available_anatomical_data = \
@@ -351,6 +355,9 @@ def _get_iterable_dwi_inputs(recon_input_directory, subject_id, pipeline_source,
                                 extension=['nii', 'nii.gz'])
                      if 'space-' + space in f.filename]
         LOGGER.info("found %s in %s", dwi_files, recon_input_directory)
-        return dwi_files
+        return [{"bids_dwi_file": dwi_file} for dwi_file in dwi_files]
+
+    if pipeline_source == "ukb":
+        return create_ukb_layout(participant_label=subject_id)
 
     raise Exception("Unknown pipeline " + pipeline_source)

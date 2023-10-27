@@ -17,6 +17,7 @@ from argparse import ArgumentParser
 from argparse import ArgumentDefaultsHelpFormatter
 from multiprocessing import cpu_count
 from time import strftime
+from ..utils.ingress import create_ukb_layout, collect_ukb_participants
 warnings.filterwarnings("ignore", category=ImportWarning)
 warnings.filterwarnings("ignore", category=PendingDeprecationWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -158,8 +159,20 @@ def get_parser():
         '--recon-input', '--recon_input',
         action='store',
         type=os.path.abspath,
-        help='use this directory as inputs to qsirecon. This option skips qsiprep.'
-    )
+        help='use this directory as inputs to qsirecon. This option skips qsiprep.')
+
+    g_recon.add_argument(
+        '--recon-input-pipeline', '--recon_input_pipeline',
+        action='store',
+        default='qsiprep',
+
+        choices=['qsiprep', 'ukb', 'hcpya'],
+        help='specify which pipeline was used to create the data specified '
+        'as the --recon-input. Not necessary to specify if the data was '
+        'processed by qsiprep. Other options include "ukb" for data processed '
+        'with the UK BioBank minimal preprocessing pipeline and "hcpya" for '
+        'the HCP young adult minimal preprocessing pipeline.')
+
     g_recon.add_argument(
         '--freesurfer-input', '--freesurfer_input',
         action='store',
@@ -1071,25 +1084,30 @@ def build_recon_workflow(opts, retval):
     log_dir = op.join(output_dir, 'qsirecon', 'logs')
     work_dir = Path(opts.work_dir or 'work')  # Set work/ as default
 
-    _db_path = opts.bids_database_dir or (
-        work_dir / run_uuid / "bids_db")
-    _db_path.mkdir(exist_ok=True, parents=True)
-
-    # First check that bids_dir looks like a BIDS folder
-    bids_dir = opts.bids_dir.resolve()
-    layout = BIDSLayout(
-                str(bids_dir),
-                validate=False,
-                database_path=_db_path,
-                reset_database=opts.bids_database_dir is None,
-                ignore=(
-                    "code",
-                    "stimuli",
-                    "sourcedata",
-                    "models",
-                    re.compile(r"^\.")))
-    subject_list = collect_participants(
-        layout, participant_label=opts.participant_label)
+    if opts.recon_input_pipeline == 'qsiprep':
+        _db_path = opts.bids_database_dir or (
+            work_dir / run_uuid / "bids_db")
+        _db_path.mkdir(exist_ok=True, parents=True)
+        # First check that bids_dir looks like a BIDS folder
+        bids_dir = opts.bids_dir.resolve()
+        layout = BIDSLayout(
+                    str(bids_dir),
+                    validate=False,
+                    database_path=_db_path,
+                    reset_database=opts.bids_database_dir is None,
+                    ignore=(
+                        "code",
+                        "stimuli",
+                        "sourcedata",
+                        "models",
+                        re.compile(r"^\.")))
+        subject_list = collect_participants(
+            layout, participant_label=opts.participant_label)
+    elif opts.recon_input_pipeline == "ukb":
+        ukb_layout = create_ukb_layout(opts.recon_input)
+        subject_list = collect_ukb_participants(ukb_layout, participant_label=opts.participant_label)
+    else:
+        raise NotImplementedError(f"{opts.recon_input_pipeline} is not supported as recon-input yet.")
     retval['subject_list'] = subject_list
 
     # Load base plugin_settings from file if --use-plugin
@@ -1189,7 +1207,8 @@ def build_recon_workflow(opts, retval):
         sloppy=opts.sloppy,
         b0_threshold=opts.b0_threshold,
         freesurfer_input=opts.freesurfer_input,
-        skip_odf_plots=opts.skip_odf_reports
+        skip_odf_plots=opts.skip_odf_reports,
+        pipeline_source=opts.pipeline_source
     )
     retval['return_code'] = 0
 
