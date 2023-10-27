@@ -351,9 +351,9 @@ jobs:
             THISVERSION=${CIRCLE_TAG:-$THISVERSION}
             virtualenv --python=python build
             source build/bin/activate
-            pip install --upgrade "setuptools<65.6.0" "pip>=19.1" numpy
+            pip install --upgrade "pip>=19.1" numpy
             echo "${CIRCLE_TAG:-$THISVERSION}" > qsiprep/VERSION
-            python setup.py sdist
+            pip install .
             pip wheel --no-deps -w dist/ .
       - store_artifacts:
           path: /tmp/src/qsiprep/dist

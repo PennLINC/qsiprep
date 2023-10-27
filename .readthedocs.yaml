@@ -2,6 +2,9 @@ version: 2
 
 build:
   os: ubuntu-22.04
+  apt_packages:
+    - blas
+    - lapack
   tools:
     python: "3.8"
 
