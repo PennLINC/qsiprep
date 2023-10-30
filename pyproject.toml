@@ -5,6 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "qsiprep"
 description = "qsiprep builds workflows for preprocessing and reconstructing q-space images"
+readme = "long_description.rst"
 authors = [{name = "The PennBBL developers"}]
 classifiers = [
     "Development Status :: 3 - Alpha",
