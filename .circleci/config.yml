@@ -335,7 +335,7 @@ jobs:
 
   test_deploy_pypi:
     docker:
-      - image: cimg/python:3.10.9
+      - image: circleci/python:3.10.9
     working_directory: /tmp/src/qsiprep
     steps:
       - checkout
@@ -400,7 +400,7 @@ jobs:
 
   deploy_pypi:
     docker:
-      - image: cimg/python:3.10.9
+      - image: circleci/python:3.10.9
     working_directory: /tmp/src/qsiprep
     steps:
       - checkout
