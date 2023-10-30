@@ -342,7 +342,7 @@ jobs:
       - run:
           name: Install stuff
           command: |
-            apt-get update
+            sudo apt-get update
             sudo apt-get install -y libblas-dev liblapack-dev
       - run:
           name: Update build tools
@@ -407,7 +407,7 @@ jobs:
       - run:
           name: Install stuff
           command: |
-            apt-get update
+            sudo apt-get update
             sudo apt-get install -y libblas-dev liblapack-dev
       - run:
           name: Update build tools
