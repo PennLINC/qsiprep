@@ -343,7 +343,7 @@ jobs:
           name: Install stuff
           command: |
             apt-get update
-            apt-get install -y libblas-dev liblapack-dev
+            sudo apt-get install -y libblas-dev liblapack-dev
       - run:
           name: Update build tools
           command: pip install --upgrade build twine hatch
@@ -404,6 +404,11 @@ jobs:
     working_directory: /tmp/src/qsiprep
     steps:
       - checkout
+      - run:
+          name: Install stuff
+          command: |
+            apt-get update
+            sudo apt-get install -y libblas-dev liblapack-dev
       - run:
           name: Update build tools
           command: pip install --upgrade build twine
