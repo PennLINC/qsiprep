@@ -340,6 +340,9 @@ jobs:
     steps:
       - checkout
       - run:
+          name: Install stuff
+          command: apt-get install libblas-dev liblapack-dev
+      - run:
           name: Update build tools
           command: pip install --upgrade build twine hatch
       - run:
