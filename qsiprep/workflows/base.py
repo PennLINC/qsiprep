@@ -478,7 +478,12 @@ def init_single_subject_wf(
         layout = None
         LOGGER.warning("Building a test workflow")
     else:
-        subject_data, layout = collect_data(bids_dir, subject_id, filters=bids_filters)
+        subject_data, layout = collect_data(
+            bids_dir, 
+            subject_id, 
+            filters=bids_filters, 
+            bids_validate=False
+        )
 
     # Warn about --dwi-only and non-none --anat-modality
     if dwi_only and anatomical_contrast != "none":
