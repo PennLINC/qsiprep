@@ -157,6 +157,7 @@ class NODDI(AmicoReconInterface):
         # Set up the AMICO evaluation
         aeval = amico.Evaluation("study", "subject")
         scheme_file = amico.util.fsl2scheme(bval_file, bvec_file,
+                                            bStep=self.inputs.b0_threshold,
                                             flipAxes=[False, True, True])
         aeval.load_data(dwi_filename=dwi_file, scheme_filename=scheme_file,
                         mask_filename=mask_file, b0_thr=self.inputs.b0_threshold)
