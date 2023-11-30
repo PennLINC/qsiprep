@@ -1,5 +1,5 @@
 from http.server import SimpleHTTPRequestHandler
-from qsiprep.interfaces.ingress import QsiReconIngress
+from qsiprep.interfaces.ingress import QsiReconDWIIngress
 from nipype.interfaces.io import FreeSurferSource
 from qsiprep.interfaces.anatomical import QsiprepAnatomicalIngress
 from nipype.interfaces.base import (TraitedSpec, BaseInterfaceInputSpec,
@@ -22,7 +22,7 @@ anatomical_workflow_outputs = qsiprep_anatomical_ingressed_fields + \
     FS_FILES_TO_REGISTER + CREATEABLE_ANATOMICAL_OUTPUTS
 
 # These are read directly from QSIPrep's dwi results.
-qsiprep_output_names = QsiReconIngress().output_spec.class_editable_traits()
+qsiprep_output_names = QsiReconDWIIngress().output_spec.class_editable_traits()
 
 # dMRI + registered anatomical fields
 recon_workflow_anatomical_input_fields = anatomical_workflow_outputs + [

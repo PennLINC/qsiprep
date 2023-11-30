@@ -25,12 +25,12 @@ from ...utils.ingress import create_ukb_layout
 from ...engine import Workflow
 from ...utils.sloppy_recon import make_sloppy
 from ...__about__ import __version__
-from ...interfaces.ingress import QsiReconIngress, UKBioBankIngress
+from ...interfaces.ingress import QsiReconDWIIngress, UKBioBankIngress
 import logging
 import json
 from bids.layout import BIDSLayout
 from .build_workflow import init_dwi_recon_workflow
-from .anatomical import init_recon_qsiprep_anatomical_wf, init_dwi_recon_anatomical_workflow
+from .anatomical import init_recon_anatomical_wf, init_dwi_recon_anatomical_workflow
 from ...interfaces.interchange import (anatomical_workflow_outputs, recon_workflow_anatomical_input_fields,
                                        ReconWorkflowInputs,
                                        qsiprep_output_names, recon_workflow_input_fields)
@@ -198,8 +198,10 @@ to workflows in *qsiprep*'s documentation]\
         LOGGER.info("No dwi files found for %s", subject_id)
         return workflow
 
+    # This is here because qsiprep currently only makes one anatomical result per subject
+    # regardless of sessions. So process it on its
     if pipeline_source == "qsiprep":
-        anat_ingress_wf, available_anatomical_data = init_recon_qsiprep_anatomical_wf(
+        anat_ingress_wf, available_anatomical_data = init_recon_anatomical_wf(
             subject_id=subject_id,
             recon_input_dir=recon_input,
             extras_to_make=spec.get('anatomical', []),
@@ -228,7 +230,7 @@ to workflows in *qsiprep*'s documentation]\
         # Get the preprocessed DWI and all the related preprocessed images
         if pipeline_source == "qsiprep":
             dwi_ingress_nodes[dwi_file] = pe.Node(
-                QsiReconIngress(dwi_file=dwi_file),
+                QsiReconDWIIngress(dwi_file=dwi_file),
                 name=wf_name + "_ingressed_dwi_data")
         elif pipeline_source == "ukb":
             dwi_ingress_nodes[dwi_file] = pe.Node(

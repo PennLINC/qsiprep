@@ -28,8 +28,9 @@ def missing_from_ukb_directory(ukb_sujbect_dir):
         dmri_dir / "bvals",
         dmri_dir / "bvecs",
         dmri_dir / "data_ud.nii.gz",
-        anat_dir / "T1_brain.nii.gz",
-        anat_dir / "T1_brain_mask.nii.gz"
+        # The anatomical data is not strictly necessary for recon
+        # anat_dir / "T1_brain.nii.gz",
+        # anat_dir / "T1_brain_mask.nii.gz"
     ]
 
     return [str(fpath) for fpath in required_files if not fpath.exists()]

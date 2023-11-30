@@ -17,7 +17,7 @@ from nipype.interfaces import utility as niu
 
 from ..engine import Workflow
 from ..interfaces import DerivativesDataSink
-from ..interfaces.ingress import QsiReconIngress
+from ..interfaces.ingress import QsiReconDWIIngress
 from ..interfaces.reports import InteractiveReport
 from ..utils.bids import collect_data
 from ..interfaces.interchange import qsiprep_output_names, recon_workflow_input_fields
@@ -114,7 +114,7 @@ def init_single_subject_json_report_wf(subject_id, name, output_dir):
     inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields),
                         name='inputnode')
     qsiprep_preprocessed_dwi_data = pe.Node(
-        QsiReconIngress(), name="qsiprep_preprocessed_dwi_data")
+        QsiReconDWIIngress(), name="qsiprep_preprocessed_dwi_data")
 
     # For doctests
     if not name == 'fake':

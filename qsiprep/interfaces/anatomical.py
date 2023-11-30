@@ -128,6 +128,7 @@ class QsiprepAnatomicalIngress(SimpleInterface):
         if len(files) == 1:
             self._results[name] = files[0]
 
+
 class _DiceOverlapInputSpec(BaseInterfaceInputSpec):
     anatomical_mask = File(exists=True, mandatory=True, desc='Mask from a T1w image')
     dwi_mask = File(exists=True, mandatory=True, desc='Mask from a DWI image')

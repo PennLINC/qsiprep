@@ -30,10 +30,11 @@ from nipype.interfaces.base import (
 from nipype.utils.filemanip import copyfile, split_filename
 from glob import glob
 from .bids import get_bids_params
+from .anatomical import QsiprepAnatomicalIngress
 
 LOGGER = logging.getLogger('nipype.interface')
 
-class QsiReconIngressInputSpec(BaseInterfaceInputSpec):
+class QsiReconDWIIngressInputSpec(BaseInterfaceInputSpec):
     # DWI files
     dwi_file = File(exists=True)
     bval_file = File(exists=True)
@@ -42,8 +43,7 @@ class QsiReconIngressInputSpec(BaseInterfaceInputSpec):
     atlas_names = traits.List()
 
 
-
-class QsiReconIngressOutputSpec(TraitedSpec):
+class QsiReconDWIIngressOutputSpec(TraitedSpec):
     subject_id = traits.Str()
     session_id = traits.Str()
     space_id = traits.Str()
@@ -64,9 +64,9 @@ class QsiReconIngressOutputSpec(TraitedSpec):
     slice_qc_file = File(exists=True)
 
 
-class QsiReconIngress(SimpleInterface):
-    input_spec = QsiReconIngressInputSpec
-    output_spec = QsiReconIngressOutputSpec
+class QsiReconDWIIngress(SimpleInterface):
+    input_spec = QsiReconDWIIngressInputSpec
+    output_spec = QsiReconDWIIngressOutputSpec
 
     def _run_interface(self, runtime):
         params = get_bids_params(self.inputs.dwi_file)
@@ -113,7 +113,7 @@ class QsiReconIngress(SimpleInterface):
         return out_root + "/" + fname + "_desc-%s_dwi.%s" % (desc, suffix)
 
 
-class _UKBioBankIngressInputSpec(QsiReconIngressInputSpec):
+class _UKBioBankDWIIngressInputSpec(QsiReconDWIIngressInputSpec):
     dwi_file = File(exists=False,
                     help="The name of what a BIDS dwi file may have been")
     data_dir = traits.Directory(
@@ -121,9 +121,9 @@ class _UKBioBankIngressInputSpec(QsiReconIngressInputSpec):
         help="The UKB data directory for a subject. Must contain DTI/ and T1/")
 
 
-class UKBioBankIngress(SimpleInterface):
-    input_spec = _UKBioBankIngressInputSpec
-    output_spec = QsiReconIngressOutputSpec
+class UKBioBankDWIIngress(SimpleInterface):
+    input_spec = _UKBioBankDWIIngressInputSpec
+    output_spec = QsiReconDWIIngressOutputSpec
 
     def _run_interface(self, runtime):
         in_dir = Path(self.inputs.data_dir)
