@@ -1083,13 +1083,13 @@ def build_recon_workflow(opts, retval):
     output_dir = op.abspath(opts.output_dir)
     log_dir = op.join(output_dir, 'qsirecon', 'logs')
     work_dir = Path(opts.work_dir or 'work')  # Set work/ as default
+    bids_dir = opts.bids_dir.resolve()
 
     if opts.recon_input_pipeline == 'qsiprep':
         _db_path = opts.bids_database_dir or (
             work_dir / run_uuid / "bids_db")
         _db_path.mkdir(exist_ok=True, parents=True)
         # First check that bids_dir looks like a BIDS folder
-        bids_dir = opts.bids_dir.resolve()
         layout = BIDSLayout(
                     str(bids_dir),
                     validate=False,
@@ -1208,7 +1208,7 @@ def build_recon_workflow(opts, retval):
         b0_threshold=opts.b0_threshold,
         freesurfer_input=opts.freesurfer_input,
         skip_odf_plots=opts.skip_odf_reports,
-        pipeline_source=opts.pipeline_source
+        pipeline_source=opts.recon_input_pipeline
     )
     retval['return_code'] = 0
 

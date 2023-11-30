@@ -30,7 +30,7 @@ import logging
 import json
 from bids.layout import BIDSLayout
 from .build_workflow import init_dwi_recon_workflow
-from .anatomical import init_recon_anatomical_wf, init_dwi_recon_anatomical_workflow
+from .anatomical import init_recon_qsiprep_anatomical_wf, init_dwi_recon_anatomical_workflow
 from ...interfaces.interchange import (anatomical_workflow_outputs, recon_workflow_anatomical_input_fields,
                                        ReconWorkflowInputs,
                                        qsiprep_output_names, recon_workflow_input_fields)
@@ -198,25 +198,19 @@ to workflows in *qsiprep*'s documentation]\
         LOGGER.info("No dwi files found for %s", subject_id)
         return workflow
 
-    anat_ingress_wf, available_anatomical_data = init_recon_anatomical_wf(
-        subject_id=subject_id,
-        recon_input_dir=recon_input,
-        extras_to_make=spec.get('anatomical', []),
-        freesurfer_dir=freesurfer_input,
-        pipeline_source=pipeline_source,
-        name='anat_ingress_wf')
+    if pipeline_source == "qsiprep":
+        anat_ingress_wf, available_anatomical_data = init_recon_qsiprep_anatomical_wf(
+            subject_id=subject_id,
+            recon_input_dir=recon_input,
+            extras_to_make=spec.get('anatomical', []),
+            freesurfer_dir=freesurfer_input,
+            base_dir=base_dir,
+            output_dir=output_dir,
+            reportlets_dir=reportlets_dir,
+            name='anat_ingress_wf')
 
-    # Connect the anatomical-only inputs. NOTE this is not to the inputnode!
-    LOGGER.info("Anatomical (T1w) available for recon: %s", available_anatomical_data)
-
-    # Fill-in datasinks and reportlet datasinks for the anatomical workflow
-    for _node in anat_ingress_wf.list_node_names():
-        node_suffix = _node.split('.')[-1]
-        if node_suffix.startswith('ds'):
-            base_dir = reportlets_dir if "report" in node_suffix else output_dir
-            anat_ingress_wf.get_node(_node).inputs.base_directory = base_dir
-            anat_ingress_wf.get_node(_node).inputs.source_file = \
-                "anat/sub-{}_desc-preproc_T1w.nii.gz".format(subject_id)
+        # Connect the anatomical-only inputs. NOTE this is not to the inputnode!
+        LOGGER.info("Anatomical (T1w) available for recon: %s", available_anatomical_data)
 
     # Get the anatomical data (masks, atlases, etc)
     atlas_names = spec.get('atlases', [])
@@ -226,13 +220,12 @@ to workflows in *qsiprep*'s documentation]\
     dwi_individual_anatomical_wfs = {}
     recon_full_inputs = {}
     dwi_ingress_nodes = {}
-
+    print(dwi_recon_inputs)
     for dwi_input in dwi_recon_inputs:
         dwi_file = dwi_input['bids_dwi_file']
         wf_name = _get_wf_name(dwi_file)
 
         # Get the preprocessed DWI and all the related preprocessed images
-
         if pipeline_source == "qsiprep":
             dwi_ingress_nodes[dwi_file] = pe.Node(
                 QsiReconIngress(dwi_file=dwi_file),
@@ -241,9 +234,11 @@ to workflows in *qsiprep*'s documentation]\
             dwi_ingress_nodes[dwi_file] = pe.Node(
                 UKBioBankIngress(dwi_file=dwi_file,
                                  data_dir=str(dwi_input['path'].absolute())),
-                name=wf_name + "_ingressed_dwi_data")
+                name=wf_name + "_ingressed_ukb_dwi_data")
+            anat_ingress_wf, available_anatomical_data = init_recon_ukb_anatomical_wf()
 
         # Create scan-specific anatomical data (mask, atlas configs, odf ROIs for reports)
+        # For UKB/HCP the reference anatomical data will be in this node too
         dwi_individual_anatomical_wfs[dwi_file], dwi_available_anatomical_data = \
             init_dwi_recon_anatomical_workflow(
                 atlas_names=atlas_names,
@@ -273,24 +268,26 @@ to workflows in *qsiprep*'s documentation]\
 
         # Connect the collected diffusion data (gradients, etc) to the inputnode
         workflow.connect([
-
             # The dwi data
             (dwi_ingress_nodes[dwi_file], recon_full_inputs[dwi_file], [
                 (trait, trait) for trait in qsiprep_output_names]),
 
-            # subject anatomical data to dwi
-            (anat_ingress_wf, dwi_individual_anatomical_wfs[dwi_file],
-             [("outputnode."+trait, "inputnode."+trait) for trait in anatomical_workflow_outputs]),
+            # Session-specific anatomical data
             (dwi_ingress_nodes[dwi_file], dwi_individual_anatomical_wfs[dwi_file],
              [(trait, "inputnode." + trait) for trait in qsiprep_output_names]),
 
-            # subject dwi-specific anatomical to recon inputs
-            (dwi_individual_anatomical_wfs[dwi_file], recon_full_inputs[dwi_file], [
-                ("outputnode." + trait, trait) for trait in recon_workflow_anatomical_input_fields]),
+            # subject dwi-specific anatomical to a special node in recon_full_inputs so
+            # we have a record of what went in. Otherwise it would be lost in an IdentityInterface
+            (dwi_individual_anatomical_wfs[dwi_file], recon_full_inputs[dwi_file],
+             [("outputnode." + trait, trait) for trait in recon_workflow_anatomical_input_fields]),
 
-            # recon inputs to recon workflow
+            # send the recon_full_inputs to the dwi recon workflow
             (recon_full_inputs[dwi_file], dwi_recon_wfs[dwi_file],
-             [(trait, "inputnode." + trait) for trait in recon_workflow_input_fields])
+             [(trait, "inputnode." + trait) for trait in recon_workflow_input_fields]),
+
+            # Any anatomical data that only needs to be computed once
+            (anat_ingress_wf, dwi_individual_anatomical_wfs[dwi_file],
+             [("outputnode."+trait, "inputnode."+trait) for trait in anatomical_workflow_outputs])
         ])
 
     return workflow
@@ -358,6 +355,7 @@ def _get_iterable_dwi_inputs(recon_input_directory, subject_id, pipeline_source,
         return [{"bids_dwi_file": dwi_file} for dwi_file in dwi_files]
 
     if pipeline_source == "ukb":
-        return create_ukb_layout(participant_label=subject_id)
+        return create_ukb_layout(ukb_dir=recon_input_directory,
+                                 participant_label=subject_id)
 
     raise Exception("Unknown pipeline " + pipeline_source)

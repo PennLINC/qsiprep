@@ -116,8 +116,9 @@ class QsiReconIngress(SimpleInterface):
 class _UKBioBankIngressInputSpec(QsiReconIngressInputSpec):
     dwi_file = File(exists=False,
                     help="The name of what a BIDS dwi file may have been")
-    data_dir = File(exists=True,
-                    help="The UKB data directory for a subject. Must contain DTI/ and T1/")
+    data_dir = traits.Directory(
+        exists=True,
+        help="The UKB data directory for a subject. Must contain DTI/ and T1/")
 
 
 class UKBioBankIngress(SimpleInterface):

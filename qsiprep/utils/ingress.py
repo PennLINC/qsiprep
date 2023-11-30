@@ -7,6 +7,7 @@ Utilities to handle data from other preprocessing pipelines
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 """
+from pathlib import Path
 import re
 import os
 import sys
@@ -73,7 +74,7 @@ def create_ukb_layout(ukb_dir, participant_label=None):
 
     # find directories starting with a number. These are the candidate directories
     ukb_layout = []
-    for potential_dir in ukb_dir.iterdir():
+    for potential_dir in Path(ukb_dir).iterdir():
         if participant_label and not potential_dir.name.startswith(participant_label):
             continue
         match = re.match(UKB_DIR_PATTERN, potential_dir.name)
@@ -89,7 +90,7 @@ def create_ukb_layout(ukb_dir, participant_label=None):
             {"subject": subject,
              "session": renamed_ses,
              "path": potential_dir,
-             "dwi_file": fake_dwi_file}
+             "bids_dwi_file": fake_dwi_file}
         )
 
     return ukb_layout

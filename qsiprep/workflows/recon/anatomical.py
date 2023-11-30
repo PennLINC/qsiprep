@@ -56,92 +56,29 @@ QSIPREP_NORMALIZED_ANAT_REQUIREMENTS = [
     "sub-{subject_id}/anat/sub-{subject_id}_from-MNI152NLin2009cAsym_to-T1w_mode-image_xfm.h5"
 ]
 
-def init_recon_anatomical_wf(subject_id, recon_input_dir, extras_to_make,
-                             pipeline_source,
-                             freesurfer_dir="", needs_t1w_transform=False,
-                             name='recon_anatomical_wf'):
+
+def init_recon_anatomical_workflow(
+    subject_id, recon_input_dir, extras_to_make, base_dir, output_dir,
+    reportlets_dir, freesurfer_dir="", needs_t1w_transform=False,
+    pipeline_source="qsiprep", name='recon_anatomical_wf'):
+
     if pipeline_source == "qsiprep":
-        return init_recon_anatomical_wf(
-            subject_id, recon_input_dir, extras_to_make,
-            freesurfer_dir="", needs_t1w_transform=False,
-            name='recon_anatomical_wf')
+        workflow, status = init_gather_qsiprep_anatomical_wf(
+            subject_id, recon_input_dir, name='gather_qsiprep_anatomical_wf')
+    elif pipeline_source == "ukb":
+        workflow, status = init_recon_ukb_anatomical_wf(
+            subject_id, recon_input_dir, name='gather_ukb_anatomical_wf')
 
-def init_qsiprep_recon_anatomical_wf(
-        subject_id, recon_input_dir, extras_to_make,
-        freesurfer_dir="", needs_t1w_transform=False,
-        name='recon_anatomical_wf'):
-    """
-    This grabs anatomical outputs from qsiprep and calculates optional
-    additional outputs like a dwi-resolution
-
-    Parameters
-
-        subject_id : str
-            List of subject labels
-        name : str
-            Name of workflow
-        recon_input_dir : str
-            Root directory of the output from qsiprep
-        extras_to_make : list
-            list of optional derivatives that will be shared across images.
-            For example ['mrtrix_5tt_hsv'].
-        needs_t1w_transform :  bool
-            If MNI-Space atlases need to get mapped to the DWI.
-        freesurfer_dir : pathlike
-            Path where the freesurfer outputs for `subject_id` go
-    """
-
-    workflow = Workflow(name=name)
-    outputnode = pe.Node(
-        niu.IdentityInterface(fields=anatomical_workflow_outputs),
-        name="outputnode")
-    desc = ""
-    status = {
-        "has_qsiprep_5tt_hsvs": False,
-        "has_freesurfer_5tt_hsvs": False,
-        "has_freesurfer": False
-    }
-
-    # Check to see if we have a T1w preprocessed by QSIPrep
-    missing_qsiprep_anats = check_qsiprep_anatomical_outputs(
-        recon_input_dir, subject_id, "T1w")
-    has_qsiprep_t1w = not missing_qsiprep_anats
-    status["has_qsiprep_t1w"] = has_qsiprep_t1w
-    if missing_qsiprep_anats:
-        LOGGER.info("Missing T1w QSIPrep outputs found: %s",
-                    " ".join(missing_qsiprep_anats))
-        workflow.add_nodes([outputnode])
-    else:
-        LOGGER.info("Found usable QSIPrep-preprocessed T1w image and mask.")
-        desc += "QSIPrep-preprocessed T1w images and brain masks were used. "
-        anat_ingress = pe.Node(
-            QsiprepAnatomicalIngress(subject_id=subject_id,
-                                     recon_input_dir=recon_input_dir),
-            name='anat_ingress')
-
-        workflow.connect([
-            (anat_ingress, outputnode,
-                [(name, name) for name in qsiprep_anatomical_ingressed_fields])
-        ])
-
-
-    # Check if the T1w-to-MNI transforms are in the QSIPrep outputs
-    missing_qsiprep_transforms = check_qsiprep_anatomical_outputs(
-        recon_input_dir, subject_id, "transforms")
-    has_qsiprep_t1w_transforms = not missing_qsiprep_transforms
-    status["has_qsiprep_t1w_transforms"] = has_qsiprep_t1w_transforms
-    if missing_qsiprep_transforms:
-        LOGGER.info("Missing T1w QSIPrep outputs found: %s",
-                    " ".join(missing_qsiprep_transforms))
-        if needs_t1w_transform:
-            raise Exception("Reconstruction workflow requires transforms: " + \
-                            " ".join(missing_qsiprep_transforms))
-    else:
-        LOGGER.info("Found T1w-to-template transforms")
-        if needs_t1w_transform:
+    # Check the status of the T1wACPC-to-template transforms
+    if needs_t1w_transform:
+        if status["has_qsiprep_t1w_transforms"]:
+            LOGGER.info("Found T1w-to-template transforms from QSIPrep")
             desc += "T1w-based spatial normalization calculated during " \
                 "preprocessing was used to map atlases from template space into " \
                 "alignment with DWIs."
+        else:
+            raise Exception("Reconstruction workflow requires a T1wACPC-to-template transform. "
+                            f"None were found in {recon_input_dir}.")
 
     # Are FreeSurfer Outputs available?
     subject_freesurfer_path = find_fs_path(freesurfer_dir, subject_id)
@@ -230,6 +167,138 @@ def init_qsiprep_recon_anatomical_wf(
                 desc += "A hybrid surface/volume segmentation was created [Smith 2020]."
 
     workflow.__desc__ = desc
+
+    # Fill-in datasinks and reportlet datasinks for the anatomical workflow
+    for _node in workflow.list_node_names():
+        node_suffix = _node.split('.')[-1]
+        if node_suffix.startswith('ds'):
+            base_dir = reportlets_dir if "report" in node_suffix else output_dir
+            anat_ingress_wf.get_node(_node).inputs.base_directory = base_dir
+            anat_ingress_wf.get_node(_node).inputs.source_file = \
+                "anat/sub-{}_desc-preproc_T1w.nii.gz".format(subject_id)
+    return workflow, status
+
+
+def init_gather_ukb_anatomical_wf(
+        subject_id, recon_input_dir, name='gather_ukb_anatomical_wf'):
+    """
+    This does initial checks and gathers qsiprep anatomial data.
+
+    Parameters
+
+        subject_id : str
+            List of subject labels
+        name : str
+            Name of workflow
+        recon_input_dir : str
+            Root directory of the output from qsiprep
+    """
+
+    workflow = Workflow(name=name)
+    outputnode = pe.Node(
+        niu.IdentityInterface(fields=anatomical_workflow_outputs),
+        name="outputnode")
+    desc = ""
+    status = {
+        "has_qsiprep_5tt_hsvs": False,
+        "has_freesurfer_5tt_hsvs": False,
+        "has_freesurfer": False
+    }
+
+    # Check to see if we have a T1w preprocessed by QSIPrep
+    missing_qsiprep_anats = check_qsiprep_anatomical_outputs(
+        recon_input_dir, subject_id, "T1w")
+    has_qsiprep_t1w = not missing_qsiprep_anats
+    status["has_qsiprep_t1w"] = has_qsiprep_t1w
+    if missing_qsiprep_anats:
+        LOGGER.info("Missing T1w QSIPrep outputs found: %s",
+                    " ".join(missing_qsiprep_anats))
+        workflow.add_nodes([outputnode])
+    else:
+        LOGGER.info("Found usable QSIPrep-preprocessed T1w image and mask.")
+        desc += "QSIPrep-preprocessed T1w images and brain masks were used. "
+        anat_ingress = pe.Node(
+            QsiprepAnatomicalIngress(subject_id=subject_id,
+                                    recon_input_dir=recon_input_dir),
+            name='anat_ingress')
+
+        workflow.connect([
+            (anat_ingress, outputnode,
+                [(name, name) for name in qsiprep_anatomical_ingressed_fields])
+        ])
+
+    # Check if the T1w-to-MNI transforms are in the QSIPrep outputs
+    missing_qsiprep_transforms = check_qsiprep_anatomical_outputs(
+        recon_input_dir, subject_id, "transforms")
+    has_qsiprep_t1w_transforms = not missing_qsiprep_transforms
+    status["has_qsiprep_t1w_transforms"] = has_qsiprep_t1w_transforms
+
+    if missing_qsiprep_transforms:
+        LOGGER.info("Missing T1w QSIPrep outputs: %s",
+                    " ".join(missing_qsiprep_transforms))
+
+    return workflow, status
+
+
+def init_gather_qsiprep_anatomical_wf(
+        subject_id, recon_input_dir,
+        name='gather_qsiprep_anatomical_wf'):
+    """
+    This does initial checks and gathers qsiprep anatomial data.
+
+    Parameters
+
+        subject_id : str
+            List of subject labels
+        name : str
+            Name of workflow
+        recon_input_dir : str
+            Root directory of the output from qsiprep
+    """
+
+    workflow = Workflow(name=name)
+    outputnode = pe.Node(
+        niu.IdentityInterface(fields=anatomical_workflow_outputs),
+        name="outputnode")
+    desc = ""
+    status = {
+        "has_qsiprep_5tt_hsvs": False,
+        "has_freesurfer_5tt_hsvs": False,
+        "has_freesurfer": False
+    }
+
+    # Check to see if we have a T1w preprocessed by QSIPrep
+    missing_qsiprep_anats = check_qsiprep_anatomical_outputs(
+        recon_input_dir, subject_id, "T1w")
+    has_qsiprep_t1w = not missing_qsiprep_anats
+    status["has_qsiprep_t1w"] = has_qsiprep_t1w
+    if missing_qsiprep_anats:
+        LOGGER.info("Missing T1w QSIPrep outputs found: %s",
+                    " ".join(missing_qsiprep_anats))
+        workflow.add_nodes([outputnode])
+    else:
+        LOGGER.info("Found usable QSIPrep-preprocessed T1w image and mask.")
+        desc += "QSIPrep-preprocessed T1w images and brain masks were used. "
+        anat_ingress = pe.Node(
+            QsiprepAnatomicalIngress(subject_id=subject_id,
+                                    recon_input_dir=recon_input_dir),
+            name='anat_ingress')
+
+        workflow.connect([
+            (anat_ingress, outputnode,
+                [(name, name) for name in qsiprep_anatomical_ingressed_fields])
+        ])
+
+    # Check if the T1w-to-MNI transforms are in the QSIPrep outputs
+    missing_qsiprep_transforms = check_qsiprep_anatomical_outputs(
+        recon_input_dir, subject_id, "transforms")
+    has_qsiprep_t1w_transforms = not missing_qsiprep_transforms
+    status["has_qsiprep_t1w_transforms"] = has_qsiprep_t1w_transforms
+
+    if missing_qsiprep_transforms:
+        LOGGER.info("Missing T1w QSIPrep outputs: %s",
+                    " ".join(missing_qsiprep_transforms))
+
     return workflow, status
 
 
