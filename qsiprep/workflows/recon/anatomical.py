@@ -20,7 +20,7 @@ import nipype.interfaces.io as nio
 from ...engine import Workflow
 import logging
 from ...interfaces.bids import ReconDerivativesDataSink
-from ...interfaces.anatomical import QsiprepAnatomicalIngress
+from ...interfaces.anatomical import QsiprepAnatomicalIngress, UKBAnatomicalIngress
 from ...interfaces.mrtrix import (GenerateMasked5tt, ITKTransformConvert,
     TransformHeader)
 from ...interfaces.ants import ConvertTransformFile
@@ -47,7 +47,7 @@ HSV_REQUIREMENTS = [
 
 UKB_REQUIREMENTS = [
     "T1/T1_brain.nii.gz",
-    "T1/T1_brain_masn.nii.gz"
+    "T1/T1_brain_mask.nii.gz"
 ]
 
 # Files that must exist if QSIPrep ran the anatomical workflow
@@ -62,10 +62,9 @@ QSIPREP_NORMALIZED_ANAT_REQUIREMENTS = [
 ]
 
 
-def init_recon_anatomical_workflow(
-    subject_id, recon_input_dir, extras_to_make, base_dir, output_dir,
-    reportlets_dir, freesurfer_dir="", needs_t1w_transform=False,
-    pipeline_source="qsiprep", name='recon_anatomical_wf'):
+def init_recon_anatomical_wf(
+    subject_id, recon_input_dir, extras_to_make, freesurfer_dir,
+    pipeline_source, name='recon_anatomical_wf'):
 
     workflow = Workflow(name=name)
     desc = ""
@@ -87,16 +86,7 @@ def init_recon_anatomical_workflow(
             (anat_ingress, outputnode,
                 [(name, name) for name in qsiprep_anatomical_ingressed_fields])])
 
-    # Check the status of the T1wACPC-to-template transforms
-    if needs_t1w_transform:
-        if status["has_qsiprep_t1w_transforms"]:
-            LOGGER.info("Found T1w-to-template transforms from QSIPrep")
-            desc += "T1w-based spatial normalization calculated during " \
-                "preprocessing was used to map atlases from template space into " \
-                "alignment with DWIs."
-        else:
-            raise Exception("Reconstruction workflow requires a T1wACPC-to-template transform. "
-                            f"None were found in {recon_input_dir}.")
+
 
     # Are FreeSurfer Outputs available?
     subject_freesurfer_path = find_fs_path(freesurfer_dir, subject_id)
@@ -184,14 +174,7 @@ def init_recon_anatomical_workflow(
                 ])
                 workflow.__desc__ += "A hybrid surface/volume segmentation was created [Smith 2020]."
 
-    # Fill-in datasinks and reportlet datasinks for the anatomical workflow
-    for _node in workflow.list_node_names():
-        node_suffix = _node.split('.')[-1]
-        if node_suffix.startswith('ds'):
-            base_dir = reportlets_dir if "report" in node_suffix else output_dir
-            anat_ingress_wf.get_node(_node).inputs.base_directory = base_dir
-            anat_ingress_wf.get_node(_node).inputs.source_file = \
-                "anat/sub-{}_desc-preproc_T1w.nii.gz".format(subject_id)
+
     return workflow, status
 
 
@@ -219,21 +202,21 @@ def gather_ukb_anatomical_data(
     missing_ukb_anats = check_ukb_anatomical_outputs(recon_input_dir)
     has_t1w = not missing_ukb_anats
     status["has_qsiprep_t1w"] = has_t1w
-    if missing_qsiprep_anats:
+    if missing_ukb_anats:
         LOGGER.info(f"Missing T1w from UKB session: {recon_input_dir}")
     else:
         LOGGER.info("Found usable UKB-preprocessed T1w image and mask.")
-        anat_ingress = pe.Node(
-            QsiprepAnatomicalIngress(subject_id=subject_id,
-                                    recon_input_dir=recon_input_dir),
-            name='ukb_anat_ingress')
+    anat_ingress = pe.Node(
+        UKBAnatomicalIngress(subject_id=subject_id,
+                             recon_input_dir=recon_input_dir),
+        name='ukb_anat_ingress')
 
     # I couldn't figure out how to convert UKB transforms to ants. So
     # they're not available for recon workflows for now
     status["has_qsiprep_t1w_transforms"] = False
     LOGGER.info("QSIPrep can't read FNIRT transforms from UKB at this time.")
 
-    return workflow, status
+    return anat_ingress, status
 
 
 def gather_qsiprep_anatomical_data(
@@ -268,11 +251,10 @@ def gather_qsiprep_anatomical_data(
                     " ".join(missing_qsiprep_anats))
     else:
         LOGGER.info("Found usable QSIPrep-preprocessed T1w image and mask.")
-        desc += "QSIPrep-preprocessed T1w images and brain masks were used. "
-        anat_ingress = pe.Node(
-            QsiprepAnatomicalIngress(subject_id=subject_id,
-                                     recon_input_dir=recon_input_dir),
-            name='qsiprep_anat_ingress')
+    anat_ingress = pe.Node(
+        QsiprepAnatomicalIngress(subject_id=subject_id,
+                                 recon_input_dir=recon_input_dir),
+        name='qsiprep_anat_ingress')
 
     # Check if the T1w-to-MNI transforms are in the QSIPrep outputs
     missing_qsiprep_transforms = check_qsiprep_anatomical_outputs(
@@ -332,7 +314,7 @@ def check_ukb_anatomical_outputs(recon_input_dir):
     """
     missing = []
     recon_input_path = Path(recon_input_dir)
-    for requirement in to_check:
+    for requirement in UKB_REQUIREMENTS:
         if not (recon_input_path / requirement).exists():
             missing.append(str(requirement))
     return missing
@@ -415,7 +397,7 @@ def init_register_fs_to_qsiprep_wf(use_qsiprep_reference_mask=False,
 
 
 def init_dwi_recon_anatomical_workflow(
-    atlas_names, omp_nthreads, has_qsiprep_5tt_hsvs,
+    atlas_names, omp_nthreads, has_qsiprep_5tt_hsvs, needs_t1w_transform,
     has_freesurfer_5tt_hsvs, has_qsiprep_t1w, has_qsiprep_t1w_transforms,
     infant_mode, has_freesurfer, extras_to_make, freesurfer_dir, b0_threshold,
     sloppy=False, prefer_dwi_mask=False, name="qsirecon_anat_wf"):
@@ -557,18 +539,39 @@ def init_dwi_recon_anatomical_workflow(
         desc += "A hybrid surface/volume segmentation was created [Smith 2020]."
 
     # If we have transforms to the template space, use them to get ROIs/atlases
-    if not has_qsiprep_t1w_transforms and has_qsiprep_t1w:
-        if not has_qsiprep_t1w:
-            raise Exception("Unable to find a T1w image for registration to the template.")
+    # if not has_qsiprep_t1w_transforms and has_qsiprep_t1w:
+    #     desc += "In order to warp brain parcellations from template space into " \
+    #         "alignment with the DWI data, the DWI-aligned FreeSurfer brain was " \
+    #         "registered to template space. "
 
-        desc += "In order to warp brain parcellations from template space into " \
-            "alignment with the DWI data, the DWI-aligned FreeSurfer brain was " \
-            "registered to template space. "
+    #     # We now have qsiprep t1w and transforms!!
+    #     has_qsiprep_t1w = has_qsiprep_t1w_transforms = True
+    #     # Calculate the transforms here:
+    #     has_qsiprep_t1w_transforms = True
+    #     _exchange_fields(['t1_2_mni_forward_transform', 't1_2_mni_reverse_transform'])
+    #     t1_2_mni = pe.Node(
+    #         get_t1w_registration_node(
+    #             infant_mode, sloppy or not atlas_names, omp_nthreads),
+    #         name="t1_2_mni")
+    #     workflow.connect([
+    #         (_get_source_node("t1_preproc"), t1_2_mni, [('t1_preproc', 'moving_image')]),
+    #         (t1_2_mni, buffernode, [
+    #             ("composite_transform", "t1_2_mni_forward_transform"),
+    #             ("inverse_composite_transform", "t1_2_mni_reverse_transform")
+    #         ])
+    #     ])
+    #     # TODO: add datasinks here
 
-        # We now have qsiprep t1w and transforms!!
-        has_qsiprep_t1w = has_qsiprep_t1w_transforms = True
-        skull_strip_method = "FreeSurfer"
-
+    # Check the status of the T1wACPC-to-template transforms
+    if needs_t1w_transform:
+        if status["has_qsiprep_t1w_transforms"]:
+            LOGGER.info("Found T1w-to-template transforms from QSIPrep")
+            desc += "T1w-based spatial normalization calculated during " \
+                "preprocessing was used to map atlases from template space into " \
+                "alignment with DWIs."
+        else:
+            raise Exception("Reconstruction workflow requires a T1wACPC-to-template transform. "
+                            f"None were found.")
     # Simply resample the T1w mask into the DWI resolution. This was the default
     # up to version 0.14.3
     if has_qsiprep_t1w and not prefer_dwi_mask:
@@ -586,99 +589,84 @@ def init_dwi_recon_anatomical_workflow(
             (resample_mask, buffernode, [("out_file", "dwi_mask")])
         ])
 
-    if not has_qsiprep_t1w_transforms:
-        # Calculate the transforms here:
-        has_qsiprep_t1w_transforms = True
-        _exchange_fields(['t1_2_mni_forward_transform', 't1_2_mni_reverse_transform'])
-        t1_2_mni = pe.Node(
-            get_t1w_registration_node(
-                infant_mode, sloppy or not atlas_names, omp_nthreads),
-            name="t1_2_mni")
+
+    if has_qsiprep_t1w_transforms:
+        LOGGER.info("Transforming ODF ROIs into DWI space for visual report.")
+        # Resample ROI targets to DWI resolution for ODF plotting
+        crossing_rois_file = pkgrf('qsiprep', 'data/crossing_rois.nii.gz')
+        odf_rois = pe.Node(
+            ants.ApplyTransforms(interpolation="MultiLabel", dimension=3),
+            name="odf_rois")
+        odf_rois.inputs.input_image = crossing_rois_file
         workflow.connect([
-            (_get_source_node("t1_preproc"), t1_2_mni, [('t1_preproc', 'moving_image')]),
-            (t1_2_mni, buffernode, [
-                ("composite_transform", "t1_2_mni_forward_transform"),
-                ("inverse_composite_transform", "t1_2_mni_reverse_transform")
+            (_get_source_node('t1_2_mni_reverse_transform'), odf_rois, [
+                ('t1_2_mni_reverse_transform', 'transforms')]),
+            (inputnode, odf_rois, [
+                ("dwi_file", "reference_image")]),
+            (odf_rois, buffernode, [("output_image", "odf_rois")])
+        ])
+
+        # Similarly, if we need atlases, transform them into DWI space
+        if atlas_names:
+            desc += "Cortical parcellations were mapped from template space to DWIS " \
+                "using the T1w-based spatial normalization. "
+
+            # Resample all atlases to dwi_file's resolution
+            get_atlases = pe.Node(
+                GetConnectivityAtlases(atlas_names=atlas_names),
+                name='get_atlases',
+                run_without_submitting=True)
+            workflow.connect([
+                (_get_source_node('t1_2_mni_reverse_transform'), get_atlases, [
+                    ('t1_2_mni_reverse_transform', 'forward_transform')]),
+                (get_atlases, buffernode, [
+                    ("atlas_configs", "atlas_configs")]),
+                (inputnode, get_atlases,[
+                    ('dwi_file', 'reference_image')])
             ])
-        ])
-        # TODO: add datasinks here
 
-    LOGGER.info("Transforming ODF ROIs into DWI space for visual report.")
-    # Resample ROI targets to DWI resolution for ODF plotting
-    crossing_rois_file = pkgrf('qsiprep', 'data/crossing_rois.nii.gz')
-    odf_rois = pe.Node(
-        ants.ApplyTransforms(interpolation="MultiLabel", dimension=3),
-        name="odf_rois")
-    odf_rois.inputs.input_image = crossing_rois_file
-    workflow.connect([
-        (_get_source_node('t1_2_mni_reverse_transform'), odf_rois, [
-            ('t1_2_mni_reverse_transform', 'transforms')]),
-        (inputnode, odf_rois, [
-            ("dwi_file", "reference_image")]),
-        (odf_rois, buffernode, [("output_image", "odf_rois")])
-    ])
+        for atlas in atlas_names:
+            workflow.connect([
+                (get_atlases,
+                pe.Node(ReconDerivativesDataSink(desc=atlas,
+                                                suffix="atlas",
+                                                compress=True),
+                        name='dsatlas_'+atlas,
+                        run_without_submitting=True),
+                [(('atlas_configs', _get_resampled, atlas, 'dwi_resolution_file'), 'in_file')]),
+                (get_atlases,
+                pe.Node(ReconDerivativesDataSink(
+                                                desc=atlas,
+                                                suffix="atlas",
+                                                extension=".mif.gz",
+                                                compress=True),
+                        name='dsatlas_mifs_'+atlas,
+                        run_without_submitting=True),
+                [(('atlas_configs', _get_resampled, atlas, 'dwi_resolution_mif'), 'in_file')]),
+                (get_atlases,
+                pe.Node(ReconDerivativesDataSink(
+                                                desc=atlas,
+                                                extension=".txt",
+                                                suffix="mrtrixLUT"),
+                        name='dsatlas_mrtrix_lut_' + atlas,
+                        run_without_submitting=True),
+                [(('atlas_configs', _get_resampled, atlas, 'mrtrix_lut'), 'in_file')]),
+                (get_atlases,
+                pe.Node(ReconDerivativesDataSink(
+                                                desc=atlas,
+                                                extension=".txt",
+                                                suffix="origLUT"),
+                        name='dsatlas_orig_lut_' + atlas,
+                        run_without_submitting=True),
+                [(('atlas_configs', _get_resampled, atlas, 'orig_lut'), 'in_file')]),
+            ])
 
-    # Similarly, if we need atlases, transform them into DWI space
-    if atlas_names:
-        desc += "Cortical parcellations were mapped from template space to DWIS " \
-            "using the T1w-based spatial normalization. "
-
-        # Resample all atlases to dwi_file's resolution
-        get_atlases = pe.Node(
-            GetConnectivityAtlases(atlas_names=atlas_names),
-            name='get_atlases',
-            run_without_submitting=True)
-        workflow.connect([
-            (_get_source_node('t1_2_mni_reverse_transform'), get_atlases, [
-                ('t1_2_mni_reverse_transform', 'forward_transform')]),
-            (get_atlases, buffernode, [
-                ("atlas_configs", "atlas_configs")]),
-            (inputnode, get_atlases,[
-                ('dwi_file', 'reference_image')])
-        ])
-
-    for atlas in atlas_names:
-        workflow.connect([
-            (get_atlases,
-            pe.Node(ReconDerivativesDataSink(desc=atlas,
-                                            suffix="atlas",
-                                            compress=True),
-                    name='dsatlas_'+atlas,
-                    run_without_submitting=True),
-            [(('atlas_configs', _get_resampled, atlas, 'dwi_resolution_file'), 'in_file')]),
-            (get_atlases,
-            pe.Node(ReconDerivativesDataSink(
-                                            desc=atlas,
-                                            suffix="atlas",
-                                            extension=".mif.gz",
-                                            compress=True),
-                    name='dsatlas_mifs_'+atlas,
-                    run_without_submitting=True),
-            [(('atlas_configs', _get_resampled, atlas, 'dwi_resolution_mif'), 'in_file')]),
-            (get_atlases,
-            pe.Node(ReconDerivativesDataSink(
-                                            desc=atlas,
-                                            extension=".txt",
-                                            suffix="mrtrixLUT"),
-                    name='dsatlas_mrtrix_lut_' + atlas,
-                    run_without_submitting=True),
-            [(('atlas_configs', _get_resampled, atlas, 'mrtrix_lut'), 'in_file')]),
-            (get_atlases,
-            pe.Node(ReconDerivativesDataSink(
-                                            desc=atlas,
-                                            extension=".txt",
-                                            suffix="origLUT"),
-                    name='dsatlas_orig_lut_' + atlas,
-                    run_without_submitting=True),
-            [(('atlas_configs', _get_resampled, atlas, 'orig_lut'), 'in_file')]),
-        ])
-
-    # Fill in the atlas datasinks
-    for node in workflow.list_node_names():
-        node_suffix = node.split('.')[-1]
-        if node_suffix.startswith('dsatlas_'):
-            workflow.connect(
-                inputnode, 'dwi_file', workflow.get_node(node), 'source_file')
+        # Fill in the atlas datasinks
+        for node in workflow.list_node_names():
+            node_suffix = node.split('.')[-1]
+            if node_suffix.startswith('dsatlas_'):
+                workflow.connect(
+                    inputnode, 'dwi_file', workflow.get_node(node), 'source_file')
 
     if "mrtrix_5tt_hsv" in extras_to_make and not has_qsiprep_5tt_hsvs:
         raise Exception("Unable to create a 5tt HSV image given input data.")

@@ -28,6 +28,7 @@ def missing_from_ukb_directory(ukb_sujbect_dir):
         dmri_dir / "bvals",
         dmri_dir / "bvecs",
         dmri_dir / "data_ud.nii.gz",
+        dmri_dir / "dti_FA.nii.gz",
         # The anatomical data is not strictly necessary for recon
         # anat_dir / "T1_brain.nii.gz",
         # anat_dir / "T1_brain_mask.nii.gz"
@@ -95,6 +96,14 @@ def create_ukb_layout(ukb_dir, participant_label=None):
         )
 
     return ukb_layout
+
+
+def ukb_dirname_to_bids(ukb_dir):
+    ukb_path = Path(ukb_dir)
+    match = re.match(UKB_DIR_PATTERN, ukb_path.name)
+    subject, ses_major, ses_minor = match.groups()
+    renamed_ses = "%02d%02d" % (int(ses_major), int(ses_minor))
+    return f"sub-{subject}_ses-{renamed_ses}"
 
 
 def collect_ukb_participants(ukb_layout, participant_label):

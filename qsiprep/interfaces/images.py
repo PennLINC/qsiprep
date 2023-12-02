@@ -202,7 +202,7 @@ class IntraModalMerge(SimpleInterface):
         fsl_check = os.environ.get('FSL_BUILD')
         if fsl_check=="no_fsl":
             raise Exception(
-                """Container in use does not have FSL. To use this workflow, 
+                """Container in use does not have FSL. To use this workflow,
                 please download the qsiprep container with FSL installed.""")
         from nipype.interfaces import fsl
         in_files = self.inputs.in_files
@@ -707,6 +707,7 @@ def to_lps(input_img, new_axcodes=("L", "P", "S")):
         return reoriented_img
     else:
         return input_img
+
 
 class TSplitInputSpec(AFNICommandInputSpec):
     in_file = File(

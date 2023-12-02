@@ -25,7 +25,7 @@ from ...utils.ingress import create_ukb_layout
 from ...engine import Workflow
 from ...utils.sloppy_recon import make_sloppy
 from ...__about__ import __version__
-from ...interfaces.ingress import QsiReconDWIIngress, UKBioBankIngress
+from ...interfaces.ingress import QsiReconDWIIngress, UKBioBankDWIIngress
 import logging
 import json
 from bids.layout import BIDSLayout
@@ -198,6 +198,10 @@ to workflows in *qsiprep*'s documentation]\
         LOGGER.info("No dwi files found for %s", subject_id)
         return workflow
 
+    # The recon spec may need additional anatomical files to be created.
+    atlas_names = spec.get('atlases', [])
+    needs_t1w_transform = spec_needs_to_template_transform(spec)
+
     # This is here because qsiprep currently only makes one anatomical result per subject
     # regardless of sessions. So process it on its
     if pipeline_source == "qsiprep":
@@ -206,22 +210,19 @@ to workflows in *qsiprep*'s documentation]\
             recon_input_dir=recon_input,
             extras_to_make=spec.get('anatomical', []),
             freesurfer_dir=freesurfer_input,
-            base_dir=base_dir,
-            output_dir=output_dir,
-            reportlets_dir=reportlets_dir,
+            needs_t1w_transform=needs_t1w_transform,
+            pipeline_source="qsiprep",
             name='anat_ingress_wf')
 
         # Connect the anatomical-only inputs. NOTE this is not to the inputnode!
         LOGGER.info("Anatomical (T1w) available for recon: %s", available_anatomical_data)
-
-    # Get the anatomical data (masks, atlases, etc)
-    atlas_names = spec.get('atlases', [])
 
     # create a processing pipeline for the dwis in each session
     dwi_recon_wfs = {}
     dwi_individual_anatomical_wfs = {}
     recon_full_inputs = {}
     dwi_ingress_nodes = {}
+    anat_ingress_wfs = {}
     print(dwi_recon_inputs)
     for dwi_input in dwi_recon_inputs:
         dwi_file = dwi_input['bids_dwi_file']
@@ -232,15 +233,23 @@ to workflows in *qsiprep*'s documentation]\
             dwi_ingress_nodes[dwi_file] = pe.Node(
                 QsiReconDWIIngress(dwi_file=dwi_file),
                 name=wf_name + "_ingressed_dwi_data")
+
         elif pipeline_source == "ukb":
             dwi_ingress_nodes[dwi_file] = pe.Node(
-                UKBioBankIngress(dwi_file=dwi_file,
+                UKBioBankDWIIngress(dwi_file=dwi_file,
                                  data_dir=str(dwi_input['path'].absolute())),
                 name=wf_name + "_ingressed_ukb_dwi_data")
-            anat_ingress_wf, available_anatomical_data = init_recon_ukb_anatomical_wf()
+            anat_ingress_wfs[dwi_file], available_anatomical_data = init_recon_anatomical_wf(
+                subject_id=subject_id,
+                recon_input_dir=dwi_input['path'],
+                extras_to_make=spec.get('anatomical', []),
+                freesurfer_dir=freesurfer_input,
+                pipeline_source="ukb",
+                name=wf_name + "_ingressed_ukb_anat_data")
+            print(available_anatomical_data)
 
         # Create scan-specific anatomical data (mask, atlas configs, odf ROIs for reports)
-        # For UKB/HCP the reference anatomical data will be in this node too
+        print(available_anatomical_data)
         dwi_individual_anatomical_wfs[dwi_file], dwi_available_anatomical_data = \
             init_dwi_recon_anatomical_workflow(
                 atlas_names=atlas_names,
@@ -248,10 +257,11 @@ to workflows in *qsiprep*'s documentation]\
                 infant_mode=False,
                 prefer_dwi_mask=False,
                 sloppy=sloppy,
+                needs_t1w_transform=needs_t1w_transform,
                 b0_threshold=b0_threshold,
                 freesurfer_dir=freesurfer_input,
                 extras_to_make=spec.get('anatomical', []),
-                name=wf_name + "_anat_wf",
+                name=wf_name + "_dwi_specific_anat_wf",
                 **available_anatomical_data)
 
         # This node holds all the inputs that will go to the recon workflow.
@@ -287,12 +297,27 @@ to workflows in *qsiprep*'s documentation]\
             (recon_full_inputs[dwi_file], dwi_recon_wfs[dwi_file],
              [(trait, "inputnode." + trait) for trait in recon_workflow_input_fields]),
 
-            # Any anatomical data that only needs to be computed once
-            (anat_ingress_wf, dwi_individual_anatomical_wfs[dwi_file],
+            (anat_ingress_wf if pipeline_source=="qsiprep" else anat_ingress_wfs[dwi_file],
+             dwi_individual_anatomical_wfs[dwi_file],
              [("outputnode."+trait, "inputnode."+trait) for trait in anatomical_workflow_outputs])
         ])
 
+    # Fill-in datasinks and reportlet datasinks for the anatomical workflow
+    for _node in workflow.list_node_names():
+        node_suffix = _node.split('.')[-1]
+        if node_suffix.startswith('ds'):
+            base_dir = reportlets_dir if "report" in node_suffix else output_dir
+            # workflow.get_node(_node).inputs.base_directory = base_dir
+            # workflow.get_node(_node).inputs.source_file = \
+            #     "anat/sub-{}_desc-preproc_T1w.nii.gz".format(subject_id)
     return workflow
+
+
+def spec_needs_to_template_transform(recon_spec):
+    """Determine whether a recon spec needs a transform from T1wACPC to a template.
+    """
+    atlases = recon_spec.get("atlases", [])
+    return bool(atlases)
 
 
 def _get_wf_name(dwi_file):
