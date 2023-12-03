@@ -64,7 +64,7 @@ QSIPREP_NORMALIZED_ANAT_REQUIREMENTS = [
 
 def init_highres_recon_anatomical_wf(
     subject_id, recon_input_dir, extras_to_make, freesurfer_dir,
-    pipeline_source, name='recon_anatomical_wf'):
+    needs_t1w_transform, pipeline_source, name='recon_anatomical_wf'):
     """Gather any high-res anatomical data (images, transforms, segmentations) to use in recon workflows.
 
     This workflow searches through input data to see what anatomical data is available. The anatomical data
@@ -91,6 +91,9 @@ def init_highres_recon_anatomical_wf(
     else:
         raise Exception(f"Unknown pipeline source '{pipeline_source}'")
 
+    if needs_t1w_transform and not status["has_qsiprep_t1w_transforms"]:
+        raise Exception("Cannot compute to-template")
+
     # If there is no high-res anat data in the inputs there may still be an image available
     # from freesurfer. Check for it:
     subject_freesurfer_path = find_fs_path(freesurfer_dir, subject_id)
@@ -104,7 +107,6 @@ def init_highres_recon_anatomical_wf(
             raise Exception("FreeSurfer data is required to make HSVS 5tt image.")
         workflow.add_nodes([outputnode])
         return workflow, status
-
 
     LOGGER.info(f"Found high-res anatomical data in preprocessed inputs for {subject_id}.")
     workflow.connect([

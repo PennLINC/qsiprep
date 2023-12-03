@@ -245,6 +245,7 @@ to workflows in *qsiprep*'s documentation]\
                 extras_to_make=spec.get('anatomical', []),
                 freesurfer_dir=freesurfer_input,
                 pipeline_source="ukb",
+                needs_t1w_transform=needs_t1w_transform,
                 name=wf_name + "_ingressed_ukb_anat_data")
 
         # Create scan-specific anatomical data (mask, atlas configs, odf ROIs for reports)
