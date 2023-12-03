@@ -30,7 +30,7 @@ import logging
 import json
 from bids.layout import BIDSLayout
 from .build_workflow import init_dwi_recon_workflow
-from .anatomical import init_recon_anatomical_wf, init_dwi_recon_anatomical_workflow
+from .anatomical import init_highres_recon_anatomical_wf, init_dwi_recon_anatomical_workflow
 from ...interfaces.interchange import (anatomical_workflow_outputs, recon_workflow_anatomical_input_fields,
                                        ReconWorkflowInputs,
                                        qsiprep_output_names, recon_workflow_input_fields)
@@ -205,7 +205,7 @@ to workflows in *qsiprep*'s documentation]\
     # This is here because qsiprep currently only makes one anatomical result per subject
     # regardless of sessions. So process it on its
     if pipeline_source == "qsiprep":
-        anat_ingress_wf, available_anatomical_data = init_recon_anatomical_wf(
+        anat_ingress_node, available_anatomical_data = init_highres_recon_anatomical_wf(
             subject_id=subject_id,
             recon_input_dir=recon_input,
             extras_to_make=spec.get('anatomical', []),
@@ -222,7 +222,7 @@ to workflows in *qsiprep*'s documentation]\
     dwi_individual_anatomical_wfs = {}
     recon_full_inputs = {}
     dwi_ingress_nodes = {}
-    anat_ingress_wfs = {}
+    anat_ingress_nodes = {}
     print(dwi_recon_inputs)
     for dwi_input in dwi_recon_inputs:
         dwi_file = dwi_input['bids_dwi_file']
@@ -239,14 +239,13 @@ to workflows in *qsiprep*'s documentation]\
                 UKBioBankDWIIngress(dwi_file=dwi_file,
                                  data_dir=str(dwi_input['path'].absolute())),
                 name=wf_name + "_ingressed_ukb_dwi_data")
-            anat_ingress_wfs[dwi_file], available_anatomical_data = init_recon_anatomical_wf(
+            anat_ingress_nodes[dwi_file], available_anatomical_data = init_highres_recon_anatomical_wf(
                 subject_id=subject_id,
                 recon_input_dir=dwi_input['path'],
                 extras_to_make=spec.get('anatomical', []),
                 freesurfer_dir=freesurfer_input,
                 pipeline_source="ukb",
                 name=wf_name + "_ingressed_ukb_anat_data")
-            print(available_anatomical_data)
 
         # Create scan-specific anatomical data (mask, atlas configs, odf ROIs for reports)
         print(available_anatomical_data)
@@ -297,7 +296,7 @@ to workflows in *qsiprep*'s documentation]\
             (recon_full_inputs[dwi_file], dwi_recon_wfs[dwi_file],
              [(trait, "inputnode." + trait) for trait in recon_workflow_input_fields]),
 
-            (anat_ingress_wf if pipeline_source=="qsiprep" else anat_ingress_wfs[dwi_file],
+            (anat_ingress_node if pipeline_source=="qsiprep" else anat_ingress_nodes[dwi_file],
              dwi_individual_anatomical_wfs[dwi_file],
              [("outputnode."+trait, "inputnode."+trait) for trait in anatomical_workflow_outputs])
         ])
