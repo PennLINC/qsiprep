@@ -580,7 +580,7 @@ def init_dwi_recon_anatomical_workflow(
 
     # Check the status of the T1wACPC-to-template transforms
     if needs_t1w_transform:
-        if status["has_qsiprep_t1w_transforms"]:
+        if has_qsiprep_t1w_transforms:
             LOGGER.info("Found T1w-to-template transforms from QSIPrep")
             desc += "T1w-based spatial normalization calculated during " \
                 "preprocessing was used to map atlases from template space into " \
