@@ -394,7 +394,7 @@ jobs:
           command: |
             THISVERSION=$( hatch version )
             THISVERSION=${CIRCLE_TAG:-$THISVERSION}
-            sed -i '' "s/REPLACEME/${THISVERSION}/" wrapper/pyproject.toml
+            sed -i "s/REPLACEME/${THISVERSION}/g" wrapper/pyproject.toml
             python -m build wrapper
       - run:
           name: Twine check wrapper
