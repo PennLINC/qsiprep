@@ -1,7 +1,0 @@
-grabbit==0.2.3
-pybids>=0.11.1
-versioneer
-dipy==1.0.0
-svgutils==0.3.0
-nipype==1.2.0
-sentry_sdk==1.14.0

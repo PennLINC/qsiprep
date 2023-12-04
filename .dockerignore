@@ -17,7 +17,6 @@ qsiprep.egg-info
 .eggs
 
 # housekeeping tools
-get_version.py
 update_changes.sh
 tox.ini
 
