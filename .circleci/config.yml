@@ -391,7 +391,11 @@ jobs:
             test "$INSTALLED_VERSION" = "$THISVERSION"
       - run:
           name: Build qsiprep-docker
-          command: python -m build wrapper
+          command: |
+            THISVERSION=$( hatch version )
+            THISVERSION=${CIRCLE_TAG:-$THISVERSION}
+            sed -i '' "s/REPLACEME/${THISVERSION}/" wrapper/pyproject.toml
+            python -m build wrapper
       - run:
           name: Twine check wrapper
           command: twine check wrapper/dist/*
