@@ -21,15 +21,16 @@ from nipype.utils.filemanip import split_filename
 from nilearn import __version__ as nilearn_ver
 from dipy import __version__ as dipy_ver
 from pkg_resources import resource_filename as pkgrf
+from ...utils.ingress import create_ukb_layout
 from ...engine import Workflow
 from ...utils.sloppy_recon import make_sloppy
 from ...__about__ import __version__
-from ...interfaces.bids import QsiReconIngress
+from ...interfaces.ingress import QsiReconDWIIngress, UKBioBankDWIIngress
 import logging
 import json
 from bids.layout import BIDSLayout
 from .build_workflow import init_dwi_recon_workflow
-from .anatomical import init_recon_anatomical_wf, init_dwi_recon_anatomical_workflow
+from .anatomical import init_highres_recon_anatomical_wf, init_dwi_recon_anatomical_workflow
 from ...interfaces.interchange import (anatomical_workflow_outputs, recon_workflow_anatomical_input_fields,
                                        ReconWorkflowInputs,
                                        qsiprep_output_names, recon_workflow_input_fields)
@@ -39,7 +40,7 @@ LOGGER = logging.getLogger('nipype.workflow')
 
 def init_qsirecon_wf(subject_list, run_uuid, work_dir, output_dir, recon_input,
                      recon_spec, low_mem, omp_nthreads, sloppy, freesurfer_input,
-                     b0_threshold, skip_odf_plots, name="qsirecon_wf"):
+                     b0_threshold, skip_odf_plots, pipeline_source, name="qsirecon_wf"):
     """
     This workflow organizes the execution of qsiprep, with a sub-workflow for
     each subject.
@@ -59,7 +60,8 @@ def init_qsirecon_wf(subject_list, run_uuid, work_dir, output_dir, recon_input,
                               freesurfer_input="freesurfer",
                               sloppy=False,
                               omp_nthreads=1,
-                              skip_odf_plots=False
+                              skip_odf_plots=False,
+                              pipeline_source="qsiprep"
                               )
 
 
@@ -78,12 +80,16 @@ def init_qsirecon_wf(subject_list, run_uuid, work_dir, output_dir, recon_input,
             Root directory of the output from qsiprep
         recon_spec : str
             Path to a JSON file that specifies how to run reconstruction
+        pipeline_source : str
+            The pipeline used to process the input data. Default is "qsiprep",
+            someday it can be "ukb", "hcp"
         low_mem : bool
             Write uncompressed .nii files in some cases to reduce memory usage
         freesurfer_input : Pathlib.Path
             Path to the directory containing subject freesurfer outputs ($SUBJECTS_DIR)
         sloppy : bool
             If True, replace reconstruction options with fast but bad options.
+
     """
     qsiprep_wf = Workflow(name=name)
     qsiprep_wf.base_dir = work_dir
@@ -94,6 +100,7 @@ def init_qsirecon_wf(subject_list, run_uuid, work_dir, output_dir, recon_input,
             subject_id=subject_id,
             recon_input=recon_input,
             recon_spec=recon_spec,
+            pipeline_source=pipeline_source,
             name="single_subject_" + subject_id + "_recon_wf",
             reportlets_dir=reportlets_dir,
             output_dir=output_dir,
@@ -117,7 +124,7 @@ def init_qsirecon_wf(subject_list, run_uuid, work_dir, output_dir, recon_input,
 
 def init_single_subject_wf(
         subject_id, name, reportlets_dir, output_dir, freesurfer_input, skip_odf_plots,
-        low_mem, omp_nthreads, recon_input, recon_spec, sloppy, b0_threshold):
+        low_mem, omp_nthreads, recon_input, recon_spec, sloppy, b0_threshold, pipeline_source):
     """
     This workflow organizes the reconstruction pipeline for a single subject.
     Reconstruction is performed using a separate workflow for each dwi series.
@@ -144,6 +151,8 @@ def init_single_subject_wf(
             Path to a JSON file that specifies how to run reconstruction
         sloppy : bool
             Use bad parameters for reconstruction to make the workflow faster.
+        pipeline_source : str
+            Which pipeline was used to process the input data
     """
     if name in ('single_subject_wf', 'single_subject_test_recon_wf'):
         # a fake spec
@@ -154,32 +163,12 @@ def init_single_subject_wf(
                 "nodes": []}
         space = spec['space']
         # for documentation purposes
-        dwi_files = ['/made/up/outputs/sub-X_dwi.nii.gz']
-        layout = None
+        dwi_recon_inputs = [{"bids_dwi_file": '/made/up/outputs/sub-X_dwi.nii.gz'}]
     else:
-        # If recon_input is specified without qsiprep, check if we can find the subject dir
-        subject_dir = 'sub-' + subject_id
-        if not op.exists(op.join(recon_input, subject_dir)):
-            qp_recon_input = op.join(recon_input, "qsiprep")
-            LOGGER.info("%s not in %s, trying recon_input=%s",
-                        subject_dir, recon_input, qp_recon_input)
-            if not op.exists(op.join(qp_recon_input, subject_dir)):
-                raise Exception(
-                    "Unable to find subject directory in %s or %s" % (
-                        recon_input, qp_recon_input))
-            recon_input = qp_recon_input
-
+        # TODO: Change this to handle multiple input types
         spec = _load_recon_spec(recon_spec, sloppy=sloppy)
         space = spec['space']
-        layout = BIDSLayout(recon_input, validate=False, absolute_paths=True)
-        # Get all the output files that are in this space
-        dwi_files = [f.path for f in
-                     layout.get(suffix="dwi", subject=subject_id, absolute_paths=True,
-                                extension=['nii', 'nii.gz'])
-                     if 'space-' + space in f.filename]
-        LOGGER.info("found %s in %s", dwi_files, recon_input)
-
-        # Find the corresponding mask files
+        dwi_recon_inputs = _get_iterable_dwi_inputs(recon_input, subject_id, pipeline_source, space)
 
     workflow = Workflow('sub-{}_{}'.format(subject_id, spec['name']))
     workflow.__desc__ = """
@@ -205,46 +194,62 @@ to workflows in *qsiprep*'s documentation]\
 
     """.format(nilearn_ver=nilearn_ver, dipy_ver=dipy_ver)
 
-    if len(dwi_files) == 0:
+    if len(dwi_recon_inputs) == 0:
         LOGGER.info("No dwi files found for %s", subject_id)
         return workflow
 
-    anat_ingress_wf, available_anatomical_data = init_recon_anatomical_wf(
-        subject_id=subject_id,
-        recon_input_dir=recon_input,
-        extras_to_make=spec.get('anatomical', []),
-        freesurfer_dir=freesurfer_input,
-        name='anat_ingress_wf')
-
-    # Connect the anatomical-only inputs. NOTE this is not to the inputnode!
-    LOGGER.info("Anatomical (T1w) available for recon: %s", available_anatomical_data)
-
-    # Fill-in datasinks and reportlet datasinks for the anatomical workflow
-    for _node in anat_ingress_wf.list_node_names():
-        node_suffix = _node.split('.')[-1]
-        if node_suffix.startswith('ds'):
-            base_dir = reportlets_dir if "report" in node_suffix else output_dir
-            anat_ingress_wf.get_node(_node).inputs.base_directory = base_dir
-            anat_ingress_wf.get_node(_node).inputs.source_file = \
-                "anat/sub-{}_desc-preproc_T1w.nii.gz".format(subject_id)
-
-    # Get the anatomical data (masks, atlases, etc)
+    # The recon spec may need additional anatomical files to be created.
     atlas_names = spec.get('atlases', [])
+    needs_t1w_transform = spec_needs_to_template_transform(spec)
+
+    # This is here because qsiprep currently only makes one anatomical result per subject
+    # regardless of sessions. So process it on its
+    if pipeline_source == "qsiprep":
+        anat_ingress_node, available_anatomical_data = init_highres_recon_anatomical_wf(
+            subject_id=subject_id,
+            recon_input_dir=recon_input,
+            extras_to_make=spec.get('anatomical', []),
+            freesurfer_dir=freesurfer_input,
+            needs_t1w_transform=needs_t1w_transform,
+            pipeline_source="qsiprep",
+            name='anat_ingress_wf')
+
+        # Connect the anatomical-only inputs. NOTE this is not to the inputnode!
+        LOGGER.info("Anatomical (T1w) available for recon: %s", available_anatomical_data)
 
     # create a processing pipeline for the dwis in each session
     dwi_recon_wfs = {}
     dwi_individual_anatomical_wfs = {}
     recon_full_inputs = {}
     dwi_ingress_nodes = {}
-    for dwi_file in dwi_files:
+    anat_ingress_nodes = {}
+    print(dwi_recon_inputs)
+    for dwi_input in dwi_recon_inputs:
+        dwi_file = dwi_input['bids_dwi_file']
         wf_name = _get_wf_name(dwi_file)
 
         # Get the preprocessed DWI and all the related preprocessed images
-        dwi_ingress_nodes[dwi_file] = pe.Node(
-            QsiReconIngress(dwi_file=dwi_file),
-            name=wf_name + "_ingressed_dwi_data")
+        if pipeline_source == "qsiprep":
+            dwi_ingress_nodes[dwi_file] = pe.Node(
+                QsiReconDWIIngress(dwi_file=dwi_file),
+                name=wf_name + "_ingressed_dwi_data")
+
+        elif pipeline_source == "ukb":
+            dwi_ingress_nodes[dwi_file] = pe.Node(
+                UKBioBankDWIIngress(dwi_file=dwi_file,
+                                 data_dir=str(dwi_input['path'].absolute())),
+                name=wf_name + "_ingressed_ukb_dwi_data")
+            anat_ingress_nodes[dwi_file], available_anatomical_data = init_highres_recon_anatomical_wf(
+                subject_id=subject_id,
+                recon_input_dir=dwi_input['path'],
+                extras_to_make=spec.get('anatomical', []),
+                freesurfer_dir=freesurfer_input,
+                pipeline_source="ukb",
+                needs_t1w_transform=needs_t1w_transform,
+                name=wf_name + "_ingressed_ukb_anat_data")
 
         # Create scan-specific anatomical data (mask, atlas configs, odf ROIs for reports)
+        print(available_anatomical_data)
         dwi_individual_anatomical_wfs[dwi_file], dwi_available_anatomical_data = \
             init_dwi_recon_anatomical_workflow(
                 atlas_names=atlas_names,
@@ -252,10 +257,11 @@ to workflows in *qsiprep*'s documentation]\
                 infant_mode=False,
                 prefer_dwi_mask=False,
                 sloppy=sloppy,
+                needs_t1w_transform=needs_t1w_transform,
                 b0_threshold=b0_threshold,
                 freesurfer_dir=freesurfer_input,
                 extras_to_make=spec.get('anatomical', []),
-                name=wf_name + "_anat_wf",
+                name=wf_name + "_dwi_specific_anat_wf",
                 **available_anatomical_data)
 
         # This node holds all the inputs that will go to the recon workflow.
@@ -274,27 +280,44 @@ to workflows in *qsiprep*'s documentation]\
 
         # Connect the collected diffusion data (gradients, etc) to the inputnode
         workflow.connect([
-
             # The dwi data
             (dwi_ingress_nodes[dwi_file], recon_full_inputs[dwi_file], [
                 (trait, trait) for trait in qsiprep_output_names]),
 
-            # subject anatomical data to dwi
-            (anat_ingress_wf, dwi_individual_anatomical_wfs[dwi_file],
-             [("outputnode."+trait, "inputnode."+trait) for trait in anatomical_workflow_outputs]),
+            # Session-specific anatomical data
             (dwi_ingress_nodes[dwi_file], dwi_individual_anatomical_wfs[dwi_file],
              [(trait, "inputnode." + trait) for trait in qsiprep_output_names]),
 
-            # subject dwi-specific anatomical to recon inputs
-            (dwi_individual_anatomical_wfs[dwi_file], recon_full_inputs[dwi_file], [
-                ("outputnode." + trait, trait) for trait in recon_workflow_anatomical_input_fields]),
+            # subject dwi-specific anatomical to a special node in recon_full_inputs so
+            # we have a record of what went in. Otherwise it would be lost in an IdentityInterface
+            (dwi_individual_anatomical_wfs[dwi_file], recon_full_inputs[dwi_file],
+             [("outputnode." + trait, trait) for trait in recon_workflow_anatomical_input_fields]),
 
-            # recon inputs to recon workflow
+            # send the recon_full_inputs to the dwi recon workflow
             (recon_full_inputs[dwi_file], dwi_recon_wfs[dwi_file],
-             [(trait, "inputnode." + trait) for trait in recon_workflow_input_fields])
+             [(trait, "inputnode." + trait) for trait in recon_workflow_input_fields]),
+
+            (anat_ingress_node if pipeline_source=="qsiprep" else anat_ingress_nodes[dwi_file],
+             dwi_individual_anatomical_wfs[dwi_file],
+             [("outputnode."+trait, "inputnode."+trait) for trait in anatomical_workflow_outputs])
         ])
 
+    # Fill-in datasinks and reportlet datasinks for the anatomical workflow
+    for _node in workflow.list_node_names():
+        node_suffix = _node.split('.')[-1]
+        if node_suffix.startswith('ds'):
+            base_dir = reportlets_dir if "report" in node_suffix else output_dir
+            # workflow.get_node(_node).inputs.base_directory = base_dir
+            # workflow.get_node(_node).inputs.source_file = \
+            #     "anat/sub-{}_desc-preproc_T1w.nii.gz".format(subject_id)
     return workflow
+
+
+def spec_needs_to_template_transform(recon_spec):
+    """Determine whether a recon spec needs a transform from T1wACPC to a template.
+    """
+    atlases = recon_spec.get("atlases", [])
+    return bool(atlases)
 
 
 def _get_wf_name(dwi_file):
@@ -321,3 +344,45 @@ def _load_recon_spec(spec_name, sloppy=False):
         LOGGER.warning("Forcing reconstruction to use unrealistic parameters")
         spec = make_sloppy(spec)
     return spec
+
+
+def _get_iterable_dwi_inputs(recon_input_directory, subject_id, pipeline_source, space):
+    """Return inputs for the recon ingressors depending on the pipeline source.
+
+    If qsiprep was used as the pipeline source, the iterable is going to be the
+    dwi files (there can be an arbitrary number of them).
+
+    If ukb or hcpya were used there is only one dwi file per subject, so the
+    ingressors are sent the subject directory, which makes it easier to find
+    the other files needed.
+
+    """
+
+    if pipeline_source == "qsiprep":
+        # If recon_input is specified without qsiprep, check if we can find the subject dir
+        subject_dir = 'sub-' + subject_id
+        if not op.exists(op.join(recon_input_directory, subject_dir)):
+            qp_recon_input = op.join(recon_input_directory, "qsiprep")
+            LOGGER.info("%s not in %s, trying recon_input=%s",
+                        subject_dir, recon_input_directory, qp_recon_input)
+            if not op.exists(op.join(qp_recon_input, subject_dir)):
+                raise Exception(
+                    "Unable to find subject directory in %s or %s" % (
+                        recon_input_directory, qp_recon_input))
+            recon_input_directory = qp_recon_input
+
+
+        layout = BIDSLayout(recon_input_directory, validate=False, absolute_paths=True)
+        # Get all the output files that are in this space
+        dwi_files = [f.path for f in
+                     layout.get(suffix="dwi", subject=subject_id, absolute_paths=True,
+                                extension=['nii', 'nii.gz'])
+                     if 'space-' + space in f.filename]
+        LOGGER.info("found %s in %s", dwi_files, recon_input_directory)
+        return [{"bids_dwi_file": dwi_file} for dwi_file in dwi_files]
+
+    if pipeline_source == "ukb":
+        return create_ukb_layout(ukb_dir=recon_input_directory,
+                                 participant_label=subject_id)
+
+    raise Exception("Unknown pipeline " + pipeline_source)

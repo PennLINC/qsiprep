@@ -75,6 +75,30 @@ another as long as the output from the upstream workflow matches the inputs to
 the downstream workflow. The :ref:`recon_workflows` section lists all the
 available workflows and their inputs and outputs.
 
+.. _other_pipeline_input:
+
+Using Data Preprocessed by Other Pipelines
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Many open datasets are provided in minimally preprocessed form. Most of these have a
+bespoke processing pipeline and in many cases these pipelines are very similar to
+QSIPrep. Instead of preprocessing these from scratch, you can run reconstruction
+workflows on the minimally preprocessed data by specifying the pipeline that was
+used for preprocessing.
+
+UK BioBank Preprocessed Data
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+To use the UK BioBank preprocessed dMRI data, specify ``--recon-input-pipeline ukb``.
+Note that the transforms to/from MNI space are not able to be used at this time.
+This means that a new spatial normalization will have to be estimated in order to
+use any of the workflows that require one.
+
+HCP Young Adult Preprocessed Data
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+To use minimally preprocessed dMRI data from HCP-YA specify ``--recon-input-pipeline hcpya``.
+The included FNIRT transforms are usable directly.
 
 .. _anat_reqs:
 
@@ -82,7 +106,7 @@ Anatomical Data for Reconstruction Workflows
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Some reconstruction workflows require additional anatomical data to work properly.
-This table shows which reconstruction workflows depend on the availibility of 
+This table shows which reconstruction workflows depend on the availibility of
 anatomical data:
 
 
@@ -121,9 +145,9 @@ anatomical data:
 Data preprocessed by ``qsiprep`` may be missing a preprocessed T1w image if the ``--dwi-only`` flag
 was used. This is not a problem because anatomical data can be introduced during the Reconstruction
 workflows! Suppose you ran FreeSurfer on your data separately (e.g. as part of fmriprep). You can
-specify the directory containing freesurfer outputs with the ``--freesurfer-input`` flag. If you 
+specify the directory containing freesurfer outputs with the ``--freesurfer-input`` flag. If you
 have::
-  
+
     derivatives/freesurfer/sub-x
     derivatives/freesurfer/sub-y
     derivatives/freesurfer/sub-z
@@ -152,32 +176,32 @@ If ``qsiprep`` performed anatomical preprocessing
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 In most cases human MRI experiments include a T1-weighted anatomical image.
-By default ``qsiprep`` performs some processing steps on this image, 
+By default ``qsiprep`` performs some processing steps on this image,
 including brain extraction and spatial normalization to the MNI152NLin2009cAsym
 template (unless ``--infant`` was specified, then the infant template is used).
 
-If a T1w image is available in the input BIDS data and was preprocessed by 
-``qsiprep``, the ``brain.mgz`` image from freesurfer is registered to the 
+If a T1w image is available in the input BIDS data and was preprocessed by
+``qsiprep``, the ``brain.mgz`` image from freesurfer is registered to the
 AC-PC and DWI-aligned ``desc-preproc_T1w.nii`` image in the ``qsiprep`` outputs.
-The transform from freesurfer native space into alignment with the ``qsiprep`` 
+The transform from freesurfer native space into alignment with the ``qsiprep``
 outputs is achieved by converting ``brain.mgz`` into NIfTI format and adjusting
-the affine matrix such that the images are aligned in world coordinates. This 
+the affine matrix such that the images are aligned in world coordinates. This
 prevents an extra interpolation.
 
 
 If ``--dwi-only`` was used
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-If ``--dwi-only`` was used, there will be no preprocessed T1w data in the 
-``qsiprep`` results. Instead the DWI images have been aligned to AC-PC 
+If ``--dwi-only`` was used, there will be no preprocessed T1w data in the
+``qsiprep`` results. Instead the DWI images have been aligned to AC-PC
 as closely as possibly (likely imperfectly). In this case, the FreeSurfer
 skull-stripped ``brain.mgz`` is rigidly registered to ``dwiref`` of each
 preprocessed DWI. The FreeSurfer brain mask is resampled to the grid of
-the DWI. 
+the DWI.
 
 If structural connectivity is calculated during the reconstruction workflow
-(or any atlases are specified in the ``"anatomical": []`` section of the 
-workflow's ``.json`` file), the coregistered-to-DWI ``brain.mgz`` image will be 
+(or any atlases are specified in the ``"anatomical": []`` section of the
+workflow's ``.json`` file), the coregistered-to-DWI ``brain.mgz`` image will be
 normalized to the MNI152NLin2009cAsym template using ``antsRegistration``.
 The reverse transform is used to get parcellations aligned to the DWI.
 
@@ -192,13 +216,13 @@ The source of the brain mask depends on available data and user options.
   * If ``qsiprep`` ran normally and the reconstruction workflows are run
     without ``--dwi-only``, the brain mask estimated by ``antsBrainExtraction``
     during preprocessing is used.
-  * If no T1w data is available in the ``qsiprep`` outputs and the user 
-    supplies FreeSurfer data with ``--freesurfer-input``, the brain mask 
+  * If no T1w data is available in the ``qsiprep`` outputs and the user
+    supplies FreeSurfer data with ``--freesurfer-input``, the brain mask
     created by FreeSurfer is used.
   * If you specify ``--dwi-only`` when ``qsiprep`` performs the reconstruction
-    OR if no preprocessed T1w images (either via ``qsiprep`` outputs or 
+    OR if no preprocessed T1w images (either via ``qsiprep`` outputs or
     ``--freesurfer-input``) are available, a mask is estimated based on the
-    preprocessed DWI data. This is the least robust option and should be 
+    preprocessed DWI data. This is the least robust option and should be
     avoided if at all possible.
 
 
@@ -228,7 +252,7 @@ Pre-configured recon_workflows
 .. warning::
   We don't recommend using ACT with FAST segmentations. The full benefits of ACT
   require very precise tissue boundaries and FAST just doesn't do this reliably
-  enough. We strongly recommend the ``hsvs`` segmentation if you're going to 
+  enough. We strongly recommend the ``hsvs`` segmentation if you're going to
   use ACT. Note that this requires ``--freesurfer-input``
 
 .. _mrtrix_multishell_msmt_ACT-hsvs:
@@ -239,7 +263,7 @@ Pre-configured recon_workflows
 This workflow uses the ``msmt_csd`` algorithm [Jeurissen2014]_ to estimate FODs for white matter,
 gray matter and cerebrospinal fluid using *multi-shell acquisitions*. The white matter FODs are
 used for tractography and the T1w segmentation is used for anatomical constraints [Smith2012]_.
-The T1w segmentation uses the hybrid surface volume segmentation (hsvs) [Smith2020]_ and 
+The T1w segmentation uses the hybrid surface volume segmentation (hsvs) [Smith2020]_ and
 requires ``--freesurfer-input``.
 
 
@@ -248,7 +272,7 @@ requires ``--freesurfer-input``.
 ``mrtrix_multishell_msmt_ACT-fast``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Identical to :ref:`mrtrix_multishell_msmt_ACT-hsvs` except FSL's FAST is used for 
+Identical to :ref:`mrtrix_multishell_msmt_ACT-hsvs` except FSL's FAST is used for
 tissue segmentation. This workflow is not recommended.
 
 
@@ -270,7 +294,7 @@ used for tractography with no T1w-based anatomical constraints.
 This workflow uses the ``ss3t_csd_beta1`` algorithm [Dhollander2016]_ to estimate FODs for white
 matter, and cerebrospinal fluid using *single shell (DTI) acquisitions*. The white matter FODs are
 used for tractography and the T1w segmentation is used for anatomical constraints [Smith2012]_.
-The T1w segmentation uses the hybrid surface volume segmentation (hsvs) [Smith2020]_ and 
+The T1w segmentation uses the hybrid surface volume segmentation (hsvs) [Smith2020]_ and
 requires ``--freesurfer-input``.
 
 .. _mrtrix_singleshell_ss3t_ACT-fast:
@@ -278,7 +302,7 @@ requires ``--freesurfer-input``.
 ``mrtrix_multishell_msmt_ACT-fast``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Identical to :ref:`mrtrix_singleshell_ss3t_ACT-hsvs` except FSL's FAST is used for 
+Identical to :ref:`mrtrix_singleshell_ss3t_ACT-hsvs` except FSL's FAST is used for
 tissue segmentation. This workflow is not recommended.
 
 .. _mrtrix_singleshell_ss3t_noACT:

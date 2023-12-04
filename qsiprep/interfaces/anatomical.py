@@ -11,6 +11,7 @@ Image tools interfaces
 
 from pkg_resources import resource_filename as pkgr
 import os.path as op
+from pathlib import Path
 import numpy as np
 from nipype import logging
 from glob import glob
@@ -22,13 +23,17 @@ from nipype.interfaces.base import (traits, TraitedSpec, BaseInterfaceInputSpec,
 from nipype.utils.filemanip import fname_presuffix
 from dipy.segment.threshold import otsu
 import nilearn.image as nim
+from ..utils.ingress import ukb_dirname_to_bids
+from .images import to_lps
 
 LOGGER = logging.getLogger('nipype.interface')
 KNOWN_TEMPLATES = ['MNI152NLin2009cAsym', 'infant']
 
 
 class QsiprepAnatomicalIngressInputSpec(BaseInterfaceInputSpec):
-    recon_input_dir = traits.Directory(exists=True, mandatory=True)
+    recon_input_dir = traits.Directory(exists=True,
+                                       mandatory=True,
+                                       help="directory containing subject results directories")
     subject_id = traits.Str()
     subjects_dir = File(exists=True)
 
@@ -127,6 +132,35 @@ class QsiprepAnatomicalIngress(SimpleInterface):
 
         if len(files) == 1:
             self._results[name] = files[0]
+
+
+class UKBAnatomicalIngressInputSpec(QsiprepAnatomicalIngressInputSpec):
+    recon_input_dir = traits.Directory(exists=True,
+                                       mandatory=True,
+                                       help="directory containing a single subject's results")
+
+
+class UKBAnatomicalIngress(QsiprepAnatomicalIngress):
+    input_spec = UKBAnatomicalIngressInputSpec
+
+    def _run_interface(self, runtime):
+        # Load the Bias-corrected brain and brain mask
+        input_path = Path(self.inputs.recon_input_dir)
+        bids_name = ukb_dirname_to_bids(self.inputs.recon_input_dir)
+
+        ukb_brain = input_path / "T1" / "T1_unbiased_brain.nii.gz"
+        ukb_brain_mask = input_path / "T1" / "T1_brain_mask.nii.gz"
+
+        conformed_t1w_file = str(Path(runtime.cwd) / (bids_name + "_desc-preproc_T1w.nii.gz"))
+        conformed_mask_file = str(Path(runtime.cwd) / (bids_name + "_desc-brain_mask.nii.gz"))
+
+        to_lps(nb.load(ukb_brain)).to_filename(conformed_t1w_file)
+        to_lps(nb.load(ukb_brain_mask)).to_filename(conformed_mask_file)
+
+        self._results['t1_preproc'] = conformed_t1w_file
+        self._results['t1_brain_mask'] = conformed_mask_file
+
+        return runtime
 
 
 class _DiceOverlapInputSpec(BaseInterfaceInputSpec):
@@ -416,6 +450,7 @@ class CustomApplyMask(SimpleInterface):
         nb.Nifti1Image(out_data, input_img.affine, header=input_img.header).to_filename(out_file)
         self._results['out_file'] = out_file
         return runtime
+
 
 class _GetTemplateInputSpec(BaseInterfaceInputSpec):
     template_name = traits.Str(

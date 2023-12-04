@@ -19,14 +19,12 @@ Disable warnings:
 
 """
 
+from pathlib import Path
 import os
+import shutil
 import os.path as op
-import re
-import simplejson as json
-import gzip
-from shutil import copytree, rmtree, copyfileobj
-
 from nipype import logging
+import nibabel as nb
 from nipype.interfaces.base import (
     traits, isdefined, TraitedSpec, BaseInterfaceInputSpec,
     File, Directory, OutputMultiPath, Str,
@@ -35,10 +33,14 @@ from nipype.interfaces.base import (
 from nipype.utils.filemanip import copyfile, split_filename
 from glob import glob
 from .bids import get_bids_params
+from .images import ConformDwi, to_lps
+from .dsi_studio import btable_from_bvals_bvecs
+from .mrtrix import _convert_fsl_to_mrtrix
+
 
 LOGGER = logging.getLogger('nipype.interface')
 
-class QsiReconIngressInputSpec(BaseInterfaceInputSpec):
+class QsiReconDWIIngressInputSpec(BaseInterfaceInputSpec):
     # DWI files
     dwi_file = File(exists=True)
     bval_file = File(exists=True)
@@ -47,8 +49,7 @@ class QsiReconIngressInputSpec(BaseInterfaceInputSpec):
     atlas_names = traits.List()
 
 
-
-class QsiReconIngressOutputSpec(TraitedSpec):
+class QsiReconDWIIngressOutputSpec(TraitedSpec):
     subject_id = traits.Str()
     session_id = traits.Str()
     space_id = traits.Str()
@@ -59,6 +60,7 @@ class QsiReconIngressOutputSpec(TraitedSpec):
     bval_file = File(exists=True)
     bvec_file = File(exists=True)
     b_file = File(exists=True)
+    btable_file = File(exists=True)
     confounds_file = File(exists=True)
     dwi_file = File(exists=True)
     local_bvec_file = File()
@@ -68,9 +70,9 @@ class QsiReconIngressOutputSpec(TraitedSpec):
     slice_qc_file = File(exists=True)
 
 
-class QsiReconIngress(SimpleInterface):
-    input_spec = QsiReconIngressInputSpec
-    output_spec = QsiReconIngressOutputSpec
+class QsiReconDWIIngress(SimpleInterface):
+    input_spec = QsiReconDWIIngressInputSpec
+    output_spec = QsiReconDWIIngressOutputSpec
 
     def _run_interface(self, runtime):
         params = get_bids_params(self.inputs.dwi_file)
@@ -115,3 +117,68 @@ class QsiReconIngress(SimpleInterface):
         used_keys = ['subject_id', 'session_id', 'acq_id', 'dir_id', 'run_id']
         fname = "_".join([params[key] for key in used_keys if params[key]])
         return out_root + "/" + fname + "_desc-%s_dwi.%s" % (desc, suffix)
+
+
+class _UKBioBankDWIIngressInputSpec(QsiReconDWIIngressInputSpec):
+    dwi_file = File(exists=False,
+                    help="The name of what a BIDS dwi file may have been")
+    data_dir = traits.Directory(
+        exists=True,
+        help="The UKB data directory for a subject. Must contain DTI/ and T1/")
+
+
+class UKBioBankDWIIngress(SimpleInterface):
+    input_spec = _UKBioBankDWIIngressInputSpec
+    output_spec = QsiReconDWIIngressOutputSpec
+
+    def _run_interface(self, runtime):
+        runpath = Path(runtime.cwd)
+
+        # The UKB input files
+        in_dir = Path(self.inputs.data_dir)
+        dwi_dir = in_dir / "DTI" / "dMRI" / "dMRI"
+        ukb_bval_file = dwi_dir / "bvals"
+        ukb_bvec_file = dwi_dir / "bvecs" # These are the same as eddy rotated
+        ukb_dwi_file = dwi_dir / "data_ud.nii.gz"
+        ukb_dwiref_file = dwi_dir / "dti_FA.nii.gz"
+
+        # The bids_name is what the images will be renamed to
+        bids_name = Path(self.inputs.dwi_file).name.replace(".nii.gz", "")
+        dwi_file = str(runpath / (bids_name + ".nii.gz"))
+        bval_file = str(runpath / (bids_name + ".bval"))
+        bvec_file = str(runpath / (bids_name + ".bvec"))
+        b_file = str(runpath / (bids_name + ".b"))
+        btable_file = str(runpath / (bids_name + "btable.txt"))
+        dwiref_file = str(runpath / (bids_name.replace("_dwi", "_dwiref") + ".nii.gz"))
+
+        dwi_conform = ConformDwi(
+            dwi_file=str(ukb_dwi_file),
+            bval_file=str(ukb_bval_file),
+            bvec_file=str(ukb_bvec_file)
+        )
+
+        result = dwi_conform.run()
+        Path(result.outputs.dwi_file).rename(dwi_file)
+        Path(result.outputs.bvec_file).rename(bvec_file)
+        shutil.copyfile(result.outputs.bval_file, bval_file)
+        # Reorient the dwi file to LPS+
+        self._results['dwi_file'] = dwi_file
+        self._results['bvec_file'] = bvec_file
+        self._results['bval_file'] = bval_file
+
+        # Create a btable_txt file for DSI Studio
+        btable_from_bvals_bvecs(bval_file,
+                                bvec_file,
+                                btable_file)
+        self._results['btable_file'] = btable_file
+
+        # Create a mrtrix .b file
+        _convert_fsl_to_mrtrix(bval_file,
+                               bvec_file,
+                               b_file)
+        self._results['b_file'] = b_file
+
+        # Create a dwi ref file
+        to_lps(nb.load(ukb_dwiref_file)).to_filename(dwiref_file)
+        self._results["dwi_ref"] = dwiref_file
+        return runtime
