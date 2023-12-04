@@ -1,7 +1,17 @@
 version: 2
 
-conda:
-  environment: .readthedocs/environment.yaml
+build:
+  os: ubuntu-22.04
+  apt_packages:
+    - gfortran
+    - graphviz
+    - libblas-dev
+    - liblapack-dev
+  tools:
+    python: "3.8"
+
+sphinx:
+  configuration: docs/conf.py
 
 python:
   install:
