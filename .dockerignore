@@ -24,11 +24,6 @@ tox.ini
 src/**/*
 src/
 
-# git
-.gitignore
-.git/**/*
-.git
-
 # other
 work/**/*
 tests/*

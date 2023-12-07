@@ -296,8 +296,11 @@ jobs:
           name: Build Docker image
           no_output_timeout: 3h
           command: |
+            sudo apt-get update
+            sudo apt-get install -y python3-pip
+            pip install hatch
             # Get version, update files.
-            THISVERSION=$(python3 -c "from qsiprep import __version__; print(__version__)")
+            THISVERSION=$(hatch version)
             if [[ ${THISVERSION:0:1} == "0" ]] ; then
               echo "WARNING: latest git tag could not be found"
               echo "Please, make sure you fetch all tags from upstream with"

@@ -1,14 +1,17 @@
+
+# Build into a wheel in a stage that has git installed
+FROM python:slim AS wheelstage
+RUN pip install build
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends git
+COPY . /src/qsiprep
+RUN python -m build /src/qsiprep
+
 FROM pennbbl/qsiprep_build:23.7.2
 
-# WORKDIR /root/
-# # Installing qsiprep
-COPY . /src/qsiprep
-ARG VERSION
-
-# # Force static versioning within container
-RUN echo "${VERSION}" > /src/qsiprep/qsiprep/VERSION && \
-    echo "include qsiprep/VERSION" >> /src/qsiprep/MANIFEST.in && \
-    pip install --no-cache-dir "/src/qsiprep[all]"
+# Install qsiprep wheel
+COPY --from=wheelstage /src/qsiprep/dist/*.whl .
+RUN pip install --no-cache-dir $( ls *.whl )
 
 # Precaching fonts, set 'Agg' as default backend for matplotlib
 RUN python -c "from matplotlib import font_manager" && \
