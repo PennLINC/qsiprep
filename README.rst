@@ -52,7 +52,6 @@ that can run ODF/FOD reconstruction, tractography, Fixel estimation and regional
 connectivity.
 
 
-
 Note
 ------
 

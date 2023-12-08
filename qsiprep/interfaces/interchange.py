@@ -1,5 +1,5 @@
 from http.server import SimpleHTTPRequestHandler
-from qsiprep.interfaces.bids import QsiReconIngress
+from qsiprep.interfaces.ingress import QsiReconDWIIngress
 from nipype.interfaces.io import FreeSurferSource
 from qsiprep.interfaces.anatomical import QsiprepAnatomicalIngress
 from nipype.interfaces.base import (TraitedSpec, BaseInterfaceInputSpec,
@@ -12,17 +12,17 @@ CREATEABLE_ANATOMICAL_OUTPUTS = [
     "fs_to_qsiprep_transform_itk", "fs_to_qsiprep_transform_mrtrix"]
 
 # These come directly from QSIPrep outputs. They're aligned to the DWIs in AC-PC
-qsiprep_anatomical_ingressed_fields = \
+qsiprep_highres_anatomical_ingressed_fields = \
     QsiprepAnatomicalIngress.output_spec.class_editable_traits()
 
 # The init_recon_anatomical anatomical workflow can create additional
 # anatomical files (segmentations/masks/etc) that can be used downstream.
 # These are **independent** of the DWI data and handled separately
-anatomical_workflow_outputs = qsiprep_anatomical_ingressed_fields + \
+anatomical_workflow_outputs = qsiprep_highres_anatomical_ingressed_fields + \
     FS_FILES_TO_REGISTER + CREATEABLE_ANATOMICAL_OUTPUTS
 
 # These are read directly from QSIPrep's dwi results.
-qsiprep_output_names = QsiReconIngress().output_spec.class_editable_traits()
+qsiprep_output_names = QsiReconDWIIngress().output_spec.class_editable_traits()
 
 # dMRI + registered anatomical fields
 recon_workflow_anatomical_input_fields = anatomical_workflow_outputs + [
