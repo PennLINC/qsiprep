@@ -27,7 +27,6 @@
       "input": "recon_3dshore",
       "parameters": {
         "turning_angle": 35,
-        "method": 0,
         "smoothing": 0.0,
         "step_size": 1.0,
         "min_length": 30,
