@@ -121,6 +121,8 @@ def init_anat_preproc_wf(template, debug, dwi_only,
             List of T2-weighted structural images
         flair
             List of FLAIR images
+        roi
+            A mask to exclude regions during standardization (as list)
         subjects_dir
             FreeSurfer SUBJECTS_DIR
 
@@ -339,6 +341,9 @@ FreeSurfer version {fs_version}. """.format(
             ('outputnode.qc_file', 'segmentation_qc')]),
 
         # Make AC-PC transform, do nonlinear registration if requested
+        (inputnode, anat_normalization_wf, [
+            ("roi", "inputnode.roi")
+        ]),
         (synthstrip_anat_wf, anat_normalization_wf, [
             ('outputnode.brain_mask', 'inputnode.brain_mask')]),
         (anat_reference_wf, anat_normalization_wf, [
@@ -683,11 +688,15 @@ def init_anat_normalization_wf(sloppy, template_name, omp_nthreads,
             Enable debugging outputs
         omp_nthreads : int
             Maximum number of threads an individual process may use
+        has_rois : bool
+            Whether Registration should account for regions to exclude
 
     Inputs
 
         in_file
             T1-weighted structural image to skull-strip
+        roi
+            A mask to exclude regions during standardization (as list)
 
     Outputs
 
