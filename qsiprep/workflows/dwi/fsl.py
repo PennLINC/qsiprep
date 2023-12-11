@@ -71,7 +71,7 @@ def init_fsl_hmc_wf(scan_groups,
             threshold for a slice to be replaced with imputed values. Overrides the
             parameter in ``eddy_config`` if set to a number > 0.
         pepolar_method : str
-            Either 'DRBUDDI' or 'TOPUP'. The method for SDC when EPI fieldmaps are used.
+            Either 'DRBUDDI', 'TOPUP' or 'DRBUDDI+TOPUP'. The method for SDC when EPI fieldmaps are used.
         eddy_config: str
             Path to a JSON file containing settings for the call to ``eddy``.
 
@@ -100,7 +100,7 @@ def init_fsl_hmc_wf(scan_groups,
     fsl_check = os.environ.get('FSL_BUILD')
     if fsl_check=="no_fsl":
         raise Exception(
-            """Container in use does not have FSL. To use this workflow, 
+            """Container in use does not have FSL. To use this workflow,
             please download the qsiprep container with FSL installed.""")
     inputnode = pe.Node(
         niu.IdentityInterface(
@@ -220,7 +220,7 @@ def init_fsl_hmc_wf(scan_groups,
     fieldmap_type = scan_groups['fieldmap_info']['suffix'] or ''
     workflow.__desc__ = boilerplate_from_eddy_config(eddy_args, fieldmap_type,
                                                      pepolar_method)
-    if fieldmap_type in ('epi', 'rpe_series') and pepolar_method.lower() == "topup":
+    if fieldmap_type in ('epi', 'rpe_series') and "topup" in pepolar_method.lower():
         # If there are EPI fieldmaps in fmaps/, make sure they get to TOPUP. It will always use
         # b=0 images from the DWI series regardless
         gather_inputs.inputs.topup_requested = True
@@ -282,7 +282,7 @@ def init_fsl_hmc_wf(scan_groups,
         (gather_inputs, distorted_merge, [('topup_imain', 'in_files')]),
         (distorted_merge, pre_eddy_b0_ref_wf, [('out_avg', 'inputnode.b0_template')])])
 
-    if fieldmap_type in ('epi', 'rpe_series') and pepolar_method.lower() == "drbuddi":
+    if fieldmap_type in ('epi', 'rpe_series') and 'drbuddi' in pepolar_method.lower():
         outputnode.inputs.sdc_method = "DRBUDDI"
 
         # Let gather_inputs know we're doing pepolar, even though it's not topup

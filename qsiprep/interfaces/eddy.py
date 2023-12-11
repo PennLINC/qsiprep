@@ -359,7 +359,7 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type, pepolar_method):
                     % (ext_eddy.inputs.mporder, niter, s2v_interp, lam))
 
     # distortion correction
-    if pepolar_method.lower() == 'topup':
+    if "topup" in pepolar_method.lower():
         desc.append(topup_boilerplate(fieldmap_type))
     # DRBUDDI is described in its own workflow
 

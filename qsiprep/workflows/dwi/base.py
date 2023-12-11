@@ -142,7 +142,7 @@ def init_dwi_preproc_wf(dwi_only,
         unringing_method : str
             algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
         pepolar_method : str
-            Either 'DRBUDDI' or 'TOPUP'. The method for SDC when EPI fieldmaps are used.
+            Either 'DRBUDDI', 'TOPUP' or 'TOPUP+DRBUDDI'. The method for SDC when EPI fieldmaps are used.
         b1_biascorrect_stage : str
             'final', 'none' or 'legacy'
         no_b0_harmonization : bool
@@ -405,7 +405,7 @@ Diffusion data preprocessing
 
     # Fieldmap reports should vary depending on which type of correction is performed
     # PEPOLAR (epi, rpe series) will produce potentially much more detailed reports
-    doing_topup = fieldmap_type in ("epi", "rpe_series") and pepolar_method.lower() == "topup"
+    doing_topup = fieldmap_type in ("epi", "rpe_series") and "topup" in pepolar_method.lower()
     if fieldmap_type not in ("epi", "rpe_series", None) or doing_topup:
         fmap_unwarp_report_wf = init_fmap_unwarp_report_wf()
         ds_report_sdc = pe.Node(

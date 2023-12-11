@@ -163,7 +163,7 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
     fieldmap_type = fieldmap_info['suffix']
 
     if fieldmap_type in ('epi', 'rpe_series'):
-        if pepolar_method.lower() == "topup":
+        if 'topup' in pepolar_method.lower():
             raise Exception("TOPUP is not supported with SHORELine ")
 
         drbuddi_wf = init_drbuddi_wf(scan_groups=scan_groups, omp_nthreads=omp_nthreads,

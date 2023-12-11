@@ -90,7 +90,7 @@ def init_dwi_finalize_wf(scan_groups,
         output_resolution : float
             Output voxel resolution in mm
         pepolar_method : str
-            Either 'DRBUDDI' or 'TOPUP'. The method for SDC when EPI fieldmaps are used.
+            Either 'DRBUDDI', 'TOPUP' or 'TOPUP+DRBUDDI'. The method for SDC when EPI fieldmaps are used.
         omp_nthreads : int
             Maximum number of threads an individual process may use
         low_mem : bool

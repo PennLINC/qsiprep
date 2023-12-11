@@ -166,7 +166,7 @@ def init_qsiprep_wf(
             How to combine multiple distortion groups after correction. 'concat', 'average' or
             'none'
         pepolar_method : str
-            Either 'DRBUDDI' or 'TOPUP'. The method for SDC when EPI fieldmaps are used.
+            Either 'DRBUDDI', 'TOPUP' or 'TOPUP+DRBUDDI'. The method for SDC when EPI fieldmaps are used.
         omp_nthreads : int
             Maximum number of threads an individual process may use
         skull_strip_template : str
