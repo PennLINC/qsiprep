@@ -220,6 +220,8 @@ def init_fsl_hmc_wf(scan_groups,
     fieldmap_type = scan_groups['fieldmap_info']['suffix'] or ''
     workflow.__desc__ = boilerplate_from_eddy_config(eddy_args, fieldmap_type,
                                                      pepolar_method)
+
+    # Are we running TOPUP?
     if fieldmap_type in ('epi', 'rpe_series') and "topup" in pepolar_method.lower():
         # If there are EPI fieldmaps in fmaps/, make sure they get to TOPUP. It will always use
         # b=0 images from the DWI series regardless
@@ -274,16 +276,14 @@ def init_fsl_hmc_wf(scan_groups,
                 (b0_ref_to_lps, outputnode, [('dwi_file', 'b0_template')]),
             ])
     else:
+        # If we're not using TOPUP we need to make a mask for eddy based on the distorted brain shapes
+        distorted_merge = pe.Node(
+            IntraModalMerge(hmc=True, to_lps=False), name='distorted_merge')
         # Use the distorted mask for eddy
         workflow.connect([
             (gather_inputs, distorted_merge, [('topup_imain', 'in_files')]),
             (distorted_merge, pre_eddy_b0_ref_wf, [('out_avg', 'inputnode.b0_template')])])
 
-    # All the following distortion correction methods operate on images
-    # *already processed by eddy*. Therefore we need to make a mask for
-    # eddy that contains both distorted brain shapes
-    distorted_merge = pe.Node(
-        IntraModalMerge(hmc=True, to_lps=False), name='distorted_merge')
 
     if fieldmap_type in ('epi', 'rpe_series') and 'drbuddi' in pepolar_method.lower():
         outputnode.inputs.sdc_method = "DRBUDDI"
@@ -327,10 +327,8 @@ def init_fsl_hmc_wf(scan_groups,
 
         return workflow
 
-
-
     if fieldmap_type in ('fieldmap', 'syn') or fieldmap_type.startswith("phase"):
-
+        LOGGER.info(f"Computing fieldmap directly from {fieldmap_type}")
         outputnode.inputs.sdc_method = fieldmap_type
         b0_sdc_wf = init_sdc_wf(
             scan_groups['fieldmap_info'], dwi_metadata, omp_nthreads=omp_nthreads,
@@ -352,7 +350,7 @@ def init_fsl_hmc_wf(scan_groups,
                 ('outputnode.method', 'sdc_method'),
                 ('outputnode.b0_ref', 'b0_template')])])
 
-    else:
+    if not fieldmap_type:
         outputnode.inputs.sdc_method = "None"
         workflow.connect([
             (b0_ref_to_lps, outputnode, [
