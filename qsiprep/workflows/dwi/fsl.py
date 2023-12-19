@@ -247,8 +247,6 @@ def init_fsl_hmc_wf(scan_groups,
         topup_to_eddy_reg = pe.Node(fsl.FLIRT(dof=6, output_type="NIFTI_GZ"),
                                     name="topup_to_eddy_reg")
         workflow.connect([
-            # There will be no SDC warps, they are applied by eddy
-            (gather_inputs, outputnode, [('forward_warps', 'to_dwi_ref_warps')]),
             (gather_inputs, topup, [
                 ('topup_datain', 'encoding_file'),
                 ('topup_imain', 'in_file'),
@@ -263,27 +261,33 @@ def init_fsl_hmc_wf(scan_groups,
             # Use corrected images from TOPUP to make a mask for eddy
             (topup, unwarped_mean, [('out_corrected', 'in_files')]),
             (unwarped_mean, pre_eddy_b0_ref_wf, [('out_avg', 'inputnode.b0_template')]),
-            (b0_ref_to_lps, outputnode, [('dwi_file', 'b0_template')]),
             # Save reports
             (gather_inputs, topup_summary, [('topup_report', 'summary')]),
             (topup_summary, ds_report_topupsummary, [('out_report', 'in_file')])
-
         ])
 
-        return workflow
+        if "drbuddi" not in pepolar_method.lower():
+            LOGGER.info("Using single-stage SDC, TOPUP-only")
+            workflow.connect([
+                # There will be no SDC warps, they are applied by eddy
+                (gather_inputs, outputnode, [('forward_warps', 'to_dwi_ref_warps')]),
+                (b0_ref_to_lps, outputnode, [('dwi_file', 'b0_template')]),
+            ])
+    else:
+        # Use the distorted mask for eddy
+        workflow.connect([
+            (gather_inputs, distorted_merge, [('topup_imain', 'in_files')]),
+            (distorted_merge, pre_eddy_b0_ref_wf, [('out_avg', 'inputnode.b0_template')])])
 
     # All the following distortion correction methods operate on images
     # *already processed by eddy*. Therefore we need to make a mask for
     # eddy that contains both distorted brain shapes
     distorted_merge = pe.Node(
         IntraModalMerge(hmc=True, to_lps=False), name='distorted_merge')
-    workflow.connect([
-        # Use the distorted mask for eddy
-        (gather_inputs, distorted_merge, [('topup_imain', 'in_files')]),
-        (distorted_merge, pre_eddy_b0_ref_wf, [('out_avg', 'inputnode.b0_template')])])
 
     if fieldmap_type in ('epi', 'rpe_series') and 'drbuddi' in pepolar_method.lower():
         outputnode.inputs.sdc_method = "DRBUDDI"
+        LOGGER.info("Running DRBUDDI for SDC")
 
         # Let gather_inputs know we're doing pepolar, even though it's not topup
         gather_inputs.inputs.topup_requested = True
