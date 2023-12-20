@@ -10,6 +10,7 @@ Image tools interfaces
 """
 
 from pkg_resources import resource_filename as pkgr
+from pathlib import Path
 import os.path as op
 from pathlib import Path
 import numpy as np
@@ -19,7 +20,7 @@ import nibabel as nb
 from scipy.spatial import distance
 from scipy import ndimage
 from nipype.interfaces.base import (traits, TraitedSpec, BaseInterfaceInputSpec,
-                                    SimpleInterface, File)
+                                    SimpleInterface, File, isdefined)
 from nipype.utils.filemanip import fname_presuffix
 from dipy.segment.threshold import otsu
 import nilearn.image as nim
@@ -457,8 +458,7 @@ class _GetTemplateInputSpec(BaseInterfaceInputSpec):
         'MNI152NLin2009cAsym',
         usedefault=True,
         mandatory=True)
-    t1_file = File(exists=True)
-    t2_file = File(exists=True)
+    native_template_file = traits.Str()
     mask_file = File(exists=True)
     infant_mode = traits.Bool(False, usedefault=True)
     anatomical_contrast = traits.Enum("T1w", "T2w", "none")
@@ -469,6 +469,8 @@ class _GetTemplateOutputSpec(BaseInterfaceInputSpec):
     template_file = File(exists=True)
     template_brain_file = File(exists=True)
     template_mask_file = File(exists=True)
+    native_template_file = File(exists=True)
+    native_template_mask_file = File(exists=True)
 
 
 class GetTemplate(SimpleInterface):
@@ -506,4 +508,19 @@ class GetTemplate(SimpleInterface):
         else:
             raise NotImplementedError("Arbitrary templates not available yet")
 
+        # By default set the native template file and mask to the template file and template mask
+        self._results["native_template_file"] = ref_img
+        self._results["native_template_mask_file"] = ref_img_mask
+        if isdefined(self.inputs.native_template_file):
+            native_template = Path(self.inputs.native_template_file)
+            if native_template.exists():
+                self._results["native_template_file"] = str(
+                    native_template.absolute())
+                self._results["native_template_brain_file"] = _get_corresponding_mask(
+                    self._results["native_template_file"])
+
         return runtime
+
+
+def _get_corresponding_mask(anat_file):
+    return anat_file

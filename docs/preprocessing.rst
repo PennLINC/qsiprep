@@ -384,12 +384,10 @@ Processing the *Subject Anatomical Reference* T1w or T2w images
                               template='MNI152NLin2009cAsym',
                               output_spaces=['T1w'],
                               output_resolution=1.25,
-                              skull_strip_template='OASIS',
                               force_spatial_normalization=True,
                               freesurfer=True,
                               longitudinal=False,
                               debug=False,
-                              hires=True,
                               num_t1w=1)
 
 As of version 0.18 QSIPrep has been changed to be very flexible with anatomical

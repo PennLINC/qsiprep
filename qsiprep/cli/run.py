@@ -342,6 +342,12 @@ def get_parser():
         default='MNI152NLin2009cAsym',
         help='volume template space (default: MNI152NLin2009cAsym)')
     g_conf.add_argument(
+        "--native-template",
+        required=False,
+        action='store',
+        help="A preprocessed native space image from fmriprep or previous qsiprep"
+        "that will be used instead of AC-PC to define subject native space.")
+    g_conf.add_argument(
         '--output-resolution', '--output_resolution',
         action='store',
         # required when not recon-only (which can be specified in sysargs 2 ways)
@@ -424,17 +430,6 @@ def get_parser():
     # ANTs options
     g_ants = parser.add_argument_group(
         'Specific options for ANTs registrations')
-    g_ants.add_argument(
-        '--skull-strip-template', '--skull_strip_template',
-        action='store',
-        default='OASIS',
-        choices=['OASIS', 'NKI'],
-        help='select ANTs skull-stripping template (default: OASIS)')
-    g_ants.add_argument(
-        '--skull-strip-fixed-seed', '--skull_strip_fixed_seed',
-        action='store_true',
-        help='do not use a random seed for skull-stripping - will ensure '
-        'run-to-run replicability when used with --omp-nthreads 1')
     g_ants.add_argument(
         '--skip-anat-based-spatial-normalization', '--skip_anat_based_spatial_normalization',
         action='store_true',
@@ -966,7 +961,6 @@ def build_qsiprep_workflow(opts, retval):
         work_dir=work_dir,
         output_dir=str(output_dir),
         ignore=opts.ignore,
-        hires=False,
         anatomical_contrast=opts.anat_modality,
         freesurfer=opts.do_reconall,
         bids_filters=opts.bids_filters,
@@ -988,11 +982,10 @@ def build_qsiprep_workflow(opts, retval):
         denoise_before_combining=not opts.denoise_after_combining,
         write_local_bvecs=opts.write_local_bvecs,
         omp_nthreads=omp_nthreads,
-        skull_strip_template=opts.skull_strip_template,
-        skull_strip_fixed_seed=opts.skull_strip_fixed_seed,
         force_spatial_normalization=force_spatial_normalization,
         output_resolution=opts.output_resolution,
         template=opts.anatomical_template,
+        native_template=opts.native_template,
         bids_dir=bids_dir,
         motion_corr_to=opts.b0_motion_corr_to,
         hmc_transform=opts.hmc_transform,

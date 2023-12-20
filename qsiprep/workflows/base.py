@@ -43,15 +43,15 @@ LOGGER = logging.getLogger('nipype.workflow')
 
 def init_qsiprep_wf(
         subject_list, run_uuid, work_dir, output_dir, bids_dir, ignore, debug,
-        low_mem, anat_only, dwi_only, longitudinal, b0_threshold, hires,
+        low_mem, anat_only, dwi_only, longitudinal, b0_threshold,
         anatomical_contrast, denoise_before_combining, dwi_denoise_window,
         denoise_method, unringing_method, b1_biascorrect_stage,
         no_b0_harmonization, output_resolution, infant_mode, combine_all_dwis,
         distortion_group_merge, pepolar_method, omp_nthreads, bids_filters,
-        force_spatial_normalization, skull_strip_template,
-        skull_strip_fixed_seed, freesurfer, hmc_model, impute_slice_threshold,
+        force_spatial_normalization,
+        freesurfer, hmc_model, impute_slice_threshold,
         hmc_transform, shoreline_iters, eddy_config, write_local_bvecs,
-        template, motion_corr_to, b0_to_t1w_transform,
+        template, native_template, motion_corr_to, b0_to_t1w_transform,
         intramodal_template_iters, intramodal_template_transform,
         prefer_dedicated_fmaps, fmap_bspline, fmap_demean, use_syn, force_syn,
         raw_image_sdc):
@@ -81,7 +81,6 @@ def init_qsiprep_wf(
                               longitudinal=False,
                               b0_threshold=100,
                               freesurfer=False,
-                              hires=False,
                               denoise_before_combining=True,
                               dwi_denoise_window=7,
                               denoise_method='patch2self',
@@ -94,9 +93,8 @@ def init_qsiprep_wf(
                               omp_nthreads=1,
                               output_resolution=2.0,
                               hmc_model='3dSHORE',
-                              skull_strip_template='OASIS',
-                              skull_strip_fixed_seed=False,
                               template='MNI152NLin2009cAsym',
+                              native_template=None,
                               motion_corr_to='iterative',
                               b0_to_t1w_transform='Rigid',
                               intramodal_template_iters=0,
@@ -169,15 +167,8 @@ def init_qsiprep_wf(
             Either 'DRBUDDI' or 'TOPUP'. The method for SDC when EPI fieldmaps are used.
         omp_nthreads : int
             Maximum number of threads an individual process may use
-        skull_strip_template : str
-            Name of ANTs skull-stripping template ('OASIS' or 'NKI')
-        skull_strip_fixed_seed : bool
-            Do not use a random seed for skull-stripping - will ensure
-            run-to-run replicability when used with --omp-nthreads 1
         freesurfer : bool
             Enable FreeSurfer surface reconstruction (may increase runtime)
-        hires : bool
-            Enable sub-millimeter preprocessing in FreeSurfer
         template : str
             Name of template targeted by ``template`` output space
         motion_corr_to : str
@@ -250,14 +241,12 @@ def init_qsiprep_wf(
             infant_mode=infant_mode,
             b0_threshold=b0_threshold,
             freesurfer=freesurfer,
-            hires=hires,
             combine_all_dwis=combine_all_dwis,
             distortion_group_merge=distortion_group_merge,
             pepolar_method=pepolar_method,
             omp_nthreads=omp_nthreads,
-            skull_strip_template=skull_strip_template,
-            skull_strip_fixed_seed=skull_strip_fixed_seed,
             template=template,
+            native_template=native_template,
             prefer_dedicated_fmaps=prefer_dedicated_fmaps,
             motion_corr_to=motion_corr_to,
             b0_to_t1w_transform=b0_to_t1w_transform,
@@ -290,9 +279,9 @@ def init_single_subject_wf(
         b0_threshold, denoise_before_combining, bids_filters, anatomical_contrast,
         dwi_denoise_window, denoise_method, unringing_method, b1_biascorrect_stage,
         no_b0_harmonization, infant_mode, combine_all_dwis, raw_image_sdc,
-        distortion_group_merge, pepolar_method, omp_nthreads, skull_strip_template,
-        force_spatial_normalization, skull_strip_fixed_seed, freesurfer, hires,
-        template, output_resolution, prefer_dedicated_fmaps,
+        distortion_group_merge, pepolar_method, omp_nthreads,
+        force_spatial_normalization, freesurfer,
+        template, native_template, output_resolution, prefer_dedicated_fmaps,
         motion_corr_to, b0_to_t1w_transform, intramodal_template_iters,
         intramodal_template_transform, hmc_model, hmc_transform,
         shoreline_iters, eddy_config, impute_slice_threshold, fmap_bspline,
@@ -336,15 +325,13 @@ def init_single_subject_wf(
             longitudinal=False,
             b0_threshold=100,
             freesurfer=False,
-            hires=False,
             force_spatial_normalization=True,
             combine_all_dwis=True,
             distortion_group_merge='none',
             pepolar_method='TOPUP',
             omp_nthreads=1,
-            skull_strip_template='OASIS',
-            skull_strip_fixed_seed=False,
             template='MNI152NLin2009cAsym',
+            native_template=None,
             prefer_dedicated_fmaps=False,
             motion_corr_to='iterative',
             b0_to_t1w_transform='Rigid',
@@ -407,15 +394,8 @@ def init_single_subject_wf(
             Either 'DRBUDDI' or 'TOPUP'. The method for SDC when EPI fieldmaps are used.
         omp_nthreads : int
             Maximum number of threads an individual process may use
-        skull_strip_template : str
-            Name of ANTs skull-stripping template ('OASIS' or 'NKI')
-        skull_strip_fixed_seed : bool
-            Do not use a random seed for skull-stripping - will ensure
-            run-to-run replicability when used with --omp-nthreads 1
         freesurfer : bool
             Enable FreeSurfer surface reconstruction (may increase runtime)
-        hires : bool
-            Enable sub-millimeter preprocessing in FreeSurfer
         reportlets_dir : str
             Directory in which to save reportlets
         output_dir : str
@@ -424,6 +404,8 @@ def init_single_subject_wf(
             Root directory of BIDS dataset
         template : str
             Name of template targeted by ``template`` output space
+        native_template : str or None
+            Either a path to an existing image or None
         hmc_model : 'none', '3dSHORE' or 'eddy'
             Model used to generate target images for head motion correction. If 'none'
             the transform from the nearest b0 will be used.
@@ -580,6 +562,7 @@ to workflows in *QSIPrep*'s documentation]\
     info_modality = "dwi" if dwi_only else anatomical_contrast.lower()
     anat_preproc_wf = init_anat_preproc_wf(
         template=template,
+        native_template=native_template,
         debug=debug,
         dwi_only=dwi_only,
         infant_mode=infant_mode,
