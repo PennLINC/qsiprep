@@ -29,9 +29,6 @@
         "step_size": 1.0,
         "min_length": 30,
         "max_length": 250,
-        "seed_plan": 0,
-        "interpolation": 0,
-        "initial_dir": 2,
         "fiber_count": 5000000
       }
     },
