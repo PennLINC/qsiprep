@@ -384,7 +384,7 @@ with the dwiref/T1w volumes in DSI Studio due to how the .tck files are read in.
 
 Diffusion metrics (e.g., dti_fa, gfa, iso,rdi, nrdi02) and shape statistics (e.g., mean_length,
 span, curl, volume, endpoint_radius) are calculated for subject-specific tracts and written out in 
-an *AutoTrackGQI.csv file.  
+an AutoTrackGQI.csv file.  
 
 .. _dipy_mapmri:
 
