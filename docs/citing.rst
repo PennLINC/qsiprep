@@ -64,7 +64,7 @@ Citing qsiprep
 	  117329.
 
 .. [Yeh2022] Yeh, F.-C. (2022). Population-based tract-to-region connectome of the human brain
-	  and its hierarchical topology. Nat Comm, 4933.
+	  and its hierarchical topology. Nat Comm (13), 4933.
 
 .. [Schaefer2017] Schaefer, A., Kong, R., Gordon, E. M., Laumann, T. O., Zuo, X. N., Holmes,
           A. J., ... & Yeo, B. T. (2017). Local-global parcellation of the human cerebral cortex
