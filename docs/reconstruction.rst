@@ -41,6 +41,8 @@ Instead of specifying a path to a file you can choose from the following:
 +-------------------------------------------+-------------+---------+-----------------+----------------+
 |:ref:`dsi_studio_gqi`                      |     Yes     |   Yes   |    Yes*         | Deterministic  |
 +-------------------------------------------+-------------+---------+-----------------+----------------+
+|:ref:`dsi_studio_autotrack`                |     Yes     |   Yes   |    Yes          | Deterministic  |
++-------------------------------------------+-------------+---------+-----------------+----------------+
 |:ref:`dipy_mapmri`                         |     Yes     |   Yes   |      No         |   Both         |
 +-------------------------------------------+-------------+---------+-----------------+----------------+
 |:ref:`dipy_3dshore`                        |     Yes     |   Yes   |      No         |   Both         |
@@ -360,6 +362,29 @@ benefits from having more diffusion data than a typical DTI.
 random seeding, a step size of 1mm and an automatically calculated QA threshold.
 
 Additionally, a number of anisotropy scalar images are produced such as QA, GFA and ISO.
+
+.. _dsi_studio_autotrack:
+
+``dsi_studio_autotrack``
+^^^^^^^^^^^^^^^^^^
+
+This workflow implements DSI Studio's q-space diffeomorphic reconstruction (QSDR), the MNI space 
+(ICBM-152) version of GQI, followed by automatic fiber tracking (autotrack) [Yeh2020]_ [Yeh2022]_ 
+of 56 white matter pathways. Autotrack uses a population-averaged tractography atlas 
+(based on HCP-Young Adult data) to identify tracts of interest in individual subject's data. 
+The autotrack procedure seeds deterministic fiber tracking with randomized parameter saturation 
+within voxels that correspondto each tract in the tractography atlas and determines whether 
+generated streamlines belong to the target tract based on the Hausdorff distance between 
+subject and atlas streamlines. 
+
+Reconstructed subject-specific tracts are written out as .tck files that are aligned to the
+qsiprep-generated _dwiref.nii.gz and preproc_T1w.nii.gz volumes; .tck files can be visualized 
+overlaid on these volumes in mrview or MI-brain. Note, .tck files will not appear in alignment 
+with the dwiref/T1w volumes in DSI Studio due to how the .tck files are read in. 
+
+Diffusion metrics (e.g., dti_fa, gfa, iso,rdi, nrdi02) and shape statistics (e.g., mean_length,
+span, curl, volume, endpoint_radius) are calculated for subject-specific tracts and written out in 
+an AutoTrackGQI.csv file.  
 
 .. _dipy_mapmri:
 

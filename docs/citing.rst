@@ -60,6 +60,12 @@ Citing qsiprep
           & Barrios-Martinez, J. (2019). Differential tractography as a track-based biomarker for
           neuronal injury. NeuroImage, 576025.
 
+.. [Yeh2020] Yeh, F.-C. (2020). Shape analysis of the human association pathways. Neuroimage, 
+	  117329.
+
+.. [Yeh2022] Yeh, F.-C. (2022). Population-based tract-to-region connectome of the human brain
+	  and its hierarchical topology. Nat Comm (13), 4933.
+
 .. [Schaefer2017] Schaefer, A., Kong, R., Gordon, E. M., Laumann, T. O., Zuo, X. N., Holmes,
           A. J., ... & Yeo, B. T. (2017). Local-global parcellation of the human cerebral cortex
           from intrinsic functional connectivity MRI. Cerebral Cortex, 28(9), 3095-3114.
