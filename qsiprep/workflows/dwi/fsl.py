@@ -296,6 +296,7 @@ def init_fsl_hmc_wf(scan_groups,
 
         drbuddi_wf = init_drbuddi_wf(scan_groups=scan_groups, omp_nthreads=omp_nthreads,
                                      t2w_sdc=t2w_sdc, b0_threshold=b0_threshold,
+                                     pepolar_method=pepolar_method,
                                      raw_image_sdc=raw_image_sdc,
                                      sloppy=sloppy)
 

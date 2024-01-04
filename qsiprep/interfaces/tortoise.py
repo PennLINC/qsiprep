@@ -635,3 +635,36 @@ def make_bmat_file(bvals, bvecs):
         ["FSLBVecsToTORTOISEBmatrix", op.abspath(bvals), op.abspath(bvecs)])
     print(pout)
     return bvals.replace("bval", "bmtxt")
+
+
+def generate_drbuddi_boilerplate(fieldmap_type, t2w_sdc, with_topup=False):
+    """Generate boilerplate that describes how DRBUDDI is being used."""
+
+    desc = ["\n\nDRBUDDI [@drbuddi], part of the TORTOISE [@tortoisev3] software package,"]
+    if not with_topup:
+        # Until now there will have been no description of the SDC procedure.
+        # Add extra details about the input data.
+        desc.append(
+            "was used to perform susceptibility distortion correction. "
+            "Data was collected with reversed phase-encode blips, resulting "
+            "in pairs of images with distortions going in opposite directions.")
+    else:
+        desc += ["was used to perform a second stage of distortion correction."]
+
+    # Describe what's going on
+    if fieldmap_type == "epi":
+        desc.append("DRBUDDI used b=0 reference images with reversed "
+                    "phase encoding directions to estimate")
+    else:
+        desc.append("DRBUDDI used multiple motion-corrected DWI series acquired "
+                    "with opposite phase encoding "
+                    "directions. A b=0 image **and** the Fractional Anisotropy "
+                    "images from both phase encoding diesctions were used together in "
+                    "a multi-modal registration to estimate")
+    desc.append("the susceptibility-induced off-resonance field.")
+
+    if t2w_sdc:
+        desc.append("A T2-weighted image was included in the multimodal registration.")
+    desc.append("Signal intensity was adjusted "
+                "in the final interpolated images using a method similar to LSR.\n\n" )
+    return " ".join(desc)

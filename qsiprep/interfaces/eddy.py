@@ -260,6 +260,7 @@ class Eddy2SPMMotion(SimpleInterface):
 def boilerplate_from_eddy_config(eddy_config, fieldmap_type, pepolar_method):
     """Write boilerplate text based on an eddy config dict.
     """
+    doing_2stage = "drbuddi" in pepolar_method.lower()
     ext_eddy = ExtendedEddy(**eddy_config)
     desc = [
         "FSL (version %s)'s eddy was used for head motion correction and "
@@ -360,7 +361,7 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type, pepolar_method):
 
     # distortion correction
     if "topup" in pepolar_method.lower():
-        desc.append(topup_boilerplate(fieldmap_type))
+        desc.append(topup_boilerplate(fieldmap_type, pepolar_method))
     # DRBUDDI is described in its own workflow
 
     # move by susceptibility
@@ -379,29 +380,42 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type, pepolar_method):
 
     # Format the interpolation
     lsr_ref = ' [@fsllsr]' if ext_eddy.inputs.method == 'lsr' else ''
-    desc.append("Final interpolation was performed using the `%s` method%s.\n\n" % (
-        ext_eddy.inputs.method, lsr_ref))
-
+    if doing_2stage:
+        desc.append("Interpolation after head motion and initial susceptibility "
+                    "distortion correction")
+    else:
+        desc.append("Final interpolation")
+    desc.append("was performed using the `%s` method%s." % (
+                ext_eddy.inputs.method, lsr_ref))
+    if not doing_2stage:
+        desc.append("\n\n")
     return " ".join(desc)
 
 
-def topup_boilerplate(fieldmap_type):
+def topup_boilerplate(fieldmap_type, pepolar_method):
     """Write boilerplate text based on fieldmaps
     """
+    if fieldmap_type not in ("rpe_series", "epi"):
+        return ""
     desc = []
-    if fieldmap_type in ("rpe_series", "epi"):
-        desc.append("Data was collected with reversed phase-encode blips, resulting "
-                    "in pairs of images with distortions going in opposite directions.")
-        if fieldmap_type == "epi":
-            desc.append("Here, b=0 reference images with reversed "
-                        "phase encoding directions were used "
-                        "along with an equal number of b=0 images extracted "
-                        "from the DWI scans.")
-        else:
-            desc.append("Here, multiple DWI series were acquired with opposite phase encoding "
-                        "directions, so b=0 images were extracted from each.")
-        desc.append("From these pairs the susceptibility-induced off-resonance field was "
-                    "estimated using a method similar to that described in [@topup]. "
-                    "The fieldmaps were ultimately incorporated into the "
-                    "Eddy current and head motion correction interpolation.")
+    desc.append("\n\nData was collected with reversed phase-encode blips, resulting "
+                "in pairs of images with distortions going in opposite directions.")
+
+    if 'drbuddi' in pepolar_method.lower():
+        desc.append(
+            "Distortion correction was performed in two stages. In the first stage, "
+            "FSL's TOPUP [@topup]")
+    else:
+        desc.append("FSL's TOPUP [@topup]")
+
+    desc.append("was used to estimate a susceptibility-induced off-resonance field based on")
+    if fieldmap_type == "epi":
+        desc.append("b=0 reference images with reversed "
+                    "phase encoding directions.")
+    else:
+        desc.append("b=0 images extracted from multiple DWI series  "
+                    "with reversed phase encoding directions.")
+    desc.append("The TOPUP-estimated fieldmap was incorporated into the "
+                "Eddy current and head motion correction interpolation.")
+
     return " ".join(desc)

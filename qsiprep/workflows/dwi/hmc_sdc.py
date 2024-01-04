@@ -168,6 +168,7 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
 
         drbuddi_wf = init_drbuddi_wf(scan_groups=scan_groups, omp_nthreads=omp_nthreads,
                                      b0_threshold=b0_threshold, raw_image_sdc=raw_image_sdc,
+                                     pepolar_method=pepolar_method,
                                      sloppy=sloppy, t2w_sdc=t2w_sdc)
 
         # apply the head motion correction transforms
