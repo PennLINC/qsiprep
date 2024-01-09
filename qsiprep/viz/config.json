@@ -163,15 +163,22 @@
             {
                 "name": "epi/unwarp",
                 "file_pattern": "dwi/.*sdc_b0.*\\.",
-                "title": "Susceptibility distortion correction",
-                "description": "Results of performing susceptibility distortion correction (SDC) using b=0 images",
+                "title": "Susceptibility distortion correction (TOPUP)",
+                "description": "Results of performing susceptibility distortion correction (SDC) using b=0 images in TOPUP",
+                "imgtype": "svg+xml"
+            },
+            {
+                "name": "epi/unwarp",
+                "file_pattern": "dwi/.*sdcdrbuddi_b0.*\\.",
+                "title": "Susceptibility distortion correction (DRBUDDI)",
+                "description": "Results of performing susceptibility distortion correction (SDC) using DRBUDDI. b=0 images are shown",
                 "imgtype": "svg+xml"
             },
             {
                 "name": "epi/unwarp",
                 "file_pattern": "dwi/.*sdc_b0t2w.*\\.",
-                "title": "Susceptibility distortion correction",
-                "description": "Results of performing susceptibility distortion correction (SDC) using b=0 images. The overlay shown is an ad-hoc segmentation of a t2w image and is only for display purposes.",
+                "title": "Susceptibility distortion correction (DRBUDDI+T2w)",
+                "description": "Results of performing susceptibility distortion correction (SDC) using DRBUDDI. The overlay shown is an ad-hoc segmentation of a t2w image and is only for display purposes.",
                 "imgtype": "svg+xml"
             },
             {
@@ -191,7 +198,7 @@
             {
                 "name": "epi_mean_t1_registration/b0_coreg",
                 "file_pattern": "dwi/.*_coreg\\.",
-                "title": "b=0 to T1 registration",
+                "title": "b=0 to anatomical reference registration",
                 "description": "<code>antsRegistration</code> was used to generate transformations from the b=0 reference image to the T1w-image.",
                 "imgtype": "svg+xml"
             },

@@ -427,7 +427,8 @@ Diffusion data preprocessing
             (fmap_unwarp_report_wf, ds_report_sdc, [('outputnode.report', 'in_file')])
         ])
 
-    elif fieldmap_type in ("epi", "rpe_series"):
+    # DRBUDDI has some extra reports that we want to save. Make sure we get them!
+    if fieldmap_type in ("epi", "rpe_series") and "drbuddi" in pepolar_method.lower():
 
         if os.path.exists(t2w_sdc):
             extended_pepolar_report_wf = init_extended_pepolar_report_wf(
@@ -446,7 +447,7 @@ Diffusion data preprocessing
 
         ds_report_b0_sdc = pe.Node(
             DerivativesMaybeDataSink(
-                desc="sdc",
+                desc="sdcdrbuddi",
                 suffix='b0' if not t2w_sdc else 'b0t2w',
                 source_file=source_file),
             name='ds_report_b0_sdc',
