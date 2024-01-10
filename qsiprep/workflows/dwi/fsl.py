@@ -71,7 +71,7 @@ def init_fsl_hmc_wf(scan_groups,
             threshold for a slice to be replaced with imputed values. Overrides the
             parameter in ``eddy_config`` if set to a number > 0.
         pepolar_method : str
-            Either 'DRBUDDI' or 'TOPUP'. The method for SDC when EPI fieldmaps are used.
+            Either 'DRBUDDI', 'TOPUP' or 'DRBUDDI+TOPUP'. The method for SDC when EPI fieldmaps are used.
         eddy_config: str
             Path to a JSON file containing settings for the call to ``eddy``.
 
@@ -100,7 +100,7 @@ def init_fsl_hmc_wf(scan_groups,
     fsl_check = os.environ.get('FSL_BUILD')
     if fsl_check=="no_fsl":
         raise Exception(
-            """Container in use does not have FSL. To use this workflow, 
+            """Container in use does not have FSL. To use this workflow,
             please download the qsiprep container with FSL installed.""")
     inputnode = pe.Node(
         niu.IdentityInterface(
@@ -220,7 +220,9 @@ def init_fsl_hmc_wf(scan_groups,
     fieldmap_type = scan_groups['fieldmap_info']['suffix'] or ''
     workflow.__desc__ = boilerplate_from_eddy_config(eddy_args, fieldmap_type,
                                                      pepolar_method)
-    if fieldmap_type in ('epi', 'rpe_series') and pepolar_method.lower() == "topup":
+
+    # Are we running TOPUP?
+    if fieldmap_type in ('epi', 'rpe_series') and "topup" in pepolar_method.lower():
         # If there are EPI fieldmaps in fmaps/, make sure they get to TOPUP. It will always use
         # b=0 images from the DWI series regardless
         gather_inputs.inputs.topup_requested = True
@@ -247,8 +249,6 @@ def init_fsl_hmc_wf(scan_groups,
         topup_to_eddy_reg = pe.Node(fsl.FLIRT(dof=6, output_type="NIFTI_GZ"),
                                     name="topup_to_eddy_reg")
         workflow.connect([
-            # There will be no SDC warps, they are applied by eddy
-            (gather_inputs, outputnode, [('forward_warps', 'to_dwi_ref_warps')]),
             (gather_inputs, topup, [
                 ('topup_datain', 'encoding_file'),
                 ('topup_imain', 'in_file'),
@@ -263,27 +263,31 @@ def init_fsl_hmc_wf(scan_groups,
             # Use corrected images from TOPUP to make a mask for eddy
             (topup, unwarped_mean, [('out_corrected', 'in_files')]),
             (unwarped_mean, pre_eddy_b0_ref_wf, [('out_avg', 'inputnode.b0_template')]),
-            (b0_ref_to_lps, outputnode, [('dwi_file', 'b0_template')]),
             # Save reports
             (gather_inputs, topup_summary, [('topup_report', 'summary')]),
             (topup_summary, ds_report_topupsummary, [('out_report', 'in_file')])
-
         ])
 
-        return workflow
-
-    # All the following distortion correction methods operate on images
-    # *already processed by eddy*. Therefore we need to make a mask for
-    # eddy that contains both distorted brain shapes
-    distorted_merge = pe.Node(
-        IntraModalMerge(hmc=True, to_lps=False), name='distorted_merge')
-    workflow.connect([
+        if "drbuddi" not in pepolar_method.lower():
+            LOGGER.info("Using single-stage SDC, TOPUP-only")
+            workflow.connect([
+                # There will be no SDC warps, they are applied by eddy
+                (gather_inputs, outputnode, [('forward_warps', 'to_dwi_ref_warps')]),
+                (b0_ref_to_lps, outputnode, [('dwi_file', 'b0_template')]),
+            ])
+    else:
+        # If we're not using TOPUP we need to make a mask for eddy based on the distorted brain shapes
+        distorted_merge = pe.Node(
+            IntraModalMerge(hmc=True, to_lps=False), name='distorted_merge')
         # Use the distorted mask for eddy
-        (gather_inputs, distorted_merge, [('topup_imain', 'in_files')]),
-        (distorted_merge, pre_eddy_b0_ref_wf, [('out_avg', 'inputnode.b0_template')])])
+        workflow.connect([
+            (gather_inputs, distorted_merge, [('topup_imain', 'in_files')]),
+            (distorted_merge, pre_eddy_b0_ref_wf, [('out_avg', 'inputnode.b0_template')])])
 
-    if fieldmap_type in ('epi', 'rpe_series') and pepolar_method.lower() == "drbuddi":
+
+    if fieldmap_type in ('epi', 'rpe_series') and 'drbuddi' in pepolar_method.lower():
         outputnode.inputs.sdc_method = "DRBUDDI"
+        LOGGER.info("Running DRBUDDI for SDC")
 
         # Let gather_inputs know we're doing pepolar, even though it's not topup
         gather_inputs.inputs.topup_requested = True
@@ -292,6 +296,7 @@ def init_fsl_hmc_wf(scan_groups,
 
         drbuddi_wf = init_drbuddi_wf(scan_groups=scan_groups, omp_nthreads=omp_nthreads,
                                      t2w_sdc=t2w_sdc, b0_threshold=b0_threshold,
+                                     pepolar_method=pepolar_method,
                                      raw_image_sdc=raw_image_sdc,
                                      sloppy=sloppy)
 
@@ -323,10 +328,8 @@ def init_fsl_hmc_wf(scan_groups,
 
         return workflow
 
-
-
     if fieldmap_type in ('fieldmap', 'syn') or fieldmap_type.startswith("phase"):
-
+        LOGGER.info(f"Computing fieldmap directly from {fieldmap_type}")
         outputnode.inputs.sdc_method = fieldmap_type
         b0_sdc_wf = init_sdc_wf(
             scan_groups['fieldmap_info'], dwi_metadata, omp_nthreads=omp_nthreads,
@@ -348,7 +351,7 @@ def init_fsl_hmc_wf(scan_groups,
                 ('outputnode.method', 'sdc_method'),
                 ('outputnode.b0_ref', 'b0_template')])])
 
-    else:
+    if not fieldmap_type:
         outputnode.inputs.sdc_method = "None"
         workflow.connect([
             (b0_ref_to_lps, outputnode, [

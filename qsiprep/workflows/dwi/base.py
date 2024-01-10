@@ -142,7 +142,7 @@ def init_dwi_preproc_wf(dwi_only,
         unringing_method : str
             algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
         pepolar_method : str
-            Either 'DRBUDDI' or 'TOPUP'. The method for SDC when EPI fieldmaps are used.
+            Either 'DRBUDDI', 'TOPUP' or 'TOPUP+DRBUDDI'. The method for SDC when EPI fieldmaps are used.
         b1_biascorrect_stage : str
             'final', 'none' or 'legacy'
         no_b0_harmonization : bool
@@ -405,7 +405,7 @@ Diffusion data preprocessing
 
     # Fieldmap reports should vary depending on which type of correction is performed
     # PEPOLAR (epi, rpe series) will produce potentially much more detailed reports
-    doing_topup = fieldmap_type in ("epi", "rpe_series") and pepolar_method.lower() == "topup"
+    doing_topup = fieldmap_type in ("epi", "rpe_series") and "topup" in pepolar_method.lower()
     if fieldmap_type not in ("epi", "rpe_series", None) or doing_topup:
         fmap_unwarp_report_wf = init_fmap_unwarp_report_wf()
         ds_report_sdc = pe.Node(
@@ -427,7 +427,8 @@ Diffusion data preprocessing
             (fmap_unwarp_report_wf, ds_report_sdc, [('outputnode.report', 'in_file')])
         ])
 
-    elif fieldmap_type in ("epi", "rpe_series"):
+    # DRBUDDI has some extra reports that we want to save. Make sure we get them!
+    if fieldmap_type in ("epi", "rpe_series") and "drbuddi" in pepolar_method.lower():
 
         if os.path.exists(t2w_sdc):
             extended_pepolar_report_wf = init_extended_pepolar_report_wf(
@@ -446,7 +447,7 @@ Diffusion data preprocessing
 
         ds_report_b0_sdc = pe.Node(
             DerivativesMaybeDataSink(
-                desc="sdc",
+                desc="sdcdrbuddi",
                 suffix='b0' if not t2w_sdc else 'b0t2w',
                 source_file=source_file),
             name='ds_report_b0_sdc',

@@ -306,6 +306,15 @@ get_bids_data() {
     mkdir -p ${WORKDIR}/data
     cd ${WORKDIR}/data
 
+    # Phantom hbcd-like data
+    if [[ ${DS} = HBCD ]]; then
+      ${WGET} \
+        -O HBCD.tar.xz \
+	    "https://upenn.box.com/shared/static/gn1ec8x7mtk1f07l97d0th9idn4qv3yx.xz"
+      tar xvfJ HBCD.tar.xz -C ${WORKDIR}/data/
+      rm HBCD.tar.xz
+    fi
+
     # Down-sampled compressed sensing DSI
     if [[ ${DS} = DSCSDSI ]]; then
       ${WGET} \

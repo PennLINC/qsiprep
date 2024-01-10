@@ -163,11 +163,12 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
     fieldmap_type = fieldmap_info['suffix']
 
     if fieldmap_type in ('epi', 'rpe_series'):
-        if pepolar_method.lower() == "topup":
+        if 'topup' in pepolar_method.lower():
             raise Exception("TOPUP is not supported with SHORELine ")
 
         drbuddi_wf = init_drbuddi_wf(scan_groups=scan_groups, omp_nthreads=omp_nthreads,
                                      b0_threshold=b0_threshold, raw_image_sdc=raw_image_sdc,
+                                     pepolar_method=pepolar_method,
                                      sloppy=sloppy, t2w_sdc=t2w_sdc)
 
         # apply the head motion correction transforms

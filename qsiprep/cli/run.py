@@ -459,8 +459,8 @@ def get_parser():
         '--pepolar-method', '--pepolar_method',
         action='store',
         default='TOPUP',
-        choices=['TOPUP', 'DRBUDDI'],
-        help='select which SDC method to use for PEPOLAR fieldmaps (default: OASIS)')
+        choices=['TOPUP', 'DRBUDDI', 'TOPUP+DRBUDDI'],
+        help='select which SDC method to use for PEPOLAR fieldmaps (default: TOPUP)')
 
     g_fmap.add_argument(
         '--denoised_image_sdc', '--denoised_image_sdc',
