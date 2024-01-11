@@ -38,7 +38,6 @@ rm -rf data/DSDTI/sub-PNC/fmap
 # Create a shifted version of the t1w
 if [[ "${IN_CI}" = 'true' ]]; then
     3dWarp \
-        ${IMAGE} \
         -matvec_in2out 'MATRIX(1,0,0,2,0,1,0,4,0,0,1,1)' \
         -gridset ${BIDS_INPUT_DIR}/sub-PNC/anat/sub-PNC_T1w.nii.gz \
         -prefix ${BIDS_INPUT_DIR}/sub-PNC/anat/sub-PNC_run-02_T1w.nii.gz \
