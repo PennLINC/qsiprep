@@ -49,8 +49,10 @@ SLOPPY_DRBUDDI = \
         "\[learning_rate=\{1.\},cfs=\{20:1:0\},field_smoothing=\{4:0\}," \
         "metrics=\{MSJac:CC\},restrict_constrain=\{0:0\}\]"
 
+
 class TORTOISEInputSpec(CommandLineInputSpec):
     num_threads = traits.Int(desc="numpy of OMP threads")
+
 
 class TORTOISECommandLine(CommandLine):
     """Support for TORTOISE commands that utilize OpenMP
@@ -560,6 +562,118 @@ class Gibbs(SeriesPreprocReport, TORTOISECommandLine):
         )
 
         self._calculate_nmse(input_dwi, denoised_nii)
+
+
+class _TORTOISEEstimatorInputSpec(TORTOISEInputSpec):
+    input = File(
+        exists=True,
+        mandatory=True,
+        argstr="--input %s",
+        desc="Full path to the input NIFTI DWI")
+    mask = File(
+        exists=True,
+        argstr="--mask %s",
+        desc="Full path to the mask NIFTI image")
+    bval_cutoff = traits.CInt(
+        argstr="--bval_cutoff %d",
+        desc="Maximum b-value volumes to use for tensor fitting. (Default: use all volumes)")
+    inclusion_file = File(
+        exists=True,
+        argstr="--inclusion %s")
+    voxelwise_bmat_file = File(
+        exists=True,
+        desc="Use voxelwise Bmatrices for gradient non-linearity correction")
+
+
+class _TORTOISEEstimatorCmdline(TORTOISECommandLine):
+
+    def _format_arg(self, name, spec, value):
+        """Trick to get noise image or voxelwise bmat symlinked without an arg"""
+        if name == "voxelwise_bmat_file":
+            return "--use_voxelwise_bmat 1"
+        return super(_TORTOISEEstimatorCmdline, self)._format_arg(name, spec, value)
+
+
+class _EstimateTensorInputSpec(_TORTOISEEstimatorInputSpec):
+    reg_mode = traits.Enum(
+        "WLLS",
+        "NLLS",
+        "RESTORE",
+        "DIAG",
+        "N2",
+        "NT2",
+        default_value="WLLS",
+        argstr="--reg_mode %s",
+        desc="Regression mode. WLLS: Weighted linear least squares, "
+             "NLLS: Nonlinear least squares, "
+             "RESTORE: Robust NLLS, "
+             "DIAG: Diagonal Only NLLS, "
+             "N2: Full diffusion tensor + free water NLLS, "
+             "NT2: One full parenchymal diffusion tensor + one full flow tensor")
+    free_water_diffusivity = traits.CInt(
+        default_value=3000,
+        argstr="--free_water_diffusivity %d",
+        desc="Free water diffusivity in (mu m)^2/s for N2 fitting.")
+    write_cs = traits.Bool(
+        default_value=True,
+        usedefault=True,
+        argstr="--write_CS %d",
+        desc="Write the Chi-squred image?")
+    noise_file = File(
+        exists=True,
+        copyfile=False,
+        desc="Use this image for weigthing and correction of interpolation artifacts.")
+
+
+class _EstimateTensorOutputSpec(TraitedSpec):
+    dt_file = File(exists=True)
+    cs_file = File(exists=True)
+
+
+class EstimateTensor(_TORTOISEEstimatorCmdline):
+    input_spec = _EstimateTensorInputSpec
+    output_spec = _
+    _cmd = "EstimateTensor"
+
+    def _format_arg(self, name, spec, value):
+        """Trick to get noise image or voxelwise bmat symlinked without an arg"""
+        if name == "noise_file":
+            return "--use_noise 1"
+        if name == "voxelwise_bmat_file":
+            return "--use_voxelwise_bmat 1"
+        return super(EstimateTensor, self)._format_arg(name, spec, value)
+
+
+class _EstimateMAPMRIInputSpec(_TORTOISEEstimatorInputSpec):
+    dti_file = File(
+        exists=True,
+        argstr="--dti %s",
+        desc="DTI image computed externally")
+    a0_file = File(
+        exists=True,
+        argstr="--A0 %s",
+        desc="A0 image computed externally")
+    map_order = traits.Int(
+        default_value=4,
+        usedefault=True,
+        argstr="--map_order %d",
+        desc="MAPMRI order")
+    big_delta = traits.CFloat(
+        argstr="--big_delta %.7f",
+        desc="Big Delta in seconds")
+    small_delta = traits.CFloat(
+        argstr="--big_delta %.7f",
+        desc="Small Delta in seconds")
+
+
+class _EstimateMAPMRIOutputSpec(TraitedSpec):
+    coeffs_file = File(exists=True)
+
+
+class EstimateMAPMRI(_TORTOISEEstimatorCmdline):
+    input_spec = _EstimateMAPMRIInputSpec
+    output_spec = _EstimateMAPMRIOutputSpec
+    _cmd = "EstimateMAPMRI"
 
 
 def split_into_up_and_down_niis(dwi_files, bval_files, bvec_files, original_images,
