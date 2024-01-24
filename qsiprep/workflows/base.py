@@ -11,37 +11,34 @@ qsiprep base processing workflows
 
 """
 import logging
-import sys
 import os
-from copy import deepcopy
+import sys
 from collections import defaultdict
-
-from nipype import __version__ as nipype_ver
-from nipype.pipeline import engine as pe
-from nipype.interfaces import utility as niu
+from copy import deepcopy
 
 from nilearn import __version__ as nilearn_ver
+from nipype import __version__ as nipype_ver
+from nipype.interfaces import utility as niu
+from nipype.pipeline import engine as pe
 
+from ..__about__ import __version__
 from ..engine import Workflow
 from ..interfaces import (
+    AboutSummary,
     BIDSDataGrabber,
     BIDSInfo,
-    SubjectSummary,
-    AboutSummary,
     DerivativesDataSink,
+    SubjectSummary,
 )
 from ..utils.bids import collect_data
-from ..utils.misc import fix_multi_source_name
 from ..utils.grouping import group_dwi_scans
-from ..__about__ import __version__
-
+from ..utils.misc import fix_multi_source_name
 from .anatomical.volume import init_anat_preproc_wf
 from .dwi.base import init_dwi_preproc_wf
+from .dwi.distortion_group_merge import init_distortion_group_merge_wf
 from .dwi.finalize import init_dwi_finalize_wf
 from .dwi.intramodal_template import init_intramodal_template_wf
-from .dwi.distortion_group_merge import init_distortion_group_merge_wf
 from .dwi.util import get_source_file
-
 
 LOGGER = logging.getLogger("nipype.workflow")
 
@@ -96,9 +93,7 @@ def init_qsiprep_wf(
     force_syn,
     raw_image_sdc,
 ):
-    """
-    This workflow organizes the execution of qsiprep, with a sub-workflow for
-    each subject.
+    """Organize the execution of qsiprep, with a sub-workflow for each subject.
 
     .. workflow::
         :graph2use: orig
@@ -107,160 +102,161 @@ def init_qsiprep_wf(
         import os
         os.environ['FREESURFER_HOME'] = os.getcwd()
         from qsiprep.workflows.base import init_qsiprep_wf
-        wf = init_qsiprep_wf(subject_list=['qsipreptest'],
-                              run_uuid='X',
-                              work_dir='.',
-                              output_dir='.',
-                              bids_dir='.',
-                              ignore=[],
-                              bids_filters=None,
-                              anatomical_contrast="T1w",
-                              debug=False,
-                              low_mem=False,
-                              dwi_only=False,
-                              anat_only=False,
-                              longitudinal=False,
-                              b0_threshold=100,
-                              freesurfer=False,
-                              hires=False,
-                              denoise_before_combining=True,
-                              dwi_denoise_window=7,
-                              denoise_method='patch2self',
-                              unringing_method='mrdegibbs',
-                              b1_biascorrect_stage=False,
-                              no_b0_harmonization=False,
-                              combine_all_dwis=True,
-                              distortion_group_merge='concat',
-                              pepolar_method='TOPUP',
-                              omp_nthreads=1,
-                              output_resolution=2.0,
-                              hmc_model='3dSHORE',
-                              skull_strip_template='OASIS',
-                              skull_strip_fixed_seed=False,
-                              template='MNI152NLin2009cAsym',
-                              motion_corr_to='iterative',
-                              b0_to_t1w_transform='Rigid',
-                              intramodal_template_iters=0,
-                              intramodal_template_transform="Rigid",
-                              hmc_transform='Affine',
-                              infant_mode=False,
-                              eddy_config=None,
-                              raw_image_sdc=False,
-                              shoreline_iters=2,
-                              impute_slice_threshold=0,
-                              write_local_bvecs=False,
-                              prefer_dedicated_fmaps=False,
-                              fmap_bspline=False,
-                              fmap_demean=True,
-                              use_syn=True,
-                              force_spatial_normalization=True,
-                              force_syn=True)
 
+        wf = init_qsiprep_wf(
+            subject_list=['qsipreptest'],
+            run_uuid='X',
+            work_dir='.',
+            output_dir='.',
+            bids_dir='.',
+            ignore=[],
+            bids_filters=None,
+            anatomical_contrast="T1w",
+            debug=False,
+            low_mem=False,
+            dwi_only=False,
+            anat_only=False,
+            longitudinal=False,
+            b0_threshold=100,
+            freesurfer=False,
+            hires=False,
+            denoise_before_combining=True,
+            dwi_denoise_window=7,
+            denoise_method='patch2self',
+            unringing_method='mrdegibbs',
+            b1_biascorrect_stage=False,
+            no_b0_harmonization=False,
+            combine_all_dwis=True,
+            distortion_group_merge='concat',
+            pepolar_method='TOPUP',
+            omp_nthreads=1,
+            output_resolution=2.0,
+            hmc_model='3dSHORE',
+            skull_strip_template='OASIS',
+            skull_strip_fixed_seed=False,
+            template='MNI152NLin2009cAsym',
+            motion_corr_to='iterative',
+            b0_to_t1w_transform='Rigid',
+            intramodal_template_iters=0,
+            intramodal_template_transform="Rigid",
+            hmc_transform='Affine',
+            infant_mode=False,
+            eddy_config=None,
+            raw_image_sdc=False,
+            shoreline_iters=2,
+            impute_slice_threshold=0,
+            write_local_bvecs=False,
+            prefer_dedicated_fmaps=False,
+            fmap_bspline=False,
+            fmap_demean=True,
+            use_syn=True,
+            force_spatial_normalization=True,
+            force_syn=True,
+        )
 
-    Parameters:
-
-        subject_list : list
-            List of subject labels
-        run_uuid : str
-            Unique identifier for execution instance
-        work_dir : str
-            Directory in which to store workflow execution state and temporary
-            files
-        output_dir : str
-            Directory in which to save derivatives
-        bids_dir : str
-            Root directory of BIDS dataset
-        anatomical_contrst : str
-            Which contrast to use for the anatomical reference
-        ignore : list
-            Preprocessing steps to skip (may include "slicetiming",
-            "fieldmaps")
-        low_mem : bool
-            Write uncompressed .nii files in some cases to reduce memory usage
-        anat_only : bool
-            Disable diffusion workflows
-        dwi_only : bool
-            Disable the anatomical (T1w/T2w) workflows
-        longitudinal : bool
-            Treat multiple sessions as longitudinal (may increase runtime)
-            See sub-workflows for specific differences
-        infant_mode : bool
-            Run the pipeline for infant DWIs
-        b0_threshold : int
-            Images with b-values less than this value will be treated as a b=0 image.
-        dwi_denoise_window : int
-            window size in voxels for image-based denoising. Must be odd. If 0, '
-            'denoising will not be run'
-        denoise_method : str
-            Either 'dwidenoise', 'patch2self' or 'none'
-        unringing_method : str
-            algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
-        b1_biascorrect_stage : str
-            'final', 'none' or 'legacy'
-        no_b0_harmonization : bool
-            skip rescaling dwi scans to have matching b=0 intensities across scans
-        denoise_before_combining : bool
-            'run ``dwidenoise`` before combining dwis. Requires ``combine_all_dwis``'
-        combine_all_dwis : bool
-            Combine all dwi sequences within a session into a single data set
-        distortion_group_merge : str
-            How to combine multiple distortion groups after correction. 'concat', 'average' or
-            'none'
-        pepolar_method : str
-            Either 'DRBUDDI', 'TOPUP' or 'TOPUP+DRBUDDI'.
-            The method for SDC when EPI fieldmaps are used.
-        omp_nthreads : int
-            Maximum number of threads an individual process may use
-        skull_strip_template : str
-            Name of ANTs skull-stripping template ('OASIS' or 'NKI')
-        skull_strip_fixed_seed : bool
-            Do not use a random seed for skull-stripping - will ensure
-            run-to-run replicability when used with --omp-nthreads 1
-        freesurfer : bool
-            Enable FreeSurfer surface reconstruction (may increase runtime)
-        hires : bool
-            Enable sub-millimeter preprocessing in FreeSurfer
-        template : str
-            Name of template targeted by ``template`` output space
-        motion_corr_to : str
-            Motion correct using the 'first' b0 image or use an 'iterative'
-            method to motion correct to the midpoint of the b0 images
-        b0_to_t1w_transform : "Rigid" or "Affine"
-            Use a rigid or full affine transform for b0-T1w registration
-        intramodal_template_iters: int
-            Number of iterations for finding the midpoint image from the b0 templates
-            from all groups. Has no effect if there is only one group. If 0, all b0
-            templates are directly registered to the t1w image.
-        intramodal_template_transform: str
-            Transformation used for building the intramodal template.
-        hmc_model : 'none', '3dSHORE' or 'MAPMRI'
-            Model used to generate target images for head motion correction. If 'none'
-            the transform from the nearest b0 will be used.
-        hmc_transform : "Rigid" or "Affine"
-            Type of transform used for head motion correction
-        impute_slice_threshold : float
-            Impute data in slices that are this many SDs from expected. If 0, no slices
-            will be imputed.
-        eddy_config: str
-            Path to a JSON file containing config options for eddy
-        raw_image_sdc: bool
-            Use raw (direct from BIDS) images for distortion
-        prefer_dedicated_fmaps: bool
-            If a reverse PE fieldmap is available in fmap, use that even if a reverse PE
-            DWI series is available
-        write_local_bvecs : bool
-            Write out a series of voxelwise bvecs
-        fmap_bspline : bool
-            **Experimental**: Fit B-Spline field using least-squares
-        fmap_demean : bool
-            Demean voxel-shift map during unwarp
-        use_syn : bool
-            **Experimental**: Enable ANTs SyN-based susceptibility distortion
-            correction (SDC). If fieldmaps are present and enabled, this is not
-            run, by default.
-        force_syn : bool
-            **Temporary**: Always run SyN-based SDC
-
+    Parameters
+    ----------
+    subject_list : list
+        List of subject labels
+    run_uuid : str
+        Unique identifier for execution instance
+    work_dir : str
+        Directory in which to store workflow execution state and temporary
+        files
+    output_dir : str
+        Directory in which to save derivatives
+    bids_dir : str
+        Root directory of BIDS dataset
+    anatomical_contrst : str
+        Which contrast to use for the anatomical reference
+    ignore : list
+        Preprocessing steps to skip (may include "slicetiming",
+        "fieldmaps")
+    low_mem : bool
+        Write uncompressed .nii files in some cases to reduce memory usage
+    anat_only : bool
+        Disable diffusion workflows
+    dwi_only : bool
+        Disable the anatomical (T1w/T2w) workflows
+    longitudinal : bool
+        Treat multiple sessions as longitudinal (may increase runtime)
+        See sub-workflows for specific differences
+    infant_mode : bool
+        Run the pipeline for infant DWIs
+    b0_threshold : int
+        Images with b-values less than this value will be treated as a b=0 image.
+    dwi_denoise_window : int
+        window size in voxels for image-based denoising. Must be odd. If 0, '
+        'denoising will not be run'
+    denoise_method : str
+        Either 'dwidenoise', 'patch2self' or 'none'
+    unringing_method : str
+        algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
+    b1_biascorrect_stage : str
+        'final', 'none' or 'legacy'
+    no_b0_harmonization : bool
+        skip rescaling dwi scans to have matching b=0 intensities across scans
+    denoise_before_combining : bool
+        'run ``dwidenoise`` before combining dwis. Requires ``combine_all_dwis``'
+    combine_all_dwis : bool
+        Combine all dwi sequences within a session into a single data set
+    distortion_group_merge : str
+        How to combine multiple distortion groups after correction. 'concat', 'average' or
+        'none'
+    pepolar_method : str
+        Either 'DRBUDDI', 'TOPUP' or 'TOPUP+DRBUDDI'.
+        The method for SDC when EPI fieldmaps are used.
+    omp_nthreads : int
+        Maximum number of threads an individual process may use
+    skull_strip_template : str
+        Name of ANTs skull-stripping template ('OASIS' or 'NKI')
+    skull_strip_fixed_seed : bool
+        Do not use a random seed for skull-stripping - will ensure
+        run-to-run replicability when used with --omp-nthreads 1
+    freesurfer : bool
+        Enable FreeSurfer surface reconstruction (may increase runtime)
+    hires : bool
+        Enable sub-millimeter preprocessing in FreeSurfer
+    template : str
+        Name of template targeted by ``template`` output space
+    motion_corr_to : str
+        Motion correct using the 'first' b0 image or use an 'iterative'
+        method to motion correct to the midpoint of the b0 images
+    b0_to_t1w_transform : "Rigid" or "Affine"
+        Use a rigid or full affine transform for b0-T1w registration
+    intramodal_template_iters: int
+        Number of iterations for finding the midpoint image from the b0 templates
+        from all groups. Has no effect if there is only one group. If 0, all b0
+        templates are directly registered to the t1w image.
+    intramodal_template_transform: str
+        Transformation used for building the intramodal template.
+    hmc_model : 'none', '3dSHORE' or 'MAPMRI'
+        Model used to generate target images for head motion correction. If 'none'
+        the transform from the nearest b0 will be used.
+    hmc_transform : "Rigid" or "Affine"
+        Type of transform used for head motion correction
+    impute_slice_threshold : float
+        Impute data in slices that are this many SDs from expected. If 0, no slices
+        will be imputed.
+    eddy_config: str
+        Path to a JSON file containing config options for eddy
+    raw_image_sdc: bool
+        Use raw (direct from BIDS) images for distortion
+    prefer_dedicated_fmaps: bool
+        If a reverse PE fieldmap is available in fmap, use that even if a reverse PE
+        DWI series is available
+    write_local_bvecs : bool
+        Write out a series of voxelwise bvecs
+    fmap_bspline : bool
+        **Experimental**: Fit B-Spline field using least-squares
+    fmap_demean : bool
+        Demean voxel-shift map during unwarp
+    use_syn : bool
+        **Experimental**: Enable ANTs SyN-based susceptibility distortion
+        correction (SDC). If fieldmaps are present and enabled, this is not
+        run, by default.
+    force_syn : bool
+        **Temporary**: Always run SyN-based SDC
     """
     qsiprep_wf = Workflow(name="qsiprep_wf")
     qsiprep_wf.base_dir = work_dir
@@ -378,9 +374,9 @@ def init_single_subject_wf(
     use_syn,
     force_syn,
 ):
-    """
-    This workflow organizes the preprocessing pipeline for a single subject.
-    It collects and reports information about the subject, and prepares
+    """Organize the preprocessing pipeline for a single subject.
+
+    This workflow collects and reports information about the subject, and prepares
     sub-workflows to perform anatomical and diffusion preprocessing.
 
     Anatomical preprocessing is performed in a single workflow, regardless of
@@ -441,112 +437,111 @@ def init_single_subject_wf(
             fmap_bspline=False,
             fmap_demean=True,
             use_syn=False,
-            force_syn=False)
+            force_syn=False,
+        )
 
     Parameters
-
-        subject_id : str
-            List of subject labels
-        name : str
-            Name of workflow
-        ignore : list
-            Preprocessing steps to skip (may include "sbref", "fieldmaps")
-        debug : bool
-            Do inaccurate but fast normalization
-        low_mem : bool
-            Write uncompressed .nii files in some cases to reduce memory usage
-        anat_only : bool
-            Disable dMRI workflows
-        anatomical_contrast : str
-            Which contrast to use for the anatomical reference
-        dwi_only : bool
-            Disable anatomical workflows
-        longitudinal : bool
-            Treat multiple sessions as longitudinal (may increase runtime)
-            See sub-workflows for specific differences
-        b0_threshold : int
-            Images with b-values less than this value will be treated as a b=0 image.
-        dwi_denoise_window : int
-            window size in voxels for image-based denoising. Must be odd. If 0, '
-            'denoising will not be run'
-        denoise_method : str
-            Either 'dwidenoise', 'patch2self' or 'none'
-        unringing_method : str
-            algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
-        b1_biascorrect_stage : str
-            'final', 'none' or 'legacy'
-        no_b0_harmonization : bool
-            skip rescaling dwi scans to have matching b=0 intensities across scans
-        denoise_before_combining : bool
-            'run ``dwidenoise`` before combining dwis. Requires ``combine_all_dwis``'
-        combine_all_dwis : Bool
-            Combine all dwi sequences within a session into a single data set
-        distortion_group_merge: str
-            How to combine preprocessed scans from different distortion groups. 'concat',
-            'average' or 'none'
-        pepolar_method : str
-            Either 'DRBUDDI' or 'TOPUP'. The method for SDC when EPI fieldmaps are used.
-        omp_nthreads : int
-            Maximum number of threads an individual process may use
-        skull_strip_template : str
-            Name of ANTs skull-stripping template ('OASIS' or 'NKI')
-        skull_strip_fixed_seed : bool
-            Do not use a random seed for skull-stripping - will ensure
-            run-to-run replicability when used with --omp-nthreads 1
-        freesurfer : bool
-            Enable FreeSurfer surface reconstruction (may increase runtime)
-        hires : bool
-            Enable sub-millimeter preprocessing in FreeSurfer
-        reportlets_dir : str
-            Directory in which to save reportlets
-        output_dir : str
-            Directory in which to save derivatives
-        bids_dir : str
-            Root directory of BIDS dataset
-        template : str
-            Name of template targeted by ``template`` output space
-        hmc_model : 'none', '3dSHORE' or 'eddy'
-            Model used to generate target images for head motion correction. If 'none'
-            the transform from the nearest b0 will be used.
-        hmc_transform : "Rigid" or "Affine"
-            Type of transform used for head motion correction
-        impute_slice_threshold : float
-            Impute data in slices that are this many SDs from expected. If 0, no slices
-            will be imputed.
-        motion_corr_to : str
-            Motion correct using the 'first' b0 image or use an 'iterative'
-            method to motion correct to the midpoint of the b0 images
-        eddy_config: str
-            Path to a JSON file containing config options for eddy
-        raw_image_sdc: bool
-            Use raw (direct from BIDS) images for distortion
-        fmap_bspline : bool
-            **Experimental**: Fit B-Spline field using least-squares
-        fmap_demean : bool
-            Demean voxel-shift map during unwarp
-        use_syn : bool
-            **Experimental**: Enable ANTs SyN-based susceptibility distortion
-            correction (SDC). If fieldmaps are present and enabled, this is not
-            run, by default.
-        force_syn : bool
-            **Temporary**: Always run SyN-based SDC
-        eddy_config: str
-            Path to a JSON file containing config options for eddy
-        b0_to_t1w_transform : "Rigid" or "Affine"
-            Use a rigid or full affine transform for b0-T1w registration
-        intramodal_template_iters: int
-            Number of iterations for finding the midpoint image from the b0 templates
-            from all groups. Has no effect if there is only one group. If 0, all b0
-            templates are directly registered to the t1w image.
-        intramodal_template_transform: str
-            Transformation used for building the intramodal template.
-
+    ----------
+    subject_id : str
+        List of subject labels
+    name : str
+        Name of workflow
+    ignore : list
+        Preprocessing steps to skip (may include "sbref", "fieldmaps")
+    debug : bool
+        Do inaccurate but fast normalization
+    low_mem : bool
+        Write uncompressed .nii files in some cases to reduce memory usage
+    anat_only : bool
+        Disable dMRI workflows
+    anatomical_contrast : str
+        Which contrast to use for the anatomical reference
+    dwi_only : bool
+        Disable anatomical workflows
+    longitudinal : bool
+        Treat multiple sessions as longitudinal (may increase runtime)
+        See sub-workflows for specific differences
+    b0_threshold : int
+        Images with b-values less than this value will be treated as a b=0 image.
+    dwi_denoise_window : int
+        window size in voxels for image-based denoising. Must be odd. If 0, '
+        'denoising will not be run'
+    denoise_method : str
+        Either 'dwidenoise', 'patch2self' or 'none'
+    unringing_method : str
+        algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
+    b1_biascorrect_stage : str
+        'final', 'none' or 'legacy'
+    no_b0_harmonization : bool
+        skip rescaling dwi scans to have matching b=0 intensities across scans
+    denoise_before_combining : bool
+        'run ``dwidenoise`` before combining dwis. Requires ``combine_all_dwis``'
+    combine_all_dwis : Bool
+        Combine all dwi sequences within a session into a single data set
+    distortion_group_merge: str
+        How to combine preprocessed scans from different distortion groups. 'concat',
+        'average' or 'none'
+    pepolar_method : str
+        Either 'DRBUDDI' or 'TOPUP'. The method for SDC when EPI fieldmaps are used.
+    omp_nthreads : int
+        Maximum number of threads an individual process may use
+    skull_strip_template : str
+        Name of ANTs skull-stripping template ('OASIS' or 'NKI')
+    skull_strip_fixed_seed : bool
+        Do not use a random seed for skull-stripping - will ensure
+        run-to-run replicability when used with --omp-nthreads 1
+    freesurfer : bool
+        Enable FreeSurfer surface reconstruction (may increase runtime)
+    hires : bool
+        Enable sub-millimeter preprocessing in FreeSurfer
+    reportlets_dir : str
+        Directory in which to save reportlets
+    output_dir : str
+        Directory in which to save derivatives
+    bids_dir : str
+        Root directory of BIDS dataset
+    template : str
+        Name of template targeted by ``template`` output space
+    hmc_model : 'none', '3dSHORE' or 'eddy'
+        Model used to generate target images for head motion correction. If 'none'
+        the transform from the nearest b0 will be used.
+    hmc_transform : "Rigid" or "Affine"
+        Type of transform used for head motion correction
+    impute_slice_threshold : float
+        Impute data in slices that are this many SDs from expected. If 0, no slices
+        will be imputed.
+    motion_corr_to : str
+        Motion correct using the 'first' b0 image or use an 'iterative'
+        method to motion correct to the midpoint of the b0 images
+    eddy_config: str
+        Path to a JSON file containing config options for eddy
+    raw_image_sdc: bool
+        Use raw (direct from BIDS) images for distortion
+    fmap_bspline : bool
+        **Experimental**: Fit B-Spline field using least-squares
+    fmap_demean : bool
+        Demean voxel-shift map during unwarp
+    use_syn : bool
+        **Experimental**: Enable ANTs SyN-based susceptibility distortion
+        correction (SDC). If fieldmaps are present and enabled, this is not
+        run, by default.
+    force_syn : bool
+        **Temporary**: Always run SyN-based SDC
+    eddy_config: str
+        Path to a JSON file containing config options for eddy
+    b0_to_t1w_transform : "Rigid" or "Affine"
+        Use a rigid or full affine transform for b0-T1w registration
+    intramodal_template_iters: int
+        Number of iterations for finding the midpoint image from the b0 templates
+        from all groups. Has no effect if there is only one group. If 0, all b0
+        templates are directly registered to the t1w image.
+    intramodal_template_transform: str
+        Transformation used for building the intramodal template.
 
     Inputs
-
-        subjects_dir
-            FreeSurfer SUBJECTS_DIR
-
+    ------
+    subjects_dir
+        FreeSurfer SUBJECTS_DIR
     """
     if name in ("single_subject_wf", "single_subject_qsipreptest_wf"):
         # for documentation purposes
