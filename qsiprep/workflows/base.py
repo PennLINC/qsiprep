@@ -151,7 +151,7 @@ def init_qsiprep_wf(
             window size in voxels for image-based denoising. Must be odd. If 0, '
             'denoising will not be run'
         denoise_method : str
-            Either 'dwidenoise', 'patch2self' or 'none'
+            Either 'dwidenoise', 'dwidenoisecomplex', 'patch2self' or 'none'
         unringing_method : str
             algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
         b1_biascorrect_stage : str
@@ -389,7 +389,7 @@ def init_single_subject_wf(
             window size in voxels for image-based denoising. Must be odd. If 0, '
             'denoising will not be run'
         denoise_method : str
-            Either 'dwidenoise', 'patch2self' or 'none'
+            Either 'dwidenoise', 'dwidenoisecomplex', 'patch2self' or 'none'
         unringing_method : str
             algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
         b1_biascorrect_stage : str
@@ -479,9 +479,9 @@ def init_single_subject_wf(
         LOGGER.warning("Building a test workflow")
     else:
         subject_data, layout = collect_data(
-            bids_dir, 
-            subject_id, 
-            filters=bids_filters, 
+            bids_dir,
+            subject_id,
+            filters=bids_filters,
             bids_validate=False
         )
 

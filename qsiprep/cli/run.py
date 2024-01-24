@@ -279,7 +279,7 @@ def get_parser():
     g_conf.add_argument(
         '--denoise-method', '--denoise_method',
         action='store',
-        choices=['dwidenoise', 'patch2self', 'none'],
+        choices=['dwidenoise', 'patch2self', 'dwidenoisecomplex', 'none'],
         default='dwidenoise',
         help='Image-based denoising method. Either "dwidenoise" (MRtrix), '
              '"patch2self" (DIPY) or none. (default: dwidenoise)')

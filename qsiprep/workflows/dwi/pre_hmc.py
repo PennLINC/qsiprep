@@ -113,7 +113,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
     dwi_series = scan_groups['dwi_series']
 
     # Configure the denoising window
-    if denoise_method == 'dwidenoise' and dwi_denoise_window == 'auto':
+    if denoise_method in ('dwidenoise', 'dwidenoisecomplex') and dwi_denoise_window == 'auto':
         dwi_denoise_window = 5
         LOGGER.info("Automatically using 5, 5, 5 window for dwidenoise")
     if dwi_denoise_window != 'auto':

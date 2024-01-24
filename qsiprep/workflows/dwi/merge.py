@@ -83,7 +83,7 @@ def init_merge_and_denoise_wf(
             window size in voxels for image-based denoising. Must be odd. If 0, '
             'denoising will not be run'
         denoise_method : str
-            Either 'dwidenoise', 'patch2self' or 'none'
+            Either 'dwidenoise', 'dwidenoisecomplex', 'patch2self' or 'none'
         unringing_method : str
             algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
         dwi_no_biascorr : bool
@@ -337,7 +337,7 @@ def init_dwi_denoising_wf(
         window size in voxels for image-based denoising. Must be odd. If 0, '
         'denoising will not be run'
     denoise_method : str
-        Either 'dwidenoise', 'patch2self' or 'none'
+        Either 'dwidenoise', 'dwidenoisecomplex', 'patch2self' or 'none'
     unringing_method : str
         algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
     dwi_no_biascorr : bool
