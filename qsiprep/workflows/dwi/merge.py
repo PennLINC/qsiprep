@@ -19,35 +19,42 @@ from ...engine import Workflow
 from ...interfaces import ConformDwi, DerivativesDataSink
 from ...interfaces.bids import get_metadata_for_nifti
 from ...interfaces.dipy import Patch2Self
-from ...interfaces.dwi_merge import MergeDWIs, StackConfounds
+from ...interfaces.dwi_merge import MergeDWIs, PhaseToRad, StackConfounds
 from ...interfaces.gradients import ExtractB0s
-from ...interfaces.mrtrix import DWIBiasCorrect, DWIDenoise, MRDeGibbs
+from ...interfaces.mrtrix import (
+    ComplexToMagnitude,
+    DWIBiasCorrect,
+    DWIDenoise,
+    MRDeGibbs,
+    PolarToComplex,
+)
 from ...interfaces.nilearn import MaskEPI, Merge
 from ...interfaces.tortoise import Gibbs
-from ...utils.bids import (IMPORTANT_DWI_FIELDS,
-                           update_metadata_from_nifti_header)
+from ...utils.bids import IMPORTANT_DWI_FIELDS, update_metadata_from_nifti_header
 from .qc import init_modelfree_qc_wf
 from .util import _get_wf_name
 
 DEFAULT_MEMORY_MIN_GB = 0.01
-LOGGER = logging.getLogger('nipype.workflow')
+LOGGER = logging.getLogger("nipype.workflow")
 
 
-def init_merge_and_denoise_wf(raw_dwi_files,
-                              dwi_denoise_window,
-                              unringing_method,
-                              dwi_no_biascorr,
-                              denoise_method,
-                              no_b0_harmonization,
-                              denoise_before_combining,
-                              orientation,
-                              b0_threshold,
-                              source_file,
-                              mem_gb=1,
-                              omp_nthreads=1,
-                              calculate_qc=False,
-                              phase_id="same",
-                              name="merge_and_denoise_wf"):
+def init_merge_and_denoise_wf(
+    raw_dwi_files,
+    dwi_denoise_window,
+    unringing_method,
+    dwi_no_biascorr,
+    denoise_method,
+    no_b0_harmonization,
+    denoise_before_combining,
+    orientation,
+    b0_threshold,
+    source_file,
+    mem_gb=1,
+    omp_nthreads=1,
+    calculate_qc=False,
+    phase_id="same",
+    name="merge_and_denoise_wf",
+):
     """
 
     .. workflow::
@@ -111,20 +118,34 @@ def init_merge_and_denoise_wf(raw_dwi_files,
 
     workflow = Workflow(name=name)
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=[
-            'merged_image', 'merged_raw_image', 'merged_bval', 'merged_bvec', 'noise_images',
-            'bias_images', 'denoising_confounds', 'original_files', 'qc_summary',
-            'validation_reports']),
-        name='outputnode')
+        niu.IdentityInterface(
+            fields=[
+                "merged_image",
+                "merged_raw_image",
+                "merged_bval",
+                "merged_bvec",
+                "noise_images",
+                "bias_images",
+                "denoising_confounds",
+                "original_files",
+                "qc_summary",
+                "validation_reports",
+            ]
+        ),
+        name="outputnode",
+    )
     desc = []
 
     # DWIs will be merged at some point.
     merge_dwis = pe.Node(
-        MergeDWIs(bids_dwi_files=raw_dwi_files,
-                  b0_threshold=b0_threshold,
-                  harmonize_b0_intensities=not no_b0_harmonization),
-        name='merge_dwis',
-        n_procs=omp_nthreads)
+        MergeDWIs(
+            bids_dwi_files=raw_dwi_files,
+            b0_threshold=b0_threshold,
+            harmonize_b0_intensities=not no_b0_harmonization,
+        ),
+        name="merge_dwis",
+        n_procs=omp_nthreads,
+    )
     # Create a denoising workflow for each input image
     num_dwis = len(raw_dwi_files)
     if num_dwis > 1:
@@ -132,19 +153,21 @@ def init_merge_and_denoise_wf(raw_dwi_files,
             order = "on individual DWI series before concatenation"
         else:
             order = "on the concatenated DWI series"
-        desc.append("A total of %d DWI series in the %s distortion group were "
-                    "concatenated, with preprocessing operations performed %s."
-                    % (num_dwis, phase_id, order))
+        desc.append(
+            "A total of %d DWI series in the %s distortion group were "
+            "concatenated, with preprocessing operations performed %s."
+            % (num_dwis, phase_id, order)
+        )
     workflow.__desc__ = " ".join(desc)
-    conformed_bvals = pe.Node(niu.Merge(num_dwis), name='conformed_bvals')
-    conformed_bvecs = pe.Node(niu.Merge(num_dwis), name='conformed_bvecs')
-    conformed_images = pe.Node(niu.Merge(num_dwis), name='conformed_images')
-    conformed_raw_images = pe.Node(niu.Merge(num_dwis), name='conformed_raw_images')
-    conformation_reports = pe.Node(niu.Merge(num_dwis), name='conformation_reports')
+    conformed_bvals = pe.Node(niu.Merge(num_dwis), name="conformed_bvals")
+    conformed_bvecs = pe.Node(niu.Merge(num_dwis), name="conformed_bvecs")
+    conformed_images = pe.Node(niu.Merge(num_dwis), name="conformed_images")
+    conformed_raw_images = pe.Node(niu.Merge(num_dwis), name="conformed_raw_images")
+    conformation_reports = pe.Node(niu.Merge(num_dwis), name="conformation_reports")
     # derivatives from denoising
-    denoising_confounds = pe.Node(niu.Merge(num_dwis), name='denoising_confounds')
-    noise_images = pe.Node(niu.Merge(num_dwis), name='noise_images')
-    bias_images = pe.Node(niu.Merge(num_dwis), name='bias_images')
+    denoising_confounds = pe.Node(niu.Merge(num_dwis), name="denoising_confounds")
+    noise_images = pe.Node(niu.Merge(num_dwis), name="noise_images")
+    bias_images = pe.Node(niu.Merge(num_dwis), name="bias_images")
     # Collect conformers and denoisers
     conformers = []
     denoising_wfs = []
@@ -157,54 +180,58 @@ def init_merge_and_denoise_wf(raw_dwi_files,
 
         # Conform each image to the requested orientation
         conformers.append(
-            pe.Node(ConformDwi(orientation=orientation),
-                    name="conform_dwis%02d" % dwi_num))
+            pe.Node(ConformDwi(orientation=orientation), name="conform_dwis%02d" % dwi_num),
+        )
         conformers[-1].inputs.dwi_file = dwi_file
 
         if denoise_before_combining:
             # Build the denoising workflow
             _, fname, _ = split_filename(dwi_file)
-            wf_name = _get_wf_name(fname).replace('preproc', 'denoise')
+            wf_name = _get_wf_name(fname).replace("preproc", "denoise")
             denoising_wfs.append(
-                init_dwi_denoising_wf(dwi_denoise_window=dwi_denoise_window,
-                                      denoise_method=denoise_method,
-                                      unringing_method=unringing_method,
-                                      dwi_no_biascorr=dwi_no_biascorr,
-                                      no_b0_harmonization=no_b0_harmonization,
-                                      b0_threshold=b0_threshold,
-                                      mem_gb=mem_gb,
-                                      partial_fourier=row.PartialFourier,
-                                      phase_encoding_direction=row.PhaseEncodingAxis,
-                                      omp_nthreads=omp_nthreads,
-                                      source_file=dwi_file,
-                                      name=wf_name))
+                init_dwi_denoising_wf(
+                    dwi_denoise_window=dwi_denoise_window,
+                    denoise_method=denoise_method,
+                    unringing_method=unringing_method,
+                    dwi_no_biascorr=dwi_no_biascorr,
+                    no_b0_harmonization=no_b0_harmonization,
+                    b0_threshold=b0_threshold,
+                    mem_gb=mem_gb,
+                    partial_fourier=row.PartialFourier,
+                    phase_encoding_direction=row.PhaseEncodingAxis,
+                    omp_nthreads=omp_nthreads,
+                    source_file=dwi_file,
+                    name=wf_name,
+                ),
+            )
             workflow.connect([
                 (conformers[-1], denoising_wfs[-1], [
                     ('bval_file', 'inputnode.bval_file'),
                     ('bvec_file', 'inputnode.bvec_file'),
                     ('dwi_file', 'inputnode.dwi_file')]),
                 (denoising_wfs[-1], denoising_confounds, [
-                    ('outputnode.confounds', 'in%d' % dwi_num)]),
-                (denoising_wfs[-1], noise_images, [
-                    ('outputnode.noise_image', 'in%d' % dwi_num)]),
-                (denoising_wfs[-1], bias_images, [
-                    ('outputnode.bias_image', 'in%d' % dwi_num)])])
+                    ('outputnode.confounds', f'in{dwi_num}'),
+                ]),
+                (denoising_wfs[-1], noise_images, [('outputnode.noise_image', f'in{dwi_num}')]),
+                (denoising_wfs[-1], bias_images, [('outputnode.bias_image', f'in{dwi_num}')]),
+            ])  # fmt:skip
+
             dwi_source = denoising_wfs[-1]
-            edge_prefix = 'outputnode.'
+            edge_prefix = "outputnode."
         else:
             dwi_source = conformers[-1]
-            edge_prefix = ''
+            edge_prefix = ""
 
         workflow.connect([
-            (dwi_source, conformed_images, [(edge_prefix + 'dwi_file', 'in%d' % dwi_num)]),
-            (conformers[-1], conformed_raw_images, [('dwi_file', 'in%d' % dwi_num)]),
-            (dwi_source, conformed_bvals, [(edge_prefix + 'bval_file', 'in%d' % dwi_num)]),
-            (dwi_source, conformed_bvecs, [(edge_prefix + 'bvec_file', 'in%d' % dwi_num)]),
-            (conformers[-1], conformation_reports, [('out_report', 'in%d' % dwi_num)])
-        ])
+            (dwi_source, conformed_images, [(f'{edge_prefix}dwi_file', f'in{dwi_num}')]),
+            (conformers[-1], conformed_raw_images, [('dwi_file', f'in{dwi_num}')]),
+            (dwi_source, conformed_bvals, [(f'{edge_prefix}bval_file', f'in{dwi_num}')]),
+            (dwi_source, conformed_bvecs, [(f'{edge_prefix}bvec_file', f'in{dwi_num}')]),
+            (conformers[-1], conformation_reports, [('out_report', f'in{dwi_num}')]),
+        ])  # fmt:skip
 
     # Get an orientation-conformed version of the raw inputs and their gradients
-    raw_merge = pe.Node(Merge(is_dwi=True), name='raw_merge', n_procs=omp_nthreads)
+    raw_merge = pe.Node(Merge(is_dwi=True), name="raw_merge", n_procs=omp_nthreads)
 
     # Merge the either conformed-only or conformed-and-denoised data
     workflow.connect([
@@ -217,17 +244,24 @@ def init_merge_and_denoise_wf(raw_dwi_files,
         (merge_dwis, outputnode, [
             ('original_images', 'original_files'),
             ('out_bval', 'merged_bval'),
-            ('out_bvec', 'merged_bvec')])])
+            ('out_bvec', 'merged_bvec'),
+        ]),
+    ])  # fmt:skip
 
     # Get a QC score for the raw data
     if calculate_qc:
-        qc_wf = init_modelfree_qc_wf(omp_nthreads=omp_nthreads,
-                                     bvec_convention="DIPY" if orientation == "LPS" else "FSL")
+        qc_wf = init_modelfree_qc_wf(
+            omp_nthreads=omp_nthreads,
+            bvec_convention="DIPY" if orientation == "LPS" else "FSL",
+        )
         workflow.connect([
             (qc_wf, outputnode, [('outputnode.qc_summary', 'qc_summary')]),
             (raw_merge, qc_wf, [('out_file', 'inputnode.dwi_file')]),
-            (merge_dwis, qc_wf, [('out_bval', 'inputnode.bval_file'),
-                                 ('out_bvec', 'inputnode.bvec_file')])])
+            (merge_dwis, qc_wf, [
+                ('out_bval', 'inputnode.bval_file'),
+                ('out_bvec', 'inputnode.bvec_file'),
+            ]),
+        ])  # fmt:skip
 
     # We have denoised and combined, therefore we are done
     if denoise_before_combining:
@@ -235,34 +269,38 @@ def init_merge_and_denoise_wf(raw_dwi_files,
             (denoising_confounds, merge_dwis, [('out', 'denoising_confounds')]),
             (merge_dwis, outputnode, [
                 ('out_dwi', 'merged_image'),
-                ('merged_denoising_confounds', 'denoising_confounds')]),
+                ('merged_denoising_confounds', 'denoising_confounds'),
+            ]),
             (noise_images, outputnode, [('out', 'noise_images')]),
             (bias_images, outputnode, [('out', 'bias_images')])
-        ])
+        ])  # fmt:skip
+
         return workflow
 
     # Send the merged series for denoising
     merge_confounds = pe.Node(niu.Merge(2), name="merge_confounds")
-    hstack_confounds = pe.Node(StackConfounds(axis=1), name='hstack_confounds')
+    hstack_confounds = pe.Node(StackConfounds(axis=1), name="hstack_confounds")
     denoising_wf = init_dwi_denoising_wf(
         dwi_denoise_window=dwi_denoise_window,
         denoise_method=denoise_method,
         unringing_method=unringing_method,
-        partial_fourier=get_merged_parameter(dwi_df, 'PartialFourier', 'all'),
-        phase_encoding_direction=get_merged_parameter(dwi_df, 'PhaseEncodingAxis', 'all'),
+        partial_fourier=get_merged_parameter(dwi_df, "PartialFourier", "all"),
+        phase_encoding_direction=get_merged_parameter(dwi_df, "PhaseEncodingAxis", "all"),
         dwi_no_biascorr=dwi_no_biascorr,
         no_b0_harmonization=no_b0_harmonization,
         b0_threshold=b0_threshold,
         mem_gb=mem_gb,
         omp_nthreads=omp_nthreads,
         source_file=source_file,
-        name='merged_denoise')
+        name="merged_denoise",
+    )
 
     workflow.connect([
         (merge_dwis, denoising_wf, [
             ('out_bval', 'inputnode.bval_file'),
             ('out_dwi', 'inputnode.dwi_file'),
-            ('out_bvec', 'inputnode.bvec_file')]),
+            ('out_bvec', 'inputnode.bvec_file'),
+        ]),
         (merge_dwis, merge_confounds, [('merged_denoising_confounds', 'in1')]),
         (denoising_wf, merge_confounds, [('outputnode.confounds', 'in2')]),
         (merge_confounds, hstack_confounds, [('out', 'in_files')]),
@@ -270,32 +308,99 @@ def init_merge_and_denoise_wf(raw_dwi_files,
         (denoising_wf, outputnode, [
             ('outputnode.dwi_file', 'merged_image'),
             (('outputnode.noise_image', _as_list), 'noise_images'),
-            (('outputnode.bias_image', _as_list), 'bias_images')])
-    ])
+            (('outputnode.bias_image', _as_list), 'bias_images'),
+        ])
+    ])  # fmt:skip
 
     return workflow
 
 
-def init_dwi_denoising_wf(dwi_denoise_window,
-                          denoise_method,
-                          unringing_method,
-                          dwi_no_biascorr,
-                          no_b0_harmonization,
-                          b0_threshold,
-                          source_file,
-                          partial_fourier,
-                          phase_encoding_direction,
-                          mem_gb=1,
-                          omp_nthreads=1,
-                          name="denoise_wf"):
+def init_dwi_denoising_wf(
+    dwi_denoise_window,
+    denoise_method,
+    unringing_method,
+    dwi_no_biascorr,
+    no_b0_harmonization,
+    b0_threshold,
+    source_file,
+    partial_fourier,
+    phase_encoding_direction,
+    mem_gb=1,
+    omp_nthreads=1,
+    name="denoise_wf",
+):
+    """Build a workflow to denoise a DWI series.
+
+    Parameters
+    ----------
+    dwi_denoise_window : int
+        window size in voxels for image-based denoising. Must be odd. If 0, '
+        'denoising will not be run'
+    denoise_method : str
+        Either 'dwidenoise', 'patch2self' or 'none'
+    unringing_method : str
+        algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
+    dwi_no_biascorr : bool
+        run spatial bias correction (N4) on dwi series
+    no_b0_harmonization : bool
+        skip rescaling dwi scans to have matching b=0 intensities across scans
+    b0_threshold : int
+        Maximum b value for an image to be considered a b=0
+    source_file : str
+        path to the original dwi file
+    partial_fourier : float
+        fraction of k-space acquired
+    phase_encoding_direction : str
+        direction of phase encoding
+    mem_gb : float
+        memory in GB to allocate to the workflow
+    omp_nthreads : int
+        number of threads to use
+    name : str
+        name of the workflow
+
+    Inputs
+    ------
+    dwi_file
+        path to the dwi file
+    bval_file
+        path to the bval file
+    bvec_file
+        path to the bvec file
+
+    Outputs
+    -------
+    dwi_file
+        path to the denoised dwi file
+    bval_file
+        path to the denoised bval file
+    bvec_file
+        path to the denoised bvec file
+    noise_image
+        path to the noise image
+    bias_image
+        path to the bias image
+    confounds
+        path to the confounds file
+    """
 
     inputnode = pe.Node(
-        niu.IdentityInterface(fields=['dwi_file', 'bval_file', 'bvec_file']),
-        name='inputnode')
+        niu.IdentityInterface(fields=["dwi_file", "bval_file", "bvec_file"]),
+        name="inputnode",
+    )
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=['dwi_file', 'bval_file', 'bvec_file', 'noise_image',
-                                      'bias_image', 'confounds']),
-        name='outputnode')
+        niu.IdentityInterface(
+            fields=[
+                "dwi_file",
+                "bval_file",
+                "bvec_file",
+                "noise_image",
+                "bias_image",
+                "confounds",
+            ],
+        ),
+        name="outputnode",
+    )
     workflow = Workflow(name=name)
 
     # Get IdentityInterfaces ready to hold intermediate results
@@ -303,102 +408,185 @@ def init_dwi_denoising_wf(dwi_denoise_window,
 
     def get_buffernode():
         num_buffers = len(buffernodes)
-        return pe.Node(niu.IdentityInterface(fields=['dwi_file']),
-                       name='buffer%02d' % num_buffers)
+        return pe.Node(
+            niu.IdentityInterface(fields=["dwi_file"]),
+            name=f"buffer{num_buffers:02}",
+        )
 
     buffernodes.append(get_buffernode())
+
     workflow.connect([
-        (inputnode, buffernodes[-1], [('dwi_file', 'dwi_file')]),
+        # The first buffernode is the raw file
+        (inputnode, buffernodes[0], [('dwi_file', 'dwi_file')]),
+        # XXX: Why pass the bval and bvec files through unmodified?
         (inputnode, outputnode, [
             ('bval_file', 'bval_file'),
-            ('bvec_file', 'bvec_file')])])
+            ('bvec_file', 'bvec_file'),
+        ]),
+    ])  # fmt:skip
 
     # Which steps to apply?
-    do_denoise = denoise_method in ('patch2self', 'dwidenoise')
-    do_unringing = unringing_method in ('mrdegibbs', 'rpg')
+    do_denoise = denoise_method in ("patch2self", "dwidenoise", "dwidenoisecomplex")
+    do_unringing = unringing_method in ("mrdegibbs", "rpg")
     do_biascorr = not dwi_no_biascorr
     harmonize_b0s = not no_b0_harmonization
     # How many steps in the denoising pipeline
     num_steps = sum(map(int, [do_denoise, do_unringing, do_biascorr, harmonize_b0s]))
-    merge_confounds = pe.Node(niu.Merge(num_steps), name='merge_confounds')
+    merge_confounds = pe.Node(niu.Merge(num_steps), name="merge_confounds")
 
     # Add the steps
     step_num = 1  # Merge inputs start at 1
     if do_denoise:
-        if denoise_method == 'dwidenoise':
+        # Add buffernode for denoised DWI
+        buffernodes.append(get_buffernode())
+
+        ds_report_denoising = pe.Node(
+            DerivativesDataSink(
+                suffix=f"{name}_denoising",
+                source_file=source_file,
+            ),
+            name=f"ds_report_{name}_denoising",
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB,
+        )
+
+        if denoise_method == "dwidenoisecomplex":
+            # If there are phase files available, then we can use dwidenoise
+            # on the complex-valued data.
+            phase_to_radians = pe.Node(
+                PhaseToRad(),
+                name="phase_to_radians",
+                n_procs=omp_nthreads,
+            )
+            workflow.connect([(inputnode, phase_to_radians, [("phase_file", "in_file")])])
+
+            combine_complex = pe.Node(
+                PolarToComplex(),
+                name="combine_complex",
+                n_procs=omp_nthreads,
+            )
+            workflow.connect([
+                (buffernodes[-2], combine_complex, [('dwi_file', 'mag_file')]),
+                (phase_to_radians, combine_complex, [('phase_file', 'phase_file')]),
+            ])  # fmt:skip
+
             denoiser = pe.Node(
-                DWIDenoise(extent=(dwi_denoise_window, dwi_denoise_window,
-                                   dwi_denoise_window),
-                           nthreads=omp_nthreads),
-                name='denoiser',
-                n_procs=omp_nthreads)
+                DWIDenoise(
+                    extent=(dwi_denoise_window, dwi_denoise_window, dwi_denoise_window),
+                    nthreads=omp_nthreads,
+                ),
+                name="denoiser",
+                n_procs=omp_nthreads,
+            )
+
+            workflow.connect([
+                (combine_complex, denoiser, [('out_file', 'in_file')]),
+                (denoiser, ds_report_denoising, [('out_report', 'in_file')]),
+                (denoiser, merge_confounds, [('nmse_text', f'in{step_num}')]),
+            ])  # fmt:skip
+
+            split_complex = pe.Node(
+                ComplexToMagnitude(),
+                name="split_complex",
+                n_procs=omp_nthreads,
+            )
+
+            workflow.connect([
+                (denoiser, split_complex, [('out_file', 'complex_file')]),
+                (split_complex, buffernodes[-1], [('out_file', 'dwi_file')]),
+            ])  # fmt:skip
+
+        elif denoise_method == "dwidenoise":
+            denoiser = pe.Node(
+                DWIDenoise(
+                    extent=(dwi_denoise_window, dwi_denoise_window, dwi_denoise_window),
+                    nthreads=omp_nthreads,
+                ),
+                name="denoiser",
+                n_procs=omp_nthreads,
+            )
         else:
             denoiser = pe.Node(
                 Patch2Self(patch_radius=dwi_denoise_window),
-                name='denoiser',
-                n_procs=omp_nthreads)
+                name="denoiser",
+                n_procs=omp_nthreads,
+            )
+            workflow.connect([(inputnode, denoiser, [("bval_file", "bval_file")])])
+
+        if denoise_method in ("dwidenoise", "patch2self"):
             workflow.connect([
-                (inputnode, denoiser, [('bval_file', 'bval_file')])])
-        ds_report_denoising = pe.Node(
-            DerivativesDataSink(suffix=name + '_denoising',
-                                source_file=source_file),
-            name='ds_report_' + name + '_denoising',
-            run_without_submitting=True,
-            mem_gb=DEFAULT_MEMORY_MIN_GB)
-        buffernodes.append(get_buffernode())
-        workflow.connect([
-            (buffernodes[-2], denoiser, [('dwi_file', 'in_file')]),
-            (denoiser, ds_report_denoising, [('out_report', 'in_file')]),
-            (denoiser, buffernodes[-1], [('out_file', 'dwi_file')]),
-            (denoiser, merge_confounds, [('nmse_text', 'in%d' % step_num)])
-        ])
+                (buffernodes[-2], denoiser, [('dwi_file', 'in_file')]),
+                (denoiser, ds_report_denoising, [('out_report', 'in_file')]),
+                (denoiser, buffernodes[-1], [('out_file', 'dwi_file')]),
+                (denoiser, merge_confounds, [('nmse_text', f'in{step_num}')]),
+            ])  # fmt:skip
+
         step_num += 1
 
     if do_unringing:
-        if unringing_method == 'mrdegibbs':
+        if unringing_method == "mrdegibbs":
             degibbser = pe.Node(
                 MRDeGibbs(nthreads=omp_nthreads),
-                name='degibbser',
-                n_procs=omp_nthreads)
-        elif unringing_method == 'rpg':
-            pe_code = {'i': 0, 'i-': 0,
-                       'j': 1, 'j-': 1, 'k':2}.get(phase_encoding_direction)
+                name="degibbser",
+                n_procs=omp_nthreads,
+            )
+        elif unringing_method == "rpg":
+            pe_code = {
+                "i": 0,
+                "i-": 0,
+                "j": 1,
+                "j-": 1,
+                "k": 2,
+            }.get(phase_encoding_direction)
             if pe_code is None:
-                raise Exception(
-                    'rpg requires an i[-],j[-] or k[-] PhaseEncodingDirection')
+                raise Exception("rpg requires an i[-],j[-] or k[-] PhaseEncodingDirection")
+
             degibbser = pe.Node(
                 Gibbs(
                     kspace_coverage=partial_fourier,
-                    phase_encoding_dir=pe_code),
-                name='degibbser',
-                n_procs=omp_nthreads)
+                    phase_encoding_dir=pe_code,
+                ),
+                name="degibbser",
+                n_procs=omp_nthreads,
+            )
 
         ds_report_unringing = pe.Node(
-            DerivativesDataSink(suffix=name + '_unringing',
-                                source_file=source_file),
-            name='ds_report_' + name + '_unringing',
+            DerivativesDataSink(
+                suffix=f"{name}_unringing",
+                source_file=source_file,
+            ),
+            name=f"ds_report_{name}_unringing",
             run_without_submitting=True,
-            mem_gb=DEFAULT_MEMORY_MIN_GB)
+            mem_gb=DEFAULT_MEMORY_MIN_GB,
+        )
+        # Add buffernode for unringed DWI
         buffernodes.append(get_buffernode())
+
         workflow.connect([
             (buffernodes[-2], degibbser, [('dwi_file', 'in_file')]),
             (degibbser, ds_report_unringing, [('out_report', 'in_file')]),
             (degibbser, buffernodes[-1], [('out_file', 'dwi_file')]),
-            (degibbser, merge_confounds, [('nmse_text', 'in%d' % step_num)])
-        ])
+            (degibbser, merge_confounds, [('nmse_text', f'in{step_num}')]),
+        ])  # fmt:skip
         step_num += 1
 
     if do_biascorr:
-        biascorr = pe.Node(DWIBiasCorrect(method='ants'), name='biascorr', n_procs=omp_nthreads)
+        biascorr = pe.Node(DWIBiasCorrect(method="ants"), name="biascorr", n_procs=omp_nthreads)
         ds_report_biascorr = pe.Node(
-            DerivativesDataSink(suffix=name + '_biascorr',
-                                source_file=source_file),
-            name='ds_report_' + name + '_biascorr',
+            DerivativesDataSink(
+                suffix=f"{name}_biascorr",
+                source_file=source_file,
+            ),
+            name=f"ds_report_{name}_biascorr",
             run_without_submitting=True,
-            mem_gb=DEFAULT_MEMORY_MIN_GB)
-        get_b0s = pe.Node(ExtractB0s(b0_threshold=b0_threshold), name='get_b0s')
-        quick_mask = pe.Node(MaskEPI(lower_cutoff=0.02), name='quick_mask')
+            mem_gb=DEFAULT_MEMORY_MIN_GB,
+        )
+        get_b0s = pe.Node(ExtractB0s(b0_threshold=b0_threshold), name="get_b0s")
+        quick_mask = pe.Node(MaskEPI(lower_cutoff=0.02), name="quick_mask")
+
+        # Add buffernode for bias-corrected DWI
         buffernodes.append(get_buffernode())
+
         workflow.connect([
             (buffernodes[-2], biascorr, [('dwi_file', 'in_file')]),
             (buffernodes[-2], get_b0s, [('dwi_file', 'dwi_series')]),
@@ -407,20 +595,24 @@ def init_dwi_denoising_wf(dwi_denoise_window,
             (quick_mask, biascorr, [('out_mask', 'mask')]),
             (biascorr, buffernodes[-1], [('out_file', 'dwi_file')]),
             (biascorr, ds_report_biascorr, [('out_report', 'in_file')]),
-            (biascorr, merge_confounds, [('nmse_text', 'in%d' % step_num)]),
-            (inputnode, biascorr, [('bval_file', 'in_bval'), ('bvec_file', 'in_bvec')])
-        ])
+            (biascorr, merge_confounds, [('nmse_text', f'in{step_num}')]),
+            (inputnode, biascorr, [
+                ('bval_file', 'in_bval'),
+                ('bvec_file', 'in_bvec'),
+            ]),
+        ])  # fmt:skip
         step_num += 1
 
-    workflow.connect([
-        (buffernodes[-1], outputnode, [('dwi_file', 'dwi_file')])])
+    # Connect the final buffernode (the most recent output) to the outputnode
+    workflow.connect([(buffernodes[-1], outputnode, [("dwi_file", "dwi_file")])])
 
     # If any denoising operations were run, collect their confounds
     if step_num > 1:
-        hstack_confounds = pe.Node(StackConfounds(axis=1), name='hstack_confounds')
+        hstack_confounds = pe.Node(StackConfounds(axis=1), name="hstack_confounds")
         workflow.connect([
             (merge_confounds, hstack_confounds, [('out', 'in_files')]),
-            (hstack_confounds, outputnode, [('confounds_file', 'confounds')])])
+            (hstack_confounds, outputnode, [('confounds_file', 'confounds')]),
+        ])  # fmt:skip
 
     return workflow
 
@@ -429,60 +621,75 @@ def _as_list(item):
     return [item]
 
 
-def gen_denoising_boilerplate(denoise_method,
-                              dwi_denoise_window,
-                              unringing_method,
-                              b1_biascorrect_stage,
-                              no_b0_harmonization,
-                              b0_threshold):
-    """Generates methods boilerplate for the denoising workflow."""
-    desc = ["Any images with a b-value less than %d s/mm^2 were treated as a "
-            "*b*=0 image." % b0_threshold]
-    do_denoise = denoise_method in ('dwidenoise', 'patch2self')
-    do_unringing = unringing_method in ('rpg', 'mrdegibbs')
+def gen_denoising_boilerplate(
+    denoise_method,
+    dwi_denoise_window,
+    unringing_method,
+    b1_biascorrect_stage,
+    no_b0_harmonization,
+    b0_threshold,
+):
+    """Generate a methods boilerplate for the denoising workflow."""
+    desc = [
+        f"Any images with a b-value less than {b0_threshold} s/mm^2 were treated as a "
+        "*b*=0 image."
+    ]
+    do_denoise = denoise_method in ("dwidenoise", "patch2self", "dwidenoisecomplex")
+    do_unringing = unringing_method in ("rpg", "mrdegibbs")
     harmonize_b0s = not no_b0_harmonization
     last_step = ""
     if do_denoise:
-        if denoise_method == 'dwidenoise':
-            desc.append("MP-PCA denoising as implemented in MRtrix3's `dwidenoise`"
-                        "[@dwidenoise1] was applied with "
-                        "a %d-voxel window." % dwi_denoise_window)
+        if denoise_method == "dwidenoisecomplex":
+            desc.append(
+                "Complex-valued MP-PCA denoising as implemented in MRtrix3's `dwidenoise`"
+                f"[@dwidenoise1] was applied with a {dwi_denoise_window}-voxel window."
+            )
             last_step = "After MP-PCA, "
-        if denoise_method == 'patch2self':
-            desc.append("Denoising using `patch2self` "
-                        "[@patch2self] was applied")
+        elif denoise_method == "dwidenoise":
+            desc.append(
+                "MP-PCA denoising as implemented in MRtrix3's `dwidenoise`"
+                f"[@dwidenoise1] was applied with a {dwi_denoise_window}-voxel window."
+            )
+            last_step = "After MP-PCA, "
+        elif denoise_method == "patch2self":
+            desc.append("Denoising using `patch2self` [@patch2self] was applied")
             if dwi_denoise_window == "auto":
                 desc.append("with settings based on developer recommendations.")
             else:
-                desc.append("with a %d-voxel window." % dwi_denoise_window)
+                desc.append(f"with a {dwi_denoise_window}-voxel window.")
             last_step = "After `patch2self`, "
+
     if do_unringing:
         unringing_txt = {
             "mrdegibbs": "MRtrix3's `mrdegibbs` [@mrdegibbs].",
             "dipy": "Dipy [@dipy].",
-            "rpg": "TORTOISE's `Gibbs` [@pfgibbs]."
+            "rpg": "TORTOISE's `Gibbs` [@pfgibbs].",
         }[unringing_method]
 
-        desc.append(last_step + "Gibbs unringing was performed using "
-                    + unringing_txt)
+        desc.append(f"{last_step}Gibbs unringing was performed using {unringing_txt}")
         last_step = "Following unringing, "
 
     if b1_biascorrect_stage == "legacy":
-        desc.append(last_step + "B1 field inhomogeneity was corrected using "
-                    "`dwibiascorrect` from MRtrix3 with the N4 algorithm "
-                    "[@n4].")
+        desc.append(
+            f"{last_step}B1 field inhomogeneity was corrected using "
+            "`dwibiascorrect` from MRtrix3 with the N4 algorithm [@n4]."
+        )
         last_step = "After B1 bias correction, "
 
     if harmonize_b0s:
-        desc.append(last_step + "the mean intensity of the DWI series was adjusted "
-                    "so all the mean intensity of the b=0 images matched across each"
-                    "separate DWI scanning sequence.")
+        desc.append(
+            f"{last_step}the mean intensity of the DWI series was adjusted "
+            "so all the mean intensity of the b=0 images matched across each"
+            "separate DWI scanning sequence."
+        )
         last_step = True
 
-    if b1_biascorrect_stage == 'final':
-        desc.append("B1 field inhomogeneity was corrected using "
-                    "`dwibiascorrect` from MRtrix3 with the N4 algorithm "
-                    "[@n4] after corrected images were resampled.")
+    if b1_biascorrect_stage == "final":
+        desc.append(
+            "B1 field inhomogeneity was corrected using "
+            "`dwibiascorrect` from MRtrix3 with the N4 algorithm "
+            "[@n4] after corrected images were resampled."
+        )
         last_step = True
 
     if not last_step:
@@ -492,7 +699,7 @@ def gen_denoising_boilerplate(denoise_method,
 
 
 def get_acq_parameters_df(dwi_file_list):
-    """Figure out what the """
+    """Figure out what the"""
     file_rows = []
     for dwi_file in dwi_file_list:
         meta = get_metadata_for_nifti(dwi_file)
@@ -501,32 +708,38 @@ def get_acq_parameters_df(dwi_file_list):
         file_rows.append(meta)
 
     merged_acq_params = pd.DataFrame(
-        file_rows, columns=["BIDSFile"] + IMPORTANT_DWI_FIELDS)
-    merged_acq_params['PhaseEncodingAxis'] = \
-        merged_acq_params['PhaseEncodingDirection'].str.replace("-","")
+        file_rows,
+        columns=["BIDSFile"] + IMPORTANT_DWI_FIELDS,
+    )
+    merged_acq_params["PhaseEncodingAxis"] = merged_acq_params[
+        "PhaseEncodingDirection"
+    ].str.replace("-", "")
     return merged_acq_params
 
 
-def get_merged_parameter(parameter_df, parameter_name,
-                         selection_mode='all'):
-    """Return a single parameter from a parameter dataframe.
-
-    """
-
+def get_merged_parameter(parameter_df, parameter_name, selection_mode="all"):
+    """Return a single parameter from a parameter dataframe."""
     col = parameter_df[parameter_name]
     unique_values = col.unique()
     if len(unique_values) > 1:
-        LOGGER.warn("Found %d unique values for %s",
-                    parameter_name,
-                    len(unique_values))
+        LOGGER.warn(
+            "Found %d unique values for %s",
+            parameter_name,
+            len(unique_values),
+        )
+
     # Require that all the values are the same
     if selection_mode == "all":
         if len(unique_values) > 1:
-            raise Exception("More than one value for %s was found: exiting!" % (
-                    parameter_name, str(unique_values)))
+            raise Exception(
+                "More than one value for %s was found (%s): exiting!",
+                parameter_name,
+                str(unique_values),
+            )
+
         return unique_values[0]
 
-    if selection_mode == 'mode':
+    if selection_mode == "mode":
         return col.mode()[0]
 
     raise Exception("selection_mode must be 'all' or 'mode'")

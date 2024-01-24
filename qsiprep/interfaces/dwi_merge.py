@@ -1,6 +1,8 @@
 """Handle merging and spliting of DSI files."""
 import os.path as op
 import json
+
+import nibabel as nb
 import numpy as np
 import pandas as pd
 from nilearn.image import concat_imgs, load_img, index_img, math_img, iter_img
@@ -9,6 +11,7 @@ from nipype.interfaces.base import (BaseInterfaceInputSpec, TraitedSpec, File, S
 from nipype.utils.filemanip import fname_presuffix
 from nipype.interfaces import ants
 from nipype import logging
+
 from .fmap import get_distortion_grouping
 from ..workflows.dwi.util import _get_concatenated_bids_name
 LOGGER = logging.getLogger('nipype.workflow')
@@ -659,3 +662,36 @@ def create_provenance_dataframe(bids_sources, harmonized_niis, b0_means,
     image_df = pd.concat(series_confounds, axis=0, ignore_index=True)
     image_df['original_file'] = bids_sources
     return image_df
+
+
+class _PhaseToRadInputSpec(MergeDWIsInputSpec):
+    phase_file = File(exists=True, mandatory=True)
+
+
+class _PhaseToRadOutputSpec(MergeDWIsOutputSpec):
+    phase_file = File(exists=True)
+
+
+class PhaseToRad(SimpleInterface):
+    input_spec = _PhaseToRadInputSpec
+    output_spec = _PhaseToRadOutputSpec
+
+    def _run_interface(self, runtime):
+        phase_img = nb.load(self.inputs.phase_file)
+
+        phase_data = phase_img.get_fdata()
+        imax = phase_data.max()
+        imin = phase_data.min()
+        scaled = (phase_data - imin) / (imax - imin)
+        rad_data = 2 * np.pi * scaled
+        out_img = nb.Nifti1Image(rad_data, phase_img.affine, phase_img.header)
+
+        self._results['phase_file'] = fname_presuffix(
+            self.inputs.phase_file,
+            suffix='_rad.nii.gz',
+            newpath=runtime.cwd,
+            use_ext=False,
+        )
+        out_img.to_filename(self._results['phase_file'])
+
+        return runtime

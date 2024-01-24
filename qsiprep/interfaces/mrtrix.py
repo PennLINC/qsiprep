@@ -1356,3 +1356,61 @@ class TransformHeader(CommandLine):
     input_spec = _TransformHeaderInputSpec
     output_spec = _TransformHeaderOutputSpec
     _cmd = "mrtransform -strides -1,-2,3"
+
+
+class _PolarToComplexInputSpec:
+    mag_file = traits.File(
+        exists=True,
+        mandatory=True,
+        position=0,
+        argstr="%s"
+    )
+    phase_file = traits.File(
+        exists=True,
+        mandatory=True,
+        position=1,
+        argstr="%s"
+    )
+    out_file = traits.File(
+        exists=False,
+        mandatory=True,
+        position=-1,
+        argstr="-polar %s"
+    )
+
+
+class _PolarToComplexOutputSpec:
+    out_file = File(exists=True)
+
+
+class PolarToComplex(CommandLine):
+    input_spec = _PolarToComplexInputSpec
+    output_spec = _PolarToComplexOutputSpec
+
+    _cmd = "mrcalc"
+
+
+class _ComplexToMagnitudeInputSpec:
+    complex_file = traits.File(
+        exists=True,
+        mandatory=True,
+        position=0,
+        argstr="%s"
+    )
+    out_file = traits.File(
+        exists=False,
+        mandatory=True,
+        position=-1,
+        argstr="-abs %s"
+    )
+
+
+class _ComplexToMagnitudeOutputSpec:
+    out_file = File(exists=True)
+
+
+class ComplexToMagnitude(CommandLine):
+    input_spec = _ComplexToMagnitudeInputSpec
+    output_spec = _ComplexToMagnitudeOutputSpec
+
+    _cmd = "mrcalc"
