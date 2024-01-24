@@ -664,11 +664,11 @@ def create_provenance_dataframe(bids_sources, harmonized_niis, b0_means,
     return image_df
 
 
-class _PhaseToRadInputSpec(MergeDWIsInputSpec):
+class _PhaseToRadInputSpec(BaseInterfaceInputSpec):
     phase_file = File(exists=True, mandatory=True)
 
 
-class _PhaseToRadOutputSpec(MergeDWIsOutputSpec):
+class _PhaseToRadOutputSpec(TraitedSpec):
     phase_file = File(exists=True)
 
 
