@@ -23,8 +23,13 @@ from nipype.interfaces import utility as niu
 from nilearn import __version__ as nilearn_ver
 
 from ..engine import Workflow
-from ..interfaces import (BIDSDataGrabber, BIDSInfo, BIDSFreeSurferDir,
-                          SubjectSummary, AboutSummary, DerivativesDataSink)
+from ..interfaces import (
+    BIDSDataGrabber,
+    BIDSInfo,
+    SubjectSummary,
+    AboutSummary,
+    DerivativesDataSink,
+)
 from ..utils.bids import collect_data
 from ..utils.misc import fix_multi_source_name
 from ..utils.grouping import group_dwi_scans
@@ -38,23 +43,59 @@ from .dwi.distortion_group_merge import init_distortion_group_merge_wf
 from .dwi.util import get_source_file
 
 
-LOGGER = logging.getLogger('nipype.workflow')
+LOGGER = logging.getLogger("nipype.workflow")
 
 
 def init_qsiprep_wf(
-        subject_list, run_uuid, work_dir, output_dir, bids_dir, ignore, debug,
-        low_mem, anat_only, dwi_only, longitudinal, b0_threshold, hires,
-        anatomical_contrast, denoise_before_combining, dwi_denoise_window,
-        denoise_method, unringing_method, b1_biascorrect_stage,
-        no_b0_harmonization, output_resolution, infant_mode, combine_all_dwis,
-        distortion_group_merge, pepolar_method, omp_nthreads, bids_filters,
-        force_spatial_normalization, skull_strip_template,
-        skull_strip_fixed_seed, freesurfer, hmc_model, impute_slice_threshold,
-        hmc_transform, shoreline_iters, eddy_config, write_local_bvecs,
-        template, motion_corr_to, b0_to_t1w_transform,
-        intramodal_template_iters, intramodal_template_transform,
-        prefer_dedicated_fmaps, fmap_bspline, fmap_demean, use_syn, force_syn,
-        raw_image_sdc):
+    subject_list,
+    run_uuid,
+    work_dir,
+    output_dir,
+    bids_dir,
+    ignore,
+    debug,
+    low_mem,
+    anat_only,
+    dwi_only,
+    longitudinal,
+    b0_threshold,
+    hires,
+    anatomical_contrast,
+    denoise_before_combining,
+    dwi_denoise_window,
+    denoise_method,
+    unringing_method,
+    b1_biascorrect_stage,
+    no_b0_harmonization,
+    output_resolution,
+    infant_mode,
+    combine_all_dwis,
+    distortion_group_merge,
+    pepolar_method,
+    omp_nthreads,
+    bids_filters,
+    force_spatial_normalization,
+    skull_strip_template,
+    skull_strip_fixed_seed,
+    freesurfer,
+    hmc_model,
+    impute_slice_threshold,
+    hmc_transform,
+    shoreline_iters,
+    eddy_config,
+    write_local_bvecs,
+    template,
+    motion_corr_to,
+    b0_to_t1w_transform,
+    intramodal_template_iters,
+    intramodal_template_transform,
+    prefer_dedicated_fmaps,
+    fmap_bspline,
+    fmap_demean,
+    use_syn,
+    force_syn,
+    raw_image_sdc,
+):
     """
     This workflow organizes the execution of qsiprep, with a sub-workflow for
     each subject.
@@ -166,7 +207,8 @@ def init_qsiprep_wf(
             How to combine multiple distortion groups after correction. 'concat', 'average' or
             'none'
         pepolar_method : str
-            Either 'DRBUDDI', 'TOPUP' or 'TOPUP+DRBUDDI'. The method for SDC when EPI fieldmaps are used.
+            Either 'DRBUDDI', 'TOPUP' or 'TOPUP+DRBUDDI'.
+            The method for SDC when EPI fieldmaps are used.
         omp_nthreads : int
             Maximum number of threads an individual process may use
         skull_strip_template : str
@@ -220,10 +262,10 @@ def init_qsiprep_wf(
             **Temporary**: Always run SyN-based SDC
 
     """
-    qsiprep_wf = Workflow(name='qsiprep_wf')
+    qsiprep_wf = Workflow(name="qsiprep_wf")
     qsiprep_wf.base_dir = work_dir
 
-    reportlets_dir = os.path.join(work_dir, 'reportlets')
+    reportlets_dir = os.path.join(work_dir, "reportlets")
     for subject_id in subject_list:
         single_subject_wf = init_single_subject_wf(
             subject_id=subject_id,
@@ -273,10 +315,12 @@ def init_qsiprep_wf(
             fmap_bspline=fmap_bspline,
             fmap_demean=fmap_demean,
             use_syn=use_syn,
-            force_syn=force_syn)
+            force_syn=force_syn,
+        )
 
-        single_subject_wf.config['execution']['crashdump_dir'] = (os.path.join(
-            output_dir, "qsiprep", "sub-" + subject_id, 'log', run_uuid))
+        single_subject_wf.config["execution"]["crashdump_dir"] = os.path.join(
+            output_dir, "qsiprep", "sub-" + subject_id, "log", run_uuid
+        )
         for node in single_subject_wf._get_all_nodes():
             node.config = deepcopy(single_subject_wf.config)
         qsiprep_wf.add_nodes([single_subject_wf])
@@ -285,18 +329,55 @@ def init_qsiprep_wf(
 
 
 def init_single_subject_wf(
-        subject_id, name, reportlets_dir, output_dir, bids_dir, ignore, debug,
-        write_local_bvecs, low_mem, dwi_only, anat_only, longitudinal,
-        b0_threshold, denoise_before_combining, bids_filters, anatomical_contrast,
-        dwi_denoise_window, denoise_method, unringing_method, b1_biascorrect_stage,
-        no_b0_harmonization, infant_mode, combine_all_dwis, raw_image_sdc,
-        distortion_group_merge, pepolar_method, omp_nthreads, skull_strip_template,
-        force_spatial_normalization, skull_strip_fixed_seed, freesurfer, hires,
-        template, output_resolution, prefer_dedicated_fmaps,
-        motion_corr_to, b0_to_t1w_transform, intramodal_template_iters,
-        intramodal_template_transform, hmc_model, hmc_transform,
-        shoreline_iters, eddy_config, impute_slice_threshold, fmap_bspline,
-        fmap_demean, use_syn, force_syn):
+    subject_id,
+    name,
+    reportlets_dir,
+    output_dir,
+    bids_dir,
+    ignore,
+    debug,
+    write_local_bvecs,
+    low_mem,
+    dwi_only,
+    anat_only,
+    longitudinal,
+    b0_threshold,
+    denoise_before_combining,
+    bids_filters,
+    anatomical_contrast,
+    dwi_denoise_window,
+    denoise_method,
+    unringing_method,
+    b1_biascorrect_stage,
+    no_b0_harmonization,
+    infant_mode,
+    combine_all_dwis,
+    raw_image_sdc,
+    distortion_group_merge,
+    pepolar_method,
+    omp_nthreads,
+    skull_strip_template,
+    force_spatial_normalization,
+    skull_strip_fixed_seed,
+    freesurfer,
+    hires,
+    template,
+    output_resolution,
+    prefer_dedicated_fmaps,
+    motion_corr_to,
+    b0_to_t1w_transform,
+    intramodal_template_iters,
+    intramodal_template_transform,
+    hmc_model,
+    hmc_transform,
+    shoreline_iters,
+    eddy_config,
+    impute_slice_threshold,
+    fmap_bspline,
+    fmap_demean,
+    use_syn,
+    force_syn,
+):
     """
     This workflow organizes the preprocessing pipeline for a single subject.
     It collects and reports information about the subject, and prepares
@@ -467,29 +548,27 @@ def init_single_subject_wf(
             FreeSurfer SUBJECTS_DIR
 
     """
-    if name in ('single_subject_wf', 'single_subject_qsipreptest_wf'):
+    if name in ("single_subject_wf", "single_subject_qsipreptest_wf"):
         # for documentation purposes
         subject_data = {
-            't1w': ['/completely/made/up/path/sub-01_T1w.nii.gz'],
-            'dwi': ['/completely/made/up/path/sub-01_dwi.nii.gz'],
-            't2w': ['/completely/made/up/path/sub-01_T2w.nii.gz'],
-            'roi': []
+            "t1w": ["/completely/made/up/path/sub-01_T1w.nii.gz"],
+            "dwi": ["/completely/made/up/path/sub-01_dwi.nii.gz"],
+            "t2w": ["/completely/made/up/path/sub-01_T2w.nii.gz"],
+            "roi": [],
         }
         layout = None
         LOGGER.warning("Building a test workflow")
     else:
         subject_data, layout = collect_data(
-            bids_dir,
-            subject_id,
-            filters=bids_filters,
-            bids_validate=False
+            bids_dir, subject_id, filters=bids_filters, bids_validate=False
         )
 
     # Warn about --dwi-only and non-none --anat-modality
     if dwi_only and anatomical_contrast != "none":
         LOGGER.warn(
             "--dwi-only is deprecated and is only compatible with "
-            "--anat-modality none. Setting --anat-modality none")
+            "--anat-modality none. Setting --anat-modality none"
+        )
         anatomical_contrast = "none"
     if anatomical_contrast == "none":
         dwi_only = True
@@ -498,23 +577,26 @@ def init_single_subject_wf(
         raise Exception("--anat-only and --dwi-only are mutually exclusive.")
 
     # Make sure we always go through these two checks
-    if not anat_only and subject_data['dwi'] == []:
-        raise Exception("No dwi images found for participant {}. "
-                        "All workflows require dwi images unless "
-                        "--anat-only is specified.".format(subject_id))
+    if not anat_only and subject_data["dwi"] == []:
+        raise Exception(
+            "No dwi images found for participant {}. "
+            "All workflows require dwi images unless "
+            "--anat-only is specified.".format(subject_id)
+        )
 
     if not dwi_only and not subject_data.get(anatomical_contrast.lower()):
-        raise Exception("No {} images found for participant {}. "
-                        "To bypass anatomical processing choose "
-                        "--anat-modality none".format(
-            anatomical_contrast, subject_id))
+        raise Exception(
+            "No {} images found for participant {}. "
+            "To bypass anatomical processing choose "
+            "--anat-modality none".format(anatomical_contrast, subject_id)
+        )
 
     additional_t2ws = 0
-    if 'drbuddi' in pepolar_method.lower() and subject_data['t2w']:
-        additional_t2ws = len(subject_data['t2w'])
+    if "drbuddi" in pepolar_method.lower() and subject_data["t2w"]:
+        additional_t2ws = len(subject_data["t2w"])
 
     # Inspect the dwi data and provide advice on pipeline choices
-    #provide_processing_advice(subject_data, layout, unringing_method)
+    # provide_processing_advice(subject_data, layout, unringing_method)
 
     workflow = Workflow(name=name)
     workflow.__desc__ = """
@@ -523,7 +605,8 @@ which is based on *Nipype* {nipype_ver}
 (@nipype1; @nipype2; RRID:SCR_002502).
 
 """.format(
-        qsiprep_ver=__version__, nipype_ver=nipype_ver)
+        qsiprep_ver=__version__, nipype_ver=nipype_ver
+    )
     workflow.__postdesc__ = """
 
 Many internal operations of *QSIPrep* use
@@ -537,43 +620,47 @@ to workflows in *QSIPrep*'s documentation]\
 
 ### References
 
-""".format(nilearn_ver=nilearn_ver)
+""".format(
+        nilearn_ver=nilearn_ver
+    )
 
-    merging_distortion_groups = not distortion_group_merge.lower() == 'none'
+    merging_distortion_groups = not distortion_group_merge.lower() == "none"
 
-    inputnode = pe.Node(
-        niu.IdentityInterface(fields=['subjects_dir']), name='inputnode')
+    inputnode = pe.Node(niu.IdentityInterface(fields=["subjects_dir"]), name="inputnode")
 
     bidssrc = pe.Node(
         BIDSDataGrabber(
             subject_data=subject_data,
             dwi_only=dwi_only,
             anat_only=anat_only,
-            anatomical_contrast=anatomical_contrast),
-        name='bidssrc')
+            anatomical_contrast=anatomical_contrast,
+        ),
+        name="bidssrc",
+    )
 
-    bids_info = pe.Node(
-        BIDSInfo(), name='bids_info', run_without_submitting=True)
+    bids_info = pe.Node(BIDSInfo(), name="bids_info", run_without_submitting=True)
 
     summary = pe.Node(
-        SubjectSummary(template=template),
-        name='summary',
-        run_without_submitting=True)
+        SubjectSummary(template=template), name="summary", run_without_submitting=True
+    )
 
     about = pe.Node(
-        AboutSummary(version=__version__, command=' '.join(sys.argv)),
-        name='about',
-        run_without_submitting=True)
+        AboutSummary(version=__version__, command=" ".join(sys.argv)),
+        name="about",
+        run_without_submitting=True,
+    )
 
     ds_report_summary = pe.Node(
-        DerivativesDataSink(base_directory=reportlets_dir, suffix='summary'),
-        name='ds_report_summary',
-        run_without_submitting=True)
+        DerivativesDataSink(base_directory=reportlets_dir, suffix="summary"),
+        name="ds_report_summary",
+        run_without_submitting=True,
+    )
 
     ds_report_about = pe.Node(
-        DerivativesDataSink(base_directory=reportlets_dir, suffix='about'),
-        name='ds_report_about',
-        run_without_submitting=True)
+        DerivativesDataSink(base_directory=reportlets_dir, suffix="about"),
+        name="ds_report_about",
+        run_without_submitting=True,
+    )
 
     num_anat_images = 0 if dwi_only else len(subject_data[anatomical_contrast.lower()])
     # Preprocessing of anatomical data (includes possible registration template)
@@ -592,8 +679,9 @@ to workflows in *QSIPrep*'s documentation]\
         reportlets_dir=reportlets_dir,
         anatomical_contrast=anatomical_contrast,
         num_additional_t2ws=additional_t2ws,
-        has_rois=bool(subject_data['roi']),
-        name="anat_preproc_wf")
+        has_rois=bool(subject_data["roi"]),
+        name="anat_preproc_wf",
+    )
 
     workflow.connect([
         (inputnode, anat_preproc_wf, [('subjects_dir', 'inputnode.subjects_dir')]),
@@ -624,18 +712,22 @@ to workflows in *QSIPrep*'s documentation]\
         return workflow
 
     if impute_slice_threshold > 0 and hmc_model == "none":
-        LOGGER.warning("hmc_model must not be 'none' if slices are to be imputed. "
-                       "setting `impute_slice_threshold=0`")
+        LOGGER.warning(
+            "hmc_model must not be 'none' if slices are to be imputed. "
+            "setting `impute_slice_threshold=0`"
+        )
         impute_slice_threshold = 0
 
     # Handle the grouping of multiple dwi files within a session
     # concatenation_scheme maps the outputs to their final concatenation group
     dwi_fmap_groups, concatenation_scheme = group_dwi_scans(
-        layout, subject_data,
+        layout,
+        subject_data,
         using_fsl=True,
         combine_scans=combine_all_dwis,
         ignore_fieldmaps="fieldmaps" in ignore,
-        concatenate_distortion_groups=merging_distortion_groups)
+        concatenate_distortion_groups=merging_distortion_groups,
+    )
     LOGGER.info(dwi_fmap_groups)
 
     # If a merge is happening at the end, make sure
@@ -655,13 +747,14 @@ to workflows in *QSIPrep*'s documentation]\
                 template=template,
                 output_dir=output_dir,
                 output_prefix=merged_group,
-                source_file=merged_group + '_dwi.nii.gz',
+                source_file=merged_group + "_dwi.nii.gz",
                 shoreline_iters=shoreline_iters,
                 hmc_model=hmc_model,
                 inputs_list=merged_to_subgroups[merged_group],
                 omp_nthreads=omp_nthreads,
                 reportlets_dir=reportlets_dir,
-                name=merged_group.replace('-', '_') + "_final_merge_wf")
+                name=merged_group.replace("-", "_") + "_final_merge_wf",
+            )
 
             workflow.connect([
                 (anat_preproc_wf, merging_group_workflows[merged_group], [
@@ -671,11 +764,12 @@ to workflows in *QSIPrep*'s documentation]\
                 ]),
             ])  # fmt:skip
 
-    outputs_to_files = {dwi_group['concatenated_bids_name']: dwi_group
-                        for dwi_group in dwi_fmap_groups}
+    outputs_to_files = {
+        dwi_group["concatenated_bids_name"]: dwi_group for dwi_group in dwi_fmap_groups
+    }
     if force_syn:
         for group_name in outputs_to_files:
-            outputs_to_files[group_name]['fieldmap_info'] = {"suffix": "syn"}
+            outputs_to_files[group_name]["fieldmap_info"] = {"suffix": "syn"}
     summary.inputs.dwi_groupings = outputs_to_files
 
     make_intramodal_template = False
@@ -691,7 +785,8 @@ to workflows in *QSIPrep*'s documentation]\
         num_iterations=intramodal_template_iters,
         transform=intramodal_template_transform,
         inputs_list=sorted(outputs_to_files.keys()),
-        name="intramodal_template_wf")
+        name="intramodal_template_wf",
+    )
 
     if make_intramodal_template:
         workflow.connect([
@@ -710,8 +805,8 @@ to workflows in *QSIPrep*'s documentation]\
 
     # create a processing pipeline for the dwis in each session
     for output_fname, dwi_info in outputs_to_files.items():
-        source_file = get_source_file(dwi_info['dwi_series'], output_fname, suffix="_dwi")
-        output_wfname = output_fname.replace('-', '_')
+        source_file = get_source_file(dwi_info["dwi_series"], output_fname, suffix="_dwi")
+        output_wfname = output_fname.replace("-", "_")
         dwi_preproc_wf = init_dwi_preproc_wf(
             scan_groups=dwi_info,
             dwi_only=dwi_only,
@@ -741,13 +836,13 @@ to workflows in *QSIPrep*'s documentation]\
             low_mem=low_mem,
             fmap_bspline=fmap_bspline,
             fmap_demean=fmap_demean,
-            t2w_sdc=bool(subject_data.get('t2w')),
+            t2w_sdc=bool(subject_data.get("t2w")),
             sloppy=debug,
-            source_file=source_file
+            source_file=source_file,
         )
         dwi_finalize_wf = init_dwi_finalize_wf(
             scan_groups=dwi_info,
-            name=dwi_preproc_wf.name.replace('dwi_preproc', 'dwi_finalize'),
+            name=dwi_preproc_wf.name.replace("dwi_preproc", "dwi_finalize"),
             output_prefix=output_fname,
             layout=layout,
             hmc_model=hmc_model,
@@ -758,11 +853,12 @@ to workflows in *QSIPrep*'s documentation]\
             output_resolution=output_resolution,
             output_dir=output_dir,
             omp_nthreads=omp_nthreads,
-            do_biascorr=b1_biascorrect_stage=='final',
+            do_biascorr=b1_biascorrect_stage == "final",
             b0_threshold=b0_threshold,
             make_intramodal_template=make_intramodal_template,
             source_file=source_file,
-            write_derivatives=not merging_distortion_groups)
+            write_derivatives=not merging_distortion_groups,
+        )
 
         workflow.connect([
             (anat_preproc_wf, dwi_preproc_wf, [
@@ -809,8 +905,8 @@ to workflows in *QSIPrep*'s documentation]\
         ])  # fmt:skip
 
         if make_intramodal_template:
-            input_name = 'inputnode.{name}_b0_template'.format(name=output_wfname)
-            output_name = 'outputnode.{name}_transform'.format(name=output_wfname)
+            input_name = "inputnode.{name}_b0_template".format(name=output_wfname)
+            output_name = "outputnode.{name}_transform".format(name=output_wfname)
             workflow.connect([
                 (dwi_preproc_wf, intramodal_template_wf, [
                     ('outputnode.b0_ref_image', input_name),
@@ -830,19 +926,18 @@ to workflows in *QSIPrep*'s documentation]\
             ])  # fmt:skip
 
         if merging_distortion_groups:
-            image_name = 'inputnode.{name}_image'.format(name=output_wfname)
-            bval_name = 'inputnode.{name}_bval'.format(name=output_wfname)
-            bvec_name = 'inputnode.{name}_bvec'.format(name=output_wfname)
-            original_bvec_name = 'inputnode.{name}_original_bvec'.format(
-                name=output_wfname)
-            original_bids_name = 'inputnode.{name}_original_image'.format(
-                name=output_wfname)
-            raw_concatenated_image_name = 'inputnode.{name}_raw_concatenated_image'.format(
-                name=output_wfname)
-            confounds_name = 'inputnode.{name}_confounds'.format(name=output_wfname)
-            b0_ref_name = 'inputnode.{name}_b0_ref'.format(name=output_wfname)
-            cnr_name = 'inputnode.{name}_cnr'.format(name=output_wfname)
-            carpetplot_name = 'inputnode.{name}_carpetplot_data'.format(name=output_wfname)
+            image_name = "inputnode.{name}_image".format(name=output_wfname)
+            bval_name = "inputnode.{name}_bval".format(name=output_wfname)
+            bvec_name = "inputnode.{name}_bvec".format(name=output_wfname)
+            original_bvec_name = "inputnode.{name}_original_bvec".format(name=output_wfname)
+            original_bids_name = "inputnode.{name}_original_image".format(name=output_wfname)
+            raw_concatenated_image_name = "inputnode.{name}_raw_concatenated_image".format(
+                name=output_wfname
+            )
+            confounds_name = "inputnode.{name}_confounds".format(name=output_wfname)
+            b0_ref_name = "inputnode.{name}_b0_ref".format(name=output_wfname)
+            cnr_name = "inputnode.{name}_cnr".format(name=output_wfname)
+            carpetplot_name = "inputnode.{name}_carpetplot_data".format(name=output_wfname)
             final_merge_wf = merging_group_workflows[concatenation_scheme[output_fname]]
             workflow.connect([
                 (dwi_finalize_wf, final_merge_wf, [
@@ -865,5 +960,6 @@ to workflows in *QSIPrep*'s documentation]\
 
 
 def provide_processing_advice(subject_data, layout, unringing_method):
-    metadata = {dwi_file: layout.get_metadata(dwi_file) for dwi_file in subject_data['dwi']}
+    """Provide advice on preprocessing options based on the data provided."""
+    # metadata = {dwi_file: layout.get_metadata(dwi_file) for dwi_file in subject_data["dwi"]}
     LOGGER.warn("Partial Fourier acquisitions found for %s. Consider using --unringing-method rpg")
