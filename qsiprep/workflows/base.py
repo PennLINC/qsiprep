@@ -479,9 +479,9 @@ def init_single_subject_wf(
         LOGGER.warning("Building a test workflow")
     else:
         subject_data, layout = collect_data(
-            bids_dir, 
-            subject_id, 
-            filters=bids_filters, 
+            bids_dir,
+            subject_id,
+            filters=bids_filters,
             bids_validate=False
         )
 
@@ -596,28 +596,29 @@ to workflows in *QSIPrep*'s documentation]\
         name="anat_preproc_wf")
 
     workflow.connect([
-        (inputnode, anat_preproc_wf, [('subjects_dir',
-                                       'inputnode.subjects_dir')]),
-        (bidssrc, bids_info, [((info_modality, fix_multi_source_name,
-                                dwi_only, anatomical_contrast),
-                               'in_file')]),
+        (inputnode, anat_preproc_wf, [('subjects_dir', 'inputnode.subjects_dir')]),
+        (bidssrc, bids_info, [
+            ((info_modality, fix_multi_source_name, dwi_only, anatomical_contrast), 'in_file'),
+        ]),
         (inputnode, summary, [('subjects_dir', 'subjects_dir')]),
         (bidssrc, summary, [('t1w', 't1w'), ('t2w', 't2w')]),
         (bids_info, summary, [('subject_id', 'subject_id')]),
-        (bidssrc, anat_preproc_wf, [('t1w', 'inputnode.t1w'),
-                                    ('t2w', 'inputnode.t2w'),
-                                    ('roi', 'inputnode.roi'),
-                                    ('flair', 'inputnode.flair')]),
+        (bidssrc, anat_preproc_wf, [
+            ('t1w', 'inputnode.t1w'),
+            ('t2w', 'inputnode.t2w'),
+            ('roi', 'inputnode.roi'),
+            ('flair', 'inputnode.flair'),
+        ]),
         (summary, anat_preproc_wf, [('subject_id', 'inputnode.subject_id')]),
-        (bidssrc, ds_report_summary, [((info_modality, fix_multi_source_name,
-                                        dwi_only, anatomical_contrast),
-                                       'source_file')]),
+        (bidssrc, ds_report_summary, [
+            ((info_modality, fix_multi_source_name, dwi_only, anatomical_contrast), 'source_file'),
+        ]),
         (summary, ds_report_summary, [('out_report', 'in_file')]),
-        (bidssrc, ds_report_about, [((info_modality, fix_multi_source_name,
-                                      dwi_only, anatomical_contrast),
-                                     'source_file')]),
+        (bidssrc, ds_report_about, [
+            ((info_modality, fix_multi_source_name, dwi_only, anatomical_contrast), 'source_file'),
+        ]),
         (about, ds_report_about, [('out_report', 'in_file')])
-    ])
+    ])  # fmt:skip
 
     if anat_only:
         return workflow
@@ -661,12 +662,14 @@ to workflows in *QSIPrep*'s documentation]\
                 omp_nthreads=omp_nthreads,
                 reportlets_dir=reportlets_dir,
                 name=merged_group.replace('-', '_') + "_final_merge_wf")
+
             workflow.connect([
                 (anat_preproc_wf, merging_group_workflows[merged_group], [
                     ('outputnode.t1_brain', 'inputnode.t1_brain'),
                     ('outputnode.t1_seg', 'inputnode.t1_seg'),
-                    ('outputnode.t1_mask', 'inputnode.t1_mask')])
-            ])
+                    ('outputnode.t1_mask', 'inputnode.t1_mask'),
+                ]),
+            ])  # fmt:skip
 
     outputs_to_files = {dwi_group['concatenated_bids_name']: dwi_group
                         for dwi_group in dwi_fmap_groups}
@@ -699,13 +702,11 @@ to workflows in *QSIPrep*'s documentation]\
                 ('outputnode.t1_seg', 'inputnode.t1_seg'),
                 ('outputnode.t1_aseg', 'inputnode.t1_aseg'),
                 ('outputnode.t1_aparc', 'inputnode.t1_aparc'),
-                ('outputnode.t1_2_mni_forward_transform',
-                 'inputnode.t1_2_mni_forward_transform'),
-                ('outputnode.t1_2_mni_reverse_transform',
-                 'inputnode.t1_2_mni_reverse_transform'),
-                ('outputnode.dwi_sampling_grid',
-                 'inputnode.dwi_sampling_grid')])
-        ])
+                ('outputnode.t1_2_mni_forward_transform', 'inputnode.t1_2_mni_forward_transform'),
+                ('outputnode.t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
+                ('outputnode.dwi_sampling_grid', 'inputnode.dwi_sampling_grid'),
+            ]),
+        ])  # fmt:skip
 
     # create a processing pipeline for the dwis in each session
     for output_fname, dwi_info in outputs_to_files.items():
@@ -764,79 +765,69 @@ to workflows in *QSIPrep*'s documentation]\
             write_derivatives=not merging_distortion_groups)
 
         workflow.connect([
-            (
-                anat_preproc_wf,
-                dwi_preproc_wf,
-                [
-                    ('outputnode.t1_preproc', 'inputnode.t1_preproc'),
-                    ('outputnode.t1_brain', 'inputnode.t1_brain'),
-                    ('outputnode.t1_mask', 'inputnode.t1_mask'),
-                    ('outputnode.t1_seg', 'inputnode.t1_seg'),
-                    ('outputnode.t1_aseg', 'inputnode.t1_aseg'),
-                    ('outputnode.t1_aparc', 'inputnode.t1_aparc'),
-                    ('outputnode.t1_2_mni_forward_transform',
-                     'inputnode.t1_2_mni_forward_transform'),
-                    ('outputnode.t1_2_mni_reverse_transform',
-                     'inputnode.t1_2_mni_reverse_transform'),
-                    ('outputnode.dwi_sampling_grid',
-                     'inputnode.dwi_sampling_grid'),
-                    ('outputnode.t2w_unfatsat', 'inputnode.t2w_unfatsat'),
-                ]),
-            (
-                anat_preproc_wf,
-                dwi_finalize_wf,
-                [
-                    ('outputnode.t1_preproc', 'inputnode.t1_preproc'),
-                    ('outputnode.t1_brain', 'inputnode.t1_brain'),
-                    ('outputnode.t1_mask', 'inputnode.t1_mask'),
-                    ('outputnode.t1_seg', 'inputnode.t1_seg'),
-                    ('outputnode.t1_aseg', 'inputnode.t1_aseg'),
-                    ('outputnode.t1_aparc', 'inputnode.t1_aparc'),
-                    ('outputnode.t1_2_mni_forward_transform',
-                     'inputnode.t1_2_mni_forward_transform'),
-                    ('outputnode.t1_2_mni_reverse_transform',
-                     'inputnode.t1_2_mni_reverse_transform'),
-                    ('outputnode.dwi_sampling_grid',
-                     'inputnode.dwi_sampling_grid'),
-                ]),
-            (
-                dwi_preproc_wf,
-                dwi_finalize_wf,
-                [
-                    ('outputnode.dwi_files', 'inputnode.dwi_files'),
-                    ('outputnode.cnr_map', 'inputnode.cnr_map'),
-                    ('outputnode.bval_files', 'inputnode.bval_files'),
-                    ('outputnode.bvec_files', 'inputnode.bvec_files'),
-                    ('outputnode.b0_ref_image', 'inputnode.b0_ref_image'),
-                    ('outputnode.b0_indices', 'inputnode.b0_indices'),
-                    ('outputnode.hmc_xforms', 'inputnode.hmc_xforms'),
-                    ('outputnode.fieldwarps', 'inputnode.fieldwarps'),
-                    ('outputnode.itk_b0_to_t1', 'inputnode.itk_b0_to_t1'),
-                    ('outputnode.hmc_optimization_data', 'inputnode.hmc_optimization_data'),
-                    ('outputnode.raw_qc_file', 'inputnode.raw_qc_file'),
-                    ('outputnode.coreg_score', 'inputnode.coreg_score'),
-                    ('outputnode.raw_concatenated', 'inputnode.raw_concatenated'),
-                    ('outputnode.confounds', 'inputnode.confounds'),
-                    ('outputnode.carpetplot_data', 'inputnode.carpetplot_data'),
-                    ('outputnode.sdc_scaling_images', 'inputnode.sdc_scaling_images')
-                    ])
-        ])
+            (anat_preproc_wf, dwi_preproc_wf, [
+                ('outputnode.t1_preproc', 'inputnode.t1_preproc'),
+                ('outputnode.t1_brain', 'inputnode.t1_brain'),
+                ('outputnode.t1_mask', 'inputnode.t1_mask'),
+                ('outputnode.t1_seg', 'inputnode.t1_seg'),
+                ('outputnode.t1_aseg', 'inputnode.t1_aseg'),
+                ('outputnode.t1_aparc', 'inputnode.t1_aparc'),
+                ('outputnode.t1_2_mni_forward_transform', 'inputnode.t1_2_mni_forward_transform'),
+                ('outputnode.t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
+                ('outputnode.dwi_sampling_grid', 'inputnode.dwi_sampling_grid'),
+                ('outputnode.t2w_unfatsat', 'inputnode.t2w_unfatsat'),
+            ]),
+            (anat_preproc_wf, dwi_finalize_wf, [
+                ('outputnode.t1_preproc', 'inputnode.t1_preproc'),
+                ('outputnode.t1_brain', 'inputnode.t1_brain'),
+                ('outputnode.t1_mask', 'inputnode.t1_mask'),
+                ('outputnode.t1_seg', 'inputnode.t1_seg'),
+                ('outputnode.t1_aseg', 'inputnode.t1_aseg'),
+                ('outputnode.t1_aparc', 'inputnode.t1_aparc'),
+                ('outputnode.t1_2_mni_forward_transform', 'inputnode.t1_2_mni_forward_transform'),
+                ('outputnode.t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
+                ('outputnode.dwi_sampling_grid', 'inputnode.dwi_sampling_grid'),
+            ]),
+            (dwi_preproc_wf, dwi_finalize_wf, [
+                ('outputnode.dwi_files', 'inputnode.dwi_files'),
+                ('outputnode.cnr_map', 'inputnode.cnr_map'),
+                ('outputnode.bval_files', 'inputnode.bval_files'),
+                ('outputnode.bvec_files', 'inputnode.bvec_files'),
+                ('outputnode.b0_ref_image', 'inputnode.b0_ref_image'),
+                ('outputnode.b0_indices', 'inputnode.b0_indices'),
+                ('outputnode.hmc_xforms', 'inputnode.hmc_xforms'),
+                ('outputnode.fieldwarps', 'inputnode.fieldwarps'),
+                ('outputnode.itk_b0_to_t1', 'inputnode.itk_b0_to_t1'),
+                ('outputnode.hmc_optimization_data', 'inputnode.hmc_optimization_data'),
+                ('outputnode.raw_qc_file', 'inputnode.raw_qc_file'),
+                ('outputnode.coreg_score', 'inputnode.coreg_score'),
+                ('outputnode.raw_concatenated', 'inputnode.raw_concatenated'),
+                ('outputnode.confounds', 'inputnode.confounds'),
+                ('outputnode.carpetplot_data', 'inputnode.carpetplot_data'),
+                ('outputnode.sdc_scaling_images', 'inputnode.sdc_scaling_images'),
+            ]),
+        ])  # fmt:skip
 
         if make_intramodal_template:
             input_name = 'inputnode.{name}_b0_template'.format(name=output_wfname)
             output_name = 'outputnode.{name}_transform'.format(name=output_wfname)
             workflow.connect([
                 (dwi_preproc_wf, intramodal_template_wf, [
-                    ('outputnode.b0_ref_image', input_name)]),
+                    ('outputnode.b0_ref_image', input_name),
+                ]),
                 (intramodal_template_wf, dwi_finalize_wf, [
                     (output_name, 'inputnode.b0_to_intramodal_template_transforms'),
-                    ('outputnode.intramodal_template_to_t1_affine',
-                     'inputnode.intramodal_template_to_t1_affine'),
-                    ('outputnode.intramodal_template_to_t1_warp',
-                     'inputnode.intramodal_template_to_t1_warp'),
-                    ('outputnode.intramodal_template',
-                     'inputnode.intramodal_template')])
-            ])
+                    (
+                        'outputnode.intramodal_template_to_t1_affine',
+                        'inputnode.intramodal_template_to_t1_affine',
+                    ),
+                    (
+                        'outputnode.intramodal_template_to_t1_warp',
+                        'inputnode.intramodal_template_to_t1_warp',
+                    ),
+                    ('outputnode.intramodal_template', 'inputnode.intramodal_template'),
+                ]),
+            ])  # fmt:skip
 
         if merging_distortion_groups:
             image_name = 'inputnode.{name}_image'.format(name=output_wfname)
@@ -859,15 +850,16 @@ to workflows in *QSIPrep*'s documentation]\
                     ('outputnode.bvecs_t1', bvec_name),
                     ('outputnode.dwi_t1', image_name),
                     ('outputnode.t1_b0_ref', b0_ref_name),
-                    ('outputnode.cnr_map_t1', cnr_name)
-                    ]),
+                    ('outputnode.cnr_map_t1', cnr_name),
+                ]),
                 (dwi_preproc_wf, final_merge_wf, [
                     ('outputnode.raw_concatenated', raw_concatenated_image_name),
                     ('outputnode.original_bvecs', original_bvec_name),
                     ('outputnode.original_files', original_bids_name),
                     ('outputnode.carpetplot_data', carpetplot_name),
-                    ('outputnode.confounds', confounds_name)])
-            ])
+                    ('outputnode.confounds', confounds_name),
+                ])
+            ])  # fmt:skip
 
     return workflow
 
