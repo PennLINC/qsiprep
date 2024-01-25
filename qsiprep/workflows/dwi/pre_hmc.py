@@ -65,7 +65,8 @@ def init_dwi_pre_hmc_wf(scan_groups,
                                   no_b0_harmonization=False,
                                   denoise_before_combining=True,
                                   omp_nthreads=1,
-                                  phase_available=False,
+                                  layout=None,
+                                  ignore=["phase"],
                                   low_mem=False)
 
     **Parameters**

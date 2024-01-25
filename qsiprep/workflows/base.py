@@ -740,7 +740,6 @@ to workflows in *QSIPrep*'s documentation]\
             fmap_bspline=fmap_bspline,
             fmap_demean=fmap_demean,
             t2w_sdc=bool(subject_data.get('t2w')),
-            phase_available=phase_available,
             sloppy=debug,
             source_file=source_file
         )
