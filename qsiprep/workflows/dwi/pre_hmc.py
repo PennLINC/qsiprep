@@ -139,7 +139,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
         b1_biascorrect_stage=b1_biascorrect_stage,
         no_b0_harmonization=no_b0_harmonization,
         b0_threshold=b0_threshold,
-        phase_available=phase_available,
+        use_phase="phase" not in ignore,
     )
 
     # Doing biascorr here is the old way.

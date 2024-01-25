@@ -191,8 +191,6 @@ def init_merge_and_denoise_wf(
         )
         conformers[-1].inputs.dwi_file = dwi_file
 
-        # TODO: Conform the phase data.
-
         if denoise_before_combining:
             # Build the denoising workflow
             _, fname, _ = split_filename(dwi_file)
@@ -209,6 +207,8 @@ def init_merge_and_denoise_wf(
                 LOGGER.info("Phase file found for %s", dwi_file)
                 phase_file = phase_files[0].path
 
+            use_phase = phase_available and "phase" not in ignore
+            if use_phase:
                 conform_phase = pe.Node(
                     ConformDwi(
                         orientation=orientation,
@@ -230,7 +230,7 @@ def init_merge_and_denoise_wf(
                     phase_encoding_direction=row.PhaseEncodingAxis,
                     omp_nthreads=omp_nthreads,
                     source_file=dwi_file,
-                    use_phase=phase_available and "phase" not in ignore,
+                    use_phase=use_phase,
                     name=wf_name,
                 ),
             )
@@ -247,7 +247,7 @@ def init_merge_and_denoise_wf(
                 (denoising_wfs[-1], bias_images, [('outputnode.bias_image', f'in{dwi_num}')]),
             ])  # fmt:skip
 
-            if phase_available:
+            if use_phase:
                 workflow.connect([
                     (conform_phase, denoising_wfs[-1], [('dwi_file', 'inputnode.dwi_phase_file')]),
                 ])  # fmt:skip
@@ -674,7 +674,7 @@ def gen_denoising_boilerplate(
     b1_biascorrect_stage,
     no_b0_harmonization,
     b0_threshold,
-    phase_available,
+    use_phase,
 ):
     """Generate a methods boilerplate for the denoising workflow."""
     desc = [
@@ -686,18 +686,17 @@ def gen_denoising_boilerplate(
     harmonize_b0s = not no_b0_harmonization
     last_step = ""
     if do_denoise:
-        if (denoise_method == "dwidenoise") and phase_available:
-            desc.append(
-                "Complex-valued MP-PCA denoising as implemented in MRtrix3's `dwidenoise`"
-                f"[@dwidenoise1] was applied with a {dwi_denoise_window}-voxel window."
-            )
-            last_step = "After MP-PCA, "
-        elif denoise_method == "dwidenoise":
+        if denoise_method == "dwidenoise":
             desc.append(
                 "MP-PCA denoising as implemented in MRtrix3's `dwidenoise`"
                 f"[@dwidenoise1] was applied with a {dwi_denoise_window}-voxel window."
             )
             last_step = "After MP-PCA, "
+            if use_phase:
+                desc.append(
+                    "When phase data were available, this was done on complex-valued data."
+                )
+
         elif denoise_method == "patch2self":
             desc.append("Denoising using `patch2self` [@patch2self] was applied")
             if dwi_denoise_window == "auto":
