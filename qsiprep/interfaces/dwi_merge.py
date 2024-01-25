@@ -673,6 +673,11 @@ class _PhaseToRadOutputSpec(TraitedSpec):
 
 
 class PhaseToRad(SimpleInterface):
+    """Convert phase image from arbitrary units to radians.
+
+    This method assumes that the phase image's minimum and maximum values correspond to
+    -pi and pi, respectively, and scales the image to be between 0 and 2*pi.
+    """
     input_spec = _PhaseToRadInputSpec
     output_spec = _PhaseToRadOutputSpec
 

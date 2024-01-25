@@ -1384,6 +1384,7 @@ class _PolarToComplexOutputSpec(TraitedSpec):
 
 
 class PolarToComplex(CommandLine):
+    """Convert a magnitude and phase image pair to a single complex image using mrcalc."""
     input_spec = _PolarToComplexInputSpec
     output_spec = _PolarToComplexOutputSpec
 
@@ -1410,6 +1411,7 @@ class _ComplexToMagnitudeOutputSpec(TraitedSpec):
 
 
 class ComplexToMagnitude(CommandLine):
+    """Extract the magnitude portion of a complex image using mrcalc."""
     input_spec = _ComplexToMagnitudeInputSpec
     output_spec = _ComplexToMagnitudeOutputSpec
 
