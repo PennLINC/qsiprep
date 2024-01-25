@@ -132,8 +132,7 @@ def init_qsiprep_wf(
         anatomical_contrst : str
             Which contrast to use for the anatomical reference
         ignore : list
-            Preprocessing steps to skip (may include "slicetiming",
-            "fieldmaps")
+            Preprocessing steps to skip (may include "slicetiming", "fieldmaps", "phase")
         low_mem : bool
             Write uncompressed .nii files in some cases to reduce memory usage
         anat_only : bool
@@ -151,7 +150,7 @@ def init_qsiprep_wf(
             window size in voxels for image-based denoising. Must be odd. If 0, '
             'denoising will not be run'
         denoise_method : str
-            Either 'dwidenoise', 'dwidenoisecomplex', 'patch2self' or 'none'
+            Either 'dwidenoise', 'patch2self' or 'none'
         unringing_method : str
             algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
         b1_biascorrect_stage : str
@@ -369,7 +368,7 @@ def init_single_subject_wf(
         name : str
             Name of workflow
         ignore : list
-            Preprocessing steps to skip (may include "sbref", "fieldmaps")
+            Preprocessing steps to skip (may include "sbref", "fieldmaps", "phase")
         debug : bool
             Do inaccurate but fast normalization
         low_mem : bool
@@ -389,7 +388,7 @@ def init_single_subject_wf(
             window size in voxels for image-based denoising. Must be odd. If 0, '
             'denoising will not be run'
         denoise_method : str
-            Either 'dwidenoise', 'dwidenoisecomplex', 'patch2self' or 'none'
+            Either 'dwidenoise', 'patch2self' or 'none'
         unringing_method : str
             algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
         b1_biascorrect_stage : str
@@ -482,8 +481,13 @@ def init_single_subject_wf(
             bids_dir,
             subject_id,
             filters=bids_filters,
-            bids_validate=False
+            bids_validate=False,
         )
+
+    if 'phase' in ignore:
+        subject_data['dwi_phase'] = []
+
+    phase_available = bool(subject_data['dwi_phase'])
 
     # Warn about --dwi-only and non-none --anat-modality
     if dwi_only and anatomical_contrast != "none":
@@ -741,6 +745,7 @@ to workflows in *QSIPrep*'s documentation]\
             fmap_bspline=fmap_bspline,
             fmap_demean=fmap_demean,
             t2w_sdc=bool(subject_data.get('t2w')),
+            phase_available=phase_available,
             sloppy=debug,
             source_file=source_file
         )

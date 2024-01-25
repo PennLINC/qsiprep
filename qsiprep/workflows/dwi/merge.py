@@ -52,6 +52,7 @@ def init_merge_and_denoise_wf(
     mem_gb=1,
     omp_nthreads=1,
     calculate_qc=False,
+    phase_available=False,
     phase_id="same",
     name="merge_and_denoise_wf",
 ):
@@ -83,7 +84,7 @@ def init_merge_and_denoise_wf(
             window size in voxels for image-based denoising. Must be odd. If 0, '
             'denoising will not be run'
         denoise_method : str
-            Either 'dwidenoise', 'dwidenoisecomplex', 'patch2self' or 'none'
+            Either 'dwidenoise', 'patch2self' or 'none'
         unringing_method : str
             algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
         dwi_no_biascorr : bool
@@ -96,6 +97,10 @@ def init_merge_and_denoise_wf(
             is run on the merged dwi series.
         calculate_qc : bool
             Should DSI Studio's QC be calculated on the merged raw data?
+        phase_available : bool
+            True if phase data are available for the DWI scan.
+            If True, and ``denoise_method`` is ``dwidenoise``, then ``dwidenoise``
+            will be run on the complex-valued data.
 
     **Outputs**
 
@@ -201,6 +206,7 @@ def init_merge_and_denoise_wf(
                     phase_encoding_direction=row.PhaseEncodingAxis,
                     omp_nthreads=omp_nthreads,
                     source_file=dwi_file,
+                    phase_available=phase_available,
                     name=wf_name,
                 ),
             )
@@ -208,7 +214,9 @@ def init_merge_and_denoise_wf(
                 (conformers[-1], denoising_wfs[-1], [
                     ('bval_file', 'inputnode.bval_file'),
                     ('bvec_file', 'inputnode.bvec_file'),
-                    ('dwi_file', 'inputnode.dwi_file')]),
+                    ('dwi_file', 'inputnode.dwi_file'),
+                    ('dwi_phase_file', 'inputnode.dwi_phase_file'),
+                ]),
                 (denoising_wfs[-1], denoising_confounds, [
                     ('outputnode.confounds', f'in{dwi_num}'),
                 ]),
@@ -292,6 +300,7 @@ def init_merge_and_denoise_wf(
         mem_gb=mem_gb,
         omp_nthreads=omp_nthreads,
         source_file=source_file,
+        phase_available=phase_available,
         name="merged_denoise",
     )
 
@@ -300,6 +309,7 @@ def init_merge_and_denoise_wf(
             ('out_bval', 'inputnode.bval_file'),
             ('out_dwi', 'inputnode.dwi_file'),
             ('out_bvec', 'inputnode.bvec_file'),
+            ('out_dwi_phase', 'inputnode.dwi_phase_file'),
         ]),
         (merge_dwis, merge_confounds, [('merged_denoising_confounds', 'in1')]),
         (denoising_wf, merge_confounds, [('outputnode.confounds', 'in2')]),
@@ -325,6 +335,7 @@ def init_dwi_denoising_wf(
     source_file,
     partial_fourier,
     phase_encoding_direction,
+    phase_available,
     mem_gb=1,
     omp_nthreads=1,
     name="denoise_wf",
@@ -337,7 +348,7 @@ def init_dwi_denoising_wf(
         window size in voxels for image-based denoising. Must be odd. If 0, '
         'denoising will not be run'
     denoise_method : str
-        Either 'dwidenoise', 'dwidenoisecomplex', 'patch2self' or 'none'
+        Either 'dwidenoise', 'patch2self' or 'none'
     unringing_method : str
         algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
     dwi_no_biascorr : bool
@@ -352,6 +363,10 @@ def init_dwi_denoising_wf(
         fraction of k-space acquired
     phase_encoding_direction : str
         direction of phase encoding
+    phase_available : bool
+        True if phase data are available for the DWI scan.
+        If True, and ``denoise_method`` is ``dwidenoise``, then ``dwidenoise``
+        will be run on the complex-valued data.
     mem_gb : float
         memory in GB to allocate to the workflow
     omp_nthreads : int
@@ -367,6 +382,8 @@ def init_dwi_denoising_wf(
         path to the bval file
     bvec_file
         path to the bvec file
+    dwi_phase_file
+        path to the dwi phase file (optional)
 
     Outputs
     -------
@@ -385,7 +402,7 @@ def init_dwi_denoising_wf(
     """
 
     inputnode = pe.Node(
-        niu.IdentityInterface(fields=["dwi_file", "bval_file", "bvec_file"]),
+        niu.IdentityInterface(fields=["dwi_file", "bval_file", "bvec_file", "dwi_phase_file"]),
         name="inputnode",
     )
     outputnode = pe.Node(
@@ -426,7 +443,7 @@ def init_dwi_denoising_wf(
     ])  # fmt:skip
 
     # Which steps to apply?
-    do_denoise = denoise_method in ("patch2self", "dwidenoise", "dwidenoisecomplex")
+    do_denoise = denoise_method in ("patch2self", "dwidenoise")
     do_unringing = unringing_method in ("mrdegibbs", "rpg")
     do_biascorr = not dwi_no_biascorr
     harmonize_b0s = not no_b0_harmonization
@@ -450,7 +467,7 @@ def init_dwi_denoising_wf(
             mem_gb=DEFAULT_MEMORY_MIN_GB,
         )
 
-        if denoise_method == "dwidenoisecomplex":
+        if (denoise_method == "dwidenoise") and phase_available:
             # If there are phase files available, then we can use dwidenoise
             # on the complex-valued data.
             phase_to_radians = pe.Node(
@@ -458,7 +475,7 @@ def init_dwi_denoising_wf(
                 name="phase_to_radians",
                 n_procs=omp_nthreads,
             )
-            workflow.connect([(inputnode, phase_to_radians, [("phase_file", "in_file")])])
+            workflow.connect([(inputnode, phase_to_radians, [("dwi_phase_file", "in_file")])])
 
             combine_complex = pe.Node(
                 PolarToComplex(),
@@ -513,7 +530,7 @@ def init_dwi_denoising_wf(
             )
             workflow.connect([(inputnode, denoiser, [("bval_file", "bval_file")])])
 
-        if denoise_method in ("dwidenoise", "patch2self"):
+        if (denoise_method in ("dwidenoise", "patch2self")) and not phase_available:
             workflow.connect([
                 (buffernodes[-2], denoiser, [('dwi_file', 'in_file')]),
                 (denoiser, ds_report_denoising, [('out_report', 'in_file')]),
@@ -622,24 +639,26 @@ def _as_list(item):
 
 
 def gen_denoising_boilerplate(
+    *,
     denoise_method,
     dwi_denoise_window,
     unringing_method,
     b1_biascorrect_stage,
     no_b0_harmonization,
     b0_threshold,
+    phase_available,
 ):
     """Generate a methods boilerplate for the denoising workflow."""
     desc = [
         f"Any images with a b-value less than {b0_threshold} s/mm^2 were treated as a "
         "*b*=0 image."
     ]
-    do_denoise = denoise_method in ("dwidenoise", "patch2self", "dwidenoisecomplex")
+    do_denoise = denoise_method in ("dwidenoise", "patch2self")
     do_unringing = unringing_method in ("rpg", "mrdegibbs")
     harmonize_b0s = not no_b0_harmonization
     last_step = ""
     if do_denoise:
-        if denoise_method == "dwidenoisecomplex":
+        if (denoise_method == "dwidenoise") and phase_available:
             desc.append(
                 "Complex-valued MP-PCA denoising as implemented in MRtrix3's `dwidenoise`"
                 f"[@dwidenoise1] was applied with a {dwi_denoise_window}-voxel window."

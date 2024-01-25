@@ -254,9 +254,14 @@ def get_parser():
         action='store',
         nargs="+",
         default=[],
-        choices=['fieldmaps'],
-        help='ignore selected aspects of the input dataset to disable '
-        'corresponding parts of the workflow (a space delimited list)')
+        choices=['fieldmaps', 'phase'],
+        help=(
+            'ignore selected aspects of the input dataset to disable '
+            'corresponding parts of the workflow (a space delimited list). '
+            'Ignoring "phase" will disable complex-valued denoising, '
+            'when phase DWI data are available.'
+        ),
+    )
     g_conf.add_argument(
         '--longitudinal',
         action='store_true',
@@ -279,7 +284,7 @@ def get_parser():
     g_conf.add_argument(
         '--denoise-method', '--denoise_method',
         action='store',
-        choices=['dwidenoise', 'patch2self', 'dwidenoisecomplex', 'none'],
+        choices=['dwidenoise', 'patch2self', 'none'],
         default='dwidenoise',
         help='Image-based denoising method. Either "dwidenoise" (MRtrix), '
              '"patch2self" (DIPY) or none. (default: dwidenoise)')

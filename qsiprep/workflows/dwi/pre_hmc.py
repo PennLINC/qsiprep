@@ -38,6 +38,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
                         source_file,
                         low_mem,
                         calculate_qc=True,
+                        phase_available=False,
                         name="pre_hmc_wf"):
     """
     This workflow merges and denoises dwi scans. The outputs from this workflow is
@@ -63,6 +64,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
                                   no_b0_harmonization=False,
                                   denoise_before_combining=True,
                                   omp_nthreads=1,
+                                  phase_available=False,
                                   low_mem=False)
 
     **Parameters**
@@ -84,6 +86,10 @@ def init_dwi_pre_hmc_wf(scan_groups,
             'LPS' or 'LAS'
         low_mem : bool
             Write uncompressed .nii files in some cases to reduce memory usage
+        phase_available : bool
+            True if phase data are available for the DWI scan.
+            If True, and ``denoise_method`` is ``dwidenoise``, then ``dwidenoise``
+            will be run on the complex-valued data.
 
     **Outputs**
         dwi_file
@@ -113,17 +119,25 @@ def init_dwi_pre_hmc_wf(scan_groups,
     dwi_series = scan_groups['dwi_series']
 
     # Configure the denoising window
-    if denoise_method in ('dwidenoise', 'dwidenoisecomplex') and dwi_denoise_window == 'auto':
+    if (denoise_method == 'dwidenoise') and dwi_denoise_window == 'auto':
         dwi_denoise_window = 5
         LOGGER.info("Automatically using 5, 5, 5 window for dwidenoise")
+
     if dwi_denoise_window != 'auto':
         try:
             dwi_denoise_window = int(dwi_denoise_window)
         except ValueError:
             raise Exception("dwi denoise window must be an integer or 'auto'")
-    workflow.__postdesc__ = gen_denoising_boilerplate(denoise_method, dwi_denoise_window,
-                                                      unringing_method, b1_biascorrect_stage,
-                                                      no_b0_harmonization, b0_threshold)
+
+    workflow.__postdesc__ = gen_denoising_boilerplate(
+        denoise_method=denoise_method,
+        dwi_denoise_window=dwi_denoise_window,
+        unringing_method=unringing_method,
+        b1_biascorrect_stage=b1_biascorrect_stage,
+        no_b0_harmonization=no_b0_harmonization,
+        b0_threshold=b0_threshold,
+        phase_available=phase_available,
+    )
 
     # Doing biascorr here is the old way.
     dwi_no_biascorr = True
@@ -140,20 +154,23 @@ def init_dwi_pre_hmc_wf(scan_groups,
             else (dwi_series, rpe_series)
         pe_axis = dwi_series_pedir[0]
         plus_source_file = get_source_file(plus_files, suffix='_PEplus')
-        merge_plus = init_merge_and_denoise_wf(raw_dwi_files=plus_files,
-                                               b0_threshold=b0_threshold,
-                                               dwi_denoise_window=dwi_denoise_window,
-                                               unringing_method=unringing_method,
-                                               dwi_no_biascorr=dwi_no_biascorr,
-                                               denoise_method=denoise_method,
-                                               no_b0_harmonization=no_b0_harmonization,
-                                               denoise_before_combining=denoise_before_combining,
-                                               orientation=orientation,
-                                               omp_nthreads=omp_nthreads,
-                                               source_file=plus_source_file,
-                                               phase_id=pe_axis + "+ phase-encoding direction",
-                                               calculate_qc=False,
-                                               name="merge_plus")
+        merge_plus = init_merge_and_denoise_wf(
+            raw_dwi_files=plus_files,
+            b0_threshold=b0_threshold,
+            dwi_denoise_window=dwi_denoise_window,
+            unringing_method=unringing_method,
+            dwi_no_biascorr=dwi_no_biascorr,
+            denoise_method=denoise_method,
+            no_b0_harmonization=no_b0_harmonization,
+            denoise_before_combining=denoise_before_combining,
+            orientation=orientation,
+            omp_nthreads=omp_nthreads,
+            source_file=plus_source_file,
+            phase_id=f"{pe_axis}+ phase-encoding direction",
+            calculate_qc=False,
+            phase_available=phase_available,
+            name="merge_plus",
+        )
 
         # Merge, denoise, split, hmc on the minus series
         minus_source_file = get_source_file(minus_files, suffix='_PEminus')
