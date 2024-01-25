@@ -38,7 +38,8 @@ def init_dwi_pre_hmc_wf(scan_groups,
                         source_file,
                         low_mem,
                         calculate_qc=True,
-                        phase_available=False,
+                        layout=None,
+                        ignore=[],
                         name="pre_hmc_wf"):
     """
     This workflow merges and denoises dwi scans. The outputs from this workflow is
@@ -86,10 +87,12 @@ def init_dwi_pre_hmc_wf(scan_groups,
             'LPS' or 'LAS'
         low_mem : bool
             Write uncompressed .nii files in some cases to reduce memory usage
-        phase_available : bool
-            True if phase data are available for the DWI scan.
-            If True, and ``denoise_method`` is ``dwidenoise``, then ``dwidenoise``
-            will be run on the complex-valued data.
+        layout : None or :obj:`bids.layout.BIDSLayout`
+            Used to try to find phase files.
+            Only used if ``denoise_before_combining`` is ``True``.
+        ignore : list
+            List of elements to ignore in processing.
+            The only relevant value for this workflow is "phase".
 
     **Outputs**
         dwi_file
@@ -168,26 +171,31 @@ def init_dwi_pre_hmc_wf(scan_groups,
             source_file=plus_source_file,
             phase_id=f"{pe_axis}+ phase-encoding direction",
             calculate_qc=False,
-            phase_available=phase_available,
+            ignore=ignore,
+            layout=layout,
             name="merge_plus",
         )
 
         # Merge, denoise, split, hmc on the minus series
         minus_source_file = get_source_file(minus_files, suffix='_PEminus')
-        merge_minus = init_merge_and_denoise_wf(raw_dwi_files=minus_files,
-                                                b0_threshold=b0_threshold,
-                                                dwi_denoise_window=dwi_denoise_window,
-                                                denoise_method=denoise_method,
-                                                unringing_method=unringing_method,
-                                                dwi_no_biascorr=dwi_no_biascorr,
-                                                no_b0_harmonization=no_b0_harmonization,
-                                                denoise_before_combining=denoise_before_combining,
-                                                orientation=orientation,
-                                                omp_nthreads=omp_nthreads,
-                                                source_file=minus_source_file,
-                                                phase_id=pe_axis + "- phase-encoding direction",
-                                                calculate_qc=False,
-                                                name="merge_minus")
+        merge_minus = init_merge_and_denoise_wf(
+            raw_dwi_files=minus_files,
+            b0_threshold=b0_threshold,
+            dwi_denoise_window=dwi_denoise_window,
+            denoise_method=denoise_method,
+            unringing_method=unringing_method,
+            dwi_no_biascorr=dwi_no_biascorr,
+            no_b0_harmonization=no_b0_harmonization,
+            denoise_before_combining=denoise_before_combining,
+            orientation=orientation,
+            omp_nthreads=omp_nthreads,
+            source_file=minus_source_file,
+            phase_id=f"{pe_axis}- phase-encoding direction",
+            calculate_qc=False,
+            ignore=ignore,
+            layout=layout,
+            name="merge_minus",
+        )
 
         # Combine the original images from the splits into one 4D series + bvals/bvecs
         pm_validation = pe.Node(niu.Merge(2), name='pm_validation')
@@ -281,6 +289,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
         workflow.__postdesc__ += "Both distortion groups were then merged into a " \
                                  "single file, as required for the FSL workflows.\n\n"
         return workflow
+
     workflow.__postdesc__ += "\n\n"
     merge_dwis = init_merge_and_denoise_wf(
         raw_dwi_files=dwi_series,
@@ -294,7 +303,10 @@ def init_dwi_pre_hmc_wf(scan_groups,
         orientation=orientation,
         calculate_qc=True,
         phase_id=dwi_series_pedir,
-        source_file=source_file)
+        source_file=source_file,
+        ignore=ignore,
+        layout=layout,
+    )
 
     workflow.connect([
         (merge_dwis, outputnode, [

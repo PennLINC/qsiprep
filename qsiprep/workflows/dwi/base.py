@@ -64,7 +64,6 @@ def init_dwi_preproc_wf(dwi_only,
                         low_mem,
                         sloppy,
                         source_file,
-                        phase_available,
                         layout=None):
     """
     This workflow controls the dwi preprocessing stages of qsiprep.
@@ -105,7 +104,6 @@ def init_dwi_preproc_wf(dwi_only,
                                   low_mem=False,
                                   sloppy=True,
                                   source_file='/data/bids/sub-1/dwi/sub-1_dwi.nii.gz',
-                                  phase_available=False,
                                   layout=None)
 
     **Parameters**
@@ -174,10 +172,6 @@ def init_dwi_preproc_wf(dwi_only,
             (default is 1)
         sloppy : bool
             Use low-quality settings for motion correction
-        phase_available : bool
-            True if phase data are available for the DWI scan.
-            If True, and ``denoise_method`` is ``dwidenoise``, then ``dwidenoise``
-            will be run on the complex-valued data.
         source_file : str
             The file name template used for derivatives
 
@@ -330,7 +324,8 @@ Diffusion data preprocessing
                                      source_file=source_file,
                                      low_mem=low_mem,
                                      denoise_before_combining=denoise_before_combining,
-                                     phase_available=phase_available,
+                                     layout=layout,
+                                     ignore=ignore,
                                      omp_nthreads=omp_nthreads)
     test_pre_hmc_connect = pe.Node(TestInput(), name='test_pre_hmc_connect')
     if hmc_model in ('none', '3dSHORE','tensor'):

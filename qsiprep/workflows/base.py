@@ -484,11 +484,6 @@ def init_single_subject_wf(
             bids_validate=False,
         )
 
-    if 'phase' in ignore:
-        subject_data['dwi_phase'] = []
-
-    phase_available = bool(subject_data['dwi_phase'])
-
     # Warn about --dwi-only and non-none --anat-modality
     if dwi_only and anatomical_contrast != "none":
         LOGGER.warn(

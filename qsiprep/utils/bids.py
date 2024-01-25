@@ -149,7 +149,6 @@ def collect_data(bids_dir, participant_label, filters=None, bids_validate=True):
         't1w': {'datatype': 'anat', 'suffix': 'T1w'},
         'roi': {'datatype': 'anat', 'suffix': 'roi'},
         'dwi': {'datatype': 'dwi', 'part': ['mag', None], 'suffix': 'dwi'},
-        'dwi_phase': {'datatype': 'dwi', 'part': 'phase', 'suffix': 'dwi'},
     }
     bids_filters = filters or {}
     for acq, entities in bids_filters.items():

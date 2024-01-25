@@ -49,10 +49,11 @@ def init_merge_and_denoise_wf(
     orientation,
     b0_threshold,
     source_file,
+    layout=None,
+    ignore=[],
     mem_gb=1,
     omp_nthreads=1,
     calculate_qc=False,
-    phase_available=False,
     phase_id="same",
     name="merge_and_denoise_wf",
 ):
@@ -97,10 +98,12 @@ def init_merge_and_denoise_wf(
             is run on the merged dwi series.
         calculate_qc : bool
             Should DSI Studio's QC be calculated on the merged raw data?
-        phase_available : bool
-            True if phase data are available for the DWI scan.
-            If True, and ``denoise_method`` is ``dwidenoise``, then ``dwidenoise``
-            will be run on the complex-valued data.
+        layout : None or :obj:`bids.layout.BIDSLayout`
+            Used to try to find phase files.
+            Only used if ``denoise_before_combining`` is ``True``.
+        ignore : list
+            List of elements to ignore in processing.
+            The only relevant value for this workflow is "phase".
 
     **Outputs**
 
@@ -120,7 +123,6 @@ def init_merge_and_denoise_wf(
             DSI Studio QC text file
 
     """
-
     workflow = Workflow(name=name)
     outputnode = pe.Node(
         niu.IdentityInterface(
@@ -189,10 +191,32 @@ def init_merge_and_denoise_wf(
         )
         conformers[-1].inputs.dwi_file = dwi_file
 
+        # TODO: Conform the phase data.
+
         if denoise_before_combining:
             # Build the denoising workflow
             _, fname, _ = split_filename(dwi_file)
             wf_name = _get_wf_name(fname).replace("preproc", "denoise")
+
+            # Try to find associated phase file.
+            # BIDSLayout.get_nearest() doesn't work well for this.
+            ents = layout.get_file(dwi_file).get_entities()
+            ents["part"] = "phase"
+            phase_files = layout.get(**ents)
+            phase_available = False
+            if len(phase_files) == 1:
+                phase_available = True
+                LOGGER.info("Phase file found for %s", dwi_file)
+                phase_file = phase_files[0].path
+
+                conform_phase = pe.Node(
+                    ConformDwi(
+                        orientation=orientation,
+                        dwi_file=phase_file,
+                    ),
+                    name=f"conform_phase{dwi_num}",
+                )
+
             denoising_wfs.append(
                 init_dwi_denoising_wf(
                     dwi_denoise_window=dwi_denoise_window,
@@ -206,7 +230,7 @@ def init_merge_and_denoise_wf(
                     phase_encoding_direction=row.PhaseEncodingAxis,
                     omp_nthreads=omp_nthreads,
                     source_file=dwi_file,
-                    phase_available=phase_available,
+                    use_phase=phase_available and "phase" not in ignore,
                     name=wf_name,
                 ),
             )
@@ -215,7 +239,6 @@ def init_merge_and_denoise_wf(
                     ('bval_file', 'inputnode.bval_file'),
                     ('bvec_file', 'inputnode.bvec_file'),
                     ('dwi_file', 'inputnode.dwi_file'),
-                    ('dwi_phase_file', 'inputnode.dwi_phase_file'),
                 ]),
                 (denoising_wfs[-1], denoising_confounds, [
                     ('outputnode.confounds', f'in{dwi_num}'),
@@ -223,6 +246,11 @@ def init_merge_and_denoise_wf(
                 (denoising_wfs[-1], noise_images, [('outputnode.noise_image', f'in{dwi_num}')]),
                 (denoising_wfs[-1], bias_images, [('outputnode.bias_image', f'in{dwi_num}')]),
             ])  # fmt:skip
+
+            if phase_available:
+                workflow.connect([
+                    (conform_phase, denoising_wfs[-1], [('dwi_file', 'inputnode.dwi_phase_file')]),
+                ])  # fmt:skip
 
             dwi_source = denoising_wfs[-1]
             edge_prefix = "outputnode."
@@ -300,7 +328,7 @@ def init_merge_and_denoise_wf(
         mem_gb=mem_gb,
         omp_nthreads=omp_nthreads,
         source_file=source_file,
-        phase_available=phase_available,
+        use_phase=False,  # can't use phase with concatenated data
         name="merged_denoise",
     )
 
@@ -335,7 +363,7 @@ def init_dwi_denoising_wf(
     source_file,
     partial_fourier,
     phase_encoding_direction,
-    phase_available,
+    use_phase,
     mem_gb=1,
     omp_nthreads=1,
     name="denoise_wf",
@@ -467,7 +495,7 @@ def init_dwi_denoising_wf(
             mem_gb=DEFAULT_MEMORY_MIN_GB,
         )
 
-        if (denoise_method == "dwidenoise") and phase_available:
+        if (denoise_method == "dwidenoise") and use_phase:
             # If there are phase files available, then we can use dwidenoise
             # on the complex-valued data.
             phase_to_radians = pe.Node(
@@ -530,7 +558,7 @@ def init_dwi_denoising_wf(
             )
             workflow.connect([(inputnode, denoiser, [("bval_file", "bval_file")])])
 
-        if (denoise_method in ("dwidenoise", "patch2self")) and not phase_available:
+        if (denoise_method in ("dwidenoise", "patch2self")) and not use_phase:
             workflow.connect([
                 (buffernodes[-2], denoiser, [('dwi_file', 'in_file')]),
                 (denoiser, ds_report_denoising, [('out_report', 'in_file')]),

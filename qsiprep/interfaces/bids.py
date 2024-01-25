@@ -115,7 +115,6 @@ class BIDSDataGrabberOutputSpec(TraitedSpec):
     t2w = OutputMultiPath(desc='output T2w images')
     flair = OutputMultiPath(desc='output FLAIR images')
     dwi = OutputMultiPath(desc='output DWI images')
-    dwi_phase = OutputMultiPath(desc='output DWI images')
 
 
 class BIDSDataGrabber(SimpleInterface):
