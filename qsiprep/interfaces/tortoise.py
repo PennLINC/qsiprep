@@ -51,7 +51,7 @@ SLOPPY_DRBUDDI = \
 
 
 class TORTOISEInputSpec(CommandLineInputSpec):
-    num_threads = traits.Int(desc="numpy of OMP threads")
+    num_threads = traits.Int(desc="number of OMP threads")
 
 
 class TORTOISECommandLine(CommandLine):
@@ -107,7 +107,7 @@ class _GatherDRBUDDIInputsInputSpec(TORTOISEInputSpec):
         mandatory=True)
 
 
-class _GatherDRBUDDIInputsOutputSpec(TORTOISEInputSpec):
+class _GatherDRBUDDIInputsOutputSpec(TraitedSpec):
     blip_up_image = File(exists=True)
     blip_up_bmat = File(exists=True)
     blip_up_json = File(exists=True)
@@ -564,12 +564,90 @@ class Gibbs(SeriesPreprocReport, TORTOISECommandLine):
         self._calculate_nmse(input_dwi, denoised_nii)
 
 
+class _TORTOISEConvertInputSpec(BaseInterfaceInputSpec):
+    bval_file = File(exists=True, mandatory=True, copyfile=True)
+    bvec_file = File(exists=True, mandatory=True, copyfile=True)
+    dwi_file = File(exists=True, mandatory=True)
+    mask_file = File(exists=True, mandatory=True)
+
+
+class _TORTOISEConvertOutputSpec(TraitedSpec):
+    dwi_file = File(exists=True)
+    mask_file = File(exists=True)
+    bmtxt_file = File(exists=True)
+
+
+class TORTOISEConvert(SimpleInterface):
+    input_spec = _TORTOISEConvertInputSpec
+    output_spec = _TORTOISEConvertOutputSpec
+
+    def _run_interface(self, runtime):
+        """Convert gzipped niftis and bval/bvec into TORTOISE format."""
+        dwi_file = fname_presuffix(
+            self.inputs.dwi_file, newpath=runtime.cwd, use_ext=False,
+            suffix=".nii")
+        dwi_img = nim.load_img(self.inputs.dwi_file, dtype='float32')
+        dwi_img.set_data_dtype('float32')
+        dwi_img.to_filename(dwi_file)
+        bmtxt_file = make_bmat_file(self.inputs.bval_file, self.inputs.bvec_file)
+
+        if isdefined(self.inputs.mask_file):
+            mask_file = fname_presuffix(
+                self.inputs.mask_file, newpath=runtime.cwd, use_ext=False,
+                suffix=".nii")
+            mask_img = nim.load_img(self.inputs.mask_file, dtype='float32')
+            mask_img.set_data_dtype('float32')
+            mask_img.to_filename(mask_file)
+            self._results["mask_file"] = mask_file
+
+        self._results["dwi_file"] = dwi_file
+        self._results["bmtxt_file"] = bmtxt_file
+
+        return runtime
+
+
+class TORTOISEReconCommandLine(TORTOISECommandLine):
+    _link_me = ["bmtxt_file"]
+    # Most TORTOISE commandline programs don't offer an option for
+    # what the output file should be called. The input file
+    def _list_outputs(self):
+
+        # If this is a special case where in_file is not defined and
+        # there is no _suffix_map, do the normal version
+        if not hasattr(self.inputs, "in_file"):
+            raise Exception("TORTOISEReconCommandLine requires an in_file")
+
+        outputs = self.output_spec().get()
+        if not self._suffix_map:
+            raise Exception("Compute classes need to have a _suffix_map")
+
+        for trait_name, suffix in self._suffix_map.items():
+            new_fname = op.basename(
+                self.inputs.in_file.replace(".nii", suffix+".nii"))
+            if op.exists(new_fname):
+                outputs[trait_name] = op.abspath(new_fname)
+        return outputs
+
+    def _format_arg(self, name, spec, value):
+        if not hasattr(self, "_link_me"):
+            raise Exception
+        if name in self._link_me:
+            return ""
+        return super(TORTOISEReconCommandLine, self)._format_arg(name, spec, value)
+
+
 class _TORTOISEEstimatorInputSpec(TORTOISEInputSpec):
-    input = File(
-        exists=True,
+    in_file = File(
+        exists=False,
         mandatory=True,
         argstr="--input %s",
-        desc="Full path to the input NIFTI DWI")
+        desc="Full path to the input NIFTI DWI",
+        copyfile=False)
+    bmtxt_file = File(
+        exists=True,
+        mandatory=True,
+        desc="Full path to the input bmtxt file",
+        copyfile=False)
     mask = File(
         exists=True,
         argstr="--mask %s",
@@ -585,15 +663,6 @@ class _TORTOISEEstimatorInputSpec(TORTOISEInputSpec):
         desc="Use voxelwise Bmatrices for gradient non-linearity correction")
 
 
-class _TORTOISEEstimatorCmdline(TORTOISECommandLine):
-
-    def _format_arg(self, name, spec, value):
-        """Trick to get noise image or voxelwise bmat symlinked without an arg"""
-        if name == "voxelwise_bmat_file":
-            return "--use_voxelwise_bmat 1"
-        return super(_TORTOISEEstimatorCmdline, self)._format_arg(name, spec, value)
-
-
 class _EstimateTensorInputSpec(_TORTOISEEstimatorInputSpec):
     reg_mode = traits.Enum(
         "WLLS",
@@ -602,8 +671,8 @@ class _EstimateTensorInputSpec(_TORTOISEEstimatorInputSpec):
         "DIAG",
         "N2",
         "NT2",
-        default_value="WLLS",
         argstr="--reg_mode %s",
+        usedefault=True,
         desc="Regression mode. WLLS: Weighted linear least squares, "
              "NLLS: Nonlinear least squares, "
              "RESTORE: Robust NLLS, "
@@ -627,13 +696,19 @@ class _EstimateTensorInputSpec(_TORTOISEEstimatorInputSpec):
 
 class _EstimateTensorOutputSpec(TraitedSpec):
     dt_file = File(exists=True)
+    am_file = File(exists=True)
     cs_file = File(exists=True)
 
 
-class EstimateTensor(_TORTOISEEstimatorCmdline):
+class EstimateTensor(TORTOISEReconCommandLine):
     input_spec = _EstimateTensorInputSpec
-    output_spec = _
+    output_spec = _EstimateTensorOutputSpec
     _cmd = "EstimateTensor"
+    _suffix_map = {
+        "dt_file": "_L1_DT",
+        "am_file": "_L1_AM"
+    }
+    _link_me = ["bmtxt", ]
 
     def _format_arg(self, name, spec, value):
         """Trick to get noise image or voxelwise bmat symlinked without an arg"""
@@ -670,10 +745,78 @@ class _EstimateMAPMRIOutputSpec(TraitedSpec):
     coeffs_file = File(exists=True)
 
 
-class EstimateMAPMRI(_TORTOISEEstimatorCmdline):
+class EstimateMAPMRI(TORTOISEReconCommandLine):
     input_spec = _EstimateMAPMRIInputSpec
     output_spec = _EstimateMAPMRIOutputSpec
     _cmd = "EstimateMAPMRI"
+
+
+class _TensorMapInputSpec(TORTOISEInputSpec):
+    in_file = File(
+        exists=True,
+        mandatory=True,
+        argstr="%s",
+        position=1,
+        copyfile=True)
+    am_file = File(
+        exists=True,
+        copyfile=False)
+
+
+class _TensorMapCmdline(TORTOISEReconCommandLine):
+    _link_me = ["am_file"]
+
+
+class _ComputeFAMapInputSpec(_TensorMapInputSpec):
+    filter_outliers = traits.Bool(
+        True,
+        usedefault=True,
+        argstr="%d",
+        position=2)
+
+
+class _ComputeFAMapOutputSpec(TraitedSpec):
+    fa_file = File(exists=True)
+
+
+class ComputeFAMap(_TensorMapCmdline):
+    input_spec = _ComputeFAMapInputSpec
+    output_spec = _ComputeFAMapOutputSpec
+    _cmd = "ComputeFAMap"
+    _suffix_map = {"fa_file": "_FA"}
+
+
+class _ComputeRDMapOutputSpec(TraitedSpec):
+    rd_file = File(exists=True)
+
+
+class ComputeRDMap(_TensorMapCmdline):
+    input_spec = _TensorMapInputSpec
+    output_spec = _ComputeRDMapOutputSpec
+    _cmd = "ComputeRDMap"
+    _suffix_map = {"rd_file": "_RD"}
+
+
+class _ComputeADMapOutputSpec(TraitedSpec):
+    ad_file = File(exists=True)
+
+
+class ComputeADMap(_TensorMapCmdline):
+    input_spec = _TensorMapInputSpec
+    output_spec = _ComputeADMapOutputSpec
+    _cmd = "ComputeADMap"
+    _suffix_map = {"ad_file": "_AD"}
+
+
+class _ComputeLIMapOutputSpec(TraitedSpec):
+    li_file = File(exists=True)
+
+
+class ComputeLIMap(_TensorMapCmdline):
+    input_spec = _TensorMapInputSpec
+    output_spec = _ComputeLIMapOutputSpec
+    _cmd = "ComputeLIMap"
+    _suffix_map = {"li_file": "_LI"}
 
 
 def split_into_up_and_down_niis(dwi_files, bval_files, bvec_files, original_images,

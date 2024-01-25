@@ -19,7 +19,7 @@ requires-python = ">=3.5"
 dependencies = [
     'importlib_resources; python_version < "3.9"',
 ]
-version = "0.19.2.dev24+g51e78c2.d20231204"
+version = "0.20.1"
 
 [project.urls]
 Homepage = "https://github.com/pennbbl/qsiprep"
@@ -28,8 +28,8 @@ Paper = "https://doi.org/10.1038/s41592-022-01458-7"
 "Docker Images" = "https://hub.docker.com/r/pennlinc/qsiprep/tags/"
 
 [project.scripts]
-qsiprep-docker = "qsiprep-docker=qsiprep_docker:main"
-qsiprep-singularity = "qsiprep-singularity=qsiprep_singularity:main"
+qsiprep-docker = "qsiprep_container.qsiprep_docker:main"
+qsiprep-singularity = "qsiprep_container.qsiprep_singularity:main"
 
 #
 # Hatch configurations
@@ -39,57 +39,10 @@ qsiprep-singularity = "qsiprep-singularity=qsiprep_singularity:main"
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["qsiprep-container"]
+packages = ["qsiprep_container"]
 exclude = [ ]
 
 ##  The following two sections configure setuptools_scm in the hatch way
 
 [tool.hatch.version]
 source = "vcs"
-
-[tool.hatch.build.hooks.vcs]
-version-file = "_version.py"
-
-#
-# Developer tool configurations
-#
-
-[tool.black]
-line-length = 99
-target-version = ['py38']
-include = '\.pyi?$'
-exclude = '''
-(
-  /(
-      \.eggs         # exclude a few common directories in the
-    | \.git          # root of the project
-    | \.github
-    | \.hg
-    | \.pytest_cache
-    | _build
-    | build
-    | dist
-  )/
-  | qsiprep/_version.py
-)
-'''
-
-
-
-[tool.flake8]
-max-line-length = "99"
-doctests = "False"
-exclude = [
-    "*build/",
-    "qsiprep/_version.py",
-    "qsiprep/_warnings.py",
-    "qsiprep/config.py",
-    "qsiprep/data/",
-    "qsiprep/tests/",
-    "qsiprep/utils/sentry.py",
-]
-ignore = ["D107", "E203", "E402", "E722", "W503", "N803", "N806", "N815"]
-per-file-ignores = [
-    "**/__init__.py : F401",
-    "docs/conf.py : E265",
-]
