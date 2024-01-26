@@ -23,6 +23,7 @@ from .gradients import write_concatenated_fsl_gradients
 from .images import split_bvals_bvecs
 from .denoise import (SeriesPreprocReport, SeriesPreprocReportInputSpec,
                       SeriesPreprocReportOutputSpec)
+from .recon_scalars import ReconScalars, ReconScalarsInputSpec, ReconScalarsOutputSpec
 import nilearn.image as nim
 from ..niworkflows.viz.utils import cuts_from_bbox, compose_view, plot_denoise
 import pandas as pd
@@ -719,38 +720,6 @@ class EstimateTensor(TORTOISEReconCommandLine):
         return super(EstimateTensor, self)._format_arg(name, spec, value)
 
 
-class _EstimateMAPMRIInputSpec(_TORTOISEEstimatorInputSpec):
-    dti_file = File(
-        exists=True,
-        argstr="--dti %s",
-        desc="DTI image computed externally")
-    a0_file = File(
-        exists=True,
-        argstr="--A0 %s",
-        desc="A0 image computed externally")
-    map_order = traits.Int(
-        default_value=4,
-        usedefault=True,
-        argstr="--map_order %d",
-        desc="MAPMRI order")
-    big_delta = traits.CFloat(
-        argstr="--big_delta %.7f",
-        desc="Big Delta in seconds")
-    small_delta = traits.CFloat(
-        argstr="--big_delta %.7f",
-        desc="Small Delta in seconds")
-
-
-class _EstimateMAPMRIOutputSpec(TraitedSpec):
-    coeffs_file = File(exists=True)
-
-
-class EstimateMAPMRI(TORTOISEReconCommandLine):
-    input_spec = _EstimateMAPMRIInputSpec
-    output_spec = _EstimateMAPMRIOutputSpec
-    _cmd = "EstimateMAPMRI"
-
-
 class _TensorMapInputSpec(TORTOISEInputSpec):
     in_file = File(
         exists=True,
@@ -819,6 +788,74 @@ class ComputeLIMap(_TensorMapCmdline):
     _suffix_map = {"li_file": "_LI"}
 
 
+class _EstimateMAPMRIInputSpec(_TORTOISEEstimatorInputSpec):
+    dt_file = File(
+        exists=True,
+        argstr="--dti %s",
+        requires=["a0_file"],
+        desc="DTI image computed externally")
+    a0_file = File(
+        exists=True,
+        argstr="--A0 %s",
+        desc="A0 image computed externally")
+    map_order = traits.Int(
+        default_value=4,
+        usedefault=True,
+        argstr="--map_order %d",
+        desc="MAPMRI order")
+    big_delta = traits.CFloat(
+        argstr="--big_delta %.7f",
+        desc="Big Delta in seconds")
+    small_delta = traits.CFloat(
+        argstr="--small_delta %.7f",
+        desc="Small Delta in seconds")
+
+
+class _EstimateMAPMRIOutputSpec(TraitedSpec):
+    coeffs_file = File(exists=True)
+    uvec_file = File(exists=True)
+
+
+class EstimateMAPMRI(TORTOISEReconCommandLine):
+    input_spec = _EstimateMAPMRIInputSpec
+    output_spec = _EstimateMAPMRIOutputSpec
+    _cmd = "EstimateMAPMRI"
+    _suffix_map = {
+        "coeffs_file": "_mapmri",
+        "uvec_file": "_uvec"
+    }
+
+
+class _ComputeMAPMRIInputSpec(TORTOISEInputSpec):
+    in_file = File(
+        exists=True,
+        mandatory=True,
+        argstr="%s",
+        position=1,
+        desc="_mapmri.nii file",
+        copyfile=False)
+    uvec_file = File(
+        exists=True,
+        mandatory=True,
+        argstr="%s",
+        position=2,
+        copyfile=False)
+
+
+class _ComputeMAPMRI_PAOutputSpec(TraitedSpec):
+    pa_file = File(exists=True)
+    path_file = File(exists=True)
+
+
+class ComputeMAPMRI_PA(TORTOISEReconCommandLine):
+    input_spec = _ComputeMAPMRIInputSpec
+    output_spec = _ComputeMAPMRI_PAOutputSpec
+    _cmd = "ComputeMAPMRI_PA"
+    _suffix_map = {
+        "pa_file": "_PA",
+        "path_file": "_PAth"}
+
+
 def split_into_up_and_down_niis(dwi_files, bval_files, bvec_files, original_images,
                                 prefix, make_bmat=True, assignments_only=False):
     """Takes the concatenated output from pre_hmc_wf and split it into "up" and "down"
@@ -885,6 +922,7 @@ def split_into_up_and_down_niis(dwi_files, bval_files, bvec_files, original_imag
     make_bmat_file(down_bval_file, down_bvec_file)
 
     return blip_assignments, up_dwi_file, up_bmat_file, down_dwi_file, down_bmat_file
+
 
 
 def make_bmat_file(bvals, bvecs):

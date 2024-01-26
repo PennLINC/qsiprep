@@ -10,11 +10,13 @@ import logging
 import nipype.pipeline.engine as pe
 import nipype.interfaces.utility as niu
 from ...interfaces.bids import ReconDerivativesDataSink
+from nipype.interfaces.base import traits
 from qsiprep.interfaces.tortoise import (
     TORTOISEConvert,
     EstimateTensor, ComputeFAMap, ComputeRDMap, ComputeLIMap, ComputeADMap,
-    EstimateMAPMRI)
+    EstimateMAPMRI, ComputeMAPMRI_PA)
 from ...interfaces.interchange import recon_workflow_input_fields
+from ...interfaces.recon_scalars import TORTOISEReconScalars
 from ...engine import Workflow
 
 LOGGER = logging.getLogger('nipype.interface')
@@ -44,20 +46,6 @@ def init_tortoise_estimator_wf(
 
     Outputs
 
-        wm_txt
-            SH fiber response function for white matter
-        wm_fod
-            FOD SH coefficients for white matter
-        gm_txt
-            SH fiber response function for gray matter
-        gm_fod
-            FOD SH coefficients for gray matter
-        csf_txt
-            SH fiber response function for CSF
-        csf_fod
-            FOD SH coefficients for CSF
-        fod_sh_mif
-            The same file as wm_fod.
 
 
     Params
@@ -84,9 +72,10 @@ def init_tortoise_estimator_wf(
                 # Tensor fit and derivatives
                 'dt_image', 'fa_image', 'ad_image', 'eigvec_image',
                 'gm_odf', 'gm_txt', 'csf_odf',
-                    'csf_txt', 'scalar_image_info']),
+                'csf_txt', 'scalar_image_info', 'recon_scalars']),
         name="outputnode")
     workflow = Workflow(name=name)
+    recon_scalars = pe.Node(TORTOISEReconScalars(workflow_name=name), name="recon_scalars")
     plot_reports = params.pop("plot_reports", True)
     desc = """TORTOISE Reconstruction
 
@@ -99,6 +88,10 @@ Methods implemented in TORTOISE (@tortoisev3) were used for reconstruction. """
     if estimate_tensor_separately and not tensor_opts:
         raise Exception('Setting "estimate_tensor_separately": true requires options'
                         'for "estimate_tensor". Please update your pipeline config.' )
+
+    # Do we have deltas?
+    deltas = (params.get("big_delta", None), params.get("small_delta", None))
+    approximate_deltas = None in deltas
 
     # TORTOISE requires unzipped float32 nifti files and a bmtxt file.
     tortoise_convert = pe.Node(TORTOISEConvert(), name="tortoise_convert")
@@ -141,6 +134,11 @@ Methods implemented in TORTOISE (@tortoisev3) were used for reconstruction. """
             (estimate_tensor, compute_dt_li, [
                 ("dt_file", "in_file"),
                 ("am_file", "am_file")]),
+            (estimate_tensor, recon_scalars, [("am_file", "am_file")]),
+            (compute_dt_fa, recon_scalars, [("fa_file", "fa_file")]),
+            (compute_dt_rd, recon_scalars, [("rd_file", "rd_file")]),
+            (compute_dt_ad, recon_scalars, [("ad_file", "ad_file")]),
+            (compute_dt_li, recon_scalars, [("li_file", "li_file")])
         ])
         if output_suffix:
             ds_dt = pe.Node(
@@ -195,202 +193,85 @@ Methods implemented in TORTOISE (@tortoisev3) were used for reconstruction. """
             ])
 
 
-#     # EstimateMAPMRI
-#     response = params.get('response', {})
-#     response_algorithm = response.get('algorithm', 'dhollander')
+    # EstimateMAPMRI
+    mapmri_opts = params.get("estimate_mapmri", {})
+    if not mapmri_opts:
+        return workflow
 
-#     response['algorithm'] = response_algorithm
+    # Set deltas if we have them. Prevent only one from being defined
+    if approximate_deltas:
+        LOGGER.warning('Both "big_delta" and "small_delta" are required for precise MAPMRI')
+        big_delta = little_delta = traits.undefined
+    else:
+        mapmri_opts["big_delta"], mapmri_opts["small_delta"] = deltas
+    mapmri_opts["num_threads"] = omp_nthreads
 
+    estimate_mapmri = pe.Node(
+        EstimateMAPMRI(**mapmri_opts),
+        name="estimate_mapmri",
+        n_procs=omp_nthreads)
 
-#     if response_algorithm == 'csd':
-#         desc += 'Single-tissue '
-#     else:
-#         desc += 'Multi-tissue '
-#     LOGGER.info("Response configuration: %s", response)
-
-
-
-#     # FOD estimation
-#     fod = params.get('fod', {})
-#     fod_algorithm = fod.get('algorithm', 'msmt_csd')
-#     fod['algorithm'] = fod_algorithm
-#     fod['nthreads'] = omp_nthreads
-#     LOGGER.info("Using %d threads in MRtrix3", omp_nthreads)
-#     using_multitissue = fod_algorithm in ('ss3t', 'msmt_csd')
-
-#     # Intensity normalize?
-#     run_mtnormalize = params.get('mtnormalize', True) and using_multitissue
-
-#     create_mif = pe.Node(MRTrixIngress(), name='create_mif')
-#     method_5tt = response.pop("method_5tt","dhollander")
-#     # Use dwi2response from 3Tissue for updated dhollander
-#     estimate_response = pe.Node(
-#         SS3TDwi2Response(**response),
-#         name='estimate_response',
-#         n_procs=omp_nthreads)
-
-#     if response_algorithm == 'msmt_5tt':
-#         if method_5tt == "hsvs":
-#             workflow.connect([
-#                 (inputnode, estimate_response, [('qsiprep_5tt_hsvs', 'mtt_file')])])
-#         else:
-#             raise Exception("Unrecognized 5tt method: " + method_5tt)
-
-#     if fod_algorithm in ('msmt_csd', 'csd'):
-#         estimate_fod = pe.Node(
-#             EstimateFOD(**fod),
-#             name='estimate_fod',
-#             n_procs=omp_nthreads)
-#         desc += ' Reconstruction was done using MRtrix3 (@mrtrix3).'
-#     elif fod_algorithm == 'ss3t':
-#         estimate_fod = pe.Node(
-#             SS3TEstimateFOD(**fod),
-#             name='estimate_fod',
-#             n_procs=omp_nthreads)
-#         desc += """ \
-# A single-shell-optimized multi-tissue CSD was performed using MRtrix3Tissue
-# (https://3Tissue.github.io), a fork of MRtrix3 (@mrtrix3)"""
-
-#     workflow.connect([
-#         (estimate_response, estimate_fod, [('wm_file', 'wm_txt'),
-#                                            ('gm_file', 'gm_txt'),
-#                                            ('csf_file', 'csf_txt')]),
-#         (create_mif, estimate_fod, [('mif_file', 'in_file')]),
-#         (inputnode, estimate_fod, [('dwi_mask', 'mask_file')]),
-#         (create_mif, estimate_response, [('mif_file', 'in_file')]),
-#         (estimate_response, outputnode, [('wm_file', 'wm_txt'),
-#                                          ('gm_file', 'gm_txt'),
-#                                          ('csf_file', 'csf_txt')]),
-#         (inputnode, estimate_response, [('dwi_mask', 'in_mask')])])
+    compute_mapmri_pa = pe.Node(
+        ComputeMAPMRI_PA(num_threads=1),
+        name="compute_mapmri_pa",
+        n_procs=1)
 
 
-#     if not run_mtnormalize:
-#         workflow.connect([
-#             (estimate_fod, plot_peaks, [('wm_odf', 'mif_file')]),
-#             (estimate_fod, outputnode, [('wm_odf', 'fod_sh_mif'),
-#                                         ('wm_odf', 'wm_odf'),
-#                                         ('gm_odf', 'gm_odf'),
-#                                         ('csf_odf', 'csf_odf')])])
-#     else:
-#         intensity_norm = pe.Node(
-#             MTNormalize(
-#                 nthreads=omp_nthreads,
-#                 inlier_mask='inliers.nii.gz',
-#                 norm_image='norm.nii.gz'),
-#             name='intensity_norm',
-#             n_procs=omp_nthreads)
-#         workflow.connect([
-#             (inputnode, intensity_norm, [('dwi_mask', 'mask_file')]),
-#             (estimate_fod, intensity_norm, [('wm_odf', 'wm_odf'),
-#                                             ('gm_odf', 'gm_odf'),
-#                                             ('csf_odf', 'csf_odf')]),
-#             (intensity_norm, outputnode, [('wm_normed_odf', 'fod_sh_mif'),
-#                                           ('wm_normed_odf', 'wm_odf'),
-#                                           ('gm_normed_odf', 'gm_odf'),
-#                                           ('csf_normed_odf', 'csf_odf')])])
-#         desc += " FODs were intensity-normalized using mtnormalize (@mtnormalize)."
+    if estimate_tensor_separately:
+        workflow.connect([
+            (estimate_tensor, estimate_mapmri, [
+                ("dt_file", "dt_file"),
+                ("am_file", "a0_file")])])
 
-#     if plot_reports:
-#         # Make a visual report of the model
-#         plot_peaks = pe.Node(
-#             CLIReconPeaksReport(),
-#             name='plot_peaks',
-#             n_procs=omp_nthreads)
-#         ds_report_peaks = pe.Node(
-#             ReconDerivativesDataSink(extension='.png',
-#                                     desc="wmFOD",
-#                                     suffix='peaks'),
-#             name='ds_report_peaks',
-#             run_without_submitting=True)
-#         workflow.connect([
-#             (inputnode, plot_peaks, [('dwi_ref', 'background_image'),
-#                                     ('odf_rois', 'odf_rois'),
-#                                     ('dwi_mask', 'mask_file')]),
-#             (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')])])
 
-#         # Plot targeted regions
-#         if available_anatomical_data['has_qsiprep_t1w_transforms']:
-#             ds_report_odfs = pe.Node(
-#                 ReconDerivativesDataSink(extension='.png',
-#                                         desc="wmFOD",
-#                                         suffix='odfs'),
-#                 name='ds_report_odfs',
-#                 run_without_submitting=True)
-#             workflow.connect(plot_peaks, 'odf_report', ds_report_odfs, 'in_file')
+    workflow.connect([
+        (tortoise_convert, estimate_mapmri,[
+            ("bmtxt_file", "bmtxt_file"),
+            ("dwi_file", "in_file"),
+            ("mask_file", "mask")]),
+        (estimate_mapmri, compute_mapmri_pa, [
+            ("coeffs_file", "in_file"),
+            ("uvec_file", "uvec_file")]),
+        (compute_mapmri_pa, recon_scalars,[
+            ("pa_file", "pa_file"),
+            ("path_file", "path_file")])
+    ])
+    if output_suffix:
+        ds_map_coeffs = pe.Node(
+            ReconDerivativesDataSink(extension='.nii.gz',
+                                    desc="mapmri",
+                                    suffix=output_suffix,
+                                    compress=True),
+            name='ds_map_coeffs',
+            run_without_submitting=True)
+        ds_map_uvec = pe.Node(
+            ReconDerivativesDataSink(extension='.nii.gz',
+                                    desc="mapmriuvec",
+                                    suffix=output_suffix,
+                                    compress=True),
+            name='ds_map_uvec',
+            run_without_submitting=True)
+        ds_map_pa = pe.Node(
+            ReconDerivativesDataSink(extension='.nii.gz',
+                                    desc="mapmriPA",
+                                    suffix=output_suffix,
+                                    compress=True),
+            name='ds_map_pa',
+            run_without_submitting=True)
+        ds_map_path = pe.Node(
+            ReconDerivativesDataSink(extension='.nii.gz',
+                                    desc="mapmriPAth",
+                                    suffix=output_suffix,
+                                    compress=True),
+            name='ds_map_path',
+            run_without_submitting=True)
+        workflow.connect([
+            (estimate_mapmri, ds_map_coeffs, [("coeffs_file", "in_file")]),
+            (estimate_mapmri, ds_map_uvec, [("uvec_file", "in_file")]),
+            (compute_mapmri_pa, ds_map_pa, [("pa_file", "in_file")]),
+            (compute_mapmri_pa, ds_map_path, [("path_file", "in_file")]),
+        ])
 
-#         fod_source, fod_key = (estimate_fod, "wm_odf") if not run_mtnormalize \
-#             else (intensity_norm, "wm_normed_odf")
-#         workflow.connect(fod_source, fod_key, plot_peaks, "mif_file")
-
-#     if output_suffix:
-#         normed = '' if not run_mtnormalize else 'mtnormed'
-#         ds_wm_odf = pe.Node(
-#             ReconDerivativesDataSink(extension='.mif.gz',
-#                                      desc="wmFOD" + normed,
-#                                      suffix=output_suffix,
-#                                      compress=True),
-#             name='ds_wm_odf',
-#             run_without_submitting=True)
-#         workflow.connect(outputnode, 'wm_odf', ds_wm_odf, 'in_file')
-#         ds_wm_txt = pe.Node(
-#             ReconDerivativesDataSink(extension='.txt',
-#                                      desc="wmFOD",
-#                                      suffix=output_suffix),
-#             name='ds_wm_txt',
-#             run_without_submitting=True)
-#         workflow.connect(outputnode, 'wm_txt', ds_wm_txt, 'in_file')
-
-#         # If multitissue write out FODs for csf, gm
-#         if using_multitissue:
-#             ds_gm_odf = pe.Node(
-#                 ReconDerivativesDataSink(extension='.mif.gz',
-#                                          desc="gmFOD" + normed,
-#                                          suffix=output_suffix,
-#                                          compress=True),
-#                 name='ds_gm_odf',
-#                 run_without_submitting=True)
-#             workflow.connect(outputnode, 'gm_odf', ds_gm_odf, 'in_file')
-#             ds_gm_txt = pe.Node(
-#                 ReconDerivativesDataSink(extension='.txt',
-#                                          desc="gmFOD",
-#                                          suffix=output_suffix),
-#                 name='ds_gm_txt',
-#                 run_without_submitting=True)
-#             workflow.connect(outputnode, 'gm_txt', ds_gm_txt, 'in_file')
-
-#             ds_csf_odf = pe.Node(
-#                 ReconDerivativesDataSink(extension='.mif.gz',
-#                                          desc="csfFOD" + normed,
-#                                          suffix=output_suffix,
-#                                          compress=True),
-#                 name='ds_csf_odf',
-#                 run_without_submitting=True)
-#             workflow.connect(outputnode, 'csf_odf', ds_csf_odf, 'in_file')
-#             ds_csf_txt = pe.Node(
-#                 ReconDerivativesDataSink(extension='.txt',
-#                                          desc="csfFOD",
-#                                          suffix=output_suffix),
-#                 name='ds_csf_txt',
-#                 run_without_submitting=True)
-#             workflow.connect(outputnode, 'csf_txt', ds_csf_txt, 'in_file')
-
-#             if run_mtnormalize:
-#                 ds_mt_norm = pe.Node(
-#                     ReconDerivativesDataSink(extension='.mif.gz',
-#                                              desc="mtnorm",
-#                                              suffix=output_suffix,
-#                                              compress=True),
-#                     name='ds_mt_norm',
-#                     run_without_submitting=True)
-#                 workflow.connect(intensity_norm, 'norm_image', ds_mt_norm, 'in_file')
-#                 ds_inlier_mask = pe.Node(
-#                     ReconDerivativesDataSink(extension='.mif.gz',
-#                                              desc="mtinliermask",
-#                                              suffix=output_suffix,
-#                                              compress=True),
-#                     name='ds_inlier_mask',
-#                     run_without_submitting=True)
-#                 workflow.connect(intensity_norm, 'inlier_mask', ds_inlier_mask, 'in_file')
 
     workflow.__desc__ = desc
     return workflow
