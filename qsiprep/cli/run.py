@@ -434,12 +434,17 @@ def get_parser():
         action='store',
         default='OASIS',
         choices=['OASIS', 'NKI'],
-        help='select ANTs skull-stripping template (default: OASIS)')
+        help='select ANTs skull-stripping template (default: OASIS). (IGNORED)',
+    )
     g_ants.add_argument(
         '--skull-strip-fixed-seed', '--skull_strip_fixed_seed',
         action='store_true',
-        help='do not use a random seed for skull-stripping - will ensure '
-        'run-to-run replicability when used with --omp-nthreads 1')
+        help=(
+            'do not use a random seed for skull-stripping - will ensure '
+            'run-to-run replicability when used with --omp-nthreads 1. '
+            '(IGNORED)'
+        ),
+    )
     g_ants.add_argument(
         '--skip-anat-based-spatial-normalization', '--skip_anat_based_spatial_normalization',
         action='store_true',
@@ -476,8 +481,11 @@ def get_parser():
         '--prefer_dedicated_fmaps', '--prefer-dedicated-fmaps',
         action='store_true',
         default=False,
-        help='forces unwarping to use files from the fmap directory instead '
-        'of using an RPEdir scan from the same session.')
+        help=(
+            'forces unwarping to use files from the fmap directory instead '
+            'of using an RPEdir scan from the same session. (IGNORED)'
+        ),
+    )
     g_fmap.add_argument(
         '--fmap-bspline', '--fmap_bspline',
         action='store_true',
@@ -497,7 +505,7 @@ def get_parser():
         action='store_true',
         default=False,
         help='EXPERIMENTAL: Use fieldmap-free distortion correction. To use '
-        'this option, "template" must be passed to --output-space')
+        'this option, "template" must be passed to --output-space. (IGNORED)')
     g_syn.add_argument(
         '--force-syn', '--force_syn',
         action='store_true',
@@ -971,9 +979,7 @@ def build_qsiprep_workflow(opts, retval):
         work_dir=work_dir,
         output_dir=str(output_dir),
         ignore=opts.ignore,
-        hires=False,
         anatomical_contrast=opts.anat_modality,
-        freesurfer=opts.do_reconall,
         bids_filters=opts.bids_filters,
         debug=opts.sloppy,
         low_mem=opts.low_mem,
@@ -993,8 +999,6 @@ def build_qsiprep_workflow(opts, retval):
         denoise_before_combining=not opts.denoise_after_combining,
         write_local_bvecs=opts.write_local_bvecs,
         omp_nthreads=omp_nthreads,
-        skull_strip_template=opts.skull_strip_template,
-        skull_strip_fixed_seed=opts.skull_strip_fixed_seed,
         force_spatial_normalization=force_spatial_normalization,
         output_resolution=opts.output_resolution,
         template=opts.anatomical_template,
@@ -1009,10 +1013,8 @@ def build_qsiprep_workflow(opts, retval):
         b0_to_t1w_transform=opts.b0_to_t1w_transform,
         intramodal_template_iters=opts.intramodal_template_iters,
         intramodal_template_transform=opts.intramodal_template_transform,
-        prefer_dedicated_fmaps=opts.prefer_dedicated_fmaps,
         fmap_bspline=opts.fmap_bspline,
         fmap_demean=opts.fmap_no_demean,
-        use_syn=opts.use_syn_sdc,
         force_syn=opts.force_syn
     )
     retval['return_code'] = 0
