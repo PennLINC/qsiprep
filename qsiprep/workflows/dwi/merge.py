@@ -17,7 +17,6 @@ from nipype.utils.filemanip import split_filename
 
 from ...engine import Workflow
 from ...interfaces import ConformDwi, DerivativesDataSink
-from ...interfaces.bids import get_metadata_for_nifti
 from ...interfaces.dipy import Patch2Self
 from ...interfaces.dwi_merge import MergeDWIs, PhaseToRad, StackConfounds
 from ...interfaces.gradients import ExtractB0s
@@ -64,16 +63,18 @@ def init_merge_and_denoise_wf(
         :simple_form: yes
 
         from qsiprep.workflows.dwi import init_merge_and_denoise_wf
-        wf = init_merge_and_dwnoise_wf(['/path/to/dwi/sub-1_dwi.nii.gz'],
-                                       source_file='/data/sub-1/dwi/sub-1_dwi.nii.gz',
-                                       dwi_denoise_window=7,
-                                       denoise_method='patch2self',
-                                       b0_threshold=100,
-                                       unringing_method='mrdegibbs',
-                                       dwi_no_biascorr=False,
-                                       no_b0_harmonization=False,
-                                       denoise_before_combining=True,
-                                       combine_all_dwis=True)
+        wf = init_merge_and_dwnoise_wf(
+            ['/path/to/dwi/sub-1_dwi.nii.gz'],
+            source_file='/data/sub-1/dwi/sub-1_dwi.nii.gz',
+            dwi_denoise_window=7,
+            denoise_method='patch2self',
+            b0_threshold=100,
+            unringing_method='mrdegibbs',
+            dwi_no_biascorr=False,
+            no_b0_harmonization=False,
+            denoise_before_combining=True,
+            combine_all_dwis=True,
+        )
 
     **Parameters**
 
@@ -180,7 +181,7 @@ def init_merge_and_denoise_wf(
     denoising_wfs = []
 
     # Get a data frame of the raw_dwi_files and their imaging parameters:
-    dwi_df = get_acq_parameters_df(raw_dwi_files)
+    dwi_df = get_acq_parameters_df(raw_dwi_files, layout=layout)
     for dwi_num, row in dwi_df.iterrows():
         dwi_num += 1  # start at 1
         dwi_file = row.BIDSFile
@@ -744,14 +745,14 @@ def gen_denoising_boilerplate(
     return " ".join(desc)
 
 
-def get_acq_parameters_df(dwi_file_list):
+def get_acq_parameters_df(dwi_file_list, layout):
     """Figure out what the"""
     file_rows = []
     for dwi_file in dwi_file_list:
-        meta = get_metadata_for_nifti(dwi_file)
-        update_metadata_from_nifti_header(meta, dwi_file)
-        meta["BIDSFile"] = dwi_file
-        file_rows.append(meta)
+        metadata = layout.get_metadata(dwi_file)
+        update_metadata_from_nifti_header(metadata, dwi_file)
+        metadata["BIDSFile"] = dwi_file
+        file_rows.append(metadata)
 
     merged_acq_params = pd.DataFrame(
         file_rows,
