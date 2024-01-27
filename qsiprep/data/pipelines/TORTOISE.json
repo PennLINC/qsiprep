@@ -1,0 +1,25 @@
+{
+  "name": "tortoise_recon",
+  "space": "T1w",
+  "atlases": [],
+  "anatomical": [],
+  "nodes": [
+    {
+      "name": "tortoise_dtmapmri",
+      "software": "TORTOISE",
+      "action": "estimate",
+      "output_suffix": "tortoise",
+      "input": "qsiprep",
+      "parameters": {
+        "estimate_tensor_separately": true,
+        "big_delta": null,
+        "small_delta": null,
+        "estimate_tensor": {
+          "bval_cutoff": 2400,
+          "write_cs": true},
+        "estimate_mapmri": {
+          "map_order": 4}
+      }
+    }
+  ]
+}

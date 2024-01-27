@@ -1,13 +1,12 @@
 #!/usr/bin/env python
 """
-The qsiprep on Docker wrapper
+Using qsiprep within a singularity container (qsiprep-<version>.simg)
 
 
-This is a lightweight Python wrapper to run qsiprep.
-Docker must be installed and running. This can be checked
-running ::
+To run qsiprep with singularity, a singularity image must be built (see Installation).
+This is the preferred method for HPCs. For example ::
 
-  docker info
+  singularity run --cleanenv -B /data/:/home/$user/data qsiprep-<version>.simg
 
 Please report any feedback to our GitHub repository
 (https://github.com/pennbbl/qsiprep) and do not
@@ -16,6 +15,7 @@ uses (https://qsiprep.readthedocs.io/en/latest/citing.html).
 """
 import sys
 import os
+import os.path as op
 import re
 import subprocess
 
@@ -37,9 +37,8 @@ that is robust to differences in scan acquisition protocols and that requires \
 minimal user input, while providing easily interpretable and comprehensive \
 error and output reporting."""
 __longdesc__ = """\
-This package is a basic wrapper for qsiprep that generates the appropriate
-Docker commands, providing an intuitive interface to running the qsiprep
-workflow in a Docker environment."""
+This package provides an intuitive interface for running the qsiprep
+workflow with a singularity image."""
 
 DOWNLOAD_URL = (
     'https://pypi.python.org/packages/source/{name[0]}/{name}/{name}-{ver}.tar.gz'.format(
@@ -49,14 +48,14 @@ CLASSIFIERS = [
     'Development Status :: 3 - Alpha',
     'Intended Audience :: Science/Research',
     'License :: OSI Approved :: BSD License',
-    'Programming Language :: Python :: 3.6',
+    'Programming Language :: Python :: 3.7',
 ]
 
 
 MISSING = """
 Image '{}' is missing
 Would you like to download? [Y/n] """
-PKG_PATH = '/usr/local/miniconda/lib/python3.8/site-packages'
+PKG_PATH = '/usr/local/miniconda/lib/python3.10/site-packages'
 
 # Monkey-patch Py2 subprocess
 if not hasattr(subprocess, 'DEVNULL'):
@@ -94,48 +93,30 @@ except NameError:
     pass
 
 
-def check_docker():
-    """Verify that docker is installed and the user has permission to
-    run docker images.
+def check_singularity():
+    """Verify that singularity is installed and the user has permission to
+    run singularity images.
 
     Returns
     -------
-    -1  Docker can't be found
-     0  Docker found, but user can't connect to daemon
+    -1  singularity can't be found
      1  Test run OK
      """
     try:
-        ret = subprocess.run(['docker', 'version'], stdout=subprocess.PIPE,
-                             stderr=subprocess.PIPE)
+        subprocess.run(['singularity', '--version'],
+                       stdout=subprocess.PIPE,
+                       stderr=subprocess.PIPE)
     except OSError as e:
         from errno import ENOENT
         if e.errno == ENOENT:
             return -1
         raise e
-    if ret.stderr.startswith(b"Cannot connect to the Docker daemon."):
-        return 0
     return 1
 
 
 def check_image(image):
-    """Check whether image is present on local system"""
-    ret = subprocess.run(['docker', 'images', '-q', image],
-                         stdout=subprocess.PIPE)
-    return bool(ret.stdout)
-
-
-def check_memory(image):
-    """Check total memory from within a docker container"""
-    ret = subprocess.run(['docker', 'run', '--rm', '--entrypoint=free',
-                          image, '-m'],
-                         stdout=subprocess.PIPE)
-    if ret.returncode:
-        return -1
-
-    mem = [line.decode().split()[1]
-           for line in ret.stdout.splitlines()
-           if line.startswith(b'Mem:')][0]
-    return int(mem)
+    """Check whether image is present and you can read it"""
+    return os.path.exists(image) and os.access(image, os.R_OK)
 
 
 def merge_help(wrapper_help, target_help):
@@ -232,20 +213,7 @@ def get_parser():
                         required=False,
                         action='store',
                         type=os.path.abspath)
-    # For eddy
-    parser.add_argument('--eddy-config', '--eddy_config',
-                        required=False,
-                        action='store',
-                        type=os.path.abspath)
-
-    # For BIDS filters
     parser.add_argument('--bids-filter-file', '--bids_filter_file',
-                        required=False,
-                        action='store',
-                        type=os.path.abspath)
-
-    # For FreeSurfer input
-    parser.add_argument('--freesurfer-input', '--freesurfer_input',
                         required=False,
                         action='store',
                         type=os.path.abspath)
@@ -256,8 +224,9 @@ def get_parser():
                         help="show program's version number and exit")
 
     # Allow alternative images (semi-developer)
+
     parser.add_argument('-i', '--image', metavar='IMG', type=str,
-                        default='pennbbl/qsiprep:{}'.format(__version__),
+                        default=os.path.expanduser("~") + "/qsiprep-latest.simg",
                         help='image name')
 
     # Options for mapping files and directories into container
@@ -276,8 +245,10 @@ def get_parser():
                         required=False,
                         action='store',
                         type=str)
-    g_wrap.add_argument('--gpus', required=False,
-                        help='gpus argument sent to docker', type=str)
+    g_wrap.add_argument('--eddy-config', '--eddy_config',
+                        required=False,
+                        action='store',
+                        type=os.path.abspath)
 
     # Developer patch/shell options
     g_dev = parser.add_argument_group(
@@ -304,6 +275,16 @@ def get_parser():
     return parser
 
 
+def mkdir(dirpath):
+    if op.exists(dirpath):
+        return 1
+    try:
+        os.makedirs(dirpath)
+    except Exception:
+        print("Unable to create {}. Exiting.".format(dirpath))
+        sys.exit(1)
+
+
 def main():
     """Entry point"""
 
@@ -317,16 +298,14 @@ def main():
         opts.help = True
 
     # Stop if no docker / docker fails to run
-    check = check_docker()
+    check = check_singularity()
     if check < 1:
         if opts.version:
             print('qsiprep wrapper {!s}'.format(__version__))
         if opts.help:
             parser.print_help()
-        if check == -1:
-            print("qsiprep: Could not find docker command... Is it installed?")
         else:
-            print("qsiprep: Make sure you have permission to run 'docker'")
+            print("qsiprep: Could not find singularity command... Is it installed?")
         return 1
 
     # For --help or --version, ask before downloading an image
@@ -344,16 +323,22 @@ def main():
                 return 1
         if resp not in ('y', 'Y', ''):
             return 0
-        print('Downloading. This may take a while...')
+        print('Downloading and building image. This may take a while...')
+        ret = subprocess.run(
+            "singularity build {} docker://pennbbl/qsiprep:latest".format(opts.image))
+        if ret > 0:
+            print("Critical Error: Unable to create singularity image {}".format(opts.image))
+            sys.exit(1)
 
     # Warn on low memory allocation
-    mem_total = check_memory(opts.image)
-    if mem_total == -1:
-        print('Could not detect memory capacity of Docker container.\n'
-              'Do you have permission to run docker?')
-        return 1
-    if not (opts.help or opts.version or '--reports-only' in unknown_args) and mem_total < 8000:
-        print('Warning: <8GB of RAM is available within your Docker '
+    # Warn on low memory allocation
+    mem_bytes = os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES')
+    mem_gib = mem_bytes/(1024.**3)
+    if mem_gib < 10:
+        print('Warning: <10GB of RAM is available on your system.\n'
+              'Some parts of QSIPrep may fail to complete.')
+    if not (opts.help or opts.version or '--reports-only' in unknown_args) and mem_gib < 10:
+        print('Warning: <10GB of RAM is available within your '
               'environment.\nSome parts of qsiprep may fail to complete.')
         if '--mem_mb' not in unknown_args:
             resp = 'N'
@@ -365,64 +350,61 @@ def main():
             if resp not in ('y', 'Y', ''):
                 return 0
 
-    command = ['docker', 'run', '--rm', '-it']
+    command = ['singularity', 'run', '--cleanenv']
 
     # Patch working repositories into installed package directories
     for pkg in ('qsiprep', 'nipype'):
         repo_path = getattr(opts, 'patch_' + pkg)
         if repo_path is not None:
-            command.extend(['-v',
-                            '{}:{}/{}:ro'.format(repo_path, PKG_PATH, pkg)])
+            command.extend(['-B',
+                            '{}:{}/{}'.format(repo_path, PKG_PATH, pkg)])
 
-    if opts.env:
-        for envvar in opts.env:
-            command.extend(['-e', '%s=%s' % tuple(envvar)])
-
-    if opts.user:
-        command.extend(['-u', opts.user])
-
+    main_args = ['/sngl/data', '/sngl/out', opts.analysis_level]
     if opts.fs_license_file:
-        command.extend([
-            '-v', '{}:/opt/freesurfer/license.txt:ro'.format(
-                opts.fs_license_file)])
-
-    main_args = ['/data', '/out', opts.analysis_level]
+        license_dir, license_fname = op.split(opts.fs_license_file)
+        mounted_license = "/mnt/" + license_fname
+        command.extend(['-B', license_dir + ':/mnt'])
+        main_args.extend(['--fs-license-file', mounted_license])
     if opts.bids_dir:
-        command.extend(['-v', ':'.join((opts.bids_dir, '/data', 'ro'))])
+        command.extend(['-B', ':'.join((opts.bids_dir, '/sngl/data'))])
     if opts.recon_input:
-        command.extend(['-v', ':'.join((opts.recon_input, '/qsiprep-output', 'ro'))])
-        main_args.extend(['--recon-input', '/qsiprep-output'])
-    if opts.freesurfer_input:
-        command.extend(['-v', ':'.join((opts.freesurfer_input, '/sngl/freesurfer-input', 'ro'))])
-        main_args.extend(['--freesurfer-input', '/sngl/freesurfer-input'])
-    if opts.gpus:
-        command.extend(['--gpus', opts.gpus])
+        command.extend(['-B', ':'.join((opts.recon_input, '/sngl/qsiprep-output'))])
+        main_args.extend(['--recon-input', '/sngl/qsiprep-output'])
     if opts.recon_spec:
         if os.path.exists(opts.recon_spec):
-            command.extend(['-v', ':'.join((opts.recon_spec, '/sngl/spec/spec.json', 'ro'))])
-            main_args.extend(['--recon-spec', '/sngl/spec/spec.json'])
+            spec_dir, spec_fname = op.split(opts.recon_spec)
+            mounted_spec = "/sngl/spec/" + spec_fname
+            command.extend(['-B', ':'.join((spec_dir, '/sngl/spec'))])
+            main_args.extend(['--recon-spec', mounted_spec])
         else:
             main_args.extend(['--recon-spec', opts.recon_spec])
-    if opts.bids_filter_file:
-        if os.path.exists(opts.bids_filter_file):
-            command.extend(['-v', ':'.join((opts.bids_filter_file,
-                            '/sngl/filter/filter.json', 'ro'))])
-            main_args.extend(['--bids-filter-file', '/sngl/filter/filter.json'])
     if opts.eddy_config:
-        command.extend(['-v', ':'.join((opts.eddy_config, '/sngl/eddy/eddy_config.json', 'ro'))])
-        main_args.extend(['--eddy-config', '/sngl/eddy/eddy_config.json'])
-    if opts.custom_atlases:
-        command.extend(['-v', ':'.join((opts.custom_atlases, '/atlas/qsirecon_atlases'))])
+        config_dir, config_fname = op.split(opts.eddy_config)
+        mounted_config = "/sngl/eddy/" + config_fname
+        command.extend(['-B', ':'.join((config_dir, '/sngl/eddy'))])
+        main_args.extend(['--eddy-config', mounted_config])
+    if opts.bids_filter_file:
+        filter_dir, filter_fname = op.split(opts.bids_filter_file)
+        mounted_filter = "/sngl/filter/" + filter_fname
+        command.extend(['-B', ':'.join((filter_dir, '/sngl/filter'))])
+        main_args.extend(['--bids-filter-file', mounted_filter])
     if opts.output_dir:
-        command.extend(['-v', ':'.join((opts.output_dir, '/out'))])
+        mkdir(opts.output_dir)
+        command.extend(['-B', ':'.join((opts.output_dir, '/sngl/out'))])
+    if opts.custom_atlases:
+        command.extend(['-B', ':'.join((opts.custom_atlases, '/atlas/qsirecon_atlases'))])
     if opts.work_dir:
-        command.extend(['-v', ':'.join((opts.work_dir, '/scratch'))])
-        unknown_args.extend(['-w', '/scratch'])
+        mkdir(opts.work_dir)
+        command.extend(['-B', ':'.join((opts.work_dir, '/sngl/scratch'))])
+        unknown_args.extend(['-w', '/sngl/scratch'])
+
     if opts.config:
-        command.extend(['-v', ':'.join((opts.config,
-                                        '/root/.nipype/nipype.cfg', 'ro'))])
+        config_dir, config_fname = op.split(opts.config)
+        command.extend(['-B', ':'.join((config_dir,
+                                        '/root/.nipype'))])
+
     if opts.shell:
-        command.append('--entrypoint=bash')
+        command[1] = 'shell'
 
     command.append(opts.image)
 

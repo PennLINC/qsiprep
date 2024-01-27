@@ -19,8 +19,8 @@ if [[ "${CIRCLECI}" = "true" ]]; then
   fi
 else
   IN_CI="false"
-  NTHREADS=2
-  OMP_NTHREADS=2
+  NTHREADS=1
+  OMP_NTHREADS=1
 fi
 export IN_CI NTHREADS OMP_NTHREADS
 

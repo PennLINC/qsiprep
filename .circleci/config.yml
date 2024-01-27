@@ -224,6 +224,18 @@ jobs:
             cd .circleci
             bash AutoTrackTest.sh
 
+  Recon_Tortoise:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run: *runinstall
+      - run:
+          name: Test the TORTOISE recon workflow
+          no_output_timeout: 1h
+          command: |
+            cd .circleci
+            bash TortoiseRecon.sh
+
   Recon_DIPY:
     <<: *dockersetup
     steps:
@@ -562,6 +574,13 @@ workflows:
             tags:
               only: /.*/
 
+      - Recon_Tortoise:
+          requires:
+            - build
+          filters:
+            tags:
+              only: /.*/
+
       - Recon_DIPY:
           requires:
             - build
@@ -606,6 +625,7 @@ workflows:
             - Recon_3Tissue
             - Recon_MRtrix3
             - Recon_AutoTrack
+            - Recon_Tortoise
             - Recon_DIPY
             - Recon_AMICO
             - Recon_PYAFQ
