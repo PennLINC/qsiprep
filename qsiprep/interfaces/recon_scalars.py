@@ -80,7 +80,25 @@ tortoise_scalars = {
     },
     "path_file": {
         "desc": "PAth from MAPMRI"
-    }
+    },
+    "rtop_file": {
+        "desc": "Return to origin probability from MAPMRI"
+    },
+    "rtap_file": {
+        "desc": "Return to axis probability from MAPMRI"
+    },
+    "rtpp_file": {
+        "desc": "Return to plane probability from MAPMRI"
+    },
+    "ng_file": {
+        "desc": "Non-Gaussianity from MAPMRI"
+    },
+    "ngpar_file": {
+        "desc": "Non-Gaussianity parallel from MAPMRI"
+    },
+    "ngperp_file": {
+        "desc": "Non-Gaussianity perpendicular from MAPMRI"
+    },
 }
 
 class _TORTOISEReconScalarInputSpec(ReconScalarsInputSpec):

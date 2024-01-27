@@ -856,6 +856,38 @@ class ComputeMAPMRI_PA(TORTOISEReconCommandLine):
         "path_file": "_PAth"}
 
 
+class _ComputeMAPMRI_RTOPOutputSpec(TraitedSpec):
+    rtop_file = File(exists=True)
+    rtap_file = File(exists=True)
+    rtpp_file = File(exists=True)
+
+
+class ComputeMAPMRI_RTOP(TORTOISEReconCommandLine):
+    input_spec = _ComputeMAPMRIInputSpec
+    output_spec = _ComputeMAPMRI_RTOPOutputSpec
+    _cmd = "ComputeMAPMRI_RTOP"
+    _suffix_map = {
+        "rtap_file": "_RTAP",
+        "rtop_file": "_RTOP",
+        "rtpp_file": "_RTPP"}
+
+
+class _ComputeMAPMRI_NGOutputSpec(TraitedSpec):
+    ng_file = File(exists=True)
+    ngpar_file = File(exists=True)
+    ngperp_file = File(exists=True)
+
+
+class ComputeMAPMRI_NG(TORTOISEReconCommandLine):
+    input_spec = _ComputeMAPMRIInputSpec
+    output_spec = _ComputeMAPMRI_NGOutputSpec
+    _cmd = "ComputeMAPMRI_NG"
+    _suffix_map = {
+        "ng_file": "_NG",
+        "ngpar_file": "_NGpar",
+        "ngperp_file": "_NGperp"}
+
+
 def split_into_up_and_down_niis(dwi_files, bval_files, bvec_files, original_images,
                                 prefix, make_bmat=True, assignments_only=False):
     """Takes the concatenated output from pre_hmc_wf and split it into "up" and "down"

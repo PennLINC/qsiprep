@@ -14,7 +14,7 @@ from nipype.interfaces.base import traits
 from qsiprep.interfaces.tortoise import (
     TORTOISEConvert,
     EstimateTensor, ComputeFAMap, ComputeRDMap, ComputeLIMap, ComputeADMap,
-    EstimateMAPMRI, ComputeMAPMRI_PA)
+    EstimateMAPMRI, ComputeMAPMRI_PA, ComputeMAPMRI_RTOP, ComputeMAPMRI_NG)
 from ...interfaces.interchange import recon_workflow_input_fields
 from ...interfaces.recon_scalars import TORTOISEReconScalars
 from ...engine import Workflow
@@ -216,6 +216,15 @@ Methods implemented in TORTOISE (@tortoisev3) were used for reconstruction. """
         name="compute_mapmri_pa",
         n_procs=1)
 
+    compute_mapmri_rtop = pe.Node(
+        ComputeMAPMRI_RTOP(num_threads=1),
+        name="compute_mapmri_rtop",
+        n_procs=1)
+
+    compute_mapmri_ng = pe.Node(
+        ComputeMAPMRI_NG(num_threads=1),
+        name="compute_mapmri_ng",
+        n_procs=1)
 
     if estimate_tensor_separately:
         workflow.connect([
@@ -234,7 +243,21 @@ Methods implemented in TORTOISE (@tortoisev3) were used for reconstruction. """
             ("uvec_file", "uvec_file")]),
         (compute_mapmri_pa, recon_scalars,[
             ("pa_file", "pa_file"),
-            ("path_file", "path_file")])
+            ("path_file", "path_file")]),
+        (estimate_mapmri, compute_mapmri_rtop, [
+            ("coeffs_file", "in_file"),
+            ("uvec_file", "uvec_file")]),
+        (compute_mapmri_rtop, recon_scalars,[
+            ("rtop_file", "rtop_file"),
+            ("rtap_file", "rtap_file"),
+            ("rtpp_file", "rtpp_file")]),
+        (estimate_mapmri, compute_mapmri_ng, [
+            ("coeffs_file", "in_file"),
+            ("uvec_file", "uvec_file")]),
+        (compute_mapmri_ng, recon_scalars,[
+            ("ng_file", "ng_file"),
+            ("ngpar_file", "ngpar_file"),
+            ("ngperp_file", "ngperp_file")]),
     ])
     if output_suffix:
         ds_map_coeffs = pe.Node(
@@ -265,11 +288,59 @@ Methods implemented in TORTOISE (@tortoisev3) were used for reconstruction. """
                                     compress=True),
             name='ds_map_path',
             run_without_submitting=True)
+        ds_map_rtop = pe.Node(
+            ReconDerivativesDataSink(extension='.nii.gz',
+                                    desc="mapmriRTOP",
+                                    suffix=output_suffix,
+                                    compress=True),
+            name='ds_map_rtop',
+            run_without_submitting=True)
+        ds_map_rtap = pe.Node(
+            ReconDerivativesDataSink(extension='.nii.gz',
+                                    desc="mapmriRTAP",
+                                    suffix=output_suffix,
+                                    compress=True),
+            name='ds_map_rtap',
+            run_without_submitting=True)
+        ds_map_rtpp = pe.Node(
+            ReconDerivativesDataSink(extension='.nii.gz',
+                                    desc="mapmriRTPP",
+                                    suffix=output_suffix,
+                                    compress=True),
+            name='ds_map_rtpp',
+            run_without_submitting=True)
+        ds_map_ng = pe.Node(
+            ReconDerivativesDataSink(extension='.nii.gz',
+                                    desc="mapmriNG",
+                                    suffix=output_suffix,
+                                    compress=True),
+            name='ds_map_ng',
+            run_without_submitting=True)
+        ds_map_ngpar = pe.Node(
+            ReconDerivativesDataSink(extension='.nii.gz',
+                                    desc="mapmriNGpar",
+                                    suffix=output_suffix,
+                                    compress=True),
+            name='ds_map_ngpar',
+            run_without_submitting=True)
+        ds_map_ngperp = pe.Node(
+            ReconDerivativesDataSink(extension='.nii.gz',
+                                    desc="mapmriNGperp",
+                                    suffix=output_suffix,
+                                    compress=True),
+            name='ds_map_ngperp',
+            run_without_submitting=True)
         workflow.connect([
             (estimate_mapmri, ds_map_coeffs, [("coeffs_file", "in_file")]),
             (estimate_mapmri, ds_map_uvec, [("uvec_file", "in_file")]),
             (compute_mapmri_pa, ds_map_pa, [("pa_file", "in_file")]),
             (compute_mapmri_pa, ds_map_path, [("path_file", "in_file")]),
+            (compute_mapmri_rtop, ds_map_rtop, [("rtop_file", "in_file")]),
+            (compute_mapmri_rtop, ds_map_rtap, [("rtap_file", "in_file")]),
+            (compute_mapmri_rtop, ds_map_rtpp, [("rtpp_file", "in_file")]),
+            (compute_mapmri_ng, ds_map_ng, [("ng_file", "in_file")]),
+            (compute_mapmri_ng, ds_map_ngpar, [("ngpar_file", "in_file")]),
+            (compute_mapmri_ng, ds_map_ngperp, [("ngperp_file", "in_file")]),
         ])
 
 
