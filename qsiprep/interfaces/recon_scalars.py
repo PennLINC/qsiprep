@@ -110,3 +110,27 @@ for input_name in tortoise_scalars:
 class TORTOISEReconScalars(ReconScalars):
     input_spec = _TORTOISEReconScalarInputSpec
     scalar_metadata = tortoise_scalars
+
+
+# Scalars produced in the AMICO recon workflow
+amico_scalars = {
+    "icvf_image": {
+        "desc": "Intracellular volume fraction from NODDI"
+    },
+    "isovf_image": {
+        "desc": "Isotropic volume fraction from NODDI"
+    },
+    "od_image": {
+        "desc": "OD from NODDI"
+    }
+}
+
+class _AMICOReconScalarInputSpec(ReconScalarsInputSpec):
+    pass
+
+for input_name in tortoise_scalars:
+    _AMICOReconScalarInputSpec.add_class_trait(input_name, File(exists=True))
+
+class AMICOReconScalars(ReconScalars):
+    input_spec = _AMICOReconScalarInputSpec
+    scalar_metadata = amico_scalars
