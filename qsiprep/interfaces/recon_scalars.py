@@ -23,8 +23,7 @@ class ReconScalars(SimpleInterface):
     input_spec = ReconScalarsInputSpec
     output_spec = ReconScalarsOutputSpec
     scalar_metadata = {}
-    _ignore_traits = ("workflow_name")
-
+    _ignore_traits = ("workflow_name", "scalar_metadata")
     def __init__(self, from_file=None, resource_monitor=None, **inputs):
 
         # Get self._results defined
@@ -128,9 +127,89 @@ amico_scalars = {
 class _AMICOReconScalarInputSpec(ReconScalarsInputSpec):
     pass
 
-for input_name in tortoise_scalars:
+for input_name in amico_scalars:
     _AMICOReconScalarInputSpec.add_class_trait(input_name, File(exists=True))
 
 class AMICOReconScalars(ReconScalars):
     input_spec = _AMICOReconScalarInputSpec
     scalar_metadata = amico_scalars
+
+
+# Scalars produced by DSI Studio
+dsistudio_scalars = {
+    "qa_file": {
+        "desc": "Fractional Anisotropy from a tensor fit"
+    },
+    "dti_fa_file": {
+        "desc": "Radial Diffusivity from a tensor fit"
+    },
+    "txx_file": {
+        "desc": "Tensor fit txx"
+    },
+    "txy_file": {
+        "desc": "Tensor fit txy"
+    },
+    "txz_file": {
+        "desc": "Tensor fit txz"
+    },
+    "tyy_file": {
+        "desc": "Tensor fit tyy"
+    },
+    "tyz_file": {
+        "desc": "Tensor fit tyz"
+    },
+    "tzz_file": {
+        "desc": "Tensor fit tzz"
+    },
+    "rd1_file": {
+        "desc": "RD1"
+    },
+    "rd2_file": {
+        "desc": "RD2"
+    },
+    "ha_file": {
+        "desc": "HA"
+    },
+    "md_file": {
+        "desc": "Mean Diffusivity"
+    },
+    "ad_file": {
+        "desc": "AD"
+    },
+    "rd_file": {
+        "desc": "Radial Diffusivity"
+    },
+    "gfa_file": {
+        "desc": "Generalized Fractional Anisotropy"
+    },
+    "iso_file": {
+        "desc": "Isotropic Diffusion"
+    },
+    "rdi_file": {
+        "desc": "RDI"
+    },
+    "nrdi02L_file": {
+        "desc": "NRDI at 02L"
+    },
+    "nrdi04L_file": {
+        "desc": "NRDI at 04L"
+    },
+    "nrdi06L_file": {
+        "desc": "NRDI at 06L"
+    },
+}
+
+class _DSIStudioReconScalarInputSpec(ReconScalarsInputSpec):
+    pass
+
+for input_name in dsistudio_scalars:
+    _DSIStudioReconScalarInputSpec.add_class_trait(input_name, File(exists=True))
+
+class DSIStudioReconScalars(ReconScalars):
+    input_spec = _DSIStudioReconScalarInputSpec
+    scalar_metadata = dsistudio_scalars
+
+
+dipy_dki_scalars = {
+
+}

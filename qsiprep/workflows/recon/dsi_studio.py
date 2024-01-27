@@ -51,9 +51,10 @@ def init_dsi_studio_recon_wf(omp_nthreads, available_anatomical_data, name="dsi_
                         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(
-            fields=['fibgz']),
+            fields=['fibgz', 'recon_scalars']),
         name="outputnode")
     workflow = Workflow(name=name)
+    outputnode.inputs.recon_scalars = []
     plot_reports = params.pop("plot_reports", True)
     desc = """DSI Studio Reconstruction
 
@@ -186,8 +187,9 @@ def init_dsi_studio_tractography_wf(omp_nthreads, available_anatomical_data, nam
         niu.IdentityInterface(
             fields=recon_workflow_input_fields + ['fibgz']),
         name="inputnode")
-    outputnode = pe.Node(niu.IdentityInterface(fields=['trk_file', 'fibgz']),
+    outputnode = pe.Node(niu.IdentityInterface(fields=['trk_file', 'fibgz', 'recon_scalars']),
                          name="outputnode")
+    outputnode.inputs.recon_scalars = []
     plot_reports = params.pop("plot_reports", True)
     workflow = Workflow(name=name)
     desc = """DSI Studio Tractography
@@ -264,8 +266,9 @@ def init_dsi_studio_autotrack_wf(omp_nthreads, available_anatomical_data,
         niu.IdentityInterface(
             fields=recon_workflow_input_fields + ['fibgz']),
         name="inputnode")
-    outputnode = pe.Node(niu.IdentityInterface(fields=['tck_files', "bundle_names"]),
+    outputnode = pe.Node(niu.IdentityInterface(fields=['tck_files', "bundle_names", "recon_scalars"]),
                          name="outputnode")
+    outputnode.inputs.recon_scalars = []
     desc = """DSI Studio Automatic Tractography
 
 : Automatic Tractography was run in DSI Studio (version %s) and
@@ -398,10 +401,11 @@ def init_dsi_studio_connectivity_wf(omp_nthreads, available_anatomical_data, nam
     """
     inputnode = pe.Node(
         niu.IdentityInterface(
-            fields=recon_workflow_input_fields + ['fibgz', 'trk_file', 'atlas_configs']),
+            fields=recon_workflow_input_fields + ['fibgz', 'trk_file', 'atlas_configs', 'recon_scalars']),
         name="inputnode")
-    outputnode = pe.Node(niu.IdentityInterface(fields=['matfile']),
+    outputnode = pe.Node(niu.IdentityInterface(fields=['matfile', "recon_scalars"]),
                          name="outputnode")
+    outputnode.inputs.recon_scalars = []
     plot_reports = params.pop("plot_reports", True)
     workflow = pe.Workflow(name=name)
     calc_connectivity = pe.Node(
@@ -471,7 +475,7 @@ def init_dsi_studio_export_wf(omp_nthreads, available_anatomical_data, name="dsi
                     "rd2", "ha", "md", "ad", "rd", "gfa", "iso", "rdi", "nrdi02L", "nrdi04L",
                     "nrdi06L"]
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=[name + "_file" for name in scalar_names]),
+        niu.IdentityInterface(fields=[name + "_file" for name in scalar_names] + ["recon_scalars"]),
         name="outputnode")
     workflow = pe.Workflow(name=name)
     export = pe.Node(DSIStudioExport(to_export=",".join(scalar_names)), name='export')
@@ -482,7 +486,8 @@ def init_dsi_studio_export_wf(omp_nthreads, available_anatomical_data, name="dsi
         connections = [(export, fixhdr_nodes[scalar_name], [(output_name, 'dsi_studio_nifti')]),
                        (inputnode, fixhdr_nodes[scalar_name], [('dwi_file',
                                                                 'correct_header_nifti')]),
-                       (fixhdr_nodes[scalar_name], outputnode, [('out_file', scalar_name)])]
+                       (fixhdr_nodes[scalar_name], outputnode, [('out_file', output_name)])
+                       (fixhdr_nodes[scalar_name], recon_scalars, [("out_file", output_name)])]
         if output_suffix:
             connections += [(fixhdr_nodes[scalar_name],
                              pe.Node(
@@ -492,6 +497,8 @@ def init_dsi_studio_export_wf(omp_nthreads, available_anatomical_data, name="dsi
                              [('out_file', 'in_file')])]
         workflow.connect(connections)
 
-    workflow.connect([(inputnode, export, [('fibgz', 'input_file')])])
+    workflow.connect([
+        (inputnode, export, [('fibgz', 'input_file')]),
+        (recon_scalars, outputnode, ("scalar_info", "recon_scalars"))])
 
     return workflow
