@@ -1373,7 +1373,9 @@ class _PolarToComplexInputSpec(CommandLineInputSpec):
     )
     out_file = traits.File(
         exists=False,
-        mandatory=True,
+        name_source="mag_file",
+        name_template="%s_complex.nii.gz",
+        keep_extension=False,
         position=-1,
         argstr="-polar %s"
     )
@@ -1400,7 +1402,9 @@ class _ComplexToMagnitudeInputSpec(CommandLineInputSpec):
     )
     out_file = traits.File(
         exists=False,
-        mandatory=True,
+        name_source="complex_file",
+        name_template="%s_mag.nii.gz",
+        keep_extension=False,
         position=-1,
         argstr="-abs %s"
     )
