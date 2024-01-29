@@ -17,6 +17,7 @@ from qsiprep.interfaces.dsi_studio import (DSIStudioCreateSrc, DSIStudioGQIRecon
 
 import logging
 from ...interfaces.bids import ReconDerivativesDataSink
+from ...interfaces.recon_scalars import DSIStudioReconScalars
 from ...interfaces.converters import DSIStudioTrkToTck
 from ...interfaces.interchange import recon_workflow_input_fields
 from ...engine import Workflow
@@ -479,6 +480,7 @@ def init_dsi_studio_export_wf(omp_nthreads, available_anatomical_data, name="dsi
         name="outputnode")
     workflow = pe.Workflow(name=name)
     export = pe.Node(DSIStudioExport(to_export=",".join(scalar_names)), name='export')
+    recon_scalars = pe.Node(DSIStudioReconScalars(workflow_name=name), n_procs=1)
     fixhdr_nodes = {}
     for scalar_name in scalar_names:
         output_name = scalar_name + '_file'

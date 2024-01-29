@@ -211,5 +211,116 @@ class DSIStudioReconScalars(ReconScalars):
 
 
 dipy_dki_scalars = {
-
+    'fa': {
+        "desc": "DKI FA"
+    },
+    'md': {
+        "desc": "DKI MD"
+    },
+    'rd': {
+        "desc": "DKI RD"
+    },
+    'ad': {
+        "desc": "DKI AD"
+    },
+    'kfa': {
+        "desc": "DKI KFA"
+    },
+    'mk': {
+        "desc": "DKI MK"
+    },
+    'ak': {
+        "desc": "DKI AK"
+    },
+    'rk': {
+        "desc": "DKI RK"
+    },
+    'mkt': {
+        "desc": "DKI MKT"
+    }
 }
+class _DIPYDKIReconScalarInputSpec(ReconScalarsInputSpec):
+    pass
+
+for input_name in dipydki_scalars:
+    _DIPYDKIScalarInputSpec.add_class_trait(input_name, File(exists=True))
+
+class DIPYDKIReconScalars(ReconScalars):
+    input_spec = _DIPYDKIReconScalarInputSpec
+    scalar_metadata = dipy_dki_scalars
+
+
+# DIPY implementation of MAPMRI
+dipy_mapmri_scalars = {
+    "qiv_file": {
+        "desc": "q-space inverse variance from MAPMRI"
+    },
+    "msd_file": {
+        "desc": "mean square displacement from MAPMRI"
+    },
+    "lapnorm_file": {
+        "desc": "Laplacian norm from regularized MAPMRI (MAPL)"
+    },
+    "rtop_file": {
+        "desc": "Return to origin probability from MAPMRI"
+    },
+    "rtap_file": {
+        "desc": "Return to axis probability from MAPMRI"
+    },
+    "rtpp_file": {
+        "desc": "Return to plane probability from MAPMRI"
+    },
+    "ng_file": {
+        "desc": "Non-Gaussianity from MAPMRI"
+    },
+    "ngpar_file": {
+        "desc": "Non-Gaussianity parallel from MAPMRI"
+    },
+    "ngperp_file": {
+        "desc": "Non-Gaussianity perpendicular from MAPMRI"
+    },
+}
+
+
+class _DIPYMAPMRIReconScalarInputSpec(ReconScalarsInputSpec):
+    pass
+
+
+for input_name in dipy_mapmri_scalars:
+    _DIPYMAPMRIReconScalarInputSpec.add_class_trait(input_name, File(exists=True))
+
+
+class DIPYMAPMRIReconScalars(ReconScalars):
+    input_spec = _DIPYMAPMRIReconScalarInputSpec
+    scalar_metadata = dipy_mapmri_scalars
+
+
+# Same as DIPY implementation of 3dSHORE, but with brainsuite bases
+brainsuite_3dshore_scalars = dipy_mapmri_scalars.copy()
+brainsuite_3dshore_scalars.update({
+    "cnr_image": {
+        "desc": "Contrast to noise ratio for 3dSHORE fit"
+    },
+    "alpha_image": {
+        "desc": "alpha used when fitting in each voxel"
+    },
+    "r2_image": {
+        "desc": "r^2 of the 3dSHORE fit"
+    },
+    "regularization_image": {
+        "desc": "regularization of the 3dSHORE fit"
+    },
+})
+
+
+class _BrainSuite3dSHOREReconScalarInputSpec(ReconScalarsInputSpec):
+    pass
+
+
+for input_name in brainsuite_3dshore_scalars:
+    _BrainSuite3dSHOREReconScalarInputSpec.add_class_trait(input_name, File(exists=True))
+
+
+class BrainSuite3dSHOREReconScalars(ReconScalars):
+    input_spec = _BrainSuite3dSHOREReconScalarInputSpec
+    scalar_metadata = brainsuite_3dshore_scalars
