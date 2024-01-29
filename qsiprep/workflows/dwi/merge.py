@@ -504,7 +504,7 @@ def init_dwi_denoising_wf(
                 name="phase_to_radians",
                 n_procs=omp_nthreads,
             )
-            workflow.connect([(inputnode, phase_to_radians, [("dwi_phase_file", "in_file")])])
+            workflow.connect([(inputnode, phase_to_radians, [("dwi_phase_file", "phase_file")])])
 
             combine_complex = pe.Node(
                 PolarToComplex(),
