@@ -19,7 +19,9 @@ from .dynamics import init_controllability_wf
 from .utils import init_conform_dwi_wf, init_discard_repeated_samples_wf
 from .steinhardt import init_steinhardt_order_param_wf
 from ...engine import Workflow
-from ...interfaces.interchange import (default_input_set, recon_workflow_input_fields)
+from ...interfaces.interchange import (
+    default_input_set, recon_workflow_input_fields, get_scalar_data_gatherer
+)
 
 LOGGER = logging.getLogger('nipype.interface')
 
@@ -41,7 +43,6 @@ def init_dwi_recon_workflow(workflow_spec, output_dir,
     inputnode = pe.Node(
         niu.IdentityInterface(fields=recon_workflow_input_fields),
         name='inputnode')
-
     # Read nodes from workflow spec, make sure we can implement them
     nodes_to_add = []
     for node_spec in workflow_spec['nodes']:
@@ -58,12 +59,22 @@ def init_dwi_recon_workflow(workflow_spec, output_dir,
     workflow.add_nodes(nodes_to_add)
     _check_repeats(workflow.list_node_names())
 
+    # Create a node that gathers scalar outputs from those that produce them
+    ReconScalarData = get_scalar_data_gatherer(workflow_spec["nodes"])
+    scalar_gatherer = pe.Node(ReconScalarData(), name="scalar_gatherer")
+
     # Now that all nodes are in the workflow, connect them
     for node_spec in workflow_spec['nodes']:
 
         # get the nipype node object
         node_name = node_spec['name']
         node = workflow.get_node(node_name)
+
+        consuming_scalars = node_spec.get("scalars_from", [])
+        if not consuming_scalars:
+            workflow.connect(scalar_gatherer, "scalars", node, "scalar_images")
+        else:
+            workflow.connect(node, "outputnode.recon_scalars", scalar_gatherer, node_spec["name"])
 
         if node_spec.get('input', 'qsiprep') == 'qsiprep':
             # directly connect all the qsiprep outputs to every node
@@ -141,6 +152,7 @@ def workflow_from_spec(omp_nthreads, available_anatomical_data, node_spec,
         "params": parameters}
 
 
+
     # DSI Studio operations
     if software == "DSI Studio":
         if node_spec["action"] == "reconstruction":
@@ -202,10 +214,13 @@ def workflow_from_spec(omp_nthreads, available_anatomical_data, node_spec,
             return init_qsiprep_to_fsl_wf(**kwargs)
         if node_spec['action'] == 'steinhardt_order_parameters':
             return init_steinhardt_order_param_wf(**kwargs)
+        if node_spec['action'] == 'bundle_map':
+            return init_bundle_map_wf(**kwargs)
 
     raise Exception("Unknown node %s" % node_spec)
 
 
 def _as_connections(attr_list, src_prefix='', dest_prefix=''):
     return [(src_prefix + item, dest_prefix + item) for item in attr_list]
+
 

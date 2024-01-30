@@ -48,6 +48,7 @@ class _ReconWorkflowInputsInputSpec(BaseInterfaceInputSpec):
 class _ReconWorkflowInputsOutputSpec(TraitedSpec):
     pass
 
+
 class ReconWorkflowInputs(SimpleInterface):
     input_spec = _ReconWorkflowInputsInputSpec
     output_spec = _ReconWorkflowInputsOutputSpec
@@ -84,3 +85,27 @@ class ReconAnatomicalData(SimpleInterface):
 for name in anatomical_workflow_outputs:
     _ReconAnatomicalDataInputSpec.add_class_trait(name, traits.Any)
     _ReconAnatomicalDataOutputSpec.add_class_trait(name, traits.Any)
+
+
+def get_scalar_data_gatherer(nodes):
+    class _ReconScalarDataInputSpec(BaseInterfaceInputSpec):
+        pass
+
+
+    class _ReconScalarDataOutputSpec(TraitedSpec):
+        recon_scalars = traits.List()
+
+
+    class ReconScalarData(SimpleInterface):
+        input_spec = _ReconScalarDataInputSpec
+        output_spec = _ReconScalarDataOutputSpec
+
+        def _run_interface(self, runtime):
+            inputs = self.inputs.get()
+            for name in anatomical_workflow_outputs:
+                self._results[name] = inputs.get(name)
+            return runtime
+    for node in nodes:
+        _ReconScalarDataInputSpec.add_class_trait(node["name"], traits.Any)
+
+    return ReconScalarData
