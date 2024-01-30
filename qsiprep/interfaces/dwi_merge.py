@@ -687,16 +687,25 @@ class PhaseToRad(SimpleInterface):
         phase_data = phase_img.get_fdata()
         imax = phase_data.max()
         imin = phase_data.min()
-        scaled = (phase_data - imin) / (imax - imin)
-        rad_data = 2 * np.pi * scaled
-        out_img = nb.Nifti1Image(rad_data, phase_img.affine, phase_img.header)
 
+        # Calculate the scaling factor
+        scaling_factor = 2 * np.pi / (imax - imin)
+
+        # Apply scaling and convert to radians
+        phase_data = (phase_data - imin) * scaling_factor
+
+        # Create the output image
+        out_img = nb.Nifti1Image(phase_data, phase_img.affine, phase_img.header)
+
+        # Set the output file name
         self._results['phase_file'] = fname_presuffix(
             self.inputs.phase_file,
             suffix='_rad.nii.gz',
             newpath=runtime.cwd,
             use_ext=False,
         )
+
+        # Save the output image
         out_img.to_filename(self._results['phase_file'])
 
         return runtime
