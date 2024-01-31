@@ -16,18 +16,6 @@
       }
     },
     {
-      "name": "amiconoddi",
-      "action": "fit_noddi",
-      "software": "AMICO",
-      "input": "qsiprep",
-      "output_suffix": "wmNODDI",
-      "parameters": {
-        "isExvivo": false,
-        "dPar": 1.7E-3,
-        "dIso": 3.0E-3
-      }
-    },
-    {
       "name": "dsistudio_gqi",
       "software": "DSI Studio",
       "action": "reconstruction",
@@ -60,7 +48,7 @@
       "software": "qsiprep",
       "action": "bundle_map",
       "input": "autotrackgqi",
-      "scalars_from": ["gqi_scalars", "amiconoddi", "DIPYdki"],
+      "scalars_from": ["gqi_scalars", "DIPYdki"],
       "output_suffix": "bundlemap"
     }
   ]

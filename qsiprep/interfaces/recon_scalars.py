@@ -2,6 +2,12 @@
 # -*- coding: utf-8 -*-
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
+"""
+Classes that collect scalar images and metadata from Recon Workflows
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+"""
 import os
 import os.path as op
 from pkg_resources import resource_filename as pkgr
@@ -51,6 +57,7 @@ class ReconScalars(SimpleInterface):
                 continue
             result = self.scalar_metadata[input_name].copy()
             result["path"] = op.abspath(inputs[input_name])
+            result["workflow_name"] = self.inputs.workflow_name
             result["variable_name"] = self.inputs.workflow_name + "_" + input_name
             results.append(result)
         self._results["scalar_info"] = results
@@ -211,39 +218,39 @@ class DSIStudioReconScalars(ReconScalars):
 
 
 dipy_dki_scalars = {
-    'fa': {
+    'dki_fa': {
         "desc": "DKI FA"
     },
-    'md': {
+    'dki_md': {
         "desc": "DKI MD"
     },
-    'rd': {
+    'dki_rd': {
         "desc": "DKI RD"
     },
-    'ad': {
+    'dki_ad': {
         "desc": "DKI AD"
     },
-    'kfa': {
+    'dki_kfa': {
         "desc": "DKI KFA"
     },
-    'mk': {
+    'dki_mk': {
         "desc": "DKI MK"
     },
-    'ak': {
+    'dki_ak': {
         "desc": "DKI AK"
     },
-    'rk': {
+    'dki_rk': {
         "desc": "DKI RK"
     },
-    'mkt': {
+    'dki_mkt': {
         "desc": "DKI MKT"
     }
 }
 class _DIPYDKIReconScalarInputSpec(ReconScalarsInputSpec):
     pass
 
-for input_name in dipydki_scalars:
-    _DIPYDKIScalarInputSpec.add_class_trait(input_name, File(exists=True))
+for input_name in dipy_dki_scalars:
+    _DIPYDKIReconScalarInputSpec.add_class_trait(input_name, File(exists=True))
 
 class DIPYDKIReconScalars(ReconScalars):
     input_spec = _DIPYDKIReconScalarInputSpec

@@ -480,7 +480,10 @@ def init_dsi_studio_export_wf(omp_nthreads, available_anatomical_data, name="dsi
         name="outputnode")
     workflow = pe.Workflow(name=name)
     export = pe.Node(DSIStudioExport(to_export=",".join(scalar_names)), name='export')
-    recon_scalars = pe.Node(DSIStudioReconScalars(workflow_name=name), n_procs=1)
+    recon_scalars = pe.Node(
+        DSIStudioReconScalars(workflow_name=name),
+        name="recon_scalars",
+        n_procs=1)
     fixhdr_nodes = {}
     for scalar_name in scalar_names:
         output_name = scalar_name + '_file'
@@ -488,7 +491,7 @@ def init_dsi_studio_export_wf(omp_nthreads, available_anatomical_data, name="dsi
         connections = [(export, fixhdr_nodes[scalar_name], [(output_name, 'dsi_studio_nifti')]),
                        (inputnode, fixhdr_nodes[scalar_name], [('dwi_file',
                                                                 'correct_header_nifti')]),
-                       (fixhdr_nodes[scalar_name], outputnode, [('out_file', output_name)])
+                       (fixhdr_nodes[scalar_name], outputnode, [('out_file', output_name)]),
                        (fixhdr_nodes[scalar_name], recon_scalars, [("out_file", output_name)])]
         if output_suffix:
             connections += [(fixhdr_nodes[scalar_name],
@@ -501,6 +504,6 @@ def init_dsi_studio_export_wf(omp_nthreads, available_anatomical_data, name="dsi
 
     workflow.connect([
         (inputnode, export, [('fibgz', 'input_file')]),
-        (recon_scalars, outputnode, ("scalar_info", "recon_scalars"))])
+        (recon_scalars, outputnode, [("scalar_info", "recon_scalars")])])
 
     return workflow
