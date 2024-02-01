@@ -14,6 +14,7 @@ from ...engine import Workflow
 from ...interfaces.amico import NODDI
 from ...interfaces.reports import CLIReconPeaksReport
 from ...interfaces.converters import NODDItoFIBGZ
+from ...interfaces.recon_scalars import AMICOReconScalars
 
 LOGGER = logging.getLogger('nipype.interface')
 
@@ -48,10 +49,13 @@ def init_amico_noddi_fit_wf(omp_nthreads, available_anatomical_data,
     outputnode = pe.Node(
         niu.IdentityInterface(
             fields=['directions_image', 'icvf_image', 'od_image',
-                    'isovf_image', 'config_file', 'fibgz']),
+                    'isovf_image', 'config_file', 'fibgz', 'recon_scalars']),
         name="outputnode")
 
     workflow = Workflow(name=name)
+    recon_scalars = pe.Node(AMICOReconScalars(workflow_name=name),
+                            name="recon_scalars",
+                            run_without_submitting=True)
     plot_reports = params.pop("plot_reports", True)
     desc = """NODDI Reconstruction
 
@@ -81,12 +85,17 @@ diffusivity.""" % (params['dPar'], params['dIso'])
             ('isovf_image', 'isovf_image'),
             ('config_file', 'config_file'),
             ]),
+        (noddi_fit, recon_scalars, [
+            ('icvf_image', 'icvf_image'),
+            ('od_image', 'od_image'),
+            ('isovf_image', 'isovf_image'),
+        ]),
+        (recon_scalars, outputnode, [("scalar_info", "recon_scalars")]),
         (noddi_fit, convert_to_fibgz, [
             ('directions_image', 'directions_file'),
             ('icvf_image', 'icvf_file'),
             ('od_image', 'od_file'),
-            ('isovf_image', 'isovf_file'),
-            ]),
+            ('isovf_image', 'isovf_file')]),
         (inputnode, convert_to_fibgz, [('dwi_mask', 'mask_file')]),
         (convert_to_fibgz, outputnode, [('fibgz_file', 'fibgz')])])
     if plot_reports:
