@@ -58,7 +58,7 @@ class ReconScalars(SimpleInterface):
             result = self.scalar_metadata[input_name].copy()
             result["path"] = op.abspath(inputs[input_name])
             result["workflow_name"] = self.inputs.workflow_name
-            result["variable_name"] = self.inputs.workflow_name + "_" + input_name
+            result["variable_name"] = input_name
             results.append(result)
         self._results["scalar_info"] = results
         return runtime

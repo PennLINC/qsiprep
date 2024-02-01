@@ -69,11 +69,10 @@ def init_scalar_to_bundle_wf(omp_nthreads, available_anatomical_data,
 
     return workflow
 
+
 def init_scalar_to_atlas_wf(omp_nthreads, available_anatomical_data,
                             name="scalar_to_template", output_suffix="", params={}):
-    """Map scalar images to bundles
-
-
+    """Map scalar images to atlas regions
 
     Inputs
         tck_files
@@ -84,7 +83,6 @@ def init_scalar_to_atlas_wf(omp_nthreads, available_anatomical_data,
             List of dictionaries containing scalar info
 
     Outputs
-
         bundle_summaries
             summary statistics in tsv format
 
@@ -116,6 +114,7 @@ def init_scalar_to_atlas_wf(omp_nthreads, available_anatomical_data,
         workflow.connect([
             (bundle_mapper, ds_bundle_summaries, [("bundle_summaries", "in_file")])
         ])
+    return workflow
 
 
 def init_scalar_to_template_wf(omp_nthreads, available_anatomical_data,
