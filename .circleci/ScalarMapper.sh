@@ -18,7 +18,7 @@ source ./get_data.sh
 TESTDIR=${PWD}
 TESTNAME=scalar_mapper_test
 get_config_data ${TESTDIR}
-#get_bids_data ${TESTDIR} multishell_output
+get_bids_data ${TESTDIR} multishell_output
 CFG=${TESTDIR}/data/nipype.cfg
 
 # Test MRtrix3 multishell msmt with ACT

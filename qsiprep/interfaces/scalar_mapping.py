@@ -112,7 +112,8 @@ class BundleMapper(ScalarMapper):
             # Then get the same stats for the scalars
             for recon_scalar in self.recon_scalars:
                 bundle_dfs.append(
-                    calculate_mask_stats(bundle_masker, tck_name, "bundle", recon_scalar))
+                    calculate_mask_stats(bundle_masker, tck_name, "bundle",
+                                         recon_scalar, tdi_weights))
         self._update_with_bids_info(bundle_dfs)
         summary_file = op.join(runtime.cwd, "bundle_stats.tsv")
         summary_df = pd.DataFrame(bundle_dfs)
