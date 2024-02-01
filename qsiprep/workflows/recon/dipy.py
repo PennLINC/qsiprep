@@ -382,7 +382,7 @@ def init_dipy_mapmri_recon_wf(omp_nthreads, available_anatomical_data, name="dip
             ('rtpp', 'rtpp_file'),
             ('ng', 'ng_file'),
             ('parng', 'ngpar_file'),
-            ('perng', 'ngper_file'),
+            ('perng', 'ngperp_file'),
             ('msd', 'msd_file'),
             ('qiv', 'qiv_file'),
             ('lapnorm', 'lapnorm_file')]),
