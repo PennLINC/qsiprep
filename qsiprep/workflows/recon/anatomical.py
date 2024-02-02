@@ -91,7 +91,7 @@ def init_highres_recon_anatomical_wf(
             subject_id, recon_input_dir, name='gather_ukb_anatomical_wf')
     else:
         raise Exception(f"Unknown pipeline source '{pipeline_source}'")
-    anat_ingress.inputs.infant_mode = infant_mode
+    anat_ingress_node.inputs.infant_mode = infant_mode
     if needs_t1w_transform and not status["has_qsiprep_t1w_transforms"]:
         raise Exception("Cannot compute to-template")
 
@@ -478,8 +478,8 @@ def init_dwi_recon_anatomical_workflow(
                                             padding=4 if infant_mode else 8)
     workflow.connect([
         (inputnode, reference_grid_wf, [
-            ('template_image', 'inputnode.template_image')]),
-            ('dwiref', 'inputnode.input_image')
+            ('template_image', 'inputnode.template_image'),
+            ('dwi_ref', 'inputnode.input_image')]),
         (reference_grid_wf, buffernode, [('outputnode.grid_image', 'resampling_template')])])
 
     # Missing Freesurfer AND QSIPrep T1ws, or the user wants a DWI-based mask

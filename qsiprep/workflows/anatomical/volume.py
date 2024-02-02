@@ -973,9 +973,11 @@ def init_output_grid_wf(voxel_size, padding, name='output_grid_wf'):
                                name='autobox_template')
     deoblique_autobox = pe.Node(afni.Warp(outputtype="NIFTI_GZ", deoblique=True),
                                 name="deoblique_autobox")
+    voxel_size_chooser = pe.Node(
+        VoxelSizeChooser(voxel_size=voxel_size),
+        name="voxel_size_chooser")
     resample_to_voxel_size = pe.Node(afni.Resample(outputtype="NIFTI_GZ"),
                                      name="resample_to_voxel_size")
-    voxel_size_chooser = pe.Node(VoxelSizeChooser(voxel_size=voxel_size), name="voxel_size_chooser")
 
     workflow.connect([
         (inputnode, autobox_template, [('template_image', 'in_file')]),
@@ -983,10 +985,15 @@ def init_output_grid_wf(voxel_size, padding, name='output_grid_wf'):
         (deoblique_autobox, resample_to_voxel_size, [('out_file', 'in_file')]),
         (resample_to_voxel_size, outputnode, [('out_file', 'grid_image')]),
         (inputnode, voxel_size_chooser, [('input_image', 'input_image')]),
-        (voxel_size_chooser, resample_to_voxel_size, [('voxel_size', 'voxel_size')])
+        (voxel_size_chooser, resample_to_voxel_size, [(('voxel_size', _tupleize), 'voxel_size')])
     ])
 
     return workflow
+
+
+def _tupleize(value):
+    # Nipype did not like having a Tuple output trait
+    return (value, value, value)
 
 
 def init_anat_reports_wf(reportlets_dir, nonlinear_register_to_template,

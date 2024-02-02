@@ -17,8 +17,12 @@ from nipype.interfaces.base import (
     traits, TraitedSpec, BaseInterfaceInputSpec, SimpleInterface, isdefined, File
 )
 
+
 class ReconScalarsInputSpec(BaseInterfaceInputSpec):
     workflow_name = traits.Str(mandatory=True)
+    source_file = traits.Str(mandatory=True)
+    desc = traits.Str(
+        desc="If doing multiple versions of the same model, use this as a desc-ID")
 
 
 class ReconScalarsOutputSpec(TraitedSpec):
@@ -59,6 +63,8 @@ class ReconScalars(SimpleInterface):
             result["path"] = op.abspath(inputs[input_name])
             result["workflow_name"] = self.inputs.workflow_name
             result["variable_name"] = input_name
+            if isdefined(self.inputs.desc) and self.inputs.desc:
+                result["bids"]["desc"] = self.inputs.desc
             results.append(result)
         self._results["scalar_info"] = results
         return runtime
@@ -67,43 +73,56 @@ class ReconScalars(SimpleInterface):
 # Scalars produced in the TORTOISE recon workflow
 tortoise_scalars = {
     "fa_file": {
-        "desc": "Fractional Anisotropy from a tensor fit"
+        "desc": "Fractional Anisotropy from a tensor fit",
+        "bids":{"model": "tensor", "param": "fa"}
     },
     "rd_file": {
-        "desc": "Radial Diffusivity from a tensor fit"
+        "desc": "Radial Diffusivity from a tensor fit",
+        "bids":{"model": "tensor", "param": "rd"}
     },
     "ad_file": {
-        "desc": "Apparent Diffusivity from a tensor fit"
+        "desc": "Apparent Diffusivity from a tensor fit",
+        "bids":{"model": "tensor", "param": "ad"}
     },
     "li_file": {
-        "desc": "LI from a tensor fit"
+        "desc": "LI from a tensor fit",
+        "bids":{"model": "tensor", "param": "li"}
     },
     "am_file": {
-        "desc": "A0 from a tensor fit"
+        "desc": "A0 from a tensor fit",
+        "bids":{"model": "tensor", "param": "AM", "suffix": "model"}
     },
     "pa_file": {
-        "desc": "PA from MAPMRI"
+        "desc": "PA from MAPMRI",
+        "bids":{"param": "PA", "suffix": "mdp", "model": "MAPMRI"}
     },
     "path_file": {
-        "desc": "PAth from MAPMRI"
+        "desc": "PAth from MAPMRI",
+        "bids":{"param": "PAth", "suffix": "mdp", "model": "MAPMRI"}
     },
     "rtop_file": {
-        "desc": "Return to origin probability from MAPMRI"
+        "desc": "Return to origin probability from MAPMRI",
+        "bids":{"param": "RTOP", "suffix": "mdp", "model": "MAPMRI"}
     },
     "rtap_file": {
-        "desc": "Return to axis probability from MAPMRI"
+        "desc": "Return to axis probability from MAPMRI",
+        "bids":{"param": "RTAP", "suffix": "mdp", "model": "MAPMRI"}
     },
     "rtpp_file": {
-        "desc": "Return to plane probability from MAPMRI"
+        "desc": "Return to plane probability from MAPMRI",
+        "bids":{"param": "RTPP", "suffix": "mdp", "model": "MAPMRI"}
     },
     "ng_file": {
-        "desc": "Non-Gaussianity from MAPMRI"
+        "desc": "Non-Gaussianity from MAPMRI",
+        "bids":{"param": "NG", "suffix": "mdp", "model": "MAPMRI"}
     },
     "ngpar_file": {
-        "desc": "Non-Gaussianity parallel from MAPMRI"
+        "desc": "Non-Gaussianity parallel from MAPMRI",
+        "bids":{"param": "NGpar", "suffix": "mdp", "model": "MAPMRI"}
     },
     "ngperp_file": {
-        "desc": "Non-Gaussianity perpendicular from MAPMRI"
+        "desc": "Non-Gaussianity perpendicular from MAPMRI",
+        "bids":{"param": "NGperp", "suffix": "mdp", "model": "MAPMRI"}
     },
 }
 
@@ -121,13 +140,16 @@ class TORTOISEReconScalars(ReconScalars):
 # Scalars produced in the AMICO recon workflow
 amico_scalars = {
     "icvf_image": {
-        "desc": "Intracellular volume fraction from NODDI"
+        "desc": "Intracellular volume fraction from NODDI",
+        "bids":{"param": "icvf", "suffix": "mdp", "model": "NODDI"}
     },
     "isovf_image": {
-        "desc": "Isotropic volume fraction from NODDI"
+        "desc": "Isotropic volume fraction from NODDI",
+        "bids":{"param": "isovf", "suffix": "mdp", "model": "NODDI"}
     },
     "od_image": {
-        "desc": "OD from NODDI"
+        "desc": "OD from NODDI",
+        "bids":{"param": "od", "suffix": "mdp", "model": "NODDI"}
     }
 }
 
@@ -145,10 +167,12 @@ class AMICOReconScalars(ReconScalars):
 # Scalars produced by DSI Studio
 dsistudio_scalars = {
     "qa_file": {
-        "desc": "Fractional Anisotropy from a tensor fit"
+        "desc": "Fractional Anisotropy from a tensor fit",
+        "bids":{"param": "qa", "suffix": "mdp", "model": "GQI"}
     },
     "dti_fa_file": {
-        "desc": "Radial Diffusivity from a tensor fit"
+        "desc": "Radial Diffusivity from a tensor fit",
+
     },
     "txx_file": {
         "desc": "Tensor fit txx"
@@ -188,9 +212,11 @@ dsistudio_scalars = {
     },
     "gfa_file": {
         "desc": "Generalized Fractional Anisotropy"
+        "bids":{"param": "gfa", "suffix": "mdp", "model": "GQI"}
     },
     "iso_file": {
-        "desc": "Isotropic Diffusion"
+        "desc": "Isotropic Diffusion",
+        "bids":{"param": "iso", "suffix": "mdp", "model": "GQI"}
     },
     "rdi_file": {
         "desc": "RDI"

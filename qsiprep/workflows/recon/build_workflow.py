@@ -18,7 +18,7 @@ from .converters import init_mif_to_fibgz_wf, init_qsiprep_to_fsl_wf
 from .dynamics import init_controllability_wf
 from .utils import init_conform_dwi_wf, init_discard_repeated_samples_wf
 from .steinhardt import init_steinhardt_order_param_wf
-from .scalar_mapping import init_scalar_to_bundle_wf
+from .scalar_mapping import init_scalar_to_bundle_wf, init_scalar_to_template_wf
 from ...engine import Workflow
 from ...interfaces.interchange import (
     default_input_set, recon_workflow_input_fields
@@ -205,7 +205,7 @@ def workflow_from_spec(omp_nthreads, available_anatomical_data, node_spec,
         if node_spec["action"] == "pyafq_tractometry":
             return init_pyafq_wf(**kwargs)
 
-    elif software ==  "TORTOISE":
+    elif software == "TORTOISE":
         if node_spec["action"] == "estimate":
             return init_tortoise_estimator_wf(**kwargs)
 
@@ -225,6 +225,8 @@ def workflow_from_spec(omp_nthreads, available_anatomical_data, node_spec,
             return init_steinhardt_order_param_wf(**kwargs)
         if node_spec['action'] == 'bundle_map':
             return init_scalar_to_bundle_wf(**kwargs)
+        if node_spec['action'] == 'template_map':
+            return init_scalar_to_template_wf(**kwargs)
 
     raise Exception("Unknown node %s" % node_spec)
 

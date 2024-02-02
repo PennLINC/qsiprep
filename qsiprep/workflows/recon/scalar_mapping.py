@@ -12,7 +12,7 @@ import logging
 from ...interfaces.bids import ReconDerivativesDataSink
 from ...interfaces.interchange import recon_workflow_input_fields
 from ...engine import Workflow
-from ...interfaces.scalar_mapping import BundleMapper
+from ...interfaces.scalar_mapping import BundleMapper, TemplateMapper
 LOGGER = logging.getLogger('nipype.workflow')
 
 
@@ -88,10 +88,10 @@ def init_scalar_to_atlas_wf(omp_nthreads, available_anatomical_data,
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=recon_workflow_input_fields +
-            ["tck_files", "bundle_names", "recon_scalars"]),
+            ["recon_scalars", "collected_scalars"]),
         name="inputnode")
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=['bundle_summaries']), name="outputnode")
+        niu.IdentityInterface(fields=['atlas_summaries']), name="outputnode")
     workflow = Workflow(name=name)
     bundle_mapper = pe.Node(
         BundleMapper(**params),
@@ -117,7 +117,50 @@ def init_scalar_to_atlas_wf(omp_nthreads, available_anatomical_data,
 
 def init_scalar_to_template_wf(omp_nthreads, available_anatomical_data,
                                name="scalar_to_template", output_suffix="", params={}):
-    """Maps scalar data to a volumetric template"""
+    """Maps scalar data to a volumetric template
+
+
+    Inputs
+        recon_scalars
+            List of dictionaries containing scalar info
+
+    Outputs
+
+        template_scalars
+            List of transformed files
+
+    """
+    inputnode = pe.Node(
+        niu.IdentityInterface(
+            fields=recon_workflow_input_fields +
+            ["recon_scalars", "collected_scalars"]),
+        name="inputnode")
+    outputnode = pe.Node(
+        niu.IdentityInterface(fields=['template_scalars', 'template_scalar_sidecars']),
+        name="outputnode")
+    workflow = Workflow(name=name)
+    template_mapper = pe.Node(
+        TemplateMapper(**params),
+        name="template_mapper")
+    workflow.connect([
+        (inputnode, template_mapper, [
+            ("collected_scalars", "recon_scalars"),
+            ("t1_2_mni_forward_transform", "to_template_transform"),
+            ("resampling_template", "template_reference_image")]),
+        (template_mapper, outputnode, [
+            ("template_space_scalars", "template_scalars")
+        ])
+    ])
+
+    if output_suffix:
+        ds_template_scalars = pe.MapNode(
+            ReconDerivativesDataSink(),
+            name='ds_template_scalars',
+            iterfield=["in_file", "suffix"],
+            run_without_submitting=True)
+        workflow.connect([
+            (template_mapper, ds_template_scalars, [("template_scalars", "in_file")])
+        ])
 
     return workflow
 

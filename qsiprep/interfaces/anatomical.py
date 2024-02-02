@@ -19,7 +19,8 @@ import nibabel as nb
 from scipy.spatial import distance
 from scipy import ndimage
 from nipype.interfaces.base import (traits, TraitedSpec, BaseInterfaceInputSpec,
-                                    SimpleInterface, File)
+                                    SimpleInterface, File, isdefined)
+from pkg_resources import resource_filename as pkgrf
 from nipype.utils.filemanip import fname_presuffix
 from dipy.segment.threshold import otsu
 import nilearn.image as nim
@@ -124,10 +125,13 @@ class QsiprepAnatomicalIngress(SimpleInterface):
         self._get_if_exists(
             't1_2_mni_forward_transform',
             "%s/sub-%s*_from-T1w_to-MNI152NLin2009cAsym_mode-image_xfm.h5" % (anat_root, sub))
-        if self.inputs.infant_mode:
-            self._results["template_image"] = "mni_infant.nii.gz"
+        if not self.inputs.infant_mode:
+            self._results["template_image"] = pkgrf(
+                'qsiprep', 'data/mni_1mm_t1w_lps_brain.nii.gz')
         else:
-            self._results["template_image"] = "mni.nii.gz"
+            self._results["template_image"] = pkgrf(
+                'qsiprep', 'data/mni_1mm_t1w_lps_brain_infant.nii.gz')
+
         return runtime
 
     def _get_if_exists(self, name, pattern, excludes=None):
@@ -202,7 +206,7 @@ class _VoxelSizeChooserInputSpec(BaseInterfaceInputSpec):
 
 
 class _VoxelSizeChooserOutputSpec(TraitedSpec):
-    voxel_size = traits.Tuple()
+    voxel_size = traits.Float()
 
 
 class VoxelSizeChooser(SimpleInterface):
@@ -227,7 +231,7 @@ class VoxelSizeChooser(SimpleInterface):
             else:
                 voxel_size = np.round(np.mean(zooms), 2)
 
-        self._results["voxel_size"] = (voxel_size, voxel_size, voxel_size)
+        self._results["voxel_size"] = voxel_size
         return runtime
 
 

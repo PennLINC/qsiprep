@@ -16,34 +16,14 @@
       }
     },
     {
-      "name": "autotrackgqi",
-      "software": "DSI Studio",
-      "action": "autotrack",
-      "input": "dsistudio_gqi",
-      "output_suffix": "AutoTrackGQI",
-      "parameters": {
-        "track_id": "Fasciculus,Cingulum,Aslant,Corticos,Thalamic_R,Reticular,Optic,Fornix,Corpus",
-        "tolerance": "22,26,30",
-        "track_voxel_ratio": 2.0,
-        "yield_rate": 0.000001
-      }
-    },
-    {
-      "name": "bundle_means",
-      "software": "qsiprep",
-      "action": "bundle_map",
-      "input": "autotrackgqi",
-      "scalars_from": ["DIPYdki"],
-      "output_suffix": "bundlemap"
-    },
-    {
       "name": "template_map",
       "software": "qsiprep",
       "action": "template_map",
+      "input": "qsiprep",
       "scalars_from": ["dipy_dki"],
       "output_suffix": "transformed",
       "parameters": {
-        "interpolation": "nearestneighbor"
+        "interpolation": "NearestNeighbor"
       }
     }
   ]

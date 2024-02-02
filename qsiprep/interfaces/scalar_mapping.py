@@ -12,8 +12,9 @@ from nipype import logging
 from nipype.utils.filemanip import fname_presuffix
 from nipype.interfaces.base import (
     traits, TraitedSpec, BaseInterfaceInputSpec, File, SimpleInterface, isdefined,
-    InputMultiObject
+    InputMultiObject, OutputMultiObject
 )
+from nipype.interfaces import ants
 import nilearn.image as nim
 from nilearn.maskers import NiftiMasker
 import pandas as pd
@@ -135,6 +136,7 @@ class AtlasMapper(ScalarMapper):
     input_spec = _AtlasMapperInputSpec
     output_spec = _AtlasMapperOutputSpec
 
+
 def calculate_mask_stats(masker, mask_name, mask_variable_name, recon_scalar, weighting_vector=None):
 
     # Get the scalar data in the masked region
@@ -169,3 +171,41 @@ def calculate_mask_stats(masker, mask_name, mask_variable_name, recon_scalar, we
             nz_voxel_data * nz_weighting_vector )
 
     return results
+
+
+class _TemplateMapperInputSpec(ScalarMapperInputSpec):
+    template_reference_image = File(exists=True, mandatory=True)
+    to_template_transform = File(exists=True, mandatory=True)
+    interpolation = traits.Str("NearestNeighbor", usedefault=True)
+
+
+class _TemplateMapperOutputSpec(ScalarMapperOutputSpec):
+    template_space_scalars = OutputMultiObject(traits.Any())
+
+
+class TemplateMapper(ScalarMapper):
+    input_spec = _TemplateMapperInputSpec
+    output_spec = _TemplateMapperOutputSpec
+
+    def _do_mapping(self, runtime):
+        resampled_images = []
+        sidecars = []
+        # Then get the same stats for the scalars
+        for recon_scalar in self.recon_scalars:
+            output_fname = op.split(recon_scalar["path"])[1]
+            output_fname = output_fname.replace("_space-T1w_", "_transformed_")
+            output_fname = op.join(runtime.cwd, output_fname)
+            transform = ants.ApplyTransforms(
+                input_image=recon_scalar["path"],
+                dimension=3,
+                transforms=[self.inputs.to_template_transform],
+                reference_image=self.inputs.template_reference_image,
+                output_image=output_fname,
+                interpolation=self.inputs.interpolation)
+            transform.terminal_output = 'allatonce'
+            transform.resource_monitor = False
+            transform.run()
+            resampled_images.append(output_fname)
+
+
+        self._results['template_space_scalars'] = resampled_images
