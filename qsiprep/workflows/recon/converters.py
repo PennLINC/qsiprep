@@ -69,12 +69,13 @@ def init_qsiprep_to_fsl_wf(omp_nthreads, available_anatomical_data,
     """Converts QSIPrep outputs (images, bval, bvec) to fsl standard orientation"""
     inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields),
                         name="inputnode")
-    to_reorient = ["mask_file", "dwi_file", "bval_file", "bvec_file"]
+    to_reorient = ["mask_file", "dwi_file", "bval_file", "bvec_file", "recon_scalars"]
     outputnode = pe.Node(
         niu.IdentityInterface(
             fields=to_reorient),
             name="outputnode")
     workflow = Workflow(name=name)
+    outputnode.inputs.recon_scalars = []
 
     convert_dwi_to_fsl = pe.Node(
         ConformDwi(orientation="LAS"), name="convert_to_fsl")

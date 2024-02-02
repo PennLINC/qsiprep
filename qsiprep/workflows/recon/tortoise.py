@@ -100,7 +100,8 @@ Methods implemented in TORTOISE (@tortoisev3) were used for reconstruction. """
             ('dwi_file', 'dwi_file'),
             ('bval_file', 'bval_file'),
             ('bvec_file', 'bvec_file'),
-            ('dwi_mask', 'mask_file')])])
+            ('dwi_mask', 'mask_file')]),
+        (recon_scalars, outputnode, [("scalar_info", "recon_scalars")])])
 
     # EstimateTensor
     if tensor_opts:

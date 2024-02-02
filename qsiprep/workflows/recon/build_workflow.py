@@ -18,8 +18,11 @@ from .converters import init_mif_to_fibgz_wf, init_qsiprep_to_fsl_wf
 from .dynamics import init_controllability_wf
 from .utils import init_conform_dwi_wf, init_discard_repeated_samples_wf
 from .steinhardt import init_steinhardt_order_param_wf
+from .scalar_mapping import init_scalar_to_bundle_wf
 from ...engine import Workflow
-from ...interfaces.interchange import (default_input_set, recon_workflow_input_fields)
+from ...interfaces.interchange import (
+    default_input_set, recon_workflow_input_fields
+)
 
 LOGGER = logging.getLogger('nipype.interface')
 
@@ -41,7 +44,6 @@ def init_dwi_recon_workflow(workflow_spec, output_dir,
     inputnode = pe.Node(
         niu.IdentityInterface(fields=recon_workflow_input_fields),
         name='inputnode')
-
     # Read nodes from workflow spec, make sure we can implement them
     nodes_to_add = []
     for node_spec in workflow_spec['nodes']:
@@ -58,12 +60,21 @@ def init_dwi_recon_workflow(workflow_spec, output_dir,
     workflow.add_nodes(nodes_to_add)
     _check_repeats(workflow.list_node_names())
 
+    # Create a node that gathers scalar outputs from those that produce them
+    scalar_gatherer = pe.Node(niu.Merge(len(nodes_to_add)), name="scalar_gatherer")
+
     # Now that all nodes are in the workflow, connect them
-    for node_spec in workflow_spec['nodes']:
+    for node_num, node_spec in enumerate(workflow_spec['nodes'], start=1):
 
         # get the nipype node object
         node_name = node_spec['name']
         node = workflow.get_node(node_name)
+
+        consuming_scalars = node_spec.get("scalars_from", [])
+        if consuming_scalars:
+            workflow.connect(scalar_gatherer, "out", node, "inputnode.collected_scalars")
+        else:
+            workflow.connect(node, "outputnode.recon_scalars", scalar_gatherer, "in%d"%node_num)
 
         if node_spec.get('input', 'qsiprep') == 'qsiprep':
             # directly connect all the qsiprep outputs to every node
@@ -127,6 +138,15 @@ def workflow_from_spec(omp_nthreads, available_anatomical_data, node_spec,
     output_suffix = node_spec.get("output_suffix", "")
     node_name = node_spec.get("name", None)
     parameters = node_spec.get("parameters", {})
+
+    # It makes more sense intuitively to have scalars_from in the
+    # root of a recon spec "node". But to pass it to the workflow
+    # it needs to go in parameters
+    if "scalars_from" in node_spec and node_spec["scalars_from"]:
+        if parameters.get("scalars_from"):
+            LOGGER.warning("overwriting scalars_from in parameters")
+        parameters["scalars_from"] = node_spec["scalars_from"]
+
     if skip_odf_plots:
         LOGGER.info("skipping ODF plots for %s", node_name)
         parameters['plot_reports'] = False
@@ -139,6 +159,7 @@ def workflow_from_spec(omp_nthreads, available_anatomical_data, node_spec,
         "name": node_name,
         "output_suffix": output_suffix,
         "params": parameters}
+
 
 
     # DSI Studio operations
@@ -202,10 +223,13 @@ def workflow_from_spec(omp_nthreads, available_anatomical_data, node_spec,
             return init_qsiprep_to_fsl_wf(**kwargs)
         if node_spec['action'] == 'steinhardt_order_parameters':
             return init_steinhardt_order_param_wf(**kwargs)
+        if node_spec['action'] == 'bundle_map':
+            return init_scalar_to_bundle_wf(**kwargs)
 
     raise Exception("Unknown node %s" % node_spec)
 
 
 def _as_connections(attr_list, src_prefix='', dest_prefix=''):
     return [(src_prefix + item, dest_prefix + item) for item in attr_list]
+
 

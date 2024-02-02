@@ -88,9 +88,10 @@ def init_mrtrix_csd_recon_wf(omp_nthreads, available_anatomical_data, name="mrtr
     outputnode = pe.Node(
         niu.IdentityInterface(
             fields=['fod_sh_mif', 'wm_odf', 'wm_txt', 'gm_odf', 'gm_txt', 'csf_odf',
-                    'csf_txt']),
+                    'csf_txt', 'recon_scalars']),
         name="outputnode")
     workflow = Workflow(name=name)
+    outputnode.inputs.recon_scalars = []
     plot_reports = params.pop("plot_reports", True)
     desc = """MRtrix3 Reconstruction
 
@@ -346,10 +347,11 @@ def init_global_tractography_wf(omp_nthreads, available_anatomical_data, name="m
         name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(
-            fields=['fod_sh_mif', 'wm_odf', 'iso_fraction', 'tck_file']),
+            fields=['fod_sh_mif', 'wm_odf', 'iso_fraction', 'tck_file', 'recon_scalars']),
         name="outputnode")
 
     workflow = pe.Workflow(name=name)
+    outputnode.inputs.recon_scalars = []
     plot_reports = params.pop("plot_reports", True)
 
     create_mif = pe.Node(MRTrixIngress(), name='create_mif')
@@ -439,10 +441,11 @@ def init_mrtrix_tractography_wf(omp_nthreads, available_anatomical_data, name="m
         niu.IdentityInterface(fields=recon_workflow_input_fields + ['fod_sh_mif']),
         name="inputnode")
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=['tck_file', 'sift_weights']),
+        niu.IdentityInterface(fields=['tck_file', 'sift_weights', 'recon_scalars']),
         name="outputnode")
 
     workflow = pe.Workflow(name=name)
+    outputnode.inputs.recon_scalars = []
     plot_reports = params.pop("plot_reports", True)
     # Resample anat mask
     tracking_params = params.get("tckgen", {})
@@ -527,8 +530,9 @@ def init_mrtrix_connectivity_wf(omp_nthreads, available_anatomical_data, name="m
         niu.IdentityInterface(
             fields=recon_workflow_input_fields + ['tck_file', 'sift_weights', 'atlas_configs']),
         name="inputnode")
-    outputnode = pe.Node(niu.IdentityInterface(fields=['matfile']),
+    outputnode = pe.Node(niu.IdentityInterface(fields=['matfile', 'recon_scalars']),
                          name="outputnode")
+    outputnode.inputs.recon_scalars = []
     plot_reports = params.pop("plot_reports", True)
     workflow = pe.Workflow(name=name)
     conmat_params = params.get("tck2connectome", {})

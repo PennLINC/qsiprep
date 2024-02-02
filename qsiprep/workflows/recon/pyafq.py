@@ -62,8 +62,9 @@ def init_pyafq_wf(omp_nthreads, available_anatomical_data,
         fields=recon_workflow_input_fields + ['tck_file']),
         name="inputnode")
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=['afq_dir']),
+        niu.IdentityInterface(fields=['afq_dir', 'recon_scalars']),
         name="outputnode")
+    outputnode.inputs.recon_scalars=[]
 
     kwargs = _parse_qsiprep_params_dict(params)
     kwargs["omp_nthreads"] = omp_nthreads
