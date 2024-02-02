@@ -42,7 +42,7 @@ run_qsiprep_cmd () {
 
     if [[ -n "${LOCAL_PATCH}" ]]; then
       #echo "Using qsiprep patch: ${LOCAL_PATCH}"
-      QSIPREP_RUN="${QSIPREP_RUN} --patch-qsiprep ${LOCAL_PATCH}"
+      QSIPREP_RUN="${QSIPREP_RUN} --patch-qsiprep ${LOCAL_PATCH} --patch-nipype /Users/mcieslak/projects/Nipype/nipype"
     fi
   fi
   echo "${QSIPREP_RUN} --nthreads ${NTHREADS} --omp-nthreads ${OMP_NTHREADS}"
