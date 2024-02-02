@@ -19,10 +19,6 @@ QSIprep: Preprocessing and analysis of q-space images
   :target: https://circleci.com/gh/PennLINC/qsiprep/tree/master
   :alt: Test Status
 
-.. image:: https://codecov.io/gh/PennLINC/qsiprep/branch/master/graph/badge.svg
-  :target: https://app.codecov.io/gh/PennLINC/qsiprep/tree/master
-  :alt: Codecov
-
 .. image:: https://img.shields.io/badge/Nature%20Methods-10.1038%2Fs41592--021--01185--5-purple
   :target: https://doi.org/10.1038/s41592-021-01185-5
   :alt: Publication DOI
