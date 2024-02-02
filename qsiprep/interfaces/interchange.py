@@ -48,6 +48,7 @@ class _ReconWorkflowInputsInputSpec(BaseInterfaceInputSpec):
 class _ReconWorkflowInputsOutputSpec(TraitedSpec):
     pass
 
+
 class ReconWorkflowInputs(SimpleInterface):
     input_spec = _ReconWorkflowInputsInputSpec
     output_spec = _ReconWorkflowInputsOutputSpec

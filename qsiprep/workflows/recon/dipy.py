@@ -13,6 +13,9 @@ from ...interfaces.dipy import BrainSuiteShoreReconstruction, KurtosisReconstruc
 from ...interfaces.interchange import recon_workflow_input_fields
 from ...engine import Workflow
 from ...interfaces.reports import CLIReconPeaksReport
+from ...interfaces.recon_scalars import (
+    DIPYDKIReconScalars, DIPYMAPMRIReconScalars, BrainSuite3dSHOREReconScalars)
+
 
 LOGGER = logging.getLogger('nipype.interface')
 
@@ -100,7 +103,7 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, available_anatomical_data,
         niu.IdentityInterface(
             fields=['shore_coeffs_image', 'rtop_image', 'alpha_image', 'r2_image',
                     'cnr_image', 'regularization_image', 'fibgz', 'fod_sh_mif',
-                    'dwi_file', 'bval_file', 'bvec_file', 'b_file']),
+                    'dwi_file', 'bval_file', 'bvec_file', 'b_file', 'recon_scalars']),
         name="outputnode")
 
     workflow = Workflow(name=name)
@@ -108,7 +111,12 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, available_anatomical_data,
 
 : """
     plot_reports = params.pop("plot_reports", True)
-    recon_shore = pe.Node(BrainSuiteShoreReconstruction(**params), name="recon_shore")
+    recon_shore = pe.Node(
+        BrainSuiteShoreReconstruction(**params), name="recon_shore")
+    recon_scalars = pe.Node(
+        BrainSuite3dSHOREReconScalars(workflow_name="name"),
+        name="recon_scalars",
+        run_without_submitting=True)
     doing_extrapolation = params.get("extrapolate_scheme") in ("HCP", "ABCD")
 
     workflow.connect([
@@ -127,8 +135,16 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, available_anatomical_data,
                                    ('extrapolated_dwi', 'dwi_file'),
                                    ('extrapolated_bvals', 'bval_file'),
                                    ('extrapolated_bvecs', 'bvec_file'),
-                                   ('extrapolated_b', 'b_file')])
-        ])
+                                   ('extrapolated_b', 'b_file')]),
+        (recon_shore, recon_scalars, [
+            ('rtop_image', 'rtop_file'),
+            ('alpha_image', 'alpha_image'),
+            ('r2_image', 'r2_image'),
+            ('cnr_image', 'cnr_image'),
+            ('regularization_image', 'regularization_image')]),
+        (recon_scalars, outputnode, [("scalar_info", "recon_scalars")])
+    ])
+
     if plot_reports:
 
         plot_peaks = pe.Node(
@@ -330,7 +346,7 @@ def init_dipy_mapmri_recon_wf(omp_nthreads, available_anatomical_data, name="dip
     outputnode = pe.Node(
         niu.IdentityInterface(
             fields=['mapmri_coeffs', 'rtop', 'rtap', 'rtpp', 'fibgz', 'fod_sh_mif',
-                    'parng', 'perng', 'ng', 'qiv', 'lapnorm', 'msd']),
+                    'parng', 'perng', 'ng', 'qiv', 'lapnorm', 'msd', 'recon_scalars']),
         name="outputnode")
 
     workflow = Workflow(name=name)
@@ -339,7 +355,10 @@ def init_dipy_mapmri_recon_wf(omp_nthreads, available_anatomical_data, name="dip
 : """
     plot_reports = params.pop("plot_reports", True)
     recon_map = pe.Node(MAPMRIReconstruction(**params), name="recon_map")
-
+    recon_scalars = pe.Node(
+        DIPYMAPMRIReconScalars(workflow_name=name),
+        name="recon_scalars",
+        run_without_submitting=True)
     workflow.connect([
         (inputnode, recon_map, [('dwi_file', 'dwi_file'),
                                 ('bval_file', 'bval_file'),
@@ -356,7 +375,18 @@ def init_dipy_mapmri_recon_wf(omp_nthreads, available_anatomical_data, name="dip
                                  ('qiv', 'qiv'),
                                  ('lapnorm', 'lapnorm'),
                                  ('fibgz', 'fibgz'),
-                                 ('fod_sh_mif', 'fod_sh_mif')])])
+                                 ('fod_sh_mif', 'fod_sh_mif')]),
+        (recon_map, recon_scalars, [
+            ('rtop', 'rtop_file'),
+            ('rtap', 'rtap_file'),
+            ('rtpp', 'rtpp_file'),
+            ('ng', 'ng_file'),
+            ('parng', 'ngpar_file'),
+            ('perng', 'ngperp_file'),
+            ('msd', 'msd_file'),
+            ('qiv', 'qiv_file'),
+            ('lapnorm', 'lapnorm_file')]),
+        (recon_scalars, outputnode, [("scalar_info", "recon_scalars")])])
     if plot_reports:
         plot_peaks = pe.Node(
             CLIReconPeaksReport(),
@@ -440,9 +470,11 @@ def init_dipy_dki_recon_wf(omp_nthreads, available_anatomical_data, name="dipy_d
         niu.IdentityInterface(
             fields=['tensor', 'fa', 'md', 'rd', 'ad',
                     'colorFA', 'kfa', 'mk', 'ak', 'rk',
-                    'mkt']),
+                    'mkt', 'recon_scalars']),
         name="outputnode")
-
+    recon_scalars = pe.Node(DIPYDKIReconScalars(workflow_name=name),
+                            run_without_submitting=True,
+                            name="recon_scalars")
     workflow = Workflow(name=name)
     desc = """Dipy Reconstruction
 
@@ -450,24 +482,36 @@ def init_dipy_dki_recon_wf(omp_nthreads, available_anatomical_data, name="dipy_d
     plot_reports = params.pop("plot_reports", True)
     recon_dki = pe.Node(KurtosisReconstruction(**params), name="recon_dki")
 
-
     workflow.connect([
-        (inputnode, recon_dki, [('dwi_file', 'dwi_file'),
-                                ('bval_file', 'bval_file'),
-                                ('bvec_file', 'bvec_file'),
-                                ('dwi_mask', 'mask_file')]),
-        (recon_dki, outputnode, [('tensor', 'tensor'),
-                                 ('fa', 'fa'),
-                                 ('md', 'md'),
-                                 ('rd', 'rd'),
-                                 ('ad', 'ad'),
-                                 ('colorFA', 'colorFA'),
-                                 ('kfa', 'kfa'),
-                                 ('mk', 'mk'),
-                                 ('ak', 'ak'),
-                                 ('rk', 'rk'),
-                                 ('mkt', 'mkt'),
-                                 ('fibgz', 'fibgz')])
+        (inputnode, recon_dki, [
+            ('dwi_file', 'dwi_file'),
+            ('bval_file', 'bval_file'),
+            ('bvec_file', 'bvec_file'),
+            ('dwi_mask', 'mask_file')]),
+        (recon_dki, outputnode, [
+            ('tensor', 'tensor'),
+            ('fa', 'fa'),
+            ('md', 'md'),
+            ('rd', 'rd'),
+            ('ad', 'ad'),
+            ('colorFA', 'colorFA'),
+            ('kfa', 'kfa'),
+            ('mk', 'mk'),
+            ('ak', 'ak'),
+            ('rk', 'rk'),
+            ('mkt', 'mkt'),
+            ('fibgz', 'fibgz')]),
+        (recon_dki, recon_scalars, [
+            ('fa', 'dki_fa'),
+            ('md', 'dki_md'),
+            ('rd', 'dki_rd'),
+            ('ad', 'dki_ad'),
+            ('kfa', 'dki_kfa'),
+            ('mk', 'dki_mk'),
+            ('ak', 'dki_ak'),
+            ('rk', 'dki_rk'),
+            ('mkt', 'dki_mkt')]),
+        (recon_scalars, outputnode, [("scalar_info", "recon_scalars")])
     ])
 
     if plot_reports and False:
