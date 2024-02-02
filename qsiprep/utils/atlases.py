@@ -8,9 +8,9 @@ Loading atlases
 
 
 """
+import json
 import os
 import os.path as op
-import json
 
 
 def get_atlases(atlas_names):

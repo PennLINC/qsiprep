@@ -23,15 +23,21 @@ Feedback will be enthusiastically received.
 
 
 """
-import pkg_resources as pkgr
 import nibabel as nb
-from nipype.utils.filemanip import fname_presuffix
+import pkg_resources as pkgr
 from nipype import logging
-from nipype.pipeline import engine as pe
-from nipype.interfaces import fsl, ants, utility as niu
+from nipype.interfaces import ants
+from nipype.interfaces import utility as niu
+from nipype.interfaces.base import (
+    BaseInterfaceInputSpec,
+    File,
+    SimpleInterface,
+    TraitedSpec,
+    traits,
+)
 from nipype.interfaces.image import Rescale
-from nipype.interfaces.base import (isdefined, traits, TraitedSpec, BaseInterfaceInputSpec,
-                                    SimpleInterface, File, InputMultiObject, OutputMultiObject)
+from nipype.pipeline import engine as pe
+from nipype.utils.filemanip import fname_presuffix
 
 from ...engine import Workflow
 

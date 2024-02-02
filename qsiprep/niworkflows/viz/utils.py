@@ -4,27 +4,26 @@
 """Helper tools for visualization purposes"""
 from __future__ import absolute_import, division, print_function, unicode_literals
 
+import base64
 import os
 import os.path as op
-import subprocess
-import base64
 import re
+import subprocess
+from io import StringIO, open
 from sys import version_info
 from uuid import uuid4
-from io import open, StringIO
 
-import numpy as np
-import nibabel as nb
 import matplotlib.pyplot as plt
-
+import nibabel as nb
+import numpy as np
 from lxml import etree
 from nilearn import image as nlimage
 from nilearn.plotting import plot_anat
-from svgutils.transform import SVGFigure
+from nipype.utils import filemanip
 from seaborn import color_palette
+from svgutils.transform import SVGFigure
 
 from .. import NIWORKFLOWS_LOG
-from nipype.utils import filemanip
 
 try:
     from shutil import which
@@ -665,6 +664,7 @@ def transform_to_2d(data, max_axis):
     preservation of the signs. Adapted from nilearn.
     """
     import numpy as np
+
     # get the shape of the array we are projecting to
     new_shape = list(data.shape)
     del new_shape[max_axis]
@@ -686,14 +686,15 @@ def plot_melodic_components(melodic_dir, in_file, tr=None,
                             out_file='melodic_reportlet.svg',
                             compress='auto', report_mask=None,
                             noise_components_file=None):
-    from nilearn.image import index_img, iter_img
+    import os
+    import re
+    from io import StringIO
+
     import nibabel as nb
     import numpy as np
     import seaborn as sns
     from matplotlib.gridspec import GridSpec
-    import os
-    import re
-    from io import StringIO
+    from nilearn.image import index_img, iter_img
     sns.set_style("white")
     current_palette = sns.color_palette()
     in_nii = nb.load(in_file)

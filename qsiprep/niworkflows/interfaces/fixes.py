@@ -3,8 +3,8 @@
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 import os
 
-from nipype.interfaces.ants.resampling import ApplyTransforms
 from nipype.interfaces.ants.registration import Registration
+from nipype.interfaces.ants.resampling import ApplyTransforms
 
 from .. import __version__
 from .utils import _copyxform

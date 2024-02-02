@@ -6,27 +6,31 @@ Implementing the FSL preprocessing workflow
 
 """
 
-import json, os
-from pkg_resources import resource_filename as pkgr_fn
+import json
+import os
+
 from nipype import logging
-
-from nipype.pipeline import engine as pe
-from nipype.interfaces import utility as niu
 from nipype.interfaces import fsl
+from nipype.interfaces import utility as niu
+from nipype.pipeline import engine as pe
+from pkg_resources import resource_filename as pkgr_fn
 
-from .registration import init_b0_to_anat_registration_wf, init_direct_b0_acpc_wf
-from ...interfaces.eddy import (GatherEddyInputs, ExtendedEddy, Eddy2SPMMotion,
-                                boilerplate_from_eddy_config)
-from ...interfaces.images import SplitDWIsFSL, ConformDwi, IntraModalMerge
-from ...interfaces.reports import TopupSummary
-from ...interfaces.nilearn import EnhanceB0
-from ...interfaces import DerivativesDataSink
 from ...engine import Workflow
+from ...interfaces import DerivativesDataSink
+from ...interfaces.eddy import (
+    Eddy2SPMMotion,
+    ExtendedEddy,
+    GatherEddyInputs,
+    boilerplate_from_eddy_config,
+)
+from ...interfaces.images import ConformDwi, IntraModalMerge, SplitDWIsFSL
+from ...interfaces.nilearn import EnhanceB0
+from ...interfaces.reports import TopupSummary
+from ..fieldmap.base import init_sdc_wf
+from ..fieldmap.drbuddi import init_drbuddi_wf
 
 # dwi workflows
 from .util import init_dwi_reference_wf
-from ..fieldmap.base import init_sdc_wf
-from ..fieldmap.drbuddi import init_drbuddi_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger('nipype.workflow')

@@ -15,10 +15,13 @@ Examples:
     >>> data_root = get_grouping_test_data()
     >>> os.chdir(data_root)
 """
-from collections import defaultdict
 import logging
+from collections import defaultdict
+
 from nipype.utils.filemanip import split_filename
+
 from ..interfaces.bids import get_bids_params
+
 LOGGER = logging.getLogger('nipype.workflow')
 
 

@@ -9,21 +9,26 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 
 import os
 import shutil
-import numpy as np
-import nibabel as nb
-import nilearn.image as nli
 from textwrap import indent
 
+import nibabel as nb
+import nilearn.image as nli
+import numpy as np
 import scipy.ndimage as nd
 from nipype import logging
+from nipype.interfaces.base import (
+    BaseInterfaceInputSpec,
+    File,
+    InputMultiPath,
+    SimpleInterface,
+    TraitedSpec,
+    isdefined,
+    traits,
+)
 from nipype.utils.filemanip import fname_presuffix
 from nipype.utils.misc import normalize_mc_params
-from nipype.interfaces.base import (
-    traits, isdefined, File, InputMultiPath,
-    TraitedSpec, BaseInterfaceInputSpec, SimpleInterface
-)
-from .. import __version__
 
+from .. import __version__
 
 LOG = logging.getLogger('nipype.interface')
 

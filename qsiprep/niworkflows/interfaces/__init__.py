@@ -4,12 +4,12 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 from .masks import BETRPT as BET
-from .segmentation import (FASTRPT as FAST)
-from .registration import (FLIRTRPT as FLIRT,
-                           ApplyXFMRPT as ApplyXFM,
-                           RobustMNINormalizationRPT as RobustMNINormalization,
-                           ANTSRegistrationRPT as Registration,
-                           ANTSApplyTransformsRPT as ApplyTransforms,
-                           SimpleBeforeAfterRPT as SimpleBeforeAfter)
-from .utils import CopyXForm, CopyHeader, NormalizeMotionParams, SanitizeImage
 from .plotting import FMRISummary
+from .registration import FLIRTRPT as FLIRT
+from .registration import ANTSApplyTransformsRPT as ApplyTransforms
+from .registration import ANTSRegistrationRPT as Registration
+from .registration import ApplyXFMRPT as ApplyXFM
+from .registration import RobustMNINormalizationRPT as RobustMNINormalization
+from .registration import SimpleBeforeAfterRPT as SimpleBeforeAfter
+from .segmentation import FASTRPT as FAST
+from .utils import CopyHeader, CopyXForm, NormalizeMotionParams, SanitizeImage

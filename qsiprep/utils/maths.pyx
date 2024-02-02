@@ -8,10 +8,11 @@ Cython math extension
 """
 
 from __future__ import division
-import numpy as np
-cimport numpy as np
-cimport cython
 
+import numpy as np
+
+cimport cython
+cimport numpy as np
 from libc.math cimport fabs
 
 

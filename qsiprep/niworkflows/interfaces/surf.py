@@ -10,12 +10,15 @@ Handling surfaces
 import os
 import re
 
-import numpy as np
 import nibabel as nb
-
+import numpy as np
 from nipype.interfaces.base import (
-    BaseInterfaceInputSpec, TraitedSpec, File, traits, isdefined,
-    SimpleInterface
+    BaseInterfaceInputSpec,
+    File,
+    SimpleInterface,
+    TraitedSpec,
+    isdefined,
+    traits,
 )
 
 

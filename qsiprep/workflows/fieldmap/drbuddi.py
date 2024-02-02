@@ -20,17 +20,17 @@ susceptibility distortion. It has multiple modes of operation
 
 """
 
-from asyncio import gather
-from nipype.pipeline import engine as pe
-from nipype.interfaces import utility as niu
 from nipype import logging
+from nipype.interfaces import utility as niu
+from nipype.pipeline import engine as pe
 
 from ...engine import Workflow
-from ...interfaces.fmap import get_distortion_grouping
 from ...interfaces.tortoise import (
-    GatherDRBUDDIInputs, DRBUDDI, DRBUDDIAggregateOutputs,
-    generate_drbuddi_boilerplate)
-from ...interfaces.reports import TopupSummary
+    DRBUDDI,
+    DRBUDDIAggregateOutputs,
+    GatherDRBUDDIInputs,
+    generate_drbuddi_boilerplate,
+)
 
 LOGGER = logging.getLogger('nipype.workflow')
 DEFAULT_MEMORY_MIN_GB = 0.01

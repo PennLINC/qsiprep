@@ -1,23 +1,34 @@
 #!python
-import os
-import time
-from pathlib import Path
-import os.path as op
 import logging
-from glob import glob
+import os
+import os.path as op
 from copy import deepcopy
-from subprocess import Popen, PIPE
-import numpy as np
-from nipype.interfaces.base import (TraitedSpec, CommandLineInputSpec, BaseInterfaceInputSpec,
-                                    CommandLine, File, traits, isdefined, SimpleInterface,
-                                    InputMultiObject, OutputMultiObject)
-import nipype.pipeline.engine as pe
+from glob import glob
+from pathlib import Path
+from subprocess import PIPE, Popen
+
+import nibabel as nb
 import nipype.interfaces.utility as niu
+import nipype.pipeline.engine as pe
+import numpy as np
+import pandas as pd
+from nipype.interfaces.base import (
+    BaseInterfaceInputSpec,
+    CommandLine,
+    CommandLineInputSpec,
+    File,
+    InputMultiObject,
+    OutputMultiObject,
+    SimpleInterface,
+    TraitedSpec,
+    isdefined,
+    traits,
+)
 from nipype.utils.filemanip import fname_presuffix, split_filename, which
 from scipy.io.matlab import loadmat, savemat
-import nibabel as nb
-import pandas as pd
+
 from .bids import get_bids_params
+
 LOGGER = logging.getLogger('nipype.interface')
 DSI_STUDIO_VERSION = "94b9c79"
 

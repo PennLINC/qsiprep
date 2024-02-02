@@ -6,15 +6,21 @@ Utility workflows
 ^^^^^^^^^^^^^^^^^
 
 """
+from nipype.interfaces import afni
+from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
-from nipype.interfaces import utility as niu, afni
+
 from ...engine import Workflow
-from ...interfaces.dsi_studio import (
-    DSIStudioSrcQC, DSIStudioCreateSrc, DSIStudioGQIReconstruction,
-    DSIStudioFibQC, DSIStudioMergeQC)
-from ...interfaces.reports import InteractiveReport
-from ...interfaces.dipy import TensorReconstruction
 from ...interfaces.anatomical import DiceOverlap
+from ...interfaces.dipy import TensorReconstruction
+from ...interfaces.dsi_studio import (
+    DSIStudioCreateSrc,
+    DSIStudioFibQC,
+    DSIStudioGQIReconstruction,
+    DSIStudioMergeQC,
+    DSIStudioSrcQC,
+)
+from ...interfaces.reports import InteractiveReport
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 

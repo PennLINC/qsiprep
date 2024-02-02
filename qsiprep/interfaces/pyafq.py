@@ -14,13 +14,16 @@ import os.path as op
 from AFQ.api.participant import ParticipantAFQ
 from AFQ.definitions.image import ImageFile
 from AFQ.definitions.mapping import ItkMap
-
 from nipype import logging
-from nipype.utils.filemanip import fname_presuffix
 from nipype.interfaces.base import (
-    traits, TraitedSpec, BaseInterfaceInputSpec, File, SimpleInterface, isdefined
+    BaseInterfaceInputSpec,
+    File,
+    SimpleInterface,
+    TraitedSpec,
+    isdefined,
+    traits,
 )
-
+from nipype.utils.filemanip import fname_presuffix
 
 LOGGER = logging.getLogger('nipype.interface')
 

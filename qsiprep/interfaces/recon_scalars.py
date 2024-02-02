@@ -8,14 +8,17 @@ Classes that collect scalar images and metadata from Recon Workflows
 
 
 """
-import os
 import os.path as op
-from pkg_resources import resource_filename as pkgr
-from nipype import logging
-from nipype.utils.filemanip import fname_presuffix
+
 from nipype.interfaces.base import (
-    traits, TraitedSpec, BaseInterfaceInputSpec, SimpleInterface, isdefined, File
+    BaseInterfaceInputSpec,
+    File,
+    SimpleInterface,
+    TraitedSpec,
+    isdefined,
+    traits,
 )
+
 
 class ReconScalarsInputSpec(BaseInterfaceInputSpec):
     workflow_name = traits.Str(mandatory=True)

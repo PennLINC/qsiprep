@@ -5,12 +5,15 @@ Dynamics and Controllability
 .. autofunction:: init_controllability_wf
 
 """
-import nipype.pipeline.engine as pe
-import nipype.interfaces.utility as niu
 import logging
-from qsiprep.interfaces.connectivity import Controllability
-from qsiprep.interfaces.bids import ReconDerivativesDataSink
+
+import nipype.interfaces.utility as niu
+import nipype.pipeline.engine as pe
+
 from ...interfaces.interchange import recon_workflow_input_fields
+from qsiprep.interfaces.bids import ReconDerivativesDataSink
+from qsiprep.interfaces.connectivity import Controllability
+
 LOGGER = logging.getLogger('nipype.workflow')
 
 

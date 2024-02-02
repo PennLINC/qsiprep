@@ -9,27 +9,25 @@ Final steps on the preprocessed data
 import os
 
 from nipype import logging
-
-from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
 from nipype.interfaces.base import isdefined
-from ...interfaces import DerivativesDataSink
-from ...niworkflows.interfaces.registration import SimpleBeforeAfterRPT
-from ...interfaces.reports import GradientPlot, SeriesQC
-from ...interfaces.mrtrix import MRTrixGradientTable, DWIBiasCorrect
-from ...interfaces.dwi_merge import SplitResampledDWIs, MergeFinalConfounds
-from ...interfaces.confounds import GatherConfounds
-from ...interfaces.gradients import ExtractB0s
-from ...interfaces.nilearn import Merge
-from ...interfaces.dsi_studio import DSIStudioBTable
+from nipype.pipeline import engine as pe
+
 from ...engine import Workflow
-from .util import init_dwi_reference_wf
+from ...interfaces import DerivativesDataSink
+from ...interfaces.dsi_studio import DSIStudioBTable
+from ...interfaces.dwi_merge import MergeFinalConfounds, SplitResampledDWIs
+from ...interfaces.gradients import ExtractB0s
+from ...interfaces.mrtrix import DWIBiasCorrect, MRTrixGradientTable
+from ...interfaces.nilearn import Merge
+from ...interfaces.reports import GradientPlot, SeriesQC
+from ...niworkflows.interfaces.registration import SimpleBeforeAfterRPT
+from .derivatives import init_dwi_derivatives_wf
+from .qc import init_interactive_report_wf, init_mask_overlap_wf, init_modelfree_qc_wf
+from .resampling import init_dwi_trans_wf
 
 # dwi workflows
-from .util import _create_mem_gb
-from .resampling import init_dwi_trans_wf
-from .derivatives import init_dwi_derivatives_wf
-from .qc import init_mask_overlap_wf, init_interactive_report_wf, init_modelfree_qc_wf
+from .util import _create_mem_gb, init_dwi_reference_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger('nipype.workflow')

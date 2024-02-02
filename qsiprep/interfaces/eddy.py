@@ -9,18 +9,27 @@ Prepare files for TOPUP and eddy
 """
 import os
 import os.path as op
-from pkg_resources import resource_filename as pkgr_fn
-import numpy as np
+
 import nibabel as nb
+import numpy as np
 from nilearn.image import index_img
 from nipype import logging
-from nipype.utils.filemanip import fname_presuffix, split_filename
 from nipype.interfaces import fsl
 from nipype.interfaces.base import (
-    traits, TraitedSpec, BaseInterfaceInputSpec, File, InputMultiObject, SimpleInterface,
-    isdefined)
-from .fmap import eddy_inputs_from_dwi_files
+    BaseInterfaceInputSpec,
+    File,
+    InputMultiObject,
+    SimpleInterface,
+    TraitedSpec,
+    isdefined,
+    traits,
+)
+from nipype.utils.filemanip import fname_presuffix, split_filename
+from pkg_resources import resource_filename as pkgr_fn
+
 from .epi_fmap import get_best_b0_topup_inputs_from
+from .fmap import eddy_inputs_from_dwi_files
+
 LOGGER = logging.getLogger('nipype.interface')
 
 
