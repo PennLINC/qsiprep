@@ -31,7 +31,7 @@ from qsiprep.interfaces import Conform
 from ...utils.misc import fix_multi_source_name
 from ...interfaces.freesurfer import (
         PrepareSynthStripGrid, FixHeaderSynthStrip, SynthSeg)
-from ...interfaces.anatomical import DesaturateSkull, GetTemplate
+from ...interfaces.anatomical import DesaturateSkull, GetTemplate, VoxelSizeChooser
 from ...interfaces.itk import DisassembleTransform, AffineToRigid
 
 from nipype import logging
@@ -967,7 +967,7 @@ def init_synthseg_wf(omp_nthreads, sloppy, name="synthseg_wf"):
 def init_output_grid_wf(voxel_size, padding, name='output_grid_wf'):
     """Generate a non-oblique, uniform voxel-size grid around a brain."""
     workflow = Workflow(name=name)
-    inputnode = pe.Node(niu.IdentityInterface(fields=['template_image']), name='inputnode')
+    inputnode = pe.Node(niu.IdentityInterface(fields=['template_image', 'input_image']), name='inputnode')
     outputnode = pe.Node(niu.IdentityInterface(fields=['grid_image']), name='outputnode')
     autobox_template = pe.Node(afni.Autobox(outputtype="NIFTI_GZ", padding=padding),
                                name='autobox_template')
@@ -975,13 +975,15 @@ def init_output_grid_wf(voxel_size, padding, name='output_grid_wf'):
                                 name="deoblique_autobox")
     resample_to_voxel_size = pe.Node(afni.Resample(outputtype="NIFTI_GZ"),
                                      name="resample_to_voxel_size")
-    resample_to_voxel_size.inputs.voxel_size = (voxel_size, voxel_size, voxel_size)
+    voxel_size_chooser = pe.Node(VoxelSizeChooser(voxel_size=voxel_size), name="voxel_size_chooser")
 
     workflow.connect([
         (inputnode, autobox_template, [('template_image', 'in_file')]),
         (autobox_template, deoblique_autobox, [('out_file', 'in_file')]),
         (deoblique_autobox, resample_to_voxel_size, [('out_file', 'in_file')]),
-        (resample_to_voxel_size, outputnode, [('out_file', 'grid_image')])
+        (resample_to_voxel_size, outputnode, [('out_file', 'grid_image')]),
+        (inputnode, voxel_size_chooser, [('input_image', 'input_image')]),
+        (voxel_size_chooser, resample_to_voxel_size, [('voxel_size', 'voxel_size')])
     ])
 
     return workflow

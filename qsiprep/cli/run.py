@@ -1210,7 +1210,9 @@ def build_recon_workflow(opts, retval):
         b0_threshold=opts.b0_threshold,
         freesurfer_input=opts.freesurfer_input,
         skip_odf_plots=opts.skip_odf_reports,
-        pipeline_source=opts.recon_input_pipeline
+        pipeline_source=opts.recon_input_pipeline,
+        output_resolution=opts.output_resolution,
+        infant_mode=opts.infant
     )
     retval['return_code'] = 0
 

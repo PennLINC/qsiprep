@@ -5,7 +5,7 @@
   "anatomical": [ ],
   "nodes": [
     {
-      "name": "DIPYdki",
+      "name": "dipy_dki",
       "software": "Dipy",
       "action": "DKI_reconstruction",
       "input": "qsiprep",
@@ -14,14 +14,6 @@
         "write_mif": false,
         "write_fibgz": false
       }
-    },
-    {
-      "name": "dsistudio_gqi",
-      "software": "DSI Studio",
-      "action": "reconstruction",
-      "input": "qsiprep",
-      "output_suffix": "gqi",
-      "parameters": {"method": "gqi"}
     },
     {
       "name": "autotrackgqi",
@@ -37,19 +29,22 @@
       }
     },
     {
-      "name": "gqi_scalars",
-      "software": "DSI Studio",
-      "action": "export",
-      "input": "dsistudio_gqi",
-      "output_suffix": "gqiscalar"
-    },
-    {
       "name": "bundle_means",
       "software": "qsiprep",
       "action": "bundle_map",
       "input": "autotrackgqi",
-      "scalars_from": ["gqi_scalars", "DIPYdki"],
+      "scalars_from": ["DIPYdki"],
       "output_suffix": "bundlemap"
+    },
+    {
+      "name": "template_map",
+      "software": "qsiprep",
+      "action": "template_map",
+      "scalars_from": ["dipy_dki"],
+      "output_suffix": "transformed",
+      "parameters": {
+        "interpolation": "nearestneighbor"
+      }
     }
   ]
 }

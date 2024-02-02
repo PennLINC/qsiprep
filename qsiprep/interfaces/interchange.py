@@ -26,7 +26,7 @@ qsiprep_output_names = QsiReconDWIIngress().output_spec.class_editable_traits()
 
 # dMRI + registered anatomical fields
 recon_workflow_anatomical_input_fields = anatomical_workflow_outputs + [
-    "dwi_mask", "atlas_configs", "odf_rois"]
+    "dwi_mask", "atlas_configs", "odf_rois", "resampling_template"]
 
 # Check that no conflicts have been introduced
 overlapping_names = set(qsiprep_output_names

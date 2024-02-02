@@ -20,8 +20,6 @@ def init_scalar_to_bundle_wf(omp_nthreads, available_anatomical_data,
                              name="scalar_to_bundle", output_suffix="", params={}):
     """Map scalar images to bundles
 
-
-
     Inputs
         tck_files
             MRtrix3 format tck files for each bundle

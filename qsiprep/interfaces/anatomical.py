@@ -36,6 +36,7 @@ class QsiprepAnatomicalIngressInputSpec(BaseInterfaceInputSpec):
                                        help="directory containing subject results directories")
     subject_id = traits.Str()
     subjects_dir = File(exists=True)
+    infant_mode = traits.Bool(mandatory=True)
 
 
 class QsiprepAnatomicalIngressOutputSpec(TraitedSpec):
@@ -61,6 +62,8 @@ class QsiprepAnatomicalIngressOutputSpec(TraitedSpec):
     t1_2_mni_reverse_transform = File()
     # sub-1_from-T1w_to-MNI152NLin2009cAsym_mode-image_xfm.h5
     t1_2_mni_forward_transform = File()
+    # Generic: what template was used?
+    template_image = File()
 
 
 class QsiprepAnatomicalIngress(SimpleInterface):
@@ -121,6 +124,10 @@ class QsiprepAnatomicalIngress(SimpleInterface):
         self._get_if_exists(
             't1_2_mni_forward_transform',
             "%s/sub-%s*_from-T1w_to-MNI152NLin2009cAsym_mode-image_xfm.h5" % (anat_root, sub))
+        if self.inputs.infant_mode:
+            self._results["template_image"] = "mni_infant.nii.gz"
+        else:
+            self._results["template_image"] = "mni.nii.gz"
         return runtime
 
     def _get_if_exists(self, name, pattern, excludes=None):
@@ -185,6 +192,42 @@ class DiceOverlap(SimpleInterface):
 
         self._results['dice_score'] = distance.dice(t1_img.get_fdata().flatten(),
                                                     dwi_img.get_fdata().flatten())
+        return runtime
+
+
+class _VoxelSizeChooserInputSpec(BaseInterfaceInputSpec):
+    voxel_size = traits.Float()
+    input_image = File(exists=True)
+    anisotropic_strategy = traits.Enum("min", "max", "mean", usedefault=True)
+
+
+class _VoxelSizeChooserOutputSpec(TraitedSpec):
+    voxel_size = traits.Tuple()
+
+
+class VoxelSizeChooser(SimpleInterface):
+    input_spec = _VoxelSizeChooserInputSpec
+    output_spec = _VoxelSizeChooserOutputSpec
+
+    def _run_interface(self, runtime):
+        if not isdefined(self.inputs.input_image) and not isdefined(self.inputs.voxel_size):
+            raise Exception("Either voxel_size or input_image need to be defined")
+
+        # A voxel size was specified without an image
+        if isdefined(self.inputs.voxel_size):
+            voxel_size = self.inputs.voxel_size
+        else:
+            # An image was provided
+            img = nb.load(self.inputs.input_image)
+            zooms = img.header.get_zooms()[:3]
+            if self.inputs.anisotropic_strategy == "min":
+                voxel_size = min(zooms)
+            elif self.inputs.anisotropic_strategy == "max":
+                voxel_size = max(zooms)
+            else:
+                voxel_size = np.round(np.mean(zooms), 2)
+
+        self._results["voxel_size"] = (voxel_size, voxel_size, voxel_size)
         return runtime
 
 
