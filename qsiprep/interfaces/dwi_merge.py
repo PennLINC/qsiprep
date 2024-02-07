@@ -673,39 +673,65 @@ class _PhaseToRadOutputSpec(TraitedSpec):
 
 
 class PhaseToRad(SimpleInterface):
-    """Convert phase image from arbitrary units to radians.
+    """Convert phase image from arbitrary units (au) to radians.
 
     This method assumes that the phase image's minimum and maximum values correspond to
     -pi and pi, respectively, and scales the image to be between 0 and 2*pi.
+
+    Notes
+    -----
+    The code is derived from
+    https://github.com/nipreps/sdcflows/blob/c6cd42944f4b6d638716ce020ffe51010e9eb58a/\
+    sdcflows/utils/phasemanip.py#L26.
+
+    License
+    -------
+    Copyright 2021 The NiPreps Developers <nipreps@gmail.com>
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+    We support and encourage derived works from this project, please read
+    about our expectations at
+
+        https://www.nipreps.org/community/licensing/
+
     """
     input_spec = _PhaseToRadInputSpec
     output_spec = _PhaseToRadOutputSpec
 
     def _run_interface(self, runtime):
-        phase_img = nb.load(self.inputs.phase_file)
+        im = nb.load(self.inputs.phase_file)
+        data = im.get_fdata(caching="unchanged")  # Read as float64 for safety
+        hdr = im.header.copy()
 
-        phase_data = phase_img.get_fdata()
-        imax = phase_data.max()
-        imin = phase_data.min()
+        # Rescale to [0, 2*pi]
+        data = (data - data.min()) * (2 * np.pi / (data.max() - data.min()))
 
-        # Calculate the scaling factor
-        scaling_factor = 2 * np.pi / (imax - imin)
+        # Round to float32 and clip
+        data = np.clip(np.float32(data), 0.0, 2 * np.pi)
 
-        # Apply scaling and convert to radians
-        phase_data = (phase_data - imin) * scaling_factor
-
-        # Create the output image
-        out_img = nb.Nifti1Image(phase_data, phase_img.affine, phase_img.header)
+        hdr.set_data_dtype(np.float32)
+        hdr.set_xyzt_units("mm")
 
         # Set the output file name
-        self._results['phase_file'] = fname_presuffix(
+        self._results["phase_file"] = fname_presuffix(
             self.inputs.phase_file,
-            suffix='_rad.nii.gz',
+            suffix="_rad.nii.gz",
             newpath=runtime.cwd,
             use_ext=False,
         )
 
         # Save the output image
-        out_img.to_filename(self._results['phase_file'])
+        nb.Nifti1Image(data, None, hdr).to_filename(self._results["phase_file"])
 
         return runtime
