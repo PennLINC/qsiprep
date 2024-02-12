@@ -11,10 +11,18 @@ as well as for open-source software distribution.
 import logging
 
 from .__about__ import (
-    __version__, __packagename__, __author__, __copyright__,
-    __credits__, __license__, __maintainer__, __email__, __status__,
-    __description__, __longdesc__)
-
+    __author__,
+    __copyright__,
+    __credits__,
+    __description__,
+    __email__,
+    __license__,
+    __longdesc__,
+    __maintainer__,
+    __packagename__,
+    __status__,
+    __version__,
+)
 
 __all__ = [
     '__version__',

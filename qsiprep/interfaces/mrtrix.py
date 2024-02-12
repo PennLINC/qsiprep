@@ -10,27 +10,41 @@ Image tools interfaces
 """
 import os
 import os.path as op
-from copy import deepcopy
-import numpy as np
 import zipfile
+from copy import deepcopy
+
 import nibabel as nb
-from scipy.io.matlab import savemat, loadmat
-from nilearn.image import load_img, threshold_img
-import nipype.pipeline.engine as pe
 import nipype.interfaces.utility as niu
+import nipype.pipeline.engine as pe
+import numpy as np
+from nilearn.image import load_img, threshold_img
 from nipype import logging
-from nipype.utils.filemanip import fname_presuffix, split_filename, which
 from nipype.interfaces.base import (
-    traits, TraitedSpec, BaseInterfaceInputSpec, File, SimpleInterface, InputMultiObject,
-    isdefined, CommandLineInputSpec, CommandLine, OutputMultiObject)
-from nipype.interfaces.mrtrix3 import Generate5tt, ResponseSD, MRConvert
-from nipype.interfaces.mrtrix3.utils import Generate5ttInputSpec
+    BaseInterfaceInputSpec,
+    CommandLine,
+    CommandLineInputSpec,
+    File,
+    InputMultiObject,
+    OutputMultiObject,
+    SimpleInterface,
+    TraitedSpec,
+    isdefined,
+    traits,
+)
+from nipype.interfaces.mrtrix3 import Generate5tt, MRConvert, ResponseSD
 from nipype.interfaces.mrtrix3.base import MRTrix3Base, MRTrix3BaseInputSpec
 from nipype.interfaces.mrtrix3.preprocess import ResponseSDInputSpec
-from nipype.interfaces.mrtrix3.tracking import TractographyInputSpec, Tractography
-from ..niworkflows.viz.utils import cuts_from_bbox, compose_view, plot_denoise
-from .denoise import (SeriesPreprocReport, SeriesPreprocReportInputSpec,
-                      SeriesPreprocReportOutputSpec)
+from nipype.interfaces.mrtrix3.tracking import Tractography, TractographyInputSpec
+from nipype.interfaces.mrtrix3.utils import Generate5ttInputSpec
+from nipype.utils.filemanip import fname_presuffix, split_filename, which
+from scipy.io.matlab import loadmat, savemat
+
+from ..niworkflows.viz.utils import compose_view, cuts_from_bbox, plot_denoise
+from .denoise import (
+    SeriesPreprocReport,
+    SeriesPreprocReportInputSpec,
+    SeriesPreprocReportOutputSpec,
+)
 
 LOGGER = logging.getLogger('nipype.interface')
 RC3_ROOT = which('average_response')  # Only exists in RC3

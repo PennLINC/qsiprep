@@ -9,18 +9,24 @@ Handling confounds
     >>> import pandas as pd
 
 """
+import json
 import os
 import re
-import json
+
 import numpy as np
 import pandas as pd
 from nipype import logging
 from nipype.interfaces.base import (
-    traits, TraitedSpec, BaseInterfaceInputSpec, File, isdefined,
-    SimpleInterface, InputMultiObject
+    BaseInterfaceInputSpec,
+    File,
+    InputMultiObject,
+    SimpleInterface,
+    TraitedSpec,
+    isdefined,
+    traits,
 )
-from .gradients import concatenate_bvecs, concatenate_bvals
 
+from .gradients import concatenate_bvals, concatenate_bvecs
 from .niworkflows import dMRIPlot
 
 LOGGER = logging.getLogger('nipype.interface')

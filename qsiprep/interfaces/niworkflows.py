@@ -8,18 +8,20 @@ Image tools interfaces
 
 
 """
+import matplotlib.pyplot as plt
 import nibabel as nb
 import numpy as np
-from nipype import logging
-
-import matplotlib.pyplot as plt
-from matplotlib import gridspec as mgs
 import seaborn as sns
-from seaborn import color_palette
+from matplotlib import gridspec as mgs
+from nipype import logging
 from nipype.interfaces.ants import Registration
-from ..niworkflows.interfaces.registration import (ANTSRegistrationInputSpecRPT,
-                                                   ANTSRegistrationOutputSpecRPT,
-                                                   nrc)
+from seaborn import color_palette
+
+from ..niworkflows.interfaces.registration import (
+    ANTSRegistrationInputSpecRPT,
+    ANTSRegistrationOutputSpecRPT,
+    nrc,
+)
 
 LOGGER = logging.getLogger('nipype.interface')
 

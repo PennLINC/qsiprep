@@ -19,15 +19,17 @@ Fieldmap preprocessing workflow for fieldmap data structure
 
 """
 import os
-from nipype.interfaces import ants, fsl, utility as niu
+
+from nipype.interfaces import ants, fsl
+from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
-from .utils import cleanup_edge_pipeline, siemens2rads, demean_image
+
+from ...interfaces import DerivativesDataSink, Phasediff2Fieldmap, Phases2Fieldmap
 from ...niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from ...niworkflows.interfaces.bids import ReadSidecarJSON
 from ...niworkflows.interfaces.images import IntraModalMerge
 from ...niworkflows.interfaces.masks import BETRPT
-
-from ...interfaces import Phasediff2Fieldmap, Phases2Fieldmap, DerivativesDataSink
+from .utils import cleanup_edge_pipeline, demean_image, siemens2rads
 
 
 def init_phdiff_wf(omp_nthreads, phasetype='phasediff', name='phdiff_wf'):

@@ -13,16 +13,26 @@ import os.path as op
 import subprocess
 from mimetypes import guess_type
 from tempfile import TemporaryDirectory
-import SimpleITK as sitk
-import numpy as np
+
 import nibabel as nb
-from nipype import logging
-from nipype.utils.filemanip import fname_presuffix
-from nipype.interfaces.base import (
-    traits, TraitedSpec, BaseInterfaceInputSpec, File, InputMultiPath, OutputMultiPath,
-    InputMultiObject, OutputMultiObject, SimpleInterface)
-from nipype.interfaces.ants.resampling import ApplyTransformsInputSpec
+import numpy as np
+import SimpleITK as sitk
 from dipy.core import geometry as geom
+from nipype import logging
+from nipype.interfaces.ants.resampling import ApplyTransformsInputSpec
+from nipype.interfaces.base import (
+    BaseInterfaceInputSpec,
+    File,
+    InputMultiObject,
+    InputMultiPath,
+    OutputMultiObject,
+    OutputMultiPath,
+    SimpleInterface,
+    TraitedSpec,
+    traits,
+)
+from nipype.utils.filemanip import fname_presuffix
+
 from ..niworkflows.viz.utils import compose_view, plot_acpc
 
 LOGGER = logging.getLogger('nipype.interface')
@@ -194,7 +204,10 @@ def _applytfms(args):
     """
     import nibabel as nb
     from nipype.utils.filemanip import fname_presuffix
-    from ..niworkflows.interfaces.fixes import FixHeaderApplyTransforms as ApplyTransforms
+
+    from ..niworkflows.interfaces.fixes import (
+        FixHeaderApplyTransforms as ApplyTransforms,
+    )
 
     in_file, in_xform, ifargs, index, newpath = args
     out_file = fname_presuffix(in_file, suffix='_xform-%05d' % index,

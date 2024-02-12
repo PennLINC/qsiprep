@@ -4,13 +4,13 @@
 """ class mixin and utilities for enabling reports for nipype interfaces """
 from __future__ import absolute_import, division, print_function, unicode_literals
 
+from nilearn.image import load_img, threshold_img
 from nilearn.masking import apply_mask, unmask
-from nilearn.image import threshold_img, load_img
-
 from nipype.interfaces.base import File, traits
 from nipype.interfaces.mixins import reporting
+
 from .. import NIWORKFLOWS_LOG
-from ..viz.utils import cuts_from_bbox, compose_view
+from ..viz.utils import compose_view, cuts_from_bbox
 
 
 class SVGReportCapableInputSpec(reporting.ReportCapableInputSpec):

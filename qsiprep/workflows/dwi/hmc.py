@@ -7,13 +7,22 @@ Head motion correction
 
 """
 import nipype.pipeline.engine as pe
+from nipype.interfaces import afni, ants
+from nipype.interfaces import utility as niu
 from pkg_resources import resource_filename as pkgrf
-from nipype.interfaces import ants, afni, utility as niu
+
 from ...engine import Workflow
-from ...interfaces.gradients import MatchTransforms, GradientRotation, CombineMotions
-from ...interfaces.shoreline import (SignalPrediction, ExtractDWIsForModel, ReorderOutputs,
-                                     B0Mean, SHORELineReport, IterationSummary, CalculateCNR)
 from ...interfaces import DerivativesDataSink
+from ...interfaces.gradients import CombineMotions, GradientRotation, MatchTransforms
+from ...interfaces.shoreline import (
+    B0Mean,
+    CalculateCNR,
+    ExtractDWIsForModel,
+    IterationSummary,
+    ReorderOutputs,
+    SHORELineReport,
+    SignalPrediction,
+)
 from .util import init_dwi_reference_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01

@@ -8,15 +8,15 @@ Orchestrating the dwi-preprocessing workflow
 """
 
 from nipype import logging
+from nipype.interfaces import ants
+from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
-from nipype.interfaces import ants, utility as niu
 
-from .registration import init_b0_to_anat_registration_wf, init_direct_b0_acpc_wf
-from ...interfaces.gradients import SliceQC, CombineMotions, GradientRotation
+from ...engine import Workflow
+from ...interfaces.gradients import CombineMotions, GradientRotation, SliceQC
 from ...interfaces.images import SplitDWIsBvals, TSplit
 from ..fieldmap.base import init_sdc_wf
 from ..fieldmap.drbuddi import init_drbuddi_wf
-from ...engine import Workflow
 
 # dwi workflows
 from .hmc import init_dwi_hmc_wf
@@ -259,8 +259,8 @@ def _get_first(in_list):
 
 
 def _list_squeeze(in_list):
-    from typing import Iterable
     from pathlib import Path
+    from typing import Iterable
     def flatten(items):
         """Yield items from any nested iterable; see
         Beazley, D. and B. Jones. Recipe 4.14, Python Cookbook 3rd Ed.,

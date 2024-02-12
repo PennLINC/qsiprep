@@ -7,11 +7,15 @@ Visualization tools
 """
 import numpy as np
 import pandas as pd
-
-from nipype.utils.filemanip import fname_presuffix
 from nipype.interfaces.base import (
-    File, BaseInterfaceInputSpec, TraitedSpec, SimpleInterface, traits
+    BaseInterfaceInputSpec,
+    File,
+    SimpleInterface,
+    TraitedSpec,
+    traits,
 )
+from nipype.utils.filemanip import fname_presuffix
+
 from ..viz.plots import fMRIPlot
 
 

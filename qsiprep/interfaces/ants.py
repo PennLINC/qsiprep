@@ -1,15 +1,24 @@
 #!python
+import logging
 import os
 import os.path as op
-import logging
 
-from nipype.interfaces.base import (TraitedSpec, CommandLineInputSpec, BaseInterfaceInputSpec,
-                                    CommandLine, File, traits, isdefined, InputMultiObject,
-                                    OutputMultiObject, SimpleInterface)
-from nipype.interfaces import ants
-from nipype.utils.filemanip import split_filename
-from sklearn import manifold
 import nibabel as nb
+from nipype.interfaces import ants
+from nipype.interfaces.base import (
+    BaseInterfaceInputSpec,
+    CommandLine,
+    CommandLineInputSpec,
+    File,
+    InputMultiObject,
+    OutputMultiObject,
+    SimpleInterface,
+    TraitedSpec,
+    isdefined,
+    traits,
+)
+from nipype.utils.filemanip import split_filename
+
 LOGGER = logging.getLogger('nipype.interface')
 
 

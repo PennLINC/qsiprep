@@ -14,6 +14,7 @@ def fix_multi_T1w_source_name(in_files):
     '/path/to/sub-045_T1w.nii.gz'
     """
     import os
+
     from nipype.utils.filemanip import filename_to_list
 
     base, in_file = os.path.split(filename_to_list(in_files)[0])
@@ -30,6 +31,7 @@ def fix_multi_source_name(in_files, dwi_only, anatomical_contrast="T1w"):
     '/path/to/sub-045_T1w.nii.gz'
     """
     import os
+
     from nipype.utils.filemanip import filename_to_list
 
     base, in_file = os.path.split(filename_to_list(in_files)[0])
@@ -50,7 +52,7 @@ def add_suffix(in_files, suffix):
     'sub-045_ses-test_T1w_test.nii.gz'
     """
     import os.path as op
-    from nipype.utils.filemanip import fname_presuffix, filename_to_list
+    from nipype.utils.filemanip import filename_to_list, fname_presuffix
 
     return op.basename(fname_presuffix(filename_to_list(in_files)[0], suffix=suffix))
 

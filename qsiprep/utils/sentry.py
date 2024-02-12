@@ -2,9 +2,11 @@
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 """Stripped out routines for Sentry"""
 import os
-from pathlib import Path
 import re
+from pathlib import Path
+
 import sentry_sdk
+
 from ..niworkflows.utils.misc import read_crashfile
 
 CHUNK_SIZE = 16384
@@ -55,9 +57,11 @@ def start_ping(run_uuid, npart):
 
 
 def sentry_setup(opts, exec_env):
-    from os import cpu_count
-    import psutil
     import hashlib
+    from os import cpu_count
+
+    import psutil
+
     from ..__about__ import __version__
 
     environment = "prod"

@@ -1,9 +1,9 @@
 #!/usr/bin/env python
-import warnings
 import sys
+import warnings
+from argparse import ArgumentParser, RawTextHelpFormatter
 from pathlib import Path
-from argparse import ArgumentParser
-from argparse import RawTextHelpFormatter
+
 from ..viz.reports import generate_interactive_report_summary
 
 warnings.filterwarnings("ignore", category=ImportWarning)

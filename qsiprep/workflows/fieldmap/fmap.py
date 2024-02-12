@@ -20,17 +20,16 @@ of the BIDS specification.
 
 """
 import os
+
+from nipype.interfaces import ants, fsl
+from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
-from nipype.interfaces import utility as niu, ants, fsl
-import os
-from .utils import demean_image, cleanup_edge_pipeline
+
+from ...interfaces import DerivativesDataSink, FieldToHz, FieldToRadS
 from ...niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from ...niworkflows.interfaces.images import IntraModalMerge
 from ...niworkflows.interfaces.masks import BETRPT
-
-from ...interfaces import (
-    FieldToRadS, FieldToHz, DerivativesDataSink
-)
+from .utils import cleanup_edge_pipeline, demean_image
 
 
 def init_fmap_wf(omp_nthreads, fmap_bspline, name='fmap_wf'):

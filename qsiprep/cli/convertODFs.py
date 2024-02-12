@@ -1,9 +1,9 @@
 #!/usr/bin/env python
-import warnings
 import os
-from argparse import ArgumentParser
-from argparse import RawTextHelpFormatter
-from qsiprep.interfaces.converters import FODtoFIBGZ, FIBGZtoFOD
+import warnings
+from argparse import ArgumentParser, RawTextHelpFormatter
+
+from qsiprep.interfaces.converters import FIBGZtoFOD, FODtoFIBGZ
 
 warnings.filterwarnings("ignore", category=ImportWarning)
 warnings.filterwarnings("ignore", category=PendingDeprecationWarning)
@@ -11,7 +11,8 @@ warnings.filterwarnings("ignore", category=PendingDeprecationWarning)
 
 def sink_mask_file(in_file, orig_file, out_dir):
     import os
-    from nipype.utils.filemanip import fname_presuffix, copyfile
+
+    from nipype.utils.filemanip import copyfile, fname_presuffix
     os.makedirs(out_dir, exist_ok=True)
     out_file = fname_presuffix(orig_file, suffix='_mask', newpath=out_dir)
     copyfile(in_file, out_file, copy=True, use_hardlink=True)

@@ -3,7 +3,9 @@ Functions copied from nipype
 
 """
 import os
-from nipype.interfaces import fsl, utility as niu
+
+from nipype.interfaces import fsl
+from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 
 
@@ -11,10 +13,11 @@ def siemens2rads(in_file, out_file=None):
     """
     Converts input phase difference map to rads
     """
-    import numpy as np
-    import nibabel as nb
-    import os.path as op
     import math
+    import os.path as op
+
+    import nibabel as nb
+    import numpy as np
 
     if out_file is None:
         fname, fext = op.splitext(op.basename(in_file))
@@ -47,9 +50,10 @@ def demean_image(in_file, in_mask=None, out_file=None):
     """
     Demean image data inside mask
     """
-    import numpy as np
-    import nibabel as nb
     import os.path as op
+
+    import nibabel as nb
+    import numpy as np
 
     if out_file is None:
         fname, fext = op.splitext(op.basename(in_file))

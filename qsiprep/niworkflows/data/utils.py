@@ -7,21 +7,21 @@ Utilities for data grabbers (from nilearn)
 """
 from __future__ import absolute_import, division, print_function, unicode_literals
 
-import os
-import os.path as op
-from pathlib import Path
-import sys
-import shutil
-import time
 import base64
 import hashlib
+import os
+import os.path as op
+import shutil
 import subprocess as sp
+import sys
+import time
 from builtins import str
+from pathlib import Path
 
 try:
-    from urllib.parse import urlparse
-    from urllib.request import urlopen, Request
     from urllib.error import HTTPError, URLError
+    from urllib.parse import urlparse
+    from urllib.request import Request, urlopen
 except ImportError:
     from urlparse import urlparse
     from urllib2 import urlopen, Request, HTTPError, URLError

@@ -6,28 +6,32 @@ ReportCapableInterfaces for registration tools
 
 """
 from __future__ import absolute_import, division, print_function, unicode_literals
+
 import os
-from distutils.version import LooseVersion
 
 import nibabel as nb
 import numpy as np
 from nilearn import image as nli
 from nilearn.image import index_img
-from nipype.utils.filemanip import fname_presuffix
-from nipype.interfaces.base import (
-    traits, isdefined, TraitedSpec, BaseInterfaceInputSpec, File, SimpleInterface)
-from nipype.interfaces.mixins import reporting
+from nipype.interfaces import afni, ants
 from nipype.interfaces import freesurfer as fs
-from nipype.interfaces import fsl, ants, afni
+from nipype.interfaces import fsl
+from nipype.interfaces.base import (
+    BaseInterfaceInputSpec,
+    File,
+    SimpleInterface,
+    TraitedSpec,
+    isdefined,
+    traits,
+)
+from nipype.interfaces.mixins import reporting
+from nipype.utils.filemanip import fname_presuffix
 
 from .. import NIWORKFLOWS_LOG
 from . import report_base as nrc
-from .mni import (
-    RobustMNINormalizationInputSpec,
-    RobustMNINormalization
-)
-from .fixes import (FixHeaderApplyTransforms as ApplyTransforms,
-                    FixHeaderRegistration as Registration)
+from .fixes import FixHeaderApplyTransforms as ApplyTransforms
+from .fixes import FixHeaderRegistration as Registration
+from .mni import RobustMNINormalization, RobustMNINormalizationInputSpec
 
 
 class RobustMNINormalizationInputSpecRPT(

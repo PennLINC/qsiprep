@@ -10,17 +10,23 @@ Image tools interfaces
 """
 
 import os
-import numpy as np
-import nibabel as nb
-import nilearn.image as nli
 from textwrap import indent
 
+import nibabel as nb
+import nilearn.image as nli
+import numpy as np
 from nipype import logging
-from nipype.utils.filemanip import fname_presuffix
-from nipype.interfaces.base import (
-    traits, TraitedSpec, BaseInterfaceInputSpec, SimpleInterface,
-    File, InputMultiPath, OutputMultiPath)
 from nipype.interfaces import fsl
+from nipype.interfaces.base import (
+    BaseInterfaceInputSpec,
+    File,
+    InputMultiPath,
+    OutputMultiPath,
+    SimpleInterface,
+    TraitedSpec,
+    traits,
+)
+from nipype.utils.filemanip import fname_presuffix
 
 LOGGER = logging.getLogger('nipype.interface')
 
@@ -590,8 +596,9 @@ def normalize_xform(img):
 def demean(in_file, in_mask, only_mask=False, newpath=None):
     """Demean ``in_file`` within the mask defined by ``in_mask``"""
     import os
-    import numpy as np
+
     import nibabel as nb
+    import numpy as np
     from nipype.utils.filemanip import fname_presuffix
 
     out_file = fname_presuffix(in_file, suffix='_demeaned',
@@ -611,8 +618,9 @@ def demean(in_file, in_mask, only_mask=False, newpath=None):
 def nii_ones_like(in_file, value, dtype, newpath=None):
     """Create a NIfTI file filled with ``value``, matching properties of ``in_file``"""
     import os
-    import numpy as np
+
     import nibabel as nb
+    import numpy as np
 
     nii = nb.load(in_file)
     data = np.ones(nii.shape, dtype=float) * value

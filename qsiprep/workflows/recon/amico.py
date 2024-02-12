@@ -5,16 +5,19 @@ AMICO Reconstruction workflows
 .. autofunction:: init_amico_noddi_fit_wf
 
 """
+
 import logging
+
 import nipype.pipeline.engine as pe
-from nipype.interfaces import afni, utility as niu
-from qsiprep.interfaces.bids import ReconDerivativesDataSink
-from ...interfaces.interchange import recon_workflow_input_fields
+from nipype.interfaces import utility as niu
+
 from ...engine import Workflow
 from ...interfaces.amico import NODDI
-from ...interfaces.reports import CLIReconPeaksReport
 from ...interfaces.converters import NODDItoFIBGZ
+from ...interfaces.interchange import recon_workflow_input_fields
 from ...interfaces.recon_scalars import AMICOReconScalars
+from ...interfaces.reports import CLIReconPeaksReport
+from qsiprep.interfaces.bids import ReconDerivativesDataSink
 
 LOGGER = logging.getLogger('nipype.interface')
 

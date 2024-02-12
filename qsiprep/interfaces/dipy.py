@@ -8,29 +8,43 @@ Image tools interfaces
 
 
 """
-import subprocess
 import shutil
-from pkg_resources import resource_filename as pkgr
+import subprocess
+
 import nibabel as nb
 import numpy as np
-from dipy.io.utils import nifti1_symmat
-from dipy.core.histeq import histeq
-from dipy.segment.mask import median_otsu
-from dipy.core.sphere import HemiSphere
 from dipy.core.gradients import gradient_table
-from dipy.reconst import mapmri, dti, dki
+from dipy.core.histeq import histeq
+from dipy.core.sphere import HemiSphere
+from dipy.io.utils import nifti1_symmat
+from dipy.reconst import dki, dti, mapmri
+from dipy.segment.mask import median_otsu
 from nilearn.image import load_img
 from nipype import logging
-from nipype.utils.filemanip import fname_presuffix
 from nipype.interfaces.base import (
-    traits, TraitedSpec, BaseInterfaceInputSpec, File, SimpleInterface, isdefined
+    BaseInterfaceInputSpec,
+    File,
+    SimpleInterface,
+    TraitedSpec,
+    isdefined,
+    traits,
+)
+from nipype.utils.filemanip import fname_presuffix
+from pkg_resources import resource_filename as pkgr
+
+from ..interfaces.mrtrix import _convert_fsl_to_mrtrix
+from ..utils.brainsuite_shore import BrainSuiteShoreModel, brainsuite_shore_basis
+from .converters import (
+    amplitudes_to_fibgz,
+    amplitudes_to_sh_mif,
+    get_dsi_studio_ODF_geometry,
+)
+from .denoise import (
+    SeriesPreprocReport,
+    SeriesPreprocReportInputSpec,
+    SeriesPreprocReportOutputSpec,
 )
 from .patch2self import patch2self
-from .denoise import (SeriesPreprocReport, SeriesPreprocReportInputSpec,
-                      SeriesPreprocReportOutputSpec)
-from .converters import get_dsi_studio_ODF_geometry, amplitudes_to_fibgz, amplitudes_to_sh_mif
-from ..utils.brainsuite_shore import BrainSuiteShoreModel, brainsuite_shore_basis
-from ..interfaces.mrtrix import _convert_fsl_to_mrtrix
 
 LOGGER = logging.getLogger('nipype.interface')
 TAU_DEFAULT = 1. / (4 * np.pi**2)

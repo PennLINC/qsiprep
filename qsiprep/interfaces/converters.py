@@ -1,26 +1,34 @@
 
 """Handle merging and spliting of DSI files."""
-import subprocess
-import logging
 import gzip
-import re
+import logging
 import os
 import os.path as op
-import numpy as np
+import re
+import subprocess
+
 import nibabel as nb
+import numpy as np
+
 try:
     from StringIO import StringIO
 except ImportError:
     from io import BytesIO as StringIO
-from nipype.interfaces.base import (BaseInterfaceInputSpec, TraitedSpec, File, SimpleInterface,
-                                    traits, isdefined)
-from nipype.utils.filemanip import fname_presuffix
-from dipy.core.geometry import cart2sphere
-from dipy.direction import peak_directions
-from dipy.core.sphere import HemiSphere
-from scipy.io.matlab import loadmat, savemat
-from pkg_resources import resource_filename as pkgr
 
+from dipy.core.geometry import cart2sphere
+from dipy.core.sphere import HemiSphere
+from dipy.direction import peak_directions
+from nipype.interfaces.base import (
+    BaseInterfaceInputSpec,
+    File,
+    SimpleInterface,
+    TraitedSpec,
+    isdefined,
+    traits,
+)
+from nipype.utils.filemanip import fname_presuffix
+from pkg_resources import resource_filename as pkgr
+from scipy.io.matlab import loadmat, savemat
 
 LOGGER = logging.getLogger('nipype.workflow')
 ODF_COLS = 20000  # Number of columns in DSI Studio odf split

@@ -7,13 +7,16 @@ ReportCapableInterfaces for segmentation tools
 
 """
 from __future__ import absolute_import, division, print_function, unicode_literals
+
 import os
 
+from nipype.interfaces import freesurfer, fsl
 from nipype.interfaces.base import File
-from nipype.interfaces import fsl, freesurfer
 from nipype.interfaces.mixins import reporting
-from . import report_base as nrc
+
 from .. import NIWORKFLOWS_LOG
+from . import report_base as nrc
+
 
 class FASTInputSpecRPT(nrc.SVGReportCapableInputSpec,
                        fsl.preprocess.FASTInputSpec):

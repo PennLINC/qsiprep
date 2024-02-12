@@ -7,8 +7,8 @@ Loading atlases
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 """
-import os
 import json
+import os
 
 
 def get_atlases(atlas_names):
