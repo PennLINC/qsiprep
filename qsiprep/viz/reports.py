@@ -8,14 +8,13 @@ qsiprep reports builder
 
 
 """
-from pathlib import Path
+import html
 import json
 import re
-
-import html
+from pathlib import Path
 
 import jinja2
-from nipype.utils.filemanip import loadcrash, copyfile
+from nipype.utils.filemanip import copyfile, loadcrash
 from pkg_resources import resource_filename as pkgrf
 
 

@@ -12,16 +12,15 @@ qsiprep interactive report workflow
 import logging
 from copy import deepcopy
 
-from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
+from nipype.pipeline import engine as pe
 
 from ..engine import Workflow
 from ..interfaces import DerivativesDataSink
 from ..interfaces.ingress import QsiReconDWIIngress
+from ..interfaces.interchange import qsiprep_output_names, recon_workflow_input_fields
 from ..interfaces.reports import InteractiveReport
 from ..utils.bids import collect_data
-from ..interfaces.interchange import qsiprep_output_names, recon_workflow_input_fields
-
 
 LOGGER = logging.getLogger('nipype.workflow')
 

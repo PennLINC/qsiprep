@@ -2,11 +2,13 @@
 # -*- coding: utf-8 -*-
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-from pkg_resources import resource_filename as pkgrf
+from nipype.interfaces import ants
+from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
-from nipype.interfaces import utility as niu, ants
-from ...interfaces.itk import AffineToRigid, ACPCReport
+from pkg_resources import resource_filename as pkgrf
+
 from ...engine import Workflow
+from ...interfaces.itk import ACPCReport, AffineToRigid
 from ...interfaces.niworkflows import ANTSRegistrationRPT
 
 DEFAULT_MEMORY_MIN_GB = 0.01

@@ -2,22 +2,25 @@
 # -*- coding: utf-8 -*-
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-import os
 import os.path as op
 import subprocess
-from pkg_resources import resource_filename as pkgr
-import nibabel as nb
-import numpy as np
-from nipype import logging
-from nipype.utils.filemanip import fname_presuffix
-from nipype.interfaces.base import (
-    traits, TraitedSpec, BaseInterfaceInputSpec, File, SimpleInterface, isdefined,
-    InputMultiObject
-)
+
 import nilearn.image as nim
-from nilearn.maskers import NiftiMasker
+import numpy as np
 import pandas as pd
+from nilearn.maskers import NiftiMasker
+from nipype.interfaces.base import (
+    BaseInterfaceInputSpec,
+    File,
+    InputMultiObject,
+    SimpleInterface,
+    TraitedSpec,
+    traits,
+)
+from nipype.utils.filemanip import fname_presuffix
+
 from .bids import get_bids_params
+
 
 class ScalarMapperInputSpec(BaseInterfaceInputSpec):
     scalars_from = InputMultiObject(traits.Str())

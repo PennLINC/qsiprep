@@ -5,14 +5,17 @@ PyAFQ tractometry and visualization
 .. autofunction:: init_pyafq_wf
 
 """
-import nipype.pipeline.engine as pe
-import nipype.interfaces.utility as niu
 import logging
+
 import AFQ
 import AFQ.utils.bin as afb
-from qsiprep.interfaces.pyafq import PyAFQRecon
-from ...interfaces.interchange import recon_workflow_input_fields
+import nipype.interfaces.utility as niu
+import nipype.pipeline.engine as pe
+
 from ...interfaces.bids import ReconDerivativesDataSink
+from ...interfaces.interchange import recon_workflow_input_fields
+from qsiprep.interfaces.pyafq import PyAFQRecon
+
 LOGGER = logging.getLogger('nipype.workflow')
 
 

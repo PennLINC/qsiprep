@@ -8,14 +8,15 @@ Interfaces for image denoising
 
 
 """
-import numpy as np
 import nibabel as nb
+import numpy as np
 import pandas as pd
-from nilearn.image import load_img, threshold_img, iter_img
+from nilearn.image import iter_img, load_img, threshold_img
 from nipype import logging
-from nipype.interfaces.base import traits, isdefined
+from nipype.interfaces.base import isdefined, traits
 from nipype.interfaces.mixins import reporting
-from ..niworkflows.viz.utils import cuts_from_bbox, compose_view, plot_denoise
+
+from ..niworkflows.viz.utils import compose_view, cuts_from_bbox, plot_denoise
 
 LOGGER = logging.getLogger('nipype.interface')
 

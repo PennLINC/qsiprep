@@ -7,21 +7,29 @@ DSI Studio workflows
 .. autofunction:: init_dsi_studio_export_wf
 
 """
+import logging
+
 import nipype.pipeline.engine as pe
 from nipype.interfaces import utility as niu
-from qsiprep.interfaces.dsi_studio import (DSIStudioCreateSrc, DSIStudioGQIReconstruction,
-                                           DSIStudioAtlasGraph, DSIStudioExport,
-                                           DSIStudioTracking, AutoTrack, _get_dsi_studio_bundles,
-                                           FixDSIStudioExportHeader, AggregateAutoTrackResults,
-                                           DSI_STUDIO_VERSION)
 
-import logging
+from ...engine import Workflow
 from ...interfaces.bids import ReconDerivativesDataSink
-from ...interfaces.recon_scalars import DSIStudioReconScalars
 from ...interfaces.converters import DSIStudioTrkToTck
 from ...interfaces.interchange import recon_workflow_input_fields
-from ...engine import Workflow
+from ...interfaces.recon_scalars import DSIStudioReconScalars
 from ...interfaces.reports import CLIReconPeaksReport, ConnectivityReport
+from qsiprep.interfaces.dsi_studio import (
+    DSI_STUDIO_VERSION,
+    AggregateAutoTrackResults,
+    AutoTrack,
+    DSIStudioAtlasGraph,
+    DSIStudioCreateSrc,
+    DSIStudioExport,
+    DSIStudioGQIReconstruction,
+    DSIStudioTracking,
+    FixDSIStudioExportHeader,
+    _get_dsi_studio_bundles,
+)
 
 LOGGER = logging.getLogger('nipype.interface')
 

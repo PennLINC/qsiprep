@@ -3,30 +3,40 @@
 Wrappers for the TORTOISE programs
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 """
-from curses import use_default_colors
+import logging
 import os
 import os.path as op
 import subprocess
-import logging
-import numpy as np
-from nipype.interfaces.base import (TraitedSpec, CommandLineInputSpec, BaseInterfaceInputSpec,
-                                    CommandLine, File, traits, isdefined, InputMultiObject,
-                                    OutputMultiObject, SimpleInterface)
-from nipype.interfaces import ants
-from nipype.utils.filemanip import split_filename, fname_presuffix
-import nilearn.image as nim
+
 import nibabel as nb
-from .fmap import get_distortion_grouping, plot_fa_reg, plot_pepolar
-from .images import to_lps
-from .epi_fmap import get_best_b0_topup_inputs_from, safe_get_3d_image
-from .gradients import write_concatenated_fsl_gradients
-from .images import split_bvals_bvecs
-from .denoise import (SeriesPreprocReport, SeriesPreprocReportInputSpec,
-                      SeriesPreprocReportOutputSpec)
-from .recon_scalars import ReconScalars, ReconScalarsInputSpec, ReconScalarsOutputSpec
 import nilearn.image as nim
-from ..niworkflows.viz.utils import cuts_from_bbox, compose_view, plot_denoise
+import numpy as np
 import pandas as pd
+from nipype.interfaces import ants
+from nipype.interfaces.base import (
+    BaseInterfaceInputSpec,
+    CommandLine,
+    CommandLineInputSpec,
+    File,
+    InputMultiObject,
+    OutputMultiObject,
+    SimpleInterface,
+    TraitedSpec,
+    isdefined,
+    traits,
+)
+from nipype.utils.filemanip import fname_presuffix
+
+from ..niworkflows.viz.utils import compose_view, cuts_from_bbox, plot_denoise
+from .denoise import (
+    SeriesPreprocReport,
+    SeriesPreprocReportInputSpec,
+    SeriesPreprocReportOutputSpec,
+)
+from .epi_fmap import get_best_b0_topup_inputs_from, safe_get_3d_image
+from .fmap import get_distortion_grouping
+from .gradients import write_concatenated_fsl_gradients
+from .images import split_bvals_bvecs, to_lps
 
 LOGGER = logging.getLogger('nipype.interface')
 

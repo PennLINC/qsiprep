@@ -1,23 +1,32 @@
 
 """Handle merging and spliting of DSI files."""
-import os
 import logging
-from subprocess import Popen, PIPE
+import os
+
 import nibabel as nb
 import numpy as np
 import pandas as pd
-from nilearn import image as nim
-from nipype.interfaces.base import (BaseInterfaceInputSpec, TraitedSpec, File, SimpleInterface,
-                                    InputMultiObject, OutputMultiObject, traits, isdefined)
-from nipype.interfaces import ants
-from nipype.utils.filemanip import fname_presuffix
-from nipype.interfaces.ants.resampling import ApplyTransformsInputSpec
-from dipy.sims.voxel import all_tensor_evecs
-from dipy.reconst.dti import decompose_tensor
 from dipy.core.geometry import normalized_vector
+from dipy.reconst.dti import decompose_tensor
+from dipy.sims.voxel import all_tensor_evecs
+from nilearn import image as nim
+from nipype.interfaces import ants
+from nipype.interfaces.ants.resampling import ApplyTransformsInputSpec
+from nipype.interfaces.base import (
+    BaseInterfaceInputSpec,
+    File,
+    InputMultiObject,
+    OutputMultiObject,
+    SimpleInterface,
+    TraitedSpec,
+    isdefined,
+    traits,
+)
+from nipype.utils.filemanip import fname_presuffix
+from scipy.spatial.transform import Rotation as R
 from sklearn.metrics import r2_score
 from transforms3d.affines import decompose44
-from scipy.spatial.transform import Rotation as R
+
 from .itk import disassemble_transform
 
 LOGGER = logging.getLogger('nipype.interface')

@@ -14,12 +14,21 @@ from shutil import copytree, rmtree
 
 from nipype import logging
 from nipype.interfaces.base import (
-    traits, isdefined, TraitedSpec, BaseInterfaceInputSpec,
-    File, Directory, InputMultiPath, OutputMultiPath, Str,
-    SimpleInterface
+    BaseInterfaceInputSpec,
+    Directory,
+    File,
+    InputMultiPath,
+    OutputMultiPath,
+    SimpleInterface,
+    Str,
+    TraitedSpec,
+    isdefined,
+    traits,
 )
+
 from ..utils.bids import BIDS_NAME, get_metadata_for_nifti
-from ..utils.misc import splitext as _splitext, _copy_any
+from ..utils.misc import _copy_any
+from ..utils.misc import splitext as _splitext
 
 LOGGER = logging.getLogger('nipype.interface')
 

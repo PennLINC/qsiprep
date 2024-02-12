@@ -1,12 +1,12 @@
 import base64
 import os.path as op
 from io import BytesIO
+
 import matplotlib.pyplot as plt
 import nibabel as nib
 import numpy as np
-
 from dipy.segment.mask import median_otsu
-from nipype.utils.filemanip import save_json, load_json
+from nipype.utils.filemanip import load_json, save_json
 
 
 def reorient_array(data, aff):

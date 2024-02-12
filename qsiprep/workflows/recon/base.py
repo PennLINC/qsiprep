@@ -11,29 +11,38 @@ qsiprep base reconstruction workflows
 
 """
 
+import json
+import logging
 import os
 import os.path as op
-from glob import glob
 from copy import deepcopy
-from nipype import __version__ as nipype_ver
+from glob import glob
+
 import nipype.pipeline.engine as pe
-from nipype.utils.filemanip import split_filename
-from nilearn import __version__ as nilearn_ver
-from dipy import __version__ as dipy_ver
-from pkg_resources import resource_filename as pkgrf
-from ...utils.ingress import create_ukb_layout
-from ...engine import Workflow
-from ...utils.sloppy_recon import make_sloppy
-from ...__about__ import __version__
-from ...interfaces.ingress import QsiReconDWIIngress, UKBioBankDWIIngress
-import logging
-import json
 from bids.layout import BIDSLayout
+from dipy import __version__ as dipy_ver
+from nilearn import __version__ as nilearn_ver
+from nipype import __version__ as nipype_ver
+from nipype.utils.filemanip import split_filename
+from pkg_resources import resource_filename as pkgrf
+
+from ...__about__ import __version__
+from ...engine import Workflow
+from ...interfaces.ingress import QsiReconDWIIngress, UKBioBankDWIIngress
+from ...interfaces.interchange import (
+    ReconWorkflowInputs,
+    anatomical_workflow_outputs,
+    qsiprep_output_names,
+    recon_workflow_anatomical_input_fields,
+    recon_workflow_input_fields,
+)
+from ...utils.ingress import create_ukb_layout
+from ...utils.sloppy_recon import make_sloppy
+from .anatomical import (
+    init_dwi_recon_anatomical_workflow,
+    init_highres_recon_anatomical_wf,
+)
 from .build_workflow import init_dwi_recon_workflow
-from .anatomical import init_highres_recon_anatomical_wf, init_dwi_recon_anatomical_workflow
-from ...interfaces.interchange import (anatomical_workflow_outputs, recon_workflow_anatomical_input_fields,
-                                       ReconWorkflowInputs,
-                                       qsiprep_output_names, recon_workflow_input_fields)
 
 LOGGER = logging.getLogger('nipype.workflow')
 

@@ -7,20 +7,20 @@ Merging Distortion Groups
 
 """
 import logging
-from nipype.interfaces import utility as niu
+
 import nipype.pipeline.engine as pe
-from .derivatives import init_dwi_derivatives_wf
-from .qc import init_modelfree_qc_wf
-from .util import init_dwi_reference_wf
+from nipype.interfaces import utility as niu
+
 from ...engine import Workflow
 from ...interfaces import DerivativesDataSink
-from ...interfaces.mrtrix import MRTrixGradientTable
-from ...interfaces.reports import GradientPlot, SeriesQC
-from ...interfaces.dwi_merge import AveragePEPairs, MergeDWIs
 from ...interfaces.dsi_studio import DSIStudioBTable
+from ...interfaces.dwi_merge import AveragePEPairs, MergeDWIs
+from ...interfaces.mrtrix import MRTrixGradientTable
 from ...interfaces.nilearn import Merge
-from .qc import init_mask_overlap_wf, init_interactive_report_wf
-
+from ...interfaces.reports import GradientPlot, SeriesQC
+from .derivatives import init_dwi_derivatives_wf
+from .qc import init_interactive_report_wf, init_mask_overlap_wf, init_modelfree_qc_wf
+from .util import init_dwi_reference_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger('nipype.workflow')

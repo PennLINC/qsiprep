@@ -18,6 +18,7 @@ def fix_multi_T1w_source_name(in_files):
 
     """
     import os
+
     from nipype.utils.filemanip import filename_to_list
     base, in_file = os.path.split(filename_to_list(in_files)[0])
     subject_label = in_file.split("_", 1)[0].split("-")[1]
@@ -35,6 +36,7 @@ def fix_multi_source_name(in_files, dwi_only, anatomical_contrast="T1w"):
 
     """
     import os
+
     from nipype.utils.filemanip import filename_to_list
     base, in_file = os.path.split(filename_to_list(in_files)[0])
     subject_label = in_file.split("_", 1)[0].split("-")[1]
@@ -55,7 +57,8 @@ def add_suffix(in_files, suffix):
 
     """
     import os.path as op
-    from nipype.utils.filemanip import fname_presuffix, filename_to_list
+
+    from nipype.utils.filemanip import filename_to_list, fname_presuffix
     return op.basename(fname_presuffix(filename_to_list(in_files)[0],
                                        suffix=suffix))
 

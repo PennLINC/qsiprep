@@ -36,11 +36,12 @@ False           False       False         HMC only
 
 """
 
-from nipype.pipeline import engine as pe
-from nipype.interfaces import utility as niu
 from nipype import logging
+from nipype.interfaces import utility as niu
+from nipype.pipeline import engine as pe
 
 from ...engine import Workflow
+
 # Fieldmap workflows
 from .pepolar import init_pepolar_unwarp_wf
 from .syn import init_syn_sdc_wf

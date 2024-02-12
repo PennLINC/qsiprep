@@ -8,25 +8,33 @@ SHORELine interfaces
 
 
 """
+import os
 import os.path as op
+
+import dipy.reconst.dti as dti
+import imageio
+import matplotlib.pyplot as plt
 import nibabel as nb
 import numpy as np
-import os
 import pandas as pd
-from skimage import measure
-import imageio
+import seaborn as sns
+from dipy.core.gradients import gradient_table
 from nipype import logging
 from nipype.interfaces.base import (
-    traits, TraitedSpec, BaseInterfaceInputSpec, File, SimpleInterface, InputMultiObject,
-    OutputMultiObject, isdefined
+    BaseInterfaceInputSpec,
+    File,
+    InputMultiObject,
+    OutputMultiObject,
+    SimpleInterface,
+    TraitedSpec,
+    isdefined,
+    traits,
 )
-from .gradients import concatenate_bvecs, concatenate_bvals
-from dipy.core.gradients import gradient_table
+from skimage import measure
+
 from ..utils.brainsuite_shore import BrainSuiteShoreModel, brainsuite_shore_basis
+from .gradients import concatenate_bvals, concatenate_bvecs
 from .reports import SummaryInterface, SummaryOutputSpec
-import seaborn as sns
-import matplotlib.pyplot as plt
-import dipy.reconst.dti as dti
 
 LOGGER = logging.getLogger('nipype.interface')
 

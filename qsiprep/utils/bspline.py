@@ -4,12 +4,15 @@
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 
 
-import numpy as np
-import nibabel as nb
-from scipy.interpolate import interpn
 from datetime import datetime as dt
-from ..interfaces.images import to_lps
+
+import nibabel as nb
+import numpy as np
 from nipype import logging
+from scipy.interpolate import interpn
+
+from ..interfaces.images import to_lps
+
 LOGGER = logging.getLogger('nipype.interfaces')
 
 

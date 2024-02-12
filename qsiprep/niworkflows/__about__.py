@@ -8,6 +8,7 @@ the Center for Reproducible Neuroscience (http://reproducibility.stanford.edu/),
 as well as for open-source software distribution.
 """
 from datetime import datetime
+
 __version__ = '0.5.2post5'
 
 __packagename__ = 'niworkflows'

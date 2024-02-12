@@ -7,9 +7,10 @@ Helpers for handling BIDS-like neuroimaging structures
 
 
 """
-from pathlib import Path
-import warnings
 import re
+import warnings
+from pathlib import Path
+
 import simplejson as json
 
 from .misc import splitext

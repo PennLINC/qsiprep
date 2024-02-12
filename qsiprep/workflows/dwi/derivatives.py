@@ -7,10 +7,11 @@ Writing outputs from a dwi preproc workflow
 """
 
 from nipype import logging
-from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
-from ...interfaces import DerivativesDataSink
+from nipype.pipeline import engine as pe
+
 from ...engine import Workflow
+from ...interfaces import DerivativesDataSink
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger('nipype.workflow')

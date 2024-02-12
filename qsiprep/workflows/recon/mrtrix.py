@@ -12,17 +12,27 @@ To keep threading consistent between nipype and mrtrix, the
 .. autofunction:: init_mrtrix_csd_recon_wf
 
 """
+
 import logging
-import nipype.pipeline.engine as pe
+
 import nipype.interfaces.utility as niu
-from nipype.interfaces import afni
+import nipype.pipeline.engine as pe
+
+from ...engine import Workflow
 from ...interfaces.bids import ReconDerivativesDataSink
+from ...interfaces.interchange import recon_workflow_input_fields
 from ...interfaces.reports import CLIReconPeaksReport, ConnectivityReport
 from qsiprep.interfaces.mrtrix import (
-    EstimateFOD, SS3TEstimateFOD, MRTrixIngress, SS3TDwi2Response, GlobalTractography,
-    MRTrixAtlasGraph, SIFT2, TckGen, MTNormalize)
-from ...interfaces.interchange import recon_workflow_input_fields
-from ...engine import Workflow
+    SIFT2,
+    EstimateFOD,
+    GlobalTractography,
+    MRTrixAtlasGraph,
+    MRTrixIngress,
+    MTNormalize,
+    SS3TDwi2Response,
+    SS3TEstimateFOD,
+    TckGen,
+)
 
 LOGGER = logging.getLogger('nipype.interface')
 MULTI_RESPONSE_ALGORITHMS = ('dhollander', 'msmt_5tt')

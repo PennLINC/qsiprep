@@ -11,17 +11,17 @@ Phase Encoding POLARity (*PEPOLAR*) techniques
 """
 
 import pkg_resources as pkgr
-
+from nipype.interfaces import afni, ants
+from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
-from nipype.interfaces import afni, ants, utility as niu
-from ...niworkflows.interfaces import CopyHeader
-from ...niworkflows.interfaces.registration import ANTSApplyTransformsRPT
 
 from ...engine import Workflow
 from ...interfaces import StructuralReference
 from ...interfaces.fmap import B0RPEFieldmap, PEPOLARReport
-from ...interfaces.nilearn import EnhanceB0
 from ...interfaces.images import ExtractWM
+from ...interfaces.nilearn import EnhanceB0
+from ...niworkflows.interfaces import CopyHeader
+from ...niworkflows.interfaces.registration import ANTSApplyTransformsRPT
 from ..anatomical import init_synthstrip_wf
 
 

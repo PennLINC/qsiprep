@@ -7,21 +7,27 @@ FreeSurfer tools interfaces
 """
 
 import os.path as op
+
 import nibabel as nb
 import numpy as np
-
-from skimage import morphology as sim
-from scipy.ndimage.morphology import binary_fill_holes
-from nilearn.image import resample_to_img, new_img_like
-
-from nipype.utils.filemanip import copyfile, filename_to_list, fname_presuffix
-from nipype.interfaces.base import (
-    isdefined, InputMultiPath, BaseInterfaceInputSpec, TraitedSpec, File, traits, Directory
-)
+from nilearn.image import new_img_like, resample_to_img
 from nipype.interfaces import freesurfer as fs
-from nipype.interfaces.base import SimpleInterface
+from nipype.interfaces.base import (
+    BaseInterfaceInputSpec,
+    Directory,
+    File,
+    InputMultiPath,
+    SimpleInterface,
+    TraitedSpec,
+    isdefined,
+    traits,
+)
 from nipype.interfaces.freesurfer.preprocess import ConcatenateLTA, RobustRegister
 from nipype.interfaces.freesurfer.utils import LTAConvert
+from nipype.utils.filemanip import copyfile, filename_to_list, fname_presuffix
+from scipy.ndimage.morphology import binary_fill_holes
+from skimage import morphology as sim
+
 from .registration import BBRegisterRPT, MRICoregRPT
 
 
@@ -439,9 +445,10 @@ def grow_mask(anat, aseg, ants_segs=None, ww=7, zval=2.0, bw=4):
 def medial_wall_to_nan(in_file, subjects_dir, target_subject, newpath=None):
     """ Convert values on medial wall to NaNs
     """
+    import os
+
     import nibabel as nb
     import numpy as np
-    import os
 
     fn = os.path.basename(in_file)
     if not target_subject.startswith('fs'):

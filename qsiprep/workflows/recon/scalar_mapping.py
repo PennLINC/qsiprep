@@ -6,13 +6,16 @@ Converting between file formats
 .. autofunction:: init_fibgz_to_mif_wf
 
 """
-import nipype.pipeline.engine as pe
-import nipype.interfaces.utility as niu
 import logging
+
+import nipype.interfaces.utility as niu
+import nipype.pipeline.engine as pe
+
+from ...engine import Workflow
 from ...interfaces.bids import ReconDerivativesDataSink
 from ...interfaces.interchange import recon_workflow_input_fields
-from ...engine import Workflow
 from ...interfaces.scalar_mapping import BundleMapper
+
 LOGGER = logging.getLogger('nipype.workflow')
 
 

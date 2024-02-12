@@ -6,16 +6,24 @@ Dipy Reconstruction workflows
 
 """
 import logging
-import nipype.pipeline.engine as pe
-from nipype.interfaces import afni, utility as niu
-from qsiprep.interfaces.bids import ReconDerivativesDataSink
-from ...interfaces.dipy import BrainSuiteShoreReconstruction, KurtosisReconstruction, MAPMRIReconstruction
-from ...interfaces.interchange import recon_workflow_input_fields
-from ...engine import Workflow
-from ...interfaces.reports import CLIReconPeaksReport
-from ...interfaces.recon_scalars import (
-    DIPYDKIReconScalars, DIPYMAPMRIReconScalars, BrainSuite3dSHOREReconScalars)
 
+import nipype.pipeline.engine as pe
+from nipype.interfaces import utility as niu
+
+from ...engine import Workflow
+from ...interfaces.dipy import (
+    BrainSuiteShoreReconstruction,
+    KurtosisReconstruction,
+    MAPMRIReconstruction,
+)
+from ...interfaces.interchange import recon_workflow_input_fields
+from ...interfaces.recon_scalars import (
+    BrainSuite3dSHOREReconScalars,
+    DIPYDKIReconScalars,
+    DIPYMAPMRIReconScalars,
+)
+from ...interfaces.reports import CLIReconPeaksReport
+from qsiprep.interfaces.bids import ReconDerivativesDataSink
 
 LOGGER = logging.getLogger('nipype.interface')
 
