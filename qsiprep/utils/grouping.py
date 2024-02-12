@@ -6,14 +6,13 @@ Utilities to group scans based on their acquisition parameters
 
 Download many variations of fieldmaps and dwi data
 
-Examples:
----------
-
-    Setup tests
-    >>> import os
-    >>> from qsiprep.utils.testing import get_grouping_test_data
-    >>> data_root = get_grouping_test_data()
-    >>> os.chdir(data_root)
+Examples
+--------
+Set up tests
+>>> import os
+>>> from qsiprep.utils.testing import get_grouping_test_data
+>>> data_root = get_grouping_test_data()
+>>> os.chdir(data_root)
 """
 import logging
 from collections import defaultdict
@@ -22,27 +21,35 @@ from nipype.utils.filemanip import split_filename
 
 from ..interfaces.bids import get_bids_params
 
-LOGGER = logging.getLogger('nipype.workflow')
+LOGGER = logging.getLogger("nipype.workflow")
 
 
-def group_dwi_scans(bids_layout, subject_data, using_fsl=False, combine_scans=True,
-                    ignore_fieldmaps=False, concatenate_distortion_groups=False):
+def group_dwi_scans(
+    bids_layout,
+    subject_data,
+    using_fsl=False,
+    combine_scans=True,
+    ignore_fieldmaps=False,
+    concatenate_distortion_groups=False,
+):
     """Determine which scans can be concatenated based on their acquisition parameters.
 
-    **Parameters**
-        bids_layout : layout
-            A PyBIDS layout
-        group_for_eddy : bool
-            Should a plus and minus series be grouped together for TOPUP/eddy?
-        combine_scans : bool
-            Should scan concatention happen?
-        concatenate_distortion_groups : bool
-            Will distortion groups get merged at the end of the pipeline?
+    Parameters
+    ----------
+    bids_layout : :obj:`pybids.BIDSLayout`
+        A PyBIDS layout
+    group_for_eddy : :obj:`bool`
+        Should a plus and minus series be grouped together for TOPUP/eddy?
+    combine_scans : :obj:`bool`
+        Should scan concatention happen?
+    concatenate_distortion_groups : :obj:`bool`
+        Will distortion groups get merged at the end of the pipeline?
 
-    **Returns**
-        scan_groups : list of dictionaries
-            A dict where the keys are the BIDS derivatives name of the output file after
-            concatenation. The values are lists of dwi files in that group
+    Returns
+    -------
+    scan_groups : :obj:`list` of :obj:`dict`
+        A dict where the keys are the BIDS derivatives name of the output file after
+        concatenation. The values are lists of dwi files in that group.
     """
 
     # Handle the grouping of multiple dwi files within a session
@@ -52,7 +59,8 @@ def group_dwi_scans(bids_layout, subject_data, using_fsl=False, combine_scans=Tr
     dwi_fmap_groups = []
     for dwi_session_group in dwi_session_groups:
         dwi_fmap_groups.extend(
-            group_by_warpspace(dwi_session_group, bids_layout, ignore_fieldmaps))
+            group_by_warpspace(dwi_session_group, bids_layout, ignore_fieldmaps)
+        )
 
     if using_fsl:
         return group_for_eddy(dwi_fmap_groups)
@@ -64,42 +72,73 @@ def group_dwi_scans(bids_layout, subject_data, using_fsl=False, combine_scans=Tr
 
 
 def get_session_groups(layout, subject_data, combine_all_dwis):
-    # Handle the grouping of multiple dwi files within a session
+    """Handle the grouping of multiple dwi files within a session.
+
+    Parameters
+    ----------
+    layout : :obj:`pybids.BIDSLayout`
+        A PyBIDS layout
+    subject_data : :obj:`dict`
+        A dictionary of BIDS data for a single subject
+    combine_all_dwis : :obj:`bool`
+        If True, combine all dwi files within a session into a single group
+
+    Returns
+    -------
+    dwi_session_groups : :obj:`list` of :obj:`list`
+        A list of lists of dwi files. Each list of dwi files is a group of scans
+        that can be concatenated together.
+    """
     sessions = layout.get_sessions() if layout is not None else []
-    all_dwis = subject_data['dwi']
+    all_dwis = subject_data["dwi"]
     dwi_session_groups = []
     if not combine_all_dwis:
         dwi_session_groups = [[dwi] for dwi in all_dwis]
+
     else:
         if sessions:
-            LOGGER.info('Combining all dwi files within each available session:')
+            LOGGER.info("Combining all dwi files within each available session:")
             for session in sessions:
-                session_files = [img for img in all_dwis if 'ses-'+session in img]
-                LOGGER.info('\t- %d scans in session %s', len(session_files), session)
+                session_files = [img for img in all_dwis if "ses-" + session in img]
+                LOGGER.info("\t- %d scans in session %s", len(session_files), session)
                 dwi_session_groups.append(session_files)
         else:
-            LOGGER.info('Combining all %d dwis within the single available session',
-                        len(all_dwis))
+            LOGGER.info("Combining all %d dwis within the single available session", len(all_dwis))
             dwi_session_groups = [all_dwis]
+
     return dwi_session_groups
 
 
 FMAP_PRIORITY = {
-    'dwi': 0,
-    'epi': 1,
-    'fieldmap': 2,
-    'phasediff': 3,
-    'phase1': 4,
-    'phase': 4,
-    'syn': 5
+    "dwi": 0,
+    "epi": 1,
+    "fieldmap": 2,
+    "phasediff": 3,
+    "phase1": 4,
+    "phase": 4,
+    "syn": 5,
 }
 
 
 def get_highest_priority_fieldmap(fmap_infos):
     """Return a dictionary describing the highest priority fieldmap.
 
-    **Examples**
+    Parameters
+    ----------
+    fmap_infos : :obj:`list` of :obj:`dict`
+        A list of dictionaries describing fieldmaps. Each dictionary must have a
+        ``suffix`` key and may have an ``epi`` key.
 
+    Returns
+    -------
+    selected_fmap_info : :obj:`dict`
+        The dictionary describing the highest priority fieldmap.
+        This will be the entry from ``fmap_infos`` with the highest priority value.
+        If no fieldmaps are found, the dictionary will have a ``suffix`` key with a
+        value of ``None``.
+
+    Examples
+    --------
     Invent some potential fieldmaps
     >>> epi_fmap1 = {"epi": "/data/sub-1/fmap/sub-1_dir-AP_run-1_epi.nii.gz", "suffix": "epi"}
     >>> epi_fmap2 = {"epi": "/data/sub-1/fmap/sub-1_dir-AP_run-2_epi.nii.gz", "suffix": "epi"}
@@ -140,23 +179,27 @@ def get_highest_priority_fieldmap(fmap_infos):
     # Find fieldmaps
     default_priority = max(FMAP_PRIORITY.values()) + 1
     priority = default_priority
-    selected_fmap_info = {'suffix': None}
+    selected_fmap_info = {"suffix": None}
 
     # collapse multiple EPI fieldmaps into one entry
-    epi_fmaps = sorted([fmap_info["epi"] for fmap_info in fmap_infos
-                        if fmap_info.get('suffix') == 'epi'])
+    epi_fmaps = sorted(
+        [fmap_info["epi"] for fmap_info in fmap_infos if fmap_info.get("suffix") == "epi"]
+    )
     if epi_fmaps:
         epi_info = {"suffix": "epi", "epi": epi_fmaps}
-        fmap_infos = [fmap_info for fmap_info in fmap_infos
-                      if fmap_info.get('suffix') != 'epi'] + [epi_info]
+        fmap_infos = [
+            fmap_info for fmap_info in fmap_infos if fmap_info.get("suffix") != "epi"
+        ] + [epi_info]
 
     # Select the highest priority fieldmap
     for fmap_info in fmap_infos:
-        if fmap_info.get('suffix') == 'phase':
-            fmap_info['suffix'] = 'phase1'
-        fmap_type = fmap_info.get('suffix')
+        if fmap_info.get("suffix") == "phase":
+            fmap_info["suffix"] = "phase1"
+
+        fmap_type = fmap_info.get("suffix")
         if fmap_type not in FMAP_PRIORITY:
             continue
+
         this_priority = FMAP_PRIORITY[fmap_type]
         if this_priority < priority:
             priority = this_priority
@@ -172,7 +215,23 @@ def find_fieldmaps_from_other_dwis(dwi_files, dwi_file_metadatas):
     used to correct each other's EPI distortion. There is currently no mechanism in BIDS to
     specify whether b=0 scans in dwi/ can be used as fieldmaps for one another.
 
-    **Examples**
+    Parameters
+    ----------
+    dwi_files : :obj:`list` of :obj:`str`
+        A list of full paths to dwi nifti files in a BIDS tree.
+    dwi_file_metadatas : :obj:`list` of :obj:`dict`
+        A list of dictionaries containing metadata for each dwi file.
+        Each dictionary should have a ``PhaseEncodingDirection`` key.
+
+    Returns
+    -------
+    dwi_series_fieldmaps : :obj:`dict`
+        A dictionary where the keys are the full paths to dwi files and the values are
+        dictionaries describing the fieldmap. If no fieldmap is found, the dictionary
+        will be empty.
+
+    Examples
+    --------
 
     A single scan with no opportunities to SDC with a DWI scan
     >>> from qsiprep.utils.grouping import find_fieldmaps_from_other_dwis
@@ -251,8 +310,10 @@ def find_fieldmaps_from_other_dwis(dwi_files, dwi_file_metadatas):
      '/data/sub-1/dwi/sub-1_run-2_dwi.nii.gz': {}}
     """
 
-    scans_to_pe_dirs = {fname: meta.get("PhaseEncodingDirection", 'None') for fname, meta in
-                        zip(dwi_files, dwi_file_metadatas)}
+    scans_to_pe_dirs = {
+        fname: meta.get("PhaseEncodingDirection", "None")
+        for fname, meta in zip(dwi_files, dwi_file_metadatas)
+    }
     pe_dirs_to_scans = defaultdict(list)
     for scan_name, scan_dir in scans_to_pe_dirs.items():
         pe_dirs_to_scans[scan_dir].append(scan_name)
@@ -264,7 +325,8 @@ def find_fieldmaps_from_other_dwis(dwi_files, dwi_file_metadatas):
         # if there is no information, don't assume it's ok to combine
         if pe_dir is None:
             continue
-        opposite_pe = pe_dir[0] if pe_dir.endswith('-') else pe_dir + '-'
+
+        opposite_pe = pe_dir[0] if pe_dir.endswith("-") else pe_dir + "-"
         rpe_dwis = pe_dirs_to_scans[opposite_pe]
 
         if rpe_dwis:
@@ -276,7 +338,30 @@ def find_fieldmaps_from_other_dwis(dwi_files, dwi_file_metadatas):
 def split_by_phase_encoding_direction(dwi_files, metadatas):
     """If no fieldmaps have been found for a group of dwi files, split them by PE direction.
 
-    **Examples**
+    Parameters
+    ----------
+    dwi_files : :obj:`list` of :obj:`str`
+        A list of full paths to dwi nifti files in a BIDS tree.
+    metadatas : :obj:`list` of :obj:`dict`
+        A list of dictionaries containing metadata for each dwi file.
+        The only field that is used i "PhaseEncodingDirection".
+
+    Returns
+    -------
+    dwi_groups : :obj:`list` of :obj:`dict`
+        A list of dictionaries describing each group of dwi files. Each dictionary
+        has the following keys:
+
+        - ``dwi_series``: A list of full paths to dwi nifti files in a BIDS tree.
+        - ``fieldmap_info``: A dictionary describing the fieldmap.
+            If no fieldmap is found, the dictionary will be empty.
+        - ``dwi_series_pedir``: The phase encoding direction of the dwi series.
+            If no information is available, the value will be an empty string.
+        - ``concatenated_bids_name``: The BIDS name of the concatenated dwi series.
+            If no information is available, the value will be an empty string.
+
+    Examples
+    --------
 
     One of each direction (Not likely to see in the wild)
     >>> dwi_files = [
@@ -385,9 +470,6 @@ def split_by_phase_encoding_direction(dwi_files, metadatas):
       'fieldmap_info': {'suffix': None},
       'dwi_series_pedir': '',
       'concatenated_bids_name': 'sub-1_run-5'}]
-
-
-
     """
     pe_dir_groups = defaultdict(list)
     unknowns = []
@@ -401,16 +483,22 @@ def split_by_phase_encoding_direction(dwi_files, metadatas):
     dwi_groups = []
     for pe_dir, dwi_group in sorted(pe_dir_groups.items()):
         dwi_groups.append(
-            {'dwi_series': dwi_group,
-             'fieldmap_info': {'suffix': None},
-             'dwi_series_pedir': pe_dir,
-             'concatenated_bids_name': get_concatenated_bids_name(dwi_group)})
+            {
+                "dwi_series": dwi_group,
+                "fieldmap_info": {"suffix": None},
+                "dwi_series_pedir": pe_dir,
+                "concatenated_bids_name": get_concatenated_bids_name(dwi_group),
+            }
+        )
     for unknown in unknowns:
         dwi_groups.append(
-            {'dwi_series': [unknown],
-             'fieldmap_info': {'suffix': None},
-             'dwi_series_pedir': '',
-             'concatenated_bids_name': get_concatenated_bids_name([unknown])})
+            {
+                "dwi_series": [unknown],
+                "fieldmap_info": {"suffix": None},
+                "dwi_series_pedir": "",
+                "concatenated_bids_name": get_concatenated_bids_name([unknown]),
+            }
+        )
 
     return dwi_groups
 
@@ -426,20 +514,31 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
     unwarping.
 
     Parameters
-    -----------
+    ----------
+    dwi_files : :obj:`list` of :obj:`str`
+        A list of full paths to dwi nifti files in a BIDS tree
+    layout : :obj:`pybids.BIDSLayout`
+        A representation of the BIDS tree
+    ignore_fieldmaps : :obj:`bool`
+        If True, ignore any fieldmaps in the ``fmap/`` directory. Images in
+        ``dwi/`` will still be considered for SDC.
 
-        dwi_files: list
-            A list of full paths to dwi nifti files in a BIDS tree
+    Returns
+    -------
+    dwi_groups : :obj:`list` of :obj:`dict`
+        A list of dictionaries describing each group of dwi files. Each dictionary
+        has the following keys:
 
-        layout: BIDSLayout
-            A representation of the BIDS tree
+        - ``dwi_series``: A list of full paths to dwi nifti files in a BIDS tree.
+        - ``fieldmap_info``: A dictionary describing the fieldmap.
+            If no fieldmap is found, the dictionary will be empty.
+        - ``dwi_series_pedir``: The phase encoding direction of the dwi series.
+            If no information is available, the value will be an empty string.
+        - ``concatenated_bids_name``: The BIDS name of the concatenated dwi series.
+            If no information is available, the value will be an empty string.
 
-        ignore_fieldmaps: bool
-            If True, ignore any fieldmaps in the ``fmap/`` directory. Images in
-            ``dwi/`` will still be considered for SDC.
-
-    Examples:
-    ---------
+    Examples
+    --------
 
     Set up tests
     >>> from qsiprep.utils.bids import collect_data
@@ -609,17 +708,18 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
         '.../wtf/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz']},
       'dwi_series_pedir': 'j-',
       'concatenated_bids_name': 'sub-1_dir-PA'}]
-
-
-
     """
     # For doc-building
     if layout is None:
         LOGGER.warning("Assuming we're building docs")
-        return [{'dwi_series': dwi_files,
-                 'fieldmap_info': {'suffix': None},
-                 'dwi_series_pedir': 'j',
-                 'concatenated_bids_name': 'sub-1'}]
+        return [
+            {
+                "dwi_series": dwi_files,
+                "fieldmap_info": {"suffix": None},
+                "dwi_series_pedir": "j",
+                "concatenated_bids_name": "sub-1",
+            }
+        ]
 
     # Get the metadata from every dwi file
     dwi_metadatas = [layout.get_metadata(dwi_file) for dwi_file in dwi_files]
@@ -640,25 +740,29 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
         best_fieldmap[dwi_file] = best_fmap
 
         # Add the dwi file to a list of those corrected by this fieldmap
-        fmap_key = tuple(best_fmap[best_fmap['suffix']]) if best_fmap['suffix'] else 'None'
+        fmap_key = tuple(best_fmap[best_fmap["suffix"]]) if best_fmap["suffix"] else "None"
         grouped_by_fmap[fmap_key].append(dwi_file)
 
     # Create the final groups
     dwi_groups = []
     for fmap_key, dwi_group in grouped_by_fmap.items():
-        if fmap_key == 'None':
+        if fmap_key == "None":
             dwi_groups.extend(
-                split_by_phase_encoding_direction(dwi_group,
-                                                  [layout.get_metadata(dwi_file) for dwi_file
-                                                   in dwi_group]))
+                split_by_phase_encoding_direction(
+                    dwi_group, [layout.get_metadata(dwi_file) for dwi_file in dwi_group]
+                )
+            )
         else:
             example_dwi_file = dwi_group[0]
-            pe_direction = layout.get_metadata(example_dwi_file).get('PhaseEncodingDirection')
+            pe_direction = layout.get_metadata(example_dwi_file).get("PhaseEncodingDirection")
             dwi_groups.append(
-                {'dwi_series': dwi_group,
-                 'fieldmap_info': best_fieldmap[example_dwi_file],
-                 'dwi_series_pedir': pe_direction,
-                 'concatenated_bids_name': get_concatenated_bids_name(dwi_group)})
+                {
+                    "dwi_series": dwi_group,
+                    "fieldmap_info": best_fieldmap[example_dwi_file],
+                    "dwi_series_pedir": pe_direction,
+                    "concatenated_bids_name": get_concatenated_bids_name(dwi_group),
+                }
+            )
 
     return dwi_groups
 
@@ -666,8 +770,32 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
 def merge_dwi_groups(dwi_groups_plus, dwi_groups_minus):
     """Convert two dwi groups into a single group that will be concatenated for FSL.
 
-    Examples:
-    ---------
+    Parameters
+    ----------
+    dwi_groups_plus : :obj:`list` of :obj:`dict`
+        A list of dictionaries describing each group of dwi files.
+        Each dictionary has the following keys:
+
+        - ``dwi_series``: A list of full paths to dwi nifti files in a BIDS tree.
+        - ``fieldmap_info``: A dictionary describing the fieldmap.
+            If no fieldmap is found, the dictionary will be empty.
+        - ``dwi_series_pedir``: The phase encoding direction of the dwi series.
+            If no information is available, the value will be an empty string.
+        - ``concatenated_bids_name``: The BIDS name of the concatenated dwi series.
+            If no information is available, the value will be an empty string.
+
+    dwi_groups_minus : :obj:`list` of :obj:`dict`
+        A list of dictionaries describing each group of dwi files.
+        Each dictionary has the same keys as ``dwi_groups_plus``.
+
+    Returns
+    -------
+    merged_group : :obj:`dict`
+        A dictionary describing the merged group of dwi files.
+        The dictionary has the same keys as ``dwi_groups_plus``.
+
+    Examples
+    --------
 
     Set up tests
     >>> SUBJECT_ID = "1"
@@ -741,29 +869,26 @@ def merge_dwi_groups(dwi_groups_plus, dwi_groups_minus):
     fmap_files = []
 
     for dwi_group in dwi_groups_plus:
-        dwi_files += dwi_group['dwi_series']
-        fmap_type = dwi_group['fieldmap_info'].get('suffix')
-        if fmap_type == 'dwi':
-            rpe_files += dwi_group['fieldmap_info']['dwi']
-        elif fmap_type == 'epi':
-            fmap_files += dwi_group['fieldmap_info']['epi']
-        pe_dir = dwi_group['dwi_series_pedir']
+        dwi_files += dwi_group["dwi_series"]
+        fmap_type = dwi_group["fieldmap_info"].get("suffix")
+        if fmap_type == "dwi":
+            rpe_files += dwi_group["fieldmap_info"]["dwi"]
+        elif fmap_type == "epi":
+            fmap_files += dwi_group["fieldmap_info"]["epi"]
+        pe_dir = dwi_group["dwi_series_pedir"]
 
     for dwi_group in dwi_groups_minus:
-        rpe_files += dwi_group['dwi_series']
-        fmap_type = dwi_group['fieldmap_info'].get('suffix')
-        if fmap_type == 'dwi':
-            dwi_files += dwi_group['fieldmap_info']['dwi']
-        elif fmap_type == 'epi':
-            fmap_files += dwi_group['fieldmap_info']['epi']
+        rpe_files += dwi_group["dwi_series"]
+        fmap_type = dwi_group["fieldmap_info"].get("suffix")
+        if fmap_type == "dwi":
+            dwi_files += dwi_group["fieldmap_info"]["dwi"]
+        elif fmap_type == "epi":
+            fmap_files += dwi_group["fieldmap_info"]["epi"]
 
     dwi_files = sorted(set(dwi_files))
     rpe_files = sorted(set(rpe_files))
     fmap_files = sorted(set(fmap_files))
-    fieldmap_info = {
-        "suffix": "rpe_series",
-        "rpe_series": rpe_files
-    }
+    fieldmap_info = {"suffix": "rpe_series", "rpe_series": rpe_files}
     if fmap_files:
         fieldmap_info["epi"] = fmap_files
 
@@ -771,7 +896,7 @@ def merge_dwi_groups(dwi_groups_plus, dwi_groups_minus):
         "dwi_series": dwi_files,
         "dwi_series_pedir": pe_dir,
         "fieldmap_info": fieldmap_info,
-        "concatenated_bids_name": get_concatenated_bids_name(dwi_files + rpe_files)
+        "concatenated_bids_name": get_concatenated_bids_name(dwi_files + rpe_files),
     }
     return merged_group
 
@@ -781,8 +906,27 @@ def group_for_eddy(all_dwi_fmap_groups):
 
     Any groups that don't have a phase encoding direction won't be correctable by eddy/TOPUP.
 
-    Examples:
+    Parameters
     ----------
+    all_dwi_fmap_groups : :obj:`list` of :obj:`dict`
+        A list of dictionaries describing each group of dwi files.
+
+    Returns
+    -------
+    eddy_groups : :obj:`list` of :obj:`dict`
+        A list of dictionaries describing each group of dwi files.
+        Each dictionary has the following keys:
+
+        - ``dwi_series``: A list of full paths to dwi nifti files in a BIDS tree.
+        - ``fieldmap_info``: A dictionary describing the fieldmap.
+            If no fieldmap is found, the dictionary will be empty.
+        - ``dwi_series_pedir``: The phase encoding direction of the dwi series.
+            If no information is available, the value will be an empty string.
+        - ``concatenated_bids_name``: The BIDS name of the concatenated dwi series.
+            If no information is available, the value will be an empty string.
+
+    Examples
+    --------
 
     Paired DWI series to correct each other:
     >>> dwi_groups = [
@@ -869,18 +1013,22 @@ def group_for_eddy(all_dwi_fmap_groups):
 
     """
     eddy_dwi_groups = []
-    eddy_compatible_suffixes = ('dwi', 'epi')
+    eddy_compatible_suffixes = ("dwi", "epi")
     session_groups = _group_by_sessions(all_dwi_fmap_groups)
     for _, dwi_fmap_groups in session_groups.items():
-        for pe_dir in 'ijk':
-            plus_series = [dwi_group for dwi_group in dwi_fmap_groups if
-                           dwi_group.get('dwi_series_pedir') == pe_dir
-                           and dwi_group['fieldmap_info'].get('suffix') in
-                           eddy_compatible_suffixes]
-            minus_series = [dwi_group for dwi_group in dwi_fmap_groups if
-                            dwi_group.get('dwi_series_pedir') == pe_dir + '-'
-                            and dwi_group['fieldmap_info'].get('suffix') in
-                            eddy_compatible_suffixes]
+        for pe_dir in "ijk":
+            plus_series = [
+                dwi_group
+                for dwi_group in dwi_fmap_groups
+                if dwi_group.get("dwi_series_pedir") == pe_dir
+                and dwi_group["fieldmap_info"].get("suffix") in eddy_compatible_suffixes
+            ]
+            minus_series = [
+                dwi_group
+                for dwi_group in dwi_fmap_groups
+                if dwi_group.get("dwi_series_pedir") == pe_dir + "-"
+                and dwi_group["fieldmap_info"].get("suffix") in eddy_compatible_suffixes
+            ]
 
             # Can these be grouped?
             if plus_series and minus_series:
@@ -890,26 +1038,41 @@ def group_for_eddy(all_dwi_fmap_groups):
 
         # Add separate groups for non-compatible fieldmaps
         for dwi_group in dwi_fmap_groups:
-            if dwi_group['fieldmap_info'].get('suffix') not in eddy_compatible_suffixes:
+            if dwi_group["fieldmap_info"].get("suffix") not in eddy_compatible_suffixes:
                 eddy_dwi_groups.append(dwi_group)
 
-    return eddy_dwi_groups, {group['concatenated_bids_name']: group['concatenated_bids_name']
-                             for group in eddy_dwi_groups}
+    return eddy_dwi_groups, {
+        group["concatenated_bids_name"]: group["concatenated_bids_name"]
+        for group in eddy_dwi_groups
+    }
 
 
 def group_for_concatenation(all_dwi_fmap_groups):
     """Find matched pairs of phase encoding directions that can be combined after SHORELine.
+
+    Any groups that don't have a phase encoding direction won't be correctable by SHORELine.
+
+    Parameters
+    ----------
+    all_dwi_fmap_groups : :obj:`list` of :obj:`dict`
+        A list of dictionaries describing each group of dwi files.
+
+    Returns
+    -------
+    concatenation_grouping : :obj:`dict`
+        A dictionary mapping the concatenated BIDS name of each group to the name of the
+        group that it should be concatenated with.
     """
     concatenation_grouping = {}
     session_groups = _group_by_sessions(all_dwi_fmap_groups)
     for _, dwi_fmap_groups in session_groups.items():
         all_images = []
         for group in dwi_fmap_groups:
-            all_images.extend(group['dwi_series'])
+            all_images.extend(group["dwi_series"])
         group_name = get_concatenated_bids_name(all_images)
         # Add separate groups for non-compatible fieldmaps
         for group in dwi_fmap_groups:
-            concatenation_grouping[group['concatenated_bids_name']] = group_name
+            concatenation_grouping[group["concatenated_bids_name"]] = group_name
 
     return concatenation_grouping
 
@@ -921,7 +1084,18 @@ def get_concatenated_bids_name(dwi_group):
     assumes you have already split the dwi group into something meaningful and
     really want to combine all the inputs.
 
-    **Examples**
+    Parameters
+    ----------
+    dwi_group : :obj:`list` of :obj:`str`
+        A list of full paths to dwi nifti files in a BIDS tree.
+
+    Returns
+    -------
+    fname : :obj:`str`
+        The BIDS name of the concatenated dwi series.
+
+    Examples
+    --------
     >>> get_concatenated_bids_name([
     ...    '/data/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
     ...    '/data/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz',
@@ -951,9 +1125,9 @@ def get_concatenated_bids_name(dwi_group):
     # If a single file, use its name, otherwise use the common prefix
     if len(dwi_group) > 1:
         fname = _get_common_bids_fields(dwi_group)
-        parts = fname.split('_')
-        full_parts = [part for part in parts if not part.endswith('-')]
-        fname = '_'.join(full_parts)
+        parts = fname.split("_")
+        full_parts = [part for part in parts if not part.endswith("-")]
+        fname = "_".join(full_parts)
     else:
         input_fname = dwi_group[0]
         fname = split_filename(input_fname)[1]
@@ -965,6 +1139,18 @@ def get_concatenated_bids_name(dwi_group):
 
 
 def _get_common_bids_fields(fnames):
+    """Find the common fields in a list of BIDS filenames.
+
+    Parameters
+    ----------
+    fnames : :obj:`list` of :obj:`str`
+        A list of full paths to dwi nifti files in a BIDS tree.
+
+    Returns
+    -------
+    fname : :obj:`str`
+        The common fields in the filenames.
+    """
     bids_keys = defaultdict(set)
     for fname in fnames:
         basename = split_filename(fname)[1]
@@ -976,15 +1162,28 @@ def _get_common_bids_fields(fnames):
 
     # Find all the keys with a single unique value
     common_bids = []
-    for key in ['sub', 'ses', 'acq', 'dir', 'run']:
+    for key in ["sub", "ses", "acq", "dir", "run"]:
         if len(bids_keys[key]) == 1:
             common_bids.append(key + "-" + bids_keys[key].pop())
+
     return "_".join(common_bids)
 
 
 def _group_by_sessions(dwi_fmap_groups):
     """Create a lookup of distortion groups by session
 
+    Parameters
+    ----------
+    dwi_fmap_groups : :obj:`list` of :obj:`dict`
+        A list of dictionaries describing each group of dwi files.
+
+    Returns
+    -------
+    ses_lookup : :obj:`dict`
+        A dictionary mapping session ids to lists of dwi_fmap_groups.
+
+    Examples
+    --------
     Paired DWI series to correct each other:
     >>> dwi_groups = [
     ...  {'dwi_series': ['.../mixed_fmaps/sub-1/ses-1/dwi/sub-1_ses-1_dir-AP_run-1_dwi.nii.gz'],
@@ -1013,11 +1212,10 @@ def _group_by_sessions(dwi_fmap_groups):
     ...               '.../opposite_concat/sub-1/ses-2/dwi/sub-1_ses-2_dir-AP_run-2_dwi.nii.gz']},
     ...      'dwi_series_pedir': 'j-',
     ...      'concatenated_bids_name': 'sub-1_ses-2_dir-PA'}]
-
-
     """
     ses_lookup = defaultdict(list)
     for group in dwi_fmap_groups:
-        bids_info = get_bids_params(group['concatenated_bids_name'])
-        ses_lookup[bids_info['session_id']].append(group)
+        bids_info = get_bids_params(group["concatenated_bids_name"])
+        ses_lookup[bids_info["session_id"]].append(group)
+
     return ses_lookup
