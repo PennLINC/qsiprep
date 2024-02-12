@@ -1,19 +1,16 @@
 """Handle merging and spliting of DSI files."""
-import os.path as op
+
 import json
 
 import nibabel as nb
 import numpy as np
 import pandas as pd
-from nilearn.image import concat_imgs, load_img, index_img, math_img, iter_img
-from nipype.interfaces.base import (BaseInterfaceInputSpec, TraitedSpec, File, SimpleInterface,
-                                    InputMultiObject, traits, isdefined)
-from nipype.utils.filemanip import fname_presuffix
-from nipype.interfaces import ants
+from nilearn.image import concat_imgs, index_img, iter_img, load_img, math_img
 from nipype import logging
 
-from .fmap import get_distortion_grouping
 from ..workflows.dwi.util import _get_concatenated_bids_name
+from .fmap import get_distortion_grouping
+
 LOGGER = logging.getLogger('nipype.workflow')
 MAX_COMBINED_SCANS = 100
 

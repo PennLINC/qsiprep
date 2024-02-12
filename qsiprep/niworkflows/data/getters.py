@@ -5,10 +5,9 @@
 """
 Data grabbers
 """
-from __future__ import print_function, division, absolute_import, unicode_literals
+from __future__ import absolute_import, division, print_function, unicode_literals
 
 from ..data.utils import fetch_file
-
 
 OSF_PROJECT_URL = ('https://files.osf.io/v1/resources/fvuh8/providers/osfstorage/')
 OSF_RESOURCES = {

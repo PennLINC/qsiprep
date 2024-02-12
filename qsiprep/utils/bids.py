@@ -14,12 +14,13 @@ Fetch some test data
     >>> os.chdir(data_root)
 
 """
+import json
 import os
 import sys
-import json
 import warnings
-import numpy as np
+
 import nibabel as nb
+import numpy as np
 from bids import BIDSLayout
 
 IMPORTANT_DWI_FIELDS = [
@@ -228,8 +229,8 @@ def write_derivative_description(bids_dir, deriv_dir):
 
 def validate_input_dir(exec_env, bids_dir, participant_label):
     # Ignore issues and warnings that should not influence qsiprep
-    import tempfile
     import subprocess
+    import tempfile
     validator_config_dict = {
         "ignore": [
             "EVENTS_COLUMN_ONSET",

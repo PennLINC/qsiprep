@@ -5,14 +5,18 @@ Steinhardt Order Parameters
 .. autofunction:: init_steinhardt_order_param_wf
 
 """
+
 import logging
+
 import nipype.pipeline.engine as pe
-from nipype.interfaces import afni, utility as niu
-from qsiprep.interfaces.bids import ReconDerivativesDataSink
-from ...interfaces.interchange import recon_workflow_input_fields
+from nipype.interfaces import utility as niu
+
 from ...engine import Workflow
-from ...interfaces.mrtrix import MRConvert
 from ...interfaces.anatomical import CalculateSOP
+from ...interfaces.interchange import recon_workflow_input_fields
+from ...interfaces.mrtrix import MRConvert
+from qsiprep.interfaces.bids import ReconDerivativesDataSink
+
 LOGGER = logging.getLogger('nipype.interface')
 
 

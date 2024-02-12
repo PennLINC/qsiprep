@@ -7,28 +7,27 @@ Orchestrating the dwi-preprocessing workflow
 """
 
 import os
+
 from nipype import logging
-from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
 from nipype.interfaces.base import isdefined
+from nipype.pipeline import engine as pe
 
-from qsiprep.workflows.fieldmap import pepolar
-from ...interfaces import DerivativesDataSink, DerivativesMaybeDataSink
-
-from ...interfaces.reports import DiffusionSummary
-from ...interfaces.confounds import DMRISummary
-from ...interfaces.utils import TestInput
 from ...engine import Workflow
+from ...interfaces import DerivativesDataSink, DerivativesMaybeDataSink
+from ...interfaces.confounds import DMRISummary
+from ...interfaces.reports import DiffusionSummary
+from ...interfaces.utils import TestInput
+from ..fieldmap.pepolar import init_extended_pepolar_report_wf
 
 # dwi workflows
 from ..fieldmap.unwarp import init_fmap_unwarp_report_wf
-from ..fieldmap.pepolar import init_extended_pepolar_report_wf
-from .hmc_sdc import init_qsiprep_hmcsdc_wf
-from .fsl import init_fsl_hmc_wf
-from .pre_hmc import init_dwi_pre_hmc_wf
-from .util import _create_mem_gb, _get_wf_name
-from .registration import init_b0_to_anat_registration_wf, init_direct_b0_acpc_wf
 from .confounds import init_dwi_confs_wf
+from .fsl import init_fsl_hmc_wf
+from .hmc_sdc import init_qsiprep_hmcsdc_wf
+from .pre_hmc import init_dwi_pre_hmc_wf
+from .registration import init_b0_to_anat_registration_wf, init_direct_b0_acpc_wf
+from .util import _create_mem_gb, _get_wf_name
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger('nipype.workflow')

@@ -1,21 +1,21 @@
 #!/usr/bin/env python
-import warnings
 import os
 import sys
-import os.path as op
-from argparse import ArgumentParser
-from argparse import RawTextHelpFormatter
+import warnings
+from argparse import ArgumentParser, RawTextHelpFormatter
+
 import nibabel as nb
 import numpy as np
-from qsiprep.niworkflows.viz.utils import slices_from_bbox
-from qsiprep.interfaces.converters import fib2amps, mif2amps
-from dipy.core.sphere import HemiSphere
 from dipy.core.ndindex import ndindex
-from dipy.reconst.odf import gfa
+from dipy.core.sphere import HemiSphere
 from dipy.direction import peak_directions
-from PIL import Image
+from dipy.reconst.odf import gfa
 from fury import actor, window
 from nipype import logging
+from PIL import Image
+
+from qsiprep.interfaces.converters import fib2amps, mif2amps
+from qsiprep.niworkflows.viz.utils import slices_from_bbox
 
 LOGGER = logging.getLogger('nipype.interface')
 
@@ -25,7 +25,8 @@ warnings.filterwarnings("ignore", category=PendingDeprecationWarning)
 
 def sink_mask_file(in_file, orig_file, out_dir):
     import os
-    from nipype.utils.filemanip import fname_presuffix, copyfile
+
+    from nipype.utils.filemanip import copyfile, fname_presuffix
     os.makedirs(out_dir, exist_ok=True)
     out_file = fname_presuffix(orig_file, suffix='_mask', newpath=out_dir)
     copyfile(in_file, out_file, copy=True, use_hardlink=True)
@@ -82,9 +83,9 @@ def recon_plot():
     parser.add_argument('--peaks_only',
                         action='store_true',
                         help='only plot the peaks')
-    parser.add_argument('--ncuts', type=int, default=3, 
+    parser.add_argument('--ncuts', type=int, default=3,
                         help="number of slices to plot")
-    parser.add_argument('--padding', type=int, default=10, 
+    parser.add_argument('--padding', type=int, default=10,
                         help="number of slices to plot")
     opts = parser.parse_args()
 
@@ -119,7 +120,7 @@ def recon_plot():
     # Plot ODFs in interesting regions
     if opts.odf_rois and not opts.peaks_only:
         LOGGER.info("saving odfs image to %s", opts.odfs_image)
-        odf_roi_plot(odf_4d, sphere, background_data, opts.odfs_image, 
+        odf_roi_plot(odf_4d, sphere, background_data, opts.odfs_image,
                      opts.odf_rois,
                      subtract_iso=opts.subtract_iso,
                      mask=opts.mask_file)

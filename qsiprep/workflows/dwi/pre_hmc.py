@@ -7,18 +7,17 @@ Orchestrating the dwi-preprocessing workflow
 """
 
 from nipype import logging
-
-from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
+from nipype.pipeline import engine as pe
 
+from ...engine import Workflow
 from ...interfaces.dwi_merge import MergeDWIs
 from ...interfaces.nilearn import Merge
-from ...engine import Workflow
 
 # dwi workflows
-from .merge import init_merge_and_denoise_wf, gen_denoising_boilerplate
-from .util import get_source_file
+from .merge import gen_denoising_boilerplate, init_merge_and_denoise_wf
 from .qc import init_modelfree_qc_wf
+from .util import get_source_file
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger('nipype.workflow')

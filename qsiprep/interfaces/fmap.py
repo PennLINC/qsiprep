@@ -14,27 +14,43 @@ Interfaces to deal with the various types of fieldmap sources
 
 
 """
-import os.path as op
 import json
+import os.path as op
 from collections import defaultdict
-import numpy as np
+
 import nibabel as nb
-from nipype import logging
-from nipype.utils.filemanip import fname_presuffix, split_filename
-from nipype.interfaces.base import (
-    BaseInterfaceInputSpec, TraitedSpec, File, isdefined, traits,
-    SimpleInterface, InputMultiObject, OutputMultiObject)
-from nipype.interfaces.ants.resampling import ApplyTransformsInputSpec
-from nipype.interfaces import ants
-from .images import to_lps
-from .reports import topup_selection_to_report
-from nilearn.image import load_img, index_img, concat_imgs, iter_img, math_img
 import nilearn.image as nim
 import nilearn.plotting as nip
+import numpy as np
 from lxml import etree
+from nilearn.image import concat_imgs, index_img, iter_img, load_img, math_img
+from nipype import logging
+from nipype.interfaces import ants
+from nipype.interfaces.ants.resampling import ApplyTransformsInputSpec
+from nipype.interfaces.base import (
+    BaseInterfaceInputSpec,
+    File,
+    InputMultiObject,
+    OutputMultiObject,
+    SimpleInterface,
+    TraitedSpec,
+    isdefined,
+    traits,
+)
 from nipype.interfaces.mixins import reporting
-from ..niworkflows.viz.utils import (cuts_from_bbox, compose_view,
-plot_denoise, robust_set_limits, extract_svg, SVGFigure, uuid4, SVGNS)
+from nipype.utils.filemanip import fname_presuffix, split_filename
+
+from ..niworkflows.viz.utils import (
+    SVGNS,
+    SVGFigure,
+    compose_view,
+    cuts_from_bbox,
+    extract_svg,
+    robust_set_limits,
+    uuid4,
+)
+from .images import to_lps
+from .reports import topup_selection_to_report
 
 LOGGER = logging.getLogger('nipype.interface')
 CRITICAL_KEYS = ["PhaseEncodingDirection", "TotalReadoutTime", "EffectiveEchoSpacing"]
@@ -251,10 +267,11 @@ class Phases2Fieldmap(SimpleInterface):
 def phases2fmap(phase_files, metadatas, newpath=None):
     """Calculates a phasediff from two phase images. Assumes monopolar
     readout. """
-    import numpy as np
-    import nibabel as nb
-    from nipype.utils.filemanip import fname_presuffix
     from copy import deepcopy
+
+    import nibabel as nb
+    import numpy as np
+    from nipype.utils.filemanip import fname_presuffix
 
     phasediff_file = fname_presuffix(phase_files[0], suffix='_phasediff', newpath=newpath)
     echo_times = [meta.get("EchoTime") for meta in metadatas]
@@ -345,9 +362,10 @@ def _unwrap(fmap_data, mag_file, mask=None):
     fsl_check = os.environ.get('FSL_BUILD')
     if fsl_check=="no_fsl":
         raise Exception(
-            """Container in use does not have FSL. To use this workflow, 
+            """Container in use does not have FSL. To use this workflow,
             please download the qsiprep container with FSL installed.""")
     from math import pi
+
     from nipype.interfaces.fsl import PRELUDE
     magnii = nb.load(mag_file)
 
@@ -421,6 +439,7 @@ def get_ees(in_meta, in_file=None):
     """
 
     import nibabel as nb
+
     from qsiprep.interfaces.fmap import _get_pe_index
 
     # Use case 1: EES is defined
@@ -538,6 +557,7 @@ def _torads(in_file, fmap_range=None, newpath=None):
     Use fmap_range=0.5 to convert from Hz to rad/s
     """
     from math import pi
+
     import nibabel as nb
     from nipype.utils.filemanip import fname_presuffix
 
@@ -557,6 +577,7 @@ def _torads(in_file, fmap_range=None, newpath=None):
 def _tohz(in_file, range_hz, newpath=None):
     """Convert a field map to Hz units"""
     from math import pi
+
     import nibabel as nb
     from nipype.utils.filemanip import fname_presuffix
 
@@ -589,9 +610,11 @@ def phdiff2fmap(in_file, delta_te, newpath=None):
 
     """
     import math
-    import numpy as np
+
     import nibabel as nb
+    import numpy as np
     from nipype.utils.filemanip import fname_presuffix
+
     #  GYROMAG_RATIO_H_PROTON_MHZ = 42.576
 
     out_file = fname_presuffix(in_file, suffix='_fmap', newpath=newpath)

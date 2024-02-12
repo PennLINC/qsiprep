@@ -9,32 +9,43 @@ Interfaces to generate reportlets
 
 """
 
+import json
 import os
 import os.path as op
-import time
-import json
 import re
+import time
 from collections import defaultdict
-#from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
-import seaborn as sns
-import nibabel as nb
+
 import matplotlib
 import matplotlib.pyplot as plt
-from nilearn.maskers import NiftiLabelsMasker
-from matplotlib import animation
-from scipy.io.matlab import loadmat
-import pandas as pd
+import nibabel as nb
 import numpy as np
-from nipype.interfaces.base import (
-    traits, TraitedSpec, BaseInterfaceInputSpec,
-    File, Directory, InputMultiPath, InputMultiObject, Str, isdefined,
-    SimpleInterface, CommandLine, CommandLineInputSpec)
+import pandas as pd
+
+import seaborn as sns
+from matplotlib import animation
+from nilearn.maskers import NiftiLabelsMasker
 from nipype.interfaces import freesurfer as fs
+from nipype.interfaces.base import (
+    BaseInterfaceInputSpec,
+    CommandLine,
+    CommandLineInputSpec,
+    Directory,
+    File,
+    InputMultiObject,
+    InputMultiPath,
+    SimpleInterface,
+    Str,
+    TraitedSpec,
+    isdefined,
+    traits,
+)
 from nipype.interfaces.mixins import reporting
-from setuptools import Command
+from scipy.io.matlab import loadmat
+
+from .bids import get_bids_params
 from .gradients import concatenate_bvals, concatenate_bvecs
 from .qc import createB0_ColorFA_Mask_Sprites, createSprite4D
-from .bids import get_bids_params
 
 SUBJECT_TEMPLATE = """\t<ul class="elem-desc">
 \t\t<li>Subject ID: {subject_id}</li>

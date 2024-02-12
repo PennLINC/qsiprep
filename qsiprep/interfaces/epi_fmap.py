@@ -2,18 +2,20 @@
 # -*- coding: utf-8 -*-
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-import os.path as op
 import json
+import os.path as op
 from collections import defaultdict
+
+import nibabel as nb
 import numpy as np
-from nipype import logging
 import pandas as pd
+from nilearn.image import concat_imgs, index_img, load_img
+from nipype import logging
 from nipype.utils.filemanip import fname_presuffix, split_filename
+
+from .gradients import concatenate_bvals
 from .images import to_lps
 from .reports import topup_selection_to_report
-from .gradients import concatenate_bvals
-from nilearn.image import load_img, index_img, concat_imgs
-import nibabel as nb
 
 LOGGER = logging.getLogger('nipype.interface')
 CRITICAL_KEYS = ["PhaseEncodingDirection", "TotalReadoutTime", "EffectiveEchoSpacing"]

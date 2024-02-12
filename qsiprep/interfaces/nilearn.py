@@ -10,25 +10,29 @@ Image tools interfaces
 """
 import os
 from tempfile import NamedTemporaryFile
+
 import nibabel as nb
 import numpy as np
+from dipy.segment.threshold import otsu
+from nilearn.image import concat_imgs, iter_img, load_img, math_img, new_img_like
+from nilearn.masking import _post_process_mask, compute_epi_mask
+from nilearn.plotting import plot_epi
+from nipype import logging
+from nipype.interfaces.base import (
+    BaseInterfaceInputSpec,
+    File,
+    InputMultiPath,
+    SimpleInterface,
+    TraitedSpec,
+    isdefined,
+    traits,
+)
+from nipype.utils.filemanip import fname_presuffix
 from scipy import ndimage
 from scipy.ndimage.morphology import binary_fill_holes
 from skimage import morphology as sim
 from skimage.segmentation import watershed
-from dipy.segment.threshold import otsu
-from sklearn.preprocessing import robust_scale, power_transform
-
-from nilearn.masking import compute_epi_mask, _post_process_mask
-from nilearn.image import (concat_imgs, load_img, new_img_like, math_img, iter_img)
-from nilearn.plotting import plot_epi
-
-from nipype import logging
-from nipype.utils.filemanip import fname_presuffix
-from nipype.interfaces.base import (
-    traits, isdefined, TraitedSpec, BaseInterfaceInputSpec,
-    File, InputMultiPath, SimpleInterface
-)
+from sklearn.preprocessing import power_transform, robust_scale
 
 LOGGER = logging.getLogger('nipype.interface')
 

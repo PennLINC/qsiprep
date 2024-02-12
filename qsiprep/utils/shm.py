@@ -24,19 +24,18 @@ following form: Y.T = x.T B.T, or in python syntax data = np.dot(sh_coef, B.T)
 where data is Y.T and sh_coef is x.T.
 """
 import warnings
-import numpy as np
-from numpy import concatenate, diag, diff, empty, eye, sqrt, unique, dot
-from numpy.linalg import pinv, svd
-from numpy.random import randint
+from distutils.version import LooseVersion
 
-from dipy.reconst.odf import OdfModel, OdfFit
+import numpy as np
+import scipy
 from dipy.core.geometry import cart2sphere
 from dipy.core.onetime import auto_attr
 from dipy.reconst.cache import Cache
-
-from distutils.version import LooseVersion
-import scipy
-from scipy.special import lpn, lpmv, gammaln, factorial
+from dipy.reconst.odf import OdfFit, OdfModel
+from numpy import concatenate, diag, diff, dot, empty, eye, sqrt, unique
+from numpy.linalg import pinv, svd
+from numpy.random import randint
+from scipy.special import factorial, gammaln, lpmv, lpn
 
 if LooseVersion(scipy.version.short_version) >= LooseVersion('0.15.0'):
     SCIPY_15_PLUS = True

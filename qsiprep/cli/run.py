@@ -4,20 +4,21 @@
 QSI workflow
 =====
 """
-import warnings
-import os
-import re
-import os.path as op
-from pathlib import Path
-import logging
-import sys
 import gc
+import logging
+import os
+import os.path as op
+import re
+import sys
 import uuid
-from argparse import ArgumentParser
-from argparse import ArgumentDefaultsHelpFormatter
+import warnings
+from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from multiprocessing import cpu_count
+from pathlib import Path
 from time import strftime
-from ..utils.ingress import create_ukb_layout, collect_ukb_participants
+
+from ..utils.ingress import collect_ukb_participants, create_ukb_layout
+
 warnings.filterwarnings("ignore", category=ImportWarning)
 warnings.filterwarnings("ignore", category=PendingDeprecationWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -52,6 +53,7 @@ def _filter_pybids_none_any(dct):
 
 def _bids_filter(value):
     from json import loads
+
     from bids.layout import Query
 
     if value and Path(value).exists():
@@ -599,10 +601,12 @@ license file at several paths, in this order: 1) command line argument ``--fs-li
 
 def main():
     """Entry point"""
+    from multiprocessing import Manager, Process, set_start_method
+
     from nipype import logging as nlogging
-    from multiprocessing import set_start_method, Process, Manager
-    from ..viz.reports import generate_reports
+
     from ..utils.bids import write_derivative_description
+    from ..viz.reports import generate_reports
 
     try:
         set_start_method('forkserver')
@@ -626,6 +630,7 @@ def main():
     sentry_sdk = None
     if not opts.notrack:
         import sentry_sdk
+
         from ..utils.sentry import sentry_setup
         sentry_setup(opts, exec_env)
 
@@ -811,14 +816,17 @@ def build_qsiprep_workflow(opts, retval):
     a hard-limited memory-scope.
 
     """
-    from subprocess import check_call, CalledProcessError, TimeoutExpired
-    from pkg_resources import resource_filename as pkgrf
+    from subprocess import CalledProcessError, TimeoutExpired, check_call
+
     from bids import BIDSLayout
-    from nipype import logging, config as ncfg
+    from nipype import config as ncfg
+    from nipype import logging
+    from pkg_resources import resource_filename as pkgrf
+
     from ..__about__ import __version__
-    from ..workflows.base import init_qsiprep_wf
     from ..utils.bids import collect_participants
     from ..viz.reports import generate_reports
+    from ..workflows.base import init_qsiprep_wf
 
     logger = logging.getLogger('nipype.workflow')
 
@@ -1067,13 +1075,16 @@ def build_recon_workflow(opts, retval):
     a hard-limited memory-scope.
 
     """
-    from subprocess import check_call, CalledProcessError, TimeoutExpired
-    from pkg_resources import resource_filename as pkgrf
+    from subprocess import CalledProcessError, TimeoutExpired, check_call
+
     from bids import BIDSLayout
-    from nipype import logging, config as ncfg
+    from nipype import config as ncfg
+    from nipype import logging
+    from pkg_resources import resource_filename as pkgrf
+
     from ..__about__ import __version__
-    from ..workflows.recon import init_qsirecon_wf
     from ..utils.bids import collect_participants
+    from ..workflows.recon import init_qsirecon_wf
 
     logger = logging.getLogger('nipype.workflow')
 

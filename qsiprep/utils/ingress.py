@@ -7,16 +7,11 @@ Utilities to handle data from other preprocessing pipelines
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 """
-from pathlib import Path
 import re
-import os
-import sys
-import json
-import warnings
-import numpy as np
-import nibabel as nb
+from pathlib import Path
 
 UKB_DIR_PATTERN = re.compile("(\d+)_(\d+)_(\d+)")
+
 
 def missing_from_ukb_directory(ukb_sujbect_dir):
     """Check for missing files in a ukb subject directory."""
