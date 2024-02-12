@@ -224,6 +224,18 @@ jobs:
             cd .circleci
             bash AutoTrackTest.sh
 
+  Recon_Tortoise:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run: *runinstall
+      - run:
+          name: Test the TORTOISE recon workflow
+          no_output_timeout: 1h
+          command: |
+            cd .circleci
+            bash TortoiseRecon.sh
+
   Recon_DIPY:
     <<: *dockersetup
     steps:
@@ -259,6 +271,18 @@ jobs:
           command: |
             cd .circleci
             bash PyAFQReconExternalTrk.sh
+
+  Recon_ScalarMap:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run: *runinstall
+      - run:
+          name: Test scalar_mapping workflow
+          no_output_timeout: 1h
+          command: |
+            cd .circleci
+            bash ScalarMapper.sh
 
   Recon_AMICO:
     <<: *dockersetup
@@ -307,7 +331,7 @@ jobs:
               echo "the command ``git fetch --tags --verbose`` and push"
               echo "them to your fork with ``git push origin --tags``"
             fi
-            sed -i -E "s/(__version__ = )'[A-Za-z0-9.-]+'/\1'${CIRCLE_TAG:-$THISVERSION}'/" wrapper/qsiprep_docker.py
+            sed -i -E "s/(__version__ = )'[A-Za-z0-9.-]+'/\1'${CIRCLE_TAG:-$THISVERSION}'/" wrapper/qsiprep-container/qsiprep_docker.py
             sed -i -E "s/(var version = )'[A-Za-z0-9.-]+'/\1'${CIRCLE_TAG:-$THISVERSION}'/" docs/citing.rst
             sed -i "s/title = {qsiprep}/title = {qsiprep ${CIRCLE_TAG:-$THISVERSION}}/" qsiprep/data/boilerplate.bib
             # Build docker image
@@ -562,6 +586,13 @@ workflows:
             tags:
               only: /.*/
 
+      - Recon_Tortoise:
+          requires:
+            - build
+          filters:
+            tags:
+              only: /.*/
+
       - Recon_DIPY:
           requires:
             - build
@@ -590,6 +621,13 @@ workflows:
             tags:
               only: /.*/
 
+      - Recon_ScalarMap:
+          requires:
+            - build
+          filters:
+            tags:
+              only: /.*/
+
       - deployable:
           requires:
             - build_docs
@@ -606,10 +644,12 @@ workflows:
             - Recon_3Tissue
             - Recon_MRtrix3
             - Recon_AutoTrack
+            - Recon_Tortoise
             - Recon_DIPY
             - Recon_AMICO
             - Recon_PYAFQ
             - Recon_PYAFQExternalTrk
+            - Recon_ScalarMap
           filters:
             branches:
               only: master
