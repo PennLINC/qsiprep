@@ -10,12 +10,10 @@ Interfaces for handling BIDS-like neuroimaging structures
 
 import os
 import os.path as op
-from shutil import copytree, rmtree
 
 from nipype import logging
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec,
-    Directory,
     File,
     InputMultiPath,
     OutputMultiPath,
@@ -253,63 +251,5 @@ class ReadSidecarJSON(SimpleInterface):
                 self._results[fname] = metadata[fname]
         else:
             self._results['out_dict'] = metadata
-
-        return runtime
-
-
-class BIDSFreeSurferDirInputSpec(BaseInterfaceInputSpec):
-    derivatives = Directory(exists=True, mandatory=True,
-                            desc='BIDS derivatives directory')
-    freesurfer_home = Directory(exists=True, mandatory=True,
-                                desc='FreeSurfer installation directory')
-    subjects_dir = traits.Str('freesurfer', usedefault=True,
-                              desc='Name of FreeSurfer subjects directory')
-    spaces = traits.List(traits.Str, desc='Set of output spaces to prepare')
-    overwrite_fsaverage = traits.Bool(False, usedefault=True,
-                                      desc='Overwrite fsaverage directories, if present')
-
-
-class BIDSFreeSurferDirOutputSpec(TraitedSpec):
-    subjects_dir = traits.Directory(exists=True,
-                                    desc='FreeSurfer subjects directory')
-
-
-class BIDSFreeSurferDir(SimpleInterface):
-    """Create a FreeSurfer subjects directory in a BIDS derivatives directory
-    and copy fsaverage from the local FreeSurfer distribution.
-
-    Output subjects_dir = ``{derivatives}/{subjects_dir}``, and may be passed to
-    ReconAll and other FreeSurfer interfaces.
-    """
-    input_spec = BIDSFreeSurferDirInputSpec
-    output_spec = BIDSFreeSurferDirOutputSpec
-    _always_run = True
-
-    def _run_interface(self, runtime):
-        subjects_dir = os.path.join(self.inputs.derivatives,
-                                    self.inputs.subjects_dir)
-        os.makedirs(subjects_dir, exist_ok=True)
-        self._results['subjects_dir'] = subjects_dir
-
-        spaces = list(self.inputs.spaces)
-        # Always copy fsaverage, for proper recon-all functionality
-        if 'fsaverage' not in spaces:
-            spaces.append('fsaverage')
-
-        for space in spaces:
-            # Skip non-freesurfer spaces and fsnative
-            if not space.startswith('fsaverage'):
-                continue
-            source = os.path.join(self.inputs.freesurfer_home, 'subjects', space)
-            dest = os.path.join(subjects_dir, space)
-            # Finesse is overrated. Either leave it alone or completely clobber it.
-            if os.path.exists(dest) and self.inputs.overwrite_fsaverage:
-                rmtree(dest)
-            if not os.path.exists(dest):
-                try:
-                    copytree(source, dest)
-                except FileExistsError:
-                    LOGGER.warning("%s exists; if multiple jobs are running in parallel"
-                                   ", this can be safely ignored", dest)
 
         return runtime

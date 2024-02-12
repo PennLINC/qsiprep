@@ -40,7 +40,7 @@ from nipype.utils.filemanip import fname_presuffix
 from ..niworkflows.interfaces.images import ValidateImageInputSpec
 
 # from qsiprep.interfaces.images import (
-#    nii_ones_like, SignalExtraction, MatchHeader,
+#    nii_ones_like,
 #    FilledImageLike, DemeanImage, TemplateDimensions)
 from .mrtrix import SS3T_ROOT
 
@@ -172,25 +172,6 @@ def _flatten(in_list):
         else:
             out_list.append(item)
     return out_list
-
-
-class NiftiInfoInputSpec(BaseInterfaceInputSpec):
-    in_file = File(exists=True, mandatory=True, desc='Input NIfTI file')
-
-
-class NiftiInfoOutputSpec(TraitedSpec):
-    voxel_size = traits.Tuple()
-
-
-class NiftiInfo(SimpleInterface):
-    input_spec = NiftiInfoInputSpec
-    output_spec = NiftiInfoOutputSpec
-
-    def _run_interface(self, runtime):
-        in_file = self.inputs.in_file
-        img = nb.load(in_file)
-        self._results['voxel_size'] = tuple(img.header.get_zooms()[:3])
-        return runtime
 
 
 class IntraModalMergeInputSpec(BaseInterfaceInputSpec):

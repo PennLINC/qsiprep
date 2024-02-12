@@ -1,5 +1,5 @@
-
 """Handle merging and spliting of DSI files."""
+
 import logging
 import os
 
@@ -26,8 +26,6 @@ from nipype.utils.filemanip import fname_presuffix
 from scipy.spatial.transform import Rotation as R
 from sklearn.metrics import r2_score
 from transforms3d.affines import decompose44
-
-from .itk import disassemble_transform
 
 LOGGER = logging.getLogger('nipype.interface')
 tensor_index = {
@@ -322,31 +320,6 @@ class ExtractB0s(SimpleInterface):
             mean_image.to_filename(output_mean_fname)
             self._results['b0_average'] = output_mean_fname
 
-        return runtime
-
-
-class SplitIntramodalTransformInputSpec(BaseInterfaceInputSpec):
-    transform_file = File(exists=True)
-
-
-class SplitIntramodalTransformOutputSpec(TraitedSpec):
-    transform_files = OutputMultiObject(File(exists=True))
-
-
-class SplitIntramodalTransform(SimpleInterface):
-    input_spec = SplitIntramodalTransformInputSpec
-    output_spec = SplitIntramodalTransformOutputSpec
-
-    def _run_interface(self, runtime):
-        transform_file = self.inputs.transform_file
-        if isdefined(transform_file) and transform_file:
-            if not transform_file.endswith(".h5"):
-                self._results["transform_files"] = [transform_file]
-            # If it's an h5 file, split it into affine and warp
-            affine_part, warp_part = disassemble_transform(transform_file, runtime.cwd)
-            self._results["transform_files"] = [affine_part, warp_part]
-        else:
-            self._results["transform_files"] = traits.Undefined
         return runtime
 
 

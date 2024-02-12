@@ -27,7 +27,6 @@ from nipype.interfaces.base import (
 )
 from nipype.utils.filemanip import fname_presuffix
 from pkg_resources import resource_filename as pkgr
-from scipy import ndimage
 from scipy.spatial import distance
 
 from ..utils.ingress import ukb_dirname_to_bids
@@ -192,33 +191,6 @@ class DiceOverlap(SimpleInterface):
 
         self._results['dice_score'] = distance.dice(t1_img.get_fdata().flatten(),
                                                     dwi_img.get_fdata().flatten())
-        return runtime
-
-
-class _FakeSegmentationInputSpec(BaseInterfaceInputSpec):
-    mask_file = File(exists=True, mandatory=True)
-
-
-class _FakeSegmentationOutputSpec(TraitedSpec):
-    dseg_file = File(exists=True)
-
-
-class FakeSegmentation(SimpleInterface):
-    input_spec = _FakeSegmentationInputSpec
-    output_spec = _FakeSegmentationOutputSpec
-
-    def _run_interface(self, runtime):
-        img = nb.load(self.inputs.mask_file)
-        orig_mask = img.get_fdata() > 0
-        eroded1 = ndimage.binary_erosion(orig_mask, iterations=3)
-        eroded2 = ndimage.binary_erosion(eroded1, iterations=3)
-        final = orig_mask.astype(int) + eroded1 + eroded2
-        out_img = nb.Nifti1Image(final, img.affine, header=img.header)
-        out_fname = fname_presuffix(self.inputs.mask_file, suffix="_dseg",
-                                    newpath=runtime.cwd)
-        out_img.to_filename(out_fname)
-        self._results['dseg_file'] = out_fname
-
         return runtime
 
 
@@ -419,44 +391,6 @@ def calculate_nonbrain_saturation(head_img, brain_mask_img):
     non_brain_head_median = np.median(head_data[nbmask > 0])
 
     return in_brain_median, non_brain_head_median
-
-class _CustomApplyMaskInputSpec(BaseInterfaceInputSpec):
-    in_file = File(
-        exists=True,
-        mandatory=True,
-        desc="Image to be masked")
-    mask_file = File(
-        exists=True,
-        mandatory=True,
-        desc='Mask to be applied')
-
-
-class _CustomApplyMaskOutputSpec(TraitedSpec):
-    out_file = File(exist=True, desc="Image with mask applied")
-
-
-class CustomApplyMask(SimpleInterface):
-    input_spec = _CustomApplyMaskInputSpec
-    output_spec = _CustomApplyMaskOutputSpec
-
-    def _run_interface(self, runtime):
-        #define masked output name
-        out_file = fname_presuffix(
-            self.inputs.in_file,
-            newpath=runtime.cwd,
-            suffix='_masked.nii.gz',
-            use_ext=False)
-
-        #load in input and mask
-        input_img = nb.load(self.inputs.in_file)
-        input_data = input_img.get_fdata()
-        mask_data = nb.load(self.inputs.mask_file).get_fdata()
-        #elementwise multiplication to apply mask
-        out_data = input_data*mask_data
-        #save out masked image and pass on file name
-        nb.Nifti1Image(out_data, input_img.affine, header=input_img.header).to_filename(out_file)
-        self._results['out_file'] = out_file
-        return runtime
 
 
 class _GetTemplateInputSpec(BaseInterfaceInputSpec):

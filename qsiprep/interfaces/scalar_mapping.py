@@ -126,17 +126,6 @@ class BundleMapper(ScalarMapper):
 
 
 # For mapping to atlases
-class _AtlasMapperInputSpec(ScalarMapperInputSpec):
-    atlas_configs = traits.Any()
-
-
-class _AtlasMapperOutputSpec(ScalarMapperOutputSpec):
-    region_stats = File(exists=True, mandatory=True)
-
-
-class AtlasMapper(ScalarMapper):
-    input_spec = _AtlasMapperInputSpec
-    output_spec = _AtlasMapperOutputSpec
 
 def calculate_mask_stats(masker, mask_name, mask_variable_name, recon_scalar, weighting_vector=None):
 

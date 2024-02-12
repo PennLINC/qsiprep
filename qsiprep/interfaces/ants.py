@@ -4,7 +4,6 @@ import os
 import os.path as op
 
 import nibabel as nb
-from nipype.interfaces import ants
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec,
     CommandLine,
@@ -121,10 +120,6 @@ class MultivariateTemplateConstruction2(CommandLine):
         return outputs
 
 
-class N3BiasFieldCorrection(ants.N4BiasFieldCorrection):
-    _cmd = "N3BiasFieldCorrection"
-
-
 class ImageMathInputSpec(BaseInterfaceInputSpec):
     in_file = File(exists=True, mandatory=True, position=3, argstr='%s')
     dimension = traits.Enum(3, 2, 4, usedefault=True, argstr="%d", position=0)
@@ -156,19 +151,6 @@ class ImageMath(CommandLine):
         outputs = self.output_spec().get()
         outputs['out_file'] = op.abspath(self._gen_filename('out_file'))
         return outputs
-
-
-class _ANTsBBRInputSpec(ants.registration.RegistrationInputSpec):
-    wm_seg = File(exists=True)
-
-
-class _ANTsBBROutputSpec(TraitedSpec):
-    forward_transforms = OutputMultiObject(File())
-
-
-class ANTsBBR(SimpleInterface):
-    input_spec = _ANTsBBRInputSpec
-    output_spec = _ANTsBBROutputSpec
 
 
 class _ConvertTransformFileInputSpec(CommandLineInputSpec):

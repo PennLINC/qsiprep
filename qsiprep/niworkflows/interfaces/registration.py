@@ -9,18 +9,13 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 
 import os
 
-import nibabel as nb
-import numpy as np
 from nilearn import image as nli
 from nilearn.image import index_img
-from nipype.interfaces import afni, ants
+from nipype.interfaces import ants
 from nipype.interfaces import freesurfer as fs
 from nipype.interfaces import fsl
 from nipype.interfaces.base import (
-    BaseInterfaceInputSpec,
     File,
-    SimpleInterface,
-    TraitedSpec,
     isdefined,
     traits,
 )
@@ -341,77 +336,6 @@ class ResampleBeforeAfterRPT(SimpleBeforeAfterRPT):
         runtime = super(ResampleBeforeAfterRPT, self)._post_run_hook(runtime)
         NIWORKFLOWS_LOG.info('Successfully created report (%s)', self._out_report)
         os.unlink(fname)
-
-        return runtime
-
-
-class EstimateReferenceImageInputSpec(BaseInterfaceInputSpec):
-    in_file = File(exists=True, mandatory=True, desc="4D EPI file")
-    sbref_file = File(exists=True, desc="Single band reference image")
-    mc_method = traits.Enum(
-        "AFNI", "FSL", usedefault=True,
-        desc="Which software to use to perform motion correction")
-
-
-class EstimateReferenceImageOutputSpec(TraitedSpec):
-    ref_image = File(exists=True, desc="3D reference image")
-    n_volumes_to_discard = traits.Int(desc="Number of detected non-steady "
-                                           "state volumes in the beginning of "
-                                           "the input file")
-
-
-class EstimateReferenceImage(SimpleInterface):
-    """
-    Given an 4D EPI file estimate an optimal reference image that could be later
-    used for motion estimation and coregistration purposes. If detected uses
-    T1 saturated volumes (non-steady state) otherwise a median of
-    of a subset of motion corrected volumes is used.
-    """
-    input_spec = EstimateReferenceImageInputSpec
-    output_spec = EstimateReferenceImageOutputSpec
-
-    def _run_interface(self, runtime):
-        in_nii = nb.load(self.inputs.in_file)
-        n_volumes_to_discard = _get_vols_to_discard(in_nii)
-
-        self._results["n_volumes_to_discard"] = n_volumes_to_discard
-
-        if isdefined(self.inputs.sbref_file):
-            self._results['ref_image'] = self.inputs.sbref_file
-            return runtime
-
-        # Slicing may induce inconsistencies with shape-dependent values in extensions.
-        # For now, remove all. If this turns out to be a mistake, we can select extensions
-        # that don't break pipeline stages.
-        in_nii.header.extensions.clear()
-
-        out_ref_fname = os.path.join(runtime.cwd, "ref_image.nii.gz")
-
-        if n_volumes_to_discard == 0:
-            if in_nii.shape[-1] > 40:
-                slice_fname = os.path.join(runtime.cwd, "slice.nii.gz")
-                nb.Nifti1Image(in_nii.dataobj[:, :, :, 20:40], in_nii.affine,
-                               in_nii.header).to_filename(slice_fname)
-            else:
-                slice_fname = self.inputs.in_file
-
-            if self.inputs.mc_method == "AFNI":
-                res = afni.Volreg(in_file=slice_fname, args='-Fourier -twopass',
-                                  zpad=4, outputtype='NIFTI_GZ').run()
-            elif self.inputs.mc_method == "FSL":
-                res = fsl.MCFLIRT(in_file=slice_fname,
-                                  ref_vol=0, interpolation='sinc').run()
-            mc_slice_nii = nb.load(res.outputs.out_file)
-
-            median_image_data = np.median(mc_slice_nii.get_fdata(), axis=3)
-        else:
-            median_image_data = np.median(
-                in_nii.dataobj[:, :, :, :n_volumes_to_discard], axis=3)
-
-        nb.Nifti1Image(median_image_data, in_nii.affine,
-                       in_nii.header).to_filename(out_ref_fname)
-
-        self._results["ref_image"] = out_ref_fname
 
         return runtime
 

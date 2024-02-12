@@ -4,7 +4,6 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 from .masks import BETRPT as BET
-from .plotting import FMRISummary
 from .registration import FLIRTRPT as FLIRT
 from .registration import ANTSApplyTransformsRPT as ApplyTransforms
 from .registration import ANTSRegistrationRPT as Registration
@@ -12,4 +11,4 @@ from .registration import ApplyXFMRPT as ApplyXFM
 from .registration import RobustMNINormalizationRPT as RobustMNINormalization
 from .registration import SimpleBeforeAfterRPT as SimpleBeforeAfter
 from .segmentation import FASTRPT as FAST
-from .utils import CopyHeader, CopyXForm, NormalizeMotionParams, SanitizeImage
+from .utils import CopyHeader

@@ -262,28 +262,9 @@ class DSIStudioDSIReconstructionInputSpec(DSIStudioReconstructionInputSpec):
 
 
 class DSIStudioReconstruction(CommandLine):
-    input_spec = DSIStudioReconstructionInputSpec
+    input_spec = DSIStudioDSIReconstructionInputSpec
     output_spec = DSIStudioReconstructionOutputSpec
     _cmd = "dsi_studio --action=rec "
-
-
-class DSIStudioDTIReconstruction(DSIStudioReconstruction):
-    _cmd = "dsi_studio --action=rec --method=1"
-    input_spec = DSIStudioReconstructionInputSpec
-
-    def _list_outputs(self):
-        outputs = self.output_spec().get()
-        print("current dir", os.getcwd())
-        srcname = os.path.split(self.inputs.input_src_file)[-1]
-        print("input src", self.inputs.input_src_file)
-        print("split src name", srcname)
-        target = os.path.join(os.getcwd(), srcname) + "*dti.fib.gz"
-        print("search target", target)
-        results = glob(target)
-        assert len(results) == 1
-        outputs["output_fib"] = results[0]
-
-        return outputs
 
 
 class DSIStudioGQIReconstruction(DSIStudioReconstruction):

@@ -22,13 +22,10 @@ from nipype.interfaces.base import (
     isdefined,
     traits,
 )
-from nipype.interfaces.freesurfer.preprocess import ConcatenateLTA, RobustRegister
 from nipype.interfaces.freesurfer.utils import LTAConvert
 from nipype.utils.filemanip import copyfile, filename_to_list, fname_presuffix
 from scipy.ndimage.morphology import binary_fill_holes
 from skimage import morphology as sim
-
-from .registration import BBRegisterRPT, MRICoregRPT
 
 
 class StructuralReference(fs.RobustTemplate):
@@ -224,39 +221,12 @@ class TruncateLTA(object):
         return runtime
 
 
-class PatchedConcatenateLTA(TruncateLTA, ConcatenateLTA):
-    """
-    A temporarily patched version of ``fs.ConcatenateLTA`` to recover from
-    `this bug <https://www.mail-archive.com/freesurfer@nmr.mgh.harvard.edu/msg55520.html>`_
-    in FreeSurfer, that was
-    `fixed here <https://github.com/freesurfer/freesurfer/pull/180>`__.
-
-    The original FMRIPREP's issue is found
-    `here <https://github.com/poldracklab/fmriprep/issues/768>`__.
-
-    the fix is now done through mixin with TruncateLTA
-    """
-    lta_outputs = ['out_file']
-
-
 class PatchedLTAConvert(TruncateLTA, LTAConvert):
     """
     LTAconvert is producing a lta file refer as out_lta
     truncate filename through mixin TruncateLTA
     """
     lta_outputs = ('out_lta',)
-
-
-class PatchedBBRegisterRPT(TruncateLTA, BBRegisterRPT):
-    pass
-
-
-class PatchedMRICoregRPT(TruncateLTA, MRICoregRPT):
-    pass
-
-
-class PatchedRobustRegister(TruncateLTA, RobustRegister):
-    lta_outputs = ('out_reg_file', 'half_source_xfm', 'half_targ_xfm')
 
 
 class RefineBrainMaskInputSpec(BaseInterfaceInputSpec):
@@ -298,32 +268,6 @@ class RefineBrainMask(SimpleInterface):
         msknii.set_data_dtype(np.uint8)
         msknii.to_filename(self._results['out_file'])
 
-        return runtime
-
-
-class MedialNaNsInputSpec(BaseInterfaceInputSpec):
-    in_file = File(exists=True, mandatory=True, desc='input surface file')
-    target_subject = traits.Str(mandatory=True, desc='target subject ID')
-    subjects_dir = Directory(mandatory=True, desc='FreeSurfer SUBJECTS_DIR')
-
-
-class MedialNaNsOutputSpec(TraitedSpec):
-    out_file = File(desc='the output surface file')
-
-
-class MedialNaNs(SimpleInterface):
-    """
-    The MedialNaNs converts from arbitrary units to rad/s
-    """
-    input_spec = MedialNaNsInputSpec
-    output_spec = MedialNaNsOutputSpec
-
-    def _run_interface(self, runtime):
-        self._results['out_file'] = medial_wall_to_nan(
-            self.inputs.in_file,
-            self.inputs.subjects_dir,
-            self.inputs.target_subject,
-            newpath=runtime.cwd)
         return runtime
 
 
