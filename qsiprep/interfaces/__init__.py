@@ -15,7 +15,6 @@ from .freesurfer import (
     FSDetectInputs,
     FSInjectBrainExtracted,
     MakeMidthickness,
-    MedialNaNs,
     RefineBrainMask,
     StructuralReference,
 )
