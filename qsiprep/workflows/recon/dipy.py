@@ -14,7 +14,8 @@ from ...interfaces.interchange import recon_workflow_input_fields
 from ...engine import Workflow
 from ...interfaces.reports import CLIReconPeaksReport
 from ...interfaces.recon_scalars import (
-    DIPYDKIReconScalars, DIPYMAPMRIReconScalars, BrainSuite3dSHOREReconScalars)
+    ReconScalarsDataSink, DIPYDKIReconScalars, DIPYMAPMRIReconScalars,
+    BrainSuite3dSHOREReconScalars)
 
 
 LOGGER = logging.getLogger('nipype.interface')
@@ -472,7 +473,7 @@ def init_dipy_dki_recon_wf(omp_nthreads, available_anatomical_data, name="dipy_d
                     'colorFA', 'kfa', 'mk', 'ak', 'rk',
                     'mkt', 'recon_scalars']),
         name="outputnode")
-    recon_scalars = pe.Node(DIPYDKIReconScalars(workflow_name=name),
+    recon_scalars = pe.Node(DIPYDKIReconScalars(workflow_name=output_suffix),
                             run_without_submitting=True,
                             name="recon_scalars")
     workflow = Workflow(name=name)
@@ -535,17 +536,15 @@ def init_dipy_dki_recon_wf(omp_nthreads, available_anatomical_data, name="dipy_d
 
     if output_suffix:
         external_format_datasinks(output_suffix, params, workflow)
-        connections = []
-        for scalar_name in ['tensor', 'fa', 'md', 'rd', 'ad',
-                    'colorFA', 'kfa', 'mk', 'ak', 'rk',
-                    'mkt']:
-            connections += [(outputnode,
-                             pe.Node(
-                                 ReconDerivativesDataSink(desc=scalar_name,
-                                                          suffix=output_suffix),
-                                 name='ds_%s_%s' % (name, scalar_name)),
-                             [(scalar_name, 'in_file')])]
-        workflow.connect(connections)
+        ds_dki_scalars = pe.Node(
+            ReconScalarsDataSink(),
+            name="ds_dki_scalars",
+            run_without_submitting=True)
+        workflow.connect(
+            recon_scalars,
+            "scalar_info",
+            ds_dki_scalars,
+            "recon_scalars")
 
     workflow.__desc__ = desc
     return workflow
