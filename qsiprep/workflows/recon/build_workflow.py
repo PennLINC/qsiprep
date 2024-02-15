@@ -121,12 +121,14 @@ def init_dwi_recon_workflow(workflow_spec, output_dir,
     # Fill-in datasinks and reportlet datasinks seen so far
     for node in workflow.list_node_names():
         node_suffix = node.split('.')[-1]
-        if node_suffix.startswith('ds'):
+        if node_suffix.startswith('ds_') or node_suffix.startswith("recon_scalars"):
             base_dir = reportlets_dir if "report" in node_suffix else output_dir
+            workflow.connect(inputnode, 'dwi_file', workflow.get_node(node), 'source_file')
             # LOGGER.info("setting %s base dir to %s", node_suffix, base_dir )
-            workflow.get_node(node).inputs.base_directory = base_dir
-            if node_suffix.startswith('ds_'):
-                workflow.connect(inputnode, 'dwi_file', workflow.get_node(node), 'source_file')
+            if node_suffix.startswith("ds"):
+                workflow.get_node(node).inputs.base_directory = base_dir
+            # if node_suffix.startswith('ds_') or node_suffix.startswith("recon_scalars"):
+            #     workflow.connect(inputnode, 'dwi_file', workflow.get_node(node), 'source_file')
 
     return workflow
 

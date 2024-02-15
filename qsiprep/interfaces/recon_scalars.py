@@ -10,19 +10,27 @@ Classes that collect scalar images and metadata from Recon Workflows
 """
 import os
 import os.path as op
+import re
 from pkg_resources import resource_filename as pkgr
 from nipype import logging
-from nipype.utils.filemanip import fname_presuffix
+from bids.layout import parse_file_entities
+from .bids import _copy_any
+from nipype.utils.filemanip import fname_presuffix, split_filename
 from nipype.interfaces.base import (
-    traits, TraitedSpec, BaseInterfaceInputSpec, SimpleInterface, isdefined, File
+    InputMultiObject, traits, TraitedSpec, BaseInterfaceInputSpec, SimpleInterface, isdefined, File
 )
 
+entity_order = [
+    "model",
+    "fit",
+    "mdp"
+]
 
 class ReconScalarsInputSpec(BaseInterfaceInputSpec):
+    source_file = File(exists=True, mandatory=True)
     workflow_name = traits.Str(mandatory=True)
-    source_file = traits.Str(mandatory=True)
-    desc = traits.Str(
-        desc="If doing multiple versions of the same model, use this as a desc-ID")
+    model_info = traits.Dict()
+    model_name = traits.Str()
 
 
 class ReconScalarsOutputSpec(TraitedSpec):
@@ -33,7 +41,9 @@ class ReconScalars(SimpleInterface):
     input_spec = ReconScalarsInputSpec
     output_spec = ReconScalarsOutputSpec
     scalar_metadata = {}
-    _ignore_traits = ("workflow_name", "scalar_metadata")
+    _ignore_traits = ("model_name", "workflow_name", "scalar_metadata",
+                      "model_info", "source_file")
+
     def __init__(self, from_file=None, resource_monitor=None, **inputs):
 
         # Get self._results defined
@@ -50,12 +60,21 @@ class ReconScalars(SimpleInterface):
             if not input_key in self.scalar_metadata:
                 raise Exception(f"No entry found for {input_key} in ``scalar_metadata`` in this class.")
 
+            # Check that BIDS attributes are defined
+            if "bids" not in self.scalar_metadata[input_key]:
+                raise Exception(f"Missing BIDS metadata for {input_key}")
+
     def _run_interface(self, runtime):
         results = []
         inputs = self.inputs.get()
 
+        # Get the BIDS info from the source file
+        source_file_bids = parse_file_entities(self.inputs.source_file)
+        del source_file_bids["extension"], source_file_bids["suffix"]
+
         file_traits = [name for name in self.inputs.editable_traits()
                        if name not in self._ignore_traits]
+
         for input_name in file_traits:
             if not isdefined(inputs[input_name]):
                 continue
@@ -63,10 +82,65 @@ class ReconScalars(SimpleInterface):
             result["path"] = op.abspath(inputs[input_name])
             result["workflow_name"] = self.inputs.workflow_name
             result["variable_name"] = input_name
-            if isdefined(self.inputs.desc) and self.inputs.desc:
-                result["bids"]["desc"] = self.inputs.desc
+            result["source_file"] = self.inputs.source_file
+            # Update the BIDS with the source file
+            bids_overlap = set(source_file_bids.keys()).intersection(result['bids'].keys())
+            if bids_overlap:
+                raise Exception(f"BIDS fields for {input_name} conflict with source file BIDS {bids_overlap}")
             results.append(result)
         self._results["scalar_info"] = results
+        return runtime
+
+
+def get_output_name(base_dir, recon_scalar):
+
+    entities = parse_file_entities(recon_scalar["source_file"])
+    out_path = op.join(base_dir, "qsirecon-" + recon_scalar["workflow_name"])
+    out_path = op.join(out_path, "sub-" + entities["subject"])
+
+    if session in entities:
+        out_path += "/ses-{session}".format(**entities)
+
+    os.makedirs(out_path, exist_ok=True)
+
+    _, source_fname, _ = split_filename(recon_scalar["source_file"])
+    _, _, extension = split_filename(recon_scalar["path"])
+
+    # It may be that the space has changed. Check if it has
+    if "space" in recon_scalar["bids"]:
+        source_fname = re.sub(
+            "_space-[a-zA-Z0-9]+_",
+            "_space-" + recon_scalar["bids"]["space"] + "_",
+            source_fname)
+    base_fname = op.join(out_path,source_fname)
+
+    for entity_name in entity_order:
+        if entity_name in recon_scalar["bids"]:
+            base_fname += "_{entity}-{value}_".format(
+                entity=entity_name,
+                value=recon_scalar["bids"][entity_name])
+
+    # Add the suffix
+    suffix = recon_scalar["bids"].get("suffix", "dwimap")
+    return f"{base_fname}_{suffix}.{extension}"
+
+
+class _ReconScalarsDataSinkInputSpec(BaseInterfaceInputSpec):
+    source_file = File()
+    base_directory = File()
+    resampled_files = InputMultiObject(File(exists=True))
+    recon_scalars = InputMultiObject(traits.Any())
+
+
+class ReconScalarsDataSink(SimpleInterface):
+    input_spec = _ReconScalarsDataSinkInputSpec
+
+    def _run_interface(self, runtime):
+
+        for recon_scalar in self.inputs.recon_scalars:
+            output_filename = get_output_name(recon_scalar)
+            _copy_any(recon_scalar["path"], output_filename)
+
         return runtime
 
 
@@ -74,55 +148,55 @@ class ReconScalars(SimpleInterface):
 tortoise_scalars = {
     "fa_file": {
         "desc": "Fractional Anisotropy from a tensor fit",
-        "bids":{"model": "tensor", "param": "fa"}
+        "bids":{"mdp": "fa"}
     },
     "rd_file": {
         "desc": "Radial Diffusivity from a tensor fit",
-        "bids":{"model": "tensor", "param": "rd"}
+        "bids":{"mdp": "rd"}
     },
     "ad_file": {
         "desc": "Apparent Diffusivity from a tensor fit",
-        "bids":{"model": "tensor", "param": "ad"}
+        "bids":{"mdp": "ad"}
     },
     "li_file": {
         "desc": "LI from a tensor fit",
-        "bids":{"model": "tensor", "param": "li"}
+        "bids":{"mdp": "li"}
     },
     "am_file": {
         "desc": "A0 from a tensor fit",
-        "bids":{"model": "tensor", "param": "AM", "suffix": "model"}
+        "bids":{"mfp": "AM"}
     },
     "pa_file": {
         "desc": "PA from MAPMRI",
-        "bids":{"param": "PA", "suffix": "mdp", "model": "MAPMRI"}
+        "bids":{"mdp": "PA"}
     },
     "path_file": {
         "desc": "PAth from MAPMRI",
-        "bids":{"param": "PAth", "suffix": "mdp", "model": "MAPMRI"}
+        "bids":{"mdp": "PAth"}
     },
     "rtop_file": {
         "desc": "Return to origin probability from MAPMRI",
-        "bids":{"param": "RTOP", "suffix": "mdp", "model": "MAPMRI"}
+        "bids":{"mdp": "RTOP"}
     },
     "rtap_file": {
         "desc": "Return to axis probability from MAPMRI",
-        "bids":{"param": "RTAP", "suffix": "mdp", "model": "MAPMRI"}
+        "bids":{"mdp": "RTAP"}
     },
     "rtpp_file": {
         "desc": "Return to plane probability from MAPMRI",
-        "bids":{"param": "RTPP", "suffix": "mdp", "model": "MAPMRI"}
+        "bids":{"mdp": "RTPP"}
     },
     "ng_file": {
         "desc": "Non-Gaussianity from MAPMRI",
-        "bids":{"param": "NG", "suffix": "mdp", "model": "MAPMRI"}
+        "bids":{"mdp": "NG"}
     },
     "ngpar_file": {
         "desc": "Non-Gaussianity parallel from MAPMRI",
-        "bids":{"param": "NGpar", "suffix": "mdp", "model": "MAPMRI"}
+        "bids":{"mdp": "NGpar"}
     },
     "ngperp_file": {
         "desc": "Non-Gaussianity perpendicular from MAPMRI",
-        "bids":{"param": "NGperp", "suffix": "mdp", "model": "MAPMRI"}
+        "bids":{"mdp": "NGperp"}
     },
 }
 
@@ -141,15 +215,15 @@ class TORTOISEReconScalars(ReconScalars):
 amico_scalars = {
     "icvf_image": {
         "desc": "Intracellular volume fraction from NODDI",
-        "bids":{"param": "icvf", "suffix": "mdp", "model": "NODDI"}
+        "bids":{"mdp": "icvf"}
     },
     "isovf_image": {
         "desc": "Isotropic volume fraction from NODDI",
-        "bids":{"param": "isovf", "suffix": "mdp", "model": "NODDI"}
+        "bids":{"mdp": "isovf"}
     },
     "od_image": {
         "desc": "OD from NODDI",
-        "bids":{"param": "od", "suffix": "mdp", "model": "NODDI"}
+        "bids":{"mdp": "od"}
     }
 }
 
@@ -168,35 +242,43 @@ class AMICOReconScalars(ReconScalars):
 dsistudio_scalars = {
     "qa_file": {
         "desc": "Fractional Anisotropy from a tensor fit",
-        "bids":{"param": "qa", "suffix": "mdp", "model": "GQI"}
+        "bids":{"mdp": "qa"}
     },
     "dti_fa_file": {
         "desc": "Radial Diffusivity from a tensor fit",
-
+        "bids":{"mdp": "qa", "fit": "DTI"}
     },
     "txx_file": {
-        "desc": "Tensor fit txx"
+        "desc": "Tensor fit txx",
+        "bids":{"mfp": "txx", "fit": "DTI"}
     },
     "txy_file": {
-        "desc": "Tensor fit txy"
+        "desc": "Tensor fit txy",
+        "bids":{"mfp": "txx", "fit": "DTI"}
     },
     "txz_file": {
-        "desc": "Tensor fit txz"
+        "desc": "Tensor fit txz",
+        "bids":{"mfp": "txx", "fit": "DTI"}
     },
     "tyy_file": {
-        "desc": "Tensor fit tyy"
+        "desc": "Tensor fit tyy",
+        "bids":{"mfp": "txx", "fit": "DTI"}
     },
     "tyz_file": {
-        "desc": "Tensor fit tyz"
+        "desc": "Tensor fit tyz",
+        "bids":{"mfp": "txx", "fit": "DTI"}
     },
     "tzz_file": {
-        "desc": "Tensor fit tzz"
+        "desc": "Tensor fit tzz",
+        "bids":{"mfp": "txx", "fit": "DTI"}
     },
     "rd1_file": {
-        "desc": "RD1"
+        "desc": "RD1",
+        "bids":{"mdp": "rd1", "fit": "RDI"}
     },
     "rd2_file": {
-        "desc": "RD2"
+        "desc": "RD2",
+        "bids":{"mdp": "rd2", "fit": "RDI"}
     },
     "ha_file": {
         "desc": "HA"
@@ -211,12 +293,12 @@ dsistudio_scalars = {
         "desc": "Radial Diffusivity"
     },
     "gfa_file": {
-        "desc": "Generalized Fractional Anisotropy"
-        "bids":{"param": "gfa", "suffix": "mdp", "model": "GQI"}
+        "desc": "Generalized Fractional Anisotropy",
+        "bids": {"mdp": "gfa", "fit": "GQI"}
     },
     "iso_file": {
         "desc": "Isotropic Diffusion",
-        "bids":{"param": "iso", "suffix": "mdp", "model": "GQI"}
+        "bids": {"mdp": "iso", "fit": "GQI"}
     },
     "rdi_file": {
         "desc": "RDI"
@@ -245,31 +327,40 @@ class DSIStudioReconScalars(ReconScalars):
 
 dipy_dki_scalars = {
     'dki_fa': {
-        "desc": "DKI FA"
+        "desc": "DKI FA",
+        "bids": {"mdp": "FA"}
     },
     'dki_md': {
-        "desc": "DKI MD"
+        "desc": "DKI MD",
+        "bids": {"mdp": "MD"}
     },
     'dki_rd': {
-        "desc": "DKI RD"
+        "desc": "DKI RD",
+        "bids": {"mdp": "RD"}
     },
     'dki_ad': {
-        "desc": "DKI AD"
+        "desc": "DKI AD",
+        "bids": {"mdp": "AD"}
     },
     'dki_kfa': {
-        "desc": "DKI KFA"
+        "desc": "DKI KFA",
+        "bids": {"mdp": "KFA"}
     },
     'dki_mk': {
-        "desc": "DKI MK"
+        "desc": "DKI MK",
+        "bids": {"mdp": "MK"}
     },
     'dki_ak': {
-        "desc": "DKI AK"
+        "desc": "DKI AK",
+        "bids": {"mdp": "AK"}
     },
     'dki_rk': {
-        "desc": "DKI RK"
+        "desc": "DKI RK",
+        "bids": {"mdp": "RK"}
     },
     'dki_mkt': {
-        "desc": "DKI MKT"
+        "desc": "DKI MKT",
+        "bids": {"mdp": "MKT"}
     }
 }
 class _DIPYDKIReconScalarInputSpec(ReconScalarsInputSpec):

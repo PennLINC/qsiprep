@@ -75,7 +75,9 @@ def init_tortoise_estimator_wf(
                 'csf_txt', 'scalar_image_info', 'recon_scalars']),
         name="outputnode")
     workflow = Workflow(name=name)
-    recon_scalars = pe.Node(TORTOISEReconScalars(workflow_name=name), name="recon_scalars")
+    recon_scalars = pe.Node(
+        TORTOISEReconScalars(workflow_name=name),
+        name="recon_scalars")
     plot_reports = params.pop("plot_reports", True)
     desc = """TORTOISE Reconstruction
 

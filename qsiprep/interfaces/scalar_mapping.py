@@ -45,8 +45,12 @@ class ScalarMapper(SimpleInterface):
         for summary_row in summary_row_list:
             summary_row.update(bids_info)
 
+    def _unload_scalars(self):
+        for recon_scalar in self._results["mapped_scalars"]:
+            if "image" in recon_scalar:
+                del recon_scalar["image"]
+
     def _run_interface(self, runtime):
-        self._load_scalars()
         self._do_mapping(runtime)
         return runtime
 
@@ -71,11 +75,13 @@ def _get_tdi_img(dwiref_image, tck_file, output_tdi_file):
         check=True)
     return nim.load_img(output_tdi_file)
 
+
 class BundleMapper(ScalarMapper):
     input_spec = _BundleMapperInputSpec
     output_spec = _BundleMapperOutputSpec
 
     def _do_mapping(self, runtime):
+        self._load_scalars()
         bundle_dfs = []
         for tck_name, tck_file in zip(self.inputs.bundle_names, self.inputs.tck_files):
             output_tdi_file = fname_presuffix(
@@ -181,6 +187,7 @@ class _TemplateMapperInputSpec(ScalarMapperInputSpec):
 
 class _TemplateMapperOutputSpec(ScalarMapperOutputSpec):
     template_space_scalars = OutputMultiObject(traits.Any())
+    template_space_scalar_info = OutputMultiObject(traits.Any())
 
 
 class TemplateMapper(ScalarMapper):
@@ -189,9 +196,10 @@ class TemplateMapper(ScalarMapper):
 
     def _do_mapping(self, runtime):
         resampled_images = []
-        sidecars = []
+        resampled_image_metadata = []
         # Then get the same stats for the scalars
-        for recon_scalar in self.recon_scalars:
+        for recon_scalar in self.inputs.recon_scalars:
+            new_metadata = recon_scalar.copy()
             output_fname = op.split(recon_scalar["path"])[1]
             output_fname = output_fname.replace("_space-T1w_", "_transformed_")
             output_fname = op.join(runtime.cwd, output_fname)
@@ -207,5 +215,12 @@ class TemplateMapper(ScalarMapper):
             transform.run()
             resampled_images.append(output_fname)
 
+            # Create new metadata for the resampled image
+            new_metadata["path"] = output_fname
+            if "bids" not in new_metadata:
+                raise Exception(f"incomplete metadata spec {new_metadata}")
+            new_metadata["bids"]["space"] = "MNI152NLin2009cAsym"
+            resampled_image_metadata.append(new_metadata)
 
         self._results['template_space_scalars'] = resampled_images
+        self._results['template_space_scalar_info'] = resampled_image_metadata

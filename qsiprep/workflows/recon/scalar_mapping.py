@@ -12,6 +12,7 @@ import logging
 from ...interfaces.bids import ReconDerivativesDataSink
 from ...interfaces.interchange import recon_workflow_input_fields
 from ...engine import Workflow
+from ...interfaces.recon_scalars import ReconScalarsDataSink
 from ...interfaces.scalar_mapping import BundleMapper, TemplateMapper
 LOGGER = logging.getLogger('nipype.workflow')
 
@@ -153,13 +154,15 @@ def init_scalar_to_template_wf(omp_nthreads, available_anatomical_data,
     ])
 
     if output_suffix:
-        ds_template_scalars = pe.MapNode(
-            ReconDerivativesDataSink(),
+        ds_template_scalars = pe.Node(
+            ReconScalarsDataSink(),
             name='ds_template_scalars',
-            iterfield=["in_file", "suffix"],
             run_without_submitting=True)
         workflow.connect([
-            (template_mapper, ds_template_scalars, [("template_scalars", "in_file")])
+            (template_mapper, ds_template_scalars, [
+                # Send the resampled files (without metadata) so they don't get cleaned up
+                ("template_space_scalars", "resampled_files"),
+                ("template_space_scalar_info", "recon_scalars")])
         ])
 
     return workflow
