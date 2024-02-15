@@ -38,13 +38,13 @@ Note the ``-i`` flag allows you to specify an image.
 When invoking ``docker`` directly, the mount options must be specified
 with the ``-v`` flag::
 
-    -v $HOME/projects/qsiprep/qsiprep:/usr/local/miniconda/lib/python3.6/site-packages/qsiprep:ro
-    -v $HOME/projects/nipype/nipype:/usr/local/miniconda/lib/python3.6/site-packages/nipype:ro
+    -v $HOME/projects/qsiprep/qsiprep:/usr/local/miniconda/lib/python3.10/site-packages/qsiprep:ro
+    -v $HOME/projects/nipype/nipype:/usr/local/miniconda/lib/python3.10/site-packages/nipype:ro
 
 For example, ::
 
     $ docker run --rm -v $HOME/fullds005:/data:ro -v $HOME/dockerout:/out \
-        -v $HOME/projects/qsiprep/qsiprep:/usr/local/miniconda/lib/python3.6/site-packages/qsiprep:ro \
+        -v $HOME/projects/qsiprep/qsiprep:/usr/local/miniconda/lib/python3.10/site-packages/qsiprep:ro \
         pennbbl/qsiprep:latest /data /out/out participant \
         -w /out/work/
 
@@ -57,14 +57,14 @@ This is the equivalent of using ``--entrypoint=bash`` and omitting the qsiprep
 arguments in a ``docker`` command::
 
     $ docker run --rm -v $HOME/fullds005:/data:ro -v $HOME/dockerout:/out \
-        -v $HOME/projects/qsiprep/qsiprep:/usr/local/miniconda/lib/python3.6/site-packages/qsiprep:ro --entrypoint=bash \
+        -v $HOME/projects/qsiprep/qsiprep:/usr/local/miniconda/lib/python3.10/site-packages/qsiprep:ro --entrypoint=bash \
         pennbbl/qsiprep:latest
 
 Patching containers can be achieved in Singularity analogous to ``docker``
 using the ``--bind`` (``-B``) option: ::
 
     $ singularity run \
-        -B $HOME/projects/qsiprep/qsiprep:/usr/local/miniconda/lib/python3.6/site-packages/qsiprep \
+        -B $HOME/projects/qsiprep/qsiprep:/usr/local/miniconda/lib/python3.10/site-packages/qsiprep \
         qsiprep.img \
         /scratch/dataset /scratch/out participant -w /out/work/
 
