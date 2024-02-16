@@ -113,7 +113,7 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, available_anatomical_data,
     recon_shore = pe.Node(
         BrainSuiteShoreReconstruction(**params), name="recon_shore")
     recon_scalars = pe.Node(
-        BrainSuite3dSHOREReconScalars(workflow_name="name"),
+        BrainSuite3dSHOREReconScalars(qsirecon_suffix="name"),
         name="recon_scalars",
         run_without_submitting=True)
     doing_extrapolation = params.get("extrapolate_scheme") in ("HCP", "ABCD")
@@ -353,7 +353,7 @@ def init_dipy_mapmri_recon_wf(omp_nthreads, available_anatomical_data, name="dip
     plot_reports = params.pop("plot_reports", True)
     recon_map = pe.Node(MAPMRIReconstruction(**params), name="recon_map")
     recon_scalars = pe.Node(
-        DIPYMAPMRIReconScalars(workflow_name=name),
+        DIPYMAPMRIReconScalars(qsirecon_suffix=name),
         name="recon_scalars",
         run_without_submitting=True)
     workflow.connect([
@@ -469,7 +469,7 @@ def init_dipy_dki_recon_wf(omp_nthreads, available_anatomical_data, name="dipy_d
                     'colorFA', 'kfa', 'mk', 'ak', 'rk',
                     'mkt', 'recon_scalars']),
         name="outputnode")
-    recon_scalars = pe.Node(DIPYDKIReconScalars(workflow_name=qsirecon_suffix),
+    recon_scalars = pe.Node(DIPYDKIReconScalars(qsirecon_suffix=qsirecon_suffix),
                             run_without_submitting=True,
                             name="recon_scalars")
     workflow = Workflow(name=name)

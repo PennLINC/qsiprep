@@ -158,7 +158,7 @@ def calculate_mask_stats(masker, mask_name, mask_variable_name, recon_scalar, we
     results = {
         mask_variable_name: mask_name,
         "variable_name": variable_name,
-        "workflow": recon_scalar["workflow_name"],
+        "workflow": recon_scalar["qsirecon_name"],
         "zero_proportion": np.sum(np.isnan(nz_voxel_data)) / voxel_data.shape[0],
         "mean": np.mean(voxel_data),
         "stdev": np.std(voxel_data),

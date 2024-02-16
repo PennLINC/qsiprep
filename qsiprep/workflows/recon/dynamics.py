@@ -48,8 +48,11 @@ def init_controllability_wf(name="controllability", qsirecon_suffix="", params={
     ])
     if qsirecon_suffix:
         # Save the output in the outputs directory
-        ds_control = pe.Node(ReconDerivativesDataSink(qsirecon_suffix=qsirecon_suffix),
-                             name='ds_' + name,
-                             run_without_submitting=True)
+        ds_control = pe.Node(
+            ReconDerivativesDataSink(
+                qsirecon_suffix=qsirecon_suffix,
+                suffix="control"),
+            name='ds_' + name,
+            run_without_submitting=True)
         workflow.connect(calc_control, 'controllability', ds_control, 'in_file')
     return workflow

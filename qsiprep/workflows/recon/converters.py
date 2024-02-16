@@ -98,24 +98,30 @@ def init_qsiprep_to_fsl_wf(omp_nthreads, available_anatomical_data,
         # Save the output in the outputs directory
         ds_dwi_file = pe.Node(
             ReconDerivativesDataSink(
-                qsirecon_suffix=qsirecon_suffix + "_dwi"),
-                name='ds_dwi_' + name,
-                run_without_submitting=True)
+                qsirecon_suffix=qsirecon_suffix,
+                suffix="dwi",
+                extension="bvec"),
+            name='ds_dwi_' + name,
+            run_without_submitting=True)
         ds_bval_file = pe.Node(
             ReconDerivativesDataSink(
-                qsirecon_suffix=qsirecon_suffix + "_dwi"),
-                name='ds_bval_' + name,
-                run_without_submitting=True)
+                qsirecon_suffix=qsirecon_suffix,
+                suffix="dwi",
+                extension="bval"),
+            name='ds_bval_' + name,
+            run_without_submitting=True)
         ds_bvec_file = pe.Node(
             ReconDerivativesDataSink(
-                qsirecon_suffix=qsirecon_suffix + "_dwi"),
-                name='ds_bvec_' + name,
-                run_without_submitting=True)
+                qsirecon_suffix=qsirecon_suffix,
+                suffix="dwi"),
+            name='ds_bvec_' + name,
+            run_without_submitting=True)
         ds_mask_file = pe.Node(
             ReconDerivativesDataSink(
-                qsirecon_suffix=qsirecon_suffix + "_mask"),
-                name='ds_mask_' + name,
-                run_without_submitting=True)
+                qsirecon_suffix=qsirecon_suffix),
+                suffix="mask",
+            name='ds_mask_' + name,
+            run_without_submitting=True)
         workflow.connect([
             (convert_dwi_to_fsl, ds_bval_file, [('bval_file', 'in_file')]),
             (convert_dwi_to_fsl, ds_bvec_file, [('bvec_file', 'in_file')]),

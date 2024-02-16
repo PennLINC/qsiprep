@@ -110,11 +110,12 @@ def init_mrtrix_csd_recon_wf(omp_nthreads, available_anatomical_data, name="mrtr
         desc += 'Multi-tissue '
     LOGGER.info("Response configuration: %s", response)
 
-    desc += """\
-fiber response functions were estimated using the {} algorithm.
-FODs were estimated via constrained spherical deconvolution
-(CSD, @originalcsd, @tournier2008csd) \
-""".format(response_algorithm)
+    desc += "\n".join([
+        "fiber response functions were estimated using the {} algorithm. ",
+        "FODs were estimated via constrained spherical deconvolution ",
+        "(CSD, @originalcsd, @tournier2008csd) "
+    ]).format(response_algorithm)
+
     if response_algorithm == 'msmt_5tt':
         desc += 'using a T1w-based segmentation {}.'.format(CITATIONS[response_algorithm])
     else:
@@ -158,9 +159,9 @@ FODs were estimated via constrained spherical deconvolution
             SS3TEstimateFOD(**fod),
             name='estimate_fod',
             n_procs=omp_nthreads)
-        desc += """ \
-A single-shell-optimized multi-tissue CSD was performed using MRtrix3Tissue
-(https://3Tissue.github.io), a fork of MRtrix3 (@mrtrix3)"""
+        desc += "\n".join([
+            "A single-shell-optimized multi-tissue CSD was performed using MRtrix3Tissue",
+            "(https://3Tissue.github.io), a fork of MRtrix3 (@mrtrix3)"])
 
     workflow.connect([
         (estimate_response, estimate_fod, [('wm_file', 'wm_txt'),
@@ -241,7 +242,8 @@ A single-shell-optimized multi-tissue CSD was performed using MRtrix3Tissue
         ds_wm_odf = pe.Node(
             ReconDerivativesDataSink(extension='.mif.gz',
                                      model=fod_algorithm,
-                                     mdp="wmFOD",
+                                     mfp="FOD",
+                                     label="WM",
                                      qsirecon_suffix=qsirecon_suffix,
                                      compress=True),
             name='ds_wm_odf',
@@ -250,7 +252,8 @@ A single-shell-optimized multi-tissue CSD was performed using MRtrix3Tissue
         ds_wm_txt = pe.Node(
             ReconDerivativesDataSink(extension='.txt',
                                      model=fod_algorithm,
-                                     mdp="wmFOD",
+                                     mfp="FOD",
+                                     label="WM",
                                      qsirecon_suffix=qsirecon_suffix),
             name='ds_wm_txt',
             run_without_submitting=True)
@@ -261,7 +264,8 @@ A single-shell-optimized multi-tissue CSD was performed using MRtrix3Tissue
             ds_gm_odf = pe.Node(
                 ReconDerivativesDataSink(extension='.mif.gz',
                                          model=fod_algorithm,
-                                         mdp="gmFOD",
+                                         mfp="FOD",
+                                         label="GM",
                                          qsirecon_suffix=qsirecon_suffix,
                                          compress=True),
                 name='ds_gm_odf',
@@ -270,7 +274,8 @@ A single-shell-optimized multi-tissue CSD was performed using MRtrix3Tissue
             ds_gm_txt = pe.Node(
                 ReconDerivativesDataSink(extension='.txt',
                                          model=fod_algorithm,
-                                         mdp="gmFOD",
+                                         mfp="FOD",
+                                         label="GM",
                                          qsirecon_suffix=qsirecon_suffix),
                 name='ds_gm_txt',
                 run_without_submitting=True)
@@ -278,8 +283,9 @@ A single-shell-optimized multi-tissue CSD was performed using MRtrix3Tissue
 
             ds_csf_odf = pe.Node(
                 ReconDerivativesDataSink(extension='.mif.gz',
-                                     model=fod_algorithm,
-                                         mdp="csfFOD",
+                                         model=fod_algorithm,
+                                         mfp="FOD",
+                                         label="CSF",
                                          qsirecon_suffix=qsirecon_suffix,
                                          compress=True),
                 name='ds_csf_odf',
@@ -288,7 +294,8 @@ A single-shell-optimized multi-tissue CSD was performed using MRtrix3Tissue
             ds_csf_txt = pe.Node(
                 ReconDerivativesDataSink(extension='.txt',
                                          model=fod_algorithm,
-                                         desc="csfFOD",
+                                         mfp="FOD",
+                                         label="CSF",
                                          qsirecon_suffix=qsirecon_suffix),
                 name='ds_csf_txt',
                 run_without_submitting=True)
@@ -496,8 +503,8 @@ def init_mrtrix_tractography_wf(omp_nthreads, available_anatomical_data, name="m
         if qsirecon_suffix:
             ds_sift_weights = pe.Node(
                 ReconDerivativesDataSink(extension='.csv',
-                                         model=tracking_params["algorithm"],
-                                         mfp="siftweights",
+                                         model="sift2",
+                                         suffix="streamlineweights",
                                          qsirecon_suffix=qsirecon_suffix),
                 name='ds_sift_weights',
                 run_without_submitting=True)
@@ -509,7 +516,7 @@ def init_mrtrix_tractography_wf(omp_nthreads, available_anatomical_data, name="m
         ds_tck_file = pe.Node(
             ReconDerivativesDataSink(extension='.tck',
                                      model=tracking_params["algorithm"],
-                                     mdp="streamlines",
+                                     suffix="streamlines",
                                      qsirecon_suffix=qsirecon_suffix),
             name='ds_tck_file',
             run_without_submitting=True)
@@ -565,7 +572,7 @@ def init_mrtrix_connectivity_wf(omp_nthreads, available_anatomical_data, name="m
         ds_report_connectivity = pe.Node(
             ReconDerivativesDataSink(extension='.svg',
                                     desc="MRtrix3Connectivity",
-                                    suffix='matrices'),==
+                                    suffix='matrices'),
             name='ds_report_connectivity',
             run_without_submitting=True)
         workflow.connect([
@@ -577,14 +584,14 @@ def init_mrtrix_connectivity_wf(omp_nthreads, available_anatomical_data, name="m
         # Save the output in the outputs directory
         ds_connectivity = pe.Node(
             ReconDerivativesDataSink(
-                model=
+                suffix="connectivity",
                 qsirecon_suffix=qsirecon_suffix),
             name='ds_' + name,
             run_without_submitting=True)
         ds_exemplars = pe.Node(
             ReconDerivativesDataSink(
                 qsirecon_suffix=qsirecon_suffix,
-                desc="exemplarbundles"),
+                suffix="exemplarbundles"),
             name='ds_exemplars',
             run_without_submitting=True)
         workflow.connect([

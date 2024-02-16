@@ -76,7 +76,7 @@ def init_tortoise_estimator_wf(
         name="outputnode")
     workflow = Workflow(name=name)
     recon_scalars = pe.Node(
-        TORTOISEReconScalars(workflow_name=qsirecon_suffix),
+        TORTOISEReconScalars(qsirecon_suffix=qsirecon_suffix),
         name="recon_scalars")
     plot_reports = params.pop("plot_reports", True)
     desc = "TORTOISE Reconstruction\n\n: " + \
@@ -180,7 +180,6 @@ def init_tortoise_estimator_wf(
                 ("dt_file", "dt_file"),
                 ("am_file", "a0_file")])])
 
-
     workflow.connect([
         (tortoise_convert, estimate_mapmri,[
             ("bmtxt_file", "bmtxt_file"),
@@ -209,8 +208,13 @@ def init_tortoise_estimator_wf(
     ])
     if qsirecon_suffix:
         ds_recon_scalars = pe.Node(
-
-        )
-
+            ReconScalarsDataSink(),
+            name="ds_recon_scalars",
+            run_without_submitting=True)
+        workflow.connect(
+            recon_scalars,
+            "scalar_info",
+            ds_recon_scalars,
+            "recon_scalars")
     workflow.__desc__ = desc
     return workflow

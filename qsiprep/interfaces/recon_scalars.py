@@ -23,7 +23,7 @@ from nipype.interfaces.base import (
 
 class ReconScalarsInputSpec(BaseInterfaceInputSpec):
     source_file = File(exists=True, mandatory=True)
-    workflow_name = traits.Str(mandatory=True)
+    qsirecon_name = traits.Str(mandatory=True)
     model_info = traits.Dict()
     model_name = traits.Str()
 
@@ -36,7 +36,7 @@ class ReconScalars(SimpleInterface):
     input_spec = ReconScalarsInputSpec
     output_spec = ReconScalarsOutputSpec
     scalar_metadata = {}
-    _ignore_traits = ("model_name", "workflow_name", "scalar_metadata",
+    _ignore_traits = ("model_name", "qsirecon_name", "scalar_metadata",
                       "model_info", "source_file")
 
     def __init__(self, from_file=None, resource_monitor=None, **inputs):
@@ -75,7 +75,7 @@ class ReconScalars(SimpleInterface):
                 continue
             result = self.scalar_metadata[input_name].copy()
             result["path"] = op.abspath(inputs[input_name])
-            result["workflow_name"] = self.inputs.workflow_name
+            result["qsirecon_name"] = self.inputs.qsirecon_name
             result["variable_name"] = input_name
             result["source_file"] = self.inputs.source_file
             # Update the BIDS with the source file
@@ -105,7 +105,7 @@ class ReconScalarsDataSink(SimpleInterface):
                 base_dir=self.inputs.base_directory,
                 source_file=self.inputs.source_file,
                 derivative_file=recon_scalar["path"],
-                workflow_name=recon_scalar["workflow_name"],
+                qsirecon_suffix=recon_scalar["qsirecon_name"],
                 output_bids_entities=recon_scalar["bids"],
                 use_ext=True)
             output_dir = op.dirname(output_filename)

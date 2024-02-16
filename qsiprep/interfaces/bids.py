@@ -204,7 +204,6 @@ class DerivativesDataSinkInputSpec(BaseInterfaceInputSpec):
     extra_values = traits.List(traits.Str)
     compress = traits.Bool(desc="force compression (True) or uncompression (False)"
                                 " of the output file (default: same as input)")
-    extension = traits.Str()
 
 
 class DerivativesDataSinkOutputSpec(TraitedSpec):
@@ -354,13 +353,14 @@ recon_entity_order = [
     "fit",
     "mdp",
     "mfp",
-    "bundle"
+    "bundle",
+    "label"
 ]
 
-def get_recon_output_name(base_dir, source_file, derivative_file, workflow_name, output_bids_entities, use_ext=True):
+def get_recon_output_name(base_dir, source_file, derivative_file, qsirecon_suffix, output_bids_entities, use_ext=True):
 
     source_entities = parse_file_entities(source_file)
-    out_path = op.join(base_dir, f"qsirecon-{workflow_name}")
+    out_path = op.join(base_dir, f"qsirecon-{qsirecon_suffix}")
     out_path = op.join(out_path, "sub-" + source_entities["subject"])
     if "session" in source_entities:
         out_path += "/ses-{session}".format(**source_entities)
@@ -405,6 +405,8 @@ class _ReconDerivativesDataSinkInputSpec(DerivativesDataSinkInputSpec):
     model = traits.Str('', usedefault=True, desc='Label for model field')
     bundle = traits.Str('', usedefault=True, desc='Label for bundle field')
     fit = traits.Str('', usedefault=True, desc='Label for fit field')
+    label = traits.Str('', usedefault=True, desc='Label for label field')
+    qsirecon_suffix = traits.Str('', usedefault=True, desc='name appended to qsirecon- in the derivatives')
 
 
 class ReconDerivativesDataSink(DerivativesDataSink):
@@ -413,6 +415,11 @@ class ReconDerivativesDataSink(DerivativesDataSink):
 
     def _run_interface(self, runtime):
 
+        # If there is no qsirecon suffix, then we're not saving this file
+        if not self.inputs.qsirecon_suffix:
+            return runtime
+
+        # Figure out what the extension should be based on the input file and compression
         src_fname, _ = _splitext(self.inputs.source_file)
         src_fname, dtype = src_fname.rsplit('_', 1)
         _, ext = _splitext(self.inputs.in_file[0])
@@ -435,13 +442,17 @@ class ReconDerivativesDataSink(DerivativesDataSink):
             output_bids["mfp"] = self.inputs.mfp
         if self.inputs.fit:
             output_bids["fit"] = self.inputs.fit
+        if self.inputs.suffix:
+            output_bids["suffix"] = self.inputs.suffix
+        if self.inputs.label:
+            output_bids["label"] = self.inputs.label
 
         # Get the output name without an extension
         bname = get_recon_output_name(
             base_dir=self.inputs.base_directory,
             source_file=self.inputs.source_file,
             derivative_file=self.inputs.in_file[0],
-            workflow_name=self.inputs.suffix, # Change this, it's confusing
+            qsirecon_suffix=self.inputs.qsirecon_suffix,
             output_bids_entities=output_bids,
             use_ext=False
         )
