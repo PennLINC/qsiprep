@@ -21,7 +21,7 @@ LOGGER = logging.getLogger('nipype.interface')
 
 def init_amico_noddi_fit_wf(omp_nthreads, available_anatomical_data,
                             name="amico_noddi_recon",
-                            output_suffix="", params={}):
+                            qsirecon_suffix="", params={}):
     """Reconstruct EAPs, ODFs, using 3dSHORE (brainsuite-style basis set).
 
     Inputs
@@ -53,7 +53,7 @@ def init_amico_noddi_fit_wf(omp_nthreads, available_anatomical_data,
         name="outputnode")
 
     workflow = Workflow(name=name)
-    recon_scalars = pe.Node(AMICOReconScalars(workflow_name=output_suffix),
+    recon_scalars = pe.Node(AMICOReconScalars(workflow_name=qsirecon_suffix),
                             name="recon_scalars",
                             run_without_submitting=True)
     plot_reports = params.pop("plot_reports", True)
@@ -117,12 +117,12 @@ diffusivity.""" % (params['dPar'], params['dIso'])
             (noddi_fit, plot_peaks, [('icvf_image', 'background_image')]),
             (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')])])
 
-    if output_suffix:
+    if qsirecon_suffix:
         ds_fibgz = pe.Node(
         ReconDerivativesDataSink(extension='.fib.gz',
-                                 suffix=output_suffix,
+                                 qsirecon_suffix=qsirecon_suffix,
                                  compress=True),
-        name='ds_{}_fibgz'.format(output_suffix),
+        name='ds_{}_fibgz'.format(qsirecon_suffix),
         run_without_submitting=True)
         workflow.connect(outputnode, 'fibgz', ds_fibgz, 'in_file')
 
@@ -137,9 +137,9 @@ diffusivity.""" % (params['dPar'], params['dIso'])
             "recon_scalars")
 
         ds_config = pe.Node(
-            ReconDerivativesDataSink(extension='.nii.gz',
-                                     desc="AMICOconfig",
-                                     suffix=output_suffix,
+            ReconDerivativesDataSink(mdf="AMICOconfig",
+                                     model="NODDI",
+                                     qsirecon_suffix=qsirecon_suffix,
                                      compress=True),
             name='ds_noddi_config',
             run_without_submitting=True)

@@ -8,7 +8,7 @@
       "name": "ss3t_csd",
       "software": "MRTrix3",
       "action": "csd",
-      "output_suffix": "ss3tcsd",
+      "qsirecon_suffix": "MRtrix3_fork-SS3T_act-HSVS",
       "input": "qsiprep",
       "parameters": {
         "mtnormalize": true,
@@ -24,7 +24,7 @@
       "name": "track_ifod2",
       "software": "MRTrix3",
       "action": "tractography",
-      "output_suffix": "ifod2",
+      "qsirecon_suffix": "MRtrix3_fork-SS3T_act-HSVS",
       "input": "ss3t_csd",
       "parameters": {
         "use_5tt": true,
@@ -47,7 +47,7 @@
       "name": "mrtrix_conn",
       "software": "MRTrix3",
       "action": "connectivity",
-      "output_suffix": "dhollanderconnectome",
+      "qsirecon_suffix": "MRtrix3_fork-SS3T_act-HSVS",
       "input": "track_ifod2",
       "parameters":{
         "tck2connectome": [

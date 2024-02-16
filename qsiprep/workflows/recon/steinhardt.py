@@ -18,7 +18,7 @@ LOGGER = logging.getLogger('nipype.interface')
 
 def init_steinhardt_order_param_wf(omp_nthreads, available_anatomical_data,
                                    name="sop_recon",
-                                   output_suffix="", params={}):
+                                   qsirecon_suffix="", params={}):
     """Compute Steinhardt order parameters based on ODFs or FODs
 
     Inputs
@@ -74,7 +74,7 @@ A series of Steinhardt order parameters (up to order %d) were calculated.
         ])
 
     sop_sinks = {}
-    if output_suffix:
+    if qsirecon_suffix:
         for sop_order in range(2, sop_order + 1, 2):
             key = 'q%d_file' % sop_order
             sop_sinks[key] = pe.Node(

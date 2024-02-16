@@ -18,7 +18,7 @@ LOGGER = logging.getLogger('nipype.workflow')
 
 
 def init_conform_dwi_wf(omp_nthreads, available_anatomical_data,
-                        name="conform_dwi", output_suffix="", params={}):
+                        name="conform_dwi", qsirecon_suffix="", params={}):
     """If data were preprocessed elsewhere, ensure the gradients and images
     conform to LPS+ before running other parts of the pipeline."""
     inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields),
@@ -42,7 +42,7 @@ def init_conform_dwi_wf(omp_nthreads, available_anatomical_data,
 
 
 def init_discard_repeated_samples_wf(omp_nthreads, available_anatomical_data,
-                                     name="discard_repeats", output_suffix="",
+                                     name="discard_repeats", qsirecon_suffix="",
                                      space="T1w", params={}):
     """Remove a sample if a similar direction/gradient has already been sampled."""
     inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields),

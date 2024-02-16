@@ -9,7 +9,7 @@
       "software": "Dipy",
       "action": "DKI_reconstruction",
       "input": "qsiprep",
-      "output_suffix": "DIPYDKI",
+      "qsirecon_suffix": "DIPYDKI",
       "parameters": {
         "write_mif": false,
         "write_fibgz": false
@@ -21,7 +21,6 @@
       "action": "template_map",
       "input": "qsiprep",
       "scalars_from": ["dipy_dki"],
-      "output_suffix": "transformed",
       "parameters": {
         "interpolation": "NearestNeighbor"
       }

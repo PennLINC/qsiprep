@@ -1,9 +1,8 @@
 """
-Converting between file formats
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Summarize and Transform recon outputs
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. autofunction:: init_mif_to_fibgz_wf
-.. autofunction:: init_fibgz_to_mif_wf
+
 
 """
 import nipype.pipeline.engine as pe
@@ -18,7 +17,7 @@ LOGGER = logging.getLogger('nipype.workflow')
 
 
 def init_scalar_to_bundle_wf(omp_nthreads, available_anatomical_data,
-                             name="scalar_to_bundle", output_suffix="", params={}):
+                             name="scalar_to_bundle", qsirecon_suffix="", params={}):
     """Map scalar images to bundles
 
     Inputs
@@ -55,11 +54,11 @@ def init_scalar_to_bundle_wf(omp_nthreads, available_anatomical_data,
         (bundle_mapper, outputnode, [
             ("bundle_summary", "bundle_summary")])
     ])
-    if output_suffix:
+    if qsirecon_suffix:
 
         ds_bundle_summaries = pe.Node(
             ReconDerivativesDataSink(desc="bundlemap",
-                                     suffix=output_suffix),
+                                     qsirecon_suffix=qsirecon_suffix),
             name='ds_bundle_summaries',
             run_without_submitting=True)
         workflow.connect([
@@ -70,7 +69,7 @@ def init_scalar_to_bundle_wf(omp_nthreads, available_anatomical_data,
 
 
 def init_scalar_to_atlas_wf(omp_nthreads, available_anatomical_data,
-                            name="scalar_to_template", output_suffix="", params={}):
+                            name="scalar_to_template", qsirecon_suffix="", params={}):
     """Map scalar images to atlas regions
 
     Inputs
@@ -103,11 +102,11 @@ def init_scalar_to_atlas_wf(omp_nthreads, available_anatomical_data,
             ("tck_files", "tck_files"),
             ("dwi_ref", "dwiref_image")])
     ])
-    if output_suffix:
+    if qsirecon_suffix:
 
         ds_bundle_summaries = pe.Node(
             ReconDerivativesDataSink(desc="bundlemap",
-                                     suffix=output_suffix),
+                                     qsirecon_suffix=qsirecon_suffix),
             name='ds_bundle_summaries',
             run_without_submitting=True)
         workflow.connect([
@@ -117,7 +116,7 @@ def init_scalar_to_atlas_wf(omp_nthreads, available_anatomical_data,
 
 
 def init_scalar_to_template_wf(omp_nthreads, available_anatomical_data,
-                               name="scalar_to_template", output_suffix="", params={}):
+                               name="scalar_to_template", qsirecon_suffix="", params={}):
     """Maps scalar data to a volumetric template
 
 
@@ -153,7 +152,7 @@ def init_scalar_to_template_wf(omp_nthreads, available_anatomical_data,
         ])
     ])
 
-    if output_suffix:
+    if qsirecon_suffix:
         ds_template_scalars = pe.Node(
             ReconScalarsDataSink(),
             name='ds_template_scalars',
@@ -169,7 +168,7 @@ def init_scalar_to_template_wf(omp_nthreads, available_anatomical_data,
 
 
 def init_scalar_to_surface_wf(omp_nthreads, available_anatomical_data,
-                              name="scalar_to_surface", output_suffix="", params={}):
+                              name="scalar_to_surface", qsirecon_suffix="", params={}):
     """Maps scalar data to a surface."""
     raise NotImplementedError()
     return workflow

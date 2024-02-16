@@ -8,7 +8,7 @@
       "action": "fit_noddi",
       "software": "AMICO",
       "input": "qsiprep",
-      "output_suffix": "NODDI",
+      "qsirecon_suffix": "NODDI",
       "parameters": {
         "isExvivo": false,
         "dPar": 1.7E-3,

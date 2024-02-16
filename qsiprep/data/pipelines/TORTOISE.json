@@ -8,7 +8,7 @@
       "name": "tortoise_dtmapmri",
       "software": "TORTOISE",
       "action": "estimate",
-      "output_suffix": "tortoise",
+      "qsirecon_suffix": "TORTOISE",
       "input": "qsiprep",
       "parameters": {
         "estimate_tensor_separately": true,

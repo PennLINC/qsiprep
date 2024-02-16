@@ -18,7 +18,7 @@ LOGGER = logging.getLogger('nipype.workflow')
 
 
 def init_mif_to_fibgz_wf(omp_nthreads, available_anatomical_data,
-                         name="mif_to_fibgz", output_suffix="", params={}):
+                         name="mif_to_fibgz", qsirecon_suffix="", params={}):
     """Converts a MRTrix mif file to DSI Studio fib file.
 
     This workflow uses ``sh2amp`` to sample the FODs on the standard DSI Studio
@@ -49,7 +49,7 @@ def init_mif_to_fibgz_wf(omp_nthreads, available_anatomical_data,
     return workflow
 
 
-def init_fibgz_to_mif_wf(name="fibgz_to_mif", output_suffix="", params={}):
+def init_fibgz_to_mif_wf(name="fibgz_to_mif", qsirecon_suffix="", params={}):
     """Needs Documentation"""
     inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields + ["mif_file"]),
                         name="inputnode")
@@ -65,7 +65,7 @@ def init_fibgz_to_mif_wf(name="fibgz_to_mif", output_suffix="", params={}):
 
 
 def init_qsiprep_to_fsl_wf(omp_nthreads, available_anatomical_data,
-                           name="qsiprep_to_fsl", output_suffix="", params={}):
+                           name="qsiprep_to_fsl", qsirecon_suffix="", params={}):
     """Converts QSIPrep outputs (images, bval, bvec) to fsl standard orientation"""
     inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields),
                         name="inputnode")
@@ -94,26 +94,26 @@ def init_qsiprep_to_fsl_wf(omp_nthreads, available_anatomical_data,
         (convert_mask_to_fsl, outputnode, [('dwi_file', 'mask_file')])
     ])
 
-    if output_suffix:
+    if qsirecon_suffix:
         # Save the output in the outputs directory
         ds_dwi_file = pe.Node(
             ReconDerivativesDataSink(
-                suffix=output_suffix + "_dwi"),
+                qsirecon_suffix=qsirecon_suffix + "_dwi"),
                 name='ds_dwi_' + name,
                 run_without_submitting=True)
         ds_bval_file = pe.Node(
             ReconDerivativesDataSink(
-                suffix=output_suffix + "_dwi"),
+                qsirecon_suffix=qsirecon_suffix + "_dwi"),
                 name='ds_bval_' + name,
                 run_without_submitting=True)
         ds_bvec_file = pe.Node(
             ReconDerivativesDataSink(
-                suffix=output_suffix + "_dwi"),
+                qsirecon_suffix=qsirecon_suffix + "_dwi"),
                 name='ds_bvec_' + name,
                 run_without_submitting=True)
         ds_mask_file = pe.Node(
             ReconDerivativesDataSink(
-                suffix=output_suffix + "_mask"),
+                qsirecon_suffix=qsirecon_suffix + "_mask"),
                 name='ds_mask_' + name,
                 run_without_submitting=True)
         workflow.connect([

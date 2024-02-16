@@ -36,7 +36,7 @@ CITATIONS = {
 
 
 def init_mrtrix_csd_recon_wf(omp_nthreads, available_anatomical_data, name="mrtrix_recon",
-                             output_suffix="", params={}):
+                             qsirecon_suffix="", params={}):
     """Create FOD images for WM, GM and CSF.
 
     This workflow uses mrtrix tools to run csd on multishell data. At the end,
@@ -93,9 +93,7 @@ def init_mrtrix_csd_recon_wf(omp_nthreads, available_anatomical_data, name="mrtr
     workflow = Workflow(name=name)
     outputnode.inputs.recon_scalars = []
     plot_reports = params.pop("plot_reports", True)
-    desc = """MRtrix3 Reconstruction
-
-: """
+    desc = """MRtrix3 Reconstruction\n\n: """
 
     # Response estimation
     response = params.get('response', {})
@@ -239,20 +237,21 @@ A single-shell-optimized multi-tissue CSD was performed using MRtrix3Tissue
             else (intensity_norm, "wm_normed_odf")
         workflow.connect(fod_source, fod_key, plot_peaks, "mif_file")
 
-    if output_suffix:
-        normed = '' if not run_mtnormalize else 'mtnormed'
+    if qsirecon_suffix:
         ds_wm_odf = pe.Node(
             ReconDerivativesDataSink(extension='.mif.gz',
-                                     desc="wmFOD" + normed,
-                                     suffix=output_suffix,
+                                     model=fod_algorithm,
+                                     mdp="wmFOD",
+                                     qsirecon_suffix=qsirecon_suffix,
                                      compress=True),
             name='ds_wm_odf',
             run_without_submitting=True)
         workflow.connect(outputnode, 'wm_odf', ds_wm_odf, 'in_file')
         ds_wm_txt = pe.Node(
             ReconDerivativesDataSink(extension='.txt',
-                                     desc="wmFOD",
-                                     suffix=output_suffix),
+                                     model=fod_algorithm,
+                                     mdp="wmFOD",
+                                     qsirecon_suffix=qsirecon_suffix),
             name='ds_wm_txt',
             run_without_submitting=True)
         workflow.connect(outputnode, 'wm_txt', ds_wm_txt, 'in_file')
@@ -261,32 +260,36 @@ A single-shell-optimized multi-tissue CSD was performed using MRtrix3Tissue
         if using_multitissue:
             ds_gm_odf = pe.Node(
                 ReconDerivativesDataSink(extension='.mif.gz',
-                                         desc="gmFOD" + normed,
-                                         suffix=output_suffix,
+                                         model=fod_algorithm,
+                                         mdp="gmFOD",
+                                         qsirecon_suffix=qsirecon_suffix,
                                          compress=True),
                 name='ds_gm_odf',
                 run_without_submitting=True)
             workflow.connect(outputnode, 'gm_odf', ds_gm_odf, 'in_file')
             ds_gm_txt = pe.Node(
                 ReconDerivativesDataSink(extension='.txt',
-                                         desc="gmFOD",
-                                         suffix=output_suffix),
+                                         model=fod_algorithm,
+                                         mdp="gmFOD",
+                                         qsirecon_suffix=qsirecon_suffix),
                 name='ds_gm_txt',
                 run_without_submitting=True)
             workflow.connect(outputnode, 'gm_txt', ds_gm_txt, 'in_file')
 
             ds_csf_odf = pe.Node(
                 ReconDerivativesDataSink(extension='.mif.gz',
-                                         desc="csfFOD" + normed,
-                                         suffix=output_suffix,
+                                     model=fod_algorithm,
+                                         mdp="csfFOD",
+                                         qsirecon_suffix=qsirecon_suffix,
                                          compress=True),
                 name='ds_csf_odf',
                 run_without_submitting=True)
             workflow.connect(outputnode, 'csf_odf', ds_csf_odf, 'in_file')
             ds_csf_txt = pe.Node(
                 ReconDerivativesDataSink(extension='.txt',
+                                         model=fod_algorithm,
                                          desc="csfFOD",
-                                         suffix=output_suffix),
+                                         qsirecon_suffix=qsirecon_suffix),
                 name='ds_csf_txt',
                 run_without_submitting=True)
             workflow.connect(outputnode, 'csf_txt', ds_csf_txt, 'in_file')
@@ -294,16 +297,18 @@ A single-shell-optimized multi-tissue CSD was performed using MRtrix3Tissue
             if run_mtnormalize:
                 ds_mt_norm = pe.Node(
                     ReconDerivativesDataSink(extension='.mif.gz',
-                                             desc="mtnorm",
-                                             suffix=output_suffix,
+                                             model="mtnorm",
+                                             mfp="norm",
+                                             qsirecon_suffix=qsirecon_suffix,
                                              compress=True),
                     name='ds_mt_norm',
                     run_without_submitting=True)
                 workflow.connect(intensity_norm, 'norm_image', ds_mt_norm, 'in_file')
                 ds_inlier_mask = pe.Node(
                     ReconDerivativesDataSink(extension='.mif.gz',
-                                             desc="mtinliermask",
-                                             suffix=output_suffix,
+                                             model="mtnorm",
+                                             mfp="inliermask",
+                                             qsirecon_suffix=qsirecon_suffix,
                                              compress=True),
                     name='ds_inlier_mask',
                     run_without_submitting=True)
@@ -314,7 +319,7 @@ A single-shell-optimized multi-tissue CSD was performed using MRtrix3Tissue
 
 
 def init_global_tractography_wf(omp_nthreads, available_anatomical_data, name="mrtrix_recon",
-                                output_suffix="", params={}):
+                                qsirecon_suffix="", params={}):
     """Run multi-shell, multi-tissue global tractography
 
     This workflow uses mrtrix tools to run csd on multishell data.
@@ -375,11 +380,11 @@ def init_global_tractography_wf(omp_nthreads, available_anatomical_data, name="m
                                   ("wm_odf", "fod_sh_mif")])
         ])
 
-    if output_suffix:
+    if qsirecon_suffix:
         ds_globalwm_odf = pe.Node(
             ReconDerivativesDataSink(extension='.mif.gz',
                                      desc="globalwmFOD",
-                                     suffix=output_suffix,
+                                     qsirecon_suffix=qsirecon_suffix,
                                      compress=True),
             name='ds_globalwm_odf',
             run_without_submitting=True)
@@ -388,7 +393,7 @@ def init_global_tractography_wf(omp_nthreads, available_anatomical_data, name="m
         ds_isotropic_fraction = pe.Node(
             ReconDerivativesDataSink(extension='.mif.gz',
                                      desc="ISOfraction",
-                                     suffix=output_suffix),
+                                     qsirecon_suffix=qsirecon_suffix),
             name='ds_isotropic_fraction',
             run_without_submitting=True)
         workflow.connect(outputnode, 'isotropic_fraction', ds_isotropic_fraction, 'in_file')
@@ -396,7 +401,7 @@ def init_global_tractography_wf(omp_nthreads, available_anatomical_data, name="m
         ds_tck_file = pe.Node(
             ReconDerivativesDataSink(extension='.tck.gz',
                                      desc="global",
-                                     suffix=output_suffix,
+                                     qsirecon_suffix=qsirecon_suffix,
                                      compress=True),
             name='ds_tck_file',
             run_without_submitting=True)
@@ -405,7 +410,7 @@ def init_global_tractography_wf(omp_nthreads, available_anatomical_data, name="m
         ds_residual_energy = pe.Node(
             ReconDerivativesDataSink(extension='.tck.gz',
                                      desc="residualEnergy",
-                                     suffix=output_suffix,
+                                     qsirecon_suffix=qsirecon_suffix,
                                      compress=True),
             name='ds_residual_energy',
             run_without_submitting=True)
@@ -415,7 +420,7 @@ def init_global_tractography_wf(omp_nthreads, available_anatomical_data, name="m
 
 
 def init_mrtrix_tractography_wf(omp_nthreads, available_anatomical_data, name="mrtrix_tracking",
-                                output_suffix="", params={}):
+                                qsirecon_suffix="", params={}):
     """Run tractography
 
     This workflow uses mrtrix tools to run csd on multishell data.
@@ -488,22 +493,24 @@ def init_mrtrix_tractography_wf(omp_nthreads, available_anatomical_data, name="m
                 ('out_mu', 'mu'),
                 ('out_weights', 'sift_weights')])
         ])
-        if output_suffix:
+        if qsirecon_suffix:
             ds_sift_weights = pe.Node(
                 ReconDerivativesDataSink(extension='.csv',
-                                         desc="siftweights",
-                                         suffix=output_suffix),
+                                         model=tracking_params["algorithm"],
+                                         mfp="siftweights",
+                                         qsirecon_suffix=qsirecon_suffix),
                 name='ds_sift_weights',
                 run_without_submitting=True)
             workflow.connect(outputnode, 'sift_weights', ds_sift_weights, 'in_file')
         if use_5tt:
             workflow.connect(inputnode, connect_5tt, tck_sift2, "act_file")
 
-    if output_suffix:
+    if qsirecon_suffix:
         ds_tck_file = pe.Node(
             ReconDerivativesDataSink(extension='.tck',
-                                     desc="tracks",
-                                     suffix=output_suffix),
+                                     model=tracking_params["algorithm"],
+                                     mdp="streamlines",
+                                     qsirecon_suffix=qsirecon_suffix),
             name='ds_tck_file',
             run_without_submitting=True)
         workflow.connect(outputnode, 'tck_file', ds_tck_file, 'in_file')
@@ -512,7 +519,7 @@ def init_mrtrix_tractography_wf(omp_nthreads, available_anatomical_data, name="m
 
 
 def init_mrtrix_connectivity_wf(omp_nthreads, available_anatomical_data, name="mrtrix_connectiity",
-                                params={}, output_suffix=""):
+                                params={}, qsirecon_suffix=""):
     """Runs ``tck2connectome`` on a ``tck`` file.
 
     Inputs
@@ -558,7 +565,7 @@ def init_mrtrix_connectivity_wf(omp_nthreads, available_anatomical_data, name="m
         ds_report_connectivity = pe.Node(
             ReconDerivativesDataSink(extension='.svg',
                                     desc="MRtrix3Connectivity",
-                                    suffix='matrices'),
+                                    suffix='matrices'),==
             name='ds_report_connectivity',
             run_without_submitting=True)
         workflow.connect([
@@ -566,14 +573,17 @@ def init_mrtrix_connectivity_wf(omp_nthreads, available_anatomical_data, name="m
                 ('connectivity_matfile', 'connectivity_matfile')]),
             (plot_connectivity, ds_report_connectivity, [('out_report', 'in_file')])])
 
-    if output_suffix:
+    if qsirecon_suffix:
         # Save the output in the outputs directory
-        ds_connectivity = pe.Node(ReconDerivativesDataSink(suffix=output_suffix),
-                                  name='ds_' + name,
-                                  run_without_submitting=True)
+        ds_connectivity = pe.Node(
+            ReconDerivativesDataSink(
+                model=
+                qsirecon_suffix=qsirecon_suffix),
+            name='ds_' + name,
+            run_without_submitting=True)
         ds_exemplars = pe.Node(
             ReconDerivativesDataSink(
-                suffix=output_suffix,
+                qsirecon_suffix=qsirecon_suffix,
                 desc="exemplarbundles"),
             name='ds_exemplars',
             run_without_submitting=True)

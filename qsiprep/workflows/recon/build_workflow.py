@@ -137,7 +137,9 @@ def workflow_from_spec(omp_nthreads, available_anatomical_data, node_spec,
                        skip_odf_plots):
     """Build a nipype workflow based on a json file."""
     software = node_spec.get("software", "qsiprep")
-    output_suffix = node_spec.get("output_suffix", "")
+    if "qsirecon_suffix" not in node_spec:
+        raise Exception("All nodes require qsirecon_suffix.")
+    qsirecon_suffix = node_spec.get("qsirecon_suffix", "")
     node_name = node_spec.get("name", None)
     parameters = node_spec.get("parameters", {})
 
@@ -159,10 +161,8 @@ def workflow_from_spec(omp_nthreads, available_anatomical_data, node_spec,
         "omp_nthreads": omp_nthreads,
         "available_anatomical_data": available_anatomical_data,
         "name": node_name,
-        "output_suffix": output_suffix,
+        "qsirecon_suffix": qsirecon_suffix,
         "params": parameters}
-
-
 
     # DSI Studio operations
     if software == "DSI Studio":
