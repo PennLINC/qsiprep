@@ -204,7 +204,7 @@ Methods implemented in TORTOISE (@tortoisev3) were used for reconstruction. """
     # Set deltas if we have them. Prevent only one from being defined
     if approximate_deltas:
         LOGGER.warning('Both "big_delta" and "small_delta" are required for precise MAPMRI')
-        big_delta = little_delta = traits.undefined
+        big_delta = little_delta = traits.Undefined
     else:
         mapmri_opts["big_delta"], mapmri_opts["small_delta"] = deltas
     mapmri_opts["num_threads"] = omp_nthreads

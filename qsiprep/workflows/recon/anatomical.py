@@ -474,7 +474,10 @@ def init_dwi_recon_anatomical_workflow(
                 "has_qsiprep_t1w_transforms": has_qsiprep_t1w_transforms}
 
     # Create the output reference grid_image
-    reference_grid_wf = init_output_grid_wf(voxel_size=output_resolution or traits.undefined,
+    if output_resolution is None:
+        output_resolution = traits.Undefined
+
+    reference_grid_wf = init_output_grid_wf(voxel_size=output_resolution,
                                             padding=4 if infant_mode else 8)
     workflow.connect([
         (inputnode, reference_grid_wf, [

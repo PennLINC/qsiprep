@@ -199,6 +199,9 @@ class TemplateMapper(ScalarMapper):
         resampled_image_metadata = []
         # Then get the same stats for the scalars
         for recon_scalar in self.inputs.recon_scalars:
+            if recon_scalar.get("reorient_on_resample", False):
+                # LOGGER.info(f"Skipping {recon_scalar}")
+                continue
             new_metadata = recon_scalar.copy()
             output_fname = op.split(recon_scalar["path"])[1]
             output_fname = output_fname.replace("_space-T1w_", "_transformed_")

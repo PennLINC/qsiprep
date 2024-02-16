@@ -195,6 +195,11 @@ amico_scalars = {
     "od_image": {
         "desc": "OD from NODDI",
         "bids":{"mdp": "od", "model": "noddi"}
+    },
+    "directions_image": {
+        "desc": "Peak directions from NODDI",
+        "reorient_on_resample": True,
+        "bids":{"mfp": "direction", "model": "noddi"}
     }
 }
 

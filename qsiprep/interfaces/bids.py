@@ -353,6 +353,7 @@ recon_entity_order = [
     "model",
     "fit",
     "mdp",
+    "mfp",
     "bundle"
 ]
 
@@ -407,6 +408,7 @@ class _ReconDerivativesDataSinkInputSpec(DerivativesDataSinkInputSpec):
 
 
 class ReconDerivativesDataSink(DerivativesDataSink):
+    input_spec = _ReconDerivativesDataSinkInputSpec
     out_path_base = "qsirecon"
 
     def _run_interface(self, runtime):
