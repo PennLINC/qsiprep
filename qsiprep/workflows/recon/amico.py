@@ -137,7 +137,7 @@ diffusivity.""" % (params['dPar'], params['dIso'])
             "recon_scalars")
 
         ds_config = pe.Node(
-            ReconDerivativesDataSink(mdf="AMICOconfig",
+            ReconDerivativesDataSink(mfp="AMICOconfig",
                                      model="NODDI",
                                      qsirecon_suffix=qsirecon_suffix,
                                      compress=True),

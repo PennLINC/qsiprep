@@ -354,31 +354,40 @@ class DIPYDKIReconScalars(ReconScalars):
 # DIPY implementation of MAPMRI
 dipy_mapmri_scalars = {
     "qiv_file": {
-        "desc": "q-space inverse variance from MAPMRI"
+        "desc": "q-space inverse variance from MAPMRI",
+        "bids":{"mdp": "QIV", "model": "mapmri"}
     },
     "msd_file": {
-        "desc": "mean square displacement from MAPMRI"
+        "desc": "mean square displacement from MAPMRI",
+        "bids":{"mdp": "MSD", "model": "mapmri"}
     },
     "lapnorm_file": {
-        "desc": "Laplacian norm from regularized MAPMRI (MAPL)"
+        "desc": "Laplacian norm from regularized MAPMRI (MAPL)",
+        "bids":{"mfp": "lapnorm", "model": "mapmri"}
     },
     "rtop_file": {
-        "desc": "Return to origin probability from MAPMRI"
+        "desc": "Return to origin probability from MAPMRI",
+        "bids":{"mdp": "RTOP", "model": "mapmri"}
     },
     "rtap_file": {
-        "desc": "Return to axis probability from MAPMRI"
+        "desc": "Return to axis probability from MAPMRI",
+        "bids":{"mdp": "RTAP", "model": "mapmri"}
     },
     "rtpp_file": {
-        "desc": "Return to plane probability from MAPMRI"
+        "desc": "Return to plane probability from MAPMRI",
+        "bids":{"mdp": "RTPP", "model": "mapmri"}
     },
     "ng_file": {
-        "desc": "Non-Gaussianity from MAPMRI"
+        "desc": "Non-Gaussianity from MAPMRI",
+        "bids":{"mdp": "NG", "model": "mapmri"}
     },
     "ngpar_file": {
-        "desc": "Non-Gaussianity parallel from MAPMRI"
+        "desc": "Non-Gaussianity parallel from MAPMRI",
+        "bids":{"mdp": "NGpar", "model": "mapmri"}
     },
     "ngperp_file": {
-        "desc": "Non-Gaussianity perpendicular from MAPMRI"
+        "desc": "Non-Gaussianity perpendicular from MAPMRI",
+        "bids":{"mdp": "NGperp", "model": "mapmri"}
     },
 }
 
