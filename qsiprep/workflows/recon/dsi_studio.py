@@ -17,7 +17,7 @@ from qsiprep.interfaces.dsi_studio import (DSIStudioCreateSrc, DSIStudioGQIRecon
 
 import logging
 from ...interfaces.bids import ReconDerivativesDataSink
-from ...interfaces.recon_scalars import DSIStudioReconScalars
+from ...interfaces.recon_scalars import DSIStudioReconScalars, ReconScalarsDataSink
 from ...interfaces.converters import DSIStudioTrkToTck
 from ...interfaces.interchange import recon_workflow_input_fields
 from ...engine import Workflow
