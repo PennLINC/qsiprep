@@ -218,7 +218,7 @@ class AMICOReconScalars(ReconScalars):
 dsistudio_scalars = {
     "qa_file": {
         "desc": "Fractional Anisotropy from a tensor fit",
-        "bids":{"mdp": "qa"}
+        "bids":{"mdp": "qa", "model": "GQI"}
     },
     "dti_fa_file": {
         "desc": "Radial Diffusivity from a tensor fit",
@@ -257,16 +257,20 @@ dsistudio_scalars = {
         "bids":{"mdp": "rd2", "model": "RDI"}
     },
     "ha_file": {
-        "desc": "HA"
+        "desc": "HA",
+        "bids":{"mdp": "ha", "model": "RDI"}
     },
     "md_file": {
-        "desc": "Mean Diffusivity"
+        "desc": "Mean Diffusivity",
+        "bids":{"mdp": "rd2", "model": "RDI"}
     },
     "ad_file": {
-        "desc": "AD"
+        "desc": "AD",
+        "bids":{"mdp": "ad", "model": "tensor"}
     },
     "rd_file": {
-        "desc": "Radial Diffusivity"
+        "desc": "Radial Diffusivity",
+        "bids":{"mdp": "rd", "model": "tensor"}
     },
     "gfa_file": {
         "desc": "Generalized Fractional Anisotropy",
@@ -277,16 +281,20 @@ dsistudio_scalars = {
         "bids": {"mdp": "iso", "fit": "GQI"}
     },
     "rdi_file": {
-        "desc": "RDI"
+        "desc": "RDI",
+        "bids":{"mdp": "rdi", "model": "RDI"}
     },
     "nrdi02L_file": {
-        "desc": "NRDI at 02L"
+        "desc": "NRDI at 02L",
+        "bids":{"mdp": "nrdi02L", "model": "RDI"}
     },
     "nrdi04L_file": {
-        "desc": "NRDI at 04L"
+        "desc": "NRDI at 04L",
+        "bids":{"mdp": "nrdi04L", "model": "RDI"}
     },
     "nrdi06L_file": {
-        "desc": "NRDI at 06L"
+        "desc": "NRDI at 06L",
+        "bids":{"mdp": "nrdi06L", "model": "RDI"}
     },
 }
 
