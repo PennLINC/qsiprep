@@ -415,15 +415,16 @@ def init_dipy_mapmri_recon_wf(omp_nthreads, available_anatomical_data, name="dip
 
     if qsirecon_suffix:
         external_format_datasinks(qsirecon_suffix, params, workflow)
-        connections = []
-        for scalar_name in ['rtop', 'rtap', 'rtpp', 'qiv', 'msd', 'lapnorm']:
-            connections += [(outputnode,
-                             pe.Node(
-                                 ReconDerivativesDataSink(desc=scalar_name,
-                                                          qsirecon_suffix=qsirecon_suffix),
-                                 name='ds_%s_%s' % (name, scalar_name)),
-                             [(scalar_name, 'in_file')])]
-        workflow.connect(connections)
+        ds_recon_scalars = pe.Node(
+            ReconScalarsDataSink(),
+            name="ds_recon_scalars",
+            run_without_submitting=True)
+        workflow.connect(
+            recon_scalars,
+            "scalar_info",
+            ds_recon_scalars,
+            "recon_scalars")
+
     workflow.__desc__ = desc
     return workflow
 
@@ -530,14 +531,14 @@ def init_dipy_dki_recon_wf(omp_nthreads, available_anatomical_data, name="dipy_d
 
     if qsirecon_suffix:
         external_format_datasinks(qsirecon_suffix, params, workflow)
-        ds_dki_scalars = pe.Node(
+        ds_recon_scalars = pe.Node(
             ReconScalarsDataSink(),
-            name="ds_dki_scalars",
+            name="ds_recon_scalars",
             run_without_submitting=True)
         workflow.connect(
             recon_scalars,
             "scalar_info",
-            ds_dki_scalars,
+            ds_recon_scalars,
             "recon_scalars")
 
     workflow.__desc__ = desc
