@@ -204,6 +204,7 @@ class DerivativesDataSinkInputSpec(BaseInterfaceInputSpec):
     extra_values = traits.List(traits.Str)
     compress = traits.Bool(desc="force compression (True) or uncompression (False)"
                                 " of the output file (default: same as input)")
+    extension = traits.Str()
 
 
 class DerivativesDataSinkOutputSpec(TraitedSpec):
