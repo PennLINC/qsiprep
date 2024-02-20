@@ -12,6 +12,7 @@ import os
 import os.path as op
 import re
 from pkg_resources import resource_filename as pkgr
+import pandas as pd
 from nipype import logging
 from bids.layout import parse_file_entities
 from .bids import _copy_any, get_recon_output_name
@@ -111,6 +112,18 @@ class ReconScalarsDataSink(SimpleInterface):
             output_dir = op.dirname(output_filename)
             os.makedirs(output_dir, exist_ok=True)
             _copy_any(recon_scalar["path"], output_filename)
+
+        return runtime
+
+
+class _BundleScalarsDataSinkInputSpec(_ReconScalarsDataSinkInputSpec):
+    bundle_summary = File(exists=True)
+
+class BundleScalarsDataSink(ReconScalarsDataSink):
+
+    def _run_interface(self, runtime):
+
+
 
         return runtime
 

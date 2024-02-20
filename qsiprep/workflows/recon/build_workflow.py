@@ -46,6 +46,7 @@ def init_dwi_recon_workflow(workflow_spec, output_dir,
         name='inputnode')
     # Read nodes from workflow spec, make sure we can implement them
     nodes_to_add = []
+    workflow_metadata_nodes = {}
     for node_spec in workflow_spec['nodes']:
         if not node_spec['name']:
             raise Exception("Node has no name [{}]".format(node_spec))
@@ -57,6 +58,14 @@ def init_dwi_recon_workflow(workflow_spec, output_dir,
         if new_node is None:
             raise Exception("Unable to create a node for %s" % node_spec)
         nodes_to_add.append(new_node)
+
+        # Make an identity interface that just has the info of this node
+        workflow_metadata_nodes[node_spec["name"]] = pe.Node(
+            niu.IdentityInterface(fields=["input_metadata"]),
+            name=node_spec["name"] + "_spec")
+        workflow_metadata_nodes[node_spec["name"]].inputs.input_metadata = node_spec
+        nodes_to_add.append(workflow_metadata_nodes[node_spec["name"]])
+
     workflow.add_nodes(nodes_to_add)
     _check_repeats(workflow.list_node_names())
 
@@ -102,7 +111,9 @@ def init_dwi_recon_workflow(workflow_spec, output_dir,
             #             inputnode, node)
             workflow.connect([
                 (inputnode, node,
-                 _as_connections(connect_from_qsiprep, dest_prefix='inputnode.'))])
+                 _as_connections(
+                    connect_from_qsiprep - set(("mapping_metadata",)),
+                    dest_prefix='inputnode.'))])
             # for qp_connection in connect_from_qsiprep:
             #    workflow.connect(inputnode, qp_connection, node, 'inputnode.' + qp_connection)
             _check_repeats(workflow.list_node_names())
@@ -112,11 +123,20 @@ def init_dwi_recon_workflow(workflow_spec, output_dir,
             workflow.connect([
                 (upstream_node, node,
                  _as_connections(
-                    connect_from_upstream, src_prefix='outputnode.', dest_prefix='inputnode.'))])
+                    connect_from_upstream - set(("mapping_metadata",)),
+                    src_prefix='outputnode.',
+                    dest_prefix='inputnode.'))])
             # for upstream_connection in connect_from_upstream:
             #     workflow.connect(upstream_node, "outputnode." + upstream_connection,
             #                      node, 'inputnode.' + upstream_connection)
             _check_repeats(workflow.list_node_names())
+
+            # Send metadata about the upstream node into the downstream node
+            workflow.connect(
+                workflow_metadata_nodes[node_spec['input']],
+                "input_metadata",
+                node,
+                "inputnode.mapping_metadata")
 
     # Fill-in datasinks and reportlet datasinks seen so far
     for node in workflow.list_node_names():

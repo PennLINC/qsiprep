@@ -20,10 +20,45 @@
       "software": "qsiprep",
       "action": "template_map",
       "input": "qsiprep",
-      "scalars_from": ["dipy_dki"],
+      "scalars_from": ["dipy_dki", "gqi_scalars"],
       "parameters": {
         "interpolation": "NearestNeighbor"
       }
+    },
+    {
+      "name": "dsistudio_gqi",
+      "software": "DSI Studio",
+      "action": "reconstruction",
+      "input": "qsiprep",
+      "qsirecon_suffix": "DSIStudio",
+      "parameters": {"method": "gqi"}
+    },
+    {
+      "name": "autotrackgqi",
+      "software": "DSI Studio",
+      "action": "autotrack",
+      "input": "dsistudio_gqi",
+      "qsirecon_suffix": "DSIStudio",
+      "parameters": {
+        "track_id": "Fasciculus,Cingulum,Aslant,Corticos,Thalamic_R,Reticular,Optic,Fornix,Corpus",
+        "tolerance": "22,26,30",
+        "track_voxel_ratio": 2.0,
+        "yield_rate": 0.000001
+      }
+    },
+    {
+      "name": "gqi_scalars",
+      "software": "DSI Studio",
+      "action": "export",
+      "input": "dsistudio_gqi",
+      "qsirecon_suffix": "DSIStudio"
+    },
+    {
+      "name": "bundle_means",
+      "software": "qsiprep",
+      "action": "bundle_map",
+      "input": "autotrackgqi",
+      "scalars_from": ["gqi_scalars", "dipy_dki"]
     }
   ]
 }

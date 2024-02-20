@@ -50,6 +50,7 @@ def init_scalar_to_bundle_wf(omp_nthreads, available_anatomical_data,
             ("collected_scalars", "recon_scalars"),
             ("tck_files", "tck_files"),
             ("dwi_ref", "dwiref_image"),
+            ("mapping_metadata", "mapping_metadata"),
             ("bundle_names", "bundle_names")]),
         (bundle_mapper, outputnode, [
             ("bundle_summary", "bundle_summary")])
@@ -142,26 +143,23 @@ def init_scalar_to_template_wf(omp_nthreads, available_anatomical_data,
     template_mapper = pe.Node(
         TemplateMapper(**params),
         name="template_mapper")
+    # Datasink will always be used, and the qsirecon-suffix is determined when
+    # the scalars are originally calculated
+    ds_template_scalars = pe.Node(
+        ReconScalarsDataSink(),
+        name='ds_template_scalars',
+        run_without_submitting=True)
     workflow.connect([
         (inputnode, template_mapper, [
             ("collected_scalars", "recon_scalars"),
             ("t1_2_mni_forward_transform", "to_template_transform"),
             ("resampling_template", "template_reference_image")]),
         (template_mapper, outputnode, [
-            ("template_space_scalars", "template_scalars")
-        ])
-    ])
-
-    if qsirecon_suffix:
-        ds_template_scalars = pe.Node(
-            ReconScalarsDataSink(),
-            name='ds_template_scalars',
-            run_without_submitting=True)
-        workflow.connect([
-            (template_mapper, ds_template_scalars, [
-                # Send the resampled files (without metadata) so they don't get cleaned up
-                ("template_space_scalars", "resampled_files"),
-                ("template_space_scalar_info", "recon_scalars")])
+            ("template_space_scalars", "template_scalars")]),
+        (template_mapper, ds_template_scalars, [
+            # Send the resampled files (without metadata) so they don't get cleaned up
+            ("template_space_scalars", "resampled_files"),
+            ("template_space_scalar_info", "recon_scalars")])
         ])
 
     return workflow

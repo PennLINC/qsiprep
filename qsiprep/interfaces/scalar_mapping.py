@@ -24,6 +24,8 @@ class ScalarMapperInputSpec(BaseInterfaceInputSpec):
     scalars_from = InputMultiObject(traits.Str())
     recon_scalars = InputMultiObject(traits.Any())
     dwiref_image = File(exists=True)
+    mapping_metadata = traits.Dict(
+        desc="Info about the upstream workflow that created the anatomical mapping units")
 
 
 class ScalarMapperOutputSpec(TraitedSpec):
@@ -65,7 +67,7 @@ class _BundleMapperInputSpec(ScalarMapperInputSpec):
 
 class _BundleMapperOutputSpec(ScalarMapperOutputSpec):
     bundle_summary = File(exists=True)
-    bundle_profiles = File(exists=True)
+    tdi_stats = File(exists=True)
 
 
 def _get_tdi_img(dwiref_image, tck_file, output_tdi_file):
@@ -83,6 +85,7 @@ class BundleMapper(ScalarMapper):
     def _do_mapping(self, runtime):
         self._load_scalars()
         bundle_dfs = []
+        tdi_dfs = []
         for tck_name, tck_file in zip(self.inputs.bundle_names, self.inputs.tck_files):
             output_tdi_file = fname_presuffix(
                 tck_file,
@@ -105,28 +108,37 @@ class BundleMapper(ScalarMapper):
             tdi_weights = tdi_weights / tdi_weights.sum()
 
             # Start gathering stats with the TDI first
-            bundle_dfs.append(
+            tdi_dfs.append(
                 calculate_mask_stats(
                     bundle_masker,
                     tck_name,
                     "bundle",
                     {"image": tdi_img,
                      "variable_name": "tdi",
-                     "workflow_name": "scalar_to_bundle",
+                     # Check that this is ok:
+                     "source_file": self.inputs.recon_scalars[0]["source_file"],
+                     "qsirecon_suffix": "scalar_to_bundle",
                      "desc": "Streamline counts per voxel"})
             )
 
             # Then get the same stats for the scalars
-            for recon_scalar in self.recon_scalars:
+            for recon_scalar in self.inputs.recon_scalars:
                 bundle_dfs.append(
                     calculate_mask_stats(bundle_masker, tck_name, "bundle",
                                          recon_scalar, tdi_weights))
+
+        # Write the scalar summary df
         self._update_with_bids_info(bundle_dfs)
         summary_file = op.join(runtime.cwd, "bundle_stats.tsv")
         summary_df = pd.DataFrame(bundle_dfs)
-
         summary_df.to_csv(summary_file, index=False, sep="\t")
-        self._results['bundle_summary'] = summary_file
+
+        # Write the TDI df
+        self._update_with_bids_info(tdi_dfs)
+        tdi_file = op.join(runtime.cwd, "tdi_stats.tsv")
+        tdi_summary_df = pd.DataFrame(tdi_dfs)
+        tdi_summary_df.to_csv(tdi_file, index=False, sep="\t")
+        self._results['tdi_stats'] = tdi_file
 
 
 # For mapping to atlases
@@ -158,7 +170,8 @@ def calculate_mask_stats(masker, mask_name, mask_variable_name, recon_scalar, we
     results = {
         mask_variable_name: mask_name,
         "variable_name": variable_name,
-        "workflow": recon_scalar["qsirecon_name"],
+        "qsirecon_suffix": recon_scalar["qsirecon_suffix"],
+        "source_file": recon_scalar["source_file"],
         "zero_proportion": np.sum(np.isnan(nz_voxel_data)) / voxel_data.shape[0],
         "mean": np.mean(voxel_data),
         "stdev": np.std(voxel_data),
