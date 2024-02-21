@@ -5,14 +5,24 @@
   "anatomical": [ ],
   "nodes": [
     {
-      "name": "DIPYdki",
+      "name": "dipy_dki",
       "software": "Dipy",
       "action": "DKI_reconstruction",
       "input": "qsiprep",
-      "output_suffix": "DKI",
+      "qsirecon_suffix": "DIPYDKI",
       "parameters": {
         "write_mif": false,
         "write_fibgz": false
+      }
+    },
+    {
+      "name": "template_map",
+      "software": "qsiprep",
+      "action": "template_map",
+      "input": "qsiprep",
+      "scalars_from": ["dipy_dki", "gqi_scalars"],
+      "parameters": {
+        "interpolation": "NearestNeighbor"
       }
     },
     {
@@ -20,7 +30,7 @@
       "software": "DSI Studio",
       "action": "reconstruction",
       "input": "qsiprep",
-      "output_suffix": "gqi",
+      "qsirecon_suffix": "DSIStudio",
       "parameters": {"method": "gqi"}
     },
     {
@@ -28,7 +38,7 @@
       "software": "DSI Studio",
       "action": "autotrack",
       "input": "dsistudio_gqi",
-      "output_suffix": "AutoTrackGQI",
+      "qsirecon_suffix": "DSIStudio",
       "parameters": {
         "track_id": "Fasciculus,Cingulum,Aslant,Corticos,Thalamic_R,Reticular,Optic,Fornix,Corpus",
         "tolerance": "22,26,30",
@@ -41,15 +51,14 @@
       "software": "DSI Studio",
       "action": "export",
       "input": "dsistudio_gqi",
-      "output_suffix": "gqiscalar"
+      "qsirecon_suffix": "DSIStudio"
     },
     {
       "name": "bundle_means",
       "software": "qsiprep",
       "action": "bundle_map",
       "input": "autotrackgqi",
-      "scalars_from": ["gqi_scalars", "DIPYdki"],
-      "output_suffix": "bundlemap"
+      "scalars_from": ["gqi_scalars", "dipy_dki"]
     }
   ]
 }

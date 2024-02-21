@@ -7,7 +7,7 @@
       "name": "to_fslstd",
       "action": "reorient_fslstd",
       "input": "qsiprep",
-      "output_suffix": "fslstd"
+      "qsirecon_suffix": "FSL"
     }
   ]
 }
