@@ -26,7 +26,7 @@ from .scalar_mapping import init_scalar_to_bundle_wf, init_scalar_to_template_wf
 from ...engine import Workflow
 from ...interfaces.interchange import (
     default_input_set, recon_workflow_input_fields
-
+)
 from .mrtrix import (
     init_global_tractography_wf,
     init_mrtrix_connectivity_wf,
