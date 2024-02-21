@@ -8,7 +8,7 @@
       "software": "Dipy",
       "action": "DKI_reconstruction",
       "input": "qsiprep",
-      "output_suffix": "DKI",
+      "qsirecon_suffix": "DKI",
       "parameters": {
         "write_mif": false,
         "write_fibgz": false

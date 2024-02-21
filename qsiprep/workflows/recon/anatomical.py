@@ -13,7 +13,12 @@ qsiprep base reconstruction workflows
 
 import logging
 from pathlib import Path
-
+from pkg_resources import resource_filename as pkgrf
+from nipype.pipeline import engine as pe
+from nipype.interfaces import utility as niu
+from nipype.interfaces import mrtrix3, ants, afni
+from nipype.interfaces.base import traits
+from ...niworkflows.interfaces.registration import RobustMNINormalizationRPT
 import nipype.interfaces.io as nio
 from nipype.interfaces import afni, ants, mrtrix3
 from nipype.interfaces import utility as niu
@@ -35,6 +40,9 @@ from ...interfaces.interchange import (
 from ...interfaces.mrtrix import GenerateMasked5tt, ITKTransformConvert, TransformHeader
 from ...niworkflows.interfaces.registration import RobustMNINormalizationRPT
 from qsiprep.interfaces.utils import GetConnectivityAtlases
+
+from ..anatomical.volume import init_output_grid_wf
+
 
 LOGGER = logging.getLogger('nipype.workflow')
 
@@ -68,7 +76,7 @@ QSIPREP_NORMALIZED_ANAT_REQUIREMENTS = [
 
 def init_highres_recon_anatomical_wf(
     subject_id, recon_input_dir, extras_to_make, freesurfer_dir,
-    needs_t1w_transform, pipeline_source, name='recon_anatomical_wf'):
+    needs_t1w_transform, pipeline_source, infant_mode, name='recon_anatomical_wf'):
     """Gather any high-res anatomical data (images, transforms, segmentations) to use in recon workflows.
 
     This workflow searches through input data to see what anatomical data is available. The anatomical data
@@ -94,7 +102,7 @@ def init_highres_recon_anatomical_wf(
             subject_id, recon_input_dir, name='gather_ukb_anatomical_wf')
     else:
         raise Exception(f"Unknown pipeline source '{pipeline_source}'")
-
+    anat_ingress_node.inputs.infant_mode = infant_mode
     if needs_t1w_transform and not status["has_qsiprep_t1w_transforms"]:
         raise Exception("Cannot compute to-template")
 
@@ -199,7 +207,7 @@ def init_highres_recon_anatomical_wf(
 
 
 def gather_ukb_anatomical_data(
-        subject_id, recon_input_dir, name='gather_ukb_anatomical_wf'):
+        subject_id, recon_input_dir, infant_mode, name='gather_ukb_anatomical_wf'):
     """
     Check a UKB directory for the necessary files for recon workflows.
 
@@ -420,7 +428,7 @@ def init_dwi_recon_anatomical_workflow(
     atlas_names, omp_nthreads, has_qsiprep_5tt_hsvs, needs_t1w_transform,
     has_freesurfer_5tt_hsvs, has_qsiprep_t1w, has_qsiprep_t1w_transforms,
     infant_mode, has_freesurfer, extras_to_make, freesurfer_dir, b0_threshold,
-    sloppy=False, prefer_dwi_mask=False, name="qsirecon_anat_wf"):
+    output_resolution, sloppy=False, prefer_dwi_mask=False, name="qsirecon_anat_wf"):
     """Ensure that anatomical data is available for the reconstruction workflows.
 
     This workflow calculates images/transforms that require a DWI spatial reference.
@@ -460,7 +468,8 @@ def init_dwi_recon_anatomical_workflow(
         connect_from_inputnode.difference_update(fields)
         connect_from_buffernode.update(fields)
 
-    _exchange_fields(['dwi_mask', 'atlas_configs', 'odf_rois'])
+    # These are always created here
+    _exchange_fields(['dwi_mask', 'atlas_configs', 'odf_rois', 'resampling_template'])
 
     outputnode = pe.Node(
         niu.IdentityInterface(
@@ -474,6 +483,18 @@ def init_dwi_recon_anatomical_workflow(
                 "has_freesurfer_5tt_hsvs": has_freesurfer_5tt_hsvs,
                 "has_qsiprep_t1w": has_qsiprep_t1w,
                 "has_qsiprep_t1w_transforms": has_qsiprep_t1w_transforms}
+
+    # Create the output reference grid_image
+    if output_resolution is None:
+        output_resolution = traits.Undefined
+
+    reference_grid_wf = init_output_grid_wf(voxel_size=output_resolution,
+                                            padding=4 if infant_mode else 8)
+    workflow.connect([
+        (inputnode, reference_grid_wf, [
+            ('template_image', 'inputnode.template_image'),
+            ('dwi_ref', 'inputnode.input_image')]),
+        (reference_grid_wf, buffernode, [('outputnode.grid_image', 'resampling_template')])])
 
     # Missing Freesurfer AND QSIPrep T1ws, or the user wants a DWI-based mask
     if not (has_qsiprep_t1w or has_freesurfer) or prefer_dwi_mask:

@@ -23,9 +23,12 @@ import gzip
 import os
 import os.path as op
 import re
-from shutil import copyfileobj, copytree
 
 import simplejson as json
+import gzip
+from shutil import copytree, rmtree, copyfileobj
+from bids.layout import parse_file_entities
+
 from nipype import logging
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec,
@@ -38,7 +41,7 @@ from nipype.interfaces.base import (
     isdefined,
     traits,
 )
-from nipype.utils.filemanip import copyfile
+from nipype.utils.filemanip import copyfile, split_filename
 
 LOGGER = logging.getLogger('nipype.interface')
 BIDS_NAME = re.compile(
@@ -252,8 +255,7 @@ class DerivativesDataSink(SimpleInterface):
     >>> dsink.inputs.desc = 'preproc'
     >>> res = dsink.run()
     >>> res.outputs.out_file  # doctest: +ELLIPSIS
-    '.../qsiprep/sub-02/ses-noanat/func/sub-02_ses-noanat_task-rest_run-01_\
-desc-preproc_bold.nii.gz'
+    '.../qsiprep/sub-02/ses-noanat/func/sub-02_ses-noanat_task-rest_run-01_desc-preproc_bold.nii.gz'
 
     """
     input_spec = DerivativesDataSinkInputSpec
@@ -294,7 +296,7 @@ desc-preproc_bold.nii.gz'
         os.makedirs(out_path, exist_ok=True)
         base_fname = op.join(out_path, src_fname)
 
-        formatstr = '{bname}{space}{desc}{bundle}{suffix}{dtype}{ext}'
+        formatstr = '{bname}{space}{desc}{suffix}{dtype}{ext}'
 
         space = '_space-{}'.format(self.inputs.space) if self.inputs.space else ''
         desc = '_desc-{}'.format(self.inputs.desc) if self.inputs.desc else ''
@@ -310,7 +312,6 @@ desc-preproc_bold.nii.gz'
                 bname=base_fname,
                 space=space,
                 desc=desc,
-                bundle=bundle,
                 suffix=suffix,
                 dtype=dtype,
                 ext='')
@@ -320,7 +321,7 @@ desc-preproc_bold.nii.gz'
             return runtime
 
         if len(self.inputs.in_file) > 1 and not isdefined(self.inputs.extra_values):
-            formatstr = '{bname}{space}{desc}{bundle}{suffix}{i:04d}{dtype}{ext}'
+            formatstr = '{bname}{space}{desc}{suffix}{i:04d}{dtype}{ext}'
 
         # Otherwise it's file(s)
         self._results['compression'] = []
@@ -329,7 +330,6 @@ desc-preproc_bold.nii.gz'
                 bname=base_fname,
                 space=space,
                 desc=desc,
-                bundle=bundle,
                 suffix=suffix,
                 i=i,
                 dtype=dtype,
@@ -357,8 +357,148 @@ class DerivativesMaybeDataSink(DerivativesDataSink):
         return super(DerivativesMaybeDataSink, self)._run_interface(runtime)
 
 
+recon_entity_order = [
+    "model",
+    "bundles",
+    "fit",
+    "mdp",
+    "mfp",
+    "bundle",
+    "label"
+]
+
+def get_recon_output_name(base_dir, source_file, derivative_file, qsirecon_suffix, output_bids_entities, use_ext=True):
+
+    source_entities = parse_file_entities(source_file)
+    out_path = op.join(base_dir, f"qsirecon-{qsirecon_suffix}")
+    out_path = op.join(out_path, "sub-" + source_entities["subject"])
+    if "session" in source_entities:
+        out_path += "/ses-{session}".format(**source_entities)
+
+    # Which datatype directory should this go under?
+    # If it's not in the output bids entities use the source_file datatype
+    datatype_dir = output_bids_entities.get(
+        "datatype",
+        op.basename(op.dirname(source_file))
+    )
+    out_path += f"/{datatype_dir}"
+    _, source_fname, _ = split_filename(source_file)
+    source_fname, _ = source_fname.rsplit('_', 1)
+    _, _, extension = split_filename(derivative_file)
+
+    # It may be that the space has changed. Check if it has
+    if "space" in output_bids_entities:
+        source_fname = re.sub(
+            "_space-[a-zA-Z0-9]+",
+            "_space-" + output_bids_entities["space"],
+            source_fname)
+    base_fname = op.join(out_path,source_fname)
+
+    # Add the new bids entities for the output file
+    for entity_name in recon_entity_order:
+        if entity_name in output_bids_entities:
+            base_fname += "_{entity}-{value}".format(
+                entity=entity_name,
+                value=output_bids_entities[entity_name])
+
+    # Add the suffix
+    suffix = output_bids_entities.get("suffix", "dwimap")
+    if use_ext:
+        return f"{base_fname}_{suffix}{extension}"
+
+    return f"{base_fname}_{suffix}"
+
+
+class _ReconDerivativesDataSinkInputSpec(DerivativesDataSinkInputSpec):
+    mdp = traits.Str('', usedefault=True, desc='Label for model derived parameter field')
+    mfp = traits.Str('', usedefault=True, desc='Label for model fit parameter field')
+    model = traits.Str('', usedefault=True, desc='Label for model field')
+    bundle = traits.Str('', usedefault=True, desc='Label for bundle field')
+    bundles = traits.Str('', usedefault=True, desc='Label for bundles field')
+    fit = traits.Str('', usedefault=True, desc='Label for fit field')
+    label = traits.Str('', usedefault=True, desc='Label for label field')
+    qsirecon_suffix = traits.Str('', usedefault=True, desc='name appended to qsirecon- in the derivatives')
+
+
 class ReconDerivativesDataSink(DerivativesDataSink):
+    input_spec = _ReconDerivativesDataSinkInputSpec
     out_path_base = "qsirecon"
+
+    def _run_interface(self, runtime):
+
+        # If there is no qsirecon suffix, then we're not saving this file
+        if not self.inputs.qsirecon_suffix:
+            return runtime
+
+        # Figure out what the extension should be based on the input file and compression
+        src_fname, _ = _splitext(self.inputs.source_file)
+        src_fname, dtype = src_fname.rsplit('_', 1)
+        _, ext = _splitext(self.inputs.in_file[0])
+        if self.inputs.compress is True and not ext.endswith('.gz'):
+            ext += '.gz'
+        elif self.inputs.compress is False and ext.endswith('.gz'):
+            ext = ext[:-3]
+
+        # Prepare the bids entities from the inputs
+        output_bids = {}
+        if self.inputs.bundles:
+            output_bids["bundles"] = self.inputs.bundles
+        if self.inputs.bundle:
+            output_bids["bundle"] = self.inputs.bundle
+        if self.inputs.space:
+            output_bids["space"] = self.inputs.space
+        if self.inputs.model:
+            output_bids["model"] = self.inputs.model
+        if self.inputs.mdp:
+            output_bids["mdp"] = self.inputs.mdp
+        if self.inputs.mfp:
+            output_bids["mfp"] = self.inputs.mfp
+        if self.inputs.fit:
+            output_bids["fit"] = self.inputs.fit
+        if self.inputs.suffix:
+            output_bids["suffix"] = self.inputs.suffix
+        if self.inputs.label:
+            output_bids["label"] = self.inputs.label
+
+        # Get the output name without an extension
+        bname = get_recon_output_name(
+            base_dir=self.inputs.base_directory,
+            source_file=self.inputs.source_file,
+            derivative_file=self.inputs.in_file[0],
+            qsirecon_suffix=self.inputs.qsirecon_suffix,
+            output_bids_entities=output_bids,
+            use_ext=False
+        )
+
+        # Ensure the directory exists
+        os.makedirs(op.dirname(bname), exist_ok=True)
+
+        formatstr = '{bname}{ext}'
+        # If the derivative is a directory, copy it over
+        copy_dir = op.isdir(str(self.inputs.in_file))
+        if copy_dir:
+            out_file = formatstr.format(
+                bname=base_fname,
+                ext='')
+            copytree(str(self.inputs.in_file), out_file, dirs_exist_ok=True)
+            self._results['out_file'] = out_file
+            return runtime
+
+        if len(self.inputs.in_file) > 1 and not isdefined(self.inputs.extra_values):
+            formatstr = '{bname}{i:04d}{ext}'
+
+        # Otherwise it's file(s)
+        self._results['compression'] = []
+        for i, fname in enumerate(self.inputs.in_file):
+            out_file = formatstr.format(
+                bname=bname,
+                i=i,
+                ext=ext)
+            if isdefined(self.inputs.extra_values):
+                out_file = out_file.format(extra_value=self.inputs.extra_values[i])
+            self._results['out_file'].append(out_file)
+            self._results['compression'].append(_copy_any(fname, out_file))
+        return runtime
 
 
 class ReadSidecarJSONInputSpec(BaseInterfaceInputSpec):

@@ -8,7 +8,7 @@
       "software": "Dipy",
       "action": "MAPMRI_reconstruction",
       "input": "qsiprep",
-      "output_suffix": "MAPMRI",
+      "qsirecon_suffix": "DIPYMAPMRI",
       "parameters": {
         "radial_order": 6,
         "laplacian_regularization": true,

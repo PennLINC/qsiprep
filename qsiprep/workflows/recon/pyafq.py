@@ -49,7 +49,7 @@ def _parse_qsiprep_params_dict(params_dict):
 
 
 def init_pyafq_wf(omp_nthreads, available_anatomical_data,
-                  name="afq", output_suffix="", params={}):
+                  name="afq", qsirecon_suffix="", params={}):
     """Run PyAFQ on some qsiprep outputs
 
     Inputs
@@ -86,7 +86,7 @@ def init_pyafq_wf(omp_nthreads, available_anatomical_data,
             ('t1_2_mni_reverse_transform', 'itk_file')]),
         (run_afq, outputnode, [('afq_dir', 'afq_dir')])
     ])
-    if output_suffix:
+    if qsirecon_suffix:
         # Save the output in the outputs directory
         ds_afq = pe.Node(
             ReconDerivativesDataSink(),

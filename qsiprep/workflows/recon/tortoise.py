@@ -15,6 +15,9 @@ from nipype.interfaces.base import traits
 from ...engine import Workflow
 from ...interfaces.bids import ReconDerivativesDataSink
 from ...interfaces.interchange import recon_workflow_input_fields
+from ...interfaces.recon_scalars import TORTOISEReconScalars, ReconScalarsDataSink
+from ...engine import Workflow
+
 from ...interfaces.recon_scalars import TORTOISEReconScalars
 from qsiprep.interfaces.tortoise import (
     ComputeADMap,
@@ -26,8 +29,9 @@ from qsiprep.interfaces.tortoise import (
     ComputeRDMap,
     EstimateMAPMRI,
     EstimateTensor,
-    TORTOISEConvert,
+    TORTOISEConvert
 )
+
 
 LOGGER = logging.getLogger('nipype.interface')
 
@@ -43,7 +47,7 @@ def init_tortoise_estimator_wf(
     omp_nthreads,
     available_anatomical_data,
     name="tortoise_recon",
-    output_suffix="", params={}):
+    qsirecon_suffix="", params={}):
     """Run estimators from TORTOISE.
 
     This workflow may run ``EstimateTensor`` and/or ``EstimateMAPMRI``
@@ -85,13 +89,12 @@ def init_tortoise_estimator_wf(
                 'csf_txt', 'scalar_image_info', 'recon_scalars']),
         name="outputnode")
     workflow = Workflow(name=name)
-    recon_scalars = pe.Node(TORTOISEReconScalars(workflow_name=name), name="recon_scalars")
+    recon_scalars = pe.Node(
+        TORTOISEReconScalars(qsirecon_suffix=qsirecon_suffix),
+        name="recon_scalars")
     plot_reports = params.pop("plot_reports", True)
-    desc = """TORTOISE Reconstruction
-
-:
-
-Methods implemented in TORTOISE (@tortoisev3) were used for reconstruction. """
+    desc = "TORTOISE Reconstruction\n\n: " + \
+        "Methods implemented in TORTOISE (@tortoisev3) were used for reconstruction. "
 
     tensor_opts = params.get("estimate_tensor", {})
     estimate_tensor_separately = params.get("estimate_tensor_separately", False)
@@ -151,58 +154,6 @@ Methods implemented in TORTOISE (@tortoisev3) were used for reconstruction. """
             (compute_dt_ad, recon_scalars, [("ad_file", "ad_file")]),
             (compute_dt_li, recon_scalars, [("li_file", "li_file")])
         ])
-        if output_suffix:
-            ds_dt = pe.Node(
-                ReconDerivativesDataSink(extension='.nii.gz',
-                                        desc="DT",
-                                        suffix=output_suffix,
-                                        compress=True),
-                name='ds_dt',
-                run_without_submitting=True)
-            ds_dt_am = pe.Node(
-                ReconDerivativesDataSink(extension='.nii.gz',
-                                        desc="DTAM",
-                                        suffix=output_suffix,
-                                        compress=True),
-                name='ds_dt_am',
-                run_without_submitting=True)
-            ds_dt_fa = pe.Node(
-                ReconDerivativesDataSink(extension='.nii.gz',
-                                         desc="DTFA",
-                                         suffix=output_suffix,
-                                         compress=True),
-                name='ds_dt_fa',
-                run_without_submitting=True)
-            ds_dt_rd = pe.Node(
-                ReconDerivativesDataSink(extension='.nii.gz',
-                                         desc="DTRD",
-                                         suffix=output_suffix,
-                                         compress=True),
-                name='ds_dt_rd',
-                run_without_submitting=True)
-            ds_dt_ad = pe.Node(
-                ReconDerivativesDataSink(extension='.nii.gz',
-                                         desc="DTAD",
-                                         suffix=output_suffix,
-                                         compress=True),
-                name='ds_dt_ad',
-                run_without_submitting=True)
-            ds_dt_li = pe.Node(
-                ReconDerivativesDataSink(extension='.nii.gz',
-                                         desc="DTLI",
-                                         suffix=output_suffix,
-                                         compress=True),
-                name='ds_dt_li',
-                run_without_submitting=True)
-            workflow.connect([
-                (estimate_tensor, ds_dt, [("dt_file", "in_file")]),
-                (estimate_tensor, ds_dt_am, [("am_file", "in_file")]),
-                (compute_dt_fa, ds_dt_fa, [("fa_file", "in_file")]),
-                (compute_dt_rd, ds_dt_rd, [("rd_file", "in_file")]),
-                (compute_dt_ad, ds_dt_ad, [("ad_file", "in_file")]),
-                (compute_dt_li, ds_dt_li, [("li_file", "in_file")])
-            ])
-
 
     # EstimateMAPMRI
     mapmri_opts = params.get("estimate_mapmri", {})
@@ -212,7 +163,7 @@ Methods implemented in TORTOISE (@tortoisev3) were used for reconstruction. """
     # Set deltas if we have them. Prevent only one from being defined
     if approximate_deltas:
         LOGGER.warning('Both "big_delta" and "small_delta" are required for precise MAPMRI')
-        big_delta = little_delta = traits.undefined
+        big_delta = little_delta = traits.Undefined
     else:
         mapmri_opts["big_delta"], mapmri_opts["small_delta"] = deltas
     mapmri_opts["num_threads"] = omp_nthreads
@@ -243,7 +194,6 @@ Methods implemented in TORTOISE (@tortoisev3) were used for reconstruction. """
                 ("dt_file", "dt_file"),
                 ("am_file", "a0_file")])])
 
-
     workflow.connect([
         (tortoise_convert, estimate_mapmri,[
             ("bmtxt_file", "bmtxt_file"),
@@ -270,90 +220,15 @@ Methods implemented in TORTOISE (@tortoisev3) were used for reconstruction. """
             ("ngpar_file", "ngpar_file"),
             ("ngperp_file", "ngperp_file")]),
     ])
-    if output_suffix:
-        ds_map_coeffs = pe.Node(
-            ReconDerivativesDataSink(extension='.nii.gz',
-                                    desc="mapmri",
-                                    suffix=output_suffix,
-                                    compress=True),
-            name='ds_map_coeffs',
+    if qsirecon_suffix:
+        ds_recon_scalars = pe.Node(
+            ReconScalarsDataSink(),
+            name="ds_recon_scalars",
             run_without_submitting=True)
-        ds_map_uvec = pe.Node(
-            ReconDerivativesDataSink(extension='.nii.gz',
-                                    desc="mapmriuvec",
-                                    suffix=output_suffix,
-                                    compress=True),
-            name='ds_map_uvec',
-            run_without_submitting=True)
-        ds_map_pa = pe.Node(
-            ReconDerivativesDataSink(extension='.nii.gz',
-                                    desc="mapmriPA",
-                                    suffix=output_suffix,
-                                    compress=True),
-            name='ds_map_pa',
-            run_without_submitting=True)
-        ds_map_path = pe.Node(
-            ReconDerivativesDataSink(extension='.nii.gz',
-                                    desc="mapmriPAth",
-                                    suffix=output_suffix,
-                                    compress=True),
-            name='ds_map_path',
-            run_without_submitting=True)
-        ds_map_rtop = pe.Node(
-            ReconDerivativesDataSink(extension='.nii.gz',
-                                    desc="mapmriRTOP",
-                                    suffix=output_suffix,
-                                    compress=True),
-            name='ds_map_rtop',
-            run_without_submitting=True)
-        ds_map_rtap = pe.Node(
-            ReconDerivativesDataSink(extension='.nii.gz',
-                                    desc="mapmriRTAP",
-                                    suffix=output_suffix,
-                                    compress=True),
-            name='ds_map_rtap',
-            run_without_submitting=True)
-        ds_map_rtpp = pe.Node(
-            ReconDerivativesDataSink(extension='.nii.gz',
-                                    desc="mapmriRTPP",
-                                    suffix=output_suffix,
-                                    compress=True),
-            name='ds_map_rtpp',
-            run_without_submitting=True)
-        ds_map_ng = pe.Node(
-            ReconDerivativesDataSink(extension='.nii.gz',
-                                    desc="mapmriNG",
-                                    suffix=output_suffix,
-                                    compress=True),
-            name='ds_map_ng',
-            run_without_submitting=True)
-        ds_map_ngpar = pe.Node(
-            ReconDerivativesDataSink(extension='.nii.gz',
-                                    desc="mapmriNGpar",
-                                    suffix=output_suffix,
-                                    compress=True),
-            name='ds_map_ngpar',
-            run_without_submitting=True)
-        ds_map_ngperp = pe.Node(
-            ReconDerivativesDataSink(extension='.nii.gz',
-                                    desc="mapmriNGperp",
-                                    suffix=output_suffix,
-                                    compress=True),
-            name='ds_map_ngperp',
-            run_without_submitting=True)
-        workflow.connect([
-            (estimate_mapmri, ds_map_coeffs, [("coeffs_file", "in_file")]),
-            (estimate_mapmri, ds_map_uvec, [("uvec_file", "in_file")]),
-            (compute_mapmri_pa, ds_map_pa, [("pa_file", "in_file")]),
-            (compute_mapmri_pa, ds_map_path, [("path_file", "in_file")]),
-            (compute_mapmri_rtop, ds_map_rtop, [("rtop_file", "in_file")]),
-            (compute_mapmri_rtop, ds_map_rtap, [("rtap_file", "in_file")]),
-            (compute_mapmri_rtop, ds_map_rtpp, [("rtpp_file", "in_file")]),
-            (compute_mapmri_ng, ds_map_ng, [("ng_file", "in_file")]),
-            (compute_mapmri_ng, ds_map_ngpar, [("ngpar_file", "in_file")]),
-            (compute_mapmri_ng, ds_map_ngperp, [("ngperp_file", "in_file")]),
-        ])
-
-
+        workflow.connect(
+            recon_scalars,
+            "scalar_info",
+            ds_recon_scalars,
+            "recon_scalars")
     workflow.__desc__ = desc
     return workflow

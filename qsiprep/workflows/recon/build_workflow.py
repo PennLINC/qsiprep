@@ -20,11 +20,19 @@ from .dsi_studio import (
     init_dsi_studio_tractography_wf,
 )
 from .dynamics import init_controllability_wf
+from .utils import init_conform_dwi_wf, init_discard_repeated_samples_wf
+from .steinhardt import init_steinhardt_order_param_wf
+from .scalar_mapping import init_scalar_to_bundle_wf, init_scalar_to_template_wf
+from ...engine import Workflow
+from ...interfaces.interchange import (
+    default_input_set, recon_workflow_input_fields
+)
 from .mrtrix import (
     init_global_tractography_wf,
     init_mrtrix_connectivity_wf,
     init_mrtrix_csd_recon_wf,
     init_mrtrix_tractography_wf,
+
 )
 from .scalar_mapping import init_scalar_to_bundle_wf
 from .steinhardt import init_steinhardt_order_param_wf
@@ -54,6 +62,7 @@ def init_dwi_recon_workflow(workflow_spec, output_dir,
         name='inputnode')
     # Read nodes from workflow spec, make sure we can implement them
     nodes_to_add = []
+    workflow_metadata_nodes = {}
     for node_spec in workflow_spec['nodes']:
         if not node_spec['name']:
             raise Exception("Node has no name [{}]".format(node_spec))
@@ -65,6 +74,14 @@ def init_dwi_recon_workflow(workflow_spec, output_dir,
         if new_node is None:
             raise Exception("Unable to create a node for %s" % node_spec)
         nodes_to_add.append(new_node)
+
+        # Make an identity interface that just has the info of this node
+        workflow_metadata_nodes[node_spec["name"]] = pe.Node(
+            niu.IdentityInterface(fields=["input_metadata"]),
+            name=node_spec["name"] + "_spec")
+        workflow_metadata_nodes[node_spec["name"]].inputs.input_metadata = node_spec
+        nodes_to_add.append(workflow_metadata_nodes[node_spec["name"]])
+
     workflow.add_nodes(nodes_to_add)
     _check_repeats(workflow.list_node_names())
 
@@ -110,7 +127,9 @@ def init_dwi_recon_workflow(workflow_spec, output_dir,
             #             inputnode, node)
             workflow.connect([
                 (inputnode, node,
-                 _as_connections(connect_from_qsiprep, dest_prefix='inputnode.'))])
+                 _as_connections(
+                    connect_from_qsiprep - set(("mapping_metadata",)),
+                    dest_prefix='inputnode.'))])
             # for qp_connection in connect_from_qsiprep:
             #    workflow.connect(inputnode, qp_connection, node, 'inputnode.' + qp_connection)
             _check_repeats(workflow.list_node_names())
@@ -120,21 +139,32 @@ def init_dwi_recon_workflow(workflow_spec, output_dir,
             workflow.connect([
                 (upstream_node, node,
                  _as_connections(
-                    connect_from_upstream, src_prefix='outputnode.', dest_prefix='inputnode.'))])
+                    connect_from_upstream - set(("mapping_metadata",)),
+                    src_prefix='outputnode.',
+                    dest_prefix='inputnode.'))])
             # for upstream_connection in connect_from_upstream:
             #     workflow.connect(upstream_node, "outputnode." + upstream_connection,
             #                      node, 'inputnode.' + upstream_connection)
             _check_repeats(workflow.list_node_names())
 
+            # Send metadata about the upstream node into the downstream node
+            workflow.connect(
+                workflow_metadata_nodes[node_spec['input']],
+                "input_metadata",
+                node,
+                "inputnode.mapping_metadata")
+
     # Fill-in datasinks and reportlet datasinks seen so far
     for node in workflow.list_node_names():
         node_suffix = node.split('.')[-1]
-        if node_suffix.startswith('ds'):
+        if node_suffix.startswith('ds_') or node_suffix.startswith("recon_scalars"):
             base_dir = reportlets_dir if "report" in node_suffix else output_dir
+            workflow.connect(inputnode, 'dwi_file', workflow.get_node(node), 'source_file')
             # LOGGER.info("setting %s base dir to %s", node_suffix, base_dir )
-            workflow.get_node(node).inputs.base_directory = base_dir
-            if node_suffix.startswith('ds_'):
-                workflow.connect(inputnode, 'dwi_file', workflow.get_node(node), 'source_file')
+            if node_suffix.startswith("ds"):
+                workflow.get_node(node).inputs.base_directory = base_dir
+            # if node_suffix.startswith('ds_') or node_suffix.startswith("recon_scalars"):
+            #     workflow.connect(inputnode, 'dwi_file', workflow.get_node(node), 'source_file')
 
     return workflow
 
@@ -143,7 +173,7 @@ def workflow_from_spec(omp_nthreads, available_anatomical_data, node_spec,
                        skip_odf_plots):
     """Build a nipype workflow based on a json file."""
     software = node_spec.get("software", "qsiprep")
-    output_suffix = node_spec.get("output_suffix", "")
+    qsirecon_suffix = node_spec.get("qsirecon_suffix", "")
     node_name = node_spec.get("name", None)
     parameters = node_spec.get("parameters", {})
 
@@ -165,10 +195,8 @@ def workflow_from_spec(omp_nthreads, available_anatomical_data, node_spec,
         "omp_nthreads": omp_nthreads,
         "available_anatomical_data": available_anatomical_data,
         "name": node_name,
-        "output_suffix": output_suffix,
+        "qsirecon_suffix": qsirecon_suffix,
         "params": parameters}
-
-
 
     # DSI Studio operations
     if software == "DSI Studio":
@@ -213,7 +241,7 @@ def workflow_from_spec(omp_nthreads, available_anatomical_data, node_spec,
         if node_spec["action"] == "pyafq_tractometry":
             return init_pyafq_wf(**kwargs)
 
-    elif software ==  "TORTOISE":
+    elif software == "TORTOISE":
         if node_spec["action"] == "estimate":
             return init_tortoise_estimator_wf(**kwargs)
 
@@ -233,6 +261,8 @@ def workflow_from_spec(omp_nthreads, available_anatomical_data, node_spec,
             return init_steinhardt_order_param_wf(**kwargs)
         if node_spec['action'] == 'bundle_map':
             return init_scalar_to_bundle_wf(**kwargs)
+        if node_spec['action'] == 'template_map':
+            return init_scalar_to_template_wf(**kwargs)
 
     raise Exception("Unknown node %s" % node_spec)
 

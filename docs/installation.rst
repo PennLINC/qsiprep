@@ -97,7 +97,7 @@ As with Docker, you will need to bind the Freesurfer license.txt when running Si
 External Dependencies
 ---------------------
 
-qsiprep is written using Python 3.8 (or above), and is based on
+qsiprep is written using Python 3.10 (or above), and is based on
 nipype_. The external dependencies are built in the `qsiprep_build
 <https://github.com/PennLINC/qsiprep_build>`_ repository. There
 you can find the URLs used to download the dependency source code

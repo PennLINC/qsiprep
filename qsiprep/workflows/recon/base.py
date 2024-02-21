@@ -49,7 +49,8 @@ LOGGER = logging.getLogger('nipype.workflow')
 
 def init_qsirecon_wf(subject_list, run_uuid, work_dir, output_dir, recon_input,
                      recon_spec, low_mem, omp_nthreads, sloppy, freesurfer_input,
-                     b0_threshold, skip_odf_plots, pipeline_source, name="qsirecon_wf"):
+                     b0_threshold, skip_odf_plots, pipeline_source, infant_mode,
+                     output_resolution, name="qsirecon_wf"):
     """
     This workflow organizes the execution of qsiprep, with a sub-workflow for
     each subject.
@@ -70,7 +71,9 @@ def init_qsirecon_wf(subject_list, run_uuid, work_dir, output_dir, recon_input,
                               sloppy=False,
                               omp_nthreads=1,
                               skip_odf_plots=False,
-                              pipeline_source="qsiprep"
+                              pipeline_source="qsiprep",
+                              output_resolution=0.0,
+                              infant_mode=False
                               )
 
 
@@ -98,6 +101,11 @@ def init_qsirecon_wf(subject_list, run_uuid, work_dir, output_dir, recon_input,
             Path to the directory containing subject freesurfer outputs ($SUBJECTS_DIR)
         sloppy : bool
             If True, replace reconstruction options with fast but bad options.
+        infant_mode : bool
+            Use MNI Infant templates
+        output_resolution : float
+            resolution to resample template space outputs. if 0, the native resolution
+            will be used
 
     """
     qsiprep_wf = Workflow(name=name)
@@ -118,7 +126,9 @@ def init_qsirecon_wf(subject_list, run_uuid, work_dir, output_dir, recon_input,
             sloppy=sloppy,
             b0_threshold=b0_threshold,
             freesurfer_input=freesurfer_input,
-            skip_odf_plots=skip_odf_plots
+            skip_odf_plots=skip_odf_plots,
+            infant_mode=infant_mode,
+            output_resolution=output_resolution
             )
 
         single_subject_wf.config['execution']['crashdump_dir'] = (os.path.join(
@@ -132,8 +142,9 @@ def init_qsirecon_wf(subject_list, run_uuid, work_dir, output_dir, recon_input,
 
 
 def init_single_subject_wf(
-        subject_id, name, reportlets_dir, output_dir, freesurfer_input, skip_odf_plots,
-        low_mem, omp_nthreads, recon_input, recon_spec, sloppy, b0_threshold, pipeline_source):
+        subject_id, name, reportlets_dir, output_dir, freesurfer_input,
+        skip_odf_plots, infant_mode, output_resolution, low_mem, omp_nthreads,
+        recon_input, recon_spec, sloppy, b0_threshold, pipeline_source):
     """
     This workflow organizes the reconstruction pipeline for a single subject.
     Reconstruction is performed using a separate workflow for each dwi series.
@@ -162,6 +173,11 @@ def init_single_subject_wf(
             Use bad parameters for reconstruction to make the workflow faster.
         pipeline_source : str
             Which pipeline was used to process the input data
+        infant_mode : bool
+            Use MNI Infant templates
+        output_resolution : float
+            resolution to resample template space outputs. if 0, the native resolution
+            will be used
     """
     if name in ('single_subject_wf', 'single_subject_test_recon_wf'):
         # a fake spec
@@ -221,6 +237,7 @@ to workflows in *qsiprep*'s documentation]\
             freesurfer_dir=freesurfer_input,
             needs_t1w_transform=needs_t1w_transform,
             pipeline_source="qsiprep",
+            infant_mode=infant_mode,
             name='anat_ingress_wf')
 
         # Connect the anatomical-only inputs. NOTE this is not to the inputnode!
@@ -255,6 +272,7 @@ to workflows in *qsiprep*'s documentation]\
                 freesurfer_dir=freesurfer_input,
                 pipeline_source="ukb",
                 needs_t1w_transform=needs_t1w_transform,
+                infant_mode=infant_mode,
                 name=wf_name + "_ingressed_ukb_anat_data")
 
         # Create scan-specific anatomical data (mask, atlas configs, odf ROIs for reports)
@@ -263,7 +281,7 @@ to workflows in *qsiprep*'s documentation]\
             init_dwi_recon_anatomical_workflow(
                 atlas_names=atlas_names,
                 omp_nthreads=omp_nthreads,
-                infant_mode=False,
+                infant_mode=infant_mode,
                 prefer_dwi_mask=False,
                 sloppy=sloppy,
                 needs_t1w_transform=needs_t1w_transform,
@@ -271,6 +289,7 @@ to workflows in *qsiprep*'s documentation]\
                 freesurfer_dir=freesurfer_input,
                 extras_to_make=spec.get('anatomical', []),
                 name=wf_name + "_dwi_specific_anat_wf",
+                output_resolution=output_resolution,
                 **available_anatomical_data)
 
         # This node holds all the inputs that will go to the recon workflow.

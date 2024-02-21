@@ -8,7 +8,7 @@
       "software": "DSI Studio",
       "action": "reconstruction",
       "input": "qsiprep",
-      "output_suffix": "gqi",
+      "qsirecon_suffix": "DSIStudio",
       "parameters": {"method": "gqi"}
     },
     {
@@ -16,7 +16,7 @@
       "software": "DSI Studio",
       "action": "export",
       "input": "dsistudio_gqi",
-      "output_suffix": "gqiscalar"
+      "qsirecon_suffix": "DSIStudio"
     },
     {
       "name": "tractography",
@@ -37,7 +37,7 @@
       "software": "DSI Studio",
       "action": "connectivity",
       "input": "tractography",
-      "output_suffix": "gqinetwork",
+      "qsirecon_suffix": "DSIStudio",
       "parameters": {
         "connectivity_value": "count,ncount,mean_length,gfa",
         "connectivity_type": "pass,end"

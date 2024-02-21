@@ -17,7 +17,7 @@ from qsiprep.interfaces.connectivity import Controllability
 LOGGER = logging.getLogger('nipype.workflow')
 
 
-def init_controllability_wf(name="controllability", output_suffix="", params={}, **kwargs):
+def init_controllability_wf(name="controllability", qsirecon_suffix="", params={}, **kwargs):
     """Calculates network controllability from connectivity matrices.
 
     Calculates modal and average controllability using the method of Gu et al. 2015.
@@ -49,10 +49,13 @@ def init_controllability_wf(name="controllability", output_suffix="", params={},
         (inputnode, calc_control, [('matfile', 'matfile')]),
         (calc_control, outputnode, [('controllability', 'matfile')])
     ])
-    if output_suffix:
+    if qsirecon_suffix:
         # Save the output in the outputs directory
-        ds_control = pe.Node(ReconDerivativesDataSink(suffix=output_suffix),
-                             name='ds_' + name,
-                             run_without_submitting=True)
+        ds_control = pe.Node(
+            ReconDerivativesDataSink(
+                qsirecon_suffix=qsirecon_suffix,
+                suffix="control"),
+            name='ds_' + name,
+            run_without_submitting=True)
         workflow.connect(calc_control, 'controllability', ds_control, 'in_file')
     return workflow

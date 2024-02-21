@@ -8,7 +8,7 @@ build:
     - libblas-dev
     - liblapack-dev
   tools:
-    python: "3.8"
+    python: "3.10"
 
 sphinx:
   configuration: docs/conf.py
