@@ -29,7 +29,8 @@ from qsiprep.interfaces.tortoise import (
     ComputeRDMap,
     EstimateMAPMRI,
     EstimateTensor,
-    TORTOISEConvert,
+    TORTOISEConvert
+)
 
 
 LOGGER = logging.getLogger('nipype.interface')

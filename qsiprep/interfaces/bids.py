@@ -42,7 +42,7 @@ from nipype.interfaces.base import (
     isdefined,
     traits,
 )
-from nipype.utils.filemanip import copyfile
+from nipype.utils.filemanip import copyfile, split_filename
 
 LOGGER = logging.getLogger('nipype.interface')
 BIDS_NAME = re.compile(

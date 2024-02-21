@@ -8,6 +8,7 @@ Classes that collect scalar images and metadata from Recon Workflows
 
 
 """
+import os
 import os.path as op
 import re
 from pkg_resources import resource_filename as pkgr
