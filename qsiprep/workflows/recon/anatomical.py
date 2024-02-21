@@ -10,6 +10,8 @@ qsiprep base reconstruction workflows
 .. autofunction:: init_single_subject_wf
 
 """
+
+import logging
 from pathlib import Path
 from pkg_resources import resource_filename as pkgrf
 from nipype.pipeline import engine as pe
@@ -18,20 +20,29 @@ from nipype.interfaces import mrtrix3, ants, afni
 from nipype.interfaces.base import traits
 from ...niworkflows.interfaces.registration import RobustMNINormalizationRPT
 import nipype.interfaces.io as nio
+from nipype.interfaces import afni, ants, mrtrix3
+from nipype.interfaces import utility as niu
+from nipype.pipeline import engine as pe
+from pkg_resources import resource_filename as pkgrf
+
 from ...engine import Workflow
-import logging
-from ...interfaces.bids import ReconDerivativesDataSink
 from ...interfaces.anatomical import QsiprepAnatomicalIngress, UKBAnatomicalIngress
-from ...interfaces.mrtrix import (GenerateMasked5tt, ITKTransformConvert,
-    TransformHeader)
 from ...interfaces.ants import ConvertTransformFile
+from ...interfaces.bids import ReconDerivativesDataSink
 from ...interfaces.freesurfer import find_fs_path
 from ...interfaces.gradients import ExtractB0s
-from ...interfaces.nilearn import MaskB0Series
-from ...interfaces.interchange import (qsiprep_highres_anatomical_ingressed_fields,
-    FS_FILES_TO_REGISTER, anatomical_workflow_outputs, recon_workflow_input_fields)
+from ...interfaces.interchange import (
+    FS_FILES_TO_REGISTER,
+    anatomical_workflow_outputs,
+    qsiprep_highres_anatomical_ingressed_fields,
+    recon_workflow_input_fields,
+)
+from ...interfaces.mrtrix import GenerateMasked5tt, ITKTransformConvert, TransformHeader
+from ...niworkflows.interfaces.registration import RobustMNINormalizationRPT
 from qsiprep.interfaces.utils import GetConnectivityAtlases
+
 from ..anatomical.volume import init_output_grid_wf
+
 
 LOGGER = logging.getLogger('nipype.workflow')
 

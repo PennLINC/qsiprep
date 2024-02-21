@@ -19,24 +19,26 @@ Disable warnings:
 
 """
 
-from pathlib import Path
-import os
-import shutil
 import os.path as op
-from nipype import logging
-import nibabel as nb
-from nipype.interfaces.base import (
-    traits, isdefined, TraitedSpec, BaseInterfaceInputSpec,
-    File, Directory, OutputMultiPath, Str,
-    SimpleInterface, InputMultiObject, OutputMultiObject
-)
-from nipype.utils.filemanip import copyfile, split_filename
+import shutil
 from glob import glob
-from .bids import get_bids_params
-from .images import ConformDwi, to_lps
-from .dsi_studio import btable_from_bvals_bvecs
-from .mrtrix import _convert_fsl_to_mrtrix
+from pathlib import Path
 
+import nibabel as nb
+from nipype import logging
+from nipype.interfaces.base import (
+    BaseInterfaceInputSpec,
+    File,
+    SimpleInterface,
+    TraitedSpec,
+    traits,
+)
+from nipype.utils.filemanip import split_filename
+
+from .bids import get_bids_params
+from .dsi_studio import btable_from_bvals_bvecs
+from .images import ConformDwi, to_lps
+from .mrtrix import _convert_fsl_to_mrtrix
 
 LOGGER = logging.getLogger('nipype.interface')
 

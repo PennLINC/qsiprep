@@ -7,34 +7,29 @@ Nipype translation of ANTs workflows
 ------------------------------------
 
 """
-from __future__ import print_function, division, absolute_import, unicode_literals
+from __future__ import absolute_import, division, print_function, unicode_literals
 
 # general purpose
 import os
 from collections import OrderedDict
 from multiprocessing import cpu_count
 from pathlib import Path
-from pkg_resources import resource_filename as pkgr_fn
-from packaging.version import parse as parseversion, Version
+
+from nipype.interfaces import utility as niu
+from nipype.interfaces.ants import Atropos, MultiplyImages, N4BiasFieldCorrection
+from nipype.interfaces.fsl.maths import ApplyMask
 
 # nipype
 from nipype.pipeline import engine as pe
-from nipype.interfaces import utility as niu
-from nipype.interfaces.fsl.maths import ApplyMask
-from nipype.interfaces.ants import N4BiasFieldCorrection, Atropos, MultiplyImages
+from packaging.version import Version
+from packaging.version import parse as parseversion
+from pkg_resources import resource_filename as pkgr_fn
 
 # niworkflows
 from ..data.getters import OSF_RESOURCES, TEMPLATE_ALIASES, get_template
-from ..interfaces.ants import (
-    ImageMath,
-    ResampleImageBySpacing,
-    AI,
-    ThresholdImage,
-)
-from ..interfaces.fixes import (
-    FixHeaderRegistration as Registration,
-    FixHeaderApplyTransforms as ApplyTransforms,
-)
+from ..interfaces.ants import AI, ImageMath, ResampleImageBySpacing, ThresholdImage
+from ..interfaces.fixes import FixHeaderApplyTransforms as ApplyTransforms
+from ..interfaces.fixes import FixHeaderRegistration as Registration
 
 ATROPOS_MODELS = {
     'T1': OrderedDict([
@@ -559,8 +554,9 @@ def _pop(in_files):
 
 def _select_labels(in_segm, labels):
     from os import getcwd
-    import numpy as np
+
     import nibabel as nb
+    import numpy as np
     from nipype.utils.filemanip import fname_presuffix
 
     out_files = []
@@ -580,5 +576,6 @@ def _select_labels(in_segm, labels):
 
 def _gen_name(in_file):
     import os
+
     from nipype.utils.filemanip import fname_presuffix
     return os.path.basename(fname_presuffix(in_file, suffix='processed'))

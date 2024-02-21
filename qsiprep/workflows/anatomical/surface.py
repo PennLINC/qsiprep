@@ -9,43 +9,27 @@ Anatomical reference preprocessing workflows
 .. autofunction:: init_skullstrip_ants_wf
 
 """
+from nipype import logging
+from nipype.interfaces import freesurfer as fs
+from nipype.interfaces import io as nio
+from nipype.interfaces import utility as niu
+from nipype.pipeline import engine as pe
 from pkg_resources import resource_filename as pkgr
 
-from nipype.pipeline import engine as pe
-from nipype.interfaces import (
-    io as nio,
-    utility as niu,
-    c3,
-    freesurfer as fs,
-    fsl,
-    image,
-    ants,
-    afni
+from ...engine import Workflow
+from ...interfaces import DerivativesDataSink as FDerivativesDataSink
+from ...interfaces import (
+    FSDetectInputs,
+    FSInjectBrainExtracted,
+    MakeMidthickness,
+    NormalizeSurf,
+    RefineBrainMask,
 )
-from nipype.interfaces.ants import BrainExtraction, N4BiasFieldCorrection
-
-from ...niworkflows.interfaces.registration import RobustMNINormalizationRPT
-from ...niworkflows.interfaces.masks import ROIsPlot
+from ...interfaces.freesurfer import PatchedLTAConvert as LTAConvert
 from ...niworkflows.interfaces.freesurfer import RobustRegister
 from ...niworkflows.interfaces.segmentation import ReconAllRPT
-from ..dwi.hmc import init_b0_hmc_wf
-from ...niworkflows.interfaces.fixes import FixHeaderApplyTransforms as ApplyTransforms
+from ...utils.misc import fix_multi_T1w_source_name
 
-from ...engine import Workflow
-from ...interfaces import (
-    StructuralReference, MakeMidthickness, FSInjectBrainExtracted,
-    FSDetectInputs, NormalizeSurf, TemplateDimensions,
-    ConcatAffines, RefineBrainMask, DerivativesDataSink as FDerivativesDataSink
-)
-
-from qsiprep.interfaces import Conform
-from ...utils.misc import fix_multi_T1w_source_name, add_suffix
-from ...interfaces.freesurfer import (
-        PatchedLTAConvert as LTAConvert, PrepareSynthStripGrid,
-        FixHeaderSynthStrip)
-from ...interfaces.anatomical import FakeSegmentation, DesaturateSkull, CustomApplyMask
-
-from nipype import logging
 LOGGER = logging.getLogger('nipype.workflow')
 
 

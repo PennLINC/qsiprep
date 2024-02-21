@@ -3,27 +3,29 @@
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 """ A robust ANTs T1-to-MNI registration workflow with fallback retry """
 
-from __future__ import print_function, division, absolute_import, unicode_literals
+from __future__ import absolute_import, division, print_function, unicode_literals
+
+from multiprocessing import cpu_count
 from os import path as op
 
-import pkg_resources as pkgr
-from multiprocessing import cpu_count
-from packaging.version import Version
 import nibabel as nb
 import numpy as np
-
-from nipype.interfaces.ants.registration import RegistrationOutputSpec
+import pkg_resources as pkgr
 from nipype.interfaces.ants import AffineInitializer
+from nipype.interfaces.ants.registration import RegistrationOutputSpec
 from nipype.interfaces.base import (
-    traits, isdefined, BaseInterface, BaseInterfaceInputSpec, File)
-
-from ..data import getters
-from .. import NIWORKFLOWS_LOG, __version__
-from .fixes import (
-    FixHeaderApplyTransforms as ApplyTransforms,
-    FixHeaderRegistration as Registration
+    BaseInterface,
+    BaseInterfaceInputSpec,
+    File,
+    isdefined,
+    traits,
 )
+from packaging.version import Version
 
+from .. import NIWORKFLOWS_LOG, __version__
+from ..data import getters
+from .fixes import FixHeaderApplyTransforms as ApplyTransforms
+from .fixes import FixHeaderRegistration as Registration
 
 niworkflows_version = Version(__version__)
 
@@ -427,8 +429,10 @@ def mask(in_file, mask_file, new_name):
     in_file and mask_file must be in the same
     image space and have the same dimensions.
     """
-    import nibabel as nb
     import os
+
+    import nibabel as nb
+
     # Load the input image
     in_nii = nb.load(in_file)
     # Load the mask image
@@ -470,8 +474,9 @@ def create_cfm(in_file, lesion_mask=None, global_mask=True, out_path=None):
     image space and have the same dimensions
     """
     import os
-    import numpy as np
+
     import nibabel as nb
+    import numpy as np
     from nipype.utils.filemanip import fname_presuffix
 
     if out_path is None:

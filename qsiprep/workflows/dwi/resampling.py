@@ -8,18 +8,23 @@ Resampling workflows
 .. autofunction:: init_dwi_trans_wf
 
 """
+from nipype.interfaces import ants
+from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
-from nipype.interfaces import utility as niu, ants
 
-from .util import init_dwi_reference_wf
 from ...engine import Workflow
-from ...interfaces.nilearn import Merge
 from ...interfaces.ants import GetImageType
-from ...interfaces.gradients import (ComposeTransforms, ExtractB0s, GradientRotation,
-                                     LocalGradientRotation)
-from ...interfaces.images import ChooseInterpolator
 from ...interfaces.fmap import ApplyScalingImages
+from ...interfaces.gradients import (
+    ComposeTransforms,
+    ExtractB0s,
+    GradientRotation,
+    LocalGradientRotation,
+)
+from ...interfaces.images import ChooseInterpolator
+from ...interfaces.nilearn import Merge
 from .qc import init_modelfree_qc_wf
+from .util import init_dwi_reference_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 

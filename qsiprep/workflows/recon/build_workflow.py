@@ -1,20 +1,24 @@
 import logging
-import nipype.pipeline.engine as pe
-from pkg_resources import resource_filename as pkgr
-from nipype.interfaces import ants, utility as niu
-from nipype.utils.filemanip import split_filename
-from qsiprep.interfaces import anatomical
 
-from .dsi_studio import (init_dsi_studio_recon_wf, init_dsi_studio_export_wf,
-                         init_dsi_studio_connectivity_wf, init_dsi_studio_tractography_wf,
-                         init_dsi_studio_autotrack_wf)
-from .dipy import (init_dipy_brainsuite_shore_recon_wf, init_dipy_mapmri_recon_wf,
-    init_dipy_dki_recon_wf)
-from .mrtrix import (init_mrtrix_csd_recon_wf, init_global_tractography_wf,
-                     init_mrtrix_tractography_wf, init_mrtrix_connectivity_wf)
+import nipype.pipeline.engine as pe
+from nipype.interfaces import utility as niu
+
+from ...engine import Workflow
+from ...interfaces.interchange import default_input_set, recon_workflow_input_fields
 from .amico import init_amico_noddi_fit_wf
-from .tortoise import init_tortoise_estimator_wf
 from .converters import init_mif_to_fibgz_wf, init_qsiprep_to_fsl_wf
+from .dipy import (
+    init_dipy_brainsuite_shore_recon_wf,
+    init_dipy_dki_recon_wf,
+    init_dipy_mapmri_recon_wf,
+)
+from .dsi_studio import (
+    init_dsi_studio_autotrack_wf,
+    init_dsi_studio_connectivity_wf,
+    init_dsi_studio_export_wf,
+    init_dsi_studio_recon_wf,
+    init_dsi_studio_tractography_wf,
+)
 from .dynamics import init_controllability_wf
 from .utils import init_conform_dwi_wf, init_discard_repeated_samples_wf
 from .steinhardt import init_steinhardt_order_param_wf
@@ -22,9 +26,21 @@ from .scalar_mapping import init_scalar_to_bundle_wf, init_scalar_to_template_wf
 from ...engine import Workflow
 from ...interfaces.interchange import (
     default_input_set, recon_workflow_input_fields
+
+from .mrtrix import (
+    init_global_tractography_wf,
+    init_mrtrix_connectivity_wf,
+    init_mrtrix_csd_recon_wf,
+    init_mrtrix_tractography_wf,
+
 )
+from .scalar_mapping import init_scalar_to_bundle_wf
+from .steinhardt import init_steinhardt_order_param_wf
+from .tortoise import init_tortoise_estimator_wf
+from .utils import init_conform_dwi_wf, init_discard_repeated_samples_wf
 
 LOGGER = logging.getLogger('nipype.interface')
+
 
 def _check_repeats(nodelist):
     total_len = len(nodelist)

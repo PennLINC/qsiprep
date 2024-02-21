@@ -7,9 +7,10 @@ Nipype interfaces for ANTs commands
 """
 
 import os
+
 from nipype.interfaces import base
-from nipype.interfaces.ants.base import ANTSCommandInputSpec, ANTSCommand
-from nipype.interfaces.base import traits, isdefined
+from nipype.interfaces.ants.base import ANTSCommand, ANTSCommandInputSpec
+from nipype.interfaces.base import isdefined, traits
 
 
 class ImageMathInputSpec(ANTSCommandInputSpec):

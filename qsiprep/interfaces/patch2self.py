@@ -1,7 +1,8 @@
-import numpy as np
 import time
-from dipy.utils.optpkg import optional_package
+
 import dipy.core.optimize as opt
+import numpy as np
+from dipy.utils.optpkg import optional_package
 from nipype import logging
 
 LOGGER = logging.getLogger('nipype.interface')

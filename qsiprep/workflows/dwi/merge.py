@@ -24,8 +24,7 @@ from ...interfaces.gradients import ExtractB0s
 from ...interfaces.mrtrix import DWIBiasCorrect, DWIDenoise, MRDeGibbs
 from ...interfaces.nilearn import MaskEPI, Merge
 from ...interfaces.tortoise import Gibbs
-from ...utils.bids import (IMPORTANT_DWI_FIELDS,
-                           update_metadata_from_nifti_header)
+from ...utils.bids import IMPORTANT_DWI_FIELDS, update_metadata_from_nifti_header
 from .qc import init_modelfree_qc_wf
 from .util import _get_wf_name
 

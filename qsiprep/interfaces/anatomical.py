@@ -9,10 +9,14 @@ Image tools interfaces
 
 """
 
-from pkg_resources import resource_filename as pkgr
 import os.path as op
+from glob import glob
 from pathlib import Path
+
+import nibabel as nb
+import nilearn.image as nim
 import numpy as np
+from dipy.segment.threshold import otsu
 from nipype import logging
 from glob import glob
 import nibabel as nb
@@ -21,9 +25,12 @@ from scipy import ndimage
 from nipype.interfaces.base import (traits, TraitedSpec, BaseInterfaceInputSpec,
                                     SimpleInterface, File, isdefined)
 from pkg_resources import resource_filename as pkgrf
+
 from nipype.utils.filemanip import fname_presuffix
-from dipy.segment.threshold import otsu
-import nilearn.image as nim
+from pkg_resources import resource_filename as pkgr
+from scipy import ndimage
+from scipy.spatial import distance
+
 from ..utils.ingress import ukb_dirname_to_bids
 from .images import to_lps
 

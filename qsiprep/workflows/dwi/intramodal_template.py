@@ -7,14 +7,15 @@ Head motion correction
 
 """
 import nipype.pipeline.engine as pe
+from nipype.interfaces import ants
+from nipype.interfaces import utility as niu
 from pkg_resources import resource_filename as pkgrf
-from nipype.interfaces import ants, utility as niu
+
 from ...engine import Workflow
 from ...interfaces import DerivativesDataSink
 from ...interfaces.ants import MultivariateTemplateConstruction2
 from .hmc import init_b0_hmc_wf
 from .registration import init_b0_to_anat_registration_wf
-
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 

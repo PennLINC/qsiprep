@@ -10,26 +10,33 @@ Utility workflows
 """
 import os
 from pathlib import Path
+
 import nibabel as nb
 import pkg_resources as pkgr
-
+from nipype.interfaces import ants
+from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from nipype.utils.filemanip import split_filename
-from nipype.interfaces import utility as niu, ants
-from nipype.interfaces.afni import Autobox
-from ...niworkflows.interfaces import SimpleBeforeAfter
+
 from ...engine import Workflow
 from ...interfaces import DerivativesDataSink
+from ...niworkflows.interfaces import SimpleBeforeAfter
 from ..anatomical import init_synthstrip_wf
-
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
-def init_dwi_reference_wf(omp_nthreads, dwi_file=None, register_t1=False,
-                          name='dwi_reference_wf', gen_report=False, source_file=None,
-                          desc="initial", sloppy=False):
-    """
+def init_dwi_reference_wf(
+    omp_nthreads,
+    dwi_file=None,
+    register_t1=False,
+    name="dwi_reference_wf",
+    gen_report=False,
+    source_file=None,
+    desc="initial",
+):
+    """Create dwiref reference image.
+
     If ``register_t2``, a skull-stripped T1w image is downsampled to the resolution
     of the b=0 input image and registered to it.
 
@@ -38,59 +45,77 @@ def init_dwi_reference_wf(omp_nthreads, dwi_file=None, register_t1=False,
         :simple_form: yes
 
         from qsiprep.workflows.dwi.util import init_dwi_reference_wf
+
         wf = init_dwi_reference_wf(omp_nthreads=1)
 
-    **Parameters**
+    Parameters
+    ----------
+    omp_nthreads : int
+        Maximum number of threads an individual process may use
+    dwi_file : str, optional
+        A b=0 image
+        Default is None.
+    register_t1 : bool, optional
+        Register the T1w image to the b=0 image.
+        Default is False.
+    name : str
+        Name of workflow (default: ``dwi_reference_wf``)
+    gen_report : bool, optional
+        Whether a mask report node should be appended in the end.
+        Default is False.
+    source_file : str, optional
+        Source file for the mask report.
+        Default is None.
+    desc : str, optional
+        Description of the dwi reference image.
+        Default is ``initial``.
 
-        dwi_file : str
-            A b=0 image
-        omp_nthreads : int
-            Maximum number of threads an individual process may use
-        name : str
-            Name of workflow (default: ``dwi_reference_wf``)
-        gen_report : bool
-            Whether a mask report node should be appended in the end
+    Inputs
+    ------
+    b0_template
+        the b0 template used as the motion correction reference
+    t1_brain
+        skull-stripped T1w image from the same subject
+    t1_mask
+        mask image for t1_brain
+    wm_seg
+        white matter segmentation from the T1w image
 
-    **Inputs**
+    Outputs
+    -------
+    raw_ref_image
+        Reference image to which dwi series is motion corrected
+    ref_image
+        Contrast-enhanced reference image
+    ref_image_brain
+        Skull-stripped reference image
+    dwi_mask
+        Skull-stripping (rough) mask of reference image
+    validation_report
+        HTML reportlet indicating whether ``dwi_file`` had a valid affine
 
-        b0_template
-            the b0 template used as the motion correction reference
-        t1_brain
-            skull-stripped T1w image from the same subject
-        t1_mask
-            mask image for t1_brain
-        wm_seg
-            white matter segmentation from the T1w image
-
-    **Outputs**
-
-        raw_ref_image
-            Reference image to which dwi series is motion corrected
-        ref_image
-            Contrast-enhanced reference image
-        ref_image_brain
-            Skull-stripped reference image
-        dwi_mask
-            Skull-stripping (rough) mask of reference image
-        validation_report
-            HTML reportlet indicating whether ``dwi_file`` had a valid affine
-
-
-    **Subworkflows**
-
-        * :py:func:`~qsiprep.workflows.dwi.util.init_enhance_and_skullstrip_wf`
-
+    See Also
+    --------
+    * :py:func:`~qsiprep.workflows.dwi.util.init_enhance_and_skullstrip_wf`
     """
     workflow = Workflow(name=name)
-    workflow.__desc__ = """\
-"""
+    workflow.__desc__ = ""
     inputnode = pe.Node(
-        niu.IdentityInterface(fields=['b0_template', 't1_brain', 't1_mask', 't1_seg']),
-        name='inputnode')
+        niu.IdentityInterface(fields=["b0_template", "t1_brain", "t1_mask", "t1_seg"]),
+        name="inputnode",
+    )
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=['raw_ref_image', 'ref_image', 'ref_image_brain',
-                                      'dwi_mask', 'validation_report']),
-        name='outputnode')
+        niu.IdentityInterface(
+            fields=[
+                "raw_ref_image",
+                "ref_image",
+                "ref_image_brain",
+                "dwi_mask",
+                "validation_report",
+            ],
+        ),
+        name="outputnode",
+    )
 
     # Simplify manually setting input image
     if dwi_file is not None:
@@ -99,66 +124,73 @@ def init_dwi_reference_wf(omp_nthreads, dwi_file=None, register_t1=False,
     # b=0 images are too diverse and tricky to reliably mask.
     # Instead register the t1w to the b=0 and use that brain mask
     if register_t1:
-        affine_transform = pkgr.resource_filename('qsiprep', 'data/affine.json')
-        register_t1_to_raw = pe.Node(ants.Registration(from_file=affine_transform),
-                                     name='register_t1_to_raw',
-                                     n_proces=omp_nthreads)
+        affine_transform = pkgr.resource_filename("qsiprep", "data/affine.json")
+        register_t1_to_raw = pe.Node(
+            ants.Registration(from_file=affine_transform),
+            name="register_t1_to_raw",
+            n_proces=omp_nthreads,
+        )
         t1_mask_to_b0 = pe.Node(
-            ants.ApplyTransforms(
-                interpolation='MultiLabel',
-                invert_transform_flags=[True]),
-            name='t1_mask_to_b0',
-            n_procs=omp_nthreads)
+            ants.ApplyTransforms(interpolation="MultiLabel", invert_transform_flags=[True]),
+            name="t1_mask_to_b0",
+            n_procs=omp_nthreads,
+        )
         workflow.connect([
             (inputnode, register_t1_to_raw, [
                 ('t1_brain', 'fixed_image'),
                 ('t1_mask', 'fixed_image_masks'),
-                ('b0_template', 'moving_image')]),
-            (register_t1_to_raw, t1_mask_to_b0, [
-                ('forward_transforms', 'transforms')])])
+                ('b0_template', 'moving_image'),
+            ]),
+            (register_t1_to_raw, t1_mask_to_b0, [('forward_transforms', 'transforms')]),
+        ])  # fmt:skip
     else:
         # T1w is already aligned
         t1_mask_to_b0 = pe.Node(
-            ants.ApplyTransforms(transforms='identity'),
-            name='t1_mask_to_b0',
-            n_procs=omp_nthreads)
+            ants.ApplyTransforms(transforms="identity"), name="t1_mask_to_b0", n_procs=omp_nthreads
+        )
 
     # Use synthstrip to extract the brain
     synthstrip_wf = init_synthstrip_wf(
-        do_padding=True,
-        omp_nthreads=omp_nthreads,
-        name="synthstrip_wf")
+        do_padding=True, omp_nthreads=omp_nthreads, name="synthstrip_wf"
+    )
 
     workflow.connect([
         (inputnode, t1_mask_to_b0, [
             ('t1_mask', 'input_image'),
-            ('b0_template', 'reference_image')]),
-        (inputnode, outputnode, [('b0_template', 'raw_ref_image')]),
-        (inputnode, outputnode, [('b0_template', 'ref_image')]),
+            ('b0_template', 'reference_image'),
+        ]),
+        (inputnode, outputnode, [
+            ('b0_template', 'raw_ref_image'),
+            ('b0_template', 'ref_image'),
+        ]),
         (inputnode, synthstrip_wf, [('b0_template', 'inputnode.original_image')]),
         (synthstrip_wf, outputnode, [
             ('outputnode.brain_image', 'ref_image_brain'),
-            ('outputnode.brain_mask', 'dwi_mask')])
-    ])
+            ('outputnode.brain_mask', 'dwi_mask'),
+        ]),
+    ])  # fmt:skip
 
     if gen_report:
         if source_file is None:
             raise Exception("Needs a source_file to write a report")
-        b0ref_reportlet = pe.Node(SimpleBeforeAfter(), name='b0ref_reportlet', mem_gb=0.1)
+
+        b0ref_reportlet = pe.Node(SimpleBeforeAfter(), name="b0ref_reportlet", mem_gb=0.1)
         ds_report_b0_mask = pe.Node(
-            DerivativesDataSink(desc=desc, suffix='b0ref', source_file=source_file),
-            name='ds_report_b0_mask',
-            mem_gb=DEFAULT_MEMORY_MIN_GB, run_without_submitting=True
+            DerivativesDataSink(desc=desc, suffix="b0ref", source_file=source_file),
+            name="ds_report_b0_mask",
+            mem_gb=DEFAULT_MEMORY_MIN_GB,
+            run_without_submitting=True,
         )
 
         workflow.connect([
             (inputnode, b0ref_reportlet, [('b0_template', 'before')]),
             (synthstrip_wf, b0ref_reportlet, [
                 ('outputnode.brain_image', 'after'),
-                ('outputnode.brain_mask', 'wm_seg')]),
+                ('outputnode.brain_mask', 'wm_seg'),
+            ]),
             (b0ref_reportlet, outputnode, [('out_report', 'validation_report')]),
-            (b0ref_reportlet, ds_report_b0_mask, [('out_report', 'in_file')])
-        ])
+            (b0ref_reportlet, ds_report_b0_mask, [('out_report', 'in_file')]),
+        ])  # fmt:skip
 
     return workflow
 
@@ -171,10 +203,11 @@ def _create_mem_gb(dwi_fname):
         dwi_nvols = 1
     except nb.filebasedimages.ImageFileError:
         dwi_nvols = 1
+
     mem_gb = {
-        'filesize': dwi_size_gb,
-        'resampled': dwi_size_gb * 4,
-        'largemem': dwi_size_gb * (max(dwi_nvols / 100, 1.0) + 4),
+        "filesize": dwi_size_gb,
+        "resampled": dwi_size_gb * 4,
+        "largemem": dwi_size_gb * (max(dwi_nvols / 100, 1.0) + 4),
     }
 
     return dwi_nvols, mem_gb
@@ -183,9 +216,10 @@ def _create_mem_gb(dwi_fname):
 def _get_concatenated_bids_name(dwi_group):
     """Derive the output name for a dwi grouping."""
     try:
-        all_dwis = dwi_group['dwi_series']
-        if dwi_group['fieldmap_info']['suffix'] == 'rpe_series':
-            all_dwis += dwi_group['fieldmap_info']['rpe_series']
+        all_dwis = dwi_group["dwi_series"]
+        if dwi_group["fieldmap_info"]["suffix"] == "rpe_series":
+            all_dwis += dwi_group["fieldmap_info"]["rpe_series"]
+
     except Exception:
         all_dwis = dwi_group
 
@@ -194,13 +228,14 @@ def _get_concatenated_bids_name(dwi_group):
         no_runs = []
         for dwi in all_dwis:
             no_runs.append(
-                "_".join([part for part in dwi.split("_")
-                          if not part.startswith("run")]))
+                "_".join([part for part in dwi.split("_") if not part.startswith("run")])
+            )
+
         input_fname = os.path.commonprefix(no_runs)
         fname = split_filename(input_fname)[1]
-        parts = fname.split('_')
-        full_parts = [part for part in parts if not part.endswith('-')]
-        fname = '_'.join(full_parts)
+        parts = fname.split("_")
+        full_parts = [part for part in parts if not part.endswith("-")]
+        fname = "_".join(full_parts)
 
     else:
         input_fname = all_dwis[0]
@@ -216,7 +251,7 @@ def _get_wf_name(dwi_fname):
     """Derive the workflow name based on the output file prefix."""
     spl = dwi_fname.split("_")
     nosub = "_".join(spl[1:])
-    return ("dwi_preproc_" + nosub + "_wf").replace("__", "_").replace("-", "_")
+    return f"dwi_preproc_{nosub}_wf".replace("__", "_").replace("-", "_")
 
 
 def _list_squeeze(in_list):
@@ -233,7 +268,7 @@ def _get_first(in_list):
     return in_list[0]
 
 
-def get_source_file(dwi_files, output_prefix=None, suffix=''):
+def get_source_file(dwi_files, output_prefix=None, suffix=""):
     """The reportlets need a source file. This file might not exist in the input data."""
     if output_prefix is None:
         output_prefix = _get_concatenated_bids_name(dwi_files)

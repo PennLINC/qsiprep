@@ -8,16 +8,16 @@ fMRIprep reports builder
 
 
 """
-from pathlib import Path
 import json
 import re
-from pkg_resources import resource_filename as pkgrf
+from pathlib import Path
 
 import jinja2
 from nipype.utils.filemanip import copyfile
+from pkg_resources import resource_filename as pkgrf
 
-from ..utils.misc import read_crashfile
 from ..utils.bids import BIDS_NAME
+from ..utils.misc import read_crashfile
 
 
 class Element(object):

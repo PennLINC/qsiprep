@@ -3,22 +3,19 @@
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 """Plotting tools shared across MRIQC and FMRIPREP"""
 
-import numpy as np
-import nibabel as nb
-import pandas as pd
-
-import matplotlib.pyplot as plt
-from matplotlib import gridspec as mgs
 import matplotlib.cm as cm
-from matplotlib.colors import ListedColormap, Normalize
+import matplotlib.pyplot as plt
+import nibabel as nb
+import numpy as np
+import pandas as pd
+import seaborn as sns
+from matplotlib import gridspec as mgs
 from matplotlib.colorbar import ColorbarBase
-
-from nilearn.plotting import plot_img
-from nilearn.signal import clean
+from matplotlib.colors import ListedColormap, Normalize
 from nilearn._utils import check_niimg_4d
 from nilearn._utils.niimg import _safe_get_data
-
-import seaborn as sns
+from nilearn.plotting import plot_img
+from nilearn.signal import clean
 from seaborn import color_palette
 
 DINA4_LANDSCAPE = (11.69, 8.27)

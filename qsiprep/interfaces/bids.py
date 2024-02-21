@@ -19,21 +19,30 @@ Disable warnings:
 
 """
 
+import gzip
 import os
 import os.path as op
 import re
+
 import simplejson as json
 import gzip
 from shutil import copytree, rmtree, copyfileobj
 from bids.layout import parse_file_entities
+
 from nipype import logging
 from nipype.interfaces.base import (
-    traits, isdefined, TraitedSpec, BaseInterfaceInputSpec,
-    File, Directory, OutputMultiPath, Str,
-    SimpleInterface, InputMultiObject, OutputMultiObject
+    BaseInterfaceInputSpec,
+    Directory,
+    File,
+    InputMultiObject,
+    OutputMultiPath,
+    SimpleInterface,
+    Str,
+    TraitedSpec,
+    isdefined,
+    traits,
 )
-from nipype.utils.filemanip import copyfile, split_filename
-from glob import glob
+from nipype.utils.filemanip import copyfile
 
 LOGGER = logging.getLogger('nipype.interface')
 BIDS_NAME = re.compile(

@@ -8,17 +8,24 @@ ReportCapableInterfaces for masks tools
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 import os
-import numpy as np
-import nibabel as nb
-from nilearn.masking import compute_epi_mask
-import scipy.ndimage as nd
 
-from nipype.interfaces import fsl, ants
-from nipype.interfaces.base import (
-    File, BaseInterfaceInputSpec, traits, isdefined, InputMultiPath, Str)
-from nipype.interfaces.mixins import reporting
+import nibabel as nb
+import numpy as np
+import scipy.ndimage as nd
+from nilearn.masking import compute_epi_mask
 from nipype.algorithms import confounds
+from nipype.interfaces import ants, fsl
+from nipype.interfaces.base import (
+    BaseInterfaceInputSpec,
+    File,
+    InputMultiPath,
+    Str,
+    isdefined,
+    traits,
+)
+from nipype.interfaces.mixins import reporting
 from seaborn import color_palette
+
 from .. import NIWORKFLOWS_LOG
 from . import report_base as nrc
 
@@ -260,7 +267,7 @@ class ROIsPlot(nrc.ReportingInterface):
     input_spec = ROIsPlotInputSpecRPT
 
     def _generate_report(self):
-        from ...niworkflows.viz.utils import plot_segs, compose_view
+        from ...niworkflows.viz.utils import compose_view, plot_segs
         seg_files = self.inputs.in_rois
         mask_file = None if not isdefined(self.inputs.in_mask) \
             else self.inputs.in_mask

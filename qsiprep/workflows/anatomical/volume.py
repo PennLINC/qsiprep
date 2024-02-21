@@ -9,32 +9,31 @@ Anatomical reference preprocessing workflows
 .. autofunction:: init_skullstrip_ants_wf
 
 """
+from nipype import logging
+from nipype.interfaces import afni, ants, mrtrix3
+from nipype.interfaces import utility as niu
+from nipype.interfaces.ants import BrainExtraction, N4BiasFieldCorrection
+from nipype.pipeline import engine as pe
 from pkg_resources import resource_filename as pkgr
 
-from nipype.pipeline import engine as pe
-from nipype.interfaces import (
-    utility as niu,
-    ants,
-    afni,
-    mrtrix3
-)
-from nipype.interfaces.ants import BrainExtraction, N4BiasFieldCorrection
-
-from ...niworkflows.interfaces.registration import RobustMNINormalizationRPT
-from ...niworkflows.interfaces.masks import ROIsPlot
-
 from ...engine import Workflow
-from ...interfaces import (TemplateDimensions, DerivativesDataSink as FDerivativesDataSink
+from ...interfaces import DerivativesDataSink as FDerivativesDataSink
+from ...interfaces import TemplateDimensions
+from ...interfaces.anatomical import DesaturateSkull, GetTemplate
+from ...interfaces.freesurfer import (
+    FixHeaderSynthStrip,
+    PrepareSynthStripGrid,
+    SynthSeg,
 )
-
-from qsiprep.interfaces import Conform
+from ...interfaces.itk import AffineToRigid, DisassembleTransform
+from ...niworkflows.interfaces.masks import ROIsPlot
+from ...niworkflows.interfaces.registration import RobustMNINormalizationRPT
 from ...utils.misc import fix_multi_source_name
 from ...interfaces.freesurfer import (
         PrepareSynthStripGrid, FixHeaderSynthStrip, SynthSeg)
 from ...interfaces.anatomical import DesaturateSkull, GetTemplate, VoxelSizeChooser
 from ...interfaces.itk import DisassembleTransform, AffineToRigid
 
-from nipype import logging
 LOGGER = logging.getLogger('nipype.workflow')
 
 

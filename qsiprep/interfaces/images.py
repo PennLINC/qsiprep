@@ -9,26 +9,40 @@ Image tools interfaces
 
 """
 
-import os
-from subprocess import Popen, PIPE
 import glob
+import os
+from subprocess import PIPE, Popen
 from textwrap import indent
-import numpy as np
+
 import nibabel as nb
 import nilearn.image as nli
+import numpy as np
 from dipy.io import read_bvals_bvecs
 from nipype import logging
-from nipype.utils.filemanip import fname_presuffix
-from nipype.interfaces.base import (isdefined, traits, TraitedSpec, BaseInterfaceInputSpec,
-                                    SimpleInterface, File, InputMultiObject, OutputMultiObject,
-                                    OutputMultiPath)
-from nipype.interfaces.afni.base import (AFNICommand, AFNICommandInputSpec, AFNICommandOutputSpec)
 from nipype.interfaces import fsl
+from nipype.interfaces.afni.base import (
+    AFNICommand,
+    AFNICommandInputSpec,
+)
+from nipype.interfaces.base import (
+    BaseInterfaceInputSpec,
+    File,
+    InputMultiObject,
+    OutputMultiObject,
+    OutputMultiPath,
+    SimpleInterface,
+    TraitedSpec,
+    isdefined,
+    traits,
+)
+from nipype.utils.filemanip import fname_presuffix
+
+from ..niworkflows.interfaces.images import ValidateImageInputSpec
+
 # from qsiprep.interfaces.images import (
 #    nii_ones_like, SignalExtraction, MatchHeader,
 #    FilledImageLike, DemeanImage, TemplateDimensions)
 from .mrtrix import SS3T_ROOT
-from ..niworkflows.interfaces.images import ValidateImageInputSpec
 
 LOGGER = logging.getLogger('nipype.interface')
 

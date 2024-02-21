@@ -7,17 +7,30 @@ TORTOISE recon workflows
 
 """
 import logging
-import nipype.pipeline.engine as pe
+
 import nipype.interfaces.utility as niu
-from ...interfaces.bids import ReconDerivativesDataSink
+import nipype.pipeline.engine as pe
 from nipype.interfaces.base import traits
-from qsiprep.interfaces.tortoise import (
-    TORTOISEConvert,
-    EstimateTensor, ComputeFAMap, ComputeRDMap, ComputeLIMap, ComputeADMap,
-    EstimateMAPMRI, ComputeMAPMRI_PA, ComputeMAPMRI_RTOP, ComputeMAPMRI_NG)
+
+from ...engine import Workflow
+from ...interfaces.bids import ReconDerivativesDataSink
 from ...interfaces.interchange import recon_workflow_input_fields
 from ...interfaces.recon_scalars import TORTOISEReconScalars, ReconScalarsDataSink
 from ...engine import Workflow
+
+from ...interfaces.recon_scalars import TORTOISEReconScalars
+from qsiprep.interfaces.tortoise import (
+    ComputeADMap,
+    ComputeFAMap,
+    ComputeLIMap,
+    ComputeMAPMRI_NG,
+    ComputeMAPMRI_PA,
+    ComputeMAPMRI_RTOP,
+    ComputeRDMap,
+    EstimateMAPMRI,
+    EstimateTensor,
+    TORTOISEConvert,
+
 
 LOGGER = logging.getLogger('nipype.interface')
 

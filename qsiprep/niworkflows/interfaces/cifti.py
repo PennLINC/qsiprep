@@ -8,20 +8,24 @@ Handling connectivity
 Combines FreeSurfer surfaces with subcortical volumes
 
 """
+import json
 import os
 from glob import glob
-import json
 
 import nibabel as nb
-from nibabel import cifti2 as ci
 import numpy as np
+from nibabel import cifti2 as ci
 from nilearn.image import resample_to_img
-
-from nipype.utils.filemanip import split_filename
 from nipype.interfaces.base import (
-    BaseInterfaceInputSpec, TraitedSpec, File, traits,
-    SimpleInterface, Directory
+    BaseInterfaceInputSpec,
+    Directory,
+    File,
+    SimpleInterface,
+    TraitedSpec,
+    traits,
 )
+from nipype.utils.filemanip import split_filename
+
 from ..data import getters
 
 # CITFI structures with corresponding FS labels

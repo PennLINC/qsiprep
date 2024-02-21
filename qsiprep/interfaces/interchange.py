@@ -1,9 +1,12 @@
-from http.server import SimpleHTTPRequestHandler
-from qsiprep.interfaces.ingress import QsiReconDWIIngress
-from nipype.interfaces.io import FreeSurferSource
+from nipype.interfaces.base import (
+    BaseInterfaceInputSpec,
+    SimpleInterface,
+    TraitedSpec,
+    traits,
+)
+
 from qsiprep.interfaces.anatomical import QsiprepAnatomicalIngress
-from nipype.interfaces.base import (TraitedSpec, BaseInterfaceInputSpec,
-                                    traits, SimpleInterface)
+from qsiprep.interfaces.ingress import QsiReconDWIIngress
 
 # Anatomical (t1w/t2w) slots
 FS_FILES_TO_REGISTER = ["brain", "aseg"]
