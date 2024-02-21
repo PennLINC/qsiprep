@@ -116,14 +116,36 @@ class ReconScalarsDataSink(SimpleInterface):
         return runtime
 
 
-class _BundleScalarsDataSinkInputSpec(_ReconScalarsDataSinkInputSpec):
-    bundle_summary = File(exists=True)
+class _ReconScalarsTableSplitterDataSinkInputSpec(_ReconScalarsDataSinkInputSpec):
+    summary_tsv = File(exists=True, mandatory=True,
+                       desc="tsv of combined scalar summaries")
+    suffix = traits.Str(mandatory=True)
 
-class BundleScalarsDataSink(ReconScalarsDataSink):
 
+class ReconScalarsTableSplitterDataSink(ReconScalarsDataSink):
+    input_spec = _ReconScalarsTableSplitterDataSinkInputSpec
     def _run_interface(self, runtime):
+        summary_df = pd.read_csv(self.inputs.summary_tsv, sep="\t")
+        for groupname, group_df in summary_df.groupby("qsirecon_suffix"):
 
+            # reset the index for this df
+            group_df.reset_index(drop=True, inplace=True)
 
+            qsirecon_suffixed_tsv = get_recon_output_name(
+                base_dir=self.inputs.base_directory,
+                source_file=group_df.loc[0, "source_file"],
+                derivative_file=self.inputs.summary_tsv,
+                qsirecon_suffix=group_df.loc[0, "qsirecon_suffix"],
+                output_bids_entities={
+                    "suffix": self.inputs.suffix,
+                    "bundles": group_df.loc[0, "bundle_source"]}
+            )
+            output_dir = op.dirname(qsirecon_suffixed_tsv)
+            os.makedirs(output_dir, exist_ok=True)
+            group_df.to_csv(
+                qsirecon_suffixed_tsv,
+                index=False,
+                sep="\t")
 
         return runtime
 

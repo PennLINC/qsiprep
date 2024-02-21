@@ -86,6 +86,7 @@ class BundleMapper(ScalarMapper):
         self._load_scalars()
         bundle_dfs = []
         tdi_dfs = []
+        source_suffix = self.inputs.mapping_metadata.get("qsirecon_suffix", "QSIPrep")
         for tck_name, tck_file in zip(self.inputs.bundle_names, self.inputs.tck_files):
             output_tdi_file = fname_presuffix(
                 tck_file,
@@ -117,7 +118,7 @@ class BundleMapper(ScalarMapper):
                      "variable_name": "tdi",
                      # Check that this is ok:
                      "source_file": self.inputs.recon_scalars[0]["source_file"],
-                     "qsirecon_suffix": "scalar_to_bundle",
+                     "qsirecon_suffix": source_suffix,
                      "desc": "Streamline counts per voxel"})
             )
 
@@ -131,12 +132,21 @@ class BundleMapper(ScalarMapper):
         self._update_with_bids_info(bundle_dfs)
         summary_file = op.join(runtime.cwd, "bundle_stats.tsv")
         summary_df = pd.DataFrame(bundle_dfs)
+        # Add information about which bundle workflow created these summaries
+        if isdefined(self.inputs.mapping_metadata):
+            summary_df["bundle_source"] = self.inputs.mapping_metadata.get("qsirecon_suffix")
+            summary_df["bundle_params_id"] = self.inputs.mapping_metadata.get("name")
         summary_df.to_csv(summary_file, index=False, sep="\t")
+        self._results["bundle_summary"] = summary_file
 
         # Write the TDI df
         self._update_with_bids_info(tdi_dfs)
         tdi_file = op.join(runtime.cwd, "tdi_stats.tsv")
         tdi_summary_df = pd.DataFrame(tdi_dfs)
+        # Add information about which bundle workflow created these summaries
+        if isdefined(self.inputs.mapping_metadata):
+            tdi_summary_df["bundle_source"] = self.inputs.mapping_metadata.get("qsirecon_suffix")
+            tdi_summary_df["bundle_params_id"] = self.inputs.mapping_metadata.get("name")
         tdi_summary_df.to_csv(tdi_file, index=False, sep="\t")
         self._results['tdi_stats'] = tdi_file
 

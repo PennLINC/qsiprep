@@ -11,7 +11,7 @@ import logging
 from ...interfaces.bids import ReconDerivativesDataSink
 from ...interfaces.interchange import recon_workflow_input_fields
 from ...engine import Workflow
-from ...interfaces.recon_scalars import ReconScalarsDataSink
+from ...interfaces.recon_scalars import ReconScalarsDataSink, ReconScalarsTableSplitterDataSink
 from ...interfaces.scalar_mapping import BundleMapper, TemplateMapper
 LOGGER = logging.getLogger('nipype.workflow')
 
@@ -31,7 +31,7 @@ def init_scalar_to_bundle_wf(omp_nthreads, available_anatomical_data,
     Outputs
 
         bundle_summaries
-            summary statistics in tsv formar
+            summary statistics in tsv format
 
     """
     inputnode = pe.Node(
@@ -45,6 +45,16 @@ def init_scalar_to_bundle_wf(omp_nthreads, available_anatomical_data,
     bundle_mapper = pe.Node(
         BundleMapper(**params),
         name="bundle_mapper")
+    ds_bundle_mapper = pe.Node(
+        ReconScalarsTableSplitterDataSink(
+            suffix="scalarstats"),
+        name="ds_bundle_mapper",
+        run_without_submitting=True)
+    ds_tdi_summary = pe.Node(
+        ReconScalarsTableSplitterDataSink(
+            suffix="tdistats"),
+        name='ds_tdi_summary',
+        run_without_submitting=True)
     workflow.connect([
         (inputnode, bundle_mapper, [
             ("collected_scalars", "recon_scalars"),
@@ -52,18 +62,12 @@ def init_scalar_to_bundle_wf(omp_nthreads, available_anatomical_data,
             ("dwi_ref", "dwiref_image"),
             ("mapping_metadata", "mapping_metadata"),
             ("bundle_names", "bundle_names")]),
+        (bundle_mapper, ds_bundle_mapper, [
+            ("bundle_summary", "summary_tsv")]),
         (bundle_mapper, outputnode, [
-            ("bundle_summary", "bundle_summary")])
-    ])
-    if qsirecon_suffix:
-
-        ds_bundle_summaries = pe.Node(
-            ReconDerivativesDataSink(desc="bundlemap",
-                                     qsirecon_suffix=qsirecon_suffix),
-            name='ds_bundle_summaries',
-            run_without_submitting=True)
-        workflow.connect([
-            (bundle_mapper, ds_bundle_summaries, [("bundle_summary", "in_file")])
+            ("bundle_summary", "bundle_summary")]),
+        (bundle_mapper, ds_tdi_summary, [
+            ("tdi_stats", "summary_tsv")])
         ])
 
     return workflow

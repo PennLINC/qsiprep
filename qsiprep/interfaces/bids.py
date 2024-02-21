@@ -351,6 +351,7 @@ class DerivativesMaybeDataSink(DerivativesDataSink):
 
 recon_entity_order = [
     "model",
+    "bundles",
     "fit",
     "mdp",
     "mfp",
@@ -405,6 +406,7 @@ class _ReconDerivativesDataSinkInputSpec(DerivativesDataSinkInputSpec):
     mfp = traits.Str('', usedefault=True, desc='Label for model fit parameter field')
     model = traits.Str('', usedefault=True, desc='Label for model field')
     bundle = traits.Str('', usedefault=True, desc='Label for bundle field')
+    bundles = traits.Str('', usedefault=True, desc='Label for bundles field')
     fit = traits.Str('', usedefault=True, desc='Label for fit field')
     label = traits.Str('', usedefault=True, desc='Label for label field')
     qsirecon_suffix = traits.Str('', usedefault=True, desc='name appended to qsirecon- in the derivatives')
@@ -431,6 +433,8 @@ class ReconDerivativesDataSink(DerivativesDataSink):
 
         # Prepare the bids entities from the inputs
         output_bids = {}
+        if self.inputs.bundles:
+            output_bids["bundles"] = self.inputs.bundles
         if self.inputs.bundle:
             output_bids["bundle"] = self.inputs.bundle
         if self.inputs.space:
