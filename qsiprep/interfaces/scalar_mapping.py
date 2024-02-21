@@ -14,6 +14,7 @@ from nipype.interfaces.base import (
     InputMultiObject, OutputMultiObject
 )
 from nipype.interfaces import ants
+from nipype.utils.filemanip import fname_presuffix
 import nilearn.image as nim
 from nilearn.maskers import NiftiMasker
 import pandas as pd
