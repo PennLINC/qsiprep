@@ -33,7 +33,7 @@ from ...interfaces.freesurfer import (
         PrepareSynthStripGrid, FixHeaderSynthStrip, SynthSeg)
 from ...interfaces.anatomical import DesaturateSkull, GetTemplate, VoxelSizeChooser
 from ...interfaces.itk import DisassembleTransform, AffineToRigid
-from qsiprep.interfaces import Conform
+from ...interfaces import Conform
 
 LOGGER = logging.getLogger('nipype.workflow')
 
