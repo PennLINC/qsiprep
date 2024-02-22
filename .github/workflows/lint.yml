@@ -3,10 +3,10 @@ name: Lint code
 on:
   push:
     branches:
-      - main_
+      - master
   pull_request:
     branches:
-      - main_
+      - master
 
 defaults:
   run:
@@ -30,7 +30,7 @@ jobs:
         run: python -c "import sys; print(sys.version)"
       - name: Install flake8 and related packages
         run: python -m pip install \
-          flake8 flake8-absolute-import flake8-black flake8-docstrings \
+          flake8 flake8-black flake8-docstrings \
           flake8-isort flake8-pyproject flake8-unused-arguments \
           flake8-use-fstring pep8-naming
       - name: Check qsiprep
