@@ -23,19 +23,19 @@ keep the data as is and implement the relevant equations rewritten in the
 following form: Y.T = x.T B.T, or in python syntax data = np.dot(sh_coef, B.T)
 where data is Y.T and sh_coef is x.T.
 """
+
 import warnings
 from distutils.version import LooseVersion
 
 import numpy as np
 import scipy
-from dipy.core.geometry import cart2sphere
 from dipy.core.onetime import auto_attr
 from dipy.reconst.cache import Cache
 from dipy.reconst.odf import OdfFit, OdfModel
 from numpy import concatenate, diag, diff, dot, empty, eye, sqrt, unique
 from numpy.linalg import pinv, svd
 from numpy.random import randint
-from scipy.special import factorial, gammaln, lpmv, lpn
+from scipy.special import factorial, gammaln, lpmv
 
 if LooseVersion(scipy.version.short_version) >= LooseVersion('0.15.0'):
     SCIPY_15_PLUS = True
@@ -560,72 +560,6 @@ class SphHarmModel(OdfModel, Cache):
         return sampling_matrix
 
 
-class QballBaseModel(SphHarmModel):
-    """To be subclassed by Qball type models."""
-    def __init__(self, gtab, sh_order, smooth=0.006, min_signal=1.,
-                 assume_normed=False):
-        """Creates a model that can be used to fit or sample diffusion data
-
-        Arguments
-        ---------
-        gtab : GradientTable
-            Diffusion gradients used to acquire data
-        sh_order : even int >= 0
-            the spherical harmonic order of the model
-        smooth : float between 0 and 1, optional
-            The regularization parameter of the model
-        min_signal : float, > 0, optional
-            During fitting, all signal values less than `min_signal` are
-            clipped to `min_signal`. This is done primarily to avoid values
-            less than or equal to zero when taking logs.
-        assume_normed : bool, optional
-            If True, clipping and normalization of the data with respect to the
-            mean B0 signal are skipped during mode fitting. This is an advanced
-            feature and should be used with care.
-
-        See Also
-        --------
-        normalize_data
-
-        """
-        SphHarmModel.__init__(self, gtab)
-        self._where_b0s = lazy_index(gtab.b0s_mask)
-        self._where_dwi = lazy_index(~gtab.b0s_mask)
-        self.assume_normed = assume_normed
-        self.min_signal = min_signal
-        x, y, z = gtab.gradients[self._where_dwi].T
-        r, theta, phi = cart2sphere(x, y, z)
-        B, m, n = real_sym_sh_basis(sh_order, theta[:, None], phi[:, None])
-        L = -n * (n + 1)
-        legendre0 = lpn(sh_order, 0)[0]
-        F = legendre0[n]
-        self.sh_order = sh_order
-        self.B = B
-        self.m = m
-        self.n = n
-        self._set_fit_matrix(B, L, F, smooth)
-
-    def _set_fit_matrix(self, *args):
-        """Should be set in a subclass and is called by __init__"""
-        msg = "User must implement this method in a subclass"
-        raise NotImplementedError(msg)
-
-    def fit(self, data, mask=None):
-        """Fits the model to diffusion data and returns the model fit"""
-        # Normalize the data and fit coefficients
-        if not self.assume_normed:
-            data = normalize_data(data, self._where_b0s, self.min_signal)
-
-        # Compute coefficients using abstract method
-        coef = self._get_shm_coef(data)
-
-        # Apply the mask to the coefficients
-        if mask is not None:
-            mask = np.asarray(mask, dtype=bool)
-            coef *= mask[..., None]
-        return SphHarmFit(self, coef, mask)
-
-
 class SphHarmFit(OdfFit):
     """Diffusion data fit to a spherical harmonic model"""
 
@@ -706,86 +640,10 @@ class SphHarmFit(OdfFit):
         return self.model.predict(self.shm_coeff, gtab, S0)
 
 
-class CsaOdfModel(QballBaseModel):
-    """Implementation of Constant Solid Angle reconstruction method.
-
-    References
-    ----------
-    .. [1] Aganj, I., et al. 2009. ODF Reconstruction in Q-Ball Imaging With
-           Solid Angle Consideration.
-    """
-    min = .001
-    max = .999
-    _n0_const = .5 / np.sqrt(np.pi)
-
-    def _set_fit_matrix(self, B, L, F, smooth):
-        """The fit matrix, is used by fit_coefficients to return the
-        coefficients of the odf"""
-        invB = smooth_pinv(B, sqrt(smooth) * L)
-        L = L[:, None]
-        F = F[:, None]
-        self._fit_matrix = (F * L) / (8 * np.pi) * invB
-
-    def _get_shm_coef(self, data, mask=None):
-        """Returns the coefficients of the model"""
-        data = data[..., self._where_dwi]
-        data = data.clip(self.min, self.max)
-        loglog_data = np.log(-np.log(data))
-        sh_coef = dot(loglog_data, self._fit_matrix.T)
-        sh_coef[..., 0] = self._n0_const
-        return sh_coef
-
-
-class OpdtModel(QballBaseModel):
-    """Implementation of Orientation Probability Density Transform
-    reconstruction method.
-
-    References
-    ----------
-    .. [1] Tristan-Vega, A., et al. 2010. A new methodology for estimation of
-           fiber populations in white matter of the brain with Funk-Radon
-           transform.
-    .. [2] Tristan-Vega, A., et al. 2009. Estimation of fiber orientation
-           probability density functions in high angular resolution diffusion
-           imaging.
-    """
-    def _set_fit_matrix(self, B, L, F, smooth):
-        invB = smooth_pinv(B, sqrt(smooth) * L)
-        L = L[:, None]
-        F = F[:, None]
-        delta_b = F * L * invB
-        delta_q = 4 * F * invB
-        self._fit_matrix = delta_b, delta_q
-
-    def _get_shm_coef(self, data, mask=None):
-        """Returns the coefficients of the model"""
-        delta_b, delta_q = self._fit_matrix
-        return _slowadc_formula(data[..., self._where_dwi], delta_b, delta_q)
-
-
 def _slowadc_formula(data, delta_b, delta_q):
     """formula used in SlowAdcOpdfModel"""
     logd = -np.log(data)
     return dot(logd * (1.5 - logd) * data, delta_q.T) - dot(data, delta_b.T)
-
-
-class QballModel(QballBaseModel):
-    """Implementation of regularized Qball reconstruction method.
-
-    References
-    ----------
-    .. [1] Descoteaux, M., et al. 2007. Regularized, fast, and robust
-           analytical Q-ball imaging.
-    """
-
-    def _set_fit_matrix(self, B, L, F, smooth):
-        invB = smooth_pinv(B, sqrt(smooth) * L)
-        F = F[:, None]
-        self._fit_matrix = F * invB
-
-    def _get_shm_coef(self, data, mask=None):
-        """Returns the coefficients of the model"""
-        return dot(data[..., self._where_dwi], self._fit_matrix.T)
 
 
 def normalize_data(data, where_b0, min_signal=1., out=None):
@@ -870,54 +728,6 @@ def bootstrap_data_voxel(data, H, R, permute=None):
     boot_data = dot(data, H.T)
     boot_data += r[permute]
     return boot_data
-
-
-class ResidualBootstrapWrapper(object):
-    """Returns a residual bootstrap sample of the signal_object when indexed
-
-    Wraps a signal_object, this signal object can be an interpolator. When
-    indexed, the the wrapper indexes the signal_object to get the signal.
-    There wrapper than samples the residual boostrap distribution of signal and
-    returns that sample.
-    """
-    def __init__(self, signal_object, B, where_dwi, min_signal=1.):
-        """Builds a ResidualBootstrapWapper
-
-        Given some linear model described by B, the design matrix, and a
-        signal_object, returns an object which can sample the residual
-        bootstrap distribution of the signal. We assume that the signals are
-        normalized so we clip the bootsrap samples to be between `min_signal`
-        and 1.
-
-        Parameters
-        ----------
-        signal_object : some object that can be indexed
-            This object should return diffusion weighted signals when indexed.
-        B : ndarray, ndim=2
-            The design matrix of the spherical harmonics model used to fit the
-            data. This is the model that will be used to compute the residuals
-            and sample the residual bootstrap distribution
-        where_dwi :
-            indexing object to find diffusion weighted signals from signal
-        min_signal : float
-            The lowest allowable signal.
-        """
-        self._signal_object = signal_object
-        self._H = hat(B)
-        self._R = lcr_matrix(self._H)
-        self._min_signal = min_signal
-        self._where_dwi = where_dwi
-        self.data = signal_object.data
-        self.voxel_size = signal_object.voxel_size
-
-    def __getitem__(self, index):
-        """Indexes self._signal_object and bootstraps the result"""
-        signal = self._signal_object[index].copy()
-        dwi_signal = signal[self._where_dwi]
-        boot_signal = bootstrap_data_voxel(dwi_signal, self._H, self._R)
-        boot_signal.clip(self._min_signal, 1., out=boot_signal)
-        signal[self._where_dwi] = boot_signal
-        return signal
 
 
 def sf_to_sh(sf, sphere, sh_order=4, basis_type=None, smooth=0.0):

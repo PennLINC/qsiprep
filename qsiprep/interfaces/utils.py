@@ -19,13 +19,12 @@ from nipype.interfaces.base import (
     BaseInterfaceInputSpec,
     DynamicTraitedSpec,
     File,
-    InputMultiPath,
     SimpleInterface,
     TraitedSpec,
     isdefined,
     traits,
 )
-from nipype.interfaces.io import add_traits, isdefined
+from nipype.interfaces.io import add_traits
 from nipype.utils.filemanip import fname_presuffix
 
 from ..utils.atlases import get_atlases
@@ -114,116 +113,6 @@ def label_convert(original_atlas, output_mif, orig_txt, mrtrix_txt, metadata):
     os.system(' '.join(cmd))
 
 
-class TPM2ROIInputSpec(BaseInterfaceInputSpec):
-    in_tpm = File(exists=True, mandatory=True, desc='Tissue probability map file in T1 space')
-    in_mask = File(exists=True, mandatory=True, desc='Binary mask of skull-stripped T1w image')
-    mask_erode_mm = traits.Float(xor=['mask_erode_prop'],
-                                 desc='erode input mask (kernel width in mm)')
-    erode_mm = traits.Float(xor=['erode_prop'],
-                            desc='erode output mask (kernel width in mm)')
-    mask_erode_prop = traits.Float(xor=['mask_erode_mm'],
-                                   desc='erode input mask (target volume ratio)')
-    erode_prop = traits.Float(xor=['erode_mm'],
-                              desc='erode output mask (target volume ratio)')
-    prob_thresh = traits.Float(0.95, usedefault=True,
-                               desc='threshold for the tissue probability maps')
-
-
-class TPM2ROIOutputSpec(TraitedSpec):
-    roi_file = File(exists=True, desc='output ROI file')
-    eroded_mask = File(exists=True, desc='resulting eroded mask')
-
-
-class TPM2ROI(SimpleInterface):
-    """Convert tissue probability maps (TPMs) into ROIs
-
-    This interface follows the following logic:
-
-    #. Erode ``in_mask`` by ``mask_erode_mm`` and apply to ``in_tpm``
-    #. Threshold masked TPM at ``prob_thresh``
-    #. Erode resulting mask by ``erode_mm``
-
-    """
-
-    input_spec = TPM2ROIInputSpec
-    output_spec = TPM2ROIOutputSpec
-
-    def _run_interface(self, runtime):
-        mask_erode_mm = self.inputs.mask_erode_mm
-        if not isdefined(mask_erode_mm):
-            mask_erode_mm = None
-        erode_mm = self.inputs.erode_mm
-        if not isdefined(erode_mm):
-            erode_mm = None
-        mask_erode_prop = self.inputs.mask_erode_prop
-        if not isdefined(mask_erode_prop):
-            mask_erode_prop = None
-        erode_prop = self.inputs.erode_prop
-        if not isdefined(erode_prop):
-            erode_prop = None
-        roi_file, eroded_mask = _tpm2roi(
-            self.inputs.in_tpm,
-            self.inputs.in_mask,
-            mask_erode_mm,
-            erode_mm,
-            mask_erode_prop,
-            erode_prop,
-            self.inputs.prob_thresh,
-            newpath=runtime.cwd,
-        )
-        self._results['roi_file'] = roi_file
-        self._results['eroded_mask'] = eroded_mask
-        return runtime
-
-
-class AddTPMsInputSpec(BaseInterfaceInputSpec):
-    in_files = InputMultiPath(File(exists=True), mandatory=True, desc='input list of ROIs')
-    indices = traits.List(traits.Int, desc='select specific maps')
-
-
-class AddTPMsOutputSpec(TraitedSpec):
-    out_file = File(exists=True, desc='union of binarized input files')
-
-
-class AddTPMs(SimpleInterface):
-    """Calculate the union of several :abbr:`TPMs (tissue-probability map)`"""
-    input_spec = AddTPMsInputSpec
-    output_spec = AddTPMsOutputSpec
-
-    def _run_interface(self, runtime):
-        in_files = self.inputs.in_files
-
-        indices = list(range(len(in_files)))
-        if isdefined(self.inputs.indices):
-            indices = self.inputs.indices
-
-        if len(self.inputs.in_files) < 2:
-            self._results['out_file'] = in_files[0]
-            return runtime
-
-        first_fname = in_files[indices[0]]
-        if len(indices) == 1:
-            self._results['out_file'] = first_fname
-            return runtime
-
-        im = nb.concat_images([in_files[i] for i in indices])
-        data = im.get_fdata().sum(axis=3)
-        data = np.clip(data, a_min=0.0, a_max=1.0)
-
-        out_file = fname_presuffix(first_fname, suffix='_tpmsum',
-                                   newpath=runtime.cwd)
-        newnii = im.__class__(data, im.affine, im.header)
-        newnii.set_data_dtype('float32')
-
-        # Set visualization thresholds
-        newnii.header['cal_max'] = 1.0
-        newnii.header['cal_min'] = 0.0
-        newnii.to_filename(out_file)
-        self._results['out_file'] = out_file
-
-        return runtime
-
-
 class AddTSVHeaderInputSpec(BaseInterfaceInputSpec):
     in_file = File(exists=True, mandatory=True, desc='input file')
     columns = traits.List(traits.Str, mandatory=True, desc='header for columns')
@@ -295,126 +184,6 @@ class TestInput(SimpleInterface):
     input_spec = TestInputInputSpec
 
     def _run_interface(self, runtime):
-        return runtime
-
-
-class JoinTSVColumnsInputSpec(BaseInterfaceInputSpec):
-    in_file = File(exists=True, mandatory=True, desc='input file')
-    join_file = File(exists=True, mandatory=True, desc='file to be adjoined')
-    side = traits.Enum('right', 'left', usedefault=True, desc='where to join')
-    columns = traits.List(traits.Str, desc='header for columns')
-
-
-class JoinTSVColumnsOutputSpec(TraitedSpec):
-    out_file = File(exists=True, desc='output TSV file')
-
-
-class JoinTSVColumns(SimpleInterface):
-    """Add a header row to a TSV file
-
-    .. testsetup::
-
-    >>> import os
-    >>> import pandas as pd
-    >>> import numpy as np
-    >>> from tempfile import TemporaryDirectory
-    >>> tmpdir = TemporaryDirectory()
-    >>> os.chdir(tmpdir.name)
-
-    .. doctest::
-
-    An example TSV:
-
-    >>> data = np.arange(30).reshape((6, 5))
-    >>> np.savetxt('data.tsv', data[:, :3], delimiter='\t', fmt='%.1f')
-    >>> np.savetxt('add.tsv', data[:, 3:], delimiter='\t', fmt='%.1f')
-
-    Add headers:
-
-    >>> from qsiprep.interfaces import JoinTSVColumns
-    >>> join = JoinTSVColumns()
-    >>> join.inputs.in_file = 'data.tsv'
-    >>> join.inputs.join_file = 'add.tsv'
-    >>> join.inputs.columns = ['a', 'b', 'c', 'd', 'e']
-    >>> res = join.run()
-    >>> res.outputs.out_file  # doctest: +ELLIPSIS
-    '...data_joined.tsv'
-    >>> pd.read_csv(res.outputs.out_file, sep='\s+', index_col=None,
-    ...             engine='python')  # doctest: +NORMALIZE_WHITESPACE
-          a     b     c     d     e
-    0   0.0   1.0   2.0   3.0   4.0
-    1   5.0   6.0   7.0   8.0   9.0
-    2  10.0  11.0  12.0  13.0  14.0
-    3  15.0  16.0  17.0  18.0  19.0
-    4  20.0  21.0  22.0  23.0  24.0
-    5  25.0  26.0  27.0  28.0  29.0
-
-    >>> join = JoinTSVColumns()
-    >>> join.inputs.in_file = 'data.tsv'
-    >>> join.inputs.join_file = 'add.tsv'
-    >>> res = join.run()
-    >>> pd.read_csv(res.outputs.out_file, sep='\s+', index_col=None,
-    ...             engine='python')  # doctest: +NORMALIZE_WHITESPACE
-        0.0   1.0   2.0   3.0   4.0
-    0   5.0   6.0   7.0   8.0   9.0
-    1  10.0  11.0  12.0  13.0  14.0
-    2  15.0  16.0  17.0  18.0  19.0
-    3  20.0  21.0  22.0  23.0  24.0
-    4  25.0  26.0  27.0  28.0  29.0
-
-    >>> join = JoinTSVColumns()
-    >>> join.inputs.in_file = 'data.tsv'
-    >>> join.inputs.join_file = 'add.tsv'
-    >>> join.inputs.side = 'left'
-    >>> join.inputs.columns = ['a', 'b', 'c', 'd', 'e']
-    >>> res = join.run()
-    >>> pd.read_csv(res.outputs.out_file, sep='\s+', index_col=None,
-    ...             engine='python')  # doctest: +NORMALIZE_WHITESPACE
-          a     b     c    d     e
-    0   3.0   4.0  0.0   1.0   2.0
-    1   8.0   9.0  5.0   6.0   7.0
-    2  13.0  14.0 10.0  11.0  12.0
-    3  18.0  19.0 15.0  16.0  17.0
-    4  23.0  24.0 20.0  21.0  22.0
-    5  28.0  29.0 25.0  26.0  27.0
-
-    .. testcleanup::
-
-    >>> tmpdir.cleanup()
-
-    """
-    input_spec = JoinTSVColumnsInputSpec
-    output_spec = JoinTSVColumnsOutputSpec
-
-    def _run_interface(self, runtime):
-        out_file = fname_presuffix(
-            self.inputs.in_file, suffix='_joined.tsv', newpath=runtime.cwd,
-            use_ext=False)
-
-        header = ''
-        if isdefined(self.inputs.columns) and self.inputs.columns:
-            header = '\t'.join(self.inputs.columns)
-
-        with open(self.inputs.in_file) as ifh:
-            data = ifh.read().splitlines(keepends=False)
-
-        with open(self.inputs.join_file) as ifh:
-            join = ifh.read().splitlines(keepends=False)
-
-        assert len(data) == len(join)
-
-        merged = []
-        for d, j in zip(data, join):
-            line = '%s\t%s' % ((j, d) if self.inputs.side == 'left' else (d, j))
-            merged.append(line)
-
-        if header:
-            merged.insert(0, header)
-
-        with open(out_file, 'w') as ofh:
-            ofh.write('\n'.join(merged))
-
-        self._results['out_file'] = out_file
         return runtime
 
 

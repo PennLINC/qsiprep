@@ -8,19 +8,14 @@ ITK files handling
 
 
 """
-import os
 from mimetypes import guess_type
-from tempfile import TemporaryDirectory
 
 import nibabel as nb
 import numpy as np
 from nipype import logging
-from nipype.interfaces.ants.resampling import ApplyTransformsInputSpec
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec,
     File,
-    InputMultiPath,
-    OutputMultiPath,
     SimpleInterface,
     TraitedSpec,
     traits,
@@ -28,137 +23,6 @@ from nipype.interfaces.base import (
 from nipype.utils.filemanip import fname_presuffix
 
 LOGGER = logging.getLogger('nipype.interface')
-
-
-class MCFLIRT2ITKInputSpec(BaseInterfaceInputSpec):
-    in_files = InputMultiPath(File(exists=True), mandatory=True,
-                              desc='list of MAT files from MCFLIRT')
-    in_reference = File(exists=True, mandatory=True,
-                        desc='input image for spatial reference')
-    in_source = File(exists=True, mandatory=True,
-                     desc='input image for spatial source')
-    num_threads = traits.Int(1, usedefault=True, nohash=True,
-                             desc='number of parallel processes')
-
-
-class MCFLIRT2ITKOutputSpec(TraitedSpec):
-    out_file = File(desc='the output ITKTransform file')
-
-
-class MCFLIRT2ITK(SimpleInterface):
-
-    """
-    Convert a list of MAT files from MCFLIRT into an ITK Transform file.
-    """
-    input_spec = MCFLIRT2ITKInputSpec
-    output_spec = MCFLIRT2ITKOutputSpec
-
-    def _run_interface(self, runtime):
-        num_threads = self.inputs.num_threads
-        if num_threads < 1:
-            num_threads = None
-
-        with TemporaryDirectory(prefix='tmp-', dir=runtime.cwd) as tmp_folder:
-            # Inputs are ready to run in parallel
-            if num_threads is None or num_threads > 1:
-                from concurrent.futures import ThreadPoolExecutor
-                with ThreadPoolExecutor(max_workers=num_threads) as pool:
-                    itk_outs = list(pool.map(_mat2itk, [
-                        (in_mat, self.inputs.in_reference, self.inputs.in_source, i, tmp_folder)
-                        for i, in_mat in enumerate(self.inputs.in_files)]
-                    ))
-            else:
-                itk_outs = [_mat2itk((
-                    in_mat, self.inputs.in_reference, self.inputs.in_source, i, tmp_folder))
-                    for i, in_mat in enumerate(self.inputs.in_files)
-                ]
-
-        # Compose the collated ITK transform file and write
-        tfms = '#Insight Transform File V1.0\n' + ''.join(
-            [el[1] for el in sorted(itk_outs)])
-
-        self._results['out_file'] = os.path.join(runtime.cwd, 'mat2itk.txt')
-        with open(self._results['out_file'], 'w') as f:
-            f.write(tfms)
-
-        return runtime
-
-
-class MultiApplyTransformsInputSpec(ApplyTransformsInputSpec):
-    input_image = InputMultiPath(File(exists=True), mandatory=True,
-                                 desc='input time-series as a list of volumes after splitting'
-                                      ' through the fourth dimension')
-    num_threads = traits.Int(1, usedefault=True, nohash=True,
-                             desc='number of parallel processes')
-    save_cmd = traits.Bool(True, usedefault=True,
-                           desc='write a log of command lines that were applied')
-    copy_dtype = traits.Bool(False, usedefault=True,
-                             desc='copy dtype from inputs to outputs')
-
-
-class MultiApplyTransformsOutputSpec(TraitedSpec):
-    out_files = OutputMultiPath(File(), desc='the output ITKTransform file')
-    log_cmdline = File(desc='a list of command lines used to apply transforms')
-
-
-class MultiApplyTransforms(SimpleInterface):
-
-    """
-    Apply the corresponding list of input transforms
-    """
-    input_spec = MultiApplyTransformsInputSpec
-    output_spec = MultiApplyTransformsOutputSpec
-
-    def _run_interface(self, runtime):
-        # Get all inputs from the ApplyTransforms object
-        ifargs = self.inputs.get()
-
-        # Extract number of input images and transforms
-        in_files = ifargs.pop('input_image')
-        num_files = len(in_files)
-        transforms = ifargs.pop('transforms')
-        # Get number of parallel jobs
-        num_threads = ifargs.pop('num_threads')
-        save_cmd = ifargs.pop('save_cmd')
-
-        # Remove certain keys
-        for key in ['environ', 'ignore_exception',
-                    'terminal_output', 'output_image']:
-            ifargs.pop(key, None)
-
-        # Get a temp folder ready
-        tmp_folder = TemporaryDirectory(prefix='tmp-', dir=runtime.cwd)
-
-        xfms_list = _arrange_xfms(transforms, num_files, tmp_folder)
-        assert len(xfms_list) == num_files
-
-        # Inputs are ready to run in parallel
-        if num_threads < 1:
-            num_threads = None
-
-        if num_threads == 1:
-            out_files = [_applytfms((
-                in_file, in_xfm, ifargs, i, runtime.cwd))
-                for i, (in_file, in_xfm) in enumerate(zip(in_files, xfms_list))
-            ]
-        else:
-            from concurrent.futures import ThreadPoolExecutor
-            with ThreadPoolExecutor(max_workers=num_threads) as pool:
-                out_files = list(pool.map(_applytfms, [
-                    (in_file, in_xfm, ifargs, i, runtime.cwd)
-                    for i, (in_file, in_xfm) in enumerate(zip(in_files, xfms_list))]
-                ))
-        tmp_folder.cleanup()
-
-        # Collect output file names, after sorting by index
-        self._results['out_files'] = [el[0] for el in out_files]
-
-        if save_cmd:
-            self._results['log_cmdline'] = os.path.join(runtime.cwd, 'command.txt')
-            with open(self._results['log_cmdline'], 'w') as cmdfile:
-                print('\n-------\n'.join([el[1] for el in out_files]),
-                      file=cmdfile)
-        return runtime
 
 
 class FUGUEvsm2ANTSwarpInputSpec(BaseInterfaceInputSpec):

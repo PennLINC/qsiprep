@@ -39,30 +39,6 @@ from .reports import SummaryInterface, SummaryOutputSpec
 LOGGER = logging.getLogger('nipype.interface')
 
 
-class GroupImagesInputSpec(BaseInterfaceInputSpec):
-    image_groups = traits.Dict(mandatory=True)
-    dwi_files = InputMultiObject(File(exists=True))
-    bval_files = InputMultiObject(File(exists=True))
-    bvec_files = InputMultiObject(File(exists=True))
-    original_files = InputMultiObject(File(exists=True))
-
-
-class GroupImagesOutputSpec(TraitedSpec):
-    plus_dwi_files = OutputMultiObject(File(exists=True))
-    plus_bval_files = OutputMultiObject(File(exists=True))
-    plus_bvec_files = OutputMultiObject(File(exists=True))
-    plus_original_files = OutputMultiObject(File(exists=True))
-    minus_dwi_files = OutputMultiObject(File(exists=True))
-    minus_bval_files = OutputMultiObject(File(exists=True))
-    minus_bvec_files = OutputMultiObject(File(exists=True))
-    minus_original_files = OutputMultiObject(File(exists=True))
-
-
-class GroupImages(SimpleInterface):
-    input_spec = GroupImagesInputSpec
-    output_spec = GroupImagesOutputSpec
-
-
 def _nonoverlapping_qspace_samples(prediction_bval, prediction_bvec,
                                    all_bvals, all_bvecs, cutoff):
     """Ensure that none of the training samples are too close to the sample to predict.
