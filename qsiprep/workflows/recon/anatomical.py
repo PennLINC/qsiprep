@@ -98,8 +98,8 @@ def init_highres_recon_anatomical_wf(
         )
     elif pipeline_source == "ukb":
         anat_ingress_node, status = gather_ukb_anatomical_data(
-            subject_id, recon_input_dir, name="gather_ukb_anatomical_wf",
-            infant_mode=False)
+            subject_id, recon_input_dir, name="gather_ukb_anatomical_wf", infant_mode=False
+        )
     else:
         raise Exception(f"Unknown pipeline source '{pipeline_source}'")
     anat_ingress_node.inputs.infant_mode = infant_mode

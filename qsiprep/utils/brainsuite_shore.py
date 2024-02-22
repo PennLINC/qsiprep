@@ -346,9 +346,11 @@ class BrainSuiteShoreFit:
                         ((-1) ** (n - ell / 2))
                         / (2.0 * (4.0 * np.pi**2 * self.zeta) ** (3.0 / 2.0))
                         * (
-                            (2.0 * (
-                                4.0 * np.pi**2 * self.zeta) ** (
-                                    3.0 / 2.0) * factorial(n - ell))
+                            (
+                                2.0
+                                * (4.0 * np.pi**2 * self.zeta) ** (3.0 / 2.0)
+                                * factorial(n - ell)
+                            )
                             / (gamma(n + 3.0 / 2.0))
                         )
                         ** (1.0 / 2.0)

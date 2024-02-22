@@ -14,11 +14,7 @@ from nilearn.image import index_img
 from nipype.interfaces import ants
 from nipype.interfaces import freesurfer as fs
 from nipype.interfaces import fsl
-from nipype.interfaces.base import (
-    File,
-    isdefined,
-    traits,
-)
+from nipype.interfaces.base import File, isdefined, traits
 from nipype.interfaces.mixins import reporting
 from nipype.utils.filemanip import fname_presuffix
 

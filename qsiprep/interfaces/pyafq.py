@@ -13,6 +13,7 @@ import os.path as op
 
 from AFQ.api.participant import ParticipantAFQ
 from AFQ.definitions.image import ImageFile
+
 # from AFQ.definitions.mapping import ItkMap
 from nipype import logging
 from nipype.interfaces.base import (

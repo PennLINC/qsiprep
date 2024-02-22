@@ -14,7 +14,6 @@ from nipype.interfaces import freesurfer as fs
 from nipype.interfaces import io as nio
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
-# from pkg_resources import resource_filename as pkgr
 
 from ...engine import Workflow
 from ...interfaces import DerivativesDataSink as FDerivativesDataSink
@@ -29,6 +28,9 @@ from ...interfaces.freesurfer import PatchedLTAConvert as LTAConvert
 from ...niworkflows.interfaces.freesurfer import RobustRegister
 from ...niworkflows.interfaces.segmentation import ReconAllRPT
 from ...utils.misc import fix_multi_T1w_source_name
+
+# from pkg_resources import resource_filename as pkgr
+
 
 LOGGER = logging.getLogger("nipype.workflow")
 
