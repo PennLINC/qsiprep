@@ -15,9 +15,6 @@ from nipype.interfaces.base import (
 )
 from nipype.interfaces import ants
 from nipype.utils.filemanip import fname_presuffix
-import nilearn.image as nim
-from nilearn.maskers import NiftiMasker
-import pandas as pd
 
 from .bids import get_bids_params
 
@@ -73,7 +70,7 @@ class _BundleMapperOutputSpec(ScalarMapperOutputSpec):
 
 
 def _get_tdi_img(dwiref_image, tck_file, output_tdi_file):
-    output = subprocess.run(
+    subprocess.run(
         ["tckmap", "-template", dwiref_image, "-contrast", "tdi", "-force",
          tck_file, output_tdi_file],
         check=True)
@@ -188,7 +185,7 @@ def calculate_mask_stats(masker, mask_name, mask_variable_name, recon_scalar, we
         nz_weighting_vector[np.isnan(nz_voxel_data)] = np.nan
         nz_weighting_vector = nz_weighting_vector / np.nansum(nz_weighting_vector)
         results["masked_weighted_mean"] = np.nansum(
-            nz_voxel_data * nz_weighting_vector )
+            nz_voxel_data * nz_weighting_vector)
 
     return results
 

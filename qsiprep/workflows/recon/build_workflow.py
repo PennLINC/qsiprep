@@ -103,7 +103,7 @@ def init_dwi_recon_workflow(
                              node, "inputnode.collected_scalars")  # fmt:skip
         else:
             workflow.connect(node, "outputnode.recon_scalars",
-                             scalar_gatherer, "in%d " % node_num)  # fmt:skip
+                             scalar_gatherer, f"in{node_num}")  # fmt:skip
         if node_spec.get("input", "qsiprep") == "qsiprep":
             # directly connect all the qsiprep outputs to every node
             workflow.connect([
