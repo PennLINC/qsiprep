@@ -16,10 +16,7 @@ from nipype.interfaces.base import traits
 from ...engine import Workflow
 from ...interfaces.bids import ReconDerivativesDataSink
 from ...interfaces.interchange import recon_workflow_input_fields
-from ...interfaces.recon_scalars import TORTOISEReconScalars, ReconScalarsDataSink
-from ...engine import Workflow
-
-from ...interfaces.recon_scalars import TORTOISEReconScalars
+from ...interfaces.recon_scalars import ReconScalarsDataSink, TORTOISEReconScalars
 from qsiprep.interfaces.tortoise import (
     ComputeADMap,
     ComputeFAMap,
@@ -32,7 +29,6 @@ from qsiprep.interfaces.tortoise import (
     EstimateTensor,
     TORTOISEConvert,
 )
-
 
 LOGGER = logging.getLogger("nipype.interface")
 

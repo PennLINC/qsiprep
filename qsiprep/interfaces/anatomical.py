@@ -30,6 +30,7 @@ from nipype.utils.filemanip import fname_presuffix
 from pkg_resources import resource_filename as pkgr
 from pkg_resources import resource_filename as pkgrf
 from scipy import ndimage
+from scipy.spatial import distance
 
 from ..utils.ingress import ukb_dirname_to_bids
 from .images import to_lps

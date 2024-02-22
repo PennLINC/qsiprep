@@ -13,15 +13,11 @@ qsiprep base reconstruction workflows
 
 import logging
 from pathlib import Path
-from pkg_resources import resource_filename as pkgrf
-from nipype.pipeline import engine as pe
-from nipype.interfaces import utility as niu
-from nipype.interfaces import mrtrix3, ants, afni
-from nipype.interfaces.base import traits
-from ...niworkflows.interfaces.registration import RobustMNINormalizationRPT
+
 import nipype.interfaces.io as nio
 from nipype.interfaces import afni, ants, mrtrix3
 from nipype.interfaces import utility as niu
+from nipype.interfaces.base import traits
 from nipype.pipeline import engine as pe
 from pkg_resources import resource_filename as pkgrf
 
@@ -39,10 +35,8 @@ from ...interfaces.interchange import (
 )
 from ...interfaces.mrtrix import GenerateMasked5tt, ITKTransformConvert, TransformHeader
 from ...niworkflows.interfaces.registration import RobustMNINormalizationRPT
-from qsiprep.interfaces.utils import GetConnectivityAtlases
-
 from ..anatomical.volume import init_output_grid_wf
-
+from qsiprep.interfaces.utils import GetConnectivityAtlases
 
 LOGGER = logging.getLogger("nipype.workflow")
 

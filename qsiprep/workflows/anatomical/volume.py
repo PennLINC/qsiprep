@@ -17,9 +17,10 @@ from nipype.pipeline import engine as pe
 from pkg_resources import resource_filename as pkgr
 
 from ...engine import Workflow
+from ...interfaces import Conform
 from ...interfaces import DerivativesDataSink as FDerivativesDataSink
 from ...interfaces import TemplateDimensions
-from ...interfaces.anatomical import DesaturateSkull, GetTemplate
+from ...interfaces.anatomical import DesaturateSkull, GetTemplate, VoxelSizeChooser
 from ...interfaces.freesurfer import (
     FixHeaderSynthStrip,
     PrepareSynthStripGrid,
@@ -29,10 +30,6 @@ from ...interfaces.itk import AffineToRigid, DisassembleTransform
 from ...niworkflows.interfaces.masks import ROIsPlot
 from ...niworkflows.interfaces.registration import RobustMNINormalizationRPT
 from ...utils.misc import fix_multi_source_name
-from ...interfaces.freesurfer import PrepareSynthStripGrid, FixHeaderSynthStrip, SynthSeg
-from ...interfaces.anatomical import DesaturateSkull, GetTemplate, VoxelSizeChooser
-from ...interfaces.itk import DisassembleTransform, AffineToRigid
-from ...interfaces import Conform
 
 LOGGER = logging.getLogger("nipype.workflow")
 

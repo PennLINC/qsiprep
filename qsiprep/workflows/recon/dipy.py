@@ -19,14 +19,13 @@ from ...interfaces.dipy import (
 )
 from ...interfaces.interchange import recon_workflow_input_fields
 from ...interfaces.recon_scalars import (
-    ReconScalarsDataSink,
-    DIPYDKIReconScalars,
     BrainSuite3dSHOREReconScalars,
+    DIPYDKIReconScalars,
     DIPYMAPMRIReconScalars,
+    ReconScalarsDataSink,
 )
 from ...interfaces.reports import CLIReconPeaksReport
 from qsiprep.interfaces.bids import ReconDerivativesDataSink
-
 
 LOGGER = logging.getLogger("nipype.interface")
 

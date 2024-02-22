@@ -20,18 +20,13 @@ from .dsi_studio import (
     init_dsi_studio_tractography_wf,
 )
 from .dynamics import init_controllability_wf
-from .utils import init_conform_dwi_wf, init_discard_repeated_samples_wf
-from .steinhardt import init_steinhardt_order_param_wf
-from .scalar_mapping import init_scalar_to_bundle_wf, init_scalar_to_template_wf
-from ...engine import Workflow
-from ...interfaces.interchange import default_input_set, recon_workflow_input_fields
 from .mrtrix import (
     init_global_tractography_wf,
     init_mrtrix_connectivity_wf,
     init_mrtrix_csd_recon_wf,
     init_mrtrix_tractography_wf,
 )
-from .scalar_mapping import init_scalar_to_bundle_wf
+from .scalar_mapping import init_scalar_to_bundle_wf, init_scalar_to_template_wf
 from .steinhardt import init_steinhardt_order_param_wf
 from .tortoise import init_tortoise_estimator_wf
 from .utils import init_conform_dwi_wf, init_discard_repeated_samples_wf

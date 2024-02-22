@@ -15,11 +15,9 @@ from nipype.interfaces import utility as niu
 
 from ...engine import Workflow
 from ...interfaces.bids import ReconDerivativesDataSink
-from ...interfaces.recon_scalars import DSIStudioReconScalars, ReconScalarsDataSink
-
 from ...interfaces.converters import DSIStudioTrkToTck
 from ...interfaces.interchange import recon_workflow_input_fields
-from ...interfaces.recon_scalars import DSIStudioReconScalars
+from ...interfaces.recon_scalars import DSIStudioReconScalars, ReconScalarsDataSink
 from ...interfaces.reports import CLIReconPeaksReport, ConnectivityReport
 from qsiprep.interfaces.dsi_studio import (
     DSI_STUDIO_VERSION,

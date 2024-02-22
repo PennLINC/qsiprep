@@ -14,8 +14,10 @@ import nipype.pipeline.engine as pe
 from ...engine import Workflow
 from ...interfaces.bids import ReconDerivativesDataSink
 from ...interfaces.interchange import recon_workflow_input_fields
-from ...engine import Workflow
-from ...interfaces.recon_scalars import ReconScalarsDataSink, ReconScalarsTableSplitterDataSink
+from ...interfaces.recon_scalars import (
+    ReconScalarsDataSink,
+    ReconScalarsTableSplitterDataSink,
+)
 from ...interfaces.scalar_mapping import BundleMapper, TemplateMapper
 
 LOGGER = logging.getLogger("nipype.workflow")

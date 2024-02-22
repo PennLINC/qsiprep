@@ -14,12 +14,10 @@ from nipype.interfaces import utility as niu
 from ...engine import Workflow
 from ...interfaces.amico import NODDI
 from ...interfaces.converters import NODDItoFIBGZ
-from ...interfaces.recon_scalars import AMICOReconScalars, ReconScalarsDataSink
 from ...interfaces.interchange import recon_workflow_input_fields
-from ...interfaces.recon_scalars import AMICOReconScalars
+from ...interfaces.recon_scalars import AMICOReconScalars, ReconScalarsDataSink
 from ...interfaces.reports import CLIReconPeaksReport
 from qsiprep.interfaces.bids import ReconDerivativesDataSink
-
 
 LOGGER = logging.getLogger("nipype.interface")
 
