@@ -36,35 +36,10 @@ from ..utils.brainsuite_shore import BrainSuiteShoreModel, brainsuite_shore_basi
 from .gradients import concatenate_bvals, concatenate_bvecs
 from .reports import SummaryInterface, SummaryOutputSpec
 
-LOGGER = logging.getLogger('nipype.interface')
+LOGGER = logging.getLogger("nipype.interface")
 
 
-class GroupImagesInputSpec(BaseInterfaceInputSpec):
-    image_groups = traits.Dict(mandatory=True)
-    dwi_files = InputMultiObject(File(exists=True))
-    bval_files = InputMultiObject(File(exists=True))
-    bvec_files = InputMultiObject(File(exists=True))
-    original_files = InputMultiObject(File(exists=True))
-
-
-class GroupImagesOutputSpec(TraitedSpec):
-    plus_dwi_files = OutputMultiObject(File(exists=True))
-    plus_bval_files = OutputMultiObject(File(exists=True))
-    plus_bvec_files = OutputMultiObject(File(exists=True))
-    plus_original_files = OutputMultiObject(File(exists=True))
-    minus_dwi_files = OutputMultiObject(File(exists=True))
-    minus_bval_files = OutputMultiObject(File(exists=True))
-    minus_bvec_files = OutputMultiObject(File(exists=True))
-    minus_original_files = OutputMultiObject(File(exists=True))
-
-
-class GroupImages(SimpleInterface):
-    input_spec = GroupImagesInputSpec
-    output_spec = GroupImagesOutputSpec
-
-
-def _nonoverlapping_qspace_samples(prediction_bval, prediction_bvec,
-                                   all_bvals, all_bvecs, cutoff):
+def _nonoverlapping_qspace_samples(prediction_bval, prediction_bvec, all_bvals, all_bvecs, cutoff):
     """Ensure that none of the training samples are too close to the sample to predict.
 
     Parameters
@@ -104,9 +79,8 @@ class B0Mean(SimpleInterface):
         b0_images = [nb.load(fname) for fname in self.inputs.b0_images]
         b0_mean = np.stack([img.get_fdata() for img in b0_images], -1).mean(3)
         mean_file = op.join(runtime.cwd, "b0_mean.nii.gz")
-        nb.Nifti1Image(b0_mean, b0_images[0].affine, b0_images[0].header
-                       ).to_filename(mean_file)
-        self._results['average_image'] = mean_file
+        nb.Nifti1Image(b0_mean, b0_images[0].affine, b0_images[0].header).to_filename(mean_file)
+        self._results["average_image"] = mean_file
         return runtime
 
 
@@ -127,6 +101,7 @@ class ExtractDWISForModelOutputSpec(TraitedSpec):
 
 class ExtractDWIsForModel(SimpleInterface):
     """Take a DWI series with interspersed b0 images and create a model-ready version"""
+
     input_spec = ExtractDWISForModelInputSpec
     output_spec = ExtractDWISForModelOutputSpec
 
@@ -139,10 +114,10 @@ class ExtractDWIsForModel(SimpleInterface):
         if not len(all_images) == len(all_bvecs) == len(all_bvals) == len(transforms):
             raise Exception("Image, bval, bvec inputs must be of the same length")
         ok_indices = [idx for idx in range(len(all_images)) if idx not in b0_indices]
-        self._results['model_dwi_files'] = [all_images[idx] for idx in ok_indices]
-        self._results['model_bvals'] = [all_bvals[idx] for idx in ok_indices]
-        self._results['model_bvecs'] = [all_bvecs[idx] for idx in ok_indices]
-        self._results['transforms'] = [transforms[idx] for idx in ok_indices]
+        self._results["model_dwi_files"] = [all_images[idx] for idx in ok_indices]
+        self._results["model_bvals"] = [all_bvals[idx] for idx in ok_indices]
+        self._results["model_bvecs"] = [all_bvecs[idx] for idx in ok_indices]
+        self._results["transforms"] = [transforms[idx] for idx in ok_indices]
 
         return runtime
 
@@ -165,7 +140,7 @@ class SignalPredictionInputSpec(BaseInterfaceInputSpec):
     bvec_to_predict = traits.Array()
     bval_to_predict = traits.Float()
     minimal_q_distance = traits.Float(2.0, usedefault=True)
-    model = traits.Str('3dSHORE', usedefault=True)
+    model = traits.Str("3dSHORE", usedefault=True)
 
 
 class SignalPredictionOutputSpec(TraitedSpec):
@@ -173,8 +148,8 @@ class SignalPredictionOutputSpec(TraitedSpec):
 
 
 class SignalPrediction(SimpleInterface):
-    """
-    """
+    """ """
+
     input_spec = SignalPredictionInputSpec
     output_spec = SignalPredictionOutputSpec
 
@@ -194,14 +169,16 @@ class SignalPrediction(SimpleInterface):
             bvals = self.inputs.bvals
         else:
             bvals = concatenate_bvals(self.inputs.bvals, None)
-        all_bvals = np.array([0.] + bvals.tolist())
+        all_bvals = np.array([0.0] + bvals.tolist())
 
         # Which sample points are too close to the one we want to predict?
         training_mask = _nonoverlapping_qspace_samples(
-            pred_val, pred_vec, all_bvals, all_bvecs, self.inputs.minimal_q_distance)
+            pred_val, pred_vec, all_bvals, all_bvecs, self.inputs.minimal_q_distance
+        )
         training_indices = np.flatnonzero(training_mask[1:])
         training_image_paths = [self.inputs.aligned_b0_mean] + [
-            all_images[idx] for idx in training_indices]
+            all_images[idx] for idx in training_indices
+        ]
         training_bvecs = all_bvecs[training_mask]
         training_bvals = all_bvals[training_mask]
         LOGGER.info("Training with %d of %d", training_mask.sum(), len(training_mask))
@@ -209,40 +186,42 @@ class SignalPrediction(SimpleInterface):
         # Load training data and fit the model
         training_data = quick_load_images(training_image_paths)
         training_gtab = gradient_table(bvals=training_bvals, bvecs=training_bvecs)
-        #set up prediction variables
+        # set up prediction variables
         prediction_bvecs = np.tile(pred_vec, (10, 1))
         prediction_bvals = np.ones(10) * pred_val
         prediction_bvals[9] = 0  # prevent warning
         prediction_gtab = gradient_table(bvals=prediction_bvals, bvecs=prediction_bvecs)
-        if self.inputs.model == '3dSHORE':
+        if self.inputs.model == "3dSHORE":
             shore_model = BrainSuiteShoreModel(training_gtab, regularization="L2")
             shore_fit = shore_model.fit(training_data, mask=mask_array)
             # Get the shore vector for the desired coordinate
-            prediction_shore = brainsuite_shore_basis(shore_model.radial_order, shore_model.zeta,
-                                                  prediction_gtab, shore_model.tau)
+            prediction_shore = brainsuite_shore_basis(
+                shore_model.radial_order, shore_model.zeta, prediction_gtab, shore_model.tau
+            )
             prediction_dir = prediction_shore[0]
             # Calculate the signal prediction, reshape to 3D and save
             shore_array = shore_fit._shore_coef[mask_array]
             output_data = np.zeros(mask_array.shape)
             output_data[mask_array] = np.dot(shore_array, prediction_dir)
 
-        elif self.inputs.model == 'tensor':
+        elif self.inputs.model == "tensor":
             dti_wls = dti.TensorModel(training_gtab)
             fit_wls = dti_wls.fit(training_data, mask=mask_array)
             dti_params = fit_wls.model_params
             output_data = dti.tensor_prediction(
-                dti_params, prediction_gtab, training_data[:,:,:,0])[..., 0]
+                dti_params, prediction_gtab, training_data[:, :, :, 0]
+            )[..., 0]
 
         else:
-            raise NotImplementedError('Unsupported model: ' + self.inputs.model)
+            raise NotImplementedError("Unsupported model: " + self.inputs.model)
 
         prediction_file = op.join(
             runtime.cwd,
-            "predicted_b%d_%.2f_%.2f_%.2f.nii.gz" % (
-                (pred_val,) + tuple(np.round(pred_vec, decimals=2))))
-        nb.Nifti1Image(output_data, mask_img.affine, mask_img.header
-                       ).to_filename(prediction_file)
-        self._results['predicted_image'] = prediction_file
+            "predicted_b%d_%.2f_%.2f_%.2f.nii.gz"
+            % ((pred_val,) + tuple(np.round(pred_vec, decimals=2))),
+        )
+        nb.Nifti1Image(output_data, mask_img.affine, mask_img.header).to_filename(prediction_file)
+        self._results["predicted_image"] = prediction_file
 
         return runtime
 
@@ -276,9 +255,8 @@ class CalculateCNR(SimpleInterface):
         snr = np.nan_to_num(signal_var / noise_var)
         out_mat = np.zeros(mask_image.shape)
         out_mat[mask] = snr
-        nb.Nifti1Image(out_mat, mask_image.affine,
-                       header=mask_image.header).to_filename(cnr_file)
-        self._results['cnr_image'] = cnr_file
+        nb.Nifti1Image(out_mat, mask_image.affine, header=mask_image.header).to_filename(cnr_file)
+        self._results["cnr_image"] = cnr_file
         return runtime
 
 
@@ -310,8 +288,9 @@ class ReorderOutputs(SimpleInterface):
         warped_dwi_images = self.inputs.warped_dwi_images[::-1]
         model_transforms = self.inputs.model_based_transforms[::-1]
         model_images = self.inputs.model_predicted_images[::-1]
-        b0_transforms = [self.inputs.initial_transforms[idx] for idx in
-                         self.inputs.b0_indices][::-1]
+        b0_transforms = [self.inputs.initial_transforms[idx] for idx in self.inputs.b0_indices][
+            ::-1
+        ]
         num_dwis = len(self.inputs.initial_transforms)
 
         for imagenum in range(num_dwis):
@@ -327,9 +306,9 @@ class ReorderOutputs(SimpleInterface):
         if not len(model_transforms) == len(b0_transforms) == len(model_images) == 0:
             raise Exception("Unable to recombine images and transforms")
 
-        self._results['hmc_warped_images'] = full_warped_images
-        self._results['full_transforms'] = full_transforms
-        self._results['full_predicted_dwi_series'] = full_predicted_dwi_series
+        self._results["hmc_warped_images"] = full_warped_images
+        self._results["full_transforms"] = full_transforms
+        self._results["full_predicted_dwi_series"] = full_predicted_dwi_series
 
         return runtime
 
@@ -357,19 +336,19 @@ class IterationSummary(SummaryInterface):
         all_iters = []
         for fnum, fname in enumerate(motion_files):
             df = pd.read_csv(fname)
-            df['iter_num'] = fnum
+            df["iter_num"] = fnum
             path_parts = fname.split(os.sep)
-            itername = '' if 'iter' not in path_parts[-3] else path_parts[-3]
-            df['iter_name'] = itername
+            itername = "" if "iter" not in path_parts[-3] else path_parts[-3]
+            df["iter_name"] = itername
             all_iters.append(df)
         combined = pd.concat(all_iters, axis=0, ignore_index=True)
 
         combined.to_csv(output_fname, index=False)
-        self._results['iteration_summary_file'] = output_fname
+        self._results["iteration_summary_file"] = output_fname
 
         # Create a figure for the report
         _iteration_summary_plot(combined, fig_output_fname)
-        self._results['plot_file'] = fig_output_fname
+        self._results["plot_file"] = fig_output_fname
 
         return runtime
 
@@ -391,15 +370,19 @@ class SHORELineReport(SummaryInterface):
 
     def _run_interface(self, runtime):
         images = []
-        for imagenum, (orig_file, aligned_file, model_file) in enumerate(zip(
-                self.inputs.original_images, self.inputs.registered_images,
-                self.inputs.model_predicted_images)):
+        for imagenum, (orig_file, aligned_file, model_file) in enumerate(
+            zip(
+                self.inputs.original_images,
+                self.inputs.registered_images,
+                self.inputs.model_predicted_images,
+            )
+        ):
 
             images.extend(before_after_images(orig_file, aligned_file, model_file, imagenum))
 
         out_file = op.join(runtime.cwd, "shoreline_reg.gif")
         imageio.mimsave(out_file, images, duration=1000)
-        self._results['plot_file'] = out_file
+        self._results["plot_file"] = out_file
         return runtime
 
 
@@ -409,15 +392,17 @@ def scaled_mip(img1, img2, img3, axis):
     mip3 = img3.max(axis=axis).T
     max_obs = max(mip1.max(), mip2.max(), mip3.max())
     vmax = 0.98 * max_obs
-    return (np.clip(mip1, 0, vmax) / vmax,
-            np.clip(mip2, 0, vmax) / vmax,
-            np.clip(mip3, 0, vmax) / vmax)
+    return (
+        np.clip(mip1, 0, vmax) / vmax,
+        np.clip(mip2, 0, vmax) / vmax,
+        np.clip(mip3, 0, vmax) / vmax,
+    )
 
 
 def to_image(fig):
     fig.subplots_adjust(hspace=0, left=0, right=1, wspace=0)
-    fig.canvas.draw()       # draw the canvas, cache the renderer
-    image = np.frombuffer(fig.canvas.tostring_rgb(), dtype='uint8')
+    fig.canvas.draw()  # draw the canvas, cache the renderer
+    image = np.frombuffer(fig.canvas.tostring_rgb(), dtype="uint8")
     image = image.reshape(fig.canvas.get_width_height()[::-1] + (3,))
     return image
 
@@ -442,11 +427,11 @@ def before_after_images(orig_file, aligned_file, model_file, imagenum):
     target_contours_low = measure.find_contours(target_mip, 0.05)
 
     # Plot before
-    ax[0].imshow(orig_mip, vmax=1., vmin=0, origin="lower", cmap="gray",
-                 interpolation="nearest")
-    ax[1].imshow(target_mip, vmax=1., vmin=0, origin="lower", cmap="gray",
-                 interpolation="nearest")
-    ax[0].text(1, 1, "%03d: Before" % imagenum, fontsize=16, color='white')
+    ax[0].imshow(orig_mip, vmax=1.0, vmin=0, origin="lower", cmap="gray", interpolation="nearest")
+    ax[1].imshow(
+        target_mip, vmax=1.0, vmin=0, origin="lower", cmap="gray", interpolation="nearest"
+    )
+    ax[0].text(1, 1, "%03d: Before" % imagenum, fontsize=16, color="white")
     for contour in target_contours + target_contours_low:
         ax[0].plot(contour[:, 1], contour[:, 0], linewidth=2, alpha=0.9, color="#e7298a")
         ax[1].plot(contour[:, 1], contour[:, 0], linewidth=2, alpha=0.9, color="#e7298a")
@@ -462,11 +447,13 @@ def before_after_images(orig_file, aligned_file, model_file, imagenum):
     # Plot after
     for _ax in ax:
         _ax.clear()
-    ax[0].imshow(aligned_mip, vmax=1., vmin=0, origin="lower", cmap="gray",
-                 interpolation="nearest")
-    ax[1].imshow(target_mip, vmax=1., vmin=0, origin="lower", cmap="gray",
-                 interpolation="nearest")
-    ax[0].text(1, 1, "%03d: After" % imagenum, fontsize=16, color='white')
+    ax[0].imshow(
+        aligned_mip, vmax=1.0, vmin=0, origin="lower", cmap="gray", interpolation="nearest"
+    )
+    ax[1].imshow(
+        target_mip, vmax=1.0, vmin=0, origin="lower", cmap="gray", interpolation="nearest"
+    )
+    ax[0].text(1, 1, "%03d: After" % imagenum, fontsize=16, color="white")
     for contour in target_contours + target_contours_low:
         ax[0].plot(contour[:, 1], contour[:, 0], linewidth=2, alpha=0.9, color="#e7298a")
         ax[1].plot(contour[:, 1], contour[:, 0], linewidth=2, alpha=0.9, color="#e7298a")
@@ -482,7 +469,7 @@ def before_after_images(orig_file, aligned_file, model_file, imagenum):
 
 
 def _iteration_summary_plot(iters_df, out_file):
-    iters = list([item[1] for item in iters_df.groupby('iter_num')])
+    iters = list([item[1] for item in iters_df.groupby("iter_num")])
     shift_cols = ["shiftX", "shiftY", "shiftZ"]
     rotate_cols = ["rotateX", "rotateY", "rotateZ"]
     shifts = np.stack([df[shift_cols] for df in iters], -1)
@@ -498,11 +485,11 @@ def _iteration_summary_plot(iters_df, out_file):
     rotdiff_dfs = []
     for diffnum, (rot_diff, shift_diff) in enumerate(zip(rot_diffs.T, shift_diffs.T)):
         shiftdiff_df = pd.DataFrame(shift_diff.T, columns=shift_cols)
-        shiftdiff_df['difference_num'] = "%02d" % diffnum
+        shiftdiff_df["difference_num"] = "%02d" % diffnum
         shiftdiff_dfs.append(shiftdiff_df)
 
         rotdiff_df = pd.DataFrame(rot_diff.T, columns=rotate_cols)
-        rotdiff_df['difference_num'] = "%02d" % diffnum
+        rotdiff_df["difference_num"] = "%02d" % diffnum
         rotdiff_dfs.append(rotdiff_df)
 
     shift_diffs = pd.concat(shiftdiff_dfs, axis=0)
@@ -511,17 +498,23 @@ def _iteration_summary_plot(iters_df, out_file):
     # Plot shifts
     sns.set()
     fig, ax = plt.subplots(ncols=2, figsize=(10, 5))
-    sns.violinplot(x="variable", y="value",
-                   hue="difference_num",
-                   ax=ax[0],
-                   data=shift_diffs.melt(id_vars=['difference_num']))
+    sns.violinplot(
+        x="variable",
+        y="value",
+        hue="difference_num",
+        ax=ax[0],
+        data=shift_diffs.melt(id_vars=["difference_num"]),
+    )
     ax[0].set_ylabel("mm")
     ax[0].set_title("Shift")
 
     # Plot rotations
-    sns.violinplot(x="variable", y="value",
-                   hue="difference_num",
-                   data=rotate_diffs.melt(id_vars=['difference_num']))
+    sns.violinplot(
+        x="variable",
+        y="value",
+        hue="difference_num",
+        data=rotate_diffs.melt(id_vars=["difference_num"]),
+    )
     ax[1].set_ylabel("Degrees")
     ax[1].set_title("Rotation")
     sns.despine(offset=10, trim=True, fig=fig)

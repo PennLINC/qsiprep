@@ -80,21 +80,32 @@ The head-motion estimates calculated in the correction step were also
 placed within the corresponding confounds file. Slicewise cross correlation
 was also calculated.
 """
-    inputnode = pe.Node(niu.IdentityInterface(
-        fields=['sliceqc_file', 'motion_params', 'bval_file', 'bvec_file', 'original_files',
-                'denoising_confounds']),
-        name='inputnode')
-    outputnode = pe.Node(niu.IdentityInterface(
-        fields=['confounds_file', 'imputed_images']),
-        name='outputnode')
+    inputnode = pe.Node(
+        niu.IdentityInterface(
+            fields=[
+                "sliceqc_file",
+                "motion_params",
+                "bval_file",
+                "bvec_file",
+                "original_files",
+                "denoising_confounds",
+            ]
+        ),
+        name="inputnode",
+    )
+    outputnode = pe.Node(
+        niu.IdentityInterface(fields=["confounds_file", "imputed_images"]), name="outputnode"
+    )
 
     # Frame displacement
-    fdisp = pe.Node(nac.FramewiseDisplacement(parameter_source="SPM"),
-                    name="fdisp", mem_gb=mem_gb)
+    fdisp = pe.Node(nac.FramewiseDisplacement(parameter_source="SPM"), name="fdisp", mem_gb=mem_gb)
 
     add_motion_headers = pe.Node(
         AddTSVHeader(columns=["trans_x", "trans_y", "trans_z", "rot_x", "rot_y", "rot_z"]),
-        name="add_motion_headers", mem_gb=0.01, run_without_submitting=True)
+        name="add_motion_headers",
+        mem_gb=0.01,
+        run_without_submitting=True,
+    )
     concat = pe.Node(GatherConfounds(), name="concat", mem_gb=0.01, run_without_submitting=True)
 
     workflow.connect([
@@ -111,6 +122,6 @@ was also calculated.
                              ('denoising_confounds', 'denoising_confounds')]),
         # Set outputs
         (concat, outputnode, [('confounds_file', 'confounds_file')]),
-    ])
+    ])  # fmt:skip
 
     return workflow

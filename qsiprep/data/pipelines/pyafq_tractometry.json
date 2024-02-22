@@ -9,7 +9,7 @@
             "software": "pyAFQ",
             "action": "pyafq_tractometry",
             "input": "qsiprep",
-            "output_suffix": "PYAFQ_TRACTOMETRY",
+            "qsirecon_suffix": "PYAFQ",
             "parameters": {
                 "use_external_tracking": false,
                 "export": "all",

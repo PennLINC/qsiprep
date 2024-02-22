@@ -20,7 +20,7 @@ from .qc import init_modelfree_qc_wf
 from .util import get_source_file
 
 DEFAULT_MEMORY_MIN_GB = 0.01
-LOGGER = logging.getLogger('nipype.workflow')
+LOGGER = logging.getLogger("nipype.workflow")
 
 
 def init_dwi_pre_hmc_wf(scan_groups,
@@ -114,12 +114,24 @@ def init_dwi_pre_hmc_wf(scan_groups,
     """
     workflow = Workflow(name=name)
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=[
-            'dwi_file', 'bval_file', 'bvec_file', 'original_files', 'denoising_confounds',
-            'noise_images', 'bias_images', 'qc_file', 'raw_concatenated', 'validation_reports']),
-        name='outputnode')
-    dwi_series_pedir = scan_groups['dwi_series_pedir']
-    dwi_series = scan_groups['dwi_series']
+        niu.IdentityInterface(
+            fields=[
+                "dwi_file",
+                "bval_file",
+                "bvec_file",
+                "original_files",
+                "denoising_confounds",
+                "noise_images",
+                "bias_images",
+                "qc_file",
+                "raw_concatenated",
+                "validation_reports",
+            ]
+        ),
+        name="outputnode",
+    )
+    dwi_series_pedir = scan_groups["dwi_series_pedir"]
+    dwi_series = scan_groups["dwi_series"]
 
     # Configure the denoising window
     if (denoise_method == 'dwidenoise') and dwi_denoise_window == 'auto':
@@ -144,17 +156,20 @@ def init_dwi_pre_hmc_wf(scan_groups,
 
     # Doing biascorr here is the old way.
     dwi_no_biascorr = True
-    if b1_biascorrect_stage == 'legacy':
+    if b1_biascorrect_stage == "legacy":
         dwi_no_biascorr = False
         LOGGER.warning("Applying bias correction before merging. Check results!")
 
     # Special case: Two reverse PE DWI series are going to get combined for eddy
     if preprocess_rpe_series:
         workflow.__desc__ = "Images were grouped into two phase encoding polarity groups. "
-        rpe_series = scan_groups['fieldmap_info']['rpe_series']
+        rpe_series = scan_groups["fieldmap_info"]["rpe_series"]
         # Merge, denoise, split, hmc on the plus series
-        plus_files, minus_files = (rpe_series, dwi_series) if dwi_series_pedir.endswith("-") \
+        plus_files, minus_files = (
+            (rpe_series, dwi_series)
+            if dwi_series_pedir.endswith("-")
             else (dwi_series, rpe_series)
+        )
         pe_axis = dwi_series_pedir[0]
         plus_source_file = get_source_file(plus_files, suffix='_PEplus')
         merge_plus = init_merge_and_denoise_wf(
@@ -198,22 +213,23 @@ def init_dwi_pre_hmc_wf(scan_groups,
         )
 
         # Combine the original images from the splits into one 4D series + bvals/bvecs
-        pm_validation = pe.Node(niu.Merge(2), name='pm_validation')
-        pm_dwis = pe.Node(niu.Merge(2), name='pm_dwis')
-        pm_bids_dwis = pe.Node(niu.Merge(2), name='pm_bids_dwis')
-        pm_bvals = pe.Node(niu.Merge(2), name='pm_bvals')
-        pm_bvecs = pe.Node(niu.Merge(2), name='pm_bvecs')
-        pm_bias = pe.Node(niu.Merge(2), name='pm_bias')
-        pm_noise_images = pe.Node(niu.Merge(2), name='pm_noise')
-        pm_denoising_confounds = pe.Node(niu.Merge(2), name='pm_denoising_confounds')
-        pm_raw_images = pe.Node(niu.Merge(2), name='pm_raw_images')
+        pm_validation = pe.Node(niu.Merge(2), name="pm_validation")
+        pm_dwis = pe.Node(niu.Merge(2), name="pm_dwis")
+        pm_bids_dwis = pe.Node(niu.Merge(2), name="pm_bids_dwis")
+        pm_bvals = pe.Node(niu.Merge(2), name="pm_bvals")
+        pm_bvecs = pe.Node(niu.Merge(2), name="pm_bvecs")
+        pm_bias = pe.Node(niu.Merge(2), name="pm_bias")
+        pm_noise_images = pe.Node(niu.Merge(2), name="pm_noise")
+        pm_denoising_confounds = pe.Node(niu.Merge(2), name="pm_denoising_confounds")
+        pm_raw_images = pe.Node(niu.Merge(2), name="pm_raw_images")
         rpe_concat = pe.Node(
-            MergeDWIs(harmonize_b0_intensities=not no_b0_harmonization,
-                      b0_threshold=b0_threshold),
-            name='rpe_concat')
-        raw_rpe_concat = pe.Node(Merge(is_dwi=True), name='raw_rpe_concat')
-        qc_wf = init_modelfree_qc_wf(omp_nthreads=omp_nthreads,
-                                     bvec_convention="DIPY" if orientation == "LPS" else "FSL")
+            MergeDWIs(harmonize_b0_intensities=not no_b0_harmonization, b0_threshold=b0_threshold),
+            name="rpe_concat",
+        )
+        raw_rpe_concat = pe.Node(Merge(is_dwi=True), name="raw_rpe_concat")
+        qc_wf = init_modelfree_qc_wf(
+            omp_nthreads=omp_nthreads, bvec_convention="DIPY" if orientation == "LPS" else "FSL"
+        )
 
         workflow.connect([
             # combine PE+
@@ -284,10 +300,12 @@ def init_dwi_pre_hmc_wf(scan_groups,
                 ('out_bval', 'inputnode.bval_file'),
                 ('out_bvec', 'inputnode.bvec_file')]),
             (qc_wf, outputnode, [('outputnode.qc_summary', 'qc_file')])
-        ])
+        ])  # fmt:skip
 
-        workflow.__postdesc__ += "Both distortion groups were then merged into a " \
-                                 "single file, as required for the FSL workflows.\n\n"
+        workflow.__postdesc__ += (
+            "Both distortion groups were then merged into a "
+            "single file, as required for the FSL workflows.\n\n"
+        )
         return workflow
 
     workflow.__postdesc__ += "\n\n"
@@ -319,16 +337,18 @@ def init_dwi_pre_hmc_wf(scan_groups,
             ('outputnode.denoising_confounds', 'denoising_confounds'),
             ('outputnode.original_files', 'original_files'),
             ('outputnode.merged_raw_image', 'raw_concatenated')])
-    ])
+    ])  # fmt:skip
 
     if calculate_qc:
-        qc_wf = init_modelfree_qc_wf(omp_nthreads=omp_nthreads,
-                                     bvec_convention="DIPY" if orientation == "LPS" else "FSL")
+        qc_wf = init_modelfree_qc_wf(
+            omp_nthreads=omp_nthreads, bvec_convention="DIPY" if orientation == "LPS" else "FSL"
+        )
         workflow.connect([
             (merge_dwis, qc_wf, [
                 ('outputnode.merged_raw_image', 'inputnode.dwi_file'),
                 ('outputnode.merged_bval', 'inputnode.bval_file'),
                 ('outputnode.merged_bvec', 'inputnode.bvec_file')]),
-            (qc_wf, outputnode, [('outputnode.qc_summary', 'qc_file')])])
+            (qc_wf, outputnode, [('outputnode.qc_summary', 'qc_file')])
+        ])  # fmt:skip
 
     return workflow

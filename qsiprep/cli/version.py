@@ -10,7 +10,7 @@ import requests
 from .. import __version__
 
 RELEASE_EXPIRY_DAYS = 14
-DATE_FMT = '%Y%m%d'
+DATE_FMT = "%Y%m%d"
 
 
 def check_latest():
@@ -20,7 +20,7 @@ def check_latest():
     latest = None
     date = None
     outdated = None
-    cachefile = Path.home() / '.cache' / 'qsiprep' / 'latest'
+    cachefile = Path.home() / ".cache" / "qsiprep" / "latest"
     try:
         cachefile.parent.mkdir(parents=True, exist_ok=True)
     except OSError:
@@ -28,7 +28,7 @@ def check_latest():
 
     if cachefile and cachefile.exists():
         try:
-            latest, date = cachefile.read_text().split('|')
+            latest, date = cachefile.read_text().split("|")
         except Exception:
             pass
         else:
@@ -43,12 +43,12 @@ def check_latest():
 
     if latest is None or outdated is True:
         try:
-            response = requests.get(url='https://pypi.org/pypi/qsiprep/json', timeout=1.0)
+            response = requests.get(url="https://pypi.org/pypi/qsiprep/json", timeout=1.0)
         except Exception:
             response = None
 
         if response and response.status_code == 200:
-            versions = [Version(rel) for rel in response.json()['releases'].keys()]
+            versions = [Version(rel) for rel in response.json()["releases"].keys()]
             versions = [rel for rel in versions if not rel.is_prerelease]
             if versions:
                 latest = sorted(versions)[-1]
@@ -57,7 +57,7 @@ def check_latest():
 
     if cachefile is not None and latest is not None:
         try:
-            cachefile.write_text('|'.join(('%s' % latest, datetime.now().strftime(DATE_FMT))))
+            cachefile.write_text("|".join(("%s" % latest, datetime.now().strftime(DATE_FMT))))
         except Exception:
             pass
 
@@ -69,13 +69,16 @@ def is_flagged():
     # https://raw.githubusercontent.com/pennbbl/qsiprep/master/.versions.json
     flagged = tuple()
     try:
-        response = requests.get(url="""\
-https://raw.githubusercontent.com/pennbbl/qsiprep/master/.versions.json""", timeout=1.0)
+        response = requests.get(
+            url="""\
+https://raw.githubusercontent.com/pennbbl/qsiprep/master/.versions.json""",
+            timeout=1.0,
+        )
     except Exception:
         response = None
 
     if response and response.status_code == 200:
-        flagged = response.json().get('flagged', {}) or {}
+        flagged = response.json().get("flagged", {}) or {}
 
     if __version__ in flagged:
         return True, flagged[__version__]

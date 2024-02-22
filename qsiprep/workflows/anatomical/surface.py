@@ -14,7 +14,6 @@ from nipype.interfaces import freesurfer as fs
 from nipype.interfaces import io as nio
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
-from pkg_resources import resource_filename as pkgr
 
 from ...engine import Workflow
 from ...interfaces import DerivativesDataSink as FDerivativesDataSink
@@ -30,7 +29,10 @@ from ...niworkflows.interfaces.freesurfer import RobustRegister
 from ...niworkflows.interfaces.segmentation import ReconAllRPT
 from ...utils.misc import fix_multi_T1w_source_name
 
-LOGGER = logging.getLogger('nipype.workflow')
+# from pkg_resources import resource_filename as pkgr
+
+
+LOGGER = logging.getLogger("nipype.workflow")
 
 
 class DerivativesDataSink(FDerivativesDataSink):
@@ -38,11 +40,11 @@ class DerivativesDataSink(FDerivativesDataSink):
 
 
 TEMPLATE_MAP = {
-    'MNI152NLin2009cAsym': 'mni_icbm152_nlin_asym_09c',
-    }
+    "MNI152NLin2009cAsym": "mni_icbm152_nlin_asym_09c",
+}
 
 
-def init_surface_recon_wf(omp_nthreads, hires, name='surface_recon_wf'):
+def init_surface_recon_wf(omp_nthreads, hires, name="surface_recon_wf"):
     r"""
     This workflow reconstructs anatomical surfaces using FreeSurfer's ``recon-all``.
     Reconstruction is performed in three phases.
@@ -144,40 +146,66 @@ RRID:SCR_001847, @fs_reconall], and the brain mask estimated
 previously was refined with a custom variation of the method to reconcile
 ANTs-derived and FreeSurfer-derived segmentations of the cortical
 gray-matter of Mindboggle [RRID:SCR_002438, @mindboggle].
-""".format(fs_ver=fs.Info().looseversion() or '<ver>')
+""".format(
+        fs_ver=fs.Info().looseversion() or "<ver>"
+    )
 
     inputnode = pe.Node(
         niu.IdentityInterface(
-            fields=['t1w', 't2w', 'flair', 'skullstripped_t1', 'corrected_t1', 'ants_segs',
-                    'subjects_dir', 'subject_id']), name='inputnode')
+            fields=[
+                "t1w",
+                "t2w",
+                "flair",
+                "skullstripped_t1",
+                "corrected_t1",
+                "ants_segs",
+                "subjects_dir",
+                "subject_id",
+            ]
+        ),
+        name="inputnode",
+    )
     outputnode = pe.Node(
         niu.IdentityInterface(
-            fields=['subjects_dir', 'subject_id', 't1_2_fsnative_forward_transform',
-                    't1_2_fsnative_reverse_transform', 'surfaces', 'out_brainmask',
-                    'out_aseg', 'out_aparc', 'out_report']),
-        name='outputnode')
+            fields=[
+                "subjects_dir",
+                "subject_id",
+                "t1_2_fsnative_forward_transform",
+                "t1_2_fsnative_reverse_transform",
+                "surfaces",
+                "out_brainmask",
+                "out_aseg",
+                "out_aparc",
+                "out_report",
+            ]
+        ),
+        name="outputnode",
+    )
 
-    recon_config = pe.Node(FSDetectInputs(hires_enabled=hires), name='recon_config')
+    recon_config = pe.Node(FSDetectInputs(hires_enabled=hires), name="recon_config")
 
     autorecon1 = pe.Node(
-        fs.ReconAll(directive='autorecon1', flags='-noskullstrip', openmp=omp_nthreads),
-        name='autorecon1', n_procs=omp_nthreads, mem_gb=5)
+        fs.ReconAll(directive="autorecon1", flags="-noskullstrip", openmp=omp_nthreads),
+        name="autorecon1",
+        n_procs=omp_nthreads,
+        mem_gb=5,
+    )
     autorecon1.interface._can_resume = False
     autorecon1.interface._always_run = True
 
-    skull_strip_extern = pe.Node(FSInjectBrainExtracted(), name='skull_strip_extern')
+    skull_strip_extern = pe.Node(FSInjectBrainExtracted(), name="skull_strip_extern")
 
-    fsnative_2_t1_xfm = pe.Node(RobustRegister(auto_sens=True, est_int_scale=True),
-                                name='fsnative_2_t1_xfm')
-    t1_2_fsnative_xfm = pe.Node(LTAConvert(out_lta=True, invert=True),
-                                name='t1_2_fsnative_xfm')
+    fsnative_2_t1_xfm = pe.Node(
+        RobustRegister(auto_sens=True, est_int_scale=True), name="fsnative_2_t1_xfm"
+    )
+    t1_2_fsnative_xfm = pe.Node(LTAConvert(out_lta=True, invert=True), name="t1_2_fsnative_xfm")
 
     autorecon_resume_wf = init_autorecon_resume_wf(omp_nthreads=omp_nthreads)
     gifti_surface_wf = init_gifti_surface_wf()
 
     aseg_to_native_wf = init_segs_to_native_wf()
-    aparc_to_native_wf = init_segs_to_native_wf(segmentation='aparc_aseg')
-    refine = pe.Node(RefineBrainMask(), name='refine')
+    aparc_to_native_wf = init_segs_to_native_wf(segmentation="aparc_aseg")
+    refine = pe.Node(RefineBrainMask(), name="refine")
 
     workflow.connect([
         # Configuration
@@ -234,12 +262,12 @@ gray-matter of Mindboggle [RRID:SCR_002438, @mindboggle].
         (refine, outputnode, [('out_file', 'out_brainmask')]),
         (aseg_to_native_wf, outputnode, [('outputnode.out_file', 'out_aseg')]),
         (aparc_to_native_wf, outputnode, [('outputnode.out_file', 'out_aparc')]),
-    ])
+    ])  # fmt:skip
 
     return workflow
 
 
-def init_autorecon_resume_wf(omp_nthreads, name='autorecon_resume_wf'):
+def init_autorecon_resume_wf(omp_nthreads, name="autorecon_resume_wf"):
     r"""
     This workflow resumes recon-all execution, assuming the `-autorecon1` stage
     has been completed.
@@ -291,51 +319,70 @@ def init_autorecon_resume_wf(omp_nthreads, name='autorecon_resume_wf'):
     workflow = Workflow(name=name)
 
     inputnode = pe.Node(
-        niu.IdentityInterface(
-            fields=['subjects_dir', 'subject_id', 'use_T2', 'use_FLAIR']),
-        name='inputnode')
+        niu.IdentityInterface(fields=["subjects_dir", "subject_id", "use_T2", "use_FLAIR"]),
+        name="inputnode",
+    )
 
     outputnode = pe.Node(
-        niu.IdentityInterface(
-            fields=['subjects_dir', 'subject_id', 'out_report']),
-        name='outputnode')
+        niu.IdentityInterface(fields=["subjects_dir", "subject_id", "out_report"]),
+        name="outputnode",
+    )
 
     autorecon2_vol = pe.Node(
-        fs.ReconAll(directive='autorecon2-volonly', openmp=omp_nthreads),
-        n_procs=omp_nthreads, mem_gb=5, name='autorecon2_vol')
+        fs.ReconAll(directive="autorecon2-volonly", openmp=omp_nthreads),
+        n_procs=omp_nthreads,
+        mem_gb=5,
+        name="autorecon2_vol",
+    )
     autorecon2_vol.interface._always_run = True
 
     autorecon_surfs = pe.MapNode(
         fs.ReconAll(
-            directive='autorecon-hemi',
-            flags=['-noparcstats', '-nocortparc2', '-noparcstats2',
-                   '-nocortparc3', '-noparcstats3', '-nopctsurfcon',
-                   '-nohyporelabel', '-noaparc2aseg', '-noapas2aseg',
-                   '-nosegstats', '-nowmparc', '-nobalabels'],
-            openmp=omp_nthreads),
-        iterfield='hemi', n_procs=omp_nthreads, mem_gb=5,
-        name='autorecon_surfs')
-    autorecon_surfs.inputs.hemi = ['lh', 'rh']
+            directive="autorecon-hemi",
+            flags=[
+                "-noparcstats",
+                "-nocortparc2",
+                "-noparcstats2",
+                "-nocortparc3",
+                "-noparcstats3",
+                "-nopctsurfcon",
+                "-nohyporelabel",
+                "-noaparc2aseg",
+                "-noapas2aseg",
+                "-nosegstats",
+                "-nowmparc",
+                "-nobalabels",
+            ],
+            openmp=omp_nthreads,
+        ),
+        iterfield="hemi",
+        n_procs=omp_nthreads,
+        mem_gb=5,
+        name="autorecon_surfs",
+    )
+    autorecon_surfs.inputs.hemi = ["lh", "rh"]
     autorecon_surfs.interface._always_run = True
 
     autorecon3 = pe.MapNode(
-        fs.ReconAll(directive='autorecon3', openmp=omp_nthreads),
-        iterfield='hemi', n_procs=omp_nthreads, mem_gb=5,
-        name='autorecon3')
-    autorecon3.inputs.hemi = ['lh', 'rh']
+        fs.ReconAll(directive="autorecon3", openmp=omp_nthreads),
+        iterfield="hemi",
+        n_procs=omp_nthreads,
+        mem_gb=5,
+        name="autorecon3",
+    )
+    autorecon3.inputs.hemi = ["lh", "rh"]
     autorecon3.interface._always_run = True
 
     # Only generate the report once; should be nothing to do
     recon_report = pe.Node(
-        ReconAllRPT(directive='autorecon3', generate_report=True),
-        name='recon_report', mem_gb=5)
+        ReconAllRPT(directive="autorecon3", generate_report=True), name="recon_report", mem_gb=5
+    )
     recon_report.interface._always_run = True
 
     def _dedup(in_list):
         vals = set(in_list)
         if len(vals) > 1:
-            raise ValueError(
-                "Non-identical values can't be deduplicated:\n{!r}".format(in_list))
+            raise ValueError("Non-identical values can't be deduplicated:\n{!r}".format(in_list))
         return vals.pop()
 
     workflow.connect([
@@ -352,12 +399,12 @@ def init_autorecon_resume_wf(omp_nthreads, name='autorecon_resume_wf'):
         (autorecon3, recon_report, [(('subjects_dir', _dedup), 'subjects_dir'),
                                     (('subject_id', _dedup), 'subject_id')]),
         (recon_report, outputnode, [('out_report', 'out_report')]),
-    ])
+    ])  # fmt:skip
 
     return workflow
 
 
-def init_gifti_surface_wf(name='gifti_surface_wf'):
+def init_gifti_surface_wf(name="gifti_surface_wf"):
     r"""
     This workflow prepares GIFTI surfaces from a FreeSurfer subjects directory
     If midthickness (or graymid) surfaces do not exist, they are generated and
@@ -386,26 +433,27 @@ def init_gifti_surface_wf(name='gifti_surface_wf'):
     """
     workflow = Workflow(name=name)
 
-    inputnode = pe.Node(niu.IdentityInterface(['subjects_dir', 'subject_id',
-                                               't1_2_fsnative_reverse_transform']),
-                        name='inputnode')
-    outputnode = pe.Node(niu.IdentityInterface(['surfaces']), name='outputnode')
+    inputnode = pe.Node(
+        niu.IdentityInterface(["subjects_dir", "subject_id", "t1_2_fsnative_reverse_transform"]),
+        name="inputnode",
+    )
+    outputnode = pe.Node(niu.IdentityInterface(["surfaces"]), name="outputnode")
 
-    get_surfaces = pe.Node(nio.FreeSurferSource(), name='get_surfaces')
+    get_surfaces = pe.Node(nio.FreeSurferSource(), name="get_surfaces")
 
     midthickness = pe.MapNode(
-        MakeMidthickness(thickness=True, distance=0.5, out_name='midthickness'),
-        iterfield='in_file',
-        name='midthickness')
+        MakeMidthickness(thickness=True, distance=0.5, out_name="midthickness"),
+        iterfield="in_file",
+        name="midthickness",
+    )
 
-    save_midthickness = pe.Node(nio.DataSink(parameterization=False),
-                                name='save_midthickness')
+    save_midthickness = pe.Node(nio.DataSink(parameterization=False), name="save_midthickness")
 
-    surface_list = pe.Node(niu.Merge(4, ravel_inputs=True),
-                           name='surface_list', run_without_submitting=True)
-    fs_2_gii = pe.MapNode(fs.MRIsConvert(out_datatype='gii'),
-                          iterfield='in_file', name='fs_2_gii')
-    fix_surfs = pe.MapNode(NormalizeSurf(), iterfield='in_file', name='fix_surfs')
+    surface_list = pe.Node(
+        niu.Merge(4, ravel_inputs=True), name="surface_list", run_without_submitting=True
+    )
+    fs_2_gii = pe.MapNode(fs.MRIsConvert(out_datatype="gii"), iterfield="in_file", name="fs_2_gii")
+    fix_surfs = pe.MapNode(NormalizeSurf(), iterfield="in_file", name="fix_surfs")
 
     workflow.connect([
         (inputnode, get_surfaces, [('subjects_dir', 'subjects_dir'),
@@ -425,11 +473,11 @@ def init_gifti_surface_wf(name='gifti_surface_wf'):
         (fs_2_gii, fix_surfs, [('converted', 'in_file')]),
         (inputnode, fix_surfs, [('t1_2_fsnative_reverse_transform', 'transform_file')]),
         (fix_surfs, outputnode, [('out_file', 'surfaces')]),
-    ])
+    ])  # fmt:skip
     return workflow
 
 
-def init_segs_to_native_wf(name='segs_to_native', segmentation='aseg'):
+def init_segs_to_native_wf(name="segs_to_native", segmentation="aseg"):
     """
     Get a segmentation from FreeSurfer conformed space into native T1w space
     .. workflow::
@@ -451,22 +499,32 @@ def init_segs_to_native_wf(name='segs_to_native', segmentation='aseg'):
         out_file
             The selected segmentation, after resampling in native space
     """
-    workflow = Workflow(name='%s_%s' % (name, segmentation))
-    inputnode = pe.Node(niu.IdentityInterface([
-        'in_file', 'subjects_dir', 'subject_id']), name='inputnode')
-    outputnode = pe.Node(niu.IdentityInterface(['out_file']), name='outputnode')
+    workflow = Workflow(name="%s_%s" % (name, segmentation))
+    inputnode = pe.Node(
+        niu.IdentityInterface(["in_file", "subjects_dir", "subject_id"]), name="inputnode"
+    )
+    outputnode = pe.Node(niu.IdentityInterface(["out_file"]), name="outputnode")
     # Extract the aseg and aparc+aseg outputs
-    fssource = pe.Node(nio.FreeSurferSource(), name='fs_datasource')
-    tonative = pe.Node(fs.Label2Vol(), name='tonative')
-    tonii = pe.Node(fs.MRIConvert(out_type='niigz', resample_type='nearest'), name='tonii')
+    fssource = pe.Node(nio.FreeSurferSource(), name="fs_datasource")
+    tonative = pe.Node(fs.Label2Vol(), name="tonative")
+    tonii = pe.Node(fs.MRIConvert(out_type="niigz", resample_type="nearest"), name="tonii")
 
-    if segmentation.startswith('aparc'):
-        if segmentation == 'aparc_aseg':
-            def _sel(x): return [parc for parc in x if 'aparc+' in parc][0]
-        elif segmentation == 'aparc_a2009s':
-            def _sel(x): return [parc for parc in x if 'a2009s+' in parc][0]
-        elif segmentation == 'aparc_dkt':
-            def _sel(x): return [parc for parc in x if 'DKTatlas+' in parc][0]
+    if segmentation.startswith("aparc"):
+        if segmentation == "aparc_aseg":
+
+            def _sel(x):
+                return [parc for parc in x if "aparc+" in parc][0]
+
+        elif segmentation == "aparc_a2009s":
+
+            def _sel(x):
+                return [parc for parc in x if "a2009s+" in parc][0]
+
+        elif segmentation == "aparc_dkt":
+
+            def _sel(x):
+                return [parc for parc in x if "DKTatlas+" in parc][0]
+
         segmentation = (segmentation, _sel)
 
     workflow.connect([
@@ -479,12 +537,18 @@ def init_segs_to_native_wf(name='segs_to_native', segmentation='aseg'):
                               ('aseg', 'reg_header')]),
         (tonative, tonii, [('vol_label_file', 'in_file')]),
         (tonii, outputnode, [('out_file', 'out_file')]),
-    ])
+    ])  # fmt:skip
     return workflow
 
 
-def init_anat_reports_wf(reportlets_dir, output_spaces, force_spatial_normalization,
-                         template, freesurfer, name='anat_reports_wf'):
+def init_anat_reports_wf(
+    reportlets_dir,
+    output_spaces,
+    force_spatial_normalization,
+    template,
+    freesurfer,
+    name="anat_reports_wf",
+):
     """
     Set up a battery of datasinks to store reports in the right location
     """
@@ -492,49 +556,70 @@ def init_anat_reports_wf(reportlets_dir, output_spaces, force_spatial_normalizat
 
     inputnode = pe.Node(
         niu.IdentityInterface(
-            fields=['source_file', 't1_conform_report', 'seg_report',
-                    't1_2_mni_report', 'recon_report']),
-        name='inputnode')
+            fields=[
+                "source_file",
+                "t1_conform_report",
+                "seg_report",
+                "t1_2_mni_report",
+                "recon_report",
+            ]
+        ),
+        name="inputnode",
+    )
 
     ds_t1_conform_report = pe.Node(
-        DerivativesDataSink(base_directory=reportlets_dir, suffix='conform'),
-        name='ds_t1_conform_report', run_without_submitting=True)
+        DerivativesDataSink(base_directory=reportlets_dir, suffix="conform"),
+        name="ds_t1_conform_report",
+        run_without_submitting=True,
+    )
 
     ds_t1_2_mni_report = pe.Node(
-        DerivativesDataSink(base_directory=reportlets_dir, suffix='t1_2_mni'),
-        name='ds_t1_2_mni_report', run_without_submitting=True)
+        DerivativesDataSink(base_directory=reportlets_dir, suffix="t1_2_mni"),
+        name="ds_t1_2_mni_report",
+        run_without_submitting=True,
+    )
 
     ds_t1_seg_mask_report = pe.Node(
-        DerivativesDataSink(base_directory=reportlets_dir, suffix='seg_brainmask'),
-        name='ds_t1_seg_mask_report', run_without_submitting=True)
+        DerivativesDataSink(base_directory=reportlets_dir, suffix="seg_brainmask"),
+        name="ds_t1_seg_mask_report",
+        run_without_submitting=True,
+    )
 
     ds_recon_report = pe.Node(
-        DerivativesDataSink(base_directory=reportlets_dir, suffix='reconall'),
-        name='ds_recon_report', run_without_submitting=True)
+        DerivativesDataSink(base_directory=reportlets_dir, suffix="reconall"),
+        name="ds_recon_report",
+        run_without_submitting=True,
+    )
 
     workflow.connect([
         (inputnode, ds_t1_conform_report, [('source_file', 'source_file'),
                                            ('t1_conform_report', 'in_file')]),
         (inputnode, ds_t1_seg_mask_report, [('source_file', 'source_file'),
                                             ('seg_report', 'in_file')]),
-    ])
+    ])  # fmt:skip
 
     if freesurfer:
         workflow.connect([
             (inputnode, ds_recon_report, [('source_file', 'source_file'),
                                           ('recon_report', 'in_file')])
-        ])
-    if 'template' in output_spaces or force_spatial_normalization:
+        ])  # fmt:skip
+    if "template" in output_spaces or force_spatial_normalization:
         workflow.connect([
             (inputnode, ds_t1_2_mni_report, [('source_file', 'source_file'),
                                              ('t1_2_mni_report', 'in_file')])
-        ])
+        ])  # fmt:skip
 
     return workflow
 
 
-def init_anat_derivatives_wf(output_dir, output_spaces, template, freesurfer,
-                             force_spatial_normalization, name='anat_derivatives_wf'):
+def init_anat_derivatives_wf(
+    output_dir,
+    output_spaces,
+    template,
+    freesurfer,
+    force_spatial_normalization,
+    name="anat_derivatives_wf",
+):
     """
     Set up a battery of datasinks to store derivatives in the right location
     """
@@ -542,72 +627,106 @@ def init_anat_derivatives_wf(output_dir, output_spaces, template, freesurfer,
 
     inputnode = pe.Node(
         niu.IdentityInterface(
-            fields=['source_files', 't1_template_transforms',
-                    't1_preproc', 't1_mask', 't1_seg', 't1_tpms',
-                    't1_2_mni_forward_transform', 't1_2_mni_reverse_transform',
-                    't1_2_mni', 'mni_mask', 'mni_seg', 'mni_tpms',
-                    't1_2_fsnative_forward_transform', 'surfaces',
-                    't1_fs_aseg', 't1_fs_aparc']),
-        name='inputnode')
+            fields=[
+                "source_files",
+                "t1_template_transforms",
+                "t1_preproc",
+                "t1_mask",
+                "t1_seg",
+                "t1_tpms",
+                "t1_2_mni_forward_transform",
+                "t1_2_mni_reverse_transform",
+                "t1_2_mni",
+                "mni_mask",
+                "mni_seg",
+                "mni_tpms",
+                "t1_2_fsnative_forward_transform",
+                "surfaces",
+                "t1_fs_aseg",
+                "t1_fs_aparc",
+            ]
+        ),
+        name="inputnode",
+    )
 
-    t1_name = pe.Node(niu.Function(function=fix_multi_T1w_source_name), name='t1_name')
+    t1_name = pe.Node(niu.Function(function=fix_multi_T1w_source_name), name="t1_name")
 
     ds_t1_preproc = pe.Node(
-        DerivativesDataSink(base_directory=output_dir, desc='preproc', keep_dtype=True),
-        name='ds_t1_preproc', run_without_submitting=True)
+        DerivativesDataSink(base_directory=output_dir, desc="preproc", keep_dtype=True),
+        name="ds_t1_preproc",
+        run_without_submitting=True,
+    )
 
     ds_t1_mask = pe.Node(
-        DerivativesDataSink(base_directory=output_dir, desc='brain', suffix='mask'),
-        name='ds_t1_mask', run_without_submitting=True)
+        DerivativesDataSink(base_directory=output_dir, desc="brain", suffix="mask"),
+        name="ds_t1_mask",
+        run_without_submitting=True,
+    )
 
     ds_t1_seg = pe.Node(
-        DerivativesDataSink(base_directory=output_dir, suffix='dseg'),
-        name='ds_t1_seg', run_without_submitting=True)
+        DerivativesDataSink(base_directory=output_dir, suffix="dseg"),
+        name="ds_t1_seg",
+        run_without_submitting=True,
+    )
 
     ds_t1_tpms = pe.Node(
-        DerivativesDataSink(base_directory=output_dir,
-                            suffix='label-{extra_value}_probseg'),
-        name='ds_t1_tpms', run_without_submitting=True)
-    ds_t1_tpms.inputs.extra_values = ['CSF', 'GM', 'WM']
+        DerivativesDataSink(base_directory=output_dir, suffix="label-{extra_value}_probseg"),
+        name="ds_t1_tpms",
+        run_without_submitting=True,
+    )
+    ds_t1_tpms.inputs.extra_values = ["CSF", "GM", "WM"]
 
     ds_t1_mni = pe.Node(
-        DerivativesDataSink(base_directory=output_dir,
-                            space=template, desc='preproc', keep_dtype=True),
-        name='ds_t1_mni', run_without_submitting=True)
+        DerivativesDataSink(
+            base_directory=output_dir, space=template, desc="preproc", keep_dtype=True
+        ),
+        name="ds_t1_mni",
+        run_without_submitting=True,
+    )
 
     ds_mni_mask = pe.Node(
-        DerivativesDataSink(base_directory=output_dir,
-                            space=template, desc='brain', suffix='mask'),
-        name='ds_mni_mask', run_without_submitting=True)
+        DerivativesDataSink(
+            base_directory=output_dir, space=template, desc="brain", suffix="mask"
+        ),
+        name="ds_mni_mask",
+        run_without_submitting=True,
+    )
 
     ds_mni_seg = pe.Node(
-        DerivativesDataSink(base_directory=output_dir,
-                            space=template, suffix='dseg'),
-        name='ds_mni_seg', run_without_submitting=True)
+        DerivativesDataSink(base_directory=output_dir, space=template, suffix="dseg"),
+        name="ds_mni_seg",
+        run_without_submitting=True,
+    )
 
     ds_mni_tpms = pe.Node(
-        DerivativesDataSink(base_directory=output_dir,
-                            space=template, suffix='label-{extra_value}_probseg'),
-        name='ds_mni_tpms', run_without_submitting=True)
-    ds_mni_tpms.inputs.extra_values = ['CSF', 'GM', 'WM']
+        DerivativesDataSink(
+            base_directory=output_dir, space=template, suffix="label-{extra_value}_probseg"
+        ),
+        name="ds_mni_tpms",
+        run_without_submitting=True,
+    )
+    ds_mni_tpms.inputs.extra_values = ["CSF", "GM", "WM"]
 
     # Transforms
-    suffix_fmt = 'from-{}_to-{}_mode-image_xfm'.format
+    suffix_fmt = "from-{}_to-{}_mode-image_xfm".format
     ds_t1_mni_inv_warp = pe.Node(
-        DerivativesDataSink(base_directory=output_dir,
-                            suffix=suffix_fmt(template, 'T1w')),
-        name='ds_t1_mni_inv_warp', run_without_submitting=True)
+        DerivativesDataSink(base_directory=output_dir, suffix=suffix_fmt(template, "T1w")),
+        name="ds_t1_mni_inv_warp",
+        run_without_submitting=True,
+    )
 
     ds_t1_template_transforms = pe.MapNode(
-        DerivativesDataSink(base_directory=output_dir, suffix=suffix_fmt('orig', 'T1w')),
-        iterfield=['source_file', 'in_file'],
-        name='ds_t1_template_transforms', run_without_submitting=True)
+        DerivativesDataSink(base_directory=output_dir, suffix=suffix_fmt("orig", "T1w")),
+        iterfield=["source_file", "in_file"],
+        name="ds_t1_template_transforms",
+        run_without_submitting=True,
+    )
 
     ds_t1_mni_warp = pe.Node(
-        DerivativesDataSink(
-            base_directory=output_dir,
-            suffix=suffix_fmt('T1w', template)),
-        name='ds_t1_mni_warp', run_without_submitting=True)
+        DerivativesDataSink(base_directory=output_dir, suffix=suffix_fmt("T1w", template)),
+        name="ds_t1_mni_warp",
+        run_without_submitting=True,
+    )
 
     workflow.connect([
         (inputnode, t1_name, [('source_files', 'in_files')]),
@@ -621,9 +740,9 @@ def init_anat_derivatives_wf(output_dir, output_spaces, template, freesurfer,
         (t1_name, ds_t1_mask, [('out', 'source_file')]),
         (t1_name, ds_t1_seg, [('out', 'source_file')]),
         (t1_name, ds_t1_tpms, [('out', 'source_file')]),
-    ])
+    ])  # fmt:skip
 
-    if 'template' in output_spaces or force_spatial_normalization:
+    if "template" in output_spaces or force_spatial_normalization:
         workflow.connect([
             (inputnode, ds_t1_mni_warp, [('t1_2_mni_forward_transform', 'in_file')]),
             (inputnode, ds_t1_mni_inv_warp, [('t1_2_mni_reverse_transform', 'in_file')]),
@@ -637,7 +756,7 @@ def init_anat_derivatives_wf(output_dir, output_spaces, template, freesurfer,
             (t1_name, ds_mni_mask, [('out', 'source_file')]),
             (t1_name, ds_mni_seg, [('out', 'source_file')]),
             (t1_name, ds_mni_tpms, [('out', 'source_file')]),
-        ])
+        ])  # fmt:skip
 
     return workflow
 
@@ -655,23 +774,18 @@ def _seg2msks(in_file, newpath=None):
     for i in range(1, 4):
         ldata = np.zeros_like(labels)
         ldata[labels == i] = 1
-        out_files.append(fname_presuffix(
-            in_file, suffix='_label%03d' % i, newpath=newpath))
+        out_files.append(fname_presuffix(in_file, suffix="_label%03d" % i, newpath=newpath))
         nii.__class__(ldata, nii.affine, nii.header).to_filename(out_files[-1])
 
     return out_files
 
+    # contrast_name = anatomical_contrast.lower()
+    # if not infant_mode:
+    #     ref_img = pkgr("qsiprep", "data/mni_1mm_%s_lps.nii.gz" % contrast_name)
+    #     ref_img_brain = pkgr("qsiprep", "data/mni_1mm_%s_lps_brain.nii.gz" % contrast_name)
+    # else:
+    #     ref_img = pkgr("qsiprep", "data/mni_1mm_%s_lps_infant.nii.gz" % contrast_name)
+    #     ref_img_brain = pkgr("qsiprep",
+    #                          "data/mni_1mm_%s_lps_brain_infant.nii.gz" % contrast_name)
 
-    contrast_name = anatomical_contrast.lower()
-    if not infant_mode:
-        ref_img = pkgr('qsiprep',
-                       'data/mni_1mm_%s_lps.nii.gz' % contrast_name)
-        ref_img_brain = pkgr('qsiprep',
-                             'data/mni_1mm_%s_lps_brain.nii.gz' % contrast_name)
-    else:
-        ref_img = pkgr('qsiprep',
-                       'data/mni_1mm_%s_lps_infant.nii.gz' % contrast_name)
-        ref_img_brain = pkgr('qsiprep',
-                             'data/mni_1mm_%s_lps_brain_infant.nii.gz' % contrast_name)
-
-    return ref_img, ref_img_brain
+    # return ref_img, ref_img_brain

@@ -8,7 +8,6 @@ Handling surfaces
 
 """
 import os
-import re
 
 import nibabel as nb
 import numpy as np
@@ -18,7 +17,6 @@ from nipype.interfaces.base import (
     SimpleInterface,
     TraitedSpec,
     isdefined,
-    traits,
 )
 
 
@@ -78,89 +76,6 @@ Pipelines/blob/ae69b9a/PostFreeSurfer/scripts/FreeSurfer2CaretConvertAndRegister
             transform_file,
             newpath=runtime.cwd
         )
-        return runtime
-
-
-class GiftiNameSourceInputSpec(BaseInterfaceInputSpec):
-    in_file = File(mandatory=True, exists=True, desc='input GIFTI file')
-    pattern = traits.Str(mandatory=True,
-                         desc='input file name pattern (must capture named group "LR")')
-    template = traits.Str(mandatory=True, desc='output file name template')
-
-
-class GiftiNameSourceOutputSpec(TraitedSpec):
-    out_name = traits.Str(desc='(partial) filename formatted according to template')
-
-
-class GiftiNameSource(SimpleInterface):
-    r"""Construct a new filename based on an input filename, a matching pattern,
-    and a related template.
-
-    This interface is intended for use with GIFTI files, to generate names
-    conforming to Section 9.0 of the `GIFTI Standard`_.
-
-    Patterns are expected to have named groups, including one named "LR" that
-    matches "l" or "r".
-    These groups must correspond to named format elements in the template.
-
-
-    .. _GIFTI Standard: https://www.nitrc.org/frs/download.php/2871/GIFTI_Surface_Format.pdf
-    """
-    input_spec = GiftiNameSourceInputSpec
-    output_spec = GiftiNameSourceOutputSpec
-
-    def _run_interface(self, runtime):
-        in_format = re.compile(self.inputs.pattern)
-        in_file = os.path.basename(self.inputs.in_file)
-        info = in_format.match(in_file).groupdict()
-        info['LR'] = info['LR'].upper()
-        filefmt = self.inputs.template
-        self._results['out_name'] = filefmt.format(**info)
-        return runtime
-
-
-class GiftiSetAnatomicalStructureInputSpec(BaseInterfaceInputSpec):
-    in_file = File(mandatory=True, exists=True,
-                   desc='GIFTI file beginning with "lh." or "rh."')
-
-
-class GiftiSetAnatomicalStructureOutputSpec(TraitedSpec):
-    out_file = File(desc='output file with updated AnatomicalStructurePrimary entry')
-
-
-class GiftiSetAnatomicalStructure(SimpleInterface):
-    """Set AnatomicalStructurePrimary attribute of GIFTI image based on
-    filename.
-
-    For files that begin with ``lh.`` or ``rh.``, update the metadata to
-    include::
-
-        {
-            AnatomicalStructurePrimary: (CortexLeft | CortexRight),
-        }
-
-    If ``AnatomicalStructurePrimary`` is already set, this function has no
-    effect.
-
-    """
-    input_spec = GiftiSetAnatomicalStructureInputSpec
-    output_spec = GiftiSetAnatomicalStructureOutputSpec
-
-    def _run_interface(self, runtime):
-        img = nb.load(self.inputs.in_file)
-        if any(nvpair.name == 'AnatomicalStruturePrimary' for nvpair in img.meta.data):
-            out_file = self.inputs.in_file
-        else:
-            fname = os.path.basename(self.inputs.in_file)
-            if fname[:3] in ('lh.', 'rh.'):
-                asp = 'CortexLeft' if fname[0] == 'l' else 'CortexRight'
-            else:
-                raise ValueError(
-                    "AnatomicalStructurePrimary cannot be derived from filename")
-            img.meta.data.insert(0, nb.gifti.GiftiNVPairs('AnatomicalStructurePrimary', asp))
-            out_file = os.path.join(runtime.cwd, fname)
-            img.to_filename(out_file)
-        self._results['out_file'] = out_file
         return runtime
 
 

@@ -8,7 +8,7 @@
       "name": "msmt_csd",
       "software": "MRTrix3",
       "action": "csd",
-      "output_suffix": "msmtcsd",
+      "qsirecon_suffix": "msmtcsd",
       "input": "qsiprep",
       "parameters": {
         "mtnormalize": true,
@@ -26,7 +26,7 @@
       "action": "fit_noddi",
       "software": "AMICO",
       "input": "qsiprep",
-      "output_suffix": "wmNODDI",
+      "qsirecon_suffix": "wmNODDI",
       "parameters": {
         "isExvivo": false,
         "dPar": 1.7E-3,
@@ -38,7 +38,7 @@
       "action": "fit_noddi",
       "software": "AMICO",
       "input": "qsiprep",
-      "output_suffix": "gmNODDI",
+      "qsirecon_suffix": "gmNODDI",
       "parameters": {
         "isExvivo": false,
         "dPar": 1.1E-3,
@@ -49,7 +49,7 @@
       "name": "calc_sops",
       "action": "steinhardt_order_parameters",
       "input": "msmt_csd",
-      "output_suffix": "SOP",
+      "qsirecon_suffix": "SOP",
       "parameters": {
         "order": 8
       }
@@ -59,7 +59,7 @@
       "software": "Dipy",
       "action": "MAPMRI_reconstruction",
       "input": "qsiprep",
-      "output_suffix": "MAPMRI",
+      "qsirecon_suffix": "MAPMRI",
       "parameters": {
         "radial_order": 6,
         "laplacian_regularization": true,
@@ -76,7 +76,7 @@
       "software": "Dipy",
       "action": "DKI_reconstruction",
       "input": "qsiprep",
-      "output_suffix": "DKI",
+      "qsirecon_suffix": "DKI",
       "parameters": {
         "write_mif": false,
         "write_fibgz": false
@@ -87,7 +87,7 @@
       "software": "Dipy",
       "action": "3dSHORE_reconstruction",
       "input": "qsiprep",
-      "output_suffix": "3dSHORE",
+      "qsirecon_suffix": "DIPY3dSHORE",
       "parameters": {
         "extrapolate_scheme": "HCP",
         "radial_order": 8,
@@ -102,7 +102,7 @@
       "name": "msmt_csd_fromcs",
       "software": "MRTrix3",
       "action": "csd",
-      "output_suffix": "csmsmtcsd",
+      "qsirecon_suffix": "csmsmtcsd",
       "input":"csdsi_3dshore",
       "parameters": {
         "mtnormalize": true,
@@ -120,7 +120,7 @@
       "software": "DSI Studio",
       "action": "reconstruction",
       "input": "qsiprep",
-      "output_suffix": "gqi",
+      "qsirecon_suffix": "DSIStudio",
       "parameters": {"method": "gqi"}
     },
     {
@@ -128,7 +128,7 @@
       "software": "DSI Studio",
       "action": "export",
       "input": "dsistudio_gqi",
-      "output_suffix": "gqiscalar"
+      "qsirecon_suffix": "DSIStudio"
     }
   ]
 }

@@ -26,7 +26,7 @@ quality-assessment-protocol/blob/master/qap/anatomical_preproc.py#L105>`_.
     fsl_check = os.environ.get('FSL_BUILD')
     if fsl_check=="no_fsl":
         raise Exception(
-            """Container in use does not have FSL. To use this workflow, 
+            """Container in use does not have FSL. To use this workflow,
             please download the qsiprep container with FSL installed.""")
     from nipype.interfaces import fsl
     workflow = pe.Workflow(name=name)
@@ -59,14 +59,14 @@ quality-assessment-protocol/blob/master/qap/anatomical_preproc.py#L105>`_.
             (sstrip_orig_vol, inu_uni_1, [('out_file', 'in_file')]),
             (inu_uni_1, outputnode, [('out_file', 'out_file')]),
             (inu_uni_0, outputnode, [('out_file', 'bias_corrected')]),
-        ])
+        ])  # fmt:skip
     else:
         workflow.connect([
             (inputnode, sstrip_orig_vol, [('in_file', 'in_file_a')]),
             (inu_n4, sstrip, [('output_image', 'in_file')]),
             (sstrip_orig_vol, outputnode, [('out_file', 'out_file')]),
             (inu_n4, outputnode, [('output_image', 'bias_corrected')]),
-        ])
+        ])  # fmt:skip
 
     # Remaining connections
     workflow.connect([
@@ -75,5 +75,5 @@ quality-assessment-protocol/blob/master/qap/anatomical_preproc.py#L105>`_.
         (sstrip_orig_vol, binarize, [('out_file', 'in_file')]),
         (binarize, outputnode, [('out_file', 'out_mask')]),
         (inu_n4, outputnode, [('bias_image', 'bias_image')]),
-    ])
+    ])  # fmt:skip
     return workflow

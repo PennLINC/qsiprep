@@ -158,7 +158,7 @@ def init_brain_extraction_wf(name='brain_extraction_wf',
     fsl_check = os.environ.get('FSL_BUILD')
     if fsl_check=="no_fsl":
         raise Exception(
-            """Container in use does not have FSL. To use this workflow, 
+            """Container in use does not have FSL. To use this workflow,
             please download the qsiprep container with FSL installed.""")
 
     wf = pe.Workflow(name)
@@ -309,7 +309,7 @@ def init_brain_extraction_wf(name='brain_extraction_wf',
         (get_brainmask, outputnode, [('output_image', 'out_mask')]),
         (apply_mask, outputnode, [('out_file', 'bias_corrected')]),
         (inu_n4, outputnode, [('bias_image', 'bias_image')]),
-    ])
+    ])  # fmt:skip
 
     if atropos_refine:
         atropos_wf = init_atropos_wf(
@@ -335,7 +335,7 @@ def init_brain_extraction_wf(name='brain_extraction_wf',
             (atropos_wf, outputnode, [
                 ('outputnode.out_segm', 'out_segm'),
                 ('outputnode.out_tpms', 'out_tpms')])
-        ])
+        ])  # fmt:skip
     return wf
 
 
@@ -542,7 +542,7 @@ def init_atropos_wf(name='atropos_wf',
         (depad_mask, outputnode, [('output_image', 'out_mask')]),
         (depad_segm, outputnode, [('output_image', 'out_segm')]),
         (merge_tpms, outputnode, [('out', 'out_tpms')]),
-    ])
+    ])  # fmt:skip
     return wf
 
 

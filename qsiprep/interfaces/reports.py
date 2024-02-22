@@ -21,7 +21,6 @@ import matplotlib.pyplot as plt
 import nibabel as nb
 import numpy as np
 import pandas as pd
-
 import seaborn as sns
 from matplotlib import animation
 from nilearn.maskers import NiftiLabelsMasker
@@ -119,7 +118,7 @@ var report = REPORT
 
 
 class SummaryOutputSpec(TraitedSpec):
-    out_report = File(exists=True, desc='HTML segment containing summary')
+    out_report = File(exists=True, desc="HTML segment containing summary")
 
 
 class SummaryInterface(SimpleInterface):
@@ -130,27 +129,27 @@ class SummaryInterface(SimpleInterface):
 
     def _run_interface(self, runtime):
         segment = self._generate_segment()
-        fname = os.path.join(runtime.cwd, 'report.html')
-        with open(fname, 'w') as fobj:
+        fname = os.path.join(runtime.cwd, "report.html")
+        with open(fname, "w") as fobj:
             fobj.write(segment)
-        self._results['out_report'] = fname
+        self._results["out_report"] = fname
         return runtime
 
 
 class SubjectSummaryInputSpec(BaseInterfaceInputSpec):
-    t1w = InputMultiPath(File(exists=True), desc='T1w structural images')
-    t2w = InputMultiPath(File(exists=True), desc='T2w structural images')
-    subjects_dir = Directory(desc='FreeSurfer subjects directory')
-    subject_id = Str(desc='Subject ID')
-    dwi_groupings = traits.Dict(desc='groupings of DWI files and their output names')
-    output_spaces = traits.List(desc='Target spaces')
-    template = traits.Enum('MNI152NLin2009cAsym', desc='Template space')
+    t1w = InputMultiPath(File(exists=True), desc="T1w structural images")
+    t2w = InputMultiPath(File(exists=True), desc="T2w structural images")
+    subjects_dir = Directory(desc="FreeSurfer subjects directory")
+    subject_id = Str(desc="Subject ID")
+    dwi_groupings = traits.Dict(desc="groupings of DWI files and their output names")
+    output_spaces = traits.List(desc="Target spaces")
+    template = traits.Enum("MNI152NLin2009cAsym", desc="Template space")
 
 
 class SubjectSummaryOutputSpec(SummaryOutputSpec):
     # This exists to ensure that the summary is run prior to the first ReconAll
     # call, allowing a determination whether there is a pre-existing directory
-    subject_id = Str(desc='FreeSurfer subject ID')
+    subject_id = Str(desc="FreeSurfer subject ID")
 
 
 class SubjectSummary(SummaryInterface):
@@ -159,77 +158,86 @@ class SubjectSummary(SummaryInterface):
 
     def _run_interface(self, runtime):
         if isdefined(self.inputs.subject_id):
-            self._results['subject_id'] = self.inputs.subject_id
+            self._results["subject_id"] = self.inputs.subject_id
         return super(SubjectSummary, self)._run_interface(runtime)
 
     def _generate_segment(self):
         if not isdefined(self.inputs.subjects_dir):
-            freesurfer_status = 'Not run'
+            freesurfer_status = "Not run"
         else:
-            recon = fs.ReconAll(subjects_dir=self.inputs.subjects_dir,
-                                subject_id=self.inputs.subject_id,
-                                T1_files=self.inputs.t1w,
-                                flags='-noskullstrip')
-            if recon.cmdline.startswith('echo'):
-                freesurfer_status = 'Pre-existing directory'
+            recon = fs.ReconAll(
+                subjects_dir=self.inputs.subjects_dir,
+                subject_id=self.inputs.subject_id,
+                T1_files=self.inputs.t1w,
+                flags="-noskullstrip",
+            )
+            if recon.cmdline.startswith("echo"):
+                freesurfer_status = "Pre-existing directory"
             else:
-                freesurfer_status = 'Run by qsiprep'
+                freesurfer_status = "Run by qsiprep"
 
-        t2w_seg = ''
+        t2w_seg = ""
         if self.inputs.t2w:
-            t2w_seg = '(+ {:d} T2-weighted)'.format(len(self.inputs.t2w))
+            t2w_seg = "(+ {:d} T2-weighted)".format(len(self.inputs.t2w))
 
         # Add text for how the dwis are grouped
         n_dwis = 0
         n_outputs = 0
-        groupings = ''
+        groupings = ""
         if isdefined(self.inputs.dwi_groupings):
             for output_fname, group_info in self.inputs.dwi_groupings.items():
                 n_outputs += 1
                 files_desc = []
                 files_desc.append(
-                    '\t\t\t<li>Scan group: %s (PE Dir %s)</li><ul>' % (
-                        output_fname, group_info['dwi_series_pedir']))
-                files_desc.append('\t\t\t\t<li>DWI Files: </li>')
-                for dwi_file in group_info['dwi_series']:
+                    "\t\t\t<li>Scan group: %s (PE Dir %s)</li><ul>"
+                    % (output_fname, group_info["dwi_series_pedir"])
+                )
+                files_desc.append("\t\t\t\t<li>DWI Files: </li>")
+                for dwi_file in group_info["dwi_series"]:
                     files_desc.append("\t\t\t\t\t<li> %s </li>" % dwi_file)
                     n_dwis += 1
-                fieldmap_type = group_info['fieldmap_info']['suffix']
+                fieldmap_type = group_info["fieldmap_info"]["suffix"]
                 if fieldmap_type is not None:
-                    files_desc.append('\t\t\t\t<li>Fieldmap type: %s </li>' % fieldmap_type)
+                    files_desc.append("\t\t\t\t<li>Fieldmap type: %s </li>" % fieldmap_type)
 
-                    for key, value in group_info['fieldmap_info'].items():
+                    for key, value in group_info["fieldmap_info"].items():
                         files_desc.append("\t\t\t\t\t<li> %s: %s </li>" % (key, str(value)))
                         n_dwis += 1
                 files_desc.append("</ul>")
-                groupings += GROUPING_TEMPLATE.format(output_name=output_fname,
-                                                      input_files='\n'.join(files_desc))
+                groupings += GROUPING_TEMPLATE.format(
+                    output_name=output_fname, input_files="\n".join(files_desc)
+                )
 
-        return SUBJECT_TEMPLATE.format(subject_id=self.inputs.subject_id,
-                                       n_t1s=len(self.inputs.t1w),
-                                       t2w=t2w_seg,
-                                       n_dwis=n_dwis,
-                                       n_outputs=n_outputs,
-                                       groupings=groupings,
-                                       output_spaces='T1wACPC',
-                                       freesurfer_status=freesurfer_status)
+        return SUBJECT_TEMPLATE.format(
+            subject_id=self.inputs.subject_id,
+            n_t1s=len(self.inputs.t1w),
+            t2w=t2w_seg,
+            n_dwis=n_dwis,
+            n_outputs=n_outputs,
+            groupings=groupings,
+            output_spaces="T1wACPC",
+            freesurfer_status=freesurfer_status,
+        )
 
 
 class DiffusionSummaryInputSpec(BaseInterfaceInputSpec):
-    distortion_correction = traits.Str(desc='Susceptibility distortion correction method',
-                                       mandatory=True)
-    pe_direction = traits.Enum(None, 'i', 'i-', 'j', 'j-', mandatory=True,
-                               desc='Phase-encoding direction detected')
-    distortion_correction = traits.Str(mandatory=True, desc='Method used for SDC')
-    impute_slice_threshold = traits.CFloat(desc='threshold for imputing a slice')
-    hmc_transform = traits.Str(mandatory=True, desc='transform used during HMC')
-    hmc_model = traits.Str(desc='model used for hmc')
-    b0_to_t1w_transform = traits.Enum("Rigid", "Affine", desc='Transform type for coregistration')
-    denoise_method = traits.Str(desc='method used for image denoising')
-    dwi_denoise_window = traits.Either(traits.Int(), traits.Str(),
-                                       desc='window size for dwidenoise')
-    output_spaces = traits.List(desc='Target spaces')
-    confounds_file = File(exists=True, desc='Confounds file')
+    distortion_correction = traits.Str(
+        desc="Susceptibility distortion correction method", mandatory=True
+    )
+    pe_direction = traits.Enum(
+        None, "i", "i-", "j", "j-", mandatory=True, desc="Phase-encoding direction detected"
+    )
+    distortion_correction = traits.Str(mandatory=True, desc="Method used for SDC")
+    impute_slice_threshold = traits.CFloat(desc="threshold for imputing a slice")
+    hmc_transform = traits.Str(mandatory=True, desc="transform used during HMC")
+    hmc_model = traits.Str(desc="model used for hmc")
+    b0_to_t1w_transform = traits.Enum("Rigid", "Affine", desc="Transform type for coregistration")
+    denoise_method = traits.Str(desc="method used for image denoising")
+    dwi_denoise_window = traits.Either(
+        traits.Int(), traits.Str(), desc="window size for dwidenoise"
+    )
+    output_spaces = traits.List(desc="Target spaces")
+    confounds_file = File(exists=True, desc="Confounds file")
     validation_reports = InputMultiObject(File(exists=True))
 
 
@@ -238,21 +246,21 @@ class DiffusionSummary(SummaryInterface):
 
     def _generate_segment(self):
         if self.inputs.pe_direction is None:
-            pedir = 'MISSING - Assuming Anterior-Posterior'
+            pedir = "MISSING - Assuming Anterior-Posterior"
         else:
-            pedir = {'i': 'Left-Right', 'j': 'Anterior-Posterior'}[self.inputs.pe_direction[0]]
+            pedir = {"i": "Left-Right", "j": "Anterior-Posterior"}[self.inputs.pe_direction[0]]
 
         if isdefined(self.inputs.confounds_file):
             with open(self.inputs.confounds_file) as cfh:
-                conflist = cfh.readline().strip('\n').strip()
+                conflist = cfh.readline().strip("\n").strip()
         else:
-            conflist = ''
+            conflist = ""
 
         validation_summaries = []
         for summary in self.inputs.validation_reports:
-            with open(summary, 'r') as summary_f:
+            with open(summary, "r") as summary_f:
                 validation_summaries.extend(summary_f.readlines())
-        validation_summary = '\n'.join(validation_summaries)
+        validation_summary = "\n".join(validation_summaries)
 
         return DIFFUSION_TEMPLATE.format(
             pedir=pedir,
@@ -262,16 +270,16 @@ class DiffusionSummary(SummaryInterface):
             hmc_model=self.inputs.hmc_model,
             denoise_method=self.inputs.denoise_method,
             denoise_window=self.inputs.dwi_denoise_window,
-            output_spaces='T1wACPC',
-            confounds=re.sub(r'[\t ]+', ', ', conflist),
+            output_spaces="T1wACPC",
+            confounds=re.sub(r"[\t ]+", ", ", conflist),
             impute_slice_threshold=self.inputs.impute_slice_threshold,
-            validation_reports=validation_summary
-            )
+            validation_reports=validation_summary,
+        )
 
 
 class AboutSummaryInputSpec(BaseInterfaceInputSpec):
-    version = Str(desc='qsiprep version')
-    command = Str(desc='qsiprep command')
+    version = Str(desc="qsiprep version")
+    command = Str(desc="qsiprep command")
     # Date not included - update timestamp only if version or command changes
 
 
@@ -279,13 +287,15 @@ class AboutSummary(SummaryInterface):
     input_spec = AboutSummaryInputSpec
 
     def _generate_segment(self):
-        return ABOUT_TEMPLATE.format(version=self.inputs.version,
-                                     command=self.inputs.command,
-                                     date=time.strftime("%Y-%m-%d %H:%M:%S %z"))
+        return ABOUT_TEMPLATE.format(
+            version=self.inputs.version,
+            command=self.inputs.command,
+            date=time.strftime("%Y-%m-%d %H:%M:%S %z"),
+        )
 
 
 class TopupSummaryInputSpec(BaseInterfaceInputSpec):
-    summary = Str(desc='Summary of TOPUP inputs')
+    summary = Str(desc="Summary of TOPUP inputs")
 
 
 class TopupSummary(SummaryInterface):
@@ -296,12 +306,14 @@ class TopupSummary(SummaryInterface):
 
 
 class GradientPlotInputSpec(BaseInterfaceInputSpec):
-    orig_bvec_files = InputMultiObject(File(exists=True), mandatory=True,
-                                       desc='bvecs from DWISplit')
-    orig_bval_files = InputMultiObject(File(exists=True), mandatory=True,
-                                       desc='bvals from DWISplit')
-    source_files = traits.List(desc='source file for each gradient')
-    final_bvec_file = File(exists=True, desc='bval file')
+    orig_bvec_files = InputMultiObject(
+        File(exists=True), mandatory=True, desc="bvecs from DWISplit"
+    )
+    orig_bval_files = InputMultiObject(
+        File(exists=True), mandatory=True, desc="bvals from DWISplit"
+    )
+    source_files = traits.List(desc="source file for each gradient")
+    final_bvec_file = File(exists=True, desc="bval file")
 
 
 class GradientPlotOutputSpec(SummaryOutputSpec):
@@ -327,7 +339,7 @@ class GradientPlot(SummaryInterface):
 
         # Account for the possibility that this is a PE Pair average
         if len(filenums) == len(bvals) * 2:
-            filenums = filenums[:len(bvals)]
+            filenums = filenums[: len(bvals)]
 
         # Plot the final bvecs if provided
         final_bvecs = None
@@ -335,14 +347,13 @@ class GradientPlot(SummaryInterface):
             final_bvecs = np.loadtxt(self.inputs.final_bvec_file).T
 
         plot_gradients(bvals, orig_bvecs, filenums, outfile, final_bvecs)
-        self._results['plot_file'] = outfile
+        self._results["plot_file"] = outfile
         return runtime
 
 
-def plot_gradients(bvals, orig_bvecs, source_filenums, output_fname, final_bvecs=None,
-                   frames=60):
+def plot_gradients(bvals, orig_bvecs, source_filenums, output_fname, final_bvecs=None, frames=60):
     qrads = np.sqrt(bvals)
-    qvecs = (qrads[:, np.newaxis] * orig_bvecs)
+    qvecs = qrads[:, np.newaxis] * orig_bvecs
     qx, qy, qz = qvecs.T
     maxvals = qvecs.max(0)
     minvals = qvecs.min(0)
@@ -351,11 +362,11 @@ def plot_gradients(bvals, orig_bvecs, source_filenums, output_fname, final_bvecs
     def force_scaling(ax):
         # trick to force equal aspect on all 3 axes
         for direction in (-1, 1):
-            for point in np.diag(direction * total_max * np.array([1,1,1])):
-                ax.plot([point[0]], [point[1]], [point[2]], 'w')
+            for point in np.diag(direction * total_max * np.array([1, 1, 1])):
+                ax.plot([point[0]], [point[1]], [point[2]], "w")
 
     def add_lines(ax):
-        labels = ['L', 'P', 'S']
+        labels = ["L", "P", "S"]
         for axnum in range(3):
             minvec = np.zeros(3)
             maxvec = np.zeros(3)
@@ -364,29 +375,30 @@ def plot_gradients(bvals, orig_bvecs, source_filenums, output_fname, final_bvecs
             x, y, z = np.column_stack([minvec, maxvec])
             ax.plot(x, y, z, color="k")
             txt_pos = maxvec + 5
-            ax.text(txt_pos[0], txt_pos[1], txt_pos[2], labels[axnum], size=8,
-                    zorder=1, color='k')
+            ax.text(txt_pos[0], txt_pos[1], txt_pos[2], labels[axnum], size=8, zorder=1, color="k")
 
     if final_bvecs is not None:
         if final_bvecs.shape[0] == 3:
             final_bvecs = final_bvecs.T
         fqx, fqy, fqz = (qrads[:, np.newaxis] * final_bvecs).T
-        fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(10, 5),
-                                 subplot_kw={"projection": "3d"})
+        fig, axes = plt.subplots(
+            nrows=1, ncols=2, figsize=(10, 5), subplot_kw={"projection": "3d"}
+        )
         orig_ax = axes[0]
         final_ax = axes[1]
         axes_list = [orig_ax, final_ax]
         final_ax.scatter(fqx, fqy, fqz, c=source_filenums, marker="+")
         orig_ax.scatter(qx, qy, qz, c=source_filenums, marker="+")
-        final_ax.axis('off')
+        final_ax.axis("off")
         add_lines(final_ax)
-        final_ax.set_title('After Preprocessing')
+        final_ax.set_title("After Preprocessing")
     else:
-        fig, orig_ax = plt.subplots(nrows=1, ncols=1, figsize=(10, 5),
-                                    subplot_kw={"aspect": "equal", "projection": "3d"})
+        fig, orig_ax = plt.subplots(
+            nrows=1, ncols=1, figsize=(10, 5), subplot_kw={"aspect": "equal", "projection": "3d"}
+        )
         axes_list = [orig_ax]
         orig_ax.scatter(qx, qy, qz, c=source_filenums, marker="+")
-    orig_ax.axis('off')
+    orig_ax.axis("off")
     orig_ax.set_title("Original Scheme")
     add_lines(orig_ax)
     force_scaling(orig_ax)
@@ -403,16 +415,16 @@ def plot_gradients(bvals, orig_bvecs, source_filenums, output_fname, final_bvecs
             ax.elev += rotate_elev[i]
         return tuple(axes_list)
 
-    anim = animation.FuncAnimation(fig, rotate, frames=frames*4,
-                                   interval=20, blit=False)
-    anim.save(output_fname, writer='imagemagick', fps=32)
+    anim = animation.FuncAnimation(fig, rotate, frames=frames * 4, interval=20, blit=False)
+    anim.save(output_fname, writer="imagemagick", fps=32)
 
     plt.close(fig)
     fig = None
 
 
-def topup_selection_to_report(selected_indices, original_files, spec_lookup,
-                              image_source='combined DWI series'):
+def topup_selection_to_report(
+    selected_indices, original_files, spec_lookup, image_source="combined DWI series"
+):
     """Write a description of how the images were selected for TOPUP.
 
     >>> selected_indices = [0, 15, 30, 45]
@@ -483,38 +495,43 @@ from sub-1_dir-PA_dwi.nii.gz.
 
     # Make the description
     num_groups = len(selected_per_warp_group)
-    plural = 's' if num_groups > 1 else ''
-    plural2 = 'were' if plural == 's' else 'was'
-    desc = ["A total of {num_groups} distortion group{plural} {plural2} included in the "
-            "{image_source} data. ".format(num_groups=num_groups, plural=plural,
-                                           plural2=plural2, image_source=image_source)]
+    plural = "s" if num_groups > 1 else ""
+    plural2 = "were" if plural == "s" else "was"
+    desc = [
+        "A total of {num_groups} distortion group{plural} {plural2} included in the "
+        "{image_source} data. ".format(
+            num_groups=num_groups, plural=plural, plural2=plural2, image_source=image_source
+        )
+    ]
     for distortion_group, image_list in selected_per_warp_group.items():
         group_desc = [
-            "Distortion group '{spec}' was represented by ".format(spec=distortion_group)]
+            "Distortion group '{spec}' was represented by ".format(spec=distortion_group)
+        ]
         for image_name, image_indices in image_list:
             formatted_indices = ", ".join(map(str, image_indices))
-            plural = 's' if len(image_indices) > 1 else ''
+            plural = "s" if len(image_indices) > 1 else ""
             group_desc += [
                 "image{plural} {imgnums} from {img_name}".format(
-                    plural=plural, imgnums=formatted_indices,
-                    img_name=op.split(image_name)[-1]),
-                ", "]
+                    plural=plural, imgnums=formatted_indices, img_name=op.split(image_name)[-1]
+                ),
+                ", ",
+            ]
         group_desc[-1] = ". "
         if len(image_list) > 1:
             group_desc[-3] = " and "
         desc += group_desc
 
-    return ''.join(desc)
+    return "".join(desc)
 
 
 class _SeriesQCInputSpec(BaseInterfaceInputSpec):
-    pre_qc = File(exists=True, desc='qc file from the raw data', mandatory=True)
-    t1_qc = File(exists=True, desc='qc file from preprocessed image in t1 space')
-    t1_qc_postproc = File(exists=True, desc='qc file from preprocessed image in template space')
-    confounds_file = File(exists=True, desc='confounds file', mandatory=True)
-    t1_mask_file = File(exists=True, desc='brain mask in t1 space')
-    t1_cnr_file = File(exists=True, desc='CNR file in t1 space')
-    t1_b0_series = File(exists=True, desc='time series of b=0 images')
+    pre_qc = File(exists=True, desc="qc file from the raw data", mandatory=True)
+    t1_qc = File(exists=True, desc="qc file from preprocessed image in t1 space")
+    t1_qc_postproc = File(exists=True, desc="qc file from preprocessed image in template space")
+    confounds_file = File(exists=True, desc="confounds file", mandatory=True)
+    t1_mask_file = File(exists=True, desc="brain mask in t1 space")
+    t1_cnr_file = File(exists=True, desc="CNR file in t1 space")
+    t1_b0_series = File(exists=True, desc="time series of b=0 images")
     t1_dice_score = traits.Float()
     mni_dice_score = traits.Float()
     output_file_name = traits.File()
@@ -539,34 +556,31 @@ class SeriesQC(SimpleInterface):
 
         # Add in Dice scores if available
         if isdefined(self.inputs.t1_dice_score):
-            image_qc['t1_dice_distance'] = [self.inputs.t1_dice_score]
+            image_qc["t1_dice_distance"] = [self.inputs.t1_dice_score]
         if isdefined(self.inputs.mni_dice_score):
-            image_qc['mni_dice_distance'] = [self.inputs.mni_dice_score]
+            image_qc["mni_dice_distance"] = [self.inputs.mni_dice_score]
 
         if isdefined(self.inputs.t1_mask_file):
             if isdefined(self.inputs.t1_cnr_file):
-                image_qc.update(
-                    get_cnr_values(self.inputs.t1_cnr_file,
-                                   self.inputs.t1_mask_file))
+                image_qc.update(get_cnr_values(self.inputs.t1_cnr_file, self.inputs.t1_mask_file))
             if isdefined(self.inputs.t1_b0_series):
                 # Add a function to get b=0 TSNR
                 pass
 
         # Get the metadata
         output_file = self.inputs.output_file_name
-        image_qc['file_name'] = output_file
+        image_qc["file_name"] = output_file
         bids_info = get_bids_params(output_file)
         image_qc.update(bids_info)
         output = op.join(runtime.cwd, "dwi_qc.csv")
         pd.DataFrame(image_qc).to_csv(output, index=False)
-        self._results['series_qc_file'] = output
+        self._results["series_qc_file"] = output
         return runtime
 
 
 def _load_qc_file(fname, prefix=""):
-    qc_data = pd.read_csv(fname).to_dict(orient='records')[0]
-    renamed = dict([
-        (prefix + key, value) for key, value in qc_data.items()])
+    qc_data = pd.read_csv(fname).to_dict(orient="records")[0]
+    renamed = dict([(prefix + key, value) for key, value in qc_data.items()])
     return renamed
 
 
@@ -579,14 +593,12 @@ def get_cnr_values(cnr_image, brain_mask):
     if num_cnrs == 1:
         cnr_labels = ["CNR"]
     else:
-        cnr_labels = [ "CNR%d" % value for value in
-                      range(num_cnrs)]
+        cnr_labels = ["CNR%d" % value for value in range(num_cnrs)]
 
     cnrs = {}
     strategies = ["mean", "median", "standard_deviation"]
     for strategy in strategies:
-        masker = NiftiLabelsMasker(mask_img, strategy=strategy,
-                                   resampling_target="data")
+        masker = NiftiLabelsMasker(mask_img, strategy=strategy, resampling_target="data")
         cnr_values = masker.fit_transform(cnr_img).flatten()
         for cnr_name, cnr_value in zip(cnr_labels, cnr_values):
             cnrs[cnr_name + "_" + strategy] = cnr_value
@@ -594,8 +606,7 @@ def get_cnr_values(cnr_image, brain_mask):
     return cnrs
 
 
-def motion_derivatives(translations, rotations, framewise_disp,
-                       original_files):
+def motion_derivatives(translations, rotations, framewise_disp, original_files):
 
     def padded_diff(data):
         out = np.zeros_like(data)
@@ -622,7 +633,7 @@ def motion_derivatives(translations, rotations, framewise_disp,
         "max_rotation": [file_masked(np.abs(rotations)).max()],
         "max_translation": [file_masked(np.abs(translations)).max()],
         "max_rel_rotation": [file_masked(np.abs(drotations)).max()],
-        "max_rel_translation": [file_masked(np.abs(dtranslations)).max()]
+        "max_rel_translation": [file_masked(np.abs(dtranslations)).max()],
     }
 
 
@@ -634,27 +645,32 @@ def calculate_motion_summary(confounds_tsv):
             "max_rotation": [np.nan],
             "max_translation": [np.nan],
             "max_rel_rotation": [np.nan],
-            "max_rel_translation": [np.nan]
+            "max_rel_translation": [np.nan],
         }
     df = pd.read_csv(confounds_tsv, delimiter="\t")
 
     # the default case where each output image comes from one input image
-    if 'trans_x' in df.columns:
-        translations = df[['trans_x', 'trans_y', 'trans_z']].values
-        rotations = df[['rot_x', 'rot_y', 'rot_z']].values
-        return motion_derivatives(translations, rotations, df['framewise_displacement'],
-                                  df['original_file'])
+    if "trans_x" in df.columns:
+        translations = df[["trans_x", "trans_y", "trans_z"]].values
+        rotations = df[["rot_x", "rot_y", "rot_z"]].values
+        return motion_derivatives(
+            translations, rotations, df["framewise_displacement"], df["original_file"]
+        )
 
     # If there was a PE Pair averaging, get motion from both
-    motion1 = motion_derivatives(df[['trans_x_1', 'trans_y_1', 'trans_z_1']].values,
-                                 df[['rot_x_1', 'rot_y_1', 'rot_z_1']].values,
-                                 df['framewise_displacement_1'],
-                                 df['original_file_1'])
+    motion1 = motion_derivatives(
+        df[["trans_x_1", "trans_y_1", "trans_z_1"]].values,
+        df[["rot_x_1", "rot_y_1", "rot_z_1"]].values,
+        df["framewise_displacement_1"],
+        df["original_file_1"],
+    )
 
-    motion2 = motion_derivatives(df[['trans_x_2', 'trans_y_2', 'trans_z_2']].values,
-                                 df[['rot_x_2', 'rot_y_2', 'rot_z_2']].values,
-                                 df['framewise_displacement_2'],
-                                 df['original_file_2'])
+    motion2 = motion_derivatives(
+        df[["trans_x_2", "trans_y_2", "trans_z_2"]].values,
+        df[["rot_x_2", "rot_y_2", "rot_z_2"]].values,
+        df["framewise_displacement_2"],
+        df["original_file_2"],
+    )
 
     # Combine the FDs from both PE directions
     # both_fd = np.column_stack([m1, m2])
@@ -670,7 +686,7 @@ def calculate_motion_summary(confounds_tsv):
         "max_rotation": compare_series("max_rotation", max),
         "max_translation": compare_series("max_translation", max),
         "max_rel_rotation": compare_series("max_rel_rotation", max),
-        "max_rel_translation": compare_series("max_rel_translation", max)
+        "max_rel_translation": compare_series("max_rel_translation", max),
     }
 
 
@@ -690,52 +706,53 @@ class InteractiveReport(SimpleInterface):
 
     def _run_interface(self, runtime):
         report = {}
-        report['dwi_corrected'] = createSprite4D(self.inputs.processed_dwi_file)
+        report["dwi_corrected"] = createSprite4D(self.inputs.processed_dwi_file)
 
-        b0, colorFA, mask = createB0_ColorFA_Mask_Sprites(self.inputs.processed_dwi_file,
-                                                          self.inputs.color_fa,
-                                                          self.inputs.mask_file)
-        report['carpetplot'] = []
+        b0, colorFA, mask = createB0_ColorFA_Mask_Sprites(
+            self.inputs.processed_dwi_file, self.inputs.color_fa, self.inputs.mask_file
+        )
+        report["carpetplot"] = []
         if isdefined(self.inputs.carpetplot_data):
-            with open(self.inputs.carpetplot_data, 'r') as carpet_f:
+            with open(self.inputs.carpetplot_data, "r") as carpet_f:
                 carpet_data = json.load(carpet_f)
             report.update(carpet_data)
 
         # Load the QC file
-        report['qc_scores'] = json.loads(
-            pd.read_csv(self.inputs.series_qc_file).to_json(orient="records"))[0]
+        report["qc_scores"] = json.loads(
+            pd.read_csv(self.inputs.series_qc_file).to_json(orient="records")
+        )[0]
 
-        report['b0'] = b0
-        report['colorFA'] = colorFA
-        report['anat_mask'] = mask
-        report['outlier_volumes'] = []
-        report['eddy_params'] = [[i, i] for i in range(30)]
+        report["b0"] = b0
+        report["colorFA"] = colorFA
+        report["anat_mask"] = mask
+        report["outlier_volumes"] = []
+        report["eddy_params"] = [[i, i] for i in range(30)]
         eddy_qc = {}
-        report['eddy_quad'] = eddy_qc
-        report['subject_id'] = "sub-test"
-        report['analysis_level'] = "participant"
-        report['pipeline'] = "qsiprep"
-        report['boilerplate'] = "boilerplate"
+        report["eddy_quad"] = eddy_qc
+        report["subject_id"] = "sub-test"
+        report["analysis_level"] = "participant"
+        report["pipeline"] = "qsiprep"
+        report["boilerplate"] = "boilerplate"
 
         df = pd.read_csv(self.inputs.confounds_file, delimiter="\t")
-        translations = df[['trans_x', 'trans_y', 'trans_z']].values
-        rms = np.sqrt((translations ** 2).sum(1))
-        fdisp = df['framewise_displacement'].tolist()
+        translations = df[["trans_x", "trans_y", "trans_z"]].values
+        rms = np.sqrt((translations**2).sum(1))
+        fdisp = df["framewise_displacement"].tolist()
         fdisp[0] = None
-        report['eddy_params'] = [[fd_, rms_] for fd_, rms_ in zip(fdisp, rms)]
+        report["eddy_params"] = [[fd_, rms_] for fd_, rms_ in zip(fdisp, rms)]
 
         # Get the sampling scheme
         xyz = df[["grad_x", "grad_y", "grad_z"]].values
-        bval = df['bval'].values
+        bval = df["bval"].values
         qxyz = np.sqrt(bval)[:, None] * xyz
-        report['q_coords'] = qxyz.tolist()
-        report['color'] = _filename_to_colors(df['original_file'])
+        report["q_coords"] = qxyz.tolist()
+        report["color"] = _filename_to_colors(df["original_file"])
 
         safe_json = json.dumps(report)
         out_file = op.join(runtime.cwd, "interactive_report.json")
         with open(out_file, "w") as out_html:
             out_html.write(safe_json)
-        self._results['out_report'] = out_file
+        self._results["out_report"] = out_file
         return runtime
 
 
@@ -752,28 +769,24 @@ def _filename_to_colors(labels_column, colormap="rainbow"):
 
 
 class _ReconPeaksReportInputSpec(CommandLineInputSpec):
-    mif_file = File(exists=True, argstr='--mif %s')
-    fib_file = File(exists=True, argstr='--fib %s')
-    odf_file = File(exists=True, argstr='--amplitudes %s')
-    directions_file = File(exists=True, argstr='--directions %s')
-    mask_file = File(exists=True, argstr='--mask_file %s')
-    background_image = File(exists=True, argstr='--background_image %s')
-    odf_rois = File(exists=True, argstr='--odf_rois %s')
-    peak_report = File(
-        "peaks_mosaic.png",
-        argstr="--peaks_image %s",
-        usedefault=True)
-    odf_report = File(
-        "odfs_mosaic.png",
-        argstr="--odfs_image %s",
-        usedefault=True)
-    peaks_only = traits.Bool(False, usedefault=True,
-                             argstr='--peaks_only',
-                             desc='only produce a peak directions report')
-    subtract_iso = traits.Bool(False, usedefault=True,
-                               argstr="--subtract-iso",
-                               desc='subtract isotropic component from ODFs')
-
+    mif_file = File(exists=True, argstr="--mif %s")
+    fib_file = File(exists=True, argstr="--fib %s")
+    odf_file = File(exists=True, argstr="--amplitudes %s")
+    directions_file = File(exists=True, argstr="--directions %s")
+    mask_file = File(exists=True, argstr="--mask_file %s")
+    background_image = File(exists=True, argstr="--background_image %s")
+    odf_rois = File(exists=True, argstr="--odf_rois %s")
+    peak_report = File("peaks_mosaic.png", argstr="--peaks_image %s", usedefault=True)
+    odf_report = File("odfs_mosaic.png", argstr="--odfs_image %s", usedefault=True)
+    peaks_only = traits.Bool(
+        False, usedefault=True, argstr="--peaks_only", desc="only produce a peak directions report"
+    )
+    subtract_iso = traits.Bool(
+        False,
+        usedefault=True,
+        argstr="--subtract-iso",
+        desc="subtract isotropic component from ODFs",
+    )
 
 
 class _ReconPeaksReportOutputSpec(TraitedSpec):
@@ -789,9 +802,9 @@ class CLIReconPeaksReport(CommandLine):
 
     def _list_outputs(self):
         outputs = self.output_spec().get()
-        outputs['peak_report'] = op.abspath(self.inputs.peak_report)
+        outputs["peak_report"] = op.abspath(self.inputs.peak_report)
         if not self.inputs.peaks_only:
-            outputs['odf_report'] = op.abspath(self.inputs.odf_report)
+            outputs["odf_report"] = op.abspath(self.inputs.odf_report)
         return outputs
 
 
@@ -810,7 +823,7 @@ class ConnectivityReport(SimpleInterface):
     def _run_interface(self, runtime):
         """Generate a reportlet."""
         mat = loadmat(self.inputs.connectivity_matfile)
-        connectivity_keys = [key for key in mat.keys() if key.endswith('connectivity')]
+        connectivity_keys = [key for key in mat.keys() if key.endswith("connectivity")]
         atlases = sorted(set([key.split("_")[0] for key in connectivity_keys]))
         measures = sorted(set(["_".join(key.split("_")[1:-1]) for key in connectivity_keys]))
         nrows = len(atlases)
@@ -821,20 +834,20 @@ class ConnectivityReport(SimpleInterface):
             measure = "_".join(connectivity_key.split("_")[1:-1])
             row = atlases.index(atlas)
             col = measures.index(measure)
-            ax[row, col].imshow(mat[connectivity_key], interpolation='nearest',
-                                cmap="Greys", aspect='equal')
+            ax[row, col].imshow(
+                mat[connectivity_key], interpolation="nearest", cmap="Greys", aspect="equal"
+            )
             ax[row, col].set_xticks([])
             ax[row, col].set_yticks([])
         fig.set_size_inches((ncols, nrows))
         fig.subplots_adjust(left=0.05, top=0.95, wspace=0, hspace=0, bottom=0, right=1)
 
         for measure_num, measure_name in enumerate(measures):
-            ax[0, measure_num].set_title(measure_name.replace('_', '/'),
-                                         fontdict={'fontsize': 6})
+            ax[0, measure_num].set_title(measure_name.replace("_", "/"), fontdict={"fontsize": 6})
         for atlas_num, atlas_name in enumerate(atlases):
-            ax[atlas_num, 0].set_ylabel(atlas_name, fontdict={'fontsize': 8})
+            ax[atlas_num, 0].set_ylabel(atlas_name, fontdict={"fontsize": 8})
 
-        conn_report = op.join(runtime.cwd, 'conn_report.svg')
+        conn_report = op.join(runtime.cwd, "conn_report.svg")
         fig.savefig(conn_report)
-        self._results['out_report'] = conn_report
+        self._results["out_report"] = conn_report
         return runtime

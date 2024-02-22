@@ -8,7 +8,7 @@
       "software": "Dipy",
       "action": "3dSHORE_reconstruction",
       "input": "qsiprep",
-      "output_suffix": "3dSHORE",
+      "qsirecon_suffix": "3dSHORE",
       "parameters": {
         "radial_order": 6,
         "zeta": 700,
@@ -42,7 +42,7 @@
       "software": "DSI Studio",
       "action": "connectivity",
       "input": "tractography",
-      "output_suffix": "3dshorenetwork",
+      "qsirecon_suffix": "3dshorenetwork",
       "parameters": {
         "connectivity_value": "count,ncount,mean_length,gfa",
         "connectivity_type": "pass,end"

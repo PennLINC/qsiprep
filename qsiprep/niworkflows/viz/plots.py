@@ -7,7 +7,6 @@ import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import nibabel as nb
 import numpy as np
-import pandas as pd
 import seaborn as sns
 from matplotlib import gridspec as mgs
 from matplotlib.colorbar import ColorbarBase
@@ -16,91 +15,8 @@ from nilearn._utils import check_niimg_4d
 from nilearn._utils.niimg import _safe_get_data
 from nilearn.plotting import plot_img
 from nilearn.signal import clean
-from seaborn import color_palette
 
 DINA4_LANDSCAPE = (11.69, 8.27)
-
-
-class fMRIPlot(object):
-    """
-    Generates the fMRI Summary Plot
-    """
-    __slots__ = ['func_file', 'mask_data',
-                 'tr', 'seg_data', 'confounds', 'spikes']
-
-    def __init__(self, func_file, mask_file=None, data=None, conf_file=None, seg_file=None,
-                 tr=None, usecols=None, units=None, vlines=None, spikes_files=None):
-        self.func_file = func_file
-        func_nii = nb.load(func_file)
-        self.tr = tr if tr is not None else func_nii.header.get_zooms()[-1]
-
-        self.mask_data = np.ones_like(func_nii.get_fdata(), dtype='uint8')
-        if mask_file:
-            self.mask_data = nb.load(mask_file).get_fdata().astype('uint8')
-
-        self.seg_data = None
-        if seg_file:
-            self.seg_data = nb.load(seg_file).get_fdata()
-
-        if units is None:
-            units = {}
-
-        if vlines is None:
-            vlines = {}
-
-        self.confounds = {}
-        if data is None and conf_file:
-            data = pd.read_csv(conf_file, sep=r'[\t\s]+',
-                               usecols=usecols, index_col=False)
-
-        if data is not None:
-            for name in data.columns.ravel():
-                self.confounds[name] = {
-                    'values': data[[name]].values.ravel().tolist(),
-                    'units': units.get(name),
-                    'cutoff': vlines.get(name)
-                }
-
-        self.spikes = []
-        if spikes_files:
-            for sp_file in spikes_files:
-                self.spikes.append((np.loadtxt(sp_file), None, False))
-
-    def plot(self, figure=None):
-        """Main plotter"""
-        sns.set_style("whitegrid")
-        sns.set_context("paper", font_scale=0.8)
-
-        if figure is None:
-            figure = plt.gcf()
-
-        nconfounds = len(self.confounds)
-        nspikes = len(self.spikes)
-        nrows = 1 + nconfounds + nspikes
-
-        # Create grid
-        grid = mgs.GridSpec(nrows, 1, wspace=0.0, hspace=0.05,
-                            height_ratios=[1] * (nrows - 1) + [5])
-
-        grid_id = 0
-        for tsz, name, iszs in self.spikes:
-            spikesplot(tsz, title=name, outer_gs=grid[grid_id], tr=self.tr,
-                       zscored=iszs)
-            grid_id += 1
-
-        if self.confounds:
-            palette = color_palette("husl", nconfounds)
-
-        for i, (name, kwargs) in enumerate(self.confounds.items()):
-            tseries = kwargs.pop('values')
-            confoundplot(
-                tseries, grid[grid_id], tr=self.tr, color=palette[i],
-                name=name, **kwargs)
-            grid_id += 1
-
-        plot_carpet(self.func_file, self.seg_data, subplot=grid[-1], tr=self.tr)
-        # spikesplot_cb([0.7, 0.78, 0.2, 0.008])
-        return figure
 
 
 def plot_carpet(img, atlaslabels, detrend=True, nskip=0, size=(950, 800),

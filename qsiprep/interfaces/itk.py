@@ -12,21 +12,17 @@ import os
 import os.path as op
 import subprocess
 from mimetypes import guess_type
-from tempfile import TemporaryDirectory
 
 import nibabel as nb
 import numpy as np
 import SimpleITK as sitk
 from dipy.core import geometry as geom
 from nipype import logging
-from nipype.interfaces.ants.resampling import ApplyTransformsInputSpec
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec,
     File,
     InputMultiObject,
-    InputMultiPath,
     OutputMultiObject,
-    OutputMultiPath,
     SimpleInterface,
     TraitedSpec,
     traits,
@@ -35,7 +31,7 @@ from nipype.utils.filemanip import fname_presuffix
 
 from ..niworkflows.viz.utils import compose_view, plot_acpc
 
-LOGGER = logging.getLogger('nipype.interface')
+LOGGER = logging.getLogger("nipype.interface")
 
 
 class _AffineToRigidInputSpec(BaseInterfaceInputSpec):
@@ -57,17 +53,17 @@ class AffineToRigid(SimpleInterface):
             raise Exception("Only one transform allowed")
         affine_transform = self.inputs.affine_transform[0]
         rigid_itk, rigid_itk_inverse, translation_itk = itk_affine_to_rigid(
-            affine_transform,
-            runtime.cwd)
-        self._results['rigid_transform'] = [rigid_itk]
-        self._results['rigid_transform_inverse'] = [rigid_itk_inverse]
-        self._results['translation_transform'] = [translation_itk]
+            affine_transform, runtime.cwd
+        )
+        self._results["rigid_transform"] = [rigid_itk]
+        self._results["rigid_transform_inverse"] = [rigid_itk_inverse]
+        self._results["translation_transform"] = [translation_itk]
         return runtime
 
 
 class _ACPCReportInputSpec(BaseInterfaceInputSpec):
-    translation_image = File(exists=True, desc='only translated to ACPC', mandatory=True)
-    rigid_image = File(exists=True, desc='rigid transformed to ACPC')
+    translation_image = File(exists=True, desc="only translated to ACPC", mandatory=True)
+    rigid_image = File(exists=True, desc="rigid transformed to ACPC")
 
 
 class _ACPCReportOutputSpec(TraitedSpec):
@@ -82,24 +78,29 @@ class ACPCReport(SimpleInterface):
         out_report = runtime.cwd + "/ACPCReport.svg"
         # Call composer
         compose_view(
-            plot_acpc(nb.load(self.inputs.translation_image),
-                      'moving-image',
-                      estimate_brightness=True,
-                      label='Original',
-                      compress=False),
-            plot_acpc(nb.load(self.inputs.rigid_image),
-                      'fixed-image',
-                      estimate_brightness=True,
-                      label="AC-PC",
-                      compress=False),
-            out_file=out_report)
-        self._results['out_report'] = out_report
+            plot_acpc(
+                nb.load(self.inputs.translation_image),
+                "moving-image",
+                estimate_brightness=True,
+                label="Original",
+                compress=False,
+            ),
+            plot_acpc(
+                nb.load(self.inputs.rigid_image),
+                "fixed-image",
+                estimate_brightness=True,
+                label="AC-PC",
+                compress=False,
+            ),
+            out_file=out_report,
+        )
+        self._results["out_report"] = out_report
 
         return runtime
 
 
 class DisassembleTransformInputSpec(BaseInterfaceInputSpec):
-    in_file = File(exists=True, mandatory=True, desc='ANTs composite transform (h5)')
+    in_file = File(exists=True, mandatory=True, desc="ANTs composite transform (h5)")
 
 
 class DisassembleTransformOutputSpec(TraitedSpec):
@@ -114,85 +115,7 @@ class DisassembleTransform(SimpleInterface):
 
     def _run_interface(self, runtime):
         transforms = disassemble_transform(self.inputs.in_file, runtime.cwd)
-        self._results['out_transforms'] = transforms
-        return runtime
-
-
-class MultiApplyTransformsInputSpec(ApplyTransformsInputSpec):
-    input_image = InputMultiPath(File(exists=True), mandatory=True,
-                                 desc='input time-series as a list of volumes after splitting'
-                                      ' through the fourth dimension')
-    num_threads = traits.Int(1, usedefault=True, nohash=True,
-                             desc='number of parallel processes')
-    save_cmd = traits.Bool(True, usedefault=True,
-                           desc='write a log of command lines that were applied')
-    copy_dtype = traits.Bool(False, usedefault=True,
-                             desc='copy dtype from inputs to outputs')
-
-
-class MultiApplyTransformsOutputSpec(TraitedSpec):
-    out_files = OutputMultiPath(File(), desc='the output ITKTransform file')
-    log_cmdline = File(desc='a list of command lines used to apply transforms')
-
-
-class MultiApplyTransforms(SimpleInterface):
-
-    """
-    Apply the corresponding list of input transforms
-    """
-    input_spec = MultiApplyTransformsInputSpec
-    output_spec = MultiApplyTransformsOutputSpec
-
-    def _run_interface(self, runtime):
-        # Get all inputs from the ApplyTransforms object
-        ifargs = self.inputs.get()
-
-        # Extract number of input images and transforms
-        in_files = ifargs.pop('input_image')
-        num_files = len(in_files)
-        transforms = ifargs.pop('transforms')
-        # Get number of parallel jobs
-        num_threads = ifargs.pop('num_threads')
-        save_cmd = ifargs.pop('save_cmd')
-
-        # Remove certain keys
-        for key in ['environ', 'ignore_exception',
-                    'terminal_output', 'output_image']:
-            ifargs.pop(key, None)
-
-        # Get a temp folder ready
-        tmp_folder = TemporaryDirectory(prefix='tmp-', dir=runtime.cwd)
-
-        # In qsiprep the transforms have already been merged
-        xfms_list = transforms
-        assert len(xfms_list) == num_files
-
-        # Inputs are ready to run in parallel
-        if num_threads < 1:
-            num_threads = None
-
-        if num_threads == 1:
-            out_files = [_applytfms((
-                in_file, in_xfm, ifargs, i, runtime.cwd))
-                for i, (in_file, in_xfm) in enumerate(zip(in_files, xfms_list))
-            ]
-        else:
-            from concurrent.futures import ThreadPoolExecutor
-            with ThreadPoolExecutor(max_workers=num_threads) as pool:
-                out_files = list(pool.map(_applytfms, [
-                    (in_file, in_xfm, ifargs, i, runtime.cwd)
-                    for i, (in_file, in_xfm) in enumerate(zip(in_files, xfms_list))]
-                ))
-        tmp_folder.cleanup()
-
-        # Collect output file names, after sorting by index
-        self._results['out_files'] = [el[0] for el in out_files]
-
-        if save_cmd:
-            self._results['log_cmdline'] = os.path.join(runtime.cwd, 'command.txt')
-            with open(self._results['log_cmdline'], 'w') as cmdfile:
-                print('\n-------\n'.join([el[1] for el in out_files]),
-                      file=cmdfile)
+        self._results["out_transforms"] = transforms
         return runtime
 
 
@@ -210,13 +133,15 @@ def _applytfms(args):
     )
 
     in_file, in_xform, ifargs, index, newpath = args
-    out_file = fname_presuffix(in_file, suffix='_xform-%05d' % index,
-                               newpath=newpath, use_ext=True)
+    out_file = fname_presuffix(
+        in_file, suffix="_xform-%05d" % index, newpath=newpath, use_ext=True
+    )
 
-    copy_dtype = ifargs.pop('copy_dtype', False)
+    copy_dtype = ifargs.pop("copy_dtype", False)
     xfm = ApplyTransforms(
-        input_image=in_file, transforms=in_xform, output_image=out_file, **ifargs)
-    xfm.terminal_output = 'allatonce'
+        input_image=in_file, transforms=in_xform, output_image=out_file, **ifargs
+    )
+    xfm.terminal_output = "allatonce"
     xfm.resource_monitor = False
     runtime = xfm.run().runtime
 
@@ -237,12 +162,12 @@ def _arrange_xfms(transforms, num_files, tmp_folder):
     Convenience method to arrange the list of transforms that should be applied
     to each input file. Not needed in qsiprep
     """
-    base_xform = ['#Insight Transform File V1.0', '#Transform 0']
+    base_xform = ["#Insight Transform File V1.0", "#Transform 0"]
     # Initialize the transforms matrix
     xfms_T = []
     for i, tf_file in enumerate(transforms):
         # If it is a deformation field, copy to the tfs_matrix directly
-        if guess_type(tf_file)[0] != 'text/plain':
+        if guess_type(tf_file)[0] != "text/plain":
             xfms_T.append([tf_file] * num_files)
             continue
 
@@ -250,15 +175,15 @@ def _arrange_xfms(transforms, num_files, tmp_folder):
             tfdata = tf_fh.read().strip()
 
         # If it is not an ITK transform file, copy to the tfs_matrix directly
-        if not tfdata.startswith('#Insight Transform File'):
+        if not tfdata.startswith("#Insight Transform File"):
             xfms_T.append([tf_file] * num_files)
             continue
 
         # Count number of transforms in ITK transform file
-        nxforms = tfdata.count('#Transform')
+        nxforms = tfdata.count("#Transform")
 
         # Remove first line
-        tfdata = tfdata.split('\n')[1:]
+        tfdata = tfdata.split("\n")[1:]
 
         # If it is a ITK transform file with only 1 xform, copy to the tfs_matrix directly
         if nxforms == 1:
@@ -266,21 +191,24 @@ def _arrange_xfms(transforms, num_files, tmp_folder):
             continue
 
         if nxforms != num_files:
-            raise RuntimeError('Number of transforms (%d) found in the ITK file does not match'
-                               ' the number of input image files (%d).' % (nxforms, num_files))
+            raise RuntimeError(
+                "Number of transforms (%d) found in the ITK file does not match"
+                " the number of input image files (%d)." % (nxforms, num_files)
+            )
 
         # At this point splitting transforms will be necessary, generate a base name
-        out_base = fname_presuffix(tf_file, suffix='_pos-%03d_xfm-{:05d}' % i,
-                                   newpath=tmp_folder.name).format
+        out_base = fname_presuffix(
+            tf_file, suffix="_pos-%03d_xfm-{:05d}" % i, newpath=tmp_folder.name
+        ).format
         # Split combined ITK transforms file
         split_xfms = []
         for xform_i in range(nxforms):
             # Find start token to extract
-            startidx = tfdata.index('#Transform %d' % xform_i)
-            next_xform = base_xform + tfdata[startidx + 1:startidx + 4] + ['']
+            startidx = tfdata.index("#Transform %d" % xform_i)
+            next_xform = base_xform + tfdata[startidx + 1 : startidx + 4] + [""]
             xfm_file = out_base(xform_i)
-            with open(xfm_file, 'w') as out_xfm:
-                out_xfm.write('\n'.join(next_xform))
+            with open(xfm_file, "w") as out_xfm:
+                out_xfm.write("\n".join(next_xform))
             split_xfms.append(xfm_file)
         xfms_T.append(split_xfms)
 
@@ -289,7 +217,7 @@ def _arrange_xfms(transforms, num_files, tmp_folder):
 
 
 def disassemble_transform(transform_file, cwd):
-    cmd = ['CompositeTransformUtil', '--disassemble', transform_file, 'disassemble']
+    cmd = ["CompositeTransformUtil", "--disassemble", transform_file, "disassemble"]
     affine_out = cwd + "/00_disassemble_AffineTransform.mat"
     warp_out = cwd + "/01_disassemble_DisplacementFieldTransform.nii.gz"
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -306,8 +234,7 @@ def disassemble_transform(transform_file, cwd):
 
 def compose_affines(reference_image, affine_list, output_file):
     """Use antsApplyTransforms to get a single affine from multiple affines."""
-    cmd = "antsApplyTransforms -d 3 -r %s -o Linear[%s, 1] " % (
-        reference_image, output_file)
+    cmd = "antsApplyTransforms -d 3 -r %s -o Linear[%s, 1] " % (reference_image, output_file)
     cmd += " ".join(["--transform %s" % trf for trf in affine_list])
     os.system(cmd)
     assert os.path.exists(output_file)
@@ -319,8 +246,8 @@ def itk_affine_to_rigid(transform_file, cwd):
     transform from affine to rigid"""
 
     rigid_mat_file = cwd + "/6DOFrigid.mat"
-    translation_mat_file = cwd + '/translation.mat'
-    inverse_mat_file = cwd + '/6DOFinverse.mat'
+    translation_mat_file = cwd + "/translation.mat"
+    inverse_mat_file = cwd + "/6DOFinverse.mat"
     raw_transform = sitk.ReadTransform(transform_file)
     aff_transform = sitk.AffineTransform(3)
     aff_transform.SetFixedParameters(raw_transform.GetFixedParameters())
@@ -342,7 +269,10 @@ def itk_affine_to_rigid(transform_file, cwd):
     # Write the inverse rigid transform
     sitk.WriteTransform(rigid.GetInverse(), inverse_mat_file)
 
-    if False in (op.exists(rigid_mat_file), op.exists(translation_mat_file),
-                 op.exists(inverse_mat_file)):
+    if False in (
+        op.exists(rigid_mat_file),
+        op.exists(translation_mat_file),
+        op.exists(inverse_mat_file),
+    ):
         raise Exception("unable to create rigid AC-PC transform")
     return rigid_mat_file, inverse_mat_file, translation_mat_file

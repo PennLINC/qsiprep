@@ -8,6 +8,7 @@ Utilities to handle data from other preprocessing pipelines
 
 """
 import re
+from pathlib import Path
 
 UKB_DIR_PATTERN = re.compile("(\d+)_(\d+)_(\d+)")
 

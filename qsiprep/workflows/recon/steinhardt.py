@@ -17,12 +17,12 @@ from ...interfaces.interchange import recon_workflow_input_fields
 from ...interfaces.mrtrix import MRConvert
 from qsiprep.interfaces.bids import ReconDerivativesDataSink
 
-LOGGER = logging.getLogger('nipype.interface')
+LOGGER = logging.getLogger("nipype.interface")
 
 
-def init_steinhardt_order_param_wf(omp_nthreads, available_anatomical_data,
-                                   name="sop_recon",
-                                   output_suffix="", params={}):
+def init_steinhardt_order_param_wf(
+    omp_nthreads, available_anatomical_data, name="sop_recon", qsirecon_suffix="", params={}
+):
     """Compute Steinhardt order parameters based on ODFs or FODs
 
     Inputs
@@ -45,26 +45,30 @@ def init_steinhardt_order_param_wf(omp_nthreads, available_anatomical_data,
 
     """
 
-    inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields + ['fod_sh_mif']),
-                        name="inputnode")
+    inputnode = pe.Node(
+        niu.IdentityInterface(fields=recon_workflow_input_fields + ["fod_sh_mif"]),
+        name="inputnode",
+    )
     outputnode = pe.Node(
-        niu.IdentityInterface(
-            fields=['q2_file', 'q4_file', 'q6_file', 'q8_file']),
-        name="outputnode")
+        niu.IdentityInterface(fields=["q2_file", "q4_file", "q6_file", "q8_file"]),
+        name="outputnode",
+    )
 
     workflow = Workflow(name=name)
     sop_order = params.get("order", 8)
-    plot_reports = params.pop("plot_reports", True)
+    plot_reports = params.pop("plot_reports", True)  # noqa: F841
     desc = """Steinhardt Order Parameter Calculation:
 
 : """
     sh_mif_to_nifti = pe.Node(
-        MRConvert(out_file="SH.nii", args="-strides -1,-2,3"),
-        name="sh_mif_to_nifti")
+        MRConvert(out_file="SH.nii", args="-strides -1,-2,3"), name="sh_mif_to_nifti"
+    )
     calc_sop = pe.Node(CalculateSOP(**params), name="calc_sop")
     desc += """\
 A series of Steinhardt order parameters (up to order %d) were calculated.
-""" % (sop_order)
+""" % (
+        sop_order
+    )
 
     workflow.connect([
         (inputnode, sh_mif_to_nifti, [('fod_sh_mif', 'in_file')]),
@@ -74,19 +78,19 @@ A series of Steinhardt order parameters (up to order %d) were calculated.
             ('q4_file', 'q4_file'),
             ('q6_file', 'q6_file'),
             ('q8_file', 'q8_file'),
-            ]),
-        ])
+        ]),
+    ])  # fmt:skip
 
     sop_sinks = {}
-    if output_suffix:
+    if qsirecon_suffix:
         for sop_order in range(2, sop_order + 1, 2):
-            key = 'q%d_file' % sop_order
+            key = "q%d_file" % sop_order
             sop_sinks[key] = pe.Node(
-                ReconDerivativesDataSink(suffix="q-%d_SOP" % sop_order),
-                    name='ds_sop_q%d' % sop_order,
-                    compress=True,
-                    run_without_submitting=True)
-            workflow.connect(outputnode, key, sop_sinks[key], 'in_file')
+                ReconDerivativesDataSink(model="steinhardt", mfp=f"q{sop_order}", compress=True),
+                name="ds_sop_q%d" % sop_order,
+                run_without_submitting=True,
+            )
+            workflow.connect(outputnode, key, sop_sinks[key], 'in_file')  # fmt:skip
 
     workflow.__desc__ = desc
     return workflow

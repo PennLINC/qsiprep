@@ -19,24 +19,24 @@ from nipype.interfaces.base import (
     BaseInterfaceInputSpec,
     DynamicTraitedSpec,
     File,
-    InputMultiPath,
     SimpleInterface,
     TraitedSpec,
     isdefined,
     traits,
 )
-from nipype.interfaces.io import add_traits, isdefined
+from nipype.interfaces.io import add_traits
 from nipype.utils.filemanip import fname_presuffix
 
 from ..utils.atlases import get_atlases
 
-IFLOGGER = logging.getLogger('nipype.interfaces')
+IFLOGGER = logging.getLogger("nipype.interfaces")
+
 
 class GetConnectivityAtlasesInputSpec(BaseInterfaceInputSpec):
-    atlas_names = traits.List(mandatory=True, desc='atlas names to be used')
-    forward_transform = File(exists=True, desc='transform to get atlas into T1w space if desired')
-    reference_image = File(exists=True, desc='')
-    space = traits.Str('T1w', usedefault=True)
+    atlas_names = traits.List(mandatory=True, desc="atlas names to be used")
+    forward_transform = File(exists=True, desc="transform to get atlas into T1w space if desired")
+    reference_image = File(exists=True, desc="")
+    space = traits.Str("T1w", usedefault=True)
 
 
 class GetConnectivityAtlasesOutputSpec(TraitedSpec):
@@ -58,44 +58,58 @@ class GetConnectivityAtlases(SimpleInterface):
             else:
                 transform = self.inputs.forward_transform
         else:
-            transform = 'identity'
+            transform = "identity"
 
         # Transform atlases to match the DWI data
         resample_commands = []
         for atlas_name, atlas_config in atlas_configs.items():
-            output_name = fname_presuffix(atlas_config['file'], newpath=runtime.cwd,
-                                          suffix="_to_dwi")
-            output_mif = fname_presuffix(atlas_config['file'], newpath=runtime.cwd,
-                                         suffix="_to_dwi.mif", use_ext=False)
-            output_mif_txt = fname_presuffix(atlas_config['file'], newpath=runtime.cwd,
-                                             suffix="_mrtrixlabels.txt", use_ext=False)
-            output_orig_txt = fname_presuffix(atlas_config['file'], newpath=runtime.cwd,
-                                              suffix="_origlabels.txt", use_ext=False)
+            output_name = fname_presuffix(
+                atlas_config["file"], newpath=runtime.cwd, suffix="_to_dwi"
+            )
+            output_mif = fname_presuffix(
+                atlas_config["file"], newpath=runtime.cwd, suffix="_to_dwi.mif", use_ext=False
+            )
+            output_mif_txt = fname_presuffix(
+                atlas_config["file"],
+                newpath=runtime.cwd,
+                suffix="_mrtrixlabels.txt",
+                use_ext=False,
+            )
+            output_orig_txt = fname_presuffix(
+                atlas_config["file"], newpath=runtime.cwd, suffix="_origlabels.txt", use_ext=False
+            )
 
-            atlas_configs[atlas_name]['dwi_resolution_file'] = output_name
-            atlas_configs[atlas_name]['dwi_resolution_mif'] = output_mif
-            atlas_configs[atlas_name]['orig_lut'] = output_mif_txt
-            atlas_configs[atlas_name]['mrtrix_lut'] = output_orig_txt
+            atlas_configs[atlas_name]["dwi_resolution_file"] = output_name
+            atlas_configs[atlas_name]["dwi_resolution_mif"] = output_mif
+            atlas_configs[atlas_name]["orig_lut"] = output_mif_txt
+            atlas_configs[atlas_name]["mrtrix_lut"] = output_orig_txt
             resample_commands.append(
-                _resample_atlas(input_atlas=atlas_config['file'],
-                                output_atlas=output_name,
-                                transform=transform,
-                                ref_image=self.inputs.reference_image))
+                _resample_atlas(
+                    input_atlas=atlas_config["file"],
+                    output_atlas=output_name,
+                    transform=transform,
+                    ref_image=self.inputs.reference_image,
+                )
+            )
             label_convert(output_name, output_mif, output_orig_txt, output_mif_txt, atlas_config)
 
-        self._results['atlas_configs'] = atlas_configs
+        self._results["atlas_configs"] = atlas_configs
         commands_file = os.path.join(runtime.cwd, "transform_commands.txt")
         with open(commands_file, "w") as f:
-            f.write('\n'.join(resample_commands))
+            f.write("\n".join(resample_commands))
 
-        self._results['commands'] = commands_file
+        self._results["commands"] = commands_file
         return runtime
 
 
 def _resample_atlas(input_atlas, output_atlas, transform, ref_image):
-    xform = ants.ApplyTransforms(transforms=[transform], reference_image=ref_image,
-                                 input_image=input_atlas, output_image=output_atlas,
-                                 interpolation="MultiLabel")
+    xform = ants.ApplyTransforms(
+        transforms=[transform],
+        reference_image=ref_image,
+        input_image=input_atlas,
+        output_image=output_atlas,
+        interpolation="MultiLabel",
+    )
     result = xform.run()
 
     return result.runtime.cmdline
@@ -107,130 +121,21 @@ def label_convert(original_atlas, output_mif, orig_txt, mrtrix_txt, metadata):
     with open(mrtrix_txt, "w") as mrtrix_f:
         with open(orig_txt, "w") as orig_f:
             for row_num, (roi_num, roi_name) in enumerate(
-                    zip(metadata['node_ids'], metadata['node_names'])):
+                zip(metadata["node_ids"], metadata["node_names"])
+            ):
                 orig_f.write("{}\t{}\n".format(roi_num, roi_name))
                 mrtrix_f.write("{}\t{}\n".format(row_num + 1, roi_name))
-    cmd = ['labelconvert', original_atlas, orig_txt, mrtrix_txt, output_mif]
-    os.system(' '.join(cmd))
-
-
-class TPM2ROIInputSpec(BaseInterfaceInputSpec):
-    in_tpm = File(exists=True, mandatory=True, desc='Tissue probability map file in T1 space')
-    in_mask = File(exists=True, mandatory=True, desc='Binary mask of skull-stripped T1w image')
-    mask_erode_mm = traits.Float(xor=['mask_erode_prop'],
-                                 desc='erode input mask (kernel width in mm)')
-    erode_mm = traits.Float(xor=['erode_prop'],
-                            desc='erode output mask (kernel width in mm)')
-    mask_erode_prop = traits.Float(xor=['mask_erode_mm'],
-                                   desc='erode input mask (target volume ratio)')
-    erode_prop = traits.Float(xor=['erode_mm'],
-                              desc='erode output mask (target volume ratio)')
-    prob_thresh = traits.Float(0.95, usedefault=True,
-                               desc='threshold for the tissue probability maps')
-
-
-class TPM2ROIOutputSpec(TraitedSpec):
-    roi_file = File(exists=True, desc='output ROI file')
-    eroded_mask = File(exists=True, desc='resulting eroded mask')
-
-
-class TPM2ROI(SimpleInterface):
-    """Convert tissue probability maps (TPMs) into ROIs
-
-    This interface follows the following logic:
-
-    #. Erode ``in_mask`` by ``mask_erode_mm`` and apply to ``in_tpm``
-    #. Threshold masked TPM at ``prob_thresh``
-    #. Erode resulting mask by ``erode_mm``
-
-    """
-
-    input_spec = TPM2ROIInputSpec
-    output_spec = TPM2ROIOutputSpec
-
-    def _run_interface(self, runtime):
-        mask_erode_mm = self.inputs.mask_erode_mm
-        if not isdefined(mask_erode_mm):
-            mask_erode_mm = None
-        erode_mm = self.inputs.erode_mm
-        if not isdefined(erode_mm):
-            erode_mm = None
-        mask_erode_prop = self.inputs.mask_erode_prop
-        if not isdefined(mask_erode_prop):
-            mask_erode_prop = None
-        erode_prop = self.inputs.erode_prop
-        if not isdefined(erode_prop):
-            erode_prop = None
-        roi_file, eroded_mask = _tpm2roi(
-            self.inputs.in_tpm,
-            self.inputs.in_mask,
-            mask_erode_mm,
-            erode_mm,
-            mask_erode_prop,
-            erode_prop,
-            self.inputs.prob_thresh,
-            newpath=runtime.cwd,
-        )
-        self._results['roi_file'] = roi_file
-        self._results['eroded_mask'] = eroded_mask
-        return runtime
-
-
-class AddTPMsInputSpec(BaseInterfaceInputSpec):
-    in_files = InputMultiPath(File(exists=True), mandatory=True, desc='input list of ROIs')
-    indices = traits.List(traits.Int, desc='select specific maps')
-
-
-class AddTPMsOutputSpec(TraitedSpec):
-    out_file = File(exists=True, desc='union of binarized input files')
-
-
-class AddTPMs(SimpleInterface):
-    """Calculate the union of several :abbr:`TPMs (tissue-probability map)`"""
-    input_spec = AddTPMsInputSpec
-    output_spec = AddTPMsOutputSpec
-
-    def _run_interface(self, runtime):
-        in_files = self.inputs.in_files
-
-        indices = list(range(len(in_files)))
-        if isdefined(self.inputs.indices):
-            indices = self.inputs.indices
-
-        if len(self.inputs.in_files) < 2:
-            self._results['out_file'] = in_files[0]
-            return runtime
-
-        first_fname = in_files[indices[0]]
-        if len(indices) == 1:
-            self._results['out_file'] = first_fname
-            return runtime
-
-        im = nb.concat_images([in_files[i] for i in indices])
-        data = im.get_fdata().sum(axis=3)
-        data = np.clip(data, a_min=0.0, a_max=1.0)
-
-        out_file = fname_presuffix(first_fname, suffix='_tpmsum',
-                                   newpath=runtime.cwd)
-        newnii = im.__class__(data, im.affine, im.header)
-        newnii.set_data_dtype('float32')
-
-        # Set visualization thresholds
-        newnii.header['cal_max'] = 1.0
-        newnii.header['cal_min'] = 0.0
-        newnii.to_filename(out_file)
-        self._results['out_file'] = out_file
-
-        return runtime
+    cmd = ["labelconvert", original_atlas, orig_txt, mrtrix_txt, output_mif]
+    os.system(" ".join(cmd))
 
 
 class AddTSVHeaderInputSpec(BaseInterfaceInputSpec):
-    in_file = File(exists=True, mandatory=True, desc='input file')
-    columns = traits.List(traits.Str, mandatory=True, desc='header for columns')
+    in_file = File(exists=True, mandatory=True, desc="input file")
+    columns = traits.List(traits.Str, mandatory=True, desc="header for columns")
 
 
 class AddTSVHeaderOutputSpec(TraitedSpec):
-    out_file = File(exists=True, desc='output average file')
+    out_file = File(exists=True, desc="output average file")
 
 
 class AddTSVHeader(SimpleInterface):
@@ -273,17 +178,20 @@ class AddTSVHeader(SimpleInterface):
     >>> tmpdir.cleanup()
 
     """
+
     input_spec = AddTSVHeaderInputSpec
     output_spec = AddTSVHeaderOutputSpec
 
     def _run_interface(self, runtime):
-        out_file = fname_presuffix(self.inputs.in_file, suffix='_motion.tsv', newpath=runtime.cwd,
-                                   use_ext=False)
+        out_file = fname_presuffix(
+            self.inputs.in_file, suffix="_motion.tsv", newpath=runtime.cwd, use_ext=False
+        )
         data = np.loadtxt(self.inputs.in_file)
-        np.savetxt(out_file, data, delimiter='\t', header='\t'.join(self.inputs.columns),
-                   comments='')
+        np.savetxt(
+            out_file, data, delimiter="\t", header="\t".join(self.inputs.columns), comments=""
+        )
 
-        self._results['out_file'] = out_file
+        self._results["out_file"] = out_file
         return runtime
 
 
@@ -298,132 +206,12 @@ class TestInput(SimpleInterface):
         return runtime
 
 
-class JoinTSVColumnsInputSpec(BaseInterfaceInputSpec):
-    in_file = File(exists=True, mandatory=True, desc='input file')
-    join_file = File(exists=True, mandatory=True, desc='file to be adjoined')
-    side = traits.Enum('right', 'left', usedefault=True, desc='where to join')
-    columns = traits.List(traits.Str, desc='header for columns')
-
-
-class JoinTSVColumnsOutputSpec(TraitedSpec):
-    out_file = File(exists=True, desc='output TSV file')
-
-
-class JoinTSVColumns(SimpleInterface):
-    """Add a header row to a TSV file
-
-    .. testsetup::
-
-    >>> import os
-    >>> import pandas as pd
-    >>> import numpy as np
-    >>> from tempfile import TemporaryDirectory
-    >>> tmpdir = TemporaryDirectory()
-    >>> os.chdir(tmpdir.name)
-
-    .. doctest::
-
-    An example TSV:
-
-    >>> data = np.arange(30).reshape((6, 5))
-    >>> np.savetxt('data.tsv', data[:, :3], delimiter='\t', fmt='%.1f')
-    >>> np.savetxt('add.tsv', data[:, 3:], delimiter='\t', fmt='%.1f')
-
-    Add headers:
-
-    >>> from qsiprep.interfaces import JoinTSVColumns
-    >>> join = JoinTSVColumns()
-    >>> join.inputs.in_file = 'data.tsv'
-    >>> join.inputs.join_file = 'add.tsv'
-    >>> join.inputs.columns = ['a', 'b', 'c', 'd', 'e']
-    >>> res = join.run()
-    >>> res.outputs.out_file  # doctest: +ELLIPSIS
-    '...data_joined.tsv'
-    >>> pd.read_csv(res.outputs.out_file, sep='\s+', index_col=None,
-    ...             engine='python')  # doctest: +NORMALIZE_WHITESPACE
-          a     b     c     d     e
-    0   0.0   1.0   2.0   3.0   4.0
-    1   5.0   6.0   7.0   8.0   9.0
-    2  10.0  11.0  12.0  13.0  14.0
-    3  15.0  16.0  17.0  18.0  19.0
-    4  20.0  21.0  22.0  23.0  24.0
-    5  25.0  26.0  27.0  28.0  29.0
-
-    >>> join = JoinTSVColumns()
-    >>> join.inputs.in_file = 'data.tsv'
-    >>> join.inputs.join_file = 'add.tsv'
-    >>> res = join.run()
-    >>> pd.read_csv(res.outputs.out_file, sep='\s+', index_col=None,
-    ...             engine='python')  # doctest: +NORMALIZE_WHITESPACE
-        0.0   1.0   2.0   3.0   4.0
-    0   5.0   6.0   7.0   8.0   9.0
-    1  10.0  11.0  12.0  13.0  14.0
-    2  15.0  16.0  17.0  18.0  19.0
-    3  20.0  21.0  22.0  23.0  24.0
-    4  25.0  26.0  27.0  28.0  29.0
-
-    >>> join = JoinTSVColumns()
-    >>> join.inputs.in_file = 'data.tsv'
-    >>> join.inputs.join_file = 'add.tsv'
-    >>> join.inputs.side = 'left'
-    >>> join.inputs.columns = ['a', 'b', 'c', 'd', 'e']
-    >>> res = join.run()
-    >>> pd.read_csv(res.outputs.out_file, sep='\s+', index_col=None,
-    ...             engine='python')  # doctest: +NORMALIZE_WHITESPACE
-          a     b     c    d     e
-    0   3.0   4.0  0.0   1.0   2.0
-    1   8.0   9.0  5.0   6.0   7.0
-    2  13.0  14.0 10.0  11.0  12.0
-    3  18.0  19.0 15.0  16.0  17.0
-    4  23.0  24.0 20.0  21.0  22.0
-    5  28.0  29.0 25.0  26.0  27.0
-
-    .. testcleanup::
-
-    >>> tmpdir.cleanup()
-
-    """
-    input_spec = JoinTSVColumnsInputSpec
-    output_spec = JoinTSVColumnsOutputSpec
-
-    def _run_interface(self, runtime):
-        out_file = fname_presuffix(
-            self.inputs.in_file, suffix='_joined.tsv', newpath=runtime.cwd,
-            use_ext=False)
-
-        header = ''
-        if isdefined(self.inputs.columns) and self.inputs.columns:
-            header = '\t'.join(self.inputs.columns)
-
-        with open(self.inputs.in_file) as ifh:
-            data = ifh.read().splitlines(keepends=False)
-
-        with open(self.inputs.join_file) as ifh:
-            join = ifh.read().splitlines(keepends=False)
-
-        assert len(data) == len(join)
-
-        merged = []
-        for d, j in zip(data, join):
-            line = '%s\t%s' % ((j, d) if self.inputs.side == 'left' else (d, j))
-            merged.append(line)
-
-        if header:
-            merged.insert(0, header)
-
-        with open(out_file, 'w') as ofh:
-            ofh.write('\n'.join(merged))
-
-        self._results['out_file'] = out_file
-        return runtime
-
-
 class ConcatAffinesInputSpec(DynamicTraitedSpec, BaseInterfaceInputSpec):
-    invert = traits.Bool(False, usedefault=True, desc='Invert output transform')
+    invert = traits.Bool(False, usedefault=True, desc="Invert output transform")
 
 
 class ConcatAffinesOutputSpec(TraitedSpec):
-    out_mat = File(exists=True, desc='Output transform')
+    out_mat = File(exists=True, desc="Output transform")
 
 
 class ConcatAffines(SimpleInterface):
@@ -435,30 +223,36 @@ class ConcatAffines(SimpleInterface):
         self._num_affines = num_affines
         trait_type = File(exists=True)
         if num_affines == 0:
-            add_traits(self.inputs, ['mat_list'], trait_type)
+            add_traits(self.inputs, ["mat_list"], trait_type)
         elif num_affines < 26:
             add_traits(self.inputs, self._get_names(num_affines), trait_type)
 
     @staticmethod
     def _get_names(num_affines):
-        A = ord('A') - 1
-        return ['mat_{}to{}'.format(chr(X), chr(X + 1))
-                for X in range(A + num_affines, A, -1)]
+        A = ord("A") - 1
+        return ["mat_{}to{}".format(chr(X), chr(X + 1)) for X in range(A + num_affines, A, -1)]
 
     def _run_interface(self, runtime):
-        out_mat = os.path.join(runtime.cwd, 'concat.mat')
+        out_mat = os.path.join(runtime.cwd, "concat.mat")
         in_list = [self.inputs.get()[name] for name in self._get_names(self._num_affines)]
 
         out_xfm = _concat_xfms(in_list, invert=self.inputs.invert)
-        np.savetxt(out_mat, out_xfm, fmt=str('%.12g'))
+        np.savetxt(out_mat, out_xfm, fmt=str("%.12g"))
 
-        self._results['out_mat'] = out_mat
+        self._results["out_mat"] = out_mat
         return runtime
 
 
-def _tpm2roi(in_tpm, in_mask, mask_erosion_mm=None, erosion_mm=None,
-             mask_erosion_prop=None, erosion_prop=None, pthres=0.95,
-             newpath=None):
+def _tpm2roi(
+    in_tpm,
+    in_mask,
+    mask_erosion_mm=None,
+    erosion_mm=None,
+    mask_erosion_prop=None,
+    erosion_prop=None,
+    pthres=0.95,
+    newpath=None,
+):
     """
     Generate a mask from a tissue probability map
     """
@@ -466,11 +260,14 @@ def _tpm2roi(in_tpm, in_mask, mask_erosion_mm=None, erosion_mm=None,
     roi_mask = (tpm_img.get_fdata() >= pthres).astype(np.uint8)
 
     eroded_mask_file = None
-    erode_in = (mask_erosion_mm is not None and mask_erosion_mm > 0 or
-                mask_erosion_prop is not None and mask_erosion_prop < 1)
+    erode_in = (
+        mask_erosion_mm is not None
+        and mask_erosion_mm > 0
+        or mask_erosion_prop is not None
+        and mask_erosion_prop < 1
+    )
     if erode_in:
-        eroded_mask_file = fname_presuffix(in_mask, suffix='_eroded',
-                                           newpath=newpath)
+        eroded_mask_file = fname_presuffix(in_mask, suffix="_eroded", newpath=newpath)
         mask_img = nb.load(in_mask)
         mask_data = mask_img.get_fdata().astype(np.uint8)
         if mask_erosion_mm:
@@ -490,8 +287,9 @@ def _tpm2roi(in_tpm, in_mask, mask_erosion_mm=None, erosion_mm=None,
         roi_mask[~mask_data] = 0
 
     # shrinking
-    erode_out = (erosion_mm is not None and erosion_mm > 0 or
-                 erosion_prop is not None and erosion_prop < 1)
+    erode_out = (
+        erosion_mm is not None and erosion_mm > 0 or erosion_prop is not None and erosion_prop < 1
+    )
     if erode_out:
         if erosion_mm:
             iter_n = max(int(erosion_mm / max(tpm_img.header.get_zooms())), 1)
@@ -503,7 +301,7 @@ def _tpm2roi(in_tpm, in_mask, mask_erosion_mm=None, erosion_mm=None,
                 roi_mask = nd.binary_erosion(roi_mask, iterations=1)
 
     # Create image to resample
-    roi_fname = fname_presuffix(in_tpm, suffix='_roi', newpath=newpath)
+    roi_fname = fname_presuffix(in_tpm, suffix="_roi", newpath=newpath)
     roi_img = nb.Nifti1Image(roi_mask, tpm_img.affine, tpm_img.header)
     roi_img.set_data_dtype(np.uint8)
     roi_img.to_filename(roi_fname)
@@ -520,21 +318,3 @@ def _concat_xfms(in_list, invert):
         out_xfm = np.linalg.inv(out_xfm)
 
     return out_xfm
-
-
-def interface_to_boilerplate(interface, ignore=["args", "environ", "output_dir"]):
-    """Create a string from an interface."""
-
-    if not hasattr(interface.inputs, "_boilerplate_traits"):
-        return ""
-    boilerplate_traits = interface.inputs._boilerplate_traits
-    display_items = []
-    for trait_name, trait_value in interface.inputs.traits():
-        if not trait_name in boilerplate_traits:
-            continue
-        if not isdefined(trait_value):
-            continue
-
-
-
-    return ""

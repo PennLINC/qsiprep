@@ -34,6 +34,7 @@ ${QSIPREP_CMD} \
 	--recon-input ${BIDS_INPUT_DIR} \
 	--sloppy \
     --stop-on-first-crash \
-	--recon-spec bundle_scalar_map \
+	--recon-spec test_scalar_maps \
 	--recon-only \
+	--output-resolution 3.5 \
 	-vv
