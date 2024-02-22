@@ -16,16 +16,6 @@
       }
     },
     {
-      "name": "template_map",
-      "software": "qsiprep",
-      "action": "template_map",
-      "input": "qsiprep",
-      "scalars_from": ["dipy_dki", "gqi_scalars"],
-      "parameters": {
-        "interpolation": "NearestNeighbor"
-      }
-    },
-    {
       "name": "dsistudio_gqi",
       "software": "DSI Studio",
       "action": "reconstruction",
@@ -59,6 +49,16 @@
       "action": "bundle_map",
       "input": "autotrackgqi",
       "scalars_from": ["gqi_scalars", "dipy_dki"]
+    },
+    {
+      "name": "template_map",
+      "software": "qsiprep",
+      "action": "template_map",
+      "input": "qsiprep",
+      "scalars_from": ["dipy_dki", "gqi_scalars"],
+      "parameters": {
+        "interpolation": "NearestNeighbor"
+      }
     }
   ]
 }

@@ -20,10 +20,7 @@ import numpy as np
 from dipy.io import read_bvals_bvecs
 from nipype import logging
 from nipype.interfaces import fsl
-from nipype.interfaces.afni.base import (
-    AFNICommand,
-    AFNICommandInputSpec,
-)
+from nipype.interfaces.afni.base import AFNICommand, AFNICommandInputSpec
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec,
     File,
@@ -44,7 +41,7 @@ from ..niworkflows.interfaces.images import ValidateImageInputSpec
 #    FilledImageLike, DemeanImage, TemplateDimensions)
 from .mrtrix import SS3T_ROOT
 
-LOGGER = logging.getLogger('nipype.interface')
+LOGGER = logging.getLogger("nipype.interface")
 
 
 class _ExtractWMInputSpec(BaseInterfaceInputSpec):
@@ -62,8 +59,7 @@ class ExtractWM(SimpleInterface):
     output_spec = _ExtractWMOutputSpec
 
     def _run_interface(self, runtime):
-        out_file = fname_presuffix(self.inputs.in_seg, newpath=runtime.cwd,
-                                   suffix="_wm")
+        out_file = fname_presuffix(self.inputs.in_seg, newpath=runtime.cwd, suffix="_wm")
 
         nii = nb.load(self.inputs.in_seg)
         nii_data = nii.get_fdata()
@@ -81,25 +77,25 @@ class ExtractWM(SimpleInterface):
         new = nb.Nifti1Image(data, nii.affine, nii.header)
         new.set_data_dtype(np.uint8)
         new.to_filename(out_file)
-        self._results['out'] = out_file
+        self._results["out"] = out_file
         return runtime
 
 
 class SplitDWIsBvalsInputSpec(BaseInterfaceInputSpec):
-    split_files = InputMultiObject(desc='pre-split DWI images')
-    bvec_file = File(desc='the bvec file')
-    bval_file = File(desc='the bval file')
-    deoblique_bvecs = traits.Bool(False, usedefault=True,
-                                  desc='write LPS+ world coordinate bvecs')
-    b0_threshold = traits.Int(50, usedefault=True,
-                              desc='Maximum b-value that can be considered a b0')
+    split_files = InputMultiObject(desc="pre-split DWI images")
+    bvec_file = File(desc="the bvec file")
+    bval_file = File(desc="the bval file")
+    deoblique_bvecs = traits.Bool(False, usedefault=True, desc="write LPS+ world coordinate bvecs")
+    b0_threshold = traits.Int(
+        50, usedefault=True, desc="Maximum b-value that can be considered a b0"
+    )
 
 
 class SplitDWIsBvalsOutputSpec(TraitedSpec):
-    bval_files = OutputMultiObject(File(exists=True), desc='single volume bvals')
-    bvec_files = OutputMultiObject(File(exists=True), desc='single volume bvecs')
-    b0_images = OutputMultiObject(File(exists=True), desc='just the b0s')
-    b0_indices = traits.List(desc='list of original indices for each b0 image')
+    bval_files = OutputMultiObject(File(exists=True), desc="single volume bvals")
+    bvec_files = OutputMultiObject(File(exists=True), desc="single volume bvecs")
+    b0_images = OutputMultiObject(File(exists=True), desc="just the b0s")
+    b0_indices = traits.List(desc="list of original indices for each b0 image")
 
 
 class SplitDWIsBvals(SimpleInterface):
@@ -109,36 +105,40 @@ class SplitDWIsBvals(SimpleInterface):
     def _run_interface(self, runtime):
 
         split_bval_files, split_bvec_files = split_bvals_bvecs(
-            self.inputs.bval_file, self.inputs.bvec_file,
-            self.inputs.split_files, self.inputs.deoblique_bvecs,
-            runtime.cwd)
+            self.inputs.bval_file,
+            self.inputs.bvec_file,
+            self.inputs.split_files,
+            self.inputs.deoblique_bvecs,
+            runtime.cwd,
+        )
 
         bvalues = np.loadtxt(self.inputs.bval_file)
         b0_indices = np.flatnonzero(bvalues < self.inputs.b0_threshold)
         b0_paths = [self.inputs.split_files[idx] for idx in b0_indices]
-        self._results['bval_files'] = split_bval_files
-        self._results['bvec_files'] = split_bvec_files
-        self._results['b0_images'] = b0_paths
-        self._results['b0_indices'] = b0_indices.tolist()
+        self._results["bval_files"] = split_bval_files
+        self._results["bvec_files"] = split_bvec_files
+        self._results["b0_images"] = b0_paths
+        self._results["b0_indices"] = b0_indices.tolist()
 
         return runtime
 
+
 class SplitDWIsFSLInputSpec(BaseInterfaceInputSpec):
-    dwi_file = File(desc='the dwi image')
-    bvec_file = File(desc='the bvec file')
-    bval_file = File(desc='the bval file')
-    deoblique_bvecs = traits.Bool(False, usedefault=True,
-                                  desc='write LPS+ world coordinate bvecs')
-    b0_threshold = traits.Int(50, usedefault=True,
-                              desc='Maximum b-value that can be considered a b0')
+    dwi_file = File(desc="the dwi image")
+    bvec_file = File(desc="the bvec file")
+    bval_file = File(desc="the bval file")
+    deoblique_bvecs = traits.Bool(False, usedefault=True, desc="write LPS+ world coordinate bvecs")
+    b0_threshold = traits.Int(
+        50, usedefault=True, desc="Maximum b-value that can be considered a b0"
+    )
 
 
 class SplitDWIsFSLOutputSpec(TraitedSpec):
-    dwi_files = OutputMultiObject(File(exists=True), desc='single volume dwis')
-    bval_files = OutputMultiObject(File(exists=True), desc='single volume bvals')
-    bvec_files = OutputMultiObject(File(exists=True), desc='single volume bvecs')
-    b0_images = OutputMultiObject(File(exists=True), desc='just the b0s')
-    b0_indices = traits.List(desc='list of original indices for each b0 image')
+    dwi_files = OutputMultiObject(File(exists=True), desc="single volume dwis")
+    bval_files = OutputMultiObject(File(exists=True), desc="single volume bvals")
+    bvec_files = OutputMultiObject(File(exists=True), desc="single volume bvecs")
+    b0_images = OutputMultiObject(File(exists=True), desc="just the b0s")
+    b0_indices = traits.List(desc="list of original indices for each b0 image")
 
 
 class SplitDWIsFSL(SimpleInterface):
@@ -146,23 +146,28 @@ class SplitDWIsFSL(SimpleInterface):
     output_spec = SplitDWIsFSLOutputSpec
 
     def _run_interface(self, runtime):
-        split = fsl.Split(dimension='t', in_file=self.inputs.dwi_file)
+        split = fsl.Split(dimension="t", in_file=self.inputs.dwi_file)
         split_dwi_files = split.run().outputs.out_files
 
         split_bval_files, split_bvec_files = split_bvals_bvecs(
-            self.inputs.bval_file, self.inputs.bvec_file, split_dwi_files,
-            self.inputs.deoblique_bvecs, runtime.cwd)
+            self.inputs.bval_file,
+            self.inputs.bvec_file,
+            split_dwi_files,
+            self.inputs.deoblique_bvecs,
+            runtime.cwd,
+        )
 
         bvalues = np.loadtxt(self.inputs.bval_file)
         b0_indices = np.flatnonzero(bvalues < self.inputs.b0_threshold)
         b0_paths = [split_dwi_files[idx] for idx in b0_indices]
-        self._results['dwi_files'] = split_dwi_files
-        self._results['bval_files'] = split_bval_files
-        self._results['bvec_files'] = split_bvec_files
-        self._results['b0_images'] = b0_paths
-        self._results['b0_indices'] = b0_indices.tolist()
+        self._results["dwi_files"] = split_dwi_files
+        self._results["bval_files"] = split_bval_files
+        self._results["bvec_files"] = split_bvec_files
+        self._results["b0_images"] = b0_paths
+        self._results["b0_indices"] = b0_indices.tolist()
 
         return runtime
+
 
 def _flatten(in_list):
     out_list = []
@@ -175,18 +180,17 @@ def _flatten(in_list):
 
 
 class IntraModalMergeInputSpec(BaseInterfaceInputSpec):
-    in_files = InputMultiObject(File(exists=True), mandatory=True,
-                                desc='input files')
+    in_files = InputMultiObject(File(exists=True), mandatory=True, desc="input files")
     hmc = traits.Bool(True, usedefault=True)
     zero_based_avg = traits.Bool(True, usedefault=True)
     to_lps = traits.Bool(True, usedefault=True)
 
 
 class IntraModalMergeOutputSpec(TraitedSpec):
-    out_file = File(exists=True, desc='merged image')
-    out_avg = File(exists=True, desc='average image')
-    out_mats = OutputMultiObject(File(exists=True), desc='output matrices')
-    out_movpar = OutputMultiObject(File(exists=True), desc='output movement parameters')
+    out_file = File(exists=True, desc="merged image")
+    out_avg = File(exists=True, desc="average image")
+    out_mats = OutputMultiObject(File(exists=True), desc="output matrices")
+    out_movpar = OutputMultiObject(File(exists=True), desc="output movement parameters")
 
 
 class IntraModalMerge(SimpleInterface):
@@ -194,23 +198,25 @@ class IntraModalMerge(SimpleInterface):
     output_spec = IntraModalMergeOutputSpec
 
     def _run_interface(self, runtime):
-        fsl_check = os.environ.get('FSL_BUILD')
-        if fsl_check=="no_fsl":
+        fsl_check = os.environ.get("FSL_BUILD")
+        if fsl_check == "no_fsl":
             raise Exception(
                 """Container in use does not have FSL. To use this workflow,
-                please download the qsiprep container with FSL installed.""")
+                please download the qsiprep container with FSL installed."""
+            )
         from nipype.interfaces import fsl
+
         in_files = self.inputs.in_files
         if not isinstance(in_files, list):
             in_files = [self.inputs.in_files]
 
         # Generate output average name early
-        self._results['out_avg'] = fname_presuffix(self.inputs.in_files[0],
-                                                   suffix='_avg', newpath=runtime.cwd)
+        self._results["out_avg"] = fname_presuffix(
+            self.inputs.in_files[0], suffix="_avg", newpath=runtime.cwd
+        )
 
         if self.inputs.to_lps:
-            in_files = [reorient(inf, newpath=runtime.cwd)
-                        for inf in in_files]
+            in_files = [reorient(inf, newpath=runtime.cwd) for inf in in_files]
 
         if len(in_files) == 1:
             filenii = nb.load(in_files[0])
@@ -220,37 +226,36 @@ class IntraModalMerge(SimpleInterface):
             if filedata.ndim == 5:
                 sqdata = np.squeeze(filedata)
                 if sqdata.ndim == 5:
-                    raise RuntimeError('Input image (%s) is 5D' % in_files[0])
+                    raise RuntimeError("Input image (%s) is 5D" % in_files[0])
                 else:
-                    in_files = [fname_presuffix(in_files[0], suffix='_squeezed',
-                                                newpath=runtime.cwd)]
-                    nb.Nifti1Image(sqdata, filenii.affine,
-                                   filenii.header).to_filename(in_files[0])
+                    in_files = [
+                        fname_presuffix(in_files[0], suffix="_squeezed", newpath=runtime.cwd)
+                    ]
+                    nb.Nifti1Image(sqdata, filenii.affine, filenii.header).to_filename(in_files[0])
 
             if np.squeeze(nb.load(in_files[0]).get_fdata()).ndim < 4:
-                self._results['out_file'] = in_files[0]
-                self._results['out_avg'] = in_files[0]
+                self._results["out_file"] = in_files[0]
+                self._results["out_avg"] = in_files[0]
                 # TODO: generate identity out_mats and zero-filled out_movpar
                 return runtime
             in_files = in_files[0]
         else:
-            magmrg = fsl.Merge(dimension='t', in_files=self.inputs.in_files)
+            magmrg = fsl.Merge(dimension="t", in_files=self.inputs.in_files)
             in_files = magmrg.run().outputs.merged_file
-        mcflirt = fsl.MCFLIRT(cost='normcorr', save_mats=True, save_plots=True,
-                              ref_vol=0, in_file=in_files)
+        mcflirt = fsl.MCFLIRT(
+            cost="normcorr", save_mats=True, save_plots=True, ref_vol=0, in_file=in_files
+        )
         mcres = mcflirt.run()
-        self._results['out_mats'] = mcres.outputs.mat_file
-        self._results['out_movpar'] = mcres.outputs.par_file
-        self._results['out_file'] = mcres.outputs.out_file
+        self._results["out_mats"] = mcres.outputs.mat_file
+        self._results["out_movpar"] = mcres.outputs.par_file
+        self._results["out_file"] = mcres.outputs.out_file
 
         hmcnii = nb.load(mcres.outputs.out_file)
         hmcdat = hmcnii.get_fdata().mean(axis=3)
         if self.inputs.zero_based_avg:
             hmcdat -= hmcdat.min()
 
-        nb.Nifti1Image(
-            hmcdat, hmcnii.affine, hmcnii.header).to_filename(
-            self._results['out_avg'])
+        nb.Nifti1Image(hmcdat, hmcnii.affine, hmcnii.header).to_filename(self._results["out_avg"])
 
         return runtime
 
@@ -270,17 +275,19 @@ DISCARD_TEMPLATE = """\t\t\t\t<li><abbr title="{path}">{basename}</abbr></li>"""
 
 
 class ConformInputSpec(BaseInterfaceInputSpec):
-    in_file = File(mandatory=True, desc='Input image')
-    target_zooms = traits.Tuple(traits.Float, traits.Float, traits.Float,
-                                desc='Target zoom information')
-    target_shape = traits.Tuple(traits.Int, traits.Int, traits.Int,
-                                desc='Target shape information')
+    in_file = File(mandatory=True, desc="Input image")
+    target_zooms = traits.Tuple(
+        traits.Float, traits.Float, traits.Float, desc="Target zoom information"
+    )
+    target_shape = traits.Tuple(
+        traits.Int, traits.Int, traits.Int, desc="Target shape information"
+    )
     deoblique_header = traits.Bool(False, usedfault=True)
 
 
 class ConformOutputSpec(TraitedSpec):
-    out_file = File(exists=True, desc='Conformed image')
-    transform = File(exists=True, desc='Conformation transform')
+    out_file = File(exists=True, desc="Conformed image")
+    transform = File(exists=True, desc="Conformation transform")
     # report = File(exists=True, desc='reportlet about orientation')
 
 
@@ -293,6 +300,7 @@ class Conform(SimpleInterface):
     2. Resample to target zooms (voxel sizes) and shape (number of voxels)
 
     """
+
     input_spec = ConformInputSpec
     output_spec = ConformOutputSpec
 
@@ -312,19 +320,20 @@ class Conform(SimpleInterface):
 
         # Reconstruct transform from orig to reoriented image
         ornt_xfm = nb.orientations.inv_ornt_aff(
-            nb.io_orientation(reoriented.affine), orig_img.shape)
+            nb.io_orientation(reoriented.affine), orig_img.shape
+        )
         # Identity unless proven otherwise
         target_affine = reoriented.affine.copy()
         conform_xfm = np.eye(4)
         # conform_xfm = np.diag([-1, -1, 1, 1])
 
         xyz_unit = reoriented.header.get_xyzt_units()[0]
-        if xyz_unit == 'unknown':
+        if xyz_unit == "unknown":
             # Common assumption; if we're wrong, unlikely to be the only thing that breaks
-            xyz_unit = 'mm'
+            xyz_unit = "mm"
 
         # Set a 0.05mm threshold to performing rescaling
-        atol = {'meter': 1e-5, 'mm': 0.01, 'micron': 10}[xyz_unit]
+        atol = {"meter": 1e-5, "mm": 0.01, "micron": 10}[xyz_unit]
 
         # Rescale => change zooms
         # Resize => update image dimensions
@@ -340,7 +349,7 @@ class Conform(SimpleInterface):
                 # Use a proportional shift to maintain relative position in dataset
                 size_factor = target_span / (zooms * shape)
                 # Use integer shifts to avoid unnecessary interpolation
-                offset = (reoriented.affine[:3, 3] * size_factor - reoriented.affine[:3, 3])
+                offset = reoriented.affine[:3, 3] * size_factor - reoriented.affine[:3, 3]
                 target_affine[:3, 3] = reoriented.affine[:3, 3] + offset.astype(int)
 
             data = nli.resample_img(reoriented, target_affine, target_shape).get_fdata()
@@ -353,13 +362,14 @@ class Conform(SimpleInterface):
                 LOGGER.warning("Removing obliquity from image affine")
                 new_affine = reoriented.affine.copy()
                 new_affine[:, :-1] = 0
-                new_affine[(0, 1, 2), (0, 1, 2)] = reoriented.header.get_zooms()[:3] \
-                    * np.sign(reoriented.affine[(0, 1, 2), (0, 1, 2)])
+                new_affine[(0, 1, 2), (0, 1, 2)] = reoriented.header.get_zooms()[:3] * np.sign(
+                    reoriented.affine[(0, 1, 2), (0, 1, 2)]
+                )
                 reoriented = nb.Nifti1Image(reoriented.get_fdata(), new_affine, reoriented.header)
 
         # Image may be reoriented, rescaled, and/or resized
         if reoriented is not orig_img:
-            out_name = fname_presuffix(fname, suffix='_lps', newpath=runtime.cwd)
+            out_name = fname_presuffix(fname, suffix="_lps", newpath=runtime.cwd)
             reoriented.to_filename(out_name)
             transform = ornt_xfm.dot(conform_xfm)
             if not np.allclose(orig_img.affine.dot(transform), target_affine):
@@ -369,26 +379,26 @@ class Conform(SimpleInterface):
             out_name = fname
             transform = np.eye(4)
 
-        mat_name = fname_presuffix(fname, suffix='.mat', newpath=runtime.cwd, use_ext=False)
-        np.savetxt(mat_name, transform, fmt='%.08f')
-        self._results['transform'] = mat_name
-        self._results['out_file'] = out_name
+        mat_name = fname_presuffix(fname, suffix=".mat", newpath=runtime.cwd, use_ext=False)
+        np.savetxt(mat_name, transform, fmt="%.08f")
+        self._results["transform"] = mat_name
+        self._results["out_file"] = out_name
 
         return runtime
 
 
 class ConformDwiInputSpec(BaseInterfaceInputSpec):
-    dwi_file = File(mandatory=True, desc='dwi image')
+    dwi_file = File(mandatory=True, desc="dwi image")
     bval_file = File(exists=True)
     bvec_file = File(exists=True)
-    orientation = traits.Enum('LPS', 'LAS', default='LPS', usedefault=True)
+    orientation = traits.Enum("LPS", "LAS", default="LPS", usedefault=True)
 
 
 class ConformDwiOutputSpec(TraitedSpec):
-    dwi_file = File(exists=True, desc='conformed dwi image')
-    bvec_file = File(exists=True, desc='conformed bvec file')
-    bval_file = File(exists=True, desc='conformed bval file')
-    out_report = File(exists=True, desc='HTML segment containing warning')
+    dwi_file = File(exists=True, desc="conformed dwi image")
+    bvec_file = File(exists=True, desc="conformed bvec file")
+    bval_file = File(exists=True, desc="conformed bval file")
+    out_report = File(exists=True, desc="HTML segment containing warning")
 
 
 class ConformDwi(SimpleInterface):
@@ -400,6 +410,7 @@ class ConformDwi(SimpleInterface):
     #. Do nothing to the bvals
     Note: This is not as nuanced as fmriprep's version
     """
+
     input_spec = ConformDwiInputSpec
     output_spec = ConformDwiOutputSpec
 
@@ -423,7 +434,7 @@ class ConformDwi(SimpleInterface):
         out_bvec_fname = fname_presuffix(bvec_fname, suffix=suffix, newpath=runtime.cwd)
         validator = ValidateImage(in_file=fname)
         validated = validator.run()
-        self._results['out_report'] = validated.outputs.out_report
+        self._results["out_report"] = validated.outputs.out_report
         input_img = nb.load(validated.outputs.out_file)
 
         input_axcodes = nb.aff2axcodes(input_img.affine)
@@ -436,14 +447,15 @@ class ConformDwi(SimpleInterface):
             input_orientation = nb.orientations.axcodes2ornt(input_axcodes)
             desired_orientation = nb.orientations.axcodes2ornt(new_axcodes)
             transform_orientation = nb.orientations.ornt_transform(
-                input_orientation, desired_orientation)
+                input_orientation, desired_orientation
+            )
             reoriented_img = input_img.as_reoriented(transform_orientation)
             reoriented_img.to_filename(out_fname)
-            self._results['dwi_file'] = out_fname
+            self._results["dwi_file"] = out_fname
 
             # Flip the bvecs
             if os.path.exists(bvec_fname):
-                LOGGER.info('Reorienting %s to %s', bvec_fname, orientation)
+                LOGGER.info("Reorienting %s to %s", bvec_fname, orientation)
                 bvec_array = np.loadtxt(bvec_fname)
                 if not bvec_array.shape[0] == transform_orientation.shape[0]:
                     raise ValueError("Unrecognized bvec format")
@@ -451,15 +463,15 @@ class ConformDwi(SimpleInterface):
                 for this_axnum, (axnum, flip) in enumerate(transform_orientation):
                     output_array[this_axnum] = bvec_array[int(axnum)] * flip
                 np.savetxt(out_bvec_fname, output_array, fmt="%.8f ")
-                self._results['bvec_file'] = out_bvec_fname
-                self._results['bval_file'] = bval_fname
+                self._results["bvec_file"] = out_bvec_fname
+                self._results["bval_file"] = bval_fname
 
         else:
             LOGGER.info("Not applying reorientation to %s: already in %s", fname, orientation)
-            self._results['dwi_file'] = fname
+            self._results["dwi_file"] = fname
             if os.path.exists(bvec_fname):
-                self._results['bvec_file'] = bvec_fname
-                self._results['bval_file'] = bval_fname
+                self._results["bvec_file"] = bvec_fname
+                self._results["bval_file"] = bval_fname
 
         return runtime
 
@@ -474,8 +486,8 @@ class _ChooseInterpolatorOutputSpec(TraitedSpec):
 
 
 class ChooseInterpolator(SimpleInterface):
-    """If the requested output resolution is more than 10% smaller than the input, use BSpline.
-    """
+    """If the requested output resolution is more than 10% smaller than the input, use BSpline."""
+
     input_spec = _ChooseInterpolatorInputSpec
     output_spec = _ChooseInterpolatorOutputSpec
 
@@ -489,13 +501,13 @@ class ChooseInterpolator(SimpleInterface):
                 interpolator = "BSpline"
                 LOGGER.warning("Using BSpline interpolation for upsampling")
                 break
-        self._results['interpolation_method'] = interpolator
+        self._results["interpolation_method"] = interpolator
         return runtime
 
 
 class ValidateImageOutputSpec(TraitedSpec):
-    out_file = File(exists=True, desc='validated image')
-    out_report = File(exists=True, desc='HTML segment containing warning')
+    out_file = File(exists=True, desc="validated image")
+    out_report = File(exists=True, desc="HTML segment containing warning")
 
 
 class ValidateImage(SimpleInterface):
@@ -534,16 +546,17 @@ class ValidateImage(SimpleInterface):
     +-------------------+------------------+------------------+------------------\
 +------------------------------------------------+
     """
+
     input_spec = ValidateImageInputSpec
     output_spec = ValidateImageOutputSpec
 
     def _run_interface(self, runtime):
         img = nb.load(self.inputs.in_file)
-        out_report = os.path.join(runtime.cwd, 'report.html')
+        out_report = os.path.join(runtime.cwd, "report.html")
 
         # Retrieve xform codes
-        sform_code = int(img.header._structarr['sform_code'])
-        qform_code = int(img.header._structarr['qform_code'])
+        sform_code = int(img.header._structarr["sform_code"])
+        qform_code = int(img.header._structarr["qform_code"])
 
         # Check qform is valid
         valid_qform = False
@@ -566,19 +579,19 @@ class ValidateImage(SimpleInterface):
 
         # Both match, qform valid (implicit with match), codes okay -> do nothing, empty report
         if matching_affines and qform_code > 0 and sform_code > 0:
-            self._results['out_file'] = self.inputs.in_file
-            open(out_report, 'w').close()
-            self._results['out_report'] = out_report
+            self._results["out_file"] = self.inputs.in_file
+            open(out_report, "w").close()
+            self._results["out_report"] = out_report
             return runtime
 
         # A new file will be written
-        out_fname = fname_presuffix(self.inputs.in_file, suffix='_valid', newpath=runtime.cwd)
-        self._results['out_file'] = out_fname
+        out_fname = fname_presuffix(self.inputs.in_file, suffix="_valid", newpath=runtime.cwd)
+        self._results["out_file"] = out_fname
 
         # Row 2:
         if valid_qform and qform_code > 0 and (sform_code == 0 or not valid_sform):
             img.set_sform(qform, qform_code)
-            warning_txt = 'Note on orientation: sform matrix set'
+            warning_txt = "Note on orientation: sform matrix set"
             description = """\
 <p class="elem-desc">The sform has been copied from qform.</p>
 """
@@ -586,12 +599,12 @@ class ValidateImage(SimpleInterface):
         # Note: if qform is not valid, matching_affines is False
         elif (valid_sform and sform_code > 0) and (not matching_affines or qform_code == 0):
             img.set_qform(img.get_sform(), sform_code)
-            warning_txt = 'Note on orientation: qform matrix overwritten'
+            warning_txt = "Note on orientation: qform matrix overwritten"
             description = """\
 <p class="elem-desc">The qform has been copied from sform.</p>
 """
             if not valid_qform and qform_code > 0:
-                warning_txt = 'WARNING - Invalid qform information'
+                warning_txt = "WARNING - Invalid qform information"
                 description = """\
 <p class="elem-desc">
     The qform matrix found in the file header is invalid.
@@ -603,9 +616,9 @@ class ValidateImage(SimpleInterface):
         # Rows 5-6:
         else:
             affine = img.header.get_base_affine()
-            img.set_sform(affine, nb.nifti1.xform_codes['scanner'])
-            img.set_qform(affine, nb.nifti1.xform_codes['scanner'])
-            warning_txt = 'WARNING - Missing orientation information'
+            img.set_sform(affine, nb.nifti1.xform_codes["scanner"])
+            img.set_qform(affine, nb.nifti1.xform_codes["scanner"])
+            warning_txt = "WARNING - Missing orientation information"
             description = """\
 <p class="elem-desc">
     QSIPrep could not retrieve orientation information from the image header.
@@ -614,13 +627,16 @@ class ValidateImage(SimpleInterface):
 </p>
 """
         snippet = '<h3 class="elem-title">%s</h3>\n%s:\n\t %s\n' % (
-            warning_txt, self.inputs.in_file, description)
+            warning_txt,
+            self.inputs.in_file,
+            description,
+        )
         # Store new file and report
         img.to_filename(out_fname)
-        with open(out_report, 'w') as fobj:
-            fobj.write(indent(snippet, '\t' * 3))
+        with open(out_report, "w") as fobj:
+            fobj.write(indent(snippet, "\t" * 3))
 
-        self._results['out_report'] = out_report
+        self._results["out_report"] = out_report
         return runtime
 
 
@@ -633,27 +649,26 @@ def bvec_to_rasb(bval_file, bvec_file, img_file, workdir):
     np.savetxt(temp_bvec, lps_bvec * np.array([[-1], [1], [1]]))
 
     # Run mrinfo to to get the RAS+ vector
-    cmd = [SS3T_ROOT + '/mrinfo', '-dwgrad',
-           '-fslgrad', temp_bvec, bval_file, img_file]
+    cmd = [SS3T_ROOT + "/mrinfo", "-dwgrad", "-fslgrad", temp_bvec, bval_file, img_file]
     proc = Popen(cmd, stdout=PIPE, stderr=PIPE)
     out, err = proc.communicate()
-    LOGGER.info(' '.join(cmd))
+    LOGGER.info(" ".join(cmd))
     if err:
         raise Exception(str(err))
 
-    return np.fromstring(out, dtype=float, sep=' ')[:3]
+    return np.fromstring(out, dtype=float, sep=" ")[:3]
 
 
 def split_bvals_bvecs(bval_file, bvec_file, img_files, deoblique, working_dir):
     """Split bvals and bvecs into one text file per image."""
     if deoblique:
-        LOGGER.info('Converting oblique-image bvecs to world coordinate reference frame')
+        LOGGER.info("Converting oblique-image bvecs to world coordinate reference frame")
     bvals, bvecs = read_bvals_bvecs(bval_file, bvec_file)
     split_bval_files = []
     split_bvec_files = []
     for nsample, (bval, bvec, img_file) in enumerate(zip(bvals[:, None], bvecs, img_files)):
-        bval_fname = fname_presuffix(bval_file, suffix='_%04d' % nsample, newpath=working_dir)
-        bvec_suffix = '_ortho_%04d' % nsample if not deoblique else '_%04d' % nsample
+        bval_fname = fname_presuffix(bval_file, suffix="_%04d" % nsample, newpath=working_dir)
+        bvec_suffix = "_ortho_%04d" % nsample if not deoblique else "_%04d" % nsample
         bvec_fname = fname_presuffix(bvec_file, bvec_suffix, newpath=working_dir)
         np.savetxt(bval_fname, bval)
         np.savetxt(bvec_fname, bvec)
@@ -663,8 +678,7 @@ def split_bvals_bvecs(bval_file, bvec_file, img_files, deoblique, working_dir):
             rasb = bvec_to_rasb(bval_fname, bvec_fname, img_file, working_dir)
             # Convert to image axis orientation
             ornt = nb.aff2axcodes(nb.load(img_file).affine)
-            flippage = np.array(
-                [1 if ornt[n] == "RAS"[n] else -1 for n in [0, 1, 2]])
+            flippage = np.array([1 if ornt[n] == "RAS"[n] else -1 for n in [0, 1, 2]])
             deobliqued_bvec = rasb * flippage
             np.savetxt(bvec_fname, deobliqued_bvec)
 
@@ -676,13 +690,13 @@ def split_bvals_bvecs(bval_file, bvec_file, img_files, deoblique, working_dir):
 
 def reorient(in_file, newpath=None):
     """Reorient Nifti files to LPS."""
-    out_file = fname_presuffix(in_file, suffix='_lps', newpath=newpath)
+    out_file = fname_presuffix(in_file, suffix="_lps", newpath=newpath)
     to_lps(nb.load(in_file)).to_filename(out_file)
     return out_file
 
 
 def reorient_to(in_file, orientation="LPS", newpath=None):
-    out_file = fname_presuffix(in_file, suffix='_'+orientation, newpath=newpath)
+    out_file = fname_presuffix(in_file, suffix="_" + orientation, newpath=newpath)
     to_lps(in_file, tuple(orientation)).to_filename(out_file)
     return out_file
 
@@ -696,8 +710,9 @@ def to_lps(input_img, new_axcodes=("L", "P", "S")):
         # Re-orient
         input_orientation = nb.orientations.axcodes2ornt(input_axcodes)
         desired_orientation = nb.orientations.axcodes2ornt(new_axcodes)
-        transform_orientation = nb.orientations.ornt_transform(input_orientation,
-                                                               desired_orientation)
+        transform_orientation = nb.orientations.ornt_transform(
+            input_orientation, desired_orientation
+        )
         reoriented_img = input_img.as_reoriented(transform_orientation)
         return reoriented_img
     else:
@@ -721,8 +736,10 @@ class TSplitInputSpec(AFNICommandInputSpec):
         argstr="-digits %d", desc="Number of digits to include in split file names"
     )
 
+
 class TSplitOutputSpec(TraitedSpec):
     out_files = OutputMultiPath(File(exists=True))
+
 
 class TSplit(AFNICommand):
     """Converts a 3D + time dataset into multiple 3D volumes (one volume per file).
@@ -747,8 +764,9 @@ class TSplit(AFNICommand):
             Else, contains path, filename of generated outputfile
         """
         outputs = self._outputs().get()
-        ext = '.nii'
-        outputs["out_files"] = sorted(glob.glob(
-            os.path.join(os.getcwd(),'{outname}.**.nii'.format(
-            outname=self.inputs.out_name))))
+        outputs["out_files"] = sorted(
+            glob.glob(
+                os.path.join(os.getcwd(), "{outname}.**.nii".format(outname=self.inputs.out_name))
+            )
+        )
         return outputs

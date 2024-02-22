@@ -6,7 +6,7 @@
 import numpy as np
 from nipype import logging
 
-LOGGER = logging.getLogger('nipype.interfaces')
+LOGGER = logging.getLogger("nipype.interfaces")
 
 
 def get_ijk(data, offset=0):
@@ -18,9 +18,11 @@ def get_ijk(data, offset=0):
     if not isinstance(offset, (list, tuple)):
         offset = [offset] * 3
 
-    grid = mgrid[offset[0]:(offset[0] + data.shape[0]),
-                 offset[1]:(offset[1] + data.shape[1]),
-                 offset[2]:(offset[2] + data.shape[2])]
+    grid = mgrid[
+        offset[0] : (offset[0] + data.shape[0]),
+        offset[1] : (offset[1] + data.shape[1]),
+        offset[2] : (offset[2] + data.shape[2]),
+    ]
     return grid.reshape(3, -1).T
 
 

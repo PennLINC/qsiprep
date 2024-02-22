@@ -18,18 +18,17 @@ from nipype.interfaces.mixins import reporting
 
 from ..niworkflows.viz.utils import compose_view, cuts_from_bbox, plot_denoise
 
-LOGGER = logging.getLogger('nipype.interface')
+LOGGER = logging.getLogger("nipype.interface")
 
 
 class SeriesPreprocReportInputSpec(reporting.ReportCapableInputSpec):
     nmse_text = traits.File(
-        name_source='in_file',
-        keep_extension=False,
-        name_template='%s_nmse.txt')
+        name_source="in_file", keep_extension=False, name_template="%s_nmse.txt"
+    )
 
 
 class SeriesPreprocReportOutputSpec(reporting.ReportCapableOutputSpec):
-    nmse_text = traits.File(desc='nmse between input and output volumes')
+    nmse_text = traits.File(desc="nmse between input and output volumes")
 
 
 class SeriesPreprocReport(reporting.ReportCapableInterface):
@@ -39,13 +38,13 @@ class SeriesPreprocReport(reporting.ReportCapableInterface):
 
     def __init__(self, **kwargs):
         """Instantiate SeriesPreprocReportlet."""
-        self._n_cuts = kwargs.pop('n_cuts', self._n_cuts)
+        self._n_cuts = kwargs.pop("n_cuts", self._n_cuts)
         super(SeriesPreprocReport, self).__init__(generate_report=True, **kwargs)
 
     def _calculate_nmse(self, original_nii, corrected_nii):
         """Calculate NMSE from the applied preprocessing operation."""
         outputs = self._list_outputs()
-        output_file = outputs.get('nmse_text')
+        output_file = outputs.get("nmse_text")
         pres = []
         posts = []
         differences = []
@@ -57,14 +56,14 @@ class SeriesPreprocReport(reporting.ReportCapableInterface):
             posts.append(corrected_data.mean())
             scaled_diff = np.abs(corrected_data - orig_data).mean() / baseline
             differences.append(scaled_diff)
-        title = str(self.__class__)[:-2].split('.')[-1]
-        pd.DataFrame({title+"_pre": pres,
-                      title+"_post": posts,
-                      title+"_change": differences}).to_csv(output_file, index=False)
+        title = str(self.__class__)[:-2].split(".")[-1]
+        pd.DataFrame(
+            {title + "_pre": pres, title + "_post": posts, title + "_change": differences}
+        ).to_csv(output_file, index=False)
 
     def _generate_report(self):
         """Generate a reportlet."""
-        LOGGER.info('Generating denoising visual report')
+        LOGGER.info("Generating denoising visual report")
 
         input_dwi, denoised_nii, field_nii = self._get_plotting_images()
 
@@ -92,32 +91,42 @@ class SeriesPreprocReport(reporting.ReportCapableInterface):
 
         # What image should be contoured?
         if field_nii is None:
-            lowb_field_nii = nb.Nifti1Image(denoised_lowb_nii.get_fdata()
-                                            - orig_lowb_nii.get_fdata(),
-                                            affine=denoised_lowb_nii.affine)
-            highb_field_nii = nb.Nifti1Image(denoised_highb_nii.get_fdata()
-                                             - orig_highb_nii.get_fdata(),
-                                             affine=denoised_highb_nii.affine)
+            lowb_field_nii = nb.Nifti1Image(
+                denoised_lowb_nii.get_fdata() - orig_lowb_nii.get_fdata(),
+                affine=denoised_lowb_nii.affine,
+            )
+            highb_field_nii = nb.Nifti1Image(
+                denoised_highb_nii.get_fdata() - orig_highb_nii.get_fdata(),
+                affine=denoised_highb_nii.affine,
+            )
         else:
             lowb_field_nii = highb_field_nii = field_nii
 
         # Call composer
         compose_view(
-            plot_denoise(orig_lowb_nii, orig_highb_nii, 'moving-image',
-                         estimate_brightness=True,
-                         cuts=cuts,
-                         label='Raw Image',
-                         lowb_contour=lowb_field_nii,
-                         highb_contour=highb_field_nii,
-                         compress=False),
-            plot_denoise(denoised_lowb_nii, denoised_highb_nii, 'fixed-image',
-                         estimate_brightness=True,
-                         cuts=cuts,
-                         label="Denoised",
-                         lowb_contour=lowb_field_nii,
-                         highb_contour=highb_field_nii,
-                         compress=False),
-            out_file=self._out_report
+            plot_denoise(
+                orig_lowb_nii,
+                orig_highb_nii,
+                "moving-image",
+                estimate_brightness=True,
+                cuts=cuts,
+                label="Raw Image",
+                lowb_contour=lowb_field_nii,
+                highb_contour=highb_field_nii,
+                compress=False,
+            ),
+            plot_denoise(
+                denoised_lowb_nii,
+                denoised_highb_nii,
+                "fixed-image",
+                estimate_brightness=True,
+                cuts=cuts,
+                label="Denoised",
+                lowb_contour=lowb_field_nii,
+                highb_contour=highb_field_nii,
+                compress=False,
+            ),
+            out_file=self._out_report,
         )
 
         self._calculate_nmse(input_dwi, denoised_nii)

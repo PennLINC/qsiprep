@@ -20,29 +20,30 @@ from ..fieldmap.drbuddi import init_drbuddi_wf
 
 # dwi workflows
 from .hmc import init_dwi_hmc_wf
-from .util import _list_squeeze
 
-LOGGER = logging.getLogger('nipype.workflow')
+LOGGER = logging.getLogger("nipype.workflow")
 
 
-def init_qsiprep_hmcsdc_wf(scan_groups,
-                           b0_threshold,
-                           hmc_transform,
-                           hmc_model,
-                           hmc_align_to,
-                           template,
-                           shoreline_iters,
-                           impute_slice_threshold,
-                           omp_nthreads,
-                           fmap_bspline,
-                           raw_image_sdc,
-                           fmap_demean,
-                           pepolar_method,
-                           source_file,
-                           t2w_sdc,
-                           dwi_metadata=None,
-                           sloppy=False,
-                           name='qsiprep_hmcsdc_wf'):
+def init_qsiprep_hmcsdc_wf(
+    scan_groups,
+    b0_threshold,
+    hmc_transform,
+    hmc_model,
+    hmc_align_to,
+    template,
+    shoreline_iters,
+    impute_slice_threshold,
+    omp_nthreads,
+    fmap_bspline,
+    raw_image_sdc,
+    fmap_demean,
+    pepolar_method,
+    source_file,
+    t2w_sdc,
+    dwi_metadata=None,
+    sloppy=False,
+    name="qsiprep_hmcsdc_wf",
+):
     """
     This workflow controls the head motion correction and susceptibility distortion
     correction parts of the qsiprep workflow. These parts have been combined because they're
@@ -77,35 +78,78 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
     """
     inputnode = pe.Node(
         niu.IdentityInterface(
-            fields=['dwi_file', 'bvec_file', 'bval_file', 'rpe_b0', 't2w_unfatsat',
-                    'original_files', 'rpe_b0_info', 'hmc_optimization_data', 't1_brain',
-                    't1_2_mni_reverse_transform', 't1_mask','t1_seg','t2_brain']),
-        name='inputnode')
+            fields=[
+                "dwi_file",
+                "bvec_file",
+                "bval_file",
+                "rpe_b0",
+                "t2w_unfatsat",
+                "original_files",
+                "rpe_b0_info",
+                "hmc_optimization_data",
+                "t1_brain",
+                "t1_2_mni_reverse_transform",
+                "t1_mask",
+                "t1_seg",
+                "t2_brain",
+            ]
+        ),
+        name="inputnode",
+    )
 
     outputnode = pe.Node(
         niu.IdentityInterface(
-            fields=["b0_template", "b0_template_mask", "pre_sdc_template",
-                    "hmc_optimization_data", "sdc_method", 'slice_quality', 'motion_params',
-                    "cnr_map", "bvec_files_to_transform", "dwi_files_to_transform", "b0_indices",
-                    "bval_files", "to_dwi_ref_affines", "to_dwi_ref_warps", "sdc_scaling_images",
-                    # From SDC
-                    "fieldmap_type", "b0_up_image", "b0_up_corrected_image", "b0_down_image",
-                    "b0_down_corrected_image", "up_fa_image", "up_fa_corrected_image", "down_fa_image",
-                    "down_fa_corrected_image", "t2w_image"]),
-        name='outputnode')
+            fields=[
+                "b0_template",
+                "b0_template_mask",
+                "pre_sdc_template",
+                "hmc_optimization_data",
+                "sdc_method",
+                "slice_quality",
+                "motion_params",
+                "cnr_map",
+                "bvec_files_to_transform",
+                "dwi_files_to_transform",
+                "b0_indices",
+                "bval_files",
+                "to_dwi_ref_affines",
+                "to_dwi_ref_warps",
+                "sdc_scaling_images",
+                # From SDC
+                "fieldmap_type",
+                "b0_up_image",
+                "b0_up_corrected_image",
+                "b0_down_image",
+                "b0_down_corrected_image",
+                "up_fa_image",
+                "up_fa_corrected_image",
+                "down_fa_image",
+                "down_fa_corrected_image",
+                "t2w_image",
+            ]
+        ),
+        name="outputnode",
+    )
 
     workflow = Workflow(name=name)
 
     # Split the input data into single volumes, put bvecs in LPS+ world reference frame
-    split_dwis = pe.Node(TSplit(digits=4, out_name='vol'),name='split_dwis')
-    split_bvals = pe.Node(SplitDWIsBvals(b0_threshold=b0_threshold, deoblique_bvecs=True),name='split_bvals')
+    split_dwis = pe.Node(TSplit(digits=4, out_name="vol"), name="split_dwis")
+    split_bvals = pe.Node(
+        SplitDWIsBvals(b0_threshold=b0_threshold, deoblique_bvecs=True), name="split_bvals"
+    )
 
     # Motion correct the data
-    dwi_hmc_wf = init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to,
-                                 source_file=source_file,
-                                 num_model_iterations=shoreline_iters,
-                                 sloppy=sloppy,
-                                 omp_nthreads=omp_nthreads, name="dwi_hmc_wf")
+    dwi_hmc_wf = init_dwi_hmc_wf(
+        hmc_transform,
+        hmc_model,
+        hmc_align_to,
+        source_file=source_file,
+        num_model_iterations=shoreline_iters,
+        sloppy=sloppy,
+        omp_nthreads=omp_nthreads,
+        name="dwi_hmc_wf",
+    )
 
     # Impute slice data if requested
     slice_qc = pe.Node(SliceQC(impute_slice_threshold=impute_slice_threshold), name="slice_qc")
@@ -120,7 +164,7 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
             ('bval_file', 'bval_file'),
             ('bvec_file', 'bvec_file')]),
         (split_dwis, split_bvals, [
-            ('out_files','split_files')]),
+            ('out_files', 'split_files')]),
         (split_bvals, dwi_hmc_wf, [
             ('bval_files', 'inputnode.bvals'),
             ('bvec_files', 'inputnode.bvecs'),
@@ -156,28 +200,33 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
         (slice_qc, outputnode, [
             ('slice_stats', 'slice_quality'),
             ('imputed_images', 'dwi_files_to_transform')]),
-    ])
+    ])  # fmt:skip
 
-    fieldmap_info = scan_groups['fieldmap_info']
+    fieldmap_info = scan_groups["fieldmap_info"]
     # Run SyN if forced or in the absence of fieldmap correction
-    fieldmap_type = fieldmap_info['suffix']
+    fieldmap_type = fieldmap_info["suffix"]
 
-    if fieldmap_type in ('epi', 'rpe_series'):
-        if 'topup' in pepolar_method.lower():
+    if fieldmap_type in ("epi", "rpe_series"):
+        if "topup" in pepolar_method.lower():
             raise Exception("TOPUP is not supported with SHORELine ")
 
-        drbuddi_wf = init_drbuddi_wf(scan_groups=scan_groups, omp_nthreads=omp_nthreads,
-                                     b0_threshold=b0_threshold, raw_image_sdc=raw_image_sdc,
-                                     pepolar_method=pepolar_method,
-                                     sloppy=sloppy, t2w_sdc=t2w_sdc)
+        drbuddi_wf = init_drbuddi_wf(
+            scan_groups=scan_groups,
+            omp_nthreads=omp_nthreads,
+            b0_threshold=b0_threshold,
+            raw_image_sdc=raw_image_sdc,
+            pepolar_method=pepolar_method,
+            sloppy=sloppy,
+            t2w_sdc=t2w_sdc,
+        )
 
         # apply the head motion correction transforms
         apply_hmc_transforms = pe.MapNode(
-            ants.ApplyTransforms(dimension=3,
-                                 interpolation='LanczosWindowedSinc'),
-            iterfield=['input_image', 'reference_image', 'transforms'],
-            name='uncorrect_model_images')
-        rotate_gradients = pe.Node(GradientRotation(), name='rotate_gradients')
+            ants.ApplyTransforms(dimension=3, interpolation="LanczosWindowedSinc"),
+            iterfield=["input_image", "reference_image", "transforms"],
+            name="uncorrect_model_images",
+        )
+        rotate_gradients = pe.Node(GradientRotation(), name="rotate_gradients")
         workflow.connect([
             (dwi_hmc_wf, apply_hmc_transforms, [
                 ('outputnode.forward_transforms', 'transforms')]),
@@ -214,26 +263,34 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
                 ('outputnode.down_fa_corrected_image', 'down_fa_corrected_image'),
                 ('outputnode.t2w_image', 't2w_image'),
                 ('outputnode.b0_ref', 'b0_template')])
-        ])
+        ])  # fmt:skip
         return workflow
 
-
     if fieldmap_type is None:
-        LOGGER.warning('SDC: no fieldmaps found or they were ignored (%s).',
-                       source_file)
-    elif fieldmap_type == 'syn':
+        LOGGER.warning("SDC: no fieldmaps found or they were ignored (%s).", source_file)
+    elif fieldmap_type == "syn":
         LOGGER.warning(
-            'SDC: no fieldmaps found or they were ignored. '
+            "SDC: no fieldmaps found or they were ignored. "
             'Using EXPERIMENTAL "fieldmap-less SyN" correction '
-            'for dataset %s.', source_file)
+            "for dataset %s.",
+            source_file,
+        )
     else:
-        LOGGER.log(25, 'SDC: fieldmap estimation of type "%s" intended for %s found.',
-                   fieldmap_type, source_file)
+        LOGGER.log(
+            25,
+            'SDC: fieldmap estimation of type "%s" intended for %s found.',
+            fieldmap_type,
+            source_file,
+        )
 
     # Perform SDC if possible. This will pass-through if no sdc is to be done
     b0_sdc_wf = init_sdc_wf(
-        scan_groups['fieldmap_info'], dwi_metadata, omp_nthreads=omp_nthreads,
-        fmap_demean=fmap_demean, fmap_bspline=fmap_bspline)
+        scan_groups["fieldmap_info"],
+        dwi_metadata,
+        omp_nthreads=omp_nthreads,
+        fmap_demean=fmap_demean,
+        fmap_bspline=fmap_bspline,
+    )
     b0_sdc_wf.inputs.inputnode.template = template
 
     workflow.connect([
@@ -249,7 +306,7 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
             ('outputnode.method', 'sdc_method'),
             ('outputnode.b0_ref', 'b0_template'),
             ('outputnode.out_warp', 'to_dwi_ref_warps')])
-        ])
+    ])  # fmt:skip
 
     return workflow
 
@@ -261,6 +318,7 @@ def _get_first(in_list):
 def _list_squeeze(in_list):
     from pathlib import Path
     from typing import Iterable
+
     def flatten(items):
         """Yield items from any nested iterable; see
         Beazley, D. and B. Jones. Recipe 4.14, Python Cookbook 3rd Ed.,
@@ -273,4 +331,5 @@ def _list_squeeze(in_list):
                     yield sub_x
             else:
                 yield x
+
     return list(flatten(in_list))

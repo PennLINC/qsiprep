@@ -13,6 +13,8 @@ import os.path as op
 
 import nibabel as nb
 import numpy as np
+from dipy.core.gradients import gradient_table
+from dipy.core.sphere import HemiSphere
 from nipype import logging
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec,
@@ -30,8 +32,8 @@ from .converters import (
     get_dsi_studio_ODF_geometry,
 )
 
-LOGGER = logging.getLogger('nipype.interface')
-TAU_DEFAULT = 1. / (4 * np.pi**2)
+LOGGER = logging.getLogger("nipype.interface")
+TAU_DEFAULT = 1.0 / (4 * np.pi**2)
 
 
 class AmicoInputSpec(BaseInterfaceInputSpec):
@@ -67,16 +69,17 @@ class AmicoReconInterface(SimpleInterface):
         big_delta = self.inputs.big_delta if isdefined(self.inputs.big_delta) else None
         bval_file = self.inputs.bval_file if external_bvals is None else external_bvals
         bvec_file = self.inputs.bvec_file if external_bvecs is None else external_bvecs
-        gtab = gradient_table(bvals=np.loadtxt(bval_file),
-                              bvecs=np.loadtxt(bvec_file).T,
-                              b0_threshold=self.inputs.b0_threshold,
-                              big_delta=big_delta,
-                              small_delta=little_delta)
+        gtab = gradient_table(
+            bvals=np.loadtxt(bval_file),
+            bvecs=np.loadtxt(bvec_file).T,
+            b0_threshold=self.inputs.b0_threshold,
+            big_delta=big_delta,
+            small_delta=little_delta,
+        )
         return gtab
 
     def _save_scalar(self, data, suffix, runtime, ref_img):
-        output_fname = fname_presuffix(self.inputs.dwi_file, suffix=suffix,
-                                       newpath=runtime.cwd)
+        output_fname = fname_presuffix(self.inputs.dwi_file, suffix=suffix, newpath=runtime.cwd)
         nb.Nifti1Image(data, ref_img.affine, ref_img.header).to_filename(output_fname)
         return output_fname
 
@@ -92,34 +95,39 @@ class AmicoReconInterface(SimpleInterface):
         x, y, z = verts[:hemisphere].T
         hs = HemiSphere(x=x, y=y, z=z)
         odf_amplitudes = nb.Nifti1Image(fit_obj.odf(hs), mask_img.affine, mask_img.header)
-        output_amps_file = fname_presuffix(self.inputs.dwi_file, suffix=suffix+"_amp.nii.gz",
-                                           newpath=runtime.cwd, use_ext=False)
-        output_dirs_file = fname_presuffix(self.inputs.dwi_file, suffix=suffix+"_dirs.npy",
-                                           newpath=runtime.cwd, use_ext=False)
+        output_amps_file = fname_presuffix(
+            self.inputs.dwi_file, suffix=suffix + "_amp.nii.gz", newpath=runtime.cwd, use_ext=False
+        )
+        output_dirs_file = fname_presuffix(
+            self.inputs.dwi_file, suffix=suffix + "_dirs.npy", newpath=runtime.cwd, use_ext=False
+        )
         odf_amplitudes.to_filename(output_amps_file)
         np.save(output_dirs_file, verts[:hemisphere])
-        self._results['odf_amplitudes'] = output_amps_file
-        self._results['odf_directions'] = output_dirs_file
+        self._results["odf_amplitudes"] = output_amps_file
+        self._results["odf_directions"] = output_dirs_file
 
         if self.inputs.write_fibgz:
-            output_fib_file = fname_presuffix(self.inputs.dwi_file, suffix=suffix+".fib",
-                                              newpath=runtime.cwd, use_ext=False)
+            output_fib_file = fname_presuffix(
+                self.inputs.dwi_file, suffix=suffix + ".fib", newpath=runtime.cwd, use_ext=False
+            )
             LOGGER.info("Writing DSI Studio fib file %s", output_fib_file)
-            amplitudes_to_fibgz(odf_amplitudes, verts, faces, output_fib_file, mask_img,
-                                num_fibers=5)
-            self._results['fibgz'] = output_fib_file
+            amplitudes_to_fibgz(
+                odf_amplitudes, verts, faces, output_fib_file, mask_img, num_fibers=5
+            )
+            self._results["fibgz"] = output_fib_file
 
         if self.inputs.write_mif:
-            output_mif_file = fname_presuffix(self.inputs.dwi_file, suffix=suffix+".mif",
-                                              newpath=runtime.cwd, use_ext=False)
+            output_mif_file = fname_presuffix(
+                self.inputs.dwi_file, suffix=suffix + ".mif", newpath=runtime.cwd, use_ext=False
+            )
             LOGGER.info("Writing sh mif file %s", output_mif_file)
             amplitudes_to_sh_mif(odf_amplitudes, verts, output_mif_file, runtime.cwd)
-            self._results['fod_sh_mif'] = output_mif_file
+            self._results["fod_sh_mif"] = output_mif_file
 
 
 class NODDIInputSpec(AmicoInputSpec):
     dPar = traits.Float(mandatory=True)
-    dIso =  traits.Float(mandatory=True)
+    dIso = traits.Float(mandatory=True)
     isExvivo = traits.Bool(False, usedefault=True)
     num_threads = traits.Int(1, usedefault=True, nohash=True)
 
@@ -141,37 +149,38 @@ class NODDI(AmicoReconInterface):
         # shim the expected inputs
         shim_dir = op.join(runtime.cwd, "study/subject")
         os.makedirs(shim_dir)
-        bval_file = fname_presuffix(self.inputs.bval_file,
-                                    newpath=shim_dir)
-        bvec_file = fname_presuffix(self.inputs.bvec_file,
-                                    newpath=shim_dir)
-        dwi_file = fname_presuffix(self.inputs.dwi_file,
-                                    newpath=shim_dir)
-        mask_file = fname_presuffix(self.inputs.mask_file,
-                                    newpath=shim_dir)
+        bval_file = fname_presuffix(self.inputs.bval_file, newpath=shim_dir)
+        bvec_file = fname_presuffix(self.inputs.bvec_file, newpath=shim_dir)
+        dwi_file = fname_presuffix(self.inputs.dwi_file, newpath=shim_dir)
+        mask_file = fname_presuffix(self.inputs.mask_file, newpath=shim_dir)
         os.symlink(self.inputs.bval_file, bval_file)
         os.symlink(self.inputs.bvec_file, bvec_file)
         os.symlink(self.inputs.dwi_file, dwi_file)
         os.symlink(self.inputs.mask_file, mask_file)
 
         # Prevent a ton of deprecation warnings
-        os.environ['KMP_WARNINGS'] = '0'
+        os.environ["KMP_WARNINGS"] = "0"
         os.environ["OMP_NUM_THREADS"] = str(self.inputs.num_threads)
         os.environ["MKL_NUM_THREADS"] = str(self.inputs.num_threads)
         import amico
+
         if hasattr(amico, "set_verbose"):
             amico.set_verbose(2)
         # Set up the AMICO evaluation
         aeval = amico.Evaluation("study", "subject")
-        scheme_file = amico.util.fsl2scheme(bval_file, bvec_file,
-                                            bStep=self.inputs.b0_threshold,
-                                            flipAxes=[False, True, True])
-        aeval.load_data(dwi_filename=dwi_file, scheme_filename=scheme_file,
-                        mask_filename=mask_file, b0_thr=self.inputs.b0_threshold)
+        scheme_file = amico.util.fsl2scheme(
+            bval_file, bvec_file, bStep=self.inputs.b0_threshold, flipAxes=[False, True, True]
+        )
+        aeval.load_data(
+            dwi_filename=dwi_file,
+            scheme_filename=scheme_file,
+            mask_filename=mask_file,
+            b0_thr=self.inputs.b0_threshold,
+        )
         LOGGER.info("Fitting NODDI Model.")
         aeval.set_model("NODDI")
-        aeval.set_config('parallel_jobs', self.inputs.num_threads)
-        aeval.set_config('parallel_backend', 'loky')
+        aeval.set_config("parallel_jobs", self.inputs.num_threads)
+        aeval.set_config("parallel_backend", "loky")
         # set the parameters
         aeval.model.dPar = self.inputs.dPar
         aeval.model.dIso = self.inputs.dIso
@@ -182,10 +191,10 @@ class NODDI(AmicoReconInterface):
 
         # Write the results
         aeval.save_results()
-        self._results['directions_image'] = shim_dir + "/AMICO/NODDI/FIT_dir.nii.gz"
-        self._results['icvf_image'] = shim_dir + "/AMICO/NODDI/FIT_ICVF.nii.gz"
-        self._results['od_image'] = shim_dir + "/AMICO/NODDI/FIT_OD.nii.gz"
-        self._results['isovf_image'] = shim_dir + "/AMICO/NODDI/FIT_ISOVF.nii.gz"
-        self._results['config_file'] = shim_dir + "/AMICO/NODDI/config.pickle"
+        self._results["directions_image"] = shim_dir + "/AMICO/NODDI/FIT_dir.nii.gz"
+        self._results["icvf_image"] = shim_dir + "/AMICO/NODDI/FIT_ICVF.nii.gz"
+        self._results["od_image"] = shim_dir + "/AMICO/NODDI/FIT_OD.nii.gz"
+        self._results["isovf_image"] = shim_dir + "/AMICO/NODDI/FIT_ISOVF.nii.gz"
+        self._results["config_file"] = shim_dir + "/AMICO/NODDI/config.pickle"
 
         return runtime

@@ -24,5 +24,5 @@ def reorient_wf(name='ReorientWorkflow'):
         (inputnode, deoblique, [('in_file', 'in_file')]),
         (deoblique, reorient, [('out_file', 'in_file')]),
         (reorient, outputnode, [('out_file', 'out_file')])
-    ])
+    ])  # fmt:skip
     return workflow

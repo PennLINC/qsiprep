@@ -131,6 +131,7 @@ exclude = '''
     | _build
     | build
     | dist
+    | qsiprep/niworkflows
   )/
   | qsiprep/_version.py
 )
@@ -152,9 +153,10 @@ exclude = [
     "qsiprep/config.py",
     "qsiprep/data/",
     "qsiprep/tests/",
+    "qsiprep/niworkflows/",
     "qsiprep/utils/sentry.py",
 ]
-ignore = ["D107", "E203", "E402", "E722", "W503", "N803", "N806", "N815"]
+ignore = ["D107", "E203", "E402", "E722", "W503", "N803", "N806", "N815", "W605"]
 per-file-ignores = [
     "**/__init__.py : F401",
     "docs/conf.py : E265",
