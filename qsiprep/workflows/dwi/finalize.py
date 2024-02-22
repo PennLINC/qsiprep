@@ -231,7 +231,7 @@ def init_dwi_finalize_wf(scan_groups,
                 ('intramodal_template', 'after'),
                 ('b0_ref_image', 'before')]),
             (b0_to_im_template, ds_report_intramodal, [('out_report', 'in_file')])
-        ])
+        ])  # fmt:skip
 
     # Do the resampling
     transform_dwis_t1 = init_dwi_trans_wf(source_file=source_file,
@@ -294,8 +294,8 @@ def init_dwi_finalize_wf(scan_groups,
             ('outputnode.dwi_t1', 'dwi_t1'),
             ('outputnode.t1_b0_ref', 't1_b0_ref'),
             ('outputnode.dwi_mask_t1', 'dwi_mask_t1'),
-            ])
-    ])
+        ])
+    ])  # fmt:skip
 
     # Fill-in datasinks of reportlets seen so far
     for node in workflow.list_node_names():
@@ -317,12 +317,12 @@ def init_dwi_finalize_wf(scan_groups,
             ('carpetplot_data', 'inputnode.carpetplot_data'),
             ('confounds', 'inputnode.confounds_file')]),
         (transform_dwis_t1, interactive_report_wf, [
-             ('outputnode.dwi_resampled', 'inputnode.processed_dwi_file'),
-             ('outputnode.resampled_dwi_mask', 'inputnode.mask_file'),
-             ('outputnode.bvals', 'inputnode.bval_file'),
-             ('outputnode.rotated_bvecs', 'inputnode.bvec_file')]),
+            ('outputnode.dwi_resampled', 'inputnode.processed_dwi_file'),
+            ('outputnode.resampled_dwi_mask', 'inputnode.mask_file'),
+            ('outputnode.bvals', 'inputnode.bval_file'),
+            ('outputnode.rotated_bvecs', 'inputnode.bvec_file')]),
         (interactive_report_wf, outputnode, [('outputnode.out_report', 'interactive_report')])
-    ])
+    ])  # fmt:skip
 
     # CONNECT TO DERIVATIVES #####################
     gtab_t1 = pe.Node(MRTrixGradientTable(), name='gtab_t1')
@@ -413,7 +413,7 @@ def init_dwi_finalize_wf(scan_groups,
             ('bval_files', 'orig_bval_files'),
             ('original_files', 'source_files')]),
         (gradient_plot, ds_report_gradients, [('plot_file', 'in_file')])
-    ])
+    ])  # fmt:skip
     # Fill-in datasinks of reportlets seen so far
     for node in workflow.list_node_names():
         if node.split('.')[-1].startswith('ds_report'):
@@ -466,7 +466,7 @@ def init_finalize_denoising_wf(name,
                 ('t1_b0_ref', 't1_b0_ref'),
                 ('dwi_mask_t1', 'dwi_mask_t1')
             ])
-        ])
+        ])  # fmt:skip
         return workflow
 
     # Hold the results of maybe bias correction
@@ -498,7 +498,7 @@ def init_finalize_denoising_wf(name,
                     ('out_file', 'dwi_t1'),
                     ('bias_image', 'bias_field'),
                     ('nmse_text', 'bias_confounds')])
-            ])
+            ])  # fmt:skip
 
         else:
             biascorrs = []
@@ -534,20 +534,20 @@ def init_finalize_denoising_wf(name,
                 workflow.connect([
                     (inputnode, biascorrs[-1], [("dwi_mask_t1", "mask")]),
                     (scan_split, biascorrs[-1], [
-                        ('dwi_file_%d'%scan_num, 'in_file'),
-                        ('bval_file_%d'%scan_num, 'in_bval'),
-                        ('bvec_file_%d'%scan_num, 'in_bvec')]),
+                        ('dwi_file_%d' % scan_num, 'in_file'),
+                        ('bval_file_%d' % scan_num, 'in_bval'),
+                        ('bvec_file_%d' % scan_num, 'in_bvec')]),
                     (biascorrs[-1], gather_corrected_images, [
-                        ('out_file', 'in%d'%scan_num)]),
+                        ('out_file', 'in%d' % scan_num)]),
                     (biascorrs[-1], gather_nmse_txts, [
-                        ('nmse_text', 'in%d'%scan_num)]),
+                        ('nmse_text', 'in%d' % scan_num)]),
                     (biascorrs[-1], gather_bias_images, [
-                        ('bias_image', 'in%d'%scan_num)]),
+                        ('bias_image', 'in%d' % scan_num)]),
                     (biascorrs[-1], reports[-1], [
                         ('out_report', 'in_file')]),
                     (scan_split, reports[-1], [
-                        ("source_file_%d"%scan_num, "source_file")]),
-                ])
+                        ("source_file_%d" % scan_num, "source_file")]),
+                ])  # fmt:skip
             workflow.connect([
                 (inputnode, scan_split, [
                     ("dwi_t1", "dwi_file"),
@@ -560,7 +560,7 @@ def init_finalize_denoising_wf(name,
                 (gather_nmse_txts, bias_corrected, [("out", "bias_confounds")]),
                 (gather_bias_images, merge_bias_images, [("out", "in_files")]),
                 (merge_bias_images, bias_corrected, [("out_file", "bias_field")])
-            ])
+            ])  # fmt:skip
 
     p2s_buffernode = pe.Node(
         niu.IdentityInterface(fields=["denoised_image", "noise_image", "nmse_text"]),
@@ -570,7 +570,7 @@ def init_finalize_denoising_wf(name,
     else:
         workflow.connect([
             (bias_corrected, p2s_buffernode, [("dwi_t1", "dwi_t1")])
-        ])
+        ])  # fmt:skip
 
     # Extract some additional derivatives from the corrected
     extract_b0_series = pe.Node(ExtractB0s(), name="extract_b0_series")
@@ -612,6 +612,5 @@ def init_finalize_denoising_wf(name,
         # The final version
         (p2s_buffernode, outputnode, [
             ('dwi_t1', 'dwi_t1')]),
-
-    ])
+    ])  # fmt:skip
     return workflow

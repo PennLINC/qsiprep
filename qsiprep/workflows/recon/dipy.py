@@ -18,8 +18,8 @@ from ...interfaces.dipy import (
 )
 from ...interfaces.interchange import recon_workflow_input_fields
 from ...interfaces.recon_scalars import (
-    ReconScalarsDataSink, 
-    DIPYDKIReconScalars, 
+    ReconScalarsDataSink,
+    DIPYDKIReconScalars,
     BrainSuite3dSHOREReconScalars,
     DIPYMAPMRIReconScalars,
 )
@@ -40,7 +40,8 @@ def external_format_datasinks(qsirecon_suffix, params, wf):
                                      compress=True),
             name='ds_{}_fibgz'.format(qsirecon_suffix),
             run_without_submitting=True)
-        wf.connect(outputnode, 'fibgz', ds_fibgz, 'in_file')
+        wf.connect(outputnode, 'fibgz',
+                   ds_fibgz, 'in_file')  # fmt:skip
     if params["write_mif"]:
         ds_mif = pe.Node(
             ReconDerivativesDataSink(extension='.mif',
@@ -48,7 +49,8 @@ def external_format_datasinks(qsirecon_suffix, params, wf):
                                      compress=False),
             name='ds_{}_mif'.format(qsirecon_suffix),
             run_without_submitting=True)
-        wf.connect(outputnode, 'fod_sh_mif', ds_mif, 'in_file')
+        wf.connect(outputnode, 'fod_sh_mif',
+                   ds_mif, 'in_file')  # fmt:skip
 
 
 def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, available_anatomical_data, name="dipy_3dshore_recon",
@@ -128,22 +130,24 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, available_anatomical_data,
     doing_extrapolation = params.get("extrapolate_scheme") in ("HCP", "ABCD")
 
     workflow.connect([
-        (inputnode, recon_shore, [('dwi_file', 'dwi_file'),
-                                  ('bval_file', 'bval_file'),
-                                  ('bvec_file', 'bvec_file'),
-                                  ('dwi_mask', 'mask_file')]),
-        (recon_shore, outputnode, [('shore_coeffs_image', 'shore_coeffs_image'),
-                                   ('rtop_image', 'rtop_image'),
-                                   ('alpha_image', 'alpha_image'),
-                                   ('r2_image', 'r2_image'),
-                                   ('cnr_image', 'cnr_image'),
-                                   ('regularization_image', 'regularization_image'),
-                                   ('fibgz', 'fibgz'),
-                                   ('fod_sh_mif', 'fod_sh_mif'),
-                                   ('extrapolated_dwi', 'dwi_file'),
-                                   ('extrapolated_bvals', 'bval_file'),
-                                   ('extrapolated_bvecs', 'bvec_file'),
-                                   ('extrapolated_b', 'b_file')]),
+        (inputnode, recon_shore, [
+            ('dwi_file', 'dwi_file'),
+            ('bval_file', 'bval_file'),
+            ('bvec_file', 'bvec_file'),
+            ('dwi_mask', 'mask_file')]),
+        (recon_shore, outputnode, [
+            ('shore_coeffs_image', 'shore_coeffs_image'),
+            ('rtop_image', 'rtop_image'),
+            ('alpha_image', 'alpha_image'),
+            ('r2_image', 'r2_image'),
+            ('cnr_image', 'cnr_image'),
+            ('regularization_image', 'regularization_image'),
+            ('fibgz', 'fibgz'),
+            ('fod_sh_mif', 'fod_sh_mif'),
+            ('extrapolated_dwi', 'dwi_file'),
+            ('extrapolated_bvals', 'bval_file'),
+            ('extrapolated_bvecs', 'bvec_file'),
+            ('extrapolated_b', 'b_file')]),
         (recon_shore, recon_scalars, [
             ('rtop_image', 'rtop_file'),
             ('alpha_image', 'alpha_image'),
@@ -151,7 +155,7 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, available_anatomical_data,
             ('cnr_image', 'cnr_image'),
             ('regularization_image', 'regularization_image')]),
         (recon_scalars, outputnode, [("scalar_info", "recon_scalars")])
-    ])
+    ])  # fmt:skip
 
     if plot_reports:
 
@@ -171,7 +175,8 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, available_anatomical_data,
             (inputnode, plot_peaks, [('dwi_mask', 'mask_file')]),
             (recon_shore, plot_peaks, [('odf_directions', 'directions_file'),
                                        ('odf_amplitudes', 'odf_file')]),
-            (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')])])
+            (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')])
+        ])  # fmt:skip
 
     # Plot targeted regions
     if available_anatomical_data['has_qsiprep_t1w_transforms'] and plot_reports:
@@ -181,7 +186,8 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, available_anatomical_data,
                                      suffix='odfs'),
             name='ds_report_odfs',
             run_without_submitting=True)
-        workflow.connect(plot_peaks, 'odf_report', ds_report_odfs, 'in_file')
+        workflow.connect(plot_peaks, 'odf_report',
+                         ds_report_odfs, 'in_file')  # fmt:skip
 
     if qsirecon_suffix:
         external_format_datasinks(qsirecon_suffix, params, workflow)
@@ -193,7 +199,8 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, available_anatomical_data,
                                      compress=True),
             name='ds_bsshore_rtop',
             run_without_submitting=True)
-        workflow.connect(outputnode, 'rtop_image', ds_rtop, 'in_file')
+        workflow.connect(outputnode, 'rtop_image',
+                         ds_rtop, 'in_file')  # fmt:skip
 
         ds_coeff = pe.Node(
             ReconDerivativesDataSink(extension='.nii.gz',
@@ -202,7 +209,8 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, available_anatomical_data,
                                      compress=True),
             name='ds_bsshore_coeff',
             run_without_submitting=True)
-        workflow.connect(outputnode, 'shore_coeffs_image', ds_coeff, 'in_file')
+        workflow.connect(outputnode, 'shore_coeffs_image',
+                         ds_coeff, 'in_file')  # fmt:skip
 
         ds_alpha = pe.Node(
             ReconDerivativesDataSink(extension='.nii.gz',
@@ -211,7 +219,8 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, available_anatomical_data,
                                      compress=True),
             name='ds_bsshore_alpha',
             run_without_submitting=True)
-        workflow.connect(outputnode, 'alpha_image', ds_alpha, 'in_file')
+        workflow.connect(outputnode, 'alpha_image',
+                         ds_alpha, 'in_file')  # fmt:skip
 
         ds_r2 = pe.Node(
             ReconDerivativesDataSink(extension='.nii.gz',
@@ -220,7 +229,8 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, available_anatomical_data,
                                      compress=True),
             name='ds_bsshore_r2',
             run_without_submitting=True)
-        workflow.connect(outputnode, 'r2_image', ds_r2, 'in_file')
+        workflow.connect(outputnode, 'r2_image',
+                         ds_r2, 'in_file')  # fmt:skip
 
         ds_cnr = pe.Node(
             ReconDerivativesDataSink(extension='.nii.gz',
@@ -229,7 +239,8 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, available_anatomical_data,
                                      compress=True),
             name='ds_bsshore_cnr',
             run_without_submitting=True)
-        workflow.connect(outputnode, 'cnr_image', ds_cnr, 'in_file')
+        workflow.connect(outputnode, 'cnr_image',
+                         ds_cnr, 'in_file')  # fmt:skip
 
         ds_regl = pe.Node(
             ReconDerivativesDataSink(extension='.nii.gz',
@@ -238,7 +249,8 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, available_anatomical_data,
                                      compress=True),
             name='ds_bsshore_regl',
             run_without_submitting=True)
-        workflow.connect(outputnode, 'regularization_image', ds_regl, 'in_file')
+        workflow.connect(outputnode, 'regularization_image',
+                         ds_regl, 'in_file')  # fmt:skip
         if doing_extrapolation:
             ds_extrap_dwi = pe.Node(
                 ReconDerivativesDataSink(extension='.nii.gz',
@@ -247,28 +259,32 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, available_anatomical_data,
                                          compress=True),
                 name='ds_extrap_dwi',
                 run_without_submitting=True)
-            workflow.connect(outputnode, 'dwi_file', ds_extrap_dwi, 'in_file')
+            workflow.connect(outputnode, 'dwi_file',
+                             ds_extrap_dwi, 'in_file')  # fmt:skip
             ds_extrap_bval = pe.Node(
                 ReconDerivativesDataSink(extension='.bval',
                                          desc="extrapolated",
                                          qsirecon_suffix=qsirecon_suffix),
                 name='ds_extrap_bval',
                 run_without_submitting=True)
-            workflow.connect(outputnode, 'bval_file', ds_extrap_bval, 'in_file')
+            workflow.connect(outputnode, 'bval_file',
+                             ds_extrap_bval, 'in_file')  # fmt:skip
             ds_extrap_bvec = pe.Node(
                 ReconDerivativesDataSink(extension='.bvec',
                                          desc="extrapolated",
                                          qsirecon_suffix=qsirecon_suffix),
                 name='ds_extrap_bvec',
                 run_without_submitting=True)
-            workflow.connect(outputnode, 'bvec_file', ds_extrap_bvec, 'in_file')
+            workflow.connect(outputnode, 'bvec_file',
+                             ds_extrap_bvec, 'in_file')  # fmt:skip
             ds_extrap_b = pe.Node(
                 ReconDerivativesDataSink(extension='.b',
                                          desc="extrapolated",
                                          qsirecon_suffix=qsirecon_suffix),
                 name='ds_extrap_b',
                 run_without_submitting=True)
-            workflow.connect(outputnode, 'b_file', ds_extrap_b, 'in_file')
+            workflow.connect(outputnode, 'b_file',
+                             ds_extrap_b, 'in_file')  # fmt:skip
     workflow.__desc__ = desc
     return workflow
 
@@ -366,22 +382,24 @@ def init_dipy_mapmri_recon_wf(omp_nthreads, available_anatomical_data, name="dip
         name="recon_scalars",
         run_without_submitting=True)
     workflow.connect([
-        (inputnode, recon_map, [('dwi_file', 'dwi_file'),
-                                ('bval_file', 'bval_file'),
-                                ('bvec_file', 'bvec_file'),
-                                ('dwi_mask', 'mask_file')]),
-        (recon_map, outputnode, [('mapmri_coeffs', 'mapmri_coeffs'),
-                                 ('rtop', 'rtop'),
-                                 ('rtap', 'rtap'),
-                                 ('rtpp', 'rtpp'),
-                                 ('parng', 'parng'),
-                                 ('perng', 'perng'),
-                                 ('msd', 'msd'),
-                                 ('ng', 'ng'),
-                                 ('qiv', 'qiv'),
-                                 ('lapnorm', 'lapnorm'),
-                                 ('fibgz', 'fibgz'),
-                                 ('fod_sh_mif', 'fod_sh_mif')]),
+        (inputnode, recon_map, [
+            ('dwi_file', 'dwi_file'),
+            ('bval_file', 'bval_file'),
+            ('bvec_file', 'bvec_file'),
+            ('dwi_mask', 'mask_file')]),
+        (recon_map, outputnode, [
+            ('mapmri_coeffs', 'mapmri_coeffs'),
+            ('rtop', 'rtop'),
+            ('rtap', 'rtap'),
+            ('rtpp', 'rtpp'),
+            ('parng', 'parng'),
+            ('perng', 'perng'),
+            ('msd', 'msd'),
+            ('ng', 'ng'),
+            ('qiv', 'qiv'),
+            ('lapnorm', 'lapnorm'),
+            ('fibgz', 'fibgz'),
+            ('fod_sh_mif', 'fod_sh_mif')]),
         (recon_map, recon_scalars, [
             ('rtop', 'rtop_file'),
             ('rtap', 'rtap_file'),
@@ -392,7 +410,8 @@ def init_dipy_mapmri_recon_wf(omp_nthreads, available_anatomical_data, name="dip
             ('msd', 'msd_file'),
             ('qiv', 'qiv_file'),
             ('lapnorm', 'lapnorm_file')]),
-        (recon_scalars, outputnode, [("scalar_info", "recon_scalars")])])
+        (recon_scalars, outputnode, [("scalar_info", "recon_scalars")])
+    ])  # fmt:skip
     if plot_reports:
         plot_peaks = pe.Node(
             CLIReconPeaksReport(),
@@ -405,12 +424,15 @@ def init_dipy_mapmri_recon_wf(omp_nthreads, available_anatomical_data, name="dip
             name='ds_report_peaks',
             run_without_submitting=True)
         workflow.connect([
-            (inputnode, plot_peaks, [('dwi_mask', 'mask_file'),
-                                     ('dwi_ref', 'background_image'),
-                                     ('odf_rois', 'odf_rois')]),
-            (recon_map, plot_peaks, [('odf_directions', 'directions_file'),
-                                     ('odf_amplitudes', 'odf_file')]),
-            (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')])])
+            (inputnode, plot_peaks, [
+                ('dwi_mask', 'mask_file'),
+                ('dwi_ref', 'background_image'),
+                ('odf_rois', 'odf_rois')]),
+            (recon_map, plot_peaks, [
+                ('odf_directions', 'directions_file'),
+                ('odf_amplitudes', 'odf_file')]),
+            (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')])
+        ])  # fmt:skip
 
     # Plot targeted regions
     if available_anatomical_data['has_qsiprep_t1w_transforms'] and plot_reports:
@@ -420,7 +442,8 @@ def init_dipy_mapmri_recon_wf(omp_nthreads, available_anatomical_data, name="dip
                                      suffix='odfs'),
             name='ds_report_odfs',
             run_without_submitting=True)
-        workflow.connect(plot_peaks, 'odf_report', ds_report_odfs, 'in_file')
+        workflow.connect(plot_peaks, 'odf_report',
+                         ds_report_odfs, 'in_file')  # fmt:skip
 
     if qsirecon_suffix:
         external_format_datasinks(qsirecon_suffix, params, workflow)
@@ -432,7 +455,7 @@ def init_dipy_mapmri_recon_wf(omp_nthreads, available_anatomical_data, name="dip
             recon_scalars,
             "scalar_info",
             ds_recon_scalars,
-            "recon_scalars")
+            "recon_scalars")  # fmt:skip
 
     workflow.__desc__ = desc
     return workflow
@@ -517,7 +540,7 @@ def init_dipy_dki_recon_wf(omp_nthreads, available_anatomical_data, name="dipy_d
             ('rk', 'dki_rk'),
             ('mkt', 'dki_mkt')]),
         (recon_scalars, outputnode, [("scalar_info", "recon_scalars")])
-    ])
+    ])  # fmt:skip
 
     if plot_reports and False:
         plot_peaks = pe.Node(
@@ -548,7 +571,7 @@ def init_dipy_dki_recon_wf(omp_nthreads, available_anatomical_data, name="dipy_d
             recon_scalars,
             "scalar_info",
             ds_recon_scalars,
-            "recon_scalars")
+            "recon_scalars")  # fmt:skip
 
     workflow.__desc__ = desc
     return workflow

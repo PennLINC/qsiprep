@@ -55,7 +55,7 @@ def init_phdiff_wf(omp_nthreads, phasetype='phasediff', name='phdiff_wf'):
 
 
     """
-    
+
     workflow = Workflow(name=name)
     workflow.__desc__ = """\
 A deformation field to correct for susceptibility distortions was estimated
@@ -69,7 +69,7 @@ further improvements of HCP Pipelines [@hcppipelines].
     fsl_check = os.environ.get('FSL_BUILD')
     if fsl_check=="no_fsl":
         raise Exception(
-            """Container in use does not have FSL. To use this workflow, 
+            """Container in use does not have FSL. To use this workflow,
             please download the qsiprep container with FSL installed.""")
     inputnode = pe.Node(niu.IdentityInterface(fields=['magnitude', 'phasediff']),
                         name='inputnode')
@@ -89,7 +89,7 @@ further improvements of HCP Pipelines [@hcppipelines].
         desc='brain', suffix='mask'), name='ds_report_fmap_mask',
         mem_gb=0.01, run_without_submitting=True)
     # uses mask from bet; outputs a mask
-    
+
     # dilate = pe.Node(fsl.maths.MathsCommand(
     #     nan2zeros=True, args='-kernel sphere 5 -dilM'), name='MskDilate')
 
@@ -125,7 +125,7 @@ further improvements of HCP Pipelines [@hcppipelines].
             (inputnode, pha2rads, [('phasediff', 'in_file')]),
             (pha2rads, prelude, [('out', 'phase_file')]),
             (inputnode, ds_report_fmap_mask, [('phasediff', 'source_file')]),
-        ])
+        ])  # fmt:skip
 
     else:
         workflow.__desc__ += """\
@@ -142,7 +142,7 @@ The phase difference used for unwarping was calculated using two separate phase 
             (phases2fmap, prelude, [('out_file', 'phase_file')]),
             (phases2fmap, compfmap, [('phasediff_metadata', 'metadata')]),
             (phases2fmap, ds_report_fmap_mask, [('out_file', 'source_file')])
-        ])
+        ])  # fmt:skip
 
     workflow.connect([
         (inputnode, meta, [('phasediff', 'in_file')]),
@@ -160,6 +160,6 @@ The phase difference used for unwarping was calculated using two separate phase 
         (bet, outputnode, [('mask_file', 'fmap_mask'),
                            ('out_file', 'fmap_ref')]),
         (bet, ds_report_fmap_mask, [('out_report', 'in_file')]),
-    ])
+    ])  # fmt:skip
 
     return workflow

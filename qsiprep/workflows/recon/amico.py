@@ -88,14 +88,12 @@ diffusivity.""" % (params['dPar'], params['dIso'])
             ('icvf_image', 'icvf_image'),
             ('od_image', 'od_image'),
             ('isovf_image', 'isovf_image'),
-            ('config_file', 'config_file'),
-            ]),
+            ('config_file', 'config_file')]),
         (noddi_fit, recon_scalars, [
             ('icvf_image', 'icvf_image'),
             ('od_image', 'od_image'),
             ('isovf_image', 'isovf_image'),
-            ('directions_image', 'directions_image')
-        ]),
+            ('directions_image', 'directions_image')]),
         (recon_scalars, outputnode, [("scalar_info", "recon_scalars")]),
         (noddi_fit, convert_to_fibgz, [
             ('directions_image', 'directions_file'),
@@ -103,7 +101,8 @@ diffusivity.""" % (params['dPar'], params['dIso'])
             ('od_image', 'od_file'),
             ('isovf_image', 'isovf_file')]),
         (inputnode, convert_to_fibgz, [('dwi_mask', 'mask_file')]),
-        (convert_to_fibgz, outputnode, [('fibgz_file', 'fibgz')])])
+        (convert_to_fibgz, outputnode, [('fibgz_file', 'fibgz')])
+    ])  # fmt:skip
     if plot_reports:
         plot_peaks = pe.Node(
             CLIReconPeaksReport(),
@@ -111,8 +110,8 @@ diffusivity.""" % (params['dPar'], params['dIso'])
             n_procs=omp_nthreads)
         ds_report_peaks = pe.Node(
             ReconDerivativesDataSink(extension='.png',
-                                    desc="NODDI",
-                                    suffix='peaks'),
+                                     desc="NODDI",
+                                     suffix='peaks'),
             name='ds_report_peaks',
             run_without_submitting=True)
 
@@ -120,7 +119,8 @@ diffusivity.""" % (params['dPar'], params['dIso'])
             (inputnode, plot_peaks, [('dwi_mask', 'mask_file')]),
             (convert_to_fibgz, plot_peaks, [('fibgz_file', 'fib_file')]),
             (noddi_fit, plot_peaks, [('icvf_image', 'background_image')]),
-            (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')])])
+            (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')])
+        ])  # fmt:skip
 
     if qsirecon_suffix:
         ds_fibgz = pe.Node(
@@ -129,7 +129,7 @@ diffusivity.""" % (params['dPar'], params['dIso'])
                                  compress=True),
         name='ds_{}_fibgz'.format(qsirecon_suffix),
         run_without_submitting=True)
-        workflow.connect(outputnode, 'fibgz', ds_fibgz, 'in_file')
+        workflow.connect(outputnode, 'fibgz', ds_fibgz, 'in_file')  # fmt:skip
 
         ds_recon_scalars = pe.Node(
             ReconScalarsDataSink(),
@@ -139,7 +139,7 @@ diffusivity.""" % (params['dPar'], params['dIso'])
             recon_scalars,
             "scalar_info",
             ds_recon_scalars,
-            "recon_scalars")
+            "recon_scalars")  # fmt:skip
 
         ds_config = pe.Node(
             ReconDerivativesDataSink(mfp="AMICOconfig",

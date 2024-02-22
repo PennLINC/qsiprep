@@ -232,13 +232,13 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
         (inputnode, get_interpolation, [('dwi_files', 'dwi_files')]),
         (get_interpolation, dwi_transform, [('interpolation_method', 'interpolation')]),
         (dwi_transform, scale_dwis, [("output_image", "dwi_files")])
-    ])
+    ])  # fmt:skip
 
     # If concatenation is not happening here, send the still-split images to outputs
     if not concatenate:
         workflow.connect([
             (scale_dwis, outputnode, [('scaled_images', 'dwi_resampled')])
-        ])
+        ])  # fmt:skip
         return workflow
 
     merge = pe.Node(Merge(compress=use_compression), name='merge', mem_gb=mem_gb * 3)
@@ -269,14 +269,14 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
             ('bvecs', 'inputnode.bvec_file')]),
         (merge, calculate_qc, [('out_file', 'inputnode.dwi_file')]),
         (calculate_qc, outputnode, [('outputnode.qc_summary', 'resampled_qc')])
-    ])
+    ])  # fmt:skip
     if write_local_bvecs:
         local_grad_rotation = pe.Node(LocalGradientRotation(), name='local_grad_rotation')
         workflow.connect([
             (compose_transforms, local_grad_rotation, [('out_warps', 'warp_transforms')]),
             (inputnode, local_grad_rotation, [('bvec_files', 'bvec_files')]),
             (local_grad_rotation, outputnode, [('local_bvecs', 'local_bvecs')])
-        ])
+        ])  # fmt:skip
 
     return workflow
 

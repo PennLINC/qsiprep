@@ -116,7 +116,7 @@ directions, using `3dQwarp` @afni (AFNI {afni_ver}).
         (inputnode, prepare_epi_opposite_wf, [('in_reference_brain', 'inputnode.ref_brain')]),
         (prepare_epi_opposite_wf, qwarp, [('outputnode.out_file', 'base_file')]),
         (inputnode, qwarp, [('in_reference_brain', 'in_file')])
-    ])
+    ])  # fmt:skip
 
     to_ants = pe.Node(niu.Function(function=_fix_hdr), name='to_ants',
                       mem_gb=0.01)
@@ -138,7 +138,7 @@ directions, using `3dQwarp` @afni (AFNI {afni_ver}).
                                        ('in_reference', 'input_image')]),
         (unwarp_reference, outputnode, [('output_image', 'out_reference')]),
         (to_ants, outputnode, [('out', 'out_warp')]),
-    ])
+    ])  # fmt:skip
 
     return workflow
 
@@ -202,7 +202,7 @@ def init_prepare_dwi_epi_wf(omp_nthreads, orientation="LPS", name="prepare_epi_w
         (enhance_b0, resample_epi_fmap, [('enhanced_file', 'input_image')]),
         (inputnode, resample_epi_fmap, [('ref_brain', 'reference_image')]),
         (resample_epi_fmap, outputnode, [('output_image', 'out_file')])
-    ])
+    ])  # fmt:skip
 
     return workflow
 
@@ -239,9 +239,7 @@ def init_extended_pepolar_report_wf(segment_t2w, omp_nthreads=1,
         (pepolar_report, outputnode, [
             ("b0_sdc_report", "b0_sdc_report"),
             ("fa_sdc_report", "fa_sdc_report")])
-    ])
-
-    
+    ])  # fmt:skip
 
     # If we don't have a T1w segmentation, make one from the t2w
     if segment_t2w:
@@ -274,7 +272,7 @@ def init_extended_pepolar_report_wf(segment_t2w, omp_nthreads=1,
                 ("outputnode.brain_image", "intensity_images"),
                 ("outputnode.brain_mask", "mask_image")]),
             (t2w_atropos, pepolar_report, [("classified_image", "t2w_seg")])
-        ])
+        ])  # fmt:skip
     else:
         map_seg = pe.Node(
             ants.ApplyTransforms(
@@ -292,7 +290,7 @@ def init_extended_pepolar_report_wf(segment_t2w, omp_nthreads=1,
                 ("t1w_seg", "input_image")]),
             (map_seg, sel_wm, [('output_image', 'in_seg')]),
             (sel_wm, pepolar_report, [('out', 't1w_seg')])
-        ])
+        ])  # fmt:skip
 
     return workflow
 

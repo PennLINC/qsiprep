@@ -130,7 +130,7 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file,
             ('outputnode.ref_image_brain', 'final_template_brain'),
             ('outputnode.dwi_mask', 'final_template_mask')
         ])
-    ])
+    ])  # fmt:skip
 
     # If we're just aligning based on the b=0 images, compute the b=0 tsnr as the cnr
     if hmc_model.lower() == "none":
@@ -144,7 +144,7 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file,
             (match_transforms, outputnode, [('transforms', 'forward_transforms')]),
             (b0_hmc_wf, concat_b0s, [('outputnode.aligned_images', 'in_files')]),
             (concat_b0s, b0_tsnr, [('out_file', 'in_file')]),
-            (b0_tsnr, outputnode, [('out_file', 'cnr_image')])])
+            (b0_tsnr, outputnode, [('out_file', 'cnr_image')])])  # fmt:skip
         return workflow
 
     # Do model-based motion correction
@@ -181,7 +181,7 @@ def init_dwi_hmc_wf(hmc_transform, hmc_model, hmc_align_to, source_file,
             ('outputnode.hmc_transforms', 'transforms')]),
         (inputnode, uncorrect_model_images, [('dwi_files', 'reference_image')]),
         (uncorrect_model_images, outputnode, [('output_image', 'noise_free_dwis')])
-    ])
+    ])  # fmt:skip
     datasinks = [node for node in workflow.list_node_names()
                  if node.split(".")[-1].startswith("ds_")]
 
@@ -218,42 +218,41 @@ def linear_alignment_workflow(transform="Rigid", metric="Mattes",
         reg, name="reg_%03d" % iternum, iterfield=["moving_image"])
 
     # Run the images through antsRegistration
-    iteration_wf.connect(inputnode, "image_paths", iter_reg, "moving_image")
-    iteration_wf.connect(inputnode, "template_image", iter_reg, "fixed_image")
+    iteration_wf.connect(inputnode, "image_paths", iter_reg, "moving_image")  # fmt:skip
+    iteration_wf.connect(inputnode, "template_image", iter_reg, "fixed_image")  # fmt:skip
 
     # Average the images
     averaged_images = pe.Node(
         ants.AverageImages(normalize=True, dimension=3),
         name="averaged_images")
-    iteration_wf.connect(iter_reg, "warped_image", averaged_images, "images")
+    iteration_wf.connect(iter_reg, "warped_image", averaged_images, "images")  # fmt:skip
 
     # Apply the inverse to the average image
     transforms_to_list = pe.Node(niu.Merge(1), name="transforms_to_list")
     transforms_to_list.inputs.ravel_inputs = True
-    iteration_wf.connect(iter_reg, "forward_transforms", transforms_to_list,
-                         "in1")
+    iteration_wf.connect(iter_reg, "forward_transforms", transforms_to_list, "in1")  # fmt:skip
     avg_affines = pe.Node(ants.AverageAffineTransform(), name="avg_affine")
     avg_affines.inputs.dimension = 3
     avg_affines.inputs.output_affine_transform = "AveragedAffines.mat"
-    iteration_wf.connect(transforms_to_list, "out", avg_affines, "transforms")
+    iteration_wf.connect(transforms_to_list, "out", avg_affines, "transforms")  # fmt:skip
 
     invert_average = pe.Node(ants.ApplyTransforms(), name="invert_average")
     invert_average.inputs.interpolation = "HammingWindowedSinc"
     invert_average.inputs.invert_transform_flags = [True]
 
     avg_to_list = pe.Node(niu.Merge(1), name="to_list")
-    iteration_wf.connect(avg_affines, "affine_transform", avg_to_list, "in1")
-    iteration_wf.connect(avg_to_list, "out", invert_average, "transforms")
+    iteration_wf.connect(avg_affines, "affine_transform", avg_to_list, "in1")  # fmt:skip
+    iteration_wf.connect(avg_to_list, "out", invert_average, "transforms")  # fmt:skip
     iteration_wf.connect(averaged_images, "output_average_image",
-                         invert_average, "input_image")
+                         invert_average, "input_image")  # fmt:skip
     iteration_wf.connect(averaged_images, "output_average_image",
-                         invert_average, "reference_image")
+                         invert_average, "reference_image")  # fmt:skip
     iteration_wf.connect(invert_average, "output_image", outputnode,
-                         "updated_template")
+                         "updated_template")  # fmt:skip
     iteration_wf.connect(iter_reg, "forward_transforms", outputnode,
-                         "affine_transforms")
+                         "affine_transforms")  # fmt:skip
     iteration_wf.connect(iter_reg, "warped_image", outputnode,
-                         "registered_image_paths")
+                         "registered_image_paths")  # fmt:skip
 
     return iteration_wf
 
@@ -284,13 +283,12 @@ def init_b0_hmc_wf(align_to="iterative", transform="Rigid",
         initial_template = pe.Node(
             ants.AverageImages(normalize=True, dimension=3),
             name="initial_template")
-        alignment_wf.connect(inputnode, "b0_images", initial_template,
-                             "images")
+        alignment_wf.connect(inputnode, "b0_images", initial_template, "images")  # fmt:skip
         # Store the registration targets
         iter_templates = pe.Node(
             niu.Merge(num_iters), name="iteration_templates")
         alignment_wf.connect(initial_template, "output_average_image",
-                             iter_templates, "in1")
+                             iter_templates, "in1")  # fmt:skip
 
         initial_reg = linear_alignment_workflow(
             transform=transform,
@@ -299,9 +297,9 @@ def init_b0_hmc_wf(align_to="iterative", transform="Rigid",
             omp_nthreads=omp_nthreads,
             iternum=0)
         alignment_wf.connect(initial_template, "output_average_image",
-                             initial_reg, "inputnode.template_image")
+                             initial_reg, "inputnode.template_image")  # fmt:skip
         alignment_wf.connect(inputnode, "b0_images", initial_reg,
-                             "inputnode.image_paths")
+                             "inputnode.image_paths")  # fmt:skip
         reg_iters = [initial_reg]
         for iternum in range(1, num_iters):
             reg_iters.append(
@@ -311,22 +309,22 @@ def init_b0_hmc_wf(align_to="iterative", transform="Rigid",
                     precision="precise" if not sloppy else "sloppy",
                     iternum=iternum))
             alignment_wf.connect(reg_iters[-2], "outputnode.updated_template",
-                                 reg_iters[-1], "inputnode.template_image")
+                                 reg_iters[-1], "inputnode.template_image")  # fmt:skip
             alignment_wf.connect(inputnode, "b0_images", reg_iters[-1],
-                                 "inputnode.image_paths")
+                                 "inputnode.image_paths")  # fmt:skip
             alignment_wf.connect(reg_iters[-1], "outputnode.updated_template",
-                                 iter_templates, "in%d" % (iternum + 1))
+                                 iter_templates, "in%d" % (iternum + 1))  # fmt:skip
 
         # Attach to outputs
         # The last iteration aligned to the output from the second-to-last
         alignment_wf.connect(reg_iters[-2], "outputnode.updated_template",
-                             outputnode, "final_template")
+                             outputnode, "final_template")  # fmt:skip
         alignment_wf.connect(reg_iters[-1], "outputnode.affine_transforms",
-                             outputnode, "forward_transforms")
+                             outputnode, "forward_transforms")  # fmt:skip
         alignment_wf.connect(reg_iters[-1], "outputnode.registered_image_paths",
-                             outputnode, "aligned_images")
+                             outputnode, "aligned_images")  # fmt:skip
         alignment_wf.connect(iter_templates, "out", outputnode,
-                             "iteration_templates")
+                             "iteration_templates")  # fmt:skip
     elif align_to == 'first':
         desc += "Each b=0 image was registered to the first b=0 image using " \
                 "a {transform} registration. ".format(transform=transform)
@@ -344,7 +342,7 @@ def init_b0_hmc_wf(align_to="iterative", transform="Rigid",
                 ('averaged_images.output_average_image', 'final_template'),
                 ('outputnode.affine_transforms', 'forward_transforms'),
                 ('outputnode.registered_image_paths', 'aligned_images')])
-        ])
+        ])  # fmt:skip
     if boilerplate:
         alignment_wf.__desc__ = desc
     return alignment_wf
@@ -488,7 +486,7 @@ def init_hmc_model_iteration_wf(modelname, transform, precision="coarse", name="
         (post_bvec_transforms, outputnode, [('bvecs', 'aligned_bvecs')]),
         (register_to_predicted, outputnode, [('warped_image', 'aligned_dwis'),
                                              ('forward_transforms', 'hmc_transforms')])
-    ])
+    ])  # fmt:skip
 
     return workflow
 
@@ -616,7 +614,7 @@ def init_dwi_model_hmc_wf(modelname, transform, mem_gb, omp_nthreads,
             ('warped_b0_mask', 'inputnode.b0_mask')]),
         (initial_model_iteration, collect_motion_params, [
             ('outputnode.motion_params', 'in1')])
-    ])
+    ])  # fmt:skip
 
     model_iterations = [initial_model_iteration]
     for iteration_num in range(num_iters-1):
@@ -640,7 +638,7 @@ def init_dwi_model_hmc_wf(modelname, transform, mem_gb, omp_nthreads,
                 ('warped_b0_mask', 'inputnode.b0_mask')]),
             (model_iterations[-1], collect_motion_params, [
                 ('outputnode.motion_params', motion_key)])
-        ])
+        ])  # fmt:skip
 
     # Return to the original, b0-interspersed ordering
     reorder_dwi_xforms = pe.Node(ReorderOutputs(), name='reorder_dwi_xforms')
@@ -666,7 +664,7 @@ def init_dwi_model_hmc_wf(modelname, transform, mem_gb, omp_nthreads,
             (summarize_iterations, outputnode, [
                 ('iteration_summary_file', 'optimization_data')]),
             (summarize_iterations, shoreline_report, [
-                ('iteration_summary_file', 'iteration_summary')])])
+                ('iteration_summary_file', 'iteration_summary')])])  # fmt:skip
 
     workflow.connect([
         (model_iterations[-1], reorder_dwi_xforms, [
@@ -692,7 +690,7 @@ def init_dwi_model_hmc_wf(modelname, transform, mem_gb, omp_nthreads,
             ('full_predicted_dwi_series', 'model_predicted_images'),
             ('hmc_warped_images', 'registered_images')]),
         (shoreline_report, ds_report_shoreline_gif, [('plot_file', 'in_file')]),
-    ])
+    ])  # fmt:skip
 
     return workflow
 

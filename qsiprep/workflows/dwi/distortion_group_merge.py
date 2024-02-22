@@ -124,14 +124,14 @@ def init_distortion_group_merge_wf(merging_strategy, inputs_list, hmc_model, rep
             (inputnode, merge_confounds, [(input_name + "_confounds", merge_input_name)]),
             (inputnode, merge_carpetplot_data, [
                 (input_name + "_carpetplot_data", merge_input_name)])
-        ])
+        ])  # fmt:skip
 
     if merging_strategy.lower() == 'average':
         distortion_merger = pe.Node(AveragePEPairs(), name='distortion_merger')
         workflow.connect([
             (merge_original_bvec, distortion_merger, [('out', 'original_bvec_files')]),
             (merge_carpetplot_data, distortion_merger, [('out', 'carpetplot_data')])
-        ])
+        ])  # fmt:skip
     elif merging_strategy.startswith('concat'):
         distortion_merger = pe.Node(MergeDWIs(), name='distortion_merger')
     b0_ref_wf = init_dwi_reference_wf(omp_nthreads, name='merged_b0_ref', register_t1=False,
@@ -148,7 +148,7 @@ def init_distortion_group_merge_wf(merging_strategy, inputs_list, hmc_model, rep
         (merge_confounds, distortion_merger, [('out', 'denoising_confounds')]),
         (merge_cnrs, concat_cnr_images, [('out', 'in_files')]),
         (concat_cnr_images, outputnode, [('out_file', 'cnr_map_t1')])
-    ])
+    ])  # fmt:skip
 
     # Calculate QC on the merged raw and processed data
     raw_qc_wf = init_modelfree_qc_wf(omp_nthreads=omp_nthreads,
@@ -274,7 +274,7 @@ def init_distortion_group_merge_wf(merging_strategy, inputs_list, hmc_model, rep
             ('btable_t1', 'inputnode.btable_t1'),
             ('confounds', 'inputnode.confounds'),
             ('hmc_optimization_data', 'inputnode.hmc_optimization_data')]),
-    ])
+    ])  # fmt:skip
 
     # Fill-in datasinks of reportlets seen so far
     for node in workflow.list_node_names():

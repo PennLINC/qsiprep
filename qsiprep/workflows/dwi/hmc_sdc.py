@@ -120,7 +120,7 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
             ('bval_file', 'bval_file'),
             ('bvec_file', 'bvec_file')]),
         (split_dwis, split_bvals, [
-            ('out_files','split_files')]),
+            ('out_files', 'split_files')]),
         (split_bvals, dwi_hmc_wf, [
             ('bval_files', 'inputnode.bvals'),
             ('bvec_files', 'inputnode.bvecs'),
@@ -156,7 +156,7 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
         (slice_qc, outputnode, [
             ('slice_stats', 'slice_quality'),
             ('imputed_images', 'dwi_files_to_transform')]),
-    ])
+    ])  # fmt:skip
 
     fieldmap_info = scan_groups['fieldmap_info']
     # Run SyN if forced or in the absence of fieldmap correction
@@ -214,9 +214,8 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
                 ('outputnode.down_fa_corrected_image', 'down_fa_corrected_image'),
                 ('outputnode.t2w_image', 't2w_image'),
                 ('outputnode.b0_ref', 'b0_template')])
-        ])
+        ])  # fmt:skip
         return workflow
-
 
     if fieldmap_type is None:
         LOGGER.warning('SDC: no fieldmaps found or they were ignored (%s).',
@@ -249,7 +248,7 @@ def init_qsiprep_hmcsdc_wf(scan_groups,
             ('outputnode.method', 'sdc_method'),
             ('outputnode.b0_ref', 'b0_template'),
             ('outputnode.out_warp', 'to_dwi_ref_warps')])
-        ])
+    ])  # fmt:skip
 
     return workflow
 

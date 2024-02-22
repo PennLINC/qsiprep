@@ -139,6 +139,6 @@ def init_single_subject_json_report_wf(subject_id, name, output_dir):
             ('qc_file', 'qc_file'),
             ('mask_file', 'mask_file')]),
         (interactive_report, ds_report_json, [('out_report', 'in_file')])
-    ])
+    ])  # fmt:skip
 
     return workflow

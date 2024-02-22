@@ -72,7 +72,7 @@ def init_scalar_to_bundle_wf(omp_nthreads, available_anatomical_data,
             ("bundle_summary", "bundle_summary")]),
         (bundle_mapper, ds_tdi_summary, [
             ("tdi_stats", "summary_tsv")])
-        ])
+    ])  # fmt:skip
 
     return workflow
 
@@ -110,7 +110,7 @@ def init_scalar_to_atlas_wf(omp_nthreads, available_anatomical_data,
             ("recon_scalars", "recon_scalars"),
             ("tck_files", "tck_files"),
             ("dwi_ref", "dwiref_image")])
-    ])
+    ])  # fmt:skip
     if qsirecon_suffix:
 
         ds_bundle_summaries = pe.Node(
@@ -120,7 +120,7 @@ def init_scalar_to_atlas_wf(omp_nthreads, available_anatomical_data,
             run_without_submitting=True)
         workflow.connect([
             (bundle_mapper, ds_bundle_summaries, [("bundle_summaries", "in_file")])
-        ])
+        ])  # fmt:skip
     return workflow
 
 
@@ -168,7 +168,7 @@ def init_scalar_to_template_wf(omp_nthreads, available_anatomical_data,
             # Send the resampled files (without metadata) so they don't get cleaned up
             ("template_space_scalars", "resampled_files"),
             ("template_space_scalar_info", "recon_scalars")])
-        ])
+    ])  # fmt:skip
 
     return workflow
 

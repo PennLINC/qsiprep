@@ -84,7 +84,7 @@ def cleanup_edge_pipeline(name='Cleanup'):
     fsl_check = os.environ.get('FSLDIR', False)
     if not fsl_check:
         raise Exception(
-            """Container in use does not have FSL. To use this workflow, 
+            """Container in use does not have FSL. To use this workflow,
             please download the qsiprep container with FSL installed.""")
     inputnode = pe.Node(
         niu.IdentityInterface(fields=['in_file', 'in_mask']), name='inputnode')
@@ -117,5 +117,6 @@ def cleanup_edge_pipeline(name='Cleanup'):
                 (applymsk, join, [('out_file', 'in2')]), (inputnode, addedge, [
                     ('in_file', 'in_file')
                 ]), (join, addedge, [('out', 'operand_files')]),
-                (addedge, outputnode, [('out_file', 'out_file')])])
+                (addedge, outputnode, [('out_file', 'out_file')])
+    ])  # fmt:skip
     return wf

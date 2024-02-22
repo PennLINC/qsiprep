@@ -97,18 +97,17 @@ def init_dwi_recon_workflow(workflow_spec, output_dir,
 
         consuming_scalars = node_spec.get("scalars_from", [])
         if consuming_scalars:
-            workflow.connect(scalar_gatherer, "out", node, "inputnode.collected_scalars")
+            workflow.connect(scalar_gatherer, "out",
+                             node, "inputnode.collected_scalars")  # fmt:skip
         else:
-            workflow.connect(node, "outputnode.recon_scalars", scalar_gatherer, "in%d"%node_num)
-
+            workflow.connect(node, "outputnode.recon_scalars",
+                             scalar_gatherer, "in%d " % node_num)  # fmt:skip
         if node_spec.get('input', 'qsiprep') == 'qsiprep':
             # directly connect all the qsiprep outputs to every node
             workflow.connect([
                 (inputnode, node,
-                 _as_connections(recon_workflow_input_fields, dest_prefix='inputnode.'))])
-            # for from_conn, to_conn in default_connections:
-            #     workflow.connect(inputnode, from_conn, node, 'inputnode.' + to_conn)
-            #     _check_repeats(workflow.list_node_names())
+                 _as_connections(recon_workflow_input_fields, dest_prefix='inputnode.'))
+            ])  # fmt:skip
 
         # connect the outputs from the upstream node to this node
         else:
@@ -123,28 +122,29 @@ def init_dwi_recon_workflow(workflow_spec, output_dir,
             connect_from_upstream = upstream_outputs.intersection(downstream_inputs)
             connect_from_qsiprep = default_input_set - connect_from_upstream
 
-            # LOGGER.info("connecting %s from %s to %s", connect_from_qsiprep,
-            #             inputnode, node)
+            LOGGER.debug("connecting %s from %s to %s", connect_from_qsiprep,
+                         inputnode, node)
             workflow.connect([
-                (inputnode, node,
-                 _as_connections(
-                    connect_from_qsiprep - set(("mapping_metadata",)),
-                    dest_prefix='inputnode.'))])
-            # for qp_connection in connect_from_qsiprep:
-            #    workflow.connect(inputnode, qp_connection, node, 'inputnode.' + qp_connection)
+                (
+                    inputnode,
+                    node,
+                    _as_connections(
+                        connect_from_qsiprep - set(("mapping_metadata",)),
+                        dest_prefix='inputnode.'))
+            ])  # fmt:skip
             _check_repeats(workflow.list_node_names())
 
-            # LOGGER.info("connecting %s from %s to %s", connect_from_upstream,
-            #             upstream_outputnode_name, downstream_inputnode_name)
+            LOGGER.debug("connecting %s from %s to %s", connect_from_upstream,
+                         upstream_outputnode_name, downstream_inputnode_name)
             workflow.connect([
-                (upstream_node, node,
-                 _as_connections(
-                    connect_from_upstream - set(("mapping_metadata",)),
-                    src_prefix='outputnode.',
-                    dest_prefix='inputnode.'))])
-            # for upstream_connection in connect_from_upstream:
-            #     workflow.connect(upstream_node, "outputnode." + upstream_connection,
-            #                      node, 'inputnode.' + upstream_connection)
+                (
+                    upstream_node,
+                    node,
+                    _as_connections(
+                        connect_from_upstream - set(("mapping_metadata",)),
+                        src_prefix='outputnode.',
+                        dest_prefix='inputnode.'))
+            ])  # fmt:skip
             _check_repeats(workflow.list_node_names())
 
             # Send metadata about the upstream node into the downstream node
@@ -152,19 +152,18 @@ def init_dwi_recon_workflow(workflow_spec, output_dir,
                 workflow_metadata_nodes[node_spec['input']],
                 "input_metadata",
                 node,
-                "inputnode.mapping_metadata")
+                "inputnode.mapping_metadata")  # fmt:skip
 
     # Fill-in datasinks and reportlet datasinks seen so far
     for node in workflow.list_node_names():
         node_suffix = node.split('.')[-1]
         if node_suffix.startswith('ds_') or node_suffix.startswith("recon_scalars"):
             base_dir = reportlets_dir if "report" in node_suffix else output_dir
-            workflow.connect(inputnode, 'dwi_file', workflow.get_node(node), 'source_file')
+            workflow.connect(inputnode, 'dwi_file',
+                             workflow.get_node(node), 'source_file')  # fmt:skip
             # LOGGER.info("setting %s base dir to %s", node_suffix, base_dir )
             if node_suffix.startswith("ds"):
                 workflow.get_node(node).inputs.base_directory = base_dir
-            # if node_suffix.startswith('ds_') or node_suffix.startswith("recon_scalars"):
-            #     workflow.connect(inputnode, 'dwi_file', workflow.get_node(node), 'source_file')
 
     return workflow
 

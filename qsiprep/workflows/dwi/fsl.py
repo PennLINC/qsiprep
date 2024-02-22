@@ -217,7 +217,7 @@ def init_fsl_hmc_wf(scan_groups,
         (eddy, spm_motion, [('out_parameter', 'eddy_motion')]),
         (b0_ref_mask_to_lps, outputnode, [('dwi_file', 'b0_template_mask')]),
         (spm_motion, outputnode, [('spm_motion_file', 'motion_params')])
-    ])
+    ])  # fmt:skip
 
     # Fieldmap correction to be done in LAS+: TOPUP for rpe series or epi fieldmap
     # If a topupref is provided, use it for TOPUP
@@ -270,7 +270,7 @@ def init_fsl_hmc_wf(scan_groups,
             # Save reports
             (gather_inputs, topup_summary, [('topup_report', 'summary')]),
             (topup_summary, ds_report_topupsummary, [('out_report', 'in_file')])
-        ])
+        ])  # fmt:skip
 
         if "drbuddi" not in pepolar_method.lower():
             LOGGER.info("Using single-stage SDC, TOPUP-only")
@@ -278,16 +278,17 @@ def init_fsl_hmc_wf(scan_groups,
                 # There will be no SDC warps, they are applied by eddy
                 (gather_inputs, outputnode, [('forward_warps', 'to_dwi_ref_warps')]),
                 (b0_ref_to_lps, outputnode, [('dwi_file', 'b0_template')]),
-            ])
+            ])  # fmt:skip
     else:
         # If we're not using TOPUP we need to make a mask for eddy based on the distorted brain shapes
         distorted_merge = pe.Node(
             IntraModalMerge(hmc=True, to_lps=False), name='distorted_merge')
         # Use the distorted mask for eddy
         workflow.connect([
-            (gather_inputs, distorted_merge, [('topup_imain', 'in_files')]),
-            (distorted_merge, pre_eddy_b0_ref_wf, [('out_avg', 'inputnode.b0_template')])])
-
+            (gather_inputs, distorted_merge, [
+                ('topup_imain', 'in_files')]),
+            (distorted_merge, pre_eddy_b0_ref_wf, [
+                ('out_avg', 'inputnode.b0_template')])])  # fmt:skip
 
     if fieldmap_type in ('epi', 'rpe_series') and 'drbuddi' in pepolar_method.lower():
         outputnode.inputs.sdc_method = "DRBUDDI"
@@ -328,7 +329,7 @@ def init_fsl_hmc_wf(scan_groups,
                 ('outputnode.down_fa_corrected_image', 'down_fa_corrected_image'),
                 ('outputnode.t2w_image', 't2w_image'),
                 ('outputnode.b0_ref', 'b0_template')])
-        ])
+        ])  # fmt:skip
 
         return workflow
 
@@ -353,11 +354,13 @@ def init_fsl_hmc_wf(scan_groups,
             (b0_sdc_wf, outputnode, [
                 ('outputnode.out_warp', 'to_dwi_ref_warps'),
                 ('outputnode.method', 'sdc_method'),
-                ('outputnode.b0_ref', 'b0_template')])])
+                ('outputnode.b0_ref', 'b0_template')])
+        ])  # fmt:skip
 
     if not fieldmap_type:
         outputnode.inputs.sdc_method = "None"
         workflow.connect([
             (b0_ref_to_lps, outputnode, [
-                ('dwi_file', 'b0_template')])])
+                ('dwi_file', 'b0_template')])
+        ])  # fmt:skip
     return workflow

@@ -196,6 +196,6 @@ def init_drbuddi_wf(scan_groups, b0_threshold, pepolar_method, raw_image_sdc, t2
             ("up_fa_corrected_image", "up_fa_corrected_image"),
             ("down_fa_corrected_image", "down_fa_corrected_image"),
             ("b0_ref", "b0_ref")])
-    ])
+    ])  # fmt:skip
 
     return workflow

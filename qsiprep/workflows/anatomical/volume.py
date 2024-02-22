@@ -178,7 +178,8 @@ def init_anat_preproc_wf(template, debug, dwi_only,
     workflow.connect([
         (get_template_image, reference_grid_wf, [
             ('template_mask_file', 'inputnode.template_image')]),
-        (reference_grid_wf, outputnode, [('outputnode.grid_image', 'dwi_sampling_grid')])])
+        (reference_grid_wf, outputnode, [('outputnode.grid_image', 'dwi_sampling_grid')])
+    ])  # fmt:skip
 
     if dwi_only:
         LOGGER.info("No anatomical scans will be processed! Visual reports will show template masks.")
@@ -187,7 +188,7 @@ def init_anat_preproc_wf(template, debug, dwi_only,
                 ('template_file', 't1_preproc'),
                 ('template_brain_file', 't1_brain'),
                 ('template_mask_file', 't1_mask'),
-                ('template_mask_file', 't1_seg')])])
+                ('template_mask_file', 't1_seg')])])  # fmt:skip
         workflow.add_nodes([inputnode])
         return workflow
 
@@ -291,7 +292,7 @@ FreeSurfer version {fs_version}. """.format(
             (get_template_image, rigid_acpc_resample_unfatsat, [
                 ('template_file', 'reference_image')]),
             (rigid_acpc_resample_unfatsat, outputnode, [('output_image', 't2w_unfatsat')]),
-            (rigid_acpc_resample_head, outputnode, [('output_image', 't2_preproc')])])
+            (rigid_acpc_resample_head, outputnode, [('output_image', 't2_preproc')])])  # fmt:skip
     else:
         if num_additional_t2ws > 0:
             t2w_preproc_wf = init_t2w_preproc_wf(
@@ -307,7 +308,7 @@ FreeSurfer version {fs_version}. """.format(
                 (t2w_preproc_wf, outputnode, [
                     ('outputnode.t2_preproc', 't2_preproc'),
                     ('outputnode.t2w_unfatsat', 't2w_unfatsat')])
-            ])
+            ])  # fmt:skip
 
     seg2msks = pe.Node(niu.Function(function=_seg2msks), name='seg2msks')
     seg_rpt = pe.Node(ROIsPlot(colors=['r', 'magenta', 'b', 'g']), name='seg_rpt')
@@ -405,7 +406,7 @@ FreeSurfer version {fs_version}. """.format(
         (seg_rpt, anat_reports_wf, [('out_report', 'inputnode.seg_report')]),
         (anat_normalization_wf, anat_reports_wf, [
                 ('outputnode.out_report', 'inputnode.t1_2_mni_report')])
-    ])
+    ])  # fmt:skip
 
     anat_derivatives_wf = init_anat_derivatives_wf(
         output_dir=output_dir,
@@ -429,7 +430,7 @@ FreeSurfer version {fs_version}. """.format(
             ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
             ('t1_2_mni', 'inputnode.t1_2_mni')
         ]),
-    ])
+    ])  # fmt:skip
 
     return workflow
 
@@ -512,7 +513,7 @@ image using an affine transformation in antsRegistration.
             ('forward_transforms', 'transforms')]),
         (rigid_resample_unfatsat, outputnode, [('output_image', 't2w_unfatsat')]),
         (rigid_resample_t2w, outputnode, [('output_image', 't2_preproc')])
-    ])
+    ])  # fmt:skip
 
     return workflow
 
@@ -593,7 +594,7 @@ A {contrast}-reference map was computed after registration of
             ('target_shape', 'target_shape')]),
         (template_dimensions, outputnode, [('out_report', 'out_report'),
                                            ('t1w_valid_list', 'valid_list')]),
-    ])
+    ])  # fmt:skip
 
     # To match what was done in antsBrainExtraction.sh
     # -c "[ 50x50x50x50,0.0000001 ]"
@@ -625,7 +626,7 @@ A {contrast}-reference map was computed after registration of
             (anat_conform, n4_correct, [
                 (('out_file', _get_first), 'input_image')]),
             (n4_correct, outputnode, [('output_image', 'bias_corrected')])
-        ])
+        ])  # fmt:skip
 
         return workflow
 
@@ -657,7 +658,7 @@ A {contrast}-reference map was computed after registration of
         (anat_merge_wf, outputnode, [
             ('outputnode.final_template', 'template'),
             ('outputnode.final_template', 'bias_corrected'),
-            ('outputnode.forward_transforms', 'template_transforms')])])
+            ('outputnode.forward_transforms', 'template_transforms')])])  # fmt:skip
 
     return workflow
 
@@ -760,7 +761,7 @@ a 6-DOF transform extracted from a full Affine registration to the
         (extract_rigid_transform, outputnode, [
             ('rigid_transform', 'to_template_rigid_transform'),
             ('rigid_transform_inverse', 'from_template_rigid_transform')]),
-        ])
+    ])  # fmt:skip
 
     if not do_nonlinear:
         workflow.__desc__ = desc
@@ -821,7 +822,7 @@ estimated via symmetric nonlinear registration (SyN) using antsRegistration. """
             ('composite_transform', 'to_template_nonlinear_transform'),
             ('inverse_composite_transform', 'from_template_nonlinear_transform'),
             ('out_report', 'out_report')])
-    ])
+    ])  # fmt:skip
 
     if has_rois:
         desc += "ROI masks of abnormal tissue were incorporated into the registration. "
@@ -837,7 +838,7 @@ estimated via symmetric nonlinear registration (SyN) using antsRegistration. """
             (inputnode, rigid_acpc_resample_roi, [
                 ('template_image', 'reference_image'),
                 ('roi', 'input_image')]),
-        ])
+        ])  # fmt:skip
 
     workflow.__desc__ = desc
     return workflow
@@ -876,7 +877,7 @@ def init_dl_prep_wf(name='dl_prep_wf'):
             ('prepared_image', 'reference_image')]),
         (inputnode, resample_skulled_to_reference, [('image', 'input_image')]),
         (resample_skulled_to_reference, outputnode, [('output_image', 'padded_image')])
-    ])
+    ])  # fmt:skip
     return workflow
 
 
@@ -913,16 +914,17 @@ def init_synthstrip_wf(omp_nthreads, do_padding=False,
             (mask_brain, desaturate_skull, [('output_product_image', 'brain_mask_image')]),
             (inputnode, desaturate_skull, [('original_image', 'skulled_t2w_image')]),
             (desaturate_skull, outputnode, [('desaturated_t2w', 'unfatsat')])
-        ])
+        ])  # fmt:skip
 
     # If the input image isn't already padded, do it here
     if do_padding:
         padding_wf = init_dl_prep_wf(name="pad_before_"+name)
         workflow.connect([
             (inputnode, padding_wf, [('original_image', 'inputnode.image')]),
-            (padding_wf, synthstrip, [('outputnode.padded_image', 'input_image')])])
+            (padding_wf, synthstrip, [('outputnode.padded_image', 'input_image')])
+        ])  # fmt:skip
     else:
-        workflow.connect([(inputnode, synthstrip, [('padded_image', 'input_image')])])
+        workflow.connect([(inputnode, synthstrip, [('padded_image', 'input_image')])])  # fmt:skip
 
     workflow.connect([
         (synthstrip, mask_to_original_grid, [('out_brain_mask', 'input_image')]),
@@ -931,7 +933,7 @@ def init_synthstrip_wf(omp_nthreads, do_padding=False,
         (inputnode, mask_brain, [('original_image', 'first_input')]),
         (mask_to_original_grid, mask_brain, [("output_image", "second_input")]),
         (mask_brain, outputnode, [('output_product_image', 'brain_image')])
-    ])
+    ])  # fmt:skip
 
     return workflow
 
@@ -960,7 +962,7 @@ def init_synthseg_wf(omp_nthreads, sloppy, name="synthseg_wf"):
             ('out_post', 'posterior_image'),
             ('out_qc', 'qc_file')
         ])
-    ])
+    ])  # fmt:skip
     return workflow
 
 
@@ -986,7 +988,7 @@ def init_output_grid_wf(voxel_size, padding, name='output_grid_wf'):
         (resample_to_voxel_size, outputnode, [('out_file', 'grid_image')]),
         (inputnode, voxel_size_chooser, [('input_image', 'input_image')]),
         (voxel_size_chooser, resample_to_voxel_size, [(('voxel_size', _tupleize), 'voxel_size')])
-    ])
+    ])  # fmt:skip
 
     return workflow
 
@@ -1026,13 +1028,13 @@ def init_anat_reports_wf(reportlets_dir, nonlinear_register_to_template,
                                            ('t1_conform_report', 'in_file')]),
         (inputnode, ds_t1_seg_mask_report, [('source_file', 'source_file'),
                                             ('seg_report', 'in_file')]),
-    ])
+    ])  # fmt:skip
 
     if nonlinear_register_to_template:
         workflow.connect([
             (inputnode, ds_t1_2_mni_report, [('source_file', 'source_file'),
                                              ('t1_2_mni_report', 'in_file')])
-        ])
+        ])  # fmt:skip
 
     return workflow
 
@@ -1119,7 +1121,7 @@ def init_anat_derivatives_wf(output_dir, template, anatomical_contrast,
         (t1_name, ds_t1_aseg, [('out', 'source_file')]),
         (t1_name, ds_t1_mask, [('out', 'source_file')]),
         (t1_name, ds_t1_seg, [('out', 'source_file')]),
-    ])
+    ])  # fmt:skip
 
     if nonlinear_register_to_template:
         workflow.connect([
@@ -1127,7 +1129,7 @@ def init_anat_derivatives_wf(output_dir, template, anatomical_contrast,
             (inputnode, ds_t1_mni_inv_warp, [('t1_2_mni_reverse_transform', 'in_file')]),
             (t1_name, ds_t1_mni_warp, [('out', 'source_file')]),
             (t1_name, ds_t1_mni_inv_warp, [('out', 'source_file')]),
-        ])
+        ])  # fmt:skip
 
     return workflow
 

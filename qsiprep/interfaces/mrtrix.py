@@ -938,13 +938,13 @@ class MRTrixAtlasGraph(SimpleInterface):
                 workflow.connect([
                     (nodes[-1], c2t_nodes[-1], [
                         ('out_assignments', 'in_assignments')]),
-                    (nodes[-1], merge_mats,[
+                    (nodes[-1], merge_mats, [
                         ('connectivity_matfile', 'in%d' % in_num)]),
-                    (nodes[-1], merge_csvs,[
+                    (nodes[-1], merge_csvs, [
                         ('out_file', 'in%d' % in_num)]),
-                    (c2t_nodes[-1], merge_tcks,[
+                    (c2t_nodes[-1], merge_tcks, [
                         ('exemplar_tck', 'in%d' % in_num)])
-                ])
+                ])  # fmt:skip
                 if using_weights:
                     workflow.connect(c2t_nodes[-1], 'exemplar_weights',
                                      merge_weights, 'in%d' % in_num)
@@ -957,7 +957,7 @@ class MRTrixAtlasGraph(SimpleInterface):
             (merge_csvs, merge_exemplars, [('out', "in3")]),
             (merge_exemplars, compress_exemplars, [('out', 'files')]),
             (compress_exemplars, outputnode, [("out_zip", "exemplar_files")])
-        ])
+        ])  # fmt:skip
 
         workflow.config['execution']['stop_on_first_crash'] = 'true'
         workflow.config['execution']['remove_unnecessary_outputs'] = 'false'

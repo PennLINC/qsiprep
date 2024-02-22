@@ -258,7 +258,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
                 ('out_bval', 'inputnode.bval_file'),
                 ('out_bvec', 'inputnode.bvec_file')]),
             (qc_wf, outputnode, [('outputnode.qc_summary', 'qc_file')])
-        ])
+        ])  # fmt:skip
 
         workflow.__postdesc__ += "Both distortion groups were then merged into a " \
                                  "single file, as required for the FSL workflows.\n\n"
@@ -289,7 +289,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
             ('outputnode.denoising_confounds', 'denoising_confounds'),
             ('outputnode.original_files', 'original_files'),
             ('outputnode.merged_raw_image', 'raw_concatenated')])
-    ])
+    ])  # fmt:skip
 
     if calculate_qc:
         qc_wf = init_modelfree_qc_wf(omp_nthreads=omp_nthreads,
@@ -299,6 +299,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
                 ('outputnode.merged_raw_image', 'inputnode.dwi_file'),
                 ('outputnode.merged_bval', 'inputnode.bval_file'),
                 ('outputnode.merged_bvec', 'inputnode.bvec_file')]),
-            (qc_wf, outputnode, [('outputnode.qc_summary', 'qc_file')])])
+            (qc_wf, outputnode, [('outputnode.qc_summary', 'qc_file')])
+        ])  # fmt:skip
 
     return workflow

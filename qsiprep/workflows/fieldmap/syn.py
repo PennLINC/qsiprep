@@ -221,6 +221,6 @@ template [@fieldmapless3].
         (unwarp_ref, outputnode, [
             ('output_image', 'out_reference'),
             ('output_image', 'out_reference_brain')])
-    ])
+    ])  # fmt:skip
 
     return workflow

@@ -294,7 +294,8 @@ to workflows in *qsiprep*'s documentation]\
 
         # This node holds all the inputs that will go to the recon workflow.
         # It is the definitive place to check what the input files are
-        recon_full_inputs[dwi_file] = pe.Node(ReconWorkflowInputs(), name=wf_name + "_recon_inputs")
+        recon_full_inputs[dwi_file] = pe.Node(
+            ReconWorkflowInputs(), name=wf_name + "_recon_inputs")
 
         # This is the actual recon workflow for this dwi file
         dwi_recon_wfs[dwi_file] = init_dwi_recon_workflow(
@@ -325,10 +326,11 @@ to workflows in *qsiprep*'s documentation]\
             (recon_full_inputs[dwi_file], dwi_recon_wfs[dwi_file],
              [(trait, "inputnode." + trait) for trait in recon_workflow_input_fields]),
 
-            (anat_ingress_node if pipeline_source=="qsiprep" else anat_ingress_nodes[dwi_file],
+            (anat_ingress_node if pipeline_source == "qsiprep" else anat_ingress_nodes[dwi_file],
              dwi_individual_anatomical_wfs[dwi_file],
-             [("outputnode."+trait, "inputnode."+trait) for trait in anatomical_workflow_outputs])
-        ])
+             [(f"outputnode.{trait}", f"inputnode.{trait}")
+              for trait in anatomical_workflow_outputs])
+        ])  # fmt:skip
 
     # Fill-in datasinks and reportlet datasinks for the anatomical workflow
     for _node in workflow.list_node_names():

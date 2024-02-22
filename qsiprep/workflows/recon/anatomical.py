@@ -123,7 +123,7 @@ def init_highres_recon_anatomical_wf(
     LOGGER.info(f"Found high-res anatomical data in preprocessed inputs for {subject_id}.")
     workflow.connect([
         (anat_ingress_node, outputnode,
-            [(name, name) for name in qsiprep_highres_anatomical_ingressed_fields])])
+            [(name, name) for name in qsiprep_highres_anatomical_ingressed_fields])])  # fmt:skip
 
     # grab un-coregistered freesurfer images later use
     if subject_freesurfer_path is not None:
@@ -137,7 +137,7 @@ def init_highres_recon_anatomical_wf(
             name="fs_source")
         workflow.connect([
             (fs_source, outputnode, [
-              (field, field) for field in FS_FILES_TO_REGISTER])])
+              (field, field) for field in FS_FILES_TO_REGISTER])])  # fmt:skip
 
     # Do we need to calculate anything else on the
     if "mrtrix_5tt_hsvs" in extras_to_make:
@@ -155,7 +155,7 @@ def init_highres_recon_anatomical_wf(
                 in_file=str(subject_freesurfer_path)),
             name='create_5tt_hsvs')
         workflow.connect([
-            (create_5tt_hsvs, outputnode, [('out_file', 'fs_5tt_hsvs')])])
+            (create_5tt_hsvs, outputnode, [('out_file', 'fs_5tt_hsvs')])])  # fmt:skip
         ds_qsiprep_5tt_hsvs = pe.Node(
             ReconDerivativesDataSink(
                 desc="hsvs",
@@ -199,9 +199,8 @@ def init_highres_recon_anatomical_wf(
                 (apply_header_to_5tt, outputnode, [
                     ("out_image", "qsiprep_5tt_hsvs")]),
                 (apply_header_to_5tt, ds_qsiprep_5tt_hsvs, [("out_image", "in_file")]),
-            ])
+            ])  # fmt:skip
             workflow.__desc__ += "A hybrid surface/volume segmentation was created [Smith 2020]."
-
 
     return workflow, status
 
@@ -380,7 +379,7 @@ def init_register_fs_to_qsiprep_wf(use_qsiprep_reference_mask=False,
     # If there is a mask for the QSIPrep reference image, use it
     if use_qsiprep_reference_mask:
         workflow.connect(inputnode, "qsiprep_reference_mask",
-                         register_to_qsiprep, "fixed_image_masks")
+                         register_to_qsiprep, "fixed_image_masks")  # fmt:skip
 
     # The more recent ANTs mat format isn't compatible with transformconvert.
     # So convert it to ANTs text format with ConvertTransform
@@ -402,7 +401,7 @@ def init_register_fs_to_qsiprep_wf(use_qsiprep_reference_mask=False,
             (convert_ants_to_mrtrix_transform,
              transform_nodes[image_name], [("out_transform", "transform_file")]),
             (transform_nodes[image_name], outputnode, [("out_image", image_name)])
-        ])
+        ])  # fmt:skip
 
     workflow.connect([
         (inputnode, convert_fs_brain, [
@@ -419,7 +418,7 @@ def init_register_fs_to_qsiprep_wf(use_qsiprep_reference_mask=False,
             ("out_transform", "in_transform")]),
         (convert_ants_to_mrtrix_transform, outputnode,
          [("out_transform", "fs_to_qsiprep_transform_mrtrix")])
-    ])
+    ])  # fmt:skip
 
     return workflow
 
@@ -494,7 +493,9 @@ def init_dwi_recon_anatomical_workflow(
         (inputnode, reference_grid_wf, [
             ('template_image', 'inputnode.template_image'),
             ('dwi_ref', 'inputnode.input_image')]),
-        (reference_grid_wf, buffernode, [('outputnode.grid_image', 'resampling_template')])])
+        (reference_grid_wf, buffernode, [
+            ('outputnode.grid_image', 'resampling_template')])
+        ])  # fmt:skip
 
     # Missing Freesurfer AND QSIPrep T1ws, or the user wants a DWI-based mask
     if not (has_qsiprep_t1w or has_freesurfer) or prefer_dwi_mask:
@@ -513,7 +514,7 @@ def init_dwi_recon_anatomical_workflow(
             (extract_b0s, mask_b0s, [("b0_series", "in_file")]),
             (mask_b0s, outputnode, [("out_file", "dwi_mask")]),
             (inputnode, outputnode, [(field, field) for field in connect_from_inputnode])
-        ])
+        ])  # fmt:skip
         return workflow, _get_status()
 
     # No data from QSIPrep was available, BUT we have freesurfer! register it and
@@ -553,7 +554,7 @@ def init_dwi_recon_anatomical_workflow(
                 ("outputnode.fs_to_qsiprep_transform_itk",
                     "fs_to_qsiprep_transform_itk")] + [
                 ("outputnode." + field, field) for field in FS_FILES_TO_REGISTER]),
-        ])
+        ])  # fmt:skip
 
     # Do we need to transform the 5tt hsvs from fsnative?
     if 'mrtrix_5tt_hsvs' in extras_to_make and not has_qsiprep_5tt_hsvs:
@@ -576,7 +577,7 @@ def init_dwi_recon_anatomical_workflow(
             (apply_header_to_5tt_hsvs, buffernode, [
                 ("out_image", "qsiprep_5tt_hsvs")]),
             (apply_header_to_5tt_hsvs, ds_qsiprep_5tt_hsvs, [("out_image", "in_file")]),
-        ])
+        ])  # fmt:skip
         desc += "A hybrid surface/volume segmentation was created [Smith 2020]."
 
     # If we have transforms to the template space, use them to get ROIs/atlases
@@ -600,7 +601,7 @@ def init_dwi_recon_anatomical_workflow(
     #             ("composite_transform", "t1_2_mni_forward_transform"),
     #             ("inverse_composite_transform", "t1_2_mni_reverse_transform")
     #         ])
-    #     ])
+    #     ])  # fmt:skip
     #     # TODO: add datasinks here
 
     # Check the status of the T1wACPC-to-template transforms
@@ -632,8 +633,7 @@ def init_dwi_recon_anatomical_workflow(
                 ("t1_brain_mask", "input_image"),
                 ("dwi_ref", "reference_image")]),
             (resample_mask, buffernode, [("output_image", "dwi_mask")])
-        ])
-
+        ])  # fmt:skip
 
     if has_qsiprep_t1w_transforms:
         LOGGER.info("Transforming ODF ROIs into DWI space for visual report.")
@@ -649,7 +649,7 @@ def init_dwi_recon_anatomical_workflow(
             (inputnode, odf_rois, [
                 ("dwi_file", "reference_image")]),
             (odf_rois, buffernode, [("output_image", "odf_rois")])
-        ])
+        ])  # fmt:skip
 
         # Similarly, if we need atlases, transform them into DWI space
         if atlas_names:
@@ -668,50 +668,71 @@ def init_dwi_recon_anatomical_workflow(
                     ("atlas_configs", "atlas_configs")]),
                 (inputnode, get_atlases,[
                     ('dwi_file', 'reference_image')])
-            ])
+            ])  # fmt:skip
 
         for atlas in atlas_names:
             workflow.connect([
-                (get_atlases,
-                pe.Node(ReconDerivativesDataSink(desc=atlas,
-                                                suffix="atlas",
-                                                compress=True),
-                        name='dsatlas_'+atlas,
-                        run_without_submitting=True),
-                [(('atlas_configs', _get_resampled, atlas, 'dwi_resolution_file'), 'in_file')]),
-                (get_atlases,
-                pe.Node(ReconDerivativesDataSink(
-                                                desc=atlas,
-                                                suffix="atlas",
-                                                extension=".mif.gz",
-                                                compress=True),
-                        name='dsatlas_mifs_'+atlas,
-                        run_without_submitting=True),
-                [(('atlas_configs', _get_resampled, atlas, 'dwi_resolution_mif'), 'in_file')]),
-                (get_atlases,
-                pe.Node(ReconDerivativesDataSink(
-                                                desc=atlas,
-                                                extension=".txt",
-                                                suffix="mrtrixLUT"),
+                (
+                    get_atlases,
+                    pe.Node(
+                        ReconDerivativesDataSink(
+                            desc=atlas,
+                            suffix="atlas",
+                            compress=True),
+                        name='dsatlas_' + atlas,
+                        run_without_submitting=True), [
+                            (
+                                ('atlas_configs',
+                                 _get_resampled, atlas, 'dwi_resolution_file'),
+                                'in_file')]),
+                (
+                    get_atlases,
+                    pe.Node(
+                        ReconDerivativesDataSink(
+                            desc=atlas,
+                            suffix="atlas",
+                            extension=".mif.gz",
+                            compress=True),
+                        name='dsatlas_mifs_' + atlas,
+                        run_without_submitting=True), [
+                            (
+                                ('atlas_configs',
+                                 _get_resampled, atlas, 'dwi_resolution_mif'),
+                                'in_file')]),
+                (
+                    get_atlases,
+                    pe.Node(
+                        ReconDerivativesDataSink(
+                            desc=atlas,
+                            extension=".txt",
+                            suffix="mrtrixLUT"),
                         name='dsatlas_mrtrix_lut_' + atlas,
-                        run_without_submitting=True),
-                [(('atlas_configs', _get_resampled, atlas, 'mrtrix_lut'), 'in_file')]),
-                (get_atlases,
-                pe.Node(ReconDerivativesDataSink(
-                                                desc=atlas,
-                                                extension=".txt",
-                                                suffix="origLUT"),
+                        run_without_submitting=True), [
+                            (
+                                ('atlas_configs',
+                                 _get_resampled, atlas, 'mrtrix_lut'),
+                                'in_file')]),
+                (
+                    get_atlases,
+                    pe.Node(
+                        ReconDerivativesDataSink(
+                            desc=atlas,
+                            extension=".txt",
+                            suffix="origLUT"),
                         name='dsatlas_orig_lut_' + atlas,
-                        run_without_submitting=True),
-                [(('atlas_configs', _get_resampled, atlas, 'orig_lut'), 'in_file')]),
-            ])
+                        run_without_submitting=True), [
+                            (
+                                ('atlas_configs',
+                                 _get_resampled, atlas, 'orig_lut'),
+                                'in_file')]),
+            ])  # fmt:skip
 
         # Fill in the atlas datasinks
         for node in workflow.list_node_names():
             node_suffix = node.split('.')[-1]
             if node_suffix.startswith('dsatlas_'):
                 workflow.connect(
-                    inputnode, 'dwi_file', workflow.get_node(node), 'source_file')
+                    inputnode, 'dwi_file', workflow.get_node(node), 'source_file')  # fmt:skip
 
     if "mrtrix_5tt_hsv" in extras_to_make and not has_qsiprep_5tt_hsvs:
         raise Exception("Unable to create a 5tt HSV image given input data.")
@@ -720,7 +741,7 @@ def init_dwi_recon_anatomical_workflow(
     workflow.connect([
         (inputnode, outputnode, [(name, name) for name in connect_from_inputnode]),
         (buffernode, outputnode, [(name, name) for name in connect_from_buffernode])
-    ])
+    ])  # fmt:skip
     return workflow, _get_status()
 
 

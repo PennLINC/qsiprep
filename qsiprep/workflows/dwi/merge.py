@@ -187,7 +187,7 @@ def init_merge_and_denoise_wf(raw_dwi_files,
                 (denoising_wfs[-1], noise_images, [
                     ('outputnode.noise_image', 'in%d' % dwi_num)]),
                 (denoising_wfs[-1], bias_images, [
-                    ('outputnode.bias_image', 'in%d' % dwi_num)])])
+                    ('outputnode.bias_image', 'in%d' % dwi_num)])])  # fmt:skip
             dwi_source = denoising_wfs[-1]
             edge_prefix = 'outputnode.'
         else:
@@ -200,7 +200,7 @@ def init_merge_and_denoise_wf(raw_dwi_files,
             (dwi_source, conformed_bvals, [(edge_prefix + 'bval_file', 'in%d' % dwi_num)]),
             (dwi_source, conformed_bvecs, [(edge_prefix + 'bvec_file', 'in%d' % dwi_num)]),
             (conformers[-1], conformation_reports, [('out_report', 'in%d' % dwi_num)])
-        ])
+        ])  # fmt:skip
 
     # Get an orientation-conformed version of the raw inputs and their gradients
     raw_merge = pe.Node(Merge(is_dwi=True), name='raw_merge', n_procs=omp_nthreads)
@@ -216,7 +216,7 @@ def init_merge_and_denoise_wf(raw_dwi_files,
         (merge_dwis, outputnode, [
             ('original_images', 'original_files'),
             ('out_bval', 'merged_bval'),
-            ('out_bvec', 'merged_bvec')])])
+            ('out_bvec', 'merged_bvec')])])  # fmt:skip
 
     # Get a QC score for the raw data
     if calculate_qc:
@@ -226,7 +226,7 @@ def init_merge_and_denoise_wf(raw_dwi_files,
             (qc_wf, outputnode, [('outputnode.qc_summary', 'qc_summary')]),
             (raw_merge, qc_wf, [('out_file', 'inputnode.dwi_file')]),
             (merge_dwis, qc_wf, [('out_bval', 'inputnode.bval_file'),
-                                 ('out_bvec', 'inputnode.bvec_file')])])
+                                 ('out_bvec', 'inputnode.bvec_file')])])  # fmt:skip
 
     # We have denoised and combined, therefore we are done
     if denoise_before_combining:
@@ -237,7 +237,7 @@ def init_merge_and_denoise_wf(raw_dwi_files,
                 ('merged_denoising_confounds', 'denoising_confounds')]),
             (noise_images, outputnode, [('out', 'noise_images')]),
             (bias_images, outputnode, [('out', 'bias_images')])
-        ])
+        ])  # fmt:skip
         return workflow
 
     # Send the merged series for denoising
@@ -270,7 +270,7 @@ def init_merge_and_denoise_wf(raw_dwi_files,
             ('outputnode.dwi_file', 'merged_image'),
             (('outputnode.noise_image', _as_list), 'noise_images'),
             (('outputnode.bias_image', _as_list), 'bias_images')])
-    ])
+    ])  # fmt:skip
 
     return workflow
 
@@ -310,7 +310,7 @@ def init_dwi_denoising_wf(dwi_denoise_window,
         (inputnode, buffernodes[-1], [('dwi_file', 'dwi_file')]),
         (inputnode, outputnode, [
             ('bval_file', 'bval_file'),
-            ('bvec_file', 'bvec_file')])])
+            ('bvec_file', 'bvec_file')])])  # fmt:skip
 
     # Which steps to apply?
     do_denoise = denoise_method in ('patch2self', 'dwidenoise')
@@ -337,7 +337,7 @@ def init_dwi_denoising_wf(dwi_denoise_window,
                 name='denoiser',
                 n_procs=omp_nthreads)
             workflow.connect([
-                (inputnode, denoiser, [('bval_file', 'bval_file')])])
+                (inputnode, denoiser, [('bval_file', 'bval_file')])])  # fmt:skip
         ds_report_denoising = pe.Node(
             DerivativesDataSink(suffix=name + '_denoising',
                                 source_file=source_file),
@@ -350,7 +350,7 @@ def init_dwi_denoising_wf(dwi_denoise_window,
             (denoiser, ds_report_denoising, [('out_report', 'in_file')]),
             (denoiser, buffernodes[-1], [('out_file', 'dwi_file')]),
             (denoiser, merge_confounds, [('nmse_text', 'in%d' % step_num)])
-        ])
+        ])  # fmt:skip
         step_num += 1
 
     if do_unringing:
@@ -384,7 +384,7 @@ def init_dwi_denoising_wf(dwi_denoise_window,
             (degibbser, ds_report_unringing, [('out_report', 'in_file')]),
             (degibbser, buffernodes[-1], [('out_file', 'dwi_file')]),
             (degibbser, merge_confounds, [('nmse_text', 'in%d' % step_num)])
-        ])
+        ])  # fmt:skip
         step_num += 1
 
     if do_biascorr:
@@ -408,18 +408,19 @@ def init_dwi_denoising_wf(dwi_denoise_window,
             (biascorr, ds_report_biascorr, [('out_report', 'in_file')]),
             (biascorr, merge_confounds, [('nmse_text', 'in%d' % step_num)]),
             (inputnode, biascorr, [('bval_file', 'in_bval'), ('bvec_file', 'in_bvec')])
-        ])
+        ])  # fmt:skip
         step_num += 1
 
     workflow.connect([
-        (buffernodes[-1], outputnode, [('dwi_file', 'dwi_file')])])
+        (buffernodes[-1], outputnode, [('dwi_file', 'dwi_file')])])  # fmt:skip
 
     # If any denoising operations were run, collect their confounds
     if step_num > 1:
         hstack_confounds = pe.Node(StackConfounds(axis=1), name='hstack_confounds')
         workflow.connect([
             (merge_confounds, hstack_confounds, [('out', 'in_files')]),
-            (hstack_confounds, outputnode, [('confounds_file', 'confounds')])])
+            (hstack_confounds, outputnode, [('confounds_file', 'confounds')])
+        ])  # fmt:skip
 
     return workflow
 

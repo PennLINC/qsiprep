@@ -112,12 +112,12 @@ def init_b0_to_anat_registration_wf(mem_gb=3, omp_nthreads=1, write_report=True,
     coreg.inputs.output_warped_image = True
     b0_to_anat = pe.Node(coreg, name="b0_to_anat", n_procs=omp_nthreads)
 
-    workflow.connect(inputnode, "t1_brain", b0_to_anat, "fixed_image")
-    workflow.connect(inputnode, "ref_b0_brain", b0_to_anat, "moving_image")
-    workflow.connect(b0_to_anat, "forward_transforms", outputnode, "itk_b0_to_t1")
-    workflow.connect(b0_to_anat, "reverse_transforms", outputnode, "itk_t1_to_b0")
-    workflow.connect(b0_to_anat, "metric_value", outputnode, "coreg_metric")
-    workflow.connect(b0_to_anat, "out_report", outputnode, "report")
+    workflow.connect(inputnode, "t1_brain", b0_to_anat, "fixed_image")  # fmt:skip
+    workflow.connect(inputnode, "ref_b0_brain", b0_to_anat, "moving_image")  # fmt:skip
+    workflow.connect(b0_to_anat, "forward_transforms", outputnode, "itk_b0_to_t1")  # fmt:skip
+    workflow.connect(b0_to_anat, "reverse_transforms", outputnode, "itk_t1_to_b0")  # fmt:skip
+    workflow.connect(b0_to_anat, "metric_value", outputnode, "coreg_metric")  # fmt:skip
+    workflow.connect(b0_to_anat, "out_report", outputnode, "report")  # fmt:skip
 
     return workflow
 
@@ -234,7 +234,7 @@ def init_direct_b0_acpc_wf(mem_gb=3, omp_nthreads=1, write_report=True,
             ("rigid_transform_inverse", "itk_t1_to_b0")]),
         (acpc_report, outputnode, [
             ("out_report", "report")])
-        ])
+    ])  # fmt:skip
 
     return workflow
 

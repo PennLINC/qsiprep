@@ -114,7 +114,9 @@ def init_tortoise_estimator_wf(
             ('bval_file', 'bval_file'),
             ('bvec_file', 'bvec_file'),
             ('dwi_mask', 'mask_file')]),
-        (recon_scalars, outputnode, [("scalar_info", "recon_scalars")])])
+        (recon_scalars, outputnode, [
+            ("scalar_info", "recon_scalars")])
+    ])  # fmt:skip
 
     # EstimateTensor
     if tensor_opts:
@@ -153,7 +155,7 @@ def init_tortoise_estimator_wf(
             (compute_dt_rd, recon_scalars, [("rd_file", "rd_file")]),
             (compute_dt_ad, recon_scalars, [("ad_file", "ad_file")]),
             (compute_dt_li, recon_scalars, [("li_file", "li_file")])
-        ])
+        ])  # fmt:skip
 
     # EstimateMAPMRI
     mapmri_opts = params.get("estimate_mapmri", {})
@@ -192,34 +194,35 @@ def init_tortoise_estimator_wf(
         workflow.connect([
             (estimate_tensor, estimate_mapmri, [
                 ("dt_file", "dt_file"),
-                ("am_file", "a0_file")])])
+                ("am_file", "a0_file")])
+        ])  # fmt:skip
 
     workflow.connect([
-        (tortoise_convert, estimate_mapmri,[
+        (tortoise_convert, estimate_mapmri, [
             ("bmtxt_file", "bmtxt_file"),
             ("dwi_file", "in_file"),
             ("mask_file", "mask")]),
         (estimate_mapmri, compute_mapmri_pa, [
             ("coeffs_file", "in_file"),
             ("uvec_file", "uvec_file")]),
-        (compute_mapmri_pa, recon_scalars,[
+        (compute_mapmri_pa, recon_scalars, [
             ("pa_file", "pa_file"),
             ("path_file", "path_file")]),
         (estimate_mapmri, compute_mapmri_rtop, [
             ("coeffs_file", "in_file"),
             ("uvec_file", "uvec_file")]),
-        (compute_mapmri_rtop, recon_scalars,[
+        (compute_mapmri_rtop, recon_scalars, [
             ("rtop_file", "rtop_file"),
             ("rtap_file", "rtap_file"),
             ("rtpp_file", "rtpp_file")]),
         (estimate_mapmri, compute_mapmri_ng, [
             ("coeffs_file", "in_file"),
             ("uvec_file", "uvec_file")]),
-        (compute_mapmri_ng, recon_scalars,[
+        (compute_mapmri_ng, recon_scalars, [
             ("ng_file", "ng_file"),
             ("ngpar_file", "ngpar_file"),
             ("ngperp_file", "ngperp_file")]),
-    ])
+    ])  # fmt:skip
     if qsirecon_suffix:
         ds_recon_scalars = pe.Node(
             ReconScalarsDataSink(),
@@ -229,6 +232,6 @@ def init_tortoise_estimator_wf(
             recon_scalars,
             "scalar_info",
             ds_recon_scalars,
-            "recon_scalars")
+            "recon_scalars")  # fmt:skip
     workflow.__desc__ = desc
     return workflow

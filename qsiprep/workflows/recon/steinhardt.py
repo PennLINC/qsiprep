@@ -74,8 +74,8 @@ A series of Steinhardt order parameters (up to order %d) were calculated.
             ('q4_file', 'q4_file'),
             ('q6_file', 'q6_file'),
             ('q8_file', 'q8_file'),
-            ]),
-        ])
+        ]),
+    ])  # fmt:skip
 
     sop_sinks = {}
     if qsirecon_suffix:
@@ -88,7 +88,7 @@ A series of Steinhardt order parameters (up to order %d) were calculated.
                     compress=True),
                 name='ds_sop_q%d' % sop_order,
                 run_without_submitting=True)
-            workflow.connect(outputnode, key, sop_sinks[key], 'in_file')
+            workflow.connect(outputnode, key, sop_sinks[key], 'in_file')  # fmt:skip
 
     workflow.__desc__ = desc
     return workflow

@@ -76,7 +76,7 @@ def init_pyafq_wf(omp_nthreads, available_anatomical_data,
     if params.get("use_external_tracking", False):
         workflow.connect([
             (inputnode, run_afq, [('tck_file', 'tck_file')]),
-        ])
+        ])  # fmt:skip
     workflow.connect([
         (inputnode, run_afq, [
             ('dwi_file', 'dwi_file'),
@@ -85,7 +85,7 @@ def init_pyafq_wf(omp_nthreads, available_anatomical_data,
             ('dwi_mask', 'mask_file'),
             ('t1_2_mni_reverse_transform', 'itk_file')]),
         (run_afq, outputnode, [('afq_dir', 'afq_dir')])
-    ])
+    ])  # fmt:skip
     if qsirecon_suffix:
         # Save the output in the outputs directory
         ds_afq = pe.Node(

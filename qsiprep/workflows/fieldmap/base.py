@@ -150,7 +150,7 @@ def init_sdc_wf(fieldmap_info, dwi_meta, omp_nthreads=1,
         outputnode.inputs.method = 'None'
         workflow.connect([
             (inputnode, outputnode, [('b0_ref', 'b0_ref'),
-                                     ('b0_mask', 'b0_mask')])])
+                                     ('b0_mask', 'b0_mask')])])  # fmt:skip
         return workflow
 
     workflow.__postdesc__ = """\
@@ -178,7 +178,7 @@ co-registration with the anatomical reference.
                 ('b0_ref', 'inputnode.in_reference'),
                 ('b0_mask', 'inputnode.in_mask'),
                 ('b0_ref_brain', 'inputnode.in_reference_brain')]),
-        ])
+        ])  # fmt:skip
 
     # FIELDMAP path
     if fieldmap_info['suffix'] == 'fieldmap' or fieldmap_info['suffix'].startswith('phase'):
@@ -211,7 +211,7 @@ co-registration with the anatomical reference.
                     workflow.connect([
                         (inputnode, outputnode, [('b0_ref', 'b0_ref'),
                                                  ('b0_mask', 'b0_mask')]),
-                    ])
+                    ])  # fmt:skip
                     return workflow
                 if fmap_polarity is None:
                     LOGGER.warning("Assuming phase images are Monopolar")
@@ -241,7 +241,7 @@ co-registration with the anatomical reference.
                 ('outputnode.fmap_mask', 'inputnode.fmap_mask')]),
             (sdc_unwarp_wf, outputnode, [
                 ('outputnode.out_hz', 'fieldmap_hz')])
-        ])
+        ])  # fmt:skip
 
     # FIELDMAP-less path
     if fieldmap_info['suffix'] == 'syn':
@@ -255,7 +255,7 @@ co-registration with the anatomical reference.
                 ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
                 ('b0_ref', 'inputnode.bold_ref'),
                 ('template', 'inputnode.template')]),
-        ])
+        ])  # fmt:skip
         outputnode.inputs.method = 'FLB ("fieldmap-less", SyN-based)'
         sdc_unwarp_wf = syn_sdc_wf
 
@@ -263,6 +263,6 @@ co-registration with the anatomical reference.
         (sdc_unwarp_wf, outputnode, [
             ('outputnode.out_warp', 'out_warp'),
             ('outputnode.out_reference', 'b0_ref')])
-    ])
+    ])  # fmt:skip
 
     return workflow

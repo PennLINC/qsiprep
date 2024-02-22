@@ -154,7 +154,9 @@ def init_mrtrix_csd_recon_wf(omp_nthreads, available_anatomical_data, name="mrtr
     if response_algorithm == 'msmt_5tt':
         if method_5tt == "hsvs":
             workflow.connect([
-                (inputnode, estimate_response, [('qsiprep_5tt_hsvs', 'mtt_file')])])
+                (inputnode, estimate_response, [
+                    ('qsiprep_5tt_hsvs', 'mtt_file')])
+            ])  # fmt:skip
         else:
             raise Exception("Unrecognized 5tt method: " + method_5tt)
 
@@ -187,8 +189,8 @@ def init_mrtrix_csd_recon_wf(omp_nthreads, available_anatomical_data, name="mrtr
         (estimate_response, outputnode, [('wm_file', 'wm_txt'),
                                          ('gm_file', 'gm_txt'),
                                          ('csf_file', 'csf_txt')]),
-        (inputnode, estimate_response, [('dwi_mask', 'in_mask')])])
-
+        (inputnode, estimate_response, [('dwi_mask', 'in_mask')])
+    ])  # fmt:skip
 
     if not run_mtnormalize:
         workflow.connect([
@@ -196,7 +198,8 @@ def init_mrtrix_csd_recon_wf(omp_nthreads, available_anatomical_data, name="mrtr
             (estimate_fod, outputnode, [('wm_odf', 'fod_sh_mif'),
                                         ('wm_odf', 'wm_odf'),
                                         ('gm_odf', 'gm_odf'),
-                                        ('csf_odf', 'csf_odf')])])
+                                        ('csf_odf', 'csf_odf')])
+        ])  # fmt:skip
     else:
         intensity_norm = pe.Node(
             MTNormalize(
@@ -213,7 +216,8 @@ def init_mrtrix_csd_recon_wf(omp_nthreads, available_anatomical_data, name="mrtr
             (intensity_norm, outputnode, [('wm_normed_odf', 'fod_sh_mif'),
                                           ('wm_normed_odf', 'wm_odf'),
                                           ('gm_normed_odf', 'gm_odf'),
-                                          ('csf_normed_odf', 'csf_odf')])])
+                                          ('csf_normed_odf', 'csf_odf')])
+        ])  # fmt:skip
         desc += " FODs were intensity-normalized using mtnormalize (@mtnormalize)."
 
     if plot_reports:
@@ -223,16 +227,19 @@ def init_mrtrix_csd_recon_wf(omp_nthreads, available_anatomical_data, name="mrtr
             name='plot_peaks',
             n_procs=omp_nthreads)
         ds_report_peaks = pe.Node(
-            ReconDerivativesDataSink(extension='.png',
-                                    desc="wmFOD",
-                                    suffix='peaks'),
+            ReconDerivativesDataSink(
+                extension='.png',
+                desc="wmFOD",
+                suffix='peaks'),
             name='ds_report_peaks',
             run_without_submitting=True)
         workflow.connect([
-            (inputnode, plot_peaks, [('dwi_ref', 'background_image'),
-                                    ('odf_rois', 'odf_rois'),
-                                    ('dwi_mask', 'mask_file')]),
-            (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')])])
+            (inputnode, plot_peaks, [
+                ('dwi_ref', 'background_image'),
+                ('odf_rois', 'odf_rois'),
+                ('dwi_mask', 'mask_file')]),
+            (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')])
+        ])  # fmt:skip
 
         # Plot targeted regions
         if available_anatomical_data['has_qsiprep_t1w_transforms']:
@@ -246,7 +253,8 @@ def init_mrtrix_csd_recon_wf(omp_nthreads, available_anatomical_data, name="mrtr
 
         fod_source, fod_key = (estimate_fod, "wm_odf") if not run_mtnormalize \
             else (intensity_norm, "wm_normed_odf")
-        workflow.connect(fod_source, fod_key, plot_peaks, "mif_file")
+        workflow.connect(fod_source, fod_key,
+                         plot_peaks, "mif_file")  # fmt:skip
 
     if qsirecon_suffix:
         ds_wm_odf = pe.Node(
@@ -258,7 +266,8 @@ def init_mrtrix_csd_recon_wf(omp_nthreads, available_anatomical_data, name="mrtr
                                      compress=True),
             name='ds_wm_odf',
             run_without_submitting=True)
-        workflow.connect(outputnode, 'wm_odf', ds_wm_odf, 'in_file')
+        workflow.connect(outputnode, 'wm_odf',
+                         ds_wm_odf, 'in_file')  # fmt:skip
         ds_wm_txt = pe.Node(
             ReconDerivativesDataSink(extension='.txt',
                                      model=fod_algorithm,
@@ -267,7 +276,8 @@ def init_mrtrix_csd_recon_wf(omp_nthreads, available_anatomical_data, name="mrtr
                                      qsirecon_suffix=qsirecon_suffix),
             name='ds_wm_txt',
             run_without_submitting=True)
-        workflow.connect(outputnode, 'wm_txt', ds_wm_txt, 'in_file')
+        workflow.connect(outputnode, 'wm_txt',
+                         ds_wm_txt, 'in_file')  # fmt:skip
 
         # If multitissue write out FODs for csf, gm
         if using_multitissue:
@@ -280,7 +290,8 @@ def init_mrtrix_csd_recon_wf(omp_nthreads, available_anatomical_data, name="mrtr
                                          compress=True),
                 name='ds_gm_odf',
                 run_without_submitting=True)
-            workflow.connect(outputnode, 'gm_odf', ds_gm_odf, 'in_file')
+            workflow.connect(outputnode, 'gm_odf',
+                             ds_gm_odf, 'in_file')  # fmt:skip
             ds_gm_txt = pe.Node(
                 ReconDerivativesDataSink(extension='.txt',
                                          model=fod_algorithm,
@@ -289,7 +300,8 @@ def init_mrtrix_csd_recon_wf(omp_nthreads, available_anatomical_data, name="mrtr
                                          qsirecon_suffix=qsirecon_suffix),
                 name='ds_gm_txt',
                 run_without_submitting=True)
-            workflow.connect(outputnode, 'gm_txt', ds_gm_txt, 'in_file')
+            workflow.connect(outputnode, 'gm_txt',
+                             ds_gm_txt, 'in_file')  # fmt:skip
 
             ds_csf_odf = pe.Node(
                 ReconDerivativesDataSink(extension='.mif.gz',
@@ -300,7 +312,8 @@ def init_mrtrix_csd_recon_wf(omp_nthreads, available_anatomical_data, name="mrtr
                                          compress=True),
                 name='ds_csf_odf',
                 run_without_submitting=True)
-            workflow.connect(outputnode, 'csf_odf', ds_csf_odf, 'in_file')
+            workflow.connect(outputnode, 'csf_odf',
+                             ds_csf_odf, 'in_file')  # fmt:skip
             ds_csf_txt = pe.Node(
                 ReconDerivativesDataSink(extension='.txt',
                                          model=fod_algorithm,
@@ -309,7 +322,8 @@ def init_mrtrix_csd_recon_wf(omp_nthreads, available_anatomical_data, name="mrtr
                                          qsirecon_suffix=qsirecon_suffix),
                 name='ds_csf_txt',
                 run_without_submitting=True)
-            workflow.connect(outputnode, 'csf_txt', ds_csf_txt, 'in_file')
+            workflow.connect(outputnode, 'csf_txt',
+                             ds_csf_txt, 'in_file')  # fmt:skip
 
             if run_mtnormalize:
                 ds_mt_norm = pe.Node(
@@ -320,7 +334,8 @@ def init_mrtrix_csd_recon_wf(omp_nthreads, available_anatomical_data, name="mrtr
                                              compress=True),
                     name='ds_mt_norm',
                     run_without_submitting=True)
-                workflow.connect(intensity_norm, 'norm_image', ds_mt_norm, 'in_file')
+                workflow.connect(intensity_norm, 'norm_image',
+                                 ds_mt_norm, 'in_file')  # fmt:skip
                 ds_inlier_mask = pe.Node(
                     ReconDerivativesDataSink(extension='.mif.gz',
                                              model="mtnorm",
@@ -329,7 +344,8 @@ def init_mrtrix_csd_recon_wf(omp_nthreads, available_anatomical_data, name="mrtr
                                              compress=True),
                     name='ds_inlier_mask',
                     run_without_submitting=True)
-                workflow.connect(intensity_norm, 'inlier_mask', ds_inlier_mask, 'in_file')
+                workflow.connect(intensity_norm, 'inlier_mask',
+                                 ds_inlier_mask, 'in_file')  # fmt:skip
 
     workflow.__desc__ = desc
     return workflow
@@ -381,21 +397,24 @@ def init_global_tractography_wf(omp_nthreads, available_anatomical_data, name="m
     # Resample anat mask
     tck_global = pe.Node(GlobalTractography(**params), name='tck_global')
     workflow.connect([
-        (inputnode, create_mif, [('dwi_file', 'dwi_file'),
-                                 ('bval_file', 'bval_file'),
-                                 ('bvec_file', 'bvec_file'),
-                                 ('b_file', 'b_file')]),
+        (inputnode, create_mif, [
+            ('dwi_file', 'dwi_file'),
+            ('bval_file', 'bval_file'),
+            ('bvec_file', 'bvec_file'),
+            ('b_file', 'b_file')]),
         (create_mif, tck_global, [('mif_file', 'dwi_file')]),
         (inputnode, tck_global, [('dwi_mask', 'mask')]),
-        (inputnode, tck_global, [("wm_txt", "wm_txt"),
-                                 ("gm_txt", "gm_txt"),
-                                 ("csf_txt", "csf_txt")]),
-        (tck_global, outputnode, [("wm_odf", "wm_odf"),
-                                  ("isotropic_fraction", "isotropic_fraction"),
-                                  ("tck_file", "tck_file"),
-                                  ("residual_energy", "residual_energy"),
-                                  ("wm_odf", "fod_sh_mif")])
-        ])
+        (inputnode, tck_global, [
+            ("wm_txt", "wm_txt"),
+            ("gm_txt", "gm_txt"),
+            ("csf_txt", "csf_txt")]),
+        (tck_global, outputnode, [
+            ("wm_odf", "wm_odf"),
+            ("isotropic_fraction", "isotropic_fraction"),
+            ("tck_file", "tck_file"),
+            ("residual_energy", "residual_energy"),
+            ("wm_odf", "fod_sh_mif")])
+    ])  # fmt:skip
 
     if qsirecon_suffix:
         ds_globalwm_odf = pe.Node(
@@ -405,7 +424,8 @@ def init_global_tractography_wf(omp_nthreads, available_anatomical_data, name="m
                                      compress=True),
             name='ds_globalwm_odf',
             run_without_submitting=True)
-        workflow.connect(outputnode, 'wm_odf', ds_globalwm_odf, 'in_file')
+        workflow.connect(outputnode, 'wm_odf',
+                         ds_globalwm_odf, 'in_file')  # fmt:skip
 
         ds_isotropic_fraction = pe.Node(
             ReconDerivativesDataSink(extension='.mif.gz',
@@ -413,7 +433,8 @@ def init_global_tractography_wf(omp_nthreads, available_anatomical_data, name="m
                                      qsirecon_suffix=qsirecon_suffix),
             name='ds_isotropic_fraction',
             run_without_submitting=True)
-        workflow.connect(outputnode, 'isotropic_fraction', ds_isotropic_fraction, 'in_file')
+        workflow.connect(outputnode, 'isotropic_fraction',
+                         ds_isotropic_fraction, 'in_file')  # fmt:skip
 
         ds_tck_file = pe.Node(
             ReconDerivativesDataSink(extension='.tck.gz',
@@ -422,7 +443,7 @@ def init_global_tractography_wf(omp_nthreads, available_anatomical_data, name="m
                                      compress=True),
             name='ds_tck_file',
             run_without_submitting=True)
-        workflow.connect(outputnode, 'tck_file', ds_tck_file, 'in_file')
+        workflow.connect(outputnode, 'tck_file', ds_tck_file, 'in_file')  # fmt:skip
 
         ds_residual_energy = pe.Node(
             ReconDerivativesDataSink(extension='.tck.gz',
@@ -431,7 +452,8 @@ def init_global_tractography_wf(omp_nthreads, available_anatomical_data, name="m
                                      compress=True),
             name='ds_residual_energy',
             run_without_submitting=True)
-        workflow.connect(outputnode, 'residual_energy', ds_residual_energy, 'in_file')
+        workflow.connect(outputnode, 'residual_energy',
+                         ds_residual_energy, 'in_file')  # fmt:skip
 
     return workflow
 
@@ -484,7 +506,8 @@ def init_mrtrix_tractography_wf(omp_nthreads, available_anatomical_data, name="m
         (inputnode, tracking, [
             ('fod_sh_mif', 'in_file'),
             ('fod_sh_mif', 'seed_dynamic')]),
-        (tracking, outputnode, [("out_file", "tck_file")])])
+        (tracking, outputnode, [
+            ("out_file", "tck_file")])])  # fmt:skip
 
     # Which 5tt image should be used?
     method_5tt = params.get("method_5tt", "hsvs")
@@ -496,7 +519,8 @@ def init_mrtrix_tractography_wf(omp_nthreads, available_anatomical_data, name="m
             connect_5tt = "qsiprep_5tt_hsvs"
         else:
             raise Exception("Unrecognized 5tt method: " + method_5tt)
-        workflow.connect(inputnode, connect_5tt, tracking, 'act_file')
+        workflow.connect(inputnode, connect_5tt,
+                         tracking, 'act_file')  # fmt:skip
 
     if use_sift2:
         tck_sift2 = pe.Node(
@@ -504,12 +528,14 @@ def init_mrtrix_tractography_wf(omp_nthreads, available_anatomical_data, name="m
             name="tck_sift2",
             n_procs=omp_nthreads)
         workflow.connect([
-            (inputnode, tck_sift2, [('fod_sh_mif', 'in_fod')]),
-            (tracking, tck_sift2, [('out_file', 'in_tracks')]),
+            (inputnode, tck_sift2, [
+                ('fod_sh_mif', 'in_fod')]),
+            (tracking, tck_sift2, [
+                ('out_file', 'in_tracks')]),
             (tck_sift2, outputnode, [
                 ('out_mu', 'mu'),
                 ('out_weights', 'sift_weights')])
-        ])
+        ])  # fmt:skip
         if qsirecon_suffix:
             ds_sift_weights = pe.Node(
                 ReconDerivativesDataSink(extension='.csv',
@@ -518,9 +544,9 @@ def init_mrtrix_tractography_wf(omp_nthreads, available_anatomical_data, name="m
                                          qsirecon_suffix=qsirecon_suffix),
                 name='ds_sift_weights',
                 run_without_submitting=True)
-            workflow.connect(outputnode, 'sift_weights', ds_sift_weights, 'in_file')
+            workflow.connect(outputnode, 'sift_weights', ds_sift_weights, 'in_file')  # fmt:skip
         if use_5tt:
-            workflow.connect(inputnode, connect_5tt, tck_sift2, "act_file")
+            workflow.connect(inputnode, connect_5tt, tck_sift2, "act_file")  # fmt:skip
 
     if qsirecon_suffix:
         ds_tck_file = pe.Node(
@@ -530,7 +556,7 @@ def init_mrtrix_tractography_wf(omp_nthreads, available_anatomical_data, name="m
                                      qsirecon_suffix=qsirecon_suffix),
             name='ds_tck_file',
             run_without_submitting=True)
-        workflow.connect(outputnode, 'tck_file', ds_tck_file, 'in_file')
+        workflow.connect(outputnode, 'tck_file', ds_tck_file, 'in_file')  # fmt:skip
 
     return workflow
 
@@ -567,12 +593,13 @@ def init_mrtrix_connectivity_wf(omp_nthreads, available_anatomical_data, name="m
         name='calc_connectivity',
         n_procs=omp_nthreads)
     workflow.connect([
-        (inputnode, calc_connectivity, [('atlas_configs', 'atlas_configs'),
-                                        ('tck_file', 'in_file'),
-                                        ('sift_weights', 'in_weights')]),
-
-        (calc_connectivity, outputnode, [('connectivity_matfile', 'matfile')])
-    ])
+        (inputnode, calc_connectivity, [
+            ('atlas_configs', 'atlas_configs'),
+            ('tck_file', 'in_file'),
+            ('sift_weights', 'in_weights')]),
+        (calc_connectivity, outputnode, [
+            ('connectivity_matfile', 'matfile')])
+    ])  # fmt:skip
 
     if plot_reports:
         plot_connectivity = pe.Node(
@@ -580,15 +607,17 @@ def init_mrtrix_connectivity_wf(omp_nthreads, available_anatomical_data, name="m
             name='plot_connectivity',
             n_procs=omp_nthreads)
         ds_report_connectivity = pe.Node(
-            ReconDerivativesDataSink(extension='.svg',
-                                    desc="MRtrix3Connectivity",
-                                    suffix='matrices'),
+            ReconDerivativesDataSink(
+                extension='.svg',
+                desc="MRtrix3Connectivity",
+                suffix='matrices'),
             name='ds_report_connectivity',
             run_without_submitting=True)
         workflow.connect([
             (calc_connectivity, plot_connectivity, [
                 ('connectivity_matfile', 'connectivity_matfile')]),
-            (plot_connectivity, ds_report_connectivity, [('out_report', 'in_file')])])
+            (plot_connectivity, ds_report_connectivity, [
+                ('out_report', 'in_file')])])  # fmt:skip
 
     if qsirecon_suffix:
         # Save the output in the outputs directory
@@ -607,6 +636,6 @@ def init_mrtrix_connectivity_wf(omp_nthreads, available_anatomical_data, name="m
         workflow.connect([
             (calc_connectivity, ds_connectivity, [('connectivity_matfile', 'in_file')]),
             (calc_connectivity, ds_exemplars, [('exemplar_files', 'in_file')])
-        ])
+        ])  # fmt:skip
 
     return workflow

@@ -80,7 +80,8 @@ def init_intramodal_template_wf(inputs_list, t1w_source_file, reportlets_dir, tr
     split_outputs = pe.Node(niu.Split(splits=[1] * len(input_names), squeeze=True),
                             name='split_outputs')
     for output_num, output_name in enumerate(output_names):
-        workflow.connect(split_outputs, 'out%d' % (output_num + 1), outputnode, output_name)
+        workflow.connect(split_outputs, 'out%d' % (output_num + 1),
+                         outputnode, output_name)  # fmt:skip
 
     runtime_opts = {'num_cores': 1, 'parallel_control': 0}
     if omp_nthreads > 1:
@@ -97,7 +98,7 @@ def init_intramodal_template_wf(inputs_list, t1w_source_file, reportlets_dir, tr
             ('forward_transforms', 'inlist')]),
         (ants_mvtc2, outputnode, [
             ('templates', 'intramodal_template')])
-    ])
+    ])  # fmt:skip
 
     # calculate dwi registration to T1w
     b0_coreg_wf = init_b0_to_anat_registration_wf(omp_nthreads=omp_nthreads,
@@ -121,7 +122,7 @@ def init_intramodal_template_wf(inputs_list, t1w_source_file, reportlets_dir, tr
         (b0_coreg_wf, ds_report_imtcoreg, [('outputnode.report', 'in_file')]),
         (b0_coreg_wf, outputnode, [
             ('outputnode.itk_b0_to_t1', 'intramodal_template_to_t1_affine')])
-    ])
+    ])  # fmt:skip
 
     # Fill-in datasinks of reportlets seen so far
     for node in workflow.list_node_names():
@@ -181,7 +182,8 @@ def init_qsiprep_intramodal_template_wf(inputs_list, transform="Rigid", num_iter
     split_outputs = pe.Node(niu.Split(splits=[1] * len(input_names), squeeze=True),
                             name='split_outputs')
     for output_num, output_name in enumerate(output_names):
-        workflow.connect(split_outputs, 'out%d' % (output_num + 1), outputnode, output_name)
+        workflow.connect(split_outputs, 'out%d' % (output_num + 1),
+                         outputnode, output_name)  # fmt:skip
 
     # N4 correct
     n4_correct = pe.MapNode(
@@ -212,12 +214,12 @@ def init_qsiprep_intramodal_template_wf(inputs_list, transform="Rigid", num_iter
         (merge_inputs, n4_correct, [('out', 'input_image')]),
         (n4_correct, intramodal_b0_affine_template, [
             ('output_image', 'inputnode.b0_images')])
-    ])
+    ])  # fmt:skip
     if not do_nonlinear:
         workflow.connect([
             (intramodal_b0_affine_template, split_outputs, [
                 (('outputnode.forward_transforms', _list_squeeze), 'inlist')])
-        ])
+        ])  # fmt:skip
     else:
         nonlinear_alignment_wf = init_nonlinear_alignment_wf(num_iters=num_iterations)
         workflow.connect([
@@ -226,7 +228,7 @@ def init_qsiprep_intramodal_template_wf(inputs_list, transform="Rigid", num_iter
                 ('outputnode.final_template', 'inputnode.initial_template')]),
             (nonlinear_alignment_wf, split_outputs, [
                 ('outputnode.forward_transforms', 'inlist')])
-        ])
+        ])  # fmt:skip
 
     return workflow
 
@@ -324,7 +326,7 @@ def nonlinear_alignment_iteration(iternum=0, gradient_step=0.2):
         (iter_reg, outputnode, [
             ('forward_transforms', 'affine_transforms'),
             ('warped_image', 'registered_image_paths')])
-    ])
+    ])  # fmt:skip
 
     return iteration_wf
 
@@ -351,7 +353,7 @@ def init_nonlinear_alignment_wf(transform="BSplineSyN", metric="CC",
         (inputnode, iter_templates, [('initial_template', 'in1')]),
         (inputnode, initial_reg, [
             ('initial_template', 'inputnode.template_image'),
-            ('images', 'inputnode.image_paths')])])
+            ('images', 'inputnode.image_paths')])])  # fmt:skip
 
     reg_iters = [initial_reg]
     for iternum in range(1, num_iters):
@@ -362,7 +364,7 @@ def init_nonlinear_alignment_wf(transform="BSplineSyN", metric="CC",
             (inputnode, reg_iters[-1], [('images', 'inputnode.image_paths')]),
             (reg_iters[-1], iter_templates, [
                 ("outputnode.updated_template", "in%d" % (iternum + 1))])
-        ])
+        ])  # fmt:skip
 
     # Attach to outputs
     # The last iteration aligned to the output from the second-to-last
@@ -373,7 +375,7 @@ def init_nonlinear_alignment_wf(transform="BSplineSyN", metric="CC",
             ('outputnode.affine_transforms', 'forward_transforms'),
             ('outputnode.registered_image_paths', 'aligned_images')]),
         (iter_templates, outputnode, [('out', 'iteration_templates')])
-    ])
+    ])  # fmt:skip
 
     return workflow
 

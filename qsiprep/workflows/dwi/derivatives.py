@@ -48,7 +48,7 @@ def init_dwi_derivatives_wf(output_prefix,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
         workflow.connect([
             (inputnode, ds_optimization, [('hmc_optimization_data', 'in_file')])
-        ])
+        ])  # fmt:skip
 
     # 4D DWI in T1wACPC space
     ds_dwi_t1 = pe.Node(
@@ -152,7 +152,7 @@ def init_dwi_derivatives_wf(output_prefix,
         (inputnode, ds_cnr_map_t1, [('cnr_map_t1', 'in_file')]),
         (inputnode, ds_gradient_table_t1, [('gradient_table_t1', 'in_file')]),
         (inputnode, ds_btable_t1, [('btable_t1', 'in_file')]),
-        ])
+    ])  # fmt:skip
     # If requested, write local bvecs
     if write_local_bvecs:
         ds_local_bvecs_t1 = pe.Node(
@@ -165,5 +165,7 @@ def init_dwi_derivatives_wf(output_prefix,
             name='ds_local_bvecs_t1',
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB)
-        workflow.connect([(inputnode, ds_local_bvecs_t1, [('local_bvecs_t1', 'in_file')])])
+        workflow.connect([
+            (inputnode, ds_local_bvecs_t1, [
+                ('local_bvecs_t1', 'in_file')])])  # fmt:skip
     return workflow

@@ -50,7 +50,7 @@ def init_fmap_wf(omp_nthreads, fmap_bspline, name='fmap_wf'):
     fsl_check = os.environ.get('FSL_BUILD')
     if fsl_check=="no_fsl":
         raise Exception(
-            """Container in use does not have FSL. To use this workflow, 
+            """Container in use does not have FSL. To use this workflow,
             please download the qsiprep container with FSL installed.""")
     workflow = Workflow(name=name)
     inputnode = pe.Node(niu.IdentityInterface(
@@ -83,7 +83,7 @@ def init_fmap_wf(omp_nthreads, fmap_bspline, name='fmap_wf'):
                            ('out_file', 'fmap_ref')]),
         (inputnode, ds_report_fmap_mask, [('fieldmap', 'source_file')]),
         (bet, ds_report_fmap_mask, [('out_report', 'in_file')]),
-    ])
+    ])  # fmt:skip
 
     torads = pe.Node(FieldToRadS(), name='torads')
     prelude = pe.Node(fsl.PRELUDE(), name='prelude')
@@ -110,6 +110,6 @@ def init_fmap_wf(omp_nthreads, fmap_bspline, name='fmap_wf'):
         (cleanup_wf, applymsk, [('outputnode.out_file', 'in_file')]),
         (bet, applymsk, [('mask_file', 'mask_file')]),
         (applymsk, outputnode, [('out_file', 'fmap')]),
-    ])
+    ])  # fmt:skip
 
     return workflow

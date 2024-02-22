@@ -111,6 +111,6 @@ was also calculated.
                              ('denoising_confounds', 'denoising_confounds')]),
         # Set outputs
         (concat, outputnode, [('confounds_file', 'confounds_file')]),
-    ])
+    ])  # fmt:skip
 
     return workflow

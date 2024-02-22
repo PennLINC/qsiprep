@@ -174,7 +174,7 @@ def init_sdc_unwarp_wf(omp_nthreads, fmap_demean, debug, name='sdc_unwarp_wf'):
                               ('metadata', 'in_meta')]),
         (fmap_mask2ref_apply, gen_vsm, [('output_image', 'mask_file')]),
         (get_ees, gen_vsm, [('ees', 'dwell_time')]),
-        (inputnode, gen_vsm, [(('metadata', _get_pedir_fugue), 'unwarp_direction')]),                      
+        (inputnode, gen_vsm, [(('metadata', _get_pedir_fugue), 'unwarp_direction')]),
         (inputnode, vsm2dfm, [(('metadata', _get_pedir_bids), 'pe_dir')]),
         (torads, gen_vsm, [('out_file', 'fmap_in_file')]),
         (gen_vsm, outputnode, [('fmap_out_file', 'fieldcoef')]),
@@ -193,7 +193,7 @@ def init_sdc_unwarp_wf(omp_nthreads, fmap_demean, debug, name='sdc_unwarp_wf'):
             ('out_file', 'out_reference'),
             ('out_file', 'out_reference_brain')]),
         (jac_dfm, outputnode, [('jacobian_image', 'out_jacobian')]),
-    ])
+    ])  # fmt:skip
 
     if fmap_demean:
         # Demean within mask
@@ -208,7 +208,7 @@ def init_sdc_unwarp_wf(omp_nthreads, fmap_demean, debug, name='sdc_unwarp_wf'):
     else:
         workflow.connect([
             (gen_vsm, vsm2dfm, [('shift_out_file', 'in_file')]),
-        ])
+        ])  # fmt:skip
 
     return workflow
 
@@ -278,7 +278,7 @@ def init_fmap_unwarp_report_wf(name='fmap_unwarp_report_wf', suffix='hmcsdc'):
         (map_seg, sel_wm, [('output_image', 'in_seg')]),
         (sel_wm, dwi_rpt, [('out', 'wm_seg')]),
         (dwi_rpt, outputnode, [('out_report', 'report')])
-    ])
+    ])  # fmt:skip
 
     return workflow
 

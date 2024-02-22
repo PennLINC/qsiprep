@@ -96,7 +96,7 @@ def init_modelfree_qc_wf(omp_nthreads, bvec_convention="DIPY", name='dwi_qc_wf')
         (raw_fib_qc, merged_qc, [('qc_txt', 'fib_qc')]),
         (raw_src_qc, merged_qc, [('qc_txt', 'src_qc')]),
         (merged_qc, outputnode, [('qc_file', 'qc_summary')]),
-    ])
+    ])  # fmt:skip
 
     return workflow
 
@@ -142,7 +142,7 @@ def init_interactive_report_wf(name="interactive_report_wf"):
             ('confounds_file', 'confounds_file'),
             ('mask_file', 'mask_file')]),
         (interactive_report, outputnode, [('out_report', 'out_report')])
-    ])
+    ])  # fmt:skip
     return workflow
 
 
@@ -175,5 +175,6 @@ def init_mask_overlap_wf(name="mask_overlap_wf"):
             ('dwi_mask', 'master')]),
         (inputnode, calculate_dice, [('dwi_mask', 'dwi_mask')]),
         (downsample_t1_mask, calculate_dice, [('out_file', 'anatomical_mask')]),
-        (calculate_dice, outputnode, [('dice_score', 'dice_score')])])
+        (calculate_dice, outputnode, [('dice_score', 'dice_score')])
+    ])  # fmt:skip
     return workflow

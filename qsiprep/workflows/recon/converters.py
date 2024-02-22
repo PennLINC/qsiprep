@@ -48,7 +48,7 @@ def init_mif_to_fibgz_wf(omp_nthreads, available_anatomical_data,
     workflow.connect([
         (inputnode, convert_to_fib, [('mif_file', 'mif_file')]),
         (convert_to_fib, outputnode, [('fib_file', 'fib_file')])
-    ])
+    ])  # fmt:skip
     return workflow
 
 
@@ -63,7 +63,7 @@ def init_fibgz_to_mif_wf(name="fibgz_to_mif", qsirecon_suffix="", params={}):
     workflow.connect([
         (inputnode, convert_to_fib, [('mif_file', 'mif_file')]),
         (convert_to_fib, outputnode, [('fib_file', 'fib_file')])
-    ])
+    ])  # fmt:skip
     return workflow
 
 
@@ -95,7 +95,7 @@ def init_qsiprep_to_fsl_wf(omp_nthreads, available_anatomical_data,
             ('bvec_file', 'bvec_file')]),
         (inputnode, convert_mask_to_fsl, [('mask_file', 'dwi_file')]),
         (convert_mask_to_fsl, outputnode, [('dwi_file', 'mask_file')])
-    ])
+    ])  # fmt:skip
 
     if qsirecon_suffix:
         # Save the output in the outputs directory
@@ -130,5 +130,5 @@ def init_qsiprep_to_fsl_wf(omp_nthreads, available_anatomical_data,
             (convert_dwi_to_fsl, ds_bvec_file, [('bvec_file', 'in_file')]),
             (convert_dwi_to_fsl, ds_dwi_file, [('dwi_file', 'in_file')]),
             (convert_mask_to_fsl, ds_mask_file, [('dwi_file', 'in_file')])
-        ])
+        ])  # fmt:skip
     return workflow

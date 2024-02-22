@@ -48,7 +48,7 @@ def init_controllability_wf(name="controllability", qsirecon_suffix="", params={
     workflow.connect([
         (inputnode, calc_control, [('matfile', 'matfile')]),
         (calc_control, outputnode, [('controllability', 'matfile')])
-    ])
+    ])  # fmt:skip
     if qsirecon_suffix:
         # Save the output in the outputs directory
         ds_control = pe.Node(
@@ -57,5 +57,6 @@ def init_controllability_wf(name="controllability", qsirecon_suffix="", params={
                 suffix="control"),
             name='ds_' + name,
             run_without_submitting=True)
-        workflow.connect(calc_control, 'controllability', ds_control, 'in_file')
+        workflow.connect(calc_control, 'controllability',
+                         ds_control, 'in_file')  # fmt:skip
     return workflow

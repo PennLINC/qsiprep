@@ -385,7 +385,7 @@ Diffusion data preprocessing
             ('outputnode.noise_images', 'noise_images'),
             ('outputnode.raw_concatenated', 'raw_concatenated')]),
         (pre_hmc_wf, test_pre_hmc_connect, [('outputnode.raw_concatenated', 'test1')])
-    ])
+    ])  # fmt:skip
 
     if not dwi_only:
         # calculate dwi registration to T1w
@@ -424,7 +424,7 @@ Diffusion data preprocessing
             (b0_coreg_wf, fmap_unwarp_report_wf, [
                 ('outputnode.itk_b0_to_t1', 'inputnode.in_xfm')]),
             (fmap_unwarp_report_wf, ds_report_sdc, [('outputnode.report', 'in_file')])
-        ])
+        ])  # fmt:skip
 
     # DRBUDDI has some extra reports that we want to save. Make sure we get them!
     if fieldmap_type in ("epi", "rpe_series") and "drbuddi" in pepolar_method.lower():
@@ -454,7 +454,7 @@ Diffusion data preprocessing
             run_without_submitting=True)
 
         workflow.connect([
-            (hmc_wf, extended_pepolar_report_wf,[
+            (hmc_wf, extended_pepolar_report_wf, [
                 ("outputnode.b0_template", "inputnode.b0_ref"),
                 ("outputnode.fieldmap_type", "inputnode.fieldmap_type"),
                 ("outputnode.b0_up_image", "inputnode.b0_up_image"),
@@ -474,7 +474,7 @@ Diffusion data preprocessing
                 ("outputnode.fa_sdc_report", "in_file")]),
             (extended_pepolar_report_wf, ds_report_b0_sdc, [
                 ("outputnode.b0_sdc_report", "in_file")])
-        ])
+        ])  # fmt:skip
 
     summary = pe.Node(
         DiffusionSummary(
@@ -504,7 +504,7 @@ Diffusion data preprocessing
         (b0_coreg_wf, outputnode, [
             (('outputnode.itk_b0_to_t1', _get_first), 'itk_b0_to_t1'),
             ('outputnode.coreg_metric', 'coreg_score')])
-    ])
+    ])  # fmt:skip
 
     # Compute and gather confounds
     confounds_wf = init_dwi_confs_wf(mem_gb=mem_gb['resampled'], metadata=[],
@@ -519,7 +519,7 @@ Diffusion data preprocessing
         mem_gb=DEFAULT_MEMORY_MIN_GB)
     workflow.connect([
         (confounds_wf, ds_confounds, [('outputnode.confounds_file', 'in_file')]),
-    ])
+    ])  # fmt:skip
 
     # Carpetplot and confounds plot
     conf_plot = pe.Node(DMRISummary(), name='conf_plot', mem_gb=mem_gb['resampled'])
@@ -556,7 +556,7 @@ Diffusion data preprocessing
             ('outputnode.to_dwi_ref_affines', 'hmc_xforms'),
             ('outputnode.to_dwi_ref_warps', 'fieldwarps'),
             ('outputnode.dwi_files_to_transform', 'dwi_files')])
-    ])
+    ])  # fmt:skip
 
     # Reporting
     ds_report_summary = pe.Node(
@@ -569,7 +569,7 @@ Diffusion data preprocessing
     workflow.connect([
         (pre_hmc_wf, summary, [('outputnode.validation_reports', 'validation_reports')]),
         (summary, ds_report_summary, [('out_report', 'in_file')])
-    ])
+    ])  # fmt:skip
 
     # Fill-in datasinks of reportlets seen so far
     for node in workflow.list_node_names():

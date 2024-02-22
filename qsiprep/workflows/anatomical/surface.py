@@ -234,7 +234,7 @@ gray-matter of Mindboggle [RRID:SCR_002438, @mindboggle].
         (refine, outputnode, [('out_file', 'out_brainmask')]),
         (aseg_to_native_wf, outputnode, [('outputnode.out_file', 'out_aseg')]),
         (aparc_to_native_wf, outputnode, [('outputnode.out_file', 'out_aparc')]),
-    ])
+    ])  # fmt:skip
 
     return workflow
 
@@ -352,7 +352,7 @@ def init_autorecon_resume_wf(omp_nthreads, name='autorecon_resume_wf'):
         (autorecon3, recon_report, [(('subjects_dir', _dedup), 'subjects_dir'),
                                     (('subject_id', _dedup), 'subject_id')]),
         (recon_report, outputnode, [('out_report', 'out_report')]),
-    ])
+    ])  # fmt:skip
 
     return workflow
 
@@ -425,7 +425,7 @@ def init_gifti_surface_wf(name='gifti_surface_wf'):
         (fs_2_gii, fix_surfs, [('converted', 'in_file')]),
         (inputnode, fix_surfs, [('t1_2_fsnative_reverse_transform', 'transform_file')]),
         (fix_surfs, outputnode, [('out_file', 'surfaces')]),
-    ])
+    ])  # fmt:skip
     return workflow
 
 
@@ -479,7 +479,7 @@ def init_segs_to_native_wf(name='segs_to_native', segmentation='aseg'):
                               ('aseg', 'reg_header')]),
         (tonative, tonii, [('vol_label_file', 'in_file')]),
         (tonii, outputnode, [('out_file', 'out_file')]),
-    ])
+    ])  # fmt:skip
     return workflow
 
 
@@ -517,18 +517,18 @@ def init_anat_reports_wf(reportlets_dir, output_spaces, force_spatial_normalizat
                                            ('t1_conform_report', 'in_file')]),
         (inputnode, ds_t1_seg_mask_report, [('source_file', 'source_file'),
                                             ('seg_report', 'in_file')]),
-    ])
+    ])  # fmt:skip
 
     if freesurfer:
         workflow.connect([
             (inputnode, ds_recon_report, [('source_file', 'source_file'),
                                           ('recon_report', 'in_file')])
-        ])
+        ])  # fmt:skip
     if 'template' in output_spaces or force_spatial_normalization:
         workflow.connect([
             (inputnode, ds_t1_2_mni_report, [('source_file', 'source_file'),
                                              ('t1_2_mni_report', 'in_file')])
-        ])
+        ])  # fmt:skip
 
     return workflow
 
@@ -621,7 +621,7 @@ def init_anat_derivatives_wf(output_dir, output_spaces, template, freesurfer,
         (t1_name, ds_t1_mask, [('out', 'source_file')]),
         (t1_name, ds_t1_seg, [('out', 'source_file')]),
         (t1_name, ds_t1_tpms, [('out', 'source_file')]),
-    ])
+    ])  # fmt:skip
 
     if 'template' in output_spaces or force_spatial_normalization:
         workflow.connect([
@@ -637,7 +637,7 @@ def init_anat_derivatives_wf(output_dir, output_spaces, template, freesurfer,
             (t1_name, ds_mni_mask, [('out', 'source_file')]),
             (t1_name, ds_mni_seg, [('out', 'source_file')]),
             (t1_name, ds_mni_tpms, [('out', 'source_file')]),
-        ])
+        ])  # fmt:skip
 
     return workflow
 

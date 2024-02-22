@@ -85,12 +85,14 @@ generalized q-sampling imaging (GQI, @yeh2010gqi) with a ratio of mean diffusion
 distance of %02f in DSI Studio (version %s). """ % (romdd, DSI_STUDIO_VERSION)
 
     workflow.connect([
-        (inputnode, create_src, [('dwi_file', 'input_nifti_file'),
-                                 ('bval_file', 'input_bvals_file'),
-                                 ('bvec_file', 'input_bvecs_file')]),
+        (inputnode, create_src, [
+            ('dwi_file', 'input_nifti_file'),
+            ('bval_file', 'input_bvals_file'),
+            ('bvec_file', 'input_bvecs_file')]),
         (create_src, gqi_recon, [('output_src', 'input_src_file')]),
         (inputnode, gqi_recon, [('dwi_mask', 'mask')]),
-        (gqi_recon, outputnode, [('output_fib', 'fibgz')])])
+        (gqi_recon, outputnode, [('output_fib', 'fibgz')])
+    ])  # fmt:skip
     if plot_reports:
         # Make a visual report of the model
         plot_peaks = pe.Node(
@@ -106,10 +108,12 @@ distance of %02f in DSI Studio (version %s). """ % (romdd, DSI_STUDIO_VERSION)
 
         workflow.connect([
             (gqi_recon, plot_peaks, [('output_fib', 'fib_file')]),
-            (inputnode, plot_peaks, [('dwi_ref', 'background_image'),
-                                     ('odf_rois', 'odf_rois'),
-                                     ('dwi_mask', 'mask_file')]),
-            (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')])])
+            (inputnode, plot_peaks, [
+                ('dwi_ref', 'background_image'),
+                ('odf_rois', 'odf_rois'),
+                ('dwi_mask', 'mask_file')]),
+            (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')])
+        ])  # fmt:skip
         # Plot targeted regions
         if available_anatomical_data['has_qsiprep_t1w_transforms']:
             ds_report_odfs = pe.Node(
@@ -118,8 +122,8 @@ distance of %02f in DSI Studio (version %s). """ % (romdd, DSI_STUDIO_VERSION)
                                         suffix='odfs'),
                 name='ds_report_odfs',
                 run_without_submitting=True)
-            workflow.connect(plot_peaks, 'odf_report', ds_report_odfs, 'in_file')
-
+            workflow.connect(plot_peaks, 'odf_report',
+                             ds_report_odfs, 'in_file')  # fmt:skip
 
     if qsirecon_suffix:
         # Save the output in the outputs directory
@@ -130,7 +134,8 @@ distance of %02f in DSI Studio (version %s). """ % (romdd, DSI_STUDIO_VERSION)
                 compress=True),
             name='ds_gqi_fibgz',
             run_without_submitting=True)
-        workflow.connect(gqi_recon, 'output_fib', ds_gqi_fibgz, 'in_file')
+        workflow.connect(gqi_recon, 'output_fib',
+                         ds_gqi_fibgz, 'in_file')  # fmt:skip
     workflow.__desc__ = desc
     return workflow
 
@@ -216,7 +221,7 @@ def init_dsi_studio_tractography_wf(omp_nthreads, available_anatomical_data, nam
         (inputnode, tracking, [('fibgz', 'input_fib')]),
         (tracking, outputnode, [('output_trk', 'trk_file')]),
         (inputnode, outputnode, [('fibgz', 'fibgz')])
-    ])
+    ])  # fmt:skip
     if qsirecon_suffix:
         # Save the output in the outputs directory
         ds_tracking = pe.Node(
@@ -226,7 +231,8 @@ def init_dsi_studio_tractography_wf(omp_nthreads, available_anatomical_data, nam
                 qsirecon_suffix=qsirecon_suffix),
             name='ds_' + name,
             run_without_submitting=True)
-        workflow.connect(tracking, 'output_trk', ds_tracking, 'in_file')
+        workflow.connect(tracking, 'output_trk',
+                         ds_tracking, 'in_file')  # fmt:skip
     return workflow
 
 
@@ -352,7 +358,7 @@ def init_dsi_studio_autotrack_wf(omp_nthreads, available_anatomical_data,
         (aggregate_atk_results, ds_bundle_csv, [("bundle_csv", "in_file")]),
         (convert_to_tck, outputnode, [("tck_file", "tck_files")]),
         (aggregate_atk_results, outputnode, [("found_bundle_names", "bundle_names")])
-    ])
+    ])  # fmt:skip
 
     return workflow
 
@@ -429,10 +435,12 @@ def init_dsi_studio_connectivity_wf(omp_nthreads, available_anatomical_data, nam
         n_procs=omp_nthreads)
 
     workflow.connect([
-        (inputnode, calc_connectivity, [('atlas_configs', 'atlas_configs'),
-                                        ('fibgz', 'input_fib'),
-                                        ('trk_file', 'trk_file')]),
-        (calc_connectivity, outputnode, [('connectivity_matfile', 'matfile')])])
+        (inputnode, calc_connectivity, [
+            ('atlas_configs', 'atlas_configs'),
+            ('fibgz', 'input_fib'),
+            ('trk_file', 'trk_file')]),
+        (calc_connectivity, outputnode, [('connectivity_matfile', 'matfile')])
+    ])  # fmt:skip
 
     if plot_reports:
         plot_connectivity = pe.Node(ConnectivityReport(), name='plot_connectivity')
@@ -446,7 +454,7 @@ def init_dsi_studio_connectivity_wf(omp_nthreads, available_anatomical_data, nam
             (calc_connectivity, plot_connectivity, [
                 ('connectivity_matfile', 'connectivity_matfile')]),
             (plot_connectivity, ds_report_connectivity, [('out_report', 'in_file')]),
-        ])
+        ])  # fmt:skip
     if qsirecon_suffix:
         # Save the output in the outputs directory
         ds_connectivity = pe.Node(
@@ -455,7 +463,8 @@ def init_dsi_studio_connectivity_wf(omp_nthreads, available_anatomical_data, nam
                 suffix="connectivity"),
             name='ds_' + name,
             run_without_submitting=True)
-        workflow.connect(calc_connectivity, 'connectivity_matfile', ds_connectivity, 'in_file')
+        workflow.connect(calc_connectivity, 'connectivity_matfile',
+                         ds_connectivity, 'in_file')  # fmt:skip
     return workflow
 
 
@@ -510,7 +519,7 @@ def init_dsi_studio_export_wf(omp_nthreads, available_anatomical_data, name="dsi
                                                                 'correct_header_nifti')]),
                        (fixhdr_nodes[scalar_name], outputnode, [('out_file', output_name)]),
                        (fixhdr_nodes[scalar_name], recon_scalars, [("out_file", output_name)])]
-        workflow.connect(connections)
+        workflow.connect(connections)  # fmt:skip
 
     if qsirecon_suffix:
         ds_recon_scalars = pe.Node(
@@ -521,10 +530,11 @@ def init_dsi_studio_export_wf(omp_nthreads, available_anatomical_data, name="dsi
             recon_scalars,
             "scalar_info",
             ds_recon_scalars,
-            "recon_scalars")
+            "recon_scalars")  # fmt:skip
 
     workflow.connect([
         (inputnode, export, [('fibgz', 'input_file')]),
-        (recon_scalars, outputnode, [("scalar_info", "recon_scalars")])])
+        (recon_scalars, outputnode, [("scalar_info", "recon_scalars")])
+    ])  # fmt:skip
 
     return workflow

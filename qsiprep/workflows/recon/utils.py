@@ -33,14 +33,18 @@ def init_conform_dwi_wf(omp_nthreads, available_anatomical_data,
     conform = pe.Node(ConformDwi(), name="conform_dwi")
     grad_table = pe.Node(MRTrixGradientTable(), name="grad_table")
     workflow.connect([
-        (inputnode, conform, [('dwi_file', 'dwi_file')]),
-        (conform, grad_table, [('bval_file', 'bval_file'),
-                               ('bvec_file', 'bvec_file')]),
-        (grad_table, outputnode, [('gradient_file', 'b_file')]),
-        (conform, outputnode, [('bval_file', 'bval_file'),
-                               ('bvec_file', 'bvec_file'),
-                               ('dwi_file', 'dwi_file')])
-    ])
+        (inputnode, conform, [
+            ('dwi_file', 'dwi_file')]),
+        (conform, grad_table, [
+            ('bval_file', 'bval_file'),
+            ('bvec_file', 'bvec_file')]),
+        (grad_table, outputnode, [
+            ('gradient_file', 'b_file')]),
+        (conform, outputnode, [
+            ('bval_file', 'bval_file'),
+            ('bvec_file', 'bvec_file'),
+            ('dwi_file', 'dwi_file')])
+    ])  # fmt:skip
     return workflow
 
 
@@ -57,10 +61,14 @@ def init_discard_repeated_samples_wf(omp_nthreads, available_anatomical_data,
 
     discard_repeats = pe.Node(RemoveDuplicates(**params), name='discard_repeats')
     workflow.connect([
-        (inputnode, discard_repeats, [('dwi_file', 'dwi_file'), ('bval_file', 'bval_file'),
-                                      ('bvec_file', 'bvec_file')]),
-        (discard_repeats, outputnode, [('dwi_file', 'dwi_file'), ('bval_file', 'bval_file'),
-                                       ('bvec_file', 'bvec_file')])
-    ])
+        (inputnode, discard_repeats, [
+            ('dwi_file', 'dwi_file'),
+            ('bval_file', 'bval_file'),
+            ('bvec_file', 'bvec_file')]),
+        (discard_repeats, outputnode, [
+            ('dwi_file', 'dwi_file'),
+            ('bval_file', 'bval_file'),
+            ('bvec_file', 'bvec_file')])
+    ])  # fmt:skip
 
     return workflow
