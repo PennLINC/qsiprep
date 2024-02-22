@@ -25,7 +25,7 @@ from nipype.interfaces.base import (
 )
 from nipype.utils.filemanip import fname_presuffix
 
-LOGGER = logging.getLogger('nipype.interface')
+LOGGER = logging.getLogger("nipype.interface")
 
 
 class PyAFQInputSpec(BaseInterfaceInputSpec):
@@ -51,16 +51,11 @@ class PyAFQRecon(SimpleInterface):
         # shim the expected inputs
         shim_dir = op.join(runtime.cwd, "study/subject")
         os.makedirs(shim_dir)
-        bval_file = fname_presuffix(self.inputs.bval_file,
-                                    newpath=shim_dir)
-        bvec_file = fname_presuffix(self.inputs.bvec_file,
-                                    newpath=shim_dir)
-        dwi_file = fname_presuffix(self.inputs.dwi_file,
-                                   newpath=shim_dir)
-        mask_file = fname_presuffix(self.inputs.mask_file,
-                                    newpath=shim_dir)
-        itk_file = fname_presuffix(self.inputs.itk_file,
-                                   newpath=shim_dir)
+        bval_file = fname_presuffix(self.inputs.bval_file, newpath=shim_dir)
+        bvec_file = fname_presuffix(self.inputs.bvec_file, newpath=shim_dir)
+        dwi_file = fname_presuffix(self.inputs.dwi_file, newpath=shim_dir)
+        mask_file = fname_presuffix(self.inputs.mask_file, newpath=shim_dir)
+        itk_file = fname_presuffix(self.inputs.itk_file, newpath=shim_dir)
         os.symlink(self.inputs.bval_file, bval_file)
         os.symlink(self.inputs.bvec_file, bvec_file)
         os.symlink(self.inputs.dwi_file, dwi_file)
@@ -70,8 +65,7 @@ class PyAFQRecon(SimpleInterface):
         kwargs = self.inputs.kwargs
 
         if self.inputs.tck_file and isdefined(self.inputs.tck_file):
-            tck_file = fname_presuffix(self.inputs.tck_file,
-                                    newpath=shim_dir)
+            tck_file = fname_presuffix(self.inputs.tck_file, newpath=shim_dir)
             os.symlink(self.inputs.tck_file, tck_file)
         else:
             tck_file = None
@@ -79,37 +73,43 @@ class PyAFQRecon(SimpleInterface):
         itk_map = ItkMap(warp_path=itk_file)
 
         if tck_file is None:
-            tck_file = kwargs['import_tract']
-        kwargs.pop('import_tract', None)
+            tck_file = kwargs["import_tract"]
+        kwargs.pop("import_tract", None)
         if brain_mask_definition is None:
-            brain_mask_definition = kwargs['brain_mask_definition']
-        kwargs.pop('brain_mask_definition', None)
+            brain_mask_definition = kwargs["brain_mask_definition"]
+        kwargs.pop("brain_mask_definition", None)
         # if itk_map is None:  # Use pyAFQ internal mapping
         #     itk_map = kwargs['mapping_definition']
         # kwargs.pop('mapping_definition', None)
 
-        if 'parallel_segmentation' in kwargs:
-            if 'n_jobs' not in kwargs['parallel_segmentation']\
-                    or kwargs['parallel_segmentation']['n_jobs'] == -1:
-                kwargs['parallel_segmentation']['n_jobs'] = self.inputs.kwargs["omp_nthreads"]
+        if "parallel_segmentation" in kwargs:
+            if (
+                "n_jobs" not in kwargs["parallel_segmentation"]
+                or kwargs["parallel_segmentation"]["n_jobs"] == -1
+            ):
+                kwargs["parallel_segmentation"]["n_jobs"] = self.inputs.kwargs["omp_nthreads"]
         else:
-            kwargs['parallel_segmentation'] = {}
-            kwargs['parallel_segmentation']['n_jobs'] = self.inputs.kwargs["omp_nthreads"]
+            kwargs["parallel_segmentation"] = {}
+            kwargs["parallel_segmentation"]["n_jobs"] = self.inputs.kwargs["omp_nthreads"]
 
         output_dir = shim_dir + "/PYAFQ/"
         os.makedirs(output_dir, exist_ok=True)
         myafq = ParticipantAFQ(
-            dwi_file, bval_file, bvec_file, output_dir,
+            dwi_file,
+            bval_file,
+            bvec_file,
+            output_dir,
             import_tract=tck_file,
             brain_mask_definition=brain_mask_definition,
             # mapping_definition=itk_map,
-            **kwargs)
+            **kwargs,
+        )
 
         if "export" not in kwargs or kwargs["export"] == "all":
             myafq.export_all()
         else:
             myafq.export(kwargs["export"])
 
-        self._results['afq_dir'] = output_dir
+        self._results["afq_dir"] = output_dir
 
         return runtime

@@ -9,11 +9,17 @@ import nilearn.image as nim
 import numpy as np
 import pandas as pd
 from nilearn.maskers import NiftiMasker
-from nipype.interfaces.base import (
-    traits, TraitedSpec, BaseInterfaceInputSpec, File, SimpleInterface, isdefined,
-    InputMultiObject, OutputMultiObject
-)
 from nipype.interfaces import ants
+from nipype.interfaces.base import (
+    BaseInterfaceInputSpec,
+    File,
+    InputMultiObject,
+    OutputMultiObject,
+    SimpleInterface,
+    TraitedSpec,
+    isdefined,
+    traits,
+)
 from nipype.utils.filemanip import fname_presuffix
 
 from .bids import get_bids_params
@@ -24,7 +30,8 @@ class ScalarMapperInputSpec(BaseInterfaceInputSpec):
     recon_scalars = InputMultiObject(traits.Any())
     dwiref_image = File(exists=True)
     mapping_metadata = traits.Dict(
-        desc="Info about the upstream workflow that created the anatomical mapping units")
+        desc="Info about the upstream workflow that created the anatomical mapping units"
+    )
 
 
 class ScalarMapperOutputSpec(TraitedSpec):
@@ -58,9 +65,7 @@ class ScalarMapper(SimpleInterface):
 
 # For mapping to bundles
 class _BundleMapperInputSpec(ScalarMapperInputSpec):
-    tck_files = InputMultiObject(
-        File(exists=True),
-        desc="Paths to tck files")
+    tck_files = InputMultiObject(File(exists=True), desc="Paths to tck files")
     bundle_names = InputMultiObject(traits.Str())
 
 
@@ -71,9 +76,18 @@ class _BundleMapperOutputSpec(ScalarMapperOutputSpec):
 
 def _get_tdi_img(dwiref_image, tck_file, output_tdi_file):
     subprocess.run(
-        ["tckmap", "-template", dwiref_image, "-contrast", "tdi", "-force",
-         tck_file, output_tdi_file],
-        check=True)
+        [
+            "tckmap",
+            "-template",
+            dwiref_image,
+            "-contrast",
+            "tdi",
+            "-force",
+            tck_file,
+            output_tdi_file,
+        ],
+        check=True,
+    )
     return nim.load_img(output_tdi_file)
 
 
@@ -88,16 +102,11 @@ class BundleMapper(ScalarMapper):
         source_suffix = self.inputs.mapping_metadata.get("qsirecon_suffix", "QSIPrep")
         for tck_name, tck_file in zip(self.inputs.bundle_names, self.inputs.tck_files):
             output_tdi_file = fname_presuffix(
-                tck_file,
-                suffix="_tdi.nii",
-                newpath=runtime.cwd,
-                use_ext=False)
+                tck_file, suffix="_tdi.nii", newpath=runtime.cwd, use_ext=False
+            )
 
             # Create a TDI, where streamline count is mapped to voxels
-            tdi_img = _get_tdi_img(
-                self.inputs.dwiref_image,
-                tck_file,
-                output_tdi_file)
+            tdi_img = _get_tdi_img(self.inputs.dwiref_image, tck_file, output_tdi_file)
 
             # Create a Masker from all voxels containing streamlines
             msk_img = nim.math_img("a>0", a=tdi_img)
@@ -113,19 +122,24 @@ class BundleMapper(ScalarMapper):
                     bundle_masker,
                     tck_name,
                     "bundle",
-                    {"image": tdi_img,
-                     "variable_name": "tdi",
-                     # Check that this is ok:
-                     "source_file": self.inputs.recon_scalars[0]["source_file"],
-                     "qsirecon_suffix": source_suffix,
-                     "desc": "Streamline counts per voxel"})
+                    {
+                        "image": tdi_img,
+                        "variable_name": "tdi",
+                        # Check that this is ok:
+                        "source_file": self.inputs.recon_scalars[0]["source_file"],
+                        "qsirecon_suffix": source_suffix,
+                        "desc": "Streamline counts per voxel",
+                    },
+                )
             )
 
             # Then get the same stats for the scalars
             for recon_scalar in self.inputs.recon_scalars:
                 bundle_dfs.append(
-                    calculate_mask_stats(bundle_masker, tck_name, "bundle",
-                                         recon_scalar, tdi_weights))
+                    calculate_mask_stats(
+                        bundle_masker, tck_name, "bundle", recon_scalar, tdi_weights
+                    )
+                )
 
         # Write the scalar summary df
         self._update_with_bids_info(bundle_dfs)
@@ -147,13 +161,15 @@ class BundleMapper(ScalarMapper):
             tdi_summary_df["bundle_source"] = self.inputs.mapping_metadata.get("qsirecon_suffix")
             tdi_summary_df["bundle_params_id"] = self.inputs.mapping_metadata.get("name")
         tdi_summary_df.to_csv(tdi_file, index=False, sep="\t")
-        self._results['tdi_stats'] = tdi_file
+        self._results["tdi_stats"] = tdi_file
 
 
 # For mapping to atlases
 
 
-def calculate_mask_stats(masker, mask_name, mask_variable_name, recon_scalar, weighting_vector=None):
+def calculate_mask_stats(
+    masker, mask_name, mask_variable_name, recon_scalar, weighting_vector=None
+):
 
     # Get the scalar data in the masked region
     voxel_data = masker.fit_transform(recon_scalar["image"]).squeeze()
@@ -176,7 +192,7 @@ def calculate_mask_stats(masker, mask_name, mask_variable_name, recon_scalar, we
         "median": np.median(voxel_data),
         "masked_mean": np.nanmean(nz_voxel_data),
         "masked_median": np.nanmedian(nz_voxel_data),
-        "masked_stdev": np.nanstd(nz_voxel_data)
+        "masked_stdev": np.nanstd(nz_voxel_data),
     }
 
     if weighting_vector is not None:
@@ -184,8 +200,7 @@ def calculate_mask_stats(masker, mask_name, mask_variable_name, recon_scalar, we
         nz_weighting_vector = weighting_vector.copy()
         nz_weighting_vector[np.isnan(nz_voxel_data)] = np.nan
         nz_weighting_vector = nz_weighting_vector / np.nansum(nz_weighting_vector)
-        results["masked_weighted_mean"] = np.nansum(
-            nz_voxel_data * nz_weighting_vector)
+        results["masked_weighted_mean"] = np.nansum(nz_voxel_data * nz_weighting_vector)
 
     return results
 
@@ -223,8 +238,9 @@ class TemplateMapper(ScalarMapper):
                 transforms=[self.inputs.to_template_transform],
                 reference_image=self.inputs.template_reference_image,
                 output_image=output_fname,
-                interpolation=self.inputs.interpolation)
-            transform.terminal_output = 'allatonce'
+                interpolation=self.inputs.interpolation,
+            )
+            transform.terminal_output = "allatonce"
             transform.resource_monitor = False
             transform.run()
             resampled_images.append(output_fname)
@@ -236,5 +252,5 @@ class TemplateMapper(ScalarMapper):
             new_metadata["bids"]["space"] = "MNI152NLin2009cAsym"
             resampled_image_metadata.append(new_metadata)
 
-        self._results['template_space_scalars'] = resampled_images
-        self._results['template_space_scalar_info'] = resampled_image_metadata
+        self._results["template_space_scalars"] = resampled_images
+        self._results["template_space_scalar_info"] = resampled_image_metadata

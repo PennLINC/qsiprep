@@ -18,29 +18,30 @@ import nilearn.image as nim
 import numpy as np
 from dipy.segment.threshold import otsu
 from nipype import logging
-from glob import glob
-import nibabel as nb
-from scipy.spatial import distance
-from scipy import ndimage
-from nipype.interfaces.base import (traits, TraitedSpec, BaseInterfaceInputSpec,
-                                    SimpleInterface, File, isdefined)
-from pkg_resources import resource_filename as pkgrf
-
+from nipype.interfaces.base import (
+    BaseInterfaceInputSpec,
+    File,
+    SimpleInterface,
+    TraitedSpec,
+    isdefined,
+    traits,
+)
 from nipype.utils.filemanip import fname_presuffix
 from pkg_resources import resource_filename as pkgr
-from scipy.spatial import distance
+from pkg_resources import resource_filename as pkgrf
+from scipy import ndimage
 
 from ..utils.ingress import ukb_dirname_to_bids
 from .images import to_lps
 
-LOGGER = logging.getLogger('nipype.interface')
-KNOWN_TEMPLATES = ['MNI152NLin2009cAsym', 'infant']
+LOGGER = logging.getLogger("nipype.interface")
+KNOWN_TEMPLATES = ["MNI152NLin2009cAsym", "infant"]
 
 
 class QsiprepAnatomicalIngressInputSpec(BaseInterfaceInputSpec):
-    recon_input_dir = traits.Directory(exists=True,
-                                       mandatory=True,
-                                       help="directory containing subject results directories")
+    recon_input_dir = traits.Directory(
+        exists=True, mandatory=True, help="directory containing subject results directories"
+    )
     subject_id = traits.Str()
     subjects_dir = File(exists=True)
     infant_mode = traits.Bool(mandatory=True)
@@ -74,69 +75,79 @@ class QsiprepAnatomicalIngressOutputSpec(TraitedSpec):
 
 
 class QsiprepAnatomicalIngress(SimpleInterface):
-    """ Get only the useful files from a QSIPrep anatomical output.
+    """Get only the useful files from a QSIPrep anatomical output.
 
     Many of the preprocessed outputs aren't useful for reconstruction
     (mainly anything that has been mapped forward into template space).
     """
+
     input_spec = QsiprepAnatomicalIngressInputSpec
     output_spec = QsiprepAnatomicalIngressOutputSpec
 
     def _run_interface(self, runtime):
         # The path to the output from the qsiprep run
         sub = self.inputs.subject_id
-        qp_root = op.join(self.inputs.recon_input_dir, 'sub-' + sub)
-        anat_root = op.join(qp_root, 'anat')
+        qp_root = op.join(self.inputs.recon_input_dir, "sub-" + sub)
+        anat_root = op.join(qp_root, "anat")
         # space-T1w files
         self._get_if_exists(
-            't1_aparc',
-            '%s/sub-%s*desc-aparcaseg_dseg.nii.*' % (anat_root, sub),
-            excludes=['space-MNI'])
+            "t1_aparc",
+            "%s/sub-%s*desc-aparcaseg_dseg.nii.*" % (anat_root, sub),
+            excludes=["space-MNI"],
+        )
         self._get_if_exists(
-            't1_seg',
-            '%s/sub-%s_*dseg.nii*' % (anat_root, sub),
-            excludes=['space-MNI', 'aseg'])
+            "t1_seg", "%s/sub-%s_*dseg.nii*" % (anat_root, sub), excludes=["space-MNI", "aseg"]
+        )
         self._get_if_exists(
-            't1_aseg',
-            '%s/sub-%s_*aseg_dseg.nii*' % (anat_root, sub),
-            excludes=['space-MNI', 'aparc'])
+            "t1_aseg",
+            "%s/sub-%s_*aseg_dseg.nii*" % (anat_root, sub),
+            excludes=["space-MNI", "aparc"],
+        )
         self._get_if_exists(
-            't1_brain_mask',
-            '%s/sub-%s*_desc-brain_mask.nii*' % (anat_root, sub),
-            excludes=['space-MNI'])
+            "t1_brain_mask",
+            "%s/sub-%s*_desc-brain_mask.nii*" % (anat_root, sub),
+            excludes=["space-MNI"],
+        )
         self._get_if_exists(
-            't1_preproc',
+            "t1_preproc",
             "%s/sub-%s_desc-preproc_T1w.nii*" % (anat_root, sub),
-            excludes=['space-MNI'])
-        if 't1_preproc' not in self._results:
+            excludes=["space-MNI"],
+        )
+        if "t1_preproc" not in self._results:
             LOGGER.warning("Unable to find a preprocessed T1w in %s", qp_root)
         self._get_if_exists(
-            't1_csf_probseg',
+            "t1_csf_probseg",
             "%s/sub-%s*_label-CSF_probseg.nii*" % (anat_root, sub),
-            excludes=["space-MNI"])
+            excludes=["space-MNI"],
+        )
         self._get_if_exists(
-            't1_gm_probseg',
+            "t1_gm_probseg",
             "%s/sub-%s*_label-GM_probseg.nii*" % (anat_root, sub),
-            excludes=["space-MNI"])
+            excludes=["space-MNI"],
+        )
         self._get_if_exists(
-            't1_wm_probseg',
+            "t1_wm_probseg",
             "%s/sub-%s*_label-WM_probseg.nii*" % (anat_root, sub),
-            excludes=["space-MNI"])
+            excludes=["space-MNI"],
+        )
         self._get_if_exists(
-            'orig_to_t1_mode_forward_transform',
-            "%s/sub-%s*_from-orig_to-T1w_mode-image_xfm.txt" % (anat_root, sub))
+            "orig_to_t1_mode_forward_transform",
+            "%s/sub-%s*_from-orig_to-T1w_mode-image_xfm.txt" % (anat_root, sub),
+        )
         self._get_if_exists(
-            't1_2_mni_reverse_transform',
-            "%s/sub-%s*_from-MNI152NLin2009cAsym_to-T1w*_xfm.h5" % (anat_root, sub))
+            "t1_2_mni_reverse_transform",
+            "%s/sub-%s*_from-MNI152NLin2009cAsym_to-T1w*_xfm.h5" % (anat_root, sub),
+        )
         self._get_if_exists(
-            't1_2_mni_forward_transform',
-            "%s/sub-%s*_from-T1w_to-MNI152NLin2009cAsym_mode-image_xfm.h5" % (anat_root, sub))
+            "t1_2_mni_forward_transform",
+            "%s/sub-%s*_from-T1w_to-MNI152NLin2009cAsym_mode-image_xfm.h5" % (anat_root, sub),
+        )
         if not self.inputs.infant_mode:
-            self._results["template_image"] = pkgrf(
-                'qsiprep', 'data/mni_1mm_t1w_lps_brain.nii.gz')
+            self._results["template_image"] = pkgrf("qsiprep", "data/mni_1mm_t1w_lps_brain.nii.gz")
         else:
             self._results["template_image"] = pkgrf(
-                'qsiprep', 'data/mni_1mm_t1w_lps_brain_infant.nii.gz')
+                "qsiprep", "data/mni_1mm_t1w_lps_brain_infant.nii.gz"
+            )
 
         return runtime
 
@@ -144,17 +155,20 @@ class QsiprepAnatomicalIngress(SimpleInterface):
         files = glob(pattern)
 
         if excludes is not None:
-            files = [fname for fname in files if not
-                     any([exclude in op.split(fname)[1] for exclude in excludes])]
+            files = [
+                fname
+                for fname in files
+                if not any([exclude in op.split(fname)[1] for exclude in excludes])
+            ]
 
         if len(files) == 1:
             self._results[name] = files[0]
 
 
 class UKBAnatomicalIngressInputSpec(QsiprepAnatomicalIngressInputSpec):
-    recon_input_dir = traits.Directory(exists=True,
-                                       mandatory=True,
-                                       help="directory containing a single subject's results")
+    recon_input_dir = traits.Directory(
+        exists=True, mandatory=True, help="directory containing a single subject's results"
+    )
 
 
 class UKBAnatomicalIngress(QsiprepAnatomicalIngress):
@@ -174,15 +188,15 @@ class UKBAnatomicalIngress(QsiprepAnatomicalIngress):
         to_lps(nb.load(ukb_brain)).to_filename(conformed_t1w_file)
         to_lps(nb.load(ukb_brain_mask)).to_filename(conformed_mask_file)
 
-        self._results['t1_preproc'] = conformed_t1w_file
-        self._results['t1_brain_mask'] = conformed_mask_file
+        self._results["t1_preproc"] = conformed_t1w_file
+        self._results["t1_brain_mask"] = conformed_mask_file
 
         return runtime
 
 
 class _DiceOverlapInputSpec(BaseInterfaceInputSpec):
-    anatomical_mask = File(exists=True, mandatory=True, desc='Mask from a T1w image')
-    dwi_mask = File(exists=True, mandatory=True, desc='Mask from a DWI image')
+    anatomical_mask = File(exists=True, mandatory=True, desc="Mask from a T1w image")
+    dwi_mask = File(exists=True, mandatory=True, desc="Mask from a DWI image")
 
 
 class _DiceOverlapOutputSpec(TraitedSpec):
@@ -200,8 +214,9 @@ class DiceOverlap(SimpleInterface):
         if not t1_img.shape == dwi_img.shape:
             raise Exception("Cannot compare masks with different shapes")
 
-        self._results['dice_score'] = distance.dice(t1_img.get_fdata().flatten(),
-                                                    dwi_img.get_fdata().flatten())
+        self._results["dice_score"] = distance.dice(
+            t1_img.get_fdata().flatten(), dwi_img.get_fdata().flatten()
+        )
         return runtime
 
 
@@ -260,10 +275,9 @@ class FakeSegmentation(SimpleInterface):
         eroded2 = ndimage.binary_erosion(eroded1, iterations=3)
         final = orig_mask.astype(int) + eroded1 + eroded2
         out_img = nb.Nifti1Image(final, img.affine, header=img.header)
-        out_fname = fname_presuffix(self.inputs.mask_file, suffix="_dseg",
-                                    newpath=runtime.cwd)
+        out_fname = fname_presuffix(self.inputs.mask_file, suffix="_dseg", newpath=runtime.cwd)
         out_img.to_filename(out_fname)
-        self._results['dseg_file'] = out_fname
+        self._results["dseg_file"] = out_fname
 
         return runtime
 
@@ -304,19 +318,14 @@ vol	l	m
 """
 
 
-lmax_lut = {
-    6: 2,
-    15: 4,
-    28: 6,
-    45: 8
-}
+lmax_lut = {6: 2, 15: 4, 28: 6, 45: 8}
 
 
 def get_l_m(lmax):
     ell = []
     m = []
     for _ell in range(0, lmax + 1, 2):
-        for _m in range(-_ell, _ell+1):
+        for _m in range(-_ell, _ell + 1):
             ell.append(_ell)
             m.append(_m)
 
@@ -327,13 +336,13 @@ def calculate_steinhardt(sh_l, sh_m, data, q_num):
     l_mask = sh_l == q_num
     images = data[..., l_mask]
     scalar = 4 * np.pi / (2 * q_num + 1)
-    s_param = scalar * np.sum(images ** 2, 3)
+    s_param = scalar * np.sum(images**2, 3)
     return np.sqrt(s_param)
 
 
 class CalculateSOPInputSpec(BaseInterfaceInputSpec):
     sh_nifti = traits.File(mandatory=True, exists=True)
-    order = traits.Enum(2,4,6,8, default=6, usedefault=True)
+    order = traits.Enum(2, 4, 6, 8, default=6, usedefault=True)
 
 
 class CalculateSOPOutputSpec(TraitedSpec):
@@ -360,9 +369,10 @@ class CalculateSOP(SimpleInterface):
 
         # Do we have enough SH coeffs to calculate all the SOPs?
         if self.inputs.order > lmax:
-            raise Exception("Not enough SH coefficients (found {}) "
-                            "to calculate SOP order {}".format(
-                                num_vols, self.inputs.order))
+            raise Exception(
+                "Not enough SH coefficients (found {}) "
+                "to calculate SOP order {}".format(num_vols, self.inputs.order)
+            )
         sh_l, sh_m = get_l_m(lmax)
         sh_data = img.get_fdata()
 
@@ -372,9 +382,11 @@ class CalculateSOP(SimpleInterface):
         # to get a specific order
         def calculate_order(order):
             out_fname = fname_presuffix(
-                self.inputs.sh_nifti, suffix="q-%d_SOP.nii.gz" % order,
+                self.inputs.sh_nifti,
+                suffix="q-%d_SOP.nii.gz" % order,
                 use_ext=False,
-                newpath=runtime.cwd)
+                newpath=runtime.cwd,
+            )
             order_data = calculate_steinhardt(sh_l, sh_m, sh_data, order)
 
             # Save with the new name in the sandbox
@@ -389,23 +401,19 @@ class CalculateSOP(SimpleInterface):
 
 
 class _DesaturateSkullInputSpec(BaseInterfaceInputSpec):
-    skulled_t2w_image = File(
-        exists=True,
-        mandatory=True,
-        desc="Skull-on T2w image")
+    skulled_t2w_image = File(exists=True, mandatory=True, desc="Skull-on T2w image")
     brain_mask_image = File(
-        exists=True,
-        mandatory=True,
-        desc='Binary brain mask in the same grid as skulled_t2w_image')
+        exists=True, mandatory=True, desc="Binary brain mask in the same grid as skulled_t2w_image"
+    )
     brain_to_skull_ratio = traits.CFloat(
-        8.0,
-        usedefault=True,
-        desc="Ratio of signal in the brain to signal in the skull")
+        8.0, usedefault=True, desc="Ratio of signal in the brain to signal in the skull"
+    )
 
 
 class _DesaturateSkullOutputSpec(TraitedSpec):
     desaturated_t2w = File(exists=True)
-    head_scaling_factor = traits.Float(0.)
+    head_scaling_factor = traits.Float(0.0)
+
 
 class DesaturateSkull(SimpleInterface):
     input_spec = _DesaturateSkullInputSpec
@@ -416,17 +424,19 @@ class DesaturateSkull(SimpleInterface):
         out_file = fname_presuffix(
             self.inputs.skulled_t2w_image,
             newpath=runtime.cwd,
-            suffix='_desaturated.nii',
-            use_ext=False)
+            suffix="_desaturated.nii",
+            use_ext=False,
+        )
         skulled_img = nim.load_img(self.inputs.skulled_t2w_image)
         brainmask_img = nim.load_img(self.inputs.brain_mask_image)
         brain_median, nonbrain_head_median = calculate_nonbrain_saturation(
-            skulled_img, brainmask_img)
+            skulled_img, brainmask_img
+        )
 
         actual_brain_to_skull_ratio = brain_median / nonbrain_head_median
         LOGGER.info("found brain to skull ratio: %.3f", actual_brain_to_skull_ratio)
-        desat_data = skulled_img.get_fdata(dtype='float32').copy()
-        adjustment = 1.
+        desat_data = skulled_img.get_fdata(dtype="float32").copy()
+        adjustment = 1.0
         if actual_brain_to_skull_ratio < self.inputs.brain_to_skull_ratio:
             # We need to downweight the non-brain voxels
             adjustment = actual_brain_to_skull_ratio / self.inputs.brain_to_skull_ratio
@@ -436,10 +446,10 @@ class DesaturateSkull(SimpleInterface):
             desat_data[nonbrain_mask] = desat_data[nonbrain_mask] * adjustment
 
         desat_img = nim.new_img_like(skulled_img, desat_data, copy_header=True)
-        desat_img.header.set_data_dtype('float32')
+        desat_img.header.set_data_dtype("float32")
         desat_img.to_filename(out_file)
-        self._results['desaturated_t2w'] = out_file
-        self._results['head_scaling_factor'] = adjustment
+        self._results["desaturated_t2w"] = out_file
+        self._results["head_scaling_factor"] = adjustment
         return runtime
 
 
@@ -449,8 +459,7 @@ def calculate_nonbrain_saturation(head_img, brain_mask_img):
     brain_mask = brain_mask_img.get_fdata() > 0
 
     def clip_values(values):
-        _, top_percent = np.percentile(
-            values, np.array([0, 99.75]), axis=None)
+        _, top_percent = np.percentile(values, np.array([0, 99.75]), axis=None)
         return np.clip(values, 0, top_percent)
 
     nonbrain_voxels = head_data[np.logical_not(brain_mask)]
@@ -468,10 +477,7 @@ def calculate_nonbrain_saturation(head_img, brain_mask_img):
 
 
 class _GetTemplateInputSpec(BaseInterfaceInputSpec):
-    template_name = traits.Str(
-        'MNI152NLin2009cAsym',
-        usedefault=True,
-        mandatory=True)
+    template_name = traits.Str("MNI152NLin2009cAsym", usedefault=True, mandatory=True)
     t1_file = File(exists=True)
     t2_file = File(exists=True)
     mask_file = File(exists=True)
@@ -491,7 +497,7 @@ class GetTemplate(SimpleInterface):
     output_spec = _GetTemplateOutputSpec
 
     def _run_interface(self, runtime):
-        self._results['template_name'] = self.inputs.template_name
+        self._results["template_name"] = self.inputs.template_name
         contrast_name = self.inputs.anatomical_contrast.lower()
         if contrast_name == "none":
             LOGGER.info("Using T1w modality template for ACPC alignment")
@@ -502,22 +508,18 @@ class GetTemplate(SimpleInterface):
         # and legacy
         if self.inputs.template_name in KNOWN_TEMPLATES or self.inputs.infant_mode:
             if not self.inputs.infant_mode:
-                ref_img = pkgr('qsiprep',
-                                'data/mni_1mm_%s_lps.nii.gz' % contrast_name)
-                ref_img_brain = pkgr('qsiprep',
-                                        'data/mni_1mm_%s_lps_brain.nii.gz' % contrast_name)
-                ref_img_mask = pkgr('qsiprep',
-                                        'data/mni_1mm_t1w_lps_brainmask.nii.gz')
+                ref_img = pkgr("qsiprep", "data/mni_1mm_%s_lps.nii.gz" % contrast_name)
+                ref_img_brain = pkgr("qsiprep", "data/mni_1mm_%s_lps_brain.nii.gz" % contrast_name)
+                ref_img_mask = pkgr("qsiprep", "data/mni_1mm_t1w_lps_brainmask.nii.gz")
             else:
-                ref_img = pkgr('qsiprep',
-                                'data/mni_1mm_%s_lps_infant.nii.gz' % contrast_name)
-                ref_img_brain = pkgr('qsiprep',
-                                        'data/mni_1mm_%s_lps_brain_infant.nii.gz' % contrast_name)
-                ref_img_mask = pkgr('qsiprep',
-                                        'data/mni_1mm_t1w_lps_brainmask_infant.nii.gz')
-            self._results['template_file'] = ref_img
-            self._results['template_brain_file'] = ref_img_brain
-            self._results['template_mask_file'] = ref_img_mask
+                ref_img = pkgr("qsiprep", "data/mni_1mm_%s_lps_infant.nii.gz" % contrast_name)
+                ref_img_brain = pkgr(
+                    "qsiprep", "data/mni_1mm_%s_lps_brain_infant.nii.gz" % contrast_name
+                )
+                ref_img_mask = pkgr("qsiprep", "data/mni_1mm_t1w_lps_brainmask_infant.nii.gz")
+            self._results["template_file"] = ref_img
+            self._results["template_brain_file"] = ref_img_brain
+            self._results["template_mask_file"] = ref_img_mask
         else:
             raise NotImplementedError("Arbitrary templates not available yet")
 

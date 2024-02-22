@@ -29,62 +29,46 @@ from scipy.io.matlab import loadmat, savemat
 
 from .bids import get_bids_params
 
-LOGGER = logging.getLogger('nipype.interface')
+LOGGER = logging.getLogger("nipype.interface")
 DSI_STUDIO_VERSION = "94b9c79"
 
 
 class DSIStudioCommandLineInputSpec(CommandLineInputSpec):
-    num_threads = traits.Int(
-        1,
-        usedefault=True,
-        argstr="--thread_count=%d",
-        nohash=True)
+    num_threads = traits.Int(1, usedefault=True, argstr="--thread_count=%d", nohash=True)
 
 
 class DSIStudioCreateSrcInputSpec(DSIStudioCommandLineInputSpec):
     test_trait = traits.Bool()
-    input_nifti_file = File(
-        desc="DWI Nifti file",
-        argstr="--source=%s")
+    input_nifti_file = File(desc="DWI Nifti file", argstr="--source=%s")
     input_dicom_dir = File(
-        desc="Directory with DICOM data from only the dwi",
-        exists=True,
-        argstr="--source=%s")
+        desc="Directory with DICOM data from only the dwi", exists=True, argstr="--source=%s"
+    )
     bvec_convention = traits.Enum(
         ("DIPY", "FSL"),
         usedefault=True,
-        desc="Convention used for bvecs. FSL assumes LAS+ no matter image orientation")
-    input_bvals_file = File(
-        desc="Text file containing b values", exists=True, argstr="--bval=%s")
+        desc="Convention used for bvecs. FSL assumes LAS+ no matter image orientation",
+    )
+    input_bvals_file = File(desc="Text file containing b values", exists=True, argstr="--bval=%s")
     input_bvecs_file = File(
-        desc="Text file containing b vectors (FSL format)",
-        exists=True,
-        argstr="--bvec=%s")
+        desc="Text file containing b vectors (FSL format)", exists=True, argstr="--bvec=%s"
+    )
     input_b_table_file = File(
         desc="Text file containing q-space sampling (DSI Studio format)",
         exists=True,
-        argstr="--b_table=%s")
+        argstr="--b_table=%s",
+    )
     recursive = traits.Bool(
-        False,
-        desc="Search for DICOM files recursively",
-        argstr="--recursive=1")
+        False, desc="Search for DICOM files recursively", argstr="--recursive=1"
+    )
     subject_id = traits.Str("data")
-    output_src = File(
-        desc="Output file (.src.gz)",
-        argstr="--output=%s",
-        genfile=True)
+    output_src = File(desc="Output file (.src.gz)", argstr="--output=%s", genfile=True)
     grad_dev = File(
-        desc="Gradient deviation file",
-        exists=True,
-        copyfile=True,
-        position=-1,
-        argstr="#%s")
+        desc="Gradient deviation file", exists=True, copyfile=True, position=-1, argstr="#%s"
+    )
 
 
 class DSIStudioCreateSrcOutputSpec(TraitedSpec):
-    output_src = File(
-        desc="Output file (.src.gz)",
-        name_source="subject_id")
+    output_src = File(desc="Output file (.src.gz)", name_source="subject_id")
 
 
 class DSIStudioCreateSrc(CommandLine):
@@ -96,44 +80,44 @@ class DSIStudioCreateSrc(CommandLine):
         """As of QSIPrep > 0.17 DSI Studio changed from DIPY bvecs to FSL bvecs."""
 
         # b_table files and dicom directories are ok
-        if isdefined(self.inputs.input_b_table_file) or \
-                isdefined(self.inputs.input_dicom_dir):
+        if isdefined(self.inputs.input_b_table_file) or isdefined(self.inputs.input_dicom_dir):
             return runtime
 
-        if not (isdefined(self.inputs.input_bvals_file) and \
-                isdefined(self.inputs.input_bvecs_file)):
-            raise Exception("without a b_table or dicom directory, both bvals and bvecs "
-                            "must be specified")
+        if not (
+            isdefined(self.inputs.input_bvals_file) and isdefined(self.inputs.input_bvecs_file)
+        ):
+            raise Exception(
+                "without a b_table or dicom directory, both bvals and bvecs must be specified"
+            )
 
         # If the bvecs are in DIPY format, convert them to a b_table.txt
         if self.inputs.bvec_convention == "DIPY":
-            btable_file = self._gen_filename('output_src').replace(".src.gz", ".b_table.txt")
-            btable_from_bvals_bvecs(self.inputs.input_bvals_file,
-                                    self.inputs.input_bvecs_file,
-                                    btable_file)
+            btable_file = self._gen_filename("output_src").replace(".src.gz", ".b_table.txt")
+            btable_from_bvals_bvecs(
+                self.inputs.input_bvals_file, self.inputs.input_bvecs_file, btable_file
+            )
             self.inputs.input_b_table_file = btable_file
             self.inputs.input_bvals_file = traits.Undefined
             self.inputs.input_bvecs_file = traits.Undefined
             LOGGER.info("Converted DIPY LPS+ bval/bvec to DSI Studio b_table")
         return runtime
 
-
     def _gen_filename(self, name):
-        if not name == 'output_src':
+        if not name == "output_src":
             return None
         if isdefined(self.inputs.input_nifti_file):
             _, fname, ext = split_filename(self.inputs.input_nifti_file)
         elif isdefined(self.inputs.input_dicom_dir):
             fname = op.split(self.inputs.dicom_dir)[1]
         else:
-            raise Exception('Need either an input dicom director or nifti')
+            raise Exception("Need either an input dicom director or nifti")
 
         output = op.abspath(fname) + ".src.gz"
         return output
 
     def _list_outputs(self):
         outputs = self.output_spec().get()
-        outputs['output_src'] = self._gen_filename('output_src')
+        outputs["output_src"] = self._gen_filename("output_src")
         return outputs
 
 
@@ -150,35 +134,33 @@ class DSIStudioQC(SimpleInterface):
         # directories, the action will be run on a number of detected files
         # (which *cannot* be symbolic links for some reason).
         src_file = fname_presuffix(self.inputs.src_file, newpath=runtime.cwd)
-        cmd = ['dsi_studio', '--action=qc', '--source='+src_file]
+        cmd = ["dsi_studio", "--action=qc", "--source=" + src_file]
         proc = Popen(cmd, cwd=runtime.cwd, stdout=PIPE, stderr=PIPE)
         out, err = proc.communicate()
         if out:
             LOGGER.info(out.decode())
         if err:
             LOGGER.critical(err.decode())
-        self._results['qc_txt'] = src_file.replace(self.ext, '.qc.txt')
+        self._results["qc_txt"] = src_file.replace(self.ext, ".qc.txt")
         return runtime
 
 
 class _DSIStudioSrcQCInputSpec(DSIStudioCommandLineInputSpec):
-    src_file = File(exists=True, copyfile=False, argstr="%s",
-                    desc='DSI Studio src[.gz] file')
+    src_file = File(exists=True, copyfile=False, argstr="%s", desc="DSI Studio src[.gz] file")
 
 
 class DSIStudioSrcQC(DSIStudioQC):
     input_spec = _DSIStudioSrcQCInputSpec
-    ext = '.src.gz'
+    ext = ".src.gz"
 
 
 class _DSIStudioFibQCInputSpec(DSIStudioCommandLineInputSpec):
-    src_file = File(exists=True, copyfile=False, argstr="%s",
-                    desc='DSI Studio fib[.gz] file')
+    src_file = File(exists=True, copyfile=False, argstr="%s", desc="DSI Studio fib[.gz] file")
 
 
 class DSIStudioFibQC(DSIStudioQC):
     input_spec = _DSIStudioFibQCInputSpec
-    ext = '.fib.gz'
+    ext = ".fib.gz"
 
 
 # Step 2 reonstruct ODFs
@@ -188,64 +170,59 @@ class DSIStudioReconstructionInputSpec(DSIStudioCommandLineInputSpec):
         mandatory=True,
         exists=True,
         copyfile=False,
-        argstr="--source=%s")
+        argstr="--source=%s",
+    )
     mask = File(
-        desc="Volume to mask brain voxels",
-        exists=True,
-        copyfile=False,
-        argstr="--mask=%s")
+        desc="Volume to mask brain voxels", exists=True, copyfile=False, argstr="--mask=%s"
+    )
     grad_dev = File(
-        desc="Gradient deviation file",
-        exists=True,
-        copyfile=True,
-        position=-1,
-        argstr="#%s")
+        desc="Gradient deviation file", exists=True, copyfile=True, position=-1, argstr="#%s"
+    )
     thread_count = traits.Int(1, usedefault=True, argstr="--thread_count=%d")
 
     dti_no_high_b = traits.Bool(
         True,
         usedefault=True,
         argstr="--dti_no_high_b=%d",
-        desc="specify whether the construction of DTI should ignore high b-value (b>1500)")
+        desc="specify whether the construction of DTI should ignore high b-value (b>1500)",
+    )
     r2_weighted = traits.Bool(
         False,
         usedefault=True,
         argstr="--r2_weighted=%d",
-        desc="specify whether GQI and QSDR uses r2-weighted to calculate SDF")
+        desc="specify whether GQI and QSDR uses r2-weighted to calculate SDF",
+    )
 
     # Outputs
     output_odf = traits.Bool(
-        True,
-        usedefault=True,
-        desc="Include full ODF's in output",
-        argstr="--record_odf=1")
-    odf_order = traits.Enum((8, 4, 5, 6, 10, 12, 16, 20),
-                            usedefault=True,
-                            desc="ODF tesselation order")
+        True, usedefault=True, desc="Include full ODF's in output", argstr="--record_odf=1"
+    )
+    odf_order = traits.Enum(
+        (8, 4, 5, 6, 10, 12, 16, 20), usedefault=True, desc="ODF tesselation order"
+    )
     # Which scalars to include
     other_output = traits.Str(
         "all",
         argstr="--other_output=%s",
         desc="additional diffusion metrics to calculate",
-        usedefault=True
+        usedefault=True,
     )
     align_acpc = traits.Bool(
-        False,
-        usedefault=True,
-        argstr="--align_acpc=%d",
-        desc="rotate image volume to align ap-pc"
+        False, usedefault=True, argstr="--align_acpc=%d", desc="rotate image volume to align ap-pc"
     )
     check_btable = traits.Enum(
         (0, 1),
         usedefault=True,
         argstr="--check_btable=%d",
-        desc="Check if btable matches nifti orientation (not foolproof)")
+        desc="Check if btable matches nifti orientation (not foolproof)",
+    )
 
     num_fibers = traits.Int(
         3,
         usedefault=True,
         argstr="--num_fiber=%d",
-        desc="number of fiber populations estimated at each voxel")
+        desc="number of fiber populations estimated at each voxel",
+    )
 
 
 class DSIStudioReconstructionOutputSpec(TraitedSpec):
@@ -253,8 +230,7 @@ class DSIStudioReconstructionOutputSpec(TraitedSpec):
 
 
 class DSIStudioGQIReconstructionInputSpec(DSIStudioReconstructionInputSpec):
-    ratio_of_mean_diffusion_distance = traits.Float(
-        1.25, usedefault=True, argstr="--param0=%.4f")
+    ratio_of_mean_diffusion_distance = traits.Float(1.25, usedefault=True, argstr="--param0=%.4f")
 
 
 class DSIStudioDSIReconstructionInputSpec(DSIStudioReconstructionInputSpec):
@@ -287,8 +263,7 @@ class DSIStudioGQIReconstruction(DSIStudioReconstruction):
 
 
 class DSIStudioExportInputSpec(DSIStudioCommandLineInputSpec):
-    input_file = File(
-        exists=True, argstr="--source=%s", mandatory=True, copyfile=False)
+    input_file = File(exists=True, argstr="--source=%s", mandatory=True, copyfile=False)
     to_export = traits.Str(mandatory=True, argstr="--export=%s")
 
 
@@ -328,8 +303,11 @@ class DSIStudioExport(CommandLine):
         cwd = Path()
         results = list(cwd.glob("*.nii.gz"))
         for expected in to_expect:
-            matches = [fname.absolute().name for fname in results if
-                       fname.name.endswith("." + expected + ".nii.gz")]
+            matches = [
+                fname.absolute().name
+                for fname in results
+                if fname.name.endswith("." + expected + ".nii.gz")
+            ]
             if len(matches) == 1:
                 outputs[expected + "_file"] = matches[0]
             elif len(matches) == 0:
@@ -342,10 +320,9 @@ class DSIStudioExport(CommandLine):
 
 class DSIStudioConnectivityMatrixInputSpec(DSIStudioCommandLineInputSpec):
     trk_file = File(exists=True, argstr="--tract=%s", copyfile=False)
-    atlas_config = traits.Dict(desc='atlas configs for atlases to run connectivity for')
+    atlas_config = traits.Dict(desc="atlas configs for atlases to run connectivity for")
     atlas_name = traits.Str()
-    input_fib = File(
-        exists=True, argstr="--source=%s", mandatory=True, copyfile=False)
+    input_fib = File(exists=True, argstr="--source=%s", mandatory=True, copyfile=False)
     fiber_count = traits.Int(xor=["seed_count"], argstr="--fiber_count=%d")
     seed_count = traits.Int(xor=["fiber_count"], argstr="--seed_count=%d")
     seed_plan = traits.Enum((0, 1), argstr="--seed_plan=%d")
@@ -357,7 +334,8 @@ class DSIStudioConnectivityMatrixInputSpec(DSIStudioCommandLineInputSpec):
         desc="specify the seeding file. "
         "Supported file format includes text, Analyze, and "
         "nifti files.",
-        argstr="--seed=%s")
+        argstr="--seed=%s",
+    )
     to_export = traits.Str(argstr="--export=%s")
     connectivity = traits.Str(argstr="--connectivity=%s")
     connectivity_type = traits.Str(argstr="--connectivity_type=%s")
@@ -389,39 +367,39 @@ class DSIStudioConnectivityMatrix(CommandLine):
         atlas_name = self.inputs.atlas_name
 
         # Aggregate the connectivity/network data from DSI Studio
-        official_labels = np.array(atlas_config['node_ids']).astype(int)
+        official_labels = np.array(atlas_config["node_ids"]).astype(int)
         connectivity_data = {
             atlas_name + "_region_ids": official_labels,
-            atlas_name + "_region_labels": np.array(atlas_config['node_names'])
+            atlas_name + "_region_labels": np.array(atlas_config["node_names"]),
         }
 
         # Gather the connectivity matrices
         matfiles = glob(runtime.cwd + "/*.connectivity.mat")
         for matfile in matfiles:
             measure = "_".join(matfile.split(".")[-4:-2])
-            connectivity_data[atlas_name + "_" + measure + "_connectivity"] = \
+            connectivity_data[atlas_name + "_" + measure + "_connectivity"] = (
                 _sanitized_connectivity_matrix(matfile, official_labels)
+            )
 
         # Gather the network measure files
         network_results = glob(runtime.cwd + "/*network*txt")
         for network_result in network_results:
             measure = "_".join(network_result.split(".")[-4:-2])
             connectivity_data.update(
-                _sanitized_network_measures(network_result, official_labels,
-                                            atlas_name, measure))
+                _sanitized_network_measures(network_result, official_labels, atlas_name, measure)
+            )
         merged_matfile = op.join(runtime.cwd, atlas_name + "_connectivity.mat")
         savemat(merged_matfile, connectivity_data, long_field_names=True)
         return runtime
 
     def _list_outputs(self):
         outputs = self.output_spec().get()
-        outputs['connectivity_matfile'] = op.abspath(
-            self.inputs.atlas_name + "_connectivity.mat")
+        outputs["connectivity_matfile"] = op.abspath(self.inputs.atlas_name + "_connectivity.mat")
         return outputs
 
 
 class DSIStudioAtlasGraphInputSpec(DSIStudioConnectivityMatrixInputSpec):
-    atlas_configs = traits.Dict(desc='atlas configs for atlases to run connectivity for')
+    atlas_configs = traits.Dict(desc="atlas configs for atlases to run connectivity for")
 
 
 class DSIStudioAtlasGraphOutputSpec(TraitedSpec):
@@ -431,59 +409,63 @@ class DSIStudioAtlasGraphOutputSpec(TraitedSpec):
 
 class DSIStudioAtlasGraph(SimpleInterface):
     """Produce one connectivity matrix per atlas based on DSI Studio tractography"""
+
     input_spec = DSIStudioAtlasGraphInputSpec
     output_spec = DSIStudioAtlasGraphOutputSpec
 
     def _run_interface(self, runtime):
         # Get all inputs from the ApplyTransforms object
         ifargs = self.inputs.get()
-        ifargs.pop('connectivity')
-        ifargs['thread_count'] = 1
+        ifargs.pop("connectivity")
+        ifargs["thread_count"] = 1
 
         # Get number of parallel jobs
-        num_threads = ifargs.pop('num_threads')
-        atlas_configs = ifargs.pop('atlas_configs')
-        workflow = pe.Workflow(name='dsistudio_atlasgraph')
+        num_threads = ifargs.pop("num_threads")
+        atlas_configs = ifargs.pop("atlas_configs")
+        workflow = pe.Workflow(name="dsistudio_atlasgraph")
         nodes = []
-        merge_mats = pe.Node(niu.Merge(len(atlas_configs)), name='merge_mats')
-        outputnode = pe.Node(niu.IdentityInterface(fields=['matfiles']), name='outputnode')
-        workflow.connect(merge_mats, 'out', outputnode, 'matfiles')
+        merge_mats = pe.Node(niu.Merge(len(atlas_configs)), name="merge_mats")
+        outputnode = pe.Node(niu.IdentityInterface(fields=["matfiles"]), name="outputnode")
+        workflow.connect(merge_mats, "out", outputnode, "matfiles")
         for atlasnum, (atlas_name, atlas_config) in enumerate(atlas_configs.items(), start=1):
             node_args = deepcopy(ifargs)
             # Symlink in the fib file
-            node_args.pop('atlas_config')
-            node_args.pop('atlas_name')
+            node_args.pop("atlas_config")
+            node_args.pop("atlas_name")
             nodes.append(
                 pe.Node(
                     DSIStudioConnectivityMatrix(
                         atlas_config=atlas_config,
                         atlas_name=atlas_name,
-                        connectivity=atlas_config['dwi_resolution_file'],
-                        **node_args),
-                    name=atlas_name)
+                        connectivity=atlas_config["dwi_resolution_file"],
+                        **node_args,
+                    ),
+                    name=atlas_name,
+                )
             )
-            workflow.connect(nodes[-1], 'connectivity_matfile',
-                             merge_mats, 'in%d' % atlasnum)
+            workflow.connect(nodes[-1], "connectivity_matfile", merge_mats, "in%d" % atlasnum)
 
-        workflow.config['execution']['stop_on_first_crash'] = 'true'
-        workflow.config['execution']['remove_unnecessary_outputs'] = 'false'
+        workflow.config["execution"]["stop_on_first_crash"] = "true"
+        workflow.config["execution"]["remove_unnecessary_outputs"] = "false"
         workflow.base_dir = runtime.cwd
         if num_threads > 1:
             plugin_settings = {
-                'plugin': 'MultiProc',
-                'plugin_args': {
-                    'raise_insufficient': False,
-                    'maxtasksperchild': 1,
-                    'n_procs': num_threads
-                }
+                "plugin": "MultiProc",
+                "plugin_args": {
+                    "raise_insufficient": False,
+                    "maxtasksperchild": 1,
+                    "n_procs": num_threads,
+                },
             }
             wf_result = workflow.run(**plugin_settings)
         else:
             wf_result = workflow.run()
-        merge_node, = [node for node in list(wf_result.nodes) if node.name.endswith('merge_mats')]
+        (merge_node,) = [
+            node for node in list(wf_result.nodes) if node.name.endswith("merge_mats")
+        ]
         merged_connectivity_file = op.join(runtime.cwd, "combined_connectivity.mat")
         _merge_conmats(merge_node.result.outputs.out, merged_connectivity_file)
-        self._results['connectivity_matfile'] = merged_connectivity_file
+        self._results["connectivity_matfile"] = merged_connectivity_file
 
         return runtime
 
@@ -496,8 +478,8 @@ def _parse_network_file(txtfile):
         sanitized_line = line.strip().replace("(", "_").replace(")", "")
         tokens = sanitized_line.split("\t")
         measure_name = tokens[0]
-        if measure_name == 'network_measures':
-            network_data['region_ids'] = [token.split('_')[-1] for token in tokens[1:]]
+        if measure_name == "network_measures":
+            network_data["region_ids"] = [token.split("_")[-1] for token in tokens[1:]]
             continue
 
         values = list(map(float, tokens[1:]))
@@ -537,12 +519,13 @@ def _sanitized_connectivity_matrix(conmat, official_labels):
     m = loadmat(conmat)
     n_atlas_labels = len(official_labels)
     # Column names are binary strings. Very confusing.
-    column_names = "".join(
-        [s.decode('UTF-8') for s in m["name"].squeeze().view("S1")]).split("\n")[:-1]
+    column_names = "".join([s.decode("UTF-8") for s in m["name"].squeeze().view("S1")]).split(
+        "\n"
+    )[:-1]
     matfile_region_ids = np.array([int(name.split("_")[-1]) for name in column_names])
 
     # Where does each column go? Make an index array
-    connectivity = m['connectivity']
+    connectivity = m["connectivity"]
     in_this_mask = np.isin(official_labels, matfile_region_ids)
     truncated_labels = official_labels[in_this_mask]
     assert np.all(truncated_labels == matfile_region_ids)
@@ -581,7 +564,7 @@ def _sanitized_network_measures(network_txt, official_labels, atlas_name, measur
     n_atlas_labels = len(official_labels)
     network_data = _parse_network_file(network_txt)
     # Make sure to get the full atlas
-    network_region_ids = np.array(network_data['region_ids']).astype(int)
+    network_region_ids = np.array(network_data["region_ids"]).astype(int)
     # If all the regions are found
     in_this_mask = np.isin(official_labels, network_region_ids)
     if np.all(in_this_mask):
@@ -613,7 +596,8 @@ class DSIStudioTrackingInputSpec(DSIStudioConnectivityMatrixInputSpec):
         name_template="%s.trk.gz",
         desc="Output file (trk.gz)",
         argstr="--output=%s",
-        name_source="input_fib")
+        name_source="input_fib",
+    )
 
 
 class DSIStudioTrackingOutputSpec(TraitedSpec):
@@ -621,7 +605,8 @@ class DSIStudioTrackingOutputSpec(TraitedSpec):
         name_template="%s.trk.gz",
         desc="Output file (trk.gz)",
         argstr="--output=%s",
-        name_source="input_fib")
+        name_source="input_fib",
+    )
     output_qa = File()
     output_gfa = File()
     connectivity_matrices = traits.List()
@@ -641,9 +626,7 @@ class DSIStudioTracking(CommandLine):
         else:
             raise Exception("DSI Studio did not produce a trk.gz file")
         conmat_results = glob("*.connectivity.mat")
-        outputs["connectivity_matrices"] = [
-            os.path.abspath(c) for c in conmat_results
-        ]
+        outputs["connectivity_matrices"] = [os.path.abspath(c) for c in conmat_results]
         if isdefined(self.inputs.to_export):
             if "gfa" in self.inputs.to_export:
                 outputs["output_gfa"] = trk_out + ".gfa.txt"
@@ -679,18 +662,17 @@ class FixDSIStudioExportHeader(SimpleInterface):
             # Re-orient
             input_orientation = nb.orientations.axcodes2ornt(input_axcodes)
             desired_orientation = nb.orientations.axcodes2ornt(new_axcodes)
-            transform_orientation = nb.orientations.ornt_transform(input_orientation,
-                                                                   desired_orientation)
+            transform_orientation = nb.orientations.ornt_transform(
+                input_orientation, desired_orientation
+            )
             reoriented_img = dsi_img.as_reoriented(transform_orientation)
 
         else:
             reoriented_img = dsi_img
 
         # No matter what, still use the correct affine
-        nb.Nifti1Image(
-            reoriented_img.get_fdata(),
-            correct_img.affine).to_filename(new_file)
-        self._results['out_file'] = new_file
+        nb.Nifti1Image(reoriented_img.get_fdata(), correct_img.affine).to_filename(new_file)
+        self._results["out_file"] = new_file
 
         return runtime
 
@@ -715,7 +697,7 @@ class DSIStudioMergeQC(SimpleInterface):
         src_qc.update(fib_qc)
         qc_df = pd.DataFrame(src_qc)
         qc_df.to_csv(output_csv, index=False)
-        self._results['qc_file'] = output_csv
+        self._results["qc_file"] = output_csv
         return runtime
 
 
@@ -725,7 +707,8 @@ class _DSIStudioBTableInputSpec(BaseInterfaceInputSpec):
     bvec_convention = traits.Enum(
         ("DIPY", "FSL"),
         usedefault=True,
-        desc="Convention used for bvecs. FSL assumes LAS+ no matter image orientation")
+        desc="Convention used for bvecs. FSL assumes LAS+ no matter image orientation",
+    )
 
 
 class _DSIStudioBTableOutputSpec(TraitedSpec):
@@ -741,17 +724,13 @@ class DSIStudioBTable(SimpleInterface):
             raise NotImplementedError("Only DIPY Bvecs supported for now")
         btab_file = op.join(runtime.cwd, "btable.txt")
         btable_from_bvals_bvecs(self.inputs.bval_file, self.inputs.bvec_file, btab_file)
-        self._results['btable_file'] = btab_file
+        self._results["btable_file"] = btab_file
         return runtime
 
 
 class _AutoTrackInputSpec(DSIStudioCommandLineInputSpec):
-    fib_file = File(exists=True,
-                    mandatory=True,
-                    copyfile=False,
-                    argstr="--source=%s")
-    map_file = File(exists=True,
-                    copyfile=False)
+    fib_file = File(exists=True, mandatory=True, copyfile=False, argstr="--source=%s")
+    map_file = File(exists=True, copyfile=False)
     track_id = traits.Str(
         "Fasciculus,Cingulum,Aslant,Corticos,Thalamic_R,Reticular,Optic,Fornix,Corpus",
         usedefault=True,
@@ -768,38 +747,35 @@ class _AutoTrackInputSpec(DSIStudioCommandLineInputSpec):
 
             example:
             for tracking left and right arcuate and cingulum, assign
-            -track_id=0,1,2,3 or -track_id=arcuate,cingulum""")
+            -track_id=0,1,2,3 or -track_id=arcuate,cingulum""",
+    )
     track_voxel_ratio = traits.CFloat(
         2.0,
         usedefault=True,
         argstr="--track_voxel_ratio=%.2f",
-        desc="the track-voxel ratio for the total number of streamline count. A larger " \
-            "value gives better mapping with the expense of computation time.")
+        desc="the track-voxel ratio for the total number of streamline count. A larger "
+        "value gives better mapping with the expense of computation time.",
+    )
     tolerance = traits.Str(
         "22,26,30",
         argstr="--tolerance=%s",
         desc="""the tolerance for the bundle recognition. The unit is in mm. Multiple values
             can be assigned using comma separator. A larger value may include larger track
-            variation but also subject to more false results.""")
+            variation but also subject to more false results.""",
+    )
     yield_rate = traits.CFloat(
         0.00001,
         argstr="--yield_rate=%.10f",
-        desc="This rate will be used to terminate tracking early if DSI Studio find the " \
-            "fiber trackings is not generating results")
-    export_trk = traits.Bool(
-        True,
-        usedefault=True,
-        argstr="--export_trk=%d")
+        desc="This rate will be used to terminate tracking early if DSI Studio find the "
+        "fiber trackings is not generating results",
+    )
+    export_trk = traits.Bool(True, usedefault=True, argstr="--export_trk=%d")
     trk_format = traits.Enum(
-        ("trk.gz", "tt.gz"),
-        default="trk.gz",
-        usedefault=True,
-        argstr="--trk_format=%s")
+        ("trk.gz", "tt.gz"), default="trk.gz", usedefault=True, argstr="--trk_format=%s"
+    )
     output_dir = traits.Str(
-        "cwd",
-        argstr="%s",
-        usedefault=True,
-        desc="Forces DSI Studio to write results in cwd")
+        "cwd", argstr="%s", usedefault=True, desc="Forces DSI Studio to write results in cwd"
+    )
     _boilerplate_traits = ["track_id", "track_voxel_ratio", "tolerance", "yield_rate"]
 
 
@@ -822,7 +798,7 @@ class AutoTrack(CommandLine):
     def _list_outputs(self):
         outputs = self.output_spec().get()
         cwd = Path(".")
-        trk_files = [str(fname.absolute()) for fname in cwd.rglob("*."+self.inputs.trk_format)]
+        trk_files = [str(fname.absolute()) for fname in cwd.rglob("*." + self.inputs.trk_format)]
         stat_files = [str(fname.absolute()) for fname in cwd.rglob("*.stat.txt")]
         outputs["native_trk_files"] = trk_files
         outputs["stat_files"] = stat_files
@@ -860,7 +836,7 @@ class AggregateAutoTrackResults(SimpleInterface):
             return Path(file_name).parts[-2]
 
         trk_map = {bundle_from_file(fname): fname for fname in self.inputs.trk_files}
-        stat_map ={bundle_from_file(fname): fname for fname in self.inputs.stat_files}
+        stat_map = {bundle_from_file(fname): fname for fname in self.inputs.stat_files}
 
         stats_rows = []
         found_bundle_files = []
@@ -869,16 +845,16 @@ class AggregateAutoTrackResults(SimpleInterface):
             if bundle_name in trk_map:
                 found_bundle_files.append(trk_map[bundle_name])
                 found_bundle_names.append(bundle_name)
-            stats_rows.append(
-                stat_txt_to_df(stat_map.get(bundle_name, "NA"), bundle_name))
+            stats_rows.append(stat_txt_to_df(stat_map.get(bundle_name, "NA"), bundle_name))
 
         stats_df = pd.DataFrame(stats_rows)
         bids_info = get_bids_params(self.inputs.source_file)
         for name, value in bids_info.items():
             stats_df[name] = value
         stats_df["source_file"] = op.split(self.inputs.source_file)[1]
-        csv_file = fname_presuffix(self.inputs.source_file, newpath=runtime.cwd,
-                                   suffix="_bundlestats.csv", use_ext=False)
+        csv_file = fname_presuffix(
+            self.inputs.source_file, newpath=runtime.cwd, suffix="_bundlestats.csv", use_ext=False
+        )
         stats_df.to_csv(csv_file, index=False)
         self._results["found_bundle_names"] = found_bundle_names
         self._results["found_bundle_files"] = found_bundle_files
@@ -887,13 +863,14 @@ class AggregateAutoTrackResults(SimpleInterface):
 
 
 def stat_txt_to_df(stat_txt_file, bundle_name):
-    bundle_stats = {'bundle_name': bundle_name}
+    bundle_stats = {"bundle_name": bundle_name}
     if stat_txt_file == "NA":
         return bundle_stats
     with open(stat_txt_file, "r") as statf:
         lines = [
             line.strip().replace(" ", "_").replace("^", "").replace("(", "_").replace(")", "")
-            for line in statf]
+            for line in statf
+        ]
 
     for line in lines:
         name, value = line.split("\t")
@@ -906,7 +883,7 @@ def load_src_qc_file(fname, prefix=""):
     with open(fname, "r") as qc_file:
         qc_data = qc_file.readlines()
     data = qc_data[1]
-    parts = data.strip().split('\t')
+    parts = data.strip().split("\t")
     if len(parts) == 7:
         _, dims, voxel_size, dirs, max_b, ndc, bad_slices = parts
     elif len(parts) == 8:
@@ -921,16 +898,16 @@ def load_src_qc_file(fname, prefix=""):
     dwi_corr = float(ndc)
     n_bad_slices = float(bad_slices)
     data = {
-        prefix + 'dimension_x': [dimx],
-        prefix + 'dimension_y': [dimy],
-        prefix + 'dimension_z': [dimz],
-        prefix + 'voxel_size_x': [voxelsx],
-        prefix + 'voxel_size_y': [voxelsy],
-        prefix + 'voxel_size_z': [voxelsz],
-        prefix + 'max_b': [max_b],
-        prefix + 'neighbor_corr': [dwi_corr],
-        prefix + 'num_bad_slices': [n_bad_slices],
-        prefix + 'num_directions': [n_dirs]
+        prefix + "dimension_x": [dimx],
+        prefix + "dimension_y": [dimy],
+        prefix + "dimension_z": [dimz],
+        prefix + "voxel_size_x": [voxelsx],
+        prefix + "voxel_size_y": [voxelsy],
+        prefix + "voxel_size_z": [voxelsz],
+        prefix + "max_b": [max_b],
+        prefix + "neighbor_corr": [dwi_corr],
+        prefix + "num_bad_slices": [n_bad_slices],
+        prefix + "num_directions": [n_dirs],
     }
     return data
 
@@ -938,8 +915,7 @@ def load_src_qc_file(fname, prefix=""):
 def load_fib_qc_file(fname):
     with open(fname, "r") as fibqc_f:
         lines = [line.strip().split() for line in fibqc_f]
-    return {'coherence_index': [float(lines[0][-1])],
-            'incoherence_index': [float(lines[1][-1])]}
+    return {"coherence_index": [float(lines[0][-1])], "incoherence_index": [float(lines[1][-1])]}
 
 
 def btable_from_bvals_bvecs(bval_file, bvec_file, output_file):
@@ -951,8 +927,7 @@ def btable_from_bvals_bvecs(bval_file, bvec_file, output_file):
     bvals = np.loadtxt(bval_file).squeeze()
     bvecs = np.loadtxt(bvec_file).squeeze()
     if not 3 in bvecs.shape:
-        raise Exception(
-            "uninterpretable bval/bvec files\n\t{}\n\t{}".format(bval_file, bvec_file))
+        raise Exception("uninterpretable bval/bvec files\n\t{}\n\t{}".format(bval_file, bvec_file))
     if not bvecs.shape[1] == 3:
         bvecs = bvecs.T
 
@@ -970,13 +945,13 @@ def btable_from_bvals_bvecs(bval_file, bvec_file, output_file):
 
 def _get_dsi_studio_bundles(desired_bundles=""):
 
-    dsi_studio_exe = which('dsi_studio')
+    dsi_studio_exe = which("dsi_studio")
     if not dsi_studio_exe:
         raise Exception("No dsi_studio executable found in $PATH")
     bundle_dir = op.split(dsi_studio_exe)[0]
     bundle_file = os.getenv(
-        "DSI_STUDIO_BUNDLES",
-        op.join(bundle_dir, "atlas/ICBM152_adult/ICBM152_adult.tt.gz.txt"))
+        "DSI_STUDIO_BUNDLES", op.join(bundle_dir, "atlas/ICBM152_adult/ICBM152_adult.tt.gz.txt")
+    )
     if not op.exists(bundle_file):
         raise Exception("No such file {} for loading bundles".format(bundle_file))
 
@@ -996,8 +971,9 @@ def _get_dsi_studio_bundles(desired_bundles=""):
         if bundle.isdigit():
             bundle_index = int(bundle)
             if bundle_index < 0 or bundle_index > len(all_bundles):
-                raise Exception("{} is not a valid bundle index, check {}".format(
-                    bundle_index, bundle_file))
+                raise Exception(
+                    "{} is not a valid bundle index, check {}".format(bundle_index, bundle_file)
+                )
             bundles_to_track.append(all_bundles[bundle_index])
         else:
             matching_bundles = get_bundles(bundle)

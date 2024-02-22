@@ -1,5 +1,5 @@
-
 """Handle merging and spliting of DSI files."""
+
 import gzip
 import logging
 import os
@@ -30,7 +30,7 @@ from nipype.utils.filemanip import fname_presuffix
 from pkg_resources import resource_filename as pkgr
 from scipy.io.matlab import loadmat, savemat
 
-LOGGER = logging.getLogger('nipype.workflow')
+LOGGER = logging.getLogger("nipype.workflow")
 ODF_COLS = 20000  # Number of columns in DSI Studio odf split
 MIN_NONZERO = 1e-6
 
@@ -59,8 +59,9 @@ class FODtoFIBGZ(SimpleInterface):
             if output_fib_file.endswith(".gz"):
                 output_fib_file = output_fib_file[:-3]
         else:
-            output_fib_file = fname_presuffix(mif_file, newpath=runtime.cwd, suffix=".fib",
-                                              use_ext=False)
+            output_fib_file = fname_presuffix(
+                mif_file, newpath=runtime.cwd, suffix=".fib", use_ext=False
+            )
 
         verts, faces = get_dsi_studio_ODF_geometry("odf8")
         num_dirs, _ = verts.shape
@@ -82,13 +83,18 @@ class FODtoFIBGZ(SimpleInterface):
         else:
             ampl_data = amplitudes_img.get_fdata()
             ampl_mask = ampl_data.sum(3) > 1e-6
-            mask_img = nb.Nifti1Image(ampl_mask.astype(float),
-                                      amplitudes_img.affine)
+            mask_img = nb.Nifti1Image(ampl_mask.astype(float), amplitudes_img.affine)
 
-        self._results['fib_file'] = output_fib_file
-        amplitudes_to_fibgz(amplitudes_img, verts, faces, output_fib_file, mask_img,
-                            num_fibers=self.inputs.num_fibers,
-                            unit_odf=self.inputs.unit_odf)
+        self._results["fib_file"] = output_fib_file
+        amplitudes_to_fibgz(
+            amplitudes_img,
+            verts,
+            faces,
+            output_fib_file,
+            mask_img,
+            num_fibers=self.inputs.num_fibers,
+            unit_odf=self.inputs.unit_odf,
+        )
         os.remove("amplitudes.nii")
         return runtime
 
@@ -113,15 +119,16 @@ class FIBGZtoFOD(SimpleInterface):
         if isdefined(self.inputs.mif_file):
             output_mif_file = self.inputs.mif_file
         else:
-            output_mif_file = fname_presuffix(fib_file, newpath=runtime.cwd, suffix=".mif",
-                                              use_ext=False)
+            output_mif_file = fname_presuffix(
+                fib_file, newpath=runtime.cwd, suffix=".mif", use_ext=False
+            )
         # Get the amplitudes as a Nifti1Image and sphere directions
-        amplitudes, directions = fib2amps(fib_file,
-                                          self.inputs.ref_image,
-                                          self.inputs.subtract_iso)
+        amplitudes, directions = fib2amps(
+            fib_file, self.inputs.ref_image, self.inputs.subtract_iso
+        )
         # convert them to MRTrix mif format
         amplitudes_to_sh_mif(amplitudes, directions, output_mif_file, runtime.cwd)
-        self._results['mif_file'] = output_mif_file
+        self._results["mif_file"] = output_mif_file
         return runtime
 
 
@@ -142,8 +149,9 @@ class NODDItoFIBGZ(SimpleInterface):
     output_spec = NODDItoFIBGZOutputSpec
 
     def _run_interface(self, runtime):
-        output_file = fname_presuffix(self.inputs.icvf_file, use_ext=False,
-                                      newpath=runtime.cwd, suffix=".fib")
+        output_file = fname_presuffix(
+            self.inputs.icvf_file, use_ext=False, newpath=runtime.cwd, suffix=".fib"
+        )
         verts, faces = get_dsi_studio_ODF_geometry("odf8")
         amico_directions_to_fibgz(
             directions_img=nb.load(self.inputs.directions_file),
@@ -153,8 +161,9 @@ class NODDItoFIBGZ(SimpleInterface):
             odf_dirs=verts,
             odf_faces=faces,
             output_file=output_file,
-            mask_img=nb.load(self.inputs.mask_file))
-        self._results['fibgz_file'] = output_file
+            mask_img=nb.load(self.inputs.mask_file),
+        )
+        self._results["fibgz_file"] = output_file
 
         return runtime
 
@@ -180,31 +189,30 @@ class DSIStudioTrkToTck(SimpleInterface):
         else:
             dsi_trk = nb.streamlines.load(self.inputs.trk_file)
 
-        #load preprocessed dwi image
+        # load preprocessed dwi image
         dwi_img = nb.load(self.inputs.reference_nifti)
 
-        #convert to voxel coordinates
+        # convert to voxel coordinates
         pts = dsi_trk.streamlines._data
-        zooms = np.abs(np.diag(dsi_trk.header['voxel_to_rasmm'])[:3])
+        zooms = np.abs(np.diag(dsi_trk.header["voxel_to_rasmm"])[:3])
         voxel_coords = pts / zooms
         voxel_coords[:, 0] = dwi_img.shape[0] - voxel_coords[:, 0]
         voxel_coords[:, 1] = dwi_img.shape[1] - voxel_coords[:, 1]
 
-        #create new tck
+        # create new tck
         new_data = nb.affines.apply_affine(dwi_img.affine, voxel_coords)
         dsi_trk.tractogram.streamlines._data = new_data
         tck = nb.streamlines.TckFile(dsi_trk.tractogram)
-        tck_file = fname_presuffix(self.inputs.trk_file.rstrip(".gz"),
-                                   newpath=runtime.cwd,
-                                   use_ext=False,
-                                   suffix=".tck")
+        tck_file = fname_presuffix(
+            self.inputs.trk_file.rstrip(".gz"), newpath=runtime.cwd, use_ext=False, suffix=".tck"
+        )
         tck.save(tck_file)
-        self._results['tck_file'] = tck_file
+        self._results["tck_file"] = tck_file
         return runtime
 
 
 def get_dsi_studio_ODF_geometry(odf_key):
-    mat_path = pkgr('qsiprep', 'data/odfs.mat')
+    mat_path = pkgr("qsiprep", "data/odfs.mat")
     m = loadmat(mat_path)
     odf_vertices = m[odf_key + "_vertices"].T
     odf_faces = m[odf_key + "_faces"].T
@@ -212,15 +220,15 @@ def get_dsi_studio_ODF_geometry(odf_key):
 
 
 def popen_run(arg_list):
-    cmd = subprocess.Popen(arg_list, stdout=subprocess.PIPE,
-                           stderr=subprocess.PIPE)
+    cmd = subprocess.Popen(arg_list, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out, err = cmd.communicate()
     LOGGER.info(out)
     LOGGER.info(err)
 
 
-def amplitudes_to_fibgz(amplitudes_img, odf_dirs, odf_faces, output_file,
-                        mask_img, num_fibers=5, unit_odf=False):
+def amplitudes_to_fibgz(
+    amplitudes_img, odf_dirs, odf_faces, output_file, mask_img, num_fibers=5, unit_odf=False
+):
     """Convert a NiftiImage of ODF amplitudes to a DSI Studio fib file.
 
     Parameters:
@@ -262,7 +270,7 @@ def amplitudes_to_fibgz(amplitudes_img, odf_dirs, odf_faces, output_file,
     # Get the flat mask
     ampl_data = amplitudes_img.get_fdata()
     flat_mask = mask_img.get_fdata().flatten(order="F") > 0
-    odf_array = ampl_data.reshape(-1, ampl_data.shape[3], order='F')
+    odf_array = ampl_data.reshape(-1, ampl_data.shape[3], order="F")
     del ampl_data
     masked_odfs = odf_array[flat_mask, :]
     z0 = np.nanmax(masked_odfs)
@@ -281,9 +289,9 @@ def amplitudes_to_fibgz(amplitudes_img, odf_dirs, odf_faces, output_file,
 
     dsi_mat = {}
     # Create matfile that can be read by dsi Studio
-    dsi_mat['dimension'] = np.array(amplitudes_img.shape[:3])
-    dsi_mat['voxel_size'] = np.array(amplitudes_img.header.get_zooms()[:3])
-    n_voxels = int(np.prod(dsi_mat['dimension']))
+    dsi_mat["dimension"] = np.array(amplitudes_img.shape[:3])
+    dsi_mat["voxel_size"] = np.array(amplitudes_img.header.get_zooms()[:3])
+    n_voxels = int(np.prod(dsi_mat["dimension"]))
     LOGGER.info("Detecting Peaks")
     for odfnum in range(n_odfs):
         dirs, vals, indices = peak_directions(masked_odfs[odfnum], hs)
@@ -299,28 +307,29 @@ def amplitudes_to_fibgz(amplitudes_img, odf_dirs, odf_faces, output_file,
         # fill in the "fa" values
         fa_n = np.zeros(n_voxels)
         fa_n[flat_mask] = peak_vals[:, nfib]
-        dsi_mat['fa%d' % nfib] = fa_n.astype('float32')
+        dsi_mat["fa%d" % nfib] = fa_n.astype("float32")
 
         # Fill in the index values
         index_n = np.zeros(n_voxels)
         index_n[flat_mask] = peak_indices[:, nfib]
-        dsi_mat['index%d' % nfib] = index_n.astype('int16')
+        dsi_mat["index%d" % nfib] = index_n.astype("int16")
 
     # Add in the ODFs
     num_odf_matrices = n_odfs // ODF_COLS
     split_indices = (np.arange(num_odf_matrices) + 1) * ODF_COLS
     odf_splits = np.array_split(masked_odfs, split_indices, axis=0)
     for splitnum, odfs in enumerate(odf_splits):
-        dsi_mat['odf%d' % splitnum] = odfs.T.astype('float32')
+        dsi_mat["odf%d" % splitnum] = odfs.T.astype("float32")
 
-    dsi_mat['odf_vertices'] = odf_dirs.T
-    dsi_mat['odf_faces'] = odf_faces.T
-    dsi_mat['z0'] = np.array([z0])
-    savemat(output_file, dsi_mat, format='4', appendmat=False)
+    dsi_mat["odf_vertices"] = odf_dirs.T
+    dsi_mat["odf_faces"] = odf_faces.T
+    dsi_mat["z0"] = np.array([z0])
+    savemat(output_file, dsi_mat, format="4", appendmat=False)
 
 
-def amico_directions_to_fibgz(directions_img, od_img, icvf_img, isovf_img,
-                              odf_dirs, odf_faces, output_file, mask_img):
+def amico_directions_to_fibgz(
+    directions_img, od_img, icvf_img, isovf_img, odf_dirs, odf_faces, output_file, mask_img
+):
     """Convert a NiftiImage of ODF amplitudes to a DSI Studio fib file.
 
     Parameters:
@@ -369,8 +378,8 @@ def amico_directions_to_fibgz(directions_img, od_img, icvf_img, isovf_img,
     directions_data = directions_img.get_fdata()
     flat_mask = mask_img.get_fdata().flatten(order="F") > 0
     n_odfs = flat_mask.sum()
-    directions_array = directions_data.reshape(-1, directions_data.shape[3], order='F')
-    #directions_array[:, 1] = -directions_array[:, 1]
+    directions_array = directions_data.reshape(-1, directions_data.shape[3], order="F")
+    # directions_array[:, 1] = -directions_array[:, 1]
     directions_array[:, 0] = -directions_array[:, 0]
     masked_dirs = np.nan_to_num(directions_array[flat_mask, :])
     isovf_vec = isovf_img.get_fdata().flatten(order="F")
@@ -382,9 +391,9 @@ def amico_directions_to_fibgz(directions_img, od_img, icvf_img, isovf_img,
 
     # Create matfile that can be read by dsi Studio
     dsi_mat = {}
-    dsi_mat['dimension'] = np.array(directions_img.shape[:3])
-    dsi_mat['voxel_size'] = np.array(directions_img.header.get_zooms()[:3])
-    n_voxels = int(np.prod(dsi_mat['dimension']))
+    dsi_mat["dimension"] = np.array(directions_img.shape[:3])
+    dsi_mat["voxel_size"] = np.array(directions_img.header.get_zooms()[:3])
+    n_voxels = int(np.prod(dsi_mat["dimension"]))
     LOGGER.info("Detecting Peaks")
     for odfnum in range(n_odfs):
         peak_indices[odfnum] = hs.find_closest(masked_dirs[odfnum])
@@ -392,14 +401,14 @@ def amico_directions_to_fibgz(directions_img, od_img, icvf_img, isovf_img,
     # fill in the "dir" values
     dir0 = np.zeros(n_voxels)
     dir0[flat_mask] = peak_indices
-    dsi_mat['index0'] = dir0.astype('int16')
-    dsi_mat['fa0'] = icvf_vec
-    dsi_mat['ICVF0'] = icvf_vec
-    dsi_mat['ISOVF0'] = isovf_vec
-    dsi_mat['OD0'] = od_vec
-    dsi_mat['odf_vertices'] = odf_dirs.T
-    dsi_mat['odf_faces'] = odf_faces.T
-    savemat(output_file, dsi_mat, format='4', appendmat=False)
+    dsi_mat["index0"] = dir0.astype("int16")
+    dsi_mat["fa0"] = icvf_vec
+    dsi_mat["ICVF0"] = icvf_vec
+    dsi_mat["ISOVF0"] = isovf_vec
+    dsi_mat["OD0"] = od_vec
+    dsi_mat["odf_vertices"] = odf_dirs.T
+    dsi_mat["odf_faces"] = odf_faces.T
+    savemat(output_file, dsi_mat, format="4", appendmat=False)
 
 
 def amplitudes_to_sh_mif(amplitudes_img, odf_dirs, output_file, working_dir):
@@ -438,13 +447,14 @@ def amplitudes_to_sh_mif(amplitudes_img, odf_dirs, output_file, working_dir):
     dirs_txt = op.join(working_dir, "ras+directions.txt")
     np.savetxt(dirs_txt, np.column_stack([phi, theta]))
 
-    popen_run(["amp2sh", "-quiet", "-force", "-directions", dirs_txt, "odf_values.nii",
-               output_file])
+    popen_run(
+        ["amp2sh", "-quiet", "-force", "-directions", dirs_txt, "odf_values.nii", output_file]
+    )
     os.remove(temp_nii)
     os.remove(dirs_txt)
 
 
-def  mif2amps(sh_mif_file, working_dir, dsi_studio_odf="odf8"):
+def mif2amps(sh_mif_file, working_dir, dsi_studio_odf="odf8"):
     """Convert a MRTrix SH mif file to a NiBabel amplitudes image.
 
     Parameters:
@@ -473,8 +483,7 @@ def  mif2amps(sh_mif_file, working_dir, dsi_studio_odf="odf8"):
 
 
 def fast_load_fibgz(fib_file):
-    """Load a potentially gzipped fibgz file more quickly than using built-in gzip.
-    """
+    """Load a potentially gzipped fibgz file more quickly than using built-in gzip."""
     # Try to load a non-zipped file
     if not fib_file.endswith("gz"):
         return loadmat(fib_file)
@@ -483,6 +492,7 @@ def fast_load_fibgz(fib_file):
     def find_zcat():
         def is_exe(fpath):
             return os.path.exists(fpath) and os.access(fpath, os.X_OK)
+
         for program in ["gzcat", "zcat"]:
             for path in os.environ["PATH"].split(os.pathsep):
                 path = path.strip('"')
@@ -506,12 +516,12 @@ def fast_load_fibgz(fib_file):
 
 def fib2amps(fib_file, ref_image, subtract_iso=True):
     fibmat = fast_load_fibgz(fib_file)
-    dims = tuple(fibmat['dimension'].squeeze().astype(int))
-    directions = fibmat['odf_vertices'].T
+    dims = tuple(fibmat["dimension"].squeeze().astype(int))
+    directions = fibmat["odf_vertices"].T
 
     odf_vars = [k for k in fibmat.keys() if re.match("odf\\d+", k)]
     valid_odfs = []
-    flat_mask = fibmat["fa0"].squeeze().ravel(order='F') > 0
+    flat_mask = fibmat["fa0"].squeeze().ravel(order="F") > 0
     n_voxels = np.prod(dims)
     if odf_vars:
         for n in range(len(odf_vars)):
@@ -529,7 +539,7 @@ def fib2amps(fib_file, ref_image, subtract_iso=True):
     # Convert each column to a 3d file, then concatenate them
     odfs_3d = []
     for odf_vals in odf_array.T:
-        new_data = np.zeros(n_voxels, dtype='float32')
+        new_data = np.zeros(n_voxels, dtype="float32")
         new_data[flat_mask] = odf_vals
         odfs_3d.append(new_data.reshape(dims, order="F"))
 
@@ -544,17 +554,13 @@ def peaks_to_odfs(fibdict):
     """If no ODF data is available, create fake ODFs that will behave properly."""
     index_vars = [key for key in fibdict if key.startswith("index")]
     num_indexes = len(index_vars)
-    flat_mask = fibdict['fa0'].squeeze().ravel(order='F') > 0
-    num_directions = fibdict['odf_vertices'].shape[1]
+    flat_mask = fibdict["fa0"].squeeze().ravel(order="F") > 0
+    num_directions = fibdict["odf_vertices"].shape[1]
     num_odfs = flat_mask.sum()
-    odfs = np.zeros((num_odfs, num_directions), dtype='float32')
+    odfs = np.zeros((num_odfs, num_directions), dtype="float32")
     row_indices = np.arange(num_odfs)
     for peak_num in range(num_indexes):
-        fa_values = fibdict[
-            'fa%d' % peak_num].squeeze().ravel(order='F')[flat_mask]
-        peak_indices = fibdict[
-            'index%d' % peak_num].squeeze().ravel(order='F')[flat_mask]
+        fa_values = fibdict["fa%d" % peak_num].squeeze().ravel(order="F")[flat_mask]
+        peak_indices = fibdict["index%d" % peak_num].squeeze().ravel(order="F")[flat_mask]
         odfs[row_indices, peak_indices] = fa_values
     return odfs
-
-

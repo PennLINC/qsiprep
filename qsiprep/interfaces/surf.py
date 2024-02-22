@@ -21,12 +21,12 @@ from nipype.interfaces.base import (
 
 
 class NormalizeSurfInputSpec(BaseInterfaceInputSpec):
-    in_file = File(mandatory=True, exists=True, desc='Freesurfer-generated GIFTI file')
-    transform_file = File(exists=True, desc='FSL or LTA affine transform file')
+    in_file = File(mandatory=True, exists=True, desc="Freesurfer-generated GIFTI file")
+    transform_file = File(exists=True, desc="FSL or LTA affine transform file")
 
 
 class NormalizeSurfOutputSpec(TraitedSpec):
-    out_file = File(desc='output file with re-centered GIFTI coordinates')
+    out_file = File(desc="output file with re-centered GIFTI coordinates")
 
 
 class NormalizeSurf(SimpleInterface):
@@ -64,6 +64,7 @@ Pipelines/blob/ae69b9a/PostFreeSurfer/scripts/FreeSurfer2CaretConvertAndRegister
 #L147-154
 
     """
+
     input_spec = NormalizeSurfInputSpec
     output_spec = NormalizeSurfOutputSpec
 
@@ -71,16 +72,14 @@ Pipelines/blob/ae69b9a/PostFreeSurfer/scripts/FreeSurfer2CaretConvertAndRegister
         transform_file = self.inputs.transform_file
         if not isdefined(transform_file):
             transform_file = None
-        self._results['out_file'] = normalize_surfs(
-            self.inputs.in_file,
-            transform_file,
-            newpath=runtime.cwd
+        self._results["out_file"] = normalize_surfs(
+            self.inputs.in_file, transform_file, newpath=runtime.cwd
         )
         return runtime
 
 
 def normalize_surfs(in_file, transform_file, newpath=None):
-    """ Re-center GIFTI coordinates to fit align to native T1 space
+    """Re-center GIFTI coordinates to fit align to native T1 space
 
     For midthickness surfaces, add MidThickness metadata
 
@@ -92,22 +91,21 @@ def normalize_surfs(in_file, transform_file, newpath=None):
 
     img = nb.load(in_file)
     transform = load_transform(transform_file)
-    pointset = img.get_arrays_from_intent('NIFTI_INTENT_POINTSET')[0]
+    pointset = img.get_arrays_from_intent("NIFTI_INTENT_POINTSET")[0]
     coords = pointset.data.T
-    c_ras_keys = ('VolGeomC_R', 'VolGeomC_A', 'VolGeomC_S')
-    ras = np.array([[float(pointset.metadata[key])]
-                    for key in c_ras_keys])
+    c_ras_keys = ("VolGeomC_R", "VolGeomC_A", "VolGeomC_S")
+    ras = np.array([[float(pointset.metadata[key])] for key in c_ras_keys])
     ones = np.ones((1, coords.shape[1]), dtype=coords.dtype)
     # Apply C_RAS translation to coordinates, then transform
     pointset.data = transform.dot(np.vstack((coords + ras, ones)))[:3].T.astype(coords.dtype)
 
-    secondary = nb.gifti.GiftiNVPairs('AnatomicalStructureSecondary', 'MidThickness')
-    geom_type = nb.gifti.GiftiNVPairs('GeometricType', 'Anatomical')
+    secondary = nb.gifti.GiftiNVPairs("AnatomicalStructureSecondary", "MidThickness")
+    geom_type = nb.gifti.GiftiNVPairs("GeometricType", "Anatomical")
     has_ass = has_geo = False
     for nvpair in pointset.meta.data:
         # Remove C_RAS translation from metadata to avoid double-dipping in FreeSurfer
         if nvpair.name in c_ras_keys:
-            nvpair.value = '0.000000'
+            nvpair.value = "0.000000"
         # Check for missing metadata
         elif nvpair.name == secondary.name:
             has_ass = True
@@ -115,7 +113,7 @@ def normalize_surfs(in_file, transform_file, newpath=None):
             has_geo = True
     fname = os.path.basename(in_file)
     # Update metadata for MidThickness/graymid surfaces
-    if 'midthickness' in fname.lower() or 'graymid' in fname.lower():
+    if "midthickness" in fname.lower() or "graymid" in fname.lower():
         if not has_ass:
             pointset.meta.data.insert(1, secondary)
         if not has_geo:
@@ -144,12 +142,12 @@ def load_transform(fname):
     if fname is None:
         return np.eye(4)
 
-    if fname.endswith('.mat'):
+    if fname.endswith(".mat"):
         return np.loadtxt(fname)
-    elif fname.endswith('.lta'):
-        with open(fname, 'rb') as fobj:
+    elif fname.endswith(".lta"):
+        with open(fname, "rb") as fobj:
             for line in fobj:
-                if line.startswith(b'1 4 4'):
+                if line.startswith(b"1 4 4"):
                     break
             lines = fobj.readlines()[:4]
         return np.genfromtxt(lines)

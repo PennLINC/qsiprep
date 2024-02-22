@@ -13,15 +13,15 @@ from nipype.utils.filemanip import fname_presuffix
 from scipy.io.matlab import loadmat, savemat
 from scipy.linalg import schur, svd
 
-LOGGER = logging.getLogger('nipype.interface')
+LOGGER = logging.getLogger("nipype.interface")
 
 
 class ControllabilityInputSpec(BaseInterfaceInputSpec):
-    matfile = File(exists=True, desc='connectivity matrices in matlab format')
+    matfile = File(exists=True, desc="connectivity matrices in matlab format")
 
 
 class ControllabilityOutputSpec(TraitedSpec):
-    controllability = File(exists=True, desc='input connectivity data and controllability')
+    controllability = File(exists=True, desc="input connectivity data and controllability")
 
 
 class Controllability(SimpleInterface):
@@ -30,33 +30,34 @@ class Controllability(SimpleInterface):
 
     def _run_interface(self, runtime):
         mat = loadmat(self.inputs.matfile, squeeze_me=True)
-        outfile = fname_presuffix(self.inputs.matfile, suffix="_controllability",
-                                  newpath=runtime.cwd)
+        outfile = fname_presuffix(
+            self.inputs.matfile, suffix="_controllability", newpath=runtime.cwd
+        )
         connectivity_info = _calculate_controllability(mat)
         LOGGER.info("writing %s", outfile)
         savemat(outfile, connectivity_info, do_compression=True)
-        self._results['controllability'] = outfile
+        self._results["controllability"] = outfile
         return runtime
 
 
 def ave_control(A):
-    Anormed = A / (1 + svd(A)[1][0])   # Matrix normalization
-    T, U = schur(Anormed, 'real')    # Schur stability
+    Anormed = A / (1 + svd(A)[1][0])  # Matrix normalization
+    T, U = schur(Anormed, "real")  # Schur stability
 
     midMat = (U**2).T
     v = np.diag(T)
-    P = np.column_stack([1 - v*v.T] * A.shape[0])
-    return np.sum(midMat/P, axis=0)
+    P = np.column_stack([1 - v * v.T] * A.shape[0])
+    return np.sum(midMat / P, axis=0)
 
 
 def modal_control(A):
-    Anormed = A / (1 + svd(A)[1][0])   # Matrix normalization
-    T, U = schur(Anormed, 'real')    # Schur stability
+    Anormed = A / (1 + svd(A)[1][0])  # Matrix normalization
+    T, U = schur(Anormed, "real")  # Schur stability
     eigVals = np.diag(T)
     N = A.shape[0]
     phi = np.zeros(N)
 
-    b = 1-eigVals**2
+    b = 1 - eigVals**2
     U2 = U**2
     for i in range(N):
         phi[i] = np.dot(U2[i], b)

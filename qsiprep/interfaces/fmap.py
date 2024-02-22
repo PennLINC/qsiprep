@@ -52,7 +52,7 @@ from ..niworkflows.viz.utils import (
 from .images import to_lps
 from .reports import topup_selection_to_report
 
-LOGGER = logging.getLogger('nipype.interface')
+LOGGER = logging.getLogger("nipype.interface")
 CRITICAL_KEYS = ["PhaseEncodingDirection", "TotalReadoutTime", "EffectiveEchoSpacing"]
 
 
@@ -60,7 +60,7 @@ class B0RPEFieldmapInputSpec(BaseInterfaceInputSpec):
     b0_file = InputMultiObject(File(exists=True))
     output_3d_images = traits.Bool(False, usedefault=True)
     max_num_b0s = traits.Int(3, usedefault=True)
-    orientation = traits.Enum('LPS', 'LAS', default='LPS', usedefault=True)
+    orientation = traits.Enum("LPS", "LAS", default="LPS", usedefault=True)
     b0_threshold = traits.Int(100, usedefault=True)
 
 
@@ -88,6 +88,7 @@ class B0RPEFieldmap(SimpleInterface):
             Write the outputs in either 'LAS' or 'LPS' orientation
 
     """
+
     input_spec = B0RPEFieldmapInputSpec
     output_spec = B0RPEFieldmapOutputSpec
 
@@ -95,12 +96,17 @@ class B0RPEFieldmap(SimpleInterface):
 
         # Get b=0 images from all the inputs
         b0_series, b0_indices, original_files = load_epi_dwi_fieldmaps(
-            self.inputs.b0_file, self.inputs.b0_threshold)
+            self.inputs.b0_file, self.inputs.b0_threshold
+        )
 
         # Only get the requested number of images
         _, fmap_imain, fmap_report, _ = topup_inputs_from_4d_file(
-            b0_series, b0_indices, original_files, image_source="EPI fieldmap",
-            max_per_spec=self.inputs.max_num_b0s)
+            b0_series,
+            b0_indices,
+            original_files,
+            image_source="EPI fieldmap",
+            max_per_spec=self.inputs.max_num_b0s,
+        )
         LOGGER.info(fmap_report)
 
         # Get b=0 images and metadata from all the input images
@@ -116,14 +122,15 @@ class B0RPEFieldmap(SimpleInterface):
         # Output just one 3/4d image and a sidecar
         if not self.inputs.output_3d_images:
             # Save the conformed fmap
-            output_fmap = fname_presuffix(self.inputs.b0_file[0], suffix="conform",
-                                          newpath=runtime.cwd)
+            output_fmap = fname_presuffix(
+                self.inputs.b0_file[0], suffix="conform", newpath=runtime.cwd
+            )
             output_json = fname_presuffix(output_fmap, use_ext=False, suffix=".json")
             fmap_imain.to_filename(output_fmap)
             with open(output_json, "w") as sidecar:
                 json.dump(merged_metadata, sidecar)
-            self._results['fmap_file'] = output_fmap
-            self._results['fmap_info'] = output_json
+            self._results["fmap_file"] = output_fmap
+            self._results["fmap_info"] = output_json
             return runtime
 
         image_list = []
@@ -131,9 +138,11 @@ class B0RPEFieldmap(SimpleInterface):
         for imgnum, img in enumerate(iter_img(merged_b0s)):
 
             # Save the conformed fmap and metadata
-            output_fmap = fname_presuffix(self.inputs.b0_file[0],
-                                          suffix="%s_%03d" % (self.inputs.orientation, imgnum),
-                                          newpath=runtime.cwd)
+            output_fmap = fname_presuffix(
+                self.inputs.b0_file[0],
+                suffix="%s_%03d" % (self.inputs.orientation, imgnum),
+                newpath=runtime.cwd,
+            )
             output_json = fname_presuffix(output_fmap, use_ext=False, suffix=".json")
             with open(output_json, "w") as sidecar:
                 json.dump(merged_metadata, sidecar)
@@ -143,8 +152,8 @@ class B0RPEFieldmap(SimpleInterface):
             image_list.append(output_fmap)
             json_list.append(output_json)
 
-        self._results['fmap_file'] = image_list
-        self._results['fmap_info'] = json_list
+        self._results["fmap_file"] = image_list
+        self._results["fmap_info"] = json_list
         return runtime
 
 
@@ -159,25 +168,30 @@ def _merge_metadata(metadatas):
             current_value = merged_metadata.get(critical_key)
             next_value = next_metadata.get(critical_key)
             if not current_value == next_value:
-                LOGGER.warning("%s inconsistent in fieldmaps: %s, %s", critical_key,
-                               str(current_value), str(next_value))
+                LOGGER.warning(
+                    "%s inconsistent in fieldmaps: %s, %s",
+                    critical_key,
+                    str(current_value),
+                    str(next_value),
+                )
     return merged_metadata
 
 
 class FieldToRadSInputSpec(BaseInterfaceInputSpec):
-    in_file = File(exists=True, mandatory=True, desc='input fieldmap')
-    fmap_range = traits.Float(desc='range of input field map')
+    in_file = File(exists=True, mandatory=True, desc="input fieldmap")
+    fmap_range = traits.Float(desc="range of input field map")
 
 
 class FieldToRadSOutputSpec(TraitedSpec):
-    out_file = File(desc='the output fieldmap')
-    fmap_range = traits.Float(desc='range of input field map')
+    out_file = File(desc="the output fieldmap")
+    fmap_range = traits.Float(desc="range of input field map")
 
 
 class FieldToRadS(SimpleInterface):
     """
     The FieldToRadS converts from arbitrary units to rad/s
     """
+
     input_spec = FieldToRadSInputSpec
     output_spec = FieldToRadSOutputSpec
 
@@ -185,95 +199,102 @@ class FieldToRadS(SimpleInterface):
         fmap_range = None
         if isdefined(self.inputs.fmap_range):
             fmap_range = self.inputs.fmap_range
-        self._results['out_file'], self._results['fmap_range'] = _torads(
-            self.inputs.in_file, fmap_range, newpath=runtime.cwd)
+        self._results["out_file"], self._results["fmap_range"] = _torads(
+            self.inputs.in_file, fmap_range, newpath=runtime.cwd
+        )
         return runtime
 
 
 class FieldToHzInputSpec(BaseInterfaceInputSpec):
-    in_file = File(exists=True, mandatory=True, desc='input fieldmap')
-    range_hz = traits.Float(mandatory=True, desc='range of input field map')
+    in_file = File(exists=True, mandatory=True, desc="input fieldmap")
+    range_hz = traits.Float(mandatory=True, desc="range of input field map")
 
 
 class FieldToHzOutputSpec(TraitedSpec):
-    out_file = File(desc='the output fieldmap')
+    out_file = File(desc="the output fieldmap")
 
 
 class FieldToHz(SimpleInterface):
     """
     The FieldToHz converts from arbitrary units to Hz
     """
+
     input_spec = FieldToHzInputSpec
     output_spec = FieldToHzOutputSpec
 
     def _run_interface(self, runtime):
-        self._results['out_file'] = _tohz(
-            self.inputs.in_file, self.inputs.range_hz, newpath=runtime.cwd)
+        self._results["out_file"] = _tohz(
+            self.inputs.in_file, self.inputs.range_hz, newpath=runtime.cwd
+        )
         return runtime
 
 
 class Phasediff2FieldmapInputSpec(BaseInterfaceInputSpec):
-    in_file = File(exists=True, mandatory=True, desc='input fieldmap')
-    metadata = traits.Dict(mandatory=True, desc='BIDS metadata dictionary')
+    in_file = File(exists=True, mandatory=True, desc="input fieldmap")
+    metadata = traits.Dict(mandatory=True, desc="BIDS metadata dictionary")
 
 
 class Phasediff2FieldmapOutputSpec(TraitedSpec):
-    out_file = File(desc='the output fieldmap')
+    out_file = File(desc="the output fieldmap")
 
 
 class Phasediff2Fieldmap(SimpleInterface):
     """
     Convert a phase difference map into a fieldmap in Hz
     """
+
     input_spec = Phasediff2FieldmapInputSpec
     output_spec = Phasediff2FieldmapOutputSpec
 
     def _run_interface(self, runtime):
-        self._results['out_file'] = phdiff2fmap(
-            self.inputs.in_file,
-            _delta_te(self.inputs.metadata),
-            newpath=runtime.cwd)
+        self._results["out_file"] = phdiff2fmap(
+            self.inputs.in_file, _delta_te(self.inputs.metadata), newpath=runtime.cwd
+        )
         return runtime
 
 
 class Phases2FieldmapInputSpec(BaseInterfaceInputSpec):
     phase_files = InputMultiObject(
-        File(exists=True), mandatory=True, desc='list of phase1, phase2 files')
+        File(exists=True), mandatory=True, desc="list of phase1, phase2 files"
+    )
     metadatas = traits.List(
-        traits.Dict, mandatory=True, desc='list of phase1, phase2 metadata dicts')
+        traits.Dict, mandatory=True, desc="list of phase1, phase2 metadata dicts"
+    )
 
 
 class Phases2FieldmapOutputSpec(TraitedSpec):
-    out_file = File(desc='the output fieldmap')
-    phasediff_metadata = traits.Dict(desc='the phasediff metadata')
+    out_file = File(desc="the output fieldmap")
+    phasediff_metadata = traits.Dict(desc="the phasediff metadata")
 
 
 class Phases2Fieldmap(SimpleInterface):
     """
     Convert a phase1, phase2 into a difference map
     """
+
     input_spec = Phases2FieldmapInputSpec
     output_spec = Phases2FieldmapOutputSpec
 
     def _run_interface(self, runtime):
         # Get the echo times
-        fmap_file, merged_metadata = phases2fmap(self.inputs.phase_files, self.inputs.metadatas,
-                                                 newpath=runtime.cwd)
-        self._results['phasediff_metadata'] = merged_metadata
-        self._results['out_file'] = fmap_file
+        fmap_file, merged_metadata = phases2fmap(
+            self.inputs.phase_files, self.inputs.metadatas, newpath=runtime.cwd
+        )
+        self._results["phasediff_metadata"] = merged_metadata
+        self._results["out_file"] = fmap_file
         return runtime
 
 
 def phases2fmap(phase_files, metadatas, newpath=None):
     """Calculates a phasediff from two phase images. Assumes monopolar
-    readout. """
+    readout."""
     from copy import deepcopy
 
     import nibabel as nb
     import numpy as np
     from nipype.utils.filemanip import fname_presuffix
 
-    phasediff_file = fname_presuffix(phase_files[0], suffix='_phasediff', newpath=newpath)
+    phasediff_file = fname_presuffix(phase_files[0], suffix="_phasediff", newpath=newpath)
     echo_times = [meta.get("EchoTime") for meta in metadatas]
     if None in echo_times or echo_times[0] == echo_times[1]:
         raise RuntimeError()
@@ -319,9 +340,9 @@ def phases2fmap(phase_files, metadatas, newpath=None):
     phasediff_nii.to_filename(phasediff_file)
 
     merged_metadata = deepcopy(metadatas[0])
-    del merged_metadata['EchoTime']
-    merged_metadata['EchoTime1'] = float(echo_times[short_echo_index])
-    merged_metadata['EchoTime2'] = float(echo_times[long_echo_index])
+    del merged_metadata["EchoTime"]
+    merged_metadata["EchoTime1"] = float(echo_times[short_echo_index])
+    merged_metadata["EchoTime2"] = float(echo_times[long_echo_index])
 
     return phasediff_file, merged_metadata
 
@@ -352,21 +373,24 @@ def _despike2d(data, thres, neigh=None):
                 patch_range = vals.max() - vals.min()
                 patch_med = np.median(vals)
 
-                if (patch_range > 1e-6 and
-                        (abs(thisval - patch_med) / patch_range) > thres):
+                if patch_range > 1e-6 and (abs(thisval - patch_med) / patch_range) > thres:
                     data[i, j, k] = patch_med
     return data
 
+
 def _unwrap(fmap_data, mag_file, mask=None):
     import os
-    fsl_check = os.environ.get('FSL_BUILD')
-    if fsl_check=="no_fsl":
+
+    fsl_check = os.environ.get("FSL_BUILD")
+    if fsl_check == "no_fsl":
         raise Exception(
             """Container in use does not have FSL. To use this workflow,
-            please download the qsiprep container with FSL installed.""")
+            please download the qsiprep container with FSL installed."""
+        )
     from math import pi
 
     from nipype.interfaces.fsl import PRELUDE
+
     magnii = nb.load(mag_file)
 
     if mask is None:
@@ -375,17 +399,20 @@ def _unwrap(fmap_data, mag_file, mask=None):
     fmapmax = max(abs(fmap_data[mask > 0].min()), fmap_data[mask > 0].max())
     fmap_data *= pi / fmapmax
 
-    nb.Nifti1Image(fmap_data, magnii.affine).to_filename('fmap_rad.nii.gz')
-    nb.Nifti1Image(mask, magnii.affine).to_filename('fmap_mask.nii.gz')
-    nb.Nifti1Image(magnii.get_fdata(), magnii.affine).to_filename('fmap_mag.nii.gz')
+    nb.Nifti1Image(fmap_data, magnii.affine).to_filename("fmap_rad.nii.gz")
+    nb.Nifti1Image(mask, magnii.affine).to_filename("fmap_mask.nii.gz")
+    nb.Nifti1Image(magnii.get_fdata(), magnii.affine).to_filename("fmap_mag.nii.gz")
 
     # Run prelude
-    res = PRELUDE(phase_file='fmap_rad.nii.gz',
-                  magnitude_file='fmap_mag.nii.gz',
-                  mask_file='fmap_mask.nii.gz').run()
+    res = PRELUDE(
+        phase_file="fmap_rad.nii.gz",
+        magnitude_file="fmap_mag.nii.gz",
+        mask_file="fmap_mask.nii.gz",
+    ).run()
 
     unwrapped = nb.load(res.outputs.unwrapped_phase_file).get_fdata() * (fmapmax / pi)
     return unwrapped
+
 
 def get_ees(in_meta, in_file=None):
     """
@@ -443,30 +470,30 @@ def get_ees(in_meta, in_file=None):
     from qsiprep.interfaces.fmap import _get_pe_index
 
     # Use case 1: EES is defined
-    ees = in_meta.get('EffectiveEchoSpacing', None)
+    ees = in_meta.get("EffectiveEchoSpacing", None)
     if ees is not None:
         return ees
 
     # All other cases require the parallel acc and npe (N vox in PE dir)
-    acc = float(in_meta.get('ParallelReductionFactorInPlane', 1.0))
+    acc = float(in_meta.get("ParallelReductionFactorInPlane", 1.0))
     npe = nb.load(in_file).shape[_get_pe_index(in_meta)]
     etl = npe // acc
 
     # Use case 2: TRT is defined
-    trt = in_meta.get('TotalReadoutTime', None)
+    trt = in_meta.get("TotalReadoutTime", None)
     if trt is not None:
         return trt / (etl - 1)
 
     # Use case 3 (philips scans)
-    wfs = in_meta.get('WaterFatShift', None)
+    wfs = in_meta.get("WaterFatShift", None)
     if wfs is not None:
-        fstrength = in_meta['MagneticFieldStrength']
+        fstrength = in_meta["MagneticFieldStrength"]
         wfd_ppm = 3.4  # water-fat diff in ppm
         g_ratio_mhz_t = 42.57  # gyromagnetic ratio for proton (1H) in MHz/T
         wfs_hz = fstrength * wfd_ppm * g_ratio_mhz_t
         return wfs / (wfs_hz * etl)
 
-    raise ValueError('Unknown effective echo-spacing specification')
+    raise ValueError("Unknown effective echo-spacing specification")
 
 
 def get_trt(in_meta, in_file=None):
@@ -513,36 +540,36 @@ def get_trt(in_meta, in_file=None):
     """
 
     # Use case 1: TRT is defined
-    trt = in_meta.get('TotalReadoutTime', None)
+    trt = in_meta.get("TotalReadoutTime", None)
     if trt is not None:
         return trt
 
     # All other cases require the parallel acc and npe (N vox in PE dir)
-    acc = float(in_meta.get('ParallelReductionFactorInPlane', 1.0))
+    acc = float(in_meta.get("ParallelReductionFactorInPlane", 1.0))
     npe = nb.load(in_file).shape[_get_pe_index(in_meta)]
     etl = npe // acc
 
     # Use case 2: TRT is defined
-    ees = in_meta.get('EffectiveEchoSpacing', None)
+    ees = in_meta.get("EffectiveEchoSpacing", None)
     if ees is not None:
         return ees * (etl - 1)
 
     # Use case 3 (philips scans)
-    wfs = in_meta.get('WaterFatShift', None)
+    wfs = in_meta.get("WaterFatShift", None)
     if wfs is not None:
-        fstrength = in_meta['MagneticFieldStrength']
+        fstrength = in_meta["MagneticFieldStrength"]
         wfd_ppm = 3.4  # water-fat diff in ppm
         g_ratio_mhz_t = 42.57  # gyromagnetic ratio for proton (1H) in MHz/T
         wfs_hz = fstrength * wfd_ppm * g_ratio_mhz_t
         return wfs / wfs_hz
 
-    raise ValueError('Unknown total-readout time specification')
+    raise ValueError("Unknown total-readout time specification")
 
 
 def _get_pe_index(meta):
-    pe = meta['PhaseEncodingDirection']
+    pe = meta["PhaseEncodingDirection"]
     try:
-        return {'i': 0, 'j': 1, 'k': 2}[pe[0]]
+        return {"i": 0, "j": 1, "k": 2}[pe[0]]
     except KeyError:
         raise RuntimeError('"%s" is an invalid PE string' % pe)
 
@@ -561,7 +588,7 @@ def _torads(in_file, fmap_range=None, newpath=None):
     import nibabel as nb
     from nipype.utils.filemanip import fname_presuffix
 
-    out_file = fname_presuffix(in_file, suffix='_rad', newpath=newpath)
+    out_file = fname_presuffix(in_file, suffix="_rad", newpath=newpath)
     fmapnii = nb.load(in_file)
     fmapdata = fmapnii.get_fdata()
 
@@ -569,7 +596,7 @@ def _torads(in_file, fmap_range=None, newpath=None):
         fmap_range = max(abs(fmapdata.min()), fmapdata.max())
     fmapdata = fmapdata * (pi / fmap_range)
     out_img = nb.Nifti1Image(fmapdata, fmapnii.affine, fmapnii.header)
-    out_img.set_data_dtype('float32')
+    out_img.set_data_dtype("float32")
     out_img.to_filename(out_file)
     return out_file, fmap_range
 
@@ -581,12 +608,12 @@ def _tohz(in_file, range_hz, newpath=None):
     import nibabel as nb
     from nipype.utils.filemanip import fname_presuffix
 
-    out_file = fname_presuffix(in_file, suffix='_hz', newpath=newpath)
+    out_file = fname_presuffix(in_file, suffix="_hz", newpath=newpath)
     fmapnii = nb.load(in_file)
     fmapdata = fmapnii.get_fdata()
     fmapdata = fmapdata * (range_hz / pi)
     out_img = nb.Nifti1Image(fmapdata, fmapnii.affine, fmapnii.header)
-    out_img.set_data_dtype('float32')
+    out_img.set_data_dtype("float32")
     out_img.to_filename(out_file)
     return out_file
 
@@ -617,9 +644,9 @@ def phdiff2fmap(in_file, delta_te, newpath=None):
 
     #  GYROMAG_RATIO_H_PROTON_MHZ = 42.576
 
-    out_file = fname_presuffix(in_file, suffix='_fmap', newpath=newpath)
+    out_file = fname_presuffix(in_file, suffix="_fmap", newpath=newpath)
     image = nb.load(in_file)
-    data = (image.get_fdata().astype(np.float32) / (2. * math.pi * delta_te))
+    data = image.get_fdata().astype(np.float32) / (2.0 * math.pi * delta_te)
     nii = nb.Nifti1Image(data, image.affine, image.header)
     nii.set_data_dtype(np.float32)
     nii.to_filename(out_file)
@@ -630,14 +657,14 @@ def _delta_te(in_values, te1=None, te2=None):
     """Read :math:`\Delta_\text{TE}` from BIDS metadata dict"""
     if isinstance(in_values, float):
         te2 = in_values
-        te1 = 0.
+        te1 = 0.0
 
     if isinstance(in_values, dict):
-        te1 = in_values.get('EchoTime1')
-        te2 = in_values.get('EchoTime2')
+        te1 = in_values.get("EchoTime1")
+        te2 = in_values.get("EchoTime2")
 
         if not all((te1, te2)):
-            te2 = in_values.get('EchoTimeDifference')
+            te2 = in_values.get("EchoTimeDifference")
             te1 = 0
 
     if isinstance(in_values, list):
@@ -649,48 +676,58 @@ def _delta_te(in_values, te1=None, te2=None):
 
     # For convienience if both are missing we should give one error about them
     if te1 is None and te2 is None:
-        raise RuntimeError('EchoTime1 and EchoTime2 metadata fields not found. '
-                           'Please consult the BIDS specification.')
+        raise RuntimeError(
+            "EchoTime1 and EchoTime2 metadata fields not found. "
+            "Please consult the BIDS specification."
+        )
     if te1 is None:
         raise RuntimeError(
-            'EchoTime1 metadata field not found. Please consult the BIDS specification.')
+            "EchoTime1 metadata field not found. Please consult the BIDS specification."
+        )
     if te2 is None:
         raise RuntimeError(
-            'EchoTime2 metadata field not found. Please consult the BIDS specification.')
+            "EchoTime2 metadata field not found. Please consult the BIDS specification."
+        )
 
     return abs(float(te2) - float(te1))
 
 
 def read_nifti_sidecar(json_file):
     if not json_file.endswith(".json"):
-        json_file = fname_presuffix(json_file, suffix='.json', use_ext=False)
+        json_file = fname_presuffix(json_file, suffix=".json", use_ext=False)
         if not op.exists(json_file):
             raise Exception("No corresponding json file found")
 
     with open(json_file, "r") as f:
         metadata = json.load(f)
-    pe_dir = metadata['PhaseEncodingDirection']
+    pe_dir = metadata["PhaseEncodingDirection"]
     slice_times = metadata.get("SliceTiming")
     trt = metadata.get("TotalReadoutTime")
     if trt is None:
         pass
-    return {"PhaseEncodingDirection": pe_dir,
-            "SliceTiming": slice_times,
-            "TotalReadoutTime": trt}
+    return {"PhaseEncodingDirection": pe_dir, "SliceTiming": slice_times, "TotalReadoutTime": trt}
 
 
 acqp_lines = {
-    "i": '1 0 0 %.6f',
-    "j": '0 1 0 %.6f',
-    "k": '0 0 1 %.6f',
-    "i-": '-1 0 0 %.6f',
-    "j-": '0 -1 0 %.6f',
-    "k-": '0 0 -1 %.6f'}
+    "i": "1 0 0 %.6f",
+    "j": "0 1 0 %.6f",
+    "k": "0 0 1 %.6f",
+    "i-": "-1 0 0 %.6f",
+    "j-": "0 -1 0 %.6f",
+    "k-": "0 0 -1 %.6f",
+}
 
 
-def get_topup_inputs_from(dwi_file, bval_file, b0_threshold, topup_prefix,
-                          bids_origin_files, epi_fmaps=None, max_per_spec=3,
-                          topup_requested=False):
+def get_topup_inputs_from(
+    dwi_file,
+    bval_file,
+    b0_threshold,
+    topup_prefix,
+    bids_origin_files,
+    epi_fmaps=None,
+    max_per_spec=3,
+    topup_requested=False,
+):
     """Create a datain spec and a slspec from a concatenated dwi series.
 
     Create inputs for TOPUP that come from data in ``dwi/`` and epi fieldmaps in ``fmap/``.
@@ -801,13 +838,18 @@ def get_topup_inputs_from(dwi_file, bval_file, b0_threshold, topup_prefix,
     dwi_nii = load_img(dwi_file)
     # Gather images from just the dwi series
     dwi_spec_lines, dwi_imain, dwi_report, _ = topup_inputs_from_4d_file(
-        dwi_nii, b0_indices, bids_origin_files, image_source="combined DWI series",
-        max_per_spec=max_per_spec)
+        dwi_nii,
+        b0_indices,
+        bids_origin_files,
+        image_source="combined DWI series",
+        max_per_spec=max_per_spec,
+    )
 
     # If there are EPI fieldmaps, add them to the END of the topup spec
     if epi_fmaps and isdefined(epi_fmaps):
         topup_imain, topup_spec_lines, fmap_report = add_epi_fmaps_to_dwi_b0s(
-            epi_fmaps, b0_threshold, max_per_spec, dwi_spec_lines, dwi_imain)
+            epi_fmaps, b0_threshold, max_per_spec, dwi_spec_lines, dwi_imain
+        )
         topup_text = dwi_report + fmap_report
     else:
         topup_imain = dwi_imain
@@ -815,15 +857,17 @@ def get_topup_inputs_from(dwi_file, bval_file, b0_threshold, topup_prefix,
         topup_text = dwi_report
 
     imain_output = topup_prefix + "imain.nii.gz"
-    imain_img = to_lps(topup_imain, new_axcodes=('L', 'A', 'S'))
+    imain_img = to_lps(topup_imain, new_axcodes=("L", "A", "S"))
     assert imain_img.shape[3] == len(topup_spec_lines)
     imain_img.to_filename(imain_output)
 
     # Write the datain text file and make sure it's usable if it's needed
     if len(set(topup_spec_lines)) < 2 and topup_requested:
         print(topup_spec_lines)
-        raise Exception("Unable to run TOPUP: not enough distortion groups. "
-                        "Check \"IntendedFor\" fields or consider using --ignore fieldmaps.")
+        raise Exception(
+            "Unable to run TOPUP: not enough distortion groups. "
+            'Check "IntendedFor" fields or consider using --ignore fieldmaps.'
+        )
 
     datain_file = topup_prefix + "datain.txt"
     with open(datain_file, "w") as f:
@@ -874,8 +918,13 @@ def load_epi_dwi_fieldmaps(fmap_list, b0_threshold):
             too_large = np.flatnonzero(bvals > b0_threshold)
             too_large_values = bvals[too_large]
             if too_large.size:
-                LOGGER.warning("Excluding volumes %s from the %s because b=%s is greater than %d",
-                               str(too_large), fmap_file, str(too_large_values), b0_threshold)
+                LOGGER.warning(
+                    "Excluding volumes %s from the %s because b=%s is greater than %d",
+                    str(too_large),
+                    fmap_file,
+                    str(too_large_values),
+                    b0_threshold,
+                )
             _b0_indices = np.flatnonzero(bvals < b0_threshold) + starting_index
         else:
             _b0_indices = np.arange(num_images) + starting_index
@@ -885,8 +934,13 @@ def load_epi_dwi_fieldmaps(fmap_list, b0_threshold):
     return concatenated_images, b0_indices, original_files
 
 
-def topup_inputs_from_4d_file(nii_file, b0_indices, bids_origin_files=None,
-                              image_source="combined DWI series", max_per_spec=3):
+def topup_inputs_from_4d_file(
+    nii_file,
+    b0_indices,
+    bids_origin_files=None,
+    image_source="combined DWI series",
+    max_per_spec=3,
+):
     """Represent distortion groups from a concatenated image and its origins.
 
     Create inputs for TOPUP that come from data in ``dwi/`` and epi fieldmaps in ``fmap/``.
@@ -927,9 +981,9 @@ def topup_inputs_from_4d_file(nii_file, b0_indices, bids_origin_files=None,
     slicetime_lookup = {}
     for unique_dwi in unique_files:
         spec = read_nifti_sidecar(unique_dwi)
-        spec_line = acqp_lines[spec['PhaseEncodingDirection']]
-        spec_lookup[unique_dwi] = spec_line % spec['TotalReadoutTime']
-        slicetime_lookup[unique_dwi] = spec['SliceTiming']
+        spec_line = acqp_lines[spec["PhaseEncodingDirection"]]
+        spec_lookup[unique_dwi] = spec_line % spec["TotalReadoutTime"]
+        slicetime_lookup[unique_dwi] = spec["SliceTiming"]
 
     # Which spec does each b=0 belong to?
     spec_indices = defaultdict(list)
@@ -951,8 +1005,9 @@ def topup_inputs_from_4d_file(nii_file, b0_indices, bids_origin_files=None,
 
     # Load and subset the image
     imain_nii = index_img(nii_file, selected_b0_indices)
-    report = topup_selection_to_report(selected_b0_indices, bids_origin_files, spec_lookup,
-                                       image_source=image_source)
+    report = topup_selection_to_report(
+        selected_b0_indices, bids_origin_files, spec_lookup, image_source=image_source
+    )
 
     return spec_lines, imain_nii, report, spec_lookup
 
@@ -961,8 +1016,9 @@ def get_evenly_spaced_b0s(b0_indices, max_per_spec):
     """Choose up to ``max_per_spec`` b=0 images from a list of b0 indices."""
     if len(b0_indices) <= max_per_spec:
         return b0_indices
-    selected_indices = np.linspace(0, len(b0_indices)-1, num=max_per_spec,
-                                   endpoint=True, dtype=int)
+    selected_indices = np.linspace(
+        0, len(b0_indices) - 1, num=max_per_spec, endpoint=True, dtype=int
+    )
     return [b0_indices[idx] for idx in selected_indices]
 
 
@@ -981,11 +1037,16 @@ def add_epi_fmaps_to_dwi_b0s(epi_fmaps, b0_threshold, max_per_spec, dwi_spec_lin
 
     """
     # Extract b=0 images as if we were only pulling images from epi fmaps.
-    fmaps_4d, fmap_b0_indices, fmap_original_files = load_epi_dwi_fieldmaps(epi_fmaps,
-                                                                            b0_threshold)
+    fmaps_4d, fmap_b0_indices, fmap_original_files = load_epi_dwi_fieldmaps(
+        epi_fmaps, b0_threshold
+    )
     fmap_spec_lines, fmap_imain, fmap_report, fmap_spec_map = topup_inputs_from_4d_file(
-        fmaps_4d, fmap_b0_indices, fmap_original_files, image_source="EPI fieldmap",
-        max_per_spec=max_per_spec)
+        fmaps_4d,
+        fmap_b0_indices,
+        fmap_original_files,
+        image_source="EPI fieldmap",
+        max_per_spec=max_per_spec,
+    )
 
     # Check how many are present in each group from just the dwi files
     spec_counts = defaultdict(int)
@@ -1002,31 +1063,35 @@ def add_epi_fmaps_to_dwi_b0s(epi_fmaps, b0_threshold, max_per_spec, dwi_spec_lin
 
     # No additional epi fmaps to add
     if not fmap_indices_to_add:
-        return dwi_imain, dwi_spec_lines, \
-            ' No Additional images from EPI fieldmaps were added because the maximum ' \
-            'number of images per distortion group was reached.'
+        return (
+            dwi_imain,
+            dwi_spec_lines,
+            " No Additional images from EPI fieldmaps were added because the maximum "
+            "number of images per distortion group was reached.",
+        )
 
     # Add the epi b=0's to the dwi b=0's
-    topup_imain = concat_imgs([dwi_imain, index_img(fmap_imain, fmap_indices_to_add)],
-                              auto_resample=True)
+    topup_imain = concat_imgs(
+        [dwi_imain, index_img(fmap_imain, fmap_indices_to_add)], auto_resample=True
+    )
     topup_spec_lines = dwi_spec_lines + [fmap_spec_lines[idx] for idx in fmap_indices_to_add]
 
     new_report = topup_selection_to_report(
-        fmap_indices_to_add, fmap_original_files, fmap_spec_map, image_source='EPI fieldmap')
+        fmap_indices_to_add, fmap_original_files, fmap_spec_map, image_source="EPI fieldmap"
+    )
 
     return topup_imain, topup_spec_lines, new_report
 
 
 def get_distortion_grouping(origin_file_list):
-    """Discover which distortion groups are present, then assign each volume to a group.
-    """
+    """Discover which distortion groups are present, then assign each volume to a group."""
     unique_files = sorted(set(origin_file_list))
     unique_acqps = []
     line_lookup = {}
     for unique_dwi in unique_files:
         spec = read_nifti_sidecar(unique_dwi)
-        spec_line = acqp_lines[spec['PhaseEncodingDirection']]
-        acqp_line = spec_line % spec['TotalReadoutTime']
+        spec_line = acqp_lines[spec["PhaseEncodingDirection"]]
+        acqp_line = spec_line % spec["TotalReadoutTime"]
         if acqp_line not in unique_acqps:
             unique_acqps.append(acqp_line)
         line_lookup[unique_dwi] = unique_acqps.index(acqp_line) + 1
@@ -1056,42 +1121,39 @@ class _ApplyScalingImagesInputSpec(ApplyTransformsInputSpec):
     scaling_image_files = InputMultiObject(
         File(exists=True),
         mandatory=False,
-        desc='list of sdc scaling image files in undistorted b0ref space')
+        desc="list of sdc scaling image files in undistorted b0ref space",
+    )
     dwi_files = InputMultiObject(
         File(exists=True),
         mandatory=True,
-        desc='list of dwi files, already resampled into their output space')
-    reference_image = File(exists=True, mandatory=True, desc='output grid')
+        desc="list of dwi files, already resampled into their output space",
+    )
+    reference_image = File(exists=True, mandatory=True, desc="output grid")
 
     # Transforms to apply
     b0_to_intramodal_template_transforms = InputMultiObject(
         File(exists=True),
         mandtory=False,
-        desc='list of transforms to register the b=0 to the intramodal template.')
+        desc="list of transforms to register the b=0 to the intramodal template.",
+    )
     intramodal_template_to_t1_affine = File(
-        exists=True,
-        mandatory=False,
-        desc='affine from the intramodal template to t1')
+        exists=True, mandatory=False, desc="affine from the intramodal template to t1"
+    )
     intramodal_template_to_t1_warp = File(
-        exists=True,
-        desc='warp from the intramodal template to t1')
-    hmcsdc_dwi_ref_to_t1w_affine = File(
-        exists=True,
-        desc='affine from dwi ref to t1w')
+        exists=True, desc="warp from the intramodal template to t1"
+    )
+    hmcsdc_dwi_ref_to_t1w_affine = File(exists=True, desc="affine from dwi ref to t1w")
 
-    save_cmd = traits.Bool(True, usedefault=True,
-                           desc='write a log of command lines that were applied')
-    copy_dtype = traits.Bool(False, usedefault=True,
-                             desc='copy dtype from inputs to outputs')
-    num_threads = traits.Int(1, usedefault=True, nohash=True,
-                             desc='number of parallel processes')
+    save_cmd = traits.Bool(
+        True, usedefault=True, desc="write a log of command lines that were applied"
+    )
+    copy_dtype = traits.Bool(False, usedefault=True, desc="copy dtype from inputs to outputs")
+    num_threads = traits.Int(1, usedefault=True, nohash=True, desc="number of parallel processes")
     transforms = File(mandatory=False)
 
 
 class _ApplyScalingImagesOutputSpec(TraitedSpec):
-    scaled_images = OutputMultiObject(
-        File(exists=True),
-        desc="Scaled dwi files")
+    scaled_images = OutputMultiObject(File(exists=True), desc="Scaled dwi files")
 
 
 class ApplyScalingImages(SimpleInterface):
@@ -1113,7 +1175,7 @@ class ApplyScalingImages(SimpleInterface):
         coreg_to_t1 = traits.Undefined
         if isdefined(self.inputs.intramodal_template_to_t1_affine):
             if isdefined(self.inputs.hmcsdc_dwi_ref_to_t1w_affine):
-                LOGGER.warning('Two b0 to t1 transforms are provided: using intramodal')
+                LOGGER.warning("Two b0 to t1 transforms are provided: using intramodal")
             coreg_to_t1 = self.inputs.intramodal_template_to_t1_affine
         else:
             coreg_to_t1 = self.inputs.hmcsdc_dwi_ref_to_t1w_affine
@@ -1131,30 +1193,33 @@ class ApplyScalingImages(SimpleInterface):
 
         # Find the chain of transforms from undistorted b=0 reference to the output space
         transform_stack = [
-            transform for transform in [
-                intramodal_affine,
-                intramodal_warp,
-                coreg_to_t1] if isdefined(transform)][::-1]
+            transform
+            for transform in [intramodal_affine, intramodal_warp, coreg_to_t1]
+            if isdefined(transform)
+        ][::-1]
 
         # There are a few unique scaling images. Find them
         scaling_images_to_dwis = defaultdict(list)
-        for dwi_image, scaling_image in zip(self.inputs.dwi_files,
-                                            self.inputs.scaling_image_files):
+        for dwi_image, scaling_image in zip(
+            self.inputs.dwi_files, self.inputs.scaling_image_files
+        ):
             scaling_images_to_dwis[scaling_image].append(dwi_image)
 
         # Apply the transform, link the resampled scaling image to resampled dwis
         dwi_files_to_scalings = {}
         for scaling_image in scaling_images_to_dwis:
             resampled_scaling_image = fname_presuffix(
-                scaling_image, suffix="_resampled", newpath=runtime.cwd)
+                scaling_image, suffix="_resampled", newpath=runtime.cwd
+            )
             xfm = ants.ApplyTransforms(
                 input_image=scaling_image,
                 transforms=transform_stack,
                 reference_image=self.inputs.reference_image,
                 output_image=resampled_scaling_image,
-                interpolation='LanczosWindowedSinc',
-                dimension=3)
-            xfm.terminal_output = 'allatonce'
+                interpolation="LanczosWindowedSinc",
+                dimension=3,
+            )
+            xfm.terminal_output = "allatonce"
             xfm.resource_monitor = False
             runtime = xfm.run().runtime
             LOGGER.info(runtime.cmdline)
@@ -1164,12 +1229,10 @@ class ApplyScalingImages(SimpleInterface):
         # Do the math
         scaled_dwi_images = []
         for dwi_file in self.inputs.dwi_files:
-            scaled_dwi_file = fname_presuffix(
-                dwi_file, newpath=runtime.cwd, suffix="_scaled")
-            math_img(
-                "a*b",
-                a=dwi_file,
-                b=dwi_files_to_scalings[dwi_file]).to_filename(scaled_dwi_file)
+            scaled_dwi_file = fname_presuffix(dwi_file, newpath=runtime.cwd, suffix="_scaled")
+            math_img("a*b", a=dwi_file, b=dwi_files_to_scalings[dwi_file]).to_filename(
+                scaled_dwi_file
+            )
 
             scaled_dwi_images.append(scaled_dwi_file)
         self._results["scaled_images"] = scaled_dwi_images
@@ -1178,7 +1241,7 @@ class ApplyScalingImages(SimpleInterface):
 
 
 class _PEPOLARReportInputSpec(BaseInterfaceInputSpec):
-    fieldmap_type = traits.Enum('rpe_series', 'epi')
+    fieldmap_type = traits.Enum("rpe_series", "epi")
     b0_up_image = File(exists=True, mandatory=True)
     b0_up_corrected_image = File(exists=True, mandatory=True)
     b0_down_image = File(exists=True, mandatory=True)
@@ -1203,10 +1266,11 @@ class PEPOLARReport(SimpleInterface):
 
     def _run_interface(self, runtime):
         """Generate a reportlet."""
-        LOGGER.info('Generating a PEPOLAR visual report')
+        LOGGER.info("Generating a PEPOLAR visual report")
 
-        ref_segmentation = self.inputs.t1w_seg if not \
-            isdefined(self.inputs.t2w_seg) else self.inputs.t2w_seg
+        ref_segmentation = (
+            self.inputs.t1w_seg if not isdefined(self.inputs.t2w_seg) else self.inputs.t2w_seg
+        )
         # Get a segmentation from an undistorted image as a reference
         seg_img = nb.load(ref_segmentation)
         b0_up_img = nb.load(self.inputs.b0_up_image)
@@ -1220,33 +1284,39 @@ class PEPOLARReport(SimpleInterface):
                 b0_up_img,
                 b0_down_img,
                 seg_img,
-                'moving-image',
+                "moving-image",
                 estimate_brightness=True,
                 cuts=cuts,
-                label='Original',
+                label="Original",
                 upper_label_suffix=": Blip Up",
                 lower_label_suffix=": Blip Down",
-                compress=False),
+                compress=False,
+            ),
             plot_pepolar(
                 b0_up_corrected_img,
                 b0_down_corrected_img,
                 seg_img,
-                'fixed-image',
+                "fixed-image",
                 estimate_brightness=True,
                 cuts=cuts,
                 label="Corrected",
                 upper_label_suffix=": Blip Up",
                 lower_label_suffix=": Blip Down",
-                compress=False),
-            out_file=b0_sdc_svg)
+                compress=False,
+            ),
+            out_file=b0_sdc_svg,
+        )
         self._results["b0_sdc_report"] = b0_sdc_svg
 
         if False in map(
             isdefined,
-            (self.inputs.up_fa_image,
-             self.inputs.up_fa_corrected_image,
-             self.inputs.down_fa_image,
-             self.inputs.down_fa_corrected_image)):
+            (
+                self.inputs.up_fa_image,
+                self.inputs.up_fa_corrected_image,
+                self.inputs.down_fa_image,
+                self.inputs.down_fa_corrected_image,
+            ),
+        ):
             LOGGER.info("No FA images available for SDC report")
             return runtime
 
@@ -1260,25 +1330,45 @@ class PEPOLARReport(SimpleInterface):
         corrected_fa = nim.math_img("(a+b)/2", a=fa_up_corrected_img, b=fa_down_corrected_img)
         compose_view(
             plot_fa_reg(
-                corrected_fa, seg_img, 'moving-image', estimate_brightness=False,
+                corrected_fa,
+                seg_img,
+                "moving-image",
+                estimate_brightness=False,
                 label="FA: After",
-                cuts=cuts),
+                cuts=cuts,
+            ),
             plot_fa_reg(
-                uncorrected_fa, seg_img, 'fixed-image', estimate_brightness=False,
+                uncorrected_fa,
+                seg_img,
+                "fixed-image",
+                estimate_brightness=False,
                 label="FA: Before",
-                cuts=cuts),
-            out_file=fa_sdc_svg)
+                cuts=cuts,
+            ),
+            out_file=fa_sdc_svg,
+        )
         self._results["fa_sdc_report"] = fa_sdc_svg
         return runtime
 
 
-def plot_pepolar(blip_up_img, blip_down_img, seg_contour_img,
-                 div_id, plot_params=None, blip_down_plot_params=None,
-                 order=('z', 'x', 'y'), cuts=None,
-                 estimate_brightness=False, label=None,
-                 blip_down_contour=None, upper_label_suffix=": low-b",
-                 lower_label_suffix=": high-b",
-                 compress='auto', overlay=None, overlay_params=None):
+def plot_pepolar(
+    blip_up_img,
+    blip_down_img,
+    seg_contour_img,
+    div_id,
+    plot_params=None,
+    blip_down_plot_params=None,
+    order=("z", "x", "y"),
+    cuts=None,
+    estimate_brightness=False,
+    label=None,
+    blip_down_contour=None,
+    upper_label_suffix=": low-b",
+    lower_label_suffix=": high-b",
+    compress="auto",
+    overlay=None,
+    overlay_params=None,
+):
     """
     Plot the foreground and background views.
     Default order is: axial, coronal, sagittal
@@ -1297,28 +1387,27 @@ def plot_pepolar(blip_up_img, blip_down_img, seg_contour_img,
     out_files = []
     if estimate_brightness:
         plot_params = robust_set_limits(
-            blip_up_img.get_fdata(dtype='float32').reshape(-1),
-            plot_params)
+            blip_up_img.get_fdata(dtype="float32").reshape(-1), plot_params
+        )
 
     zeros_bg_img = nim.new_img_like(
-        seg_contour_img,
-        np.zeros(seg_contour_img.shape),
-        copy_header=True)
+        seg_contour_img, np.zeros(seg_contour_img.shape), copy_header=True
+    )
 
     # Plot each cut axis for low-b
     image_plot_params = plot_params.copy()
     for i, mode in enumerate(list(order)):
-        plot_params['display_mode'] = mode
-        plot_params['cut_coords'] = cuts[mode]
+        plot_params["display_mode"] = mode
+        plot_params["cut_coords"] = cuts[mode]
         if i == 0:
-            plot_params['title'] = label + upper_label_suffix
+            plot_params["title"] = label + upper_label_suffix
         else:
-            plot_params['title'] = None
+            plot_params["title"] = None
 
         # Generate nilearn figure
         display = nip.plot_anat(zeros_bg_img, **plot_params)
         display.add_overlay(blip_up_img, cmap="gray", **image_plot_params)
-        display.add_contours(seg_contour_img, colors='b', linewidths=0.5)
+        display.add_contours(seg_contour_img, colors="b", linewidths=0.5)
 
         svg = extract_svg(display, compress=compress)
         display.close()
@@ -1326,7 +1415,7 @@ def plot_pepolar(blip_up_img, blip_down_img, seg_contour_img,
         # Find and replace the figure_1 id.
         xml_data = etree.fromstring(svg)
         find_text = etree.ETXPath("//{%s}g[@id='figure_1']" % SVGNS)
-        find_text(xml_data)[0].set('id', '%s-%s-%s' % (div_id, mode, uuid4()))
+        find_text(xml_data)[0].set("id", "%s-%s-%s" % (div_id, mode, uuid4()))
 
         svg_fig = SVGFigure()
         svg_fig.root = xml_data
@@ -1335,28 +1424,28 @@ def plot_pepolar(blip_up_img, blip_down_img, seg_contour_img,
     # Plot each cut axis for high-b
     if estimate_brightness:
         blip_down_plot_params = robust_set_limits(
-            blip_down_img.get_fdata(dtype='float32').reshape(-1),
-            blip_down_plot_params)
+            blip_down_img.get_fdata(dtype="float32").reshape(-1), blip_down_plot_params
+        )
     image_blip_down_plot_params = blip_down_plot_params.copy()
     for i, mode in enumerate(list(order)):
-        blip_down_plot_params['display_mode'] = mode
-        blip_down_plot_params['cut_coords'] = cuts[mode]
+        blip_down_plot_params["display_mode"] = mode
+        blip_down_plot_params["cut_coords"] = cuts[mode]
         if i == 0:
-            blip_down_plot_params['title'] = label + lower_label_suffix
+            blip_down_plot_params["title"] = label + lower_label_suffix
         else:
-            blip_down_plot_params['title'] = None
+            blip_down_plot_params["title"] = None
 
         # Generate nilearn figure
         display = nip.plot_anat(zeros_bg_img, **blip_down_plot_params)
         display.add_overlay(blip_down_img, cmap="gray", **image_blip_down_plot_params)
-        display.add_contours(seg_contour_img, colors='b', linewidths=0.5)
+        display.add_contours(seg_contour_img, colors="b", linewidths=0.5)
         svg = extract_svg(display, compress=compress)
         display.close()
 
         # Find and replace the figure_1 id.
         xml_data = etree.fromstring(svg)
         find_text = etree.ETXPath("//{%s}g[@id='figure_1']" % SVGNS)
-        find_text(xml_data)[0].set('id', '%s-%s-%s' % (div_id, mode, uuid4()))
+        find_text(xml_data)[0].set("id", "%s-%s-%s" % (div_id, mode, uuid4()))
 
         svg_fig = SVGFigure()
         svg_fig.root = xml_data
@@ -1364,11 +1453,19 @@ def plot_pepolar(blip_up_img, blip_down_img, seg_contour_img,
 
     return out_files
 
-def plot_fa_reg(fa_img, seg_contour_img,
-                div_id, plot_params=None, blip_down_plot_params=None,
-                order=('z', 'x', 'y'), cuts=None,
-                estimate_brightness=False, label=None,
-                compress='auto'):
+
+def plot_fa_reg(
+    fa_img,
+    seg_contour_img,
+    div_id,
+    plot_params=None,
+    blip_down_plot_params=None,
+    order=("z", "x", "y"),
+    cuts=None,
+    estimate_brightness=False,
+    label=None,
+    compress="auto",
+):
     """
     Plot the foreground and background views.
     Default order is: axial, coronal, sagittal
@@ -1378,30 +1475,29 @@ def plot_fa_reg(fa_img, seg_contour_img,
     image in the grid of the segmentation image and using this as the background.
 
     """
-    plot_params = {"vmin":0.01, "vmax":0.85, "cmap": "gray"}
+    plot_params = {"vmin": 0.01, "vmax": 0.85, "cmap": "gray"}
     if cuts is None:
         raise NotImplementedError
 
     out_files = []
     zeros_bg_img = nim.new_img_like(
-        seg_contour_img,
-        np.zeros(seg_contour_img.shape),
-        copy_header=True)
+        seg_contour_img, np.zeros(seg_contour_img.shape), copy_header=True
+    )
 
     # Plot each cut axis for low-b
     image_plot_params = plot_params.copy()
     for i, mode in enumerate(list(order)):
-        plot_params['display_mode'] = mode
-        plot_params['cut_coords'] = cuts[mode]
+        plot_params["display_mode"] = mode
+        plot_params["cut_coords"] = cuts[mode]
         if i == 0:
-            plot_params['title'] = label
+            plot_params["title"] = label
         else:
-            plot_params['title'] = None
+            plot_params["title"] = None
 
         # Generate nilearn figure
         display = nip.plot_anat(zeros_bg_img, **plot_params)
         display.add_overlay(fa_img, **image_plot_params)
-        #display.add_contours(seg_contour_img, colors='b', linewidths=0.5)
+        # display.add_contours(seg_contour_img, colors='b', linewidths=0.5)
 
         svg = extract_svg(display, compress=compress)
         display.close()
@@ -1409,7 +1505,7 @@ def plot_fa_reg(fa_img, seg_contour_img,
         # Find and replace the figure_1 id.
         xml_data = etree.fromstring(svg)
         find_text = etree.ETXPath("//{%s}g[@id='figure_1']" % SVGNS)
-        find_text(xml_data)[0].set('id', '%s-%s-%s' % (div_id, mode, uuid4()))
+        find_text(xml_data)[0].set("id", "%s-%s-%s" % (div_id, mode, uuid4()))
 
         svg_fig = SVGFigure()
         svg_fig.root = xml_data

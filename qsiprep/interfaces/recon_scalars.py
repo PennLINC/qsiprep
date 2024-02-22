@@ -11,15 +11,23 @@ Classes that collect scalar images and metadata from Recon Workflows
 import os
 import os.path as op
 import re
-from pkg_resources import resource_filename as pkgr
+
 import pandas as pd
-from nipype import logging
 from bids.layout import parse_file_entities
-from .bids import _copy_any, get_recon_output_name
-from nipype.utils.filemanip import fname_presuffix, split_filename
+from nipype import logging
 from nipype.interfaces.base import (
-    InputMultiObject, traits, TraitedSpec, BaseInterfaceInputSpec, SimpleInterface, isdefined, File
+    BaseInterfaceInputSpec,
+    File,
+    InputMultiObject,
+    SimpleInterface,
+    TraitedSpec,
+    isdefined,
+    traits,
 )
+from nipype.utils.filemanip import fname_presuffix, split_filename
+from pkg_resources import resource_filename as pkgr
+
+from .bids import _copy_any, get_recon_output_name
 
 
 class ReconScalarsInputSpec(BaseInterfaceInputSpec):
@@ -37,14 +45,18 @@ class ReconScalars(SimpleInterface):
     input_spec = ReconScalarsInputSpec
     output_spec = ReconScalarsOutputSpec
     scalar_metadata = {}
-    _ignore_traits = ("model_name", "qsirecon_suffix", "scalar_metadata",
-                      "model_info", "source_file")
+    _ignore_traits = (
+        "model_name",
+        "qsirecon_suffix",
+        "scalar_metadata",
+        "model_info",
+        "source_file",
+    )
 
     def __init__(self, from_file=None, resource_monitor=None, **inputs):
 
         # Get self._results defined
-        super().__init__(
-            from_file=from_file, resource_monitor=resource_monitor, **inputs)
+        super().__init__(from_file=from_file, resource_monitor=resource_monitor, **inputs)
 
         # Check that the input_spec matches the scalar_metadata
         self._validate_scalar_metadata()
@@ -54,7 +66,9 @@ class ReconScalars(SimpleInterface):
             if input_key in self._ignore_traits:
                 continue
             if not input_key in self.scalar_metadata:
-                raise Exception(f"No entry found for {input_key} in ``scalar_metadata`` in this class.")
+                raise Exception(
+                    f"No entry found for {input_key} in ``scalar_metadata`` in this class."
+                )
 
             # Check that BIDS attributes are defined
             if "bids" not in self.scalar_metadata[input_key]:
@@ -68,8 +82,9 @@ class ReconScalars(SimpleInterface):
         source_file_bids = parse_file_entities(self.inputs.source_file)
         del source_file_bids["extension"], source_file_bids["suffix"]
 
-        file_traits = [name for name in self.inputs.editable_traits()
-                       if name not in self._ignore_traits]
+        file_traits = [
+            name for name in self.inputs.editable_traits() if name not in self._ignore_traits
+        ]
 
         for input_name in file_traits:
             if not isdefined(inputs[input_name]):
@@ -80,9 +95,11 @@ class ReconScalars(SimpleInterface):
             result["variable_name"] = input_name
             result["source_file"] = self.inputs.source_file
             # Update the BIDS with the source file
-            bids_overlap = set(source_file_bids.keys()).intersection(result['bids'].keys())
+            bids_overlap = set(source_file_bids.keys()).intersection(result["bids"].keys())
             if bids_overlap:
-                raise Exception(f"BIDS fields for {input_name} conflict with source file BIDS {bids_overlap}")
+                raise Exception(
+                    f"BIDS fields for {input_name} conflict with source file BIDS {bids_overlap}"
+                )
             results.append(result)
         self._results["scalar_info"] = results
         return runtime
@@ -108,7 +125,8 @@ class ReconScalarsDataSink(SimpleInterface):
                 derivative_file=recon_scalar["path"],
                 qsirecon_suffix=recon_scalar["qsirecon_suffix"],
                 output_bids_entities=recon_scalar["bids"],
-                use_ext=True)
+                use_ext=True,
+            )
             output_dir = op.dirname(output_filename)
             os.makedirs(output_dir, exist_ok=True)
             _copy_any(recon_scalar["path"], output_filename)
@@ -117,13 +135,13 @@ class ReconScalarsDataSink(SimpleInterface):
 
 
 class _ReconScalarsTableSplitterDataSinkInputSpec(_ReconScalarsDataSinkInputSpec):
-    summary_tsv = File(exists=True, mandatory=True,
-                       desc="tsv of combined scalar summaries")
+    summary_tsv = File(exists=True, mandatory=True, desc="tsv of combined scalar summaries")
     suffix = traits.Str(mandatory=True)
 
 
 class ReconScalarsTableSplitterDataSink(ReconScalarsDataSink):
     input_spec = _ReconScalarsTableSplitterDataSinkInputSpec
+
     def _run_interface(self, runtime):
         summary_df = pd.read_csv(self.inputs.summary_tsv, sep="\t")
         for groupname, group_df in summary_df.groupby("qsirecon_suffix"):
@@ -138,14 +156,12 @@ class ReconScalarsTableSplitterDataSink(ReconScalarsDataSink):
                 qsirecon_suffix=group_df.loc[0, "qsirecon_suffix"],
                 output_bids_entities={
                     "suffix": self.inputs.suffix,
-                    "bundles": group_df.loc[0, "bundle_source"]}
+                    "bundles": group_df.loc[0, "bundle_source"],
+                },
             )
             output_dir = op.dirname(qsirecon_suffixed_tsv)
             os.makedirs(output_dir, exist_ok=True)
-            group_df.to_csv(
-                qsirecon_suffixed_tsv,
-                index=False,
-                sep="\t")
+            group_df.to_csv(qsirecon_suffixed_tsv, index=False, sep="\t")
 
         return runtime
 
@@ -154,63 +170,51 @@ class ReconScalarsTableSplitterDataSink(ReconScalarsDataSink):
 tortoise_scalars = {
     "fa_file": {
         "desc": "Fractional Anisotropy from a tensor fit",
-        "bids":{"mdp": "fa", "model": "tensor"}
+        "bids": {"mdp": "fa", "model": "tensor"},
     },
     "rd_file": {
         "desc": "Radial Diffusivity from a tensor fit",
-        "bids":{"mdp": "rd", "model": "tensor"}
+        "bids": {"mdp": "rd", "model": "tensor"},
     },
     "ad_file": {
         "desc": "Apparent Diffusivity from a tensor fit",
-        "bids":{"mdp": "ad", "model": "tensor"}
+        "bids": {"mdp": "ad", "model": "tensor"},
     },
-    "li_file": {
-        "desc": "LI from a tensor fit",
-        "bids":{"mdp": "li", "model": "tensor"}
-    },
-    "am_file": {
-        "desc": "A0 from a tensor fit",
-        "bids":{"mfp": "AM", "model": "tensor"}
-    },
-    "pa_file": {
-        "desc": "PA from MAPMRI",
-        "bids":{"mdp": "PA", "model": "mapmri"}
-    },
-    "path_file": {
-        "desc": "PAth from MAPMRI",
-        "bids":{"mdp": "PAth", "model": "mapmri"}
-    },
+    "li_file": {"desc": "LI from a tensor fit", "bids": {"mdp": "li", "model": "tensor"}},
+    "am_file": {"desc": "A0 from a tensor fit", "bids": {"mfp": "AM", "model": "tensor"}},
+    "pa_file": {"desc": "PA from MAPMRI", "bids": {"mdp": "PA", "model": "mapmri"}},
+    "path_file": {"desc": "PAth from MAPMRI", "bids": {"mdp": "PAth", "model": "mapmri"}},
     "rtop_file": {
         "desc": "Return to origin probability from MAPMRI",
-        "bids":{"mdp": "RTOP", "model": "mapmri"}
+        "bids": {"mdp": "RTOP", "model": "mapmri"},
     },
     "rtap_file": {
         "desc": "Return to axis probability from MAPMRI",
-        "bids":{"mdp": "RTAP", "model": "mapmri"}
+        "bids": {"mdp": "RTAP", "model": "mapmri"},
     },
     "rtpp_file": {
         "desc": "Return to plane probability from MAPMRI",
-        "bids":{"mdp": "RTPP", "model": "mapmri"}
+        "bids": {"mdp": "RTPP", "model": "mapmri"},
     },
-    "ng_file": {
-        "desc": "Non-Gaussianity from MAPMRI",
-        "bids":{"mdp": "NG", "model": "mapmri"}
-    },
+    "ng_file": {"desc": "Non-Gaussianity from MAPMRI", "bids": {"mdp": "NG", "model": "mapmri"}},
     "ngpar_file": {
         "desc": "Non-Gaussianity parallel from MAPMRI",
-        "bids":{"mdp": "NGpar", "model": "mapmri"}
+        "bids": {"mdp": "NGpar", "model": "mapmri"},
     },
     "ngperp_file": {
         "desc": "Non-Gaussianity perpendicular from MAPMRI",
-        "bids":{"mdp": "NGperp", "model": "mapmri"}
+        "bids": {"mdp": "NGperp", "model": "mapmri"},
     },
 }
+
 
 class _TORTOISEReconScalarInputSpec(ReconScalarsInputSpec):
     pass
 
+
 for input_name in tortoise_scalars:
     _TORTOISEReconScalarInputSpec.add_class_trait(input_name, File(exists=True))
+
 
 class TORTOISEReconScalars(ReconScalars):
     input_spec = _TORTOISEReconScalarInputSpec
@@ -221,28 +225,28 @@ class TORTOISEReconScalars(ReconScalars):
 amico_scalars = {
     "icvf_image": {
         "desc": "Intracellular volume fraction from NODDI",
-        "bids":{"mdp": "icvf", "model": "noddi"}
+        "bids": {"mdp": "icvf", "model": "noddi"},
     },
     "isovf_image": {
         "desc": "Isotropic volume fraction from NODDI",
-        "bids":{"mdp": "isovf", "model": "noddi"}
+        "bids": {"mdp": "isovf", "model": "noddi"},
     },
-    "od_image": {
-        "desc": "OD from NODDI",
-        "bids":{"mdp": "od", "model": "noddi"}
-    },
+    "od_image": {"desc": "OD from NODDI", "bids": {"mdp": "od", "model": "noddi"}},
     "directions_image": {
         "desc": "Peak directions from NODDI",
         "reorient_on_resample": True,
-        "bids":{"mfp": "direction", "model": "noddi"}
-    }
+        "bids": {"mfp": "direction", "model": "noddi"},
+    },
 }
+
 
 class _AMICOReconScalarInputSpec(ReconScalarsInputSpec):
     pass
 
+
 for input_name in amico_scalars:
     _AMICOReconScalarInputSpec.add_class_trait(input_name, File(exists=True))
+
 
 class AMICOReconScalars(ReconScalars):
     input_spec = _AMICOReconScalarInputSpec
@@ -253,91 +257,43 @@ class AMICOReconScalars(ReconScalars):
 dsistudio_scalars = {
     "qa_file": {
         "desc": "Fractional Anisotropy from a tensor fit",
-        "bids":{"mdp": "qa", "model": "GQI"}
+        "bids": {"mdp": "qa", "model": "GQI"},
     },
     "dti_fa_file": {
         "desc": "Radial Diffusivity from a tensor fit",
-        "bids":{"mdp": "qa", "model": "tensor"}
+        "bids": {"mdp": "qa", "model": "tensor"},
     },
-    "txx_file": {
-        "desc": "Tensor fit txx",
-        "bids":{"mfp": "txx", "model": "tensor"}
-    },
-    "txy_file": {
-        "desc": "Tensor fit txy",
-        "bids":{"mfp": "txx", "model": "tensor"}
-    },
-    "txz_file": {
-        "desc": "Tensor fit txz",
-        "bids":{"mfp": "txx", "model": "tensor"}
-    },
-    "tyy_file": {
-        "desc": "Tensor fit tyy",
-        "bids":{"mfp": "txx", "model": "tensor"}
-    },
-    "tyz_file": {
-        "desc": "Tensor fit tyz",
-        "bids":{"mfp": "txx", "model": "tensor"}
-    },
-    "tzz_file": {
-        "desc": "Tensor fit tzz",
-        "bids":{"mfp": "txx", "model": "tensor"}
-    },
-    "rd1_file": {
-        "desc": "RD1",
-        "bids":{"mdp": "rd1", "model": "RDI"}
-    },
-    "rd2_file": {
-        "desc": "RD2",
-        "bids":{"mdp": "rd2", "model": "RDI"}
-    },
-    "ha_file": {
-        "desc": "HA",
-        "bids":{"mdp": "ha", "model": "RDI"}
-    },
-    "md_file": {
-        "desc": "Mean Diffusivity",
-        "bids":{"mdp": "rd2", "model": "RDI"}
-    },
-    "ad_file": {
-        "desc": "AD",
-        "bids":{"mdp": "ad", "model": "tensor"}
-    },
-    "rd_file": {
-        "desc": "Radial Diffusivity",
-        "bids":{"mdp": "rd", "model": "tensor"}
-    },
+    "txx_file": {"desc": "Tensor fit txx", "bids": {"mfp": "txx", "model": "tensor"}},
+    "txy_file": {"desc": "Tensor fit txy", "bids": {"mfp": "txx", "model": "tensor"}},
+    "txz_file": {"desc": "Tensor fit txz", "bids": {"mfp": "txx", "model": "tensor"}},
+    "tyy_file": {"desc": "Tensor fit tyy", "bids": {"mfp": "txx", "model": "tensor"}},
+    "tyz_file": {"desc": "Tensor fit tyz", "bids": {"mfp": "txx", "model": "tensor"}},
+    "tzz_file": {"desc": "Tensor fit tzz", "bids": {"mfp": "txx", "model": "tensor"}},
+    "rd1_file": {"desc": "RD1", "bids": {"mdp": "rd1", "model": "RDI"}},
+    "rd2_file": {"desc": "RD2", "bids": {"mdp": "rd2", "model": "RDI"}},
+    "ha_file": {"desc": "HA", "bids": {"mdp": "ha", "model": "RDI"}},
+    "md_file": {"desc": "Mean Diffusivity", "bids": {"mdp": "rd2", "model": "RDI"}},
+    "ad_file": {"desc": "AD", "bids": {"mdp": "ad", "model": "tensor"}},
+    "rd_file": {"desc": "Radial Diffusivity", "bids": {"mdp": "rd", "model": "tensor"}},
     "gfa_file": {
         "desc": "Generalized Fractional Anisotropy",
-        "bids": {"mdp": "gfa", "fit": "GQI"}
+        "bids": {"mdp": "gfa", "fit": "GQI"},
     },
-    "iso_file": {
-        "desc": "Isotropic Diffusion",
-        "bids": {"mdp": "iso", "fit": "GQI"}
-    },
-    "rdi_file": {
-        "desc": "RDI",
-        "bids":{"mdp": "rdi", "model": "RDI"}
-    },
-    "nrdi02L_file": {
-        "desc": "NRDI at 02L",
-        "bids":{"mdp": "nrdi02L", "model": "RDI"}
-    },
-    "nrdi04L_file": {
-        "desc": "NRDI at 04L",
-        "bids":{"mdp": "nrdi04L", "model": "RDI"}
-    },
-    "nrdi06L_file": {
-        "desc": "NRDI at 06L",
-        "bids":{"mdp": "nrdi06L", "model": "RDI"}
-    },
+    "iso_file": {"desc": "Isotropic Diffusion", "bids": {"mdp": "iso", "fit": "GQI"}},
+    "rdi_file": {"desc": "RDI", "bids": {"mdp": "rdi", "model": "RDI"}},
+    "nrdi02L_file": {"desc": "NRDI at 02L", "bids": {"mdp": "nrdi02L", "model": "RDI"}},
+    "nrdi04L_file": {"desc": "NRDI at 04L", "bids": {"mdp": "nrdi04L", "model": "RDI"}},
+    "nrdi06L_file": {"desc": "NRDI at 06L", "bids": {"mdp": "nrdi06L", "model": "RDI"}},
 }
+
 
 class _DSIStudioReconScalarInputSpec(ReconScalarsInputSpec):
     pass
 
+
 for input_name in dsistudio_scalars:
     _DSIStudioReconScalarInputSpec.add_class_trait(input_name, File(exists=True))
+
 
 class DSIStudioReconScalars(ReconScalars):
     input_spec = _DSIStudioReconScalarInputSpec
@@ -345,49 +301,25 @@ class DSIStudioReconScalars(ReconScalars):
 
 
 dipy_dki_scalars = {
-    'dki_fa': {
-        "desc": "DKI FA",
-        "bids": {"mdp": "FA", "model": "tensor"}
-    },
-    'dki_md': {
-        "desc": "DKI MD",
-        "bids": {"mdp": "MD", "model": "dki"}
-    },
-    'dki_rd': {
-        "desc": "DKI RD",
-        "bids": {"mdp": "RD", "model": "dki"}
-    },
-    'dki_ad': {
-        "desc": "DKI AD",
-        "bids": {"mdp": "AD", "model": "dki"}
-    },
-    'dki_kfa': {
-        "desc": "DKI KFA",
-        "bids": {"mdp": "KFA", "model": "dki"}
-    },
-    'dki_mk': {
-        "desc": "DKI MK",
-        "bids": {"mdp": "MK", "model": "dki"}
-    },
-    'dki_ak': {
-        "desc": "DKI AK",
-        "bids": {"mdp": "AK", "model": "dki"}
-    },
-    'dki_rk': {
-        "desc": "DKI RK",
-        "bids": {"mdp": "RK", "model": "dki"}
-    },
-    'dki_mkt': {
-        "desc": "DKI MKT",
-        "bids": {"mdp": "MKT", "model": "dki"}
-    }
+    "dki_fa": {"desc": "DKI FA", "bids": {"mdp": "FA", "model": "tensor"}},
+    "dki_md": {"desc": "DKI MD", "bids": {"mdp": "MD", "model": "dki"}},
+    "dki_rd": {"desc": "DKI RD", "bids": {"mdp": "RD", "model": "dki"}},
+    "dki_ad": {"desc": "DKI AD", "bids": {"mdp": "AD", "model": "dki"}},
+    "dki_kfa": {"desc": "DKI KFA", "bids": {"mdp": "KFA", "model": "dki"}},
+    "dki_mk": {"desc": "DKI MK", "bids": {"mdp": "MK", "model": "dki"}},
+    "dki_ak": {"desc": "DKI AK", "bids": {"mdp": "AK", "model": "dki"}},
+    "dki_rk": {"desc": "DKI RK", "bids": {"mdp": "RK", "model": "dki"}},
+    "dki_mkt": {"desc": "DKI MKT", "bids": {"mdp": "MKT", "model": "dki"}},
 }
+
 
 class _DIPYDKIReconScalarInputSpec(ReconScalarsInputSpec):
     pass
 
+
 for input_name in dipy_dki_scalars:
     _DIPYDKIReconScalarInputSpec.add_class_trait(input_name, File(exists=True))
+
 
 class DIPYDKIReconScalars(ReconScalars):
     input_spec = _DIPYDKIReconScalarInputSpec
@@ -398,39 +330,36 @@ class DIPYDKIReconScalars(ReconScalars):
 dipy_mapmri_scalars = {
     "qiv_file": {
         "desc": "q-space inverse variance from MAPMRI",
-        "bids":{"mdp": "QIV", "model": "mapmri"}
+        "bids": {"mdp": "QIV", "model": "mapmri"},
     },
     "msd_file": {
         "desc": "mean square displacement from MAPMRI",
-        "bids":{"mdp": "MSD", "model": "mapmri"}
+        "bids": {"mdp": "MSD", "model": "mapmri"},
     },
     "lapnorm_file": {
         "desc": "Laplacian norm from regularized MAPMRI (MAPL)",
-        "bids":{"mfp": "lapnorm", "model": "mapmri"}
+        "bids": {"mfp": "lapnorm", "model": "mapmri"},
     },
     "rtop_file": {
         "desc": "Return to origin probability from MAPMRI",
-        "bids":{"mdp": "RTOP", "model": "mapmri"}
+        "bids": {"mdp": "RTOP", "model": "mapmri"},
     },
     "rtap_file": {
         "desc": "Return to axis probability from MAPMRI",
-        "bids":{"mdp": "RTAP", "model": "mapmri"}
+        "bids": {"mdp": "RTAP", "model": "mapmri"},
     },
     "rtpp_file": {
         "desc": "Return to plane probability from MAPMRI",
-        "bids":{"mdp": "RTPP", "model": "mapmri"}
+        "bids": {"mdp": "RTPP", "model": "mapmri"},
     },
-    "ng_file": {
-        "desc": "Non-Gaussianity from MAPMRI",
-        "bids":{"mdp": "NG", "model": "mapmri"}
-    },
+    "ng_file": {"desc": "Non-Gaussianity from MAPMRI", "bids": {"mdp": "NG", "model": "mapmri"}},
     "ngpar_file": {
         "desc": "Non-Gaussianity parallel from MAPMRI",
-        "bids":{"mdp": "NGpar", "model": "mapmri"}
+        "bids": {"mdp": "NGpar", "model": "mapmri"},
     },
     "ngperp_file": {
         "desc": "Non-Gaussianity perpendicular from MAPMRI",
-        "bids":{"mdp": "NGperp", "model": "mapmri"}
+        "bids": {"mdp": "NGperp", "model": "mapmri"},
     },
 }
 
@@ -450,20 +379,14 @@ class DIPYMAPMRIReconScalars(ReconScalars):
 
 # Same as DIPY implementation of 3dSHORE, but with brainsuite bases
 brainsuite_3dshore_scalars = dipy_mapmri_scalars.copy()
-brainsuite_3dshore_scalars.update({
-    "cnr_image": {
-        "desc": "Contrast to noise ratio for 3dSHORE fit"
-    },
-    "alpha_image": {
-        "desc": "alpha used when fitting in each voxel"
-    },
-    "r2_image": {
-        "desc": "r^2 of the 3dSHORE fit"
-    },
-    "regularization_image": {
-        "desc": "regularization of the 3dSHORE fit"
-    },
-})
+brainsuite_3dshore_scalars.update(
+    {
+        "cnr_image": {"desc": "Contrast to noise ratio for 3dSHORE fit"},
+        "alpha_image": {"desc": "alpha used when fitting in each voxel"},
+        "r2_image": {"desc": "r^2 of the 3dSHORE fit"},
+        "regularization_image": {"desc": "regularization of the 3dSHORE fit"},
+    }
+)
 
 
 class _BrainSuite3dSHOREReconScalarInputSpec(ReconScalarsInputSpec):
