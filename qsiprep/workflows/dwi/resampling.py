@@ -29,17 +29,19 @@ from .util import init_dwi_reference_wf
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
-def init_dwi_trans_wf(source_file,
-                      template,
-                      mem_gb,
-                      omp_nthreads,
-                      output_resolution,
-                      name='dwi_trans_wf',
-                      use_compression=True,
-                      to_mni=False,
-                      write_local_bvecs=False,
-                      write_reports=True,
-                      concatenate=True):
+def init_dwi_trans_wf(
+    source_file,
+    template,
+    mem_gb,
+    omp_nthreads,
+    output_resolution,
+    name="dwi_trans_wf",
+    use_compression=True,
+    to_mni=False,
+    write_local_bvecs=False,
+    write_reports=True,
+    concatenate=True,
+):
     """
     This workflow samples dwi images to the ``output_grid`` in a "single shot"
     from the original DWI series.
@@ -132,63 +134,73 @@ def init_dwi_trans_wf(source_file,
     workflow.__desc__ = """\
 The DWI time-series were resampled to {tpl},
 generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels.
-""".format(tpl=template, vox=str(output_resolution).rstrip("0").rstrip("."))
+""".format(
+        tpl=template, vox=str(output_resolution).rstrip("0").rstrip(".")
+    )
 
     inputnode = pe.Node(
-        niu.IdentityInterface(fields=[
-            'itk_b0_to_t1',
-            't1_mask',
-            't1_brain',
-            'b0_to_intramodal_template_transforms',
-            'intramodal_template_to_t1_warp',
-            'intramodal_template_to_t1_affine',
-            't1_2_mni_forward_transform',
-            'name_source',
-            'dwi_files',
-            'cnr_map',
-            'bval_files',
-            'bvec_files',
-            'b0_ref_image',
-            'b0_indices',
-            'dwi_mask',
-            'hmc_xforms',
-            'fieldwarps',
-            'output_grid',
-            'sdc_scaling_images'
-        ]),
-        name='inputnode'
+        niu.IdentityInterface(
+            fields=[
+                "itk_b0_to_t1",
+                "t1_mask",
+                "t1_brain",
+                "b0_to_intramodal_template_transforms",
+                "intramodal_template_to_t1_warp",
+                "intramodal_template_to_t1_affine",
+                "t1_2_mni_forward_transform",
+                "name_source",
+                "dwi_files",
+                "cnr_map",
+                "bval_files",
+                "bvec_files",
+                "b0_ref_image",
+                "b0_indices",
+                "dwi_mask",
+                "hmc_xforms",
+                "fieldwarps",
+                "output_grid",
+                "sdc_scaling_images",
+            ]
+        ),
+        name="inputnode",
     )
 
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=[
-            'dwi_resampled',
-            'dwi_ref_resampled',
-            'dwi_mask_resampled',
-            'cnr_map_resampled',
-            'bvals',
-            'resampled_dwi_mask',
-            'rotated_bvecs',
-            'local_bvecs',
-            'b0_series',
-            'resampled_qc']),
-        name='outputnode')
+        niu.IdentityInterface(
+            fields=[
+                "dwi_resampled",
+                "dwi_ref_resampled",
+                "dwi_mask_resampled",
+                "cnr_map_resampled",
+                "bvals",
+                "resampled_dwi_mask",
+                "rotated_bvecs",
+                "local_bvecs",
+                "b0_series",
+                "resampled_qc",
+            ]
+        ),
+        name="outputnode",
+    )
 
     # get composite warps and composed affines for warping and rotating
-    compose_transforms = pe.Node(ComposeTransforms(), name='compose_transforms')
+    compose_transforms = pe.Node(ComposeTransforms(), name="compose_transforms")
     get_interpolation = pe.Node(
-        ChooseInterpolator(output_resolution=output_resolution), name='get_interpolation')
+        ChooseInterpolator(output_resolution=output_resolution), name="get_interpolation"
+    )
     dwi_transform = pe.MapNode(
         ants.ApplyTransforms(float=True),
-        name='dwi_transform', iterfield=['input_image', 'transforms'])
-    scale_dwis = pe.Node(
-        ApplyScalingImages(),
-        name="scale_dwis")
-    rotate_gradients = pe.Node(GradientRotation(), name='rotate_gradients')
-    cnr_image_type = pe.Node(GetImageType(), name='cnr_image_type')
+        name="dwi_transform",
+        iterfield=["input_image", "transforms"],
+    )
+    scale_dwis = pe.Node(ApplyScalingImages(), name="scale_dwis")
+    rotate_gradients = pe.Node(GradientRotation(), name="rotate_gradients")
+    cnr_image_type = pe.Node(GetImageType(), name="cnr_image_type")
     cnr_tfm = pe.Node(
-        ants.ApplyTransforms(interpolation='LanczosWindowedSinc', float=True),
-        name='cnr_tfm',
-        mem_gb=1)
+        ants.ApplyTransforms(interpolation="LanczosWindowedSinc", float=True),
+        name="cnr_tfm",
+        mem_gb=1,
+    )
 
     workflow.connect([
         (inputnode, compose_transforms, [
@@ -241,28 +253,43 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
         ])  # fmt:skip
         return workflow
 
-    merge = pe.Node(Merge(compress=use_compression), name='merge', mem_gb=mem_gb * 3)
+    merge = pe.Node(Merge(compress=use_compression), name="merge", mem_gb=mem_gb * 3)
     extract_b0_series = pe.Node(ExtractB0s(), name="extract_b0_series")
-    final_b0_ref = init_dwi_reference_wf(register_t1=False, gen_report=write_reports,
-                                         desc='resampled', name='final_b0_ref',
-                                         source_file=source_file, omp_nthreads=omp_nthreads)
+    final_b0_ref = init_dwi_reference_wf(
+        register_t1=False,
+        gen_report=write_reports,
+        desc="resampled",
+        name="final_b0_ref",
+        source_file=source_file,
+        omp_nthreads=omp_nthreads,
+    )
 
-    workflow.connect([
-        (inputnode, merge, [('name_source', 'header_source')]),
-        (scale_dwis, merge, [('scaled_images', 'in_files')]),
-        (merge, outputnode, [('out_file', 'dwi_resampled')]),
-        (merge, extract_b0_series, [('out_file', 'dwi_series')]),
-        (inputnode, extract_b0_series, [('b0_indices', 'b0_indices')]),
-        (extract_b0_series, final_b0_ref, [('b0_average', 'inputnode.b0_template')]),
-        (inputnode, final_b0_ref, [('t1_mask', 'inputnode.t1_mask')]),
-        (final_b0_ref, outputnode, [
-            ('outputnode.ref_image', 'dwi_ref_resampled'),
-            ('outputnode.dwi_mask', 'resampled_dwi_mask')])])
+    workflow.connect(
+        [
+            (inputnode, merge, [("name_source", "header_source")]),
+            (scale_dwis, merge, [("scaled_images", "in_files")]),
+            (merge, outputnode, [("out_file", "dwi_resampled")]),
+            (merge, extract_b0_series, [("out_file", "dwi_series")]),
+            (inputnode, extract_b0_series, [("b0_indices", "b0_indices")]),
+            (extract_b0_series, final_b0_ref, [("b0_average", "inputnode.b0_template")]),
+            (inputnode, final_b0_ref, [("t1_mask", "inputnode.t1_mask")]),
+            (
+                final_b0_ref,
+                outputnode,
+                [
+                    ("outputnode.ref_image", "dwi_ref_resampled"),
+                    ("outputnode.dwi_mask", "resampled_dwi_mask"),
+                ],
+            ),
+        ]
+    )
 
     # Calculate QC metrics on the resampled data
-    calculate_qc = init_modelfree_qc_wf(omp_nthreads=omp_nthreads,
-                                        bvec_convention="DIPY",  # Resampled is always LPS+
-                                        name='calculate_qc')
+    calculate_qc = init_modelfree_qc_wf(
+        omp_nthreads=omp_nthreads,
+        bvec_convention="DIPY",  # Resampled is always LPS+
+        name="calculate_qc",
+    )
     workflow.connect([
         (rotate_gradients, calculate_qc, [
             ('bvals', 'inputnode.bval_file'),
@@ -271,7 +298,7 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
         (calculate_qc, outputnode, [('outputnode.qc_summary', 'resampled_qc')])
     ])  # fmt:skip
     if write_local_bvecs:
-        local_grad_rotation = pe.Node(LocalGradientRotation(), name='local_grad_rotation')
+        local_grad_rotation = pe.Node(LocalGradientRotation(), name="local_grad_rotation")
         workflow.connect([
             (compose_transforms, local_grad_rotation, [('out_warps', 'warp_transforms')]),
             (inputnode, local_grad_rotation, [('bvec_files', 'bvec_files')]),
@@ -287,6 +314,7 @@ def _first(inlist):
 
 def _get_first(lll):
     from nipype.interfaces.base import isdefined
+
     if isdefined(lll):
         return lll[0]
     return lll

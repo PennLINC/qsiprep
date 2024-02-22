@@ -5,6 +5,7 @@ Dipy Reconstruction workflows
 .. autofunction:: init_dipy_brainsuite_shore_recon_wf
 
 """
+
 import logging
 
 import nipype.pipeline.engine as pe
@@ -27,7 +28,7 @@ from ...interfaces.reports import CLIReconPeaksReport
 from qsiprep.interfaces.bids import ReconDerivativesDataSink
 
 
-LOGGER = logging.getLogger('nipype.interface')
+LOGGER = logging.getLogger("nipype.interface")
 
 
 def external_format_datasinks(qsirecon_suffix, params, wf):
@@ -35,26 +36,33 @@ def external_format_datasinks(qsirecon_suffix, params, wf):
     outputnode = wf.get_node("outputnode")
     if params["write_fibgz"]:
         ds_fibgz = pe.Node(
-            ReconDerivativesDataSink(extension='.fib.gz',
-                                     qsirecon_suffix=qsirecon_suffix,
-                                     compress=True),
-            name='ds_{}_fibgz'.format(qsirecon_suffix),
-            run_without_submitting=True)
+            ReconDerivativesDataSink(
+                extension=".fib.gz", qsirecon_suffix=qsirecon_suffix, compress=True
+            ),
+            name="ds_{}_fibgz".format(qsirecon_suffix),
+            run_without_submitting=True,
+        )
         wf.connect(outputnode, 'fibgz',
                    ds_fibgz, 'in_file')  # fmt:skip
     if params["write_mif"]:
         ds_mif = pe.Node(
-            ReconDerivativesDataSink(extension='.mif',
-                                     qsirecon_suffix=qsirecon_suffix,
-                                     compress=False),
-            name='ds_{}_mif'.format(qsirecon_suffix),
-            run_without_submitting=True)
+            ReconDerivativesDataSink(
+                extension=".mif", qsirecon_suffix=qsirecon_suffix, compress=False
+            ),
+            name="ds_{}_mif".format(qsirecon_suffix),
+            run_without_submitting=True,
+        )
         wf.connect(outputnode, 'fod_sh_mif',
                    ds_mif, 'in_file')  # fmt:skip
 
 
-def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, available_anatomical_data, name="dipy_3dshore_recon",
-                                        qsirecon_suffix="", params={}):
+def init_dipy_brainsuite_shore_recon_wf(
+    omp_nthreads,
+    available_anatomical_data,
+    name="dipy_3dshore_recon",
+    qsirecon_suffix="",
+    params={},
+):
     """Reconstruct EAPs, ODFs, using 3dSHORE (brainsuite-style basis set).
 
     Inputs
@@ -109,24 +117,39 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, available_anatomical_data,
 
     """
 
-    inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields),
-                        name="inputnode")
+    inputnode = pe.Node(
+        niu.IdentityInterface(fields=recon_workflow_input_fields), name="inputnode"
+    )
     outputnode = pe.Node(
         niu.IdentityInterface(
-            fields=['shore_coeffs_image', 'rtop_image', 'alpha_image', 'r2_image',
-                    'cnr_image', 'regularization_image', 'fibgz', 'fod_sh_mif',
-                    'dwi_file', 'bval_file', 'bvec_file', 'b_file', 'recon_scalars']),
-        name="outputnode")
+            fields=[
+                "shore_coeffs_image",
+                "rtop_image",
+                "alpha_image",
+                "r2_image",
+                "cnr_image",
+                "regularization_image",
+                "fibgz",
+                "fod_sh_mif",
+                "dwi_file",
+                "bval_file",
+                "bvec_file",
+                "b_file",
+                "recon_scalars",
+            ]
+        ),
+        name="outputnode",
+    )
 
     workflow = Workflow(name=name)
     desc = "Dipy Reconstruction\n\n: "
     plot_reports = params.pop("plot_reports", True)
-    recon_shore = pe.Node(
-        BrainSuiteShoreReconstruction(**params), name="recon_shore")
+    recon_shore = pe.Node(BrainSuiteShoreReconstruction(**params), name="recon_shore")
     recon_scalars = pe.Node(
         BrainSuite3dSHOREReconScalars(qsirecon_suffix="name"),
         name="recon_scalars",
-        run_without_submitting=True)
+        run_without_submitting=True,
+    )
     doing_extrapolation = params.get("extrapolate_scheme") in ("HCP", "ABCD")
 
     workflow.connect([
@@ -159,16 +182,12 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, available_anatomical_data,
 
     if plot_reports:
 
-        plot_peaks = pe.Node(
-            CLIReconPeaksReport(),
-            name='plot_peaks',
-            n_procs=omp_nthreads)
+        plot_peaks = pe.Node(CLIReconPeaksReport(), name="plot_peaks", n_procs=omp_nthreads)
         ds_report_peaks = pe.Node(
-            ReconDerivativesDataSink(extension='.png',
-                                    desc="3dSHOREODF",
-                                    suffix='peaks'),
-            name='ds_report_peaks',
-            run_without_submitting=True)
+            ReconDerivativesDataSink(extension=".png", desc="3dSHOREODF", suffix="peaks"),
+            name="ds_report_peaks",
+            run_without_submitting=True,
+        )
         workflow.connect([
             (inputnode, plot_peaks, [('dwi_ref', 'background_image'),
                                      ('odf_rois', 'odf_rois')]),
@@ -179,13 +198,12 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, available_anatomical_data,
         ])  # fmt:skip
 
     # Plot targeted regions
-    if available_anatomical_data['has_qsiprep_t1w_transforms'] and plot_reports:
+    if available_anatomical_data["has_qsiprep_t1w_transforms"] and plot_reports:
         ds_report_odfs = pe.Node(
-            ReconDerivativesDataSink(extension='.png',
-                                     desc="3dSHOREODF",
-                                     suffix='odfs'),
-            name='ds_report_odfs',
-            run_without_submitting=True)
+            ReconDerivativesDataSink(extension=".png", desc="3dSHOREODF", suffix="odfs"),
+            name="ds_report_odfs",
+            run_without_submitting=True,
+        )
         workflow.connect(plot_peaks, 'odf_report',
                          ds_report_odfs, 'in_file')  # fmt:skip
 
@@ -193,104 +211,121 @@ def init_dipy_brainsuite_shore_recon_wf(omp_nthreads, available_anatomical_data,
         external_format_datasinks(qsirecon_suffix, params, workflow)
 
         ds_rtop = pe.Node(
-            ReconDerivativesDataSink(extension='.nii.gz',
-                                     desc="rtop",
-                                     qsirecon_suffix=qsirecon_suffix,
-                                     compress=True),
-            name='ds_bsshore_rtop',
-            run_without_submitting=True)
+            ReconDerivativesDataSink(
+                extension=".nii.gz", desc="rtop", qsirecon_suffix=qsirecon_suffix, compress=True
+            ),
+            name="ds_bsshore_rtop",
+            run_without_submitting=True,
+        )
         workflow.connect(outputnode, 'rtop_image',
                          ds_rtop, 'in_file')  # fmt:skip
 
         ds_coeff = pe.Node(
-            ReconDerivativesDataSink(extension='.nii.gz',
-                                     desc="SHOREcoeff",
-                                     qsirecon_suffix=qsirecon_suffix,
-                                     compress=True),
-            name='ds_bsshore_coeff',
-            run_without_submitting=True)
+            ReconDerivativesDataSink(
+                extension=".nii.gz",
+                desc="SHOREcoeff",
+                qsirecon_suffix=qsirecon_suffix,
+                compress=True,
+            ),
+            name="ds_bsshore_coeff",
+            run_without_submitting=True,
+        )
         workflow.connect(outputnode, 'shore_coeffs_image',
                          ds_coeff, 'in_file')  # fmt:skip
 
         ds_alpha = pe.Node(
-            ReconDerivativesDataSink(extension='.nii.gz',
-                                     desc="L1alpha",
-                                     qsirecon_suffix=qsirecon_suffix,
-                                     compress=True),
-            name='ds_bsshore_alpha',
-            run_without_submitting=True)
+            ReconDerivativesDataSink(
+                extension=".nii.gz", desc="L1alpha", qsirecon_suffix=qsirecon_suffix, compress=True
+            ),
+            name="ds_bsshore_alpha",
+            run_without_submitting=True,
+        )
         workflow.connect(outputnode, 'alpha_image',
                          ds_alpha, 'in_file')  # fmt:skip
 
         ds_r2 = pe.Node(
-            ReconDerivativesDataSink(extension='.nii.gz',
-                                     desc="r2",
-                                     qsirecon_suffix=qsirecon_suffix,
-                                     compress=True),
-            name='ds_bsshore_r2',
-            run_without_submitting=True)
+            ReconDerivativesDataSink(
+                extension=".nii.gz", desc="r2", qsirecon_suffix=qsirecon_suffix, compress=True
+            ),
+            name="ds_bsshore_r2",
+            run_without_submitting=True,
+        )
         workflow.connect(outputnode, 'r2_image',
                          ds_r2, 'in_file')  # fmt:skip
 
         ds_cnr = pe.Node(
-            ReconDerivativesDataSink(extension='.nii.gz',
-                                     desc="CNR",
-                                     qsirecon_suffix=qsirecon_suffix,
-                                     compress=True),
-            name='ds_bsshore_cnr',
-            run_without_submitting=True)
+            ReconDerivativesDataSink(
+                extension=".nii.gz", desc="CNR", qsirecon_suffix=qsirecon_suffix, compress=True
+            ),
+            name="ds_bsshore_cnr",
+            run_without_submitting=True,
+        )
         workflow.connect(outputnode, 'cnr_image',
                          ds_cnr, 'in_file')  # fmt:skip
 
         ds_regl = pe.Node(
-            ReconDerivativesDataSink(extension='.nii.gz',
-                                     desc="regularization",
-                                     qsirecon_suffix=qsirecon_suffix,
-                                     compress=True),
-            name='ds_bsshore_regl',
-            run_without_submitting=True)
+            ReconDerivativesDataSink(
+                extension=".nii.gz",
+                desc="regularization",
+                qsirecon_suffix=qsirecon_suffix,
+                compress=True,
+            ),
+            name="ds_bsshore_regl",
+            run_without_submitting=True,
+        )
         workflow.connect(outputnode, 'regularization_image',
                          ds_regl, 'in_file')  # fmt:skip
         if doing_extrapolation:
             ds_extrap_dwi = pe.Node(
-                ReconDerivativesDataSink(extension='.nii.gz',
-                                         desc="extrapolated",
-                                         qsirecon_suffix=qsirecon_suffix,
-                                         compress=True),
-                name='ds_extrap_dwi',
-                run_without_submitting=True)
+                ReconDerivativesDataSink(
+                    extension=".nii.gz",
+                    desc="extrapolated",
+                    qsirecon_suffix=qsirecon_suffix,
+                    compress=True,
+                ),
+                name="ds_extrap_dwi",
+                run_without_submitting=True,
+            )
             workflow.connect(outputnode, 'dwi_file',
                              ds_extrap_dwi, 'in_file')  # fmt:skip
             ds_extrap_bval = pe.Node(
-                ReconDerivativesDataSink(extension='.bval',
-                                         desc="extrapolated",
-                                         qsirecon_suffix=qsirecon_suffix),
-                name='ds_extrap_bval',
-                run_without_submitting=True)
+                ReconDerivativesDataSink(
+                    extension=".bval", desc="extrapolated", qsirecon_suffix=qsirecon_suffix
+                ),
+                name="ds_extrap_bval",
+                run_without_submitting=True,
+            )
             workflow.connect(outputnode, 'bval_file',
                              ds_extrap_bval, 'in_file')  # fmt:skip
             ds_extrap_bvec = pe.Node(
-                ReconDerivativesDataSink(extension='.bvec',
-                                         desc="extrapolated",
-                                         qsirecon_suffix=qsirecon_suffix),
-                name='ds_extrap_bvec',
-                run_without_submitting=True)
+                ReconDerivativesDataSink(
+                    extension=".bvec", desc="extrapolated", qsirecon_suffix=qsirecon_suffix
+                ),
+                name="ds_extrap_bvec",
+                run_without_submitting=True,
+            )
             workflow.connect(outputnode, 'bvec_file',
                              ds_extrap_bvec, 'in_file')  # fmt:skip
             ds_extrap_b = pe.Node(
-                ReconDerivativesDataSink(extension='.b',
-                                         desc="extrapolated",
-                                         qsirecon_suffix=qsirecon_suffix),
-                name='ds_extrap_b',
-                run_without_submitting=True)
+                ReconDerivativesDataSink(
+                    extension=".b", desc="extrapolated", qsirecon_suffix=qsirecon_suffix
+                ),
+                name="ds_extrap_b",
+                run_without_submitting=True,
+            )
             workflow.connect(outputnode, 'b_file',
                              ds_extrap_b, 'in_file')  # fmt:skip
     workflow.__desc__ = desc
     return workflow
 
 
-def init_dipy_mapmri_recon_wf(omp_nthreads, available_anatomical_data, name="dipy_mapmri_recon",
-                              qsirecon_suffix="", params={}):
+def init_dipy_mapmri_recon_wf(
+    omp_nthreads,
+    available_anatomical_data,
+    name="dipy_mapmri_recon",
+    qsirecon_suffix="",
+    params={},
+):
     """Reconstruct EAPs, ODFs, using 3dSHORE (brainsuite-style basis set).
 
     Inputs
@@ -365,13 +400,29 @@ def init_dipy_mapmri_recon_wf(omp_nthreads, available_anatomical_data, name="dip
             Default: None (cvxpy chooses its own solver)
     """
 
-    inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields),
-                        name="inputnode")
+    inputnode = pe.Node(
+        niu.IdentityInterface(fields=recon_workflow_input_fields), name="inputnode"
+    )
     outputnode = pe.Node(
         niu.IdentityInterface(
-            fields=['mapmri_coeffs', 'rtop', 'rtap', 'rtpp', 'fibgz', 'fod_sh_mif',
-                    'parng', 'perng', 'ng', 'qiv', 'lapnorm', 'msd', 'recon_scalars']),
-        name="outputnode")
+            fields=[
+                "mapmri_coeffs",
+                "rtop",
+                "rtap",
+                "rtpp",
+                "fibgz",
+                "fod_sh_mif",
+                "parng",
+                "perng",
+                "ng",
+                "qiv",
+                "lapnorm",
+                "msd",
+                "recon_scalars",
+            ]
+        ),
+        name="outputnode",
+    )
 
     workflow = Workflow(name=name)
     desc = "Dipy Reconstruction\n\n: "
@@ -380,7 +431,8 @@ def init_dipy_mapmri_recon_wf(omp_nthreads, available_anatomical_data, name="dip
     recon_scalars = pe.Node(
         DIPYMAPMRIReconScalars(qsirecon_suffix=name),
         name="recon_scalars",
-        run_without_submitting=True)
+        run_without_submitting=True,
+    )
     workflow.connect([
         (inputnode, recon_map, [
             ('dwi_file', 'dwi_file'),
@@ -413,16 +465,12 @@ def init_dipy_mapmri_recon_wf(omp_nthreads, available_anatomical_data, name="dip
         (recon_scalars, outputnode, [("scalar_info", "recon_scalars")])
     ])  # fmt:skip
     if plot_reports:
-        plot_peaks = pe.Node(
-            CLIReconPeaksReport(),
-            name='plot_peaks',
-            n_procs=omp_nthreads)
+        plot_peaks = pe.Node(CLIReconPeaksReport(), name="plot_peaks", n_procs=omp_nthreads)
         ds_report_peaks = pe.Node(
-            ReconDerivativesDataSink(extension='.png',
-                                    desc="MAPLMRIODF",
-                                    suffix='peaks'),
-            name='ds_report_peaks',
-            run_without_submitting=True)
+            ReconDerivativesDataSink(extension=".png", desc="MAPLMRIODF", suffix="peaks"),
+            name="ds_report_peaks",
+            run_without_submitting=True,
+        )
         workflow.connect([
             (inputnode, plot_peaks, [
                 ('dwi_mask', 'mask_file'),
@@ -435,22 +483,20 @@ def init_dipy_mapmri_recon_wf(omp_nthreads, available_anatomical_data, name="dip
         ])  # fmt:skip
 
     # Plot targeted regions
-    if available_anatomical_data['has_qsiprep_t1w_transforms'] and plot_reports:
+    if available_anatomical_data["has_qsiprep_t1w_transforms"] and plot_reports:
         ds_report_odfs = pe.Node(
-            ReconDerivativesDataSink(extension='.png',
-                                     desc="MAPLMRIODF",
-                                     suffix='odfs'),
-            name='ds_report_odfs',
-            run_without_submitting=True)
+            ReconDerivativesDataSink(extension=".png", desc="MAPLMRIODF", suffix="odfs"),
+            name="ds_report_odfs",
+            run_without_submitting=True,
+        )
         workflow.connect(plot_peaks, 'odf_report',
                          ds_report_odfs, 'in_file')  # fmt:skip
 
     if qsirecon_suffix:
         external_format_datasinks(qsirecon_suffix, params, workflow)
         ds_recon_scalars = pe.Node(
-            ReconScalarsDataSink(),
-            name="ds_recon_scalars",
-            run_without_submitting=True)
+            ReconScalarsDataSink(), name="ds_recon_scalars", run_without_submitting=True
+        )
         workflow.connect(
             recon_scalars,
             "scalar_info",
@@ -461,8 +507,9 @@ def init_dipy_mapmri_recon_wf(omp_nthreads, available_anatomical_data, name="dip
     return workflow
 
 
-def init_dipy_dki_recon_wf(omp_nthreads, available_anatomical_data, name="dipy_dki_recon",
-                              qsirecon_suffix="", params={}):
+def init_dipy_dki_recon_wf(
+    omp_nthreads, available_anatomical_data, name="dipy_dki_recon", qsirecon_suffix="", params={}
+):
     """Fit DKI
 
     Inputs
@@ -494,17 +541,33 @@ def init_dipy_dki_recon_wf(omp_nthreads, available_anatomical_data, name="dipy_d
 
     """
 
-    inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields),
-                        name="inputnode")
+    inputnode = pe.Node(
+        niu.IdentityInterface(fields=recon_workflow_input_fields), name="inputnode"
+    )
     outputnode = pe.Node(
         niu.IdentityInterface(
-            fields=['tensor', 'fa', 'md', 'rd', 'ad',
-                    'colorFA', 'kfa', 'mk', 'ak', 'rk',
-                    'mkt', 'recon_scalars']),
-        name="outputnode")
-    recon_scalars = pe.Node(DIPYDKIReconScalars(qsirecon_suffix=qsirecon_suffix),
-                            run_without_submitting=True,
-                            name="recon_scalars")
+            fields=[
+                "tensor",
+                "fa",
+                "md",
+                "rd",
+                "ad",
+                "colorFA",
+                "kfa",
+                "mk",
+                "ak",
+                "rk",
+                "mkt",
+                "recon_scalars",
+            ]
+        ),
+        name="outputnode",
+    )
+    recon_scalars = pe.Node(
+        DIPYDKIReconScalars(qsirecon_suffix=qsirecon_suffix),
+        run_without_submitting=True,
+        name="recon_scalars",
+    )
     workflow = Workflow(name=name)
     desc = "Dipy Reconstruction\n\n: "
     plot_reports = params.pop("plot_reports", True)
@@ -544,29 +607,35 @@ def init_dipy_dki_recon_wf(omp_nthreads, available_anatomical_data, name="dipy_d
 
     if plot_reports and False:
         plot_peaks = pe.Node(
-            CLIReconPeaksReport(peaks_only=True),
-            name='plot_peaks',
-            n_procs=omp_nthreads)
+            CLIReconPeaksReport(peaks_only=True), name="plot_peaks", n_procs=omp_nthreads
+        )
         ds_report_peaks = pe.Node(
-            ReconDerivativesDataSink(extension='.png',
-                                     desc="DKI",
-                                     suffix='peaks'),
-            name='ds_report_peaks',
-            run_without_submitting=True)
-        workflow.connect([
-            (inputnode, plot_peaks, [('dwi_ref', 'background_image'),
-                                     ('odf_rois', 'odf_rois')]),
-            (inputnode, plot_peaks, [('dwi_mask', 'mask_file')]),
-            (recon_dki, plot_peaks, [('odf_directions', 'directions_file'),
-                                     ('odf_amplitudes', 'odf_file')]),
-            (plot_peaks, ds_report_peaks, [('peak_report', 'in_file')])])
+            ReconDerivativesDataSink(extension=".png", desc="DKI", suffix="peaks"),
+            name="ds_report_peaks",
+            run_without_submitting=True,
+        )
+        workflow.connect(
+            [
+                (
+                    inputnode,
+                    plot_peaks,
+                    [("dwi_ref", "background_image"), ("odf_rois", "odf_rois")],
+                ),
+                (inputnode, plot_peaks, [("dwi_mask", "mask_file")]),
+                (
+                    recon_dki,
+                    plot_peaks,
+                    [("odf_directions", "directions_file"), ("odf_amplitudes", "odf_file")],
+                ),
+                (plot_peaks, ds_report_peaks, [("peak_report", "in_file")]),
+            ]
+        )
 
     if qsirecon_suffix:
         external_format_datasinks(qsirecon_suffix, params, workflow)
         ds_recon_scalars = pe.Node(
-            ReconScalarsDataSink(),
-            name="ds_recon_scalars",
-            run_without_submitting=True)
+            ReconScalarsDataSink(), name="ds_recon_scalars", run_without_submitting=True
+        )
         workflow.connect(
             recon_scalars,
             "scalar_info",

@@ -32,7 +32,7 @@ from ...niworkflows.interfaces.masks import BETRPT
 from .utils import cleanup_edge_pipeline, demean_image, siemens2rads
 
 
-def init_phdiff_wf(omp_nthreads, phasetype='phasediff', name='phdiff_wf'):
+def init_phdiff_wf(omp_nthreads, phasetype="phasediff", name="phdiff_wf"):
     """
     Estimates the fieldmap using a phase-difference image and one or more
     magnitude images corresponding to two or more :abbr:`GRE (Gradient Echo sequence)`
@@ -66,44 +66,49 @@ further improvements of HCP Pipelines [@hcppipelines].
 """
 
     # Check for FSL binary
-    fsl_check = os.environ.get('FSL_BUILD')
-    if fsl_check=="no_fsl":
+    fsl_check = os.environ.get("FSL_BUILD")
+    if fsl_check == "no_fsl":
         raise Exception(
             """Container in use does not have FSL. To use this workflow,
-            please download the qsiprep container with FSL installed.""")
-    inputnode = pe.Node(niu.IdentityInterface(fields=['magnitude', 'phasediff']),
-                        name='inputnode')
+            please download the qsiprep container with FSL installed."""
+        )
+    inputnode = pe.Node(niu.IdentityInterface(fields=["magnitude", "phasediff"]), name="inputnode")
 
-    outputnode = pe.Node(niu.IdentityInterface(
-        fields=['fmap', 'fmap_ref', 'fmap_mask']), name='outputnode')
+    outputnode = pe.Node(
+        niu.IdentityInterface(fields=["fmap", "fmap_ref", "fmap_mask"]), name="outputnode"
+    )
 
     # Merge input magnitude images
-    magmrg = pe.Node(IntraModalMerge(), name='magmrg')
+    magmrg = pe.Node(IntraModalMerge(), name="magmrg")
 
     # de-gradient the fields ("bias/illumination artifact")
-    n4 = pe.Node(ants.N4BiasFieldCorrection(dimension=3, copy_header=True),
-                 name='n4', n_procs=omp_nthreads)
-    bet = pe.Node(BETRPT(generate_report=True, frac=0.6, mask=True),
-                name='bet')
-    ds_report_fmap_mask = pe.Node(DerivativesDataSink(
-        desc='brain', suffix='mask'), name='ds_report_fmap_mask',
-        mem_gb=0.01, run_without_submitting=True)
+    n4 = pe.Node(
+        ants.N4BiasFieldCorrection(dimension=3, copy_header=True), name="n4", n_procs=omp_nthreads
+    )
+    bet = pe.Node(BETRPT(generate_report=True, frac=0.6, mask=True), name="bet")
+    ds_report_fmap_mask = pe.Node(
+        DerivativesDataSink(desc="brain", suffix="mask"),
+        name="ds_report_fmap_mask",
+        mem_gb=0.01,
+        run_without_submitting=True,
+    )
     # uses mask from bet; outputs a mask
 
     # dilate = pe.Node(fsl.maths.MathsCommand(
     #     nan2zeros=True, args='-kernel sphere 5 -dilM'), name='MskDilate')
 
     # FSL PRELUDE will perform phase-unwrapping
-    prelude = pe.Node(fsl.PRELUDE(), name='prelude')
+    prelude = pe.Node(fsl.PRELUDE(), name="prelude")
 
-    denoise = pe.Node(fsl.SpatialFilter(operation='median', kernel_shape='sphere',
-                                        kernel_size=5), name='denoise')
+    denoise = pe.Node(
+        fsl.SpatialFilter(operation="median", kernel_shape="sphere", kernel_size=5), name="denoise"
+    )
 
-    demean = pe.Node(niu.Function(function=demean_image), name='demean')
+    demean = pe.Node(niu.Function(function=demean_image), name="demean")
 
     cleanup_wf = cleanup_edge_pipeline(name="cleanup_wf")
 
-    compfmap = pe.Node(Phasediff2Fieldmap(), name='compfmap')
+    compfmap = pe.Node(Phasediff2Fieldmap(), name="compfmap")
 
     # The phdiff2fmap interface is equivalent to:
     # rad2rsec (using rads2radsec from nipype.workflows.dmri.fsl.utils)
@@ -112,14 +117,12 @@ further improvements of HCP Pipelines [@hcppipelines].
 
     if phasetype == "phasediff":
         # Read phasediff echo times
-        meta = pe.Node(ReadSidecarJSON(), name='meta', mem_gb=0.01)
+        meta = pe.Node(ReadSidecarJSON(), name="meta", mem_gb=0.01)
 
         # phase diff -> radians
-        pha2rads = pe.Node(niu.Function(function=siemens2rads),
-                           name='pha2rads')
+        pha2rads = pe.Node(niu.Function(function=siemens2rads), name="pha2rads")
         # Read phasediff echo times
-        meta = pe.Node(ReadSidecarJSON(), name='meta', mem_gb=0.01,
-                       run_without_submitting=True)
+        meta = pe.Node(ReadSidecarJSON(), name="meta", mem_gb=0.01, run_without_submitting=True)
         workflow.connect([
             (meta, compfmap, [('out_dict', 'metadata')]),
             (inputnode, pha2rads, [('phasediff', 'in_file')]),
@@ -133,9 +136,14 @@ The phase difference used for unwarping was calculated using two separate phase 
  [@pncprocessing].
     """
         # Special case for phase1, phase2 images
-        meta = pe.MapNode(ReadSidecarJSON(), name='meta', mem_gb=0.01,
-                          run_without_submitting=True, iterfield=['in_file'])
-        phases2fmap = pe.Node(Phases2Fieldmap(), name='phases2fmap')
+        meta = pe.MapNode(
+            ReadSidecarJSON(),
+            name="meta",
+            mem_gb=0.01,
+            run_without_submitting=True,
+            iterfield=["in_file"],
+        )
+        phases2fmap = pe.Node(Phases2Fieldmap(), name="phases2fmap")
         workflow.connect([
             (meta, phases2fmap, [('out_dict', 'metadatas')]),
             (inputnode, phases2fmap, [('phasediff', 'phase_files')]),

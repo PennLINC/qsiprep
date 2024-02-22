@@ -30,26 +30,28 @@ from .resampling import init_dwi_trans_wf
 from .util import _create_mem_gb, init_dwi_reference_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
-LOGGER = logging.getLogger('nipype.workflow')
+LOGGER = logging.getLogger("nipype.workflow")
 
 
-def init_dwi_finalize_wf(scan_groups,
-                         name,
-                         output_prefix,
-                         hmc_model,
-                         shoreline_iters,
-                         reportlets_dir,
-                         output_resolution,
-                         template,
-                         output_dir,
-                         omp_nthreads,
-                         b0_threshold,
-                         write_local_bvecs,
-                         do_biascorr,
-                         make_intramodal_template,
-                         source_file,
-                         write_derivatives=True,
-                         layout=None):
+def init_dwi_finalize_wf(
+    scan_groups,
+    name,
+    output_prefix,
+    hmc_model,
+    shoreline_iters,
+    reportlets_dir,
+    output_resolution,
+    template,
+    output_dir,
+    omp_nthreads,
+    b0_threshold,
+    write_local_bvecs,
+    do_biascorr,
+    make_intramodal_template,
+    source_file,
+    write_derivatives=True,
+    layout=None,
+):
     """
     This workflow controls the resampling parts of the dwi preprocessing workflow.
 
@@ -161,13 +163,13 @@ def init_dwi_finalize_wf(scan_groups,
     """
     # Check the inputs
     if layout is not None:
-        all_dwis = scan_groups['dwi_series']
-        if 'rpe_series' in scan_groups:
-            all_dwis += scan_groups['rpe_series']
+        all_dwis = scan_groups["dwi_series"]
+        if "rpe_series" in scan_groups:
+            all_dwis += scan_groups["rpe_series"]
     else:
-        all_dwis = ['/fake/testing/path.nii.gz']
+        all_dwis = ["/fake/testing/path.nii.gz"]
 
-    mem_gb = {'filesize': 1, 'resampled': 1, 'largemem': 1}
+    mem_gb = {"filesize": 1, "resampled": 1, "largemem": 1}
     dwi_nvols = 10
 
     # Determine resource usage
@@ -177,55 +179,85 @@ def init_dwi_finalize_wf(scan_groups,
             continue
         _dwi_nvols, _mem_gb = _create_mem_gb(scan)
         dwi_nvols += _dwi_nvols
-        mem_gb['filesize'] += _mem_gb['filesize']
-        mem_gb['resampled'] += _mem_gb['resampled']
-        mem_gb['largemem'] += _mem_gb['largemem']
+        mem_gb["filesize"] += _mem_gb["filesize"]
+        mem_gb["resampled"] += _mem_gb["resampled"]
+        mem_gb["largemem"] += _mem_gb["largemem"]
 
     workflow = Workflow(name=name)
 
     inputnode = pe.Node(
-        niu.IdentityInterface(fields=[
-            'itk_b0_to_t1',
-            'b0_to_intramodal_template_transforms',
-            'intramodal_template_to_t1_affine',
-            'intramodal_template_to_t1_warp',
-            't1_2_mni_forward_transform',
-            'hmc_optimization_data',
-            'dwi_files',
-            'cnr_map',
-            'bval_files',
-            'bvec_files',
-            'b0_ref_image',
-            'intramodal_template',
-            'b0_indices',
-            'dwi_mask',
-            'original_files',
-            'hmc_xforms',
-            'fieldwarps',
-            'output_grid',
-            'sbref_file', 'subjects_dir', 'subject_id',
-            't1_preproc', 't1_brain', 't1_mask', 't1_seg',
-            't1_aseg', 't1_aparc',
-            't1_2_mni_reverse_transform', 't1_2_fsnative_forward_transform',
-            't1_2_fsnative_reverse_transform', 'dwi_sampling_grid', 'raw_qc_file',
-            'coreg_score', 'raw_concatenated', 'confounds', 'carpetplot_data',
-            'sdc_scaling_images'
-        ]),
-        name='inputnode')
+        niu.IdentityInterface(
+            fields=[
+                "itk_b0_to_t1",
+                "b0_to_intramodal_template_transforms",
+                "intramodal_template_to_t1_affine",
+                "intramodal_template_to_t1_warp",
+                "t1_2_mni_forward_transform",
+                "hmc_optimization_data",
+                "dwi_files",
+                "cnr_map",
+                "bval_files",
+                "bvec_files",
+                "b0_ref_image",
+                "intramodal_template",
+                "b0_indices",
+                "dwi_mask",
+                "original_files",
+                "hmc_xforms",
+                "fieldwarps",
+                "output_grid",
+                "sbref_file",
+                "subjects_dir",
+                "subject_id",
+                "t1_preproc",
+                "t1_brain",
+                "t1_mask",
+                "t1_seg",
+                "t1_aseg",
+                "t1_aparc",
+                "t1_2_mni_reverse_transform",
+                "t1_2_fsnative_forward_transform",
+                "t1_2_fsnative_reverse_transform",
+                "dwi_sampling_grid",
+                "raw_qc_file",
+                "coreg_score",
+                "raw_concatenated",
+                "confounds",
+                "carpetplot_data",
+                "sdc_scaling_images",
+            ]
+        ),
+        name="inputnode",
+    )
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=[
-            'dwi_t1', 'dwi_mask_t1', 'cnr_map_t1', 'bvals_t1', 'bvecs_t1', 'local_bvecs_t1',
-            't1_b0_ref', 'confounds', 'gradient_table_t1', 'btable_t1', 'hmc_optimization_data'
-        ]),
-        name='outputnode')
+        niu.IdentityInterface(
+            fields=[
+                "dwi_t1",
+                "dwi_mask_t1",
+                "cnr_map_t1",
+                "bvals_t1",
+                "bvecs_t1",
+                "local_bvecs_t1",
+                "t1_b0_ref",
+                "confounds",
+                "gradient_table_t1",
+                "btable_t1",
+                "hmc_optimization_data",
+            ]
+        ),
+        name="outputnode",
+    )
 
     if make_intramodal_template:
-        b0_to_im_template = pe.Node(SimpleBeforeAfterRPT(), name='b0_to_im_template')
+        b0_to_im_template = pe.Node(SimpleBeforeAfterRPT(), name="b0_to_im_template")
         ds_report_intramodal = pe.Node(
-            DerivativesDataSink(suffix='tointramodal', source_file=source_file,
-                                base_directory=reportlets_dir),
-            name='ds_report_intramodal', run_without_submitting=True,
-            mem_gb=DEFAULT_MEMORY_MIN_GB)
+            DerivativesDataSink(
+                suffix="tointramodal", source_file=source_file, base_directory=reportlets_dir
+            ),
+            name="ds_report_intramodal",
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB,
+        )
         workflow.connect([
             (inputnode, b0_to_im_template, [
                 ('intramodal_template', 'after'),
@@ -234,16 +266,18 @@ def init_dwi_finalize_wf(scan_groups,
         ])  # fmt:skip
 
     # Do the resampling
-    transform_dwis_t1 = init_dwi_trans_wf(source_file=source_file,
-                                          name='transform_dwis_t1',
-                                          template="ACPC",
-                                          mem_gb=mem_gb['resampled'],
-                                          omp_nthreads=omp_nthreads,
-                                          output_resolution=output_resolution,
-                                          use_compression=False,
-                                          to_mni=False,
-                                          write_local_bvecs=write_local_bvecs,
-                                          concatenate=write_derivatives)
+    transform_dwis_t1 = init_dwi_trans_wf(
+        source_file=source_file,
+        name="transform_dwis_t1",
+        template="ACPC",
+        mem_gb=mem_gb["resampled"],
+        omp_nthreads=omp_nthreads,
+        output_resolution=output_resolution,
+        use_compression=False,
+        to_mni=False,
+        write_local_bvecs=write_local_bvecs,
+        concatenate=write_derivatives,
+    )
 
     # Apply denoising to the interpolated data if requested
     final_denoise_wf = init_finalize_denoising_wf(
@@ -251,7 +285,7 @@ def init_dwi_finalize_wf(scan_groups,
         omp_nthreads=omp_nthreads,
         source_file=source_file,
         do_biascorr=do_biascorr and write_derivatives,
-        num_dwi_acquisitions=len(all_dwis)
+        num_dwi_acquisitions=len(all_dwis),
     )
 
     workflow.connect([
@@ -299,7 +333,7 @@ def init_dwi_finalize_wf(scan_groups,
 
     # Fill-in datasinks of reportlets seen so far
     for node in workflow.list_node_names():
-        if node.split('.')[-1].startswith('ds_report'):
+        if node.split(".")[-1].startswith("ds_report"):
             workflow.get_node(node).inputs.base_directory = reportlets_dir
             workflow.get_node(node).inputs.source_file = source_file
 
@@ -325,14 +359,16 @@ def init_dwi_finalize_wf(scan_groups,
     ])  # fmt:skip
 
     # CONNECT TO DERIVATIVES #####################
-    gtab_t1 = pe.Node(MRTrixGradientTable(), name='gtab_t1')
-    btab_t1 = pe.Node(DSIStudioBTable(bvec_convention="DIPY"), name='btab_t1')
-    t1_dice_calc = init_mask_overlap_wf(name='t1_dice_calc')
-    gradient_plot = pe.Node(GradientPlot(), name='gradient_plot', run_without_submitting=True)
+    gtab_t1 = pe.Node(MRTrixGradientTable(), name="gtab_t1")
+    btab_t1 = pe.Node(DSIStudioBTable(bvec_convention="DIPY"), name="btab_t1")
+    t1_dice_calc = init_mask_overlap_wf(name="t1_dice_calc")
+    gradient_plot = pe.Node(GradientPlot(), name="gradient_plot", run_without_submitting=True)
     ds_report_gradients = pe.Node(
-        DerivativesDataSink(suffix='sampling_scheme', source_file=source_file),
-        name='ds_report_gradients', run_without_submitting=True,
-        mem_gb=DEFAULT_MEMORY_MIN_GB)
+        DerivativesDataSink(suffix="sampling_scheme", source_file=source_file),
+        name="ds_report_gradients",
+        run_without_submitting=True,
+        mem_gb=DEFAULT_MEMORY_MIN_GB,
+    )
 
     dwi_derivatives_wf = init_dwi_derivatives_wf(
         output_prefix=output_prefix,
@@ -341,29 +377,37 @@ def init_dwi_finalize_wf(scan_groups,
         template=template,
         write_local_bvecs=write_local_bvecs,
         hmc_model=hmc_model,
-        shoreline_iters=shoreline_iters)
+        shoreline_iters=shoreline_iters,
+    )
 
     # Combine all the QC measures for a series QC
-    series_qc = pe.Node(SeriesQC(output_file_name=output_prefix), name='series_qc')
+    series_qc = pe.Node(SeriesQC(output_file_name=output_prefix), name="series_qc")
     ds_series_qc = pe.Node(
-        DerivativesDataSink(desc='ImageQC', suffix='dwi', source_file=source_file,
-                            base_directory=output_dir),
-        name='ds_series_qc', run_without_submitting=True,
-        mem_gb=DEFAULT_MEMORY_MIN_GB)
+        DerivativesDataSink(
+            desc="ImageQC", suffix="dwi", source_file=source_file, base_directory=output_dir
+        ),
+        name="ds_series_qc",
+        run_without_submitting=True,
+        mem_gb=DEFAULT_MEMORY_MIN_GB,
+    )
 
     # Write the carpetplot data
     ds_carpetplot = pe.Node(
-        DerivativesDataSink(desc='SliceQC', suffix='dwi', source_file=source_file,
-                            base_directory=output_dir),
-        name='ds_carpetplot', run_without_submitting=True,
-        mem_gb=DEFAULT_MEMORY_MIN_GB)
+        DerivativesDataSink(
+            desc="SliceQC", suffix="dwi", source_file=source_file, base_directory=output_dir
+        ),
+        name="ds_carpetplot",
+        run_without_submitting=True,
+        mem_gb=DEFAULT_MEMORY_MIN_GB,
+    )
 
     # Write the interactive report json
     ds_interactive_report = pe.Node(
-        DerivativesDataSink(suffix='dwiqc', source_file=source_file,
-                            base_directory=output_dir),
-        name='ds_interactive_report', run_without_submitting=True,
-        mem_gb=DEFAULT_MEMORY_MIN_GB)
+        DerivativesDataSink(suffix="dwiqc", source_file=source_file, base_directory=output_dir),
+        name="ds_interactive_report",
+        run_without_submitting=True,
+        mem_gb=DEFAULT_MEMORY_MIN_GB,
+    )
 
     workflow.connect([
         (interactive_report_wf, ds_interactive_report, [
@@ -416,7 +460,7 @@ def init_dwi_finalize_wf(scan_groups,
     ])  # fmt:skip
     # Fill-in datasinks of reportlets seen so far
     for node in workflow.list_node_names():
-        if node.split('.')[-1].startswith('ds_report'):
+        if node.split(".")[-1].startswith("ds_report"):
             workflow.get_node(node).inputs.base_directory = reportlets_dir
             if not isdefined(workflow.get_node(node).inputs.source_file):
                 workflow.get_node(node).inputs.source_file = source_file
@@ -424,37 +468,46 @@ def init_dwi_finalize_wf(scan_groups,
     return workflow
 
 
-def init_finalize_denoising_wf(name,
-                               omp_nthreads,
-                               source_file,
-                               do_biascorr,
-                               num_dwi_acquisitions,
-                               split_biascorr=False,
-                               do_patch2self=False,
-                               ):
+def init_finalize_denoising_wf(
+    name,
+    omp_nthreads,
+    source_file,
+    do_biascorr,
+    num_dwi_acquisitions,
+    split_biascorr=False,
+    do_patch2self=False,
+):
     """
     Some denoising can only happen after images have been aligned
     """
     inputnode = pe.Node(
-        niu.IdentityInterface(fields=[
-            'confounds',
-            'dwi_t1',
-            'dwi_t1_bval',
-            'dwi_t1_bvec',
-            't1_b0_series',
-            't1_b0_ref',
-            'dwi_mask_t1',
-            'series_qc_t1']),
-        name="inputnode")
+        niu.IdentityInterface(
+            fields=[
+                "confounds",
+                "dwi_t1",
+                "dwi_t1_bval",
+                "dwi_t1_bvec",
+                "t1_b0_series",
+                "t1_b0_ref",
+                "dwi_mask_t1",
+                "series_qc_t1",
+            ]
+        ),
+        name="inputnode",
+    )
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=[
-            'confounds',
-            'dwi_t1',
-            't1_b0_series',
-            't1_b0_ref',
-            'dwi_mask_t1',
-            'series_qc_postproc']),
-        name="outputnode")
+        niu.IdentityInterface(
+            fields=[
+                "confounds",
+                "dwi_t1",
+                "t1_b0_series",
+                "t1_b0_ref",
+                "dwi_mask_t1",
+                "series_qc_postproc",
+            ]
+        ),
+        name="outputnode",
+    )
     workflow = Workflow(name=name)
     # If no denoising, send it back
     if not (do_biascorr or do_patch2self):
@@ -471,22 +524,21 @@ def init_finalize_denoising_wf(name,
 
     # Hold the results of maybe bias correction
     bias_corrected = pe.Node(
-        niu.IdentityInterface(
-            fields=["dwi_t1", "bias_field", "bias_confounds"]),
-        name="bias_corrected")
+        niu.IdentityInterface(fields=["dwi_t1", "bias_field", "bias_confounds"]),
+        name="bias_corrected",
+    )
 
     if do_biascorr:
         if not split_biascorr:
             biascorr = pe.Node(
-                DWIBiasCorrect(method='ants'),
-                name='biascorr',
-                n_procs=omp_nthreads)
+                DWIBiasCorrect(method="ants"), name="biascorr", n_procs=omp_nthreads
+            )
             ds_report_biascorr = pe.Node(
-                DerivativesDataSink(suffix=name + '_biascorr',
-                                    source_file=source_file),
-                name='ds_report_' + name + '_biascorr',
+                DerivativesDataSink(suffix=name + "_biascorr", source_file=source_file),
+                name="ds_report_" + name + "_biascorr",
                 run_without_submitting=True,
-                mem_gb=DEFAULT_MEMORY_MIN_GB)
+                mem_gb=DEFAULT_MEMORY_MIN_GB,
+            )
             workflow.connect([
                 (inputnode, biascorr, [
                     ("dwi_t1", "in_file"),
@@ -504,33 +556,39 @@ def init_finalize_denoising_wf(name,
             biascorrs = []
             reports = []
             scan_split = pe.Node(
-                SplitResampledDWIs(n_images=num_dwi_acquisitions),
-                name="scan_split")
-            gather_corrected_images = pe.Node(niu.Merge(num_dwi_acquisitions),
-                                              name="gather_corrected_images")
-            gather_nmse_txts = pe.Node(niu.Merge(num_dwi_acquisitions),
-                                       name="gather_nmse_txts")
-            gather_bias_images = pe.Node(niu.Merge(num_dwi_acquisitions),
-                                         name="gather_bias_images")
+                SplitResampledDWIs(n_images=num_dwi_acquisitions), name="scan_split"
+            )
+            gather_corrected_images = pe.Node(
+                niu.Merge(num_dwi_acquisitions), name="gather_corrected_images"
+            )
+            gather_nmse_txts = pe.Node(niu.Merge(num_dwi_acquisitions), name="gather_nmse_txts")
+            gather_bias_images = pe.Node(
+                niu.Merge(num_dwi_acquisitions), name="gather_bias_images"
+            )
 
-            merge_corrected_images = pe.Node(Merge(is_dwi=True, dtype="f4"),
-                                             name="merge_corrected_images")
-            merge_bias_images = pe.Node(Merge(is_dwi=True, dtype="f4"),
-                                        name="merge_bias_images")
+            merge_corrected_images = pe.Node(
+                Merge(is_dwi=True, dtype="f4"), name="merge_corrected_images"
+            )
+            merge_bias_images = pe.Node(Merge(is_dwi=True, dtype="f4"), name="merge_bias_images")
 
             # Loop over each original image
             for scan_num in range(num_dwi_acquisitions):
                 scan_num += 1
                 biascorrs.append(
-                    pe.Node(DWIBiasCorrect(method='ants'),
-                            name='biascorr%d' % scan_num,
-                            n_procs=omp_nthreads))
+                    pe.Node(
+                        DWIBiasCorrect(method="ants"),
+                        name="biascorr%d" % scan_num,
+                        n_procs=omp_nthreads,
+                    )
+                )
                 reports.append(
                     pe.Node(
-                        DerivativesDataSink(suffix=name + '_biascorr%d' % scan_num),
-                        name='ds_report_' + name + '_biascorr%d' % scan_num,
+                        DerivativesDataSink(suffix=name + "_biascorr%d" % scan_num),
+                        name="ds_report_" + name + "_biascorr%d" % scan_num,
                         run_without_submitting=True,
-                        mem_gb=DEFAULT_MEMORY_MIN_GB))
+                        mem_gb=DEFAULT_MEMORY_MIN_GB,
+                    )
+                )
                 workflow.connect([
                     (inputnode, biascorrs[-1], [("dwi_mask_t1", "mask")]),
                     (scan_split, biascorrs[-1], [
@@ -564,7 +622,8 @@ def init_finalize_denoising_wf(name,
 
     p2s_buffernode = pe.Node(
         niu.IdentityInterface(fields=["denoised_image", "noise_image", "nmse_text"]),
-        name="p2s_buffernode")
+        name="p2s_buffernode",
+    )
     if do_patch2self:
         raise NotImplementedError()
     else:
@@ -574,15 +633,22 @@ def init_finalize_denoising_wf(name,
 
     # Extract some additional derivatives from the corrected
     extract_b0_series = pe.Node(ExtractB0s(), name="extract_b0_series")
-    final_b0_ref = init_dwi_reference_wf(register_t1=False, gen_report=True,
-                                         desc='resampled', name='final_b0_ref',
-                                         source_file=source_file, omp_nthreads=omp_nthreads)
+    final_b0_ref = init_dwi_reference_wf(
+        register_t1=False,
+        gen_report=True,
+        desc="resampled",
+        name="final_b0_ref",
+        source_file=source_file,
+        omp_nthreads=omp_nthreads,
+    )
 
     # Calculate QC metrics on the resampled data
-    calculate_qc = init_modelfree_qc_wf(omp_nthreads=omp_nthreads,
-                                        bvec_convention="DIPY",  # Resampled is always LPS+
-                                        name='calculate_qc')
-    update_confounds = pe.Node(MergeFinalConfounds(), name='update_confounds')
+    calculate_qc = init_modelfree_qc_wf(
+        omp_nthreads=omp_nthreads,
+        bvec_convention="DIPY",  # Resampled is always LPS+
+        name="calculate_qc",
+    )
+    update_confounds = pe.Node(MergeFinalConfounds(), name="update_confounds")
 
     workflow.connect([
         # Get the new b=0 data from the denoised images

@@ -25,7 +25,7 @@ from ...interfaces.reports import InteractiveReport
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
-def init_modelfree_qc_wf(omp_nthreads, bvec_convention="DIPY", name='dwi_qc_wf'):
+def init_modelfree_qc_wf(omp_nthreads, bvec_convention="DIPY", name="dwi_qc_wf"):
     """
     This workflow runs DSI Studio's QC metrics
 
@@ -56,35 +56,27 @@ def init_modelfree_qc_wf(omp_nthreads, bvec_convention="DIPY", name='dwi_qc_wf')
     workflow.__desc__ = """\
 """
     inputnode = pe.Node(
-        niu.IdentityInterface(fields=['dwi_file', 'bval_file', 'bvec_file']),
-        name='inputnode')
-    outputnode = pe.Node(
-        niu.IdentityInterface(fields=['qc_summary']),
-        name='outputnode')
+        niu.IdentityInterface(fields=["dwi_file", "bval_file", "bvec_file"]), name="inputnode"
+    )
+    outputnode = pe.Node(niu.IdentityInterface(fields=["qc_summary"]), name="outputnode")
 
     raw_src = pe.Node(
         DSIStudioCreateSrc(
-            bvec_convention="FSL" if bvec_convention=="auto" else bvec_convention),
-        name='raw_src',
-        n_procs=omp_nthreads)
-    raw_src_qc = pe.Node(
-        DSIStudioSrcQC(),
-        name='raw_src_qc',
-        n_procs=omp_nthreads)
+            bvec_convention="FSL" if bvec_convention == "auto" else bvec_convention
+        ),
+        name="raw_src",
+        n_procs=omp_nthreads,
+    )
+    raw_src_qc = pe.Node(DSIStudioSrcQC(), name="raw_src_qc", n_procs=omp_nthreads)
     raw_gqi = pe.Node(
         DSIStudioGQIReconstruction(
-            thread_count=omp_nthreads,
-            check_btable=1 if bvec_convention=="auto" else 0),
-        name='raw_gqi',
-        n_procs=omp_nthreads)
-    raw_fib_qc = pe.Node(
-        DSIStudioFibQC(),
-        name='raw_fib_qc',
-        n_procs=omp_nthreads)
-    merged_qc = pe.Node(
-        DSIStudioMergeQC(),
-        name='merged_qc',
-        n_procs=omp_nthreads)
+            thread_count=omp_nthreads, check_btable=1 if bvec_convention == "auto" else 0
+        ),
+        name="raw_gqi",
+        n_procs=omp_nthreads,
+    )
+    raw_fib_qc = pe.Node(DSIStudioFibQC(), name="raw_fib_qc", n_procs=omp_nthreads)
+    merged_qc = pe.Node(DSIStudioMergeQC(), name="merged_qc", n_procs=omp_nthreads)
     workflow.connect([
         (inputnode, raw_src, [
             ('dwi_file', 'input_nifti_file'),
@@ -119,14 +111,24 @@ def init_interactive_report_wf(name="interactive_report_wf"):
     """
 
     inputnode = pe.Node(
-        niu.IdentityInterface(fields=[
-            "raw_dwi_file", "processed_dwi_file", "confounds_file", "bval_file",
-            "bvec_file", "mask_file", "carpetplot_data", "series_qc_file"]),
-        name="inputnode")
+        niu.IdentityInterface(
+            fields=[
+                "raw_dwi_file",
+                "processed_dwi_file",
+                "confounds_file",
+                "bval_file",
+                "bvec_file",
+                "mask_file",
+                "carpetplot_data",
+                "series_qc_file",
+            ]
+        ),
+        name="inputnode",
+    )
     outputnode = pe.Node(niu.IdentityInterface(fields=["out_report"]), name="outputnode")
-    interactive_report = pe.Node(InteractiveReport(), name='interactive_report')
+    interactive_report = pe.Node(InteractiveReport(), name="interactive_report")
     workflow = Workflow(name=name)
-    tensor_fit = pe.Node(TensorReconstruction(), name='tensor_fit')
+    tensor_fit = pe.Node(TensorReconstruction(), name="tensor_fit")
     workflow.connect([
         (inputnode, tensor_fit, [
             ('processed_dwi_file', 'dwi_file'),
@@ -160,13 +162,14 @@ def init_mask_overlap_wf(name="mask_overlap_wf"):
             float value of the dice overlap of the masks
     """
     inputnode = pe.Node(
-        niu.IdentityInterface(fields=['anatomical_mask', 'dwi_mask']),
-        name='inputnode')
-    outputnode = pe.Node(niu.IdentityInterface(fields=['dice_score']), name='outputnode')
+        niu.IdentityInterface(fields=["anatomical_mask", "dwi_mask"]), name="inputnode"
+    )
+    outputnode = pe.Node(niu.IdentityInterface(fields=["dice_score"]), name="outputnode")
 
-    downsample_t1_mask = pe.Node(afni.Resample(resample_mode="NN", outputtype="NIFTI_GZ"),
-                                 name='downsample_t1_mask')
-    calculate_dice = pe.Node(DiceOverlap(), name='calculate_dice')
+    downsample_t1_mask = pe.Node(
+        afni.Resample(resample_mode="NN", outputtype="NIFTI_GZ"), name="downsample_t1_mask"
+    )
+    calculate_dice = pe.Node(DiceOverlap(), name="calculate_dice")
 
     workflow = Workflow(name=name)
     workflow.connect([

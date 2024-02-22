@@ -21,12 +21,16 @@ from ...interfaces.reports import CLIReconPeaksReport
 from qsiprep.interfaces.bids import ReconDerivativesDataSink
 
 
-LOGGER = logging.getLogger('nipype.interface')
+LOGGER = logging.getLogger("nipype.interface")
 
 
-def init_amico_noddi_fit_wf(omp_nthreads, available_anatomical_data,
-                            name="amico_noddi_recon",
-                            qsirecon_suffix="", params={}):
+def init_amico_noddi_fit_wf(
+    omp_nthreads,
+    available_anatomical_data,
+    name="amico_noddi_recon",
+    qsirecon_suffix="",
+    params={},
+):
     """Reconstruct EAPs, ODFs, using 3dSHORE (brainsuite-style basis set).
 
     Inputs
@@ -49,34 +53,46 @@ def init_amico_noddi_fit_wf(omp_nthreads, available_anatomical_data,
 
     """
 
-    inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields + ['odf_rois']),
-                        name="inputnode")
+    inputnode = pe.Node(
+        niu.IdentityInterface(fields=recon_workflow_input_fields + ["odf_rois"]), name="inputnode"
+    )
     outputnode = pe.Node(
         niu.IdentityInterface(
-            fields=['directions_image', 'icvf_image', 'od_image',
-                    'isovf_image', 'config_file', 'fibgz', 'recon_scalars']),
-        name="outputnode")
+            fields=[
+                "directions_image",
+                "icvf_image",
+                "od_image",
+                "isovf_image",
+                "config_file",
+                "fibgz",
+                "recon_scalars",
+            ]
+        ),
+        name="outputnode",
+    )
 
     workflow = Workflow(name=name)
-    recon_scalars = pe.Node(AMICOReconScalars(qsirecon_suffix=qsirecon_suffix),
-                            name="recon_scalars",
-                            run_without_submitting=True)
+    recon_scalars = pe.Node(
+        AMICOReconScalars(qsirecon_suffix=qsirecon_suffix),
+        name="recon_scalars",
+        run_without_submitting=True,
+    )
     plot_reports = params.pop("plot_reports", True)
     desc = """NODDI Reconstruction
 
 : """
-    noddi_fit = pe.Node(
-        NODDI(**params),
-        name="recon_noddi",
-        n_procs=omp_nthreads)
+    noddi_fit = pe.Node(NODDI(**params), name="recon_noddi", n_procs=omp_nthreads)
     desc += """\
 The NODDI model (@noddi) was fit using the AMICO implementation (@amico).
 A value of %.1E was used for parallel diffusivity and %.1E for isotropic
-diffusivity.""" % (params['dPar'], params['dIso'])
-    if params.get('is_exvivo'):
+diffusivity.""" % (
+        params["dPar"],
+        params["dIso"],
+    )
+    if params.get("is_exvivo"):
         desc += " An additional component was added to the model foe ex-vivo data."
 
-    convert_to_fibgz = pe.Node(NODDItoFIBGZ(), name='convert_to_fibgz')
+    convert_to_fibgz = pe.Node(NODDItoFIBGZ(), name="convert_to_fibgz")
 
     workflow.connect([
         (inputnode, noddi_fit, [('dwi_file', 'dwi_file'),
@@ -104,16 +120,12 @@ diffusivity.""" % (params['dPar'], params['dIso'])
         (convert_to_fibgz, outputnode, [('fibgz_file', 'fibgz')])
     ])  # fmt:skip
     if plot_reports:
-        plot_peaks = pe.Node(
-            CLIReconPeaksReport(),
-            name='plot_peaks',
-            n_procs=omp_nthreads)
+        plot_peaks = pe.Node(CLIReconPeaksReport(), name="plot_peaks", n_procs=omp_nthreads)
         ds_report_peaks = pe.Node(
-            ReconDerivativesDataSink(extension='.png',
-                                     desc="NODDI",
-                                     suffix='peaks'),
-            name='ds_report_peaks',
-            run_without_submitting=True)
+            ReconDerivativesDataSink(extension=".png", desc="NODDI", suffix="peaks"),
+            name="ds_report_peaks",
+            run_without_submitting=True,
+        )
 
         workflow.connect([
             (inputnode, plot_peaks, [('dwi_mask', 'mask_file')]),
@@ -124,17 +136,17 @@ diffusivity.""" % (params['dPar'], params['dIso'])
 
     if qsirecon_suffix:
         ds_fibgz = pe.Node(
-        ReconDerivativesDataSink(extension='.fib.gz',
-                                 qsirecon_suffix=qsirecon_suffix,
-                                 compress=True),
-        name='ds_{}_fibgz'.format(qsirecon_suffix),
-        run_without_submitting=True)
+            ReconDerivativesDataSink(
+                extension=".fib.gz", qsirecon_suffix=qsirecon_suffix, compress=True
+            ),
+            name="ds_{}_fibgz".format(qsirecon_suffix),
+            run_without_submitting=True,
+        )
         workflow.connect(outputnode, 'fibgz', ds_fibgz, 'in_file')  # fmt:skip
 
         ds_recon_scalars = pe.Node(
-            ReconScalarsDataSink(),
-            name="ds_recon_scalars",
-            run_without_submitting=True)
+            ReconScalarsDataSink(), name="ds_recon_scalars", run_without_submitting=True
+        )
         workflow.connect(
             recon_scalars,
             "scalar_info",
@@ -142,13 +154,13 @@ diffusivity.""" % (params['dPar'], params['dIso'])
             "recon_scalars")  # fmt:skip
 
         ds_config = pe.Node(
-            ReconDerivativesDataSink(mfp="AMICOconfig",
-                                     model="NODDI",
-                                     qsirecon_suffix=qsirecon_suffix,
-                                     compress=True),
-            name='ds_noddi_config',
-            run_without_submitting=True)
-        workflow.connect(outputnode, 'config_file', ds_config, 'in_file')
+            ReconDerivativesDataSink(
+                mfp="AMICOconfig", model="NODDI", qsirecon_suffix=qsirecon_suffix, compress=True
+            ),
+            name="ds_noddi_config",
+            run_without_submitting=True,
+        )
+        workflow.connect(outputnode, "config_file", ds_config, "in_file")
 
     workflow.__desc__ = desc
     return workflow

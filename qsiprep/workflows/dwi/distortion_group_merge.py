@@ -6,6 +6,7 @@ Merging Distortion Groups
 .. autofunction:: init_dwi_model_hmc_wf
 
 """
+
 import logging
 
 import nipype.pipeline.engine as pe
@@ -23,14 +24,25 @@ from .qc import init_interactive_report_wf, init_mask_overlap_wf, init_modelfree
 from .util import init_dwi_reference_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
-LOGGER = logging.getLogger('nipype.workflow')
+LOGGER = logging.getLogger("nipype.workflow")
 
 
-def init_distortion_group_merge_wf(merging_strategy, inputs_list, hmc_model, reportlets_dir,
-                                   harmonize_b0_intensities, b0_threshold, output_prefix,
-                                   source_file, output_dir, template, shoreline_iters,
-                                   mem_gb=3, omp_nthreads=1,
-                                   name="distortion_group_merge_wf"):
+def init_distortion_group_merge_wf(
+    merging_strategy,
+    inputs_list,
+    hmc_model,
+    reportlets_dir,
+    harmonize_b0_intensities,
+    b0_threshold,
+    output_prefix,
+    source_file,
+    output_dir,
+    template,
+    shoreline_iters,
+    mem_gb=3,
+    omp_nthreads=1,
+    name="distortion_group_merge_wf",
+):
     """Create an unbiased intramodal template for a subject. This aligns the b=0 references
     from all the scans of a subject. Can be rigid, affine or nonlinear (BSplineSyN).
 
@@ -79,37 +91,61 @@ def init_distortion_group_merge_wf(merging_strategy, inputs_list, hmc_model, rep
 
     workflow = Workflow(name=name)
     source_file = "dwi/" + source_file
-    sanitized_inputs = [name.replace('-', '_') for name in inputs_list]
-    input_names = ['t1_brain', 't1_mask', 't1_seg']
-    for suffix in ["_image", "_bval", "_bvec", "_original_bvec", "_b0_ref", "_cnr",
-                   "_carpetplot_data", "_original_image", "_raw_concatenated_image",
-                   "_confounds"]:
+    sanitized_inputs = [name.replace("-", "_") for name in inputs_list]
+    input_names = ["t1_brain", "t1_mask", "t1_seg"]
+    for suffix in [
+        "_image",
+        "_bval",
+        "_bvec",
+        "_original_bvec",
+        "_b0_ref",
+        "_cnr",
+        "_carpetplot_data",
+        "_original_image",
+        "_raw_concatenated_image",
+        "_confounds",
+    ]:
         input_names += [name + suffix for name in sanitized_inputs]
-    inputnode = pe.Node(niu.IdentityInterface(fields=input_names), name='inputnode')
+    inputnode = pe.Node(niu.IdentityInterface(fields=input_names), name="inputnode")
     outputnode = pe.Node(
         niu.IdentityInterface(
-            fields=["merged_image", "merged_bval", "merged_bvec", "merged_qc", "merged_cnr_map"
-                    'dwi_mask_t1', 'cnr_map_t1', 'merged_bval', 'bvecs_t1', 'btable_t1',
-                    'local_bvecs_t1', 't1_b0_ref', 'confounds',
-                    'gradient_table_t1', 'hmc_optimization_data']),
-        name='outputnode')
+            fields=[
+                "merged_image",
+                "merged_bval",
+                "merged_bvec",
+                "merged_qc",
+                "merged_cnr_map" "dwi_mask_t1",
+                "cnr_map_t1",
+                "merged_bval",
+                "bvecs_t1",
+                "btable_t1",
+                "local_bvecs_t1",
+                "t1_b0_ref",
+                "confounds",
+                "gradient_table_t1",
+                "hmc_optimization_data",
+            ]
+        ),
+        name="outputnode",
+    )
 
     num_inputs = len(input_names)
-    merge_images = pe.Node(niu.Merge(num_inputs), name='merge_images')
-    merge_bval = pe.Node(niu.Merge(num_inputs), name='merge_bval')
-    merge_bvec = pe.Node(niu.Merge(num_inputs), name='merge_bvec')
-    merge_original_bvec = pe.Node(niu.Merge(num_inputs), name='merge_original_bvec')
-    merge_original_image = pe.Node(niu.Merge(num_inputs), name='merge_original_image')
-    merge_b0_refs = pe.Node(niu.Merge(num_inputs), name='merge_b0_refs')
-    merge_raw_concatenated_image = pe.Node(niu.Merge(num_inputs),
-                                           name='merge_raw_concatenated_image')
-    merge_confounds = pe.Node(niu.Merge(num_inputs), name='merge_confounds')
-    merge_cnrs = pe.Node(niu.Merge(num_inputs), name='merge_cnrs')
-    merge_carpetplot_data = pe.Node(niu.Merge(num_inputs), name='merge_carpetplot_data')
+    merge_images = pe.Node(niu.Merge(num_inputs), name="merge_images")
+    merge_bval = pe.Node(niu.Merge(num_inputs), name="merge_bval")
+    merge_bvec = pe.Node(niu.Merge(num_inputs), name="merge_bvec")
+    merge_original_bvec = pe.Node(niu.Merge(num_inputs), name="merge_original_bvec")
+    merge_original_image = pe.Node(niu.Merge(num_inputs), name="merge_original_image")
+    merge_b0_refs = pe.Node(niu.Merge(num_inputs), name="merge_b0_refs")
+    merge_raw_concatenated_image = pe.Node(
+        niu.Merge(num_inputs), name="merge_raw_concatenated_image"
+    )
+    merge_confounds = pe.Node(niu.Merge(num_inputs), name="merge_confounds")
+    merge_cnrs = pe.Node(niu.Merge(num_inputs), name="merge_cnrs")
+    merge_carpetplot_data = pe.Node(niu.Merge(num_inputs), name="merge_carpetplot_data")
 
     # Merge the input data from each distortion group: safe even if eddy was used
     for input_num, input_name in enumerate(sanitized_inputs):
-        merge_input_name = 'in%d' % (input_num + 1)
+        merge_input_name = "in%d" % (input_num + 1)
         workflow.connect([
             (inputnode, merge_images, [(input_name + "_image", merge_input_name)]),
             (inputnode, merge_bval, [(input_name + "_bval", merge_input_name)]),
@@ -126,17 +162,22 @@ def init_distortion_group_merge_wf(merging_strategy, inputs_list, hmc_model, rep
                 (input_name + "_carpetplot_data", merge_input_name)])
         ])  # fmt:skip
 
-    if merging_strategy.lower() == 'average':
-        distortion_merger = pe.Node(AveragePEPairs(), name='distortion_merger')
+    if merging_strategy.lower() == "average":
+        distortion_merger = pe.Node(AveragePEPairs(), name="distortion_merger")
         workflow.connect([
             (merge_original_bvec, distortion_merger, [('out', 'original_bvec_files')]),
             (merge_carpetplot_data, distortion_merger, [('out', 'carpetplot_data')])
         ])  # fmt:skip
-    elif merging_strategy.startswith('concat'):
-        distortion_merger = pe.Node(MergeDWIs(), name='distortion_merger')
-    b0_ref_wf = init_dwi_reference_wf(omp_nthreads, name='merged_b0_ref', register_t1=False,
-                                      gen_report=True, source_file=source_file)
-    concat_cnr_images = pe.Node(Merge(), name='concat_cnr_images')
+    elif merging_strategy.startswith("concat"):
+        distortion_merger = pe.Node(MergeDWIs(), name="distortion_merger")
+    b0_ref_wf = init_dwi_reference_wf(
+        omp_nthreads,
+        name="merged_b0_ref",
+        register_t1=False,
+        gen_report=True,
+        source_file=source_file,
+    )
+    concat_cnr_images = pe.Node(Merge(), name="concat_cnr_images")
 
     workflow.connect([
         (merge_images, distortion_merger, [('out', 'dwi_files')]),
@@ -151,36 +192,44 @@ def init_distortion_group_merge_wf(merging_strategy, inputs_list, hmc_model, rep
     ])  # fmt:skip
 
     # Calculate QC on the merged raw and processed data
-    raw_qc_wf = init_modelfree_qc_wf(omp_nthreads=omp_nthreads,
-                                     bvec_convention="auto",
-                                     name='raw_qc_wf')
-    processed_qc_wf = init_modelfree_qc_wf(omp_nthreads=omp_nthreads,
-                                           bvec_convention="DIPY",  # Always LPS+ when resampled
-                                           name='processed_qc_wf')
+    raw_qc_wf = init_modelfree_qc_wf(
+        omp_nthreads=omp_nthreads, bvec_convention="auto", name="raw_qc_wf"
+    )
+    processed_qc_wf = init_modelfree_qc_wf(
+        omp_nthreads=omp_nthreads,
+        bvec_convention="DIPY",  # Always LPS+ when resampled
+        name="processed_qc_wf",
+    )
     # Combine all the QC measures for a series QC
-    series_qc = pe.Node(SeriesQC(output_file_name=output_prefix), name='series_qc')
+    series_qc = pe.Node(SeriesQC(output_file_name=output_prefix), name="series_qc")
     ds_series_qc = pe.Node(
-        DerivativesDataSink(desc='ImageQC', suffix='dwi', source_file=source_file,
-                            base_directory=output_dir),
-        name='ds_series_qc', run_without_submitting=True,
-        mem_gb=DEFAULT_MEMORY_MIN_GB)
+        DerivativesDataSink(
+            desc="ImageQC", suffix="dwi", source_file=source_file, base_directory=output_dir
+        ),
+        name="ds_series_qc",
+        run_without_submitting=True,
+        mem_gb=DEFAULT_MEMORY_MIN_GB,
+    )
 
     interactive_report_wf = init_interactive_report_wf()
     # Write the interactive report json
     ds_interactive_report = pe.Node(
-        DerivativesDataSink(suffix='dwiqc', source_file=source_file,
-                            base_directory=output_dir),
-        name='ds_interactive_report', run_without_submitting=True,
-        mem_gb=DEFAULT_MEMORY_MIN_GB)
+        DerivativesDataSink(suffix="dwiqc", source_file=source_file, base_directory=output_dir),
+        name="ds_interactive_report",
+        run_without_submitting=True,
+        mem_gb=DEFAULT_MEMORY_MIN_GB,
+    )
     # CONNECT TO DERIVATIVES
-    gtab_t1 = pe.Node(MRTrixGradientTable(), name='gtab_t1')
-    btab_t1 = pe.Node(DSIStudioBTable(bvec_convention="DIPY"), name='btab_t1')
-    t1_dice_calc = init_mask_overlap_wf(name='t1_dice_calc')
-    gradient_plot = pe.Node(GradientPlot(), name='gradient_plot', run_without_submitting=True)
+    gtab_t1 = pe.Node(MRTrixGradientTable(), name="gtab_t1")
+    btab_t1 = pe.Node(DSIStudioBTable(bvec_convention="DIPY"), name="btab_t1")
+    t1_dice_calc = init_mask_overlap_wf(name="t1_dice_calc")
+    gradient_plot = pe.Node(GradientPlot(), name="gradient_plot", run_without_submitting=True)
     ds_report_gradients = pe.Node(
-        DerivativesDataSink(suffix='sampling_scheme', source_file=source_file),
-        name='ds_report_gradients', run_without_submitting=True,
-        mem_gb=DEFAULT_MEMORY_MIN_GB)
+        DerivativesDataSink(suffix="sampling_scheme", source_file=source_file),
+        name="ds_report_gradients",
+        run_without_submitting=True,
+        mem_gb=DEFAULT_MEMORY_MIN_GB,
+    )
 
     dwi_derivatives_wf = init_dwi_derivatives_wf(
         output_prefix=output_prefix,
@@ -189,7 +238,8 @@ def init_distortion_group_merge_wf(merging_strategy, inputs_list, hmc_model, rep
         template=template,
         write_local_bvecs=False,
         hmc_model=hmc_model,
-        shoreline_iters=shoreline_iters)
+        shoreline_iters=shoreline_iters,
+    )
 
     workflow.connect([
         # Mask the new b=0 reference
@@ -278,7 +328,7 @@ def init_distortion_group_merge_wf(merging_strategy, inputs_list, hmc_model, rep
 
     # Fill-in datasinks of reportlets seen so far
     for node in workflow.list_node_names():
-        if node.split('.')[-1].startswith('ds_report'):
+        if node.split(".")[-1].startswith("ds_report"):
             workflow.get_node(node).inputs.base_directory = reportlets_dir
 
     return workflow

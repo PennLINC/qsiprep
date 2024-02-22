@@ -42,15 +42,16 @@ from nipype.utils.filemanip import fname_presuffix
 from ...engine import Workflow
 
 DEFAULT_MEMORY_MIN_GB = 0.01
-LOGGER = logging.getLogger('nipype.workflow')
+LOGGER = logging.getLogger("nipype.workflow")
+
 
 class ThreshAndBinInputSpec(BaseInterfaceInputSpec):
-    atlas_threshold = traits.Int(2, desc='threshold value')
-    in_file = File(desc='file to modify, atlas', mandatory=True)
+    atlas_threshold = traits.Int(2, desc="threshold value")
+    in_file = File(desc="file to modify, atlas", mandatory=True)
 
 
 class ThreshAndBinOutputSpec(TraitedSpec):
-    out_file = File(exists=True,desc='file with threshold and binarization applied')
+    out_file = File(exists=True, desc="file with threshold and binarization applied")
 
 
 class ThreshAndBin(SimpleInterface):
@@ -58,27 +59,25 @@ class ThreshAndBin(SimpleInterface):
     output_spec = ThreshAndBinOutputSpec
 
     def _run_interface(self, runtime):
-        #specify output fname
+        # specify output fname
         out_file = fname_presuffix(
-            self.inputs.in_file,
-            newpath=runtime.cwd,
-            suffix='_threshbin.nii.gz',
-            use_ext=False)
-        #load in data
+            self.inputs.in_file, newpath=runtime.cwd, suffix="_threshbin.nii.gz", use_ext=False
+        )
+        # load in data
         input_img = nb.load(self.inputs.in_file)
         out_data = input_img.get_fdata()
-        #apply threshold and binarize
+        # apply threshold and binarize
         out_data[out_data < self.inputs.atlas_threshold] = 0
         out_data[out_data > 0] = 1
 
-        #save out new image
+        # save out new image
         nb.Nifti1Image(out_data, input_img.affine, header=input_img.header).to_filename(out_file)
-        self._results['out_file'] = out_file
+        self._results["out_file"] = out_file
 
         return runtime
 
-def init_syn_sdc_wf(omp_nthreads, bold_pe=None,
-                    atlas_threshold=2, name='syn_sdc_wf'):
+
+def init_syn_sdc_wf(omp_nthreads, bold_pe=None, atlas_threshold=2, name="syn_sdc_wf"):
     """
     This workflow takes a skull-stripped T1w image and reference b0 image and
     estimates a susceptibility distortion correction warp, using ANTs symmetric
@@ -128,9 +127,9 @@ def init_syn_sdc_wf(omp_nthreads, bold_pe=None,
 
     """
 
-    if bold_pe is None or bold_pe[0] not in ['i', 'j']:
-        LOGGER.warning('Incorrect phase-encoding direction, assuming PA (posterior-to-anterior).')
-        bold_pe = 'j'
+    if bold_pe is None or bold_pe[0] not in ["i", "j"]:
+        LOGGER.warning("Incorrect phase-encoding direction, assuming PA (posterior-to-anterior).")
+        bold_pe = "j"
 
     workflow = Workflow(name=name)
     workflow.__desc__ = """\
@@ -143,59 +142,65 @@ Registration is performed with `antsRegistration` (ANTs {ants_ver}), and
 the process regularized by constraining deformation to be nonzero only
 along the phase-encoding direction, and modulated with an average fieldmap
 template [@fieldmapless3].
-""".format(ants_ver=ants.Registration().version or '<ver>')
+""".format(
+        ants_ver=ants.Registration().version or "<ver>"
+    )
     inputnode = pe.Node(
-        niu.IdentityInterface(['bold_ref', 'template',
-                               't1_brain', 't1_2_mni_reverse_transform']),
-        name='inputnode')
+        niu.IdentityInterface(["bold_ref", "template", "t1_brain", "t1_2_mni_reverse_transform"]),
+        name="inputnode",
+    )
     outputnode = pe.Node(
-        niu.IdentityInterface(['out_reference', 'out_reference_brain',
-                               'out_mask', 'out_warp']),
-        name='outputnode')
+        niu.IdentityInterface(["out_reference", "out_reference_brain", "out_mask", "out_warp"]),
+        name="outputnode",
+    )
 
     # Collect predefined data
     # Atlas image and registration affine
-    atlas_img = pkgr.resource_filename('qsiprep', 'data/mni_lps_fmap_atlas.nii.gz')
+    atlas_img = pkgr.resource_filename("qsiprep", "data/mni_lps_fmap_atlas.nii.gz")
     # Registration specifications
-    affine_transform = pkgr.resource_filename('qsiprep', 'data/affine.json')
-    syn_transform = pkgr.resource_filename('qsiprep', 'data/susceptibility_syn.json')
+    affine_transform = pkgr.resource_filename("qsiprep", "data/affine.json")
+    syn_transform = pkgr.resource_filename("qsiprep", "data/susceptibility_syn.json")
 
-    invert_t1w = pe.Node(Rescale(invert=True), name='invert_t1w',
-                         mem_gb=0.3)
+    invert_t1w = pe.Node(Rescale(invert=True), name="invert_t1w", mem_gb=0.3)
 
-    ref_2_t1 = pe.Node(ants.Registration(from_file=affine_transform),
-                       name='ref_2_t1', n_procs=omp_nthreads)
-    t1_2_ref = pe.Node(ants.ApplyTransforms(invert_transform_flags=[True]),
-                       name='t1_2_ref', n_procs=omp_nthreads)
+    ref_2_t1 = pe.Node(
+        ants.Registration(from_file=affine_transform), name="ref_2_t1", n_procs=omp_nthreads
+    )
+    t1_2_ref = pe.Node(
+        ants.ApplyTransforms(invert_transform_flags=[True]), name="t1_2_ref", n_procs=omp_nthreads
+    )
 
     # 1) BO -> T1; 2) MNI -> T1
-    transform_list = pe.Node(niu.Merge(2), name='transform_list',
-                             mem_gb=DEFAULT_MEMORY_MIN_GB)
+    transform_list = pe.Node(niu.Merge(2), name="transform_list", mem_gb=DEFAULT_MEMORY_MIN_GB)
 
     # Inverting (1), then applying in reverse order:
     #
     # ATLAS -> MNI -> T1 -> BOLD
-    atlas_2_ref = pe.Node(ants.ApplyTransforms(), name='atlas_2_ref', n_procs=omp_nthreads,
-                          mem_gb=0.3)
+    atlas_2_ref = pe.Node(
+        ants.ApplyTransforms(), name="atlas_2_ref", n_procs=omp_nthreads, mem_gb=0.3
+    )
     atlas_2_ref.inputs.input_image = atlas_img
     atlas_2_ref.inputs.invert_transform_flags = [True, False]
     threshold_atlas = pe.Node(
-        ThreshAndBin(atlas_threshold=atlas_threshold),
-        name='threshold_atlas', mem_gb=0.3
-        )
+        ThreshAndBin(atlas_threshold=atlas_threshold), name="threshold_atlas", mem_gb=0.3
+    )
 
-    fixed_image_masks = pe.Node(niu.Merge(2), name='fixed_image_masks',
-                                mem_gb=DEFAULT_MEMORY_MIN_GB)
-    fixed_image_masks.inputs.in1 = 'NULL'
+    fixed_image_masks = pe.Node(
+        niu.Merge(2), name="fixed_image_masks", mem_gb=DEFAULT_MEMORY_MIN_GB
+    )
+    fixed_image_masks.inputs.in1 = "NULL"
 
-    restrict = [[int(bold_pe[0] == 'i'), int(bold_pe[0] == 'j'), 0]] * 2
+    restrict = [[int(bold_pe[0] == "i"), int(bold_pe[0] == "j"), 0]] * 2
     syn = pe.Node(
         ants.Registration(from_file=syn_transform, restrict_deformation=restrict),
-        name='syn', n_procs=omp_nthreads)
+        name="syn",
+        n_procs=omp_nthreads,
+    )
 
-    unwarp_ref = pe.Node(ants.ApplyTransforms(
-        dimension=3, float=True, interpolation='LanczosWindowedSinc'),
-        name='unwarp_ref')
+    unwarp_ref = pe.Node(
+        ants.ApplyTransforms(dimension=3, float=True, interpolation="LanczosWindowedSinc"),
+        name="unwarp_ref",
+    )
 
     workflow.connect([
         (inputnode, invert_t1w, [('t1_brain', 'in_file'),

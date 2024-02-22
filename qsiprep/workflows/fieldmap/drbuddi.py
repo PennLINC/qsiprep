@@ -32,12 +32,20 @@ from ...interfaces.tortoise import (
     generate_drbuddi_boilerplate,
 )
 
-LOGGER = logging.getLogger('nipype.workflow')
+LOGGER = logging.getLogger("nipype.workflow")
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
-def init_drbuddi_wf(scan_groups, b0_threshold, pepolar_method, raw_image_sdc, t2w_sdc, omp_nthreads=1,
-                    name="drbuddi_sdc_wf", sloppy=False):
+def init_drbuddi_wf(
+    scan_groups,
+    b0_threshold,
+    pepolar_method,
+    raw_image_sdc,
+    t2w_sdc,
+    omp_nthreads=1,
+    name="drbuddi_sdc_wf",
+    sloppy=False,
+):
     """
     This workflow implements the heuristics to choose a
     :abbr:`SDC (susceptibility distortion correction)` strategy.
@@ -101,54 +109,80 @@ def init_drbuddi_wf(scan_groups, b0_threshold, pepolar_method, raw_image_sdc, t2
     """
 
     workflow = Workflow(name=name)
-    inputnode = pe.Node(niu.IdentityInterface(
-        fields=['dwi_files', 'bval_files', 'bvec_files', 'original_files',
-                't1_brain', 't1_wm_seg', 't2w_unfatsat']),
-        name='inputnode')
+    inputnode = pe.Node(
+        niu.IdentityInterface(
+            fields=[
+                "dwi_files",
+                "bval_files",
+                "bvec_files",
+                "original_files",
+                "t1_brain",
+                "t1_wm_seg",
+                "t2w_unfatsat",
+            ]
+        ),
+        name="inputnode",
+    )
 
     outputnode = pe.Node(
         niu.IdentityInterface(
-            fields=['b0_ref', 'b0_mask', 'sdc_warps', 'sdc_scaling_images', 'report', 'method',
-                    # From SDC
-                    "fieldmap_type", "b0_up_image", "b0_up_corrected_image", "b0_down_image",
-                    "b0_down_corrected_image", "up_fa_image", "up_fa_corrected_image", "down_fa_image",
-                    "down_fa_corrected_image", "t2w_image"
-            ]),
-        name='outputnode')
+            fields=[
+                "b0_ref",
+                "b0_mask",
+                "sdc_warps",
+                "sdc_scaling_images",
+                "report",
+                "method",
+                # From SDC
+                "fieldmap_type",
+                "b0_up_image",
+                "b0_up_corrected_image",
+                "b0_down_image",
+                "b0_down_corrected_image",
+                "up_fa_image",
+                "up_fa_corrected_image",
+                "down_fa_image",
+                "down_fa_corrected_image",
+                "t2w_image",
+            ]
+        ),
+        name="outputnode",
+    )
 
-    fieldmap_info = scan_groups['fieldmap_info']
-    if fieldmap_info['suffix'] not in ('epi', 'rpe_series', 'dwi'):
+    fieldmap_info = scan_groups["fieldmap_info"]
+    if fieldmap_info["suffix"] not in ("epi", "rpe_series", "dwi"):
         raise Exception("DRBUDDI workflow requires epi, rpe_series or dwi fieldmaps")
 
     workflow.__desc__ = generate_drbuddi_boilerplate(
-        fieldmap_type=fieldmap_info['suffix'],
+        fieldmap_type=fieldmap_info["suffix"],
         t2w_sdc=t2w_sdc,
-        with_topup="topup" in pepolar_method.lower())
+        with_topup="topup" in pepolar_method.lower(),
+    )
 
-    outputnode.inputs.method = \
-        'PEB/PEPOLAR (phase-encoding based / PE-POLARity): %s' % fieldmap_info['suffix']
+    outputnode.inputs.method = (
+        "PEB/PEPOLAR (phase-encoding based / PE-POLARity): %s" % fieldmap_info["suffix"]
+    )
 
     gather_drbuddi_inputs = pe.Node(
         GatherDRBUDDIInputs(
-            dwi_series_pedir=scan_groups['dwi_series_pedir'],
-            epi_fmaps=fieldmap_info[fieldmap_info['suffix']],
+            dwi_series_pedir=scan_groups["dwi_series_pedir"],
+            epi_fmaps=fieldmap_info[fieldmap_info["suffix"]],
             b0_threshold=b0_threshold,
             raw_image_sdc=raw_image_sdc,
-            fieldmap_type=fieldmap_info['suffix']),
-        name="gather_drbuddi_inputs")
+            fieldmap_type=fieldmap_info["suffix"],
+        ),
+        name="gather_drbuddi_inputs",
+    )
 
     drbuddi = pe.Node(
-        DRBUDDI(
-            fieldmap_type=fieldmap_info['suffix'],
-            num_threads=omp_nthreads,
-            sloppy=sloppy),
-        name='drbuddi',
-        n_procs=omp_nthreads)
+        DRBUDDI(fieldmap_type=fieldmap_info["suffix"], num_threads=omp_nthreads, sloppy=sloppy),
+        name="drbuddi",
+        n_procs=omp_nthreads,
+    )
 
     aggregate_drbuddi = pe.Node(
-        DRBUDDIAggregateOutputs(
-            fieldmap_type=fieldmap_info['suffix']),
-        name="aggregate_drbuddi")
+        DRBUDDIAggregateOutputs(fieldmap_type=fieldmap_info["suffix"]), name="aggregate_drbuddi"
+    )
 
     workflow.connect([
         (inputnode, gather_drbuddi_inputs, [

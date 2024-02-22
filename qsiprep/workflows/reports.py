@@ -22,7 +22,7 @@ from ..interfaces.interchange import qsiprep_output_names, recon_workflow_input_
 from ..interfaces.reports import InteractiveReport
 from ..utils.bids import collect_data
 
-LOGGER = logging.getLogger('nipype.workflow')
+LOGGER = logging.getLogger("nipype.workflow")
 
 
 def init_json_preproc_report_wf(subject_list, work_dir, output_dir):
@@ -52,14 +52,15 @@ def init_json_preproc_report_wf(subject_list, work_dir, output_dir):
             Directory in which to save derivatives
 
     """
-    qsiprep_wf = Workflow(name='json_reports_wf')
+    qsiprep_wf = Workflow(name="json_reports_wf")
     qsiprep_wf.base_dir = work_dir
 
     for subject_id in subject_list:
         single_subject_wf = init_single_subject_json_report_wf(
             subject_id=subject_id,
             name="single_subject_" + subject_id + "json_report_wf",
-            output_dir=output_dir)
+            output_dir=output_dir,
+        )
 
         for node in single_subject_wf._get_all_nodes():
             node.config = deepcopy(single_subject_wf.config)
@@ -95,38 +96,38 @@ def init_single_subject_json_report_wf(subject_id, name, output_dir):
             Directory in which to read and save derivatives
 
     """
-    if name in ('single_subject_wf', 'single_subject_qsipreptest_wf'):
+    if name in ("single_subject_wf", "single_subject_qsipreptest_wf"):
         # for documentation purposes
         subject_data = {
-            't1w': ['/completely/made/up/path/sub-01_T1w.nii.gz'],
-            'dwi': ['/completely/made/up/path/sub-01_dwi.nii.gz']
+            "t1w": ["/completely/made/up/path/sub-01_T1w.nii.gz"],
+            "dwi": ["/completely/made/up/path/sub-01_dwi.nii.gz"],
         }
         layout = None
         LOGGER.warning("Building a test workflow")
     else:
-        subject_data, layout = collect_data(output_dir, subject_id,
-                                            bids_validate=False)
-    dwi_files = subject_data['dwi']
+        subject_data, layout = collect_data(output_dir, subject_id, bids_validate=False)
+    dwi_files = subject_data["dwi"]
     workflow = Workflow(name=name)
-    scans_iter = pe.Node(niu.IdentityInterface(fields=['dwi_file']), name='scans_iter')
+    scans_iter = pe.Node(niu.IdentityInterface(fields=["dwi_file"]), name="scans_iter")
     scans_iter.iterables = ("dwi_file", dwi_files)
-    inputnode = pe.Node(niu.IdentityInterface(fields=recon_workflow_input_fields),
-                        name='inputnode')
+    inputnode = pe.Node(
+        niu.IdentityInterface(fields=recon_workflow_input_fields), name="inputnode"
+    )
     qsiprep_preprocessed_dwi_data = pe.Node(
-        QsiReconDWIIngress(), name="qsiprep_preprocessed_dwi_data")
+        QsiReconDWIIngress(), name="qsiprep_preprocessed_dwi_data"
+    )
 
     # For doctests
-    if not name == 'fake':
+    if not name == "fake":
         scans_iter.inputs.dwi_file = dwi_files
 
-    interactive_report = pe.Node(
-        InteractiveReport(),
-        name="interactive_report")
+    interactive_report = pe.Node(InteractiveReport(), name="interactive_report")
 
     ds_report_json = pe.Node(
-        DerivativesDataSink(base_directory=output_dir, suffix='viewer'),
-        name='ds_report_json',
-        run_without_submitting=True)
+        DerivativesDataSink(base_directory=output_dir, suffix="viewer"),
+        name="ds_report_json",
+        run_without_submitting=True,
+    )
 
     # Connect the collected diffusion data (gradients, etc) to the inputnode
     workflow.connect([
