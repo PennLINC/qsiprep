@@ -209,7 +209,7 @@ def init_dsi_studio_tractography_wf(
         niu.IdentityInterface(fields=["trk_file", "fibgz", "recon_scalars"]), name="outputnode"
     )
     outputnode.inputs.recon_scalars = []
-    plot_reports = params.pop("plot_reports", True)
+    plot_reports = params.pop("plot_reports", True)  # noqa: F841
     workflow = Workflow(name=name)
     desc = (
         "DSI Studio Tractography\n\n: Tractography was run in DSI Studio "
@@ -237,6 +237,7 @@ def init_dsi_studio_tractography_wf(
         )
         workflow.connect(tracking, 'output_trk',
                          ds_tracking, 'in_file')  # fmt:skip
+    workflow.__desc__ = desc
     return workflow
 
 
@@ -304,7 +305,7 @@ def init_dsi_studio_autotrack_wf(
         "DSI Studio (version %s) and bundle shape statistics were calculated [@autotrack]. "
         % DSI_STUDIO_VERSION
     )
-    plot_reports = params.pop("plot_reports", True)
+    plot_reports = params.pop("plot_reports", True)  # noqa: F841
     bundle_names = _get_dsi_studio_bundles(params.get("track_id", ""))
     bundle_desc = (
         "AutoTrack attempted to reconstruct the following bundles:\n  * "
@@ -519,7 +520,7 @@ def init_dsi_studio_export_wf(
     inputnode = pe.Node(
         niu.IdentityInterface(fields=recon_workflow_input_fields + ["fibgz"]), name="inputnode"
     )
-    plot_reports = params.pop("plot_reports", True)
+    plot_reports = params.pop("plot_reports", True)  # noqa: F841
     scalar_names = [
         "qa",
         "dti_fa",

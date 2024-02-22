@@ -669,7 +669,8 @@ def get_fsl_motion_params(itk_file, src_file, ref_file, working_dir):
         return src_center_mm
 
     def get_trans_from_offset(image_center, rotmat):
-        # offset[0] = trans[0] + center[0] - [rot[0,0]*center[0] +rot[0,1]*center[1] + rot[0,2]*center[2]]
+        # offset[0] = trans[0] + center[0] - [rot[0,0]*center[0]
+        # +rot[0,1]*center[1] + rot[0,2]*center[2]]
         trans = np.zeros((3,))
         offsets = rotmat[0:3, 3]
         for i in range(3):

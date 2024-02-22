@@ -1132,7 +1132,7 @@ def _rename_connectome(connectome_csv, suffix="_connectome.csv"):
         (image_name,) = [
             part for part in parts if part.startswith("sub_") and part.endswith("recon_wf")
         ]
-    except Exception as ex:
+    except Exception:
         raise Exception(f"unable to detect image name from these parts {parts}")
     image_name = image_name[: -len("_recon_wf")]
     return "connectome2tck/" + _rebids(image_name) + "_" + conn_name + suffix

@@ -11,6 +11,8 @@ Workflows for AMICO
 import os
 import os.path as op
 
+from dipy.core.gradients import gradient_table
+from dipy.core.sphere import HemiSphere
 import nibabel as nb
 import numpy as np
 from nipype import logging

@@ -14,7 +14,7 @@ from tempfile import NamedTemporaryFile
 import nibabel as nb
 import numpy as np
 from dipy.segment.threshold import otsu
-from nilearn.image import concat_imgs, iter_img, load_img, math_img, new_img_like
+from nilearn.image import concat_imgs, load_img, math_img, new_img_like
 from nilearn.masking import _post_process_mask, compute_epi_mask
 from nilearn.plotting import plot_epi
 from nipype import logging

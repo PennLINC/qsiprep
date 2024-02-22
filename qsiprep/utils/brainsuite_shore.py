@@ -337,26 +337,28 @@ class BrainSuiteShoreFit:
         counter = 0
 
         for n in range(self.radial_order + 1):
-            for l in range(0, n + 1, 2):
-                for m in range(-l, l + 1):
+            for ell in range(0, n + 1, 2):
+                for m in range(-ell, ell + 1):
 
-                    j = int(l + m + (2 * np.array(range(0, l, 2)) + 1).sum())
+                    j = int(ell + m + (2 * np.array(range(0, ell, 2)) + 1).sum())
 
                     Cnl = (
-                        ((-1) ** (n - l / 2))
+                        ((-1) ** (n - ell / 2))
                         / (2.0 * (4.0 * np.pi**2 * self.zeta) ** (3.0 / 2.0))
                         * (
-                            (2.0 * (4.0 * np.pi**2 * self.zeta) ** (3.0 / 2.0) * factorial(n - l))
+                            (2.0 * (
+                                4.0 * np.pi**2 * self.zeta) ** (
+                                    3.0 / 2.0) * factorial(n - ell))
                             / (gamma(n + 3.0 / 2.0))
                         )
                         ** (1.0 / 2.0)
                     )
                     Gnl = (
-                        (gamma(l / 2 + 3.0 / 2.0) * gamma(3.0 / 2.0 + n))
-                        / (gamma(l + 3.0 / 2.0) * factorial(n - l))
-                        * (1.0 / 2.0) ** (-l / 2 - 3.0 / 2.0)
+                        (gamma(ell / 2 + 3.0 / 2.0) * gamma(3.0 / 2.0 + n))
+                        / (gamma(ell + 3.0 / 2.0) * factorial(n - ell))
+                        * (1.0 / 2.0) ** (-ell / 2 - 3.0 / 2.0)
                     )
-                    Fnl = hyp2f1(-n + l, l / 2 + 3.0 / 2.0, l + 3.0 / 2.0, 2.0)
+                    Fnl = hyp2f1(-n + ell, ell / 2 + 3.0 / 2.0, ell + 3.0 / 2.0, 2.0)
 
                     c_sh[j] += self._shore_coef[counter] * Cnl * Gnl * Fnl
                     counter += 1
@@ -488,8 +490,8 @@ class BrainSuiteShoreFit:
         return self._r2
 
 
-def _kappa(zeta, n, l):
-    return np.sqrt((2 * factorial(n - l)) / (zeta**1.5 * gamma(n + 1.5)))
+def _kappa(zeta, n, ell):
+    return np.sqrt((2 * factorial(n - ell)) / (zeta**1.5 * gamma(n + 1.5)))
 
 
 def brainsuite_shore_basis(radial_order, zeta, gtab, tau=1 / (4 * np.pi**2)):
@@ -513,15 +515,15 @@ def brainsuite_shore_basis(radial_order, zeta, gtab, tau=1 / (4 * np.pi**2)):
     Snew = []
     R = []
     for n in range(radial_order + 1):
-        for l in range(0, n + 1, 2):
-            Snew.append(S[:, L == l])
-            for _ in range(-l, l + 1):
+        for ell in range(0, n + 1, 2):
+            Snew.append(S[:, L == ell])
+            for _ in range(-ell, ell + 1):
                 # Radial part
                 R.append(
-                    genlaguerre(n - l, l + 0.5)(r**2 / zeta)
+                    genlaguerre(n - ell, ell + 0.5)(r**2 / zeta)
                     * np.exp(-(r**2) / (2.0 * zeta))
-                    * _kappa(zeta, n, l)
-                    * (r**2 / zeta) ** (l / 2)
+                    * _kappa(zeta, n, ell)
+                    * (r**2 / zeta) ** (ell / 2)
                 )
     R = np.column_stack(R)
     Snew = np.column_stack(Snew)
@@ -557,22 +559,22 @@ def brainsuite_shore_matrix_pdf(radial_order, zeta, rtab):
     Snew = []
 
     for n in range(radial_order + 1):
-        for l in range(0, n + 1, 2):
-            Snew.append(S[:, L == l])
-            for _ in range(-l, l + 1):
+        for ell in range(0, n + 1, 2):
+            Snew.append(S[:, L == ell])
+            for _ in range(-ell, ell + 1):
                 psi.append(
-                    genlaguerre(n - l, l + 0.5)(4 * np.pi**2 * zeta * r**2)
+                    genlaguerre(n - ell, ell + 0.5)(4 * np.pi**2 * zeta * r**2)
                     * np.exp(-2 * np.pi**2 * zeta * r**2)
-                    * _kappa_pdf(zeta, n, l)
-                    * (4 * np.pi**2 * zeta * r**2) ** (l / 2)
-                    * (-1) ** (n - l / 2)
+                    * _kappa_pdf(zeta, n, ell)
+                    * (4 * np.pi**2 * zeta * r**2) ** (ell / 2)
+                    * (-1) ** (n - ell / 2)
                 )
 
     return np.column_stack(psi) * np.column_stack(Snew)
 
 
-def _kappa_pdf(zeta, n, l):
-    return np.sqrt((16 * np.pi**3 * zeta**1.5 * factorial(n - l)) / gamma(n + 1.5))
+def _kappa_pdf(zeta, n, ell):
+    return np.sqrt((16 * np.pi**3 * zeta**1.5 * factorial(n - ell)) / gamma(n + 1.5))
 
 
 def shore_matrix_odf(radial_order, zeta, sphere_vertices):
@@ -605,22 +607,22 @@ def shore_matrix_odf(radial_order, zeta, sphere_vertices):
     Snew = []
 
     for n in range(radial_order + 1):
-        for l in range(0, n + 1, 2):
-            Snew.append(S[:, L == l])
-            for _ in range(-l, l + 1):
+        for ell in range(0, n + 1, 2):
+            Snew.append(S[:, L == ell])
+            for _ in range(-ell, ell + 1):
                 upsilon.append(
-                    (-1) ** (n - l / 2.0)
-                    * _kappa_odf(zeta, n, l)
-                    * hyp2f1(l - n, l / 2.0 + 1.5, l + 1.5, 2.0)
+                    (-1) ** (n - ell / 2.0)
+                    * _kappa_odf(zeta, n, ell)
+                    * hyp2f1(ell - n, ell / 2.0 + 1.5, ell + 1.5, 2.0)
                 )
 
     return np.column_stack(upsilon) * np.column_stack(Snew)
 
 
-def _kappa_odf(zeta, n, l):
+def _kappa_odf(zeta, n, ell):
     return np.sqrt(
-        (gamma(l / 2.0 + 1.5) ** 2 * gamma(n + 1.5) * 2 ** (l + 3))
-        / (16 * np.pi**3 * (zeta) ** 1.5 * factorial(n - l) * gamma(l + 1.5) ** 2)
+        (gamma(ell / 2.0 + 1.5) ** 2 * gamma(n + 1.5) * 2 ** (ell + 3))
+        / (16 * np.pi**3 * (zeta) ** 1.5 * factorial(n - ell) * gamma(ell + 1.5) ** 2)
     )
 
 
@@ -661,9 +663,9 @@ def create_rspace(gridsize, radius_max):
 def shore_index_matrix(radial_order):
     indices = []
     for n in range(radial_order + 1):
-        for l in range(0, n + 1, 2):
-            for m in range(-l, l + 1):
-                indices.append((n, l, m))
+        for ell in range(0, n + 1, 2):
+            for m in range(-ell, ell + 1):
+                indices.append((n, ell, m))
     return np.array(indices).astype(int)
 
 

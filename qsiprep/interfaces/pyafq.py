@@ -13,7 +13,7 @@ import os.path as op
 
 from AFQ.api.participant import ParticipantAFQ
 from AFQ.definitions.image import ImageFile
-from AFQ.definitions.mapping import ItkMap
+# from AFQ.definitions.mapping import ItkMap
 from nipype import logging
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec,
@@ -70,7 +70,7 @@ class PyAFQRecon(SimpleInterface):
         else:
             tck_file = None
         brain_mask_definition = ImageFile(path=mask_file)
-        itk_map = ItkMap(warp_path=itk_file)
+        # itk_map = ItkMap(warp_path=itk_file)
 
         if tck_file is None:
             tck_file = kwargs["import_tract"]

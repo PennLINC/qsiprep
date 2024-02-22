@@ -364,7 +364,7 @@ class CalculateSOP(SimpleInterface):
 
         # determine what the lmax was based on the number of volumes
         num_vols = img.shape[3]
-        if not num_vols in lmax_lut:
+        if num_vols not in lmax_lut:
             raise ValueError("Not an SH image")
         lmax = lmax_lut[num_vols]
 

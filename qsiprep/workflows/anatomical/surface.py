@@ -14,7 +14,7 @@ from nipype.interfaces import freesurfer as fs
 from nipype.interfaces import io as nio
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
-from pkg_resources import resource_filename as pkgr
+# from pkg_resources import resource_filename as pkgr
 
 from ...engine import Workflow
 from ...interfaces import DerivativesDataSink as FDerivativesDataSink
@@ -777,12 +777,13 @@ def _seg2msks(in_file, newpath=None):
 
     return out_files
 
-    contrast_name = anatomical_contrast.lower()
-    if not infant_mode:
-        ref_img = pkgr("qsiprep", "data/mni_1mm_%s_lps.nii.gz" % contrast_name)
-        ref_img_brain = pkgr("qsiprep", "data/mni_1mm_%s_lps_brain.nii.gz" % contrast_name)
-    else:
-        ref_img = pkgr("qsiprep", "data/mni_1mm_%s_lps_infant.nii.gz" % contrast_name)
-        ref_img_brain = pkgr("qsiprep", "data/mni_1mm_%s_lps_brain_infant.nii.gz" % contrast_name)
+    # contrast_name = anatomical_contrast.lower()
+    # if not infant_mode:
+    #     ref_img = pkgr("qsiprep", "data/mni_1mm_%s_lps.nii.gz" % contrast_name)
+    #     ref_img_brain = pkgr("qsiprep", "data/mni_1mm_%s_lps_brain.nii.gz" % contrast_name)
+    # else:
+    #     ref_img = pkgr("qsiprep", "data/mni_1mm_%s_lps_infant.nii.gz" % contrast_name)
+    #     ref_img_brain = pkgr("qsiprep",
+    #                          "data/mni_1mm_%s_lps_brain_infant.nii.gz" % contrast_name)
 
-    return ref_img, ref_img_brain
+    # return ref_img, ref_img_brain

@@ -386,7 +386,7 @@ def amico_directions_to_fibgz(
     icvf_vec = icvf_img.get_fdata().flatten(order="F")
     od_vec = od_img.get_fdata().flatten(order="F")
 
-    z0 = np.nanmax(isovf_vec)
+    # z0 = np.nanmax(isovf_vec)
     peak_indices = np.zeros(n_odfs)
 
     # Create matfile that can be read by dsi Studio

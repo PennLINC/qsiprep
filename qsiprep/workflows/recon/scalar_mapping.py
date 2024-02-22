@@ -108,7 +108,7 @@ def init_scalar_to_atlas_wf(
         ),
         name="inputnode",
     )
-    outputnode = pe.Node(niu.IdentityInterface(fields=["atlas_summaries"]), name="outputnode")
+    # outputnode = pe.Node(niu.IdentityInterface(fields=["atlas_summaries"]), name="outputnode")
     workflow = Workflow(name=name)
     bundle_mapper = pe.Node(BundleMapper(**params), name="bundle_mapper")
     workflow.connect([
@@ -192,4 +192,3 @@ def init_scalar_to_surface_wf(
 ):
     """Maps scalar data to a surface."""
     raise NotImplementedError()
-    return workflow

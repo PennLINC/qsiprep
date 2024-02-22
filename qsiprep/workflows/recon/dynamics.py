@@ -41,7 +41,7 @@ def init_controllability_wf(name="controllability", qsirecon_suffix="", params={
         niu.IdentityInterface(fields=recon_workflow_input_fields + ["matfile"]), name="inputnode"
     )
     outputnode = pe.Node(niu.IdentityInterface(fields=["matfile"]), name="outputnode")
-    plot_reports = params.pop("plot_reports", True)
+    plot_reports = params.pop("plot_reports", True)   # noqa: F841
 
     calc_control = pe.Node(Controllability(**params), name="calc_control")
     workflow = pe.Workflow(name=name)

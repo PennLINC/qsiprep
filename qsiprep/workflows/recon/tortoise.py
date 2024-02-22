@@ -11,10 +11,8 @@ import logging
 
 import nipype.interfaces.utility as niu
 import nipype.pipeline.engine as pe
-from nipype.interfaces.base import traits
 
 from ...engine import Workflow
-from ...interfaces.bids import ReconDerivativesDataSink
 from ...interfaces.interchange import recon_workflow_input_fields
 from ...interfaces.recon_scalars import ReconScalarsDataSink, TORTOISEReconScalars
 from qsiprep.interfaces.tortoise import (
@@ -97,7 +95,7 @@ def init_tortoise_estimator_wf(
     recon_scalars = pe.Node(
         TORTOISEReconScalars(qsirecon_suffix=qsirecon_suffix), name="recon_scalars"
     )
-    plot_reports = params.pop("plot_reports", True)
+    plot_reports = params.pop("plot_reports", True)  # noqa: F841
     desc = (
         "TORTOISE Reconstruction\n\n: "
         + "Methods implemented in TORTOISE (@tortoisev3) were used for reconstruction. "
@@ -175,9 +173,9 @@ def init_tortoise_estimator_wf(
     # Set deltas if we have them. Prevent only one from being defined
     if approximate_deltas:
         LOGGER.warning('Both "big_delta" and "small_delta" are required for precise MAPMRI')
-        big_delta = little_delta = traits.Undefined
     else:
         mapmri_opts["big_delta"], mapmri_opts["small_delta"] = deltas
+
     mapmri_opts["num_threads"] = omp_nthreads
 
     estimate_mapmri = pe.Node(

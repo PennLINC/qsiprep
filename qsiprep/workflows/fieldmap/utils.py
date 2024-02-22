@@ -103,17 +103,24 @@ def cleanup_edge_pipeline(name="Cleanup"):
     addedge = pe.Node(fsl.MultiImageMaths(op_string="-mas %s -add %s"), name="AddEdge")
 
     wf = pe.Workflow(name=name)
-    wf.connect([(inputnode, fugue, [
-        ('in_file', 'fmap_in_file'), ('in_mask', 'mask_file')
-    ]), (inputnode, erode, [('in_mask', 'in_file')]), (inputnode, newmsk, [
-        ('in_mask', 'in_file')
-    ]), (erode, newmsk, [('out_file', 'operand_files')]), (fugue, applymsk, [
-        ('fmap_out_file', 'in_file')
-    ]), (newmsk, applymsk,
-         [('out_file', 'mask_file')]), (erode, join, [('out_file', 'in1')]),
-                (applymsk, join, [('out_file', 'in2')]), (inputnode, addedge, [
-                    ('in_file', 'in_file')
-                ]), (join, addedge, [('out', 'operand_files')]),
-                (addedge, outputnode, [('out_file', 'out_file')])
+    wf.connect([
+        (inputnode, fugue, [
+            ('in_file', 'fmap_in_file'),
+            ('in_mask', 'mask_file')]),
+        (inputnode, erode, [
+            ('in_mask', 'in_file')]),
+        (inputnode, newmsk, [
+            ('in_mask', 'in_file')]),
+        (erode, newmsk, [
+            ('out_file', 'operand_files')]),
+        (fugue, applymsk, [
+            ('fmap_out_file', 'in_file')]),
+        (newmsk, applymsk, [
+            ('out_file', 'mask_file')]),
+        (erode, join, [('out_file', 'in1')]),
+        (applymsk, join, [('out_file', 'in2')]),
+        (inputnode, addedge, [('in_file', 'in_file')]),
+        (join, addedge, [('out', 'operand_files')]),
+        (addedge, outputnode, [('out_file', 'out_file')])
     ])  # fmt:skip
     return wf

@@ -143,7 +143,8 @@ def init_dwi_preproc_wf(
         unringing_method : str
             algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
         pepolar_method : str
-            Either 'DRBUDDI', 'TOPUP' or 'TOPUP+DRBUDDI'. The method for SDC when EPI fieldmaps are used.
+            Either 'DRBUDDI', 'TOPUP' or 'TOPUP+DRBUDDI'. The method for SDC when
+            EPI fieldmaps are used.
         b1_biascorrect_stage : str
             'final', 'none' or 'legacy'
         no_b0_harmonization : bool

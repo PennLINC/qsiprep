@@ -764,7 +764,6 @@ class TSplit(AFNICommand):
             Else, contains path, filename of generated outputfile
         """
         outputs = self._outputs().get()
-        ext = ".nii"
         outputs["out_files"] = sorted(
             glob.glob(
                 os.path.join(os.getcwd(), "{outname}.**.nii".format(outname=self.inputs.out_name))

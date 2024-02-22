@@ -59,7 +59,7 @@ def _bids_filter(value):
     if value and Path(value).exists():
         try:
             filters = loads(Path(value).read_text(), object_hook=_filter_pybids_none_any)
-        except Exception as e:
+        except Exception:
             raise Exception("Unable to parse BIDS filter file. Check that it is " "valid JSON.")
     else:
         raise Exception("Unable to load BIDS filter file " + value)

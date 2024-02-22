@@ -374,7 +374,7 @@ FreeSurfer version {fs_version}. """.format(
             ('outputnode.template', 'inputnode.original_image')]),
 
         # SynthSeg
-        (pad_anat_reference_wf, synthseg_anat_wf,[
+        (pad_anat_reference_wf, synthseg_anat_wf, [
             ('outputnode.padded_image', 'inputnode.padded_image')]),
         (anat_reference_wf, synthseg_anat_wf, [
             ('outputnode.template', 'inputnode.original_image')]),
@@ -445,7 +445,7 @@ FreeSurfer version {fs_version}. """.format(
             ('outputnode.out_report', 'inputnode.t1_conform_report')]),
         (seg_rpt, anat_reports_wf, [('out_report', 'inputnode.seg_report')]),
         (anat_normalization_wf, anat_reports_wf, [
-                ('outputnode.out_report', 'inputnode.t1_2_mni_report')])
+            ('outputnode.out_report', 'inputnode.t1_2_mni_report')])
     ])  # fmt:skip
 
     anat_derivatives_wf = init_anat_derivatives_wf(

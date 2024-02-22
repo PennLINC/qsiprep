@@ -77,7 +77,8 @@ def init_fsl_hmc_wf(
             threshold for a slice to be replaced with imputed values. Overrides the
             parameter in ``eddy_config`` if set to a number > 0.
         pepolar_method : str
-            Either 'DRBUDDI', 'TOPUP' or 'DRBUDDI+TOPUP'. The method for SDC when EPI fieldmaps are used.
+            Either 'DRBUDDI', 'TOPUP' or 'DRBUDDI+TOPUP'. The method for SDC when EPI
+            fieldmaps are used.
         eddy_config: str
             Path to a JSON file containing settings for the call to ``eddy``.
 

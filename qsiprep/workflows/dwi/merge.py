@@ -551,7 +551,7 @@ def get_merged_parameter(parameter_df, parameter_name, selection_mode="all"):
     if selection_mode == "all":
         if len(unique_values) > 1:
             raise Exception(
-                "More than one value for %s was found: exiting!"
+                "More than one value for %s was found: %s exiting!"
                 % (parameter_name, str(unique_values))
             )
         return unique_values[0]

@@ -200,10 +200,10 @@ def init_prepare_dwi_epi_wf(omp_nthreads, orientation="LPS", name="prepare_epi_w
     )
     workflow = Workflow(name=name)
 
-    def _flatten(l):
+    def _flatten(ell):
         from nipype.utils.filemanip import filename_to_list
 
-        return [item for sublist in l for item in filename_to_list(sublist)]
+        return [item for sublist in ell for item in filename_to_list(sublist)]
 
     workflow.connect([
         (inputnode, prepare_b0s, [('fmaps', 'b0_file')]),

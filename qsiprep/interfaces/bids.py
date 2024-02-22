@@ -23,7 +23,7 @@ import gzip
 import os
 import os.path as op
 import re
-from shutil import copyfileobj, copytree, rmtree
+from shutil import copyfileobj, copytree
 
 import simplejson as json
 from bids.layout import parse_file_entities
@@ -317,9 +317,6 @@ class DerivativesDataSink(SimpleInterface):
 
         space = "_space-{}".format(self.inputs.space) if self.inputs.space else ""
         desc = "_desc-{}".format(self.inputs.desc) if self.inputs.desc else ""
-        bundle = (
-            "_bundle-{}".format(self.inputs.bundle.replace("_", "")) if self.inputs.bundle else ""
-        )
         suffix = "_{}".format(self.inputs.suffix) if self.inputs.suffix else ""
         dtype = "" if not self.inputs.keep_dtype else ("_%s" % dtype)
 
@@ -479,9 +476,9 @@ class ReconDerivativesDataSink(DerivativesDataSink):
 
         formatstr = "{bname}{ext}"
         # If the derivative is a directory, copy it over
-        copy_dir = op.isdir(str(self.inputs.in_file))
+        copy_dir = op.isdir(str(self.inputs.in_file[0]))
         if copy_dir:
-            out_file = formatstr.format(bname=base_fname, ext="")
+            out_file = formatstr.format(bname=bname, ext="")
             copytree(str(self.inputs.in_file), out_file, dirs_exist_ok=True)
             self._results["out_file"] = out_file
             return runtime

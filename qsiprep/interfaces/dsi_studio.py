@@ -926,7 +926,7 @@ def btable_from_bvals_bvecs(bval_file, bvec_file, output_file):
     """
     bvals = np.loadtxt(bval_file).squeeze()
     bvecs = np.loadtxt(bvec_file).squeeze()
-    if not 3 in bvecs.shape:
+    if 3 not in bvecs.shape:
         raise Exception("uninterpretable bval/bvec files\n\t{}\n\t{}".format(bval_file, bvec_file))
     if not bvecs.shape[1] == 3:
         bvecs = bvecs.T

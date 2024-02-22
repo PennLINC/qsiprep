@@ -204,7 +204,7 @@ def init_mrtrix_csd_recon_wf(
 
     if not run_mtnormalize:
         workflow.connect([
-            (estimate_fod, plot_peaks, [('wm_odf', 'mif_file')]),
+            # (estimate_fod, plot_peaks, [('wm_odf', 'mif_file')]),
             (estimate_fod, outputnode, [('wm_odf', 'fod_sh_mif'),
                                         ('wm_odf', 'wm_odf'),
                                         ('gm_odf', 'gm_odf'),
@@ -425,7 +425,7 @@ def init_global_tractography_wf(
 
     workflow = pe.Workflow(name=name)
     outputnode.inputs.recon_scalars = []
-    plot_reports = params.pop("plot_reports", True)
+    plot_reports = params.pop("plot_reports", True)  # noqa: F841
 
     create_mif = pe.Node(MRTrixIngress(), name="create_mif")
 
@@ -535,7 +535,7 @@ def init_mrtrix_tractography_wf(
 
     workflow = pe.Workflow(name=name)
     outputnode.inputs.recon_scalars = []
-    plot_reports = params.pop("plot_reports", True)
+    plot_reports = params.pop("plot_reports", True)  # noqa: F841
     # Resample anat mask
     tracking_params = params.get("tckgen", {})
     tracking_params["nthreads"] = omp_nthreads

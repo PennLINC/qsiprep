@@ -214,7 +214,8 @@ def write_derivative_description(bids_dir, deriv_dir):
             }
         ],
         "CodeURL": "https://github.com/pennbbl/qsiprep",
-        "HowToAcknowledge": "Please cite our paper (https://www.nature.com/articles/s41592-021-01185-5#citeas), and "
+        "HowToAcknowledge": "Please cite our paper "
+        "(https://www.nature.com/articles/s41592-021-01185-5#citeas), and "
         "include the generated citation boilerplate within the Methods "
         "section of the text.",
     }

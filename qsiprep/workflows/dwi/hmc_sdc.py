@@ -20,7 +20,6 @@ from ..fieldmap.drbuddi import init_drbuddi_wf
 
 # dwi workflows
 from .hmc import init_dwi_hmc_wf
-from .util import _list_squeeze
 
 LOGGER = logging.getLogger("nipype.workflow")
 

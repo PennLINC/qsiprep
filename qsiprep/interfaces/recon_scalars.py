@@ -10,11 +10,9 @@ Classes that collect scalar images and metadata from Recon Workflows
 """
 import os
 import os.path as op
-import re
 
 import pandas as pd
 from bids.layout import parse_file_entities
-from nipype import logging
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec,
     File,
@@ -24,8 +22,6 @@ from nipype.interfaces.base import (
     isdefined,
     traits,
 )
-from nipype.utils.filemanip import fname_presuffix, split_filename
-from pkg_resources import resource_filename as pkgr
 
 from .bids import _copy_any, get_recon_output_name
 
@@ -65,7 +61,7 @@ class ReconScalars(SimpleInterface):
         for input_key in self.inputs.editable_traits():
             if input_key in self._ignore_traits:
                 continue
-            if not input_key in self.scalar_metadata:
+            if input_key not in self.scalar_metadata:
                 raise Exception(
                     f"No entry found for {input_key} in ``scalar_metadata`` in this class."
                 )

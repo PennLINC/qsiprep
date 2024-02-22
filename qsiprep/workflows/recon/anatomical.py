@@ -75,15 +75,15 @@ def init_highres_recon_anatomical_wf(
     infant_mode,
     name="recon_anatomical_wf",
 ):
-    """Gather any high-res anatomical data (images, transforms, segmentations) to use in recon workflows.
+    """Gather any high-res anatomical data (images, transforms, segmentations) to use
+    in recon workflows.
 
-    This workflow searches through input data to see what anatomical data is available. The anatomical data
-    may be in a freesurfer directory.
+    This workflow searches through input data to see what anatomical data is available.
+    The anatomical data may be in a freesurfer directory.
 
     """
 
     workflow = Workflow(name=name)
-    desc = ""
     outputnode = pe.Node(
         niu.IdentityInterface(fields=anatomical_workflow_outputs), name="outputnode"
     )
@@ -98,8 +98,8 @@ def init_highres_recon_anatomical_wf(
         )
     elif pipeline_source == "ukb":
         anat_ingress_node, status = gather_ukb_anatomical_data(
-            subject_id, recon_input_dir, name="gather_ukb_anatomical_wf"
-        )
+            subject_id, recon_input_dir, name="gather_ukb_anatomical_wf",
+            infant_mode=False)
     else:
         raise Exception(f"Unknown pipeline source '{pipeline_source}'")
     anat_ingress_node.inputs.infant_mode = infant_mode
@@ -137,7 +137,7 @@ def init_highres_recon_anatomical_wf(
         )
         workflow.connect([
             (fs_source, outputnode, [
-              (field, field) for field in FS_FILES_TO_REGISTER])])  # fmt:skip
+                (field, field) for field in FS_FILES_TO_REGISTER])])  # fmt:skip
 
     # Do we need to calculate anything else on the
     if "mrtrix_5tt_hsvs" in extras_to_make:
@@ -166,7 +166,7 @@ def init_highres_recon_anatomical_wf(
         )
 
         # Transform the 5tt image so it's registered to the QSIPrep AC-PC T1w
-        if has_qsiprep_t1w:
+        if status["has_qsiprep_t1w"]:
             LOGGER.info("HSVS 5tt imaged will be registered to the " "QSIPrep T1w image.")
             status["has_qsiprep_5tt_hsvs"] = True
             register_fs_to_qsiprep_wf = init_register_fs_to_qsiprep_wf(
@@ -174,7 +174,7 @@ def init_highres_recon_anatomical_wf(
             )
             apply_header_to_5tt = pe.Node(TransformHeader(), name="apply_header_to_5tt")
             workflow.connect([
-                (anat_ingress, register_fs_to_qsiprep_wf, [
+                (anat_ingress_node, register_fs_to_qsiprep_wf, [
                     ("t1_preproc", "inputnode.qsiprep_reference_image"),
                     ("t1_brain_mask", "inputnode.qsiprep_reference_mask")]),
                 (fs_source, register_fs_to_qsiprep_wf, [
@@ -188,7 +188,7 @@ def init_highres_recon_anatomical_wf(
                 (create_5tt_hsvs, apply_header_to_5tt, [("out_file", "in_image")]),
                 (create_5tt_hsvs, ds_fs_5tt_hsvs, [("out_file", "in_file")]),
 
-                (register_fs_to_qsiprep_wf, apply_header_to_5tt,[
+                (register_fs_to_qsiprep_wf, apply_header_to_5tt, [
                     ("outputnode.fs_to_qsiprep_transform_mrtrix", "transform_file")]),
                 (apply_header_to_5tt, outputnode, [
                     ("out_image", "qsiprep_5tt_hsvs")]),
@@ -404,7 +404,7 @@ def init_register_fs_to_qsiprep_wf(
     workflow.connect([
         (inputnode, convert_fs_brain, [
             ("brain", "in_file")]),
-        (inputnode,register_to_qsiprep, [
+        (inputnode, register_to_qsiprep, [
             ("qsiprep_reference_image", "fixed_image")]),
         (convert_fs_brain, register_to_qsiprep, [
             ("out_file", "moving_image")]),
@@ -509,7 +509,7 @@ def init_dwi_recon_anatomical_workflow(
             ('dwi_ref', 'inputnode.input_image')]),
         (reference_grid_wf, buffernode, [
             ('outputnode.grid_image', 'resampling_template')])
-        ])  # fmt:skip
+    ])  # fmt:skip
 
     # Missing Freesurfer AND QSIPrep T1ws, or the user wants a DWI-based mask
     if not (has_qsiprep_t1w or has_freesurfer) or prefer_dwi_mask:
@@ -631,7 +631,7 @@ def init_dwi_recon_anatomical_workflow(
         else:
             raise Exception(
                 "Reconstruction workflow requires a T1wACPC-to-template transform. "
-                f"None were found."
+                "None were found."
             )
 
     # Simply resample the T1w mask into the DWI resolution. This was the default
@@ -689,7 +689,7 @@ def init_dwi_recon_anatomical_workflow(
                     ('t1_2_mni_reverse_transform', 'forward_transform')]),
                 (get_atlases, buffernode, [
                     ("atlas_configs", "atlas_configs")]),
-                (inputnode, get_atlases,[
+                (inputnode, get_atlases, [
                     ('dwi_file', 'reference_image')])
             ])  # fmt:skip
 

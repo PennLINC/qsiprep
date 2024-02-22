@@ -318,19 +318,3 @@ def _concat_xfms(in_list, invert):
         out_xfm = np.linalg.inv(out_xfm)
 
     return out_xfm
-
-
-def interface_to_boilerplate(interface, ignore=["args", "environ", "output_dir"]):
-    """Create a string from an interface."""
-
-    if not hasattr(interface.inputs, "_boilerplate_traits"):
-        return ""
-    boilerplate_traits = interface.inputs._boilerplate_traits
-    display_items = []
-    for trait_name, trait_value in interface.inputs.traits():
-        if not trait_name in boilerplate_traits:
-            continue
-        if not isdefined(trait_value):
-            continue
-
-    return ""

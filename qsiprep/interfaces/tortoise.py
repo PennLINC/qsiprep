@@ -480,7 +480,8 @@ class DRBUDDIAggregateOutputs(SimpleInterface):
 
 
 class _GibbsInputSpec(TORTOISEInputSpec, SeriesPreprocReportInputSpec):
-    """Gibbs input_nifti  output_nifti kspace_coverage(1,0.875,0.75) phase_encoding_dir nsh minW(optional) maxW(optional)"""
+    """Gibbs input_nifti  output_nifti kspace_coverage(1,0.875,0.75)
+    phase_encoding_dir nsh minW(optional) maxW(optional)"""
 
     in_file = traits.File(exists=True, mandatory=True, position=0, argstr="%s")
     out_file = traits.File(
