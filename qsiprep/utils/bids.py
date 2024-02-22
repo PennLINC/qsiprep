@@ -164,13 +164,13 @@ def collect_data(bids_dir, participant_label, filters=None, bids_validate=True):
         layout = BIDSLayout(str(bids_dir), validate=bids_validate)
 
     queries = {
-        'fmap': {'datatype': 'fmap'},
-        'sbref': {'datatype': 'func', 'suffix': 'sbref'},
-        'flair': {'datatype': 'anat', 'suffix': 'FLAIR'},
-        't2w': {'datatype': 'anat', 'suffix': 'T2w'},
-        't1w': {'datatype': 'anat', 'suffix': 'T1w'},
-        'roi': {'datatype': 'anat', 'suffix': 'roi'},
-        'dwi': {'datatype': 'dwi', 'part': ['mag', None], 'suffix': 'dwi'},
+        "fmap": {"datatype": "fmap"},
+        "sbref": {"datatype": "func", "suffix": "sbref"},
+        "flair": {"datatype": "anat", "suffix": "FLAIR"},
+        "t2w": {"datatype": "anat", "suffix": "T2w"},
+        "t1w": {"datatype": "anat", "suffix": "T1w"},
+        "roi": {"datatype": "anat", "suffix": "roi"},
+        "dwi": {"datatype": "dwi", "part": ["mag", None], "suffix": "dwi"},
     }
     bids_filters = filters or {}
     for acq, entities in bids_filters.items():

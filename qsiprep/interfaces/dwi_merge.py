@@ -759,6 +759,7 @@ class PhaseToRad(SimpleInterface):
         https://www.nipreps.org/community/licensing/
 
     """
+
     input_spec = _PhaseToRadInputSpec
     output_spec = _PhaseToRadOutputSpec
 

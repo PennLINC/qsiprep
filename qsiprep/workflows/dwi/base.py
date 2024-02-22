@@ -360,24 +360,26 @@ Diffusion data preprocessing
 
 : """
 
-    pre_hmc_wf = init_dwi_pre_hmc_wf(scan_groups=scan_groups,
-                                     b0_threshold=b0_threshold,
-                                     preprocess_rpe_series=doing_bidirectional_pepolar,
-                                     dwi_denoise_window=dwi_denoise_window,
-                                     denoise_method=denoise_method,
-                                     unringing_method=unringing_method,
-                                     no_b0_harmonization=no_b0_harmonization,
-                                     b1_biascorrect_stage=b1_biascorrect_stage,
-                                     orientation='LAS' if hmc_model == 'eddy' else 'LPS',
-                                     source_file=source_file,
-                                     low_mem=low_mem,
-                                     denoise_before_combining=denoise_before_combining,
-                                     layout=layout,
-                                     ignore=ignore,
-                                     omp_nthreads=omp_nthreads)
-    test_pre_hmc_connect = pe.Node(TestInput(), name='test_pre_hmc_connect')
-    if hmc_model in ('none', '3dSHORE','tensor'):
-        if not hmc_model == 'none' and shoreline_iters < 1:
+    pre_hmc_wf = init_dwi_pre_hmc_wf(
+        scan_groups=scan_groups,
+        b0_threshold=b0_threshold,
+        preprocess_rpe_series=doing_bidirectional_pepolar,
+        dwi_denoise_window=dwi_denoise_window,
+        denoise_method=denoise_method,
+        unringing_method=unringing_method,
+        no_b0_harmonization=no_b0_harmonization,
+        b1_biascorrect_stage=b1_biascorrect_stage,
+        orientation="LAS" if hmc_model == "eddy" else "LPS",
+        source_file=source_file,
+        low_mem=low_mem,
+        denoise_before_combining=denoise_before_combining,
+        layout=layout,
+        ignore=ignore,
+        omp_nthreads=omp_nthreads,
+    )
+    test_pre_hmc_connect = pe.Node(TestInput(), name="test_pre_hmc_connect")
+    if hmc_model in ("none", "3dSHORE", "tensor"):
+        if not hmc_model == "none" and shoreline_iters < 1:
             raise Exception("--shoreline-iters must be > 0 when --hmc-model is " + hmc_model)
         hmc_wf = init_qsiprep_hmcsdc_wf(
             scan_groups=scan_groups,

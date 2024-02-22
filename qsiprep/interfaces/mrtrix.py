@@ -1368,25 +1368,15 @@ class TransformHeader(CommandLine):
 
 
 class _PolarToComplexInputSpec(CommandLineInputSpec):
-    mag_file = traits.File(
-        exists=True,
-        mandatory=True,
-        position=0,
-        argstr="%s"
-    )
-    phase_file = traits.File(
-        exists=True,
-        mandatory=True,
-        position=1,
-        argstr="%s"
-    )
+    mag_file = traits.File(exists=True, mandatory=True, position=0, argstr="%s")
+    phase_file = traits.File(exists=True, mandatory=True, position=1, argstr="%s")
     out_file = traits.File(
         exists=False,
         name_source="mag_file",
         name_template="%s_complex.nii.gz",
         keep_extension=False,
         position=-1,
-        argstr="-polar %s"
+        argstr="-polar %s",
     )
 
 
@@ -1396,6 +1386,7 @@ class _PolarToComplexOutputSpec(TraitedSpec):
 
 class PolarToComplex(CommandLine):
     """Convert a magnitude and phase image pair to a single complex image using mrcalc."""
+
     input_spec = _PolarToComplexInputSpec
     output_spec = _PolarToComplexOutputSpec
 
@@ -1403,19 +1394,14 @@ class PolarToComplex(CommandLine):
 
 
 class _ComplexToMagnitudeInputSpec(CommandLineInputSpec):
-    complex_file = traits.File(
-        exists=True,
-        mandatory=True,
-        position=0,
-        argstr="%s"
-    )
+    complex_file = traits.File(exists=True, mandatory=True, position=0, argstr="%s")
     out_file = traits.File(
         exists=False,
         name_source="complex_file",
         name_template="%s_mag.nii.gz",
         keep_extension=False,
         position=-1,
-        argstr="-abs %s"
+        argstr="-abs %s",
     )
 
 
@@ -1425,6 +1411,7 @@ class _ComplexToMagnitudeOutputSpec(TraitedSpec):
 
 class ComplexToMagnitude(CommandLine):
     """Extract the magnitude portion of a complex image using mrcalc."""
+
     input_spec = _ComplexToMagnitudeInputSpec
     output_spec = _ComplexToMagnitudeOutputSpec
 

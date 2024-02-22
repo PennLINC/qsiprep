@@ -284,12 +284,12 @@ def get_parser():
         action="store",
         nargs="+",
         default=[],
-        choices=['fieldmaps', 'phase'],
+        choices=["fieldmaps", "phase"],
         help=(
-            'ignore selected aspects of the input dataset to disable '
-            'corresponding parts of the workflow (a space delimited list). '
+            "ignore selected aspects of the input dataset to disable "
+            "corresponding parts of the workflow (a space delimited list). "
             'Ignoring "phase" will disable complex-valued denoising, '
-            'when phase DWI data are available.'
+            "when phase DWI data are available."
         ),
     )
     g_conf.add_argument(

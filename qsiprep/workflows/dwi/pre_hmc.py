@@ -23,23 +23,25 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger("nipype.workflow")
 
 
-def init_dwi_pre_hmc_wf(scan_groups,
-                        b0_threshold,
-                        preprocess_rpe_series,
-                        dwi_denoise_window,
-                        denoise_method,
-                        unringing_method,
-                        no_b0_harmonization,
-                        b1_biascorrect_stage,
-                        denoise_before_combining,
-                        orientation,
-                        omp_nthreads,
-                        source_file,
-                        low_mem,
-                        calculate_qc=True,
-                        layout=None,
-                        ignore=[],
-                        name="pre_hmc_wf"):
+def init_dwi_pre_hmc_wf(
+    scan_groups,
+    b0_threshold,
+    preprocess_rpe_series,
+    dwi_denoise_window,
+    denoise_method,
+    unringing_method,
+    no_b0_harmonization,
+    b1_biascorrect_stage,
+    denoise_before_combining,
+    orientation,
+    omp_nthreads,
+    source_file,
+    low_mem,
+    calculate_qc=True,
+    layout=None,
+    ignore=[],
+    name="pre_hmc_wf",
+):
     """
     This workflow merges and denoises dwi scans. The outputs from this workflow is
     a single dwi file (optionally denoised) and corresponding bvals, bvecs.
@@ -134,11 +136,11 @@ def init_dwi_pre_hmc_wf(scan_groups,
     dwi_series = scan_groups["dwi_series"]
 
     # Configure the denoising window
-    if (denoise_method == 'dwidenoise') and dwi_denoise_window == 'auto':
+    if (denoise_method == "dwidenoise") and dwi_denoise_window == "auto":
         dwi_denoise_window = 5
         LOGGER.info("Automatically using 5, 5, 5 window for dwidenoise")
 
-    if dwi_denoise_window != 'auto':
+    if dwi_denoise_window != "auto":
         try:
             dwi_denoise_window = int(dwi_denoise_window)
         except ValueError:
@@ -171,7 +173,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
             else (dwi_series, rpe_series)
         )
         pe_axis = dwi_series_pedir[0]
-        plus_source_file = get_source_file(plus_files, suffix='_PEplus')
+        plus_source_file = get_source_file(plus_files, suffix="_PEplus")
         merge_plus = init_merge_and_denoise_wf(
             raw_dwi_files=plus_files,
             b0_threshold=b0_threshold,
@@ -192,7 +194,7 @@ def init_dwi_pre_hmc_wf(scan_groups,
         )
 
         # Merge, denoise, split, hmc on the minus series
-        minus_source_file = get_source_file(minus_files, suffix='_PEminus')
+        minus_source_file = get_source_file(minus_files, suffix="_PEminus")
         merge_minus = init_merge_and_denoise_wf(
             raw_dwi_files=minus_files,
             b0_threshold=b0_threshold,
