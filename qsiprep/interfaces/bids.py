@@ -365,7 +365,7 @@ class DerivativesMaybeDataSink(DerivativesDataSink):
         return super(DerivativesMaybeDataSink, self)._run_interface(runtime)
 
 
-recon_entity_order = ["model", "bundles", "fit", "mdp", "mfp", "bundle", "label"]
+recon_entity_order = ["atlas", "model", "bundles", "fit", "mdp", "mfp", "bundle", "label"]
 
 
 def get_recon_output_name(
@@ -416,6 +416,7 @@ class _ReconDerivativesDataSinkInputSpec(DerivativesDataSinkInputSpec):
     bundles = traits.Str("", usedefault=True, desc="Label for bundles field")
     fit = traits.Str("", usedefault=True, desc="Label for fit field")
     label = traits.Str("", usedefault=True, desc="Label for label field")
+    atlas = traits.Str("", usedefault=True, desc="Label for label field")
     qsirecon_suffix = traits.Str(
         "", usedefault=True, desc="name appended to qsirecon- in the derivatives"
     )
@@ -442,6 +443,8 @@ class ReconDerivativesDataSink(DerivativesDataSink):
 
         # Prepare the bids entities from the inputs
         output_bids = {}
+        if self.inputs.atlas:
+            output_bids["atlas"] = self.inputs.atlas
         if self.inputs.bundles:
             output_bids["bundles"] = self.inputs.bundles
         if self.inputs.bundle:
