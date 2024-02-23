@@ -155,12 +155,14 @@ def init_highres_recon_anatomical_wf(
         workflow.connect([
             (create_5tt_hsvs, outputnode, [('out_file', 'fs_5tt_hsvs')])])  # fmt:skip
         ds_qsiprep_5tt_hsvs = pe.Node(
-            ReconDerivativesDataSink(desc="hsvs", suffix="5tt"),
+            ReconDerivativesDataSink(atlas="hsvs", suffix="dseg", qsirecon_suffix="anat"),
             name="ds_qsiprep_5tt_hsvs",
             run_without_submitting=True,
         )
         ds_fs_5tt_hsvs = pe.Node(
-            ReconDerivativesDataSink(desc="hsvs", space="fsnative", suffix="5tt"),
+            ReconDerivativesDataSink(
+                desc="hsvs", space="fsnative", suffix="dseg", qsirecon_suffix="anat"
+            ),
             name="ds_fs_5tt_hsvs",
             run_without_submitting=True,
         )
@@ -583,7 +585,11 @@ def init_dwi_recon_anatomical_workflow(
             raise Exception("The 5tt image in fsnative should have been created by now")
         apply_header_to_5tt_hsvs = pe.Node(TransformHeader(), name="apply_header_to_5tt_hsvs")
         ds_qsiprep_5tt_hsvs = pe.Node(
-            ReconDerivativesDataSink(desc="hsvs", suffix="5tt"),
+            ReconDerivativesDataSink(
+                atlas="hsvs",
+                suffix="dseg",
+                qsirecon_suffix="anat",
+            ),
             name="ds_qsiprep_5tt_hsvs",
             run_without_submitting=True,
         )
@@ -699,9 +705,10 @@ def init_dwi_recon_anatomical_workflow(
                     get_atlases,
                     pe.Node(
                         ReconDerivativesDataSink(
-                            desc=atlas,
-                            suffix="atlas",
-                            compress=True),
+                            atlas=atlas,
+                            suffix="dseg",
+                            compress=True,
+                            qsirecon_suffix="anat"),
                         name='dsatlas_' + atlas,
                         run_without_submitting=True), [
                             (
@@ -712,10 +719,11 @@ def init_dwi_recon_anatomical_workflow(
                     get_atlases,
                     pe.Node(
                         ReconDerivativesDataSink(
-                            desc=atlas,
-                            suffix="atlas",
+                            atlas=atlas,
+                            suffix="dseg",
                             extension=".mif.gz",
-                            compress=True),
+                            compress=True,
+                            qsirecon_suffix="anat"),
                         name='dsatlas_mifs_' + atlas,
                         run_without_submitting=True), [
                             (
@@ -726,9 +734,10 @@ def init_dwi_recon_anatomical_workflow(
                     get_atlases,
                     pe.Node(
                         ReconDerivativesDataSink(
-                            desc=atlas,
+                            atlas=atlas,
                             extension=".txt",
-                            suffix="mrtrixLUT"),
+                            suffix="dseg",
+                            qsirecon_suffix="anat"),
                         name='dsatlas_mrtrix_lut_' + atlas,
                         run_without_submitting=True), [
                             (
@@ -739,9 +748,10 @@ def init_dwi_recon_anatomical_workflow(
                     get_atlases,
                     pe.Node(
                         ReconDerivativesDataSink(
-                            desc=atlas,
+                            atlas=atlas,
                             extension=".txt",
-                            suffix="origLUT"),
+                            suffix="dseg",
+                            qsirecon_suffix="anat"),
                         name='dsatlas_orig_lut_' + atlas,
                         run_without_submitting=True), [
                             (
