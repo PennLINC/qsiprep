@@ -718,18 +718,10 @@ def create_provenance_dataframe(
 
 
 class _PhaseToRadInputSpec(BaseInterfaceInputSpec):
-    phase_file = File(exists=True, mandatory=True)
+    """Output spec for PhaseToRad interface.
 
-
-class _PhaseToRadOutputSpec(TraitedSpec):
-    phase_file = File(exists=True)
-
-
-class PhaseToRad(SimpleInterface):
-    """Convert phase image from arbitrary units (au) to radians.
-
-    This method assumes that the phase image's minimum and maximum values correspond to
-    -pi and pi, respectively, and scales the image to be between 0 and 2*pi.
+    STATEMENT OF CHANGES: This class is derived from sources licensed under the Apache-2.0 terms,
+    and the code has been changed.
 
     Notes
     -----
@@ -739,6 +731,91 @@ class PhaseToRad(SimpleInterface):
 
     License
     -------
+    ORIGINAL WORK'S ATTRIBUTION NOTICE:
+
+    Copyright 2021 The NiPreps Developers <nipreps@gmail.com>
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+    We support and encourage derived works from this project, please read
+    about our expectations at
+
+        https://www.nipreps.org/community/licensing/
+
+    """
+
+    phase_file = File(exists=True, mandatory=True)
+
+
+class _PhaseToRadOutputSpec(TraitedSpec):
+    """Output spec for PhaseToRad interface.
+
+    STATEMENT OF CHANGES: This class is derived from sources licensed under the Apache-2.0 terms,
+    and the code has been changed.
+
+    Notes
+    -----
+    The code is derived from
+    https://github.com/nipreps/sdcflows/blob/c6cd42944f4b6d638716ce020ffe51010e9eb58a/\
+    sdcflows/utils/phasemanip.py#L26.
+
+    License
+    -------
+    ORIGINAL WORK'S ATTRIBUTION NOTICE:
+
+    Copyright 2021 The NiPreps Developers <nipreps@gmail.com>
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+    We support and encourage derived works from this project, please read
+    about our expectations at
+
+        https://www.nipreps.org/community/licensing/
+
+    """
+
+    phase_file = File(exists=True)
+
+
+class PhaseToRad(SimpleInterface):
+    """Convert phase image from arbitrary units (au) to radians.
+
+    This method assumes that the phase image's minimum and maximum values correspond to
+    -pi and pi, respectively, and scales the image to be between 0 and 2*pi.
+
+    STATEMENT OF CHANGES: This class is derived from sources licensed under the Apache-2.0 terms,
+    and the code has not been changed.
+
+    Notes
+    -----
+    The code is derived from
+    https://github.com/nipreps/sdcflows/blob/c6cd42944f4b6d638716ce020ffe51010e9eb58a/\
+    sdcflows/utils/phasemanip.py#L26.
+
+    License
+    -------
+    ORIGINAL WORK'S ATTRIBUTION NOTICE:
+
     Copyright 2021 The NiPreps Developers <nipreps@gmail.com>
 
     Licensed under the Apache License, Version 2.0 (the "License");
