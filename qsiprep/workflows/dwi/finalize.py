@@ -285,6 +285,7 @@ def init_dwi_finalize_wf(
         name="final_denoise_wf",
         omp_nthreads=omp_nthreads,
         source_file=source_file,
+        b0_threshold=b0_threshold,
         do_biascorr=do_biascorr and write_derivatives,
         num_dwi_acquisitions=len(all_dwis),
     )
@@ -474,6 +475,7 @@ def init_finalize_denoising_wf(
     omp_nthreads,
     source_file,
     do_biascorr,
+    b0_threshold,
     num_dwi_acquisitions,
     split_biascorr=False,
     do_patch2self=False,
@@ -532,7 +534,9 @@ def init_finalize_denoising_wf(
     if do_biascorr:
         if not split_biascorr:
             biascorr = pe.Node(
-                DWIBiasCorrect(method="ants"), name="biascorr", n_procs=omp_nthreads
+                DWIBiasCorrect(method="ants", bzero_max=b0_threshold),
+                name="biascorr",
+                n_procs=omp_nthreads,
             )
             ds_report_biascorr = pe.Node(
                 DerivativesDataSink(suffix=name + "_biascorr", source_file=source_file),
@@ -577,7 +581,7 @@ def init_finalize_denoising_wf(
                 scan_num += 1
                 biascorrs.append(
                     pe.Node(
-                        DWIBiasCorrect(method="ants"),
+                        DWIBiasCorrect(method="ants", bzero_max=b0_threshold),
                         name="biascorr%d" % scan_num,
                         n_procs=omp_nthreads,
                     )

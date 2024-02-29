@@ -1170,6 +1170,10 @@ class DWIBiasCorrectInputSpec(MRTrix3BaseInputSpec, SeriesPreprocReportInputSpec
     ants_c = traits.Str(default_value="[200x200,1e-6]", argstr="-ants.c %s", usedefault=True)
     ants_s = traits.Str(default_value="4", argstr="-ants.s %s")
     out_report = File("n4_report.svg", usedefault=True, desc="filename for the visual report")
+    bzero_max = traits.Int(
+        argstr="-config BZeroThreshold %d",
+        desc="Maximum b-value that can be considered a b=0",
+    )
 
 
 class DWIBiasCorrectOutputSpec(SeriesPreprocReportOutputSpec):
