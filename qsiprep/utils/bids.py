@@ -157,10 +157,7 @@ def collect_participants(bids_dir, participant_label=None, strict=False, bids_va
 
 
 def collect_data(bids_dir, participant_label, filters=None, bids_validate=True):
-    """
-    Uses pybids to retrieve the input data for a given participant
-
-    """
+    """Use pybids to retrieve the input data for a given participant."""
     if isinstance(bids_dir, BIDSLayout):
         layout = bids_dir
     else:
@@ -173,7 +170,7 @@ def collect_data(bids_dir, participant_label, filters=None, bids_validate=True):
         "t2w": {"datatype": "anat", "suffix": "T2w"},
         "t1w": {"datatype": "anat", "suffix": "T1w"},
         "roi": {"datatype": "anat", "suffix": "roi"},
-        "dwi": {"datatype": "dwi", "suffix": "dwi"},
+        "dwi": {"datatype": "dwi", "part": ["mag", None], "suffix": "dwi"},
     }
     bids_filters = filters or {}
     for acq, entities in bids_filters.items():

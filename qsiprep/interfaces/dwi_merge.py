@@ -3,6 +3,7 @@
 import json
 import os.path as op
 
+import nibabel as nb
 import numpy as np
 import pandas as pd
 from nilearn.image import concat_imgs, index_img, iter_img, load_img, math_img
@@ -714,3 +715,154 @@ def create_provenance_dataframe(
     image_df = pd.concat(series_confounds, axis=0, ignore_index=True)
     image_df["original_file"] = bids_sources
     return image_df
+
+
+class _PhaseToRadInputSpec(BaseInterfaceInputSpec):
+    """Output spec for PhaseToRad interface.
+
+    STATEMENT OF CHANGES: This class is derived from sources licensed under the Apache-2.0 terms,
+    and the code has been changed.
+
+    Notes
+    -----
+    The code is derived from
+    https://github.com/nipreps/sdcflows/blob/c6cd42944f4b6d638716ce020ffe51010e9eb58a/\
+    sdcflows/utils/phasemanip.py#L26.
+
+    License
+    -------
+    ORIGINAL WORK'S ATTRIBUTION NOTICE:
+
+    Copyright 2021 The NiPreps Developers <nipreps@gmail.com>
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+    We support and encourage derived works from this project, please read
+    about our expectations at
+
+        https://www.nipreps.org/community/licensing/
+
+    """
+
+    phase_file = File(exists=True, mandatory=True)
+
+
+class _PhaseToRadOutputSpec(TraitedSpec):
+    """Output spec for PhaseToRad interface.
+
+    STATEMENT OF CHANGES: This class is derived from sources licensed under the Apache-2.0 terms,
+    and the code has been changed.
+
+    Notes
+    -----
+    The code is derived from
+    https://github.com/nipreps/sdcflows/blob/c6cd42944f4b6d638716ce020ffe51010e9eb58a/\
+    sdcflows/utils/phasemanip.py#L26.
+
+    License
+    -------
+    ORIGINAL WORK'S ATTRIBUTION NOTICE:
+
+    Copyright 2021 The NiPreps Developers <nipreps@gmail.com>
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+    We support and encourage derived works from this project, please read
+    about our expectations at
+
+        https://www.nipreps.org/community/licensing/
+
+    """
+
+    phase_file = File(exists=True)
+
+
+class PhaseToRad(SimpleInterface):
+    """Convert phase image from arbitrary units (au) to radians.
+
+    This method assumes that the phase image's minimum and maximum values correspond to
+    -pi and pi, respectively, and scales the image to be between 0 and 2*pi.
+
+    STATEMENT OF CHANGES: This class is derived from sources licensed under the Apache-2.0 terms,
+    and the code has not been changed.
+
+    Notes
+    -----
+    The code is derived from
+    https://github.com/nipreps/sdcflows/blob/c6cd42944f4b6d638716ce020ffe51010e9eb58a/\
+    sdcflows/utils/phasemanip.py#L26.
+
+    License
+    -------
+    ORIGINAL WORK'S ATTRIBUTION NOTICE:
+
+    Copyright 2021 The NiPreps Developers <nipreps@gmail.com>
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+    We support and encourage derived works from this project, please read
+    about our expectations at
+
+        https://www.nipreps.org/community/licensing/
+
+    """
+
+    input_spec = _PhaseToRadInputSpec
+    output_spec = _PhaseToRadOutputSpec
+
+    def _run_interface(self, runtime):
+        im = nb.load(self.inputs.phase_file)
+        data = im.get_fdata(caching="unchanged")  # Read as float64 for safety
+        hdr = im.header.copy()
+
+        # Rescale to [0, 2*pi]
+        data = (data - data.min()) * (2 * np.pi / (data.max() - data.min()))
+
+        # Round to float32 and clip
+        data = np.clip(np.float32(data), 0.0, 2 * np.pi)
+
+        hdr.set_data_dtype(np.float32)
+        hdr.set_xyzt_units("mm")
+
+        # Set the output file name
+        self._results["phase_file"] = fname_presuffix(
+            self.inputs.phase_file,
+            suffix="_rad.nii.gz",
+            newpath=runtime.cwd,
+            use_ext=False,
+        )
+
+        # Save the output image
+        nb.Nifti1Image(data, None, hdr).to_filename(self._results["phase_file"])
+
+        return runtime

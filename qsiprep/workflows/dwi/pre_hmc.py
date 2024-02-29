@@ -38,6 +38,8 @@ def init_dwi_pre_hmc_wf(
     source_file,
     low_mem,
     calculate_qc=True,
+    layout=None,
+    ignore=[],
     name="pre_hmc_wf",
 ):
     """
@@ -64,6 +66,8 @@ def init_dwi_pre_hmc_wf(
                                   no_b0_harmonization=False,
                                   denoise_before_combining=True,
                                   omp_nthreads=1,
+                                  layout=None,
+                                  ignore=["phase"],
                                   low_mem=False)
 
     **Parameters**
@@ -85,6 +89,12 @@ def init_dwi_pre_hmc_wf(
             'LPS' or 'LAS'
         low_mem : bool
             Write uncompressed .nii files in some cases to reduce memory usage
+        layout : None or :obj:`bids.layout.BIDSLayout`
+            Used to try to find phase files.
+            Only used if ``denoise_before_combining`` is ``True``.
+        ignore : list
+            List of elements to ignore in processing.
+            The only relevant value for this workflow is "phase".
 
     **Outputs**
         dwi_file
@@ -126,21 +136,24 @@ def init_dwi_pre_hmc_wf(
     dwi_series = scan_groups["dwi_series"]
 
     # Configure the denoising window
-    if denoise_method == "dwidenoise" and dwi_denoise_window == "auto":
+    if (denoise_method == "dwidenoise") and dwi_denoise_window == "auto":
         dwi_denoise_window = 5
         LOGGER.info("Automatically using 5, 5, 5 window for dwidenoise")
+
     if dwi_denoise_window != "auto":
         try:
             dwi_denoise_window = int(dwi_denoise_window)
         except ValueError:
             raise Exception("dwi denoise window must be an integer or 'auto'")
+
     workflow.__postdesc__ = gen_denoising_boilerplate(
-        denoise_method,
-        dwi_denoise_window,
-        unringing_method,
-        b1_biascorrect_stage,
-        no_b0_harmonization,
-        b0_threshold,
+        denoise_method=denoise_method,
+        dwi_denoise_window=dwi_denoise_window,
+        unringing_method=unringing_method,
+        b1_biascorrect_stage=b1_biascorrect_stage,
+        no_b0_harmonization=no_b0_harmonization,
+        b0_threshold=b0_threshold,
+        use_phase="phase" not in ignore,
     )
 
     # Doing biascorr here is the old way.
@@ -173,8 +186,10 @@ def init_dwi_pre_hmc_wf(
             orientation=orientation,
             omp_nthreads=omp_nthreads,
             source_file=plus_source_file,
-            phase_id=pe_axis + "+ phase-encoding direction",
+            phase_id=f"{pe_axis}+ phase-encoding direction",
             calculate_qc=False,
+            ignore=ignore,
+            layout=layout,
             name="merge_plus",
         )
 
@@ -192,8 +207,10 @@ def init_dwi_pre_hmc_wf(
             orientation=orientation,
             omp_nthreads=omp_nthreads,
             source_file=minus_source_file,
-            phase_id=pe_axis + "- phase-encoding direction",
+            phase_id=f"{pe_axis}- phase-encoding direction",
             calculate_qc=False,
+            ignore=ignore,
+            layout=layout,
             name="merge_minus",
         )
 
@@ -292,6 +309,7 @@ def init_dwi_pre_hmc_wf(
             "single file, as required for the FSL workflows.\n\n"
         )
         return workflow
+
     workflow.__postdesc__ += "\n\n"
     merge_dwis = init_merge_and_denoise_wf(
         raw_dwi_files=dwi_series,
@@ -306,6 +324,8 @@ def init_dwi_pre_hmc_wf(
         calculate_qc=True,
         phase_id=dwi_series_pedir,
         source_file=source_file,
+        ignore=ignore,
+        layout=layout,
     )
 
     workflow.connect([

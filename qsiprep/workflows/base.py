@@ -158,8 +158,7 @@ def init_qsiprep_wf(
     anatomical_contrst : str
         Which contrast to use for the anatomical reference
     ignore : list
-        Preprocessing steps to skip (may include "slicetiming",
-        "fieldmaps")
+        Preprocessing steps to skip (may include "slicetiming", "fieldmaps", "phase").
     low_mem : bool
         Write uncompressed .nii files in some cases to reduce memory usage
     anat_only : bool
@@ -401,7 +400,7 @@ def init_single_subject_wf(
     name : str
         Name of workflow
     ignore : list
-        Preprocessing steps to skip (may include "sbref", "fieldmaps")
+        Preprocessing steps to skip (may include "sbref", "fieldmaps", "phase")
     debug : bool
         Do inaccurate but fast normalization
     low_mem : bool
@@ -496,7 +495,10 @@ def init_single_subject_wf(
         LOGGER.warning("Building a test workflow")
     else:
         subject_data, layout = collect_data(
-            bids_dir, subject_id, filters=bids_filters, bids_validate=False
+            bids_dir,
+            subject_id,
+            filters=bids_filters,
+            bids_validate=False,
         )
 
     # Warn about --dwi-only and non-none --anat-modality

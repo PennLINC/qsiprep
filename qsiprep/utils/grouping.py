@@ -51,7 +51,6 @@ def group_dwi_scans(
         A dict where the keys are the BIDS derivatives name of the output file after
         concatenation. The values are lists of dwi files in that group.
     """
-
     # Handle the grouping of multiple dwi files within a session
     dwi_session_groups = get_session_groups(bids_layout, subject_data, combine_scans)
 

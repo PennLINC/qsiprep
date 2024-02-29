@@ -373,6 +373,8 @@ Diffusion data preprocessing
         source_file=source_file,
         low_mem=low_mem,
         denoise_before_combining=denoise_before_combining,
+        layout=layout,
+        ignore=ignore,
         omp_nthreads=omp_nthreads,
     )
     test_pre_hmc_connect = pe.Node(TestInput(), name="test_pre_hmc_connect")
