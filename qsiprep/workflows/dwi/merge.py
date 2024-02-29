@@ -10,6 +10,7 @@ Merge and denoise dwi images
 
 """
 import pandas as pd
+from bids.layout import Query
 from nipype import logging
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
@@ -197,11 +198,13 @@ def init_merge_and_denoise_wf(
             _, fname, _ = split_filename(dwi_file)
             wf_name = _get_wf_name(fname).replace("preproc", "denoise")
 
-            # Try to find associated phase file.
-            # BIDSLayout.get_nearest() doesn't work well for this.
-            ents = layout.get_file(dwi_file).get_entities()
-            ents["part"] = "phase"
-            phase_files = layout.get(**ents)
+            # Set up a strict query for a phase file based on the magnitude file.
+            all_entities = layout.get_entities(metadata=False)
+            # No other non-matching entities allowed
+            query = {k: Query.NONE for k in all_entities.keys()}
+            query.update(layout.get_file(dwi_file).get_entities())
+            query["part"] = "phase"
+            phase_files = layout.get(**query)
             phase_available = False
             if len(phase_files) == 1:
                 phase_available = True
