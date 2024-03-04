@@ -9,6 +9,7 @@ Prepare files for TOPUP and eddy
 """
 import os
 import os.path as op
+import json
 
 import nibabel as nb
 import numpy as np
@@ -45,6 +46,8 @@ class GatherEddyInputsInputSpec(BaseInterfaceInputSpec):
     topup_max_b0s_per_spec = traits.CInt(1, usedefault=True)
     topup_requested = traits.Bool(False, usedefault=True)
     raw_image_sdc = traits.Bool(True, usedefault=True)
+    eddy_config = File(exists=True, mandatory=True)
+    json_file = File(exists=True)
 
 
 class GatherEddyInputsOutputSpec(TraitedSpec):
@@ -60,6 +63,8 @@ class GatherEddyInputsOutputSpec(TraitedSpec):
     forward_transforms = traits.List()
     forward_warps = traits.List()
     topup_report = traits.Str(desc="description of where data came from")
+    json_file = File(exists=True)
+    multiband_factor = traits.Int()
 
 
 class GatherEddyInputs(SimpleInterface):
@@ -125,6 +130,21 @@ class GatherEddyInputs(SimpleInterface):
         # these have already had HMC, SDC applied
         self._results["forward_transforms"] = []
         self._results["forward_warps"] = []
+
+        # Based on the eddy config, determine whether to send a json argument
+        with open(self.inputs.eddy_config, "r") as eddy_cfg_f:
+            eddy_config = json.load(eddy_cfg_f)
+            # json file is only allowed if mporder is defined
+            if "mporder" in eddy_config:
+                self._results["json_file"] = self.inputs.json_file
+
+        #  Get the multiband factor from the json file and convert it to an arg
+        if isdefined(self.inputs.json_file):
+            with open(self.inputs.json_file) as json_f:
+                input_sidecar = json.load(json_f)
+            if "MultibandAccelerationFactor" in input_sidecar:
+                self._results["multiband_factor"] = input_sidecar["MultibandAccelerationFactor"]
+
         return runtime
 
 
@@ -241,6 +261,10 @@ class ExtendedEddy(fsl.Eddy):
         if name == "field":
             pth, fname, _ = split_filename(value)
             return spec.argstr % op.join(pth, fname)
+        if name == "json":
+            if isdefined(self.inputs.mporder):
+                return spec.argstr % value
+            return ""
         return super(ExtendedEddy, self)._format_arg(name, spec, value)
 
 

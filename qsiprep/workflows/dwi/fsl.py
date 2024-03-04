@@ -91,6 +91,8 @@ def init_fsl_hmc_wf(
             bvec file
         bval_file: str
             bval file
+        json_file: str
+            path to sidecar json file for dwi_file
         b0_indices: list
             Indexes into ``dwi_files`` that correspond to b=0 volumes
         b0_images: list
@@ -116,6 +118,7 @@ def init_fsl_hmc_wf(
                 "dwi_file",
                 "bvec_file",
                 "bval_file",
+                "json_file",
                 "b0_indices",
                 "b0_images",
                 "original_files",
@@ -224,7 +227,9 @@ def init_fsl_hmc_wf(
             ('outputnode.ref_image_brain', 'dwi_file')]),
         (gather_inputs, eddy, [
             ('eddy_indices', 'in_index'),
-            ('eddy_acqp', 'in_acqp')]),
+            ('eddy_acqp', 'in_acqp'),
+            ('json_file', 'json'),
+            ('multiband_factor', 'multiband_factor')]),
         (inputnode, eddy, [
             ('dwi_file', 'in_file'),
             ('bval_file', 'in_bval'),
