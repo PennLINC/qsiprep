@@ -1,5 +1,6 @@
 """Visualization utilities."""
 
+import numpy as np
 from lxml import etree
 from nilearn.plotting import plot_anat
 from niworkflows.viz.utils import (
@@ -156,3 +157,17 @@ def plot_acpc(
         out_files.append(svg_fig)
 
     return out_files
+
+
+def slices_from_bbox(mask_data, cuts=3, padding=0):
+    """Finds equi-spaced cuts for presenting images"""
+    B = np.argwhere(mask_data > 0)
+    start_coords = B.min(0)
+    stop_coords = B.max(0) + 1
+
+    vox_coords = []
+    for start, stop in zip(start_coords, stop_coords):
+        inc = abs(stop - start) / (cuts + 2 * padding + 1)
+        slices = [start + (i + 1) * inc for i in range(cuts + 2 * padding)]
+        vox_coords.append(slices[padding:-padding])
+    return {k: [int(_v) for _v in v] for k, v in zip(["x", "y", "z"], vox_coords)}
