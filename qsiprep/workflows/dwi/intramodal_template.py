@@ -15,7 +15,6 @@ from pkg_resources import resource_filename as pkgrf
 from ...engine import Workflow
 from ...interfaces import DerivativesDataSink
 from ...interfaces.ants import MultivariateTemplateConstruction2
-from .hmc import init_b0_hmc_wf
 from .registration import init_b0_to_anat_registration_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
@@ -164,116 +163,6 @@ def init_intramodal_template_wf(
     return workflow
 
 
-def init_qsiprep_intramodal_template_wf(
-    inputs_list,
-    transform="Rigid",
-    num_iterations=2,
-    mem_gb=3,
-    omp_nthreads=1,
-    name="intramodal_template_wf",
-):
-    """Create an unbiased intramodal template for a subject.
-    This aligns the b=0 references
-    from all the scans of a subject. Can be rigid, affine or nonlinear (BSplineSyN).
-
-    **Parameters**
-        inputs_list: list of inputs
-            List if identifiers for the input b=0 images.
-        transform: 'Rigid', 'Affine', 'BSplineSyN'
-            Which transform to ultimately use. If 'BSplineSyN', first 2 iterations of Affine will
-            be run.
-        num_iterations: int
-            Default: 2.
-
-    **Inputs**
-
-        [workflow_name]_image...
-            One input for each input image. There is no input called inputs_list
-        t1w_image
-
-    **Outputs**
-        [workflow_name]_transform
-            transform files to the intramodal template
-
-        intramodal_template_to_t1w_transform
-            Transform from the b0
-
-    """
-    workflow = Workflow(name=name)
-    input_names = [name + "_b0_template" for name in inputs_list]
-    output_names = [name + "_transform" for name in inputs_list]
-
-    inputnode = pe.Node(
-        niu.IdentityInterface(fields=input_names + ["t1w_brain"]), name="inputnode"
-    )
-    merge_inputs = pe.Node(niu.Merge(len(input_names)), name="merge_inputs")
-    for input_num, input_name in enumerate(input_names):
-        workflow.connect(inputnode, input_name, merge_inputs, "in%d" % (input_num + 1))
-
-    outputnode = pe.Node(
-        niu.IdentityInterface(
-            fields=output_names + ["intramodal_template", "intramodal_template_to_t1w_transform"]
-        ),
-        name="outputnode",
-    )
-    split_outputs = pe.Node(
-        niu.Split(splits=[1] * len(input_names), squeeze=True), name="split_outputs"
-    )
-    for output_num, output_name in enumerate(output_names):
-        workflow.connect(split_outputs, 'out%d' % (output_num + 1),
-                         outputnode, output_name)  # fmt:skip
-
-    # N4 correct
-    n4_correct = pe.MapNode(
-        ants.N4BiasFieldCorrection(
-            dimension=3,
-            copy_header=True,
-            n_iterations=[50, 50, 40, 30],
-            shrink_factor=2,
-            convergence_threshold=0.00000001,
-            bspline_fitting_distance=200,
-            bspline_order=3,
-        ),
-        name="n4_correct",
-        iterfield=["input_image"],
-    )
-
-    # Should we add nonlinear iterations?
-    do_nonlinear = transform not in ("Rigid", "Affine")
-
-    # Align the b=0 images from all runs (Linear)
-    initial_transform = "Affine" if do_nonlinear else transform
-    intramodal_b0_affine_template = init_b0_hmc_wf(
-        align_to="iterative",
-        num_iters=2,
-        transform=initial_transform,
-        spatial_bias_correct=True,
-        name="intramodal_b0_affine_template",
-    )
-
-    workflow.connect([
-        (merge_inputs, n4_correct, [('out', 'input_image')]),
-        (n4_correct, intramodal_b0_affine_template, [
-            ('output_image', 'inputnode.b0_images')])
-    ])  # fmt:skip
-    if not do_nonlinear:
-        workflow.connect([
-            (intramodal_b0_affine_template, split_outputs, [
-                (('outputnode.forward_transforms', _list_squeeze), 'inlist')])
-        ])  # fmt:skip
-    else:
-        nonlinear_alignment_wf = init_nonlinear_alignment_wf(num_iters=num_iterations)
-        workflow.connect([
-            (n4_correct, nonlinear_alignment_wf, [('output_image', 'inputnode.images')]),
-            (intramodal_b0_affine_template, nonlinear_alignment_wf, [
-                ('outputnode.final_template', 'inputnode.initial_template')]),
-            (nonlinear_alignment_wf, split_outputs, [
-                ('outputnode.forward_transforms', 'inlist')])
-        ])  # fmt:skip
-
-    return workflow
-
-
 def nonlinear_alignment_iteration(iternum=0, gradient_step=0.2):
     """
     Takes a template image and a set of input images, does
@@ -379,63 +268,6 @@ def nonlinear_alignment_iteration(iternum=0, gradient_step=0.2):
     ])  # fmt:skip
 
     return iteration_wf
-
-
-def init_nonlinear_alignment_wf(
-    transform="BSplineSyN", metric="CC", num_iters=2, name="nonlinear_alignment_wf"
-):
-    """Creates a workflow that does nonlinear template creation."""
-    workflow = Workflow(name=name)
-    inputnode = pe.Node(
-        niu.IdentityInterface(fields=["images", "initial_template"]), name="inputnode"
-    )
-    outputnode = pe.Node(
-        niu.IdentityInterface(
-            fields=[
-                "final_template",
-                "forward_transforms",
-                "iteration_templates",
-                "motion_params",
-                "aligned_images",
-            ]
-        ),
-        name="outputnode",
-    )
-
-    # Save the iteration templates
-    iter_templates = pe.Node(niu.Merge(num_iters), name="iteration_templates")
-
-    initial_reg = nonlinear_alignment_iteration(iternum=0)
-
-    workflow.connect([
-        (inputnode, iter_templates, [('initial_template', 'in1')]),
-        (inputnode, initial_reg, [
-            ('initial_template', 'inputnode.template_image'),
-            ('images', 'inputnode.image_paths')])])  # fmt:skip
-
-    reg_iters = [initial_reg]
-    for iternum in range(1, num_iters):
-        reg_iters.append(nonlinear_alignment_iteration(iternum=iternum))
-        workflow.connect([
-            (reg_iters[-2], reg_iters[-1], [
-                ('outputnode.updated_template', 'inputnode.template_image')]),
-            (inputnode, reg_iters[-1], [('images', 'inputnode.image_paths')]),
-            (reg_iters[-1], iter_templates, [
-                ("outputnode.updated_template", "in%d" % (iternum + 1))])
-        ])  # fmt:skip
-
-    # Attach to outputs
-    # The last iteration aligned to the output from the second-to-last
-    workflow.connect([
-        (reg_iters[-2], outputnode, [
-            ('outputnode.updated_template', 'final_template')]),
-        (reg_iters[-1], outputnode, [
-            ('outputnode.affine_transforms', 'forward_transforms'),
-            ('outputnode.registered_image_paths', 'aligned_images')]),
-        (iter_templates, outputnode, [('out', 'iteration_templates')])
-    ])  # fmt:skip
-
-    return workflow
 
 
 def _list_squeeze(in_list):

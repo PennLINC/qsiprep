@@ -12,7 +12,6 @@ import nipype.interfaces.utility as niu
 import nipype.pipeline.engine as pe
 
 from ...engine import Workflow
-from ...interfaces.bids import ReconDerivativesDataSink
 from ...interfaces.interchange import recon_workflow_input_fields
 from ...interfaces.recon_scalars import (
     ReconScalarsDataSink,
@@ -80,56 +79,6 @@ def init_scalar_to_bundle_wf(
     return workflow
 
 
-def init_scalar_to_atlas_wf(
-    omp_nthreads,
-    available_anatomical_data,
-    name="scalar_to_template",
-    qsirecon_suffix="",
-    params={},
-):
-    """Map scalar images to atlas regions
-
-    Inputs
-        tck_files
-            MRtrix3 format tck files for each bundle
-        bundle_names
-            Names that describe which bundles are present in `tck_files`
-        recon_scalars
-            List of dictionaries containing scalar info
-
-    Outputs
-        bundle_summaries
-            summary statistics in tsv format
-
-    """
-    inputnode = pe.Node(
-        niu.IdentityInterface(
-            fields=recon_workflow_input_fields + ["recon_scalars", "collected_scalars"]
-        ),
-        name="inputnode",
-    )
-    # outputnode = pe.Node(niu.IdentityInterface(fields=["atlas_summaries"]), name="outputnode")
-    workflow = Workflow(name=name)
-    bundle_mapper = pe.Node(BundleMapper(**params), name="bundle_mapper")
-    workflow.connect([
-        (inputnode, bundle_mapper, [
-            ("recon_scalars", "recon_scalars"),
-            ("tck_files", "tck_files"),
-            ("dwi_ref", "dwiref_image")])
-    ])  # fmt:skip
-    if qsirecon_suffix:
-
-        ds_bundle_summaries = pe.Node(
-            ReconDerivativesDataSink(desc="bundlemap", qsirecon_suffix=qsirecon_suffix),
-            name="ds_bundle_summaries",
-            run_without_submitting=True,
-        )
-        workflow.connect([
-            (bundle_mapper, ds_bundle_summaries, [("bundle_summaries", "in_file")])
-        ])  # fmt:skip
-    return workflow
-
-
 def init_scalar_to_template_wf(
     omp_nthreads,
     available_anatomical_data,
@@ -181,14 +130,3 @@ def init_scalar_to_template_wf(
     ])  # fmt:skip
 
     return workflow
-
-
-def init_scalar_to_surface_wf(
-    omp_nthreads,
-    available_anatomical_data,
-    name="scalar_to_surface",
-    qsirecon_suffix="",
-    params={},
-):
-    """Maps scalar data to a surface."""
-    raise NotImplementedError()
