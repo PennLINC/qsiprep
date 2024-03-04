@@ -41,13 +41,13 @@ from nipype.interfaces.mixins import reporting
 from nipype.utils.filemanip import fname_presuffix, split_filename
 from niworkflows.viz.utils import (
     SVGNS,
-    SVGFigure,
     compose_view,
     cuts_from_bbox,
     extract_svg,
     robust_set_limits,
     uuid4,
 )
+from svgutils.transform import SVGFigure
 
 from .images import to_lps
 from .reports import topup_selection_to_report
