@@ -250,6 +250,27 @@ Pre-configured recon_workflows
   were calculated using SIFT2_ [Smith2015]_ and were included for while estimating the
   structural connectivity matrix.
 
+  The MRtrix workflows generate a variety of outputs. These include:
+
+    * WM FOD, GM-like, and CSF-like compartment files. Both original (wmFOD, gmFOD, csfFOD .mif.gz 
+      files) and bias field corrected/intensity normalized (wmFODmtnormed, gmFODmtnormed, 
+      csfFODmtnormed .mif.gz files) files are written. These are the outputs of dwi2fod and 
+      mtnormalise, respectively
+    * atlas files of interest in .mig.gz and .nii.gz formats, with corresponding txt files
+    * a .mat file, which contains cortico-cortical and cortical-subcortical structural connectivity
+      matrices for numerous atlases. This mat file contains information about regional 
+      numbers/labels for each atlas as well as 4 structural connectome outputs for each atlas. 
+      The 4 connectivity matrix outputs are 
+      		*radius#.count.connectivity*: raw streamline count based matrix
+		*sift.radius#.count.connectivity*: sift-weighted streamline count based matrix
+		*radius#.meanlength.connectivity*: a matrix containing mean length of raw streamlines
+		*sift.radius#.meanlenght.connectivity*: a matrix containing mean length of sifted output
+
+		The number # in radius# indicates how many mm the algorithm would search up from a 
+		given streamline's endpoint for a cortical region. E.g., a radius of 2 indicates that
+		if a streamline ended before hitting gray matter, the search for a cortical 
+		termination region could be up to 2mm from the endpoint. 
+
 
 .. warning::
   We don't recommend using ACT with FAST segmentations. The full benefits of ACT
