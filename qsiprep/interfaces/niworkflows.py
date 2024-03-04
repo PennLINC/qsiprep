@@ -12,10 +12,10 @@ import matplotlib.pyplot as plt
 import nibabel as nb
 import numpy as np
 import seaborn as sns
+import niworkflows.interfaces.reportlets.base as nrb
 from matplotlib import gridspec as mgs
 from nipype import logging
 from nipype.interfaces.ants import Registration
-from niworkflows.interfaces.reportlets.base import RegistrationRC
 from niworkflows.interfaces.reportlets.registration import (
     _ANTSRegistrationInputSpecRPT,
     _ANTSRegistrationOutputSpecRPT,
@@ -25,7 +25,7 @@ from seaborn import color_palette
 LOGGER = logging.getLogger("nipype.interface")
 
 
-class ANTSRegistrationRPT(RegistrationRC, Registration):
+class ANTSRegistrationRPT(nrb.RegistrationRC, Registration):
     input_spec = _ANTSRegistrationInputSpecRPT
     output_spec = _ANTSRegistrationOutputSpecRPT
 
