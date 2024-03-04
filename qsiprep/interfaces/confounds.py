@@ -25,9 +25,9 @@ from nipype.interfaces.base import (
     isdefined,
     traits,
 )
-from niworkflows import dMRIPlot
 
 from .gradients import concatenate_bvals, concatenate_bvecs
+from .niworkflows import dMRIPlot
 
 LOGGER = logging.getLogger("nipype.interface")
 
