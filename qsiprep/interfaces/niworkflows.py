@@ -15,19 +15,19 @@ import seaborn as sns
 from matplotlib import gridspec as mgs
 from nipype import logging
 from nipype.interfaces.ants import Registration
-from niworkflows.interfaces.registration import (
-    ANTSRegistrationInputSpecRPT,
-    ANTSRegistrationOutputSpecRPT,
-    nrc,
+from niworkflows.interfaces.reportlets.base import RegistrationRC
+from niworkflows.interfaces.reportlets.registration import (
+    _ANTSRegistrationInputSpecRPT,
+    _ANTSRegistrationOutputSpecRPT,
 )
 from seaborn import color_palette
 
 LOGGER = logging.getLogger("nipype.interface")
 
 
-class ANTSRegistrationRPT(nrc.RegistrationRC, Registration):
-    input_spec = ANTSRegistrationInputSpecRPT
-    output_spec = ANTSRegistrationOutputSpecRPT
+class ANTSRegistrationRPT(RegistrationRC, Registration):
+    input_spec = _ANTSRegistrationInputSpecRPT
+    output_spec = _ANTSRegistrationOutputSpecRPT
 
     def _post_run_hook(self, runtime):
         self._fixed_image = self.inputs.fixed_image[0]

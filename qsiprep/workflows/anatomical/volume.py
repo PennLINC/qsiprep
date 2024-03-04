@@ -14,8 +14,8 @@ from nipype.interfaces import afni, ants, mrtrix3
 from nipype.interfaces import utility as niu
 from nipype.interfaces.ants import BrainExtraction, N4BiasFieldCorrection
 from nipype.pipeline import engine as pe
-from niworkflows.interfaces.masks import ROIsPlot
-from niworkflows.interfaces.registration import RobustMNINormalizationRPT
+from niworkflows.interfaces.reportlets.masks import ROIsPlot
+from niworkflows.interfaces.reportlets.registration import RobustMNINormalizationRPT
 from pkg_resources import resource_filename as pkgr
 
 from ...engine import Workflow

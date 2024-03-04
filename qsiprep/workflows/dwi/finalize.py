@@ -12,7 +12,7 @@ from nipype import logging
 from nipype.interfaces import utility as niu
 from nipype.interfaces.base import isdefined
 from nipype.pipeline import engine as pe
-from niworkflows.interfaces.registration import SimpleBeforeAfterRPT
+from niworkflows.interfaces.reportlets.registration import SimpleBeforeAfterRPT
 
 from ...engine import Workflow
 from ...interfaces import DerivativesDataSink

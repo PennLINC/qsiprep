@@ -15,7 +15,7 @@ from nipype.interfaces import io as nio
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from niworkflows.interfaces.freesurfer import RobustRegister
-from niworkflows.interfaces.segmentation import ReconAllRPT
+from niworkflows.interfaces.reportlets.segmentation import ReconAllRPT
 
 from ...engine import Workflow
 from ...interfaces import DerivativesDataSink as FDerivativesDataSink

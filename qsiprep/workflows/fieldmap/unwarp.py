@@ -27,8 +27,8 @@ from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from niworkflows.interfaces import itk
-from niworkflows.interfaces.images import DemeanImage, FilledImageLike
-from niworkflows.interfaces.registration import (
+from niworkflows.interfaces.nibabel import DemeanImage, FilledImageLike
+from niworkflows.interfaces.reportlets.registration import (
     ANTSApplyTransformsRPT,
     ANTSRegistrationRPT,
 )
@@ -294,8 +294,8 @@ def init_fmap_unwarp_report_wf(name="fmap_unwarp_report_wf", suffix="hmcsdc"):
             Affine transform from T1 space to b0 space (ITK format)
 
     """
-    from niworkflows.interfaces import SimpleBeforeAfter
     from niworkflows.interfaces.fixes import FixHeaderApplyTransforms as ApplyTransforms
+    from niworkflows.interfaces.reportlets.registration import SimpleBeforeAfterRPT
 
     from ...interfaces.images import ExtractWM
 
@@ -317,7 +317,7 @@ def init_fmap_unwarp_report_wf(name="fmap_unwarp_report_wf", suffix="hmcsdc"):
 
     sel_wm = pe.Node(ExtractWM(), name="sel_wm", mem_gb=DEFAULT_MEMORY_MIN_GB)
 
-    dwi_rpt = pe.Node(SimpleBeforeAfter(), name="dwi_rpt", mem_gb=0.1)
+    dwi_rpt = pe.Node(SimpleBeforeAfterRPT(), name="dwi_rpt", mem_gb=0.1)
 
     workflow.connect([
         (inputnode, dwi_rpt, [('in_pre', 'before'), ('in_post', 'after')]),

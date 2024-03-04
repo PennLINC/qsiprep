@@ -26,7 +26,7 @@ from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from niworkflows.interfaces.bids import ReadSidecarJSON
 from niworkflows.interfaces.images import IntraModalMerge
-from niworkflows.interfaces.masks import BETRPT
+from niworkflows.interfaces.reportlets.masks import BETRPT
 
 from ...interfaces import DerivativesDataSink, Phasediff2Fieldmap, Phases2Fieldmap
 from .utils import cleanup_edge_pipeline, demean_image, siemens2rads
