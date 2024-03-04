@@ -40,12 +40,12 @@ from nipype.utils.filemanip import fname_presuffix, split_filename, which
 from niworkflows.viz.utils import compose_view, cuts_from_bbox
 from scipy.io.matlab import loadmat, savemat
 
+from ..viz.utils import plot_denoise
 from .denoise import (
     SeriesPreprocReport,
     SeriesPreprocReportInputSpec,
     SeriesPreprocReportOutputSpec,
 )
-from ..viz.utils import plot_denoise
 
 LOGGER = logging.getLogger("nipype.interface")
 RC3_ROOT = which("average_response")  # Only exists in RC3

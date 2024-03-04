@@ -3,12 +3,7 @@
 import numpy as np
 from lxml import etree
 from nilearn.plotting import plot_anat
-from niworkflows.viz.utils import (
-    SVGNS,
-    extract_svg,
-    robust_set_limits,
-    uuid4,
-)
+from niworkflows.viz.utils import SVGNS, extract_svg, robust_set_limits, uuid4
 from svgutils.transform import SVGFigure
 
 

@@ -14,8 +14,8 @@ from fury import actor, window
 from nipype import logging
 from PIL import Image
 
-from qsiprep.interfaces.converters import fib2amps, mif2amps
 from ..viz.utils import slices_from_bbox
+from qsiprep.interfaces.converters import fib2amps, mif2amps
 
 LOGGER = logging.getLogger("nipype.interface")
 
