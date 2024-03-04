@@ -28,7 +28,9 @@ from nipype.interfaces.base import (
     traits,
 )
 from nipype.utils.filemanip import fname_presuffix
-from niworkflows.viz.utils import compose_view, plot_acpc
+from niworkflows.viz.utils import compose_view
+
+from ..viz.utils import plot_acpc
 
 LOGGER = logging.getLogger("nipype.interface")
 

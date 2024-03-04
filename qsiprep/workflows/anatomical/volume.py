@@ -15,7 +15,7 @@ from nipype.interfaces import utility as niu
 from nipype.interfaces.ants import BrainExtraction, N4BiasFieldCorrection
 from nipype.pipeline import engine as pe
 from niworkflows.interfaces.reportlets.masks import ROIsPlot
-from niworkflows.interfaces.reportlets.registration import RobustMNINormalizationRPT
+from niworkflows.interfaces.reportlets.registration import SpatialNormalizationRPT
 from pkg_resources import resource_filename as pkgr
 
 from ...engine import Workflow
@@ -792,7 +792,7 @@ a 6-DOF transform extracted from a full Affine registration to the
         "data/intramodal_ACPC.json" if not sloppy else "data/intramodal_ACPC_sloppy.json",
     )
     acpc_reg = pe.Node(
-        RobustMNINormalizationRPT(float=True, generate_report=False, settings=[acpc_settings]),
+        SpatialNormalizationRPT(float=True, generate_report=False, settings=[acpc_settings]),
         name="acpc_reg",
         n_procs=omp_nthreads,
     )
@@ -835,11 +835,11 @@ estimated via symmetric nonlinear registration (SyN) using antsRegistration. """
         LOGGER.info("Using QuickSyN")
         # Requires a warp file: make an inaccurate one
         settings = pkgr("qsiprep", "data/quick_syn.json")
-        anat_norm_interface = RobustMNINormalizationRPT(
+        anat_norm_interface = SpatialNormalizationRPT(
             float=True, generate_report=True, settings=[settings]
         )
     else:
-        anat_norm_interface = RobustMNINormalizationRPT(
+        anat_norm_interface = SpatialNormalizationRPT(
             float=True, generate_report=True, flavor="precise"
         )
 

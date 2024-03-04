@@ -33,7 +33,7 @@ from nipype.interfaces.base import (
     traits,
 )
 from nipype.utils.filemanip import fname_presuffix
-from niworkflows.interfaces.images import ValidateImageInputSpec
+from niworkflows.interfaces.header import _ValidateImageInputSpec
 
 # from qsiprep.interfaces.images import (
 #    nii_ones_like,
@@ -546,7 +546,7 @@ class ValidateImage(SimpleInterface):
 +------------------------------------------------+
     """
 
-    input_spec = ValidateImageInputSpec
+    input_spec = _ValidateImageInputSpec
     output_spec = ValidateImageOutputSpec
 
     def _run_interface(self, runtime):

@@ -37,7 +37,7 @@ from nipype.interfaces.mrtrix3.preprocess import ResponseSDInputSpec
 from nipype.interfaces.mrtrix3.tracking import Tractography, TractographyInputSpec
 from nipype.interfaces.mrtrix3.utils import Generate5ttInputSpec
 from nipype.utils.filemanip import fname_presuffix, split_filename, which
-from niworkflows.viz.utils import compose_view, cuts_from_bbox, plot_denoise
+from niworkflows.viz.utils import compose_view, cuts_from_bbox
 from scipy.io.matlab import loadmat, savemat
 
 from .denoise import (
@@ -45,6 +45,7 @@ from .denoise import (
     SeriesPreprocReportInputSpec,
     SeriesPreprocReportOutputSpec,
 )
+from ..viz.utils import plot_denoise
 
 LOGGER = logging.getLogger("nipype.interface")
 RC3_ROOT = which("average_response")  # Only exists in RC3

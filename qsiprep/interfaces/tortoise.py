@@ -26,7 +26,7 @@ from nipype.interfaces.base import (
     traits,
 )
 from nipype.utils.filemanip import fname_presuffix
-from niworkflows.viz.utils import compose_view, cuts_from_bbox, plot_denoise
+from niworkflows.viz.utils import compose_view, cuts_from_bbox
 
 from .denoise import (
     SeriesPreprocReport,
@@ -37,6 +37,7 @@ from .epi_fmap import get_best_b0_topup_inputs_from, safe_get_3d_image
 from .fmap import get_distortion_grouping
 from .gradients import write_concatenated_fsl_gradients
 from .images import split_bvals_bvecs, to_lps
+from ..viz.utils import plot_denoise
 
 LOGGER = logging.getLogger("nipype.interface")
 
