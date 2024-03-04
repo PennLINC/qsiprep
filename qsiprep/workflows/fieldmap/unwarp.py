@@ -25,17 +25,17 @@ import pkg_resources as pkgr
 from nipype.interfaces import ants, fsl
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
+from niworkflows.engine.workflows import LiterateWorkflow as Workflow
+from niworkflows.interfaces import itk
+from niworkflows.interfaces.images import DemeanImage, FilledImageLike
+from niworkflows.interfaces.registration import (
+    ANTSApplyTransformsRPT,
+    ANTSRegistrationRPT,
+)
 
 from ...interfaces import DerivativesDataSink
 from ...interfaces.fmap import FieldToHz, FieldToRadS
 from ...interfaces.fmap import get_ees as _get_ees
-from ...niworkflows.engine.workflows import LiterateWorkflow as Workflow
-from ...niworkflows.interfaces import itk
-from ...niworkflows.interfaces.images import DemeanImage, FilledImageLike
-from ...niworkflows.interfaces.registration import (
-    ANTSApplyTransformsRPT,
-    ANTSRegistrationRPT,
-)
 
 
 def init_sdc_unwarp_wf(omp_nthreads, fmap_demean, debug, name="sdc_unwarp_wf"):
@@ -294,11 +294,10 @@ def init_fmap_unwarp_report_wf(name="fmap_unwarp_report_wf", suffix="hmcsdc"):
             Affine transform from T1 space to b0 space (ITK format)
 
     """
+    from niworkflows.interfaces import SimpleBeforeAfter
+    from niworkflows.interfaces.fixes import FixHeaderApplyTransforms as ApplyTransforms
+
     from ...interfaces.images import ExtractWM
-    from ...niworkflows.interfaces import SimpleBeforeAfter
-    from ...niworkflows.interfaces.fixes import (
-        FixHeaderApplyTransforms as ApplyTransforms,
-    )
 
     DEFAULT_MEMORY_MIN_GB = 0.01
 

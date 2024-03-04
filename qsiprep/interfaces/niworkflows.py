@@ -15,13 +15,12 @@ import seaborn as sns
 from matplotlib import gridspec as mgs
 from nipype import logging
 from nipype.interfaces.ants import Registration
-from seaborn import color_palette
-
-from ..niworkflows.interfaces.registration import (
+from niworkflows.interfaces.registration import (
     ANTSRegistrationInputSpecRPT,
     ANTSRegistrationOutputSpecRPT,
     nrc,
 )
+from seaborn import color_palette
 
 LOGGER = logging.getLogger("nipype.interface")
 

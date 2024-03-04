@@ -26,8 +26,8 @@ from nipype.interfaces.base import (
     traits,
 )
 from nipype.utils.filemanip import fname_presuffix
+from niworkflows.viz.utils import compose_view, cuts_from_bbox, plot_denoise
 
-from ..niworkflows.viz.utils import compose_view, cuts_from_bbox, plot_denoise
 from .denoise import (
     SeriesPreprocReport,
     SeriesPreprocReportInputSpec,

@@ -14,6 +14,8 @@ from nipype.interfaces import afni, ants, mrtrix3
 from nipype.interfaces import utility as niu
 from nipype.interfaces.ants import BrainExtraction, N4BiasFieldCorrection
 from nipype.pipeline import engine as pe
+from niworkflows.interfaces.masks import ROIsPlot
+from niworkflows.interfaces.registration import RobustMNINormalizationRPT
 from pkg_resources import resource_filename as pkgr
 
 from ...engine import Workflow
@@ -27,8 +29,6 @@ from ...interfaces.freesurfer import (
     SynthSeg,
 )
 from ...interfaces.itk import AffineToRigid, DisassembleTransform
-from ...niworkflows.interfaces.masks import ROIsPlot
-from ...niworkflows.interfaces.registration import RobustMNINormalizationRPT
 from ...utils.misc import fix_multi_source_name
 
 LOGGER = logging.getLogger("nipype.workflow")

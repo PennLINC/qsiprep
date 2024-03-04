@@ -17,10 +17,10 @@ from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from nipype.utils.filemanip import split_filename
+from niworkflows.interfaces import SimpleBeforeAfter
 
 from ...engine import Workflow
 from ...interfaces import DerivativesDataSink
-from ...niworkflows.interfaces import SimpleBeforeAfter
 from ..anatomical import init_synthstrip_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01

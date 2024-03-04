@@ -12,10 +12,10 @@ from dipy.direction import peak_directions
 from dipy.reconst.odf import gfa
 from fury import actor, window
 from nipype import logging
+from niworkflows.viz.utils import slices_from_bbox
 from PIL import Image
 
 from qsiprep.interfaces.converters import fib2amps, mif2amps
-from qsiprep.niworkflows.viz.utils import slices_from_bbox
 
 LOGGER = logging.getLogger("nipype.interface")
 

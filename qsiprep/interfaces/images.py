@@ -33,8 +33,7 @@ from nipype.interfaces.base import (
     traits,
 )
 from nipype.utils.filemanip import fname_presuffix
-
-from ..niworkflows.interfaces.images import ValidateImageInputSpec
+from niworkflows.interfaces.images import ValidateImageInputSpec
 
 # from qsiprep.interfaces.images import (
 #    nii_ones_like,

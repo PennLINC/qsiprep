@@ -24,11 +24,11 @@ import os
 from nipype.interfaces import ants, fsl
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
+from niworkflows.engine.workflows import LiterateWorkflow as Workflow
+from niworkflows.interfaces.images import IntraModalMerge
+from niworkflows.interfaces.masks import BETRPT
 
 from ...interfaces import DerivativesDataSink, FieldToHz, FieldToRadS
-from ...niworkflows.engine.workflows import LiterateWorkflow as Workflow
-from ...niworkflows.interfaces.images import IntraModalMerge
-from ...niworkflows.interfaces.masks import BETRPT
 from .utils import cleanup_edge_pipeline, demean_image
 
 

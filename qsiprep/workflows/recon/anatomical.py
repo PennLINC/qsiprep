@@ -19,6 +19,7 @@ from nipype.interfaces import afni, ants, mrtrix3
 from nipype.interfaces import utility as niu
 from nipype.interfaces.base import traits
 from nipype.pipeline import engine as pe
+from niworkflows.interfaces.registration import RobustMNINormalizationRPT
 from pkg_resources import resource_filename as pkgrf
 
 from ...engine import Workflow
@@ -34,7 +35,6 @@ from ...interfaces.interchange import (
     recon_workflow_input_fields,
 )
 from ...interfaces.mrtrix import GenerateMasked5tt, ITKTransformConvert, TransformHeader
-from ...niworkflows.interfaces.registration import RobustMNINormalizationRPT
 from ..anatomical.volume import init_output_grid_wf
 from qsiprep.interfaces.utils import GetConnectivityAtlases
 
