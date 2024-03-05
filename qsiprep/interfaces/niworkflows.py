@@ -18,6 +18,7 @@ from matplotlib import gridspec as mgs
 from nipype import logging
 from nipype.interfaces import ants
 from nipype.interfaces.ants import Registration
+from nipype.interfaces.base import traits
 from nipype.interfaces.mixins import reporting
 from niworkflows.interfaces.norm import (
     SpatialNormalization,
@@ -401,7 +402,13 @@ class RobustMNINormalizationInputSpecRPT(
     _SVGReportCapableInputSpec,
     _SpatialNormalizationInputSpec,
 ):
-    pass
+    # Template orientation.
+    orientation = traits.Enum(
+        "LPS",
+        mandatory=True,
+        usedefault=True,
+        desc="modify template orientation (should match input image)",
+    )
 
 
 class RobustMNINormalizationOutputSpecRPT(
