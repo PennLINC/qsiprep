@@ -426,6 +426,7 @@ Diffusion data preprocessing
             ('outputnode.dwi_file', 'inputnode.dwi_file'),
             ('outputnode.bval_file', 'inputnode.bval_file'),
             ('outputnode.bvec_file', 'inputnode.bvec_file'),
+            ('outputnode.json_file', 'inputnode.json_file'),
             ('outputnode.original_files', 'inputnode.original_files')]),
         (inputnode, hmc_wf, [
             ('t1_brain', 'inputnode.t1_brain'),

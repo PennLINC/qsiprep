@@ -103,6 +103,8 @@ def init_dwi_pre_hmc_wf(
             a bvec file
         bval_file
             a bval files
+        sidecar_file
+            a json sidecar file for the scan data
         b0_indices
             list of the positions of the b0 images in the dwi series
         b0_images
@@ -121,6 +123,7 @@ def init_dwi_pre_hmc_wf(
                 "dwi_file",
                 "bval_file",
                 "bvec_file",
+                "json_file",
                 "original_files",
                 "denoising_confounds",
                 "noise_images",
@@ -296,6 +299,9 @@ def init_dwi_pre_hmc_wf(
             (pm_raw_images, raw_rpe_concat, [('out', 'in_files')]),
             (raw_rpe_concat, outputnode, [('out_file', 'raw_concatenated')]),
 
+            # Send the slice timings from "plus" to the next steps
+            (merge_plus, outputnode, [('outputnode.merged_json', 'json_file')]),
+
             # Connect to the QC calculator
             (raw_rpe_concat, qc_wf, [('out_file', 'inputnode.dwi_file')]),
             (rpe_concat, qc_wf, [
@@ -333,6 +339,7 @@ def init_dwi_pre_hmc_wf(
             ('outputnode.merged_image', 'dwi_file'),
             ('outputnode.merged_bval', 'bval_file'),
             ('outputnode.merged_bvec', 'bvec_file'),
+            ('outputnode.merged_json', 'json_file'),
             ('outputnode.bias_images', 'bias_images'),
             ('outputnode.noise_images', 'noise_images'),
             ('outputnode.validation_reports', 'validation_reports'),

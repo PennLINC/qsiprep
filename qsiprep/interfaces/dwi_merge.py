@@ -48,6 +48,7 @@ class MergeDWIsInputSpec(BaseInterfaceInputSpec):
     carpetplot_data = InputMultiObject(
         File(exists=True), mandatory=False, desc="list of carpetplot_data files"
     )
+    scan_metadata = traits.Dict(desc="Dict of metadata for the to-be-combined scans")
 
 
 class MergeDWIsOutputSpec(TraitedSpec):
@@ -55,7 +56,7 @@ class MergeDWIsOutputSpec(TraitedSpec):
     out_bval = File(desc="the merged bval file")
     out_bvec = File(desc="the merged bvec file")
     original_images = traits.List()
-    merged_metadata = traits.Dict()
+    merged_metadata = File(exists=True)
     merged_denoising_confounds = File(exists=True)
     merged_b0_ref = File(exists=True)
     merged_raw_dwi = File(exists=True, mandatory=False)
@@ -78,6 +79,17 @@ class MergeDWIs(SimpleInterface):
             self.inputs.b0_threshold,
             self.inputs.harmonize_b0_intensities,
         )
+
+        # Create a merged metadata json file for
+        if isdefined(self.inputs.scan_metadata):
+            combined_metadata = combine_metadata(
+                self.inputs.bids_dwi_files,
+                self.inputs.scan_metadata,
+            )
+            merged_metadata_file = op.join(runtime.cwd, "merged_metadata.json")
+            with open(merged_metadata_file, "w") as merged_meta_f:
+                json.dump(combined_metadata, merged_meta_f, sort_keys=True, indent=4)
+            self._results["merged_metadata"] = merged_metadata_file
 
         # Get basic qc / provenance per volume
         provenance_df = create_provenance_dataframe(
@@ -149,6 +161,33 @@ class MergeDWIs(SimpleInterface):
         pos_merged_nii.to_filename(merged_fname)
 
         return runtime
+
+
+def combine_metadata(scan_list, metadata_dict, merge_method="first"):
+    """Create a merged metadata dictionary.
+
+    Most importantly, combine the slice timings in some way.
+
+    Parameters
+    ----------
+    scan_list: list
+        List of BIDS inputs in the order in which they'll be concatenated
+    medadata_dict: dict
+        Mapping keys (values in ``scan_list``) to BIDS metadata dictionaries
+    merge_method: str
+        How to combine the metadata when multiple scans are being concatenated.
+        If "first" the metadata from the first scan is selected. Someday other
+        methods like "average" may be added.
+
+    Returns
+    -------
+    metadata: dict
+        A BIDS metadata dictionary
+
+    """
+    if merge_method == "first":
+        return metadata_dict[scan_list[0]]
+    raise NotImplementedError(f"merge_method '{merge_method}' is not implemented")
 
 
 class AveragePEPairsInputSpec(MergeDWIsInputSpec):

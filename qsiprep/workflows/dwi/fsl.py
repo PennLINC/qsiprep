@@ -91,6 +91,8 @@ def init_fsl_hmc_wf(
             bvec file
         bval_file: str
             bval file
+        json_file: str
+            path to sidecar json file for dwi_file
         b0_indices: list
             Indexes into ``dwi_files`` that correspond to b=0 volumes
         b0_images: list
@@ -116,6 +118,7 @@ def init_fsl_hmc_wf(
                 "dwi_file",
                 "bvec_file",
                 "bval_file",
+                "json_file",
                 "b0_indices",
                 "b0_images",
                 "original_files",
@@ -165,10 +168,6 @@ def init_fsl_hmc_wf(
     )
 
     workflow = Workflow(name=name)
-    gather_inputs = pe.Node(
-        GatherEddyInputs(b0_threshold=b0_threshold, raw_image_sdc=raw_image_sdc),
-        name="gather_inputs",
-    )
     if eddy_config is None:
         # load from the defaults
         eddy_cfg_file = pkgr_fn("qsiprep.data", "eddy_params.json")
@@ -177,6 +176,13 @@ def init_fsl_hmc_wf(
 
     with open(eddy_cfg_file, "r") as f:
         eddy_args = json.load(f)
+
+    gather_inputs = pe.Node(
+        GatherEddyInputs(
+            b0_threshold=b0_threshold, raw_image_sdc=raw_image_sdc, eddy_config=eddy_cfg_file
+        ),
+        name="gather_inputs",
+    )
     enhance_pre_sdc = pe.Node(EnhanceB0(), name="enhance_pre_sdc")
 
     # Run in parallel if possible
@@ -210,6 +216,7 @@ def init_fsl_hmc_wf(
             ('dwi_file', 'dwi_file'),
             ('bval_file', 'bval_file'),
             ('bvec_file', 'bvec_file'),
+            ('json_file', 'json_file'),
             ('original_files', 'original_files')]),
         (inputnode, pre_eddy_b0_ref_wf, [
             ('t1_brain', 'inputnode.t1_brain'),
@@ -224,7 +231,9 @@ def init_fsl_hmc_wf(
             ('outputnode.ref_image_brain', 'dwi_file')]),
         (gather_inputs, eddy, [
             ('eddy_indices', 'in_index'),
-            ('eddy_acqp', 'in_acqp')]),
+            ('eddy_acqp', 'in_acqp'),
+            ('json_file', 'json'),
+            ('multiband_factor', 'multiband_factor')]),
         (inputnode, eddy, [
             ('dwi_file', 'in_file'),
             ('bval_file', 'in_bval'),
