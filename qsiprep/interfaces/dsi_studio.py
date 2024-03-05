@@ -361,6 +361,7 @@ class DSIStudioConnectivityMatrix(CommandLine):
     input_spec = DSIStudioConnectivityMatrixInputSpec
     output_spec = DSIStudioConnectivityMatrixOutputSpec
     _cmd = "dsi_studio --action=ana "
+    _terminal_output = "file"
 
     def _post_run_hook(self, runtime):
         atlas_config = self.inputs.atlas_config
@@ -448,18 +449,22 @@ class DSIStudioAtlasGraph(SimpleInterface):
         workflow.config["execution"]["stop_on_first_crash"] = "true"
         workflow.config["execution"]["remove_unnecessary_outputs"] = "false"
         workflow.base_dir = runtime.cwd
+        plugin_settings = {}
         if num_threads > 1:
-            plugin_settings = {
-                "plugin": "MultiProc",
-                "plugin_args": {
-                    "raise_insufficient": False,
-                    "maxtasksperchild": 1,
-                    "n_procs": num_threads,
-                },
+            plugin_settings["plugin"] = "MultiProc"
+            plugin_settings["plugin_args"] = {
+                "raise_insufficient": False,
+                "maxtasksperchild": 1,
+                "n_procs": num_threads,
             }
-            wf_result = workflow.run(**plugin_settings)
         else:
-            wf_result = workflow.run()
+            plugin_settings["plugin"] = "Linear"
+
+        workflow.config["execution"] = {
+            "stop_on_first_crash": "True",
+            "remove_unnecessary_outputs": "False",
+        }
+        wf_result = workflow.run(**plugin_settings)
         (merge_node,) = [
             node for node in list(wf_result.nodes) if node.name.endswith("merge_mats")
         ]
