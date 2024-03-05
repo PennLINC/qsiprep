@@ -8,14 +8,25 @@ Image tools interfaces
 
 
 """
+from __future__ import absolute_import, division, print_function, unicode_literals
+
 import matplotlib.pyplot as plt
 import nibabel as nb
 import numpy as np
 import seaborn as sns
 from matplotlib import gridspec as mgs
 from nipype import logging
+from nipype.interfaces import ants
 from nipype.interfaces.ants import Registration
-from niworkflows.interfaces.reportlets.base import RegistrationRC
+from nipype.interfaces.mixins import reporting
+from niworkflows.interfaces.norm import (
+    SpatialNormalization,
+    _SpatialNormalizationInputSpec,
+)
+from niworkflows.interfaces.reportlets.base import (
+    RegistrationRC,
+    _SVGReportCapableInputSpec,
+)
 from niworkflows.interfaces.reportlets.registration import (
     _ANTSRegistrationInputSpecRPT,
     _ANTSRegistrationOutputSpecRPT,
@@ -384,3 +395,39 @@ def confoundplot(
 
         return [ax_ts, ax_dist], gs
     return ax_ts, gs
+
+
+class RobustMNINormalizationInputSpecRPT(
+    _SVGReportCapableInputSpec,
+    _SpatialNormalizationInputSpec,
+):
+    pass
+
+
+class RobustMNINormalizationOutputSpecRPT(
+    reporting.ReportCapableOutputSpec,
+    ants.registration.RegistrationOutputSpec,
+):
+    pass
+
+
+class RobustMNINormalizationRPT(RegistrationRC, SpatialNormalization):
+    input_spec = RobustMNINormalizationInputSpecRPT
+    output_spec = RobustMNINormalizationOutputSpecRPT
+
+    def _post_run_hook(self, runtime):
+        # We need to dig into the internal ants.Registration interface
+        self._fixed_image = self._get_ants_args()["fixed_image"]
+        if isinstance(self._fixed_image, (list, tuple)):
+            self._fixed_image = self._fixed_image[0]  # get first item if list
+
+        if self._get_ants_args().get("fixed_image_mask") is not None:
+            self._fixed_image_mask = self._get_ants_args().get("fixed_image_mask")
+        self._moving_image = self.aggregate_outputs(runtime=runtime).warped_image
+        LOGGER.info(
+            "Report - setting fixed (%s) and moving (%s) images",
+            self._fixed_image,
+            self._moving_image,
+        )
+
+        return super(RobustMNINormalizationRPT, self)._post_run_hook(runtime)
