@@ -88,7 +88,7 @@ class MergeDWIs(SimpleInterface):
             )
             merged_metadata_file = op.join(runtime.cwd, "merged_metadata.json")
             with open(merged_metadata_file, "w") as merged_meta_f:
-                json.dump(combined_metadata, merged_meta_f, indent=4)
+                json.dump(combined_metadata, merged_meta_f, sort_keys=True, indent=4)
             self._results["merged_metadata"] = merged_metadata_file
 
         # Get basic qc / provenance per volume
@@ -163,14 +163,31 @@ class MergeDWIs(SimpleInterface):
         return runtime
 
 
-def combine_metadata(scan_list, metadata_dict):
+def combine_metadata(scan_list, metadata_dict, merge_method="first"):
     """Create a merged metadata dictionary.
 
-    Most importantly, combine the slice timings in some way. Here the slice
-    metadata is taken from the first scan.
+    Most importantly, combine the slice timings in some way.
+
+    Parameters
+    ----------
+    scan_list: list
+        List of BIDS inputs in the order in which they'll be concatenated
+    medadata_dict: dict
+        Mapping keys (values in ``scan_list``) to BIDS metadata dictionaries
+    merge_method: str
+        How to combine the metadata when multiple scans are being concatenated.
+        If "first" the metadata from the first scan is selected. Someday other
+        methods like "average" may be added.
+
+    Returns
+    -------
+    metadata: dict
+        A BIDS metadata dictionary
 
     """
-    return metadata_dict[scan_list[0]]
+    if merge_method == "first":
+        return metadata_dict[scan_list[0]]
+    raise NotImplementedError(f"merge_method '{merge_method}' is not implemented")
 
 
 class AveragePEPairsInputSpec(MergeDWIsInputSpec):

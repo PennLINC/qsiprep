@@ -7,9 +7,9 @@ Prepare files for TOPUP and eddy
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 """
+import json
 import os
 import os.path as op
-import json
 
 import nibabel as nb
 import numpy as np
@@ -137,13 +137,6 @@ class GatherEddyInputs(SimpleInterface):
             # json file is only allowed if mporder is defined
             if "mporder" in eddy_config:
                 self._results["json_file"] = self.inputs.json_file
-
-        #  Get the multiband factor from the json file and convert it to an arg
-        if isdefined(self.inputs.json_file):
-            with open(self.inputs.json_file) as json_f:
-                input_sidecar = json.load(json_f)
-            if "MultibandAccelerationFactor" in input_sidecar:
-                self._results["multiband_factor"] = input_sidecar["MultibandAccelerationFactor"]
 
         return runtime
 
