@@ -168,10 +168,6 @@ def init_fsl_hmc_wf(
     )
 
     workflow = Workflow(name=name)
-    gather_inputs = pe.Node(
-        GatherEddyInputs(b0_threshold=b0_threshold, raw_image_sdc=raw_image_sdc),
-        name="gather_inputs",
-    )
     if eddy_config is None:
         # load from the defaults
         eddy_cfg_file = pkgr_fn("qsiprep.data", "eddy_params.json")
@@ -180,6 +176,13 @@ def init_fsl_hmc_wf(
 
     with open(eddy_cfg_file, "r") as f:
         eddy_args = json.load(f)
+
+    gather_inputs = pe.Node(
+        GatherEddyInputs(
+            b0_threshold=b0_threshold, raw_image_sdc=raw_image_sdc, eddy_config=eddy_cfg_file
+        ),
+        name="gather_inputs",
+    )
     enhance_pre_sdc = pe.Node(EnhanceB0(), name="enhance_pre_sdc")
 
     # Run in parallel if possible

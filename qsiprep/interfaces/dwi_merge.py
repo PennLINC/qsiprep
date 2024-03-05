@@ -83,7 +83,7 @@ class MergeDWIs(SimpleInterface):
         # Create a merged metadata json file for
         if isdefined(self.inputs.scan_metadata):
             combined_metadata = combine_metadata(
-                self.inputs.dwi_files,
+                self.inputs.bids_dwi_files,
                 self.inputs.scan_metadata,
             )
             merged_metadata_file = op.join(runtime.cwd, "merged_metadata.json")
