@@ -40,7 +40,7 @@ dependencies = [
     "seaborn",
     "sentry_sdk",
     "SimpleITK",
-    "svgutils <= 0.3.0",
+    "svgutils <= 0.3.4",
     "transforms3d",
     "vtk",
     "xvfbwrapper",
