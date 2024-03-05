@@ -216,6 +216,7 @@ def init_fsl_hmc_wf(
             ('dwi_file', 'dwi_file'),
             ('bval_file', 'bval_file'),
             ('bvec_file', 'bvec_file'),
+            ('json_file', 'json_file'),
             ('original_files', 'original_files')]),
         (inputnode, pre_eddy_b0_ref_wf, [
             ('t1_brain', 'inputnode.t1_brain'),
