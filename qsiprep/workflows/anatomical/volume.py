@@ -14,6 +14,7 @@ from nipype.interfaces import afni, ants, mrtrix3
 from nipype.interfaces import utility as niu
 from nipype.interfaces.ants import BrainExtraction, N4BiasFieldCorrection
 from nipype.pipeline import engine as pe
+from niworkflows.interfaces.images import TemplateDimensions
 from niworkflows.interfaces.reportlets.masks import ROIsPlot
 from niworkflows.interfaces.reportlets.registration import SpatialNormalizationRPT
 from pkg_resources import resource_filename as pkgr
@@ -21,7 +22,6 @@ from pkg_resources import resource_filename as pkgr
 from ...engine import Workflow
 from ...interfaces import Conform
 from ...interfaces import DerivativesDataSink as FDerivativesDataSink
-from ...interfaces import TemplateDimensions
 from ...interfaces.anatomical import DesaturateSkull, GetTemplate, VoxelSizeChooser
 from ...interfaces.freesurfer import (
     FixHeaderSynthStrip,
