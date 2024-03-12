@@ -3,7 +3,6 @@ Converting between file formats
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. autofunction:: init_mif_to_fibgz_wf
-.. autofunction:: init_fibgz_to_mif_wf
 
 """
 
@@ -41,21 +40,6 @@ def init_mif_to_fibgz_wf(
             DSI Studio fib file containing the FODs from the input ``mif_file``.
 
     """
-    inputnode = pe.Node(
-        niu.IdentityInterface(fields=recon_workflow_input_fields + ["mif_file"]), name="inputnode"
-    )
-    outputnode = pe.Node(niu.IdentityInterface(fields=["fib_file"]), name="outputnode")
-    workflow = Workflow(name=name)
-    convert_to_fib = pe.Node(FODtoFIBGZ(), name="convert_to_fib")
-    workflow.connect([
-        (inputnode, convert_to_fib, [('mif_file', 'mif_file')]),
-        (convert_to_fib, outputnode, [('fib_file', 'fib_file')])
-    ])  # fmt:skip
-    return workflow
-
-
-def init_fibgz_to_mif_wf(name="fibgz_to_mif", qsirecon_suffix="", params={}):
-    """Needs Documentation"""
     inputnode = pe.Node(
         niu.IdentityInterface(fields=recon_workflow_input_fields + ["mif_file"]), name="inputnode"
     )
