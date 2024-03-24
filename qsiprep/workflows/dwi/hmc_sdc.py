@@ -82,6 +82,7 @@ def init_qsiprep_hmcsdc_wf(
                 "dwi_file",
                 "bvec_file",
                 "bval_file",
+                "json_file",
                 "rpe_b0",
                 "t2w_unfatsat",
                 "original_files",
