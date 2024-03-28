@@ -284,7 +284,13 @@ def init_fsl_hmc_wf(
             gather_inputs.inputs.epi_fmaps = scan_groups["fieldmap_info"]["epi"]
 
         outputnode.inputs.sdc_method = "TOPUP"
-        topup = pe.Node(fsl.TOPUP(out_field="fieldmap_HZ.nii.gz", scale=1), name="topup")
+        topup = pe.Node(
+            fsl.TOPUP(
+                out_field="fieldmap_HZ.nii.gz", 
+                scale=1, 
+                args=f"--nthr={omp_nthreads}"),
+            name="topup",
+        )
         topup_summary = pe.Node(TopupSummary(), name="topup_summary")
         ds_report_topupsummary = pe.Node(
             DerivativesDataSink(suffix="topupsummary", source_file=source_file),
