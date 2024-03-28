@@ -28,8 +28,9 @@ from nipype.interfaces.base import (
     traits,
 )
 from nipype.utils.filemanip import fname_presuffix
+from niworkflows.viz.utils import compose_view
 
-from ..niworkflows.viz.utils import compose_view, plot_acpc
+from ..viz.utils import plot_acpc
 
 LOGGER = logging.getLogger("nipype.interface")
 
@@ -127,10 +128,7 @@ def _applytfms(args):
     """
     import nibabel as nb
     from nipype.utils.filemanip import fname_presuffix
-
-    from ..niworkflows.interfaces.fixes import (
-        FixHeaderApplyTransforms as ApplyTransforms,
-    )
+    from niworkflows.interfaces.fixes import FixHeaderApplyTransforms as ApplyTransforms
 
     in_file, in_xform, ifargs, index, newpath = args
     out_file = fname_presuffix(

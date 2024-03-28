@@ -6,8 +6,7 @@ import re
 from pathlib import Path
 
 import sentry_sdk
-
-from ..niworkflows.utils.misc import read_crashfile
+from niworkflows.utils.misc import read_crashfile
 
 CHUNK_SIZE = 16384
 # Group common events with pre specified fingerprints

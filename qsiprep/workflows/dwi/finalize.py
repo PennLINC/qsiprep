@@ -12,6 +12,7 @@ from nipype import logging
 from nipype.interfaces import utility as niu
 from nipype.interfaces.base import isdefined
 from nipype.pipeline import engine as pe
+from niworkflows.interfaces.reportlets.registration import SimpleBeforeAfterRPT
 
 from ...engine import Workflow
 from ...interfaces import DerivativesDataSink
@@ -21,7 +22,6 @@ from ...interfaces.gradients import ExtractB0s
 from ...interfaces.mrtrix import DWIBiasCorrect, MRTrixGradientTable
 from ...interfaces.nilearn import Merge
 from ...interfaces.reports import GradientPlot, SeriesQC
-from ...niworkflows.interfaces.registration import SimpleBeforeAfterRPT
 from .derivatives import init_dwi_derivatives_wf
 from .qc import init_interactive_report_wf, init_mask_overlap_wf, init_modelfree_qc_wf
 from .resampling import init_dwi_trans_wf

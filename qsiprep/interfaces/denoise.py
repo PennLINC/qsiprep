@@ -15,8 +15,9 @@ from nilearn.image import iter_img, load_img, threshold_img
 from nipype import logging
 from nipype.interfaces.base import isdefined, traits
 from nipype.interfaces.mixins import reporting
+from niworkflows.viz.utils import compose_view, cuts_from_bbox
 
-from ..niworkflows.viz.utils import compose_view, cuts_from_bbox, plot_denoise
+from ..viz.utils import plot_denoise
 
 LOGGER = logging.getLogger("nipype.interface")
 

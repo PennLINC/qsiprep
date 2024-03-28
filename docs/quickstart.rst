@@ -157,7 +157,7 @@ in the terminal like::
 
   [Node] Setting-up "qsiprep_wf.single_subject_PNC_wf.dwi_finalize_acq_realistic_wf.transform_dwis_t1.final_b0_ref.b0ref_reportlet" in "/scratch/qsiprep_wf/single_subject_PNC_wf/dwi_finalize_acq_realistic_wf/transform_dwis_t1/final_b0_ref/b0ref_reportlet".
     201229-21:33:46,213 nipype.workflow INFO:
-      [Node] Running "b0ref_reportlet" ("qsiprep.niworkflows.interfaces.registration.SimpleBeforeAfterRPT")
+      [Node] Running "b0ref_reportlet" ("niworkflows.interfaces.registration.SimpleBeforeAfterRPT")
     201229-21:33:48,51 nipype.workflow INFO:
       [MultiProc] Running 2 tasks, and 3 jobs ready. Free memory (GB): 3.70/4.00, Free processors: 0/2.
                         Currently running:

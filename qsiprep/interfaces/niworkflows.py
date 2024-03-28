@@ -8,27 +8,38 @@ Image tools interfaces
 
 
 """
+from __future__ import absolute_import, division, print_function, unicode_literals
+
 import matplotlib.pyplot as plt
 import nibabel as nb
 import numpy as np
 import seaborn as sns
 from matplotlib import gridspec as mgs
 from nipype import logging
+from nipype.interfaces import ants
 from nipype.interfaces.ants import Registration
-from seaborn import color_palette
-
-from ..niworkflows.interfaces.registration import (
-    ANTSRegistrationInputSpecRPT,
-    ANTSRegistrationOutputSpecRPT,
-    nrc,
+from nipype.interfaces.base import traits
+from nipype.interfaces.mixins import reporting
+from niworkflows.interfaces.norm import (
+    SpatialNormalization,
+    _SpatialNormalizationInputSpec,
 )
+from niworkflows.interfaces.reportlets.base import (
+    RegistrationRC,
+    _SVGReportCapableInputSpec,
+)
+from niworkflows.interfaces.reportlets.registration import (
+    _ANTSRegistrationInputSpecRPT,
+    _ANTSRegistrationOutputSpecRPT,
+)
+from seaborn import color_palette
 
 LOGGER = logging.getLogger("nipype.interface")
 
 
-class ANTSRegistrationRPT(nrc.RegistrationRC, Registration):
-    input_spec = ANTSRegistrationInputSpecRPT
-    output_spec = ANTSRegistrationOutputSpecRPT
+class ANTSRegistrationRPT(RegistrationRC, Registration):
+    input_spec = _ANTSRegistrationInputSpecRPT
+    output_spec = _ANTSRegistrationOutputSpecRPT
 
     def _post_run_hook(self, runtime):
         self._fixed_image = self.inputs.fixed_image[0]
@@ -385,3 +396,46 @@ def confoundplot(
 
         return [ax_ts, ax_dist], gs
     return ax_ts, gs
+
+
+class RobustMNINormalizationInputSpecRPT(
+    _SVGReportCapableInputSpec,
+    _SpatialNormalizationInputSpec,
+):
+    # Template orientation.
+    orientation = traits.Enum(
+        "LPS",
+        mandatory=True,
+        usedefault=True,
+        desc="modify template orientation (should match input image)",
+    )
+
+
+class RobustMNINormalizationOutputSpecRPT(
+    reporting.ReportCapableOutputSpec,
+    ants.registration.RegistrationOutputSpec,
+):
+    # Try to work around TraitError of "undefined 'reference_image' attribute"
+    reference_image = traits.File(desc="the output reference image")
+
+
+class RobustMNINormalizationRPT(RegistrationRC, SpatialNormalization):
+    input_spec = RobustMNINormalizationInputSpecRPT
+    output_spec = RobustMNINormalizationOutputSpecRPT
+
+    def _post_run_hook(self, runtime):
+        # We need to dig into the internal ants.Registration interface
+        self._fixed_image = self._get_ants_args()["fixed_image"]
+        if isinstance(self._fixed_image, (list, tuple)):
+            self._fixed_image = self._fixed_image[0]  # get first item if list
+
+        if self._get_ants_args().get("fixed_image_mask") is not None:
+            self._fixed_image_mask = self._get_ants_args().get("fixed_image_mask")
+        self._moving_image = self.aggregate_outputs(runtime=runtime).warped_image
+        LOGGER.info(
+            "Report - setting fixed (%s) and moving (%s) images",
+            self._fixed_image,
+            self._moving_image,
+        )
+
+        return super(RobustMNINormalizationRPT, self)._post_run_hook(runtime)
