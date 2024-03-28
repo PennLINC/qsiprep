@@ -415,7 +415,8 @@ class RobustMNINormalizationOutputSpecRPT(
     reporting.ReportCapableOutputSpec,
     ants.registration.RegistrationOutputSpec,
 ):
-    pass
+    # Try to work around TraitError of "undefined 'reference_image' attribute"
+    reference_image = traits.File(desc="the output reference image")
 
 
 class RobustMNINormalizationRPT(RegistrationRC, SpatialNormalization):
