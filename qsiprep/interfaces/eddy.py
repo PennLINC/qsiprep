@@ -193,7 +193,7 @@ class ExtendedEddy(fsl.Eddy):
             self.inputs.environ["OMP_NUM_THREADS"] = str(self.inputs.num_threads)
 
     def _use_cuda(self):
-        self._cmd = "eddy_cuda" if self.inputs.use_cuda else "eddy_openmp"
+        self._cmd = "eddy_cuda10.2" if self.inputs.use_cuda else "eddy_cpu"
 
     def _list_outputs(self):
         outputs = self.output_spec().get()

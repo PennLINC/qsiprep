@@ -7,7 +7,7 @@ RUN apt-get update && \
 COPY . /src/qsiprep
 RUN python -m build /src/qsiprep
 
-FROM pennbbl/qsiprep_build:24.1.4
+FROM pennbbl/qsiprep_build:24.4.4
 
 # Install qsiprep wheel
 COPY --from=wheelstage /src/qsiprep/dist/*.whl .
