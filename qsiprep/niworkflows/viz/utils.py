@@ -108,7 +108,7 @@ def svg_compress(image, compress='auto'):
 
     # Compress the SVG file using SVGO
     if compress:
-        cmd = 'svgo -i - -o - -q -p 3 --pretty --disable=cleanupNumericValues'
+        cmd = 'svgo -i - -o - -q -p 3 --pretty'
         try:
             pout = subprocess.run(cmd, input=image.encode('utf-8'), stdout=subprocess.PIPE,
                                   shell=True, check=True, close_fds=True).stdout
