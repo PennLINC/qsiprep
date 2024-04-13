@@ -12,7 +12,7 @@ def make_sloppy(spec):
         ("DSI Studio", "connectivity"): {"fiber_count": 5000},
         ("DSI Studio", "tractography"): {"fiber_count": 5000},
         ("DSI Studio", "autotrack"): {
-            "track_id": "Arcuate_Fasciculus_L,Arcuate_Fasciculus_R",
+            "track_id": "Association_ArcuateFasciculusL,Association_ArcuateFasciculusR",
             "tolerance": "30,40",
             "track_voxel_ratio": 0.8,
         },
