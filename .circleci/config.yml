@@ -2,7 +2,7 @@ version: 2.1
 
 .dockersetup: &dockersetup
   docker:
-    - image: pennbbl/qsiprep_build:24.4.16
+    - image: pennbbl/qsiprep_build:24.4.17
   working_directory: /src/qsiprep
 
 runinstall: &runinstall
