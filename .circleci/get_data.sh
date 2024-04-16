@@ -31,7 +31,7 @@ run_qsiprep_cmd () {
   # test that uses
   if [[ "${CIRCLECI}" = "true" ]]; then
     # In circleci we're running from inside the container. call directly
-    QSIPREP_RUN="/usr/local/miniconda/bin/qsiprep ${bids_dir} ${output_dir} participant"
+    QSIPREP_RUN="/opt/conda/envs/qsiprep/bin/qsiprep ${bids_dir} ${output_dir} participant"
   else
     # Otherwise we're going to use docker from the outside
     QSIPREP_RUN="qsiprep-docker ${bids_dir} ${output_dir} participant -e qsiprep_DEV 1 -u $(id -u) -i ${IMAGE}"

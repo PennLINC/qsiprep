@@ -2,7 +2,7 @@ version: 2.1
 
 .dockersetup: &dockersetup
   docker:
-    - image: pennbbl/qsiprep_build:24.1.4
+    - image: pennbbl/qsiprep_build:24.4.17
   working_directory: /src/qsiprep
 
 runinstall: &runinstall
@@ -38,20 +38,6 @@ jobs:
       - checkout
       - run: *runinstall
 
-  build_docs:
-    environment:
-      FSLOUTPUTTYPE: NIFTI
-      NIPYPE_NO_ET: "1"
-    <<: *dockersetup
-    steps:
-      - checkout
-      - run: *runinstall
-      - run:
-          name: Build documentation
-          command: |
-            conda install -y make
-            pip install ".[doc]"
-            make SHPINXOPTS="-W" -C docs html
 
   DSCSDSI:
     resource_class: large
@@ -463,13 +449,6 @@ workflows:
             tags:
               only: /.*/
 
-      - build_docs:
-          requires:
-            - build
-          filters:
-            tags:
-              only: /.*/
-
       - test_deploy_pypi:
           filters:
             tags:
@@ -630,7 +609,6 @@ workflows:
 
       - deployable:
           requires:
-            - build_docs
             - test_deploy_pypi
             - DSCSDSI
             - DSDTI_nofmap

@@ -889,10 +889,14 @@ def load_src_qc_file(fname, prefix=""):
         qc_data = qc_file.readlines()
     data = qc_data[1]
     parts = data.strip().split("\t")
+    dwi_contrast = np.nan
+    ndc_masked = np.nan
     if len(parts) == 7:
         _, dims, voxel_size, dirs, max_b, ndc, bad_slices = parts
     elif len(parts) == 8:
         _, dims, voxel_size, dirs, max_b, _, ndc, bad_slices = parts
+    elif len(parts) == 9:
+        _, dims, voxel_size, dirs, max_b, dwi_contrast, ndc, ndc_masked, bad_slices = parts
     else:
         raise Exception("Unknown QC File format")
 
@@ -902,6 +906,8 @@ def load_src_qc_file(fname, prefix=""):
     max_b = float(max_b)
     dwi_corr = float(ndc)
     n_bad_slices = float(bad_slices)
+    ndc_masked = float(ndc_masked)
+    dwi_contrast = float(dwi_contrast)
     data = {
         prefix + "dimension_x": [dimx],
         prefix + "dimension_y": [dimy],
@@ -911,6 +917,8 @@ def load_src_qc_file(fname, prefix=""):
         prefix + "voxel_size_z": [voxelsz],
         prefix + "max_b": [max_b],
         prefix + "neighbor_corr": [dwi_corr],
+        prefix + "masked_neighbor_corr": [ndc_masked],
+        prefix + "dwi_contrast": [dwi_contrast],
         prefix + "num_bad_slices": [n_bad_slices],
         prefix + "num_directions": [n_dirs],
     }
