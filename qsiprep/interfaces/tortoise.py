@@ -42,10 +42,7 @@ LOGGER = logging.getLogger("nipype.interface")
 
 SLOPPY_DRBUDDI = (
     "--DRBUDDI_stage "
-    "\[learning_rate=\{0.1\},cfs=\{100:8:4\},field_smoothing=\{9:0\},"
-    "metrics=\{MSJac:CC\},restrict_constrain=\{1:1\}\] "
-    "--DRBUDDI_stage "
-    "\[learning_rate=\{0.25\},cfs=\{100:6:3\},field_smoothing=\{8:0\},"
+    "\[learning_rate=\{0.3\},cfs=\{100:8:4\},field_smoothing=\{9:0\},"
     "metrics=\{MSJac:CC\},restrict_constrain=\{1:1\}\] "
 )
 
@@ -210,7 +207,7 @@ class _DRBUDDIInputSpec(TORTOISEInputSpec):
     num_threads = traits.Int(
         desc="number of OMP threads",
         argstr="--ncores %d",
-        help="Number of cores to use in the CPU version. The default is 50% of system cores."
+        help="Number of cores to use in the CPU version. The default is 50% of system cores.",
     )
     blip_up_image = File(
         exists=True,
@@ -285,9 +282,7 @@ class _DRBUDDIInputSpec(TORTOISEInputSpec):
     sloppy = traits.Bool(
         False, argstr=SLOPPY_DRBUDDI, desc="use underpowered (sloppy) registration for speed"
     )
-    disable_itk_threads = traits.Bool(
-        True, usedefault=True, argstr="--disable_itk_threads"
-    )
+    disable_itk_threads = traits.Bool(True, usedefault=True, argstr="--disable_itk_threads")
 
 
 class _DRBUDDIOutputSpec(TraitedSpec):

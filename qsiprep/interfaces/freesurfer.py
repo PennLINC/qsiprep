@@ -36,13 +36,17 @@ from nipype.interfaces.base import (
     isdefined,
     traits,
 )
-from nipype.interfaces.freesurfer.base import FSCommandOpenMP, FSTraitedSpecOpenMP
+from nipype.interfaces.freesurfer.base import FSCommandOpenMP, FSTraitedSpec
 from nipype.interfaces.freesurfer.utils import LTAConvert
 from nipype.utils.filemanip import copyfile, filename_to_list, fname_presuffix
 from scipy.ndimage.morphology import binary_fill_holes
 from skimage import morphology as sim
 
 from ..niworkflows.interfaces.utils import _copyxform
+
+
+class FSTraitedSpecOpenMP(FSTraitedSpec):
+    num_threads = traits.Int(desc="allows for specifying more threads", nohash=True)
 
 
 class StructuralReference(fs.RobustTemplate):
