@@ -208,6 +208,7 @@ class _DRBUDDIInputSpec(TORTOISEInputSpec):
         desc="number of OMP threads",
         argstr="--ncores %d",
         help="Number of cores to use in the CPU version. The default is 50% of system cores.",
+        nohash=True,
     )
     blip_up_image = File(
         exists=True,
