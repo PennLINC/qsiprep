@@ -58,7 +58,7 @@ CLASSIFIERS = [
 MISSING = """
 Image '{}' is missing
 Would you like to download? [Y/n] """
-PKG_PATH = "/usr/local/miniconda/lib/python3.10/site-packages"
+PKG_PATH = "/opt/conda/envs/qsiprep/lib/python3.10/site-packages"
 
 # Monkey-patch Py2 subprocess
 if not hasattr(subprocess, "DEVNULL"):

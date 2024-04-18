@@ -128,7 +128,7 @@ def init_dwi_reference_wf(
         register_t1_to_raw = pe.Node(
             ants.Registration(from_file=affine_transform),
             name="register_t1_to_raw",
-            n_proces=omp_nthreads,
+            n_procs=omp_nthreads,
         )
         t1_mask_to_b0 = pe.Node(
             ants.ApplyTransforms(interpolation="MultiLabel", invert_transform_flags=[True]),

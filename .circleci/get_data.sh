@@ -1,5 +1,7 @@
 IMAGE=pennbbl/qsiprep:unstable
-MAX_CPUS=10
+
+# Set this to be comfortable on the testing machine
+MAX_CPUS=18
 
 if [[ "$SHELL" =~ zsh ]]; then
   setopt SH_WORD_SPLIT

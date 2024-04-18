@@ -18,7 +18,7 @@ TESTNAME=DRBUDDI_RPE
 get_config_data ${TESTDIR}
 get_bids_data ${TESTDIR} drbuddi_rpe_series
 CFG=${TESTDIR}/data/nipype.cfg
-EDDY_CFG=${TESTDIR}/data/eddy_config.json
+EDDY_CFG=${TESTDIR}/data/eddy_cuda_config.json
 
 # For the run
 setup_dir ${TESTDIR}/${TESTNAME}
