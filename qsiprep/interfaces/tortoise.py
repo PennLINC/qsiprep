@@ -292,6 +292,9 @@ class _DRBUDDIInputSpec(TORTOISEInputSpec):
     sloppy = traits.Bool(
         False, argstr=SLOPPY_DRBUDDI, desc="use underpowered (sloppy) registration for speed"
     )
+    disable_itk_threads = traits.Bool(
+        True, usedefault=True, argstr="--disable_itk_threads"
+    )
 
 
 class _DRBUDDIOutputSpec(TraitedSpec):

@@ -178,7 +178,7 @@ class DSIStudioReconstructionInputSpec(DSIStudioCommandLineInputSpec):
     grad_dev = File(
         desc="Gradient deviation file", exists=True, copyfile=True, position=-1, argstr="#%s"
     )
-    thread_count = traits.Int(1, usedefault=True, argstr="--thread_count=%d")
+    thread_count = traits.Int(1, usedefault=True, argstr="--thread_count=%d", nohash=True)
 
     dti_no_high_b = traits.Bool(
         True,
@@ -349,7 +349,7 @@ class DSIStudioConnectivityMatrixInputSpec(DSIStudioCommandLineInputSpec):
     smoothing = traits.CFloat(argstr="--smoothing=%.2f")
     min_length = traits.CInt(argstr="--min_length=%d")
     max_length = traits.CInt(argstr="--max_length=%d")
-    thread_count = traits.Int(1, argstr="--thread_count=%d", usedefault=True)
+    thread_count = traits.Int(1, argstr="--thread_count=%d", usedefault=True, nohash=True)
 
 
 class DSIStudioConnectivityMatrixOutputSpec(TraitedSpec):
