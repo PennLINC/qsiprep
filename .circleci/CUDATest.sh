@@ -15,8 +15,8 @@ set +e
 source ./get_data.sh
 TESTDIR=${PWD}
 TESTNAME=DRBUDDI_RPE
-get_config_data ${TESTDIR}
-get_bids_data ${TESTDIR} drbuddi_rpe_series
+#get_config_data ${TESTDIR}
+#get_bids_data ${TESTDIR} drbuddi_rpe_series
 CFG=${TESTDIR}/data/nipype.cfg
 EDDY_CFG=${TESTDIR}/data/eddy_cuda_config.json
 
@@ -32,7 +32,7 @@ QSIPREP_CMD=$(run_qsiprep_cmd ${BIDS_INPUT_DIR} ${OUTPUT_DIR})
 ${QSIPREP_CMD} \
 	-w ${TEMPDIR} \
 	--sloppy \
-	--anat-modality none \
+	--anat-modality T1w \
 	--denoise-method none \
 	--b1_biascorrect_stage none \
 	--pepolar-method DRBUDDI \

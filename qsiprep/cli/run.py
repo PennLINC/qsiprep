@@ -210,6 +210,13 @@ def get_parser():
 
     g_perfm = parser.add_argument_group("Options to handle performance")
     g_perfm.add_argument(
+        "--prefer-gpu",
+        "--prefer_gpu",
+        action="store_true",
+        default=False,
+        help="Use GPU accelerated tools when available (requires a GPU)",
+    )
+    g_perfm.add_argument(
         "--nthreads",
         "--n_cpus",
         "--n-cpus",
@@ -1114,6 +1121,7 @@ def build_qsiprep_workflow(opts, retval):
         denoise_before_combining=not opts.denoise_after_combining,
         write_local_bvecs=opts.write_local_bvecs,
         omp_nthreads=omp_nthreads,
+        use_gpu=opts.prefer_gpu,
         force_spatial_normalization=force_spatial_normalization,
         output_resolution=opts.output_resolution,
         template=opts.anatomical_template,

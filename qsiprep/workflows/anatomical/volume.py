@@ -925,7 +925,7 @@ def init_dl_prep_wf(name="dl_prep_wf"):
     return workflow
 
 
-def init_synthstrip_wf(omp_nthreads, do_padding=False, unfatsat=False, name="synthstrip_wf"):
+def init_synthstrip_wf(omp_nthreads, use_gpu, do_padding=False, unfatsat=False, name="synthstrip_wf"):
     workflow = Workflow(name=name)
     inputnode = pe.Node(
         niu.IdentityInterface(fields=["padded_image", "original_image"]), name="inputnode"
@@ -935,7 +935,7 @@ def init_synthstrip_wf(omp_nthreads, do_padding=False, unfatsat=False, name="syn
     )
 
     synthstrip = pe.Node(
-        FixHeaderSynthStrip(),  # Threads are always fixed to 1 in the run
+        FixHeaderSynthStrip(gpu=use_gpu),  # Threads are always fixed to 1 in the run
         name="synthstrip",
         n_procs=omp_nthreads,
     )
