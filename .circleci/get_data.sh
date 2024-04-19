@@ -1,3 +1,7 @@
+IMAGE=pennbbl/qsiprep:unstable
+
+# Set this to be comfortable on the testing machine
+MAX_CPUS=18
 
 if [[ "$SHELL" =~ zsh ]]; then
   setopt SH_WORD_SPLIT
@@ -5,8 +9,14 @@ fi
 
 # Edit these for project-wide testing
 WGET="wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q"
-LOCAL_PATCH=/Users/mcieslak/projects/qsiprep/qsiprep
-IMAGE=pennbbl/qsiprep:unstable
+
+# Patch in a local copy of qsiprep?
+LOCAL_PATCH=""
+if [[ -d /Users/mcieslak/projects/qsiprep/qsiprep ]]; then
+    LOCAL_PATCH=/Users/mcieslak/projects/qsiprep/qsiprep
+elif [[ -d /home/matt/projects/qsiprep ]]; then
+    LOCAL_PATCH=/home/matt/projects/qsiprep/qsiprep
+fi
 
 # Determine if we're in a CI test
 if [[ "${CIRCLECI}" = "true" ]]; then
@@ -19,9 +29,21 @@ if [[ "${CIRCLECI}" = "true" ]]; then
   fi
 else
   IN_CI="false"
-  NTHREADS=1
-  OMP_NTHREADS=1
+  N_CPUS=""
+  which nproc && N_CPUS=$(nproc)
+  if [[ -z "${N_CPUS}" ]]; then
+    N_CPUS=$(sysctl -n hw.logicalcpu)
+  fi
+  [[ -z "${N_CPUS}" ]] && N_CPUS=1
+
+  NTHREADS=$(( $N_CPUS < $MAX_CPUS ? $N_CPUS : $MAX_CPUS ))
+  OMP_NTHREADS=$NTHREADS
 fi
+
+# Determine if we have a gpu
+GPU_FLAG=""
+which nvidia-smi && GPU_FLAG="--gpus all"
+
 export IN_CI NTHREADS OMP_NTHREADS
 
 run_qsiprep_cmd () {
@@ -34,7 +56,7 @@ run_qsiprep_cmd () {
     QSIPREP_RUN="/opt/conda/envs/qsiprep/bin/qsiprep ${bids_dir} ${output_dir} participant"
   else
     # Otherwise we're going to use docker from the outside
-    QSIPREP_RUN="qsiprep-docker ${bids_dir} ${output_dir} participant -e qsiprep_DEV 1 -u $(id -u) -i ${IMAGE}"
+    QSIPREP_RUN="qsiprep-docker ${GPU_FLAG} ${bids_dir} ${output_dir} participant -e qsiprep_DEV 1 -u $(id -u) -i ${IMAGE}"
     CFG=$(printenv NIPYPE_CONFIG)
     if [[ -n "${CFG}" ]]; then
         QSIPREP_RUN="${QSIPREP_RUN} --config ${CFG}"
@@ -42,7 +64,7 @@ run_qsiprep_cmd () {
 
     if [[ -n "${LOCAL_PATCH}" ]]; then
       #echo "Using qsiprep patch: ${LOCAL_PATCH}"
-      QSIPREP_RUN="${QSIPREP_RUN} --patch-qsiprep ${LOCAL_PATCH} --patch-nipype /Users/mcieslak/projects/Nipype/nipype"
+      QSIPREP_RUN="${QSIPREP_RUN} --patch-qsiprep ${LOCAL_PATCH}"
     fi
   fi
   echo "${QSIPREP_RUN} --nthreads ${NTHREADS} --omp-nthreads ${OMP_NTHREADS}"
@@ -88,7 +110,7 @@ get_config_data() {
     cat > ${WORKDIR}/data/eddy_config.json << "EOT"
 {
   "flm": "linear",
-  "slm": "linear",
+  "slm": "none",
   "fep": false,
   "interp": "spline",
   "nvoxhp": 100,
@@ -107,7 +129,33 @@ get_config_data() {
   "args": ""
 }
 EOT
+
+    # Get an eddy config. It's used for some tests
+    cat > ${WORKDIR}/data/eddy_cuda_config.json << "EOT"
+{
+  "flm": "quadratic",
+  "slm": "none",
+  "fep": false,
+  "interp": "spline",
+  "nvoxhp": 100,
+  "fudge_factor": 10,
+  "dont_sep_offs_move": false,
+  "dont_peas": false,
+  "niter": 2,
+  "method": "jac",
+  "repol": true,
+  "num_threads": 1,
+  "is_shelled": true,
+  "use_cuda": true,
+  "mporder": 1,
+  "cnr_maps": true,
+  "residuals": false,
+  "output_type": "NIFTI_GZ",
+  "args": ""
+}
+EOT
     chmod a+r ${WORKDIR}/data/eddy_config.json
+    chmod a+r ${WORKDIR}/data/eddy_cuda_config.json
 
     # We always need a freesurfer license
     echo "cHJpbnRmICJtYXR0aGV3LmNpZXNsYWtAcHN5Y2gudWNzYi5lZHVcbjIwNzA2XG4gKkNmZVZkSDVVVDhyWVxuIEZTQllaLlVrZVRJQ3dcbiIgPiBsaWNlbnNlLnR4dAo=" | base64 -d | sh
