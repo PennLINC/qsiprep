@@ -7,7 +7,7 @@ RUN apt-get update && \
 COPY . /src/qsiprep
 RUN python -m build /src/qsiprep
 
-FROM pennbbl/qsiprep_build:24.4.23
+FROM pennbbl/qsiprep_build:24.4.24
 
 # Install qsiprep wheel
 COPY --from=wheelstage /src/qsiprep/dist/*.whl .
@@ -23,7 +23,7 @@ RUN find $HOME -type d -exec chmod go=u {} + && \
 RUN ldconfig
 WORKDIR /tmp/
 ENTRYPOINT ["/opt/conda/envs/qsiprep/bin/qsiprep"]
-
+ENV LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/opt/conda/envs/qsiprep/lib/python3.10/site-packages/nvidia/cudnn/lib
 ARG BUILD_DATE
 ARG VCS_REF
 ARG VERSION
