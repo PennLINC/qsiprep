@@ -47,6 +47,7 @@ def init_fsl_hmc_wf(
     raw_image_sdc,
     pepolar_method,
     t2w_sdc,
+    use_gpu,
     mem_gb=3,
     omp_nthreads=1,
     dwi_metadata=None,
@@ -81,6 +82,8 @@ def init_fsl_hmc_wf(
             fieldmaps are used.
         eddy_config: str
             Path to a JSON file containing settings for the call to ``eddy``.
+        use_gpu: bool
+            Use GPU-accelerated tools
 
 
     **Inputs**
@@ -176,6 +179,21 @@ def init_fsl_hmc_wf(
 
     with open(eddy_cfg_file, "r") as f:
         eddy_args = json.load(f)
+
+    # Check to see if eddy config had specified whether to use the GPU
+    config_file_gpu_choice = eddy_args.get("use_cuda")
+    if config_file_gpu_choice is not None:
+        LOGGER.warning('DEPRECATION: eddy config has a value specified for "use_cuda".')
+        if not config_file_gpu_choice == use_gpu:
+            if use_gpu:
+                LOGGER.warning("Overriding eddy config and using a eddy_cuda10.2")
+            else:
+                LOGGER.warning(
+                    "eddy config requested to use cuda, but --prefer-gpu was not specified. "
+                    "In the future, this will result in a GPU not being used."
+                )
+                use_gpu = True
+    eddy_args["use_cuda"] = use_gpu
 
     gather_inputs = pe.Node(
         GatherEddyInputs(

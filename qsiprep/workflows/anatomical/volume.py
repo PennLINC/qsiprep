@@ -54,6 +54,7 @@ def init_anat_preproc_wf(
     infant_mode,
     longitudinal,
     omp_nthreads,
+    use_gpu,
     output_dir,
     num_anat_images,
     output_resolution,
@@ -80,6 +81,7 @@ def init_anat_preproc_wf(
 
         from qsiprep.workflows.anatomical import init_anat_preproc_wf
         wf = init_anat_preproc_wf(omp_nthreads=1,
+                                  use_gpu=False,
                                   reportlets_dir='.',
                                   output_dir='.',
                                   anatomical_contrast="T1w",
@@ -925,7 +927,9 @@ def init_dl_prep_wf(name="dl_prep_wf"):
     return workflow
 
 
-def init_synthstrip_wf(omp_nthreads, use_gpu, do_padding=False, unfatsat=False, name="synthstrip_wf"):
+def init_synthstrip_wf(
+    omp_nthreads, use_gpu, do_padding=False, unfatsat=False, name="synthstrip_wf"
+):
     workflow = Workflow(name=name)
     inputnode = pe.Node(
         niu.IdentityInterface(fields=["padded_image", "original_image"]), name="inputnode"
@@ -981,7 +985,7 @@ def init_synthstrip_wf(omp_nthreads, use_gpu, do_padding=False, unfatsat=False, 
     return workflow
 
 
-def init_synthseg_wf(omp_nthreads, sloppy, name="synthseg_wf"):
+def init_synthseg_wf(omp_nthreads, sloppy, use_gpu, name="synthseg_wf"):
     workflow = Workflow(name=name)
     inputnode = pe.Node(
         niu.IdentityInterface(fields=["padded_image", "original_image"]), name="inputnode"

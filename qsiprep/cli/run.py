@@ -1039,7 +1039,10 @@ def build_qsiprep_workflow(opts, retval):
 
     omp_nthreads = opts.omp_nthreads
     if omp_nthreads == 0:
-        omp_nthreads = min(nthreads - 1 if nthreads > 1 else cpu_count(), 8)
+        if nthreads == 1:
+            omp_nthreads = 1
+        else:
+            omp_nthreads = min(cpu_count(), 8)
 
     if 1 < nthreads < omp_nthreads:
         logger.warning(
@@ -1049,7 +1052,12 @@ def build_qsiprep_workflow(opts, retval):
             nthreads,
         )
     retval["plugin_settings"] = plugin_settings
-    logger.info("Running with omp_nthreads=%d, nthreads=%d", omp_nthreads, nthreads)
+    logger.info(
+        "Running with omp_nthreads=%d, nthreads=%d, gpu-preferred=%d",
+        omp_nthreads,
+        nthreads,
+        opts.prefer_gpu,
+    )
 
     # Set up directories
     log_dir = output_dir / "qsiprep" / "logs"
@@ -1282,7 +1290,10 @@ def build_recon_workflow(opts, retval):
 
     omp_nthreads = opts.omp_nthreads
     if omp_nthreads == 0:
-        omp_nthreads = min(nthreads - 1 if nthreads > 1 else cpu_count(), 8)
+        if nthreads == 1:
+            omp_nthreads = 1
+        else:
+            omp_nthreads = min(cpu_count(), 8)
 
     if 1 < nthreads < omp_nthreads:
         logger.warning(

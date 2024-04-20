@@ -32,6 +32,7 @@ QSIPREP_CMD=$(run_qsiprep_cmd ${BIDS_INPUT_DIR} ${OUTPUT_DIR})
 ${QSIPREP_CMD} \
 	-w ${TEMPDIR} \
 	--sloppy \
+	--prefer-gpu \
 	--anat-modality T1w \
 	--denoise-method none \
 	--b1_biascorrect_stage none \

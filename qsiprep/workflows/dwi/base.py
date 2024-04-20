@@ -58,6 +58,7 @@ def init_dwi_preproc_wf(
     denoise_before_combining,
     template,
     omp_nthreads,
+    use_gpu,
     fmap_bspline,
     fmap_demean,
     t2w_sdc,
@@ -376,6 +377,7 @@ Diffusion data preprocessing
         layout=layout,
         ignore=ignore,
         omp_nthreads=omp_nthreads,
+        use_gpu=use_gpu,
     )
     test_pre_hmc_connect = pe.Node(TestInput(), name="test_pre_hmc_connect")
     if hmc_model in ("none", "3dSHORE", "tensor"):
@@ -393,6 +395,7 @@ Diffusion data preprocessing
             shoreline_iters=shoreline_iters,
             impute_slice_threshold=impute_slice_threshold,
             omp_nthreads=omp_nthreads,
+            use_gpu=use_gpu,
             fmap_bspline=fmap_bspline,
             fmap_demean=fmap_demean,
             pepolar_method=pepolar_method,
@@ -412,6 +415,7 @@ Diffusion data preprocessing
             raw_image_sdc=raw_image_sdc,
             mem_gb=mem_gb,
             omp_nthreads=omp_nthreads,
+            use_gpu=use_gpu,
             fmap_bspline=fmap_bspline,
             fmap_demean=fmap_demean,
             pepolar_method=pepolar_method,

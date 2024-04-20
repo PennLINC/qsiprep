@@ -332,6 +332,7 @@ def init_dwi_pre_hmc_wf(
         source_file=source_file,
         ignore=ignore,
         layout=layout,
+        omp_nthreads=omp_nthreads,
     )
 
     workflow.connect([
