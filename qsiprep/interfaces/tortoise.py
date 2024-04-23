@@ -204,11 +204,6 @@ def write_dummy_bmtxt(nii_file):
 
 
 class _DRBUDDIInputSpec(TORTOISEInputSpec):
-    num_threads = traits.Int(
-        desc="number of OMP threads",
-        argstr="--ncores %d",
-        help="Number of cores to use in the CPU version. The default is 50% of system cores.",
-    )
     blip_up_image = File(
         exists=True,
         help="Full path to the input UP NIFTI file to be corrected.",
