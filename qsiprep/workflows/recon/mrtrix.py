@@ -46,7 +46,7 @@ CITATIONS = {
 
 
 def init_mrtrix_csd_recon_wf(
-    omp_nthreads, available_anatomical_data, name="mrtrix_recon", qsirecon_suffix="", params={}
+    omp_nthreads, use_gpu, available_anatomical_data, name="mrtrix_recon", qsirecon_suffix="", params={}
 ):
     """Create FOD images for WM, GM and CSF.
 
@@ -381,7 +381,7 @@ def init_mrtrix_csd_recon_wf(
 
 
 def init_global_tractography_wf(
-    omp_nthreads, available_anatomical_data, name="mrtrix_recon", qsirecon_suffix="", params={}
+    omp_nthreads, use_gpu, available_anatomical_data, name="mrtrix_recon", qsirecon_suffix="", params={}
 ):
     """Run multi-shell, multi-tissue global tractography
 
@@ -501,7 +501,7 @@ def init_global_tractography_wf(
 
 
 def init_mrtrix_tractography_wf(
-    omp_nthreads, available_anatomical_data, name="mrtrix_tracking", qsirecon_suffix="", params={}
+    omp_nthreads, use_gpu, available_anatomical_data, name="mrtrix_tracking", qsirecon_suffix="", params={}
 ):
     """Run tractography
 
@@ -608,6 +608,7 @@ def init_mrtrix_tractography_wf(
 
 def init_mrtrix_connectivity_wf(
     omp_nthreads,
+    use_gpu,
     available_anatomical_data,
     name="mrtrix_connectiity",
     params={},

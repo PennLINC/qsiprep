@@ -36,7 +36,7 @@ LOGGER = logging.getLogger("nipype.interface")
 
 
 def init_dsi_studio_recon_wf(
-    omp_nthreads, available_anatomical_data, name="dsi_studio_recon", qsirecon_suffix="", params={}
+    omp_nthreads, use_gpu, available_anatomical_data, name="dsi_studio_recon", qsirecon_suffix="", params={}
 ):
     """Reconstructs diffusion data using DSI Studio.
 
@@ -140,6 +140,7 @@ distance of %02f in DSI Studio (version %s). """ % (
 
 def init_dsi_studio_tractography_wf(
     omp_nthreads,
+    use_gpu,
     available_anatomical_data,
     name="dsi_studio_tractography",
     params={},
@@ -243,6 +244,7 @@ def init_dsi_studio_tractography_wf(
 
 def init_dsi_studio_autotrack_wf(
     omp_nthreads,
+    use_gpu,
     available_anatomical_data,
     params={},
     qsirecon_suffix="",
@@ -374,6 +376,7 @@ def init_dsi_studio_autotrack_wf(
 
 def init_dsi_studio_connectivity_wf(
     omp_nthreads,
+    use_gpu,
     available_anatomical_data,
     name="dsi_studio_connectivity",
     params={},
@@ -489,6 +492,7 @@ def init_dsi_studio_connectivity_wf(
 
 def init_dsi_studio_export_wf(
     omp_nthreads,
+    use_gpu,
     available_anatomical_data,
     name="dsi_studio_export",
     params={},

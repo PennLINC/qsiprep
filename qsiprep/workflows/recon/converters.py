@@ -22,7 +22,7 @@ LOGGER = logging.getLogger("nipype.workflow")
 
 
 def init_mif_to_fibgz_wf(
-    omp_nthreads, available_anatomical_data, name="mif_to_fibgz", qsirecon_suffix="", params={}
+    omp_nthreads, use_gpu, available_anatomical_data, name="mif_to_fibgz", qsirecon_suffix="", params={}
 ):
     """Converts a MRTrix mif file to DSI Studio fib file.
 
@@ -70,7 +70,7 @@ def init_fibgz_to_mif_wf(name="fibgz_to_mif", qsirecon_suffix="", params={}):
 
 
 def init_qsiprep_to_fsl_wf(
-    omp_nthreads, available_anatomical_data, name="qsiprep_to_fsl", qsirecon_suffix="", params={}
+    omp_nthreads, use_gpu, available_anatomical_data, name="qsiprep_to_fsl", qsirecon_suffix="", params={}
 ):
     """Converts QSIPrep outputs (images, bval, bvec) to fsl standard orientation"""
     inputnode = pe.Node(

@@ -52,7 +52,7 @@ def _parse_qsiprep_params_dict(params_dict):
 
 
 def init_pyafq_wf(
-    omp_nthreads, available_anatomical_data, name="afq", qsirecon_suffix="", params={}
+    omp_nthreads, use_gpu, available_anatomical_data, name="afq", qsirecon_suffix="", params={}
 ):
     """Run PyAFQ on some qsiprep outputs
 

@@ -175,7 +175,7 @@ def init_drbuddi_wf(
     )
 
     drbuddi = pe.Node(
-        DRBUDDI(fieldmap_type=fieldmap_info["suffix"], num_threads=omp_nthreads, sloppy=sloppy),
+        DRBUDDI(fieldmap_type=fieldmap_info["suffix"], num_threads=omp_nthreads,, use_gpu=use_gpu, sloppy=sloppy),
         name="drbuddi",
         n_procs=omp_nthreads,
     )

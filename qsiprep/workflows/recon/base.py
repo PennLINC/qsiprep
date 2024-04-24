@@ -56,6 +56,7 @@ def init_qsirecon_wf(
     recon_spec,
     low_mem,
     omp_nthreads,
+    use_gpu,
     sloppy,
     freesurfer_input,
     b0_threshold,
@@ -136,6 +137,7 @@ def init_qsirecon_wf(
             reportlets_dir=reportlets_dir,
             output_dir=output_dir,
             omp_nthreads=omp_nthreads,
+            use_gpu=use_gpu,
             low_mem=low_mem,
             sloppy=sloppy,
             b0_threshold=b0_threshold,
@@ -167,6 +169,7 @@ def init_single_subject_wf(
     output_resolution,
     low_mem,
     omp_nthreads,
+    use_gpu=use_gpu,
     recon_input,
     recon_spec,
     sloppy,
@@ -314,6 +317,7 @@ to workflows in *qsiprep*'s documentation]\
             init_dwi_recon_anatomical_workflow(
                 atlas_names=atlas_names,
                 omp_nthreads=omp_nthreads,
+                use_gpu=use_gpu,
                 infant_mode=infant_mode,
                 prefer_dwi_mask=False,
                 sloppy=sloppy,
@@ -341,6 +345,7 @@ to workflows in *qsiprep*'s documentation]\
             reportlets_dir=reportlets_dir,
             output_dir=output_dir,
             omp_nthreads=omp_nthreads,
+            use_gpu=use_gpu,
             skip_odf_plots=skip_odf_plots,
         )
 

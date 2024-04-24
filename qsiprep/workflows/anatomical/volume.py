@@ -263,12 +263,12 @@ and used as an anatomical reference throughout the workflow.
 
     # Skull strip the anatomical reference
     synthstrip_anat_wf = init_synthstrip_wf(
-        omp_nthreads=omp_nthreads, unfatsat=anatomical_contrast == "T2w", name="synthstrip_anat_wf"
+        omp_nthreads=omp_nthreads, use_gpu=use_gpu, unfatsat=anatomical_contrast == "T2w", name="synthstrip_anat_wf"
     )
 
     # Segment the anatomical reference
     synthseg_anat_wf = init_synthseg_wf(
-        omp_nthreads=omp_nthreads, sloppy=debug, name="synthseg_anat_wf"
+        omp_nthreads=omp_nthreads, use_gpu=use_gpu, sloppy=debug, name="synthseg_anat_wf"
     )
 
     # Synthstrip is used a lot elsewhere, so make boilerplate for the anatomy-specific
@@ -337,6 +337,7 @@ FreeSurfer version {fs_version}. """.format(
         if num_additional_t2ws > 0:
             t2w_preproc_wf = init_t2w_preproc_wf(
                 omp_nthreads=omp_nthreads,
+                use_gpu=use_gpu,
                 num_t2ws=num_additional_t2ws,
                 longitudinal=longitudinal,
                 sloppy=debug,
@@ -478,7 +479,7 @@ FreeSurfer version {fs_version}. """.format(
     return workflow
 
 
-def init_t2w_preproc_wf(omp_nthreads, num_t2ws, longitudinal, sloppy, name="t2w_preproc_wf"):
+def init_t2w_preproc_wf(omp_nthreads, use_gpu, num_t2ws, longitudinal, sloppy, name="t2w_preproc_wf"):
     """If T1w is the anatomical contrast, you may also want to process the T2ws for
     worlflows that can use them (ie DRBUDDI). This"""
     workflow = Workflow(name=name)
@@ -502,7 +503,7 @@ image using an affine transformation in antsRegistration.
 """
     # Skull strip the anatomical reference
     synthstrip_anat_wf = init_synthstrip_wf(
-        do_padding=True, omp_nthreads=omp_nthreads, unfatsat=True, name="synthstrip_anat_wf"
+        do_padding=True, use_gpu=use_gpu, omp_nthreads=omp_nthreads, unfatsat=True, name="synthstrip_anat_wf"
     )
 
     # Perform registrations

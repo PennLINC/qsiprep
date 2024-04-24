@@ -426,6 +426,7 @@ def init_register_fs_to_qsiprep_wf(
 def init_dwi_recon_anatomical_workflow(
     atlas_names,
     omp_nthreads,
+    use_gpu,
     has_qsiprep_5tt_hsvs,
     needs_t1w_transform,
     has_freesurfer_5tt_hsvs,

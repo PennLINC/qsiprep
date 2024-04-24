@@ -47,6 +47,7 @@ def init_dwi_recon_workflow(
     reportlets_dir,
     available_anatomical_data,
     omp_nthreads,
+    use_gpu,
     skip_odf_plots,
     name="recon_wf",
 ):
@@ -64,6 +65,7 @@ def init_dwi_recon_workflow(
             raise Exception("Node has no name [{}]".format(node_spec))
         new_node = workflow_from_spec(
             omp_nthreads=omp_nthreads,
+            use_gpu=use_gpu,
             available_anatomical_data=available_anatomical_data,
             node_spec=node_spec,
             skip_odf_plots=skip_odf_plots,
@@ -168,7 +170,7 @@ def init_dwi_recon_workflow(
     return workflow
 
 
-def workflow_from_spec(omp_nthreads, available_anatomical_data, node_spec, skip_odf_plots):
+def workflow_from_spec(omp_nthreads, use_gpu, available_anatomical_data, node_spec, skip_odf_plots):
     """Build a nipype workflow based on a json file."""
     software = node_spec.get("software", "qsiprep")
     qsirecon_suffix = node_spec.get("qsirecon_suffix", "")
@@ -191,6 +193,7 @@ def workflow_from_spec(omp_nthreads, available_anatomical_data, node_spec, skip_
         raise Exception('Node %s must have a "name" attribute' % node_spec)
     kwargs = {
         "omp_nthreads": omp_nthreads,
+        "use_gpu": use_gpu,
         "available_anatomical_data": available_anatomical_data,
         "name": node_name,
         "qsirecon_suffix": qsirecon_suffix,

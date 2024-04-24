@@ -182,7 +182,7 @@ def init_dwi_hmc_wf(
 
     # Do model-based motion correction
     dwi_model_hmc_wf = init_dwi_model_hmc_wf(
-        hmc_model, hmc_transform, mem_gb, omp_nthreads, num_iters=num_model_iterations
+        hmc_model, hmc_transform, mem_gb, omp_nthreads, use_gpu=use_gpu, num_iters=num_model_iterations
     )
 
     # Warp the modeled images into non-motion-corrected space
@@ -299,6 +299,7 @@ def linear_alignment_workflow(
 
 
 def init_b0_hmc_wf(
+    use_gpu,
     align_to="iterative",
     transform="Rigid",
     sloppy=False,
@@ -349,6 +350,7 @@ def init_b0_hmc_wf(
             metric=metric,
             precision="coarse" if not sloppy else "sloppy",
             omp_nthreads=omp_nthreads,
+            use_gpu=use_gpu,
             iternum=0,
         )
         alignment_wf.connect(initial_template, "output_average_image",
@@ -580,6 +582,7 @@ def init_dwi_model_hmc_wf(
     transform,
     mem_gb,
     omp_nthreads,
+    use_gpu=use_gpu,
     num_iters=2,
     name="dwi_model_hmc_wf",
     metric="Mattes",

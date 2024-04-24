@@ -7,6 +7,7 @@ Orchestrating the dwi-preprocessing workflow
 
 """
 
+from matplotlib import use
 from nipype import logging
 from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
@@ -34,6 +35,7 @@ def init_qsiprep_hmcsdc_wf(
     shoreline_iters,
     impute_slice_threshold,
     omp_nthreads,
+    use_gpu,
     fmap_bspline,
     raw_image_sdc,
     fmap_demean,
@@ -149,6 +151,7 @@ def init_qsiprep_hmcsdc_wf(
         num_model_iterations=shoreline_iters,
         sloppy=sloppy,
         omp_nthreads=omp_nthreads,
+        use_gpu=use_gpu,
         name="dwi_hmc_wf",
     )
 
@@ -214,6 +217,7 @@ def init_qsiprep_hmcsdc_wf(
         drbuddi_wf = init_drbuddi_wf(
             scan_groups=scan_groups,
             omp_nthreads=omp_nthreads,
+            use_gpu=use_gpu,
             b0_threshold=b0_threshold,
             raw_image_sdc=raw_image_sdc,
             pepolar_method=pepolar_method,
@@ -289,6 +293,7 @@ def init_qsiprep_hmcsdc_wf(
         scan_groups["fieldmap_info"],
         dwi_metadata,
         omp_nthreads=omp_nthreads,
+        use_gpu=use_gpu,
         fmap_demean=fmap_demean,
         fmap_bspline=fmap_bspline,
     )

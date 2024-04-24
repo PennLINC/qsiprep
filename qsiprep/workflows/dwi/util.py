@@ -28,6 +28,7 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 
 def init_dwi_reference_wf(
     omp_nthreads,
+    use_gpu,
     dwi_file=None,
     register_t1=False,
     name="dwi_reference_wf",
@@ -151,7 +152,7 @@ def init_dwi_reference_wf(
 
     # Use synthstrip to extract the brain
     synthstrip_wf = init_synthstrip_wf(
-        do_padding=True, omp_nthreads=omp_nthreads, name="synthstrip_wf"
+        do_padding=True, omp_nthreads=omp_nthreads, use_gpu=use_gpu, name="synthstrip_wf"
     )
 
     workflow.connect([
