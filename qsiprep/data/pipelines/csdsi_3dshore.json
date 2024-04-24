@@ -20,32 +20,6 @@
       }
     },
     {
-      "name": "streamline_connectivity",
-      "software": "DSI Studio",
-      "action": "connectivity",
-      "input": "csdsi_3dshore",
-      "parameters": {
-        "turning_angle": 35,
-        "smoothing": 0.0,
-        "step_size": 1.0,
-        "min_length": 30,
-        "max_length": 250,
-        "seed_plan": 0,
-        "interpolation": 0,
-        "initial_dir": 2,
-        "fiber_count": 5000000,
-        "connectivity_value": "count,ncount,mean_length,gfa",
-        "connectivity_type": "pass,end",
-        "output_trk": "no_trk"
-      }
-    },
-    {
-        "name": "controlability",
-        "input": "streamline_connectivity",
-        "action": "controllability",
-        "qsirecon_suffix": "rec-3dshore_control"
-    },
-    {
       "name": "msmt_csd",
       "software": "MRTrix3",
       "action": "csd",
