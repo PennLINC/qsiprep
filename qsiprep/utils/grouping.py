@@ -17,7 +17,9 @@ Set up tests
 import logging
 from collections import defaultdict
 
+import nibabel as nb
 from nipype.utils.filemanip import split_filename
+import numpy as np
 
 from ..interfaces.bids import get_bids_params
 
@@ -27,6 +29,7 @@ LOGGER = logging.getLogger("nipype.workflow")
 def group_dwi_scans(
     bids_layout,
     subject_data,
+    reckless_concatenate,
     using_fsl=False,
     combine_scans=True,
     ignore_fieldmaps=False,
@@ -502,7 +505,7 @@ def split_by_phase_encoding_direction(dwi_files, metadatas):
     return dwi_groups
 
 
-def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
+def group_by_warpspace(dwi_files, layout, ignore_fieldmaps, reckless_concatenate):
     """Groups a session's DWI files by their acquisition parameters.
 
     DWIs are grouped by their **warped space**. Two DWI series that are
@@ -1218,3 +1221,10 @@ def _group_by_sessions(dwi_fmap_groups):
         ses_lookup[bids_info["session_id"]].append(group)
 
     return ses_lookup
+
+
+def needs_reckless_concatenation(image_list):
+    """Loop over an image list to see if an affine would need to be overwritten."""
+    images_to_concat = [nb.load(img_) for img_ in image_list]
+    reference_affine = images_to_concat[0].affine
+    return not all([np.allclose(reference_affine, img_.affine) for img_ in images_to_concat])

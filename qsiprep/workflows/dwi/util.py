@@ -213,13 +213,13 @@ def _create_mem_gb(dwi_fname):
     return dwi_nvols, mem_gb
 
 
-def _get_concatenated_bids_name(dwi_group):
+def _get_concatenated_bids_name(dwi_group, reckless_concatenate=False):
     """Derive the output name for a dwi grouping."""
     try:
         all_dwis = dwi_group["dwi_series"]
         if dwi_group["fieldmap_info"]["suffix"] == "rpe_series":
             all_dwis += dwi_group["fieldmap_info"]["rpe_series"]
-
+        reckless_concatenate = dwi_group.get("reckless_concatenate", reckless_concatenate)
     except Exception:
         all_dwis = dwi_group
 

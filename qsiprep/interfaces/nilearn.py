@@ -127,10 +127,14 @@ class MergeInputSpec(BaseInterfaceInputSpec):
     header_source = File(exists=True, desc="a Nifti file from which the header should be copied")
     compress = traits.Bool(True, usedefault=True, desc="Use gzip compression on .nii output")
     is_dwi = traits.Bool(True, usedefault=True, desc="if True, negative values are set to zero")
+    reckless_concat = traits.Bool(
+        False, usedefault=True, desc="Force affines into non-aligned images"
+    )
 
 
 class MergeOutputSpec(TraitedSpec):
     out_file = File(exists=True, desc="output merged file")
+    recklessly_combined = File(exists=True, mandatory=False)
 
 
 class Merge(SimpleInterface):
@@ -142,6 +146,27 @@ class Merge(SimpleInterface):
         self._results["out_file"] = fname_presuffix(
             self.inputs.in_files[0], suffix="_merged" + ext, newpath=runtime.cwd, use_ext=False
         )
+
+        # Check that all the affines are compatible
+        images_to_concat = [nb.load(img_) for img_ in self.inputs.in_files]
+        reference_affine = images_to_concat[0].affine
+        consistent_affines = all(
+            [np.allclose(reference_affine, img_.affine) for img_ in images_to_concat]
+        )
+        if not consistent_affines:
+            if self.inputs.reckless_concat:
+                ref_image = images_to_concat[0]
+                images_to_concat = [ref_image] + [
+                    new_img_like(ref_image, img_.get_fdata(), copy_header=True)
+                    for img_ in images_to_concat[1:]
+                ]
+            else:
+                raise Exception(
+                    "Inconsistent field of view in images. If you're absolutely certain "
+                    "you want to concatenate these images, consider running qsiprep with "
+                    "the --reckless-concatenate option."
+                )
+
         new_nii = concat_imgs(self.inputs.in_files, dtype=self.inputs.dtype)
 
         if isdefined(self.inputs.header_source):

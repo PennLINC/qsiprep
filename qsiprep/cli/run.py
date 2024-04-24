@@ -385,6 +385,17 @@ def get_parser():
         " - none: Default. Keep distorted groups separate",
     )
     g_conf.add_argument(
+        "--reckless-concatenate",
+        "--reckless_concatenate",
+        action="store_true",
+        default=False,
+        help="DWIs should only be concatenated if they have the same FOV.\n"
+        " Sometimies the FOV is repositioned between scans and a new FOV\n "
+        " and a new shim are set. This option will overwrite inconsistent \n"
+        " image affines so they can be concatenated without interpolation. \n"
+        " STRONGLY DISCOURAGED.",
+    )
+    g_conf.add_argument(
         "--write-local-bvecs",
         "--write_local_bvecs",
         action="store_true",
@@ -1150,7 +1161,8 @@ def build_qsiprep_workflow(opts, retval):
         "-s",
         "--bibliography",
         pkgrf("qsiprep", "data/boilerplate.bib"),
-        "--citeproc",
+        "--filter",
+        "pandoc-citeproc",
         str(logs_path / "CITATION.md"),
         "-o",
         str(logs_path / "CITATION.html"),

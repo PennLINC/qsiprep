@@ -49,6 +49,9 @@ class MergeDWIsInputSpec(BaseInterfaceInputSpec):
         File(exists=True), mandatory=False, desc="list of carpetplot_data files"
     )
     scan_metadata = traits.Dict(desc="Dict of metadata for the to-be-combined scans")
+    reckless_concatenate = traits.Bool(
+        False, usedefault=True, desc="force concatenation of misaligned dwis"
+    )
 
 
 class MergeDWIsOutputSpec(TraitedSpec):
@@ -116,7 +119,11 @@ class MergeDWIs(SimpleInterface):
         # Concatenate the gradient information
         if num_dwis > 1:
             merged_output = _get_concatenated_bids_name(
-                {"dwi_series": self.inputs.dwi_files, "fieldmap_info": {"suffix": None}}
+                {
+                    "dwi_series": self.inputs.dwi_files,
+                    "fieldmap_info": {"suffix": None},
+                    "reckless_concatenate": self.inputs.reckless_concatenate,
+                }
             )
             merged_fname = op.join(runtime.cwd, merged_output + "_merged.nii.gz")
             out_bval = fname_presuffix(

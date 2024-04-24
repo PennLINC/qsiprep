@@ -37,6 +37,7 @@ def init_dwi_pre_hmc_wf(
     omp_nthreads,
     source_file,
     low_mem,
+    reckless_concatenate,
     calculate_qc=True,
     layout=None,
     ignore=[],
@@ -176,7 +177,7 @@ def init_dwi_pre_hmc_wf(
             else (dwi_series, rpe_series)
         )
         pe_axis = dwi_series_pedir[0]
-        plus_source_file = get_source_file(plus_files, suffix="_PEplus")
+        plus_source_file = get_source_file(plus_files, reckless_concatenate=reckless_concatenate, suffix="_PEplus")
         merge_plus = init_merge_and_denoise_wf(
             raw_dwi_files=plus_files,
             b0_threshold=b0_threshold,
@@ -197,7 +198,9 @@ def init_dwi_pre_hmc_wf(
         )
 
         # Merge, denoise, split, hmc on the minus series
-        minus_source_file = get_source_file(minus_files, suffix="_PEminus")
+        minus_source_file = get_source_file(
+            minus_files, reckless_concatenate=reckless_concatenate, suffix="_PEminus"
+        )
         merge_minus = init_merge_and_denoise_wf(
             raw_dwi_files=minus_files,
             b0_threshold=b0_threshold,
@@ -231,7 +234,9 @@ def init_dwi_pre_hmc_wf(
             MergeDWIs(harmonize_b0_intensities=not no_b0_harmonization, b0_threshold=b0_threshold),
             name="rpe_concat",
         )
-        raw_rpe_concat = pe.Node(Merge(is_dwi=True), name="raw_rpe_concat")
+        raw_rpe_concat = pe.Node(
+            Merge(is_dwi=True, reckless_concatenate=reckless_concatenate), name="raw_rpe_concat"
+        )
         qc_wf = init_modelfree_qc_wf(
             omp_nthreads=omp_nthreads, bvec_convention="DIPY" if orientation == "LPS" else "FSL"
         )

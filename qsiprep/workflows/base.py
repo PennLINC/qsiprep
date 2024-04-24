@@ -316,6 +316,7 @@ def init_single_subject_wf(
     raw_image_sdc,
     distortion_group_merge,
     pepolar_method,
+    reckless_concatenation,
     omp_nthreads,
     force_spatial_normalization,
     template,
@@ -375,6 +376,7 @@ def init_single_subject_wf(
             combine_all_dwis=True,
             distortion_group_merge='none',
             pepolar_method='TOPUP',
+            reckless_concatenation=False,
             omp_nthreads=1,
             template='MNI152NLin2009cAsym',
             motion_corr_to='iterative',
@@ -661,6 +663,7 @@ to workflows in *QSIPrep*'s documentation]\
     dwi_fmap_groups, concatenation_scheme = group_dwi_scans(
         layout,
         subject_data,
+        reckless_concatenation=reckless_concatenation,
         using_fsl=True,
         combine_scans=combine_all_dwis,
         ignore_fieldmaps="fieldmaps" in ignore,

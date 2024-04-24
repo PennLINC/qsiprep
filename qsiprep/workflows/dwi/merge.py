@@ -276,7 +276,7 @@ def init_merge_and_denoise_wf(
         ])  # fmt:skip
 
     # Get an orientation-conformed version of the raw inputs and their gradients
-    raw_merge = pe.Node(Merge(is_dwi=True), name="raw_merge", n_procs=omp_nthreads)
+    raw_merge = pe.Node(Merge(is_dwi=True, reckless_concatenate=reckless_concatenate), name="raw_merge", n_procs=omp_nthreads)
 
     # Merge the either conformed-only or conformed-and-denoised data
     workflow.connect([
