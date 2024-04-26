@@ -285,10 +285,7 @@ def init_fsl_hmc_wf(
 
         outputnode.inputs.sdc_method = "TOPUP"
         topup = pe.Node(
-            fsl.TOPUP(
-                out_field="fieldmap_HZ.nii.gz", 
-                scale=1, 
-                args=f"--nthr={omp_nthreads}"),
+            fsl.TOPUP(out_field="fieldmap_HZ.nii.gz", scale=1, args=f"--nthr={omp_nthreads}"),
             name="topup",
         )
         topup_summary = pe.Node(TopupSummary(), name="topup_summary")
