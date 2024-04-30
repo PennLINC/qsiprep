@@ -93,7 +93,9 @@ def init_pyafq_wf(
     if qsirecon_suffix:
         # Save the output in the outputs directory
         ds_afq = pe.Node(
-            ReconDerivativesDataSink(), name="ds_" + name, run_without_submitting=True
+            ReconDerivativesDataSink(qsirecon_suffix=qsirecon_suffix),
+            name="ds_" + name,
+            run_without_submitting=True,
         )
         workflow.connect(run_afq, "afq_dir", ds_afq, "in_file")
 
