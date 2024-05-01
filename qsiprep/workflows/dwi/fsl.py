@@ -267,7 +267,6 @@ def init_fsl_hmc_wf(
         (eddy, spm_motion, [('out_parameter', 'eddy_motion')]),
 
         (spm_motion, outputnode, [('spm_motion_file', 'motion_params')]),
-        
         # Create a b=0 reference from Eddy's output
         (back_to_lps, extract_b0_series, [
             ('dwi_file', 'dwi_series'),

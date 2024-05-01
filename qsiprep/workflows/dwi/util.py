@@ -12,8 +12,6 @@ import os
 from pathlib import Path
 
 import nibabel as nb
-import pkg_resources as pkgr
-from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from nipype.utils.filemanip import split_filename
@@ -145,7 +143,8 @@ def init_dwi_reference_wf(
     # else:
     #     # T1w is already aligned
     #     t1_mask_to_b0 = pe.Node(
-    #         ants.ApplyTransforms(transforms="identity"), name="t1_mask_to_b0", n_procs=omp_nthreads
+    #         ants.ApplyTransforms(transforms="identity"), name="t1_mask_to_b0",
+    # n_procs=omp_nthreads
     #     )
 
     # Use synthstrip to extract the brain
