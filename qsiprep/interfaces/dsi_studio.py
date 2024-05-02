@@ -178,7 +178,7 @@ class DSIStudioReconstructionInputSpec(DSIStudioCommandLineInputSpec):
     grad_dev = File(
         desc="Gradient deviation file", exists=True, copyfile=True, position=-1, argstr="#%s"
     )
-    thread_count = traits.Int(1, usedefault=True, argstr="--thread_count=%d")
+    thread_count = traits.Int(1, usedefault=True, argstr="--thread_count=%d", nohash=True)
 
     dti_no_high_b = traits.Bool(
         True,
@@ -349,7 +349,7 @@ class DSIStudioConnectivityMatrixInputSpec(DSIStudioCommandLineInputSpec):
     smoothing = traits.CFloat(argstr="--smoothing=%.2f")
     min_length = traits.CInt(argstr="--min_length=%d")
     max_length = traits.CInt(argstr="--max_length=%d")
-    thread_count = traits.Int(1, argstr="--thread_count=%d", usedefault=True)
+    thread_count = traits.Int(1, argstr="--thread_count=%d", usedefault=True, nohash=True)
 
 
 class DSIStudioConnectivityMatrixOutputSpec(TraitedSpec):
@@ -361,6 +361,7 @@ class DSIStudioConnectivityMatrix(CommandLine):
     input_spec = DSIStudioConnectivityMatrixInputSpec
     output_spec = DSIStudioConnectivityMatrixOutputSpec
     _cmd = "dsi_studio --action=ana "
+    _terminal_output = "file"
 
     def _post_run_hook(self, runtime):
         atlas_config = self.inputs.atlas_config
@@ -448,18 +449,22 @@ class DSIStudioAtlasGraph(SimpleInterface):
         workflow.config["execution"]["stop_on_first_crash"] = "true"
         workflow.config["execution"]["remove_unnecessary_outputs"] = "false"
         workflow.base_dir = runtime.cwd
+        plugin_settings = {}
         if num_threads > 1:
-            plugin_settings = {
-                "plugin": "MultiProc",
-                "plugin_args": {
-                    "raise_insufficient": False,
-                    "maxtasksperchild": 1,
-                    "n_procs": num_threads,
-                },
+            plugin_settings["plugin"] = "MultiProc"
+            plugin_settings["plugin_args"] = {
+                "raise_insufficient": False,
+                "maxtasksperchild": 1,
+                "n_procs": num_threads,
             }
-            wf_result = workflow.run(**plugin_settings)
         else:
-            wf_result = workflow.run()
+            plugin_settings["plugin"] = "Linear"
+
+        workflow.config["execution"] = {
+            "stop_on_first_crash": "True",
+            "remove_unnecessary_outputs": "False",
+        }
+        wf_result = workflow.run(**plugin_settings)
         (merge_node,) = [
             node for node in list(wf_result.nodes) if node.name.endswith("merge_mats")
         ]
@@ -884,10 +889,14 @@ def load_src_qc_file(fname, prefix=""):
         qc_data = qc_file.readlines()
     data = qc_data[1]
     parts = data.strip().split("\t")
+    dwi_contrast = np.nan
+    ndc_masked = np.nan
     if len(parts) == 7:
         _, dims, voxel_size, dirs, max_b, ndc, bad_slices = parts
     elif len(parts) == 8:
         _, dims, voxel_size, dirs, max_b, _, ndc, bad_slices = parts
+    elif len(parts) == 9:
+        _, dims, voxel_size, dirs, max_b, dwi_contrast, ndc, ndc_masked, bad_slices = parts
     else:
         raise Exception("Unknown QC File format")
 
@@ -897,6 +906,8 @@ def load_src_qc_file(fname, prefix=""):
     max_b = float(max_b)
     dwi_corr = float(ndc)
     n_bad_slices = float(bad_slices)
+    ndc_masked = float(ndc_masked)
+    dwi_contrast = float(dwi_contrast)
     data = {
         prefix + "dimension_x": [dimx],
         prefix + "dimension_y": [dimy],
@@ -906,6 +917,8 @@ def load_src_qc_file(fname, prefix=""):
         prefix + "voxel_size_z": [voxelsz],
         prefix + "max_b": [max_b],
         prefix + "neighbor_corr": [dwi_corr],
+        prefix + "masked_neighbor_corr": [ndc_masked],
+        prefix + "dwi_contrast": [dwi_contrast],
         prefix + "num_bad_slices": [n_bad_slices],
         prefix + "num_directions": [n_dirs],
     }

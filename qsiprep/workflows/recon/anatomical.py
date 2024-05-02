@@ -19,6 +19,7 @@ from nipype.interfaces import afni, ants, mrtrix3
 from nipype.interfaces import utility as niu
 from nipype.interfaces.base import traits
 from nipype.pipeline import engine as pe
+from niworkflows.interfaces.reportlets.registration import SpatialNormalizationRPT
 from pkg_resources import resource_filename as pkgrf
 
 from ...engine import Workflow
@@ -34,7 +35,6 @@ from ...interfaces.interchange import (
     recon_workflow_input_fields,
 )
 from ...interfaces.mrtrix import GenerateMasked5tt, ITKTransformConvert, TransformHeader
-from ...niworkflows.interfaces.registration import RobustMNINormalizationRPT
 from ..anatomical.volume import init_output_grid_wf
 from qsiprep.interfaces.utils import GetConnectivityAtlases
 
@@ -300,6 +300,23 @@ def check_hsv_inputs(subj_fs_path):
     return missing
 
 
+def _check_zipped_unzipped(path_to_check):
+    """Check to see if a path exists and warn if it's gzipped."""
+
+    exists = False
+    if path_to_check.exists():
+        exists = True
+    if path_to_check.name.endswith(".gz"):
+        nonzipped = str(path_to_check)[:-3]
+        if Path(nonzipped).exists():
+            LOGGER.warn(
+                "A Non-gzipped input nifti file was found. Consider gzipping %s", nonzipped
+            )
+            exists = True
+    LOGGER.info(f"CHECKING {path_to_check}: {exists}")
+    return exists
+
+
 def check_qsiprep_anatomical_outputs(recon_input_dir, subject_id, anat_type):
     """Determines whether an aligned T1w exists in a qsiprep derivatives directory.
 
@@ -313,18 +330,19 @@ def check_qsiprep_anatomical_outputs(recon_input_dir, subject_id, anat_type):
     to_check = (
         QSIPREP_ANAT_REQUIREMENTS if anat_type == "T1w" else QSIPREP_NORMALIZED_ANAT_REQUIREMENTS
     )
+
     for requirement in to_check:
-        requirement = recon_input_path / requirement.format(subject_id=subject_id)
-        if not requirement.exists():
-            # Is the non-gzipped version is there
-            if requirement.name.endswith(".gz"):
-                nonzipped = str(requirement)[:-3]
-                if Path(nonzipped).exists():
-                    LOGGER.warn(
-                        "A Non-gzipped input nifti file was found. Consider gzipping %s", nonzipped
-                    )
-                    continue
-            missing.append(str(requirement))
+        requirement = requirement.format(subject_id=subject_id)
+        t1_version = recon_input_path / requirement
+        if _check_zipped_unzipped(t1_version):
+            continue
+
+        # Try to see if a T2w version is present
+        t2w_version = recon_input_path / requirement.replace("_T1w", "_T2w")
+        if _check_zipped_unzipped(t2w_version):
+            continue
+        missing.append(str(t1_version))
+
     return missing
 
 
@@ -796,7 +814,7 @@ def get_t1w_registration_node(infant_mode, sloppy, omp_nthreads):
         # Requires a warp file: make an inaccurate one
         settings = pkgrf("qsiprep", "data/quick_syn.json")
         t1_2_mni = pe.Node(
-            RobustMNINormalizationRPT(
+            SpatialNormalizationRPT(
                 float=True,
                 generate_report=True,
                 settings=[settings],
@@ -807,7 +825,7 @@ def get_t1w_registration_node(infant_mode, sloppy, omp_nthreads):
         )
     else:
         t1_2_mni = pe.Node(
-            RobustMNINormalizationRPT(
+            SpatialNormalizationRPT(
                 float=True,
                 generate_report=True,
                 flavor="precise",

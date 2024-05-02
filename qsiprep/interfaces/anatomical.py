@@ -111,7 +111,7 @@ class QsiprepAnatomicalIngress(SimpleInterface):
         )
         self._get_if_exists(
             "t1_preproc",
-            "%s/sub-%s_desc-preproc_T1w.nii*" % (anat_root, sub),
+            "%s/sub-%s_desc-preproc_T*w.nii*" % (anat_root, sub),
             excludes=["space-MNI"],
         )
         if "t1_preproc" not in self._results:
@@ -133,15 +133,15 @@ class QsiprepAnatomicalIngress(SimpleInterface):
         )
         self._get_if_exists(
             "orig_to_t1_mode_forward_transform",
-            "%s/sub-%s*_from-orig_to-T1w_mode-image_xfm.txt" % (anat_root, sub),
+            "%s/sub-%s*_from-orig_to-T*w_mode-image_xfm.txt" % (anat_root, sub),
         )
         self._get_if_exists(
             "t1_2_mni_reverse_transform",
-            "%s/sub-%s*_from-MNI152NLin2009cAsym_to-T1w*_xfm.h5" % (anat_root, sub),
+            "%s/sub-%s*_from-MNI152NLin2009cAsym_to-T*w*_xfm.h5" % (anat_root, sub),
         )
         self._get_if_exists(
             "t1_2_mni_forward_transform",
-            "%s/sub-%s*_from-T1w_to-MNI152NLin2009cAsym_mode-image_xfm.h5" % (anat_root, sub),
+            "%s/sub-%s*_from-T*w_to-MNI152NLin2009cAsym_mode-image_xfm.h5" % (anat_root, sub),
         )
         if not self.inputs.infant_mode:
             self._results["template_image"] = pkgrf("qsiprep", "data/mni_1mm_t1w_lps_brain.nii.gz")

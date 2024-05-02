@@ -18,6 +18,7 @@ from nipype.utils.filemanip import split_filename
 
 from ...engine import Workflow
 from ...interfaces import ConformDwi, DerivativesDataSink
+from ...interfaces.bids import get_metadata_for_nifti
 from ...interfaces.dipy import Patch2Self
 from ...interfaces.dwi_merge import MergeDWIs, PhaseToRad, StackConfounds
 from ...interfaces.gradients import ExtractB0s
@@ -117,6 +118,8 @@ def init_merge_and_denoise_wf(
             bvals from merged images
         merged_bvec
             bvecs from merged images
+        merged_json
+            JSON file containing slice timings for slice2vol
         noise_image
             image(s) created by ``dwidenoise``
         original_files
@@ -133,6 +136,7 @@ def init_merge_and_denoise_wf(
                 "merged_raw_image",
                 "merged_bval",
                 "merged_bvec",
+                "merged_json",
                 "noise_images",
                 "bias_images",
                 "denoising_confounds",
@@ -151,6 +155,7 @@ def init_merge_and_denoise_wf(
             bids_dwi_files=raw_dwi_files,
             b0_threshold=b0_threshold,
             harmonize_b0_intensities=not no_b0_harmonization,
+            scan_metadata={scan: get_metadata_for_nifti(scan) for scan in raw_dwi_files},
         ),
         name="merge_dwis",
         n_procs=omp_nthreads,
@@ -285,6 +290,7 @@ def init_merge_and_denoise_wf(
             ('original_images', 'original_files'),
             ('out_bval', 'merged_bval'),
             ('out_bvec', 'merged_bvec'),
+            ('merged_metadata', 'merged_json')
         ]),
     ])  # fmt:skip
 

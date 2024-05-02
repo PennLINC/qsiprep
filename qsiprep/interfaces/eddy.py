@@ -7,6 +7,7 @@ Prepare files for TOPUP and eddy
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 """
+import json
 import os
 import os.path as op
 
@@ -45,6 +46,8 @@ class GatherEddyInputsInputSpec(BaseInterfaceInputSpec):
     topup_max_b0s_per_spec = traits.CInt(1, usedefault=True)
     topup_requested = traits.Bool(False, usedefault=True)
     raw_image_sdc = traits.Bool(True, usedefault=True)
+    eddy_config = File(exists=True, mandatory=True)
+    json_file = File(exists=True)
 
 
 class GatherEddyInputsOutputSpec(TraitedSpec):
@@ -60,6 +63,8 @@ class GatherEddyInputsOutputSpec(TraitedSpec):
     forward_transforms = traits.List()
     forward_warps = traits.List()
     topup_report = traits.Str(desc="description of where data came from")
+    json_file = File(exists=True)
+    multiband_factor = traits.Int()
 
 
 class GatherEddyInputs(SimpleInterface):
@@ -125,7 +130,19 @@ class GatherEddyInputs(SimpleInterface):
         # these have already had HMC, SDC applied
         self._results["forward_transforms"] = []
         self._results["forward_warps"] = []
+
+        # Based on the eddy config, determine whether to send a json argument
+        with open(self.inputs.eddy_config, "r") as eddy_cfg_f:
+            eddy_config = json.load(eddy_cfg_f)
+            # json file is only allowed if mporder is defined
+            if "mporder" in eddy_config:
+                self._results["json_file"] = self.inputs.json_file
+
         return runtime
+
+
+class ExtendedEddyInputSpec(fsl.epi.EddyInputSpec):
+    num_threads = traits.Int(1, usedefault=True, argstr="--nthr=%d")
 
 
 class ExtendedEddyOutputSpec(fsl.epi.EddyOutputSpec):
@@ -156,31 +173,17 @@ class ExtendedEddyOutputSpec(fsl.epi.EddyOutputSpec):
 
 
 class ExtendedEddy(fsl.Eddy):
+    input_spec = ExtendedEddyInputSpec
     output_spec = ExtendedEddyOutputSpec
-
-    _num_threads = 1
 
     def __init__(self, **inputs):
         super(ExtendedEddy, self).__init__(**inputs)
-        self.inputs.on_trait_change(self._num_threads_update, "num_threads")
-        if not isdefined(self.inputs.num_threads):
-            self.inputs.num_threads = self._num_threads
-        else:
-            self._num_threads_update()
         self.inputs.on_trait_change(self._use_cuda, "use_cuda")
         if isdefined(self.inputs.use_cuda):
             self._use_cuda()
 
-    def _num_threads_update(self):
-        self._num_threads = self.inputs.num_threads
-        if not isdefined(self.inputs.num_threads):
-            if "OMP_NUM_THREADS" in self.inputs.environ:
-                del self.inputs.environ["OMP_NUM_THREADS"]
-        else:
-            self.inputs.environ["OMP_NUM_THREADS"] = str(self.inputs.num_threads)
-
     def _use_cuda(self):
-        self._cmd = "eddy_cuda" if self.inputs.use_cuda else "eddy_openmp"
+        self._cmd = "eddy_cuda10.2" if self.inputs.use_cuda else "eddy_cpu"
 
     def _list_outputs(self):
         outputs = self.output_spec().get()
@@ -241,6 +244,10 @@ class ExtendedEddy(fsl.Eddy):
         if name == "field":
             pth, fname, _ = split_filename(value)
             return spec.argstr % op.join(pth, fname)
+        if name == "json":
+            if isdefined(self.inputs.mporder):
+                return spec.argstr % value
+            return ""
         return super(ExtendedEddy, self)._format_arg(name, spec, value)
 
 

@@ -2,7 +2,7 @@ version: 2.1
 
 .dockersetup: &dockersetup
   docker:
-    - image: pennbbl/qsiprep_build:24.1.4
+    - image: pennbbl/qsiprep_build:24.4.29
   working_directory: /src/qsiprep
 
 runinstall: &runinstall
@@ -38,20 +38,6 @@ jobs:
       - checkout
       - run: *runinstall
 
-  build_docs:
-    environment:
-      FSLOUTPUTTYPE: NIFTI
-      NIPYPE_NO_ET: "1"
-    <<: *dockersetup
-    steps:
-      - checkout
-      - run: *runinstall
-      - run:
-          name: Build documentation
-          command: |
-            conda install -y make
-            pip install ".[doc]"
-            make SHPINXOPTS="-W" -C docs html
 
   DSCSDSI:
     resource_class: large
@@ -123,7 +109,7 @@ jobs:
       - run: *runinstall
       - run:
           name: Run TENSORLine with epi fmaps and DRBUDDI
-          no_output_timeout: 1h
+          no_output_timeout: 2h
           command: |
             cd .circleci
             bash DRBUDDI_TENSORLine_epi.sh
@@ -138,7 +124,7 @@ jobs:
       - run: *runinstall
       - run:
           name: Run SHORELine with epi fmaps and DRBUDDI
-          no_output_timeout: 1h
+          no_output_timeout: 2h
           command: |
             cd .circleci
             bash DRBUDDI_SHORELine_epi.sh
@@ -153,7 +139,7 @@ jobs:
       - run: *runinstall
       - run:
           name: Run Eddy with rpe series fmaps and DRBUDDI
-          no_output_timeout: 1h
+          no_output_timeout: 3h
           command: |
             cd .circleci
             bash DRBUDDI_eddy_rpe_series.sh
@@ -168,7 +154,7 @@ jobs:
       - run: *runinstall
       - run:
           name: Test the intramodal template workflow
-          no_output_timeout: 1h
+          no_output_timeout: 2h
           command: |
             cd .circleci
             bash IntramodalTemplate.sh
@@ -360,117 +346,12 @@ jobs:
               fi
             fi
 
-  test_deploy_pypi:
-    docker:
-      - image: cimg/python:3.10.9
-    working_directory: /tmp/src/qsiprep
-    steps:
-      - checkout
-      - run:
-          name: Install stuff
-          command: |
-            sudo apt-get update
-            sudo apt-get install -y libblas-dev liblapack-dev
-      - run:
-          name: Update build tools
-          command: pip install --upgrade build twine hatch
-      - run:
-          name: Build QSIPrep
-          command: python -m build
-      - run:
-          name: Twine check qsiprep
-          command: twine check dist/*
-      - run:
-          name: Pre-run hatch version
-          command: hatch version
-      - store_artifacts:
-          path: /tmp/src/qsiprep/dist
-      - run:
-          name: Check sdist distribution
-          command: |
-            THISVERSION=$( hatch version )
-            THISVERSION=${CIRCLE_TAG:-$THISVERSION}
-            virtualenv --python=python sdist
-            source sdist/bin/activate
-            python -m pip install --upgrade pip
-            python -m pip install dist/qsiprep*.tar.gz
-            which qsiprep | grep sdist\\/bin
-            INSTALLED_VERSION=$(qsiprep --version)
-            INSTALLED_VERSION=${INSTALLED_VERSION%$'\r'}
-            INSTALLED_VERSION=${INSTALLED_VERSION#*"qsiprep v"}
-            echo "VERSION: \"$THISVERSION\""
-            echo "INSTALLED: \"$INSTALLED_VERSION\""
-            test "$INSTALLED_VERSION" = "$THISVERSION"
-      - run:
-          name: Check wheel distribution
-          command: |
-            THISVERSION=$( hatch version )
-            THISVERSION=${CIRCLE_TAG:-$THISVERSION}
-            virtualenv --python=python wheel
-            source wheel/bin/activate
-            python -m pip install dist/qsiprep*.whl
-            which qsiprep | grep wheel\\/bin
-            INSTALLED_VERSION=$(qsiprep --version)
-            INSTALLED_VERSION=${INSTALLED_VERSION%$'\r'}
-            INSTALLED_VERSION=${INSTALLED_VERSION#*"qsiprep v"}
-            echo "VERSION: \"$THISVERSION\""
-            echo "INSTALLED: \"$INSTALLED_VERSION\""
-            test "$INSTALLED_VERSION" = "$THISVERSION"
-      - run:
-          name: Build qsiprep-docker
-          command: |
-            THISVERSION=$( hatch version )
-            THISVERSION=${CIRCLE_TAG:-$THISVERSION}
-            sed -i "s/REPLACEME/${THISVERSION}/g" wrapper/pyproject.toml
-            python -m build wrapper
-      - run:
-          name: Twine check wrapper
-          command: twine check wrapper/dist/*
-      - store_artifacts:
-          path: /tmp/src/qsiprep/wrapper/dist
-
-  deploy_pypi:
-    docker:
-      - image: cimg/python:3.10.9
-    working_directory: /tmp/src/qsiprep
-    steps:
-      - checkout
-      - run:
-          name: Install stuff
-          command: |
-            sudo apt-get update
-            sudo apt-get install -y libblas-dev liblapack-dev
-      - run:
-          name: Update build tools
-          command: pip install --upgrade build twine
-      - run:
-          name: Build QSIPrep
-          command: python -m build
-      - run:
-          name: Build qsiprep-docker
-          command: python -m build wrapper/
-      - run:
-          name: Upload packages to PyPI
-          command: python -m twine upload -u __token__ -p ${PYPI_PASS} dist/qsiprep* wrapper/dist/qsiprep*
-
 workflows:
   version: 2
   build_test_deploy:
     jobs:
 
       - build:
-          filters:
-            tags:
-              only: /.*/
-
-      - build_docs:
-          requires:
-            - build
-          filters:
-            tags:
-              only: /.*/
-
-      - test_deploy_pypi:
           filters:
             tags:
               only: /.*/
@@ -630,8 +511,6 @@ workflows:
 
       - deployable:
           requires:
-            - build_docs
-            - test_deploy_pypi
             - DSCSDSI
             - DSDTI_nofmap
             - DSDTI_synfmap
@@ -662,14 +541,5 @@ workflows:
           filters:
             branches:
               only: master
-            tags:
-              only: /.*/
-
-      - deploy_pypi:
-          requires:
-            - deployable
-          filters:
-            branches:
-              ignore: /.*/
             tags:
               only: /.*/

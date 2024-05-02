@@ -12,15 +12,13 @@ import os
 from pathlib import Path
 
 import nibabel as nb
-import pkg_resources as pkgr
-from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from nipype.utils.filemanip import split_filename
+from niworkflows.interfaces.reportlets.registration import SimpleBeforeAfterRPT
 
 from ...engine import Workflow
 from ...interfaces import DerivativesDataSink
-from ...niworkflows.interfaces import SimpleBeforeAfter
 from ..anatomical import init_synthstrip_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
@@ -121,33 +119,33 @@ def init_dwi_reference_wf(
     if dwi_file is not None:
         inputnode.inputs.b0_template = dwi_file
 
-    # b=0 images are too diverse and tricky to reliably mask.
-    # Instead register the t1w to the b=0 and use that brain mask
-    if register_t1:
-        affine_transform = pkgr.resource_filename("qsiprep", "data/affine.json")
-        register_t1_to_raw = pe.Node(
-            ants.Registration(from_file=affine_transform),
-            name="register_t1_to_raw",
-            n_proces=omp_nthreads,
-        )
-        t1_mask_to_b0 = pe.Node(
-            ants.ApplyTransforms(interpolation="MultiLabel", invert_transform_flags=[True]),
-            name="t1_mask_to_b0",
-            n_procs=omp_nthreads,
-        )
-        workflow.connect([
-            (inputnode, register_t1_to_raw, [
-                ('t1_brain', 'fixed_image'),
-                ('t1_mask', 'fixed_image_masks'),
-                ('b0_template', 'moving_image'),
-            ]),
-            (register_t1_to_raw, t1_mask_to_b0, [('forward_transforms', 'transforms')]),
-        ])  # fmt:skip
-    else:
-        # T1w is already aligned
-        t1_mask_to_b0 = pe.Node(
-            ants.ApplyTransforms(transforms="identity"), name="t1_mask_to_b0", n_procs=omp_nthreads
-        )
+    # Synthstrip is used now
+    # if register_t1:
+    #     affine_transform = pkgr.resource_filename("qsiprep", "data/affine.json")
+    #     register_t1_to_raw = pe.Node(
+    #         ants.Registration(from_file=affine_transform),
+    #         name="register_t1_to_raw",
+    #         n_procs=omp_nthreads,
+    #     )
+    #     t1_mask_to_b0 = pe.Node(
+    #         ants.ApplyTransforms(interpolation="MultiLabel", invert_transform_flags=[True]),
+    #         name="t1_mask_to_b0",
+    #         n_procs=omp_nthreads,
+    #     )
+    #     workflow.connect([
+    #         (inputnode, register_t1_to_raw, [
+    #             ('t1_brain', 'fixed_image'),
+    #             ('t1_mask', 'fixed_image_masks'),
+    #             ('b0_template', 'moving_image'),
+    #         ]),
+    #         (register_t1_to_raw, t1_mask_to_b0, [('forward_transforms', 'transforms')]),
+    #     ])  # fmt:skip
+    # else:
+    #     # T1w is already aligned
+    #     t1_mask_to_b0 = pe.Node(
+    #         ants.ApplyTransforms(transforms="identity"), name="t1_mask_to_b0",
+    # n_procs=omp_nthreads
+    #     )
 
     # Use synthstrip to extract the brain
     synthstrip_wf = init_synthstrip_wf(
@@ -155,10 +153,10 @@ def init_dwi_reference_wf(
     )
 
     workflow.connect([
-        (inputnode, t1_mask_to_b0, [
-            ('t1_mask', 'input_image'),
-            ('b0_template', 'reference_image'),
-        ]),
+        # (inputnode, t1_mask_to_b0, [
+        #     ('t1_mask', 'input_image'),
+        #     ('b0_template', 'reference_image'),
+        # ]),
         (inputnode, outputnode, [
             ('b0_template', 'raw_ref_image'),
             ('b0_template', 'ref_image'),
@@ -174,7 +172,7 @@ def init_dwi_reference_wf(
         if source_file is None:
             raise Exception("Needs a source_file to write a report")
 
-        b0ref_reportlet = pe.Node(SimpleBeforeAfter(), name="b0ref_reportlet", mem_gb=0.1)
+        b0ref_reportlet = pe.Node(SimpleBeforeAfterRPT(), name="b0ref_reportlet", mem_gb=0.1)
         ds_report_b0_mask = pe.Node(
             DerivativesDataSink(desc=desc, suffix="b0ref", source_file=source_file),
             name="ds_report_b0_mask",
