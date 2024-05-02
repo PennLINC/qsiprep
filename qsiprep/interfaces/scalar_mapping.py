@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
+import logging
 import os.path as op
 import subprocess
 
@@ -22,6 +23,7 @@ from nipype.interfaces.base import (
 )
 from nipype.utils.filemanip import fname_presuffix
 
+LOGGER = logging.getLogger("nipype.interface")
 from .bids import get_bids_params
 
 
@@ -198,9 +200,15 @@ def calculate_mask_stats(
     if weighting_vector is not None:
         results["weighted_mean"] = np.sum(voxel_data * weighting_vector)
         nz_weighting_vector = weighting_vector.copy()
-        nz_weighting_vector[np.isnan(nz_voxel_data)] = np.nan
-        nz_weighting_vector = nz_weighting_vector / np.nansum(nz_weighting_vector)
-        results["masked_weighted_mean"] = np.nansum(nz_voxel_data * nz_weighting_vector)
+        try:
+            nz_weighting_vector[np.isnan(nz_voxel_data)] = np.nan
+            nz_weighting_vector = nz_weighting_vector / np.nansum(nz_weighting_vector)
+            results["masked_weighted_mean"] = np.nansum(nz_voxel_data * nz_weighting_vector)
+        except Exception as exc:
+            LOGGER.warn(
+                f"Error calculating weighted mean of {variable_name} in {mask_name}\n{exc}"
+            )
+            results["masked_weighted_mean"] = np.nan
 
     return results
 

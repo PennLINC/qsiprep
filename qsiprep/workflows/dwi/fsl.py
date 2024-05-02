@@ -23,6 +23,8 @@ from ...interfaces.eddy import (
     GatherEddyInputs,
     boilerplate_from_eddy_config,
 )
+from ...interfaces.fmap import ParallelTOPUP
+from ...interfaces.gradients import ExtractB0s
 from ...interfaces.images import ConformDwi, IntraModalMerge, SplitDWIsFSL
 from ...interfaces.nilearn import EnhanceB0
 from ...interfaces.reports import TopupSummary
@@ -135,8 +137,6 @@ def init_fsl_hmc_wf(
     outputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
-                "b0_template",
-                "b0_template_mask",
                 "pre_sdc_template",
                 "bval_files",
                 "hmc_optimization_data",
@@ -162,6 +162,9 @@ def init_fsl_hmc_wf(
                 "down_fa_image",
                 "down_fa_corrected_image",
                 "t2w_image",
+                # Not from SDC, but from the eddy-resampled data
+                "b0_template",
+                "b0_template_mask",
             ]
         ),
         name="outputnode",
@@ -205,10 +208,15 @@ def init_fsl_hmc_wf(
         SplitDWIsFSL(b0_threshold=b0_threshold, deoblique_bvecs=True), name="split_eddy_lps"
     )
 
-    # Convert the b=0 template from pre_eddy_b0_ref to LPS+
-    b0_ref_to_lps = pe.Node(ConformDwi(orientation="LPS"), name="b0_ref_to_lps")
-    b0_ref_mask_to_lps = pe.Node(ConformDwi(orientation="LPS"), name="b0_ref_mask_to_lps")
-    b0_ref_brain_to_lps = pe.Node(ConformDwi(orientation="LPS"), name="b0_ref_brain_to_lps")
+    extract_b0_series = pe.Node(ExtractB0s(b0_threshold=b0_threshold), name="extract_b0_series")
+    b0_ref_for_coreg = init_dwi_reference_wf(
+        register_t1=False,
+        gen_report=False,
+        desc="b0_for_coreg",
+        name="b0_ref_for_coreg",
+        source_file=source_file,
+        omp_nthreads=omp_nthreads,
+    )
 
     workflow.connect([
         # These images and gradients should be in LAS+
@@ -222,13 +230,6 @@ def init_fsl_hmc_wf(
             ('t1_brain', 'inputnode.t1_brain'),
             ('t1_seg', 'inputnode.t1_seg'),
             ('t1_mask', 'inputnode.t1_mask')]),
-        # Convert distorted ref to LPS+
-        (pre_eddy_b0_ref_wf, b0_ref_to_lps, [
-            ('outputnode.ref_image', 'dwi_file')]),
-        (pre_eddy_b0_ref_wf, b0_ref_mask_to_lps, [
-            ('outputnode.dwi_mask', 'dwi_file')]),
-        (pre_eddy_b0_ref_wf, b0_ref_brain_to_lps, [
-            ('outputnode.ref_image_brain', 'dwi_file')]),
         (gather_inputs, eddy, [
             ('eddy_indices', 'in_index'),
             ('eddy_acqp', 'in_acqp'),
@@ -238,7 +239,6 @@ def init_fsl_hmc_wf(
             ('dwi_file', 'in_file'),
             ('bval_file', 'in_bval'),
             ('bvec_file', 'in_bvec')]),
-        (pre_eddy_b0_ref_wf, eddy, [('outputnode.dwi_mask', 'in_mask')]),
         (gather_inputs, outputnode, [
             ('forward_transforms', 'to_dwi_ref_affines')]),
         (gather_inputs, enhance_pre_sdc, [
@@ -266,8 +266,15 @@ def init_fsl_hmc_wf(
             (slice_quality, 'slice_quality'),
             (slice_quality, 'hmc_optimization_data')]),
         (eddy, spm_motion, [('out_parameter', 'eddy_motion')]),
-        (b0_ref_mask_to_lps, outputnode, [('dwi_file', 'b0_template_mask')]),
-        (spm_motion, outputnode, [('spm_motion_file', 'motion_params')])
+
+        (spm_motion, outputnode, [('spm_motion_file', 'motion_params')]),
+        # Create a b=0 reference from Eddy's output
+        (back_to_lps, extract_b0_series, [
+            ('dwi_file', 'dwi_series'),
+            ('bval_file', 'bval_file')]),
+        (extract_b0_series, b0_ref_for_coreg, [("b0_average", "inputnode.b0_template")]),
+        (b0_ref_for_coreg, outputnode, [
+            ('outputnode.dwi_mask', 'b0_template_mask')]),
     ])  # fmt:skip
 
     # Fieldmap correction to be done in LAS+: TOPUP for rpe series or epi fieldmap
@@ -284,7 +291,11 @@ def init_fsl_hmc_wf(
             gather_inputs.inputs.epi_fmaps = scan_groups["fieldmap_info"]["epi"]
 
         outputnode.inputs.sdc_method = "TOPUP"
-        topup = pe.Node(fsl.TOPUP(out_field="fieldmap_HZ.nii.gz", scale=1), name="topup")
+        topup = pe.Node(
+            ParallelTOPUP(out_field="fieldmap_HZ.nii.gz", scale=1, nthreads=omp_nthreads),
+            name="topup",
+            n_procs=omp_nthreads,
+        )
         topup_summary = pe.Node(TopupSummary(), name="topup_summary")
         ds_report_topupsummary = pe.Node(
             DerivativesDataSink(suffix="topupsummary", source_file=source_file),
@@ -305,21 +316,34 @@ def init_fsl_hmc_wf(
         topup_to_eddy_reg = pe.Node(
             fsl.FLIRT(dof=6, output_type="NIFTI_GZ"), name="topup_to_eddy_reg"
         )
+        transform_mask_to_eddy = pe.Node(
+            fsl.ApplyXFM(apply_xfm=True, interp="nearestneighbour", output_type="NIFTI_GZ"),
+            name="transform_mask_to_eddy",
+        )
+
         workflow.connect([
             (gather_inputs, topup, [
                 ('topup_datain', 'encoding_file'),
                 ('topup_imain', 'in_file'),
                 ('topup_config', 'config')]),
+            (gather_inputs, ds_topupcsv, [('b0_csv', 'in_file')]),
             (topup, eddy, [
                 ('out_field', 'field')]),
             (gather_inputs, topup_to_eddy_reg, [
                 ('topup_first', 'in_file'),
                 ('eddy_first', 'reference')]),
-            (gather_inputs, ds_topupcsv, [('b0_csv', 'in_file')]),
             (topup_to_eddy_reg, eddy, [('out_matrix_file', 'field_mat')]),
+
             # Use corrected images from TOPUP to make a mask for eddy
             (topup, unwarped_mean, [('out_corrected', 'in_files')]),
             (unwarped_mean, pre_eddy_b0_ref_wf, [('out_avg', 'inputnode.b0_template')]),
+
+            # Ensure that the mask is aligned with eddy's first image
+            (pre_eddy_b0_ref_wf, transform_mask_to_eddy, [("outputnode.dwi_mask", "in_file")]),
+            (topup_to_eddy_reg, transform_mask_to_eddy, [("out_matrix_file", "in_matrix_file")]),
+            (gather_inputs, transform_mask_to_eddy, [("eddy_first", "reference")]),
+            (transform_mask_to_eddy, eddy, [('out_file', 'in_mask')]),
+
             # Save reports
             (gather_inputs, topup_summary, [('topup_report', 'summary')]),
             (topup_summary, ds_report_topupsummary, [('out_report', 'in_file')])
@@ -330,7 +354,7 @@ def init_fsl_hmc_wf(
             workflow.connect([
                 # There will be no SDC warps, they are applied by eddy
                 (gather_inputs, outputnode, [('forward_warps', 'to_dwi_ref_warps')]),
-                (b0_ref_to_lps, outputnode, [('dwi_file', 'b0_template')]),
+                (b0_ref_for_coreg, outputnode, [('outputnode.ref_image', 'b0_template')]),
             ])  # fmt:skip
     else:
         # If we're not using TOPUP we need to make a mask for eddy based on the
@@ -341,7 +365,9 @@ def init_fsl_hmc_wf(
             (gather_inputs, distorted_merge, [
                 ('topup_imain', 'in_files')]),
             (distorted_merge, pre_eddy_b0_ref_wf, [
-                ('out_avg', 'inputnode.b0_template')])])  # fmt:skip
+                ('out_avg', 'inputnode.b0_template')]),
+            (pre_eddy_b0_ref_wf, eddy, [("outputnode.dwi_mask", "in_mask")]),
+        ])  # fmt:skip
 
     if fieldmap_type in ("epi", "rpe_series") and "drbuddi" in pepolar_method.lower():
         outputnode.inputs.sdc_method = "DRBUDDI"
@@ -403,10 +429,10 @@ def init_fsl_hmc_wf(
 
         workflow.connect([
             # Send to SDC workflow
-            (b0_ref_to_lps, b0_sdc_wf, [
-                ('dwi_file', 'inputnode.b0_ref')]),
-            (b0_ref_brain_to_lps, b0_sdc_wf, [('dwi_file', 'inputnode.b0_ref_brain')]),
-            (b0_ref_mask_to_lps, b0_sdc_wf, [('dwi_file', 'inputnode.b0_mask')]),
+            (b0_ref_for_coreg, b0_sdc_wf, [
+                ('outputnode.ref_image', 'inputnode.b0_ref'),
+                ('outputnode.ref_image_brain', 'inputnode.b0_ref_brain'),
+                ('outputnode.dwi_mask', 'inputnode.b0_mask')]),
             (inputnode, b0_sdc_wf, [
                 ('t1_brain', 'inputnode.t1_brain'),
                 ('t1_2_mni_reverse_transform',
@@ -421,7 +447,7 @@ def init_fsl_hmc_wf(
     if not fieldmap_type:
         outputnode.inputs.sdc_method = "None"
         workflow.connect([
-            (b0_ref_to_lps, outputnode, [
-                ('dwi_file', 'b0_template')])
+            (b0_ref_for_coreg, outputnode, [
+                ('outputnode.ref_image', 'b0_template')])
         ])  # fmt:skip
     return workflow

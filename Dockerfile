@@ -7,7 +7,7 @@ RUN apt-get update && \
 COPY . /src/qsiprep
 RUN python -m build /src/qsiprep
 
-FROM pennbbl/qsiprep_build:24.1.4
+FROM pennbbl/qsiprep_build:24.4.29
 
 # Install qsiprep wheel
 COPY --from=wheelstage /src/qsiprep/dist/*.whl .
@@ -22,8 +22,7 @@ RUN find $HOME -type d -exec chmod go=u {} + && \
 
 RUN ldconfig
 WORKDIR /tmp/
-ENTRYPOINT ["/usr/local/miniconda/bin/qsiprep"]
-
+ENTRYPOINT ["/opt/conda/envs/qsiprep/bin/qsiprep"]
 ARG BUILD_DATE
 ARG VCS_REF
 ARG VERSION
