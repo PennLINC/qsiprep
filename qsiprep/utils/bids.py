@@ -9,7 +9,7 @@ Utilities to handle BIDS inputs
 Fetch some test data
 
     >>> import os
-    >>> from qsiprep.niworkflows import data
+    >>> from niworkflows import data
     >>> data_root = data.get_bids_examples(variant='BIDS-examples-1-enh-ds054')
     >>> os.chdir(data_root)
 

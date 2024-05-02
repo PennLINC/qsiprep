@@ -15,10 +15,10 @@ import nibabel as nb
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from nipype.utils.filemanip import split_filename
+from niworkflows.interfaces.reportlets.registration import SimpleBeforeAfterRPT
 
 from ...engine import Workflow
 from ...interfaces import DerivativesDataSink
-from ...niworkflows.interfaces import SimpleBeforeAfter
 from ..anatomical import init_synthstrip_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
@@ -172,7 +172,7 @@ def init_dwi_reference_wf(
         if source_file is None:
             raise Exception("Needs a source_file to write a report")
 
-        b0ref_reportlet = pe.Node(SimpleBeforeAfter(), name="b0ref_reportlet", mem_gb=0.1)
+        b0ref_reportlet = pe.Node(SimpleBeforeAfterRPT(), name="b0ref_reportlet", mem_gb=0.1)
         ds_report_b0_mask = pe.Node(
             DerivativesDataSink(desc=desc, suffix="b0ref", source_file=source_file),
             name="ds_report_b0_mask",

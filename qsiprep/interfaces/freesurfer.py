@@ -39,10 +39,9 @@ from nipype.interfaces.base import (
 from nipype.interfaces.freesurfer.base import FSCommandOpenMP, FSTraitedSpec
 from nipype.interfaces.freesurfer.utils import LTAConvert
 from nipype.utils.filemanip import copyfile, filename_to_list, fname_presuffix
+from niworkflows.utils.images import _copyxform
 from scipy.ndimage.morphology import binary_fill_holes
 from skimage import morphology as sim
-
-from ..niworkflows.interfaces.utils import _copyxform
 
 
 class FSTraitedSpecOpenMP(FSTraitedSpec):

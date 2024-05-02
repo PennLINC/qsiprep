@@ -19,6 +19,7 @@ from nipype.interfaces import afni, ants, mrtrix3
 from nipype.interfaces import utility as niu
 from nipype.interfaces.base import traits
 from nipype.pipeline import engine as pe
+from niworkflows.interfaces.reportlets.registration import SpatialNormalizationRPT
 from pkg_resources import resource_filename as pkgrf
 
 from ...engine import Workflow
@@ -34,7 +35,6 @@ from ...interfaces.interchange import (
     recon_workflow_input_fields,
 )
 from ...interfaces.mrtrix import GenerateMasked5tt, ITKTransformConvert, TransformHeader
-from ...niworkflows.interfaces.registration import RobustMNINormalizationRPT
 from ..anatomical.volume import init_output_grid_wf
 from qsiprep.interfaces.utils import GetConnectivityAtlases
 
@@ -814,7 +814,7 @@ def get_t1w_registration_node(infant_mode, sloppy, omp_nthreads):
         # Requires a warp file: make an inaccurate one
         settings = pkgrf("qsiprep", "data/quick_syn.json")
         t1_2_mni = pe.Node(
-            RobustMNINormalizationRPT(
+            SpatialNormalizationRPT(
                 float=True,
                 generate_report=True,
                 settings=[settings],
@@ -825,7 +825,7 @@ def get_t1w_registration_node(infant_mode, sloppy, omp_nthreads):
         )
     else:
         t1_2_mni = pe.Node(
-            RobustMNINormalizationRPT(
+            SpatialNormalizationRPT(
                 float=True,
                 generate_report=True,
                 flavor="precise",

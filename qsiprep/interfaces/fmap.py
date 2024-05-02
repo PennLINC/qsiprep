@@ -40,16 +40,16 @@ from nipype.interfaces.base import (
 from nipype.interfaces.fsl.epi import TOPUP, TOPUPInputSpec
 from nipype.interfaces.mixins import reporting
 from nipype.utils.filemanip import fname_presuffix, split_filename
-
-from ..niworkflows.viz.utils import (
+from niworkflows.viz.utils import (
     SVGNS,
-    SVGFigure,
     compose_view,
     cuts_from_bbox,
     extract_svg,
     robust_set_limits,
     uuid4,
 )
+from svgutils.transform import SVGFigure
+
 from .images import to_lps
 from .reports import topup_selection_to_report
 
@@ -1382,7 +1382,7 @@ def plot_pepolar(
     Plot the foreground and background views.
     Default order is: axial, coronal, sagittal
 
-    Updated version from sdcflows and different from in qsiprep.niworkflows.viz.utils
+    Updated version from sdcflows and different from in niworkflows.viz.utils
     so that the contour lines never move. This is accomplished by making an empty
     image in the grid of the segmentation image and using this as the background.
 
@@ -1479,7 +1479,7 @@ def plot_fa_reg(
     Plot the foreground and background views.
     Default order is: axial, coronal, sagittal
 
-    Updated version from sdcflows and different from in qsiprep.niworkflows.viz.utils
+    Updated version from sdcflows and different from in niworkflows.viz.utils
     so that the contour lines never move. This is accomplished by making an empty
     image in the grid of the segmentation image and using this as the background.
 
