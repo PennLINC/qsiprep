@@ -37,6 +37,7 @@ from nipype.interfaces.base import (
     isdefined,
     traits,
 )
+from nipype.interfaces.fsl.epi import TOPUP, TOPUPInputSpec
 from nipype.interfaces.mixins import reporting
 from nipype.utils.filemanip import fname_presuffix, split_filename
 
@@ -54,6 +55,14 @@ from .reports import topup_selection_to_report
 
 LOGGER = logging.getLogger("nipype.interface")
 CRITICAL_KEYS = ["PhaseEncodingDirection", "TotalReadoutTime", "EffectiveEchoSpacing"]
+
+
+class _ParallelTOPUPInputSpec(TOPUPInputSpec):
+    nthreads = traits.Int(argstr="--nthr %d", nohash=True, mandatory=False)
+
+
+class ParallelTOPUP(TOPUP):
+    input_spec = _ParallelTOPUPInputSpec
 
 
 class B0RPEFieldmapInputSpec(BaseInterfaceInputSpec):

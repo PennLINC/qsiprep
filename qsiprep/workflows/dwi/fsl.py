@@ -23,6 +23,7 @@ from ...interfaces.eddy import (
     GatherEddyInputs,
     boilerplate_from_eddy_config,
 )
+from ...interfaces.fmap import ParallelTOPUP
 from ...interfaces.gradients import ExtractB0s
 from ...interfaces.images import ConformDwi, IntraModalMerge, SplitDWIsFSL
 from ...interfaces.nilearn import EnhanceB0
@@ -290,7 +291,11 @@ def init_fsl_hmc_wf(
             gather_inputs.inputs.epi_fmaps = scan_groups["fieldmap_info"]["epi"]
 
         outputnode.inputs.sdc_method = "TOPUP"
-        topup = pe.Node(fsl.TOPUP(out_field="fieldmap_HZ.nii.gz", scale=1), name="topup")
+        topup = pe.Node(
+            ParallelTOPUP(out_field="fieldmap_HZ.nii.gz", scale=1, nthreads=omp_nthreads),
+            name="topup",
+            n_procs=omp_nthreads,
+        )
         topup_summary = pe.Node(TopupSummary(), name="topup_summary")
         ds_report_topupsummary = pe.Node(
             DerivativesDataSink(suffix="topupsummary", source_file=source_file),
