@@ -58,7 +58,7 @@ CRITICAL_KEYS = ["PhaseEncodingDirection", "TotalReadoutTime", "EffectiveEchoSpa
 
 
 class _ParallelTOPUPInputSpec(TOPUPInputSpec):
-    nthreads = traits.Int(argstr="--nthr %d", nohash=True, mandatory=False)
+    nthreads = traits.Int(argstr="--nthr=%d", nohash=True, mandatory=False)
 
 
 class ParallelTOPUP(TOPUP):
