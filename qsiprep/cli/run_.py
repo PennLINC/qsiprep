@@ -17,7 +17,7 @@ from multiprocessing import cpu_count
 from pathlib import Path
 from time import strftime
 
-from ..utils.ingress import collect_ukb_participants, create_ukb_layout
+
 
 warnings.filterwarnings("ignore", category=ImportWarning)
 warnings.filterwarnings("ignore", category=PendingDeprecationWarning)
@@ -26,69 +26,6 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 logging.addLevelName(25, "IMPORTANT")  # Add a new level between INFO and WARNING
 logging.addLevelName(15, "VERBOSE")  # Add a new level between INFO and DEBUG
 logger = logging.getLogger("cli")
-
-
-def _warn_redirect(message, category, filename, lineno, file=None, line=None):
-    logger.warning("Captured warning (%s): %s", category, message)
-
-
-def check_deps(workflow):
-    from nipype.utils.filemanip import which
-
-    return sorted(
-        (node.interface.__class__.__name__, node.interface._cmd)
-        for node in workflow._get_all_nodes()
-        if (hasattr(node.interface, "_cmd") and which(node.interface._cmd.split()[0]) is None)
-    )
-
-
-def _filter_pybids_none_any(dct):
-    import bids
-
-    return {
-        k: bids.layout.Query.NONE if v is None else (bids.layout.Query.ANY if v == "*" else v)
-        for k, v in dct.items()
-    }
-
-
-def _bids_filter(value):
-    from json import loads
-
-    from bids.layout import Query
-
-    if value and Path(value).exists():
-        try:
-            filters = loads(Path(value).read_text(), object_hook=_filter_pybids_none_any)
-        except Exception:
-            raise Exception("Unable to parse BIDS filter file. Check that it is " "valid JSON.")
-    else:
-        raise Exception("Unable to load BIDS filter file " + value)
-
-    # unserialize pybids Query enum values
-    for acq, _filters in filters.items():
-        filters[acq] = {
-            k: getattr(Query, v[7:-4]) if not isinstance(v, Query) and "Query" in v else v
-            for k, v in _filters.items()
-        }
-    return filters
-
-
-def get_parser():
-    """Build parser object"""
-    from ..__about__ import __version__
-
-    verstr = "qsiprep v{}".format(__version__)
-
-    parser = ArgumentParser(
-        description="qsiprep: q-Space Image Preprocessing workflows",
-        formatter_class=ArgumentDefaultsHelpFormatter,
-    )
-
-
-
-    return parser
-
-
 
 def main():
     """Entry point"""
@@ -299,13 +236,3 @@ def main():
         subject_list, output_dir, work_dir, run_uuid, pipeline_mode="qsirecon"
     )
     sys.exit(int(errno > 0))
-
-
-
-
-
-if __name__ == "__main__":
-    raise RuntimeError(
-        "qsiprep/cli/run.py should not be run directly;\n"
-        "Please `pip install` qsiprep and use the `qsiprep` command"
-    )

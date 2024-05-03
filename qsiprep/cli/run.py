@@ -115,15 +115,15 @@ def main():
     if sentry_sdk is not None:
         with sentry_sdk.configure_scope() as scope:
             scope.set_tag('run_uuid', config.execution.run_uuid)
-            scope.set_tag('npart', len(config.execution.participant_label)
+            scope.set_tag('npart', len(config.execution.participant_label))
         sentry_sdk.add_breadcrumb(message='fMRIPrep started', level='info')
         sentry_sdk.capture_message('fMRIPrep started', level='info')
 
     config.loggers.workflow.log(
         15,
-        '\n'.join(['fMRIPrep config:'] + ['\t\t%s' % s for s in config.dumps().splitlines()]),
+        '\n'.join(['QSIPrep config:'] + ['\t\t%s' % s for s in config.dumps().splitlines()]),
     )
-    config.loggers.workflow.log(25, 'fMRIPrep started!')
+    config.loggers.workflow.log(25, 'QSIPrep started!')
     errno = 1  # Default is error exit unless otherwise set
     try:
         qsiprep_wf.run(**config.nipype.get_plugin())
@@ -141,7 +141,7 @@ def main():
 
             if sentry_sdk is not None and 'Workflow did not execute cleanly' not in str(e):
                 sentry_sdk.capture_exception(e)
-        config.loggers.workflow.critical('fMRIPrep failed: %s', e)
+        config.loggers.workflow.critical('QSIPrep failed: %s', e)
         raise
     else:
         config.loggers.workflow.log(25, 'QSIPrep finished successfully!')
@@ -156,7 +156,7 @@ def main():
             if config.environment.exec_env in (
                 'singularity',
                 'docker',
-                'fmriprep-docker',
+                'qsiprep-docker',
             ):
                 boiler_file = Path('<OUTPUT_PATH>') / boiler_file.relative_to(
                     config.execution.output_dir

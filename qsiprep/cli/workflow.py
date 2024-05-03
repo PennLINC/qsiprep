@@ -32,7 +32,7 @@ dictionary (``retval``) to allow isolation using a
 a hard-limited memory-scope.
 
 """
-
+from ..utils.ingress import collect_ukb_participants, create_ukb_layout
 
 def build_workflow(config_file, retval):
     """Create the Nipype Workflow that supports the whole execution graph."""
