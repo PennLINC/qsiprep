@@ -42,13 +42,13 @@ def _build_parser(**kwargs):
 
     deprecations = {
         # parser attribute name: (replacement flag, version slated to be removed in)
-        'dwi_only': ("--anat-modality none", '0.23.0'),
-        'prefer_dedicated_fmaps': (None, '0.23.0'),
-        'do_reconall': (None, '0.23.0'),
-        'dwi_no_biascorr': ("--b1-biascorrect-stage none", '0.23.0'),
-        'recon_only': (None, '0.23.0'),
-        'b0_motion_corr_to': (None, '0.23.0'),
-        'b0_to_t1w_transform': ('--b0-t0-anat-transform', '0.23.0')
+        "dwi_only": ("--anat-modality none", "0.23.0"),
+        "prefer_dedicated_fmaps": (None, "0.23.0"),
+        "do_reconall": (None, "0.23.0"),
+        "dwi_no_biascorr": ("--b1-biascorrect-stage none", "0.23.0"),
+        "recon_only": (None, "0.23.0"),
+        "b0_motion_corr_to": (None, "0.23.0"),
+        "b0_to_t1w_transform": ("--b0-t0-anat-transform", "0.23.0"),
     }
 
     class DeprecatedAction(Action):
@@ -59,7 +59,7 @@ def _build_parser(**kwargs):
                 f"{rem_vers or 'a later version'}."
             )
             if new_opt:
-                msg += f' Please use `{new_opt}` instead.'
+                msg += f" Please use `{new_opt}` instead."
             print(msg, file=sys.stderr)
             delattr(namespace, self.dest)
 
@@ -68,14 +68,14 @@ def _build_parser(**kwargs):
             d = {}
             for spec in values:
                 try:
-                    name, loc = spec.split('=')
+                    name, loc = spec.split("=")
                     loc = Path(loc)
                 except ValueError:
                     loc = Path(spec)
                     name = loc.name
 
                 if name in d:
-                    raise ValueError(f'Received duplicate derivative name: {name}')
+                    raise ValueError(f"Received duplicate derivative name: {name}")
 
                 d[name] = loc
             setattr(namespace, self.dest, d)
@@ -83,14 +83,14 @@ def _build_parser(**kwargs):
     def _path_exists(path, parser):
         """Ensure a given path exists."""
         if path is None or not Path(path).exists():
-            raise parser.error(f'Path does not exist: <{path}>.')
+            raise parser.error(f"Path does not exist: <{path}>.")
         return Path(path).absolute()
 
     def _is_file(path, parser):
         """Ensure a given path exists and it is a file."""
         path = _path_exists(path, parser)
         if not path.is_file():
-            raise parser.error(f'Path should point to a file (or symlink of file): <{path}>.')
+            raise parser.error(f"Path should point to a file (or symlink of file): <{path}>.")
         return path
 
     def _min_one(value, parser):
@@ -101,20 +101,20 @@ def _build_parser(**kwargs):
         return value
 
     def _to_gb(value):
-        scale = {'G': 1, 'T': 10**3, 'M': 1e-3, 'K': 1e-6, 'B': 1e-9}
-        digits = ''.join([c for c in value if c.isdigit()])
-        units = value[len(digits) :] or 'M'
+        scale = {"G": 1, "T": 10**3, "M": 1e-3, "K": 1e-6, "B": 1e-9}
+        digits = "".join([c for c in value if c.isdigit()])
+        units = value[len(digits) :] or "M"
         return int(digits) * scale[units[0]]
 
     def _drop_sub(value):
-        return value[4:] if value.startswith('sub-') else value
+        return value[4:] if value.startswith("sub-") else value
 
     def _process_value(value):
         import bids
 
         if value is None:
             return bids.layout.Query.NONE
-        elif value == '*':
+        elif value == "*":
             return bids.layout.Query.ANY
         else:
             return value
@@ -136,16 +136,16 @@ def _build_parser(**kwargs):
                 try:
                     return loads(Path(value).read_text(), object_hook=_filter_pybids_none_any)
                 except JSONDecodeError as e:
-                    raise parser.error(f'JSON syntax error in: <{value}>.') from e
+                    raise parser.error(f"JSON syntax error in: <{value}>.") from e
             else:
-                raise parser.error(f'Path does not exist: <{value}>.')
+                raise parser.error(f"Path does not exist: <{value}>.")
 
-    verstr = f'QSIPrep v{config.environment.version}'
+    verstr = f"QSIPrep v{config.environment.version}"
     currentv = Version(config.environment.version)
     is_release = not any((currentv.is_devrelease, currentv.is_prerelease, currentv.is_postrelease))
 
     parser = ArgumentParser(
-        description=f'qsiprep: q-Space Image Preprocessing workflows v{config.environment.version}',
+        description=f"qsiprep: q-Space Image Preprocessing workflows v{config.environment.version}",
         formatter_class=ArgumentDefaultsHelpFormatter,
         **kwargs,
     )
@@ -158,41 +158,40 @@ def _build_parser(**kwargs):
     # required, positional arguments
     # IMPORTANT: they must go directly with the parser object
     parser.add_argument(
-        'bids_dir',
-        action='store',
+        "bids_dir",
+        action="store",
         type=PathExists,
-        help='The root folder of a BIDS valid dataset (sub-XXXXX folders should '
-        'be found at the top level in this folder).',
+        help="The root folder of a BIDS valid dataset (sub-XXXXX folders should "
+        "be found at the top level in this folder).",
     )
     parser.add_argument(
-        'output_dir',
-        action='store',
+        "output_dir",
+        action="store",
         type=Path,
-        help='The output path for the outcomes of preprocessing and visual reports',
+        help="The output path for the outcomes of preprocessing and visual reports",
     )
     parser.add_argument(
-        'analysis_level',
-        choices=['participant'],
-        help='Processing stage to be run, only "participant" in the case of '
-        'QSIPrep (for now).',
+        "analysis_level",
+        choices=["participant"],
+        help='Processing stage to be run, only "participant" in the case of ' "QSIPrep (for now).",
     )
 
-    g_bids = parser.add_argument_group('Options for filtering BIDS queries')
+    g_bids = parser.add_argument_group("Options for filtering BIDS queries")
     g_bids.add_argument(
-        '--skip_bids_validation',
-        '--skip-bids-validation',
-        action='store_true',
+        "--skip_bids_validation",
+        "--skip-bids-validation",
+        action="store_true",
         default=False,
-        help='Assume the input dataset is BIDS compliant and skip the validation',
+        help="Assume the input dataset is BIDS compliant and skip the validation",
     )
     g_bids.add_argument(
-        '--participant-label',
-        '--participant_label',
-        action='store',
-        nargs='+',
+        "--participant-label",
+        "--participant_label",
+        action="store",
+        nargs="+",
         type=_drop_sub,
-        help='A space delimited list of participant identifiers or a single '
-        'identifier (the sub- prefix can be removed)',
+        help="A space delimited list of participant identifiers or a single "
+        "identifier (the sub- prefix can be removed)",
     )
     # Re-enable when option is actually implemented
     # g_bids.add_argument('-s', '--session-id', action='store', default='single_session',
@@ -202,93 +201,93 @@ def _build_parser(**kwargs):
     #                     help='Select a specific run to be processed')
 
     g_bids.add_argument(
-        '--bids-filter-file',
-        dest='bids_filters',
-        action='store',
+        "--bids-filter-file",
+        dest="bids_filters",
+        action="store",
         type=BIDSFilter,
-        metavar='FILE',
-        help='A JSON file describing custom BIDS input filters using PyBIDS. '
-        'For further details, please check out '
-        'https://fmriprep.readthedocs.io/en/%s/faq.html#'
-        'how-do-I-select-only-certain-files-to-be-input-to-fMRIPrep'
-        % (currentv.base_version if is_release else 'latest'),
+        metavar="FILE",
+        help="A JSON file describing custom BIDS input filters using PyBIDS. "
+        "For further details, please check out "
+        "https://fmriprep.readthedocs.io/en/%s/faq.html#"
+        "how-do-I-select-only-certain-files-to-be-input-to-fMRIPrep"
+        % (currentv.base_version if is_release else "latest"),
     )
     g_bids.add_argument(
-        '--bids-database-dir',
-        metavar='PATH',
+        "--bids-database-dir",
+        metavar="PATH",
         type=Path,
-        help='Path to a PyBIDS database folder, for faster indexing (especially '
-        'useful for large datasets). Will be created if not present.',
+        help="Path to a PyBIDS database folder, for faster indexing (especially "
+        "useful for large datasets). Will be created if not present.",
     )
 
-    g_perfm = parser.add_argument_group('Options to handle performance')
+    g_perfm = parser.add_argument_group("Options to handle performance")
     g_perfm.add_argument(
-        '--nprocs',
-        '--nthreads',
-        '--n_cpus',
-        '--n-cpus',
-        dest='nprocs',
-        action='store',
+        "--nprocs",
+        "--nthreads",
+        "--n_cpus",
+        "--n-cpus",
+        dest="nprocs",
+        action="store",
         type=PositiveInt,
-        help='Maximum number of threads across all processes',
+        help="Maximum number of threads across all processes",
     )
     g_perfm.add_argument(
-        '--omp-nthreads',
-        action='store',
+        "--omp-nthreads",
+        action="store",
         type=PositiveInt,
-        help='Maximum number of threads per-process',
+        help="Maximum number of threads per-process",
     )
     g_perfm.add_argument(
-        '--mem',
-        '--mem_mb',
-        '--mem-mb',
-        dest='memory_gb',
-        action='store',
+        "--mem",
+        "--mem_mb",
+        "--mem-mb",
+        dest="memory_gb",
+        action="store",
         type=_to_gb,
-        metavar='MEMORY_MB',
-        help='Upper bound memory limit for fMRIPrep processes',
+        metavar="MEMORY_MB",
+        help="Upper bound memory limit for fMRIPrep processes",
     )
     g_perfm.add_argument(
-        '--low-mem',
-        action='store_true',
-        help='Attempt to reduce memory usage (will increase disk usage in working directory)',
+        "--low-mem",
+        action="store_true",
+        help="Attempt to reduce memory usage (will increase disk usage in working directory)",
     )
     g_perfm.add_argument(
-        '--use-plugin',
-        '--nipype-plugin-file',
-        action='store',
-        metavar='FILE',
+        "--use-plugin",
+        "--nipype-plugin-file",
+        action="store",
+        metavar="FILE",
         type=IsFile,
-        help='Nipype plugin configuration file',
+        help="Nipype plugin configuration file",
     )
     g_perfm.add_argument(
-        '--sloppy',
-        action='store_true',
+        "--sloppy",
+        action="store_true",
         default=False,
-        help='Use low-quality tools for speed - TESTING ONLY',
+        help="Use low-quality tools for speed - TESTING ONLY",
     )
 
-    g_subset = parser.add_argument_group('Options for performing only a subset of the workflow')
-    g_subset.add_argument('--anat-only', action='store_true', help='Run anatomical workflows only')
+    g_subset = parser.add_argument_group("Options for performing only a subset of the workflow")
+    g_subset.add_argument("--anat-only", action="store_true", help="Run anatomical workflows only")
     g_subset.add_argument(
         "--dwi-only",
         action="store_true",
         help="ignore anatomical (T1w/T2w) data and process DWIs only",
     )
     g_subset.add_argument(
-        '--boilerplate-only',
-        '--boilerplate_only',
-        '--boilerplate',
-        action='store_true',
+        "--boilerplate-only",
+        "--boilerplate_only",
+        "--boilerplate",
+        action="store_true",
         default=False,
-        help='Generate boilerplate only',
+        help="Generate boilerplate only",
     )
     g_subset.add_argument(
-        '--reports-only',
-        action='store_true',
+        "--reports-only",
+        action="store_true",
         default=False,
         help="Only generate reports, don't run workflows. This will only rerun report "
-        'aggregation, not reportlet generation for specific nodes.',
+        "aggregation, not reportlet generation for specific nodes.",
     )
     g_subset.add_argument(
         "--interactive-reports-only",
@@ -297,24 +296,24 @@ def _build_parser(**kwargs):
         help="create interactive report json files on already preprocessed data.",
     )
 
-    g_conf = parser.add_argument_group('Workflow configuration')
+    g_conf = parser.add_argument_group("Workflow configuration")
     g_conf.add_argument(
-        '--ignore',
+        "--ignore",
         required=False,
-        action='store',
-        nargs='+',
+        action="store",
+        nargs="+",
         default=[],
-        choices=['fieldmaps', 'sbref', 't2w', 'flair', 'fmap-jacobian'],
-        help='Ignore selected aspects of the input dataset to disable corresponding '
-        'parts of the workflow (a space delimited list)',
+        choices=["fieldmaps", "sbref", "t2w", "flair", "fmap-jacobian"],
+        help="Ignore selected aspects of the input dataset to disable corresponding "
+        "parts of the workflow (a space delimited list)",
     )
     g_conf.add_argument(
         "--infant", action="store_true", help="configure pipelines to process infant brains"
     )
     g_conf.add_argument(
-        '--longitudinal',
-        action='store_true',
-        help='Treat dataset as longitudinal - may increase runtime',
+        "--longitudinal",
+        action="store_true",
+        help="Treat dataset as longitudinal - may increase runtime",
     )
 
     g_conf.add_argument(
@@ -521,7 +520,7 @@ def _build_parser(**kwargs):
     )
 
     # Fieldmap options
-    g_fmap = parser.add_argument_group('Specific options for handling fieldmaps')
+    g_fmap = parser.add_argument_group("Specific options for handling fieldmaps")
     g_fmap.add_argument(
         "--pepolar-method",
         "--pepolar_method",
@@ -531,36 +530,36 @@ def _build_parser(**kwargs):
         help="select which SDC method to use for PEPOLAR fieldmaps (default: TOPUP)",
     )
     g_fmap.add_argument(
-        '--fmap-bspline',
-        action='store_true',
+        "--fmap-bspline",
+        action="store_true",
         default=False,
-        help='Fit a B-Spline field using least-squares (experimental)',
+        help="Fit a B-Spline field using least-squares (experimental)",
     )
     g_fmap.add_argument(
-        '--fmap-no-demean',
-        action='store_false',
+        "--fmap-no-demean",
+        action="store_false",
         default=True,
-        help='Do not remove median (within mask) from fieldmap',
+        help="Do not remove median (within mask) from fieldmap",
     )
 
     # SyN-unwarp options
-    g_syn = parser.add_argument_group('Specific options for SyN distortion correction')
+    g_syn = parser.add_argument_group("Specific options for SyN distortion correction")
     g_syn.add_argument(
-        '--use-syn-sdc',
-        nargs='?',
-        choices=['warn', 'error'],
-        action='store',
-        const='error',
+        "--use-syn-sdc",
+        nargs="?",
+        choices=["warn", "error"],
+        action="store",
+        const="error",
         default=False,
-        help='Use fieldmap-less distortion correction based on anatomical image; '
-        'if unable, error (default) or warn based on optional argument.',
+        help="Use fieldmap-less distortion correction based on anatomical image; "
+        "if unable, error (default) or warn based on optional argument.",
     )
     g_syn.add_argument(
-        '--force-syn',
-        action='store_true',
+        "--force-syn",
+        action="store_true",
         default=False,
-        help='EXPERIMENTAL/TEMPORARY: Use SyN correction in addition to '
-        'fieldmap correction, if available',
+        help="EXPERIMENTAL/TEMPORARY: Use SyN correction in addition to "
+        "fieldmap correction, if available",
     )
 
     # arguments for reconstructing QSI data
@@ -615,63 +614,63 @@ def _build_parser(**kwargs):
         help="run only reconstruction, assumes preprocessing has already completed.",
     )
 
-    g_other = parser.add_argument_group('Other options')
-    g_other.add_argument('--version', action='version', version=verstr)
+    g_other = parser.add_argument_group("Other options")
+    g_other.add_argument("--version", action="version", version=verstr)
     g_other.add_argument(
-        '-v',
-        '--verbose',
-        dest='verbose_count',
-        action='count',
+        "-v",
+        "--verbose",
+        dest="verbose_count",
+        action="count",
         default=0,
-        help='Increases log verbosity for each occurrence, debug level is -vvv',
+        help="Increases log verbosity for each occurrence, debug level is -vvv",
     )
     g_other.add_argument(
-        '-w',
-        '--work-dir',
-        action='store',
+        "-w",
+        "--work-dir",
+        action="store",
         type=Path,
-        default=Path('work').absolute(),
-        help='Path where intermediate results should be stored',
+        default=Path("work").absolute(),
+        help="Path where intermediate results should be stored",
     )
     g_other.add_argument(
-        '--resource-monitor',
-        action='store_true',
+        "--resource-monitor",
+        action="store_true",
         default=False,
         help="Enable Nipype's resource monitoring to keep track of memory and CPU usage",
     )
     g_other.add_argument(
-        '--config-file',
-        action='store',
-        metavar='FILE',
-        help='Use pre-generated configuration file. Values in file will be overridden '
-        'by command-line arguments.',
+        "--config-file",
+        action="store",
+        metavar="FILE",
+        help="Use pre-generated configuration file. Values in file will be overridden "
+        "by command-line arguments.",
     )
     g_other.add_argument(
-        '--write-graph',
-        action='store_true',
+        "--write-graph",
+        action="store_true",
         default=False,
-        help='Write workflow graph.',
+        help="Write workflow graph.",
     )
     g_other.add_argument(
-        '--stop-on-first-crash',
-        action='store_true',
+        "--stop-on-first-crash",
+        action="store_true",
         default=False,
-        help='Force stopping on first crash, even if a work directory was specified.',
+        help="Force stopping on first crash, even if a work directory was specified.",
     )
     g_other.add_argument(
-        '--notrack',
-        action='store_true',
+        "--notrack",
+        action="store_true",
         default=False,
-        help='Opt-out of sending tracking information of this run to '
-        'the QSIPrep developers. This information helps to '
-        'improve QSIPrep and provides an indicator of real '
-        'world usage crucial for obtaining funding.',
+        help="Opt-out of sending tracking information of this run to "
+        "the QSIPrep developers. This information helps to "
+        "improve QSIPrep and provides an indicator of real "
+        "world usage crucial for obtaining funding.",
     )
     g_other.add_argument(
-        '--debug',
-        action='store',
-        nargs='+',
-        choices=config.DEBUG_MODES + ('all',),
+        "--debug",
+        action="store",
+        nargs="+",
+        choices=config.DEBUG_MODES + ("all",),
         help="Debug mode(s) to enable. 'all' is alias for all available modes.",
     )
     return parser
@@ -687,29 +686,29 @@ def parse_args(args=None, namespace=None):
     opts = parser.parse_args(args, namespace)
 
     if opts.config_file:
-        skip = {} if opts.reports_only else {'execution': ('run_uuid',)}
+        skip = {} if opts.reports_only else {"execution": ("run_uuid",)}
         config.load(opts.config_file, skip=skip, init=False)
-        config.loggers.cli.info(f'Loaded previous configuration file {opts.config_file}')
+        config.loggers.cli.info(f"Loaded previous configuration file {opts.config_file}")
 
     config.execution.log_level = int(max(25 - 5 * opts.verbose_count, logging.DEBUG))
-    config.from_dict(vars(opts), init=['nipype'])
+    config.from_dict(vars(opts), init=["nipype"])
 
     if not config.execution.notrack:
         import pkgutil
 
-        if pkgutil.find_loader('sentry_sdk') is None:
+        if pkgutil.find_loader("sentry_sdk") is None:
             config.execution.notrack = True
-            config.loggers.cli.warning('Telemetry disabled because sentry_sdk is not installed.')
+            config.loggers.cli.warning("Telemetry disabled because sentry_sdk is not installed.")
         else:
             config.loggers.cli.info(
-                'Telemetry system to collect crashes and errors is enabled '
-                '- thanks for your feedback!. Use option ``--notrack`` to opt out.'
+                "Telemetry system to collect crashes and errors is enabled "
+                "- thanks for your feedback!. Use option ``--notrack`` to opt out."
             )
 
     # Initialize --output-spaces if not defined
     if config.execution.output_spaces is None:
         config.execution.output_spaces = SpatialReferences(
-            [Reference('MNI152NLin2009cAsym', {'res': 'native'})]
+            [Reference("MNI152NLin2009cAsym", {"res": "native"})]
         )
 
     # Retrieve logging level
@@ -721,12 +720,12 @@ def parse_args(args=None, namespace=None):
 
         with open(opts.use_plugin) as f:
             plugin_settings = yaml.safe_load(f)
-        _plugin = plugin_settings.get('plugin')
+        _plugin = plugin_settings.get("plugin")
         if _plugin:
             config.nipype.plugin = _plugin
-            config.nipype.plugin_args = plugin_settings.get('plugin_args', {})
+            config.nipype.plugin_args = plugin_settings.get("plugin_args", {})
             config.nipype.nprocs = opts.nprocs or config.nipype.plugin_args.get(
-                'n_procs', config.nipype.nprocs
+                "n_procs", config.nipype.nprocs
             )
 
     # Resource management options
@@ -734,8 +733,8 @@ def parse_args(args=None, namespace=None):
     # This may need to be revisited if people try to use batch plugins
     if 1 < config.nipype.nprocs < config.nipype.omp_nthreads:
         build_log.warning(
-            f'Per-process threads (--omp-nthreads={config.nipype.omp_nthreads}) exceed '
-            f'total threads (--nthreads/--n_cpus={config.nipype.nprocs})'
+            f"Per-process threads (--omp-nthreads={config.nipype.omp_nthreads}) exceed "
+            f"total threads (--nthreads/--n_cpus={config.nipype.nprocs})"
         )
 
     bids_dir = config.execution.bids_dir
@@ -744,7 +743,7 @@ def parse_args(args=None, namespace=None):
     version = config.environment.version
 
     if config.execution.qsiprep_dir is None:
-        config.execution.qsiprep_dir = output_dir / 'qsiprep'
+        config.execution.qsiprep_dir = output_dir / "qsiprep"
 
     # Update the config with an empty dict to trigger initialization of all config
     # sections (we used `init=False` above).
@@ -755,17 +754,17 @@ def parse_args(args=None, namespace=None):
     # Ensure input and output folders are not the same
     if output_dir == bids_dir:
         parser.error(
-            'The selected output folder is the same as the input BIDS folder. '
-            'Please modify the output path (suggestion: %s).'
+            "The selected output folder is the same as the input BIDS folder. "
+            "Please modify the output path (suggestion: %s)."
             % bids_dir
-            / 'derivatives'
-            / ('qsiprep-%s' % version.split('+')[0])
+            / "derivatives"
+            / ("qsiprep-%s" % version.split("+")[0])
         )
 
     if bids_dir in work_dir.parents:
         parser.error(
-            'The selected working directory is a subdirectory of the input BIDS folder. '
-            'Please modify the output path.'
+            "The selected working directory is a subdirectory of the input BIDS folder. "
+            "Please modify the output path."
         )
 
     # Validate inputs
@@ -773,18 +772,17 @@ def parse_args(args=None, namespace=None):
         from ..utils.bids import validate_input_dir
 
         build_log.info(
-            'Making sure the input data is BIDS compliant (warnings can be ignored in most '
-            'cases).'
+            "Making sure the input data is BIDS compliant (warnings can be ignored in most "
+            "cases)."
         )
         validate_input_dir(
             config.environment.exec_env,
             opts.bids_dir,
             opts.participant_label,
-            need_T1w=not config.execution.derivatives,
         )
 
     # Setup directories
-    config.execution.log_dir = config.execution.qsiprep_dir / 'logs'
+    config.execution.log_dir = config.execution.qsiprep_dir / "logs"
     # Check and create output and working directories
     config.execution.log_dir.mkdir(exist_ok=True, parents=True)
     work_dir.mkdir(exist_ok=True, parents=True)
@@ -799,8 +797,8 @@ def parse_args(args=None, namespace=None):
     missing_subjects = participant_label - set(all_subjects)
     if missing_subjects:
         parser.error(
-            'One or more participant labels were not found in the BIDS directory: '
-            '%s.' % ', '.join(missing_subjects)
+            "One or more participant labels were not found in the BIDS directory: "
+            "%s." % ", ".join(missing_subjects)
         )
 
     config.execution.participant_label = sorted(participant_label)
