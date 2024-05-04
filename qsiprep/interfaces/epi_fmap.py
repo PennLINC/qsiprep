@@ -259,7 +259,7 @@ def get_best_b0_topup_inputs_from(
     # Calculate the "quality" of each image:
     dwi_b0_df["qc_score"] = spec_groups["nii_3d_files"].transform(calculate_best_b0s)
     dwi_b0_df["qc_rank"] = (
-        np.nan_to_num(spec_groups["qc_score"].rank(ascending=True)).astype(int) - 1
+        np.nan_to_num(spec_groups["qc_score"].rank(ascending=True), nan=1.0).astype(int) - 1
     )
 
     # Select only the top
