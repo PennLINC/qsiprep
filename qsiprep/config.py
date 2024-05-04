@@ -398,14 +398,12 @@ class execution(_Config):
     """Run in sloppy mode (meaning, suboptimal parameters that minimize run-time)."""
     debug = []
     """Debug mode(s)."""
-    # echo_idx = None
-    # """Select a particular echo for multi-echo EPI datasets."""
-    qsiprep_dir = None
-    """Root of fMRIPrep BIDS Derivatives dataset. Depends on output_layout."""
     fs_license_file = _fs_license
     """An existing file containing a FreeSurfer license."""
     fs_subjects_dir = None
     """FreeSurfer's subjects directory."""
+    interactive_reports_only = False
+    """Only build the interactive reports, based on the output directory."""
     layout = None
     """A :py:class:`~bids.layout.BIDSLayout` object, see :py:func:`init`."""
     log_dir = None
@@ -418,16 +416,8 @@ class execution(_Config):
     # """Do not convert boilerplate from MarkDown to LaTex and HTML."""
     notrack = False
     """Do not collect telemetry information for *QSIPrep*."""
-    # track_carbon = False
-    # """Tracks power draws using CodeCarbon package."""
-    # country_code = 'CAN'
-    # """Country ISO code used by carbon trackers."""
     output_dir = None
     """Folder where derivatives will be stored."""
-    # me_output_echos = False
-    # """Output individual echo time series with slice, motion and susceptibility correction"""
-    # aggr_ses_reports = None
-    # """Maximum number of sessions aggregated in one subject's visual report."""
     output_layout = None
     """Layout of derivatives within output_dir."""
     # output_spaces = None
@@ -437,8 +427,16 @@ class execution(_Config):
     """Only build the reports, based on the reportlets found in a cached working directory."""
     run_uuid = f"{strftime('%Y%m%d-%H%M%S')}_{uuid4()}"
     """Unique identifier of this particular run."""
+    skip_odf_reports = False
+    """Disable ODF recon reports."""
     participant_label = None
     """List of participant identifiers that are to be preprocessed."""
+    qsiprep_dir = None
+    """Root of QSIPrep BIDS Derivatives dataset. Depends on output_layout."""
+    recon_input = None
+    """Directory containing QSIPrep derivatives to run through recon workflows."""
+    recon_only = False
+    """Run only recon workflows."""
     task_id = None
     """Select a particular task from all available in the dataset."""
     templateflow_home = _templateflow_home
@@ -454,17 +452,19 @@ class execution(_Config):
 
     _paths = (
         'bids_dir',
-        'derivatives',
         'bids_database_dir',
-        'qsiprep_dir',
+        'dataset_links',
+        'eddy_config',
         'fs_license_file',
         'fs_subjects_dir',
+        'freesurfer_input',
         'layout',
         'log_dir',
         'output_dir',
+        'qsiprep_dir',
+        'recon_input',
         'templateflow_home',
         'work_dir',
-        'dataset_links',
     )
 
     @classmethod
@@ -489,7 +489,7 @@ class execution(_Config):
                 'sourcedata',
                 'models',
                 re.compile(r'^\.'),
-                re.compile(r'sub-[a-zA-Z0-9]+(/ses-[a-zA-Z0-9]+)?/(beh|dwi|eeg|ieeg|meg|perf)'),
+                re.compile(r'sub-[a-zA-Z0-9]+(/ses-[a-zA-Z0-9]+)?/(beh|func|eeg|ieeg|meg|perf)'),
             ]
             if cls.participant_label and cls.bids_database_dir is None:
                 # Ignore any subjects who aren't the requested ones.
@@ -555,77 +555,79 @@ del _oc_policy
 class workflow(_Config):
     """Configure the particular execution graph of this workflow."""
 
+    anat_modality = None
+    """Modality to use as the anatomical reference. Images of this
+    contrast will be skull stripped and segmented for use in the
+    visual reports and reconstruction. If --infant, T2w is forced."""
     anat_only = False
     """Execute the anatomical preprocessing only."""
-    aroma_err_on_warn = None
-    """Cast AROMA warnings to errors."""
-    aroma_melodic_dim = None
-    """Number of ICA components to be estimated by MELODIC
-    (positive = exact, negative = maximum)."""
-    bold2anat_dof = None
-    """Degrees of freedom of the BOLD-to-anatomical registration steps."""
-    bold2anat_init = 'auto'
-    """Method of initial BOLD to anatomical coregistration. If `auto`, a T2w image is used
-    if available, otherwise the T1w image. `t1w` forces use of the T1w, `t2w` forces use of
-    the T2w, and `header` uses the BOLD header information without an initial registration."""
+    anatomical_template = None
+    """Keeps the :py:class:`~niworkflows.utils.spaces.SpatialReferences`
+    instance keeping standard and nonstandard spaces."""
+    b0_threshold = None
+    """Any value in the .bval file less than this will be considered a b=0 image."""
+    b0_motion_corr_to = None
+    """Perform SHORELine's initial b=0-based registration to first volume? 
+    Or make a template? Either 'iterative' or 'first'"""
+    b0_to_t1w_transform = None
+    """Transformation model for intramodal registration."""
+    b1_biascorrect_stage = None
+    """The stage of processing at which to apply B1 bias correction. Either "final" (after
+    resampling), "none" (skipped entirely) or "legacy" (before concatenation)."""
     cifti_output = None
     """Generate HCP Grayordinates, accepts either ``'91k'`` (default) or ``'170k'``."""
-    dummy_scans = None
-    """Set a number of initial scans to be considered nonsteady states."""
+    denoise_after_combining = False
+    """Run ``dwidenoise`` after combining dwis, but before motion correction."""
+    denoise_method = None
+    """Image-based denoising method. Either "dwidenoise" (MRtrix), "patch2self" (DIPY)
+    or "none"."""
+    distortion_group_merge = None
+    """How to combine images across distortion groups (concatenate, average or none)."""
+    do_reconall = True
+    """Run FreeSurfer's surface reconstruction (ignored)."""
+    dwi_denoise_window = None
+    """Window size in voxels for image-based denoising, integer or "auto"."""
+    dwi_no_biascorr = None
+    """DEPRECATED: see --b1-biascorrect-stage."""
+    dwi_only = False
+    """DEPRECATED: True if anat_modality is 'none'."""
+    eddy_config = None
+    """Configuration for running Eddy."""
     fmap_bspline = None
     """Regularize fieldmaps with a field of B-Spline basis."""
     fmap_demean = None
     """Remove the mean from fieldmaps."""
     force_syn = None
     """Run *fieldmap-less* susceptibility-derived distortions estimation."""
-    hires = None
-    """Run FreeSurfer ``recon-all`` with the ``-hires`` flag."""
-    fs_no_resume = None
-    """Adjust pipeline to reuse base template of existing longitudinal freesurfer"""
+    hmc_model = None
+    """Model used to generate target images for hmc."""
+    hmc_transform = None
+    """Transformation to be used in SHORELine."""
     ignore = None
-    """Ignore particular steps for *fMRIPrep*."""
-    level = None
-    """Level of preprocessing to complete. One of ['minimal', 'resampling', 'full']."""
+    """Ignore particular steps for *QSIPrep*."""
+    infant = False
+    """Configure pipelines specifically for infant brains"""
     longitudinal = False
     """Run FreeSurfer ``recon-all`` with the ``-logitudinal`` flag."""
-    run_msmsulc = True
-    """Run Multimodal Surface Matching surface registration."""
-    medial_surface_nan = None
-    """Fill medial surface with :abbr:`NaNs (not-a-number)` when sampling."""
-    project_goodvoxels = False
-    """Exclude voxels with locally high coefficient of variation from sampling."""
-    regressors_all_comps = None
-    """Return all CompCor components."""
-    regressors_dvars_th = None
-    """Threshold for DVARS."""
-    regressors_fd_th = None
-    """Threshold for :abbr:`FD (frame-wise displacement)`."""
-    run_reconall = True
-    """Run FreeSurfer's surface reconstruction."""
-    skull_strip_fixed_seed = False
-    """Fix a seed for skull-stripping."""
-    skull_strip_template = 'OASIS30ANTs'
-    """Change default brain extraction template."""
-    skull_strip_t1w = 'force'
-    """Skip brain extraction of the T1w image (default is ``force``, meaning that
-    *fMRIPrep* will run brain extraction of the T1w)."""
-    slice_time_ref = 0.5
-    """The time of the reference slice to correct BOLD values to, as a fraction
-    acquisition time. 0 indicates the start, 0.5 the midpoint, and 1 the end
-    of acquisition. The alias `start` corresponds to 0, and `middle` to 0.5.
-    The default value is 0.5."""
-    spaces = None
-    """Keeps the :py:class:`~niworkflows.utils.spaces.SpatialReferences`
-    instance keeping standard and nonstandard spaces."""
-    use_aroma = None
-    """Run ICA-:abbr:`AROMA (automatic removal of motion artifacts)`."""
-    use_bbr = None
-    """Run boundary-based registration for BOLD-to-T1w registration."""
+    no_b0_harmonization = False
+    """Skip re-scaling dwi scans to have matching b=0 intensities."""
+    output_resolution = None
+    """Isotropic voxel size for outputs."""
+    pepolar_method = None
+    """SDC method to be used for PEPOLAR fieldmaps."""
+    recon_input_pipeline = None
+    """Specifies which pipeline was used to preprocess data in ``recon_input``"""
+    recon_spec = None
+    """Recon workflow specification."""
+    separate_all_dwis = False
+    """Process all dwis separately - do not attempt concatenation."""
+    shoreline_iters = None
+    """How many iterations to run SHORELine."""
+    unringing_method = None
+    """Method for Gibbs-ringing removal. Either "none", "mrdegibbs" or "rpg"."""
     use_syn_sdc = None
     """Run *fieldmap-less* susceptibility-derived distortions estimation
     in the absence of any alternatives."""
-    me_t2s_fit_method = 'curvefit'
-    """The method by which to estimate T2*/S0 for multi-echo data"""
 
 
 class loggers:

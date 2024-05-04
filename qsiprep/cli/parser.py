@@ -42,11 +42,13 @@ def _build_parser(**kwargs):
 
     deprecations = {
         # parser attribute name: (replacement flag, version slated to be removed in)
-        'dwi_only': (None, '0.23.0'),
+        'dwi_only': ("--anat-modality none", '0.23.0'),
         'prefer_dedicated_fmaps': (None, '0.23.0'),
         'do_reconall': (None, '0.23.0'),
-        'dwi_no_biascorr': (None, '0.23.0'),
+        'dwi_no_biascorr': ("--b1-biascorrect-stage none", '0.23.0'),
         'recon_only': (None, '0.23.0'),
+        'b0_motion_corr_to': (None, '0.23.0'),
+        'b0_to_t1w_transform': ('--b0-t0-anat-transform', '0.23.0')
     }
 
     class DeprecatedAction(Action):
@@ -365,7 +367,7 @@ def _build_parser(**kwargs):
         "--dwi-no-biascorr",
         "--dwi_no_biascorr",
         action="store_true",
-        help="DEPRECATED: see --b1-biascorr-stage",
+        help="DEPRECATED: see --b1-biascorrect-stage",
     )
     g_conf.add_argument(
         "--b1-biascorrect-stage",
@@ -388,8 +390,7 @@ def _build_parser(**kwargs):
         "--denoise-after-combining",
         "--denoise_after_combining",
         action="store_true",
-        help="run ``dwidenoise`` after combining dwis, but before motion correction. "
-        "Requires ``--combine-all-dwis``",
+        help="run ``dwidenoise`` after combining dwis, but before motion correction",
     )
     g_conf.add_argument(
         "--separate_all_dwis",
@@ -410,14 +411,6 @@ def _build_parser(**kwargs):
         "            directions, average the corrected images of the same\n"
         "            q-space coordinate\n"
         " - none: Default. Keep distorted groups separate",
-    )
-    g_conf.add_argument(
-        "--write-local-bvecs",
-        "--write_local_bvecs",
-        action="store_true",
-        default=False,
-        help="write a series of voxelwise bvecs, relevant if "
-        "writing preprocessed dwis to template space",
     )
     g_conf.add_argument(
         "--anatomical-template",
@@ -516,7 +509,7 @@ def _build_parser(**kwargs):
         help="path to a json file with settings for the call to eddy. If no "
         "json is specified, a default one will be used. The current default "
         "json can be found here: "
-        "https://github.com/PennBBL/qsiprep/blob/master/qsiprep/data/eddy_params.json",
+        "https://github.com/PennLINC/qsiprep/blob/master/qsiprep/data/eddy_params.json",
     )
     g_moco.add_argument(
         "--shoreline_iters",
@@ -525,15 +518,6 @@ def _build_parser(**kwargs):
         type=int,
         default=2,
         help="number of SHORELine iterations. (default: 2)",
-    )
-    g_moco.add_argument(
-        "--impute-slice-threshold",
-        "--impute_slice_threshold",
-        action="store",
-        default=0,
-        type=float,
-        help="impute data in slices that are this many SDs from expected. "
-        "If 0 (default), no slices will be imputed",
     )
 
     # Fieldmap options
@@ -557,23 +541,6 @@ def _build_parser(**kwargs):
         action='store_false',
         default=True,
         help='Do not remove median (within mask) from fieldmap',
-    )
-    g_fmap.add_argument(
-        "--denoised_image_sdc",
-        "--denoised_image_sdc",
-        action="store_true",
-        default=False,
-        help="use denoised b=0 images if available instead of raw (from BIDS) images in SDC",
-    )
-    g_fmap.add_argument(
-        "--prefer_dedicated_fmaps",
-        "--prefer-dedicated-fmaps",
-        action="store_true",
-        default=False,
-        help=(
-            "forces unwarping to use files from the fmap directory instead "
-            "of using an RPEdir scan from the same session. (IGNORED)"
-        ),
     )
 
     # SyN-unwarp options
@@ -700,7 +667,13 @@ def _build_parser(**kwargs):
         'improve QSIPrep and provides an indicator of real '
         'world usage crucial for obtaining funding.',
     )
-
+    g_other.add_argument(
+        '--debug',
+        action='store',
+        nargs='+',
+        choices=config.DEBUG_MODES + ('all',),
+        help="Debug mode(s) to enable. 'all' is alias for all available modes.",
+    )
     return parser
 
 
