@@ -258,7 +258,7 @@ def get_best_b0_topup_inputs_from(
 
     # Calculate the "quality" of each image:
     dwi_b0_df["qc_score"] = spec_groups["nii_3d_files"].transform(calculate_best_b0s)
-    dwi_b0_df["qc_rank"] = spec_groups["qc_score"].transform(np.argsort)
+    dwi_b0_df["qc_rank"] = spec_groups["qc_score"].rank(ascending=True).astype(int) - 1
 
     # Select only the top
     dwi_b0_df["selected_for_sdc"] = dwi_b0_df["qc_rank"] < max_per_spec
@@ -351,11 +351,13 @@ def calculate_best_b0s(b0_list, radius=4):
     no_reg = sitk.ImageRegistrationMethod()
     no_reg.SetMetricSamplingStrategy(no_reg.NONE)
     no_reg.SetMetricAsCorrelation()
-    pairwise = np.eye(len(b0_list))
+    pairwise = np.zeros((len(b0_list), len(b0_list)), dtype=np.float64)
     for id0, id1 in zip(*np.triu_indices(len(b0_list), 1)):
         pairwise[id0, id1] = no_reg.MetricEvaluate(imgs[id0], imgs[id1])
     pairwise = pairwise + pairwise.T
-    return pairwise.mean(0)
+    # Don't include self correlation
+    np.fill_diagonal(pairwise, np.nan)
+    return np.nanmean(pairwise, axis=0)
 
 
 def _get_bvals(bval_input):
