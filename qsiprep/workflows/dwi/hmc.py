@@ -12,6 +12,7 @@ from nipype.interfaces import afni, ants
 from nipype.interfaces import utility as niu
 from pkg_resources import resource_filename as pkgrf
 
+from ... import config
 from ...engine import Workflow
 from ...interfaces import DerivativesDataSink
 from ...interfaces.gradients import CombineMotions, GradientRotation, MatchTransforms
@@ -301,13 +302,15 @@ def linear_alignment_workflow(
 def init_b0_hmc_wf(
     align_to="iterative",
     transform="Rigid",
-    sloppy=False,
     metric="Mattes",
     num_iters=3,
-    omp_nthreads=1,
     boilerplate=True,
     name="b0_hmc_wf",
-):
+) -> Workflow:
+
+    if config.execution.sloppy:
+        num_iters = 1
+        align_to = "first"
 
     if align_to == "iterative" and num_iters < 2:
         raise ValueError("Must specify a positive number of iterations")
