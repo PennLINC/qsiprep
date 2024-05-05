@@ -36,10 +36,10 @@ False           False       False         HMC only
 
 """
 
-from nipype import logging
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 
+from ... import config
 from ...engine import Workflow
 
 # Fieldmap workflows
@@ -47,13 +47,10 @@ from .pepolar import init_pepolar_unwarp_wf
 from .syn import init_syn_sdc_wf
 from .unwarp import init_sdc_unwarp_wf
 
-LOGGER = logging.getLogger("nipype.workflow")
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
-def init_sdc_wf(
-    fieldmap_info, dwi_meta, omp_nthreads=1, debug=False, fmap_bspline=False, fmap_demean=True
-):
+def init_sdc_wf(fieldmap_info, dwi_meta):
     """
     This workflow implements the heuristics to choose a
     :abbr:`SDC (susceptibility distortion correction)` strategy.
@@ -84,56 +81,50 @@ def init_sdc_wf(
             },
         )
 
-    **Parameters**
+    Parameters
+    ----------
+    fmaps : list of pybids dicts
+        A list of dictionaries with the available fieldmaps
+        (and their metadata using the key ``'metadata'`` for the
+        case of *epi* fieldmaps)
+    dwi_meta : dict
+        BIDS metadata dictionary corresponding to the DWI run
 
-        fmaps : list of pybids dicts
-            A list of dictionaries with the available fieldmaps
-            (and their metadata using the key ``'metadata'`` for the
-            case of *epi* fieldmaps)
-        dwi_meta : dict
-            BIDS metadata dictionary corresponding to the DWI run
-        omp_nthreads : int
-            Maximum number of threads an individual process may use
-        fmap_bspline : bool
-            **Experimental**: Fit B-Spline field using least-squares
-        fmap_demean : bool
-            Demean voxel-shift map during unwarp
-        debug : bool
-            Enable debugging outputs
-
-    **Inputs**
-        b0_ref
-            A b0 reference calculated at a previous stage
-        b0_ref_brain
-            Same as above, but brain-masked
-        b0_mask
-            Brain mask for the DWI run
-        t1_brain
-            T1w image, brain-masked, for the fieldmap-less SyN method
-        t1_2_mni_reverse_transform
-            MNI-to-T1w transform to map prior knowledge to the T1w
-            fo the fieldmap-less SyN method
-        template : str
-            Name of template targeted by ``template`` output space
+    Inputs
+    ------
+    b0_ref
+        A b0 reference calculated at a previous stage
+    b0_ref_brain
+        Same as above, but brain-masked
+    b0_mask
+        Brain mask for the DWI run
+    t1_brain
+        T1w image, brain-masked, for the fieldmap-less SyN method
+    t1_2_mni_reverse_transform
+        MNI-to-T1w transform to map prior knowledge to the T1w
+        fo the fieldmap-less SyN method
+    template : str
+        Name of template targeted by ``template`` output space
 
 
-    **Outputs**
-        b0_ref
-            An unwarped b0 reference
-        b0_mask
-            The corresponding new mask after unwarping
-        out_warp
-            The deformation field to unwarp the susceptibility distortions
-        syn_b0_ref
-            If ``--force-syn``, an unwarped b0 reference with this
-            method (for reporting purposes)
-        method
-            Name of the method used for SDC
-        fieldmap_hz
-            The fieldmap in Hz for eddy
+    Outputs
+    -------
+    b0_ref
+        An unwarped b0 reference
+    b0_mask
+        The corresponding new mask after unwarping
+    out_warp
+        The deformation field to unwarp the susceptibility distortions
+    syn_b0_ref
+        If ``--force-syn``, an unwarped b0 reference with this
+        method (for reporting purposes)
+    method
+        Name of the method used for SDC
+    fieldmap_hz
+        The fieldmap in Hz for eddy
 
     """
-
+    omp_nthreads = config.nipype.omp_nthreads
     workflow = Workflow(name="sdc_wf" if fieldmap_info["suffix"] is not None else "sdc_bypass_wf")
     inputnode = pe.Node(
         niu.IdentityInterface(

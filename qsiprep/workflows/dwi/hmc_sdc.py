@@ -7,11 +7,11 @@ Orchestrating the dwi-preprocessing workflow
 
 """
 
-from nipype import logging
 from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 
+from ... import config
 from ...engine import Workflow
 from ...interfaces.gradients import CombineMotions, GradientRotation, SliceQC
 from ...interfaces.images import SplitDWIsBvals, TSplit
@@ -21,28 +21,12 @@ from ..fieldmap.drbuddi import init_drbuddi_wf
 # dwi workflows
 from .hmc import init_dwi_hmc_wf
 
-LOGGER = logging.getLogger("nipype.workflow")
-
 
 def init_qsiprep_hmcsdc_wf(
     scan_groups,
-    b0_threshold,
-    hmc_transform,
-    hmc_model,
-    hmc_align_to,
-    template,
-    shoreline_iters,
-    impute_slice_threshold,
-    omp_nthreads,
-    fmap_bspline,
-    raw_image_sdc,
-    fmap_demean,
-    pepolar_method,
     source_file,
     t2w_sdc,
     dwi_metadata=None,
-    sloppy=False,
-    name="qsiprep_hmcsdc_wf",
 ):
     """
     This workflow controls the head motion correction and susceptibility distortion
@@ -59,20 +43,6 @@ def init_qsiprep_hmcsdc_wf(
              'fieldmap_info': {'suffix': None},
              'dwi_series_pedir': j},
             source_file='/data/sub-1/dwi/sub-1_dwi.nii.gz',
-            b0_threshold=100,
-            hmc_transform='Affine',
-            hmc_model='3dSHORE',
-            hmc_align_to='iterative',
-            template='MNI152NLin2009cAsym',
-            shoreline_iters=1,
-            raw_image_sdc=True,
-            impute_slice_threshold=0,
-            pepolar_method='DRBUDDI',
-            omp_nthreads=1,
-            fmap_bspline=False,
-            fmap_demean=False,
-            name='qsiprep_hmcsdc_wf',
-            sloppy=False,
             t2w_sdc=False,
             dwi_metadata={})
     """
@@ -132,28 +102,20 @@ def init_qsiprep_hmcsdc_wf(
         name="outputnode",
     )
 
-    workflow = Workflow(name=name)
+    workflow = Workflow(name="qsiprep_hmcsdc_wf")
 
     # Split the input data into single volumes, put bvecs in LPS+ world reference frame
     split_dwis = pe.Node(TSplit(digits=4, out_name="vol"), name="split_dwis")
     split_bvals = pe.Node(
-        SplitDWIsBvals(b0_threshold=b0_threshold, deoblique_bvecs=True), name="split_bvals"
+        SplitDWIsBvals(b0_threshold=config.workflow.b0_threshold, deoblique_bvecs=True),
+        name="split_bvals",
     )
 
     # Motion correct the data
-    dwi_hmc_wf = init_dwi_hmc_wf(
-        hmc_transform,
-        hmc_model,
-        hmc_align_to,
-        source_file=source_file,
-        num_model_iterations=shoreline_iters,
-        sloppy=sloppy,
-        omp_nthreads=omp_nthreads,
-        name="dwi_hmc_wf",
-    )
+    dwi_hmc_wf = init_dwi_hmc_wf(source_file=source_file)
 
     # Impute slice data if requested
-    slice_qc = pe.Node(SliceQC(impute_slice_threshold=impute_slice_threshold), name="slice_qc")
+    slice_qc = pe.Node(SliceQC(), name="slice_qc")
 
     # Compute distance travelled to the template
     summarize_motion = pe.Node(CombineMotions(), name="summarize_motion")
@@ -208,16 +170,11 @@ def init_qsiprep_hmcsdc_wf(
     fieldmap_type = fieldmap_info["suffix"]
 
     if fieldmap_type in ("epi", "rpe_series"):
-        if "topup" in pepolar_method.lower():
+        if "topup" in config.workflow.pepolar_method.lower():
             raise Exception("TOPUP is not supported with SHORELine ")
 
         drbuddi_wf = init_drbuddi_wf(
             scan_groups=scan_groups,
-            omp_nthreads=omp_nthreads,
-            b0_threshold=b0_threshold,
-            raw_image_sdc=raw_image_sdc,
-            pepolar_method=pepolar_method,
-            sloppy=sloppy,
             t2w_sdc=t2w_sdc,
         )
 
@@ -268,16 +225,18 @@ def init_qsiprep_hmcsdc_wf(
         return workflow
 
     if fieldmap_type is None:
-        LOGGER.warning("SDC: no fieldmaps found or they were ignored (%s).", source_file)
+        config.loggers.workflow.warning(
+            "SDC: no fieldmaps found or they were ignored (%s).", source_file
+        )
     elif fieldmap_type == "syn":
-        LOGGER.warning(
+        config.loggers.workflow.warning(
             "SDC: no fieldmaps found or they were ignored. "
             'Using EXPERIMENTAL "fieldmap-less SyN" correction '
             "for dataset %s.",
             source_file,
         )
     else:
-        LOGGER.log(
+        config.loggers.workflow.log(
             25,
             'SDC: fieldmap estimation of type "%s" intended for %s found.',
             fieldmap_type,
@@ -288,11 +247,8 @@ def init_qsiprep_hmcsdc_wf(
     b0_sdc_wf = init_sdc_wf(
         scan_groups["fieldmap_info"],
         dwi_metadata,
-        omp_nthreads=omp_nthreads,
-        fmap_demean=fmap_demean,
-        fmap_bspline=fmap_bspline,
     )
-    b0_sdc_wf.inputs.inputnode.template = template
+    b0_sdc_wf.inputs.inputnode.template = config.workflow.anatomical_template
 
     workflow.connect([
         (dwi_hmc_wf, b0_sdc_wf, [

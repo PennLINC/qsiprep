@@ -138,7 +138,7 @@ def init_dwi_preproc_wf(
 
     """
     dwi_only = config.workflow.anat_modality == "none"
-    omp_nthreads = config.nipype.omp_nthreads
+    output_dir = config.execution.output_dir
 
     # Check the inputs
     if config.execution.layout is not None:
@@ -297,13 +297,9 @@ Diffusion data preprocessing
 
     if not dwi_only:
         # calculate dwi registration to T1w
-        b0_coreg_wf = init_b0_to_anat_registration_wf(
-            omp_nthreads=omp_nthreads, mem_gb=mem_gb["resampled"], write_report=True
-        )
+        b0_coreg_wf = init_b0_to_anat_registration_wf(write_report=True)
     else:
-        b0_coreg_wf = init_direct_b0_acpc_wf(
-            omp_nthreads=omp_nthreads, mem_gb=mem_gb["resampled"], write_report=True
-        )
+        b0_coreg_wf = init_direct_b0_acpc_wf(write_report=True)
     ds_report_coreg = pe.Node(
         DerivativesDataSink(suffix="acpc" if dwi_only else "coreg", source_file=source_file),
         name="ds_report_coreg",
@@ -346,11 +342,9 @@ Diffusion data preprocessing
     ):
 
         if os.path.exists(t2w_sdc):
-            extended_pepolar_report_wf = init_extended_pepolar_report_wf(
-                segment_t2w=t2w_sdc, omp_nthreads=omp_nthreads
-            )
+            extended_pepolar_report_wf = init_extended_pepolar_report_wf(segment_t2w=t2w_sdc)
         else:
-            extended_pepolar_report_wf = init_extended_pepolar_report_wf(omp_nthreads=omp_nthreads)
+            extended_pepolar_report_wf = init_extended_pepolar_report_wf()
 
         ds_report_fa_sdc = pe.Node(
             DerivativesMaybeDataSink(desc="sdc", suffix="fa", source_file=source_file),
@@ -394,12 +388,11 @@ Diffusion data preprocessing
     summary = pe.Node(
         DiffusionSummary(
             pe_direction=scan_groups["dwi_series_pedir"],
-            hmc_model=hmc_model,
-            b0_to_t1w_transform=b0_to_t1w_transform,
-            hmc_transform=hmc_transform,
-            impute_slice_threshold=impute_slice_threshold,
-            denoise_method=denoise_method,
-            dwi_denoise_window=dwi_denoise_window,
+            hmc_model=config.workflow.hmc_model,
+            b0_to_t1w_transform=config.workflow.b0_to_t1w_transform,
+            hmc_transform=config.workflow.hmc_transform,
+            denoise_method=config.workflow.denoise_method,
+            dwi_denoise_window=config.workflow.dwi_denoise_window,
         ),
         name="summary",
         mem_gb=DEFAULT_MEMORY_MIN_GB,
@@ -425,9 +418,7 @@ Diffusion data preprocessing
 
     # Compute and gather confounds
     confounds_wf = init_dwi_confs_wf(
-        mem_gb=mem_gb["resampled"],
         metadata=[],
-        impute_slice_threshold=impute_slice_threshold,
         name="confounds_wf",
     )
     ds_confounds = pe.Node(
@@ -496,7 +487,7 @@ Diffusion data preprocessing
     # Fill-in datasinks of reportlets seen so far
     for node in workflow.list_node_names():
         if node.split(".")[-1].startswith("ds_report"):
-            workflow.get_node(node).inputs.base_directory = str(reportlets_dir)
+            workflow.get_node(node).inputs.base_directory = str(config.execution.reportlets_dir)
             src_file = workflow.get_node(node).inputs.source_file
             if not isdefined(src_file) or src_file is None:
                 workflow.get_node(node).inputs.source_file = source_file

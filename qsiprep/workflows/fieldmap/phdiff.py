@@ -28,11 +28,12 @@ from niworkflows.interfaces.bids import ReadSidecarJSON
 from niworkflows.interfaces.images import IntraModalMerge
 from niworkflows.interfaces.reportlets.masks import BETRPT
 
+from ... import config
 from ...interfaces import DerivativesDataSink, Phasediff2Fieldmap, Phases2Fieldmap
 from .utils import cleanup_edge_pipeline, demean_image, siemens2rads
 
 
-def init_phdiff_wf(omp_nthreads, phasetype="phasediff", name="phdiff_wf"):
+def init_phdiff_wf(phasetype="phasediff", name="phdiff_wf"):
     """
     Estimates the fieldmap using a phase-difference image and one or more
     magnitude images corresponding to two or more :abbr:`GRE (Gradient Echo sequence)`
@@ -55,7 +56,7 @@ def init_phdiff_wf(omp_nthreads, phasetype="phasediff", name="phdiff_wf"):
 
 
     """
-
+    omp_nthreads = config.nipype.omp_nthreads
     workflow = Workflow(name=name)
     workflow.__desc__ = """\
 A deformation field to correct for susceptibility distortions was estimated
@@ -83,7 +84,9 @@ further improvements of HCP Pipelines [@hcppipelines].
 
     # de-gradient the fields ("bias/illumination artifact")
     n4 = pe.Node(
-        ants.N4BiasFieldCorrection(dimension=3, copy_header=True), name="n4", n_procs=omp_nthreads
+        ants.N4BiasFieldCorrection(dimension=3, copy_header=True, num_threads=omp_nthreads),
+        name="n4",
+        n_procs=omp_nthreads,
     )
     bet = pe.Node(BETRPT(generate_report=True, frac=0.6, mask=True), name="bet")
     ds_report_fmap_mask = pe.Node(

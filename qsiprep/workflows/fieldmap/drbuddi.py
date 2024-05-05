@@ -20,10 +20,10 @@ susceptibility distortion. It has multiple modes of operation
 
 """
 
-from nipype import logging
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 
+from ... import config
 from ...engine import Workflow
 from ...interfaces.tortoise import (
     DRBUDDI,
@@ -32,7 +32,6 @@ from ...interfaces.tortoise import (
     generate_drbuddi_boilerplate,
 )
 
-LOGGER = logging.getLogger("nipype.workflow")
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 

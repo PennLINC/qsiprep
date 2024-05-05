@@ -16,6 +16,7 @@ from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from nipype.utils.filemanip import split_filename
 
+from ... import config
 from ...engine import Workflow
 from ...interfaces import ConformDwi, DerivativesDataSink
 from ...interfaces.bids import get_metadata_for_nifti
@@ -41,19 +42,9 @@ LOGGER = logging.getLogger("nipype.workflow")
 
 def init_merge_and_denoise_wf(
     raw_dwi_files,
-    dwi_denoise_window,
-    unringing_method,
-    dwi_no_biascorr,
-    denoise_method,
-    no_b0_harmonization,
-    denoise_before_combining,
     orientation,
-    b0_threshold,
     source_file,
-    layout=None,
-    ignore=[],
     mem_gb=1,
-    omp_nthreads=1,
     calculate_qc=False,
     phase_id="same",
     name="merge_and_denoise_wf",
@@ -68,64 +59,32 @@ def init_merge_and_denoise_wf(
         wf = init_merge_and_dwnoise_wf(
             ['/path/to/dwi/sub-1_dwi.nii.gz'],
             source_file='/data/sub-1/dwi/sub-1_dwi.nii.gz',
-            dwi_denoise_window=7,
-            denoise_method='patch2self',
-            b0_threshold=100,
-            unringing_method='mrdegibbs',
-            dwi_no_biascorr=False,
-            no_b0_harmonization=False,
-            denoise_before_combining=True,
-            combine_all_dwis=True,
         )
 
-    **Parameters**
+    Parameters
+    ----------
+    raw_dwi_files : list
+        list of raw (in their original BIDS directory) dwi nifti files
 
-        raw_dwi_files : list
-            list of raw (in their original BIDS directory) dwi nifti files
-        b0_threshold : int
-            Maximum b value for an image to be considered a b=0
-        dwi_denoise_window : int
-            window size in voxels for image-based denoising. Must be odd. If 0, '
-            'denoising will not be run'
-        denoise_method : str
-            Either 'dwidenoise', 'patch2self' or 'none'
-        unringing_method : str
-            algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
-        dwi_no_biascorr : bool
-            run spatial bias correction (N4) on dwi series
-        no_b0_harmonization : bool
-            skip rescaling dwi scans to have matching b=0 intensities across scans
-        denoise_before_combining : bool
-            run ``dwidenoise`` before combining dwis. Requires ``combine_all_dwis``
-            If ``dwi_denoise_window > 0`` and this is ``False``, then ``dwidenoise``
-            is run on the merged dwi series.
-        calculate_qc : bool
-            Should DSI Studio's QC be calculated on the merged raw data?
-        layout : None or :obj:`bids.layout.BIDSLayout`
-            Used to try to find phase files.
-            Only used if ``denoise_before_combining`` is ``True``.
-        ignore : list
-            List of elements to ignore in processing.
-            The only relevant value for this workflow is "phase".
 
-    **Outputs**
-
-        merged_image
-            dwi series, conformed, denoised if requested
-        merged_raw_image
-            dwi series, conformed, raw
-        merged_bval
-            bvals from merged images
-        merged_bvec
-            bvecs from merged images
-        merged_json
-            JSON file containing slice timings for slice2vol
-        noise_image
-            image(s) created by ``dwidenoise``
-        original_files
-            names of the original files for each volume
-        qc_summary
-            DSI Studio QC text file
+    Outputs
+    -------
+    merged_image
+        dwi series, conformed, denoised if requested
+    merged_raw_image
+        dwi series, conformed, raw
+    merged_bval
+        bvals from merged images
+    merged_bvec
+        bvecs from merged images
+    merged_json
+        JSON file containing slice timings for slice2vol
+    noise_image
+        image(s) created by ``dwidenoise``
+    original_files
+        names of the original files for each volume
+    qc_summary
+        DSI Studio QC text file
 
     """
     workflow = Workflow(name=name)
@@ -364,18 +323,10 @@ def init_merge_and_denoise_wf(
 
 
 def init_dwi_denoising_wf(
-    dwi_denoise_window,
-    denoise_method,
-    unringing_method,
-    dwi_no_biascorr,
-    no_b0_harmonization,
-    b0_threshold,
     source_file,
     partial_fourier,
     phase_encoding_direction,
     use_phase,
-    mem_gb=1,
-    omp_nthreads=1,
     name="denoise_wf",
 ):
     """Build a workflow to denoise a DWI series.

@@ -12,13 +12,14 @@ from nipype.algorithms import confounds as nac
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 
+from ... import config
 from ...engine import Workflow
 from ...interfaces import AddTSVHeader, GatherConfounds
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
-def init_dwi_confs_wf(mem_gb, metadata, impute_slice_threshold, name="dwi_confs_wf"):
+def init_dwi_confs_wf():
     """
     This workflow calculates confounds for a dwi series, and aggregates them
     into a :abbr:`TSV (tab-separated value)` file, for use as nuisance
@@ -36,42 +37,27 @@ def init_dwi_confs_wf(mem_gb, metadata, impute_slice_threshold, name="dwi_confs_
         :simple_form: yes
 
         from qsiprep.workflows.dwi.confounds import init_dwi_confs_wf
-        wf = init_dwi_confs_wf(
-            mem_gb=1,
-            metadata={},
-            impute_slice_threshold=0)
+        wf = init_dwi_confs_wf()
 
-    **Parameters**
-
-        mem_gb : float
-            Size of dwi file in GB - please note that this size
-            should be calculated after resamplings that may extend
-            the FoV
-        metadata : dict
-            BIDS metadata for dwi file
-        name : str
-            Name of workflow (default: ``dwi_confs_wf``)
+    Inputs
+    ------
+    sliceqc_file
+        dwi image, after the prescribed corrections (STC, HMC and SDC)
+        when available.
+    motion_params
+        spm motion params
 
 
-    **Inputs**
-
-        sliceqc_file
-            dwi image, after the prescribed corrections (STC, HMC and SDC)
-            when available.
-        motion_params
-            spm motion params
-
-
-    **Outputs**
-
-        confounds_file
-            TSV of all aggregated confounds
-        rois_report
-            Reportlet visualizing white-matter/CSF mask used for aCompCor,
-            the ROI for tCompCor and the dwi brain mask.
+    Outputs
+    -------
+    confounds_file
+        TSV of all aggregated confounds
+    rois_report
+        Reportlet visualizing white-matter/CSF mask used for aCompCor,
+        the ROI for tCompCor and the dwi brain mask.
 
     """
-    workflow = Workflow(name=name)
+    workflow = Workflow(name="dwi_confs_wf")
     workflow.__desc__ = """\
 Several confounding time-series were calculated based on the
 preprocessed DWI: framewise displacement (FD) using the
@@ -98,7 +84,7 @@ was also calculated.
     )
 
     # Frame displacement
-    fdisp = pe.Node(nac.FramewiseDisplacement(parameter_source="SPM"), name="fdisp", mem_gb=mem_gb)
+    fdisp = pe.Node(nac.FramewiseDisplacement(parameter_source="SPM"), name="fdisp")
 
     add_motion_headers = pe.Node(
         AddTSVHeader(columns=["trans_x", "trans_y", "trans_z", "rot_x", "rot_y", "rot_z"]),

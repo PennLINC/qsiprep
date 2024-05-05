@@ -31,14 +31,9 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 
 
 def init_dwi_hmc_wf(
-    hmc_transform,
-    hmc_model,
-    hmc_align_to,
     source_file,
     num_model_iterations=2,
     mem_gb=3,
-    omp_nthreads=1,
-    sloppy=False,
     name="dwi_hmc_wf",
 ):
     """Perform head motion correction and susceptibility distortion correction.
@@ -230,7 +225,7 @@ def init_dwi_hmc_wf(
 
 
 def linear_alignment_workflow(
-    transform="Rigid", metric="Mattes", iternum=0, precision="precise", omp_nthreads=1
+    transform="Rigid", iternum=0, precision="precise", omp_nthreads=1
 ):
     """
     Takes a template image and a set of input images, does

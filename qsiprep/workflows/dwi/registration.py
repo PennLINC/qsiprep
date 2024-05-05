@@ -7,6 +7,7 @@ from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from pkg_resources import resource_filename as pkgrf
 
+from ... import config
 from ...engine import Workflow
 from ...interfaces.itk import ACPCReport, AffineToRigid
 from ...interfaces.niworkflows import ANTSRegistrationRPT
@@ -15,7 +16,7 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 
 
 def init_b0_to_anat_registration_wf(
-    mem_gb=3, omp_nthreads=1, write_report=True, transform_type="Rigid", name="b0_anat_coreg"
+    write_report=True, transform_type="Rigid", name="b0_anat_coreg"
 ):
     """
     Calculates the registration between a reference b0 image and T1-space
@@ -27,54 +28,52 @@ def init_b0_to_anat_registration_wf(
 
         from qsiprep.workflows.dwi.registration import init_b0_to_anat_registration_wf
         wf = init_b0_to_anat_registration_wf(
-                              mem_gb=3,
-                              source_file='/data/sub-1/dwi/sub-1_dwi.nii.gz',
-                              omp_nthreads=1,
                               transform_type="Rigid",
                               write_report=False)
 
-    **Parameters**
+    Parameters
+    ----------
+    mem_gb : float
+        Size of DWI file in GB
+    omp_nthreads : int
+        Maximum number of threads an individual process may use
+    name : str
+        Name of workflow (default: ``bold_reg_wf``)
+    transform_type : str
+        Either "Rigid" or "Affine"
+    write_report : bool
+        Should a reportlet be written?
 
-        mem_gb : float
-            Size of DWI file in GB
-        omp_nthreads : int
-            Maximum number of threads an individual process may use
-        name : str
-            Name of workflow (default: ``bold_reg_wf``)
-        transform_type : str
-            Either "Rigid" or "Affine"
-        write_report : bool
-            Should a reportlet be written?
+    Inputs
+    ------
+    ref_b0_brain
+        Reference image to which DWI series is aligned
+        If ``fieldwarp == True``, ``ref_bold_brain`` should be unwarped
+    t1_brain
+        Skull-stripped ``t1_preproc``
+    t1_seg
+        Segmentation of preprocessed structural image, including
+        gray-matter (GM), white-matter (WM) and cerebrospinal fluid (CSF)
+    subjects_dir
+        FreeSurfer SUBJECTS_DIR
+    subject_id
+        FreeSurfer subject ID
+    t1_2_fsnative_reverse_transform
+        LTA-style affine matrix translating from FreeSurfer-conformed subject space to T1w
 
-    **Inputs**
+    Outputs
+    -------
+    itk_b0_to_t1
+        Affine transform from ``ref_bold_brain`` to T1 space (ITK format)
+    itk_t1_to_b0
+        Affine transform from T1 space to DWI space (ITK format)
+    coreg_metric
+        Mattes score from the coregistration
+    fallback
+        Boolean indicating whether BBR was rejected (mri_coreg registration returned)
+    report
+        svg reportlet for the coregistration
 
-        ref_b0_brain
-            Reference image to which DWI series is aligned
-            If ``fieldwarp == True``, ``ref_bold_brain`` should be unwarped
-        t1_brain
-            Skull-stripped ``t1_preproc``
-        t1_seg
-            Segmentation of preprocessed structural image, including
-            gray-matter (GM), white-matter (WM) and cerebrospinal fluid (CSF)
-        subjects_dir
-            FreeSurfer SUBJECTS_DIR
-        subject_id
-            FreeSurfer subject ID
-        t1_2_fsnative_reverse_transform
-            LTA-style affine matrix translating from FreeSurfer-conformed subject space to T1w
-
-    **Outputs**
-
-        itk_b0_to_t1
-            Affine transform from ``ref_bold_brain`` to T1 space (ITK format)
-        itk_t1_to_b0
-            Affine transform from T1 space to DWI space (ITK format)
-        coreg_metric
-            Mattes score from the coregistration
-        fallback
-            Boolean indicating whether BBR was rejected (mri_coreg registration returned)
-        report
-            svg reportlet for the coregistration
     """
     inputnode = pe.Node(
         niu.IdentityInterface(
@@ -119,7 +118,7 @@ def init_b0_to_anat_registration_wf(
     coreg.inputs.collapse_output_transforms = True
     coreg.inputs.write_composite_transform = False
     coreg.inputs.output_warped_image = True
-    b0_to_anat = pe.Node(coreg, name="b0_to_anat", n_procs=omp_nthreads)
+    b0_to_anat = pe.Node(coreg, name="b0_to_anat", n_procs=config.nipype.omp_nthreads)
 
     workflow.connect(inputnode, "t1_brain", b0_to_anat, "fixed_image")  # fmt:skip
     workflow.connect(inputnode, "ref_b0_brain", b0_to_anat, "moving_image")  # fmt:skip
@@ -131,7 +130,7 @@ def init_b0_to_anat_registration_wf(
     return workflow
 
 
-def init_direct_b0_acpc_wf(mem_gb=3, omp_nthreads=1, write_report=True, name="b0_anat_coreg"):
+def init_direct_b0_acpc_wf(write_report=True, name="b0_anat_coreg"):
     """
     Re-orients a b=0 image directly to AC-PC. A full affine registration is run,
     but only the rigid (translation + rotation) part is included.
@@ -214,7 +213,7 @@ def init_direct_b0_acpc_wf(mem_gb=3, omp_nthreads=1, write_report=True, name="b0
     acpc_reg = pe.Node(
         ANTSRegistrationRPT(generate_report=write_report, from_file=ants_settings),
         name="acpc_reg",
-        n_procs=omp_nthreads,
+        n_procs=config.nipype.omp_nthreads,
     )
 
     # Extract the rigid components of the transform

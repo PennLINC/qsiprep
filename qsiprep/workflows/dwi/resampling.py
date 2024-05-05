@@ -31,13 +31,9 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 
 def init_dwi_trans_wf(
     source_file,
-    template,
     mem_gb,
-    omp_nthreads,
-    output_resolution,
     name="dwi_trans_wf",
     use_compression=True,
-    to_mni=False,
     write_local_bvecs=False,
     write_reports=True,
     concatenate=True,

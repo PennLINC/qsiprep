@@ -32,7 +32,7 @@ from ...interfaces import DerivativesDataSink, FieldToHz, FieldToRadS
 from .utils import cleanup_edge_pipeline, demean_image
 
 
-def init_fmap_wf(omp_nthreads, fmap_bspline, name="fmap_wf"):
+def init_fmap_wf(name="fmap_wf"):
     """
     Fieldmap workflow - when we have a sequence that directly measures the fieldmap
     we just need to mask it (using the corresponding magnitude image) to remove the

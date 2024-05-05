@@ -10,6 +10,7 @@ from nipype import logging
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 
+from ... import config
 from ...engine import Workflow
 from ...interfaces.dwi_merge import MergeDWIs
 from ...interfaces.nilearn import Merge
@@ -20,26 +21,14 @@ from .qc import init_modelfree_qc_wf
 from .util import get_source_file
 
 DEFAULT_MEMORY_MIN_GB = 0.01
-LOGGER = logging.getLogger("nipype.workflow")
 
 
 def init_dwi_pre_hmc_wf(
     scan_groups,
-    b0_threshold,
     preprocess_rpe_series,
-    dwi_denoise_window,
-    denoise_method,
-    unringing_method,
-    no_b0_harmonization,
-    b1_biascorrect_stage,
-    denoise_before_combining,
     orientation,
-    omp_nthreads,
     source_file,
-    low_mem,
     calculate_qc=True,
-    layout=None,
-    ignore=[],
     name="pre_hmc_wf",
 ):
     """
