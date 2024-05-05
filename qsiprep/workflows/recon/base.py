@@ -26,7 +26,6 @@ from nipype import __version__ as nipype_ver
 from nipype.utils.filemanip import split_filename
 from pkg_resources import resource_filename as pkgrf
 
-from ...__about__ import __version__
 from ...engine import Workflow
 from ...interfaces.ingress import QsiReconDWIIngress, UKBioBankDWIIngress
 from ...interfaces.interchange import (

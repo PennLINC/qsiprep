@@ -315,7 +315,13 @@ def _build_parser(**kwargs):
         action="store_true",
         help="Treat dataset as longitudinal - may increase runtime",
     )
-
+    g_conf.add_argument(
+        "--skip-anat-based-spatial-normalization",
+        action="store_true",
+        default=False,
+        help="skip running the anat-based normalization to template space. "
+        "Default is to run the normalization.",
+    )
     g_conf.add_argument(
         "--anat-modality",
         "--anat_modality",

@@ -437,6 +437,10 @@ class execution(_Config):
     """Directory containing QSIPrep derivatives to run through recon workflows."""
     recon_only = False
     """Run only recon workflows."""
+    reportlets_dir = None
+    """Path where reportlets are written."""
+    skip_anat_based_spatial_normalization = False
+    """Should we skip normalizing the anatomical data to a template?"""
     task_id = None
     """Select a particular task from all available in the dataset."""
     templateflow_home = _templateflow_home
@@ -463,6 +467,7 @@ class execution(_Config):
         "output_dir",
         "qsiprep_dir",
         "recon_input",
+        "reportlets_dir",
         "templateflow_home",
         "work_dir",
     )
