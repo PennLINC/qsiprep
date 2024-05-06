@@ -28,6 +28,7 @@ from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from niworkflows.interfaces.images import IntraModalMerge
 from niworkflows.interfaces.reportlets.masks import BETRPT
 
+from ... import config
 from ...interfaces import DerivativesDataSink, FieldToHz, FieldToRadS
 from .utils import cleanup_edge_pipeline, demean_image
 
@@ -68,7 +69,7 @@ def init_fmap_wf(name="fmap_wf"):
     n4_correct = pe.Node(
         ants.N4BiasFieldCorrection(dimension=3, copy_header=True),
         name="n4_correct",
-        n_procs=omp_nthreads,
+        n_procs=config.nipype.omp_nthreads,
     )
     bet = pe.Node(BETRPT(generate_report=True, frac=0.6, mask=True), name="bet")
 

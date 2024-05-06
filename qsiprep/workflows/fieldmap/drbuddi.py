@@ -37,13 +37,7 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 
 def init_drbuddi_wf(
     scan_groups,
-    b0_threshold,
-    pepolar_method,
-    raw_image_sdc,
     t2w_sdc,
-    omp_nthreads=1,
-    name="drbuddi_sdc_wf",
-    sloppy=False,
 ):
     """
     This workflow implements the heuristics to choose a
@@ -73,41 +67,42 @@ def init_drbuddi_wf(
             scan_groups=scan_groups
         )
 
-    **Parameters**
+    Parameters
+    ----------
+    scan_groups : dict of distortion groupings
+        Inputs configuration for distortion correction
+    t2w_sdc : bool
+        Should a T2w image be included in the DRBUDDI run?
 
-        scan_groups : dict of distortion groupings
-            Inputs configuration for distortion correction
-        omp_nthreads : int
-            Maximum number of threads an individual process may use
-        debug : bool
-            Enable debugging outputs
 
-    **Inputs**
-        dwi_file : str
-            Path to a motion/eddy corrected DWI file (in LPS+)
-        bval_file : str
-            Corresponding bval file for dwi_file
-        bvec_file : str
-            Corresponding bvec file for dwi_file (in LPS+)
-        original_files : list
-            List of the original BIDS file for each image in dwi_file
-        t1_brain
-            T1w image, brain-masked
-        t2_brain
-            T2w image, brain masked
+    Inputs
+    ------
+    dwi_file : str
+        Path to a motion/eddy corrected DWI file (in LPS+)
+    bval_file : str
+        Corresponding bval file for dwi_file
+    bvec_file : str
+        Corresponding bvec file for dwi_file (in LPS+)
+    original_files : list
+        List of the original BIDS file for each image in dwi_file
+    t1_brain
+        T1w image, brain-masked
+    t2_brain
+        T2w image, brain masked
 
-    **Outputs**
-        b0_ref
-            An unwarped b0 reference
-        b0_mask
-            The corresponding new mask after unwarping
-        sdc_warps
-            The deformation fields to unwarp the susceptibility distortions in each image
-            in dwi_file
+    Outputs
+    -------
+    b0_ref
+        An unwarped b0 reference
+    b0_mask
+        The corresponding new mask after unwarping
+    sdc_warps
+        The deformation fields to unwarp the susceptibility distortions in each image
+        in dwi_file
 
     """
 
-    workflow = Workflow(name=name)
+    workflow = Workflow(name="drbuddi_sdc_wf")
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
@@ -155,7 +150,7 @@ def init_drbuddi_wf(
     workflow.__desc__ = generate_drbuddi_boilerplate(
         fieldmap_type=fieldmap_info["suffix"],
         t2w_sdc=t2w_sdc,
-        with_topup="topup" in pepolar_method.lower(),
+        with_topup="topup" in config.workflow.pepolar_method.lower(),
     )
 
     outputnode.inputs.method = (
@@ -166,17 +161,21 @@ def init_drbuddi_wf(
         GatherDRBUDDIInputs(
             dwi_series_pedir=scan_groups["dwi_series_pedir"],
             epi_fmaps=fieldmap_info[fieldmap_info["suffix"]],
-            b0_threshold=b0_threshold,
-            raw_image_sdc=raw_image_sdc,
+            b0_threshold=config.workflow.b0_threshold,
+            raw_image_sdc=True,
             fieldmap_type=fieldmap_info["suffix"],
         ),
         name="gather_drbuddi_inputs",
     )
 
     drbuddi = pe.Node(
-        DRBUDDI(fieldmap_type=fieldmap_info["suffix"], num_threads=omp_nthreads, sloppy=sloppy),
+        DRBUDDI(
+            fieldmap_type=fieldmap_info["suffix"],
+            num_threads=config.nipype.omp_nthreads,
+            sloppy=config.execution.sloppy,
+        ),
         name="drbuddi",
-        n_procs=omp_nthreads,
+        n_procs=config.nipype.omp_nthreads,
     )
 
     aggregate_drbuddi = pe.Node(

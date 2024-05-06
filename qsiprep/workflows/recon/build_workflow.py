@@ -1,8 +1,7 @@
-import logging
-
 import nipype.pipeline.engine as pe
 from nipype.interfaces import utility as niu
 
+from ... import config
 from ...engine import Workflow
 from ...interfaces.interchange import default_input_set, recon_workflow_input_fields
 from .amico import init_amico_noddi_fit_wf
@@ -31,8 +30,6 @@ from .steinhardt import init_steinhardt_order_param_wf
 from .tortoise import init_tortoise_estimator_wf
 from .utils import init_conform_dwi_wf, init_discard_repeated_samples_wf
 
-LOGGER = logging.getLogger("nipype.interface")
-
 
 def _check_repeats(nodelist):
     total_len = len(nodelist)
@@ -43,11 +40,7 @@ def _check_repeats(nodelist):
 
 def init_dwi_recon_workflow(
     workflow_spec,
-    output_dir,
-    reportlets_dir,
     available_anatomical_data,
-    omp_nthreads,
-    skip_odf_plots,
     name="recon_wf",
 ):
     """Convert a workflow spec into a nipype workflow."""
@@ -63,10 +56,8 @@ def init_dwi_recon_workflow(
         if not node_spec["name"]:
             raise Exception("Node has no name [{}]".format(node_spec))
         new_node = workflow_from_spec(
-            omp_nthreads=omp_nthreads,
             available_anatomical_data=available_anatomical_data,
             node_spec=node_spec,
-            skip_odf_plots=skip_odf_plots,
         )
         if new_node is None:
             raise Exception("Unable to create a node for %s" % node_spec)
@@ -119,7 +110,9 @@ def init_dwi_recon_workflow(
             connect_from_upstream = upstream_outputs.intersection(downstream_inputs)
             connect_from_qsiprep = default_input_set - connect_from_upstream
 
-            LOGGER.debug("connecting %s from %s to %s", connect_from_qsiprep, inputnode, node)
+            config.loggers.workflow.debug(
+                "connecting %s from %s to %s", connect_from_qsiprep, inputnode, node
+            )
             workflow.connect([
                 (
                     inputnode,
@@ -130,7 +123,7 @@ def init_dwi_recon_workflow(
             ])  # fmt:skip
             _check_repeats(workflow.list_node_names())
 
-            LOGGER.debug(
+            config.loggers.workflow.debug(
                 "connecting %s from %s to %s",
                 connect_from_upstream,
                 upstream_outputnode_name,
@@ -158,17 +151,21 @@ def init_dwi_recon_workflow(
     for node in workflow.list_node_names():
         node_suffix = node.split(".")[-1]
         if node_suffix.startswith("ds_") or node_suffix.startswith("recon_scalars"):
-            base_dir = reportlets_dir if "report" in node_suffix else output_dir
+            base_dir = (
+                config.execution.reportlets_dir
+                if "report" in node_suffix
+                else config.execution.output_dir
+            )
             workflow.connect(inputnode, 'dwi_file',
                              workflow.get_node(node), 'source_file')  # fmt:skip
-            # LOGGER.info("setting %s base dir to %s", node_suffix, base_dir )
+            # config.loggers.workflow.info("setting %s base dir to %s", node_suffix, base_dir )
             if node_suffix.startswith("ds"):
                 workflow.get_node(node).inputs.base_directory = base_dir
 
     return workflow
 
 
-def workflow_from_spec(omp_nthreads, available_anatomical_data, node_spec, skip_odf_plots):
+def workflow_from_spec(available_anatomical_data, node_spec):
     """Build a nipype workflow based on a json file."""
     software = node_spec.get("software", "qsiprep")
     qsirecon_suffix = node_spec.get("qsirecon_suffix", "")
@@ -180,17 +177,16 @@ def workflow_from_spec(omp_nthreads, available_anatomical_data, node_spec, skip_
     # it needs to go in parameters
     if "scalars_from" in node_spec and node_spec["scalars_from"]:
         if parameters.get("scalars_from"):
-            LOGGER.warning("overwriting scalars_from in parameters")
+            config.loggers.workflow.warning("overwriting scalars_from in parameters")
         parameters["scalars_from"] = node_spec["scalars_from"]
 
-    if skip_odf_plots:
-        LOGGER.info("skipping ODF plots for %s", node_name)
+    if config.execution.skip_odf_reports:
+        config.loggers.workflow.info("skipping ODF plots for %s", node_name)
         parameters["plot_reports"] = False
 
     if node_name is None:
         raise Exception('Node %s must have a "name" attribute' % node_spec)
     kwargs = {
-        "omp_nthreads": omp_nthreads,
         "available_anatomical_data": available_anatomical_data,
         "name": node_name,
         "qsirecon_suffix": qsirecon_suffix,

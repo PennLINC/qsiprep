@@ -6,11 +6,10 @@ AMICO Reconstruction workflows
 
 """
 
-import logging
-
 import nipype.pipeline.engine as pe
 from nipype.interfaces import utility as niu
 
+from ... import config
 from ...engine import Workflow
 from ...interfaces.amico import NODDI
 from ...interfaces.converters import NODDItoFIBGZ
@@ -19,11 +18,8 @@ from ...interfaces.recon_scalars import AMICOReconScalars, ReconScalarsDataSink
 from ...interfaces.reports import CLIReconPeaksReport
 from qsiprep.interfaces.bids import ReconDerivativesDataSink
 
-LOGGER = logging.getLogger("nipype.interface")
-
 
 def init_amico_noddi_fit_wf(
-    omp_nthreads,
     available_anatomical_data,
     name="amico_noddi_recon",
     qsirecon_suffix="",
@@ -68,7 +64,7 @@ def init_amico_noddi_fit_wf(
         ),
         name="outputnode",
     )
-
+    omp_nthreads = config.nipype.omp_nthreads
     workflow = Workflow(name=name)
     recon_scalars = pe.Node(
         AMICOReconScalars(qsirecon_suffix=qsirecon_suffix),

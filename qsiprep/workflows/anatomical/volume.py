@@ -34,6 +34,7 @@ Anatomical reference preprocessing workflows
 from nipype.interfaces import afni, ants, mrtrix3
 from nipype.interfaces import utility as niu
 from nipype.interfaces.ants import BrainExtraction, N4BiasFieldCorrection
+from nipype.interfaces.base import traits
 from nipype.pipeline import engine as pe
 from niworkflows.interfaces.images import TemplateDimensions
 from niworkflows.interfaces.reportlets.masks import ROIsPlot
@@ -236,15 +237,12 @@ and used as an anatomical reference throughout the workflow.
 
     # Skull strip the anatomical reference
     synthstrip_anat_wf = init_synthstrip_wf(
-        omp_nthreads=omp_nthreads,
         unfatsat=config.workflow.anat_modality == "T2w",
         name="synthstrip_anat_wf",
     )
 
     # Segment the anatomical reference
-    synthseg_anat_wf = init_synthseg_wf(
-        omp_nthreads=omp_nthreads, sloppy=config.execution.sloppy, name="synthseg_anat_wf"
-    )
+    synthseg_anat_wf = init_synthseg_wf()
 
     # Synthstrip is used a lot elsewhere, so make boilerplate for the anatomy-specific
     # version here. TODO: get version number automatically
@@ -402,7 +400,7 @@ FreeSurfer version {fs_version}. """.format(
             ('t1_mask', 'in_mask'),
             ('t1_preproc', 'in_file')]),
         (inputnode, anat_reports_wf, [
-            ((config.workflow.anat_modality.lower(), fix_multi_source_name, 
+            ((config.workflow.anat_modality.lower(), fix_multi_source_name,
               False, config.workflow.anat_modality),
              'inputnode.source_file')]),
         (anat_reference_wf, anat_reports_wf, [
@@ -434,7 +432,7 @@ FreeSurfer version {fs_version}. """.format(
     return workflow
 
 
-def init_t2w_preproc_wf(omp_nthreads, num_t2ws, longitudinal, sloppy, name="t2w_preproc_wf"):
+def init_t2w_preproc_wf(num_t2ws, name="t2w_preproc_wf"):
     """If T1w is the anatomical contrast, you may also want to process the T2ws for
     worlflows that can use them (ie DRBUDDI). This"""
     workflow = Workflow(name=name)
@@ -444,13 +442,7 @@ def init_t2w_preproc_wf(omp_nthreads, num_t2ws, longitudinal, sloppy, name="t2w_
     )
 
     # Ensure there is 1 and only 1 T2w reference
-    anat_reference_wf = init_anat_template_wf(
-        longitudinal=longitudinal,
-        omp_nthreads=omp_nthreads,
-        num_images=num_t2ws,
-        sloppy=sloppy,
-        anatomical_contrast="T2w",
-    )
+    anat_reference_wf = init_anat_template_wf(num_images=num_t2ws)
     # ^ this also provides some boilerplate.
     workflow.__postdesc__ = """\
 The additional T2w reference image was registered to the T1w-ACPC reference
@@ -458,13 +450,15 @@ image using an affine transformation in antsRegistration.
 """
     # Skull strip the anatomical reference
     synthstrip_anat_wf = init_synthstrip_wf(
-        do_padding=True, omp_nthreads=omp_nthreads, unfatsat=True, name="synthstrip_anat_wf"
+        do_padding=True, unfatsat=True, name="synthstrip_anat_wf"
     )
 
     # Perform registrations
     settings = pkgr("qsiprep", "data/affine.json")
     t2_brain_to_t1_brain = pe.Node(
-        ants.Registration(from_file=settings), name="t2_brain_to_t1_brain", n_procs=omp_nthreads
+        ants.Registration(from_file=settings),
+        name="t2_brain_to_t1_brain",
+        n_procs=config.nipype.omp_nthreads,
     )
 
     # Resampling
@@ -955,8 +949,11 @@ def init_output_grid_wf() -> Workflow:
         niu.IdentityInterface(fields=["template_image", "input_image"]), name="inputnode"
     )
     outputnode = pe.Node(niu.IdentityInterface(fields=["grid_image"]), name="outputnode")
-
-    voxel_size = config.workflow.output_resolution
+    # Create the output reference grid_image
+    if config.workflow.output_resolution is None:
+        voxel_size = traits.Undefined
+    else:
+        voxel_size = config.workflow.output_resolution
     padding = 4 if config.workflow.infant else 8
 
     autobox_template = pe.Node(

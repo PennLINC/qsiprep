@@ -18,6 +18,7 @@ import logging
 import nipype.interfaces.utility as niu
 import nipype.pipeline.engine as pe
 
+from ... import config
 from ...engine import Workflow
 from ...interfaces.bids import ReconDerivativesDataSink
 from ...interfaces.interchange import recon_workflow_input_fields
@@ -46,7 +47,7 @@ CITATIONS = {
 
 
 def init_mrtrix_csd_recon_wf(
-    omp_nthreads, available_anatomical_data, name="mrtrix_recon", qsirecon_suffix="", params={}
+    available_anatomical_data, name="mrtrix_recon", qsirecon_suffix="", params={}
 ):
     """Create FOD images for WM, GM and CSF.
 
@@ -113,7 +114,8 @@ def init_mrtrix_csd_recon_wf(
     )
     workflow = Workflow(name=name)
     outputnode.inputs.recon_scalars = []
-    plot_reports = params.pop("plot_reports", True)
+    omp_nthreads = config.nipype.omp_nthreads
+    plot_reports = not config.execution.skip_odf_reports
     desc = """MRtrix3 Reconstruction\n\n: """
 
     # Response estimation
@@ -381,7 +383,7 @@ def init_mrtrix_csd_recon_wf(
 
 
 def init_global_tractography_wf(
-    omp_nthreads, available_anatomical_data, name="mrtrix_recon", qsirecon_suffix="", params={}
+    available_anatomical_data, name="mrtrix_recon", qsirecon_suffix="", params={}
 ):
     """Run multi-shell, multi-tissue global tractography
 
@@ -425,7 +427,6 @@ def init_global_tractography_wf(
 
     workflow = pe.Workflow(name=name)
     outputnode.inputs.recon_scalars = []
-    plot_reports = params.pop("plot_reports", True)  # noqa: F841
 
     create_mif = pe.Node(MRTrixIngress(), name="create_mif")
 
@@ -501,7 +502,7 @@ def init_global_tractography_wf(
 
 
 def init_mrtrix_tractography_wf(
-    omp_nthreads, available_anatomical_data, name="mrtrix_tracking", qsirecon_suffix="", params={}
+    available_anatomical_data, name="mrtrix_tracking", qsirecon_suffix="", params={}
 ):
     """Run tractography
 
@@ -535,7 +536,7 @@ def init_mrtrix_tractography_wf(
 
     workflow = pe.Workflow(name=name)
     outputnode.inputs.recon_scalars = []
-    plot_reports = params.pop("plot_reports", True)  # noqa: F841
+    omp_nthreads = config.nipype.omp_nthreads
     # Resample anat mask
     tracking_params = params.get("tckgen", {})
     tracking_params["nthreads"] = omp_nthreads
@@ -607,7 +608,6 @@ def init_mrtrix_tractography_wf(
 
 
 def init_mrtrix_connectivity_wf(
-    omp_nthreads,
     available_anatomical_data,
     name="mrtrix_connectiity",
     params={},
@@ -635,8 +635,9 @@ def init_mrtrix_connectivity_wf(
     outputnode = pe.Node(
         niu.IdentityInterface(fields=["matfile", "recon_scalars"]), name="outputnode"
     )
+    omp_nthreads = config.nipype.omp_nthreads
     outputnode.inputs.recon_scalars = []
-    plot_reports = params.pop("plot_reports", True)
+    plot_reports = not config.execution.skip_odf_reports
     workflow = pe.Workflow(name=name)
     conmat_params = params.get("tck2connectome", {})
     calc_connectivity = pe.Node(

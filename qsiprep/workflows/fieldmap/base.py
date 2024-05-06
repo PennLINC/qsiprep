@@ -193,7 +193,7 @@ co-registration with the anatomical reference.
         if fieldmap_info["suffix"] == "fieldmap":
             from .fmap import init_fmap_wf
 
-            fmap_estimator_wf = init_fmap_wf(omp_nthreads=omp_nthreads, fmap_bspline=fmap_bspline)
+            fmap_estimator_wf = init_fmap_wf()
             # set inputs
             fmap_estimator_wf.inputs.inputnode.fieldmap = fieldmap_info["fieldmap"]
             fmap_estimator_wf.inputs.inputnode.magnitude = fieldmap_info["magnitude"]
@@ -201,9 +201,7 @@ co-registration with the anatomical reference.
         else:
             from .phdiff import init_phdiff_wf
 
-            fmap_estimator_wf = init_phdiff_wf(
-                omp_nthreads=omp_nthreads, phasetype=fieldmap_info["suffix"]
-            )
+            fmap_estimator_wf = init_phdiff_wf(phasetype=fieldmap_info["suffix"])
             # set inputs
             if fieldmap_info["suffix"] == "phasediff":
                 fmap_estimator_wf.inputs.inputnode.phasediff = fieldmap_info["phasediff"]
@@ -211,7 +209,9 @@ co-registration with the anatomical reference.
                 # Check that fieldmap is not bipolar
                 fmap_polarity = fieldmap_info["metadata"].get("DiffusionScheme", None)
                 if fmap_polarity == "Bipolar":
-                    LOGGER.warning("Bipolar fieldmaps are not supported. Ignoring")
+                    config.loggers.workflow.warning(
+                        "Bipolar fieldmaps are not supported. Ignoring"
+                    )
                     workflow.__postdesc__ = ""
                     outputnode.inputs.method = "None"
                     workflow.connect([
@@ -220,7 +220,7 @@ co-registration with the anatomical reference.
                     ])  # fmt:skip
                     return workflow
                 if fmap_polarity is None:
-                    LOGGER.warning("Assuming phase images are Monopolar")
+                    config.loggers.workflow.warning("Assuming phase images are Monopolar")
 
                 fmap_estimator_wf.inputs.inputnode.phasediff = [
                     fieldmap_info["phase1"],
@@ -232,9 +232,7 @@ co-registration with the anatomical reference.
                 if key.startswith("magnitude")
             ]
 
-        sdc_unwarp_wf = init_sdc_unwarp_wf(
-            omp_nthreads=omp_nthreads, fmap_demean=fmap_demean, debug=debug, name="sdc_unwarp_wf"
-        )
+        sdc_unwarp_wf = init_sdc_unwarp_wf(name="sdc_unwarp_wf")
         sdc_unwarp_wf.inputs.inputnode.metadata = dwi_meta
 
         workflow.connect([
@@ -253,7 +251,7 @@ co-registration with the anatomical reference.
     # FIELDMAP-less path
     if fieldmap_info["suffix"] == "syn":
         syn_sdc_wf = init_syn_sdc_wf(
-            bold_pe=dwi_meta.get("PhaseEncodingDirection", None), omp_nthreads=omp_nthreads
+            bold_pe=dwi_meta.get("PhaseEncodingDirection", None),
         )
 
         workflow.connect([

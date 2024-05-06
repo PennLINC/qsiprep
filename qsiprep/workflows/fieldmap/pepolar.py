@@ -77,7 +77,7 @@ def init_pepolar_unwarp_wf(dwi_meta, epi_fmaps, name="pepolar_unwarp_wf"):
 
     """
     dwi_file_pe = dwi_meta["PhaseEncodingDirection"]
-
+    omp_nthreads = config.nipype.omp_nthreads
     args = "-noXdis -noYdis -noZdis"
     rm_arg = {"i": "-noXdis", "j": "-noYdis", "k": "-noZdis"}[dwi_file_pe[0]]
     args = args.replace(rm_arg, "")
