@@ -171,7 +171,6 @@ def init_anat_preproc_wf(
     )
 
     dwi_only = config.workflow.anat_modality == "none"
-    omp_nthreads = config.nipype.omp_nthreads
 
     # Make sure we have usable anatomical reference images/masks
     get_template_image = pe.Node(
@@ -224,16 +223,10 @@ and used as an anatomical reference throughout the workflow.
     )
 
     # Ensure there is 1 and only 1 anatomical reference
-    anat_reference_wf = init_anat_template_wf(
-        longitudinal=config.workflow.longitudinal,
-        omp_nthreads=omp_nthreads,
-        num_images=num_anat_images,
-        sloppy=config.execution.sloppy,
-        anatomical_contrast=config.workflow.anat_modality,
-    )
+    anat_reference_wf = init_anat_template_wf(num_images=num_anat_images)
 
     # Do some padding to prevent memory issues in the synth workflows
-    pad_anat_reference_wf = init_dl_prep_wf(name="pad_anat_reference_wf")
+    pad_anat_reference_wf = init_dl_prep_wf()
 
     # Skull strip the anatomical reference
     synthstrip_anat_wf = init_synthstrip_wf(
@@ -827,9 +820,9 @@ estimated via symmetric nonlinear registration (SyN) using antsRegistration. """
     return workflow
 
 
-def init_dl_prep_wf() -> Workflow:
+def init_dl_prep_wf(name="dl_prep_wf") -> Workflow:
     """Prepare images for use in the FreeSurfer deep learning functions"""
-    workflow = Workflow(name="dl_prep_wf")
+    workflow = Workflow(name=name)
     inputnode = pe.Node(niu.IdentityInterface(fields=["image"]), name="inputnode")
     outputnode = pe.Node(niu.IdentityInterface(fields=["padded_image"]), name="outputnode")
     skulled_1mm_resample = pe.Node(

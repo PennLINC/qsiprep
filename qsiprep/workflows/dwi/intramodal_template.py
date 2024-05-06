@@ -12,6 +12,7 @@ from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
 from pkg_resources import resource_filename as pkgrf
 
+from ... import config
 from ...engine import Workflow
 from ...interfaces import DerivativesDataSink
 from ...interfaces.ants import MultivariateTemplateConstruction2
@@ -56,6 +57,7 @@ def init_intramodal_template_wf(
         Transform from the b0
 
     """
+    omp_nthreads = config.nipype.omp_nthreads
     workflow = Workflow(name=name)
     input_names = [name.replace("-", "_") + "_b0_template" for name in inputs_list]
     output_names = [name.replace("-", "_") + "_transform" for name in inputs_list]
@@ -129,9 +131,7 @@ def init_intramodal_template_wf(
     ])  # fmt:skip
 
     # calculate dwi registration to T1w
-    b0_coreg_wf = init_b0_to_anat_registration_wf(
-        omp_nthreads=omp_nthreads, mem_gb=mem_gb, write_report=True
-    )
+    b0_coreg_wf = init_b0_to_anat_registration_wf(write_report=True)
     ds_report_imtcoreg = pe.Node(
         DerivativesDataSink(suffix="imtcoreg", source_file=t1w_source_file),
         name="ds_report_imtcoreg",
@@ -157,7 +157,7 @@ def init_intramodal_template_wf(
     # Fill-in datasinks of reportlets seen so far
     for node in workflow.list_node_names():
         if node.split(".")[-1].startswith("ds_report"):
-            workflow.get_node(node).inputs.base_directory = reportlets_dir
+            workflow.get_node(node).inputs.base_directory = config.execution.reportlets_dir
             workflow.get_node(node).inputs.source_file = t1w_source_file
 
     return workflow

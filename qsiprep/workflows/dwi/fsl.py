@@ -184,7 +184,6 @@ def init_fsl_hmc_wf(
     config.loggers.workflow.info("Using %d threads in eddy", omp_nthreads)
     eddy_args["num_threads"] = omp_nthreads
     pre_eddy_b0_ref_wf = init_dwi_reference_wf(
-        register_t1=True,
         source_file=source_file,
         name="pre_eddy_b0_ref_wf",
         gen_report=False,
@@ -204,7 +203,6 @@ def init_fsl_hmc_wf(
         ExtractB0s(b0_threshold=config.workflow.b0_threshold), name="extract_b0_series"
     )
     b0_ref_for_coreg = init_dwi_reference_wf(
-        register_t1=False,
         gen_report=False,
         desc="b0_for_coreg",
         name="b0_ref_for_coreg",

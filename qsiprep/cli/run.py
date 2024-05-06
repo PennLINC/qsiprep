@@ -116,8 +116,8 @@ def main():
         with sentry_sdk.configure_scope() as scope:
             scope.set_tag('run_uuid', config.execution.run_uuid)
             scope.set_tag('npart', len(config.execution.participant_label))
-        sentry_sdk.add_breadcrumb(message='fMRIPrep started', level='info')
-        sentry_sdk.capture_message('fMRIPrep started', level='info')
+        sentry_sdk.add_breadcrumb(message='QSIPrep started', level='info')
+        sentry_sdk.capture_message('QSIPrep started', level='info')
 
     config.loggers.workflow.log(
         15,
@@ -170,25 +170,25 @@ def main():
         errno = 0
     finally:
 
-        from fmriprep.reports.core import generate_reports
+        from ..viz.reports import generate_reports
 
         # Generate reports phase
         session_list = (
-            config.execution.get().get('bids_filters', {}).get('bold', {}).get('session')
+            config.execution.get().get('bids_filters', {}).get('dwi', {}).get('session')
         )
 
         failed_reports = generate_reports(
             config.execution.participant_label,
-            config.execution.fmriprep_dir,
+            config.execution.qsiprep_dir,
             config.execution.run_uuid,
             session_list=session_list,
         )
         write_derivative_description(
             config.execution.bids_dir,
-            config.execution.fmriprep_dir,
+            config.execution.qsiprep_dir,
             dataset_links=config.execution.dataset_links,
         )
-        write_bidsignore(config.execution.fmriprep_dir)
+        write_bidsignore(config.execution.qsiprep_dir)
 
         if failed_reports:
             msg = (

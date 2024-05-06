@@ -708,7 +708,7 @@ def parse_args(args=None, namespace=None):
         else:
             config.loggers.cli.info(
                 "Telemetry system to collect crashes and errors is enabled "
-                "- thanks for your feedback!. Use option ``--notrack`` to opt out."
+                "- thanks for your feedback! Use option ``--notrack`` to opt out."
             )
 
     # Initialize --output-spaces if not defined
@@ -743,6 +743,13 @@ def parse_args(args=None, namespace=None):
             f"total threads (--nthreads/--n_cpus={config.nipype.nprocs})"
         )
 
+    # Validate the tricky options here
+    if config.workflow.dwi_denoise_window != "auto":
+        try:
+            _ = int(config.workflow.dwi_denoise_window)
+        except ValueError:
+            raise Exception("--dwi-denoise-window must be an integer or 'auto'")
+
     bids_dir = config.execution.bids_dir
     output_dir = config.execution.output_dir
     work_dir = config.execution.work_dir
@@ -750,6 +757,9 @@ def parse_args(args=None, namespace=None):
 
     if config.execution.qsiprep_dir is None:
         config.execution.qsiprep_dir = output_dir / "qsiprep"
+
+    if config.execution.reportlets_dir is None:
+        config.execution.reportlets_dir = work_dir / "reportlets"
 
     # Update the config with an empty dict to trigger initialization of all config
     # sections (we used `init=False` above).
@@ -791,6 +801,7 @@ def parse_args(args=None, namespace=None):
     config.execution.log_dir = config.execution.qsiprep_dir / "logs"
     # Check and create output and working directories
     config.execution.log_dir.mkdir(exist_ok=True, parents=True)
+    config.execution.reportlets_dir.mkdir(exist_ok=True, parents=True)
     work_dir.mkdir(exist_ok=True, parents=True)
 
     # Force initialization of the BIDSLayout

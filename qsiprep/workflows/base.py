@@ -82,7 +82,7 @@ def init_qsiprep_wf():
         single_subject_wf = init_single_subject_wf(subject_id)
 
         single_subject_wf.config["execution"]["crashdump_dir"] = str(
-            config.execution.qsiprep_dir / f"sub-{subject_id}" / "log", config.execution.run_uuid
+            config.execution.qsiprep_dir / f"sub-{subject_id}" / "log" / config.execution.run_uuid
         )
         for node in single_subject_wf._get_all_nodes():
             node.config = deepcopy(single_subject_wf.config)
@@ -214,7 +214,7 @@ to workflows in *QSIPrep*'s documentation]\
     )
 
     ds_report_summary = pe.Node(
-        DerivativesDataSink(base_directory=config.nipype.reportlets_dir, suffix="summary"),
+        DerivativesDataSink(base_directory=config.execution.reportlets_dir, suffix="summary"),
         name="ds_report_summary",
         run_without_submitting=True,
     )
@@ -323,7 +323,6 @@ to workflows in *QSIPrep*'s documentation]\
         make_intramodal_template = True
 
     intramodal_template_wf = init_intramodal_template_wf(
-        omp_nthreads=config.nipype.omp_nthreads,
         t1w_source_file=fix_multi_source_name(
             subject_data[info_modality], config.workflow.anat_modality == "none"
         ),
@@ -354,6 +353,7 @@ to workflows in *QSIPrep*'s documentation]\
             scan_groups=dwi_info,
             output_prefix=output_fname,
             source_file=source_file,
+            t2w_sdc=bool(subject_data.get("t2w")),
         )
         dwi_finalize_wf = init_dwi_finalize_wf(
             scan_groups=dwi_info,

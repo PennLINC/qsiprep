@@ -46,44 +46,13 @@ def init_dwi_pre_hmc_wf(
 
         from qsiprep.workflows.dwi.pre_hmc import init_dwi_pre_hmc_wf
         wf = init_dwi_pre_hmc_wf(['/completely/made/up/path/sub-01_dwi.nii.gz'],
-                                  b0_threshold=100,
                                   preprocess_rpe_series=False,
-                                  dwi_denoise_window=7,
-                                  denoise_method='dwidenoise',
-                                  unringing_method='mrdegibbs',
-                                  b1_biascorrect_stage='final',
-                                  no_b0_harmonization=False,
-                                  denoise_before_combining=True,
-                                  omp_nthreads=1,
-                                  layout=None,
-                                  ignore=["phase"],
-                                  low_mem=False)
+                                  orientation="LPS",
 
     **Parameters**
 
-        dwi_denoise_window : int
-            window size in voxels for ``dwidenoise``. Must be odd. If 0, '
-            '``dwidwenoise`` will not be run'
-        unringing_method : str
-            algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
-        b1_biascorr_phase : str
-            'final', 'none' or 'legacy'
-        no_b0_harmonization : bool
-            skip rescaling dwi scans to have matching b=0 intensities across scans
-        denoise_before_combining : bool
-            'run ``dwidenoise`` before combining dwis. Requires ``combine_all_dwis``'
-        omp_nthreads : int
-            Maximum number of threads an individual process may use
         orientation : str
             'LPS' or 'LAS'
-        low_mem : bool
-            Write uncompressed .nii files in some cases to reduce memory usage
-        layout : None or :obj:`bids.layout.BIDSLayout`
-            Used to try to find phase files.
-            Only used if ``denoise_before_combining`` is ``True``.
-        ignore : list
-            List of elements to ignore in processing.
-            The only relevant value for this workflow is "phase".
 
     **Outputs**
         dwi_file
@@ -127,32 +96,13 @@ def init_dwi_pre_hmc_wf(
     dwi_series_pedir = scan_groups["dwi_series_pedir"]
     dwi_series = scan_groups["dwi_series"]
 
-    # Configure the denoising window
-    if (denoise_method == "dwidenoise") and dwi_denoise_window == "auto":
-        dwi_denoise_window = 5
-        LOGGER.info("Automatically using 5, 5, 5 window for dwidenoise")
-
-    if dwi_denoise_window != "auto":
-        try:
-            dwi_denoise_window = int(dwi_denoise_window)
-        except ValueError:
-            raise Exception("dwi denoise window must be an integer or 'auto'")
-
-    workflow.__postdesc__ = gen_denoising_boilerplate(
-        denoise_method=denoise_method,
-        dwi_denoise_window=dwi_denoise_window,
-        unringing_method=unringing_method,
-        b1_biascorrect_stage=b1_biascorrect_stage,
-        no_b0_harmonization=no_b0_harmonization,
-        b0_threshold=b0_threshold,
-        use_phase="phase" not in ignore,
-    )
+    workflow.__postdesc__ = gen_denoising_boilerplate()
 
     # Doing biascorr here is the old way.
     dwi_no_biascorr = True
-    if b1_biascorrect_stage == "legacy":
+    if config.workflow.b1_biascorrect_stage == "legacy":
         dwi_no_biascorr = False
-        LOGGER.warning("Applying bias correction before merging. Check results!")
+        config.loggers.workflow.warning("Applying bias correction before merging. Check results!")
 
     # Special case: Two reverse PE DWI series are going to get combined for eddy
     if preprocess_rpe_series:
@@ -168,20 +118,12 @@ def init_dwi_pre_hmc_wf(
         plus_source_file = get_source_file(plus_files, suffix="_PEplus")
         merge_plus = init_merge_and_denoise_wf(
             raw_dwi_files=plus_files,
-            b0_threshold=b0_threshold,
             dwi_denoise_window=dwi_denoise_window,
-            unringing_method=unringing_method,
             dwi_no_biascorr=dwi_no_biascorr,
-            denoise_method=denoise_method,
-            no_b0_harmonization=no_b0_harmonization,
-            denoise_before_combining=denoise_before_combining,
             orientation=orientation,
-            omp_nthreads=omp_nthreads,
             source_file=plus_source_file,
             phase_id=f"{pe_axis}+ phase-encoding direction",
             calculate_qc=False,
-            ignore=ignore,
-            layout=layout,
             name="merge_plus",
         )
 
@@ -189,20 +131,12 @@ def init_dwi_pre_hmc_wf(
         minus_source_file = get_source_file(minus_files, suffix="_PEminus")
         merge_minus = init_merge_and_denoise_wf(
             raw_dwi_files=minus_files,
-            b0_threshold=b0_threshold,
             dwi_denoise_window=dwi_denoise_window,
-            denoise_method=denoise_method,
-            unringing_method=unringing_method,
             dwi_no_biascorr=dwi_no_biascorr,
-            no_b0_harmonization=no_b0_harmonization,
-            denoise_before_combining=denoise_before_combining,
             orientation=orientation,
-            omp_nthreads=omp_nthreads,
             source_file=minus_source_file,
             phase_id=f"{pe_axis}- phase-encoding direction",
             calculate_qc=False,
-            ignore=ignore,
-            layout=layout,
             name="merge_minus",
         )
 
@@ -217,13 +151,11 @@ def init_dwi_pre_hmc_wf(
         pm_denoising_confounds = pe.Node(niu.Merge(2), name="pm_denoising_confounds")
         pm_raw_images = pe.Node(niu.Merge(2), name="pm_raw_images")
         rpe_concat = pe.Node(
-            MergeDWIs(harmonize_b0_intensities=not no_b0_harmonization, b0_threshold=b0_threshold),
+            MergeDWIs(harmonize_b0_intensities=not config.workflow.no_b0_harmonization),
             name="rpe_concat",
         )
         raw_rpe_concat = pe.Node(Merge(is_dwi=True), name="raw_rpe_concat")
-        qc_wf = init_modelfree_qc_wf(
-            omp_nthreads=omp_nthreads, bvec_convention="DIPY" if orientation == "LPS" else "FSL"
-        )
+        qc_wf = init_modelfree_qc_wf(bvec_convention="DIPY" if orientation == "LPS" else "FSL")
 
         workflow.connect([
             # combine PE+
@@ -308,19 +240,10 @@ def init_dwi_pre_hmc_wf(
     workflow.__postdesc__ += "\n\n"
     merge_dwis = init_merge_and_denoise_wf(
         raw_dwi_files=dwi_series,
-        b0_threshold=b0_threshold,
-        dwi_denoise_window=dwi_denoise_window,
-        denoise_method=denoise_method,
-        unringing_method=unringing_method,
-        dwi_no_biascorr=dwi_no_biascorr,
-        no_b0_harmonization=no_b0_harmonization,
-        denoise_before_combining=denoise_before_combining,
         orientation=orientation,
         calculate_qc=True,
         phase_id=dwi_series_pedir,
         source_file=source_file,
-        ignore=ignore,
-        layout=layout,
     )
 
     workflow.connect([
@@ -338,9 +261,7 @@ def init_dwi_pre_hmc_wf(
     ])  # fmt:skip
 
     if calculate_qc:
-        qc_wf = init_modelfree_qc_wf(
-            omp_nthreads=omp_nthreads, bvec_convention="DIPY" if orientation == "LPS" else "FSL"
-        )
+        qc_wf = init_modelfree_qc_wf(bvec_convention="DIPY" if orientation == "LPS" else "FSL")
         workflow.connect([
             (merge_dwis, qc_wf, [
                 ('outputnode.merged_raw_image', 'inputnode.dwi_file'),

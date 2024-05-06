@@ -388,7 +388,7 @@ def init_dwi_finalize_wf(
     # Write the interactive report json
     ds_interactive_report = pe.Node(
         DerivativesDataSink(
-            suffix="dwiqc", source_file=source_file, base_directory=config.workflow.output_dir
+            suffix="dwiqc", source_file=source_file, base_directory=config.execution.output_dir
         ),
         name="ds_interactive_report",
         run_without_submitting=True,
@@ -622,17 +622,14 @@ def init_finalize_denoising_wf(
     # Extract some additional derivatives from the corrected
     extract_b0_series = pe.Node(ExtractB0s(), name="extract_b0_series")
     final_b0_ref = init_dwi_reference_wf(
-        register_t1=False,
         gen_report=True,
         desc="resampled",
         name="final_b0_ref",
         source_file=source_file,
-        omp_nthreads=omp_nthreads,
     )
 
     # Calculate QC metrics on the resampled data
     calculate_qc = init_modelfree_qc_wf(
-        omp_nthreads=omp_nthreads,
         bvec_convention="DIPY",  # Resampled is always LPS+
         name="calculate_qc",
     )

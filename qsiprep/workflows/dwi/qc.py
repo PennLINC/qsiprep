@@ -53,7 +53,7 @@ def init_modelfree_qc_wf(bvec_convention="DIPY", name="dwi_qc_wf"):
 
 
     """
-    omp_nthreads = config.nip
+    omp_nthreads = config.nipype.omp_nthreads
     workflow = Workflow(name=name)
     workflow.__desc__ = """\
 """

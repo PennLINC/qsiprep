@@ -246,7 +246,7 @@ Diffusion data preprocessing
     pre_hmc_wf = init_dwi_pre_hmc_wf(
         scan_groups=scan_groups,
         preprocess_rpe_series=doing_bidirectional_pepolar,
-        # orientation="LAS" if hmc_model == "eddy" else "LPS",
+        orientation="LAS" if config.workflow.hmc_model == "eddy" else "LPS",
         source_file=source_file,
     )
     test_pre_hmc_connect = pe.Node(TestInput(), name="test_pre_hmc_connect")
@@ -267,7 +267,6 @@ Diffusion data preprocessing
         hmc_wf = init_fsl_hmc_wf(
             scan_groups=scan_groups,
             source_file=source_file,
-            mem_gb=mem_gb,
             dwi_metadata=dwi_metadata,
             t2w_sdc=t2w_sdc,
             name="hmc_sdc_wf",
@@ -417,10 +416,7 @@ Diffusion data preprocessing
     ])  # fmt:skip
 
     # Compute and gather confounds
-    confounds_wf = init_dwi_confs_wf(
-        metadata=[],
-        name="confounds_wf",
-    )
+    confounds_wf = init_dwi_confs_wf()
     ds_confounds = pe.Node(
         DerivativesDataSink(
             source_file=source_file, base_directory=str(output_dir), suffix="confounds"

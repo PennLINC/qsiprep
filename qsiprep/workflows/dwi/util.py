@@ -25,9 +25,7 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 
 
 def init_dwi_reference_wf(
-    omp_nthreads,
     dwi_file=None,
-    register_t1=False,
     name="dwi_reference_wf",
     gen_report=False,
     source_file=None,
@@ -48,14 +46,9 @@ def init_dwi_reference_wf(
 
     Parameters
     ----------
-    omp_nthreads : int
-        Maximum number of threads an individual process may use
     dwi_file : str, optional
         A b=0 image
         Default is None.
-    register_t1 : bool, optional
-        Register the T1w image to the b=0 image.
-        Default is False.
     name : str
         Name of workflow (default: ``dwi_reference_wf``)
     gen_report : bool, optional
@@ -148,9 +141,7 @@ def init_dwi_reference_wf(
     #     )
 
     # Use synthstrip to extract the brain
-    synthstrip_wf = init_synthstrip_wf(
-        do_padding=True, omp_nthreads=omp_nthreads, name="synthstrip_wf"
-    )
+    synthstrip_wf = init_synthstrip_wf(do_padding=True, name="synthstrip_wf")
 
     workflow.connect([
         # (inputnode, t1_mask_to_b0, [
