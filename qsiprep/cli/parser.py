@@ -712,10 +712,10 @@ def parse_args(args=None, namespace=None):
             )
 
     # Initialize --output-spaces if not defined
-    if config.execution.output_spaces is None:
-        config.execution.output_spaces = SpatialReferences(
-            [Reference("MNI152NLin2009cAsym", {"res": "native"})]
-        )
+    # if config.execution.output_spaces is None:
+    #     config.execution.output_spaces = SpatialReferences(
+    #         [Reference("MNI152NLin2009cAsym", {"res": "native"})]
+    #     )
 
     # Retrieve logging level
     build_log = config.loggers.cli

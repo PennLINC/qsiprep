@@ -12,6 +12,7 @@ import logging
 import nipype.interfaces.utility as niu
 import nipype.pipeline.engine as pe
 
+from ... import config
 from ...engine import Workflow
 from ...interfaces.interchange import recon_workflow_input_fields
 from ...interfaces.recon_scalars import ReconScalarsDataSink, TORTOISEReconScalars
@@ -39,7 +40,7 @@ CITATIONS = {
 
 
 def init_tortoise_estimator_wf(
-    omp_nthreads, available_anatomical_data, name="tortoise_recon", qsirecon_suffix="", params={}
+    available_anatomical_data, name="tortoise_recon", qsirecon_suffix="", params={}
 ):
     """Run estimators from TORTOISE.
 
@@ -95,7 +96,7 @@ def init_tortoise_estimator_wf(
     recon_scalars = pe.Node(
         TORTOISEReconScalars(qsirecon_suffix=qsirecon_suffix), name="recon_scalars"
     )
-    plot_reports = params.pop("plot_reports", True)  # noqa: F841
+    omp_nthreads = config.nipype.omp_nthreads
     desc = (
         "TORTOISE Reconstruction\n\n: "
         + "Methods implemented in TORTOISE (@tortoisev3) were used for reconstruction. "

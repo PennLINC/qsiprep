@@ -6,18 +6,15 @@ PyAFQ tractometry and visualization
 
 """
 
-import logging
-
 import AFQ
 import AFQ.utils.bin as afb
 import nipype.interfaces.utility as niu
 import nipype.pipeline.engine as pe
 
+from ... import config
 from ...interfaces.bids import ReconDerivativesDataSink
 from ...interfaces.interchange import recon_workflow_input_fields
 from qsiprep.interfaces.pyafq import PyAFQRecon
-
-LOGGER = logging.getLogger("nipype.workflow")
 
 
 def _parse_qsiprep_params_dict(params_dict):
@@ -52,7 +49,7 @@ def _parse_qsiprep_params_dict(params_dict):
 
 
 def init_pyafq_wf(
-    omp_nthreads, available_anatomical_data, name="afq", qsirecon_suffix="", params={}
+    available_anatomical_data, name="afq", qsirecon_suffix="", params={}
 ):
     """Run PyAFQ on some qsiprep outputs
 
@@ -74,7 +71,7 @@ def init_pyafq_wf(
     outputnode.inputs.recon_scalars = []
 
     kwargs = _parse_qsiprep_params_dict(params)
-    kwargs["omp_nthreads"] = omp_nthreads
+    kwargs["omp_nthreads"] = config.nipype.omp_nthreads
     run_afq = pe.Node(PyAFQRecon(kwargs=kwargs), name="run_afq")
     workflow = pe.Workflow(name=name)
     if params.get("use_external_tracking", False):

@@ -22,7 +22,7 @@ LOGGER = logging.getLogger("nipype.workflow")
 
 
 def init_conform_dwi_wf(
-    omp_nthreads, available_anatomical_data, name="conform_dwi", qsirecon_suffix="", params={}
+    available_anatomical_data, name="conform_dwi", qsirecon_suffix="", params={}
 ):
     """If data were preprocessed elsewhere, ensure the gradients and images
     conform to LPS+ before running other parts of the pipeline."""
@@ -53,7 +53,6 @@ def init_conform_dwi_wf(
 
 
 def init_discard_repeated_samples_wf(
-    omp_nthreads,
     available_anatomical_data,
     name="discard_repeats",
     qsirecon_suffix="",

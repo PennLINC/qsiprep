@@ -437,12 +437,10 @@ def init_hmc_model_iteration_wf(modelname, transform, precision="coarse", name="
         :graph2use: colored
         :simple_form: yes
 
-        from qsiprep.workflows.dwi.hmc import init_dwi_model_hmc_wf
+        from qsiprep.workflows.dwi.hmc import init_dwi_model_iteration_wf
         wf = init_dwi_model_hmc_wf(modelname='3dSHORE',
                                    transform='Affine',
-                                   num_iters=2,
-                                   mem_gb=3,
-                                   omp_nthreads=1)
+                                   num_iters=2)
 
     **Parameters**
 
@@ -576,11 +574,8 @@ def init_hmc_model_iteration_wf(modelname, transform, precision="coarse", name="
 def init_dwi_model_hmc_wf(
     modelname,
     transform,
-    mem_gb,
-    omp_nthreads,
     num_iters=2,
     name="dwi_model_hmc_wf",
-    metric="Mattes",
 ):
     """Create a model-based hmc workflow.
 
@@ -591,48 +586,46 @@ def init_dwi_model_hmc_wf(
         from qsiprep.workflows.dwi.hmc import init_dwi_model_hmc_wf
         wf = init_dwi_model_hmc_wf(modelname='3dSHORE',
                                    transform='Affine',
-                                   num_iters=2,
-                                   mem_gb=3,
-                                   omp_nthreads=1)
+                                   num_iters=2)
 
-    **Parameters**
+    Parameters
+    ----------
+    modelname : str
+        one of the models for reconstructing an EAP and producing
+        signal estimates used for motion correction
+    transform : str
+        either "Rigid" or "Affine". Choosing "Affine" may help with Eddy warping
+    num_iters : int
+        the number of times the model will be updated with transformed data
 
-        modelname : str
-            one of the models for reconstructing an EAP and producing
-            signal estimates used for motion correction
-        transform : str
-            either "Rigid" or "Affine". Choosing "Affine" may help with Eddy warping
-        num_iters : int
-            the number of times the model will be updated with transformed data
+    Inputs
+    ------
+    dwi_files
+        list of 3d dwi files
+    b0_indices
+        list of which indices in `dwi_files` are b0 images
+    initial_transforms
+        list of b0-based transforms from dwis to the b0 template
+    warped_b0_images
+        list of aligned b0 images
+    b0_mask
+        mask of containing brain voxels
+    bvecs
+        list of bvec files corresponding to `dwi_files`
+    bvals
+        list of bval files corresponding to `dwi_files`
 
-    **Inputs**
-
-        dwi_files
-            list of 3d dwi files
-        b0_indices
-            list of which indices in `dwi_files` are b0 images
-        initial_transforms
-            list of b0-based transforms from dwis to the b0 template
-        warped_b0_images
-            list of aligned b0 images
-        b0_mask
-            mask of containing brain voxels
-        bvecs
-            list of bvec files corresponding to `dwi_files`
-        bvals
-            list of bval files corresponding to `dwi_files`
-
-    **Outputs**
-
-        hmc_transforms
-            list of transforms, one per file in `dwi_files`
-        model_predicted_images: list
-            Model-predicted images reverse-transformed into alignment with ``dwi_files``
-        cnr_image: str
-            If hmc_model is 'none' this is the tsnr of the b=0 images. Otherwise it is the
-            model fit divided by the model error in each voxel.
-        optimization_data: str
-            CSV file tracking the motion estimates across shoreline iterations
+    Outputs
+    -------
+    hmc_transforms
+        list of transforms, one per file in `dwi_files`
+    model_predicted_images: list
+        Model-predicted images reverse-transformed into alignment with ``dwi_files``
+    cnr_image: str
+        If hmc_model is 'none' this is the tsnr of the b=0 images. Otherwise it is the
+        model fit divided by the model error in each voxel.
+    optimization_data: str
+        CSV file tracking the motion estimates across shoreline iterations
 
 
     """
