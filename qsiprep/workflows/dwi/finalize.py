@@ -235,8 +235,7 @@ def init_dwi_finalize_wf(
         ),
         name="outputnode",
     )
-
-    if not config.workflow.intramodal_template_transform == "none":
+    if config.workflow.intramodal_template_iters > 0:
         b0_to_im_template = pe.Node(SimpleBeforeAfterRPT(), name="b0_to_im_template")
         ds_report_intramodal = pe.Node(
             DerivativesDataSink(

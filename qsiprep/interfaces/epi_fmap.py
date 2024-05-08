@@ -131,7 +131,6 @@ def load_epi_dwi_fieldmaps(fmap_list, b0_threshold):
             _b0_indices = np.arange(num_images) + starting_index
         b0_indices += _b0_indices.tolist()
 
-    print(image_series)
     concatenated_images = concat_imgs(image_series, auto_resample=True)
     return concatenated_images, b0_indices, original_files
 
