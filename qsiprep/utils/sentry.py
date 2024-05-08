@@ -27,7 +27,9 @@ from pathlib import Path
 
 from nibabel.optpkg import optional_package
 from niworkflows.utils.misc import read_crashfile
-import sentry_sdk
+
+sentry_sdk = optional_package("sentry_sdk")[0]
+migas = optional_package("migas")[0]
 
 from .. import __version__, config
 
@@ -170,7 +172,7 @@ def process_crashfile(crashfile):
 
 
 def before_send(event, hints):
-    # Filtering log messages about crashed nodes
+    """Filter log messages about crashed nodes."""
     if "logentry" in event and "message" in event["logentry"]:
         msg = event["logentry"]["message"]
         if msg.startswith("could not run node:"):
@@ -198,10 +200,10 @@ def before_send(event, hints):
 
 def _chunks(string, length=CHUNK_SIZE):
     """
-    Splits a string into smaller chunks
+    Split a string into smaller chunks.
 
     >>> list(_chunks('some longer string.', length=3))
     ['som', 'e l', 'ong', 'er ', 'str', 'ing', '.']
 
     """
-    return (string[i : i + length] for i in range(0, len(string), length))
+    return [string[i : i + length] for i in range(0, len(string), length)]

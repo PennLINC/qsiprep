@@ -132,7 +132,7 @@ def main():
             from ..utils.sentry import process_crashfile
 
             crashfolders = [
-                config.execution.fmriprep_dir / f'sub-{s}' / 'log' / config.execution.run_uuid
+                config.execution.qsiprep_dir / f'sub-{s}' / 'log' / config.execution.run_uuid
                 for s in config.execution.participant_label
             ]
             for crashfolder in crashfolders:
@@ -151,7 +151,7 @@ def main():
             sentry_sdk.capture_message(success_message, level='info')
 
         # Bother users with the boilerplate only iff the workflow went okay.
-        boiler_file = config.execution.fmriprep_dir / 'logs' / 'CITATION.md'
+        boiler_file = config.execution.qsiprep_dir / 'logs' / 'CITATION.md'
         if boiler_file.exists():
             if config.environment.exec_env in (
                 'singularity',
@@ -173,30 +173,29 @@ def main():
         from ..viz.reports import generate_reports
 
         # Generate reports phase
-        session_list = (
-            config.execution.get().get('bids_filters', {}).get('dwi', {}).get('session')
-        )
+        # session_list = (
+        #     config.execution.get().get('bids_filters', {}).get('dwi', {}).get('session')
+        # )
 
         failed_reports = generate_reports(
             config.execution.participant_label,
-            config.execution.qsiprep_dir,
-            config.execution.run_uuid,
-            session_list=session_list,
+            # session_list=session_list,
         )
         write_derivative_description(
             config.execution.bids_dir,
             config.execution.qsiprep_dir,
-            dataset_links=config.execution.dataset_links,
+            # dataset_links=config.execution.dataset_links,
         )
         write_bidsignore(config.execution.qsiprep_dir)
 
         if failed_reports:
-            msg = (
-                'Report generation was not successful for the following participants '
-                f': {", ".join(failed_reports)}.'
-            )
-            config.loggers.cli.error(msg)
-            if sentry_sdk is not None:
-                sentry_sdk.capture_message(msg, level='error')
+            print(failed_reports)
+            # msg = (
+            #     'Report generation was not successful for the following participants '
+            #     f': {", ".join(failed_reports)}.'
+            # )
+            # config.loggers.cli.error(msg)
+            # if sentry_sdk is not None:
+            #     sentry_sdk.capture_message(msg, level='error')
 
-        sys.exit(int((errno + len(failed_reports)) > 0))
+        sys.exit(int(errno + failed_reports) > 0)

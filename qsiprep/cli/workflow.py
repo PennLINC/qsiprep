@@ -180,7 +180,7 @@ def build_qsiprep_workflow(opts, retval):
     from nipype import config as ncfg
     from nipype import logging
 
-    from ..__about__ import __version__
+    from qsiprep import __version__
     from ..utils.bids import collect_participants
     from ..viz.reports import generate_reports
     from ..workflows.base import init_qsiprep_wf
@@ -656,12 +656,10 @@ def build_boilerplate(config_file, workflow):
 
     citation_files["md"].write_text(boilerplate)
 
-    if not config.execution.md_only_boilerplate and citation_files["md"].exists():
+    if citation_files["md"].exists():
         from subprocess import CalledProcessError, TimeoutExpired, check_call
 
-        from .. import data
-
-        bib_text = data.load.readable("boilerplate.bib").read_text()
+        bib_text = Path(pkgrf("qsiprep", "data/boilerplate.bib")).read_text()
         citation_files["bib"].write_text(
             bib_text.replace("QSIPrep <version>", f"QSIPrep {config.environment.version}")
         )

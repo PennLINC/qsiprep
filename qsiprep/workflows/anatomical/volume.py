@@ -629,7 +629,6 @@ A {contrast}-reference map was computed after registration of
         align_to="first" if not config.workflow.longitudinal else "iterative",
         transform="Rigid",
         name="anat_merge_wf",
-        num_iters=2,
         boilerplate=False,
     )
 

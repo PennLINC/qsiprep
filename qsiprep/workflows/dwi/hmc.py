@@ -126,14 +126,12 @@ def init_dwi_hmc_wf(
 
     workflow = Workflow(name=name)
     # Unbiased align the b0s
-    b0_hmc_wf = init_b0_hmc_wf(align_to=hmc_align_to, transform=hmc_transform, sloppy=sloppy)
+    b0_hmc_wf = init_b0_hmc_wf()
     # Tile the transforms so each non-b0 gets the transform from the nearest b0
     match_transforms = pe.Node(MatchTransforms(), name="match_transforms")
     # Make a mask from the output template. It is bias-corrected, so good for masking
     # but bad for using as a b=0 for modeling.
     b0_template_mask = init_dwi_reference_wf(
-        omp_nthreads=omp_nthreads,
-        register_t1=True,
         name="b0_template_mask",
         gen_report=False,
         source_file=source_file,
@@ -224,9 +222,7 @@ def init_dwi_hmc_wf(
     return workflow
 
 
-def linear_alignment_workflow(
-    transform="Rigid", iternum=0, precision="precise", omp_nthreads=1
-):
+def linear_alignment_workflow(transform="Rigid", iternum=0, precision="precise", omp_nthreads=1):
     """
     Takes a template image and a set of input images, does
     a linear alignment to the template and updates it with the
@@ -295,14 +291,16 @@ def linear_alignment_workflow(
 
 
 def init_b0_hmc_wf(
-    align_to="iterative",
-    transform="Rigid",
-    metric="Mattes",
-    num_iters=3,
+    align_to=None,
+    transform=None,
     boilerplate=True,
     name="b0_hmc_wf",
 ) -> Workflow:
-
+    num_iters = 2
+    if align_to is None:
+        align_to = config.workflow.b0_motion_corr_to
+    if transform is None:
+        transform = config.workflow.hmc_transform
     if config.execution.sloppy:
         num_iters = 1
         align_to = "first"
@@ -331,7 +329,9 @@ def init_b0_hmc_wf(
     if align_to == "iterative":
         desc += (
             "An unbiased b=0 template was constructed over {num_iters} iterations "
-            "of {transform} registrations. ".format(num_iters=num_iters, transform=transform)
+            "of {transform} registrations. ".format(
+                num_iters=num_iters, transform=config.workflow.hmc_model
+            )
         )
         initial_template = pe.Node(
             ants.AverageImages(normalize=True, dimension=3), name="initial_template"
@@ -342,27 +342,14 @@ def init_b0_hmc_wf(
         alignment_wf.connect(initial_template, "output_average_image",
                              iter_templates, "in1")  # fmt:skip
 
-        initial_reg = linear_alignment_workflow(
-            transform=transform,
-            metric=metric,
-            precision="coarse" if not sloppy else "sloppy",
-            omp_nthreads=omp_nthreads,
-            iternum=0,
-        )
+        initial_reg = linear_alignment_workflow(iternum=0)
         alignment_wf.connect(initial_template, "output_average_image",
                              initial_reg, "inputnode.template_image")  # fmt:skip
         alignment_wf.connect(inputnode, "b0_images", initial_reg,
                              "inputnode.image_paths")  # fmt:skip
         reg_iters = [initial_reg]
         for iternum in range(1, num_iters):
-            reg_iters.append(
-                linear_alignment_workflow(
-                    transform=transform,
-                    metric=metric,
-                    precision="precise" if not sloppy else "sloppy",
-                    iternum=iternum,
-                )
-            )
+            reg_iters.append(linear_alignment_workflow(iternum=iternum))
             alignment_wf.connect(reg_iters[-2], "outputnode.updated_template",
                                  reg_iters[-1], "inputnode.template_image")  # fmt:skip
             alignment_wf.connect(inputnode, "b0_images", reg_iters[-1],
@@ -383,14 +370,9 @@ def init_b0_hmc_wf(
     elif align_to == "first":
         desc += (
             "Each b=0 image was registered to the first b=0 image using "
-            "a {transform} registration. ".format(transform=transform)
+            f"a {transform} registration. "
         )
-        reg_to_first = linear_alignment_workflow(
-            transform=transform,
-            metric=metric,
-            precision="coarse" if not sloppy else "sloppy",
-            iternum=0,
-        )
+        reg_to_first = linear_alignment_workflow(iternum=0)
 
         alignment_wf.connect([
             (inputnode, reg_to_first, [
@@ -423,7 +405,7 @@ def _bvals_to_floats(bval_files):
     return [float(np.loadtxt(bval_file)) for bval_file in bval_files]
 
 
-def init_hmc_model_iteration_wf(modelname, transform, precision="coarse", name="hmc_model_iter0"):
+def init_hmc_model_iteration_wf(name="hmc_model_iter0"):
     """Create a model-based hmc registration iteration workflow.
 
     This workflow takes an initial set of transforms, applies them to the
@@ -442,19 +424,12 @@ def init_hmc_model_iteration_wf(modelname, transform, precision="coarse", name="
                                    transform='Affine',
                                    num_iters=2)
 
-    **Parameters**
+    Parameters
+    ----------
+    name : str
+        name of the workflow
 
-        modelname : str
-            one of the models for reconstructing an EAP and producing
-            signal estimates used for motion correction
-        transform : str
-            either "Rigid" or "Affine". Choosing "Affine" may help with Eddy warping
-        precision : str
-            Use fast "coarse" alignment or accurate "precise" registration
-        name : str
-            name of the workflow
-
-    **Inputs**
+    Inputs
 
         original_dwi_files
             list of 3d dwi files, no b0's
@@ -508,16 +483,16 @@ def init_hmc_model_iteration_wf(modelname, transform, precision="coarse", name="
         ),
         name="outputnode",
     )
-
+    precision = "coarse" if config.execution.sloppy else "precise"
     ants_settings = pkgrf(
         "qsiprep",
         "data/shoreline_{precision}_{transform}.json".format(
-            precision=precision, transform=transform
+            precision=precision, transform=config.workflow.hmc_transform
         ),
     )
 
     predict_dwis = pe.MapNode(
-        SignalPrediction(model=modelname),
+        SignalPrediction(model=config.workflow.hmc_model),
         iterfield=["bval_to_predict", "bvec_to_predict"],
         name="predict_dwis",
     )
@@ -572,8 +547,6 @@ def init_hmc_model_iteration_wf(modelname, transform, precision="coarse", name="
 
 
 def init_dwi_model_hmc_wf(
-    modelname,
-    transform,
     num_iters=2,
     name="dwi_model_hmc_wf",
 ):
@@ -590,11 +563,6 @@ def init_dwi_model_hmc_wf(
 
     Parameters
     ----------
-    modelname : str
-        one of the models for reconstructing an EAP and producing
-        signal estimates used for motion correction
-    transform : str
-        either "Rigid" or "Affine". Choosing "Affine" may help with Eddy warping
     num_iters : int
         the number of times the model will be updated with transformed data
 
@@ -656,7 +624,7 @@ def init_dwi_model_hmc_wf(
         "the others using 3dSHORE [@merlet3dshore]. The signal for the left-"
         "out image serves as the registration target. A total of {num_iters} "
         "iterations were run using a {transform} transform. ".format(
-            transform=transform, num_iters=num_iters
+            transform=config.workflow.hmc_transform, num_iters=num_iters
         )
     )
 
@@ -676,9 +644,7 @@ def init_dwi_model_hmc_wf(
     b0_mean = pe.Node(B0Mean(), name="b0_mean")
 
     # Start building and connecting the model iterations
-    initial_model_iteration = init_hmc_model_iteration_wf(
-        modelname, transform, precision="coarse", name="initial_model_iteration"
-    )
+    initial_model_iteration = init_hmc_model_iteration_wf(name="initial_model_iteration")
 
     # Collect motion estimates across iterations
     collect_motion_params = pe.Node(niu.Merge(num_iters), name="collect_motion_params")
@@ -718,11 +684,7 @@ def init_dwi_model_hmc_wf(
     for iteration_num in range(num_iters - 1):
         iteration_name = "shoreline_iteration%03d" % (iteration_num + 1)
         motion_key = "in%d" % (iteration_num + 2)
-        model_iterations.append(
-            init_hmc_model_iteration_wf(
-                modelname=modelname, transform=transform, precision="precise", name=iteration_name
-            )
-        )
+        model_iterations.append(init_hmc_model_iteration_wf(name=iteration_name))
         workflow.connect([
             (model_iterations[-2], model_iterations[-1], [
                 ('outputnode.aligned_dwis', 'inputnode.approx_aligned_dwi_files'),
