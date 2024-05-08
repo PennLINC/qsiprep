@@ -31,6 +31,7 @@ from nipype.interfaces.base import (
 from nipype.utils.filemanip import fname_presuffix
 from pkg_resources import resource_filename as pkgr
 
+from .. import config
 from ..interfaces.mrtrix import _convert_fsl_to_mrtrix
 from ..utils.brainsuite_shore import BrainSuiteShoreModel, brainsuite_shore_basis
 from .converters import (
@@ -52,8 +53,8 @@ TAU_DEFAULT = 1.0 / (4 * np.pi**2)
 def popen_run(arg_list):
     cmd = subprocess.Popen(arg_list, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out, err = cmd.communicate()
-    print(out)
-    print(err)
+    config.loggers.interface.info(out)
+    config.loggers.interface.info(err)
 
 
 class Patch2SelfInputSpec(SeriesPreprocReportInputSpec):

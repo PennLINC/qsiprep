@@ -108,7 +108,6 @@ def init_dwi_hmc_wf(
         ),
         name="inputnode",
     )
-
     outputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
@@ -123,7 +122,7 @@ def init_dwi_hmc_wf(
         ),
         name="outputnode",
     )
-
+    hmc_model = config.workflow.hmc_model
     workflow = Workflow(name=name)
     # Unbiased align the b0s
     b0_hmc_wf = init_b0_hmc_wf()
@@ -175,9 +174,7 @@ def init_dwi_hmc_wf(
         return workflow
 
     # Do model-based motion correction
-    dwi_model_hmc_wf = init_dwi_model_hmc_wf(
-        hmc_model, hmc_transform, mem_gb, omp_nthreads, num_iters=num_model_iterations
-    )
+    dwi_model_hmc_wf = init_dwi_model_hmc_wf(num_iters=num_model_iterations)
 
     # Warp the modeled images into non-motion-corrected space
     uncorrect_model_images = pe.MapNode(

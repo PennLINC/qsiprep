@@ -260,7 +260,6 @@ Diffusion data preprocessing
             source_file=source_file,
             dwi_metadata=dwi_metadata,
             t2w_sdc=t2w_sdc,
-            name="hmc_sdc_wf",
         )
 
     elif config.workflow.hmc_model == "eddy":

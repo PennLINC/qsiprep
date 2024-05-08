@@ -14,6 +14,7 @@ from nilearn.image import concat_imgs, index_img, load_img
 from nipype import logging
 from nipype.utils.filemanip import fname_presuffix, split_filename
 
+from .. import config
 from .gradients import concatenate_bvals
 from .images import to_lps
 from .reports import topup_selection_to_report
@@ -247,7 +248,7 @@ def get_best_b0_topup_inputs_from(
     dwi_b0_df["fsl_spec"] = dwi_b0_df["bids_origin_file"].map(spec_lookup)
     # Write the datain text file and make sure it's usable if it's needed
     if len(dwi_b0_df["fsl_spec"].unique()) < 2 and topup_requested:
-        print(dwi_b0_df["fsl_spec"])
+        config.loggers.workflow.critical(dwi_b0_df["fsl_spec"])
         raise Exception(
             "Unable to run TOPUP: not enough distortion groups. "
             'Check "IntendedFor" fields or consider using --ignore fieldmaps.'
