@@ -39,7 +39,7 @@ the settings to hard disk in *ToML* format, which looks like:
    :caption: **Example file representation of QSIPrep settings**.
 
 This config file is used to pass the settings across processes,
-using the :py:func:`~fmriprep.config.load` function.
+using the :py:func:`~qsiprep.config.load` function.
 
 Configuration sections
 ----------------------
@@ -166,7 +166,7 @@ if os.getenv("IS_DOCKER_8395080871"):
     _cgroup = Path("/proc/1/cgroup")
     if _cgroup.exists() and "docker" in _cgroup.read_text():
         _docker_ver = os.getenv("DOCKER_VERSION_8395080871")
-        _exec_env = "fmriprep-docker" if _docker_ver else "docker"
+        _exec_env = "qsiprep-docker" if _docker_ver else "docker"
     del _cgroup
 
 _fs_license = os.getenv("FS_LICENSE")
@@ -274,7 +274,7 @@ class environment(_Config):
     Read-only options regarding the platform and environment.
 
     Crawls runtime descriptive settings (e.g., default FreeSurfer license,
-    execution environment, nipype and *fMRIPrep* versions, etc.).
+    execution environment, nipype and *QSIPrep* versions, etc.).
     The ``environment`` section is not loaded in from file,
     only written out when settings are exported.
     This config section is useful when reporting issues,
@@ -300,7 +300,7 @@ class environment(_Config):
     templateflow_version = _tf_ver
     """The TemplateFlow client version installed."""
     version = __version__
-    """*fMRIPrep*'s version."""
+    """*QSPrep*'s version."""
 
 
 class nipype(_Config):
@@ -439,6 +439,8 @@ class execution(_Config):
     """Run only recon workflows."""
     reportlets_dir = None
     """Path where reportlets are written."""
+    run_preproc_and_recon = False
+    """Will both preproc and recon be run in a single call?"""
     skip_anat_based_spatial_normalization = False
     """Should we skip normalizing the anatomical data to a template?"""
     task_id = None
@@ -752,7 +754,7 @@ def load(filename, skip=None, init=True):
     Arguments
     ---------
     filename : :py:class:`os.PathLike`
-        TOML file containing fMRIPrep configuration.
+        TOML file containing QSIPrep configuration.
     skip : dict or None
         Sets of values to ignore during load, keyed by section name
     init : `bool` or :py:class:`~collections.abc.Container`

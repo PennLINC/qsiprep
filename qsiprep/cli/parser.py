@@ -245,7 +245,7 @@ def _build_parser(**kwargs):
         action="store",
         type=_to_gb,
         metavar="MEMORY_MB",
-        help="Upper bound memory limit for fMRIPrep processes",
+        help="Upper bound memory limit for QSIPrep processes",
     )
     g_perfm.add_argument(
         "--low-mem",
@@ -686,7 +686,7 @@ def parse_args(args=None, namespace=None):
     """Parse args and run further checks on the command line."""
     import logging
 
-    from niworkflows.utils.spaces import Reference, SpatialReferences
+    # from niworkflows.utils.spaces import Reference, SpatialReferences
 
     parser = _build_parser()
     opts = parser.parse_args(args, namespace)
@@ -743,6 +743,11 @@ def parse_args(args=None, namespace=None):
             f"total threads (--nthreads/--n_cpus={config.nipype.nprocs})"
         )
 
+    if config.workflow.recon_spec and not config.execution.recon_input:
+        build_log.info("Running BOTH preprocessing and recon.")
+        config.execution.running_preproc_and_recon = True
+        config.execution.recon_input = config.execution.qsiprep_dir
+
     # Validate the tricky options here
     if config.workflow.dwi_denoise_window != "auto":
         try:
@@ -757,6 +762,9 @@ def parse_args(args=None, namespace=None):
 
     if config.execution.qsiprep_dir is None:
         config.execution.qsiprep_dir = output_dir / "qsiprep"
+
+    if config.execution.qsiprep_dir is None:
+        config.execution.qsiprep_dir = output_dir / "qsirecon"
 
     if config.execution.reportlets_dir is None:
         config.execution.reportlets_dir = work_dir / "reportlets"

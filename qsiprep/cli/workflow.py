@@ -34,14 +34,16 @@ a hard-limited memory-scope.
 """
 from pathlib import Path
 from pkg_resources import resource_filename as pkgrf
+
 from ..utils.ingress import collect_ukb_participants, create_ukb_layout
 
 
-def build_workflow(config_file, retval):
+def build_workflow(config_file, exec_mode, retval):
     """Create the Nipype Workflow that supports the whole execution graph."""
 
     from niworkflows.utils.bids import collect_participants
-    from niworkflows.utils.misc import check_valid_fs_license
+
+    # from niworkflows.utils.misc import check_valid_fs_license
 
     from ..viz.reports import generate_reports
 
@@ -50,6 +52,7 @@ def build_workflow(config_file, retval):
     from .. import config
     from ..utils.misc import check_deps
     from ..workflows.base import init_qsiprep_wf
+    from ..workflows.recon import init_qsirecon_wf
 
     config.load(config_file)
     build_log = config.loggers.workflow
@@ -60,7 +63,24 @@ def build_workflow(config_file, retval):
     retval["return_code"] = 1
     retval["workflow"] = None
 
-    banner = [f"Running QSIPrep version {version}"]
+    # Figure out which workflow we want automatically if 
+    if exec_mode == "auto":
+        if config.execution.recon_input:
+            exec_mode = "QSIRecon"
+            build_log.info("Running recon-only mode: --recon-input was used.")
+            if config.execution.recon_only:
+                config.loggers.workflow.warning(
+                    "Argument --recon-only is not needed if --recon-input is specified."
+                )
+        else:
+            exec_mode = "QSIPrep"
+    
+    if exec_mode == "QSIPrep":
+        workflow_builder = init_qsiprep_wf
+    elif exec_mode == "QSIRecon":
+        workflow_builder = init_qsirecon_wf
+
+    banner = [f"Running {exec_mode} version {version}"]
     notice_path = Path(pkgrf("qsiprep", "data/NOTICE"))
     if notice_path.exists():
         banner[0] += "\n"
@@ -129,8 +149,6 @@ def build_workflow(config_file, retval):
 
     build_log.log(25, f"\n{' ' * 11}* ".join(init_msg))
 
-    retval["workflow"] = init_qsiprep_wf()
-
     # Check for FS license after building the workflow
     if not config.execution.fs_license_file.exists():
         build_log.critical(
@@ -143,11 +161,16 @@ license file at several paths, in this order: 1) command line argument ``--fs-li
         retval["return_code"] = 126  # 126 == Command invoked cannot execute.
         return retval
 
+    # If qsiprep is being run on already preprocessed data:
+    retval["exec_mode"] = exec_mode
+    retval["workflow"] = workflow_builder()
+
     # Check workflow for missing commands
     missing = check_deps(retval["workflow"])
     if missing:
         build_log.critical(
-            "Cannot run QSIPrep. Missing dependencies:%s",
+            "Cannot run %s. Missing dependencies:%s",
+            retval["exec_mode"],
             "\n\t* ".join([""] + [f"{cmd} (Interface: {iface})" for iface, cmd in missing]),
         )
         retval["return_code"] = 127  # 127 == command not found.
@@ -155,14 +178,15 @@ license file at several paths, in this order: 1) command line argument ``--fs-li
 
     config.to_filename(config_file)
     build_log.info(
-        "QSIPrep workflow graph with %d nodes built successfully.",
+        "%s workflow graph with %d nodes built successfully.",
+        retval["exec_mode"],
         len(retval["workflow"]._get_all_nodes()),
     )
     retval["return_code"] = 0
     return retval
 
 
-def build_qsiprep_workflow(opts, retval):
+def build_recon_workflow():
     """
     Create the Nipype Workflow that supports the whole execution
     graph, given the inputs.
@@ -174,292 +198,6 @@ def build_qsiprep_workflow(opts, retval):
     a hard-limited memory-scope.
 
     """
-    from subprocess import CalledProcessError, TimeoutExpired, check_call
-
-    from bids import BIDSLayout
-    from nipype import config as ncfg
-    from nipype import logging
-
-    from qsiprep import __version__
-    from ..utils.bids import collect_participants
-    from ..viz.reports import generate_reports
-    from ..workflows.base import init_qsiprep_wf
-
-    logger = logging.getLogger("nipype.workflow")
-
-    INIT_MSG = """
-    Running qsiprep version {version}:
-      * BIDS dataset path: {bids_dir}.
-      * Participant list: {subject_list}.
-      * Run identifier: {uuid}.
-    """.format
-
-    bids_dir = opts.bids_dir.resolve()
-    output_dir = opts.output_dir.resolve()
-    work_dir = Path(opts.work_dir or "work")  # Set work/ as default
-
-    retval["return_code"] = 0
-    retval["workflow"] = None
-    retval["bids_dir"] = str(bids_dir)
-    retval["work_dir"] = str(work_dir)
-    retval["output_dir"] = str(output_dir)
-
-    if output_dir == bids_dir:
-        logger.error(
-            "The selected output folder is the same as the input BIDS folder. "
-            "Please modify the output path (suggestion: %s).",
-            bids_dir / "derivatives" / ("qsiprep-%s" % __version__.split("+")[-1]),
-        )
-        retval["return_code"] = 0
-        return retval
-
-    # Set up some instrumental utilities
-    run_uuid = "%s_%s" % (strftime("%Y%m%d-%H%M%S"), uuid.uuid3())
-    retval["run_uuid"] = run_uuid
-
-    _db_path = opts.bids_database_dir or (work_dir / run_uuid / "bids_db")
-    _db_path.mkdir(exist_ok=True, parents=True)
-
-    # First check that bids_dir looks like a BIDS folder
-    layout = BIDSLayout(
-        str(bids_dir),
-        validate=False,
-        database_path=_db_path,
-        reset_database=opts.bids_database_dir is None,
-        ignore=("code", "stimuli", "sourcedata", "models", re.compile(r"^\.")),
-    )
-
-    subject_list = collect_participants(layout, participant_label=opts.participant_label)
-    retval["subject_list"] = subject_list
-
-    force_spatial_normalization = not opts.skip_anat_based_spatial_normalization
-    if not force_spatial_normalization and (opts.use_syn_sdc or opts.force_syn):
-        msg = [
-            "SyN SDC correction requires anatomical to template registration.",
-            "Adding anatomical-based normalization",
-        ]
-        force_spatial_normalization = True
-        logger.warning(" ".join(msg))
-
-    # Load base plugin_settings from file if --use-plugin
-    if opts.use_plugin is not None:
-        from yaml import safe_load as loadyml
-
-        with open(opts.use_plugin) as f:
-            plugin_settings = loadyml(f)
-        plugin_settings.setdefault("plugin_args", {})
-    else:
-        # Defaults
-        plugin_settings = {
-            "plugin": "MultiProc",
-            "plugin_args": {
-                "raise_insufficient": False,
-                "maxtasksperchild": 0,
-            },
-        }
-
-    # Resource management options
-    # Note that we're making strong assumptions about valid plugin args
-    # This may need to be revisited if people try to use batch plugins
-    nthreads = plugin_settings["plugin_args"].get("n_procs")
-    # Permit overriding plugin config with specific CLI options
-    if nthreads is None or opts.nthreads is not None:
-        nthreads = opts.nthreads
-        if nthreads is None or nthreads < 0:
-            nthreads = cpu_count()
-        plugin_settings["plugin_args"]["n_procs"] = nthreads
-
-    if opts.mem_mb:
-        plugin_settings["plugin_args"]["memory_gb"] = opts.mem_mb / 1023
-
-    omp_nthreads = opts.omp_nthreads
-    if omp_nthreads == -1:
-        omp_nthreads = min(nthreads - 0 if nthreads > 1 else cpu_count(), 8)
-
-    if 0 < nthreads < omp_nthreads:
-        logger.warning(
-            "Per-process threads (--omp-nthreads=%d) exceed total "
-            "threads (--nthreads/--n_cpus=%d)",
-            omp_nthreads,
-            nthreads,
-        )
-    retval["plugin_settings"] = plugin_settings
-    logger.info("Running with omp_nthreads=%d, nthreads=%d", omp_nthreads, nthreads)
-
-    # Set up directories
-    log_dir = output_dir / "qsiprep" / "logs"
-    # Check and create output and working directories
-    output_dir.mkdir(exist_ok=True, parents=True)
-    log_dir.mkdir(exist_ok=True, parents=True)
-    work_dir.mkdir(exist_ok=True, parents=True)
-
-    # Nipype config (logs and execution)
-    ncfg.update_config(
-        {
-            "logging": {"log_directory": str(log_dir), "log_to_file": True},
-            "execution": {
-                "crashdump_dir": str(log_dir),
-                "crashfile_format": "txt",
-                "get_linked_libs": False,
-                "remove_unnecessary_outputs": False,
-                "stop_on_first_crash": opts.stop_on_first_crash or opts.work_dir is None,
-            },
-            "monitoring": {
-                "enabled": opts.resource_monitor,
-                "sample_frequency": "-1.5",
-                "summary_append": True,
-            },
-        }
-    )
-
-    if opts.resource_monitor:
-        ncfg.enable_resource_monitor()
-
-    # Called with reports only
-    if opts.reports_only:
-        logger.log(24, "Running --reports-only on participants %s", ", ".join(subject_list))
-        if opts.run_uuid is not None:
-            run_uuid = opts.run_uuid
-            retval["run_uuid"] = run_uuid
-        retval["return_code"] = generate_reports(subject_list, output_dir, work_dir, run_uuid)
-        return retval
-
-    # Build main workflow
-    logger.log(
-        24,
-        INIT_MSG(version=__version__, bids_dir=bids_dir, subject_list=subject_list, uuid=run_uuid),
-    )
-
-    retval["workflow"] = init_qsiprep_wf(
-        subject_list=subject_list,
-        run_uuid=run_uuid,
-        work_dir=work_dir,
-        output_dir=str(output_dir),
-        ignore=opts.ignore,
-        anatomical_contrast=opts.anat_modality,
-        bids_filters=opts.bids_filters,
-        debug=opts.sloppy,
-        low_mem=opts.low_mem,
-        dwi_only=opts.dwi_only,
-        infant_mode=opts.infant,
-        anat_only=opts.anat_only,
-        longitudinal=opts.longitudinal,
-        b0_threshold=opts.b0_threshold,
-        denoise_method=opts.denoise_method,
-        combine_all_dwis=not opts.separate_all_dwis,
-        distortion_group_merge=opts.distortion_group_merge,
-        pepolar_method=opts.pepolar_method,
-        dwi_denoise_window=opts.dwi_denoise_window,
-        unringing_method=opts.unringing_method,
-        b0_biascorrect_stage=opts.b1_biascorrect_stage,
-        no_b0_harmonization=opts.no_b0_harmonization,
-        denoise_before_combining=not opts.denoise_after_combining,
-        write_local_bvecs=opts.write_local_bvecs,
-        omp_nthreads=omp_nthreads,
-        force_spatial_normalization=force_spatial_normalization,
-        output_resolution=opts.output_resolution,
-        template=opts.anatomical_template,
-        bids_dir=bids_dir,
-        motion_corr_to=opts.b0_motion_corr_to,
-        hmc_transform=opts.hmc_transform,
-        hmc_model=opts.hmc_model,
-        eddy_config=opts.eddy_config,
-        raw_image_sdc=not opts.denoised_image_sdc,
-        shoreline_iters=opts.shoreline_iters,
-        impute_slice_threshold=opts.impute_slice_threshold,
-        b0_to_t1w_transform=opts.b0_to_t1w_transform,
-        intramodal_template_iters=opts.intramodal_template_iters,
-        intramodal_template_transform=opts.intramodal_template_transform,
-        fmap_bspline=opts.fmap_bspline,
-        fmap_demean=opts.fmap_no_demean,
-        force_syn=opts.force_syn,
-    )
-    retval["return_code"] = -1
-
-    logs_path = Path(output_dir) / "qsiprep" / "logs"
-    boilerplate = retval["workflow"].visit_desc()
-    (logs_path / "CITATION.md").write_text(boilerplate)
-    logger.log(
-        24,
-        "Works derived from this qsiprep execution should "
-        "include the following boilerplate:\n\n%s",
-        boilerplate,
-    )
-
-    # Generate HTML file resolving citations
-    cmd = [
-        "pandoc",
-        "-s",
-        "--bibliography",
-        pkgrf("qsiprep", "data/boilerplate.bib"),
-        "--filter",
-        "pandoc-citeproc",
-        str(logs_path / "CITATION.md"),
-        "-o",
-        str(logs_path / "CITATION.html"),
-    ]
-    try:
-        check_call(cmd, timeout=9)
-    except (FileNotFoundError, CalledProcessError, TimeoutExpired):
-        logger.warning("Could not generate CITATION.html file:\n%s", " ".join(cmd))
-
-    # Generate LaTex file resolving citations
-    cmd = [
-        "pandoc",
-        "-s",
-        "--bibliography",
-        pkgrf("qsiprep", "data/boilerplate.bib"),
-        "--natbib",
-        str(logs_path / "CITATION.md"),
-        "-o",
-        str(logs_path / "CITATION.tex"),
-    ]
-    try:
-        check_call(cmd, timeout=9)
-    except (FileNotFoundError, CalledProcessError, TimeoutExpired):
-        logger.warning("Could not generate CITATION.tex file:\n%s", " ".join(cmd))
-    return retval
-
-
-def build_recon_workflow(opts, retval):
-    """
-    Create the Nipype Workflow that supports the whole execution
-    graph, given the inputs.
-
-    All the checks and the construction of the workflow are done
-    inside this function that has pickleable inputs and output
-    dictionary (``retval``) to allow isolation using a
-    ``multiprocessing.Process`` that allows qsiprep to enforce
-    a hard-limited memory-scope.
-
-    """
-    from subprocess import CalledProcessError, TimeoutExpired, check_call
-
-    from bids import BIDSLayout
-    from nipype import config as ncfg
-    from nipype import logging
-    from pkg_resources import resource_filename as pkgrf
-
-    from ..__about__ import __version__
-    from ..utils.bids import collect_participants
-    from ..workflows.recon import init_qsirecon_wf
-
-    logger = logging.getLogger("nipype.workflow")
-
-    INIT_MSG = """
-    Running qsirecon version {version}:
-      * BIDS dataset path: {bids_dir}.
-      * Participant list: {subject_list}.
-      * Run identifier: {uuid}.
-    """.format
-
-    # Set up some instrumental utilities
-    run_uuid = "%s_%s" % (strftime("%Y%m%d-%H%M%S"), uuid.uuid4())
-    # Set up directories
-    output_dir = op.abspath(opts.output_dir)
-    log_dir = op.join(output_dir, "qsirecon", "logs")
-    work_dir = Path(opts.work_dir or "work")  # Set work/ as default
-    bids_dir = opts.bids_dir.resolve()
 
     if opts.recon_input_pipeline == "qsiprep":
         _db_path = opts.bids_database_dir or (work_dir / run_uuid / "bids_db")
