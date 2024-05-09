@@ -16,6 +16,7 @@ import os
 import os.path as op
 from copy import deepcopy
 from glob import glob
+from packaging.version import Version
 
 import nipype.pipeline.engine as pe
 from bids.layout import BIDSLayout
@@ -44,7 +45,7 @@ from .anatomical import (
 from .build_workflow import init_dwi_recon_workflow
 
 
-def init_qsirecon_wf(subject_list):
+def init_qsirecon_wf():
     """
     This workflow organizes the execution of qsiprep, with a sub-workflow for
     each subject.
@@ -59,12 +60,34 @@ def init_qsirecon_wf(subject_list):
 
     Parameters
 
-        subject_list : list
-            List of subject labels
 
     """
-    qsiprep_wf = Workflow(name="qsirecon_wf")
+    ver = Version(config.environment.version)
+    qsiprep_wf = Workflow(name=f"qsirecon_{ver.major}_{ver.minor}_wf")
     qsiprep_wf.base_dir = config.execution.work_dir
+
+    # There is not necessarily a BIDS layout going into the recon workflow
+    if opts.recon_input_pipeline == "qsiprep":
+        _db_path = opts.bids_database_dir or (work_dir / run_uuid / "bids_db")
+        _db_path.mkdir(exist_ok=True, parents=True)
+        # First check that bids_dir looks like a BIDS folder
+        layout = BIDSLayout(
+            str(bids_dir),
+            validate=False,
+            database_path=_db_path,
+            reset_database=opts.bids_database_dir is None,
+            ignore=("code", "stimuli", "sourcedata", "models", re.compile(r"^\.")),
+        )
+        subject_list = collect_participants(layout, participant_label=opts.participant_label)
+    elif opts.recon_input_pipeline == "ukb":
+        ukb_layout = create_ukb_layout(opts.recon_input)
+        subject_list = collect_ukb_participants(
+            ukb_layout, participant_label=opts.participant_label
+        )
+    else:
+        raise NotImplementedError(
+            f"{opts.recon_input_pipeline} is not supported as recon-input yet."
+        )
 
     for subject_id in subject_list:
         single_subject_wf = init_single_subject_wf(

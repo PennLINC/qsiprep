@@ -33,26 +33,23 @@ a hard-limited memory-scope.
 
 """
 from pathlib import Path
-from pkg_resources import resource_filename as pkgrf
-
-from ..utils.ingress import collect_ukb_participants, create_ukb_layout
 
 
 def build_workflow(config_file, exec_mode, retval):
     """Create the Nipype Workflow that supports the whole execution graph."""
 
+    from pkg_resources import resource_filename as pkgrf
+
     from niworkflows.utils.bids import collect_participants
 
     # from niworkflows.utils.misc import check_valid_fs_license
-
-    from ..viz.reports import generate_reports
-
     # from ..utils.bids import check_pipeline_version
 
     from .. import config
     from ..utils.misc import check_deps
     from ..workflows.base import init_qsiprep_wf
     from ..workflows.recon import init_qsirecon_wf
+    from ..viz.reports import generate_reports
 
     config.load(config_file)
     build_log = config.loggers.workflow
@@ -63,7 +60,7 @@ def build_workflow(config_file, exec_mode, retval):
     retval["return_code"] = 1
     retval["workflow"] = None
 
-    # Figure out which workflow we want automatically if 
+    # Figure out which workflow we want automatically if
     if exec_mode == "auto":
         if config.execution.recon_input:
             exec_mode = "QSIRecon"
@@ -74,11 +71,13 @@ def build_workflow(config_file, exec_mode, retval):
                 )
         else:
             exec_mode = "QSIPrep"
-    
+
     if exec_mode == "QSIPrep":
         workflow_builder = init_qsiprep_wf
     elif exec_mode == "QSIRecon":
         workflow_builder = init_qsirecon_wf
+    else:
+        raise Exception(f"Unknown mode: {exec_mode}")
 
     banner = [f"Running {exec_mode} version {version}"]
     notice_path = Path(pkgrf("qsiprep", "data/NOTICE"))
@@ -134,7 +133,7 @@ def build_workflow(config_file, exec_mode, retval):
 
     # Build main workflow
     init_msg = [
-        "Building QSIPrep's workflow:",
+        f"Building {exec_mode}'s workflow:",
         f"BIDS dataset path: {config.execution.bids_dir}.",
         f"Participant list: {subject_list}.",
         f"Run identifier: {config.execution.run_uuid}.",
@@ -199,132 +198,10 @@ def build_recon_workflow():
 
     """
 
-    if opts.recon_input_pipeline == "qsiprep":
-        _db_path = opts.bids_database_dir or (work_dir / run_uuid / "bids_db")
-        _db_path.mkdir(exist_ok=True, parents=True)
-        # First check that bids_dir looks like a BIDS folder
-        layout = BIDSLayout(
-            str(bids_dir),
-            validate=False,
-            database_path=_db_path,
-            reset_database=opts.bids_database_dir is None,
-            ignore=("code", "stimuli", "sourcedata", "models", re.compile(r"^\.")),
-        )
-        subject_list = collect_participants(layout, participant_label=opts.participant_label)
-    elif opts.recon_input_pipeline == "ukb":
-        ukb_layout = create_ukb_layout(opts.recon_input)
-        subject_list = collect_ukb_participants(
-            ukb_layout, participant_label=opts.participant_label
-        )
-    else:
-        raise NotImplementedError(
-            f"{opts.recon_input_pipeline} is not supported as recon-input yet."
-        )
-    retval["subject_list"] = subject_list
+    from .. import config
+    from ..utils.misc import check_deps
+    from ..utils.ingress import collect_ukb_participants, create_ukb_layout
 
-    # Load base plugin_settings from file if --use-plugin
-    if opts.use_plugin is not None:
-        from yaml import safe_load as loadyml
-
-        with open(opts.use_plugin) as f:
-            plugin_settings = loadyml(f)
-        plugin_settings.setdefault("plugin_args", {})
-    else:
-        # Defaults
-        plugin_settings = {
-            "plugin": "MultiProc",
-            "plugin_args": {
-                "raise_insufficient": False,
-                "maxtasksperchild": 1,
-            },
-        }
-
-    # Resource management options
-    # Note that we're making strong assumptions about valid plugin args
-    # This may need to be revisited if people try to use batch plugins
-    nthreads = plugin_settings["plugin_args"].get("n_procs")
-    # Permit overriding plugin config with specific CLI options
-    if nthreads is None or opts.nthreads is not None:
-        nthreads = opts.nthreads
-        if nthreads is None or nthreads < 1:
-            nthreads = cpu_count()
-        plugin_settings["plugin_args"]["n_procs"] = nthreads
-
-    if opts.mem_mb:
-        plugin_settings["plugin_args"]["memory_gb"] = opts.mem_mb / 1024
-
-    omp_nthreads = opts.omp_nthreads
-    if omp_nthreads == 0:
-        omp_nthreads = min(nthreads - 1 if nthreads > 1 else cpu_count(), 8)
-
-    if 1 < nthreads < omp_nthreads:
-        logger.warning(
-            "Per-process threads (--omp-nthreads=%d) exceed total "
-            "threads (--nthreads/--n_cpus=%d)",
-            omp_nthreads,
-            nthreads,
-        )
-
-    # Check and create output and working directories
-    os.makedirs(output_dir, exist_ok=True)
-    os.makedirs(log_dir, exist_ok=True)
-    os.makedirs(work_dir, exist_ok=True)
-
-    # Nipype config (logs and execution)
-    ncfg.update_config(
-        {
-            "logging": {"log_directory": log_dir, "log_to_file": True},
-            "execution": {
-                "crashdump_dir": log_dir,
-                "crashfile_format": "txt",
-                "get_linked_libs": False,
-                "remove_unnecessary_outputs": False,
-                "stop_on_first_crash": opts.stop_on_first_crash or opts.work_dir is None,
-            },
-            "monitoring": {
-                "enabled": opts.resource_monitor,
-                "sample_frequency": "0.5",
-                "summary_append": True,
-            },
-        }
-    )
-
-    if opts.resource_monitor:
-        ncfg.enable_resource_monitor()
-
-    retval["return_code"] = 0
-    retval["plugin_settings"] = plugin_settings
-    retval["bids_dir"] = bids_dir
-    retval["output_dir"] = output_dir
-    retval["work_dir"] = work_dir
-    retval["subject_list"] = subject_list
-    retval["run_uuid"] = run_uuid
-    retval["workflow"] = None
-
-    # Build main workflow
-    logger.log(
-        25,
-        INIT_MSG(version=__version__, bids_dir=bids_dir, subject_list=subject_list, uuid=run_uuid),
-    )
-
-    retval["workflow"] = init_qsirecon_wf(
-        subject_list=subject_list,
-        run_uuid=run_uuid,
-        work_dir=work_dir,
-        output_dir=output_dir,
-        recon_input=opts.recon_input,
-        recon_spec=opts.recon_spec,
-        low_mem=opts.low_mem,
-        omp_nthreads=omp_nthreads,
-        sloppy=opts.sloppy,
-        b0_threshold=opts.b0_threshold,
-        freesurfer_input=opts.freesurfer_input,
-        skip_odf_plots=opts.skip_odf_reports,
-        pipeline_source=opts.recon_input_pipeline,
-        output_resolution=opts.output_resolution,
-        infant_mode=opts.infant,
-    )
-    retval["return_code"] = 0
 
     logs_path = Path(output_dir) / "qsirecon" / "logs"
     boilerplate = retval["workflow"].visit_desc()
