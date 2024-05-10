@@ -12,7 +12,6 @@ from nipype.algorithms import confounds as nac
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 
-from ... import config
 from ...engine import Workflow
 from ...interfaces import AddTSVHeader, GatherConfounds
 

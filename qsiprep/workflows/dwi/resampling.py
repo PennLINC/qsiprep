@@ -16,11 +16,10 @@ from ... import config
 from ...engine import Workflow
 from ...interfaces.ants import GetImageType
 from ...interfaces.fmap import ApplyScalingImages
-from ...interfaces.gradients import (
+from ...interfaces.gradients import (  # LocalGradientRotation,
     ComposeTransforms,
     ExtractB0s,
     GradientRotation,
-    LocalGradientRotation,
 )
 from ...interfaces.images import ChooseInterpolator
 from ...interfaces.nilearn import Merge
@@ -130,7 +129,6 @@ def init_dwi_trans_wf(
     """
     workflow = Workflow(name=name)
     output_resolution = config.workflow.output_resolution
-    omp_nthreads = config.nipype.omp_nthreads
     workflow.__desc__ = """\
 The DWI time-series were resampled to {tpl},
 generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels.

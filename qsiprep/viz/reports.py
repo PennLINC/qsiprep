@@ -68,7 +68,13 @@ class Report(object):
     """
 
     def __init__(
-        self, path, viz_config, out_dir, run_uuid, out_filename="report.html", pipeline_type="qsiprep"
+        self,
+        path,
+        viz_config,
+        out_dir,
+        run_uuid,
+        out_filename="report.html",
+        pipeline_type="qsiprep",
     ):
         self.root = path
         self.sections = []

@@ -36,9 +36,9 @@ Fetch some test data
 """
 import json
 import os
-from pathlib import Path
 import sys
 import warnings
+from pathlib import Path
 
 import nibabel as nb
 import numpy as np
@@ -214,7 +214,8 @@ def collect_data(bids_dir, participant_label, filters=None, bids_validate=True):
 
 def write_derivative_description(bids_dir, deriv_dir):
     from qsiprep import __version__
-    DOWNLOAD_URL = f'https://github.com/PennLINC/qsiprep/archive/{__version__}.tar.gz'
+
+    DOWNLOAD_URL = f"https://github.com/PennLINC/qsiprep/archive/{__version__}.tar.gz"
 
     desc = {
         "Name": "qsiprep output",

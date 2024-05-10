@@ -605,7 +605,9 @@ def init_dipy_dki_recon_wf(
 
     if plot_reports and False:
         plot_peaks = pe.Node(
-            CLIReconPeaksReport(peaks_only=True), name="plot_peaks", n_procs=omp_nthreads
+            CLIReconPeaksReport(peaks_only=True),
+            name="plot_peaks",
+            n_procs=config.nipype.omp_nthreads,
         )
         ds_report_peaks = pe.Node(
             ReconDerivativesDataSink(extension=".png", desc="DKI", suffix="peaks"),

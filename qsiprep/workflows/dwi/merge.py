@@ -42,6 +42,7 @@ def init_merge_and_denoise_wf(
     raw_dwi_files,
     orientation,
     source_file,
+    do_biascorr,
     calculate_qc=False,
     phase_id="same",
     name="merge_and_denoise_wf",
@@ -191,6 +192,7 @@ def init_merge_and_denoise_wf(
                     phase_encoding_direction=row.PhaseEncodingAxis,
                     source_file=dwi_file,
                     use_phase=use_phase,
+                    do_biascorr=do_biascorr,
                     name=wf_name,
                 ),
             )
@@ -281,6 +283,7 @@ def init_merge_and_denoise_wf(
         phase_encoding_direction=get_merged_parameter(dwi_df, "PhaseEncodingAxis", "all"),
         source_file=source_file,
         use_phase=False,  # can't use phase with concatenated data
+        do_biascorr=do_biascorr,
         name="merged_denoise",
     )
 
@@ -310,6 +313,7 @@ def init_dwi_denoising_wf(
     partial_fourier,
     phase_encoding_direction,
     use_phase,
+    do_biascorr,
     name="denoise_wf",
 ):
     """Build a workflow to denoise a DWI series.
@@ -326,6 +330,8 @@ def init_dwi_denoising_wf(
         True if phase data are available for the DWI scan.
         If True, and ``denoise_method`` is ``dwidenoise``, then ``dwidenoise``
         will be run on the complex-valued data.
+    do_biascorr : bool
+        If True run dwi_biascorrect
     name : str
         name of the workflow
 
@@ -403,7 +409,6 @@ def init_dwi_denoising_wf(
     unringing_method = config.workflow.unringing_method
     do_denoise = denoise_method in ("patch2self", "dwidenoise")
     do_unringing = config.workflow.unringing_method in ("mrdegibbs", "rpg")
-    do_biascorr = not config.workflow.dwi_no_biascorr
     harmonize_b0s = not config.workflow.no_b0_harmonization
     # Configure the denoising window
     if (

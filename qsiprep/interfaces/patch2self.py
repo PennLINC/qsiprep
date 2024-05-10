@@ -3,7 +3,6 @@ import time
 import dipy.core.optimize as opt
 import numpy as np
 from dipy.utils.optpkg import optional_package
-from nipype import logging
 
 sklearn, has_sklearn, _ = optional_package("sklearn")
 linear_model, _, _ = optional_package("sklearn.linear_model")

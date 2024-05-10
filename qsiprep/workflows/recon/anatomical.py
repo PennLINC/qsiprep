@@ -85,7 +85,6 @@ def init_highres_recon_anatomical_wf(
     # anatomical data is available. In the case where ``pipeline_source`` is not "qsiprep",
     # the data is converted in this node to be qsiprep-like.
     pipeline_source = config.workflow.recon_input_pipeline
-    recon_input_dir = config.execution.recon_input
     freesurfer_dir = config.execution.fs_subjects_dir
     if pipeline_source == "qsiprep":
         anat_ingress_node, status = gather_qsiprep_anatomical_data(subject_id)
@@ -472,6 +471,7 @@ def init_dwi_recon_anatomical_workflow(
         niu.IdentityInterface(fields=recon_workflow_input_fields), name="buffernode"
     )
     connect_from_buffernode = set()
+    b0_threshold = config.workflow.b0_threshold
 
     def _get_source_node(fieldname):
         if fieldname in connect_from_inputnode:
@@ -533,7 +533,9 @@ def init_dwi_recon_anatomical_workflow(
     # get the brain, masks and possibly a to-MNI transform.
     # --> If has_freesurfer AND has qsiprep_t1w, the necessary files were created earlier
     elif has_freesurfer and not has_qsiprep_t1w:
-        fs_source = pe.Node(nio.FreeSurferSource(subjects_dir=freesurfer_dir), name="fs_source")
+        fs_source = pe.Node(
+            nio.FreeSurferSource(subjects_dir=config.execution.fs_subjects_dir), name="fs_source"
+        )
         # Register the FreeSurfer brain to the DWI reference
         desc += (
             "A brainmasked T1w image from FreeSurfer was registered to the "

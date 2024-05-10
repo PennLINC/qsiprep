@@ -242,8 +242,6 @@ def workflow_from_spec(available_anatomical_data, node_spec):
 
     # qsiprep operations
     else:
-        if node_spec["action"] == "controllability":
-            return init_controllability_wf(**kwargs)
         if node_spec["action"] == "discard_repeated_samples":
             return init_discard_repeated_samples_wf(**kwargs)
         if node_spec["action"] == "conform":

@@ -267,7 +267,7 @@ def init_dwi_finalize_wf(
     # Apply denoising to the interpolated data if requested
     final_denoise_wf = init_finalize_denoising_wf(
         source_file=source_file,
-        do_biascorr=not config.workflow.b1_biascorrect_stage == "none" and write_derivatives,
+        do_biascorr=config.workflow.b1_biascorrect_stage == "final" and write_derivatives,
         num_dwi_acquisitions=len(all_dwis),
     )
 

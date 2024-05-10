@@ -145,7 +145,7 @@ def _build_parser(**kwargs):
     is_release = not any((currentv.is_devrelease, currentv.is_prerelease, currentv.is_postrelease))
 
     parser = ArgumentParser(
-        description=f"qsiprep: q-Space Image Preprocessing workflows v{config.environment.version}",
+        description=f"{verstr}: q-Space Image Preprocessing workflows",
         formatter_class=ArgumentDefaultsHelpFormatter,
         **kwargs,
     )

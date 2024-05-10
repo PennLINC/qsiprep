@@ -25,7 +25,6 @@ Feedback will be enthusiastically received.
 """
 import nibabel as nb
 import pkg_resources as pkgr
-from nipype import logging
 from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
 from nipype.interfaces.base import (

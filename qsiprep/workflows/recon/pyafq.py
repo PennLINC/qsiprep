@@ -48,9 +48,7 @@ def _parse_qsiprep_params_dict(params_dict):
     return kwargs
 
 
-def init_pyafq_wf(
-    available_anatomical_data, name="afq", qsirecon_suffix="", params={}
-):
+def init_pyafq_wf(available_anatomical_data, name="afq", qsirecon_suffix="", params={}):
     """Run PyAFQ on some qsiprep outputs
 
     Inputs

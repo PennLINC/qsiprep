@@ -6,7 +6,6 @@ Orchestrating the dwi-preprocessing workflow
 
 """
 
-from nipype import logging
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 
@@ -99,9 +98,9 @@ def init_dwi_pre_hmc_wf(
     workflow.__postdesc__ = gen_denoising_boilerplate()
 
     # Doing biascorr here is the old way.
-    dwi_no_biascorr = True
+    do_biascorr = False
     if config.workflow.b1_biascorrect_stage == "legacy":
-        dwi_no_biascorr = False
+        do_biascorr = True
         config.loggers.workflow.warning("Applying bias correction before merging. Check results!")
 
     # Special case: Two reverse PE DWI series are going to get combined for eddy
@@ -122,6 +121,7 @@ def init_dwi_pre_hmc_wf(
             source_file=plus_source_file,
             phase_id=f"{pe_axis}+ phase-encoding direction",
             calculate_qc=False,
+            do_biascorr=do_biascorr,
             name="merge_plus",
         )
 
@@ -133,6 +133,7 @@ def init_dwi_pre_hmc_wf(
             source_file=minus_source_file,
             phase_id=f"{pe_axis}- phase-encoding direction",
             calculate_qc=False,
+            do_biascorr=do_biascorr,
             name="merge_minus",
         )
 

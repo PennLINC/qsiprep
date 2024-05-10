@@ -15,7 +15,6 @@ import json
 import os.path as op
 from copy import deepcopy
 from glob import glob
-from packaging.version import Version
 
 import nipype.pipeline.engine as pe
 from bids.layout import BIDSLayout
@@ -23,6 +22,7 @@ from dipy import __version__ as dipy_ver
 from nilearn import __version__ as nilearn_ver
 from nipype import __version__ as nipype_ver
 from nipype.utils.filemanip import split_filename
+from packaging.version import Version
 from pkg_resources import resource_filename as pkgrf
 
 from ... import config
@@ -99,7 +99,6 @@ def init_single_subject_recon_wf(subject_id):
             Single subject label
 
     """
-    from .build_workflow import init_dwi_recon_workflow
     from ...interfaces.ingress import QsiReconDWIIngress, UKBioBankDWIIngress
     from ...interfaces.interchange import (
         ReconWorkflowInputs,
@@ -112,6 +111,7 @@ def init_single_subject_recon_wf(subject_id):
         init_dwi_recon_anatomical_workflow,
         init_highres_recon_anatomical_wf,
     )
+    from .build_workflow import init_dwi_recon_workflow
 
     spec = _load_recon_spec()
     dwi_recon_inputs = _get_iterable_dwi_inputs(subject_id)
