@@ -240,6 +240,7 @@ def init_dwi_pre_hmc_wf(
         orientation=orientation,
         calculate_qc=True,
         phase_id=dwi_series_pedir,
+        do_biascorr=do_biascorr,
         source_file=source_file,
     )
 
