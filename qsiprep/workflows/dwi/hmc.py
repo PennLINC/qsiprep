@@ -245,7 +245,9 @@ def linear_alignment_workflow(transform="Rigid", iternum=0, precision="precise",
         ),
     )
     reg = ants.Registration(from_file=ants_settings, num_threads=omp_nthreads)
-    iter_reg = pe.MapNode(reg, name="reg_%03d" % iternum, iterfield=["moving_image"])
+    iter_reg = pe.MapNode(
+        reg, name="reg_%03d" % iternum, iterfield=["moving_image"], n_procs=omp_nthreads
+    )
 
     # Run the images through antsRegistration
     iteration_wf.connect(inputnode, "image_paths", iter_reg, "moving_image")  # fmt:skip
@@ -292,6 +294,7 @@ def init_b0_hmc_wf(
     transform=None,
     boilerplate=True,
     name="b0_hmc_wf",
+    prioritize_omp=False,
 ) -> Workflow:
     num_iters = 2
     if align_to is None:
@@ -301,7 +304,7 @@ def init_b0_hmc_wf(
     if config.execution.sloppy:
         num_iters = 1
         align_to = "first"
-
+    omp_nthreads = config.nipype.omp_nthreads if prioritize_omp else 1
     if align_to == "iterative" and num_iters < 2:
         raise ValueError("Must specify a positive number of iterations")
 
@@ -339,14 +342,14 @@ def init_b0_hmc_wf(
         alignment_wf.connect(initial_template, "output_average_image",
                              iter_templates, "in1")  # fmt:skip
 
-        initial_reg = linear_alignment_workflow(iternum=0)
+        initial_reg = linear_alignment_workflow(iternum=0, omp_nthreads=omp_nthreads)
         alignment_wf.connect(initial_template, "output_average_image",
                              initial_reg, "inputnode.template_image")  # fmt:skip
         alignment_wf.connect(inputnode, "b0_images", initial_reg,
                              "inputnode.image_paths")  # fmt:skip
         reg_iters = [initial_reg]
         for iternum in range(1, num_iters):
-            reg_iters.append(linear_alignment_workflow(iternum=iternum))
+            reg_iters.append(linear_alignment_workflow(iternum=iternum, omp_nthreads=omp_nthreads))
             alignment_wf.connect(reg_iters[-2], "outputnode.updated_template",
                                  reg_iters[-1], "inputnode.template_image")  # fmt:skip
             alignment_wf.connect(inputnode, "b0_images", reg_iters[-1],
@@ -369,7 +372,7 @@ def init_b0_hmc_wf(
             "Each b=0 image was registered to the first b=0 image using "
             f"a {transform} registration. "
         )
-        reg_to_first = linear_alignment_workflow(iternum=0)
+        reg_to_first = linear_alignment_workflow(iternum=0, omp_nthreads=omp_nthreads)
 
         alignment_wf.connect([
             (inputnode, reg_to_first, [

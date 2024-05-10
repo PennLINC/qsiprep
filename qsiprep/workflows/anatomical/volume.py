@@ -630,6 +630,7 @@ A {contrast}-reference map was computed after registration of
         transform="Rigid",
         name="anat_merge_wf",
         boilerplate=False,
+        prioritize_omp=True,
     )
 
     workflow.connect([

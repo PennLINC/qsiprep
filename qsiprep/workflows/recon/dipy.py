@@ -424,6 +424,7 @@ def init_dipy_mapmri_recon_wf(
     workflow = Workflow(name=name)
     desc = "Dipy Reconstruction\n\n: "
     plot_reports = not config.execution.skip_odf_reports
+    omp_nthreads = config.nipype.omp_nthreads
     recon_map = pe.Node(MAPMRIReconstruction(**params), name="recon_map")
     recon_scalars = pe.Node(
         DIPYMAPMRIReconScalars(qsirecon_suffix=name),
