@@ -219,7 +219,7 @@ def init_dwi_hmc_wf(
     return workflow
 
 
-def linear_alignment_workflow(transform="Rigid", iternum=0, precision="precise", omp_nthreads=1):
+def linear_alignment_workflow(transform="Rigid", iternum=0, omp_nthreads=1):
     """
     Takes a template image and a set of input images, does
     a linear alignment to the template and updates it with the
@@ -238,6 +238,7 @@ def linear_alignment_workflow(transform="Rigid", iternum=0, precision="precise",
         ),
         name="outputnode",
     )
+    precision = "coarse" if config.execution.sloppy else "precise"
     ants_settings = pkgrf(
         "qsiprep",
         "data/shoreline_{precision}_{transform}.json".format(
