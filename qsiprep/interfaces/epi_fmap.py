@@ -5,6 +5,7 @@
 import json
 import os.path as op
 from collections import defaultdict
+from pathlib import Path
 
 import nibabel as nb
 import numpy as np
@@ -13,6 +14,7 @@ from nilearn.image import concat_imgs, index_img, load_img
 from nipype import logging
 from nipype.utils.filemanip import fname_presuffix, split_filename
 
+from .. import config
 from .gradients import concatenate_bvals
 from .images import to_lps
 from .reports import topup_selection_to_report
@@ -130,7 +132,6 @@ def load_epi_dwi_fieldmaps(fmap_list, b0_threshold):
             _b0_indices = np.arange(num_images) + starting_index
         b0_indices += _b0_indices.tolist()
 
-    print(image_series)
     concatenated_images = concat_imgs(image_series, auto_resample=True)
     return concatenated_images, b0_indices, original_files
 
@@ -190,22 +191,21 @@ def get_best_b0_topup_inputs_from(
     Here, distortion group uses the FSL definition of a phase encoding direction and
     total readout time, as specified in the datain file used by TOPUP (i.e. "0 -1 0 0.087").
 
-    Parameters:
-    ===========
-
-        nii_file : str
-            A 4D DWI Series
-        bval_file: str
-            indices into nii_file that can be used by topup
-        topup_prefix: str
-            file prefix for topup inputs
-        bids_origin_files: list
-            A list with the original bids file of each image in ``nii_file``. This is
-            necessary because merging may have happened earlier in the pipeline
-        epi_fmaps:
-            A list of images from the fmaps/ directory.
-        max_per_spec: int
-            The maximum number of b=0 images to extract from a PE direction / image set
+    Parameters
+    ----------
+    nii_file : str
+        A 4D DWI Series
+    bval_file: str
+        indices into nii_file that can be used by topup
+    topup_prefix: str
+        file prefix for topup inputs
+    bids_origin_files: list
+        A list with the original bids file of each image in ``nii_file``. This is
+        necessary because merging may have happened earlier in the pipeline
+    epi_fmaps:
+        A list of images from the fmaps/ directory.
+    max_per_spec: int
+        The maximum number of b=0 images to extract from a PE direction / image set
 
     """
 
@@ -248,7 +248,7 @@ def get_best_b0_topup_inputs_from(
     dwi_b0_df["fsl_spec"] = dwi_b0_df["bids_origin_file"].map(spec_lookup)
     # Write the datain text file and make sure it's usable if it's needed
     if len(dwi_b0_df["fsl_spec"].unique()) < 2 and topup_requested:
-        print(dwi_b0_df["fsl_spec"])
+        config.loggers.workflow.critical(dwi_b0_df["fsl_spec"])
         raise Exception(
             "Unable to run TOPUP: not enough distortion groups. "
             'Check "IntendedFor" fields or consider using --ignore fieldmaps.'
@@ -370,7 +370,10 @@ def _get_bvals(bval_input):
 
 # In case of a 3d image
 def safe_get_3d_image(img_file, b0_index):
-    _img = nb.load(img_file)
+    if isinstance(img_file, Path) or isinstance(img_file, str):
+        _img = nb.load(img_file)
+    else:
+        _img = img_file
     if _img.ndim < 4:
         if b0_index > 0:
             raise Exception("Impossible b=0 index in a 3d image")
@@ -418,6 +421,8 @@ def split_into_b0s_and_origins(
         )
         image_source = original_file if use_original_files else full_img
         source_index = original_index if use_original_files else b0_index
+        print("image_source", image_source)
+        print("new_b0_path", new_b0_path)
         safe_get_3d_image(image_source, source_index).to_filename(new_b0_path)
         b0_nii_files.append(new_b0_path)
 

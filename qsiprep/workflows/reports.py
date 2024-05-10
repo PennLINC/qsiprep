@@ -15,6 +15,7 @@ from copy import deepcopy
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 
+from .. import config
 from ..engine import Workflow
 from ..interfaces import DerivativesDataSink
 from ..interfaces.ingress import QsiReconDWIIngress
@@ -25,7 +26,7 @@ from ..utils.bids import collect_data
 LOGGER = logging.getLogger("nipype.workflow")
 
 
-def init_json_preproc_report_wf(subject_list, work_dir, output_dir):
+def init_json_preproc_report_wf(subject_list):
     """
     This workflow creates a json report for the dmriprep-viewer.
 
@@ -52,6 +53,9 @@ def init_json_preproc_report_wf(subject_list, work_dir, output_dir):
             Directory in which to save derivatives
 
     """
+    work_dir = config.execution.work_dir
+    output_dir = config.execution.output_dir
+
     qsiprep_wf = Workflow(name="json_reports_wf")
     qsiprep_wf.base_dir = work_dir
 
@@ -69,7 +73,7 @@ def init_json_preproc_report_wf(subject_list, work_dir, output_dir):
     return qsiprep_wf
 
 
-def init_single_subject_json_report_wf(subject_id, name, output_dir):
+def init_single_subject_json_report_wf(subject_id, name):
     """
     This workflow examines the output of a qsiprep run and creates a json report for
     dmriprep-viewer. These are very useful for batch QC-ing QSIPrep runs.
@@ -96,6 +100,7 @@ def init_single_subject_json_report_wf(subject_id, name, output_dir):
             Directory in which to read and save derivatives
 
     """
+    output_dir = config.execution.output_dir
     if name in ("single_subject_wf", "single_subject_qsipreptest_wf"):
         # for documentation purposes
         subject_data = {

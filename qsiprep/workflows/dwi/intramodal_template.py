@@ -12,6 +12,7 @@ from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
 from pkg_resources import resource_filename as pkgrf
 
+from ... import config
 from ...engine import Workflow
 from ...interfaces import DerivativesDataSink
 from ...interfaces.ants import MultivariateTemplateConstruction2
@@ -24,39 +25,39 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 def init_intramodal_template_wf(
     inputs_list,
     t1w_source_file,
-    reportlets_dir,
-    transform="Rigid",
     num_iterations=2,
     mem_gb=3,
-    omp_nthreads=1,
     name="intramodal_template_wf",
 ):
     """Create an unbiased intramodal template for a subject. This aligns the b=0 references
     from all the scans of a subject. Can be rigid, affine or nonlinear (BSplineSyN).
 
-    **Parameters**
-        inputs_list: list of inputs
-            List if identifiers for the input b=0 images.
-        transform: 'Rigid', 'Affine', 'BSplineSyN'
-            Which transform to ultimately use. If 'BSplineSyN', first 2 iterations of Affine will
-            be run.
-        num_iterations: int
-            Default: 2.
+    Parameters
+    ----------
+    inputs_list: list of inputs
+        List if identifiers for the input b=0 images.
+    transform: 'Rigid', 'Affine', 'BSplineSyN'
+        Which transform to ultimately use. If 'BSplineSyN', first 2 iterations of Affine will
+        be run.
+    num_iterations: int
+        Default: 2.
 
-    **Inputs**
+    Inputs
+    ------
+    [workflow_name]_image...
+        One input for each input image. There is no input called inputs_list
+    t1w_image
 
-        [workflow_name]_image...
-            One input for each input image. There is no input called inputs_list
-        t1w_image
+    Outputs
+    -------
+    [workflow_name]_transform
+        transform files to the intramodal template
 
-    **Outputs**
-        [workflow_name]_transform
-            transform files to the intramodal template
-
-        intramodal_template_to_t1w_transform
-            Transform from the b0
+    intramodal_template_to_t1w_transform
+        Transform from the b0
 
     """
+    omp_nthreads = config.nipype.omp_nthreads
     workflow = Workflow(name=name)
     input_names = [name.replace("-", "_") + "_b0_template" for name in inputs_list]
     output_names = [name.replace("-", "_") + "_transform" for name in inputs_list]
@@ -130,9 +131,7 @@ def init_intramodal_template_wf(
     ])  # fmt:skip
 
     # calculate dwi registration to T1w
-    b0_coreg_wf = init_b0_to_anat_registration_wf(
-        omp_nthreads=omp_nthreads, mem_gb=mem_gb, write_report=True
-    )
+    b0_coreg_wf = init_b0_to_anat_registration_wf(write_report=True)
     ds_report_imtcoreg = pe.Node(
         DerivativesDataSink(suffix="imtcoreg", source_file=t1w_source_file),
         name="ds_report_imtcoreg",
@@ -158,7 +157,7 @@ def init_intramodal_template_wf(
     # Fill-in datasinks of reportlets seen so far
     for node in workflow.list_node_names():
         if node.split(".")[-1].startswith("ds_report"):
-            workflow.get_node(node).inputs.base_directory = reportlets_dir
+            workflow.get_node(node).inputs.base_directory = config.execution.reportlets_dir
             workflow.get_node(node).inputs.source_file = t1w_source_file
 
     return workflow
@@ -168,35 +167,35 @@ def init_qsiprep_intramodal_template_wf(
     inputs_list,
     transform="Rigid",
     num_iterations=2,
-    mem_gb=3,
-    omp_nthreads=1,
     name="intramodal_template_wf",
 ):
     """Create an unbiased intramodal template for a subject.
     This aligns the b=0 references
     from all the scans of a subject. Can be rigid, affine or nonlinear (BSplineSyN).
 
-    **Parameters**
-        inputs_list: list of inputs
-            List if identifiers for the input b=0 images.
-        transform: 'Rigid', 'Affine', 'BSplineSyN'
-            Which transform to ultimately use. If 'BSplineSyN', first 2 iterations of Affine will
-            be run.
-        num_iterations: int
-            Default: 2.
+    Parameters
+    ----------
+    inputs_list: list of inputs
+        List if identifiers for the input b=0 images.
+    transform: 'Rigid', 'Affine', 'BSplineSyN'
+        Which transform to ultimately use. If 'BSplineSyN', first 2 iterations of Affine will
+        be run.
+    num_iterations: int
+        Default: 2.
 
-    **Inputs**
+    Inputs
+    ------
+    [workflow_name]_image...
+        One input for each input image. There is no input called inputs_list
+    t1w_image
 
-        [workflow_name]_image...
-            One input for each input image. There is no input called inputs_list
-        t1w_image
+    Outputs
+    -------
+    [workflow_name]_transform
+        transform files to the intramodal template
 
-    **Outputs**
-        [workflow_name]_transform
-            transform files to the intramodal template
-
-        intramodal_template_to_t1w_transform
-            Transform from the b0
+    intramodal_template_to_t1w_transform
+        Transform from the b0
 
     """
     workflow = Workflow(name=name)
@@ -381,9 +380,7 @@ def nonlinear_alignment_iteration(iternum=0, gradient_step=0.2):
     return iteration_wf
 
 
-def init_nonlinear_alignment_wf(
-    transform="BSplineSyN", metric="CC", num_iters=2, name="nonlinear_alignment_wf"
-):
+def init_nonlinear_alignment_wf(num_iters=2, name="nonlinear_alignment_wf"):
     """Creates a workflow that does nonlinear template creation."""
     workflow = Workflow(name=name)
     inputnode = pe.Node(

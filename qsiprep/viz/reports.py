@@ -17,6 +17,8 @@ import jinja2
 from nipype.utils.filemanip import copyfile, loadcrash
 from pkg_resources import resource_filename as pkgrf
 
+from .. import config
+
 
 class Element(object):
     """
@@ -66,7 +68,13 @@ class Report(object):
     """
 
     def __init__(
-        self, path, config, out_dir, run_uuid, out_filename="report.html", pipeline_type="qsiprep"
+        self,
+        path,
+        viz_config,
+        out_dir,
+        run_uuid,
+        out_filename="report.html",
+        pipeline_type="qsiprep",
     ):
         self.root = path
         self.sections = []
@@ -76,15 +84,15 @@ class Report(object):
         self.run_uuid = run_uuid
         self.pipeline_type = pipeline_type
 
-        self._load_config(config)
+        self._load_config(viz_config)
 
-    def _load_config(self, config):
-        with open(config, "r") as configfh:
-            config = json.load(configfh)
+    def _load_config(self, viz_config):
+        with open(viz_config, "r") as configfh:
+            viz_config = json.load(configfh)
 
-        self.index(config["sections"])
+        self.index(viz_config["sections"])
 
-    def index(self, config):
+    def index(self, viz_config):
         fig_dir = "figures"
         subject_dir = self.root.split("/")[-1]
         subject = re.search("^(?P<subject_id>sub-[a-zA-Z0-9]+)$", subject_dir).group()
@@ -92,7 +100,7 @@ class Report(object):
         svg_dir.mkdir(parents=True, exist_ok=True)
         reportlet_list = list(sorted([str(f) for f in Path(self.root).glob("**/*.*")]))
 
-        for subrep_cfg in config:
+        for subrep_cfg in viz_config:
             reportlets = []
             for reportlet_cfg in subrep_cfg["reportlets"]:
                 rlet = Reportlet(**reportlet_cfg)
@@ -321,22 +329,24 @@ def run_reports(reportlets_dir, out_dir, subject_label, run_uuid, report_type="q
     """
     reportlet_path = str(Path(reportlets_dir) / report_type / ("sub-%s" % subject_label))
     if report_type == "qsiprep":
-        config = pkgrf("qsiprep", "viz/config.json")
+        viz_config = pkgrf("qsiprep", "viz/config.json")
     else:
-        config = pkgrf("qsiprep", "viz/recon_config.json")
+        viz_config = pkgrf("qsiprep", "viz/recon_config.json")
 
     out_filename = "sub-{}.html".format(subject_label)
     report = Report(
-        reportlet_path, config, out_dir, run_uuid, out_filename, pipeline_type=report_type
+        reportlet_path, viz_config, out_dir, run_uuid, out_filename, pipeline_type=report_type
     )
     return report.generate_report()
 
 
-def generate_reports(subject_list, output_dir, work_dir, run_uuid, pipeline_mode="qsiprep"):
+def generate_reports(subject_list, pipeline_mode="qsiprep"):
     """
     A wrapper to run_reports on a given ``subject_list``
     """
-    reports_dir = str(Path(work_dir) / "reportlets")
+    reports_dir = str(config.execution.reportlets_dir)
+    run_uuid = config.execution.run_uuid
+    output_dir = str(config.execution.output_dir)
     report_errors = [
         run_reports(
             reports_dir, output_dir, subject_label, run_uuid=run_uuid, report_type=pipeline_mode

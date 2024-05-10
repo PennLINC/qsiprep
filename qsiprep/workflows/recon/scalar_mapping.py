@@ -24,7 +24,7 @@ LOGGER = logging.getLogger("nipype.workflow")
 
 
 def init_scalar_to_bundle_wf(
-    omp_nthreads, available_anatomical_data, name="scalar_to_bundle", qsirecon_suffix="", params={}
+    available_anatomical_data, name="scalar_to_bundle", qsirecon_suffix="", params={}
 ):
     """Map scalar images to bundles
 
@@ -81,7 +81,6 @@ def init_scalar_to_bundle_wf(
 
 
 def init_scalar_to_atlas_wf(
-    omp_nthreads,
     available_anatomical_data,
     name="scalar_to_template",
     qsirecon_suffix="",
@@ -131,7 +130,6 @@ def init_scalar_to_atlas_wf(
 
 
 def init_scalar_to_template_wf(
-    omp_nthreads,
     available_anatomical_data,
     name="scalar_to_template",
     qsirecon_suffix="",
@@ -184,7 +182,6 @@ def init_scalar_to_template_wf(
 
 
 def init_scalar_to_surface_wf(
-    omp_nthreads,
     available_anatomical_data,
     name="scalar_to_surface",
     qsirecon_suffix="",

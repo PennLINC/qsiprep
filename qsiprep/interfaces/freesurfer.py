@@ -600,6 +600,9 @@ class _SynthSegInputSpec(FSTraitedSpecOpenMP):
         keep_extension=False,
         desc="qc csv",
     )
+    cpu = traits.Bool(
+        True, argstr="--cpu", usedefault=True, desc="Enforce running with CPU rather than GPU."
+    )
 
 
 class _SynthSegOutputSpec(TraitedSpec):

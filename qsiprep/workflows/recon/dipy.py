@@ -11,6 +11,7 @@ import logging
 import nipype.pipeline.engine as pe
 from nipype.interfaces import utility as niu
 
+from ... import config
 from ...engine import Workflow
 from ...interfaces.dipy import (
     BrainSuiteShoreReconstruction,
@@ -56,7 +57,6 @@ def external_format_datasinks(qsirecon_suffix, params, wf):
 
 
 def init_dipy_brainsuite_shore_recon_wf(
-    omp_nthreads,
     available_anatomical_data,
     name="dipy_3dshore_recon",
     qsirecon_suffix="",
@@ -115,7 +115,7 @@ def init_dipy_brainsuite_shore_recon_wf(
             Radius for EAP estimation (default=20e-03)
 
     """
-
+    omp_nthreads = config.nipype.omp_nthreads
     inputnode = pe.Node(
         niu.IdentityInterface(fields=recon_workflow_input_fields), name="inputnode"
     )
@@ -139,10 +139,9 @@ def init_dipy_brainsuite_shore_recon_wf(
         ),
         name="outputnode",
     )
-
+    plot_reports = not config.execution.skip_odf_reports
     workflow = Workflow(name=name)
     desc = "Dipy Reconstruction\n\n: "
-    plot_reports = params.pop("plot_reports", True)
     recon_shore = pe.Node(BrainSuiteShoreReconstruction(**params), name="recon_shore")
     recon_scalars = pe.Node(
         BrainSuite3dSHOREReconScalars(qsirecon_suffix="name"),
@@ -319,7 +318,6 @@ def init_dipy_brainsuite_shore_recon_wf(
 
 
 def init_dipy_mapmri_recon_wf(
-    omp_nthreads,
     available_anatomical_data,
     name="dipy_mapmri_recon",
     qsirecon_suffix="",
@@ -425,7 +423,8 @@ def init_dipy_mapmri_recon_wf(
 
     workflow = Workflow(name=name)
     desc = "Dipy Reconstruction\n\n: "
-    plot_reports = params.pop("plot_reports", True)
+    plot_reports = not config.execution.skip_odf_reports
+    omp_nthreads = config.nipype.omp_nthreads
     recon_map = pe.Node(MAPMRIReconstruction(**params), name="recon_map")
     recon_scalars = pe.Node(
         DIPYMAPMRIReconScalars(qsirecon_suffix=name),
@@ -507,7 +506,7 @@ def init_dipy_mapmri_recon_wf(
 
 
 def init_dipy_dki_recon_wf(
-    omp_nthreads, available_anatomical_data, name="dipy_dki_recon", qsirecon_suffix="", params={}
+    available_anatomical_data, name="dipy_dki_recon", qsirecon_suffix="", params={}
 ):
     """Fit DKI
 
@@ -569,7 +568,7 @@ def init_dipy_dki_recon_wf(
     )
     workflow = Workflow(name=name)
     desc = "Dipy Reconstruction\n\n: "
-    plot_reports = params.pop("plot_reports", True)
+    plot_reports = not config.execution.skip_odf_reports
     recon_dki = pe.Node(KurtosisReconstruction(**params), name="recon_dki")
 
     workflow.connect([
@@ -606,7 +605,9 @@ def init_dipy_dki_recon_wf(
 
     if plot_reports and False:
         plot_peaks = pe.Node(
-            CLIReconPeaksReport(peaks_only=True), name="plot_peaks", n_procs=omp_nthreads
+            CLIReconPeaksReport(peaks_only=True),
+            name="plot_peaks",
+            n_procs=config.nipype.omp_nthreads,
         )
         ds_report_peaks = pe.Node(
             ReconDerivativesDataSink(extension=".png", desc="DKI", suffix="peaks"),

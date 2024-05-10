@@ -8,12 +8,12 @@ Final steps on the preprocessed data
 
 import os
 
-from nipype import logging
 from nipype.interfaces import utility as niu
 from nipype.interfaces.base import isdefined
 from nipype.pipeline import engine as pe
 from niworkflows.interfaces.reportlets.registration import SimpleBeforeAfterRPT
 
+from ... import config
 from ...engine import Workflow
 from ...interfaces import DerivativesDataSink
 from ...interfaces.dsi_studio import DSIStudioBTable
@@ -30,27 +30,14 @@ from .resampling import init_dwi_trans_wf
 from .util import _create_mem_gb, init_dwi_reference_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
-LOGGER = logging.getLogger("nipype.workflow")
 
 
 def init_dwi_finalize_wf(
     scan_groups,
     name,
-    output_prefix,
-    hmc_model,
-    shoreline_iters,
-    reportlets_dir,
-    output_resolution,
-    template,
-    output_dir,
-    omp_nthreads,
-    b0_threshold,
-    write_local_bvecs,
-    do_biascorr,
-    make_intramodal_template,
     source_file,
+    output_prefix,
     write_derivatives=True,
-    layout=None,
 ):
     """
     This workflow controls the resampling parts of the dwi preprocessing workflow.
@@ -163,7 +150,7 @@ def init_dwi_finalize_wf(
 
     """
     # Check the inputs
-    if layout is not None:
+    if config.execution.layout is not None:
         all_dwis = scan_groups["dwi_series"]
         if "rpe_series" in scan_groups:
             all_dwis += scan_groups["rpe_series"]
@@ -248,12 +235,13 @@ def init_dwi_finalize_wf(
         ),
         name="outputnode",
     )
-
-    if make_intramodal_template:
+    if config.workflow.intramodal_template_iters > 0:
         b0_to_im_template = pe.Node(SimpleBeforeAfterRPT(), name="b0_to_im_template")
         ds_report_intramodal = pe.Node(
             DerivativesDataSink(
-                suffix="tointramodal", source_file=source_file, base_directory=reportlets_dir
+                suffix="tointramodal",
+                source_file=source_file,
+                base_directory=config.execution.reportlets_dir,
             ),
             name="ds_report_intramodal",
             run_without_submitting=True,
@@ -272,21 +260,14 @@ def init_dwi_finalize_wf(
         name="transform_dwis_t1",
         template="ACPC",
         mem_gb=mem_gb["resampled"],
-        omp_nthreads=omp_nthreads,
-        output_resolution=output_resolution,
         use_compression=False,
-        to_mni=False,
-        write_local_bvecs=write_local_bvecs,
         concatenate=write_derivatives,
     )
 
     # Apply denoising to the interpolated data if requested
     final_denoise_wf = init_finalize_denoising_wf(
-        name="final_denoise_wf",
-        omp_nthreads=omp_nthreads,
         source_file=source_file,
-        b0_threshold=b0_threshold,
-        do_biascorr=do_biascorr and write_derivatives,
+        do_biascorr=config.workflow.b1_biascorrect_stage == "final" and write_derivatives,
         num_dwi_acquisitions=len(all_dwis),
     )
 
@@ -336,7 +317,7 @@ def init_dwi_finalize_wf(
     # Fill-in datasinks of reportlets seen so far
     for node in workflow.list_node_names():
         if node.split(".")[-1].startswith("ds_report"):
-            workflow.get_node(node).inputs.base_directory = reportlets_dir
+            workflow.get_node(node).inputs.base_directory = config.execution.reportlets_dir
             workflow.get_node(node).inputs.source_file = source_file
 
     # The workflow is done if we will be concatenating images later
@@ -373,20 +354,17 @@ def init_dwi_finalize_wf(
     )
 
     dwi_derivatives_wf = init_dwi_derivatives_wf(
-        output_prefix=output_prefix,
         source_file=source_file,
-        output_dir=output_dir,
-        template=template,
-        write_local_bvecs=write_local_bvecs,
-        hmc_model=hmc_model,
-        shoreline_iters=shoreline_iters,
     )
 
     # Combine all the QC measures for a series QC
     series_qc = pe.Node(SeriesQC(output_file_name=output_prefix), name="series_qc")
     ds_series_qc = pe.Node(
         DerivativesDataSink(
-            desc="ImageQC", suffix="dwi", source_file=source_file, base_directory=output_dir
+            desc="ImageQC",
+            suffix="dwi",
+            source_file=source_file,
+            base_directory=config.execution.output_dir,
         ),
         name="ds_series_qc",
         run_without_submitting=True,
@@ -396,7 +374,10 @@ def init_dwi_finalize_wf(
     # Write the carpetplot data
     ds_carpetplot = pe.Node(
         DerivativesDataSink(
-            desc="SliceQC", suffix="dwi", source_file=source_file, base_directory=output_dir
+            desc="SliceQC",
+            suffix="dwi",
+            source_file=source_file,
+            base_directory=config.execution.output_dir,
         ),
         name="ds_carpetplot",
         run_without_submitting=True,
@@ -405,7 +386,9 @@ def init_dwi_finalize_wf(
 
     # Write the interactive report json
     ds_interactive_report = pe.Node(
-        DerivativesDataSink(suffix="dwiqc", source_file=source_file, base_directory=output_dir),
+        DerivativesDataSink(
+            suffix="dwiqc", source_file=source_file, base_directory=config.execution.output_dir
+        ),
         name="ds_interactive_report",
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
@@ -463,7 +446,7 @@ def init_dwi_finalize_wf(
     # Fill-in datasinks of reportlets seen so far
     for node in workflow.list_node_names():
         if node.split(".")[-1].startswith("ds_report"):
-            workflow.get_node(node).inputs.base_directory = reportlets_dir
+            workflow.get_node(node).inputs.base_directory = config.execution.reportlets_dir
             if not isdefined(workflow.get_node(node).inputs.source_file):
                 workflow.get_node(node).inputs.source_file = source_file
 
@@ -471,14 +454,12 @@ def init_dwi_finalize_wf(
 
 
 def init_finalize_denoising_wf(
-    name,
-    omp_nthreads,
     source_file,
     do_biascorr,
-    b0_threshold,
     num_dwi_acquisitions,
     split_biascorr=False,
     do_patch2self=False,
+    name="final_denoise_wf",
 ):
     """
     Some denoising can only happen after images have been aligned
@@ -512,6 +493,7 @@ def init_finalize_denoising_wf(
         name="outputnode",
     )
     workflow = Workflow(name=name)
+    omp_nthreads = config.nipype.omp_nthreads
     # If no denoising, send it back
     if not (do_biascorr or do_patch2self):
         workflow.connect([
@@ -534,7 +516,7 @@ def init_finalize_denoising_wf(
     if do_biascorr:
         if not split_biascorr:
             biascorr = pe.Node(
-                DWIBiasCorrect(method="ants", bzero_max=b0_threshold),
+                DWIBiasCorrect(method="ants", bzero_max=config.workflow.b0_threshold),
                 name="biascorr",
                 n_procs=omp_nthreads,
             )
@@ -581,7 +563,7 @@ def init_finalize_denoising_wf(
                 scan_num += 1
                 biascorrs.append(
                     pe.Node(
-                        DWIBiasCorrect(method="ants", bzero_max=b0_threshold),
+                        DWIBiasCorrect(method="ants", bzero_max=config.workflow.b0_threshold),
                         name="biascorr%d" % scan_num,
                         n_procs=omp_nthreads,
                     )
@@ -639,17 +621,14 @@ def init_finalize_denoising_wf(
     # Extract some additional derivatives from the corrected
     extract_b0_series = pe.Node(ExtractB0s(), name="extract_b0_series")
     final_b0_ref = init_dwi_reference_wf(
-        register_t1=False,
         gen_report=True,
         desc="resampled",
         name="final_b0_ref",
         source_file=source_file,
-        omp_nthreads=omp_nthreads,
     )
 
     # Calculate QC metrics on the resampled data
     calculate_qc = init_modelfree_qc_wf(
-        omp_nthreads=omp_nthreads,
         bvec_convention="DIPY",  # Resampled is always LPS+
         name="calculate_qc",
     )

@@ -1,7 +1,27 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
+#
+# Copied recent function write_bidsignore
+#
+# Copyright The NiPreps Developers <nipreps@gmail.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# We support and encourage derived works from this project, please read
+# about our expectations at
+#
+#     https://www.nipreps.org/community/licensing/
+#
 """
 Utilities to handle BIDS inputs
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -18,6 +38,7 @@ import json
 import os
 import sys
 import warnings
+from pathlib import Path
 
 import nibabel as nb
 import numpy as np
@@ -193,7 +214,8 @@ def collect_data(bids_dir, participant_label, filters=None, bids_validate=True):
 
 def write_derivative_description(bids_dir, deriv_dir):
     from qsiprep import __version__
-    from qsiprep.__about__ import DOWNLOAD_URL
+
+    DOWNLOAD_URL = f"https://github.com/PennLINC/qsiprep/archive/{__version__}.tar.gz"
 
     desc = {
         "Name": "qsiprep output",
@@ -243,6 +265,24 @@ def write_derivative_description(bids_dir, deriv_dir):
 
     with open(os.path.join(deriv_dir, "dataset_description.json"), "w") as fobj:
         json.dump(desc, fobj, indent=4)
+
+
+def write_bidsignore(deriv_dir):
+    bids_ignore = (
+        "*.html",
+        "logs/",
+        "figures/",  # Reports
+        "*_xfm.*",  # Unspecified transform files
+        "*.surf.gii",  # Unspecified structural outputs
+        # Unspecified functional outputs
+        "*_boldref.nii.gz",
+        "*_bold.func.gii",
+        "*_mixing.tsv",
+        "*_timeseries.tsv",
+    )
+    ignore_file = Path(deriv_dir) / ".bidsignore"
+
+    ignore_file.write_text("\n".join(bids_ignore) + "\n")
 
 
 def validate_input_dir(exec_env, bids_dir, participant_label):

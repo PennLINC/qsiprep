@@ -141,14 +141,10 @@ class SliceQC(SimpleInterface):
     output_spec = SliceQCOutputSpec
 
     def _run_interface(self, runtime):
-        threshold = self.inputs.impute_slice_threshold
         ideal_image_files = self.inputs.ideal_image_files
         uncorrected_image_files = self.inputs.uncorrected_dwi_files
 
         self._results["imputed_images"] = self.inputs.uncorrected_dwi_files
-        if threshold > 0:
-            LOGGER.warning("Imputation is not implemented yet")
-
         output_npz = os.path.join(runtime.cwd, "slice_stats.npz")
         mask_img = nb.load(self.inputs.mask_image)
         mask = mask_img.get_fdata() > 0

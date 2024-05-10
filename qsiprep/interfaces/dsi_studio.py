@@ -27,6 +27,7 @@ from nipype.interfaces.base import (
 from nipype.utils.filemanip import fname_presuffix, split_filename, which
 from scipy.io.matlab import loadmat, savemat
 
+from .. import config
 from .bids import get_bids_params
 
 LOGGER = logging.getLogger("nipype.interface")
@@ -249,12 +250,12 @@ class DSIStudioGQIReconstruction(DSIStudioReconstruction):
 
     def _list_outputs(self):
         outputs = self.output_spec().get()
-        print("current dir", os.getcwd())
+        config.loggers.interface.info("current dir", os.getcwd())
         srcname = os.path.split(self.inputs.input_src_file)[-1]
-        print("input src", self.inputs.input_src_file)
-        print("split src name", srcname)
+        config.loggers.interface.info("input src", self.inputs.input_src_file)
+        config.loggers.interface.info("split src name", srcname)
         target = os.path.join(os.getcwd(), srcname) + "*gqi*.fib.gz"
-        print("search target", target)
+        config.loggers.interface.info("search target", target)
         results = glob(target)
         assert len(results) == 1
         outputs["output_fib"] = results[0]
@@ -304,7 +305,7 @@ class DSIStudioExport(CommandLine):
         results = list(cwd.glob("*.nii.gz"))
         for expected in to_expect:
             matches = [
-                fname.absolute().name
+                fname.absolute()
                 for fname in results
                 if fname.name.endswith("." + expected + ".nii.gz")
             ]

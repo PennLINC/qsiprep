@@ -17,6 +17,7 @@ from nipype.pipeline import engine as pe
 from niworkflows.interfaces.header import CopyHeader
 from niworkflows.interfaces.reportlets.registration import ANTSApplyTransformsRPT
 
+from ... import config
 from ...engine import Workflow
 from ...interfaces import StructuralReference
 from ...interfaces.fmap import B0RPEFieldmap, PEPOLARReport
@@ -25,7 +26,7 @@ from ...interfaces.nilearn import EnhanceB0
 from ..anatomical import init_synthstrip_wf
 
 
-def init_pepolar_unwarp_wf(dwi_meta, epi_fmaps, omp_nthreads=1, name="pepolar_unwarp_wf"):
+def init_pepolar_unwarp_wf(dwi_meta, epi_fmaps, name="pepolar_unwarp_wf"):
     """
     This workflow takes in a set of EPI files with opposite phase encoding
     direction than the target file and calculates a displacements field
@@ -54,8 +55,7 @@ def init_pepolar_unwarp_wf(dwi_meta, epi_fmaps, omp_nthreads=1, name="pepolar_un
         from qsiprep.workflows.fieldmap.pepolar import init_pepolar_unwarp_wf
         wf = init_pepolar_unwarp_wf(
             dwi_meta={'PhaseEncodingDirection': 'j'},
-            epi_fmaps=[('/dataset/sub-01/fmap/sub-01_epi.nii.gz', 'j-')],
-            omp_nthreads=8)
+            epi_fmaps=[('/dataset/sub-01/fmap/sub-01_epi.nii.gz', 'j-')])
 
 
     Inputs
@@ -77,7 +77,7 @@ def init_pepolar_unwarp_wf(dwi_meta, epi_fmaps, omp_nthreads=1, name="pepolar_un
 
     """
     dwi_file_pe = dwi_meta["PhaseEncodingDirection"]
-
+    omp_nthreads = config.nipype.omp_nthreads
     args = "-noXdis -noYdis -noZdis"
     rm_arg = {"i": "-noXdis", "j": "-noYdis", "k": "-noZdis"}[dwi_file_pe[0]]
     args = args.replace(rm_arg, "")

@@ -11,11 +11,11 @@ Merge and denoise dwi images
 """
 import pandas as pd
 from bids.layout import Query
-from nipype import logging
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from nipype.utils.filemanip import split_filename
 
+from ... import config
 from ...engine import Workflow
 from ...interfaces import ConformDwi, DerivativesDataSink
 from ...interfaces.bids import get_metadata_for_nifti
@@ -36,24 +36,13 @@ from .qc import init_modelfree_qc_wf
 from .util import _get_wf_name
 
 DEFAULT_MEMORY_MIN_GB = 0.01
-LOGGER = logging.getLogger("nipype.workflow")
 
 
 def init_merge_and_denoise_wf(
     raw_dwi_files,
-    dwi_denoise_window,
-    unringing_method,
-    dwi_no_biascorr,
-    denoise_method,
-    no_b0_harmonization,
-    denoise_before_combining,
     orientation,
-    b0_threshold,
     source_file,
-    layout=None,
-    ignore=[],
-    mem_gb=1,
-    omp_nthreads=1,
+    do_biascorr,
     calculate_qc=False,
     phase_id="same",
     name="merge_and_denoise_wf",
@@ -68,67 +57,38 @@ def init_merge_and_denoise_wf(
         wf = init_merge_and_dwnoise_wf(
             ['/path/to/dwi/sub-1_dwi.nii.gz'],
             source_file='/data/sub-1/dwi/sub-1_dwi.nii.gz',
-            dwi_denoise_window=7,
-            denoise_method='patch2self',
-            b0_threshold=100,
-            unringing_method='mrdegibbs',
-            dwi_no_biascorr=False,
-            no_b0_harmonization=False,
-            denoise_before_combining=True,
-            combine_all_dwis=True,
         )
 
-    **Parameters**
+    Parameters
+    ----------
+    raw_dwi_files : list
+        list of raw (in their original BIDS directory) dwi nifti files
 
-        raw_dwi_files : list
-            list of raw (in their original BIDS directory) dwi nifti files
-        b0_threshold : int
-            Maximum b value for an image to be considered a b=0
-        dwi_denoise_window : int
-            window size in voxels for image-based denoising. Must be odd. If 0, '
-            'denoising will not be run'
-        denoise_method : str
-            Either 'dwidenoise', 'patch2self' or 'none'
-        unringing_method : str
-            algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
-        dwi_no_biascorr : bool
-            run spatial bias correction (N4) on dwi series
-        no_b0_harmonization : bool
-            skip rescaling dwi scans to have matching b=0 intensities across scans
-        denoise_before_combining : bool
-            run ``dwidenoise`` before combining dwis. Requires ``combine_all_dwis``
-            If ``dwi_denoise_window > 0`` and this is ``False``, then ``dwidenoise``
-            is run on the merged dwi series.
-        calculate_qc : bool
-            Should DSI Studio's QC be calculated on the merged raw data?
-        layout : None or :obj:`bids.layout.BIDSLayout`
-            Used to try to find phase files.
-            Only used if ``denoise_before_combining`` is ``True``.
-        ignore : list
-            List of elements to ignore in processing.
-            The only relevant value for this workflow is "phase".
 
-    **Outputs**
-
-        merged_image
-            dwi series, conformed, denoised if requested
-        merged_raw_image
-            dwi series, conformed, raw
-        merged_bval
-            bvals from merged images
-        merged_bvec
-            bvecs from merged images
-        merged_json
-            JSON file containing slice timings for slice2vol
-        noise_image
-            image(s) created by ``dwidenoise``
-        original_files
-            names of the original files for each volume
-        qc_summary
-            DSI Studio QC text file
+    Outputs
+    -------
+    merged_image
+        dwi series, conformed, denoised if requested
+    merged_raw_image
+        dwi series, conformed, raw
+    merged_bval
+        bvals from merged images
+    merged_bvec
+        bvecs from merged images
+    merged_json
+        JSON file containing slice timings for slice2vol
+    noise_image
+        image(s) created by ``dwidenoise``
+    original_files
+        names of the original files for each volume
+    qc_summary
+        DSI Studio QC text file
 
     """
     workflow = Workflow(name=name)
+    omp_nthreads = config.nipype.omp_nthreads
+    denoise_before_combining = not config.workflow.denoise_after_combining
+    layout = config.execution.layout
     outputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
@@ -153,8 +113,8 @@ def init_merge_and_denoise_wf(
     merge_dwis = pe.Node(
         MergeDWIs(
             bids_dwi_files=raw_dwi_files,
-            b0_threshold=b0_threshold,
-            harmonize_b0_intensities=not no_b0_harmonization,
+            b0_threshold=config.workflow.b0_threshold,
+            harmonize_b0_intensities=not config.workflow.no_b0_harmonization,
             scan_metadata={scan: get_metadata_for_nifti(scan) for scan in raw_dwi_files},
         ),
         name="merge_dwis",
@@ -213,10 +173,10 @@ def init_merge_and_denoise_wf(
             phase_available = False
             if len(phase_files) == 1:
                 phase_available = True
-                LOGGER.info("Phase file found for %s", dwi_file)
+                config.loggers.workflow.info("Phase file found for %s", dwi_file)
                 phase_file = phase_files[0].path
 
-            use_phase = phase_available and "phase" not in ignore
+            use_phase = phase_available and "phase" not in config.workflow.ignore
             if use_phase:
                 conform_phase = pe.Node(
                     ConformDwi(
@@ -228,18 +188,11 @@ def init_merge_and_denoise_wf(
 
             denoising_wfs.append(
                 init_dwi_denoising_wf(
-                    dwi_denoise_window=dwi_denoise_window,
-                    denoise_method=denoise_method,
-                    unringing_method=unringing_method,
-                    dwi_no_biascorr=dwi_no_biascorr,
-                    no_b0_harmonization=no_b0_harmonization,
-                    b0_threshold=b0_threshold,
-                    mem_gb=mem_gb,
                     partial_fourier=row.PartialFourier,
                     phase_encoding_direction=row.PhaseEncodingAxis,
-                    omp_nthreads=omp_nthreads,
                     source_file=dwi_file,
                     use_phase=use_phase,
+                    do_biascorr=do_biascorr,
                     name=wf_name,
                 ),
             )
@@ -297,7 +250,6 @@ def init_merge_and_denoise_wf(
     # Get a QC score for the raw data
     if calculate_qc:
         qc_wf = init_modelfree_qc_wf(
-            omp_nthreads=omp_nthreads,
             bvec_convention="DIPY" if orientation == "LPS" else "FSL",
         )
         workflow.connect([
@@ -327,18 +279,11 @@ def init_merge_and_denoise_wf(
     merge_confounds = pe.Node(niu.Merge(2), name="merge_confounds")
     hstack_confounds = pe.Node(StackConfounds(axis=1), name="hstack_confounds")
     denoising_wf = init_dwi_denoising_wf(
-        dwi_denoise_window=dwi_denoise_window,
-        denoise_method=denoise_method,
-        unringing_method=unringing_method,
         partial_fourier=get_merged_parameter(dwi_df, "PartialFourier", "all"),
         phase_encoding_direction=get_merged_parameter(dwi_df, "PhaseEncodingAxis", "all"),
-        dwi_no_biascorr=dwi_no_biascorr,
-        no_b0_harmonization=no_b0_harmonization,
-        b0_threshold=b0_threshold,
-        mem_gb=mem_gb,
-        omp_nthreads=omp_nthreads,
         source_file=source_file,
         use_phase=False,  # can't use phase with concatenated data
+        do_biascorr=do_biascorr,
         name="merged_denoise",
     )
 
@@ -364,51 +309,29 @@ def init_merge_and_denoise_wf(
 
 
 def init_dwi_denoising_wf(
-    dwi_denoise_window,
-    denoise_method,
-    unringing_method,
-    dwi_no_biascorr,
-    no_b0_harmonization,
-    b0_threshold,
     source_file,
     partial_fourier,
     phase_encoding_direction,
     use_phase,
-    mem_gb=1,
-    omp_nthreads=1,
+    do_biascorr,
     name="denoise_wf",
 ):
     """Build a workflow to denoise a DWI series.
 
     Parameters
     ----------
-    dwi_denoise_window : int
-        window size in voxels for image-based denoising. Must be odd. If 0, '
-        'denoising will not be run'
-    denoise_method : str
-        Either 'dwidenoise', 'patch2self' or 'none'
-    unringing_method : str
-        algorithm to use for removing Gibbs ringing. Options: none, mrdegibbs
-    dwi_no_biascorr : bool
-        run spatial bias correction (N4) on dwi series
-    no_b0_harmonization : bool
-        skip rescaling dwi scans to have matching b=0 intensities across scans
-    b0_threshold : int
-        Maximum b value for an image to be considered a b=0
     source_file : str
         path to the original dwi file
     partial_fourier : float
         fraction of k-space acquired
     phase_encoding_direction : str
         direction of phase encoding
-    phase_available : bool
+    use_phase : bool
         True if phase data are available for the DWI scan.
         If True, and ``denoise_method`` is ``dwidenoise``, then ``dwidenoise``
         will be run on the complex-valued data.
-    mem_gb : float
-        memory in GB to allocate to the workflow
-    omp_nthreads : int
-        number of threads to use
+    do_biascorr : bool
+        If True run dwi_biascorrect
     name : str
         name of the workflow
 
@@ -457,6 +380,7 @@ def init_dwi_denoising_wf(
         name="outputnode",
     )
     workflow = Workflow(name=name)
+    omp_nthreads = config.nipype.omp_nthreads
 
     # Get IdentityInterfaces ready to hold intermediate results
     buffernodes = []
@@ -481,10 +405,18 @@ def init_dwi_denoising_wf(
     ])  # fmt:skip
 
     # Which steps to apply?
+    denoise_method = config.workflow.denoise_method
+    unringing_method = config.workflow.unringing_method
     do_denoise = denoise_method in ("patch2self", "dwidenoise")
-    do_unringing = unringing_method in ("mrdegibbs", "rpg")
-    do_biascorr = not dwi_no_biascorr
-    harmonize_b0s = not no_b0_harmonization
+    do_unringing = config.workflow.unringing_method in ("mrdegibbs", "rpg")
+    harmonize_b0s = not config.workflow.no_b0_harmonization
+    # Configure the denoising window
+    if (
+        config.workflow.denoise_method == "dwidenoise"
+    ) and config.workflow.dwi_denoise_window == "auto":
+        dwi_denoise_window = 5
+        config.loggers.workflow.info("Automatically using 5, 5, 5 window for dwidenoise")
+
     # How many steps in the denoising pipeline
     num_steps = sum(map(int, [do_denoise, do_unringing, do_biascorr, harmonize_b0s]))
     merge_confounds = pe.Node(niu.Merge(num_steps), name="merge_confounds")
@@ -636,7 +568,7 @@ def init_dwi_denoising_wf(
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB,
         )
-        get_b0s = pe.Node(ExtractB0s(b0_threshold=b0_threshold), name="get_b0s")
+        get_b0s = pe.Node(ExtractB0s(b0_threshold=config.workflow.b0_threshold), name="get_b0s")
         quick_mask = pe.Node(MaskEPI(lower_cutoff=0.02), name="quick_mask")
 
         # Add buffernode for bias-corrected DWI
@@ -676,17 +608,16 @@ def _as_list(item):
     return [item]
 
 
-def gen_denoising_boilerplate(
-    *,
-    denoise_method,
-    dwi_denoise_window,
-    unringing_method,
-    b1_biascorrect_stage,
-    no_b0_harmonization,
-    b0_threshold,
-    use_phase,
-):
+def gen_denoising_boilerplate():
     """Generate a methods boilerplate for the denoising workflow."""
+
+    denoise_method = config.workflow.denoise_method
+    dwi_denoise_window = config.workflow.dwi_denoise_window
+    unringing_method = config.workflow.unringing_method
+    b1_biascorrect_stage = config.workflow.b1_biascorrect_stage
+    no_b0_harmonization = config.workflow.no_b0_harmonization
+    b0_threshold = config.workflow.b0_threshold
+    use_phase = "phase" not in config.workflow.ignore
     desc = [
         f"Any images with a b-value less than {b0_threshold} s/mm^2 were treated as a "
         "*b*=0 image."
@@ -778,7 +709,7 @@ def get_merged_parameter(parameter_df, parameter_name, selection_mode="all"):
     col = parameter_df[parameter_name]
     unique_values = col.unique()
     if len(unique_values) > 1:
-        LOGGER.warn(
+        config.loggers.workflow.warn(
             "Found %d unique values for %s",
             parameter_name,
             len(unique_values),

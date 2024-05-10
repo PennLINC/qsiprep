@@ -9,12 +9,12 @@ Implementing the FSL preprocessing workflow
 import json
 import os
 
-from nipype import logging
 from nipype.interfaces import fsl
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from pkg_resources import resource_filename as pkgr_fn
 
+from ... import config
 from ...engine import Workflow
 from ...interfaces import DerivativesDataSink
 from ...interfaces.eddy import (
@@ -35,25 +35,14 @@ from ..fieldmap.drbuddi import init_drbuddi_wf
 from .util import init_dwi_reference_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
-LOGGER = logging.getLogger("nipype.workflow")
 
 
 def init_fsl_hmc_wf(
     scan_groups,
     source_file,
-    b0_threshold,
-    impute_slice_threshold,
-    fmap_demean,
-    fmap_bspline,
-    eddy_config,
-    raw_image_sdc,
-    pepolar_method,
     t2w_sdc,
-    mem_gb=3,
-    omp_nthreads=1,
     dwi_metadata=None,
     slice_quality="outlier_n_sqr_stdev_map",
-    sloppy=False,
     name="fsl_hmc_wf",
 ):
     """
@@ -171,29 +160,30 @@ def init_fsl_hmc_wf(
     )
 
     workflow = Workflow(name=name)
-    if eddy_config is None:
+    omp_nthreads = config.nipype.omp_nthreads
+    if config.workflow.eddy_config is None:
         # load from the defaults
         eddy_cfg_file = pkgr_fn("qsiprep.data", "eddy_params.json")
     else:
-        eddy_cfg_file = eddy_config
+        eddy_cfg_file = config.workflow.eddy_config
 
     with open(eddy_cfg_file, "r") as f:
         eddy_args = json.load(f)
 
     gather_inputs = pe.Node(
         GatherEddyInputs(
-            b0_threshold=b0_threshold, raw_image_sdc=raw_image_sdc, eddy_config=eddy_cfg_file
+            b0_threshold=config.workflow.b0_threshold,
+            raw_image_sdc=False,
+            eddy_config=eddy_cfg_file,
         ),
         name="gather_inputs",
     )
     enhance_pre_sdc = pe.Node(EnhanceB0(), name="enhance_pre_sdc")
 
     # Run in parallel if possible
-    LOGGER.info("Using %d threads in eddy", omp_nthreads)
+    config.loggers.workflow.info("Using %d threads in eddy", omp_nthreads)
     eddy_args["num_threads"] = omp_nthreads
     pre_eddy_b0_ref_wf = init_dwi_reference_wf(
-        omp_nthreads=omp_nthreads,
-        register_t1=True,
         source_file=source_file,
         name="pre_eddy_b0_ref_wf",
         gen_report=False,
@@ -205,17 +195,18 @@ def init_fsl_hmc_wf(
     back_to_lps = pe.Node(ConformDwi(orientation="LPS"), name="back_to_lps")
     cnr_lps = pe.Node(ConformDwi(orientation="LPS"), name="cnr_lps")
     split_eddy_lps = pe.Node(
-        SplitDWIsFSL(b0_threshold=b0_threshold, deoblique_bvecs=True), name="split_eddy_lps"
+        SplitDWIsFSL(b0_threshold=config.workflow.b0_threshold, deoblique_bvecs=True),
+        name="split_eddy_lps",
     )
 
-    extract_b0_series = pe.Node(ExtractB0s(b0_threshold=b0_threshold), name="extract_b0_series")
+    extract_b0_series = pe.Node(
+        ExtractB0s(b0_threshold=config.workflow.b0_threshold), name="extract_b0_series"
+    )
     b0_ref_for_coreg = init_dwi_reference_wf(
-        register_t1=False,
         gen_report=False,
         desc="b0_for_coreg",
         name="b0_ref_for_coreg",
         source_file=source_file,
-        omp_nthreads=omp_nthreads,
     )
 
     workflow.connect([
@@ -280,10 +271,15 @@ def init_fsl_hmc_wf(
     # Fieldmap correction to be done in LAS+: TOPUP for rpe series or epi fieldmap
     # If a topupref is provided, use it for TOPUP
     fieldmap_type = scan_groups["fieldmap_info"]["suffix"] or ""
-    workflow.__desc__ = boilerplate_from_eddy_config(eddy_args, fieldmap_type, pepolar_method)
+    workflow.__desc__ = boilerplate_from_eddy_config(
+        eddy_args, fieldmap_type, config.workflow.pepolar_method
+    )
 
     # Are we running TOPUP?
-    if fieldmap_type in ("epi", "rpe_series") and "topup" in pepolar_method.lower():
+    if (
+        fieldmap_type in ("epi", "rpe_series")
+        and "topup" in config.workflow.pepolar_method.lower()
+    ):
         # If there are EPI fieldmaps in fmaps/, make sure they get to TOPUP. It will always use
         # b=0 images from the DWI series regardless
         gather_inputs.inputs.topup_requested = True
@@ -349,8 +345,8 @@ def init_fsl_hmc_wf(
             (topup_summary, ds_report_topupsummary, [('out_report', 'in_file')])
         ])  # fmt:skip
 
-        if "drbuddi" not in pepolar_method.lower():
-            LOGGER.info("Using single-stage SDC, TOPUP-only")
+        if "drbuddi" not in config.workflow.pepolar_method.lower():
+            config.loggers.workflow.info("Using single-stage SDC, TOPUP-only")
             workflow.connect([
                 # There will be no SDC warps, they are applied by eddy
                 (gather_inputs, outputnode, [('forward_warps', 'to_dwi_ref_warps')]),
@@ -369,9 +365,12 @@ def init_fsl_hmc_wf(
             (pre_eddy_b0_ref_wf, eddy, [("outputnode.dwi_mask", "in_mask")]),
         ])  # fmt:skip
 
-    if fieldmap_type in ("epi", "rpe_series") and "drbuddi" in pepolar_method.lower():
+    if (
+        fieldmap_type in ("epi", "rpe_series")
+        and "drbuddi" in config.workflow.pepolar_method.lower()
+    ):
         outputnode.inputs.sdc_method = "DRBUDDI"
-        LOGGER.info("Running DRBUDDI for SDC")
+        config.loggers.workflow.info("Running DRBUDDI for SDC")
 
         # Let gather_inputs know we're doing pepolar, even though it's not topup
         gather_inputs.inputs.topup_requested = True
@@ -380,12 +379,7 @@ def init_fsl_hmc_wf(
 
         drbuddi_wf = init_drbuddi_wf(
             scan_groups=scan_groups,
-            omp_nthreads=omp_nthreads,
             t2w_sdc=t2w_sdc,
-            b0_threshold=b0_threshold,
-            pepolar_method=pepolar_method,
-            raw_image_sdc=raw_image_sdc,
-            sloppy=sloppy,
         )
 
         workflow.connect([
@@ -417,14 +411,11 @@ def init_fsl_hmc_wf(
         return workflow
 
     if fieldmap_type in ("fieldmap", "syn") or fieldmap_type.startswith("phase"):
-        LOGGER.info(f"Computing fieldmap directly from {fieldmap_type}")
+        config.loggers.workflow.info(f"Computing fieldmap directly from {fieldmap_type}")
         outputnode.inputs.sdc_method = fieldmap_type
         b0_sdc_wf = init_sdc_wf(
             scan_groups["fieldmap_info"],
             dwi_metadata,
-            omp_nthreads=omp_nthreads,
-            fmap_demean=fmap_demean,
-            fmap_bspline=fmap_bspline,
         )
 
         workflow.connect([

@@ -1,6 +1,8 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 #
+# Copied without change from fMRIPrep
+#
 # Copyright The NiPreps Developers <nipreps@gmail.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,19 +22,27 @@
 #
 #     https://www.nipreps.org/community/licensing/
 #
-"""Top-module metadata."""
+"""Manipulate Python warnings."""
 
-try:
-    from ._version import __version__
-except ImportError:
-    __version__ = "0+unknown"
-
+import logging
 import warnings
 
-# cmp is not used by qsiprep, so ignore nipype-generated warnings
-warnings.simplefilter("ignore")
-warnings.filterwarnings("ignore", r"cmp not installed")
-warnings.filterwarnings("ignore", r"Enable tracemalloc")
-warnings.filterwarnings("ignore", r"can't resolve package from __spec__ or __package__")
-warnings.filterwarnings("ignore", category=ResourceWarning)
-warnings.filterwarnings("ignore", r"Using or importing the ABCs from")
+_wlog = logging.getLogger("py.warnings")
+_wlog.addHandler(logging.NullHandler())
+
+
+def _warn(message, category=None, stacklevel=1, source=None):
+    """Redefine the warning function."""
+    if category is not None:
+        category = type(category).__name__
+        category = category.replace("type", "WARNING")
+
+    logging.getLogger("py.warnings").warning(f"{category or 'WARNING'}: {message}")
+
+
+def _showwarning(message, category, filename, lineno, file=None, line=None):
+    _warn(message, category=category)
+
+
+warnings.warn = _warn
+warnings.showwarning = _showwarning

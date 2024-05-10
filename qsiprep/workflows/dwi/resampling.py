@@ -12,14 +12,14 @@ from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 
+from ... import config
 from ...engine import Workflow
 from ...interfaces.ants import GetImageType
 from ...interfaces.fmap import ApplyScalingImages
-from ...interfaces.gradients import (
+from ...interfaces.gradients import (  # LocalGradientRotation,
     ComposeTransforms,
     ExtractB0s,
     GradientRotation,
-    LocalGradientRotation,
 )
 from ...interfaces.images import ChooseInterpolator
 from ...interfaces.nilearn import Merge
@@ -31,13 +31,10 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 
 def init_dwi_trans_wf(
     source_file,
-    template,
     mem_gb,
-    omp_nthreads,
-    output_resolution,
+    template="ACPC",
     name="dwi_trans_wf",
     use_compression=True,
-    to_mni=False,
     write_local_bvecs=False,
     write_reports=True,
     concatenate=True,
@@ -131,6 +128,7 @@ def init_dwi_trans_wf(
 
     """
     workflow = Workflow(name=name)
+    output_resolution = config.workflow.output_resolution
     workflow.__desc__ = """\
 The DWI time-series were resampled to {tpl},
 generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels.
@@ -256,12 +254,10 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
     merge = pe.Node(Merge(compress=use_compression), name="merge", mem_gb=mem_gb * 3)
     extract_b0_series = pe.Node(ExtractB0s(), name="extract_b0_series")
     final_b0_ref = init_dwi_reference_wf(
-        register_t1=False,
         gen_report=write_reports,
         desc="resampled",
         name="final_b0_ref",
         source_file=source_file,
-        omp_nthreads=omp_nthreads,
     )
 
     workflow.connect(
@@ -286,7 +282,6 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
 
     # Calculate QC metrics on the resampled data
     calculate_qc = init_modelfree_qc_wf(
-        omp_nthreads=omp_nthreads,
         bvec_convention="DIPY",  # Resampled is always LPS+
         name="calculate_qc",
     )
@@ -297,13 +292,13 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
         (merge, calculate_qc, [('out_file', 'inputnode.dwi_file')]),
         (calculate_qc, outputnode, [('outputnode.qc_summary', 'resampled_qc')])
     ])  # fmt:skip
-    if write_local_bvecs:
-        local_grad_rotation = pe.Node(LocalGradientRotation(), name="local_grad_rotation")
-        workflow.connect([
-            (compose_transforms, local_grad_rotation, [('out_warps', 'warp_transforms')]),
-            (inputnode, local_grad_rotation, [('bvec_files', 'bvec_files')]),
-            (local_grad_rotation, outputnode, [('local_bvecs', 'local_bvecs')])
-        ])  # fmt:skip
+    # if write_local_bvecs:
+    #     local_grad_rotation = pe.Node(LocalGradientRotation(), name="local_grad_rotation")
+    #     workflow.connect([
+    #         (compose_transforms, local_grad_rotation, [('out_warps', 'warp_transforms')]),
+    #         (inputnode, local_grad_rotation, [('bvec_files', 'bvec_files')]),
+    #         (local_grad_rotation, outputnode, [('local_bvecs', 'local_bvecs')])
+    #     ])  # fmt:skip
 
     return workflow
 

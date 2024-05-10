@@ -12,6 +12,7 @@ import logging
 import nipype.pipeline.engine as pe
 from nipype.interfaces import utility as niu
 
+from ... import config
 from ...engine import Workflow
 from ...interfaces import DerivativesDataSink
 from ...interfaces.dsi_studio import DSIStudioBTable
@@ -30,66 +31,57 @@ LOGGER = logging.getLogger("nipype.workflow")
 def init_distortion_group_merge_wf(
     merging_strategy,
     inputs_list,
-    hmc_model,
-    reportlets_dir,
-    harmonize_b0_intensities,
-    b0_threshold,
-    output_prefix,
     source_file,
-    output_dir,
-    template,
-    shoreline_iters,
-    mem_gb=3,
-    omp_nthreads=1,
-    name="distortion_group_merge_wf",
-):
+) -> Workflow:
     """Create an unbiased intramodal template for a subject. This aligns the b=0 references
     from all the scans of a subject. Can be rigid, affine or nonlinear (BSplineSyN).
 
-    **Parameters**
-        inputs_list: list of inputs
-            List if identifiers for inputs. There will be bvals, bvecs, niis and original
-            bvecs.
-        merging_strategy: str
-            'average': averages images that originally sampled the same q-space coordinate
-            'concat': concatenates images in the 4th dimension
+    Parameters
+    ----------
+    inputs_list: list of inputs
+        List if identifiers for inputs. There will be bvals, bvecs, niis and original
+        bvecs.
+    merging_strategy: str
+        'average': averages images that originally sampled the same q-space coordinate
+        'concat': concatenates images in the 4th dimension
 
 
-    **Inputs**
+    Inputs
+    ------
+    [workflow_name]_image...
+        One input for each volume in each input image.
+    [workflow_name]_bval...
+        One input for each input image. path to the corresponding bval file
+    [workflow_name]_bvec...
+        One input for each input image. path to the corresponding final bvec file
+    [workflow_name]_original_bvec...
+        One input for each input image. Path to the original bvec file
+    [workflow_name]_original_image...
+        One input for each input image. Path to the original dwi file
+    [workflow_name]_raw_concatenated_image
+        One input for each input image. Path to the original images after concatenation
+    [workflow_name]_confounds
+        One input for each input image. Path to the confounds files
+    [workflow_name]_b0_ref
+        One input for each input image. Path to the b=0 reference image
+    [workflow_name]_carpetplot_data
+        One input for each input image. Path to the hmc carpetplot data
 
-        [workflow_name]_image...
-            One input for each volume in each input image.
-        [workflow_name]_bval...
-            One input for each input image. path to the corresponding bval file
-        [workflow_name]_bvec...
-            One input for each input image. path to the corresponding final bvec file
-        [workflow_name]_original_bvec...
-            One input for each input image. Path to the original bvec file
-        [workflow_name]_original_image...
-            One input for each input image. Path to the original dwi file
-        [workflow_name]_raw_concatenated_image
-            One input for each input image. Path to the original images after concatenation
-        [workflow_name]_confounds
-            One input for each input image. Path to the confounds files
-        [workflow_name]_b0_ref
-            One input for each input image. Path to the b=0 reference image
-        [workflow_name]_carpetplot_data
-            One input for each input image. Path to the hmc carpetplot data
-
-    **Outputs**
-        merged_image
-            The input images merged into a single image (averaged or concatenated)
-        merged_bval
-            The bvals corresponding to merged_image
-        merged_bvec
-            The bvecs corresponding to merged_image
-        merged_qc
-            The Before/After QC file
-        merged_interactive_report
-            The interactive report data
+    Outputs
+    -------
+    merged_image
+        The input images merged into a single image (averaged or concatenated)
+    merged_bval
+        The bvals corresponding to merged_image
+    merged_bvec
+        The bvecs corresponding to merged_image
+    merged_qc
+        The Before/After QC file
+    merged_interactive_report
+        The interactive report data
     """
 
-    workflow = Workflow(name=name)
+    workflow = Workflow(name="distortion_group_merge_wf")
     source_file = "dwi/" + source_file
     sanitized_inputs = [name.replace("-", "_") for name in inputs_list]
     input_names = ["t1_brain", "t1_mask", "t1_seg"]
@@ -171,7 +163,6 @@ def init_distortion_group_merge_wf(
     elif merging_strategy.startswith("concat"):
         distortion_merger = pe.Node(MergeDWIs(), name="distortion_merger")
     b0_ref_wf = init_dwi_reference_wf(
-        omp_nthreads,
         name="merged_b0_ref",
         register_t1=False,
         gen_report=True,
@@ -192,19 +183,21 @@ def init_distortion_group_merge_wf(
     ])  # fmt:skip
 
     # Calculate QC on the merged raw and processed data
-    raw_qc_wf = init_modelfree_qc_wf(
-        omp_nthreads=omp_nthreads, bvec_convention="auto", name="raw_qc_wf"
-    )
+    raw_qc_wf = init_modelfree_qc_wf(bvec_convention="auto", name="raw_qc_wf")
     processed_qc_wf = init_modelfree_qc_wf(
-        omp_nthreads=omp_nthreads,
         bvec_convention="DIPY",  # Always LPS+ when resampled
         name="processed_qc_wf",
     )
     # Combine all the QC measures for a series QC
-    series_qc = pe.Node(SeriesQC(output_file_name=output_prefix), name="series_qc")
+    series_qc = pe.Node(
+        SeriesQC(output_file_name=config.execution.output_prefix), name="series_qc"
+    )
     ds_series_qc = pe.Node(
         DerivativesDataSink(
-            desc="ImageQC", suffix="dwi", source_file=source_file, base_directory=output_dir
+            desc="ImageQC",
+            suffix="dwi",
+            source_file=source_file,
+            base_directory=config.execution.output_dir,
         ),
         name="ds_series_qc",
         run_without_submitting=True,
@@ -214,7 +207,9 @@ def init_distortion_group_merge_wf(
     interactive_report_wf = init_interactive_report_wf()
     # Write the interactive report json
     ds_interactive_report = pe.Node(
-        DerivativesDataSink(suffix="dwiqc", source_file=source_file, base_directory=output_dir),
+        DerivativesDataSink(
+            suffix="dwiqc", source_file=source_file, base_directory=config.execution.output_dir
+        ),
         name="ds_interactive_report",
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
@@ -231,15 +226,7 @@ def init_distortion_group_merge_wf(
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
 
-    dwi_derivatives_wf = init_dwi_derivatives_wf(
-        output_prefix=output_prefix,
-        source_file=source_file,
-        output_dir=output_dir,
-        template=template,
-        write_local_bvecs=False,
-        hmc_model=hmc_model,
-        shoreline_iters=shoreline_iters,
-    )
+    dwi_derivatives_wf = init_dwi_derivatives_wf(source_file=source_file)
 
     workflow.connect([
         # Mask the new b=0 reference
@@ -329,6 +316,6 @@ def init_distortion_group_merge_wf(
     # Fill-in datasinks of reportlets seen so far
     for node in workflow.list_node_names():
         if node.split(".")[-1].startswith("ds_report"):
-            workflow.get_node(node).inputs.base_directory = reportlets_dir
+            workflow.get_node(node).inputs.base_directory = config.execution.reportlets_dir
 
     return workflow

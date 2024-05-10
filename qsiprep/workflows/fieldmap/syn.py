@@ -25,7 +25,6 @@ Feedback will be enthusiastically received.
 """
 import nibabel as nb
 import pkg_resources as pkgr
-from nipype import logging
 from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
 from nipype.interfaces.base import (
@@ -39,10 +38,10 @@ from nipype.interfaces.image import Rescale
 from nipype.pipeline import engine as pe
 from nipype.utils.filemanip import fname_presuffix
 
+from ... import config
 from ...engine import Workflow
 
 DEFAULT_MEMORY_MIN_GB = 0.01
-LOGGER = logging.getLogger("nipype.workflow")
 
 
 class ThreshAndBinInputSpec(BaseInterfaceInputSpec):
@@ -77,7 +76,7 @@ class ThreshAndBin(SimpleInterface):
         return runtime
 
 
-def init_syn_sdc_wf(omp_nthreads, bold_pe=None, atlas_threshold=2, name="syn_sdc_wf"):
+def init_syn_sdc_wf(bold_pe=None, atlas_threshold=2):
     """
     This workflow takes a skull-stripped T1w image and reference b0 image and
     estimates a susceptibility distortion correction warp, using ANTs symmetric
@@ -126,25 +125,25 @@ def init_syn_sdc_wf(omp_nthreads, bold_pe=None, atlas_threshold=2, name="syn_sdc
             mask of the unwarped input file
 
     """
-
+    omp_nthreads = config.nipype.omp_nthreads
     if bold_pe is None or bold_pe[0] not in ["i", "j"]:
-        LOGGER.warning("Incorrect phase-encoding direction, assuming PA (posterior-to-anterior).")
+        config.loggers.workflow.warning(
+            "Incorrect phase-encoding direction, assuming PA (posterior-to-anterior)."
+        )
         bold_pe = "j"
 
-    workflow = Workflow(name=name)
-    workflow.__desc__ = """\
+    workflow = Workflow(name="syn_sdc_wf")
+    workflow.__desc__ = f"""\
 A deformation field to correct for susceptibility distortions was estimated
 based on *fmriprep*'s *fieldmap-less* approach.
 The deformation field is that resulting from co-registering the b0 reference
 to the same-subject T1w-reference with its intensity inverted [@fieldmapless1;
 @fieldmapless2].
-Registration is performed with `antsRegistration` (ANTs {ants_ver}), and
+Registration is performed with `antsRegistration` (ANTs {ants.Registration().version}), and
 the process regularized by constraining deformation to be nonzero only
 along the phase-encoding direction, and modulated with an average fieldmap
 template [@fieldmapless3].
-""".format(
-        ants_ver=ants.Registration().version or "<ver>"
-    )
+"""
     inputnode = pe.Node(
         niu.IdentityInterface(["bold_ref", "template", "t1_brain", "t1_2_mni_reverse_transform"]),
         name="inputnode",

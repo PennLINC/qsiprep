@@ -21,7 +21,7 @@ LOGGER = logging.getLogger("nipype.interface")
 
 
 def init_steinhardt_order_param_wf(
-    omp_nthreads, available_anatomical_data, name="sop_recon", qsirecon_suffix="", params={}
+    available_anatomical_data, name="sop_recon", qsirecon_suffix="", params={}
 ):
     """Compute Steinhardt order parameters based on ODFs or FODs
 
@@ -56,7 +56,6 @@ def init_steinhardt_order_param_wf(
 
     workflow = Workflow(name=name)
     sop_order = params.get("order", 8)
-    plot_reports = params.pop("plot_reports", True)  # noqa: F841
     desc = """Steinhardt Order Parameter Calculation:
 
 : """

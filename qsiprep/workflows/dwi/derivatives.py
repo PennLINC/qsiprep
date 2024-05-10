@@ -10,6 +10,7 @@ from nipype import logging
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 
+from ... import config
 from ...engine import Workflow
 from ...interfaces import DerivativesDataSink
 
@@ -17,20 +18,10 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger("nipype.workflow")
 
 
-def init_dwi_derivatives_wf(
-    output_prefix,
-    source_file,
-    output_dir,
-    template,
-    write_local_bvecs,
-    hmc_model,
-    shoreline_iters,
-    name="dwi_derivatives_wf",
-):
+def init_dwi_derivatives_wf(source_file) -> Workflow:
     """Set up a battery of datasinks to store derivatives in the right location."""
-    workflow = Workflow(name=name)
-    output_dir = str(output_dir)
-
+    output_dir = str(config.execution.output_dir)
+    workflow = Workflow(name="dwi_derivatives_wf")
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
@@ -52,7 +43,7 @@ def init_dwi_derivatives_wf(
         name="inputnode",
     )
 
-    if hmc_model == "3dSHORE" and shoreline_iters > 1:
+    if config.workflow.hmc_model == "3dSHORE" and config.workflow.shoreline_iters > 1:
         ds_optimization = pe.Node(
             DerivativesDataSink(
                 source_file=source_file, base_directory=output_dir, suffix="hmcOptimization"
@@ -138,7 +129,7 @@ def init_dwi_derivatives_wf(
             source_file=source_file,
             base_directory=output_dir,
             space="T1w",
-            desc=hmc_model,
+            desc=config.workflow.hmc_model,
             suffix="cnr",
             extension=".nii.gz",
             compress=True,
@@ -185,20 +176,20 @@ def init_dwi_derivatives_wf(
         (inputnode, ds_btable_t1, [('btable_t1', 'in_file')]),
     ])  # fmt:skip
     # If requested, write local bvecs
-    if write_local_bvecs:
-        ds_local_bvecs_t1 = pe.Node(
-            DerivativesDataSink(
-                base_directory=output_dir,
-                source_file=source_file,
-                space="T1w",
-                suffix="bvec",
-                compress=True,
-            ),
-            name="ds_local_bvecs_t1",
-            run_without_submitting=True,
-            mem_gb=DEFAULT_MEMORY_MIN_GB,
-        )
-        workflow.connect([
-            (inputnode, ds_local_bvecs_t1, [
-                ('local_bvecs_t1', 'in_file')])])  # fmt:skip
+    # if config.workflow.write_local_bvecs:
+    #     ds_local_bvecs_t1 = pe.Node(
+    #         DerivativesDataSink(
+    #             base_directory=output_dir,
+    #             source_file=source_file,
+    #             space="T1w",
+    #             suffix="bvec",
+    #             compress=True,
+    #         ),
+    #         name="ds_local_bvecs_t1",
+    #         run_without_submitting=True,
+    #         mem_gb=DEFAULT_MEMORY_MIN_GB,
+    #     )
+    #     workflow.connect([
+    #         (inputnode, ds_local_bvecs_t1, [
+    #             ('local_bvecs_t1', 'in_file')])])  # fmt:skip
     return workflow

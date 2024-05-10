@@ -10,6 +10,7 @@ from nipype.interfaces import afni
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 
+from ... import config
 from ...engine import Workflow
 from ...interfaces.anatomical import DiceOverlap
 from ...interfaces.dipy import TensorReconstruction
@@ -25,33 +26,34 @@ from ...interfaces.reports import InteractiveReport
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
-def init_modelfree_qc_wf(omp_nthreads, bvec_convention="DIPY", name="dwi_qc_wf"):
+def init_modelfree_qc_wf(bvec_convention="DIPY", name="dwi_qc_wf"):
     """
     This workflow runs DSI Studio's QC metrics
 
-    **Parameters**
-        omp_nthreads : int
-            maximum number of threads
-        bvec_convention : "DIPY", "FSL" or "auto"
-            What kind of bvecs
-        name : str
-            Name of workflow (default: ``dwi_qc_wf``)
+    Parameters
+    ----------
+    bvec_convention : "DIPY", "FSL" or "auto"
+        What kind of bvecs
+    name : str
+        Name of workflow (default: ``dwi_qc_wf``)
 
-    **Inputs**
-        dwi_file
-            a single 4D dwi series
-        bval_file
-            bval file corresponding to the concatenated dwi_files inputs or dwi_file
-        bvec_file
-            bvec file corresponding to the concatenated dwi_files inputs or dwi_file
+    Inputs
+    ------
+    dwi_file
+        a single 4D dwi series
+    bval_file
+        bval file corresponding to the concatenated dwi_files inputs or dwi_file
+    bvec_file
+        bvec file corresponding to the concatenated dwi_files inputs or dwi_file
 
-    **Outputs**
-
-        qc file
-            DSI Studio's src QC metrics for the input data
+    Outputs
+    -------
+    qc file
+        DSI Studio's src QC metrics for the input data
 
 
     """
+    omp_nthreads = config.nipype.omp_nthreads
     workflow = Workflow(name=name)
     workflow.__desc__ = """\
 """

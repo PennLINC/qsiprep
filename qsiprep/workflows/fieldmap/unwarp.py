@@ -33,12 +33,13 @@ from niworkflows.interfaces.reportlets.registration import (
     ANTSRegistrationRPT,
 )
 
+from ... import config
 from ...interfaces import DerivativesDataSink
 from ...interfaces.fmap import FieldToHz, FieldToRadS
 from ...interfaces.fmap import get_ees as _get_ees
 
 
-def init_sdc_unwarp_wf(omp_nthreads, fmap_demean, debug, name="sdc_unwarp_wf"):
+def init_sdc_unwarp_wf(name="sdc_unwarp_wf"):
     """
     This workflow takes in a displacements fieldmap and calculates the corresponding
     displacements field (in other words, an ANTs-compatible warp file).
@@ -47,43 +48,42 @@ def init_sdc_unwarp_wf(omp_nthreads, fmap_demean, debug, name="sdc_unwarp_wf"):
     The mask is restricted to the field of view of the fieldmap since outside of it corrections
     could not be performed.
 
-
-
     Inputs
-
-        in_reference
-            the reference image
-        in_reference_brain
-            the reference image (skull-stripped)
-        in_mask
-            a brain mask corresponding to ``in_reference``
-        metadata
-            metadata associated to the ``in_reference`` EPI input
-        fmap
-            the fieldmap in Hz
-        fmap_ref
-            the reference (anatomical) image corresponding to ``fmap``
-        fmap_mask
-            a brain mask corresponding to ``fmap``
+    ------
+    in_reference
+        the reference image
+    in_reference_brain
+        the reference image (skull-stripped)
+    in_mask
+        a brain mask corresponding to ``in_reference``
+    metadata
+        metadata associated to the ``in_reference`` EPI input
+    fmap
+        the fieldmap in Hz
+    fmap_ref
+        the reference (anatomical) image corresponding to ``fmap``
+    fmap_mask
+        a brain mask corresponding to ``fmap``
 
 
     Outputs
-
-        out_reference
-            the ``in_reference`` after unwarping
-        out_reference_brain
-            the ``in_reference`` after unwarping and skullstripping
-        out_warp
-            the corresponding :abbr:`DFM (displacements field map)` compatible with
-            ANTs
-        out_jacobian
-            the jacobian of the field (for drop-out alleviation)
-        out_mask
-            mask of the unwarped input file
-        out_hz
-            fieldmap in Hz that can be sent to eddy
+    -------
+    out_reference
+        the ``in_reference`` after unwarping
+    out_reference_brain
+        the ``in_reference`` after unwarping and skullstripping
+    out_warp
+        the corresponding :abbr:`DFM (displacements field map)` compatible with
+        ANTs
+    out_jacobian
+        the jacobian of the field (for drop-out alleviation)
+    out_mask
+        mask of the unwarped input file
+    out_hz
+        fieldmap in Hz that can be sent to eddy
 
     """
+    omp_nthreads = config.nipype.omp_nthreads
     fsl_check = os.environ.get("FSLDIR", False)
     if not fsl_check:
         raise Exception(
@@ -122,7 +122,7 @@ def init_sdc_unwarp_wf(omp_nthreads, fmap_demean, debug, name="sdc_unwarp_wf"):
     # Register the reference of the fieldmap to the reference
     # of the target image (the one that shall be corrected)
     ants_settings = pkgr.resource_filename("qsiprep", "data/fmap-any_registration.json")
-    if debug:
+    if config.execution.sloppy:
         ants_settings = pkgr.resource_filename(
             "qsiprep", "data/fmap-any_registration_testing.json"
         )
@@ -242,7 +242,7 @@ def init_sdc_unwarp_wf(omp_nthreads, fmap_demean, debug, name="sdc_unwarp_wf"):
         (jac_dfm, outputnode, [('jacobian_image', 'out_jacobian')]),
     ])  # fmt:skip
 
-    if fmap_demean:
+    if config.workflow.fmap_demean:
         # Demean within mask
         demean = pe.Node(DemeanImage(), name="demean")
 
@@ -262,7 +262,7 @@ def init_sdc_unwarp_wf(omp_nthreads, fmap_demean, debug, name="sdc_unwarp_wf"):
     return workflow
 
 
-def init_fmap_unwarp_report_wf(name="fmap_unwarp_report_wf", suffix="hmcsdc"):
+def init_fmap_unwarp_report_wf(name="fmap_unwarp_report_wf"):
     """
     This workflow generates and saves a reportlet showing the effect of fieldmap
     unwarping a DWI image.
@@ -274,24 +274,22 @@ def init_fmap_unwarp_report_wf(name="fmap_unwarp_report_wf", suffix="hmcsdc"):
         from qsiprep.workflows.fieldmap.unwarp import init_fmap_unwarp_report_wf
         wf = init_fmap_unwarp_report_wf()
 
-    **Parameters**
+    Parameters
+    ----------
+    name : str, optional
+        Workflow name (default: fmap_unwarp_report_wf)
 
-        name : str, optional
-            Workflow name (default: fmap_unwarp_report_wf)
-        suffix : str, optional
-            Suffix to be appended to this reportlet
-
-    **Inputs**
-
-        in_pre
-            Reference image, before unwarping
-        in_post
-            Reference image, after unwarping
-        in_seg
-            Segmentation of preprocessed structural image, including
-            gray-matter (GM), white-matter (WM) and cerebrospinal fluid (CSF)
-        in_xfm
-            Affine transform from T1 space to b0 space (ITK format)
+    Inputs
+    ------
+    in_pre
+        Reference image, before unwarping
+    in_post
+        Reference image, after unwarping
+    in_seg
+        Segmentation of preprocessed structural image, including
+        gray-matter (GM), white-matter (WM) and cerebrospinal fluid (CSF)
+    in_xfm
+        Affine transform from T1 space to b0 space (ITK format)
 
     """
     from niworkflows.interfaces.fixes import FixHeaderApplyTransforms as ApplyTransforms

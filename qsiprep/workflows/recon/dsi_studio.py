@@ -13,6 +13,7 @@ import logging
 import nipype.pipeline.engine as pe
 from nipype.interfaces import utility as niu
 
+from ... import config
 from ...engine import Workflow
 from ...interfaces.bids import ReconDerivativesDataSink
 from ...interfaces.converters import DSIStudioTrkToTck
@@ -36,7 +37,7 @@ LOGGER = logging.getLogger("nipype.interface")
 
 
 def init_dsi_studio_recon_wf(
-    omp_nthreads, available_anatomical_data, name="dsi_studio_recon", qsirecon_suffix="", params={}
+    available_anatomical_data, name="dsi_studio_recon", qsirecon_suffix="", params={}
 ):
     """Reconstructs diffusion data using DSI Studio.
 
@@ -66,7 +67,8 @@ def init_dsi_studio_recon_wf(
     )
     workflow = Workflow(name=name)
     outputnode.inputs.recon_scalars = []
-    plot_reports = params.pop("plot_reports", True)
+    plot_reports = not config.execution.skip_odf_reports
+    omp_nthreads = config.nipype.omp_nthreads
     desc = """DSI Studio Reconstruction
 
 : """
@@ -139,7 +141,6 @@ distance of %02f in DSI Studio (version %s). """ % (
 
 
 def init_dsi_studio_tractography_wf(
-    omp_nthreads,
     available_anatomical_data,
     name="dsi_studio_tractography",
     params={},
@@ -209,7 +210,7 @@ def init_dsi_studio_tractography_wf(
         niu.IdentityInterface(fields=["trk_file", "fibgz", "recon_scalars"]), name="outputnode"
     )
     outputnode.inputs.recon_scalars = []
-    plot_reports = params.pop("plot_reports", True)  # noqa: F841
+    omp_nthreads = config.nipype.omp_nthreads
     workflow = Workflow(name=name)
     desc = (
         "DSI Studio Tractography\n\n: Tractography was run in DSI Studio "
@@ -242,7 +243,6 @@ def init_dsi_studio_tractography_wf(
 
 
 def init_dsi_studio_autotrack_wf(
-    omp_nthreads,
     available_anatomical_data,
     params={},
     qsirecon_suffix="",
@@ -305,7 +305,7 @@ def init_dsi_studio_autotrack_wf(
         "DSI Studio (version %s) and bundle shape statistics were calculated [@autotrack]. "
         % DSI_STUDIO_VERSION
     )
-    plot_reports = params.pop("plot_reports", True)  # noqa: F841
+    omp_nthreads = config.nipype.omp_nthreads
     bundle_names = _get_dsi_studio_bundles(params.get("track_id", ""))
     bundle_desc = (
         "AutoTrack attempted to reconstruct the following bundles:\n  * "
@@ -373,7 +373,6 @@ def init_dsi_studio_autotrack_wf(
 
 
 def init_dsi_studio_connectivity_wf(
-    omp_nthreads,
     available_anatomical_data,
     name="dsi_studio_connectivity",
     params={},
@@ -445,7 +444,9 @@ def init_dsi_studio_connectivity_wf(
         niu.IdentityInterface(fields=["matfile", "recon_scalars"]), name="outputnode"
     )
     outputnode.inputs.recon_scalars = []
-    plot_reports = params.pop("plot_reports", True)
+    omp_nthreads = config.nipype.omp_nthreads
+    plot_reports = not config.execution.skip_odf_reports
+
     workflow = pe.Workflow(name=name)
     calc_connectivity = pe.Node(
         DSIStudioAtlasGraph(num_threads=omp_nthreads, **params),
@@ -488,7 +489,6 @@ def init_dsi_studio_connectivity_wf(
 
 
 def init_dsi_studio_export_wf(
-    omp_nthreads,
     available_anatomical_data,
     name="dsi_studio_export",
     params={},

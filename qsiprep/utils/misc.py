@@ -5,6 +5,16 @@
 """Miscellaneous utility functions."""
 
 
+def check_deps(workflow):
+    from nipype.utils.filemanip import which
+
+    return sorted(
+        (node.interface.__class__.__name__, node.interface._cmd)
+        for node in workflow._get_all_nodes()
+        if (hasattr(node.interface, "_cmd") and which(node.interface._cmd.split()[0]) is None)
+    )
+
+
 def fix_multi_T1w_source_name(in_files):
     """Make up a generic source name when there are multiple T1s.
 
