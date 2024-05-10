@@ -18,7 +18,6 @@ from .dsi_studio import (
     init_dsi_studio_recon_wf,
     init_dsi_studio_tractography_wf,
 )
-from .dynamics import init_controllability_wf
 from .mrtrix import (
     init_global_tractography_wf,
     init_mrtrix_connectivity_wf,

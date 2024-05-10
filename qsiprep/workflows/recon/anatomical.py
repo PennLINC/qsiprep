@@ -88,13 +88,9 @@ def init_highres_recon_anatomical_wf(
     recon_input_dir = config.execution.recon_input
     freesurfer_dir = config.execution.fs_subjects_dir
     if pipeline_source == "qsiprep":
-        anat_ingress_node, status = gather_qsiprep_anatomical_data(
-            subject_id, recon_input_dir, name="gather_qsiprep_anatomical_wf"
-        )
+        anat_ingress_node, status = gather_qsiprep_anatomical_data(subject_id)
     elif pipeline_source == "ukb":
-        anat_ingress_node, status = gather_ukb_anatomical_data(
-            subject_id, recon_input_dir, name="gather_ukb_anatomical_wf", infant_mode=False
-        )
+        anat_ingress_node, status = gather_ukb_anatomical_data(subject_id)
     else:
         raise Exception(f"Unknown pipeline source '{pipeline_source}'")
     anat_ingress_node.inputs.infant_mode = config.workflow.infant
@@ -446,6 +442,7 @@ def init_dwi_recon_anatomical_workflow(
     has_qsiprep_t1w_transforms,
     has_freesurfer,
     extras_to_make,
+    name,
     prefer_dwi_mask=False,
 ):
     """Ensure that anatomical data is available for the reconstruction workflows.
@@ -493,7 +490,7 @@ def init_dwi_recon_anatomical_workflow(
     outputnode = pe.Node(
         niu.IdentityInterface(fields=recon_workflow_input_fields), name="outputnode"
     )
-    workflow = Workflow(name="qsirecon_anat_wf")
+    workflow = Workflow(name=name)
     skull_strip_method = "antsBrainExtraction"
     desc = ""
 
@@ -504,7 +501,6 @@ def init_dwi_recon_anatomical_workflow(
             "has_qsiprep_t1w": has_qsiprep_t1w,
             "has_qsiprep_t1w_transforms": has_qsiprep_t1w_transforms,
         }
-
 
     reference_grid_wf = init_output_grid_wf()
     workflow.connect([

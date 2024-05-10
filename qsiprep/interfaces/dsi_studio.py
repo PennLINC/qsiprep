@@ -305,7 +305,7 @@ class DSIStudioExport(CommandLine):
         results = list(cwd.glob("*.nii.gz"))
         for expected in to_expect:
             matches = [
-                fname.absolute().name
+                fname.absolute()
                 for fname in results
                 if fname.name.endswith("." + expected + ".nii.gz")
             ]

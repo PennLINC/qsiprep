@@ -763,8 +763,8 @@ def parse_args(args=None, namespace=None):
     if config.execution.qsiprep_dir is None:
         config.execution.qsiprep_dir = output_dir / "qsiprep"
 
-    if config.execution.qsiprep_dir is None:
-        config.execution.qsiprep_dir = output_dir / "qsirecon"
+    if config.execution.qsirecon_dir is None:
+        config.execution.qsirecon_dir = output_dir / "qsirecon"
 
     if config.execution.reportlets_dir is None:
         config.execution.reportlets_dir = work_dir / "reportlets"
@@ -793,17 +793,20 @@ def parse_args(args=None, namespace=None):
 
     # Validate inputs
     if not opts.skip_bids_validation:
-        from ..utils.bids import validate_input_dir
+        if opts.recon_input is not None:
+            build_log.info("Skipping BIDS validation because inputs are BIDS derivatives")
+        else:
+            from ..utils.bids import validate_input_dir
 
-        build_log.info(
-            "Making sure the input data is BIDS compliant (warnings can be ignored in most "
-            "cases)."
-        )
-        validate_input_dir(
-            config.environment.exec_env,
-            opts.bids_dir,
-            opts.participant_label,
-        )
+            build_log.info(
+                "Making sure the input data is BIDS compliant (warnings can be ignored in most "
+                "cases)."
+            )
+            validate_input_dir(
+                config.environment.exec_env,
+                opts.bids_dir,
+                opts.participant_label,
+            )
 
     # Setup directories
     config.execution.log_dir = config.execution.qsiprep_dir / "logs"

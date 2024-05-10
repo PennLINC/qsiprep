@@ -77,7 +77,7 @@ def main():
                 retval["return_code"] = p.exitcode
 
     else:
-        retval = build_workflow(str(config_file), {})
+        retval = build_workflow(str(config_file), "auto", {})
 
     exitcode = retval.get("return_code", 0)
     qsiprep_wf = retval.get("workflow", None)
@@ -229,7 +229,7 @@ def main():
                 retval["return_code"] = p.exitcode
 
     else:
-        retval = build_workflow(str(config_file), {})
+        retval = build_workflow(str(config_file), "QSIRecon", {})
 
     exitcode = retval.get("return_code", 0)
     qsirecon_wf = retval.get("workflow", None)

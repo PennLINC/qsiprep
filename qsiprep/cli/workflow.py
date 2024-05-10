@@ -34,22 +34,21 @@ a hard-limited memory-scope.
 """
 from pathlib import Path
 
+from pkg_resources import resource_filename as pkgrf
+
 
 def build_workflow(config_file, exec_mode, retval):
     """Create the Nipype Workflow that supports the whole execution graph."""
-
-    from pkg_resources import resource_filename as pkgrf
 
     from niworkflows.utils.bids import collect_participants
 
     # from niworkflows.utils.misc import check_valid_fs_license
     # from ..utils.bids import check_pipeline_version
-
     from .. import config
     from ..utils.misc import check_deps
+    from ..viz.reports import generate_reports
     from ..workflows.base import init_qsiprep_wf
     from ..workflows.recon import init_qsirecon_wf
-    from ..viz.reports import generate_reports
 
     config.load(config_file)
     build_log = config.loggers.workflow
@@ -108,10 +107,10 @@ def build_workflow(config_file, exec_mode, retval):
     )
 
     # Called with reports only
-    if config.execution.reports_only:
+    if config.execution.reports_only and exec_mode == "QSIPrep":
         build_log.log(25, "Running --reports-only on participants %s", ", ".join(subject_list))
         session_list = (
-            config.execution.bids_filters.get("bold", {}).get("session")
+            config.execution.bids_filters.get("dwi", {}).get("session")
             if config.execution.bids_filters
             else None
         )
@@ -139,11 +138,7 @@ def build_workflow(config_file, exec_mode, retval):
         f"Run identifier: {config.execution.run_uuid}.",
     ]
 
-    # if config.execution.derivatives:
-    #     init_msg += [
-    #        f"Searching for derivatives: {list(config.execution.derivatives.values())}."]
-
-    if config.execution.fs_subjects_dir:
+    if config.execution.fs_subjects_dir and exec_mode == "QSIRecon":
         init_msg += [f"Pre-run FreeSurfer's SUBJECTS_DIR: {config.execution.fs_subjects_dir}."]
 
     build_log.log(25, f"\n{' ' * 11}* ".join(init_msg))
@@ -182,69 +177,6 @@ license file at several paths, in this order: 1) command line argument ``--fs-li
         len(retval["workflow"]._get_all_nodes()),
     )
     retval["return_code"] = 0
-    return retval
-
-
-def build_recon_workflow():
-    """
-    Create the Nipype Workflow that supports the whole execution
-    graph, given the inputs.
-
-    All the checks and the construction of the workflow are done
-    inside this function that has pickleable inputs and output
-    dictionary (``retval``) to allow isolation using a
-    ``multiprocessing.Process`` that allows qsiprep to enforce
-    a hard-limited memory-scope.
-
-    """
-
-    from .. import config
-    from ..utils.misc import check_deps
-    from ..utils.ingress import collect_ukb_participants, create_ukb_layout
-
-
-    logs_path = Path(output_dir) / "qsirecon" / "logs"
-    boilerplate = retval["workflow"].visit_desc()
-    (logs_path / "CITATION.md").write_text(boilerplate)
-    logger.log(
-        25,
-        "Works derived from this qsiprep execution should "
-        "include the following boilerplate:\n\n%s",
-        boilerplate,
-    )
-
-    # Generate HTML file resolving citations
-    cmd = [
-        "pandoc",
-        "-s",
-        "--bibliography",
-        pkgrf("qsiprep", "data/boilerplate.bib"),
-        "--filter",
-        "pandoc-citeproc",
-        str(logs_path / "CITATION.md"),
-        "-o",
-        str(logs_path / "CITATION.html"),
-    ]
-    try:
-        check_call(cmd, timeout=10)
-    except (FileNotFoundError, CalledProcessError, TimeoutExpired):
-        logger.warning("Could not generate CITATION.html file:\n%s", " ".join(cmd))
-
-    # Generate LaTex file resolving citations
-    cmd = [
-        "pandoc",
-        "-s",
-        "--bibliography",
-        pkgrf("qsiprep", "data/boilerplate.bib"),
-        "--natbib",
-        str(logs_path / "CITATION.md"),
-        "-o",
-        str(logs_path / "CITATION.tex"),
-    ]
-    try:
-        check_call(cmd, timeout=10)
-    except (FileNotFoundError, CalledProcessError, TimeoutExpired):
-        logger.warning("Could not generate CITATION.tex file:\n%s", " ".join(cmd))
     return retval
 
 

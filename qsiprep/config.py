@@ -433,6 +433,8 @@ class execution(_Config):
     """List of participant identifiers that are to be preprocessed."""
     qsiprep_dir = None
     """Root of QSIPrep BIDS Derivatives dataset. Depends on output_layout."""
+    qsirecon_dir = None
+    """Root of QSIRecon BIDS Derivatives dataset."""
     recon_input = None
     """Directory containing QSIPrep derivatives to run through recon workflows."""
     recon_only = False
@@ -468,6 +470,7 @@ class execution(_Config):
         "log_dir",
         "output_dir",
         "qsiprep_dir",
+        "qsirecon_dir",
         "recon_input",
         "reportlets_dir",
         "templateflow_home",

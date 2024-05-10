@@ -12,7 +12,6 @@ qsiprep base reconstruction workflows
 """
 
 import json
-import os
 import os.path as op
 from copy import deepcopy
 from glob import glob
@@ -28,26 +27,11 @@ from pkg_resources import resource_filename as pkgrf
 
 from ... import config
 from ...engine import Workflow
-from ...interfaces.ingress import QsiReconDWIIngress, UKBioBankDWIIngress
-from ...interfaces.interchange import (
-    ReconWorkflowInputs,
-    anatomical_workflow_outputs,
-    qsiprep_output_names,
-    recon_workflow_anatomical_input_fields,
-    recon_workflow_input_fields,
-)
-from ...utils.ingress import create_ukb_layout
-from ...utils.sloppy_recon import make_sloppy
-from .anatomical import (
-    init_dwi_recon_anatomical_workflow,
-    init_highres_recon_anatomical_wf,
-)
-from .build_workflow import init_dwi_recon_workflow
 
 
 def init_qsirecon_wf():
     """
-    This workflow organizes the execution of qsiprep, with a sub-workflow for
+    This workflow organizes the execution of qsirecon, with a sub-workflow for
     each subject.
 
     .. workflow::
@@ -55,7 +39,7 @@ def init_qsirecon_wf():
         :simple_form: yes
 
         from qsiprep.workflows.recon.base import init_qsirecon_wf
-        wf = init_qsirecon_wf(subject_list=['test'])
+        wf = init_qsirecon_wf()
 
 
     Parameters
@@ -66,47 +50,45 @@ def init_qsirecon_wf():
     qsiprep_wf = Workflow(name=f"qsirecon_{ver.major}_{ver.minor}_wf")
     qsiprep_wf.base_dir = config.execution.work_dir
 
-    # There is not necessarily a BIDS layout going into the recon workflow
-    if opts.recon_input_pipeline == "qsiprep":
-        _db_path = opts.bids_database_dir or (work_dir / run_uuid / "bids_db")
-        _db_path.mkdir(exist_ok=True, parents=True)
-        # First check that bids_dir looks like a BIDS folder
-        layout = BIDSLayout(
-            str(bids_dir),
-            validate=False,
-            database_path=_db_path,
-            reset_database=opts.bids_database_dir is None,
-            ignore=("code", "stimuli", "sourcedata", "models", re.compile(r"^\.")),
-        )
-        subject_list = collect_participants(layout, participant_label=opts.participant_label)
-    elif opts.recon_input_pipeline == "ukb":
-        ukb_layout = create_ukb_layout(opts.recon_input)
-        subject_list = collect_ukb_participants(
-            ukb_layout, participant_label=opts.participant_label
-        )
-    else:
+    if config.workflow.recon_input_pipeline not in ("qsiprep", "ukb"):
         raise NotImplementedError(
-            f"{opts.recon_input_pipeline} is not supported as recon-input yet."
+            f"{config.workflow.recon_input_pipeline} is not supported as recon-input yet."
         )
 
-    for subject_id in subject_list:
-        single_subject_wf = init_single_subject_wf(
-            subject_id=subject_id,
-            name="single_subject_" + subject_id + "_recon_wf",
+    if config.workflow.recon_input_pipeline == "qsiprep":
+        # This should work for --recon-input as long as the same dataset is in bids_dir
+        # or if the call is doing preproc+recon
+        to_recon_list = config.execution.participant_label
+    elif config.workflow.recon_input_pipeline == "ukb":
+        from ...utils.ingress import collect_ukb_participants, create_ukb_layout
+
+        # The ukb input will always be specified as the bids input - we can't preproc it first
+        ukb_layout = create_ukb_layout(config.execution.bids_dir)
+        to_recon_list = collect_ukb_participants(
+            ukb_layout, participant_label=config.execution.participant_label
         )
 
-        single_subject_wf.config["execution"]["crashdump_dir"] = os.path.join(
-            output_dir, "qsirecon", "sub-" + subject_id, "log", run_uuid
+    for subject_id in to_recon_list:
+        single_subject_wf = init_single_subject_recon_wf(subject_id=subject_id)
+
+        single_subject_wf.config["execution"]["crashdump_dir"] = str(
+            config.execution.qsirecon_dir / f"sub-{subject_id}" / "log" / config.execution.run_uuid
         )
         for node in single_subject_wf._get_all_nodes():
             node.config = deepcopy(single_subject_wf.config)
-
         qsiprep_wf.add_nodes([single_subject_wf])
+
+        # Dump a copy of the config file into the log directory
+        log_dir = (
+            config.execution.qsirecon_dir / f"sub-{subject_id}" / "log" / config.execution.run_uuid
+        )
+        log_dir.mkdir(exist_ok=True, parents=True)
+        config.to_filename(log_dir / "qsiprep.toml")
 
     return qsiprep_wf
 
 
-def init_single_subject_wf(subject_id):
+def init_single_subject_recon_wf(subject_id):
     """
     This workflow organizes the reconstruction pipeline for a single subject.
     Reconstruction is performed using a separate workflow for each dwi series.
@@ -114,21 +96,25 @@ def init_single_subject_wf(subject_id):
     Parameters
 
         subject_id : str
-            List of subject labels
+            Single subject label
 
     """
-    name = f"single_subject_{subject_id}_recon_wf"
-    if name in ("single_subject_wf", "single_subject_test_recon_wf"):
-        # a fake spec
-        spec = {"name": "fake", "atlases": [], "space": "T1w", "anatomical": [], "nodes": []}
-        space = spec["space"]
-        # for documentation purposes
-        dwi_recon_inputs = [{"bids_dwi_file": "/made/up/outputs/sub-X_dwi.nii.gz"}]
-    else:
-        # TODO: Change this to handle multiple input types
-        spec = _load_recon_spec()
-        space = spec["space"]
-        dwi_recon_inputs = _get_iterable_dwi_inputs(subject_id, space)
+    from .build_workflow import init_dwi_recon_workflow
+    from ...interfaces.ingress import QsiReconDWIIngress, UKBioBankDWIIngress
+    from ...interfaces.interchange import (
+        ReconWorkflowInputs,
+        anatomical_workflow_outputs,
+        qsiprep_output_names,
+        recon_workflow_anatomical_input_fields,
+        recon_workflow_input_fields,
+    )
+    from .anatomical import (
+        init_dwi_recon_anatomical_workflow,
+        init_highres_recon_anatomical_wf,
+    )
+
+    spec = _load_recon_spec()
+    dwi_recon_inputs = _get_iterable_dwi_inputs(subject_id)
 
     workflow = Workflow(name=f"sub-{subject_id}_{spec['name']}")
     workflow.__desc__ = f"""
@@ -168,7 +154,6 @@ to workflows in *qsiprep*'s documentation]\
             subject_id=subject_id,
             extras_to_make=spec.get("anatomical", []),
             needs_t1w_transform=needs_t1w_transform,
-            name="anat_ingress_wf",
         )
 
         # Connect the anatomical-only inputs. NOTE this is not to the inputnode!
@@ -289,6 +274,8 @@ def _get_wf_name(dwi_file):
 
 
 def _load_recon_spec():
+    from ...utils.sloppy_recon import make_sloppy
+
     spec_name = config.workflow.recon_spec
     prepackaged_dir = pkgrf("qsiprep", "data/pipelines")
     prepackaged = [op.split(fname)[1][:-5] for fname in glob(prepackaged_dir + "/*.json")]
@@ -309,7 +296,7 @@ def _load_recon_spec():
     return spec
 
 
-def _get_iterable_dwi_inputs(recon_input_directory, subject_id, pipeline_source, space):
+def _get_iterable_dwi_inputs(subject_id):
     """Return inputs for the recon ingressors depending on the pipeline source.
 
     If qsiprep was used as the pipeline source, the iterable is going to be the
@@ -320,24 +307,25 @@ def _get_iterable_dwi_inputs(recon_input_directory, subject_id, pipeline_source,
     the other files needed.
 
     """
+    from ...utils.ingress import create_ukb_layout
 
-    if pipeline_source == "qsiprep":
+    recon_input_directory = config.execution.recon_input
+    if config.workflow.recon_input_pipeline == "qsiprep":
         # If recon_input is specified without qsiprep, check if we can find the subject dir
-        subject_dir = "sub-" + subject_id
-        if not op.exists(op.join(recon_input_directory, subject_dir)):
-            qp_recon_input = op.join(recon_input_directory, "qsiprep")
+        if not (recon_input_directory / f"sub-{subject_id}").exists():
             config.loggers.workflow.info(
                 "%s not in %s, trying recon_input=%s",
-                subject_dir,
+                subject_id,
                 recon_input_directory,
-                qp_recon_input,
+                recon_input_directory / "qsiprep",
             )
-            if not op.exists(op.join(qp_recon_input, subject_dir)):
+
+            recon_input_directory = recon_input_directory / "qsiprep"
+            if not (recon_input_directory / f"sub-{subject_id}").exists():
                 raise Exception(
                     "Unable to find subject directory in %s or %s"
-                    % (recon_input_directory, qp_recon_input)
+                    % (config.execution.recon_input, recon_input_directory)
                 )
-            recon_input_directory = qp_recon_input
 
         layout = BIDSLayout(recon_input_directory, validate=False, absolute_paths=True)
         # Get all the output files that are in this space
@@ -346,12 +334,12 @@ def _get_iterable_dwi_inputs(recon_input_directory, subject_id, pipeline_source,
             for f in layout.get(
                 suffix="dwi", subject=subject_id, absolute_paths=True, extension=["nii", "nii.gz"]
             )
-            if "space-" + space in f.filename
+            if "space-T1w" in f.filename
         ]
         config.loggers.workflow.info("found %s in %s", dwi_files, recon_input_directory)
         return [{"bids_dwi_file": dwi_file} for dwi_file in dwi_files]
 
-    if pipeline_source == "ukb":
-        return create_ukb_layout(ukb_dir=recon_input_directory, participant_label=subject_id)
+    if config.workflow.recon_input_pipeline == "ukb":
+        return create_ukb_layout(ukb_dir=config.execution.bids_dir, participant_label=subject_id)
 
-    raise Exception("Unknown pipeline " + pipeline_source)
+    raise Exception("Unknown pipeline " + config.workflow.recon_input_pipeline)
