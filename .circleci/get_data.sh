@@ -402,10 +402,10 @@ get_bids_data() {
     # Get Multi Shell outputs
     if [[ ${DS} = multishell_output ]]; then
       ${WGET} \
-        -O multishell_output.tar.gz \
-        "https://upenn.box.com/shared/static/nwxdn4ale8dkebvpjmxbx99dqjzwvlmh.gz"
-      tar xvfz multishell_output.tar.gz -C ${WORKDIR}/data/
-      rm multishell_output.tar.gz
+        -O multishell_output.tar.xz \
+        "https://upenn.box.com/shared/static/hr7xnxicbx9iqndv1yl35bhtd61fpalp.xz"
+      tar xvfJ multishell_output.tar.xz -C ${WORKDIR}/data/
+      rm multishell_output.tar.xz
     fi
 
     # Get Single Shell outputs

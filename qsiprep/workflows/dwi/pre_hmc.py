@@ -118,8 +118,6 @@ def init_dwi_pre_hmc_wf(
         plus_source_file = get_source_file(plus_files, suffix="_PEplus")
         merge_plus = init_merge_and_denoise_wf(
             raw_dwi_files=plus_files,
-            dwi_denoise_window=dwi_denoise_window,
-            dwi_no_biascorr=dwi_no_biascorr,
             orientation=orientation,
             source_file=plus_source_file,
             phase_id=f"{pe_axis}+ phase-encoding direction",
@@ -131,8 +129,6 @@ def init_dwi_pre_hmc_wf(
         minus_source_file = get_source_file(minus_files, suffix="_PEminus")
         merge_minus = init_merge_and_denoise_wf(
             raw_dwi_files=minus_files,
-            dwi_denoise_window=dwi_denoise_window,
-            dwi_no_biascorr=dwi_no_biascorr,
             orientation=orientation,
             source_file=minus_source_file,
             phase_id=f"{pe_axis}- phase-encoding direction",
