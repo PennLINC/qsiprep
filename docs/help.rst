@@ -8,3 +8,6 @@ your question to
 and the "Software Support" category.
 
 Previous questions about QSIprep are available at https://neurostars.org/tag/qsiprep/.
+
+If you have a bug you're like to report, or a new feature you'd like to request,
+please open an issue on the QSIprep GitHub page at https://github.com/pennlinc/qsiprep/issues.
