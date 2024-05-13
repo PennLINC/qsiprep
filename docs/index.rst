@@ -20,7 +20,7 @@ Contents
    contributors
    citing
    changes
-   api/index.rst
+   api
    comparisons
    help
    license

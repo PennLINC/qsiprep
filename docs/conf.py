@@ -44,23 +44,16 @@ needs_sphinx = "4.2.0"
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    # "matplotlib.sphinxext.plot_directive",
     "nbsphinx",
     "nipype.sphinxext.apidoc",
-    # "nipype.sphinxext.documenter",
     "nipype.sphinxext.plot_workflow",
     "recommonmark",
     "sphinx.ext.autodoc",
-    "sphinx.ext.autosectionlabel",
-    "sphinx.ext.autosummary",  # standard
     "sphinx.ext.coverage",
     "sphinx.ext.doctest",
-    # "sphinx.ext.graphviz",
-    # "sphinx.ext.inheritance_diagram",
     "sphinx.ext.intersphinx",
     "sphinx.ext.linkcode",
     "sphinx.ext.mathjax",
-    # "sphinx.ext.todo",
     "sphinx_markdown_tables",
     "sphinxarg.ext",  # argparse extension
     "sphinxcontrib.apidoc",
@@ -69,11 +62,12 @@ extensions = [
 
 # Mock modules in autodoc:
 autodoc_mock_imports = [
-    "numpy",
     "matplotlib",
-    "pandas",
     "nilearn",
+    "numpy",
+    "pandas",
     "seaborn",
+    "pygraphviz",
 ]
 
 # NOTE: Not in qsiprep
