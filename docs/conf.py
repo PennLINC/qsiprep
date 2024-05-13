@@ -66,8 +66,8 @@ autodoc_mock_imports = [
     "nilearn",
     "numpy",
     "pandas",
-    "seaborn",
     "pygraphviz",
+    "seaborn",
 ]
 
 # NOTE: Not in qsiprep
