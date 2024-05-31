@@ -83,7 +83,6 @@ def init_anat_preproc_wf(template, native_template, debug, dwi_only,
                                   nonlinear_register_to_template=True,
                                   longitudinal=False,
                                   debug=False,
-                                  native_reference=None,
                                   num_anat_images=1)
 
     **Parameters**
@@ -113,9 +112,6 @@ def init_anat_preproc_wf(template, native_template, debug, dwi_only,
             Directory in which to save reportlets
         output_dir : str
             Directory in which to save derivatives
-        native_reference : str or None
-            Image containing the reference for AC-PC alignment. By default is
-            just the template image.
         name : str, optional
             Workflow name (default: anat_preproc_wf)
 
