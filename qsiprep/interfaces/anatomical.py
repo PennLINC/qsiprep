@@ -481,7 +481,7 @@ class GetTemplate(SimpleInterface):
             if native_template.exists():
                 self._results["native_template_file"] = str(
                     native_template.absolute())
-                self._results["native_template_brain_file"] = _get_corresponding_mask(
+                self._results["native_template_mask_file"] = _get_corresponding_mask(
                     self._results["native_template_file"])
 
         return runtime
