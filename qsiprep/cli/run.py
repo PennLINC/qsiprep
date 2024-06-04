@@ -318,6 +318,7 @@ def main():
         errno = 0
     finally:
 
+        from ..workflows.recon import _load_recon_spec
         from ..viz.reports import generate_reports
 
         # Generate reports phase
@@ -325,16 +326,27 @@ def main():
         #     config.execution.get().get('bids_filters', {}).get('dwi', {}).get('session')
         # )
 
-        failed_reports = generate_reports(
-            config.execution.participant_label,
-            # session_list=session_list,
-        )
-        write_derivative_description(
-            config.execution.bids_dir,
-            config.execution.qsiprep_dir,
-            # dataset_links=config.execution.dataset_links,
-        )
-        write_bidsignore(config.execution.qsirecon)
+        workflow_spec = _load_recon_spec()
+        # Compile list of output folders
+        # TODO: Retain QSIRecon pipeline names in the config object
+        qsirecon_suffixes = []
+        for node_spec in workflow_spec["nodes"]:
+            qsirecon_suffix = node_spec.get("qsirecon_suffix", None)
+            qsirecon_suffixes += [qsirecon_suffix] if qsirecon_suffix else []
 
-        if failed_reports:
-            print(failed_reports)
+        qsirecon_suffixes = sorted(list(set(qsirecon_suffixes)))
+        for qsirecon_suffix in qsirecon_suffixes:
+            failed_reports = generate_reports(
+                config.execution.participant_label,
+                pipeline_mode=f'qsirecon-{qsirecon_suffix}',
+            )
+
+            write_derivative_description(
+                config.execution.bids_dir,
+                config.execution.qsiprep_dir / f'qsirecon-{qsirecon_suffix}',
+                # dataset_links=config.execution.dataset_links,
+            )
+            write_bidsignore(config.execution.qsirecon / f'qsirecon-{qsirecon_suffix}')
+
+            if failed_reports:
+                print(failed_reports)
