@@ -342,4 +342,4 @@ def _run_and_generate(test_name, parameters, test_main=False):
         )
 
     output_list_file = os.path.join(get_test_data_path(), f"{test_name}_outputs.txt")
-    check_generated_files(config.execution.qsiprep_dir, output_list_file)
+    check_generated_files(config.execution.output_dir, output_list_file)
