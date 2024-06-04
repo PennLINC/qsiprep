@@ -14,6 +14,7 @@ your dataset with the free, online `BIDS Validator
 The exact command to run ``qsiprep`` depends on the Installation_ method.
 The common parts of the command are similar to the `BIDS-Apps
 <https://github.com/BIDS-Apps>`_ definition.
+
 Example: ::
 
     qsiprep data/bids_root/ out/ participant -w work/
@@ -23,7 +24,7 @@ Command-Line Arguments
 ======================
 
 .. argparse::
-   :ref: qsiprep.cli.run.get_parser
+   :ref: qsiprep.cli.parser._build_parser
    :prog: qsiprep
    :nodefault:
    :nodefaultconst:
@@ -72,12 +73,3 @@ CUDA Support
 As of version 0.6.7 CUDA version 9.1 is supported in the QSIPrep container! To run locally
 using docker you will need the nvidia container runtime installed for Docker version 19.0.3
 or higher. Singularity images will run with CUDA 9.1 with the ``-nv`` flag.
-
-
-Support and communication
-=========================
-
-The documentation of this project is found here: http://qsiprep.readthedocs.org/en/latest/.
-
-All bugs, concerns and enhancement requests for this software can be submitted here:
-https://github.com/pennbbl/qsiprep/issues.
