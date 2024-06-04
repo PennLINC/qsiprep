@@ -119,9 +119,6 @@ further improvements of HCP Pipelines [@hcppipelines].
     # rsec2hz (divide by 2pi)
 
     if phasetype == "phasediff":
-        # Read phasediff echo times
-        meta = pe.Node(ReadSidecarJSON(), name="meta", mem_gb=0.01)
-
         # phase diff -> radians
         pha2rads = pe.Node(niu.Function(function=siemens2rads), name="pha2rads")
         # Read phasediff echo times
