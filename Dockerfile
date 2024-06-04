@@ -5,13 +5,11 @@ RUN pip install build
 RUN apt-get update && \
     apt-get install -y --no-install-recommends git
 COPY . /src/qsiprep
-RUN python -m build /src/qsiprep
 
 FROM pennbbl/qsiprep_build:24.4.29
 
-# Install qsiprep wheel
-COPY --from=wheelstage /src/qsiprep/dist/*.whl .
-RUN pip install --no-cache-dir $( ls *.whl )
+# Install qsiprep
+RUN pip install --no-cache-dir "/src/qsiprep[all]"
 
 # Precaching fonts, set 'Agg' as default backend for matplotlib
 RUN python -c "from matplotlib import font_manager" && \

@@ -70,7 +70,7 @@ def run_tests(test_regex, test_mark):
     run_str = "docker run --rm -ti "
     run_str += f"-v {local_patch}:{mounted_code} "
     run_str += "--entrypoint pytest "
-    run_str += "pennlinc/qsiprep:unstable "
+    run_str += "pennbbl/qsiprep:unstable "
     run_str += (
         f"{mounted_code}/qsiprep "
         f"--data_dir={mounted_code}/qsiprep/tests/test_data "
