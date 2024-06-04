@@ -6,7 +6,6 @@ from .bids import (
     BIDSInfo,
     DerivativesDataSink,
     DerivativesMaybeDataSink,
-    ReadSidecarJSON,
 )
 from .confounds import DMRISummary, GatherConfounds
 from .fmap import FieldToHz, FieldToRadS, Phasediff2Fieldmap, Phases2Fieldmap
