@@ -4,11 +4,11 @@ FROM python:slim AS wheelstage
 RUN pip install build
 RUN apt-get update && \
     apt-get install -y --no-install-recommends git
-COPY . /src/qsiprep
 
 FROM pennbbl/qsiprep_build:24.4.29
 
 # Install qsiprep
+COPY . /src/qsiprep
 RUN pip install --no-cache-dir "/src/qsiprep[all]"
 
 # Precaching fonts, set 'Agg' as default backend for matplotlib

@@ -115,7 +115,7 @@ def test_dsdti_fmap(data_dir, output_dir, working_dir):
     TEST_NAME = "dsdti_fmap"
 
     dataset_dir = download_test_data("DSDTI_fmap", data_dir)
-    out_dir = os.path.join(output_dir, TEST_NAME, "qsiprep")
+    out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
 
     parameters = [
@@ -153,7 +153,7 @@ def test_dscsdsi_fmap(data_dir, output_dir, working_dir):
     TEST_NAME = "dscsdsi_fmap"
 
     dataset_dir = download_test_data("DSCSDSI_fmap", data_dir)
-    out_dir = os.path.join(output_dir, TEST_NAME, "qsiprep")
+    out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
 
     parameters = [
@@ -190,7 +190,9 @@ def test_amico_noddi(data_dir, output_dir, working_dir):
     TEST_NAME = "amico_noddi"
 
     dataset_dir = download_test_data("singleshell_output", data_dir)
-    out_dir = os.path.join(output_dir, TEST_NAME, "qsiprep")
+    # XXX: Having to modify dataset_dirs is suboptimal.
+    dataset_dir = os.path.join(dataset_dir, "qsiprep")
+    out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
 
     parameters = [
@@ -202,15 +204,17 @@ def test_amico_noddi(data_dir, output_dir, working_dir):
         "--sloppy",
         "--recon-spec=amico_noddi",
         "--recon-only",
+        "--output-resolution=5",
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=False)
+    _run_and_generate(TEST_NAME, parameters, test_main=True)
 
 
 def _run_and_generate(test_name, parameters, test_main=False):
     from qsiprep import config
 
-    parameters.append("--clean-workdir")
+    # TODO: Add this param
+    # parameters.append("--clean-workdir")
     parameters.append("--stop-on-first-crash")
     parameters.append("--notrack")
     parameters.append("-vv")
@@ -229,7 +233,7 @@ def _run_and_generate(test_name, parameters, test_main=False):
         config.loggers.cli.warning(f"Saving config file to {config_file}")
         config.to_filename(config_file)
 
-        retval = build_workflow(config_file, retval={})
+        retval = build_workflow(config_file, exec_mode="auto", retval={})
         qsiprep_wf = retval["workflow"]
         qsiprep_wf.run()
         write_derivative_description(config.execution.fmri_dir, config.execution.qsiprep_dir)

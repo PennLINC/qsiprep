@@ -1,3 +1,7 @@
+# Test data
+qsiprep/tests/test_data/
+qsiprep/tests/pytests/
+
 qsiprep/_version.py
 docs/api/
 
