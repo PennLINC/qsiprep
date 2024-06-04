@@ -318,8 +318,8 @@ def main():
         errno = 0
     finally:
 
-        from ..workflows.recon import _load_recon_spec
         from ..viz.reports import generate_reports
+        from ..workflows.recon import _load_recon_spec
 
         # Generate reports phase
         # session_list = (
@@ -338,15 +338,15 @@ def main():
         for qsirecon_suffix in qsirecon_suffixes:
             failed_reports = generate_reports(
                 config.execution.participant_label,
-                pipeline_mode=f'qsirecon-{qsirecon_suffix}',
+                pipeline_mode=f"qsirecon-{qsirecon_suffix}",
             )
 
             write_derivative_description(
                 config.execution.bids_dir,
-                config.execution.output_dir / f'qsirecon-{qsirecon_suffix}',
+                config.execution.output_dir / f"qsirecon-{qsirecon_suffix}",
                 # dataset_links=config.execution.dataset_links,
             )
-            write_bidsignore(config.execution.qsirecon / f'qsirecon-{qsirecon_suffix}')
+            write_bidsignore(config.execution.qsirecon / f"qsirecon-{qsirecon_suffix}")
 
             if failed_reports:
                 print(failed_reports)
