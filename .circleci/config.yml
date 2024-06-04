@@ -48,12 +48,12 @@ jobs:
       - run:
           name: Download singleshell_output test data
           command: |
-            cd /src/xcp_d/.circleci
+            cd /src/qsiprep/.circleci
             python get_data.py $PWD/data singleshell_output
       - save_cache:
           key: singleshell_output-01
           paths:
-            - /src/xcp_d/.circleci/data/singleshell_output
+            - /src/qsiprep/.circleci/data/singleshell_output
 
   DSCSDSI:
     resource_class: large
