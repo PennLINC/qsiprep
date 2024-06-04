@@ -343,7 +343,7 @@ def main():
 
             write_derivative_description(
                 config.execution.bids_dir,
-                config.execution.qsiprep_dir / f'qsirecon-{qsirecon_suffix}',
+                config.execution.output_dir / f'qsirecon-{qsirecon_suffix}',
                 # dataset_links=config.execution.dataset_links,
             )
             write_bidsignore(config.execution.qsirecon / f'qsirecon-{qsirecon_suffix}')
