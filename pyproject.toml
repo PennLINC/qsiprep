@@ -164,6 +164,19 @@ per-file-ignores = [
     "docs/conf.py : E265",
 ]
 
+[tool.pytest.ini_options]
+addopts = '-m "not mrtrix_singleshell_ss3t and not mrtrix_multishell_ss3t and not dsdti_fmap and not dscsdsi_fmap and not amico_noddi"'
+markers = [
+    "mrtrix_singleshell_ss3t: test 1",
+    "mrtrix_multishell_ss3t: test 2",
+    "dsdti_fmap: test 3",
+    "dscsdsi_fmap: test 4",
+    "amico_noddi: test 5",
+]
+env = [
+    "RUNNING_PYTEST = 1",
+]
+
 [tool.coverage.run]
 branch = true
 omit = [
