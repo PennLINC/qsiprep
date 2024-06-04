@@ -25,7 +25,6 @@ import os.path as op
 import re
 from shutil import copyfileobj, copytree
 
-import simplejson as json
 from bids.layout import parse_file_entities
 from nipype import logging
 from nipype.interfaces.base import (
