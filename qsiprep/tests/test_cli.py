@@ -228,6 +228,7 @@ def _run_and_generate(test_name, parameters, test_main=False):
 
             assert e.value.code == 0
     else:
+        # XXX: This isn't working because config.execution.fs_license_file is None.
         parse_args(parameters)
         config_file = config.execution.work_dir / f"config-{config.execution.run_uuid}.toml"
         config.loggers.cli.warning(f"Saving config file to {config_file}")
