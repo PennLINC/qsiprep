@@ -57,6 +57,7 @@ Paper = "https://doi.org/10.1038/s41592-022-01458-7"
 doc = [
     "dipy",
     "doctest-ignore-unicode",
+    "lxml_html_clean",
     "nbsphinx",
     "pydot >= 1.2.3",
     "pydotplus",

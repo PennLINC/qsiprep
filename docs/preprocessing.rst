@@ -281,7 +281,7 @@ Volumetric output spaces include ``T1w`` (default) and ``MNI152NLin2009cAsym``.
 Confounds
 ^^^^^^^^^^^^
 
-See implementation on :mod:`~qsiprep.workflows.dwi.confounds.init_dwi_confs_wf`.
+See implementation on :func:`~qsiprep.workflows.dwi.confounds.init_dwi_confs_wf`.
 
 
 For each DWI processed by qsiprep, a
@@ -369,7 +369,7 @@ available and are used as the input.
 Processing the *Subject Anatomical Reference* T1w or T2w images
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-:mod:`qsiprep.workflows.anatomical.init_anat_preproc_wf`
+:func:`qsiprep.workflows.anatomical.init_anat_preproc_wf`
 
 .. workflow::
     :graph2use: orig
@@ -516,7 +516,7 @@ with the MNI infant template. It is highly advisable to also include
 DWI preprocessing
 ^^^^^^^^^^^^^^^^^
 
-:mod:`qsiprep.workflows.dwi.base.init_dwi_preproc_wf`
+:func:`qsiprep.workflows.dwi.base.init_dwi_preproc_wf`
 
 .. workflow::
     :graph2use: orig
@@ -566,7 +566,7 @@ split into multiple sub-workflows described below.
 Head-motion / Eddy Current/ Distortion correction (FSL)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-:mod:`qsiprep.workflows.dwi.fsl.init_fsl_hmc_wf`
+:func:`qsiprep.workflows.dwi.fsl.init_fsl_hmc_wf`
 
 FSL provides the most widely-used tools for head motion correction, eddy
 current correction and susceptibility distortion correction. These tools
@@ -681,7 +681,7 @@ be viewed or downloaded `here
 Head-motion estimation (SHORELine)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-:mod:`qsiprep.workflows.dwi.hmc.init_dwi_hmc_wf`
+:func:`qsiprep.workflows.dwi.hmc.init_dwi_hmc_wf`
 
 
 A long-standing issue for q-space imaging techniques, particularly DSI, has
@@ -747,7 +747,7 @@ are saved for each slice for display in a carpet plot-like thing.
 Susceptibility correction methods
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-:mod:`qsiprep.workflows.fieldmap.base.init_sdc_wf`
+:func:`qsiprep.workflows.fieldmap.base.init_sdc_wf`
 
 .. figure:: _static/unwarping.svg
 
@@ -822,7 +822,7 @@ transform are extracted.
 DWI reference image estimation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-:mod:`qsiprep.workflows.dwi.util.init_dwi_reference_wf`
+:func:`qsiprep.workflows.dwi.util.init_dwi_reference_wf`
 
 .. workflow::
     :graph2use: orig
@@ -845,7 +845,7 @@ pipeline for DWIs
 Pre-processed DWIs in a different space
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-:mod:`qsiprep.workflows.dwi.resampling.init_dwi_trans_wf`
+:func:`qsiprep.workflows.dwi.resampling.init_dwi_trans_wf`
 
 .. workflow::
     :graph2use: orig
@@ -879,7 +879,7 @@ use these yet, but it's an interesting idea.
 b0 to T1w registration
 ^^^^^^^^^^^^^^^^^^^^^^
 
-:mod:`qsiprep.workflows.dwi.registration.init_b0_to_anat_registration_wf`
+:func:`qsiprep.workflows.dwi.registration.init_b0_to_anat_registration_wf`
 
 .. workflow::
     :graph2use: orig
