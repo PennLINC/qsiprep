@@ -38,6 +38,22 @@ jobs:
       - checkout
       - run: *runinstall
 
+  download_singleshell_output:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - restore_cache:
+          key: singleshell_output-01
+      - run: *runinstall
+      - run:
+          name: Download singleshell_output test data
+          command: |
+            cd /src/xcp_d/.circleci
+            python get_data.py $PWD/data singleshell_output
+      - save_cache:
+          key: singleshell_output-01
+          paths:
+            - /src/xcp_d/.circleci/data/singleshell_output
 
   DSCSDSI:
     resource_class: large
@@ -281,8 +297,18 @@ jobs:
       - run:
           name: Test the DIPY recon workflows
           command: |
-            cd .circleci
-            bash AMICOReconTests.sh
+            pytest -rP -o log_cli=true -m "amico_noddi" --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
+            mkdir /src/coverage
+            mv /src/qsiprep/.coverage /src/coverage/.coverage.amico_noddi
+            # remove nifti files before uploading artifacts
+            find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+      - persist_to_workspace:
+          root: /src/coverage/
+          paths:
+            - .coverage.amico_noddi
+      - store_artifacts:
+          path: /src/qsiprep/.circleci/out/amico_noddi/
 
   deployable:
     resource_class: small
@@ -352,6 +378,13 @@ workflows:
     jobs:
 
       - build:
+          filters:
+            tags:
+              only: /.*/
+
+      - download_singleshell_output:
+          requires:
+            - build
           filters:
             tags:
               only: /.*/
@@ -483,7 +516,7 @@ workflows:
 
       - Recon_AMICO:
           requires:
-            - build
+            - download_singleshell_output
           filters:
             tags:
               only: /.*/
