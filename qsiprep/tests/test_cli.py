@@ -21,6 +21,7 @@ from qsiprep.viz.reports import generate_reports
 nipype_config.enable_debug_mode()
 
 
+@pytest.mark.integration
 @pytest.mark.mrtrix_singleshell_ss3t
 def test_mrtrix_singleshell_ss3t(data_dir, output_dir, working_dir):
     """Run reconstruction workflow tests.
@@ -58,6 +59,7 @@ def test_mrtrix_singleshell_ss3t(data_dir, output_dir, working_dir):
     _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
+@pytest.mark.integration
 @pytest.mark.mrtrix_multishell_ss3t
 def test_mrtrix_multishell_ss3t(data_dir, output_dir, working_dir):
     """Run reconstruction workflow tests.
@@ -95,6 +97,7 @@ def test_mrtrix_multishell_ss3t(data_dir, output_dir, working_dir):
     _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
+@pytest.mark.integration
 @pytest.mark.dsdti_fmap
 def test_dsdti_fmap(data_dir, output_dir, working_dir):
     """Run AllFieldmaps test.
@@ -133,6 +136,7 @@ def test_dsdti_fmap(data_dir, output_dir, working_dir):
     _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
+@pytest.mark.integration
 @pytest.mark.dscsdsi_fmap
 def test_dscsdsi_fmap(data_dir, output_dir, working_dir):
     """Run AllFieldmaps test.
@@ -171,6 +175,7 @@ def test_dscsdsi_fmap(data_dir, output_dir, working_dir):
     _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
+@pytest.mark.integration
 @pytest.mark.amico_noddi
 def test_amico_noddi(data_dir, output_dir, working_dir):
     """Run reconstruction workflow test.
@@ -204,6 +209,90 @@ def test_amico_noddi(data_dir, output_dir, working_dir):
         "--sloppy",
         "--recon-spec=amico_noddi",
         "--recon-only",
+        "--output-resolution=5",
+    ]
+
+    _run_and_generate(TEST_NAME, parameters, test_main=True)
+
+
+@pytest.mark.integration
+@pytest.mark.autotrack
+def test_autotrack(data_dir, output_dir, working_dir):
+    """Run reconstruction workflow test.
+
+    All supported reconstruction workflows get tested.
+
+    This tests the following features:
+    - Blip-up + Blip-down DWI series for TOPUP/Eddy
+    - Eddy is run on a CPU
+    - Denoising is skipped
+    - A follow-up reconstruction using the dsi_studio_gqi workflow
+
+    Inputs
+    ------
+    - DSDTI BIDS data (data/multishell_output)
+    """
+    TEST_NAME = "autotrack"
+
+    dataset_dir = download_test_data("multishell_output", data_dir)
+    # XXX: Having to modify dataset_dirs is suboptimal.
+    dataset_dir = os.path.join(dataset_dir, "qsiprep")
+    out_dir = os.path.join(output_dir, TEST_NAME)
+    work_dir = os.path.join(working_dir, TEST_NAME)
+
+    parameters = [
+        dataset_dir,
+        out_dir,
+        "participant",
+        f"-w={work_dir}",
+        f"--recon-input={dataset_dir}",
+        "--sloppy",
+        "--recon-spec=dsi_studio_autotrack",
+        "--recon-only",
+        "--output-resolution=5",
+    ]
+
+    _run_and_generate(TEST_NAME, parameters, test_main=True)
+
+
+@pytest.mark.integration
+@pytest.mark.cuda
+def test_cuda(data_dir, output_dir, working_dir):
+    """Run reconstruction workflow test.
+
+    All supported reconstruction workflows get tested.
+
+    This tests the following features:
+    - Blip-up + Blip-down DWI series for TOPUP/Eddy
+    - Eddy is run on a CPU
+    - Denoising is skipped
+    - A follow-up reconstruction using the dsi_studio_gqi workflow
+
+    Inputs
+    ------
+    - DSDTI BIDS data (data/drbuddi_rpe_series)
+    """
+    TEST_NAME = "cuda"
+
+    dataset_dir = download_test_data("drbuddi_rpe_series", data_dir)
+    # XXX: Having to modify dataset_dirs is suboptimal.
+    dataset_dir = os.path.join(dataset_dir, "qsiprep")
+    out_dir = os.path.join(output_dir, TEST_NAME)
+    work_dir = os.path.join(working_dir, TEST_NAME)
+    test_data_path = get_test_data_path()
+    eddy_config = os.path.join(test_data_path, "eddy_config.json")
+
+    parameters = [
+        dataset_dir,
+        out_dir,
+        "participant",
+        f"-w={work_dir}",
+        "--sloppy",
+        "--anat-modality=none",
+        "--denoise-method=none",
+        "--b1_biascorrect_stage=none",
+        "--pepolar-method=DRBUDDI",
+        f"--eddy_config={eddy_config}",
         "--output-resolution=5",
     ]
 
