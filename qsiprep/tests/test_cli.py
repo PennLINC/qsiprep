@@ -490,6 +490,42 @@ def test_drbuddi_shoreline_epi(data_dir, output_dir, working_dir):
     _run_and_generate(TEST_NAME, parameters, test_main=True)
 
 
+@pytest.mark.integration
+@pytest.mark.drbuddi_tensorline_epi
+def test_drbuddi_tensorline_epi(data_dir, output_dir, working_dir):
+    """Test EPI fieldmap correction with TENSORLine + DRBUDDI.
+
+    Was in DRBUDDI_TENSORLine_epi.sh.
+
+    This tests the following features:
+    - TENSORLine (tensor-based) motion correction
+    """
+    TEST_NAME = "drbuddi_tensorline_epi"
+
+    dataset_dir = download_test_data("DSDTI", data_dir)
+    # XXX: Having to modify dataset_dirs is suboptimal.
+    dataset_dir = os.path.join(dataset_dir, "DSDTI")
+    out_dir = os.path.join(output_dir, TEST_NAME)
+    work_dir = os.path.join(working_dir, TEST_NAME)
+
+    parameters = [
+        dataset_dir,
+        out_dir,
+        "participant",
+        f"-w={work_dir}",
+        "--sloppy",
+        "--anat-modality=none",
+        "--denoise-method=none",
+        "--b1-biascorrect-stage=none",
+        "--pepolar-method=DRBUDDI",
+        "--hmc-model=tensor",
+        "--output-resolution=2",
+        "--shoreline-iters=1",
+    ]
+
+    _run_and_generate(TEST_NAME, parameters, test_main=True)
+
+
 def _run_and_generate(test_name, parameters, test_main=True):
     from qsiprep import config
 
