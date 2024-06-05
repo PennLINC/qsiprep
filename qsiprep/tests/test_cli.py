@@ -26,6 +26,8 @@ nipype_config.enable_debug_mode()
 def test_mrtrix_singleshell_ss3t(data_dir, output_dir, working_dir):
     """Run reconstruction workflow tests.
 
+    Was in 3TissueReconTests.sh. I split it between this and the multi-shell test.
+
     All supported reconstruction workflows get tested
 
     This tests the following features:
@@ -64,6 +66,8 @@ def test_mrtrix_singleshell_ss3t(data_dir, output_dir, working_dir):
 def test_mrtrix_multishell_ss3t(data_dir, output_dir, working_dir):
     """Run reconstruction workflow tests.
 
+    Was in 3TissueReconTests.sh. I split it between this and the single-shell test.
+
     All supported reconstruction workflows get tested
 
     This tests the following features:
@@ -100,7 +104,10 @@ def test_mrtrix_multishell_ss3t(data_dir, output_dir, working_dir):
 @pytest.mark.integration
 @pytest.mark.dsdti_fmap
 def test_dsdti_fmap(data_dir, output_dir, working_dir):
-    """Run AllFieldmaps test.
+    """Run AllFieldmaps test on DSDTI data.
+
+    Was in AllFieldmapsTests.sh. I split it between this and the DSCSDSI test.
+    XXX: Not called in CircleCI.
 
     Instead of running full workflows, this test checks that workflows can
     be built for all sorts of fieldmap configurations.
@@ -139,7 +146,10 @@ def test_dsdti_fmap(data_dir, output_dir, working_dir):
 @pytest.mark.integration
 @pytest.mark.dscsdsi_fmap
 def test_dscsdsi_fmap(data_dir, output_dir, working_dir):
-    """Run AllFieldmaps test.
+    """Run AllFieldmaps test on DSCSDSI data.
+
+    Was in AllFieldmapsTests.sh. I split it between this and the DSDTI test.
+    XXX: Not called in CircleCI.
 
     Instead of running full workflows, this test checks that workflows can
     be built for all sorts of fieldmap configurations.
@@ -180,6 +190,7 @@ def test_dscsdsi_fmap(data_dir, output_dir, working_dir):
 def test_amico_noddi(data_dir, output_dir, working_dir):
     """Run reconstruction workflow test.
 
+    Was in AMICOReconTests.sh.
     All supported reconstruction workflows get tested.
 
     This tests the following features:
@@ -219,6 +230,8 @@ def test_amico_noddi(data_dir, output_dir, working_dir):
 @pytest.mark.autotrack
 def test_autotrack(data_dir, output_dir, working_dir):
     """Run reconstruction workflow test.
+
+    Was in AutoTrackTest.sh.
 
     All supported reconstruction workflows get tested.
 
@@ -260,6 +273,9 @@ def test_autotrack(data_dir, output_dir, working_dir):
 def test_cuda(data_dir, output_dir, working_dir):
     """Run reconstruction workflow test.
 
+    Was in CUDATest.sh.
+    XXX: Not called in CircleCI.
+
     All supported reconstruction workflows get tested.
 
     This tests the following features:
@@ -273,6 +289,142 @@ def test_cuda(data_dir, output_dir, working_dir):
     - DSDTI BIDS data (data/drbuddi_rpe_series)
     """
     TEST_NAME = "cuda"
+
+    dataset_dir = download_test_data("drbuddi_rpe_series", data_dir)
+    # XXX: Having to modify dataset_dirs is suboptimal.
+    dataset_dir = os.path.join(dataset_dir, "qsiprep")
+    out_dir = os.path.join(output_dir, TEST_NAME)
+    work_dir = os.path.join(working_dir, TEST_NAME)
+    test_data_path = get_test_data_path()
+    eddy_config = os.path.join(test_data_path, "eddy_config.json")
+
+    parameters = [
+        dataset_dir,
+        out_dir,
+        "participant",
+        f"-w={work_dir}",
+        "--sloppy",
+        "--anat-modality=none",
+        "--denoise-method=none",
+        "--b1_biascorrect_stage=none",
+        "--pepolar-method=DRBUDDI",
+        f"--eddy_config={eddy_config}",
+        "--output-resolution=5",
+    ]
+
+    _run_and_generate(TEST_NAME, parameters, test_main=True)
+
+
+@pytest.mark.integration
+@pytest.mark.dipy_mapmri
+def test_dipy_mapmri(data_dir, output_dir, working_dir):
+    """Run reconstruction workflow test.
+
+    Was in DipyReconTests.sh. I split it between this and the dipy_dki test.
+
+    All supported reconstruction workflows get tested
+
+    This tests the following features:
+    - Blip-up + Blip-down DWI series for TOPUP/Eddy
+    - Eddy is run on a CPU
+    - Denoising is skipped
+    - A follow-up reconstruction using the dsi_studio_gqi workflow
+
+    Inputs:
+    -------
+
+    - qsiprep single shell results (data/DSDTI_fmap)
+    - qsiprep multi shell results (data/DSDTI_fmap)
+    """
+    TEST_NAME = "dipy_mapmri"
+
+    dataset_dir = download_test_data("multishell_output", data_dir)
+    # XXX: Having to modify dataset_dirs is suboptimal.
+    dataset_dir = os.path.join(dataset_dir, "qsiprep")
+    out_dir = os.path.join(output_dir, TEST_NAME)
+    work_dir = os.path.join(working_dir, TEST_NAME)
+
+    parameters = [
+        dataset_dir,
+        out_dir,
+        "participant",
+        f"-w={work_dir}",
+        "--sloppy",
+        f"--recon-input={dataset_dir}",
+        "--recon-spec=dipy_mapmri",
+        "--recon-only",
+        "--output-resolution=5",
+    ]
+
+    _run_and_generate(TEST_NAME, parameters, test_main=True)
+
+
+@pytest.mark.integration
+@pytest.mark.dipy_dki
+def test_dipy_dki(data_dir, output_dir, working_dir):
+    """Run reconstruction workflow test.
+
+    Was in DipyReconTests.sh. I split it between this and the dipy_mapmri test.
+
+    All supported reconstruction workflows get tested
+
+    This tests the following features:
+    - Blip-up + Blip-down DWI series for TOPUP/Eddy
+    - Eddy is run on a CPU
+    - Denoising is skipped
+    - A follow-up reconstruction using the dsi_studio_gqi workflow
+
+    Inputs:
+    -------
+
+    - qsiprep single shell results (data/DSDTI_fmap)
+    - qsiprep multi shell results (data/DSDTI_fmap)
+    """
+    TEST_NAME = "dipy_dki"
+
+    dataset_dir = download_test_data("multishell_output", data_dir)
+    # XXX: Having to modify dataset_dirs is suboptimal.
+    dataset_dir = os.path.join(dataset_dir, "qsiprep")
+    out_dir = os.path.join(output_dir, TEST_NAME)
+    work_dir = os.path.join(working_dir, TEST_NAME)
+
+    parameters = [
+        dataset_dir,
+        out_dir,
+        "participant",
+        f"-w={work_dir}",
+        "--sloppy",
+        f"--recon-input={dataset_dir}",
+        "--recon-spec=dipy_dki",
+        "--recon-only",
+        "--output-resolution=5",
+    ]
+
+    _run_and_generate(TEST_NAME, parameters, test_main=True)
+
+
+@pytest.mark.integration
+@pytest.mark.drbuddi_rpe
+def test_drbuddi_rpe(data_dir, output_dir, working_dir):
+    """Run reconstruction workflow test.
+
+    Was in DRBUDDI_eddy_rpe_series.sh.
+
+    All supported reconstruction workflows get tested
+
+    This tests the following features:
+    - Blip-up + Blip-down DWI series for TOPUP/Eddy
+    - Eddy is run on a CPU
+    - Denoising is skipped
+    - A follow-up reconstruction using the dsi_studio_gqi workflow
+
+    Inputs:
+    -------
+
+    - qsiprep single shell results (data/DSDTI_fmap)
+    - qsiprep multi shell results (data/DSDTI_fmap)
+    """
+    TEST_NAME = "drbuddi_rpe"
 
     dataset_dir = download_test_data("drbuddi_rpe_series", data_dir)
     # XXX: Having to modify dataset_dirs is suboptimal.
