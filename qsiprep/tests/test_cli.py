@@ -563,7 +563,7 @@ def test_dscsdsi(data_dir, output_dir, working_dir):
         "--force-syn",
         "--b1-biascorrect-stage=none",
         "--hmc-model=3dSHORE",
-        "--hmctransform=Rigid",
+        "--hmc-transform=Rigid",
         "--output-resolution=5",
         "--shoreline-iters=1",
     ]
