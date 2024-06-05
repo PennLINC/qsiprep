@@ -54,7 +54,7 @@ def test_mrtrix_singleshell_ss3t_act(data_dir, output_dir, working_dir):
         f"-w={work_dir}",
         f"--recon-input={dataset_dir}",
         "--sloppy",
-        "--recon-spec mrtrix_singleshell_ss3t_ACT-fast",
+        "--recon-spec=mrtrix_singleshell_ss3t_ACT-fast",
         "--recon-only",
         "--output-resolution=5",
     ]
@@ -95,7 +95,7 @@ def test_mrtrix_singleshell_ss3t_noact(data_dir, output_dir, working_dir):
         f"-w={work_dir}",
         f"--recon-input={dataset_dir}",
         "--sloppy",
-        "--recon-spec mrtrix_singleshell_ss3t_noACT",
+        "--recon-spec=mrtrix_singleshell_ss3t_noACT",
         "--recon-only",
         "--output-resolution=5",
     ]
