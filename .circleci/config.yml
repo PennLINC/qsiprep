@@ -234,7 +234,7 @@ jobs:
             cd .circleci
             bash MultiT1w.sh
 
-  Recon_3Tissue_Singleshell:
+  Recon_3Tissue_Singleshell_ACT:
     <<: *dockersetup
     steps:
       - checkout
@@ -243,20 +243,20 @@ jobs:
           name: Test the 3Tissue recon workflows
           no_output_timeout: 1h
           command: |
-            pytest -rP -o log_cli=true -m "mrtrix_singleshell_ss3t" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
+            pytest -rP -o log_cli=true -m "mrtrix_singleshell_ss3t_act" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
             mkdir /src/coverage
-            mv /src/qsiprep/.coverage /src/coverage/.coverage.mrtrix_singleshell_ss3t
+            mv /src/qsiprep/.coverage /src/coverage/.coverage.mrtrix_singleshell_ss3t_act
             # remove nifti files before uploading artifacts
             find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
             find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
       - persist_to_workspace:
           root: /src/coverage/
           paths:
-            - .coverage.mrtrix_singleshell_ss3t
+            - .coverage.mrtrix_singleshell_ss3t_act
       - store_artifacts:
-          path: /src/qsiprep/.circleci/out/mrtrix_singleshell_ss3t/
+          path: /src/qsiprep/.circleci/out/mrtrix_singleshell_ss3t_act/
 
-  Recon_3Tissue_Multishell:
+  Recon_3Tissue_Singleshell_NoACT:
     <<: *dockersetup
     steps:
       - checkout
@@ -265,18 +265,18 @@ jobs:
           name: Test the 3Tissue recon workflows
           no_output_timeout: 1h
           command: |
-            pytest -rP -o log_cli=true -m "mrtrix_multishell_ss3t" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
+            pytest -rP -o log_cli=true -m "mrtrix_singleshell_ss3t_noact" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
             mkdir /src/coverage
-            mv /src/qsiprep/.coverage /src/coverage/.coverage.mrtrix_multishell_ss3t
+            mv /src/qsiprep/.coverage /src/coverage/.coverage.mrtrix_singleshell_ss3t_noact
             # remove nifti files before uploading artifacts
             find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
             find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
       - persist_to_workspace:
           root: /src/coverage/
           paths:
-            - .coverage.mrtrix_multishell_ss3t
+            - .coverage.mrtrix_singleshell_ss3t_noact
       - store_artifacts:
-          path: /src/qsiprep/.circleci/out/mrtrix_multishell_ss3t/
+          path: /src/qsiprep/.circleci/out/mrtrix_singleshell_ss3t_noact/
 
   Recon_MRtrix3:
     <<: *dockersetup
@@ -611,16 +611,16 @@ workflows:
             tags:
               only: /.*/
 
-      - Recon_3Tissue_Singleshell:
+      - Recon_3Tissue_Singleshell_ACT:
           requires:
             - download_singleshell_output
           filters:
             tags:
               only: /.*/
 
-      - Recon_3Tissue_Multishell:
+      - Recon_3Tissue_Singleshell_NoACT:
           requires:
-            - download_multishell_output
+            - download_singleshell_output
           filters:
             tags:
               only: /.*/
@@ -699,8 +699,8 @@ workflows:
             - DRBUDDI_TENSORLine_EPI
             - IntramodalTemplate
             - MultiT1w
-            - Recon_3Tissue_Singleshell
-            - Recon_3Tissue_Multishell
+            - Recon_3Tissue_Singleshell_ACT
+            - Recon_3Tissue_Singleshell_NoACT
             - Recon_MRtrix3
             - Recon_AutoTrack
             - Recon_Tortoise

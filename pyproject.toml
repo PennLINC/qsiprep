@@ -168,8 +168,8 @@ per-file-ignores = [
 [tool.pytest.ini_options]
 addopts = '-m "not integration"'
 markers = [
-    "mrtrix_singleshell_ss3t: test 1",
-    "mrtrix_multishell_ss3t: test 2",
+    "mrtrix_singleshell_ss3t_act: test 1",
+    "mrtrix_singleshell_ss3t_noact: test 2",
     "dsdti_fmap: test 3",
     "dscsdsi_fmap: test 4",
     "amico_noddi: test 5",

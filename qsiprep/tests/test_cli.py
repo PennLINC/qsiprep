@@ -22,8 +22,8 @@ nipype_config.enable_debug_mode()
 
 
 @pytest.mark.integration
-@pytest.mark.mrtrix_singleshell_ss3t
-def test_mrtrix_singleshell_ss3t(data_dir, output_dir, working_dir):
+@pytest.mark.mrtrix_singleshell_ss3t_act
+def test_mrtrix_singleshell_ss3t_act(data_dir, output_dir, working_dir):
     """Run reconstruction workflow tests.
 
     Was in 3TissueReconTests.sh. I split it between this and the multi-shell test.
@@ -40,7 +40,7 @@ def test_mrtrix_singleshell_ss3t(data_dir, output_dir, working_dir):
     ------
     - qsiprep single shell results (data/DSDTI_fmap)
     """
-    TEST_NAME = "mrtrix_singleshell_ss3t"
+    TEST_NAME = "mrtrix_singleshell_ss3t_act"
 
     dataset_dir = download_test_data("singleshell_output", data_dir)
 
@@ -56,14 +56,15 @@ def test_mrtrix_singleshell_ss3t(data_dir, output_dir, working_dir):
         "--sloppy",
         "--recon-spec mrtrix_singleshell_ss3t_ACT-fast",
         "--recon-only",
+        "--output-resolution=5",
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 @pytest.mark.integration
-@pytest.mark.mrtrix_multishell_ss3t
-def test_mrtrix_multishell_ss3t(data_dir, output_dir, working_dir):
+@pytest.mark.mrtrix_singleshell_ss3t_noact
+def test_mrtrix_singleshell_ss3t_noact(data_dir, output_dir, working_dir):
     """Run reconstruction workflow tests.
 
     Was in 3TissueReconTests.sh. I split it between this and the single-shell test.
@@ -80,9 +81,9 @@ def test_mrtrix_multishell_ss3t(data_dir, output_dir, working_dir):
     ------
     - qsiprep multi shell results (data/DSDTI_fmap)
     """
-    TEST_NAME = "mrtrix_multishell_ss3t"
+    TEST_NAME = "mrtrix_singleshell_ss3t_noact"
 
-    dataset_dir = download_test_data("multishell_output", data_dir)
+    dataset_dir = download_test_data("singleshell_output", data_dir)
 
     out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
@@ -94,8 +95,9 @@ def test_mrtrix_multishell_ss3t(data_dir, output_dir, working_dir):
         f"-w={work_dir}",
         f"--recon-input={dataset_dir}",
         "--sloppy",
-        "--recon-spec mrtrix_multishell_ss3t_ACT-fast",
+        "--recon-spec mrtrix_singleshell_ss3t_noACT",
         "--recon-only",
+        "--output-resolution=5",
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=False)
