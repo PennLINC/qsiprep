@@ -297,7 +297,7 @@ jobs:
       - run:
           name: Test the DIPY recon workflows
           command: |
-            pytest -rP -o log_cli=true -m "amico_noddi" --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
+            pytest -rP -o log_cli=true -m "amico_noddi" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
             mkdir /src/coverage
             mv /src/qsiprep/.coverage /src/coverage/.coverage.amico_noddi
             # remove nifti files before uploading artifacts
