@@ -168,6 +168,7 @@ per-file-ignores = [
 [tool.pytest.ini_options]
 addopts = '-m "not integration"'
 markers = [
+    "integration: integration tests to skip by default",
     "mrtrix_singleshell_ss3t_act: test 1",
     "mrtrix_singleshell_ss3t_noact: test 2",
     "dsdti_fmap: test 3",

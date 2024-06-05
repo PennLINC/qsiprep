@@ -186,6 +186,8 @@ jobs:
     <<: *dockersetup
     steps:
       - checkout
+      - restore_cache:
+          key: drbuddi_rpe_series-01
       - run: *runinstall
       - run:
           name: Run Eddy with rpe series fmaps and DRBUDDI
@@ -238,6 +240,8 @@ jobs:
     <<: *dockersetup
     steps:
       - checkout
+      - restore_cache:
+          key: singleshell_output-01
       - run: *runinstall
       - run:
           name: Test the 3Tissue recon workflows
@@ -260,6 +264,8 @@ jobs:
     <<: *dockersetup
     steps:
       - checkout
+      - restore_cache:
+          key: singleshell_output-01
       - run: *runinstall
       - run:
           name: Test the 3Tissue recon workflows
@@ -294,6 +300,8 @@ jobs:
     <<: *dockersetup
     steps:
       - checkout
+      - restore_cache:
+          key: multishell_output-01
       - run: *runinstall
       - run:
           name: Test the AutoTrack workflow
@@ -328,6 +336,8 @@ jobs:
     <<: *dockersetup
     steps:
       - checkout
+      - restore_cache:
+          key: multishell_output-01
       - run: *runinstall
       - run:
           name: Test the DIPY recon workflows
@@ -350,6 +360,8 @@ jobs:
     <<: *dockersetup
     steps:
       - checkout
+      - restore_cache:
+          key: multishell_output-01
       - run: *runinstall
       - run:
           name: Test the DIPY recon workflows
@@ -411,6 +423,8 @@ jobs:
       CIRCLE_CPUS: 3
     steps:
       - checkout
+      - restore_cache:
+          key: singleshell_output-01
       - run: *runinstall
       - run:
           name: Test the DIPY recon workflows
