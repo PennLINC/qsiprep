@@ -59,7 +59,7 @@ def test_mrtrix_singleshell_ss3t_act(data_dir, output_dir, working_dir):
         "--output-resolution=5",
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=False)
+    _run_and_generate(TEST_NAME, parameters, test_main=True)
 
 
 @pytest.mark.integration
@@ -100,7 +100,7 @@ def test_mrtrix_singleshell_ss3t_noact(data_dir, output_dir, working_dir):
         "--output-resolution=5",
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=False)
+    _run_and_generate(TEST_NAME, parameters, test_main=True)
 
 
 @pytest.mark.integration
@@ -142,7 +142,7 @@ def test_dsdti_fmap(data_dir, output_dir, working_dir):
         "--output-resolution=5",
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=False)
+    _run_and_generate(TEST_NAME, parameters, test_main=True)
 
 
 @pytest.mark.integration
@@ -184,7 +184,7 @@ def test_dscsdsi_fmap(data_dir, output_dir, working_dir):
         "--output-resolution=5",
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=False)
+    _run_and_generate(TEST_NAME, parameters, test_main=True)
 
 
 @pytest.mark.integration
@@ -490,7 +490,7 @@ def test_drbuddi_shoreline_epi(data_dir, output_dir, working_dir):
     _run_and_generate(TEST_NAME, parameters, test_main=True)
 
 
-def _run_and_generate(test_name, parameters, test_main=False):
+def _run_and_generate(test_name, parameters, test_main=True):
     from qsiprep import config
 
     # TODO: Add this param
