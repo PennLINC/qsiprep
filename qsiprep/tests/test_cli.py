@@ -571,6 +571,47 @@ def test_dscsdsi(data_dir, output_dir, working_dir):
     _run_and_generate(TEST_NAME, parameters, test_main=True)
 
 
+@pytest.mark.integration
+@pytest.mark.dsdti_nofmap
+def test_dsdti_nofmap(data_dir, output_dir, working_dir):
+    """DSCDTI_nofmap test
+
+    This tests the following features:
+    - A workflow with no distortion correction followed by eddy
+    - Eddy is run on a CPU
+    - Denoising is skipped
+    - A follow-up reconstruction using the dsi_studio_gqi workflow
+
+    Inputs
+    ------
+    - DSDTI BIDS data (data/DSDTI)
+    """
+    TEST_NAME = "dsdti_nofmap"
+
+    dataset_dir = download_test_data("DSDTI", data_dir)
+    # XXX: Having to modify dataset_dirs is suboptimal.
+    dataset_dir = os.path.join(dataset_dir, "DSDTI")
+    out_dir = os.path.join(output_dir, TEST_NAME)
+    work_dir = os.path.join(working_dir, TEST_NAME)
+    test_data_path = get_test_data_path()
+    eddy_config = os.path.join(test_data_path, "eddy_config.json")
+
+    parameters = [
+        dataset_dir,
+        out_dir,
+        "participant",
+        f"-w={work_dir}",
+        "--sloppy",
+        f"--eddy-config={eddy_config}",
+        "--denoise-method=none",
+        "--unringing-method=rpg",
+        "--b1-biascorrect-stage=none",
+        "--output-resolution=5",
+    ]
+
+    _run_and_generate(TEST_NAME, parameters, test_main=True)
+
+
 def _run_and_generate(test_name, parameters, test_main=True):
     from qsiprep import config
 

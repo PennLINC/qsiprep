@@ -174,13 +174,25 @@ jobs:
     <<: *dockersetup
     steps:
       - checkout
+      - restore_cache:
+          key: DSDTI-01
       - run: *runinstall
       - run:
           name: Run DTI with no fieldmap
           no_output_timeout: 1h
           command: |
-            cd .circleci
-            bash DSDTI_nofmap.sh
+            pytest -rP -o log_cli=true -m "dsdti_nofmap" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
+            mkdir /src/coverage
+            mv /src/qsiprep/.coverage /src/coverage/.coverage.dsdti_nofmap
+            # remove nifti files before uploading artifacts
+            find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+      - persist_to_workspace:
+          root: /src/coverage/
+          paths:
+            - .coverage.dsdti_nofmap
+      - store_artifacts:
+          path: /src/qsiprep/.circleci/out/dsdti_nofmap/
 
   DSDTI_synfmap:
     resource_class: large
@@ -685,7 +697,7 @@ workflows:
 
       - DSDTI_nofmap:
           requires:
-            - build
+            - download_DSDTI
           filters:
             branches:
               ignore:
