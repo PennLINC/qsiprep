@@ -89,6 +89,23 @@ jobs:
           paths:
             - /src/qsiprep/.circleci/data/drbuddi_rpe_series
 
+  download_drbuddi_epi:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - restore_cache:
+          key: drbuddi_epi-01
+      - run: *runinstall
+      - run:
+          name: Download drbuddi_epi test data
+          command: |
+            cd /src/qsiprep/.circleci
+            python get_data.py $PWD/data drbuddi_epi
+      - save_cache:
+          key: drbuddi_epi-01
+          paths:
+            - /src/qsiprep/.circleci/data/drbuddi_epi
+
   DSCSDSI:
     resource_class: large
     environment:
@@ -171,13 +188,25 @@ jobs:
     <<: *dockersetup
     steps:
       - checkout
+      - restore_cache:
+          key: drbuddi_epi-01
       - run: *runinstall
       - run:
           name: Run SHORELine with epi fmaps and DRBUDDI
           no_output_timeout: 2h
           command: |
-            cd .circleci
-            bash DRBUDDI_SHORELine_epi.sh
+            pytest -rP -o log_cli=true -m "drbuddi_shoreline_epi" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
+            mkdir /src/coverage
+            mv /src/qsiprep/.coverage /src/coverage/.coverage.drbuddi_shoreline_epi
+            # remove nifti files before uploading artifacts
+            find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+      - persist_to_workspace:
+          root: /src/coverage/
+          paths:
+            - .coverage.drbuddi_shoreline_epi
+      - store_artifacts:
+          path: /src/qsiprep/.circleci/out/drbuddi_shoreline_epi/
 
   DRBUDDI_eddy_rpe_series:
     resource_class: large
@@ -535,6 +564,13 @@ workflows:
             tags:
               only: /.*/
 
+      - download_drbuddi_epi:
+          requires:
+            - build
+          filters:
+            tags:
+              only: /.*/
+
       - DSCSDSI:
           requires:
             - build
@@ -547,7 +583,7 @@ workflows:
 
       - DRBUDDI_SHORELine_EPI:
           requires:
-            - build
+            - download_drbuddi_epi
           filters:
             branches:
               ignore:
