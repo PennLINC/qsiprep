@@ -123,6 +123,23 @@ jobs:
           paths:
             - /src/qsiprep/.circleci/data/DSDTI
 
+  download_DSCSDSI:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - restore_cache:
+          key: DSCSDSI-01
+      - run: *runinstall
+      - run:
+          name: Download DSCSDSI test data
+          command: |
+            cd /src/qsiprep/.circleci
+            python get_data.py $PWD/data DSCSDSI
+      - save_cache:
+          key: DSCSDSI-01
+          paths:
+            - /src/qsiprep/.circleci/data/DSCSDSI
+
   DSCSDSI:
     resource_class: large
     environment:
@@ -130,13 +147,25 @@ jobs:
     <<: *dockersetup
     steps:
       - checkout
+      - restore_cache:
+          key: DSCSDSI-01
       - run: *runinstall
       - run:
-          name: Run DSCSDSI tests
-          no_output_timeout: 1h
+          name: Run TENSORLine with epi fmaps and DRBUDDI
+          no_output_timeout: 2h
           command: |
-            cd .circleci
-            bash DSCSDSI.sh
+            pytest -rP -o log_cli=true -m "dscsdsi" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
+            mkdir /src/coverage
+            mv /src/qsiprep/.coverage /src/coverage/.coverage.dscsdsi
+            # remove nifti files before uploading artifacts
+            find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+      - persist_to_workspace:
+          root: /src/coverage/
+          paths:
+            - .coverage.dscsdsi
+      - store_artifacts:
+          path: /src/qsiprep/.circleci/out/dscsdsi/
 
   DSDTI_nofmap:
     environment:
@@ -607,9 +636,16 @@ workflows:
             tags:
               only: /.*/
 
-      - DSCSDSI:
+      - download_DSCSDSI:
           requires:
             - build
+          filters:
+            tags:
+              only: /.*/
+
+      - DSCSDSI:
+          requires:
+            - download_DSCSDSI
           filters:
             branches:
               ignore:

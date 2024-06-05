@@ -526,6 +526,51 @@ def test_drbuddi_tensorline_epi(data_dir, output_dir, working_dir):
     _run_and_generate(TEST_NAME, parameters, test_main=True)
 
 
+@pytest.mark.integration
+@pytest.mark.dscsdsi
+def test_dscsdsi(data_dir, output_dir, working_dir):
+    """DSCSDSI test
+
+    Was in DSCSDSI.sh.
+
+    This tests the following features:
+    - Whether the --anat-only workflow is successful
+    - Whether the regular qsiprep workflow can resume using the working directory from --anat-only
+    - The SHORELine motion correction workflow
+    - Skipping B1 biascorrection
+    - Using the SyN-SDC distortion correction method
+
+    Inputs
+    ------
+    - DSCSDSI BIDS data (data/DSCSDSI_nofmap)
+    """
+    TEST_NAME = "dscsdsi"
+
+    dataset_dir = download_test_data("DSCSDSI", data_dir)
+    # XXX: Having to modify dataset_dirs is suboptimal.
+    dataset_dir = os.path.join(dataset_dir, "DSCSDSI_nofmap")
+    out_dir = os.path.join(output_dir, TEST_NAME)
+    work_dir = os.path.join(working_dir, TEST_NAME)
+
+    parameters = [
+        dataset_dir,
+        out_dir,
+        "participant",
+        f"-w={work_dir}",
+        "--sloppy",
+        "--write-graph",
+        "--use-syn-sdc",
+        "--force-syn",
+        "--b1-biascorrect-stage=none",
+        "--hmc-model=3dSHORE",
+        "--hmctransform=Rigid",
+        "--output-resolution=5",
+        "--shoreline-iters=1",
+    ]
+
+    _run_and_generate(TEST_NAME, parameters, test_main=True)
+
+
 def _run_and_generate(test_name, parameters, test_main=True):
     from qsiprep import config
 
