@@ -430,7 +430,7 @@ def test_drbuddi_rpe(data_dir, output_dir, working_dir):
 
     dataset_dir = download_test_data("drbuddi_rpe_series", data_dir)
     # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, "qsiprep")
+    dataset_dir = os.path.join(dataset_dir, "tinytensor_rpe_series")
     out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
     test_data_path = get_test_data_path()
