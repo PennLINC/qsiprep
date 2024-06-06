@@ -183,6 +183,7 @@ markers = [
     "dscsdsi: test 12",
     "dsdti_nofmap: test 13",
     "dsdti_synfmap: test 14",
+    "dsdti_topup: test 15",
 ]
 env = [
     "RUNNING_PYTEST = 1",
