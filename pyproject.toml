@@ -178,6 +178,11 @@ markers = [
     "dipy_mapmri: test 7",
     "dipy_dki: test 8",
     "drbuddi_rpe: test 9",
+    "drbuddi_shoreline_epi: test 10",
+    "drbuddi_tensorline_epi: test 11",
+    "dscsdsi: test 12",
+    "dsdti_nofmap: test 13",
+    "dsdti_synfmap: test 14",
 ]
 env = [
     "RUNNING_PYTEST = 1",

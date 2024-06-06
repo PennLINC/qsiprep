@@ -201,13 +201,25 @@ jobs:
     <<: *dockersetup
     steps:
       - checkout
+      - restore_cache:
+          key: DSDTI-01
       - run: *runinstall
       - run:
           name: Run DTI with SyN SDC
           no_output_timeout: 1h
           command: |
-            cd .circleci
-            bash DSDTI_synfmap.sh
+            pytest -rP -o log_cli=true -m "dsdti_synfmap" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
+            mkdir /src/coverage
+            mv /src/qsiprep/.coverage /src/coverage/.coverage.dsdti_synfmap
+            # remove nifti files before uploading artifacts
+            find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+      - persist_to_workspace:
+          root: /src/coverage/
+          paths:
+            - .coverage.dsdti_synfmap
+      - store_artifacts:
+          path: /src/qsiprep/.circleci/out/dsdti_synfmap/
 
   DSDTI_TOPUP:
     resource_class: large
@@ -216,13 +228,25 @@ jobs:
     <<: *dockersetup
     steps:
       - checkout
+      - restore_cache:
+          key: DSDTI-01
       - run: *runinstall
       - run:
           name: Run DTI with TOPUP/Eddy
           no_output_timeout: 1h
           command: |
-            cd .circleci
-            bash DSDTI_TOPUP.sh
+            pytest -rP -o log_cli=true -m "dsdti_topup" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
+            mkdir /src/coverage
+            mv /src/qsiprep/.coverage /src/coverage/.coverage.dsdti_topup
+            # remove nifti files before uploading artifacts
+            find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+      - persist_to_workspace:
+          root: /src/coverage/
+          paths:
+            - .coverage.dsdti_topup
+      - store_artifacts:
+          path: /src/qsiprep/.circleci/out/dsdti_topup/
 
   DRBUDDI_TENSORLine_EPI:
     resource_class: large
