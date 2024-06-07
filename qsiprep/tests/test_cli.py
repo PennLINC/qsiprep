@@ -442,7 +442,7 @@ def test_drbuddi_rpe(data_dir, output_dir, working_dir):
         "participant",
         f"-w={work_dir}",
         "--sloppy",
-        "--nprocs=4",
+        "--nthreads=4",
         "--anat-modality=none",
         "--denoise-method=none",
         "--b1_biascorrect_stage=none",
@@ -566,6 +566,7 @@ def test_dscsdsi(data_dir, output_dir, working_dir):
         "--hmc-transform=Rigid",
         "--output-resolution=5",
         "--shoreline-iters=1",
+        "--nthreads=1",
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=True)
@@ -609,6 +610,7 @@ def test_dsdti_nofmap(data_dir, output_dir, working_dir):
         "--unringing-method=rpg",
         "--b1-biascorrect-stage=none",
         "--output-resolution=5",
+        "--nthreads=1",
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=True)
@@ -652,6 +654,7 @@ def test_dsdti_synfmap(data_dir, output_dir, working_dir):
         "--force-syn",
         "--b1-biascorrect-stage=final",
         "--output-resolution=5",
+        "--nthreads=1",
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=True)
@@ -693,6 +696,48 @@ def test_dsdti_topup(data_dir, output_dir, working_dir):
         "--b1-biascorrect-stage=legacy",
         "--output-resolution=5",
         "--recon-spec=dsi_studio_gqi",
+        "--nthreads=1",
+    ]
+
+    _run_and_generate(TEST_NAME, parameters, test_main=True)
+
+
+@pytest.mark.integration
+@pytest.mark.intramodal_template
+def test_intramodal_template(data_dir, output_dir, working_dir):
+    """IntramodalTemplate test
+
+    A two-session dataset is used to create an intramodal template.
+
+    This tests the following features:
+    - Blip-up + Blip-down DWI series for TOPUP/Eddy
+    - Eddy is run on a CPU
+    - Denoising is skipped
+    - A follow-up reconstruction using the dsi_studio_gqi workflow
+
+    Inputs
+    ------
+    - twoses BIDS data (data/DSDTI_fmap)
+    """
+    TEST_NAME = "intramodal_template"
+
+    dataset_dir = download_test_data("twoses", data_dir)
+    # XXX: Having to modify dataset_dirs is suboptimal.
+    dataset_dir = os.path.join(dataset_dir, "twoses")
+    out_dir = os.path.join(output_dir, TEST_NAME)
+    work_dir = os.path.join(working_dir, TEST_NAME)
+
+    parameters = [
+        dataset_dir,
+        out_dir,
+        "participant",
+        f"-w={work_dir}",
+        "--b1-biascorrect-stage=none",
+        "--hmc_model=none",
+        "--b0-motion-corr-to=first",
+        "--output-resolution=5",
+        "--intramodal-template-transform BSplineSyN",
+        "--intramodal-template-iters 2",
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=True)

@@ -140,6 +140,23 @@ jobs:
           paths:
             - /src/qsiprep/.circleci/data/DSCSDSI
 
+  download_twoses:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - restore_cache:
+          key: twoses-01
+      - run: *runinstall
+      - run:
+          name: Download twoses test data
+          command: |
+            cd /src/qsiprep/.circleci
+            python get_data.py $PWD/data twoses
+      - save_cache:
+          key: twoses-01
+          paths:
+            - /src/qsiprep/.circleci/data/twoses
+
   DSCSDSI:
     resource_class: large
     environment:
@@ -336,13 +353,25 @@ jobs:
       CIRCLE_CPUS: 4
     steps:
       - checkout
+      - restore_cache:
+          key: twoses-01
       - run: *runinstall
       - run:
           name: Test the intramodal template workflow
           no_output_timeout: 2h
           command: |
-            cd .circleci
-            bash IntramodalTemplate.sh
+            pytest -rP -o log_cli=true -m "intramodal_template" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
+            mkdir /src/coverage
+            mv /src/qsiprep/.coverage /src/coverage/.coverage.intramodal_template
+            # remove nifti files before uploading artifacts
+            find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+      - persist_to_workspace:
+          root: /src/coverage/
+          paths:
+            - .coverage.intramodal_template
+      - store_artifacts:
+          path: /src/qsiprep/.circleci/out/intramodal_template/
 
   MultiT1w:
     resource_class: large
@@ -679,6 +708,13 @@ workflows:
             tags:
               only: /.*/
 
+      - download_twoses:
+          requires:
+            - build
+          filters:
+            tags:
+              only: /.*/
+
       - DSCSDSI:
           requires:
             - download_DSCSDSI
@@ -751,7 +787,7 @@ workflows:
 
       - IntramodalTemplate:
           requires:
-            - build
+            - download_twoses
           filters:
             branches:
               ignore:
