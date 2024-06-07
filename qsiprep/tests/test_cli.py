@@ -736,8 +736,8 @@ def test_intramodal_template(data_dir, output_dir, working_dir):
         "--hmc_model=none",
         "--b0-motion-corr-to=first",
         "--output-resolution=5",
-        "--intramodal-template-transform BSplineSyN",
-        "--intramodal-template-iters 2",
+        "--intramodal-template-transform=BSplineSyN",
+        "--intramodal-template-iters=2",
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=True)
