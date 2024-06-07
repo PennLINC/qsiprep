@@ -184,6 +184,7 @@ markers = [
     "dsdti_nofmap: test 13",
     "dsdti_synfmap: test 14",
     "dsdti_topup: test 15",
+    "intramodal_template: test 16",
 ]
 env = [
     "RUNNING_PYTEST = 1",
