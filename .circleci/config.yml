@@ -548,13 +548,25 @@ jobs:
     <<: *dockersetup
     steps:
       - checkout
+      - restore_cache:
+          key: multishell_output-01
       - run: *runinstall
       - run:
           name: Test the PYAFQ workflow with mrtrix tractography
           no_output_timeout: 1h
           command: |
-            cd .circleci
-            bash PyAFQReconExternalTrk.sh
+            pytest -rP -o log_cli=true -m "pyafq_recon_external_trk" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
+            mkdir /src/coverage
+            mv /src/qsiprep/.coverage /src/coverage/.coverage.pyafq_recon_external_trk
+            # remove nifti files before uploading artifacts
+            find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+      - persist_to_workspace:
+          root: /src/coverage/
+          paths:
+            - .coverage.pyafq_recon_external_trk
+      - store_artifacts:
+          path: /src/qsiprep/.circleci/out/pyafq_recon_external_trk/
 
   Recon_ScalarMap:
     <<: *dockersetup
@@ -882,7 +894,7 @@ workflows:
 
       - Recon_PYAFQExternalTrk:
           requires:
-            - build
+            - download_multishell_output
           filters:
             tags:
               only: /.*/
