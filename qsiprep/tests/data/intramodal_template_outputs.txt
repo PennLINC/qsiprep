@@ -1,3 +1,4 @@
+/tmp/twoses/derivatives
 qsiprep
 qsiprep/dataset_description.json
 qsiprep/dwiqc.json
@@ -6,6 +7,7 @@ qsiprep/logs/CITATION.html
 qsiprep/logs/CITATION.md
 qsiprep/logs/CITATION.tex
 qsiprep/sub-tester
+qsiprep/sub-tester.html
 qsiprep/sub-tester/anat
 qsiprep/sub-tester/anat/sub-tester_desc-brain_mask.nii.gz
 qsiprep/sub-tester/anat/sub-tester_desc-preproc_T1w.nii.gz
@@ -37,7 +39,6 @@ qsiprep/sub-tester/figures/sub-tester_ses-2_acq-HASC55AP_dwi_denoise_ses_2_acq_H
 qsiprep/sub-tester/figures/sub-tester_ses-2_acq-HASC55AP_sampling_scheme.gif
 qsiprep/sub-tester/figures/sub-tester_ses-2_acq-HASC55AP_tointramodal.svg
 qsiprep/sub-tester/figures/sub-tester_t1_2_mni.svg
-qsiprep/sub-tester.html
 qsiprep/sub-tester/ses-1
 qsiprep/sub-tester/ses-1/anat
 qsiprep/sub-tester/ses-1/anat/sub-tester_ses-1_from-orig_to-T1w_mode-image_xfm.txt
@@ -66,4 +67,3 @@ qsiprep/sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-T1w_desc-prepro
 qsiprep/sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-T1w_desc-preproc_dwi.bvec
 qsiprep/sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-T1w_desc-preproc_dwi.nii.gz
 qsiprep/sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-T1w_dwiref.nii.gz
-/tmp/twoses/derivatives

@@ -127,7 +127,7 @@ def reorder_expected_outputs():
         with open(expected_output_file, "r") as fo:
             file_contents = fo.readlines()
 
-        file_contents = sorted(file_contents)
+        file_contents = sorted(list(set(file_contents)))
 
         with open(expected_output_file, "w") as fo:
             fo.writelines(file_contents)
