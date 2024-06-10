@@ -522,6 +522,7 @@ def test_drbuddi_tensorline_epi(data_dir, output_dir, working_dir):
         "--hmc-model=tensor",
         "--output-resolution=2",
         "--shoreline-iters=1",
+        "--nthreads=1",
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=True)
