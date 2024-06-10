@@ -440,13 +440,25 @@ jobs:
     <<: *dockersetup
     steps:
       - checkout
+      - restore_cache:
+          key: multishell_output-01
       - run: *runinstall
       - run:
           name: Test the CSD recon workflows
           no_output_timeout: 1h
           command: |
-            cd .circleci
-            bash Mrtrix3ReconTests.sh
+            pytest -rP -o log_cli=true -m "mrtrix3_recon" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
+            mkdir /src/coverage
+            mv /src/qsiprep/.coverage /src/coverage/.coverage.mrtrix3_recon
+            # remove nifti files before uploading artifacts
+            find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+      - persist_to_workspace:
+          root: /src/coverage/
+          paths:
+            - .coverage.mrtrix3_recon
+      - store_artifacts:
+          path: /src/qsiprep/.circleci/out/mrtrix3_recon/
 
   Recon_AutoTrack:
     <<: *dockersetup
@@ -857,7 +869,7 @@ workflows:
 
       - Recon_MRtrix3:
           requires:
-            - build
+            - download_multishell_output
           filters:
             tags:
               only: /.*/

@@ -188,6 +188,7 @@ markers = [
     "scalar_mapper: test 17",
     "pyafq_recon_external_trk: test 18",
     "pyafq_recon_full: test 19",
+    "mrtrix3_recon: test 20",
 ]
 env = [
     "RUNNING_PYTEST = 1",
