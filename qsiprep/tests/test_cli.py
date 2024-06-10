@@ -744,6 +744,42 @@ def test_intramodal_template(data_dir, output_dir, working_dir):
 
 
 @pytest.mark.integration
+@pytest.mark.multi_t1w
+def test_multi_t1w(data_dir, output_dir, working_dir):
+    """MultiT1w test
+
+    This tests the following features:
+    - freesurfer's robust template
+
+    Inputs
+    ------
+    - DSDTI BIDS data (data/DSDTI)
+    """
+    TEST_NAME = "multi_t1w"
+
+    dataset_dir = download_test_data("twoses", data_dir)
+    # XXX: Having to modify dataset_dirs is suboptimal.
+    dataset_dir = os.path.join(dataset_dir, "DSDTI")
+    out_dir = os.path.join(output_dir, TEST_NAME)
+    work_dir = os.path.join(working_dir, TEST_NAME)
+
+    parameters = [
+        dataset_dir,
+        out_dir,
+        "participant",
+        f"-w={work_dir}",
+        "--b1-biascorrect-stage=none",
+        "--hmc_model=none",
+        "--b0-motion-corr-to=first",
+        "--output-resolution=5",
+        "--intramodal-template-transform=BSplineSyN",
+        "--intramodal-template-iters=2",
+    ]
+
+    _run_and_generate(TEST_NAME, parameters, test_main=True)
+
+
+@pytest.mark.integration
 @pytest.mark.scalar_mapper
 def test_scalar_mapper(data_dir, output_dir, working_dir):
     """Test the TORTOISE recon workflow.
