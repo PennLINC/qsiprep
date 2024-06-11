@@ -360,18 +360,8 @@ jobs:
           name: Test the intramodal template workflow
           no_output_timeout: 2h
           command: |
-            pytest -rP -o log_cli=true -m "intramodal_template" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
-            mkdir /src/coverage
-            mv /src/qsiprep/.coverage /src/coverage/.coverage.intramodal_template
-            # remove nifti files before uploading artifacts
-            find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
-            find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
-      - persist_to_workspace:
-          root: /src/coverage/
-          paths:
-            - .coverage.intramodal_template
-      - store_artifacts:
-          path: /src/qsiprep/.circleci/out/intramodal_template/
+            cd .circleci
+            bash IntramodalTemplate.sh
 
   MultiT1w:
     resource_class: large
@@ -387,18 +377,8 @@ jobs:
           name: Test the mri robust template for T1w images
           no_output_timeout: 1h
           command: |
-            pytest -rP -o log_cli=true -m "multi_t1w" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
-            mkdir /src/coverage
-            mv /src/qsiprep/.coverage /src/coverage/.coverage.multi_t1w
-            # remove nifti files before uploading artifacts
-            find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
-            find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
-      - persist_to_workspace:
-          root: /src/coverage/
-          paths:
-            - .coverage.multi_t1w
-      - store_artifacts:
-          path: /src/qsiprep/.circleci/out/multi_t1w/
+            cd .circleci
+            bash MultiT1w.sh
 
   Recon_3Tissue_Singleshell_ACT:
     <<: *dockersetup
