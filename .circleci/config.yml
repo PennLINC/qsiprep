@@ -1,4 +1,6 @@
 version: 2.1
+orbs:
+  codecov: codecov/codecov@3.2.4
 
 .dockersetup: &dockersetup
   docker:
@@ -646,6 +648,24 @@ jobs:
       - store_artifacts:
           path: /src/qsiprep/.circleci/out/amico_noddi/
 
+  merge_coverage:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - attach_workspace:
+          at: /src/coverage
+      - run: *runinstall
+      - run:
+          name: Merge coverage files
+          command: |
+            cd /src/coverage/
+            coverage combine
+            coverage xml
+      - store_artifacts:
+          path: /src/coverage
+      - codecov/upload:
+          file: /src/coverage/coverage.xml
+
   deployable:
     resource_class: small
     docker:
@@ -931,6 +951,36 @@ workflows:
           requires:
             - download_multishell_output
           filters:
+            tags:
+              only: /.*/
+
+      - merge_coverage:
+          requires:
+            - DSCSDSI
+            - DSDTI_nofmap
+            - DSDTI_synfmap
+            - DSDTI_TOPUP
+            - DRBUDDI_SHORELine_EPI
+            - DRBUDDI_eddy_rpe_series
+            - DRBUDDI_TENSORLine_EPI
+            - IntramodalTemplate
+            - MultiT1w
+            - Recon_3Tissue_Singleshell_ACT
+            - Recon_3Tissue_Singleshell_NoACT
+            - Recon_MRtrix3
+            - Recon_AutoTrack
+            - Recon_Tortoise
+            - Recon_DIPY_MAPMRI
+            - Recon_DIPY_DKI
+            - Recon_AMICO
+            - Recon_PYAFQ
+            - Recon_PYAFQExternalTrk
+            - Recon_ScalarMap
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
             tags:
               only: /.*/
 
