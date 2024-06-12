@@ -355,8 +355,6 @@ jobs:
       CIRCLE_CPUS: 4
     steps:
       - checkout
-      - restore_cache:
-          key: twoses-01
       - run: *runinstall
       - run:
           name: Test the intramodal template workflow
@@ -859,7 +857,7 @@ workflows:
 
       - IntramodalTemplate:
           requires:
-            - download_twoses
+            - build
           filters:
             branches:
               ignore:
