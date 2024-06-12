@@ -1008,4 +1008,8 @@ def _run_and_generate(test_name, parameters, test_main=True):
         )
 
     output_list_file = os.path.join(get_test_data_path(), f"{test_name}_outputs.txt")
-    check_generated_files(config.execution.output_dir, output_list_file)
+    optional_outputs_list = os.path.join(get_test_data_path(), f"{test_name}_optional_outputs.txt")
+    if not os.path.isfile(optional_outputs_list):
+        optional_outputs_list = None
+
+    check_generated_files(config.execution.output_dir, output_list_file, optional_outputs_list)
