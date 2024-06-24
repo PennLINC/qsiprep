@@ -3,6 +3,7 @@ qsiprep/tests/test_data/
 qsiprep/tests/pytests/
 
 qsiprep/_version.py
+docs/api/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
