@@ -1,4 +1,6 @@
 version: 2.1
+orbs:
+  codecov: codecov/codecov@3.2.4
 
 .dockersetup: &dockersetup
   docker:
@@ -15,7 +17,7 @@ runinstall: &runinstall
       git checkout $CIRCLE_BRANCH
       echo "${VERSION}" > /src/qsiprep/qsiprep/VERSION
       echo "include qsiprep/VERSION" >> /src/qsiprep/MANIFEST.in
-      pip install . --progress-bar off
+      pip install .[tests] --progress-bar off
 
       # Precaching fonts, set 'Agg' as default backend for matplotlib
       python -c "from matplotlib import font_manager"
@@ -38,6 +40,124 @@ jobs:
       - checkout
       - run: *runinstall
 
+  download_singleshell_output:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - restore_cache:
+          key: singleshell_output-01
+      - run: *runinstall
+      - run:
+          name: Download singleshell_output test data
+          command: |
+            cd /src/qsiprep/.circleci
+            python get_data.py $PWD/data singleshell_output
+      - save_cache:
+          key: singleshell_output-01
+          paths:
+            - /src/qsiprep/.circleci/data/singleshell_output
+
+  download_multishell_output:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - restore_cache:
+          key: multishell_output-01
+      - run: *runinstall
+      - run:
+          name: Download multishell_output test data
+          command: |
+            cd /src/qsiprep/.circleci
+            python get_data.py $PWD/data multishell_output
+      - save_cache:
+          key: multishell_output-01
+          paths:
+            - /src/qsiprep/.circleci/data/multishell_output
+
+  download_drbuddi_rpe_series:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - restore_cache:
+          key: drbuddi_rpe_series-01
+      - run: *runinstall
+      - run:
+          name: Download drbuddi_rpe_series test data
+          command: |
+            cd /src/qsiprep/.circleci
+            python get_data.py $PWD/data drbuddi_rpe_series
+      - save_cache:
+          key: drbuddi_rpe_series-01
+          paths:
+            - /src/qsiprep/.circleci/data/drbuddi_rpe_series
+
+  download_drbuddi_epi:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - restore_cache:
+          key: drbuddi_epi-01
+      - run: *runinstall
+      - run:
+          name: Download drbuddi_epi test data
+          command: |
+            cd /src/qsiprep/.circleci
+            python get_data.py $PWD/data drbuddi_epi
+      - save_cache:
+          key: drbuddi_epi-01
+          paths:
+            - /src/qsiprep/.circleci/data/drbuddi_epi
+
+  download_DSDTI:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - restore_cache:
+          key: DSDTI-01
+      - run: *runinstall
+      - run:
+          name: Download DSDTI test data
+          command: |
+            cd /src/qsiprep/.circleci
+            python get_data.py $PWD/data DSDTI
+      - save_cache:
+          key: DSDTI-01
+          paths:
+            - /src/qsiprep/.circleci/data/DSDTI
+
+  download_DSCSDSI:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - restore_cache:
+          key: DSCSDSI-01
+      - run: *runinstall
+      - run:
+          name: Download DSCSDSI test data
+          command: |
+            cd /src/qsiprep/.circleci
+            python get_data.py $PWD/data DSCSDSI
+      - save_cache:
+          key: DSCSDSI-01
+          paths:
+            - /src/qsiprep/.circleci/data/DSCSDSI
+
+  download_twoses:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - restore_cache:
+          key: twoses-01
+      - run: *runinstall
+      - run:
+          name: Download twoses test data
+          command: |
+            cd /src/qsiprep/.circleci
+            python get_data.py $PWD/data twoses
+      - save_cache:
+          key: twoses-01
+          paths:
+            - /src/qsiprep/.circleci/data/twoses
 
   DSCSDSI:
     resource_class: large
@@ -46,13 +166,25 @@ jobs:
     <<: *dockersetup
     steps:
       - checkout
+      - restore_cache:
+          key: DSCSDSI-01
       - run: *runinstall
       - run:
-          name: Run DSCSDSI tests
-          no_output_timeout: 1h
+          name: Run TENSORLine with epi fmaps and DRBUDDI
+          no_output_timeout: 2h
           command: |
-            cd .circleci
-            bash DSCSDSI.sh
+            pytest -rP -o log_cli=true -m "dscsdsi" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
+            mkdir /src/coverage
+            mv /src/qsiprep/.coverage /src/coverage/.coverage.dscsdsi
+            # remove nifti files before uploading artifacts
+            find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+      - persist_to_workspace:
+          root: /src/coverage/
+          paths:
+            - .coverage.dscsdsi
+      - store_artifacts:
+          path: /src/qsiprep/.circleci/out/dscsdsi/
 
   DSDTI_nofmap:
     environment:
@@ -61,13 +193,25 @@ jobs:
     <<: *dockersetup
     steps:
       - checkout
+      - restore_cache:
+          key: DSDTI-01
       - run: *runinstall
       - run:
           name: Run DTI with no fieldmap
           no_output_timeout: 1h
           command: |
-            cd .circleci
-            bash DSDTI_nofmap.sh
+            pytest -rP -o log_cli=true -m "dsdti_nofmap" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
+            mkdir /src/coverage
+            mv /src/qsiprep/.coverage /src/coverage/.coverage.dsdti_nofmap
+            # remove nifti files before uploading artifacts
+            find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+      - persist_to_workspace:
+          root: /src/coverage/
+          paths:
+            - .coverage.dsdti_nofmap
+      - store_artifacts:
+          path: /src/qsiprep/.circleci/out/dsdti_nofmap/
 
   DSDTI_synfmap:
     resource_class: large
@@ -76,13 +220,25 @@ jobs:
     <<: *dockersetup
     steps:
       - checkout
+      - restore_cache:
+          key: DSDTI-01
       - run: *runinstall
       - run:
           name: Run DTI with SyN SDC
           no_output_timeout: 1h
           command: |
-            cd .circleci
-            bash DSDTI_synfmap.sh
+            pytest -rP -o log_cli=true -m "dsdti_synfmap" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
+            mkdir /src/coverage
+            mv /src/qsiprep/.coverage /src/coverage/.coverage.dsdti_synfmap
+            # remove nifti files before uploading artifacts
+            find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+      - persist_to_workspace:
+          root: /src/coverage/
+          paths:
+            - .coverage.dsdti_synfmap
+      - store_artifacts:
+          path: /src/qsiprep/.circleci/out/dsdti_synfmap/
 
   DSDTI_TOPUP:
     resource_class: large
@@ -91,13 +247,25 @@ jobs:
     <<: *dockersetup
     steps:
       - checkout
+      - restore_cache:
+          key: DSDTI-01
       - run: *runinstall
       - run:
           name: Run DTI with TOPUP/Eddy
           no_output_timeout: 1h
           command: |
-            cd .circleci
-            bash DSDTI_TOPUP.sh
+            pytest -rP -o log_cli=true -m "dsdti_topup" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
+            mkdir /src/coverage
+            mv /src/qsiprep/.coverage /src/coverage/.coverage.dsdti_topup
+            # remove nifti files before uploading artifacts
+            find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+      - persist_to_workspace:
+          root: /src/coverage/
+          paths:
+            - .coverage.dsdti_topup
+      - store_artifacts:
+          path: /src/qsiprep/.circleci/out/dsdti_topup/
 
   DRBUDDI_TENSORLine_EPI:
     resource_class: large
@@ -106,13 +274,25 @@ jobs:
     <<: *dockersetup
     steps:
       - checkout
+      - restore_cache:
+          key: DSDTI-01
       - run: *runinstall
       - run:
           name: Run TENSORLine with epi fmaps and DRBUDDI
           no_output_timeout: 2h
           command: |
-            cd .circleci
-            bash DRBUDDI_TENSORLine_epi.sh
+            pytest -rP -o log_cli=true -m "drbuddi_tensorline_epi" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
+            mkdir /src/coverage
+            mv /src/qsiprep/.coverage /src/coverage/.coverage.drbuddi_tensorline_epi
+            # remove nifti files before uploading artifacts
+            find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+      - persist_to_workspace:
+          root: /src/coverage/
+          paths:
+            - .coverage.drbuddi_tensorline_epi
+      - store_artifacts:
+          path: /src/qsiprep/.circleci/out/drbuddi_tensorline_epi/
 
   DRBUDDI_SHORELine_EPI:
     resource_class: large
@@ -121,13 +301,25 @@ jobs:
     <<: *dockersetup
     steps:
       - checkout
+      - restore_cache:
+          key: drbuddi_epi-01
       - run: *runinstall
       - run:
           name: Run SHORELine with epi fmaps and DRBUDDI
           no_output_timeout: 2h
           command: |
-            cd .circleci
-            bash DRBUDDI_SHORELine_epi.sh
+            pytest -rP -o log_cli=true -m "drbuddi_shoreline_epi" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
+            mkdir /src/coverage
+            mv /src/qsiprep/.coverage /src/coverage/.coverage.drbuddi_shoreline_epi
+            # remove nifti files before uploading artifacts
+            find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+      - persist_to_workspace:
+          root: /src/coverage/
+          paths:
+            - .coverage.drbuddi_shoreline_epi
+      - store_artifacts:
+          path: /src/qsiprep/.circleci/out/drbuddi_shoreline_epi/
 
   DRBUDDI_eddy_rpe_series:
     resource_class: large
@@ -136,13 +328,25 @@ jobs:
     <<: *dockersetup
     steps:
       - checkout
+      - restore_cache:
+          key: drbuddi_rpe_series-01
       - run: *runinstall
       - run:
           name: Run Eddy with rpe series fmaps and DRBUDDI
           no_output_timeout: 3h
           command: |
-            cd .circleci
-            bash DRBUDDI_eddy_rpe_series.sh
+            pytest -rP -o log_cli=true -m "drbuddi_rpe" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
+            mkdir /src/coverage
+            mv /src/qsiprep/.coverage /src/coverage/.coverage.drbuddi_rpe
+            # remove nifti files before uploading artifacts
+            find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+      - persist_to_workspace:
+          root: /src/coverage/
+          paths:
+            - .coverage.drbuddi_rpe
+      - store_artifacts:
+          path: /src/qsiprep/.circleci/out/drbuddi_rpe/
 
   IntramodalTemplate:
     resource_class: large
@@ -166,6 +370,8 @@ jobs:
       CIRCLE_CPUS: 4
     steps:
       - checkout
+      - restore_cache:
+          key: twoses-01
       - run: *runinstall
       - run:
           name: Test the mri robust template for T1w images
@@ -174,101 +380,245 @@ jobs:
             cd .circleci
             bash MultiT1w.sh
 
-  Recon_3Tissue:
+  Recon_3Tissue_Singleshell_ACT:
     <<: *dockersetup
     steps:
       - checkout
+      - restore_cache:
+          key: singleshell_output-01
       - run: *runinstall
       - run:
           name: Test the 3Tissue recon workflows
           no_output_timeout: 1h
           command: |
-            cd .circleci
-            bash 3TissueReconTests.sh
+            pytest -rP -o log_cli=true -m "mrtrix_singleshell_ss3t_act" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
+            mkdir /src/coverage
+            mv /src/qsiprep/.coverage /src/coverage/.coverage.mrtrix_singleshell_ss3t_act
+            # remove nifti files before uploading artifacts
+            find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+      - persist_to_workspace:
+          root: /src/coverage/
+          paths:
+            - .coverage.mrtrix_singleshell_ss3t_act
+      - store_artifacts:
+          path: /src/qsiprep/.circleci/out/mrtrix_singleshell_ss3t_act/
+
+  Recon_3Tissue_Singleshell_NoACT:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - restore_cache:
+          key: singleshell_output-01
+      - run: *runinstall
+      - run:
+          name: Test the 3Tissue recon workflows
+          no_output_timeout: 1h
+          command: |
+            pytest -rP -o log_cli=true -m "mrtrix_singleshell_ss3t_noact" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
+            mkdir /src/coverage
+            mv /src/qsiprep/.coverage /src/coverage/.coverage.mrtrix_singleshell_ss3t_noact
+            # remove nifti files before uploading artifacts
+            find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+      - persist_to_workspace:
+          root: /src/coverage/
+          paths:
+            - .coverage.mrtrix_singleshell_ss3t_noact
+      - store_artifacts:
+          path: /src/qsiprep/.circleci/out/mrtrix_singleshell_ss3t_noact/
 
   Recon_MRtrix3:
     <<: *dockersetup
     steps:
       - checkout
+      - restore_cache:
+          key: multishell_output-01
       - run: *runinstall
       - run:
           name: Test the CSD recon workflows
           no_output_timeout: 1h
           command: |
-            cd .circleci
-            bash Mrtrix3ReconTests.sh
+            pytest -rP -o log_cli=true -m "mrtrix3_recon" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
+            mkdir /src/coverage
+            mv /src/qsiprep/.coverage /src/coverage/.coverage.mrtrix3_recon
+            # remove nifti files before uploading artifacts
+            find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+      - persist_to_workspace:
+          root: /src/coverage/
+          paths:
+            - .coverage.mrtrix3_recon
+      - store_artifacts:
+          path: /src/qsiprep/.circleci/out/mrtrix3_recon/
 
   Recon_AutoTrack:
     <<: *dockersetup
     steps:
       - checkout
+      - restore_cache:
+          key: multishell_output-01
       - run: *runinstall
       - run:
           name: Test the AutoTrack workflow
           no_output_timeout: 1h
           command: |
-            cd .circleci
-            bash AutoTrackTest.sh
+            pytest -rP -o log_cli=true -m "autotrack" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
+            mkdir /src/coverage
+            mv /src/qsiprep/.coverage /src/coverage/.coverage.autotrack
+            # remove nifti files before uploading artifacts
+            find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+      - persist_to_workspace:
+          root: /src/coverage/
+          paths:
+            - .coverage.autotrack
+      - store_artifacts:
+          path: /src/qsiprep/.circleci/out/autotrack/
 
   Recon_Tortoise:
     <<: *dockersetup
     steps:
       - checkout
+      - restore_cache:
+          key: multishell_output-01
       - run: *runinstall
       - run:
           name: Test the TORTOISE recon workflow
           no_output_timeout: 1h
           command: |
-            cd .circleci
-            bash TortoiseRecon.sh
+            pytest -rP -o log_cli=true -m "tortoise_recon" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
+            mkdir /src/coverage
+            mv /src/qsiprep/.coverage /src/coverage/.coverage.tortoise_recon
+            # remove nifti files before uploading artifacts
+            find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+      - persist_to_workspace:
+          root: /src/coverage/
+          paths:
+            - .coverage.tortoise_recon
+      - store_artifacts:
+          path: /src/qsiprep/.circleci/out/tortoise_recon/
 
-  Recon_DIPY:
+  Recon_DIPY_MAPMRI:
     <<: *dockersetup
     steps:
       - checkout
+      - restore_cache:
+          key: multishell_output-01
       - run: *runinstall
       - run:
           name: Test the DIPY recon workflows
           no_output_timeout: 1h
           command: |
-            cd .circleci
-            bash DIPYReconTests.sh
+            pytest -rP -o log_cli=true -m "dipy_mapmri" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
+            mkdir /src/coverage
+            mv /src/qsiprep/.coverage /src/coverage/.coverage.dipy_mapmri
+            # remove nifti files before uploading artifacts
+            find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+      - persist_to_workspace:
+          root: /src/coverage/
+          paths:
+            - .coverage.dipy_mapmri
+      - store_artifacts:
+          path: /src/qsiprep/.circleci/out/dipy_mapmri/
+
+  Recon_DIPY_DKI:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - restore_cache:
+          key: multishell_output-01
+      - run: *runinstall
+      - run:
+          name: Test the DIPY recon workflows
+          no_output_timeout: 1h
+          command: |
+            pytest -rP -o log_cli=true -m "dipy_dki" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
+            mkdir /src/coverage
+            mv /src/qsiprep/.coverage /src/coverage/.coverage.dipy_dki
+            # remove nifti files before uploading artifacts
+            find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+      - persist_to_workspace:
+          root: /src/coverage/
+          paths:
+            - .coverage.dipy_dki
+      - store_artifacts:
+          path: /src/qsiprep/.circleci/out/dipy_dki/
 
   Recon_PYAFQ:
     <<: *dockersetup
     steps:
       - checkout
+      - restore_cache:
+          key: multishell_output-01
       - run: *runinstall
       - run:
           name: Test the PYAFQ standalone recon workflow
           no_output_timeout: 1h
           command: |
-            cd .circleci
-            bash PyAFQReconTests.sh
+            pytest -rP -o log_cli=true -m "pyafq_recon_full" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
+            mkdir /src/coverage
+            mv /src/qsiprep/.coverage /src/coverage/.coverage.pyafq_recon_full
+            # remove nifti files before uploading artifacts
+            find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+      - persist_to_workspace:
+          root: /src/coverage/
+          paths:
+            - .coverage.pyafq_recon_full
+      - store_artifacts:
+          path: /src/qsiprep/.circleci/out/pyafq_recon_full/
 
   Recon_PYAFQExternalTrk:
     <<: *dockersetup
     steps:
       - checkout
+      - restore_cache:
+          key: multishell_output-01
       - run: *runinstall
       - run:
           name: Test the PYAFQ workflow with mrtrix tractography
           no_output_timeout: 1h
           command: |
-            cd .circleci
-            bash PyAFQReconExternalTrk.sh
+            pytest -rP -o log_cli=true -m "pyafq_recon_external_trk" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
+            mkdir /src/coverage
+            mv /src/qsiprep/.coverage /src/coverage/.coverage.pyafq_recon_external_trk
+            # remove nifti files before uploading artifacts
+            find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+      - persist_to_workspace:
+          root: /src/coverage/
+          paths:
+            - .coverage.pyafq_recon_external_trk
+      - store_artifacts:
+          path: /src/qsiprep/.circleci/out/pyafq_recon_external_trk/
 
   Recon_ScalarMap:
     <<: *dockersetup
     steps:
       - checkout
+      - restore_cache:
+          key: multishell_output-01
       - run: *runinstall
       - run:
           name: Test scalar_mapping workflow
           no_output_timeout: 1h
           command: |
-            cd .circleci
-            bash ScalarMapper.sh
+            pytest -rP -o log_cli=true -m "scalar_mapper" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
+            mkdir /src/coverage
+            mv /src/qsiprep/.coverage /src/coverage/.coverage.scalar_mapper
+            # remove nifti files before uploading artifacts
+            find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+      - persist_to_workspace:
+          root: /src/coverage/
+          paths:
+            - .coverage.scalar_mapper
+      - store_artifacts:
+          path: /src/qsiprep/.circleci/out/scalar_mapper/
 
   Recon_AMICO:
     <<: *dockersetup
@@ -277,12 +627,42 @@ jobs:
       CIRCLE_CPUS: 3
     steps:
       - checkout
+      - restore_cache:
+          key: singleshell_output-01
       - run: *runinstall
       - run:
           name: Test the DIPY recon workflows
           command: |
-            cd .circleci
-            bash AMICOReconTests.sh
+            pytest -rP -o log_cli=true -m "amico_noddi" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
+            mkdir /src/coverage
+            mv /src/qsiprep/.coverage /src/coverage/.coverage.amico_noddi
+            # remove nifti files before uploading artifacts
+            find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+      - persist_to_workspace:
+          root: /src/coverage/
+          paths:
+            - .coverage.amico_noddi
+      - store_artifacts:
+          path: /src/qsiprep/.circleci/out/amico_noddi/
+
+  merge_coverage:
+    <<: *dockersetup
+    steps:
+      - checkout
+      - attach_workspace:
+          at: /src/coverage
+      - run: *runinstall
+      - run:
+          name: Merge coverage files
+          command: |
+            cd /src/coverage/
+            coverage combine
+            coverage xml
+      - store_artifacts:
+          path: /src/coverage
+      - codecov/upload:
+          file: /src/coverage/coverage.xml
 
   deployable:
     resource_class: small
@@ -356,9 +736,58 @@ workflows:
             tags:
               only: /.*/
 
-      - DSCSDSI:
+      - download_singleshell_output:
           requires:
             - build
+          filters:
+            tags:
+              only: /.*/
+
+      - download_multishell_output:
+          requires:
+            - build
+          filters:
+            tags:
+              only: /.*/
+
+      - download_drbuddi_rpe_series:
+          requires:
+            - build
+          filters:
+            tags:
+              only: /.*/
+
+      - download_drbuddi_epi:
+          requires:
+            - build
+          filters:
+            tags:
+              only: /.*/
+
+      - download_DSDTI:
+          requires:
+            - build
+          filters:
+            tags:
+              only: /.*/
+
+      - download_DSCSDSI:
+          requires:
+            - build
+          filters:
+            tags:
+              only: /.*/
+
+      - download_twoses:
+          requires:
+            - build
+          filters:
+            tags:
+              only: /.*/
+
+      - DSCSDSI:
+          requires:
+            - download_DSCSDSI
           filters:
             branches:
               ignore:
@@ -368,7 +797,7 @@ workflows:
 
       - DRBUDDI_SHORELine_EPI:
           requires:
-            - build
+            - download_drbuddi_epi
           filters:
             branches:
               ignore:
@@ -378,7 +807,7 @@ workflows:
 
       - DRBUDDI_eddy_rpe_series:
           requires:
-            - build
+            - download_drbuddi_rpe_series
           filters:
             branches:
               ignore:
@@ -388,7 +817,7 @@ workflows:
 
       - DRBUDDI_TENSORLine_EPI:
           requires:
-            - build
+            - download_DSDTI
           filters:
             branches:
               ignore:
@@ -398,7 +827,7 @@ workflows:
 
       - DSDTI_nofmap:
           requires:
-            - build
+            - download_DSDTI
           filters:
             branches:
               ignore:
@@ -408,7 +837,7 @@ workflows:
 
       - DSDTI_synfmap:
           requires:
-            - build
+            - download_DSDTI
           filters:
             branches:
               ignore:
@@ -418,7 +847,7 @@ workflows:
 
       - DSDTI_TOPUP:
           requires:
-            - build
+            - download_DSDTI
           filters:
             branches:
               ignore:
@@ -438,7 +867,7 @@ workflows:
 
       - MultiT1w:
           requires:
-            - build
+            - download_twoses
           filters:
             branches:
               ignore:
@@ -446,66 +875,110 @@ workflows:
             tags:
               only: /.*/
 
-      - Recon_3Tissue:
+      - Recon_3Tissue_Singleshell_ACT:
           requires:
-            - build
+            - download_singleshell_output
+          filters:
+            tags:
+              only: /.*/
+
+      - Recon_3Tissue_Singleshell_NoACT:
+          requires:
+            - download_singleshell_output
           filters:
             tags:
               only: /.*/
 
       - Recon_MRtrix3:
           requires:
-            - build
+            - download_multishell_output
           filters:
             tags:
               only: /.*/
 
       - Recon_AutoTrack:
           requires:
-            - build
+            - download_multishell_output
           filters:
             tags:
               only: /.*/
 
       - Recon_Tortoise:
           requires:
-            - build
+            - download_multishell_output
           filters:
             tags:
               only: /.*/
 
-      - Recon_DIPY:
+      - Recon_DIPY_MAPMRI:
           requires:
-            - build
+            - download_multishell_output
+          filters:
+            tags:
+              only: /.*/
+
+      - Recon_DIPY_DKI:
+          requires:
+            - download_multishell_output
           filters:
             tags:
               only: /.*/
 
       - Recon_AMICO:
           requires:
-            - build
+            - download_singleshell_output
           filters:
             tags:
               only: /.*/
 
       - Recon_PYAFQ:
           requires:
-            - build
+            - download_multishell_output
           filters:
             tags:
               only: /.*/
 
       - Recon_PYAFQExternalTrk:
           requires:
-            - build
+            - download_multishell_output
           filters:
             tags:
               only: /.*/
 
       - Recon_ScalarMap:
           requires:
-            - build
+            - download_multishell_output
           filters:
+            tags:
+              only: /.*/
+
+      - merge_coverage:
+          requires:
+            - DSCSDSI
+            - DSDTI_nofmap
+            - DSDTI_synfmap
+            - DSDTI_TOPUP
+            - DRBUDDI_SHORELine_EPI
+            - DRBUDDI_eddy_rpe_series
+            - DRBUDDI_TENSORLine_EPI
+            - IntramodalTemplate
+            - MultiT1w
+            - Recon_3Tissue_Singleshell_ACT
+            - Recon_3Tissue_Singleshell_NoACT
+            - Recon_MRtrix3
+            - Recon_AutoTrack
+            - Recon_Tortoise
+            - Recon_DIPY_MAPMRI
+            - Recon_DIPY_DKI
+            - Recon_AMICO
+            - Recon_PYAFQ
+            - Recon_PYAFQExternalTrk
+            - Recon_ScalarMap
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
             tags:
               only: /.*/
 
@@ -520,11 +993,13 @@ workflows:
             - DRBUDDI_TENSORLine_EPI
             - IntramodalTemplate
             - MultiT1w
-            - Recon_3Tissue
+            - Recon_3Tissue_Singleshell_ACT
+            - Recon_3Tissue_Singleshell_NoACT
             - Recon_MRtrix3
             - Recon_AutoTrack
             - Recon_Tortoise
-            - Recon_DIPY
+            - Recon_DIPY_MAPMRI
+            - Recon_DIPY_DKI
             - Recon_AMICO
             - Recon_PYAFQ
             - Recon_PYAFQExternalTrk

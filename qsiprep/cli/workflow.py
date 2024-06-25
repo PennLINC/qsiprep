@@ -144,7 +144,7 @@ def build_workflow(config_file, exec_mode, retval):
     build_log.log(25, f"\n{' ' * 11}* ".join(init_msg))
 
     # Check for FS license after building the workflow
-    if not config.execution.fs_license_file.exists():
+    if not Path(config.execution.fs_license_file).exists():
         build_log.critical(
             """\
 ERROR: a valid license file is required for FreeSurfer to run. QSIPrep looked for an existing \
