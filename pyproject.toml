@@ -70,9 +70,10 @@ doc = [
     "sphinxcontrib-bibtex",
 ]
 tests = [
-    "codecov",
     "coverage",
     "pytest",
+    "pytest-cov",
+    "pytest-env",
 ]
 maint = [
     "fuzzywuzzy",
@@ -162,6 +163,37 @@ ignore = ["D107", "E203", "E402", "E722", "W503", "N803", "N806", "N815", "W605"
 per-file-ignores = [
     "**/__init__.py : F401",
     "docs/conf.py : E265",
+]
+
+[tool.pytest.ini_options]
+addopts = '-m "not integration"'
+markers = [
+    "integration: integration tests to skip by default",
+    "mrtrix_singleshell_ss3t_act: test 1",
+    "mrtrix_singleshell_ss3t_noact: test 2",
+    "dsdti_fmap: test 3",
+    "dscsdsi_fmap: test 4",
+    "amico_noddi: test 5",
+    "cuda: test 6",
+    "dipy_mapmri: test 7",
+    "dipy_dki: test 8",
+    "drbuddi_rpe: test 9",
+    "drbuddi_shoreline_epi: test 10",
+    "drbuddi_tensorline_epi: test 11",
+    "dscsdsi: test 12",
+    "dsdti_nofmap: test 13",
+    "dsdti_synfmap: test 14",
+    "dsdti_topup: test 15",
+    "intramodal_template: test 16",
+    "scalar_mapper: test 17",
+    "pyafq_recon_external_trk: test 18",
+    "pyafq_recon_full: test 19",
+    "mrtrix3_recon: test 20",
+    "tortoise_recon: test 21",
+    "multi_t1w: test 22",
+]
+env = [
+    "RUNNING_PYTEST = 1",
 ]
 
 [tool.coverage.run]
