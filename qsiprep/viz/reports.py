@@ -8,6 +8,7 @@ qsiprep reports builder
 
 
 """
+
 import html
 import json
 import re
@@ -36,7 +37,13 @@ class Reportlet(Element):
     """
 
     def __init__(
-        self, name, imgtype=None, file_pattern=None, title=None, description=None, raw=False
+        self,
+        name,
+        imgtype=None,
+        file_pattern=None,
+        title=None,
+        description=None,
+        raw=False,
     ):
         self.name = name
         self.file_pattern = re.compile(file_pattern)
@@ -113,7 +120,9 @@ class Report(object):
                                 contents = fp.read().strip()
                         elif ext in ("svg", "gif", "png"):
                             fbase = Path(src).name
-                            copyfile(src, str(svg_dir / fbase), copy=True, use_hardlink=True)
+                            copyfile(
+                                src, str(svg_dir / fbase), copy=True, use_hardlink=True
+                            )
                             contents = str(Path(subject) / fig_dir / fbase)
                         if contents:
                             rlet.source_files.append(src)
@@ -124,7 +133,9 @@ class Report(object):
 
             if reportlets:
                 sub_report = SubReport(
-                    subrep_cfg["name"], reportlets=reportlets, title=subrep_cfg.get("title")
+                    subrep_cfg["name"],
+                    reportlets=reportlets,
+                    title=subrep_cfg.get("title"),
                 )
                 self.sections.append(order_by_run(sub_report))
 
@@ -198,22 +209,26 @@ class Report(object):
             boiler_idx += 1
 
         if (logs_path / "CITATION.md").exists():
-            text = "<pre>%s</pre>\n" % (logs_path / "CITATION.md").read_text(encoding="UTF-8")
+            text = "<pre>%s</pre>\n" % (logs_path / "CITATION.md").read_text(
+                encoding="UTF-8"
+            )
             boilerplate.append((boiler_idx, "Markdown", text))
             boiler_idx += 1
 
         if (logs_path / "CITATION.tex").exists():
             text = (logs_path / "CITATION.tex").read_text(encoding="UTF-8")
             text = (
-                re.compile(r"\\begin{document}(.*?)\\end{document}", re.DOTALL | re.IGNORECASE)
+                re.compile(
+                    r"\\begin{document}(.*?)\\end{document}", re.DOTALL | re.IGNORECASE
+                )
                 .findall(text)[0]
                 .strip()
             )
             text = "<pre>%s</pre>\n" % text
             text += "<h3>Bibliography</h3>\n"
-            text += "<pre>%s</pre>\n" % Path(pkgrf("qsiprep", "data/boilerplate.bib")).read_text(
-                encoding="UTF-8"
-            )
+            text += "<pre>%s</pre>\n" % Path(
+                pkgrf("qsiprep", "data/boilerplate.bib")
+            ).read_text(encoding="UTF-8")
             boilerplate.append((boiler_idx, "LaTeX", text))
             boiler_idx += 1
 
@@ -304,7 +319,9 @@ def generate_name_title(filename):
     return name.strip("_"), title
 
 
-def run_reports(reportlets_dir, out_dir, subject_label, run_uuid, report_type="qsiprep"):
+def run_reports(
+    reportlets_dir, out_dir, subject_label, run_uuid, report_type="qsiprep"
+):
     """
     Runs the reports
 
@@ -327,7 +344,9 @@ def run_reports(reportlets_dir, out_dir, subject_label, run_uuid, report_type="q
     >>> tmpdir.cleanup()
 
     """
-    reportlet_path = str(Path(reportlets_dir) / report_type / ("sub-%s" % subject_label))
+    reportlet_path = str(
+        Path(reportlets_dir) / report_type / ("sub-%s" % subject_label)
+    )
     if report_type == "qsiprep":
         viz_config = pkgrf("qsiprep", "viz/config.json")
     else:
@@ -335,7 +354,12 @@ def run_reports(reportlets_dir, out_dir, subject_label, run_uuid, report_type="q
 
     out_filename = "sub-{}.html".format(subject_label)
     report = Report(
-        reportlet_path, viz_config, out_dir, run_uuid, out_filename, pipeline_type=report_type
+        reportlet_path,
+        viz_config,
+        out_dir,
+        run_uuid,
+        out_filename,
+        pipeline_type=report_type,
     )
     return report.generate_report()
 
@@ -346,10 +370,21 @@ def generate_reports(subject_list, pipeline_mode="qsiprep"):
     """
     reports_dir = str(config.execution.reportlets_dir)
     run_uuid = config.execution.run_uuid
-    output_dir = str(config.execution.output_dir)
+    if config.execution.recon_only:
+        output_dir = str(config.execution.qsirecon_dir)
+    else:
+        output_dir = str(config.execution.qsiprep_dir)
+
+        if pipeline_mode != "qsiprep":
+            output_dir = str(config.execution.output_dir / "derivatives" / pipeline_mode)
+
     report_errors = [
         run_reports(
-            reports_dir, output_dir, subject_label, run_uuid=run_uuid, report_type=pipeline_mode
+            reports_dir,
+            output_dir,
+            subject_label,
+            run_uuid=run_uuid,
+            report_type=pipeline_mode,
         )
         for subject_label in subject_list
     ]
@@ -363,7 +398,10 @@ def generate_reports(subject_list, pipeline_mode="qsiprep"):
         logger.warning(
             "Errors occurred while generating reports for participants: %s.",
             ", ".join(
-                ["%s (%d)" % (subid, err) for subid, err in zip(subject_list, report_errors)]
+                [
+                    "%s (%d)" % (subid, err)
+                    for subid, err in zip(subject_list, report_errors)
+                ]
             ),
         )
     return errno

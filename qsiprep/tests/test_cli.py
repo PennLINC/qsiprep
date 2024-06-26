@@ -992,7 +992,7 @@ def _run_and_generate(test_name, parameters, test_main=True):
         retval = build_workflow(config_file, exec_mode="auto", retval={})
         qsiprep_wf = retval["workflow"]
         qsiprep_wf.run()
-        write_derivative_description(config.execution.fmri_dir, config.execution.qsiprep_dir)
+        write_derivative_description(config.execution.bids_dir, config.execution.qsiprep_dir)
 
         build_boilerplate(str(config_file), qsiprep_wf)
         session_list = (
