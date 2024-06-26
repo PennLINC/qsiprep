@@ -436,9 +436,37 @@ All outputs, including the imputed HCP sequence are saved in the outputs directo
 Building a custom reconstruction pipeline
 ==========================================
 
+Arguments contained in the qsiprep json files called in ``--recon-spec`` are passed to the various 
+tractography pipelines via nipype interfaces, hence parameters that are otherwise not listed in the current 
+json files can be found in there. For example, in the mrtrix pipelines (``ss3t`` or ``msmt``), the full list 
+of arguments can be found in the nipype `github`(https://github.com/nipy/nipype/blob/master/nipype/interfaces/mrtrix3/tracking.py), 
+and passing custom step sizes and maximum angles to the ``mrtrix_singleshell_ss3t_noACT`` workflow would look like::
+
+   {
+      "name": "track_ifod2",
+      "software": "MRTrix3",
+      "action": "tractography",
+      "qsirecon_suffix": "MRtrix3_fork-SS3T_act-None",
+      "input": "ss3t_csd",
+      "parameters": {
+        "use_5tt": false,
+        "use_sift2": true,
+        "tckgen":{
+          "algorithm": "iFOD2",
+          "select": 1e7,
+          "max_length": 200, # changed from default value
+          "min_length": 4, # changed from default value
+          "power": 0.33,
+          "quiet": true,
+          "angle": 15.0, # changed from default value
+          "step_size": 0.2 # changed from default value
+        },
+        "sift2":{}
+      }
+    }
 
 Instead of going through each possible element of a pipeline, we will go through
-a simple example and describe its components.
+a simple example and describe its components. 
 
 Simple DSI Studio example
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -524,6 +552,11 @@ Assuming this file is called ``qgi_scalar_export.json`` and you've installed
       --recon_spec gqi_scalar_export.json \
       --fs-license-file /path/to/license.txt
 
+If your custom json file is stored outside of your qsiprep container, remember to bind the file path of your custom json file before calling it in ``--recon_spec``. For example:: 
+
+--bind /path/to/<pipeline_name>_custom.json:/opt/conda/envs/qsiprep/lib/python3.10/site-packages/qsiprep/data/pipelines/<pipeline_name>.json 
+
+after which you can call the relevant ``<pipeline_name>`` under ``--recon_spec``.
 
 .. _transforms:
 
