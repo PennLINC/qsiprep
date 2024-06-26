@@ -24,7 +24,6 @@ from nipype.interfaces import ants, fsl
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
-from niworkflows.interfaces.bids import ReadSidecarJSON
 from niworkflows.interfaces.images import IntraModalMerge
 from niworkflows.interfaces.reportlets.masks import BETRPT
 
@@ -73,7 +72,16 @@ further improvements of HCP Pipelines [@hcppipelines].
             """Container in use does not have FSL. To use this workflow,
             please download the qsiprep container with FSL installed."""
         )
-    inputnode = pe.Node(niu.IdentityInterface(fields=["magnitude", "phasediff"]), name="inputnode")
+    inputnode = pe.Node(
+        niu.IdentityInterface(
+            fields=[
+                "magnitude",
+                "phasediff",
+                "phase_meta",
+            ],
+        ),
+        name="inputnode",
+    )
 
     outputnode = pe.Node(
         niu.IdentityInterface(fields=["fmap", "fmap_ref", "fmap_mask"]), name="outputnode"
@@ -119,15 +127,11 @@ further improvements of HCP Pipelines [@hcppipelines].
     # rsec2hz (divide by 2pi)
 
     if phasetype == "phasediff":
-        # Read phasediff echo times
-        meta = pe.Node(ReadSidecarJSON(), name="meta", mem_gb=0.01)
-
         # phase diff -> radians
         pha2rads = pe.Node(niu.Function(function=siemens2rads), name="pha2rads")
-        # Read phasediff echo times
-        meta = pe.Node(ReadSidecarJSON(), name="meta", mem_gb=0.01, run_without_submitting=True)
+
         workflow.connect([
-            (meta, compfmap, [('out_dict', 'metadata')]),
+            (inputnode, compfmap, [('phase_meta', 'metadata')]),
             (inputnode, pha2rads, [('phasediff', 'in_file')]),
             (pha2rads, prelude, [('out', 'phase_file')]),
             (inputnode, ds_report_fmap_mask, [('phasediff', 'source_file')]),
@@ -138,17 +142,10 @@ further improvements of HCP Pipelines [@hcppipelines].
 The phase difference used for unwarping was calculated using two separate phase measurements
  [@pncprocessing].
     """
-        # Special case for phase1, phase2 images
-        meta = pe.MapNode(
-            ReadSidecarJSON(),
-            name="meta",
-            mem_gb=0.01,
-            run_without_submitting=True,
-            iterfield=["in_file"],
-        )
         phases2fmap = pe.Node(Phases2Fieldmap(), name="phases2fmap")
+
         workflow.connect([
-            (meta, phases2fmap, [('out_dict', 'metadatas')]),
+            (inputnode, phases2fmap, [('phase_meta', 'metadatas')]),
             (inputnode, phases2fmap, [('phasediff', 'phase_files')]),
             (phases2fmap, prelude, [('out_file', 'phase_file')]),
             (phases2fmap, compfmap, [('phasediff_metadata', 'metadata')]),
@@ -156,7 +153,6 @@ The phase difference used for unwarping was calculated using two separate phase 
         ])  # fmt:skip
 
     workflow.connect([
-        (inputnode, meta, [('phasediff', 'in_file')]),
         (inputnode, magmrg, [('magnitude', 'in_files')]),
         (magmrg, n4, [('out_avg', 'input_image')]),
         (n4, prelude, [('output_image', 'magnitude_file')]),
