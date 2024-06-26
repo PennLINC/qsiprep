@@ -178,6 +178,7 @@ jobs:
             mv /src/qsiprep/.coverage /src/coverage/.coverage.dscsdsi
             # remove nifti files before uploading artifacts
             find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.nii" -type f -delete
             find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
       - persist_to_workspace:
           root: /src/coverage/
@@ -205,6 +206,7 @@ jobs:
             mv /src/qsiprep/.coverage /src/coverage/.coverage.dsdti_nofmap
             # remove nifti files before uploading artifacts
             find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.nii" -type f -delete
             find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
       - persist_to_workspace:
           root: /src/coverage/
@@ -232,6 +234,7 @@ jobs:
             mv /src/qsiprep/.coverage /src/coverage/.coverage.dsdti_synfmap
             # remove nifti files before uploading artifacts
             find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.nii" -type f -delete
             find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
       - persist_to_workspace:
           root: /src/coverage/
@@ -259,6 +262,7 @@ jobs:
             mv /src/qsiprep/.coverage /src/coverage/.coverage.dsdti_topup
             # remove nifti files before uploading artifacts
             find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.nii" -type f -delete
             find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
       - persist_to_workspace:
           root: /src/coverage/
@@ -286,6 +290,7 @@ jobs:
             mv /src/qsiprep/.coverage /src/coverage/.coverage.drbuddi_tensorline_epi
             # remove nifti files before uploading artifacts
             find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.nii" -type f -delete
             find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
       - persist_to_workspace:
           root: /src/coverage/
@@ -313,6 +318,7 @@ jobs:
             mv /src/qsiprep/.coverage /src/coverage/.coverage.drbuddi_shoreline_epi
             # remove nifti files before uploading artifacts
             find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.nii" -type f -delete
             find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
       - persist_to_workspace:
           root: /src/coverage/
@@ -340,6 +346,7 @@ jobs:
             mv /src/qsiprep/.coverage /src/coverage/.coverage.drbuddi_rpe
             # remove nifti files before uploading artifacts
             find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.nii" -type f -delete
             find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
       - persist_to_workspace:
           root: /src/coverage/
@@ -396,6 +403,7 @@ jobs:
             mv /src/qsiprep/.coverage /src/coverage/.coverage.mrtrix_singleshell_ss3t_act
             # remove nifti files before uploading artifacts
             find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.nii" -type f -delete
             find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
       - persist_to_workspace:
           root: /src/coverage/
@@ -420,6 +428,7 @@ jobs:
             mv /src/qsiprep/.coverage /src/coverage/.coverage.mrtrix_singleshell_ss3t_noact
             # remove nifti files before uploading artifacts
             find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.nii" -type f -delete
             find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
       - persist_to_workspace:
           root: /src/coverage/
@@ -444,6 +453,7 @@ jobs:
             mv /src/qsiprep/.coverage /src/coverage/.coverage.mrtrix3_recon
             # remove nifti files before uploading artifacts
             find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.nii" -type f -delete
             find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
       - persist_to_workspace:
           root: /src/coverage/
@@ -468,6 +478,7 @@ jobs:
             mv /src/qsiprep/.coverage /src/coverage/.coverage.autotrack
             # remove nifti files before uploading artifacts
             find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.nii" -type f -delete
             find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
       - persist_to_workspace:
           root: /src/coverage/
@@ -492,6 +503,7 @@ jobs:
             mv /src/qsiprep/.coverage /src/coverage/.coverage.tortoise_recon
             # remove nifti files before uploading artifacts
             find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.nii" -type f -delete
             find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
       - persist_to_workspace:
           root: /src/coverage/
@@ -516,6 +528,7 @@ jobs:
             mv /src/qsiprep/.coverage /src/coverage/.coverage.dipy_mapmri
             # remove nifti files before uploading artifacts
             find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.nii" -type f -delete
             find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
       - persist_to_workspace:
           root: /src/coverage/
@@ -540,6 +553,7 @@ jobs:
             mv /src/qsiprep/.coverage /src/coverage/.coverage.dipy_dki
             # remove nifti files before uploading artifacts
             find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.nii" -type f -delete
             find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
       - persist_to_workspace:
           root: /src/coverage/
@@ -564,6 +578,7 @@ jobs:
             mv /src/qsiprep/.coverage /src/coverage/.coverage.pyafq_recon_full
             # remove nifti files before uploading artifacts
             find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.nii" -type f -delete
             find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
       - persist_to_workspace:
           root: /src/coverage/
@@ -588,6 +603,7 @@ jobs:
             mv /src/qsiprep/.coverage /src/coverage/.coverage.pyafq_recon_external_trk
             # remove nifti files before uploading artifacts
             find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.nii" -type f -delete
             find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
       - persist_to_workspace:
           root: /src/coverage/
@@ -612,6 +628,7 @@ jobs:
             mv /src/qsiprep/.coverage /src/coverage/.coverage.scalar_mapper
             # remove nifti files before uploading artifacts
             find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.nii" -type f -delete
             find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
       - persist_to_workspace:
           root: /src/coverage/
@@ -638,6 +655,7 @@ jobs:
             mv /src/qsiprep/.coverage /src/coverage/.coverage.amico_noddi
             # remove nifti files before uploading artifacts
             find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.nii" -type f -delete
             find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
       - persist_to_workspace:
           root: /src/coverage/
