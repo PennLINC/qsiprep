@@ -363,10 +363,10 @@ def generate_reports(subject_list, pipeline_mode="qsiprep"):
     if config.execution.recon_only:
         output_dir = str(config.execution.qsirecon_dir)
     else:
-        output_dir = str(config.execution.qsiprep_dir)
-
-        if pipeline_mode != "qsiprep":
-            output_dir = str(config.execution.output_dir / "derivatives" / pipeline_mode)
+        if pipeline_mode == "qsiprep":
+            output_dir = str(config.execution.qsiprep_dir)
+        else:
+            output_dir = str(config.execution.qsiprep_dir / pipeline_mode)
 
     report_errors = [
         run_reports(
@@ -380,7 +380,7 @@ def generate_reports(subject_list, pipeline_mode="qsiprep"):
     ]
 
     errno = sum(report_errors)
-    errno += generate_interactive_report_summary(Path(output_dir) / pipeline_mode)
+    errno += generate_interactive_report_summary(output_dir)
     if errno:
         import logging
 
