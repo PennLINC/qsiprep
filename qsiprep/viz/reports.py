@@ -376,7 +376,9 @@ def generate_reports(subject_list, pipeline_mode="qsiprep"):
         output_dir = str(config.execution.qsiprep_dir)
 
         if pipeline_mode != "qsiprep":
-            output_dir = str(config.execution.output_dir / "derivatives" / pipeline_mode)
+            output_dir = str(
+                config.execution.output_dir / "derivatives" / pipeline_mode
+            )
 
     report_errors = [
         run_reports(
