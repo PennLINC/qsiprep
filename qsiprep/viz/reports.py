@@ -8,6 +8,7 @@ qsiprep reports builder
 
 
 """
+
 import html
 import json
 import re
@@ -36,7 +37,13 @@ class Reportlet(Element):
     """
 
     def __init__(
-        self, name, imgtype=None, file_pattern=None, title=None, description=None, raw=False
+        self,
+        name,
+        imgtype=None,
+        file_pattern=None,
+        title=None,
+        description=None,
+        raw=False,
     ):
         self.name = name
         self.file_pattern = re.compile(file_pattern)
@@ -124,7 +131,9 @@ class Report(object):
 
             if reportlets:
                 sub_report = SubReport(
-                    subrep_cfg["name"], reportlets=reportlets, title=subrep_cfg.get("title")
+                    subrep_cfg["name"],
+                    reportlets=reportlets,
+                    title=subrep_cfg.get("title"),
                 )
                 self.sections.append(order_by_run(sub_report))
 
@@ -335,7 +344,12 @@ def run_reports(reportlets_dir, out_dir, subject_label, run_uuid, report_type="q
 
     out_filename = "sub-{}.html".format(subject_label)
     report = Report(
-        reportlet_path, viz_config, out_dir, run_uuid, out_filename, pipeline_type=report_type
+        reportlet_path,
+        viz_config,
+        out_dir,
+        run_uuid,
+        out_filename,
+        pipeline_type=report_type,
     )
     return report.generate_report()
 
@@ -346,16 +360,27 @@ def generate_reports(subject_list, pipeline_mode="qsiprep"):
     """
     reports_dir = str(config.execution.reportlets_dir)
     run_uuid = config.execution.run_uuid
-    output_dir = str(config.execution.output_dir)
+    if config.execution.recon_only:
+        output_dir = str(config.execution.qsirecon_dir)
+    else:
+        if pipeline_mode == "qsiprep":
+            output_dir = str(config.execution.qsiprep_dir)
+        else:
+            output_dir = str(config.execution.qsiprep_dir / pipeline_mode)
+
     report_errors = [
         run_reports(
-            reports_dir, output_dir, subject_label, run_uuid=run_uuid, report_type=pipeline_mode
+            reports_dir,
+            output_dir,
+            subject_label,
+            run_uuid=run_uuid,
+            report_type=pipeline_mode,
         )
         for subject_label in subject_list
     ]
 
     errno = sum(report_errors)
-    errno += generate_interactive_report_summary(Path(output_dir) / pipeline_mode)
+    errno += generate_interactive_report_summary(output_dir)
     if errno:
         import logging
 

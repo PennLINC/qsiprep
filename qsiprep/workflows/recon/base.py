@@ -175,7 +175,8 @@ to workflows in *qsiprep*'s documentation]\
         # Get the preprocessed DWI and all the related preprocessed images
         if config.workflow.recon_input_pipeline == "qsiprep":
             dwi_ingress_nodes[dwi_file] = pe.Node(
-                QsiReconDWIIngress(dwi_file=dwi_file), name=wf_name + "_ingressed_dwi_data"
+                QsiReconDWIIngress(dwi_file=dwi_file),
+                name=wf_name + "_ingressed_dwi_data",
             )
 
         elif config.workflow.recon_input_pipeline == "ukb":
@@ -239,11 +240,14 @@ to workflows in *qsiprep*'s documentation]\
             (recon_full_inputs[dwi_file], dwi_recon_wfs[dwi_file],
              [(trait, "inputnode." + trait) for trait in recon_workflow_input_fields]),
 
-            (anat_ingress_node if config.workflow.recon_input_pipeline == "qsiprep" \
-             else anat_ingress_nodes[dwi_file],
-             dwi_individual_anatomical_wfs[dwi_file],
-             [(f"outputnode.{trait}", f"inputnode.{trait}")
-              for trait in anatomical_workflow_outputs])
+            (
+                anat_ingress_node if config.workflow.recon_input_pipeline == "qsiprep"
+                else anat_ingress_nodes[dwi_file],
+                dwi_individual_anatomical_wfs[dwi_file], [
+                    (f"outputnode.{trait}", f"inputnode.{trait}")
+                    for trait in anatomical_workflow_outputs
+                ]
+            )
         ])  # fmt:skip
 
     # Fill-in datasinks and reportlet datasinks for the anatomical workflow
@@ -332,7 +336,10 @@ def _get_iterable_dwi_inputs(subject_id):
         dwi_files = [
             f.path
             for f in layout.get(
-                suffix="dwi", subject=subject_id, absolute_paths=True, extension=["nii", "nii.gz"]
+                suffix="dwi",
+                subject=subject_id,
+                absolute_paths=True,
+                extension=["nii", "nii.gz"],
             )
             if "space-T1w" in f.filename
         ]
