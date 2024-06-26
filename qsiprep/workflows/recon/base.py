@@ -72,10 +72,7 @@ def init_qsirecon_wf():
         single_subject_wf = init_single_subject_recon_wf(subject_id=subject_id)
 
         single_subject_wf.config["execution"]["crashdump_dir"] = str(
-            config.execution.qsirecon_dir
-            / f"sub-{subject_id}"
-            / "log"
-            / config.execution.run_uuid
+            config.execution.qsirecon_dir / f"sub-{subject_id}" / "log" / config.execution.run_uuid
         )
         for node in single_subject_wf._get_all_nodes():
             node.config = deepcopy(single_subject_wf.config)
@@ -83,10 +80,7 @@ def init_qsirecon_wf():
 
         # Dump a copy of the config file into the log directory
         log_dir = (
-            config.execution.qsirecon_dir
-            / f"sub-{subject_id}"
-            / "log"
-            / config.execution.run_uuid
+            config.execution.qsirecon_dir / f"sub-{subject_id}" / "log" / config.execution.run_uuid
         )
         log_dir.mkdir(exist_ok=True, parents=True)
         config.to_filename(log_dir / "qsiprep.toml")
@@ -187,9 +181,7 @@ to workflows in *qsiprep*'s documentation]\
 
         elif config.workflow.recon_input_pipeline == "ukb":
             dwi_ingress_nodes[dwi_file] = pe.Node(
-                UKBioBankDWIIngress(
-                    dwi_file=dwi_file, data_dir=str(dwi_input["path"].absolute())
-                ),
+                UKBioBankDWIIngress(dwi_file=dwi_file, data_dir=str(dwi_input["path"].absolute())),
                 name=wf_name + "_ingressed_ukb_dwi_data",
             )
             anat_ingress_nodes[dwi_file], available_anatomical_data = (
@@ -290,26 +282,20 @@ def _load_recon_spec():
 
     spec_name = config.workflow.recon_spec
     prepackaged_dir = pkgrf("qsiprep", "data/pipelines")
-    prepackaged = [
-        op.split(fname)[1][:-5] for fname in glob(prepackaged_dir + "/*.json")
-    ]
+    prepackaged = [op.split(fname)[1][:-5] for fname in glob(prepackaged_dir + "/*.json")]
     if op.exists(spec_name):
         recon_spec = spec_name
     elif spec_name in prepackaged:
         recon_spec = op.join(prepackaged_dir + "/{}.json".format(spec_name))
     else:
-        raise Exception(
-            "{} is not a file that exists or in {}".format(spec_name, prepackaged)
-        )
+        raise Exception("{} is not a file that exists or in {}".format(spec_name, prepackaged))
     with open(recon_spec, "r") as f:
         try:
             spec = json.load(f)
         except Exception:
             raise Exception("Unable to read JSON spec. Check the syntax.")
     if config.execution.sloppy:
-        config.loggers.workflow.warning(
-            "Forcing reconstruction to use unrealistic parameters"
-        )
+        config.loggers.workflow.warning("Forcing reconstruction to use unrealistic parameters")
         spec = make_sloppy(spec)
     return spec
 
@@ -361,8 +347,6 @@ def _get_iterable_dwi_inputs(subject_id):
         return [{"bids_dwi_file": dwi_file} for dwi_file in dwi_files]
 
     if config.workflow.recon_input_pipeline == "ukb":
-        return create_ukb_layout(
-            ukb_dir=config.execution.bids_dir, participant_label=subject_id
-        )
+        return create_ukb_layout(ukb_dir=config.execution.bids_dir, participant_label=subject_id)
 
     raise Exception("Unknown pipeline " + config.workflow.recon_input_pipeline)
