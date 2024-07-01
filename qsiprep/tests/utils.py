@@ -1,12 +1,12 @@
 """Utility functions for tests."""
 
+import lzma
 import os
 import tarfile
 from glob import glob
 from gzip import GzipFile
 from io import BytesIO
 
-import lzma
 import requests
 from nipype import logging
 
