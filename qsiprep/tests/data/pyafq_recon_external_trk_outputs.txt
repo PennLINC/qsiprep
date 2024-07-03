@@ -1,5 +1,4 @@
 qsiprep
-qsiprep/.bidsignore
 qsiprep/dataset_description.json
 qsiprep/dwiqc.json
 qsiprep/logs
@@ -9,7 +8,6 @@ qsiprep/logs/CITATION.md
 qsiprep/logs/CITATION.tex
 qsiprep/sub-ABCD
 qsiprep/sub-ABCD.html
-qsiprep/sub-ABCD/figures
 qsirecon
 qsirecon-MRtrix3
 qsirecon-MRtrix3/sub-ABCD

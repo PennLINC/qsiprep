@@ -108,8 +108,6 @@ qsirecon-PYAFQ/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-T1w_desc-preproc_dwimap/
 qsiprep
 qsiprep/sub-ABCD.html
 qsiprep/sub-ABCD
-qsiprep/sub-ABCD/figures
-qsiprep/.bidsignore
 qsiprep/logs
 qsiprep/logs/CITATION.tex
 qsiprep/logs/CITATION.bib
