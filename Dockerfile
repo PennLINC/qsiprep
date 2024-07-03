@@ -5,7 +5,7 @@ RUN pip install build
 RUN apt-get update && \
     apt-get install -y --no-install-recommends git
 
-FROM pennbbl/qsiprep_build:24.4.29
+FROM pennbbl/qsiprep_build:24.7.1
 
 # Install qsiprep
 COPY . /src/qsiprep

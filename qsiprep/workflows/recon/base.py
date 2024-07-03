@@ -239,7 +239,7 @@ to workflows in *qsiprep*'s documentation]\
             (recon_full_inputs[dwi_file], dwi_recon_wfs[dwi_file],
              [(trait, "inputnode." + trait) for trait in recon_workflow_input_fields]),
 
-            (anat_ingress_node if config.workflow.recon_input_pipeline == "qsiprep" \
+            (anat_ingress_node if config.workflow.recon_input_pipeline == "qsiprep"
              else anat_ingress_nodes[dwi_file],
              dwi_individual_anatomical_wfs[dwi_file],
              [(f"outputnode.{trait}", f"inputnode.{trait}")
