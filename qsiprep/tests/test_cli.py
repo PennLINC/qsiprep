@@ -965,6 +965,42 @@ def test_tortoise_recon(data_dir, output_dir, working_dir):
     _run_and_generate(TEST_NAME, parameters, test_main=True)
 
 
+@pytest.mark.integration
+@pytest.mark.maternal_brain_project
+def test_maternal_brain_project(data_dir, output_dir, working_dir):
+    """Run QSIPrep on Maternal Brain Project data.
+
+    The dataset was built from the Maternal Brain Project dataset:
+    https://openneuro.org/datasets/ds005299/versions/1.0.0
+
+    The first subject's first session DWI data were downsampled to 5 mm isotropic voxels.
+    The dataset contains multi-shell DWI data with a GRE field map.
+    """
+    TEST_NAME = "maternal_brain_project"
+
+    dataset_dir = download_test_data("maternal_brain_project", data_dir)
+    out_dir = os.path.join(output_dir, TEST_NAME)
+    work_dir = os.path.join(working_dir, TEST_NAME)
+
+    test_data_dir = get_test_data_path()
+    filter_file = os.path.join(test_data_dir, "maternal_brain_project_filter.json")
+
+    parameters = [
+        dataset_dir,
+        out_dir,
+        "participant",
+        f"-w={work_dir}",
+        "--boilerplate",
+        "--sloppy",
+        "--write-graph",
+        "--mem_mb=4096",
+        "--output-resolution=5",
+        f"--bids-filter-file={filter_file}",
+    ]
+
+    _run_and_generate(TEST_NAME, parameters, test_main=True)
+
+
 def _run_and_generate(test_name, parameters, test_main=True):
     from qsiprep import config
 

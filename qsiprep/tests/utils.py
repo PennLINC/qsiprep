@@ -35,6 +35,9 @@ def download_test_data(dset, data_dir=None):
         "drbuddi_epi": "https://upenn.box.com/shared/static/plyuee1nbj9v8eck03s38ojji8tkspwr.xz",
         "DSDTI_fmap": "https://upenn.box.com/shared/static/rxr6qbi6ezku9gw3esfpnvqlcxaw7n5n.gz",
         "DSCSDSI_fmap": "https://upenn.box.com/shared/static/l561psez1ojzi4p3a12eidaw9vbizwdc.gz",
+        "maternal_brain_project": (
+            "https://upenn.box.com/shared/static/tkahg1ctipmfihvpa1gmibvcv0gb721h.xz"
+        ),
     }
     if dset == "*":
         for k in URLS:
