@@ -362,7 +362,7 @@ jobs:
           command: |
             pytest -rP -o log_cli=true -m "maternal_brain_project" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
             mkdir /src/coverage
-            mv /src/qsiprep/.coverage /src/coverage/.coverage.drbuddi_rpe
+            mv /src/qsiprep/.coverage /src/coverage/.coverage.maternal_brain_project
             # remove nifti files before uploading artifacts
             find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
             find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
@@ -372,6 +372,31 @@ jobs:
             - .coverage.maternal_brain_project
       - store_artifacts:
           path: /src/qsiprep/.circleci/out/maternal_brain_project/
+
+  forrest_gump:
+    resource_class: large
+    environment:
+      CIRCLE_CPUS: 4
+    <<: *dockersetup
+    steps:
+      - checkout
+      - run: *runinstall
+      - run:
+          name: Run QSIPrep on single-shell dataset with GRE field maps
+          no_output_timeout: 3h
+          command: |
+            pytest -rP -o log_cli=true -m "forrest_gump" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
+            mkdir /src/coverage
+            mv /src/qsiprep/.coverage /src/coverage/.coverage.forrest_gump
+            # remove nifti files before uploading artifacts
+            find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+      - persist_to_workspace:
+          root: /src/coverage/
+          paths:
+            - .coverage.forrest_gump
+      - store_artifacts:
+          path: /src/qsiprep/.circleci/out/forrest_gump/
 
   IntramodalTemplate:
     resource_class: large
@@ -890,6 +915,16 @@ workflows:
             tags:
               only: /.*/
 
+      - forrest_gump:
+          requires:
+            - build
+          filters:
+            branches:
+              ignore:
+                - /recon\/.*/
+            tags:
+              only: /.*/
+
       - IntramodalTemplate:
           requires:
             - build
@@ -997,6 +1032,7 @@ workflows:
             - DRBUDDI_eddy_rpe_series
             - DRBUDDI_TENSORLine_EPI
             - maternal_brain_project
+            - forrest_gump
             - IntramodalTemplate
             - MultiT1w
             - Recon_3Tissue_Singleshell_ACT
@@ -1028,6 +1064,7 @@ workflows:
             - DRBUDDI_eddy_rpe_series
             - DRBUDDI_TENSORLine_EPI
             - maternal_brain_project
+            - forrest_gump
             - IntramodalTemplate
             - MultiT1w
             - Recon_3Tissue_Singleshell_ACT

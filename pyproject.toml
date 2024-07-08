@@ -192,6 +192,7 @@ markers = [
     "tortoise_recon: test 21",
     "multi_t1w: test 22",
     "maternal_brain_project: multi-shell with GRE field map",
+    "forrest_gump: single-shell with GRE field map",
 ]
 env = [
     "RUNNING_PYTEST = 1",

@@ -982,8 +982,37 @@ def test_maternal_brain_project(data_dir, output_dir, working_dir):
     out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
 
-    test_data_dir = get_test_data_path()
-    filter_file = os.path.join(test_data_dir, "maternal_brain_project_filter.json")
+    parameters = [
+        dataset_dir,
+        out_dir,
+        "participant",
+        f"-w={work_dir}",
+        "--boilerplate",
+        "--sloppy",
+        "--write-graph",
+        "--mem_mb=4096",
+        "--output-resolution=5",
+    ]
+
+    _run_and_generate(TEST_NAME, parameters, test_main=True)
+
+
+@pytest.mark.integration
+@pytest.mark.forrest_gump
+def test_forrest_gump(data_dir, output_dir, working_dir):
+    """Run QSIPrep on Forrest Gump data.
+
+    The dataset was built from the Forrest Gump dataset:
+    https://openneuro.org/datasets/ds000113/versions/1.3.0
+
+    The first subject's first session DWI data were downsampled to 5 mm isotropic voxels.
+    The dataset contains single-shell DWI data with a GRE field map.
+    """
+    TEST_NAME = "forrest_gump"
+
+    dataset_dir = download_test_data("forrest_gump", data_dir)
+    out_dir = os.path.join(output_dir, TEST_NAME)
+    work_dir = os.path.join(working_dir, TEST_NAME)
 
     parameters = [
         dataset_dir,
@@ -995,7 +1024,6 @@ def test_maternal_brain_project(data_dir, output_dir, working_dir):
         "--write-graph",
         "--mem_mb=4096",
         "--output-resolution=5",
-        f"--bids-filter-file={filter_file}",
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=True)
