@@ -11,12 +11,13 @@ Image tools interfaces
 
 from __future__ import absolute_import, division, print_function, unicode_literals
 
+from mimetypes import guess_type
+
 import matplotlib.pyplot as plt
 import nibabel as nb
 import numpy as np
 import seaborn as sns
 from matplotlib import gridspec as mgs
-from mimetypes import guess_type
 from nipype import logging
 from nipype.interfaces import ants
 from nipype.interfaces.ants import Registration
@@ -42,7 +43,6 @@ from niworkflows.interfaces.reportlets.registration import (
     _ANTSRegistrationOutputSpecRPT,
 )
 from seaborn import color_palette
-
 
 LOGGER = logging.getLogger("nipype.interface")
 
@@ -545,7 +545,6 @@ def _applytfms(args):
     """
     import nibabel as nb
     from nipype.utils.filemanip import fname_presuffix
-
     from niworkflows.interfaces.fixes import FixHeaderApplyTransforms as ApplyTransforms
 
     in_file, in_xform, ifargs, index, newpath = args
