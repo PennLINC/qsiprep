@@ -1,0 +1,7 @@
+qsiprep
+qsiprep/logs
+qsiprep/logs/CITATION.bib
+qsiprep/logs/CITATION.html
+qsiprep/logs/CITATION.md
+qsiprep/logs/CITATION.tex
+qsiprep/sub-01
