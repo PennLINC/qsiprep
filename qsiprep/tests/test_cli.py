@@ -1033,8 +1033,7 @@ def test_forrest_gump(data_dir, output_dir, working_dir):
 def _run_and_generate(test_name, parameters, test_main=True):
     from qsiprep import config
 
-    # TODO: Add this param
-    # parameters.append("--clean-workdir")
+    # TODO: Add --clean-workdir param to CLI
     parameters.append("--stop-on-first-crash")
     parameters.append("--notrack")
     parameters.append("-vv")
