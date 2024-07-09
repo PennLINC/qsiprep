@@ -381,8 +381,10 @@ def generate_reports(subject_list, pipeline_mode="qsiprep"):
         for subject_label in subject_list
     ]
 
+    actual_output_dir = str(Path(output_dir) / pipeline_mode)
+
     errno = sum(report_errors)
-    errno += generate_interactive_report_summary(output_dir)
+    errno += generate_interactive_report_summary(actual_output_dir)
     if errno:
         import logging
 
