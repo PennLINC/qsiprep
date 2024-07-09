@@ -83,6 +83,7 @@ class Report(object):
         out_filename="report.html",
         pipeline_type="qsiprep",
     ):
+        config.loggers.cli.warning(f"Report output directory: {out_dir}")
         self.root = path
         self.sections = []
         self.errors = []
@@ -343,6 +344,7 @@ def run_reports(reportlets_dir, out_dir, subject_label, run_uuid, report_type="q
         viz_config = pkgrf("qsiprep", "viz/recon_config.json")
 
     out_filename = "sub-{}.html".format(subject_label)
+    config.loggers.cli.warning(f"run_reports output directory: {out_dir}")
     report = Report(
         reportlet_path,
         viz_config,
@@ -364,7 +366,7 @@ def generate_reports(subject_list, pipeline_mode="qsiprep"):
     if pipeline_mode == "qsiprep":
         output_dir = str(config.execution.qsiprep_dir)
     else:
-        output_dir = str(config.execution.output_dir / pipeline_mode)
+        output_dir = str(config.execution.output_dir)
 
     config.loggers.cli.warning(f"Using report output dir '{output_dir}")
 
