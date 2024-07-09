@@ -1,12 +1,12 @@
 """Utility functions for tests."""
 
+import lzma
 import os
 import tarfile
 from glob import glob
 from gzip import GzipFile
 from io import BytesIO
 
-import lzma
 import requests
 from nipype import logging
 
@@ -121,7 +121,9 @@ def check_generated_files(qsiprep_dir, output_list_file, optional_output_list_fi
         if found_not_expected:
             msg += "\nFound but not expected:\n\t"
             msg += "\n\t".join(found_not_expected)
-        raise ValueError(msg)
+
+        if msg:
+            raise ValueError(msg)
 
 
 def reorder_expected_outputs():

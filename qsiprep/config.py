@@ -498,7 +498,7 @@ class execution(_Config):
                 "stimuli",
                 "sourcedata",
                 "models",
-                re.compile(r"^\."),
+                re.compile(r"\/\.\w+|^\.\w+"),  # hidden files
                 re.compile(r"sub-[a-zA-Z0-9]+(/ses-[a-zA-Z0-9]+)?/(beh|func|eeg|ieeg|meg|perf)"),
             ]
             if cls.participant_label and cls.bids_database_dir is None:
