@@ -364,7 +364,7 @@ def generate_reports(subject_list, pipeline_mode="qsiprep"):
     if pipeline_mode == "qsiprep":
         output_dir = str(config.execution.qsiprep_dir)
     else:
-        output_dir = str(config.execution.qsiprep_dir / pipeline_mode)
+        output_dir = str(config.execution.output_dir / pipeline_mode)
 
     config.loggers.cli.warning(f"Using report output dir '{output_dir}")
 
