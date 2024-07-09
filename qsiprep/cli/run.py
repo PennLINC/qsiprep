@@ -195,12 +195,10 @@ def main():
 
                 write_derivative_description(
                     config.execution.bids_dir,
-                    config.execution.output_dir / f"derivatives/qsirecon-{qsirecon_suffix}",
+                    config.execution.output_dir / f"qsirecon-{qsirecon_suffix}",
                     # dataset_links=config.execution.dataset_links,
                 )
-                write_bidsignore(
-                    config.execution.output_dir / f"derivatives/qsirecon-{qsirecon_suffix}"
-                )
+                write_bidsignore(config.execution.output_dir / f"qsirecon-{qsirecon_suffix}")
 
         else:
             failed_reports = generate_reports(
@@ -363,11 +361,11 @@ def main():
 
             write_derivative_description(
                 config.execution.bids_dir,
-                config.execution.output_dir / f"derivatives/qsirecon-{qsirecon_suffix}",
+                config.execution.output_dir / f"qsirecon-{qsirecon_suffix}",
                 # dataset_links=config.execution.dataset_links,
             )
             write_bidsignore(
-                config.execution.output_dir / f"derivatives/qsirecon-{qsirecon_suffix}"
+                config.execution.output_dir / f"qsirecon-{qsirecon_suffix}"
             )
 
             if failed_reports:
