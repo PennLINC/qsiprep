@@ -530,7 +530,7 @@ def init_mrtrix_tractography_wf(
         name="inputnode",
     )
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=["tck_file", "sift_weights", "recon_scalars"]),
+        niu.IdentityInterface(fields=["tck_file", "sift_weights", "mu", "recon_scalars"]),
         name="outputnode",
     )
 
@@ -588,6 +588,18 @@ def init_mrtrix_tractography_wf(
                 run_without_submitting=True,
             )
             workflow.connect(outputnode, 'sift_weights', ds_sift_weights, 'in_file')  # fmt:skip
+        if qsirecon_suffix:
+            ds_mu_file = pe.Node(
+                ReconDerivativesDataSink(
+                    extension=".txt",
+                    model="sift2",
+                    suffix="mu",
+                    qsirecon_suffix=qsirecon_suffix,
+                ),
+                name="ds_mu_file",
+                run_without_submitting=True,
+            )
+            workflow.connect(outputnode, 'mu', ds_mu_file, 'in_file')  # fmt:skip            
         if use_5tt:
             workflow.connect(inputnode, connect_5tt, tck_sift2, "act_file")  # fmt:skip
 
