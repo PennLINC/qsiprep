@@ -361,13 +361,10 @@ def generate_reports(subject_list, pipeline_mode="qsiprep"):
     config.loggers.cli.warning(f"Generating report for pipeline mode '{pipeline_mode}'")
     reports_dir = str(config.execution.reportlets_dir)
     run_uuid = config.execution.run_uuid
-    if config.execution.recon_only:
-        output_dir = str(config.execution.qsirecon_dir)
+    if pipeline_mode == "qsiprep":
+        output_dir = str(config.execution.qsiprep_dir)
     else:
-        if pipeline_mode == "qsiprep":
-            output_dir = str(config.execution.qsiprep_dir)
-        else:
-            output_dir = str(config.execution.qsiprep_dir / pipeline_mode)
+        output_dir = str(config.execution.qsiprep_dir / pipeline_mode)
 
     config.loggers.cli.warning(f"Using report output dir '{output_dir}")
 
