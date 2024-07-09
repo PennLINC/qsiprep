@@ -30,7 +30,8 @@ def make_sloppy(spec):
         ("MRTrix3", "global_tractography"): {"niters": 10000},
         ("pyAFQ", "pyafq_tractometry"): {
             "mapping_definition": 'AffMap(affine_kwargs={"level_iters": [10, 10, 10]})',
-            "bundle_info": '["SLF_L", "ARC_L", "CST_L", "CST_R"]',
+            "bundle_info": 'default18_bd()["Left Superior Longitudinal", "Left Arcuate", '
+            '"Left Corticospinal", "Right Corticospinal"]',
             "n_seeds": 10000,
             "random_seeds": True,
             "export": "all_bundles_figure",
