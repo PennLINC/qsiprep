@@ -982,6 +982,9 @@ def test_maternal_brain_project(data_dir, output_dir, working_dir):
     out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
 
+    test_data_path = get_test_data_path()
+    bids_filter = os.path.join(test_data_path, f"{TEST_NAME}_filter.json")
+
     parameters = [
         dataset_dir,
         out_dir,
@@ -991,6 +994,7 @@ def test_maternal_brain_project(data_dir, output_dir, working_dir):
         "--write-graph",
         "--output-resolution=5",
         "--hmc-model=3dSHORE",
+        f"--bids-filter-file={bids_filter}",
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=True)
@@ -1013,6 +1017,9 @@ def test_forrest_gump(data_dir, output_dir, working_dir):
     out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
 
+    test_data_path = get_test_data_path()
+    bids_filter = os.path.join(test_data_path, f"{TEST_NAME}_filter.json")
+
     parameters = [
         dataset_dir,
         out_dir,
@@ -1021,6 +1028,7 @@ def test_forrest_gump(data_dir, output_dir, working_dir):
         "--sloppy",
         "--write-graph",
         "--output-resolution=5",
+        f"--bids-filter-file={bids_filter}",
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=True)
