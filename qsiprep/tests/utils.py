@@ -125,7 +125,9 @@ def check_generated_files(qsiprep_dir, output_list_file, optional_output_list_fi
         if found_not_expected:
             msg += "\nFound but not expected:\n\t"
             msg += "\n\t".join(found_not_expected)
-        raise ValueError(msg)
+
+        if msg:
+            raise ValueError(msg)
 
 
 def reorder_expected_outputs():
