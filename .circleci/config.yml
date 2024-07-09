@@ -349,7 +349,7 @@ jobs:
           path: /src/qsiprep/.circleci/out/drbuddi_rpe/
 
   maternal_brain_project:
-    resource_class: large
+    resource_class: xlarge
     environment:
       CIRCLE_CPUS: 4
     <<: *dockersetup
@@ -374,7 +374,7 @@ jobs:
           path: /src/qsiprep/.circleci/out/maternal_brain_project/
 
   forrest_gump:
-    resource_class: large
+    resource_class: xlarge
     environment:
       CIRCLE_CPUS: 4
     <<: *dockersetup
