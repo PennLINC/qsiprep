@@ -991,8 +991,6 @@ def test_maternal_brain_project(data_dir, output_dir, working_dir):
         "--write-graph",
         "--output-resolution=5",
         "--hmc-model=3dSHORE",
-        "--nthreads=1",
-        "--omp-nthreads=1",
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=True)
@@ -1023,8 +1021,6 @@ def test_forrest_gump(data_dir, output_dir, working_dir):
         "--sloppy",
         "--write-graph",
         "--output-resolution=5",
-        "--nthreads=1",
-        "--omp-nthreads=1",
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=True)
