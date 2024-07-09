@@ -364,9 +364,7 @@ def main():
                 config.execution.output_dir / f"qsirecon-{qsirecon_suffix}",
                 # dataset_links=config.execution.dataset_links,
             )
-            write_bidsignore(
-                config.execution.output_dir / f"qsirecon-{qsirecon_suffix}"
-            )
+            write_bidsignore(config.execution.output_dir / f"qsirecon-{qsirecon_suffix}")
 
             if failed_reports:
                 print(failed_reports)
