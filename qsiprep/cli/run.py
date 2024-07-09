@@ -335,6 +335,7 @@ def main():
             qsirecon_suffixes += [qsirecon_suffix] if qsirecon_suffix else []
 
         qsirecon_suffixes = sorted(list(set(qsirecon_suffixes)))
+        config.loggers.cli.warning(f"QSIRecon suffixes: {qsirecon_suffixes}")
         for qsirecon_suffix in qsirecon_suffixes:
             failed_reports = generate_reports(
                 config.execution.participant_label,

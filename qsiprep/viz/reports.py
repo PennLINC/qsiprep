@@ -358,7 +358,7 @@ def generate_reports(subject_list, pipeline_mode="qsiprep"):
     """
     A wrapper to run_reports on a given ``subject_list``
     """
-    config.loggers.cli.warning(f"Generating report for pipeline mode '{pipeline_mode}")
+    config.loggers.cli.warning(f"Generating report for pipeline mode '{pipeline_mode}'")
     reports_dir = str(config.execution.reportlets_dir)
     run_uuid = config.execution.run_uuid
     if config.execution.recon_only:
