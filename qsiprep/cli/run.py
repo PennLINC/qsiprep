@@ -173,24 +173,46 @@ def main():
 
         errno = 0
     finally:
-
         from ..viz.reports import generate_reports
+        from ..workflows.recon.base import _load_recon_spec
 
-        # Generate reports phase
-        # session_list = (
-        #     config.execution.get().get('bids_filters', {}).get('dwi', {}).get('session')
-        # )
+        if exec_mode == "QSIRecon":
+            workflow_spec = _load_recon_spec()
+            # Compile list of output folders
+            # TODO: Retain QSIRecon pipeline names in the config object
+            qsirecon_suffixes = []
+            for node_spec in workflow_spec["nodes"]:
+                qsirecon_suffix = node_spec.get("qsirecon_suffix", None)
+                qsirecon_suffixes += [qsirecon_suffix] if qsirecon_suffix else []
 
-        failed_reports = generate_reports(
-            config.execution.participant_label,
-            # session_list=session_list,
-        )
-        write_derivative_description(
-            config.execution.bids_dir,
-            config.execution.qsiprep_dir,
-            # dataset_links=config.execution.dataset_links,
-        )
-        write_bidsignore(config.execution.qsiprep_dir)
+            qsirecon_suffixes = sorted(list(set(qsirecon_suffixes)))
+            config.loggers.cli.warning(f"QSIRecon suffixes: {qsirecon_suffixes}")
+            for qsirecon_suffix in qsirecon_suffixes:
+                failed_reports = generate_reports(
+                    config.execution.participant_label,
+                    pipeline_mode=f"qsirecon-{qsirecon_suffix}",
+                )
+
+                write_derivative_description(
+                    config.execution.bids_dir,
+                    config.execution.output_dir / f"derivatives/qsirecon-{qsirecon_suffix}",
+                    # dataset_links=config.execution.dataset_links,
+                )
+                write_bidsignore(
+                    config.execution.output_dir / f"derivatives/qsirecon-{qsirecon_suffix}"
+                )
+
+        else:
+            failed_reports = generate_reports(
+                config.execution.participant_label,
+                # session_list=session_list,
+            )
+            write_derivative_description(
+                config.execution.bids_dir,
+                config.execution.qsiprep_dir,
+                # dataset_links=config.execution.dataset_links,
+            )
+            write_bidsignore(config.execution.qsiprep_dir)
 
         if failed_reports:
             print(failed_reports)
@@ -212,8 +234,9 @@ def main():
                 )
                 sys.exit(int(errno + failed_reports) > 0)
 
-    # POST-PREP RECON
     del qsiprep_wf
+
+    # POST-PREP RECON
     # CRITICAL Call build_workflow(config_file, retval) in a subprocess.
     # Because Python on Linux does not ever free virtual memory (VM), running the
     # workflow construction jailed within a process preempts excessive VM buildup.
@@ -292,9 +315,9 @@ def main():
         config.loggers.workflow.critical("QSIPrep failed: %s", e)
         raise
     else:
-        config.loggers.workflow.log(25, "QSIPrep finished successfully!")
+        config.loggers.workflow.log(25, "QSIRecon finished successfully!")
         if sentry_sdk is not None:
-            success_message = "QSIPostRecon finished without errors"
+            success_message = "QSIRecon finished without errors"
             sentry_sdk.add_breadcrumb(message=success_message, level="info")
             sentry_sdk.capture_message(success_message, level="info")
 
@@ -317,10 +340,6 @@ def main():
 
         errno = 0
     finally:
-
-        from ..viz.reports import generate_reports
-        from ..workflows.recon.base import _load_recon_spec
-
         # Generate reports phase
         # session_list = (
         #     config.execution.get().get('bids_filters', {}).get('dwi', {}).get('session')
