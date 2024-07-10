@@ -58,8 +58,6 @@ def init_mif_to_fibgz_wf(
         (convert_to_fib, outputnode, [('fib_file', 'fibgz')]),
     ])  # fmt:skip
 
-    secondary_fib = params.get("secondary_fib")
-
     if qsirecon_suffix:
         # Save the output in the outputs directory
         ds_fibgz = pe.Node(
