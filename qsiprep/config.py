@@ -434,7 +434,7 @@ class execution(_Config):
     qsiprep_dir = None
     """Root of QSIPrep BIDS Derivatives dataset. Depends on output_layout."""
     qsirecon_dir = None
-    """Root of QSIRecon BIDS Derivatives dataset."""
+    """Root of QSIRecon BIDS Derivatives dataset. Outputs will be written to <qsirecon_dir>-<qsirecon_suffix>."""
     recon_input = None
     """Directory containing QSIPrep derivatives to run through recon workflows."""
     recon_only = False
