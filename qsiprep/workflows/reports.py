@@ -87,7 +87,6 @@ def init_single_subject_json_report_wf(subject_id, name):
         wf = init_single_subject_json_report_wf(
             subject_id='test',
             name='single_subject_qsipreptest_wf',
-            reportlets_dir='.',
             output_dir='.')
 
     Parameters

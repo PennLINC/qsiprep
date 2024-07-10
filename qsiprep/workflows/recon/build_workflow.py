@@ -150,11 +150,7 @@ def init_dwi_recon_workflow(
     for node in workflow.list_node_names():
         node_suffix = node.split(".")[-1]
         if node_suffix.startswith("ds_") or node_suffix.startswith("recon_scalars"):
-            base_dir = (
-                config.execution.reportlets_dir
-                if "report" in node_suffix
-                else config.execution.output_dir
-            )
+            base_dir = config.execution.output_dir
             workflow.connect(inputnode, 'dwi_file',
                              workflow.get_node(node), 'source_file')  # fmt:skip
             # config.loggers.workflow.info("setting %s base dir to %s", node_suffix, base_dir )

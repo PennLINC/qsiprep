@@ -49,7 +49,6 @@ def init_dwi_finalize_wf(
         from qsiprep.workflows.dwi.base import init_dwi_finalize_wf
         wf = init_dwi_finalize_wf(name='finalize_wf',
                                   omp_nthreads=1,
-                                  reportlets_dir='.',
                                   output_dir='.',
                                   output_resolution=2.0,
                                   template='MNI152NLin2009cAsym',
@@ -68,8 +67,6 @@ def init_dwi_finalize_wf(
             beginning of the output file name (eg 'sub-1_buds-j')
         ignore : list
             Preprocessing steps to skip (eg "fieldmaps")
-        reportlets_dir : str
-            Directory in which to save reportlets
         template : str
             Name of template targeted by ``template`` output space
         output_dir : str
@@ -241,7 +238,6 @@ def init_dwi_finalize_wf(
             DerivativesDataSink(
                 suffix="tointramodal",
                 source_file=source_file,
-                base_directory=config.execution.reportlets_dir,
             ),
             name="ds_report_intramodal",
             run_without_submitting=True,
@@ -317,7 +313,7 @@ def init_dwi_finalize_wf(
     # Fill-in datasinks of reportlets seen so far
     for node in workflow.list_node_names():
         if node.split(".")[-1].startswith("ds_report"):
-            workflow.get_node(node).inputs.base_directory = config.execution.reportlets_dir
+            workflow.get_node(node).inputs.base_directory = config.execution.qsiprep_dir
             workflow.get_node(node).inputs.source_file = source_file
 
     # The workflow is done if we will be concatenating images later
@@ -446,7 +442,7 @@ def init_dwi_finalize_wf(
     # Fill-in datasinks of reportlets seen so far
     for node in workflow.list_node_names():
         if node.split(".")[-1].startswith("ds_report"):
-            workflow.get_node(node).inputs.base_directory = config.execution.reportlets_dir
+            workflow.get_node(node).inputs.base_directory = config.execution.qsiprep_dir
             if not isdefined(workflow.get_node(node).inputs.source_file):
                 workflow.get_node(node).inputs.source_file = source_file
 

@@ -439,8 +439,6 @@ class execution(_Config):
     """Directory containing QSIPrep derivatives to run through recon workflows."""
     recon_only = False
     """Run only recon workflows."""
-    reportlets_dir = None
-    """Path where reportlets are written."""
     run_preproc_and_recon = False
     """Will both preproc and recon be run in a single call?"""
     skip_anat_based_spatial_normalization = False
@@ -472,7 +470,6 @@ class execution(_Config):
         "qsiprep_dir",
         "qsirecon_dir",
         "recon_input",
-        "reportlets_dir",
         "templateflow_home",
         "work_dir",
     )
@@ -577,7 +574,7 @@ class workflow(_Config):
     b0_threshold = None
     """Any value in the .bval file less than this will be considered a b=0 image."""
     b0_motion_corr_to = None
-    """Perform SHORELine's initial b=0-based registration to first volume? 
+    """Perform SHORELine's initial b=0-based registration to first volume?
     Or make a template? Either 'iterative' or 'first'"""
     b0_to_t1w_transform = None
     """Transformation model for intramodal registration."""

@@ -251,11 +251,7 @@ to workflows in *qsiprep*'s documentation]\
     for _node in workflow.list_node_names():
         node_suffix = _node.split(".")[-1]
         if node_suffix.startswith("ds"):
-            base_dir = (
-                config.execution.reportlets_dir
-                if "report" in node_suffix
-                else config.execution.output_dir
-            )
+            base_dir = config.execution.output_dir
             workflow.get_node(_node).inputs.base_directory = base_dir
             # workflow.get_node(_node).inputs.source_file = \
             #     "anat/sub-{}_desc-preproc_T1w.nii.gz".format(subject_id)

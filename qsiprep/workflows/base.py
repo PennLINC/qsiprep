@@ -214,13 +214,13 @@ to workflows in *QSIPrep*'s documentation]\
     )
 
     ds_report_summary = pe.Node(
-        DerivativesDataSink(base_directory=config.execution.reportlets_dir, suffix="summary"),
+        DerivativesDataSink(suffix="summary"),
         name="ds_report_summary",
         run_without_submitting=True,
     )
 
     ds_report_about = pe.Node(
-        DerivativesDataSink(base_directory=config.execution.reportlets_dir, suffix="about"),
+        DerivativesDataSink(suffix="about"),
         name="ds_report_about",
         run_without_submitting=True,
     )

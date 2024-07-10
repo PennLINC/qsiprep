@@ -157,7 +157,7 @@ def init_intramodal_template_wf(
     # Fill-in datasinks of reportlets seen so far
     for node in workflow.list_node_names():
         if node.split(".")[-1].startswith("ds_report"):
-            workflow.get_node(node).inputs.base_directory = config.execution.reportlets_dir
+            workflow.get_node(node).inputs.base_directory = config.execution.qsiprep_dir
             workflow.get_node(node).inputs.source_file = t1w_source_file
 
     return workflow

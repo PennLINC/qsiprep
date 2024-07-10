@@ -542,7 +542,6 @@ def init_segs_to_native_wf(name="segs_to_native", segmentation="aseg"):
 
 
 def init_anat_reports_wf(
-    reportlets_dir,
     output_spaces,
     force_spatial_normalization,
     template,
@@ -568,25 +567,25 @@ def init_anat_reports_wf(
     )
 
     ds_t1_conform_report = pe.Node(
-        DerivativesDataSink(base_directory=reportlets_dir, suffix="conform"),
+        DerivativesDataSink(suffix="conform"),
         name="ds_t1_conform_report",
         run_without_submitting=True,
     )
 
     ds_t1_2_mni_report = pe.Node(
-        DerivativesDataSink(base_directory=reportlets_dir, suffix="t1_2_mni"),
+        DerivativesDataSink(suffix="t1_2_mni"),
         name="ds_t1_2_mni_report",
         run_without_submitting=True,
     )
 
     ds_t1_seg_mask_report = pe.Node(
-        DerivativesDataSink(base_directory=reportlets_dir, suffix="seg_brainmask"),
+        DerivativesDataSink(suffix="seg_brainmask"),
         name="ds_t1_seg_mask_report",
         run_without_submitting=True,
     )
 
     ds_recon_report = pe.Node(
-        DerivativesDataSink(base_directory=reportlets_dir, suffix="reconall"),
+        DerivativesDataSink(suffix="reconall"),
         name="ds_recon_report",
         run_without_submitting=True,
     )
