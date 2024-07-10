@@ -567,25 +567,25 @@ def init_anat_reports_wf(
     )
 
     ds_t1_conform_report = pe.Node(
-        DerivativesDataSink(suffix="conform"),
+        DerivativesDataSink(datatype="figures", suffix="conform"),
         name="ds_t1_conform_report",
         run_without_submitting=True,
     )
 
     ds_t1_2_mni_report = pe.Node(
-        DerivativesDataSink(suffix="t1_2_mni"),
+        DerivativesDataSink(datatype="figures", suffix="t1_2_mni"),
         name="ds_t1_2_mni_report",
         run_without_submitting=True,
     )
 
     ds_t1_seg_mask_report = pe.Node(
-        DerivativesDataSink(suffix="seg_brainmask"),
+        DerivativesDataSink(datatype="figures", suffix="seg_brainmask"),
         name="ds_t1_seg_mask_report",
         run_without_submitting=True,
     )
 
     ds_recon_report = pe.Node(
-        DerivativesDataSink(suffix="reconall"),
+        DerivativesDataSink(datatype="figures", suffix="reconall"),
         name="ds_recon_report",
         run_without_submitting=True,
     )

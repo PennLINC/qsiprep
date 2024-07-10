@@ -429,6 +429,7 @@ def init_dwi_denoising_wf(
 
         ds_report_denoising = pe.Node(
             DerivativesDataSink(
+                datatype="figures",
                 suffix=f"{name}_denoising",
                 source_file=source_file,
             ),
@@ -539,6 +540,7 @@ def init_dwi_denoising_wf(
 
         ds_report_unringing = pe.Node(
             DerivativesDataSink(
+                datatype="figures",
                 suffix=f"{name}_unringing",
                 source_file=source_file,
             ),
@@ -561,6 +563,7 @@ def init_dwi_denoising_wf(
         biascorr = pe.Node(DWIBiasCorrect(method="ants"), name="biascorr", n_procs=omp_nthreads)
         ds_report_biascorr = pe.Node(
             DerivativesDataSink(
+                datatype="figures",
                 suffix=f"{name}_biascorr",
                 source_file=source_file,
             ),

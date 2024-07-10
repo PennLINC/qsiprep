@@ -133,7 +133,7 @@ def init_intramodal_template_wf(
     # calculate dwi registration to T1w
     b0_coreg_wf = init_b0_to_anat_registration_wf(write_report=True)
     ds_report_imtcoreg = pe.Node(
-        DerivativesDataSink(suffix="imtcoreg", source_file=t1w_source_file),
+        DerivativesDataSink(datatype="figures", suffix="imtcoreg", source_file=t1w_source_file),
         name="ds_report_imtcoreg",
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,

@@ -299,7 +299,11 @@ Diffusion data preprocessing
     else:
         b0_coreg_wf = init_direct_b0_acpc_wf(write_report=True)
     ds_report_coreg = pe.Node(
-        DerivativesDataSink(suffix="acpc" if dwi_only else "coreg", source_file=source_file),
+        DerivativesDataSink(
+            datatype="figures",
+            suffix="acpc" if dwi_only else "coreg",
+            source_file=source_file,
+        ),
         name="ds_report_coreg",
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
@@ -314,7 +318,12 @@ Diffusion data preprocessing
     if fieldmap_type not in ("epi", "rpe_series", None) or doing_topup:
         fmap_unwarp_report_wf = init_fmap_unwarp_report_wf()
         ds_report_sdc = pe.Node(
-            DerivativesDataSink(desc="sdc", suffix="b0", source_file=source_file),
+            DerivativesDataSink(
+                datatype="figures",
+                desc="sdc",
+                suffix="b0",
+                source_file=source_file,
+            ),
             name="ds_report_sdc",
             mem_gb=DEFAULT_MEMORY_MIN_GB,
             run_without_submitting=True,
@@ -418,7 +427,10 @@ Diffusion data preprocessing
     confounds_wf = init_dwi_confs_wf()
     ds_confounds = pe.Node(
         DerivativesDataSink(
-            source_file=source_file, base_directory=str(output_dir), suffix="confounds"
+            source_file=source_file,
+            base_directory=str(output_dir),
+            datatype="figures",
+            suffix="confounds",
         ),
         name="ds_confounds",
         run_without_submitting=True,
@@ -431,7 +443,7 @@ Diffusion data preprocessing
     # Carpetplot and confounds plot
     conf_plot = pe.Node(DMRISummary(), name="conf_plot", mem_gb=mem_gb["resampled"])
     ds_report_dwi_conf = pe.Node(
-        DerivativesDataSink(suffix="carpetplot", source_file=source_file),
+        DerivativesDataSink(datatype="figures", suffix="carpetplot", source_file=source_file),
         name="ds_report_dwi_conf",
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
@@ -468,7 +480,7 @@ Diffusion data preprocessing
 
     # Reporting
     ds_report_summary = pe.Node(
-        DerivativesDataSink(suffix="summary", source_file=source_file),
+        DerivativesDataSink(datatype="figures", suffix="summary", source_file=source_file),
         name="ds_report_summary",
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,

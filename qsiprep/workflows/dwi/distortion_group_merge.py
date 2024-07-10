@@ -208,7 +208,10 @@ def init_distortion_group_merge_wf(
     # Write the interactive report json
     ds_interactive_report = pe.Node(
         DerivativesDataSink(
-            suffix="dwiqc", source_file=source_file, base_directory=config.execution.output_dir
+            datatype="figures",
+            suffix="dwiqc",
+            source_file=source_file,
+            base_directory=config.execution.output_dir,
         ),
         name="ds_interactive_report",
         run_without_submitting=True,
@@ -220,7 +223,7 @@ def init_distortion_group_merge_wf(
     t1_dice_calc = init_mask_overlap_wf(name="t1_dice_calc")
     gradient_plot = pe.Node(GradientPlot(), name="gradient_plot", run_without_submitting=True)
     ds_report_gradients = pe.Node(
-        DerivativesDataSink(suffix="sampling_scheme", source_file=source_file),
+        DerivativesDataSink(datatype="figures", suffix="sampling_scheme", source_file=source_file),
         name="ds_report_gradients",
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
