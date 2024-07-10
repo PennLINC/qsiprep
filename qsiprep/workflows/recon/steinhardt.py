@@ -85,7 +85,12 @@ A series of Steinhardt order parameters (up to order %d) were calculated.
         for sop_order in range(2, sop_order + 1, 2):
             key = "q%d_file" % sop_order
             sop_sinks[key] = pe.Node(
-                ReconDerivativesDataSink(model="steinhardt", mfp=f"q{sop_order}", compress=True),
+                ReconDerivativesDataSink(
+                    qsirecon_suffix=qsirecon_suffix,
+                    model="steinhardt",
+                    mfp=f"q{sop_order}",
+                    compress=True,
+                ),
                 name="ds_sop_q%d" % sop_order,
                 run_without_submitting=True,
             )

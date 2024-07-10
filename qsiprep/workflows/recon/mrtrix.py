@@ -236,7 +236,9 @@ def init_mrtrix_csd_recon_wf(
         # Make a visual report of the model
         plot_peaks = pe.Node(CLIReconPeaksReport(), name="plot_peaks", n_procs=omp_nthreads)
         ds_report_peaks = pe.Node(
-            ReconDerivativesDataSink(extension=".png", desc="wmFOD", suffix="peaks"),
+            ReconDerivativesDataSink(
+                qsirecon_suffix=qsirecon_suffix, extension=".png", desc="wmFOD", suffix="peaks"
+            ),
             name="ds_report_peaks",
             run_without_submitting=True,
         )
@@ -251,7 +253,9 @@ def init_mrtrix_csd_recon_wf(
         # Plot targeted regions
         if available_anatomical_data["has_qsiprep_t1w_transforms"]:
             ds_report_odfs = pe.Node(
-                ReconDerivativesDataSink(extension=".png", desc="wmFOD", suffix="odfs"),
+                ReconDerivativesDataSink(
+                    qsirecon_suffix=qsirecon_suffix, extension=".png", desc="wmFOD", suffix="odfs"
+                ),
                 name="ds_report_odfs",
                 run_without_submitting=True,
             )
@@ -660,7 +664,10 @@ def init_mrtrix_connectivity_wf(
         )
         ds_report_connectivity = pe.Node(
             ReconDerivativesDataSink(
-                extension=".svg", desc="MRtrix3Connectivity", suffix="matrices"
+                qsirecon_suffix=qsirecon_suffix,
+                extension=".svg",
+                desc="MRtrix3Connectivity",
+                suffix="matrices",
             ),
             name="ds_report_connectivity",
             run_without_submitting=True,

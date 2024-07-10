@@ -116,7 +116,9 @@ diffusivity.""" % (
     if plot_reports:
         plot_peaks = pe.Node(CLIReconPeaksReport(), name="plot_peaks", n_procs=omp_nthreads)
         ds_report_peaks = pe.Node(
-            ReconDerivativesDataSink(extension=".png", desc="NODDI", suffix="peaks"),
+            ReconDerivativesDataSink(
+                qsirecon_suffix=qsirecon_suffix, extension=".png", desc="NODDI", suffix="peaks"
+            ),
             name="ds_report_peaks",
             run_without_submitting=True,
         )

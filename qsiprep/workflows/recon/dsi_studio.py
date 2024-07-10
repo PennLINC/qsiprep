@@ -102,7 +102,9 @@ distance of %02f in DSI Studio (version %s). """ % (
             CLIReconPeaksReport(subtract_iso=True), name="plot_peaks", n_procs=omp_nthreads
         )
         ds_report_peaks = pe.Node(
-            ReconDerivativesDataSink(extension=".png", desc="GQIODF", suffix="peaks"),
+            ReconDerivativesDataSink(
+                qsirecon_suffix=qsirecon_suffix, extension=".png", desc="GQIODF", suffix="peaks"
+            ),
             name="ds_report_peaks",
             run_without_submitting=True,
         )
@@ -118,7 +120,9 @@ distance of %02f in DSI Studio (version %s). """ % (
         # Plot targeted regions
         if available_anatomical_data["has_qsiprep_t1w_transforms"]:
             ds_report_odfs = pe.Node(
-                ReconDerivativesDataSink(extension=".png", desc="GQIODF", suffix="odfs"),
+                ReconDerivativesDataSink(
+                    qsirecon_suffix=qsirecon_suffix, extension=".png", desc="GQIODF", suffix="odfs"
+                ),
                 name="ds_report_odfs",
                 run_without_submitting=True,
             )
@@ -466,7 +470,10 @@ def init_dsi_studio_connectivity_wf(
         plot_connectivity = pe.Node(ConnectivityReport(), name="plot_connectivity")
         ds_report_connectivity = pe.Node(
             ReconDerivativesDataSink(
-                extension=".svg", desc="DSIStudioConnectivity", suffix="matrices"
+                qsirecon_suffix=qsirecon_suffix,
+                extension=".svg",
+                desc="DSIStudioConnectivity",
+                suffix="matrices",
             ),
             name="ds_report_connectivity",
             run_without_submitting=True,

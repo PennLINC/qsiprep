@@ -182,7 +182,12 @@ def init_dipy_brainsuite_shore_recon_wf(
 
         plot_peaks = pe.Node(CLIReconPeaksReport(), name="plot_peaks", n_procs=omp_nthreads)
         ds_report_peaks = pe.Node(
-            ReconDerivativesDataSink(extension=".png", desc="3dSHOREODF", suffix="peaks"),
+            ReconDerivativesDataSink(
+                qsirecon_suffix=qsirecon_suffix,
+                extension=".png",
+                desc="3dSHOREODF",
+                suffix="peaks",
+            ),
             name="ds_report_peaks",
             run_without_submitting=True,
         )
@@ -198,7 +203,9 @@ def init_dipy_brainsuite_shore_recon_wf(
     # Plot targeted regions
     if available_anatomical_data["has_qsiprep_t1w_transforms"] and plot_reports:
         ds_report_odfs = pe.Node(
-            ReconDerivativesDataSink(extension=".png", desc="3dSHOREODF", suffix="odfs"),
+            ReconDerivativesDataSink(
+                qsirecon_suffix=qsirecon_suffix, extension=".png", desc="3dSHOREODF", suffix="odfs"
+            ),
             name="ds_report_odfs",
             run_without_submitting=True,
         )
@@ -465,7 +472,12 @@ def init_dipy_mapmri_recon_wf(
     if plot_reports:
         plot_peaks = pe.Node(CLIReconPeaksReport(), name="plot_peaks", n_procs=omp_nthreads)
         ds_report_peaks = pe.Node(
-            ReconDerivativesDataSink(extension=".png", desc="MAPLMRIODF", suffix="peaks"),
+            ReconDerivativesDataSink(
+                qsirecon_suffix=qsirecon_suffix,
+                extension=".png",
+                desc="MAPLMRIODF",
+                suffix="peaks",
+            ),
             name="ds_report_peaks",
             run_without_submitting=True,
         )
@@ -483,7 +495,9 @@ def init_dipy_mapmri_recon_wf(
     # Plot targeted regions
     if available_anatomical_data["has_qsiprep_t1w_transforms"] and plot_reports:
         ds_report_odfs = pe.Node(
-            ReconDerivativesDataSink(extension=".png", desc="MAPLMRIODF", suffix="odfs"),
+            ReconDerivativesDataSink(
+                qsirecon_suffix=qsirecon_suffix, extension=".png", desc="MAPLMRIODF", suffix="odfs"
+            ),
             name="ds_report_odfs",
             run_without_submitting=True,
         )
@@ -610,7 +624,9 @@ def init_dipy_dki_recon_wf(
             n_procs=config.nipype.omp_nthreads,
         )
         ds_report_peaks = pe.Node(
-            ReconDerivativesDataSink(extension=".png", desc="DKI", suffix="peaks"),
+            ReconDerivativesDataSink(
+                qsirecon_suffix=qsirecon_suffix, extension=".png", desc="DKI", suffix="peaks"
+            ),
             name="ds_report_peaks",
             run_without_submitting=True,
         )
