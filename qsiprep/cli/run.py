@@ -190,14 +190,16 @@ def main():
 
             qsirecon_suffixes = sorted(list(set(qsirecon_suffixes)))
             config.loggers.cli.warning(f"QSIRecon suffixes: {qsirecon_suffixes}")
+            failed_reports = []
             for qsirecon_suffix in qsirecon_suffixes:
                 suffix_dir = Path(str(config.execution.qsirecon_dir) + f"-{qsirecon_suffix}")
-                failed_reports = generate_reports(
+                suffix_failed_reports = generate_reports(
                     config.execution.participant_label,
                     suffix_dir,
                     config.execution.run_uuid,
                     session_list=session_list,
                 )
+                failed_reports += suffix_failed_reports
 
                 write_derivative_description(
                     config.execution.bids_dir,
@@ -230,7 +232,7 @@ def main():
             # if sentry_sdk is not None:
             #     sentry_sdk.capture_message(msg, level='error')
         if not config.execution.run_preproc_and_recon:
-            sys.exit(int(errno + failed_reports) > 0)
+            sys.exit(int(errno + len(failed_reports)) > 0)
 
         # If preprocessing and recon are requested in the same call, start the recon workflow now.
         if errno > 0:
@@ -238,7 +240,7 @@ def main():
                 config.loggers.workflow.critical(
                     "Errors occurred during preprocessing - Recon will not run."
                 )
-                sys.exit(int(errno + failed_reports) > 0)
+                sys.exit(int(errno + len(failed_reports)) > 0)
 
     del qsiprep_wf
 
@@ -361,14 +363,16 @@ def main():
 
         qsirecon_suffixes = sorted(list(set(qsirecon_suffixes)))
         config.loggers.cli.warning(f"QSIRecon suffixes: {qsirecon_suffixes}")
+        failed_reports = []
         for qsirecon_suffix in qsirecon_suffixes:
             suffix_dir = Path(str(config.execution.qsirecon_dir) + f"-{qsirecon_suffix}")
-            failed_reports = generate_reports(
+            suffix_failed_reports = generate_reports(
                 config.execution.participant_label,
                 suffix_dir,
                 config.execution.run_uuid,
                 session_list=session_list,
             )
+            failed_reports += suffix_failed_reports
 
             write_derivative_description(
                 config.execution.bids_dir,
@@ -377,5 +381,5 @@ def main():
             )
             write_bidsignore(suffix_dir)
 
-            if failed_reports:
-                print(failed_reports)
+        if failed_reports:
+            print(failed_reports)
