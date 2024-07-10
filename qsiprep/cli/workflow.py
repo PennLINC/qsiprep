@@ -45,8 +45,8 @@ def build_workflow(config_file, exec_mode, retval):
     # from niworkflows.utils.misc import check_valid_fs_license
     # from ..utils.bids import check_pipeline_version
     from .. import config
-    from ..utils.misc import check_deps
     from ..reports.core import generate_reports
+    from ..utils.misc import check_deps
     from ..workflows.base import init_qsiprep_wf
     from ..workflows.recon import init_qsirecon_wf
 
