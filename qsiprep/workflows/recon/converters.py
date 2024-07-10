@@ -42,15 +42,35 @@ def init_mif_to_fibgz_wf(
 
     """
     inputnode = pe.Node(
-        niu.IdentityInterface(fields=recon_workflow_input_fields + ["mif_file"]), name="inputnode"
+        niu.IdentityInterface(fields=recon_workflow_input_fields + ["fod_sh_mif", "fibgz"]),
+        name="inputnode",
     )
-    outputnode = pe.Node(niu.IdentityInterface(fields=["fib_file"]), name="outputnode")
+    outputnode = pe.Node(
+        niu.IdentityInterface(fields=["fibgz", "recon_scalars"]), name="outputnode"
+    )
+    outputnode.inputs.recon_scalars = []
     workflow = Workflow(name=name)
     convert_to_fib = pe.Node(FODtoFIBGZ(), name="convert_to_fib")
     workflow.connect([
-        (inputnode, convert_to_fib, [('mif_file', 'mif_file')]),
-        (convert_to_fib, outputnode, [('fib_file', 'fib_file')])
+        (inputnode, convert_to_fib, [
+            ('fod_sh_mif', 'mif_file'),
+            ('fibgz', 'fib_file')]),
+        (convert_to_fib, outputnode, [('fib_file', 'fibgz')]),
     ])  # fmt:skip
+
+    secondary_fib = params.get("secondary_fib")
+
+    if qsirecon_suffix:
+        # Save the output in the outputs directory
+        ds_fibgz = pe.Node(
+            ReconDerivativesDataSink(
+                extension=".fib.gz", qsirecon_suffix=qsirecon_suffix, compress=True
+            ),
+            name="ds_fibgz",
+            run_without_submitting=True,
+        )
+        workflow.connect(convert_to_fib, 'fib_file',
+                         ds_fibgz, 'in_file')  # fmt:skip
     return workflow
 
 
@@ -59,7 +79,10 @@ def init_fibgz_to_mif_wf(name="fibgz_to_mif", qsirecon_suffix="", params={}):
     inputnode = pe.Node(
         niu.IdentityInterface(fields=recon_workflow_input_fields + ["mif_file"]), name="inputnode"
     )
-    outputnode = pe.Node(niu.IdentityInterface(fields=["fib_file"]), name="outputnode")
+    outputnode = pe.Node(
+        niu.IdentityInterface(fields=["fib_file", "recon_scalars"]), name="outputnode"
+    )
+    outputnode.inputs.recon_scalars = []
     workflow = Workflow(name=name)
     convert_to_fib = pe.Node(FODtoFIBGZ(), name="convert_to_fib")
     workflow.connect([

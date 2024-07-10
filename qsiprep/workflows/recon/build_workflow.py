@@ -82,13 +82,18 @@ def init_dwi_recon_workflow(
         node_name = node_spec["name"]
         node = workflow.get_node(node_name)
 
+        # If this node is consuming scalar images from other nodes, add them to the input.
+        # We can't collect scalars from this node or it would create a cycle in the graph.
         consuming_scalars = node_spec.get("scalars_from", [])
         if consuming_scalars:
             workflow.connect(scalar_gatherer, "out",
                              node, "inputnode.collected_scalars")  # fmt:skip
+        # if not consuming, then gather the scalars it might produce.
         else:
             workflow.connect(node, "outputnode.recon_scalars",
                              scalar_gatherer, f"in{node_num}")  # fmt:skip
+
+        # If there is no input specified OR if "qsiprep", there are no upstream nodes
         if node_spec.get("input", "qsiprep") == "qsiprep":
             # directly connect all the qsiprep outputs to every node
             workflow.connect([
