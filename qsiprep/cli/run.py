@@ -173,8 +173,11 @@ def main():
 
         errno = 0
     finally:
-        from ..viz.reports import generate_reports
+        from ..reports.core import generate_reports
         from ..workflows.recon.base import _load_recon_spec
+
+        # Generate reports phase
+        session_list = config.execution.get().get('bids_filters', {}).get('dwi', {}).get('session')
 
         if exec_mode == "QSIRecon":
             workflow_spec = _load_recon_spec()
@@ -188,22 +191,27 @@ def main():
             qsirecon_suffixes = sorted(list(set(qsirecon_suffixes)))
             config.loggers.cli.warning(f"QSIRecon suffixes: {qsirecon_suffixes}")
             for qsirecon_suffix in qsirecon_suffixes:
+                suffix_dir = Path(str(config.execution.qsirecon_dir) + f"-{qsirecon_suffix}")
                 failed_reports = generate_reports(
                     config.execution.participant_label,
-                    pipeline_mode=f"qsirecon-{qsirecon_suffix}",
+                    suffix_dir,
+                    config.execution.run_uuid,
+                    session_list=session_list,
                 )
 
                 write_derivative_description(
                     config.execution.bids_dir,
-                    config.execution.output_dir / f"qsirecon-{qsirecon_suffix}",
+                    suffix_dir,
                     # dataset_links=config.execution.dataset_links,
                 )
-                write_bidsignore(config.execution.output_dir / f"qsirecon-{qsirecon_suffix}")
+                write_bidsignore(suffix_dir)
 
         else:
             failed_reports = generate_reports(
                 config.execution.participant_label,
-                # session_list=session_list,
+                config.execution.qsiprep_dir,
+                config.execution.run_uuid,
+                session_list=session_list,
             )
             write_derivative_description(
                 config.execution.bids_dir,
@@ -354,17 +362,20 @@ def main():
         qsirecon_suffixes = sorted(list(set(qsirecon_suffixes)))
         config.loggers.cli.warning(f"QSIRecon suffixes: {qsirecon_suffixes}")
         for qsirecon_suffix in qsirecon_suffixes:
+            suffix_dir = Path(str(config.execution.qsirecon_dir) + f"-{qsirecon_suffix}")
             failed_reports = generate_reports(
                 config.execution.participant_label,
-                pipeline_mode=f"qsirecon-{qsirecon_suffix}",
+                suffix_dir,
+                config.execution.run_uuid,
+                session_list=session_list,
             )
 
             write_derivative_description(
                 config.execution.bids_dir,
-                config.execution.output_dir / f"qsirecon-{qsirecon_suffix}",
+                suffix_dir,
                 # dataset_links=config.execution.dataset_links,
             )
-            write_bidsignore(config.execution.output_dir / f"qsirecon-{qsirecon_suffix}")
+            write_bidsignore(suffix_dir)
 
             if failed_reports:
                 print(failed_reports)

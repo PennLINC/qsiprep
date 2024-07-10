@@ -46,7 +46,7 @@ def build_workflow(config_file, exec_mode, retval):
     # from ..utils.bids import check_pipeline_version
     from .. import config
     from ..utils.misc import check_deps
-    from ..viz.reports import generate_reports
+    from ..reports.core import generate_reports
     from ..workflows.base import init_qsiprep_wf
     from ..workflows.recon import init_qsirecon_wf
 
