@@ -177,7 +177,7 @@ def main():
         from ..workflows.recon.base import _load_recon_spec
 
         # Generate reports phase
-        session_list = config.execution.get().get('bids_filters', {}).get('dwi', {}).get('session')
+        session_list = config.execution.get().get("bids_filters", {}).get("dwi", {}).get("session")
 
         if exec_mode == "QSIRecon":
             workflow_spec = _load_recon_spec()
