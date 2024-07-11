@@ -1,16 +1,11 @@
+import logging
 import nipype.pipeline.engine as pe
 from nipype.interfaces import utility as niu
 
 from ... import config
 from ...engine import Workflow
-from ...interfaces.interchange import default_input_set, recon_workflow_input_fields
-from .amico import init_amico_noddi_fit_wf
-from .converters import init_mif_to_fibgz_wf, init_qsiprep_to_fsl_wf
-from .dipy import (
-    init_dipy_brainsuite_shore_recon_wf,
-    init_dipy_dki_recon_wf,
-    init_dipy_mapmri_recon_wf,
-)
+from ...interfaces.interchange import recon_workflow_input_fields
+
 from .dsi_studio import (
     init_dsi_studio_autotrack_wf,
     init_dsi_studio_connectivity_wf,
@@ -24,268 +19,137 @@ from .mrtrix import (
     init_mrtrix_csd_recon_wf,
     init_mrtrix_tractography_wf,
 )
-from .scalar_mapping import init_scalar_to_bundle_wf, init_scalar_to_template_wf
-from .steinhardt import init_steinhardt_order_param_wf
-from .tortoise import init_tortoise_estimator_wf
-from .utils import init_conform_dwi_wf, init_discard_repeated_samples_wf
 
+LOGGER = logging.getLogger("nipype.interface")
 
-def _check_repeats(nodelist):
-    total_len = len(nodelist)
-    unique_len = len(set(nodelist))
-    if not total_len == unique_len:
-        raise Exception
 
 def init_singleshell_benchmarking_wf(
     available_anatomical_data, name="_recon", qsirecon_suffix="SingleShellBenchmark", params={}
 ):
-    pass
+    inputnode = pe.Node(
+        niu.IdentityInterface(fields=recon_workflow_input_fields + ["odf_rois"]), name="inputnode"
+    )
+    outputnode = pe.Node(
+        niu.IdentityInterface(fields=["tck_files", "bundle_names", "recon_scalars"]),
+        name="outputnode",
+    )
+    outputnode.inputs.recon_scalars = []
+    workflow = Workflow(name=name)
+    omp_nthreads = config.nipype.omp_nthreads
+
+    autotrack_params = params.get("autotrack", {})
+    bundle_names = _get_dsi_studio_bundles(autotrack_params.get("track_id", ""))
+    bundle_desc = (
+        "AutoTrack attempted to reconstruct the following bundles:\n  * "
+        + "\n  * ".join(bundle_names)
+        + "\n\n"
+    )
+    LOGGER.info(bundle_desc)
+
+    # First do a standard GQI reconstruction
     gqi_params = params.get("gqi_recon", {})
     initial_gqi_wf = init_dsi_studio_recon_wf(
         available_anatomical_data=available_anatomical_data,
         name="initial_gqi",
         qsirecon_suffix=f"{qsirecon_suffix}_part-GQI",
-        params=gqi_params
+        params=gqi_params,
     )
 
+    # Do an SS3T recon to feed to autotrack
     ss3t_params = params.get("ss3t_recon")
-    ss3t_wf = init_dsi_studio_recon_wf(
+    ss3t_wf = init_mrtrix_csd_recon_wf(
         available_anatomical_data=available_anatomical_data,
         name="ss3t_recon",
         qsirecon_suffix=f"{qsirecon_suffix}_part-SS3T",
-        params=ss3t_params
+        params=ss3t_params,
     )
+    ss3t_to_fib = pe.Node(FODtoFIBGZ(), name="ss3t_to_fib")
 
+    # For comparison, also do a regular CSD
     csd_params = params.get("csd_recon")
-    csd_wf = init_dsi_studio_recon_wf(
+    csd_wf = init_mrtrix_csd_recon_wf(
         available_anatomical_data=available_anatomical_data,
         name="csd_recon",
         qsirecon_suffix=f"{qsirecon_suffix}_part-CSD",
-        params=csd_params
+        params=csd_params,
+    )
+    csd_to_fib = pe.Node(FODtoFIBGZ(), name="csd_to_fib")
+
+    # Run autotrack!
+    gqi_autotrack = pe.Node(
+        AutoTrack(num_threads=omp_nthreads, **params), name="gqi_autotrack", n_procs=omp_nthreads
+    )
+    ss3t_autotrack = pe.Node(
+        AutoTrack(num_threads=omp_nthreads, **params), name="ss3t_autotrack", n_procs=omp_nthreads
+    )
+    csd_autotrack = pe.Node(
+        AutoTrack(num_threads=omp_nthreads, **params), name="csd_autotrack", n_procs=omp_nthreads
     )
 
-
-def init_dwi_recon_workflow(
-    workflow_spec,
-    available_anatomical_data,
-    name="recon_wf",
-):
-    """Convert a workflow spec into a nipype workflow."""
-
-    workflow = Workflow(name=name)
-    inputnode = pe.Node(
-        niu.IdentityInterface(fields=recon_workflow_input_fields), name="inputnode"
+    # Create a single output
+    aggregate_gqi_atk_results = pe.Node(
+        AggregateAutoTrackResults(expected_bundles=bundle_names), name="aggregate_gqi_atk_results"
     )
-    # Read nodes from workflow spec, make sure we can implement them
-    nodes_to_add = []
-    workflow_metadata_nodes = {}
-    for node_spec in workflow_spec["nodes"]:
-        if not node_spec["name"]:
-            raise Exception("Node has no name [{}]".format(node_spec))
-        new_node = workflow_from_spec(
-            available_anatomical_data=available_anatomical_data,
-            node_spec=node_spec,
-        )
-        if new_node is None:
-            raise Exception("Unable to create a node for %s" % node_spec)
-        nodes_to_add.append(new_node)
+    aggregate_ss3t_atk_results = pe.Node(
+        AggregateAutoTrackResults(expected_bundles=bundle_names), name="aggregate_ss3t_atk_results"
+    )
+    aggregate_csd_atk_results = pe.Node(
+        AggregateAutoTrackResults(expected_bundles=bundle_names), name="aggregate_csd_atk_results"
+    )
 
-        # Make an identity interface that just has the info of this node
-        workflow_metadata_nodes[node_spec["name"]] = pe.Node(
-            niu.IdentityInterface(fields=["input_metadata"]), name=node_spec["name"] + "_spec"
-        )
-        workflow_metadata_nodes[node_spec["name"]].inputs.input_metadata = node_spec
-        nodes_to_add.append(workflow_metadata_nodes[node_spec["name"]])
+    convert_gqi_to_tck = pe.MapNode(DSIStudioTrkToTck(), name="convert_gqi_to_tck", iterfield="trk_file")
+    convert_ss3t_to_tck = pe.MapNode(DSIStudioTrkToTck(), name="convert_ss3t_to_tck", iterfield="trk_file")
+    convert_csd_to_tck = pe.MapNode(DSIStudioTrkToTck(), name="convert_csd_to_tck", iterfield="trk_file")
 
-    workflow.add_nodes(nodes_to_add)
-    _check_repeats(workflow.list_node_names())
+    # Save the bundle csv
+    ds_gqi_bundle_csv = pe.Node(
+        ReconDerivativesDataSink(suffix="bundlestats", qsirecon_suffix=f"{qsirecon_suffix}_part-GQI"),
+        name="ds_gqi_bundle_csv",
+        run_without_submitting=True,
+    )
+    ds_ss3t_bundle_csv = pe.Node(
+        ReconDerivativesDataSink(suffix="bundlestats", qsirecon_suffix=f"{qsirecon_suffix}_part-SS3T"),
+        name="ds_ss3t_bundle_csv",
+        run_without_submitting=True,
+    )
+    ds_csd_bundle_csv = pe.Node(
+        ReconDerivativesDataSink(suffix="bundlestats", qsirecon_suffix=f"{qsirecon_suffix}_part-CSD"),
+        name="ds_csd_bundle_csv",
+        run_without_submitting=True,
+    )
 
-    # Create a node that gathers scalar outputs from those that produce them
-    scalar_gatherer = pe.Node(niu.Merge(len(nodes_to_add)), name="scalar_gatherer")
+    # Save the mapping file. We're only using the mapping from GQI
+    ds_mapping = pe.Node(
+        ReconDerivativesDataSink(suffix="mapping", qsirecon_suffix=qsirecon_suffix),
+        name="ds_mapping",
+        run_without_submitting=True,
+    )
 
-    # Now that all nodes are in the workflow, connect them
-    for node_num, node_spec in enumerate(workflow_spec["nodes"], start=1):
+    workflow.connect([
+        # Connect the qsiprep inputs to the recon workflows we're creating here
+        # (normally this is done in build_workflow())
+        (inputnode, initial_gqi_wf,
+            _as_connections(recon_workflow_input_fields, dest_prefix='inputnode.')),
+        (inputnode, ss3t_wf,
+            _as_connections(recon_workflow_input_fields, dest_prefix='inputnode.')),
+        (inputnode, csd_wf,
+            _as_connections(recon_workflow_input_fields, dest_prefix='inputnode.')),
 
-        # get the nipype node object
-        node_name = node_spec["name"]
-        node = workflow.get_node(node_name)
+        # Convert the sh mifs from csd and ss3t into fib files
+        (csd_wf, ss3t_to_fib, [("outputnode.mif_file", "mif_file")]),
+        (initial_gqi_wf, csd_to_fib, [("outputnode.fibgz", "fib_file")]),
+        (ss3t_wf, ss3t_to_fib, [("outputnode.mif_file", "mif_file")]),
+        (initial_gqi_wf, ss3t_to_fib, [("outputnode.fibgz", "fib_file")]),
 
-        consuming_scalars = node_spec.get("scalars_from", [])
-        if consuming_scalars:
-            workflow.connect(scalar_gatherer, "out",
-                             node, "inputnode.collected_scalars")  # fmt:skip
-        else:
-            workflow.connect(node, "outputnode.recon_scalars",
-                             scalar_gatherer, f"in{node_num}")  # fmt:skip
-        if node_spec.get("input", "qsiprep") == "qsiprep":
-            # directly connect all the qsiprep outputs to every node
-            workflow.connect([
-                (inputnode, node,
-                 _as_connections(recon_workflow_input_fields, dest_prefix='inputnode.'))
-            ])  # fmt:skip
-
-        # connect the outputs from the upstream node to this node
-        else:
-            upstream_node = workflow.get_node(node_spec["input"])
-            upstream_outputnode_name = node_spec["input"] + ".outputnode"
-            upstream_outputnode = workflow.get_node(upstream_outputnode_name)
-            upstream_outputs = set(upstream_outputnode.outputs.get().keys())
-            downstream_inputnode_name = node_name + ".inputnode"
-            downstream_inputnode = workflow.get_node(downstream_inputnode_name)
-            downstream_inputs = set(downstream_inputnode.outputs.get().keys())
-
-            connect_from_upstream = upstream_outputs.intersection(downstream_inputs)
-            connect_from_qsiprep = default_input_set - connect_from_upstream
-
-            config.loggers.workflow.debug(
-                "connecting %s from %s to %s", connect_from_qsiprep, inputnode, node
-            )
-            workflow.connect([
-                (
-                    inputnode,
-                    node,
-                    _as_connections(
-                        connect_from_qsiprep - set(("mapping_metadata",)),
-                        dest_prefix='inputnode.'))
-            ])  # fmt:skip
-            _check_repeats(workflow.list_node_names())
-
-            config.loggers.workflow.debug(
-                "connecting %s from %s to %s",
-                connect_from_upstream,
-                upstream_outputnode_name,
-                downstream_inputnode_name,
-            )
-            workflow.connect([
-                (
-                    upstream_node,
-                    node,
-                    _as_connections(
-                        connect_from_upstream - set(("mapping_metadata",)),
-                        src_prefix='outputnode.',
-                        dest_prefix='inputnode.'))
-            ])  # fmt:skip
-            _check_repeats(workflow.list_node_names())
-
-            # Send metadata about the upstream node into the downstream node
-            workflow.connect(
-                workflow_metadata_nodes[node_spec['input']],
-                "input_metadata",
-                node,
-                "inputnode.mapping_metadata")  # fmt:skip
-
-    # Fill-in datasinks and reportlet datasinks seen so far
-    for node in workflow.list_node_names():
-        node_suffix = node.split(".")[-1]
-        if node_suffix.startswith("ds_") or node_suffix.startswith("recon_scalars"):
-            base_dir = (
-                config.execution.reportlets_dir
-                if "report" in node_suffix
-                else config.execution.output_dir
-            )
-            workflow.connect(inputnode, 'dwi_file',
-                             workflow.get_node(node), 'source_file')  # fmt:skip
-            # config.loggers.workflow.info("setting %s base dir to %s", node_suffix, base_dir )
-            if node_suffix.startswith("ds"):
-                workflow.get_node(node).inputs.base_directory = base_dir
+        # Send the fib files to autotrack. Use the map file from gqi in ss3t and csd
+        (initial_gqi_wf, gqi_autotrack, [("outputnode.fibgz", "fib_file")]),
+        (ss3t_to_fib, ss3t_autotrack, [("fib_file", "fib_file")]),
+        (gqi_autotrack, ss3t_autotrack, [("map_file", "map_file")]),
+        (csd_to_fib, csd_autotrack, [("fib_file", "fib_file")]),
+        (gqi_autotrack, csd_autotrack, [("map_file", "map_file")]),
+    ])  # fmt:skip
 
     return workflow
-
-
-def workflow_from_spec(available_anatomical_data, node_spec):
-    """Build a nipype workflow based on a json file."""
-    software = node_spec.get("software", "qsiprep")
-    qsirecon_suffix = node_spec.get("qsirecon_suffix", "")
-    node_name = node_spec.get("name", None)
-    parameters = node_spec.get("parameters", {})
-
-    # It makes more sense intuitively to have scalars_from in the
-    # root of a recon spec "node". But to pass it to the workflow
-    # it needs to go in parameters
-    if "scalars_from" in node_spec and node_spec["scalars_from"]:
-        if parameters.get("scalars_from"):
-            config.loggers.workflow.warning("overwriting scalars_from in parameters")
-        parameters["scalars_from"] = node_spec["scalars_from"]
-
-    if config.execution.skip_odf_reports:
-        config.loggers.workflow.info("skipping ODF plots for %s", node_name)
-        parameters["plot_reports"] = False
-
-    if node_name is None:
-        raise Exception('Node %s must have a "name" attribute' % node_spec)
-    kwargs = {
-        "available_anatomical_data": available_anatomical_data,
-        "name": node_name,
-        "qsirecon_suffix": qsirecon_suffix,
-        "params": parameters,
-    }
-
-    # DSI Studio operations
-    if software == "DSI Studio":
-        if node_spec["action"] == "reconstruction":
-            return init_dsi_studio_recon_wf(**kwargs)
-        if node_spec["action"] == "export":
-            return init_dsi_studio_export_wf(**kwargs)
-        if node_spec["action"] == "tractography":
-            return init_dsi_studio_tractography_wf(**kwargs)
-        if node_spec["action"] == "connectivity":
-            return init_dsi_studio_connectivity_wf(**kwargs)
-        if node_spec["action"] == "autotrack":
-            return init_dsi_studio_autotrack_wf(**kwargs)
-
-    # MRTrix3 operations
-    elif software == "MRTrix3":
-        if node_spec["action"] == "csd":
-            return init_mrtrix_csd_recon_wf(**kwargs)
-        if node_spec["action"] == "global_tractography":
-            return init_global_tractography_wf(**kwargs)
-        if node_spec["action"] == "tractography":
-            return init_mrtrix_tractography_wf(**kwargs)
-        if node_spec["action"] == "connectivity":
-            return init_mrtrix_connectivity_wf(**kwargs)
-
-    # Dipy operations
-    elif software == "Dipy":
-        if node_spec["action"] == "3dSHORE_reconstruction":
-            return init_dipy_brainsuite_shore_recon_wf(**kwargs)
-        if node_spec["action"] == "MAPMRI_reconstruction":
-            return init_dipy_mapmri_recon_wf(**kwargs)
-        if node_spec["action"] == "DKI_reconstruction":
-            return init_dipy_dki_recon_wf(**kwargs)
-
-    # AMICO operations
-    elif software == "AMICO":
-        if node_spec["action"] == "fit_noddi":
-            return init_amico_noddi_fit_wf(**kwargs)
-
-    elif software == "pyAFQ":
-        from .pyafq import init_pyafq_wf
-
-        if node_spec["action"] == "pyafq_tractometry":
-            return init_pyafq_wf(**kwargs)
-
-    elif software == "TORTOISE":
-        if node_spec["action"] == "estimate":
-            return init_tortoise_estimator_wf(**kwargs)
-
-    # qsiprep operations
-    else:
-        if node_spec["action"] == "discard_repeated_samples":
-            return init_discard_repeated_samples_wf(**kwargs)
-        if node_spec["action"] == "conform":
-            return init_conform_dwi_wf(**kwargs)
-        if node_spec["action"] == "mif_to_fib":
-            return init_mif_to_fibgz_wf(**kwargs)
-        if node_spec["action"] == "reorient_fslstd":
-            return init_qsiprep_to_fsl_wf(**kwargs)
-        if node_spec["action"] == "steinhardt_order_parameters":
-            return init_steinhardt_order_param_wf(**kwargs)
-        if node_spec["action"] == "bundle_map":
-            return init_scalar_to_bundle_wf(**kwargs)
-        if node_spec["action"] == "template_map":
-            return init_scalar_to_template_wf(**kwargs)
-
-    raise Exception("Unknown node %s" % node_spec)
 
 
 def _as_connections(attr_list, src_prefix="", dest_prefix=""):
