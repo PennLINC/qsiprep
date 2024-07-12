@@ -4,7 +4,7 @@ orbs:
 
 .dockersetup: &dockersetup
   docker:
-    - image: pennbbl/qsiprep_build:24.7.1
+    - image: pennbbl/qsiprep_build:24.7.2
   working_directory: /src/qsiprep
 
 runinstall: &runinstall
