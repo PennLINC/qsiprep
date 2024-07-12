@@ -17,6 +17,7 @@ qsirecon-MRtrix3_fork-SS3T_act-None/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_
 qsirecon-MRtrix3_fork-SS3T_act-None/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_model-SD_Stream_streamlines.tck
 qsirecon-MRtrix3_fork-SS3T_act-None/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_model-mtnorm_mfp-inliermask_dwimap.nii.gz
 qsirecon-MRtrix3_fork-SS3T_act-None/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_model-mtnorm_mfp-norm_dwimap.nii.gz
+qsirecon-MRtrix3_fork-SS3T_act-None/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_model-sift2_mu.txt
 qsirecon-MRtrix3_fork-SS3T_act-None/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_model-sift2_streamlineweights.csv
 qsirecon-MRtrix3_fork-SS3T_act-None/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_model-ss3t_mfp-FOD_label-CSF_dwimap.mif.gz
 qsirecon-MRtrix3_fork-SS3T_act-None/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_model-ss3t_mfp-FOD_label-CSF_dwimap.txt
