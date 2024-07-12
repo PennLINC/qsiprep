@@ -965,11 +965,83 @@ def test_tortoise_recon(data_dir, output_dir, working_dir):
     _run_and_generate(TEST_NAME, parameters, test_main=True)
 
 
+@pytest.mark.integration
+@pytest.mark.maternal_brain_project
+def test_maternal_brain_project(data_dir, output_dir, working_dir):
+    """Run QSIPrep on Maternal Brain Project data.
+
+    The dataset was built from the Maternal Brain Project dataset:
+    https://openneuro.org/datasets/ds005299/versions/1.0.0
+
+    The first subject's first session DWI data were downsampled to 5 mm isotropic voxels.
+    The dataset contains multi-shell DWI data with a GRE field map.
+    """
+    TEST_NAME = "maternal_brain_project"
+
+    dataset_dir = download_test_data("maternal_brain_project", data_dir)
+    out_dir = os.path.join(output_dir, TEST_NAME)
+    work_dir = os.path.join(working_dir, TEST_NAME)
+
+    test_data_path = get_test_data_path()
+    bids_filter = os.path.join(test_data_path, f"{TEST_NAME}_filter.json")
+
+    parameters = [
+        dataset_dir,
+        out_dir,
+        "participant",
+        f"-w={work_dir}",
+        "--sloppy",
+        "--write-graph",
+        "--output-resolution=5",
+        "--hmc-model=3dSHORE",
+        f"--bids-filter-file={bids_filter}",
+        "--nthreads=4",
+        "--omp-nthreads=4",
+    ]
+
+    _run_and_generate(TEST_NAME, parameters, test_main=True)
+
+
+@pytest.mark.integration
+@pytest.mark.forrest_gump
+def test_forrest_gump(data_dir, output_dir, working_dir):
+    """Run QSIPrep on Forrest Gump data.
+
+    The dataset was built from the Forrest Gump dataset:
+    https://openneuro.org/datasets/ds000113/versions/1.3.0
+
+    The first subject's first session DWI data were downsampled to 5 mm isotropic voxels.
+    The dataset contains single-shell DWI data with a GRE field map.
+    """
+    TEST_NAME = "forrest_gump"
+
+    dataset_dir = download_test_data("forrest_gump", data_dir)
+    out_dir = os.path.join(output_dir, TEST_NAME)
+    work_dir = os.path.join(working_dir, TEST_NAME)
+
+    test_data_path = get_test_data_path()
+    bids_filter = os.path.join(test_data_path, f"{TEST_NAME}_filter.json")
+
+    parameters = [
+        dataset_dir,
+        out_dir,
+        "participant",
+        f"-w={work_dir}",
+        "--sloppy",
+        "--write-graph",
+        "--output-resolution=5",
+        f"--bids-filter-file={bids_filter}",
+        "--nthreads=4",
+        "--omp-nthreads=4",
+    ]
+
+    _run_and_generate(TEST_NAME, parameters, test_main=True)
+
+
 def _run_and_generate(test_name, parameters, test_main=True):
     from qsiprep import config
 
-    # TODO: Add this param
-    # parameters.append("--clean-workdir")
+    # TODO: Add --clean-workdir param to CLI
     parameters.append("--stop-on-first-crash")
     parameters.append("--notrack")
     parameters.append("-vv")
