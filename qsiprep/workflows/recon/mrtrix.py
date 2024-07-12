@@ -599,7 +599,7 @@ def init_mrtrix_tractography_wf(
                 name="ds_mu_file",
                 run_without_submitting=True,
             )
-            workflow.connect(outputnode, 'mu', ds_mu_file, 'in_file')  # fmt:skip            
+            workflow.connect(outputnode, 'mu', ds_mu_file, 'in_file')  # fmt:skip
         if use_5tt:
             workflow.connect(inputnode, connect_5tt, tck_sift2, "act_file")  # fmt:skip
 
