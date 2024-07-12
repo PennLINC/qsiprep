@@ -18,7 +18,7 @@
       "input": "dsistudio_gqi",
       "qsirecon_suffix": "DSIStudio",
       "parameters": {
-        "track_id": "Fasciculus,Cingulum,Aslant,Corticos,Thalamic_R,Reticular,Optic,Fornix,Corpus",
+        "track_id": "Association,Projection,Commissure,Cerebellum,CranialNerve",
         "tolerance": "22,26,30",
         "track_voxel_ratio": 2.0,
         "yield_rate": 0.000001
