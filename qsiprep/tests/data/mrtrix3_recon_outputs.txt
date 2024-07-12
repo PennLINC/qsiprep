@@ -23,6 +23,7 @@ qsirecon-MRtrix3_act-FAST/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-T1w_desc-prep
 qsirecon-MRtrix3_act-FAST/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-T1w_desc-preproc_model-msmt_csd_mfp-FOD_label-WM_dwimap.txt
 qsirecon-MRtrix3_act-FAST/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-T1w_desc-preproc_model-mtnorm_mfp-inliermask_dwimap.nii.gz
 qsirecon-MRtrix3_act-FAST/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-T1w_desc-preproc_model-mtnorm_mfp-norm_dwimap.nii.gz
+qsirecon-MRtrix3_act-FAST/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-T1w_desc-preproc_model-sift2_mu.txt
 qsirecon-MRtrix3_act-FAST/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-T1w_desc-preproc_model-sift2_streamlineweights.csv
 qsirecon-anat
 qsirecon-anat/sub-ABCD
