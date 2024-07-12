@@ -1,0 +1,8 @@
+{
+    "t1w": {
+        "reconstruction": "autobox"
+    },
+    "t2w": {
+        "reconstruction": "autobox"
+    }
+}

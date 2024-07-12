@@ -26,7 +26,6 @@ from nipype.interfaces import ants, fsl
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
-from niworkflows.interfaces import itk
 from niworkflows.interfaces.nibabel import DemeanImage, FilledImageLike
 from niworkflows.interfaces.reportlets.registration import (
     ANTSApplyTransformsRPT,
@@ -37,6 +36,7 @@ from ... import config
 from ...interfaces import DerivativesDataSink
 from ...interfaces.fmap import FieldToHz, FieldToRadS
 from ...interfaces.fmap import get_ees as _get_ees
+from ...interfaces.niworkflows import FUGUEvsm2ANTSwarp
 
 
 def init_sdc_unwarp_wf(name="sdc_unwarp_wf"):
@@ -177,7 +177,7 @@ def init_sdc_unwarp_wf(name="sdc_unwarp_wf"):
     gen_vsm = pe.Node(fsl.FUGUE(save_unmasked_shift=True, save_fmap=True), name="gen_vsm")
     # Convert the VSM into a DFM (displacements field map)
     # or: FUGUE shift to ANTS warping.
-    vsm2dfm = pe.Node(itk.FUGUEvsm2ANTSwarp(), name="vsm2dfm")
+    vsm2dfm = pe.Node(FUGUEvsm2ANTSwarp(), name="vsm2dfm")
     jac_dfm = pe.Node(
         ants.CreateJacobianDeterminantImage(imageDimension=3, outputImage="jacobian.nii.gz"),
         name="jac_dfm",

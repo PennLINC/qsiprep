@@ -1,5 +1,3 @@
-qsirecon-PYAFQ/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-T1w_desc-preproc_dwimap/viz_bundles/sub-ABCD_acq-10per000_coordsys-RASMM_trkmethod-probCSD_recogmethod-AFQ_desc-LeftArcuateviz_dwi.html
-qsirecon-PYAFQ/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-T1w_desc-preproc_dwimap/bundles/sub-ABCD_acq-10per000_coordsys-RASMM_trkmethod-probCSD_recogmethod-AFQ_desc-LeftArcuate_tractography.trk
 qsirecon-PYAFQ/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-T1w_desc-preproc_dwimap/bundles/sub-ABCD_acq-10per000_coordsys-RASMM_trkmethod-probCSD_recogmethod-AFQ_desc-LeftArcuate_tractography.trk
 qsirecon-PYAFQ/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-T1w_desc-preproc_dwimap/viz_bundles/sub-ABCD_acq-10per000_coordsys-RASMM_trkmethod-probCSD_recogmethod-AFQ_desc-LeftArcuateviz_dwi.html
 qsirecon-PYAFQ/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-T1w_desc-preproc_dwimap/viz_core_bundles/sub-ABCD_acq-10per000_coordsys-RASMM_trkmethod-probCSD_recogmethod-AFQ_desc-LeftArcuateviz_dwi.html

@@ -41,6 +41,7 @@ class FODtoFIBGZInputSpec(BaseInterfaceInputSpec):
     num_fibers = traits.Int(5, usedefault=True)
     unit_odf = traits.Bool(False, usedefault=True)
     fib_file = File()
+    output_fib_file = File()
 
 
 class FODtoFIBGZOutputSpec(TraitedSpec):
@@ -54,8 +55,8 @@ class FODtoFIBGZ(SimpleInterface):
     def _run_interface(self, runtime):
         mif_file = self.inputs.mif_file
         mask_file = self.inputs.mask_file
-        if isdefined(self.inputs.fib_file):
-            output_fib_file = self.inputs.fib_file
+        if isdefined(self.inputs.output_fib_file):
+            output_fib_file = self.inputs.output_fib_file
             if output_fib_file.endswith(".gz"):
                 output_fib_file = output_fib_file[:-3]
         else:
