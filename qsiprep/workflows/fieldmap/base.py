@@ -205,6 +205,9 @@ co-registration with the anatomical reference.
             # set inputs
             if fieldmap_info["suffix"] == "phasediff":
                 fmap_estimator_wf.inputs.inputnode.phasediff = fieldmap_info["phasediff"]
+                fmap_estimator_wf.inputs.inputnode.phase_meta = (
+                    config.execution.layout.get_metadata(fieldmap_info["phasediff"])
+                )
             else:
                 # Check that fieldmap is not bipolar
                 fmap_polarity = fieldmap_info["metadata"].get("DiffusionScheme", None)
@@ -219,6 +222,7 @@ co-registration with the anatomical reference.
                                                  ('b0_mask', 'b0_mask')]),
                     ])  # fmt:skip
                     return workflow
+
                 if fmap_polarity is None:
                     config.loggers.workflow.warning("Assuming phase images are Monopolar")
 
@@ -226,6 +230,11 @@ co-registration with the anatomical reference.
                     fieldmap_info["phase1"],
                     fieldmap_info["phase2"],
                 ]
+                fmap_estimator_wf.inputs.inputnode.phase_meta = [
+                    config.execution.layout.get_metadata(fieldmap_info["phase1"]),
+                    config.execution.layout.get_metadata(fieldmap_info["phase2"]),
+                ]
+
             fmap_estimator_wf.inputs.inputnode.magnitude = [
                 fmap_
                 for key, fmap_ in sorted(fieldmap_info.items())
