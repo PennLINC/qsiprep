@@ -79,7 +79,7 @@ def init_highres_recon_anatomical_wf(
     outputnode = pe.Node(
         niu.IdentityInterface(fields=anatomical_workflow_outputs), name="outputnode"
     )
-
+    workflow.__desc__ = ""
     # "Gather" the input data. ``status`` is a dict that reflects which anatomical data
     # are present. The anat_ingress_node is a nipype node that ensures that qsiprep-style
     # anatomical data is available. In the case where ``pipeline_source`` is not "qsiprep",
@@ -129,9 +129,9 @@ def init_highres_recon_anatomical_wf(
             nio.FreeSurferSource(subjects_dir=freesurfer_dir, subject_id="sub-" + subject_id),
             name="fs_source",
         )
-        workflow.connect([
-            (fs_source, outputnode, [
-                (field, field) for field in FS_FILES_TO_REGISTER])])  # fmt:skip
+        # workflow.connect([
+        #     (fs_source, outputnode, [
+        #         (field, field) for field in FS_FILES_TO_REGISTER])])  # fmt:skip
 
     # Do we need to calculate anything else on the
     if "mrtrix_5tt_hsvs" in extras_to_make:
@@ -164,7 +164,7 @@ def init_highres_recon_anatomical_wf(
         # Transform the 5tt image so it's registered to the QSIPrep AC-PC T1w
         if status["has_qsiprep_t1w"]:
             config.loggers.workflow.info(
-                "HSVS 5tt imaged will be registered to the " "QSIPrep T1w image."
+                "HSVS 5tt imaged will be registered to the QSIPrep T1w image."
             )
             status["has_qsiprep_5tt_hsvs"] = True
             register_fs_to_qsiprep_wf = init_register_fs_to_qsiprep_wf(
