@@ -85,7 +85,7 @@ def init_highres_recon_anatomical_wf(
     # anatomical data is available. In the case where ``pipeline_source`` is not "qsiprep",
     # the data is converted in this node to be qsiprep-like.
     pipeline_source = config.workflow.recon_input_pipeline
-    freesurfer_dir = config.execution.fs_subjects_dir
+    freesurfer_dir = config.execution.freesurfer_input
     if pipeline_source == "qsiprep":
         anat_ingress_node, status = gather_qsiprep_anatomical_data(subject_id)
     elif pipeline_source == "ukb":
