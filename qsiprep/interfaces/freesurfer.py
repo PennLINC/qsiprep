@@ -20,6 +20,7 @@ Disable warnings:
 
 """
 import os.path as op
+from pathlib import Path
 
 import nibabel as nb
 import numpy as np
@@ -454,10 +455,10 @@ def find_fs_path(freesurfer_dir, subject_id):
         return None
     nosub = op.join(freesurfer_dir, subject_id)
     if op.exists(nosub):
-        return nosub
+        return Path(nosub)
     withsub = op.join(freesurfer_dir, "sub-" + subject_id)
     if op.exists(withsub):
-        return withsub
+        return Path(withsub)
     return None
 
 
