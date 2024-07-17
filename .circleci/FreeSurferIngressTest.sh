@@ -3,7 +3,7 @@
 set +e
 source ./get_data.sh
 TESTDIR=${PWD}
-#get_config_data ${TESTDIR}
+get_config_data ${TESTDIR}
 #get_bids_data ${TESTDIR} freesurfer
 #get_bids_data ${TESTDIR} abcd_output
 
@@ -12,7 +12,7 @@ export FS_LICENSE=${TESTDIR}/data/license.txt
 
 # Test dipy_mapmri
 TESTNAME=fs_ingress_test
-# setup_dir ${TESTDIR}/${TESTNAME}
+setup_dir ${TESTDIR}/${TESTNAME}
 TEMPDIR=${TESTDIR}/${TESTNAME}/work
 OUTPUT_DIR=${TESTDIR}/${TESTNAME}/derivatives
 BIDS_INPUT_DIR=${TESTDIR}/data/araikes/qsiprep

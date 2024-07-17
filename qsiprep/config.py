@@ -437,6 +437,8 @@ class execution(_Config):
     """Root of QSIRecon BIDS Derivatives dataset."""
     recon_input = None
     """Directory containing QSIPrep derivatives to run through recon workflows."""
+    freesurfer_input = None
+    """Directory containing FreeSurfer directories to use for recon workflows."""
     recon_only = False
     """Run only recon workflows."""
     reportlets_dir = None
