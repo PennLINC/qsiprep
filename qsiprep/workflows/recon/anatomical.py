@@ -156,7 +156,9 @@ def init_highres_recon_anatomical_wf(
             n_procs=config.nipype.omp_nthreads,
         )
         ds_qsiprep_5tt_hsvs = pe.Node(
-            ReconDerivativesDataSink(atlas="hsvs", space="T1w", suffix="dseg", qsirecon_suffix="anat"),
+            ReconDerivativesDataSink(
+                atlas="hsvs", space="T1w", suffix="dseg", qsirecon_suffix="anat"
+            ),
             name="ds_qsiprep_5tt_hsvs",
             run_without_submitting=True,
         )
