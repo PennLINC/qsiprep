@@ -256,8 +256,7 @@ to workflows in *qsiprep*'s documentation]\
                 else config.execution.output_dir
             )
             workflow.get_node(_node).inputs.base_directory = base_dir
-            # workflow.get_node(_node).inputs.source_file = \
-            #     "anat/sub-{}_desc-preproc_T1w.nii.gz".format(subject_id)
+
     return workflow
 
 

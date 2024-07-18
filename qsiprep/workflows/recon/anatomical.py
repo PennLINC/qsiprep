@@ -41,6 +41,7 @@ from qsiprep.interfaces.utils import GetConnectivityAtlases
 HSV_REQUIREMENTS = [
     "mri/aparc+aseg.mgz",
     "mri/brainmask.mgz",
+    "mri/norm.mgz",
     "mri/transforms/talairach.xfm",
     "surf/lh.white",
     "surf/lh.pial",
@@ -79,13 +80,13 @@ def init_highres_recon_anatomical_wf(
     outputnode = pe.Node(
         niu.IdentityInterface(fields=anatomical_workflow_outputs), name="outputnode"
     )
-
+    workflow.__desc__ = ""
     # "Gather" the input data. ``status`` is a dict that reflects which anatomical data
     # are present. The anat_ingress_node is a nipype node that ensures that qsiprep-style
     # anatomical data is available. In the case where ``pipeline_source`` is not "qsiprep",
     # the data is converted in this node to be qsiprep-like.
     pipeline_source = config.workflow.recon_input_pipeline
-    freesurfer_dir = config.execution.fs_subjects_dir
+    freesurfer_dir = config.execution.freesurfer_input
     if pipeline_source == "qsiprep":
         anat_ingress_node, status = gather_qsiprep_anatomical_data(subject_id)
     elif pipeline_source == "ukb":
@@ -126,12 +127,15 @@ def init_highres_recon_anatomical_wf(
             "Freesurfer directory %s exists for %s", subject_freesurfer_path, subject_id
         )
         fs_source = pe.Node(
-            nio.FreeSurferSource(subjects_dir=freesurfer_dir, subject_id="sub-" + subject_id),
+            nio.FreeSurferSource(
+                subjects_dir=str(subject_freesurfer_path.parent),
+                subject_id=subject_freesurfer_path.name,
+            ),
             name="fs_source",
         )
-        workflow.connect([
-            (fs_source, outputnode, [
-                (field, field) for field in FS_FILES_TO_REGISTER])])  # fmt:skip
+        # workflow.connect([
+        #     (fs_source, outputnode, [
+        #         (field, field) for field in FS_FILES_TO_REGISTER])])  # fmt:skip
 
     # Do we need to calculate anything else on the
     if "mrtrix_5tt_hsvs" in extras_to_make:
@@ -143,28 +147,39 @@ def init_highres_recon_anatomical_wf(
         config.loggers.workflow.info("FreeSurfer data will be used to create a HSVS 5tt image.")
         status["has_freesurfer_5tt_hsvs"] = True
         create_5tt_hsvs = pe.Node(
-            GenerateMasked5tt(algorithm="hsvs", in_file=str(subject_freesurfer_path)),
+            GenerateMasked5tt(
+                algorithm="hsvs",
+                in_file=str(subject_freesurfer_path),
+                nthreads=config.nipype.omp_nthreads,
+            ),
             name="create_5tt_hsvs",
+            n_procs=config.nipype.omp_nthreads,
         )
-        workflow.connect([
-            (create_5tt_hsvs, outputnode, [('out_file', 'fs_5tt_hsvs')])])  # fmt:skip
         ds_qsiprep_5tt_hsvs = pe.Node(
-            ReconDerivativesDataSink(atlas="hsvs", suffix="dseg", qsirecon_suffix="anat"),
+            ReconDerivativesDataSink(
+                atlas="hsvs", space="T1w", suffix="dseg", qsirecon_suffix="anat"
+            ),
             name="ds_qsiprep_5tt_hsvs",
             run_without_submitting=True,
         )
         ds_fs_5tt_hsvs = pe.Node(
             ReconDerivativesDataSink(
-                desc="hsvs", space="fsnative", suffix="dseg", qsirecon_suffix="anat"
+                desc="hsvs", space="fsnative", suffix="dseg", qsirecon_suffix="anat", compress=True
             ),
             name="ds_fs_5tt_hsvs",
             run_without_submitting=True,
         )
+        workflow.connect([
+            (anat_ingress_node, ds_fs_5tt_hsvs, [("t1_preproc", "source_file")]),
+            (anat_ingress_node, ds_qsiprep_5tt_hsvs, [("t1_preproc", "source_file")]),
+            (create_5tt_hsvs, outputnode, [('out_file', 'fs_5tt_hsvs')]),
+            (create_5tt_hsvs, ds_fs_5tt_hsvs, [("out_file", "in_file")]),
+        ])  # fmt:skip
 
         # Transform the 5tt image so it's registered to the QSIPrep AC-PC T1w
         if status["has_qsiprep_t1w"]:
             config.loggers.workflow.info(
-                "HSVS 5tt imaged will be registered to the " "QSIPrep T1w image."
+                "HSVS 5tt imaged will be registered to the QSIPrep T1w image."
             )
             status["has_qsiprep_5tt_hsvs"] = True
             register_fs_to_qsiprep_wf = init_register_fs_to_qsiprep_wf(
@@ -184,8 +199,6 @@ def init_highres_recon_anatomical_wf(
                         "fs_to_qsiprep_transform_itk")] + [
                     ("outputnode." + field, field) for field in FS_FILES_TO_REGISTER]),
                 (create_5tt_hsvs, apply_header_to_5tt, [("out_file", "in_image")]),
-                (create_5tt_hsvs, ds_fs_5tt_hsvs, [("out_file", "in_file")]),
-
                 (register_fs_to_qsiprep_wf, apply_header_to_5tt, [
                     ("outputnode.fs_to_qsiprep_transform_mrtrix", "transform_file")]),
                 (apply_header_to_5tt, outputnode, [

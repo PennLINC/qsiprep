@@ -382,14 +382,22 @@ def get_recon_output_name(
     datatype_dir = output_bids_entities.get("datatype", op.basename(op.dirname(source_file)))
     out_path += f"/{datatype_dir}"
     _, source_fname, _ = split_filename(source_file)
+    # Remove the suffix
     source_fname, _ = source_fname.rsplit("_", 1)
     _, _, extension = split_filename(derivative_file)
 
     # It may be that the space has changed. Check if it has
     if "space" in output_bids_entities:
-        source_fname = re.sub(
-            "_space-[a-zA-Z0-9]+", "_space-" + output_bids_entities["space"], source_fname
-        )
+        if "_space-" in source_fname:
+            source_fname = re.sub(
+                "_space-[a-zA-Z0-9]+", "_space-" + output_bids_entities["space"], source_fname
+            )
+        elif "_desc-preproc" in source_fname:
+            source_fname = source_fname.replace(
+                "_desc-preproc", f"_space-{output_bids_entities['space']}_desc-preproc"
+            )
+        else:
+            source_fname += f"_space-{output_bids_entities['space']}"
     base_fname = op.join(out_path, source_fname)
 
     # Add the new bids entities for the output file
@@ -444,6 +452,8 @@ class ReconDerivativesDataSink(DerivativesDataSink):
         output_bids = {}
         if self.inputs.atlas:
             output_bids["atlas"] = self.inputs.atlas
+        if self.inputs.space:
+            output_bids["space"] = self.inputs.space
         if self.inputs.bundles:
             output_bids["bundles"] = self.inputs.bundles
         if self.inputs.bundle:

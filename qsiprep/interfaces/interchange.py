@@ -9,7 +9,12 @@ from qsiprep.interfaces.anatomical import QsiprepAnatomicalIngress
 from qsiprep.interfaces.ingress import QsiReconDWIIngress
 
 # Anatomical (t1w/t2w) slots
-FS_FILES_TO_REGISTER = ["brain", "aseg"]
+FS_FILES_TO_REGISTER = [
+    # The skull-stripped brain produced by FreeSurfer
+    "brain",
+    # Automated volumetric segmentation file from FreeSurfer
+    "aseg",
+]
 CREATEABLE_ANATOMICAL_OUTPUTS = [
     "fs_5tt_hsvs",
     "qsiprep_5tt_hsvs",
