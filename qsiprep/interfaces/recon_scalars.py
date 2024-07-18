@@ -106,6 +106,7 @@ class _ReconScalarsDataSinkInputSpec(BaseInterfaceInputSpec):
     base_directory = File()
     resampled_files = InputMultiObject(File(exists=True))
     recon_scalars = InputMultiObject(traits.Any())
+    compress = traits.Bool(True, usedefault=True)
 
 
 class ReconScalarsDataSink(SimpleInterface):
@@ -113,6 +114,14 @@ class ReconScalarsDataSink(SimpleInterface):
     _always_run = True
 
     def _run_interface(self, runtime):
+
+        force_compress = False
+        force_decompress = False
+        if isdefined(self.inputs.compress):
+            if self.inputs.compress:
+                force_compress = True
+            else:
+                force_decompress = True
 
         for recon_scalar in self.inputs.recon_scalars:
             output_filename = get_recon_output_name(
@@ -123,6 +132,13 @@ class ReconScalarsDataSink(SimpleInterface):
                 output_bids_entities=recon_scalar["bids"],
                 use_ext=True,
             )
+
+            if force_decompress and output_filename.endswith(".gz"):
+                output_filename = output_filename.rstrip(".gz")
+
+            if force_compress and not output_filename.endswith(".gz"):
+                output_filename += ".gz"
+
             output_dir = op.dirname(output_filename)
             os.makedirs(output_dir, exist_ok=True)
             _copy_any(recon_scalar["path"], output_filename)
