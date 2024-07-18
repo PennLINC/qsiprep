@@ -331,7 +331,9 @@ def init_dsi_studio_autotrack_wf(
 
     # Save tck files of the bundles into the outputs
     ds_tckfiles = pe.MapNode(
-        ReconDerivativesDataSink(suffix="streamlines", qsirecon_suffix=qsirecon_suffix),
+        ReconDerivativesDataSink(
+            suffix="streamlines", qsirecon_suffix=qsirecon_suffix, compress=True
+        ),
         iterfield=["in_file", "bundle"],
         name="ds_tckfiles",
     )
