@@ -50,8 +50,8 @@ qsirecon-DSIStudio/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-MNI152NLin2009cAsym_
 qsirecon-DSIStudio/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-MNI152NLin2009cAsym_desc-preproc_model-tensor_mfp-tyy_dwimap.nii.gz
 qsirecon-DSIStudio/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-MNI152NLin2009cAsym_desc-preproc_model-tensor_mfp-tyz_dwimap.nii.gz
 qsirecon-DSIStudio/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-MNI152NLin2009cAsym_desc-preproc_model-tensor_mfp-tzz_dwimap.nii.gz
-qsirecon-DSIStudio/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-T1w_desc-preproc_bundle-Association_ArcuateFasciculusL_streamlines.tck
-qsirecon-DSIStudio/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-T1w_desc-preproc_bundle-Association_ArcuateFasciculusR_streamlines.tck
+qsirecon-DSIStudio/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-T1w_desc-preproc_bundle-Association_ArcuateFasciculusL_streamlines.tck.gz
+qsirecon-DSIStudio/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-T1w_desc-preproc_bundle-Association_ArcuateFasciculusR_streamlines.tck.gz
 qsirecon-DSIStudio/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-T1w_desc-preproc_bundles-DSIStudio_scalarstats.tsv
 qsirecon-DSIStudio/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-T1w_desc-preproc_bundles-DSIStudio_tdistats.tsv
 qsirecon-DSIStudio/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-T1w_desc-preproc_bundlestats.csv
