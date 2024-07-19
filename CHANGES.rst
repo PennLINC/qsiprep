@@ -1,3 +1,118 @@
+0.22.0 (July 19, 2024)
+======================
+
+Continuing the update to current NiPreps best practices, an update to PyAFQ and a few bugfixes.
+
+ * [ENH] Compress recon derivatives (#787)
+ * [FIX] Make hsvs workflow work (#784)
+ * [FIX] Use new bundle names (#783)
+ * [RF] Drop functions to read sidecar JSONs (#760)
+ * [FIX] FUGUE bug (#769)
+ * [ENH] Save SIFT2 mu parameter (#774)
+ * [FIX] Fix the mif2fib workflow (#778)
+ * [FIX] CI test file checking
+ * [CI] Update expected AFQ outputs again
+ * [CI] add optional bundles (#771)
+ * [ENH] Update dependencies in docker image (#768)
+ * [ENH] Upgrade pyAFQ to 1.3.2 (#764)
+ * [RF] Run integration tests with pytest (#763)
+ * [FIX] API documentation (#748)
+ * [ENH] Update to NiPreps-style config file (#745)
+
+
+0.21.4 (May 4, 2024)
+====================
+
+
+## What's Changed
+The effort to update to current NiPreps standards has begun, plus another bugfix in the TOPUP workflow.
+
+### Other Changes
+* Remove copy of Niworkflows in favor of dependency by @tsalo in https://github.com/PennLINC/qsiprep/pull/709
+* [FIX] stop bizarre argsort behavior in best b=0 by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/744
+
+
+
+0.21.3 (May 2, 2024)
+====================
+
+## What's Changed
+
+This update addresses an important coregistration bug (#740), makes CPU Eddy much more usable and fixes a bug in the PyAFQ workflow.
+
+### Other Changes
+* [FIX] PyAFQ was not being written to derivatives by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/738
+* [FIX] use b0 ref from eddy-processed data by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/739
+* [MAINT] remove pypi by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/742
+* [ENH] add parallel argument for topup by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/741
+* [ENH] Allow multithreading in eddy by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/743
+
+
+
+0.21.1 (Apr 25, 2024)
+=====================
+
+There are important software updates in this release, along with a lot of infrastructure improvements.
+
+## Important Changes
+ * FSL version 6.0.7.8 is now in qsiprep. This contains 2 [serious bugfixes](https://fsl.fmrib.ox.ac.uk/fsl/docs/#/development/history/changelog-6.0.7.8.md). One has to do with susceptibility-by-volume correction and the other resulted in incorrect CNR values being calculated.
+ * DSI Studio has been updated to fix a bug in [Neighboring DWI Correlation](https://github.com/frankyeh/DSI-Studio/issues/84).
+ * You can use `"mporder"` in your eddy config json file and the slice timings will automatically be created and passed to eddy (even if you're concatenating runs)
+ * Recon workflows can now include a "bundle mapping" and "scalar mapping", where scalars created in individual workflows can be mapped to a template or summarized inside autotrack bundles. This does not do tract profiles or surface mapping - yet. See `qsiprep/data/pipelines/hbcd_scalar_maps.json` for an example.
+ * The recon derivatives are written approximately according to BEP-016
+
+## New Features
+
+* [ENH] Add workflow to resample recon scalars to template space by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/688
+* Support complex-valued dwidenoising by @tsalo in https://github.com/PennLINC/qsiprep/pull/679
+* [ENH] Add ReconScalars node to recon workflows by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/683
+* Pin current version of pyAFQ (1.3.1) by @arokem in https://github.com/PennLINC/qsiprep/pull/729
+* [ENH] Add TORTOISE Estimator recon workflows by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/674
+* [ENH] Make Eddy's slice2vol much easier to use by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/710
+
+## Other Changes
+* Apply stylistic changes to `workflows/base.py` by @tsalo in https://github.com/PennLINC/qsiprep/pull/678
+* Pin Nilearn version by @tsalo in https://github.com/PennLINC/qsiprep/pull/687
+* Add a series of infrastructure files from ASLPrep/XCP-D by @tsalo in https://github.com/PennLINC/qsiprep/pull/684
+* Run isort and remove unused imports by @tsalo in https://github.com/PennLINC/qsiprep/pull/690
+* Apply stylistic changes to `workflows/utils.py` by @tsalo in https://github.com/PennLINC/qsiprep/pull/680
+* Remove unused classes flagged by vulture by @tsalo in https://github.com/PennLINC/qsiprep/pull/693
+* [RF] Use Black to reformat package by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/701
+
+## Bugfixes
+* [FIX] Prevent undecodable terminal output in calc_connectivity by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/711
+* [FIX] save recon anat files by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/702
+* [FIX] revert citeproc for old pandoc by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/736
+* [FIX] recon workflows when --anat-modality T2w was used  by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/734
+* [FIX] remove old nodes from csdsi_3dshore.json by @kjamison in https://github.com/PennLINC/qsiprep/pull/733
+* [ENH] Update TORTOISE for lower cuda memory use by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/730
+
+
+
+0.20.0 (Jan 12, 2024)
+======================
+Please note there is no corresponding release on PyPI for this version
+
+## New features
+* [ENH] allow topup+drbuddi for hbcd by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/667
+   * Adds a 2-stage distortion correction option `--pepolar-method TOPUP+DRBUDDI`, which will run TOPUP -> Eddy -> DRBUDDI
+* [ENH] Use UKB processed data as input for recon workflows by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/651
+   * This adds the --recon-input-pipeline, which lets you run recon workflows on UKB data
+* [ENH] Update to python 3.10 by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/670
+   * Hopefully this will address the hang-after-crashing problem in the recent releases
+
+## Bugfixes/Docs
+* DOC: Add SMeisler and JHLegarreta to contributors list by @jhlegarreta in https://github.com/PennLINC/qsiprep/pull/642
+* Fixes typos on FreeSurfer requirements for ss3t hsvs recon by @pcamach2 in https://github.com/PennLINC/qsiprep/pull/414
+* Fix RTD build by @tsalo in https://github.com/PennLINC/qsiprep/pull/652
+* ENH: conform bvals to shells separated by b0_threshold by @cookpa in https://github.com/PennLINC/qsiprep/pull/660
+* [FIX] remove unneeded "method" from tracking by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/641
+* FIX: allow finding of lesion rois by @psadil in https://github.com/PennLINC/qsiprep/pull/659
+* MISC: Remove outdated dsi_studio tracking parameters by @cookpa in https://github.com/PennLINC/qsiprep/pull/668
+* [DOC] Add documentation for dsi_studio_autotrack reconstruction workflow by @valeriejill in https://github.com/PennLINC/qsiprep/pull/669
+* [ENH] Update BIDS validator to 1.8.4 by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/671
+
+
 0.19.0 (August 10, 2023)
 ========================
 

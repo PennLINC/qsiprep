@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling", "hatch-vcs", "cython", "numpy"]
+requires = ["hatchling", "hatch-vcs", "nipreps-versions", "cython", "numpy"]
 build-backend = "hatchling.build"
 
 [project]
@@ -51,7 +51,7 @@ dynamic = ["version"]
 Homepage = "https://github.com/pennbbl/qsiprep"
 Documentation = "https://www.qsiprep.readthedocs.io"
 Paper = "https://doi.org/10.1038/s41592-022-01458-7"
-"Docker Images" = "https://hub.docker.com/r/pennlinc/qsiprep/tags/"
+"Docker Images" = "https://hub.docker.com/r/pennbbl/qsiprep/tags/"
 
 [project.optional-dependencies]
 doc = [
