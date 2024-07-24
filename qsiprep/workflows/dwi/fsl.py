@@ -181,7 +181,7 @@ def init_fsl_hmc_wf(
     enhance_pre_sdc = pe.Node(EnhanceB0(), name="enhance_pre_sdc")
 
     # Run in parallel if possible
-    if eddy_args["use_cuda"] is True:
+    if eddy_args["use_cuda"]:
         eddy_args["num_threads"] = 1
         config.loggers.workflow.info("Using CUDA and %d threads in eddy", eddy_args["num_threads"])
     else:
