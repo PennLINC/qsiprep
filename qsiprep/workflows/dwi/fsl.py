@@ -181,8 +181,12 @@ def init_fsl_hmc_wf(
     enhance_pre_sdc = pe.Node(EnhanceB0(), name="enhance_pre_sdc")
 
     # Run in parallel if possible
-    config.loggers.workflow.info("Using %d threads in eddy", omp_nthreads)
-    eddy_args["num_threads"] = omp_nthreads
+    if eddy_args["use_cuda"]:
+        eddy_args["num_threads"] = 1
+        config.loggers.workflow.info("Using CUDA and %d threads in eddy", eddy_args["num_threads"])
+    else:
+        eddy_args["num_threads"] = omp_nthreads
+        config.loggers.workflow.info("Using %d threads in eddy", eddy_args["num_threads"])
     pre_eddy_b0_ref_wf = init_dwi_reference_wf(
         source_file=source_file,
         name="pre_eddy_b0_ref_wf",
