@@ -76,7 +76,7 @@
       "input": "dsistudio_gqi",
       "qsirecon_suffix": "DSIStudio",
       "parameters": {
-        "track_id": "Fasciculus,Cingulum,Aslant,Corticos,Thalamic_R,Reticular,Optic,Fornix,Corpus",
+        "track_id": "Association,Projection,Commissure,Cerebellum,CranialNerve",
         "tolerance": "22,26,30",
         "track_voxel_ratio": 2.0,
         "yield_rate": 0.000001
@@ -95,9 +95,9 @@
       "action": "bundle_map",
       "input": "autotrackgqi",
       "scalars_from": [
-        "gqi_scalars", 
-        "dipy_dki", 
-        "fit_noddi", 
+        "gqi_scalars",
+        "dipy_dki",
+        "fit_noddi",
         "tortoise_fullshell_tensor",
         "tortoise_dtmapmri"
       ]
@@ -108,9 +108,9 @@
       "action": "template_map",
       "input": "qsiprep",
       "scalars_from": [
-        "gqi_scalars", 
-        "dipy_dki", 
-        "fit_noddi", 
+        "gqi_scalars",
+        "dipy_dki",
+        "fit_noddi",
         "tortoise_fullshell_tensor",
         "tortoise_dtmapmri"
       ],
