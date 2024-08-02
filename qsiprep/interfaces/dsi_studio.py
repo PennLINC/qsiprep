@@ -142,7 +142,7 @@ class DSIStudioQC(SimpleInterface):
             LOGGER.info(out.decode())
         if err:
             LOGGER.critical(err.decode())
-        self._results["qc_txt"] = src_file.replace(self.ext, ".qc.txt")
+        self._results["qc_txt"] = op.join(runtime.cwd, "qc.txt")
         return runtime
 
 
@@ -252,10 +252,10 @@ class DSIStudioGQIReconstruction(DSIStudioReconstruction):
         outputs = self.output_spec().get()
         config.loggers.interface.info("current dir", os.getcwd())
         srcname = os.path.split(self.inputs.input_src_file)[-1]
-        config.loggers.interface.info("input src", self.inputs.input_src_file)
-        config.loggers.interface.info("split src name", srcname)
+        config.loggers.interface.info(f"input src {self.inputs.input_src_file}")
+        config.loggers.interface.info(f"split src name {srcname}")
         target = os.path.join(os.getcwd(), srcname) + "*gqi*.fib.gz"
-        config.loggers.interface.info("search target", target)
+        config.loggers.interface.info(f"search target: {target}")
         results = glob(target)
         assert len(results) == 1
         outputs["output_fib"] = results[0]
@@ -903,7 +903,7 @@ def load_src_qc_file(fname, prefix=""):
 
     voxelsx, voxelsy, voxelsz = map(float, voxel_size.strip().split())
     dimx, dimy, dimz = map(float, dims.strip().split())
-    n_dirs = float(dirs)
+    n_dirs = float(dirs.split("/")[1])
     max_b = float(max_b)
     dwi_corr = float(ndc)
     n_bad_slices = float(bad_slices)
@@ -929,7 +929,7 @@ def load_src_qc_file(fname, prefix=""):
 def load_fib_qc_file(fname):
     with open(fname, "r") as fibqc_f:
         lines = [line.strip().split() for line in fibqc_f]
-    return {"coherence_index": [float(lines[0][-1])], "incoherence_index": [float(lines[1][-1])]}
+    return {"coherence_index": [float(lines[1][-1])]}
 
 
 def btable_from_bvals_bvecs(bval_file, bvec_file, output_file):
