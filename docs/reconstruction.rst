@@ -65,8 +65,8 @@ To use a pre-packaged workflow, simply provide the name from the leftmost column
 
   $ qsiprep-docker \
       /path/to/bids /path/for/reconstruction/outputs participant \
-      --recon_input /output/from/qsiprep \
-      --recon_spec dsi_studio_gqi \
+      --recon-input /output/from/qsiprep \
+      --recon-spec dsi_studio_gqi \
       --fs-license-file /path/to/license.txt
 
 
@@ -164,8 +164,8 @@ You can run::
 
   $ qsiprep-docker \
       derivatives/qsiprep derivatives participant \
-      --recon_input derivatives/qsiprep \
-      --recon_spec mrtrix_multishell_msmt_ACT-hsvs \
+      --recon-input derivatives/qsiprep \
+      --recon-spec mrtrix_multishell_msmt_ACT-hsvs \
       --freesurfer-input derivatives/freesurfer \
       --fs-license-file /path/to/license.txt
 
@@ -520,8 +520,8 @@ Assuming this file is called ``qgi_scalar_export.json`` and you've installed
 
   $ qsiprep-docker \
       /path/to/bids /where/my/reconstructed/data/goes participant \
-      --recon_input /output/from/qsiprep \
-      --recon_spec gqi_scalar_export.json \
+      --recon-input /output/from/qsiprep \
+      --recon-spec gqi_scalar_export.json \
       --fs-license-file /path/to/license.txt
 
 
