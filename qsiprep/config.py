@@ -398,12 +398,6 @@ class execution(_Config):
     """Run in sloppy mode (meaning, suboptimal parameters that minimize run-time)."""
     debug = []
     """Debug mode(s)."""
-    fs_license_file = _fs_license
-    """An existing file containing a FreeSurfer license."""
-    fs_subjects_dir = None
-    """FreeSurfer's subjects directory."""
-    interactive_reports_only = False
-    """Only build the interactive reports, based on the output directory."""
     layout = None
     """A :py:class:`~bids.layout.BIDSLayout` object, see :py:func:`init`."""
     log_dir = None
@@ -431,24 +425,10 @@ class execution(_Config):
     """Disable ODF recon reports."""
     participant_label = None
     """List of participant identifiers that are to be preprocessed."""
-    qsiprep_dir = None
-    """Root of QSIPrep BIDS Derivatives dataset. Depends on output_layout."""
-    qsirecon_dir = None
-    """Root of QSIRecon BIDS Derivatives dataset."""
-    recon_input = None
-    """Directory containing QSIPrep derivatives to run through recon workflows."""
-    freesurfer_input = None
-    """Directory containing FreeSurfer directories to use for recon workflows."""
-    recon_only = False
-    """Run only recon workflows."""
     reportlets_dir = None
     """Path where reportlets are written."""
-    run_preproc_and_recon = False
-    """Will both preproc and recon be run in a single call?"""
     skip_anat_based_spatial_normalization = False
     """Should we skip normalizing the anatomical data to a template?"""
-    task_id = None
-    """Select a particular task from all available in the dataset."""
     templateflow_home = _templateflow_home
     """The root folder of the TemplateFlow client."""
     work_dir = Path("work").absolute()
@@ -465,15 +445,9 @@ class execution(_Config):
         "bids_database_dir",
         "dataset_links",
         "eddy_config",
-        "fs_license_file",
-        "fs_subjects_dir",
-        "freesurfer_input",
         "layout",
         "log_dir",
         "output_dir",
-        "qsiprep_dir",
-        "qsirecon_dir",
-        "recon_input",
         "reportlets_dir",
         "templateflow_home",
         "work_dir",
@@ -482,9 +456,6 @@ class execution(_Config):
     @classmethod
     def init(cls):
         """Create a new BIDS Layout accessible with :attr:`~execution.layout`."""
-        if cls.fs_license_file and Path(cls.fs_license_file).is_file():
-            os.environ["FS_LICENSE"] = str(cls.fs_license_file)
-
         if cls._layout is None:
             import re
 
@@ -579,15 +550,13 @@ class workflow(_Config):
     b0_threshold = None
     """Any value in the .bval file less than this will be considered a b=0 image."""
     b0_motion_corr_to = None
-    """Perform SHORELine's initial b=0-based registration to first volume? 
+    """Perform SHORELine's initial b=0-based registration to first volume?
     Or make a template? Either 'iterative' or 'first'"""
     b0_to_t1w_transform = None
     """Transformation model for intramodal registration."""
     b1_biascorrect_stage = None
     """The stage of processing at which to apply B1 bias correction. Either "final" (after
     resampling), "none" (skipped entirely) or "legacy" (before concatenation)."""
-    cifti_output = None
-    """Generate HCP Grayordinates, accepts either ``'91k'`` (default) or ``'170k'``."""
     denoise_after_combining = False
     """Run ``dwidenoise`` after combining dwis, but before motion correction."""
     denoise_method = None
@@ -595,8 +564,6 @@ class workflow(_Config):
     or "none"."""
     distortion_group_merge = None
     """How to combine images across distortion groups (concatenate, average or none)."""
-    do_reconall = True
-    """Run FreeSurfer's surface reconstruction (ignored)."""
     dwi_denoise_window = None
     """Window size in voxels for image-based denoising, integer or "auto"."""
     dwi_no_biascorr = None
@@ -631,10 +598,6 @@ class workflow(_Config):
     """Isotropic voxel size for outputs."""
     pepolar_method = None
     """SDC method to be used for PEPOLAR fieldmaps."""
-    recon_input_pipeline = None
-    """Specifies which pipeline was used to preprocess data in ``recon_input``"""
-    recon_spec = None
-    """Recon workflow specification."""
     separate_all_dwis = False
     """Process all dwis separately - do not attempt concatenation."""
     shoreline_iters = None
@@ -832,15 +795,6 @@ def init_spaces(checkpoint=True):
     # Add the default standard space if not already present (required by several sub-workflows)
     if "MNI152NLin2009cAsym" not in spaces.get_spaces(nonstandard=False, dim=(3,)):
         spaces.add(Reference("MNI152NLin2009cAsym", {}))
-
-    # Ensure user-defined spatial references for outputs are correctly parsed.
-    # Certain options require normalization to a space not explicitly defined by users.
-    # These spaces will not be included in the final outputs.
-    cifti_output = workflow.cifti_output
-    if cifti_output:
-        # CIFTI grayordinates to corresponding FSL-MNI resolutions.
-        vol_res = "2" if cifti_output == "91k" else "1"
-        spaces.add(Reference("MNI152NLin6Asym", {"res": vol_res}))
 
     # Make the SpatialReferences object available
     workflow.spaces = spaces

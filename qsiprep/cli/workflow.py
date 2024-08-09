@@ -48,7 +48,6 @@ def build_workflow(config_file, exec_mode, retval):
     from ..utils.misc import check_deps
     from ..viz.reports import generate_reports
     from ..workflows.base import init_qsiprep_wf
-    from ..workflows.recon import init_qsirecon_wf
 
     config.load(config_file)
     build_log = config.loggers.workflow
@@ -59,26 +58,7 @@ def build_workflow(config_file, exec_mode, retval):
     retval["return_code"] = 1
     retval["workflow"] = None
 
-    # Figure out which workflow we want automatically if
-    if exec_mode == "auto":
-        if config.execution.recon_input:
-            exec_mode = "QSIRecon"
-            build_log.info("Running recon-only mode: --recon-input was used.")
-            if config.execution.recon_only:
-                config.loggers.workflow.warning(
-                    "Argument --recon-only is not needed if --recon-input is specified."
-                )
-        else:
-            exec_mode = "QSIPrep"
-
-    if exec_mode == "QSIPrep":
-        workflow_builder = init_qsiprep_wf
-    elif exec_mode == "QSIRecon":
-        workflow_builder = init_qsirecon_wf
-    else:
-        raise Exception(f"Unknown mode: {exec_mode}")
-
-    banner = [f"Running {exec_mode} version {version}"]
+    banner = [f"Running QSIPrep version {version}"]
     notice_path = Path(pkgrf("qsiprep", "data/NOTICE"))
     if notice_path.exists():
         banner[0] += "\n"
@@ -138,26 +118,11 @@ def build_workflow(config_file, exec_mode, retval):
         f"Run identifier: {config.execution.run_uuid}.",
     ]
 
-    if config.execution.fs_subjects_dir and exec_mode == "QSIRecon":
-        init_msg += [f"Pre-run FreeSurfer's SUBJECTS_DIR: {config.execution.fs_subjects_dir}."]
-
     build_log.log(25, f"\n{' ' * 11}* ".join(init_msg))
-
-    # Check for FS license after building the workflow
-    if not Path(config.execution.fs_license_file).exists():
-        build_log.critical(
-            """\
-ERROR: a valid license file is required for FreeSurfer to run. QSIPrep looked for an existing \
-license file at several paths, in this order: 1) command line argument ``--fs-license-file``; \
-2) ``$FS_LICENSE`` environment variable; and 3) the ``$FREESURFER_HOME/license.txt`` path. Get it \
-(for free) by registering at https://surfer.nmr.mgh.harvard.edu/registration.html"""
-        )
-        retval["return_code"] = 126  # 126 == Command invoked cannot execute.
-        return retval
 
     # If qsiprep is being run on already preprocessed data:
     retval["exec_mode"] = exec_mode
-    retval["workflow"] = workflow_builder()
+    retval["workflow"] = init_qsiprep_wf()
 
     # Check workflow for missing commands
     missing = check_deps(retval["workflow"])
