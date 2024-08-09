@@ -293,7 +293,6 @@ def init_merge_and_denoise_wf(
             ('out_bval', 'inputnode.bval_file'),
             ('out_dwi', 'inputnode.dwi_file'),
             ('out_bvec', 'inputnode.bvec_file'),
-            ('out_dwi_phase', 'inputnode.dwi_phase_file'),
         ]),
         (merge_dwis, merge_confounds, [('merged_denoising_confounds', 'in1')]),
         (denoising_wf, merge_confounds, [('outputnode.confounds', 'in2')]),
