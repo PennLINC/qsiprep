@@ -36,7 +36,6 @@ def test_dsdti_fmap(data_dir, output_dir, working_dir):
     - Blip-up + Blip-down DWI series for TOPUP/Eddy
     - Eddy is run on a CPU
     - Denoising is skipped
-    - A follow-up reconstruction using the dsi_studio_gqi workflow
 
     Inputs
     ------
@@ -78,7 +77,6 @@ def test_dscsdsi_fmap(data_dir, output_dir, working_dir):
     - Blip-up + Blip-down DWI series for TOPUP/Eddy
     - Eddy is run on a CPU
     - Denoising is skipped
-    - A follow-up reconstruction using the dsi_studio_gqi workflow
 
     Inputs
     ------
@@ -108,18 +106,15 @@ def test_dscsdsi_fmap(data_dir, output_dir, working_dir):
 @pytest.mark.integration
 @pytest.mark.cuda
 def test_cuda(data_dir, output_dir, working_dir):
-    """Run reconstruction workflow test.
+    """
 
     Was in CUDATest.sh.
     XXX: Not called in CircleCI.
-
-    All supported reconstruction workflows get tested.
 
     This tests the following features:
     - Blip-up + Blip-down DWI series for TOPUP/Eddy
     - Eddy is run on a CPU
     - Denoising is skipped
-    - A follow-up reconstruction using the dsi_studio_gqi workflow
 
     Inputs
     ------
@@ -155,17 +150,14 @@ def test_cuda(data_dir, output_dir, working_dir):
 @pytest.mark.integration
 @pytest.mark.drbuddi_rpe
 def test_drbuddi_rpe(data_dir, output_dir, working_dir):
-    """Run reconstruction workflow test.
+    """
 
     Was in DRBUDDI_eddy_rpe_series.sh.
-
-    All supported reconstruction workflows get tested
 
     This tests the following features:
     - Blip-up + Blip-down DWI series for TOPUP/Eddy
     - Eddy is run on a CPU
     - Denoising is skipped
-    - A follow-up reconstruction using the dsi_studio_gqi workflow
 
     Inputs:
     -------
@@ -332,7 +324,6 @@ def test_dsdti_nofmap(data_dir, output_dir, working_dir):
     - A workflow with no distortion correction followed by eddy
     - Eddy is run on a CPU
     - Denoising is skipped
-    - A follow-up reconstruction using the dsi_studio_gqi workflow
 
     Inputs
     ------
@@ -376,7 +367,6 @@ def test_dsdti_synfmap(data_dir, output_dir, working_dir):
     - A workflow with no distortion correction followed by eddy
     - Eddy is run on a CPU
     - Denoising is skipped
-    - A follow-up reconstruction using the dsi_studio_gqi workflow
 
     Inputs
     ------
@@ -420,7 +410,6 @@ def test_intramodal_template(data_dir, output_dir, working_dir):
     - Blip-up + Blip-down DWI series for TOPUP/Eddy
     - Eddy is run on a CPU
     - Denoising is skipped
-    - A follow-up reconstruction using the dsi_studio_gqi workflow
 
     Inputs
     ------

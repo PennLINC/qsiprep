@@ -5,14 +5,13 @@ cat << DOC
 AllFieldmaps test
 =================
 
-Instead of running full workflows, this test checks that workflows can 
+Instead of running full workflows, this test checks that workflows can
 be built for all sorts of fieldmap configurations.
 
 This tests the following features:
  - Blip-up + Blip-down DWI series for TOPUP/Eddy
  - Eddy is run on a CPU
  - Denoising is skipped
- - A follow-up reconstruction using the dsi_studio_gqi workflow
 
 Inputs:
 -------

@@ -525,9 +525,6 @@ workflows:
           requires:
             - download_DSCSDSI
           filters:
-            branches:
-              ignore:
-                - /recon\/.*/
             tags:
               only: /.*/
 
@@ -535,9 +532,6 @@ workflows:
           requires:
             - download_drbuddi_epi
           filters:
-            branches:
-              ignore:
-                - /recon\/.*/
             tags:
               only: /.*/
 
@@ -545,9 +539,6 @@ workflows:
           requires:
             - download_drbuddi_rpe_series
           filters:
-            branches:
-              ignore:
-                - /recon\/.*/
             tags:
               only: /.*/
 
@@ -555,9 +546,6 @@ workflows:
           requires:
             - download_DSDTI
           filters:
-            branches:
-              ignore:
-                - /recon\/.*/
             tags:
               only: /.*/
 
@@ -565,9 +553,6 @@ workflows:
           requires:
             - download_DSDTI
           filters:
-            branches:
-              ignore:
-                - /recon\/.*/
             tags:
               only: /.*/
 
@@ -575,9 +560,6 @@ workflows:
           requires:
             - download_DSDTI
           filters:
-            branches:
-              ignore:
-                - /recon\/.*/
             tags:
               only: /.*/
 
@@ -585,9 +567,6 @@ workflows:
           requires:
             - download_DSDTI
           filters:
-            branches:
-              ignore:
-                - /recon\/.*/
             tags:
               only: /.*/
 
@@ -595,9 +574,6 @@ workflows:
           requires:
             - build
           filters:
-            branches:
-              ignore:
-                - /recon\/.*/
             tags:
               only: /.*/
 
@@ -605,9 +581,6 @@ workflows:
           requires:
             - build
           filters:
-            branches:
-              ignore:
-                - /recon\/.*/
             tags:
               only: /.*/
 
@@ -615,9 +588,6 @@ workflows:
           requires:
             - build
           filters:
-            branches:
-              ignore:
-                - /recon\/.*/
             tags:
               only: /.*/
 
@@ -625,9 +595,6 @@ workflows:
           requires:
             - download_twoses
           filters:
-            branches:
-              ignore:
-                - /recon\/.*/
             tags:
               only: /.*/
 

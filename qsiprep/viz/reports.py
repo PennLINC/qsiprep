@@ -304,7 +304,7 @@ def generate_name_title(filename):
     return name.strip("_"), title
 
 
-def run_reports(reportlets_dir, out_dir, subject_label, run_uuid, report_type="qsiprep"):
+def run_reports(reportlets_dir, out_dir, subject_label, run_uuid):
     """
     Runs the reports
 
@@ -328,10 +328,7 @@ def run_reports(reportlets_dir, out_dir, subject_label, run_uuid, report_type="q
 
     """
     reportlet_path = str(Path(reportlets_dir) / report_type / ("sub-%s" % subject_label))
-    if report_type == "qsiprep":
-        viz_config = pkgrf("qsiprep", "viz/config.json")
-    else:
-        viz_config = pkgrf("qsiprep", "viz/recon_config.json")
+    viz_config = pkgrf("qsiprep", "viz/config.json")
 
     out_filename = "sub-{}.html".format(subject_label)
     report = Report(

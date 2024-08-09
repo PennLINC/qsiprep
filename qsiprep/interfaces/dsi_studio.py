@@ -153,7 +153,7 @@ class DSIStudioFibQC(DSIStudioQC):
     ext = ".fib.gz"
 
 
-# Step 2 reonstruct ODFs
+# Step 2 reonstruct ODFs: This is needed still in preprocessing because it's used for QC
 class DSIStudioReconstructionInputSpec(DSIStudioCommandLineInputSpec):
     input_src_file = File(
         desc="DSI Studio src file",
@@ -223,19 +223,10 @@ class DSIStudioGQIReconstructionInputSpec(DSIStudioReconstructionInputSpec):
     ratio_of_mean_diffusion_distance = traits.Float(1.25, usedefault=True, argstr="--param0=%.4f")
 
 
-class DSIStudioDSIReconstructionInputSpec(DSIStudioReconstructionInputSpec):
-    hamming_window_len = traits.Int(16, argstr="--param0=%d")
-
-
-class DSIStudioReconstruction(CommandLine):
-    input_spec = DSIStudioDSIReconstructionInputSpec
-    output_spec = DSIStudioReconstructionOutputSpec
-    _cmd = "dsi_studio --action=rec "
-
-
-class DSIStudioGQIReconstruction(DSIStudioReconstruction):
-    _cmd = "dsi_studio --action=rec --method=4"
+class DSIStudioGQIReconstruction(CommandLine):
     input_spec = DSIStudioGQIReconstructionInputSpec
+    output_spec = DSIStudioReconstructionOutputSpec
+    _cmd = "dsi_studio --action=rec --method=4"
 
     def _list_outputs(self):
         outputs = self.output_spec().get()

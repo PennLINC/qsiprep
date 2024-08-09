@@ -44,9 +44,7 @@ def _build_parser(**kwargs):
         # parser attribute name: (replacement flag, version slated to be removed in)
         "dwi_only": ("--anat-modality none", "0.23.0"),
         "prefer_dedicated_fmaps": (None, "0.23.0"),
-        "do_reconall": (None, "0.23.0"),
         "dwi_no_biascorr": ("--b1-biascorrect-stage none", "0.23.0"),
-        "recon_only": (None, "0.23.0"),
         "b0_motion_corr_to": (None, "0.23.0"),
         "b0_to_t1w_transform": ("--b0-t0-anat-transform", "0.23.0"),
     }
@@ -323,7 +321,7 @@ def _build_parser(**kwargs):
         default="T1w",
         help="Modality to use as the anatomical reference. Images of this "
         "contrast will be skull stripped and segmented for use in the "
-        "visual reports and reconstruction. If --infant, T2w is forced.",
+        "visual reports. If --infant, T2w is forced.",
     )
     g_conf.add_argument(
         "--b0-threshold",
@@ -423,8 +421,7 @@ def _build_parser(**kwargs):
         "--output-resolution",
         "--output_resolution",
         action="store",
-        # required when not recon-only (which can be specified in sysargs 2 ways)
-        required=not any(rcn in sys.argv for rcn in ["--recon-only", "--recon_only"]),
+        required=True,
         type=float,
         help="the isotropic voxel size in mm the data will be resampled to "
         "after preprocessing. If set to a lower value than the original voxel "
@@ -685,11 +682,6 @@ def parse_args(args=None, namespace=None):
             f"total threads (--nthreads/--n_cpus={config.nipype.nprocs})"
         )
 
-    if config.workflow.recon_spec and not config.execution.recon_input:
-        build_log.info("Running BOTH preprocessing and recon.")
-        config.execution.running_preproc_and_recon = True
-        config.execution.recon_input = config.execution.qsiprep_dir
-
     # Validate the tricky options here
     if config.workflow.dwi_denoise_window != "auto":
         try:
@@ -704,9 +696,6 @@ def parse_args(args=None, namespace=None):
 
     if config.execution.qsiprep_dir is None:
         config.execution.qsiprep_dir = output_dir / "qsiprep"
-
-    if config.execution.qsirecon_dir is None:
-        config.execution.qsirecon_dir = output_dir / "qsirecon"
 
     if config.execution.reportlets_dir is None:
         config.execution.reportlets_dir = work_dir / "reportlets"
@@ -735,20 +724,17 @@ def parse_args(args=None, namespace=None):
 
     # Validate inputs
     if not opts.skip_bids_validation:
-        if opts.recon_input is not None:
-            build_log.info("Skipping BIDS validation because inputs are BIDS derivatives")
-        else:
-            from ..utils.bids import validate_input_dir
+        from ..utils.bids import validate_input_dir
 
-            build_log.info(
-                "Making sure the input data is BIDS compliant (warnings can be ignored in most "
-                "cases)."
-            )
-            validate_input_dir(
-                config.environment.exec_env,
-                opts.bids_dir,
-                opts.participant_label,
-            )
+        build_log.info(
+            "Making sure the input data is BIDS compliant (warnings can be ignored in most "
+            "cases)."
+        )
+        validate_input_dir(
+            config.environment.exec_env,
+            opts.bids_dir,
+            opts.participant_label,
+        )
 
     # Setup directories
     config.execution.log_dir = config.execution.qsiprep_dir / "logs"

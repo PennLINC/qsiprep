@@ -7,9 +7,4 @@ gradient direction and strength.
 Since qsiprep uses the FMRIPREP workflow-building strategy, it can also generate methods
 boilerplate and quality-check figures.
 
-Users can also reconstruct orientation distribution functions (ODFs), fiber orientation
-distributions (FODs) and perform tractography, estimate anisotropy scalars and connectivity
-estimation using a combination of Dipy, MRTrix and DSI Studio using a JSON-based pipeline
-specification.
-
 [Documentation `qsiprep.org <https://qsiprep.readthedocs.io>`_]

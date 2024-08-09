@@ -421,8 +421,6 @@ class execution(_Config):
     """Only build the reports, based on the reportlets found in a cached working directory."""
     run_uuid = f"{strftime('%Y%m%d-%H%M%S')}_{uuid4()}"
     """Unique identifier of this particular run."""
-    skip_odf_reports = False
-    """Disable ODF recon reports."""
     participant_label = None
     """List of participant identifiers that are to be preprocessed."""
     reportlets_dir = None
@@ -541,7 +539,7 @@ class workflow(_Config):
     anat_modality = None
     """Modality to use as the anatomical reference. Images of this
     contrast will be skull stripped and segmented for use in the
-    visual reports and reconstruction. If --infant, T2w is forced."""
+    visual reports. If --infant, T2w is forced."""
     anat_only = False
     """Execute the anatomical preprocessing only."""
     anatomical_template = None
