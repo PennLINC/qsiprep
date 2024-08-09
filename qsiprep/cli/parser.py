@@ -289,12 +289,6 @@ def _build_parser(**kwargs):
         help="Only generate reports, don't run workflows. This will only rerun report "
         "aggregation, not reportlet generation for specific nodes.",
     )
-    g_subset.add_argument(
-        "--interactive-reports-only",
-        action="store_true",
-        default=False,
-        help="create interactive report json files on already preprocessed data.",
-    )
 
     g_conf = parser.add_argument_group("Workflow configuration")
     g_conf.add_argument(
@@ -566,58 +560,6 @@ def _build_parser(**kwargs):
         default=False,
         help="EXPERIMENTAL/TEMPORARY: Use SyN correction in addition to "
         "fieldmap correction, if available",
-    )
-
-    # arguments for reconstructing QSI data
-    g_recon = parser.add_argument_group("Options for reconstructing qsiprep outputs")
-    g_recon.add_argument(
-        "--recon-only",
-        "--recon_only",
-        action="store_true",
-        default=False,
-        help="run only reconstruction, assumes preprocessing has already completed.",
-    )
-    g_recon.add_argument(
-        "--recon-spec",
-        "--recon_spec",
-        action="store",
-        type=str,
-        help="json file specifying a reconstruction pipeline to be run after preprocessing",
-    )
-    g_recon.add_argument(
-        "--recon-input",
-        "--recon_input",
-        action="store",
-        metavar="PATH",
-        type=Path,
-        help="use this directory as inputs to qsirecon. This option skips qsiprep.",
-    )
-    g_recon.add_argument(
-        "--recon-input-pipeline",
-        "--recon_input_pipeline",
-        action="store",
-        default="qsiprep",
-        choices=["qsiprep", "ukb", "hcpya"],
-        help="specify which pipeline was used to create the data specified "
-        "as the --recon-input. Not necessary to specify if the data was "
-        'processed by qsiprep. Other options include "ukb" for data processed '
-        'with the UK BioBank minimal preprocessing pipeline and "hcpya" for '
-        "the HCP young adult minimal preprocessing pipeline.",
-    )
-    g_recon.add_argument(
-        "--freesurfer-input",
-        "--freesurfer_input",
-        action="store",
-        metavar="PATH",
-        type=Path,
-        help="Directory containing freesurfer outputs to be integrated into recon.",
-    )
-    g_recon.add_argument(
-        "--skip-odf-reports",
-        "--skip_odf_reports",
-        action="store_true",
-        default=False,
-        help="run only reconstruction, assumes preprocessing has already completed.",
     )
 
     g_other = parser.add_argument_group("Other options")

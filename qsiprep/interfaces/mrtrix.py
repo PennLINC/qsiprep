@@ -3,19 +3,14 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 """
-Image tools interfaces
-~~~~~~~~~~~~~~~~~~~~~~
+MRtrix3 Interfaces
+~~~~~~~~~~~~~~~~~~
 
 
 """
 import os
-import os.path as op
-import zipfile
-from copy import deepcopy
 
 import nibabel as nb
-import nipype.interfaces.utility as niu
-import nipype.pipeline.engine as pe
 import numpy as np
 from nilearn.image import load_img, threshold_img
 from nipype import logging
@@ -24,21 +19,15 @@ from nipype.interfaces.base import (
     CommandLine,
     CommandLineInputSpec,
     File,
-    InputMultiObject,
-    OutputMultiObject,
     SimpleInterface,
     TraitedSpec,
     isdefined,
     traits,
 )
-from nipype.interfaces.mrtrix3 import Generate5tt, MRConvert, ResponseSD
+from nipype.interfaces.mrtrix3 import MRConvert
 from nipype.interfaces.mrtrix3.base import MRTrix3Base, MRTrix3BaseInputSpec
-from nipype.interfaces.mrtrix3.preprocess import ResponseSDInputSpec
-from nipype.interfaces.mrtrix3.tracking import Tractography, TractographyInputSpec
-from nipype.interfaces.mrtrix3.utils import Generate5ttInputSpec
-from nipype.utils.filemanip import fname_presuffix, split_filename, which
+from nipype.utils.filemanip import fname_presuffix, which
 from niworkflows.viz.utils import compose_view, cuts_from_bbox
-from scipy.io.matlab import loadmat, savemat
 
 from ..viz.utils import plot_denoise
 from .denoise import (
@@ -52,17 +41,6 @@ RC3_ROOT = which("average_response")  # Only exists in RC3
 if RC3_ROOT is not None:
     # Use the directory containing average_response
     RC3_ROOT = os.path.split(RC3_ROOT)[0]
-
-_SS3T_EXE = which("ss3t_csd_beta1")
-if _SS3T_EXE is None:
-    if os.getenv("SS3T_HOME"):
-        SS3T_ROOT = os.getenv("SS3T_HOME")
-    else:
-        if not os.path.exists("/opt/3Tissue/bin/ss3t_csd_beta1"):
-            LOGGER.warn("Check installation of 3Tissue")
-        SS3T_ROOT = "/opt/3Tissue/bin"
-else:
-    SS3T_ROOT = os.path.split(_SS3T_EXE)[0]
 
 
 class MRTrixGradientTableInputSpec(BaseInterfaceInputSpec):
