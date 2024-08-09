@@ -165,7 +165,12 @@ def init_dwi_reference_wf(
 
         b0ref_reportlet = pe.Node(SimpleBeforeAfterRPT(), name="b0ref_reportlet", mem_gb=0.1)
         ds_report_b0_mask = pe.Node(
-            DerivativesDataSink(desc=desc, suffix="b0ref", source_file=source_file),
+            DerivativesDataSink(
+                datatype="figures",
+                desc=desc,
+                suffix="b0ref",
+                source_file=source_file,
+            ),
             name="ds_report_b0_mask",
             mem_gb=DEFAULT_MEMORY_MIN_GB,
             run_without_submitting=True,

@@ -98,7 +98,7 @@ further improvements of HCP Pipelines [@hcppipelines].
     )
     bet = pe.Node(BETRPT(generate_report=True, frac=0.6, mask=True), name="bet")
     ds_report_fmap_mask = pe.Node(
-        DerivativesDataSink(desc="brain", suffix="mask"),
+        DerivativesDataSink(datatype="figures", desc="brain", suffix="mask"),
         name="ds_report_fmap_mask",
         mem_gb=0.01,
         run_without_submitting=True,

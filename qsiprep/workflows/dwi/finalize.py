@@ -49,7 +49,6 @@ def init_dwi_finalize_wf(
         from qsiprep.workflows.dwi.base import init_dwi_finalize_wf
         wf = init_dwi_finalize_wf(name='finalize_wf',
                                   omp_nthreads=1,
-                                  reportlets_dir='.',
                                   output_dir='.',
                                   output_resolution=2.0,
                                   template='MNI152NLin2009cAsym',
@@ -68,8 +67,6 @@ def init_dwi_finalize_wf(
             beginning of the output file name (eg 'sub-1_buds-j')
         ignore : list
             Preprocessing steps to skip (eg "fieldmaps")
-        reportlets_dir : str
-            Directory in which to save reportlets
         template : str
             Name of template targeted by ``template`` output space
         output_dir : str
@@ -239,9 +236,9 @@ def init_dwi_finalize_wf(
         b0_to_im_template = pe.Node(SimpleBeforeAfterRPT(), name="b0_to_im_template")
         ds_report_intramodal = pe.Node(
             DerivativesDataSink(
+                datatype="figures",
                 suffix="tointramodal",
                 source_file=source_file,
-                base_directory=config.execution.reportlets_dir,
             ),
             name="ds_report_intramodal",
             run_without_submitting=True,
@@ -317,7 +314,7 @@ def init_dwi_finalize_wf(
     # Fill-in datasinks of reportlets seen so far
     for node in workflow.list_node_names():
         if node.split(".")[-1].startswith("ds_report"):
-            workflow.get_node(node).inputs.base_directory = config.execution.reportlets_dir
+            workflow.get_node(node).inputs.base_directory = config.execution.qsiprep_dir
             workflow.get_node(node).inputs.source_file = source_file
 
     # The workflow is done if we will be concatenating images later
@@ -347,7 +344,7 @@ def init_dwi_finalize_wf(
     t1_dice_calc = init_mask_overlap_wf(name="t1_dice_calc")
     gradient_plot = pe.Node(GradientPlot(), name="gradient_plot", run_without_submitting=True)
     ds_report_gradients = pe.Node(
-        DerivativesDataSink(suffix="sampling_scheme", source_file=source_file),
+        DerivativesDataSink(datatype="figures", suffix="sampling_scheme", source_file=source_file),
         name="ds_report_gradients",
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
@@ -374,6 +371,7 @@ def init_dwi_finalize_wf(
     # Write the carpetplot data
     ds_carpetplot = pe.Node(
         DerivativesDataSink(
+            datatype="figures",
             desc="SliceQC",
             suffix="dwi",
             source_file=source_file,
@@ -387,7 +385,10 @@ def init_dwi_finalize_wf(
     # Write the interactive report json
     ds_interactive_report = pe.Node(
         DerivativesDataSink(
-            suffix="dwiqc", source_file=source_file, base_directory=config.execution.output_dir
+            datatype="figures",
+            suffix="dwiqc",
+            source_file=source_file,
+            base_directory=config.execution.output_dir,
         ),
         name="ds_interactive_report",
         run_without_submitting=True,
@@ -446,7 +447,7 @@ def init_dwi_finalize_wf(
     # Fill-in datasinks of reportlets seen so far
     for node in workflow.list_node_names():
         if node.split(".")[-1].startswith("ds_report"):
-            workflow.get_node(node).inputs.base_directory = config.execution.reportlets_dir
+            workflow.get_node(node).inputs.base_directory = config.execution.qsiprep_dir
             if not isdefined(workflow.get_node(node).inputs.source_file):
                 workflow.get_node(node).inputs.source_file = source_file
 
@@ -521,7 +522,11 @@ def init_finalize_denoising_wf(
                 n_procs=omp_nthreads,
             )
             ds_report_biascorr = pe.Node(
-                DerivativesDataSink(suffix=name + "_biascorr", source_file=source_file),
+                DerivativesDataSink(
+                    datatype="figures",
+                    suffix=name + "_biascorr",
+                    source_file=source_file,
+                ),
                 name="ds_report_" + name + "_biascorr",
                 run_without_submitting=True,
                 mem_gb=DEFAULT_MEMORY_MIN_GB,
@@ -570,7 +575,10 @@ def init_finalize_denoising_wf(
                 )
                 reports.append(
                     pe.Node(
-                        DerivativesDataSink(suffix=name + "_biascorr%d" % scan_num),
+                        DerivativesDataSink(
+                            datatype="figures",
+                            suffix=name + "_biascorr%d" % scan_num,
+                        ),
                         name="ds_report_" + name + "_biascorr%d" % scan_num,
                         run_without_submitting=True,
                         mem_gb=DEFAULT_MEMORY_MIN_GB,

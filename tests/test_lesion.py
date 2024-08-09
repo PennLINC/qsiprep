@@ -12,7 +12,6 @@ def test_roi_found(tmp_path):
     wf = base.init_single_subject_wf(
         subject_id="1",
         name="test_roi",
-        reportlets_dir=tmp_path,
         output_dir=output_dir,
         bids_dir=bids_dir,
         ignore=[],

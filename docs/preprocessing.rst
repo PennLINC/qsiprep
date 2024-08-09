@@ -377,7 +377,6 @@ Processing the *Subject Anatomical Reference* T1w or T2w images
 
     from qsiprep.workflows.anatomical import init_anat_preproc_wf
     wf = init_anat_preproc_wf(omp_nthreads=1,
-                              reportlets_dir='.',
                               output_dir='.',
                               dwi_only=False,
                               infant_mode=False,
@@ -538,7 +537,6 @@ DWI preprocessing
                               shoreline_iters=2,
                               impute_slice_threshold=0,
                               eddy_config=None,
-                              reportlets_dir='.',
                               output_spaces=['T1w'],
                               dwi_denoise_window=5,
                               denoise_method='dwidenoise',

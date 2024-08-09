@@ -298,7 +298,11 @@ def init_fsl_hmc_wf(
         )
         topup_summary = pe.Node(TopupSummary(), name="topup_summary")
         ds_report_topupsummary = pe.Node(
-            DerivativesDataSink(suffix="topupsummary", source_file=source_file),
+            DerivativesDataSink(
+                datatype="figures",
+                suffix="topupsummary",
+                source_file=source_file,
+            ),
             name="ds_report_topupsummary",
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB,

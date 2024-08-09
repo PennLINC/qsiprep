@@ -175,7 +175,8 @@ to workflows in *qsiprep*'s documentation]\
         # Get the preprocessed DWI and all the related preprocessed images
         if config.workflow.recon_input_pipeline == "qsiprep":
             dwi_ingress_nodes[dwi_file] = pe.Node(
-                QsiReconDWIIngress(dwi_file=dwi_file), name=wf_name + "_ingressed_dwi_data"
+                QsiReconDWIIngress(dwi_file=dwi_file),
+                name=wf_name + "_ingressed_dwi_data",
             )
 
         elif config.workflow.recon_input_pipeline == "ukb":
@@ -250,11 +251,7 @@ to workflows in *qsiprep*'s documentation]\
     for _node in workflow.list_node_names():
         node_suffix = _node.split(".")[-1]
         if node_suffix.startswith("ds"):
-            base_dir = (
-                config.execution.reportlets_dir
-                if "report" in node_suffix
-                else config.execution.output_dir
-            )
+            base_dir = config.execution.output_dir
             workflow.get_node(_node).inputs.base_directory = base_dir
 
     return workflow
@@ -331,7 +328,10 @@ def _get_iterable_dwi_inputs(subject_id):
         dwi_files = [
             f.path
             for f in layout.get(
-                suffix="dwi", subject=subject_id, absolute_paths=True, extension=["nii", "nii.gz"]
+                suffix="dwi",
+                subject=subject_id,
+                absolute_paths=True,
+                extension=["nii", "nii.gz"],
             )
             if "space-T1w" in f.filename
         ]

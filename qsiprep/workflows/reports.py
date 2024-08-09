@@ -87,7 +87,6 @@ def init_single_subject_json_report_wf(subject_id, name):
         wf = init_single_subject_json_report_wf(
             subject_id='test',
             name='single_subject_qsipreptest_wf',
-            reportlets_dir='.',
             output_dir='.')
 
     Parameters
@@ -129,7 +128,7 @@ def init_single_subject_json_report_wf(subject_id, name):
     interactive_report = pe.Node(InteractiveReport(), name="interactive_report")
 
     ds_report_json = pe.Node(
-        DerivativesDataSink(base_directory=output_dir, suffix="viewer"),
+        DerivativesDataSink(base_directory=output_dir, datatype="figures", suffix="viewer"),
         name="ds_report_json",
         run_without_submitting=True,
     )
