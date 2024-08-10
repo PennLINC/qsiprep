@@ -51,8 +51,6 @@ def build_workflow(config_file, exec_mode, retval):
 
     config.load(config_file)
     build_log = config.loggers.workflow
-
-    # qsiprep_dir = config.execution.qsiprep_dir
     version = config.environment.version
 
     retval["return_code"] = 1
@@ -97,7 +95,7 @@ def build_workflow(config_file, exec_mode, retval):
 
         failed_reports = generate_reports(
             config.execution.participant_label,
-            config.execution.qsiprep_dir,
+            config.execution.output_dir,
             config.execution.run_uuid,
             session_list=session_list,
         )
@@ -150,7 +148,7 @@ def build_boilerplate(config_file, workflow):
     from .. import config
 
     config.load(config_file)
-    logs_path = config.execution.qsiprep_dir / "logs"
+    logs_path = config.execution.output_dir / "logs"
     boilerplate = workflow.visit_desc()
     citation_files = {
         ext: logs_path / ("CITATION.%s" % ext) for ext in ("bib", "tex", "md", "html")

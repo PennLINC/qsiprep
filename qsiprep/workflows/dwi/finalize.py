@@ -23,7 +23,7 @@ from ...interfaces.mrtrix import DWIBiasCorrect, MRTrixGradientTable
 from ...interfaces.nilearn import Merge
 from ...interfaces.reports import GradientPlot, SeriesQC
 from .derivatives import init_dwi_derivatives_wf
-from .qc import init_interactive_report_wf, init_mask_overlap_wf, init_modelfree_qc_wf
+from .qc import init_mask_overlap_wf, init_modelfree_qc_wf
 from .resampling import init_dwi_trans_wf
 
 # dwi workflows
@@ -324,23 +324,6 @@ def init_dwi_finalize_wf(
     if not write_derivatives:
         return workflow
 
-    # Finish up the derivatives process
-    interactive_report_wf = init_interactive_report_wf()
-
-    # We need to attach outputs to the interactive report
-    workflow.connect([
-        (inputnode, interactive_report_wf, [
-            ('raw_concatenated', 'inputnode.raw_dwi_file'),
-            ('carpetplot_data', 'inputnode.carpetplot_data'),
-            ('confounds', 'inputnode.confounds_file')]),
-        (transform_dwis_t1, interactive_report_wf, [
-            ('outputnode.dwi_resampled', 'inputnode.processed_dwi_file'),
-            ('outputnode.resampled_dwi_mask', 'inputnode.mask_file'),
-            ('outputnode.bvals', 'inputnode.bval_file'),
-            ('outputnode.rotated_bvecs', 'inputnode.bvec_file')]),
-        (interactive_report_wf, outputnode, [('outputnode.out_report', 'interactive_report')])
-    ])  # fmt:skip
-
     # CONNECT TO DERIVATIVES #####################
     gtab_t1 = pe.Node(MRTrixGradientTable(), name="gtab_t1")
     btab_t1 = pe.Node(DSIStudioBTable(bvec_convention="DIPY"), name="btab_t1")
@@ -384,19 +367,7 @@ def init_dwi_finalize_wf(
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
 
-    # Write the interactive report json
-    ds_interactive_report = pe.Node(
-        DerivativesDataSink(
-            suffix="dwiqc", source_file=source_file, base_directory=config.execution.output_dir
-        ),
-        name="ds_interactive_report",
-        run_without_submitting=True,
-        mem_gb=DEFAULT_MEMORY_MIN_GB,
-    )
-
     workflow.connect([
-        (interactive_report_wf, ds_interactive_report, [
-            ('outputnode.out_report', 'in_file')]),
         (inputnode, series_qc, [
             ('raw_qc_file', 'pre_qc'),
             ('confounds', 'confounds_file')]),
@@ -410,7 +381,6 @@ def init_dwi_finalize_wf(
         (final_denoise_wf, series_qc, [
             ('outputnode.dwi_mask_t1', 't1_mask_file'),
             ('outputnode.t1_b0_series', 't1_b0_series')]),
-        (series_qc, interactive_report_wf, [('series_qc_file', 'inputnode.series_qc_file')]),
         (inputnode, dwi_derivatives_wf, [('dwi_files', 'inputnode.source_file')]),
         (inputnode, outputnode, [('hmc_optimization_data', 'hmc_optimization_data')]),
         (transform_dwis_t1, series_qc, [('outputnode.resampled_qc', 't1_qc')]),

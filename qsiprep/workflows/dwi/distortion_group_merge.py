@@ -21,7 +21,7 @@ from ...interfaces.mrtrix import MRTrixGradientTable
 from ...interfaces.nilearn import Merge
 from ...interfaces.reports import GradientPlot, SeriesQC
 from .derivatives import init_dwi_derivatives_wf
-from .qc import init_interactive_report_wf, init_mask_overlap_wf, init_modelfree_qc_wf
+from .qc import init_mask_overlap_wf, init_modelfree_qc_wf
 from .util import init_dwi_reference_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
@@ -204,16 +204,6 @@ def init_distortion_group_merge_wf(
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
 
-    interactive_report_wf = init_interactive_report_wf()
-    # Write the interactive report json
-    ds_interactive_report = pe.Node(
-        DerivativesDataSink(
-            suffix="dwiqc", source_file=source_file, base_directory=config.execution.output_dir
-        ),
-        name="ds_interactive_report",
-        run_without_submitting=True,
-        mem_gb=DEFAULT_MEMORY_MIN_GB,
-    )
     # CONNECT TO DERIVATIVES
     gtab_t1 = pe.Node(MRTrixGradientTable(), name="gtab_t1")
     btab_t1 = pe.Node(DSIStudioBTable(bvec_convention="DIPY"), name="btab_t1")
@@ -281,22 +271,6 @@ def init_distortion_group_merge_wf(
                                       ('out_bvec', 'bvec_file')]),
         (gtab_t1, outputnode, [('gradient_file', 'gradient_table_t1')]),
         (btab_t1, outputnode, [('btable_file', 'btable_t1')]),
-
-        # Connections for the interactive report
-        (distortion_merger, interactive_report_wf, [
-            ('merged_raw_dwi', 'inputnode.raw_dwi_file'),
-            ('out_dwi', 'inputnode.processed_dwi_file'),
-            ('out_bval', 'inputnode.bval_file'),
-            ('out_bvec', 'inputnode.bvec_file'),
-            ('merged_carpetplot_data', 'inputnode.carpetplot_data'),
-            ('merged_denoising_confounds', 'inputnode.confounds_file')]),
-        (interactive_report_wf, outputnode, [
-            ('outputnode.out_report', 'interactive_report')]),
-        (b0_ref_wf, interactive_report_wf, [
-            ('outputnode.dwi_mask', 'inputnode.mask_file')]),
-        (series_qc, interactive_report_wf, [('series_qc_file', 'inputnode.series_qc_file')]),
-        (interactive_report_wf, ds_interactive_report, [
-            ('outputnode.out_report', 'in_file')]),
 
         # Connect merged results to outputs
         (outputnode, dwi_derivatives_wf, [

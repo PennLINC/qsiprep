@@ -38,7 +38,6 @@ from niworkflows.interfaces.header import _ValidateImageInputSpec
 # from qsiprep.interfaces.images import (
 #    nii_ones_like,
 #    FilledImageLike, DemeanImage, TemplateDimensions)
-from .mrtrix import SS3T_ROOT
 
 LOGGER = logging.getLogger("nipype.interface")
 
@@ -648,7 +647,7 @@ def bvec_to_rasb(bval_file, bvec_file, img_file, workdir):
     np.savetxt(temp_bvec, lps_bvec * np.array([[-1], [1], [1]]))
 
     # Run mrinfo to to get the RAS+ vector
-    cmd = [SS3T_ROOT + "/mrinfo", "-dwgrad", "-fslgrad", temp_bvec, bval_file, img_file]
+    cmd = ["mrinfo", "-dwgrad", "-fslgrad", temp_bvec, bval_file, img_file]
     proc = Popen(cmd, stdout=PIPE, stderr=PIPE)
     out, err = proc.communicate()
     LOGGER.info(" ".join(cmd))

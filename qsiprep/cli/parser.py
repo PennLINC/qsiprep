@@ -694,9 +694,6 @@ def parse_args(args=None, namespace=None):
     work_dir = config.execution.work_dir
     version = config.environment.version
 
-    if config.execution.qsiprep_dir is None:
-        config.execution.qsiprep_dir = output_dir / "qsiprep"
-
     if config.execution.reportlets_dir is None:
         config.execution.reportlets_dir = work_dir / "reportlets"
 
@@ -737,7 +734,7 @@ def parse_args(args=None, namespace=None):
         )
 
     # Setup directories
-    config.execution.log_dir = config.execution.qsiprep_dir / "logs"
+    config.execution.log_dir = config.execution.output_dir / "logs"
     # Check and create output and working directories
     config.execution.log_dir.mkdir(exist_ok=True, parents=True)
     config.execution.reportlets_dir.mkdir(exist_ok=True, parents=True)

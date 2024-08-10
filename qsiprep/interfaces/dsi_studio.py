@@ -7,6 +7,7 @@ from subprocess import PIPE, Popen
 
 import numpy as np
 from nipype.interfaces.base import (
+    BaseInterfaceInputSpec,
     CommandLine,
     CommandLineInputSpec,
     File,
@@ -241,6 +242,57 @@ class DSIStudioGQIReconstruction(CommandLine):
         outputs["output_fib"] = results[0]
 
         return outputs
+
+
+class _DSIStudioQCMergeInputSpec(BaseInterfaceInputSpec):
+    src_qc = File(exists=True, mandatory=True)
+    fib_qc = File(exists=True, mandatory=True)
+
+
+class _DSIStudioQCMergeOutputSpec(TraitedSpec):
+    qc_file = File(exists=True)
+
+
+class DSIStudioMergeQC(SimpleInterface):
+    input_spec = _DSIStudioQCMergeInputSpec
+    output_spec = _DSIStudioQCMergeOutputSpec
+
+    def _run_interface(self, runtime):
+        output_csv = runtime.cwd + "/merged_qc.csv"
+        src_qc = load_src_qc_file(self.inputs.src_qc)
+        fib_qc = load_fib_qc_file(self.inputs.fib_qc)
+        src_qc.update(fib_qc)
+        qc_df = pd.DataFrame(src_qc)
+        qc_df.to_csv(output_csv, index=False)
+        self._results["qc_file"] = output_csv
+        return runtime
+
+
+class _DSIStudioBTableInputSpec(BaseInterfaceInputSpec):
+    bval_file = File(exists=True, mandatory=True)
+    bvec_file = File(exists=True, mandatory=True)
+    bvec_convention = traits.Enum(
+        ("DIPY", "FSL"),
+        usedefault=True,
+        desc="Convention used for bvecs. FSL assumes LAS+ no matter image orientation",
+    )
+
+
+class _DSIStudioBTableOutputSpec(TraitedSpec):
+    btable_file = File(exists=True)
+
+
+class DSIStudioBTable(SimpleInterface):
+    input_spec = _DSIStudioBTableInputSpec
+    output_spec = _DSIStudioBTableOutputSpec
+
+    def _run_interface(self, runtime):
+        if self.inputs.bvec_convention != "DIPY":
+            raise NotImplementedError("Only DIPY Bvecs supported for now")
+        btab_file = op.join(runtime.cwd, "btable.txt")
+        btable_from_bvals_bvecs(self.inputs.bval_file, self.inputs.bvec_file, btab_file)
+        self._results["btable_file"] = btab_file
+        return runtime
 
 
 def load_src_qc_file(fname, prefix=""):

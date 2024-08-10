@@ -81,7 +81,7 @@ def main():
 
     exitcode = retval.get("return_code", 0)
     qsiprep_wf = retval.get("workflow", None)
-    output_dir = config.execution.qsiprep_dir
+    output_dir = config.execution.output_dir
 
     # CRITICAL Load the config from the file. This is necessary because the ``build_workflow``
     # function executed constrained in a process may change the config (and thus the global
@@ -184,10 +184,10 @@ def main():
         )
         write_derivative_description(
             config.execution.bids_dir,
-            config.execution.qsiprep_dir,
+            config.execution.output_dir,
             # dataset_links=config.execution.dataset_links,
         )
-        write_bidsignore(config.execution.qsiprep_dir)
+        write_bidsignore(config.execution.output_dir)
 
         if failed_reports:
             print(failed_reports)
