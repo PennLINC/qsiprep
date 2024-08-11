@@ -6,6 +6,7 @@ from glob import glob
 from subprocess import PIPE, Popen
 
 import numpy as np
+import pandas as pd
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec,
     CommandLine,

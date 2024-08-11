@@ -327,13 +327,11 @@ def run_reports(reportlets_dir, out_dir, subject_label, run_uuid):
     >>> tmpdir.cleanup()
 
     """
-    reportlet_path = str(Path(reportlets_dir) / report_type / ("sub-%s" % subject_label))
+    reportlet_path = str(Path(reportlets_dir) / "qsiprep" / ("sub-%s" % subject_label))
     viz_config = pkgrf("qsiprep", "viz/config.json")
 
     out_filename = "sub-{}.html".format(subject_label)
-    report = Report(
-        reportlet_path, viz_config, out_dir, run_uuid, out_filename, pipeline_type=report_type
-    )
+    report = Report(reportlet_path, viz_config, out_dir, run_uuid, out_filename)
     return report.generate_report()
 
 
@@ -345,9 +343,7 @@ def generate_reports(subject_list, pipeline_mode="qsiprep"):
     run_uuid = config.execution.run_uuid
     output_dir = str(config.execution.output_dir)
     report_errors = [
-        run_reports(
-            reports_dir, output_dir, subject_label, run_uuid=run_uuid, report_type=pipeline_mode
-        )
+        run_reports(reports_dir, output_dir, subject_label, run_uuid=run_uuid)
         for subject_label in subject_list
     ]
 
