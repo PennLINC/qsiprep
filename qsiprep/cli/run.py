@@ -68,7 +68,7 @@ def main():
     if "pdb" not in config.execution.debug:
         with Manager() as mgr:
             retval = mgr.dict()
-            p = Process(target=build_workflow, args=(str(config_file), "auto", retval))
+            p = Process(target=build_workflow, args=(str(config_file), retval))
             p.start()
             p.join()
             retval = dict(retval.items())  # Convert to base dictionary
@@ -77,7 +77,7 @@ def main():
                 retval["return_code"] = p.exitcode
 
     else:
-        retval = build_workflow(str(config_file), "auto", {})
+        retval = build_workflow(str(config_file), {})
 
     exitcode = retval.get("return_code", 0)
     qsiprep_wf = retval.get("workflow", None)

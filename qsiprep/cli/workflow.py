@@ -37,7 +37,7 @@ from pathlib import Path
 from pkg_resources import resource_filename as pkgrf
 
 
-def build_workflow(config_file, exec_mode, retval):
+def build_workflow(config_file, retval):
     """Create the Nipype Workflow that supports the whole execution graph."""
 
     from niworkflows.utils.bids import collect_participants
@@ -85,7 +85,7 @@ def build_workflow(config_file, exec_mode, retval):
     )
 
     # Called with reports only
-    if config.execution.reports_only and exec_mode == "QSIPrep":
+    if config.execution.reports_only:
         build_log.log(25, "Running --reports-only on participants %s", ", ".join(subject_list))
         session_list = (
             config.execution.bids_filters.get("dwi", {}).get("session")
@@ -110,7 +110,7 @@ def build_workflow(config_file, exec_mode, retval):
 
     # Build main workflow
     init_msg = [
-        f"Building {exec_mode}'s workflow:",
+        "Building QSIPrep's workflow:",
         f"BIDS dataset path: {config.execution.bids_dir}.",
         f"Participant list: {subject_list}.",
         f"Run identifier: {config.execution.run_uuid}.",
@@ -119,15 +119,13 @@ def build_workflow(config_file, exec_mode, retval):
     build_log.log(25, f"\n{' ' * 11}* ".join(init_msg))
 
     # If qsiprep is being run on already preprocessed data:
-    retval["exec_mode"] = exec_mode
     retval["workflow"] = init_qsiprep_wf()
 
     # Check workflow for missing commands
     missing = check_deps(retval["workflow"])
     if missing:
         build_log.critical(
-            "Cannot run %s. Missing dependencies:%s",
-            retval["exec_mode"],
+            "Cannot run QSIPrep. Missing dependencies:%s",
             "\n\t* ".join([""] + [f"{cmd} (Interface: {iface})" for iface, cmd in missing]),
         )
         retval["return_code"] = 127  # 127 == command not found.
@@ -135,8 +133,7 @@ def build_workflow(config_file, exec_mode, retval):
 
     config.to_filename(config_file)
     build_log.info(
-        "%s workflow graph with %d nodes built successfully.",
-        retval["exec_mode"],
+        "QSIPrep workflow graph with %d nodes built successfully.",
         len(retval["workflow"]._get_all_nodes()),
     )
     retval["return_code"] = 0
