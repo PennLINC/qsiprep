@@ -27,8 +27,6 @@ from nilearn.maskers import NiftiLabelsMasker
 from nipype.interfaces import freesurfer as fs
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec,
-    CommandLine,
-    CommandLineInputSpec,
     Directory,
     File,
     InputMultiObject,
@@ -39,12 +37,9 @@ from nipype.interfaces.base import (
     isdefined,
     traits,
 )
-from nipype.interfaces.mixins import reporting
-from scipy.io.matlab import loadmat
 
 from .bids import get_bids_params
 from .gradients import concatenate_bvals, concatenate_bvecs
-from .qc import createB0_ColorFA_Mask_Sprites, createSprite4D
 
 SUBJECT_TEMPLATE = """\t<ul class="elem-desc">
 \t\t<li>Subject ID: {subject_id}</li>
