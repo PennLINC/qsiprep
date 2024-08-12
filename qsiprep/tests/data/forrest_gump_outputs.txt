@@ -24,7 +24,6 @@ qsiprep/sub-01/ses-forrestgump/dwi
 qsiprep/sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_confounds.tsv
 qsiprep/sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_desc-ImageQC_dwi.csv
 qsiprep/sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_desc-SliceQC_dwi.json
-qsiprep/sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_dwiqc.json
 qsiprep/sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_space-T1w_desc-brain_mask.nii.gz
 qsiprep/sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_space-T1w_desc-eddy_cnr.nii.gz
 qsiprep/sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_space-T1w_desc-preproc_dwi.b

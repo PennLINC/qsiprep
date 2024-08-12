@@ -12,7 +12,6 @@ qsiprep/sub-PNC/dwi
 qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_confounds.tsv
 qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_desc-ImageQC_dwi.csv
 qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_desc-SliceQC_dwi.json
-qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_dwiqc.json
 qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-brain_mask.nii.gz
 qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_dwi.b
 qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_dwi.bval

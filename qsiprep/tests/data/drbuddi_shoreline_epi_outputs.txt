@@ -12,7 +12,6 @@ qsiprep/sub-tinytensors/dwi
 qsiprep/sub-tinytensors/dwi/sub-tinytensors_dir-PA_confounds.tsv
 qsiprep/sub-tinytensors/dwi/sub-tinytensors_dir-PA_desc-ImageQC_dwi.csv
 qsiprep/sub-tinytensors/dwi/sub-tinytensors_dir-PA_desc-SliceQC_dwi.json
-qsiprep/sub-tinytensors/dwi/sub-tinytensors_dir-PA_dwiqc.json
 qsiprep/sub-tinytensors/dwi/sub-tinytensors_dir-PA_space-T1w_desc-brain_mask.nii.gz
 qsiprep/sub-tinytensors/dwi/sub-tinytensors_dir-PA_space-T1w_desc-none_cnr.nii.gz
 qsiprep/sub-tinytensors/dwi/sub-tinytensors_dir-PA_space-T1w_desc-preproc_dwi.b

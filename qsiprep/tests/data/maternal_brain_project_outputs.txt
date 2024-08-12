@@ -24,7 +24,6 @@ qsiprep/sub-01/ses-01/dwi
 qsiprep/sub-01/ses-01/dwi/sub-01_ses-01_confounds.tsv
 qsiprep/sub-01/ses-01/dwi/sub-01_ses-01_desc-ImageQC_dwi.csv
 qsiprep/sub-01/ses-01/dwi/sub-01_ses-01_desc-SliceQC_dwi.json
-qsiprep/sub-01/ses-01/dwi/sub-01_ses-01_dwiqc.json
 qsiprep/sub-01/ses-01/dwi/sub-01_ses-01_hmcOptimization.csv
 qsiprep/sub-01/ses-01/dwi/sub-01_ses-01_space-T1w_desc-3dSHORE_cnr.nii.gz
 qsiprep/sub-01/ses-01/dwi/sub-01_ses-01_space-T1w_desc-brain_mask.nii.gz
