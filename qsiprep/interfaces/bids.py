@@ -256,7 +256,7 @@ class DerivativesDataSink(SimpleInterface):
     >>> dsink.inputs.suffix = 'target-mni'
     >>> res = dsink.run()
     >>> res.outputs.out_file  # doctest: +ELLIPSIS
-    '.../qsiprep/sub-01/ses-retest/anat/sub-01_ses-retest_target-mni_T1w.nii.gz'
+    '../sub-01/ses-retest/anat/sub-01_ses-retest_target-mni_T1w.nii.gz'
 
     >>> bids_dir = tmpdir / 'bidsroot' / 'sub-02' / 'ses-noanat' / 'func'
     >>> bids_dir.mkdir(parents=True, exist_ok=True)
@@ -269,13 +269,13 @@ class DerivativesDataSink(SimpleInterface):
     >>> dsink.inputs.desc = 'preproc'
     >>> res = dsink.run()
     >>> res.outputs.out_file  # doctest: +ELLIPSIS
-    '.../qsiprep/sub-02/ses-noanat/func/sub-02_ses-noanat_task-rest_run-01_desc-preproc_bold.nii.gz'
+    '../sub-02/ses-noanat/func/sub-02_ses-noanat_task-rest_run-01_desc-preproc_bold.nii.gz'
 
     """
 
     input_spec = DerivativesDataSinkInputSpec
     output_spec = DerivativesDataSinkOutputSpec
-    out_path_base = "qsiprep"
+    out_path_base = ""
     _always_run = True
 
     def __init__(self, out_path_base=None, **inputs):
