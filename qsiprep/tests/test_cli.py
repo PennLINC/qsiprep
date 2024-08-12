@@ -44,7 +44,7 @@ def test_dsdti_fmap(data_dir, output_dir, working_dir):
     TEST_NAME = "dsdti_fmap"
 
     dataset_dir = download_test_data("DSDTI_fmap", data_dir)
-    out_dir = os.path.join(output_dir, TEST_NAME + "/qsiprep")
+    out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
 
     parameters = [
@@ -85,7 +85,7 @@ def test_dscsdsi_fmap(data_dir, output_dir, working_dir):
     TEST_NAME = "dscsdsi_fmap"
 
     dataset_dir = download_test_data("DSCSDSI_fmap", data_dir)
-    out_dir = os.path.join(output_dir, TEST_NAME + "/qsiprep")
+    out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
 
     parameters = [
@@ -125,7 +125,7 @@ def test_cuda(data_dir, output_dir, working_dir):
     dataset_dir = download_test_data("drbuddi_rpe_series", data_dir)
     # XXX: Having to modify dataset_dirs is suboptimal.
     dataset_dir = os.path.join(dataset_dir, "qsiprep")
-    out_dir = os.path.join(output_dir, TEST_NAME + "/qsiprep")
+    out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
     test_data_path = get_test_data_path()
     eddy_config = os.path.join(test_data_path, "eddy_config.json")
@@ -170,7 +170,7 @@ def test_drbuddi_rpe(data_dir, output_dir, working_dir):
     dataset_dir = download_test_data("drbuddi_rpe_series", data_dir)
     # XXX: Having to modify dataset_dirs is suboptimal.
     dataset_dir = os.path.join(dataset_dir, "tinytensor_rpe_series")
-    out_dir = os.path.join(output_dir, TEST_NAME + "/qsiprep")
+    out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
     test_data_path = get_test_data_path()
     eddy_config = os.path.join(test_data_path, "eddy_config.json")
@@ -208,7 +208,7 @@ def test_drbuddi_shoreline_epi(data_dir, output_dir, working_dir):
     dataset_dir = download_test_data("drbuddi_epi", data_dir)
     # XXX: Having to modify dataset_dirs is suboptimal.
     dataset_dir = os.path.join(dataset_dir, "tinytensor_epi")
-    out_dir = os.path.join(output_dir, TEST_NAME + "/qsiprep")
+    out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
 
     parameters = [
@@ -245,7 +245,7 @@ def test_drbuddi_tensorline_epi(data_dir, output_dir, working_dir):
     dataset_dir = download_test_data("DSDTI", data_dir)
     # XXX: Having to modify dataset_dirs is suboptimal.
     dataset_dir = os.path.join(dataset_dir, "DSDTI")
-    out_dir = os.path.join(output_dir, TEST_NAME + "/qsiprep")
+    out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
 
     parameters = [
@@ -290,7 +290,7 @@ def test_dscsdsi(data_dir, output_dir, working_dir):
     dataset_dir = download_test_data("DSCSDSI", data_dir)
     # XXX: Having to modify dataset_dirs is suboptimal.
     dataset_dir = os.path.join(dataset_dir, "DSCSDSI_nofmap")
-    out_dir = os.path.join(output_dir, TEST_NAME + "/qsiprep")
+    out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
 
     parameters = [
@@ -334,7 +334,7 @@ def test_dsdti_nofmap(data_dir, output_dir, working_dir):
     dataset_dir = download_test_data("DSDTI", data_dir)
     # XXX: Having to modify dataset_dirs is suboptimal.
     dataset_dir = os.path.join(dataset_dir, "DSDTI")
-    out_dir = os.path.join(output_dir, TEST_NAME + "/qsiprep")
+    out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
     test_data_path = get_test_data_path()
     eddy_config = os.path.join(test_data_path, "eddy_config.json")
@@ -377,7 +377,7 @@ def test_dsdti_synfmap(data_dir, output_dir, working_dir):
     dataset_dir = download_test_data("DSDTI", data_dir)
     # XXX: Having to modify dataset_dirs is suboptimal.
     dataset_dir = os.path.join(dataset_dir, "DSDTI")
-    out_dir = os.path.join(output_dir, TEST_NAME + "/qsiprep")
+    out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
     test_data_path = get_test_data_path()
     eddy_config = os.path.join(test_data_path, "eddy_config.json")
@@ -420,7 +420,7 @@ def test_intramodal_template(data_dir, output_dir, working_dir):
     dataset_dir = download_test_data("twoses", data_dir)
     # XXX: Having to modify dataset_dirs is suboptimal.
     dataset_dir = os.path.join(dataset_dir, "twoses")
-    out_dir = os.path.join(output_dir, TEST_NAME + "/qsiprep")
+    out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
 
     parameters = [
@@ -456,7 +456,7 @@ def test_multi_t1w(data_dir, output_dir, working_dir):
     dataset_dir = download_test_data("twoses", data_dir)
     # XXX: Having to modify dataset_dirs is suboptimal.
     dataset_dir = os.path.join(dataset_dir, "DSDTI")
-    out_dir = os.path.join(output_dir, TEST_NAME + "/qsiprep")
+    out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
 
     parameters = [
@@ -489,7 +489,7 @@ def test_maternal_brain_project(data_dir, output_dir, working_dir):
     TEST_NAME = "maternal_brain_project"
 
     dataset_dir = download_test_data("maternal_brain_project", data_dir)
-    out_dir = os.path.join(output_dir, TEST_NAME + "/qsiprep")
+    out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
 
     test_data_path = get_test_data_path()
@@ -526,7 +526,7 @@ def test_forrest_gump(data_dir, output_dir, working_dir):
     TEST_NAME = "forrest_gump"
 
     dataset_dir = download_test_data("forrest_gump", data_dir)
-    out_dir = os.path.join(output_dir, TEST_NAME + "/qsiprep")
+    out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
 
     test_data_path = get_test_data_path()
