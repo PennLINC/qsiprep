@@ -28,7 +28,7 @@ A Python module to maintain unique, run-wide *QSIPrep* settings.
 This module implements the memory structures to keep a consistent, singleton config.
 Settings are passed across processes via filesystem, and a copy of the settings for
 each run and subject is left under
-``<qsiprep_dir>/sub-<participant_id>/log/<run_unique_id>/qsiprep.toml``.
+``<output_dir>/sub-<participant_id>/log/<run_unique_id>/qsiprep.toml``.
 Settings are stored using :abbr:`ToML (Tom's Markup Language)`.
 The module has a :py:func:`~qsiprep.config.to_filename` function to allow writing out
 the settings to hard disk in *ToML* format, which looks like:
