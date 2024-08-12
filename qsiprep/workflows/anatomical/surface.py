@@ -36,7 +36,7 @@ LOGGER = logging.getLogger("nipype.workflow")
 
 
 class DerivativesDataSink(FDerivativesDataSink):
-    out_path_base = "qsiprep"
+    out_path_base = ""
 
 
 TEMPLATE_MAP = {

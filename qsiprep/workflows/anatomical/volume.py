@@ -56,7 +56,7 @@ from ...utils.misc import fix_multi_source_name
 
 
 class DerivativesDataSink(FDerivativesDataSink):
-    out_path_base = "qsiprep"
+    out_path_base = ""
 
 
 ANTS_VERSION = BrainExtraction().version or "<ver>"
