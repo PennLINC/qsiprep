@@ -459,6 +459,10 @@ to workflows in *QSIPrep*'s documentation]\
                 ])
             ])  # fmt:skip
 
+    for node in workflow.list_node_names():
+        if node.split(".")[-1].startswith("ds_"):
+            workflow.get_node(node).interface.out_path_base = ""
+
     return workflow
 
 
