@@ -59,7 +59,7 @@ def test_dsdti_fmap(data_dir, output_dir, working_dir):
         "--output-resolution=5",
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=False)
+    _run_and_generate(TEST_NAME, parameters, test_main=True)
 
 
 @pytest.mark.integration
@@ -100,7 +100,7 @@ def test_dscsdsi_fmap(data_dir, output_dir, working_dir):
         "--output-resolution=5",
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=False)
+    _run_and_generate(TEST_NAME, parameters, test_main=True)
 
 
 @pytest.mark.integration
@@ -144,7 +144,7 @@ def test_cuda(data_dir, output_dir, working_dir):
         "--output-resolution=5",
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=False)
+    _run_and_generate(TEST_NAME, parameters, test_main=True)
 
 
 @pytest.mark.integration
@@ -190,7 +190,7 @@ def test_drbuddi_rpe(data_dir, output_dir, working_dir):
         "--output-resolution=5",
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=False)
+    _run_and_generate(TEST_NAME, parameters, test_main=True)
 
 
 @pytest.mark.integration
@@ -227,7 +227,7 @@ def test_drbuddi_shoreline_epi(data_dir, output_dir, working_dir):
         "--nthreads=1",
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=False)
+    _run_and_generate(TEST_NAME, parameters, test_main=True)
 
 
 @pytest.mark.integration
@@ -264,7 +264,7 @@ def test_drbuddi_tensorline_epi(data_dir, output_dir, working_dir):
         "--nthreads=1",
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=False)
+    _run_and_generate(TEST_NAME, parameters, test_main=True)
 
 
 @pytest.mark.integration
@@ -310,7 +310,7 @@ def test_dscsdsi(data_dir, output_dir, working_dir):
         "--nthreads=1",
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=False)
+    _run_and_generate(TEST_NAME, parameters, test_main=True)
 
 
 @pytest.mark.integration
@@ -353,7 +353,7 @@ def test_dsdti_nofmap(data_dir, output_dir, working_dir):
         "--nthreads=1",
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=False)
+    _run_and_generate(TEST_NAME, parameters, test_main=True)
 
 
 @pytest.mark.integration
@@ -396,7 +396,7 @@ def test_dsdti_synfmap(data_dir, output_dir, working_dir):
         "--nthreads=1",
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=False)
+    _run_and_generate(TEST_NAME, parameters, test_main=True)
 
 
 @pytest.mark.integration
@@ -436,7 +436,7 @@ def test_intramodal_template(data_dir, output_dir, working_dir):
         "--intramodal-template-iters=2",
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=False)
+    _run_and_generate(TEST_NAME, parameters, test_main=True)
 
 
 @pytest.mark.integration
@@ -472,7 +472,7 @@ def test_multi_t1w(data_dir, output_dir, working_dir):
         "--intramodal-template-iters=2",
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=False)
+    _run_and_generate(TEST_NAME, parameters, test_main=True)
 
 
 @pytest.mark.integration
@@ -509,7 +509,7 @@ def test_maternal_brain_project(data_dir, output_dir, working_dir):
         "--omp-nthreads=4",
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=False)
+    _run_and_generate(TEST_NAME, parameters, test_main=True)
 
 
 @pytest.mark.integration
@@ -545,7 +545,7 @@ def test_forrest_gump(data_dir, output_dir, working_dir):
         "--omp-nthreads=4",
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=False)
+    _run_and_generate(TEST_NAME, parameters, test_main=True)
 
 
 def _run_and_generate(test_name, parameters, test_main=True):
