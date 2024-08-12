@@ -335,7 +335,7 @@ def run_reports(reportlets_dir, out_dir, subject_label, run_uuid):
     return report.generate_report()
 
 
-def generate_reports(subject_list, pipeline_mode="qsiprep"):
+def generate_reports(subject_list):
     """
     A wrapper to run_reports on a given ``subject_list``
     """
@@ -348,7 +348,7 @@ def generate_reports(subject_list, pipeline_mode="qsiprep"):
     ]
 
     errno = sum(report_errors)
-    errno += generate_interactive_report_summary(Path(output_dir) / pipeline_mode)
+    errno += generate_interactive_report_summary(output_dir)
     if errno:
         import logging
 
