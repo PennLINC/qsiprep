@@ -9,7 +9,6 @@ Interfaces to generate reportlets
 
 """
 
-import json
 import os
 import os.path as op
 import re
