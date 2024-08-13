@@ -708,7 +708,11 @@ def init_dwi_model_hmc_wf(
     # Create a report:
     shoreline_report = pe.Node(SHORELineReport(), name="shoreline_report")
     ds_report_shoreline_gif = pe.Node(
-        DerivativesDataSink(suffix="shoreline_animation"),
+        DerivativesDataSink(
+            datatype="figures",
+            desc="shoreline",
+            suffix="animation",
+        ),
         name="ds_report_shoreline_gif",
         mem_gb=1,
         run_without_submitting=True,
@@ -719,7 +723,11 @@ def init_dwi_model_hmc_wf(
     if num_iters > 1:
         summarize_iterations = pe.Node(IterationSummary(), name="summarize_iterations")
         ds_report_iteration_plot = pe.Node(
-            DerivativesDataSink(suffix="shoreline_iterdata"),
+            DerivativesDataSink(
+                datatype="figures",
+                desc="shoreline",
+                suffix="iterdata",
+            ),
             name="ds_report_iteration_plot",
             mem_gb=0.1,
             run_without_submitting=True,

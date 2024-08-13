@@ -18,7 +18,7 @@ from niworkflows.interfaces.freesurfer import RobustRegister
 from niworkflows.interfaces.reportlets.segmentation import ReconAllRPT
 
 from ...engine import Workflow
-from ...interfaces import DerivativesDataSink as FDerivativesDataSink
+from ...interfaces import DerivativesDataSink
 from ...interfaces import (
     FSDetectInputs,
     FSInjectBrainExtracted,
@@ -33,10 +33,6 @@ from ...utils.misc import fix_multi_T1w_source_name
 
 
 LOGGER = logging.getLogger("nipype.workflow")
-
-
-class DerivativesDataSink(FDerivativesDataSink):
-    out_path_base = ""
 
 
 TEMPLATE_MAP = {
@@ -567,45 +563,54 @@ def init_anat_reports_wf(
         name="inputnode",
     )
 
-    ds_t1_conform_report = pe.Node(
-        DerivativesDataSink(base_directory=reportlets_dir, suffix="conform"),
-        name="ds_t1_conform_report",
+    ds_report_t1_conform = pe.Node(
+        DerivativesDataSink(base_directory=reportlets_dir, datatype="figures", suffix="conform"),
+        name="ds_report_t1_conform",
         run_without_submitting=True,
     )
 
-    ds_t1_2_mni_report = pe.Node(
-        DerivativesDataSink(base_directory=reportlets_dir, suffix="t1_2_mni"),
-        name="ds_t1_2_mni_report",
+    ds_report_t1_2_mni = pe.Node(
+        DerivativesDataSink(base_directory=reportlets_dir, datatype="figures", suffix="t1w2mni"),
+        name="ds_report_t1_2_mni",
         run_without_submitting=True,
     )
 
-    ds_t1_seg_mask_report = pe.Node(
-        DerivativesDataSink(base_directory=reportlets_dir, suffix="seg_brainmask"),
-        name="ds_t1_seg_mask_report",
+    ds_report_t1_seg_mask = pe.Node(
+        DerivativesDataSink(
+            base_directory=reportlets_dir,
+            datatype="figures",
+            desc="seg",
+            suffix="mask",
+        ),
+        name="ds_report_t1_seg_mask",
         run_without_submitting=True,
     )
 
-    ds_recon_report = pe.Node(
-        DerivativesDataSink(base_directory=reportlets_dir, suffix="reconall"),
-        name="ds_recon_report",
+    ds_report_recon = pe.Node(
+        DerivativesDataSink(
+            base_directory=reportlets_dir,
+            datatype="figures",
+            suffix="reconall",
+        ),
+        name="ds_report_recon",
         run_without_submitting=True,
     )
 
     workflow.connect([
-        (inputnode, ds_t1_conform_report, [('source_file', 'source_file'),
+        (inputnode, ds_report_t1_conform, [('source_file', 'source_file'),
                                            ('t1_conform_report', 'in_file')]),
-        (inputnode, ds_t1_seg_mask_report, [('source_file', 'source_file'),
+        (inputnode, ds_report_t1_seg_mask, [('source_file', 'source_file'),
                                             ('seg_report', 'in_file')]),
     ])  # fmt:skip
 
     if freesurfer:
         workflow.connect([
-            (inputnode, ds_recon_report, [('source_file', 'source_file'),
+            (inputnode, ds_report_recon, [('source_file', 'source_file'),
                                           ('recon_report', 'in_file')])
         ])  # fmt:skip
     if "template" in output_spaces or force_spatial_normalization:
         workflow.connect([
-            (inputnode, ds_t1_2_mni_report, [('source_file', 'source_file'),
+            (inputnode, ds_report_t1_2_mni, [('source_file', 'source_file'),
                                              ('t1_2_mni_report', 'in_file')])
         ])  # fmt:skip
 
@@ -670,11 +675,11 @@ def init_anat_derivatives_wf(
     )
 
     ds_t1_tpms = pe.Node(
-        DerivativesDataSink(base_directory=output_dir, suffix="label-{extra_value}_probseg"),
+        DerivativesDataSink(base_directory=output_dir, suffix="probseg"),
         name="ds_t1_tpms",
         run_without_submitting=True,
     )
-    ds_t1_tpms.inputs.extra_values = ["CSF", "GM", "WM"]
+    ds_t1_tpms.inputs.label = ["CSF", "GM", "WM"]
 
     ds_t1_mni = pe.Node(
         DerivativesDataSink(
@@ -699,13 +704,11 @@ def init_anat_derivatives_wf(
     )
 
     ds_mni_tpms = pe.Node(
-        DerivativesDataSink(
-            base_directory=output_dir, space=template, suffix="label-{extra_value}_probseg"
-        ),
+        DerivativesDataSink(base_directory=output_dir, space=template, suffix="probseg"),
         name="ds_mni_tpms",
         run_without_submitting=True,
     )
-    ds_mni_tpms.inputs.extra_values = ["CSF", "GM", "WM"]
+    ds_mni_tpms.inputs.label = ["CSF", "GM", "WM"]
 
     # Transforms
     suffix_fmt = "from-{}_to-{}_mode-image_xfm".format

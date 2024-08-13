@@ -9,7 +9,6 @@ Final steps on the preprocessed data
 import os
 
 from nipype.interfaces import utility as niu
-from nipype.interfaces.base import isdefined
 from nipype.pipeline import engine as pe
 from niworkflows.interfaces.reportlets.registration import SimpleBeforeAfterRPT
 
@@ -239,6 +238,7 @@ def init_dwi_finalize_wf(
         b0_to_im_template = pe.Node(SimpleBeforeAfterRPT(), name="b0_to_im_template")
         ds_report_intramodal = pe.Node(
             DerivativesDataSink(
+                datatype="figures",
                 suffix="tointramodal",
                 source_file=source_file,
                 base_directory=config.execution.reportlets_dir,
@@ -314,12 +314,6 @@ def init_dwi_finalize_wf(
         ])
     ])  # fmt:skip
 
-    # Fill-in datasinks of reportlets seen so far
-    for node in workflow.list_node_names():
-        if node.split(".")[-1].startswith("ds_report"):
-            workflow.get_node(node).inputs.base_directory = config.execution.reportlets_dir
-            workflow.get_node(node).inputs.source_file = source_file
-
     # The workflow is done if we will be concatenating images later
     if not write_derivatives:
         return workflow
@@ -330,7 +324,12 @@ def init_dwi_finalize_wf(
     t1_dice_calc = init_mask_overlap_wf(name="t1_dice_calc")
     gradient_plot = pe.Node(GradientPlot(), name="gradient_plot", run_without_submitting=True)
     ds_report_gradients = pe.Node(
-        DerivativesDataSink(suffix="sampling_scheme", source_file=source_file),
+        DerivativesDataSink(
+            datatype="figures",
+            desc="sampling",
+            suffix="scheme",
+            source_file=source_file,
+        ),
         name="ds_report_gradients",
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
@@ -344,6 +343,7 @@ def init_dwi_finalize_wf(
     series_qc = pe.Node(SeriesQC(output_file_name=output_prefix), name="series_qc")
     ds_series_qc = pe.Node(
         DerivativesDataSink(
+            datatype="figures",
             desc="ImageQC",
             suffix="dwi",
             source_file=source_file,
@@ -357,6 +357,7 @@ def init_dwi_finalize_wf(
     # Write the carpetplot data
     ds_carpetplot = pe.Node(
         DerivativesDataSink(
+            datatype="figures",
             desc="SliceQC",
             suffix="dwi",
             source_file=source_file,
@@ -413,12 +414,6 @@ def init_dwi_finalize_wf(
             ('original_files', 'source_files')]),
         (gradient_plot, ds_report_gradients, [('plot_file', 'in_file')])
     ])  # fmt:skip
-    # Fill-in datasinks of reportlets seen so far
-    for node in workflow.list_node_names():
-        if node.split(".")[-1].startswith("ds_report"):
-            workflow.get_node(node).inputs.base_directory = config.execution.reportlets_dir
-            if not isdefined(workflow.get_node(node).inputs.source_file):
-                workflow.get_node(node).inputs.source_file = source_file
 
     return workflow
 
@@ -491,7 +486,12 @@ def init_finalize_denoising_wf(
                 n_procs=omp_nthreads,
             )
             ds_report_biascorr = pe.Node(
-                DerivativesDataSink(suffix=name + "_biascorr", source_file=source_file),
+                DerivativesDataSink(
+                    datatype="figures",
+                    desc=name,
+                    suffix="biascorr",
+                    source_file=source_file,
+                ),
                 name="ds_report_" + name + "_biascorr",
                 run_without_submitting=True,
                 mem_gb=DEFAULT_MEMORY_MIN_GB,
@@ -540,7 +540,11 @@ def init_finalize_denoising_wf(
                 )
                 reports.append(
                     pe.Node(
-                        DerivativesDataSink(suffix=name + "_biascorr%d" % scan_num),
+                        DerivativesDataSink(
+                            datatype="figures",
+                            desc=f"{name}{scan_num}",
+                            suffix="biascorr",
+                        ),
                         name="ds_report_" + name + "_biascorr%d" % scan_num,
                         run_without_submitting=True,
                         mem_gb=DEFAULT_MEMORY_MIN_GB,

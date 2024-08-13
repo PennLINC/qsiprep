@@ -43,7 +43,7 @@ from pkg_resources import resource_filename as pkgr
 from ... import config
 from ...engine import Workflow
 from ...interfaces import Conform
-from ...interfaces import DerivativesDataSink as FDerivativesDataSink
+from ...interfaces import DerivativesDataSink
 from ...interfaces.anatomical import DesaturateSkull, GetTemplate, VoxelSizeChooser
 from ...interfaces.freesurfer import (
     FixHeaderSynthStrip,
@@ -53,10 +53,6 @@ from ...interfaces.freesurfer import (
 from ...interfaces.itk import AffineToRigid, DisassembleTransform
 from ...interfaces.niworkflows import RobustMNINormalizationRPT
 from ...utils.misc import fix_multi_source_name
-
-
-class DerivativesDataSink(FDerivativesDataSink):
-    out_path_base = ""
 
 
 ANTS_VERSION = BrainExtraction().version or "<ver>"
@@ -998,36 +994,47 @@ def init_anat_reports_wf() -> Workflow:
         name="inputnode",
     )
 
-    ds_t1_conform_report = pe.Node(
-        DerivativesDataSink(base_directory=config.execution.reportlets_dir, suffix="conform"),
-        name="ds_t1_conform_report",
-        run_without_submitting=True,
-    )
-
-    ds_t1_2_mni_report = pe.Node(
-        DerivativesDataSink(base_directory=config.execution.reportlets_dir, suffix="t1_2_mni"),
-        name="ds_t1_2_mni_report",
-        run_without_submitting=True,
-    )
-
-    ds_t1_seg_mask_report = pe.Node(
+    ds_report_t1_conform = pe.Node(
         DerivativesDataSink(
-            base_directory=config.execution.reportlets_dir, suffix="seg_brainmask"
+            base_directory=config.execution.reportlets_dir,
+            datatype="figures",
+            suffix="conform",
         ),
-        name="ds_t1_seg_mask_report",
+        name="ds_report_t1_conform",
+        run_without_submitting=True,
+    )
+
+    ds_report_t1_2_mni = pe.Node(
+        DerivativesDataSink(
+            base_directory=config.execution.reportlets_dir,
+            datatype="figures",
+            suffix="t1w2mni",
+        ),
+        name="ds_report_t1_2_mni",
+        run_without_submitting=True,
+    )
+
+    ds_report_t1_seg_mask = pe.Node(
+        DerivativesDataSink(
+            base_directory=config.execution.reportlets_dir,
+            datatype="figures",
+            desc="seg",
+            suffix="mask",
+        ),
+        name="ds_report_t1_seg_mask",
         run_without_submitting=True,
     )
 
     workflow.connect([
-        (inputnode, ds_t1_conform_report, [('source_file', 'source_file'),
+        (inputnode, ds_report_t1_conform, [('source_file', 'source_file'),
                                            ('t1_conform_report', 'in_file')]),
-        (inputnode, ds_t1_seg_mask_report, [('source_file', 'source_file'),
+        (inputnode, ds_report_t1_seg_mask, [('source_file', 'source_file'),
                                             ('seg_report', 'in_file')]),
     ])  # fmt:skip
 
     if not config.execution.skip_anat_based_spatial_normalization:
         workflow.connect([
-            (inputnode, ds_t1_2_mni_report, [('source_file', 'source_file'),
+            (inputnode, ds_report_t1_2_mni, [('source_file', 'source_file'),
                                              ('t1_2_mni_report', 'in_file')])
         ])  # fmt:skip
 

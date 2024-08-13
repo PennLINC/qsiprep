@@ -194,6 +194,7 @@ def init_distortion_group_merge_wf(
     )
     ds_series_qc = pe.Node(
         DerivativesDataSink(
+            datatype="figures",
             desc="ImageQC",
             suffix="dwi",
             source_file=source_file,
@@ -210,7 +211,12 @@ def init_distortion_group_merge_wf(
     t1_dice_calc = init_mask_overlap_wf(name="t1_dice_calc")
     gradient_plot = pe.Node(GradientPlot(), name="gradient_plot", run_without_submitting=True)
     ds_report_gradients = pe.Node(
-        DerivativesDataSink(suffix="sampling_scheme", source_file=source_file),
+        DerivativesDataSink(
+            datatype="figures",
+            desc="sampling",
+            suffix="scheme",
+            source_file=source_file,
+        ),
         name="ds_report_gradients",
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
@@ -286,10 +292,5 @@ def init_distortion_group_merge_wf(
             ('confounds', 'inputnode.confounds'),
             ('hmc_optimization_data', 'inputnode.hmc_optimization_data')]),
     ])  # fmt:skip
-
-    # Fill-in datasinks of reportlets seen so far
-    for node in workflow.list_node_names():
-        if node.split(".")[-1].startswith("ds_report"):
-            workflow.get_node(node).inputs.base_directory = config.execution.reportlets_dir
 
     return workflow
