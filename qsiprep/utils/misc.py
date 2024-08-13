@@ -53,7 +53,10 @@ def fix_multi_source_name(in_files, dwi_only, anatomical_contrast="T1w"):
 
     out_file = "_".join(sel_entities)
     if "ses-" not in out_file:
-        base = os.path.dirname(base)
+        base = os.path.abspath(base)
+        folders = base.split(os.sep)
+        folders = [f for f in folders if not f.startswith("ses-")]
+        base = os.sep.join(folders)
 
     if dwi_only:
         pattern = r"_(\w+)\."
