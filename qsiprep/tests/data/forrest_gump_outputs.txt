@@ -1,4 +1,3 @@
-qsiprep
 dataset_description.json
 dwiqc.json
 logs
