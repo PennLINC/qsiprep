@@ -41,33 +41,23 @@ def fix_multi_source_name(in_files, dwi_only, anatomical_contrast="T1w"):
     '/path/to/sub-045_T1w.nii.gz'
     """
     import os
-    import re
 
-    base = os.path.dirname(in_files[0])
-    in_filenames = [os.path.basename(in_file) for in_file in in_files]
-    entities = [in_file.split("_") for in_file in in_filenames]
-    sel_entities = []
-    for entity in entities[0]:
-        if all(entity in entity_set for entity_set in entities):
-            sel_entities.append(entity)
+    from nipype.utils.filemanip import filename_to_list
 
-    out_file = "_".join(sel_entities)
-    if "ses-" not in out_file:
-        base = os.path.abspath(base)
-        folders = base.split(os.sep)
-        folders = [f for f in folders if not f.startswith("ses-")]
-        base = os.sep.join(folders)
+    base, in_file = os.path.split(filename_to_list(in_files)[0])
 
+    # Remove the session label
+    base = os.path.abspath(base)
+    folders = base.split(os.sep)
+    folders = [f for f in folders if not f.startswith("ses-")]
+    base = os.sep.join(folders)
+
+    subject_label = in_file.split("_", 1)[0].split("-")[1]
     if dwi_only:
         anatomical_contrast = "dwi"
         base = base.replace("/dwi", "/anat")
 
-    # Replace the suffix
-    pattern = r"_(\w+)\."
-    replacement = f"_{anatomical_contrast}."
-    out_file = re.sub(pattern, replacement, out_file)
-
-    return os.path.join(base, out_file)
+    return os.path.join(base, f"sub-{subject_label}_{anatomical_contrast}.nii.gz")
 
 
 def add_suffix(in_files, suffix):
