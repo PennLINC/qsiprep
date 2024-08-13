@@ -711,22 +711,39 @@ def init_anat_derivatives_wf(
     ds_mni_tpms.inputs.label = ["CSF", "GM", "WM"]
 
     # Transforms
-    suffix_fmt = "from-{}_to-{}_mode-image_xfm".format
     ds_t1_mni_inv_warp = pe.Node(
-        DerivativesDataSink(base_directory=output_dir, suffix=suffix_fmt(template, "T1w")),
+        DerivativesDataSink(
+            base_directory=output_dir,
+            to="T1w",
+            mode="image",
+            suffix="xfm",
+            **{"from": template},
+        ),
         name="ds_t1_mni_inv_warp",
         run_without_submitting=True,
     )
 
     ds_t1_template_transforms = pe.MapNode(
-        DerivativesDataSink(base_directory=output_dir, suffix=suffix_fmt("orig", "T1w")),
+        DerivativesDataSink(
+            base_directory=output_dir,
+            to="T1w",
+            mode="image",
+            suffix="xfm",
+            **{"from": "orig"},
+        ),
         iterfield=["source_file", "in_file"],
         name="ds_t1_template_transforms",
         run_without_submitting=True,
     )
 
     ds_t1_mni_warp = pe.Node(
-        DerivativesDataSink(base_directory=output_dir, suffix=suffix_fmt("T1w", template)),
+        DerivativesDataSink(
+            base_directory=output_dir,
+            to=template,
+            mode="image",
+            suffix="xfm",
+            **{"from": "T1w"},
+        ),
         name="ds_t1_mni_warp",
         run_without_submitting=True,
     )
