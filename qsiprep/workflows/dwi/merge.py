@@ -544,6 +544,7 @@ def init_dwi_denoising_wf(
                 datatype="figures",
                 desc=name,
                 suffix="unringing",
+                extension=".svg",
                 source_file=source_file,
             ),
             name=f"ds_report_{name}_unringing",
