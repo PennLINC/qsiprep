@@ -41,16 +41,27 @@ def fix_multi_source_name(in_files, dwi_only, anatomical_contrast="T1w"):
     '/path/to/sub-045_T1w.nii.gz'
     """
     import os
+    import re
 
-    from nipype.utils.filemanip import filename_to_list
+    base = os.path.dirname(in_files[0])
+    in_filenames = [os.path.basename(in_file) for in_file in in_files]
+    entities = [in_file.split("_") for in_file in in_filenames]
+    sel_entities = []
+    for entity in entities[0]:
+        if all(entity in entity_set for entity_set in entities):
+            sel_entities.append(entity)
 
-    base, in_file = os.path.split(filename_to_list(in_files)[0])
-    subject_label = in_file.split("_", 1)[0].split("-")[1]
+    out_file = "_".join(sel_entities)
+    if "ses-" not in out_file:
+        base = os.path.dirname(base)
+
     if dwi_only:
-        anatomical_contrast = "dwi"
+        pattern = r"_(\w+)\."
+        replacement = r"_T1w."
+        out_file = re.sub(pattern, replacement, out_file)
         base = base.replace("/dwi", "/anat")
 
-    return os.path.join(base, f"sub-{subject_label}_{anatomical_contrast}.nii.gz")
+    return os.path.join(base, out_file)
 
 
 def add_suffix(in_files, suffix):
