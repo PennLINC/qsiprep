@@ -343,7 +343,6 @@ def init_dwi_finalize_wf(
     series_qc = pe.Node(SeriesQC(output_file_name=output_prefix), name="series_qc")
     ds_series_qc = pe.Node(
         DerivativesDataSink(
-            datatype="figures",
             desc="ImageQC",
             suffix="dwi",
             source_file=source_file,
