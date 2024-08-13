@@ -31,6 +31,7 @@ Anatomical reference preprocessing workflows
 .. autofunction:: init_skullstrip_ants_wf
 
 """
+
 from nipype.interfaces import afni, ants, mrtrix3
 from nipype.interfaces import utility as niu
 from nipype.interfaces.ants import BrainExtraction, N4BiasFieldCorrection
@@ -137,7 +138,9 @@ def init_anat_preproc_wf(
 
     workflow = Workflow(name="anat_preproc_wf")
     inputnode = pe.Node(
-        niu.IdentityInterface(fields=["t1w", "t2w", "roi", "flair", "subjects_dir", "subject_id"]),
+        niu.IdentityInterface(
+            fields=["t1w", "t2w", "roi", "flair", "subjects_dir", "subject_id"],
+        ),
         name="inputnode",
     )
     outputnode = pe.Node(
@@ -423,9 +426,13 @@ def init_t2w_preproc_wf(num_t2ws, name="t2w_preproc_wf"):
     """If T1w is the anatomical contrast, you may also want to process the T2ws for
     worlflows that can use them (ie DRBUDDI). This"""
     workflow = Workflow(name=name)
-    inputnode = pe.Node(niu.IdentityInterface(fields=["t2w_images", "t1_brain"]), name="inputnode")
+    inputnode = pe.Node(
+        niu.IdentityInterface(fields=["t2w_images", "t1_brain"]),
+        name="inputnode",
+    )
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=["t2_preproc", "t2w_unfatsat"]), name="outputnode"
+        niu.IdentityInterface(fields=["t2_preproc", "t2w_unfatsat"]),
+        name="outputnode",
     )
 
     # Ensure there is 1 and only 1 T2w reference
@@ -678,7 +685,13 @@ def init_anat_normalization_wf(has_rois=False) -> Workflow:
     workflow = Workflow(name="anat_normalization_wf")
     inputnode = pe.Node(
         niu.IdentityInterface(
-            fields=["template_image", "template_mask", "anatomical_reference", "brain_mask", "roi"]
+            fields=[
+                "template_image",
+                "template_mask",
+                "anatomical_reference",
+                "brain_mask",
+                "roi",
+            ]
         ),
         name="inputnode",
     )
@@ -711,11 +724,18 @@ a 6-DOF transform extracted from a full Affine registration to the
         ),
     )
     acpc_reg = pe.Node(
-        RobustMNINormalizationRPT(float=True, generate_report=False, settings=[acpc_settings]),
+        RobustMNINormalizationRPT(
+            float=True,
+            generate_report=False,
+            settings=[acpc_settings],
+        ),
         name="acpc_reg",
         n_procs=omp_nthreads,
     )
-    disassemble_transform = pe.Node(DisassembleTransform(), name="disassemble_transform")
+    disassemble_transform = pe.Node(
+        DisassembleTransform(),
+        name="disassemble_transform",
+    )
     extract_rigid_transform = pe.Node(AffineToRigid(), name="extract_rigid_transform")
 
     workflow.connect([
@@ -818,19 +838,28 @@ def init_dl_prep_wf(name="dl_prep_wf") -> Workflow:
     """Prepare images for use in the FreeSurfer deep learning functions"""
     workflow = Workflow(name=name)
     inputnode = pe.Node(niu.IdentityInterface(fields=["image"]), name="inputnode")
-    outputnode = pe.Node(niu.IdentityInterface(fields=["padded_image"]), name="outputnode")
+    outputnode = pe.Node(
+        niu.IdentityInterface(fields=["padded_image"]),
+        name="outputnode",
+    )
     skulled_1mm_resample = pe.Node(
         afni.Resample(outputtype="NIFTI_GZ", voxel_size=(1.0, 1.0, 1.0)),
         name="skulled_1mm_resample",
     )
     skulled_autobox = pe.Node(
-        afni.Autobox(outputtype="NIFTI_GZ", padding=3), name="skulled_autobox"
+        afni.Autobox(outputtype="NIFTI_GZ", padding=3),
+        name="skulled_autobox",
     )
     prepare_synthstrip_reference = pe.Node(
-        PrepareSynthStripGrid(), name="prepare_synthstrip_reference"
+        PrepareSynthStripGrid(),
+        name="prepare_synthstrip_reference",
     )
     resample_skulled_to_reference = pe.Node(
-        ants.ApplyTransforms(dimension=3, interpolation="BSpline", transforms=["identity"]),
+        ants.ApplyTransforms(
+            dimension=3,
+            interpolation="BSpline",
+            transforms=["identity"],
+        ),
         name="resample_skulled_to_reference",
     )
 
@@ -849,10 +878,12 @@ def init_dl_prep_wf(name="dl_prep_wf") -> Workflow:
 def init_synthstrip_wf(do_padding=False, unfatsat=False, name="synthstrip_wf") -> Workflow:
     workflow = Workflow(name=name)
     inputnode = pe.Node(
-        niu.IdentityInterface(fields=["padded_image", "original_image"]), name="inputnode"
+        niu.IdentityInterface(fields=["padded_image", "original_image"]),
+        name="inputnode",
     )
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=["brain_image", "brain_mask", "unfatsat"]), name="outputnode"
+        niu.IdentityInterface(fields=["brain_image", "brain_mask", "unfatsat"]),
+        name="outputnode",
     )
 
     synthstrip = pe.Node(
@@ -905,7 +936,8 @@ def init_synthstrip_wf(do_padding=False, unfatsat=False, name="synthstrip_wf") -
 def init_synthseg_wf() -> Workflow:
     workflow = Workflow(name="synthseg_wf")
     inputnode = pe.Node(
-        niu.IdentityInterface(fields=["padded_image", "original_image"]), name="inputnode"
+        niu.IdentityInterface(fields=["padded_image", "original_image"]),
+        name="inputnode",
     )
     outputnode = pe.Node(
         niu.IdentityInterface(fields=["aparc_image", "posterior_image", "qc_file"]),
@@ -933,7 +965,8 @@ def init_output_grid_wf() -> Workflow:
     """Generate a non-oblique, uniform voxel-size grid around a brain."""
     workflow = Workflow(name="output_grid_wf")
     inputnode = pe.Node(
-        niu.IdentityInterface(fields=["template_image", "input_image"]), name="inputnode"
+        niu.IdentityInterface(fields=["template_image", "input_image"]),
+        name="inputnode",
     )
     outputnode = pe.Node(niu.IdentityInterface(fields=["grid_image"]), name="outputnode")
     # Create the output reference grid_image
@@ -1076,7 +1109,10 @@ def init_anat_derivatives_wf() -> Workflow:
 
     ds_t1_preproc = pe.Node(
         DerivativesDataSink(
-            base_directory=config.execution.output_dir, desc="preproc", keep_dtype=True
+            compress=True,
+            base_directory=config.execution.output_dir,
+            desc="preproc",
+            keep_dtype=True,
         ),
         name="ds_t1_preproc",
         run_without_submitting=True,
@@ -1084,21 +1120,31 @@ def init_anat_derivatives_wf() -> Workflow:
 
     ds_t1_mask = pe.Node(
         DerivativesDataSink(
-            base_directory=config.execution.output_dir, desc="brain", suffix="mask"
+            compress=True,
+            base_directory=config.execution.output_dir,
+            desc="brain",
+            suffix="mask",
         ),
         name="ds_t1_mask",
         run_without_submitting=True,
     )
 
     ds_t1_seg = pe.Node(
-        DerivativesDataSink(base_directory=config.execution.output_dir, suffix="dseg"),
+        DerivativesDataSink(
+            compress=True,
+            base_directory=config.execution.output_dir,
+            suffix="dseg",
+        ),
         name="ds_t1_seg",
         run_without_submitting=True,
     )
 
     ds_t1_aseg = pe.Node(
         DerivativesDataSink(
-            base_directory=config.execution.output_dir, desc="aseg", suffix="dseg"
+            compress=True,
+            base_directory=config.execution.output_dir,
+            desc="aseg",
+            suffix="dseg",
         ),
         name="ds_t1_aseg",
         run_without_submitting=True,

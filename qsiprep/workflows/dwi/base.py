@@ -436,7 +436,9 @@ Diffusion data preprocessing
     confounds_wf = init_dwi_confs_wf()
     ds_confounds = pe.Node(
         DerivativesDataSink(
-            source_file=source_file, base_directory=str(output_dir), suffix="confounds"
+            source_file=source_file,
+            base_directory=str(output_dir),
+            suffix="confounds",
         ),
         name="ds_confounds",
         run_without_submitting=True,
