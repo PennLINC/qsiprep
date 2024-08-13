@@ -994,7 +994,7 @@ def init_anat_reports_wf() -> Workflow:
 
     ds_report_t1_conform = pe.Node(
         DerivativesDataSink(
-            base_directory=config.execution.reportlets_dir,
+            base_directory=config.execution.output_dir,
             datatype="figures",
             suffix="conform",
         ),
@@ -1004,7 +1004,7 @@ def init_anat_reports_wf() -> Workflow:
 
     ds_report_t1_2_mni = pe.Node(
         DerivativesDataSink(
-            base_directory=config.execution.reportlets_dir,
+            base_directory=config.execution.output_dir,
             datatype="figures",
             suffix="t1w2mni",
         ),
@@ -1014,7 +1014,7 @@ def init_anat_reports_wf() -> Workflow:
 
     ds_report_t1_seg_mask = pe.Node(
         DerivativesDataSink(
-            base_directory=config.execution.reportlets_dir,
+            base_directory=config.execution.output_dir,
             datatype="figures",
             desc="seg",
             suffix="mask",

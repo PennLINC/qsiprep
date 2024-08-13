@@ -423,8 +423,6 @@ class execution(_Config):
     """Unique identifier of this particular run."""
     participant_label = None
     """List of participant identifiers that are to be preprocessed."""
-    reportlets_dir = None
-    """Path where reportlets are written."""
     skip_anat_based_spatial_normalization = False
     """Should we skip normalizing the anatomical data to a template?"""
     templateflow_home = _templateflow_home
@@ -446,7 +444,6 @@ class execution(_Config):
         "layout",
         "log_dir",
         "output_dir",
-        "reportlets_dir",
         "templateflow_home",
         "work_dir",
     )

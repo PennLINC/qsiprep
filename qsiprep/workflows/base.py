@@ -215,7 +215,7 @@ to workflows in *QSIPrep*'s documentation]\
 
     ds_report_summary = pe.Node(
         DerivativesDataSink(
-            base_directory=config.execution.reportlets_dir,
+            base_directory=config.execution.output_dir,
             datatype="figures",
             suffix="summary",
         ),
@@ -225,7 +225,7 @@ to workflows in *QSIPrep*'s documentation]\
 
     ds_report_about = pe.Node(
         DerivativesDataSink(
-            base_directory=config.execution.reportlets_dir,
+            base_directory=config.execution.output_dir,
             datatype="figures",
             suffix="about",
         ),

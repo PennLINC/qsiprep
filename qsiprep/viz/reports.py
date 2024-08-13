@@ -335,7 +335,7 @@ def generate_reports(subject_list):
     """
     A wrapper to run_reports on a given ``subject_list``
     """
-    reports_dir = str(config.execution.reportlets_dir)
+    reports_dir = str(config.execution.output_dir)
     run_uuid = config.execution.run_uuid
     output_dir = str(config.execution.output_dir)
     report_errors = [

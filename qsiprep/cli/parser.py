@@ -694,9 +694,6 @@ def parse_args(args=None, namespace=None):
     work_dir = config.execution.work_dir
     version = config.environment.version
 
-    if config.execution.reportlets_dir is None:
-        config.execution.reportlets_dir = work_dir / "reportlets"
-
     # Update the config with an empty dict to trigger initialization of all config
     # sections (we used `init=False` above).
     # This must be done after cleaning the work directory, or we could delete an
@@ -737,7 +734,6 @@ def parse_args(args=None, namespace=None):
     config.execution.log_dir = config.execution.output_dir / "logs"
     # Check and create output and working directories
     config.execution.log_dir.mkdir(exist_ok=True, parents=True)
-    config.execution.reportlets_dir.mkdir(exist_ok=True, parents=True)
     work_dir.mkdir(exist_ok=True, parents=True)
 
     # Force initialization of the BIDSLayout
