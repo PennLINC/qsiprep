@@ -59,10 +59,13 @@ def fix_multi_source_name(in_files, dwi_only, anatomical_contrast="T1w"):
         base = os.sep.join(folders)
 
     if dwi_only:
-        pattern = r"_(\w+)\."
-        replacement = r"_T1w."
-        out_file = re.sub(pattern, replacement, out_file)
+        anatomical_contrast = "dwi"
         base = base.replace("/dwi", "/anat")
+
+    # Replace the suffix
+    pattern = r"_(\w+)\."
+    replacement = f"_{anatomical_contrast}."
+    out_file = re.sub(pattern, replacement, out_file)
 
     return os.path.join(base, out_file)
 
