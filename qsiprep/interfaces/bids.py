@@ -39,8 +39,8 @@ from nipype.interfaces.base import (
     traits,
 )
 from nipype.utils.filemanip import copyfile
-from niworkflows.interfaces.bids import _DerivativesDataSinkInputSpec
 from niworkflows.interfaces.bids import DerivativesDataSink as BaseDerivativesDataSink
+from niworkflows.interfaces.bids import _DerivativesDataSinkInputSpec
 
 from qsiprep.data import load as load_data
 

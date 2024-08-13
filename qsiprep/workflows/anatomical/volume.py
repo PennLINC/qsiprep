@@ -42,8 +42,7 @@ from pkg_resources import resource_filename as pkgr
 
 from ... import config
 from ...engine import Workflow
-from ...interfaces import Conform
-from ...interfaces import DerivativesDataSink
+from ...interfaces import Conform, DerivativesDataSink
 from ...interfaces.anatomical import DesaturateSkull, GetTemplate, VoxelSizeChooser
 from ...interfaces.freesurfer import (
     FixHeaderSynthStrip,
@@ -53,7 +52,6 @@ from ...interfaces.freesurfer import (
 from ...interfaces.itk import AffineToRigid, DisassembleTransform
 from ...interfaces.niworkflows import RobustMNINormalizationRPT
 from ...utils.misc import fix_multi_source_name
-
 
 ANTS_VERSION = BrainExtraction().version or "<ver>"
 FS_VERSION = "7.3.1"
