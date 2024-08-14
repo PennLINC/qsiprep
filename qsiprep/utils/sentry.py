@@ -65,7 +65,6 @@ USELESS_OPTS = [
     "participant_label",
     "bids_database_dir",
     "bids_filter_file",
-    "recon_input",
     "use_plugin",
     "fs_license_file",
     "work_dir",

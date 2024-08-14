@@ -133,7 +133,11 @@ def init_intramodal_template_wf(
     # calculate dwi registration to T1w
     b0_coreg_wf = init_b0_to_anat_registration_wf(write_report=True)
     ds_report_imtcoreg = pe.Node(
-        DerivativesDataSink(suffix="imtcoreg", source_file=t1w_source_file),
+        DerivativesDataSink(
+            datatype="figures",
+            suffix="imtcoreg",
+            source_file=t1w_source_file,
+        ),
         name="ds_report_imtcoreg",
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
@@ -153,12 +157,6 @@ def init_intramodal_template_wf(
         (b0_coreg_wf, outputnode, [
             ('outputnode.itk_b0_to_t1', 'intramodal_template_to_t1_affine')])
     ])  # fmt:skip
-
-    # Fill-in datasinks of reportlets seen so far
-    for node in workflow.list_node_names():
-        if node.split(".")[-1].startswith("ds_report"):
-            workflow.get_node(node).inputs.base_directory = config.execution.reportlets_dir
-            workflow.get_node(node).inputs.source_file = t1w_source_file
 
     return workflow
 

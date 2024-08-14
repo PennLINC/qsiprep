@@ -82,7 +82,7 @@ def init_qsiprep_wf():
         single_subject_wf = init_single_subject_wf(subject_id)
 
         single_subject_wf.config["execution"]["crashdump_dir"] = str(
-            config.execution.qsiprep_dir / f"sub-{subject_id}" / "log" / config.execution.run_uuid
+            config.execution.output_dir / f"sub-{subject_id}" / "log" / config.execution.run_uuid
         )
         for node in single_subject_wf._get_all_nodes():
             node.config = deepcopy(single_subject_wf.config)
@@ -90,7 +90,7 @@ def init_qsiprep_wf():
 
         # Dump a copy of the config file into the log directory
         log_dir = (
-            config.execution.qsiprep_dir / f"sub-{subject_id}" / "log" / config.execution.run_uuid
+            config.execution.output_dir / f"sub-{subject_id}" / "log" / config.execution.run_uuid
         )
         log_dir.mkdir(exist_ok=True, parents=True)
         config.to_filename(log_dir / "qsiprep.toml")
@@ -214,13 +214,21 @@ to workflows in *QSIPrep*'s documentation]\
     )
 
     ds_report_summary = pe.Node(
-        DerivativesDataSink(base_directory=config.execution.reportlets_dir, suffix="summary"),
+        DerivativesDataSink(
+            base_directory=config.execution.output_dir,
+            datatype="figures",
+            suffix="summary",
+        ),
         name="ds_report_summary",
         run_without_submitting=True,
     )
 
     ds_report_about = pe.Node(
-        DerivativesDataSink(base_directory=config.execution.reportlets_dir, suffix="about"),
+        DerivativesDataSink(
+            base_directory=config.execution.output_dir,
+            datatype="figures",
+            suffix="about",
+        ),
         name="ds_report_about",
         run_without_submitting=True,
     )
@@ -458,6 +466,10 @@ to workflows in *QSIPrep*'s documentation]\
                     ('outputnode.confounds', confounds_name),
                 ])
             ])  # fmt:skip
+
+    for node in workflow.list_node_names():
+        if node.split(".")[-1].startswith("ds_"):
+            workflow.get_node(node).interface.out_path_base = ""
 
     return workflow
 

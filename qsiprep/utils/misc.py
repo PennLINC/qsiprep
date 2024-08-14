@@ -45,6 +45,13 @@ def fix_multi_source_name(in_files, dwi_only, anatomical_contrast="T1w"):
     from nipype.utils.filemanip import filename_to_list
 
     base, in_file = os.path.split(filename_to_list(in_files)[0])
+
+    # Remove the session label
+    base = os.path.abspath(base)
+    folders = base.split(os.sep)
+    folders = [f for f in folders if not f.startswith("ses-")]
+    base = os.sep.join(folders)
+
     subject_label = in_file.split("_", 1)[0].split("-")[1]
     if dwi_only:
         anatomical_contrast = "dwi"

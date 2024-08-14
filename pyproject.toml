@@ -85,10 +85,6 @@ all = ["qsiprep[doc,maint,tests]"]
 
 [project.scripts]
 qsiprep = "qsiprep.cli.run:main"
-mif2fib = "qsiprep.cli.convertODFs:mif_to_fib"
-fib2mif = "qsiprep.cli.convertODFs:fib_to_mif"
-qsiprep_group_report = "qsiprep.cli.group_report:aggregate_reports"
-recon_plot = "qsiprep.cli.recon_plot:recon_plot"
 
 #
 # Hatch configurations
@@ -169,14 +165,10 @@ per-file-ignores = [
 addopts = '-m "not integration"'
 markers = [
     "integration: integration tests to skip by default",
-    "mrtrix_singleshell_ss3t_act: test 1",
-    "mrtrix_singleshell_ss3t_noact: test 2",
     "dsdti_fmap: test 3",
     "dscsdsi_fmap: test 4",
     "amico_noddi: test 5",
     "cuda: test 6",
-    "dipy_mapmri: test 7",
-    "dipy_dki: test 8",
     "drbuddi_rpe: test 9",
     "drbuddi_shoreline_epi: test 10",
     "drbuddi_tensorline_epi: test 11",
@@ -185,11 +177,6 @@ markers = [
     "dsdti_synfmap: test 14",
     "dsdti_topup: test 15",
     "intramodal_template: test 16",
-    "scalar_mapper: test 17",
-    "pyafq_recon_external_trk: test 18",
-    "pyafq_recon_full: test 19",
-    "mrtrix3_recon: test 20",
-    "tortoise_recon: test 21",
     "multi_t1w: test 22",
     "maternal_brain_project: multi-shell with GRE field map",
     "forrest_gump: single-shell with GRE field map",

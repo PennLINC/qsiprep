@@ -46,7 +46,9 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
     if config.workflow.hmc_model == "3dSHORE" and config.workflow.shoreline_iters > 1:
         ds_optimization = pe.Node(
             DerivativesDataSink(
-                source_file=source_file, base_directory=output_dir, suffix="hmcOptimization"
+                source_file=source_file,
+                base_directory=output_dir,
+                suffix="hmcOptimization",
             ),
             name="ds_optimization",
             run_without_submitting=True,
@@ -143,9 +145,9 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
             source_file=source_file,
             base_directory=output_dir,
             space="T1w",
+            desc="preproc",
             suffix="dwi",
             extension=".b",
-            desc="preproc",
         ),
         name="ds_gradient_table_t1",
         run_without_submitting=True,
@@ -156,9 +158,9 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
             source_file=source_file,
             base_directory=output_dir,
             space="T1w",
+            desc="preproc",
             suffix="dwi",
             extension=".b_table.txt",
-            desc="preproc",
         ),
         name="ds_btable_t1",
         run_without_submitting=True,

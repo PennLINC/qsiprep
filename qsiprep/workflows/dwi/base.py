@@ -298,8 +298,13 @@ Diffusion data preprocessing
         b0_coreg_wf = init_b0_to_anat_registration_wf(write_report=True)
     else:
         b0_coreg_wf = init_direct_b0_acpc_wf(write_report=True)
+
     ds_report_coreg = pe.Node(
-        DerivativesDataSink(suffix="acpc" if dwi_only else "coreg", source_file=source_file),
+        DerivativesDataSink(
+            datatype="figures",
+            suffix="acpc" if dwi_only else "coreg",
+            source_file=source_file,
+        ),
         name="ds_report_coreg",
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
@@ -314,7 +319,12 @@ Diffusion data preprocessing
     if fieldmap_type not in ("epi", "rpe_series", None) or doing_topup:
         fmap_unwarp_report_wf = init_fmap_unwarp_report_wf()
         ds_report_sdc = pe.Node(
-            DerivativesDataSink(desc="sdc", suffix="b0", source_file=source_file),
+            DerivativesDataSink(
+                datatype="figures",
+                desc="sdc",
+                suffix="b0",
+                source_file=source_file,
+            ),
             name="ds_report_sdc",
             mem_gb=DEFAULT_MEMORY_MIN_GB,
             run_without_submitting=True,
@@ -345,7 +355,12 @@ Diffusion data preprocessing
             extended_pepolar_report_wf = init_extended_pepolar_report_wf()
 
         ds_report_fa_sdc = pe.Node(
-            DerivativesMaybeDataSink(desc="sdc", suffix="fa", source_file=source_file),
+            DerivativesMaybeDataSink(
+                datatype="figures",
+                desc="sdc",
+                suffix="fa",
+                source_file=source_file,
+            ),
             name="ds_report_fa_sdc",
             mem_gb=DEFAULT_MEMORY_MIN_GB,
             run_without_submitting=True,
@@ -353,7 +368,10 @@ Diffusion data preprocessing
 
         ds_report_b0_sdc = pe.Node(
             DerivativesMaybeDataSink(
-                desc="sdcdrbuddi", suffix="b0" if not t2w_sdc else "b0t2w", source_file=source_file
+                datatype="figures",
+                desc="sdcdrbuddi",
+                suffix="b0" if not t2w_sdc else "b0t2w",
+                source_file=source_file,
             ),
             name="ds_report_b0_sdc",
             mem_gb=DEFAULT_MEMORY_MIN_GB,
@@ -418,7 +436,9 @@ Diffusion data preprocessing
     confounds_wf = init_dwi_confs_wf()
     ds_confounds = pe.Node(
         DerivativesDataSink(
-            source_file=source_file, base_directory=str(output_dir), suffix="confounds"
+            source_file=source_file,
+            base_directory=str(output_dir),
+            suffix="confounds",
         ),
         name="ds_confounds",
         run_without_submitting=True,
@@ -431,7 +451,11 @@ Diffusion data preprocessing
     # Carpetplot and confounds plot
     conf_plot = pe.Node(DMRISummary(), name="conf_plot", mem_gb=mem_gb["resampled"])
     ds_report_dwi_conf = pe.Node(
-        DerivativesDataSink(suffix="carpetplot", source_file=source_file),
+        DerivativesDataSink(
+            datatype="figures",
+            suffix="carpetplot",
+            source_file=source_file,
+        ),
         name="ds_report_dwi_conf",
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
@@ -468,7 +492,11 @@ Diffusion data preprocessing
 
     # Reporting
     ds_report_summary = pe.Node(
-        DerivativesDataSink(suffix="summary", source_file=source_file),
+        DerivativesDataSink(
+            datatype="figures",
+            suffix="summary",
+            source_file=source_file,
+        ),
         name="ds_report_summary",
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
@@ -482,10 +510,11 @@ Diffusion data preprocessing
     # Fill-in datasinks of reportlets seen so far
     for node in workflow.list_node_names():
         if node.split(".")[-1].startswith("ds_report"):
-            workflow.get_node(node).inputs.base_directory = str(config.execution.reportlets_dir)
+            workflow.get_node(node).inputs.base_directory = str(config.execution.output_dir)
             src_file = workflow.get_node(node).inputs.source_file
             if not isdefined(src_file) or src_file is None:
                 workflow.get_node(node).inputs.source_file = source_file
+
     return workflow
 
 

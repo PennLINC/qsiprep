@@ -1,0 +1,30 @@
+{
+    "name": "qsiprep",
+    "entities": [
+      {
+        "name": "datatype",
+        "pattern": "[/\\\\]+(anat|beh|dwi|eeg|figures|fmap|func|ieeg|meg|micr|perf|pet)[/\\\\]+"
+      },
+      {
+        "name": "cohort",
+        "pattern": "(?:^|_)cohort-([0-9]+)",
+        "dtype": "int"
+      }
+    ],
+    "default_path_patterns": [
+      "[desc-{desc}]_{suffix<qc>}{extension<.json>|.json}",
+      "sub-{subject}[/ses-{session}]/{datatype<anat>|anat}/sub-{subject}[_ses-{session}][_acq-{acquisition}][_ce-{ceagent}][_dir-{direction}][_rec-{reconstruction}][_space-{space}][_desc-{desc}]_{suffix<T1w|T2w|T1rho|T1map|T2map|T2star|FLAIR|FLASH|PDmap|PD|PDT2|dseg|inplaneT[12]|angio|imtcoreg>}.{extension<nii|nii.gz|json>|nii.gz}",
+      "sub-{subject}[/ses-{session}]/{datatype<anat>|anat}/sub-{subject}[_ses-{session}][_acq-{acquisition}][_ce-{ceagent}][_dir-{direction}][_rec-{reconstruction}]_from-{from}_to-{to}_mode-{mode<image|points>|image}_{suffix<xfm>|xfm}.{extension<txt|h5|mat>}",
+      "sub-{subject}[/ses-{session}]/{datatype<anat>|anat}/sub-{subject}[_ses-{session}][_acq-{acquisition}][_ce-{ceagent}][_dir-{direction}][_rec-{reconstruction}][_space-{space}]_desc-{desc}_{suffix<mask>|mask}.{extension<nii|nii.gz|json>|nii.gz}",
+      "sub-{subject}[/ses-{session}]/{datatype<anat>|anat}/sub-{subject}[_ses-{session}][_acq-{acquisition}][_ce-{ceagent}][_dir-{direction}][_rec-{reconstruction}][_space-{space}]_label-{label}[_desc-{desc}]_{suffix<probseg>|probseg}.{extension<nii|nii.gz|json>|nii.gz}",
+      "sub-{subject}[/ses-{session}]/{datatype<dwi>|dwi}/sub-{subject}[_ses-{session}][_acq-{acquisition}][_ce-{ceagent}][_dir-{direction}][_rec-{reconstruction}][_space-{space}][_desc-{desc}]_{suffix<dwiref>|dwiref}.{extension<nii|nii.gz|json>|nii.gz}",
+      "sub-{subject}[/ses-{session}]/{datatype<dwi>|dwi}/sub-{subject}[_ses-{session}][_acq-{acquisition}][_ce-{ceagent}][_dir-{direction}][_rec-{reconstruction}][_space-{space}][_desc-{desc}]_{suffix<mask>|mask}.{extension<nii|nii.gz|json>|nii.gz}",
+      "sub-{subject}[/ses-{session}]/{datatype<dwi>|dwi}/sub-{subject}[_ses-{session}][_acq-{acquisition}][_ce-{ceagent}][_dir-{direction}][_rec-{reconstruction}][_space-{space}][_desc-{desc}]_{suffix<dwi>|dwi}.{extension<nii|nii.gz|b|b_table.txt|bval|bvec|json>|nii.gz}",
+      "sub-{subject}[/ses-{session}]/{datatype<dwi>|dwi}/sub-{subject}[_ses-{session}][_acq-{acquisition}][_ce-{ceagent}][_dir-{direction}][_rec-{reconstruction}][_space-{space}][_desc-{desc}]_{suffix<confounds|dwi|topupcsv|hmcOptimization>|confounds}.{extension<tsv|csv|json>|tsv}",
+      "sub-{subject}[/ses-{session}]/{datatype<dwi>|dwi}/sub-{subject}[_ses-{session}][_acq-{acquisition}][_ce-{ceagent}][_dir-{direction}][_rec-{reconstruction}][_space-{space}][_desc-{desc}]_{suffix<bvecs|cnr>|bvecs}.{extension<nii|nii.gz|json>|nii.gz}",
+      "sub-{subject}[/ses-{session}]/{datatype<fmap>|fmap}/sub-{subject}[_ses-{session}][_acq-{acquisition}][_ce-{ceagent}][_dir-{direction}][_rec-{reconstruction}][_space-{space}][_desc-{desc}]_{suffix<fmapreg|fmapregvsm|b0ref>|fmapreg}.{extension<nii|nii.gz|json>|nii.gz}",
+      "sub-{subject}[/ses-{session}]/{datatype<fmap>|fmap}/sub-{subject}[_ses-{session}][_acq-{acquisition}][_ce-{ceagent}][_dir-{direction}][_rec-{reconstruction}][_space-{space}][_desc-{desc}]_{suffix<biascorr|denoising|unringing>|biascorr}.{extension<nii|nii.gz|json>|nii.gz}",
+      "sub-{subject}/{datatype<figures>}/sub-{subject}[_ses-{session}][_acq-{acquisition}][_ce-{ceagent}][_dir-{direction}][_rec-{reconstruction}][_run-{run}][_space-{space}][_cohort-{cohort}][_seg-{segmentation}][_desc-{desc}]_{suffix<T1w|T2w|T1rho|T1map|T2map|T2star|FLAIR|FLASH|PDmap|PD|PDT2|inplaneT[12]|angio|dseg|mask|dwi|epiref|fieldmap>}{extension<.html|.svg|.png|.json>}",
+      "sub-{subject}/{datatype<figures>}/sub-{subject}[_ses-{session}][_acq-{acquisition}][_ce-{ceagent}][_dir-{direction}][_rec-{reconstruction}][_run-{run}][_space-{space}][_cohort-{cohort}][_seg-{segmentation}][_desc-{desc}]_{suffix<t1w2mni|conform|about|summary|mask|reconall|acpc|coreg|b0|fa|b0t2w|carpetplot|scheme|tointramodal|biascorr|animation|topupsummary|iterdata|imtcoreg|denoising|unringing|biascorr|b0ref|fmapreg|fmapregvsm>}{extension<.html|.svg|.png|.gif>}"
+    ]
+  }

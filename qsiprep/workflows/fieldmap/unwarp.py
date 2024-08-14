@@ -137,8 +137,8 @@ def init_sdc_unwarp_wf(name="sdc_unwarp_wf"):
         n_procs=omp_nthreads,
     )
 
-    ds_reg = pe.Node(
-        DerivativesDataSink(suffix="fmap_reg"),
+    ds_report_reg = pe.Node(
+        DerivativesDataSink(datatype="figures", suffix="fmapreg"),
         name="ds_report_reg",
         mem_gb=0.01,
         run_without_submitting=True,
@@ -159,8 +159,8 @@ def init_sdc_unwarp_wf(name="sdc_unwarp_wf"):
         name="fmap_mask2ref_apply",
     )
 
-    ds_reg_vsm = pe.Node(
-        DerivativesDataSink(suffix="fmap_reg_vsm"),
+    ds_report_reg_vsm = pe.Node(
+        DerivativesDataSink(datatype="figures", suffix="fmapregvsm"),
         name="ds_report_vsm",
         mem_gb=0.01,
         run_without_submitting=True,
@@ -209,9 +209,9 @@ def init_sdc_unwarp_wf(name="sdc_unwarp_wf"):
         (inputnode, fmap_mask2ref_apply, [('in_reference', 'reference_image')]),
         (fmap2ref_reg, fmap_mask2ref_apply, [
             ('composite_transform', 'transforms')]),
-        (fmap2ref_apply, ds_reg_vsm, [('out_report', 'in_file')]),
+        (fmap2ref_apply, ds_report_reg_vsm, [('out_report', 'in_file')]),
         (inputnode, fmap2ref_reg, [('in_reference_brain', 'fixed_image')]),
-        (fmap2ref_reg, ds_reg, [('out_report', 'in_file')]),
+        (fmap2ref_reg, ds_report_reg, [('out_report', 'in_file')]),
         (inputnode, fmap2ref_apply, [('fmap', 'input_image')]),
         (inputnode, fmap_mask2ref_apply, [('fmap_mask', 'input_image')]),
         (fmap2ref_apply, torads, [('output_image', 'in_file')]),

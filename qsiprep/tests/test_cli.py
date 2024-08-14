@@ -22,88 +22,6 @@ nipype_config.enable_debug_mode()
 
 
 @pytest.mark.integration
-@pytest.mark.mrtrix_singleshell_ss3t_act
-def test_mrtrix_singleshell_ss3t_act(data_dir, output_dir, working_dir):
-    """Run reconstruction workflow tests.
-
-    Was in 3TissueReconTests.sh. I split it between this and the multi-shell test.
-
-    All supported reconstruction workflows get tested
-
-    This tests the following features:
-    - Blip-up + Blip-down DWI series for TOPUP/Eddy
-    - Eddy is run on a CPU
-    - Denoising is skipped
-    - A follow-up reconstruction using the dsi_studio_gqi workflow
-
-    Inputs
-    ------
-    - qsiprep single shell results (data/DSDTI_fmap)
-    """
-    TEST_NAME = "mrtrix_singleshell_ss3t_act"
-
-    dataset_dir = download_test_data("singleshell_output", data_dir)
-    dataset_dir = os.path.join(dataset_dir, "qsiprep")
-    out_dir = os.path.join(output_dir, TEST_NAME)
-    work_dir = os.path.join(working_dir, TEST_NAME)
-
-    parameters = [
-        dataset_dir,
-        out_dir,
-        "participant",
-        f"-w={work_dir}",
-        f"--recon-input={dataset_dir}",
-        "--sloppy",
-        "--recon-spec=mrtrix_singleshell_ss3t_ACT-fast",
-        "--recon-only",
-        "--output-resolution=5",
-    ]
-
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
-
-
-@pytest.mark.integration
-@pytest.mark.mrtrix_singleshell_ss3t_noact
-def test_mrtrix_singleshell_ss3t_noact(data_dir, output_dir, working_dir):
-    """Run reconstruction workflow tests.
-
-    Was in 3TissueReconTests.sh. I split it between this and the single-shell test.
-
-    All supported reconstruction workflows get tested
-
-    This tests the following features:
-    - Blip-up + Blip-down DWI series for TOPUP/Eddy
-    - Eddy is run on a CPU
-    - Denoising is skipped
-    - A follow-up reconstruction using the dsi_studio_gqi workflow
-
-    Inputs
-    ------
-    - qsiprep multi shell results (data/DSDTI_fmap)
-    """
-    TEST_NAME = "mrtrix_singleshell_ss3t_noact"
-
-    dataset_dir = download_test_data("singleshell_output", data_dir)
-    dataset_dir = os.path.join(dataset_dir, "qsiprep")
-    out_dir = os.path.join(output_dir, TEST_NAME)
-    work_dir = os.path.join(working_dir, TEST_NAME)
-
-    parameters = [
-        dataset_dir,
-        out_dir,
-        "participant",
-        f"-w={work_dir}",
-        f"--recon-input={dataset_dir}",
-        "--sloppy",
-        "--recon-spec=mrtrix_singleshell_ss3t_noACT",
-        "--recon-only",
-        "--output-resolution=5",
-    ]
-
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
-
-
-@pytest.mark.integration
 @pytest.mark.dsdti_fmap
 def test_dsdti_fmap(data_dir, output_dir, working_dir):
     """Run AllFieldmaps test on DSDTI data.
@@ -118,7 +36,6 @@ def test_dsdti_fmap(data_dir, output_dir, working_dir):
     - Blip-up + Blip-down DWI series for TOPUP/Eddy
     - Eddy is run on a CPU
     - Denoising is skipped
-    - A follow-up reconstruction using the dsi_studio_gqi workflow
 
     Inputs
     ------
@@ -160,7 +77,6 @@ def test_dscsdsi_fmap(data_dir, output_dir, working_dir):
     - Blip-up + Blip-down DWI series for TOPUP/Eddy
     - Eddy is run on a CPU
     - Denoising is skipped
-    - A follow-up reconstruction using the dsi_studio_gqi workflow
 
     Inputs
     ------
@@ -188,103 +104,17 @@ def test_dscsdsi_fmap(data_dir, output_dir, working_dir):
 
 
 @pytest.mark.integration
-@pytest.mark.amico_noddi
-def test_amico_noddi(data_dir, output_dir, working_dir):
-    """Run reconstruction workflow test.
-
-    Was in AMICOReconTests.sh.
-    All supported reconstruction workflows get tested.
-
-    This tests the following features:
-    - Blip-up + Blip-down DWI series for TOPUP/Eddy
-    - Eddy is run on a CPU
-    - Denoising is skipped
-    - A follow-up reconstruction using the dsi_studio_gqi workflow
-
-    Inputs
-    ------
-    - DSDTI BIDS data (data/singleshell_output)
-    """
-    TEST_NAME = "amico_noddi"
-
-    dataset_dir = download_test_data("singleshell_output", data_dir)
-    # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, "qsiprep")
-    out_dir = os.path.join(output_dir, TEST_NAME)
-    work_dir = os.path.join(working_dir, TEST_NAME)
-
-    parameters = [
-        dataset_dir,
-        out_dir,
-        "participant",
-        f"-w={work_dir}",
-        f"--recon-input={dataset_dir}",
-        "--sloppy",
-        "--recon-spec=amico_noddi",
-        "--recon-only",
-        "--output-resolution=5",
-    ]
-
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
-
-
-@pytest.mark.integration
-@pytest.mark.autotrack
-def test_autotrack(data_dir, output_dir, working_dir):
-    """Run reconstruction workflow test.
-
-    Was in AutoTrackTest.sh.
-
-    All supported reconstruction workflows get tested.
-
-    This tests the following features:
-    - Blip-up + Blip-down DWI series for TOPUP/Eddy
-    - Eddy is run on a CPU
-    - Denoising is skipped
-    - A follow-up reconstruction using the dsi_studio_gqi workflow
-
-    Inputs
-    ------
-    - DSDTI BIDS data (data/multishell_output)
-    """
-    TEST_NAME = "autotrack"
-
-    dataset_dir = download_test_data("multishell_output", data_dir)
-    # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, "multishell_output", "qsiprep")
-    out_dir = os.path.join(output_dir, TEST_NAME)
-    work_dir = os.path.join(working_dir, TEST_NAME)
-
-    parameters = [
-        dataset_dir,
-        out_dir,
-        "participant",
-        f"-w={work_dir}",
-        f"--recon-input={dataset_dir}",
-        "--sloppy",
-        "--recon-spec=dsi_studio_autotrack",
-        "--recon-only",
-        "--output-resolution=5",
-    ]
-
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
-
-
-@pytest.mark.integration
 @pytest.mark.cuda
 def test_cuda(data_dir, output_dir, working_dir):
-    """Run reconstruction workflow test.
+    """
 
     Was in CUDATest.sh.
     XXX: Not called in CircleCI.
 
-    All supported reconstruction workflows get tested.
-
     This tests the following features:
     - Blip-up + Blip-down DWI series for TOPUP/Eddy
     - Eddy is run on a CPU
     - Denoising is skipped
-    - A follow-up reconstruction using the dsi_studio_gqi workflow
 
     Inputs
     ------
@@ -318,107 +148,16 @@ def test_cuda(data_dir, output_dir, working_dir):
 
 
 @pytest.mark.integration
-@pytest.mark.dipy_mapmri
-def test_dipy_mapmri(data_dir, output_dir, working_dir):
-    """Run reconstruction workflow test.
-
-    Was in DipyReconTests.sh. I split it between this and the dipy_dki test.
-
-    All supported reconstruction workflows get tested
-
-    This tests the following features:
-    - Blip-up + Blip-down DWI series for TOPUP/Eddy
-    - Eddy is run on a CPU
-    - Denoising is skipped
-    - A follow-up reconstruction using the dsi_studio_gqi workflow
-
-    Inputs:
-    -------
-
-    - qsiprep single shell results (data/DSDTI_fmap)
-    - qsiprep multi shell results (data/DSDTI_fmap)
-    """
-    TEST_NAME = "dipy_mapmri"
-
-    dataset_dir = download_test_data("multishell_output", data_dir)
-    # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, "multishell_output", "qsiprep")
-    out_dir = os.path.join(output_dir, TEST_NAME)
-    work_dir = os.path.join(working_dir, TEST_NAME)
-
-    parameters = [
-        dataset_dir,
-        out_dir,
-        "participant",
-        f"-w={work_dir}",
-        "--sloppy",
-        f"--recon-input={dataset_dir}",
-        "--recon-spec=dipy_mapmri",
-        "--recon-only",
-        "--output-resolution=5",
-    ]
-
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
-
-
-@pytest.mark.integration
-@pytest.mark.dipy_dki
-def test_dipy_dki(data_dir, output_dir, working_dir):
-    """Run reconstruction workflow test.
-
-    Was in DipyReconTests.sh. I split it between this and the dipy_mapmri test.
-
-    All supported reconstruction workflows get tested
-
-    This tests the following features:
-    - Blip-up + Blip-down DWI series for TOPUP/Eddy
-    - Eddy is run on a CPU
-    - Denoising is skipped
-    - A follow-up reconstruction using the dsi_studio_gqi workflow
-
-    Inputs:
-    -------
-
-    - qsiprep single shell results (data/DSDTI_fmap)
-    - qsiprep multi shell results (data/DSDTI_fmap)
-    """
-    TEST_NAME = "dipy_dki"
-
-    dataset_dir = download_test_data("multishell_output", data_dir)
-    # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, "multishell_output", "qsiprep")
-    out_dir = os.path.join(output_dir, TEST_NAME)
-    work_dir = os.path.join(working_dir, TEST_NAME)
-
-    parameters = [
-        dataset_dir,
-        out_dir,
-        "participant",
-        f"-w={work_dir}",
-        "--sloppy",
-        f"--recon-input={dataset_dir}",
-        "--recon-spec=dipy_dki",
-        "--recon-only",
-        "--output-resolution=5",
-    ]
-
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
-
-
-@pytest.mark.integration
 @pytest.mark.drbuddi_rpe
 def test_drbuddi_rpe(data_dir, output_dir, working_dir):
-    """Run reconstruction workflow test.
+    """
 
     Was in DRBUDDI_eddy_rpe_series.sh.
 
-    All supported reconstruction workflows get tested
-
     This tests the following features:
     - Blip-up + Blip-down DWI series for TOPUP/Eddy
     - Eddy is run on a CPU
     - Denoising is skipped
-    - A follow-up reconstruction using the dsi_studio_gqi workflow
 
     Inputs:
     -------
@@ -585,7 +324,6 @@ def test_dsdti_nofmap(data_dir, output_dir, working_dir):
     - A workflow with no distortion correction followed by eddy
     - Eddy is run on a CPU
     - Denoising is skipped
-    - A follow-up reconstruction using the dsi_studio_gqi workflow
 
     Inputs
     ------
@@ -629,7 +367,6 @@ def test_dsdti_synfmap(data_dir, output_dir, working_dir):
     - A workflow with no distortion correction followed by eddy
     - Eddy is run on a CPU
     - Denoising is skipped
-    - A follow-up reconstruction using the dsi_studio_gqi workflow
 
     Inputs
     ------
@@ -663,48 +400,6 @@ def test_dsdti_synfmap(data_dir, output_dir, working_dir):
 
 
 @pytest.mark.integration
-@pytest.mark.dsdti_topup
-def test_dsdti_topup(data_dir, output_dir, working_dir):
-    """DSCDTI_TOPUP test
-
-    This tests the following features:
-    - TOPUP on a single-shell sequence
-    - Eddy is run on a CPU
-    - mrdegibbs is run
-    - A follow-up reconstruction using the dsi_studio_gqi workflow
-
-    Inputs
-    ------
-    - DSDTI BIDS data (data/DSDTI)
-    """
-    TEST_NAME = "dsdti_topup"
-
-    dataset_dir = download_test_data("DSDTI", data_dir)
-    # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, "DSDTI")
-    out_dir = os.path.join(output_dir, TEST_NAME)
-    work_dir = os.path.join(working_dir, TEST_NAME)
-    test_data_path = get_test_data_path()
-    eddy_config = os.path.join(test_data_path, "eddy_config.json")
-
-    parameters = [
-        dataset_dir,
-        out_dir,
-        "participant",
-        f"-w={work_dir}",
-        "--sloppy",
-        f"--eddy-config={eddy_config}",
-        "--unringing-method=mrdegibbs",
-        "--b1-biascorrect-stage=legacy",
-        "--output-resolution=5",
-        "--recon-spec=dsi_studio_gqi",
-        "--nthreads=1",
-    ]
-
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
-
-
-@pytest.mark.integration
 @pytest.mark.intramodal_template
 def test_intramodal_template(data_dir, output_dir, working_dir):
     """IntramodalTemplate test
@@ -715,7 +410,6 @@ def test_intramodal_template(data_dir, output_dir, working_dir):
     - Blip-up + Blip-down DWI series for TOPUP/Eddy
     - Eddy is run on a CPU
     - Denoising is skipped
-    - A follow-up reconstruction using the dsi_studio_gqi workflow
 
     Inputs
     ------
@@ -776,190 +470,6 @@ def test_multi_t1w(data_dir, output_dir, working_dir):
         "--output-resolution=5",
         "--intramodal-template-transform=BSplineSyN",
         "--intramodal-template-iters=2",
-    ]
-
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
-
-
-@pytest.mark.integration
-@pytest.mark.scalar_mapper
-def test_scalar_mapper(data_dir, output_dir, working_dir):
-    """Test the TORTOISE recon workflow.
-
-    All supported reconstruction workflows get tested
-
-    Inputs
-    ------
-    - qsiprep multi shell results (data/DSDTI_fmap)
-    """
-    TEST_NAME = "scalar_mapper"
-
-    dataset_dir = download_test_data("multishell_output", data_dir)
-    # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, "multishell_output", "qsiprep")
-    out_dir = os.path.join(output_dir, TEST_NAME)
-    work_dir = os.path.join(working_dir, TEST_NAME)
-
-    parameters = [
-        dataset_dir,
-        out_dir,
-        "participant",
-        f"-w={work_dir}",
-        f"--recon-input={dataset_dir}",
-        "--sloppy",
-        "--recon-spec=test_scalar_maps",
-        "--recon-only",
-        "--output-resolution=3.5",
-        "--nthreads=1",
-    ]
-
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
-
-
-@pytest.mark.integration
-@pytest.mark.pyafq_recon_external_trk
-def test_pyafq_recon_external_trk(data_dir, output_dir, working_dir):
-    """Reconstruction workflow tests
-
-    All supported reconstruction workflows get tested
-
-    This tests the following features:
-    - pyAFQ pipeline with tractography done in mrtrix
-
-    Inputs
-    ------
-    - qsiprep multi shell results (data/DSDTI_fmap)
-    """
-    TEST_NAME = "pyafq_recon_external_trk"
-
-    dataset_dir = download_test_data("multishell_output", data_dir)
-    # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, "multishell_output", "qsiprep")
-    out_dir = os.path.join(output_dir, TEST_NAME)
-    work_dir = os.path.join(working_dir, TEST_NAME)
-
-    parameters = [
-        dataset_dir,
-        out_dir,
-        "participant",
-        f"-w={work_dir}",
-        f"--recon-input={dataset_dir}",
-        "--sloppy",
-        "--recon-spec=mrtrix_multishell_msmt_pyafq_tractometry",
-        "--recon-only",
-        "--output-resolution=5",
-    ]
-
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
-
-
-@pytest.mark.integration
-@pytest.mark.pyafq_recon_full
-def test_pyafq_recon_full(data_dir, output_dir, working_dir):
-    """Reconstruction workflow tests
-
-    All supported reconstruction workflows get tested
-
-    This tests the following features:
-    - Full pyAFQ pipeline
-
-    Inputs
-    ------
-    - qsiprep multi shell results (data/DSDTI_fmap)
-    """
-    TEST_NAME = "pyafq_recon_full"
-
-    dataset_dir = download_test_data("multishell_output", data_dir)
-    # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, "multishell_output", "qsiprep")
-    out_dir = os.path.join(output_dir, TEST_NAME)
-    work_dir = os.path.join(working_dir, TEST_NAME)
-
-    parameters = [
-        dataset_dir,
-        out_dir,
-        "participant",
-        f"-w={work_dir}",
-        f"--recon-input={dataset_dir}",
-        "--sloppy",
-        "--recon-spec=pyafq_tractometry",
-        "--recon-only",
-        "--output-resolution=5",
-    ]
-
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
-
-
-@pytest.mark.integration
-@pytest.mark.mrtrix3_recon
-def test_mrtrix3_recon(data_dir, output_dir, working_dir):
-    """Reconstruction workflow tests
-
-    All supported reconstruction workflows get tested
-
-    This tests the following features:
-    - Blip-up + Blip-down DWI series for TOPUP/Eddy
-    - Eddy is run on a CPU
-    - Denoising is skipped
-    - A follow-up reconstruction using the dsi_studio_gqi workflow
-
-    Inputs
-    ------
-    - qsiprep single shell results (data/DSDTI_fmap)
-    - qsiprep multi shell results (data/DSDTI_fmap)
-    """
-    TEST_NAME = "mrtrix3_recon"
-
-    dataset_dir = download_test_data("multishell_output", data_dir)
-    # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, "multishell_output", "qsiprep")
-    out_dir = os.path.join(output_dir, TEST_NAME)
-    work_dir = os.path.join(working_dir, TEST_NAME)
-
-    parameters = [
-        dataset_dir,
-        out_dir,
-        "participant",
-        f"-w={work_dir}",
-        f"--recon-input={dataset_dir}",
-        "--sloppy",
-        "--recon-spec=mrtrix_multishell_msmt_ACT-fast",
-        "--recon-only",
-        "--output-resolution=5",
-    ]
-
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
-
-
-@pytest.mark.integration
-@pytest.mark.tortoise_recon
-def test_tortoise_recon(data_dir, output_dir, working_dir):
-    """Test the TORTOISE recon workflow
-
-    All supported reconstruction workflows get tested
-
-    Inputs
-    ------
-    - qsiprep multi shell results (data/DSDTI_fmap)
-    """
-    TEST_NAME = "tortoise_recon"
-
-    dataset_dir = download_test_data("multishell_output", data_dir)
-    # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, "multishell_output", "qsiprep")
-    out_dir = os.path.join(output_dir, TEST_NAME)
-    work_dir = os.path.join(working_dir, TEST_NAME)
-
-    parameters = [
-        dataset_dir,
-        out_dir,
-        "participant",
-        f"-w={work_dir}",
-        f"--recon-input={dataset_dir}",
-        "--sloppy",
-        "--recon-spec=TORTOISE",
-        "--recon-only",
-        "--output-resolution=5",
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=True)
@@ -1061,10 +571,10 @@ def _run_and_generate(test_name, parameters, test_main=True):
         config.loggers.cli.warning(f"Saving config file to {config_file}")
         config.to_filename(config_file)
 
-        retval = build_workflow(config_file, exec_mode="auto", retval={})
+        retval = build_workflow(config_file, retval={})
         qsiprep_wf = retval["workflow"]
         qsiprep_wf.run()
-        write_derivative_description(config.execution.fmri_dir, config.execution.qsiprep_dir)
+        write_derivative_description(config.execution.bids_dir, config.execution.output_dir)
 
         build_boilerplate(str(config_file), qsiprep_wf)
         session_list = (
@@ -1074,7 +584,7 @@ def _run_and_generate(test_name, parameters, test_main=True):
         )
         generate_reports(
             subject_list=config.execution.participant_label,
-            output_dir=config.execution.qsiprep_dir,
+            output_dir=config.execution.output_dir,
             run_uuid=config.execution.run_uuid,
             session_list=session_list,
         )

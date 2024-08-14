@@ -9,6 +9,7 @@ Anatomical reference preprocessing workflows
 .. autofunction:: init_skullstrip_ants_wf
 
 """
+
 from nipype import logging
 from nipype.interfaces import freesurfer as fs
 from nipype.interfaces import io as nio
@@ -18,8 +19,8 @@ from niworkflows.interfaces.freesurfer import RobustRegister
 from niworkflows.interfaces.reportlets.segmentation import ReconAllRPT
 
 from ...engine import Workflow
-from ...interfaces import DerivativesDataSink as FDerivativesDataSink
 from ...interfaces import (
+    DerivativesDataSink,
     FSDetectInputs,
     FSInjectBrainExtracted,
     MakeMidthickness,
@@ -33,10 +34,6 @@ from ...utils.misc import fix_multi_T1w_source_name
 
 
 LOGGER = logging.getLogger("nipype.workflow")
-
-
-class DerivativesDataSink(FDerivativesDataSink):
-    out_path_base = "qsiprep"
 
 
 TEMPLATE_MAP = {
@@ -375,7 +372,9 @@ def init_autorecon_resume_wf(omp_nthreads, name="autorecon_resume_wf"):
 
     # Only generate the report once; should be nothing to do
     recon_report = pe.Node(
-        ReconAllRPT(directive="autorecon3", generate_report=True), name="recon_report", mem_gb=5
+        ReconAllRPT(directive="autorecon3", generate_report=True),
+        name="recon_report",
+        mem_gb=5,
     )
     recon_report.interface._always_run = True
 
@@ -450,7 +449,9 @@ def init_gifti_surface_wf(name="gifti_surface_wf"):
     save_midthickness = pe.Node(nio.DataSink(parameterization=False), name="save_midthickness")
 
     surface_list = pe.Node(
-        niu.Merge(4, ravel_inputs=True), name="surface_list", run_without_submitting=True
+        niu.Merge(4, ravel_inputs=True),
+        name="surface_list",
+        run_without_submitting=True,
     )
     fs_2_gii = pe.MapNode(fs.MRIsConvert(out_datatype="gii"), iterfield="in_file", name="fs_2_gii")
     fix_surfs = pe.MapNode(NormalizeSurf(), iterfield="in_file", name="fix_surfs")
@@ -501,7 +502,8 @@ def init_segs_to_native_wf(name="segs_to_native", segmentation="aseg"):
     """
     workflow = Workflow(name="%s_%s" % (name, segmentation))
     inputnode = pe.Node(
-        niu.IdentityInterface(["in_file", "subjects_dir", "subject_id"]), name="inputnode"
+        niu.IdentityInterface(["in_file", "subjects_dir", "subject_id"]),
+        name="inputnode",
     )
     outputnode = pe.Node(niu.IdentityInterface(["out_file"]), name="outputnode")
     # Extract the aseg and aparc+aseg outputs
@@ -567,45 +569,54 @@ def init_anat_reports_wf(
         name="inputnode",
     )
 
-    ds_t1_conform_report = pe.Node(
-        DerivativesDataSink(base_directory=reportlets_dir, suffix="conform"),
-        name="ds_t1_conform_report",
+    ds_report_t1_conform = pe.Node(
+        DerivativesDataSink(base_directory=reportlets_dir, datatype="figures", suffix="conform"),
+        name="ds_report_t1_conform",
         run_without_submitting=True,
     )
 
-    ds_t1_2_mni_report = pe.Node(
-        DerivativesDataSink(base_directory=reportlets_dir, suffix="t1_2_mni"),
-        name="ds_t1_2_mni_report",
+    ds_report_t1_2_mni = pe.Node(
+        DerivativesDataSink(base_directory=reportlets_dir, datatype="figures", suffix="t1w2mni"),
+        name="ds_report_t1_2_mni",
         run_without_submitting=True,
     )
 
-    ds_t1_seg_mask_report = pe.Node(
-        DerivativesDataSink(base_directory=reportlets_dir, suffix="seg_brainmask"),
-        name="ds_t1_seg_mask_report",
+    ds_report_t1_seg_mask = pe.Node(
+        DerivativesDataSink(
+            base_directory=reportlets_dir,
+            datatype="figures",
+            desc="seg",
+            suffix="mask",
+        ),
+        name="ds_report_t1_seg_mask",
         run_without_submitting=True,
     )
 
-    ds_recon_report = pe.Node(
-        DerivativesDataSink(base_directory=reportlets_dir, suffix="reconall"),
-        name="ds_recon_report",
+    ds_report_recon = pe.Node(
+        DerivativesDataSink(
+            base_directory=reportlets_dir,
+            datatype="figures",
+            suffix="reconall",
+        ),
+        name="ds_report_recon",
         run_without_submitting=True,
     )
 
     workflow.connect([
-        (inputnode, ds_t1_conform_report, [('source_file', 'source_file'),
+        (inputnode, ds_report_t1_conform, [('source_file', 'source_file'),
                                            ('t1_conform_report', 'in_file')]),
-        (inputnode, ds_t1_seg_mask_report, [('source_file', 'source_file'),
+        (inputnode, ds_report_t1_seg_mask, [('source_file', 'source_file'),
                                             ('seg_report', 'in_file')]),
     ])  # fmt:skip
 
     if freesurfer:
         workflow.connect([
-            (inputnode, ds_recon_report, [('source_file', 'source_file'),
+            (inputnode, ds_report_recon, [('source_file', 'source_file'),
                                           ('recon_report', 'in_file')])
         ])  # fmt:skip
     if "template" in output_spaces or force_spatial_normalization:
         workflow.connect([
-            (inputnode, ds_t1_2_mni_report, [('source_file', 'source_file'),
+            (inputnode, ds_report_t1_2_mni, [('source_file', 'source_file'),
                                              ('t1_2_mni_report', 'in_file')])
         ])  # fmt:skip
 
@@ -652,33 +663,55 @@ def init_anat_derivatives_wf(
     t1_name = pe.Node(niu.Function(function=fix_multi_T1w_source_name), name="t1_name")
 
     ds_t1_preproc = pe.Node(
-        DerivativesDataSink(base_directory=output_dir, desc="preproc", keep_dtype=True),
+        DerivativesDataSink(
+            compress=True,
+            base_directory=output_dir,
+            desc="preproc",
+            keep_dtype=True,
+        ),
         name="ds_t1_preproc",
         run_without_submitting=True,
     )
 
     ds_t1_mask = pe.Node(
-        DerivativesDataSink(base_directory=output_dir, desc="brain", suffix="mask"),
+        DerivativesDataSink(
+            compress=True,
+            base_directory=output_dir,
+            desc="brain",
+            suffix="mask",
+        ),
         name="ds_t1_mask",
         run_without_submitting=True,
     )
 
     ds_t1_seg = pe.Node(
-        DerivativesDataSink(base_directory=output_dir, suffix="dseg"),
+        DerivativesDataSink(
+            compress=True,
+            base_directory=output_dir,
+            suffix="dseg",
+        ),
         name="ds_t1_seg",
         run_without_submitting=True,
     )
 
     ds_t1_tpms = pe.Node(
-        DerivativesDataSink(base_directory=output_dir, suffix="label-{extra_value}_probseg"),
+        DerivativesDataSink(
+            compress=True,
+            base_directory=output_dir,
+            suffix="probseg",
+        ),
         name="ds_t1_tpms",
         run_without_submitting=True,
     )
-    ds_t1_tpms.inputs.extra_values = ["CSF", "GM", "WM"]
+    ds_t1_tpms.inputs.label = ["CSF", "GM", "WM"]
 
     ds_t1_mni = pe.Node(
         DerivativesDataSink(
-            base_directory=output_dir, space=template, desc="preproc", keep_dtype=True
+            compress=True,
+            base_directory=output_dir,
+            space=template,
+            desc="preproc",
+            keep_dtype=True,
         ),
         name="ds_t1_mni",
         run_without_submitting=True,
@@ -686,44 +719,73 @@ def init_anat_derivatives_wf(
 
     ds_mni_mask = pe.Node(
         DerivativesDataSink(
-            base_directory=output_dir, space=template, desc="brain", suffix="mask"
+            compress=True,
+            base_directory=output_dir,
+            space=template,
+            desc="brain",
+            suffix="mask",
         ),
         name="ds_mni_mask",
         run_without_submitting=True,
     )
 
     ds_mni_seg = pe.Node(
-        DerivativesDataSink(base_directory=output_dir, space=template, suffix="dseg"),
+        DerivativesDataSink(
+            compress=True,
+            base_directory=output_dir,
+            space=template,
+            suffix="dseg",
+        ),
         name="ds_mni_seg",
         run_without_submitting=True,
     )
 
     ds_mni_tpms = pe.Node(
         DerivativesDataSink(
-            base_directory=output_dir, space=template, suffix="label-{extra_value}_probseg"
+            compress=True,
+            base_directory=output_dir,
+            space=template,
+            suffix="probseg",
         ),
         name="ds_mni_tpms",
         run_without_submitting=True,
     )
-    ds_mni_tpms.inputs.extra_values = ["CSF", "GM", "WM"]
+    ds_mni_tpms.inputs.label = ["CSF", "GM", "WM"]
 
     # Transforms
-    suffix_fmt = "from-{}_to-{}_mode-image_xfm".format
     ds_t1_mni_inv_warp = pe.Node(
-        DerivativesDataSink(base_directory=output_dir, suffix=suffix_fmt(template, "T1w")),
+        DerivativesDataSink(
+            base_directory=output_dir,
+            to="T1w",
+            mode="image",
+            suffix="xfm",
+            **{"from": template},
+        ),
         name="ds_t1_mni_inv_warp",
         run_without_submitting=True,
     )
 
     ds_t1_template_transforms = pe.MapNode(
-        DerivativesDataSink(base_directory=output_dir, suffix=suffix_fmt("orig", "T1w")),
+        DerivativesDataSink(
+            base_directory=output_dir,
+            to="T1w",
+            mode="image",
+            suffix="xfm",
+            **{"from": "orig"},
+        ),
         iterfield=["source_file", "in_file"],
         name="ds_t1_template_transforms",
         run_without_submitting=True,
     )
 
     ds_t1_mni_warp = pe.Node(
-        DerivativesDataSink(base_directory=output_dir, suffix=suffix_fmt("T1w", template)),
+        DerivativesDataSink(
+            base_directory=output_dir,
+            to=template,
+            mode="image",
+            suffix="xfm",
+            **{"from": "T1w"},
+        ),
         name="ds_t1_mni_warp",
         run_without_submitting=True,
     )

@@ -9,7 +9,6 @@ This tests the following features:
  - A workflow with no distortion correction followed by eddy
  - Eddy is run on a CPU
  - Denoising is skipped
- - A follow-up reconstruction using the dsi_studio_gqi workflow
 
 Inputs:
 -------

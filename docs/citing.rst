@@ -36,77 +36,6 @@ Citing qsiprep
                    Multi-tissue constrained spherical deconvolution for improved analysis of
                    multi-shell diffusion MRI data. NeuroImage, 2014, 103, 411-426
 
-.. [Dhollander2016] Dhollander, T. & Connelly, A. A novel iterative approach to reap the
-     benefits of multi-tissue CSD from just single-shell (+b=0) diffusion MRI
-     data. Proc Intl Soc Mag Reson Med, 2016, 3010
-
-.. [Dhollander2019] Dhollander, Thijs & Mito, Remika & Raffelt, David & Connelly, Alan. (2019).
-    Improved white matter response function estimation for 3-tissue constrained spherical
-    deconvolution.
-
-.. [Smith2012] Smith, R. E., Tournier, J. D., Calamante, F., & Connelly, A. (2012).
-    Anatomically-constrained tractography: improved diffusion MRI streamlines tractography
-    through effective use of anatomical information. Neuroimage, 62(3), 1924-1938.
-
-.. [Smith2015] Smith, R. E.; Tournier, J.-D.; Calamante, F. & Connelly, A. SIFT2: Enabling dense
-               quantitative assessment of brain white matter connectivity using streamlines
-               tractography. NeuroImage, 2015, 119, 338-351
-
-.. [Yeh2013]  F.-C. Yeh, T. D. Verstynen, Y. Wang, J. C. Fernández-Miranda, and W-Y. I. Tseng,
-          Deterministic Diffusion Fiber Tracking Improved By Quantitative Anisotropy, PLoS
-          ONE 8(11): e80713. doi:10.1371/journal.pone.0080713
-
-.. [Yeh2019] Yeh, F. C., Zaydan, I. M., Suski, V. R., Lacomis, D., Richardson, R. M., Maroon, J.,
-          & Barrios-Martinez, J. (2019). Differential tractography as a track-based biomarker for
-          neuronal injury. NeuroImage, 576025.
-
-.. [Yeh2020] Yeh, F.-C. (2020). Shape analysis of the human association pathways. Neuroimage, 
-	  117329.
-
-.. [Yeh2022] Yeh, F.-C. (2022). Population-based tract-to-region connectome of the human brain
-	  and its hierarchical topology. Nat Comm (13), 4933.
-
-.. [Schaefer2017] Schaefer, A., Kong, R., Gordon, E. M., Laumann, T. O., Zuo, X. N., Holmes,
-          A. J., ... & Yeo, B. T. (2017). Local-global parcellation of the human cerebral cortex
-          from intrinsic functional connectivity MRI. Cerebral Cortex, 28(9), 3095-3114.
-
-.. [Yeo2011] Thomas Yeo, B. T., Krienen, F. M., Sepulcre, J., Sabuncu, M. R., Lashkari, D.,
-          Hollinshead, M., ... & Fischl, B. (2011). The organization of the human cerebral
-          cortex estimated by intrinsic functional connectivity. Journal of neurophysiology,
-          106(3), 1125-1165.
-
-.. [Joliot2015] Joliot M, Jobard G, Naveau M, Delcroix N, Petit L, Zago L, Crivello F, Mellet E,
-          Mazoyer B, Tzourio-Mazoyer N (2015) AICHA: An atlas of intrinsic connectivity of
-          homotopic areas. J Neurosci Methods 254:46-59.
-
-.. [Fan2016] Lingzhong Fan, Hai Li, Junjie Zhuo, Yu Zhang, Jiaojian Wang, Liangfu Chen, Zhengyi
-          Yang, Congying Chu, # Sangma Xie, Angela R. Laird, Peter T. Fox, Simon B. Eickhoff,
-          Chunshui Yu, and Tianzi Jiang, "The Human # Brainnetome Atlas: A New Brain Atlas Based
-          on Connectional Architecture", Cerebral Cortex, 2016
-
-.. [Gordon2014] Gordon, E. M., Laumann, T. O., Adeyemo, B., Huckins, J. F., Kelley, W. M., &
-          Petersen, S. E. (2014). Generation and evaluation of a cortical area parcellation from
-          resting-state correlations. Cerebral cortex, 26(1), 288-303.
-
-.. [TzourioMazoyer2002] Tzourio-Mazoyer, N., Landeau, B., Papathanassiou, D., Crivello, F., Etard,
-          O., Delcroix, N., ... & Joliot, M. (2002). Automated anatomical labeling of activations
-          in SPM using a macroscopic anatomical parcellation of the MNI MRI single-subject brain.
-          Neuroimage, 15(1), 273-289.
-
-.. [Power2011] Power, J. D., Cohen, A. L., Nelson, S. M., Wig, G. S., Barnes, K. A., Church,
-          J. A., ... & Petersen, S. E. (2011). Functional network organization of the human brain.
-          Neuron, 72(4), 665-678.
-
-.. [Daducci2015] Daducci, Alessandro, et al. "Accelerated microstructure imaging via convex
-          optimization (AMICO) from diffusion MRI data." NeuroImage 105 (2015): 32-44.
-
-.. [Zhang2012] Zhang, Hui, et al. "NODDI: practical in vivo neurite orientation dispersion
-          and density imaging of the human brain." Neuroimage 61.4 (2012): 1000-1016.
-
-.. [Smith2020] Smith, R.; Skoch, A.; Bajada, C.; Caspers, S.; Connelly, A. Hybrid Surface-
-     Volume Segmentation for improved Anatomically-Constrained Tractography. In
-     Proc OHBM 2020
-
 .. [Irfanoglu] Irfanoglu, M.O., et al. (2015) DR-BUDDI (Diffeomorphic Registration for
      Blip-Up blip-Down Diffusion Imaging) method for correcting echo planar imaging distortions.
       Neuroimage 106:284-299
@@ -114,4 +43,3 @@ Citing qsiprep
 .. [Irfanoglu2017] Irfanoglu, M.O., et al. TORTOISE v3: Improvements and new features of
          the NIH diffusion MRI processing pipeline." Program and proceedings of the ISMRM
          25th annual meeting and exhibition, Honolulu, HI, USA. 2017.
-

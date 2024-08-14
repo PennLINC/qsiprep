@@ -74,7 +74,6 @@ class Report(object):
         out_dir,
         run_uuid,
         out_filename="report.html",
-        pipeline_type="qsiprep",
     ):
         self.root = path
         self.sections = []
@@ -82,7 +81,6 @@ class Report(object):
         self.out_dir = Path(out_dir)
         self.out_filename = out_filename
         self.run_uuid = run_uuid
-        self.pipeline_type = pipeline_type
 
         self._load_config(viz_config)
 
@@ -96,7 +94,7 @@ class Report(object):
         fig_dir = "figures"
         subject_dir = self.root.split("/")[-1]
         subject = re.search("^(?P<subject_id>sub-[a-zA-Z0-9]+)$", subject_dir).group()
-        svg_dir = self.out_dir / self.pipeline_type / subject / fig_dir
+        svg_dir = self.out_dir / subject / fig_dir
         svg_dir.mkdir(parents=True, exist_ok=True)
         reportlet_list = list(sorted([str(f) for f in Path(self.root).glob("**/*.*")]))
 
@@ -128,7 +126,7 @@ class Report(object):
                 )
                 self.sections.append(order_by_run(sub_report))
 
-        error_dir = self.out_dir / self.pipeline_type / subject / "log" / self.run_uuid
+        error_dir = self.out_dir / subject / "log" / self.run_uuid
         if error_dir.is_dir():
             self.index_error_dir(error_dir)
 
@@ -181,7 +179,7 @@ class Report(object):
         return data
 
     def generate_report(self):
-        logs_path = self.out_dir / self.pipeline_type / "logs"
+        logs_path = self.out_dir / "logs"
 
         boilerplate = []
         boiler_idx = 0
@@ -229,9 +227,7 @@ class Report(object):
         )
 
         # Write out report
-        (self.out_dir / self.pipeline_type / self.out_filename).write_text(
-            report_render, encoding="UTF-8"
-        )
+        (self.out_dir / self.out_filename).write_text(report_render, encoding="UTF-8")
         return len(self.errors)
 
 
@@ -304,7 +300,7 @@ def generate_name_title(filename):
     return name.strip("_"), title
 
 
-def run_reports(reportlets_dir, out_dir, subject_label, run_uuid, report_type="qsiprep"):
+def run_reports(reportlets_dir, out_dir, subject_label, run_uuid):
     """
     Runs the reports
 
@@ -327,35 +323,28 @@ def run_reports(reportlets_dir, out_dir, subject_label, run_uuid, report_type="q
     >>> tmpdir.cleanup()
 
     """
-    reportlet_path = str(Path(reportlets_dir) / report_type / ("sub-%s" % subject_label))
-    if report_type == "qsiprep":
-        viz_config = pkgrf("qsiprep", "viz/config.json")
-    else:
-        viz_config = pkgrf("qsiprep", "viz/recon_config.json")
+    reportlet_path = str(Path(reportlets_dir) / ("sub-%s" % subject_label))
+    viz_config = pkgrf("qsiprep", "viz/config.json")
 
     out_filename = "sub-{}.html".format(subject_label)
-    report = Report(
-        reportlet_path, viz_config, out_dir, run_uuid, out_filename, pipeline_type=report_type
-    )
+    report = Report(reportlet_path, viz_config, out_dir, run_uuid, out_filename)
     return report.generate_report()
 
 
-def generate_reports(subject_list, pipeline_mode="qsiprep"):
+def generate_reports(subject_list):
     """
     A wrapper to run_reports on a given ``subject_list``
     """
-    reports_dir = str(config.execution.reportlets_dir)
+    reports_dir = str(config.execution.output_dir)
     run_uuid = config.execution.run_uuid
     output_dir = str(config.execution.output_dir)
     report_errors = [
-        run_reports(
-            reports_dir, output_dir, subject_label, run_uuid=run_uuid, report_type=pipeline_mode
-        )
+        run_reports(reports_dir, output_dir, subject_label, run_uuid=run_uuid)
         for subject_label in subject_list
     ]
 
     errno = sum(report_errors)
-    errno += generate_interactive_report_summary(Path(output_dir) / pipeline_mode)
+    errno += generate_interactive_report_summary(output_dir)
     if errno:
         import logging
 

@@ -44,9 +44,7 @@ def _build_parser(**kwargs):
         # parser attribute name: (replacement flag, version slated to be removed in)
         "dwi_only": ("--anat-modality none", "0.23.0"),
         "prefer_dedicated_fmaps": (None, "0.23.0"),
-        "do_reconall": (None, "0.23.0"),
         "dwi_no_biascorr": ("--b1-biascorrect-stage none", "0.23.0"),
-        "recon_only": (None, "0.23.0"),
         "b0_motion_corr_to": (None, "0.23.0"),
         "b0_to_t1w_transform": ("--b0-t0-anat-transform", "0.23.0"),
     }
@@ -289,12 +287,6 @@ def _build_parser(**kwargs):
         help="Only generate reports, don't run workflows. This will only rerun report "
         "aggregation, not reportlet generation for specific nodes.",
     )
-    g_subset.add_argument(
-        "--interactive-reports-only",
-        action="store_true",
-        default=False,
-        help="create interactive report json files on already preprocessed data.",
-    )
 
     g_conf = parser.add_argument_group("Workflow configuration")
     g_conf.add_argument(
@@ -329,7 +321,7 @@ def _build_parser(**kwargs):
         default="T1w",
         help="Modality to use as the anatomical reference. Images of this "
         "contrast will be skull stripped and segmented for use in the "
-        "visual reports and reconstruction. If --infant, T2w is forced.",
+        "visual reports. If --infant, T2w is forced.",
     )
     g_conf.add_argument(
         "--b0-threshold",
@@ -429,8 +421,7 @@ def _build_parser(**kwargs):
         "--output-resolution",
         "--output_resolution",
         action="store",
-        # required when not recon-only (which can be specified in sysargs 2 ways)
-        required=not any(rcn in sys.argv for rcn in ["--recon-only", "--recon_only"]),
+        required=True,
         type=float,
         help="the isotropic voxel size in mm the data will be resampled to "
         "after preprocessing. If set to a lower value than the original voxel "
@@ -568,58 +559,6 @@ def _build_parser(**kwargs):
         "fieldmap correction, if available",
     )
 
-    # arguments for reconstructing QSI data
-    g_recon = parser.add_argument_group("Options for reconstructing qsiprep outputs")
-    g_recon.add_argument(
-        "--recon-only",
-        "--recon_only",
-        action="store_true",
-        default=False,
-        help="run only reconstruction, assumes preprocessing has already completed.",
-    )
-    g_recon.add_argument(
-        "--recon-spec",
-        "--recon_spec",
-        action="store",
-        type=str,
-        help="json file specifying a reconstruction pipeline to be run after preprocessing",
-    )
-    g_recon.add_argument(
-        "--recon-input",
-        "--recon_input",
-        action="store",
-        metavar="PATH",
-        type=Path,
-        help="use this directory as inputs to qsirecon. This option skips qsiprep.",
-    )
-    g_recon.add_argument(
-        "--recon-input-pipeline",
-        "--recon_input_pipeline",
-        action="store",
-        default="qsiprep",
-        choices=["qsiprep", "ukb", "hcpya"],
-        help="specify which pipeline was used to create the data specified "
-        "as the --recon-input. Not necessary to specify if the data was "
-        'processed by qsiprep. Other options include "ukb" for data processed '
-        'with the UK BioBank minimal preprocessing pipeline and "hcpya" for '
-        "the HCP young adult minimal preprocessing pipeline.",
-    )
-    g_recon.add_argument(
-        "--freesurfer-input",
-        "--freesurfer_input",
-        action="store",
-        metavar="PATH",
-        type=Path,
-        help="Directory containing freesurfer outputs to be integrated into recon.",
-    )
-    g_recon.add_argument(
-        "--skip-odf-reports",
-        "--skip_odf_reports",
-        action="store_true",
-        default=False,
-        help="run only reconstruction, assumes preprocessing has already completed.",
-    )
-
     g_other = parser.add_argument_group("Other options")
     g_other.add_argument("--version", action="version", version=verstr)
     g_other.add_argument(
@@ -743,11 +682,6 @@ def parse_args(args=None, namespace=None):
             f"total threads (--nthreads/--n_cpus={config.nipype.nprocs})"
         )
 
-    if config.workflow.recon_spec and not config.execution.recon_input:
-        build_log.info("Running BOTH preprocessing and recon.")
-        config.execution.running_preproc_and_recon = True
-        config.execution.recon_input = config.execution.qsiprep_dir
-
     # Validate the tricky options here
     if config.workflow.dwi_denoise_window != "auto":
         try:
@@ -759,15 +693,6 @@ def parse_args(args=None, namespace=None):
     output_dir = config.execution.output_dir
     work_dir = config.execution.work_dir
     version = config.environment.version
-
-    if config.execution.qsiprep_dir is None:
-        config.execution.qsiprep_dir = output_dir / "qsiprep"
-
-    if config.execution.qsirecon_dir is None:
-        config.execution.qsirecon_dir = output_dir / "qsirecon"
-
-    if config.execution.reportlets_dir is None:
-        config.execution.reportlets_dir = work_dir / "reportlets"
 
     # Update the config with an empty dict to trigger initialization of all config
     # sections (we used `init=False` above).
@@ -793,26 +718,22 @@ def parse_args(args=None, namespace=None):
 
     # Validate inputs
     if not opts.skip_bids_validation:
-        if opts.recon_input is not None:
-            build_log.info("Skipping BIDS validation because inputs are BIDS derivatives")
-        else:
-            from ..utils.bids import validate_input_dir
+        from ..utils.bids import validate_input_dir
 
-            build_log.info(
-                "Making sure the input data is BIDS compliant (warnings can be ignored in most "
-                "cases)."
-            )
-            validate_input_dir(
-                config.environment.exec_env,
-                opts.bids_dir,
-                opts.participant_label,
-            )
+        build_log.info(
+            "Making sure the input data is BIDS compliant (warnings can be ignored in most "
+            "cases)."
+        )
+        validate_input_dir(
+            config.environment.exec_env,
+            opts.bids_dir,
+            opts.participant_label,
+        )
 
     # Setup directories
-    config.execution.log_dir = config.execution.qsiprep_dir / "logs"
+    config.execution.log_dir = config.execution.output_dir / "logs"
     # Check and create output and working directories
     config.execution.log_dir.mkdir(exist_ok=True, parents=True)
-    config.execution.reportlets_dir.mkdir(exist_ok=True, parents=True)
     work_dir.mkdir(exist_ok=True, parents=True)
 
     # Force initialization of the BIDSLayout

@@ -9,7 +9,6 @@ This tests the following features:
  - TOPUP on a single-shell sequence
  - Eddy is run on a CPU
  - mrdegibbs is run
- - A follow-up reconstruction using the dsi_studio_gqi workflow
 
 Inputs:
 -------
@@ -23,7 +22,7 @@ source ./get_data.sh
 TESTDIR=${PWD}
 TESTNAME=DSDTI_TOPUP
 get_config_data ${TESTDIR}
-get_bids_data ${TESTDIR} DSDTI
+#get_bids_data ${TESTDIR} DSDTI
 CFG=${TESTDIR}/data/nipype.cfg
 EDDY_CFG=${TESTDIR}/data/eddy_config.json
 
@@ -41,7 +40,6 @@ ${QSIPREP_CMD} \
 	--sloppy \
 	--unringing-method mrdegibbs \
 	--b1-biascorrect-stage legacy \
-	--recon-spec dsi_studio_gqi \
 	--eddy_config ${EDDY_CFG} \
 	--output-resolution 5 \
     -vv
