@@ -23,14 +23,14 @@
             },
             {
                 "name": "anat_preproc/t1_brain_seg",
-                "file_pattern": "anat/.*seg_brainmask",
+                "file_pattern": "anat/.*desc-seg_mask",
                 "title": "Brain mask and brain tissue segmentation of the T1w",
                 "description": "This panel shows the template T1-weighted image (if several T1w images were found), with contours delineating the detected brain mask and brain tissue segmentations.",
                 "imgtype": "svg+xml"
             },
             {
-                "name": "anat_preproc/t1_2_mni",
-                "file_pattern": "anat/.*t1_2_mni",
+                "name": "anat_preproc/t1w2mni",
+                "file_pattern": "anat/.*t1w2mni",
                 "title": "T1 to MNI registration",
                 "description": "Nonlinear mapping of the T1w image into MNI space. Hover on the panel with the mouse to transition between both spaces.",
                 "imgtype": "svg+xml"
@@ -148,14 +148,14 @@
             },
             {
                 "name": "epi/fmap_reg",
-                "file_pattern": "dwi/.*fmap_reg\\.",
+                "file_pattern": "dwi/.*fmapreg\\.",
                 "title": "Fieldmap to EPI registration",
                 "description": "Results of affine coregistration between the magnitude image of the fieldmap and the reference EPI image",
                 "imgtype": "svg+xml"
             },
             {
                 "name": "epi/fmap_reg",
-                "file_pattern": "dwi/.*fmap_reg_vsm\\.",
+                "file_pattern": "dwi/.*fmapregvsm\\.",
                 "title": "Fieldmap",
                 "description": "Overlaid on the reference EPI image",
                 "imgtype": "svg+xml"
@@ -176,7 +176,7 @@
             },
             {
                 "name": "epi/unwarp",
-                "file_pattern": "dwi/.*sdc_b0t2w.*\\.",
+                "file_pattern": "dwi/.*sdcdrbuddi_b0t2w.*\\.",
                 "title": "Susceptibility distortion correction (DRBUDDI+T2w)",
                 "description": "Results of performing susceptibility distortion correction (SDC) using DRBUDDI. The overlay shown is an ad-hoc segmentation of a t2w image and is only for display purposes.",
                 "imgtype": "svg+xml"
@@ -211,7 +211,7 @@
             },
             {
               "name": "epi/intramodal_reg",
-              "file_pattern": "dwi/.*to_intramodal\\.",
+              "file_pattern": "dwi/.*tointramodal\\.",
               "title": "Registration to the Intramodal Template",
               "description": "The b=0 template registered to the midpoint b=0 image",
               "imgtype": "svg+xml"
