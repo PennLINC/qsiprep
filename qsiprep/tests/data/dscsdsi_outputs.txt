@@ -10,6 +10,7 @@ sub-tester.html
 sub-tester/anat
 sub-tester/anat/sub-tester_desc-aseg_dseg.nii.gz
 sub-tester/anat/sub-tester_desc-brain_mask.nii.gz
+sub-tester/anat/sub-tester_desc-preproc_T1w.json
 sub-tester/anat/sub-tester_desc-preproc_T1w.nii.gz
 sub-tester/anat/sub-tester_dseg.nii.gz
 sub-tester/anat/sub-tester_from-MNI152NLin2009cAsym_to-T1w_mode-image_xfm.h5

@@ -10,6 +10,7 @@ sub-01.html
 sub-01/anat
 sub-01/anat/sub-01_desc-aseg_dseg.nii.gz
 sub-01/anat/sub-01_desc-brain_mask.nii.gz
+sub-01/anat/sub-01_desc-preproc_T1w.json
 sub-01/anat/sub-01_desc-preproc_T1w.nii.gz
 sub-01/anat/sub-01_dseg.nii.gz
 sub-01/anat/sub-01_from-MNI152NLin2009cAsym_to-T1w_mode-image_xfm.h5

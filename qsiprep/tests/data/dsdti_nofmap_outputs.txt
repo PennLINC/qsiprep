@@ -10,6 +10,7 @@ sub-PNC.html
 sub-PNC/anat
 sub-PNC/anat/sub-PNC_desc-aseg_dseg.nii.gz
 sub-PNC/anat/sub-PNC_desc-brain_mask.nii.gz
+sub-PNC/anat/sub-PNC_desc-preproc_T1w.json
 sub-PNC/anat/sub-PNC_desc-preproc_T1w.nii.gz
 sub-PNC/anat/sub-PNC_dseg.nii.gz
 sub-PNC/anat/sub-PNC_from-MNI152NLin2009cAsym_to-T1w_mode-image_xfm.h5
