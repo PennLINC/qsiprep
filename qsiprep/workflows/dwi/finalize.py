@@ -350,10 +350,9 @@ def init_dwi_finalize_wf(
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
 
-    # Write the carpetplot data
-    ds_carpetplot = pe.Node(
+    # Write the carpetplot data (which is the text output from eddy)
+    ds_carpetplot_data = pe.Node(
         DerivativesDataSink(
-            datatype="figures",
             desc="SliceQC",
             suffix="dwi",
             source_file=source_file,
@@ -368,7 +367,7 @@ def init_dwi_finalize_wf(
         (inputnode, series_qc, [
             ('raw_qc_file', 'pre_qc'),
             ('confounds', 'confounds_file')]),
-        (inputnode, ds_carpetplot, [('carpetplot_data', 'in_file')]),
+        (inputnode, ds_carpetplot_data, [('carpetplot_data', 'in_file')]),
         (t1_dice_calc, series_qc, [('outputnode.dice_score', 't1_dice_score')]),
         (final_denoise_wf, series_qc, [
             ('outputnode.series_qc_postproc', 't1_qc_postproc')]),
