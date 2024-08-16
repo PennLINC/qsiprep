@@ -157,7 +157,6 @@ def main():
             if config.environment.exec_env in (
                 "singularity",
                 "docker",
-                "qsiprep-docker",
             ):
                 boiler_file = Path("<OUTPUT_PATH>") / boiler_file.relative_to(
                     config.execution.output_dir

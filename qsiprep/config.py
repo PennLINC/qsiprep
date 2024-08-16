@@ -165,8 +165,7 @@ if os.getenv("IS_DOCKER_8395080871"):
     _exec_env = "singularity"
     _cgroup = Path("/proc/1/cgroup")
     if _cgroup.exists() and "docker" in _cgroup.read_text():
-        _docker_ver = os.getenv("DOCKER_VERSION_8395080871")
-        _exec_env = "qsiprep-docker" if _docker_ver else "docker"
+        _exec_env = "docker"
     del _cgroup
 
 _fs_license = os.getenv("FS_LICENSE")
