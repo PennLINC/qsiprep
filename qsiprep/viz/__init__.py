@@ -5,4 +5,3 @@
 """
 The qsiprep reporting engine for visual assessment
 """
-from .reports import generate_reports, run_reports

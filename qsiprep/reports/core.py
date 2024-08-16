@@ -116,7 +116,7 @@ def generate_reports(
             # we separate the functional reports per session
             if session_list is None:
                 all_filters = config.execution.bids_filters or {}
-                filters = all_filters.get("bold", {})
+                filters = all_filters.get("dwi", {})
                 session_list = config.execution.layout.get_sessions(
                     subject=subject_label, **filters
                 )
@@ -125,8 +125,8 @@ def generate_reports(
             session_list = [ses[4:] if ses.startswith("ses-") else ses for ses in session_list]
 
             for session_label in session_list:
-                bootstrap_file = data.load("reports-spec-func.yml")
-                html_report = f'sub-{subject_label.lstrip("sub-")}_ses-{session_label}_func.html'
+                bootstrap_file = data.load("reports-spec-dwi.yml")
+                html_report = f'sub-{subject_label.lstrip("sub-")}_ses-{session_label}_dwi.html'
 
                 report_error = run_reports(
                     output_dir,
@@ -135,7 +135,7 @@ def generate_reports(
                     bootstrap_file=bootstrap_file,
                     out_filename=html_report,
                     reportlets_dir=reportlets_dir,
-                    errorname=f"report-{run_uuid}-{subject_label}-func.err",
+                    errorname=f"report-{run_uuid}-{subject_label}-dwi.err",
                     subject=subject_label,
                     session=session_label,
                 )
