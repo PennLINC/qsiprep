@@ -75,5 +75,75 @@ def add_suffix(in_files, suffix):
     return op.basename(fname_presuffix(filename_to_list(in_files)[0], suffix=suffix))
 
 
+def generate_interactive_report_summary(output_dir):
+    """
+    Gather the dwiqc values from the outputs in a
+    """
+    import json
+    from pathlib import Path
+
+    report_errors = []
+    qc_report = {
+        "report_type": "dwi_qc_report",
+        "pipeline": "qsiprep",
+        "pipeline_version": 0,
+        "boilerplate": "",
+        "metric_explanation": {
+            "raw_dimension_x": "Number of x voxels in raw images",
+            "raw_dimension_y": "Number of y voxels in raw images",
+            "raw_dimension_z": "Number of z voxels in raw images",
+            "raw_voxel_size_x": "Voxel size in x direction in raw images",
+            "raw_voxel_size_y": "Voxel size in y direction in raw images",
+            "raw_voxel_size_z": "Voxel size in z direction in raw images",
+            "raw_max_b": "Maximum b-value in s/mm^2 in raw images",
+            "raw_neighbor_corr": "Neighboring DWI Correlation (NDC) of raw images",
+            "raw_num_bad_slices": "Number of bad slices in raw images (from DSI Studio)",
+            "raw_num_directions": "Number of directions sampled in raw images",
+            "t1_dimension_x": "Number of x voxels in preprocessed images",
+            "t1_dimension_y": "Number of y voxels in preprocessed images",
+            "t1_dimension_z": "Number of z voxels in preprocessed images",
+            "t1_voxel_size_x": "Voxel size in x direction in preprocessed images",
+            "t1_voxel_size_y": "Voxel size in y direction in preprocessed images",
+            "t1_voxel_size_z": "Voxel size in z direction in preprocessed images",
+            "t1_max_b": "Maximum b-value s/mm^2 in preprocessed images",
+            "t1_neighbor_corr": "Neighboring DWI Correlation (NDC) of preprocessed images",
+            "t1_num_bad_slices": "Number of bad slices in preprocessed images (from DSI Studio)",
+            "t1_num_directions": "Number of directions sampled in preprocessed images",
+            "mean_fd": "Mean framewise displacement from head motion",
+            "max_fd": "Maximum framewise displacement from head motion",
+            "max_rotation": "Maximum rotation from head motion",
+            "max_translation": "Maximum translation from head motion",
+            "max_rel_rotation": "Maximum rotation relative to the previous head position",
+            "max_rel_translation": "Maximum translation relative to the previous head position",
+            "t1_dice_distance": "Dice score for the overlap of the T1w-based brain mask "
+            "and the b=0 ref mask",
+        },
+    }
+    qc_values = []
+    output_path = Path(output_dir)
+    dwiqc_jsons = output_path.rglob("**/sub-*dwiqc.json")
+
+    for qc_file in dwiqc_jsons:
+        try:
+            with open(qc_file, "r") as qc_json:
+                dwi_qc = json.load(qc_json)["qc_scores"]
+                dwi_qc["participant_id"] = dwi_qc.get("subject_id", "subject")
+            qc_values.append(dwi_qc)
+        except Exception:
+            report_errors.append(1)
+
+    errno = sum(report_errors)
+    if errno:
+        import logging
+
+        logger = logging.getLogger("cli")
+        logger.warning("Errors occurred while generating interactive report summary.")
+    qc_report["subjects"] = qc_values
+    with open(output_path / "dwiqc.json", "w") as project_qc:
+        json.dump(qc_report, project_qc, indent=2)
+
+    return errno
+
+
 if __name__ == "__main__":
     pass
