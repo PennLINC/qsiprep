@@ -1,6 +1,5 @@
 qsiprep
 qsiprep/dataset_description.json
-qsiprep/dwiqc.json
 qsiprep/logs
 qsiprep/logs/CITATION.html
 qsiprep/logs/CITATION.md

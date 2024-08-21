@@ -25,7 +25,6 @@ from pathlib import Path
 from nireports.assembler.report import Report
 
 from .. import config, data
-from ..utils.misc import generate_interactive_report_summary
 
 
 def run_reports(
@@ -79,7 +78,6 @@ def generate_reports(
         subject_list = [subject_list]
 
     errors = []
-    errors += generate_interactive_report_summary(output_dir)
     for subject_label in subject_list:
         # The number of sessions is intentionally not based on session_list but
         # on the total number of sessions, because I want the final derivatives
