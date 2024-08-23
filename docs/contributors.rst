@@ -19,21 +19,6 @@ Patching working repositories
 In order to test new code without rebuilding the Docker image, it is
 possible to mount working repositories as source directories within the
 container.
-The ``qsiprep-docker`` script simplifies this for the most common repositories::
-
-    -f PATH, --patch-qsiprep PATH
-                          working qsiprep repository (default: None)
-    -p PATH, --patch-nipype PATH
-                          working nipype repository (default: None)
-
-For instance, if your repositories are contained in ``$HOME/projects``::
-
-    $ qsiprep-docker -f $HOME/projects/qsiprep/qsiprep \
-                      -p $HOME/projects/nipype/nipype \
-                      -i pennbbl/qsiprep:latest \
-                      $HOME/fullds005 $HOME/dockerout participant
-
-Note the ``-i`` flag allows you to specify an image.
 
 When invoking ``docker`` directly, the mount options must be specified
 with the ``-v`` flag::
@@ -48,12 +33,7 @@ For example, ::
         pennbbl/qsiprep:latest /data /out/out participant \
         -w /out/work/
 
-In order to work directly in the container, pass the ``--shell`` flag to
-``qsiprep-docker``::
-
-    $ qsiprep-docker --shell $HOME/fullds005 $HOME/dockerout participant
-
-This is the equivalent of using ``--entrypoint=bash`` and omitting the qsiprep
+In order to work directly in the container, use ``--entrypoint=bash`` 
 arguments in a ``docker`` command::
 
     $ docker run --rm -v $HOME/fullds005:/data:ro -v $HOME/dockerout:/out \
@@ -111,10 +91,6 @@ repository, located in ``~/projects/qsiprep``: ::
 
 To work in this image, replace ``pennbbl/qsiprep:latest`` with
 ``qsiprep`` in any of the above commands.
-This image may be accessed by the ``qsiprep-docker`` wrapper via the
-``-i`` flag, e.g. ::
-
-    $ qsiprep-docker -i qsiprep --shell
 
 
 Adding new features to the citation boilerplate
