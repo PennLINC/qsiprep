@@ -225,7 +225,6 @@ def init_anat_preproc_wf(
             (reorient_template_to_lps, outputnode, [('out_file', 't1_preproc')]),
         ])  # fmt:skip
 
-        workflow.add_nodes([inputnode])
         return workflow
 
     contrast = config.workflow.anat_modality[:-1]
