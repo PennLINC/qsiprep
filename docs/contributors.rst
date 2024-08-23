@@ -33,7 +33,7 @@ For example, ::
         pennbbl/qsiprep:latest /data /out/out participant \
         -w /out/work/
 
-In order to work directly in the container, use ``--entrypoint=bash`` and omit the qsiprep
+In order to work directly in the container, use ``--entrypoint=bash`` 
 arguments in a ``docker`` command::
 
     $ docker run --rm -v $HOME/fullds005:/data:ro -v $HOME/dockerout:/out \
