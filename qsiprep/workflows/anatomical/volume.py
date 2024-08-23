@@ -199,7 +199,6 @@ def init_anat_preproc_wf(
         ]),
         (get_template, reorient_mask_to_lps, [('mask_file', 'in_file')]),
         (mask_template, reorient_brain_to_lps, [('out_file', 'in_file')]),
-        (inputnode, reference_grid_wf, [('dwi_ref', 'inputnode.input_image')]),
         (reorient_brain_to_lps, reference_grid_wf, [('out_file', 'inputnode.template_image')]),
         (reference_grid_wf, outputnode, [('outputnode.grid_image', 'dwi_sampling_grid')]),
     ])  # fmt:skip
@@ -225,6 +224,7 @@ def init_anat_preproc_wf(
             (reorient_template_to_lps, outputnode, [('out_file', 't1_preproc')]),
         ])  # fmt:skip
 
+        workflow.add_nodes([inputnode])
         return workflow
 
     contrast = config.workflow.anat_modality[:-1]
