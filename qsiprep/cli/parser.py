@@ -630,6 +630,13 @@ def parse_args(args=None, namespace=None):
     parser = _build_parser()
     opts = parser.parse_args(args, namespace)
 
+    # Change anatomical_template based on infant parameter
+    if opts.infant:
+        config.loggers.cli.info(
+            "Infant processing mode enabled. Changing anatomical template to MNIInfant cohort-2."
+        )
+        opts.anatomical_template = "MNIInfant"
+
     if opts.config_file:
         skip = {} if opts.reports_only else {"execution": ("run_uuid",)}
         config.load(opts.config_file, skip=skip, init=False)

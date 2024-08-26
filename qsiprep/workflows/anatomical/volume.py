@@ -169,22 +169,38 @@ def init_anat_preproc_wf(
 
     dwi_only = config.workflow.anat_modality == "none"
 
-    # Make sure we have usable anatomical reference images/masks
-    get_template_image = pe.Node(
+    # XXX: This is a temporary solution until QSIPrep supports flexible output spaces.
+    get_template = pe.Node(
         GetTemplate(
             template_name=config.workflow.anatomical_template,
-            infant_mode=config.workflow.infant,
             anatomical_contrast=config.workflow.anat_modality,
         ),
         name="get_template_image",
+    )
+    mask_template = pe.Node(
+        afni.Calc(expr="a*b", outputtype="NIFTI_GZ"),
+        name="mask_template",
+    )
+    reorient_brain_to_lps = pe.Node(
+        afni.Resample(orientation="RAI", outputtype="NIFTI_GZ"),
+        name="reorient_brain_to_lps",
+    )
+    reorient_mask_to_lps = pe.Node(
+        afni.Resample(orientation="RAI", outputtype="NIFTI_GZ"),
+        name="reorient_mask_to_lps",
     )
 
     # Create the output reference grid_image
     reference_grid_wf = init_output_grid_wf()
     workflow.connect([
-        (get_template_image, reference_grid_wf, [
-            ('template_mask_file', 'inputnode.template_image')]),
-        (reference_grid_wf, outputnode, [('outputnode.grid_image', 'dwi_sampling_grid')])
+        (get_template, mask_template, [
+            ('template_file', 'in_file_a'),
+            ('mask_file', 'in_file_b'),
+        ]),
+        (get_template, reorient_mask_to_lps, [('mask_file', 'in_file')]),
+        (mask_template, reorient_brain_to_lps, [('out_file', 'in_file')]),
+        (reorient_brain_to_lps, reference_grid_wf, [('out_file', 'inputnode.template_image')]),
+        (reference_grid_wf, outputnode, [('outputnode.grid_image', 'dwi_sampling_grid')]),
     ])  # fmt:skip
 
     if dwi_only:
@@ -192,11 +208,22 @@ def init_anat_preproc_wf(
             "No anatomical scans will be processed! Visual reports will show template masks."
         )
         workflow.connect([
-            (get_template_image, outputnode, [
-                ('template_file', 't1_preproc'),
-                ('template_brain_file', 't1_brain'),
-                ('template_mask_file', 't1_mask'),
-                ('template_mask_file', 't1_seg')])])  # fmt:skip
+            (reorient_brain_to_lps, outputnode, [("out_file", "t1_brain")]),
+            (reorient_mask_to_lps, outputnode, [
+                ('out_file', 't1_mask'),
+                ('out_file', 't1_seg'),
+            ]),
+        ])  # fmt:skip
+
+        reorient_template_to_lps = pe.Node(
+            afni.Resample(orientation="RAI", outputtype="NIFTI_GZ"),
+            name="reorient_template_to_lps",
+        )
+        workflow.connect([
+            (get_template, reorient_template_to_lps, [('template_file', 'in_file')]),
+            (reorient_template_to_lps, outputnode, [('out_file', 't1_preproc')]),
+        ])  # fmt:skip
+
         workflow.add_nodes([inputnode])
         return workflow
 
@@ -285,8 +312,9 @@ FreeSurfer version {fs_version}. """.format(
                 ('outputnode.unfatsat', 'input_image')]),
             (anat_normalization_wf, rigid_acpc_resample_unfatsat, [
                 ('outputnode.to_template_rigid_transform', 'transforms')]),
-            (get_template_image, rigid_acpc_resample_unfatsat, [
-                ('template_file', 'reference_image')]),
+            (reorient_brain_to_lps, rigid_acpc_resample_unfatsat, [
+                ('out_file', 'reference_image'),
+            ]),
             (rigid_acpc_resample_unfatsat, outputnode, [('output_image', 't2w_unfatsat')]),
             (rigid_acpc_resample_head, outputnode, [('output_image', 't2_preproc')])])  # fmt:skip
     else:
@@ -340,9 +368,10 @@ FreeSurfer version {fs_version}. """.format(
             ('outputnode.brain_mask', 'inputnode.brain_mask')]),
         (anat_reference_wf, anat_normalization_wf, [
             ('outputnode.bias_corrected', 'inputnode.anatomical_reference')]),
-        (get_template_image, anat_normalization_wf, [
-            ('template_file', 'inputnode.template_image'),
-            ('template_mask_file', 'inputnode.template_mask')]),
+        (reorient_brain_to_lps, anat_normalization_wf, [
+            ('out_file', 'inputnode.template_image'),
+        ]),
+        (reorient_mask_to_lps, anat_normalization_wf, [('out_file', 'inputnode.template_mask')]),
         (anat_normalization_wf, outputnode, [
             ('outputnode.to_template_rigid_transform', 'acpc_transform'),
             ('outputnode.from_template_rigid_transform', 'acpc_inv_transform'),
@@ -360,14 +389,10 @@ FreeSurfer version {fs_version}. """.format(
         (synthseg_anat_wf, rigid_acpc_resample_aseg, [
             ('outputnode.aparc_image', 'input_image')]),
 
-        (get_template_image, rigid_acpc_resample_brain, [
-            ('template_file', 'reference_image')]),
-        (get_template_image, rigid_acpc_resample_mask, [
-            ('template_file', 'reference_image')]),
-        (get_template_image, rigid_acpc_resample_head, [
-            ('template_file', 'reference_image')]),
-        (get_template_image, rigid_acpc_resample_aseg, [
-            ('template_file', 'reference_image')]),
+        (reorient_brain_to_lps, rigid_acpc_resample_brain, [('out_file', 'reference_image')]),
+        (reorient_brain_to_lps, rigid_acpc_resample_mask, [('out_file', 'reference_image')]),
+        (reorient_brain_to_lps, rigid_acpc_resample_head, [('out_file', 'reference_image')]),
+        (reorient_brain_to_lps, rigid_acpc_resample_aseg, [('out_file', 'reference_image')]),
         (anat_normalization_wf, rigid_acpc_resample_brain, [
             ('outputnode.to_template_rigid_transform', 'transforms')]),
         (anat_normalization_wf, rigid_acpc_resample_mask, [

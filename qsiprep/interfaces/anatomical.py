@@ -23,7 +23,6 @@ from nipype.interfaces.base import (
     traits,
 )
 from nipype.utils.filemanip import fname_presuffix
-from pkg_resources import resource_filename as pkgr
 from scipy import ndimage
 from scipy.spatial import distance
 
@@ -196,19 +195,17 @@ def calculate_nonbrain_saturation(head_img, brain_mask_img):
 
 
 class _GetTemplateInputSpec(BaseInterfaceInputSpec):
-    template_name = traits.Str("MNI152NLin2009cAsym", usedefault=True, mandatory=True)
-    t1_file = File(exists=True)
-    t2_file = File(exists=True)
-    mask_file = File(exists=True)
-    infant_mode = traits.Bool(False, usedefault=True)
+    template_name = traits.Enum(
+        "MNI152NLin2009cAsym",
+        "MNIInfant",
+        mandatory=True,
+    )
     anatomical_contrast = traits.Enum("T1w", "T2w", "none")
 
 
 class _GetTemplateOutputSpec(BaseInterfaceInputSpec):
-    template_name = traits.Str()
     template_file = File(exists=True)
-    template_brain_file = File(exists=True)
-    template_mask_file = File(exists=True)
+    mask_file = File(exists=True)
 
 
 class GetTemplate(SimpleInterface):
@@ -216,30 +213,35 @@ class GetTemplate(SimpleInterface):
     output_spec = _GetTemplateOutputSpec
 
     def _run_interface(self, runtime):
-        self._results["template_name"] = self.inputs.template_name
-        contrast_name = self.inputs.anatomical_contrast.lower()
-        if contrast_name == "none":
-            LOGGER.info("Using T1w modality template for ACPC alignment")
-            contrast_name = "t1w"
+        from templateflow.api import get as get_template
 
-        # Cover the cases where the template images are actually in the
-        # qsiprep package. This is for common use cases (MNI2009cAsym and Infant)
-        # and legacy
-        if self.inputs.template_name in KNOWN_TEMPLATES or self.inputs.infant_mode:
-            if not self.inputs.infant_mode:
-                ref_img = pkgr("qsiprep", "data/mni_1mm_%s_lps.nii.gz" % contrast_name)
-                ref_img_brain = pkgr("qsiprep", "data/mni_1mm_%s_lps_brain.nii.gz" % contrast_name)
-                ref_img_mask = pkgr("qsiprep", "data/mni_1mm_t1w_lps_brainmask.nii.gz")
-            else:
-                ref_img = pkgr("qsiprep", "data/mni_1mm_%s_lps_infant.nii.gz" % contrast_name)
-                ref_img_brain = pkgr(
-                    "qsiprep", "data/mni_1mm_%s_lps_brain_infant.nii.gz" % contrast_name
-                )
-                ref_img_mask = pkgr("qsiprep", "data/mni_1mm_t1w_lps_brainmask_infant.nii.gz")
-            self._results["template_file"] = ref_img
-            self._results["template_brain_file"] = ref_img_brain
-            self._results["template_mask_file"] = ref_img_mask
-        else:
-            raise NotImplementedError("Arbitrary templates not available yet")
+        anatomical_contrast = self.inputs.anatomical_contrast
+        if anatomical_contrast == "none":
+            LOGGER.info("Using T1w modality template for ACPC alignment")
+            anatomical_contrast = "T1w"
+
+        template_file = str(
+            get_template(
+                self.inputs.template_name,
+                cohort=[None, "2"],
+                resolution="1",
+                desc=None,
+                suffix=anatomical_contrast,
+                extension=".nii.gz",
+            ),
+        )
+        mask_file = str(
+            get_template(
+                self.inputs.template_name,
+                cohort=[None, "2"],
+                resolution="1",
+                desc="brain",
+                suffix="mask",
+                extension=".nii.gz",
+            ),
+        )
+
+        self._results["template_file"] = template_file
+        self._results["mask_file"] = mask_file
 
         return runtime
