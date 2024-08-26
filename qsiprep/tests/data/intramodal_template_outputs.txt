@@ -1,6 +1,5 @@
 /tmp/twoses/derivatives
 dataset_description.json
-dwiqc.json
 logs
 logs/CITATION.html
 logs/CITATION.md

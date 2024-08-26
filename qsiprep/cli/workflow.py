@@ -45,8 +45,8 @@ def build_workflow(config_file, retval):
     # from niworkflows.utils.misc import check_valid_fs_license
     # from ..utils.bids import check_pipeline_version
     from .. import config
+    from ..reports.core import generate_reports
     from ..utils.misc import check_deps
-    from ..viz.reports import generate_reports
     from ..workflows.base import init_qsiprep_wf
 
     config.load(config_file)
@@ -94,9 +94,9 @@ def build_workflow(config_file, retval):
         )
 
         failed_reports = generate_reports(
-            config.execution.participant_label,
-            config.execution.output_dir,
-            config.execution.run_uuid,
+            subject_list=config.execution.participant_label,
+            output_dir=config.execution.output_dir,
+            run_uuid=config.execution.run_uuid,
             session_list=session_list,
         )
         if failed_reports:

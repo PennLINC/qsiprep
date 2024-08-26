@@ -1,5 +1,4 @@
 dataset_description.json
-dwiqc.json
 logs
 logs/CITATION.bib
 logs/CITATION.html
