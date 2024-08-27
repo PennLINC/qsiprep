@@ -41,9 +41,7 @@ jobs:
       - run: *runinstall
 
   download_drbuddi_rpe_series:
-    docker:
-      - image: cimg/python:3.10.14
-    working_directory: /home/circleci/qsiprep
+    <<: *dockersetup
     steps:
       - checkout
       - restore_cache:
@@ -52,12 +50,12 @@ jobs:
       - run:
           name: Download drbuddi_rpe_series test data
           command: |
-            cd /home/circleci/qsiprep/.circleci
+            cd /src/qsiprep/.circleci
             python get_data.py $PWD/data drbuddi_rpe_series
       - save_cache:
           key: drbuddi_rpe_series-01
           paths:
-            - /home/circleci/qsiprep/.circleci/data/drbuddi_rpe_series
+            - /src/qsiprep/.circleci/data/drbuddi_rpe_series
 
   download_drbuddi_epi:
     <<: *dockersetup

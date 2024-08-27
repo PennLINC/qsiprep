@@ -2,7 +2,7 @@
 
 import os
 import sys
-from unittest.mock import patch
+from unittest.mock import DEFAULT, patch
 
 import pytest
 from nipype import config as nipype_config
@@ -19,6 +19,8 @@ from qsiprep.utils.bids import write_derivative_description
 from qsiprep.viz.reports import generate_reports
 
 nipype_config.enable_debug_mode()
+
+DEFAULT_NUM_CPUS = 4
 
 
 @pytest.mark.integration
@@ -505,8 +507,6 @@ def test_maternal_brain_project(data_dir, output_dir, working_dir):
         "--output-resolution=5",
         "--hmc-model=3dSHORE",
         f"--bids-filter-file={bids_filter}",
-        "--nthreads=4",
-        "--omp-nthreads=4",
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=True)
@@ -541,11 +541,32 @@ def test_forrest_gump(data_dir, output_dir, working_dir):
         "--write-graph",
         "--output-resolution=5",
         f"--bids-filter-file={bids_filter}",
-        "--nthreads=4",
-        "--omp-nthreads=4",
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=True)
+
+
+def _check_arg_specified(argname, arglist):
+    for arg in arglist:
+        if arg.startswith(argname):
+            return True
+    return False
+
+
+def _update_resources(parameters):
+    """We should use all the available CPUs for testing.
+
+    Sometimes a test will set a specific amount of cpus. In that
+    case, the number should be kept. Otherwise, try to read the
+    env variable (specified in each job in config.yml). If
+    this variable doesn't work, just set it to 4.
+    """
+    nthreads = int(os.environ.get("CIRCLECPUS", DEFAULT_NUM_CPUS))
+    if not _check_arg_specified("--nthreads", parameters):
+        parameters.append(f"--nthreads={nthreads}")
+    if not _check_arg_specified("--omp-nthreads", parameters):
+        parameters.append(f"--omp-nthreads={nthreads}")
+    return parameters
 
 
 def _run_and_generate(test_name, parameters, test_main=True):
@@ -555,6 +576,9 @@ def _run_and_generate(test_name, parameters, test_main=True):
     parameters.append("--stop-on-first-crash")
     parameters.append("--notrack")
     parameters.append("-vv")
+
+    # Update resource parameters
+    _update_resources(parameters)
 
     if test_main:
         # This runs, but for some reason doesn't count toward coverage.
