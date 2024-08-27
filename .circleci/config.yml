@@ -41,7 +41,9 @@ jobs:
       - run: *runinstall
 
   download_drbuddi_rpe_series:
-    <<: *dockersetup
+    docker:
+      - image: cimg/python:3.10.14
+    working_directory: /src/qsiprep
     steps:
       - checkout
       - restore_cache:
