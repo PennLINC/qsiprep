@@ -578,7 +578,7 @@ def _run_and_generate(test_name, parameters, test_main=True):
     parameters.append("-vv")
 
     # Update resource parameters
-    _update_resources(parameters)
+    parameters = _update_resources(parameters)
 
     if test_main:
         # This runs, but for some reason doesn't count toward coverage.
