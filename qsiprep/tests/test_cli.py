@@ -183,7 +183,6 @@ def test_drbuddi_rpe(data_dir, output_dir, working_dir):
         "participant",
         f"-w={work_dir}",
         "--sloppy",
-        "--nthreads=4",
         "--anat-modality=none",
         "--denoise-method=none",
         "--b1_biascorrect_stage=none",
@@ -226,7 +225,6 @@ def test_drbuddi_shoreline_epi(data_dir, output_dir, working_dir):
         "--hmc-model=none",
         "--output-resolution=2",
         "--shoreline-iters=1",
-        "--nthreads=1",
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=True)
@@ -261,9 +259,8 @@ def test_drbuddi_tensorline_epi(data_dir, output_dir, working_dir):
         "--b1-biascorrect-stage=none",
         "--pepolar-method=DRBUDDI",
         "--hmc-model=tensor",
-        "--output-resolution=2",
+        "--output-resolution=5",
         "--shoreline-iters=1",
-        "--nthreads=1",
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=True)
@@ -309,7 +306,6 @@ def test_dscsdsi(data_dir, output_dir, working_dir):
         "--hmc-transform=Rigid",
         "--output-resolution=5",
         "--shoreline-iters=1",
-        "--nthreads=1",
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=True)
@@ -352,7 +348,6 @@ def test_dsdti_nofmap(data_dir, output_dir, working_dir):
         "--unringing-method=rpg",
         "--b1-biascorrect-stage=none",
         "--output-resolution=5",
-        "--nthreads=1",
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=True)
@@ -395,7 +390,6 @@ def test_dsdti_synfmap(data_dir, output_dir, working_dir):
         "--force-syn",
         "--b1-biascorrect-stage=final",
         "--output-resolution=5",
-        "--nthreads=1",
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=True)
