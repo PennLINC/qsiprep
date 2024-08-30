@@ -8,8 +8,8 @@ Image tools interfaces
 
 
 """
-from pathlib import Path
 import shutil
+from pathlib import Path
 
 import nibabel as nb
 import nilearn.image as nim
