@@ -394,6 +394,22 @@ jobs:
     steps:
       - run: echo Deploying!
 
+  deploy_pypi:
+    docker:
+      - image: cimg/python:3.10.9
+    working_directory: /tmp/src/qsiprep
+    steps:
+      - checkout
+      - run:
+          name: Update build tools
+          command: pip install --upgrade build twine
+      - run:
+          name: Build QSIPrep
+          command: python -m build
+      - run:
+          name: Upload packages to PyPI
+          command: python -m twine upload -u __token__ -p ${PYPI_PASS} dist/qsiprep*
+
   build_and_deploy:
     environment:
       TZ: "/usr/share/zoneinfo/America/New_York"
@@ -607,5 +623,14 @@ workflows:
           filters:
             branches:
               only: master
+            tags:
+              only: /.*/
+
+      - deploy_pypi:
+          requires:
+            - deployable
+          filters:
+            branches:
+              ignore: /.*/
             tags:
               only: /.*/
