@@ -47,6 +47,7 @@ from ...interfaces import Conform, DerivativesDataSink
 from ...interfaces.anatomical import DesaturateSkull, GetTemplate, VoxelSizeChooser
 from ...interfaces.freesurfer import (
     FixHeaderSynthStrip,
+    MockSynthSeg,
     MockSynthStrip,
     PrepareSynthStripGrid,
     SynthSeg,
@@ -921,7 +922,7 @@ def init_synthstrip_wf(do_padding=False, unfatsat=False, name="synthstrip_wf") -
     else:
         synthstrip = pe.Node(
             MockSynthStrip(),
-            name="synthstrip",
+            name="mocksynthstrip",
         )
 
     mask_to_original_grid = pe.Node(
@@ -977,11 +978,18 @@ def init_synthseg_wf() -> Workflow:
         name="outputnode",
     )
 
-    synthseg = pe.Node(
-        SynthSeg(fast=config.execution.sloppy, num_threads=1),  # Hard code to 1
-        n_procs=config.nipype.omp_nthreads,
-        name="synthseg",
-    )
+    if not config.execution.sloppy:
+        synthseg = pe.Node(
+            SynthSeg(fast=config.execution.sloppy, num_threads=1),  # Hard code to 1
+            n_procs=config.nipype.omp_nthreads,
+            name="synthseg",
+        )
+    else:
+        synthseg = pe.Node(
+            MockSynthSeg(fast=config.execution.sloppy, num_threads=1),  # Hard code to 1
+            n_procs=config.nipype.omp_nthreads,
+            name="mocksynthseg",
+        )
 
     workflow.connect([
         (inputnode, synthseg, [('padded_image', 'input_image')]),
