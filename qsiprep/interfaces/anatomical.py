@@ -8,6 +8,8 @@ Image tools interfaces
 
 
 """
+from pathlib import Path
+import shutil
 
 import nibabel as nb
 import nilearn.image as nim
@@ -220,28 +222,30 @@ class GetTemplate(SimpleInterface):
             LOGGER.info("Using T1w modality template for ACPC alignment")
             anatomical_contrast = "T1w"
 
-        template_file = str(
-            get_template(
-                self.inputs.template_name,
-                cohort=[None, "2"],
-                resolution="1",
-                desc=None,
-                suffix=anatomical_contrast,
-                extension=".nii.gz",
-            ),
+        template_path = get_template(
+            self.inputs.template_name,
+            cohort=[None, "2"],
+            resolution="1",
+            desc=None,
+            suffix=anatomical_contrast,
+            extension=".nii.gz",
         )
-        mask_file = str(
-            get_template(
-                self.inputs.template_name,
-                cohort=[None, "2"],
-                resolution="1",
-                desc="brain",
-                suffix="mask",
-                extension=".nii.gz",
-            ),
+        mask_path = get_template(
+            self.inputs.template_name,
+            cohort=[None, "2"],
+            resolution="1",
+            desc="brain",
+            suffix="mask",
+            extension=".nii.gz",
         )
 
-        self._results["template_file"] = template_file
-        self._results["mask_file"] = mask_file
+        local_template = Path(runtime.cwd) / template_path.name
+        local_mask = Path(runtime.cwd) / mask_path.name
+
+        shutil.copy(template_path, local_template)
+        shutil.copy(mask_path, local_mask)
+
+        self._results["template_file"] = str(local_template)
+        self._results["mask_file"] = str(local_mask)
 
         return runtime

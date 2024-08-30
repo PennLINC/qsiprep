@@ -978,17 +978,11 @@ def init_synthseg_wf() -> Workflow:
         name="outputnode",
     )
 
-    if not config.execution.sloppy:
-        synthseg = pe.Node(
-            SynthSeg(fast=config.execution.sloppy, num_threads=1),  # Hard code to 1
-            n_procs=config.nipype.omp_nthreads,
-            name="synthseg",
-        )
-    else:
-        synthseg = pe.Node(
-            MockSynthSeg(),
-            name="synthseg",
-        )
+    synthseg = pe.Node(
+        SynthSeg(fast=config.execution.sloppy, num_threads=1),  # Hard code to 1
+        n_procs=config.nipype.omp_nthreads,
+        name="synthseg",
+    )
 
     workflow.connect([
         (inputnode, synthseg, [('padded_image', 'input_image')]),

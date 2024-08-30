@@ -580,21 +580,14 @@ class MockSynthStrip(SimpleInterface):
     def _run_interface(self, runtime):
         from nipype.interfaces.fsl import BET
 
-        stripped_file = fname_presuffix(
-            self.inputs.input_image, newpath=runtime.cwd, suffix="betbrain"
-        )
-        masked_file = fname_presuffix(
-            self.inputs.input_image, newpath=runtime.cwd, suffix="betmask"
-        )
         this_bet = BET(
             mask=True,
             in_file=self.inputs.input_image,
-            out_file=stripped_file,
-            mask_file=masked_file,
+            output_type="NIFTI_GZ",
         )
-        _ = this_bet.run()
-        self._results["out_brain"] = stripped_file
-        self._results["out_brain_mask"] = masked_file
+        result = this_bet.run()
+        self._results["out_brain"] = result.outputs.out_file
+        self._results["out_brain_mask"] = result.outputs.mask_file
 
         return runtime
 
