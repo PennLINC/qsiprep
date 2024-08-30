@@ -573,6 +573,32 @@ class FixHeaderSynthStrip(SynthStrip):
         return runtime
 
 
+class MockSynthStrip(SimpleInterface):
+    input_spec = _SynthStripInputSpec
+    output_spec = _SynthStripOutputSpec
+
+    def _run_interface(self, runtime):
+        from nipype.interfaces.fsl import BET
+
+        stripped_file = fname_presuffix(
+            self.inputs.input_image, newpath=runtime.cwd, suffix="betbrain"
+        )
+        masked_file = fname_presuffix(
+            self.inputs.input_image, newpath=runtime.cwd, suffix="betmask"
+        )
+        this_bet = BET(
+            mask=True,
+            in_file=self.inputs.input_image,
+            out_file=stripped_file,
+            mask_file=masked_file,
+        )
+        _ = this_bet.run()
+        self._results["out_brain"] = stripped_file
+        self._results["out_brain_mask"] = masked_file
+
+        return runtime
+
+
 class _SynthSegInputSpec(FSTraitedSpecOpenMP):
     input_image = File(argstr="--i %s", exists=True, mandatory=True)
     num_threads = traits.Int(
@@ -626,3 +652,17 @@ class SynthSeg(FSCommandOpenMP):
     def _num_threads_update(self):
         if self.inputs.num_threads:
             self.inputs.environ.update({"OMP_NUM_THREADS": "1"})
+
+
+class MockSynthSeg(SimpleInterface):
+    """A fake version of synthseg for testing."""
+
+    input_spec = _SynthSegInputSpec
+    output_spec = _SynthSegOutputSpec
+
+    def _run_interface(self, runtime):
+        output_qc = op.join(runtime, "fake_synthseg_qc.csv")
+        with open(output_qc, "w") as qcf:
+            qcf.write("Test QC file\n")
+
+        return super()._run_interface(runtime)
