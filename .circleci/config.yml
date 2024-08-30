@@ -5,7 +5,7 @@ orbs:
 .dockersetup: &dockersetup
   docker:
     - image: pennbbl/qsiprep_build:24.7.4
-  working_directory: /src/qsiprep
+  working_directory: /tmp/src/qsiprep
 
 runinstall: &runinstall
     name: Install qsiprep
@@ -15,8 +15,8 @@ runinstall: &runinstall
         VERSION="$CIRCLE_TAG"
       fi
       git checkout $CIRCLE_BRANCH
-      echo "${VERSION}" > /src/qsiprep/qsiprep/VERSION
-      echo "include qsiprep/VERSION" >> /src/qsiprep/MANIFEST.in
+      echo "${VERSION}" > /tmp/src/qsiprep/qsiprep/VERSION
+      echo "include qsiprep/VERSION" >> /tmp/src/qsiprep/MANIFEST.in
       pip install .[tests] --progress-bar off
 
       # Precaching fonts, set 'Agg' as default backend for matplotlib
@@ -35,13 +35,18 @@ runinstall: &runinstall
 jobs:
 
   build:
-    <<: *dockersetup
+    resource_class: small
+    docker:
+      - image: cimg/python:3.10.9
+    working_directory: /tmp/src/qsiprep
     steps:
       - checkout
       - run: *runinstall
 
   download_drbuddi_rpe_series:
-    <<: *dockersetup
+    docker:
+      - image: cimg/python:3.10.9
+    working_directory: /tmp/src/qsiprep
     steps:
       - checkout
       - restore_cache:
@@ -50,15 +55,18 @@ jobs:
       - run:
           name: Download drbuddi_rpe_series test data
           command: |
-            cd /src/qsiprep/.circleci
+            cd /tmp/src/qsiprep/.circleci
             python get_data.py $PWD/data drbuddi_rpe_series
       - save_cache:
           key: drbuddi_rpe_series-01
           paths:
-            - /src/qsiprep/.circleci/data/drbuddi_rpe_series
+            - /tmp/src/qsiprep/.circleci/data/drbuddi_rpe_series
 
   download_drbuddi_epi:
-    <<: *dockersetup
+    resource_class: small
+    docker:
+      - image: cimg/python:3.10.9
+    working_directory: /tmp/src/qsiprep
     steps:
       - checkout
       - restore_cache:
@@ -67,15 +75,18 @@ jobs:
       - run:
           name: Download drbuddi_epi test data
           command: |
-            cd /src/qsiprep/.circleci
+            cd /tmp/src/qsiprep/.circleci
             python get_data.py $PWD/data drbuddi_epi
       - save_cache:
           key: drbuddi_epi-01
           paths:
-            - /src/qsiprep/.circleci/data/drbuddi_epi
+            - /tmp/src/qsiprep/.circleci/data/drbuddi_epi
 
   download_DSDTI:
-    <<: *dockersetup
+    resource_class: small
+    docker:
+      - image: cimg/python:3.10.9
+    working_directory: /tmp/src/qsiprep
     steps:
       - checkout
       - restore_cache:
@@ -84,15 +95,18 @@ jobs:
       - run:
           name: Download DSDTI test data
           command: |
-            cd /src/qsiprep/.circleci
+            cd /tmp/src/qsiprep/.circleci
             python get_data.py $PWD/data DSDTI
       - save_cache:
           key: DSDTI-01
           paths:
-            - /src/qsiprep/.circleci/data/DSDTI
+            - /tmp/src/qsiprep/.circleci/data/DSDTI
 
   download_DSCSDSI:
-    <<: *dockersetup
+    resource_class: small
+    docker:
+      - image: cimg/python:3.10.9
+    working_directory: /tmp/src/qsiprep
     steps:
       - checkout
       - restore_cache:
@@ -101,15 +115,18 @@ jobs:
       - run:
           name: Download DSCSDSI test data
           command: |
-            cd /src/qsiprep/.circleci
+            cd /tmp/src/qsiprep/.circleci
             python get_data.py $PWD/data DSCSDSI
       - save_cache:
           key: DSCSDSI-01
           paths:
-            - /src/qsiprep/.circleci/data/DSCSDSI
+            - /tmp/src/qsiprep/.circleci/data/DSCSDSI
 
   download_twoses:
-    <<: *dockersetup
+    resource_class: small
+    docker:
+      - image: cimg/python:3.10.9
+    working_directory: /tmp/src/qsiprep
     steps:
       - checkout
       - restore_cache:
@@ -118,12 +135,12 @@ jobs:
       - run:
           name: Download twoses test data
           command: |
-            cd /src/qsiprep/.circleci
+            cd /tmp/src/qsiprep/.circleci
             python get_data.py $PWD/data twoses
       - save_cache:
           key: twoses-01
           paths:
-            - /src/qsiprep/.circleci/data/twoses
+            - /tmp/src/qsiprep/.circleci/data/twoses
 
   DSCSDSI:
     resource_class: large
@@ -139,18 +156,18 @@ jobs:
           name: Run TENSORLine with epi fmaps and DRBUDDI
           no_output_timeout: 2h
           command: |
-            pytest -rP -o log_cli=true -m "dscsdsi" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
-            mkdir /src/coverage
-            mv /src/qsiprep/.coverage /src/coverage/.coverage.dscsdsi
+            pytest -rP -o log_cli=true -m "dscsdsi" --cov-config=/tmp/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/tmp/src/qsiprep/.circleci/data --output_dir=/tmp/src/qsiprep/.circleci/out --working_dir=/tmp/src/qsiprep/.circleci/work qsiprep
+            mkdir /tmp/src/coverage
+            mv /tmp/src/qsiprep/.coverage /tmp/src/coverage/.coverage.dscsdsi
             # remove nifti files before uploading artifacts
-            find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
-            find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+            find /tmp/src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /tmp/src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
       - persist_to_workspace:
-          root: /src/coverage/
+          root: /tmp/src/coverage/
           paths:
             - .coverage.dscsdsi
       - store_artifacts:
-          path: /src/qsiprep/.circleci/out/dscsdsi/
+          path: /tmp/src/qsiprep/.circleci/out/dscsdsi/
 
   DSDTI_nofmap:
     environment:
@@ -166,18 +183,18 @@ jobs:
           name: Run DTI with no fieldmap
           no_output_timeout: 1h
           command: |
-            pytest -rP -o log_cli=true -m "dsdti_nofmap" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
-            mkdir /src/coverage
-            mv /src/qsiprep/.coverage /src/coverage/.coverage.dsdti_nofmap
+            pytest -rP -o log_cli=true -m "dsdti_nofmap" --cov-config=/tmp/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/tmp/src/qsiprep/.circleci/data --output_dir=/tmp/src/qsiprep/.circleci/out --working_dir=/tmp/src/qsiprep/.circleci/work qsiprep
+            mkdir /tmp/src/coverage
+            mv /tmp/src/qsiprep/.coverage /tmp/src/coverage/.coverage.dsdti_nofmap
             # remove nifti files before uploading artifacts
-            find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
-            find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+            find /tmp/src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /tmp/src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
       - persist_to_workspace:
-          root: /src/coverage/
+          root: /tmp/src/coverage/
           paths:
             - .coverage.dsdti_nofmap
       - store_artifacts:
-          path: /src/qsiprep/.circleci/out/dsdti_nofmap/
+          path: /tmp/src/qsiprep/.circleci/out/dsdti_nofmap/
 
   DSDTI_synfmap:
     resource_class: large
@@ -193,18 +210,18 @@ jobs:
           name: Run DTI with SyN SDC
           no_output_timeout: 1h
           command: |
-            pytest -rP -o log_cli=true -m "dsdti_synfmap" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
-            mkdir /src/coverage
-            mv /src/qsiprep/.coverage /src/coverage/.coverage.dsdti_synfmap
+            pytest -rP -o log_cli=true -m "dsdti_synfmap" --cov-config=/tmp/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/tmp/src/qsiprep/.circleci/data --output_dir=/tmp/src/qsiprep/.circleci/out --working_dir=/tmp/src/qsiprep/.circleci/work qsiprep
+            mkdir /tmp/src/coverage
+            mv /tmp/src/qsiprep/.coverage /tmp/src/coverage/.coverage.dsdti_synfmap
             # remove nifti files before uploading artifacts
-            find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
-            find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+            find /tmp/src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /tmp/src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
       - persist_to_workspace:
-          root: /src/coverage/
+          root: /tmp/src/coverage/
           paths:
             - .coverage.dsdti_synfmap
       - store_artifacts:
-          path: /src/qsiprep/.circleci/out/dsdti_synfmap/
+          path: /tmp/src/qsiprep/.circleci/out/dsdti_synfmap/
 
   DRBUDDI_TENSORLine_EPI:
     resource_class: large
@@ -220,18 +237,18 @@ jobs:
           name: Run TENSORLine with epi fmaps and DRBUDDI
           no_output_timeout: 2h
           command: |
-            pytest -rP -o log_cli=true -m "drbuddi_tensorline_epi" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
-            mkdir /src/coverage
-            mv /src/qsiprep/.coverage /src/coverage/.coverage.drbuddi_tensorline_epi
+            pytest -rP -o log_cli=true -m "drbuddi_tensorline_epi" --cov-config=/tmp/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/tmp/src/qsiprep/.circleci/data --output_dir=/tmp/src/qsiprep/.circleci/out --working_dir=/tmp/src/qsiprep/.circleci/work qsiprep
+            mkdir /tmp/src/coverage
+            mv /tmp/src/qsiprep/.coverage /tmp/src/coverage/.coverage.drbuddi_tensorline_epi
             # remove nifti files before uploading artifacts
-            find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
-            find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+            find /tmp/src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /tmp/src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
       - persist_to_workspace:
-          root: /src/coverage/
+          root: /tmp/src/coverage/
           paths:
             - .coverage.drbuddi_tensorline_epi
       - store_artifacts:
-          path: /src/qsiprep/.circleci/out/drbuddi_tensorline_epi/
+          path: /tmp/src/qsiprep/.circleci/out/drbuddi_tensorline_epi/
 
   DRBUDDI_SHORELine_EPI:
     resource_class: large
@@ -247,18 +264,18 @@ jobs:
           name: Run SHORELine with epi fmaps and DRBUDDI
           no_output_timeout: 2h
           command: |
-            pytest -rP -o log_cli=true -m "drbuddi_shoreline_epi" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
-            mkdir /src/coverage
-            mv /src/qsiprep/.coverage /src/coverage/.coverage.drbuddi_shoreline_epi
+            pytest -rP -o log_cli=true -m "drbuddi_shoreline_epi" --cov-config=/tmp/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/tmp/src/qsiprep/.circleci/data --output_dir=/tmp/src/qsiprep/.circleci/out --working_dir=/tmp/src/qsiprep/.circleci/work qsiprep
+            mkdir /tmp/src/coverage
+            mv /tmp/src/qsiprep/.coverage /tmp/src/coverage/.coverage.drbuddi_shoreline_epi
             # remove nifti files before uploading artifacts
-            find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
-            find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+            find /tmp/src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /tmp/src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
       - persist_to_workspace:
-          root: /src/coverage/
+          root: /tmp/src/coverage/
           paths:
             - .coverage.drbuddi_shoreline_epi
       - store_artifacts:
-          path: /src/qsiprep/.circleci/out/drbuddi_shoreline_epi/
+          path: /tmp/src/qsiprep/.circleci/out/drbuddi_shoreline_epi/
 
   DRBUDDI_eddy_rpe_series:
     resource_class: large
@@ -274,18 +291,18 @@ jobs:
           name: Run Eddy with rpe series fmaps and DRBUDDI
           no_output_timeout: 3h
           command: |
-            pytest -rP -o log_cli=true -m "drbuddi_rpe" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
-            mkdir /src/coverage
-            mv /src/qsiprep/.coverage /src/coverage/.coverage.drbuddi_rpe
+            pytest -rP -o log_cli=true -m "drbuddi_rpe" --cov-config=/tmp/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/tmp/src/qsiprep/.circleci/data --output_dir=/tmp/src/qsiprep/.circleci/out --working_dir=/tmp/src/qsiprep/.circleci/work qsiprep
+            mkdir /tmp/src/coverage
+            mv /tmp/src/qsiprep/.coverage /tmp/src/coverage/.coverage.drbuddi_rpe
             # remove nifti files before uploading artifacts
-            find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
-            find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+            find /tmp/src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /tmp/src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
       - persist_to_workspace:
-          root: /src/coverage/
+          root: /tmp/src/coverage/
           paths:
             - .coverage.drbuddi_rpe
       - store_artifacts:
-          path: /src/qsiprep/.circleci/out/drbuddi_rpe/
+          path: /tmp/src/qsiprep/.circleci/out/drbuddi_rpe/
 
   maternal_brain_project:
     resource_class: xlarge
@@ -299,18 +316,18 @@ jobs:
           name: Run QSIPrep on multi-shell dataset with GRE field maps
           no_output_timeout: 3h
           command: |
-            pytest -rP -o log_cli=true -m "maternal_brain_project" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
-            mkdir /src/coverage
-            mv /src/qsiprep/.coverage /src/coverage/.coverage.maternal_brain_project
+            pytest -rP -o log_cli=true -m "maternal_brain_project" --cov-config=/tmp/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/tmp/src/qsiprep/.circleci/data --output_dir=/tmp/src/qsiprep/.circleci/out --working_dir=/tmp/src/qsiprep/.circleci/work qsiprep
+            mkdir /tmp/src/coverage
+            mv /tmp/src/qsiprep/.coverage /tmp/src/coverage/.coverage.maternal_brain_project
             # remove nifti files before uploading artifacts
-            find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
-            find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+            find /tmp/src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /tmp/src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
       - persist_to_workspace:
-          root: /src/coverage/
+          root: /tmp/src/coverage/
           paths:
             - .coverage.maternal_brain_project
       - store_artifacts:
-          path: /src/qsiprep/.circleci/out/maternal_brain_project/
+          path: /tmp/src/qsiprep/.circleci/out/maternal_brain_project/
 
   forrest_gump:
     resource_class: xlarge
@@ -324,18 +341,18 @@ jobs:
           name: Run QSIPrep on single-shell dataset with GRE field maps
           no_output_timeout: 3h
           command: |
-            pytest -rP -o log_cli=true -m "forrest_gump" --cov-config=/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/src/qsiprep/.circleci/data --output_dir=/src/qsiprep/.circleci/out --working_dir=/src/qsiprep/.circleci/work qsiprep
-            mkdir /src/coverage
-            mv /src/qsiprep/.coverage /src/coverage/.coverage.forrest_gump
+            pytest -rP -o log_cli=true -m "forrest_gump" --cov-config=/tmp/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/tmp/src/qsiprep/.circleci/data --output_dir=/tmp/src/qsiprep/.circleci/out --working_dir=/tmp/src/qsiprep/.circleci/work qsiprep
+            mkdir /tmp/src/coverage
+            mv /tmp/src/qsiprep/.coverage /tmp/src/coverage/.coverage.forrest_gump
             # remove nifti files before uploading artifacts
-            find /src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
-            find /src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+            find /tmp/src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /tmp/src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
       - persist_to_workspace:
-          root: /src/coverage/
+          root: /tmp/src/coverage/
           paths:
             - .coverage.forrest_gump
       - store_artifacts:
-          path: /src/qsiprep/.circleci/out/forrest_gump/
+          path: /tmp/src/qsiprep/.circleci/out/forrest_gump/
 
   IntramodalTemplate:
     resource_class: large
@@ -370,22 +387,25 @@ jobs:
             bash MultiT1w.sh
 
   merge_coverage:
-    <<: *dockersetup
+    resource_class: small
+    docker:
+      - image: cimg/python:3.10.9
+    working_directory: /tmp/src/qsiprep
     steps:
       - checkout
       - attach_workspace:
-          at: /src/coverage
+          at: /tmp/src/coverage
       - run: *runinstall
       - run:
           name: Merge coverage files
           command: |
-            cd /src/coverage/
+            cd /tmp/src/coverage/
             coverage combine
             coverage xml
       - store_artifacts:
-          path: /src/coverage
+          path: /tmp/src/coverage
       - codecov/upload:
-          file: /src/coverage/coverage.xml
+          file: /tmp/src/coverage/coverage.xml
 
   deployable:
     resource_class: small
@@ -395,6 +415,7 @@ jobs:
       - run: echo Deploying!
 
   deploy_pypi:
+    resource_class: small
     docker:
       - image: cimg/python:3.10.9
     working_directory: /tmp/src/qsiprep
