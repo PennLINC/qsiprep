@@ -47,7 +47,6 @@ from ...interfaces import Conform, DerivativesDataSink
 from ...interfaces.anatomical import DesaturateSkull, GetTemplate, VoxelSizeChooser
 from ...interfaces.freesurfer import (
     FixHeaderSynthStrip,
-    MockSynthSeg,
     MockSynthStrip,
     PrepareSynthStripGrid,
     SynthSeg,
