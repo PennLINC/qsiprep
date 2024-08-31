@@ -25,7 +25,7 @@ runinstall: &runinstall
 
       # Write the config file
       sudo mkdir /root/.nipype
-      chmod 777 /root/.nipype
+      sudo chmod 777 /root/.nipype
       CFG=/root/.nipype/nipype.cfg
       printf "[execution]\nstop_on_first_crash = true\n" > ${CFG}
       echo "poll_sleep_duration = 0.01" >> ${CFG}
