@@ -24,12 +24,13 @@ runinstall: &runinstall
       sed -i 's/\(backend *: \).*$/\1Agg/g' $( python -c "import matplotlib; print(matplotlib.matplotlib_fname())" )
 
       # Write the config file
-      mkdir /root/.nipype
+      sudo mkdir /root/.nipype
+      chmod 777 /root/.nipype
       CFG=/root/.nipype/nipype.cfg
       printf "[execution]\nstop_on_first_crash = true\n" > ${CFG}
       echo "poll_sleep_duration = 0.01" >> ${CFG}
       echo "hash_method = content" >> ${CFG}
-      ln -s /home/qsiprep/.dipy /root/.dipy
+      # ln -s /home/qsiprep/.dipy /root/.dipy
 
 
 jobs:
