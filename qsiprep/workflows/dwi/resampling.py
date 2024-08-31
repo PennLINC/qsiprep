@@ -184,7 +184,8 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
     # get composite warps and composed affines for warping and rotating
     compose_transforms = pe.Node(ComposeTransforms(), name="compose_transforms")
     get_interpolation = pe.Node(
-        ChooseInterpolator(output_resolution=output_resolution), name="get_interpolation"
+        ChooseInterpolator(sloppy=config.execution.sloppy, output_resolution=output_resolution),
+        name="get_interpolation",
     )
     dwi_transform = pe.MapNode(
         ants.ApplyTransforms(float=True),

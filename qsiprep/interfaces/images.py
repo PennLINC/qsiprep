@@ -477,6 +477,7 @@ class ConformDwi(SimpleInterface):
 class _ChooseInterpolatorInputSpec(BaseInterfaceInputSpec):
     dwi_files = InputMultiObject(File(exists=True), mandatory=True)
     output_resolution = traits.Float(mandatory=True)
+    sloppy = traits.Bool(False, usedefault=True)
 
 
 class _ChooseInterpolatorOutputSpec(TraitedSpec):
@@ -490,6 +491,10 @@ class ChooseInterpolator(SimpleInterface):
     output_spec = _ChooseInterpolatorOutputSpec
 
     def _run_interface(self, runtime):
+        if self.inputs.sloppy:
+            self._results["interpolation_method"] = "NearestNeighbor"
+            LOGGER.warning("Using NN interpolation for sloppy mode")
+            return runtime
         output_resolution = np.array([self.inputs.output_resolution] * 3)
         interpolator = "LanczosWindowedSinc"
         for input_file in self.inputs.dwi_files:

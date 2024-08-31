@@ -178,7 +178,12 @@ def init_dwi_hmc_wf(
 
     # Warp the modeled images into non-motion-corrected space
     uncorrect_model_images = pe.MapNode(
-        ants.ApplyTransforms(invert_transform_flags=[True], interpolation="LanczosWindowedSinc"),
+        ants.ApplyTransforms(
+            invert_transform_flags=[True],
+            interpolation=(
+                "LanczosWindowedSinc" if not config.execution.sloppy else "NearestNeighbor"
+            ),
+        ),
         iterfield=["input_image", "reference_image", "transforms"],
         name="uncorrect_model_images",
     )
@@ -238,7 +243,7 @@ def linear_alignment_workflow(transform="Rigid", iternum=0, omp_nthreads=1):
         ),
         name="outputnode",
     )
-    precision = "coarse" if config.execution.sloppy else "precise"
+    precision = "sloppy" if config.execution.sloppy else "precise"
     ants_settings = pkgrf(
         "qsiprep",
         "data/shoreline_{precision}_{transform}.json".format(
@@ -484,7 +489,7 @@ def init_hmc_model_iteration_wf(name="hmc_model_iter0"):
         ),
         name="outputnode",
     )
-    precision = "coarse" if config.execution.sloppy else "precise"
+    precision = "sloppy" if config.execution.sloppy else "precise"
     ants_settings = pkgrf(
         "qsiprep",
         "data/shoreline_{precision}_{transform}.json".format(

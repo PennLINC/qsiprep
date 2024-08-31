@@ -43,7 +43,7 @@ LOGGER = logging.getLogger("nipype.interface")
 
 SLOPPY_DRBUDDI = (
     "--DRBUDDI_stage "
-    "\[learning_rate=\{0.3\},cfs=\{10:4:2\},field_smoothing=\{9:0\},"
+    "\[learning_rate=\{0.4\},cfs=\{4:2:1\},field_smoothing=\{9:0\},"
     "metrics=\{MSJac:CC\},restrict_constrain=\{1:1\}\] "
 )
 
