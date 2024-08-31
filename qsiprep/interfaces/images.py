@@ -481,7 +481,7 @@ class _ChooseInterpolatorInputSpec(BaseInterfaceInputSpec):
 
 
 class _ChooseInterpolatorOutputSpec(TraitedSpec):
-    interpolation_method = traits.Enum("LanczosWindowedSinc", "BSpline")
+    interpolation_method = traits.Enum("LanczosWindowedSinc", "BSpline", "NearestNeighbor")
 
 
 class ChooseInterpolator(SimpleInterface):
