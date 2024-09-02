@@ -47,6 +47,8 @@ from ...interfaces import Conform, DerivativesDataSink
 from ...interfaces.anatomical import DesaturateSkull, GetTemplate, VoxelSizeChooser
 from ...interfaces.freesurfer import (
     FixHeaderSynthStrip,
+    MockSynthSeg,
+    MockSynthStrip,
     PrepareSynthStripGrid,
     SynthSeg,
 )
@@ -911,11 +913,18 @@ def init_synthstrip_wf(do_padding=False, unfatsat=False, name="synthstrip_wf") -
         name="outputnode",
     )
 
-    synthstrip = pe.Node(
-        FixHeaderSynthStrip(),  # Threads are always fixed to 1 in the run
-        name="synthstrip",
-        n_procs=config.nipype.omp_nthreads,
-    )
+    if not config.execution.sloppy:
+        synthstrip = pe.Node(
+            FixHeaderSynthStrip(),  # Threads are always fixed to 1 in the run
+            name="synthstrip",
+            n_procs=config.nipype.omp_nthreads,
+        )
+    else:
+        synthstrip = pe.Node(
+            MockSynthStrip(),
+            name="mocksynthstrip",
+        )
+
     mask_to_original_grid = pe.Node(
         ants.ApplyTransforms(
             dimension=3, transforms=["identity"], interpolation="NearestNeighbor"
@@ -969,11 +978,18 @@ def init_synthseg_wf() -> Workflow:
         name="outputnode",
     )
 
-    synthseg = pe.Node(
-        SynthSeg(fast=config.execution.sloppy, num_threads=1),  # Hard code to 1
-        n_procs=config.nipype.omp_nthreads,
-        name="synthseg",
-    )
+    if not config.execution.sloppy:
+        synthseg = pe.Node(
+            SynthSeg(fast=config.execution.sloppy, num_threads=1),  # Hard code to 1
+            n_procs=config.nipype.omp_nthreads,
+            name="synthseg",
+        )
+    else:
+        synthseg = pe.Node(
+            MockSynthSeg(fast=config.execution.sloppy, num_threads=1),  # Hard code to 1
+            n_procs=config.nipype.omp_nthreads,
+            name="mocksynthseg",
+        )
 
     workflow.connect([
         (inputnode, synthseg, [('padded_image', 'input_image')]),

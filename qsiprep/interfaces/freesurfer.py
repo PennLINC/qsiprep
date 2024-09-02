@@ -41,6 +41,7 @@ from nipype.interfaces.freesurfer.base import FSCommandOpenMP, FSTraitedSpec
 from nipype.interfaces.freesurfer.utils import LTAConvert
 from nipype.utils.filemanip import copyfile, filename_to_list, fname_presuffix
 from niworkflows.utils.images import _copyxform
+from scipy import ndimage
 from scipy.ndimage.morphology import binary_fill_holes
 from skimage import morphology as sim
 
@@ -573,6 +574,25 @@ class FixHeaderSynthStrip(SynthStrip):
         return runtime
 
 
+class MockSynthStrip(SimpleInterface):
+    input_spec = _SynthStripInputSpec
+    output_spec = _SynthStripOutputSpec
+
+    def _run_interface(self, runtime):
+        from nipype.interfaces.fsl import BET
+
+        this_bet = BET(
+            mask=True,
+            in_file=self.inputs.input_image,
+            output_type="NIFTI_GZ",
+        )
+        result = this_bet.run()
+        self._results["out_brain"] = result.outputs.out_file
+        self._results["out_brain_mask"] = result.outputs.mask_file
+
+        return runtime
+
+
 class _SynthSegInputSpec(FSTraitedSpecOpenMP):
     input_image = File(argstr="--i %s", exists=True, mandatory=True)
     num_threads = traits.Int(
@@ -626,3 +646,38 @@ class SynthSeg(FSCommandOpenMP):
     def _num_threads_update(self):
         if self.inputs.num_threads:
             self.inputs.environ.update({"OMP_NUM_THREADS": "1"})
+
+
+class MockSynthSeg(SimpleInterface):
+    """A fake version of synthseg for testing."""
+
+    input_spec = _SynthSegInputSpec
+    output_spec = _SynthSegOutputSpec
+
+    def _run_interface(self, runtime):
+        from nipype.interfaces.fsl import BET
+
+        output_qc = op.join(runtime.cwd, "fake_synthseg_qc.csv")
+        with open(output_qc, "w") as qcf:
+            qcf.write("Test QC file\n")
+
+        # Get a brain mask
+        this_bet = BET(
+            mask=True,
+            in_file=self.inputs.input_image,
+            output_type="NIFTI_GZ",
+        )
+        result = this_bet.run()
+        self._results["out_post"] = result.outputs.out_file
+
+        # Make a fake segmentation
+        img = nb.load(result.outputs.mask_file)
+        orig_mask = img.get_fdata() > 0
+        eroded1 = ndimage.binary_erosion(orig_mask, iterations=3)
+        eroded2 = ndimage.binary_erosion(eroded1, iterations=3)
+        final = orig_mask.astype(int) + eroded1 + eroded2
+        out_img = nb.Nifti1Image(final, img.affine, header=img.header)
+        out_fname = fname_presuffix(self.inputs.input_image, suffix="_dseg", newpath=runtime.cwd)
+        out_img.to_filename(out_fname)
+        self._results["out_seg"] = out_fname
+        return runtime

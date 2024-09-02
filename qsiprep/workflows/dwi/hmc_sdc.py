@@ -180,7 +180,12 @@ def init_qsiprep_hmcsdc_wf(
 
         # apply the head motion correction transforms
         apply_hmc_transforms = pe.MapNode(
-            ants.ApplyTransforms(dimension=3, interpolation="LanczosWindowedSinc"),
+            ants.ApplyTransforms(
+                dimension=3,
+                interpolation=(
+                    "LanczosWindowedSinc" if not config.execution.sloppy else "NearestNeighbor"
+                ),
+            ),
             iterfield=["input_image", "reference_image", "transforms"],
             name="uncorrect_model_images",
         )
