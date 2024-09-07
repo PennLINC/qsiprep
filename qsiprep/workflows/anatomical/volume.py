@@ -32,7 +32,7 @@ Anatomical reference preprocessing workflows
 
 """
 
-from nipype.interfaces import afni, ants, mrtrix3
+from nipype.interfaces import afni, ants, freesurfer, mrtrix3
 from nipype.interfaces import utility as niu
 from nipype.interfaces.ants import BrainExtraction, N4BiasFieldCorrection
 from nipype.interfaces.base import traits
@@ -54,6 +54,7 @@ from ...interfaces.freesurfer import (
 )
 from ...interfaces.itk import AffineToRigid, DisassembleTransform
 from ...interfaces.niworkflows import RobustMNINormalizationRPT
+from ...interfaces.synb0 import get_synb0_atlas
 from ...utils.misc import fix_multi_source_name
 
 ANTS_VERSION = BrainExtraction().version or "<ver>"
@@ -135,6 +136,8 @@ def init_anat_preproc_wf(
         ANTs-compatible affine-and-warp transform file (inverse)
     t1_resampling_grid
         Image of the preprocessed t1 to be used as the reference output for dwis
+    t1_for_synb0
+        T1w image to be used for synb0-DISCO (if selected)
 
     """
 
@@ -858,6 +861,80 @@ estimated via symmetric nonlinear registration (SyN) using antsRegistration. """
         ])  # fmt:skip
 
     workflow.__desc__ = desc
+    return workflow
+
+
+def init_synb0_anat_wf(name="synb0_anat_wf") -> Workflow:
+    """Creates a T1w image that has been prepared/scaled for synb0 disco.
+
+    The steps come from the normalize_T1.sh script in v3.1 of Synb0-DISCO
+
+    Inputs
+    ------
+    t1w_brain_acpc
+        T1-weighted structural image to skull-strip
+
+    Outputs
+    -------
+    t1w_brain_acpc_nu
+        Full resolution, scaled brain image
+    t1w_brain_acpc_nu_2_5
+        The ``t1w_brain_acpc_nu`` image resampled into SynB0-DISCO's
+        input 2.5mm grid.
+
+    """
+    workflow = Workflow(name=name)
+    inputnode = pe.Node(niu.IdentityInterface(fields=["t1w_brain_acpc"]), name="inputnode")
+    outputnode = pe.Node(
+        niu.IdentityInterface(fields=["t1w_brain_acpc_nu", "t1w_brain_acpc_nu_2_5"]),
+        name="outputnode",
+    )
+
+    # mri_convert $JOB_PATH/T1.nii.gz $JOB_PATH/T1.mgz
+    convert_to_mgz = pe.Node(
+        freesurfer.MRIConvert(out_type="mgz"),
+        name="convert_to_mgz",
+    )
+
+    # mri_nu_correct.mni --i $JOB_PATH/T1.mgz --o $JOB_PATH/T1_N3.mgz --n 2
+    nu_mni = pe.Node(
+        freesurfer.MNIBiasCorrection(iterations=2),
+        name="nu_mni",
+    )
+
+    # mri_normalize -g 1 -mprage $JOB_PATH/T1_N3.mgz $JOB_PATH/T1_norm.mgz
+    mri_normalize = pe.Node(
+        freesurfer.Normalize(gradient=1, args="-mprage", out_file="T1_norm.mgz"),
+        name="mri_normalize",
+    )
+
+    # mri_convert $JOB_PATH/T1_norm.mgz $T1_NORM_PATH
+    convert_to_nii = pe.Node(
+        freesurfer.MRIConvert(out_type="niigz"),
+        name="convert_to_nii",
+    )
+
+    # From prepare_input.sh:
+    # "antsApplyTransforms -d 3 -i $T1_NORM_PATH -r $T1_ATLAS_2_5_PATH \
+    #   -n BSpline -t "$ANTS_OUT"0GenericAffine.mat -o $T1_NORM_LIN_ATLAS_2_5_PATH"
+    resample_to_model_grid = pe.Node(
+        ants.ApplyTransforms(
+            reference_image=get_synb0_atlas(masked=True, res="low"),
+            dimension=3,
+            interpolation="BSpline",
+            transforms="identity",
+        ),
+        name="resample_to_model_grid",
+    )
+    workflow.connect([
+        (inputnode, convert_to_mgz, [('t1w_brain_acpc', 'in_file')]),
+        (convert_to_mgz, nu_mni, [('out_file', 'in_file')]),
+        (nu_mni, mri_normalize, [('out_file', 'in_file')]),
+        (mri_normalize, convert_to_nii, [('out_file', 'in_file')]),
+        (convert_to_nii, outputnode, [('out_file', 't1w_brain_acpc_nu')]),
+        (convert_to_nii, resample_to_model_grid, [('out_file', 'input_image')]),
+        (resample_to_model_grid, outputnode, [('output_image', 't1w_brain_acpc_nu_2_5')])
+    ])  # fmt:skip
     return workflow
 
 
