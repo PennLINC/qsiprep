@@ -17,8 +17,13 @@ One way to process these data would be to call ``qsiprep`` like this::
 
   qsiprep \
     /path/to/inputs /path/to/outputs participant \
-    --output-resolution 1.2 \
+    --output-resolution X \
     --fs-license-file /path/to/license.txt
+
+.. warning::
+   The above example sets the ``--output-resolution`` to ``X``, where in
+   real usage this number should be set to a value in millimeters.
+   See :ref:`output_resolution` for specifics.
 
 
 Grouping scans
@@ -53,15 +58,14 @@ Specifying outputs
 ==================
 
 .. note::
-   This section covers ``--output-resolution 1.2``, and
+   This section covers ``--output-resolution X``, and
    ``--skip-t1-based-spatial-normalization``.
 
 Unlike with fMRI, which can be coregistered to a T1w image and warped to a
 template using the T1w image's spatial normalization, the T1w images do not
 contain enough contrast to accurately align white matter structures to a
 template. For this reason, spatial normalization is typically done *after*
-models are fit. Therefore we omit the ``--output-spaces`` argument from
-preprocessing: i.e. **no template warping takes place by default**.
+models are fit.
 
 All outputs will be registered to the T1w image (or the
 AC-PC aligned b=0 template if ``--dwi-only`` was specified) but will have
@@ -79,6 +83,10 @@ brain graphs. If you want to save ~20 minutes of computation time, this
 normalization can be disabled with the
 ``--skip-t1-based-spatial-normalization`` option.
 
+.. _output_resolution:
+Output Resolution and Resampling
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
 The ``--output-resolution`` argument determines the spatial resolution of the
 preprocessed dwi series. You can specify the resolution of the original data
 or choose to upsample the dwi to a higher spatial resolution. Some
@@ -87,7 +95,7 @@ your output to at least 1.3mm resolution. By choosing this resolution here,
 it means your data will only be interpolated once: head motion correction,
 susceptibility distortion correction, coregistration and upsampling will be
 done in a single step. If your are upsampling your data by more than 10%,
-QSIPrep will use BSpline interpolation instead of Lanczos windowed sinc
+QSIPrep will use Linear interpolation instead of Lanczos windowed Sinc
 interpolation.
 
 
