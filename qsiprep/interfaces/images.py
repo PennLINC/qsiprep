@@ -501,8 +501,8 @@ class ChooseInterpolator(SimpleInterface):
             resolution_cutoff = 0.9 * np.array(nb.load(input_file).header.get_zooms()[:3])
             print(output_resolution, resolution_cutoff)
             if np.any(output_resolution < resolution_cutoff):
-                interpolator = "BSpline"
-                LOGGER.warning("Using BSpline interpolation for upsampling")
+                interpolator = "Linear"
+                LOGGER.warning("Using Linear interpolation for upsampling")
                 break
         self._results["interpolation_method"] = interpolator
         return runtime
