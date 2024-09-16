@@ -94,7 +94,7 @@ post-processing pipelines such as fixel-based analysis recommend resampling
 your output to at least 1.3mm resolution. By choosing this resolution here,
 it means your data will only be interpolated once: head motion correction,
 susceptibility distortion correction, coregistration and upsampling will be
-done in a single step. If your are upsampling your data by more than 10%,
+done in a single step. If you are upsampling your data by more than 10%,
 QSIPrep will use Linear interpolation instead of Lanczos windowed Sinc
 interpolation.
 
