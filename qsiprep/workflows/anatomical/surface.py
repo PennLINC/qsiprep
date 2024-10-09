@@ -36,11 +36,6 @@ from ...utils.misc import fix_multi_T1w_source_name
 LOGGER = logging.getLogger("nipype.workflow")
 
 
-TEMPLATE_MAP = {
-    "MNI152NLin2009cAsym": "mni_icbm152_nlin_asym_09c",
-}
-
-
 def init_surface_recon_wf(omp_nthreads, hires, name="surface_recon_wf"):
     r"""
     This workflow reconstructs anatomical surfaces using FreeSurfer's ``recon-all``.

@@ -29,7 +29,6 @@ from scipy import ndimage
 from scipy.spatial import distance
 
 LOGGER = logging.getLogger("nipype.interface")
-KNOWN_TEMPLATES = ["MNI152NLin2009cAsym", "infant"]
 
 
 class _DiceOverlapInputSpec(BaseInterfaceInputSpec):
