@@ -4,6 +4,7 @@ import os
 import os.path as op
 
 import nibabel as nb
+from nipype.interfaces.ants.base import ANTSCommand, ANTSCommandInputSpec
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec,
     CommandLine,
@@ -16,7 +17,6 @@ from nipype.interfaces.base import (
     isdefined,
     traits,
 )
-from nipype.interfaces.ants.base import ANTSCommand, ANTSCommandInputSpec
 from nipype.utils.filemanip import split_filename
 
 LOGGER = logging.getLogger("nipype.interface")
