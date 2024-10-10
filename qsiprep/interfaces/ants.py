@@ -16,13 +16,14 @@ from nipype.interfaces.base import (
     isdefined,
     traits,
 )
+from nipype.interfaces.ants.base import ANTSCommand, ANTSCommandInputSpec
 from nipype.utils.filemanip import split_filename
 
 LOGGER = logging.getLogger("nipype.interface")
 
 
 # Step 1 from DSI Studio, importing DICOM files or nifti
-class MultivariateTemplateConstruction2InputSpec(CommandLineInputSpec):
+class MultivariateTemplateConstruction2InputSpec(ANTSCommandInputSpec):
     dimension = traits.Enum(2, 3, 4, default=3, usedefault=True, argstr="-d %d")
     input_file = File(desc="txt or csv file with images", exists=True, position=-1)
     input_images = InputMultiObject(
@@ -93,7 +94,7 @@ class MultivariateTemplateConstruction2OutputSpec(TraitedSpec):
     iteration_templates = OutputMultiObject(File(exists=True))
 
 
-class MultivariateTemplateConstruction2(CommandLine):
+class MultivariateTemplateConstruction2(ANTSCommand):
     input_spec = MultivariateTemplateConstruction2InputSpec
     output_spec = MultivariateTemplateConstruction2OutputSpec
     _cmd = "antsMultivariateTemplateConstruction2.sh "
@@ -135,6 +136,10 @@ class MultivariateTemplateConstruction2(CommandLine):
         outputs["templates"] = templates
 
         return outputs
+
+    def _num_threads_update(self):
+        # Parallelization is controlled by ants pexec
+        self.inputs.environ.update({"ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS": "1", "NSLOTS": "1"})
 
 
 class ImageMathInputSpec(BaseInterfaceInputSpec):

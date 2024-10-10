@@ -119,6 +119,7 @@ def init_intramodal_template_wf(
             dimension=3, iteration_limit=num_iterations, **runtime_opts
         ),
         name="ants_mvtc2",
+        n_procs=omp_nthreads,
     )
 
     workflow.connect([
