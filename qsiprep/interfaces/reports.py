@@ -137,7 +137,7 @@ class SubjectSummaryInputSpec(BaseInterfaceInputSpec):
     subject_id = Str(desc="Subject ID")
     dwi_groupings = traits.Dict(desc="groupings of DWI files and their output names")
     output_spaces = traits.List(desc="Target spaces")
-    template = traits.Enum("MNI152NLin2009cAsym", desc="Template space")
+    template = traits.Enum("MNI152NLin2009cAsym", "MNIInfant", desc="Template space")
 
 
 class SubjectSummaryOutputSpec(SummaryOutputSpec):
