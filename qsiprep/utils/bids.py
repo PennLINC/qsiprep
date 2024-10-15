@@ -212,6 +212,42 @@ def collect_data(bids_dir, participant_label, filters=None, bids_validate=True):
     return subj_data, layout
 
 
+def collect_cross_sectional_anatomical_data(
+    bids_dir, participant_label, filters=None, bids_validate=True
+):
+    """Create a dict of sessions and the result of collect_data() for each session."""
+    if isinstance(bids_dir, BIDSLayout):
+        layout = bids_dir
+    else:
+        layout = BIDSLayout(str(bids_dir), validate=bids_validate)
+
+    queries = {
+        "t2w": {"datatype": "anat", "suffix": "T2w"},
+        "t1w": {"datatype": "anat", "suffix": "T1w"},
+        "roi": {"datatype": "anat", "suffix": "roi"},
+    }
+    bids_filters = filters or {}
+    for acq, entities in bids_filters.items():
+        queries[acq].update(entities)
+
+    sessions = layout.get(subject=participant_label, return_type="id", target="session")
+
+    session_anatomicals = {}
+    for session in sessions:
+        session_anatomicals[session] = {
+            dtype: sorted(
+                layout.get(
+                    return_type="file",
+                    subject=participant_label,
+                    extension=["nii", "nii.gz"],
+                    **query,
+                )
+            )
+            for dtype, query in queries.items()
+        }
+    return session_anatomicals, layout
+
+
 def write_derivative_description(bids_dir, deriv_dir):
     from qsiprep import __version__
 

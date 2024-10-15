@@ -585,8 +585,10 @@ class workflow(_Config):
     """Number of iterations for intramodal template construction."""
     intramodal_template_transform = None
     """Transformation used for building the intramodal template."""
+    anat_space_definition = None
+    """How should the anatomical space be defined: session, robust-template or first"""
     longitudinal = False
-    """Run FreeSurfer ``recon-all`` with the ``-logitudinal`` flag."""
+    """Run FreeSurfer ``recon-all`` with the ``-logitudinal`` flag. [Deprecated]"""
     no_b0_harmonization = False
     """Skip re-scaling dwi scans to have matching b=0 intensities."""
     output_resolution = None

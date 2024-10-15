@@ -32,6 +32,7 @@ qsiprep base processing workflows
 .. autofunction:: init_single_subject_wf
 
 """
+from gc import collect
 import sys
 from collections import defaultdict
 from copy import deepcopy
@@ -50,7 +51,7 @@ from ..interfaces import (
     DerivativesDataSink,
     SubjectSummary,
 )
-from ..utils.bids import collect_data
+from ..utils.bids import collect_data, collect_cross_sectional_anatomical_data
 from ..utils.grouping import group_dwi_scans
 from ..utils.misc import fix_multi_source_name
 from .anatomical.volume import init_anat_preproc_wf
@@ -233,20 +234,40 @@ to workflows in *QSIPrep*'s documentation]\
         run_without_submitting=True,
     )
 
-    num_anat_images = (
-        0
-        if config.workflow.anat_modality == "none"
-        else len(subject_data[config.workflow.anat_modality.lower()])
-    )
     # Preprocessing of anatomical data (includes possible registration template)
     info_modality = (
         "dwi" if config.workflow.anat_modality == "none" else config.workflow.anat_modality.lower()
     )
-    anat_preproc_wf = init_anat_preproc_wf(
-        num_anat_images=num_anat_images,
-        num_additional_t2ws=additional_t2ws,
-        has_rois=bool(subject_data["roi"]),
-    )
+
+    anat_preproc_wfs = {}
+    if config.workflow.anat_space_definition == "session":
+        subject_anat_data = collect_cross_sectional_anatomical_data(
+            config.execution.layout,
+            subject_id,
+            filters=config.execution.bids_filters,
+            bids_validate=False,
+        )[0]
+    else:
+        subject_anat_data = {
+            "all": {
+                "t1w": subject_data["t1w"],
+                "t2w": subject_data["t2w"],
+                "roi": subject_data["roi"],
+            }
+        }
+
+    for anat_preproc_ses, anat_preproc_data in subject_anat_data.items():
+        num_anat_images = (
+            0
+            if config.workflow.anat_modality == "none"
+            else len(anat_preproc_data[config.workflow.anat_modality.lower()])
+        )
+        anat_preproc_wfs[anat_preproc_ses] = init_anat_preproc_wf(
+            num_anat_images=num_anat_images,
+            num_additional_t2ws=additional_t2ws,
+            has_rois=bool(anat_preproc_data["roi"]),
+            name=f"anat_preproc_{anat_preproc_ses}_wf",
+        )
 
     workflow.connect([
         (inputnode, anat_preproc_wf, [('subjects_dir', 'inputnode.subjects_dir')]),

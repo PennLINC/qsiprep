@@ -47,6 +47,7 @@ def _build_parser(**kwargs):
         "dwi_no_biascorr": ("--b1-biascorrect-stage none", "0.23.0"),
         "b0_motion_corr_to": (None, "0.23.0"),
         "b0_to_t1w_transform": ("--b0-t0-anat-transform", "0.23.0"),
+        "longitudinal": ("--anat-space-definition robust-template", "0.24.0"),
     }
 
     class DeprecatedAction(Action):
@@ -191,12 +192,13 @@ def _build_parser(**kwargs):
         help="A space delimited list of participant identifiers or a single "
         "identifier (the sub- prefix can be removed)",
     )
-    # Re-enable when option is actually implemented
-    # g_bids.add_argument('-s', '--session-id', action='store', default='single_session',
-    #                     help='Select a specific session to be processed')
-    # Re-enable when option is actually implemented
-    # g_bids.add_argument('-r', '--run-id', action='store', default='single_run',
-    #                     help='Select a specific run to be processed')
+    g_bids.add_argument(
+        "-s",
+        "--session-id",
+        action="store",
+        default="single_session",
+        help="Select a specific session to be processed",
+    )
 
     g_bids.add_argument(
         "--bids-filter-file",
@@ -306,6 +308,14 @@ def _build_parser(**kwargs):
         "--longitudinal",
         action="store_true",
         help="Treat dataset as longitudinal - may increase runtime",
+    )
+    g_conf.add_argument(
+        "--anat-space-definition",
+        choices=["first", "robust-template", "session"],
+        default="first",
+        help="How to define subject-specific anatomical space. session will "
+        "produce one anatomical space per session. The others combine anatomical "
+        "data across sessions to define one anatomical space per subject.",
     )
     g_conf.add_argument(
         "--skip-anat-based-spatial-normalization",
