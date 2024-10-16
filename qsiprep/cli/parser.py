@@ -646,9 +646,9 @@ def parse_args(args=None, namespace=None):
     config.from_dict(vars(opts), init=["nipype"])
 
     if not config.execution.notrack:
-        import pkgutil
+        import importlib.util
 
-        if pkgutil.find_loader("sentry_sdk") is None:
+        if importlib.util.find_spec("sentry_sdk") is None:
             config.execution.notrack = True
             config.loggers.cli.warning("Telemetry disabled because sentry_sdk is not installed.")
         else:
