@@ -301,8 +301,7 @@ to workflows in *QSIPrep*'s documentation]\
         merging_group_workflows = {}
         for merged_group in merged_group_names:
             merging_group_workflows[merged_group] = init_distortion_group_merge_wf(
-                template=config.workflow.anatomical_template,
-                output_prefix=merged_group,
+                merging_strategy=config.workflow.distortion_group_merge,
                 source_file=merged_group + "_dwi.nii.gz",
                 inputs_list=merged_to_subgroups[merged_group],
                 name=merged_group.replace("-", "_") + "_final_merge_wf",
