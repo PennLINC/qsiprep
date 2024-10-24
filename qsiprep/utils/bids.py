@@ -212,8 +212,8 @@ def collect_data(bids_dir, participant_label, filters=None, bids_validate=True):
     return subj_data, layout
 
 
-def collect_cross_sectional_anatomical_data(
-    bids_dir, participant_label, filters=None, bids_validate=True
+def create_processing_groups(
+    bids_dir, participant_label, session_list, filters=None, bids_validate=True
 ):
     """Create a dict of sessions and the result of collect_data() for each session."""
     if isinstance(bids_dir, BIDSLayout):

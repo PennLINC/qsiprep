@@ -193,11 +193,13 @@ def _build_parser(**kwargs):
         "identifier (the sub- prefix can be removed)",
     )
     g_bids.add_argument(
-        "-s",
         "--session-id",
         action="store",
+        nargs="+",
+        type=_drop_sub,
         default="single_session",
-        help="Select a specific session to be processed",
+        help="A space delimited list of session identifiers or a single "
+        "identifier (the ses- prefix can be removed)",
     )
 
     g_bids.add_argument(
@@ -634,6 +636,7 @@ def _build_parser(**kwargs):
 def parse_args(args=None, namespace=None):
     """Parse args and run further checks on the command line."""
     import logging
+    from bids.layout import Query
 
     # from niworkflows.utils.spaces import Reference, SpatialReferences
 
@@ -766,5 +769,32 @@ def parse_args(args=None, namespace=None):
             "One or more participant labels were not found in the BIDS directory: "
             "%s." % ", ".join(missing_subjects)
         )
+
+    # Determine which sessions to process and group them
+    processing_groups = []
+
+    # Determine any session filters
+    session_filters = config.execution.session_id or []
+    if config.execution.bids_filters is not None:
+        for _, filters in config.execution.bids_filters:
+            ses_filter = filters.get("session")
+            if isinstance(ses_filter, str):
+                session_filters.append(ses_filter)
+            elif isinstance(ses_filter, list):
+                session_filters.extend(ses_filter)
+    requested_sessions = session_filters or Query.OPTIONAL
+
+    # Examine the available sessions for each participant
+    for participant_label in participant_label:
+        sessions = config.execution.layout.get(
+            subject=participant_label,
+            session=requested_sessions,
+            return_type="id",
+            target="session",
+            suffix=["T1w", "T2w", "dwi"],
+        )
+
+        if not requested_sessions is None:
+            processing_groups.append((participant_label, []))
 
     config.execution.participant_label = sorted(participant_label)

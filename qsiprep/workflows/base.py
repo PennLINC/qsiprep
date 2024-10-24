@@ -79,8 +79,11 @@ def init_qsiprep_wf():
     qsiprep_wf = Workflow(name=f"qsiprep_{ver.major}_{ver.minor}_wf")
     qsiprep_wf.base_dir = config.execution.work_dir
 
-    for subject_id in config.execution.participant_label:
-        single_subject_wf = init_single_subject_wf(subject_id)
+    for subject_id, session_ids in config.execution.processing_list:
+
+        # We may need to select a session or multiple sessions to consider together
+
+        single_subject_wf = init_single_subject_wf(subject_id, session_ids)
 
         single_subject_wf.config["execution"]["crashdump_dir"] = str(
             config.execution.output_dir / f"sub-{subject_id}" / "log" / config.execution.run_uuid
@@ -98,7 +101,7 @@ def init_qsiprep_wf():
     return qsiprep_wf
 
 
-def init_single_subject_wf(subject_id: str):
+def init_single_subject_wf(subject_id: str, session_ids: list):
     """Organize the preprocessing pipeline for a single subject.
 
     This workflow collects and reports information about the subject, and prepares
@@ -519,6 +522,3 @@ def provide_processing_advice(subject_data, layout, unringing_method):
     config.loggers.utils.warn(
         "Partial Fourier acquisitions found for %s. Consider using --unringing-method rpg"
     )
-
-
-def
