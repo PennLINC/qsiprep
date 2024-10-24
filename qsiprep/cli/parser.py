@@ -47,6 +47,7 @@ def _build_parser(**kwargs):
         "dwi_no_biascorr": ("--b1-biascorrect-stage none", "0.23.0"),
         "b0_motion_corr_to": (None, "0.23.0"),
         "b0_to_t1w_transform": ("--b0-t0-anat-transform", "0.23.0"),
+        "longitudinal": ("--anat-space-definition robust-template", "0.24.0"),
     }
 
     class DeprecatedAction(Action):
@@ -191,12 +192,15 @@ def _build_parser(**kwargs):
         help="A space delimited list of participant identifiers or a single "
         "identifier (the sub- prefix can be removed)",
     )
-    # Re-enable when option is actually implemented
-    # g_bids.add_argument('-s', '--session-id', action='store', default='single_session',
-    #                     help='Select a specific session to be processed')
-    # Re-enable when option is actually implemented
-    # g_bids.add_argument('-r', '--run-id', action='store', default='single_run',
-    #                     help='Select a specific run to be processed')
+    g_bids.add_argument(
+        "--session-id",
+        action="store",
+        nargs="+",
+        type=_drop_sub,
+        default="single_session",
+        help="A space delimited list of session identifiers or a single "
+        "identifier (the ses- prefix can be removed)",
+    )
 
     g_bids.add_argument(
         "--bids-filter-file",
@@ -306,6 +310,14 @@ def _build_parser(**kwargs):
         "--longitudinal",
         action="store_true",
         help="Treat dataset as longitudinal - may increase runtime",
+    )
+    g_conf.add_argument(
+        "--anat-space-definition",
+        choices=["first", "robust-template", "session"],
+        default="first",
+        help="How to define subject-specific anatomical space. session will "
+        "produce one anatomical space per session. The others combine anatomical "
+        "data across sessions to define one anatomical space per subject.",
     )
     g_conf.add_argument(
         "--skip-anat-based-spatial-normalization",
@@ -624,6 +636,7 @@ def _build_parser(**kwargs):
 def parse_args(args=None, namespace=None):
     """Parse args and run further checks on the command line."""
     import logging
+    from bids.layout import Query
 
     # from niworkflows.utils.spaces import Reference, SpatialReferences
 
@@ -756,5 +769,32 @@ def parse_args(args=None, namespace=None):
             "One or more participant labels were not found in the BIDS directory: "
             "%s." % ", ".join(missing_subjects)
         )
+
+    # Determine which sessions to process and group them
+    processing_groups = []
+
+    # Determine any session filters
+    session_filters = config.execution.session_id or []
+    if config.execution.bids_filters is not None:
+        for _, filters in config.execution.bids_filters:
+            ses_filter = filters.get("session")
+            if isinstance(ses_filter, str):
+                session_filters.append(ses_filter)
+            elif isinstance(ses_filter, list):
+                session_filters.extend(ses_filter)
+    requested_sessions = session_filters or Query.OPTIONAL
+
+    # Examine the available sessions for each participant
+    for participant_label in participant_label:
+        sessions = config.execution.layout.get(
+            subject=participant_label,
+            session=requested_sessions,
+            return_type="id",
+            target="session",
+            suffix=["T1w", "T2w", "dwi"],
+        )
+
+        if not requested_sessions is None:
+            processing_groups.append((participant_label, []))
 
     config.execution.participant_label = sorted(participant_label)
