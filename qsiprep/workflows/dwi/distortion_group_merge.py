@@ -32,6 +32,7 @@ def init_distortion_group_merge_wf(
     merging_strategy,
     inputs_list,
     source_file,
+    name,
 ) -> Workflow:
     """Create an unbiased intramodal template for a subject. This aligns the b=0 references
     from all the scans of a subject. Can be rigid, affine or nonlinear (BSplineSyN).
@@ -81,7 +82,7 @@ def init_distortion_group_merge_wf(
         The interactive report data
     """
 
-    workflow = Workflow(name="distortion_group_merge_wf")
+    workflow = Workflow(name=name)
     source_file = "dwi/" + source_file
     sanitized_inputs = [name.replace("-", "_") for name in inputs_list]
     input_names = ["t1_brain", "t1_mask", "t1_seg"]
@@ -164,7 +165,6 @@ def init_distortion_group_merge_wf(
         distortion_merger = pe.Node(MergeDWIs(), name="distortion_merger")
     b0_ref_wf = init_dwi_reference_wf(
         name="merged_b0_ref",
-        register_t1=False,
         gen_report=True,
         source_file=source_file,
     )
