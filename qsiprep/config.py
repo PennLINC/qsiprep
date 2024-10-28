@@ -238,7 +238,10 @@ class _Config:
                     new_v = []
                     for el in v:
                         sub, ses_list = el.split(":")
-                        new_v.append((sub, [ses for ses in ses_list.split(",")]))
+                        if ses_list:
+                            new_v.append((sub, [ses for ses in ses_list.split(",")]))
+                        else:
+                            new_v.append((sub, []))
                     setattr(cls, k, new_v)
                 else:
                     setattr(cls, k, v)
