@@ -805,7 +805,7 @@ def parse_args(args=None, namespace=None):
                     f"{subject_id}.",
                 )
 
-            processing_groups.append([subject_id, [None]])
+            processing_groups.append([subject_id, []])
             continue
 
         if config.workflow.anat_space_definition == "session":
