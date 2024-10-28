@@ -234,7 +234,14 @@ class _Config:
                 else:
                     setattr(cls, k, Path(v).absolute())
             elif hasattr(cls, k):
-                setattr(cls, k, v)
+                if k == "processing_list":
+                    new_v = []
+                    for el in v:
+                        sub, ses_list = el.split(":")
+                        new_v.append((sub, [ses for ses in ses_list.split(",")]))
+                    setattr(cls, k, new_v)
+                else:
+                    setattr(cls, k, v)
 
         if init:
             try:
@@ -756,6 +763,11 @@ def get(flat=False):
         "nipype": nipype.get(),
         "seeds": seeds.get(),
     }
+    if "processing_list" in settings["execution"]:
+        settings["execution"]["processing_list"] = [
+            f"{el[0]}:{','.join(el[1])}" for el in settings["execution"]["processing_list"]
+        ]
+
     if not flat:
         return settings
 

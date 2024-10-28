@@ -108,6 +108,9 @@ def _build_parser(**kwargs):
     def _drop_sub(value):
         return value[4:] if value.startswith("sub-") else value
 
+    def _drop_ses(value):
+        return value[4:] if value.startswith("ses-") else value
+
     def _process_value(value):
         import bids
 
@@ -196,7 +199,8 @@ def _build_parser(**kwargs):
         "--session-id",
         action="store",
         nargs="+",
-        type=_drop_sub,
+        type=_drop_ses,
+        default=None,
         help="A space delimited list of session identifiers or a single "
         "identifier (the ses- prefix can be removed)",
     )
@@ -785,11 +789,9 @@ def parse_args(args=None, namespace=None):
 
     # Examine the available sessions for each participant
     for subject_id in participant_label:
-        sessions = config.execution.layout.get(
+        sessions = config.execution.layout.get_sessions(
             subject=subject_id,
             session=session_filters or Query.OPTIONAL,
-            return_type="id",
-            target="session",
             suffix=["T1w", "T2w", "dwi"],
         )
 
@@ -802,14 +804,15 @@ def parse_args(args=None, namespace=None):
                     "Outputs will NOT appear in a session directory for "
                     f"{subject_id}.",
                 )
-            processing_groups.append((subject_id, []))
+
+            processing_groups.append([subject_id, [None]])
             continue
 
         if config.workflow.anat_space_definition == "session":
             for session in sessions:
-                processing_groups.append((subject_id, [session]))
+                processing_groups.append([subject_id, [session]])
         else:
-            processing_groups.append((subject_id, sessions))
+            processing_groups.append([subject_id, sessions])
 
     # Make a nicely formatted message showing what we will process
     def pretty_group(group_num, processing_group):
@@ -819,7 +822,7 @@ def parse_args(args=None, namespace=None):
         else:
             session_txt = "No session level"
 
-        return f"{group_num}\t{subject_id}\t{session_txt}"
+        return f"{group_num}\t{participant_label}\t{session_txt}"
 
     processing_msg = "\nGroup\tSubject\tSessions\n" + "\n".join(
         [pretty_group(gnum, group) for gnum, group in enumerate(processing_groups)]
