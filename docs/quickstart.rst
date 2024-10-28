@@ -1,7 +1,8 @@
 .. include:: links.rst
 
+###########
 Quick Start
------------
+###########
 
 There are many options for running ``qsiprep`` but most have sensible defaults and
 don't need to be changed. This page describes the options most likely to be
@@ -26,8 +27,9 @@ One way to process these data would be to call ``qsiprep`` like this::
    See :ref:`output_resolution` for specifics.
 
 
+**************
 Grouping scans
-==============
+**************
 
 .. note::
    This section explains ``--separate-all-dwis``, ``--denoise-after-combining`` and
@@ -54,8 +56,9 @@ the denoising preprocessing step has important caveats that should be considered
 discussion see :ref:`merge_denoise`.
 
 
+******************
 Specifying outputs
-==================
+******************
 
 .. note::
    This section covers ``--output-resolution X``, and
@@ -83,9 +86,11 @@ brain graphs. If you want to save ~20 minutes of computation time, this
 normalization can be disabled with the
 ``--skip-t1-based-spatial-normalization`` option.
 
+
 .. _output_resolution:
+
 Output Resolution and Resampling
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+================================
 
 The ``--output-resolution`` argument determines the spatial resolution of the
 preprocessed dwi series. You can specify the resolution of the original data
@@ -100,7 +105,7 @@ interpolation.
 
 
 Head motion correction model
-===============================
+============================
 
 Although FSL's ``eddy`` is technically model-free, it is an option for
 ``--hmc-model`` along with ``3dSHORE`` and ``none``. Choosing ``eddy`` (the

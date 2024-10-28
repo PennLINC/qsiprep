@@ -1,6 +1,10 @@
-##############################
-Comparisons to other pipelines
-##############################
+##########################
+Comparisons to other tools
+##########################
+
+***********************************
+Comparisons to other dMRI pipelines
+***********************************
 
 Other pipelines for preprocessing DWI data are currently being developed.
 Below are tables comparing their current feature sets.
@@ -11,9 +15,8 @@ Below are tables comparing their current feature sets.
 * `dMRIPrep <https://github.com/nipreps/dmriprep>`_
 
 
-**************************
 Supported Sampling Schemes
-**************************
+==========================
 
 .. list-table::
    :header-rows: 1
@@ -50,9 +53,8 @@ Supported Sampling Schemes
      - ✘
 
 
-*************
 Preprocessing
-*************
+=============
 
 .. list-table::
    :header-rows: 1
@@ -179,9 +181,8 @@ Preprocessing
      - ✔
 
 
-***************
 Quality Control
-***************
+===============
 
 .. list-table::
    :header-rows: 1
@@ -207,5 +208,32 @@ Quality Control
      - Custom
      - ✘
 
+
+***********************************
 QSIPrep versus other modality preps
-===================================
+***********************************
+
+Diffusion processing has idiosyncrasies that may confuse users who are used to
+working with other modalities.
+This section is designed to orient users who are familiar with pipelines like fMRIPrep and ASLPrep.
+
+
+Output spaces
+=============
+
+With fMRIPrep and other, similar pipelines, the user defines any output spaces they want,
+and the workflow will write out preprocessed data in those spaces.
+With QSIPrep, the pipeline will write out the preprocessed DWI data in a native anatomical space-
+typically the T1w space, aligned to the ACPC.
+The "output spaces" in this case will be provided as transforms from the T1w space to the
+desired output space.
+It is then up to the reconstruction pipeline (typically QSIRecon) to apply these transforms to the
+preprocessed DWI data to get reconstructed outputs in the requested spaces.
+
+
+Output resolution
+=================
+
+
+Concatenation across runs
+=========================
