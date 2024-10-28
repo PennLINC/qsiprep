@@ -32,7 +32,7 @@ def fix_multi_T1w_source_name(in_files):
     return os.path.join(base, f"sub-{subject_label}_T1w.nii.gz")
 
 
-def fix_multi_source_name(in_files, dwi_only, anatomical_contrast="T1w"):
+def fix_multi_source_name(in_files, dwi_only, include_session, anatomical_contrast="T1w"):
     """Make up a generic source name when there are multiple source files.
 
     >>> fix_multi_source_name([
@@ -49,7 +49,8 @@ def fix_multi_source_name(in_files, dwi_only, anatomical_contrast="T1w"):
     # Remove the session label
     base = os.path.abspath(base)
     folders = base.split(os.sep)
-    folders = [f for f in folders if not f.startswith("ses-")]
+    if not include_session:
+        folders = [f for f in folders if not f.startswith("ses-")]
     base = os.sep.join(folders)
 
     subject_label = in_file.split("_", 1)[0].split("-")[1]
@@ -57,7 +58,13 @@ def fix_multi_source_name(in_files, dwi_only, anatomical_contrast="T1w"):
         anatomical_contrast = "dwi"
         base = base.replace("/dwi", "/anat")
 
-    return os.path.join(base, f"sub-{subject_label}_{anatomical_contrast}.nii.gz")
+    _session = ""
+    if include_session:
+        ses_entity = [f for f in folders if f.startswith("ses-")]
+        if ses_entity:
+            _session = f"_{ses_entity[-1]}"
+
+    return os.path.join(base, f"sub-{subject_label}{_session}_{anatomical_contrast}.nii.gz")
 
 
 def add_suffix(in_files, suffix):

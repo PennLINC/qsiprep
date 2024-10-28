@@ -785,9 +785,9 @@ def parse_args(args=None, namespace=None):
                 session_filters.extend(ses_filter)
 
     # Examine the available sessions for each participant
-    for participant_label in participant_label:
+    for subject_id in participant_label:
         sessions = config.execution.layout.get(
-            subject=participant_label,
+            subject=subject_id,
             session=session_filters or Query.OPTIONAL,
             return_type="id",
             target="session",
@@ -798,19 +798,19 @@ def parse_args(args=None, namespace=None):
         if not sessions:
             if config.workflow.anat_space_definition == "session":
                 config.loggers.workflow.warning(
-                    f"Subject {participant_label} had no sessions, "
+                    f"Subject {subject_id} had no sessions, "
                     "but --anat-space-definition was set to 'session'. "
                     "Outputs will NOT appear in a session directory for "
-                    f"{participant_label}.",
+                    f"{subject_id}.",
                 )
-            processing_groups.append((participant_label, []))
+            processing_groups.append((subject_id, []))
             continue
 
         if config.workflow.anat_space_definition == "session":
             for session in sessions:
-                processing_groups.append((participant_label, [session]))
+                processing_groups.append((subject_id, [session]))
         else:
-            processing_groups.append((participant_label, sessions))
+            processing_groups.append((subject_id, sessions))
 
     # Make a nicely formatted message showing what we will process
     def pretty_group(group_num, processing_group):
@@ -819,11 +819,12 @@ def parse_args(args=None, namespace=None):
             session_txt = ", ".join(map(str, ses_labels))
         else:
             session_txt = "No session level"
-        
-        return f"{group_num}\t{participant_label}\t{session_txt}"
 
-    processing_msg = "\nGroup\tSubject\tSessions\n" + \
-        "\n".join([pretty_group(gnum, group) for gnum, group in enumerate(processing_groups)])
+        return f"{group_num}\t{subject_id}\t{session_txt}"
+
+    processing_msg = "\nGroup\tSubject\tSessions\n" + "\n".join(
+        [pretty_group(gnum, group) for gnum, group in enumerate(processing_groups)]
+    )
     config.loggers.workflow.info(processing_msg)
 
     config.execution.participant_label = sorted(participant_label)

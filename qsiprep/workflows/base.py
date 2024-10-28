@@ -51,7 +51,7 @@ from ..interfaces import (
     DerivativesDataSink,
     SubjectSummary,
 )
-from ..utils.bids import collect_data, collect_cross_sectional_anatomical_data
+from ..utils.bids import collect_data
 from ..utils.grouping import group_dwi_scans
 from ..utils.misc import fix_multi_source_name
 from .anatomical.volume import init_anat_preproc_wf
@@ -85,6 +85,7 @@ def init_qsiprep_wf():
 
         single_subject_wf = init_single_subject_wf(subject_id, session_ids)
 
+        # Should we put these in session specific directories? The uuid is unique but opaque
         single_subject_wf.config["execution"]["crashdump_dir"] = str(
             config.execution.output_dir / f"sub-{subject_id}" / "log" / config.execution.run_uuid
         )
@@ -139,6 +140,7 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
         subject_data = collect_data(
             config.execution.layout,
             subject_id,
+            session_id=session_ids,
             filters=config.execution.bids_filters,
             bids_validate=False,
         )[0]
@@ -160,10 +162,15 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
             "--anat-modality none".format(config.workflow.anat_modality, subject_id)
         )
 
+    additional_t2ws = 0
+    if "drbuddi" in config.workflow.pepolar_method.lower() and subject_data["t2w"]:
+        additional_t2ws = len(subject_data["t2w"])
+
     # Inspect the dwi data and provide advice on pipeline choices
     # provide_processing_advice(subject_data, layout, unringing_method)
 
-    workflow = Workflow(name=f"sub_{subject_id}_wf")
+    _ses_name = "_ses_" + "_".join(map(str, session_ids)) if session_ids else ""
+    workflow = Workflow(name=f"sub_{subject_id}{_ses_name}_wf")
     workflow.__desc__ = f"""
 Preprocessing was performed using *QSIPrep* {config.environment.version},
 which is based on *Nipype* {config.environment.nipype_version}
@@ -189,9 +196,37 @@ to workflows in *QSIPrep*'s documentation]\
 
     inputnode = pe.Node(niu.IdentityInterface(fields=["subjects_dir"]), name="inputnode")
 
+    bidssrc = pe.Node(
+        BIDSDataGrabber(
+            subject_data=subject_data,  # Data has already been selected with sub/ses filters
+            dwi_only=config.workflow.anat_modality == "none",
+            anat_only=config.workflow.anat_only,
+            anatomical_contrast=config.workflow.anat_modality,
+        ),
+        name="bidssrc",
+    )
+
+    bids_info = pe.Node(BIDSInfo(), name="bids_info", run_without_submitting=True)
+
+    summary = pe.Node(
+        SubjectSummary(template=config.workflow.anatomical_template),
+        name="summary",
+        run_without_submitting=True,
+    )
+
     about = pe.Node(
         AboutSummary(version=config.environment.version, command=" ".join(sys.argv)),
         name="about",
+        run_without_submitting=True,
+    )
+
+    ds_report_summary = pe.Node(
+        DerivativesDataSink(
+            base_directory=config.execution.output_dir,
+            datatype="figures",
+            suffix="summary",
+        ),
+        name="ds_report_summary",
         run_without_submitting=True,
     )
 
@@ -205,110 +240,60 @@ to workflows in *QSIPrep*'s documentation]\
         run_without_submitting=True,
     )
 
-    # Which modality should we build output names based on?
+    num_anat_images = (
+        0
+        if config.workflow.anat_modality == "none"
+        else len(subject_data[config.workflow.anat_modality.lower()])
+    )
+    # Preprocessing of anatomical data (includes possible registration template)
     info_modality = (
         "dwi" if config.workflow.anat_modality == "none" else config.workflow.anat_modality.lower()
     )
+    anat_preproc_wf = init_anat_preproc_wf(
+        num_anat_images=num_anat_images,
+        num_additional_t2ws=additional_t2ws,
+        has_rois=bool(subject_data["roi"]),
+    )
 
-    # Group anatomical data based on whether we are doing cross-sectional workflows
-    anat_preproc_wfs = {}
-    if config.workflow.anat_space_definition == "session":
-        subject_anat_data = collect_cross_sectional_anatomical_data(
-            config.execution.layout,
-            subject_id,
-            filters=config.execution.bids_filters,
-            bids_validate=False,
-        )[0]
-    else:
-        subject_anat_data = {
-            "all": {
-                "t1w": subject_data["t1w"],
-                "t2w": subject_data["t2w"],
-                "roi": subject_data["roi"],
-            }
-        }
-
-    session_anat_bidssrcs = {}
-    session_anat_summaries = {}
-    session_bids_info = {}
-    for anat_preproc_ses, anat_preproc_data in subject_anat_data.items():
-        anat_name_suffix = "" if anat_preproc_ses == "all" else f"_{anat_preproc_ses}"
-        num_anat_images = (
-            0
-            if config.workflow.anat_modality == "none"
-            else len(anat_preproc_data[config.workflow.anat_modality.lower()])
-        )
-
-        # Are additional T2ws going to be used for this anatomial workflow?
-        additional_t2ws = 0
-        if "drbuddi" in config.workflow.pepolar_method.lower() and anat_preproc_data["t2w"]:
-            additional_t2ws = len(anat_preproc_data["t2w"])
-
-        session_anat_bidssrcs[anat_preproc_ses] = pe.Node(
-            BIDSDataGrabber(
-                subject_data=subject_data,
-                dwi_only=config.workflow.anat_modality == "none",
-                anat_only=config.workflow.anat_only,
-                anatomical_contrast=config.workflow.anat_modality,
-            ),
-            name=f"bidssrc{anat_name_suffix}",
-        )
-        session_anat_summaries[anat_preproc_ses] = pe.Node(
-            SubjectSummary(template=config.workflow.anatomical_template),
-            name=f"summary{anat_name_suffix}",
-            run_without_submitting=True,
-        )
-        session_bids_info[anat_preproc_ses] = pe.Node(
-            BIDSInfo(), name=f"bids_info{anat_name_suffix}", run_without_submitting=True
-        )
-
-        anat_preproc_wfs[anat_preproc_ses] = init_anat_preproc_wf(
-            num_anat_images=num_anat_images,
-            num_additional_t2ws=additional_t2ws,
-            has_rois=bool(anat_preproc_data["roi"]),
-            name=f"anat_preproc_{anat_preproc_ses}_wf",
-        )
-
-        ds_report_summary = pe.Node(
-            DerivativesDataSink(
-                base_directory=config.execution.output_dir,
-                datatype="figures",
-                suffix="summary",
-            ),
-            name="ds_report_summary",
-            run_without_submitting=True,
-        )
-
-        workflow.connect([
-            (session_anat_bidssrcs[anat_preproc_ses], session_bids_info[anat_preproc_ses], [
-                ((info_modality, fix_multi_source_name, config.workflow.anat_modality == 'none',
-                config.workflow.anat_modality), 'in_file'),
-            ]),
-            (inputnode, session_anat_summaries[anat_preproc_ses], [
-                ('subjects_dir', 'subjects_dir')]),
-            (session_anat_bidssrcs[anat_preproc_ses], session_anat_summaries[anat_preproc_ses], [
-                ('t1w', 't1w'), ('t2w', 't2w')]),
-            (session_bids_info[anat_preproc_ses], session_anat_summaries[anat_preproc_ses], [
-                ('subject_id', 'subject_id')]),
-            (session_anat_bidssrcs[anat_preproc_ses], anat_preproc_wfs[anat_preproc_ses], [
-                ('t1w', 'inputnode.t1w'),
-                ('t2w', 'inputnode.t2w'),
-                ('roi', 'inputnode.roi'),
-                ('flair', 'inputnode.flair'),
-            ]),
-            (session_anat_summaries[anat_preproc_ses], anat_preproc_wfs[anat_preproc_ses], [
-                ('subject_id', 'inputnode.subject_id')]),
-            (session_anat_bidssrcs[anat_preproc_ses], ds_report_summary, [
-                ((info_modality, fix_multi_source_name, config.workflow.anat_modality == 'none',
-                config.workflow.anat_modality), 'source_file'),
-            ]),
-            (session_anat_summaries[anat_preproc_ses], ds_report_summary, [('out_report', 'in_file')]),
-            (session_anat_bidssrcs[anat_preproc_ses], ds_report_about, [
-                ((info_modality, fix_multi_source_name, config.workflow.anat_modality == 'none',
-                config.workflow.anat_modality), 'source_file'),
-            ]),
-            (about, ds_report_about, [('out_report', 'in_file')])
-        ])  # fmt:skip
+    workflow.connect([
+        (inputnode, anat_preproc_wf, [('subjects_dir', 'inputnode.subjects_dir')]),
+        (bidssrc, bids_info, [
+            ((info_modality,
+              fix_multi_source_name,
+              config.workflow.anat_modality == 'none',
+              config.workflow.anat_space_definition == "session",
+              config.workflow.anat_modality),
+             'in_file'),
+        ]),
+        (inputnode, summary, [('subjects_dir', 'subjects_dir')]),
+        (bidssrc, summary, [('t1w', 't1w'), ('t2w', 't2w')]),
+        (bids_info, summary, [('subject_id', 'subject_id')]),
+        (bidssrc, anat_preproc_wf, [
+            ('t1w', 'inputnode.t1w'),
+            ('t2w', 'inputnode.t2w'),
+            ('roi', 'inputnode.roi'),
+            ('flair', 'inputnode.flair'),
+        ]),
+        (summary, anat_preproc_wf, [('subject_id', 'inputnode.subject_id')]),
+        (bidssrc, ds_report_summary, [
+            ((info_modality,
+              fix_multi_source_name,
+              config.workflow.anat_modality == 'none',
+              config.workflow.anat_space_definition == "session",
+              config.workflow.anat_modality),
+             'source_file'),
+        ]),
+        (summary, ds_report_summary, [('out_report', 'in_file')]),
+        (bidssrc, ds_report_about, [
+            ((info_modality,
+              fix_multi_source_name,
+              config.workflow.anat_modality == 'none',
+              config.workflow.anat_space_definition == "session",
+              config.workflow.anat_modality),
+             'source_file'),
+        ]),
+        (about, ds_report_about, [('out_report', 'in_file')])
+    ])  # fmt:skip
 
     if config.workflow.anat_only:
         return workflow
@@ -349,39 +334,34 @@ to workflows in *QSIPrep*'s documentation]\
                 ]),
             ])  # fmt:skip
 
-    # Start grouping the dwi scans based on what will be concatenated
     outputs_to_files = {
         dwi_group["concatenated_bids_name"]: dwi_group for dwi_group in dwi_fmap_groups
     }
     if config.workflow.force_syn:
         for group_name in outputs_to_files:
             outputs_to_files[group_name]["fieldmap_info"] = {"suffix": "syn"}
+    summary.inputs.dwi_groupings = outputs_to_files
 
-
-    # Intramodal templates register the dmri to each other before registering to
-    # the subject anatomical space.
     make_intramodal_template = False
     if config.workflow.intramodal_template_iters > 0:
         if len(outputs_to_files) < 2:
             raise Exception("Cannot make an intramodal with less than 2 groups.")
         make_intramodal_template = True
+
+    intramodal_template_wf = init_intramodal_template_wf(
+        t1w_source_file=fix_multi_source_name(
+            subject_data[info_modality],
+            dwi_only=config.workflow.anat_modality == "none",
+            include_session=config.workflow.anat_space_definition == "session",
+            anatomical_contrast=config.workflow.anat_modality,
+        ),
+        inputs_list=sorted(outputs_to_files.keys()),
+        name="intramodal_template_wf",
+    )
+
     if make_intramodal_template:
-        if config.workflow.anat_space_definition == "session":
-            raise Exception(
-                "Intramodal workflow only works with 'first' or 'robust-template' "
-                "options for --anat-space-definition"
-            )
-
-        intramodal_template_wf = init_intramodal_template_wf(
-            t1w_source_file=fix_multi_source_name(
-                subject_data[info_modality], config.workflow.anat_modality == "none"
-            ),
-            inputs_list=sorted(outputs_to_files.keys()),
-            name="intramodal_template_wf",
-        )
-
         workflow.connect([
-            (anat_preproc_wfs["all"], intramodal_template_wf, [
+            (anat_preproc_wf, intramodal_template_wf, [
                 ('outputnode.t1_preproc', 'inputnode.t1_preproc'),
                 ('outputnode.t1_brain', 'inputnode.t1_brain'),
                 ('outputnode.t1_mask', 'inputnode.t1_mask'),
@@ -518,6 +498,6 @@ to workflows in *QSIPrep*'s documentation]\
 def provide_processing_advice(subject_data, layout, unringing_method):
     """Provide advice on preprocessing options based on the data provided."""
     # metadata = {dwi_file: layout.get_metadata(dwi_file) for dwi_file in subject_data["dwi"]}
-    config.loggers.utils.warn(
+    config.loggers.utils.warning(
         "Partial Fourier acquisitions found for %s. Consider using --unringing-method rpg"
     )
