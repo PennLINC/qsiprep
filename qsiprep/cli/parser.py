@@ -197,7 +197,6 @@ def _build_parser(**kwargs):
         action="store",
         nargs="+",
         type=_drop_sub,
-        default="single_session",
         help="A space delimited list of session identifiers or a single "
         "identifier (the ses- prefix can be removed)",
     )
@@ -776,13 +775,13 @@ def parse_args(args=None, namespace=None):
 
     # Determine any session filters
     session_filters = config.execution.session_id or []
-    if config.execution.bids_filters is not None:
-        for _, filters in config.execution.bids_filters:
-            ses_filter = filters.get("session")
-            if isinstance(ses_filter, str):
-                session_filters.append(ses_filter)
-            elif isinstance(ses_filter, list):
-                session_filters.extend(ses_filter)
+    # if config.execution.bids_filters is not None:
+    #     for _, filters in config.execution.bids_filters:
+    #         ses_filter = filters.get("session")
+    #         if isinstance(ses_filter, str):
+    #             session_filters.append(ses_filter)
+    #         elif isinstance(ses_filter, list):
+    #             session_filters.extend(ses_filter)
 
     # Examine the available sessions for each participant
     for subject_id in participant_label:
