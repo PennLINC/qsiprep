@@ -23,7 +23,6 @@ import pandas as pd
 import seaborn as sns
 from matplotlib import animation
 from nilearn.maskers import NiftiLabelsMasker
-from nipype.interfaces import freesurfer as fs
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec,
     Directory,
@@ -150,6 +149,7 @@ class SubjectSummaryInputSpec(BaseInterfaceInputSpec):
     dwi_groupings = traits.Dict(desc="groupings of DWI files and their output names")
     output_spaces = traits.List(desc="Target spaces")
     template = traits.Enum("MNI152NLin2009cAsym", "MNIInfant", desc="Template space")
+    freesurfer_status = traits.Enum("Not run", "Partial", "Full", desc="FreeSurfer status")
 
 
 class SubjectSummaryOutputSpec(SummaryOutputSpec):
@@ -209,7 +209,7 @@ class SubjectSummary(SummaryInterface):
             n_outputs=n_outputs,
             groupings=groupings,
             output_spaces="T1wACPC",
-            freesurfer_status=freesurfer_status,
+            freesurfer_status=self.inputs.freesurfer_status,
         )
 
 

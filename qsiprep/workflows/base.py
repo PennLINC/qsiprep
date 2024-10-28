@@ -32,7 +32,6 @@ qsiprep base processing workflows
 .. autofunction:: init_single_subject_wf
 
 """
-from gc import collect
 import sys
 from collections import defaultdict
 from copy import deepcopy
