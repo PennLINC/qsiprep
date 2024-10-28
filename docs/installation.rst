@@ -1,8 +1,8 @@
 .. include:: links.rst
 
-------------
+############
 Installation
-------------
+############
 
 There are two easy ways to use qsiprep:
 in a `Docker Container`_, or in a `Singularity Container`_.
@@ -13,10 +13,12 @@ To install::
 
     $ pip install --user --upgrade qsiprep-container
 
+
 .. _`Docker Container`:
 
+****************
 Docker Container
-================
+****************
 
 In order to run qsiprep in a Docker container, Docker must be `installed
 <https://docs.docker.com/engine/installation/>`_.
@@ -63,9 +65,9 @@ See `External Dependencies`_ for more information on what is included in the Doc
 and how it's built.
 
 
-
+*********************
 Singularity Container
-=====================
+*********************
 
 The easiest way to get a Sigularity image is to run::
 
@@ -83,10 +85,11 @@ As with Docker, you will need to bind the Freesurfer license.txt when running Si
         --fs-license-file /opt/freesurfer/license.txt
 
 
+*********************
 External Dependencies
----------------------
+*********************
 
-qsiprep is written using Python 3.10 (or above), and is based on
+QSIPrep is written using Python 3.10 (or above), and is based on
 nipype_. The external dependencies are built in the `qsiprep_build
 <https://github.com/PennLINC/qsiprep_build>`_ repository. There
 you can find the URLs used to download the dependency source code

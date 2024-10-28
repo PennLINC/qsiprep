@@ -1,8 +1,8 @@
 .. include:: links.rst
 
-------------------------
-Contributing to qsiprep
-------------------------
+#######################
+Contributing to QSIPrep
+#######################
 
 This document explains how to prepare a new development environment and
 update an existing environment, as necessary.
@@ -14,8 +14,10 @@ By default, work should be built off of `pennbbl/qsiprep:latest
 installation_ guide for the basic procedure for running).
 
 
+*****************************
 Patching working repositories
-=============================
+*****************************
+
 In order to test new code without rebuilding the Docker image, it is
 possible to mount working repositories as source directories within the
 container.
@@ -33,7 +35,7 @@ For example, ::
         pennbbl/qsiprep:latest /data /out/out participant \
         -w /out/work/
 
-In order to work directly in the container, use ``--entrypoint=bash`` 
+In order to work directly in the container, use ``--entrypoint=bash``
 arguments in a ``docker`` command::
 
     $ docker run --rm -v $HOME/fullds005:/data:ro -v $HOME/dockerout:/out \
@@ -54,8 +56,10 @@ Or you can patch Singularity containers using the PYTHONPATH variable: ::
         /scratch/dataset /scratch/out participant -w /out/work/
 
 
+*******************
 Adding dependencies
-===================
+*******************
+
 New dependencies to be inserted into the Docker image will either be
 Python or non-Python dependencies.
 Python dependencies may be added in three places, depending on whether
@@ -81,8 +85,11 @@ For example, installing an ``apt`` package may be done as follows: ::
     RUN apt-get update && \
         apt-get install -y <PACKAGE>
 
+
+***********************
 Rebuilding Docker image
-=======================
+***********************
+
 If it is necessary to rebuild the Docker image, a local image named
 ``qsiprep`` may be built from within the working qsiprep
 repository, located in ``~/projects/qsiprep``: ::
@@ -93,8 +100,9 @@ To work in this image, replace ``pennbbl/qsiprep:latest`` with
 ``qsiprep`` in any of the above commands.
 
 
+***********************************************
 Adding new features to the citation boilerplate
-===============================================
+***********************************************
 
 The citation boilerplate is built by adding two dunder attributes
 of workflow objects: ``__desc__`` and ``__postdesc__``.

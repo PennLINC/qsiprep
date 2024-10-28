@@ -1,5 +1,6 @@
+###################
 License information
--------------------
+###################
 
 We use the 3-clause BSD license; the full license may be found in the
 `LICENSE <https://github.com/pennbbl/qsiprep/blob/master/LICENSE>`_ file
