@@ -46,7 +46,6 @@ SUBJECT_TEMPLATE = """\t<ul class="elem-desc">
 \t\t<li>Diffusion-weighted series: inputs {n_dwis:d}, outputs {n_outputs:d}</li>
 {groupings}
 \t\t<li>Resampling targets: T1wACPC
-\t\t<li>FreeSurfer reconstruction: {freesurfer_status}</li>
 \t</ul>
 """
 
@@ -57,7 +56,6 @@ SUBJECT_SESSION_ANAT_TEMPLATE = """\t<ul class="elem-desc">
 \t\t<li>Diffusion-weighted series: inputs {n_dwis:d}, outputs {n_outputs:d}</li>
 {groupings}
 \t\t<li>Resampling targets: T1wACPC
-\t\t<li>FreeSurfer reconstruction: {freesurfer_status}</li>
 \t</ul>
 """
 
@@ -209,7 +207,6 @@ class SubjectSummary(SummaryInterface):
             n_outputs=n_outputs,
             groupings=groupings,
             output_spaces="T1wACPC",
-            freesurfer_status=freesurfer_status,
         )
 
 

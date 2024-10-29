@@ -1142,10 +1142,11 @@ def init_anat_derivatives_wf() -> Workflow:
     t1_name = pe.Node(
         niu.Function(
             function=fix_multi_source_name,
-            input_names=["in_files", "dwi_only", "anatomical_contrast"],
+            input_names=["in_files", "dwi_only", "include_session", "anatomical_contrast"],
         ),
         name="t1_name",
     )
+    t1_name.inputs.include_session = config.workflow.anat_space_definition == "session"
     t1_name.inputs.anatomical_contrast = config.workflow.anat_modality
     t1_name.inputs.dwi_only = False
 
