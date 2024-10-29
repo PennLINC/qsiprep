@@ -67,22 +67,17 @@ def run_reports(
 
 
 def generate_reports(
-    subject_list, output_dir, run_uuid, session_list=None, bootstrap_file=None, work_dir=None
+    processing_list, output_level, output_dir, run_uuid, bootstrap_file=None, work_dir=None
 ):
     """Generate reports for a list of subjects."""
     reportlets_dir = None
     if work_dir is not None:
         reportlets_dir = Path(work_dir) / "reportlets"
 
-    if isinstance(subject_list, str):
-        subject_list = [subject_list]
-
     errors = []
-    for subject_label in subject_list:
-        # The number of sessions is intentionally not based on session_list but
-        # on the total number of sessions, because I want the final derivatives
-        # folder to be the same whether sessions were run one at a time or all-together.
-        n_ses = len(config.execution.layout.get_sessions(subject=subject_label))
+    for subject_label, session_list in processing_list:
+
+        n_ses = len(session_list)
 
         if bootstrap_file is not None:
             # If a config file is precised, we do not override it
@@ -97,45 +92,46 @@ def generate_reports(
             bootstrap_file = data.load("reports-spec-anat.yml")
             html_report = f'sub-{subject_label.lstrip("sub-")}_anat.html'
 
-        report_error = run_reports(
-            output_dir,
-            subject_label,
-            run_uuid,
-            bootstrap_file=bootstrap_file,
-            out_filename=html_report,
-            reportlets_dir=reportlets_dir,
-            errorname=f"report-{run_uuid}-{subject_label}.err",
-            subject=subject_label,
-        )
-        # If the report generation failed, append the subject label for which it failed
-        if report_error is not None:
-            errors.append(report_error)
+        # We only make this one if it's all the sessions or just the anat and not sessionwise
+        if not output_level == "session":
+            report_error = run_reports(
+                output_dir,
+                subject_label,
+                run_uuid,
+                bootstrap_file=bootstrap_file,
+                out_filename=html_report,
+                reportlets_dir=reportlets_dir,
+                errorname=f"report-{run_uuid}-{subject_label}.err",
+                subject=subject_label,
+            )
+            # If the report generation failed, append the subject label for which it failed
+            if report_error is not None:
+                errors.append(report_error)
 
-        if n_ses > config.execution.aggr_ses_reports:
+        if n_ses > config.execution.aggr_ses_reports or output_level == "session":
             # Beyond a certain number of sessions per subject,
-            # we separate the functional reports per session
-            if session_list is None:
-                all_filters = config.execution.bids_filters or {}
-                filters = all_filters.get("dwi", {})
-                session_list = config.execution.layout.get_sessions(
-                    subject=subject_label, **filters
-                )
-
-            # Drop ses- prefixes
+            # we separate the dwi reports per session
+            # If output_level is "session", the session-wise anatomical reports are in here too
             session_list = [ses[4:] if ses.startswith("ses-") else ses for ses in session_list]
 
             for session_label in session_list:
-                bootstrap_file = data.load("reports-spec-dwi.yml")
-                html_report = f'sub-{subject_label.lstrip("sub-")}_ses-{session_label}_dwi.html'
+
+                bootstrap_file = data.load(
+                    "reports-spec.yml" if output_level == "session" else "reports-spec-dwi.yml"
+                )
+                suffix = "" if output_level == "session" else "_dwi"
+                html_report = (
+                    f'sub-{subject_label.lstrip("sub-")}_ses-{session_label}{suffix}.html'
+                )
 
                 report_error = run_reports(
-                    output_dir,
+                    output_dir / subject_label if output_level == "session" else output_dir,
                     subject_label,
                     run_uuid,
                     bootstrap_file=bootstrap_file,
                     out_filename=html_report,
                     reportlets_dir=reportlets_dir,
-                    errorname=f"report-{run_uuid}-{subject_label}-dwi.err",
+                    errorname=f"report-{run_uuid}-{subject_label}-{session_label}{suffix}.err",
                     subject=subject_label,
                     session=session_label,
                 )
