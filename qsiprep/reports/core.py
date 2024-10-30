@@ -93,7 +93,7 @@ def generate_reports(
             html_report = f'sub-{subject_label.lstrip("sub-")}_anat.html'
 
         # We only make this one if it's all the sessions or just the anat and not sessionwise
-        if not output_level == "session":
+        if output_level != "session":
             report_error = run_reports(
                 output_dir,
                 subject_label,
@@ -125,7 +125,7 @@ def generate_reports(
                 )
 
                 report_error = run_reports(
-                    output_dir / subject_label if output_level == "session" else output_dir,
+                    output_dir,
                     subject_label,
                     run_uuid,
                     bootstrap_file=bootstrap_file,
