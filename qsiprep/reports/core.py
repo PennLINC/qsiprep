@@ -70,9 +70,7 @@ def generate_reports(
     processing_list, output_level, output_dir, run_uuid, bootstrap_file=None, work_dir=None
 ):
     """Generate reports for a list of subjects."""
-    reportlets_dir = None
-    if work_dir is not None:
-        reportlets_dir = Path(work_dir) / "reportlets"
+    reportlets_dir = output_dir
 
     errors = []
     for subject_label, session_list in processing_list:
@@ -120,13 +118,14 @@ def generate_reports(
                     "reports-spec.yml" if output_level == "session" else "reports-spec-dwi.yml"
                 )
                 suffix = "" if output_level == "session" else "_dwi"
-                html_report = (
-                    f'ses-{session_label}/sub-{subject_label.lstrip("sub-")}_'
-                    f"ses-{session_label}{suffix}.html"
+                subject_id = (
+                    subject_label[4:] if subject_label.startswith("sub-") else subject_label
                 )
+                html_report = "report.html"
+                ses_output_dir = Path(output_dir) / f"sub-{subject_id}" / f"ses-{session_label}"
 
                 report_error = run_reports(
-                    output_dir,
+                    ses_output_dir,
                     subject_label,
                     run_uuid,
                     bootstrap_file=bootstrap_file,
