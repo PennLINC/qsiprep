@@ -122,7 +122,7 @@ def generate_reports(
                 suffix = "" if output_level == "session" else "_dwi"
                 html_report = (
                     f'ses-{session_label}/sub-{subject_label.lstrip("sub-")}_'
-                    f'ses-{session_label}{suffix}.html'
+                    f"ses-{session_label}{suffix}.html"
                 )
 
                 report_error = run_reports(
