@@ -75,6 +75,7 @@ def generate_reports(
     errors = []
     for subject_label, session_list in processing_list:
 
+        subject_id = subject_label[4:] if subject_label.startswith("sub-") else subject_label
         n_ses = len(session_list)
 
         if bootstrap_file is not None:
@@ -114,18 +115,22 @@ def generate_reports(
 
             for session_label in session_list:
 
-                bootstrap_file = data.load(
-                    "reports-spec.yml" if output_level == "session" else "reports-spec-dwi.yml"
-                )
-                suffix = "" if output_level == "session" else "_dwi"
-                subject_id = (
-                    subject_label[4:] if subject_label.startswith("sub-") else subject_label
-                )
-                html_report = "report.html"
-                ses_output_dir = Path(output_dir) / f"sub-{subject_id}" / f"ses-{session_label}"
+                if output_level == "session":
+                    bootstrap_file = data.load("reports-spec.yml")
+                    suffix = ""
+                    html_report = (
+                        output_dir
+                        / f"sub-{subject_id}"
+                        / f"ses-{session_label}"
+                        / f"sub-{subject_id}_ses-{session_label}.html"
+                    )
+                else:
+                    bootstrap_file = data.load("reports-spec-dwi.yml")
+                    suffix = "_dwi"
+                    html_report = "report.html"
 
                 report_error = run_reports(
-                    ses_output_dir,
+                    output_dir,
                     subject_label,
                     run_uuid,
                     bootstrap_file=bootstrap_file,
