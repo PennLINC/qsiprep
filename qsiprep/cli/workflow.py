@@ -87,17 +87,12 @@ def build_workflow(config_file, retval):
     # Called with reports only
     if config.execution.reports_only:
         build_log.log(25, "Running --reports-only on participants %s", ", ".join(subject_list))
-        session_list = (
-            config.execution.bids_filters.get("dwi", {}).get("session")
-            if config.execution.bids_filters
-            else None
-        )
 
         failed_reports = generate_reports(
-            subject_list=config.execution.participant_label,
+            processing_list=config.execution.participant_label,
+            output_level=config.workflow.anat_space_definition,
             output_dir=config.execution.output_dir,
             run_uuid=config.execution.run_uuid,
-            session_list=session_list,
         )
         if failed_reports:
             config.loggers.cli.error(
