@@ -125,7 +125,11 @@ def generate_reports(
                 )
 
                 report_error = run_reports(
-                    output_dir / subject_label if output_level == "session" else output_dir,
+                    (
+                        output_dir / f"sub-{subject_label}"
+                        if output_level == "session"
+                        else output_dir
+                    ),
                     subject_label,
                     run_uuid,
                     bootstrap_file=bootstrap_file,
