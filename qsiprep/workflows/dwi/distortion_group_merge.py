@@ -212,8 +212,8 @@ def init_distortion_group_merge_wf(
     ds_report_gradients = pe.Node(
         DerivativesDataSink(
             datatype="figures",
-            desc="sampling",
-            suffix="scheme",
+            desc="samplingscheme",
+            suffix="dwi",
             source_file=source_file,
         ),
         name="ds_report_gradients",

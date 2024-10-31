@@ -236,7 +236,8 @@ def init_dwi_finalize_wf(
         ds_report_intramodal = pe.Node(
             DerivativesDataSink(
                 datatype="figures",
-                suffix="tointramodal",
+                desc="intramodalcoreg",
+                suffix="dwi",
                 source_file=source_file,
                 base_directory=config.execution.output_dir,
             ),
@@ -323,8 +324,8 @@ def init_dwi_finalize_wf(
     ds_report_gradients = pe.Node(
         DerivativesDataSink(
             datatype="figures",
-            desc="sampling",
-            suffix="scheme",
+            desc="samplingscheme",
+            suffix="dwi",
             source_file=source_file,
         ),
         name="ds_report_gradients",
