@@ -302,7 +302,8 @@ Diffusion data preprocessing
     ds_report_coreg = pe.Node(
         DerivativesDataSink(
             datatype="figures",
-            suffix="acpc" if dwi_only else "coreg",
+            suffix="dwi",
+            desc="acpc" if dwi_only else "coreg",
             source_file=source_file,
         ),
         name="ds_report_coreg",

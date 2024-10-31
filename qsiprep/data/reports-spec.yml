@@ -1,34 +1,30 @@
 package: qsiprep
 title: Visual report for participant '{subject}' - QSIPrep
 sections:
+
 - name: Summary
   reportlets:
   - bids: {datatype: figures, suffix: "summary"}
+
 - name: Anatomical
   reportlets:
   - bids:
       datatype: figures
-      desc: conform
       extension: [.html]
-      suffix: [T1w, T2w]
-  - bids: {datatype: figures, suffix: dseg}
+      suffix: conform
+  - bids: {datatype: figures, desc: seg, suffix: mask}
     caption: |
-      This panel shows the final, preprocessed T1-weighted image,
+      This panel shows the final, preprocessed anatomical reference image,
       with contours delineating the detected brain mask and brain tissue segmentations.
     subtitle: Brain mask and brain tissue segmentation of the T1w
-  - bids: {datatype: figures, space: .*, suffix: T1w, regex_search: True}
-    caption: Spatial normalization of the T1w image to the <code>{space}</code> template.
+  - bids: {datatype: figures, suffix: t1w2mni}
+    caption: Spatial normalization of the anatomical reference to the <code>{space}</code> template.
     description: |
-      Results of nonlinear alignment of the T1w reference one or more template
+      Results of nonlinear alignment of the anatomical reference one or more template
       space(s). Hover on the panels with the mouse pointer to transition between both
       spaces.
     static: false
-    subtitle: Spatial normalization of the anatomical T1w reference
-  - bids: {datatype: figures, desc: reconall, suffix: T1w}
-    caption: |
-      Surfaces (white and pial) reconstructed with FreeSurfer (<code>recon-all</code>)
-      overlaid on the participant's T1w template.
-    subtitle: Surface reconstruction
+    subtitle: Spatial normalization of the anatomical reference
 
 - name: <em>B<sub>0</sub></em> field mapping
   ordering: session,acquisition,run,fmapid
@@ -138,16 +134,25 @@ sections:
       appear in the 100ms bin.
     static: false
     subtitle: T2* gray-matter values
+
   - bids: {datatype: figures, desc: coreg, suffix: dwi}
     caption: |
-      This panel shows the alignment of the reference EPI (DWI) image to the
-      anatomical (T1-weighted) image.
+      This panel shows the alignment of the reference EPI (dMRI b=0) image to the
+      anatomical reference image.
       The reference EPI has been contrast enhanced and susceptibility-distortion
       corrected (if applicable) for improved anatomical fidelity.
       The anatomical image has been resampled into EPI space, as well as the
       anatomical white matter mask, which appears as a red contour.
     static: false
-    subtitle: Alignment of functional and anatomical MRI data (coregistration)
+    subtitle: Alignment of dMRI and anatomical MRI data (coregistration)
+
+  - bids: {datatype: figures, desc: acpc, suffix: dwi}
+    caption: |
+      This panel shows the alignment of the reference EPI (DWI) image to
+      AC-PC alignment.
+    static: false
+    subtitle: Reorientation of DWI reference image to AC-PC
+
   - bids: {datatype: figures, desc: rois, suffix: dwi}
     caption: |
       Brain mask calculated on the DWI signal (red contour), along with the
@@ -197,10 +202,11 @@ sections:
       effects and can inform decisions about feature orthogonalization prior to
       confound regression.
     subtitle: Correlations among nuisance regressors
+
 - name: About
   nested: true
   reportlets:
-  - bids: {datatype: figures, desc: about, suffix: T1w}
+  - bids: {datatype: figures, suffix: about}
   - custom: boilerplate
     path: '{out_dir}/logs'
     bibfile: ['qsiprep', 'data/boilerplate.bib']
