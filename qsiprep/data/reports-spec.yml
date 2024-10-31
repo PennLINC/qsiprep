@@ -3,7 +3,7 @@ title: Visual report for participant '{subject}' - QSIPrep
 sections:
 - name: Summary
   reportlets:
-  - bids: {datatype: figures, desc: summary, suffix: [T1w, T2w]}
+  - bids: {datatype: figures, suffix: "summary"}
 - name: Anatomical
   reportlets:
   - bids:

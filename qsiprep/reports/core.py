@@ -118,12 +118,8 @@ def generate_reports(
                 if output_level == "session":
                     bootstrap_file = data.load("reports-spec.yml")
                     suffix = ""
-                    html_report = (
-                        output_dir
-                        / f"sub-{subject_id}"
-                        / f"ses-{session_label}"
-                        / f"sub-{subject_id}_ses-{session_label}.html"
-                    )
+                    session_dir = output_dir / f"sub-{subject_id}" / f"ses-{session_label}"
+                    html_report = session_dir / f"sub-{subject_id}_ses-{session_label}.html"
                 else:
                     bootstrap_file = data.load("reports-spec-dwi.yml")
                     suffix = "_dwi"
