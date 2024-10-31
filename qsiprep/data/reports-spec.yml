@@ -19,7 +19,7 @@ sections:
       with contours delineating the detected brain mask and brain tissue segmentations.
     subtitle: Brain mask and brain tissue segmentation of the T1w
 
-  - bids: {datatype: figures, suffix: t1w2mni}
+  - bids: {datatype: figures, space: .*, suffix: t1w2mni, regex_search: True}
     caption: Spatial normalization of the anatomical reference to the <code>{space}</code> template.
     description: |
       Results of nonlinear alignment of the anatomical reference one or more template
