@@ -227,7 +227,7 @@ sections:
   reportlets:
   - bids: {datatype: figures, suffix: about}
   - custom: boilerplate
-    path: '{out_dir}/logs'
+    path: '{reportlets_dir}/logs'
     bibfile: ['qsiprep', 'data/boilerplate.bib']
     caption: |
       <p>We kindly ask to report results preprocessed with this tool using the following boilerplate.</p>

@@ -69,8 +69,7 @@ def run_reports(
 def generate_reports(
     processing_list, output_level, output_dir, run_uuid, bootstrap_file=None, work_dir=None
 ):
-    """Generate reports for a list of subjects."""
-    reportlets_dir = output_dir
+    """Generate reports for a list of processing groups."""
 
     errors = []
     for subject_label, session_list in processing_list:
@@ -99,7 +98,7 @@ def generate_reports(
                 run_uuid,
                 bootstrap_file=bootstrap_file,
                 out_filename=html_report,
-                reportlets_dir=reportlets_dir,
+                reportlets_dir=output_dir,
                 errorname=f"report-{run_uuid}-{subject_label}.err",
                 subject=subject_label,
             )
@@ -119,19 +118,19 @@ def generate_reports(
                     bootstrap_file = data.load("reports-spec.yml")
                     suffix = ""
                     session_dir = output_dir / f"sub-{subject_id}" / f"ses-{session_label}"
-                    html_report = session_dir / f"sub-{subject_id}_ses-{session_label}.html"
+                    html_report = f"sub-{subject_id}_ses-{session_label}.html"
                 else:
                     bootstrap_file = data.load("reports-spec-dwi.yml")
                     suffix = "_dwi"
                     html_report = "report.html"
 
                 report_error = run_reports(
-                    output_dir,
+                    session_dir,
                     subject_label,
                     run_uuid,
                     bootstrap_file=bootstrap_file,
                     out_filename=html_report,
-                    reportlets_dir=reportlets_dir,
+                    reportlets_dir=output_dir,
                     errorname=f"report-{run_uuid}-{subject_label}-{session_label}{suffix}.err",
                     subject=subject_label,
                     session=session_label,
