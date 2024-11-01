@@ -43,6 +43,7 @@ from pathlib import Path
 import nibabel as nb
 import numpy as np
 from bids import BIDSLayout
+from bids.layout import Query
 
 IMPORTANT_DWI_FIELDS = [
     # From image headers:
@@ -177,7 +178,7 @@ def collect_participants(bids_dir, participant_label=None, strict=False, bids_va
     return found_label
 
 
-def collect_data(bids_dir, participant_label, filters=None, bids_validate=True):
+def collect_data(bids_dir, participant_label, session_id=None, filters=None, bids_validate=True):
     """Use pybids to retrieve the input data for a given participant."""
     if isinstance(bids_dir, BIDSLayout):
         layout = bids_dir
@@ -202,6 +203,7 @@ def collect_data(bids_dir, participant_label, filters=None, bids_validate=True):
             layout.get(
                 return_type="file",
                 subject=participant_label,
+                session=session_id or Query.OPTIONAL,
                 extension=["nii", "nii.gz"],
                 **query,
             )

@@ -47,6 +47,7 @@ def _build_parser(**kwargs):
         "dwi_no_biascorr": ("--b1-biascorrect-stage none", "0.23.0"),
         "b0_motion_corr_to": (None, "0.23.0"),
         "b0_to_t1w_transform": ("--b0-t0-anat-transform", "0.23.0"),
+        "longitudinal": ("--anat-space-definition robust-template", "0.24.0"),
     }
 
     class DeprecatedAction(Action):
@@ -106,6 +107,9 @@ def _build_parser(**kwargs):
 
     def _drop_sub(value):
         return value[4:] if value.startswith("sub-") else value
+
+    def _drop_ses(value):
+        return value[4:] if value.startswith("ses-") else value
 
     def _process_value(value):
         import bids
@@ -191,12 +195,15 @@ def _build_parser(**kwargs):
         help="A space delimited list of participant identifiers or a single "
         "identifier (the sub- prefix can be removed)",
     )
-    # Re-enable when option is actually implemented
-    # g_bids.add_argument('-s', '--session-id', action='store', default='single_session',
-    #                     help='Select a specific session to be processed')
-    # Re-enable when option is actually implemented
-    # g_bids.add_argument('-r', '--run-id', action='store', default='single_run',
-    #                     help='Select a specific run to be processed')
+    g_bids.add_argument(
+        "--session-id",
+        action="store",
+        nargs="+",
+        type=_drop_ses,
+        default=None,
+        help="A space delimited list of session identifiers or a single "
+        "identifier (the ses- prefix can be removed)",
+    )
 
     g_bids.add_argument(
         "--bids-filter-file",
@@ -306,6 +313,14 @@ def _build_parser(**kwargs):
         "--longitudinal",
         action="store_true",
         help="Treat dataset as longitudinal - may increase runtime",
+    )
+    g_conf.add_argument(
+        "--anat-space-definition",
+        choices=["first", "robust-template", "session"],
+        default="first",
+        help="How to define subject-specific anatomical space. session will "
+        "produce one anatomical space per session. The others combine anatomical "
+        "data across sessions to define one anatomical space per subject.",
     )
     g_conf.add_argument(
         "--skip-anat-based-spatial-normalization",
@@ -625,6 +640,8 @@ def parse_args(args=None, namespace=None):
     """Parse args and run further checks on the command line."""
     import logging
 
+    from bids.layout import Query
+
     # from niworkflows.utils.spaces import Reference, SpatialReferences
 
     parser = _build_parser()
@@ -757,4 +774,60 @@ def parse_args(args=None, namespace=None):
             "%s." % ", ".join(missing_subjects)
         )
 
+    # Determine which sessions to process and group them
+    processing_groups = []
+
+    # Determine any session filters
+    session_filters = config.execution.session_id or []
+    # if config.execution.bids_filters is not None:
+    #     for _, filters in config.execution.bids_filters:
+    #         ses_filter = filters.get("session")
+    #         if isinstance(ses_filter, str):
+    #             session_filters.append(ses_filter)
+    #         elif isinstance(ses_filter, list):
+    #             session_filters.extend(ses_filter)
+
+    # Examine the available sessions for each participant
+    for subject_id in participant_label:
+        sessions = config.execution.layout.get_sessions(
+            subject=subject_id,
+            session=session_filters or Query.OPTIONAL,
+            suffix=["T1w", "T2w", "dwi"],
+        )
+
+        # If there are no sessions, there is only one option:
+        if not sessions:
+            if config.workflow.anat_space_definition == "session":
+                config.loggers.workflow.warning(
+                    f"Subject {subject_id} had no sessions, "
+                    "but --anat-space-definition was set to 'session'. "
+                    "Outputs will NOT appear in a session directory for "
+                    f"{subject_id}.",
+                )
+
+            processing_groups.append([subject_id, []])
+            continue
+
+        if config.workflow.anat_space_definition == "session":
+            for session in sessions:
+                processing_groups.append([subject_id, [session]])
+        else:
+            processing_groups.append([subject_id, sessions])
+
+    # Make a nicely formatted message showing what we will process
+    def pretty_group(group_num, processing_group):
+        participant_label, ses_labels = processing_group
+        if ses_labels:
+            session_txt = ", ".join(map(str, ses_labels))
+        else:
+            session_txt = "No session level"
+
+        return f"{group_num}\t{participant_label}\t{session_txt}"
+
+    processing_msg = "\nGroup\tSubject\tSessions\n" + "\n".join(
+        [pretty_group(gnum, group) for gnum, group in enumerate(processing_groups)]
+    )
+    config.loggers.workflow.info(processing_msg)
+
     config.execution.participant_label = sorted(participant_label)
+    config.execution.processing_list = processing_groups

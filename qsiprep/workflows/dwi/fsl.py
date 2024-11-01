@@ -300,7 +300,8 @@ def init_fsl_hmc_wf(
         ds_report_topupsummary = pe.Node(
             DerivativesDataSink(
                 datatype="figures",
-                suffix="topupsummary",
+                desc="topupsummary",
+                suffix="dwi",
                 source_file=source_file,
             ),
             name="ds_report_topupsummary",

@@ -65,6 +65,7 @@ def init_anat_preproc_wf(
     num_anat_images,
     num_additional_t2ws,
     has_rois,
+    name="anat_preproc_wf",
 ):
     r"""
     This workflow controls the anatomical preprocessing stages of qsiprep.
@@ -138,7 +139,7 @@ def init_anat_preproc_wf(
 
     """
 
-    workflow = Workflow(name="anat_preproc_wf")
+    workflow = Workflow(name=name)
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=["t1w", "t2w", "roi", "flair", "subjects_dir", "subject_id"],
@@ -1141,10 +1142,11 @@ def init_anat_derivatives_wf() -> Workflow:
     t1_name = pe.Node(
         niu.Function(
             function=fix_multi_source_name,
-            input_names=["in_files", "dwi_only", "anatomical_contrast"],
+            input_names=["in_files", "dwi_only", "include_session", "anatomical_contrast"],
         ),
         name="t1_name",
     )
+    t1_name.inputs.include_session = config.workflow.anat_space_definition == "session"
     t1_name.inputs.anatomical_contrast = config.workflow.anat_modality
     t1_name.inputs.dwi_only = False
 

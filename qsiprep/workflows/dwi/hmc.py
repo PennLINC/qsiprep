@@ -730,8 +730,8 @@ def init_dwi_model_hmc_wf(
         ds_report_iteration_plot = pe.Node(
             DerivativesDataSink(
                 datatype="figures",
-                desc="shoreline",
-                suffix="iterdata",
+                desc="shorelineiters",
+                suffix="dwi",
             ),
             name="ds_report_iteration_plot",
             mem_gb=0.1,

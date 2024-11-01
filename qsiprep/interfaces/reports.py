@@ -23,7 +23,6 @@ import pandas as pd
 import seaborn as sns
 from matplotlib import animation
 from nilearn.maskers import NiftiLabelsMasker
-from nipype.interfaces import freesurfer as fs
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec,
     Directory,
@@ -46,7 +45,16 @@ SUBJECT_TEMPLATE = """\t<ul class="elem-desc">
 \t\t<li>Diffusion-weighted series: inputs {n_dwis:d}, outputs {n_outputs:d}</li>
 {groupings}
 \t\t<li>Resampling targets: T1wACPC
-\t\t<li>FreeSurfer reconstruction: {freesurfer_status}</li>
+\t</ul>
+"""
+
+SUBJECT_SESSION_ANAT_TEMPLATE = """\t<ul class="elem-desc">
+\t\t<li>Subject ID: {subject_id}</li>
+\t\t<li>Session ID: {session_id}</li>
+\t\t<li>Structural images: {n_t1s:d} T1-weighted {t2w}</li>
+\t\t<li>Diffusion-weighted series: inputs {n_dwis:d}, outputs {n_outputs:d}</li>
+{groupings}
+\t\t<li>Resampling targets: T1wACPC
 \t</ul>
 """
 
@@ -135,9 +143,11 @@ class SubjectSummaryInputSpec(BaseInterfaceInputSpec):
     t2w = InputMultiPath(File(exists=True), desc="T2w structural images")
     subjects_dir = Directory(desc="FreeSurfer subjects directory")
     subject_id = Str(desc="Subject ID")
+    session_id = Str(desc="Session ID")
     dwi_groupings = traits.Dict(desc="groupings of DWI files and their output names")
     output_spaces = traits.List(desc="Target spaces")
     template = traits.Enum("MNI152NLin2009cAsym", "MNIInfant", desc="Template space")
+    freesurfer_status = traits.Enum("Not run", "Partial", "Full", desc="FreeSurfer status")
 
 
 class SubjectSummaryOutputSpec(SummaryOutputSpec):
@@ -156,19 +166,6 @@ class SubjectSummary(SummaryInterface):
         return super(SubjectSummary, self)._run_interface(runtime)
 
     def _generate_segment(self):
-        if not isdefined(self.inputs.subjects_dir):
-            freesurfer_status = "Not run"
-        else:
-            recon = fs.ReconAll(
-                subjects_dir=self.inputs.subjects_dir,
-                subject_id=self.inputs.subject_id,
-                T1_files=self.inputs.t1w,
-                flags="-noskullstrip",
-            )
-            if recon.cmdline.startswith("echo"):
-                freesurfer_status = "Pre-existing directory"
-            else:
-                freesurfer_status = "Run by qsiprep"
 
         t2w_seg = ""
         if self.inputs.t2w:
@@ -210,7 +207,6 @@ class SubjectSummary(SummaryInterface):
             n_outputs=n_outputs,
             groupings=groupings,
             output_spaces="T1wACPC",
-            freesurfer_status=freesurfer_status,
         )
 
 

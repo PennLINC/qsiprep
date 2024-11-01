@@ -78,9 +78,13 @@ def init_qsiprep_wf():
     qsiprep_wf = Workflow(name=f"qsiprep_{ver.major}_{ver.minor}_wf")
     qsiprep_wf.base_dir = config.execution.work_dir
 
-    for subject_id in config.execution.participant_label:
-        single_subject_wf = init_single_subject_wf(subject_id)
+    for subject_id, session_ids in config.execution.processing_list:
 
+        # We may need to select a session or multiple sessions to consider together
+
+        single_subject_wf = init_single_subject_wf(subject_id, session_ids)
+
+        # Should we put these in session specific directories? The uuid is unique but opaque
         single_subject_wf.config["execution"]["crashdump_dir"] = str(
             config.execution.output_dir / f"sub-{subject_id}" / "log" / config.execution.run_uuid
         )
@@ -97,7 +101,7 @@ def init_qsiprep_wf():
     return qsiprep_wf
 
 
-def init_single_subject_wf(subject_id: str):
+def init_single_subject_wf(subject_id: str, session_ids: list):
     """Organize the preprocessing pipeline for a single subject.
 
     This workflow collects and reports information about the subject, and prepares
@@ -135,6 +139,7 @@ def init_single_subject_wf(subject_id: str):
         subject_data = collect_data(
             config.execution.layout,
             subject_id,
+            session_id=session_ids,
             filters=config.execution.bids_filters,
             bids_validate=False,
         )[0]
@@ -163,7 +168,8 @@ def init_single_subject_wf(subject_id: str):
     # Inspect the dwi data and provide advice on pipeline choices
     # provide_processing_advice(subject_data, layout, unringing_method)
 
-    workflow = Workflow(name=f"sub_{subject_id}_wf")
+    _ses_name = "_ses_" + "_".join(map(str, session_ids)) if session_ids else ""
+    workflow = Workflow(name=f"sub_{subject_id}{_ses_name}_wf")
     workflow.__desc__ = f"""
 Preprocessing was performed using *QSIPrep* {config.environment.version},
 which is based on *Nipype* {config.environment.nipype_version}
@@ -191,7 +197,7 @@ to workflows in *QSIPrep*'s documentation]\
 
     bidssrc = pe.Node(
         BIDSDataGrabber(
-            subject_data=subject_data,
+            subject_data=subject_data,  # Data has already been selected with sub/ses filters
             dwi_only=config.workflow.anat_modality == "none",
             anat_only=config.workflow.anat_only,
             anatomical_contrast=config.workflow.anat_modality,
@@ -251,8 +257,12 @@ to workflows in *QSIPrep*'s documentation]\
     workflow.connect([
         (inputnode, anat_preproc_wf, [('subjects_dir', 'inputnode.subjects_dir')]),
         (bidssrc, bids_info, [
-            ((info_modality, fix_multi_source_name, config.workflow.anat_modality == 'none',
-              config.workflow.anat_modality), 'in_file'),
+            ((info_modality,
+              fix_multi_source_name,
+              config.workflow.anat_modality == 'none',
+              config.workflow.anat_space_definition == "session",
+              config.workflow.anat_modality),
+             'in_file'),
         ]),
         (inputnode, summary, [('subjects_dir', 'subjects_dir')]),
         (bidssrc, summary, [('t1w', 't1w'), ('t2w', 't2w')]),
@@ -265,13 +275,21 @@ to workflows in *QSIPrep*'s documentation]\
         ]),
         (summary, anat_preproc_wf, [('subject_id', 'inputnode.subject_id')]),
         (bidssrc, ds_report_summary, [
-            ((info_modality, fix_multi_source_name, config.workflow.anat_modality == 'none',
-              config.workflow.anat_modality), 'source_file'),
+            ((info_modality,
+              fix_multi_source_name,
+              config.workflow.anat_modality == 'none',
+              config.workflow.anat_space_definition == "session",
+              config.workflow.anat_modality),
+             'source_file'),
         ]),
         (summary, ds_report_summary, [('out_report', 'in_file')]),
         (bidssrc, ds_report_about, [
-            ((info_modality, fix_multi_source_name, config.workflow.anat_modality == 'none',
-              config.workflow.anat_modality), 'source_file'),
+            ((info_modality,
+              fix_multi_source_name,
+              config.workflow.anat_modality == 'none',
+              config.workflow.anat_space_definition == "session",
+              config.workflow.anat_modality),
+             'source_file'),
         ]),
         (about, ds_report_about, [('out_report', 'in_file')])
     ])  # fmt:skip
@@ -331,7 +349,10 @@ to workflows in *QSIPrep*'s documentation]\
 
     intramodal_template_wf = init_intramodal_template_wf(
         t1w_source_file=fix_multi_source_name(
-            subject_data[info_modality], config.workflow.anat_modality == "none"
+            subject_data[info_modality],
+            dwi_only=config.workflow.anat_modality == "none",
+            include_session=config.workflow.anat_space_definition == "session",
+            anatomical_contrast=config.workflow.anat_modality,
         ),
         inputs_list=sorted(outputs_to_files.keys()),
         name="intramodal_template_wf",
@@ -476,6 +497,6 @@ to workflows in *QSIPrep*'s documentation]\
 def provide_processing_advice(subject_data, layout, unringing_method):
     """Provide advice on preprocessing options based on the data provided."""
     # metadata = {dwi_file: layout.get_metadata(dwi_file) for dwi_file in subject_data["dwi"]}
-    config.loggers.utils.warn(
+    config.loggers.utils.warning(
         "Partial Fourier acquisitions found for %s. Consider using --unringing-method rpg"
     )
