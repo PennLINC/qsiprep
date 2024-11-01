@@ -484,8 +484,7 @@ def init_finalize_denoising_wf(
             ds_report_biascorr = pe.Node(
                 DerivativesDataSink(
                     datatype="figures",
-                    desc=name,
-                    suffix="biascorr",
+                    desc="biascorrpost",
                     source_file=source_file,
                 ),
                 name="ds_report_" + name + "_biascorr",

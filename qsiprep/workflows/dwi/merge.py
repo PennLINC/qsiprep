@@ -430,8 +430,7 @@ def init_dwi_denoising_wf(
         ds_report_denoising = pe.Node(
             DerivativesDataSink(
                 datatype="figures",
-                desc=name,
-                suffix="denoising",
+                desc="denoising",
                 source_file=source_file,
             ),
             name=f"ds_report_{name}_denoising",
@@ -542,8 +541,7 @@ def init_dwi_denoising_wf(
         ds_report_unringing = pe.Node(
             DerivativesDataSink(
                 datatype="figures",
-                desc=name,
-                suffix="unringing",
+                desc="unringing",
                 extension=".svg",
                 source_file=source_file,
             ),
@@ -567,8 +565,7 @@ def init_dwi_denoising_wf(
         ds_report_biascorr = pe.Node(
             DerivativesDataSink(
                 datatype="figures",
-                desc=name,
-                suffix="biascorr",
+                desc="biascorr",
                 source_file=source_file,
             ),
             name=f"ds_report_{name}_biascorr",
