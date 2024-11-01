@@ -180,6 +180,30 @@ sections:
     static: false
     subtitle: Experimental fieldmap-less susceptibility distortion correction
 
+  - bids: {datatype: figures, desc: denoising, suffix: dwi}
+    caption: |
+      "Effect of denoising on a low and high-<em>b</em> image."
+    static: false
+    subtitle: DWI Denoising
+
+  - bids: {datatype: figures, desc: unringing, suffix: dwi}
+    caption: |
+      "Effect of removing Gibbs ringing on a low and high-<em>b</em> image."
+    static: false
+    subtitle: Gibbs Ringing Removal
+
+  - bids: {datatype: figures, desc: biascorr, suffix: dwi}
+    caption: |
+      "Effect of correcting <em>B<sub>1</sub></em> bias on a low and high-<em>b</em> image."
+    static: false
+    subtitle: <em>B<sub>1</sub></em> Bias Correction
+
+  - bids: {datatype: figures, desc: biascorrpost, suffix: dwi}
+    caption: |
+      "Effect of correcting <em>B<sub>1</sub></em> bias on a low and high-<em>b</em> resampled image."
+    static: false
+    subtitle: <em>B<sub>1</sub></em> Bias Correction (Post-Resampling)
+
   - bids: {datatype: figures, suffix: b0ref}
     caption: |
       b=0 template and final mask output. The t1 and signal intersection mask is blue,
