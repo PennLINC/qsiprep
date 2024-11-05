@@ -415,7 +415,7 @@ def scan_groups_to_sidecar(scan_groups):
     concatenated_dwi_files = scan_groups.get("dwi_series")
     fieldmap_info = scan_groups.get("fieldmap_info")
     if fieldmap_info.get("suffix") == "rpe_series":
-        concatenated_dwi_files.extend(fieldmap_info.get("rpe_series"), [])
+        concatenated_dwi_files.extend(fieldmap_info.get("rpe_series", []))
     scan_metadata = {}
     for dwi_file in concatenated_dwi_files:
         dwi_file_name = Path(dwi_file).name
