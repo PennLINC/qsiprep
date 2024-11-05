@@ -364,6 +364,8 @@ def init_dwi_finalize_wf(
         DerivativesDataSink(
             extension=".json",
             source_file=source_file,
+            space="T1w",
+            desc="preproc",
             base_directory=config.execution.output_dir,
         ),
         name="ds_merged_sidecar",
