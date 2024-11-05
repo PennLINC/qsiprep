@@ -272,7 +272,7 @@ class DerivativesSidecar(SimpleInterface):
         with open(json_fname, "w") as jsonf:
             dump(self.inputs.sidecar_data, jsonf, sort_keys=True, indent=4)
         self._results["derivatives_json"] = json_fname
-        return super()._run_interface(runtime)
+        return runtime
 
 
 def _splitext(fname):
