@@ -16,5 +16,6 @@ sub-tinytensors/dwi/sub-tinytensors_dir-PA_space-T1w_desc-preproc_dwi.b
 sub-tinytensors/dwi/sub-tinytensors_dir-PA_space-T1w_desc-preproc_dwi.bval
 sub-tinytensors/dwi/sub-tinytensors_dir-PA_space-T1w_desc-preproc_dwi.bvec
 sub-tinytensors/dwi/sub-tinytensors_dir-PA_space-T1w_desc-preproc_dwi.nii.gz
+sub-tinytensors/dwi/sub-tinytensors_dir-PA_space-T1w_desc-preproc_dwi.json
 sub-tinytensors/dwi/sub-tinytensors_dir-PA_space-T1w_desc-preproc_dwi.b_table.txt
 sub-tinytensors/dwi/sub-tinytensors_dir-PA_space-T1w_dwiref.nii.gz

@@ -355,7 +355,9 @@ def init_dwi_finalize_wf(
 
     # Write a metadata sidecar for the derivatives
     merged_sidecar = pe.Node(
-        DerivativesSidecar(scan_groups_to_sidecar(scan_groups)),
+        DerivativesSidecar(
+            sidecar_data=scan_groups_to_sidecar(scan_groups), source_file=source_file
+        ),
         name="merged_sidecar",
     )
     ds_merged_sidecar = pe.Node(
@@ -410,6 +412,7 @@ def init_dwi_finalize_wf(
             ('t1_mask', 'inputnode.anatomical_mask')]),
         (gtab_t1, outputnode, [('gradient_file', 'gradient_table_t1')]),
         (btab_t1, outputnode, [('btable_file', 'btable_t1')]),
+        (merged_sidecar, ds_merged_sidecar, [('derivatives_json', 'in_file')]),
         (outputnode, dwi_derivatives_wf,
          [('dwi_t1', 'inputnode.dwi_t1'),
           ('dwi_mask_t1', 'inputnode.dwi_mask_t1'),

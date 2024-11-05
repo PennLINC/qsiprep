@@ -45,6 +45,8 @@ import numpy as np
 from bids import BIDSLayout
 from bids.layout import Query
 
+from .. import config
+
 IMPORTANT_DWI_FIELDS = [
     # From image headers:
     "Obliquity",
@@ -404,4 +406,19 @@ def update_metadata_from_nifti_header(metadata, nifti_file):
 
 
 def scan_groups_to_sidecar(scan_groups):
-    return {}
+    """Create a sidecar that reflects how the preprocessed image was created."""
+
+    # Add the information about how the images were grouped and which fieldmaps were used
+    derivatives_metadata = {"scan_grouping": scan_groups}
+
+    # Get metadata from the individual scans that were combined to make this preprocessed image
+    concatenated_dwi_files = scan_groups.get("dwi_series")
+    fieldmap_info = scan_groups.get("fieldmap_info")
+    if fieldmap_info.get("suffix") == "rpe_series":
+        concatenated_dwi_files.extend(fieldmap_info.get("rpe_series"), [])
+    scan_metadata = {}
+    for dwi_file in concatenated_dwi_files:
+        dwi_file_name = Path(dwi_file).name
+        scan_metadata[dwi_file_name] = config.execution.layout.get_metadata(dwi_file)
+    derivatives_metadata["source_metadata"] = scan_metadata
+    return derivatives_metadata
