@@ -252,6 +252,18 @@ class DerivativesMaybeDataSink(DerivativesDataSink):
         return super(DerivativesMaybeDataSink, self)._run_interface(runtime)
 
 
+class _DerivativesSidecarInputSpec(BaseInterfaceInputSpec):
+    pass
+
+
+class _DerivativesSidecarOutputSpec(TraitedSpec):
+    pass
+
+
+class DerivativesSidecar(SimpleInterface):
+    pass
+
+
 def _splitext(fname):
     fname, ext = os.path.splitext(os.path.basename(fname))
     if ext == ".gz":

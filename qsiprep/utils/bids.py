@@ -401,3 +401,7 @@ def update_metadata_from_nifti_header(metadata, nifti_file):
         metadata["NumVolumes"] = 1.0
     orient = nb.orientations.aff2axcodes(img.affine)
     metadata["ImageOrientation"] = "".join(orient) + "+"
+
+
+def scan_groups_to_sidecar(scan_groups):
+    return {}

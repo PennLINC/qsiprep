@@ -15,12 +15,14 @@ from niworkflows.interfaces.reportlets.registration import SimpleBeforeAfterRPT
 from ... import config
 from ...engine import Workflow
 from ...interfaces import DerivativesDataSink
+from ...interfaces.bids import DerivativesSidecar
 from ...interfaces.dsi_studio import DSIStudioBTable
 from ...interfaces.dwi_merge import MergeFinalConfounds, SplitResampledDWIs
 from ...interfaces.gradients import ExtractB0s
 from ...interfaces.mrtrix import DWIBiasCorrect, MRTrixGradientTable
 from ...interfaces.nilearn import Merge
 from ...interfaces.reports import GradientPlot, SeriesQC
+from ...utils.bids import scan_groups_to_sidecar
 from .derivatives import init_dwi_derivatives_wf
 from .qc import init_mask_overlap_wf, init_modelfree_qc_wf
 from .resampling import init_dwi_trans_wf
@@ -347,6 +349,22 @@ def init_dwi_finalize_wf(
             base_directory=config.execution.output_dir,
         ),
         name="ds_series_qc",
+        run_without_submitting=True,
+        mem_gb=DEFAULT_MEMORY_MIN_GB,
+    )
+
+    # Write a metadata sidecar for the derivatives
+    merged_sidecar = pe.Node(
+        DerivativesSidecar(scan_groups_to_sidecar(scan_groups)),
+        name="merged_sidecar",
+    )
+    ds_merged_sidecar = pe.Node(
+        DerivativesDataSink(
+            extension=".json",
+            source_file=source_file,
+            base_directory=config.execution.output_dir,
+        ),
+        name="ds_merged_sidecar",
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
