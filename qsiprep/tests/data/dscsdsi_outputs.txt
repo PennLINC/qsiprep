@@ -27,5 +27,6 @@ sub-tester/dwi/sub-tester_acq-HASC55AP_space-T1w_desc-preproc_dwi.b
 sub-tester/dwi/sub-tester_acq-HASC55AP_space-T1w_desc-preproc_dwi.bval
 sub-tester/dwi/sub-tester_acq-HASC55AP_space-T1w_desc-preproc_dwi.bvec
 sub-tester/dwi/sub-tester_acq-HASC55AP_space-T1w_desc-preproc_dwi.nii.gz
+sub-tester/dwi/sub-tester_acq-HASC55AP_space-T1w_desc-preproc_dwi.json
 sub-tester/dwi/sub-tester_acq-HASC55AP_space-T1w_desc-preproc_dwi.b_table.txt
 sub-tester/dwi/sub-tester_acq-HASC55AP_space-T1w_dwiref.nii.gz

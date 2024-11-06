@@ -50,6 +50,7 @@ sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_space-T1w_desc-preproc_dwi.b
 sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_space-T1w_desc-preproc_dwi.bval
 sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_space-T1w_desc-preproc_dwi.bvec
 sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_space-T1w_desc-preproc_dwi.nii.gz
+sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_space-T1w_desc-preproc_dwi.json
 sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_space-T1w_dwiref.nii.gz
 sub-tester/ses-2
 sub-tester/ses-2/dwi
@@ -62,4 +63,5 @@ sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-T1w_desc-preproc_dwi.b
 sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-T1w_desc-preproc_dwi.bval
 sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-T1w_desc-preproc_dwi.bvec
 sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-T1w_desc-preproc_dwi.nii.gz
+sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-T1w_desc-preproc_dwi.json
 sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-T1w_dwiref.nii.gz

@@ -30,5 +30,6 @@ sub-01/ses-01/dwi/sub-01_ses-01_space-T1w_desc-preproc_dwi.b
 sub-01/ses-01/dwi/sub-01_ses-01_space-T1w_desc-preproc_dwi.bval
 sub-01/ses-01/dwi/sub-01_ses-01_space-T1w_desc-preproc_dwi.bvec
 sub-01/ses-01/dwi/sub-01_ses-01_space-T1w_desc-preproc_dwi.nii.gz
+sub-01/ses-01/dwi/sub-01_ses-01_space-T1w_desc-preproc_dwi.json
 sub-01/ses-01/dwi/sub-01_ses-01_space-T1w_desc-preproc_dwi.b_table.txt
 sub-01/ses-01/dwi/sub-01_ses-01_space-T1w_dwiref.nii.gz

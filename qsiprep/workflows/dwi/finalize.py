@@ -15,12 +15,14 @@ from niworkflows.interfaces.reportlets.registration import SimpleBeforeAfterRPT
 from ... import config
 from ...engine import Workflow
 from ...interfaces import DerivativesDataSink
+from ...interfaces.bids import DerivativesSidecar
 from ...interfaces.dsi_studio import DSIStudioBTable
 from ...interfaces.dwi_merge import MergeFinalConfounds, SplitResampledDWIs
 from ...interfaces.gradients import ExtractB0s
 from ...interfaces.mrtrix import DWIBiasCorrect, MRTrixGradientTable
 from ...interfaces.nilearn import Merge
 from ...interfaces.reports import GradientPlot, SeriesQC
+from ...utils.bids import scan_groups_to_sidecar
 from .derivatives import init_dwi_derivatives_wf
 from .qc import init_mask_overlap_wf, init_modelfree_qc_wf
 from .resampling import init_dwi_trans_wf
@@ -351,6 +353,26 @@ def init_dwi_finalize_wf(
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
 
+    # Write a metadata sidecar for the derivatives
+    merged_sidecar = pe.Node(
+        DerivativesSidecar(
+            sidecar_data=scan_groups_to_sidecar(scan_groups), source_file=source_file
+        ),
+        name="merged_sidecar",
+    )
+    ds_merged_sidecar = pe.Node(
+        DerivativesDataSink(
+            extension=".json",
+            source_file=source_file,
+            space="T1w",
+            desc="preproc",
+            base_directory=config.execution.output_dir,
+        ),
+        name="ds_merged_sidecar",
+        run_without_submitting=True,
+        mem_gb=DEFAULT_MEMORY_MIN_GB,
+    )
+
     # Write the carpetplot data (which is the text output from eddy)
     ds_carpetplot_data = pe.Node(
         DerivativesDataSink(
@@ -392,6 +414,7 @@ def init_dwi_finalize_wf(
             ('t1_mask', 'inputnode.anatomical_mask')]),
         (gtab_t1, outputnode, [('gradient_file', 'gradient_table_t1')]),
         (btab_t1, outputnode, [('btable_file', 'btable_t1')]),
+        (merged_sidecar, ds_merged_sidecar, [('derivatives_json', 'in_file')]),
         (outputnode, dwi_derivatives_wf,
          [('dwi_t1', 'inputnode.dwi_t1'),
           ('dwi_mask_t1', 'inputnode.dwi_mask_t1'),
