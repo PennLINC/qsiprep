@@ -67,7 +67,7 @@ and how it's built.
 Singularity Container
 =====================
 
-The easiest way to get a Sigularity image is to run::
+The easiest way to get a Singularity image is to run::
 
     $ singularity build qsiprep-<version>.sif docker://pennbbl/qsiprep:<version>
 
