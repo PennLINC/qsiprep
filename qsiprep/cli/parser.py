@@ -47,7 +47,7 @@ def _build_parser(**kwargs):
         "dwi_no_biascorr": ("--b1-biascorrect-stage none", "0.23.0"),
         "b0_motion_corr_to": (None, "0.23.0"),
         "b0_to_t1w_transform": ("--b0-t0-anat-transform", "0.23.0"),
-        "longitudinal": ("--subject-anatomical-reference robust-template", "0.24.0"),
+        "longitudinal": ("--subject-anatomical-reference unbiased", "0.24.0"),
     }
 
     class DeprecatedAction(Action):
@@ -316,7 +316,7 @@ def _build_parser(**kwargs):
     )
     g_conf.add_argument(
         "--subject-anatomical-reference",
-        choices=["first", "robust-template", "session"],
+        choices=["first", "unbiased", "session"],
         default="first",
         help="How to define subject-specific anatomical space. session will "
         "produce one anatomical space per session. The others combine anatomical "
