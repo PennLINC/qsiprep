@@ -307,7 +307,11 @@ def _build_parser(**kwargs):
         "parts of the workflow (a space delimited list)",
     )
     g_conf.add_argument(
-        "--infant", action="store_true", help="configure pipelines to process infant brains"
+        "--infant",
+        action="store_true",
+        help="Configure pipelines to process infant brains. "
+        "If using this parameter, the anatomical-template will be changed to MNIInfant. "
+        "The appropriate MNIInfant cohort will be selected based on the participant's age.",
     )
     g_conf.add_argument(
         "--longitudinal",
