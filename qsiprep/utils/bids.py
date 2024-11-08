@@ -445,7 +445,32 @@ def parse_bids_for_age_months(
     2) Check `sub-<subject_id>/sub-<subject_id>_sessions.tsv`
     3) Check `<root>/participants.tsv`
 
-    NOTE: TAKEN FROM NIBABIES
+    Notes
+    -----
+    This function is derived from sources licensed under the Apache-2.0 terms.
+    The original function this work derives from is found at:
+    https://github.com/nipreps/nibabies/blob/7efc8c96d109cb755258209d83b1e164c481cf4e/
+    nibabies/utils/bids.py#L218
+
+    Copyright The NiPreps Developers <nipreps@gmail.com>
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+    We support and encourage derived works from this project, please read
+    about our expectations at
+
+        https://www.nipreps.org/community/licensing/
+
     """
     if subject_id.startswith("sub-"):
         subject_id = subject_id[4:]
@@ -497,7 +522,32 @@ def _get_age_from_tsv(
 ) -> float | None:
     """Get age from TSV.
 
-    NOTE: TAKEN FROM NIBABIES
+    Notes
+    -----
+    This function is derived from sources licensed under the Apache-2.0 terms.
+    The original function this work derives from is found at:
+    https://github.com/nipreps/nibabies/blob/7efc8c96d109cb755258209d83b1e164c481cf4e/
+    nibabies/utils/bids.py#L275
+
+    Copyright The NiPreps Developers <nipreps@gmail.com>
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+    We support and encourage derived works from this project, please read
+    about our expectations at
+
+        https://www.nipreps.org/community/licensing/
+
     """
     df = pd.read_csv(str(bids_tsv), sep="\t")
     age_col = None
@@ -543,7 +593,32 @@ def _get_age_from_tsv(
 def _get_age_units(bids_json: Path) -> ty.Literal["weeks", "months", "years", False]:
     """Get age units.
 
-    NOTE: TAKEN FROM NIBABIES
+    Notes
+    -----
+    This function is derived from sources licensed under the Apache-2.0 terms.
+    The original function this work derives from is found at:
+    https://github.com/nipreps/nibabies/blob/7efc8c96d109cb755258209d83b1e164c481cf4e/
+    nibabies/utils/bids.py#L321
+
+    Copyright The NiPreps Developers <nipreps@gmail.com>
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+    We support and encourage derived works from this project, please read
+    about our expectations at
+
+        https://www.nipreps.org/community/licensing/
+
     """
     try:
         data = json.loads(bids_json.read_text())
@@ -574,7 +649,32 @@ def age_to_months(age: int | float, units: ty.Literal["weeks", "months", "years"
     >>> age_to_months(8, "months")
     8
 
-    NOTE: TAKEN FROM NIBABIES
+    Notes
+    -----
+    This function is derived from sources licensed under the Apache-2.0 terms.
+    The original function this work derives from is found at:
+    https://github.com/nipreps/nibabies/blob/7efc8c96d109cb755258209d83b1e164c481cf4e/
+    nibabies/utils/bids.py#L337
+
+    Copyright The NiPreps Developers <nipreps@gmail.com>
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+    We support and encourage derived works from this project, please read
+    about our expectations at
+
+        https://www.nipreps.org/community/licensing/
+
     """
     WEEKS_TO_MONTH = 0.230137
     YEARS_TO_MONTH = 12
@@ -589,7 +689,32 @@ def age_to_months(age: int | float, units: ty.Literal["weeks", "months", "years"
 def cohort_by_months(template, months):
     """Produce a recommended cohort based on partipants age.
 
-    NOTE: TAKEN FROM NIBABIES
+    Notes
+    -----
+    This function is derived from sources licensed under the Apache-2.0 terms.
+    The original function this work derives from is found at:
+    https://github.com/nipreps/nibabies/blob/7efc8c96d109cb755258209d83b1e164c481cf4e/
+    nibabies/utils/misc.py#L50
+
+    Copyright The NiPreps Developers <nipreps@gmail.com>
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+    We support and encourage derived works from this project, please read
+    about our expectations at
+
+        https://www.nipreps.org/community/licensing/
+
     """
     cohort_key = {
         "MNIInfant": (
