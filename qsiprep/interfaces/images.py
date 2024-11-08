@@ -272,7 +272,8 @@ CONFORMATION_TEMPLATE = """\t\t<h3 class="elem-title">Anatomical Conformation</h
 DISCARD_TEMPLATE = """\t\t\t\t<li><abbr title="{path}">{basename}</abbr></li>"""
 
 
-class ConformInputSpec(BaseInterfaceInputSpec):
+class ValidateImageInputSpec(_ValidateImageInputSpec):
+    subject_id = traits.Str(mandatory=True, desc="Subject ID for file naming")
     in_file = File(mandatory=True, desc="Input image")
     target_zooms = traits.Tuple(
         traits.Float, traits.Float, traits.Float, desc="Target zoom information"
@@ -512,6 +513,9 @@ class ChooseInterpolator(SimpleInterface):
 
 class ValidateImageOutputSpec(TraitedSpec):
     out_file = File(exists=True, desc="validated image")
+    out_matrix_file = File(exists=True, desc="transformation matrix file")
+    out_report = File(exists=True, desc="HTML segment containing warning")
+    out_file = File(exists=True, desc="validated image")
     out_report = File(exists=True, desc="HTML segment containing warning")
 
 
@@ -590,8 +594,9 @@ class ValidateImage(SimpleInterface):
             return runtime
 
         # A new file will be written
-        out_fname = fname_presuffix(self.inputs.in_file, suffix="_valid", newpath=runtime.cwd)
+        out_fname = os.path.join(runtime.cwd, f"sub-{self.inputs.subject_id}_from-orig_to-T1w_mode-image_xfm.txt")
         self._results["out_file"] = out_fname
+        self._results["out_matrix_file"] = out_fname  # Add this line to store the matrix file path
 
         # Row 2:
         if valid_qform and qform_code > 0 and (sform_code == 0 or not valid_sform):
