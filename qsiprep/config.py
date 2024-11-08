@@ -554,7 +554,7 @@ class workflow(_Config):
     anat_only = False
     """Execute the anatomical preprocessing only."""
     anatomical_template = None
-    """Anatomical template definition in the form <template>[+<cohort>]."""
+    """Anatomical template to use. This field doesn't include the cohort."""
     b0_threshold = None
     """Any value in the .bval file less than this will be considered a b=0 image."""
     b0_motion_corr_to = None

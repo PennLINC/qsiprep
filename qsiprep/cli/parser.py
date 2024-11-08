@@ -660,6 +660,10 @@ def parse_args(args=None, namespace=None):
             "Inferring the subject's age and selecting the appropriate MNIInfant cohort."
         )
         opts.anatomical_template = "MNIInfant"
+        if opts.subject_anatomical_reference != "sessionwise":
+            config.loggers.cli.error(
+                "Infant processing requires --subject-anatomical-reference sessionwise"
+            )
 
     if opts.config_file:
         skip = {} if opts.reports_only else {"execution": ("run_uuid",)}

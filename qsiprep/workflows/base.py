@@ -160,7 +160,7 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
         )
 
     anatomical_template = config.workflow.anatomical_template
-    if config.workflow.anatomical_template == "MNIInfant":
+    if config.workflow.infant:
         from ..utils.bids import cohort_by_months, parse_bids_for_age_months
 
         if session_ids and len(session_ids) > 1:
@@ -177,8 +177,8 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
             ses_str = f"_ses-{session_id}" if session_id else ""
             raise RuntimeError(f"Could not find age for sub-{subject_id}{ses_str}")
 
-        cohort = cohort_by_months("MNIInfant", age)
-        anatomical_template = f"MNIInfant+{cohort}"
+        cohort = cohort_by_months(anatomical_template, age)
+        anatomical_template = f"{anatomical_template}+{cohort}"
 
     additional_t2ws = 0
     if "drbuddi" in config.workflow.pepolar_method.lower() and subject_data["t2w"]:
