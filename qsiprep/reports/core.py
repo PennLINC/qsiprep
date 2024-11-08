@@ -37,9 +37,7 @@ def run_reports(
     errorname="report.err",
     **entities,
 ):
-    """
-    Run the reports.
-    """
+    """Run the reports."""
     robj = Report(
         output_dir,
         run_uuid,

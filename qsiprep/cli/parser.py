@@ -311,7 +311,7 @@ def _build_parser(**kwargs):
     )
     g_conf.add_argument(
         "--longitudinal",
-        action="store_true",
+        action=DeprecatedAction,
         help="Treat dataset as longitudinal - may increase runtime",
     )
     g_conf.add_argument(
