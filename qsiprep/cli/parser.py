@@ -316,11 +316,12 @@ def _build_parser(**kwargs):
     )
     g_conf.add_argument(
         "--subject-anatomical-reference",
-        choices=["first", "unbiased", "session"],
-        default="first",
-        help="How to define subject-specific anatomical space. session will "
-        "produce one anatomical space per session. The others combine anatomical "
-        "data across sessions to define one anatomical space per subject.",
+        choices=["first-alphabetically", "unbiased", "sessionwise"],
+        default="first-alphabetically",
+        help="How to define subject-specific anatomical space. "
+        "sessionwise will produce one anatomical space per session. "
+        "The others combine anatomical data across sessions to define "
+        "one anatomical space per subject.",
     )
     g_conf.add_argument(
         "--skip-anat-based-spatial-normalization",
