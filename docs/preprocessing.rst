@@ -427,7 +427,7 @@ Processing the *Anatomical Reference* images
   2. If there are multiple images of the preferred anatomical contrast, they will
      be bias corrected using N4 and aligned to one another. If ``--subject-anatomical-reference unbiased``
      is specified they will be unbiasedly registered to each other using ANTs.
-     Otherwise all the images are registered to the first image (see
+     Otherwise all the images are registered to the first (alphabetically) image (see
      `Longitudinal T1w processing`_).
   3. Brain extraction is performed using ``SynthStrip``.
 
