@@ -648,9 +648,11 @@ def parse_args(args=None, namespace=None):
     opts = parser.parse_args(args, namespace)
 
     # Change anatomical_template based on infant parameter
+    opts.anatomical_template = "MNI152NLin2009cAsym"
     if opts.infant:
         config.loggers.cli.info(
-            "Infant processing mode enabled. Changing anatomical template to MNIInfant cohort-2."
+            "Infant processing mode enabled. "
+            "Inferring the subject's age and selecting the appropriate MNIInfant cohort."
         )
         opts.anatomical_template = "MNIInfant"
 

@@ -37,6 +37,7 @@ def init_dwi_preproc_wf(
     t2w_sdc,
     output_prefix,
     source_file,
+    anatomical_template,
 ) -> Workflow:
     """
     This workflow controls the dwi preprocessing stages of qsiprep.
@@ -260,6 +261,7 @@ Diffusion data preprocessing
             source_file=source_file,
             dwi_metadata=dwi_metadata,
             t2w_sdc=t2w_sdc,
+            anatomical_template=anatomical_template,
         )
 
     elif config.workflow.hmc_model == "eddy":

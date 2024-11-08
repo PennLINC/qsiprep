@@ -26,6 +26,7 @@ def init_qsiprep_hmcsdc_wf(
     scan_groups,
     source_file,
     t2w_sdc,
+    anatomical_template,
     dwi_metadata=None,
 ):
     """
@@ -44,7 +45,9 @@ def init_qsiprep_hmcsdc_wf(
              'dwi_series_pedir': j},
             source_file='/data/sub-1/dwi/sub-1_dwi.nii.gz',
             t2w_sdc=False,
-            dwi_metadata={})
+            dwi_metadata={},
+            anatomical_template='MNI152NLin2009cAsym',
+        )
     """
     inputnode = pe.Node(
         niu.IdentityInterface(
@@ -253,7 +256,7 @@ def init_qsiprep_hmcsdc_wf(
         scan_groups["fieldmap_info"],
         dwi_metadata,
     )
-    b0_sdc_wf.inputs.inputnode.template = config.workflow.anatomical_template
+    b0_sdc_wf.inputs.inputnode.template = anatomical_template
 
     workflow.connect([
         (dwi_hmc_wf, b0_sdc_wf, [

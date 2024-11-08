@@ -65,6 +65,7 @@ def init_anat_preproc_wf(
     num_anat_images,
     num_additional_t2ws,
     has_rois,
+    anatomical_template,
     name="anat_preproc_wf",
 ):
     r"""
@@ -175,7 +176,7 @@ def init_anat_preproc_wf(
     # XXX: This is a temporary solution until QSIPrep supports flexible output spaces.
     get_template = pe.Node(
         GetTemplate(
-            template_name=config.workflow.anatomical_template,
+            template_spec=anatomical_template,
             anatomical_contrast=config.workflow.anat_modality,
         ),
         name="get_template_image",
@@ -275,7 +276,10 @@ FreeSurfer version {fs_version}. """.format(
     )
 
     # Perform registrations
-    anat_normalization_wf = init_anat_normalization_wf(has_rois=has_rois)
+    anat_normalization_wf = init_anat_normalization_wf(
+        anatomical_template=anatomical_template,
+        has_rois=has_rois,
+    )
 
     # Resampling
     rigid_acpc_resample_brain = pe.Node(
@@ -428,7 +432,7 @@ FreeSurfer version {fs_version}. """.format(
             ('outputnode.out_report', 'inputnode.t1_2_mni_report')])
     ])  # fmt:skip
 
-    anat_derivatives_wf = init_anat_derivatives_wf()
+    anat_derivatives_wf = init_anat_derivatives_wf(anatomical_template=anatomical_template)
 
     workflow.connect([
         (anat_reference_wf, anat_derivatives_wf, [
@@ -673,7 +677,7 @@ A {contrast}-reference map was computed after registration of
     return workflow
 
 
-def init_anat_normalization_wf(has_rois=False) -> Workflow:
+def init_anat_normalization_wf(anatomical_template, has_rois=False) -> Workflow:
     r"""
     This workflow performs registration from the original anatomical reference to the
     template anatomical reference.
@@ -741,7 +745,7 @@ def init_anat_normalization_wf(has_rois=False) -> Workflow:
     desc = f"""\
 The anatomical reference image was reoriented into AC-PC alignment via
 a 6-DOF transform extracted from a full Affine registration to the
-{config.workflow.anatomical_template} template. """
+{anatomical_template} template. """
 
     acpc_settings = pkgr(
         "qsiprep",
@@ -815,7 +819,7 @@ estimated via symmetric nonlinear registration (SyN) using antsRegistration. """
     anat_nlin_normalization = pe.Node(
         anat_norm_interface, name="anat_nlin_normalization", n_procs=omp_nthreads
     )
-    anat_nlin_normalization.inputs.template = config.workflow.anatomical_template
+    anat_nlin_normalization.inputs.template = anatomical_template
     anat_nlin_normalization.inputs.orientation = "LPS"
 
     workflow.connect([
@@ -1114,7 +1118,7 @@ def init_anat_reports_wf() -> Workflow:
     return workflow
 
 
-def init_anat_derivatives_wf() -> Workflow:
+def init_anat_derivatives_wf(anatomical_template) -> Workflow:
     """
     Set up a battery of datasinks to store derivatives in the right location
     """
@@ -1213,7 +1217,7 @@ def init_anat_derivatives_wf() -> Workflow:
             to="T1w",
             mode="image",
             suffix="xfm",
-            **{"from": config.workflow.anatomical_template},
+            **{"from": anatomical_template},
         ),
         name="ds_t1_mni_inv_warp",
         run_without_submitting=True,
@@ -1246,7 +1250,7 @@ def init_anat_derivatives_wf() -> Workflow:
     ds_t1_mni_warp = pe.Node(
         DerivativesDataSink(
             base_directory=config.execution.output_dir,
-            to=config.workflow.anatomical_template,
+            to=anatomical_template,
             mode="image",
             suffix="xfm",
             **{"from": "T1w"},
