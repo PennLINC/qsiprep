@@ -387,7 +387,6 @@ Processing the *Subject Anatomical Reference* T1w or T2w images
                               skull_strip_template='OASIS',
                               force_spatial_normalization=True,
                               freesurfer=True,
-                              longitudinal=False,
                               debug=False,
                               hires=True,
                               num_t1w=1)
@@ -426,9 +425,9 @@ Processing the *Anatomical Reference* images
      :ref:`conforming <conformation>` all found T1w or T2w images to LPS+
      orientation and a common voxel size.
   2. If there are multiple images of the preferred anatomical contrast, they will
-     be bias corrected using N4 and aligned to one another. If ``--longitudinal``
+     be bias corrected using N4 and aligned to one another. If ``--subject-anatomical-reference unbiased``
      is specified they will be unbiasedly registered to each other using ANTs.
-     Otherwise all the images are registered to the first image (see
+     Otherwise all the images are registered to the first (alphabetically) image (see
      `Longitudinal T1w processing`_).
   3. Brain extraction is performed using ``SynthStrip``.
 
@@ -491,7 +490,7 @@ by session label). For two images, the additional cost of estimating an unbiased
 template is trivial and is the default behavior, but, for greater than two
 images, the cost can be a slowdown of an order of magnitude.
 Therefore, in the case of three or more images, ``qsiprep`` constructs
-templates aligned to the first image, unless passed the ``--longitudinal``
+templates aligned to the first image, unless passed the ``--subject-anatomical-reference unbiased``
 flag, which forces the estimation of an unbiased template.
 
 .. note::

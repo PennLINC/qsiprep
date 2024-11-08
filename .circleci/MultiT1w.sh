@@ -68,7 +68,7 @@ ${QSIPREP_CMD} \
      -vv
 
 
-# Explicitly test --longitudinal
+# Explicitly test --subject-anatomical-reference unbiased
 TESTNAME=Longitudinal
 setup_dir ${TESTDIR}/${TESTNAME}
 TEMPDIR=${TESTDIR}/${TESTNAME}/work
@@ -81,7 +81,7 @@ ${QSIPREP_CMD} \
      --sloppy \
      --output-resolution 5 \
      --anat-only \
-     --longitudinal \
+     --subject-anatomical-reference unbiased \
      -vv
 
 
