@@ -1146,7 +1146,7 @@ def init_anat_derivatives_wf() -> Workflow:
         ),
         name="t1_name",
     )
-    t1_name.inputs.include_session = config.workflow.anat_space_definition == "session"
+    t1_name.inputs.include_session = config.workflow.subject_anatomical_reference == "sessionwise"
     t1_name.inputs.anatomical_contrast = config.workflow.anat_modality
     t1_name.inputs.dwi_only = False
 

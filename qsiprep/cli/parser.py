@@ -47,7 +47,7 @@ def _build_parser(**kwargs):
         "dwi_no_biascorr": ("--b1-biascorrect-stage none", "0.23.0"),
         "b0_motion_corr_to": (None, "0.23.0"),
         "b0_to_t1w_transform": ("--b0-t0-anat-transform", "0.23.0"),
-        "longitudinal": ("--anat-space-definition robust-template", "0.24.0"),
+        "longitudinal": ("--subject-anatomical-reference robust-template", "0.24.0"),
     }
 
     class DeprecatedAction(Action):
@@ -315,7 +315,7 @@ def _build_parser(**kwargs):
         help="Treat dataset as longitudinal - may increase runtime",
     )
     g_conf.add_argument(
-        "--anat-space-definition",
+        "--subject-anatomical-reference",
         choices=["first", "robust-template", "session"],
         default="first",
         help="How to define subject-specific anatomical space. session will "
@@ -797,10 +797,10 @@ def parse_args(args=None, namespace=None):
 
         # If there are no sessions, there is only one option:
         if not sessions:
-            if config.workflow.anat_space_definition == "session":
+            if config.workflow.subject_anatomical_reference == "sessionwise":
                 config.loggers.workflow.warning(
                     f"Subject {subject_id} had no sessions, "
-                    "but --anat-space-definition was set to 'session'. "
+                    "but --subject-anatomical-reference was set to 'sessionwise'. "
                     "Outputs will NOT appear in a session directory for "
                     f"{subject_id}.",
                 )
@@ -808,7 +808,7 @@ def parse_args(args=None, namespace=None):
             processing_groups.append([subject_id, []])
             continue
 
-        if config.workflow.anat_space_definition == "session":
+        if config.workflow.subject_anatomical_reference == "sessionwise":
             for session in sessions:
                 processing_groups.append([subject_id, [session]])
         else:
