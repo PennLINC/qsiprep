@@ -37,9 +37,7 @@ def run_reports(
     errorname="report.err",
     **entities,
 ):
-    """
-    Run the reports.
-    """
+    """Run the reports."""
     robj = Report(
         output_dir,
         run_uuid,
@@ -69,7 +67,12 @@ def run_reports(
 def generate_reports(
     processing_list, output_level, output_dir, run_uuid, bootstrap_file=None, work_dir=None
 ):
-    """Generate reports for a list of processing groups."""
+    """Generate reports for a list of processing groups.
+
+    Parameters
+    ----------
+    output_level {"sessionwise", "unbiased", "first-alphabetically"}
+    """
 
     errors = []
     for subject_label, session_list in processing_list:
@@ -91,7 +94,7 @@ def generate_reports(
             html_report = f'sub-{subject_label.lstrip("sub-")}_anat.html'
 
         # We only make this one if it's all the sessions or just the anat and not sessionwise
-        if output_level != "session":
+        if output_level != "sessionwise":
             report_error = run_reports(
                 output_dir,
                 subject_label,
@@ -106,15 +109,16 @@ def generate_reports(
             if report_error is not None:
                 errors.append(report_error)
 
-        if n_ses > config.execution.aggr_ses_reports or output_level == "session":
+        if n_ses > config.execution.aggr_ses_reports or output_level == "sessionwise":
             # Beyond a certain number of sessions per subject,
             # we separate the dwi reports per session
-            # If output_level is "session", the session-wise anatomical reports are in here too
+            # If output_level is "sessionwise",
+            # the session-wise anatomical reports are in here too
             session_list = [ses[4:] if ses.startswith("ses-") else ses for ses in session_list]
 
             for session_label in session_list:
 
-                if output_level == "session":
+                if output_level == "sessionwise":
                     bootstrap_file = data.load("reports-spec.yml")
                     suffix = ""
                     session_dir = output_dir / f"sub-{subject_id}" / f"ses-{session_label}"

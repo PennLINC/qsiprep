@@ -654,8 +654,9 @@ A {contrast}-reference map was computed after registration of
     )
 
     # Make an unbiased template, same as used for b=0 registration
+    align_to = config.workflow.subject_anatomical_reference
     anat_merge_wf = init_b0_hmc_wf(
-        align_to="first" if not config.workflow.longitudinal else "iterative",
+        align_to="first" if (align_to == "first-alphabetically") else "iterative",
         transform="Rigid",
         name="anat_merge_wf",
         boilerplate=False,
@@ -1146,7 +1147,7 @@ def init_anat_derivatives_wf() -> Workflow:
         ),
         name="t1_name",
     )
-    t1_name.inputs.include_session = config.workflow.anat_space_definition == "session"
+    t1_name.inputs.include_session = config.workflow.subject_anatomical_reference == "sessionwise"
     t1_name.inputs.anatomical_contrast = config.workflow.anat_modality
     t1_name.inputs.dwi_only = False
 
