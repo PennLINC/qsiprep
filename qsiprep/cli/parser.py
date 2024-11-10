@@ -307,7 +307,11 @@ def _build_parser(**kwargs):
         "parts of the workflow (a space delimited list)",
     )
     g_conf.add_argument(
-        "--infant", action="store_true", help="configure pipelines to process infant brains"
+        "--infant",
+        action="store_true",
+        help="Configure pipelines to process infant brains. "
+        "If using this parameter, the anatomical-template will be changed to MNIInfant. "
+        "The appropriate MNIInfant cohort will be selected based on the participant's age.",
     )
     g_conf.add_argument(
         "--longitudinal",
@@ -649,11 +653,17 @@ def parse_args(args=None, namespace=None):
     opts = parser.parse_args(args, namespace)
 
     # Change anatomical_template based on infant parameter
+    opts.anatomical_template = "MNI152NLin2009cAsym"
     if opts.infant:
         config.loggers.cli.info(
-            "Infant processing mode enabled. Changing anatomical template to MNIInfant cohort-2."
+            "Infant processing mode enabled. "
+            "Inferring the subject's age and selecting the appropriate MNIInfant cohort."
         )
         opts.anatomical_template = "MNIInfant"
+        if opts.subject_anatomical_reference != "sessionwise":
+            config.loggers.cli.error(
+                "Infant processing requires --subject-anatomical-reference sessionwise"
+            )
 
     if opts.config_file:
         skip = {} if opts.reports_only else {"execution": ("run_uuid",)}

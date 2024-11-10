@@ -30,6 +30,30 @@ Command-Line Arguments
    :nodefaultconst:
 
 
+Infant mode
+===========
+
+If ``--infant`` is used, the pipeline will select an MNIInfant template with the
+appropriate cohort based on the participant's age.
+
+``--infant`` is only compatible with ``--subject-anatomical-reference sessionwise``.
+
+.. note::
+
+    QSIPrep's cohort selection is derived from Nibabies.
+
+Participant Ages
+----------------
+
+QSIPrep will attempt to automatically extract participant ages (in months) from the BIDS layout. Specifically, these two files will be checked:
+
+Sessions file: <bids-root>/<subject>/subject_sessions.tsv
+
+Participants file: <bids-root>/participants.tsv
+
+Either file should include age (or if you wish to be more explicit: age_months) columns, and it is recommended to have an accompanying JSON file to further describe these fields, and explicitly state the values are in months.
+
+
 Note on using CUDA
 ==================
 

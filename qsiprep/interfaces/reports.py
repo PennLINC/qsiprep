@@ -44,7 +44,8 @@ SUBJECT_TEMPLATE = """\t<ul class="elem-desc">
 \t\t<li>Structural images: {n_t1s:d} T1-weighted {t2w}</li>
 \t\t<li>Diffusion-weighted series: inputs {n_dwis:d}, outputs {n_outputs:d}</li>
 {groupings}
-\t\t<li>Resampling targets: T1wACPC
+\t\t<li>Resampling targets: T1wACPC</li>
+\t\t<li>Transform targets: {output_spaces}</li>
 \t</ul>
 """
 
@@ -146,7 +147,7 @@ class SubjectSummaryInputSpec(BaseInterfaceInputSpec):
     session_id = Str(desc="Session ID")
     dwi_groupings = traits.Dict(desc="groupings of DWI files and their output names")
     output_spaces = traits.List(desc="Target spaces")
-    template = traits.Enum("MNI152NLin2009cAsym", "MNIInfant", desc="Template space")
+    template = Str(desc="Template space")
     freesurfer_status = traits.Enum("Not run", "Partial", "Full", desc="FreeSurfer status")
 
 
@@ -206,7 +207,7 @@ class SubjectSummary(SummaryInterface):
             n_dwis=n_dwis,
             n_outputs=n_outputs,
             groupings=groupings,
-            output_spaces="T1wACPC",
+            output_spaces=["T1wACPC", self.inputs.template],
         )
 
 

@@ -79,9 +79,7 @@ def init_qsiprep_wf():
     qsiprep_wf.base_dir = config.execution.work_dir
 
     for subject_id, session_ids in config.execution.processing_list:
-
         # We may need to select a session or multiple sessions to consider together
-
         single_subject_wf = init_single_subject_wf(subject_id, session_ids)
 
         # Should we put these in session specific directories? The uuid is unique but opaque
@@ -161,6 +159,27 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
             "--anat-modality none".format(config.workflow.anat_modality, subject_id)
         )
 
+    anatomical_template = config.workflow.anatomical_template
+    if config.workflow.infant:
+        from ..utils.bids import cohort_by_months, parse_bids_for_age_months
+
+        if session_ids and len(session_ids) > 1:
+            raise RuntimeError("Infant template is only available for single session processing.")
+
+        # Calculate the age and age-specific spaces
+        session_id = None if not session_ids else session_ids[0]
+        age = parse_bids_for_age_months(
+            config.execution.bids_dir,
+            subject_id,
+            session_id,
+        )
+        if age is None:
+            ses_str = f"_ses-{session_id}" if session_id else ""
+            raise RuntimeError(f"Could not find age for sub-{subject_id}{ses_str}")
+
+        cohort = cohort_by_months(anatomical_template, age)
+        anatomical_template = f"{anatomical_template}+{cohort}"
+
     additional_t2ws = 0
     if "drbuddi" in config.workflow.pepolar_method.lower() and subject_data["t2w"]:
         additional_t2ws = len(subject_data["t2w"])
@@ -208,7 +227,7 @@ to workflows in *QSIPrep*'s documentation]\
     bids_info = pe.Node(BIDSInfo(), name="bids_info", run_without_submitting=True)
 
     summary = pe.Node(
-        SubjectSummary(template=config.workflow.anatomical_template),
+        SubjectSummary(template=anatomical_template),
         name="summary",
         run_without_submitting=True,
     )
@@ -252,6 +271,7 @@ to workflows in *QSIPrep*'s documentation]\
         num_anat_images=num_anat_images,
         num_additional_t2ws=additional_t2ws,
         has_rois=bool(subject_data["roi"]),
+        anatomical_template=anatomical_template,
     )
 
     workflow.connect([
@@ -382,6 +402,7 @@ to workflows in *QSIPrep*'s documentation]\
             output_prefix=output_fname,
             source_file=source_file,
             t2w_sdc=bool(subject_data.get("t2w")),
+            anatomical_template=anatomical_template,
         )
         dwi_finalize_wf = init_dwi_finalize_wf(
             scan_groups=dwi_info,
