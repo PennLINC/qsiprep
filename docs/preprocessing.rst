@@ -167,9 +167,6 @@ they are concatenated. When warped groups are concatenated an additional b=0
 image intensity normalization is performed.
 
 
-
-
-
 Preprocessing HCP-style
 ^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -214,11 +211,10 @@ qsiprep generates three broad classes of outcomes:
 Visual Reports
 ^^^^^^^^^^^^^^^
 
-qsiprep outputs summary reports, written to ``<output
-dir>/qsiprep/sub-<subject_label>.html``. These reports provide a quick way to
-make visual inspection of the results easy. One useful graphic is the
-animation of the q-space sampling scheme before and after the pipeline. Here
-is a sampling scheme from a DSI scan:
+qsiprep outputs summary reports, written to ``<output_dir>/qsiprep/sub-<subject_label>.html``.
+These reports provide a quick way to make visual inspection of the results easy.
+One useful graphic is the animation of the q-space sampling scheme before and after the pipeline.
+Here is a sampling scheme from a DSI scan:
 
 .. figure:: _static/sampling_scheme.gif
     :scale: 75%
@@ -231,35 +227,34 @@ is a sampling scheme from a DSI scan:
 Preprocessed data (qsiprep *derivatives*)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-There are additional files, called "Derivatives", written to
-``<output dir>/qsiprep/sub-<subject_label>/``.
+There are additional files, called "Derivatives",
+written to ``<output_dir>/qsiprep/sub-<subject_label>/``.
 
-Derivatives related to T1w files are nearly identical to those produced by ``FMRIPREP`` and
-can be found in the ``anat`` subfolder:
+Derivatives related to anatomical files are nearly identical to those produced by ``fMRIprep`` and
+can be found in the ``anat`` subfolder.
+One major difference is that the anatomical derivatives are in LPS+ orientation and are realigned to the AC-PC,
+while ``fMRIprep``'s are in RAS+ orientation and retain the original anatomical images' orientation.
 
-- ``*T1w_brainmask.nii.gz`` Brain mask derived using ANTs' ``antsBrainExtraction.sh``.
-- ``*T1w_class-CSF_probtissue.nii.gz``
-- ``*T1w_class-GM_probtissue.nii.gz``
-- ``*T1w_class-WM_probtissue.nii.gz`` tissue-probability maps.
-- ``*T1w_dtissue.nii.gz`` Tissue class map derived using FAST.
-- ``*T1w_preproc.nii.gz`` Bias field corrected T1w file, using ANTS' N4BiasFieldCorrection
-- ``*T1w_space-MNI152NLin2009cAsym_brainmask.nii.gz`` Same as ``_brainmask`` above, but in MNI space.
-- ``*T1w_space-MNI152NLin2009cAsym_class-CSF_probtissue.nii.gz``
-- ``*T1w_space-MNI152NLin2009cAsym_class-GM_probtissue.nii.gz``
-- ``*T1w_space-MNI152NLin2009cAsym_class-WM_probtissue.nii.gz`` Probability tissue maps, transformed into MNI space
-- ``*T1w_space-MNI152NLin2009cAsym_dtissue.nii.gz`` Same as ``_dtissue`` above, but in MNI space
-- ``*T1w_space-MNI152NLin2009cAsym_preproc.nii.gz`` Same as ``_preproc`` above, but in MNI space
-- ``*T1w_space-MNI152NLin2009cAsym_target-T1w_warp.h5`` Composite (warp and affine) transform to map from MNI to T1 space
-- ``*T1w_target-MNI152NLin2009cAsym_warp.h5`` Composite (warp and affine) transform to transform T1w into MNI space
-
-.. Note:
-  These are in LPS+ orientation, so are not identical to FMRIPREP's anatomical outputs
+- ``<source_entities>_space-ACPC_desc-brain_mask.nii.gz`` Brain mask derived using ANTs' ``antsBrainExtraction.sh``.
+- ``<source_entities>_space-ACPC_label-CSF_probseg.nii.gz``
+- ``<source_entities>_space-ACPC_label-GM_probseg.nii.gz``
+- ``<source_entities>_space-ACPC_label-WM_probseg.nii.gz`` tissue-probability maps.
+- ``<source_entities>_space-ACPC_dseg.nii.gz`` Tissue class map derived using FAST.
+- ``<source_entities>_space-ACPC_desc-preproc_T1w.nii.gz`` Bias field corrected T1w file, using ANTS' N4BiasFieldCorrection
+- ``<source_entities>_space-MNI152NLin2009cAsym_desc-brain_mask.nii.gz`` Same as ``_brainmask`` above, but in MNI space.
+- ``<source_entities>_space-MNI152NLin2009cAsym_label-CSF_probseg.nii.gz``
+- ``<source_entities>_space-MNI152NLin2009cAsym_label-GM_probseg.nii.gz``
+- ``<source_entities>_space-MNI152NLin2009cAsym_label-WM_probseg.nii.gz`` Probability tissue maps, transformed into MNI space
+- ``<source_entities>_space-MNI152NLin2009cAsym_dseg.nii.gz`` Same as ``_dtissue`` above, but in MNI space
+- ``<source_entities>_space-MNI152NLin2009cAsym_desc-preproc_T1w.nii.gz`` Same as ``_preproc`` above, but in MNI space
+- ``<source_entities>_from-MNI152NLin2009cAsym_to-ACPC_mode-image_xfm.h5`` Composite (warp and affine) transform to map from MNI to ACPC space
+- ``<source_entities>_from-ACPC_to-MNI152NLin2009cAsym_mode-image_xfm.h5`` Composite (warp and affine) transform to transform ACPC into MNI space
 
 Derivatives related to diffusion images are in the ``dwi`` subfolder.
 
 - ``*_confounds.tsv`` A tab-separated value file with one column per calculated confound and one row per timepoint/volume
 
-Volumetric output spaces include ``T1w`` (default) and ``MNI152NLin2009cAsym``.
+Volumetric outputs are written out in ``ACPC`` space.
 
 - ``*dwiref.nii.gz`` The b0 template
 - ``*desc-brain_mask.nii.gz`` The generous brain mask that should be reduced probably
@@ -479,8 +474,8 @@ to be run through ``qsiprep``.
     Animation showing T1w to MNI normalization
 
 
-Longitudinal T1w processing
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Longitudinal anatomical processing
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 In the case of multiple T1w images (across sessions and/or within a session),
 T1w images are merged into a single template image using FreeSurfer's
@@ -495,11 +490,11 @@ flag, which forces the estimation of an unbiased template.
 
 .. note::
 
-    The preprocessed T1w image defines the ``T1w`` space.
+    The preprocessed T1w image defines the ``anat`` space.
     In the case of multiple T1w images, this space may not be precisely aligned
     with any of the original images.
     Reconstructed surfaces and functional datasets will be registered to the
-    ``T1w`` space, and not to the input images.
+    ``anat`` space, and not to the input images.
 
 
 Processing Infant Data
@@ -842,7 +837,7 @@ pipeline for DWIs
 .. _resampling:
 
 Pre-processed DWIs in a different space
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 :func:`qsiprep.workflows.dwi.resampling.init_dwi_trans_wf`
 
