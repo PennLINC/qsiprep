@@ -64,19 +64,19 @@ and how it's built.
 
 
 
-Singularity Container
+Apptainer Container
 =====================
 
-The easiest way to get a Singularity image is to run::
+The easiest way to get an Apptainer (formerly Singularity) image is to run::
 
-    $ singularity build qsiprep-<version>.sif docker://pennbbl/qsiprep:<version>
+    $ apptainer build qsiprep-<version>.sif docker://pennbbl/qsiprep:<version>
 
 Where ``<version>`` should be replaced with the desired version of qsiprep that you want to download.
 Do not use ``latest`` or ``unstable`` unless you are performing limited testing.
 
-As with Docker, you will need to bind the Freesurfer license.txt when running Singularity ::
+As with Docker, you will need to bind the Freesurfer license.txt when running Apptainer ::
 
-    $ singularity run --containall --writable-tmpfs \
+    $ apptainer run --containall --writable-tmpfs \
         -B $HOME/fullds005,$HOME/dockerout,${FREESURFER_HOME}/license.txt:/opt/freesurfer/license.txt \
         qsiprep-<version>.sif \
         $HOME/fullds005 $HOME/dockerout participant \

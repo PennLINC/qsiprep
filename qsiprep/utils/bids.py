@@ -260,6 +260,13 @@ def write_derivative_description(bids_dir, deriv_dir):
             desc["SingularityContainerMD5"] = _get_shub_version(singularity_url)
         except ValueError:
             pass
+    if "QSIPREP_APPTAINER_URL" in os.environ:
+        apptainer_url = os.environ["QSIPREP_APPTAINER_URL"]
+        desc["ApptainerContainerURL"] = apptainer_url
+        try:
+            desc["ApptainerContainerMD5"] = _get_ahub_version(apptainer_url)
+        except ValueError:
+            pass
 
     # Keys deriving from source dataset
     fname = os.path.join(bids_dir, "dataset_description.json")
@@ -366,6 +373,14 @@ def validate_input_dir(exec_env, bids_dir, participant_label):
                     "all paths are mapped properly (see https://www.sylabs.io/"
                     "guides/3.0/user-guide/bind_paths_and_mounts.html)"
                 )
+            if exec_env == "apptainer":
+                error_msg += (
+                    " This error can be caused by the input data not being "
+                    "accessible inside the Apptainer container. Please make sure "
+                    "all paths are mapped properly (see https://apptainer.org/",
+                    "docs/user/main/bind_paths_and_mounts.html)"
+                )
+
             raise RuntimeError(error_msg % ",".join(bad_labels))
 
         ignored_subs = all_subs.difference(selected_subs)
@@ -382,6 +397,10 @@ def validate_input_dir(exec_env, bids_dir, participant_label):
 
 
 def _get_shub_version(singularity_url):
+    raise ValueError("Not yet implemented")
+
+
+def _get_ahub_version(apptainer_url):
     raise ValueError("Not yet implemented")
 
 

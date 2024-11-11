@@ -162,7 +162,7 @@ _exec_env = os.name
 _docker_ver = None
 # special variable set in the container
 if os.getenv("IS_DOCKER_8395080871"):
-    _exec_env = "singularity"
+    _exec_env = "apptainer"
     _cgroup = Path("/proc/1/cgroup")
     if _cgroup.exists() and "docker" in _cgroup.read_text():
         _exec_env = "docker"
