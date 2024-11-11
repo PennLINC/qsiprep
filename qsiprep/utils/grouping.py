@@ -114,8 +114,9 @@ def get_entity_groups(layout, subject_data, combine_all_dwis):
             ]
             for acq in acquisitions:
                 group_files = [
-                    img for img in session_files if
-                    layout.get_file(img).entities.get("acquisition") == acq
+                    img
+                    for img in session_files
+                    if layout.get_file(img).entities.get("acquisition") == acq
                 ]
 
                 if group_files:
