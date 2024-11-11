@@ -342,6 +342,7 @@ to workflows in *QSIPrep*'s documentation]\
                 merging_strategy=config.workflow.distortion_group_merge,
                 source_file=merged_group + "_dwi.nii.gz",
                 inputs_list=merged_to_subgroups[merged_group],
+                output_prefix=merged_group,
                 name=merged_group.replace("-", "_") + "_final_merge_wf",
             )
 
