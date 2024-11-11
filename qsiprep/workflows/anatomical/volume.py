@@ -1202,7 +1202,7 @@ def init_anat_derivatives_wf(anatomical_template) -> Workflow:
     ds_t1_template_transforms = pe.MapNode(
         DerivativesDataSink(
             base_directory=config.execution.output_dir,
-            to="T1w",
+            to="anat",
             mode="image",
             suffix="xfm",
             **{"from": "orig"},
