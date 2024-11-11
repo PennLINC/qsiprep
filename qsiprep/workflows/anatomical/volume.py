@@ -1159,6 +1159,7 @@ def init_anat_derivatives_wf(anatomical_template) -> Workflow:
         DerivativesDataSink(
             compress=True,
             base_directory=config.execution.output_dir,
+            space="ACPC",
             desc="preproc",
             keep_dtype=True,
         ),

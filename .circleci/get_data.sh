@@ -312,15 +312,15 @@ Contents:
  - data/singleshell_output/qsiprep/logs/CITATION.html
  - data/singleshell_output/qsiprep/logs/CITATION.md
  - data/singleshell_output/qsiprep/logs/CITATION.tex
- - data/singleshell_output/qsiprep/sub-PNC/anat/sub-PNC_desc-brain_mask.nii.gz
- - data/singleshell_output/qsiprep/sub-PNC/anat/sub-PNC_desc-preproc_T1w.nii.gz
- - data/singleshell_output/qsiprep/sub-PNC/anat/sub-PNC_dseg.nii.gz
+ - data/singleshell_output/qsiprep/sub-PNC/anat/sub-PNC_space-ACPC_desc-brain_mask.nii.gz
+ - data/singleshell_output/qsiprep/sub-PNC/anat/sub-PNC_space-ACPC_desc-preproc_T1w.nii.gz
+ - data/singleshell_output/qsiprep/sub-PNC/anat/sub-PNC_space-ACPC_dseg.nii.gz
  - data/singleshell_output/qsiprep/sub-PNC/anat/sub-PNC_from-MNI152NLin2009cAsym_to-T1w_mode-image_xfm.h5
  - data/singleshell_output/qsiprep/sub-PNC/anat/sub-PNC_from-orig_to-T1w_mode-image_xfm.txt
  - data/singleshell_output/qsiprep/sub-PNC/anat/sub-PNC_from-T1w_to-MNI152NLin2009cAsym_mode-image_xfm.h5
- - data/singleshell_output/qsiprep/sub-PNC/anat/sub-PNC_label-CSF_probseg.nii.gz
- - data/singleshell_output/qsiprep/sub-PNC/anat/sub-PNC_label-GM_probseg.nii.gz
- - data/singleshell_output/qsiprep/sub-PNC/anat/sub-PNC_label-WM_probseg.nii.gz
+ - data/singleshell_output/qsiprep/sub-PNC/anat/sub-PNC_space-ACPC_label-CSF_probseg.nii.gz
+ - data/singleshell_output/qsiprep/sub-PNC/anat/sub-PNC_space-ACPC_label-GM_probseg.nii.gz
+ - data/singleshell_output/qsiprep/sub-PNC/anat/sub-PNC_space-ACPC_label-WM_probseg.nii.gz
  - data/singleshell_output/qsiprep/sub-PNC/anat/sub-PNC_space-MNI152NLin2009cAsym_desc-brain_mask.nii.gz
  - data/singleshell_output/qsiprep/sub-PNC/anat/sub-PNC_space-MNI152NLin2009cAsym_desc-preproc_T1w.nii.gz
  - data/singleshell_output/qsiprep/sub-PNC/anat/sub-PNC_space-MNI152NLin2009cAsym_dseg.nii.gz

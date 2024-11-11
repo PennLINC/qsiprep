@@ -7,11 +7,11 @@ logs/CITATION.tex
 sub-tester
 sub-tester.html
 sub-tester/anat
-sub-tester/anat/sub-tester_desc-aseg_dseg.nii.gz
-sub-tester/anat/sub-tester_desc-brain_mask.nii.gz
-sub-tester/anat/sub-tester_desc-preproc_T1w.json
-sub-tester/anat/sub-tester_desc-preproc_T1w.nii.gz
-sub-tester/anat/sub-tester_dseg.nii.gz
+sub-tester/anat/sub-tester_space-ACPC_desc-aseg_dseg.nii.gz
+sub-tester/anat/sub-tester_space-ACPC_desc-brain_mask.nii.gz
+sub-tester/anat/sub-tester_space-ACPC_desc-preproc_T1w.json
+sub-tester/anat/sub-tester_space-ACPC_desc-preproc_T1w.nii.gz
+sub-tester/anat/sub-tester_space-ACPC_dseg.nii.gz
 sub-tester/anat/sub-tester_from-MNI152NLin2009cAsym_to-ACPC_mode-image_xfm.h5
 sub-tester/anat/sub-tester_from-ACPC_to-anat_mode-image_xfm.mat
 sub-tester/anat/sub-tester_from-anat_to-ACPC_mode-image_xfm.mat
