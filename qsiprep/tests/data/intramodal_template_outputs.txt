@@ -7,11 +7,11 @@ logs/CITATION.tex
 sub-tester
 sub-tester.html
 sub-tester/anat
+sub-tester/anat/sub-tester_from-ACPC_to-MNI152NLin2009cAsym_mode-image_xfm.h5
+sub-tester/anat/sub-tester_from-MNI152NLin2009cAsym_to-ACPC_mode-image_xfm.h5
 sub-tester/anat/sub-tester_space-ACPC_desc-brain_mask.nii.gz
 sub-tester/anat/sub-tester_space-ACPC_desc-preproc_T1w.nii.gz
 sub-tester/anat/sub-tester_space-ACPC_dseg.nii.gz
-sub-tester/anat/sub-tester_from-MNI152NLin2009cAsym_to-ACPC_mode-image_xfm.h5
-sub-tester/anat/sub-tester_from-ACPC_to-MNI152NLin2009cAsym_mode-image_xfm.h5
 sub-tester/anat/sub-tester_space-ACPC_label-CSF_probseg.nii.gz
 sub-tester/anat/sub-tester_space-ACPC_label-GM_probseg.nii.gz
 sub-tester/anat/sub-tester_space-ACPC_label-WM_probseg.nii.gz
@@ -49,8 +49,8 @@ sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_space-ACPC_desc-none_cnr.nii.
 sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_space-ACPC_desc-preproc_dwi.b
 sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_space-ACPC_desc-preproc_dwi.bval
 sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_space-ACPC_desc-preproc_dwi.bvec
-sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_space-ACPC_desc-preproc_dwi.nii.gz
 sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_space-ACPC_desc-preproc_dwi.json
+sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_space-ACPC_desc-preproc_dwi.nii.gz
 sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_space-ACPC_dwiref.nii.gz
 sub-tester/ses-2
 sub-tester/ses-2/dwi
@@ -62,6 +62,6 @@ sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-ACPC_desc-none_cnr.nii.
 sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-ACPC_desc-preproc_dwi.b
 sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-ACPC_desc-preproc_dwi.bval
 sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-ACPC_desc-preproc_dwi.bvec
-sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-ACPC_desc-preproc_dwi.nii.gz
 sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-ACPC_desc-preproc_dwi.json
+sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-ACPC_desc-preproc_dwi.nii.gz
 sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-ACPC_dwiref.nii.gz
