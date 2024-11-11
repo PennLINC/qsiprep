@@ -1171,6 +1171,7 @@ def init_anat_derivatives_wf(anatomical_template) -> Workflow:
         DerivativesDataSink(
             compress=True,
             base_directory=config.execution.output_dir,
+            space="ACPC",
             desc="brain",
             suffix="mask",
         ),
@@ -1182,6 +1183,7 @@ def init_anat_derivatives_wf(anatomical_template) -> Workflow:
         DerivativesDataSink(
             compress=True,
             base_directory=config.execution.output_dir,
+            space="ACPC",
             suffix="dseg",
         ),
         name="ds_t1_seg",
@@ -1192,6 +1194,7 @@ def init_anat_derivatives_wf(anatomical_template) -> Workflow:
         DerivativesDataSink(
             compress=True,
             base_directory=config.execution.output_dir,
+            space="ACPC",
             desc="aseg",
             suffix="dseg",
         ),
