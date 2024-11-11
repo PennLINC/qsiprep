@@ -44,7 +44,7 @@ SUBJECT_TEMPLATE = """\t<ul class="elem-desc">
 \t\t<li>Structural images: {n_t1s:d} T1-weighted {t2w}</li>
 \t\t<li>Diffusion-weighted series: inputs {n_dwis:d}, outputs {n_outputs:d}</li>
 {groupings}
-\t\t<li>Resampling targets: T1wACPC</li>
+\t\t<li>Resampling targets: ACPC</li>
 \t\t<li>Transform targets: {output_spaces}</li>
 \t</ul>
 """
@@ -55,7 +55,7 @@ SUBJECT_SESSION_ANAT_TEMPLATE = """\t<ul class="elem-desc">
 \t\t<li>Structural images: {n_t1s:d} T1-weighted {t2w}</li>
 \t\t<li>Diffusion-weighted series: inputs {n_dwis:d}, outputs {n_outputs:d}</li>
 {groupings}
-\t\t<li>Resampling targets: T1wACPC
+\t\t<li>Resampling targets: ACPC</li>
 \t</ul>
 """
 
@@ -68,7 +68,7 @@ DIFFUSION_TEMPLATE = """\t\t<h3 class="elem-title">Summary</h3>
 \t\t\t<li>Denoising Window: {denoise_window}</li>
 \t\t\t<li>HMC Transform: {hmc_transform}</li>
 \t\t\t<li>HMC Model: {hmc_model}</li>
-\t\t\t<li>DWI series resampled to spaces: T1wACPC</li>
+\t\t\t<li>DWI series resampled to spaces: ACPC</li>
 \t\t\t<li>Confounds collected: {confounds}</li>
 \t\t\t<li>Impute slice threshold: {impute_slice_threshold}</li>
 \t\t</ul>
@@ -207,7 +207,7 @@ class SubjectSummary(SummaryInterface):
             n_dwis=n_dwis,
             n_outputs=n_outputs,
             groupings=groupings,
-            output_spaces=["T1wACPC", self.inputs.template],
+            output_spaces=["ACPC", self.inputs.template],
         )
 
 
@@ -261,7 +261,7 @@ class DiffusionSummary(SummaryInterface):
             hmc_model=self.inputs.hmc_model,
             denoise_method=self.inputs.denoise_method,
             denoise_window=self.inputs.dwi_denoise_window,
-            output_spaces="T1wACPC",
+            output_spaces="ACPC",
             confounds=re.sub(r"[\t ]+", ", ", conflist),
             impute_slice_threshold=self.inputs.impute_slice_threshold,
             validation_reports=validation_summary,

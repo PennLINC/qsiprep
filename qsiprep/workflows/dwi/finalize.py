@@ -364,7 +364,7 @@ def init_dwi_finalize_wf(
         DerivativesDataSink(
             extension=".json",
             source_file=source_file,
-            space="T1w",
+            space="ACPC",
             desc="preproc",
             base_directory=config.execution.output_dir,
         ),
