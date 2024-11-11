@@ -189,9 +189,7 @@ def init_distortion_group_merge_wf(
         name="processed_qc_wf",
     )
     # Combine all the QC measures for a series QC
-    series_qc = pe.Node(
-        SeriesQC(output_file_name=config.execution.output_prefix), name="series_qc"
-    )
+    series_qc = pe.Node(SeriesQC(output_file_name=source_file), name="series_qc")
     ds_series_qc = pe.Node(
         DerivativesDataSink(
             desc="ImageQC",
