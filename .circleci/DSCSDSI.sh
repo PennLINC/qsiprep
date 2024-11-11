@@ -41,10 +41,10 @@ ${QSIPREP_CMD} \
    -w ${TEMPDIR} \
    --sloppy --write-graph --use-syn-sdc \
    --force-syn \
-   --b1_biascorrect_stage none \
-   --hmc_model 3dSHORE \
+   --b1-biascorrect-stage none \
+   --hmc-model 3dSHORE \
    --hmc-transform Rigid \
-   --shoreline_iters 1 \
+   --shoreline-iters 1 \
    --output-resolution 5 \
    --stop-on-first-crash \
    -vv
