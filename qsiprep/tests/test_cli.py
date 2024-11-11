@@ -2,7 +2,7 @@
 
 import os
 import sys
-from unittest.mock import DEFAULT, patch
+from unittest.mock import patch
 
 import pytest
 from nipype import config as nipype_config
@@ -99,7 +99,7 @@ def test_dscsdsi_fmap(data_dir, output_dir, working_dir):
         "--sloppy",
         "--b0-motion-corr-to=first",
         "--write-graph",
-        "--mem_mb=4096",
+        "--mem-mb=4096",
         "--output-resolution=5",
     ]
 
@@ -141,9 +141,9 @@ def test_cuda(data_dir, output_dir, working_dir):
         "--sloppy",
         "--anat-modality=none",
         "--denoise-method=none",
-        "--b1_biascorrect_stage=none",
+        "--b1-biascorrect-stage=none",
         "--pepolar-method=DRBUDDI",
-        f"--eddy_config={eddy_config}",
+        f"--eddy-config={eddy_config}",
         "--output-resolution=5",
     ]
 
@@ -187,9 +187,9 @@ def test_drbuddi_rpe(data_dir, output_dir, working_dir):
         "--anat-modality=none",
         "--denoise-method=none",
         "--b0-motion-corr-to=first",
-        "--b1_biascorrect_stage=none",
+        "--b1-biascorrect-stage=none",
         "--pepolar-method=DRBUDDI",
-        f"--eddy_config={eddy_config}",
+        f"--eddy-config={eddy_config}",
         "--output-resolution=5",
     ]
 
@@ -429,7 +429,7 @@ def test_intramodal_template(data_dir, output_dir, working_dir):
         "participant",
         f"-w={work_dir}",
         "--b1-biascorrect-stage=none",
-        "--hmc_model=none",
+        "--hmc-model=none",
         "--b0-motion-corr-to=first",
         "--output-resolution=5",
         "--intramodal-template-transform=BSplineSyN",
@@ -465,7 +465,7 @@ def test_multi_t1w(data_dir, output_dir, working_dir):
         "participant",
         f"-w={work_dir}",
         "--b1-biascorrect-stage=none",
-        "--hmc_model=none",
+        "--hmc-model=none",
         "--b0-motion-corr-to=first",
         "--output-resolution=5",
         "--intramodal-template-transform=BSplineSyN",
