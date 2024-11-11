@@ -378,7 +378,7 @@ def validate_input_dir(exec_env, bids_dir, participant_label):
                     " This error can be caused by the input data not being "
                     "accessible inside the Apptainer container. Please make sure "
                     "all paths are mapped properly (see https://apptainer.org/",
-                    "docs/user/main/bind_paths_and_mounts.html)"
+                    "docs/user/main/bind_paths_and_mounts.html)",
                 )
 
             raise RuntimeError(error_msg % ",".join(bad_labels))
