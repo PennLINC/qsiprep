@@ -34,7 +34,7 @@ a DWI scan (or scans) in the reverse phase encoding direction to use for
 susceptibility distortion correction (SDC).
 
 This creates a number of possible scenarios for preprocessing your DWIs. These
-scenarios can be controlled by the ``--separate_all_dwis`` argument. If your study
+scenarios can be controlled by the ``--separate-all-dwis`` argument. If your study
 has multiple sessions, DWI scans will *never* be combined across sessions.
 Merging only occurs within a session.
 

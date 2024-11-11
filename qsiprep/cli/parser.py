@@ -180,8 +180,8 @@ def _build_parser(**kwargs):
 
     g_bids = parser.add_argument_group("Options for filtering BIDS queries")
     g_bids.add_argument(
-        "--skip_bids_validation",
         "--skip-bids-validation",
+        "--skip_bids_validation",
         action="store_true",
         default=False,
         help="Assume the input dataset is BIDS compliant and skip the validation",
@@ -197,6 +197,7 @@ def _build_parser(**kwargs):
     )
     g_bids.add_argument(
         "--session-id",
+        "--session_id",
         action="store",
         nargs="+",
         type=_drop_ses,
@@ -207,6 +208,7 @@ def _build_parser(**kwargs):
 
     g_bids.add_argument(
         "--bids-filter-file",
+        "--bids_filter_file",
         dest="bids_filters",
         action="store",
         type=BIDSFilter,
@@ -219,6 +221,7 @@ def _build_parser(**kwargs):
     )
     g_bids.add_argument(
         "--bids-database-dir",
+        "--bids_database_dir",
         metavar="PATH",
         type=Path,
         help="Path to a PyBIDS database folder, for faster indexing (especially "
@@ -238,6 +241,7 @@ def _build_parser(**kwargs):
     )
     g_perfm.add_argument(
         "--omp-nthreads",
+        "--omp_nthreads",
         action="store",
         type=PositiveInt,
         help="Maximum number of threads per-process",
@@ -254,6 +258,7 @@ def _build_parser(**kwargs):
     )
     g_perfm.add_argument(
         "--low-mem",
+        "--low_mem",
         action="store_true",
         help="Attempt to reduce memory usage (will increase disk usage in working directory)",
     )
@@ -276,6 +281,7 @@ def _build_parser(**kwargs):
     g_subset.add_argument("--anat-only", action="store_true", help="Run anatomical workflows only")
     g_subset.add_argument(
         "--dwi-only",
+        "--dwi_only",
         action="store_true",
         help="ignore anatomical (T1w/T2w) data and process DWIs only",
     )
@@ -289,6 +295,7 @@ def _build_parser(**kwargs):
     )
     g_subset.add_argument(
         "--reports-only",
+        "--reports_only",
         action="store_true",
         default=False,
         help="Only generate reports, don't run workflows. This will only rerun report "
@@ -320,6 +327,7 @@ def _build_parser(**kwargs):
     )
     g_conf.add_argument(
         "--subject-anatomical-reference",
+        "--subject_anatomical_reference",
         choices=["first-alphabetically", "unbiased", "sessionwise"],
         default="first-alphabetically",
         help="How to define subject-specific anatomical space. "
@@ -329,6 +337,7 @@ def _build_parser(**kwargs):
     )
     g_conf.add_argument(
         "--skip-anat-based-spatial-normalization",
+        "--skip_anat_based_spatial_normalization",
         action="store_true",
         default=False,
         help="skip running the anat-based normalization to template space. "
@@ -354,8 +363,8 @@ def _build_parser(**kwargs):
         "lowered or increased. Note, setting this too high can result in inaccurate results.",
     )
     g_conf.add_argument(
-        "--dwi_denoise_window",
         "--dwi-denoise-window",
+        "--dwi_denoise_window",
         action="store",
         default="auto",
         help='window size in voxels for image-based denoising, integer or "auto".'
@@ -410,8 +419,8 @@ def _build_parser(**kwargs):
         help="run ``dwidenoise`` after combining dwis, but before motion correction",
     )
     g_conf.add_argument(
-        "--separate_all_dwis",
         "--separate-all-dwis",
+        "--separate_all_dwis",
         action="store_true",
         help="don't attempt to combine dwis from multiple runs. Each will be "
         "processed separately.",
@@ -431,6 +440,7 @@ def _build_parser(**kwargs):
     )
     g_conf.add_argument(
         "--anatomical-template",
+        "--anatomical_template",
         required=False,
         action="store",
         choices=["MNI152NLin2009cAsym"],
@@ -508,8 +518,8 @@ def _build_parser(**kwargs):
         help="transformation to be optimized during head motion correction " "(default: affine)",
     )
     g_moco.add_argument(
-        "--hmc_model",
         "--hmc-model",
+        "--hmc_model",
         action="store",
         default="eddy",
         choices=["none", "3dSHORE", "eddy", "tensor"],
@@ -528,8 +538,8 @@ def _build_parser(**kwargs):
         "https://github.com/PennLINC/qsiprep/blob/master/qsiprep/data/eddy_params.json",
     )
     g_moco.add_argument(
-        "--shoreline_iters",
         "--shoreline-iters",
+        "--shoreline_iters",
         action="store",
         type=int,
         default=2,
@@ -548,12 +558,14 @@ def _build_parser(**kwargs):
     )
     g_fmap.add_argument(
         "--fmap-bspline",
+        "--fmap_bspline",
         action="store_true",
         default=False,
         help="Fit a B-Spline field using least-squares (experimental)",
     )
     g_fmap.add_argument(
         "--fmap-no-demean",
+        "--fmap_no_demean",
         action="store_false",
         default=True,
         help="Do not remove median (within mask) from fieldmap",
@@ -563,6 +575,7 @@ def _build_parser(**kwargs):
     g_syn = parser.add_argument_group("Specific options for SyN distortion correction")
     g_syn.add_argument(
         "--use-syn-sdc",
+        "--use_syn_sdc",
         nargs="?",
         choices=["warn", "error"],
         action="store",
@@ -573,6 +586,7 @@ def _build_parser(**kwargs):
     )
     g_syn.add_argument(
         "--force-syn",
+        "--force_syn",
         action="store_true",
         default=False,
         help="EXPERIMENTAL/TEMPORARY: Use SyN correction in addition to "
@@ -592,6 +606,7 @@ def _build_parser(**kwargs):
     g_other.add_argument(
         "-w",
         "--work-dir",
+        "--work_dir",
         action="store",
         type=Path,
         default=Path("work").absolute(),
@@ -599,12 +614,14 @@ def _build_parser(**kwargs):
     )
     g_other.add_argument(
         "--resource-monitor",
+        "--resource_monitor",
         action="store_true",
         default=False,
         help="Enable Nipype's resource monitoring to keep track of memory and CPU usage",
     )
     g_other.add_argument(
         "--config-file",
+        "--config_file",
         action="store",
         metavar="FILE",
         help="Use pre-generated configuration file. Values in file will be overridden "
@@ -612,12 +629,14 @@ def _build_parser(**kwargs):
     )
     g_other.add_argument(
         "--write-graph",
+        "--write_graph",
         action="store_true",
         default=False,
         help="Write workflow graph.",
     )
     g_other.add_argument(
         "--stop-on-first-crash",
+        "--stop_on_first_crash",
         action="store_true",
         default=False,
         help="Force stopping on first crash, even if a work directory was specified.",
