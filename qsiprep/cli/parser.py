@@ -687,7 +687,7 @@ def parse_args(args=None, namespace=None):
     if 1 < config.nipype.nprocs < config.nipype.omp_nthreads:
         build_log.warning(
             f"Per-process threads (--omp-nthreads={config.nipype.omp_nthreads}) exceed "
-            f"total threads (--nthreads/--n_cpus={config.nipype.nprocs})"
+            f"total threads (--nthreads/--n-cpus={config.nipype.nprocs})"
         )
 
     # Validate the tricky options here

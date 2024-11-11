@@ -57,7 +57,7 @@ def test_dsdti_fmap(data_dir, output_dir, working_dir):
         "--boilerplate",
         "--sloppy",
         "--write-graph",
-        "--mem_mb=4096",
+        "--mem-mb=4096",
         "--output-resolution=5",
     ]
 
