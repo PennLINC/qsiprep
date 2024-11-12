@@ -52,13 +52,13 @@ def group_dwi_scans(
         concatenation. The values are lists of dwi files in that group.
     """
     # Handle the grouping of multiple dwi files within a session
-    dwi_session_groups = get_session_groups(config.execution.layout, subject_data, combine_scans)
+    dwi_entity_groups = get_entity_groups(config.execution.layout, subject_data, combine_scans)
 
     # Group them by their warp group
     dwi_fmap_groups = []
-    for dwi_session_group in dwi_session_groups:
+    for dwi_entity_group in dwi_entity_groups:
         dwi_fmap_groups.extend(
-            group_by_warpspace(dwi_session_group, config.execution.layout, ignore_fieldmaps)
+            group_by_warpspace(dwi_entity_group, config.execution.layout, ignore_fieldmaps)
         )
 
     if using_fsl:
@@ -70,8 +70,8 @@ def group_dwi_scans(
     return dwi_fmap_groups, {}
 
 
-def get_session_groups(layout, subject_data, combine_all_dwis):
-    """Handle the grouping of multiple dwi files within a session.
+def get_entity_groups(layout, subject_data, combine_all_dwis):
+    """Handle the grouping of multiple DWI files within a session/acquisition.
 
     Parameters
     ----------
@@ -80,32 +80,55 @@ def get_session_groups(layout, subject_data, combine_all_dwis):
     subject_data : :obj:`dict`
         A dictionary of BIDS data for a single subject
     combine_all_dwis : :obj:`bool`
-        If True, combine all dwi files within a session into a single group
+        If True, combine all DWI files within a session/acq into a single group
 
     Returns
     -------
-    dwi_session_groups : :obj:`list` of :obj:`list`
-        A list of lists of dwi files. Each list of dwi files is a group of scans
-        that can be concatenated together.
+    dwi_entity_groups : :obj:`list` of :obj:`list`
+        A list of lists of DWI files.
+        Each list of DWI files is a group of scans that can be concatenated together.
     """
-    sessions = layout.get_sessions() if layout is not None else []
     all_dwis = subject_data["dwi"]
-    dwi_session_groups = []
+    dwi_groups = []
     if not combine_all_dwis:
-        dwi_session_groups = [[dwi] for dwi in all_dwis]
+        dwi_groups = [[dwi] for dwi in all_dwis]
 
     else:
-        if sessions:
-            LOGGER.info("Combining all dwi files within each available session:")
-            for session in sessions:
-                session_files = [img for img in all_dwis if "ses-" + session in img]
-                LOGGER.info("\t- %d scans in session %s", len(session_files), session)
-                dwi_session_groups.append(session_files)
-        else:
-            LOGGER.info("Combining all %d dwis within the single available session", len(all_dwis))
-            dwi_session_groups = [all_dwis]
+        dwi_entities = {}
+        for f in all_dwis:
+            f_entities = layout.get_file(f).get_entities()
+            for k, v in f_entities.items():
+                if k in dwi_entities:
+                    if v not in dwi_entities[k]:
+                        dwi_entities[k].append(v)
+                else:
+                    dwi_entities[k] = [v]
 
-    return dwi_session_groups
+        sessions = dwi_entities.get("session", [None])
+        acquisitions = dwi_entities.get("acquisition", [None])
+
+        LOGGER.info("Combining all DWI files within each available session and acquisition:")
+        for session in sessions:
+            session_files = [
+                img for img in all_dwis if layout.get_file(img).entities.get("session") == session
+            ]
+            for acq in acquisitions:
+                group_files = [
+                    img
+                    for img in session_files
+                    if layout.get_file(img).entities.get("acquisition") == acq
+                ]
+
+                if group_files:
+                    LOGGER.info(
+                        "\t- %d scans in session %s/acquisition %s",
+                        len(group_files),
+                        session,
+                        acq,
+                    )
+                    dwi_groups.append(group_files)
+
+    return dwi_groups
 
 
 FMAP_PRIORITY = {
