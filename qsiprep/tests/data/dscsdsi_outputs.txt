@@ -19,9 +19,9 @@ sub-tester/anat/sub-tester_space-ACPC_desc-preproc_T1w.nii.gz
 sub-tester/anat/sub-tester_space-ACPC_dseg.nii.gz
 sub-tester/dwi
 sub-tester/dwi/sub-tester_acq-HASC55AP_confounds.tsv
-sub-tester/dwi/sub-tester_acq-HASC55AP_desc-ImageQC_dwi.csv
-sub-tester/dwi/sub-tester_acq-HASC55AP_desc-SliceQC_dwi.json
 sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_desc-3dSHORE_cnr.nii.gz
+sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_desc-ImageQC_dwi.csv
+sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_desc-SliceQC_dwi.json
 sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_desc-brain_mask.nii.gz
 sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_desc-preproc_dwi.b
 sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_desc-preproc_dwi.b_table.txt
