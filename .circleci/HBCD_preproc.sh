@@ -35,9 +35,9 @@ ${QSIPREP_CMD} \
 	--anat-modality T2w \
 	--infant \
 	--denoise-method dwidenoise \
-	--b1_biascorrect_stage none \
+	--b1-biascorrect-stage none \
 	--pepolar-method DRBUDDI \
-	--eddy_config ${EDDY_CFG} \
+	--eddy-config ${EDDY_CFG} \
 	--output-resolution 5 \
     -vv --stop-on-first-crash
 

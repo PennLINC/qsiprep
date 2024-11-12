@@ -180,7 +180,6 @@ def _build_parser(**kwargs):
 
     g_bids = parser.add_argument_group("Options for filtering BIDS queries")
     g_bids.add_argument(
-        "--skip_bids_validation",
         "--skip-bids-validation",
         action="store_true",
         default=False,
@@ -188,7 +187,6 @@ def _build_parser(**kwargs):
     )
     g_bids.add_argument(
         "--participant-label",
-        "--participant_label",
         action="store",
         nargs="+",
         type=_drop_sub,
@@ -229,7 +227,6 @@ def _build_parser(**kwargs):
     g_perfm.add_argument(
         "--nprocs",
         "--nthreads",
-        "--n_cpus",
         "--n-cpus",
         dest="nprocs",
         action="store",
@@ -244,7 +241,6 @@ def _build_parser(**kwargs):
     )
     g_perfm.add_argument(
         "--mem",
-        "--mem_mb",
         "--mem-mb",
         dest="memory_gb",
         action="store",
@@ -281,7 +277,6 @@ def _build_parser(**kwargs):
     )
     g_subset.add_argument(
         "--boilerplate-only",
-        "--boilerplate_only",
         "--boilerplate",
         action="store_true",
         default=False,
@@ -336,7 +331,6 @@ def _build_parser(**kwargs):
     )
     g_conf.add_argument(
         "--anat-modality",
-        "--anat_modality",
         choices=["T1w", "T2w", "none"],
         default="T1w",
         help="Modality to use as the anatomical reference. Images of this "
@@ -345,7 +339,6 @@ def _build_parser(**kwargs):
     )
     g_conf.add_argument(
         "--b0-threshold",
-        "--b0_threshold",
         action="store",
         type=int,
         default=100,
@@ -354,7 +347,6 @@ def _build_parser(**kwargs):
         "lowered or increased. Note, setting this too high can result in inaccurate results.",
     )
     g_conf.add_argument(
-        "--dwi_denoise_window",
         "--dwi-denoise-window",
         action="store",
         default="auto",
@@ -364,7 +356,6 @@ def _build_parser(**kwargs):
     )
     g_conf.add_argument(
         "--denoise-method",
-        "--denoise_method",
         action="store",
         choices=["dwidenoise", "patch2self", "none"],
         default="dwidenoise",
@@ -373,7 +364,6 @@ def _build_parser(**kwargs):
     )
     g_conf.add_argument(
         "--unringing-method",
-        "--unringing_method",
         action="store",
         choices=["none", "mrdegibbs", "rpg"],
         help="Method for Gibbs-ringing removal.\n - none: no action\n - mrdegibbs: "
@@ -382,13 +372,11 @@ def _build_parser(**kwargs):
     )
     g_conf.add_argument(
         "--dwi-no-biascorr",
-        "--dwi_no_biascorr",
         action="store_true",
         help="DEPRECATED: see --b1-biascorrect-stage",
     )
     g_conf.add_argument(
         "--b1-biascorrect-stage",
-        "--b1_biascorrect_stage",
         action="store",
         choices=["final", "none", "legacy"],
         default="final",
@@ -399,18 +387,15 @@ def _build_parser(**kwargs):
     )
     g_conf.add_argument(
         "--no-b0-harmonization",
-        "--no_b0_harmonization",
         action="store_true",
         help="skip re-scaling dwi scans to have matching b=0 intensities",
     )
     g_conf.add_argument(
         "--denoise-after-combining",
-        "--denoise_after_combining",
         action="store_true",
         help="run ``dwidenoise`` after combining dwis, but before motion correction",
     )
     g_conf.add_argument(
-        "--separate_all_dwis",
         "--separate-all-dwis",
         action="store_true",
         help="don't attempt to combine dwis from multiple runs. Each will be "
@@ -418,7 +403,6 @@ def _build_parser(**kwargs):
     )
     g_conf.add_argument(
         "--distortion-group-merge",
-        "--distortion_group_merge",
         action="store",
         choices=["concat", "average", "none"],
         default="none",
@@ -439,7 +423,6 @@ def _build_parser(**kwargs):
     )
     g_conf.add_argument(
         "--output-resolution",
-        "--output_resolution",
         action="store",
         required=True,
         type=float,
@@ -451,7 +434,6 @@ def _build_parser(**kwargs):
     g_coreg = parser.add_argument_group("Options for dwi-to-Anatomical coregistration")
     g_coreg.add_argument(
         "--b0-to-t1w-transform",
-        "--b0_to_t1w_transform",
         action="store",
         default="Rigid",
         choices=["Rigid", "Affine"],
@@ -460,7 +442,6 @@ def _build_parser(**kwargs):
     )
     g_coreg.add_argument(
         "--intramodal-template-iters",
-        "--intramodal_template_iters",
         action="store",
         default=0,
         type=int,
@@ -471,7 +452,6 @@ def _build_parser(**kwargs):
     )
     g_coreg.add_argument(
         "--intramodal-template-transform",
-        "--intramodal_template_transform",
         default="BSplineSyN",
         choices=["Rigid", "Affine", "BSplineSyN", "SyN"],
         action="store",
@@ -482,7 +462,6 @@ def _build_parser(**kwargs):
     g_fs = parser.add_argument_group("Specific options for FreeSurfer preprocessing")
     g_fs.add_argument(
         "--fs-license-file",
-        "--fs_license_file",
         metavar="PATH",
         type=Path,
         help="Path to FreeSurfer license key file. Get it (for free) by registering "
@@ -492,7 +471,6 @@ def _build_parser(**kwargs):
     g_moco = parser.add_argument_group("Specific options for motion correction and coregistration")
     g_moco.add_argument(
         "--b0-motion-corr-to",
-        "--bo_motion_corr_to",
         action="store",
         default="iterative",
         choices=["iterative", "first"],
@@ -501,14 +479,12 @@ def _build_parser(**kwargs):
     )
     g_moco.add_argument(
         "--hmc-transform",
-        "--hmc_transform",
         action="store",
         default="Affine",
         choices=["Affine", "Rigid"],
         help="transformation to be optimized during head motion correction " "(default: affine)",
     )
     g_moco.add_argument(
-        "--hmc_model",
         "--hmc-model",
         action="store",
         default="eddy",
@@ -520,7 +496,6 @@ def _build_parser(**kwargs):
     )
     g_moco.add_argument(
         "--eddy-config",
-        "--eddy_config",
         action="store",
         help="path to a json file with settings for the call to eddy. If no "
         "json is specified, a default one will be used. The current default "
@@ -528,7 +503,6 @@ def _build_parser(**kwargs):
         "https://github.com/PennLINC/qsiprep/blob/master/qsiprep/data/eddy_params.json",
     )
     g_moco.add_argument(
-        "--shoreline_iters",
         "--shoreline-iters",
         action="store",
         type=int,
@@ -540,7 +514,6 @@ def _build_parser(**kwargs):
     g_fmap = parser.add_argument_group("Specific options for handling fieldmaps")
     g_fmap.add_argument(
         "--pepolar-method",
-        "--pepolar_method",
         action="store",
         default="TOPUP",
         choices=["TOPUP", "DRBUDDI", "TOPUP+DRBUDDI"],
@@ -714,7 +687,7 @@ def parse_args(args=None, namespace=None):
     if 1 < config.nipype.nprocs < config.nipype.omp_nthreads:
         build_log.warning(
             f"Per-process threads (--omp-nthreads={config.nipype.omp_nthreads}) exceed "
-            f"total threads (--nthreads/--n_cpus={config.nipype.nprocs})"
+            f"total threads (--nthreads/--n-cpus={config.nipype.nprocs})"
         )
 
     # Validate the tricky options here
