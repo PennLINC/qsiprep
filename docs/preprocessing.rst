@@ -233,42 +233,52 @@ written to ``<output_dir>/qsiprep/sub-<subject_label>/``.
 Derivatives related to anatomical files are nearly identical to those produced by ``fMRIprep`` and
 can be found in the ``anat`` subfolder.
 One major difference is that the anatomical derivatives are in LPS+ orientation and are realigned to the AC-PC,
-while ``fMRIprep``'s are in RAS+ orientation and retain the original anatomical images' orientation.
+while ``fMRIprep``'s are in RAS+ orientation and retain the original anatomical images' orientation ::
 
-- ``<source_entities>_space-ACPC_desc-brain_mask.nii.gz`` Brain mask derived using ANTs' ``antsBrainExtraction.sh``.
-- ``<source_entities>_space-ACPC_label-CSF_probseg.nii.gz``
-- ``<source_entities>_space-ACPC_label-GM_probseg.nii.gz``
-- ``<source_entities>_space-ACPC_label-WM_probseg.nii.gz`` tissue-probability maps.
-- ``<source_entities>_space-ACPC_dseg.nii.gz`` Tissue class map derived using FAST.
-- ``<source_entities>_space-ACPC_desc-preproc_T1w.nii.gz`` Bias field corrected T1w file, using ANTS' N4BiasFieldCorrection
-- ``<source_entities>_space-MNI152NLin2009cAsym_desc-brain_mask.nii.gz`` Same as ``_brainmask`` above, but in MNI space.
-- ``<source_entities>_space-MNI152NLin2009cAsym_label-CSF_probseg.nii.gz``
-- ``<source_entities>_space-MNI152NLin2009cAsym_label-GM_probseg.nii.gz``
-- ``<source_entities>_space-MNI152NLin2009cAsym_label-WM_probseg.nii.gz`` Probability tissue maps, transformed into MNI space
-- ``<source_entities>_space-MNI152NLin2009cAsym_dseg.nii.gz`` Same as ``_dtissue`` above, but in MNI space
-- ``<source_entities>_space-MNI152NLin2009cAsym_desc-preproc_T1w.nii.gz`` Same as ``_preproc`` above, but in MNI space
-- ``<source_entities>_from-MNI152NLin2009cAsym_to-ACPC_mode-image_xfm.h5`` Composite (warp and affine) transform to map from MNI to ACPC space
-- ``<source_entities>_from-ACPC_to-MNI152NLin2009cAsym_mode-image_xfm.h5`` Composite (warp and affine) transform to transform ACPC into MNI space
+  sub-<label>/[ses-<label>/]
+    anat/
+      <source_entities>_space-ACPC_desc-brain_mask.nii.gz                   Brain mask derived using ANTs' ``antsBrainExtraction.sh``.
+      <source_entities>_space-ACPC_label-CSF_probseg.nii.gz                 Tissue-probability maps
+      <source_entities>_space-ACPC_label-GM_probseg.nii.gz
+      <source_entities>_space-ACPC_label-WM_probseg.nii.gz
+      <source_entities>_space-ACPC_dseg.nii.gz                              Tissue class map derived using FAST.
+      <source_entities>_space-ACPC_desc-preproc_T1w.nii.gz                  Bias field corrected T1w file, using ANTS' N4BiasFieldCorrection
+      <source_entities>_space-MNI152NLin2009cAsym_desc-brain_mask.nii.gz    Same as brain mask above, but in MNI space.
+      <source_entities>_space-MNI152NLin2009cAsym_label-CSF_probseg.nii.gz  Probability tissue maps, transformed into MNI space
+      <source_entities>_space-MNI152NLin2009cAsym_label-GM_probseg.nii.gz
+      <source_entities>_space-MNI152NLin2009cAsym_label-WM_probseg.nii.gz
+      <source_entities>_space-MNI152NLin2009cAsym_dseg.nii.gz               Same as tissue class map above, but in MNI space
+      <source_entities>_space-MNI152NLin2009cAsym_desc-preproc_T1w.nii.gz   Same as preprocessed T1w above, but in MNI space
 
-Derivatives related to diffusion images are in the ``dwi`` subfolder.
+Derivatives related to diffusion images are in the ``dwi`` subfolder ::
 
-- ``*_confounds.tsv`` A tab-separated value file with one column per calculated confound and one row per timepoint/volume
+  sub-<label>/[ses-<label>/]
+    dwi/
+      <source_entities>_confounds.tsv   A tab-separated value file with one column per calculated confound and one row per timepoint/volume
 
-Volumetric outputs are written out in ``ACPC`` space.
+Volumetric outputs are written out in ``ACPC`` space ::
 
-- ``*dwiref.nii.gz`` The b0 template
-- ``*desc-brain_mask.nii.gz`` The generous brain mask that should be reduced probably
-- ``*desc-preproc_dwi.nii.gz`` Resampled DWI series including all b0 images.
-- ``*desc-preproc_dwi.bval``, ``*desc-preproc_dwi.bvec`` FSL-style bvals and bvecs files.
-  *These will be incorrectly interpreted by MRTrix, but will work with DSI Studio and Dipy.*
-  Use the ``.b`` file for MRTrix.
-- ``desc-preproc_dwi.b`` The gradient table to import data into MRTrix. This and the
-  ``_dwi.nii.gz`` can be converted directly to a ``.mif`` file using the ``mrconvert -grad _dwi.b``
-  command.
-- ``*bvecs.nii.gz`` Each voxel contains a gradient table that has been adjusted for local
-  rotations introduced by spatial warping.
-- ``*cnr.nii.gz`` Each voxel contains a contrast-to-noise model defined as the variance of the
-  signal model divided by the variance of the error of the signal model.
+  sub-<label>/[ses-<label>/]
+    dwi/
+      <source_entities>_space-ACPC_dwiref.nii.gz
+      # The generous brain mask that should be reduced probably
+      <source_entities>_space-ACPC_desc-brain_mask.nii.gz
+      <source_entities>_space-ACPC_desc-preproc_dwi.nii.gz
+
+      # FSL-style bval and bvec files.
+      # These will be incorrectly interpreted by MRTrix, but will work with DSI Studio and Dipy.
+      <source_entities>_space-ACPC_desc-preproc_dwi.bval
+      <source_entities>_space-ACPC_desc-preproc_dwi.bvec
+
+      # Use the ``.b`` file for MRTrix.
+      # The gradient table to import data into MRTrix.
+      # This can be used with the preprocessed DWI file and
+      # converted directly to a ``.mif`` file using the ``mrconvert -grad _dwi.b`` command.
+      <source_entities>_space-ACPC_desc-preproc_dwi.b
+
+      # Contrast-to-noise model defined as the variance of the
+      # signal model divided by the variance of the error of the signal model.
+      <source_entities>_space-ACPC_desc-<label>_cnr.nii.gz
 
 
 .. _dwi_confounds:
@@ -280,7 +290,7 @@ See implementation on :func:`~qsiprep.workflows.dwi.confounds.init_dwi_confs_wf`
 
 
 For each DWI processed by qsiprep, a
-``<output_folder>/qsiprep/sub-<sub_id>/func/sub-<sub_id>_task-<task_id>_run-<run_id>_confounds.tsv``
+``<output_folder>/qsiprep/sub-<label>/func/<source_entities>_confounds.tsv``
 file will be generated. These are :abbr:`TSV (tab-separated values)` tables,
 which look like the example below::
 
@@ -306,8 +316,8 @@ working on specific gradient strengths or directions.
 
 .. _qc_data:
 
-Quality Control data
-^^^^^^^^^^^^^^^^^^^^^
+Quality Control Data
+^^^^^^^^^^^^^^^^^^^^
 
 A single-line csv file (``desc-ImageQC_dwi.csv``) is created for each output
 image. This file is particularly useful for comparing the relative quality
@@ -325,7 +335,7 @@ the anatomical brain mask and the DWI brain mask is calculated using the Dice
 distance in ``t1_dice_distance`` and ``mni_dice_distance``.
 
 Confounds and "carpet"-plot on the visual reports
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 fMRI has been using a "carpet" visualization of the
 :abbr:`BOLD (blood-oxygen level-dependent)` time-series (see [Power2016]_),
