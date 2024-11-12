@@ -155,6 +155,7 @@ def main():
         boiler_file = output_dir / "logs" / "CITATION.md"
         if boiler_file.exists():
             if config.environment.exec_env in (
+                "apptainer",
                 "singularity",
                 "docker",
             ):

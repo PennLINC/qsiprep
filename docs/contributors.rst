@@ -33,24 +33,24 @@ For example, ::
         pennbbl/qsiprep:latest /data /out/out participant \
         -w /out/work/
 
-In order to work directly in the container, use ``--entrypoint=bash`` 
+In order to work directly in the container, use ``--entrypoint=bash``
 arguments in a ``docker`` command::
 
     $ docker run --rm -v $HOME/fullds005:/data:ro -v $HOME/dockerout:/out \
         -v $HOME/projects/qsiprep/qsiprep:/usr/local/miniconda/lib/python3.10/site-packages/qsiprep:ro --entrypoint=bash \
         pennbbl/qsiprep:latest
 
-Patching containers can be achieved in Singularity analogous to ``docker``
+Patching containers can be achieved in Apptainer analogous to ``docker``
 using the ``--bind`` (``-B``) option: ::
 
-    $ singularity run \
+    $ apptainer run \
         -B $HOME/projects/qsiprep/qsiprep:/usr/local/miniconda/lib/python3.10/site-packages/qsiprep \
         qsiprep.img \
         /scratch/dataset /scratch/out participant -w /out/work/
 
-Or you can patch Singularity containers using the PYTHONPATH variable: ::
+Or you can patch Apptainer containers using the PYTHONPATH variable: ::
 
-   $ PYTHONPATH="$HOME/projects/qsiprep" singularity run qsiprep.img \
+   $ PYTHONPATH="$HOME/projects/qsiprep" apptainer run qsiprep.img \
         /scratch/dataset /scratch/out participant -w /out/work/
 
 
