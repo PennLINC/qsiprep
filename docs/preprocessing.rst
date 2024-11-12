@@ -297,9 +297,9 @@ QSIPrep will write out a series of transforms needed to map between the differen
 
 .. important::
 
-  Motion correction, eddy current correction, and distortion correction are performed with EDDY,
+  Motion correction, eddy current correction, and distortion correction are performed with Eddy,
   which does not produce transforms that can be written out and reused.
-  In the future, if EDDY starts writing out usable transforms
+  In the future, if Eddy starts writing out usable transforms
   or an alternate implementation is made available,
   QSIPrep may start writing these transforms out in a similar manner to fMRIPrep.
 
