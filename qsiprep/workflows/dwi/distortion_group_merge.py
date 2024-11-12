@@ -194,8 +194,8 @@ def init_distortion_group_merge_wf(
     )
     ds_series_qc = pe.Node(
         DerivativesDataSink(
-            desc="ImageQC",
-            suffix="dwi",
+            desc="image",
+            suffix="qc",
             source_file=source_file,
             base_directory=config.execution.output_dir,
         ),

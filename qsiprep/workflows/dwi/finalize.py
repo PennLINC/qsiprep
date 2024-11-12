@@ -344,8 +344,8 @@ def init_dwi_finalize_wf(
     ds_series_qc = pe.Node(
         DerivativesDataSink(
             space="ACPC",
-            desc="ImageQC",
-            suffix="dwi",
+            desc="image",
+            suffix="qc",
             source_file=source_file,
             base_directory=config.execution.output_dir,
         ),
@@ -378,8 +378,8 @@ def init_dwi_finalize_wf(
     ds_carpetplot_data = pe.Node(
         DerivativesDataSink(
             space="ACPC",
-            desc="SliceQC",
-            suffix="dwi",
+            desc="slice",
+            suffix="qc",
             source_file=source_file,
             base_directory=config.execution.output_dir,
         ),

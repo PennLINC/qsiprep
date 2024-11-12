@@ -333,7 +333,7 @@ working on specific gradient strengths or directions.
 Quality Control Data
 ^^^^^^^^^^^^^^^^^^^^
 
-A single-line csv file (``desc-ImageQC_dwi.csv``) is created for each output
+A single-line csv file (``desc-image_qc.csv``) is created for each output
 image. This file is particularly useful for comparing the relative quality
 across subjects before deciding who to include in a group analysis. The
 columns in this file come from DSI Studio's QC calculation and is described
