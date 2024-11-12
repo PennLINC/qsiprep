@@ -276,6 +276,53 @@ Volumetric output spaces include ``T1w`` (default) and ``MNI152NLin2009cAsym``.
   signal model divided by the variance of the error of the signal model.
 
 
+Transforms
+^^^^^^^^^^
+
+QSIPrep will write out a series of transforms needed to map between the different spaces.
+
+.. code-block::
+
+  sub-<label>/
+    anat/
+      sub-<label>_from-anat_to-ACPC_mode-image_xfm.mat
+      sub-<label>_from-ACPC_to-anat_mode-image_xfm.mat
+      sub-<label>_from-ACPC_to-<output-space>_mode-image_xfm.h5
+      sub-<label>_from-<output-space>_to-ACPC_mode-image_xfm.h5
+    ses-<label>/
+      anat/
+        sub-<label>_ses-<label>_from-orig_to-anat_mode-image_xfm.txt
+        sub-<label>_ses-<label>_from-anat_to-orig_mode-image_xfm.txt
+
+
+.. important::
+
+  Motion correction, eddy current correction, and distortion correction are performed with EDDY,
+  which does not produce transforms that can be written out and reused.
+  In the future, if EDDY starts writing out usable transforms
+  or an alternate implementation is made available,
+  QSIPrep may start writing these transforms out in a similar manner to fMRIPrep.
+
+  These will most likely be organized thusly::
+
+    sub-<label>/
+      ses-<label>/
+        dwi/
+          sub-<label>_ses-<label>_from-orig_to-dwiref_mode-image_desc-eddy_xfm.h5
+
+
+.. important::
+
+  QSIPrep does not currently write out the coregistration transform from dwiref space to ACPC space.
+  When it does start writing this transform out, it will be organized like this::
+
+    sub-<label>/
+      ses-<label>/
+        dwi/
+          sub-<label>_ses-<label>_from-dwiref_to-ACPC_mode-image_xfm.h5
+          sub-<label>_ses-<label>_from-ACPC_to-dwiref_mode-image_xfm.h5
+
+
 .. _dwi_confounds:
 
 Confounds
