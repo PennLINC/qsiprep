@@ -190,9 +190,9 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
     _ses_name = "_ses_" + "_".join(map(str, session_ids)) if session_ids else ""
     workflow = Workflow(name=f"sub_{subject_id}{_ses_name}_wf")
     workflow.__desc__ = f"""
-Preprocessing was performed using *QSIPrep* {config.environment.version},
+Preprocessing was performed using *QSIPrep* {config.environment.version} [@cieslak2021qsiprep],
 which is based on *Nipype* {config.environment.nipype_version}
-(@nipype1; @nipype2; RRID:SCR_002502).
+[@nipype1; @nipype2; RRID:SCR_002502].
 
 """
     workflow.__postdesc__ = f"""
