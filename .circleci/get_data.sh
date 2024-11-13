@@ -292,7 +292,7 @@ Contents:
  - data/multishell_output/qsiprep/sub-ABCD/dwi/sub-ABCD_acq-10per000_confounds.tsv
  - data/multishell_output/qsiprep/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-T1w_b0series.nii.gz
  - data/multishell_output/qsiprep/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-T1w_desc-brain_mask.nii.gz
- - data/multishell_output/qsiprep/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-T1w_desc-eddy_cnr.nii.gz
+ - data/multishell_output/qsiprep/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-T1w_stat-cnr_desc-eddy_dwimap.nii.gz
  - data/multishell_output/qsiprep/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-T1w_desc-preproc_dwi.b
  - data/multishell_output/qsiprep/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-T1w_desc-preproc_dwi.bval
  - data/multishell_output/qsiprep/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-T1w_desc-preproc_dwi.bvec
@@ -330,7 +330,7 @@ Contents:
  - data/singleshell_output/qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_confounds.tsv
  - data/singleshell_output/qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_b0series.nii.gz
  - data/singleshell_output/qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-brain_mask.nii.gz
- - data/singleshell_output/qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-eddy_cnr.nii.gz
+ - data/singleshell_output/qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_stat-cnr_desc-eddy_dwimap.nii.gz
  - data/singleshell_output/qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_dwi.b
  - data/singleshell_output/qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_dwi.bval
  - data/singleshell_output/qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_dwi.bvec

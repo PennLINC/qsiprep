@@ -17,5 +17,5 @@ sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_dwi.bvec
 sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_dwi.nii.gz
 sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_dwi.json
 sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_dwi.b_table.txt
-sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-tensor_cnr.nii.gz
+sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_stat-cnr_desc-tensor_dwimap.nii.gz
 sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_dwiref.nii.gz
