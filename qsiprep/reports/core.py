@@ -24,7 +24,7 @@ from pathlib import Path
 
 from nireports.assembler.report import Report
 
-from .. import config, data
+from .. import data
 
 
 def run_reports(
@@ -73,25 +73,18 @@ def generate_reports(
     ----------
     output_level {"sessionwise", "unbiased", "first-alphabetically"}
     """
-
     errors = []
     for subject_label, session_list in processing_list:
-
         subject_id = subject_label[4:] if subject_label.startswith("sub-") else subject_label
-        n_ses = len(session_list)
 
         if bootstrap_file is not None:
             # If a config file is precised, we do not override it
             html_report = "report.html"
-        elif n_ses <= config.execution.aggr_ses_reports:
+        else:
             # If there are only a few session for this subject,
             # we aggregate them in a single visual report.
             bootstrap_file = data.load("reports-spec.yml")
             html_report = "report.html"
-        else:
-            # Beyond a threshold, we separate the anatomical report from the functional.
-            bootstrap_file = data.load("reports-spec-anat.yml")
-            html_report = f'sub-{subject_label.lstrip("sub-")}_anat.html'
 
         # We only make this one if it's all the sessions or just the anat and not sessionwise
         if output_level != "sessionwise":
@@ -109,7 +102,7 @@ def generate_reports(
             if report_error is not None:
                 errors.append(report_error)
 
-        if n_ses > config.execution.aggr_ses_reports or output_level == "sessionwise":
+        else:
             # Beyond a certain number of sessions per subject,
             # we separate the dwi reports per session
             # If output_level is "sessionwise",
@@ -117,16 +110,9 @@ def generate_reports(
             session_list = [ses[4:] if ses.startswith("ses-") else ses for ses in session_list]
 
             for session_label in session_list:
-
-                if output_level == "sessionwise":
-                    bootstrap_file = data.load("reports-spec.yml")
-                    suffix = ""
-                    session_dir = output_dir / f"sub-{subject_id}" / f"ses-{session_label}"
-                    html_report = f"sub-{subject_id}_ses-{session_label}.html"
-                else:
-                    bootstrap_file = data.load("reports-spec-dwi.yml")
-                    suffix = "_dwi"
-                    html_report = "report.html"
+                bootstrap_file = data.load("reports-spec.yml")
+                session_dir = output_dir / f"sub-{subject_id}" / f"ses-{session_label}"
+                html_report = f"sub-{subject_id}_ses-{session_label}.html"
 
                 report_error = run_reports(
                     session_dir,
@@ -135,7 +121,7 @@ def generate_reports(
                     bootstrap_file=bootstrap_file,
                     out_filename=html_report,
                     reportlets_dir=output_dir,
-                    errorname=f"report-{run_uuid}-{subject_label}-{session_label}{suffix}.err",
+                    errorname=f"report-{run_uuid}-{subject_label}-{session_label}.err",
                     subject=subject_label,
                     session=session_label,
                 )

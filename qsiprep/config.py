@@ -446,7 +446,6 @@ class execution(_Config):
     """Write out the computational graph corresponding to the planned preprocessing."""
     dataset_links = {}
     """A dictionary of dataset links to be used to track Sources in sidecars."""
-    aggr_ses_reports = 4
 
     _layout = None
 
