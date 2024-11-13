@@ -6,7 +6,7 @@ RUN apt-get update && \
 COPY . /src/qsiprep
 RUN python -m build /src/qsiprep
 
-FROM pennbbl/qsiprep_build:24.7.4
+FROM pennlinc/qsiprep_build:24.7.4
 
 # Install qsiprep wheel
 COPY --from=wheelstage /src/qsiprep/dist/*.whl .
@@ -30,6 +30,6 @@ LABEL org.label-schema.build-date=$BUILD_DATE \
       org.label-schema.description="qsiprep - q Space Images preprocessing tool" \
       org.label-schema.url="http://qsiprep.readthedocs.io" \
       org.label-schema.vcs-ref=$VCS_REF \
-      org.label-schema.vcs-url="https://github.com/pennbbl/qsiprep" \
+      org.label-schema.vcs-url="https://github.com/pennlinc/qsiprep" \
       org.label-schema.version=$VERSION \
       org.label-schema.schema-version="1.0"

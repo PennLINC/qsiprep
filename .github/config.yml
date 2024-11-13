@@ -5,7 +5,7 @@ newPRWelcomeComment: >
   Thanks for opening this pull request!
   We have detected this is the first time for you to contribute
   to *qsiprep*.
-  Please check out our [contributing guidelines](https://github.com/pennbbl/qsiprep/blob/master/CONTRIBUTING.md).
+  Please check out our [contributing guidelines](https://github.com/pennlinc/qsiprep/blob/master/CONTRIBUTING.md).
 
   These are guidelines intended to make communication easier by describing a
   consistent process, but don't worry if you don't get it everything exactly
@@ -13,7 +13,7 @@ newPRWelcomeComment: >
 
   We invite you to list yourself as a *qsiprep* contributor, so if your name
   is not already mentioned, please modify the
-  [``.zenodo.json``](https://github.com/pennbbl/qsiprep/blob/master/.zenodo.json)
+  [``.zenodo.json``](https://github.com/pennlinc/qsiprep/blob/master/.zenodo.json)
   file with your data. If you do so, your name will be listed as an author
   at the next release. Please add yourself to the list in alphabetical order,
   keeping Cieslak, Matthew as first and Satterthwaite, Theodore D. as last

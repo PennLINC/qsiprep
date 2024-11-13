@@ -9,8 +9,8 @@ update an existing environment, as necessary.
 
 Development in Docker is encouraged, for the sake of consistency and
 portability.
-By default, work should be built off of `pennbbl/qsiprep:latest
-<https://hub.docker.com/r/pennbbl/qsiprep/>`_ (see the
+By default, work should be built off of `pennlinc/qsiprep:latest
+<https://hub.docker.com/r/pennlinc/qsiprep/>`_ (see the
 installation_ guide for the basic procedure for running).
 
 
@@ -30,7 +30,7 @@ For example, ::
 
     $ docker run --rm -v $HOME/fullds005:/data:ro -v $HOME/dockerout:/out \
         -v $HOME/projects/qsiprep/qsiprep:/usr/local/miniconda/lib/python3.10/site-packages/qsiprep:ro \
-        pennbbl/qsiprep:latest /data /out/out participant \
+        pennlinc/qsiprep:latest /data /out/out participant \
         -w /out/work/
 
 In order to work directly in the container, use ``--entrypoint=bash``
@@ -38,7 +38,7 @@ arguments in a ``docker`` command::
 
     $ docker run --rm -v $HOME/fullds005:/data:ro -v $HOME/dockerout:/out \
         -v $HOME/projects/qsiprep/qsiprep:/usr/local/miniconda/lib/python3.10/site-packages/qsiprep:ro --entrypoint=bash \
-        pennbbl/qsiprep:latest
+        pennlinc/qsiprep:latest
 
 Patching containers can be achieved in Apptainer analogous to ``docker``
 using the ``--bind`` (``-B``) option: ::
@@ -65,14 +65,14 @@ dependency changes.
 
 Python dependencies should generally be included in the ``REQUIRES``
 list in `qsiprep/info.py
-<https://github.com/pennbbl/qsiprep/blob/29133e5e9f92aae4b23dd897f9733885a60be311/qsiprep/info.py#L46-L61>`_.
+<https://github.com/pennlinc/qsiprep/blob/29133e5e9f92aae4b23dd897f9733885a60be311/qsiprep/info.py#L46-L61>`_.
 If the latest version in `PyPI <https://pypi.org/>`_ is sufficient,
 then no further action is required.
 
 For large Python dependencies where there will be a benefit to
 pre-compiled binaries, `conda <https://github.com/conda/conda>`_ packages
 may also be added to the ``conda install`` line in the `Dockerfile
-<https://github.com/pennbbl/qsiprep/blob/29133e5e9f92aae4b23dd897f9733885a60be311/Dockerfile#L46>`_.
+<https://github.com/pennlinc/qsiprep/blob/29133e5e9f92aae4b23dd897f9733885a60be311/Dockerfile#L46>`_.
 
 Non-Python dependencies must also be installed in the Dockerfile, via a
 ``RUN`` command.
@@ -89,7 +89,7 @@ repository, located in ``~/projects/qsiprep``: ::
 
     ~/projects/qsiprep$ docker build -t qsiprep .
 
-To work in this image, replace ``pennbbl/qsiprep:latest`` with
+To work in this image, replace ``pennlinc/qsiprep:latest`` with
 ``qsiprep`` in any of the above commands.
 
 
