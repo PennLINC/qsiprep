@@ -30,7 +30,6 @@ from .. import config
 def main():
     """Entry point."""
     import gc
-    import os
     import sys
     from multiprocessing import Manager, Process
     from os import EX_SOFTWARE
@@ -41,31 +40,6 @@ def main():
     from .workflow import build_workflow
 
     parse_args()
-
-    # Raise a warning about PennBBL/QSIPrep being deprecated
-    in_container = False
-    # Check for Docker
-    if os.path.exists("/.dockerenv"):
-        in_container = True
-
-    # Check for Apptainer/Singularity
-    if os.path.exists("/.singularity.d") or os.path.exists("/.apptainer.d"):
-        in_container = True
-
-    # Check for environment variables
-    if os.getenv("SINGULARITY_NAME") or os.getenv("APPTAINER_NAME"):
-        in_container = True
-
-    if in_container:
-        print(
-            """\
-**************************************************************
-WARNING: The pennbbl/qsiprep Docker image has been DEPRECATED.
-Please use the pennlinc/qsiprep image instead.
-**************************************************************
-""",
-            file=sys.stderr,
-        )
 
     if "pdb" in config.execution.debug:
         from qsiprep.utils.debug import setup_exceptionhook
