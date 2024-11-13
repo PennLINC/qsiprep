@@ -12,6 +12,7 @@ sub-tinytensors/dwi/sub-tinytensors_desc-ImageQC_dwi.csv
 sub-tinytensors/dwi/sub-tinytensors_desc-SliceQC_dwi.json
 sub-tinytensors/dwi/sub-tinytensors_space-T1w_desc-brain_mask.nii.gz
 sub-tinytensors/dwi/sub-tinytensors_space-T1w_stat-cnr_desc-eddy_dwimap.nii.gz
+sub-tinytensors/dwi/sub-tinytensors_space-T1w_stat-cnr_desc-eddy_dwimap.json
 sub-tinytensors/dwi/sub-tinytensors_space-T1w_desc-preproc_dwi.b
 sub-tinytensors/dwi/sub-tinytensors_space-T1w_desc-preproc_dwi.bval
 sub-tinytensors/dwi/sub-tinytensors_space-T1w_desc-preproc_dwi.bvec

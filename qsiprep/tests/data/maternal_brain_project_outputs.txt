@@ -25,6 +25,7 @@ sub-01/ses-01/dwi/sub-01_ses-01_desc-ImageQC_dwi.csv
 sub-01/ses-01/dwi/sub-01_ses-01_desc-SliceQC_dwi.json
 sub-01/ses-01/dwi/sub-01_ses-01_hmcOptimization.csv
 sub-01/ses-01/dwi/sub-01_ses-01_space-T1w_stat-cnr_desc-3dSHORE_dwimap.nii.gz
+sub-01/ses-01/dwi/sub-01_ses-01_space-T1w_stat-cnr_desc-3dSHORE_dwimap.json
 sub-01/ses-01/dwi/sub-01_ses-01_space-T1w_desc-brain_mask.nii.gz
 sub-01/ses-01/dwi/sub-01_ses-01_space-T1w_desc-preproc_dwi.b
 sub-01/ses-01/dwi/sub-01_ses-01_space-T1w_desc-preproc_dwi.bval

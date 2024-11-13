@@ -23,6 +23,7 @@ sub-PNC/dwi/sub-PNC_acq-realistic_desc-ImageQC_dwi.csv
 sub-PNC/dwi/sub-PNC_acq-realistic_desc-SliceQC_dwi.json
 sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-brain_mask.nii.gz
 sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_stat-cnr_desc-eddy_dwimap.nii.gz
+sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_stat-cnr_desc-eddy_dwimap.json
 sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_dwi.b
 sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_dwi.bval
 sub-PNC/dwi/sub-PNC_acq-realistic_space-T1w_desc-preproc_dwi.bvec

@@ -47,6 +47,7 @@ qsiprep/sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_desc-SliceQC_dwi.json
 qsiprep/sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_dwiqc.json
 qsiprep/sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_space-T1w_desc-brain_mask.nii.gz
 qsiprep/sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_space-T1w_stat-cnr_desc-none_dwimap.nii.gz
+qsiprep/sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_space-T1w_stat-cnr_desc-none_dwimap.json
 qsiprep/sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_space-T1w_desc-preproc_dwi.b
 qsiprep/sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_space-T1w_desc-preproc_dwi.bval
 qsiprep/sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_space-T1w_desc-preproc_dwi.bvec
@@ -60,6 +61,7 @@ qsiprep/sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_desc-SliceQC_dwi.json
 qsiprep/sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_dwiqc.json
 qsiprep/sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-T1w_desc-brain_mask.nii.gz
 qsiprep/sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-T1w_stat-cnr_desc-none_dwimap.nii.gz
+qsiprep/sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-T1w_stat-cnr_desc-none_dwimap.json
 qsiprep/sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-T1w_desc-preproc_dwi.b
 qsiprep/sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-T1w_desc-preproc_dwi.bval
 qsiprep/sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-T1w_desc-preproc_dwi.bvec

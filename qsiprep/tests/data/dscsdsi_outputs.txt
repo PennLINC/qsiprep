@@ -22,6 +22,7 @@ sub-tester/dwi/sub-tester_acq-HASC55AP_confounds.tsv
 sub-tester/dwi/sub-tester_acq-HASC55AP_desc-ImageQC_dwi.csv
 sub-tester/dwi/sub-tester_acq-HASC55AP_desc-SliceQC_dwi.json
 sub-tester/dwi/sub-tester_acq-HASC55AP_space-T1w_stat-cnr_desc-3dSHORE_dwimap.nii.gz
+sub-tester/dwi/sub-tester_acq-HASC55AP_space-T1w_stat-cnr_desc-3dSHORE_dwimap.json
 sub-tester/dwi/sub-tester_acq-HASC55AP_space-T1w_desc-brain_mask.nii.gz
 sub-tester/dwi/sub-tester_acq-HASC55AP_space-T1w_desc-preproc_dwi.b
 sub-tester/dwi/sub-tester_acq-HASC55AP_space-T1w_desc-preproc_dwi.bval
