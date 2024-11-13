@@ -292,7 +292,8 @@ Volumetric outputs are written out in ``ACPC`` space ::
 
       # Contrast-to-noise model defined as the variance of the
       # signal model divided by the variance of the error of the signal model.
-      <source_entities>_space-ACPC_desc-<label>_cnr.nii.gz
+      <source_entities>_space-ACPC_stat-cnr_desc-<label>_dwimap.json
+      <source_entities>_space-ACPC_stat-cnr_desc-<label>_dwimap.nii.gz
 
 
 Transforms
