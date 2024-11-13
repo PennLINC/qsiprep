@@ -343,8 +343,9 @@ def init_dwi_finalize_wf(
     series_qc = pe.Node(SeriesQC(output_file_name=output_prefix), name="series_qc")
     ds_series_qc = pe.Node(
         DerivativesDataSink(
-            desc="ImageQC",
-            suffix="dwi",
+            space="ACPC",
+            desc="image",
+            suffix="qc",
             source_file=source_file,
             base_directory=config.execution.output_dir,
         ),
@@ -362,10 +363,10 @@ def init_dwi_finalize_wf(
     )
     ds_merged_sidecar = pe.Node(
         DerivativesDataSink(
+            space="ACPC",
+            desc="preproc",
             extension=".json",
             source_file=source_file,
-            space="T1w",
-            desc="preproc",
             base_directory=config.execution.output_dir,
         ),
         name="ds_merged_sidecar",
@@ -376,8 +377,9 @@ def init_dwi_finalize_wf(
     # Write the carpetplot data (which is the text output from eddy)
     ds_carpetplot_data = pe.Node(
         DerivativesDataSink(
-            desc="SliceQC",
-            suffix="dwi",
+            space="ACPC",
+            desc="slice",
+            suffix="qc",
             source_file=source_file,
             base_directory=config.execution.output_dir,
         ),

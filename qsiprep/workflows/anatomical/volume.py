@@ -1159,6 +1159,7 @@ def init_anat_derivatives_wf(anatomical_template) -> Workflow:
         DerivativesDataSink(
             compress=True,
             base_directory=config.execution.output_dir,
+            space="ACPC",
             desc="preproc",
             keep_dtype=True,
         ),
@@ -1170,6 +1171,7 @@ def init_anat_derivatives_wf(anatomical_template) -> Workflow:
         DerivativesDataSink(
             compress=True,
             base_directory=config.execution.output_dir,
+            space="ACPC",
             desc="brain",
             suffix="mask",
         ),
@@ -1181,6 +1183,7 @@ def init_anat_derivatives_wf(anatomical_template) -> Workflow:
         DerivativesDataSink(
             compress=True,
             base_directory=config.execution.output_dir,
+            space="ACPC",
             suffix="dseg",
         ),
         name="ds_t1_seg",
@@ -1191,6 +1194,7 @@ def init_anat_derivatives_wf(anatomical_template) -> Workflow:
         DerivativesDataSink(
             compress=True,
             base_directory=config.execution.output_dir,
+            space="ACPC",
             desc="aseg",
             suffix="dseg",
         ),
@@ -1202,7 +1206,7 @@ def init_anat_derivatives_wf(anatomical_template) -> Workflow:
     ds_t1_template_transforms = pe.MapNode(
         DerivativesDataSink(
             base_directory=config.execution.output_dir,
-            to="T1w",
+            to="anat",
             mode="image",
             suffix="xfm",
             **{"from": "orig"},
@@ -1215,7 +1219,7 @@ def init_anat_derivatives_wf(anatomical_template) -> Workflow:
     ds_t1_mni_inv_warp = pe.Node(
         DerivativesDataSink(
             base_directory=config.execution.output_dir,
-            to="T1w",
+            to="ACPC",
             mode="image",
             suffix="xfm",
             **{"from": anatomical_template},
@@ -1227,10 +1231,10 @@ def init_anat_derivatives_wf(anatomical_template) -> Workflow:
     ds_t1_template_acpc_transform = pe.Node(
         DerivativesDataSink(
             base_directory=config.execution.output_dir,
-            to="T1wACPC",
+            to="ACPC",
             mode="image",
             suffix="xfm",
-            **{"from": "T1wNative"},
+            **{"from": "anat"},
         ),
         name="ds_t1_template_acpc_transforms",
         run_without_submitting=True,
@@ -1239,10 +1243,10 @@ def init_anat_derivatives_wf(anatomical_template) -> Workflow:
     ds_t1_template_acpc_inv_transform = pe.Node(
         DerivativesDataSink(
             base_directory=config.execution.output_dir,
-            to="T1wNative",
+            to="anat",
             mode="image",
             suffix="xfm",
-            **{"from": "T1wACPC"},
+            **{"from": "ACPC"},
         ),
         name="ds_t1_template_acpc_inv_transforms",
         run_without_submitting=True,
@@ -1254,7 +1258,7 @@ def init_anat_derivatives_wf(anatomical_template) -> Workflow:
             to=anatomical_template,
             mode="image",
             suffix="xfm",
-            **{"from": "T1w"},
+            **{"from": "ACPC"},
         ),
         name="ds_t1_mni_warp",
         run_without_submitting=True,

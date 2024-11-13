@@ -58,12 +58,12 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
             (inputnode, ds_optimization, [('hmc_optimization_data', 'in_file')])
         ])  # fmt:skip
 
-    # 4D DWI in T1wACPC space
+    # 4D DWI in ACPC space
     ds_dwi_t1 = pe.Node(
         DerivativesDataSink(
             source_file=source_file,
             base_directory=output_dir,
-            space="T1w",
+            space="ACPC",
             desc="preproc",
             suffix="dwi",
             extension=".nii.gz",
@@ -77,7 +77,7 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
         DerivativesDataSink(
             source_file=source_file,
             base_directory=output_dir,
-            space="T1w",
+            space="ACPC",
             suffix="dwi",
             extension=".bval",
             desc="preproc",
@@ -90,7 +90,7 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
         DerivativesDataSink(
             source_file=source_file,
             base_directory=output_dir,
-            space="T1w",
+            space="ACPC",
             suffix="dwi",
             extension=".bvec",
             desc="preproc",
@@ -103,7 +103,7 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
         DerivativesDataSink(
             source_file=source_file,
             base_directory=output_dir,
-            space="T1w",
+            space="ACPC",
             suffix="dwiref",
             extension=".nii.gz",
             compress=True,
@@ -116,7 +116,7 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
         DerivativesDataSink(
             source_file=source_file,
             base_directory=output_dir,
-            space="T1w",
+            space="ACPC",
             desc="brain",
             suffix="mask",
             extension=".nii.gz",
@@ -130,7 +130,7 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
         DerivativesDataSink(
             source_file=source_file,
             base_directory=output_dir,
-            space="T1w",
+            space="ACPC",
             desc=config.workflow.hmc_model,
             suffix="cnr",
             extension=".nii.gz",
@@ -144,7 +144,7 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
         DerivativesDataSink(
             source_file=source_file,
             base_directory=output_dir,
-            space="T1w",
+            space="ACPC",
             desc="preproc",
             suffix="dwi",
             extension=".b",
@@ -157,7 +157,7 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
         DerivativesDataSink(
             source_file=source_file,
             base_directory=output_dir,
-            space="T1w",
+            space="ACPC",
             desc="preproc",
             suffix="dwi",
             extension=".b_table.txt",
@@ -183,7 +183,7 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
     #         DerivativesDataSink(
     #             base_directory=output_dir,
     #             source_file=source_file,
-    #             space="T1w",
+    #             space="ACPC",
     #             suffix="bvec",
     #             compress=True,
     #         ),
