@@ -10,7 +10,8 @@ sub-tinytensors/dwi
 sub-tinytensors/dwi/sub-tinytensors_dir-PA_confounds.tsv
 sub-tinytensors/dwi/sub-tinytensors_dir-PA_space-ACPC_desc-brain_mask.nii.gz
 sub-tinytensors/dwi/sub-tinytensors_dir-PA_space-ACPC_desc-image_qc.csv
-sub-tinytensors/dwi/sub-tinytensors_dir-PA_space-ACPC_desc-none_cnr.nii.gz
+sub-tinytensors/dwi/sub-tinytensors_dir-PA_space-ACPC_stat-cnr_desc-none_dwimap.json
+sub-tinytensors/dwi/sub-tinytensors_dir-PA_space-ACPC_stat-cnr_desc-none_dwimap.nii.gz
 sub-tinytensors/dwi/sub-tinytensors_dir-PA_space-ACPC_desc-preproc_dwi.b
 sub-tinytensors/dwi/sub-tinytensors_dir-PA_space-ACPC_desc-preproc_dwi.b_table.txt
 sub-tinytensors/dwi/sub-tinytensors_dir-PA_space-ACPC_desc-preproc_dwi.bval
