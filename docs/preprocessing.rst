@@ -237,7 +237,7 @@ while ``fMRIprep``'s are in RAS+ orientation and retain the original anatomical 
 
   sub-<label>/[ses-<label>/]
     anat/
-      # Brain mask derived using ANTs' ``antsBrainExtraction.sh``.
+      # Brain mask derived from SynthStrip
       <source_entities>_space-ACPC_desc-brain_mask.nii.gz
 
       # Tissue-probability maps
@@ -245,7 +245,7 @@ while ``fMRIprep``'s are in RAS+ orientation and retain the original anatomical 
       <source_entities>_space-ACPC_label-GM_probseg.nii.gz
       <source_entities>_space-ACPC_label-WM_probseg.nii.gz
 
-      # Tissue class map derived using FAST.
+      # Tissue class map derived SynthSeg
       <source_entities>_space-ACPC_dseg.nii.gz
 
       # Bias field corrected T1w file, using ANTS' N4BiasFieldCorrection
