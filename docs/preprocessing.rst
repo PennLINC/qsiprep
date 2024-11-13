@@ -167,9 +167,6 @@ they are concatenated. When warped groups are concatenated an additional b=0
 image intensity normalization is performed.
 
 
-
-
-
 Preprocessing HCP-style
 ^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -214,11 +211,10 @@ qsiprep generates three broad classes of outcomes:
 Visual Reports
 ^^^^^^^^^^^^^^^
 
-qsiprep outputs summary reports, written to ``<output
-dir>/qsiprep/sub-<subject_label>.html``. These reports provide a quick way to
-make visual inspection of the results easy. One useful graphic is the
-animation of the q-space sampling scheme before and after the pipeline. Here
-is a sampling scheme from a DSI scan:
+qsiprep outputs summary reports, written to ``<output_dir>/qsiprep/sub-<subject_label>.html``.
+These reports provide a quick way to make visual inspection of the results easy.
+One useful graphic is the animation of the q-space sampling scheme before and after the pipeline.
+Here is a sampling scheme from a DSI scan:
 
 .. figure:: _static/sampling_scheme.gif
     :scale: 75%
@@ -231,49 +227,72 @@ is a sampling scheme from a DSI scan:
 Preprocessed data (qsiprep *derivatives*)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-There are additional files, called "Derivatives", written to
-``<output dir>/qsiprep/sub-<subject_label>/``.
+There are additional files, called "Derivatives",
+written to ``<output_dir>/qsiprep/sub-<subject_label>/``.
 
-Derivatives related to T1w files are nearly identical to those produced by ``FMRIPREP`` and
-can be found in the ``anat`` subfolder:
+Derivatives related to anatomical files are nearly identical to those produced by ``fMRIprep`` and
+can be found in the ``anat`` subfolder.
+One major difference is that the anatomical derivatives are in LPS+ orientation and are realigned to the AC-PC,
+while ``fMRIprep``'s are in RAS+ orientation and retain the original anatomical images' orientation ::
 
-- ``*T1w_brainmask.nii.gz`` Brain mask derived using ANTs' ``antsBrainExtraction.sh``.
-- ``*T1w_class-CSF_probtissue.nii.gz``
-- ``*T1w_class-GM_probtissue.nii.gz``
-- ``*T1w_class-WM_probtissue.nii.gz`` tissue-probability maps.
-- ``*T1w_dtissue.nii.gz`` Tissue class map derived using FAST.
-- ``*T1w_preproc.nii.gz`` Bias field corrected T1w file, using ANTS' N4BiasFieldCorrection
-- ``*T1w_space-MNI152NLin2009cAsym_brainmask.nii.gz`` Same as ``_brainmask`` above, but in MNI space.
-- ``*T1w_space-MNI152NLin2009cAsym_class-CSF_probtissue.nii.gz``
-- ``*T1w_space-MNI152NLin2009cAsym_class-GM_probtissue.nii.gz``
-- ``*T1w_space-MNI152NLin2009cAsym_class-WM_probtissue.nii.gz`` Probability tissue maps, transformed into MNI space
-- ``*T1w_space-MNI152NLin2009cAsym_dtissue.nii.gz`` Same as ``_dtissue`` above, but in MNI space
-- ``*T1w_space-MNI152NLin2009cAsym_preproc.nii.gz`` Same as ``_preproc`` above, but in MNI space
-- ``*T1w_space-MNI152NLin2009cAsym_target-T1w_warp.h5`` Composite (warp and affine) transform to map from MNI to T1 space
-- ``*T1w_target-MNI152NLin2009cAsym_warp.h5`` Composite (warp and affine) transform to transform T1w into MNI space
+  sub-<label>/[ses-<label>/]
+    anat/
+      # Brain mask derived from SynthStrip
+      <source_entities>_space-ACPC_desc-brain_mask.nii.gz
 
-.. Note:
-  These are in LPS+ orientation, so are not identical to FMRIPREP's anatomical outputs
+      # Tissue-probability maps
+      <source_entities>_space-ACPC_label-CSF_probseg.nii.gz
+      <source_entities>_space-ACPC_label-GM_probseg.nii.gz
+      <source_entities>_space-ACPC_label-WM_probseg.nii.gz
 
-Derivatives related to diffusion images are in the ``dwi`` subfolder.
+      # Tissue class map derived SynthSeg
+      <source_entities>_space-ACPC_dseg.nii.gz
 
-- ``*_confounds.tsv`` A tab-separated value file with one column per calculated confound and one row per timepoint/volume
+      # Bias field corrected T1w file, using ANTS' N4BiasFieldCorrection
+      <source_entities>_space-ACPC_desc-preproc_T1w.nii.gz
 
-Volumetric output spaces include ``T1w`` (default) and ``MNI152NLin2009cAsym``.
+      # The same files as above, but in the selected output space.
+      <source_entities>_space-MNI152NLin2009cAsym_desc-brain_mask.nii.gz
+      <source_entities>_space-MNI152NLin2009cAsym_label-CSF_probseg.nii.gz
+      <source_entities>_space-MNI152NLin2009cAsym_label-GM_probseg.nii.gz
+      <source_entities>_space-MNI152NLin2009cAsym_label-WM_probseg.nii.gz
+      <source_entities>_space-MNI152NLin2009cAsym_dseg.nii.gz
+      <source_entities>_space-MNI152NLin2009cAsym_desc-preproc_T1w.nii.gz
 
-- ``*dwiref.nii.gz`` The b0 template
-- ``*desc-brain_mask.nii.gz`` The generous brain mask that should be reduced probably
-- ``*desc-preproc_dwi.nii.gz`` Resampled DWI series including all b0 images.
-- ``*desc-preproc_dwi.bval``, ``*desc-preproc_dwi.bvec`` FSL-style bvals and bvecs files.
-  *These will be incorrectly interpreted by MRTrix, but will work with DSI Studio and Dipy.*
-  Use the ``.b`` file for MRTrix.
-- ``desc-preproc_dwi.b`` The gradient table to import data into MRTrix. This and the
-  ``_dwi.nii.gz`` can be converted directly to a ``.mif`` file using the ``mrconvert -grad _dwi.b``
-  command.
-- ``*bvecs.nii.gz`` Each voxel contains a gradient table that has been adjusted for local
-  rotations introduced by spatial warping.
-- ``*cnr.nii.gz`` Each voxel contains a contrast-to-noise model defined as the variance of the
-  signal model divided by the variance of the error of the signal model.
+Derivatives related to diffusion images are in the ``dwi`` subfolder ::
+
+  sub-<label>/[ses-<label>/]
+    dwi/
+      # A tab-separated value file with one column per calculated confound
+      # and one row per timepoint/volume
+      <source_entities>_confounds.tsv
+
+Volumetric outputs are written out in ``ACPC`` space ::
+
+  sub-<label>/[ses-<label>/]
+    dwi/
+      <source_entities>_space-ACPC_dwiref.nii.gz
+
+      # The generous brain mask that should be reduced probably
+      <source_entities>_space-ACPC_desc-brain_mask.nii.gz
+      <source_entities>_space-ACPC_desc-preproc_dwi.nii.gz
+
+      # FSL-style bval and bvec files.
+      # These will be incorrectly interpreted by MRTrix,
+      # but will work with DSI Studio and Dipy.
+      <source_entities>_space-ACPC_desc-preproc_dwi.bval
+      <source_entities>_space-ACPC_desc-preproc_dwi.bvec
+
+      # Use the ``.b`` file for MRTrix.
+      # The gradient table to import data into MRTrix.
+      # This can be used with the preprocessed DWI file and
+      # converted directly to a ``.mif`` file using the
+      # ``mrconvert -grad _dwi.b`` command.
+      <source_entities>_space-ACPC_desc-preproc_dwi.b
+
+      # Contrast-to-noise model defined as the variance of the
+      # signal model divided by the variance of the error of the signal model.
+      <source_entities>_space-ACPC_desc-<label>_cnr.nii.gz
 
 
 Transforms
@@ -332,7 +351,7 @@ See implementation on :func:`~qsiprep.workflows.dwi.confounds.init_dwi_confs_wf`
 
 
 For each DWI processed by qsiprep, a
-``<output_folder>/qsiprep/sub-<sub_id>/func/sub-<sub_id>_task-<task_id>_run-<run_id>_confounds.tsv``
+``<output_folder>/qsiprep/sub-<label>/func/<source_entities>_confounds.tsv``
 file will be generated. These are :abbr:`TSV (tab-separated values)` tables,
 which look like the example below::
 
@@ -358,10 +377,10 @@ working on specific gradient strengths or directions.
 
 .. _qc_data:
 
-Quality Control data
-^^^^^^^^^^^^^^^^^^^^^
+Quality Control Data
+^^^^^^^^^^^^^^^^^^^^
 
-A single-line csv file (``desc-ImageQC_dwi.csv``) is created for each output
+A single-line csv file (``desc-image_qc.csv``) is created for each output
 image. This file is particularly useful for comparing the relative quality
 across subjects before deciding who to include in a group analysis. The
 columns in this file come from DSI Studio's QC calculation and is described
@@ -377,7 +396,7 @@ the anatomical brain mask and the DWI brain mask is calculated using the Dice
 distance in ``t1_dice_distance`` and ``mni_dice_distance``.
 
 Confounds and "carpet"-plot on the visual reports
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 fMRI has been using a "carpet" visualization of the
 :abbr:`BOLD (blood-oxygen level-dependent)` time-series (see [Power2016]_),
@@ -526,8 +545,8 @@ to be run through ``qsiprep``.
     Animation showing T1w to MNI normalization
 
 
-Longitudinal T1w processing
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Longitudinal anatomical processing
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 In the case of multiple T1w images (across sessions and/or within a session),
 T1w images are merged into a single template image using FreeSurfer's
@@ -542,11 +561,11 @@ flag, which forces the estimation of an unbiased template.
 
 .. note::
 
-    The preprocessed T1w image defines the ``T1w`` space.
+    The preprocessed T1w image defines the ``anat`` space.
     In the case of multiple T1w images, this space may not be precisely aligned
     with any of the original images.
     Reconstructed surfaces and functional datasets will be registered to the
-    ``T1w`` space, and not to the input images.
+    ``anat`` space, and not to the input images.
 
 
 Processing Infant Data
@@ -889,7 +908,7 @@ pipeline for DWIs
 .. _resampling:
 
 Pre-processed DWIs in a different space
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 :func:`qsiprep.workflows.dwi.resampling.init_dwi_trans_wf`
 
