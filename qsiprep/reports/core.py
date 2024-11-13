@@ -111,7 +111,6 @@ def generate_reports(
 
             for session_label in session_list:
                 bootstrap_file = data.load("reports-spec.yml")
-                suffix = ""
                 session_dir = output_dir / f"sub-{subject_id}" / f"ses-{session_label}"
                 html_report = f"sub-{subject_id}_ses-{session_label}.html"
 
@@ -122,7 +121,7 @@ def generate_reports(
                     bootstrap_file=bootstrap_file,
                     out_filename=html_report,
                     reportlets_dir=output_dir,
-                    errorname=f"report-{run_uuid}-{subject_label}-{session_label}{suffix}.err",
+                    errorname=f"report-{run_uuid}-{subject_label}-{session_label}.err",
                     subject=subject_label,
                     session=session_label,
                 )
