@@ -292,8 +292,8 @@ Contents:
  - data/multishell_output/qsiprep/sub-ABCD/dwi/sub-ABCD_acq-10per000_confounds.tsv
  - data/multishell_output/qsiprep/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-ACPC_b0series.nii.gz
  - data/multishell_output/qsiprep/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-ACPC_desc-brain_mask.nii.gz
- - data/multishell_output/qsiprep/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-ACPC_stat-cnr_desc-eddy_dwimap.json
- - data/multishell_output/qsiprep/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-ACPC_stat-cnr_desc-eddy_dwimap.nii.gz
+ - data/multishell_output/qsiprep/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-ACPC_model-eddy_stat-cnr_dwimap.json
+ - data/multishell_output/qsiprep/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-ACPC_model-eddy_stat-cnr_dwimap.nii.gz
  - data/multishell_output/qsiprep/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-ACPC_desc-preproc_dwi.b
  - data/multishell_output/qsiprep/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-ACPC_desc-preproc_dwi.bval
  - data/multishell_output/qsiprep/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-ACPC_desc-preproc_dwi.bvec
@@ -331,8 +331,8 @@ Contents:
  - data/singleshell_output/qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_confounds.tsv
  - data/singleshell_output/qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_b0series.nii.gz
  - data/singleshell_output/qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_desc-brain_mask.nii.gz
- - data/singleshell_output/qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_stat-cnr_desc-eddy_dwimap.json
- - data/singleshell_output/qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_stat-cnr_desc-eddy_dwimap.nii.gz
+ - data/singleshell_output/qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_model-eddy_stat-cnr_dwimap.json
+ - data/singleshell_output/qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_model-eddy_stat-cnr_dwimap.nii.gz
  - data/singleshell_output/qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_desc-preproc_dwi.b
  - data/singleshell_output/qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_desc-preproc_dwi.bval
  - data/singleshell_output/qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_desc-preproc_dwi.bvec

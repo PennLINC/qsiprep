@@ -26,8 +26,8 @@ qsiprep/sub-tester/dwi/sub-tester_acq-HASC55AP_confounds.tsv
 qsiprep/sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_desc-image_qc.csv
 qsiprep/sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_desc-slice_qc.json
 qsiprep/sub-tester/dwi/sub-tester_acq-HASC55AP_dwiqc.json
-qsiprep/sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_stat-cnr_desc-3dSHORE_dwimap.json
-qsiprep/sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_stat-cnr_desc-3dSHORE_dwimap.nii.gz
+qsiprep/sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_model-3dSHORE_stat-cnr_dwimap.json
+qsiprep/sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_model-3dSHORE_stat-cnr_dwimap.nii.gz
 qsiprep/sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_desc-brain_mask.nii.gz
 qsiprep/sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_desc-preproc_dwi.b
 qsiprep/sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_desc-preproc_dwi.bval

@@ -11,6 +11,10 @@
         "dtype": "int"
       },
       {
+        "name": "model",
+        "pattern": "(?:^|_)model-([a-zA-Z0-9]+)"
+      },
+      {
         "name": "statistic",
         "pattern": "(?:^|_)stat-([a-zA-Z0-9]+)"
       }
@@ -25,7 +29,7 @@
       "sub-{subject}[/ses-{session}]/{datatype<dwi>|dwi}/sub-{subject}[_ses-{session}][_acq-{acquisition}][_ce-{ceagent}][_dir-{direction}][_rec-{reconstruction}][_space-{space}][_desc-{desc}]_{suffix<dwi>|dwi}.{extension<nii|nii.gz|b|b_table.txt|bval|bvec|json>|nii.gz}",
       "sub-{subject}[/ses-{session}]/{datatype<dwi>|dwi}/sub-{subject}[_ses-{session}][_acq-{acquisition}][_ce-{ceagent}][_dir-{direction}][_rec-{reconstruction}][_space-{space}][_desc-{desc}]_{suffix<confounds|dwi|topupcsv|hmcOptimization|qc>|confounds}.{extension<tsv|csv|json>|tsv}",
       "sub-{subject}[/ses-{session}]/{datatype<dwi>|dwi}/sub-{subject}[_ses-{session}][_acq-{acquisition}][_ce-{ceagent}][_dir-{direction}][_rec-{reconstruction}][_space-{space}][_desc-{desc}]_{suffix<bvecs>|bvecs}.{extension<nii|nii.gz|json>|nii.gz}",
-      "sub-{subject}[/ses-{session}]/{datatype<dwi>|dwi}/sub-{subject}[_ses-{session}][_acq-{acquisition}][_ce-{ceagent}][_dir-{direction}][_rec-{reconstruction}][_space-{space}][_stat-{statistic}][_desc-{desc}]_{suffix<dwimap>|dwimap}.{extension<nii|nii.gz|json>|nii.gz}",
+      "sub-{subject}[/ses-{session}]/{datatype<dwi>|dwi}/sub-{subject}[_ses-{session}][_acq-{acquisition}][_ce-{ceagent}][_dir-{direction}][_rec-{reconstruction}][_space-{space}][_model-{model}][_stat-{statistic}][_desc-{desc}]_{suffix<dwimap>|dwimap}.{extension<nii|nii.gz|json>|nii.gz}",
       "sub-{subject}[/ses-{session}]/{datatype<fmap>|fmap}/sub-{subject}[_ses-{session}][_acq-{acquisition}][_ce-{ceagent}][_dir-{direction}][_rec-{reconstruction}][_space-{space}][_desc-{desc}]_{suffix<fmapreg|fmapregvsm|b0ref>|fmapreg}.{extension<nii|nii.gz|json>|nii.gz}",
       "sub-{subject}[/ses-{session}]/{datatype<fmap>|fmap}/sub-{subject}[_ses-{session}][_acq-{acquisition}][_ce-{ceagent}][_dir-{direction}][_rec-{reconstruction}][_space-{space}][_desc-{desc}]_{suffix<biascorr|denoising|unringing>|biascorr}.{extension<nii|nii.gz|json>|nii.gz}",
       "sub-{subject}[/ses-{session}]/{datatype<figures>}/sub-{subject}[_ses-{session}][_acq-{acquisition}][_ce-{ceagent}][_dir-{direction}][_rec-{reconstruction}][_run-{run}][_space-{space}][_cohort-{cohort}][_seg-{segmentation}][_desc-{desc}]_{suffix<T1w|T2w|T1rho|T1map|T2map|T2star|FLAIR|FLASH|PDmap|PD|PDT2|inplaneT[12]|angio|dseg|mask|dwi|epiref|fieldmap>}{extension<.html|.svg|.png|.json|.png|.gif>}",

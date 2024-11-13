@@ -46,8 +46,8 @@ qsiprep/sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_space-ACPC_desc-image
 qsiprep/sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_space-ACPC_desc-slice_qc.json
 qsiprep/sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_dwiqc.json
 qsiprep/sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_space-ACPC_desc-brain_mask.nii.gz
-qsiprep/sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_space-ACPC_stat-cnr_desc-none_dwimap.json
-qsiprep/sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_space-ACPC_stat-cnr_desc-none_dwimap.nii.gz
+qsiprep/sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_space-ACPC_model-none_stat-cnr_dwimap.json
+qsiprep/sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_space-ACPC_model-none_stat-cnr_dwimap.nii.gz
 qsiprep/sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_space-ACPC_desc-preproc_dwi.b
 qsiprep/sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_space-ACPC_desc-preproc_dwi.bval
 qsiprep/sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_space-ACPC_desc-preproc_dwi.bvec
@@ -60,8 +60,8 @@ qsiprep/sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-ACPC_desc-image
 qsiprep/sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-ACPC_desc-slice_qc.json
 qsiprep/sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_dwiqc.json
 qsiprep/sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-ACPC_desc-brain_mask.nii.gz
-qsiprep/sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-ACPC_stat-cnr_desc-none_dwimap.json
-qsiprep/sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-ACPC_stat-cnr_desc-none_dwimap.nii.gz
+qsiprep/sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-ACPC_model-none_stat-cnr_dwimap.json
+qsiprep/sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-ACPC_model-none_stat-cnr_dwimap.nii.gz
 qsiprep/sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-ACPC_desc-preproc_dwi.b
 qsiprep/sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-ACPC_desc-preproc_dwi.bval
 qsiprep/sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-ACPC_desc-preproc_dwi.bvec

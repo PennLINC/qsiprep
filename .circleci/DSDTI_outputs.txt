@@ -27,8 +27,8 @@ qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_desc-image_qc.csv
 qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_desc-slice_qc.json
 qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_dwiqc.json
 qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_desc-brain_mask.nii.gz
-qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_stat-cnr_desc-eddy_dwimap.json
-qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_stat-cnr_desc-eddy_dwimap.nii.gz
+qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_model-eddy_stat-cnr_dwimap.json
+qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_model-eddy_stat-cnr_dwimap.nii.gz
 qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_desc-preproc_dwi.b
 qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_desc-preproc_dwi.bval
 qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_desc-preproc_dwi.bvec

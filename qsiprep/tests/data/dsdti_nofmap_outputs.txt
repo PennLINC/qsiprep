@@ -20,8 +20,8 @@ sub-PNC/anat/sub-PNC_space-ACPC_dseg.nii.gz
 sub-PNC/dwi
 sub-PNC/dwi/sub-PNC_acq-realistic_confounds.tsv
 sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_desc-brain_mask.nii.gz
-sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_stat-cnr_desc-eddy_dwimap.json
-sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_stat-cnr_desc-eddy_dwimap.nii.gz
+sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_model-eddy_stat-cnr_dwimap.json
+sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_model-eddy_stat-cnr_dwimap.nii.gz
 sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_desc-image_qc.csv
 sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_desc-preproc_dwi.b
 sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_desc-preproc_dwi.b_table.txt
