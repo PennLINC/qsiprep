@@ -265,7 +265,7 @@ Derivatives related to diffusion images are in the ``dwi`` subfolder ::
     dwi/
       # A tab-separated value file with one column per calculated confound
       # and one row per timepoint/volume
-      <source_entities>_confounds.tsv
+      <source_entities>_desc-confounds_timeseries.tsv
 
 Volumetric outputs are written out in ``ACPC`` space ::
 
@@ -352,7 +352,7 @@ See implementation on :func:`~qsiprep.workflows.dwi.confounds.init_dwi_confs_wf`
 
 
 For each DWI processed by qsiprep, a
-``<output_folder>/qsiprep/sub-<label>/func/<source_entities>_confounds.tsv``
+``<output_folder>/qsiprep/sub-<label>/func/<source_entities>_desc-confounds_timeseries.tsv``
 file will be generated. These are :abbr:`TSV (tab-separated values)` tables,
 which look like the example below::
 

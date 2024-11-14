@@ -252,7 +252,7 @@ class AveragePEPairs(SimpleInterface):
         self._results["out_bval"] = combine_bvals(combined_bvals, out_bval_path)
         out_bvec_path = op.join(runtime.cwd, "averaged_pairs.bvec")
         self._results["out_bvec"] = combine_bvecs(combined_bvecs, out_bvec_path)
-        out_confounds_path = op.join(runtime.cwd, "averaged_pairs_confounds.tsv")
+        out_confounds_path = op.join(runtime.cwd, "averaged_pairs_desc-confounds_timeseries.tsv")
         error_report.to_csv(out_confounds_path, index=False, sep="\t")
         self._results["merged_denoising_confounds"] = out_confounds_path
         self._results["original_images"] = self.inputs.bids_dwi_files
