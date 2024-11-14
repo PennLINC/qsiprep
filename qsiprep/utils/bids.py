@@ -436,7 +436,7 @@ def scan_groups_to_sidecar(scan_groups):
 
     # Add the information about how the images were grouped and which fieldmaps were used
     derivatives_metadata = {"ScanGrouping": scan_groups}
-    derivatives_metadata["Sources"] = scan_groups["dwi_files"]
+    derivatives_metadata["Sources"] = scan_groups["dwi_series"]
 
     # Get metadata from the individual scans that were combined to make this preprocessed image
     concatenated_dwi_files = scan_groups.get("dwi_series")
