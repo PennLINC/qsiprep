@@ -441,15 +441,14 @@ Diffusion data preprocessing
         DerivativesDataSink(
             source_file=source_file,
             base_directory=str(output_dir),
-            suffix="confounds",
+            desc="confounds",
+            suffix="timeseries",
         ),
         name="ds_confounds",
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
-    workflow.connect([
-        (confounds_wf, ds_confounds, [('outputnode.confounds_file', 'in_file')]),
-    ])  # fmt:skip
+    workflow.connect([(confounds_wf, ds_confounds, [("outputnode.confounds_file", "in_file")])])
 
     # Carpetplot and confounds plot
     conf_plot = pe.Node(DMRISummary(), name="conf_plot", mem_gb=mem_gb["resampled"])
