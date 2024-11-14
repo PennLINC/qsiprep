@@ -34,7 +34,7 @@ TESTNAME=imtemplate
 setup_dir ${TESTDIR}/${TESTNAME}
 TEMPDIR=${TESTDIR}/${TESTNAME}/work
 OUTPUT_DIR=${TESTDIR}/${TESTNAME}/derivatives
-BIDS_INPUT_DIR=${TESTDIR}/data/twoses
+BIDS_INPUT_DIR=${TESTDIR}/data/twoses/twoses
 QSIPREP_CMD=$(run_qsiprep_cmd ${BIDS_INPUT_DIR} ${OUTPUT_DIR})
 
 ${QSIPREP_CMD} \

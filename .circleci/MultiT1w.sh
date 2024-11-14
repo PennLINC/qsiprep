@@ -28,12 +28,12 @@ EDDY_CFG=${TESTDIR}/data/eddy_config.json
 setup_dir ${TESTDIR}/${TESTNAME}
 TEMPDIR=${TESTDIR}/${TESTNAME}/work
 OUTPUT_DIR=${TESTDIR}/${TESTNAME}/derivatives
-BIDS_INPUT_DIR=${TESTDIR}/data/DSDTI
+BIDS_INPUT_DIR=${TESTDIR}/data/DSDTI/DSDTI
 export FS_LICENSE=${TESTDIR}/data/license.txt
 QSIPREP_CMD=$(run_qsiprep_cmd ${BIDS_INPUT_DIR} ${OUTPUT_DIR})
 
 # CRITICAL: delete the fieldmap data
-rm -rf data/DSDTI/sub-PNC/fmap
+rm -rf data/DSDTI/DSDTI/sub-PNC/fmap
 
 # Create a shifted version of the t1w
 if [[ "${IN_CI}" = 'true' ]]; then
