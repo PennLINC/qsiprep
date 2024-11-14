@@ -33,10 +33,7 @@ runinstall: &runinstall
         ln -s /home/qsiprep/.dipy /root/.dipy
       fi
 
-
-
 jobs:
-
   build:
     resource_class: small
     docker:
@@ -364,6 +361,8 @@ jobs:
       CIRCLE_CPUS: 4
     steps:
       - checkout
+      - restore_cache:
+          key: twoses-02
       - run: *runinstall
       - run:
           name: Test the intramodal template workflow
@@ -380,7 +379,7 @@ jobs:
     steps:
       - checkout
       - restore_cache:
-          key: twoses-02
+          key: DSDTI-01
       - run: *runinstall
       - run:
           name: Test the mri robust template for T1w images
@@ -591,14 +590,14 @@ workflows:
 
       - IntramodalTemplate:
           requires:
-            - build
+            - download_twoses
           filters:
             tags:
               only: /.*/
 
       - MultiT1w:
           requires:
-            - download_twoses
+            - download_DSDTI
           filters:
             tags:
               only: /.*/
