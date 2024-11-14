@@ -450,8 +450,10 @@ def scan_groups_to_sidecar(scan_groups):
     derivatives_metadata["SourceMetadata"] = scan_metadata
 
     # Copy common fields to the top level of the sidecar
-    common_metadata = scan_metadata[0]
-    for scan_metadata_dict in scan_metadata[1:]:
+
+    common_metadata = scan_metadata[concatenated_dwi_files[0]]
+    for dwi_file in concatenated_dwi_files[1:]:
+        scan_metadata_dict = scan_metadata[dwi_file]
         keys_to_remove = []
         for key in common_metadata:
             if key not in scan_metadata_dict:
