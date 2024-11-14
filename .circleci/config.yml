@@ -133,7 +133,7 @@ jobs:
     steps:
       - checkout
       - restore_cache:
-          key: twoses-01
+          key: twoses-02
       - run: *runinstall
       - run:
           name: Download twoses test data
@@ -141,7 +141,7 @@ jobs:
             cd /tmp/src/qsiprep/.circleci
             python get_data.py $PWD/data twoses
       - save_cache:
-          key: twoses-01
+          key: twoses-02
           paths:
             - /tmp/src/qsiprep/.circleci/data/twoses
 
@@ -380,7 +380,7 @@ jobs:
     steps:
       - checkout
       - restore_cache:
-          key: twoses-01
+          key: twoses-02
       - run: *runinstall
       - run:
           name: Test the mri robust template for T1w images
