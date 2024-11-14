@@ -427,7 +427,6 @@ def init_dwi_finalize_wf(
           ('t1_b0_ref', 'inputnode.t1_b0_ref'),
           ('gradient_table_t1', 'inputnode.gradient_table_t1'),
           ('btable_t1', 'inputnode.btable_t1'),
-          ('confounds', 'inputnode.confounds'),
           ('hmc_optimization_data', 'inputnode.hmc_optimization_data')]),
         (inputnode, gradient_plot, [
             ('bvec_files', 'orig_bvec_files'),

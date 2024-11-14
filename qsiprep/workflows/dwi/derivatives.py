@@ -35,7 +35,6 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
                 "t1_b0_ref",
                 "gradient_table_t1",
                 "btable_t1",
-                "confounds",
                 "hmc_optimization_data",
                 "series_qc",
             ]
