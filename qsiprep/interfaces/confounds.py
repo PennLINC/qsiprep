@@ -209,7 +209,7 @@ def _gather_confounds(
 
 
 class DMRISummaryInputSpec(BaseInterfaceInputSpec):
-    confounds_file = File(exists=True, desc="BIDS' _confounds.tsv file")
+    confounds_file = File(exists=True, desc="BIDS' _desc-confounds_timeseries.tsv file")
     sliceqc_file = File(exists=True, desc="output from SliceQC")
     sliceqc_mask = File(exists=True, desc="Mask")
 

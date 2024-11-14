@@ -289,7 +289,7 @@ Contents:
  - data/multishell_output/qsiprep/sub-ABCD/anat/sub-ABCD_space-MNI152NLin2009cAsym_label-CSF_probseg.nii.gz
  - data/multishell_output/qsiprep/sub-ABCD/anat/sub-ABCD_space-MNI152NLin2009cAsym_label-GM_probseg.nii.gz
  - data/multishell_output/qsiprep/sub-ABCD/anat/sub-ABCD_space-MNI152NLin2009cAsym_label-WM_probseg.nii.gz
- - data/multishell_output/qsiprep/sub-ABCD/dwi/sub-ABCD_acq-10per000_confounds.tsv
+ - data/multishell_output/qsiprep/sub-ABCD/dwi/sub-ABCD_acq-10per000_desc-confounds_timeseries.tsv
  - data/multishell_output/qsiprep/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-ACPC_b0series.nii.gz
  - data/multishell_output/qsiprep/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-ACPC_desc-brain_mask.nii.gz
  - data/multishell_output/qsiprep/sub-ABCD/dwi/sub-ABCD_acq-10per000_space-ACPC_model-eddy_stat-cnr_dwimap.json
@@ -328,7 +328,7 @@ Contents:
  - data/singleshell_output/qsiprep/sub-PNC/anat/sub-PNC_space-MNI152NLin2009cAsym_label-CSF_probseg.nii.gz
  - data/singleshell_output/qsiprep/sub-PNC/anat/sub-PNC_space-MNI152NLin2009cAsym_label-GM_probseg.nii.gz
  - data/singleshell_output/qsiprep/sub-PNC/anat/sub-PNC_space-MNI152NLin2009cAsym_label-WM_probseg.nii.gz
- - data/singleshell_output/qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_confounds.tsv
+ - data/singleshell_output/qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_desc-confounds_timeseries.tsv
  - data/singleshell_output/qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_b0series.nii.gz
  - data/singleshell_output/qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_desc-brain_mask.nii.gz
  - data/singleshell_output/qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_model-eddy_stat-cnr_dwimap.json

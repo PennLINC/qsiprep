@@ -22,7 +22,7 @@ qsiprep/sub-PNC/anat/sub-PNC_space-MNI152NLin2009cAsym_label-CSF_probseg.nii.gz
 qsiprep/sub-PNC/anat/sub-PNC_space-MNI152NLin2009cAsym_label-GM_probseg.nii.gz
 qsiprep/sub-PNC/anat/sub-PNC_space-MNI152NLin2009cAsym_label-WM_probseg.nii.gz
 qsiprep/sub-PNC/dwi
-qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_confounds.tsv
+qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_desc-confounds_timeseries.tsv
 qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_desc-image_qc.csv
 qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_desc-slice_qc.json
 qsiprep/sub-PNC/dwi/sub-PNC_acq-realistic_dwiqc.json

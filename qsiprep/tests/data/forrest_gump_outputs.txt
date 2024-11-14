@@ -20,7 +20,7 @@ sub-01/ses-forrestgump
 sub-01/ses-forrestgump/anat
 sub-01/ses-forrestgump/anat/sub-01_ses-forrestgump_rec-autobox_from-orig_to-anat_mode-image_xfm.txt
 sub-01/ses-forrestgump/dwi
-sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_confounds.tsv
+sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_desc-confounds_timeseries.tsv
 sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_space-ACPC_desc-brain_mask.nii.gz
 sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_space-ACPC_model-eddy_stat-cnr_dwimap.json
 sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_space-ACPC_model-eddy_stat-cnr_dwimap.nii.gz
