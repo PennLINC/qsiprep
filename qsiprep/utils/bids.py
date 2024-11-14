@@ -443,33 +443,31 @@ def scan_groups_to_sidecar(scan_groups):
     fieldmap_info = scan_groups.get("fieldmap_info")
     if fieldmap_info.get("suffix") == "rpe_series":
         concatenated_dwi_files.extend(fieldmap_info.get("rpe_series", []))
+
     scan_metadata = {}
-    for dwi_file in concatenated_dwi_files:
+    for i_file, dwi_file in enumerate(concatenated_dwi_files):
         dwi_file_name = Path(dwi_file).name
         scan_metadata[dwi_file_name] = config.execution.layout.get_metadata(dwi_file)
-    derivatives_metadata["SourceMetadata"] = scan_metadata
-
-    # Copy common fields to the top level of the sidecar
-
-    common_metadata = scan_metadata[concatenated_dwi_files[0]]
-    for dwi_file in concatenated_dwi_files[1:]:
-        scan_metadata_dict = scan_metadata[dwi_file]
-        keys_to_remove = []
-        for key in common_metadata:
-            if key not in scan_metadata_dict:
-                keys_to_remove.append(key)
-            else:
-                val1 = common_metadata[key]
-                val2 = scan_metadata_dict[key]
-                if isinstance(val1, float) and isinstance(val2, float):
-                    if not np.isclose(val1, val2):
-                        keys_to_remove.append(key)
-                elif val1 != val2:
+        if i_file == 0:
+            common_metadata = scan_metadata[dwi_file_name]
+        else:
+            keys_to_remove = []
+            for key in common_metadata:
+                if key not in scan_metadata[dwi_file_name]:
                     keys_to_remove.append(key)
+                else:
+                    val1 = common_metadata[key]
+                    val2 = scan_metadata[dwi_file_name][key]
+                    if isinstance(val1, float) and isinstance(val2, float):
+                        if not np.isclose(val1, val2):
+                            keys_to_remove.append(key)
+                    elif val1 != val2:
+                        keys_to_remove.append(key)
 
-        for key in keys_to_remove:
-            common_metadata.pop(key)
+            for key in keys_to_remove:
+                common_metadata.pop(key)
 
+    derivatives_metadata["SourceMetadata"] = scan_metadata
     derivatives_metadata = {**common_metadata, **derivatives_metadata}
 
     return derivatives_metadata
