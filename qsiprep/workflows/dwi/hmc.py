@@ -59,7 +59,7 @@ def init_dwi_hmc_wf(
             correction
         num_model_iterations: int
             If ``hmc_model`` is ``'3dSHORE'`` or ``'SH'`` determines the number of times the
-            model is updated and motion corretion is estimated. Default: 2.
+            model is updated and motion correction is estimated. Default: 2.
 
     **Inputs**
 

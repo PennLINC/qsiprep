@@ -8,7 +8,7 @@
 Automatic selection of the appropriate SDC method
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-If the dataset metadata indicate tha more than one field map acquisition is
+If the dataset metadata indicate that more than one field map acquisition is
 ``IntendedFor`` (see BIDS Specification section 8.9) the following priority
 will be used:
 

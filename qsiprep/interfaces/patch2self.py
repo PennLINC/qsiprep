@@ -252,7 +252,7 @@ def patch2self(
 
     if data.shape[3] < 10:
         config.loggers.interface.warning(
-            "The intput data has less than 10 3D volumes. Patch2Self may not",
+            "The input data has less than 10 3D volumes. Patch2Self may not",
             "give denoising performance.",
         )
 

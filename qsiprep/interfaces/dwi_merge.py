@@ -1,4 +1,4 @@
-"""Handle merging and spliting of DSI files."""
+"""Handle merging and splitting of DSI files."""
 
 import json
 import os.path as op
@@ -156,7 +156,7 @@ class MergeDWIs(SimpleInterface):
         combine_bvecs(bvecs, output_file=out_bvec)
         # Concatenate into a single file
         merged_nii = concat_imgs(to_concat, auto_resample=True)
-        # Remove any negative values introduced during interpolation (if it occurrs)
+        # Remove any negative values introduced during interpolation (if it occurs)
         pos_merged_nii = math_img("np.clip(img, 0, None)", img=merged_nii)
         pos_merged_nii.to_filename(merged_fname)
 
@@ -358,7 +358,7 @@ class MergeFinalConfounds(SimpleInterface):
         to_concat_horizontally = []
         # New confounds from bias correction
         if isdefined(self.inputs.bias_correction_confounds):
-            # There may be multuple files that need to be vertically stacked
+            # There may be multiple files that need to be vertically stacked
             biascorrection_df = pd.concat(
                 [pd.read_csv(bc_csv) for bc_csv in self.inputs.bias_correction_confounds],
                 axis=0,
@@ -577,7 +577,7 @@ def average_bvec(bvec1, bvec2):
         bvec1, mean_bvec_minus
     ) and angle_between(bvec2, mean_bvec_plus) < angle_between(bvec2, mean_bvec_minus):
         return mean_bvec_minus, bvec_diff
-    LOGGER.warning("Ambiguous direcions of vectors: assuming plus")
+    LOGGER.warning("Ambiguous directions of vectors: assuming plus")
     return mean_bvec_plus, bvec_diff
 
 

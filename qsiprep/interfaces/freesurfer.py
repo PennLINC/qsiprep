@@ -120,7 +120,7 @@ class MakeMidthickness(fs.MRIsExpand):
         if not isdefined(self.inputs.graymid) or len(self.inputs.graymid) < 1:
             return cmd
 
-        # Possible graymid values inclue {l,r}h.{graymid,midthickness}
+        # Possible graymid values include {l,r}h.{graymid,midthickness}
         # Prefer midthickness to graymid, require to be of the same hemisphere
         # as input
         source = None

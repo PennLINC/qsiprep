@@ -683,7 +683,7 @@ def _delta_te(in_values, te1=None, te2=None):
         if isinstance(te2, list):
             te2 = te2[1]
 
-    # For convienience if both are missing we should give one error about them
+    # For convenience if both are missing we should give one error about them
     if te1 is None and te2 is None:
         raise RuntimeError(
             "EchoTime1 and EchoTime2 metadata fields not found. "

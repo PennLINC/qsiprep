@@ -5,4 +5,8 @@ skip = .git,*.pdf,*.svg,*.html,dataset_description.json,*.gii
 # reson - Reson. abbreviation in citation
 # DNE: acronym for does not exist
 # fo: acronym for file object
-ignore-words-list = te,weill,reson,DNE,fo
+# Gage - name
+# nd - package
+# pres - variable
+# fixel - real word
+ignore-words-list = te,weill,reson,DNE,fo,Gage,nd,pres,fixel

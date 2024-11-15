@@ -116,7 +116,7 @@ def _gather_confounds(
         return re.sub("([a-z0-9])([A-Z])", r"\1_\2", s1).lower()
 
     def _adjust_indices(left_df, right_df):
-        # This forces missing values to appear at the beggining of the DataFrame
+        # This forces missing values to appear at the beginning of the DataFrame
         # instead of the end
         index_diff = len(left_df.index) - len(right_df.index)
         if index_diff > 0:

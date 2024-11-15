@@ -121,7 +121,7 @@ class DSIStudioQC(SimpleInterface):
     output_spec = _DSIStudioQCOutputSpec
 
     def _run_interface(self, runtime):
-        # DSI Studio (0.12.2) action=qc has two modes, depending on wether the
+        # DSI Studio (0.12.2) action=qc has two modes, depending on whether the
         # input is a file (src.gz|nii.gz)|(fib.gz) or a directory. For
         # directories, the action will be run on a number of detected files
         # (which *cannot* be symbolic links for some reason).
@@ -190,7 +190,7 @@ class DSIStudioReconstructionInputSpec(DSIStudioCommandLineInputSpec):
         True, usedefault=True, desc="Include full ODF's in output", argstr="--record_odf=1"
     )
     odf_order = traits.Enum(
-        (8, 4, 5, 6, 10, 12, 16, 20), usedefault=True, desc="ODF tesselation order"
+        (8, 4, 5, 6, 10, 12, 16, 20), usedefault=True, desc="ODF tessellation order"
     )
     # Which scalars to include
     other_output = traits.Str(

@@ -1,4 +1,4 @@
-"""Handle merging and spliting of DSI files."""
+"""Handle merging and splitting of DSI files."""
 
 import logging
 import os
@@ -579,7 +579,7 @@ class GradientRotationOutputSpec(TraitedSpec):
 
 
 class GradientRotation(SimpleInterface):
-    """Reorient gradients accordint to transorms."""
+    """Reorient gradients according to transforms."""
 
     input_spec = GradientRotationInputSpec
     output_spec = GradientRotationOutputSpec
