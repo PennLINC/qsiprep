@@ -435,18 +435,40 @@ def scan_groups_to_sidecar(scan_groups):
     """Create a sidecar that reflects how the preprocessed image was created."""
 
     # Add the information about how the images were grouped and which fieldmaps were used
-    derivatives_metadata = {"scan_grouping": scan_groups}
+    derivatives_metadata = {"ScanGrouping": scan_groups}
 
     # Get metadata from the individual scans that were combined to make this preprocessed image
     concatenated_dwi_files = scan_groups.get("dwi_series")
     fieldmap_info = scan_groups.get("fieldmap_info")
     if fieldmap_info.get("suffix") == "rpe_series":
         concatenated_dwi_files.extend(fieldmap_info.get("rpe_series", []))
+
     scan_metadata = {}
-    for dwi_file in concatenated_dwi_files:
+    for i_file, dwi_file in enumerate(concatenated_dwi_files):
         dwi_file_name = Path(dwi_file).name
         scan_metadata[dwi_file_name] = config.execution.layout.get_metadata(dwi_file)
-    derivatives_metadata["source_metadata"] = scan_metadata
+        if i_file == 0:
+            common_metadata = scan_metadata[dwi_file_name]
+        else:
+            keys_to_remove = []
+            for key in common_metadata:
+                if key not in scan_metadata[dwi_file_name]:
+                    keys_to_remove.append(key)
+                else:
+                    val1 = common_metadata[key]
+                    val2 = scan_metadata[dwi_file_name][key]
+                    if isinstance(val1, float) and isinstance(val2, float):
+                        if not np.isclose(val1, val2):
+                            keys_to_remove.append(key)
+                    elif val1 != val2:
+                        keys_to_remove.append(key)
+
+            for key in keys_to_remove:
+                common_metadata.pop(key)
+
+    derivatives_metadata["SourceMetadata"] = scan_metadata
+    derivatives_metadata = {**common_metadata, **derivatives_metadata}
+    derivatives_metadata["Sources"] = sorted(scan_metadata.keys())
     return derivatives_metadata
 
 
