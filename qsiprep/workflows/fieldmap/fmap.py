@@ -84,8 +84,10 @@ def init_fmap_wf(name='fmap_wf'):
         (inputnode, fmapmrg, [('fieldmap', 'in_files')]),
         (magmrg, n4_correct, [('out_file', 'input_image')]),
         (n4_correct, bet, [('output_image', 'in_file')]),
-        (bet, outputnode, [('mask_file', 'fmap_mask'),
-                           ('out_file', 'fmap_ref')]),
+        (bet, outputnode, [
+            ('mask_file', 'fmap_mask'),
+            ('out_file', 'fmap_ref'),
+        ]),
         (inputnode, ds_report_fmap_mask, [('fieldmap', 'source_file')]),
         (bet, ds_report_fmap_mask, [('out_report', 'in_file')]),
     ])  # fmt:skip
@@ -103,8 +105,10 @@ def init_fmap_wf(name='fmap_wf'):
     applymsk = pe.Node(fsl.ApplyMask(), name='applymsk')
 
     workflow.connect([
-        (bet, prelude, [('mask_file', 'mask_file'),
-                        ('out_file', 'magnitude_file')]),
+        (bet, prelude, [
+            ('mask_file', 'mask_file'),
+            ('out_file', 'magnitude_file'),
+        ]),
         (fmapmrg, torads, [('out_file', 'in_file')]),
         (torads, tohz, [('fmap_range', 'range_hz')]),
         (torads, prelude, [('out_file', 'phase_file')]),

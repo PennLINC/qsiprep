@@ -100,11 +100,13 @@ was also calculated.
         (inputnode, add_motion_headers, [('motion_params', 'in_file')]),
         (fdisp, concat, [('out_file', 'fd')]),
         (add_motion_headers, concat, [('out_file', 'motion')]),
-        (inputnode, concat, [('sliceqc_file', 'sliceqc_file'),
-                             ('bval_file', 'original_bvals'),
-                             ('bvec_file', 'original_bvecs'),
-                             ('original_files', 'original_files'),
-                             ('denoising_confounds', 'denoising_confounds')]),
+        (inputnode, concat, [
+            ('sliceqc_file', 'sliceqc_file'),
+            ('bval_file', 'original_bvals'),
+            ('bvec_file', 'original_bvecs'),
+            ('original_files', 'original_files'),
+            ('denoising_confounds', 'denoising_confounds'),
+        ]),
         # Set outputs
         (concat, outputnode, [('confounds_file', 'confounds_file')]),
     ])  # fmt:skip

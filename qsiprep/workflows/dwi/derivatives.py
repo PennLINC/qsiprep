@@ -53,9 +53,7 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB,
         )
-        workflow.connect([
-            (inputnode, ds_optimization, [('hmc_optimization_data', 'in_file')])
-        ])  # fmt:skip
+        workflow.connect([(inputnode, ds_optimization, [('hmc_optimization_data', 'in_file')])])
 
     # 4D DWI in ACPC space
     ds_dwi_t1 = pe.Node(
@@ -194,7 +192,5 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
     #         run_without_submitting=True,
     #         mem_gb=DEFAULT_MEMORY_MIN_GB,
     #     )
-    #     workflow.connect([
-    #         (inputnode, ds_local_bvecs_t1, [
-    #             ('local_bvecs_t1', 'in_file')])])  # fmt:skip
+    #     workflow.connect([(inputnode, ds_local_bvecs_t1, [('local_bvecs_t1', 'in_file')])])
     return workflow

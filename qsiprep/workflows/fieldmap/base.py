@@ -151,8 +151,11 @@ def init_sdc_wf(fieldmap_info, dwi_meta):
         workflow.__postdesc__ = 'No susceptibility distortion correction was performed.'
         outputnode.inputs.method = 'None'
         workflow.connect([
-            (inputnode, outputnode, [('b0_ref', 'b0_ref'),
-                                     ('b0_mask', 'b0_mask')])])  # fmt:skip
+            (inputnode, outputnode, [
+                ('b0_ref', 'b0_ref'),
+                ('b0_mask', 'b0_mask'),
+            ]),
+        ])  # fmt:skip
         return workflow
 
     workflow.__postdesc__ = """\
@@ -181,7 +184,8 @@ co-registration with the anatomical reference.
             (inputnode, sdc_unwarp_wf, [
                 ('b0_ref', 'inputnode.in_reference'),
                 ('b0_mask', 'inputnode.in_mask'),
-                ('b0_ref_brain', 'inputnode.in_reference_brain')]),
+                ('b0_ref_brain', 'inputnode.in_reference_brain'),
+            ]),
         ])  # fmt:skip
 
     # FIELDMAP path
@@ -217,8 +221,10 @@ co-registration with the anatomical reference.
                     workflow.__postdesc__ = ''
                     outputnode.inputs.method = 'None'
                     workflow.connect([
-                        (inputnode, outputnode, [('b0_ref', 'b0_ref'),
-                                                 ('b0_mask', 'b0_mask')]),
+                        (inputnode, outputnode, [
+                            ('b0_ref', 'b0_ref'),
+                            ('b0_mask', 'b0_mask'),
+                        ]),
                     ])  # fmt:skip
                     return workflow
 
@@ -247,13 +253,14 @@ co-registration with the anatomical reference.
             (inputnode, sdc_unwarp_wf, [
                 ('b0_ref', 'inputnode.in_reference'),
                 ('b0_ref_brain', 'inputnode.in_reference_brain'),
-                ('b0_mask', 'inputnode.in_mask')]),
+                ('b0_mask', 'inputnode.in_mask'),
+            ]),
             (fmap_estimator_wf, sdc_unwarp_wf, [
                 ('outputnode.fmap', 'inputnode.fmap'),
                 ('outputnode.fmap_ref', 'inputnode.fmap_ref'),
-                ('outputnode.fmap_mask', 'inputnode.fmap_mask')]),
-            (sdc_unwarp_wf, outputnode, [
-                ('outputnode.out_hz', 'fieldmap_hz')])
+                ('outputnode.fmap_mask', 'inputnode.fmap_mask'),
+            ]),
+            (sdc_unwarp_wf, outputnode, [('outputnode.out_hz', 'fieldmap_hz')]),
         ])  # fmt:skip
 
     # FIELDMAP-less path
@@ -267,7 +274,8 @@ co-registration with the anatomical reference.
                 ('t1_brain', 'inputnode.t1_brain'),
                 ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
                 ('b0_ref', 'inputnode.bold_ref'),
-                ('template', 'inputnode.template')]),
+                ('template', 'inputnode.template'),
+            ]),
         ])  # fmt:skip
         outputnode.inputs.method = 'FLB ("fieldmap-less", SyN-based)'
         sdc_unwarp_wf = syn_sdc_wf
@@ -275,7 +283,8 @@ co-registration with the anatomical reference.
     workflow.connect([
         (sdc_unwarp_wf, outputnode, [
             ('outputnode.out_warp', 'out_warp'),
-            ('outputnode.out_reference', 'b0_ref')])
+            ('outputnode.out_reference', 'b0_ref'),
+        ]),
     ])  # fmt:skip
 
     return workflow

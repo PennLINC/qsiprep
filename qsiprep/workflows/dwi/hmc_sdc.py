@@ -124,25 +124,25 @@ def init_qsiprep_hmcsdc_wf(
     summarize_motion = pe.Node(CombineMotions(), name='summarize_motion')
 
     workflow.connect([
-        (inputnode, split_dwis, [
-            ('dwi_file', 'in_file')]),
+        (inputnode, split_dwis, [('dwi_file', 'in_file')]),
         (inputnode, split_bvals, [
             ('bval_file', 'bval_file'),
-            ('bvec_file', 'bvec_file')]),
-        (split_dwis, split_bvals, [
-            ('out_files', 'split_files')]),
+            ('bvec_file', 'bvec_file'),
+        ]),
+        (split_dwis, split_bvals, [('out_files', 'split_files')]),
         (split_bvals, dwi_hmc_wf, [
             ('bval_files', 'inputnode.bvals'),
             ('bvec_files', 'inputnode.bvecs'),
             ('b0_images', 'inputnode.b0_images'),
-            ('b0_indices', 'inputnode.b0_indices')]),
-        (split_dwis, dwi_hmc_wf, [
-            ('out_files', 'inputnode.dwi_files')]),
+            ('b0_indices', 'inputnode.b0_indices'),
+        ]),
+        (split_dwis, dwi_hmc_wf, [('out_files', 'inputnode.dwi_files')]),
         (inputnode, dwi_hmc_wf, [
             ('t1_brain', 'inputnode.t1_brain'),
             ('t1_mask', 'inputnode.t1_mask'),
             ('t1_seg', 'inputnode.t1_seg'),
-            ('original_files', 'inputnode.original_files')]),
+            ('original_files', 'inputnode.original_files'),
+        ]),
         (split_dwis, slice_qc, [('out_files', 'uncorrected_dwi_files')]),
         (dwi_hmc_wf, outputnode, [
             ('outputnode.final_template', 'pre_sdc_template'),
@@ -150,22 +150,27 @@ def init_qsiprep_hmcsdc_wf(
              'to_dwi_ref_affines'),
             ('outputnode.optimization_data', 'hmc_optimization_data'),
             ('outputnode.cnr_image', 'cnr_map'),
-            ('outputnode.final_template_mask', 'b0_template_mask')]),
+            ('outputnode.final_template_mask', 'b0_template_mask'),
+        ]),
         (dwi_hmc_wf, summarize_motion, [
             ('outputnode.final_template', 'ref_file'),
             ('outputnode.final_template', 'source_files'),
-            (('outputnode.forward_transforms', _list_squeeze), 'transform_files')]),
+            (('outputnode.forward_transforms', _list_squeeze), 'transform_files'),
+        ]),
         (dwi_hmc_wf, slice_qc, [
             ('outputnode.noise_free_dwis', 'ideal_image_files'),
-            ('outputnode.final_template_mask', 'mask_image')]),
+            ('outputnode.final_template_mask', 'mask_image'),
+        ]),
         (summarize_motion, outputnode, [('spm_motion_file', 'motion_params')]),
         (split_bvals, outputnode, [
             ('bvec_files', 'bvec_files_to_transform'),
             ('bval_files', 'bval_files'),
-            ('b0_indices', 'b0_indices')]),
+            ('b0_indices', 'b0_indices'),
+        ]),
         (slice_qc, outputnode, [
             ('slice_stats', 'slice_quality'),
-            ('imputed_images', 'dwi_files_to_transform')]),
+            ('imputed_images', 'dwi_files_to_transform'),
+        ]),
     ])  # fmt:skip
 
     fieldmap_info = scan_groups['fieldmap_info']
@@ -194,26 +199,28 @@ def init_qsiprep_hmcsdc_wf(
         )
         rotate_gradients = pe.Node(GradientRotation(), name='rotate_gradients')
         workflow.connect([
-            (dwi_hmc_wf, apply_hmc_transforms, [
-                ('outputnode.forward_transforms', 'transforms')]),
+            (dwi_hmc_wf, apply_hmc_transforms, [('outputnode.forward_transforms', 'transforms')]),
             (dwi_hmc_wf, rotate_gradients, [
-                (('outputnode.forward_transforms', _list_squeeze),
-                 'affine_transforms')]),
+                (('outputnode.forward_transforms', _list_squeeze), 'affine_transforms'),
+            ]),
             (split_dwis, apply_hmc_transforms, [
                 ('out_files', 'input_image'),
-                ('out_files', 'reference_image')]),
+                ('out_files', 'reference_image'),
+            ]),
             (split_bvals, rotate_gradients, [
                 ('bvec_files', 'bvec_files'),
-                ('bval_files', 'bval_files')]),
-            (apply_hmc_transforms, drbuddi_wf, [
-                ('output_image', 'inputnode.dwi_files')]),
+                ('bval_files', 'bval_files'),
+            ]),
+            (apply_hmc_transforms, drbuddi_wf, [('output_image', 'inputnode.dwi_files')]),
             (rotate_gradients, drbuddi_wf, [
                 ('bvals', 'inputnode.bval_files'),
-                ('bvecs', 'inputnode.bvec_files')]),
+                ('bvecs', 'inputnode.bvec_files'),
+            ]),
             (inputnode, drbuddi_wf, [
                 ('t1_brain', 'inputnode.t1_brain'),
                 ('t2w_unfatsat', 'inputnode.t2w_unfatsat'),
-                ('original_files', 'inputnode.original_files')]),
+                ('original_files', 'inputnode.original_files'),
+            ]),
             (drbuddi_wf, outputnode, [
                 ('outputnode.sdc_warps', 'to_dwi_ref_warps'),
                 ('outputnode.sdc_scaling_images', 'sdc_scaling_images'),
@@ -228,7 +235,8 @@ def init_qsiprep_hmcsdc_wf(
                 ('outputnode.down_fa_image', 'down_fa_image'),
                 ('outputnode.down_fa_corrected_image', 'down_fa_corrected_image'),
                 ('outputnode.t2w_image', 't2w_image'),
-                ('outputnode.b0_ref', 'b0_template')])
+                ('outputnode.b0_ref', 'b0_template'),
+            ]),
         ])  # fmt:skip
         return workflow
 
@@ -262,15 +270,17 @@ def init_qsiprep_hmcsdc_wf(
         (dwi_hmc_wf, b0_sdc_wf, [
             ('outputnode.final_template', 'inputnode.b0_ref'),
             ('outputnode.final_template_brain', 'inputnode.b0_ref_brain'),
-            ('outputnode.final_template_mask', 'inputnode.b0_mask')]),
+            ('outputnode.final_template_mask', 'inputnode.b0_mask'),
+        ]),
         (inputnode, b0_sdc_wf, [
             ('t1_brain', 'inputnode.t1_brain'),
-            ('t1_2_mni_reverse_transform',
-             'inputnode.t1_2_mni_reverse_transform')]),
+            ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
+        ]),
         (b0_sdc_wf, outputnode, [
             ('outputnode.method', 'sdc_method'),
             ('outputnode.b0_ref', 'b0_template'),
-            ('outputnode.out_warp', 'to_dwi_ref_warps')])
+            ('outputnode.out_warp', 'to_dwi_ref_warps'),
+        ]),
     ])  # fmt:skip
 
     return workflow

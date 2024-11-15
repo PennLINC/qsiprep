@@ -137,22 +137,25 @@ def init_dwi_hmc_wf(
     )
 
     workflow.connect([
-        (inputnode, match_transforms, [('dwi_files', 'dwi_files'),
-                                       ('b0_indices', 'b0_indices')]),
+        (inputnode, match_transforms, [
+            ('dwi_files', 'dwi_files'),
+            ('b0_indices', 'b0_indices'),
+        ]),
         (inputnode, b0_hmc_wf, [('b0_images', 'inputnode.b0_images')]),
         (b0_hmc_wf, outputnode, [('outputnode.final_template', 'final_template')]),
-        (b0_hmc_wf, match_transforms, [(('outputnode.forward_transforms', _list_squeeze),
-                                        'transforms')]),
+        (b0_hmc_wf, match_transforms, [
+            (('outputnode.forward_transforms', _list_squeeze), 'transforms'),
+        ]),
         (inputnode, b0_template_mask, [
             ('t1_brain', 'inputnode.t1_brain'),
             ('t1_seg', 'inputnode.t1_seg'),
-            ('t1_mask', 'inputnode.t1_mask')]),
-        (b0_hmc_wf, b0_template_mask, [
-            ('outputnode.final_template', 'inputnode.b0_template')]),
+            ('t1_mask', 'inputnode.t1_mask'),
+        ]),
+        (b0_hmc_wf, b0_template_mask, [('outputnode.final_template', 'inputnode.b0_template')]),
         (b0_template_mask, outputnode, [
             ('outputnode.ref_image_brain', 'final_template_brain'),
-            ('outputnode.dwi_mask', 'final_template_mask')
-        ])
+            ('outputnode.dwi_mask', 'final_template_mask'),
+        ]),
     ])  # fmt:skip
 
     # If we're just aligning based on the b=0 images, compute the b=0 tsnr as the cnr
@@ -170,7 +173,8 @@ def init_dwi_hmc_wf(
             (match_transforms, outputnode, [('transforms', 'forward_transforms')]),
             (b0_hmc_wf, concat_b0s, [('outputnode.aligned_images', 'in_files')]),
             (concat_b0s, b0_tsnr, [('out_file', 'in_file')]),
-            (b0_tsnr, outputnode, [('out_file', 'cnr_image')])])  # fmt:skip
+            (b0_tsnr, outputnode, [('out_file', 'cnr_image')]),
+        ])  # fmt:skip
         return workflow
 
     # Do model-based motion correction
@@ -194,25 +198,29 @@ def init_dwi_hmc_wf(
     )
     workflow.connect([
         (b0_hmc_wf, dwi_model_hmc_wf, [
-            ('outputnode.aligned_images', 'inputnode.warped_b0_images')]),
+            ('outputnode.aligned_images', 'inputnode.warped_b0_images'),
+        ]),
         (b0_template_mask, dwi_model_hmc_wf, [
-            ('outputnode.dwi_mask', 'inputnode.warped_b0_mask')]),
+            ('outputnode.dwi_mask', 'inputnode.warped_b0_mask'),
+        ]),
         (inputnode, dwi_model_hmc_wf, [
             ('dwi_files', 'inputnode.dwi_files'),
             ('b0_indices', 'inputnode.b0_indices'),
             ('bvecs', 'inputnode.bvec_files'),
-            ('bvals', 'inputnode.bval_files')]),
-        (match_transforms, dwi_model_hmc_wf, [
-            ('transforms', 'inputnode.initial_transforms')]),
+            ('bvals', 'inputnode.bval_files'),
+        ]),
+        (match_transforms, dwi_model_hmc_wf, [('transforms', 'inputnode.initial_transforms')]),
         (dwi_model_hmc_wf, outputnode, [
             ('outputnode.hmc_transforms', 'forward_transforms'),
             ('outputnode.optimization_data', 'optimization_data'),
-            ('outputnode.cnr_image', 'cnr_image')]),
+            ('outputnode.cnr_image', 'cnr_image'),
+        ]),
         (dwi_model_hmc_wf, uncorrect_model_images, [
             ('outputnode.model_predicted_images', 'input_image'),
-            ('outputnode.hmc_transforms', 'transforms')]),
+            ('outputnode.hmc_transforms', 'transforms'),
+        ]),
         (inputnode, uncorrect_model_images, [('dwi_files', 'reference_image')]),
-        (uncorrect_model_images, outputnode, [('output_image', 'noise_free_dwis')])
+        (uncorrect_model_images, outputnode, [('output_image', 'noise_free_dwis')]),
     ])  # fmt:skip
     datasinks = [
         node for node in workflow.list_node_names() if node.split('.')[-1].startswith('ds_')
@@ -514,33 +522,41 @@ def init_hmc_model_iteration_wf(name='hmc_model_iter0'):
 
     workflow.connect([
         # Send inputs to DWI prediction
-        (inputnode, predict_dwis, [('approx_aligned_dwi_files', 'aligned_dwis'),
-                                   ('approx_aligned_bvecs', 'aligned_bvecs'),
-                                   ('bvals', 'bvals'),
-                                   ('b0_mean', 'aligned_b0_mean'),
-                                   ('b0_mask', 'aligned_mask'),
-                                   (('approx_aligned_bvecs', _bvecs_to_list), 'bvec_to_predict'),
-                                   (('bvals', _bvals_to_floats), 'bval_to_predict')]),
+        (inputnode, predict_dwis, [
+            ('approx_aligned_dwi_files', 'aligned_dwis'),
+            ('approx_aligned_bvecs', 'aligned_bvecs'),
+            ('bvals', 'bvals'),
+            ('b0_mean', 'aligned_b0_mean'),
+            ('b0_mask', 'aligned_mask'),
+            (('approx_aligned_bvecs', _bvecs_to_list), 'bvec_to_predict'),
+            (('bvals', _bvals_to_floats), 'bval_to_predict'),
+        ]),
         (predict_dwis, register_to_predicted, [('predicted_image', 'fixed_image')]),
         (inputnode, register_to_predicted, [
             ('original_dwi_files', 'moving_image'),
-            ('b0_mask', 'fixed_image_masks')]),
-
+            ('b0_mask', 'fixed_image_masks'),
+        ]),
         (register_to_predicted, calculate_motion, [
-            (('forward_transforms', _list_squeeze), 'transform_files')]),
-        (inputnode, calculate_motion, [('original_dwi_files', 'source_files'),
-                                       ('b0_mean', 'ref_file')]),
+            (('forward_transforms', _list_squeeze), 'transform_files'),
+        ]),
+        (inputnode, calculate_motion, [
+            ('original_dwi_files', 'source_files'),
+            ('b0_mean', 'ref_file'),
+        ]),
         (calculate_motion, outputnode, [('motion_file', 'motion_params')]),
-
         (register_to_predicted, post_bvec_transforms, [
-            (('forward_transforms', _list_squeeze), 'affine_transforms')]),
-        (inputnode, post_bvec_transforms, [('original_bvecs', 'bvec_files'),
-                                           ('bvals', 'bval_files')]),
-
+            (('forward_transforms', _list_squeeze), 'affine_transforms'),
+        ]),
+        (inputnode, post_bvec_transforms, [
+            ('original_bvecs', 'bvec_files'),
+            ('bvals', 'bval_files'),
+        ]),
         (predict_dwis, outputnode, [('predicted_image', 'predicted_dwis')]),
         (post_bvec_transforms, outputnode, [('bvecs', 'aligned_bvecs')]),
-        (register_to_predicted, outputnode, [('warped_image', 'aligned_dwis'),
-                                             ('forward_transforms', 'hmc_transforms')])
+        (register_to_predicted, outputnode, [
+            ('warped_image', 'aligned_dwis'),
+            ('forward_transforms', 'hmc_transforms'),
+        ]),
     ])  # fmt:skip
 
     return workflow
@@ -648,34 +664,40 @@ def init_dwi_model_hmc_wf(
     collect_motion_params = pe.Node(niu.Merge(num_iters), name='collect_motion_params')
 
     workflow.connect([
-        (inputnode, extract_dwis, [('dwi_files', 'dwi_files'),
-                                   ('bval_files', 'bval_files'),
-                                   ('bvec_files', 'bvec_files'),
-                                   ('initial_transforms', 'transforms'),
-                                   ('b0_indices', 'b0_indices')]),
+        (inputnode, extract_dwis, [
+            ('dwi_files', 'dwi_files'),
+            ('bval_files', 'bval_files'),
+            ('bvec_files', 'bvec_files'),
+            ('initial_transforms', 'transforms'),
+            ('b0_indices', 'b0_indices'),
+        ]),
         (inputnode, b0_mean, [('warped_b0_images', 'b0_images')]),
-        (extract_dwis, b0_based_bvec_transforms, [('model_bvecs', 'bvec_files'),
-                                                  ('model_bvals', 'bval_files'),
-                                                  ('transforms', 'affine_transforms')]),
-        (extract_dwis, b0_based_image_transforms, [('model_dwi_files', 'input_image'),
-                                                   ('transforms', 'transforms')]),
+        (extract_dwis, b0_based_bvec_transforms, [
+            ('model_bvecs', 'bvec_files'),
+            ('model_bvals', 'bval_files'),
+            ('transforms', 'affine_transforms'),
+        ]),
+        (extract_dwis, b0_based_image_transforms, [
+            ('model_dwi_files', 'input_image'),
+            ('transforms', 'transforms'),
+        ]),
         (b0_mean, b0_based_image_transforms, [('average_image', 'reference_image')]),
 
         # Connect the first iteration
         (extract_dwis, initial_model_iteration, [
             ('model_dwi_files', 'inputnode.original_dwi_files'),
             ('model_bvecs', 'inputnode.original_bvecs'),
-            ('model_bvals', 'inputnode.bvals')]),
+            ('model_bvals', 'inputnode.bvals'),
+        ]),
         (b0_based_image_transforms, initial_model_iteration, [
-            ('output_image', 'inputnode.approx_aligned_dwi_files')]),
+            ('output_image', 'inputnode.approx_aligned_dwi_files'),
+        ]),
         (b0_based_bvec_transforms, initial_model_iteration, [
-            ('bvecs', 'inputnode.approx_aligned_bvecs')]),
-        (b0_mean, initial_model_iteration, [
-            ('average_image', 'inputnode.b0_mean')]),
-        (inputnode, initial_model_iteration, [
-            ('warped_b0_mask', 'inputnode.b0_mask')]),
-        (initial_model_iteration, collect_motion_params, [
-            ('outputnode.motion_params', 'in1')])
+            ('bvecs', 'inputnode.approx_aligned_bvecs'),
+        ]),
+        (b0_mean, initial_model_iteration, [('average_image', 'inputnode.b0_mean')]),
+        (inputnode, initial_model_iteration, [('warped_b0_mask', 'inputnode.b0_mask')]),
+        (initial_model_iteration, collect_motion_params, [('outputnode.motion_params', 'in1')]),
     ])  # fmt:skip
 
     model_iterations = [initial_model_iteration]
@@ -686,17 +708,18 @@ def init_dwi_model_hmc_wf(
         workflow.connect([
             (model_iterations[-2], model_iterations[-1], [
                 ('outputnode.aligned_dwis', 'inputnode.approx_aligned_dwi_files'),
-                ('outputnode.aligned_bvecs', 'inputnode.approx_aligned_bvecs')]),
+                ('outputnode.aligned_bvecs', 'inputnode.approx_aligned_bvecs'),
+            ]),
             (extract_dwis, model_iterations[-1], [
                 ('model_dwi_files', 'inputnode.original_dwi_files'),
                 ('model_bvals', 'inputnode.bvals'),
-                ('model_bvecs', 'inputnode.original_bvecs')]),
-            (b0_mean, model_iterations[-1], [
-                ('average_image', 'inputnode.b0_mean')]),
-            (inputnode, model_iterations[-1], [
-                ('warped_b0_mask', 'inputnode.b0_mask')]),
+                ('model_bvecs', 'inputnode.original_bvecs'),
+            ]),
+            (b0_mean, model_iterations[-1], [('average_image', 'inputnode.b0_mean')]),
+            (inputnode, model_iterations[-1], [('warped_b0_mask', 'inputnode.b0_mask')]),
             (model_iterations[-1], collect_motion_params, [
-                ('outputnode.motion_params', motion_key)])
+                ('outputnode.motion_params', motion_key),
+            ]),
         ])  # fmt:skip
 
     # Return to the original, b0-interspersed ordering
@@ -730,38 +753,42 @@ def init_dwi_model_hmc_wf(
             run_without_submitting=True,
         )
         workflow.connect([
-            (collect_motion_params, summarize_iterations, [
-                ('out', 'collected_motion_files')]),
-            (summarize_iterations, ds_report_iteration_plot, [
-                ('plot_file', 'in_file')]),
-            (summarize_iterations, outputnode, [
-                ('iteration_summary_file', 'optimization_data')]),
+            (collect_motion_params, summarize_iterations, [('out', 'collected_motion_files')]),
+            (summarize_iterations, ds_report_iteration_plot, [('plot_file', 'in_file')]),
+            (summarize_iterations, outputnode, [('iteration_summary_file', 'optimization_data')]),
             (summarize_iterations, shoreline_report, [
-                ('iteration_summary_file', 'iteration_summary')])])  # fmt:skip
+                ('iteration_summary_file', 'iteration_summary'),
+            ]),
+        ])  # fmt:skip
 
     workflow.connect([
         (model_iterations[-1], reorder_dwi_xforms, [
             ('outputnode.hmc_transforms', 'model_based_transforms'),
             ('outputnode.predicted_dwis', 'model_predicted_images'),
-            ('outputnode.aligned_dwis', 'warped_dwi_images')]),
+            ('outputnode.aligned_dwis', 'warped_dwi_images'),
+        ]),
         (b0_mean, reorder_dwi_xforms, [('average_image', 'b0_mean')]),
         (inputnode, reorder_dwi_xforms, [
             ('warped_b0_images', 'warped_b0_images'),
             ('b0_indices', 'b0_indices'),
-            ('initial_transforms', 'initial_transforms')]),
+            ('initial_transforms', 'initial_transforms'),
+        ]),
         (reorder_dwi_xforms, outputnode, [
             ('hmc_warped_images', 'aligned_dwis'),
             ('full_transforms', 'hmc_transforms'),
-            ('full_predicted_dwi_series', 'model_predicted_images')]),
+            ('full_predicted_dwi_series', 'model_predicted_images'),
+        ]),
         (inputnode, shoreline_report, [('dwi_files', 'original_images')]),
         (reorder_dwi_xforms, calculate_cnr, [
             ('hmc_warped_images', 'hmc_warped_images'),
-            ('full_predicted_dwi_series', 'predicted_images')]),
+            ('full_predicted_dwi_series', 'predicted_images'),
+        ]),
         (inputnode, calculate_cnr, [('warped_b0_mask', 'mask_image')]),
         (calculate_cnr, outputnode, [('cnr_image', 'cnr_image')]),
         (reorder_dwi_xforms, shoreline_report, [
             ('full_predicted_dwi_series', 'model_predicted_images'),
-            ('hmc_warped_images', 'registered_images')]),
+            ('hmc_warped_images', 'registered_images'),
+        ]),
         (shoreline_report, ds_report_shoreline_gif, [('plot_file', 'in_file')]),
     ])  # fmt:skip
 

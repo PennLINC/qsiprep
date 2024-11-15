@@ -202,8 +202,10 @@ template [@fieldmapless3].
     )
 
     workflow.connect([
-        (inputnode, invert_t1w, [('t1_brain', 'in_file'),
-                                 ('bold_ref', 'ref_file')]),
+        (inputnode, invert_t1w, [
+            ('t1_brain', 'in_file'),
+            ('bold_ref', 'ref_file'),
+        ]),
         (inputnode, ref_2_t1, [('bold_ref', 'moving_image')]),
         (invert_t1w, ref_2_t1, [('out_file', 'fixed_image')]),
         (inputnode, t1_2_ref, [('bold_ref', 'reference_image')]),
@@ -220,11 +222,14 @@ template [@fieldmapless3].
         (fixed_image_masks, syn, [('out', 'fixed_image_masks')]),
         (syn, outputnode, [('forward_transforms', 'out_warp')]),
         (syn, unwarp_ref, [('forward_transforms', 'transforms')]),
-        (inputnode, unwarp_ref, [('bold_ref', 'reference_image'),
-                                 ('bold_ref', 'input_image')]),
+        (inputnode, unwarp_ref, [
+            ('bold_ref', 'reference_image'),
+            ('bold_ref', 'input_image'),
+        ]),
         (unwarp_ref, outputnode, [
             ('output_image', 'out_reference'),
-            ('output_image', 'out_reference_brain')])
+            ('output_image', 'out_reference_brain'),
+        ]),
     ])  # fmt:skip
 
     return workflow

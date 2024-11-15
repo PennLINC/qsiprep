@@ -311,7 +311,7 @@ to workflows in *QSIPrep*'s documentation]\
               config.workflow.anat_modality),
              'source_file'),
         ]),
-        (about, ds_report_about, [('out_report', 'in_file')])
+        (about, ds_report_about, [('out_report', 'in_file')]),
     ])  # fmt:skip
 
     if config.workflow.anat_only:
@@ -504,7 +504,7 @@ to workflows in *QSIPrep*'s documentation]\
                     ('outputnode.original_files', original_bids_name),
                     ('outputnode.carpetplot_data', carpetplot_name),
                     ('outputnode.confounds', confounds_name),
-                ])
+                ]),
             ])  # fmt:skip
 
     for node in workflow.list_node_names():

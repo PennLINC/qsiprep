@@ -244,7 +244,7 @@ def init_merge_and_denoise_wf(
             ('original_images', 'original_files'),
             ('out_bval', 'merged_bval'),
             ('out_bvec', 'merged_bvec'),
-            ('merged_metadata', 'merged_json')
+            ('merged_metadata', 'merged_json'),
         ]),
     ])  # fmt:skip
 
@@ -271,7 +271,7 @@ def init_merge_and_denoise_wf(
                 ('merged_denoising_confounds', 'denoising_confounds'),
             ]),
             (noise_images, outputnode, [('out', 'noise_images')]),
-            (bias_images, outputnode, [('out', 'bias_images')])
+            (bias_images, outputnode, [('out', 'bias_images')]),
         ])  # fmt:skip
 
         return workflow
@@ -302,7 +302,7 @@ def init_merge_and_denoise_wf(
             ('outputnode.dwi_file', 'merged_image'),
             (('outputnode.noise_image', _as_list), 'noise_images'),
             (('outputnode.bias_image', _as_list), 'bias_images'),
-        ])
+        ]),
     ])  # fmt:skip
 
     return workflow

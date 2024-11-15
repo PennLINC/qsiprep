@@ -156,44 +156,26 @@ def init_dwi_pre_hmc_wf(
 
         workflow.connect([
             # combine PE+
-            (merge_plus, pm_dwis, [
-                ('outputnode.merged_image', 'in1')]),
-            (merge_plus, pm_bids_dwis, [
-                ('outputnode.original_files', 'in1')]),
-            (merge_plus, pm_bvals, [
-                ('outputnode.merged_bval', 'in1')]),
-            (merge_plus, pm_bvecs, [
-                ('outputnode.merged_bvec', 'in1')]),
-            (merge_plus, pm_bias, [
-                ('outputnode.bias_images', 'in1')]),
-            (merge_plus, pm_noise_images, [
-                ('outputnode.noise_images', 'in1')]),
-            (merge_plus, pm_raw_images, [
-                ('outputnode.merged_raw_image', 'in1')]),
-            (merge_plus, pm_denoising_confounds, [
-                ('outputnode.denoising_confounds', 'in1')]),
-            (merge_plus, pm_validation, [
-                ('outputnode.validation_reports', 'in1')]),
+            (merge_plus, pm_dwis, [('outputnode.merged_image', 'in1')]),
+            (merge_plus, pm_bids_dwis, [('outputnode.original_files', 'in1')]),
+            (merge_plus, pm_bvals, [('outputnode.merged_bval', 'in1')]),
+            (merge_plus, pm_bvecs, [('outputnode.merged_bvec', 'in1')]),
+            (merge_plus, pm_bias, [('outputnode.bias_images', 'in1')]),
+            (merge_plus, pm_noise_images, [('outputnode.noise_images', 'in1')]),
+            (merge_plus, pm_raw_images, [('outputnode.merged_raw_image', 'in1')]),
+            (merge_plus, pm_denoising_confounds, [('outputnode.denoising_confounds', 'in1')]),
+            (merge_plus, pm_validation, [('outputnode.validation_reports', 'in1')]),
 
             # combine PE-
-            (merge_minus, pm_dwis, [
-                ('outputnode.merged_image', 'in2')]),
-            (merge_minus, pm_bids_dwis, [
-                ('outputnode.original_files', 'in2')]),
-            (merge_minus, pm_bvals, [
-                ('outputnode.merged_bval', 'in2')]),
-            (merge_minus, pm_bvecs, [
-                ('outputnode.merged_bvec', 'in2')]),
-            (merge_minus, pm_bias, [
-                ('outputnode.bias_images', 'in2')]),
-            (merge_minus, pm_noise_images, [
-                ('outputnode.noise_images', 'in2')]),
-            (merge_minus, pm_raw_images, [
-                ('outputnode.merged_raw_image', 'in2')]),
-            (merge_minus, pm_denoising_confounds, [
-                ('outputnode.denoising_confounds', 'in2')]),
-            (merge_minus, pm_validation, [
-                ('outputnode.validation_reports', 'in2')]),
+            (merge_minus, pm_dwis, [('outputnode.merged_image', 'in2')]),
+            (merge_minus, pm_bids_dwis, [('outputnode.original_files', 'in2')]),
+            (merge_minus, pm_bvals, [('outputnode.merged_bval', 'in2')]),
+            (merge_minus, pm_bvecs, [('outputnode.merged_bvec', 'in2')]),
+            (merge_minus, pm_bias, [('outputnode.bias_images', 'in2')]),
+            (merge_minus, pm_noise_images, [('outputnode.noise_images', 'in2')]),
+            (merge_minus, pm_raw_images, [('outputnode.merged_raw_image', 'in2')]),
+            (merge_minus, pm_denoising_confounds, [('outputnode.denoising_confounds', 'in2')]),
+            (merge_minus, pm_validation, [('outputnode.validation_reports', 'in2')]),
 
             (pm_dwis, rpe_concat, [('out', 'dwi_files')]),
             (pm_bids_dwis, rpe_concat, [('out', 'bids_dwi_files')]),
@@ -207,13 +189,11 @@ def init_dwi_pre_hmc_wf(
                 ('out_bval', 'bval_file'),
                 ('out_bvec', 'bvec_file'),
                 ('original_images', 'original_files'),
-                ('merged_denoising_confounds', 'denoising_confounds')]),
-            (pm_validation, outputnode, [
-                ('out', 'validation_reports')]),
-            (pm_noise_images, outputnode, [
-                ('out', 'noise_images')]),
-            (pm_bias, outputnode, [
-                ('out', 'bias_images')]),
+                ('merged_denoising_confounds', 'denoising_confounds'),
+            ]),
+            (pm_validation, outputnode, [('out', 'validation_reports')]),
+            (pm_noise_images, outputnode, [('out', 'noise_images')]),
+            (pm_bias, outputnode, [('out', 'bias_images')]),
             (pm_raw_images, raw_rpe_concat, [('out', 'in_files')]),
             (raw_rpe_concat, outputnode, [('out_file', 'raw_concatenated')]),
 
@@ -224,8 +204,9 @@ def init_dwi_pre_hmc_wf(
             (raw_rpe_concat, qc_wf, [('out_file', 'inputnode.dwi_file')]),
             (rpe_concat, qc_wf, [
                 ('out_bval', 'inputnode.bval_file'),
-                ('out_bvec', 'inputnode.bvec_file')]),
-            (qc_wf, outputnode, [('outputnode.qc_summary', 'qc_file')])
+                ('out_bvec', 'inputnode.bvec_file'),
+            ]),
+            (qc_wf, outputnode, [('outputnode.qc_summary', 'qc_file')]),
         ])  # fmt:skip
 
         workflow.__postdesc__ += (
@@ -255,7 +236,8 @@ def init_dwi_pre_hmc_wf(
             ('outputnode.validation_reports', 'validation_reports'),
             ('outputnode.denoising_confounds', 'denoising_confounds'),
             ('outputnode.original_files', 'original_files'),
-            ('outputnode.merged_raw_image', 'raw_concatenated')])
+            ('outputnode.merged_raw_image', 'raw_concatenated'),
+        ]),
     ])  # fmt:skip
 
     if calculate_qc:
@@ -264,8 +246,9 @@ def init_dwi_pre_hmc_wf(
             (merge_dwis, qc_wf, [
                 ('outputnode.merged_raw_image', 'inputnode.dwi_file'),
                 ('outputnode.merged_bval', 'inputnode.bval_file'),
-                ('outputnode.merged_bvec', 'inputnode.bvec_file')]),
-            (qc_wf, outputnode, [('outputnode.qc_summary', 'qc_file')])
+                ('outputnode.merged_bvec', 'inputnode.bvec_file'),
+            ]),
+            (qc_wf, outputnode, [('outputnode.qc_summary', 'qc_file')]),
         ])  # fmt:skip
 
     return workflow

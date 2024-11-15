@@ -81,7 +81,8 @@ def init_modelfree_qc_wf(bvec_convention='DIPY', name='dwi_qc_wf'):
         (inputnode, raw_src, [
             ('dwi_file', 'input_nifti_file'),
             ('bval_file', 'input_bvals_file'),
-            ('bvec_file', 'input_bvecs_file')]),
+            ('bvec_file', 'input_bvecs_file'),
+        ]),
         (raw_src, raw_src_qc, [('output_src', 'src_file')]),
         (raw_src, raw_gqi, [('output_src', 'input_src_file')]),
         (raw_gqi, raw_fib_qc, [('output_fib', 'src_file')]),
@@ -120,9 +121,10 @@ def init_mask_overlap_wf(name='mask_overlap_wf'):
     workflow.connect([
         (inputnode, downsample_t1_mask, [
             ('anatomical_mask', 'in_file'),
-            ('dwi_mask', 'master')]),
+            ('dwi_mask', 'master'),
+        ]),
         (inputnode, calculate_dice, [('dwi_mask', 'dwi_mask')]),
         (downsample_t1_mask, calculate_dice, [('out_file', 'anatomical_mask')]),
-        (calculate_dice, outputnode, [('dice_score', 'dice_score')])
+        (calculate_dice, outputnode, [('dice_score', 'dice_score')]),
     ])  # fmt:skip
     return workflow

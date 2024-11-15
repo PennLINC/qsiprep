@@ -203,11 +203,9 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
     workflow.connect([
         (inputnode, fmap2ref_reg, [('fmap_ref', 'moving_image')]),
         (inputnode, fmap2ref_apply, [('in_reference', 'reference_image')]),
-        (fmap2ref_reg, fmap2ref_apply, [
-            ('composite_transform', 'transforms')]),
+        (fmap2ref_reg, fmap2ref_apply, [('composite_transform', 'transforms')]),
         (inputnode, fmap_mask2ref_apply, [('in_reference', 'reference_image')]),
-        (fmap2ref_reg, fmap_mask2ref_apply, [
-            ('composite_transform', 'transforms')]),
+        (fmap2ref_reg, fmap_mask2ref_apply, [('composite_transform', 'transforms')]),
         (fmap2ref_apply, ds_report_reg_vsm, [('out_report', 'in_file')]),
         (inputnode, fmap2ref_reg, [('in_reference_brain', 'fixed_image')]),
         (fmap2ref_reg, ds_report_reg, [('out_report', 'in_file')]),
@@ -216,8 +214,10 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
         (fmap2ref_apply, torads, [('output_image', 'in_file')]),
         (fmap2ref_apply, tohz, [('output_image', 'in_file')]),
         (tohz, outputnode, [('out_file', 'out_hz')]),
-        (inputnode, get_ees, [('in_reference', 'in_file'),
-                              ('metadata', 'in_meta')]),
+        (inputnode, get_ees, [
+            ('in_reference', 'in_file'),
+            ('metadata', 'in_meta'),
+        ]),
         (fmap_mask2ref_apply, gen_vsm, [('output_image', 'mask_file')]),
         (get_ees, gen_vsm, [('ees', 'dwell_time')]),
         (inputnode, gen_vsm, [(('metadata', _get_pedir_fugue), 'unwarp_direction')]),
@@ -237,7 +237,8 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
         (unwarp_reference, apply_fov_mask, [('output_image', 'in_file')]),
         (apply_fov_mask, outputnode, [
             ('out_file', 'out_reference'),
-            ('out_file', 'out_reference_brain')]),
+            ('out_file', 'out_reference_brain'),
+        ]),
         (jac_dfm, outputnode, [('jacobian_image', 'out_jacobian')]),
     ])  # fmt:skip
 
@@ -245,18 +246,14 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
         # Demean within mask
         demean = pe.Node(DemeanImage(), name='demean')
 
-        workflow.connect(
-            [
-                (gen_vsm, demean, [('shift_out_file', 'in_file')]),
-                (fmap_mask2ref_apply, demean, [('output_image', 'in_mask')]),
-                (demean, vsm2dfm, [('out_file', 'in_file')]),
-            ]
-        )
+        workflow.connect([
+            (gen_vsm, demean, [('shift_out_file', 'in_file')]),
+            (fmap_mask2ref_apply, demean, [('output_image', 'in_mask')]),
+            (demean, vsm2dfm, [('out_file', 'in_file')]),
+        ])  # fmt:skip
 
     else:
-        workflow.connect([
-            (gen_vsm, vsm2dfm, [('shift_out_file', 'in_file')]),
-        ])  # fmt:skip
+        workflow.connect([(gen_vsm, vsm2dfm, [('shift_out_file', 'in_file')])])
 
     return workflow
 
@@ -317,10 +314,15 @@ def init_fmap_unwarp_report_wf(name='fmap_unwarp_report_wf'):
     dwi_rpt = pe.Node(SimpleBeforeAfterRPT(), name='dwi_rpt', mem_gb=0.1)
 
     workflow.connect([
-        (inputnode, dwi_rpt, [('in_pre', 'before'), ('in_post', 'after')]),
-        (inputnode, map_seg, [('in_post', 'reference_image'),
-                              ('in_seg', 'input_image'),
-                              ('in_xfm', 'transforms')]),
+        (inputnode, dwi_rpt, [
+            ('in_pre', 'before'),
+            ('in_post', 'after'),
+        ]),
+        (inputnode, map_seg, [
+            ('in_post', 'reference_image'),
+            ('in_seg', 'input_image'),
+            ('in_xfm', 'transforms'),
+        ]),
         (map_seg, sel_wm, [('output_image', 'in_seg')]),
         (sel_wm, dwi_rpt, [('out', 'wm_seg')]),
         (dwi_rpt, outputnode, [('out_report', 'report')])

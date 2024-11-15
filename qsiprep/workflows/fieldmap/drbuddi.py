@@ -186,7 +186,8 @@ def init_drbuddi_wf(
             ('dwi_files', 'dwi_files'),
             ('bval_files', 'bval_files'),
             ('bvec_files', 'bvec_files'),
-            ('original_files', 'original_files')]),
+            ('original_files', 'original_files'),
+        ]),
         (gather_drbuddi_inputs, drbuddi, [
             ('blip_assignments', 'blip_assignments'),
             ('blip_up_image', 'blip_up_image'),
@@ -202,7 +203,8 @@ def init_drbuddi_wf(
             ('blip_up_b0_corrected', 'b0_up_corrected_image'),
             ('blip_down_FA', 'down_fa_image'),
             ('blip_up_FA', 'up_fa_image'),
-            ('structural_image', 't2w_image')]),
+            ('structural_image', 't2w_image'),
+        ]),
         (drbuddi, aggregate_drbuddi, [
             ('undistorted_reference', 'undistorted_reference'),
             ('bdown_to_bup_rigid_trans_h5', 'bdown_to_bup_rigid_trans_h5'),
@@ -218,15 +220,16 @@ def init_drbuddi_wf(
             ('deformation_minv', 'deformation_minv'),
             ('blip_up_FA', 'blip_up_FA'),
             ('blip_down_FA', 'blip_down_FA'),
-            ('structural_image', 'structural_image')]),
-        (gather_drbuddi_inputs, aggregate_drbuddi, [
-            ('blip_assignments', 'blip_assignments')]),
+            ('structural_image', 'structural_image'),
+        ]),
+        (gather_drbuddi_inputs, aggregate_drbuddi, [('blip_assignments', 'blip_assignments')]),
         (aggregate_drbuddi, outputnode, [
             ('sdc_warps', 'sdc_warps'),
             ('sdc_scaling_images', 'sdc_scaling_images'),
             ('up_fa_corrected_image', 'up_fa_corrected_image'),
             ('down_fa_corrected_image', 'down_fa_corrected_image'),
-            ('b0_ref', 'b0_ref')])
+            ('b0_ref', 'b0_ref'),
+        ]),
     ])  # fmt:skip
 
     return workflow

@@ -279,20 +279,23 @@ Diffusion data preprocessing
             ('outputnode.bval_file', 'inputnode.bval_file'),
             ('outputnode.bvec_file', 'inputnode.bvec_file'),
             ('outputnode.json_file', 'inputnode.json_file'),
-            ('outputnode.original_files', 'inputnode.original_files')]),
+            ('outputnode.original_files', 'inputnode.original_files'),
+        ]),
         (inputnode, hmc_wf, [
             ('t1_brain', 'inputnode.t1_brain'),
             ('t1_mask', 'inputnode.t1_mask'),
             ('t2w_unfatsat', 'inputnode.t2w_unfatsat'),
-            ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform')]),
+            ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
+        ]),
         (pre_hmc_wf, outputnode, [
             ('outputnode.qc_file', 'raw_qc_file'),
             ('outputnode.original_files', 'original_files'),
             ('outputnode.bvec_file', 'original_bvecs'),
             ('outputnode.bias_images', 'bias_images'),
             ('outputnode.noise_images', 'noise_images'),
-            ('outputnode.raw_concatenated', 'raw_concatenated')]),
-        (pre_hmc_wf, test_pre_hmc_connect, [('outputnode.raw_concatenated', 'test1')])
+            ('outputnode.raw_concatenated', 'raw_concatenated'),
+        ]),
+        (pre_hmc_wf, test_pre_hmc_connect, [('outputnode.raw_concatenated', 'test1')]),
     ])  # fmt:skip
 
     if not dwi_only:
@@ -334,16 +337,16 @@ Diffusion data preprocessing
         )
 
         workflow.connect([
-            (inputnode, fmap_unwarp_report_wf, [
-                ('t1_seg', 'inputnode.in_seg')]),
-            (hmc_wf, outputnode, [
-                ('outputnode.sdc_scaling_images', 'sdc_scaling_images')]),
+            (inputnode, fmap_unwarp_report_wf, [('t1_seg', 'inputnode.in_seg')]),
+            (hmc_wf, outputnode, [('outputnode.sdc_scaling_images', 'sdc_scaling_images')]),
             (hmc_wf, fmap_unwarp_report_wf, [
                 ('outputnode.pre_sdc_template', 'inputnode.in_pre'),
-                ('outputnode.b0_template', 'inputnode.in_post')]),
+                ('outputnode.b0_template', 'inputnode.in_post'),
+            ]),
             (b0_coreg_wf, fmap_unwarp_report_wf, [
-                ('outputnode.itk_b0_to_t1', 'inputnode.in_xfm')]),
-            (fmap_unwarp_report_wf, ds_report_sdc, [('outputnode.report', 'in_file')])
+                ('outputnode.itk_b0_to_t1', 'inputnode.in_xfm'),
+            ]),
+            (fmap_unwarp_report_wf, ds_report_sdc, [('outputnode.report', 'in_file')]),
         ])  # fmt:skip
 
     # DRBUDDI has some extra reports that we want to save. Make sure we get them!
@@ -392,15 +395,18 @@ Diffusion data preprocessing
                 ('outputnode.up_fa_corrected_image', 'inputnode.up_fa_corrected_image'),
                 ('outputnode.down_fa_image', 'inputnode.down_fa_image'),
                 ('outputnode.down_fa_corrected_image', 'inputnode.down_fa_corrected_image'),
-                ('outputnode.t2w_image', 'inputnode.t2w_image')]),
+                ('outputnode.t2w_image', 'inputnode.t2w_image'),
+            ]),
             (b0_coreg_wf, extended_pepolar_report_wf, [
-                ('outputnode.itk_b0_to_t1', 'inputnode.t1w_seg_transform')]),
-            (inputnode, extended_pepolar_report_wf, [
-                ('t1_seg', 'inputnode.t1w_seg')]),
+                ('outputnode.itk_b0_to_t1', 'inputnode.t1w_seg_transform'),
+            ]),
+            (inputnode, extended_pepolar_report_wf, [('t1_seg', 'inputnode.t1w_seg')]),
             (extended_pepolar_report_wf, ds_report_fa_sdc, [
-                ('outputnode.fa_sdc_report', 'in_file')]),
+                ('outputnode.fa_sdc_report', 'in_file'),
+            ]),
             (extended_pepolar_report_wf, ds_report_b0_sdc, [
-                ('outputnode.b0_sdc_report', 'in_file')])
+                ('outputnode.b0_sdc_report', 'in_file'),
+            ]),
         ])  # fmt:skip
 
     summary = pe.Node(
@@ -423,15 +429,15 @@ Diffusion data preprocessing
             ('t1_seg', 'inputnode.t1_seg'),
             ('subjects_dir', 'inputnode.subjects_dir'),
             ('subject_id', 'inputnode.subject_id'),
-            ('t1_2_fsnative_reverse_transform',
-             'inputnode.t1_2_fsnative_reverse_transform')]),
-        (hmc_wf, b0_coreg_wf, [('outputnode.b0_template',
-                                'inputnode.ref_b0_brain')]),
+            ('t1_2_fsnative_reverse_transform', 'inputnode.t1_2_fsnative_reverse_transform'),
+        ]),
+        (hmc_wf, b0_coreg_wf, [('outputnode.b0_template', 'inputnode.ref_b0_brain')]),
         (hmc_wf, summary, [('outputnode.sdc_method', 'distortion_correction')]),
         (b0_coreg_wf, ds_report_coreg, [('outputnode.report', 'in_file')]),
         (b0_coreg_wf, outputnode, [
             (('outputnode.itk_b0_to_t1', _get_first), 'itk_b0_to_t1'),
-            ('outputnode.coreg_metric', 'coreg_score')])
+            ('outputnode.coreg_metric', 'coreg_score'),
+        ]),
     ])  # fmt:skip
 
     # Compute and gather confounds
@@ -465,17 +471,19 @@ Diffusion data preprocessing
     workflow.connect([
         (hmc_wf, confounds_wf, [
             ('outputnode.slice_quality', 'inputnode.sliceqc_file'),
-            ('outputnode.motion_params', 'inputnode.motion_params')]),
+            ('outputnode.motion_params', 'inputnode.motion_params'),
+        ]),
         (pre_hmc_wf, confounds_wf, [
             ('outputnode.denoising_confounds', 'inputnode.denoising_confounds'),
             ('outputnode.bval_file', 'inputnode.bval_file'),
             ('outputnode.bvec_file', 'inputnode.bvec_file'),
-            ('outputnode.original_files', 'inputnode.original_files')]),
+            ('outputnode.original_files', 'inputnode.original_files'),
+        ]),
         (hmc_wf, conf_plot, [
             ('outputnode.slice_quality', 'sliceqc_file'),
-            ('outputnode.b0_template_mask', 'sliceqc_mask')]),
-        (confounds_wf, conf_plot, [
-            ('outputnode.confounds_file', 'confounds_file')]),
+            ('outputnode.b0_template_mask', 'sliceqc_mask'),
+        ]),
+        (confounds_wf, conf_plot, [('outputnode.confounds_file', 'confounds_file')]),
         (confounds_wf, outputnode, [('outputnode.confounds_file', 'confounds')]),
         (conf_plot, ds_report_dwi_conf, [('out_file', 'in_file')]),
         (conf_plot, outputnode, [('carpetplot_json', 'carpetplot_data')]),
@@ -489,7 +497,8 @@ Diffusion data preprocessing
             ('outputnode.b0_template_mask', 'dwi_mask'),
             ('outputnode.to_dwi_ref_affines', 'hmc_xforms'),
             ('outputnode.to_dwi_ref_warps', 'fieldwarps'),
-            ('outputnode.dwi_files_to_transform', 'dwi_files')])
+            ('outputnode.dwi_files_to_transform', 'dwi_files'),
+        ]),
     ])  # fmt:skip
 
     # Reporting
@@ -507,7 +516,7 @@ Diffusion data preprocessing
 
     workflow.connect([
         (pre_hmc_wf, summary, [('outputnode.validation_reports', 'validation_reports')]),
-        (summary, ds_report_summary, [('out_report', 'in_file')])
+        (summary, ds_report_summary, [('out_report', 'in_file')]),
     ])  # fmt:skip
 
     # Fill-in datasinks of reportlets seen so far

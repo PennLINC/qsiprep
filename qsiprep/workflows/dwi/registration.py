@@ -119,13 +119,18 @@ def init_b0_to_anat_registration_wf(
     coreg.inputs.output_warped_image = True
     b0_to_anat = pe.Node(coreg, name='b0_to_anat', n_procs=config.nipype.omp_nthreads)
 
-    workflow.connect(inputnode, 't1_brain', b0_to_anat, 'fixed_image')  # fmt:skip
-    workflow.connect(inputnode, 'ref_b0_brain', b0_to_anat, 'moving_image')  # fmt:skip
-    workflow.connect(b0_to_anat, 'forward_transforms', outputnode, 'itk_b0_to_t1')  # fmt:skip
-    workflow.connect(b0_to_anat, 'reverse_transforms', outputnode, 'itk_t1_to_b0')  # fmt:skip
-    workflow.connect(b0_to_anat, 'metric_value', outputnode, 'coreg_metric')  # fmt:skip
-    workflow.connect(b0_to_anat, 'out_report', outputnode, 'report')  # fmt:skip
-
+    workflow.connect([
+        (inputnode, b0_to_anat, [
+            ('t1_brain', 'fixed_image'),
+            ('ref_b0_brain', 'moving_image'),
+        ]),
+        (b0_to_anat, outputnode, [
+            ('forward_transforms', 'itk_b0_to_t1'),
+            ('reverse_transforms', 'itk_t1_to_b0'),
+            ('metric_value', 'coreg_metric'),
+            ('out_report', 'report'),
+        ]),
+    ])  # fmt:skip
     return workflow
 
 
@@ -231,26 +236,26 @@ def init_direct_b0_acpc_wf(write_report=True, name='b0_anat_coreg'):
         (inputnode, acpc_reg, [
             ('t1_brain', 'fixed_image'),
             (('t1_seg', _format_masks), 'fixed_image_masks'),
-            ('ref_b0_brain', 'moving_image')]),
-        (acpc_reg, itk_to_rigid, [
-            ('forward_transforms', 'affine_transform')]),
-        (itk_to_rigid, rigid_warp, [
-            ('rigid_transform', 'transforms')]),
-        (itk_to_rigid, translation_warp, [
-            ('translation_transform', 'transforms')]),
+            ('ref_b0_brain', 'moving_image'),
+        ]),
+        (acpc_reg, itk_to_rigid, [('forward_transforms', 'affine_transform')]),
+        (itk_to_rigid, rigid_warp, [('rigid_transform', 'transforms')]),
+        (itk_to_rigid, translation_warp, [('translation_transform', 'transforms')]),
         (inputnode, rigid_warp, [
             ('ref_b0_brain', 'input_image'),
-            ('t1_brain', 'reference_image')]),
+            ('t1_brain', 'reference_image'),
+        ]),
         (inputnode, translation_warp, [
             ('ref_b0_brain', 'input_image'),
-            ('t1_brain', 'reference_image')]),
+            ('t1_brain', 'reference_image'),
+        ]),
         (translation_warp, acpc_report, [('output_image', 'translation_image')]),
         (rigid_warp, acpc_report, [('output_image', 'rigid_image')]),
         (itk_to_rigid, outputnode, [
             ('rigid_transform', 'itk_b0_to_t1'),
-            ('rigid_transform_inverse', 'itk_t1_to_b0')]),
-        (acpc_report, outputnode, [
-            ('out_report', 'report')])
+            ('rigid_transform_inverse', 'itk_t1_to_b0'),
+        ]),
+        (acpc_report, outputnode, [('out_report', 'report')]),
     ])  # fmt:skip
 
     return workflow

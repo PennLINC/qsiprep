@@ -145,22 +145,25 @@ def init_distortion_group_merge_wf(
             (inputnode, merge_bval, [(input_name + '_bval', merge_input_name)]),
             (inputnode, merge_bvec, [(input_name + '_bvec', merge_input_name)]),
             (inputnode, merge_original_bvec, [(input_name + '_original_bvec', merge_input_name)]),
-            (inputnode, merge_original_image, [(input_name + '_original_image',
-                                                merge_input_name)]),
-            (inputnode, merge_raw_concatenated_image, [(input_name + '_raw_concatenated_image',
-                                                        merge_input_name)]),
+            (inputnode, merge_original_image, [
+                (input_name + '_original_image', merge_input_name),
+            ]),
+            (inputnode, merge_raw_concatenated_image, [
+                (input_name + '_raw_concatenated_image', merge_input_name),
+            ]),
             (inputnode, merge_b0_refs, [(input_name + '_b0_ref', merge_input_name)]),
             (inputnode, merge_cnrs, [(input_name + '_cnr', merge_input_name)]),
             (inputnode, merge_confounds, [(input_name + '_confounds', merge_input_name)]),
             (inputnode, merge_carpetplot_data, [
-                (input_name + '_carpetplot_data', merge_input_name)])
+                (input_name + '_carpetplot_data', merge_input_name),
+            ]),
         ])  # fmt:skip
 
     if merging_strategy.lower() == 'average':
         distortion_merger = pe.Node(AveragePEPairs(), name='distortion_merger')
         workflow.connect([
             (merge_original_bvec, distortion_merger, [('out', 'original_bvec_files')]),
-            (merge_carpetplot_data, distortion_merger, [('out', 'carpetplot_data')])
+            (merge_carpetplot_data, distortion_merger, [('out', 'carpetplot_data')]),
         ])  # fmt:skip
     elif merging_strategy.startswith('concat'):
         distortion_merger = pe.Node(MergeDWIs(), name='distortion_merger')
@@ -180,7 +183,7 @@ def init_distortion_group_merge_wf(
         (merge_b0_refs, distortion_merger, [('out', 'b0_refs')]),
         (merge_confounds, distortion_merger, [('out', 'denoising_confounds')]),
         (merge_cnrs, concat_cnr_images, [('out', 'in_files')]),
-        (concat_cnr_images, outputnode, [('out_file', 'cnr_map_t1')])
+        (concat_cnr_images, outputnode, [('out_file', 'cnr_map_t1')]),
     ])  # fmt:skip
 
     # Calculate QC on the merged raw and processed data
@@ -224,42 +227,40 @@ def init_distortion_group_merge_wf(
 
     workflow.connect([
         # Mask the new b=0 reference
-        (distortion_merger, b0_ref_wf, [
-            ('merged_b0_ref', 'inputnode.b0_template')]),
+        (distortion_merger, b0_ref_wf, [('merged_b0_ref', 'inputnode.b0_template')]),
         (inputnode, b0_ref_wf, [
             ('t1_brain', 'inputnode.t1_brain'),
             ('t1_mask', 'inputnode.t1_mask'),
-            ('t1_seg', 'inputnode.t1_seg')]),
+            ('t1_seg', 'inputnode.t1_seg'),
+        ]),
         (b0_ref_wf, outputnode, [
             ('outputnode.ref_image', 't1_b0_ref'),
-            ('outputnode.dwi_mask', 'dwi_mask_t1')]),
+            ('outputnode.dwi_mask', 'dwi_mask_t1'),
+        ]),
 
         # QC connections
         (distortion_merger, raw_qc_wf, [
             ('merged_raw_dwi', 'inputnode.dwi_file'),
             ('merged_raw_bvec', 'inputnode.bvec_file'),
-            ('out_bval', 'inputnode.bval_file')]),
+            ('out_bval', 'inputnode.bval_file'),
+        ]),
         (distortion_merger, processed_qc_wf, [
             ('out_dwi', 'inputnode.dwi_file'),
             ('out_bvec', 'inputnode.bvec_file'),
-            ('out_bval', 'inputnode.bval_file')]),
+            ('out_bval', 'inputnode.bval_file'),
+        ]),
         (distortion_merger, series_qc, [('merged_denoising_confounds', 'confounds_file')]),
-        (raw_qc_wf, series_qc, [
-            ('outputnode.qc_summary', 'pre_qc')]),
-        (processed_qc_wf, series_qc, [
-            ('outputnode.qc_summary', 't1_qc')]),
-        (b0_ref_wf, t1_dice_calc, [
-            ('outputnode.dwi_mask', 'inputnode.dwi_mask')]),
-        (inputnode, t1_dice_calc, [
-            ('t1_mask', 'inputnode.anatomical_mask')]),
+        (raw_qc_wf, series_qc, [('outputnode.qc_summary', 'pre_qc')]),
+        (processed_qc_wf, series_qc, [('outputnode.qc_summary', 't1_qc')]),
+        (b0_ref_wf, t1_dice_calc, [('outputnode.dwi_mask', 'inputnode.dwi_mask')]),
+        (inputnode, t1_dice_calc, [('t1_mask', 'inputnode.anatomical_mask')]),
         (t1_dice_calc, series_qc, [('outputnode.dice_score', 't1_dice_score')]),
         (series_qc, ds_series_qc, [('series_qc_file', 'in_file')]),
-
         (distortion_merger, outputnode, [
             ('out_bval', 'merged_bval'),
             ('out_bvec', 'bvecs_t1'),
             ('out_dwi', 'merged_image'),
-            ('merged_denoising_confounds', 'confounds')
+            ('merged_denoising_confounds', 'confounds'),
         ]),
 
         # Report the merged gradients
@@ -267,12 +268,17 @@ def init_distortion_group_merge_wf(
         (distortion_merger, gradient_plot, [
             ('out_bvec', 'orig_bvec_files'),
             ('out_bval', 'orig_bval_files'),
-            ('original_images', 'source_files')]),
+            ('original_images', 'source_files'),
+        ]),
         (gradient_plot, ds_report_gradients, [('plot_file', 'in_file')]),
-        (distortion_merger, gtab_t1, [('out_bval', 'bval_file'),
-                                      ('out_bvec', 'bvec_file')]),
-        (distortion_merger, btab_t1, [('out_bval', 'bval_file'),
-                                      ('out_bvec', 'bvec_file')]),
+        (distortion_merger, gtab_t1, [
+            ('out_bval', 'bval_file'),
+            ('out_bvec', 'bvec_file'),
+        ]),
+        (distortion_merger, btab_t1, [
+            ('out_bval', 'bval_file'),
+            ('out_bvec', 'bvec_file'),
+        ]),
         (gtab_t1, outputnode, [('gradient_file', 'gradient_table_t1')]),
         (btab_t1, outputnode, [('btable_file', 'btable_t1')]),
 
@@ -287,7 +293,8 @@ def init_distortion_group_merge_wf(
             ('t1_b0_ref', 'inputnode.t1_b0_ref'),
             ('gradient_table_t1', 'inputnode.gradient_table_t1'),
             ('btable_t1', 'inputnode.btable_t1'),
-            ('hmc_optimization_data', 'inputnode.hmc_optimization_data')]),
+            ('hmc_optimization_data', 'inputnode.hmc_optimization_data'),
+        ]),
     ])  # fmt:skip
 
     return workflow

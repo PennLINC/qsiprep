@@ -119,7 +119,7 @@ directions, using `3dQwarp` @afni (AFNI {afni_ver}).
     workflow.connect([
         (inputnode, prepare_epi_opposite_wf, [('in_reference_brain', 'inputnode.ref_brain')]),
         (prepare_epi_opposite_wf, qwarp, [('outputnode.out_file', 'base_file')]),
-        (inputnode, qwarp, [('in_reference_brain', 'in_file')])
+        (inputnode, qwarp, [('in_reference_brain', 'in_file')]),
     ])  # fmt:skip
 
     to_ants = pe.Node(niu.Function(function=_fix_hdr), name='to_ants', mem_gb=0.01)
@@ -138,8 +138,10 @@ directions, using `3dQwarp` @afni (AFNI {afni_ver}).
         (qwarp, cphdr_warp, [('source_warp', 'in_file')]),
         (cphdr_warp, to_ants, [('out_file', 'in_file')]),
         (to_ants, unwarp_reference, [('out', 'transforms')]),
-        (inputnode, unwarp_reference, [('in_reference', 'reference_image'),
-                                       ('in_reference', 'input_image')]),
+        (inputnode, unwarp_reference, [
+            ('in_reference', 'reference_image'),
+            ('in_reference', 'input_image'),
+        ]),
         (unwarp_reference, outputnode, [('output_image', 'out_reference')]),
         (to_ants, outputnode, [('out', 'out_warp')]),
     ])  # fmt:skip
@@ -211,7 +213,7 @@ def init_prepare_dwi_epi_wf(omp_nthreads, orientation='LPS', name='prepare_epi_w
         (fmap2ref_reg, resample_epi_fmap, [('composite_transform', 'transforms')]),
         (enhance_b0, resample_epi_fmap, [('enhanced_file', 'input_image')]),
         (inputnode, resample_epi_fmap, [('ref_brain', 'reference_image')]),
-        (resample_epi_fmap, outputnode, [('output_image', 'out_file')])
+        (resample_epi_fmap, outputnode, [('output_image', 'out_file')]),
     ])  # fmt:skip
 
     return workflow
@@ -257,10 +259,12 @@ def init_extended_pepolar_report_wf(
             ('up_fa_image', 'up_fa_image'),
             ('up_fa_corrected_image', 'up_fa_corrected_image'),
             ('down_fa_image', 'down_fa_image'),
-            ('down_fa_corrected_image', 'down_fa_corrected_image')]),
+            ('down_fa_corrected_image', 'down_fa_corrected_image'),
+        ]),
         (pepolar_report, outputnode, [
             ('b0_sdc_report', 'b0_sdc_report'),
-            ('fa_sdc_report', 'fa_sdc_report')])
+            ('fa_sdc_report', 'fa_sdc_report'),
+        ]),
     ])  # fmt:skip
 
     # If we don't have a T1w segmentation, make one from the t2w
@@ -286,13 +290,13 @@ def init_extended_pepolar_report_wf(
         )
 
         workflow.connect([
-            (inputnode, t2w_n4, [
-                ('t2w_image', 'input_image')]),
+            (inputnode, t2w_n4, [('t2w_image', 'input_image')]),
             (t2w_n4, strip_t2w_wf, [('output_image', 'inputnode.original_image')]),
             (strip_t2w_wf, t2w_atropos, [
                 ('outputnode.brain_image', 'intensity_images'),
-                ('outputnode.brain_mask', 'mask_image')]),
-            (t2w_atropos, pepolar_report, [('classified_image', 't2w_seg')])
+                ('outputnode.brain_mask', 'mask_image'),
+            ]),
+            (t2w_atropos, pepolar_report, [('classified_image', 't2w_seg')]),
         ])  # fmt:skip
     else:
         map_seg = pe.Node(
@@ -309,9 +313,10 @@ def init_extended_pepolar_report_wf(
             (inputnode, map_seg, [
                 ('b0_ref', 'reference_image'),
                 ('t1w_seg_transform', 'transforms'),
-                ('t1w_seg', 'input_image')]),
+                ('t1w_seg', 'input_image'),
+            ]),
             (map_seg, sel_wm, [('output_image', 'in_seg')]),
-            (sel_wm, pepolar_report, [('out', 't1w_seg')])
+            (sel_wm, pepolar_report, [('out', 't1w_seg')]),
         ])  # fmt:skip
 
     return workflow

@@ -220,56 +220,59 @@ def init_fsl_hmc_wf(
             ('bval_file', 'bval_file'),
             ('bvec_file', 'bvec_file'),
             ('json_file', 'json_file'),
-            ('original_files', 'original_files')]),
+            ('original_files', 'original_files'),
+        ]),
         (inputnode, pre_eddy_b0_ref_wf, [
             ('t1_brain', 'inputnode.t1_brain'),
             ('t1_seg', 'inputnode.t1_seg'),
-            ('t1_mask', 'inputnode.t1_mask')]),
+            ('t1_mask', 'inputnode.t1_mask'),
+        ]),
         (gather_inputs, eddy, [
             ('eddy_indices', 'in_index'),
             ('eddy_acqp', 'in_acqp'),
             ('json_file', 'json'),
-            ('multiband_factor', 'multiband_factor')]),
+            ('multiband_factor', 'multiband_factor'),
+        ]),
         (inputnode, eddy, [
             ('dwi_file', 'in_file'),
             ('bval_file', 'in_bval'),
-            ('bvec_file', 'in_bvec')]),
-        (gather_inputs, outputnode, [
-            ('forward_transforms', 'to_dwi_ref_affines')]),
-        (gather_inputs, enhance_pre_sdc, [
-            ('pre_topup_image', 'b0_file')]),
-        (enhance_pre_sdc, outputnode, [
-            ('enhanced_file', 'pre_sdc_template')]),
+            ('bvec_file', 'in_bvec'),
+        ]),
+        (gather_inputs, outputnode, [('forward_transforms', 'to_dwi_ref_affines')]),
+        (gather_inputs, enhance_pre_sdc, [('pre_topup_image', 'b0_file')]),
+        (enhance_pre_sdc, outputnode, [('enhanced_file', 'pre_sdc_template')]),
         (eddy, back_to_lps, [
             ('out_corrected', 'dwi_file'),
-            ('out_rotated_bvecs', 'bvec_file')]),
+            ('out_rotated_bvecs', 'bvec_file'),
+        ]),
         (inputnode, back_to_lps, [('bval_file', 'bval_file')]),
         (back_to_lps, split_eddy_lps, [
             ('dwi_file', 'dwi_file'),
             ('bval_file', 'bval_file'),
-            ('bvec_file', 'bvec_file')]),
-        (inputnode, outputnode, [
-            ('original_files', 'original_files')]),
+            ('bvec_file', 'bvec_file'),
+        ]),
+        (inputnode, outputnode, [('original_files', 'original_files')]),
         (split_eddy_lps, outputnode, [
             ('dwi_files', 'dwi_files_to_transform'),
             ('bvec_files', 'bvec_files_to_transform'),
             ('bval_files', 'bval_files'),
-            ('b0_indices', 'b0_indices')]),
+            ('b0_indices', 'b0_indices'),
+        ]),
         (eddy, cnr_lps, [('out_cnr_maps', 'dwi_file')]),
         (cnr_lps, outputnode, [('dwi_file', 'cnr_map')]),
         (eddy, outputnode, [
             (slice_quality, 'slice_quality'),
-            (slice_quality, 'hmc_optimization_data')]),
+            (slice_quality, 'hmc_optimization_data'),
+        ]),
         (eddy, spm_motion, [('out_parameter', 'eddy_motion')]),
-
         (spm_motion, outputnode, [('spm_motion_file', 'motion_params')]),
         # Create a b=0 reference from Eddy's output
         (back_to_lps, extract_b0_series, [
             ('dwi_file', 'dwi_series'),
-            ('bval_file', 'bval_file')]),
+            ('bval_file', 'bval_file'),
+        ]),
         (extract_b0_series, b0_ref_for_coreg, [('b0_average', 'inputnode.b0_template')]),
-        (b0_ref_for_coreg, outputnode, [
-            ('outputnode.dwi_mask', 'b0_template_mask')]),
+        (b0_ref_for_coreg, outputnode, [('outputnode.dwi_mask', 'b0_template_mask')]),
     ])  # fmt:skip
 
     # Fieldmap correction to be done in LAS+: TOPUP for rpe series or epi fieldmap
@@ -330,13 +333,14 @@ def init_fsl_hmc_wf(
             (gather_inputs, topup, [
                 ('topup_datain', 'encoding_file'),
                 ('topup_imain', 'in_file'),
-                ('topup_config', 'config')]),
+                ('topup_config', 'config'),
+            ]),
             (gather_inputs, ds_topupcsv, [('b0_csv', 'in_file')]),
-            (topup, eddy, [
-                ('out_field', 'field')]),
+            (topup, eddy, [('out_field', 'field')]),
             (gather_inputs, topup_to_eddy_reg, [
                 ('topup_first', 'in_file'),
-                ('eddy_first', 'reference')]),
+                ('eddy_first', 'reference'),
+            ]),
             (topup_to_eddy_reg, eddy, [('out_matrix_file', 'field_mat')]),
 
             # Use corrected images from TOPUP to make a mask for eddy
@@ -351,7 +355,7 @@ def init_fsl_hmc_wf(
 
             # Save reports
             (gather_inputs, topup_summary, [('topup_report', 'summary')]),
-            (topup_summary, ds_report_topupsummary, [('out_report', 'in_file')])
+            (topup_summary, ds_report_topupsummary, [('out_report', 'in_file')]),
         ])  # fmt:skip
 
         if 'drbuddi' not in config.workflow.pepolar_method.lower():
@@ -367,10 +371,8 @@ def init_fsl_hmc_wf(
         distorted_merge = pe.Node(IntraModalMerge(hmc=True, to_lps=False), name='distorted_merge')
         # Use the distorted mask for eddy
         workflow.connect([
-            (gather_inputs, distorted_merge, [
-                ('topup_imain', 'in_files')]),
-            (distorted_merge, pre_eddy_b0_ref_wf, [
-                ('out_avg', 'inputnode.b0_template')]),
+            (gather_inputs, distorted_merge, [('topup_imain', 'in_files')]),
+            (distorted_merge, pre_eddy_b0_ref_wf, [('out_avg', 'inputnode.b0_template')]),
             (pre_eddy_b0_ref_wf, eddy, [('outputnode.dwi_mask', 'in_mask')]),
         ])  # fmt:skip
 
@@ -395,11 +397,13 @@ def init_fsl_hmc_wf(
             (split_eddy_lps, drbuddi_wf, [
                 ('dwi_files', 'inputnode.dwi_files'),
                 ('bval_files', 'inputnode.bval_files'),
-                ('bvec_files', 'inputnode.bvec_files')]),
+                ('bvec_files', 'inputnode.bvec_files'),
+            ]),
             (inputnode, drbuddi_wf, [
                 ('t1_brain', 'inputnode.t1_brain'),
                 ('t2w_unfatsat', 'inputnode.t2w_unfatsat'),
-                ('original_files', 'inputnode.original_files')]),
+                ('original_files', 'inputnode.original_files'),
+            ]),
             (drbuddi_wf, outputnode, [
                 ('outputnode.sdc_warps', 'to_dwi_ref_warps'),
                 ('outputnode.sdc_scaling_images', 'sdc_scaling_images'),
@@ -414,7 +418,8 @@ def init_fsl_hmc_wf(
                 ('outputnode.down_fa_image', 'down_fa_image'),
                 ('outputnode.down_fa_corrected_image', 'down_fa_corrected_image'),
                 ('outputnode.t2w_image', 't2w_image'),
-                ('outputnode.b0_ref', 'b0_template')])
+                ('outputnode.b0_ref', 'b0_template'),
+            ]),
         ])  # fmt:skip
 
         return workflow
@@ -432,22 +437,23 @@ def init_fsl_hmc_wf(
             (b0_ref_for_coreg, b0_sdc_wf, [
                 ('outputnode.ref_image', 'inputnode.b0_ref'),
                 ('outputnode.ref_image_brain', 'inputnode.b0_ref_brain'),
-                ('outputnode.dwi_mask', 'inputnode.b0_mask')]),
+                ('outputnode.dwi_mask', 'inputnode.b0_mask'),
+            ]),
             (inputnode, b0_sdc_wf, [
                 ('t1_brain', 'inputnode.t1_brain'),
-                ('t1_2_mni_reverse_transform',
-                 'inputnode.t1_2_mni_reverse_transform')]),
+                ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
+            ]),
             # These deformations will be applied later, use the unwarped image now
             (b0_sdc_wf, outputnode, [
                 ('outputnode.out_warp', 'to_dwi_ref_warps'),
                 ('outputnode.method', 'sdc_method'),
-                ('outputnode.b0_ref', 'b0_template')])
+                ('outputnode.b0_ref', 'b0_template'),
+            ]),
         ])  # fmt:skip
 
     if not fieldmap_type:
         outputnode.inputs.sdc_method = 'None'
         workflow.connect([
-            (b0_ref_for_coreg, outputnode, [
-                ('outputnode.ref_image', 'b0_template')])
+            (b0_ref_for_coreg, outputnode, [('outputnode.ref_image', 'b0_template')]),
         ])  # fmt:skip
     return workflow

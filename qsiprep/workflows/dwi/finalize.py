@@ -250,8 +250,9 @@ def init_dwi_finalize_wf(
         workflow.connect([
             (inputnode, b0_to_im_template, [
                 ('intramodal_template', 'after'),
-                ('b0_ref_image', 'before')]),
-            (b0_to_im_template, ds_report_intramodal, [('out_report', 'in_file')])
+                ('b0_ref_image', 'before'),
+            ]),
+            (b0_to_im_template, ds_report_intramodal, [('out_report', 'in_file')]),
         ])  # fmt:skip
 
     # Do the resampling
@@ -291,12 +292,14 @@ def init_dwi_finalize_wf(
             ('intramodal_template_to_t1_warp',
              'inputnode.intramodal_template_to_t1_warp'),
             ('itk_b0_to_t1', 'inputnode.itk_b0_to_t1'),
-            ('sdc_scaling_images', 'inputnode.sdc_scaling_images')]),
+            ('sdc_scaling_images', 'inputnode.sdc_scaling_images'),
+        ]),
         (transform_dwis_t1, outputnode, [
             ('outputnode.bvals', 'bvals_t1'),
             ('outputnode.rotated_bvecs', 'bvecs_t1'),
             ('outputnode.cnr_map_resampled', 'cnr_map_t1'),
-            ('outputnode.local_bvecs', 'local_bvecs_t1')]),
+            ('outputnode.local_bvecs', 'local_bvecs_t1'),
+        ]),
         (inputnode, final_denoise_wf, [('confounds', 'inputnode.confounds')]),
         (transform_dwis_t1, final_denoise_wf, [
             ('outputnode.dwi_resampled', 'inputnode.dwi_t1'),
@@ -305,13 +308,14 @@ def init_dwi_finalize_wf(
             ('outputnode.b0_series', 'inputnode.t1_b0_series'),
             ('outputnode.dwi_ref_resampled', 'inputnode.t1_b0_ref'),
             ('outputnode.resampled_dwi_mask', 'inputnode.dwi_mask_t1'),
-            ('outputnode.resampled_qc', 'inputnode.series_qc_t1')]),
+            ('outputnode.resampled_qc', 'inputnode.series_qc_t1'),
+        ]),
         (final_denoise_wf, outputnode, [
             ('outputnode.confounds', 'confounds'),
             ('outputnode.dwi_t1', 'dwi_t1'),
             ('outputnode.t1_b0_ref', 't1_b0_ref'),
             ('outputnode.dwi_mask_t1', 'dwi_mask_t1'),
-        ])
+        ]),
     ])  # fmt:skip
 
     # The workflow is done if we will be concatenating images later
@@ -391,48 +395,58 @@ def init_dwi_finalize_wf(
     workflow.connect([
         (inputnode, series_qc, [
             ('raw_qc_file', 'pre_qc'),
-            ('confounds', 'confounds_file')]),
+            ('confounds', 'confounds_file'),
+        ]),
         (inputnode, ds_carpetplot_data, [('carpetplot_data', 'in_file')]),
         (t1_dice_calc, series_qc, [('outputnode.dice_score', 't1_dice_score')]),
         (final_denoise_wf, series_qc, [
-            ('outputnode.series_qc_postproc', 't1_qc_postproc')]),
+            ('outputnode.series_qc_postproc', 't1_qc_postproc'),
+        ]),
         (series_qc, ds_series_qc, [('series_qc_file', 'in_file')]),
         (transform_dwis_t1, series_qc, [
-            ('outputnode.cnr_map_resampled', 't1_cnr_file')]),
+            ('outputnode.cnr_map_resampled', 't1_cnr_file'),
+        ]),
         (final_denoise_wf, series_qc, [
             ('outputnode.dwi_mask_t1', 't1_mask_file'),
-            ('outputnode.t1_b0_series', 't1_b0_series')]),
+            ('outputnode.t1_b0_series', 't1_b0_series'),
+        ]),
         (inputnode, dwi_derivatives_wf, [('dwi_files', 'inputnode.source_file')]),
         (inputnode, outputnode, [('hmc_optimization_data', 'hmc_optimization_data')]),
         (transform_dwis_t1, series_qc, [('outputnode.resampled_qc', 't1_qc')]),
         (transform_dwis_t1, t1_dice_calc, [
-            ('outputnode.resampled_dwi_mask', 'inputnode.dwi_mask')]),
+            ('outputnode.resampled_dwi_mask', 'inputnode.dwi_mask'),
+        ]),
         (outputnode, gradient_plot, [('bvecs_t1', 'final_bvec_file')]),
-        (transform_dwis_t1, gtab_t1, [('outputnode.bvals', 'bval_file'),
-                                      ('outputnode.rotated_bvecs', 'bvec_file')]),
-        (transform_dwis_t1, btab_t1, [('outputnode.bvals', 'bval_file'),
-                                      ('outputnode.rotated_bvecs', 'bvec_file')]),
-        (inputnode, t1_dice_calc, [
-            ('t1_mask', 'inputnode.anatomical_mask')]),
+        (transform_dwis_t1, gtab_t1, [
+            ('outputnode.bvals', 'bval_file'),
+            ('outputnode.rotated_bvecs', 'bvec_file'),
+        ]),
+        (transform_dwis_t1, btab_t1, [
+            ('outputnode.bvals', 'bval_file'),
+            ('outputnode.rotated_bvecs', 'bvec_file'),
+        ]),
+        (inputnode, t1_dice_calc, [('t1_mask', 'inputnode.anatomical_mask')]),
         (gtab_t1, outputnode, [('gradient_file', 'gradient_table_t1')]),
         (btab_t1, outputnode, [('btable_file', 'btable_t1')]),
         (merged_sidecar, ds_merged_sidecar, [('derivatives_json', 'in_file')]),
-        (outputnode, dwi_derivatives_wf,
-         [('dwi_t1', 'inputnode.dwi_t1'),
-          ('dwi_mask_t1', 'inputnode.dwi_mask_t1'),
-          ('cnr_map_t1', 'inputnode.cnr_map_t1'),
-          ('bvals_t1', 'inputnode.bvals_t1'),
-          ('bvecs_t1', 'inputnode.bvecs_t1'),
-          ('local_bvecs_t1', 'inputnode.local_bvecs_t1'),
-          ('t1_b0_ref', 'inputnode.t1_b0_ref'),
-          ('gradient_table_t1', 'inputnode.gradient_table_t1'),
-          ('btable_t1', 'inputnode.btable_t1'),
-          ('hmc_optimization_data', 'inputnode.hmc_optimization_data')]),
+        (outputnode, dwi_derivatives_wf, [
+            ('dwi_t1', 'inputnode.dwi_t1'),
+            ('dwi_mask_t1', 'inputnode.dwi_mask_t1'),
+            ('cnr_map_t1', 'inputnode.cnr_map_t1'),
+            ('bvals_t1', 'inputnode.bvals_t1'),
+            ('bvecs_t1', 'inputnode.bvecs_t1'),
+            ('local_bvecs_t1', 'inputnode.local_bvecs_t1'),
+            ('t1_b0_ref', 'inputnode.t1_b0_ref'),
+            ('gradient_table_t1', 'inputnode.gradient_table_t1'),
+            ('btable_t1', 'inputnode.btable_t1'),
+            ('hmc_optimization_data', 'inputnode.hmc_optimization_data'),
+        ]),
         (inputnode, gradient_plot, [
             ('bvec_files', 'orig_bvec_files'),
             ('bval_files', 'orig_bval_files'),
-            ('original_files', 'source_files')]),
-        (gradient_plot, ds_report_gradients, [('plot_file', 'in_file')])
+            ('original_files', 'source_files'),
+        ]),
+        (gradient_plot, ds_report_gradients, [('plot_file', 'in_file')]),
     ])  # fmt:skip
 
     return workflow
@@ -488,7 +502,7 @@ def init_finalize_denoising_wf(
                 ('t1_b0_series', 't1_b0_series'),
                 ('t1_b0_ref', 't1_b0_ref'),
                 ('dwi_mask_t1', 'dwi_mask_t1')
-            ])
+            ]),
         ])  # fmt:skip
         return workflow
 
@@ -520,12 +534,14 @@ def init_finalize_denoising_wf(
                     ('dwi_t1', 'in_file'),
                     ('dwi_t1_bval', 'in_bval'),
                     ('dwi_t1_bvec', 'in_bvec'),
-                    ('dwi_mask_t1', 'mask')]),
+                    ('dwi_mask_t1', 'mask'),
+                ]),
                 (biascorr, ds_report_biascorr, [('out_report', 'in_file')]),
                 (biascorr, bias_corrected, [
                     ('out_file', 'dwi_t1'),
                     ('bias_image', 'bias_field'),
-                    ('nmse_text', 'bias_confounds')])
+                    ('nmse_text', 'bias_confounds'),
+                ]),
             ])  # fmt:skip
 
         else:
@@ -574,30 +590,27 @@ def init_finalize_denoising_wf(
                     (scan_split, biascorrs[-1], [
                         ('dwi_file_%d' % scan_num, 'in_file'),
                         ('bval_file_%d' % scan_num, 'in_bval'),
-                        ('bvec_file_%d' % scan_num, 'in_bvec')]),
-                    (biascorrs[-1], gather_corrected_images, [
-                        ('out_file', 'in%d' % scan_num)]),
-                    (biascorrs[-1], gather_nmse_txts, [
-                        ('nmse_text', 'in%d' % scan_num)]),
-                    (biascorrs[-1], gather_bias_images, [
-                        ('bias_image', 'in%d' % scan_num)]),
-                    (biascorrs[-1], reports[-1], [
-                        ('out_report', 'in_file')]),
-                    (scan_split, reports[-1], [
-                        ('source_file_%d' % scan_num, 'source_file')]),
+                        ('bvec_file_%d' % scan_num, 'in_bvec'),
+                    ]),
+                    (biascorrs[-1], gather_corrected_images, [('out_file', 'in%d' % scan_num)]),
+                    (biascorrs[-1], gather_nmse_txts, [('nmse_text', 'in%d' % scan_num)]),
+                    (biascorrs[-1], gather_bias_images, [('bias_image', 'in%d' % scan_num)]),
+                    (biascorrs[-1], reports[-1], [('out_report', 'in_file')]),
+                    (scan_split, reports[-1], [('source_file_%d' % scan_num, 'source_file')]),
                 ])  # fmt:skip
+
             workflow.connect([
                 (inputnode, scan_split, [
                     ('dwi_t1', 'dwi_file'),
                     ('dwi_t1_bval', 'bval_file'),
                     ('dwi_t1_bvec', 'bvec_file'),
-                    ('confounds', 'confounds')
+                    ('confounds', 'confounds'),
                 ]),
                 (gather_corrected_images, merge_corrected_images, [('out', 'in_files')]),
                 (merge_corrected_images, bias_corrected, [('out_file', 'dwi_t1')]),
                 (gather_nmse_txts, bias_corrected, [('out', 'bias_confounds')]),
                 (gather_bias_images, merge_bias_images, [('out', 'in_files')]),
-                (merge_bias_images, bias_corrected, [('out_file', 'bias_field')])
+                (merge_bias_images, bias_corrected, [('out_file', 'bias_field')]),
             ])  # fmt:skip
 
     p2s_buffernode = pe.Node(
@@ -607,9 +620,7 @@ def init_finalize_denoising_wf(
     if do_patch2self:
         raise NotImplementedError()
     else:
-        workflow.connect([
-            (bias_corrected, p2s_buffernode, [('dwi_t1', 'dwi_t1')])
-        ])  # fmt:skip
+        workflow.connect([(bias_corrected, p2s_buffernode, [('dwi_t1', 'dwi_t1')])])
 
     # Extract some additional derivatives from the corrected
     extract_b0_series = pe.Node(ExtractB0s(), name='extract_b0_series')
@@ -636,24 +647,27 @@ def init_finalize_denoising_wf(
         (extract_b0_series, outputnode, [('b0_series', 't1_b0_series')]),
         (final_b0_ref, outputnode, [
             ('outputnode.ref_image', 't1_b0_ref'),
-            ('outputnode.dwi_mask', 'dwi_mask_t1')]),
+            ('outputnode.dwi_mask', 'dwi_mask_t1'),
+        ]),
 
         # New QC on the whole series
         (inputnode, calculate_qc, [
             ('dwi_t1_bval', 'inputnode.bval_file'),
-            ('dwi_t1_bvec', 'inputnode.bvec_file')]),
+            ('dwi_t1_bvec', 'inputnode.bvec_file'),
+        ]),
         (p2s_buffernode, calculate_qc, [('dwi_t1', 'inputnode.dwi_file')]),
         (calculate_qc, outputnode, [('outputnode.qc_summary', 'series_qc_postproc')]),
 
         # Update confounds with new nmse's
         (inputnode, update_confounds, [('confounds', 'confounds')]),
         (bias_corrected, update_confounds, [
-            ('bias_confounds', 'bias_correction_confounds')]),
+            ('bias_confounds', 'bias_correction_confounds'),
+        ]),
         (p2s_buffernode, update_confounds, [
-            ('nmse_text', 'patch2self_correction_confounds')]),
+            ('nmse_text', 'patch2self_correction_confounds'),
+        ]),
 
         # The final version
-        (p2s_buffernode, outputnode, [
-            ('dwi_t1', 'dwi_t1')]),
+        (p2s_buffernode, outputnode, [('dwi_t1', 'dwi_t1')]),
     ])  # fmt:skip
     return workflow

@@ -209,8 +209,8 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
             ('b0_to_intramodal_template_transforms', 'b0_to_intramodal_template_transforms'),
             (('intramodal_template_to_t1_affine', _get_first),
              'intramodal_template_to_t1_affine'),
-            ('intramodal_template_to_t1_warp', 'intramodal_template_to_t1_warp')]),
-
+            ('intramodal_template_to_t1_warp', 'intramodal_template_to_t1_warp'),
+        ]),
         (inputnode, scale_dwis, [
             ('sdc_scaling_images', 'scaling_image_files'),
             ('output_grid', 'reference_image'),
@@ -218,36 +218,41 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
             ('b0_to_intramodal_template_transforms', 'b0_to_intramodal_template_transforms'),
             (('intramodal_template_to_t1_affine', _get_first),
              'intramodal_template_to_t1_affine'),
-            ('intramodal_template_to_t1_warp', 'intramodal_template_to_t1_warp')]),
+            ('intramodal_template_to_t1_warp', 'intramodal_template_to_t1_warp'),
+        ]),
 
         # TODO: check that the cnr_tfm is also appropriately warped for shoreline
         (compose_transforms, cnr_tfm, [(('out_warps', _get_first), 'transforms')]),
-
-        (inputnode, rotate_gradients, [('bvec_files', 'bvec_files'),
-                                       ('bval_files', 'bval_files'),
-                                       ('dwi_files', 'original_images')]),
-
+        (inputnode, rotate_gradients, [
+            ('bvec_files', 'bvec_files'),
+            ('bval_files', 'bval_files'),
+            ('dwi_files', 'original_images'),
+        ]),
         (compose_transforms, rotate_gradients, [('out_affines', 'affine_transforms')]),
-        (rotate_gradients, outputnode, [('bvals', 'bvals'),
-                                        ('bvecs', 'rotated_bvecs')]),
+        (rotate_gradients, outputnode, [
+            ('bvals', 'bvals'),
+            ('bvecs', 'rotated_bvecs'),
+        ]),
         (inputnode, cnr_image_type, [('cnr_map', 'image')]),
         (cnr_image_type, cnr_tfm, [('image_type', 'input_image_type')]),
-        (inputnode, cnr_tfm, [('cnr_map', 'input_image'),
-                              ('output_grid', 'reference_image')]),
+        (inputnode, cnr_tfm, [
+            ('cnr_map', 'input_image'),
+            ('output_grid', 'reference_image'),
+        ]),
         (cnr_tfm, outputnode, [('output_image', 'cnr_map_resampled')]),
         (compose_transforms, dwi_transform, [('out_warps', 'transforms')]),
-        (inputnode, dwi_transform, [('dwi_files', 'input_image'),
-                                    ('output_grid', 'reference_image')]),
+        (inputnode, dwi_transform, [
+            ('dwi_files', 'input_image'),
+            ('output_grid', 'reference_image'),
+        ]),
         (inputnode, get_interpolation, [('dwi_files', 'dwi_files')]),
         (get_interpolation, dwi_transform, [('interpolation_method', 'interpolation')]),
-        (dwi_transform, scale_dwis, [('output_image', 'dwi_files')])
+        (dwi_transform, scale_dwis, [('output_image', 'dwi_files')]),
     ])  # fmt:skip
 
     # If concatenation is not happening here, send the still-split images to outputs
     if not concatenate:
-        workflow.connect([
-            (scale_dwis, outputnode, [('scaled_images', 'dwi_resampled')])
-        ])  # fmt:skip
+        workflow.connect([(scale_dwis, outputnode, [('scaled_images', 'dwi_resampled')])])
         return workflow
 
     merge = pe.Node(Merge(compress=use_compression), name='merge', mem_gb=mem_gb * 3)
@@ -259,25 +264,19 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
         source_file=source_file,
     )
 
-    workflow.connect(
-        [
-            (inputnode, merge, [('name_source', 'header_source')]),
-            (scale_dwis, merge, [('scaled_images', 'in_files')]),
-            (merge, outputnode, [('out_file', 'dwi_resampled')]),
-            (merge, extract_b0_series, [('out_file', 'dwi_series')]),
-            (inputnode, extract_b0_series, [('b0_indices', 'b0_indices')]),
-            (extract_b0_series, final_b0_ref, [('b0_average', 'inputnode.b0_template')]),
-            (inputnode, final_b0_ref, [('t1_mask', 'inputnode.t1_mask')]),
-            (
-                final_b0_ref,
-                outputnode,
-                [
-                    ('outputnode.ref_image', 'dwi_ref_resampled'),
-                    ('outputnode.dwi_mask', 'resampled_dwi_mask'),
-                ],
-            ),
-        ]
-    )
+    workflow.connect([
+        (inputnode, merge, [('name_source', 'header_source')]),
+        (scale_dwis, merge, [('scaled_images', 'in_files')]),
+        (merge, outputnode, [('out_file', 'dwi_resampled')]),
+        (merge, extract_b0_series, [('out_file', 'dwi_series')]),
+        (inputnode, extract_b0_series, [('b0_indices', 'b0_indices')]),
+        (extract_b0_series, final_b0_ref, [('b0_average', 'inputnode.b0_template')]),
+        (inputnode, final_b0_ref, [('t1_mask', 'inputnode.t1_mask')]),
+        (final_b0_ref, outputnode, [
+            ('outputnode.ref_image', 'dwi_ref_resampled'),
+            ('outputnode.dwi_mask', 'resampled_dwi_mask'),
+        ]),
+    ])  # fmt:skip
 
     # Calculate QC metrics on the resampled data
     calculate_qc = init_modelfree_qc_wf(
@@ -287,9 +286,10 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
     workflow.connect([
         (rotate_gradients, calculate_qc, [
             ('bvals', 'inputnode.bval_file'),
-            ('bvecs', 'inputnode.bvec_file')]),
+            ('bvecs', 'inputnode.bvec_file'),
+        ]),
         (merge, calculate_qc, [('out_file', 'inputnode.dwi_file')]),
-        (calculate_qc, outputnode, [('outputnode.qc_summary', 'resampled_qc')])
+        (calculate_qc, outputnode, [('outputnode.qc_summary', 'resampled_qc')]),
     ])  # fmt:skip
     # if write_local_bvecs:
     #     local_grad_rotation = pe.Node(LocalGradientRotation(), name="local_grad_rotation")

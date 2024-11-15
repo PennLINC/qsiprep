@@ -149,7 +149,7 @@ The phase difference used for unwarping was calculated using two separate phase 
             (inputnode, phases2fmap, [('phasediff', 'phase_files')]),
             (phases2fmap, prelude, [('out_file', 'phase_file')]),
             (phases2fmap, compfmap, [('phasediff_metadata', 'metadata')]),
-            (phases2fmap, ds_report_fmap_mask, [('out_file', 'source_file')])
+            (phases2fmap, ds_report_fmap_mask, [('out_file', 'source_file')]),
         ])  # fmt:skip
 
     workflow.connect([
@@ -164,8 +164,10 @@ The phase difference used for unwarping was calculated using two separate phase 
         (bet, cleanup_wf, [('mask_file', 'inputnode.in_mask')]),
         (cleanup_wf, compfmap, [('outputnode.out_file', 'in_file')]),
         (compfmap, outputnode, [('out_file', 'fmap')]),
-        (bet, outputnode, [('mask_file', 'fmap_mask'),
-                           ('out_file', 'fmap_ref')]),
+        (bet, outputnode, [
+            ('mask_file', 'fmap_mask'),
+            ('out_file', 'fmap_ref'),
+        ]),
         (bet, ds_report_fmap_mask, [('out_report', 'in_file')]),
     ])  # fmt:skip
 
