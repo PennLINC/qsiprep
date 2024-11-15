@@ -9,4 +9,5 @@ skip = .git,*.pdf,*.svg,*.html,dataset_description.json,*.gii
 # nd - package
 # pres - variable
 # fixel - real word
-ignore-words-list = te,weill,reson,DNE,fo,Gage,nd,pres,fixel
+# assertIn - function
+ignore-words-list = te,weill,reson,DNE,fo,Gage,nd,pres,fixel,assertIn
