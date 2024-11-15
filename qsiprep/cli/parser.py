@@ -213,7 +213,7 @@ def _build_parser(**kwargs):
         'For further details, please check out '
         'https://fmriprep.readthedocs.io/en/'
         f'{currentv.base_version if is_release else "latest"}/faq.html#'
-        'how-do-I-select-only-certain-files-to-be-input-to-fMRIPrep'
+        'how-do-I-select-only-certain-files-to-be-input-to-fMRIPrep',
     )
     g_bids.add_argument(
         '--bids-database-dir',

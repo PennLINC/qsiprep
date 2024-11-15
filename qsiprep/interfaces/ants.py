@@ -127,8 +127,7 @@ class MultivariateTemplateConstruction2(ANTSCommand):
             reverse_transforms.append([inv_warp, affine])
 
         templates = [
-            f'{cwd}/{prefix}template{tnum}.nii.gz'
-            for tnum in range(self.inputs.num_modalities)
+            f'{cwd}/{prefix}template{tnum}.nii.gz' for tnum in range(self.inputs.num_modalities)
         ]
         outputs = self.output_spec().get()
         outputs['forward_transforms'] = forward_transforms

@@ -11,9 +11,9 @@ Resampling workflows
 from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
+from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 
 from ... import config
-from ...engine import Workflow
 from ...interfaces.ants import GetImageType
 from ...interfaces.fmap import ApplyScalingImages
 from ...interfaces.gradients import (  # LocalGradientRotation,

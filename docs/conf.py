@@ -22,7 +22,6 @@
 #        " for paragraphs
 import os
 import sys
-from datetime import datetime
 
 import qsiprep
 
@@ -88,7 +87,7 @@ master_doc = 'index'
 # General information about the project.
 project = 'qsiprep'
 author = 'qsiprep team'
-copyright = f'2021-{datetime.now().year}, {author}'
+copyright = f'2021-, {author}'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the

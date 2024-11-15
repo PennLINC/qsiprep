@@ -10,10 +10,10 @@ Head motion correction
 import nipype.pipeline.engine as pe
 from nipype.interfaces import afni, ants
 from nipype.interfaces import utility as niu
+from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from pkg_resources import resource_filename as pkgrf
 
 from ... import config
-from ...engine import Workflow
 from ...interfaces import DerivativesDataSink
 from ...interfaces.gradients import CombineMotions, GradientRotation, MatchTransforms
 from ...interfaces.shoreline import (

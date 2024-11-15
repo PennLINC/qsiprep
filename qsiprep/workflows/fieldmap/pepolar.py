@@ -12,11 +12,11 @@ import pkg_resources as pkgr
 from nipype.interfaces import afni, ants
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
+from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from niworkflows.interfaces.header import CopyHeader
 from niworkflows.interfaces.reportlets.registration import ANTSApplyTransformsRPT
 
 from ... import config
-from ...engine import Workflow
 from ...interfaces import StructuralReference
 from ...interfaces.fmap import B0RPEFieldmap, PEPOLARReport
 from ...interfaces.images import ExtractWM

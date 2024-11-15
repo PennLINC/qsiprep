@@ -10,10 +10,10 @@ import os
 
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
+from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from niworkflows.interfaces.reportlets.registration import SimpleBeforeAfterRPT
 
 from ... import config
-from ...engine import Workflow
 from ...interfaces import DerivativesDataSink
 from ...interfaces.bids import DerivativesSidecar
 from ...interfaces.dsi_studio import DSIStudioBTable

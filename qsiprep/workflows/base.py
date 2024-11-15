@@ -38,10 +38,10 @@ from copy import deepcopy
 from nilearn import __version__ as nilearn_ver
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
+from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from packaging.version import Version
 
 from .. import config
-from ..engine import Workflow
 from ..interfaces import (
     AboutSummary,
     BIDSDataGrabber,

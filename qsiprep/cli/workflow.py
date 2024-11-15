@@ -143,9 +143,7 @@ def build_boilerplate(config_file, workflow):
     config.load(config_file)
     logs_path = config.execution.output_dir / 'logs'
     boilerplate = workflow.visit_desc()
-    citation_files = {
-        ext: logs_path / f'CITATION.{ext}' for ext in ('bib', 'tex', 'md', 'html')
-    }
+    citation_files = {ext: logs_path / f'CITATION.{ext}' for ext in ('bib', 'tex', 'md', 'html')}
 
     if boilerplate:
         # To please git-annex users and also to guarantee consistency

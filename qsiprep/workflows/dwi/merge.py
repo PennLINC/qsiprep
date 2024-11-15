@@ -14,9 +14,9 @@ from bids.layout import Query
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from nipype.utils.filemanip import split_filename
+from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 
 from ... import config
-from ...engine import Workflow
 from ...interfaces import ConformDwi, DerivativesDataSink
 from ...interfaces.dipy import Patch2Self
 from ...interfaces.dwi_merge import MergeDWIs, PhaseToRad, StackConfounds

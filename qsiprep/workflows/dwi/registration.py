@@ -3,10 +3,10 @@
 from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
+from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from pkg_resources import resource_filename as pkgrf
 
 from ... import config
-from ...engine import Workflow
 from ...interfaces.itk import ACPCReport, AffineToRigid
 from ...interfaces.niworkflows import ANTSRegistrationRPT
 

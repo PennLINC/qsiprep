@@ -11,9 +11,9 @@ import logging
 
 import nipype.pipeline.engine as pe
 from nipype.interfaces import utility as niu
+from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 
 from ... import config
-from ...engine import Workflow
 from ...interfaces import DerivativesDataSink
 from ...interfaces.dsi_studio import DSIStudioBTable
 from ...interfaces.dwi_merge import AveragePEPairs, MergeDWIs

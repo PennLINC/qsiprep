@@ -11,9 +11,9 @@ import os
 from nipype.interfaces import utility as niu
 from nipype.interfaces.base import isdefined
 from nipype.pipeline import engine as pe
+from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 
 from ... import config
-from ...engine import Workflow
 from ...interfaces import DerivativesDataSink, DerivativesMaybeDataSink
 from ...interfaces.confounds import DMRISummary
 from ...interfaces.reports import DiffusionSummary

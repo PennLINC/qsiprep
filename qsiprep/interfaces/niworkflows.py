@@ -26,14 +26,8 @@ from nipype.interfaces.base import (
 )
 from nipype.interfaces.mixins import reporting
 from nipype.utils.filemanip import fname_presuffix
-from niworkflows.interfaces.norm import (
-    SpatialNormalization,
-    _SpatialNormalizationInputSpec,
-)
-from niworkflows.interfaces.reportlets.base import (
-    RegistrationRC,
-    _SVGReportCapableInputSpec,
-)
+from niworkflows.interfaces.norm import SpatialNormalization, _SpatialNormalizationInputSpec
+from niworkflows.interfaces.reportlets.base import RegistrationRC, _SVGReportCapableInputSpec
 from niworkflows.interfaces.reportlets.registration import (
     _ANTSRegistrationInputSpecRPT,
     _ANTSRegistrationOutputSpecRPT,

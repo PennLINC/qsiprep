@@ -11,11 +11,7 @@ from qsiprep.cli import run
 from qsiprep.cli.parser import parse_args
 from qsiprep.cli.workflow import build_boilerplate, build_workflow
 from qsiprep.reports.core import generate_reports
-from qsiprep.tests.utils import (
-    check_generated_files,
-    download_test_data,
-    get_test_data_path,
-)
+from qsiprep.tests.utils import check_generated_files, download_test_data, get_test_data_path
 from qsiprep.utils.bids import write_derivative_description
 
 nipype_config.enable_debug_mode()

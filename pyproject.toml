@@ -18,6 +18,7 @@ license = {file = "LICENSE"}
 requires-python = ">=3.10"
 dependencies = [
     'importlib_resources; python_version < "3.11"',
+    "acres",
     "dipy>=1.8.0,<1.9.0",
     "fury",
     "indexed_gzip <= 1.8.7",

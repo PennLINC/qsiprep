@@ -37,9 +37,9 @@ from nipype.interfaces.base import (
 from nipype.interfaces.image import Rescale
 from nipype.pipeline import engine as pe
 from nipype.utils.filemanip import fname_presuffix
+from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 
 from ... import config
-from ...engine import Workflow
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
