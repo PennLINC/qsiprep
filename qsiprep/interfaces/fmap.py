@@ -576,8 +576,8 @@ def _get_pe_index(meta):
     pe = meta['PhaseEncodingDirection']
     try:
         return {'i': 0, 'j': 1, 'k': 2}[pe[0]]
-    except KeyError:
-        raise RuntimeError('"%s" is an invalid PE string' % pe)
+    except KeyError as err:
+        raise RuntimeError(f'"{pe}" is an invalid PE string') from err
 
 
 def _torads(in_file, fmap_range=None, newpath=None):
@@ -1418,8 +1418,8 @@ def plot_pepolar(
         display.close()
 
         # Find and replace the figure_1 id.
-        xml_data = etree.fromstring(svg)
-        find_text = etree.ETXPath("//{%s}g[@id='figure_1']" % SVGNS)
+        xml_data = etree.fromstring(svg)  # noqa: S320
+        find_text = etree.ETXPath(f"//{{{SVGNS}}}g[@id='figure_1']")
         find_text(xml_data)[0].set('id', f'{div_id}-{mode}-{uuid4()}')
 
         svg_fig = SVGFigure()
@@ -1448,8 +1448,8 @@ def plot_pepolar(
         display.close()
 
         # Find and replace the figure_1 id.
-        xml_data = etree.fromstring(svg)
-        find_text = etree.ETXPath("//{%s}g[@id='figure_1']" % SVGNS)
+        xml_data = etree.fromstring(svg)  # noqa: S320
+        find_text = etree.ETXPath(f"//{{{SVGNS}}}g[@id='figure_1']")
         find_text(xml_data)[0].set('id', f'{div_id}-{mode}-{uuid4()}')
 
         svg_fig = SVGFigure()
@@ -1508,8 +1508,8 @@ def plot_fa_reg(
         display.close()
 
         # Find and replace the figure_1 id.
-        xml_data = etree.fromstring(svg)
-        find_text = etree.ETXPath("//{%s}g[@id='figure_1']" % SVGNS)
+        xml_data = etree.fromstring(svg)  # noqa: S320
+        find_text = etree.ETXPath(f"//{{{SVGNS}}}g[@id='figure_1']")
         find_text(xml_data)[0].set('id', f'{div_id}-{mode}-{uuid4()}')
 
         svg_fig = SVGFigure()

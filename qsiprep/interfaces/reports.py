@@ -178,19 +178,19 @@ class SubjectSummary(SummaryInterface):
                 n_outputs += 1
                 files_desc = []
                 files_desc.append(
-                    '\t\t\t<li>Scan group: %s (PE Dir %s)</li><ul>'
-                    % (output_fname, group_info['dwi_series_pedir'])
+                    f'\t\t\t<li>Scan group: {output_fname} '
+                    f'(PE Dir {group_info["dwi_series_pedir"]})</li><ul>'
                 )
                 files_desc.append('\t\t\t\t<li>DWI Files: </li>')
                 for dwi_file in group_info['dwi_series']:
-                    files_desc.append('\t\t\t\t\t<li> %s </li>' % dwi_file)
+                    files_desc.append(f'\t\t\t\t\t<li> {dwi_file} </li>')
                     n_dwis += 1
                 fieldmap_type = group_info['fieldmap_info']['suffix']
                 if fieldmap_type is not None:
-                    files_desc.append('\t\t\t\t<li>Fieldmap type: %s </li>' % fieldmap_type)
+                    files_desc.append(f'\t\t\t\t<li>Fieldmap type: {fieldmap_type} </li>')
 
                     for key, value in group_info['fieldmap_info'].items():
-                        files_desc.append('\t\t\t\t\t<li> %s: %s </li>' % (key, str(value)))
+                        files_desc.append(f'\t\t\t\t\t<li> {key}: {str(value)} </li>')
                         n_dwis += 1
                 files_desc.append('</ul>')
                 groupings += GROUPING_TEMPLATE.format(

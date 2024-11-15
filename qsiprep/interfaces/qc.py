@@ -146,12 +146,12 @@ def create_sprite_from_tiles(tile, out_file=None, as_bytes=False):
 
     if as_bytes:
         img = mplfig(mosaic, out_file, as_bytes=as_bytes)
-        return dict(img=img, N=N, M=M, pix=pix, num_slices=num_slices)
+        return {'img': img, 'N': N, 'M': M, 'pix': pix, 'num_slices': num_slices}
 
     if out_file:
         img = mplfig(mosaic, out_file), N, M, pix, num_slices
 
-    return dict(mosaic=mosaic, N=N, M=M, pix=pix, num_slices=num_slices)
+    return {'mosaic': mosaic, 'N': N, 'M': M, 'pix': pix, 'num_slices': num_slices}
 
 
 def createSprite4D(dwi_file):
@@ -212,11 +212,21 @@ def embed_tiles_in_json_sprite(tile_list, as_bytes=True, out_file=None):
 
     if as_bytes:
         img = mplfig(mosaic, out_file, as_bytes=as_bytes)
-        return dict(img=img, N=num_tile_rows, M=num_tile_cols, pix=tile_size, num_slices=num_tiles)
+        return {
+            'img': img,
+            'N': num_tile_rows,
+            'M': num_tile_cols,
+            'pix': tile_size,
+            'num_slices': num_tiles,
+        }
 
-    return dict(
-        mosaic=mosaic, N=num_tile_rows, M=num_tile_cols, pix=tile_size, num_slices=num_tiles
-    )
+    return {
+        'mosaic': mosaic,
+        'N': num_tile_rows,
+        'M': num_tile_cols,
+        'pix': tile_size,
+        'num_slices': num_tiles,
+    }
 
 
 def get_middle_slice_tiles(data, slice_direction):
@@ -269,8 +279,11 @@ def create_report_json(
     anat_mask_file,
     outlier_indices,
     eddy_qc_file,
-    outpath=op.abspath('./report.json'),
+    outpath=None,
 ):
+    if outpath is None:
+        outpath = op.abspath('./report.json')
+
     report = {}
     report['dwi_corrected'] = createSprite4D(dwi_corrected_file)
 

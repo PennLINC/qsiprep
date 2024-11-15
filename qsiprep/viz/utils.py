@@ -61,8 +61,8 @@ def plot_denoise(
         display.close()
 
         # Find and replace the figure_1 id.
-        xml_data = etree.fromstring(svg)
-        find_text = etree.ETXPath("//{%s}g[@id='figure_1']" % SVGNS)
+        xml_data = etree.fromstring(svg)  # noqa: S320
+        find_text = etree.ETXPath(f"//{{{SVGNS}}}g[@id='figure_1']")
         find_text(xml_data)[0].set('id', f'{div_id}-{mode}-{uuid4()}')
 
         svg_fig = SVGFigure()
@@ -91,8 +91,8 @@ def plot_denoise(
         display.close()
 
         # Find and replace the figure_1 id.
-        xml_data = etree.fromstring(svg)
-        find_text = etree.ETXPath("//{%s}g[@id='figure_1']" % SVGNS)
+        xml_data = etree.fromstring(svg)  # noqa: S320
+        find_text = etree.ETXPath(f"//{{{SVGNS}}}g[@id='figure_1']")
         find_text(xml_data)[0].set('id', f'{div_id}-{mode}-{uuid4()}')
 
         svg_fig = SVGFigure()
@@ -142,8 +142,8 @@ def plot_acpc(
         display.close()
 
         # Find and replace the figure_1 id.
-        xml_data = etree.fromstring(svg)
-        find_text = etree.ETXPath("//{%s}g[@id='figure_1']" % SVGNS)
+        xml_data = etree.fromstring(svg)  # noqa: S320
+        find_text = etree.ETXPath(f"//{{{SVGNS}}}g[@id='figure_1']")
         find_text(xml_data)[0].set('id', f'{div_id}-{mode}-{uuid4()}')
 
         svg_fig = SVGFigure()

@@ -468,7 +468,7 @@ def before_after_images(orig_file, aligned_file, model_file, imagenum):
 
 
 def _iteration_summary_plot(iters_df, out_file):
-    iters = list([item[1] for item in iters_df.groupby('iter_num')])
+    iters = [item[1] for item in iters_df.groupby('iter_num')]
     shift_cols = ['shiftX', 'shiftY', 'shiftZ']
     rotate_cols = ['rotateX', 'rotateY', 'rotateZ']
     shifts = np.stack([df[shift_cols] for df in iters], -1)

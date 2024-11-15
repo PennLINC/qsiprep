@@ -215,7 +215,7 @@ def run_imagemath(nii, op, args, copy_input_header=True, cwd=None):
     out_fname = tmpf_out.name + '.nii.gz'
     nii.to_filename(in_fname)
     imath_cmd = ['ImageMath', '3', out_fname, op, in_fname] + args
-    os.system(' '.join(imath_cmd))
+    os.system(' '.join(imath_cmd))  # noqa: S605
     new_img = load_img(out_fname)
     tmpf_in.close()
     tmpf_out.close()
@@ -244,7 +244,7 @@ def biascorrect(nii, copy_input_header=True, cwd=None):
         '4',
         out_bias_fname,
     ]
-    os.system(' '.join(cmd))
+    os.system(' '.join(cmd))  # noqa: S605
     new_img = load_img(out_fname)
     bias_img = load_img(out_bias_fname)
     tmpf_in.close()
