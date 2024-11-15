@@ -468,7 +468,7 @@ def scan_groups_to_sidecar(scan_groups):
 
     derivatives_metadata["SourceMetadata"] = scan_metadata
     derivatives_metadata = {**common_metadata, **derivatives_metadata}
-derivatives_metadata["Sources"] = sorted(scan_metadata.keys())
+    derivatives_metadata["Sources"] = sorted(scan_metadata.keys())
     return derivatives_metadata
 
 
