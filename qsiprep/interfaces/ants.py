@@ -120,14 +120,14 @@ class MultivariateTemplateConstruction2(ANTSCommand):
             if isinstance(input_image, list):
                 input_image = input_image[0]
             path, fname, ext = split_filename(input_image)
-            affine = '%s/%s%s%d0GenericAffine.mat' % (cwd, prefix, fname, num)
-            warp = '%s/%s%s%d1Warp.nii.gz' % (cwd, prefix, fname, num)
-            inv_warp = '%s/%s%s%d1InverseWarp.nii.gz' % (cwd, prefix, fname, num)
+            affine = f'{cwd}/{prefix}{fname}{num}0GenericAffine.mat'
+            warp = f'{cwd}/{prefix}{fname}{num}1Warp.nii.gz'
+            inv_warp = f'{cwd}/{prefix}{fname}{num}1InverseWarp.nii.gz'
             forward_transforms.append([affine, warp])
             reverse_transforms.append([inv_warp, affine])
 
         templates = [
-            '%s/%stemplate%s.nii.gz' % (cwd, prefix, tnum)
+            f'{cwd}/{prefix}template{tnum}.nii.gz'
             for tnum in range(self.inputs.num_modalities)
         ]
         outputs = self.output_spec().get()

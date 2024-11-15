@@ -144,7 +144,7 @@ def build_boilerplate(config_file, workflow):
     logs_path = config.execution.output_dir / 'logs'
     boilerplate = workflow.visit_desc()
     citation_files = {
-        ext: logs_path / ('CITATION.%s' % ext) for ext in ('bib', 'tex', 'md', 'html')
+        ext: logs_path / f'CITATION.{ext}' for ext in ('bib', 'tex', 'md', 'html')
     }
 
     if boilerplate:

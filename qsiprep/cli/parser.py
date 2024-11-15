@@ -211,9 +211,9 @@ def _build_parser(**kwargs):
         metavar='FILE',
         help='A JSON file describing custom BIDS input filters using PyBIDS. '
         'For further details, please check out '
-        'https://fmriprep.readthedocs.io/en/%s/faq.html#'
+        'https://fmriprep.readthedocs.io/en/'
+        f'{currentv.base_version if is_release else "latest"}/faq.html#'
         'how-do-I-select-only-certain-files-to-be-input-to-fMRIPrep'
-        % (currentv.base_version if is_release else 'latest'),
     )
     g_bids.add_argument(
         '--bids-database-dir',
@@ -710,12 +710,10 @@ def parse_args(args=None, namespace=None):
 
     # Ensure input and output folders are not the same
     if output_dir == bids_dir:
+        rec_path = output_dir / 'derivatives' / f"qsiprep-{version.split('+')[0]}"
         parser.error(
             'The selected output folder is the same as the input BIDS folder. '
-            'Please modify the output path (suggestion: %s).'
-            % bids_dir
-            / 'derivatives'
-            / ('qsiprep-%s' % version.split('+')[0])
+            f'Please modify the output path (suggestion: {rec_path}).'
         )
 
     if bids_dir in work_dir.parents:
@@ -755,7 +753,7 @@ def parse_args(args=None, namespace=None):
     if missing_subjects:
         parser.error(
             'One or more participant labels were not found in the BIDS directory: '
-            '%s.' % ', '.join(missing_subjects)
+            f"{', '.join(missing_subjects)}."
         )
 
     # Determine which sessions to process and group them

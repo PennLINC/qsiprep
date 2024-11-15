@@ -166,7 +166,7 @@ co-registration with the anatomical reference.
     # PEPOLAR path
     if fieldmap_info['suffix'] in ('epi', 'rpe_series', 'dwi'):
         outputnode.inputs.method = (
-            'PEB/PEPOLAR (phase-encoding based / PE-POLARity): %s' % fieldmap_info['suffix']
+            f'PEB/PEPOLAR (phase-encoding based / PE-POLARity): {fieldmap_info["suffix"]}'
         )
 
         epi_fmaps = fieldmap_info[fieldmap_info['suffix']]
@@ -189,7 +189,7 @@ co-registration with the anatomical reference.
 
     # FIELDMAP path
     if fieldmap_info['suffix'] == 'fieldmap' or fieldmap_info['suffix'].startswith('phase'):
-        outputnode.inputs.method = 'FMB (%s-based)' % fieldmap_info['suffix']
+        outputnode.inputs.method = f'FMB ({fieldmap_info["suffix"]}-based)'
         # Import specific workflows here, so we don't break everything with one
         # unused workflow.
         if fieldmap_info['suffix'] == 'fieldmap':

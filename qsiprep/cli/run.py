@@ -122,7 +122,7 @@ def main():
 
     config.loggers.workflow.log(
         15,
-        '\n'.join(['QSIPrep config:'] + ['\t\t%s' % s for s in config.dumps().splitlines()]),
+        '\n'.join(['QSIPrep config:'] + [f'\t\t{s}' for s in config.dumps().splitlines()]),
     )
     config.loggers.workflow.log(25, 'QSIPrep started!')
     errno = 1  # Default is error exit unless otherwise set

@@ -152,7 +152,7 @@ def init_drbuddi_wf(
     )
 
     outputnode.inputs.method = (
-        'PEB/PEPOLAR (phase-encoding based / PE-POLARity): %s' % fieldmap_info['suffix']
+        f'PEB/PEPOLAR (phase-encoding based / PE-POLARity): {fieldmap_info["suffix"]}'
     )
 
     gather_drbuddi_inputs = pe.Node(

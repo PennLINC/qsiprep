@@ -94,10 +94,10 @@ def check_generated_files(output_dir, output_list_file, optional_output_list_fil
     found_files = [os.path.relpath(f, output_dir) for f in found_files]
 
     # Ignore figures
-    found_files = sorted(list(set([f for f in found_files if 'figures' not in f])))
+    found_files = sorted(set([f for f in found_files if 'figures' not in f]))
 
     # Ignore logs
-    found_files = sorted(list(set([f for f in found_files if 'log' not in f.split(os.path.sep)])))
+    found_files = sorted(set([f for f in found_files if 'log' not in f.split(os.path.sep)]))
 
     with open(output_list_file) as fo:
         expected_files = fo.readlines()
@@ -110,8 +110,8 @@ def check_generated_files(output_dir, output_list_file, optional_output_list_fil
             optional_files = [f.rstrip() for f in optional_files]
 
     if sorted(found_files) != sorted(expected_files):
-        expected_not_found = sorted(list(set(expected_files) - set(found_files)))
-        found_not_expected = sorted(list(set(found_files) - set(expected_files)))
+        expected_not_found = sorted(set(expected_files) - set(found_files))
+        found_not_expected = sorted(set(found_files) - set(expected_files))
 
         msg = ''
         if expected_not_found:
@@ -143,7 +143,7 @@ def reorder_expected_outputs():
         with open(expected_output_file) as fo:
             file_contents = fo.readlines()
 
-        file_contents = sorted(list(set(file_contents)))
+        file_contents = sorted(set(file_contents))
 
         with open(expected_output_file, 'w') as fo:
             fo.writelines(file_contents)
