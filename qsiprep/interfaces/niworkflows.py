@@ -433,7 +433,7 @@ class RobustMNINormalizationRPT(RegistrationRC, SpatialNormalization):
     def _post_run_hook(self, runtime):
         # We need to dig into the internal ants.Registration interface
         self._fixed_image = self._get_ants_args()['fixed_image']
-        if isinstance(self._fixed_image, (list, tuple)):
+        if isinstance(self._fixed_image, list | tuple):
             self._fixed_image = self._fixed_image[0]  # get first item if list
 
         if self._get_ants_args().get('fixed_image_mask') is not None:

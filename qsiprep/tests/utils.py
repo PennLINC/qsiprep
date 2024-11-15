@@ -94,10 +94,10 @@ def check_generated_files(output_dir, output_list_file, optional_output_list_fil
     found_files = [os.path.relpath(f, output_dir) for f in found_files]
 
     # Ignore figures
-    found_files = sorted(set([f for f in found_files if 'figures' not in f]))
+    found_files = sorted(set(f for f in found_files if 'figures' not in f))
 
     # Ignore logs
-    found_files = sorted(set([f for f in found_files if 'log' not in f.split(os.path.sep)]))
+    found_files = sorted(set(f for f in found_files if 'log' not in f.split(os.path.sep)))
 
     with open(output_list_file) as fo:
         expected_files = fo.readlines()

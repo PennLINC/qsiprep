@@ -13,7 +13,7 @@ import re
 import time
 from collections import defaultdict
 
-import matplotlib
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import nibabel as nb
 import numpy as np
@@ -162,7 +162,7 @@ class SubjectSummary(SummaryInterface):
     def _run_interface(self, runtime):
         if isdefined(self.inputs.subject_id):
             self._results['subject_id'] = self.inputs.subject_id
-        return super(SubjectSummary, self)._run_interface(runtime)
+        return super()._run_interface(runtime)
 
     def _generate_segment(self):
         t2w_seg = ''
@@ -562,7 +562,7 @@ class SeriesQC(SimpleInterface):
 
 def _load_qc_file(fname, prefix=''):
     qc_data = pd.read_csv(fname).to_dict(orient='records')[0]
-    renamed = dict([(prefix + key, value) for key, value in qc_data.items()])
+    renamed = {prefix + key: value for key, value in qc_data.items()}
     return renamed
 
 
@@ -672,7 +672,7 @@ def calculate_motion_summary(confounds_tsv):
 
 
 def _filename_to_colors(labels_column, colormap='rainbow'):
-    cmap = matplotlib.cm.get_cmap(colormap)
+    cmap = mpl.cm.get_cmap(colormap)
     labels, _ = pd.factorize(labels_column)
     n_samples = labels.shape[0]
     max_label = labels.max()

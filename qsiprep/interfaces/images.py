@@ -167,7 +167,7 @@ class SplitDWIsFSL(SimpleInterface):
 def _flatten(in_list):
     out_list = []
     for item in in_list:
-        if isinstance(item, (list, tuple)):
+        if isinstance(item, list | tuple):
             out_list.extend(item)
         else:
             out_list.append(item)

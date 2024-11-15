@@ -79,10 +79,10 @@ class StructuralReference(fs.RobustTemplate):
     def cmdline(self):
         if self._num_vols() == 1:
             return 'echo Only one time point!'
-        return super(StructuralReference, self).cmdline
+        return super().cmdline
 
     def _list_outputs(self):
-        outputs = super(StructuralReference, self)._list_outputs()
+        outputs = super()._list_outputs()
         if self._num_vols() == 1:
             in_file = self.inputs.in_files[0]
             outputs['out_file'] = in_file
@@ -115,7 +115,7 @@ class MakeMidthickness(fs.MRIsExpand):
 
     @property
     def cmdline(self):
-        cmd = super(MakeMidthickness, self).cmdline
+        cmd = super().cmdline
         if not isdefined(self.inputs.graymid) or len(self.inputs.graymid) < 1:
             return cmd
 
@@ -250,7 +250,7 @@ class TruncateLTA:
                 with open(lta_file, 'w') as f:
                     f.write(''.join(newfile))
 
-        runtime = super(TruncateLTA, self)._post_run_hook(runtime)
+        runtime = super()._post_run_hook(runtime)
 
         return runtime
 
@@ -556,7 +556,7 @@ class SynthStrip(FSCommandOpenMP):
 class FixHeaderSynthStrip(SynthStrip):
     def _run_interface(self, runtime, correct_return_codes=(0,)):
         # Run normally
-        runtime = super(FixHeaderSynthStrip, self)._run_interface(runtime, correct_return_codes)
+        runtime = super()._run_interface(runtime, correct_return_codes)
 
         outputs = self._list_outputs()
         if not op.exists(outputs['out_brain']):

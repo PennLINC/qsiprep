@@ -95,7 +95,7 @@ class BIDSError(ValueError):
             message=message,
             footer=''.join(['-'] * len(header)),
         )
-        super(BIDSError, self).__init__(self.msg)
+        super().__init__(self.msg)
         self.bids_root = bids_root
 
 
@@ -183,7 +183,7 @@ def collect_participants(bids_dir, participant_label=None, strict=False, bids_va
         )
         if strict:
             raise exc
-        warnings.warn(exc.msg, BIDSWarning)
+        warnings.warn(exc.msg, BIDSWarning, stacklevel=2)
 
     return found_label
 
@@ -351,8 +351,8 @@ def validate_input_dir(exec_env, bids_dir, participant_label):
     }
     # Limit validation only to data from requested participants
     if participant_label:
-        all_subs = set([s.name[4:] for s in bids_dir.glob('sub-*')])
-        selected_subs = set([s[4:] if s.startswith('sub-') else s for s in participant_label])
+        all_subs = {s.name[4:] for s in bids_dir.glob('sub-*')}
+        selected_subs = {s[4:] if s.startswith('sub-') else s for s in participant_label}
         bad_labels = selected_subs.difference(all_subs)
         if bad_labels:
             error_msg = (
@@ -387,7 +387,7 @@ def validate_input_dir(exec_env, bids_dir, participant_label):
         ignored_subs = all_subs.difference(selected_subs)
         if ignored_subs:
             for sub in ignored_subs:
-                validator_config_dict['ignoredFiles'].append('/sub-%s/**' % sub)
+                validator_config_dict['ignoredFiles'].append(f'/sub-{sub}/**')
     with tempfile.NamedTemporaryFile('w+') as temp:
         temp.write(json.dumps(validator_config_dict))
         temp.flush()

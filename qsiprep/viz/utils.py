@@ -63,7 +63,7 @@ def plot_denoise(
         # Find and replace the figure_1 id.
         xml_data = etree.fromstring(svg)
         find_text = etree.ETXPath("//{%s}g[@id='figure_1']" % SVGNS)
-        find_text(xml_data)[0].set('id', '%s-%s-%s' % (div_id, mode, uuid4()))
+        find_text(xml_data)[0].set('id', f'{div_id}-{mode}-{uuid4()}')
 
         svg_fig = SVGFigure()
         svg_fig.root = xml_data
@@ -135,7 +135,7 @@ def plot_acpc(
 
         # Generate nilearn figure
         display = plot_anat(acpc_registered_img, **plot_params)
-        for coord, axis in display.axes.items():
+        for _coord, axis in display.axes.items():
             axis.ax.axvline(0, lw=1)
             axis.ax.axhline(0, lw=1)
         svg = extract_svg(display, compress=compress)

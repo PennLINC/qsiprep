@@ -301,7 +301,7 @@ def _list_squeeze(in_list):
         https://stackoverflow.com/questions/952914/how-do-i-make-a-flat-list-out-of-a-list-of-lists
         """
         for x in items:
-            if isinstance(x, Iterable) and not isinstance(x, (str, bytes, Path)):
+            if isinstance(x, Iterable) and not isinstance(x, str | bytes | Path):
                 for sub_x in flatten(x):
                     yield sub_x
             else:

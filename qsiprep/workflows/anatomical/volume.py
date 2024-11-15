@@ -642,7 +642,7 @@ A {contrast}-reference map was computed after registration of
     if num_images == 1:
 
         def _get_first(in_list):
-            if isinstance(in_list, (list, tuple)):
+            if isinstance(in_list, list | tuple):
                 return in_list[0]
             return in_list
 

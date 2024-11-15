@@ -116,7 +116,7 @@ class ConcatAffines(SimpleInterface):
     output_spec = ConcatAffinesOutputSpec
 
     def __init__(self, num_affines=0, *args, **kwargs):
-        super(ConcatAffines, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self._num_affines = num_affines
         trait_type = File(exists=True)
         if num_affines == 0:

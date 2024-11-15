@@ -24,7 +24,7 @@ def siemens2rads(in_file, out_file=None):
         fname, fext = op.splitext(op.basename(in_file))
         if fext == '.gz':
             fname, _ = op.splitext(fname)
-        out_file = op.abspath('./%s_rads.nii.gz' % fname)
+        out_file = op.abspath(f'./{fname}_rads.nii.gz')
 
     in_file = np.atleast_1d(in_file).tolist()
     im = nb.load(in_file[0])
@@ -60,7 +60,7 @@ def demean_image(in_file, in_mask=None, out_file=None):
         fname, fext = op.splitext(op.basename(in_file))
         if fext == '.gz':
             fname, _ = op.splitext(fname)
-        out_file = op.abspath('./%s_demean.nii.gz' % fname)
+        out_file = op.abspath(f'./{fname}_demean.nii.gz')
 
     im = nb.load(in_file)
     data = im.get_fdata().astype(np.float32)

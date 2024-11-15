@@ -13,7 +13,7 @@ def get_ijk(data, offset=0):
     """
     from numpy import mgrid
 
-    if not isinstance(offset, (list, tuple)):
+    if not isinstance(offset, list | tuple):
         offset = [offset] * 3
 
     grid = mgrid[

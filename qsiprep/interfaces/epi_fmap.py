@@ -368,7 +368,7 @@ def _get_bvals(bval_input):
 
 # In case of a 3d image
 def safe_get_3d_image(img_file, b0_index):
-    if isinstance(img_file, Path) or isinstance(img_file, str):
+    if isinstance(img_file, Path | str):
         _img = nb.load(img_file)
     else:
         _img = img_file
