@@ -96,14 +96,14 @@ from multiprocessing import set_start_method
 from templateflow.conf import TF_LAYOUT
 
 # Disable NiPype etelemetry always
-_disable_et = bool(os.getenv("NO_ET") is not None or os.getenv("NIPYPE_NO_ET") is not None)
-os.environ["NIPYPE_NO_ET"] = "1"
-os.environ["NO_ET"] = "1"
+_disable_et = bool(os.getenv('NO_ET') is not None or os.getenv('NIPYPE_NO_ET') is not None)
+os.environ['NIPYPE_NO_ET'] = '1'
+os.environ['NO_ET'] = '1'
 
-CONFIG_FILENAME = "qsiprep.toml"
+CONFIG_FILENAME = 'qsiprep.toml'
 
 try:
-    set_start_method("forkserver")
+    set_start_method('forkserver')
 except RuntimeError:
     pass  # context has been already set
 finally:
@@ -120,28 +120,28 @@ finally:
 
     from . import __version__
 
-if not hasattr(sys, "_is_pytest_session"):
+if not hasattr(sys, '_is_pytest_session'):
     sys._is_pytest_session = False  # Trick to avoid sklearn's FutureWarnings
 # Disable all warnings in main and children processes only on production versions
 if not any(
     (
-        "+" in __version__,
-        __version__.endswith(".dirty"),
-        os.getenv("QSIPREP_DEV", "0").lower() in ("1", "on", "true", "y", "yes"),
+        '+' in __version__,
+        __version__.endswith('.dirty'),
+        os.getenv('QSIPREP_DEV', '0').lower() in ('1', 'on', 'true', 'y', 'yes'),
     )
 ):
     from ._warnings import logging
 
-    os.environ["PYTHONWARNINGS"] = "ignore"
-elif os.getenv("QSIPREP_WARNINGS", "0").lower() in ("1", "on", "true", "y", "yes"):
+    os.environ['PYTHONWARNINGS'] = 'ignore'
+elif os.getenv('QSIPREP_WARNINGS', '0').lower() in ('1', 'on', 'true', 'y', 'yes'):
     # allow disabling warnings on development versions
     # https://github.com/nipreps/fmriprep/pull/2080#discussion_r409118765
     from ._warnings import logging
 else:
     import logging
 
-logging.addLevelName(25, "IMPORTANT")  # Add a new level between INFO and WARNING
-logging.addLevelName(15, "VERBOSE")  # Add a new level between INFO and DEBUG
+logging.addLevelName(25, 'IMPORTANT')  # Add a new level between INFO and WARNING
+logging.addLevelName(15, 'VERBOSE')  # Add a new level between INFO and DEBUG
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
@@ -155,28 +155,28 @@ if not _disable_et:
     from requests import get as _get_url
 
     with suppress((ConnectionError, ReadTimeout)):
-        _get_url("https://rig.mit.edu/et/projects/nipy/nipype", timeout=0.05)
+        _get_url('https://rig.mit.edu/et/projects/nipy/nipype', timeout=0.05)
 
 # Execution environment
 _exec_env = os.name
 _docker_ver = None
 # special variable set in the container
-if os.getenv("IS_DOCKER_8395080871"):
-    _exec_env = "apptainer"
-    _cgroup = Path("/proc/1/cgroup")
-    if _cgroup.exists() and "docker" in _cgroup.read_text():
-        _exec_env = "docker"
+if os.getenv('IS_DOCKER_8395080871'):
+    _exec_env = 'apptainer'
+    _cgroup = Path('/proc/1/cgroup')
+    if _cgroup.exists() and 'docker' in _cgroup.read_text():
+        _exec_env = 'docker'
     del _cgroup
 
-_fs_license = os.getenv("FS_LICENSE")
-if not _fs_license and os.getenv("FREESURFER_HOME"):
-    _fs_home = os.getenv("FREESURFER_HOME")
-    if _fs_home and (Path(_fs_home) / "license.txt").is_file():
-        _fs_license = str(Path(_fs_home) / "license.txt")
+_fs_license = os.getenv('FS_LICENSE')
+if not _fs_license and os.getenv('FREESURFER_HOME'):
+    _fs_home = os.getenv('FREESURFER_HOME')
+    if _fs_home and (Path(_fs_home) / 'license.txt').is_file():
+        _fs_license = str(Path(_fs_home) / 'license.txt')
     del _fs_home
 
 _templateflow_home = Path(
-    os.getenv("TEMPLATEFLOW_HOME", os.path.join(os.getenv("HOME"), ".cache", "templateflow"))
+    os.getenv('TEMPLATEFLOW_HOME', os.path.join(os.getenv('HOME'), '.cache', 'templateflow'))
 )
 
 try:
@@ -186,28 +186,28 @@ try:
 except ImportError:
     _free_mem_at_start = None
 
-_oc_limit = "n/a"
-_oc_policy = "n/a"
+_oc_limit = 'n/a'
+_oc_policy = 'n/a'
 try:
     # Memory policy may have a large effect on types of errors experienced
-    _proc_oc_path = Path("/proc/sys/vm/overcommit_memory")
+    _proc_oc_path = Path('/proc/sys/vm/overcommit_memory')
     if _proc_oc_path.exists():
-        _oc_policy = {"0": "heuristic", "1": "always", "2": "never"}.get(
-            _proc_oc_path.read_text().strip(), "unknown"
+        _oc_policy = {'0': 'heuristic', '1': 'always', '2': 'never'}.get(
+            _proc_oc_path.read_text().strip(), 'unknown'
         )
-        if _oc_policy != "never":
-            _proc_oc_kbytes = Path("/proc/sys/vm/overcommit_kbytes")
+        if _oc_policy != 'never':
+            _proc_oc_kbytes = Path('/proc/sys/vm/overcommit_kbytes')
             if _proc_oc_kbytes.exists():
                 _oc_limit = _proc_oc_kbytes.read_text().strip()
-            if _oc_limit in ("0", "n/a") and Path("/proc/sys/vm/overcommit_ratio").exists():
-                _oc_limit = "{}%".format(Path("/proc/sys/vm/overcommit_ratio").read_text().strip())
+            if _oc_limit in ('0', 'n/a') and Path('/proc/sys/vm/overcommit_ratio').exists():
+                _oc_limit = '{}%'.format(Path('/proc/sys/vm/overcommit_ratio').read_text().strip())
 except Exception:  # noqa: S110, BLE001
     pass
 
 
 # Debug modes are names that influence the exposure of internal details to
 # the user, either through additional derivatives or increased verbosity
-DEBUG_MODES = ("fieldmaps", "pdb")
+DEBUG_MODES = ('fieldmaps', 'pdb')
 
 
 class _Config:
@@ -217,7 +217,7 @@ class _Config:
 
     def __init__(self):
         """Avert instantiation."""
-        raise RuntimeError("Configuration type is not instantiable.")
+        raise RuntimeError('Configuration type is not instantiable.')
 
     @classmethod
     def load(cls, settings, init=True, ignore=None):
@@ -234,12 +234,12 @@ class _Config:
                 else:
                     setattr(cls, k, Path(v).absolute())
             elif hasattr(cls, k):
-                if k == "processing_list":
+                if k == 'processing_list':
                     new_v = []
                     for el in v:
-                        sub, ses_list = el.split(":")
+                        sub, ses_list = el.split(':')
                         if ses_list:
-                            new_v.append((sub, [ses for ses in ses_list.split(",")]))
+                            new_v.append((sub, [ses for ses in ses_list.split(',')]))
                         else:
                             new_v.append((sub, []))
                     setattr(cls, k, new_v)
@@ -259,7 +259,7 @@ class _Config:
 
         out = {}
         for k, v in cls.__dict__.items():
-            if k.startswith("_") or v is None:
+            if k.startswith('_') or v is None:
                 continue
             if callable(getattr(cls, k)):
                 continue
@@ -271,7 +271,7 @@ class _Config:
                 else:
                     v = str(v)
             if isinstance(v, SpatialReferences):
-                v = " ".join(str(s) for s in v.references) or None
+                v = ' '.join(str(s) for s in v.references) or None
             if isinstance(v, Reference):
                 v = str(v) or None
             out[k] = v
@@ -315,7 +315,7 @@ class environment(_Config):
 class nipype(_Config):
     """Nipype settings."""
 
-    crashfile_format = "txt"
+    crashfile_format = 'txt'
     """The file format for crashfiles, either text (txt) or pickle (pklz)."""
     get_linked_libs = False
     """Run NiPype's tool to enlist linked libraries for every interface."""
@@ -325,11 +325,11 @@ class nipype(_Config):
     """Number of processes (compute tasks) that can be run in parallel (multiprocessing only)."""
     omp_nthreads = None
     """Number of CPUs a single process can access for multithreaded execution."""
-    plugin = "MultiProc"
+    plugin = 'MultiProc'
     """NiPype's execution plugin."""
     plugin_args = {
-        "maxtasksperchild": 1,
-        "raise_insufficient": False,
+        'maxtasksperchild': 1,
+        'raise_insufficient': False,
     }
     """Settings for NiPype's execution plugin."""
     remove_unnecessary_outputs = True
@@ -343,13 +343,13 @@ class nipype(_Config):
     def get_plugin(cls):
         """Format a dictionary for Nipype consumption."""
         out = {
-            "plugin": cls.plugin,
-            "plugin_args": cls.plugin_args,
+            'plugin': cls.plugin,
+            'plugin_args': cls.plugin_args,
         }
-        if cls.plugin in ("MultiProc", "LegacyMultiProc"):
-            out["plugin_args"]["n_procs"] = int(cls.nprocs)
+        if cls.plugin in ('MultiProc', 'LegacyMultiProc'):
+            out['plugin_args']['n_procs'] = int(cls.nprocs)
             if cls.memory_gb:
-                out["plugin_args"]["memory_gb"] = float(cls.memory_gb)
+                out['plugin_args']['memory_gb'] = float(cls.memory_gb)
         return out
 
     @classmethod
@@ -361,10 +361,10 @@ class nipype(_Config):
         if cls.resource_monitor:
             ncfg.update_config(
                 {
-                    "monitoring": {
-                        "enabled": cls.resource_monitor,
-                        "sample_frequency": "0.5",
-                        "summary_append": True,
+                    'monitoring': {
+                        'enabled': cls.resource_monitor,
+                        'sample_frequency': '0.5',
+                        'summary_append': True,
                     }
                 }
             )
@@ -373,13 +373,13 @@ class nipype(_Config):
         # Nipype config (logs and execution)
         ncfg.update_config(
             {
-                "execution": {
-                    "crashdump_dir": str(execution.log_dir),
-                    "crashfile_format": cls.crashfile_format,
-                    "get_linked_libs": cls.get_linked_libs,
-                    "remove_unnecessary_outputs": cls.remove_unnecessary_outputs,
-                    "stop_on_first_crash": cls.stop_on_first_crash,
-                    "check_version": False,  # disable future telemetry
+                'execution': {
+                    'crashdump_dir': str(execution.log_dir),
+                    'crashfile_format': cls.crashfile_format,
+                    'get_linked_libs': cls.get_linked_libs,
+                    'remove_unnecessary_outputs': cls.remove_unnecessary_outputs,
+                    'stop_on_first_crash': cls.stop_on_first_crash,
+                    'check_version': False,  # disable future telemetry
                 }
             }
         )
@@ -440,7 +440,7 @@ class execution(_Config):
     """Should we skip normalizing the anatomical data to a template?"""
     templateflow_home = _templateflow_home
     """The root folder of the TemplateFlow client."""
-    work_dir = Path("work").absolute()
+    work_dir = Path('work').absolute()
     """Path to a working directory where intermediate results will be available."""
     write_graph = False
     """Write out the computational graph corresponding to the planned preprocessing."""
@@ -450,15 +450,15 @@ class execution(_Config):
     _layout = None
 
     _paths = (
-        "bids_dir",
-        "bids_database_dir",
-        "dataset_links",
-        "eddy_config",
-        "layout",
-        "log_dir",
-        "output_dir",
-        "templateflow_home",
-        "work_dir",
+        'bids_dir',
+        'bids_database_dir',
+        'dataset_links',
+        'eddy_config',
+        'layout',
+        'log_dir',
+        'output_dir',
+        'templateflow_home',
+        'work_dir',
     )
 
     @classmethod
@@ -470,23 +470,23 @@ class execution(_Config):
             from bids.layout import BIDSLayout
             from bids.layout.index import BIDSLayoutIndexer
 
-            _db_path = cls.bids_database_dir or (cls.work_dir / cls.run_uuid / "bids_db")
+            _db_path = cls.bids_database_dir or (cls.work_dir / cls.run_uuid / 'bids_db')
             _db_path.mkdir(exist_ok=True, parents=True)
 
             # Recommended after PyBIDS 12.1
             ignore_patterns = [
-                "code",
-                "stimuli",
-                "sourcedata",
-                "models",
-                re.compile(r"\/\.\w+|^\.\w+"),  # hidden files
-                re.compile(r"sub-[a-zA-Z0-9]+(/ses-[a-zA-Z0-9]+)?/(beh|func|eeg|ieeg|meg|perf)"),
+                'code',
+                'stimuli',
+                'sourcedata',
+                'models',
+                re.compile(r'\/\.\w+|^\.\w+'),  # hidden files
+                re.compile(r'sub-[a-zA-Z0-9]+(/ses-[a-zA-Z0-9]+)?/(beh|func|eeg|ieeg|meg|perf)'),
             ]
             if cls.participant_label and cls.bids_database_dir is None:
                 # Ignore any subjects who aren't the requested ones.
                 # This is only done if the database is written out to a run-specific folder.
                 ignore_patterns.append(
-                    re.compile(r"sub-(?!(" + "|".join(cls.participant_label) + r")(\b|_))")
+                    re.compile(r'sub-(?!(' + '|'.join(cls.participant_label) + r')(\b|_))')
                 )
 
             _indexer = BIDSLayoutIndexer(
@@ -511,7 +511,7 @@ class execution(_Config):
                 else:
                     return (
                         getattr(Query, value[7:-4])
-                        if not isinstance(value, Query) and "Query" in value
+                        if not isinstance(value, Query) and 'Query' in value
                         else value
                     )
 
@@ -521,14 +521,14 @@ class execution(_Config):
                     cls.bids_filters[acq][k] = _process_value(v)
 
         dataset_links = {
-            "raw": cls.bids_dir,
-            "templateflow": Path(TF_LAYOUT.root),
+            'raw': cls.bids_dir,
+            'templateflow': Path(TF_LAYOUT.root),
         }
         for deriv_name, deriv_path in cls.derivatives.items():
             dataset_links[deriv_name] = deriv_path
         cls.dataset_links = dataset_links
 
-        if "all" in cls.debug:
+        if 'all' in cls.debug:
             cls.debug = list(DEBUG_MODES)
 
 
@@ -621,18 +621,18 @@ class workflow(_Config):
 class loggers:
     """Keep loggers easily accessible (see :py:func:`init`)."""
 
-    _fmt = "%(asctime)s,%(msecs)d %(name)-2s %(levelname)-2s:\n\t %(message)s"
-    _datefmt = "%y%m%d-%H:%M:%S"
+    _fmt = '%(asctime)s,%(msecs)d %(name)-2s %(levelname)-2s:\n\t %(message)s'
+    _datefmt = '%y%m%d-%H:%M:%S'
 
     default = logging.getLogger()
     """The root logger."""
-    cli = logging.getLogger("cli")
+    cli = logging.getLogger('cli')
     """Command-line interface logging."""
-    workflow = logging.getLogger("nipype.workflow")
+    workflow = logging.getLogger('nipype.workflow')
     """NiPype's workflow logger."""
-    interface = logging.getLogger("nipype.interface")
+    interface = logging.getLogger('nipype.interface')
     """NiPype's interface logger."""
-    utils = logging.getLogger("nipype.utils")
+    utils = logging.getLogger('nipype.utils')
     """NiPype's utils logger."""
 
     @classmethod
@@ -657,7 +657,7 @@ class loggers:
         cls.workflow.setLevel(execution.log_level)
         cls.utils.setLevel(execution.log_level)
         ncfg.update_config(
-            {"logging": {"log_directory": str(execution.log_dir), "log_to_file": True}}
+            {'logging': {'log_directory': str(execution.log_dir), 'log_to_file': True}}
         )
 
 
@@ -687,7 +687,7 @@ class seeds(_Config):
 def _set_ants_seed():
     """Fix random seed for antsRegistration, antsAI, antsMotionCorr"""
     val = random.randint(1, 65536)
-    os.environ["ANTS_RANDOM_SEED"] = str(val)
+    os.environ['ANTS_RANDOM_SEED'] = str(val)
     return val
 
 
@@ -717,10 +717,10 @@ def from_dict(settings, init=True, ignore=None):
     def initialize(x):
         return init if init in (True, False) else x in init
 
-    nipype.load(settings, init=initialize("nipype"), ignore=ignore)
-    execution.load(settings, init=initialize("execution"), ignore=ignore)
-    workflow.load(settings, init=initialize("workflow"), ignore=ignore)
-    seeds.load(settings, init=initialize("seeds"), ignore=ignore)
+    nipype.load(settings, init=initialize('nipype'), ignore=ignore)
+    execution.load(settings, init=initialize('execution'), ignore=ignore)
+    workflow.load(settings, init=initialize('workflow'), ignore=ignore)
+    seeds.load(settings, init=initialize('seeds'), ignore=ignore)
 
     loggers.init()
 
@@ -748,7 +748,7 @@ def load(filename, skip=None, init=True):
     filename = Path(filename)
     settings = loads(filename.read_text())
     for sectionname, configs in settings.items():
-        if sectionname != "environment":
+        if sectionname != 'environment':
             section = getattr(sys.modules[__name__], sectionname)
             ignore = skip.get(sectionname)
             section.load(configs, ignore=ignore, init=initialize(sectionname))
@@ -758,22 +758,22 @@ def load(filename, skip=None, init=True):
 def get(flat=False):
     """Get config as a dict."""
     settings = {
-        "environment": environment.get(),
-        "execution": execution.get(),
-        "workflow": workflow.get(),
-        "nipype": nipype.get(),
-        "seeds": seeds.get(),
+        'environment': environment.get(),
+        'execution': execution.get(),
+        'workflow': workflow.get(),
+        'nipype': nipype.get(),
+        'seeds': seeds.get(),
     }
-    if "processing_list" in settings["execution"]:
-        settings["execution"]["processing_list"] = [
-            f"{el[0]}:{','.join(el[1])}" for el in settings["execution"]["processing_list"]
+    if 'processing_list' in settings['execution']:
+        settings['execution']['processing_list'] = [
+            f"{el[0]}:{','.join(el[1])}" for el in settings['execution']['processing_list']
         ]
 
     if not flat:
         return settings
 
     return {
-        ".".join((section, k)): v
+        '.'.join((section, k)): v
         for section, configs in settings.items()
         for k, v in configs.items()
     }
@@ -800,15 +800,15 @@ def init_spaces(checkpoint=True):
     spaces = SpatialReferences()
     if not isinstance(spaces, SpatialReferences):
         spaces = SpatialReferences(
-            [ref for s in spaces.split(" ") for ref in Reference.from_string(s)]
+            [ref for s in spaces.split(' ') for ref in Reference.from_string(s)]
         )
 
     if checkpoint and not spaces.is_cached():
         spaces.checkpoint()
 
     # Add the default standard space if not already present (required by several sub-workflows)
-    if "MNI152NLin2009cAsym" not in spaces.get_spaces(nonstandard=False, dim=(3,)):
-        spaces.add(Reference("MNI152NLin2009cAsym", {}))
+    if 'MNI152NLin2009cAsym' not in spaces.get_spaces(nonstandard=False, dim=(3,)):
+        spaces.add(Reference('MNI152NLin2009cAsym', {}))
 
     # Make the SpatialReferences object available
     workflow.spaces = spaces

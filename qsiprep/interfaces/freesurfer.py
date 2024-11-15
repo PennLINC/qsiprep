@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 """
@@ -19,6 +18,7 @@ Disable warnings:
     >>> logging.getLogger('nipype.interface').setLevel('ERROR')
 
 """
+
 import os.path as op
 from pathlib import Path
 
@@ -47,7 +47,7 @@ from skimage import morphology as sim
 
 
 class FSTraitedSpecOpenMP(FSTraitedSpec):
-    num_threads = traits.Int(desc="allows for specifying more threads", nohash=True)
+    num_threads = traits.Int(desc='allows for specifying more threads', nohash=True)
 
 
 class StructuralReference(fs.RobustTemplate):
@@ -79,18 +79,18 @@ class StructuralReference(fs.RobustTemplate):
     @property
     def cmdline(self):
         if self._num_vols() == 1:
-            return "echo Only one time point!"
+            return 'echo Only one time point!'
         return super(StructuralReference, self).cmdline
 
     def _list_outputs(self):
         outputs = super(StructuralReference, self)._list_outputs()
         if self._num_vols() == 1:
             in_file = self.inputs.in_files[0]
-            outputs["out_file"] = in_file
-            if isdefined(outputs["transform_outputs"]):
-                transform_file = outputs["transform_outputs"][0]
+            outputs['out_file'] = in_file
+            if isdefined(outputs['transform_outputs']):
+                transform_file = outputs['transform_outputs'][0]
                 fs.utils.LTAConvert(
-                    in_lta="identity.nofile",
+                    in_lta='identity.nofile',
                     source_file=in_file,
                     target_file=in_file,
                     out_lta=transform_file,
@@ -99,7 +99,7 @@ class StructuralReference(fs.RobustTemplate):
 
 
 class MakeMidthicknessInputSpec(fs.utils.MRIsExpandInputSpec):
-    graymid = InputMultiPath(desc="Existing graymid/midthickness file")
+    graymid = InputMultiPath(desc='Existing graymid/midthickness file')
 
 
 class MakeMidthickness(fs.MRIsExpand):
@@ -125,8 +125,8 @@ class MakeMidthickness(fs.MRIsExpand):
         # as input
         source = None
         in_base = op.basename(self.inputs.in_file)
-        mt = self._associated_file(in_base, "midthickness")
-        gm = self._associated_file(in_base, "graymid")
+        mt = self._associated_file(in_base, 'midthickness')
+        gm = self._associated_file(in_base, 'graymid')
 
         for surf in self.inputs.graymid:
             if op.basename(surf) == mt:
@@ -138,18 +138,18 @@ class MakeMidthickness(fs.MRIsExpand):
         if source is None:
             return cmd
 
-        return "cp {} {}".format(source, self._list_outputs()["out_file"])
+        return 'cp {} {}'.format(source, self._list_outputs()['out_file'])
 
 
 class FSInjectBrainExtractedInputSpec(BaseInterfaceInputSpec):
-    subjects_dir = Directory(mandatory=True, desc="FreeSurfer SUBJECTS_DIR")
-    subject_id = traits.Str(mandatory=True, desc="Subject ID")
-    in_brain = File(mandatory=True, exists=True, desc="input file, part of a BIDS tree")
+    subjects_dir = Directory(mandatory=True, desc='FreeSurfer SUBJECTS_DIR')
+    subject_id = traits.Str(mandatory=True, desc='Subject ID')
+    in_brain = File(mandatory=True, exists=True, desc='input file, part of a BIDS tree')
 
 
 class FSInjectBrainExtractedOutputSpec(TraitedSpec):
-    subjects_dir = Directory(desc="FreeSurfer SUBJECTS_DIR")
-    subject_id = traits.Str(desc="Subject ID")
+    subjects_dir = Directory(desc='FreeSurfer SUBJECTS_DIR')
+    subject_id = traits.Str(desc='Subject ID')
 
 
 class FSInjectBrainExtracted(SimpleInterface):
@@ -161,27 +161,27 @@ class FSInjectBrainExtracted(SimpleInterface):
         subjects_dir, subject_id = inject_skullstripped(
             self.inputs.subjects_dir, self.inputs.subject_id, self.inputs.in_brain
         )
-        self._results["subjects_dir"] = subjects_dir
-        self._results["subject_id"] = subject_id
+        self._results['subjects_dir'] = subjects_dir
+        self._results['subject_id'] = subject_id
         return runtime
 
 
 class FSDetectInputsInputSpec(BaseInterfaceInputSpec):
     t1w_list = InputMultiPath(
-        File(exists=True), mandatory=True, desc="input file, part of a BIDS tree"
+        File(exists=True), mandatory=True, desc='input file, part of a BIDS tree'
     )
-    t2w_list = InputMultiPath(File(exists=True), desc="input file, part of a BIDS tree")
-    flair_list = InputMultiPath(File(exists=True), desc="input file, part of a BIDS tree")
-    hires_enabled = traits.Bool(True, usedefault=True, desc="enable hi-resolution processing")
+    t2w_list = InputMultiPath(File(exists=True), desc='input file, part of a BIDS tree')
+    flair_list = InputMultiPath(File(exists=True), desc='input file, part of a BIDS tree')
+    hires_enabled = traits.Bool(True, usedefault=True, desc='enable hi-resolution processing')
 
 
 class FSDetectInputsOutputSpec(TraitedSpec):
-    t2w = File(desc="reference T2w image")
-    use_t2w = traits.Bool(desc="enable use of T2w downstream computation")
-    flair = File(desc="reference FLAIR image")
-    use_flair = traits.Bool(desc="enable use of FLAIR downstream computation")
-    hires = traits.Bool(desc="enable hi-res processing")
-    mris_inflate = traits.Str(desc="mris_inflate argument")
+    t2w = File(desc='reference T2w image')
+    use_t2w = traits.Bool(desc='enable use of T2w downstream computation')
+    flair = File(desc='reference FLAIR image')
+    use_flair = traits.Bool(desc='enable use of FLAIR downstream computation')
+    hires = traits.Bool(desc='enable hi-res processing')
+    mris_inflate = traits.Str(desc='mris_inflate argument')
 
 
 class FSDetectInputs(SimpleInterface):
@@ -189,28 +189,28 @@ class FSDetectInputs(SimpleInterface):
     output_spec = FSDetectInputsOutputSpec
 
     def _run_interface(self, runtime):
-        t2w, flair, self._results["hires"], mris_inflate = detect_inputs(
+        t2w, flair, self._results['hires'], mris_inflate = detect_inputs(
             self.inputs.t1w_list,
             t2w_list=self.inputs.t2w_list if isdefined(self.inputs.t2w_list) else None,
             flair_list=self.inputs.flair_list if isdefined(self.inputs.flair_list) else None,
             hires_enabled=self.inputs.hires_enabled,
         )
 
-        self._results["use_t2w"] = t2w is not None
-        if self._results["use_t2w"]:
-            self._results["t2w"] = t2w
+        self._results['use_t2w'] = t2w is not None
+        if self._results['use_t2w']:
+            self._results['t2w'] = t2w
 
-        self._results["use_flair"] = flair is not None
-        if self._results["use_flair"]:
-            self._results["flair"] = flair
+        self._results['use_flair'] = flair is not None
+        if self._results['use_flair']:
+            self._results['flair'] = flair
 
-        if self._results["hires"]:
-            self._results["mris_inflate"] = mris_inflate
+        if self._results['hires']:
+            self._results['mris_inflate'] = mris_inflate
 
         return runtime
 
 
-class TruncateLTA(object):
+class TruncateLTA:
     """Mixin to ensure that LTA files do not store overly long paths,
     which lead to segmentation faults when read by FreeSurfer tools.
 
@@ -224,10 +224,9 @@ class TruncateLTA(object):
     """
 
     # Use a tuple in case some object produces multiple transforms
-    lta_outputs = ("out_lta_file",)
+    lta_outputs = ('out_lta_file',)
 
     def _post_run_hook(self, runtime):
-
         outputs = self._list_outputs()
 
         for lta_name in self.lta_outputs:
@@ -235,22 +234,22 @@ class TruncateLTA(object):
             if not isdefined(lta_file):
                 continue
 
-            with open(lta_file, "r") as f:
+            with open(lta_file) as f:
                 lines = f.readlines()
 
             fixed = False
             newfile = []
 
             for line in lines:
-                if line.startswith("filename = ") and len(line.strip("\n")) >= 255:
+                if line.startswith('filename = ') and len(line.strip('\n')) >= 255:
                     fixed = True
-                    newfile.append("filename = path_too_long\n")
+                    newfile.append('filename = path_too_long\n')
                 else:
                     newfile.append(line)
 
             if fixed:
-                with open(lta_file, "w") as f:
-                    f.write("".join(newfile))
+                with open(lta_file, 'w') as f:
+                    f.write(''.join(newfile))
 
         runtime = super(TruncateLTA, self)._post_run_hook(runtime)
 
@@ -263,21 +262,21 @@ class PatchedLTAConvert(TruncateLTA, LTAConvert):
     truncate filename through mixin TruncateLTA
     """
 
-    lta_outputs = ("out_lta",)
+    lta_outputs = ('out_lta',)
 
 
 class RefineBrainMaskInputSpec(BaseInterfaceInputSpec):
-    in_anat = File(exists=True, mandatory=True, desc="input anatomical reference (INU corrected)")
-    in_aseg = File(exists=True, mandatory=True, desc="input ``aseg`` file, in NifTi format.")
+    in_anat = File(exists=True, mandatory=True, desc='input anatomical reference (INU corrected)')
+    in_aseg = File(exists=True, mandatory=True, desc='input ``aseg`` file, in NifTi format.')
     in_ants = File(
         exists=True,
         mandatory=True,
-        desc="brain tissue segmentation generated with antsBrainExtraction.sh",
+        desc='brain tissue segmentation generated with antsBrainExtraction.sh',
     )
 
 
 class RefineBrainMaskOutputSpec(TraitedSpec):
-    out_file = File(exists=True, desc="new mask")
+    out_file = File(exists=True, desc='new mask')
 
 
 class RefineBrainMask(SimpleInterface):
@@ -291,9 +290,8 @@ class RefineBrainMask(SimpleInterface):
     output_spec = RefineBrainMaskOutputSpec
 
     def _run_interface(self, runtime):
-
-        self._results["out_file"] = fname_presuffix(
-            self.inputs.in_anat, suffix="_rbrainmask", newpath=runtime.cwd
+        self._results['out_file'] = fname_presuffix(
+            self.inputs.in_anat, suffix='_rbrainmask', newpath=runtime.cwd
         )
 
         anatnii = nb.load(self.inputs.in_anat)
@@ -307,22 +305,22 @@ class RefineBrainMask(SimpleInterface):
             anatnii.header,
         )
         msknii.set_data_dtype(np.uint8)
-        msknii.to_filename(self._results["out_file"])
+        msknii.to_filename(self._results['out_file'])
 
         return runtime
 
 
 def inject_skullstripped(subjects_dir, subject_id, skullstripped):
-    mridir = op.join(subjects_dir, subject_id, "mri")
-    t1 = op.join(mridir, "T1.mgz")
-    bm_auto = op.join(mridir, "brainmask.auto.mgz")
-    bm = op.join(mridir, "brainmask.mgz")
+    mridir = op.join(subjects_dir, subject_id, 'mri')
+    t1 = op.join(mridir, 'T1.mgz')
+    bm_auto = op.join(mridir, 'brainmask.auto.mgz')
+    bm = op.join(mridir, 'brainmask.mgz')
 
     if not op.exists(bm_auto):
         img = nb.load(t1)
         mask = nb.load(skullstripped)
         bmask = new_img_like(mask, mask.get_fdata() > 0)
-        resampled_mask = resample_to_img(bmask, img, "nearest")
+        resampled_mask = resample_to_img(bmask, img, 'nearest')
         masked_image = new_img_like(img, img.get_fdata() * resampled_mask.get_fdata())
         masked_image.to_filename(bm_auto)
 
@@ -351,7 +349,7 @@ def detect_inputs(t1w_list, t2w_list=None, flair_list=None, hires_enabled=True):
         flair = flair_list[0]
 
     # https://surfer.nmr.mgh.harvard.edu/fswiki/SubmillimeterRecon
-    mris_inflate = "-n 50" if hires else None
+    mris_inflate = '-n 50' if hires else None
     return (t2w, flair, hires, mris_inflate)
 
 
@@ -435,11 +433,11 @@ def medial_wall_to_nan(in_file, subjects_dir, target_subject, newpath=None):
     import numpy as np
 
     fn = os.path.basename(in_file)
-    if not target_subject.startswith("fs"):
+    if not target_subject.startswith('fs'):
         return in_file
 
     cortex = nb.freesurfer.read_label(
-        os.path.join(subjects_dir, target_subject, "label", "{}.cortex.label".format(fn[:2]))
+        os.path.join(subjects_dir, target_subject, 'label', f'{fn[:2]}.cortex.label')
     )
     func = nb.load(in_file)
     medial = np.delete(np.arange(len(func.darrays[0].data)), cortex)
@@ -457,7 +455,7 @@ def find_fs_path(freesurfer_dir, subject_id):
     nosub = op.join(freesurfer_dir, subject_id)
     if op.exists(nosub):
         return Path(nosub)
-    withsub = op.join(freesurfer_dir, "sub-" + subject_id)
+    withsub = op.join(freesurfer_dir, 'sub-' + subject_id)
     if op.exists(withsub):
         return Path(withsub)
     return None
@@ -479,15 +477,15 @@ class PrepareSynthStripGrid(SimpleInterface):
         out_fname = fname_presuffix(
             self.inputs.input_image,
             newpath=runtime.cwd,
-            suffix="_SynthStripGrid.nii",
+            suffix='_SynthStripGrid.nii',
             use_ext=False,
         )
-        self._results["prepared_image"] = out_fname
+        self._results['prepared_image'] = out_fname
 
         # possibly downsample the image for sloppy mode. Always ensure float32
         img = nb.load(self.inputs.input_image)
         if not img.ndim == 3:
-            raise Exception("3D inputs are required for Synthstrip")
+            raise Exception('3D inputs are required for Synthstrip')
         xvoxels, yvoxels, zvoxels = img.shape
 
         def get_padding(nvoxels):
@@ -521,23 +519,23 @@ class PrepareSynthStripGrid(SimpleInterface):
 
 
 class _SynthStripInputSpec(FSTraitedSpecOpenMP):
-    input_image = File(argstr="-i %s", exists=True, mandatory=True)
-    no_csf = traits.Bool(argstr="--no-csf", desc="Exclude CSF from brain border.")
-    border = traits.Int(argstr="-b %d", desc="Mask border threshold in mm. Default is 1.")
-    gpu = traits.Bool(argstr="-g")
+    input_image = File(argstr='-i %s', exists=True, mandatory=True)
+    no_csf = traits.Bool(argstr='--no-csf', desc='Exclude CSF from brain border.')
+    border = traits.Int(argstr='-b %d', desc='Mask border threshold in mm. Default is 1.')
+    gpu = traits.Bool(argstr='-g')
     out_brain = File(
-        argstr="-o %s",
-        name_template="%s_brain.nii.gz",
-        name_source=["input_image"],
+        argstr='-o %s',
+        name_template='%s_brain.nii.gz',
+        name_source=['input_image'],
         keep_extension=False,
-        desc="skull stripped image with corrupt sform",
+        desc='skull stripped image with corrupt sform',
     )
     out_brain_mask = File(
-        argstr="-m %s",
-        name_template="%s_mask.nii.gz",
-        name_source=["input_image"],
+        argstr='-m %s',
+        name_template='%s_mask.nii.gz',
+        name_source=['input_image'],
         keep_extension=False,
-        desc="mask image with corrupt sform",
+        desc='mask image with corrupt sform',
     )
 
 
@@ -549,27 +547,26 @@ class _SynthStripOutputSpec(TraitedSpec):
 class SynthStrip(FSCommandOpenMP):
     input_spec = _SynthStripInputSpec
     output_spec = _SynthStripOutputSpec
-    _cmd = "mri_synthstrip"
+    _cmd = 'mri_synthstrip'
 
     def _num_threads_update(self):
         if self.inputs.num_threads:
-            self.inputs.environ.update({"OMP_NUM_THREADS": "1"})
+            self.inputs.environ.update({'OMP_NUM_THREADS': '1'})
 
 
 class FixHeaderSynthStrip(SynthStrip):
-
     def _run_interface(self, runtime, correct_return_codes=(0,)):
         # Run normally
         runtime = super(FixHeaderSynthStrip, self)._run_interface(runtime, correct_return_codes)
 
         outputs = self._list_outputs()
-        if not op.exists(outputs["out_brain"]):
-            raise Exception("mri_synthstrip failed!")
+        if not op.exists(outputs['out_brain']):
+            raise Exception('mri_synthstrip failed!')
 
-        if outputs.get("out_brain_mask"):
-            _copyxform(self.inputs.input_image, outputs["out_brain_mask"])
+        if outputs.get('out_brain_mask'):
+            _copyxform(self.inputs.input_image, outputs['out_brain_mask'])
 
-        _copyxform(self.inputs.input_image, outputs["out_brain"])
+        _copyxform(self.inputs.input_image, outputs['out_brain'])
 
         return runtime
 
@@ -584,45 +581,45 @@ class MockSynthStrip(SimpleInterface):
         this_bet = BET(
             mask=True,
             in_file=self.inputs.input_image,
-            output_type="NIFTI_GZ",
+            output_type='NIFTI_GZ',
         )
         result = this_bet.run()
-        self._results["out_brain"] = result.outputs.out_file
-        self._results["out_brain_mask"] = result.outputs.mask_file
+        self._results['out_brain'] = result.outputs.out_file
+        self._results['out_brain_mask'] = result.outputs.mask_file
 
         return runtime
 
 
 class _SynthSegInputSpec(FSTraitedSpecOpenMP):
-    input_image = File(argstr="--i %s", exists=True, mandatory=True)
+    input_image = File(argstr='--i %s', exists=True, mandatory=True)
     num_threads = traits.Int(
-        default=1, argstr="--threads %d", usedefault=True, desc="Number of threads to use"
+        default=1, argstr='--threads %d', usedefault=True, desc='Number of threads to use'
     )
-    fast = traits.Bool(argstr="--fast", desc="fast predictions (lower quality).")
-    robust = traits.Bool(argstr="--robust", desc="use robust predictions (slower).")
+    fast = traits.Bool(argstr='--fast', desc='fast predictions (lower quality).')
+    robust = traits.Bool(argstr='--robust', desc='use robust predictions (slower).')
     out_seg = File(
-        argstr="--o %s",
-        name_template="%s_aseg.nii.gz",
-        name_source=["input_image"],
+        argstr='--o %s',
+        name_template='%s_aseg.nii.gz',
+        name_source=['input_image'],
         keep_extension=False,
-        desc="segmentation image",
+        desc='segmentation image',
     )
     out_post = File(
-        argstr="--post %s",
-        name_template="%s_post.nii.gz",
-        name_source=["input_image"],
+        argstr='--post %s',
+        name_template='%s_post.nii.gz',
+        name_source=['input_image'],
         keep_extension=False,
-        desc="posteriors image",
+        desc='posteriors image',
     )
     out_qc = File(
-        argstr="--qc %s",
-        name_template="%s_qc.csv",
-        name_source=["input_image"],
+        argstr='--qc %s',
+        name_template='%s_qc.csv',
+        name_source=['input_image'],
         keep_extension=False,
-        desc="qc csv",
+        desc='qc csv',
     )
     cpu = traits.Bool(
-        True, argstr="--cpu", usedefault=True, desc="Enforce running with CPU rather than GPU."
+        True, argstr='--cpu', usedefault=True, desc='Enforce running with CPU rather than GPU.'
     )
 
 
@@ -635,17 +632,17 @@ class _SynthSegOutputSpec(TraitedSpec):
 class SynthSeg(FSCommandOpenMP):
     input_spec = _SynthSegInputSpec
     output_spec = _SynthSegOutputSpec
-    _cmd = "mri_synthseg"
+    _cmd = 'mri_synthseg'
 
     def _format_arg(self, name, trait_spec, value):
         # Hardcode threads to be 1
-        if name == "num_threads":
-            return "--threads 1"
+        if name == 'num_threads':
+            return '--threads 1'
         return super()._format_arg(name, trait_spec, value)
 
     def _num_threads_update(self):
         if self.inputs.num_threads:
-            self.inputs.environ.update({"OMP_NUM_THREADS": "1"})
+            self.inputs.environ.update({'OMP_NUM_THREADS': '1'})
 
 
 class MockSynthSeg(SimpleInterface):
@@ -657,18 +654,18 @@ class MockSynthSeg(SimpleInterface):
     def _run_interface(self, runtime):
         from nipype.interfaces.fsl import BET
 
-        output_qc = op.join(runtime.cwd, "fake_synthseg_qc.csv")
-        with open(output_qc, "w") as qcf:
-            qcf.write("Test QC file\n")
+        output_qc = op.join(runtime.cwd, 'fake_synthseg_qc.csv')
+        with open(output_qc, 'w') as qcf:
+            qcf.write('Test QC file\n')
 
         # Get a brain mask
         this_bet = BET(
             mask=True,
             in_file=self.inputs.input_image,
-            output_type="NIFTI_GZ",
+            output_type='NIFTI_GZ',
         )
         result = this_bet.run()
-        self._results["out_post"] = result.outputs.out_file
+        self._results['out_post'] = result.outputs.out_file
 
         # Make a fake segmentation
         img = nb.load(result.outputs.mask_file)
@@ -677,7 +674,7 @@ class MockSynthSeg(SimpleInterface):
         eroded2 = ndimage.binary_erosion(eroded1, iterations=3)
         final = orig_mask.astype(int) + eroded1 + eroded2
         out_img = nb.Nifti1Image(final, img.affine, header=img.header)
-        out_fname = fname_presuffix(self.inputs.input_image, suffix="_dseg", newpath=runtime.cwd)
+        out_fname = fname_presuffix(self.inputs.input_image, suffix='_dseg', newpath=runtime.cwd)
         out_img.to_filename(out_fname)
-        self._results["out_seg"] = out_fname
+        self._results['out_seg'] = out_fname
         return runtime

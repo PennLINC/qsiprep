@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 """
@@ -8,6 +7,7 @@ MRtrix3 Interfaces
 
 
 """
+
 import os
 
 import nibabel as nb
@@ -36,8 +36,8 @@ from .denoise import (
     SeriesPreprocReportOutputSpec,
 )
 
-LOGGER = logging.getLogger("nipype.interface")
-RC3_ROOT = which("average_response")  # Only exists in RC3
+LOGGER = logging.getLogger('nipype.interface')
+RC3_ROOT = which('average_response')  # Only exists in RC3
 if RC3_ROOT is not None:
     # Use the directory containing average_response
     RC3_ROOT = os.path.split(RC3_ROOT)[0]
@@ -58,10 +58,10 @@ class MRTrixGradientTable(SimpleInterface):
 
     def _run_interface(self, runtime):
         gtab_fname = fname_presuffix(
-            self.inputs.bval_file, suffix=".b", newpath=runtime.cwd, use_ext=False
+            self.inputs.bval_file, suffix='.b', newpath=runtime.cwd, use_ext=False
         )
         _convert_fsl_to_mrtrix(self.inputs.bval_file, self.inputs.bvec_file, gtab_fname)
-        self._results["gradient_file"] = gtab_fname
+        self._results['gradient_file'] = gtab_fname
         return runtime
 
 
@@ -69,7 +69,7 @@ def _convert_fsl_to_mrtrix(bval_file, bvec_file, output_fname):
     vecs = np.loadtxt(bvec_file)
     vals = np.loadtxt(bval_file)
     gtab = np.column_stack([vecs.T, vals]) * np.array([-1, -1, 1, 1])
-    np.savetxt(output_fname, gtab, fmt=["%.8f", "%.8f", "%.8f", "%d"])
+    np.savetxt(output_fname, gtab, fmt=['%.8f', '%.8f', '%.8f', '%d'])
 
 
 class MRTrixIngressInputSpec(BaseInterfaceInputSpec):
@@ -77,7 +77,7 @@ class MRTrixIngressInputSpec(BaseInterfaceInputSpec):
     bval_file = File(exists=True)
     bvec_file = File(exists=True)
     b_file = File(exists=True)
-    suffix = traits.Str("", usedefault=True)
+    suffix = traits.Str('', usedefault=True)
 
 
 class MRTrixIngressOutputSpec(TraitedSpec):
@@ -91,7 +91,7 @@ class MRTrixIngress(SimpleInterface):
     def _run_interface(self, runtime):
         output_mif = fname_presuffix(
             self.inputs.dwi_file,
-            suffix=self.inputs.suffix + ".mif",
+            suffix=self.inputs.suffix + '.mif',
             newpath=runtime.cwd,
             use_ext=False,
         )
@@ -107,44 +107,44 @@ class MRTrixIngress(SimpleInterface):
                 out_file=output_mif,
             )
         else:
-            raise Exception("No valid mrtrix gradient files or fsl bval/bvec files specified")
+            raise Exception('No valid mrtrix gradient files or fsl bval/bvec files specified')
         convert_run = convert.run()
-        self._results["mif_file"] = convert_run.outputs.out_file
+        self._results['mif_file'] = convert_run.outputs.out_file
 
         return runtime
 
 
 class DWIDenoiseInputSpec(MRTrix3BaseInputSpec, SeriesPreprocReportInputSpec):
-    in_file = File(exists=True, argstr="%s", position=-2, mandatory=True, desc="input DWI image")
-    mask = File(exists=True, argstr="-mask %s", position=1, desc="mask image")
+    in_file = File(exists=True, argstr='%s', position=-2, mandatory=True, desc='input DWI image')
+    mask = File(exists=True, argstr='-mask %s', position=1, desc='mask image')
     extent = traits.Tuple(
         (traits.Int, traits.Int, traits.Int),
-        argstr="-extent %d,%d,%d",
-        desc="set the window size of the denoising filter. (default = 5,5,5)",
+        argstr='-extent %d,%d,%d',
+        desc='set the window size of the denoising filter. (default = 5,5,5)',
     )
     noise_image = File(
-        argstr="-noise %s",
-        name_template="%s_noise.nii.gz",
-        name_source=["in_file"],
+        argstr='-noise %s',
+        name_template='%s_noise.nii.gz',
+        name_source=['in_file'],
         keep_extension=False,
-        desc="the output noise map",
+        desc='the output noise map',
     )
     out_file = File(
-        name_template="%s_denoised.nii.gz",
-        name_source=["in_file"],
+        name_template='%s_denoised.nii.gz',
+        name_source=['in_file'],
         keep_extension=False,
-        argstr="%s",
+        argstr='%s',
         position=-1,
-        desc="the output denoised DWI image",
+        desc='the output denoised DWI image',
     )
     out_report = File(
-        "dwidenoise_report.svg", usedefault=True, desc="filename for the visual report"
+        'dwidenoise_report.svg', usedefault=True, desc='filename for the visual report'
     )
 
 
 class DWIDenoiseOutputSpec(SeriesPreprocReportOutputSpec):
-    noise_image = File(desc="the output noise map", exists=True)
-    out_file = File(desc="the output denoised DWI image", exists=True)
+    noise_image = File(desc='the output noise map', exists=True)
+    out_file = File(desc='the output denoised DWI image', exists=True)
 
 
 class DWIDenoise(SeriesPreprocReport, MRTrix3Base):
@@ -168,52 +168,52 @@ class DWIDenoise(SeriesPreprocReport, MRTrix3Base):
 
     """
 
-    _cmd = "dwidenoise"
+    _cmd = 'dwidenoise'
     input_spec = DWIDenoiseInputSpec
     output_spec = DWIDenoiseOutputSpec
 
     def _get_plotting_images(self):
         input_dwi = load_img(self.inputs.in_file)
         outputs = self._list_outputs()
-        ref_name = outputs.get("out_file")
+        ref_name = outputs.get('out_file')
         denoised_nii = load_img(ref_name)
-        noise_name = outputs["noise_image"]
+        noise_name = outputs['noise_image']
         noisenii = load_img(noise_name)
         return input_dwi, denoised_nii, noisenii
 
 
 class DWIBiasCorrectInputSpec(MRTrix3BaseInputSpec, SeriesPreprocReportInputSpec):
-    in_file = File(exists=True, argstr="%s", position=-2, mandatory=True, desc="input DWI image")
-    mask = File(argstr="-mask %s", desc="input mask image for bias field estimation")
-    method = traits.Enum("ants", "fsl", argstr="%s", position=1, usedefault=True)
+    in_file = File(exists=True, argstr='%s', position=-2, mandatory=True, desc='input DWI image')
+    mask = File(argstr='-mask %s', desc='input mask image for bias field estimation')
+    method = traits.Enum('ants', 'fsl', argstr='%s', position=1, usedefault=True)
     bias_image = File(
-        argstr="-bias %s",
-        name_source="in_file",
-        name_template="%s_bias.nii.gz",
+        argstr='-bias %s',
+        name_source='in_file',
+        name_template='%s_bias.nii.gz',
         keep_extension=False,
-        desc="bias field",
+        desc='bias field',
     )
     out_file = File(
-        name_source="in_file",
+        name_source='in_file',
         keep_extension=False,
-        argstr="%s",
-        name_template="%s_N4.nii.gz",
+        argstr='%s',
+        name_template='%s_N4.nii.gz',
         position=-1,
-        desc="the output bias corrected DWI image",
+        desc='the output bias corrected DWI image',
     )
-    ants_b = traits.Str(default_value="[150,3]", argstr="-ants.b %s", usedefault=True)
-    ants_c = traits.Str(default_value="[200x200,1e-6]", argstr="-ants.c %s", usedefault=True)
-    ants_s = traits.Str(default_value="4", argstr="-ants.s %s")
-    out_report = File("n4_report.svg", usedefault=True, desc="filename for the visual report")
+    ants_b = traits.Str(default_value='[150,3]', argstr='-ants.b %s', usedefault=True)
+    ants_c = traits.Str(default_value='[200x200,1e-6]', argstr='-ants.c %s', usedefault=True)
+    ants_s = traits.Str(default_value='4', argstr='-ants.s %s')
+    out_report = File('n4_report.svg', usedefault=True, desc='filename for the visual report')
     bzero_max = traits.Int(
-        argstr="-config BZeroThreshold %d",
-        desc="Maximum b-value that can be considered a b=0",
+        argstr='-config BZeroThreshold %d',
+        desc='Maximum b-value that can be considered a b=0',
     )
 
 
 class DWIBiasCorrectOutputSpec(SeriesPreprocReportOutputSpec):
-    bias_image = File(desc="the output bias field", exists=True)
-    out_file = File(desc="the output bias corrected DWI image", exists=True)
+    bias_image = File(desc='the output bias field', exists=True)
+    out_file = File(desc='the output bias corrected DWI image', exists=True)
 
 
 class DWIBiasCorrect(SeriesPreprocReport, MRTrix3Base):
@@ -232,48 +232,48 @@ class DWIBiasCorrect(SeriesPreprocReport, MRTrix3Base):
     >>> bias_correct.run()                             # doctest: +SKIP
     """
 
-    _cmd = "dwibiascorrect"
+    _cmd = 'dwibiascorrect'
     input_spec = DWIBiasCorrectInputSpec
     output_spec = DWIBiasCorrectOutputSpec
 
     def _get_plotting_images(self):
         input_dwi = load_img(self.inputs.in_file)
         outputs = self._list_outputs()
-        ref_name = outputs.get("out_file")
+        ref_name = outputs.get('out_file')
         denoised_nii = load_img(ref_name)
-        noise_name = outputs["bias_image"]
+        noise_name = outputs['bias_image']
         noisenii = load_img(noise_name)
         return input_dwi, denoised_nii, noisenii
 
 
 class MRDeGibbsInputSpec(MRTrix3BaseInputSpec, SeriesPreprocReportInputSpec):
-    out_report = File("degibbs_report.svg", usedefault=True, desc="filename for the visual report")
-    in_file = File(exists=True, argstr="%s", position=-2, mandatory=True, desc="input DWI image")
+    out_report = File('degibbs_report.svg', usedefault=True, desc='filename for the visual report')
+    in_file = File(exists=True, argstr='%s', position=-2, mandatory=True, desc='input DWI image')
     out_file = File(
-        name_source="in_file",
+        name_source='in_file',
         keep_extension=False,
-        argstr="%s",
-        name_template="%s_mrdegibbs.nii.gz",
+        argstr='%s',
+        name_template='%s_mrdegibbs.nii.gz',
         position=-1,
         desc="the output de-Gibbs'd DWI image",
     )
-    mask = File(desc="input mask image for the visual report")
+    mask = File(desc='input mask image for the visual report')
     nshifts = traits.Int(
-        default=20, argstr="-nshifts %d", desc="discretization of subpixel spacing."
+        default=20, argstr='-nshifts %d', desc='discretization of subpixel spacing.'
     )
     axes = traits.Enum(
-        "0,1",
-        "0,2",
-        "1,2",
-        default="0,1",
-        argstr="-axes %s",
-        desc="select the slice axes (default: 0,1 - i.e. x-y)",
+        '0,1',
+        '0,2',
+        '1,2',
+        default='0,1',
+        argstr='-axes %s',
+        desc='select the slice axes (default: 0,1 - i.e. x-y)',
     )
     minw = traits.Int(
-        default=1, argstr="-minW %d", desc="left border of window used for TV computation"
+        default=1, argstr='-minW %d', desc='left border of window used for TV computation'
     )
     maxw = traits.Int(
-        default=3, argstr="-maxW %d", desc="right border of window used for TV computation"
+        default=3, argstr='-maxW %d', desc='right border of window used for TV computation'
     )
 
 
@@ -284,18 +284,18 @@ class MRDeGibbsOutputSpec(SeriesPreprocReportOutputSpec):
 class MRDeGibbs(SeriesPreprocReport, MRTrix3Base):
     input_spec = MRDeGibbsInputSpec
     output_spec = MRDeGibbsOutputSpec
-    _cmd = "mrdegibbs"
+    _cmd = 'mrdegibbs'
 
     def _get_plotting_images(self):
         input_dwi = load_img(self.inputs.in_file)
         outputs = self._list_outputs()
-        ref_name = outputs.get("out_file")
+        ref_name = outputs.get('out_file')
         denoised_nii = load_img(ref_name)
         return input_dwi, denoised_nii, None
 
     def _generate_report(self):
         """Generate a reportlet."""
-        LOGGER.info("Generating denoising visual report")
+        LOGGER.info('Generating denoising visual report')
 
         input_dwi, denoised_nii, _ = self._get_plotting_images()
 
@@ -335,10 +335,10 @@ class MRDeGibbs(SeriesPreprocReport, MRTrix3Base):
             plot_denoise(
                 denoised_lowb_nii,
                 denoised_highb_nii,
-                "moving-image",
+                'moving-image',
                 estimate_brightness=True,
                 cuts=cuts,
-                label="De-Gibbs",
+                label='De-Gibbs',
                 lowb_contour=None,
                 highb_contour=None,
                 compress=False,
@@ -346,10 +346,10 @@ class MRDeGibbs(SeriesPreprocReport, MRTrix3Base):
             plot_denoise(
                 diff_lowb_nii,
                 diff_highb_nii,
-                "fixed-image",
+                'fixed-image',
                 estimate_brightness=True,
                 cuts=cuts,
-                label="Estimated Ringing",
+                label='Estimated Ringing',
                 lowb_contour=None,
                 highb_contour=None,
                 compress=False,
@@ -361,14 +361,14 @@ class MRDeGibbs(SeriesPreprocReport, MRTrix3Base):
 
 
 class _ITKTransformConvertInputSpec(CommandLineInputSpec):
-    in_transform = traits.File(exists=True, argstr="%s", mandatory=True, position=0)
+    in_transform = traits.File(exists=True, argstr='%s', mandatory=True, position=0)
     operation = traits.Enum(
-        "itk_import", default="itk_import", usedefault=True, posision=1, argstr="%s"
+        'itk_import', default='itk_import', usedefault=True, posision=1, argstr='%s'
     )
     out_transform = traits.File(
-        argstr="%s",
-        name_source="in_transform",
-        name_template="%s.txt",
+        argstr='%s',
+        name_source='in_transform',
+        name_template='%s.txt',
         keep_extension=False,
         position=-1,
     )
@@ -379,18 +379,18 @@ class _ITKTransformConvertOutputSpec(TraitedSpec):
 
 
 class ITKTransformConvert(CommandLine):
-    _cmd = "transformconvert"
+    _cmd = 'transformconvert'
     input_spec = _ITKTransformConvertInputSpec
     output_spec = _ITKTransformConvertOutputSpec
 
 
 class _TransformHeaderInputSpec(CommandLineInputSpec):
-    transform_file = traits.File(exists=True, position=0, mandatory=True, argstr="-linear %s")
-    in_image = traits.File(exists=True, mandatory=True, position=1, argstr="%s")
+    transform_file = traits.File(exists=True, position=0, mandatory=True, argstr='-linear %s')
+    in_image = traits.File(exists=True, mandatory=True, position=1, argstr='%s')
     out_image = traits.File(
-        argstr="%s",
-        name_source="in_image",
-        name_template="%s_hdrxform.nii.gz",
+        argstr='%s',
+        name_source='in_image',
+        name_template='%s_hdrxform.nii.gz',
         keep_extension=False,
         position=-1,
     )
@@ -403,19 +403,19 @@ class _TransformHeaderOutputSpec(TraitedSpec):
 class TransformHeader(CommandLine):
     input_spec = _TransformHeaderInputSpec
     output_spec = _TransformHeaderOutputSpec
-    _cmd = "mrtransform -strides -1,-2,3"
+    _cmd = 'mrtransform -strides -1,-2,3'
 
 
 class _PolarToComplexInputSpec(CommandLineInputSpec):
-    mag_file = traits.File(exists=True, mandatory=True, position=0, argstr="%s")
-    phase_file = traits.File(exists=True, mandatory=True, position=1, argstr="%s")
+    mag_file = traits.File(exists=True, mandatory=True, position=0, argstr='%s')
+    phase_file = traits.File(exists=True, mandatory=True, position=1, argstr='%s')
     out_file = traits.File(
         exists=False,
-        name_source="mag_file",
-        name_template="%s_complex.nii.gz",
+        name_source='mag_file',
+        name_template='%s_complex.nii.gz',
         keep_extension=False,
         position=-1,
-        argstr="-polar %s",
+        argstr='-polar %s',
     )
 
 
@@ -429,18 +429,18 @@ class PolarToComplex(CommandLine):
     input_spec = _PolarToComplexInputSpec
     output_spec = _PolarToComplexOutputSpec
 
-    _cmd = "mrcalc"
+    _cmd = 'mrcalc'
 
 
 class _ComplexToMagnitudeInputSpec(CommandLineInputSpec):
-    complex_file = traits.File(exists=True, mandatory=True, position=0, argstr="%s")
+    complex_file = traits.File(exists=True, mandatory=True, position=0, argstr='%s')
     out_file = traits.File(
         exists=False,
-        name_source="complex_file",
-        name_template="%s_mag.nii.gz",
+        name_source='complex_file',
+        name_template='%s_mag.nii.gz',
         keep_extension=False,
         position=-1,
-        argstr="-abs %s",
+        argstr='-abs %s',
     )
 
 
@@ -454,4 +454,4 @@ class ComplexToMagnitude(CommandLine):
     input_spec = _ComplexToMagnitudeInputSpec
     output_spec = _ComplexToMagnitudeOutputSpec
 
-    _cmd = "mrcalc"
+    _cmd = 'mrcalc'

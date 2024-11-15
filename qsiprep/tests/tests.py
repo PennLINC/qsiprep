@@ -21,6 +21,7 @@
 #     https://www.nipreps.org/community/licensing/
 #
 """Utilities and mocks for testing and documentation building."""
+
 import os
 import shutil
 from contextlib import contextmanager
@@ -38,20 +39,20 @@ def mock_config():
     """Create a mock config for documentation and testing purposes."""
     from qsiprep import config
 
-    _old_fs = os.getenv("FREESURFER_HOME")
+    _old_fs = os.getenv('FREESURFER_HOME')
     if not _old_fs:
-        os.environ["FREESURFER_HOME"] = mkdtemp()
+        os.environ['FREESURFER_HOME'] = mkdtemp()
 
-    filename = load_data("tests/config.toml").resolve()
+    filename = load_data('tests/config.toml').resolve()
     if not filename.exists():
         base_path = os.path.dirname(filename)
         raise FileNotFoundError(
-            f"File not found: {filename}\nFiles in {base_path}:\n{os.listdir(base_path)}"
+            f'File not found: {filename}\nFiles in {base_path}:\n{os.listdir(base_path)}'
         )
 
     settings = loads(filename.read_text())
     for sectionname, configs in settings.items():
-        if sectionname != "environment":
+        if sectionname != 'environment':
             section = getattr(config, sectionname)
             section.load(configs, init=False)
 
@@ -72,4 +73,4 @@ def mock_config():
     shutil.rmtree(config.execution.output_dir)
 
     if not _old_fs:
-        del os.environ["FREESURFER_HOME"]
+        del os.environ['FREESURFER_HOME']

@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 from nipype.interfaces import ants
@@ -16,7 +15,7 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 
 
 def init_b0_to_anat_registration_wf(
-    write_report=True, transform_type="Rigid", name="b0_anat_coreg"
+    write_report=True, transform_type='Rigid', name='b0_anat_coreg'
 ):
     """
     Calculates the registration between a reference b0 image and T1-space
@@ -78,37 +77,37 @@ def init_b0_to_anat_registration_wf(
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
-                "ref_b0_brain",
-                "t1_brain",
-                "t1_seg",
-                "subjects_dir",
-                "subject_id",
-                "t1_2_fsnative_reverse_transform",
+                'ref_b0_brain',
+                't1_brain',
+                't1_seg',
+                'subjects_dir',
+                'subject_id',
+                't1_2_fsnative_reverse_transform',
             ]
         ),
-        name="inputnode",
+        name='inputnode',
     )
     outputnode = pe.Node(
         niu.IdentityInterface(
-            fields=["itk_b0_to_t1", "itk_t1_to_b0", "fallback", "coreg_metric", "report"]
+            fields=['itk_b0_to_t1', 'itk_t1_to_b0', 'fallback', 'coreg_metric', 'report']
         ),
-        name="outputnode",
+        name='outputnode',
     )
 
     workflow = Workflow(name=name)
 
     # Defines a coregistration operation
     coreg = ANTSRegistrationRPT(generate_report=write_report)
-    coreg.inputs.metric = ["Mattes"]
+    coreg.inputs.metric = ['Mattes']
     coreg.inputs.transforms = [transform_type]
     coreg.inputs.shrink_factors = [[8, 4, 2, 1]]
     coreg.inputs.smoothing_sigmas = [[7.0, 3.0, 1.0, 0.0]]
-    coreg.inputs.sigma_units = ["vox"]
-    coreg.inputs.sampling_strategy = ["Random"]
+    coreg.inputs.sigma_units = ['vox']
+    coreg.inputs.sampling_strategy = ['Random']
     coreg.inputs.sampling_percentage = [0.25]
     coreg.inputs.radius_or_number_of_bins = [32]
     coreg.inputs.initial_moving_transform_com = 0
-    coreg.inputs.interpolation = "HammingWindowedSinc"
+    coreg.inputs.interpolation = 'HammingWindowedSinc'
     coreg.inputs.dimension = 3
     coreg.inputs.winsorize_lower_quantile = 0.025
     coreg.inputs.winsorize_upper_quantile = 0.975
@@ -118,19 +117,19 @@ def init_b0_to_anat_registration_wf(
     coreg.inputs.collapse_output_transforms = True
     coreg.inputs.write_composite_transform = False
     coreg.inputs.output_warped_image = True
-    b0_to_anat = pe.Node(coreg, name="b0_to_anat", n_procs=config.nipype.omp_nthreads)
+    b0_to_anat = pe.Node(coreg, name='b0_to_anat', n_procs=config.nipype.omp_nthreads)
 
-    workflow.connect(inputnode, "t1_brain", b0_to_anat, "fixed_image")  # fmt:skip
-    workflow.connect(inputnode, "ref_b0_brain", b0_to_anat, "moving_image")  # fmt:skip
-    workflow.connect(b0_to_anat, "forward_transforms", outputnode, "itk_b0_to_t1")  # fmt:skip
-    workflow.connect(b0_to_anat, "reverse_transforms", outputnode, "itk_t1_to_b0")  # fmt:skip
-    workflow.connect(b0_to_anat, "metric_value", outputnode, "coreg_metric")  # fmt:skip
-    workflow.connect(b0_to_anat, "out_report", outputnode, "report")  # fmt:skip
+    workflow.connect(inputnode, 't1_brain', b0_to_anat, 'fixed_image')  # fmt:skip
+    workflow.connect(inputnode, 'ref_b0_brain', b0_to_anat, 'moving_image')  # fmt:skip
+    workflow.connect(b0_to_anat, 'forward_transforms', outputnode, 'itk_b0_to_t1')  # fmt:skip
+    workflow.connect(b0_to_anat, 'reverse_transforms', outputnode, 'itk_t1_to_b0')  # fmt:skip
+    workflow.connect(b0_to_anat, 'metric_value', outputnode, 'coreg_metric')  # fmt:skip
+    workflow.connect(b0_to_anat, 'out_report', outputnode, 'report')  # fmt:skip
 
     return workflow
 
 
-def init_direct_b0_acpc_wf(write_report=True, name="b0_anat_coreg"):
+def init_direct_b0_acpc_wf(write_report=True, name='b0_anat_coreg'):
     """
     Re-orients a b=0 image directly to AC-PC. A full affine registration is run,
     but only the rigid (translation + rotation) part is included.
@@ -189,73 +188,73 @@ def init_direct_b0_acpc_wf(write_report=True, name="b0_anat_coreg"):
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
-                "ref_b0_brain",
-                "t1_brain",
-                "t1_seg",
-                "subjects_dir",
-                "subject_id",
-                "t1_2_fsnative_reverse_transform",
+                'ref_b0_brain',
+                't1_brain',
+                't1_seg',
+                'subjects_dir',
+                'subject_id',
+                't1_2_fsnative_reverse_transform',
             ]
         ),
-        name="inputnode",
+        name='inputnode',
     )
     outputnode = pe.Node(
         niu.IdentityInterface(
-            fields=["itk_b0_to_t1", "itk_t1_to_b0", "fallback", "coreg_metric", "report"]
+            fields=['itk_b0_to_t1', 'itk_t1_to_b0', 'fallback', 'coreg_metric', 'report']
         ),
-        name="outputnode",
+        name='outputnode',
     )
 
     workflow = Workflow(name=name)
 
     # Defines a coregistration operation
-    ants_settings = pkgrf("qsiprep", "data/intermodal_ACPC.json")
+    ants_settings = pkgrf('qsiprep', 'data/intermodal_ACPC.json')
     acpc_reg = pe.Node(
         ANTSRegistrationRPT(generate_report=write_report, from_file=ants_settings),
-        name="acpc_reg",
+        name='acpc_reg',
         n_procs=config.nipype.omp_nthreads,
     )
 
     # Extract the rigid components of the transform
-    itk_to_rigid = pe.Node(AffineToRigid(), name="itk_to_rigid")
+    itk_to_rigid = pe.Node(AffineToRigid(), name='itk_to_rigid')
 
     # Apply the rigid transform to the b=0 ref
     translation_warp = pe.Node(
-        ants.ApplyTransforms(dimension=3, interpolation="BSpline"), name="translation_warp"
+        ants.ApplyTransforms(dimension=3, interpolation='BSpline'), name='translation_warp'
     )
     rigid_warp = pe.Node(
-        ants.ApplyTransforms(dimension=3, interpolation="BSpline"), name="rigid_warp"
+        ants.ApplyTransforms(dimension=3, interpolation='BSpline'), name='rigid_warp'
     )
-    acpc_report = pe.Node(ACPCReport(), name="acpc_report")
+    acpc_report = pe.Node(ACPCReport(), name='acpc_report')
 
     workflow.connect([
         (inputnode, acpc_reg, [
-            ("t1_brain", "fixed_image"),
-            (("t1_seg", _format_masks), "fixed_image_masks"),
-            ("ref_b0_brain", "moving_image")]),
+            ('t1_brain', 'fixed_image'),
+            (('t1_seg', _format_masks), 'fixed_image_masks'),
+            ('ref_b0_brain', 'moving_image')]),
         (acpc_reg, itk_to_rigid, [
-            ("forward_transforms", "affine_transform")]),
+            ('forward_transforms', 'affine_transform')]),
         (itk_to_rigid, rigid_warp, [
             ('rigid_transform', 'transforms')]),
         (itk_to_rigid, translation_warp, [
             ('translation_transform', 'transforms')]),
         (inputnode, rigid_warp, [
-            ("ref_b0_brain", "input_image"),
-            ("t1_brain", "reference_image")]),
+            ('ref_b0_brain', 'input_image'),
+            ('t1_brain', 'reference_image')]),
         (inputnode, translation_warp, [
-            ("ref_b0_brain", "input_image"),
-            ("t1_brain", "reference_image")]),
-        (translation_warp, acpc_report, [("output_image", "translation_image")]),
-        (rigid_warp, acpc_report, [("output_image", "rigid_image")]),
+            ('ref_b0_brain', 'input_image'),
+            ('t1_brain', 'reference_image')]),
+        (translation_warp, acpc_report, [('output_image', 'translation_image')]),
+        (rigid_warp, acpc_report, [('output_image', 'rigid_image')]),
         (itk_to_rigid, outputnode, [
-            ("rigid_transform", "itk_b0_to_t1"),
-            ("rigid_transform_inverse", "itk_t1_to_b0")]),
+            ('rigid_transform', 'itk_b0_to_t1'),
+            ('rigid_transform_inverse', 'itk_t1_to_b0')]),
         (acpc_report, outputnode, [
-            ("out_report", "report")])
+            ('out_report', 'report')])
     ])  # fmt:skip
 
     return workflow
 
 
 def _format_masks(mask_file):
-    return ["NULL", mask_file]
+    return ['NULL', mask_file]

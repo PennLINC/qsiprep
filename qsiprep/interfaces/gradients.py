@@ -27,8 +27,8 @@ from scipy.spatial.transform import Rotation as R
 from sklearn.metrics import r2_score
 from transforms3d.affines import decompose44
 
-LOGGER = logging.getLogger("nipype.interface")
-tensor_index = {"xx": (0, 0), "xy": (0, 1), "xz": (0, 2), "yy": (1, 1), "yz": (1, 2), "zz": (2, 2)}
+LOGGER = logging.getLogger('nipype.interface')
+tensor_index = {'xx': (0, 0), 'xy': (0, 1), 'xz': (0, 2), 'yy': (1, 1), 'yz': (1, 2), 'zz': (2, 2)}
 
 
 class RemoveDuplicatesInputSpec(BaseInterfaceInputSpec):
@@ -87,53 +87,53 @@ class RemoveDuplicates(SimpleInterface):
         if isdefined(expected):
             if not len(seen_vecs) == expected:
                 raise Exception(
-                    "Expected %d unique samples but found %d", expected, len(seen_vecs)
+                    'Expected %d unique samples but found %d', expected, len(seen_vecs)
                 )
 
         # Are all the directions unique?
         if len(ok_vecs) == len(bvals):
-            self._results["dwi_file"] = self.inputs.dwi_file
-            self._results["bval_file"] = self.inputs.bval_file
-            self._results["bvec_file"] = self.inputs.bvec_file
-            self._results["local_bvec_file"] = self.inputs.local_bvec_file
+            self._results['dwi_file'] = self.inputs.dwi_file
+            self._results['bval_file'] = self.inputs.bval_file
+            self._results['bvec_file'] = self.inputs.bvec_file
+            self._results['local_bvec_file'] = self.inputs.local_bvec_file
 
             return runtime
 
         # Extract the unique samples
-        output_bval = fname_presuffix(self.inputs.bval_file, newpath=runtime.cwd, suffix="_unique")
-        output_bvec = fname_presuffix(self.inputs.bvec_file, newpath=runtime.cwd, suffix="_unique")
-        output_nii = fname_presuffix(self.inputs.dwi_file, newpath=runtime.cwd, suffix="_unique")
+        output_bval = fname_presuffix(self.inputs.bval_file, newpath=runtime.cwd, suffix='_unique')
+        output_bvec = fname_presuffix(self.inputs.bvec_file, newpath=runtime.cwd, suffix='_unique')
+        output_nii = fname_presuffix(self.inputs.dwi_file, newpath=runtime.cwd, suffix='_unique')
         unique_indices = np.array(ok_vecs)
         unique_bvals = orig_bvals[unique_indices]
-        np.savetxt(output_bval, unique_bvals, fmt="%d", newline=" ")
+        np.savetxt(output_bval, unique_bvals, fmt='%d', newline=' ')
         unique_bvecs = bvecs[unique_indices]
-        np.savetxt(output_bvec, unique_bvecs.T, fmt="%.8f")
+        np.savetxt(output_bvec, unique_bvecs.T, fmt='%.8f')
         unique_data = original_image.get_fdata()[..., unique_indices]
         nb.Nifti1Image(unique_data, original_image.affine, original_image.header).to_filename(
             output_nii
         )
-        self._results["bval_file"] = output_bval
-        self._results["bvec_file"] = output_bvec
-        self._results["dwi_file"] = output_nii
+        self._results['bval_file'] = output_bval
+        self._results['bvec_file'] = output_bvec
+        self._results['dwi_file'] = output_nii
         # TODO: support local bvecs
         return runtime
 
 
 class SliceQCInputSpec(BaseInterfaceInputSpec):
-    uncorrected_dwi_files = InputMultiObject(File(exists=True), desc="uncorrected dwi files")
-    ideal_image_files = InputMultiObject(File(exists=True), desc="model-based images")
-    mask_image = File(exists=True, desc="brain mask")
-    impute_slice_threshold = traits.Float(0.0, desc="threshold for using imputed data in a slice")
+    uncorrected_dwi_files = InputMultiObject(File(exists=True), desc='uncorrected dwi files')
+    ideal_image_files = InputMultiObject(File(exists=True), desc='model-based images')
+    mask_image = File(exists=True, desc='brain mask')
+    impute_slice_threshold = traits.Float(0.0, desc='threshold for using imputed data in a slice')
     min_slice_size_percentile = traits.CFloat(
         10.0,
         usedefault=True,
-        desc="slices bigger than " "this percentile are candidates for imputation.",
+        desc='slices bigger than ' 'this percentile are candidates for imputation.',
     )
 
 
 class SliceQCOutputSpec(TraitedSpec):
-    imputed_images = OutputMultiObject(File(exists=True), desc="dwi files with imputed slices")
-    slice_stats = File(exists=True, desc="npy file with the slice-by-TR error matrix")
+    imputed_images = OutputMultiObject(File(exists=True), desc='dwi files with imputed slices')
+    slice_stats = File(exists=True, desc='npy file with the slice-by-TR error matrix')
 
 
 class SliceQC(SimpleInterface):
@@ -144,8 +144,8 @@ class SliceQC(SimpleInterface):
         ideal_image_files = self.inputs.ideal_image_files
         uncorrected_image_files = self.inputs.uncorrected_dwi_files
 
-        self._results["imputed_images"] = self.inputs.uncorrected_dwi_files
-        output_npz = os.path.join(runtime.cwd, "slice_stats.npz")
+        self._results['imputed_images'] = self.inputs.uncorrected_dwi_files
+        output_npz = os.path.join(runtime.cwd, 'slice_stats.npz')
         mask_img = nb.load(self.inputs.mask_image)
         mask = mask_img.get_fdata() > 0
         masked_slices = (mask * np.arange(mask_img.shape[2])[np.newaxis, np.newaxis, :]).astype(
@@ -163,7 +163,9 @@ class SliceQC(SimpleInterface):
         wb_r2s = []
         # If impute slice threshold==0 or hmc_model=="none"
         if isdefined(ideal_image_files):
-            for ideal_image, input_image in zip(ideal_image_files, uncorrected_image_files):
+            for ideal_image, input_image in zip(
+                ideal_image_files, uncorrected_image_files, strict=False
+            ):
                 slices, wb_xcorr, wb_r2 = _score_slices(
                     ideal_image, input_image, masked_slices, valid_slices
                 )
@@ -187,7 +189,7 @@ class SliceQC(SimpleInterface):
             slice_nums=slice_nums,
             slice_counts=slice_counts,
         )
-        self._results["slice_stats"] = output_npz
+        self._results['slice_stats'] = output_npz
         return runtime
 
 
@@ -218,10 +220,10 @@ def _score_slices(ideal_image, input_image, masked_slices, valid_slices):
 
 class CombineMotionsInputSpec(BaseInterfaceInputSpec):
     transform_files = InputMultiObject(
-        File(exists=True), mandatory=True, desc="transform files from hmc"
+        File(exists=True), mandatory=True, desc='transform files from hmc'
     )
-    source_files = InputMultiObject(File(exists=True), mandatory=True, desc="Moving images")
-    ref_file = File(exists=True, mandatory=True, desc="Fixed Image")
+    source_files = InputMultiObject(File(exists=True), mandatory=True, desc='Moving images')
+    ref_file = File(exists=True, mandatory=True, desc='Fixed Image')
 
 
 class CombineMotionsOututSpec(TraitedSpec):
@@ -235,8 +237,8 @@ class CombineMotions(SimpleInterface):
 
     def _run_interface(self, runtime):
         collected_motion = []
-        output_fname = os.path.join(runtime.cwd, "motion_params.csv")
-        output_spm_fname = os.path.join(runtime.cwd, "spm_movpar.txt")
+        output_fname = os.path.join(runtime.cwd, 'motion_params.csv')
+        output_spm_fname = os.path.join(runtime.cwd, 'spm_movpar.txt')
         ref_file = self.inputs.ref_file
         for motion_file in self.inputs.transform_files:
             collected_motion.append(
@@ -245,25 +247,25 @@ class CombineMotions(SimpleInterface):
 
         final_motion = np.row_stack(collected_motion)
         cols = [
-            "scaleX",
-            "scaleY",
-            "scaleZ",
-            "shearXY",
-            "shearXZ",
-            "shearYZ",
-            "rotateX",
-            "rotateY",
-            "rotateZ",
-            "shiftX",
-            "shiftY",
-            "shiftZ",
+            'scaleX',
+            'scaleY',
+            'scaleZ',
+            'shearXY',
+            'shearXZ',
+            'shearYZ',
+            'rotateX',
+            'rotateY',
+            'rotateZ',
+            'shiftX',
+            'shiftY',
+            'shiftZ',
         ]
         motion_df = pd.DataFrame(data=final_motion, columns=cols)
         motion_df.to_csv(output_fname, index=False)
-        self._results["motion_file"] = output_fname
+        self._results['motion_file'] = output_fname
 
-        spmcols = motion_df[["shiftX", "shiftY", "shiftZ", "rotateX", "rotateY", "rotateZ"]]
-        self._results["spm_motion_file"] = output_spm_fname
+        spmcols = motion_df[['shiftX', 'shiftY', 'shiftZ', 'rotateX', 'rotateY', 'rotateZ']]
+        self._results['spm_motion_file'] = output_spm_fname
         np.savetxt(output_spm_fname, spmcols.values)
 
         return runtime
@@ -284,7 +286,7 @@ class MatchTransforms(SimpleInterface):
     output_spec = MatchTransformsOutputSpec
 
     def _run_interface(self, runtime):
-        self._results["transforms"] = match_transforms(
+        self._results['transforms'] = match_transforms(
             self.inputs.dwi_files, self.inputs.transforms, self.inputs.b0_indices
         )
         return runtime
@@ -310,10 +312,10 @@ class ExtractB0s(SimpleInterface):
 
     def _run_interface(self, runtime):
         output_fname = fname_presuffix(
-            self.inputs.dwi_series, suffix="_b0_series", use_ext=True, newpath=runtime.cwd
+            self.inputs.dwi_series, suffix='_b0_series', use_ext=True, newpath=runtime.cwd
         )
         output_mean_fname = fname_presuffix(
-            output_fname, suffix="_mean", use_ext=True, newpath=runtime.cwd
+            output_fname, suffix='_mean', use_ext=True, newpath=runtime.cwd
         )
         if isdefined(self.inputs.b0_indices):
             indices = np.array(self.inputs.b0_indices).astype(int)
@@ -321,63 +323,63 @@ class ExtractB0s(SimpleInterface):
             bvals = np.loadtxt(self.inputs.bval_file)
             indices = np.flatnonzero(bvals < self.inputs.b0_threshold)
             if indices.size == 0:
-                raise ValueError("No b<%d images found" % self.inputs.b0_threshold)
+                raise ValueError('No b<%d images found' % self.inputs.b0_threshold)
         else:
-            raise ValueError("No gradient information available")
+            raise ValueError('No gradient information available')
         new_data = nim.index_img(self.inputs.dwi_series, indices)
         new_data.to_filename(output_fname)
-        self._results["b0_series"] = output_fname
+        self._results['b0_series'] = output_fname
         if new_data.ndim == 3:
-            self._results["b0_average"] = output_fname
+            self._results['b0_average'] = output_fname
         else:
-            mean_image = nim.math_img("img.mean(3)", img=new_data)
+            mean_image = nim.math_img('img.mean(3)', img=new_data)
             mean_image.to_filename(output_mean_fname)
-            self._results["b0_average"] = output_mean_fname
+            self._results['b0_average'] = output_mean_fname
 
         return runtime
 
 
 class ComposeTransformsInputSpec(ApplyTransformsInputSpec):
     input_image = File(mandatory=False)
-    dwi_files = InputMultiObject(File(exists=True), mandatory=True, desc="list of dwi files")
-    reference_image = File(exists=True, mandatory=True, desc="output grid")
+    dwi_files = InputMultiObject(File(exists=True), mandatory=True, desc='list of dwi files')
+    reference_image = File(exists=True, mandatory=True, desc='output grid')
     # Transforms to apply
-    hmc_affines = InputMultiObject(File(exists=True), desc="head motion correction affines")
+    hmc_affines = InputMultiObject(File(exists=True), desc='head motion correction affines')
     fieldwarps = InputMultiObject(
-        File(exists=True), mandtory=False, desc="SDC unwarping transform"
+        File(exists=True), mandtory=False, desc='SDC unwarping transform'
     )
     b0_to_intramodal_template_transforms = InputMultiObject(
         File(exists=True),
         mandtory=False,
-        desc="list of transforms to register the b=0 to " "the intramodal template.",
+        desc='list of transforms to register the b=0 to ' 'the intramodal template.',
     )
     intramodal_template_to_t1_affine = File(
-        exists=True, desc="affine from the intramodal template to t1"
+        exists=True, desc='affine from the intramodal template to t1'
     )
     intramodal_template_to_t1_warp = File(
-        exists=True, desc="warp from the intramodal template to t1"
+        exists=True, desc='warp from the intramodal template to t1'
     )
-    hmcsdc_dwi_ref_to_t1w_affine = File(exists=True, desc="affine from dwi ref to t1w")
+    hmcsdc_dwi_ref_to_t1w_affine = File(exists=True, desc='affine from dwi ref to t1w')
     t1_2_mni_forward_transform = InputMultiObject(
-        File(exists=True), mandatory=False, desc="composite (h5) transform to mni"
+        File(exists=True), mandatory=False, desc='composite (h5) transform to mni'
     )
     save_cmd = traits.Bool(
-        True, usedefault=True, desc="write a log of command lines that were applied"
+        True, usedefault=True, desc='write a log of command lines that were applied'
     )
-    copy_dtype = traits.Bool(False, usedefault=True, desc="copy dtype from inputs to outputs")
-    num_threads = traits.Int(1, usedefault=True, nohash=True, desc="number of parallel processes")
+    copy_dtype = traits.Bool(False, usedefault=True, desc='copy dtype from inputs to outputs')
+    num_threads = traits.Int(1, usedefault=True, nohash=True, desc='number of parallel processes')
     transforms = File(mandatory=False)
 
 
 class ComposeTransformsOutputSpec(TraitedSpec):
-    out_warps = OutputMultiObject(File(exists=True), desc="composed all transforms to output_grid")
+    out_warps = OutputMultiObject(File(exists=True), desc='composed all transforms to output_grid')
     out_affines = OutputMultiObject(
-        File(exists=True), desc="composed affine-only transforms to output_grid"
+        File(exists=True), desc='composed affine-only transforms to output_grid'
     )
     transform_lists = OutputMultiObject(
-        traits.List(File(exists=True)), desc="lists of transforms for each image"
+        traits.List(File(exists=True)), desc='lists of transforms for each image'
     )
-    log_cmdline = File(desc="a list of command lines used to apply transforms")
+    log_cmdline = File(desc='a list of command lines used to apply transforms')
 
 
 class ComposeTransforms(SimpleInterface):
@@ -395,25 +397,25 @@ class ComposeTransforms(SimpleInterface):
         def include_transform(transform):
             if not isdefined(transform):
                 return False
-            LOGGER.info("Including %s", transform)
+            LOGGER.info('Including %s', transform)
             return len(transform) == num_dwis
 
         hmc_affines = self.inputs.hmc_affines
         fieldwarps = self.inputs.fieldwarps
         if isdefined(fieldwarps):
             if len(fieldwarps) == 1:
-                LOGGER.info("using a single fieldwarp for all DWI files")
+                LOGGER.info('using a single fieldwarp for all DWI files')
                 fieldwarps = fieldwarps * num_dwis
             elif len(fieldwarps) == num_dwis:
-                LOGGER.info("using DRBUDDI warps!")
+                LOGGER.info('using DRBUDDI warps!')
             else:
-                LOGGER.info("No Fieldwarps will be used")
+                LOGGER.info('No Fieldwarps will be used')
 
         # The affine transform to the t1 can come from hmcsdc or the intramodal template
         coreg_to_t1 = traits.Undefined
         if isdefined(self.inputs.intramodal_template_to_t1_affine):
             if isdefined(self.inputs.hmcsdc_dwi_ref_to_t1w_affine):
-                LOGGER.warning("Two b0 to t1 transforms are provided: using intramodal")
+                LOGGER.warning('Two b0 to t1 transforms are provided: using intramodal')
             coreg_to_t1 = self.inputs.intramodal_template_to_t1_affine
         else:
             coreg_to_t1 = self.inputs.hmcsdc_dwi_ref_to_t1w_affine
@@ -429,7 +431,7 @@ class ComposeTransforms(SimpleInterface):
             if len(intramodal_transforms) == 2:
                 intramodal_warp = [intramodal_transforms[1]] * num_dwis
             elif len(intramodal_transforms) > 2:
-                raise Exception("Unsupported intramodal template transform")
+                raise Exception('Unsupported intramodal template transform')
 
         # If an intramodal template to t1 affine is present, copy for each dwi
         intramodal_template_to_t1_affine = self.inputs.intramodal_template_to_t1_affine
@@ -442,11 +444,11 @@ class ComposeTransforms(SimpleInterface):
             intramodal_template_to_t1_affine = [intramodal_template_to_t1_warp] * num_dwis
 
         transform_order = [
-            (hmc_affines, "hmc"),
-            (fieldwarps, "fieldwarp"),
-            (intramodal_affine, "to b=0 affine"),
-            (intramodal_warp, "to b=0 warp"),
-            (coreg_to_t1, "b=0 to T1w"),
+            (hmc_affines, 'hmc'),
+            (fieldwarps, 'fieldwarp'),
+            (intramodal_affine, 'to b=0 affine'),
+            (intramodal_warp, 'to b=0 warp'),
+            (coreg_to_t1, 'b=0 to T1w'),
         ]
 
         for transform_list, transform_name in transform_order:
@@ -461,7 +463,7 @@ class ComposeTransforms(SimpleInterface):
             assert len(mni_xform) == 2
             image_transforms.append([mni_xform[0]] * num_dwis)
             image_transforms.append([mni_xform[1]] * num_dwis)
-            image_transform_names += ["mni affine", "mni warp"]
+            image_transform_names += ['mni affine', 'mni warp']
 
         # Check that all the transform lists have the same numbers of transforms
         assert all(
@@ -469,10 +471,10 @@ class ComposeTransforms(SimpleInterface):
         )
 
         # If there is just a coreg transform, then we have everything
-        if image_transform_names == ["b=0 to T1w"]:
-            self._results["out_warps"] = image_transforms[0]
-            self._results["out_affines"] = image_transforms[0]
-            self._results["transform_lists"] = image_transforms
+        if image_transform_names == ['b=0 to T1w']:
+            self._results['out_warps'] = image_transforms[0]
+            self._results['out_affines'] = image_transforms[0]
+            self._results['transform_lists'] = image_transforms
             return runtime
 
         # Reverse the order for ANTs
@@ -483,42 +485,42 @@ class ComposeTransforms(SimpleInterface):
         for image_num in range(num_dwis):
             xfms_list.append([xfm[image_num] for xfm in image_transforms])
 
-        LOGGER.info("Composing %s transforms", " -> ".join(image_transform_names))
+        LOGGER.info('Composing %s transforms', ' -> '.join(image_transform_names))
 
         # Get all inputs from the ApplyTransforms object
         ifargs = self.inputs.get()
 
         # Extract number of input images and transforms
         # Get number of parallel jobs
-        num_threads = ifargs.pop("num_threads")
-        save_cmd = ifargs.pop("save_cmd")
+        num_threads = ifargs.pop('num_threads')
+        save_cmd = ifargs.pop('save_cmd')
 
         # Remove certain keys
         for key in [
-            "environ",
-            "ignore_exception",
-            "print_out_composite_warp_file",
-            "terminal_output",
-            "output_image",
-            "input_image",
-            "transforms",
-            "dwi_files",
-            "original_b0_indices",
-            "hmc_affines",
-            "b0_to_intramodal_template_transforms",
-            "intramodal_template_to_t1_affine",
-            "intramodal_template_to_t1_warp",
-            "fieldwarps",
-            "hmcsdc_dwi_ref_to_t1w_affine",
-            "interpolation",
-            "t1_2_mni_forward_transform",
-            "copy_dtype",
+            'environ',
+            'ignore_exception',
+            'print_out_composite_warp_file',
+            'terminal_output',
+            'output_image',
+            'input_image',
+            'transforms',
+            'dwi_files',
+            'original_b0_indices',
+            'hmc_affines',
+            'b0_to_intramodal_template_transforms',
+            'intramodal_template_to_t1_affine',
+            'intramodal_template_to_t1_warp',
+            'fieldwarps',
+            'hmcsdc_dwi_ref_to_t1w_affine',
+            'interpolation',
+            't1_2_mni_forward_transform',
+            'copy_dtype',
         ]:
             ifargs.pop(key, None)
 
         # In qsiprep the transforms have already been merged
         assert len(xfms_list) == num_dwis
-        self._results["transform_lists"] = xfms_list
+        self._results['transform_lists'] = xfms_list
 
         # Inputs are ready to run in parallel
         if num_threads < 1:
@@ -527,7 +529,7 @@ class ComposeTransforms(SimpleInterface):
         if num_threads == 1:
             out_files = [
                 _compose_tfms((in_file, in_xfm, ifargs, i, runtime.cwd))
-                for i, (in_file, in_xfm) in enumerate(zip(dwi_files, xfms_list))
+                for i, (in_file, in_xfm) in enumerate(zip(dwi_files, xfms_list, strict=False))
             ]
         else:
             from concurrent.futures import ThreadPoolExecutor
@@ -537,38 +539,40 @@ class ComposeTransforms(SimpleInterface):
                     _compose_tfms,
                     [
                         (in_file, in_xfm, ifargs, i, runtime.cwd)
-                        for i, (in_file, in_xfm) in enumerate(zip(dwi_files, xfms_list))
+                        for i, (in_file, in_xfm) in enumerate(
+                            zip(dwi_files, xfms_list, strict=False)
+                        )
                     ],
                 )
                 out_files = list(mapper)
 
         # Collect output file names, after sorting by index
-        self._results["out_warps"] = [el[0] for el in out_files]
-        self._results["out_affines"] = [el[2] for el in out_files]
+        self._results['out_warps'] = [el[0] for el in out_files]
+        self._results['out_affines'] = [el[2] for el in out_files]
 
         if save_cmd:
-            self._results["log_cmdline"] = os.path.join(runtime.cwd, "command.txt")
-            with open(self._results["log_cmdline"], "w") as cmdfile:
+            self._results['log_cmdline'] = os.path.join(runtime.cwd, 'command.txt')
+            with open(self._results['log_cmdline'], 'w') as cmdfile:
                 print(
-                    "\n-------\n".join(["\n-------\n".join([el[1], el[3]]) for el in out_files]),
+                    '\n-------\n'.join(['\n-------\n'.join([el[1], el[3]]) for el in out_files]),
                     file=cmdfile,
                 )
         return runtime
 
 
 class GradientRotationInputSpec(BaseInterfaceInputSpec):
-    affine_transforms = InputMultiObject(File(exists=True), desc="ITK affine transforms")
+    affine_transforms = InputMultiObject(File(exists=True), desc='ITK affine transforms')
     original_images = InputMultiObject(
-        File(exists=True), desc="NIfTI images corresponding to bvals, bvecs"
+        File(exists=True), desc='NIfTI images corresponding to bvals, bvecs'
     )
     bvec_files = InputMultiObject(
         File(exists=True),
-        desc="list of split bvec files, must correspond to a "
-        "non-oblique image/reference frame.",
+        desc='list of split bvec files, must correspond to a '
+        'non-oblique image/reference frame.',
         mandatory=True,
     )
     bval_files = InputMultiObject(
-        File(exists=True), desc="list of split bval files", mandatory=True
+        File(exists=True), desc='list of split bval files', mandatory=True
     )
 
 
@@ -585,28 +589,28 @@ class GradientRotation(SimpleInterface):
     output_spec = GradientRotationOutputSpec
 
     def _run_interface(self, runtime):
-        out_root = os.path.join(runtime.cwd, "rotated")
+        out_root = os.path.join(runtime.cwd, 'rotated')
 
         # Simple concatenation of bvals
-        bval_fname = out_root + ".bval"
+        bval_fname = out_root + '.bval'
         concatenate_bvals(self.inputs.bval_files, bval_fname)
-        self._results["bvals"] = bval_fname
+        self._results['bvals'] = bval_fname
 
-        bvec_fname = out_root + ".bvec"
+        bvec_fname = out_root + '.bvec'
         bvecs = concatenate_bvecs(self.inputs.bvec_files)
         commands = bvec_rotation(bvecs, self.inputs.affine_transforms, bvec_fname, runtime)
-        self._results["bvecs"] = bvec_fname
+        self._results['bvecs'] = bvec_fname
 
-        self._results["log_cmdline"] = os.path.join(runtime.cwd, "command.txt")
-        with open(self._results["log_cmdline"], "w") as cmdfile:
-            print("\n-------\n".join(commands), file=cmdfile)
+        self._results['log_cmdline'] = os.path.join(runtime.cwd, 'command.txt')
+        with open(self._results['log_cmdline'], 'w') as cmdfile:
+            print('\n-------\n'.join(commands), file=cmdfile)
         return runtime
 
 
 class LocalGradientRotationInputSpec(GradientRotationInputSpec):
-    warp_transforms = InputMultiObject(File(exists=True), desc="Warps")
-    mask_image = File(exists=True, desc="brain mask in the output space")
-    bvec_files = InputMultiObject(File(exists=True), desc="list of split bvec files")
+    warp_transforms = InputMultiObject(File(exists=True), desc='Warps')
+    mask_image = File(exists=True, desc='brain mask in the output space')
+    bvec_files = InputMultiObject(File(exists=True), desc='list of split bvec files')
 
 
 class LocalGradientRotationOutputSpec(TraitedSpec):
@@ -619,10 +623,10 @@ class LocalGradientRotation(SimpleInterface):
     output_spec = LocalGradientRotationOutputSpec
 
     def _run_interface(self, runtime):
-        out_root = os.path.join(runtime.cwd, "rotated")
+        out_root = os.path.join(runtime.cwd, 'rotated')
         # Create the local bvecs
-        local_bvec_fname = out_root + "_local_bvecs.nii.gz"
-        self._results["local_bvecs"] = local_bvec_fname
+        local_bvec_fname = out_root + '_local_bvecs.nii.gz'
+        self._results['local_bvecs'] = local_bvec_fname
         original_bvecs = concatenate_bvecs(self.inputs.bvec_files)
         commands = local_bvec_rotation(
             original_bvecs,
@@ -631,22 +635,20 @@ class LocalGradientRotation(SimpleInterface):
             runtime,
             local_bvec_fname,
         )
-        self._results["log_cmdline"] = os.path.join(runtime.cwd, "command.txt")
-        with open(self._results["log_cmdline"], "w") as cmdfile:
-            print("\n-------\n".join(commands[1]), file=cmdfile)
+        self._results['log_cmdline'] = os.path.join(runtime.cwd, 'command.txt')
+        with open(self._results['log_cmdline'], 'w') as cmdfile:
+            print('\n-------\n'.join(commands[1]), file=cmdfile)
         return runtime
 
 
 def get_fsl_motion_params(itk_file, src_file, ref_file, working_dir):
-    tmp_fsl_file = fname_presuffix(itk_file, newpath=working_dir, suffix="_FSL.xfm", use_ext=False)
+    tmp_fsl_file = fname_presuffix(itk_file, newpath=working_dir, suffix='_FSL.xfm', use_ext=False)
     fsl_convert_cmd = (
-        "c3d_affine_tool "
-        "-ref {ref_file} "
-        "-src {src_file} "
-        "-itk {itk_file} "
-        "-ras2fsl -o {fsl_file}".format(
-            src_file=src_file, ref_file=ref_file, itk_file=itk_file, fsl_file=tmp_fsl_file
-        )
+        'c3d_affine_tool '
+        f'-ref {ref_file} '
+        f'-src {src_file} '
+        f'-itk {itk_file} '
+        f'-ras2fsl -o {tmp_fsl_file}'
     )
     os.system(fsl_convert_cmd)
 
@@ -680,7 +682,7 @@ def get_fsl_motion_params(itk_file, src_file, ref_file, working_dir):
         return trans
 
     img_center = get_image_center(src_file)
-    c3d_out_xfm = np.loadtxt(fname=tmp_fsl_file, dtype="float")
+    c3d_out_xfm = np.loadtxt(fname=tmp_fsl_file, dtype='float')
     [T, Rotmat, Z, S] = decompose44(c3d_out_xfm)
     T = get_trans_from_offset(img_center, c3d_out_xfm)
 
@@ -707,7 +709,7 @@ def match_transforms(dwi_files, transforms, b0_indices):
 
     # Do sanity checks
     if not len(transforms) == len(b0_indices):
-        raise Exception("number of transforms does not match number of b0 images")
+        raise Exception('number of transforms does not match number of b0 images')
 
     # Create a list of which hmc affines go with each of the split images
     nearest_affines = []
@@ -726,7 +728,7 @@ def concatenate_bvals(bval_list, out_file):
         collected_vals.append(np.loadtxt(bval_file, ndmin=1))
     final_bvals = np.concatenate(collected_vals).squeeze()
     if out_file is not None:
-        np.savetxt(out_file, final_bvals, fmt=str("%i"))
+        np.savetxt(out_file, final_bvals, fmt='%i')
     return final_bvals
 
 
@@ -745,10 +747,10 @@ def concatenate_bvecs(input_files):
 
 
 def write_concatenated_fsl_gradients(bval_files, bvec_files, out_prefix):
-    bvec_file = out_prefix + ".bvec"
-    bval_file = out_prefix + ".bval"
+    bvec_file = out_prefix + '.bvec'
+    bval_file = out_prefix + '.bval'
     stacked_bvecs = concatenate_bvecs(bvec_files)
-    np.savetxt(bvec_file, stacked_bvecs.T, fmt="%.8f", delimiter=" ")
+    np.savetxt(bvec_file, stacked_bvecs.T, fmt='%.8f', delimiter=' ')
     concatenate_bvals(bval_files, bval_file)
     return bval_file, bvec_file
 
@@ -778,30 +780,30 @@ def bvec_rotation(ortho_bvecs, transforms, output_file, runtime):
     """
     aattp_rotated = []
     commands = []
-    for bvec, transform in zip(ortho_bvecs, transforms):
+    for bvec, transform in zip(ortho_bvecs, transforms, strict=False):
         vec, cmd = aattp_rotate_vec(bvec, transform, runtime)
         aattp_rotated.append(vec)
         commands.append(cmd)
     rotated_vecs = np.row_stack(aattp_rotated)
-    np.savetxt(output_file, rotated_vecs.T, fmt=str("%.8f"))
+    np.savetxt(output_file, rotated_vecs.T, fmt='%.8f')
     return commands
 
 
 def aattp_rotate_vec(orig_vec, transform, runtime):
     if (orig_vec**2).sum() == 0:
-        return orig_vec, "b0: No rotation"
+        return orig_vec, 'b0: No rotation'
 
     orig_txt = fname_presuffix(
-        transform, suffix="_pre_rotation.csv", newpath=runtime.cwd, use_ext=False
+        transform, suffix='_pre_rotation.csv', newpath=runtime.cwd, use_ext=False
     )
     rotated_txt = fname_presuffix(
-        transform, suffix="_post_rotation.csv", newpath=runtime.cwd, use_ext=False
+        transform, suffix='_post_rotation.csv', newpath=runtime.cwd, use_ext=False
     )
 
     # Save it for ants
-    with open(orig_txt, "w") as bvec_txt:
-        bvec_txt.write("x,y,z,t\n0.0,0.0,0.0,0.0\n")
-        bvec_txt.write(",".join(map(str, 5 * orig_vec)) + ",0.0\n")
+    with open(orig_txt, 'w') as bvec_txt:
+        bvec_txt.write('x,y,z,t\n0.0,0.0,0.0,0.0\n')
+        bvec_txt.write(','.join(map(str, 5 * orig_vec)) + ',0.0\n')
 
     def unit_vector(vector):
         """The unit vector of the vector."""
@@ -809,18 +811,18 @@ def aattp_rotate_vec(orig_vec, transform, runtime):
 
     # Only use the affine transforms for global bvecs
     # Reverse order and inverse to antsApplyTransformsToPoints
-    transforms = "--transform [%s, 1]" % transform
+    transforms = '--transform [%s, 1]' % transform
     cmd = (
-        "antsApplyTransformsToPoints --dimensionality 3 --input "
+        'antsApplyTransformsToPoints --dimensionality 3 --input '
         + orig_txt
-        + " --output "
+        + ' --output '
         + rotated_txt
-        + " "
+        + ' '
         + transforms
     )
     LOGGER.info(cmd)
     os.system(cmd)
-    rotated_vec = np.loadtxt(rotated_txt, skiprows=1, delimiter=",")[:, :3]
+    rotated_vec = np.loadtxt(rotated_txt, skiprows=1, delimiter=',')[:, :3]
     rotated_unit_vec = unit_vector(rotated_vec[1] - rotated_vec[0])
 
     return rotated_unit_vec, cmd
@@ -830,7 +832,7 @@ def _compose_tfms(args):
     """Create a composite transform from inputs."""
     in_file, in_xform, ifargs, index, newpath = args
     out_file = fname_presuffix(
-        in_file, suffix="_xform-%05d" % index, newpath=newpath, use_ext=True
+        in_file, suffix='_xform-%05d' % index, newpath=newpath, use_ext=True
     )
 
     xfm = ants.ApplyTransforms(
@@ -838,33 +840,33 @@ def _compose_tfms(args):
         transforms=in_xform,
         output_image=out_file,
         print_out_composite_warp_file=True,
-        interpolation="LanczosWindowedSinc",
+        interpolation='LanczosWindowedSinc',
         **ifargs,
     )
-    xfm.terminal_output = "allatonce"
+    xfm.terminal_output = 'allatonce'
     xfm.resource_monitor = False
     runtime = xfm.run().runtime
     LOGGER.info(runtime.cmdline)
 
     # Force floating point precision
     nii = nb.load(out_file, mmap=False)
-    nii.set_data_dtype(np.dtype("float32"))
+    nii.set_data_dtype(np.dtype('float32'))
     nii.to_filename(out_file)
 
     # Get just the affine Transforms
-    affines = [transform for transform in in_xform if ".nii" not in transform]
+    affines = [transform for transform in in_xform if '.nii' not in transform]
     out_affine = fname_presuffix(
-        in_file, suffix="_affine_xform-%05d.mat" % index, newpath=newpath, use_ext=False
+        in_file, suffix='_affine_xform-%05d.mat' % index, newpath=newpath, use_ext=False
     )
-    affine_file, affine_cmd = compose_affines(ifargs["reference_image"], affines, out_affine)
+    affine_file, affine_cmd = compose_affines(ifargs['reference_image'], affines, out_affine)
 
     return (out_file, runtime.cmdline, affine_file, affine_cmd)
 
 
 def compose_affines(reference_image, affine_list, output_file):
     """Use antsApplyTransforms to get a single affine from multiple affines."""
-    cmd = "antsApplyTransforms -d 3 -r %s -o Linear[%s] " % (reference_image, output_file)
-    cmd += " ".join(["--transform %s" % trf for trf in affine_list])
+    cmd = 'antsApplyTransforms -d 3 -r %s -o Linear[%s] ' % (reference_image, output_file)
+    cmd += ' '.join(['--transform %s' % trf for trf in affine_list])
     LOGGER.info(cmd)
     os.system(cmd)
     if not os.path.exists(output_file):
@@ -879,15 +881,15 @@ def create_tensor_image(mask_img, direction, prefix):
     info from here
     https://github.com/ANTsX/ANTs/wiki/Importing-diffusion-tensor-data-from-other-software
     """
-    out_fname = prefix + "_tensor.nii"
+    out_fname = prefix + '_tensor.nii'
     evecs = all_tensor_evecs(direction)
     evals = np.diag([1.0, 0.5, 0.05])
     tensor = np.linalg.multi_dot([evecs, evals, evecs.T])
 
     temp_components = []
-    for direction in ["xx", "xy", "xz", "yy", "yz", "zz"]:
-        this_component = prefix + "_temp_dtiComp_%s.nii.gz" % direction
-        LOGGER.info("writing %s", this_component)
+    for direction in ['xx', 'xy', 'xz', 'yy', 'yz', 'zz']:
+        this_component = prefix + '_temp_dtiComp_%s.nii.gz' % direction
+        LOGGER.info('writing %s', this_component)
         nb.Nifti1Image(
             mask_img.get_fdata() * tensor[tensor_index[direction]],
             mask_img.affine,
@@ -895,7 +897,7 @@ def create_tensor_image(mask_img, direction, prefix):
         ).to_filename(this_component)
         temp_components.append(this_component)
 
-    compose_cmd = "ImageMath 3 %s ComponentTo3DTensor %s" % (out_fname, prefix + "_temp_dtiComp_")
+    compose_cmd = 'ImageMath 3 %s ComponentTo3DTensor %s' % (out_fname, prefix + '_temp_dtiComp_')
     LOGGER.info(compose_cmd)
     os.system(compose_cmd)
     for temp_component in temp_components:
@@ -907,8 +909,8 @@ def create_tensor_image(mask_img, direction, prefix):
 def reorient_tensor_image(tensor_image, warp_file, mask_img, prefix, output_fname):
     cmds = []
     to_remove = []
-    reoriented_tensor_fname = prefix + "reoriented_tensor.nii"
-    reorient_cmd = "ReorientTensorImage 3 %s %s %s" % (
+    reoriented_tensor_fname = prefix + 'reoriented_tensor.nii'
+    reorient_cmd = 'ReorientTensorImage 3 %s %s %s' % (
         tensor_image,
         reoriented_tensor_fname,
         warp_file,
@@ -949,14 +951,14 @@ def reorient_tensor_image(tensor_image, warp_file, mask_img, prefix, output_fnam
 
 def get_vector_nii(data, affine, header):
     hdr = header.copy()
-    hdr.set_data_dtype(np.dtype("<f4"))
-    hdr.set_intent("vector", (), "")
-    return nb.Nifti1Image(data[:, :, :, np.newaxis, :].astype(np.dtype("<f4")), affine, hdr)
+    hdr.set_data_dtype(np.dtype('<f4'))
+    hdr.set_intent('vector', (), '')
+    return nb.Nifti1Image(data[:, :, :, np.newaxis, :].astype(np.dtype('<f4')), affine, hdr)
 
 
 def local_bvec_rotation(original_bvecs, warp_transforms, mask_image, runtime, output_fname):
     """Create a vector in each voxel that accounts for nonlinear warps."""
-    prefix = os.path.join(runtime.cwd, "local_bvec_")
+    prefix = os.path.join(runtime.cwd, 'local_bvec_')
     mask_img = nb.load(mask_image)
     mask_data = mask_img.get_fdata()
     b0_image = get_vector_nii(
@@ -964,14 +966,16 @@ def local_bvec_rotation(original_bvecs, warp_transforms, mask_image, runtime, ou
     )
     commands = []
     rotated_vec_files = []
-    for vecnum, (original_bvec, warp_file) in enumerate(zip(original_bvecs, warp_transforms)):
-        num_prefix = prefix + "%03d_" % vecnum
-        out_fname = num_prefix + "rotated.nii.gz"
+    for vecnum, (original_bvec, warp_file) in enumerate(
+        zip(original_bvecs, warp_transforms, strict=False)
+    ):
+        num_prefix = prefix + '%03d_' % vecnum
+        out_fname = num_prefix + 'rotated.nii.gz'
         # if it's a b0, no rotation needed
         if np.sum(original_bvec**2) == 0:
             b0_image.to_filename(out_fname)
             rotated_vec_files.append(out_fname)
-            commands.append("B0: No rotation")
+            commands.append('B0: No rotation')
             continue
 
         # otherwise, rotate it
@@ -982,7 +986,7 @@ def local_bvec_rotation(original_bvecs, warp_transforms, mask_image, runtime, ou
         commands.append(rotate_cmd)
         rotated_vec_files.append(out_fname)
     concatenated = np.stack(
-        [nb.load(img, mmap=False).get_fdata().astype("<f4") for img in rotated_vec_files], -1
+        [nb.load(img, mmap=False).get_fdata().astype('<f4') for img in rotated_vec_files], -1
     )
     nb.Nifti1Image(concatenated, mask_img.affine, mask_img.header).to_filename(output_fname)
     for temp_file in rotated_vec_files:

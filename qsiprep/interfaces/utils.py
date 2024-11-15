@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 """
@@ -25,16 +24,16 @@ from nipype.interfaces.base import (
 from nipype.interfaces.io import add_traits
 from nipype.utils.filemanip import fname_presuffix
 
-IFLOGGER = logging.getLogger("nipype.interfaces")
+IFLOGGER = logging.getLogger('nipype.interfaces')
 
 
 class AddTSVHeaderInputSpec(BaseInterfaceInputSpec):
-    in_file = File(exists=True, mandatory=True, desc="input file")
-    columns = traits.List(traits.Str, mandatory=True, desc="header for columns")
+    in_file = File(exists=True, mandatory=True, desc='input file')
+    columns = traits.List(traits.Str, mandatory=True, desc='header for columns')
 
 
 class AddTSVHeaderOutputSpec(TraitedSpec):
-    out_file = File(exists=True, desc="output average file")
+    out_file = File(exists=True, desc='output average file')
 
 
 class AddTSVHeader(SimpleInterface):
@@ -62,7 +61,7 @@ class AddTSVHeader(SimpleInterface):
     >>> addheader.inputs.in_file = 'data.tsv'
     >>> addheader.inputs.columns = ['a', 'b', 'c', 'd', 'e']
     >>> res = addheader.run()
-    >>> pd.read_csv(res.outputs.out_file, sep='\s+', index_col=None,
+    >>> pd.read_csv(res.outputs.out_file, sep='\\s+', index_col=None,
     ...             engine='python')  # doctest: +NORMALIZE_WHITESPACE
           a     b     c     d     e
     0   0.0   1.0   2.0   3.0   4.0
@@ -83,14 +82,14 @@ class AddTSVHeader(SimpleInterface):
 
     def _run_interface(self, runtime):
         out_file = fname_presuffix(
-            self.inputs.in_file, suffix="_motion.tsv", newpath=runtime.cwd, use_ext=False
+            self.inputs.in_file, suffix='_motion.tsv', newpath=runtime.cwd, use_ext=False
         )
         data = np.loadtxt(self.inputs.in_file)
         np.savetxt(
-            out_file, data, delimiter="\t", header="\t".join(self.inputs.columns), comments=""
+            out_file, data, delimiter='\t', header='\t'.join(self.inputs.columns), comments=''
         )
 
-        self._results["out_file"] = out_file
+        self._results['out_file'] = out_file
         return runtime
 
 
@@ -106,11 +105,11 @@ class TestInput(SimpleInterface):
 
 
 class ConcatAffinesInputSpec(DynamicTraitedSpec, BaseInterfaceInputSpec):
-    invert = traits.Bool(False, usedefault=True, desc="Invert output transform")
+    invert = traits.Bool(False, usedefault=True, desc='Invert output transform')
 
 
 class ConcatAffinesOutputSpec(TraitedSpec):
-    out_mat = File(exists=True, desc="Output transform")
+    out_mat = File(exists=True, desc='Output transform')
 
 
 class ConcatAffines(SimpleInterface):
@@ -122,23 +121,23 @@ class ConcatAffines(SimpleInterface):
         self._num_affines = num_affines
         trait_type = File(exists=True)
         if num_affines == 0:
-            add_traits(self.inputs, ["mat_list"], trait_type)
+            add_traits(self.inputs, ['mat_list'], trait_type)
         elif num_affines < 26:
             add_traits(self.inputs, self._get_names(num_affines), trait_type)
 
     @staticmethod
     def _get_names(num_affines):
-        A = ord("A") - 1
-        return ["mat_{}to{}".format(chr(X), chr(X + 1)) for X in range(A + num_affines, A, -1)]
+        A = ord('A') - 1
+        return [f'mat_{chr(X)}to{chr(X + 1)}' for X in range(A + num_affines, A, -1)]
 
     def _run_interface(self, runtime):
-        out_mat = os.path.join(runtime.cwd, "concat.mat")
+        out_mat = os.path.join(runtime.cwd, 'concat.mat')
         in_list = [self.inputs.get()[name] for name in self._get_names(self._num_affines)]
 
         out_xfm = _concat_xfms(in_list, invert=self.inputs.invert)
-        np.savetxt(out_mat, out_xfm, fmt=str("%.12g"))
+        np.savetxt(out_mat, out_xfm, fmt='%.12g')
 
-        self._results["out_mat"] = out_mat
+        self._results['out_mat'] = out_mat
         return runtime
 
 
@@ -166,7 +165,7 @@ def _tpm2roi(
         and mask_erosion_prop < 1
     )
     if erode_in:
-        eroded_mask_file = fname_presuffix(in_mask, suffix="_eroded", newpath=newpath)
+        eroded_mask_file = fname_presuffix(in_mask, suffix='_eroded', newpath=newpath)
         mask_img = nb.load(in_mask)
         mask_data = mask_img.get_fdata().astype(np.uint8)
         if mask_erosion_mm:
@@ -200,7 +199,7 @@ def _tpm2roi(
                 roi_mask = nd.binary_erosion(roi_mask, iterations=1)
 
     # Create image to resample
-    roi_fname = fname_presuffix(in_tpm, suffix="_roi", newpath=newpath)
+    roi_fname = fname_presuffix(in_tpm, suffix='_roi', newpath=newpath)
     roi_img = nb.Nifti1Image(roi_mask, tpm_img.affine, tpm_img.header)
     roi_img.set_data_dtype(np.uint8)
     roi_img.to_filename(roi_fname)

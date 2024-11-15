@@ -56,8 +56,8 @@ from ...interfaces.itk import AffineToRigid, DisassembleTransform
 from ...interfaces.niworkflows import RobustMNINormalizationRPT
 from ...utils.misc import fix_multi_source_name
 
-ANTS_VERSION = BrainExtraction().version or "<ver>"
-FS_VERSION = "7.3.1"
+ANTS_VERSION = BrainExtraction().version or '<ver>'
+FS_VERSION = '7.3.1'
 
 
 #  pylint: disable=R0914
@@ -66,7 +66,7 @@ def init_anat_preproc_wf(
     num_additional_t2ws,
     has_rois,
     anatomical_template,
-    name="anat_preproc_wf",
+    name='anat_preproc_wf',
 ):
     r"""
     This workflow controls the anatomical preprocessing stages of qsiprep.
@@ -143,35 +143,35 @@ def init_anat_preproc_wf(
     workflow = Workflow(name=name)
     inputnode = pe.Node(
         niu.IdentityInterface(
-            fields=["t1w", "t2w", "roi", "flair", "subjects_dir", "subject_id"],
+            fields=['t1w', 't2w', 'roi', 'flair', 'subjects_dir', 'subject_id'],
         ),
-        name="inputnode",
+        name='inputnode',
     )
     outputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
-                "t1_preproc",
-                "t2_preproc",
-                "t1_brain",
-                "t1_mask",
-                "t1_seg",
-                "t1_aseg",
-                "t1_aparc",
-                "t1_2_mni",
-                "t1_2_mni_forward_transform",
-                "t1_2_mni_reverse_transform",
-                "t2w_unfatsat",
-                "segmentation_qc",
-                "template_transforms",
-                "acpc_transform",
-                "acpc_inv_transform",
-                "dwi_sampling_grid",
+                't1_preproc',
+                't2_preproc',
+                't1_brain',
+                't1_mask',
+                't1_seg',
+                't1_aseg',
+                't1_aparc',
+                't1_2_mni',
+                't1_2_mni_forward_transform',
+                't1_2_mni_reverse_transform',
+                't2w_unfatsat',
+                'segmentation_qc',
+                'template_transforms',
+                'acpc_transform',
+                'acpc_inv_transform',
+                'dwi_sampling_grid',
             ]
         ),
-        name="outputnode",
+        name='outputnode',
     )
 
-    dwi_only = config.workflow.anat_modality == "none"
+    dwi_only = config.workflow.anat_modality == 'none'
 
     # XXX: This is a temporary solution until QSIPrep supports flexible output spaces.
     get_template = pe.Node(
@@ -179,19 +179,19 @@ def init_anat_preproc_wf(
             template_spec=anatomical_template,
             anatomical_contrast=config.workflow.anat_modality,
         ),
-        name="get_template_image",
+        name='get_template_image',
     )
     mask_template = pe.Node(
-        afni.Calc(expr="a*b", outputtype="NIFTI_GZ"),
-        name="mask_template",
+        afni.Calc(expr='a*b', outputtype='NIFTI_GZ'),
+        name='mask_template',
     )
     reorient_brain_to_lps = pe.Node(
-        afni.Resample(orientation="RAI", outputtype="NIFTI_GZ"),
-        name="reorient_brain_to_lps",
+        afni.Resample(orientation='RAI', outputtype='NIFTI_GZ'),
+        name='reorient_brain_to_lps',
     )
     reorient_mask_to_lps = pe.Node(
-        afni.Resample(orientation="RAI", outputtype="NIFTI_GZ"),
-        name="reorient_mask_to_lps",
+        afni.Resample(orientation='RAI', outputtype='NIFTI_GZ'),
+        name='reorient_mask_to_lps',
     )
 
     # Create the output reference grid_image
@@ -209,10 +209,10 @@ def init_anat_preproc_wf(
 
     if dwi_only:
         config.loggers.workflow.info(
-            "No anatomical scans will be processed! Visual reports will show template masks."
+            'No anatomical scans will be processed! Visual reports will show template masks.'
         )
         workflow.connect([
-            (reorient_brain_to_lps, outputnode, [("out_file", "t1_brain")]),
+            (reorient_brain_to_lps, outputnode, [('out_file', 't1_brain')]),
             (reorient_mask_to_lps, outputnode, [
                 ('out_file', 't1_mask'),
                 ('out_file', 't1_seg'),
@@ -220,8 +220,8 @@ def init_anat_preproc_wf(
         ])  # fmt:skip
 
         reorient_template_to_lps = pe.Node(
-            afni.Resample(orientation="RAI", outputtype="NIFTI_GZ"),
-            name="reorient_template_to_lps",
+            afni.Resample(orientation='RAI', outputtype='NIFTI_GZ'),
+            name='reorient_template_to_lps',
         )
         workflow.connect([
             (get_template, reorient_template_to_lps, [('template_file', 'in_file')]),
@@ -258,8 +258,8 @@ and used as an anatomical reference throughout the workflow.
 
     # Skull strip the anatomical reference
     synthstrip_anat_wf = init_synthstrip_wf(
-        unfatsat=config.workflow.anat_modality == "T2w",
-        name="synthstrip_anat_wf",
+        unfatsat=config.workflow.anat_modality == 'T2w',
+        name='synthstrip_anat_wf',
     )
 
     # Segment the anatomical reference
@@ -267,13 +267,11 @@ and used as an anatomical reference throughout the workflow.
 
     # Synthstrip is used a lot elsewhere, so make boilerplate for the anatomy-specific
     # version here. TODO: get version number automatically
-    workflow.__postdesc__ = """\
-Brain extraction was performed on the {contrast} image using
+    workflow.__postdesc__ = f"""\
+Brain extraction was performed on the {config.workflow.anat_modality} image using
 SynthStrip [@synthstrip] and automated segmentation was
 performed using SynthSeg [@synthseg1, @synthseg2] from
-FreeSurfer version {fs_version}. """.format(
-        fs_version=FS_VERSION, contrast=config.workflow.anat_modality
-    )
+FreeSurfer version {FS_VERSION}. """
 
     # Perform registrations
     anat_normalization_wf = init_anat_normalization_wf(
@@ -283,37 +281,37 @@ FreeSurfer version {fs_version}. """.format(
 
     # Resampling
     rigid_acpc_resample_brain = pe.Node(
-        ants.ApplyTransforms(input_image_type=0, interpolation="LanczosWindowedSinc"),
-        name="rigid_acpc_resample_brain",
+        ants.ApplyTransforms(input_image_type=0, interpolation='LanczosWindowedSinc'),
+        name='rigid_acpc_resample_brain',
     )
     rigid_acpc_resample_head = pe.Node(
-        ants.ApplyTransforms(input_image_type=0, interpolation="LanczosWindowedSinc"),
-        name="rigid_acpc_resample_head",
+        ants.ApplyTransforms(input_image_type=0, interpolation='LanczosWindowedSinc'),
+        name='rigid_acpc_resample_head',
     )
     rigid_acpc_resample_unfatsat = pe.Node(
-        ants.ApplyTransforms(input_image_type=0, interpolation="LanczosWindowedSinc"),
-        name="rigid_acpc_resample_unfatsat",
+        ants.ApplyTransforms(input_image_type=0, interpolation='LanczosWindowedSinc'),
+        name='rigid_acpc_resample_unfatsat',
     )
     rigid_acpc_resample_aseg = pe.Node(
-        ants.ApplyTransforms(input_image_type=0, interpolation="MultiLabel"),
-        name="rigid_acpc_resample_aseg",
+        ants.ApplyTransforms(input_image_type=0, interpolation='MultiLabel'),
+        name='rigid_acpc_resample_aseg',
     )
     rigid_acpc_resample_mask = pe.Node(
-        ants.ApplyTransforms(input_image_type=0, interpolation="MultiLabel"),
-        name="rigid_acpc_resample_mask",
+        ants.ApplyTransforms(input_image_type=0, interpolation='MultiLabel'),
+        name='rigid_acpc_resample_mask',
     )
 
     acpc_aseg_to_dseg = pe.Node(
         mrtrix3.LabelConvert(
-            in_lut=pkgr("qsiprep", "data/FreeSurferColorLUT.txt"),
-            in_config=pkgr("qsiprep", "data/FreeSurfer2dseg.txt"),
-            out_file="acpc_dseg.nii.gz",
+            in_lut=pkgr('qsiprep', 'data/FreeSurferColorLUT.txt'),
+            in_config=pkgr('qsiprep', 'data/FreeSurfer2dseg.txt'),
+            out_file='acpc_dseg.nii.gz',
         ),
-        name="acpc_aseg_to_dseg",
+        name='acpc_aseg_to_dseg',
     )
 
     # What to do about T2w's?
-    if config.workflow.anat_modality == "T2w":
+    if config.workflow.anat_modality == 'T2w':
         workflow.connect([
             (synthstrip_anat_wf, rigid_acpc_resample_unfatsat, [
                 ('outputnode.unfatsat', 'input_image')]),
@@ -328,7 +326,7 @@ FreeSurfer version {fs_version}. """.format(
         if num_additional_t2ws > 0:
             t2w_preproc_wf = init_t2w_preproc_wf(
                 num_t2ws=num_additional_t2ws,
-                name="t2w_preproc_wf",
+                name='t2w_preproc_wf',
             )
             workflow.connect([
                 (rigid_acpc_resample_brain, t2w_preproc_wf, [
@@ -339,8 +337,8 @@ FreeSurfer version {fs_version}. """.format(
                     ('outputnode.t2w_unfatsat', 't2w_unfatsat')])
             ])  # fmt:skip
 
-    seg2msks = pe.Node(niu.Function(function=_seg2msks), name="seg2msks")
-    seg_rpt = pe.Node(ROIsPlot(colors=["r", "magenta", "b", "g"]), name="seg_rpt")
+    seg2msks = pe.Node(niu.Function(function=_seg2msks), name='seg2msks')
+    seg_rpt = pe.Node(ROIsPlot(colors=['r', 'magenta', 'b', 'g']), name='seg_rpt')
     anat_reports_wf = init_anat_reports_wf()
 
     workflow.connect([
@@ -369,7 +367,7 @@ FreeSurfer version {fs_version}. """.format(
 
         # Make AC-PC transform, do nonlinear registration if requested
         (inputnode, anat_normalization_wf, [
-            ("roi", "inputnode.roi")
+            ('roi', 'inputnode.roi')
         ]),
         (synthstrip_anat_wf, anat_normalization_wf, [
             ('outputnode.brain_mask', 'inputnode.brain_mask')]),
@@ -454,17 +452,17 @@ FreeSurfer version {fs_version}. """.format(
     return workflow
 
 
-def init_t2w_preproc_wf(num_t2ws, name="t2w_preproc_wf"):
+def init_t2w_preproc_wf(num_t2ws, name='t2w_preproc_wf'):
     """If T1w is the anatomical contrast, you may also want to process the T2ws for
     worlflows that can use them (ie DRBUDDI). This"""
     workflow = Workflow(name=name)
     inputnode = pe.Node(
-        niu.IdentityInterface(fields=["t2w_images", "t1_brain"]),
-        name="inputnode",
+        niu.IdentityInterface(fields=['t2w_images', 't1_brain']),
+        name='inputnode',
     )
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=["t2_preproc", "t2w_unfatsat"]),
-        name="outputnode",
+        niu.IdentityInterface(fields=['t2_preproc', 't2w_unfatsat']),
+        name='outputnode',
     )
 
     # Ensure there is 1 and only 1 T2w reference
@@ -476,25 +474,25 @@ image using an affine transformation in antsRegistration.
 """
     # Skull strip the anatomical reference
     synthstrip_anat_wf = init_synthstrip_wf(
-        do_padding=True, unfatsat=True, name="synthstrip_anat_wf"
+        do_padding=True, unfatsat=True, name='synthstrip_anat_wf'
     )
 
     # Perform registrations
-    settings = pkgr("qsiprep", "data/affine.json")
+    settings = pkgr('qsiprep', 'data/affine.json')
     t2_brain_to_t1_brain = pe.Node(
         ants.Registration(from_file=settings),
-        name="t2_brain_to_t1_brain",
+        name='t2_brain_to_t1_brain',
         n_procs=config.nipype.omp_nthreads,
     )
 
     # Resampling
     rigid_resample_t2w = pe.Node(
-        ants.ApplyTransforms(input_image_type=0, interpolation="LanczosWindowedSinc"),
-        name="rigid_resample_t2w",
+        ants.ApplyTransforms(input_image_type=0, interpolation='LanczosWindowedSinc'),
+        name='rigid_resample_t2w',
     )
     rigid_resample_unfatsat = pe.Node(
-        ants.ApplyTransforms(input_image_type=0, interpolation="LanczosWindowedSinc"),
-        name="rigid_resample_unfatsat",
+        ants.ApplyTransforms(input_image_type=0, interpolation='LanczosWindowedSinc'),
+        name='rigid_resample_unfatsat',
     )
 
     workflow.connect([
@@ -567,7 +565,7 @@ def init_anat_template_wf(num_images) -> Workflow:
 
     from ..dwi.hmc import init_b0_hmc_wf
 
-    workflow = Workflow(name="anat_template_wf")
+    workflow = Workflow(name='anat_template_wf')
     contrast = config.workflow.anat_modality
 
     if num_images > 1:
@@ -578,29 +576,29 @@ A {contrast}-reference map was computed after registration of
 """.format(
             contrast=config.workflow.anat_modality,
             num_images=num_images,
-            ants_ver=BrainExtraction().version or "<ver>",
+            ants_ver=BrainExtraction().version or '<ver>',
         )
 
-    inputnode = pe.Node(niu.IdentityInterface(fields=["images"]), name="inputnode")
+    inputnode = pe.Node(niu.IdentityInterface(fields=['images']), name='inputnode')
     outputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
-                "template",
-                "bias_corrected",
-                "valid_list",
-                "template_transforms",
-                "out_report",
+                'template',
+                'bias_corrected',
+                'valid_list',
+                'template_transforms',
+                'out_report',
             ]
         ),
-        name="outputnode",
+        name='outputnode',
     )
 
     omp_nthreads = config.nipype.omp_nthreads
 
     # 0. Reorient anatomical image(s) to LPS and resample to common voxel space
-    template_dimensions = pe.Node(TemplateDimensions(), name="template_dimensions")
+    template_dimensions = pe.Node(TemplateDimensions(), name='template_dimensions')
     anat_conform = pe.MapNode(
-        Conform(deoblique_header=True), iterfield="in_file", name="anat_conform"
+        Conform(deoblique_header=True), iterfield='in_file', name='anat_conform'
     )
 
     workflow.connect([
@@ -634,9 +632,9 @@ A {contrast}-reference map was computed after registration of
                 return in_list[0]
             return in_list
 
-        n4_correct = pe.Node(n4_interface, name="n4_correct", n_procs=omp_nthreads)
+        n4_correct = pe.Node(n4_interface, name='n4_correct', n_procs=omp_nthreads)
 
-        outputnode.inputs.template_transforms = [pkgr("qsiprep", "data/itkIdentityTransform.txt")]
+        outputnode.inputs.template_transforms = [pkgr('qsiprep', 'data/itkIdentityTransform.txt')]
 
         workflow.connect([
             (anat_conform, outputnode, [
@@ -654,15 +652,15 @@ A {contrast}-reference map was computed after registration of
     #     combination of fields and N4 fails with merged images.
     # 1b. Align and merge if several T1w images are provided
     n4_correct = pe.MapNode(
-        n4_interface, iterfield="input_image", name="n4_correct", n_procs=omp_nthreads
+        n4_interface, iterfield='input_image', name='n4_correct', n_procs=omp_nthreads
     )
 
     # Make an unbiased template, same as used for b=0 registration
     align_to = config.workflow.subject_anatomical_reference
     anat_merge_wf = init_b0_hmc_wf(
-        align_to="first" if (align_to == "first-alphabetically") else "iterative",
-        transform="Rigid",
-        name="anat_merge_wf",
+        align_to='first' if (align_to == 'first-alphabetically') else 'iterative',
+        transform='Rigid',
+        name='anat_merge_wf',
         boilerplate=False,
         prioritize_omp=True,
     )
@@ -715,30 +713,30 @@ def init_anat_normalization_wf(anatomical_template, has_rois=False) -> Workflow:
         Reportlet visualizing quality of skull-stripping
     """
 
-    workflow = Workflow(name="anat_normalization_wf")
+    workflow = Workflow(name='anat_normalization_wf')
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
-                "template_image",
-                "template_mask",
-                "anatomical_reference",
-                "brain_mask",
-                "roi",
+                'template_image',
+                'template_mask',
+                'anatomical_reference',
+                'brain_mask',
+                'roi',
             ]
         ),
-        name="inputnode",
+        name='inputnode',
     )
     outputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
-                "to_template_nonlinear_transform",
-                "to_template_rigid_transform",
-                "from_template_nonlinear_transform",
-                "from_template_rigid_transform",
-                "out_report",
+                'to_template_nonlinear_transform',
+                'to_template_rigid_transform',
+                'from_template_nonlinear_transform',
+                'from_template_rigid_transform',
+                'out_report',
             ]
         ),
-        name="outputnode",
+        name='outputnode',
     )
     omp_nthreads = config.nipype.omp_nthreads
 
@@ -749,11 +747,11 @@ a 6-DOF transform extracted from a full Affine registration to the
 {anatomical_template} template. """
 
     acpc_settings = pkgr(
-        "qsiprep",
+        'qsiprep',
         (
-            "data/intramodal_ACPC.json"
+            'data/intramodal_ACPC.json'
             if not config.execution.sloppy
-            else "data/intramodal_ACPC_sloppy.json"
+            else 'data/intramodal_ACPC_sloppy.json'
         ),
     )
     acpc_reg = pe.Node(
@@ -762,14 +760,14 @@ a 6-DOF transform extracted from a full Affine registration to the
             generate_report=False,
             settings=[acpc_settings],
         ),
-        name="acpc_reg",
+        name='acpc_reg',
         n_procs=omp_nthreads,
     )
     disassemble_transform = pe.Node(
         DisassembleTransform(),
-        name="disassemble_transform",
+        name='disassemble_transform',
     )
-    extract_rigid_transform = pe.Node(AffineToRigid(), name="extract_rigid_transform")
+    extract_rigid_transform = pe.Node(AffineToRigid(), name='extract_rigid_transform')
 
     workflow.connect([
         (inputnode, acpc_reg, [
@@ -796,32 +794,32 @@ a 6-DOF transform extracted from a full Affine registration to the
 A full nonlinear registration to the template from AC-PC space was
 estimated via symmetric nonlinear registration (SyN) using antsRegistration. """
     rigid_acpc_resample_anat = pe.Node(
-        ants.ApplyTransforms(input_image_type=0, interpolation="LanczosWindowedSinc"),
-        name="rigid_acpc_resample_anat",
+        ants.ApplyTransforms(input_image_type=0, interpolation='LanczosWindowedSinc'),
+        name='rigid_acpc_resample_anat',
     )
-    config.loggers.workflow.info("Running nonlinear normalization to template")
+    config.loggers.workflow.info('Running nonlinear normalization to template')
     rigid_acpc_resample_mask = pe.Node(
-        ants.ApplyTransforms(input_image_type=0, interpolation="MultiLabel"),
-        name="rigid_acpc_resample_mask",
+        ants.ApplyTransforms(input_image_type=0, interpolation='MultiLabel'),
+        name='rigid_acpc_resample_mask',
     )
 
     if config.execution.sloppy:
-        config.loggers.workflow.info("Using QuickSyN")
+        config.loggers.workflow.info('Using QuickSyN')
         # Requires a warp file: make an inaccurate one
-        settings = pkgr("qsiprep", "data/quick_syn.json")
+        settings = pkgr('qsiprep', 'data/quick_syn.json')
         anat_norm_interface = RobustMNINormalizationRPT(
             float=True, generate_report=True, settings=[settings]
         )
     else:
         anat_norm_interface = RobustMNINormalizationRPT(
-            float=True, generate_report=True, flavor="precise"
+            float=True, generate_report=True, flavor='precise'
         )
 
     anat_nlin_normalization = pe.Node(
-        anat_norm_interface, name="anat_nlin_normalization", n_procs=omp_nthreads
+        anat_norm_interface, name='anat_nlin_normalization', n_procs=omp_nthreads
     )
     anat_nlin_normalization.inputs.template = anatomical_template
-    anat_nlin_normalization.inputs.orientation = "LPS"
+    anat_nlin_normalization.inputs.orientation = 'LPS'
 
     workflow.connect([
         (inputnode, anat_nlin_normalization, [
@@ -848,10 +846,10 @@ estimated via symmetric nonlinear registration (SyN) using antsRegistration. """
     ])  # fmt:skip
 
     if has_rois:
-        desc += "ROI masks of abnormal tissue were incorporated into the registration. "
+        desc += 'ROI masks of abnormal tissue were incorporated into the registration. '
         rigid_acpc_resample_roi = pe.Node(
-            ants.ApplyTransforms(input_image_type=0, interpolation="MultiLabel"),
-            name="rigid_acpc_resample_roi",
+            ants.ApplyTransforms(input_image_type=0, interpolation='MultiLabel'),
+            name='rigid_acpc_resample_roi',
         )
         workflow.connect([
             (rigid_acpc_resample_roi, anat_nlin_normalization, [
@@ -867,33 +865,33 @@ estimated via symmetric nonlinear registration (SyN) using antsRegistration. """
     return workflow
 
 
-def init_dl_prep_wf(name="dl_prep_wf") -> Workflow:
+def init_dl_prep_wf(name='dl_prep_wf') -> Workflow:
     """Prepare images for use in the FreeSurfer deep learning functions"""
     workflow = Workflow(name=name)
-    inputnode = pe.Node(niu.IdentityInterface(fields=["image"]), name="inputnode")
+    inputnode = pe.Node(niu.IdentityInterface(fields=['image']), name='inputnode')
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=["padded_image"]),
-        name="outputnode",
+        niu.IdentityInterface(fields=['padded_image']),
+        name='outputnode',
     )
     skulled_1mm_resample = pe.Node(
-        afni.Resample(outputtype="NIFTI_GZ", voxel_size=(1.0, 1.0, 1.0)),
-        name="skulled_1mm_resample",
+        afni.Resample(outputtype='NIFTI_GZ', voxel_size=(1.0, 1.0, 1.0)),
+        name='skulled_1mm_resample',
     )
     skulled_autobox = pe.Node(
-        afni.Autobox(outputtype="NIFTI_GZ", padding=3),
-        name="skulled_autobox",
+        afni.Autobox(outputtype='NIFTI_GZ', padding=3),
+        name='skulled_autobox',
     )
     prepare_synthstrip_reference = pe.Node(
         PrepareSynthStripGrid(),
-        name="prepare_synthstrip_reference",
+        name='prepare_synthstrip_reference',
     )
     resample_skulled_to_reference = pe.Node(
         ants.ApplyTransforms(
             dimension=3,
-            interpolation="BSpline",
-            transforms=["identity"],
+            interpolation='BSpline',
+            transforms=['identity'],
         ),
-        name="resample_skulled_to_reference",
+        name='resample_skulled_to_reference',
     )
 
     workflow.connect([
@@ -908,43 +906,43 @@ def init_dl_prep_wf(name="dl_prep_wf") -> Workflow:
     return workflow
 
 
-def init_synthstrip_wf(do_padding=False, unfatsat=False, name="synthstrip_wf") -> Workflow:
+def init_synthstrip_wf(do_padding=False, unfatsat=False, name='synthstrip_wf') -> Workflow:
     workflow = Workflow(name=name)
     inputnode = pe.Node(
-        niu.IdentityInterface(fields=["padded_image", "original_image"]),
-        name="inputnode",
+        niu.IdentityInterface(fields=['padded_image', 'original_image']),
+        name='inputnode',
     )
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=["brain_image", "brain_mask", "unfatsat"]),
-        name="outputnode",
+        niu.IdentityInterface(fields=['brain_image', 'brain_mask', 'unfatsat']),
+        name='outputnode',
     )
 
     if not config.execution.sloppy:
         synthstrip = pe.Node(
             FixHeaderSynthStrip(),  # Threads are always fixed to 1 in the run
-            name="synthstrip",
+            name='synthstrip',
             n_procs=config.nipype.omp_nthreads,
         )
     else:
         synthstrip = pe.Node(
             MockSynthStrip(),
-            name="mocksynthstrip",
+            name='mocksynthstrip',
         )
 
     mask_to_original_grid = pe.Node(
         ants.ApplyTransforms(
-            dimension=3, transforms=["identity"], interpolation="NearestNeighbor"
+            dimension=3, transforms=['identity'], interpolation='NearestNeighbor'
         ),
-        name="mask_to_original_grid",
+        name='mask_to_original_grid',
     )
     mask_brain = pe.Node(
-        ants.MultiplyImages(dimension=3, output_product_image="masked_brain.nii"),
-        name="mask_brain",
+        ants.MultiplyImages(dimension=3, output_product_image='masked_brain.nii'),
+        name='mask_brain',
     )
 
     # For T2w images, create an artificially skull-downweighted image
     if unfatsat:
-        desaturate_skull = pe.Node(DesaturateSkull(), name="desaturate_skull")
+        desaturate_skull = pe.Node(DesaturateSkull(), name='desaturate_skull')
         workflow.connect([
             (mask_brain, desaturate_skull, [('output_product_image', 'brain_mask_image')]),
             (inputnode, desaturate_skull, [('original_image', 'skulled_t2w_image')]),
@@ -953,7 +951,7 @@ def init_synthstrip_wf(do_padding=False, unfatsat=False, name="synthstrip_wf") -
 
     # If the input image isn't already padded, do it here
     if do_padding:
-        padding_wf = init_dl_prep_wf(name="pad_before_" + name)
+        padding_wf = init_dl_prep_wf(name='pad_before_' + name)
         workflow.connect([
             (inputnode, padding_wf, [('original_image', 'inputnode.image')]),
             (padding_wf, synthstrip, [('outputnode.padded_image', 'input_image')])
@@ -966,7 +964,7 @@ def init_synthstrip_wf(do_padding=False, unfatsat=False, name="synthstrip_wf") -
         (inputnode, mask_to_original_grid, [('original_image', 'reference_image')]),
         (mask_to_original_grid, outputnode, [('output_image', 'brain_mask')]),
         (inputnode, mask_brain, [('original_image', 'first_input')]),
-        (mask_to_original_grid, mask_brain, [("output_image", "second_input")]),
+        (mask_to_original_grid, mask_brain, [('output_image', 'second_input')]),
         (mask_brain, outputnode, [('output_product_image', 'brain_image')])
     ])  # fmt:skip
 
@@ -974,27 +972,27 @@ def init_synthstrip_wf(do_padding=False, unfatsat=False, name="synthstrip_wf") -
 
 
 def init_synthseg_wf() -> Workflow:
-    workflow = Workflow(name="synthseg_wf")
+    workflow = Workflow(name='synthseg_wf')
     inputnode = pe.Node(
-        niu.IdentityInterface(fields=["padded_image", "original_image"]),
-        name="inputnode",
+        niu.IdentityInterface(fields=['padded_image', 'original_image']),
+        name='inputnode',
     )
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=["aparc_image", "posterior_image", "qc_file"]),
-        name="outputnode",
+        niu.IdentityInterface(fields=['aparc_image', 'posterior_image', 'qc_file']),
+        name='outputnode',
     )
 
     if not config.execution.sloppy:
         synthseg = pe.Node(
             SynthSeg(fast=config.execution.sloppy, num_threads=1),  # Hard code to 1
             n_procs=config.nipype.omp_nthreads,
-            name="synthseg",
+            name='synthseg',
         )
     else:
         synthseg = pe.Node(
             MockSynthSeg(fast=config.execution.sloppy, num_threads=1),  # Hard code to 1
             n_procs=config.nipype.omp_nthreads,
-            name="mocksynthseg",
+            name='mocksynthseg',
         )
 
     workflow.connect([
@@ -1010,12 +1008,12 @@ def init_synthseg_wf() -> Workflow:
 
 def init_output_grid_wf() -> Workflow:
     """Generate a non-oblique, uniform voxel-size grid around a brain."""
-    workflow = Workflow(name="output_grid_wf")
+    workflow = Workflow(name='output_grid_wf')
     inputnode = pe.Node(
-        niu.IdentityInterface(fields=["template_image", "input_image"]),
-        name="inputnode",
+        niu.IdentityInterface(fields=['template_image', 'input_image']),
+        name='inputnode',
     )
-    outputnode = pe.Node(niu.IdentityInterface(fields=["grid_image"]), name="outputnode")
+    outputnode = pe.Node(niu.IdentityInterface(fields=['grid_image']), name='outputnode')
     # Create the output reference grid_image
     if config.workflow.output_resolution is None:
         voxel_size = traits.Undefined
@@ -1024,16 +1022,16 @@ def init_output_grid_wf() -> Workflow:
     padding = 4 if config.workflow.infant else 8
 
     autobox_template = pe.Node(
-        afni.Autobox(outputtype="NIFTI_GZ", padding=padding), name="autobox_template"
+        afni.Autobox(outputtype='NIFTI_GZ', padding=padding), name='autobox_template'
     )
     deoblique_autobox = pe.Node(
-        afni.Warp(outputtype="NIFTI_GZ", deoblique=True), name="deoblique_autobox"
+        afni.Warp(outputtype='NIFTI_GZ', deoblique=True), name='deoblique_autobox'
     )
     voxel_size_chooser = pe.Node(
-        VoxelSizeChooser(voxel_size=voxel_size), name="voxel_size_chooser"
+        VoxelSizeChooser(voxel_size=voxel_size), name='voxel_size_chooser'
     )
     resample_to_voxel_size = pe.Node(
-        afni.Resample(outputtype="NIFTI_GZ"), name="resample_to_voxel_size"
+        afni.Resample(outputtype='NIFTI_GZ'), name='resample_to_voxel_size'
     )
 
     workflow.connect([
@@ -1057,49 +1055,49 @@ def init_anat_reports_wf() -> Workflow:
     """
     Set up a battery of datasinks to store reports in the right location
     """
-    workflow = Workflow(name="anat_reports_wf")
+    workflow = Workflow(name='anat_reports_wf')
 
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
-                "source_file",
-                "t1_conform_report",
-                "seg_report",
-                "t1_2_mni_report",
-                "recon_report",
+                'source_file',
+                't1_conform_report',
+                'seg_report',
+                't1_2_mni_report',
+                'recon_report',
             ]
         ),
-        name="inputnode",
+        name='inputnode',
     )
 
     ds_report_t1_conform = pe.Node(
         DerivativesDataSink(
             base_directory=config.execution.output_dir,
-            datatype="figures",
-            suffix="conform",
+            datatype='figures',
+            suffix='conform',
         ),
-        name="ds_report_t1_conform",
+        name='ds_report_t1_conform',
         run_without_submitting=True,
     )
 
     ds_report_t1_2_mni = pe.Node(
         DerivativesDataSink(
             base_directory=config.execution.output_dir,
-            datatype="figures",
-            suffix="t1w2mni",
+            datatype='figures',
+            suffix='t1w2mni',
         ),
-        name="ds_report_t1_2_mni",
+        name='ds_report_t1_2_mni',
         run_without_submitting=True,
     )
 
     ds_report_t1_seg_mask = pe.Node(
         DerivativesDataSink(
             base_directory=config.execution.output_dir,
-            datatype="figures",
-            desc="seg",
-            suffix="mask",
+            datatype='figures',
+            desc='seg',
+            suffix='mask',
         ),
-        name="ds_report_t1_seg_mask",
+        name='ds_report_t1_seg_mask',
         run_without_submitting=True,
     )
 
@@ -1123,35 +1121,35 @@ def init_anat_derivatives_wf(anatomical_template) -> Workflow:
     """
     Set up a battery of datasinks to store derivatives in the right location
     """
-    workflow = Workflow(name="anat_derivatives_wf")
+    workflow = Workflow(name='anat_derivatives_wf')
 
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
-                "source_files",
-                "t1_template_transforms",
-                "t1_acpc_transform",
-                "t1_acpc_inv_transform",
-                "t1_preproc",
-                "t1_mask",
-                "t1_seg",
-                "t1_2_mni_forward_transform",
-                "t1_2_mni_reverse_transform",
-                "t1_2_mni",
-                "t1_aseg",
+                'source_files',
+                't1_template_transforms',
+                't1_acpc_transform',
+                't1_acpc_inv_transform',
+                't1_preproc',
+                't1_mask',
+                't1_seg',
+                't1_2_mni_forward_transform',
+                't1_2_mni_reverse_transform',
+                't1_2_mni',
+                't1_aseg',
             ]
         ),
-        name="inputnode",
+        name='inputnode',
     )
 
     t1_name = pe.Node(
         niu.Function(
             function=fix_multi_source_name,
-            input_names=["in_files", "dwi_only", "include_session", "anatomical_contrast"],
+            input_names=['in_files', 'dwi_only', 'include_session', 'anatomical_contrast'],
         ),
-        name="t1_name",
+        name='t1_name',
     )
-    t1_name.inputs.include_session = config.workflow.subject_anatomical_reference == "sessionwise"
+    t1_name.inputs.include_session = config.workflow.subject_anatomical_reference == 'sessionwise'
     t1_name.inputs.anatomical_contrast = config.workflow.anat_modality
     t1_name.inputs.dwi_only = False
 
@@ -1159,11 +1157,11 @@ def init_anat_derivatives_wf(anatomical_template) -> Workflow:
         DerivativesDataSink(
             compress=True,
             base_directory=config.execution.output_dir,
-            space="ACPC",
-            desc="preproc",
+            space='ACPC',
+            desc='preproc',
             keep_dtype=True,
         ),
-        name="ds_t1_preproc",
+        name='ds_t1_preproc',
         run_without_submitting=True,
     )
 
@@ -1171,11 +1169,11 @@ def init_anat_derivatives_wf(anatomical_template) -> Workflow:
         DerivativesDataSink(
             compress=True,
             base_directory=config.execution.output_dir,
-            space="ACPC",
-            desc="brain",
-            suffix="mask",
+            space='ACPC',
+            desc='brain',
+            suffix='mask',
         ),
-        name="ds_t1_mask",
+        name='ds_t1_mask',
         run_without_submitting=True,
     )
 
@@ -1183,10 +1181,10 @@ def init_anat_derivatives_wf(anatomical_template) -> Workflow:
         DerivativesDataSink(
             compress=True,
             base_directory=config.execution.output_dir,
-            space="ACPC",
-            suffix="dseg",
+            space='ACPC',
+            suffix='dseg',
         ),
-        name="ds_t1_seg",
+        name='ds_t1_seg',
         run_without_submitting=True,
     )
 
@@ -1194,11 +1192,11 @@ def init_anat_derivatives_wf(anatomical_template) -> Workflow:
         DerivativesDataSink(
             compress=True,
             base_directory=config.execution.output_dir,
-            space="ACPC",
-            desc="aseg",
-            suffix="dseg",
+            space='ACPC',
+            desc='aseg',
+            suffix='dseg',
         ),
-        name="ds_t1_aseg",
+        name='ds_t1_aseg',
         run_without_submitting=True,
     )
 
@@ -1206,49 +1204,49 @@ def init_anat_derivatives_wf(anatomical_template) -> Workflow:
     ds_t1_template_transforms = pe.MapNode(
         DerivativesDataSink(
             base_directory=config.execution.output_dir,
-            to="anat",
-            mode="image",
-            suffix="xfm",
-            **{"from": "orig"},
+            to='anat',
+            mode='image',
+            suffix='xfm',
+            **{'from': 'orig'},
         ),
-        iterfield=["source_file", "in_file"],
-        name="ds_t1_template_transforms",
+        iterfield=['source_file', 'in_file'],
+        name='ds_t1_template_transforms',
         run_without_submitting=True,
     )
 
     ds_t1_mni_inv_warp = pe.Node(
         DerivativesDataSink(
             base_directory=config.execution.output_dir,
-            to="ACPC",
-            mode="image",
-            suffix="xfm",
-            **{"from": anatomical_template},
+            to='ACPC',
+            mode='image',
+            suffix='xfm',
+            **{'from': anatomical_template},
         ),
-        name="ds_t1_mni_inv_warp",
+        name='ds_t1_mni_inv_warp',
         run_without_submitting=True,
     )
 
     ds_t1_template_acpc_transform = pe.Node(
         DerivativesDataSink(
             base_directory=config.execution.output_dir,
-            to="ACPC",
-            mode="image",
-            suffix="xfm",
-            **{"from": "anat"},
+            to='ACPC',
+            mode='image',
+            suffix='xfm',
+            **{'from': 'anat'},
         ),
-        name="ds_t1_template_acpc_transforms",
+        name='ds_t1_template_acpc_transforms',
         run_without_submitting=True,
     )
 
     ds_t1_template_acpc_inv_transform = pe.Node(
         DerivativesDataSink(
             base_directory=config.execution.output_dir,
-            to="anat",
-            mode="image",
-            suffix="xfm",
-            **{"from": "ACPC"},
+            to='anat',
+            mode='image',
+            suffix='xfm',
+            **{'from': 'ACPC'},
         ),
-        name="ds_t1_template_acpc_inv_transforms",
+        name='ds_t1_template_acpc_inv_transforms',
         run_without_submitting=True,
     )
 
@@ -1256,11 +1254,11 @@ def init_anat_derivatives_wf(anatomical_template) -> Workflow:
         DerivativesDataSink(
             base_directory=config.execution.output_dir,
             to=anatomical_template,
-            mode="image",
-            suffix="xfm",
-            **{"from": "ACPC"},
+            mode='image',
+            suffix='xfm',
+            **{'from': 'ACPC'},
         ),
-        name="ds_t1_mni_warp",
+        name='ds_t1_mni_warp',
         run_without_submitting=True,
     )
 
@@ -1306,7 +1304,7 @@ def _seg2msks(in_file, newpath=None):
     for i in range(1, 4):
         ldata = np.zeros_like(labels)
         ldata[labels == i] = 1
-        out_files.append(fname_presuffix(in_file, suffix="_label%03d" % i, newpath=newpath))
+        out_files.append(fname_presuffix(in_file, suffix='_label%03d' % i, newpath=newpath))
         nii.__class__(ldata, nii.affine, nii.header).to_filename(out_files[-1])
 
     return out_files

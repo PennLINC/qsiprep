@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 """
@@ -26,7 +25,7 @@ from ...interfaces.nilearn import EnhanceB0
 from ..anatomical import init_synthstrip_wf
 
 
-def init_pepolar_unwarp_wf(dwi_meta, epi_fmaps, name="pepolar_unwarp_wf"):
+def init_pepolar_unwarp_wf(dwi_meta, epi_fmaps, name='pepolar_unwarp_wf'):
     """
     This workflow takes in a set of EPI files with opposite phase encoding
     direction than the target file and calculates a displacements field
@@ -76,32 +75,30 @@ def init_pepolar_unwarp_wf(dwi_meta, epi_fmaps, name="pepolar_unwarp_wf"):
             ANTs
 
     """
-    dwi_file_pe = dwi_meta["PhaseEncodingDirection"]
+    dwi_file_pe = dwi_meta['PhaseEncodingDirection']
     omp_nthreads = config.nipype.omp_nthreads
-    args = "-noXdis -noYdis -noZdis"
-    rm_arg = {"i": "-noXdis", "j": "-noYdis", "k": "-noZdis"}[dwi_file_pe[0]]
-    args = args.replace(rm_arg, "")
+    args = '-noXdis -noYdis -noZdis'
+    rm_arg = {'i': '-noXdis', 'j': '-noYdis', 'k': '-noZdis'}[dwi_file_pe[0]]
+    args = args.replace(rm_arg, '')
 
     workflow = Workflow(name=name)
     workflow.__desc__ = """\
 A deformation field to correct for susceptibility distortions was estimated
 based on two echo-planar imaging (EPI) references with opposing phase-encoding
 directions, using `3dQwarp` @afni (AFNI {afni_ver}).
-""".format(
-        afni_ver="".join(["%02d" % v for v in afni.Info().version() or []])
-    )
+""".format(afni_ver=''.join(['%02d' % v for v in afni.Info().version() or []]))
 
     inputnode = pe.Node(
-        niu.IdentityInterface(fields=["in_reference", "in_reference_brain", "in_mask"]),
-        name="inputnode",
+        niu.IdentityInterface(fields=['in_reference', 'in_reference_brain', 'in_mask']),
+        name='inputnode',
     )
 
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=["out_reference", "out_warp"]), name="outputnode"
+        niu.IdentityInterface(fields=['out_reference', 'out_warp']), name='outputnode'
     )
 
     prepare_epi_opposite_wf = init_prepare_dwi_epi_wf(
-        omp_nthreads=omp_nthreads, name="prepare_epi_opposite_wf"
+        omp_nthreads=omp_nthreads, name='prepare_epi_opposite_wf'
     )
     prepare_epi_opposite_wf.inputs.inputnode.fmaps = epi_fmaps
 
@@ -112,10 +109,10 @@ directions, using `3dQwarp` @afni (AFNI {afni_ver}).
             noweight=True,
             minpatch=9,
             nopadWARP=True,
-            environ={"OMP_NUM_THREADS": "%d" % omp_nthreads},
+            environ={'OMP_NUM_THREADS': '%d' % omp_nthreads},
             args=args,
         ),
-        name="qwarp",
+        name='qwarp',
         n_procs=omp_nthreads,
     )
 
@@ -125,15 +122,15 @@ directions, using `3dQwarp` @afni (AFNI {afni_ver}).
         (inputnode, qwarp, [('in_reference_brain', 'in_file')])
     ])  # fmt:skip
 
-    to_ants = pe.Node(niu.Function(function=_fix_hdr), name="to_ants", mem_gb=0.01)
+    to_ants = pe.Node(niu.Function(function=_fix_hdr), name='to_ants', mem_gb=0.01)
 
-    cphdr_warp = pe.Node(CopyHeader(), name="cphdr_warp", mem_gb=0.01)
+    cphdr_warp = pe.Node(CopyHeader(), name='cphdr_warp', mem_gb=0.01)
 
     unwarp_reference = pe.Node(
         ANTSApplyTransformsRPT(
-            dimension=3, generate_report=False, float=True, interpolation="LanczosWindowedSinc"
+            dimension=3, generate_report=False, float=True, interpolation='LanczosWindowedSinc'
         ),
-        name="unwarp_reference",
+        name='unwarp_reference',
     )
 
     workflow.connect([
@@ -150,7 +147,7 @@ directions, using `3dQwarp` @afni (AFNI {afni_ver}).
     return workflow
 
 
-def init_prepare_dwi_epi_wf(omp_nthreads, orientation="LPS", name="prepare_epi_wf"):
+def init_prepare_dwi_epi_wf(omp_nthreads, orientation='LPS', name='prepare_epi_wf'):
     """
     This workflow takes in a set of dwi files with with the same phase
     encoding direction and returns a single 3D volume ready to be used in
@@ -161,14 +158,14 @@ def init_prepare_dwi_epi_wf(omp_nthreads, orientation="LPS", name="prepare_epi_w
     and AFNI 3dUnifize, skullstripping using FSL BET and AFNI 3dAutomask,
     and rigid coregistration to the reference using ANTs.
     """
-    inputnode = pe.Node(niu.IdentityInterface(fields=["fmaps", "ref_brain"]), name="inputnode")
+    inputnode = pe.Node(niu.IdentityInterface(fields=['fmaps', 'ref_brain']), name='inputnode')
 
-    outputnode = pe.Node(niu.IdentityInterface(fields=["out_file"]), name="outputnode")
+    outputnode = pe.Node(niu.IdentityInterface(fields=['out_file']), name='outputnode')
 
     prepare_b0s = pe.MapNode(
         B0RPEFieldmap(output_3d_images=True, orientation=orientation),
-        iterfield="b0_file",
-        name="prepare_b0s",
+        iterfield='b0_file',
+        name='prepare_b0s',
     )
 
     merge = pe.Node(
@@ -180,23 +177,23 @@ def init_prepare_dwi_epi_wf(omp_nthreads, orientation="LPS", name="prepare_epi_w
             # 7-DOF (rigid + intensity)
             no_iteration=True,
             subsample_threshold=200,
-            out_file="template.nii.gz",
+            out_file='template.nii.gz',
         ),
-        name="merge",
+        name='merge',
     )
 
-    enhance_b0 = pe.Node(EnhanceB0(), name="enhance_b0")
-    ants_settings = pkgr.resource_filename("qsiprep", "data/translation_rigid.json")
+    enhance_b0 = pe.Node(EnhanceB0(), name='enhance_b0')
+    ants_settings = pkgr.resource_filename('qsiprep', 'data/translation_rigid.json')
     fmap2ref_reg = pe.Node(
         ants.Registration(from_file=ants_settings, output_warped_image=True),
-        name="fmap2ref_reg",
+        name='fmap2ref_reg',
         n_procs=omp_nthreads,
     )
     resample_epi_fmap = pe.Node(
         ANTSApplyTransformsRPT(
-            dimension=3, generate_report=False, float=True, interpolation="LanczosWindowedSinc"
+            dimension=3, generate_report=False, float=True, interpolation='LanczosWindowedSinc'
         ),
-        name="resample_epi_fmap",
+        name='resample_epi_fmap',
     )
     workflow = Workflow(name=name)
 
@@ -221,55 +218,55 @@ def init_prepare_dwi_epi_wf(omp_nthreads, orientation="LPS", name="prepare_epi_w
 
 
 def init_extended_pepolar_report_wf(
-    segment_t2w, omp_nthreads=1, name="extended_pepolar_report_wf"
+    segment_t2w, omp_nthreads=1, name='extended_pepolar_report_wf'
 ):
     workflow = Workflow(name=name)
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
-                "t1w_seg_transform",
-                "t1w_seg",
-                "b0_ref",
-                "fieldmap_type",
-                "b0_up_image",
-                "b0_up_corrected_image",
-                "b0_down_image",
-                "b0_down_corrected_image",
-                "up_fa_image",
-                "up_fa_corrected_image",
-                "down_fa_image",
-                "down_fa_corrected_image",
-                "t2w_image",
+                't1w_seg_transform',
+                't1w_seg',
+                'b0_ref',
+                'fieldmap_type',
+                'b0_up_image',
+                'b0_up_corrected_image',
+                'b0_down_image',
+                'b0_down_corrected_image',
+                'up_fa_image',
+                'up_fa_corrected_image',
+                'down_fa_image',
+                'down_fa_corrected_image',
+                't2w_image',
             ]
         ),
-        name="inputnode",
+        name='inputnode',
     )
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=["fa_sdc_report", "b0_sdc_report"]), name="outputnode"
+        niu.IdentityInterface(fields=['fa_sdc_report', 'b0_sdc_report']), name='outputnode'
     )
 
-    pepolar_report = pe.Node(PEPOLARReport(), name="peoplar_report")
+    pepolar_report = pe.Node(PEPOLARReport(), name='peoplar_report')
 
     workflow.connect([
         (inputnode, pepolar_report, [
-            ("fieldmap_type", "fieldmap_type"),
-            ("b0_up_image", "b0_up_image"),
-            ("b0_up_corrected_image", "b0_up_corrected_image"),
-            ("b0_down_image", "b0_down_image"),
-            ("b0_down_corrected_image", "b0_down_corrected_image"),
-            ("up_fa_image", "up_fa_image"),
-            ("up_fa_corrected_image", "up_fa_corrected_image"),
-            ("down_fa_image", "down_fa_image"),
-            ("down_fa_corrected_image", "down_fa_corrected_image")]),
+            ('fieldmap_type', 'fieldmap_type'),
+            ('b0_up_image', 'b0_up_image'),
+            ('b0_up_corrected_image', 'b0_up_corrected_image'),
+            ('b0_down_image', 'b0_down_image'),
+            ('b0_down_corrected_image', 'b0_down_corrected_image'),
+            ('up_fa_image', 'up_fa_image'),
+            ('up_fa_corrected_image', 'up_fa_corrected_image'),
+            ('down_fa_image', 'down_fa_image'),
+            ('down_fa_corrected_image', 'down_fa_corrected_image')]),
         (pepolar_report, outputnode, [
-            ("b0_sdc_report", "b0_sdc_report"),
-            ("fa_sdc_report", "fa_sdc_report")])
+            ('b0_sdc_report', 'b0_sdc_report'),
+            ('fa_sdc_report', 'fa_sdc_report')])
     ])  # fmt:skip
 
     # If we don't have a T1w segmentation, make one from the t2w
     if segment_t2w:
         t2w_n4 = pe.Node(
-            ants.N4BiasFieldCorrection(dimension=3), name="t2w_n4", n_procs=omp_nthreads
+            ants.N4BiasFieldCorrection(dimension=3), name='t2w_n4', n_procs=omp_nthreads
         )
 
         strip_t2w_wf = init_synthstrip_wf(do_padding=True, omp_nthreads=omp_nthreads)
@@ -277,42 +274,42 @@ def init_extended_pepolar_report_wf(
         t2w_atropos = pe.Node(
             ants.Atropos(
                 dimension=3,
-                initialization="Otsu",
+                initialization='Otsu',
                 mrf_radius=[1, 1, 1],
-                posterior_formulation="Socrates",
+                posterior_formulation='Socrates',
                 use_mixture_model_proportions=False,
                 mrf_smoothing_factor=0.1,
                 number_of_tissue_classes=3,
             ),
-            name="t2w_atropos",
+            name='t2w_atropos',
             n_procs=omp_nthreads,
         )
 
         workflow.connect([
             (inputnode, t2w_n4, [
-                ("t2w_image", "input_image")]),
-            (t2w_n4, strip_t2w_wf, [("output_image", "inputnode.original_image")]),
+                ('t2w_image', 'input_image')]),
+            (t2w_n4, strip_t2w_wf, [('output_image', 'inputnode.original_image')]),
             (strip_t2w_wf, t2w_atropos, [
-                ("outputnode.brain_image", "intensity_images"),
-                ("outputnode.brain_mask", "mask_image")]),
-            (t2w_atropos, pepolar_report, [("classified_image", "t2w_seg")])
+                ('outputnode.brain_image', 'intensity_images'),
+                ('outputnode.brain_mask', 'mask_image')]),
+            (t2w_atropos, pepolar_report, [('classified_image', 't2w_seg')])
         ])  # fmt:skip
     else:
         map_seg = pe.Node(
             ants.ApplyTransforms(
-                dimension=3, float=True, interpolation="MultiLabel", invert_transform_flags=[True]
+                dimension=3, float=True, interpolation='MultiLabel', invert_transform_flags=[True]
             ),
-            name="map_seg",
+            name='map_seg',
             mem_gb=0.3,
         )
 
-        sel_wm = pe.Node(ExtractWM(), name="sel_wm")
+        sel_wm = pe.Node(ExtractWM(), name='sel_wm')
 
         workflow.connect([
             (inputnode, map_seg, [
-                ("b0_ref", "reference_image"),
-                ("t1w_seg_transform", "transforms"),
-                ("t1w_seg", "input_image")]),
+                ('b0_ref', 'reference_image'),
+                ('t1w_seg_transform', 'transforms'),
+                ('t1w_seg', 'input_image')]),
             (map_seg, sel_wm, [('output_image', 'in_seg')]),
             (sel_wm, pepolar_report, [('out', 't1w_seg')])
         ])  # fmt:skip
@@ -326,8 +323,8 @@ def _fix_hdr(in_file, newpath=None):
 
     nii = nb.load(in_file)
     hdr = nii.header.copy()
-    hdr.set_data_dtype("<f4")
-    hdr.set_intent("vector", (), "")
-    out_file = fname_presuffix(in_file, "_warpfield", newpath=newpath)
-    nb.Nifti1Image(nii.get_fdata().astype("<f4"), nii.affine, hdr).to_filename(out_file)
+    hdr.set_data_dtype('<f4')
+    hdr.set_intent('vector', (), '')
+    out_file = fname_presuffix(in_file, '_warpfield', newpath=newpath)
+    nb.Nifti1Image(nii.get_fdata().astype('<f4'), nii.affine, hdr).to_filename(out_file)
     return out_file

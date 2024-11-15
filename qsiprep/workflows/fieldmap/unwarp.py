@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 """
@@ -39,7 +38,7 @@ from ...interfaces.fmap import get_ees as _get_ees
 from ...interfaces.niworkflows import FUGUEvsm2ANTSwarp
 
 
-def init_sdc_unwarp_wf(name="sdc_unwarp_wf"):
+def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
     """
     This workflow takes in a displacements fieldmap and calculates the corresponding
     displacements field (in other words, an ANTs-compatible warp file).
@@ -84,7 +83,7 @@ def init_sdc_unwarp_wf(name="sdc_unwarp_wf"):
 
     """
     omp_nthreads = config.nipype.omp_nthreads
-    fsl_check = os.environ.get("FSLDIR", False)
+    fsl_check = os.environ.get('FSLDIR', False)
     if not fsl_check:
         raise Exception(
             """Container in use does not have FSL. To use this workflow,
@@ -94,37 +93,37 @@ def init_sdc_unwarp_wf(name="sdc_unwarp_wf"):
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
-                "in_reference",
-                "in_reference_brain",
-                "in_mask",
-                "metadata",
-                "fmap_ref",
-                "fmap_mask",
-                "fmap",
+                'in_reference',
+                'in_reference_brain',
+                'in_mask',
+                'metadata',
+                'fmap_ref',
+                'fmap_mask',
+                'fmap',
             ]
         ),
-        name="inputnode",
+        name='inputnode',
     )
     outputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
-                "out_reference",
-                "out_reference_brain",
-                "out_warp",
-                "out_mask",
-                "out_jacobian",
-                "out_hz",
+                'out_reference',
+                'out_reference_brain',
+                'out_warp',
+                'out_mask',
+                'out_jacobian',
+                'out_hz',
             ]
         ),
-        name="outputnode",
+        name='outputnode',
     )
 
     # Register the reference of the fieldmap to the reference
     # of the target image (the one that shall be corrected)
-    ants_settings = pkgr.resource_filename("qsiprep", "data/fmap-any_registration.json")
+    ants_settings = pkgr.resource_filename('qsiprep', 'data/fmap-any_registration.json')
     if config.execution.sloppy:
         ants_settings = pkgr.resource_filename(
-            "qsiprep", "data/fmap-any_registration_testing.json"
+            'qsiprep', 'data/fmap-any_registration_testing.json'
         )
     fmap2ref_reg = pe.Node(
         ANTSRegistrationRPT(
@@ -133,13 +132,13 @@ def init_sdc_unwarp_wf(name="sdc_unwarp_wf"):
             output_inverse_warped_image=True,
             output_warped_image=True,
         ),
-        name="fmap2ref_reg",
+        name='fmap2ref_reg',
         n_procs=omp_nthreads,
     )
 
     ds_report_reg = pe.Node(
-        DerivativesDataSink(datatype="figures", suffix="fmapreg"),
-        name="ds_report_reg",
+        DerivativesDataSink(datatype='figures', suffix='fmapreg'),
+        name='ds_report_reg',
         mem_gb=0.01,
         run_without_submitting=True,
     )
@@ -147,59 +146,59 @@ def init_sdc_unwarp_wf(name="sdc_unwarp_wf"):
     # Map the VSM into the EPI space
     fmap2ref_apply = pe.Node(
         ANTSApplyTransformsRPT(
-            generate_report=True, dimension=3, interpolation="BSpline", float=True
+            generate_report=True, dimension=3, interpolation='BSpline', float=True
         ),
-        name="fmap2ref_apply",
+        name='fmap2ref_apply',
     )
 
     fmap_mask2ref_apply = pe.Node(
         ANTSApplyTransformsRPT(
-            generate_report=False, dimension=3, interpolation="MultiLabel", float=True
+            generate_report=False, dimension=3, interpolation='MultiLabel', float=True
         ),
-        name="fmap_mask2ref_apply",
+        name='fmap_mask2ref_apply',
     )
 
     ds_report_reg_vsm = pe.Node(
-        DerivativesDataSink(datatype="figures", suffix="fmapregvsm"),
-        name="ds_report_vsm",
+        DerivativesDataSink(datatype='figures', suffix='fmapregvsm'),
+        name='ds_report_vsm',
         mem_gb=0.01,
         run_without_submitting=True,
     )
 
     # Fieldmap to rads and then to voxels (VSM - voxel shift map)
-    torads = pe.Node(FieldToRadS(fmap_range=0.5), name="torads")
+    torads = pe.Node(FieldToRadS(fmap_range=0.5), name='torads')
 
     # Make one in Hz for eddy
-    tohz = pe.Node(FieldToHz(range_hz=1), name="tohz")
+    tohz = pe.Node(FieldToHz(range_hz=1), name='tohz')
 
-    get_ees = pe.Node(niu.Function(function=_get_ees, output_names=["ees"]), name="get_ees")
+    get_ees = pe.Node(niu.Function(function=_get_ees, output_names=['ees']), name='get_ees')
 
-    gen_vsm = pe.Node(fsl.FUGUE(save_unmasked_shift=True, save_fmap=True), name="gen_vsm")
+    gen_vsm = pe.Node(fsl.FUGUE(save_unmasked_shift=True, save_fmap=True), name='gen_vsm')
     # Convert the VSM into a DFM (displacements field map)
     # or: FUGUE shift to ANTS warping.
-    vsm2dfm = pe.Node(FUGUEvsm2ANTSwarp(), name="vsm2dfm")
+    vsm2dfm = pe.Node(FUGUEvsm2ANTSwarp(), name='vsm2dfm')
     jac_dfm = pe.Node(
-        ants.CreateJacobianDeterminantImage(imageDimension=3, outputImage="jacobian.nii.gz"),
-        name="jac_dfm",
+        ants.CreateJacobianDeterminantImage(imageDimension=3, outputImage='jacobian.nii.gz'),
+        name='jac_dfm',
     )
 
     unwarp_reference = pe.Node(
         ANTSApplyTransformsRPT(
-            dimension=3, generate_report=False, float=True, interpolation="LanczosWindowedSinc"
+            dimension=3, generate_report=False, float=True, interpolation='LanczosWindowedSinc'
         ),
-        name="unwarp_reference",
+        name='unwarp_reference',
     )
 
-    fieldmap_fov_mask = pe.Node(FilledImageLike(dtype="uint8"), name="fieldmap_fov_mask")
+    fieldmap_fov_mask = pe.Node(FilledImageLike(dtype='uint8'), name='fieldmap_fov_mask')
 
     fmap_fov2ref_apply = pe.Node(
         ANTSApplyTransformsRPT(
-            generate_report=False, dimension=3, interpolation="NearestNeighbor", float=True
+            generate_report=False, dimension=3, interpolation='NearestNeighbor', float=True
         ),
-        name="fmap_fov2ref_apply",
+        name='fmap_fov2ref_apply',
     )
 
-    apply_fov_mask = pe.Node(fsl.ApplyMask(), name="apply_fov_mask")
+    apply_fov_mask = pe.Node(fsl.ApplyMask(), name='apply_fov_mask')
 
     workflow.connect([
         (inputnode, fmap2ref_reg, [('fmap_ref', 'moving_image')]),
@@ -244,13 +243,13 @@ def init_sdc_unwarp_wf(name="sdc_unwarp_wf"):
 
     if config.workflow.fmap_demean:
         # Demean within mask
-        demean = pe.Node(DemeanImage(), name="demean")
+        demean = pe.Node(DemeanImage(), name='demean')
 
         workflow.connect(
             [
-                (gen_vsm, demean, [("shift_out_file", "in_file")]),
-                (fmap_mask2ref_apply, demean, [("output_image", "in_mask")]),
-                (demean, vsm2dfm, [("out_file", "in_file")]),
+                (gen_vsm, demean, [('shift_out_file', 'in_file')]),
+                (fmap_mask2ref_apply, demean, [('output_image', 'in_mask')]),
+                (demean, vsm2dfm, [('out_file', 'in_file')]),
             ]
         )
 
@@ -262,7 +261,7 @@ def init_sdc_unwarp_wf(name="sdc_unwarp_wf"):
     return workflow
 
 
-def init_fmap_unwarp_report_wf(name="fmap_unwarp_report_wf"):
+def init_fmap_unwarp_report_wf(name='fmap_unwarp_report_wf'):
     """
     This workflow generates and saves a reportlet showing the effect of fieldmap
     unwarping a DWI image.
@@ -302,20 +301,20 @@ def init_fmap_unwarp_report_wf(name="fmap_unwarp_report_wf"):
     workflow = Workflow(name=name)
 
     inputnode = pe.Node(
-        niu.IdentityInterface(fields=["in_pre", "in_post", "in_seg", "in_xfm"]), name="inputnode"
+        niu.IdentityInterface(fields=['in_pre', 'in_post', 'in_seg', 'in_xfm']), name='inputnode'
     )
-    outputnode = pe.Node(niu.IdentityInterface(fields=["report"]), name="outputnode")
+    outputnode = pe.Node(niu.IdentityInterface(fields=['report']), name='outputnode')
     map_seg = pe.Node(
         ApplyTransforms(
-            dimension=3, float=True, interpolation="MultiLabel", invert_transform_flags=[True]
+            dimension=3, float=True, interpolation='MultiLabel', invert_transform_flags=[True]
         ),
-        name="map_seg",
+        name='map_seg',
         mem_gb=0.3,
     )
 
-    sel_wm = pe.Node(ExtractWM(), name="sel_wm", mem_gb=DEFAULT_MEMORY_MIN_GB)
+    sel_wm = pe.Node(ExtractWM(), name='sel_wm', mem_gb=DEFAULT_MEMORY_MIN_GB)
 
-    dwi_rpt = pe.Node(SimpleBeforeAfterRPT(), name="dwi_rpt", mem_gb=0.1)
+    dwi_rpt = pe.Node(SimpleBeforeAfterRPT(), name='dwi_rpt', mem_gb=0.1)
 
     workflow.connect([
         (inputnode, dwi_rpt, [('in_pre', 'before'), ('in_post', 'after')]),
@@ -335,8 +334,8 @@ def init_fmap_unwarp_report_wf(name="fmap_unwarp_report_wf"):
 
 
 def _get_pedir_bids(in_dict):
-    return in_dict["PhaseEncodingDirection"]
+    return in_dict['PhaseEncodingDirection']
 
 
 def _get_pedir_fugue(in_dict):
-    return in_dict["PhaseEncodingDirection"].replace("i", "x").replace("j", "y").replace("k", "z")
+    return in_dict['PhaseEncodingDirection'].replace('i', 'x').replace('j', 'y').replace('k', 'z')

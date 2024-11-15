@@ -22,9 +22,9 @@ def siemens2rads(in_file, out_file=None):
 
     if out_file is None:
         fname, fext = op.splitext(op.basename(in_file))
-        if fext == ".gz":
+        if fext == '.gz':
             fname, _ = op.splitext(fname)
-        out_file = op.abspath("./%s_rads.nii.gz" % fname)
+        out_file = op.abspath('./%s_rads.nii.gz' % fname)
 
     in_file = np.atleast_1d(in_file).tolist()
     im = nb.load(in_file[0])
@@ -41,8 +41,8 @@ def siemens2rads(in_file, out_file=None):
     imax = data.max()
     data = (2.0 * math.pi * (data - imin) / (imax - imin)) - math.pi
     hdr.set_data_dtype(np.float32)
-    hdr.set_xyzt_units("mm")
-    hdr["datatype"] = 16
+    hdr.set_xyzt_units('mm')
+    hdr['datatype'] = 16
     nb.Nifti1Image(data, im.affine, hdr).to_filename(out_file)
     return out_file
 
@@ -58,9 +58,9 @@ def demean_image(in_file, in_mask=None, out_file=None):
 
     if out_file is None:
         fname, fext = op.splitext(op.basename(in_file))
-        if fext == ".gz":
+        if fext == '.gz':
             fname, _ = op.splitext(fname)
-        out_file = op.abspath("./%s_demean.nii.gz" % fname)
+        out_file = op.abspath('./%s_demean.nii.gz' % fname)
 
     im = nb.load(in_file)
     data = im.get_fdata().astype(np.float32)
@@ -77,30 +77,30 @@ def demean_image(in_file, in_mask=None, out_file=None):
     return out_file
 
 
-def cleanup_edge_pipeline(name="Cleanup"):
+def cleanup_edge_pipeline(name='Cleanup'):
     """
     Perform some de-spiking filtering to clean up the edge of the fieldmap
     (copied from fsl_prepare_fieldmap)
     """
-    fsl_check = os.environ.get("FSLDIR", False)
+    fsl_check = os.environ.get('FSLDIR', False)
     if not fsl_check:
         raise Exception(
             """Container in use does not have FSL. To use this workflow,
             please download the qsiprep container with FSL installed."""
         )
-    inputnode = pe.Node(niu.IdentityInterface(fields=["in_file", "in_mask"]), name="inputnode")
-    outputnode = pe.Node(niu.IdentityInterface(fields=["out_file"]), name="outputnode")
+    inputnode = pe.Node(niu.IdentityInterface(fields=['in_file', 'in_mask']), name='inputnode')
+    outputnode = pe.Node(niu.IdentityInterface(fields=['out_file']), name='outputnode')
 
     fugue = pe.Node(
-        fsl.FUGUE(save_fmap=True, despike_2dfilter=True, despike_threshold=2.1), name="Despike"
+        fsl.FUGUE(save_fmap=True, despike_2dfilter=True, despike_threshold=2.1), name='Despike'
     )
     erode = pe.Node(
-        fsl.maths.MathsCommand(nan2zeros=True, args="-kernel 2D -ero"), name="MskErode"
+        fsl.maths.MathsCommand(nan2zeros=True, args='-kernel 2D -ero'), name='MskErode'
     )
-    newmsk = pe.Node(fsl.MultiImageMaths(op_string="-sub %s -thr 0.5 -bin"), name="NewMask")
-    applymsk = pe.Node(fsl.ApplyMask(nan2zeros=True), name="ApplyMask")
-    join = pe.Node(niu.Merge(2), name="Merge")
-    addedge = pe.Node(fsl.MultiImageMaths(op_string="-mas %s -add %s"), name="AddEdge")
+    newmsk = pe.Node(fsl.MultiImageMaths(op_string='-sub %s -thr 0.5 -bin'), name='NewMask')
+    applymsk = pe.Node(fsl.ApplyMask(nan2zeros=True), name='ApplyMask')
+    join = pe.Node(niu.Merge(2), name='Merge')
+    addedge = pe.Node(fsl.MultiImageMaths(op_string='-mas %s -add %s'), name='AddEdge')
 
     wf = pe.Workflow(name=name)
     wf.connect([

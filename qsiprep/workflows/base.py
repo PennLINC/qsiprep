@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 #
@@ -32,6 +31,7 @@ qsiprep base processing workflows
 .. autofunction:: init_single_subject_wf
 
 """
+
 import sys
 from collections import defaultdict
 from copy import deepcopy
@@ -75,7 +75,7 @@ def init_qsiprep_wf():
         wf = init_qsiprep_wf()
     """
     ver = Version(config.environment.version)
-    qsiprep_wf = Workflow(name=f"qsiprep_{ver.major}_{ver.minor}_wf")
+    qsiprep_wf = Workflow(name=f'qsiprep_{ver.major}_{ver.minor}_wf')
     qsiprep_wf.base_dir = config.execution.work_dir
 
     for subject_id, session_ids in config.execution.processing_list:
@@ -83,8 +83,8 @@ def init_qsiprep_wf():
         single_subject_wf = init_single_subject_wf(subject_id, session_ids)
 
         # Should we put these in session specific directories? The uuid is unique but opaque
-        single_subject_wf.config["execution"]["crashdump_dir"] = str(
-            config.execution.output_dir / f"sub-{subject_id}" / "log" / config.execution.run_uuid
+        single_subject_wf.config['execution']['crashdump_dir'] = str(
+            config.execution.output_dir / f'sub-{subject_id}' / 'log' / config.execution.run_uuid
         )
         for node in single_subject_wf._get_all_nodes():
             node.config = deepcopy(single_subject_wf.config)
@@ -92,10 +92,10 @@ def init_qsiprep_wf():
 
         # Dump a copy of the config file into the log directory
         log_dir = (
-            config.execution.output_dir / f"sub-{subject_id}" / "log" / config.execution.run_uuid
+            config.execution.output_dir / f'sub-{subject_id}' / 'log' / config.execution.run_uuid
         )
         log_dir.mkdir(exist_ok=True, parents=True)
-        config.to_filename(log_dir / "qsiprep.toml")
+        config.to_filename(log_dir / 'qsiprep.toml')
     return qsiprep_wf
 
 
@@ -124,15 +124,15 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
         Single subject label
 
     """
-    if subject_id == "qsiprepXtest":
+    if subject_id == 'qsiprepXtest':
         # for documentation purposes
         subject_data = {
-            "t1w": ["/completely/made/up/path/sub-01_T1w.nii.gz"],
-            "dwi": ["/completely/made/up/path/sub-01_dwi.nii.gz"],
-            "t2w": ["/completely/made/up/path/sub-01_T2w.nii.gz"],
-            "roi": [],
+            't1w': ['/completely/made/up/path/sub-01_T1w.nii.gz'],
+            'dwi': ['/completely/made/up/path/sub-01_dwi.nii.gz'],
+            't2w': ['/completely/made/up/path/sub-01_T2w.nii.gz'],
+            'roi': [],
         }
-        config.loggers.workflow.warning("Building a test workflow")
+        config.loggers.workflow.warning('Building a test workflow')
     else:
         subject_data = collect_data(
             config.execution.layout,
@@ -143,20 +143,20 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
         )[0]
 
     # Make sure we always go through these two checks
-    if not config.workflow.anat_only and subject_data["dwi"] == []:
+    if not config.workflow.anat_only and subject_data['dwi'] == []:
         raise Exception(
-            "No dwi images found for participant {}. "
-            "All workflows require dwi images unless "
-            "--anat-only is specified.".format(subject_id)
+            f'No dwi images found for participant {subject_id}. '
+            'All workflows require dwi images unless '
+            '--anat-only is specified.'
         )
 
-    if not config.workflow.anat_modality == "none" and not subject_data.get(
+    if not config.workflow.anat_modality == 'none' and not subject_data.get(
         config.workflow.anat_modality.lower()
     ):
         raise Exception(
-            "No {} images found for participant {}. "
-            "To bypass anatomical processing choose "
-            "--anat-modality none".format(config.workflow.anat_modality, subject_id)
+            f'No {config.workflow.anat_modality} images found for participant {subject_id}. '
+            'To bypass anatomical processing choose '
+            '--anat-modality none'
         )
 
     anatomical_template = config.workflow.anatomical_template
@@ -164,7 +164,7 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
         from ..utils.bids import cohort_by_months, parse_bids_for_age_months
 
         if session_ids and len(session_ids) > 1:
-            raise RuntimeError("Infant template is only available for single session processing.")
+            raise RuntimeError('Infant template is only available for single session processing.')
 
         # Calculate the age and age-specific spaces
         session_id = None if not session_ids else session_ids[0]
@@ -174,21 +174,21 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
             session_id,
         )
         if age is None:
-            ses_str = f"_ses-{session_id}" if session_id else ""
-            raise RuntimeError(f"Could not find age for sub-{subject_id}{ses_str}")
+            ses_str = f'_ses-{session_id}' if session_id else ''
+            raise RuntimeError(f'Could not find age for sub-{subject_id}{ses_str}')
 
         cohort = cohort_by_months(anatomical_template, age)
-        anatomical_template = f"{anatomical_template}+{cohort}"
+        anatomical_template = f'{anatomical_template}+{cohort}'
 
     additional_t2ws = 0
-    if "drbuddi" in config.workflow.pepolar_method.lower() and subject_data["t2w"]:
-        additional_t2ws = len(subject_data["t2w"])
+    if 'drbuddi' in config.workflow.pepolar_method.lower() and subject_data['t2w']:
+        additional_t2ws = len(subject_data['t2w'])
 
     # Inspect the dwi data and provide advice on pipeline choices
     # provide_processing_advice(subject_data, layout, unringing_method)
 
-    _ses_name = "_ses_" + "_".join(map(str, session_ids)) if session_ids else ""
-    workflow = Workflow(name=f"sub_{subject_id}{_ses_name}_wf")
+    _ses_name = '_ses_' + '_'.join(map(str, session_ids)) if session_ids else ''
+    workflow = Workflow(name=f'sub_{subject_id}{_ses_name}_wf')
     workflow.__desc__ = f"""
 Preprocessing was performed using *QSIPrep* {config.environment.version} [@cieslak2021qsiprep],
 which is based on *Nipype* {config.environment.nipype_version}
@@ -210,67 +210,67 @@ to workflows in *QSIPrep*'s documentation]\
 
 """
 
-    merging_distortion_groups = not config.workflow.distortion_group_merge.lower() == "none"
+    merging_distortion_groups = not config.workflow.distortion_group_merge.lower() == 'none'
 
-    inputnode = pe.Node(niu.IdentityInterface(fields=["subjects_dir"]), name="inputnode")
+    inputnode = pe.Node(niu.IdentityInterface(fields=['subjects_dir']), name='inputnode')
 
     bidssrc = pe.Node(
         BIDSDataGrabber(
             subject_data=subject_data,  # Data has already been selected with sub/ses filters
-            dwi_only=config.workflow.anat_modality == "none",
+            dwi_only=config.workflow.anat_modality == 'none',
             anat_only=config.workflow.anat_only,
             anatomical_contrast=config.workflow.anat_modality,
         ),
-        name="bidssrc",
+        name='bidssrc',
     )
 
-    bids_info = pe.Node(BIDSInfo(), name="bids_info", run_without_submitting=True)
+    bids_info = pe.Node(BIDSInfo(), name='bids_info', run_without_submitting=True)
 
     summary = pe.Node(
         SubjectSummary(template=anatomical_template),
-        name="summary",
+        name='summary',
         run_without_submitting=True,
     )
 
     about = pe.Node(
-        AboutSummary(version=config.environment.version, command=" ".join(sys.argv)),
-        name="about",
+        AboutSummary(version=config.environment.version, command=' '.join(sys.argv)),
+        name='about',
         run_without_submitting=True,
     )
 
     ds_report_summary = pe.Node(
         DerivativesDataSink(
             base_directory=config.execution.output_dir,
-            datatype="figures",
-            suffix="summary",
+            datatype='figures',
+            suffix='summary',
         ),
-        name="ds_report_summary",
+        name='ds_report_summary',
         run_without_submitting=True,
     )
 
     ds_report_about = pe.Node(
         DerivativesDataSink(
             base_directory=config.execution.output_dir,
-            datatype="figures",
-            suffix="about",
+            datatype='figures',
+            suffix='about',
         ),
-        name="ds_report_about",
+        name='ds_report_about',
         run_without_submitting=True,
     )
 
     num_anat_images = (
         0
-        if config.workflow.anat_modality == "none"
+        if config.workflow.anat_modality == 'none'
         else len(subject_data[config.workflow.anat_modality.lower()])
     )
     # Preprocessing of anatomical data (includes possible registration template)
     info_modality = (
-        "dwi" if config.workflow.anat_modality == "none" else config.workflow.anat_modality.lower()
+        'dwi' if config.workflow.anat_modality == 'none' else config.workflow.anat_modality.lower()
     )
     anat_preproc_wf = init_anat_preproc_wf(
         num_anat_images=num_anat_images,
         num_additional_t2ws=additional_t2ws,
-        has_rois=bool(subject_data["roi"]),
+        has_rois=bool(subject_data['roi']),
         anatomical_template=anatomical_template,
     )
 
@@ -280,7 +280,7 @@ to workflows in *QSIPrep*'s documentation]\
             ((info_modality,
               fix_multi_source_name,
               config.workflow.anat_modality == 'none',
-              config.workflow.subject_anatomical_reference == "sessionwise",
+              config.workflow.subject_anatomical_reference == 'sessionwise',
               config.workflow.anat_modality),
              'in_file'),
         ]),
@@ -298,7 +298,7 @@ to workflows in *QSIPrep*'s documentation]\
             ((info_modality,
               fix_multi_source_name,
               config.workflow.anat_modality == 'none',
-              config.workflow.subject_anatomical_reference == "sessionwise",
+              config.workflow.subject_anatomical_reference == 'sessionwise',
               config.workflow.anat_modality),
              'source_file'),
         ]),
@@ -307,7 +307,7 @@ to workflows in *QSIPrep*'s documentation]\
             ((info_modality,
               fix_multi_source_name,
               config.workflow.anat_modality == 'none',
-              config.workflow.subject_anatomical_reference == "sessionwise",
+              config.workflow.subject_anatomical_reference == 'sessionwise',
               config.workflow.anat_modality),
              'source_file'),
         ]),
@@ -323,7 +323,7 @@ to workflows in *QSIPrep*'s documentation]\
         subject_data,
         using_fsl=True,
         combine_scans=not config.workflow.separate_all_dwis,
-        ignore_fieldmaps="fieldmaps" in config.workflow.ignore,
+        ignore_fieldmaps='fieldmaps' in config.workflow.ignore,
         concatenate_distortion_groups=merging_distortion_groups,
     )
     config.loggers.workflow.info(dwi_fmap_groups)
@@ -340,10 +340,10 @@ to workflows in *QSIPrep*'s documentation]\
         for merged_group in merged_group_names:
             merging_group_workflows[merged_group] = init_distortion_group_merge_wf(
                 merging_strategy=config.workflow.distortion_group_merge,
-                source_file=merged_group + "_dwi.nii.gz",
+                source_file=merged_group + '_dwi.nii.gz',
                 inputs_list=merged_to_subgroups[merged_group],
                 output_prefix=merged_group,
-                name=merged_group.replace("-", "_") + "_final_merge_wf",
+                name=merged_group.replace('-', '_') + '_final_merge_wf',
             )
 
             workflow.connect([
@@ -355,28 +355,28 @@ to workflows in *QSIPrep*'s documentation]\
             ])  # fmt:skip
 
     outputs_to_files = {
-        dwi_group["concatenated_bids_name"]: dwi_group for dwi_group in dwi_fmap_groups
+        dwi_group['concatenated_bids_name']: dwi_group for dwi_group in dwi_fmap_groups
     }
     if config.workflow.force_syn:
         for group_name in outputs_to_files:
-            outputs_to_files[group_name]["fieldmap_info"] = {"suffix": "syn"}
+            outputs_to_files[group_name]['fieldmap_info'] = {'suffix': 'syn'}
     summary.inputs.dwi_groupings = outputs_to_files
 
     make_intramodal_template = False
     if config.workflow.intramodal_template_iters > 0:
         if len(outputs_to_files) < 2:
-            raise Exception("Cannot make an intramodal with less than 2 groups.")
+            raise Exception('Cannot make an intramodal with less than 2 groups.')
         make_intramodal_template = True
 
     intramodal_template_wf = init_intramodal_template_wf(
         t1w_source_file=fix_multi_source_name(
             subject_data[info_modality],
-            dwi_only=config.workflow.anat_modality == "none",
-            include_session=config.workflow.subject_anatomical_reference == "sessionwise",
+            dwi_only=config.workflow.anat_modality == 'none',
+            include_session=config.workflow.subject_anatomical_reference == 'sessionwise',
             anatomical_contrast=config.workflow.anat_modality,
         ),
         inputs_list=sorted(outputs_to_files.keys()),
-        name="intramodal_template_wf",
+        name='intramodal_template_wf',
     )
 
     if make_intramodal_template:
@@ -396,18 +396,18 @@ to workflows in *QSIPrep*'s documentation]\
 
     # create a processing pipeline for the dwis in each session
     for output_fname, dwi_info in outputs_to_files.items():
-        source_file = get_source_file(dwi_info["dwi_series"], output_fname, suffix="_dwi")
-        output_wfname = output_fname.replace("-", "_")
+        source_file = get_source_file(dwi_info['dwi_series'], output_fname, suffix='_dwi')
+        output_wfname = output_fname.replace('-', '_')
         dwi_preproc_wf = init_dwi_preproc_wf(
             scan_groups=dwi_info,
             output_prefix=output_fname,
             source_file=source_file,
-            t2w_sdc=bool(subject_data.get("t2w")),
+            t2w_sdc=bool(subject_data.get('t2w')),
             anatomical_template=anatomical_template,
         )
         dwi_finalize_wf = init_dwi_finalize_wf(
             scan_groups=dwi_info,
-            name=dwi_preproc_wf.name.replace("dwi_preproc", "dwi_finalize"),
+            name=dwi_preproc_wf.name.replace('dwi_preproc', 'dwi_finalize'),
             output_prefix=output_fname,
             source_file=source_file,
             write_derivatives=not merging_distortion_groups,
@@ -458,8 +458,8 @@ to workflows in *QSIPrep*'s documentation]\
         ])  # fmt:skip
 
         if make_intramodal_template:
-            input_name = "inputnode.{name}_b0_template".format(name=output_wfname)
-            output_name = "outputnode.{name}_transform".format(name=output_wfname)
+            input_name = f'inputnode.{output_wfname}_b0_template'
+            output_name = f'outputnode.{output_wfname}_transform'
             workflow.connect([
                 (dwi_preproc_wf, intramodal_template_wf, [
                     ('outputnode.b0_ref_image', input_name),
@@ -479,18 +479,16 @@ to workflows in *QSIPrep*'s documentation]\
             ])  # fmt:skip
 
         if merging_distortion_groups:
-            image_name = "inputnode.{name}_image".format(name=output_wfname)
-            bval_name = "inputnode.{name}_bval".format(name=output_wfname)
-            bvec_name = "inputnode.{name}_bvec".format(name=output_wfname)
-            original_bvec_name = "inputnode.{name}_original_bvec".format(name=output_wfname)
-            original_bids_name = "inputnode.{name}_original_image".format(name=output_wfname)
-            raw_concatenated_image_name = "inputnode.{name}_raw_concatenated_image".format(
-                name=output_wfname
-            )
-            confounds_name = "inputnode.{name}_confounds".format(name=output_wfname)
-            b0_ref_name = "inputnode.{name}_b0_ref".format(name=output_wfname)
-            cnr_name = "inputnode.{name}_cnr".format(name=output_wfname)
-            carpetplot_name = "inputnode.{name}_carpetplot_data".format(name=output_wfname)
+            image_name = f'inputnode.{output_wfname}_image'
+            bval_name = f'inputnode.{output_wfname}_bval'
+            bvec_name = f'inputnode.{output_wfname}_bvec'
+            original_bvec_name = f'inputnode.{output_wfname}_original_bvec'
+            original_bids_name = f'inputnode.{output_wfname}_original_image'
+            raw_concatenated_image_name = f'inputnode.{output_wfname}_raw_concatenated_image'
+            confounds_name = f'inputnode.{output_wfname}_confounds'
+            b0_ref_name = f'inputnode.{output_wfname}_b0_ref'
+            cnr_name = f'inputnode.{output_wfname}_cnr'
+            carpetplot_name = f'inputnode.{output_wfname}_carpetplot_data'
             final_merge_wf = merging_group_workflows[concatenation_scheme[output_fname]]
             workflow.connect([
                 (dwi_finalize_wf, final_merge_wf, [
@@ -510,8 +508,8 @@ to workflows in *QSIPrep*'s documentation]\
             ])  # fmt:skip
 
     for node in workflow.list_node_names():
-        if node.split(".")[-1].startswith("ds_"):
-            workflow.get_node(node).interface.out_path_base = ""
+        if node.split('.')[-1].startswith('ds_'):
+            workflow.get_node(node).interface.out_path_base = ''
 
     return workflow
 
@@ -520,5 +518,5 @@ def provide_processing_advice(subject_data, layout, unringing_method):
     """Provide advice on preprocessing options based on the data provided."""
     # metadata = {dwi_file: layout.get_metadata(dwi_file) for dwi_file in subject_data["dwi"]}
     config.loggers.utils.warning(
-        "Partial Fourier acquisitions found for %s. Consider using --unringing-method rpg"
+        'Partial Fourier acquisitions found for %s. Consider using --unringing-method rpg'
     )

@@ -25,7 +25,7 @@ from .qc import init_mask_overlap_wf, init_modelfree_qc_wf
 from .util import init_dwi_reference_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
-LOGGER = logging.getLogger("nipype.workflow")
+LOGGER = logging.getLogger('nipype.workflow')
 
 
 def init_distortion_group_merge_wf(
@@ -84,92 +84,92 @@ def init_distortion_group_merge_wf(
     """
 
     workflow = Workflow(name=name)
-    source_file = "dwi/" + source_file
-    sanitized_inputs = [name.replace("-", "_") for name in inputs_list]
-    input_names = ["t1_brain", "t1_mask", "t1_seg"]
+    source_file = 'dwi/' + source_file
+    sanitized_inputs = [name.replace('-', '_') for name in inputs_list]
+    input_names = ['t1_brain', 't1_mask', 't1_seg']
     for suffix in [
-        "_image",
-        "_bval",
-        "_bvec",
-        "_original_bvec",
-        "_b0_ref",
-        "_cnr",
-        "_carpetplot_data",
-        "_original_image",
-        "_raw_concatenated_image",
-        "_confounds",
+        '_image',
+        '_bval',
+        '_bvec',
+        '_original_bvec',
+        '_b0_ref',
+        '_cnr',
+        '_carpetplot_data',
+        '_original_image',
+        '_raw_concatenated_image',
+        '_confounds',
     ]:
         input_names += [name + suffix for name in sanitized_inputs]
-    inputnode = pe.Node(niu.IdentityInterface(fields=input_names), name="inputnode")
+    inputnode = pe.Node(niu.IdentityInterface(fields=input_names), name='inputnode')
     outputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
-                "merged_image",
-                "merged_bval",
-                "merged_bvec",
-                "merged_qc",
-                "merged_cnr_map" "dwi_mask_t1",
-                "cnr_map_t1",
-                "merged_bval",
-                "bvecs_t1",
-                "btable_t1",
-                "local_bvecs_t1",
-                "t1_b0_ref",
-                "confounds",
-                "gradient_table_t1",
-                "hmc_optimization_data",
+                'merged_image',
+                'merged_bval',
+                'merged_bvec',
+                'merged_qc',
+                'merged_cnr_map' 'dwi_mask_t1',
+                'cnr_map_t1',
+                'merged_bval',
+                'bvecs_t1',
+                'btable_t1',
+                'local_bvecs_t1',
+                't1_b0_ref',
+                'confounds',
+                'gradient_table_t1',
+                'hmc_optimization_data',
             ]
         ),
-        name="outputnode",
+        name='outputnode',
     )
 
     num_inputs = len(input_names)
-    merge_images = pe.Node(niu.Merge(num_inputs), name="merge_images")
-    merge_bval = pe.Node(niu.Merge(num_inputs), name="merge_bval")
-    merge_bvec = pe.Node(niu.Merge(num_inputs), name="merge_bvec")
-    merge_original_bvec = pe.Node(niu.Merge(num_inputs), name="merge_original_bvec")
-    merge_original_image = pe.Node(niu.Merge(num_inputs), name="merge_original_image")
-    merge_b0_refs = pe.Node(niu.Merge(num_inputs), name="merge_b0_refs")
+    merge_images = pe.Node(niu.Merge(num_inputs), name='merge_images')
+    merge_bval = pe.Node(niu.Merge(num_inputs), name='merge_bval')
+    merge_bvec = pe.Node(niu.Merge(num_inputs), name='merge_bvec')
+    merge_original_bvec = pe.Node(niu.Merge(num_inputs), name='merge_original_bvec')
+    merge_original_image = pe.Node(niu.Merge(num_inputs), name='merge_original_image')
+    merge_b0_refs = pe.Node(niu.Merge(num_inputs), name='merge_b0_refs')
     merge_raw_concatenated_image = pe.Node(
-        niu.Merge(num_inputs), name="merge_raw_concatenated_image"
+        niu.Merge(num_inputs), name='merge_raw_concatenated_image'
     )
-    merge_confounds = pe.Node(niu.Merge(num_inputs), name="merge_confounds")
-    merge_cnrs = pe.Node(niu.Merge(num_inputs), name="merge_cnrs")
-    merge_carpetplot_data = pe.Node(niu.Merge(num_inputs), name="merge_carpetplot_data")
+    merge_confounds = pe.Node(niu.Merge(num_inputs), name='merge_confounds')
+    merge_cnrs = pe.Node(niu.Merge(num_inputs), name='merge_cnrs')
+    merge_carpetplot_data = pe.Node(niu.Merge(num_inputs), name='merge_carpetplot_data')
 
     # Merge the input data from each distortion group: safe even if eddy was used
     for input_num, input_name in enumerate(sanitized_inputs):
-        merge_input_name = "in%d" % (input_num + 1)
+        merge_input_name = 'in%d' % (input_num + 1)
         workflow.connect([
-            (inputnode, merge_images, [(input_name + "_image", merge_input_name)]),
-            (inputnode, merge_bval, [(input_name + "_bval", merge_input_name)]),
-            (inputnode, merge_bvec, [(input_name + "_bvec", merge_input_name)]),
-            (inputnode, merge_original_bvec, [(input_name + "_original_bvec", merge_input_name)]),
-            (inputnode, merge_original_image, [(input_name + "_original_image",
+            (inputnode, merge_images, [(input_name + '_image', merge_input_name)]),
+            (inputnode, merge_bval, [(input_name + '_bval', merge_input_name)]),
+            (inputnode, merge_bvec, [(input_name + '_bvec', merge_input_name)]),
+            (inputnode, merge_original_bvec, [(input_name + '_original_bvec', merge_input_name)]),
+            (inputnode, merge_original_image, [(input_name + '_original_image',
                                                 merge_input_name)]),
-            (inputnode, merge_raw_concatenated_image, [(input_name + "_raw_concatenated_image",
+            (inputnode, merge_raw_concatenated_image, [(input_name + '_raw_concatenated_image',
                                                         merge_input_name)]),
-            (inputnode, merge_b0_refs, [(input_name + "_b0_ref", merge_input_name)]),
-            (inputnode, merge_cnrs, [(input_name + "_cnr", merge_input_name)]),
-            (inputnode, merge_confounds, [(input_name + "_confounds", merge_input_name)]),
+            (inputnode, merge_b0_refs, [(input_name + '_b0_ref', merge_input_name)]),
+            (inputnode, merge_cnrs, [(input_name + '_cnr', merge_input_name)]),
+            (inputnode, merge_confounds, [(input_name + '_confounds', merge_input_name)]),
             (inputnode, merge_carpetplot_data, [
-                (input_name + "_carpetplot_data", merge_input_name)])
+                (input_name + '_carpetplot_data', merge_input_name)])
         ])  # fmt:skip
 
-    if merging_strategy.lower() == "average":
-        distortion_merger = pe.Node(AveragePEPairs(), name="distortion_merger")
+    if merging_strategy.lower() == 'average':
+        distortion_merger = pe.Node(AveragePEPairs(), name='distortion_merger')
         workflow.connect([
             (merge_original_bvec, distortion_merger, [('out', 'original_bvec_files')]),
             (merge_carpetplot_data, distortion_merger, [('out', 'carpetplot_data')])
         ])  # fmt:skip
-    elif merging_strategy.startswith("concat"):
-        distortion_merger = pe.Node(MergeDWIs(), name="distortion_merger")
+    elif merging_strategy.startswith('concat'):
+        distortion_merger = pe.Node(MergeDWIs(), name='distortion_merger')
     b0_ref_wf = init_dwi_reference_wf(
-        name="merged_b0_ref",
+        name='merged_b0_ref',
         gen_report=True,
         source_file=source_file,
     )
-    concat_cnr_images = pe.Node(Merge(), name="concat_cnr_images")
+    concat_cnr_images = pe.Node(Merge(), name='concat_cnr_images')
 
     workflow.connect([
         (merge_images, distortion_merger, [('out', 'dwi_files')]),
@@ -184,38 +184,38 @@ def init_distortion_group_merge_wf(
     ])  # fmt:skip
 
     # Calculate QC on the merged raw and processed data
-    raw_qc_wf = init_modelfree_qc_wf(bvec_convention="auto", name="raw_qc_wf")
+    raw_qc_wf = init_modelfree_qc_wf(bvec_convention='auto', name='raw_qc_wf')
     processed_qc_wf = init_modelfree_qc_wf(
-        bvec_convention="DIPY",  # Always LPS+ when resampled
-        name="processed_qc_wf",
+        bvec_convention='DIPY',  # Always LPS+ when resampled
+        name='processed_qc_wf',
     )
     # Combine all the QC measures for a series QC
-    series_qc = pe.Node(SeriesQC(output_file_name=output_prefix), name="series_qc")
+    series_qc = pe.Node(SeriesQC(output_file_name=output_prefix), name='series_qc')
     ds_series_qc = pe.Node(
         DerivativesDataSink(
-            desc="image",
-            suffix="qc",
+            desc='image',
+            suffix='qc',
             source_file=source_file,
             base_directory=config.execution.output_dir,
         ),
-        name="ds_series_qc",
+        name='ds_series_qc',
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
 
     # CONNECT TO DERIVATIVES
-    gtab_t1 = pe.Node(MRTrixGradientTable(), name="gtab_t1")
-    btab_t1 = pe.Node(DSIStudioBTable(bvec_convention="DIPY"), name="btab_t1")
-    t1_dice_calc = init_mask_overlap_wf(name="t1_dice_calc")
-    gradient_plot = pe.Node(GradientPlot(), name="gradient_plot", run_without_submitting=True)
+    gtab_t1 = pe.Node(MRTrixGradientTable(), name='gtab_t1')
+    btab_t1 = pe.Node(DSIStudioBTable(bvec_convention='DIPY'), name='btab_t1')
+    t1_dice_calc = init_mask_overlap_wf(name='t1_dice_calc')
+    gradient_plot = pe.Node(GradientPlot(), name='gradient_plot', run_without_submitting=True)
     ds_report_gradients = pe.Node(
         DerivativesDataSink(
-            datatype="figures",
-            desc="samplingscheme",
-            suffix="dwi",
+            datatype='figures',
+            desc='samplingscheme',
+            suffix='dwi',
             source_file=source_file,
         ),
-        name="ds_report_gradients",
+        name='ds_report_gradients',
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )

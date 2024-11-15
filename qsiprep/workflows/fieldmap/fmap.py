@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 """
@@ -19,6 +18,7 @@ This corresponds to the section 8.9.3 --fieldmap image (and one magnitude image)
 of the BIDS specification.
 
 """
+
 import os
 
 from nipype.interfaces import ants, fsl
@@ -33,7 +33,7 @@ from ...interfaces import DerivativesDataSink, FieldToHz, FieldToRadS
 from .utils import cleanup_edge_pipeline, demean_image
 
 
-def init_fmap_wf(name="fmap_wf"):
+def init_fmap_wf(name='fmap_wf'):
     """
     Fieldmap workflow - when we have a sequence that directly measures the fieldmap
     we just need to mask it (using the corresponding magnitude image) to remove the
@@ -48,34 +48,34 @@ def init_fmap_wf(name="fmap_wf"):
 
     """
     # Check for FSL binary
-    fsl_check = os.environ.get("FSL_BUILD")
-    if fsl_check == "no_fsl":
+    fsl_check = os.environ.get('FSL_BUILD')
+    if fsl_check == 'no_fsl':
         raise Exception(
             """Container in use does not have FSL. To use this workflow,
             please download the qsiprep container with FSL installed."""
         )
     workflow = Workflow(name=name)
-    inputnode = pe.Node(niu.IdentityInterface(fields=["magnitude", "fieldmap"]), name="inputnode")
+    inputnode = pe.Node(niu.IdentityInterface(fields=['magnitude', 'fieldmap']), name='inputnode')
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=["fmap", "fmap_ref", "fmap_mask"]), name="outputnode"
+        niu.IdentityInterface(fields=['fmap', 'fmap_ref', 'fmap_mask']), name='outputnode'
     )
 
     # Merge input magnitude images
-    magmrg = pe.Node(IntraModalMerge(), name="magmrg")
+    magmrg = pe.Node(IntraModalMerge(), name='magmrg')
     # Merge input fieldmap images
-    fmapmrg = pe.Node(IntraModalMerge(zero_based_avg=False, hmc=False), name="fmapmrg")
+    fmapmrg = pe.Node(IntraModalMerge(zero_based_avg=False, hmc=False), name='fmapmrg')
 
     # de-gradient the fields ("bias/illumination artifact")
     n4_correct = pe.Node(
         ants.N4BiasFieldCorrection(dimension=3, copy_header=True),
-        name="n4_correct",
+        name='n4_correct',
         n_procs=config.nipype.omp_nthreads,
     )
-    bet = pe.Node(BETRPT(generate_report=True, frac=0.6, mask=True), name="bet")
+    bet = pe.Node(BETRPT(generate_report=True, frac=0.6, mask=True), name='bet')
 
     ds_report_fmap_mask = pe.Node(
-        DerivativesDataSink(datatype="figures", desc="brainmask", suffix="fieldmap"),
-        name="ds_report_fmap_mask",
+        DerivativesDataSink(datatype='figures', desc='brainmask', suffix='fieldmap'),
+        name='ds_report_fmap_mask',
         run_without_submitting=True,
     )
 
@@ -90,17 +90,17 @@ def init_fmap_wf(name="fmap_wf"):
         (bet, ds_report_fmap_mask, [('out_report', 'in_file')]),
     ])  # fmt:skip
 
-    torads = pe.Node(FieldToRadS(), name="torads")
-    prelude = pe.Node(fsl.PRELUDE(), name="prelude")
-    tohz = pe.Node(FieldToHz(), name="tohz")
+    torads = pe.Node(FieldToRadS(), name='torads')
+    prelude = pe.Node(fsl.PRELUDE(), name='prelude')
+    tohz = pe.Node(FieldToHz(), name='tohz')
 
     denoise = pe.Node(
-        fsl.SpatialFilter(operation="median", kernel_shape="sphere", kernel_size=3), name="denoise"
+        fsl.SpatialFilter(operation='median', kernel_shape='sphere', kernel_size=3), name='denoise'
     )
-    demean = pe.Node(niu.Function(function=demean_image), name="demean")
-    cleanup_wf = cleanup_edge_pipeline(name="cleanup_wf")
+    demean = pe.Node(niu.Function(function=demean_image), name='demean')
+    cleanup_wf = cleanup_edge_pipeline(name='cleanup_wf')
 
-    applymsk = pe.Node(fsl.ApplyMask(), name="applymsk")
+    applymsk = pe.Node(fsl.ApplyMask(), name='applymsk')
 
     workflow.connect([
         (bet, prelude, [('mask_file', 'mask_file'),

@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 """
@@ -125,32 +124,32 @@ def init_sdc_wf(fieldmap_info, dwi_meta):
 
     """
     omp_nthreads = config.nipype.omp_nthreads
-    workflow = Workflow(name="sdc_wf" if fieldmap_info["suffix"] is not None else "sdc_bypass_wf")
+    workflow = Workflow(name='sdc_wf' if fieldmap_info['suffix'] is not None else 'sdc_bypass_wf')
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
-                "b0_ref",
-                "b0_ref_brain",
-                "b0_mask",
-                "t1_brain",
-                "t1_2_mni_reverse_transform",
-                "template",
+                'b0_ref',
+                'b0_ref_brain',
+                'b0_mask',
+                't1_brain',
+                't1_2_mni_reverse_transform',
+                'template',
             ]
         ),
-        name="inputnode",
+        name='inputnode',
     )
 
     outputnode = pe.Node(
         niu.IdentityInterface(
-            fields=["b0_ref", "b0_mask", "out_warp", "syn_b0_ref", "method", "fieldmap_hz"]
+            fields=['b0_ref', 'b0_mask', 'out_warp', 'syn_b0_ref', 'method', 'fieldmap_hz']
         ),
-        name="outputnode",
+        name='outputnode',
     )
 
     # No fieldmaps - forward inputs to outputs
-    if fieldmap_info.get("suffix") is None:
-        workflow.__postdesc__ = "No susceptibility distortion correction was performed."
-        outputnode.inputs.method = "None"
+    if fieldmap_info.get('suffix') is None:
+        workflow.__postdesc__ = 'No susceptibility distortion correction was performed.'
+        outputnode.inputs.method = 'None'
         workflow.connect([
             (inputnode, outputnode, [('b0_ref', 'b0_ref'),
                                      ('b0_mask', 'b0_mask')])])  # fmt:skip
@@ -163,19 +162,19 @@ co-registration with the anatomical reference.
 """
 
     # PEPOLAR path
-    if fieldmap_info["suffix"] in ("epi", "rpe_series", "dwi"):
+    if fieldmap_info['suffix'] in ('epi', 'rpe_series', 'dwi'):
         outputnode.inputs.method = (
-            "PEB/PEPOLAR (phase-encoding based / PE-POLARity): %s" % fieldmap_info["suffix"]
+            'PEB/PEPOLAR (phase-encoding based / PE-POLARity): %s' % fieldmap_info['suffix']
         )
 
-        epi_fmaps = fieldmap_info[fieldmap_info["suffix"]]
+        epi_fmaps = fieldmap_info[fieldmap_info['suffix']]
 
         # We have already sorted by compatible
         sdc_unwarp_wf = init_pepolar_unwarp_wf(
             dwi_meta=dwi_meta,
             epi_fmaps=epi_fmaps,
             omp_nthreads=omp_nthreads,
-            name="pepolar_unwarp_wf",
+            name='pepolar_unwarp_wf',
         )
 
         workflow.connect([
@@ -186,37 +185,37 @@ co-registration with the anatomical reference.
         ])  # fmt:skip
 
     # FIELDMAP path
-    if fieldmap_info["suffix"] == "fieldmap" or fieldmap_info["suffix"].startswith("phase"):
-        outputnode.inputs.method = "FMB (%s-based)" % fieldmap_info["suffix"]
+    if fieldmap_info['suffix'] == 'fieldmap' or fieldmap_info['suffix'].startswith('phase'):
+        outputnode.inputs.method = 'FMB (%s-based)' % fieldmap_info['suffix']
         # Import specific workflows here, so we don't break everything with one
         # unused workflow.
-        if fieldmap_info["suffix"] == "fieldmap":
+        if fieldmap_info['suffix'] == 'fieldmap':
             from .fmap import init_fmap_wf
 
             fmap_estimator_wf = init_fmap_wf()
             # set inputs
-            fmap_estimator_wf.inputs.inputnode.fieldmap = fieldmap_info["fieldmap"]
-            fmap_estimator_wf.inputs.inputnode.magnitude = fieldmap_info["magnitude"]
+            fmap_estimator_wf.inputs.inputnode.fieldmap = fieldmap_info['fieldmap']
+            fmap_estimator_wf.inputs.inputnode.magnitude = fieldmap_info['magnitude']
 
         else:
             from .phdiff import init_phdiff_wf
 
-            fmap_estimator_wf = init_phdiff_wf(phasetype=fieldmap_info["suffix"])
+            fmap_estimator_wf = init_phdiff_wf(phasetype=fieldmap_info['suffix'])
             # set inputs
-            if fieldmap_info["suffix"] == "phasediff":
-                fmap_estimator_wf.inputs.inputnode.phasediff = fieldmap_info["phasediff"]
+            if fieldmap_info['suffix'] == 'phasediff':
+                fmap_estimator_wf.inputs.inputnode.phasediff = fieldmap_info['phasediff']
                 fmap_estimator_wf.inputs.inputnode.phase_meta = (
-                    config.execution.layout.get_metadata(fieldmap_info["phasediff"])
+                    config.execution.layout.get_metadata(fieldmap_info['phasediff'])
                 )
             else:
                 # Check that fieldmap is not bipolar
-                fmap_polarity = fieldmap_info["metadata"].get("DiffusionScheme", None)
-                if fmap_polarity == "Bipolar":
+                fmap_polarity = fieldmap_info['metadata'].get('DiffusionScheme', None)
+                if fmap_polarity == 'Bipolar':
                     config.loggers.workflow.warning(
-                        "Bipolar fieldmaps are not supported. Ignoring"
+                        'Bipolar fieldmaps are not supported. Ignoring'
                     )
-                    workflow.__postdesc__ = ""
-                    outputnode.inputs.method = "None"
+                    workflow.__postdesc__ = ''
+                    outputnode.inputs.method = 'None'
                     workflow.connect([
                         (inputnode, outputnode, [('b0_ref', 'b0_ref'),
                                                  ('b0_mask', 'b0_mask')]),
@@ -224,24 +223,24 @@ co-registration with the anatomical reference.
                     return workflow
 
                 if fmap_polarity is None:
-                    config.loggers.workflow.warning("Assuming phase images are Monopolar")
+                    config.loggers.workflow.warning('Assuming phase images are Monopolar')
 
                 fmap_estimator_wf.inputs.inputnode.phasediff = [
-                    fieldmap_info["phase1"],
-                    fieldmap_info["phase2"],
+                    fieldmap_info['phase1'],
+                    fieldmap_info['phase2'],
                 ]
                 fmap_estimator_wf.inputs.inputnode.phase_meta = [
-                    config.execution.layout.get_metadata(fieldmap_info["phase1"]),
-                    config.execution.layout.get_metadata(fieldmap_info["phase2"]),
+                    config.execution.layout.get_metadata(fieldmap_info['phase1']),
+                    config.execution.layout.get_metadata(fieldmap_info['phase2']),
                 ]
 
             fmap_estimator_wf.inputs.inputnode.magnitude = [
                 fmap_
                 for key, fmap_ in sorted(fieldmap_info.items())
-                if key.startswith("magnitude")
+                if key.startswith('magnitude')
             ]
 
-        sdc_unwarp_wf = init_sdc_unwarp_wf(name="sdc_unwarp_wf")
+        sdc_unwarp_wf = init_sdc_unwarp_wf(name='sdc_unwarp_wf')
         sdc_unwarp_wf.inputs.inputnode.metadata = dwi_meta
 
         workflow.connect([
@@ -258,9 +257,9 @@ co-registration with the anatomical reference.
         ])  # fmt:skip
 
     # FIELDMAP-less path
-    if fieldmap_info["suffix"] == "syn":
+    if fieldmap_info['suffix'] == 'syn':
         syn_sdc_wf = init_syn_sdc_wf(
-            bold_pe=dwi_meta.get("PhaseEncodingDirection", None),
+            bold_pe=dwi_meta.get('PhaseEncodingDirection', None),
         )
 
         workflow.connect([

@@ -34,7 +34,7 @@ def init_dwi_hmc_wf(
     source_file,
     num_model_iterations=2,
     mem_gb=3,
-    name="dwi_hmc_wf",
+    name='dwi_hmc_wf',
 ):
     """Perform head motion correction and susceptibility distortion correction.
 
@@ -94,44 +94,44 @@ def init_dwi_hmc_wf(
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
-                "dwi_files",
-                "b0_indices",
-                "bvecs",
-                "bvals",
-                "b0_images",
-                "original_files",
-                "t1_brain",
-                "t1_mask",
-                "t1_seg",
-                "original_files",
+                'dwi_files',
+                'b0_indices',
+                'bvecs',
+                'bvals',
+                'b0_images',
+                'original_files',
+                't1_brain',
+                't1_mask',
+                't1_seg',
+                'original_files',
             ]
         ),
-        name="inputnode",
+        name='inputnode',
     )
     outputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
-                "final_template",
-                "forward_transforms",
-                "noise_free_dwis",
-                "cnr_image",
-                "optimization_data",
-                "final_template_brain",
-                "final_template_mask",
+                'final_template',
+                'forward_transforms',
+                'noise_free_dwis',
+                'cnr_image',
+                'optimization_data',
+                'final_template_brain',
+                'final_template_mask',
             ]
         ),
-        name="outputnode",
+        name='outputnode',
     )
     hmc_model = config.workflow.hmc_model
     workflow = Workflow(name=name)
     # Unbiased align the b0s
     b0_hmc_wf = init_b0_hmc_wf()
     # Tile the transforms so each non-b0 gets the transform from the nearest b0
-    match_transforms = pe.Node(MatchTransforms(), name="match_transforms")
+    match_transforms = pe.Node(MatchTransforms(), name='match_transforms')
     # Make a mask from the output template. It is bias-corrected, so good for masking
     # but bad for using as a b=0 for modeling.
     b0_template_mask = init_dwi_reference_wf(
-        name="b0_template_mask",
+        name='b0_template_mask',
         gen_report=False,
         source_file=source_file,
     )
@@ -156,15 +156,15 @@ def init_dwi_hmc_wf(
     ])  # fmt:skip
 
     # If we're just aligning based on the b=0 images, compute the b=0 tsnr as the cnr
-    if hmc_model.lower() == "none":
+    if hmc_model.lower() == 'none':
         workflow.__postdesc__ = (
-            "Each b>0 image was transformed based on the registration "
-            " of the nearest b=0 image. "
+            'Each b>0 image was transformed based on the registration '
+            ' of the nearest b=0 image. '
         )
 
-        concat_b0s = pe.Node(afni.TCat(outputtype="NIFTI_GZ"), name="concat_b0s")
+        concat_b0s = pe.Node(afni.TCat(outputtype='NIFTI_GZ'), name='concat_b0s')
         b0_tsnr = pe.Node(
-            afni.TStat(options=" -cvarinvNOD ", outputtype="NIFTI_GZ"), name="b0_tsnr"
+            afni.TStat(options=' -cvarinvNOD ', outputtype='NIFTI_GZ'), name='b0_tsnr'
         )
         workflow.connect([
             (match_transforms, outputnode, [('transforms', 'forward_transforms')]),
@@ -181,16 +181,16 @@ def init_dwi_hmc_wf(
         ants.ApplyTransforms(
             invert_transform_flags=[True],
             interpolation=(
-                "LanczosWindowedSinc" if not config.execution.sloppy else "NearestNeighbor"
+                'LanczosWindowedSinc' if not config.execution.sloppy else 'NearestNeighbor'
             ),
         ),
-        iterfield=["input_image", "reference_image", "transforms"],
-        name="uncorrect_model_images",
+        iterfield=['input_image', 'reference_image', 'transforms'],
+        name='uncorrect_model_images',
     )
     workflow.__postdesc__ = (
-        "Model-generated images were transformed into alignment with each "
-        "b>0 image. Both slicewise and whole-brain QC measures (cross "
-        "correlation and R^2) were calculated."
+        'Model-generated images were transformed into alignment with each '
+        'b>0 image. Both slicewise and whole-brain QC measures (cross '
+        'correlation and R^2) were calculated.'
     )
     workflow.connect([
         (b0_hmc_wf, dwi_model_hmc_wf, [
@@ -215,7 +215,7 @@ def init_dwi_hmc_wf(
         (uncorrect_model_images, outputnode, [('output_image', 'noise_free_dwis')])
     ])  # fmt:skip
     datasinks = [
-        node for node in workflow.list_node_names() if node.split(".")[-1].startswith("ds_")
+        node for node in workflow.list_node_names() if node.split('.')[-1].startswith('ds_')
     ]
 
     for ds in datasinks:
@@ -224,7 +224,7 @@ def init_dwi_hmc_wf(
     return workflow
 
 
-def linear_alignment_workflow(transform="Rigid", iternum=0, omp_nthreads=1):
+def linear_alignment_workflow(transform='Rigid', iternum=0, omp_nthreads=1):
     """
     Takes a template image and a set of input images, does
     a linear alignment to the template and updates it with the
@@ -233,64 +233,62 @@ def linear_alignment_workflow(transform="Rigid", iternum=0, omp_nthreads=1):
     Returns a workflow
 
     """
-    iteration_wf = Workflow(name="iterative_alignment_%03d" % iternum)
-    input_node_fields = ["image_paths", "template_image", "iteration_num"]
-    inputnode = pe.Node(niu.IdentityInterface(fields=input_node_fields), name="inputnode")
+    iteration_wf = Workflow(name='iterative_alignment_%03d' % iternum)
+    input_node_fields = ['image_paths', 'template_image', 'iteration_num']
+    inputnode = pe.Node(niu.IdentityInterface(fields=input_node_fields), name='inputnode')
     inputnode.inputs.iteration_num = iternum
     outputnode = pe.Node(
         niu.IdentityInterface(
-            fields=["registered_image_paths", "affine_transforms", "updated_template"]
+            fields=['registered_image_paths', 'affine_transforms', 'updated_template']
         ),
-        name="outputnode",
+        name='outputnode',
     )
-    precision = "sloppy" if config.execution.sloppy else "precise"
+    precision = 'sloppy' if config.execution.sloppy else 'precise'
     ants_settings = pkgrf(
-        "qsiprep",
-        "data/shoreline_{precision}_{transform}.json".format(
-            precision=precision, transform=transform
-        ),
+        'qsiprep',
+        f'data/shoreline_{precision}_{transform}.json',
     )
     reg = ants.Registration(from_file=ants_settings, num_threads=omp_nthreads)
     iter_reg = pe.MapNode(
-        reg, name="reg_%03d" % iternum, iterfield=["moving_image"], n_procs=omp_nthreads
+        reg, name='reg_%03d' % iternum, iterfield=['moving_image'], n_procs=omp_nthreads
     )
 
     # Run the images through antsRegistration
-    iteration_wf.connect(inputnode, "image_paths", iter_reg, "moving_image")  # fmt:skip
-    iteration_wf.connect(inputnode, "template_image", iter_reg, "fixed_image")  # fmt:skip
+    iteration_wf.connect(inputnode, 'image_paths', iter_reg, 'moving_image')  # fmt:skip
+    iteration_wf.connect(inputnode, 'template_image', iter_reg, 'fixed_image')  # fmt:skip
 
     # Average the images
     averaged_images = pe.Node(
-        ants.AverageImages(normalize=True, dimension=3), name="averaged_images"
+        ants.AverageImages(normalize=True, dimension=3), name='averaged_images'
     )
-    iteration_wf.connect(iter_reg, "warped_image", averaged_images, "images")  # fmt:skip
+    iteration_wf.connect(iter_reg, 'warped_image', averaged_images, 'images')  # fmt:skip
 
     # Apply the inverse to the average image
-    transforms_to_list = pe.Node(niu.Merge(1), name="transforms_to_list")
+    transforms_to_list = pe.Node(niu.Merge(1), name='transforms_to_list')
     transforms_to_list.inputs.ravel_inputs = True
-    iteration_wf.connect(iter_reg, "forward_transforms", transforms_to_list, "in1")  # fmt:skip
-    avg_affines = pe.Node(ants.AverageAffineTransform(), name="avg_affine")
+    iteration_wf.connect(iter_reg, 'forward_transforms', transforms_to_list, 'in1')  # fmt:skip
+    avg_affines = pe.Node(ants.AverageAffineTransform(), name='avg_affine')
     avg_affines.inputs.dimension = 3
-    avg_affines.inputs.output_affine_transform = "AveragedAffines.mat"
-    iteration_wf.connect(transforms_to_list, "out", avg_affines, "transforms")  # fmt:skip
+    avg_affines.inputs.output_affine_transform = 'AveragedAffines.mat'
+    iteration_wf.connect(transforms_to_list, 'out', avg_affines, 'transforms')  # fmt:skip
 
-    invert_average = pe.Node(ants.ApplyTransforms(), name="invert_average")
-    invert_average.inputs.interpolation = "HammingWindowedSinc"
+    invert_average = pe.Node(ants.ApplyTransforms(), name='invert_average')
+    invert_average.inputs.interpolation = 'HammingWindowedSinc'
     invert_average.inputs.invert_transform_flags = [True]
 
-    avg_to_list = pe.Node(niu.Merge(1), name="to_list")
-    iteration_wf.connect(avg_affines, "affine_transform", avg_to_list, "in1")  # fmt:skip
-    iteration_wf.connect(avg_to_list, "out", invert_average, "transforms")  # fmt:skip
-    iteration_wf.connect(averaged_images, "output_average_image",
-                         invert_average, "input_image")  # fmt:skip
-    iteration_wf.connect(averaged_images, "output_average_image",
-                         invert_average, "reference_image")  # fmt:skip
-    iteration_wf.connect(invert_average, "output_image", outputnode,
-                         "updated_template")  # fmt:skip
-    iteration_wf.connect(iter_reg, "forward_transforms", outputnode,
-                         "affine_transforms")  # fmt:skip
-    iteration_wf.connect(iter_reg, "warped_image", outputnode,
-                         "registered_image_paths")  # fmt:skip
+    avg_to_list = pe.Node(niu.Merge(1), name='to_list')
+    iteration_wf.connect(avg_affines, 'affine_transform', avg_to_list, 'in1')  # fmt:skip
+    iteration_wf.connect(avg_to_list, 'out', invert_average, 'transforms')  # fmt:skip
+    iteration_wf.connect(averaged_images, 'output_average_image',
+                         invert_average, 'input_image')  # fmt:skip
+    iteration_wf.connect(averaged_images, 'output_average_image',
+                         invert_average, 'reference_image')  # fmt:skip
+    iteration_wf.connect(invert_average, 'output_image', outputnode,
+                         'updated_template')  # fmt:skip
+    iteration_wf.connect(iter_reg, 'forward_transforms', outputnode,
+                         'affine_transforms')  # fmt:skip
+    iteration_wf.connect(iter_reg, 'warped_image', outputnode,
+                         'registered_image_paths')  # fmt:skip
 
     return iteration_wf
 
@@ -299,7 +297,7 @@ def init_b0_hmc_wf(
     align_to=None,
     transform=None,
     boilerplate=True,
-    name="b0_hmc_wf",
+    name='b0_hmc_wf',
     prioritize_omp=False,
 ) -> Workflow:
     num_iters = 2
@@ -309,74 +307,72 @@ def init_b0_hmc_wf(
         transform = config.workflow.hmc_transform
     if config.execution.sloppy:
         num_iters = 1
-        align_to = "first"
+        align_to = 'first'
     omp_nthreads = config.nipype.omp_nthreads if prioritize_omp else 1
-    if align_to == "iterative" and num_iters < 2:
-        raise ValueError("Must specify a positive number of iterations")
+    if align_to == 'iterative' and num_iters < 2:
+        raise ValueError('Must specify a positive number of iterations')
 
     alignment_wf = Workflow(name=name)
-    inputnode = pe.Node(niu.IdentityInterface(fields=["b0_images"]), name="inputnode")
+    inputnode = pe.Node(niu.IdentityInterface(fields=['b0_images']), name='inputnode')
     outputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
-                "final_template",
-                "forward_transforms",
-                "iteration_templates",
-                "motion_params",
-                "aligned_images",
+                'final_template',
+                'forward_transforms',
+                'iteration_templates',
+                'motion_params',
+                'aligned_images',
             ]
         ),
-        name="outputnode",
+        name='outputnode',
     )
 
-    desc = "Initial motion correction was performed using only the b=0 images. "
+    desc = 'Initial motion correction was performed using only the b=0 images. '
 
     # Iteratively create a template
-    if align_to == "iterative":
+    if align_to == 'iterative':
         desc += (
-            "An unbiased b=0 template was constructed over {num_iters} iterations "
-            "of {transform} registrations. ".format(
-                num_iters=num_iters, transform=config.workflow.hmc_model
-            )
+            f'An unbiased b=0 template was constructed over {num_iters} iterations '
+            f'of {config.workflow.hmc_model} registrations. '
         )
         initial_template = pe.Node(
-            ants.AverageImages(normalize=True, dimension=3), name="initial_template"
+            ants.AverageImages(normalize=True, dimension=3), name='initial_template'
         )
-        alignment_wf.connect(inputnode, "b0_images", initial_template, "images")  # fmt:skip
+        alignment_wf.connect(inputnode, 'b0_images', initial_template, 'images')  # fmt:skip
         # Store the registration targets
-        iter_templates = pe.Node(niu.Merge(num_iters), name="iteration_templates")
-        alignment_wf.connect(initial_template, "output_average_image",
-                             iter_templates, "in1")  # fmt:skip
+        iter_templates = pe.Node(niu.Merge(num_iters), name='iteration_templates')
+        alignment_wf.connect(initial_template, 'output_average_image',
+                             iter_templates, 'in1')  # fmt:skip
 
         initial_reg = linear_alignment_workflow(iternum=0, omp_nthreads=omp_nthreads)
-        alignment_wf.connect(initial_template, "output_average_image",
-                             initial_reg, "inputnode.template_image")  # fmt:skip
-        alignment_wf.connect(inputnode, "b0_images", initial_reg,
-                             "inputnode.image_paths")  # fmt:skip
+        alignment_wf.connect(initial_template, 'output_average_image',
+                             initial_reg, 'inputnode.template_image')  # fmt:skip
+        alignment_wf.connect(inputnode, 'b0_images', initial_reg,
+                             'inputnode.image_paths')  # fmt:skip
         reg_iters = [initial_reg]
         for iternum in range(1, num_iters):
             reg_iters.append(linear_alignment_workflow(iternum=iternum, omp_nthreads=omp_nthreads))
-            alignment_wf.connect(reg_iters[-2], "outputnode.updated_template",
-                                 reg_iters[-1], "inputnode.template_image")  # fmt:skip
-            alignment_wf.connect(inputnode, "b0_images", reg_iters[-1],
-                                 "inputnode.image_paths")  # fmt:skip
-            alignment_wf.connect(reg_iters[-1], "outputnode.updated_template",
-                                 iter_templates, "in%d" % (iternum + 1))  # fmt:skip
+            alignment_wf.connect(reg_iters[-2], 'outputnode.updated_template',
+                                 reg_iters[-1], 'inputnode.template_image')  # fmt:skip
+            alignment_wf.connect(inputnode, 'b0_images', reg_iters[-1],
+                                 'inputnode.image_paths')  # fmt:skip
+            alignment_wf.connect(reg_iters[-1], 'outputnode.updated_template',
+                                 iter_templates, 'in%d' % (iternum + 1))  # fmt:skip
 
         # Attach to outputs
         # The last iteration aligned to the output from the second-to-last
-        alignment_wf.connect(reg_iters[-2], "outputnode.updated_template",
-                             outputnode, "final_template")  # fmt:skip
-        alignment_wf.connect(reg_iters[-1], "outputnode.affine_transforms",
-                             outputnode, "forward_transforms")  # fmt:skip
-        alignment_wf.connect(reg_iters[-1], "outputnode.registered_image_paths",
-                             outputnode, "aligned_images")  # fmt:skip
-        alignment_wf.connect(iter_templates, "out", outputnode,
-                             "iteration_templates")  # fmt:skip
-    elif align_to == "first":
+        alignment_wf.connect(reg_iters[-2], 'outputnode.updated_template',
+                             outputnode, 'final_template')  # fmt:skip
+        alignment_wf.connect(reg_iters[-1], 'outputnode.affine_transforms',
+                             outputnode, 'forward_transforms')  # fmt:skip
+        alignment_wf.connect(reg_iters[-1], 'outputnode.registered_image_paths',
+                             outputnode, 'aligned_images')  # fmt:skip
+        alignment_wf.connect(iter_templates, 'out', outputnode,
+                             'iteration_templates')  # fmt:skip
+    elif align_to == 'first':
         desc += (
-            "Each b=0 image was registered to the first b=0 image using "
-            f"a {transform} registration. "
+            'Each b=0 image was registered to the first b=0 image using '
+            f'a {transform} registration. '
         )
         reg_to_first = linear_alignment_workflow(iternum=0, omp_nthreads=omp_nthreads)
 
@@ -411,7 +407,7 @@ def _bvals_to_floats(bval_files):
     return [float(np.loadtxt(bval_file)) for bval_file in bval_files]
 
 
-def init_hmc_model_iteration_wf(name="hmc_model_iter0"):
+def init_hmc_model_iteration_wf(name='hmc_model_iter0'):
     """Create a model-based hmc registration iteration workflow.
 
     This workflow takes an initial set of transforms, applies them to the
@@ -466,57 +462,55 @@ def init_hmc_model_iteration_wf(name="hmc_model_iter0"):
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
-                "original_dwi_files",
-                "bvals",
-                "approx_aligned_dwi_files",
-                "approx_aligned_bvecs",
-                "b0_mask",
-                "b0_mean",
-                "original_bvecs",
+                'original_dwi_files',
+                'bvals',
+                'approx_aligned_dwi_files',
+                'approx_aligned_bvecs',
+                'b0_mask',
+                'b0_mean',
+                'original_bvecs',
             ]
         ),
-        name="inputnode",
+        name='inputnode',
     )
     outputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
-                "hmc_transforms",
-                "aligned_dwis",
-                "aligned_bvecs",
-                "predicted_dwis",
-                "motion_params",
+                'hmc_transforms',
+                'aligned_dwis',
+                'aligned_bvecs',
+                'predicted_dwis',
+                'motion_params',
             ]
         ),
-        name="outputnode",
+        name='outputnode',
     )
-    precision = "sloppy" if config.execution.sloppy else "precise"
+    precision = 'sloppy' if config.execution.sloppy else 'precise'
     ants_settings = pkgrf(
-        "qsiprep",
-        "data/shoreline_{precision}_{transform}.json".format(
-            precision=precision, transform=config.workflow.hmc_transform
-        ),
+        'qsiprep',
+        f'data/shoreline_{precision}_{config.workflow.hmc_transform}.json',
     )
 
     predict_dwis = pe.MapNode(
         SignalPrediction(model=config.workflow.hmc_model),
-        iterfield=["bval_to_predict", "bvec_to_predict"],
-        name="predict_dwis",
+        iterfield=['bval_to_predict', 'bvec_to_predict'],
+        name='predict_dwis',
     )
     predict_dwis.synchronize = True
 
     # Register original images to the predicted images
     register_to_predicted = pe.MapNode(
         ants.Registration(from_file=ants_settings),
-        iterfield=["fixed_image", "moving_image"],
-        name="register_to_predicted",
+        iterfield=['fixed_image', 'moving_image'],
+        name='register_to_predicted',
     )
     register_to_predicted.synchronize = True
 
     # Apply new transforms to bvecs
-    post_bvec_transforms = pe.Node(GradientRotation(), name="post_bvec_transforms")
+    post_bvec_transforms = pe.Node(GradientRotation(), name='post_bvec_transforms')
 
     # Summarize the motion
-    calculate_motion = pe.Node(CombineMotions(), name="calculate_motion")
+    calculate_motion = pe.Node(CombineMotions(), name='calculate_motion')
 
     workflow.connect([
         # Send inputs to DWI prediction
@@ -554,7 +548,7 @@ def init_hmc_model_iteration_wf(name="hmc_model_iter0"):
 
 def init_dwi_model_hmc_wf(
     num_iters=2,
-    name="dwi_model_hmc_wf",
+    name='dwi_model_hmc_wf',
 ):
     """Create a model-based hmc workflow.
 
@@ -607,53 +601,51 @@ def init_dwi_model_hmc_wf(
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
-                "dwi_files",
-                "b0_indices",
-                "initial_transforms",
-                "bvec_files",
-                "bval_files",
-                "warped_b0_images",
-                "warped_b0_mask",
+                'dwi_files',
+                'b0_indices',
+                'initial_transforms',
+                'bvec_files',
+                'bval_files',
+                'warped_b0_images',
+                'warped_b0_mask',
             ]
         ),
-        name="inputnode",
+        name='inputnode',
     )
     outputnode = pe.Node(
         niu.IdentityInterface(
-            fields=["hmc_transforms", "model_predicted_images", "cnr_image", "optimization_data"]
+            fields=['hmc_transforms', 'model_predicted_images', 'cnr_image', 'optimization_data']
         ),
-        name="outputnode",
+        name='outputnode',
     )
     workflow.__desc__ = (
-        "The the SHORELine method was used to estimate head motion in b>0 "
-        "images. This entails leaving out each b>0 image and reconstructing "
-        "the others using 3dSHORE [@merlet3dshore]. The signal for the left-"
-        "out image serves as the registration target. A total of {num_iters} "
-        "iterations were run using a {transform} transform. ".format(
-            transform=config.workflow.hmc_transform, num_iters=num_iters
-        )
+        'The the SHORELine method was used to estimate head motion in b>0 '
+        'images. This entails leaving out each b>0 image and reconstructing '
+        'the others using 3dSHORE [@merlet3dshore]. The signal for the left-'
+        f'out image serves as the registration target. A total of {num_iters} '
+        f'iterations were run using a {config.workflow.hmc_transform} transform. '
     )
 
     # Merge b0s into a single volume, put the non-b0 dwis into a list
-    extract_dwis = pe.Node(ExtractDWIsForModel(), name="extract_dwis")
+    extract_dwis = pe.Node(ExtractDWIsForModel(), name='extract_dwis')
 
     # Initialize with the transforms provided
     b0_based_image_transforms = pe.MapNode(
-        ants.ApplyTransforms(interpolation="BSpline"),
-        iterfield=["input_image", "transforms"],
-        name="b0_based_image_transforms",
+        ants.ApplyTransforms(interpolation='BSpline'),
+        iterfield=['input_image', 'transforms'],
+        name='b0_based_image_transforms',
     )
     # Rotate the original bvecs as well
-    b0_based_bvec_transforms = pe.Node(GradientRotation(), name="b0_based_bvec_transforms")
+    b0_based_bvec_transforms = pe.Node(GradientRotation(), name='b0_based_bvec_transforms')
 
     # Create a mask and an average from the aligned b0 images
-    b0_mean = pe.Node(B0Mean(), name="b0_mean")
+    b0_mean = pe.Node(B0Mean(), name='b0_mean')
 
     # Start building and connecting the model iterations
-    initial_model_iteration = init_hmc_model_iteration_wf(name="initial_model_iteration")
+    initial_model_iteration = init_hmc_model_iteration_wf(name='initial_model_iteration')
 
     # Collect motion estimates across iterations
-    collect_motion_params = pe.Node(niu.Merge(num_iters), name="collect_motion_params")
+    collect_motion_params = pe.Node(niu.Merge(num_iters), name='collect_motion_params')
 
     workflow.connect([
         (inputnode, extract_dwis, [('dwi_files', 'dwi_files'),
@@ -688,8 +680,8 @@ def init_dwi_model_hmc_wf(
 
     model_iterations = [initial_model_iteration]
     for iteration_num in range(num_iters - 1):
-        iteration_name = "shoreline_iteration%03d" % (iteration_num + 1)
-        motion_key = "in%d" % (iteration_num + 2)
+        iteration_name = 'shoreline_iteration%03d' % (iteration_num + 1)
+        motion_key = 'in%d' % (iteration_num + 2)
         model_iterations.append(init_hmc_model_iteration_wf(name=iteration_name))
         workflow.connect([
             (model_iterations[-2], model_iterations[-1], [
@@ -708,32 +700,32 @@ def init_dwi_model_hmc_wf(
         ])  # fmt:skip
 
     # Return to the original, b0-interspersed ordering
-    reorder_dwi_xforms = pe.Node(ReorderOutputs(), name="reorder_dwi_xforms")
+    reorder_dwi_xforms = pe.Node(ReorderOutputs(), name='reorder_dwi_xforms')
 
     # Create a report:
-    shoreline_report = pe.Node(SHORELineReport(), name="shoreline_report")
+    shoreline_report = pe.Node(SHORELineReport(), name='shoreline_report')
     ds_report_shoreline_gif = pe.Node(
         DerivativesDataSink(
-            datatype="figures",
-            desc="shoreline",
-            suffix="animation",
+            datatype='figures',
+            desc='shoreline',
+            suffix='animation',
         ),
-        name="ds_report_shoreline_gif",
+        name='ds_report_shoreline_gif',
         mem_gb=1,
         run_without_submitting=True,
     )
 
-    calculate_cnr = pe.Node(CalculateCNR(), name="calculate_cnr")
+    calculate_cnr = pe.Node(CalculateCNR(), name='calculate_cnr')
 
     if num_iters > 1:
-        summarize_iterations = pe.Node(IterationSummary(), name="summarize_iterations")
+        summarize_iterations = pe.Node(IterationSummary(), name='summarize_iterations')
         ds_report_iteration_plot = pe.Node(
             DerivativesDataSink(
-                datatype="figures",
-                desc="shorelineiters",
-                suffix="dwi",
+                datatype='figures',
+                desc='shorelineiters',
+                suffix='dwi',
             ),
-            name="ds_report_iteration_plot",
+            name='ds_report_iteration_plot',
             mem_gb=0.1,
             run_without_submitting=True,
         )

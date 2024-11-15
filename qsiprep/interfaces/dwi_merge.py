@@ -23,38 +23,38 @@ from nipype.utils.filemanip import fname_presuffix
 from ..workflows.dwi.util import _get_concatenated_bids_name
 from .fmap import get_distortion_grouping
 
-LOGGER = logging.getLogger("nipype.workflow")
+LOGGER = logging.getLogger('nipype.workflow')
 MAX_COMBINED_SCANS = 100
 
 
 class MergeDWIsInputSpec(BaseInterfaceInputSpec):
-    dwi_files = InputMultiObject(File(), mandatory=True, desc="list of dwi files")
+    dwi_files = InputMultiObject(File(), mandatory=True, desc='list of dwi files')
     bids_dwi_files = InputMultiObject(
-        File(), mandatory=True, desc="list of original (BIDS) dwi files"
+        File(), mandatory=True, desc='list of original (BIDS) dwi files'
     )
-    bval_files = InputMultiObject(File(exists=True), mandatory=True, desc="list of bval files")
-    bvec_files = InputMultiObject(File(exists=True), mandatory=True, desc="list of bvec files")
-    b0_threshold = traits.Int(100, usedefault=True, desc="Maximum b=0 value")
+    bval_files = InputMultiObject(File(exists=True), mandatory=True, desc='list of bval files')
+    bvec_files = InputMultiObject(File(exists=True), mandatory=True, desc='list of bvec files')
+    b0_threshold = traits.Int(100, usedefault=True, desc='Maximum b=0 value')
     denoising_confounds = InputMultiObject(
-        File(exists=True, desc="list of confound files associated with each input dwi")
+        File(exists=True, desc='list of confound files associated with each input dwi')
     )
     harmonize_b0_intensities = traits.Bool(
-        True, usedefault=True, desc="Force scans to have the same mean b=0 intensity"
+        True, usedefault=True, desc='Force scans to have the same mean b=0 intensity'
     )
     raw_concatenated_files = InputMultiObject(
-        File(), mandatory=False, desc="list of raw concatenated images"
+        File(), mandatory=False, desc='list of raw concatenated images'
     )
-    b0_refs = InputMultiObject(File(), mandatory=False, desc="list of b=0 reference images")
+    b0_refs = InputMultiObject(File(), mandatory=False, desc='list of b=0 reference images')
     carpetplot_data = InputMultiObject(
-        File(exists=True), mandatory=False, desc="list of carpetplot_data files"
+        File(exists=True), mandatory=False, desc='list of carpetplot_data files'
     )
-    scan_metadata = traits.Dict(desc="Dict of metadata for the to-be-combined scans")
+    scan_metadata = traits.Dict(desc='Dict of metadata for the to-be-combined scans')
 
 
 class MergeDWIsOutputSpec(TraitedSpec):
-    out_dwi = File(desc="the merged dwi image")
-    out_bval = File(desc="the merged bval file")
-    out_bvec = File(desc="the merged bvec file")
+    out_dwi = File(desc='the merged dwi image')
+    out_bval = File(desc='the merged bval file')
+    out_bvec = File(desc='the merged bvec file')
     original_images = traits.List()
     merged_metadata = File(exists=True)
     merged_denoising_confounds = File(exists=True)
@@ -86,10 +86,10 @@ class MergeDWIs(SimpleInterface):
                 self.inputs.bids_dwi_files,
                 self.inputs.scan_metadata,
             )
-            merged_metadata_file = op.join(runtime.cwd, "merged_metadata.json")
-            with open(merged_metadata_file, "w") as merged_meta_f:
+            merged_metadata_file = op.join(runtime.cwd, 'merged_metadata.json')
+            with open(merged_metadata_file, 'w') as merged_meta_f:
                 json.dump(combined_metadata, merged_meta_f, sort_keys=True, indent=4)
-            self._results["merged_metadata"] = merged_metadata_file
+            self._results['merged_metadata'] = merged_metadata_file
 
         # Get basic qc / provenance per volume
         provenance_df = create_provenance_dataframe(
@@ -107,23 +107,23 @@ class MergeDWIs(SimpleInterface):
         # Load the gradient information
         all_bvals = combined_bval_array(self.inputs.bval_files)
         all_bvecs = combined_bvec_array(self.inputs.bvec_files)
-        confounds_df["original_bval"] = all_bvals
-        confounds_df["original_bx"] = all_bvecs[0]
-        confounds_df["original_by"] = all_bvecs[1]
-        confounds_df["original_bz"] = all_bvecs[2]
+        confounds_df['original_bval'] = all_bvals
+        confounds_df['original_bx'] = all_bvecs[0]
+        confounds_df['original_by'] = all_bvecs[1]
+        confounds_df['original_bz'] = all_bvecs[2]
         confounds_df = confounds_df.loc[:, ~confounds_df.columns.duplicated()]
 
         # Concatenate the gradient information
         if num_dwis > 1:
             merged_output = _get_concatenated_bids_name(
-                {"dwi_series": self.inputs.dwi_files, "fieldmap_info": {"suffix": None}}
+                {'dwi_series': self.inputs.dwi_files, 'fieldmap_info': {'suffix': None}}
             )
-            merged_fname = op.join(runtime.cwd, merged_output + "_merged.nii.gz")
+            merged_fname = op.join(runtime.cwd, merged_output + '_merged.nii.gz')
             out_bval = fname_presuffix(
-                merged_fname, suffix=".bval", use_ext=False, newpath=runtime.cwd
+                merged_fname, suffix='.bval', use_ext=False, newpath=runtime.cwd
             )
             out_bvec = fname_presuffix(
-                merged_fname, suffix=".bvec", use_ext=False, newpath=runtime.cwd
+                merged_fname, suffix='.bvec', use_ext=False, newpath=runtime.cwd
             )
         else:
             merged_fname = self.inputs.dwi_files[0]
@@ -131,22 +131,22 @@ class MergeDWIs(SimpleInterface):
             out_bvec = bvecs[0]
 
         merged_confounds = fname_presuffix(
-            merged_fname, suffix="_confounds.csv", use_ext=False, newpath=runtime.cwd
+            merged_fname, suffix='_confounds.csv', use_ext=False, newpath=runtime.cwd
         )
-        confounds_df = confounds_df.drop("Unnamed: 0", axis=1, errors="ignore")
+        confounds_df = confounds_df.drop('Unnamed: 0', axis=1, errors='ignore')
         confounds_df.to_csv(merged_confounds, index=False)
 
-        self._results["merged_denoising_confounds"] = merged_confounds
-        self._results["original_images"] = confounds_df["original_file"].tolist()
-        self._results["out_dwi"] = merged_fname
-        self._results["out_bval"] = out_bval
-        self._results["out_bvec"] = out_bvec
+        self._results['merged_denoising_confounds'] = merged_confounds
+        self._results['original_images'] = confounds_df['original_file'].tolist()
+        self._results['out_dwi'] = merged_fname
+        self._results['out_bval'] = out_bval
+        self._results['out_bvec'] = out_bvec
 
         # If one and only one carpetplot data was specified, add it to outputs
         if len(self.inputs.carpetplot_data) > 1:
             raise NotImplementedError("Can't handle multiple carpetplots in merging")
         if len(self.inputs.carpetplot_data) == 1:
-            self._results["merged_carpetplot_data"] = self.inputs.carpetplot_data[0]
+            self._results['merged_carpetplot_data'] = self.inputs.carpetplot_data[0]
 
         if num_dwis == 1:
             return runtime
@@ -157,13 +157,13 @@ class MergeDWIs(SimpleInterface):
         # Concatenate into a single file
         merged_nii = concat_imgs(to_concat, auto_resample=True)
         # Remove any negative values introduced during interpolation (if it occurs)
-        pos_merged_nii = math_img("np.clip(img, 0, None)", img=merged_nii)
+        pos_merged_nii = math_img('np.clip(img, 0, None)', img=merged_nii)
         pos_merged_nii.to_filename(merged_fname)
 
         return runtime
 
 
-def combine_metadata(scan_list, metadata_dict, merge_method="first"):
+def combine_metadata(scan_list, metadata_dict, merge_method='first'):
     """Create a merged metadata dictionary.
 
     Most importantly, combine the slice timings in some way.
@@ -185,17 +185,17 @@ def combine_metadata(scan_list, metadata_dict, merge_method="first"):
         A BIDS metadata dictionary
 
     """
-    if merge_method == "first":
+    if merge_method == 'first':
         return metadata_dict[scan_list[0]]
     raise NotImplementedError(f"merge_method '{merge_method}' is not implemented")
 
 
 class AveragePEPairsInputSpec(MergeDWIsInputSpec):
     original_bvec_files = InputMultiObject(
-        File(exists=True), mandatory=True, desc="list of original bvec files"
+        File(exists=True), mandatory=True, desc='list of original bvec files'
     )
     carpetplot_data = InputMultiObject(
-        File(exists=True), mandatory=True, desc="list of carpetplot_data files"
+        File(exists=True), mandatory=True, desc='list of carpetplot_data files'
     )
     verbose = traits.Bool(False, usedefault=True)
 
@@ -214,8 +214,8 @@ class AveragePEPairs(SimpleInterface):
         if not num_distortion_groups == 2:
             raise Exception(
                 "Unable to merge using strategy 'average': exactly"
-                " two distortion groups must be present in data."
-                " Found %d" % num_distortion_groups
+                ' two distortion groups must be present in data.'
+                ' Found %d' % num_distortion_groups
             )
 
         # Get the gradient info for each PE group
@@ -245,30 +245,30 @@ class AveragePEPairs(SimpleInterface):
         )
 
         # Save the averaged outputs
-        out_dwi_path = op.join(runtime.cwd, "averaged_pairs.nii.gz")
+        out_dwi_path = op.join(runtime.cwd, 'averaged_pairs.nii.gz')
         combined_images.to_filename(out_dwi_path)
-        self._results["out_dwi"] = out_dwi_path
-        out_bval_path = op.join(runtime.cwd, "averaged_pairs.bval")
-        self._results["out_bval"] = combine_bvals(combined_bvals, out_bval_path)
-        out_bvec_path = op.join(runtime.cwd, "averaged_pairs.bvec")
-        self._results["out_bvec"] = combine_bvecs(combined_bvecs, out_bvec_path)
-        out_confounds_path = op.join(runtime.cwd, "averaged_pairs_desc-confounds_timeseries.tsv")
-        error_report.to_csv(out_confounds_path, index=False, sep="\t")
-        self._results["merged_denoising_confounds"] = out_confounds_path
-        self._results["original_images"] = self.inputs.bids_dwi_files
+        self._results['out_dwi'] = out_dwi_path
+        out_bval_path = op.join(runtime.cwd, 'averaged_pairs.bval')
+        self._results['out_bval'] = combine_bvals(combined_bvals, out_bval_path)
+        out_bvec_path = op.join(runtime.cwd, 'averaged_pairs.bvec')
+        self._results['out_bvec'] = combine_bvecs(combined_bvecs, out_bvec_path)
+        out_confounds_path = op.join(runtime.cwd, 'averaged_pairs_desc-confounds_timeseries.tsv')
+        error_report.to_csv(out_confounds_path, index=False, sep='\t')
+        self._results['merged_denoising_confounds'] = out_confounds_path
+        self._results['original_images'] = self.inputs.bids_dwi_files
 
         # Write the merged carpetplot data
-        out_carpetplot_path = op.join(runtime.cwd, "merged_carpetplot.json")
-        with open(out_carpetplot_path, "w") as carpet_f:
+        out_carpetplot_path = op.join(runtime.cwd, 'merged_carpetplot.json')
+        with open(out_carpetplot_path, 'w') as carpet_f:
             json.dump(avg_carpetplot, carpet_f)
-        self._results["merged_carpetplot_data"] = out_carpetplot_path
+        self._results['merged_carpetplot_data'] = out_carpetplot_path
 
         # write the averaged raw data
-        out_raw_concatenated = op.join(runtime.cwd, "merged_raw.nii.gz")
-        self._results["merged_raw_dwi"] = out_raw_concatenated
+        out_raw_concatenated = op.join(runtime.cwd, 'merged_raw.nii.gz')
+        self._results['merged_raw_dwi'] = out_raw_concatenated
         combined_raw_images.to_filename(out_raw_concatenated)
-        out_raw_bvec = op.join(runtime.cwd, "merged_raw.bvec")
-        self._results["merged_raw_bvec"] = combine_bvecs(averaged_raw_bvec, out_raw_bvec)
+        out_raw_bvec = op.join(runtime.cwd, 'merged_raw.bvec')
+        self._results['merged_raw_bvec'] = combine_bvecs(averaged_raw_bvec, out_raw_bvec)
 
         # Make a new b=0 template
         b0_indices = np.flatnonzero(bvals < self.inputs.b0_threshold)
@@ -276,7 +276,7 @@ class AveragePEPairs(SimpleInterface):
             dimension=3, normalize=True, images=[self.inputs.dwi_files[idx] for idx in b0_indices]
         )
         result = b0_ref.run()
-        self._results["merged_b0_ref"] = result.outputs.output_average_image
+        self._results['merged_b0_ref'] = result.outputs.output_average_image
 
         return runtime
 
@@ -295,10 +295,10 @@ class _SplitResampledDWIsOutputSpec(TraitedSpec):
 
 # Add slots for the possibly
 for subscan in np.arange(MAX_COMBINED_SCANS) + 1:
-    _SplitResampledDWIsOutputSpec.add_class_trait("dwi_file_%d" % subscan, File(exists=True))
-    _SplitResampledDWIsOutputSpec.add_class_trait("bval_file_%d" % subscan, File(exists=True))
-    _SplitResampledDWIsOutputSpec.add_class_trait("bvec_file_%d" % subscan, File(exists=True))
-    _SplitResampledDWIsOutputSpec.add_class_trait("source_file_%d" % subscan, traits.Str())
+    _SplitResampledDWIsOutputSpec.add_class_trait('dwi_file_%d' % subscan, File(exists=True))
+    _SplitResampledDWIsOutputSpec.add_class_trait('bval_file_%d' % subscan, File(exists=True))
+    _SplitResampledDWIsOutputSpec.add_class_trait('bvec_file_%d' % subscan, File(exists=True))
+    _SplitResampledDWIsOutputSpec.add_class_trait('source_file_%d' % subscan, traits.Str())
 
 
 class SplitResampledDWIs(SimpleInterface):
@@ -307,35 +307,35 @@ class SplitResampledDWIs(SimpleInterface):
 
     def _run_interface(self, runtime):
         # Load the confounds
-        confounds_df = pd.read_csv(self.inputs.confounds, sep="\t")
-        original_files = confounds_df["original_file"].unique().tolist()
+        confounds_df = pd.read_csv(self.inputs.confounds, sep='\t')
+        original_files = confounds_df['original_file'].unique().tolist()
         if not len(original_files) == self.inputs.n_images:
             raise Exception(
-                "Found %d files in confounds file, but expected %d"
+                'Found %d files in confounds file, but expected %d'
                 % (len(original_files), self.inputs.n_images)
             )
         resampled_img = load_img(self.inputs.dwi_file)
         for file_num, original_file in enumerate(original_files, start=1):
             image_indices = np.flatnonzero(
-                (confounds_df["original_file"] == original_file).to_numpy()
+                (confounds_df['original_file'] == original_file).to_numpy()
             )
             dwi_subfile = fname_presuffix(
                 original_file,
-                prefix="resampled_",
-                suffix=".nii.gz",
+                prefix='resampled_',
+                suffix='.nii.gz',
                 use_ext=False,
                 newpath=runtime.cwd,
             )
-            bval_subfile = dwi_subfile.replace(".nii.gz", ".bval")
-            bvec_subfile = dwi_subfile.replace(".nii.gz", ".bvec")
+            bval_subfile = dwi_subfile.replace('.nii.gz', '.bval')
+            bvec_subfile = dwi_subfile.replace('.nii.gz', '.bvec')
             index_img(resampled_img, image_indices).to_filename(dwi_subfile)
             subset_bvals(self.inputs.bval_file, image_indices, bval_subfile)
             subset_bvecs(self.inputs.bvec_file, image_indices, bvec_subfile)
 
-            self._results["dwi_file_%d" % file_num] = dwi_subfile
-            self._results["bval_file_%d" % file_num] = bval_subfile
-            self._results["bvec_file_%d" % file_num] = bvec_subfile
-            self._results["source_file_%d" % file_num] = original_file
+            self._results['dwi_file_%d' % file_num] = dwi_subfile
+            self._results['bval_file_%d' % file_num] = bval_subfile
+            self._results['bvec_file_%d' % file_num] = bvec_subfile
+            self._results['source_file_%d' % file_num] = original_file
         return runtime
 
 
@@ -354,7 +354,6 @@ class MergeFinalConfounds(SimpleInterface):
     output_spec = _MergeFinalConfoundsOutputSpec
 
     def _run_interface(self, runtime):
-
         to_concat_horizontally = []
         # New confounds from bias correction
         if isdefined(self.inputs.bias_correction_confounds):
@@ -372,16 +371,16 @@ class MergeFinalConfounds(SimpleInterface):
         # If we have new ones, append the columns, prefixed by "final_"
         if to_concat_horizontally:
             new_confounds_file = fname_presuffix(
-                self.inputs.confounds, newpath=runtime.cwd, prefix="final_"
+                self.inputs.confounds, newpath=runtime.cwd, prefix='final_'
             )
-            original_confounds = pd.read_csv(self.inputs.confounds, sep="\t")
+            original_confounds = pd.read_csv(self.inputs.confounds, sep='\t')
             extra_confounds = pd.concat(to_concat_horizontally, axis=1)
-            extra_confounds.columns = ["final_" + col for col in extra_confounds.columns.tolist()]
+            extra_confounds.columns = ['final_' + col for col in extra_confounds.columns.tolist()]
             final_confounds = pd.concat([original_confounds, extra_confounds], axis=1)
-            final_confounds.to_csv(new_confounds_file, sep="\t", index=False)
-            self._results["confounds"] = new_confounds_file
+            final_confounds.to_csv(new_confounds_file, sep='\t', index=False)
+            self._results['confounds'] = new_confounds_file
         else:
-            self._results["confounds"] = self.inputs.confounds
+            self._results['confounds'] = self.inputs.confounds
 
         return runtime
 
@@ -392,26 +391,26 @@ def find_image_pairs(original_bvecs, bvals, assignments):
     group2_mask = assignments == 2
     image_nums = np.arange(len(assignments))
     group1 = {
-        "bvals": bvals[group1_mask],
-        "original_bvecs": original_bvecs[:, group1_mask],
-        "indices": image_nums[group1_mask],
+        'bvals': bvals[group1_mask],
+        'original_bvecs': original_bvecs[:, group1_mask],
+        'indices': image_nums[group1_mask],
     }
     group2 = {
-        "bvals": bvals[group2_mask],
-        "original_bvecs": original_bvecs[:, group2_mask],
-        "indices": image_nums[group2_mask],
+        'bvals': bvals[group2_mask],
+        'original_bvecs': original_bvecs[:, group2_mask],
+        'indices': image_nums[group2_mask],
     }
 
     # If this is HCP-style, the bvals and bvecs will match directly
-    if not group2["bvals"].shape == group1["bvals"].shape:
-        raise Exception("Unable to perform HCP-style merge, different numbers of images")
-    if np.allclose(group2["bvals"], group1["bvals"], atol=50) and np.allclose(
-        group2["original_bvecs"], group1["original_bvecs"], atol=0.0001
+    if not group2['bvals'].shape == group1['bvals'].shape:
+        raise Exception('Unable to perform HCP-style merge, different numbers of images')
+    if np.allclose(group2['bvals'], group1['bvals'], atol=50) and np.allclose(
+        group2['original_bvecs'], group1['original_bvecs'], atol=0.0001
     ):
-        pairs = list(zip(group1["indices"], group2["indices"]))
-        bvecs = group1["original_bvecs"]
+        pairs = list(zip(group1['indices'], group2['indices'], strict=False))
+        bvecs = group1['original_bvecs']
     else:
-        raise Exception("Bvecs do not match - ensure matching bvecs")
+        raise Exception('Bvecs do not match - ensure matching bvecs')
 
     return pairs, bvecs
 
@@ -448,7 +447,7 @@ def average_image_pairs(
     """Create 4D series of averaged images, gradients, and confounds"""
     averaged_images = []
     new_bvecs = []
-    confounds = pd.concat([pd.read_csv(fname, delimiter="\t") for fname in confounds_tsvs])
+    confounds = pd.concat([pd.read_csv(fname, delimiter='\t') for fname in confounds_tsvs])
     merged_confounds = []
     merged_bvals = []
 
@@ -456,16 +455,16 @@ def average_image_pairs(
     raw_concatenated_img = concat_imgs(raw_concatenated_files)
     raw_averaged_images = []
 
-    confounds1_rename = {col: col + "_1" for col in confounds.columns}
-    confounds2_rename = {col: col + "_2" for col in confounds.columns}
+    confounds1_rename = {col: col + '_1' for col in confounds.columns}
+    confounds2_rename = {col: col + '_2' for col in confounds.columns}
     for index1, index2 in image_pairs:
         confounds1 = confounds.iloc[index1].copy().rename(confounds1_rename)
         confounds2 = confounds.iloc[index2].copy().rename(confounds2_rename)
         # Make a single row containing both 1 and 2
         confounds_both = confounds1.append(confounds2)
-        averaged_images.append(math_img("(a+b)/2", a=image_paths[index1], b=image_paths[index2]))
+        averaged_images.append(math_img('(a+b)/2', a=image_paths[index1], b=image_paths[index2]))
         raw_averaged_images.append(
-            math_img("(a[..., %d] + a[..., %d]) / 2" % (index1, index2), a=raw_concatenated_img)
+            math_img('(a[..., %d] + a[..., %d]) / 2' % (index1, index2), a=raw_concatenated_img)
         )
 
         new_bval = (bvals[index1] + bvals[index2]) / 2.0
@@ -475,43 +474,43 @@ def average_image_pairs(
         new_bvec, bvec_error = average_bvec(rotated1, rotated2)
         new_bvecs.append(new_bvec)
 
-        confounds_both["vec_averaging_error"] = bvec_error
-        confounds_both["rotated_grad_x_1"] = rotated1[0]
-        confounds_both["rotated_grad_y_1"] = rotated1[1]
-        confounds_both["rotated_grad_z_1"] = rotated1[2]
-        confounds_both["rotated_grad_x_2"] = rotated2[0]
-        confounds_both["rotated_grad_y_2"] = rotated2[1]
-        confounds_both["rotated_grad_z_2"] = rotated2[2]
-        confounds_both["grad_x"] = new_bvec[0]
-        confounds_both["grad_y"] = new_bvec[1]
-        confounds_both["grad_z"] = new_bvec[2]
-        confounds_both["bval"] = new_bval
+        confounds_both['vec_averaging_error'] = bvec_error
+        confounds_both['rotated_grad_x_1'] = rotated1[0]
+        confounds_both['rotated_grad_y_1'] = rotated1[1]
+        confounds_both['rotated_grad_z_1'] = rotated1[2]
+        confounds_both['rotated_grad_x_2'] = rotated2[0]
+        confounds_both['rotated_grad_y_2'] = rotated2[1]
+        confounds_both['rotated_grad_z_2'] = rotated2[2]
+        confounds_both['grad_x'] = new_bvec[0]
+        confounds_both['grad_y'] = new_bvec[1]
+        confounds_both['grad_z'] = new_bvec[2]
+        confounds_both['bval'] = new_bval
         merged_confounds.append(confounds_both)
         if verbose:
             print(
-                "%d: %d [%.4fdeg error]\n\t%d (%.4f %.4f %.4f)"
+                '%d: %d [%.4fdeg error]\n\t%d (%.4f %.4f %.4f)'
                 % (index1, index2, bvec_error, new_bval, new_bvec[0], new_bvec[1], new_bvec[2])
             )
 
     # Make columns that can be used in the interactive report
     averaged_confounds = pd.DataFrame(merged_confounds)
     needed_for_interactive_report = [
-        "trans_x",
-        "trans_y",
-        "trans_z",
-        "rot_x",
-        "rot_y",
-        "rot_z",
-        "framewise_displacement",
+        'trans_x',
+        'trans_y',
+        'trans_z',
+        'rot_x',
+        'rot_y',
+        'rot_z',
+        'framewise_displacement',
     ]
     for key in needed_for_interactive_report:
-        confs1, confs2 = averaged_confounds[[key + "_1", key + "_2"]].to_numpy().T
+        confs1, confs2 = averaged_confounds[[key + '_1', key + '_2']].to_numpy().T
         averaged_confounds[key] = get_worst(confs1, confs2)
 
     # Original file is actually two files!
-    averaged_confounds["original_file"] = averaged_confounds[
-        ["original_file_1", "original_file_2"]
-    ].agg("+".join, axis=1)
+    averaged_confounds['original_file'] = averaged_confounds[
+        ['original_file_1', 'original_file_2']
+    ].agg('+'.join, axis=1)
 
     # Get the averaged carpetplot data for the interactive report
     averaged_carpetplot = average_carpetplots(carpetplots, np.array(image_pairs))
@@ -545,15 +544,15 @@ def average_carpetplots(carpet_list, image_pairs):
 
     """
     if not isinstance(carpet_list, list) and len(carpet_list) == 1:
-        raise Exception("Not implemented for SHORELine")
+        raise Exception('Not implemented for SHORELine')
     carpet_path = carpet_list[0]
-    with open(carpet_path, "r") as carpet_f:
+    with open(carpet_path) as carpet_f:
         carpet_dict = json.load(carpet_f)
-    carpet_data = np.array(carpet_dict["carpetplot"])
+    carpet_data = np.array(carpet_dict['carpetplot'])
     worst_rows = []
     for index1, index2 in image_pairs:
         worst_rows.append(get_worst(carpet_data[index1], carpet_data[index2]).tolist())
-    return {"carpetplot": worst_rows}
+    return {'carpetplot': worst_rows}
 
 
 def average_bvec(bvec1, bvec2):
@@ -577,7 +576,7 @@ def average_bvec(bvec1, bvec2):
         bvec1, mean_bvec_minus
     ) and angle_between(bvec2, mean_bvec_plus) < angle_between(bvec2, mean_bvec_minus):
         return mean_bvec_minus, bvec_diff
-    LOGGER.warning("Ambiguous directions of vectors: assuming plus")
+    LOGGER.warning('Ambiguous directions of vectors: assuming plus')
     return mean_bvec_plus, bvec_diff
 
 
@@ -588,7 +587,7 @@ class StackConfoundsInputSpec(BaseInterfaceInputSpec):
 
 
 class StackConfoundsOutputSpec(TraitedSpec):
-    confounds_file = File(desc="the stacked confound data")
+    confounds_file = File(desc='the stacked confound data')
 
 
 class StackConfounds(SimpleInterface):
@@ -600,23 +599,23 @@ class StackConfounds(SimpleInterface):
             return runtime
         dfs = [pd.read_csv(fname) for fname in self.inputs.in_files]
         stacked = pd.concat(dfs, axis=self.inputs.axis, ignore_index=self.inputs.axis == 0)
-        out_file = op.join(runtime.cwd, "confounds.csv")
-        stacked = stacked.drop("Unnamed: 0", axis=1, errors="ignore")
+        out_file = op.join(runtime.cwd, 'confounds.csv')
+        stacked = stacked.drop('Unnamed: 0', axis=1, errors='ignore')
         stacked.to_csv(out_file)
-        self._results["confounds_file"] = out_file
+        self._results['confounds_file'] = out_file
         return runtime
 
 
 def subset_bvals(bval_file, indices, out_bval_file):
     original_bvals = np.loadtxt(bval_file)
     bval_subset = original_bvals[indices]
-    np.savetxt(out_bval_file, bval_subset, fmt=str("%i"))
+    np.savetxt(out_bval_file, bval_subset, fmt='%i')
 
 
 def subset_bvecs(bvec_file, indices, out_bvec_file):
     original_bvecs = np.loadtxt(bvec_file)
     bvec_subset = original_bvecs[:, indices]
-    np.savetxt(out_bvec_file, bvec_subset, fmt=str("%.8f"))
+    np.savetxt(out_bvec_file, bvec_subset, fmt='%.8f')
 
 
 def combined_bval_array(bval_files):
@@ -629,10 +628,10 @@ def combined_bval_array(bval_files):
     return np.concatenate(collected_vals)
 
 
-def combine_bvals(bvals, output_file="restacked.bval"):
+def combine_bvals(bvals, output_file='restacked.bval'):
     """Load, merge and save fsl-style bvals files."""
     final_bvals = combined_bval_array(bvals)
-    np.savetxt(output_file, final_bvals, fmt=str("%i"))
+    np.savetxt(output_file, final_bvals, fmt='%i')
     return op.abspath(output_file)
 
 
@@ -646,10 +645,10 @@ def combined_bvec_array(bvec_files):
     return np.column_stack(collected_vecs)
 
 
-def combine_bvecs(bvecs, output_file="restacked.bvec"):
+def combine_bvecs(bvecs, output_file='restacked.bvec'):
     """Load, merge and save fsl-style bvecs files."""
     final_bvecs = combined_bvec_array(bvecs)
-    np.savetxt(output_file, final_bvecs, fmt=str("%.8f"))
+    np.savetxt(output_file, final_bvecs, fmt='%.8f')
     return op.abspath(output_file)
 
 
@@ -690,7 +689,7 @@ def harmonize_b0s(dwi_files, bvals, b0_threshold, harmonize_b0s):
     num_dwis = len(dwi_files)
     dwi_niis = []
     b0_means = []
-    for dwi_file, bval_file in zip(dwi_files, bvals):
+    for dwi_file, bval_file in zip(dwi_files, bvals, strict=False):
         dwi_nii = load_img(dwi_file)
         _bvals = np.loadtxt(bval_file)
         b0_indices = np.flatnonzero(_bvals < b0_threshold)
@@ -709,12 +708,12 @@ def harmonize_b0s(dwi_files, bvals, b0_threshold, harmonize_b0s):
         b0_all_mean = np.nanmean(b0_means)
         corrections = b0_all_mean / np.array(b0_means)
         harmonized_niis = []
-        for nii_img, correction in zip(dwi_niis, corrections):
+        for nii_img, correction in zip(dwi_niis, corrections, strict=False):
             if np.isnan(b0_mean):
                 harmonized_niis.append(nii_img)
-                LOGGER.warning("An image has no b=0 images and cannot be harmonized")
+                LOGGER.warning('An image has no b=0 images and cannot be harmonized')
             else:
-                harmonized_niis.append(math_img("img*%.32f" % correction, img=nii_img))
+                harmonized_niis.append(math_img('img*%.32f' % correction, img=nii_img))
         to_concat = harmonized_niis
     else:
         to_concat = dwi_niis
@@ -732,27 +731,27 @@ def create_provenance_dataframe(
     # Check whether the bids sources are per file or per volume
     if not len(bids_sources) == total_vols:
         images_per_volume = []
-        for source_image, img_nvols in zip(bids_sources, nvols_per_image):
+        for source_image, img_nvols in zip(bids_sources, nvols_per_image, strict=False):
             images_per_volume.extend([source_image] * img_nvols)
         if not len(images_per_volume) == total_vols:
-            raise Exception("Mismatch in number of images and BIDS sources")
+            raise Exception('Mismatch in number of images and BIDS sources')
         bids_sources = images_per_volume
 
     for correction, harmonized_nii, b0_mean, nvols in zip(
-        harmonization_corrections, harmonized_niis, b0_means, nvols_per_image
+        harmonization_corrections, harmonized_niis, b0_means, nvols_per_image, strict=False
     ):
         series_confounds.append(
             pd.DataFrame(
                 {
-                    "image_mean": [img.get_fdata().mean() for img in iter_img(harmonized_nii)],
-                    "series_b0_mean": [b0_mean] * nvols,
-                    "series_b0_correction": [correction] * nvols,
+                    'image_mean': [img.get_fdata().mean() for img in iter_img(harmonized_nii)],
+                    'series_b0_mean': [b0_mean] * nvols,
+                    'series_b0_correction': [correction] * nvols,
                 }
             )
         )
 
     image_df = pd.concat(series_confounds, axis=0, ignore_index=True)
-    image_df["original_file"] = bids_sources
+    image_df['original_file'] = bids_sources
     return image_df
 
 
@@ -881,7 +880,7 @@ class PhaseToRad(SimpleInterface):
 
     def _run_interface(self, runtime):
         im = nb.load(self.inputs.phase_file)
-        data = im.get_fdata(caching="unchanged")  # Read as float64 for safety
+        data = im.get_fdata(caching='unchanged')  # Read as float64 for safety
         hdr = im.header.copy()
 
         # Rescale to [0, 2*pi]
@@ -891,17 +890,17 @@ class PhaseToRad(SimpleInterface):
         data = np.clip(np.float32(data), 0.0, 2 * np.pi)
 
         hdr.set_data_dtype(np.float32)
-        hdr.set_xyzt_units("mm")
+        hdr.set_xyzt_units('mm')
 
         # Set the output file name
-        self._results["phase_file"] = fname_presuffix(
+        self._results['phase_file'] = fname_presuffix(
             self.inputs.phase_file,
-            suffix="_rad.nii.gz",
+            suffix='_rad.nii.gz',
             newpath=runtime.cwd,
             use_ext=False,
         )
 
         # Save the output image
-        nb.Nifti1Image(data, None, hdr).to_filename(self._results["phase_file"])
+        nb.Nifti1Image(data, None, hdr).to_filename(self._results['phase_file'])
 
         return runtime

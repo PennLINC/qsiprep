@@ -2,12 +2,13 @@
 This script comes from scikit-learn:
 https://github.com/scikit-learn/scikit-learn/blob/master/doc/sphinxext/github_link.py
 """
-from operator import attrgetter
+
 import inspect
-import subprocess
 import os
+import subprocess
 import sys
 from functools import partial
+from operator import attrgetter
 
 REVISION_CMD = 'git rev-parse --short HEAD'
 
@@ -62,14 +63,12 @@ def _linkcode_resolve(domain, info, package, url_fmt, revision):
     if not fn:
         return
 
-    fn = os.path.relpath(fn,
-                         start=os.path.dirname(__import__(package).__file__))
+    fn = os.path.relpath(fn, start=os.path.dirname(__import__(package).__file__))
     try:
         lineno = inspect.getsourcelines(obj)[1]
     except Exception:
         lineno = ''
-    return url_fmt.format(revision=revision, package=package,
-                          path=fn, lineno=lineno)
+    return url_fmt.format(revision=revision, package=package, path=fn, lineno=lineno)
 
 
 def make_linkcode_resolve(package, url_fmt):
@@ -84,5 +83,4 @@ def make_linkcode_resolve(package, url_fmt):
                                    '{path}#L{lineno}')
     """
     revision = _get_git_revision()
-    return partial(_linkcode_resolve, revision=revision, package=package,
-                   url_fmt=url_fmt)
+    return partial(_linkcode_resolve, revision=revision, package=package, url_fmt=url_fmt)

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 """
@@ -44,47 +43,47 @@ from niworkflows.interfaces.bids import _DerivativesDataSinkInputSpec
 
 from qsiprep.data import load as load_data
 
-LOGGER = logging.getLogger("nipype.interface")
+LOGGER = logging.getLogger('nipype.interface')
 BIDS_NAME = re.compile(
-    "^(.*\/)?(?P<subject_id>sub-[a-zA-Z0-9]+)(_(?P<session_id>ses-[a-zA-Z0-9]+))?"
-    "(_(?P<task_id>task-[a-zA-Z0-9]+))?(_(?P<acq_id>acq-[a-zA-Z0-9]+))?"
-    "(_(?P<space_id>space-[a-zA-Z0-9]+))?"
-    "(_(?P<rec_id>rec-[a-zA-Z0-9]+))?(_(?P<run_id>run-[a-zA-Z0-9]+))?"
+    r'^(.*\/)?(?P<subject_id>sub-[a-zA-Z0-9]+)(_(?P<session_id>ses-[a-zA-Z0-9]+))?'
+    '(_(?P<task_id>task-[a-zA-Z0-9]+))?(_(?P<acq_id>acq-[a-zA-Z0-9]+))?'
+    '(_(?P<space_id>space-[a-zA-Z0-9]+))?'
+    '(_(?P<rec_id>rec-[a-zA-Z0-9]+))?(_(?P<run_id>run-[a-zA-Z0-9]+))?'
 )
 
 # NOTE: Modified for QSIPrep's purposes
-qsiprep_spec = loads(load_data("io_spec.json").read_text())
-bids_config = Config.load("bids")
-deriv_config = Config.load("derivatives")
+qsiprep_spec = loads(load_data('io_spec.json').read_text())
+bids_config = Config.load('bids')
+deriv_config = Config.load('derivatives')
 
-qsiprep_entities = {v["name"]: v["pattern"] for v in qsiprep_spec["entities"]}
+qsiprep_entities = {v['name']: v['pattern'] for v in qsiprep_spec['entities']}
 merged_entities = {**bids_config.entities, **deriv_config.entities}
 merged_entities = {k: v.pattern for k, v in merged_entities.items()}
 merged_entities = {**merged_entities, **qsiprep_entities}
-merged_entities = [{"name": k, "pattern": v} for k, v in merged_entities.items()]
-config_entities = frozenset({e["name"] for e in merged_entities})
+merged_entities = [{'name': k, 'pattern': v} for k, v in merged_entities.items()]
+config_entities = frozenset({e['name'] for e in merged_entities})
 
 
 def get_bids_params(fullpath):
     bids_patterns = [
-        r"^(.*/)?(?P<subject_id>sub-[a-zA-Z0-9]+)",
-        "^.*_(?P<session_id>ses-[a-zA-Z0-9]+)",
-        "^.*_(?P<task_id>task-[a-zA-Z0-9]+)",
-        "^.*_(?P<acq_id>acq-[a-zA-Z0-9]+)",
-        "^.*_(?P<space_id>space-[a-zA-Z0-9]+)",
-        "^.*_(?P<rec_id>rec-[a-zA-Z0-9]+)",
-        "^.*_(?P<run_id>run-[a-zA-Z0-9]+)",
-        "^.*_(?P<dir_id>dir-[a-zA-Z0-9]+)",
+        r'^(.*/)?(?P<subject_id>sub-[a-zA-Z0-9]+)',
+        '^.*_(?P<session_id>ses-[a-zA-Z0-9]+)',
+        '^.*_(?P<task_id>task-[a-zA-Z0-9]+)',
+        '^.*_(?P<acq_id>acq-[a-zA-Z0-9]+)',
+        '^.*_(?P<space_id>space-[a-zA-Z0-9]+)',
+        '^.*_(?P<rec_id>rec-[a-zA-Z0-9]+)',
+        '^.*_(?P<run_id>run-[a-zA-Z0-9]+)',
+        '^.*_(?P<dir_id>dir-[a-zA-Z0-9]+)',
     ]
     matches = {
-        "subject_id": None,
-        "session_id": None,
-        "task_id": None,
-        "dir_id": None,
-        "acq_id": None,
-        "space_id": None,
-        "rec_id": None,
-        "run_id": None,
+        'subject_id': None,
+        'session_id': None,
+        'task_id': None,
+        'dir_id': None,
+        'acq_id': None,
+        'space_id': None,
+        'rec_id': None,
+        'run_id': None,
     }
     for pattern in bids_patterns:
         pat = re.compile(pattern)
@@ -99,7 +98,7 @@ class FileNotFoundError(IOError):
 
 
 class BIDSInfoInputSpec(BaseInterfaceInputSpec):
-    in_file = File(mandatory=True, desc="input file, part of a BIDS tree")
+    in_file = File(mandatory=True, desc='input file, part of a BIDS tree')
 
 
 class BIDSInfoOutputSpec(TraitedSpec):
@@ -136,15 +135,15 @@ class BIDSDataGrabberInputSpec(BaseInterfaceInputSpec):
 
 
 class BIDSDataGrabberOutputSpec(TraitedSpec):
-    out_dict = traits.Dict(desc="output data structure")
-    fmap = OutputMultiPath(desc="output fieldmaps")
-    bold = OutputMultiPath(desc="output functional images")
-    sbref = OutputMultiPath(desc="output sbrefs")
-    t1w = OutputMultiPath(desc="output T1w images")
-    roi = OutputMultiPath(desc="output ROI images")
-    t2w = OutputMultiPath(desc="output T2w images")
-    flair = OutputMultiPath(desc="output FLAIR images")
-    dwi = OutputMultiPath(desc="output DWI images")
+    out_dict = traits.Dict(desc='output data structure')
+    fmap = OutputMultiPath(desc='output fieldmaps')
+    bold = OutputMultiPath(desc='output functional images')
+    sbref = OutputMultiPath(desc='output sbrefs')
+    t1w = OutputMultiPath(desc='output T1w images')
+    roi = OutputMultiPath(desc='output ROI images')
+    t2w = OutputMultiPath(desc='output T2w images')
+    flair = OutputMultiPath(desc='output FLAIR images')
+    dwi = OutputMultiPath(desc='output DWI images')
 
 
 class BIDSDataGrabber(SimpleInterface):
@@ -168,53 +167,53 @@ class BIDSDataGrabber(SimpleInterface):
     _require_funcs = True
 
     def __init__(self, *args, **kwargs):
-        anat_only = kwargs.pop("anat_only")
-        dwi_only = kwargs.pop("dwi_only")
-        anatomical_contrast = kwargs.pop("anatomical_contrast")
+        anat_only = kwargs.pop('anat_only')
+        dwi_only = kwargs.pop('dwi_only')
+        anatomical_contrast = kwargs.pop('anatomical_contrast')
         self._anatomical_contrast = anatomical_contrast
         super(BIDSDataGrabber, self).__init__(*args, **kwargs)
         if anat_only is not None:
             self._require_funcs = not anat_only
-        self._no_anat_necessary = bool(dwi_only) or anatomical_contrast == "none"
+        self._no_anat_necessary = bool(dwi_only) or anatomical_contrast == 'none'
 
     def _run_interface(self, runtime):
         bids_dict = self.inputs.subject_data
 
-        self._results["out_dict"] = bids_dict
+        self._results['out_dict'] = bids_dict
         self._results.update(bids_dict)
 
-        if not bids_dict["t1w"]:
-            message = "No T1w images found for subject sub-{}".format(self.inputs.subject_id)
+        if not bids_dict['t1w']:
+            message = f'No T1w images found for subject sub-{self.inputs.subject_id}'
             if self._no_anat_necessary:
-                LOGGER.info("%s, but no problem because --dwi-only was selected.", message)
-            elif self._anatomical_contrast != "T1w":
+                LOGGER.info('%s, but no problem because --dwi-only was selected.', message)
+            elif self._anatomical_contrast != 'T1w':
                 LOGGER.info(
-                    "%s, but no problem because --anat-modality %s was selected.",
+                    '%s, but no problem because --anat-modality %s was selected.',
                     message,
                     self._anatomical_contrast,
                 )
             else:
                 raise FileNotFoundError(message)
 
-        if not bids_dict["t2w"]:
-            message = "No T2w images found for subject sub-{}".format(self.inputs.subject_id)
+        if not bids_dict['t2w']:
+            message = f'No T2w images found for subject sub-{self.inputs.subject_id}'
             if self._no_anat_necessary:
-                LOGGER.info("%s, but no problem because --dwi-only was selected.", message)
-            elif self._anatomical_contrast != "T2w":
+                LOGGER.info('%s, but no problem because --dwi-only was selected.', message)
+            elif self._anatomical_contrast != 'T2w':
                 LOGGER.info(
-                    "%s, but no problem because --anat-modality %s was selected.",
+                    '%s, but no problem because --anat-modality %s was selected.',
                     message,
                     self._anatomical_contrast,
                 )
             else:
                 raise FileNotFoundError(message)
 
-        if self._no_anat_necessary and not bids_dict["dwi"]:
+        if self._no_anat_necessary and not bids_dict['dwi']:
             raise FileNotFoundError(
-                "No DWI images found for subject sub-{}".format(self.inputs.subject_id)
+                f'No DWI images found for subject sub-{self.inputs.subject_id}'
             )
 
-        for imtype in ["flair", "fmap", "sbref", "roi", "dwi"]:
+        for imtype in ['flair', 'fmap', 'sbref', 'roi', 'dwi']:
             if not bids_dict[imtype]:
                 LOGGER.warning("No '%s' images found for sub-%s", imtype, self.inputs.subject_id)
 
@@ -227,11 +226,11 @@ class DerivativesDataSink(BaseDerivativesDataSink):
     A child class of the niworkflows DerivativesDataSink, using xcp_d's configuration files.
     """
 
-    out_path_base = ""
+    out_path_base = ''
     _allowed_entities = set(config_entities)
     _config_entities = config_entities
     _config_entities_dict = merged_entities
-    _file_patterns = qsiprep_spec["default_path_patterns"]
+    _file_patterns = qsiprep_spec['default_path_patterns']
 
 
 class _DerivativesMaybeDataSinkInputSpec(_DerivativesDataSinkInputSpec):
@@ -239,7 +238,7 @@ class _DerivativesMaybeDataSinkInputSpec(_DerivativesDataSinkInputSpec):
         traits.Directory(exists=True),
         InputMultiObject(File(exists=True)),
         mandatory=False,
-        desc="the object to be saved",
+        desc='the object to be saved',
     )
 
 
@@ -258,7 +257,7 @@ class _DerivativesSidecarInputSpec(BaseInterfaceInputSpec):
 
 
 class _DerivativesSidecarOutputSpec(TraitedSpec):
-    derivatives_json = File(exists=True, desc="Derivatives Sidecar")
+    derivatives_json = File(exists=True, desc='Derivatives Sidecar')
 
 
 class DerivativesSidecar(SimpleInterface):
@@ -267,25 +266,25 @@ class DerivativesSidecar(SimpleInterface):
 
     def _run_interface(self, runtime):
         json_fname = fname_presuffix(
-            self.inputs.source_file, use_ext=False, suffix=".json", newpath=runtime.cwd
+            self.inputs.source_file, use_ext=False, suffix='.json', newpath=runtime.cwd
         )
-        with open(json_fname, "w") as jsonf:
+        with open(json_fname, 'w') as jsonf:
             dump(self.inputs.sidecar_data, jsonf, sort_keys=True, indent=4)
-        self._results["derivatives_json"] = json_fname
+        self._results['derivatives_json'] = json_fname
         return runtime
 
 
 def _splitext(fname):
     fname, ext = os.path.splitext(os.path.basename(fname))
-    if ext == ".gz":
+    if ext == '.gz':
         fname, ext2 = os.path.splitext(fname)
         ext = ext2 + ext
     return fname, ext
 
 
 def _copy_any(src, dst):
-    src_isgz = src.endswith(".gz")
-    dst_isgz = dst.endswith(".gz")
+    src_isgz = src.endswith('.gz')
+    dst_isgz = dst.endswith('.gz')
     if src_isgz == dst_isgz:
         copyfile(src, dst, copy=True, use_hardlink=True)
         return False  # Make sure we do not reuse the hardlink later
@@ -296,7 +295,7 @@ def _copy_any(src, dst):
 
     src_open = gzip.open if src_isgz else open
     dst_open = gzip.open if dst_isgz else open
-    with src_open(src, "rb") as f_in:
-        with dst_open(dst, "wb") as f_out:
+    with src_open(src, 'rb') as f_in:
+        with dst_open(dst, 'wb') as f_out:
             copyfileobj(f_in, f_out)
     return True

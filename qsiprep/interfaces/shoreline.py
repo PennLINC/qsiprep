@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 """
@@ -8,6 +7,7 @@ SHORELine interfaces
 
 
 """
+
 import os
 import os.path as op
 
@@ -36,7 +36,7 @@ from ..utils.brainsuite_shore import BrainSuiteShoreModel, brainsuite_shore_basi
 from .gradients import concatenate_bvals, concatenate_bvecs
 from .reports import SummaryInterface, SummaryOutputSpec
 
-LOGGER = logging.getLogger("nipype.interface")
+LOGGER = logging.getLogger('nipype.interface')
 
 
 def _nonoverlapping_qspace_samples(prediction_bval, prediction_bvec, all_bvals, all_bvecs, cutoff):
@@ -78,9 +78,9 @@ class B0Mean(SimpleInterface):
     def _run_interface(self, runtime):
         b0_images = [nb.load(fname) for fname in self.inputs.b0_images]
         b0_mean = np.stack([img.get_fdata() for img in b0_images], -1).mean(3)
-        mean_file = op.join(runtime.cwd, "b0_mean.nii.gz")
+        mean_file = op.join(runtime.cwd, 'b0_mean.nii.gz')
         nb.Nifti1Image(b0_mean, b0_images[0].affine, b0_images[0].header).to_filename(mean_file)
-        self._results["average_image"] = mean_file
+        self._results['average_image'] = mean_file
         return runtime
 
 
@@ -112,12 +112,12 @@ class ExtractDWIsForModel(SimpleInterface):
         b0_indices = self.inputs.b0_indices
         transforms = self.inputs.transforms
         if not len(all_images) == len(all_bvecs) == len(all_bvals) == len(transforms):
-            raise Exception("Image, bval, bvec inputs must be of the same length")
+            raise Exception('Image, bval, bvec inputs must be of the same length')
         ok_indices = [idx for idx in range(len(all_images)) if idx not in b0_indices]
-        self._results["model_dwi_files"] = [all_images[idx] for idx in ok_indices]
-        self._results["model_bvals"] = [all_bvals[idx] for idx in ok_indices]
-        self._results["model_bvecs"] = [all_bvecs[idx] for idx in ok_indices]
-        self._results["transforms"] = [transforms[idx] for idx in ok_indices]
+        self._results['model_dwi_files'] = [all_images[idx] for idx in ok_indices]
+        self._results['model_bvals'] = [all_bvals[idx] for idx in ok_indices]
+        self._results['model_bvecs'] = [all_bvecs[idx] for idx in ok_indices]
+        self._results['transforms'] = [transforms[idx] for idx in ok_indices]
 
         return runtime
 
@@ -140,7 +140,7 @@ class SignalPredictionInputSpec(BaseInterfaceInputSpec):
     bvec_to_predict = traits.Array()
     bval_to_predict = traits.Float()
     minimal_q_distance = traits.Float(2.0, usedefault=True)
-    model = traits.Str("3dSHORE", usedefault=True)
+    model = traits.Str('3dSHORE', usedefault=True)
 
 
 class SignalPredictionOutputSpec(TraitedSpec):
@@ -181,7 +181,7 @@ class SignalPrediction(SimpleInterface):
         ]
         training_bvecs = all_bvecs[training_mask]
         training_bvals = all_bvals[training_mask]
-        LOGGER.info("Training with %d of %d", training_mask.sum(), len(training_mask))
+        LOGGER.info('Training with %d of %d', training_mask.sum(), len(training_mask))
 
         # Load training data and fit the model
         training_data = quick_load_images(training_image_paths)
@@ -191,8 +191,8 @@ class SignalPrediction(SimpleInterface):
         prediction_bvals = np.ones(10) * pred_val
         prediction_bvals[9] = 0  # prevent warning
         prediction_gtab = gradient_table(bvals=prediction_bvals, bvecs=prediction_bvecs)
-        if self.inputs.model == "3dSHORE":
-            shore_model = BrainSuiteShoreModel(training_gtab, regularization="L2")
+        if self.inputs.model == '3dSHORE':
+            shore_model = BrainSuiteShoreModel(training_gtab, regularization='L2')
             shore_fit = shore_model.fit(training_data, mask=mask_array)
             # Get the shore vector for the desired coordinate
             prediction_shore = brainsuite_shore_basis(
@@ -204,7 +204,7 @@ class SignalPrediction(SimpleInterface):
             output_data = np.zeros(mask_array.shape)
             output_data[mask_array] = np.dot(shore_array, prediction_dir)
 
-        elif self.inputs.model == "tensor":
+        elif self.inputs.model == 'tensor':
             dti_wls = dti.TensorModel(training_gtab)
             fit_wls = dti_wls.fit(training_data, mask=mask_array)
             dti_params = fit_wls.model_params
@@ -213,15 +213,15 @@ class SignalPrediction(SimpleInterface):
             )[..., 0]
 
         else:
-            raise NotImplementedError("Unsupported model: " + self.inputs.model)
+            raise NotImplementedError('Unsupported model: ' + self.inputs.model)
 
         prediction_file = op.join(
             runtime.cwd,
-            "predicted_b%d_%.2f_%.2f_%.2f.nii.gz"
+            'predicted_b%d_%.2f_%.2f_%.2f.nii.gz'
             % ((pred_val,) + tuple(np.round(pred_vec, decimals=2))),
         )
         nb.Nifti1Image(output_data, mask_img.affine, mask_img.header).to_filename(prediction_file)
-        self._results["predicted_image"] = prediction_file
+        self._results['predicted_image'] = prediction_file
 
         return runtime
 
@@ -241,7 +241,7 @@ class CalculateCNR(SimpleInterface):
     output_spec = CalculateCNROutputSpec
 
     def _run_interface(self, runtime):
-        cnr_file = op.join(runtime.cwd, "SHORELine_CNR.nii.gz")
+        cnr_file = op.join(runtime.cwd, 'SHORELine_CNR.nii.gz')
         model_images = quick_load_images(self.inputs.predicted_images)
         observed_images = quick_load_images(self.inputs.hmc_warped_images)
         mask_image = nb.load(self.inputs.mask_image)
@@ -256,7 +256,7 @@ class CalculateCNR(SimpleInterface):
         out_mat = np.zeros(mask_image.shape)
         out_mat[mask] = snr
         nb.Nifti1Image(out_mat, mask_image.affine, header=mask_image.header).to_filename(cnr_file)
-        self._results["cnr_image"] = cnr_file
+        self._results['cnr_image'] = cnr_file
         return runtime
 
 
@@ -304,11 +304,11 @@ class ReorderOutputs(SimpleInterface):
                 full_warped_images.append(warped_dwi_images.pop())
 
         if not len(model_transforms) == len(b0_transforms) == len(model_images) == 0:
-            raise Exception("Unable to recombine images and transforms")
+            raise Exception('Unable to recombine images and transforms')
 
-        self._results["hmc_warped_images"] = full_warped_images
-        self._results["full_transforms"] = full_transforms
-        self._results["full_predicted_dwi_series"] = full_predicted_dwi_series
+        self._results['hmc_warped_images'] = full_warped_images
+        self._results['full_transforms'] = full_transforms
+        self._results['full_predicted_dwi_series'] = full_predicted_dwi_series
 
         return runtime
 
@@ -328,27 +328,27 @@ class IterationSummary(SummaryInterface):
 
     def _run_interface(self, runtime):
         motion_files = self.inputs.collected_motion_files
-        output_fname = op.join(runtime.cwd, "iteration_summary.csv")
-        fig_output_fname = op.join(runtime.cwd, "iterdiffs.svg")
+        output_fname = op.join(runtime.cwd, 'iteration_summary.csv')
+        fig_output_fname = op.join(runtime.cwd, 'iterdiffs.svg')
         if not isdefined(motion_files):
             return runtime
 
         all_iters = []
         for fnum, fname in enumerate(motion_files):
             df = pd.read_csv(fname)
-            df["iter_num"] = fnum
+            df['iter_num'] = fnum
             path_parts = fname.split(os.sep)
-            itername = "" if "iter" not in path_parts[-3] else path_parts[-3]
-            df["iter_name"] = itername
+            itername = '' if 'iter' not in path_parts[-3] else path_parts[-3]
+            df['iter_name'] = itername
             all_iters.append(df)
         combined = pd.concat(all_iters, axis=0, ignore_index=True)
 
         combined.to_csv(output_fname, index=False)
-        self._results["iteration_summary_file"] = output_fname
+        self._results['iteration_summary_file'] = output_fname
 
         # Create a figure for the report
         _iteration_summary_plot(combined, fig_output_fname)
-        self._results["plot_file"] = fig_output_fname
+        self._results['plot_file'] = fig_output_fname
 
         return runtime
 
@@ -375,14 +375,14 @@ class SHORELineReport(SummaryInterface):
                 self.inputs.original_images,
                 self.inputs.registered_images,
                 self.inputs.model_predicted_images,
+                strict=False,
             )
         ):
-
             images.extend(before_after_images(orig_file, aligned_file, model_file, imagenum))
 
-        out_file = op.join(runtime.cwd, "shoreline_reg.gif")
+        out_file = op.join(runtime.cwd, 'shoreline_reg.gif')
         imageio.mimsave(out_file, images, duration=1000)
-        self._results["plot_file"] = out_file
+        self._results['plot_file'] = out_file
         return runtime
 
 
@@ -402,7 +402,7 @@ def scaled_mip(img1, img2, img3, axis):
 def to_image(fig):
     fig.subplots_adjust(hspace=0, left=0, right=1, wspace=0)
     fig.canvas.draw()  # draw the canvas, cache the renderer
-    image = np.frombuffer(fig.canvas.tostring_rgb(), dtype="uint8")
+    image = np.frombuffer(fig.canvas.tostring_rgb(), dtype='uint8')
     image = image.reshape(fig.canvas.get_width_height()[::-1] + (3,))
     return image
 
@@ -427,17 +427,17 @@ def before_after_images(orig_file, aligned_file, model_file, imagenum):
     target_contours_low = measure.find_contours(target_mip, 0.05)
 
     # Plot before
-    ax[0].imshow(orig_mip, vmax=1.0, vmin=0, origin="lower", cmap="gray", interpolation="nearest")
+    ax[0].imshow(orig_mip, vmax=1.0, vmin=0, origin='lower', cmap='gray', interpolation='nearest')
     ax[1].imshow(
-        target_mip, vmax=1.0, vmin=0, origin="lower", cmap="gray", interpolation="nearest"
+        target_mip, vmax=1.0, vmin=0, origin='lower', cmap='gray', interpolation='nearest'
     )
-    ax[0].text(1, 1, "%03d: Before" % imagenum, fontsize=16, color="white")
+    ax[0].text(1, 1, '%03d: Before' % imagenum, fontsize=16, color='white')
     for contour in target_contours + target_contours_low:
-        ax[0].plot(contour[:, 1], contour[:, 0], linewidth=2, alpha=0.9, color="#e7298a")
-        ax[1].plot(contour[:, 1], contour[:, 0], linewidth=2, alpha=0.9, color="#e7298a")
+        ax[0].plot(contour[:, 1], contour[:, 0], linewidth=2, alpha=0.9, color='#e7298a')
+        ax[1].plot(contour[:, 1], contour[:, 0], linewidth=2, alpha=0.9, color='#e7298a')
     for contour in orig_contours + orig_contours_low:
-        ax[1].plot(contour[:, 1], contour[:, 0], linewidth=2, alpha=0.9, color="#d95f02")
-        ax[0].plot(contour[:, 1], contour[:, 0], linewidth=2, alpha=0.9, color="#d95f02")
+        ax[1].plot(contour[:, 1], contour[:, 0], linewidth=2, alpha=0.9, color='#d95f02')
+        ax[0].plot(contour[:, 1], contour[:, 0], linewidth=2, alpha=0.9, color='#d95f02')
     for axis in ax:
         axis.set_xticks([])
         axis.set_yticks([])
@@ -448,18 +448,18 @@ def before_after_images(orig_file, aligned_file, model_file, imagenum):
     for _ax in ax:
         _ax.clear()
     ax[0].imshow(
-        aligned_mip, vmax=1.0, vmin=0, origin="lower", cmap="gray", interpolation="nearest"
+        aligned_mip, vmax=1.0, vmin=0, origin='lower', cmap='gray', interpolation='nearest'
     )
     ax[1].imshow(
-        target_mip, vmax=1.0, vmin=0, origin="lower", cmap="gray", interpolation="nearest"
+        target_mip, vmax=1.0, vmin=0, origin='lower', cmap='gray', interpolation='nearest'
     )
-    ax[0].text(1, 1, "%03d: After" % imagenum, fontsize=16, color="white")
+    ax[0].text(1, 1, '%03d: After' % imagenum, fontsize=16, color='white')
     for contour in target_contours + target_contours_low:
-        ax[0].plot(contour[:, 1], contour[:, 0], linewidth=2, alpha=0.9, color="#e7298a")
-        ax[1].plot(contour[:, 1], contour[:, 0], linewidth=2, alpha=0.9, color="#e7298a")
+        ax[0].plot(contour[:, 1], contour[:, 0], linewidth=2, alpha=0.9, color='#e7298a')
+        ax[1].plot(contour[:, 1], contour[:, 0], linewidth=2, alpha=0.9, color='#e7298a')
     for contour in aligned_contours + aligned_contours_low:
-        ax[1].plot(contour[:, 1], contour[:, 0], linewidth=2, alpha=0.9, color="#d95f02")
-        ax[0].plot(contour[:, 1], contour[:, 0], linewidth=2, alpha=0.9, color="#d95f02")
+        ax[1].plot(contour[:, 1], contour[:, 0], linewidth=2, alpha=0.9, color='#d95f02')
+        ax[0].plot(contour[:, 1], contour[:, 0], linewidth=2, alpha=0.9, color='#d95f02')
     for axis in ax:
         axis.set_xticks([])
         axis.set_yticks([])
@@ -469,9 +469,9 @@ def before_after_images(orig_file, aligned_file, model_file, imagenum):
 
 
 def _iteration_summary_plot(iters_df, out_file):
-    iters = list([item[1] for item in iters_df.groupby("iter_num")])
-    shift_cols = ["shiftX", "shiftY", "shiftZ"]
-    rotate_cols = ["rotateX", "rotateY", "rotateZ"]
+    iters = list([item[1] for item in iters_df.groupby('iter_num')])
+    shift_cols = ['shiftX', 'shiftY', 'shiftZ']
+    rotate_cols = ['rotateX', 'rotateY', 'rotateZ']
     shifts = np.stack([df[shift_cols] for df in iters], -1)
     rotations = np.stack([df[rotate_cols] for df in iters], -1)
 
@@ -483,13 +483,15 @@ def _iteration_summary_plot(iters_df, out_file):
 
     shiftdiff_dfs = []
     rotdiff_dfs = []
-    for diffnum, (rot_diff, shift_diff) in enumerate(zip(rot_diffs.T, shift_diffs.T)):
+    for diffnum, (rot_diff, shift_diff) in enumerate(
+        zip(rot_diffs.T, shift_diffs.T, strict=False)
+    ):
         shiftdiff_df = pd.DataFrame(shift_diff.T, columns=shift_cols)
-        shiftdiff_df["difference_num"] = "%02d" % diffnum
+        shiftdiff_df['difference_num'] = '%02d' % diffnum
         shiftdiff_dfs.append(shiftdiff_df)
 
         rotdiff_df = pd.DataFrame(rot_diff.T, columns=rotate_cols)
-        rotdiff_df["difference_num"] = "%02d" % diffnum
+        rotdiff_df['difference_num'] = '%02d' % diffnum
         rotdiff_dfs.append(rotdiff_df)
 
     shift_diffs = pd.concat(shiftdiff_dfs, axis=0)
@@ -499,23 +501,23 @@ def _iteration_summary_plot(iters_df, out_file):
     sns.set()
     fig, ax = plt.subplots(ncols=2, figsize=(10, 5))
     sns.violinplot(
-        x="variable",
-        y="value",
-        hue="difference_num",
+        x='variable',
+        y='value',
+        hue='difference_num',
         ax=ax[0],
-        data=shift_diffs.melt(id_vars=["difference_num"]),
+        data=shift_diffs.melt(id_vars=['difference_num']),
     )
-    ax[0].set_ylabel("mm")
-    ax[0].set_title("Shift")
+    ax[0].set_ylabel('mm')
+    ax[0].set_title('Shift')
 
     # Plot rotations
     sns.violinplot(
-        x="variable",
-        y="value",
-        hue="difference_num",
-        data=rotate_diffs.melt(id_vars=["difference_num"]),
+        x='variable',
+        y='value',
+        hue='difference_num',
+        data=rotate_diffs.melt(id_vars=['difference_num']),
     )
-    ax[1].set_ylabel("Degrees")
-    ax[1].set_title("Rotation")
+    ax[1].set_ylabel('Degrees')
+    ax[1].set_title('Rotation')
     sns.despine(offset=10, trim=True, fig=fig)
     fig.savefig(out_file)
