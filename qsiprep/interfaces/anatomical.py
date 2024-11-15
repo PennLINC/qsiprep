@@ -157,7 +157,7 @@ class DesaturateSkull(SimpleInterface):
         if actual_brain_to_skull_ratio < self.inputs.brain_to_skull_ratio:
             # We need to downweight the non-brain voxels
             adjustment = actual_brain_to_skull_ratio / self.inputs.brain_to_skull_ratio
-            LOGGER.info('Desaturating outside-brain signal by %.5f' % adjustment)
+            LOGGER.info(f'Desaturating outside-brain signal by {adjustment:.5f}')
             nonbrain_mask = brainmask_img.get_fdata() < 1
             # Apply the adjustment
             desat_data[nonbrain_mask] = desat_data[nonbrain_mask] * adjustment

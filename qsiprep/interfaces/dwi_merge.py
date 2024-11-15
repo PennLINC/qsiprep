@@ -215,7 +215,7 @@ class AveragePEPairs(SimpleInterface):
             raise Exception(
                 "Unable to merge using strategy 'average': exactly"
                 ' two distortion groups must be present in data.'
-                ' Found %d' % num_distortion_groups
+                f' Found {num_distortion_groups}'
             )
 
         # Get the gradient info for each PE group
@@ -713,7 +713,7 @@ def harmonize_b0s(dwi_files, bvals, b0_threshold, harmonize_b0s):
                 harmonized_niis.append(nii_img)
                 LOGGER.warning('An image has no b=0 images and cannot be harmonized')
             else:
-                harmonized_niis.append(math_img('img*%.32f' % correction, img=nii_img))
+                harmonized_niis.append(math_img(f'img*{correction:.32f}', img=nii_img))
         to_concat = harmonized_niis
     else:
         to_concat = dwi_niis

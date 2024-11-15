@@ -1,4 +1,3 @@
-#!python
 import logging
 import os
 import os.path as op
@@ -103,8 +102,8 @@ class MultivariateTemplateConstruction2(ANTSCommand):
         if opt == 'input_images':
             return ' '.join([op.split(fname)[1] for fname in val])
         if opt == 'modality_weights':
-            return 'x'.join(['%.3f' % weight for weight in val])
-        return super(MultivariateTemplateConstruction2, self)._format_arg(opt, spec, val)
+            return 'x'.join([f'{weight:.3f}' for weight in val])
+        return super()._format_arg(opt, spec, val)
 
     def _list_outputs(self):
         if isdefined(self.inputs.input_file):

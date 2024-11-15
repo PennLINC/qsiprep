@@ -14,3 +14,30 @@ from .images import Conform, ConformDwi, IntraModalMerge, ValidateImage
 from .reports import AboutSummary, SubjectSummary
 from .surf import NormalizeSurf
 from .utils import AddTSVHeader, ConcatAffines
+
+__all__ = [
+    'BIDSDataGrabber',
+    'BIDSInfo',
+    'Conform',
+    'ConformDwi',
+    'DMRISummary',
+    'FieldToHz',
+    'FieldToRadS',
+    'FSDetectInputs',
+    'FSInjectBrainExtracted',
+    'GatherConfounds',
+    'IntraModalMerge',
+    'MakeMidthickness',
+    'Phasediff2Fieldmap',
+    'Phases2Fieldmap',
+    'RefineBrainMask',
+    'StructuralReference',
+    'ValidateImage',
+    'AboutSummary',
+    'SubjectSummary',
+    'AddTSVHeader',
+    'ConcatAffines',
+    'DerivativesDataSink',
+    'DerivativesMaybeDataSink',
+    'NormalizeSurf',
+]

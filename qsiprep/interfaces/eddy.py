@@ -175,7 +175,7 @@ class ExtendedEddy(fsl.Eddy):
     output_spec = ExtendedEddyOutputSpec
 
     def __init__(self, **inputs):
-        super(ExtendedEddy, self).__init__(**inputs)
+        super().__init__(**inputs)
         self.inputs.on_trait_change(self._use_cuda, 'use_cuda')
         if isdefined(self.inputs.use_cuda):
             self._use_cuda()
@@ -185,34 +185,34 @@ class ExtendedEddy(fsl.Eddy):
 
     def _list_outputs(self):
         outputs = self.output_spec().get()
-        outputs['out_corrected'] = os.path.abspath('%s.nii.gz' % self.inputs.out_base)
-        outputs['out_parameter'] = os.path.abspath('%s.eddy_parameters' % self.inputs.out_base)
+        outputs['out_corrected'] = os.path.abspath(f'{self.inputs.out_base}.nii.gz')
+        outputs['out_parameter'] = os.path.abspath(f'{self.inputs.out_base}.eddy_parameters')
 
         # File generation might depend on the version of EDDY
-        out_rotated_bvecs = os.path.abspath('%s.eddy_rotated_bvecs' % self.inputs.out_base)
-        out_movement_rms = os.path.abspath('%s.eddy_movement_rms' % self.inputs.out_base)
+        out_rotated_bvecs = os.path.abspath(f'{self.inputs.out_base}.eddy_rotated_bvecs')
+        out_movement_rms = os.path.abspath(f'{self.inputs.out_base}.eddy_movement_rms')
         out_restricted_movement_rms = os.path.abspath(
-            '%s.eddy_restricted_movement_rms' % self.inputs.out_base
+            f'{self.inputs.out_base}.eddy_restricted_movement_rms'
         )
         out_shell_alignment_parameters = os.path.abspath(
-            '%s.eddy_post_eddy_shell_alignment_parameters' % self.inputs.out_base
+            f'{self.inputs.out_base}.eddy_post_eddy_shell_alignment_parameters'
         )
         shell_PE_translation_parameters = op.abspath(
-            '%s.eddy_post_eddy_shell_PE_translation_parameters' % self.inputs.out_base
+            f'{self.inputs.out_base}.eddy_post_eddy_shell_PE_translation_parameters'
         )
-        out_outlier_report = os.path.abspath('%s.eddy_outlier_report' % self.inputs.out_base)
-        outlier_map = op.abspath('%s.eddy_outlier_map' % self.inputs.out_base)
-        outlier_n_stdev_map = op.abspath('%s.eddy_outlier_n_stdev_map' % self.inputs.out_base)
+        out_outlier_report = os.path.abspath(f'{self.inputs.out_base}.eddy_outlier_report')
+        outlier_map = op.abspath(f'{self.inputs.out_base}.eddy_outlier_map')
+        outlier_n_stdev_map = op.abspath(f'{self.inputs.out_base}.eddy_outlier_n_stdev_map')
         outlier_n_sqr_stdev_map = op.abspath(
-            '%s.eddy_outlier_n_sqr_stdev_map' % self.inputs.out_base
+            f'{self.inputs.out_base}.eddy_outlier_n_sqr_stdev_map'
         )
 
         if isdefined(self.inputs.cnr_maps) and self.inputs.cnr_maps:
-            out_cnr_maps = os.path.abspath('%s.eddy_cnr_maps.nii.gz' % self.inputs.out_base)
+            out_cnr_maps = os.path.abspath(f'{self.inputs.out_base}.eddy_cnr_maps.nii.gz')
             if os.path.exists(out_cnr_maps):
                 outputs['out_cnr_maps'] = out_cnr_maps
         if isdefined(self.inputs.residuals) and self.inputs.residuals:
-            out_residuals = os.path.abspath('%s.eddy_residuals.nii.gz' % self.inputs.out_base)
+            out_residuals = os.path.abspath(f'{self.inputs.out_base}.eddy_residuals.nii.gz')
             if os.path.exists(out_residuals):
                 outputs['out_residuals'] = out_residuals
 
@@ -246,7 +246,7 @@ class ExtendedEddy(fsl.Eddy):
             if isdefined(self.inputs.mporder):
                 return spec.argstr % value
             return ''
-        return super(ExtendedEddy, self)._format_arg(name, spec, value)
+        return super()._format_arg(name, spec, value)
 
 
 class Eddy2SPMMotionInputSpec(BaseInterfaceInputSpec):
@@ -279,8 +279,8 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type, pepolar_method):
     doing_2stage = 'drbuddi' in pepolar_method.lower()
     ext_eddy = ExtendedEddy(**eddy_config)
     desc = [
-        "FSL (version %s)'s eddy was used for head motion correction and "
-        'Eddy current correction [@anderssoneddy].' % ext_eddy.version
+        f"FSL (version {ext_eddy.version})'s eddy was used for head motion correction and "
+        'Eddy current correction [@anderssoneddy].'
     ]
 
     # Basic eddy setup
@@ -295,18 +295,18 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type, pepolar_method):
     slm = (
         'was'
         if ext_eddy.inputs.slm == 'none'
-        else 'and a %s second level model were' % ext_eddy.inputs.slm
+        else f'and a {ext_eddy.inputs.slm} second level model were'
     )
     desc.append(
-        'A %s first level model %s used to characterize Eddy current-'
-        'related spatial distortion.' % (ext_eddy.inputs.flm, slm)
+        f'A {ext_eddy.inputs.flm} first level model {slm} used to characterize Eddy current-'
+        'related spatial distortion.'
     )
 
     # fwhm of pre-conditioning filter
     if isdefined(ext_eddy.inputs.fwhm):
         desc.append(
-            'A filter with fwhm=%04f was used to pre-condition the '
-            'data before using it to estimate distortions.' % ext_eddy.inputs.fwhm
+            f'A filter with fwhm={ext_eddy.inputs.fwhm:04f} was used to pre-condition the '
+            'data before using it to estimate distortions.'
         )
 
     # force shelled scheme
@@ -354,7 +354,7 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type, pepolar_method):
             offs_txt = 'was'
             if mb_off != 0:
                 offs_txt = {-1: 'bottom', 1: 'top'}
-                offs_txt = 'and slices removed from the %s of the volume were' % offs_txt
+                offs_txt = f'and slices removed from the {offs_txt} of the volume were'
             desc.append('A multi-band acceleration factor of %d ' '%s assumed.' % (mbf, offs_txt))
 
         # The threshold for outliers
@@ -367,7 +367,7 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type, pepolar_method):
             else ''
         )
         pos = (
-            ' (positively or negatively%s)' % ssq
+            f' (positively or negatively{ssq})'
             if isdefined(ext_eddy.inputs.outlier_pos) and ext_eddy.inputs.outlier_pos
             else ''
         )
@@ -424,7 +424,7 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type, pepolar_method):
         )
     else:
         desc.append('Final interpolation')
-    desc.append('was performed using the `%s` method%s.' % (ext_eddy.inputs.method, lsr_ref))
+    desc.append(f'was performed using the `{ext_eddy.inputs.method}` method{lsr_ref}.')
     if not doing_2stage:
         desc.append('\n\n')
     return ' '.join(desc)

@@ -1,4 +1,3 @@
-#!python
 """
 Wrappers for the TORTOISE programs
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -63,7 +62,7 @@ class TORTOISECommandLine(CommandLine):
     _num_threads = None
 
     def __init__(self, **inputs):
-        super(TORTOISECommandLine, self).__init__(**inputs)
+        super().__init__(**inputs)
         self.inputs.on_trait_change(self._num_threads_update, 'num_threads')
         if not self._num_threads:
             self._num_threads = os.environ.get('OMP_NUM_THREADS', None)
@@ -81,7 +80,7 @@ class TORTOISECommandLine(CommandLine):
         if 'num_threads' in inputs:
             self.inputs.num_threads = inputs['num_threads']
         self._num_threads_update()
-        return super(TORTOISECommandLine, self).run(**inputs)
+        return super().run(**inputs)
 
 
 class _GatherDRBUDDIInputsInputSpec(TORTOISEInputSpec):
@@ -318,7 +317,7 @@ class DRBUDDI(TORTOISECommandLine):
             return ''
         if name == 'structural_image':
             return '-s ' + ' '.join(value)
-        return super(DRBUDDI, self)._format_arg(name, spec, value)
+        return super()._format_arg(name, spec, value)
 
     def _list_outputs(self):
         outputs = self.output_spec().get()

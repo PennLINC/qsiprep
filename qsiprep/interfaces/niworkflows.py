@@ -50,7 +50,7 @@ class ANTSRegistrationRPT(RegistrationRC, Registration):
             self._moving_image,
         )
 
-        return super(ANTSRegistrationRPT, self)._post_run_hook(runtime)
+        return super()._post_run_hook(runtime)
 
 
 class dMRIPlot:
@@ -194,7 +194,7 @@ def plot_sliceqc(
     else:
         ax1.set_xlabel('time (s)')
     labels = tr * (np.array(xticks))
-    ax1.set_xticklabels(['%.02f' % t for t in labels.tolist()], fontsize=5)
+    ax1.set_xticklabels([f'{t:.2f}' for t in labels.tolist()], fontsize=5)
 
     # Remove and redefine spines
     for side in ['top', 'right']:
@@ -258,13 +258,13 @@ def confoundplot(
         else:
             ax_ts.set_xlabel('time (s)')
             labels = tr * np.array(xticks)
-            ax_ts.set_xticklabels(['%.02f' % t for t in labels.tolist()])
+            ax_ts.set_xticklabels([f'{t:.2f}' for t in labels.tolist()])
     else:
         ax_ts.set_xticklabels([])
 
     if name is not None:
         if units is not None:
-            name += ' [%s]' % units
+            name += f' [{units}]'
 
         ax_ts.annotate(
             name,
@@ -358,7 +358,7 @@ def confoundplot(
     # Annotate percentile 95
     ax_ts.plot((0, ntsteps - 1), [p95] * 2, linewidth=0.1, color='lightgray')
     ax_ts.annotate(
-        '%.2f' % p95,
+        f'{p95:.2f}',
         xy=(0, p95),
         xytext=(-1, 0),
         textcoords='offset points',
@@ -371,11 +371,11 @@ def confoundplot(
     if cutoff is None:
         cutoff = []
 
-    for i, thr in enumerate(cutoff):
+    for thr in cutoff:
         ax_ts.plot((0, ntsteps - 1), [thr] * 2, linewidth=0.2, color='dimgray')
 
         ax_ts.annotate(
-            '%.2f' % thr,
+            f'{thr:.2f}',
             xy=(0, thr),
             xytext=(-1, 0),
             textcoords='offset points',
@@ -439,7 +439,7 @@ class RobustMNINormalizationRPT(RegistrationRC, SpatialNormalization):
             self._moving_image,
         )
 
-        return super(RobustMNINormalizationRPT, self)._post_run_hook(runtime)
+        return super()._post_run_hook(runtime)
 
 
 class FUGUEvsm2ANTSwarpInputSpec(BaseInterfaceInputSpec):

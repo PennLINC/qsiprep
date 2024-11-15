@@ -171,7 +171,7 @@ class BIDSDataGrabber(SimpleInterface):
         dwi_only = kwargs.pop('dwi_only')
         anatomical_contrast = kwargs.pop('anatomical_contrast')
         self._anatomical_contrast = anatomical_contrast
-        super(BIDSDataGrabber, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         if anat_only is not None:
             self._require_funcs = not anat_only
         self._no_anat_necessary = bool(dwi_only) or anatomical_contrast == 'none'
@@ -248,7 +248,7 @@ class DerivativesMaybeDataSink(DerivativesDataSink):
     def _run_interface(self, runtime):
         if not isdefined(self.inputs.in_file):
             return runtime
-        return super(DerivativesMaybeDataSink, self)._run_interface(runtime)
+        return super()._run_interface(runtime)
 
 
 class _DerivativesSidecarInputSpec(BaseInterfaceInputSpec):

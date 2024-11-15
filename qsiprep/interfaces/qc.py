@@ -88,7 +88,7 @@ def make_a_square(data_mat, include_last_dim=True):
     shapes = data_mat.shape if include_last_dim else data_mat.shape[:-1]
 
     # Is it already square?
-    if all([shape == shapes[0] for shape in shapes]):
+    if all(shape == shapes[0] for shape in shapes):
         return data_mat
     n_dims_to_pad = len(shapes)
     largest_side = np.argmax(shapes)

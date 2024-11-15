@@ -65,14 +65,14 @@ def download_test_data(dset, data_dir=None):
 
     os.makedirs(out_dir, exist_ok=True)
     url = URLS[dset]
-    with requests.get(url, stream=True) as req:
+    with requests.get(url, stream=True, timeout=60) as req:
         if url.endswith('.xz'):
             with lzma.open(BytesIO(req.content)) as f:
                 with tarfile.open(fileobj=f) as t:
-                    t.extractall(out_dir)
+                    t.extractall(out_dir)  # noqa: S202
         elif url.endswith('.gz'):
             with tarfile.open(fileobj=GzipFile(fileobj=BytesIO(req.content))) as t:
-                t.extractall(out_dir)
+                t.extractall(out_dir)  # noqa: S202
         else:
             raise ValueError(f'Unknown file type for {dset} ({url})')
 
@@ -94,10 +94,10 @@ def check_generated_files(output_dir, output_list_file, optional_output_list_fil
     found_files = [os.path.relpath(f, output_dir) for f in found_files]
 
     # Ignore figures
-    found_files = sorted(set(f for f in found_files if 'figures' not in f))
+    found_files = sorted({f for f in found_files if 'figures' not in f})
 
     # Ignore logs
-    found_files = sorted(set(f for f in found_files if 'log' not in f.split(os.path.sep)))
+    found_files = sorted({f for f in found_files if 'log' not in f.split(os.path.sep)})
 
     with open(output_list_file) as fo:
         expected_files = fo.readlines()
