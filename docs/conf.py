@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# qsiprep  documentation build configuration file, created by
+# QSIPrep documentation build configuration file, created by
 # sphinx-quickstart on Mon May  9 09:04:25 2016.
 #
 # This file is execfile()d with the current directory set to its
@@ -344,7 +344,7 @@ texinfo_documents = [
     (
         master_doc,
         "qsiprep",
-        "qsiprep Documentation",
+        "QSIPrep Documentation",
         author,
         "qsiprep",
         "One line description of project.",
