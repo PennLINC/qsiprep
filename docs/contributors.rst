@@ -79,6 +79,12 @@ You can select individual tests to run by using the ``-m`` (to select markers) o
     and may take a long time to run, so be prepared for that before running them on a laptop.
 
 
+If the tests pass, that's a good sign that your changes are solid.
+We also recommend opening the HTML reports produced by integration tests to check the results.
+Evaluating whether the HTML reports look "good" requires some domain knowledge and
+familiarity with *QSIPrep* outputs.
+
+
 *******************
 Adding dependencies
 *******************
