@@ -6,6 +6,8 @@ This is a prerelease for the version that will be used by the HBCD project for t
 Starting with this release, QSIPrep is now being deployed to `pennlinc/qsiprep`
 on DockerHub instead of `pennbbl/qsiprep`.
 
+We plan to not introduce any backwards-incompatible changes for a while.
+
 ### 🛠 Breaking Changes
 
 * Replace pennbbl with pennlinc in package by @tsalo in https://github.com/PennLINC/qsiprep/pull/869
@@ -18,6 +20,8 @@ on DockerHub instead of `pennbbl/qsiprep`.
 
 This is a major, backwards-incompatible release.
 It is also the last release using the `pennbbl` organization on DockerHub.
+
+We recommend that users jump straight to 1.0.0rc1 rather than using 0.24.0.
 
 ### 🛠 Breaking Changes
 
