@@ -61,7 +61,7 @@ Either file should include age (or if you wish to be more explicit: age_months) 
 Note on using CUDA
 ******************
 
-The CUDA runtime version 9.1 is included in the *QSIPrep* docker image.
+The CUDA runtime version 11.1.1 is included in the *QSIPrep* docker image.
 The CUDA version of eddy is dramatically faster than the openmp version.
 Information on running Docker with CUDA enabled can be found on
 `dockerhub <https://github.com/NVIDIA/nvidia-docker/wiki/CUDA>`_. If running with Apptainer,
