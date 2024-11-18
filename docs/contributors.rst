@@ -56,6 +56,29 @@ Or you can patch Apptainer containers using the PYTHONPATH variable: ::
         /scratch/dataset /scratch/out participant -w /out/work/
 
 
+Running tests locally
+=====================
+
+To run the tests locally, *QSIRecon* includes a Python script to automatically mount the
+local clone into ``pennlinc/qsiprep:unstable`` and run tests with ``pytest``.
+The script will also download any required test data from Box.
+
+To run the tests, navigate to the tests folder and run ``run_local_tests.py``::
+
+    $ cd /path/to/qsiprep/qsiprep/tests
+    $ python run_local_tests.py
+
+You can select individual tests to run by using the ``-m`` (to select markers) or ``-k`` (the select tests by name) flags::
+
+    $ python run_local_tests.py -m "dsdti_fmap"
+    $ python run_local_tests.py -k "test_some_name"
+
+.. warning::
+
+    Please note that the integration tests in *QSIPrep* are computationally intensive
+    and may take a long time to run, so be prepared for that before running them on a laptop.
+
+
 *******************
 Adding dependencies
 *******************
@@ -100,9 +123,9 @@ To work in this image, replace ``pennlinc/qsiprep:latest`` with
 ``qsiprep`` in any of the above commands.
 
 
-************************************************
+***********************************************
 Adding new features to the citation boilerplate
-************************************************
+***********************************************
 
 The citation boilerplate is built by adding two dunder attributes
 of workflow objects: ``__desc__`` and ``__postdesc__``.
