@@ -13,6 +13,14 @@ We plan to not introduce any backwards-incompatible changes for a while.
 * Replace pennbbl with pennlinc in package by @tsalo in https://github.com/PennLINC/qsiprep/pull/869
 * Move common metadata to top of JSON by @tsalo in https://github.com/PennLINC/qsiprep/pull/875
 
+### 🐛 Bug Fixes
+
+* Hardcode extensions for GIF figures by @tsalo in https://github.com/PennLINC/qsiprep/pull/880
+
+### Other Changes
+
+* Restructure documentation and document how to run tests locally by @tsalo in https://github.com/PennLINC/qsiprep/pull/879
+
 **Full Changelog**: https://github.com/PennLINC/qsiprep/compare/0.24.0...1.0.0rc1
 
 
