@@ -3,7 +3,9 @@
 .. _reconstruction:
 
 
+##############
 Reconstruction
-==============
+##############
 
-Reconstruction workflows have been moved to a separate package: QSIRecon.
+Reconstruction workflows have been moved to a separate package:
+`QSIRecon <https://qsirecon.readthedocs.io/>`_.

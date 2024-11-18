@@ -1,13 +1,13 @@
 .. include:: links.rst
 
-------------
+############
 Installation
-------------
+############
 
-There are two easy ways to use qsiprep:
+There are two easy ways to use *QSIPrep*:
 in a `Docker Container`_, or in a `Singularity Container`_.
 Using a local container method is highly recommended.
-Once you are ready to run qsiprep, see Usage_ for details.
+Once you are ready to run *QSIPrep*, see Usage_ for details.
 
 To install::
 
@@ -15,10 +15,11 @@ To install::
 
 .. _`Docker Container`:
 
+****************
 Docker Container
-================
+****************
 
-In order to run qsiprep in a Docker container, Docker must be `installed
+In order to run *QSIPrep* in a Docker container, Docker must be `installed
 <https://docs.docker.com/engine/installation/>`_.
 
 .. note::
@@ -47,7 +48,7 @@ For example: ::
         --ignore fieldmaps \
         --fs-license-file /opt/freesurfer/license.txt
 
-If you are running Freesurfer as part of QSIPrep,
+If you are running Freesurfer as part of *QSIPrep*,
 you will need to mount your Freesurfer license.txt file when invoking ``docker`` ::
 
     $ docker run -ti --rm \
@@ -63,9 +64,9 @@ See `External Dependencies`_ for more information on what is included in the Doc
 and how it's built.
 
 
-
+*******************
 Apptainer Container
-=====================
+*******************
 
 The easiest way to get an Apptainer (formerly Singularity) image is to run::
 
@@ -83,11 +84,12 @@ As with Docker, you will need to bind the Freesurfer license.txt when running Ap
         --fs-license-file /opt/freesurfer/license.txt
 
 
+*********************
 External Dependencies
----------------------
+*********************
 
-qsiprep is written using Python 3.10 (or above), and is based on
-nipype_. The external dependencies are built in the `qsiprep_build
-<https://github.com/PennLINC/qsiprep_build>`_ repository. There
-you can find the URLs used to download the dependency source code
+*QSIPrep* is written using Python 3.10 (or above), and is based on nipype_.
+The external dependencies are built in the
+`qsiprep_build <https://github.com/PennLINC/qsiprep_build>`_ repository.
+There you can find the URLs used to download the dependency source code
 and the steps to compile each dependency.
