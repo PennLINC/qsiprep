@@ -17,7 +17,7 @@ Library API
 ***********
 
 Preprocessing Workflows
------------------------
+=======================
 
 .. toctree::
    :glob:
@@ -28,17 +28,8 @@ Preprocessing Workflows
    api/qsiprep.workflows.fieldmap
 
 
-Reconstruction Workflows
-------------------------
-
-.. toctree::
-   :glob:
-
-   api/qsiprep.workflows.recon
-
-
 Other Utilities
----------------
+===============
 
 .. toctree::
    :glob:
