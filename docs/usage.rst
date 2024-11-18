@@ -68,14 +68,6 @@ Information on running Docker with CUDA enabled can be found on
 the call to Apptainer should include ``--nv``. To enable CUDA, see :ref:`configure_eddy`.
 
 
-CUDA Support
-============
-
-As of version 0.6.7 CUDA version 9.1 is supported in the *QSIPrep* container! To run locally
-using docker you will need the nvidia container runtime installed for Docker version 19.0.3
-or higher. Apptainer images will run with CUDA 9.1 with the ``-nv`` flag.
-
-
 *********
 Debugging
 *********
