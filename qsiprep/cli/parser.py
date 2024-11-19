@@ -47,6 +47,7 @@ def _build_parser(**kwargs):
         "dwi_no_biascorr": ("--b1-biascorrect-stage none", "0.23.0"),
         "b0_motion_corr_to": (None, "0.23.0"),
         "b0_to_t1w_transform": ("--b0-t0-anat-transform", "0.23.0"),
+        "longitudinal": ("--subject-anatomical-reference unbiased", "0.24.0"),
     }
 
     class DeprecatedAction(Action):
@@ -106,6 +107,9 @@ def _build_parser(**kwargs):
 
     def _drop_sub(value):
         return value[4:] if value.startswith("sub-") else value
+
+    def _drop_ses(value):
+        return value[4:] if value.startswith("ses-") else value
 
     def _process_value(value):
         import bids
@@ -176,7 +180,6 @@ def _build_parser(**kwargs):
 
     g_bids = parser.add_argument_group("Options for filtering BIDS queries")
     g_bids.add_argument(
-        "--skip_bids_validation",
         "--skip-bids-validation",
         action="store_true",
         default=False,
@@ -184,19 +187,21 @@ def _build_parser(**kwargs):
     )
     g_bids.add_argument(
         "--participant-label",
-        "--participant_label",
         action="store",
         nargs="+",
         type=_drop_sub,
         help="A space delimited list of participant identifiers or a single "
         "identifier (the sub- prefix can be removed)",
     )
-    # Re-enable when option is actually implemented
-    # g_bids.add_argument('-s', '--session-id', action='store', default='single_session',
-    #                     help='Select a specific session to be processed')
-    # Re-enable when option is actually implemented
-    # g_bids.add_argument('-r', '--run-id', action='store', default='single_run',
-    #                     help='Select a specific run to be processed')
+    g_bids.add_argument(
+        "--session-id",
+        action="store",
+        nargs="+",
+        type=_drop_ses,
+        default=None,
+        help="A space delimited list of session identifiers or a single "
+        "identifier (the ses- prefix can be removed)",
+    )
 
     g_bids.add_argument(
         "--bids-filter-file",
@@ -222,7 +227,6 @@ def _build_parser(**kwargs):
     g_perfm.add_argument(
         "--nprocs",
         "--nthreads",
-        "--n_cpus",
         "--n-cpus",
         dest="nprocs",
         action="store",
@@ -237,7 +241,6 @@ def _build_parser(**kwargs):
     )
     g_perfm.add_argument(
         "--mem",
-        "--mem_mb",
         "--mem-mb",
         dest="memory_gb",
         action="store",
@@ -274,7 +277,6 @@ def _build_parser(**kwargs):
     )
     g_subset.add_argument(
         "--boilerplate-only",
-        "--boilerplate_only",
         "--boilerplate",
         action="store_true",
         default=False,
@@ -295,17 +297,30 @@ def _build_parser(**kwargs):
         action="store",
         nargs="+",
         default=[],
-        choices=["fieldmaps", "sbref", "t2w", "flair", "fmap-jacobian"],
+        choices=["fieldmaps", "sbref", "t2w", "flair", "fmap-jacobian", "phase"],
         help="Ignore selected aspects of the input dataset to disable corresponding "
         "parts of the workflow (a space delimited list)",
     )
     g_conf.add_argument(
-        "--infant", action="store_true", help="configure pipelines to process infant brains"
+        "--infant",
+        action="store_true",
+        help="Configure pipelines to process infant brains. "
+        "If using this parameter, the anatomical-template will be changed to MNIInfant. "
+        "The appropriate MNIInfant cohort will be selected based on the participant's age.",
     )
     g_conf.add_argument(
         "--longitudinal",
-        action="store_true",
+        action=DeprecatedAction,
         help="Treat dataset as longitudinal - may increase runtime",
+    )
+    g_conf.add_argument(
+        "--subject-anatomical-reference",
+        choices=["first-alphabetically", "unbiased", "sessionwise"],
+        default="first-alphabetically",
+        help="How to define subject-specific anatomical space. "
+        "sessionwise will produce one anatomical space per session. "
+        "The others combine anatomical data across sessions to define "
+        "one anatomical space per subject.",
     )
     g_conf.add_argument(
         "--skip-anat-based-spatial-normalization",
@@ -316,7 +331,6 @@ def _build_parser(**kwargs):
     )
     g_conf.add_argument(
         "--anat-modality",
-        "--anat_modality",
         choices=["T1w", "T2w", "none"],
         default="T1w",
         help="Modality to use as the anatomical reference. Images of this "
@@ -325,7 +339,6 @@ def _build_parser(**kwargs):
     )
     g_conf.add_argument(
         "--b0-threshold",
-        "--b0_threshold",
         action="store",
         type=int,
         default=100,
@@ -334,7 +347,6 @@ def _build_parser(**kwargs):
         "lowered or increased. Note, setting this too high can result in inaccurate results.",
     )
     g_conf.add_argument(
-        "--dwi_denoise_window",
         "--dwi-denoise-window",
         action="store",
         default="auto",
@@ -344,7 +356,6 @@ def _build_parser(**kwargs):
     )
     g_conf.add_argument(
         "--denoise-method",
-        "--denoise_method",
         action="store",
         choices=["dwidenoise", "patch2self", "none"],
         default="dwidenoise",
@@ -353,7 +364,6 @@ def _build_parser(**kwargs):
     )
     g_conf.add_argument(
         "--unringing-method",
-        "--unringing_method",
         action="store",
         choices=["none", "mrdegibbs", "rpg"],
         help="Method for Gibbs-ringing removal.\n - none: no action\n - mrdegibbs: "
@@ -362,13 +372,11 @@ def _build_parser(**kwargs):
     )
     g_conf.add_argument(
         "--dwi-no-biascorr",
-        "--dwi_no_biascorr",
         action="store_true",
         help="DEPRECATED: see --b1-biascorrect-stage",
     )
     g_conf.add_argument(
         "--b1-biascorrect-stage",
-        "--b1_biascorrect_stage",
         action="store",
         choices=["final", "none", "legacy"],
         default="final",
@@ -379,18 +387,15 @@ def _build_parser(**kwargs):
     )
     g_conf.add_argument(
         "--no-b0-harmonization",
-        "--no_b0_harmonization",
         action="store_true",
         help="skip re-scaling dwi scans to have matching b=0 intensities",
     )
     g_conf.add_argument(
         "--denoise-after-combining",
-        "--denoise_after_combining",
         action="store_true",
         help="run ``dwidenoise`` after combining dwis, but before motion correction",
     )
     g_conf.add_argument(
-        "--separate_all_dwis",
         "--separate-all-dwis",
         action="store_true",
         help="don't attempt to combine dwis from multiple runs. Each will be "
@@ -398,7 +403,6 @@ def _build_parser(**kwargs):
     )
     g_conf.add_argument(
         "--distortion-group-merge",
-        "--distortion_group_merge",
         action="store",
         choices=["concat", "average", "none"],
         default="none",
@@ -419,7 +423,6 @@ def _build_parser(**kwargs):
     )
     g_conf.add_argument(
         "--output-resolution",
-        "--output_resolution",
         action="store",
         required=True,
         type=float,
@@ -431,7 +434,6 @@ def _build_parser(**kwargs):
     g_coreg = parser.add_argument_group("Options for dwi-to-Anatomical coregistration")
     g_coreg.add_argument(
         "--b0-to-t1w-transform",
-        "--b0_to_t1w_transform",
         action="store",
         default="Rigid",
         choices=["Rigid", "Affine"],
@@ -440,7 +442,6 @@ def _build_parser(**kwargs):
     )
     g_coreg.add_argument(
         "--intramodal-template-iters",
-        "--intramodal_template_iters",
         action="store",
         default=0,
         type=int,
@@ -451,7 +452,6 @@ def _build_parser(**kwargs):
     )
     g_coreg.add_argument(
         "--intramodal-template-transform",
-        "--intramodal_template_transform",
         default="BSplineSyN",
         choices=["Rigid", "Affine", "BSplineSyN", "SyN"],
         action="store",
@@ -462,7 +462,6 @@ def _build_parser(**kwargs):
     g_fs = parser.add_argument_group("Specific options for FreeSurfer preprocessing")
     g_fs.add_argument(
         "--fs-license-file",
-        "--fs_license_file",
         metavar="PATH",
         type=Path,
         help="Path to FreeSurfer license key file. Get it (for free) by registering "
@@ -472,7 +471,6 @@ def _build_parser(**kwargs):
     g_moco = parser.add_argument_group("Specific options for motion correction and coregistration")
     g_moco.add_argument(
         "--b0-motion-corr-to",
-        "--bo_motion_corr_to",
         action="store",
         default="iterative",
         choices=["iterative", "first"],
@@ -481,14 +479,12 @@ def _build_parser(**kwargs):
     )
     g_moco.add_argument(
         "--hmc-transform",
-        "--hmc_transform",
         action="store",
         default="Affine",
         choices=["Affine", "Rigid"],
         help="transformation to be optimized during head motion correction " "(default: affine)",
     )
     g_moco.add_argument(
-        "--hmc_model",
         "--hmc-model",
         action="store",
         default="eddy",
@@ -500,7 +496,6 @@ def _build_parser(**kwargs):
     )
     g_moco.add_argument(
         "--eddy-config",
-        "--eddy_config",
         action="store",
         help="path to a json file with settings for the call to eddy. If no "
         "json is specified, a default one will be used. The current default "
@@ -508,7 +503,6 @@ def _build_parser(**kwargs):
         "https://github.com/PennLINC/qsiprep/blob/master/qsiprep/data/eddy_params.json",
     )
     g_moco.add_argument(
-        "--shoreline_iters",
         "--shoreline-iters",
         action="store",
         type=int,
@@ -520,7 +514,6 @@ def _build_parser(**kwargs):
     g_fmap = parser.add_argument_group("Specific options for handling fieldmaps")
     g_fmap.add_argument(
         "--pepolar-method",
-        "--pepolar_method",
         action="store",
         default="TOPUP",
         choices=["TOPUP", "DRBUDDI", "TOPUP+DRBUDDI"],
@@ -625,17 +618,25 @@ def parse_args(args=None, namespace=None):
     """Parse args and run further checks on the command line."""
     import logging
 
+    from bids.layout import Query
+
     # from niworkflows.utils.spaces import Reference, SpatialReferences
 
     parser = _build_parser()
     opts = parser.parse_args(args, namespace)
 
     # Change anatomical_template based on infant parameter
+    opts.anatomical_template = "MNI152NLin2009cAsym"
     if opts.infant:
         config.loggers.cli.info(
-            "Infant processing mode enabled. Changing anatomical template to MNIInfant cohort-2."
+            "Infant processing mode enabled. "
+            "Inferring the subject's age and selecting the appropriate MNIInfant cohort."
         )
         opts.anatomical_template = "MNIInfant"
+        if opts.subject_anatomical_reference != "sessionwise":
+            config.loggers.cli.error(
+                "Infant processing requires --subject-anatomical-reference sessionwise"
+            )
 
     if opts.config_file:
         skip = {} if opts.reports_only else {"execution": ("run_uuid",)}
@@ -686,7 +687,7 @@ def parse_args(args=None, namespace=None):
     if 1 < config.nipype.nprocs < config.nipype.omp_nthreads:
         build_log.warning(
             f"Per-process threads (--omp-nthreads={config.nipype.omp_nthreads}) exceed "
-            f"total threads (--nthreads/--n_cpus={config.nipype.nprocs})"
+            f"total threads (--nthreads/--n-cpus={config.nipype.nprocs})"
         )
 
     # Validate the tricky options here
@@ -757,4 +758,60 @@ def parse_args(args=None, namespace=None):
             "%s." % ", ".join(missing_subjects)
         )
 
+    # Determine which sessions to process and group them
+    processing_groups = []
+
+    # Determine any session filters
+    session_filters = config.execution.session_id or []
+    # if config.execution.bids_filters is not None:
+    #     for _, filters in config.execution.bids_filters:
+    #         ses_filter = filters.get("session")
+    #         if isinstance(ses_filter, str):
+    #             session_filters.append(ses_filter)
+    #         elif isinstance(ses_filter, list):
+    #             session_filters.extend(ses_filter)
+
+    # Examine the available sessions for each participant
+    for subject_id in participant_label:
+        sessions = config.execution.layout.get_sessions(
+            subject=subject_id,
+            session=session_filters or Query.OPTIONAL,
+            suffix=["T1w", "T2w", "dwi"],
+        )
+
+        # If there are no sessions, there is only one option:
+        if not sessions:
+            if config.workflow.subject_anatomical_reference == "sessionwise":
+                config.loggers.workflow.warning(
+                    f"Subject {subject_id} had no sessions, "
+                    "but --subject-anatomical-reference was set to 'sessionwise'. "
+                    "Outputs will NOT appear in a session directory for "
+                    f"{subject_id}.",
+                )
+
+            processing_groups.append([subject_id, []])
+            continue
+
+        if config.workflow.subject_anatomical_reference == "sessionwise":
+            for session in sessions:
+                processing_groups.append([subject_id, [session]])
+        else:
+            processing_groups.append([subject_id, sessions])
+
+    # Make a nicely formatted message showing what we will process
+    def pretty_group(group_num, processing_group):
+        participant_label, ses_labels = processing_group
+        if ses_labels:
+            session_txt = ", ".join(map(str, ses_labels))
+        else:
+            session_txt = "No session level"
+
+        return f"{group_num}\t{participant_label}\t{session_txt}"
+
+    processing_msg = "\nGroup\tSubject\tSessions\n" + "\n".join(
+        [pretty_group(gnum, group) for gnum, group in enumerate(processing_groups)]
+    )
+    config.loggers.workflow.info(processing_msg)
+
     config.execution.participant_label = sorted(participant_label)
+    config.execution.processing_list = processing_groups

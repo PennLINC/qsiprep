@@ -65,6 +65,8 @@ def init_anat_preproc_wf(
     num_anat_images,
     num_additional_t2ws,
     has_rois,
+    anatomical_template,
+    name="anat_preproc_wf",
 ):
     r"""
     This workflow controls the anatomical preprocessing stages of qsiprep.
@@ -138,7 +140,7 @@ def init_anat_preproc_wf(
 
     """
 
-    workflow = Workflow(name="anat_preproc_wf")
+    workflow = Workflow(name=name)
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=["t1w", "t2w", "roi", "flair", "subjects_dir", "subject_id"],
@@ -174,7 +176,7 @@ def init_anat_preproc_wf(
     # XXX: This is a temporary solution until QSIPrep supports flexible output spaces.
     get_template = pe.Node(
         GetTemplate(
-            template_name=config.workflow.anatomical_template,
+            template_spec=anatomical_template,
             anatomical_contrast=config.workflow.anat_modality,
         ),
         name="get_template_image",
@@ -274,7 +276,10 @@ FreeSurfer version {fs_version}. """.format(
     )
 
     # Perform registrations
-    anat_normalization_wf = init_anat_normalization_wf(has_rois=has_rois)
+    anat_normalization_wf = init_anat_normalization_wf(
+        anatomical_template=anatomical_template,
+        has_rois=has_rois,
+    )
 
     # Resampling
     rigid_acpc_resample_brain = pe.Node(
@@ -427,7 +432,7 @@ FreeSurfer version {fs_version}. """.format(
             ('outputnode.out_report', 'inputnode.t1_2_mni_report')])
     ])  # fmt:skip
 
-    anat_derivatives_wf = init_anat_derivatives_wf()
+    anat_derivatives_wf = init_anat_derivatives_wf(anatomical_template=anatomical_template)
 
     workflow.connect([
         (anat_reference_wf, anat_derivatives_wf, [
@@ -653,8 +658,9 @@ A {contrast}-reference map was computed after registration of
     )
 
     # Make an unbiased template, same as used for b=0 registration
+    align_to = config.workflow.subject_anatomical_reference
     anat_merge_wf = init_b0_hmc_wf(
-        align_to="first" if not config.workflow.longitudinal else "iterative",
+        align_to="first" if (align_to == "first-alphabetically") else "iterative",
         transform="Rigid",
         name="anat_merge_wf",
         boilerplate=False,
@@ -672,7 +678,7 @@ A {contrast}-reference map was computed after registration of
     return workflow
 
 
-def init_anat_normalization_wf(has_rois=False) -> Workflow:
+def init_anat_normalization_wf(anatomical_template, has_rois=False) -> Workflow:
     r"""
     This workflow performs registration from the original anatomical reference to the
     template anatomical reference.
@@ -740,7 +746,7 @@ def init_anat_normalization_wf(has_rois=False) -> Workflow:
     desc = f"""\
 The anatomical reference image was reoriented into AC-PC alignment via
 a 6-DOF transform extracted from a full Affine registration to the
-{config.workflow.anatomical_template} template. """
+{anatomical_template} template. """
 
     acpc_settings = pkgr(
         "qsiprep",
@@ -814,7 +820,7 @@ estimated via symmetric nonlinear registration (SyN) using antsRegistration. """
     anat_nlin_normalization = pe.Node(
         anat_norm_interface, name="anat_nlin_normalization", n_procs=omp_nthreads
     )
-    anat_nlin_normalization.inputs.template = config.workflow.anatomical_template
+    anat_nlin_normalization.inputs.template = anatomical_template
     anat_nlin_normalization.inputs.orientation = "LPS"
 
     workflow.connect([
@@ -1113,7 +1119,7 @@ def init_anat_reports_wf() -> Workflow:
     return workflow
 
 
-def init_anat_derivatives_wf() -> Workflow:
+def init_anat_derivatives_wf(anatomical_template) -> Workflow:
     """
     Set up a battery of datasinks to store derivatives in the right location
     """
@@ -1141,10 +1147,11 @@ def init_anat_derivatives_wf() -> Workflow:
     t1_name = pe.Node(
         niu.Function(
             function=fix_multi_source_name,
-            input_names=["in_files", "dwi_only", "anatomical_contrast"],
+            input_names=["in_files", "dwi_only", "include_session", "anatomical_contrast"],
         ),
         name="t1_name",
     )
+    t1_name.inputs.include_session = config.workflow.subject_anatomical_reference == "sessionwise"
     t1_name.inputs.anatomical_contrast = config.workflow.anat_modality
     t1_name.inputs.dwi_only = False
 
@@ -1152,6 +1159,7 @@ def init_anat_derivatives_wf() -> Workflow:
         DerivativesDataSink(
             compress=True,
             base_directory=config.execution.output_dir,
+            space="ACPC",
             desc="preproc",
             keep_dtype=True,
         ),
@@ -1163,6 +1171,7 @@ def init_anat_derivatives_wf() -> Workflow:
         DerivativesDataSink(
             compress=True,
             base_directory=config.execution.output_dir,
+            space="ACPC",
             desc="brain",
             suffix="mask",
         ),
@@ -1174,6 +1183,7 @@ def init_anat_derivatives_wf() -> Workflow:
         DerivativesDataSink(
             compress=True,
             base_directory=config.execution.output_dir,
+            space="ACPC",
             suffix="dseg",
         ),
         name="ds_t1_seg",
@@ -1184,6 +1194,7 @@ def init_anat_derivatives_wf() -> Workflow:
         DerivativesDataSink(
             compress=True,
             base_directory=config.execution.output_dir,
+            space="ACPC",
             desc="aseg",
             suffix="dseg",
         ),
@@ -1195,7 +1206,7 @@ def init_anat_derivatives_wf() -> Workflow:
     ds_t1_template_transforms = pe.MapNode(
         DerivativesDataSink(
             base_directory=config.execution.output_dir,
-            to="T1w",
+            to="anat",
             mode="image",
             suffix="xfm",
             **{"from": "orig"},
@@ -1208,10 +1219,10 @@ def init_anat_derivatives_wf() -> Workflow:
     ds_t1_mni_inv_warp = pe.Node(
         DerivativesDataSink(
             base_directory=config.execution.output_dir,
-            to="T1w",
+            to="ACPC",
             mode="image",
             suffix="xfm",
-            **{"from": config.workflow.anatomical_template},
+            **{"from": anatomical_template},
         ),
         name="ds_t1_mni_inv_warp",
         run_without_submitting=True,
@@ -1220,10 +1231,10 @@ def init_anat_derivatives_wf() -> Workflow:
     ds_t1_template_acpc_transform = pe.Node(
         DerivativesDataSink(
             base_directory=config.execution.output_dir,
-            to="T1wACPC",
+            to="ACPC",
             mode="image",
             suffix="xfm",
-            **{"from": "T1wNative"},
+            **{"from": "anat"},
         ),
         name="ds_t1_template_acpc_transforms",
         run_without_submitting=True,
@@ -1232,10 +1243,10 @@ def init_anat_derivatives_wf() -> Workflow:
     ds_t1_template_acpc_inv_transform = pe.Node(
         DerivativesDataSink(
             base_directory=config.execution.output_dir,
-            to="T1wNative",
+            to="anat",
             mode="image",
             suffix="xfm",
-            **{"from": "T1wACPC"},
+            **{"from": "ACPC"},
         ),
         name="ds_t1_template_acpc_inv_transforms",
         run_without_submitting=True,
@@ -1244,10 +1255,10 @@ def init_anat_derivatives_wf() -> Workflow:
     ds_t1_mni_warp = pe.Node(
         DerivativesDataSink(
             base_directory=config.execution.output_dir,
-            to=config.workflow.anatomical_template,
+            to=anatomical_template,
             mode="image",
             suffix="xfm",
-            **{"from": "T1w"},
+            **{"from": "ACPC"},
         ),
         name="ds_t1_mni_warp",
         run_without_submitting=True,

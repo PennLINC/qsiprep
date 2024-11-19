@@ -24,7 +24,7 @@ from pathlib import Path
 
 from nireports.assembler.report import Report
 
-from .. import config, data
+from .. import data
 
 
 def run_reports(
@@ -37,9 +37,7 @@ def run_reports(
     errorname="report.err",
     **entities,
 ):
-    """
-    Run the reports.
-    """
+    """Run the reports."""
     robj = Report(
         output_dir,
         run_uuid,
@@ -67,75 +65,63 @@ def run_reports(
 
 
 def generate_reports(
-    subject_list, output_dir, run_uuid, session_list=None, bootstrap_file=None, work_dir=None
+    processing_list, output_level, output_dir, run_uuid, bootstrap_file=None, work_dir=None
 ):
-    """Generate reports for a list of subjects."""
-    reportlets_dir = None
-    if work_dir is not None:
-        reportlets_dir = Path(work_dir) / "reportlets"
+    """Generate reports for a list of processing groups.
 
-    if isinstance(subject_list, str):
-        subject_list = [subject_list]
-
+    Parameters
+    ----------
+    output_level {"sessionwise", "unbiased", "first-alphabetically"}
+    """
     errors = []
-    for subject_label in subject_list:
-        # The number of sessions is intentionally not based on session_list but
-        # on the total number of sessions, because I want the final derivatives
-        # folder to be the same whether sessions were run one at a time or all-together.
-        n_ses = len(config.execution.layout.get_sessions(subject=subject_label))
+    for subject_label, session_list in processing_list:
+        subject_id = subject_label[4:] if subject_label.startswith("sub-") else subject_label
 
         if bootstrap_file is not None:
             # If a config file is precised, we do not override it
             html_report = "report.html"
-        elif n_ses <= config.execution.aggr_ses_reports:
+        else:
             # If there are only a few session for this subject,
             # we aggregate them in a single visual report.
             bootstrap_file = data.load("reports-spec.yml")
             html_report = "report.html"
+
+        # We only make this one if it's all the sessions or just the anat and not sessionwise
+        if output_level != "sessionwise":
+            report_error = run_reports(
+                output_dir,
+                subject_label,
+                run_uuid,
+                bootstrap_file=bootstrap_file,
+                out_filename=html_report,
+                reportlets_dir=output_dir,
+                errorname=f"report-{run_uuid}-{subject_label}.err",
+                subject=subject_label,
+            )
+            # If the report generation failed, append the subject label for which it failed
+            if report_error is not None:
+                errors.append(report_error)
+
         else:
-            # Beyond a threshold, we separate the anatomical report from the functional.
-            bootstrap_file = data.load("reports-spec-anat.yml")
-            html_report = f'sub-{subject_label.lstrip("sub-")}_anat.html'
-
-        report_error = run_reports(
-            output_dir,
-            subject_label,
-            run_uuid,
-            bootstrap_file=bootstrap_file,
-            out_filename=html_report,
-            reportlets_dir=reportlets_dir,
-            errorname=f"report-{run_uuid}-{subject_label}.err",
-            subject=subject_label,
-        )
-        # If the report generation failed, append the subject label for which it failed
-        if report_error is not None:
-            errors.append(report_error)
-
-        if n_ses > config.execution.aggr_ses_reports:
             # Beyond a certain number of sessions per subject,
-            # we separate the functional reports per session
-            if session_list is None:
-                all_filters = config.execution.bids_filters or {}
-                filters = all_filters.get("dwi", {})
-                session_list = config.execution.layout.get_sessions(
-                    subject=subject_label, **filters
-                )
-
-            # Drop ses- prefixes
+            # we separate the dwi reports per session
+            # If output_level is "sessionwise",
+            # the session-wise anatomical reports are in here too
             session_list = [ses[4:] if ses.startswith("ses-") else ses for ses in session_list]
 
             for session_label in session_list:
-                bootstrap_file = data.load("reports-spec-dwi.yml")
-                html_report = f'sub-{subject_label.lstrip("sub-")}_ses-{session_label}_dwi.html'
+                bootstrap_file = data.load("reports-spec.yml")
+                session_dir = output_dir / f"sub-{subject_id}" / f"ses-{session_label}"
+                html_report = f"sub-{subject_id}_ses-{session_label}.html"
 
                 report_error = run_reports(
-                    output_dir,
+                    session_dir,
                     subject_label,
                     run_uuid,
                     bootstrap_file=bootstrap_file,
                     out_filename=html_report,
-                    reportlets_dir=reportlets_dir,
-                    errorname=f"report-{run_uuid}-{subject_label}-dwi.err",
+                    reportlets_dir=output_dir,
+                    errorname=f"report-{run_uuid}-{subject_label}-{session_label}.err",
                     subject=subject_label,
                     session=session_label,
                 )

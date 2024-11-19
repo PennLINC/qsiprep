@@ -136,7 +136,7 @@ def init_intramodal_template_wf(
     ds_report_imtcoreg = pe.Node(
         DerivativesDataSink(
             datatype="figures",
-            suffix="imtcoreg",
+            desc="intramodalcoreg",
             source_file=t1w_source_file,
         ),
         name="ds_report_imtcoreg",

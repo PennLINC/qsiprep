@@ -78,9 +78,11 @@ def init_qsiprep_wf():
     qsiprep_wf = Workflow(name=f"qsiprep_{ver.major}_{ver.minor}_wf")
     qsiprep_wf.base_dir = config.execution.work_dir
 
-    for subject_id in config.execution.participant_label:
-        single_subject_wf = init_single_subject_wf(subject_id)
+    for subject_id, session_ids in config.execution.processing_list:
+        # We may need to select a session or multiple sessions to consider together
+        single_subject_wf = init_single_subject_wf(subject_id, session_ids)
 
+        # Should we put these in session specific directories? The uuid is unique but opaque
         single_subject_wf.config["execution"]["crashdump_dir"] = str(
             config.execution.output_dir / f"sub-{subject_id}" / "log" / config.execution.run_uuid
         )
@@ -97,7 +99,7 @@ def init_qsiprep_wf():
     return qsiprep_wf
 
 
-def init_single_subject_wf(subject_id: str):
+def init_single_subject_wf(subject_id: str, session_ids: list):
     """Organize the preprocessing pipeline for a single subject.
 
     This workflow collects and reports information about the subject, and prepares
@@ -135,6 +137,7 @@ def init_single_subject_wf(subject_id: str):
         subject_data = collect_data(
             config.execution.layout,
             subject_id,
+            session_id=session_ids,
             filters=config.execution.bids_filters,
             bids_validate=False,
         )[0]
@@ -156,6 +159,27 @@ def init_single_subject_wf(subject_id: str):
             "--anat-modality none".format(config.workflow.anat_modality, subject_id)
         )
 
+    anatomical_template = config.workflow.anatomical_template
+    if config.workflow.infant:
+        from ..utils.bids import cohort_by_months, parse_bids_for_age_months
+
+        if session_ids and len(session_ids) > 1:
+            raise RuntimeError("Infant template is only available for single session processing.")
+
+        # Calculate the age and age-specific spaces
+        session_id = None if not session_ids else session_ids[0]
+        age = parse_bids_for_age_months(
+            config.execution.bids_dir,
+            subject_id,
+            session_id,
+        )
+        if age is None:
+            ses_str = f"_ses-{session_id}" if session_id else ""
+            raise RuntimeError(f"Could not find age for sub-{subject_id}{ses_str}")
+
+        cohort = cohort_by_months(anatomical_template, age)
+        anatomical_template = f"{anatomical_template}+{cohort}"
+
     additional_t2ws = 0
     if "drbuddi" in config.workflow.pepolar_method.lower() and subject_data["t2w"]:
         additional_t2ws = len(subject_data["t2w"])
@@ -163,11 +187,12 @@ def init_single_subject_wf(subject_id: str):
     # Inspect the dwi data and provide advice on pipeline choices
     # provide_processing_advice(subject_data, layout, unringing_method)
 
-    workflow = Workflow(name=f"sub_{subject_id}_wf")
+    _ses_name = "_ses_" + "_".join(map(str, session_ids)) if session_ids else ""
+    workflow = Workflow(name=f"sub_{subject_id}{_ses_name}_wf")
     workflow.__desc__ = f"""
-Preprocessing was performed using *QSIPrep* {config.environment.version},
+Preprocessing was performed using *QSIPrep* {config.environment.version} [@cieslak2021qsiprep],
 which is based on *Nipype* {config.environment.nipype_version}
-(@nipype1; @nipype2; RRID:SCR_002502).
+[@nipype1; @nipype2; RRID:SCR_002502].
 
 """
     workflow.__postdesc__ = f"""
@@ -191,7 +216,7 @@ to workflows in *QSIPrep*'s documentation]\
 
     bidssrc = pe.Node(
         BIDSDataGrabber(
-            subject_data=subject_data,
+            subject_data=subject_data,  # Data has already been selected with sub/ses filters
             dwi_only=config.workflow.anat_modality == "none",
             anat_only=config.workflow.anat_only,
             anatomical_contrast=config.workflow.anat_modality,
@@ -202,7 +227,7 @@ to workflows in *QSIPrep*'s documentation]\
     bids_info = pe.Node(BIDSInfo(), name="bids_info", run_without_submitting=True)
 
     summary = pe.Node(
-        SubjectSummary(template=config.workflow.anatomical_template),
+        SubjectSummary(template=anatomical_template),
         name="summary",
         run_without_submitting=True,
     )
@@ -246,13 +271,18 @@ to workflows in *QSIPrep*'s documentation]\
         num_anat_images=num_anat_images,
         num_additional_t2ws=additional_t2ws,
         has_rois=bool(subject_data["roi"]),
+        anatomical_template=anatomical_template,
     )
 
     workflow.connect([
         (inputnode, anat_preproc_wf, [('subjects_dir', 'inputnode.subjects_dir')]),
         (bidssrc, bids_info, [
-            ((info_modality, fix_multi_source_name, config.workflow.anat_modality == 'none',
-              config.workflow.anat_modality), 'in_file'),
+            ((info_modality,
+              fix_multi_source_name,
+              config.workflow.anat_modality == 'none',
+              config.workflow.subject_anatomical_reference == "sessionwise",
+              config.workflow.anat_modality),
+             'in_file'),
         ]),
         (inputnode, summary, [('subjects_dir', 'subjects_dir')]),
         (bidssrc, summary, [('t1w', 't1w'), ('t2w', 't2w')]),
@@ -265,13 +295,21 @@ to workflows in *QSIPrep*'s documentation]\
         ]),
         (summary, anat_preproc_wf, [('subject_id', 'inputnode.subject_id')]),
         (bidssrc, ds_report_summary, [
-            ((info_modality, fix_multi_source_name, config.workflow.anat_modality == 'none',
-              config.workflow.anat_modality), 'source_file'),
+            ((info_modality,
+              fix_multi_source_name,
+              config.workflow.anat_modality == 'none',
+              config.workflow.subject_anatomical_reference == "sessionwise",
+              config.workflow.anat_modality),
+             'source_file'),
         ]),
         (summary, ds_report_summary, [('out_report', 'in_file')]),
         (bidssrc, ds_report_about, [
-            ((info_modality, fix_multi_source_name, config.workflow.anat_modality == 'none',
-              config.workflow.anat_modality), 'source_file'),
+            ((info_modality,
+              fix_multi_source_name,
+              config.workflow.anat_modality == 'none',
+              config.workflow.subject_anatomical_reference == "sessionwise",
+              config.workflow.anat_modality),
+             'source_file'),
         ]),
         (about, ds_report_about, [('out_report', 'in_file')])
     ])  # fmt:skip
@@ -304,6 +342,7 @@ to workflows in *QSIPrep*'s documentation]\
                 merging_strategy=config.workflow.distortion_group_merge,
                 source_file=merged_group + "_dwi.nii.gz",
                 inputs_list=merged_to_subgroups[merged_group],
+                output_prefix=merged_group,
                 name=merged_group.replace("-", "_") + "_final_merge_wf",
             )
 
@@ -331,7 +370,10 @@ to workflows in *QSIPrep*'s documentation]\
 
     intramodal_template_wf = init_intramodal_template_wf(
         t1w_source_file=fix_multi_source_name(
-            subject_data[info_modality], config.workflow.anat_modality == "none"
+            subject_data[info_modality],
+            dwi_only=config.workflow.anat_modality == "none",
+            include_session=config.workflow.subject_anatomical_reference == "sessionwise",
+            anatomical_contrast=config.workflow.anat_modality,
         ),
         inputs_list=sorted(outputs_to_files.keys()),
         name="intramodal_template_wf",
@@ -361,6 +403,7 @@ to workflows in *QSIPrep*'s documentation]\
             output_prefix=output_fname,
             source_file=source_file,
             t2w_sdc=bool(subject_data.get("t2w")),
+            anatomical_template=anatomical_template,
         )
         dwi_finalize_wf = init_dwi_finalize_wf(
             scan_groups=dwi_info,
@@ -476,6 +519,6 @@ to workflows in *QSIPrep*'s documentation]\
 def provide_processing_advice(subject_data, layout, unringing_method):
     """Provide advice on preprocessing options based on the data provided."""
     # metadata = {dwi_file: layout.get_metadata(dwi_file) for dwi_file in subject_data["dwi"]}
-    config.loggers.utils.warn(
+    config.loggers.utils.warning(
         "Partial Fourier acquisitions found for %s. Consider using --unringing-method rpg"
     )

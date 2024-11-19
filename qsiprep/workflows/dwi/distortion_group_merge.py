@@ -32,6 +32,7 @@ def init_distortion_group_merge_wf(
     merging_strategy,
     inputs_list,
     source_file,
+    output_prefix,
     name,
 ) -> Workflow:
     """Create an unbiased intramodal template for a subject. This aligns the b=0 references
@@ -189,13 +190,11 @@ def init_distortion_group_merge_wf(
         name="processed_qc_wf",
     )
     # Combine all the QC measures for a series QC
-    series_qc = pe.Node(
-        SeriesQC(output_file_name=config.execution.output_prefix), name="series_qc"
-    )
+    series_qc = pe.Node(SeriesQC(output_file_name=output_prefix), name="series_qc")
     ds_series_qc = pe.Node(
         DerivativesDataSink(
-            desc="ImageQC",
-            suffix="dwi",
+            desc="image",
+            suffix="qc",
             source_file=source_file,
             base_directory=config.execution.output_dir,
         ),
@@ -212,8 +211,8 @@ def init_distortion_group_merge_wf(
     ds_report_gradients = pe.Node(
         DerivativesDataSink(
             datatype="figures",
-            desc="sampling",
-            suffix="scheme",
+            desc="samplingscheme",
+            suffix="dwi",
             source_file=source_file,
         ),
         name="ds_report_gradients",
@@ -288,7 +287,6 @@ def init_distortion_group_merge_wf(
             ('t1_b0_ref', 'inputnode.t1_b0_ref'),
             ('gradient_table_t1', 'inputnode.gradient_table_t1'),
             ('btable_t1', 'inputnode.btable_t1'),
-            ('confounds', 'inputnode.confounds'),
             ('hmc_optimization_data', 'inputnode.hmc_optimization_data')]),
     ])  # fmt:skip
 

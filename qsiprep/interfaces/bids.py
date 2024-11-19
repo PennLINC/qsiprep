@@ -22,7 +22,7 @@ Disable warnings:
 import gzip
 import os
 import re
-from json import loads
+from json import dump, loads
 from shutil import copyfileobj
 
 from bids.layout import Config
@@ -38,7 +38,7 @@ from nipype.interfaces.base import (
     isdefined,
     traits,
 )
-from nipype.utils.filemanip import copyfile
+from nipype.utils.filemanip import copyfile, fname_presuffix
 from niworkflows.interfaces.bids import DerivativesDataSink as BaseDerivativesDataSink
 from niworkflows.interfaces.bids import _DerivativesDataSinkInputSpec
 
@@ -250,6 +250,29 @@ class DerivativesMaybeDataSink(DerivativesDataSink):
         if not isdefined(self.inputs.in_file):
             return runtime
         return super(DerivativesMaybeDataSink, self)._run_interface(runtime)
+
+
+class _DerivativesSidecarInputSpec(BaseInterfaceInputSpec):
+    sidecar_data = traits.Dict()
+    source_file = File()
+
+
+class _DerivativesSidecarOutputSpec(TraitedSpec):
+    derivatives_json = File(exists=True, desc="Derivatives Sidecar")
+
+
+class DerivativesSidecar(SimpleInterface):
+    input_spec = _DerivativesSidecarInputSpec
+    output_spec = _DerivativesSidecarOutputSpec
+
+    def _run_interface(self, runtime):
+        json_fname = fname_presuffix(
+            self.inputs.source_file, use_ext=False, suffix=".json", newpath=runtime.cwd
+        )
+        with open(json_fname, "w") as jsonf:
+            dump(self.inputs.sidecar_data, jsonf, sort_keys=True, indent=4)
+        self._results["derivatives_json"] = json_fname
+        return runtime
 
 
 def _splitext(fname):

@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "qsiprep"
 description = "qsiprep builds workflows for preprocessing and reconstructing q-space images"
 readme = "long_description.rst"
-authors = [{name = "The PennBBL developers"}]
+authors = [{name = "The PennLINC developers"}]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
@@ -26,8 +26,8 @@ dependencies = [
     "networkx ~= 2.8.8",
     "nibabel <= 5.2.0",
     "nilearn == 0.10.1",
-    "nipype == 1.8.6",
-    "nireports",
+    "nipype == 1.9.1",
+    "nireports >= 24.0.3",
     "niworkflows >=1.9,<= 1.10",
     "numpy <= 1.26.3",
     "pandas < 2.0.0",
@@ -47,10 +47,10 @@ dependencies = [
 dynamic = ["version"]
 
 [project.urls]
-Homepage = "https://github.com/pennbbl/qsiprep"
+Homepage = "https://github.com/pennlinc/qsiprep"
 Documentation = "https://www.qsiprep.readthedocs.io"
 Paper = "https://doi.org/10.1038/s41592-022-01458-7"
-"Docker Images" = "https://hub.docker.com/r/pennbbl/qsiprep/tags/"
+"Docker Images" = "https://hub.docker.com/r/pennlinc/qsiprep/tags/"
 
 [project.optional-dependencies]
 doc = [

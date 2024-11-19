@@ -155,6 +155,7 @@ def main():
         boiler_file = output_dir / "logs" / "CITATION.md"
         if boiler_file.exists():
             if config.environment.exec_env in (
+                "apptainer",
                 "singularity",
                 "docker",
             ):
@@ -173,13 +174,11 @@ def main():
         from ..reports.core import generate_reports
 
         # Generate reports phase
-        session_list = config.execution.get().get("bids_filters", {}).get("dwi", {}).get("session")
-
         failed_reports = generate_reports(
-            subject_list=config.execution.participant_label,
+            processing_list=config.execution.processing_list,
+            output_level=config.workflow.subject_anatomical_reference,
             output_dir=config.execution.output_dir,
             run_uuid=config.execution.run_uuid,
-            session_list=session_list,
         )
         write_derivative_description(
             config.execution.bids_dir,

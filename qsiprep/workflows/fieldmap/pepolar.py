@@ -272,7 +272,7 @@ def init_extended_pepolar_report_wf(
             ants.N4BiasFieldCorrection(dimension=3), name="t2w_n4", n_procs=omp_nthreads
         )
 
-        strip_t2w_wf = init_synthstrip_wf(do_padding=True, omp_nthreads=omp_nthreads)
+        strip_t2w_wf = init_synthstrip_wf(do_padding=True)
 
         t2w_atropos = pe.Node(
             ants.Atropos(

@@ -40,7 +40,7 @@ ${QSIPREP_CMD} \
 	--sloppy \
 	--unringing-method mrdegibbs \
 	--b1-biascorrect-stage legacy \
-	--eddy_config ${EDDY_CFG} \
+	--eddy-config ${EDDY_CFG} \
 	--output-resolution 5 \
     -vv
 

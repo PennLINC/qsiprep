@@ -162,7 +162,7 @@ _exec_env = os.name
 _docker_ver = None
 # special variable set in the container
 if os.getenv("IS_DOCKER_8395080871"):
-    _exec_env = "singularity"
+    _exec_env = "apptainer"
     _cgroup = Path("/proc/1/cgroup")
     if _cgroup.exists() and "docker" in _cgroup.read_text():
         _exec_env = "docker"
@@ -234,7 +234,17 @@ class _Config:
                 else:
                     setattr(cls, k, Path(v).absolute())
             elif hasattr(cls, k):
-                setattr(cls, k, v)
+                if k == "processing_list":
+                    new_v = []
+                    for el in v:
+                        sub, ses_list = el.split(":")
+                        if ses_list:
+                            new_v.append((sub, [ses for ses in ses_list.split(",")]))
+                        else:
+                            new_v.append((sub, []))
+                    setattr(cls, k, new_v)
+                else:
+                    setattr(cls, k, v)
 
         if init:
             try:
@@ -422,6 +432,10 @@ class execution(_Config):
     """Unique identifier of this particular run."""
     participant_label = None
     """List of participant identifiers that are to be preprocessed."""
+    session_id = None
+    """List of session identifiers that are to be preprocessed"""
+    processing_list = []
+    """List of (subject_id, [session_id, ...]) to be preprocessed together."""
     skip_anat_based_spatial_normalization = False
     """Should we skip normalizing the anatomical data to a template?"""
     templateflow_home = _templateflow_home
@@ -432,7 +446,6 @@ class execution(_Config):
     """Write out the computational graph corresponding to the planned preprocessing."""
     dataset_links = {}
     """A dictionary of dataset links to be used to track Sources in sidecars."""
-    aggr_ses_reports = 4
 
     _layout = None
 
@@ -540,8 +553,7 @@ class workflow(_Config):
     anat_only = False
     """Execute the anatomical preprocessing only."""
     anatomical_template = None
-    """Keeps the :py:class:`~niworkflows.utils.spaces.SpatialReferences`
-    instance keeping standard and nonstandard spaces."""
+    """Anatomical template to use. This field doesn't include the cohort."""
     b0_threshold = None
     """Any value in the .bval file less than this will be considered a b=0 image."""
     b0_motion_corr_to = None
@@ -585,8 +597,10 @@ class workflow(_Config):
     """Number of iterations for intramodal template construction."""
     intramodal_template_transform = None
     """Transformation used for building the intramodal template."""
+    subject_anatomical_reference = None
+    """How should the anatomical space be defined: sessionwise, unbiased or first-alphabetically"""
     longitudinal = False
-    """Run FreeSurfer ``recon-all`` with the ``-logitudinal`` flag."""
+    """Run FreeSurfer ``recon-all`` with the ``-longitudinal`` flag. [Deprecated]"""
     no_b0_harmonization = False
     """Skip re-scaling dwi scans to have matching b=0 intensities."""
     output_resolution = None
@@ -750,6 +764,11 @@ def get(flat=False):
         "nipype": nipype.get(),
         "seeds": seeds.get(),
     }
+    if "processing_list" in settings["execution"]:
+        settings["execution"]["processing_list"] = [
+            f"{el[0]}:{','.join(el[1])}" for el in settings["execution"]["processing_list"]
+        ]
+
     if not flat:
         return settings
 

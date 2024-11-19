@@ -4,7 +4,7 @@ orbs:
 
 .dockersetup: &dockersetup
   docker:
-    - image: pennbbl/qsiprep_build:24.7.4
+    - image: pennlinc/qsiprep_build:24.10.0
   working_directory: /tmp/src/qsiprep
 
 runinstall: &runinstall
@@ -33,10 +33,7 @@ runinstall: &runinstall
         ln -s /home/qsiprep/.dipy /root/.dipy
       fi
 
-
-
 jobs:
-
   build:
     resource_class: small
     docker:
@@ -133,7 +130,7 @@ jobs:
     steps:
       - checkout
       - restore_cache:
-          key: twoses-01
+          key: twoses-02
       - run: *runinstall
       - run:
           name: Download twoses test data
@@ -141,7 +138,7 @@ jobs:
             cd /tmp/src/qsiprep/.circleci
             python get_data.py $PWD/data twoses
       - save_cache:
-          key: twoses-01
+          key: twoses-02
           paths:
             - /tmp/src/qsiprep/.circleci/data/twoses
 
@@ -364,6 +361,8 @@ jobs:
       CIRCLE_CPUS: 4
     steps:
       - checkout
+      - restore_cache:
+          key: twoses-02
       - run: *runinstall
       - run:
           name: Test the intramodal template workflow
@@ -380,7 +379,7 @@ jobs:
     steps:
       - checkout
       - restore_cache:
-          key: twoses-01
+          key: DSDTI-01
       - run: *runinstall
       - run:
           name: Test the mri robust template for T1w images
@@ -460,14 +459,13 @@ jobs:
               echo "the command ``git fetch --tags --verbose`` and push"
               echo "them to your fork with ``git push origin --tags``"
             fi
-            sed -i -E "s/(var version = )'[A-Za-z0-9.-]+'/\1'${CIRCLE_TAG:-$THISVERSION}'/" docs/citing.rst
             sed -i "s/title = {qsiprep}/title = {qsiprep ${CIRCLE_TAG:-$THISVERSION}}/" qsiprep/data/boilerplate.bib
             # Build docker image
             e=1 && for i in {1..5}; do
               docker build \
-                --cache-from=pennbbl/qsiprep \
+                --cache-from=pennlinc/qsiprep \
                 --rm=false \
-                -t pennbbl/qsiprep:latest \
+                -t pennlinc/qsiprep:latest \
                 --build-arg BUILD_DATE=`date -u +"%Y-%m-%dT%H:%M:%SZ"` \
                 --build-arg VCS_REF=`git rev-parse --short HEAD` \
                 --build-arg VERSION="${CIRCLE_TAG:-$THISVERSION}" . \
@@ -479,12 +477,12 @@ jobs:
           command: |
             if [[ -n "$DOCKER_PASS" ]]; then
               docker login -u $DOCKER_USER -p $DOCKER_PASS
-              docker tag pennbbl/qsiprep pennbbl/qsiprep:unstable
-              docker push pennbbl/qsiprep:unstable
+              docker tag pennlinc/qsiprep pennlinc/qsiprep:unstable
+              docker push pennlinc/qsiprep:unstable
               if [[ -n "$CIRCLE_TAG" ]]; then
-                docker push pennbbl/qsiprep:latest
-                docker tag pennbbl/qsiprep pennbbl/qsiprep:$CIRCLE_TAG
-                docker push pennbbl/qsiprep:$CIRCLE_TAG
+                docker push pennlinc/qsiprep:latest
+                docker tag pennlinc/qsiprep pennlinc/qsiprep:$CIRCLE_TAG
+                docker push pennlinc/qsiprep:$CIRCLE_TAG
               fi
             fi
 
@@ -591,14 +589,14 @@ workflows:
 
       - IntramodalTemplate:
           requires:
-            - build
+            - download_twoses
           filters:
             tags:
               only: /.*/
 
       - MultiT1w:
           requires:
-            - download_twoses
+            - download_DSDTI
           filters:
             tags:
               only: /.*/

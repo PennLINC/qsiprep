@@ -37,6 +37,7 @@ def init_dwi_preproc_wf(
     t2w_sdc,
     output_prefix,
     source_file,
+    anatomical_template,
 ) -> Workflow:
     """
     This workflow controls the dwi preprocessing stages of qsiprep.
@@ -260,6 +261,7 @@ Diffusion data preprocessing
             source_file=source_file,
             dwi_metadata=dwi_metadata,
             t2w_sdc=t2w_sdc,
+            anatomical_template=anatomical_template,
         )
 
     elif config.workflow.hmc_model == "eddy":
@@ -302,7 +304,8 @@ Diffusion data preprocessing
     ds_report_coreg = pe.Node(
         DerivativesDataSink(
             datatype="figures",
-            suffix="acpc" if dwi_only else "coreg",
+            suffix="dwi",
+            desc="acpc" if dwi_only else "coreg",
             source_file=source_file,
         ),
         name="ds_report_coreg",
@@ -438,22 +441,22 @@ Diffusion data preprocessing
         DerivativesDataSink(
             source_file=source_file,
             base_directory=str(output_dir),
-            suffix="confounds",
+            desc="confounds",
+            suffix="timeseries",
         ),
         name="ds_confounds",
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
-    workflow.connect([
-        (confounds_wf, ds_confounds, [('outputnode.confounds_file', 'in_file')]),
-    ])  # fmt:skip
+    workflow.connect([(confounds_wf, ds_confounds, [("outputnode.confounds_file", "in_file")])])
 
     # Carpetplot and confounds plot
     conf_plot = pe.Node(DMRISummary(), name="conf_plot", mem_gb=mem_gb["resampled"])
     ds_report_dwi_conf = pe.Node(
         DerivativesDataSink(
             datatype="figures",
-            suffix="carpetplot",
+            desc="carpetplot",
+            suffix="dwi",
             source_file=source_file,
         ),
         name="ds_report_dwi_conf",
@@ -494,7 +497,8 @@ Diffusion data preprocessing
     ds_report_summary = pe.Node(
         DerivativesDataSink(
             datatype="figures",
-            suffix="summary",
+            desc="summary",
+            suffix="dwi",
             source_file=source_file,
         ),
         name="ds_report_summary",

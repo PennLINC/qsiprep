@@ -34,14 +34,14 @@ TESTNAME=imtemplate
 setup_dir ${TESTDIR}/${TESTNAME}
 TEMPDIR=${TESTDIR}/${TESTNAME}/work
 OUTPUT_DIR=${TESTDIR}/${TESTNAME}/derivatives
-BIDS_INPUT_DIR=${TESTDIR}/data/twoses
+BIDS_INPUT_DIR=${TESTDIR}/data/twoses/twoses
 QSIPREP_CMD=$(run_qsiprep_cmd ${BIDS_INPUT_DIR} ${OUTPUT_DIR})
 
 ${QSIPREP_CMD} \
 	 -w ${TEMPDIR} \
 	 --sloppy \
-	 --b1_biascorrect_stage none \
-	 --hmc_model none \
+	 --b1-biascorrect-stage none \
+	 --hmc-model none \
 	 --b0-motion-corr-to first \
 	 --output-resolution 5 \
 	 --intramodal-template-transform BSplineSyN \
