@@ -15,7 +15,8 @@ We plan to not introduce any backwards-incompatible changes for a while.
 
 ### 🐛 Bug Fixes
 
-* Hardcode extensions for GIF figures by @tsalo in https://github.com/PennLINC/qsiprep/pull/880
+* [FIX] synthstrip extra arg by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/881
+* Pin nireports version and allow GIFs by @tsalo in https://github.com/PennLINC/qsiprep/pull/883
 
 ### Other Changes
 
