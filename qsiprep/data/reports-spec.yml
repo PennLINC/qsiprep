@@ -109,7 +109,7 @@ sections:
   reportlets:
   - bids: {datatype: figures, desc: summary, suffix: dwi}
   - bids: {datatype: figures, desc: validation, suffix: dwi}
-  - bids: {datatype: figures, desc: samplingscheme, suffix: dwi, extension: [.png]}
+  - bids: {datatype: figures, desc: samplingscheme, suffix: dwi}
     caption: |
       Animation of the DWI sampling scheme. Each separate scan is its own color
     static: false
@@ -235,7 +235,7 @@ sections:
     static: false
     subtitle: Reorientation of DWI reference image to AC-PC
 
-  - bids: {datatype: figures, desc: shorelineiters, suffix: dwi, extension: [.png]}
+  - bids: {datatype: figures, desc: shorelineiters, suffix: dwi}
     caption: |
       Difference in motion estimates over SHORELine iterations. Values close to zero
       indicate good convergence.
