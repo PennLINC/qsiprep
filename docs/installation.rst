@@ -5,13 +5,27 @@ Installation
 ############
 
 There are two easy ways to use *QSIPrep*:
-in a `Docker Container`_, or in a `Singularity Container`_.
+as a Python library with PyPi or as a container with Docker or Singularity/Apptainer.
 Using a local container method is highly recommended.
+
 Once you are ready to run *QSIPrep*, see Usage_ for details.
 
-To install::
 
-    $ pip install --user --upgrade qsiprep-container
+**************
+Python Library
+**************
+
+To install the *QSIPrep* Python library, use pip::
+
+    $ pip install --user --upgrade qsiprep
+
+We strongly discourage installing *QSIPrep* this way,
+as *QSIPrep* relies on a number of non-Python dependencies that are difficult to install
+and configure on a local system.
+Pip will not install these dependencies for you.
+Instead, we recommend using the Docker or Singularity/Apptainer containers,
+wherein all of the necessary dependencies will come pre-installed and configured.
+
 
 .. _`Docker Container`:
 
