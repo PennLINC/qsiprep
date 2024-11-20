@@ -23,6 +23,10 @@ QSIPrep: Preprocessing and analysis of q-space images
   :target: https://doi.org/10.1038/s41592-021-01185-5
   :alt: Publication DOI
 
+.. image:: https://zenodo.org/badge/156589095.svg
+  :target: https://doi.org/10.5281/zenodo.14187327
+  :alt: Zenodo DOI
+
 .. image:: https://img.shields.io/badge/License-BSD--3--Clause-green
   :target: https://opensource.org/licenses/BSD-3-Clause
   :alt: License
