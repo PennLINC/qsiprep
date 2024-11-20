@@ -1,6 +1,7 @@
 """Command-line interface tests."""
 
 import os
+from pathlib import Path
 import sys
 from unittest.mock import patch
 
@@ -16,7 +17,7 @@ from qsiprep.tests.utils import (
     download_test_data,
     get_test_data_path,
 )
-from qsiprep.utils.bids import write_derivative_description
+from qsiprep.utils.bids import write_bidsignore, write_derivative_description
 
 nipype_config.enable_debug_mode()
 
@@ -598,23 +599,44 @@ def _run_and_generate(test_name, parameters, test_main=False):
 
         retval = build_workflow(config_file, retval={})
         qsiprep_wf = retval["workflow"]
+        build_boilerplate(str(config_file), qsiprep_wf)
+        config.loggers.workflow.log(
+            15,
+            "\n".join(["config:"] + ["\t\t%s" % s for s in config.dumps().splitlines()]),
+        )
 
         qsiprep_wf.run(**config.nipype.get_plugin())
 
-        write_derivative_description(config.execution.bids_dir, config.execution.output_dir)
+        boiler_file = config.execution.output_dir / "logs" / "CITATION.md"
+        if boiler_file.exists():
+            if config.environment.exec_env in (
+                "apptainer",
+                "singularity",
+                "docker",
+            ):
+                boiler_file = Path("<OUTPUT_PATH>") / boiler_file.relative_to(
+                    config.execution.output_dir
+                )
+            config.loggers.workflow.log(
+                25,
+                "Works derived from this QSIPrep execution should include the "
+                f"boilerplate text found in {boiler_file}.",
+            )
 
-        build_boilerplate(str(config_file), qsiprep_wf)
-        session_list = (
-            config.execution.bids_filters.get("bold", {}).get("session")
-            if config.execution.bids_filters
-            else None
-        )
-        generate_reports(
-            subject_list=config.execution.participant_label,
+        write_derivative_description(config.execution.bids_dir, config.execution.output_dir)
+        failed_reports = generate_reports(
+            processing_list=config.execution.processing_list,
+            output_level=config.workflow.subject_anatomical_reference,
             output_dir=config.execution.output_dir,
             run_uuid=config.execution.run_uuid,
-            session_list=session_list,
         )
+        assert failed_reports == 0
+        write_derivative_description(
+            config.execution.bids_dir,
+            config.execution.output_dir,
+            # dataset_links=config.execution.dataset_links,
+        )
+        write_bidsignore(config.execution.output_dir)
 
     output_list_file = os.path.join(get_test_data_path(), f"{test_name}_outputs.txt")
     optional_outputs_list = os.path.join(get_test_data_path(), f"{test_name}_optional_outputs.txt")
