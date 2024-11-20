@@ -61,7 +61,7 @@ def test_dsdti_fmap(data_dir, output_dir, working_dir):
         "--output-resolution=5",
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 @pytest.mark.integration
@@ -103,7 +103,7 @@ def test_dscsdsi_fmap(data_dir, output_dir, working_dir):
         "--output-resolution=5",
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 @pytest.mark.integration
@@ -147,7 +147,7 @@ def test_cuda(data_dir, output_dir, working_dir):
         "--output-resolution=5",
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 @pytest.mark.integration
@@ -193,7 +193,7 @@ def test_drbuddi_rpe(data_dir, output_dir, working_dir):
         "--output-resolution=5",
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 @pytest.mark.integration
@@ -230,7 +230,7 @@ def test_drbuddi_shoreline_epi(data_dir, output_dir, working_dir):
         "--shoreline-iters=1",
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 @pytest.mark.integration
@@ -267,7 +267,7 @@ def test_drbuddi_tensorline_epi(data_dir, output_dir, working_dir):
         "--shoreline-iters=1",
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 @pytest.mark.integration
@@ -312,7 +312,7 @@ def test_dscsdsi(data_dir, output_dir, working_dir):
         "--shoreline-iters=1",
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 @pytest.mark.integration
@@ -354,7 +354,7 @@ def test_dsdti_nofmap(data_dir, output_dir, working_dir):
         "--output-resolution=5",
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 @pytest.mark.integration
@@ -396,7 +396,7 @@ def test_dsdti_synfmap(data_dir, output_dir, working_dir):
         "--output-resolution=5",
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 @pytest.mark.integration
@@ -436,7 +436,7 @@ def test_intramodal_template(data_dir, output_dir, working_dir):
         "--intramodal-template-iters=2",
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 @pytest.mark.integration
@@ -472,7 +472,7 @@ def test_multi_t1w(data_dir, output_dir, working_dir):
         "--intramodal-template-iters=2",
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 @pytest.mark.integration
@@ -509,7 +509,7 @@ def test_maternal_brain_project(data_dir, output_dir, working_dir):
         f"--bids-filter-file={bids_filter}",
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 @pytest.mark.integration
@@ -545,7 +545,7 @@ def test_forrest_gump(data_dir, output_dir, working_dir):
         f"--bids-filter-file={bids_filter}",
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 def _check_arg_specified(argname, arglist):
@@ -571,7 +571,7 @@ def _update_resources(parameters):
     return parameters
 
 
-def _run_and_generate(test_name, parameters, test_main=True):
+def _run_and_generate(test_name, parameters, test_main=False):
     from qsiprep import config
 
     # TODO: Add --clean-workdir param to CLI
@@ -591,7 +591,6 @@ def _run_and_generate(test_name, parameters, test_main=True):
 
             assert e.value.code == 0
     else:
-        # XXX: This isn't working because config.execution.fs_license_file is None.
         parse_args(parameters)
         config_file = config.execution.work_dir / f"config-{config.execution.run_uuid}.toml"
         config.loggers.cli.warning(f"Saving config file to {config_file}")
@@ -599,7 +598,9 @@ def _run_and_generate(test_name, parameters, test_main=True):
 
         retval = build_workflow(config_file, retval={})
         qsiprep_wf = retval["workflow"]
-        qsiprep_wf.run()
+
+        qsiprep_wf.run(**config.nipype.get_plugin())
+
         write_derivative_description(config.execution.bids_dir, config.execution.output_dir)
 
         build_boilerplate(str(config_file), qsiprep_wf)
