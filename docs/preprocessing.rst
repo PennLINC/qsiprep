@@ -2,13 +2,15 @@
 
 .. _preprocessing:
 
+#############
 Preprocessing
-=============
+#############
 
+*******************
 Building a pipeline
---------------------
+*******************
 
-QSIPrep builds a pipeline based on your BIDS inputs. In general the pipeline will incorporate
+*QSIPrep* builds a pipeline based on your BIDS inputs. In general the pipeline will incorporate
 all the data it knows how to handle (i.e. fieldmaps, dMRI and anatomical data) automatically.
 There may be cases where you want to change the default behavior, particularly in regard to
 
@@ -25,7 +27,7 @@ There may be cases where you want to change the default behavior, particularly i
 .. _merging:
 
 Merging multiple scans from a session
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+======================================
 
 For q-space imaging sequences it is common to have multiple separate scans to
 acquire the entire sampling scheme. These scans get aligned and merged into
@@ -51,19 +53,19 @@ perform SDC. Further complicating this is the FSL workflow, which combines disto
 with eddy/motion correction and will merge scans with different PE directions.
 
 If you have some scans you want to combine and others you want to preprocess separately,
-you can call qsiprep more than once with BIDS filters to process the different scans.
+you can call *QSIPrep* more than once with BIDS filters to process the different scans.
 
 .. _bids_filters:
 
 Using BIDS filters
-^^^^^^^^^^^^^^^^^^^
+==================
 
-BIDS filters allow users to filter the set of images available to QSIPrep at run
-time. BIDS filters should be stored in a json file and passed to QSIPrep with
+BIDS filters allow users to filter the set of images available to *QSIPrep* at run
+time. BIDS filters should be stored in a json file and passed to *QSIPrep* with
 the ``--bids-filter-file`` option.
 Filters modify "queries", which are used to find data for each data type.
 NOTE: this is illustrating how modalities are queried in general, and is not the format
-of the file you will send to ``--bids-filter-file``. The queries in QSIPrep are::
+of the file you will send to ``--bids-filter-file``. The queries in *QSIPrep* are::
 
   {
       "fmap": {"datatype": "fmap"},
@@ -116,7 +118,7 @@ will do a case-insensitive match of "mprage" within the "t1w" query.
 .. _merge_denoise:
 
 Denoising and Merging Images
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+============================
 
 The user can decide whether to do certain preprocessing steps and, if so,
 whether they are performed *before* or *after* the DWI series are
@@ -131,7 +133,7 @@ turned off using ``--dwi-no-b0-harmonization``.
 
 Together, denoising (MP-PCA or patch2self), Gibbs unringing B1 bias field
 correction and b=0 intensity normalization are referred to as *denoising* in
-QSIPrep. Each of these image processing operations has assumptions about its
+*QSIPrep*. Each of these image processing operations has assumptions about its
 inputs and changes the distribution of noise in its outputs. Although the
 inclusion of each operation can be decided by the user, the order in which
 they are applied relative to one another is fixed. MP-PCA or patch2self are
@@ -168,13 +170,13 @@ image intensity normalization is performed.
 
 
 Preprocessing HCP-style
-^^^^^^^^^^^^^^^^^^^^^^^
+=======================
 
-QSIPrep can be configured to produce a very similar pipeline to the HCP dMRI pipelines.
+*QSIPrep* can be configured to produce a very similar pipeline to the HCP dMRI pipelines.
 HCP and HCP-Lifespan scans acquire complete multi-shell sequences in opposing phase
 encoding directions, making them a special case where :ref:`sdc_pepolar` are used
 and the corrected images from both PE directions are averaged at the end. To produce
-output from ``qsiprep`` that is directly comparable to the HCP dMRI pipeline you
+output from *QSIPrep* that is directly comparable to the HCP dMRI pipeline you
 will want to include::
 
   --distortion-group-merge average \
@@ -186,10 +188,11 @@ many images, you can substitute ``average`` with ``concat``.
 
 .. _outputs:
 
-Outputs of qsiprep
--------------------
+********************
+Outputs of *QSIPrep*
+********************
 
-qsiprep generates three broad classes of outcomes:
+*QSIPrep* generates three broad classes of outcomes:
 
   1. **Visual QA (quality assessment) reports**:
      one :abbr:`HTML (hypertext markup language)` per subject,
@@ -209,9 +212,9 @@ qsiprep generates three broad classes of outcomes:
 
 
 Visual Reports
-^^^^^^^^^^^^^^^
+==============
 
-qsiprep outputs summary reports, written to ``<output_dir>/qsiprep/sub-<subject_label>.html``.
+*QSIPrep* outputs summary reports, written to ``<output_dir>/qsiprep/sub-<subject_label>.html``.
 These reports provide a quick way to make visual inspection of the results easy.
 One useful graphic is the animation of the q-space sampling scheme before and after the pipeline.
 Here is a sampling scheme from a DSI scan:
@@ -224,8 +227,8 @@ Here is a sampling scheme from a DSI scan:
     that head motion correction has not disrupted the scheme extensively.
 
 
-Preprocessed data (qsiprep *derivatives*)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Preprocessed data (*QSIPrep derivatives*)
+=========================================
 
 There are additional files, called "Derivatives",
 written to ``<output_dir>/qsiprep/sub-<subject_label>/``.
@@ -297,9 +300,9 @@ Volumetric outputs are written out in ``ACPC`` space ::
 
 
 Transforms
-^^^^^^^^^^
+==========
 
-QSIPrep will write out a series of transforms needed to map between the different spaces.
+*QSIPrep* will write out a series of transforms needed to map between the different spaces.
 
 .. code-block::
 
@@ -321,7 +324,7 @@ QSIPrep will write out a series of transforms needed to map between the differen
   which does not produce transforms that can be written out and reused.
   In the future, if Eddy starts writing out usable transforms
   or an alternate implementation is made available,
-  QSIPrep may start writing these transforms out in a similar manner to fMRIPrep.
+  *QSIPrep* may start writing these transforms out in a similar manner to fMRIPrep.
 
   These will most likely be organized thusly::
 
@@ -333,7 +336,7 @@ QSIPrep will write out a series of transforms needed to map between the differen
 
 .. important::
 
-  QSIPrep does not currently write out the coregistration transform from dwiref space to ACPC space.
+  *QSIPrep* does not currently write out the coregistration transform from dwiref space to ACPC space.
   When it does start writing this transform out, it will be organized like this::
 
     sub-<label>/
@@ -346,12 +349,12 @@ QSIPrep will write out a series of transforms needed to map between the differen
 .. _dwi_confounds:
 
 Confounds
-^^^^^^^^^^^^
+=========
 
 See implementation on :func:`~qsiprep.workflows.dwi.confounds.init_dwi_confs_wf`.
 
 
-For each DWI processed by qsiprep, a
+For each DWI processed by *QSIPrep*, a
 ``<output_folder>/qsiprep/sub-<label>/func/<source_entities>_desc-confounds_timeseries.tsv``
 file will be generated. These are :abbr:`TSV (tab-separated values)` tables,
 which look like the example below::
@@ -379,7 +382,7 @@ working on specific gradient strengths or directions.
 .. _qc_data:
 
 Quality Control Data
-^^^^^^^^^^^^^^^^^^^^
+====================
 
 A single-line csv file (``desc-image_qc.csv``) is created for each output
 image. This file is particularly useful for comparing the relative quality
@@ -396,11 +399,12 @@ Finally, the difference in spatial overlap between the anatomical mask and
 the anatomical brain mask and the DWI brain mask is calculated using the Dice
 distance in ``t1_dice_distance`` and ``mni_dice_distance``.
 
+
 Confounds and "carpet"-plot on the visual reports
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+=================================================
 
 fMRI has been using a "carpet" visualization of the
-:abbr:`BOLD (blood-oxygen level-dependent)` time-series (see [Power2016]_),
+:abbr:`BOLD (blood-oxygen level-dependent)` time-series (see :footcite:t:`power2017simple`),
 but this type of plot does not make sense for DWI data. Instead, we plot
 the cross-correlation value between each raw slice and the HMC model signal
 resampled into that slice.
@@ -424,17 +428,19 @@ Examples of these plots follow:
     For eddy slices with more outliers appear more yellow, while fewer
     outliers is more blue.
 
+
 .. _workflow_details:
 
+******************************
 Preprocessing pipeline details
-------------------------------
+******************************
 
-``qsiprep`` adapts its pipeline depending on what data and metadata are
+*QSIPrep* adapts its pipeline depending on what data and metadata are
 available and are used as the input.
 
 
 Processing the *Subject Anatomical Reference* T1w or T2w images
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+===============================================================
 
 :func:`qsiprep.workflows.anatomical.init_anat_preproc_wf`
 
@@ -458,21 +464,21 @@ Processing the *Subject Anatomical Reference* T1w or T2w images
                               hires=True,
                               num_t1w=1)
 
-As of version 0.18 QSIPrep has been changed to be very flexible with anatomical
+As of version 0.18 *QSIPrep* has been changed to be very flexible with anatomical
 processing workflows. Versions prior to 0.18 were focused on the T1w images and
 provided only 2 possible templates. Version 0.18 introduces 2 terms that
 simplify the anatomical processing and open up new opportunities for choosing
 a template. First, is the *subject anatomical reference* and the second is the
 *template anatomical reference*.
 
-As a dMRI-focused tool, QSIPrep only uses an *anatomical reference* image for an
+As a dMRI-focused tool, *QSIPrep* only uses an *anatomical reference* image for an
 extra-robust brain extraction and to get a tissue segmentation for visualizing
-the susceptibility distortion correction results.  The anatomical workflows
+the susceptibility distortion correction results.  The anatomical worflows
 leverage fast and powerful tools from FreeSurfer, namely ``SynthStrip`` and
 ``SynthSeg`` to perform brain extraction and segmentation.
 
 Many imaging protocols acquire some high-resolution, undistorted anatomical
-reference scans. QSIPrep can use either T1-weighted or T2-weighted 3D images as
+reference scans. *QSIPrep* can use either T1-weighted ot T2-weighted 3D images as
 the *anatomical reference*. To specify which contrast you'd like to use for your
 anatomical reference, be sure to specify ``--anatomical-contrast`` as either
 ``T1w``, ``T2w`` or ``none``. Specifying ``none`` is equivalent to the previous
@@ -526,7 +532,7 @@ Processing the *Anatomical Reference* images
 .. _t1preproc_steps:
 
 Handling Lesions and abnormalities
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+----------------------------------
 
 When processing images from patients with focal brain lesions (e.g. stroke, tumor
 resection), it is possible to provide a lesion mask to be used during spatial
@@ -538,7 +544,7 @@ in the same space and resolution as the T1 image, and follow the naming conventi
 `BIDS Extension Proposal 3: Common Derivatives <https://docs.google.com/document/d/1Wwc4A6Mow4ZPPszDIWfCUCRNstn7d_zzaWPcfcHmgI4/edit#heading=h.9146wuepclkt>`_
 (e.g. ``sub-001_T1w_label-lesion_roi.nii.gz``).
 This file should be placed in the ``sub-*/anat`` directory of the BIDS dataset
-to be run through ``qsiprep``.
+to be run through *QSIPrep*.
 
 .. figure:: _static/T1MNINormalization.svg
     :scale: 100%
@@ -547,7 +553,7 @@ to be run through ``qsiprep``.
 
 
 Longitudinal anatomical processing
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+----------------------------------
 
 In the case of multiple T1w images (across sessions and/or within a session),
 T1w images are merged into a single template image using FreeSurfer's
@@ -556,7 +562,7 @@ all source images, or aligned to the first image (determined lexicographically
 by session label). For two images, the additional cost of estimating an unbiased
 template is trivial and is the default behavior, but, for greater than two
 images, the cost can be a slowdown of an order of magnitude.
-Therefore, in the case of three or more images, ``qsiprep`` constructs
+Therefore, in the case of three or more images, *QSIPrep* constructs
 templates aligned to the first image, unless passed the ``--subject-anatomical-reference unbiased``
 flag, which forces the estimation of an unbiased template.
 
@@ -570,17 +576,17 @@ flag, which forces the estimation of an unbiased template.
 
 
 Processing Infant Data
-^^^^^^^^^^^^^^^^^^^^^^
+=======================
 
 When processing infant DWI data, users may add ``--infant`` to their
-QSIPrep call. This will swap the default MNI152NLin2009cAsym template
+*QSIPrep* call. This will swap the default MNI152NLin2009cAsym template
 with the MNI infant template. It is highly advisable to also include
 ``--dwi-only`` to avoid problems with T1w skull-stripping.
 
 .. _dwi_overview:
 
 DWI preprocessing
-^^^^^^^^^^^^^^^^^
+=================
 
 :func:`qsiprep.workflows.dwi.base.init_dwi_preproc_wf`
 
@@ -627,10 +633,11 @@ DWI preprocessing
 Preprocessing of :abbr:`DWI (Diffusion Weighted Image)` files is
 split into multiple sub-workflows described below.
 
+
 .. _fsl_wf:
 
 Head-motion / Eddy Current/ Distortion correction (FSL)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-------------------------------------------------------
 
 :func:`qsiprep.workflows.dwi.fsl.init_fsl_hmc_wf`
 
@@ -642,7 +649,7 @@ is unique to their workflow.
 To ensure that the FSL workflow works as intended, all inputs are forced into
 to the FSL standard orientation. The head motion, eddy current and suscebtibility
 distortion corrections are applied at the end of ``eddy``, which means that
-there will be *two* total interpolations in the FSL-based qsiprep workflow, as
+there will be *two* total interpolations in the FSL-based *QSIPrep* workflow, as
 the final interpolation into T1w/AC-PC space is done externally in ANTs.
 
 The FSL workflow can take three different forms.
@@ -651,8 +658,9 @@ The FSL workflow can take three different forms.
  2. PEPOLAR distortion correction (using topup)
  3. Fieldmap-based distortion correction
 
+
 No distortion correction
-++++++++++++++++++++++++
+^^^^^^^^^^^^^^^^^^^^^^^^
 
 If there are no fieldmap images or the user has specified ``--ignore fieldmaps``,
 no distortion correction will occur. In this case, only head motion correction
@@ -676,7 +684,7 @@ and eddy current correction will be performed. The workflow looks like this:
 
 
 PEPOLAR (TOPUP) Distortion Correction
-+++++++++++++++++++++++++++++++++++++
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 When images with different phase encoding directions are available, either
 dedicated fieldmaps (in the ``fmap/`` directory) or DWI series
@@ -703,7 +711,7 @@ dedicated fieldmaps (in the ``fmap/`` directory) or DWI series
 
 
 Fieldmap-based Distortion Correction
-++++++++++++++++++++++++++++++++++++
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 If a GRE fieldmap or SyN-based fieldmapless distortion correction
 are detected, these will be performed on the outputs of ``eddy``.
@@ -729,13 +737,14 @@ For details see :ref:`dwi_sdc`.
                          source_file='/path/to/dwi/sub-X_dwi.nii.gz',
                          omp_nthreads=1)
 
+
 .. _configure_eddy:
 
 Configuring ``eddy``
-+++++++++++++++++++++
+^^^^^^^^^^^^^^^^^^^^
 
 ``eddy`` has many configuration options. Instead of making these commandline
-options, you can specify them in a JSON file and pass that to ``qsiprep``
+options, you can specify them in a JSON file and pass that to *QSIPrep*
 using the ``--eddy-config`` option. An example (default) eddy config json can
 be viewed or downloaded `here
 <https://github.com/PennLINC/qsiprep/blob/master/qsiprep/data/eddy_params.json>`__
@@ -745,7 +754,7 @@ be viewed or downloaded `here
 .. _dwi_hmc:
 
 Head-motion estimation (SHORELine)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+----------------------------------
 
 :func:`qsiprep.workflows.dwi.hmc.init_dwi_hmc_wf`
 
@@ -755,7 +764,7 @@ been the lack of motion correction methods. DTI and multi-shell HARDI have
 had ``eddy_correct`` and ``eddy`` in FSL, but DSI has relied on aligning the
 interleaved b0 images and applying the transforms to nearby non-b0 images.
 
-``qsiprep`` introduces a method for head motion correction that iteratively
+*QSIPrep* introduces a method for head motion correction that iteratively
 creates target images based on ``3dSHORE`` or ``MAPMRI`` fits.
 First, all b0 images are aligned to a midpoint b0 image (or the first b0 image
 if ``hmc_align_to="first"``) and each non-b0 image is transformed along with
@@ -811,13 +820,13 @@ are saved for each slice for display in a carpet plot-like thing.
 .. _dwi_sdc:
 
 Susceptibility correction methods
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+=================================
 
 :func:`qsiprep.workflows.fieldmap.base.init_sdc_wf`
 
 .. figure:: _static/unwarping.svg
 
-The are three kinds of SDC available in qsiprep:
+The are three kinds of SDC available in *QSIPrep*:
 
   1. :ref:`sdc_pepolar` (also called **blip-up/blip-down**):
      This is the implementation from sdcflows, using 3dQwarp to
@@ -831,16 +840,17 @@ The are three kinds of SDC available in qsiprep:
 
   3. :ref:`sdc_fieldmapless`: The SyN-based susceptibility distortion correction
      implemented in FMRIPREP. To use this method, include argument ``--use-syn-sdc`` when
-     calling qsiprep. Briefly, this method estimates a SDC warp using ANTS SyN based
+     calling *QSIPrep*. Briefly, this method estimates a SDC warp using ANTS SyN based
      on an average fieldmap in MNI space. For details on this method.
 
-``qsiprep`` determines if a fieldmap should be used based on the ``"IntendedFor"``
+*QSIPrep* determines if a fieldmap should be used based on the ``"IntendedFor"``
 fields in the JSON sidecars in the ``fmap/`` directory.
+
 
 .. _best_b0:
 
 Selecting representative images for PEPOLAR
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-------------------------------------------
 
 ``TOPUP`` estimates EPI distortion based on the shapes of images with
 different phase encoding directions and total readout times (i.e. warped
@@ -851,11 +861,11 @@ For diffusion-weighted MRI, the b=0 images are used as input to TOPUP. While
 these contain a lot of anatomical detail, they can also contain troublesome
 artefacts such as spin history, head motion and slice dropout.
 
-In QSIPrep versions up until 0.13, up to 3 b=0 images were selected per
+In *QSIPrep* versions up until 0.13, up to 3 b=0 images were selected per
 warped group as input to ``TOPUP``. The images were selected to be
 evenly spaced within their acquisitions.
 
-In versions 0.13 and later, QSIPrep finds the "most representative" b=0
+In versions 0.13 and later, *QSIPrep* finds the "most representative" b=0
 images per warped group. A nearly identical approach is used in the
 developmental HCP pipelines, where a pairwise spatial correlation score is
 calculated between all b=0 images of the same warped group and the images
@@ -867,9 +877,9 @@ column in the confounds tsv file.
 .. _dwi_only:
 
 Using only DWI data (bypassing the T1w workflows)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-------------------------------------------------
 
-It is possible to use QSIPrep to process *only* diffusion-weighted images. In
+It is possible to use *QSIPrep* to process *only* diffusion-weighted images. In
 the case of infant data, where robust skull-stripping methods are not
 currently available, or where anatomical preprocessing has already been
 performed in another pipeline, the user can specify ``--dwi-only``.
@@ -886,7 +896,7 @@ transform are extracted.
 .. _dwi_ref:
 
 DWI reference image estimation
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+------------------------------
 
 :func:`qsiprep.workflows.dwi.util.init_dwi_reference_wf`
 
@@ -909,7 +919,7 @@ pipeline for DWIs
 .. _resampling:
 
 Pre-processed DWIs in a different space
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---------------------------------------
 
 :func:`qsiprep.workflows.dwi.resampling.init_dwi_trans_wf`
 
@@ -943,7 +953,7 @@ use these yet, but it's an interesting idea.
 .. _b0_reg:
 
 b0 to T1w registration
-^^^^^^^^^^^^^^^^^^^^^^
+======================
 
 :func:`qsiprep.workflows.dwi.registration.init_b0_to_anat_registration_wf`
 
@@ -961,8 +971,8 @@ b0 to T1w registration
 This just uses `antsRegistration`.
 
 
+**********
+References
+**********
 
-.. topic:: References
-
-  .. [Power2016] Power JD, A simple but useful way to assess fMRI scan qualities.
-     NeuroImage. 2016. doi: `10.1016/j.neuroimage.2016.08.009 <http://doi.org/10.1016/j.neuroimage.2016.08.009>`_
+.. footbibliography::

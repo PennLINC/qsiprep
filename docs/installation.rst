@@ -1,24 +1,39 @@
 .. include:: links.rst
 
-------------
+############
 Installation
-------------
+############
 
-There are two easy ways to use qsiprep:
-in a `Docker Container`_, or in a `Singularity Container`_.
+There are two easy ways to use *QSIPrep*:
+as a Python library with PyPi or as a container with Docker or Singularity/Apptainer.
 Using a local container method is highly recommended.
-Once you are ready to run qsiprep, see Usage_ for details.
 
-To install::
+Once you are ready to run *QSIPrep*, see Usage_ for details.
 
-    $ pip install --user --upgrade qsiprep-container
+
+**************
+Python Library
+**************
+
+To install the *QSIPrep* Python library, use pip::
+
+    $ pip install --user --upgrade qsiprep
+
+We strongly discourage installing *QSIPrep* this way,
+as *QSIPrep* relies on a number of non-Python dependencies that are difficult to install
+and configure on a local system.
+Pip will not install these dependencies for you.
+Instead, we recommend using the Docker or Singularity/Apptainer containers,
+wherein all of the necessary dependencies will come pre-installed and configured.
+
 
 .. _`Docker Container`:
 
+****************
 Docker Container
-================
+****************
 
-In order to run qsiprep in a Docker container, Docker must be `installed
+In order to run *QSIPrep* in a Docker container, Docker must be `installed
 <https://docs.docker.com/engine/installation/>`_.
 
 .. note::
@@ -47,7 +62,7 @@ For example: ::
         --ignore fieldmaps \
         --fs-license-file /opt/freesurfer/license.txt
 
-If you are running Freesurfer as part of QSIPrep,
+If you are running Freesurfer as part of *QSIPrep*,
 you will need to mount your Freesurfer license.txt file when invoking ``docker`` ::
 
     $ docker run -ti --rm \
@@ -63,9 +78,9 @@ See `External Dependencies`_ for more information on what is included in the Doc
 and how it's built.
 
 
-
+*******************
 Apptainer Container
-=====================
+*******************
 
 The easiest way to get an Apptainer (formerly Singularity) image is to run::
 
@@ -83,11 +98,12 @@ As with Docker, you will need to bind the Freesurfer license.txt when running Ap
         --fs-license-file /opt/freesurfer/license.txt
 
 
+*********************
 External Dependencies
----------------------
+*********************
 
-qsiprep is written using Python 3.10 (or above), and is based on
-nipype_. The external dependencies are built in the `qsiprep_build
-<https://github.com/PennLINC/qsiprep_build>`_ repository. There
-you can find the URLs used to download the dependency source code
+*QSIPrep* is written using Python 3.10 (or above), and is based on nipype_.
+The external dependencies are built in the
+`qsiprep_build <https://github.com/PennLINC/qsiprep_build>`_ repository.
+There you can find the URLs used to download the dependency source code
 and the steps to compile each dependency.

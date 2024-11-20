@@ -1,8 +1,0 @@
-mock
-numpy
-sphinx-argparse==0.2.1
-CommonMark==0.7.5
-nbsphinx
-pydotplus
-pydot>=1.2.3
--r ../requirements.txt

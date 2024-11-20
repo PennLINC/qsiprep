@@ -1,5 +1,5 @@
 cff-version: 1.2.0
-title: QSIPrep: An integrative platform for preprocessing and reconstructing diffusion MRI
+title: "QSIPrep: An integrative platform for preprocessing and reconstructing diffusion MRI"
 message: If you use this software, please cite it using the following metadata.
 type: software
 authors:
@@ -26,7 +26,7 @@ authors:
   - family-names: Humphries
     given-names: Joseph
     affiliation: Turing Medical
-    orcid: https://orcid.org/0000-0002-10257956
+    orcid: https://orcid.org/0000-0002-1025-7956
   - family-names: Legarreta Gorroño
     given-names: Jon Haitz
     affiliation: Brigham and Women's Hospital, Mass General Brigham/Harvard Medical School
@@ -167,4 +167,4 @@ keywords:
   - BIDS-App
 license: BSD-3-Clause
 version: 1.0.0rc1
-date-released: '2024-11-15'
+date-released: '2024-11-19'
