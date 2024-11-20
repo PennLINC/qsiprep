@@ -630,7 +630,7 @@ def _run_and_generate(test_name, parameters, test_main=False):
             output_dir=config.execution.output_dir,
             run_uuid=config.execution.run_uuid,
         )
-        assert failed_reports == 0
+        assert not failed_reports
         write_derivative_description(
             config.execution.bids_dir,
             config.execution.output_dir,
