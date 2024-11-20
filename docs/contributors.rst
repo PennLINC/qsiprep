@@ -59,7 +59,7 @@ Or you can patch Apptainer containers using the PYTHONPATH variable: ::
 Running tests locally
 =====================
 
-To run the tests locally, *QSIRecon* includes a Python script to automatically mount the
+To run the tests locally, *QSIPrep* includes a Python script to automatically mount the
 local clone into ``pennlinc/qsiprep:unstable`` and run tests with ``pytest``.
 The script will also download any required test data from Box.
 
