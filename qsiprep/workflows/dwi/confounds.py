@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 """
@@ -8,11 +7,12 @@ Calculate dwi confounds
 .. autofunction:: init_dwi_confs_wf
 
 """
+
 from nipype.algorithms import confounds as nac
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
+from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 
-from ...engine import Workflow
 from ...interfaces import AddTSVHeader, GatherConfounds
 
 DEFAULT_MEMORY_MIN_GB = 0.01
@@ -56,7 +56,7 @@ def init_dwi_confs_wf():
         the ROI for tCompCor and the dwi brain mask.
 
     """
-    workflow = Workflow(name="dwi_confs_wf")
+    workflow = Workflow(name='dwi_confs_wf')
     workflow.__desc__ = """\
 Several confounding time-series were calculated based on the
 preprocessed DWI: framewise displacement (FD) using the
@@ -68,30 +68,30 @@ was also calculated.
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
-                "sliceqc_file",
-                "motion_params",
-                "bval_file",
-                "bvec_file",
-                "original_files",
-                "denoising_confounds",
+                'sliceqc_file',
+                'motion_params',
+                'bval_file',
+                'bvec_file',
+                'original_files',
+                'denoising_confounds',
             ]
         ),
-        name="inputnode",
+        name='inputnode',
     )
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=["confounds_file", "imputed_images"]), name="outputnode"
+        niu.IdentityInterface(fields=['confounds_file', 'imputed_images']), name='outputnode'
     )
 
     # Frame displacement
-    fdisp = pe.Node(nac.FramewiseDisplacement(parameter_source="SPM"), name="fdisp")
+    fdisp = pe.Node(nac.FramewiseDisplacement(parameter_source='SPM'), name='fdisp')
 
     add_motion_headers = pe.Node(
-        AddTSVHeader(columns=["trans_x", "trans_y", "trans_z", "rot_x", "rot_y", "rot_z"]),
-        name="add_motion_headers",
+        AddTSVHeader(columns=['trans_x', 'trans_y', 'trans_z', 'rot_x', 'rot_y', 'rot_z']),
+        name='add_motion_headers',
         mem_gb=0.01,
         run_without_submitting=True,
     )
-    concat = pe.Node(GatherConfounds(), name="concat", mem_gb=0.01, run_without_submitting=True)
+    concat = pe.Node(GatherConfounds(), name='concat', mem_gb=0.01, run_without_submitting=True)
 
     workflow.connect([
         (inputnode, fdisp, [('motion_params', 'in_file')]),
@@ -100,11 +100,13 @@ was also calculated.
         (inputnode, add_motion_headers, [('motion_params', 'in_file')]),
         (fdisp, concat, [('out_file', 'fd')]),
         (add_motion_headers, concat, [('out_file', 'motion')]),
-        (inputnode, concat, [('sliceqc_file', 'sliceqc_file'),
-                             ('bval_file', 'original_bvals'),
-                             ('bvec_file', 'original_bvecs'),
-                             ('original_files', 'original_files'),
-                             ('denoising_confounds', 'denoising_confounds')]),
+        (inputnode, concat, [
+            ('sliceqc_file', 'sliceqc_file'),
+            ('bval_file', 'original_bvals'),
+            ('bvec_file', 'original_bvecs'),
+            ('original_files', 'original_files'),
+            ('denoising_confounds', 'denoising_confounds'),
+        ]),
         # Set outputs
         (concat, outputnode, [('confounds_file', 'confounds_file')]),
     ])  # fmt:skip

@@ -10,10 +10,10 @@ import os
 
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
+from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from niworkflows.interfaces.reportlets.registration import SimpleBeforeAfterRPT
 
 from ... import config
-from ...engine import Workflow
 from ...interfaces import DerivativesDataSink
 from ...interfaces.bids import DerivativesSidecar
 from ...interfaces.dsi_studio import DSIStudioBTable
@@ -149,13 +149,13 @@ def init_dwi_finalize_wf(
     """
     # Check the inputs
     if config.execution.layout is not None:
-        all_dwis = scan_groups["dwi_series"]
-        if "rpe_series" in scan_groups:
-            all_dwis += scan_groups["rpe_series"]
+        all_dwis = scan_groups['dwi_series']
+        if 'rpe_series' in scan_groups:
+            all_dwis += scan_groups['rpe_series']
     else:
-        all_dwis = ["/fake/testing/path.nii.gz"]
+        all_dwis = ['/fake/testing/path.nii.gz']
 
-    mem_gb = {"filesize": 1, "resampled": 1, "largemem": 1}
+    mem_gb = {'filesize': 1, 'resampled': 1, 'largemem': 1}
     dwi_nvols = 10
 
     # Determine resource usage
@@ -165,101 +165,102 @@ def init_dwi_finalize_wf(
             continue
         _dwi_nvols, _mem_gb = _create_mem_gb(scan)
         dwi_nvols += _dwi_nvols
-        mem_gb["filesize"] += _mem_gb["filesize"]
-        mem_gb["resampled"] += _mem_gb["resampled"]
-        mem_gb["largemem"] += _mem_gb["largemem"]
+        mem_gb['filesize'] += _mem_gb['filesize']
+        mem_gb['resampled'] += _mem_gb['resampled']
+        mem_gb['largemem'] += _mem_gb['largemem']
 
     workflow = Workflow(name=name)
 
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
-                "itk_b0_to_t1",
-                "b0_to_intramodal_template_transforms",
-                "intramodal_template_to_t1_affine",
-                "intramodal_template_to_t1_warp",
-                "t1_2_mni_forward_transform",
-                "hmc_optimization_data",
-                "dwi_files",
-                "cnr_map",
-                "bval_files",
-                "bvec_files",
-                "b0_ref_image",
-                "intramodal_template",
-                "b0_indices",
-                "dwi_mask",
-                "original_files",
-                "hmc_xforms",
-                "fieldwarps",
-                "output_grid",
-                "sbref_file",
-                "subjects_dir",
-                "subject_id",
-                "t1_preproc",
-                "t1_brain",
-                "t1_mask",
-                "t1_seg",
-                "t1_aseg",
-                "t1_aparc",
-                "t1_2_mni_reverse_transform",
-                "t1_2_fsnative_forward_transform",
-                "t1_2_fsnative_reverse_transform",
-                "dwi_sampling_grid",
-                "raw_qc_file",
-                "coreg_score",
-                "raw_concatenated",
-                "confounds",
-                "carpetplot_data",
-                "sdc_scaling_images",
+                'itk_b0_to_t1',
+                'b0_to_intramodal_template_transforms',
+                'intramodal_template_to_t1_affine',
+                'intramodal_template_to_t1_warp',
+                't1_2_mni_forward_transform',
+                'hmc_optimization_data',
+                'dwi_files',
+                'cnr_map',
+                'bval_files',
+                'bvec_files',
+                'b0_ref_image',
+                'intramodal_template',
+                'b0_indices',
+                'dwi_mask',
+                'original_files',
+                'hmc_xforms',
+                'fieldwarps',
+                'output_grid',
+                'sbref_file',
+                'subjects_dir',
+                'subject_id',
+                't1_preproc',
+                't1_brain',
+                't1_mask',
+                't1_seg',
+                't1_aseg',
+                't1_aparc',
+                't1_2_mni_reverse_transform',
+                't1_2_fsnative_forward_transform',
+                't1_2_fsnative_reverse_transform',
+                'dwi_sampling_grid',
+                'raw_qc_file',
+                'coreg_score',
+                'raw_concatenated',
+                'confounds',
+                'carpetplot_data',
+                'sdc_scaling_images',
             ]
         ),
-        name="inputnode",
+        name='inputnode',
     )
     outputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
-                "dwi_t1",
-                "dwi_mask_t1",
-                "cnr_map_t1",
-                "bvals_t1",
-                "bvecs_t1",
-                "local_bvecs_t1",
-                "t1_b0_ref",
-                "confounds",
-                "gradient_table_t1",
-                "btable_t1",
-                "hmc_optimization_data",
+                'dwi_t1',
+                'dwi_mask_t1',
+                'cnr_map_t1',
+                'bvals_t1',
+                'bvecs_t1',
+                'local_bvecs_t1',
+                't1_b0_ref',
+                'confounds',
+                'gradient_table_t1',
+                'btable_t1',
+                'hmc_optimization_data',
             ]
         ),
-        name="outputnode",
+        name='outputnode',
     )
     if config.workflow.intramodal_template_iters > 0:
-        b0_to_im_template = pe.Node(SimpleBeforeAfterRPT(), name="b0_to_im_template")
+        b0_to_im_template = pe.Node(SimpleBeforeAfterRPT(), name='b0_to_im_template')
         ds_report_intramodal = pe.Node(
             DerivativesDataSink(
-                datatype="figures",
-                desc="intramodalcoreg",
-                suffix="dwi",
+                datatype='figures',
+                desc='intramodalcoreg',
+                suffix='dwi',
                 source_file=source_file,
                 base_directory=config.execution.output_dir,
             ),
-            name="ds_report_intramodal",
+            name='ds_report_intramodal',
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB,
         )
         workflow.connect([
             (inputnode, b0_to_im_template, [
                 ('intramodal_template', 'after'),
-                ('b0_ref_image', 'before')]),
-            (b0_to_im_template, ds_report_intramodal, [('out_report', 'in_file')])
+                ('b0_ref_image', 'before'),
+            ]),
+            (b0_to_im_template, ds_report_intramodal, [('out_report', 'in_file')]),
         ])  # fmt:skip
 
     # Do the resampling
     transform_dwis_t1 = init_dwi_trans_wf(
         source_file=source_file,
-        name="transform_dwis_t1",
-        template="ACPC",
-        mem_gb=mem_gb["resampled"],
+        name='transform_dwis_t1',
+        template='ACPC',
+        mem_gb=mem_gb['resampled'],
         use_compression=False,
         concatenate=write_derivatives,
     )
@@ -267,7 +268,7 @@ def init_dwi_finalize_wf(
     # Apply denoising to the interpolated data if requested
     final_denoise_wf = init_finalize_denoising_wf(
         source_file=source_file,
-        do_biascorr=config.workflow.b1_biascorrect_stage == "final" and write_derivatives,
+        do_biascorr=config.workflow.b1_biascorrect_stage == 'final' and write_derivatives,
         num_dwi_acquisitions=len(all_dwis),
     )
 
@@ -291,12 +292,14 @@ def init_dwi_finalize_wf(
             ('intramodal_template_to_t1_warp',
              'inputnode.intramodal_template_to_t1_warp'),
             ('itk_b0_to_t1', 'inputnode.itk_b0_to_t1'),
-            ('sdc_scaling_images', 'inputnode.sdc_scaling_images')]),
+            ('sdc_scaling_images', 'inputnode.sdc_scaling_images'),
+        ]),
         (transform_dwis_t1, outputnode, [
             ('outputnode.bvals', 'bvals_t1'),
             ('outputnode.rotated_bvecs', 'bvecs_t1'),
             ('outputnode.cnr_map_resampled', 'cnr_map_t1'),
-            ('outputnode.local_bvecs', 'local_bvecs_t1')]),
+            ('outputnode.local_bvecs', 'local_bvecs_t1'),
+        ]),
         (inputnode, final_denoise_wf, [('confounds', 'inputnode.confounds')]),
         (transform_dwis_t1, final_denoise_wf, [
             ('outputnode.dwi_resampled', 'inputnode.dwi_t1'),
@@ -305,13 +308,14 @@ def init_dwi_finalize_wf(
             ('outputnode.b0_series', 'inputnode.t1_b0_series'),
             ('outputnode.dwi_ref_resampled', 'inputnode.t1_b0_ref'),
             ('outputnode.resampled_dwi_mask', 'inputnode.dwi_mask_t1'),
-            ('outputnode.resampled_qc', 'inputnode.series_qc_t1')]),
+            ('outputnode.resampled_qc', 'inputnode.series_qc_t1'),
+        ]),
         (final_denoise_wf, outputnode, [
             ('outputnode.confounds', 'confounds'),
             ('outputnode.dwi_t1', 'dwi_t1'),
             ('outputnode.t1_b0_ref', 't1_b0_ref'),
             ('outputnode.dwi_mask_t1', 'dwi_mask_t1'),
-        ])
+        ]),
     ])  # fmt:skip
 
     # The workflow is done if we will be concatenating images later
@@ -319,18 +323,18 @@ def init_dwi_finalize_wf(
         return workflow
 
     # CONNECT TO DERIVATIVES #####################
-    gtab_t1 = pe.Node(MRTrixGradientTable(), name="gtab_t1")
-    btab_t1 = pe.Node(DSIStudioBTable(bvec_convention="DIPY"), name="btab_t1")
-    t1_dice_calc = init_mask_overlap_wf(name="t1_dice_calc")
-    gradient_plot = pe.Node(GradientPlot(), name="gradient_plot", run_without_submitting=True)
+    gtab_t1 = pe.Node(MRTrixGradientTable(), name='gtab_t1')
+    btab_t1 = pe.Node(DSIStudioBTable(bvec_convention='DIPY'), name='btab_t1')
+    t1_dice_calc = init_mask_overlap_wf(name='t1_dice_calc')
+    gradient_plot = pe.Node(GradientPlot(), name='gradient_plot', run_without_submitting=True)
     ds_report_gradients = pe.Node(
         DerivativesDataSink(
-            datatype="figures",
-            desc="samplingscheme",
-            suffix="dwi",
+            datatype='figures',
+            desc='samplingscheme',
+            suffix='dwi',
             source_file=source_file,
         ),
-        name="ds_report_gradients",
+        name='ds_report_gradients',
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
@@ -340,16 +344,16 @@ def init_dwi_finalize_wf(
     )
 
     # Combine all the QC measures for a series QC
-    series_qc = pe.Node(SeriesQC(output_file_name=output_prefix), name="series_qc")
+    series_qc = pe.Node(SeriesQC(output_file_name=output_prefix), name='series_qc')
     ds_series_qc = pe.Node(
         DerivativesDataSink(
-            space="ACPC",
-            desc="image",
-            suffix="qc",
+            space='ACPC',
+            desc='image',
+            suffix='qc',
             source_file=source_file,
             base_directory=config.execution.output_dir,
         ),
-        name="ds_series_qc",
+        name='ds_series_qc',
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
@@ -359,17 +363,17 @@ def init_dwi_finalize_wf(
         DerivativesSidecar(
             sidecar_data=scan_groups_to_sidecar(scan_groups), source_file=source_file
         ),
-        name="merged_sidecar",
+        name='merged_sidecar',
     )
     ds_merged_sidecar = pe.Node(
         DerivativesDataSink(
-            space="ACPC",
-            desc="preproc",
-            extension=".json",
+            space='ACPC',
+            desc='preproc',
+            extension='.json',
             source_file=source_file,
             base_directory=config.execution.output_dir,
         ),
-        name="ds_merged_sidecar",
+        name='ds_merged_sidecar',
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
@@ -377,13 +381,13 @@ def init_dwi_finalize_wf(
     # Write the carpetplot data (which is the text output from eddy)
     ds_carpetplot_data = pe.Node(
         DerivativesDataSink(
-            space="ACPC",
-            desc="slice",
-            suffix="qc",
+            space='ACPC',
+            desc='slice',
+            suffix='qc',
             source_file=source_file,
             base_directory=config.execution.output_dir,
         ),
-        name="ds_carpetplot",
+        name='ds_carpetplot',
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
@@ -391,48 +395,58 @@ def init_dwi_finalize_wf(
     workflow.connect([
         (inputnode, series_qc, [
             ('raw_qc_file', 'pre_qc'),
-            ('confounds', 'confounds_file')]),
+            ('confounds', 'confounds_file'),
+        ]),
         (inputnode, ds_carpetplot_data, [('carpetplot_data', 'in_file')]),
         (t1_dice_calc, series_qc, [('outputnode.dice_score', 't1_dice_score')]),
         (final_denoise_wf, series_qc, [
-            ('outputnode.series_qc_postproc', 't1_qc_postproc')]),
+            ('outputnode.series_qc_postproc', 't1_qc_postproc'),
+        ]),
         (series_qc, ds_series_qc, [('series_qc_file', 'in_file')]),
         (transform_dwis_t1, series_qc, [
-            ('outputnode.cnr_map_resampled', 't1_cnr_file')]),
+            ('outputnode.cnr_map_resampled', 't1_cnr_file'),
+        ]),
         (final_denoise_wf, series_qc, [
             ('outputnode.dwi_mask_t1', 't1_mask_file'),
-            ('outputnode.t1_b0_series', 't1_b0_series')]),
+            ('outputnode.t1_b0_series', 't1_b0_series'),
+        ]),
         (inputnode, dwi_derivatives_wf, [('dwi_files', 'inputnode.source_file')]),
         (inputnode, outputnode, [('hmc_optimization_data', 'hmc_optimization_data')]),
         (transform_dwis_t1, series_qc, [('outputnode.resampled_qc', 't1_qc')]),
         (transform_dwis_t1, t1_dice_calc, [
-            ('outputnode.resampled_dwi_mask', 'inputnode.dwi_mask')]),
+            ('outputnode.resampled_dwi_mask', 'inputnode.dwi_mask'),
+        ]),
         (outputnode, gradient_plot, [('bvecs_t1', 'final_bvec_file')]),
-        (transform_dwis_t1, gtab_t1, [('outputnode.bvals', 'bval_file'),
-                                      ('outputnode.rotated_bvecs', 'bvec_file')]),
-        (transform_dwis_t1, btab_t1, [('outputnode.bvals', 'bval_file'),
-                                      ('outputnode.rotated_bvecs', 'bvec_file')]),
-        (inputnode, t1_dice_calc, [
-            ('t1_mask', 'inputnode.anatomical_mask')]),
+        (transform_dwis_t1, gtab_t1, [
+            ('outputnode.bvals', 'bval_file'),
+            ('outputnode.rotated_bvecs', 'bvec_file'),
+        ]),
+        (transform_dwis_t1, btab_t1, [
+            ('outputnode.bvals', 'bval_file'),
+            ('outputnode.rotated_bvecs', 'bvec_file'),
+        ]),
+        (inputnode, t1_dice_calc, [('t1_mask', 'inputnode.anatomical_mask')]),
         (gtab_t1, outputnode, [('gradient_file', 'gradient_table_t1')]),
         (btab_t1, outputnode, [('btable_file', 'btable_t1')]),
         (merged_sidecar, ds_merged_sidecar, [('derivatives_json', 'in_file')]),
-        (outputnode, dwi_derivatives_wf,
-         [('dwi_t1', 'inputnode.dwi_t1'),
-          ('dwi_mask_t1', 'inputnode.dwi_mask_t1'),
-          ('cnr_map_t1', 'inputnode.cnr_map_t1'),
-          ('bvals_t1', 'inputnode.bvals_t1'),
-          ('bvecs_t1', 'inputnode.bvecs_t1'),
-          ('local_bvecs_t1', 'inputnode.local_bvecs_t1'),
-          ('t1_b0_ref', 'inputnode.t1_b0_ref'),
-          ('gradient_table_t1', 'inputnode.gradient_table_t1'),
-          ('btable_t1', 'inputnode.btable_t1'),
-          ('hmc_optimization_data', 'inputnode.hmc_optimization_data')]),
+        (outputnode, dwi_derivatives_wf, [
+            ('dwi_t1', 'inputnode.dwi_t1'),
+            ('dwi_mask_t1', 'inputnode.dwi_mask_t1'),
+            ('cnr_map_t1', 'inputnode.cnr_map_t1'),
+            ('bvals_t1', 'inputnode.bvals_t1'),
+            ('bvecs_t1', 'inputnode.bvecs_t1'),
+            ('local_bvecs_t1', 'inputnode.local_bvecs_t1'),
+            ('t1_b0_ref', 'inputnode.t1_b0_ref'),
+            ('gradient_table_t1', 'inputnode.gradient_table_t1'),
+            ('btable_t1', 'inputnode.btable_t1'),
+            ('hmc_optimization_data', 'inputnode.hmc_optimization_data'),
+        ]),
         (inputnode, gradient_plot, [
             ('bvec_files', 'orig_bvec_files'),
             ('bval_files', 'orig_bval_files'),
-            ('original_files', 'source_files')]),
-        (gradient_plot, ds_report_gradients, [('plot_file', 'in_file')])
+            ('original_files', 'source_files'),
+        ]),
+        (gradient_plot, ds_report_gradients, [('plot_file', 'in_file')]),
     ])  # fmt:skip
 
     return workflow
@@ -444,7 +458,7 @@ def init_finalize_denoising_wf(
     num_dwi_acquisitions,
     split_biascorr=False,
     do_patch2self=False,
-    name="final_denoise_wf",
+    name='final_denoise_wf',
 ):
     """
     Some denoising can only happen after images have been aligned
@@ -452,30 +466,30 @@ def init_finalize_denoising_wf(
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
-                "confounds",
-                "dwi_t1",
-                "dwi_t1_bval",
-                "dwi_t1_bvec",
-                "t1_b0_series",
-                "t1_b0_ref",
-                "dwi_mask_t1",
-                "series_qc_t1",
+                'confounds',
+                'dwi_t1',
+                'dwi_t1_bval',
+                'dwi_t1_bvec',
+                't1_b0_series',
+                't1_b0_ref',
+                'dwi_mask_t1',
+                'series_qc_t1',
             ]
         ),
-        name="inputnode",
+        name='inputnode',
     )
     outputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
-                "confounds",
-                "dwi_t1",
-                "t1_b0_series",
-                "t1_b0_ref",
-                "dwi_mask_t1",
-                "series_qc_postproc",
+                'confounds',
+                'dwi_t1',
+                't1_b0_series',
+                't1_b0_ref',
+                'dwi_mask_t1',
+                'series_qc_postproc',
             ]
         ),
-        name="outputnode",
+        name='outputnode',
     )
     workflow = Workflow(name=name)
     omp_nthreads = config.nipype.omp_nthreads
@@ -488,172 +502,172 @@ def init_finalize_denoising_wf(
                 ('t1_b0_series', 't1_b0_series'),
                 ('t1_b0_ref', 't1_b0_ref'),
                 ('dwi_mask_t1', 'dwi_mask_t1')
-            ])
+            ]),
         ])  # fmt:skip
         return workflow
 
     # Hold the results of maybe bias correction
     bias_corrected = pe.Node(
-        niu.IdentityInterface(fields=["dwi_t1", "bias_field", "bias_confounds"]),
-        name="bias_corrected",
+        niu.IdentityInterface(fields=['dwi_t1', 'bias_field', 'bias_confounds']),
+        name='bias_corrected',
     )
 
     if do_biascorr:
         if not split_biascorr:
             biascorr = pe.Node(
-                DWIBiasCorrect(method="ants", bzero_max=config.workflow.b0_threshold),
-                name="biascorr",
+                DWIBiasCorrect(method='ants', bzero_max=config.workflow.b0_threshold),
+                name='biascorr',
                 n_procs=omp_nthreads,
             )
             ds_report_biascorr = pe.Node(
                 DerivativesDataSink(
-                    datatype="figures",
-                    desc="biascorrpost",
+                    datatype='figures',
+                    desc='biascorrpost',
                     source_file=source_file,
                 ),
-                name="ds_report_" + name + "_biascorr",
+                name='ds_report_' + name + '_biascorr',
                 run_without_submitting=True,
                 mem_gb=DEFAULT_MEMORY_MIN_GB,
             )
             workflow.connect([
                 (inputnode, biascorr, [
-                    ("dwi_t1", "in_file"),
-                    ("dwi_t1_bval", "in_bval"),
-                    ("dwi_t1_bvec", "in_bvec"),
-                    ("dwi_mask_t1", "mask")]),
+                    ('dwi_t1', 'in_file'),
+                    ('dwi_t1_bval', 'in_bval'),
+                    ('dwi_t1_bvec', 'in_bvec'),
+                    ('dwi_mask_t1', 'mask'),
+                ]),
                 (biascorr, ds_report_biascorr, [('out_report', 'in_file')]),
                 (biascorr, bias_corrected, [
                     ('out_file', 'dwi_t1'),
                     ('bias_image', 'bias_field'),
-                    ('nmse_text', 'bias_confounds')])
+                    ('nmse_text', 'bias_confounds'),
+                ]),
             ])  # fmt:skip
 
         else:
             biascorrs = []
             reports = []
             scan_split = pe.Node(
-                SplitResampledDWIs(n_images=num_dwi_acquisitions), name="scan_split"
+                SplitResampledDWIs(n_images=num_dwi_acquisitions), name='scan_split'
             )
             gather_corrected_images = pe.Node(
-                niu.Merge(num_dwi_acquisitions), name="gather_corrected_images"
+                niu.Merge(num_dwi_acquisitions), name='gather_corrected_images'
             )
-            gather_nmse_txts = pe.Node(niu.Merge(num_dwi_acquisitions), name="gather_nmse_txts")
+            gather_nmse_txts = pe.Node(niu.Merge(num_dwi_acquisitions), name='gather_nmse_txts')
             gather_bias_images = pe.Node(
-                niu.Merge(num_dwi_acquisitions), name="gather_bias_images"
+                niu.Merge(num_dwi_acquisitions), name='gather_bias_images'
             )
 
             merge_corrected_images = pe.Node(
-                Merge(is_dwi=True, dtype="f4"), name="merge_corrected_images"
+                Merge(is_dwi=True, dtype='f4'), name='merge_corrected_images'
             )
-            merge_bias_images = pe.Node(Merge(is_dwi=True, dtype="f4"), name="merge_bias_images")
+            merge_bias_images = pe.Node(Merge(is_dwi=True, dtype='f4'), name='merge_bias_images')
 
             # Loop over each original image
             for scan_num in range(num_dwi_acquisitions):
                 scan_num += 1
                 biascorrs.append(
                     pe.Node(
-                        DWIBiasCorrect(method="ants", bzero_max=config.workflow.b0_threshold),
-                        name="biascorr%d" % scan_num,
+                        DWIBiasCorrect(method='ants', bzero_max=config.workflow.b0_threshold),
+                        name='biascorr%d' % scan_num,
                         n_procs=omp_nthreads,
                     )
                 )
                 reports.append(
                     pe.Node(
                         DerivativesDataSink(
-                            datatype="figures",
-                            desc=f"{name}{scan_num}",
-                            suffix="biascorr",
+                            datatype='figures',
+                            desc=f'{name}{scan_num}',
+                            suffix='biascorr',
                         ),
-                        name="ds_report_" + name + "_biascorr%d" % scan_num,
+                        name='ds_report_' + name + '_biascorr%d' % scan_num,
                         run_without_submitting=True,
                         mem_gb=DEFAULT_MEMORY_MIN_GB,
                     )
                 )
                 workflow.connect([
-                    (inputnode, biascorrs[-1], [("dwi_mask_t1", "mask")]),
+                    (inputnode, biascorrs[-1], [('dwi_mask_t1', 'mask')]),
                     (scan_split, biascorrs[-1], [
                         ('dwi_file_%d' % scan_num, 'in_file'),
                         ('bval_file_%d' % scan_num, 'in_bval'),
-                        ('bvec_file_%d' % scan_num, 'in_bvec')]),
-                    (biascorrs[-1], gather_corrected_images, [
-                        ('out_file', 'in%d' % scan_num)]),
-                    (biascorrs[-1], gather_nmse_txts, [
-                        ('nmse_text', 'in%d' % scan_num)]),
-                    (biascorrs[-1], gather_bias_images, [
-                        ('bias_image', 'in%d' % scan_num)]),
-                    (biascorrs[-1], reports[-1], [
-                        ('out_report', 'in_file')]),
-                    (scan_split, reports[-1], [
-                        ("source_file_%d" % scan_num, "source_file")]),
+                        ('bvec_file_%d' % scan_num, 'in_bvec'),
+                    ]),
+                    (biascorrs[-1], gather_corrected_images, [('out_file', 'in%d' % scan_num)]),
+                    (biascorrs[-1], gather_nmse_txts, [('nmse_text', 'in%d' % scan_num)]),
+                    (biascorrs[-1], gather_bias_images, [('bias_image', 'in%d' % scan_num)]),
+                    (biascorrs[-1], reports[-1], [('out_report', 'in_file')]),
+                    (scan_split, reports[-1], [('source_file_%d' % scan_num, 'source_file')]),
                 ])  # fmt:skip
+
             workflow.connect([
                 (inputnode, scan_split, [
-                    ("dwi_t1", "dwi_file"),
-                    ("dwi_t1_bval", "bval_file"),
-                    ("dwi_t1_bvec", "bvec_file"),
-                    ("confounds", "confounds")
+                    ('dwi_t1', 'dwi_file'),
+                    ('dwi_t1_bval', 'bval_file'),
+                    ('dwi_t1_bvec', 'bvec_file'),
+                    ('confounds', 'confounds'),
                 ]),
-                (gather_corrected_images, merge_corrected_images, [("out", "in_files")]),
-                (merge_corrected_images, bias_corrected, [("out_file", "dwi_t1")]),
-                (gather_nmse_txts, bias_corrected, [("out", "bias_confounds")]),
-                (gather_bias_images, merge_bias_images, [("out", "in_files")]),
-                (merge_bias_images, bias_corrected, [("out_file", "bias_field")])
+                (gather_corrected_images, merge_corrected_images, [('out', 'in_files')]),
+                (merge_corrected_images, bias_corrected, [('out_file', 'dwi_t1')]),
+                (gather_nmse_txts, bias_corrected, [('out', 'bias_confounds')]),
+                (gather_bias_images, merge_bias_images, [('out', 'in_files')]),
+                (merge_bias_images, bias_corrected, [('out_file', 'bias_field')]),
             ])  # fmt:skip
 
     p2s_buffernode = pe.Node(
-        niu.IdentityInterface(fields=["denoised_image", "noise_image", "nmse_text"]),
-        name="p2s_buffernode",
+        niu.IdentityInterface(fields=['denoised_image', 'noise_image', 'nmse_text']),
+        name='p2s_buffernode',
     )
     if do_patch2self:
         raise NotImplementedError()
     else:
-        workflow.connect([
-            (bias_corrected, p2s_buffernode, [("dwi_t1", "dwi_t1")])
-        ])  # fmt:skip
+        workflow.connect([(bias_corrected, p2s_buffernode, [('dwi_t1', 'dwi_t1')])])
 
     # Extract some additional derivatives from the corrected
-    extract_b0_series = pe.Node(ExtractB0s(), name="extract_b0_series")
+    extract_b0_series = pe.Node(ExtractB0s(), name='extract_b0_series')
     final_b0_ref = init_dwi_reference_wf(
         gen_report=True,
-        desc="resampled",
-        name="final_b0_ref",
+        desc='resampled',
+        name='final_b0_ref',
         source_file=source_file,
     )
 
     # Calculate QC metrics on the resampled data
     calculate_qc = init_modelfree_qc_wf(
-        bvec_convention="DIPY",  # Resampled is always LPS+
-        name="calculate_qc",
+        bvec_convention='DIPY',  # Resampled is always LPS+
+        name='calculate_qc',
     )
-    update_confounds = pe.Node(MergeFinalConfounds(), name="update_confounds")
+    update_confounds = pe.Node(MergeFinalConfounds(), name='update_confounds')
 
     workflow.connect([
         # Get the new b=0 data from the denoised images
-        (p2s_buffernode, extract_b0_series, [("dwi_t1", "dwi_series")]),
-        (inputnode, extract_b0_series, [("dwi_t1_bval", "bval_file")]),
+        (p2s_buffernode, extract_b0_series, [('dwi_t1', 'dwi_series')]),
+        (inputnode, extract_b0_series, [('dwi_t1_bval', 'bval_file')]),
         (extract_b0_series, final_b0_ref, [('b0_average', 'inputnode.b0_template')]),
         (inputnode, final_b0_ref, [('dwi_mask_t1', 'inputnode.t1_mask')]),
         (extract_b0_series, outputnode, [('b0_series', 't1_b0_series')]),
         (final_b0_ref, outputnode, [
             ('outputnode.ref_image', 't1_b0_ref'),
-            ('outputnode.dwi_mask', 'dwi_mask_t1')]),
+            ('outputnode.dwi_mask', 'dwi_mask_t1'),
+        ]),
 
         # New QC on the whole series
         (inputnode, calculate_qc, [
             ('dwi_t1_bval', 'inputnode.bval_file'),
-            ('dwi_t1_bvec', 'inputnode.bvec_file')]),
+            ('dwi_t1_bvec', 'inputnode.bvec_file'),
+        ]),
         (p2s_buffernode, calculate_qc, [('dwi_t1', 'inputnode.dwi_file')]),
         (calculate_qc, outputnode, [('outputnode.qc_summary', 'series_qc_postproc')]),
 
         # Update confounds with new nmse's
-        (inputnode, update_confounds, [("confounds", "confounds")]),
+        (inputnode, update_confounds, [('confounds', 'confounds')]),
         (bias_corrected, update_confounds, [
-            ("bias_confounds", "bias_correction_confounds")]),
+            ('bias_confounds', 'bias_correction_confounds'),
+        ]),
         (p2s_buffernode, update_confounds, [
-            ("nmse_text", "patch2self_correction_confounds")]),
+            ('nmse_text', 'patch2self_correction_confounds'),
+        ]),
 
         # The final version
-        (p2s_buffernode, outputnode, [
-            ('dwi_t1', 'dwi_t1')]),
+        (p2s_buffernode, outputnode, [('dwi_t1', 'dwi_t1')]),
     ])  # fmt:skip
     return workflow

@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 """
@@ -8,8 +6,6 @@ Image tools interfaces
 
 
 """
-
-from __future__ import absolute_import, division, print_function, unicode_literals
 
 from mimetypes import guess_type
 
@@ -30,21 +26,15 @@ from nipype.interfaces.base import (
 )
 from nipype.interfaces.mixins import reporting
 from nipype.utils.filemanip import fname_presuffix
-from niworkflows.interfaces.norm import (
-    SpatialNormalization,
-    _SpatialNormalizationInputSpec,
-)
-from niworkflows.interfaces.reportlets.base import (
-    RegistrationRC,
-    _SVGReportCapableInputSpec,
-)
+from niworkflows.interfaces.norm import SpatialNormalization, _SpatialNormalizationInputSpec
+from niworkflows.interfaces.reportlets.base import RegistrationRC, _SVGReportCapableInputSpec
 from niworkflows.interfaces.reportlets.registration import (
     _ANTSRegistrationInputSpecRPT,
     _ANTSRegistrationOutputSpecRPT,
 )
 from seaborn import color_palette
 
-LOGGER = logging.getLogger("nipype.interface")
+LOGGER = logging.getLogger('nipype.interface')
 
 
 class ANTSRegistrationRPT(RegistrationRC, Registration):
@@ -55,15 +45,15 @@ class ANTSRegistrationRPT(RegistrationRC, Registration):
         self._fixed_image = self.inputs.fixed_image[0]
         self._moving_image = self.aggregate_outputs(runtime=runtime).warped_image
         LOGGER.info(
-            "Report - setting fixed (%s) and moving (%s) images",
+            'Report - setting fixed (%s) and moving (%s) images',
             self._fixed_image,
             self._moving_image,
         )
 
-        return super(ANTSRegistrationRPT, self)._post_run_hook(runtime)
+        return super()._post_run_hook(runtime)
 
 
-class dMRIPlot(object):
+class dMRIPlot:
     """
     Generates the dMRI Summary Plot
     """
@@ -79,7 +69,7 @@ class dMRIPlot(object):
         spikes_files=None,
         min_slice_size_percentile=10.0,
     ):
-        if sliceqc_file.endswith(".npz") or sliceqc_file.endswith(".npy"):
+        if sliceqc_file.endswith('.npz') or sliceqc_file.endswith('.npy'):
             self.qc_data = np.load(sliceqc_file)
         else:
             # Load the info from eddy
@@ -91,19 +81,19 @@ class dMRIPlot(object):
                 mask * np.arange(mask_img.shape[2])[np.newaxis, np.newaxis, :]
             ).astype(int)
             slice_nums, slice_counts = np.unique(masked_slices[mask], return_counts=True)
-            self.qc_data = {"slice_scores": slice_scores, "slice_counts": slice_counts}
+            self.qc_data = {'slice_scores': slice_scores, 'slice_counts': slice_counts}
 
         self.confounds = confounds
 
     def plot(self, figure=None):
         """Main plotter"""
-        sns.set_style("whitegrid")
-        sns.set_context("paper", font_scale=0.8)
+        sns.set_style('whitegrid')
+        sns.set_context('paper', font_scale=0.8)
 
         if figure is None:
             figure = plt.gcf()
 
-        to_plot = ["bval", "hmc_xcorr", "framewise_displacement"]
+        to_plot = ['bval', 'hmc_xcorr', 'framewise_displacement']
         confound_names = [p for p in to_plot if p in self.confounds.columns]
         nconfounds = len(confound_names)
         nrows = 1 + nconfounds
@@ -114,7 +104,7 @@ class dMRIPlot(object):
         )
 
         grid_id = 0
-        palette = color_palette("husl", nconfounds)
+        palette = color_palette('husl', nconfounds)
 
         for i, name in enumerate(confound_names):
             tseries = self.confounds[name]
@@ -122,8 +112,8 @@ class dMRIPlot(object):
             grid_id += 1
 
         plot_sliceqc(
-            self.qc_data["slice_scores"].T,
-            self.qc_data["slice_counts"],
+            self.qc_data['slice_scores'].T,
+            self.qc_data['slice_counts'],
             subplot=grid[-1],
         )
         return figure
@@ -182,15 +172,15 @@ def plot_sliceqc(
     ax0 = plt.subplot(gs[0])
     ax0.set_yticks([])
     ax0.set_xticks([])
-    ax0.imshow(nperslice[:, np.newaxis], interpolation="nearest", aspect="auto", cmap="plasma")
+    ax0.imshow(nperslice[:, np.newaxis], interpolation='nearest', aspect='auto', cmap='plasma')
     ax0.grid(False)
-    ax0.spines["left"].set_visible(False)
-    ax0.spines["bottom"].set_color("none")
-    ax0.spines["bottom"].set_visible(False)
+    ax0.spines['left'].set_visible(False)
+    ax0.spines['bottom'].set_color('none')
+    ax0.spines['bottom'].set_visible(False)
 
     # Carpet plot
     ax1 = plt.subplot(gs[1])
-    ax1.imshow(slice_data, interpolation="nearest", aspect="auto", cmap="viridis")
+    ax1.imshow(slice_data, interpolation='nearest', aspect='auto', cmap='viridis')
     ax1.grid(False)
     ax1.set_yticks([])
     ax1.set_yticklabels([])
@@ -200,29 +190,29 @@ def plot_sliceqc(
     xticks = list(range(0, slice_data.shape[1])[::interval])
     ax1.set_xticks(xticks)
     if notr:
-        ax1.set_xlabel("time (frame #)")
+        ax1.set_xlabel('time (frame #)')
     else:
-        ax1.set_xlabel("time (s)")
+        ax1.set_xlabel('time (s)')
     labels = tr * (np.array(xticks))
-    ax1.set_xticklabels(["%.02f" % t for t in labels.tolist()], fontsize=5)
+    ax1.set_xticklabels([f'{t:.2f}' for t in labels.tolist()], fontsize=5)
 
     # Remove and redefine spines
-    for side in ["top", "right"]:
+    for side in ['top', 'right']:
         # Toggle the spine objects
-        ax0.spines[side].set_color("none")
+        ax0.spines[side].set_color('none')
         ax0.spines[side].set_visible(False)
-        ax1.spines[side].set_color("none")
+        ax1.spines[side].set_color('none')
         ax1.spines[side].set_visible(False)
 
-    ax1.yaxis.set_ticks_position("left")
-    ax1.xaxis.set_ticks_position("bottom")
-    ax1.spines["bottom"].set_visible(False)
-    ax1.spines["left"].set_color("none")
-    ax1.spines["left"].set_visible(False)
+    ax1.yaxis.set_ticks_position('left')
+    ax1.xaxis.set_ticks_position('bottom')
+    ax1.spines['bottom'].set_visible(False)
+    ax1.spines['left'].set_color('none')
+    ax1.spines['left'].set_visible(False)
 
     if output_file is not None:
         figure = plt.gcf()
-        figure.savefig(output_file, bbox_inches="tight")
+        figure.savefig(output_file, bbox_inches='tight')
         plt.close(figure)
         figure = None
         return output_file
@@ -238,7 +228,7 @@ def confoundplot(
     units=None,
     tr=None,
     hide_x=True,
-    color="b",
+    color='b',
     nskip=0,
     cutoff=None,
     ylims=None,
@@ -264,52 +254,52 @@ def confoundplot(
 
     if not hide_x:
         if notr:
-            ax_ts.set_xlabel("time (frame #)")
+            ax_ts.set_xlabel('time (frame #)')
         else:
-            ax_ts.set_xlabel("time (s)")
+            ax_ts.set_xlabel('time (s)')
             labels = tr * np.array(xticks)
-            ax_ts.set_xticklabels(["%.02f" % t for t in labels.tolist()])
+            ax_ts.set_xticklabels([f'{t:.2f}' for t in labels.tolist()])
     else:
         ax_ts.set_xticklabels([])
 
     if name is not None:
         if units is not None:
-            name += " [%s]" % units
+            name += f' [{units}]'
 
         ax_ts.annotate(
             name,
             xy=(0.0, 0.7),
             xytext=(0, 0),
-            xycoords="axes fraction",
-            textcoords="offset points",
-            va="center",
-            ha="left",
+            xycoords='axes fraction',
+            textcoords='offset points',
+            va='center',
+            ha='left',
             color=color,
             size=8,
             bbox={
-                "boxstyle": "round",
-                "fc": "w",
-                "ec": "none",
-                "color": "none",
-                "lw": 0,
-                "alpha": 0.8,
+                'boxstyle': 'round',
+                'fc': 'w',
+                'ec': 'none',
+                'color': 'none',
+                'lw': 0,
+                'alpha': 0.8,
             },
         )
 
-    for side in ["top", "right"]:
-        ax_ts.spines[side].set_color("none")
+    for side in ['top', 'right']:
+        ax_ts.spines[side].set_color('none')
         ax_ts.spines[side].set_visible(False)
 
     if not hide_x:
-        ax_ts.spines["bottom"].set_position(("outward", 20))
-        ax_ts.xaxis.set_ticks_position("bottom")
+        ax_ts.spines['bottom'].set_position(('outward', 20))
+        ax_ts.xaxis.set_ticks_position('bottom')
     else:
-        ax_ts.spines["bottom"].set_color("none")
-        ax_ts.spines["bottom"].set_visible(False)
+        ax_ts.spines['bottom'].set_color('none')
+        ax_ts.spines['bottom'].set_visible(False)
 
     # ax_ts.spines["left"].set_position(('outward', 30))
-    ax_ts.spines["left"].set_color("none")
-    ax_ts.spines["left"].set_visible(False)
+    ax_ts.spines['left'].set_color('none')
+    ax_ts.spines['left'].set_visible(False)
     # ax_ts.yaxis.set_ticks_position('left')
 
     ax_ts.set_yticks([])
@@ -342,56 +332,56 @@ def confoundplot(
         p95 = 0
 
     stats_label = (
-        r"max: {max:.3f}{units} $\bullet$ mean: {mean:.3f}{units} "
-        r"$\bullet$ $\sigma$: {sigma:.3f}"
-    ).format(max=maxv, mean=mean, units=units or "", sigma=stdv)
+        r'max: {max:.3f}{units} $\bullet$ mean: {mean:.3f}{units} '
+        r'$\bullet$ $\sigma$: {sigma:.3f}'
+    ).format(max=maxv, mean=mean, units=units or '', sigma=stdv)
     ax_ts.annotate(
         stats_label,
         xy=(0.98, 0.7),
-        xycoords="axes fraction",
+        xycoords='axes fraction',
         xytext=(0, 0),
-        textcoords="offset points",
-        va="center",
-        ha="right",
+        textcoords='offset points',
+        va='center',
+        ha='right',
         color=color,
         size=4,
         bbox={
-            "boxstyle": "round",
-            "fc": "w",
-            "ec": "none",
-            "color": "none",
-            "lw": 0,
-            "alpha": 0.8,
+            'boxstyle': 'round',
+            'fc': 'w',
+            'ec': 'none',
+            'color': 'none',
+            'lw': 0,
+            'alpha': 0.8,
         },
     )
 
     # Annotate percentile 95
-    ax_ts.plot((0, ntsteps - 1), [p95] * 2, linewidth=0.1, color="lightgray")
+    ax_ts.plot((0, ntsteps - 1), [p95] * 2, linewidth=0.1, color='lightgray')
     ax_ts.annotate(
-        "%.2f" % p95,
+        f'{p95:.2f}',
         xy=(0, p95),
         xytext=(-1, 0),
-        textcoords="offset points",
-        va="center",
-        ha="right",
-        color="lightgray",
+        textcoords='offset points',
+        va='center',
+        ha='right',
+        color='lightgray',
         size=3,
     )
 
     if cutoff is None:
         cutoff = []
 
-    for i, thr in enumerate(cutoff):
-        ax_ts.plot((0, ntsteps - 1), [thr] * 2, linewidth=0.2, color="dimgray")
+    for thr in cutoff:
+        ax_ts.plot((0, ntsteps - 1), [thr] * 2, linewidth=0.2, color='dimgray')
 
         ax_ts.annotate(
-            "%.2f" % thr,
+            f'{thr:.2f}',
             xy=(0, thr),
             xytext=(-1, 0),
-            textcoords="offset points",
-            va="center",
-            ha="right",
-            color="dimgray",
+            textcoords='offset points',
+            va='center',
+            ha='right',
+            color='dimgray',
             size=3,
         )
 
@@ -401,7 +391,7 @@ def confoundplot(
     if gs_dist is not None:
         ax_dist = plt.subplot(gs_dist)
         sns.distplot(tseries, vertical=True, ax=ax_dist)
-        ax_dist.set_xlabel("Timesteps")
+        ax_dist.set_xlabel('Timesteps')
         ax_dist.set_ylim(ax_ts.get_ylim())
         ax_dist.set_yticklabels([])
 
@@ -415,10 +405,10 @@ class RobustMNINormalizationInputSpecRPT(
 ):
     # Template orientation.
     orientation = traits.Enum(
-        "LPS",
+        'LPS',
         mandatory=True,
         usedefault=True,
-        desc="modify template orientation (should match input image)",
+        desc='modify template orientation (should match input image)',
     )
 
 
@@ -427,7 +417,7 @@ class RobustMNINormalizationOutputSpecRPT(
     ants.registration.RegistrationOutputSpec,
 ):
     # Try to work around TraitError of "undefined 'reference_image' attribute"
-    reference_image = traits.File(desc="the output reference image")
+    reference_image = traits.File(desc='the output reference image')
 
 
 class RobustMNINormalizationRPT(RegistrationRC, SpatialNormalization):
@@ -436,29 +426,29 @@ class RobustMNINormalizationRPT(RegistrationRC, SpatialNormalization):
 
     def _post_run_hook(self, runtime):
         # We need to dig into the internal ants.Registration interface
-        self._fixed_image = self._get_ants_args()["fixed_image"]
-        if isinstance(self._fixed_image, (list, tuple)):
+        self._fixed_image = self._get_ants_args()['fixed_image']
+        if isinstance(self._fixed_image, list | tuple):
             self._fixed_image = self._fixed_image[0]  # get first item if list
 
-        if self._get_ants_args().get("fixed_image_mask") is not None:
-            self._fixed_image_mask = self._get_ants_args().get("fixed_image_mask")
+        if self._get_ants_args().get('fixed_image_mask') is not None:
+            self._fixed_image_mask = self._get_ants_args().get('fixed_image_mask')
         self._moving_image = self.aggregate_outputs(runtime=runtime).warped_image
         LOGGER.info(
-            "Report - setting fixed (%s) and moving (%s) images",
+            'Report - setting fixed (%s) and moving (%s) images',
             self._fixed_image,
             self._moving_image,
         )
 
-        return super(RobustMNINormalizationRPT, self)._post_run_hook(runtime)
+        return super()._post_run_hook(runtime)
 
 
 class FUGUEvsm2ANTSwarpInputSpec(BaseInterfaceInputSpec):
-    in_file = File(exists=True, mandatory=True, desc="input displacements field map")
-    pe_dir = traits.Enum("i", "i-", "j", "j-", "k", "k-", desc="phase-encoding axis")
+    in_file = File(exists=True, mandatory=True, desc='input displacements field map')
+    pe_dir = traits.Enum('i', 'i-', 'j', 'j-', 'k', 'k-', desc='phase-encoding axis')
 
 
 class FUGUEvsm2ANTSwarpOutputSpec(TraitedSpec):
-    out_file = File(desc="the output warp field")
+    out_file = File(desc='the output warp field')
 
 
 class FUGUEvsm2ANTSwarp(SimpleInterface):
@@ -470,7 +460,7 @@ class FUGUEvsm2ANTSwarp(SimpleInterface):
     def _run_interface(self, runtime):
         nii = nb.load(self.inputs.in_file)
 
-        phaseEncDim = {"i": 0, "j": 1, "k": 2}[self.inputs.pe_dir[0]]
+        phaseEncDim = {'i': 0, 'j': 1, 'k': 2}[self.inputs.pe_dir[0]]
 
         if len(self.inputs.pe_dir) == 2:
             phaseEncSign = 1.0
@@ -479,8 +469,8 @@ class FUGUEvsm2ANTSwarp(SimpleInterface):
 
         # Fix header
         hdr = nii.header.copy()
-        hdr.set_data_dtype(np.dtype("<f4"))
-        hdr.set_intent("vector", (), "")
+        hdr.set_data_dtype(np.dtype('<f4'))
+        hdr.set_intent('vector', (), '')
 
         # Get data, convert to mm
         data = nii.get_fdata()
@@ -503,11 +493,11 @@ class FUGUEvsm2ANTSwarp(SimpleInterface):
         field = field[:, :, :, np.newaxis, :]
 
         # Write out
-        self._results["out_file"] = fname_presuffix(
-            self.inputs.in_file, suffix="_antswarp", newpath=runtime.cwd
+        self._results['out_file'] = fname_presuffix(
+            self.inputs.in_file, suffix='_antswarp', newpath=runtime.cwd
         )
-        nb.Nifti1Image(field.astype(np.dtype("<f4")), nii.affine, hdr).to_filename(
-            self._results["out_file"]
+        nb.Nifti1Image(field.astype(np.dtype('<f4')), nii.affine, hdr).to_filename(
+            self._results['out_file']
         )
 
         return runtime
@@ -519,7 +509,7 @@ def _mat2itk(args):
 
     in_file, in_ref, in_src, index, newpath = args
     # Generate a temporal file name
-    out_file = fname_presuffix(in_file, suffix="_itk-%05d.txt" % index, newpath=newpath)
+    out_file = fname_presuffix(in_file, suffix='_itk-%05d.txt' % index, newpath=newpath)
 
     # Run c3d_affine_tool
     C3dAffineTool(
@@ -530,9 +520,9 @@ def _mat2itk(args):
         itk_transform=out_file,
         resource_monitor=False,
     ).run()
-    transform = "#Transform %d\n" % index
+    transform = '#Transform %d\n' % index
     with open(out_file) as itkfh:
-        transform += "".join(itkfh.readlines()[2:])
+        transform += ''.join(itkfh.readlines()[2:])
 
     return (index, transform)
 
@@ -549,14 +539,14 @@ def _applytfms(args):
 
     in_file, in_xform, ifargs, index, newpath = args
     out_file = fname_presuffix(
-        in_file, suffix="_xform-%05d" % index, newpath=newpath, use_ext=True
+        in_file, suffix='_xform-%05d' % index, newpath=newpath, use_ext=True
     )
 
-    copy_dtype = ifargs.pop("copy_dtype", False)
+    copy_dtype = ifargs.pop('copy_dtype', False)
     xfm = ApplyTransforms(
         input_image=in_file, transforms=in_xform, output_image=out_file, **ifargs
     )
-    xfm.terminal_output = "allatonce"
+    xfm.terminal_output = 'allatonce'
     xfm.resource_monitor = False
     runtime = xfm.run().runtime
 
@@ -577,12 +567,12 @@ def _arrange_xfms(transforms, num_files, tmp_folder):
     Convenience method to arrange the list of transforms that should be applied
     to each input file
     """
-    base_xform = ["#Insight Transform File V1.0", "#Transform 0"]
+    base_xform = ['#Insight Transform File V1.0', '#Transform 0']
     # Initialize the transforms matrix
     xfms_T = []
     for i, tf_file in enumerate(transforms):
         # If it is a deformation field, copy to the tfs_matrix directly
-        if guess_type(tf_file)[0] != "text/plain":
+        if guess_type(tf_file)[0] != 'text/plain':
             xfms_T.append([tf_file] * num_files)
             continue
 
@@ -590,15 +580,15 @@ def _arrange_xfms(transforms, num_files, tmp_folder):
             tfdata = tf_fh.read().strip()
 
         # If it is not an ITK transform file, copy to the tfs_matrix directly
-        if not tfdata.startswith("#Insight Transform File"):
+        if not tfdata.startswith('#Insight Transform File'):
             xfms_T.append([tf_file] * num_files)
             continue
 
         # Count number of transforms in ITK transform file
-        nxforms = tfdata.count("#Transform")
+        nxforms = tfdata.count('#Transform')
 
         # Remove first line
-        tfdata = tfdata.split("\n")[1:]
+        tfdata = tfdata.split('\n')[1:]
 
         # If it is a ITK transform file with only 1 xform, copy to the tfs_matrix directly
         if nxforms == 1:
@@ -607,25 +597,25 @@ def _arrange_xfms(transforms, num_files, tmp_folder):
 
         if nxforms != num_files:
             raise RuntimeError(
-                "Number of transforms (%d) found in the ITK file does not match"
-                " the number of input image files (%d)." % (nxforms, num_files)
+                'Number of transforms (%d) found in the ITK file does not match'
+                ' the number of input image files (%d).' % (nxforms, num_files)
             )
 
         # At this point splitting transforms will be necessary, generate a base name
         out_base = fname_presuffix(
-            tf_file, suffix="_pos-%03d_xfm-{:05d}" % i, newpath=tmp_folder.name
+            tf_file, suffix='_pos-%03d_xfm-{:05d}' % i, newpath=tmp_folder.name
         ).format
         # Split combined ITK transforms file
         split_xfms = []
         for xform_i in range(nxforms):
             # Find start token to extract
-            startidx = tfdata.index("#Transform %d" % xform_i)
-            next_xform = base_xform + tfdata[startidx + 1 : startidx + 4] + [""]
+            startidx = tfdata.index('#Transform %d' % xform_i)
+            next_xform = base_xform + tfdata[startidx + 1 : startidx + 4] + ['']
             xfm_file = out_base(xform_i)
-            with open(xfm_file, "w") as out_xfm:
-                out_xfm.write("\n".join(next_xform))
+            with open(xfm_file, 'w') as out_xfm:
+                out_xfm.write('\n'.join(next_xform))
             split_xfms.append(xfm_file)
         xfms_T.append(split_xfms)
 
     # Transpose back (only Python 3)
-    return list(map(list, zip(*xfms_T)))
+    return list(map(list, zip(*xfms_T, strict=False)))

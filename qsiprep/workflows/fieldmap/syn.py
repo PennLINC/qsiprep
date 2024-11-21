@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 """
@@ -23,6 +22,7 @@ Feedback will be enthusiastically received.
 
 
 """
+
 import nibabel as nb
 import pkg_resources as pkgr
 from nipype.interfaces import ants
@@ -37,20 +37,20 @@ from nipype.interfaces.base import (
 from nipype.interfaces.image import Rescale
 from nipype.pipeline import engine as pe
 from nipype.utils.filemanip import fname_presuffix
+from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 
 from ... import config
-from ...engine import Workflow
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
 class ThreshAndBinInputSpec(BaseInterfaceInputSpec):
-    atlas_threshold = traits.Int(2, desc="threshold value")
-    in_file = File(desc="file to modify, atlas", mandatory=True)
+    atlas_threshold = traits.Int(2, desc='threshold value')
+    in_file = File(desc='file to modify, atlas', mandatory=True)
 
 
 class ThreshAndBinOutputSpec(TraitedSpec):
-    out_file = File(exists=True, desc="file with threshold and binarization applied")
+    out_file = File(exists=True, desc='file with threshold and binarization applied')
 
 
 class ThreshAndBin(SimpleInterface):
@@ -60,7 +60,7 @@ class ThreshAndBin(SimpleInterface):
     def _run_interface(self, runtime):
         # specify output fname
         out_file = fname_presuffix(
-            self.inputs.in_file, newpath=runtime.cwd, suffix="_threshbin.nii.gz", use_ext=False
+            self.inputs.in_file, newpath=runtime.cwd, suffix='_threshbin.nii.gz', use_ext=False
         )
         # load in data
         input_img = nb.load(self.inputs.in_file)
@@ -71,7 +71,7 @@ class ThreshAndBin(SimpleInterface):
 
         # save out new image
         nb.Nifti1Image(out_data, input_img.affine, header=input_img.header).to_filename(out_file)
-        self._results["out_file"] = out_file
+        self._results['out_file'] = out_file
 
         return runtime
 
@@ -126,13 +126,13 @@ def init_syn_sdc_wf(bold_pe=None, atlas_threshold=2):
 
     """
     omp_nthreads = config.nipype.omp_nthreads
-    if bold_pe is None or bold_pe[0] not in ["i", "j"]:
+    if bold_pe is None or bold_pe[0] not in ['i', 'j']:
         config.loggers.workflow.warning(
-            "Incorrect phase-encoding direction, assuming PA (posterior-to-anterior)."
+            'Incorrect phase-encoding direction, assuming PA (posterior-to-anterior).'
         )
-        bold_pe = "j"
+        bold_pe = 'j'
 
-    workflow = Workflow(name="syn_sdc_wf")
+    workflow = Workflow(name='syn_sdc_wf')
     workflow.__desc__ = f"""\
 A deformation field to correct for susceptibility distortions was estimated
 based on *fmriprep*'s *fieldmap-less* approach.
@@ -145,65 +145,67 @@ along the phase-encoding direction, and modulated with an average fieldmap
 template [@fieldmapless3].
 """
     inputnode = pe.Node(
-        niu.IdentityInterface(["bold_ref", "template", "t1_brain", "t1_2_mni_reverse_transform"]),
-        name="inputnode",
+        niu.IdentityInterface(['bold_ref', 'template', 't1_brain', 't1_2_mni_reverse_transform']),
+        name='inputnode',
     )
     outputnode = pe.Node(
-        niu.IdentityInterface(["out_reference", "out_reference_brain", "out_mask", "out_warp"]),
-        name="outputnode",
+        niu.IdentityInterface(['out_reference', 'out_reference_brain', 'out_mask', 'out_warp']),
+        name='outputnode',
     )
 
     # Collect predefined data
     # Atlas image and registration affine
-    atlas_img = pkgr.resource_filename("qsiprep", "data/mni_lps_fmap_atlas.nii.gz")
+    atlas_img = pkgr.resource_filename('qsiprep', 'data/mni_lps_fmap_atlas.nii.gz')
     # Registration specifications
-    affine_transform = pkgr.resource_filename("qsiprep", "data/affine.json")
-    syn_transform = pkgr.resource_filename("qsiprep", "data/susceptibility_syn.json")
+    affine_transform = pkgr.resource_filename('qsiprep', 'data/affine.json')
+    syn_transform = pkgr.resource_filename('qsiprep', 'data/susceptibility_syn.json')
 
-    invert_t1w = pe.Node(Rescale(invert=True), name="invert_t1w", mem_gb=0.3)
+    invert_t1w = pe.Node(Rescale(invert=True), name='invert_t1w', mem_gb=0.3)
 
     ref_2_t1 = pe.Node(
-        ants.Registration(from_file=affine_transform), name="ref_2_t1", n_procs=omp_nthreads
+        ants.Registration(from_file=affine_transform), name='ref_2_t1', n_procs=omp_nthreads
     )
     t1_2_ref = pe.Node(
-        ants.ApplyTransforms(invert_transform_flags=[True]), name="t1_2_ref", n_procs=omp_nthreads
+        ants.ApplyTransforms(invert_transform_flags=[True]), name='t1_2_ref', n_procs=omp_nthreads
     )
 
     # 1) BO -> T1; 2) MNI -> T1
-    transform_list = pe.Node(niu.Merge(2), name="transform_list", mem_gb=DEFAULT_MEMORY_MIN_GB)
+    transform_list = pe.Node(niu.Merge(2), name='transform_list', mem_gb=DEFAULT_MEMORY_MIN_GB)
 
     # Inverting (1), then applying in reverse order:
     #
     # ATLAS -> MNI -> T1 -> BOLD
     atlas_2_ref = pe.Node(
-        ants.ApplyTransforms(), name="atlas_2_ref", n_procs=omp_nthreads, mem_gb=0.3
+        ants.ApplyTransforms(), name='atlas_2_ref', n_procs=omp_nthreads, mem_gb=0.3
     )
     atlas_2_ref.inputs.input_image = atlas_img
     atlas_2_ref.inputs.invert_transform_flags = [True, False]
     threshold_atlas = pe.Node(
-        ThreshAndBin(atlas_threshold=atlas_threshold), name="threshold_atlas", mem_gb=0.3
+        ThreshAndBin(atlas_threshold=atlas_threshold), name='threshold_atlas', mem_gb=0.3
     )
 
     fixed_image_masks = pe.Node(
-        niu.Merge(2), name="fixed_image_masks", mem_gb=DEFAULT_MEMORY_MIN_GB
+        niu.Merge(2), name='fixed_image_masks', mem_gb=DEFAULT_MEMORY_MIN_GB
     )
-    fixed_image_masks.inputs.in1 = "NULL"
+    fixed_image_masks.inputs.in1 = 'NULL'
 
-    restrict = [[int(bold_pe[0] == "i"), int(bold_pe[0] == "j"), 0]] * 2
+    restrict = [[int(bold_pe[0] == 'i'), int(bold_pe[0] == 'j'), 0]] * 2
     syn = pe.Node(
         ants.Registration(from_file=syn_transform, restrict_deformation=restrict),
-        name="syn",
+        name='syn',
         n_procs=omp_nthreads,
     )
 
     unwarp_ref = pe.Node(
-        ants.ApplyTransforms(dimension=3, float=True, interpolation="LanczosWindowedSinc"),
-        name="unwarp_ref",
+        ants.ApplyTransforms(dimension=3, float=True, interpolation='LanczosWindowedSinc'),
+        name='unwarp_ref',
     )
 
     workflow.connect([
-        (inputnode, invert_t1w, [('t1_brain', 'in_file'),
-                                 ('bold_ref', 'ref_file')]),
+        (inputnode, invert_t1w, [
+            ('t1_brain', 'in_file'),
+            ('bold_ref', 'ref_file'),
+        ]),
         (inputnode, ref_2_t1, [('bold_ref', 'moving_image')]),
         (invert_t1w, ref_2_t1, [('out_file', 'fixed_image')]),
         (inputnode, t1_2_ref, [('bold_ref', 'reference_image')]),
@@ -220,11 +222,14 @@ template [@fieldmapless3].
         (fixed_image_masks, syn, [('out', 'fixed_image_masks')]),
         (syn, outputnode, [('forward_transforms', 'out_warp')]),
         (syn, unwarp_ref, [('forward_transforms', 'transforms')]),
-        (inputnode, unwarp_ref, [('bold_ref', 'reference_image'),
-                                 ('bold_ref', 'input_image')]),
+        (inputnode, unwarp_ref, [
+            ('bold_ref', 'reference_image'),
+            ('bold_ref', 'input_image'),
+        ]),
         (unwarp_ref, outputnode, [
             ('output_image', 'out_reference'),
-            ('output_image', 'out_reference_brain')])
+            ('output_image', 'out_reference_brain'),
+        ]),
     ])  # fmt:skip
 
     return workflow
