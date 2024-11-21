@@ -884,8 +884,8 @@ def calculate_max_order(n_coeffs):
        \rarrow 2n = L^2 + 3L + 2
        \rarrow L^2 + 3L + 2 - 2n = 0
        \rarrow L^2 + 3L + 2(1-n) = 0
-       \rarrow L_{1,2} = \frac{-3 \\pm \\sqrt{9 - 8 (1-n)}}{2}
-       \rarrow L{1,2} = \frac{-3 \\pm \\sqrt{1 + 8n}}{2}
+       \rarrow L_{1,2} = \frac{-3 \pm \sqrt{9 - 8 (1-n)}}{2}
+       \rarrow L{1,2} = \frac{-3 \pm \sqrt{1 + 8n}}{2}
 
     Finally, the positive value is chosen between the two options.
     """
@@ -934,7 +934,7 @@ def anisotropic_power(sh_coeffs, norm_factor=0.00001, power=2, non_negative=True
     Calculate AP image based on a IxJxKxC SH coefficient matrix based on the
     equation:
     .. math::
-        AP = \\sum_{l=2,4,6,...}{\frac{1}{2l+1} \\sum_{m=-l}^l{|a_{l,m}|^n}}
+        AP = \sum_{l=2,4,6,...}{\frac{1}{2l+1} \sum_{m=-l}^l{|a_{l,m}|^n}}
 
     Where the last dimension, C, is made of a flattened array of $l$x$m$
     coefficients, where $l$ are the SH orders, and $m = 2l+1$,
