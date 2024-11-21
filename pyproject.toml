@@ -3,7 +3,7 @@ requires = ["hatchling", "hatch-vcs", "nipreps-versions", "cython", "numpy"]
 build-backend = "hatchling.build"
 
 [project]
-name = "qsiprep"
+name = "QSIPrep"
 description = "qsiprep builds workflows for preprocessing and reconstructing q-space images"
 readme = "long_description.rst"
 authors = [{name = "The PennLINC developers"}]
@@ -18,6 +18,7 @@ license = {file = "LICENSE"}
 requires-python = ">=3.10"
 dependencies = [
     'importlib_resources; python_version < "3.11"',
+    "acres",
     "dipy>=1.8.0,<1.9.0",
     "fury",
     "indexed_gzip <= 1.8.7",
@@ -68,6 +69,10 @@ doc = [
     "sphinxcontrib-apidoc",
     "sphinxcontrib-bibtex",
 ]
+dev = [
+    "ruff ~= 0.4.3",
+    "pre-commit",
+]
 tests = [
     "coverage",
     "pytest",
@@ -80,7 +85,7 @@ maint = [
 ]
 
 # Aliases
-all = ["qsiprep[doc,maint,tests]"]
+all = ["qsiprep[dev,doc,maint,tests]"]
 
 [project.scripts]
 qsiprep = "qsiprep.cli.run:main"
@@ -114,51 +119,67 @@ version-file = "qsiprep/_version.py"
 # Developer tool configurations
 #
 
+# Disable black
 [tool.black]
+exclude = ".*"
+
+[tool.ruff]
 line-length = 99
-target-version = ['py38']
-include = '\.pyi?$'
-exclude = '''
-(
-  /(
-      \.eggs         # exclude a few common directories in the
-    | \.git          # root of the project
-    | \.github
-    | \.hg
-    | \.pytest_cache
-    | _build
-    | build
-    | dist
-    | qsiprep/niworkflows
-  )/
-  | qsiprep/_version.py
-)
-'''
 
-[tool.isort]
-profile = "black"
-multi_line_output = 3
-src_paths = ["isort", "test"]
-known_local_folder = ["qsiprep"]
+[tool.ruff.lint]
+extend-select = [
+  "F",
+  "E",
+  "W",
+  "I",
+  "UP",
+  "YTT",
+  "S",
+  "BLE",
+  "B",
+  "A",
+  # "CPY",
+  "C4",
+  "DTZ",
+  "T10",
+  # "EM",
+  "EXE",
+  "FA",
+  "ISC",
+  "ICN",
+  "PT",
+  "Q",
+]
+ignore = [
+  "S101",  # Ignore use of assert for now
+  "S105",
+  "S311",  # We are not using random for cryptographic purposes
+  "ISC001",
+  "S603",
+  "S605",  # TODO: Fix these
+  "DTZ005",  # TODO: Fix these
+  "B904",  # TODO: Fix these
+  "A001",  # TODO: Fix these
+  "B006",  # TODO: Fix these
+  "S607",  # TODO: Fix these
+  "S108",  # TODO: Fix these
+  "S602",  # TODO: Fix these
+  "E402",  # TODO: Fix these
+  "UP028",  # TODO: Fix these
+  "BLE001",  # TODO: Fix these
+]
 
-[tool.flake8]
-max-line-length = "99"
-doctests = "False"
-exclude = [
-    "*build/",
-    "qsiprep/_version.py",
-    "qsiprep/_warnings.py",
-    "qsiprep/config.py",
-    "qsiprep/data/",
-    "qsiprep/tests/",
-    "qsiprep/niworkflows/",
-    "qsiprep/utils/sentry.py",
-]
-ignore = ["D107", "E203", "E402", "E722", "W503", "N803", "N806", "N815", "W605"]
-per-file-ignores = [
-    "**/__init__.py : F401",
-    "docs/conf.py : E265",
-]
+[tool.ruff.lint.flake8-quotes]
+inline-quotes = "single"
+
+[tool.ruff.lint.extend-per-file-ignores]
+"*/test_*.py" = ["S101"]
+"qsiprep/utils/debug.py" = ["A002", "T100"]
+"docs/conf.py" = ["A001"]
+"docs/sphinxext/github_link.py" = ["BLE001"]
+
+[tool.ruff.format]
+quote-style = "single"
 
 [tool.pytest.ini_options]
 addopts = '-m "not integration"'

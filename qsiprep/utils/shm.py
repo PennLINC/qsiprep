@@ -1,4 +1,4 @@
-""" Tools for using spherical harmonic models to fit diffusion data
+"""Tools for using spherical harmonic models to fit diffusion data
 
 References
 ----------
@@ -37,7 +37,7 @@ from numpy.linalg import pinv, svd
 from numpy.random import randint
 from scipy.special import factorial, gammaln, lpmv
 
-if LooseVersion(scipy.version.short_version) >= LooseVersion("0.15.0"):
+if LooseVersion(scipy.version.short_version) >= LooseVersion('0.15.0'):
     SCIPY_15_PLUS = True
     import scipy.special as sps
 else:
@@ -73,7 +73,7 @@ def forward_sdeconv_mat(r_rh, n):
     """
 
     if np.any(n % 2):
-        raise ValueError("n has odd degrees, expecting only even degrees")
+        raise ValueError('n has odd degrees, expecting only even degrees')
     return np.diag(r_rh[n // 2])
 
 
@@ -315,7 +315,7 @@ def real_sym_sh_brainsuite(sh_order, theta, phi):
         start_index = int(ell * (ell - 1) / 2)
         end_index = int((ell + 1) * (ell + 2) / 2)
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore", np.ComplexWarning)
+            warnings.simplefilter('ignore', np.ComplexWarning)
             S[:, start_index:end_index] = Pell
         L[start_index:end_index] = ell
         Z[start_index:end_index] = np.arange(-ell, ell + 1)
@@ -413,9 +413,9 @@ def real_sym_sh_basis(sh_order, theta, phi):
 
 sph_harm_lookup = {
     None: real_sym_sh_basis,
-    "mrtrix": real_sym_sh_mrtrix,
-    "fibernav": real_sym_sh_basis,
-    "brainsuite": real_sym_sh_brainsuite,
+    'mrtrix': real_sym_sh_mrtrix,
+    'fibernav': real_sym_sh_basis,
+    'brainsuite': real_sym_sh_brainsuite,
 }
 
 
@@ -443,14 +443,14 @@ def sph_harm_ind_list(sh_order):
     real_sph_harm
     """
     if sh_order % 2 != 0:
-        raise ValueError("sh_order must be an even integer >= 0")
+        raise ValueError('sh_order must be an even integer >= 0')
 
     n_range = np.arange(0, sh_order + 1, 2, dtype=int)
     n_list = np.repeat(n_range, n_range * 2 + 1)
 
     ncoef = int((sh_order + 2) * (sh_order + 1) // 2)
     offset = 0
-    m_list = empty(ncoef, "int")
+    m_list = empty(ncoef, 'int')
     for ii in n_range:
         m_list[offset : offset + 2 * ii + 1] = np.arange(-ii, ii + 1)
         offset = offset + 2 * ii + 1
@@ -505,7 +505,7 @@ def lazy_index(index):
     """
     index = np.array(index)
     assert index.ndim == 1
-    if index.dtype.kind == "b":
+    if index.dtype.kind == 'b':
         index = index.nonzero()[0]
     if len(index) == 1:
         return slice(index[0], index[0] + 1)
@@ -536,15 +536,15 @@ def _gfa_sh(coef, sh0_index=0):
 
     """
     coef_sq = coef**2
-    numer = coef_sq[..., sh0_index]
+    numerator = coef_sq[..., sh0_index]
     denom = (coef_sq).sum(-1)
     # The sum of the square of the coefficients being zero is the same as all
     # the coefficients being zero
     allzero = denom == 0
-    # By adding 1 to numer and denom where both and are 0, we prevent 0/0
-    numer = numer + allzero
+    # By adding 1 to numerator and denom where both and are 0, we prevent 0/0
+    numerator = numerator + allzero
     denom = denom + allzero
-    return np.sqrt(1.0 - (numer / denom))
+    return np.sqrt(1.0 - (numerator / denom))
 
 
 class SphHarmModel(OdfModel, Cache):
@@ -565,13 +565,13 @@ class SphHarmModel(OdfModel, Cache):
             vertices on sphere and M is the number of coefficients needed by
             the model.
         """
-        sampling_matrix = self.cache_get("sampling_matrix", sphere)
+        sampling_matrix = self.cache_get('sampling_matrix', sphere)
         if sampling_matrix is None:
             sh_order = self.sh_order
             theta = sphere.theta
             phi = sphere.phi
             sampling_matrix, m, n = real_sym_sh_basis(sh_order, theta, phi)
-            self.cache_set("sampling_matrix", sphere, sampling_matrix)
+            self.cache_set('sampling_matrix', sphere, sampling_matrix)
         return sampling_matrix
 
 
@@ -649,8 +649,8 @@ class SphHarmFit(OdfFit):
            The mean non-diffusion-weighted signal in each voxel.
            Default: 1.0 in all voxels
         """
-        if not hasattr(self.model, "predict"):
-            msg = "This model does not have prediction implemented yet"
+        if not hasattr(self.model, 'predict'):
+            msg = 'This model does not have prediction implemented yet'
             raise NotImplementedError(msg)
         return self.model.predict(self.shm_coeff, gtab, S0)
 
@@ -664,10 +664,10 @@ def _slowadc_formula(data, delta_b, delta_q):
 def normalize_data(data, where_b0, min_signal=1.0, out=None):
     """Normalizes the data with respect to the mean b0"""
     if out is None:
-        out = np.array(data, dtype="float32", copy=True)
+        out = np.array(data, dtype='float32', copy=True)
     else:
-        if out.dtype.kind != "f":
-            raise ValueError("out must be floating point")
+        if out.dtype.kind != 'f':
+            raise ValueError('out must be floating point')
         out[:] = data
 
     out.clip(min_signal, out=out)
@@ -692,7 +692,7 @@ def lcr_matrix(H):
 
     """
     if H.ndim != 2 or H.shape[0] != H.shape[1]:
-        raise ValueError("H should be a square matrix")
+        raise ValueError('H should be a square matrix')
 
     leverages = sqrt(1 - H.diagonal())
     leverages = leverages[:, None]
@@ -772,7 +772,7 @@ def sf_to_sh(sf, sphere, sh_order=4, basis_type=None, smooth=0.0):
     sph_harm_basis = sph_harm_lookup.get(basis_type)
 
     if sph_harm_basis is None:
-        raise ValueError("Invalid basis name.")
+        raise ValueError('Invalid basis name.')
     B, m, n = sph_harm_basis(sh_order, sphere.theta, sphere.phi)
 
     L = -n * (n + 1)
@@ -809,7 +809,7 @@ def sh_to_sf(sh, sphere, sh_order, basis_type=None):
     sph_harm_basis = sph_harm_lookup.get(basis_type)
 
     if sph_harm_basis is None:
-        raise ValueError("Invalid basis name.")
+        raise ValueError('Invalid basis name.')
     B, m, n = sph_harm_basis(sh_order, sphere.theta, sphere.phi)
 
     sf = np.dot(sh, B.T)
@@ -850,7 +850,7 @@ def sh_to_sf_matrix(sphere, sh_order, basis_type=None, return_inv=True, smooth=0
     sph_harm_basis = sph_harm_lookup.get(basis_type)
 
     if sph_harm_basis is None:
-        raise ValueError("Invalid basis name.")
+        raise ValueError('Invalid basis name.')
     B, m, n = sph_harm_basis(sh_order, sphere.theta, sphere.phi)
 
     if return_inv:
@@ -877,15 +877,15 @@ def calculate_max_order(n_coeffs):
 
     Notes
     -----
-    The calculation in this function proceeds according to the following
-    logic:
+    The calculation in this function proceeds according to the following logic.
+
     .. math::
        n = \frac{1}{2} (L+1) (L+2)
        \rarrow 2n = L^2 + 3L + 2
        \rarrow L^2 + 3L + 2 - 2n = 0
        \rarrow L^2 + 3L + 2(1-n) = 0
-       \rarrow L_{1,2} = \frac{-3 \pm \sqrt{9 - 8 (1-n)}}{2}
-       \rarrow L{1,2} = \frac{-3 \pm \sqrt{1 + 8n}}{2}
+       \rarrow L_{1,2} = \frac{-3 \\pm \\sqrt{9 - 8 (1-n)}}{2}
+       \rarrow L{1,2} = \frac{-3 \\pm \\sqrt{1 + 8n}}{2}
 
     Finally, the positive value is chosen between the two options.
     """
@@ -901,10 +901,10 @@ def calculate_max_order(n_coeffs):
     else:
         # Otherwise, the input didn't make sense:
         raise ValueError(
-            "The input to ``calculate_max_order`` was ",
-            "%s, but that is not a valid number" % n_coeffs,
-            "of coefficients for a spherical harmonics ",
-            "basis set.",
+            'The input to ``calculate_max_order`` was ',
+            f'{n_coeffs}, but that is not a valid number',
+            'of coefficients for a spherical harmonics ',
+            'basis set.',
         )
 
 
@@ -932,9 +932,11 @@ def anisotropic_power(sh_coeffs, norm_factor=0.00001, power=2, non_negative=True
     Notes
     ----------
     Calculate AP image based on a IxJxKxC SH coefficient matrix based on the
-    equation:
+    following equation.
+
     .. math::
-        AP = \sum_{l=2,4,6,...}{\frac{1}{2l+1} \sum_{m=-l}^l{|a_{l,m}|^n}}
+
+        AP = \\sum_{l=2,4,6,...}{\\frac{1}{2l+1} \\sum_{m=-l}^l{|a_{l,m}|^n}}
 
     Where the last dimension, C, is made of a flattened array of $l$x$m$
     coefficients, where $l$ are the SH orders, and $m = 2l+1$,

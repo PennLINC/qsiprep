@@ -32,9 +32,9 @@ def run_reports(
     subject_label,
     run_uuid,
     bootstrap_file=None,
-    out_filename="report.html",
+    out_filename='report.html',
     reportlets_dir=None,
-    errorname="report.err",
+    errorname='report.err',
     **entities,
 ):
     """Run the reports."""
@@ -58,7 +58,7 @@ def run_reports(
         import traceback
 
         # Store the list of subjects for which report generation failed
-        traceback.print_exception(*sys.exc_info(), file=str(Path(output_dir) / "logs" / errorname))
+        traceback.print_exception(*sys.exc_info(), file=str(Path(output_dir) / 'logs' / errorname))
         return subject_label
 
     return None
@@ -75,19 +75,19 @@ def generate_reports(
     """
     errors = []
     for subject_label, session_list in processing_list:
-        subject_id = subject_label[4:] if subject_label.startswith("sub-") else subject_label
+        subject_id = subject_label[4:] if subject_label.startswith('sub-') else subject_label
 
         if bootstrap_file is not None:
             # If a config file is precised, we do not override it
-            html_report = "report.html"
+            html_report = 'report.html'
         else:
             # If there are only a few session for this subject,
             # we aggregate them in a single visual report.
-            bootstrap_file = data.load("reports-spec.yml")
-            html_report = "report.html"
+            bootstrap_file = data.load('reports-spec.yml')
+            html_report = 'report.html'
 
         # We only make this one if it's all the sessions or just the anat and not sessionwise
-        if output_level != "sessionwise":
+        if output_level != 'sessionwise':
             report_error = run_reports(
                 output_dir,
                 subject_label,
@@ -95,7 +95,7 @@ def generate_reports(
                 bootstrap_file=bootstrap_file,
                 out_filename=html_report,
                 reportlets_dir=output_dir,
-                errorname=f"report-{run_uuid}-{subject_label}.err",
+                errorname=f'report-{run_uuid}-{subject_label}.err',
                 subject=subject_label,
             )
             # If the report generation failed, append the subject label for which it failed
@@ -107,12 +107,12 @@ def generate_reports(
             # we separate the dwi reports per session
             # If output_level is "sessionwise",
             # the session-wise anatomical reports are in here too
-            session_list = [ses[4:] if ses.startswith("ses-") else ses for ses in session_list]
+            session_list = [ses[4:] if ses.startswith('ses-') else ses for ses in session_list]
 
             for session_label in session_list:
-                bootstrap_file = data.load("reports-spec.yml")
-                session_dir = output_dir / f"sub-{subject_id}" / f"ses-{session_label}"
-                html_report = f"sub-{subject_id}_ses-{session_label}.html"
+                bootstrap_file = data.load('reports-spec.yml')
+                session_dir = output_dir / f'sub-{subject_id}' / f'ses-{session_label}'
+                html_report = f'sub-{subject_id}_ses-{session_label}.html'
 
                 report_error = run_reports(
                     session_dir,
@@ -121,7 +121,7 @@ def generate_reports(
                     bootstrap_file=bootstrap_file,
                     out_filename=html_report,
                     reportlets_dir=output_dir,
-                    errorname=f"report-{run_uuid}-{subject_label}-{session_label}.err",
+                    errorname=f'report-{run_uuid}-{subject_label}-{session_label}.err',
                     subject=subject_label,
                     session=session_label,
                 )

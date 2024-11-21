@@ -10,10 +10,10 @@ Head motion correction
 import nipype.pipeline.engine as pe
 from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
+from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from pkg_resources import resource_filename as pkgrf
 
 from ... import config
-from ...engine import Workflow
 from ...interfaces import DerivativesDataSink
 from ...interfaces.ants import MultivariateTemplateConstruction2
 from .hmc import init_b0_hmc_wf
@@ -27,7 +27,7 @@ def init_intramodal_template_wf(
     t1w_source_file,
     num_iterations=2,
     mem_gb=3,
-    name="intramodal_template_wf",
+    name='intramodal_template_wf',
 ):
     """Create an unbiased intramodal template for a subject. This aligns the b=0 references
     from all the scans of a subject. Can be rigid, affine or nonlinear (BSplineSyN).
@@ -59,87 +59,84 @@ def init_intramodal_template_wf(
     """
     omp_nthreads = config.nipype.omp_nthreads
     workflow = Workflow(name=name)
-    input_names = [name.replace("-", "_") + "_b0_template" for name in inputs_list]
-    output_names = [name.replace("-", "_") + "_transform" for name in inputs_list]
+    input_names = [name.replace('-', '_') + '_b0_template' for name in inputs_list]
+    output_names = [name.replace('-', '_') + '_transform' for name in inputs_list]
 
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=input_names
             + [
-                "t1_brain",
-                "t1_preproc",
-                "t1_mask",
-                "t1_seg",
-                "subjects_dir",
-                "subject_id",
-                "t1_aseg",
-                "t1_aparc",
-                "t1_tpms",
-                "t1_2_mni_forward_transform",
-                "dwi_sampling_grid",
-                "t1_2_fsnative_forward_transform",
-                "t1_2_fsnative_reverse_transform",
-                "t1_2_mni_reverse_transform",
+                't1_brain',
+                't1_preproc',
+                't1_mask',
+                't1_seg',
+                'subjects_dir',
+                'subject_id',
+                't1_aseg',
+                't1_aparc',
+                't1_tpms',
+                't1_2_mni_forward_transform',
+                'dwi_sampling_grid',
+                't1_2_fsnative_forward_transform',
+                't1_2_fsnative_reverse_transform',
+                't1_2_mni_reverse_transform',
             ]
         ),
-        name="inputnode",
+        name='inputnode',
     )
-    merge_inputs = pe.Node(niu.Merge(len(input_names)), name="merge_inputs")
+    merge_inputs = pe.Node(niu.Merge(len(input_names)), name='merge_inputs')
     rename_inputs = pe.MapNode(
-        niu.Rename(keep_ext=True), iterfield=["in_file", "format_string"], name="rename_inputs"
+        niu.Rename(keep_ext=True), iterfield=['in_file', 'format_string'], name='rename_inputs'
     )
     rename_inputs.inputs.format_string = input_names
     rename_inputs.synchronize = True
     for input_num, input_name in enumerate(input_names):
-        workflow.connect(inputnode, input_name, merge_inputs, "in%d" % (input_num + 1))
+        workflow.connect(inputnode, input_name, merge_inputs, 'in%d' % (input_num + 1))
 
     outputnode = pe.Node(
         niu.IdentityInterface(
             fields=output_names
             + [
-                "intramodal_template",
-                "intramodal_template_to_t1_affine",
-                "intramodal_template_to_t1_warp",
+                'intramodal_template',
+                'intramodal_template_to_t1_affine',
+                'intramodal_template_to_t1_warp',
             ]
         ),
-        name="outputnode",
+        name='outputnode',
     )
     split_outputs = pe.Node(
-        niu.Split(splits=[1] * len(input_names), squeeze=True), name="split_outputs"
+        niu.Split(splits=[1] * len(input_names), squeeze=True), name='split_outputs'
     )
     for output_num, output_name in enumerate(output_names):
-        workflow.connect(split_outputs, 'out%d' % (output_num + 1),
-                         outputnode, output_name)  # fmt:skip
+        workflow.connect(split_outputs, 'out%d' % (output_num + 1), outputnode, output_name)
 
-    runtime_opts = {"num_cores": 1, "parallel_control": 0}
+    runtime_opts = {'num_cores': 1, 'parallel_control': 0}
     if omp_nthreads > 1:
-        runtime_opts = {"num_cores": omp_nthreads, "parallel_control": 2}
+        runtime_opts = {'num_cores': omp_nthreads, 'parallel_control': 2}
     ants_mvtc2 = pe.Node(
         MultivariateTemplateConstruction2(
             dimension=3, iteration_limit=num_iterations, **runtime_opts
         ),
-        name="ants_mvtc2",
+        name='ants_mvtc2',
         n_procs=omp_nthreads,
     )
 
     workflow.connect([
         (merge_inputs, rename_inputs, [('out', 'in_file')]),
         (rename_inputs, ants_mvtc2, [('out_file', 'input_images')]),
-        (ants_mvtc2, split_outputs, [
-            ('forward_transforms', 'inlist')]),
-        (ants_mvtc2, outputnode, [
-            ('templates', 'intramodal_template')])
+        (ants_mvtc2, split_outputs, [('forward_transforms', 'inlist')]),
+        (ants_mvtc2, outputnode, [('templates', 'intramodal_template')]),
     ])  # fmt:skip
 
     # calculate dwi registration to T1w
     b0_coreg_wf = init_b0_to_anat_registration_wf(write_report=True)
     ds_report_imtcoreg = pe.Node(
         DerivativesDataSink(
-            datatype="figures",
-            desc="intramodalcoreg",
+            datatype='figures',
+            desc='intramodalcoreg',
             source_file=t1w_source_file,
         ),
-        name="ds_report_imtcoreg",
+        name='ds_report_imtcoreg',
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
@@ -150,13 +147,13 @@ def init_intramodal_template_wf(
             ('subjects_dir', 'inputnode.subjects_dir'),
             ('t1_seg', 'inputnode.t1_seg'),
             ('subject_id', 'inputnode.subject_id'),
-            ('t1_2_fsnative_reverse_transform',
-             'inputnode.t1_2_fsnative_reverse_transform')]),
-        (ants_mvtc2, b0_coreg_wf, [
-            ('templates', 'inputnode.ref_b0_brain')]),
+            ('t1_2_fsnative_reverse_transform', 'inputnode.t1_2_fsnative_reverse_transform'),
+        ]),
+        (ants_mvtc2, b0_coreg_wf, [('templates', 'inputnode.ref_b0_brain')]),
         (b0_coreg_wf, ds_report_imtcoreg, [('outputnode.report', 'in_file')]),
         (b0_coreg_wf, outputnode, [
-            ('outputnode.itk_b0_to_t1', 'intramodal_template_to_t1_affine')])
+            ('outputnode.itk_b0_to_t1', 'intramodal_template_to_t1_affine'),
+        ]),
     ])  # fmt:skip
 
     return workflow
@@ -164,9 +161,9 @@ def init_intramodal_template_wf(
 
 def init_qsiprep_intramodal_template_wf(
     inputs_list,
-    transform="Rigid",
+    transform='Rigid',
     num_iterations=2,
-    name="intramodal_template_wf",
+    name='intramodal_template_wf',
 ):
     """Create an unbiased intramodal template for a subject.
     This aligns the b=0 references
@@ -198,28 +195,27 @@ def init_qsiprep_intramodal_template_wf(
 
     """
     workflow = Workflow(name=name)
-    input_names = [name + "_b0_template" for name in inputs_list]
-    output_names = [name + "_transform" for name in inputs_list]
+    input_names = [name + '_b0_template' for name in inputs_list]
+    output_names = [name + '_transform' for name in inputs_list]
 
     inputnode = pe.Node(
-        niu.IdentityInterface(fields=input_names + ["t1w_brain"]), name="inputnode"
+        niu.IdentityInterface(fields=input_names + ['t1w_brain']), name='inputnode'
     )
-    merge_inputs = pe.Node(niu.Merge(len(input_names)), name="merge_inputs")
+    merge_inputs = pe.Node(niu.Merge(len(input_names)), name='merge_inputs')
     for input_num, input_name in enumerate(input_names):
-        workflow.connect(inputnode, input_name, merge_inputs, "in%d" % (input_num + 1))
+        workflow.connect(inputnode, input_name, merge_inputs, 'in%d' % (input_num + 1))
 
     outputnode = pe.Node(
         niu.IdentityInterface(
-            fields=output_names + ["intramodal_template", "intramodal_template_to_t1w_transform"]
+            fields=output_names + ['intramodal_template', 'intramodal_template_to_t1w_transform']
         ),
-        name="outputnode",
+        name='outputnode',
     )
     split_outputs = pe.Node(
-        niu.Split(splits=[1] * len(input_names), squeeze=True), name="split_outputs"
+        niu.Split(splits=[1] * len(input_names), squeeze=True), name='split_outputs'
     )
     for output_num, output_name in enumerate(output_names):
-        workflow.connect(split_outputs, 'out%d' % (output_num + 1),
-                         outputnode, output_name)  # fmt:skip
+        workflow.connect(split_outputs, 'out%d' % (output_num + 1), outputnode, output_name)
 
     # N4 correct
     n4_correct = pe.MapNode(
@@ -232,41 +228,41 @@ def init_qsiprep_intramodal_template_wf(
             bspline_fitting_distance=200,
             bspline_order=3,
         ),
-        name="n4_correct",
-        iterfield=["input_image"],
+        name='n4_correct',
+        iterfield=['input_image'],
     )
 
     # Should we add nonlinear iterations?
-    do_nonlinear = transform not in ("Rigid", "Affine")
+    do_nonlinear = transform not in ('Rigid', 'Affine')
 
     # Align the b=0 images from all runs (Linear)
-    initial_transform = "Affine" if do_nonlinear else transform
+    initial_transform = 'Affine' if do_nonlinear else transform
     intramodal_b0_affine_template = init_b0_hmc_wf(
-        align_to="iterative",
+        align_to='iterative',
         num_iters=2,
         transform=initial_transform,
         spatial_bias_correct=True,
-        name="intramodal_b0_affine_template",
+        name='intramodal_b0_affine_template',
     )
 
     workflow.connect([
         (merge_inputs, n4_correct, [('out', 'input_image')]),
-        (n4_correct, intramodal_b0_affine_template, [
-            ('output_image', 'inputnode.b0_images')])
+        (n4_correct, intramodal_b0_affine_template, [('output_image', 'inputnode.b0_images')]),
     ])  # fmt:skip
     if not do_nonlinear:
         workflow.connect([
             (intramodal_b0_affine_template, split_outputs, [
-                (('outputnode.forward_transforms', _list_squeeze), 'inlist')])
+                (('outputnode.forward_transforms', _list_squeeze), 'inlist'),
+            ]),
         ])  # fmt:skip
     else:
         nonlinear_alignment_wf = init_nonlinear_alignment_wf(num_iters=num_iterations)
         workflow.connect([
             (n4_correct, nonlinear_alignment_wf, [('output_image', 'inputnode.images')]),
             (intramodal_b0_affine_template, nonlinear_alignment_wf, [
-                ('outputnode.final_template', 'inputnode.initial_template')]),
-            (nonlinear_alignment_wf, split_outputs, [
-                ('outputnode.forward_transforms', 'inlist')])
+                ('outputnode.final_template', 'inputnode.initial_template'),
+            ]),
+            (nonlinear_alignment_wf, split_outputs, [('outputnode.forward_transforms', 'inlist')]),
         ])  # fmt:skip
 
     return workflow
@@ -281,63 +277,63 @@ def nonlinear_alignment_iteration(iternum=0, gradient_step=0.2):
     Returns a workflow
 
     """
-    iteration_wf = Workflow(name="nl_iterative_alignment_%03d" % iternum)
-    input_node_fields = ["image_paths", "template_image", "iteration_num"]
-    inputnode = pe.Node(niu.IdentityInterface(fields=input_node_fields), name="inputnode")
+    iteration_wf = Workflow(name='nl_iterative_alignment_%03d' % iternum)
+    input_node_fields = ['image_paths', 'template_image', 'iteration_num']
+    inputnode = pe.Node(niu.IdentityInterface(fields=input_node_fields), name='inputnode')
     inputnode.inputs.iteration_num = iternum
     outputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
-                "registered_image_paths",
-                "affine_transforms",
-                "warp_transforms",
-                "composite_transforms",
-                "updated_template",
+                'registered_image_paths',
+                'affine_transforms',
+                'warp_transforms',
+                'composite_transforms',
+                'updated_template',
             ]
         ),
-        name="outputnode",
+        name='outputnode',
     )
-    ants_settings = pkgrf("qsiprep", "data/intramodal_nonlinear.json")
+    ants_settings = pkgrf('qsiprep', 'data/intramodal_nonlinear.json')
     reg = ants.Registration(from_file=ants_settings)
-    iter_reg = pe.MapNode(reg, name="nlreg_%03d" % iternum, iterfield=["moving_image"])
+    iter_reg = pe.MapNode(reg, name='nlreg_%03d' % iternum, iterfield=['moving_image'])
 
     # Average the images
     averaged_images = pe.Node(
-        ants.AverageImages(normalize=True, dimension=3), name="averaged_images"
+        ants.AverageImages(normalize=True, dimension=3), name='averaged_images'
     )
 
     # Shape update to template:
     # Average the affines so that the inverse can be applied to the template
-    affines_to_list = pe.Node(niu.Merge(1), name="affines_to_list")
-    warps_to_list = pe.Node(niu.Merge(1), name="warps_to_list")
+    affines_to_list = pe.Node(niu.Merge(1), name='affines_to_list')
+    warps_to_list = pe.Node(niu.Merge(1), name='warps_to_list')
     avg_affines = pe.Node(
-        ants.AverageAffineTransform(dimension=3, output_affine_transform="AveragedAffines.mat"),
-        name="avg_affines",
+        ants.AverageAffineTransform(dimension=3, output_affine_transform='AveragedAffines.mat'),
+        name='avg_affines',
     )
 
     # Average the warps:
-    average_warps = pe.Node(ants.AverageImages(dimension=3, normalize=False), name="average_warps")
+    average_warps = pe.Node(ants.AverageImages(dimension=3, normalize=False), name='average_warps')
     # Scale by the gradient step
     scale_warp = pe.Node(
         ants.MultiplyImages(
-            dimension=3, second_input=gradient_step, output_product_image="scaled_warp.nii.gz"
+            dimension=3, second_input=gradient_step, output_product_image='scaled_warp.nii.gz'
         ),
-        name="scale_warp",
+        name='scale_warp',
     )
     # Align the warps to the template image
     align_warp = pe.Node(
-        ants.ApplyTransforms(input_image_type=1, invert_transform_flags=[True]), name="align_warp"
+        ants.ApplyTransforms(input_image_type=1, invert_transform_flags=[True]), name='align_warp'
     )
 
     # transform the template for the shape update
     shape_update_template = pe.Node(
         ants.ApplyTransforms(
-            interpolation="LanczosWindowedSinc",
+            interpolation='LanczosWindowedSinc',
             invert_transform_flags=[True, False, False, False, False],
         ),
-        name="shape_update_template",
+        name='shape_update_template',
     )
-    shape_update_merge = pe.Node(niu.Merge(5), name="shape_update_merge")
+    shape_update_merge = pe.Node(niu.Merge(5), name='shape_update_merge')
 
     # Run the images through antsRegistration
     def get_first(input_pairs):
@@ -379,27 +375,27 @@ def nonlinear_alignment_iteration(iternum=0, gradient_step=0.2):
     return iteration_wf
 
 
-def init_nonlinear_alignment_wf(num_iters=2, name="nonlinear_alignment_wf"):
+def init_nonlinear_alignment_wf(num_iters=2, name='nonlinear_alignment_wf'):
     """Creates a workflow that does nonlinear template creation."""
     workflow = Workflow(name=name)
     inputnode = pe.Node(
-        niu.IdentityInterface(fields=["images", "initial_template"]), name="inputnode"
+        niu.IdentityInterface(fields=['images', 'initial_template']), name='inputnode'
     )
     outputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
-                "final_template",
-                "forward_transforms",
-                "iteration_templates",
-                "motion_params",
-                "aligned_images",
+                'final_template',
+                'forward_transforms',
+                'iteration_templates',
+                'motion_params',
+                'aligned_images',
             ]
         ),
-        name="outputnode",
+        name='outputnode',
     )
 
     # Save the iteration templates
-    iter_templates = pe.Node(niu.Merge(num_iters), name="iteration_templates")
+    iter_templates = pe.Node(niu.Merge(num_iters), name='iteration_templates')
 
     initial_reg = nonlinear_alignment_iteration(iternum=0)
 
@@ -407,28 +403,32 @@ def init_nonlinear_alignment_wf(num_iters=2, name="nonlinear_alignment_wf"):
         (inputnode, iter_templates, [('initial_template', 'in1')]),
         (inputnode, initial_reg, [
             ('initial_template', 'inputnode.template_image'),
-            ('images', 'inputnode.image_paths')])])  # fmt:skip
+            ('images', 'inputnode.image_paths'),
+        ]),
+    ])  # fmt:skip
 
     reg_iters = [initial_reg]
     for iternum in range(1, num_iters):
         reg_iters.append(nonlinear_alignment_iteration(iternum=iternum))
         workflow.connect([
             (reg_iters[-2], reg_iters[-1], [
-                ('outputnode.updated_template', 'inputnode.template_image')]),
+                ('outputnode.updated_template', 'inputnode.template_image'),
+            ]),
             (inputnode, reg_iters[-1], [('images', 'inputnode.image_paths')]),
             (reg_iters[-1], iter_templates, [
-                ("outputnode.updated_template", "in%d" % (iternum + 1))])
+                ('outputnode.updated_template', 'in%d' % (iternum + 1)),
+            ]),
         ])  # fmt:skip
 
     # Attach to outputs
     # The last iteration aligned to the output from the second-to-last
     workflow.connect([
-        (reg_iters[-2], outputnode, [
-            ('outputnode.updated_template', 'final_template')]),
+        (reg_iters[-2], outputnode, [('outputnode.updated_template', 'final_template')]),
         (reg_iters[-1], outputnode, [
             ('outputnode.affine_transforms', 'forward_transforms'),
-            ('outputnode.registered_image_paths', 'aligned_images')]),
-        (iter_templates, outputnode, [('out', 'iteration_templates')])
+            ('outputnode.registered_image_paths', 'aligned_images'),
+        ]),
+        (iter_templates, outputnode, [('out', 'iteration_templates')]),
     ])  # fmt:skip
 
     return workflow

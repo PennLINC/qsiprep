@@ -6,7 +6,7 @@ Usage
 
 The *QSIPrep* preprocessing workflow takes as principal input the path of
 the dataset that is to be processed. The input dataset is required to be in
-valid :abbr:`BIDS (Brain Imaging Data Structure)` formate at least one
+valid :abbr:`BIDS (Brain Imaging Data Structure)` format at least one
 diffusion MRI series. The T1w image and the DWI may be in separate BIDS
 <session> folders for a given subject. We highly recommend that you validate
 your dataset with the free, online `BIDS Validator
