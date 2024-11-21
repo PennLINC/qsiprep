@@ -466,9 +466,7 @@ class ComposeTransforms(SimpleInterface):
             image_transform_names += ['mni affine', 'mni warp']
 
         # Check that all the transform lists have the same numbers of transforms
-        assert all(
-            [len(xform_list) == len(image_transforms[0]) for xform_list in image_transforms]
-        )
+        assert all(len(xform_list) == len(image_transforms[0]) for xform_list in image_transforms)
 
         # If there is just a coreg transform, then we have everything
         if image_transform_names == ['b=0 to T1w']:
@@ -811,7 +809,7 @@ def aattp_rotate_vec(orig_vec, transform, runtime):
 
     # Only use the affine transforms for global bvecs
     # Reverse order and inverse to antsApplyTransformsToPoints
-    transforms = '--transform [%s, 1]' % transform
+    transforms = f'--transform [{transform}, 1]'
     cmd = (
         'antsApplyTransformsToPoints --dimensionality 3 --input '
         + orig_txt
@@ -865,13 +863,13 @@ def _compose_tfms(args):
 
 def compose_affines(reference_image, affine_list, output_file):
     """Use antsApplyTransforms to get a single affine from multiple affines."""
-    cmd = 'antsApplyTransforms -d 3 -r %s -o Linear[%s] ' % (reference_image, output_file)
-    cmd += ' '.join(['--transform %s' % trf for trf in affine_list])
+    cmd = f'antsApplyTransforms -d 3 -r {reference_image} -o Linear[{output_file}] '
+    cmd += ' '.join([f'--transform {trf}' for trf in affine_list])
     LOGGER.info(cmd)
     os.system(cmd)
     if not os.path.exists(output_file):
         LOGGER.critical(cmd)
-        assert False
+        raise AssertionError()
     return output_file, cmd
 
 
@@ -888,7 +886,7 @@ def create_tensor_image(mask_img, direction, prefix):
 
     temp_components = []
     for direction in ['xx', 'xy', 'xz', 'yy', 'yz', 'zz']:
-        this_component = prefix + '_temp_dtiComp_%s.nii.gz' % direction
+        this_component = prefix + f'_temp_dtiComp_{direction}.nii.gz'
         LOGGER.info('writing %s', this_component)
         nb.Nifti1Image(
             mask_img.get_fdata() * tensor[tensor_index[direction]],
@@ -897,7 +895,7 @@ def create_tensor_image(mask_img, direction, prefix):
         ).to_filename(this_component)
         temp_components.append(this_component)
 
-    compose_cmd = 'ImageMath 3 %s ComponentTo3DTensor %s' % (out_fname, prefix + '_temp_dtiComp_')
+    compose_cmd = f'ImageMath 3 {out_fname} ComponentTo3DTensor {prefix}_temp_dtiComp_'
     LOGGER.info(compose_cmd)
     os.system(compose_cmd)
     for temp_component in temp_components:
@@ -910,11 +908,7 @@ def reorient_tensor_image(tensor_image, warp_file, mask_img, prefix, output_fnam
     cmds = []
     to_remove = []
     reoriented_tensor_fname = prefix + 'reoriented_tensor.nii'
-    reorient_cmd = 'ReorientTensorImage 3 %s %s %s' % (
-        tensor_image,
-        reoriented_tensor_fname,
-        warp_file,
-    )
+    reorient_cmd = f'ReorientTensorImage 3 {tensor_image} {reoriented_tensor_fname} {warp_file}'
     LOGGER.info(reorient_cmd)
     os.system(reorient_cmd)
     cmds.append(reorient_cmd)

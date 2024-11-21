@@ -156,6 +156,7 @@ ignore = [
   "S311",  # We are not using random for cryptographic purposes
   "ISC001",
   "S603",
+  "S605",
 ]
 
 [tool.ruff.lint.flake8-quotes]
