@@ -1,8 +1,8 @@
 """Command-line interface tests."""
 
 import os
-from pathlib import Path
 import sys
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -603,20 +603,20 @@ def _run_and_generate(test_name, parameters, test_main=False):
 
         qsiprep_wf.run(**config.nipype.get_plugin())
 
-        boiler_file = config.execution.output_dir / "logs" / "CITATION.md"
+        boiler_file = config.execution.output_dir / 'logs' / 'CITATION.md'
         if boiler_file.exists():
             if config.environment.exec_env in (
-                "apptainer",
-                "singularity",
-                "docker",
+                'apptainer',
+                'singularity',
+                'docker',
             ):
-                boiler_file = Path("<OUTPUT_PATH>") / boiler_file.relative_to(
+                boiler_file = Path('<OUTPUT_PATH>') / boiler_file.relative_to(
                     config.execution.output_dir
                 )
             config.loggers.workflow.log(
                 25,
-                "Works derived from this QSIPrep execution should include the "
-                f"boilerplate text found in {boiler_file}.",
+                'Works derived from this QSIPrep execution should include the '
+                f'boilerplate text found in {boiler_file}.',
             )
 
         write_derivative_description(config.execution.bids_dir, config.execution.output_dir)
