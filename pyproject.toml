@@ -156,7 +156,17 @@ ignore = [
   "S311",  # We are not using random for cryptographic purposes
   "ISC001",
   "S603",
-  "S605",
+  "S605",  # TODO: Fix these
+  "DTZ005",  # TODO: Fix these
+  "B904",  # TODO: Fix these
+  "A001",  # TODO: Fix these
+  "B006",  # TODO: Fix these
+  "S607",  # TODO: Fix these
+  "S108",  # TODO: Fix these
+  "S602",  # TODO: Fix these
+  "E402",  # TODO: Fix these
+  "UP028",  # TODO: Fix these
+  "BLE001",  # TODO: Fix these
 ]
 
 [tool.ruff.lint.flake8-quotes]

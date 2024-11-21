@@ -231,8 +231,8 @@ def disassemble_transform(transform_file, cwd):
 
 def compose_affines(reference_image, affine_list, output_file):
     """Use antsApplyTransforms to get a single affine from multiple affines."""
-    cmd = 'antsApplyTransforms -d 3 -r %s -o Linear[%s, 1] ' % (reference_image, output_file)
-    cmd += ' '.join(['--transform %s' % trf for trf in affine_list])
+    cmd = f'antsApplyTransforms -d 3 -r {reference_image} -o Linear[{output_file}, 1] '
+    cmd += ' '.join([f'--transform {trf}' for trf in affine_list])
     os.system(cmd)
     assert os.path.exists(output_file)
     return output_file

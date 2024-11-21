@@ -123,8 +123,8 @@ def load_epi_dwi_fieldmaps(fmap_list, b0_threshold):
                 _b0_indices = np.flatnonzero(bvals < b0_threshold) + starting_index
             else:
                 raise Exception(
-                    'Secret fieldmap file %s mismatches its image file %s'
-                    % (potential_bval_file, fmap_file)
+                    f'Secret fieldmap file {potential_bval_file} mismatches its image file '
+                    f'{fmap_file}'
                 )
         else:
             _b0_indices = np.arange(num_images) + starting_index

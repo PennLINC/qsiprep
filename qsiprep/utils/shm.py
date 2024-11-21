@@ -902,7 +902,7 @@ def calculate_max_order(n_coeffs):
         # Otherwise, the input didn't make sense:
         raise ValueError(
             'The input to ``calculate_max_order`` was ',
-            '%s, but that is not a valid number' % n_coeffs,
+            f'{n_coeffs}, but that is not a valid number',
             'of coefficients for a spherical harmonics ',
             'basis set.',
         )

@@ -116,7 +116,7 @@ class GatherDRBUDDIInputs(SimpleInterface):
         # Write the metadata
         up_json = op.join(runtime.cwd, 'blip_up.json')
         with open(up_json, 'w') as up_jsonf:
-            up_jsonf.write('{"PhaseEncodingDirection": "%s"}\n' % self.inputs.dwi_series_pedir)
+            up_jsonf.write(f'{{"PhaseEncodingDirection": "{self.inputs.dwi_series_pedir}"}}\n')
         self._results['blip_up_json'] = up_json
 
         # Coerce the bvals and bvecs into lists of files

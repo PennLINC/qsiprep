@@ -221,7 +221,7 @@ class IntraModalMerge(SimpleInterface):
             if filedata.ndim == 5:
                 sqdata = np.squeeze(filedata)
                 if sqdata.ndim == 5:
-                    raise RuntimeError('Input image (%s) is 5D' % in_files[0])
+                    raise RuntimeError(f'Input image ({in_files[0]}) is 5D')
                 else:
                     in_files = [
                         fname_presuffix(in_files[0], suffix='_squeezed', newpath=runtime.cwd)
@@ -628,10 +628,9 @@ class ValidateImage(SimpleInterface):
     Analyses of this dataset MAY BE INVALID.
 </p>
 """
-        snippet = '<h3 class="elem-title">%s</h3>\n%s:\n\t %s\n' % (
-            warning_txt,
-            self.inputs.in_file,
-            description,
+        snippet = (
+            f'<h3 class="elem-title">{warning_txt}</h3>\n{self.inputs.in_file}:\n\t '
+            f'{description}\n'
         )
         # Store new file and report
         img.to_filename(out_fname)
