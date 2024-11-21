@@ -473,12 +473,12 @@ a template. First, is the *subject anatomical reference* and the second is the
 
 As a dMRI-focused tool, *QSIPrep* only uses an *anatomical reference* image for an
 extra-robust brain extraction and to get a tissue segmentation for visualizing
-the susceptibility distortion correction results.  The anatomical worflows
+the susceptibility distortion correction results.  The anatomical workflows
 leverage fast and powerful tools from FreeSurfer, namely ``SynthStrip`` and
 ``SynthSeg`` to perform brain extraction and segmentation.
 
 Many imaging protocols acquire some high-resolution, undistorted anatomical
-reference scans. *QSIPrep* can use either T1-weighted ot T2-weighted 3D images as
+reference scans. *QSIPrep* can use either T1-weighted or T2-weighted 3D images as
 the *anatomical reference*. To specify which contrast you'd like to use for your
 anatomical reference, be sure to specify ``--anatomical-contrast`` as either
 ``T1w``, ``T2w`` or ``none``. Specifying ``none`` is equivalent to the previous

@@ -424,7 +424,7 @@ Many bugfixes
 This version introduces major changes to the TOPUP/eddy workflow. Feedback would be greatly
 appreciated!
 
-* Added new algorithm for selecting b=0 images for distortion corretion (#202)
+* Added new algorithm for selecting b=0 images for distortion correction (#202)
 * Added the Patch2Self denoising method (#203, credit to @ShreyasFadnavis)
 * Documentation has been expanded significantly (#212)
 * Boilerplate for DWI preprocessing is greatly expanded (#200)
@@ -489,7 +489,7 @@ are merged before motion correction by default (disabled by ``--separate-all-dwi
 This release adds some rather big updates to QSIPrep.
 * FSL is updated to version 6.0.3
 * CUDA v9.1 support is added to the image (works with GPUS in Docker and Singularity)
-* A new robust b=0 masking algorith is introduced.
+* A new robust b=0 masking algorithm is introduced.
 
 
 ## 0.6.5 (Nov 21, 2019)
@@ -497,7 +497,7 @@ This release adds some rather big updates to QSIPrep.
 * Improved handling of Freesurfer path (#50)
 * Better logic in commandline argument checking (#50, #62)
 * More robust brain masking for b=0 reference images (#73)
-* Bugfix for reverse phase encoding directon dwi series (#68)
+* Bugfix for reverse phase encoding direction dwi series (#68)
 * Bugfix for warping eddy's CNR output (#72)
 
 
@@ -511,7 +511,7 @@ This release adds some rather big updates to QSIPrep.
 ## 0.6.2, 0.6.3RC1, 0.6.3RC2 (October 27, 2019)
 
 * Bugfix: masking was not working on eddy.
-* Bugfix: static versioning was not workign in the container.
+* Bugfix: static versioning was not working in the container.
 * New graphics in the documentation.
 * Use BSpline Interpolation if --output-resolution is higher than the input resolution.
 
@@ -560,7 +560,7 @@ SyN. The rest of the pipeline happens in LPS+, like the SHORELine version.
 
 ## 0.4.4 (July 19, 2019)
 
-* Default eddy configuation changed to not use CUDA by default.
+* Default eddy configuration changed to not use CUDA by default.
 * Valerie added content to documentation
 
 
