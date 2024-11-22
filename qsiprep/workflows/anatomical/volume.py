@@ -131,14 +131,12 @@ def init_anat_preproc_wf(
         List of preprocessed t2w files
     template
         List of template names to which the structural image has been registered
-    anat2std_xfm
+    acpc2std_xfm
         List of nonlinear spatial transforms to resample data from subject
         anatomical space into standard template spaces. Collated with template.
-    std2anat_xfm
+    std2acpc_xfm
         List of nonlinear spatial transforms to resample data from standard
         template spaces into subject anatomical space. Collated with template.
-    t1_2_mni
-        T1w template, normalized to MNI space
     t1_resampling_grid
         Image of the preprocessed t1 to be used as the reference output for dwis
 
@@ -161,14 +159,13 @@ def init_anat_preproc_wf(
                 't1_seg',
                 't1_aseg',
                 't1_aparc',
-                't1_2_mni',
-                'anat2std_xfm',
-                'std2anat_xfm',
                 't2w_unfatsat',
                 'segmentation_qc',
-                'template_transforms',
-                'acpc_transform',
-                'acpc_inv_transform',
+                'orig2anat_xfms',
+                'anat2acpc_xfm',
+                'acpc2anat_xfm',
+                'acpc2std_xfm',
+                'std2acpc_xfm',
                 'dwi_sampling_grid',
             ]
         ),
@@ -360,7 +357,7 @@ FreeSurfer version {FS_VERSION}. """
             ('outputnode.template', 'inputnode.image'),
         ]),
         (anat_reference_wf, outputnode, [
-            ('outputnode.template_transforms', 'anat_template_transforms'),
+            ('outputnode.orig2anat_xfms', 'orig2anat_xfms'),
         ]),
 
         # SynthStrip
@@ -393,10 +390,10 @@ FreeSurfer version {FS_VERSION}. """
         ]),
         (reorient_mask_to_lps, anat_normalization_wf, [('out_file', 'inputnode.template_mask')]),
         (anat_normalization_wf, outputnode, [
-            ('outputnode.to_template_rigid_transform', 'acpc_transform'),
-            ('outputnode.from_template_rigid_transform', 'acpc_inv_transform'),
-            ('outputnode.to_template_nonlinear_transform', 't1_2_mni_forward_transform'),
-            ('outputnode.from_template_nonlinear_transform', 't1_2_mni_reverse_transform'),
+            ('outputnode.to_template_rigid_transform', 'anat2acpc_xfm'),
+            ('outputnode.from_template_rigid_transform', 'acpc2anat_xfm'),
+            ('outputnode.to_template_nonlinear_transform', 'acpc2std_xfm'),
+            ('outputnode.from_template_nonlinear_transform', 'std2acpc_xfm'),
         ]),
 
         # Resampling
@@ -458,16 +455,15 @@ FreeSurfer version {FS_VERSION}. """
             ('outputnode.valid_list', 'inputnode.source_files'),
         ]),
         (outputnode, anat_derivatives_wf, [
-            ('anat_template_transforms', 'inputnode.t1_template_transforms'),
-            ('acpc_transform', 'inputnode.t1_acpc_transform'),
-            ('acpc_inv_transform', 'inputnode.t1_acpc_inv_transform'),
+            ('orig2anat_xfms', 'inputnode.orig2anat_xfms'),
+            ('anat2acpc_xfm', 'inputnode.anat2acpc_xfm'),
+            ('acpc2anat_xfm', 'inputnode.acpc2anat_xfm'),
             ('t1_preproc', 'inputnode.t1_preproc'),
             ('t1_mask', 'inputnode.t1_mask'),
             ('t1_seg', 'inputnode.t1_seg'),
             ('t1_aseg', 'inputnode.t1_aseg'),
-            ('t1_2_mni_forward_transform', 'inputnode.t1_2_mni_forward_transform'),
-            ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
-            ('t1_2_mni', 'inputnode.t1_2_mni'),
+            ('acpc2std_xfm', 'inputnode.acpc2std_xfm'),
+            ('std2acpc_xfm', 'inputnode.std2acpc_xfm'),
         ]),
     ])  # fmt:skip
 
@@ -525,7 +521,7 @@ image using an affine transformation in antsRegistration.
             ('outputnode.template', 'inputnode.original_image'),
         ]),
         # (anat_reference_wf, outputnode, [
-        #    ('outputnode.template_transforms', 'anat_template_transforms'),
+        #    ('outputnode.orig2anat_xfms', 'orig2anat_xfms'),
         # ]),
 
         # Register the skull-stripped T2w to the skull-stripped T2w
@@ -572,7 +568,7 @@ def init_anat_template_wf(num_images) -> Workflow:
     -------
     template
         Structural template, defining T1w space
-    template_transforms
+    orig2anat_xfms
         List of affine transforms from ``template`` to original images
     out_report
         Conformation report
@@ -601,7 +597,7 @@ A {contrast}-reference map was computed after registration of
                 'template',
                 'bias_corrected',
                 'valid_list',
-                'template_transforms',
+                'orig2anat_xfms',
                 'out_report',
             ]
         ),
@@ -652,7 +648,7 @@ A {contrast}-reference map was computed after registration of
 
         n4_correct = pe.Node(n4_interface, name='n4_correct', n_procs=omp_nthreads)
 
-        outputnode.inputs.template_transforms = [pkgr('qsiprep', 'data/itkIdentityTransform.txt')]
+        outputnode.inputs.orig2anat_xfms = [pkgr('qsiprep', 'data/itkIdentityTransform.txt')]
 
         workflow.connect([
             (anat_conform, outputnode, [(('out_file', _get_first), 'template')]),
@@ -687,7 +683,7 @@ A {contrast}-reference map was computed after registration of
         (anat_merge_wf, outputnode, [
             ('outputnode.final_template', 'template'),
             ('outputnode.final_template', 'bias_corrected'),
-            ('outputnode.forward_transforms', 'template_transforms'),
+            ('outputnode.forward_transforms', 'orig2anat_xfms'),
         ]),
     ])  # fmt:skip
 
@@ -1154,16 +1150,15 @@ def init_anat_derivatives_wf(anatomical_template) -> Workflow:
         niu.IdentityInterface(
             fields=[
                 'source_files',
-                't1_template_transforms',
-                't1_acpc_transform',
-                't1_acpc_inv_transform',
+                'orig2anat_xfms',
                 't1_preproc',
                 't1_mask',
                 't1_seg',
-                't1_2_mni_forward_transform',
-                't1_2_mni_reverse_transform',
-                't1_2_mni',
                 't1_aseg',
+                'anat2acpc_xfm',
+                'acpc2anat_xfm',
+                'acpc2std_xfm',
+                'std2acpc_xfm',
             ]
         ),
         name='inputnode',
@@ -1293,10 +1288,10 @@ def init_anat_derivatives_wf(anatomical_template) -> Workflow:
         (inputnode, t1_name, [('source_files', 'in_files')]),
         (inputnode, ds_t1_template_transforms, [
             ('source_files', 'source_file'),
-            ('t1_template_transforms', 'in_file'),
+            ('orig2anat_xfms', 'in_file'),
         ]),
-        (inputnode, ds_t1_template_acpc_transform, [('t1_acpc_transform', 'in_file')]),
-        (inputnode, ds_t1_template_acpc_inv_transform, [('t1_acpc_inv_transform', 'in_file')]),
+        (inputnode, ds_t1_template_acpc_transform, [('anat2acpc_xfm', 'in_file')]),
+        (inputnode, ds_t1_template_acpc_inv_transform, [('acpc2anat_xfm', 'in_file')]),
         (inputnode, ds_t1_preproc, [('t1_preproc', 'in_file')]),
         (inputnode, ds_t1_mask, [('t1_mask', 'in_file')]),
         (inputnode, ds_t1_seg, [('t1_seg', 'in_file')]),
@@ -1311,8 +1306,8 @@ def init_anat_derivatives_wf(anatomical_template) -> Workflow:
 
     if not config.execution.skip_anat_based_spatial_normalization:
         workflow.connect([
-            (inputnode, ds_t1_mni_warp, [('t1_2_mni_forward_transform', 'in_file')]),
-            (inputnode, ds_t1_mni_inv_warp, [('t1_2_mni_reverse_transform', 'in_file')]),
+            (inputnode, ds_t1_mni_warp, [('acpc2std_xfm', 'in_file')]),
+            (inputnode, ds_t1_mni_inv_warp, [('std2acpc_xfm', 'in_file')]),
             (t1_name, ds_t1_mni_warp, [('out', 'source_file')]),
             (t1_name, ds_t1_mni_inv_warp, [('out', 'source_file')]),
         ])  # fmt:skip
