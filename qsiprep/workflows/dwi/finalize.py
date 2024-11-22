@@ -101,10 +101,6 @@ def init_dwi_finalize_wf(
         t1_seg
             Segmentation of preprocessed structural image, including
             gray-matter (GM), white-matter (WM) and cerebrospinal fluid (CSF)
-        t1_2_mni_forward_transform
-            ANTs-compatible affine-and-warp transform file
-        t1_2_mni_reverse_transform
-            ANTs-compatible affine-and-warp transform file (inverse)
         subjects_dir
             FreeSurfer SUBJECTS_DIR
         subject_id
@@ -178,7 +174,6 @@ def init_dwi_finalize_wf(
                 'b0_to_intramodal_template_transforms',
                 'intramodal_template_to_t1_affine',
                 'intramodal_template_to_t1_warp',
-                't1_2_mni_forward_transform',
                 'hmc_optimization_data',
                 'dwi_files',
                 'cnr_map',
@@ -201,7 +196,6 @@ def init_dwi_finalize_wf(
                 't1_seg',
                 't1_aseg',
                 't1_aparc',
-                't1_2_mni_reverse_transform',
                 't1_2_fsnative_forward_transform',
                 't1_2_fsnative_reverse_transform',
                 'dwi_sampling_grid',

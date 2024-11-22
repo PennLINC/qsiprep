@@ -101,9 +101,6 @@ def init_sdc_wf(fieldmap_info, dwi_meta):
     t1_2_mni_reverse_transform
         MNI-to-T1w transform to map prior knowledge to the T1w
         fo the fieldmap-less SyN method
-    template : str
-        Name of template targeted by ``template`` output space
-
 
     Outputs
     -------
@@ -132,7 +129,6 @@ def init_sdc_wf(fieldmap_info, dwi_meta):
                 'b0_mask',
                 't1_brain',
                 't1_2_mni_reverse_transform',
-                'template',
             ]
         ),
         name='inputnode',
@@ -273,7 +269,6 @@ co-registration with the anatomical reference.
                 ('t1_brain', 'inputnode.t1_brain'),
                 ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
                 ('b0_ref', 'inputnode.bold_ref'),
-                ('template', 'inputnode.template'),
             ]),
         ])  # fmt:skip
         outputnode.inputs.method = 'FLB ("fieldmap-less", SyN-based)'

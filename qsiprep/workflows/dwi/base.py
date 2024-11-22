@@ -37,7 +37,6 @@ def init_dwi_preproc_wf(
     t2w_sdc,
     output_prefix,
     source_file,
-    anatomical_template,
 ) -> Workflow:
     """
     This workflow controls the dwi preprocessing stages of qsiprep.
@@ -77,8 +76,6 @@ def init_dwi_preproc_wf(
     t1_seg
         Segmentation of preprocessed structural image, including
         gray-matter (GM), white-matter (WM) and cerebrospinal fluid (CSF)
-    t1_2_mni_forward_transform
-        ANTs-compatible affine-and-warp transform file
     t1_2_mni_reverse_transform
         ANTs-compatible affine-and-warp transform file (inverse)
     subjects_dir
@@ -198,7 +195,6 @@ def init_dwi_preproc_wf(
                 't1_seg',
                 't1_aseg',
                 't1_aparc',
-                't1_2_mni_forward_transform',
                 't2w_unfatsat',
                 't1_2_mni_reverse_transform',
                 't1_2_fsnative_forward_transform',
@@ -261,7 +257,6 @@ Diffusion data preprocessing
             source_file=source_file,
             dwi_metadata=dwi_metadata,
             t2w_sdc=t2w_sdc,
-            anatomical_template=anatomical_template,
         )
 
     elif config.workflow.hmc_model == 'eddy':

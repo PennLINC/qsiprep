@@ -75,11 +75,8 @@ def init_intramodal_template_wf(
                 't1_aseg',
                 't1_aparc',
                 't1_tpms',
-                't1_2_mni_forward_transform',
                 'dwi_sampling_grid',
-                't1_2_fsnative_forward_transform',
                 't1_2_fsnative_reverse_transform',
-                't1_2_mni_reverse_transform',
             ]
         ),
         name='inputnode',
