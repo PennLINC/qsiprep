@@ -2,6 +2,7 @@
 
 import os
 import sys
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -12,7 +13,7 @@ from qsiprep.cli.parser import parse_args
 from qsiprep.cli.workflow import build_boilerplate, build_workflow
 from qsiprep.reports.core import generate_reports
 from qsiprep.tests.utils import check_generated_files, download_test_data, get_test_data_path
-from qsiprep.utils.bids import write_derivative_description
+from qsiprep.utils.bids import write_bidsignore, write_derivative_description
 
 nipype_config.enable_debug_mode()
 
@@ -57,7 +58,7 @@ def test_dsdti_fmap(data_dir, output_dir, working_dir):
         '--output-resolution=5',
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 @pytest.mark.integration
@@ -99,7 +100,7 @@ def test_dscsdsi_fmap(data_dir, output_dir, working_dir):
         '--output-resolution=5',
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 @pytest.mark.integration
@@ -143,7 +144,7 @@ def test_cuda(data_dir, output_dir, working_dir):
         '--output-resolution=5',
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 @pytest.mark.integration
@@ -189,7 +190,7 @@ def test_drbuddi_rpe(data_dir, output_dir, working_dir):
         '--output-resolution=5',
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 @pytest.mark.integration
@@ -226,7 +227,7 @@ def test_drbuddi_shoreline_epi(data_dir, output_dir, working_dir):
         '--shoreline-iters=1',
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 @pytest.mark.integration
@@ -263,7 +264,7 @@ def test_drbuddi_tensorline_epi(data_dir, output_dir, working_dir):
         '--shoreline-iters=1',
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 @pytest.mark.integration
@@ -308,7 +309,7 @@ def test_dscsdsi(data_dir, output_dir, working_dir):
         '--shoreline-iters=1',
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 @pytest.mark.integration
@@ -350,7 +351,7 @@ def test_dsdti_nofmap(data_dir, output_dir, working_dir):
         '--output-resolution=5',
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 @pytest.mark.integration
@@ -392,7 +393,7 @@ def test_dsdti_synfmap(data_dir, output_dir, working_dir):
         '--output-resolution=5',
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 @pytest.mark.integration
@@ -432,7 +433,7 @@ def test_intramodal_template(data_dir, output_dir, working_dir):
         '--intramodal-template-iters=2',
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 @pytest.mark.integration
@@ -468,7 +469,7 @@ def test_multi_t1w(data_dir, output_dir, working_dir):
         '--intramodal-template-iters=2',
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 @pytest.mark.integration
@@ -505,7 +506,7 @@ def test_maternal_brain_project(data_dir, output_dir, working_dir):
         f'--bids-filter-file={bids_filter}',
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 @pytest.mark.integration
@@ -541,7 +542,7 @@ def test_forrest_gump(data_dir, output_dir, working_dir):
         f'--bids-filter-file={bids_filter}',
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 def _check_arg_specified(argname, arglist):
@@ -567,7 +568,7 @@ def _update_resources(parameters):
     return parameters
 
 
-def _run_and_generate(test_name, parameters, test_main=True):
+def _run_and_generate(test_name, parameters, test_main=False):
     from qsiprep import config
 
     # TODO: Add --clean-workdir param to CLI
@@ -587,7 +588,6 @@ def _run_and_generate(test_name, parameters, test_main=True):
 
             assert e.value.code == 0
     else:
-        # XXX: This isn't working because config.execution.fs_license_file is None.
         parse_args(parameters)
         config_file = config.execution.work_dir / f'config-{config.execution.run_uuid}.toml'
         config.loggers.cli.warning(f'Saving config file to {config_file}')
@@ -595,21 +595,44 @@ def _run_and_generate(test_name, parameters, test_main=True):
 
         retval = build_workflow(config_file, retval={})
         qsiprep_wf = retval['workflow']
-        qsiprep_wf.run()
-        write_derivative_description(config.execution.bids_dir, config.execution.output_dir)
-
         build_boilerplate(str(config_file), qsiprep_wf)
-        session_list = (
-            config.execution.bids_filters.get('bold', {}).get('session')
-            if config.execution.bids_filters
-            else None
+        config.loggers.workflow.log(
+            15,
+            '\n'.join(['config:'] + [f'\t\t{s}' for s in config.dumps().splitlines()]),
         )
-        generate_reports(
-            subject_list=config.execution.participant_label,
+
+        qsiprep_wf.run(**config.nipype.get_plugin())
+
+        boiler_file = config.execution.output_dir / 'logs' / 'CITATION.md'
+        if boiler_file.exists():
+            if config.environment.exec_env in (
+                'apptainer',
+                'singularity',
+                'docker',
+            ):
+                boiler_file = Path('<OUTPUT_PATH>') / boiler_file.relative_to(
+                    config.execution.output_dir
+                )
+            config.loggers.workflow.log(
+                25,
+                'Works derived from this QSIPrep execution should include the '
+                f'boilerplate text found in {boiler_file}.',
+            )
+
+        write_derivative_description(config.execution.bids_dir, config.execution.output_dir)
+        failed_reports = generate_reports(
+            processing_list=config.execution.processing_list,
+            output_level=config.workflow.subject_anatomical_reference,
             output_dir=config.execution.output_dir,
             run_uuid=config.execution.run_uuid,
-            session_list=session_list,
         )
+        assert not failed_reports
+        write_derivative_description(
+            config.execution.bids_dir,
+            config.execution.output_dir,
+            # dataset_links=config.execution.dataset_links,
+        )
+        write_bidsignore(config.execution.output_dir)
 
     output_list_file = os.path.join(get_test_data_path(), f'{test_name}_outputs.txt')
     optional_outputs_list = os.path.join(get_test_data_path(), f'{test_name}_optional_outputs.txt')
