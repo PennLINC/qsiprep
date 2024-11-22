@@ -423,9 +423,9 @@ class execution(_Config):
     """Folder where derivatives will be stored."""
     output_layout = None
     """Layout of derivatives within output_dir."""
-    # output_spaces = None
-    # """List of (non)standard spaces designated (with the ``--output-spaces`` flag of
-    # the command line) as spatial references for outputs."""
+    output_spaces = None
+    """List of (non)standard spaces designated (with the ``--output-spaces`` flag of
+    the command line) as spatial references for outputs."""
     reports_only = False
     """Only build the reports, based on the reportlets found in a cached working directory."""
     run_uuid = f"{strftime('%Y%m%d-%H%M%S')}_{uuid4()}"
@@ -591,8 +591,6 @@ class workflow(_Config):
     """Transformation to be used in SHORELine."""
     ignore = None
     """Ignore particular steps for *QSIPrep*."""
-    infant = False
-    """Configure pipelines specifically for infant brains"""
     intramodal_template_iters = None
     """Number of iterations for intramodal template construction."""
     intramodal_template_transform = None
@@ -603,8 +601,6 @@ class workflow(_Config):
     """Run FreeSurfer ``recon-all`` with the ``-longitudinal`` flag. [Deprecated]"""
     no_b0_harmonization = False
     """Skip re-scaling dwi scans to have matching b=0 intensities."""
-    output_resolution = None
-    """Isotropic voxel size for outputs."""
     pepolar_method = None
     """SDC method to be used for PEPOLAR fieldmaps."""
     separate_all_dwis = False
@@ -793,11 +789,20 @@ def to_filename(filename):
 
 
 def init_spaces(checkpoint=True):
-    """Initialize the :attr:`~workflow.spaces` setting."""
+    """Initialize the :attr:`~workflow.spaces` setting.
+
+    QSIPrep is slightly different from fMRIPrep in a few regards:
+
+    1.  The "ACPC" output space is *required* for QSIPrep.
+    2.  The ACPC resolution must be set by the user.
+    3.  Resolutions for other output spaces don't matter.
+        QSIPrep just produces the transform to each of them.
+    4.  QSIPrep needs isotropic output spaces, so we need to parse
+        'nativemin' and 'nativemax' values.
+    """
     from niworkflows.utils.spaces import Reference, SpatialReferences
 
-    # spaces = execution.output_spaces or SpatialReferences()
-    spaces = SpatialReferences()
+    spaces = execution.output_spaces or SpatialReferences()
     if not isinstance(spaces, SpatialReferences):
         spaces = SpatialReferences(
             [ref for s in spaces.split(' ') for ref in Reference.from_string(s)]

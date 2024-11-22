@@ -38,6 +38,7 @@ def _build_parser(**kwargs):
     from functools import partial
     from pathlib import Path
 
+    from niworkflows.utils.spaces import OutputReferencesAction
     from packaging.version import Version
 
     deprecations = {
@@ -300,6 +301,23 @@ def _build_parser(**kwargs):
         choices=['fieldmaps', 'sbref', 't2w', 'flair', 'fmap-jacobian', 'phase'],
         help='Ignore selected aspects of the input dataset to disable corresponding '
         'parts of the workflow (a space delimited list)',
+    )
+    g_conf.add_argument(
+        '--output-spaces',
+        nargs='*',
+        action=OutputReferencesAction,
+        help="""\
+Standard and non-standard spaces to resample anatomical and functional images to. \
+Standard spaces may be specified by the form \
+``<SPACE>[:cohort-<label>][:res-<resolution>][...]``, where ``<SPACE>`` is \
+a keyword designating a spatial reference, and may be followed by optional, \
+colon-separated parameters. \
+Non-standard spaces imply specific orientations and sampling grids. \
+Important to note, the ``res-*`` modifier does not define the resolution used for \
+the spatial normalization. To generate no BOLD outputs, use this option without specifying \
+any spatial references. For further details, please check out \
+https://fmriprep.readthedocs.io/en/%s/spaces.html"""
+        % (currentv.base_version if is_release else 'latest'),
     )
     g_conf.add_argument(
         '--infant',
@@ -619,24 +637,10 @@ def parse_args(args=None, namespace=None):
     import logging
 
     from bids.layout import Query
-
-    # from niworkflows.utils.spaces import Reference, SpatialReferences
+    from niworkflows.utils.spaces import Reference, SpatialReferences
 
     parser = _build_parser()
     opts = parser.parse_args(args, namespace)
-
-    # Change anatomical_template based on infant parameter
-    opts.anatomical_template = 'MNI152NLin2009cAsym'
-    if opts.infant:
-        config.loggers.cli.info(
-            'Infant processing mode enabled. '
-            "Inferring the subject's age and selecting the appropriate MNIInfant cohort."
-        )
-        opts.anatomical_template = 'MNIInfant'
-        if opts.subject_anatomical_reference != 'sessionwise':
-            config.loggers.cli.error(
-                'Infant processing requires --subject-anatomical-reference sessionwise'
-            )
 
     if opts.config_file:
         skip = {} if opts.reports_only else {'execution': ('run_uuid',)}
@@ -659,10 +663,25 @@ def parse_args(args=None, namespace=None):
             )
 
     # Initialize --output-spaces if not defined
-    # if config.execution.output_spaces is None:
-    #     config.execution.output_spaces = SpatialReferences(
-    #         [Reference("MNI152NLin2009cAsym", {"res": "native"})]
-    #     )
+    if opts.infant:
+        config.loggers.cli.info(
+            'Infant processing mode enabled. '
+            "Inferring the subject's age and selecting the appropriate MNIInfant cohort."
+        )
+        if opts.subject_anatomical_reference != 'sessionwise':
+            config.loggers.cli.error(
+                'Infant processing requires --subject-anatomical-reference sessionwise'
+            )
+
+    if config.execution.output_spaces is None:
+        if opts.infant:
+            config.execution.output_spaces = SpatialReferences(
+                [Reference('ACPC', {'res': 'nativemax'}), Reference('MNIInfant')]
+            )
+        else:
+            config.execution.output_spaces = SpatialReferences(
+                [Reference('ACPC', {'res': 'nativemax'}), Reference('MNI152NLin2009cAsym')]
+            )
 
     # Retrieve logging level
     build_log = config.loggers.cli

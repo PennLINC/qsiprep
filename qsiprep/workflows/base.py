@@ -402,7 +402,6 @@ to workflows in *QSIPrep*'s documentation]\
             output_prefix=output_fname,
             source_file=source_file,
             t2w_sdc=bool(subject_data.get('t2w')),
-            anatomical_template=anatomical_template,
         )
         dwi_finalize_wf = init_dwi_finalize_wf(
             scan_groups=dwi_info,
@@ -420,7 +419,6 @@ to workflows in *QSIPrep*'s documentation]\
                 ('outputnode.t1_seg', 'inputnode.t1_seg'),
                 ('outputnode.t1_aseg', 'inputnode.t1_aseg'),
                 ('outputnode.t1_aparc', 'inputnode.t1_aparc'),
-                ('outputnode.t1_2_mni_forward_transform', 'inputnode.t1_2_mni_forward_transform'),
                 ('outputnode.t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
                 ('outputnode.dwi_sampling_grid', 'inputnode.dwi_sampling_grid'),
                 ('outputnode.t2w_unfatsat', 'inputnode.t2w_unfatsat'),
@@ -432,8 +430,6 @@ to workflows in *QSIPrep*'s documentation]\
                 ('outputnode.t1_seg', 'inputnode.t1_seg'),
                 ('outputnode.t1_aseg', 'inputnode.t1_aseg'),
                 ('outputnode.t1_aparc', 'inputnode.t1_aparc'),
-                ('outputnode.t1_2_mni_forward_transform', 'inputnode.t1_2_mni_forward_transform'),
-                ('outputnode.t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
                 ('outputnode.dwi_sampling_grid', 'inputnode.dwi_sampling_grid'),
             ]),
             (dwi_preproc_wf, dwi_finalize_wf, [

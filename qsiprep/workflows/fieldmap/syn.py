@@ -105,8 +105,6 @@ def init_syn_sdc_wf(bold_pe=None, atlas_threshold=2):
 
         b0_ref
             reference image
-        template : str
-            Name of template targeted by ``template`` output space
         t1_brain
             skull-stripped, bias-corrected structural image
         t1_2_mni_reverse_transform
@@ -145,7 +143,7 @@ along the phase-encoding direction, and modulated with an average fieldmap
 template [@fieldmapless3].
 """
     inputnode = pe.Node(
-        niu.IdentityInterface(['bold_ref', 'template', 't1_brain', 't1_2_mni_reverse_transform']),
+        niu.IdentityInterface(['bold_ref', 't1_brain', 't1_2_mni_reverse_transform']),
         name='inputnode',
     )
     outputnode = pe.Node(
