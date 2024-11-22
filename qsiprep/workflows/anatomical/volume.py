@@ -129,12 +129,16 @@ def init_anat_preproc_wf(
         List of tissue probability maps in T1w space
     t2_preproc
         List of preprocessed t2w files
+    template
+        List of template names to which the structural image has been registered
+    anat2std_xfm
+        List of nonlinear spatial transforms to resample data from subject
+        anatomical space into standard template spaces. Collated with template.
+    std2anat_xfm
+        List of nonlinear spatial transforms to resample data from standard
+        template spaces into subject anatomical space. Collated with template.
     t1_2_mni
         T1w template, normalized to MNI space
-    t1_2_mni_forward_transform
-        ANTs-compatible affine-and-warp transform file
-    t1_2_mni_reverse_transform
-        ANTs-compatible affine-and-warp transform file (inverse)
     t1_resampling_grid
         Image of the preprocessed t1 to be used as the reference output for dwis
 
@@ -158,8 +162,8 @@ def init_anat_preproc_wf(
                 't1_aseg',
                 't1_aparc',
                 't1_2_mni',
-                't1_2_mni_forward_transform',
-                't1_2_mni_reverse_transform',
+                'anat2std_xfm',
+                'std2anat_xfm',
                 't2w_unfatsat',
                 'segmentation_qc',
                 'template_transforms',
