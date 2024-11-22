@@ -260,6 +260,7 @@ co-registration with the anatomical reference.
 
     # FIELDMAP-less path
     if fieldmap_info['suffix'] == 'syn':
+        # XXX: Should be replaced with SynB0.
         syn_sdc_wf = init_syn_sdc_wf(
             bold_pe=dwi_meta.get('PhaseEncodingDirection', None),
         )
@@ -267,6 +268,7 @@ co-registration with the anatomical reference.
         workflow.connect([
             (inputnode, syn_sdc_wf, [
                 ('t1_brain', 'inputnode.t1_brain'),
+                # Only place a template transform is used on DWI data
                 ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
                 ('b0_ref', 'inputnode.bold_ref'),
             ]),
