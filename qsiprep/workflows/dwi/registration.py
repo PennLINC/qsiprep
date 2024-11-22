@@ -56,8 +56,6 @@ def init_b0_to_anat_registration_wf(
         FreeSurfer SUBJECTS_DIR
     subject_id
         FreeSurfer subject ID
-    t1_2_fsnative_reverse_transform
-        LTA-style affine matrix translating from FreeSurfer-conformed subject space to T1w
 
     Outputs
     -------
@@ -81,7 +79,6 @@ def init_b0_to_anat_registration_wf(
                 't1_seg',
                 'subjects_dir',
                 'subject_id',
-                't1_2_fsnative_reverse_transform',
             ]
         ),
         name='inputnode',
@@ -175,8 +172,6 @@ def init_direct_b0_acpc_wf(write_report=True, name='b0_anat_coreg'):
             FreeSurfer SUBJECTS_DIR
         subject_id
             FreeSurfer subject ID
-        t1_2_fsnative_reverse_transform
-            LTA-style affine matrix translating from FreeSurfer-conformed subject space to T1w
 
     **Outputs**
 
@@ -197,7 +192,6 @@ def init_direct_b0_acpc_wf(write_report=True, name='b0_anat_coreg'):
                 't1_seg',
                 'subjects_dir',
                 'subject_id',
-                't1_2_fsnative_reverse_transform',
             ]
         ),
         name='inputnode',
