@@ -166,6 +166,7 @@ ignore = [
   "S602",  # TODO: Fix these
   "E402",  # TODO: Fix these
   "UP028",  # TODO: Fix these
+  "UP031",  # TODO: Fix these
   "BLE001",  # TODO: Fix these
 ]
 

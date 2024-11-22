@@ -151,7 +151,7 @@ if not _disable_et:
     # Just get so analytics track one hit
     from contextlib import suppress
 
-    from requests import ConnectionError, ReadTimeout
+    from requests import ConnectionError, ReadTimeout  # noqa: A004
     from requests import get as _get_url
 
     with suppress((ConnectionError, ReadTimeout)):
