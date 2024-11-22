@@ -77,8 +77,6 @@ def init_intramodal_template_wf(
                 't1_tpms',
                 't1_2_mni_forward_transform',
                 'dwi_sampling_grid',
-                't1_2_fsnative_forward_transform',
-                't1_2_fsnative_reverse_transform',
                 't1_2_mni_reverse_transform',
             ]
         ),
@@ -147,7 +145,6 @@ def init_intramodal_template_wf(
             ('subjects_dir', 'inputnode.subjects_dir'),
             ('t1_seg', 'inputnode.t1_seg'),
             ('subject_id', 'inputnode.subject_id'),
-            ('t1_2_fsnative_reverse_transform', 'inputnode.t1_2_fsnative_reverse_transform'),
         ]),
         (ants_mvtc2, b0_coreg_wf, [('templates', 'inputnode.ref_b0_brain')]),
         (b0_coreg_wf, ds_report_imtcoreg, [('outputnode.report', 'in_file')]),

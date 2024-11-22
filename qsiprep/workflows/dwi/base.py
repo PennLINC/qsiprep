@@ -85,12 +85,6 @@ def init_dwi_preproc_wf(
         FreeSurfer SUBJECTS_DIR
     subject_id
         FreeSurfer subject ID
-    t1_2_fsnative_forward_transform
-        LTA-style affine matrix translating from T1w to
-        FreeSurfer-conformed subject space
-    t1_2_fsnative_reverse_transform
-        LTA-style affine matrix translating from FreeSurfer-conformed
-        subject space to T1w
     dwi_sampling_grid
         A NIfTI1 file with the grid spacing and FoV to resample the DWIs
 
@@ -201,8 +195,6 @@ def init_dwi_preproc_wf(
                 't1_2_mni_forward_transform',
                 't2w_unfatsat',
                 't1_2_mni_reverse_transform',
-                't1_2_fsnative_forward_transform',
-                't1_2_fsnative_reverse_transform',
                 't2w_files',
                 'dwi_sampling_grid',
             ]
@@ -429,7 +421,6 @@ Diffusion data preprocessing
             ('t1_seg', 'inputnode.t1_seg'),
             ('subjects_dir', 'inputnode.subjects_dir'),
             ('subject_id', 'inputnode.subject_id'),
-            ('t1_2_fsnative_reverse_transform', 'inputnode.t1_2_fsnative_reverse_transform'),
         ]),
         (hmc_wf, b0_coreg_wf, [('outputnode.b0_template', 'inputnode.ref_b0_brain')]),
         (hmc_wf, summary, [('outputnode.sdc_method', 'distortion_correction')]),

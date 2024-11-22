@@ -109,12 +109,6 @@ def init_dwi_finalize_wf(
             FreeSurfer SUBJECTS_DIR
         subject_id
             FreeSurfer subject ID
-        t1_2_fsnative_forward_transform
-            LTA-style affine matrix translating from T1w to
-            FreeSurfer-conformed subject space
-        t1_2_fsnative_reverse_transform
-            LTA-style affine matrix translating from FreeSurfer-conformed
-            subject space to T1w
         dwi_sampling_grid
             A NIfTI1 file with the grid spacing and FoV to resample the DWIs
         b0_ref_image
@@ -202,8 +196,6 @@ def init_dwi_finalize_wf(
                 't1_aseg',
                 't1_aparc',
                 't1_2_mni_reverse_transform',
-                't1_2_fsnative_forward_transform',
-                't1_2_fsnative_reverse_transform',
                 'dwi_sampling_grid',
                 'raw_qc_file',
                 'coreg_score',
