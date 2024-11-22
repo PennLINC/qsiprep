@@ -65,7 +65,7 @@ def init_anat_preproc_wf(
     num_anat_images,
     num_additional_t2ws,
     has_rois,
-    anatomical_template,
+    spaces,
     name='anat_preproc_wf',
 ):
     r"""

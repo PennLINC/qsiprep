@@ -808,6 +808,40 @@ def init_spaces(checkpoint=True):
             [ref for s in spaces.split(' ') for ref in Reference.from_string(s)]
         )
 
+    acpc_spaces = [space for space in spaces.references if space.space == 'ACPC']
+    if len(acpc_spaces) > 1:
+        raise ValueError(
+            'Specifying ACPC space with multiple resolutions is not currently supported.'
+        )
+
+    for space in spaces.references:
+        if space.space != 'ACPC':
+            resolution_specified = bool(space.spec.get('res'))
+            if resolution_specified:
+                raise ValueError(f'Resolution cannot be specified for space "{space.space}"')
+        else:
+            resolution_specified = bool(space.spec.get('res'))
+            if not resolution_specified:
+                print(
+                    f'Resolution not specified for space "{space.space}". '
+                    'Defaulting to nativemax.'
+                )
+                space.spec['res'] = 'nativemax'
+
+        if space.dim != 3:
+            raise ValueError(
+                f'Space "{space.space}" is {space.dim}D, which is not supported in QSIPrep.'
+            )
+
+        if not space.standard and space.space != 'ACPC':
+            raise ValueError(f'Non-standard space "{space.space}" is not supported.')
+
+    spaces = execution.output_spaces or SpatialReferences()
+    if not isinstance(spaces, SpatialReferences):
+        spaces = SpatialReferences(
+            [ref for s in spaces.split(' ') for ref in Reference.from_string(s)]
+        )
+
     if checkpoint and not spaces.is_cached():
         spaces.checkpoint()
 

@@ -42,8 +42,8 @@ SUBJECT_TEMPLATE = """\t<ul class="elem-desc">
 \t\t<li>Structural images: {n_t1s:d} T1-weighted {t2w}</li>
 \t\t<li>Diffusion-weighted series: inputs {n_dwis:d}, outputs {n_outputs:d}</li>
 {groupings}
-\t\t<li>Resampling targets: ACPC</li>
-\t\t<li>Transform targets: {output_spaces}</li>
+\t\t<li>Resampling targets: {nstd_spaces}</li>
+\t\t<li>Transform targets: {std_spaces}</li>
 \t</ul>
 """
 
@@ -144,8 +144,8 @@ class SubjectSummaryInputSpec(BaseInterfaceInputSpec):
     subject_id = Str(desc='Subject ID')
     session_id = Str(desc='Session ID')
     dwi_groupings = traits.Dict(desc='groupings of DWI files and their output names')
-    output_spaces = traits.List(desc='Target spaces')
-    template = Str(desc='Template space')
+    std_spaces = traits.List(desc='Standard spaces for outputs')
+    nstd_spaces = traits.List(desc='Non-standard spaces for outputs')
     freesurfer_status = traits.Enum('Not run', 'Partial', 'Full', desc='FreeSurfer status')
 
 
@@ -204,7 +204,8 @@ class SubjectSummary(SummaryInterface):
             n_dwis=n_dwis,
             n_outputs=n_outputs,
             groupings=groupings,
-            output_spaces=['ACPC', self.inputs.template],
+            std_spaces=', '.join(self.inputs.std_spaces),
+            nstd_spaces=', '.join(self.inputs.nstd_spaces),
         )
 
 

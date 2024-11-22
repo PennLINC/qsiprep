@@ -52,6 +52,7 @@ from ..interfaces import (
 from ..utils.bids import collect_data
 from ..utils.grouping import group_dwi_scans
 from ..utils.misc import fix_multi_source_name
+from ..utils.spaces import SpatialReferences
 from .anatomical.volume import init_anat_preproc_wf
 from .dwi.base import init_dwi_preproc_wf
 from .dwi.distortion_group_merge import init_distortion_group_merge_wf
@@ -158,26 +159,11 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
             '--anat-modality none'
         )
 
-    anatomical_template = config.workflow.anatomical_template
-    if config.workflow.infant:
-        from ..utils.bids import cohort_by_months, parse_bids_for_age_months
-
-        if session_ids and len(session_ids) > 1:
-            raise RuntimeError('Infant template is only available for single session processing.')
-
-        # Calculate the age and age-specific spaces
-        session_id = None if not session_ids else session_ids[0]
-        age = parse_bids_for_age_months(
-            config.execution.bids_dir,
-            subject_id,
-            session_id,
-        )
-        if age is None:
-            ses_str = f'_ses-{session_id}' if session_id else ''
-            raise RuntimeError(f'Could not find age for sub-{subject_id}{ses_str}')
-
-        cohort = cohort_by_months(anatomical_template, age)
-        anatomical_template = f'{anatomical_template}+{cohort}'
+    spaces = init_workflow_spaces(
+        execution_spaces=config.workflow.output_spaces,
+        subject_id=subject_id,
+        session_ids=session_ids,
+    )
 
     additional_t2ws = 0
     if 'drbuddi' in config.workflow.pepolar_method.lower() and subject_data['t2w']:
@@ -226,7 +212,10 @@ to workflows in *QSIPrep*'s documentation]\
     bids_info = pe.Node(BIDSInfo(), name='bids_info', run_without_submitting=True)
 
     summary = pe.Node(
-        SubjectSummary(template=anatomical_template),
+        SubjectSummary(
+            std_spaces=spaces.get_spaces(nonstandard=False),
+            nstd_spaces=spaces.get_spaces(standard=False),
+        ),
         name='summary',
         run_without_submitting=True,
     )
@@ -270,7 +259,7 @@ to workflows in *QSIPrep*'s documentation]\
         num_anat_images=num_anat_images,
         num_additional_t2ws=additional_t2ws,
         has_rois=bool(subject_data['roi']),
-        anatomical_template=anatomical_template,
+        spaces=spaces,
     )
 
     workflow.connect([
@@ -284,7 +273,10 @@ to workflows in *QSIPrep*'s documentation]\
              'in_file'),
         ]),
         (inputnode, summary, [('subjects_dir', 'subjects_dir')]),
-        (bidssrc, summary, [('t1w', 't1w'), ('t2w', 't2w')]),
+        (bidssrc, summary, [
+            ('t1w', 't1w'),
+            ('t2w', 't2w'),
+        ]),
         (bids_info, summary, [('subject_id', 'subject_id')]),
         (bidssrc, anat_preproc_wf, [
             ('t1w', 'inputnode.t1w'),
@@ -515,3 +507,43 @@ def provide_processing_advice(subject_data, layout, unringing_method):
     config.loggers.utils.warning(
         'Partial Fourier acquisitions found for %s. Consider using --unringing-method rpg'
     )
+
+
+def init_workflow_spaces(execution_spaces: SpatialReferences, subject_id: str, session_ids: list):
+    """Create output spaces at a per-subworkflow level.
+
+    This address the case where a multi-session subject is run,
+    and requires separate template cohorts.
+    """
+    from templateflow import api as _tfapi
+
+    spaces = deepcopy(execution_spaces)
+
+    for space in spaces:
+        needs_cohort = (
+            bool(_tfapi.TF_LAYOUT.get_cohorts(template=space.space)) and
+            'cohort' not in space.spec
+        )
+        if needs_cohort:
+            from ..utils.bids import cohort_by_months, parse_bids_for_age_months
+
+            if session_ids and len(session_ids) > 1:
+                raise RuntimeError(
+                    'Cohort inference is only available for single session processing.'
+                )
+
+            # Calculate the age and age-specific spaces
+            session_id = None if not session_ids else session_ids[0]
+            age = parse_bids_for_age_months(
+                config.execution.bids_dir,
+                subject_id,
+                session_id,
+            )
+            if age is None:
+                ses_str = f'_ses-{session_id}' if session_id else ''
+                raise RuntimeError(f'Could not find age for sub-{subject_id}{ses_str}')
+
+            cohort = cohort_by_months(space.space, age)
+            space['spec']['cohort'] = cohort
+
+        return spaces
