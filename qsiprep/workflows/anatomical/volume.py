@@ -174,6 +174,17 @@ def init_anat_preproc_wf(
 
     dwi_only = config.workflow.anat_modality == 'none'
 
+    templates = spaces.get_spaces(nonstandard=False, dim=(3,))
+    if templates:
+        config.loggers.workflow.info(
+            f'ANAT Stage X: Preparing normalization workflow for {templates}'
+        )
+        # Run the template preparation and normalization workflow
+        ...
+
+    # Select the primary standard template (MNI152NLin2009cAsym for adult, MNIInfant for infant)
+    # and pass it along to reference grid wf.
+
     # XXX: This is a temporary solution until QSIPrep supports flexible output spaces.
     get_template = pe.Node(
         GetTemplate(
