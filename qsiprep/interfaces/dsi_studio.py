@@ -231,7 +231,7 @@ class DSIStudioGQIReconstruction(CommandLine):
 
     def _list_outputs(self):
         outputs = self.output_spec().get()
-        config.loggers.interface.info('current dir', os.getcwd())
+        config.loggers.interface.info(f'current dir: {os.getcwd()}')
         srcname = os.path.split(self.inputs.input_src_file)[-1]
         config.loggers.interface.info(f'input src {self.inputs.input_src_file}')
         config.loggers.interface.info(f'split src name {srcname}')
