@@ -99,6 +99,20 @@ def _build_parser(**kwargs):
             raise parser.error("Argument can't be less than one.")
         return value
 
+    def _int_or_auto(value, parser):
+        """Ensure an argument is an integer or 'auto'."""
+        if value == 'auto':
+            return value
+        try:
+            value = int(value)
+        except ValueError as exc:
+            raise parser.error('Argument must be an integer or "auto".') from exc
+
+        if value < 1:
+            raise parser.error('Argument must be greater than zero.')
+
+        return value
+
     def _to_gb(value):
         scale = {'G': 1, 'T': 10**3, 'M': 1e-3, 'K': 1e-6, 'B': 1e-9}
         digits = ''.join([c for c in value if c.isdigit()])
@@ -349,10 +363,16 @@ def _build_parser(**kwargs):
     g_conf.add_argument(
         '--dwi-denoise-window',
         action='store',
+        type=_int_or_auto,
         default='auto',
-        help='window size in voxels for image-based denoising, integer or "auto".'
-        'If "auto", 5 will be used for dwidenoise and auto-configured for '
-        'patch2self based on the number of b>0 images.',
+        help=(
+            'Window size in voxels for image-based denoising: integer or "auto". '
+            'If using the "dwidenoise" denoising method, '
+            'the "auto" option will calculate a window size '
+            'based on the number of volumes according to the method described by the '
+            'dwidenoise documentation. '
+            'If using the "patch2self" denoising method, this argument will not be used.'
+        ),
     )
     g_conf.add_argument(
         '--denoise-method',
@@ -360,7 +380,7 @@ def _build_parser(**kwargs):
         choices=['dwidenoise', 'patch2self', 'none'],
         default='dwidenoise',
         help='Image-based denoising method. Either "dwidenoise" (MRtrix), '
-        '"patch2self" (DIPY) or none. (default: dwidenoise)',
+        '"patch2self" (DIPY) or "none". (default: dwidenoise)',
     )
     g_conf.add_argument(
         '--unringing-method',
@@ -692,10 +712,14 @@ def parse_args(args=None, namespace=None):
 
     # Validate the tricky options here
     if config.workflow.dwi_denoise_window != 'auto':
-        try:
-            _ = int(config.workflow.dwi_denoise_window)
-        except ValueError:
-            raise Exception("--dwi-denoise-window must be an integer or 'auto'")
+        if config.workflow.denoise_method == 'patch2self':
+            config.loggers.cli.error(
+                'The --dwi-denoise-window option is not used when --denoise-method=patch2self'
+            )
+        elif config.workflow.denoise_method == 'none':
+            config.loggers.cli.error(
+                'The --dwi-denoise-window option is not used when --denoise-method=none'
+            )
 
     bids_dir = config.execution.bids_dir
     output_dir = config.execution.output_dir

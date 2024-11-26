@@ -414,8 +414,13 @@ def init_dwi_denoising_wf(
     if (
         config.workflow.denoise_method == 'dwidenoise'
     ) and config.workflow.dwi_denoise_window == 'auto':
-        dwi_denoise_window = 5
-        config.loggers.workflow.info('Automatically using 5, 5, 5 window for dwidenoise')
+        import numpy as np
+
+        dwi_denoise_window = closest_odd(np.cbrt(n_volumes))
+        config.loggers.workflow.info(
+            f'Automatically using {dwi_denoise_window}, {dwi_denoise_window}, '
+            f'{dwi_denoise_window} window for dwidenoise'
+        )
 
     # How many steps in the denoising pipeline
     num_steps = sum(map(int, [do_denoise, do_unringing, do_biascorr, harmonize_b0s]))
@@ -734,3 +739,10 @@ def get_merged_parameter(parameter_df, parameter_name, selection_mode='all'):
         return col.mode()[0]
 
     raise Exception("selection_mode must be 'all' or 'mode'")
+
+
+def closest_odd(x):
+    if x % 2 == 0:
+        return x - 1
+    else:
+        return x
