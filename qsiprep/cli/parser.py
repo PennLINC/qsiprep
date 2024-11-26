@@ -168,6 +168,7 @@ def _build_parser(**kwargs):
     PathExists = partial(_path_exists, parser=parser)
     IsFile = partial(_is_file, parser=parser)
     PositiveInt = partial(_min_one, parser=parser)
+    IntOrAuto = partial(_int_or_auto, parser=parser)
     BIDSFilter = partial(_bids_filter, parser=parser)
 
     # Arguments as specified by BIDS-Apps
@@ -363,7 +364,7 @@ def _build_parser(**kwargs):
     g_conf.add_argument(
         '--dwi-denoise-window',
         action='store',
-        type=_int_or_auto,
+        type=IntOrAuto,
         default='auto',
         help=(
             'Window size in voxels for image-based denoising: integer or "auto". '
