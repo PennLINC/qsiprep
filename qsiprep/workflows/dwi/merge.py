@@ -149,13 +149,13 @@ def init_merge_and_denoise_wf(
 
     # Get a data frame of the raw_dwi_files and their imaging parameters:
     dwi_df = get_acq_parameters_df(raw_dwi_files, layout=layout)
-    for dwi_num, row in dwi_df.iterrows():
-        dwi_num += 1  # start at 1
+    for i_dwi, row in dwi_df.iterrows():
+        dwi_num = i_dwi + 1  # start at 1
         dwi_file = row.BIDSFile
 
         # Conform each image to the requested orientation
         conformers.append(
-            pe.Node(ConformDwi(orientation=orientation), name='conform_dwis%02d' % dwi_num),
+            pe.Node(ConformDwi(orientation=orientation), name=f'conform_dwis{dwi_num:02d}'),
         )
         conformers[-1].inputs.dwi_file = dwi_file
 
@@ -187,11 +187,13 @@ def init_merge_and_denoise_wf(
                     name=f'conform_phase{dwi_num}',
                 )
 
+            n_volumes = row.NumVolumes
             denoising_wfs.append(
                 init_dwi_denoising_wf(
                     partial_fourier=row.PartialFourier,
                     phase_encoding_direction=row.PhaseEncodingAxis,
                     source_file=dwi_file,
+                    n_volumes=n_volumes,
                     use_phase=use_phase,
                     do_biascorr=do_biascorr,
                     name=wf_name,
@@ -279,10 +281,12 @@ def init_merge_and_denoise_wf(
     # Send the merged series for denoising
     merge_confounds = pe.Node(niu.Merge(2), name='merge_confounds')
     hstack_confounds = pe.Node(StackConfounds(axis=1), name='hstack_confounds')
+    n_volumes = dwi_df['NumVolumes'].sum()
     denoising_wf = init_dwi_denoising_wf(
         partial_fourier=get_merged_parameter(dwi_df, 'PartialFourier', 'all'),
         phase_encoding_direction=get_merged_parameter(dwi_df, 'PhaseEncodingAxis', 'all'),
         source_file=source_file,
+        n_volumes=n_volumes,
         use_phase=False,  # can't use phase with concatenated data
         do_biascorr=do_biascorr,
         name='merged_denoise',
@@ -312,6 +316,7 @@ def init_dwi_denoising_wf(
     source_file,
     partial_fourier,
     phase_encoding_direction,
+    n_volumes,
     use_phase,
     do_biascorr,
     name='denoise_wf',
@@ -326,6 +331,10 @@ def init_dwi_denoising_wf(
         fraction of k-space acquired
     phase_encoding_direction : str
         direction of phase encoding
+    n_volumes : int
+        number of volumes in the DWI series.
+        Used to determine the window size for denoising if dwidenoise is used
+        and the 'auto' option is selected.
     use_phase : bool
         True if phase data are available for the DWI scan.
         If True, and ``denoise_method`` is ``dwidenoise``, then ``dwidenoise``
@@ -410,17 +419,6 @@ def init_dwi_denoising_wf(
     do_denoise = denoise_method in ('patch2self', 'dwidenoise')
     do_unringing = config.workflow.unringing_method in ('mrdegibbs', 'rpg')
     harmonize_b0s = not config.workflow.no_b0_harmonization
-    # Configure the denoising window
-    if (
-        config.workflow.denoise_method == 'dwidenoise'
-    ) and config.workflow.dwi_denoise_window == 'auto':
-        import numpy as np
-
-        dwi_denoise_window = closest_odd(np.cbrt(n_volumes))
-        config.loggers.workflow.info(
-            f'Automatically using {dwi_denoise_window}, {dwi_denoise_window}, '
-            f'{dwi_denoise_window} window for dwidenoise'
-        )
 
     # How many steps in the denoising pipeline
     num_steps = sum(map(int, [do_denoise, do_unringing, do_biascorr, harmonize_b0s]))
@@ -442,6 +440,16 @@ def init_dwi_denoising_wf(
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB,
         )
+
+        if denoise_method == 'dwidenoise' and config.workflow.dwi_denoise_window == 'auto':
+            # Configure the denoising window
+            import numpy as np
+
+            dwi_denoise_window = closest_odd(np.cbrt(n_volumes))
+            config.loggers.workflow.info(
+                f'Automatically using {dwi_denoise_window}, {dwi_denoise_window}, '
+                f'{dwi_denoise_window} window for dwidenoise'
+            )
 
         if (denoise_method == 'dwidenoise') and use_phase:
             # If there are phase files available, then we can use dwidenoise
@@ -500,7 +508,7 @@ def init_dwi_denoising_wf(
             )
         else:
             denoiser = pe.Node(
-                Patch2Self(patch_radius=dwi_denoise_window),
+                Patch2Self(),
                 name='denoiser',
                 n_procs=omp_nthreads,
             )
