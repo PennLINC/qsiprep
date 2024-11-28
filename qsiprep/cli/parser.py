@@ -111,6 +111,9 @@ def _build_parser(**kwargs):
         if value < 1:
             raise parser.error('Argument must be greater than zero.')
 
+        if value % 2 == 0:
+            raise parser.error('Argument must be an odd integer.')
+
         return value
 
     def _to_gb(value):
@@ -368,6 +371,7 @@ def _build_parser(**kwargs):
         default='auto',
         help=(
             'Window size in voxels for image-based denoising: integer or "auto". '
+            'Any non-"auto" value must be an odd, positive integer. '
             'If using the "dwidenoise" denoising method, '
             'the "auto" option will calculate a window size '
             'based on the number of volumes according to the method described by the '
