@@ -525,7 +525,7 @@ def init_dwi_denoising_wf(
         else:
             desc += (
                 "DWI data were denoised using DiPy's Patch2Self algorithm [@dipy; @patch2self] "
-                "with an automatically-defined window size. "
+                'with an automatically-defined window size. '
             )
             denoiser = pe.Node(
                 Patch2Self(),
