@@ -390,6 +390,7 @@ def init_dwi_denoising_wf(
     )
     workflow = Workflow(name=name)
     omp_nthreads = config.nipype.omp_nthreads
+    desc = '\n\n'
 
     # Get IdentityInterfaces ready to hold intermediate results
     buffernodes = []
@@ -441,6 +442,7 @@ def init_dwi_denoising_wf(
             mem_gb=DEFAULT_MEMORY_MIN_GB,
         )
 
+        dwi_denoise_window = config.workflow.dwi_denoise_window
         if denoise_method == 'dwidenoise' and config.workflow.dwi_denoise_window == 'auto':
             # Configure the denoising window
             import numpy as np
@@ -452,6 +454,14 @@ def init_dwi_denoising_wf(
             )
 
         if (denoise_method == 'dwidenoise') and use_phase:
+            desc += (
+                'Magnitude and phase DWI data were combined into a complex-valued file, '
+                'then denoised using the Marchenko-Pastur PCA method implemented in dwidenoise '
+                '[@mrtrix3; @dwidenoise1; @dwidenoise2; @cordero2019complex] '
+                f'with a window size of {dwi_denoise_window} voxels. '
+                'After denoising, the complex-valued data were split back into magnitude and '
+                'phase, and the denoised magnitude data were retained. '
+            )
             # If there are phase files available, then we can use dwidenoise
             # on the complex-valued data.
             phase_to_radians = pe.Node(
@@ -498,6 +508,12 @@ def init_dwi_denoising_wf(
             ])  # fmt:skip
 
         elif denoise_method == 'dwidenoise':
+            desc += (
+                'DWI data were '
+                'denoised using the Marchenko-Pastur PCA method implemented in dwidenoise '
+                '[@mrtrix3; @dwidenoise1; @dwidenoise2; @cordero2019complex] '
+                f'with a window size of {dwi_denoise_window} voxels. '
+            )
             denoiser = pe.Node(
                 DWIDenoise(
                     extent=(dwi_denoise_window, dwi_denoise_window, dwi_denoise_window),
@@ -507,6 +523,10 @@ def init_dwi_denoising_wf(
                 n_procs=omp_nthreads,
             )
         else:
+            desc += (
+                "DWI data were denoised using DiPy's Patch2Self algorithm [@dipy; @patch2self] "
+                "with an automatically-defined window size. "
+            )
             denoiser = pe.Node(
                 Patch2Self(),
                 name='denoiser',
@@ -526,12 +546,15 @@ def init_dwi_denoising_wf(
 
     if do_unringing:
         if unringing_method == 'mrdegibbs':
+            desc += 'Gibbs ringing was removed using MRtrix3 [@mrtrix3; @mrdegibbs]. '
             degibbser = pe.Node(
                 MRDeGibbs(nthreads=omp_nthreads),
                 name='degibbser',
                 n_procs=omp_nthreads,
             )
         elif unringing_method == 'rpg':
+            desc += 'Gibbs ringing was removed using TORTOISE [@pfgibbs]. '
+
             pe_code = {
                 'i': 0,
                 'i-': 0,
@@ -574,6 +597,11 @@ def init_dwi_denoising_wf(
         step_num += 1
 
     if do_biascorr:
+        desc += (
+            'B1 field inhomogeneity was corrected using '
+            '`dwibiascorrect` from MRtrix3 with the N4 algorithm [@n4]. '
+        )
+
         biascorr = pe.Node(DWIBiasCorrect(method='ants'), name='biascorr', n_procs=omp_nthreads)
         ds_report_biascorr = pe.Node(
             DerivativesDataSink(
@@ -617,6 +645,8 @@ def init_dwi_denoising_wf(
             (merge_confounds, hstack_confounds, [('out', 'in_files')]),
             (hstack_confounds, outputnode, [('confounds_file', 'confounds')]),
         ])  # fmt:skip
+
+    workflow.__desc__ = desc
 
     return workflow
 
