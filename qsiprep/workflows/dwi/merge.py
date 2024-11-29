@@ -427,6 +427,7 @@ def init_dwi_denoising_wf(
 
     # Add the steps
     step_num = 1  # Merge inputs start at 1
+    last_step = ''
     if do_denoise:
         # Add buffernode for denoised DWI
         buffernodes.append(get_buffernode())
@@ -443,6 +444,7 @@ def init_dwi_denoising_wf(
         )
 
         dwi_denoise_window = config.workflow.dwi_denoise_window
+        auto_str = ''
         if denoise_method == 'dwidenoise' and config.workflow.dwi_denoise_window == 'auto':
             # Configure the denoising window
             import numpy as np
@@ -452,16 +454,19 @@ def init_dwi_denoising_wf(
                 f'Automatically using {dwi_denoise_window}, {dwi_denoise_window}, '
                 f'{dwi_denoise_window} window for dwidenoise'
             )
+            auto_str = 'n automatically-determined'
 
         if (denoise_method == 'dwidenoise') and use_phase:
             desc += (
                 'Magnitude and phase DWI data were combined into a complex-valued file, '
                 'then denoised using the Marchenko-Pastur PCA method implemented in dwidenoise '
                 '[@mrtrix3; @dwidenoise1; @dwidenoise2; @cordero2019complex] '
-                f'with a window size of {dwi_denoise_window} voxels. '
+                f'with a{auto_str} window size of {dwi_denoise_window} voxels. '
                 'After denoising, the complex-valued data were split back into magnitude and '
                 'phase, and the denoised magnitude data were retained. '
             )
+            last_step = 'After MP-PCA, '
+
             # If there are phase files available, then we can use dwidenoise
             # on the complex-valued data.
             phase_to_radians = pe.Node(
@@ -512,8 +517,10 @@ def init_dwi_denoising_wf(
                 'DWI data were '
                 'denoised using the Marchenko-Pastur PCA method implemented in dwidenoise '
                 '[@mrtrix3; @dwidenoise1; @dwidenoise2; @cordero2019complex] '
-                f'with a window size of {dwi_denoise_window} voxels. '
+                f'with a{auto_str} window size of {dwi_denoise_window} voxels. '
             )
+            last_step = 'After MP-PCA, '
+
             denoiser = pe.Node(
                 DWIDenoise(
                     extent=(dwi_denoise_window, dwi_denoise_window, dwi_denoise_window),
@@ -527,6 +534,7 @@ def init_dwi_denoising_wf(
                 "DWI data were denoised using DiPy's Patch2Self algorithm [@dipy; @patch2self] "
                 'with an automatically-defined window size. '
             )
+            last_step = 'After `patch2self`, '
             denoiser = pe.Node(
                 Patch2Self(),
                 name='denoiser',
@@ -546,14 +554,14 @@ def init_dwi_denoising_wf(
 
     if do_unringing:
         if unringing_method == 'mrdegibbs':
-            desc += 'Gibbs ringing was removed using MRtrix3 [@mrtrix3; @mrdegibbs]. '
+            desc += f'{last_step}Gibbs ringing was removed using MRtrix3 [@mrtrix3; @mrdegibbs]. '
             degibbser = pe.Node(
                 MRDeGibbs(nthreads=omp_nthreads),
                 name='degibbser',
                 n_procs=omp_nthreads,
             )
         elif unringing_method == 'rpg':
-            desc += 'Gibbs ringing was removed using TORTOISE [@pfgibbs]. '
+            desc += f'{last_step}Gibbs ringing was removed using TORTOISE [@pfgibbs]. '
 
             pe_code = {
                 'i': 0,
@@ -573,6 +581,8 @@ def init_dwi_denoising_wf(
                 name='degibbser',
                 n_procs=omp_nthreads,
             )
+
+        last_step = 'After unringing, '
 
         ds_report_unringing = pe.Node(
             DerivativesDataSink(
@@ -598,9 +608,10 @@ def init_dwi_denoising_wf(
 
     if do_biascorr:
         desc += (
-            'B1 field inhomogeneity was corrected using '
+            f'{last_step}B1 field inhomogeneity was corrected using '
             '`dwibiascorrect` from MRtrix3 with the N4 algorithm [@n4]. '
         )
+        last_step = True
 
         biascorr = pe.Node(DWIBiasCorrect(method='ants'), name='biascorr', n_procs=omp_nthreads)
         ds_report_biascorr = pe.Node(
@@ -638,6 +649,9 @@ def init_dwi_denoising_wf(
     # Connect the final buffernode (the most recent output) to the outputnode
     workflow.connect([(buffernodes[-1], outputnode, [('dwi_file', 'dwi_file')])])
 
+    if not last_step:
+        desc = 'No denoising steps were applied to the DWI data.'
+
     # If any denoising operations were run, collect their confounds
     if step_num > 1:
         hstack_confounds = pe.Node(StackConfounds(axis=1), name='hstack_confounds')
@@ -673,42 +687,6 @@ def gen_denoising_boilerplate():
     do_unringing = unringing_method in ('rpg', 'mrdegibbs')
     harmonize_b0s = not no_b0_harmonization
     last_step = ''
-    if do_denoise:
-        if denoise_method == 'dwidenoise':
-            desc.append(
-                "MP-PCA denoising as implemented in MRtrix3's `dwidenoise`"
-                f'[@dwidenoise1] was applied with a {dwi_denoise_window}-voxel window.'
-            )
-            last_step = 'After MP-PCA, '
-            if use_phase:
-                desc.append(
-                    'When phase data were available, this was done on complex-valued data.'
-                )
-
-        elif denoise_method == 'patch2self':
-            desc.append('Denoising using `patch2self` [@patch2self] was applied')
-            if dwi_denoise_window == 'auto':
-                desc.append('with settings based on developer recommendations.')
-            else:
-                desc.append(f'with a {dwi_denoise_window}-voxel window.')
-            last_step = 'After `patch2self`, '
-
-    if do_unringing:
-        unringing_txt = {
-            'mrdegibbs': "MRtrix3's `mrdegibbs` [@mrdegibbs].",
-            'dipy': 'Dipy [@dipy].',
-            'rpg': "TORTOISE's `Gibbs` [@pfgibbs].",
-        }[unringing_method]
-
-        desc.append(f'{last_step}Gibbs unringing was performed using {unringing_txt}')
-        last_step = 'Following unringing, '
-
-    if b1_biascorrect_stage == 'legacy':
-        desc.append(
-            f'{last_step}B1 field inhomogeneity was corrected using '
-            '`dwibiascorrect` from MRtrix3 with the N4 algorithm [@n4].'
-        )
-        last_step = 'After B1 bias correction, '
 
     if harmonize_b0s:
         desc.append(
