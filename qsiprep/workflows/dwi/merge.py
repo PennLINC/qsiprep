@@ -684,7 +684,7 @@ def gen_denoising_boilerplate():
 
     if harmonize_b0s:
         desc.append(
-            f'{last_step}the mean intensity of the DWI series was adjusted '
+            'The mean intensity of the DWI series was adjusted '
             'so all the mean intensity of the b=0 images matched across each'
             'separate DWI scanning sequence.'
         )
