@@ -101,7 +101,7 @@ def _build_parser(**kwargs):
 
     def _int_or_auto(value, parser):
         """Ensure an argument is an integer or 'auto'."""
-        if value == 'auto':
+        if value.lower() == 'auto':
             return value
         try:
             value = int(value)
@@ -370,7 +370,7 @@ def _build_parser(**kwargs):
         type=IntOrAuto,
         default='auto',
         help=(
-            'Window size in voxels for image-based denoising: integer or "auto". '
+            'Window size in voxels for image-based denoising: odd integer or "auto". '
             'Any non-"auto" value must be an odd, positive integer. '
             'If using the "dwidenoise" denoising method, '
             'the "auto" option will calculate a window size '
@@ -722,7 +722,7 @@ def parse_args(args=None, namespace=None):
                 'The --dwi-denoise-window option is not used when --denoise-method=patch2self'
             )
         elif config.workflow.denoise_method == 'none':
-            config.loggers.cli.error(
+            config.loggers.cli.warning(
                 'The --dwi-denoise-window option is not used when --denoise-method=none'
             )
 
