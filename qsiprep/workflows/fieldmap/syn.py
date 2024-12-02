@@ -135,7 +135,7 @@ def init_syn_sdc_wf(bold_pe=None, atlas_threshold=2):
     workflow = Workflow(name='syn_sdc_wf')
     workflow.__desc__ = f"""\
 A deformation field to correct for susceptibility distortions was estimated
-based on *fmriprep*'s *fieldmap-less* approach.
+based on *fMRIPrep*'s *fieldmap-less* approach.
 The deformation field is that resulting from co-registering the b0 reference
 to the same-subject T1w-reference with its intensity inverted [@fieldmapless1;
 @fieldmapless2].

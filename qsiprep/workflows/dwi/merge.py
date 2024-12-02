@@ -149,13 +149,13 @@ def init_merge_and_denoise_wf(
 
     # Get a data frame of the raw_dwi_files and their imaging parameters:
     dwi_df = get_acq_parameters_df(raw_dwi_files, layout=layout)
-    for dwi_num, row in dwi_df.iterrows():
-        dwi_num += 1  # start at 1
+    for i_dwi, row in dwi_df.iterrows():
+        dwi_num = i_dwi + 1  # start at 1
         dwi_file = row.BIDSFile
 
         # Conform each image to the requested orientation
         conformers.append(
-            pe.Node(ConformDwi(orientation=orientation), name='conform_dwis%02d' % dwi_num),
+            pe.Node(ConformDwi(orientation=orientation), name=f'conform_dwis{dwi_num:02d}'),
         )
         conformers[-1].inputs.dwi_file = dwi_file
 
@@ -187,11 +187,13 @@ def init_merge_and_denoise_wf(
                     name=f'conform_phase{dwi_num}',
                 )
 
+            n_volumes = row.NumVolumes
             denoising_wfs.append(
                 init_dwi_denoising_wf(
                     partial_fourier=row.PartialFourier,
                     phase_encoding_direction=row.PhaseEncodingAxis,
                     source_file=dwi_file,
+                    n_volumes=n_volumes,
                     use_phase=use_phase,
                     do_biascorr=do_biascorr,
                     name=wf_name,
@@ -279,10 +281,12 @@ def init_merge_and_denoise_wf(
     # Send the merged series for denoising
     merge_confounds = pe.Node(niu.Merge(2), name='merge_confounds')
     hstack_confounds = pe.Node(StackConfounds(axis=1), name='hstack_confounds')
+    n_volumes = dwi_df['NumVolumes'].sum()
     denoising_wf = init_dwi_denoising_wf(
         partial_fourier=get_merged_parameter(dwi_df, 'PartialFourier', 'all'),
         phase_encoding_direction=get_merged_parameter(dwi_df, 'PhaseEncodingAxis', 'all'),
         source_file=source_file,
+        n_volumes=n_volumes,
         use_phase=False,  # can't use phase with concatenated data
         do_biascorr=do_biascorr,
         name='merged_denoise',
@@ -312,6 +316,7 @@ def init_dwi_denoising_wf(
     source_file,
     partial_fourier,
     phase_encoding_direction,
+    n_volumes,
     use_phase,
     do_biascorr,
     name='denoise_wf',
@@ -326,6 +331,10 @@ def init_dwi_denoising_wf(
         fraction of k-space acquired
     phase_encoding_direction : str
         direction of phase encoding
+    n_volumes : int
+        number of volumes in the DWI series.
+        Used to determine the window size for denoising if dwidenoise is used
+        and the 'auto' option is selected.
     use_phase : bool
         True if phase data are available for the DWI scan.
         If True, and ``denoise_method`` is ``dwidenoise``, then ``dwidenoise``
@@ -381,6 +390,7 @@ def init_dwi_denoising_wf(
     )
     workflow = Workflow(name=name)
     omp_nthreads = config.nipype.omp_nthreads
+    desc = '\n\n'
 
     # Get IdentityInterfaces ready to hold intermediate results
     buffernodes = []
@@ -410,12 +420,6 @@ def init_dwi_denoising_wf(
     do_denoise = denoise_method in ('patch2self', 'dwidenoise')
     do_unringing = config.workflow.unringing_method in ('mrdegibbs', 'rpg')
     harmonize_b0s = not config.workflow.no_b0_harmonization
-    # Configure the denoising window
-    if (
-        config.workflow.denoise_method == 'dwidenoise'
-    ) and config.workflow.dwi_denoise_window == 'auto':
-        dwi_denoise_window = 5
-        config.loggers.workflow.info('Automatically using 5, 5, 5 window for dwidenoise')
 
     # How many steps in the denoising pipeline
     num_steps = sum(map(int, [do_denoise, do_unringing, do_biascorr, harmonize_b0s]))
@@ -423,6 +427,7 @@ def init_dwi_denoising_wf(
 
     # Add the steps
     step_num = 1  # Merge inputs start at 1
+    last_step = ''
     if do_denoise:
         # Add buffernode for denoised DWI
         buffernodes.append(get_buffernode())
@@ -438,7 +443,30 @@ def init_dwi_denoising_wf(
             mem_gb=DEFAULT_MEMORY_MIN_GB,
         )
 
+        dwi_denoise_window = config.workflow.dwi_denoise_window
+        auto_str = ''
+        if denoise_method == 'dwidenoise' and config.workflow.dwi_denoise_window == 'auto':
+            # Configure the denoising window
+            import numpy as np
+
+            dwi_denoise_window = closest_odd(int(np.cbrt(n_volumes)))
+            config.loggers.workflow.info(
+                f'Automatically using {dwi_denoise_window}, {dwi_denoise_window}, '
+                f'{dwi_denoise_window} window for dwidenoise'
+            )
+            auto_str = 'n automatically-determined'
+
         if (denoise_method == 'dwidenoise') and use_phase:
+            desc += (
+                'Magnitude and phase DWI data were combined into a complex-valued file, '
+                'then denoised using the Marchenko-Pastur PCA method implemented in dwidenoise '
+                '[@mrtrix3; @dwidenoise1; @dwidenoise2; @cordero2019complex] '
+                f'with a{auto_str} window size of {dwi_denoise_window} voxels. '
+                'After denoising, the complex-valued data were split back into magnitude and '
+                'phase, and the denoised magnitude data were retained. '
+            )
+            last_step = 'After MP-PCA, '
+
             # If there are phase files available, then we can use dwidenoise
             # on the complex-valued data.
             phase_to_radians = pe.Node(
@@ -485,6 +513,14 @@ def init_dwi_denoising_wf(
             ])  # fmt:skip
 
         elif denoise_method == 'dwidenoise':
+            desc += (
+                'DWI data were '
+                'denoised using the Marchenko-Pastur PCA method implemented in dwidenoise '
+                '[@mrtrix3; @dwidenoise1; @dwidenoise2; @cordero2019complex] '
+                f'with a{auto_str} window size of {dwi_denoise_window} voxels. '
+            )
+            last_step = 'After MP-PCA, '
+
             denoiser = pe.Node(
                 DWIDenoise(
                     extent=(dwi_denoise_window, dwi_denoise_window, dwi_denoise_window),
@@ -494,8 +530,13 @@ def init_dwi_denoising_wf(
                 n_procs=omp_nthreads,
             )
         else:
+            desc += (
+                "DWI data were denoised using DiPy's Patch2Self algorithm [@dipy; @patch2self] "
+                'with an automatically-defined window size. '
+            )
+            last_step = 'After `patch2self`, '
             denoiser = pe.Node(
-                Patch2Self(patch_radius=dwi_denoise_window),
+                Patch2Self(),
                 name='denoiser',
                 n_procs=omp_nthreads,
             )
@@ -513,12 +554,15 @@ def init_dwi_denoising_wf(
 
     if do_unringing:
         if unringing_method == 'mrdegibbs':
+            desc += f'{last_step}Gibbs ringing was removed using MRtrix3 [@mrtrix3; @mrdegibbs]. '
             degibbser = pe.Node(
                 MRDeGibbs(nthreads=omp_nthreads),
                 name='degibbser',
                 n_procs=omp_nthreads,
             )
         elif unringing_method == 'rpg':
+            desc += f'{last_step}Gibbs ringing was removed using TORTOISE [@pfgibbs]. '
+
             pe_code = {
                 'i': 0,
                 'i-': 0,
@@ -537,6 +581,8 @@ def init_dwi_denoising_wf(
                 name='degibbser',
                 n_procs=omp_nthreads,
             )
+
+        last_step = 'After unringing, '
 
         ds_report_unringing = pe.Node(
             DerivativesDataSink(
@@ -561,6 +607,12 @@ def init_dwi_denoising_wf(
         step_num += 1
 
     if do_biascorr:
+        desc += (
+            f'{last_step}B1 field inhomogeneity was corrected using '
+            '`dwibiascorrect` from MRtrix3 with the N4 algorithm [@n4]. '
+        )
+        last_step = True
+
         biascorr = pe.Node(DWIBiasCorrect(method='ants'), name='biascorr', n_procs=omp_nthreads)
         ds_report_biascorr = pe.Node(
             DerivativesDataSink(
@@ -597,6 +649,9 @@ def init_dwi_denoising_wf(
     # Connect the final buffernode (the most recent output) to the outputnode
     workflow.connect([(buffernodes[-1], outputnode, [('dwi_file', 'dwi_file')])])
 
+    if not last_step:
+        desc = 'No denoising steps were applied to the DWI data.'
+
     # If any denoising operations were run, collect their confounds
     if step_num > 1:
         hstack_confounds = pe.Node(StackConfounds(axis=1), name='hstack_confounds')
@@ -604,6 +659,8 @@ def init_dwi_denoising_wf(
             (merge_confounds, hstack_confounds, [('out', 'in_files')]),
             (hstack_confounds, outputnode, [('confounds_file', 'confounds')]),
         ])  # fmt:skip
+
+    workflow.__desc__ = desc
 
     return workflow
 
@@ -615,61 +672,19 @@ def _as_list(item):
 def gen_denoising_boilerplate():
     """Generate a methods boilerplate for the denoising workflow."""
 
-    denoise_method = config.workflow.denoise_method
-    dwi_denoise_window = config.workflow.dwi_denoise_window
-    unringing_method = config.workflow.unringing_method
     b1_biascorrect_stage = config.workflow.b1_biascorrect_stage
     no_b0_harmonization = config.workflow.no_b0_harmonization
     b0_threshold = config.workflow.b0_threshold
-    use_phase = 'phase' not in config.workflow.ignore
     desc = [
         f'Any images with a b-value less than {b0_threshold} s/mm^2 were treated as a '
         '*b*=0 image.'
     ]
-    do_denoise = denoise_method in ('dwidenoise', 'patch2self')
-    do_unringing = unringing_method in ('rpg', 'mrdegibbs')
     harmonize_b0s = not no_b0_harmonization
     last_step = ''
-    if do_denoise:
-        if denoise_method == 'dwidenoise':
-            desc.append(
-                "MP-PCA denoising as implemented in MRtrix3's `dwidenoise`"
-                f'[@dwidenoise1] was applied with a {dwi_denoise_window}-voxel window.'
-            )
-            last_step = 'After MP-PCA, '
-            if use_phase:
-                desc.append(
-                    'When phase data were available, this was done on complex-valued data.'
-                )
-
-        elif denoise_method == 'patch2self':
-            desc.append('Denoising using `patch2self` [@patch2self] was applied')
-            if dwi_denoise_window == 'auto':
-                desc.append('with settings based on developer recommendations.')
-            else:
-                desc.append(f'with a {dwi_denoise_window}-voxel window.')
-            last_step = 'After `patch2self`, '
-
-    if do_unringing:
-        unringing_txt = {
-            'mrdegibbs': "MRtrix3's `mrdegibbs` [@mrdegibbs].",
-            'dipy': 'Dipy [@dipy].',
-            'rpg': "TORTOISE's `Gibbs` [@pfgibbs].",
-        }[unringing_method]
-
-        desc.append(f'{last_step}Gibbs unringing was performed using {unringing_txt}')
-        last_step = 'Following unringing, '
-
-    if b1_biascorrect_stage == 'legacy':
-        desc.append(
-            f'{last_step}B1 field inhomogeneity was corrected using '
-            '`dwibiascorrect` from MRtrix3 with the N4 algorithm [@n4].'
-        )
-        last_step = 'After B1 bias correction, '
 
     if harmonize_b0s:
         desc.append(
-            f'{last_step}the mean intensity of the DWI series was adjusted '
+            'The mean intensity of the DWI series was adjusted '
             'so all the mean intensity of the b=0 images matched across each'
             'separate DWI scanning sequence.'
         )
@@ -734,3 +749,10 @@ def get_merged_parameter(parameter_df, parameter_name, selection_mode='all'):
         return col.mode()[0]
 
     raise Exception("selection_mode must be 'all' or 'mode'")
+
+
+def closest_odd(x):
+    if x % 2 == 0:
+        return x - 1
+    else:
+        return x
