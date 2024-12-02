@@ -635,7 +635,7 @@ def init_dwi_model_hmc_wf(
         name='outputnode',
     )
     workflow.__desc__ = (
-        'The the SHORELine method was used to estimate head motion in b>0 '
+        'The SHORELine method was used to estimate head motion in b>0 '
         'images. This entails leaving out each b>0 image and reconstructing '
         'the others using 3dSHORE [@merlet3dshore]. The signal for the left-'
         f'out image serves as the registration target. A total of {num_iters} '

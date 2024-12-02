@@ -672,19 +672,13 @@ def _as_list(item):
 def gen_denoising_boilerplate():
     """Generate a methods boilerplate for the denoising workflow."""
 
-    denoise_method = config.workflow.denoise_method
-    dwi_denoise_window = config.workflow.dwi_denoise_window
-    unringing_method = config.workflow.unringing_method
     b1_biascorrect_stage = config.workflow.b1_biascorrect_stage
     no_b0_harmonization = config.workflow.no_b0_harmonization
     b0_threshold = config.workflow.b0_threshold
-    use_phase = 'phase' not in config.workflow.ignore
     desc = [
         f'Any images with a b-value less than {b0_threshold} s/mm^2 were treated as a '
         '*b*=0 image.'
     ]
-    do_denoise = denoise_method in ('dwidenoise', 'patch2self')
-    do_unringing = unringing_method in ('rpg', 'mrdegibbs')
     harmonize_b0s = not no_b0_harmonization
     last_step = ''
 
