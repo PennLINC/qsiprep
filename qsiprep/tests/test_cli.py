@@ -2,7 +2,8 @@
 
 import os
 import sys
-from unittest.mock import DEFAULT, patch
+from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from nipype import config as nipype_config
@@ -11,12 +12,8 @@ from qsiprep.cli import run
 from qsiprep.cli.parser import parse_args
 from qsiprep.cli.workflow import build_boilerplate, build_workflow
 from qsiprep.reports.core import generate_reports
-from qsiprep.tests.utils import (
-    check_generated_files,
-    download_test_data,
-    get_test_data_path,
-)
-from qsiprep.utils.bids import write_derivative_description
+from qsiprep.tests.utils import check_generated_files, download_test_data, get_test_data_path
+from qsiprep.utils.bids import write_bidsignore, write_derivative_description
 
 nipype_config.enable_debug_mode()
 
@@ -43,25 +40,25 @@ def test_dsdti_fmap(data_dir, output_dir, working_dir):
     ------
     - DSDTI BIDS data (data/DSDTI_fmap)
     """
-    TEST_NAME = "dsdti_fmap"
+    TEST_NAME = 'dsdti_fmap'
 
-    dataset_dir = download_test_data("DSDTI_fmap", data_dir)
+    dataset_dir = download_test_data('DSDTI_fmap', data_dir)
     out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
 
     parameters = [
         dataset_dir,
         out_dir,
-        "participant",
-        f"-w={work_dir}",
-        "--boilerplate",
-        "--sloppy",
-        "--write-graph",
-        "--mem_mb=4096",
-        "--output-resolution=5",
+        'participant',
+        f'-w={work_dir}',
+        '--boilerplate',
+        '--sloppy',
+        '--write-graph',
+        '--mem-mb=4096',
+        '--output-resolution=5',
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 @pytest.mark.integration
@@ -84,26 +81,26 @@ def test_dscsdsi_fmap(data_dir, output_dir, working_dir):
     ------
     - DSDTI BIDS data (data/DSCSDSI_fmap)
     """
-    TEST_NAME = "dscsdsi_fmap"
+    TEST_NAME = 'dscsdsi_fmap'
 
-    dataset_dir = download_test_data("DSCSDSI_fmap", data_dir)
+    dataset_dir = download_test_data('DSCSDSI_fmap', data_dir)
     out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
 
     parameters = [
         dataset_dir,
         out_dir,
-        "participant",
-        f"-w={work_dir}",
-        "--boilerplate",
-        "--sloppy",
-        "--b0-motion-corr-to=first",
-        "--write-graph",
-        "--mem_mb=4096",
-        "--output-resolution=5",
+        'participant',
+        f'-w={work_dir}',
+        '--boilerplate',
+        '--sloppy',
+        '--b0-motion-corr-to=first',
+        '--write-graph',
+        '--mem-mb=4096',
+        '--output-resolution=5',
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 @pytest.mark.integration
@@ -123,31 +120,31 @@ def test_cuda(data_dir, output_dir, working_dir):
     ------
     - DSDTI BIDS data (data/drbuddi_rpe_series)
     """
-    TEST_NAME = "cuda"
+    TEST_NAME = 'cuda'
 
-    dataset_dir = download_test_data("drbuddi_rpe_series", data_dir)
+    dataset_dir = download_test_data('drbuddi_rpe_series', data_dir)
     # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, "qsiprep")
+    dataset_dir = os.path.join(dataset_dir, 'qsiprep')
     out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
     test_data_path = get_test_data_path()
-    eddy_config = os.path.join(test_data_path, "eddy_config.json")
+    eddy_config = os.path.join(test_data_path, 'eddy_config.json')
 
     parameters = [
         dataset_dir,
         out_dir,
-        "participant",
-        f"-w={work_dir}",
-        "--sloppy",
-        "--anat-modality=none",
-        "--denoise-method=none",
-        "--b1_biascorrect_stage=none",
-        "--pepolar-method=DRBUDDI",
-        f"--eddy_config={eddy_config}",
-        "--output-resolution=5",
+        'participant',
+        f'-w={work_dir}',
+        '--sloppy',
+        '--anat-modality=none',
+        '--denoise-method=none',
+        '--b1-biascorrect-stage=none',
+        '--pepolar-method=DRBUDDI',
+        f'--eddy-config={eddy_config}',
+        '--output-resolution=5',
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 @pytest.mark.integration
@@ -168,32 +165,32 @@ def test_drbuddi_rpe(data_dir, output_dir, working_dir):
     - qsiprep single shell results (data/DSDTI_fmap)
     - qsiprep multi shell results (data/DSDTI_fmap)
     """
-    TEST_NAME = "drbuddi_rpe"
+    TEST_NAME = 'drbuddi_rpe'
 
-    dataset_dir = download_test_data("drbuddi_rpe_series", data_dir)
+    dataset_dir = download_test_data('drbuddi_rpe_series', data_dir)
     # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, "tinytensor_rpe_series")
+    dataset_dir = os.path.join(dataset_dir, 'tinytensor_rpe_series')
     out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
     test_data_path = get_test_data_path()
-    eddy_config = os.path.join(test_data_path, "eddy_config.json")
+    eddy_config = os.path.join(test_data_path, 'eddy_config.json')
 
     parameters = [
         dataset_dir,
         out_dir,
-        "participant",
-        f"-w={work_dir}",
-        "--sloppy",
-        "--anat-modality=none",
-        "--denoise-method=none",
-        "--b0-motion-corr-to=first",
-        "--b1_biascorrect_stage=none",
-        "--pepolar-method=DRBUDDI",
-        f"--eddy_config={eddy_config}",
-        "--output-resolution=5",
+        'participant',
+        f'-w={work_dir}',
+        '--sloppy',
+        '--anat-modality=none',
+        '--denoise-method=none',
+        '--b0-motion-corr-to=first',
+        '--b1-biascorrect-stage=none',
+        '--pepolar-method=DRBUDDI',
+        f'--eddy-config={eddy_config}',
+        '--output-resolution=5',
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 @pytest.mark.integration
@@ -206,31 +203,31 @@ def test_drbuddi_shoreline_epi(data_dir, output_dir, working_dir):
     This tests the following features:
     - SHORELine (here, just b=0 registration) motion correction
     """
-    TEST_NAME = "drbuddi_shoreline_epi"
+    TEST_NAME = 'drbuddi_shoreline_epi'
 
-    dataset_dir = download_test_data("drbuddi_epi", data_dir)
+    dataset_dir = download_test_data('drbuddi_epi', data_dir)
     # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, "tinytensor_epi")
+    dataset_dir = os.path.join(dataset_dir, 'tinytensor_epi')
     out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
 
     parameters = [
         dataset_dir,
         out_dir,
-        "participant",
-        f"-w={work_dir}",
-        "--sloppy",
-        "--anat-modality=none",
-        "--denoise-method=none",
-        "--b0-motion-corr-to=first",
-        "--b1-biascorrect-stage=none",
-        "--pepolar-method=DRBUDDI",
-        "--hmc-model=none",
-        "--output-resolution=2",
-        "--shoreline-iters=1",
+        'participant',
+        f'-w={work_dir}',
+        '--sloppy',
+        '--anat-modality=none',
+        '--denoise-method=none',
+        '--b0-motion-corr-to=first',
+        '--b1-biascorrect-stage=none',
+        '--pepolar-method=DRBUDDI',
+        '--hmc-model=none',
+        '--output-resolution=2',
+        '--shoreline-iters=1',
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 @pytest.mark.integration
@@ -243,31 +240,31 @@ def test_drbuddi_tensorline_epi(data_dir, output_dir, working_dir):
     This tests the following features:
     - TENSORLine (tensor-based) motion correction
     """
-    TEST_NAME = "drbuddi_tensorline_epi"
+    TEST_NAME = 'drbuddi_tensorline_epi'
 
-    dataset_dir = download_test_data("DSDTI", data_dir)
+    dataset_dir = download_test_data('DSDTI', data_dir)
     # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, "DSDTI")
+    dataset_dir = os.path.join(dataset_dir, 'DSDTI')
     out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
 
     parameters = [
         dataset_dir,
         out_dir,
-        "participant",
-        f"-w={work_dir}",
-        "--sloppy",
-        "--anat-modality=none",
-        "--denoise-method=none",
-        "--b0-motion-corr-to=first",
-        "--b1-biascorrect-stage=none",
-        "--pepolar-method=DRBUDDI",
-        "--hmc-model=tensor",
-        "--output-resolution=5",
-        "--shoreline-iters=1",
+        'participant',
+        f'-w={work_dir}',
+        '--sloppy',
+        '--anat-modality=none',
+        '--denoise-method=none',
+        '--b0-motion-corr-to=first',
+        '--b1-biascorrect-stage=none',
+        '--pepolar-method=DRBUDDI',
+        '--hmc-model=tensor',
+        '--output-resolution=5',
+        '--shoreline-iters=1',
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 @pytest.mark.integration
@@ -288,31 +285,31 @@ def test_dscsdsi(data_dir, output_dir, working_dir):
     ------
     - DSCSDSI BIDS data (data/DSCSDSI_nofmap)
     """
-    TEST_NAME = "dscsdsi"
+    TEST_NAME = 'dscsdsi'
 
-    dataset_dir = download_test_data("DSCSDSI", data_dir)
+    dataset_dir = download_test_data('DSCSDSI', data_dir)
     # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, "DSCSDSI_nofmap")
+    dataset_dir = os.path.join(dataset_dir, 'DSCSDSI_nofmap')
     out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
 
     parameters = [
         dataset_dir,
         out_dir,
-        "participant",
-        f"-w={work_dir}",
-        "--sloppy",
-        "--write-graph",
-        "--use-syn-sdc",
-        "--force-syn",
-        "--b1-biascorrect-stage=none",
-        "--hmc-model=3dSHORE",
-        "--hmc-transform=Rigid",
-        "--output-resolution=5",
-        "--shoreline-iters=1",
+        'participant',
+        f'-w={work_dir}',
+        '--sloppy',
+        '--write-graph',
+        '--use-syn-sdc',
+        '--force-syn',
+        '--b1-biascorrect-stage=none',
+        '--hmc-model=3dSHORE',
+        '--hmc-transform=Rigid',
+        '--output-resolution=5',
+        '--shoreline-iters=1',
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 @pytest.mark.integration
@@ -331,30 +328,30 @@ def test_dsdti_nofmap(data_dir, output_dir, working_dir):
     ------
     - DSDTI BIDS data (data/DSDTI)
     """
-    TEST_NAME = "dsdti_nofmap"
+    TEST_NAME = 'dsdti_nofmap'
 
-    dataset_dir = download_test_data("DSDTI", data_dir)
+    dataset_dir = download_test_data('DSDTI', data_dir)
     # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, "DSDTI")
+    dataset_dir = os.path.join(dataset_dir, 'DSDTI')
     out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
     test_data_path = get_test_data_path()
-    eddy_config = os.path.join(test_data_path, "eddy_config.json")
+    eddy_config = os.path.join(test_data_path, 'eddy_config.json')
 
     parameters = [
         dataset_dir,
         out_dir,
-        "participant",
-        f"-w={work_dir}",
-        "--sloppy",
-        f"--eddy-config={eddy_config}",
-        "--denoise-method=none",
-        "--unringing-method=rpg",
-        "--b1-biascorrect-stage=none",
-        "--output-resolution=5",
+        'participant',
+        f'-w={work_dir}',
+        '--sloppy',
+        f'--eddy-config={eddy_config}',
+        '--denoise-method=none',
+        '--unringing-method=rpg',
+        '--b1-biascorrect-stage=none',
+        '--output-resolution=5',
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 @pytest.mark.integration
@@ -373,30 +370,30 @@ def test_dsdti_synfmap(data_dir, output_dir, working_dir):
     ------
     - DSDTI BIDS data (data/DSDTI)
     """
-    TEST_NAME = "dsdti_synfmap"
+    TEST_NAME = 'dsdti_synfmap'
 
-    dataset_dir = download_test_data("DSDTI", data_dir)
+    dataset_dir = download_test_data('DSDTI', data_dir)
     # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, "DSDTI")
+    dataset_dir = os.path.join(dataset_dir, 'DSDTI')
     out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
     test_data_path = get_test_data_path()
-    eddy_config = os.path.join(test_data_path, "eddy_config.json")
+    eddy_config = os.path.join(test_data_path, 'eddy_config.json')
 
     parameters = [
         dataset_dir,
         out_dir,
-        "participant",
-        f"-w={work_dir}",
-        "--sloppy",
-        f"--eddy-config={eddy_config}",
-        "--denoise-method=none",
-        "--force-syn",
-        "--b1-biascorrect-stage=final",
-        "--output-resolution=5",
+        'participant',
+        f'-w={work_dir}',
+        '--sloppy',
+        f'--eddy-config={eddy_config}',
+        '--denoise-method=none',
+        '--force-syn',
+        '--b1-biascorrect-stage=final',
+        '--output-resolution=5',
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 @pytest.mark.integration
@@ -415,28 +412,28 @@ def test_intramodal_template(data_dir, output_dir, working_dir):
     ------
     - twoses BIDS data (data/DSDTI_fmap)
     """
-    TEST_NAME = "intramodal_template"
+    TEST_NAME = 'intramodal_template'
 
-    dataset_dir = download_test_data("twoses", data_dir)
+    dataset_dir = download_test_data('twoses', data_dir)
     # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, "twoses")
+    dataset_dir = os.path.join(dataset_dir, 'twoses')
     out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
 
     parameters = [
         dataset_dir,
         out_dir,
-        "participant",
-        f"-w={work_dir}",
-        "--b1-biascorrect-stage=none",
-        "--hmc_model=none",
-        "--b0-motion-corr-to=first",
-        "--output-resolution=5",
-        "--intramodal-template-transform=BSplineSyN",
-        "--intramodal-template-iters=2",
+        'participant',
+        f'-w={work_dir}',
+        '--b1-biascorrect-stage=none',
+        '--hmc-model=none',
+        '--b0-motion-corr-to=first',
+        '--output-resolution=5',
+        '--intramodal-template-transform=BSplineSyN',
+        '--intramodal-template-iters=2',
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 @pytest.mark.integration
@@ -451,28 +448,28 @@ def test_multi_t1w(data_dir, output_dir, working_dir):
     ------
     - DSDTI BIDS data (data/DSDTI)
     """
-    TEST_NAME = "multi_t1w"
+    TEST_NAME = 'multi_t1w'
 
-    dataset_dir = download_test_data("twoses", data_dir)
+    dataset_dir = download_test_data('twoses', data_dir)
     # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, "DSDTI")
+    dataset_dir = os.path.join(dataset_dir, 'DSDTI')
     out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
 
     parameters = [
         dataset_dir,
         out_dir,
-        "participant",
-        f"-w={work_dir}",
-        "--b1-biascorrect-stage=none",
-        "--hmc_model=none",
-        "--b0-motion-corr-to=first",
-        "--output-resolution=5",
-        "--intramodal-template-transform=BSplineSyN",
-        "--intramodal-template-iters=2",
+        'participant',
+        f'-w={work_dir}',
+        '--b1-biascorrect-stage=none',
+        '--hmc-model=none',
+        '--b0-motion-corr-to=first',
+        '--output-resolution=5',
+        '--intramodal-template-transform=BSplineSyN',
+        '--intramodal-template-iters=2',
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 @pytest.mark.integration
@@ -486,30 +483,30 @@ def test_maternal_brain_project(data_dir, output_dir, working_dir):
     The first subject's first session DWI data were downsampled to 5 mm isotropic voxels.
     The dataset contains multi-shell DWI data with a GRE field map.
     """
-    TEST_NAME = "maternal_brain_project"
+    TEST_NAME = 'maternal_brain_project'
 
-    dataset_dir = download_test_data("maternal_brain_project", data_dir)
+    dataset_dir = download_test_data('maternal_brain_project', data_dir)
     out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
 
     test_data_path = get_test_data_path()
-    bids_filter = os.path.join(test_data_path, f"{TEST_NAME}_filter.json")
+    bids_filter = os.path.join(test_data_path, f'{TEST_NAME}_filter.json')
 
     parameters = [
         dataset_dir,
         out_dir,
-        "participant",
-        f"-w={work_dir}",
-        "--sloppy",
-        "--denoise-method=none",
-        "--b1-biascorrect-stage=none",
-        "--write-graph",
-        "--output-resolution=5",
-        "--hmc-model=3dSHORE",
-        f"--bids-filter-file={bids_filter}",
+        'participant',
+        f'-w={work_dir}',
+        '--sloppy',
+        '--denoise-method=none',
+        '--b1-biascorrect-stage=none',
+        '--write-graph',
+        '--output-resolution=5',
+        '--hmc-model=3dSHORE',
+        f'--bids-filter-file={bids_filter}',
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 @pytest.mark.integration
@@ -523,29 +520,29 @@ def test_forrest_gump(data_dir, output_dir, working_dir):
     The first subject's first session DWI data were downsampled to 5 mm isotropic voxels.
     The dataset contains single-shell DWI data with a GRE field map.
     """
-    TEST_NAME = "forrest_gump"
+    TEST_NAME = 'forrest_gump'
 
-    dataset_dir = download_test_data("forrest_gump", data_dir)
+    dataset_dir = download_test_data('forrest_gump', data_dir)
     out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
 
     test_data_path = get_test_data_path()
-    bids_filter = os.path.join(test_data_path, f"{TEST_NAME}_filter.json")
+    bids_filter = os.path.join(test_data_path, f'{TEST_NAME}_filter.json')
 
     parameters = [
         dataset_dir,
         out_dir,
-        "participant",
-        f"-w={work_dir}",
-        "--sloppy",
-        "--denoise-method=none",
-        "--b1-biascorrect-stage=none",
-        "--write-graph",
-        "--output-resolution=5",
-        f"--bids-filter-file={bids_filter}",
+        'participant',
+        f'-w={work_dir}',
+        '--sloppy',
+        '--denoise-method=none',
+        '--b1-biascorrect-stage=none',
+        '--write-graph',
+        '--output-resolution=5',
+        f'--bids-filter-file={bids_filter}',
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=True)
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
 def _check_arg_specified(argname, arglist):
@@ -563,60 +560,82 @@ def _update_resources(parameters):
     env variable (specified in each job in config.yml). If
     this variable doesn't work, just set it to 4.
     """
-    nthreads = int(os.environ.get("CIRCLECPUS", DEFAULT_NUM_CPUS))
-    if not _check_arg_specified("--nthreads", parameters):
-        parameters.append(f"--nthreads={nthreads}")
-    if not _check_arg_specified("--omp-nthreads", parameters):
-        parameters.append(f"--omp-nthreads={nthreads}")
+    nthreads = int(os.environ.get('CIRCLECPUS', DEFAULT_NUM_CPUS))
+    if not _check_arg_specified('--nthreads', parameters):
+        parameters.append(f'--nthreads={nthreads}')
+    if not _check_arg_specified('--omp-nthreads', parameters):
+        parameters.append(f'--omp-nthreads={nthreads}')
     return parameters
 
 
-def _run_and_generate(test_name, parameters, test_main=True):
+def _run_and_generate(test_name, parameters, test_main=False):
     from qsiprep import config
 
     # TODO: Add --clean-workdir param to CLI
-    parameters.append("--stop-on-first-crash")
-    parameters.append("--notrack")
-    parameters.append("-vv")
+    parameters.append('--stop-on-first-crash')
+    parameters.append('--notrack')
+    parameters.append('-vv')
 
     # Update resource parameters
     parameters = _update_resources(parameters)
 
     if test_main:
         # This runs, but for some reason doesn't count toward coverage.
-        argv = ["qsiprep"] + parameters
-        with patch.object(sys, "argv", argv):
+        argv = ['qsiprep'] + parameters
+        with patch.object(sys, 'argv', argv):
             with pytest.raises(SystemExit) as e:
                 run.main()
 
             assert e.value.code == 0
     else:
-        # XXX: This isn't working because config.execution.fs_license_file is None.
         parse_args(parameters)
-        config_file = config.execution.work_dir / f"config-{config.execution.run_uuid}.toml"
-        config.loggers.cli.warning(f"Saving config file to {config_file}")
+        config_file = config.execution.work_dir / f'config-{config.execution.run_uuid}.toml'
+        config.loggers.cli.warning(f'Saving config file to {config_file}')
         config.to_filename(config_file)
 
         retval = build_workflow(config_file, retval={})
-        qsiprep_wf = retval["workflow"]
-        qsiprep_wf.run()
-        write_derivative_description(config.execution.bids_dir, config.execution.output_dir)
-
+        qsiprep_wf = retval['workflow']
         build_boilerplate(str(config_file), qsiprep_wf)
-        session_list = (
-            config.execution.bids_filters.get("bold", {}).get("session")
-            if config.execution.bids_filters
-            else None
+        config.loggers.workflow.log(
+            15,
+            '\n'.join(['config:'] + [f'\t\t{s}' for s in config.dumps().splitlines()]),
         )
-        generate_reports(
-            subject_list=config.execution.participant_label,
+
+        qsiprep_wf.run(**config.nipype.get_plugin())
+
+        boiler_file = config.execution.output_dir / 'logs' / 'CITATION.md'
+        if boiler_file.exists():
+            if config.environment.exec_env in (
+                'apptainer',
+                'singularity',
+                'docker',
+            ):
+                boiler_file = Path('<OUTPUT_PATH>') / boiler_file.relative_to(
+                    config.execution.output_dir
+                )
+            config.loggers.workflow.log(
+                25,
+                'Works derived from this QSIPrep execution should include the '
+                f'boilerplate text found in {boiler_file}.',
+            )
+
+        write_derivative_description(config.execution.bids_dir, config.execution.output_dir)
+        failed_reports = generate_reports(
+            processing_list=config.execution.processing_list,
+            output_level=config.workflow.subject_anatomical_reference,
             output_dir=config.execution.output_dir,
             run_uuid=config.execution.run_uuid,
-            session_list=session_list,
         )
+        assert not failed_reports
+        write_derivative_description(
+            config.execution.bids_dir,
+            config.execution.output_dir,
+            # dataset_links=config.execution.dataset_links,
+        )
+        write_bidsignore(config.execution.output_dir)
 
-    output_list_file = os.path.join(get_test_data_path(), f"{test_name}_outputs.txt")
-    optional_outputs_list = os.path.join(get_test_data_path(), f"{test_name}_optional_outputs.txt")
+    output_list_file = os.path.join(get_test_data_path(), f'{test_name}_outputs.txt')
+    optional_outputs_list = os.path.join(get_test_data_path(), f'{test_name}_optional_outputs.txt')
     if not os.path.isfile(optional_outputs_list):
         optional_outputs_list = None
 

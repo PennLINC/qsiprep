@@ -4,13 +4,13 @@ import dipy.core.optimize as opt
 import numpy as np
 from dipy.utils.optpkg import optional_package
 
-sklearn, has_sklearn, _ = optional_package("sklearn")
-linear_model, _, _ = optional_package("sklearn.linear_model")
+sklearn, has_sklearn, _ = optional_package('sklearn')
+linear_model, _, _ = optional_package('sklearn.linear_model')
 
 from .. import config
 
 if not has_sklearn:
-    w = "Scikit-Learn is required to denoise the data via Patch2Self."
+    w = 'Scikit-Learn is required to denoise the data via Patch2Self.'
     config.loggers.workflow.critical(w)
 
 
@@ -85,13 +85,13 @@ def _vol_denoise(train, vol_idx, model, data_shape, alpha):
     """
     # To add a new model, use the following API
     # We adhere to the following options as they are used for comparisons
-    if model.lower() == "ols":
+    if model.lower() == 'ols':
         model = linear_model.LinearRegression(copy_X=False)
 
-    elif model.lower() == "ridge":
+    elif model.lower() == 'ridge':
         model = linear_model.Ridge(copy_X=False, alpha=alpha)
 
-    elif model.lower() == "lasso":
+    elif model.lower() == 'lasso':
         model = linear_model.Lasso(copy_X=False, max_iter=50, alpha=alpha)
 
     elif (
@@ -102,9 +102,9 @@ def _vol_denoise(train, vol_idx, model, data_shape, alpha):
         model = model
 
     else:
-        e_s = "The `solver` key-word argument needs to be: "
+        e_s = 'The `solver` key-word argument needs to be: '
         e_s += "'ols', 'ridge', 'lasso' or a "
-        e_s += "`dipy.optimize.SKLearnLinearSolver` object"
+        e_s += '`dipy.optimize.SKLearnLinearSolver` object'
         raise ValueError(e_s)
 
     cur_x, y = _vol_split(train, vol_idx)
@@ -135,7 +135,7 @@ def _extract_3d_patches(arr, patch_radius):
     if isinstance(patch_radius, int):
         patch_radius = np.ones(3, dtype=int) * patch_radius
     if len(patch_radius) != 3:
-        raise ValueError("patch_radius should have length 3")
+        raise ValueError('patch_radius should have length 3')
     else:
         patch_radius = np.asarray(patch_radius, dtype=int)
     patch_size = 2 * patch_radius + 1
@@ -148,7 +148,6 @@ def _extract_3d_patches(arr, patch_radius):
     for i in range(patch_radius[0], arr.shape[0] - patch_radius[0], 1):
         for j in range(patch_radius[1], arr.shape[1] - patch_radius[1], 1):
             for k in range(patch_radius[2], arr.shape[2] - patch_radius[2], 1):
-
                 ix1 = i - patch_radius[0]
                 ix2 = i + patch_radius[0] + 1
                 jx1 = j - patch_radius[1]
@@ -166,7 +165,7 @@ def patch2self(
     data,
     bvals,
     patch_radius=[0, 0, 0],
-    model="ols",
+    model='ols',
     b0_threshold=50,
     out_dtype=None,
     alpha=1.0,
@@ -248,12 +247,12 @@ def patch2self(
     patch_radius = np.asarray(patch_radius, dtype=int)
 
     if not data.ndim == 4:
-        raise ValueError("Patch2Self can only denoise on 4D arrays.", data.shape)
+        raise ValueError('Patch2Self can only denoise on 4D arrays.', data.shape)
 
     if data.shape[3] < 10:
         config.loggers.interface.warning(
-            "The intput data has less than 10 3D volumes. Patch2Self may not",
-            "give denoising performance.",
+            'The input data has less than 10 3D volumes. Patch2Self may not',
+            'give denoising performance.',
         )
 
     if out_dtype is None:
@@ -286,7 +285,7 @@ def patch2self(
     # if only 1 b0 volume, skip denoising it
     if data_b0s.ndim == 3 or not b0_denoising:
         if verbose:
-            print("b0 denoising skipped...")
+            print('b0 denoising skipped...')
         denoised_b0s = data_b0s
 
     else:
@@ -299,7 +298,7 @@ def patch2self(
                     (patch_radius[2], patch_radius[2]),
                     (0, 0),
                 ),
-                mode="constant",
+                mode='constant',
             ),
             patch_radius=patch_radius,
         )
@@ -310,7 +309,7 @@ def patch2self(
             )
 
             if verbose:
-                print("Denoised b0 Volume: ", vol_idx)
+                print('Denoised b0 Volume: ', vol_idx)
 
     # Separate denoising for DWI volumes
     train_dwi = _extract_3d_patches(
@@ -322,7 +321,7 @@ def patch2self(
                 (patch_radius[2], patch_radius[2]),
                 (0, 0),
             ),
-            mode="constant",
+            mode='constant',
         ),
         patch_radius=patch_radius,
     )
@@ -334,11 +333,11 @@ def patch2self(
         )
 
         if verbose:
-            print("Denoised DWI Volume: ", vol_idx)
+            print('Denoised DWI Volume: ', vol_idx)
 
     if verbose:
         t2 = time.time()
-        print("Total time taken for Patch2Self: ", t2 - t1, " seconds")
+        print('Total time taken for Patch2Self: ', t2 - t1, ' seconds')
 
     if data_b0s.ndim == 3:
         denoised_arr[:, :, :, b0_idx[0][0]] = denoised_b0s
@@ -361,9 +360,9 @@ def patch2self(
 
     elif clip_negative_vals and shift_intensity:
         config.loggers.interface.warning(
-            "Both `clip_negative_vals` and `shift_intensity` cannot be True."
+            'Both `clip_negative_vals` and `shift_intensity` cannot be True.'
         )
-        config.loggers.interface.warning("Defaulting to `clip_negative_bvals`...")
+        config.loggers.interface.warning('Defaulting to `clip_negative_bvals`...')
         denoised_arr.clip(min=0, out=denoised_arr)
 
     # Calculate a "noise level" image

@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 import json
@@ -19,8 +17,8 @@ from .gradients import concatenate_bvals
 from .images import to_lps
 from .reports import topup_selection_to_report
 
-LOGGER = logging.getLogger("nipype.interface")
-CRITICAL_KEYS = ["PhaseEncodingDirection", "TotalReadoutTime", "EffectiveEchoSpacing"]
+LOGGER = logging.getLogger('nipype.interface')
+CRITICAL_KEYS = ['PhaseEncodingDirection', 'TotalReadoutTime', 'EffectiveEchoSpacing']
 
 
 def _merge_metadata(metadatas):
@@ -35,7 +33,7 @@ def _merge_metadata(metadatas):
             next_value = next_metadata.get(critical_key)
             if not current_value == next_value:
                 LOGGER.warning(
-                    "%s inconsistent in fieldmaps: %s, %s",
+                    '%s inconsistent in fieldmaps: %s, %s',
                     critical_key,
                     str(current_value),
                     str(next_value),
@@ -44,28 +42,28 @@ def _merge_metadata(metadatas):
 
 
 def read_nifti_sidecar(json_file):
-    if not json_file.endswith(".json"):
-        json_file = fname_presuffix(json_file, suffix=".json", use_ext=False)
+    if not json_file.endswith('.json'):
+        json_file = fname_presuffix(json_file, suffix='.json', use_ext=False)
         if not op.exists(json_file):
-            raise Exception("No corresponding json file found")
+            raise Exception('No corresponding json file found')
 
-    with open(json_file, "r") as f:
+    with open(json_file) as f:
         metadata = json.load(f)
-    pe_dir = metadata["PhaseEncodingDirection"]
-    slice_times = metadata.get("SliceTiming")
-    trt = metadata.get("TotalReadoutTime")
+    pe_dir = metadata['PhaseEncodingDirection']
+    slice_times = metadata.get('SliceTiming')
+    trt = metadata.get('TotalReadoutTime')
     if trt is None:
         pass
-    return {"PhaseEncodingDirection": pe_dir, "SliceTiming": slice_times, "TotalReadoutTime": trt}
+    return {'PhaseEncodingDirection': pe_dir, 'SliceTiming': slice_times, 'TotalReadoutTime': trt}
 
 
 acqp_lines = {
-    "i": "1 0 0 %.6f",
-    "j": "0 1 0 %.6f",
-    "k": "0 0 1 %.6f",
-    "i-": "-1 0 0 %.6f",
-    "j-": "0 -1 0 %.6f",
-    "k-": "0 0 -1 %.6f",
+    'i': '1 0 0 %.6f',
+    'j': '0 1 0 %.6f',
+    'k': '0 0 1 %.6f',
+    'i-': '-1 0 0 %.6f',
+    'j-': '0 -1 0 %.6f',
+    'k-': '0 0 -1 %.6f',
 }
 
 
@@ -98,7 +96,7 @@ def load_epi_dwi_fieldmaps(fmap_list, b0_threshold):
 
     for fmap_file in fmap_list:
         pth, fname, _ = split_filename(fmap_file)
-        potential_bval_file = op.join(pth, fname) + ".bval"
+        potential_bval_file = op.join(pth, fname) + '.bval'
         starting_index = len(original_files)
         fmap_img = load_img(fmap_file)
         image_series.append(fmap_img)
@@ -116,7 +114,7 @@ def load_epi_dwi_fieldmaps(fmap_list, b0_threshold):
                 too_large_values = bvals[too_large]
                 if too_large.size:
                     LOGGER.warning(
-                        "Excluding volumes %s from the %s because b=%s is greater than %d",
+                        'Excluding volumes %s from the %s because b=%s is greater than %d',
                         str(too_large),
                         fmap_file,
                         str(too_large_values),
@@ -125,8 +123,8 @@ def load_epi_dwi_fieldmaps(fmap_list, b0_threshold):
                 _b0_indices = np.flatnonzero(bvals < b0_threshold) + starting_index
             else:
                 raise Exception(
-                    "Secret fieldmap file %s mismatches its image file %s"
-                    % (potential_bval_file, fmap_file)
+                    f'Secret fieldmap file {potential_bval_file} mismatches its image file '
+                    f'{fmap_file}'
                 )
         else:
             _b0_indices = np.arange(num_images) + starting_index
@@ -143,8 +141,8 @@ def get_distortion_grouping(origin_file_list):
     line_lookup = {}
     for unique_dwi in unique_files:
         spec = read_nifti_sidecar(unique_dwi)
-        spec_line = acqp_lines[spec["PhaseEncodingDirection"]]
-        acqp_line = spec_line % spec["TotalReadoutTime"]
+        spec_line = acqp_lines[spec['PhaseEncodingDirection']]
+        acqp_line = spec_line % spec['TotalReadoutTime']
         if acqp_line not in unique_acqps:
             unique_acqps.append(acqp_line)
         line_lookup[unique_dwi] = unique_acqps.index(acqp_line) + 1
@@ -157,14 +155,14 @@ def eddy_inputs_from_dwi_files(origin_file_list, eddy_prefix):
     unique_acqps, group_numbers = get_distortion_grouping(origin_file_list)
 
     # Create the acqp file
-    acqp_file = eddy_prefix + "acqp.txt"
-    with open(acqp_file, "w") as f:
-        f.write("\n".join(unique_acqps))
+    acqp_file = eddy_prefix + 'acqp.txt'
+    with open(acqp_file, 'w') as f:
+        f.write('\n'.join(unique_acqps))
 
     # Create the index file
-    index_file = eddy_prefix + "index.txt"
-    with open(index_file, "w") as f:
-        f.write(" ".join(map(str, group_numbers)))
+    index_file = eddy_prefix + 'index.txt'
+    with open(index_file, 'w') as f:
+        f.write(' '.join(map(str, group_numbers)))
 
     return acqp_file, index_file
 
@@ -240,61 +238,61 @@ def get_best_b0_topup_inputs_from(
     slicetime_lookup = {}
     for unique_bids_file in unique_bids_files:
         spec = read_nifti_sidecar(unique_bids_file)
-        spec_line = acqp_lines[spec["PhaseEncodingDirection"]]
-        spec_lookup[unique_bids_file] = spec_line % spec["TotalReadoutTime"]
-        slicetime_lookup[unique_bids_file] = spec["SliceTiming"]
+        spec_line = acqp_lines[spec['PhaseEncodingDirection']]
+        spec_lookup[unique_bids_file] = spec_line % spec['TotalReadoutTime']
+        slicetime_lookup[unique_bids_file] = spec['SliceTiming']
 
     # Group the b=0 images by their spec
-    dwi_b0_df["fsl_spec"] = dwi_b0_df["bids_origin_file"].map(spec_lookup)
+    dwi_b0_df['fsl_spec'] = dwi_b0_df['bids_origin_file'].map(spec_lookup)
     # Write the datain text file and make sure it's usable if it's needed
-    if len(dwi_b0_df["fsl_spec"].unique()) < 2 and topup_requested:
-        config.loggers.workflow.critical(dwi_b0_df["fsl_spec"])
+    if len(dwi_b0_df['fsl_spec'].unique()) < 2 and topup_requested:
+        config.loggers.workflow.critical(dwi_b0_df['fsl_spec'])
         raise Exception(
-            "Unable to run TOPUP: not enough distortion groups. "
+            'Unable to run TOPUP: not enough distortion groups. '
             'Check "IntendedFor" fields or consider using --ignore fieldmaps.'
         )
-    spec_groups = dwi_b0_df.groupby("fsl_spec")
+    spec_groups = dwi_b0_df.groupby('fsl_spec')
     max_per_spec = min(max_per_spec, min(spec_groups.apply(len)))
 
     # Calculate the "quality" of each image:
-    dwi_b0_df["qc_score"] = spec_groups["nii_3d_files"].transform(calculate_best_b0s)
-    dwi_b0_df["qc_rank"] = (
-        np.nan_to_num(spec_groups["qc_score"].rank(ascending=True), nan=1.0).astype(int) - 1
+    dwi_b0_df['qc_score'] = spec_groups['nii_3d_files'].transform(calculate_best_b0s)
+    dwi_b0_df['qc_rank'] = (
+        np.nan_to_num(spec_groups['qc_score'].rank(ascending=True), nan=1.0).astype(int) - 1
     )
 
     # Select only the top
-    dwi_b0_df["selected_for_sdc"] = dwi_b0_df["qc_rank"] < max_per_spec
-    sdc_selections = dwi_b0_df[dwi_b0_df["selected_for_sdc"]].reset_index()
+    dwi_b0_df['selected_for_sdc'] = dwi_b0_df['qc_rank'] < max_per_spec
+    sdc_selections = dwi_b0_df[dwi_b0_df['selected_for_sdc']].reset_index()
     # Make sure the first image in topup imain has the same distortion as the
     # first b=0 volume in the eddy inputs
-    sdc_selections["same_as_first"] = sdc_selections["fsl_spec"] == dwi_b0_df.loc[0, "fsl_spec"]
+    sdc_selections['same_as_first'] = sdc_selections['fsl_spec'] == dwi_b0_df.loc[0, 'fsl_spec']
     sdc_selections.sort_values(
-        by=["same_as_first", "index"], ascending=[False, True], inplace=True
+        by=['same_as_first', 'index'], ascending=[False, True], inplace=True
     )
 
-    imain_output = cwd + "/topup_imain.nii.gz"
+    imain_output = cwd + '/topup_imain.nii.gz'
     imain_img = concat_imgs(
-        [to_lps(img, new_axcodes=("L", "A", "S")) for img in sdc_selections["nii_3d_files"]],
+        [to_lps(img, new_axcodes=('L', 'A', 'S')) for img in sdc_selections['nii_3d_files']],
         auto_resample=True,
     )
     imain_img.to_filename(imain_output)
 
-    datain_file = cwd + "/topup_datain.txt"
-    with open(datain_file, "w") as f:
-        f.write("\n".join(sdc_selections["fsl_spec"]))
+    datain_file = cwd + '/topup_datain.txt'
+    with open(datain_file, 'w') as f:
+        f.write('\n'.join(sdc_selections['fsl_spec']))
 
-    b0_csv = cwd + "/b0_selection_info.csv"
-    dwi_b0_df.drop("nii_3d_files", 1).to_csv(b0_csv, index=False)
+    b0_csv = cwd + '/b0_selection_info.csv'
+    dwi_b0_df.drop('nii_3d_files', 1).to_csv(b0_csv, index=False)
 
     # get out reference images from the topup and eddy data
-    topup_reg_file = cwd + "/topup_reg_image.nii.gz"
+    topup_reg_file = cwd + '/topup_reg_image.nii.gz'
     index_img(imain_output, 0).to_filename(topup_reg_file)
 
     topup_report = topup_selection_to_report(
-        np.flatnonzero(dwi_b0_df["selected_for_sdc"]),
-        dwi_b0_df["bids_origin_file"],
+        np.flatnonzero(dwi_b0_df['selected_for_sdc']),
+        dwi_b0_df['bids_origin_file'],
         spec_lookup,
-        image_source="data",
+        image_source='data',
     )
     return (
         datain_file,
@@ -302,7 +300,7 @@ def get_best_b0_topup_inputs_from(
         topup_report,
         b0_csv,
         topup_reg_file,
-        dwi_b0_df.loc[0, "nii_3d_files"],
+        dwi_b0_df.loc[0, 'nii_3d_files'],
     )
 
 
@@ -335,7 +333,7 @@ def relative_b0_index(b0_indices, original_files):
     offsets = [0]
     for original_file in ordered_files:
         offsets.append(offsets[-1] + image_counts[original_file])
-    image_offsets = dict(zip(ordered_files, offsets))
+    image_offsets = dict(zip(ordered_files, offsets, strict=False))
 
     original_indices = []
     for b0_index in b0_indices:
@@ -354,7 +352,7 @@ def calculate_best_b0s(b0_list, radius=4):
     no_reg.SetMetricSamplingStrategy(no_reg.NONE)
     no_reg.SetMetricAsCorrelation()
     pairwise = np.zeros((len(b0_list), len(b0_list)), dtype=np.float64)
-    for id0, id1 in zip(*np.triu_indices(len(b0_list), 1)):
+    for id0, id1 in zip(*np.triu_indices(len(b0_list), 1), strict=False):
         pairwise[id0, id1] = no_reg.MetricEvaluate(imgs[id0], imgs[id1])
     pairwise = pairwise + pairwise.T
     # Don't include self correlation
@@ -370,13 +368,13 @@ def _get_bvals(bval_input):
 
 # In case of a 3d image
 def safe_get_3d_image(img_file, b0_index):
-    if isinstance(img_file, Path) or isinstance(img_file, str):
+    if isinstance(img_file, Path | str):
         _img = nb.load(img_file)
     else:
         _img = img_file
     if _img.ndim < 4:
         if b0_index > 0:
-            raise Exception("Impossible b=0 index in a 3d image")
+            raise Exception('Impossible b=0 index in a 3d image')
         return _img
     return index_img(_img, b0_index)
 
@@ -403,7 +401,7 @@ def split_into_b0s_and_origins(
             bvals = _get_bvals(bval_file)
             b0_indices = np.flatnonzero(bvals < b0_threshold)
             if not b0_indices.size:
-                raise RuntimeError("No b=0 images available.")
+                raise RuntimeError('No b=0 images available.')
         else:
             # Assume they're all b=0
             b0_indices = (
@@ -413,23 +411,23 @@ def split_into_b0s_and_origins(
     relative_indices = relative_b0_index(b0_indices, original_files)
 
     # find the original files accompanying each b=0
-    for b0_index, original_index in zip(b0_indices, relative_indices):
+    for b0_index, original_index in zip(b0_indices, relative_indices, strict=False):
         original_file = original_files[b0_index]
         b0_bids_files.append(original_file)
         new_b0_path = fname_presuffix(
-            original_file, suffix="_b0-%02d" % original_index, newpath=cwd
+            original_file, suffix='_b0-%02d' % original_index, newpath=cwd
         )
         image_source = original_file if use_original_files else full_img
         source_index = original_index if use_original_files else b0_index
-        print("image_source", image_source)
-        print("new_b0_path", new_b0_path)
+        print('image_source', image_source)
+        print('new_b0_path', new_b0_path)
         safe_get_3d_image(image_source, source_index).to_filename(new_b0_path)
         b0_nii_files.append(new_b0_path)
 
     return pd.DataFrame(
         {
-            "nii_3d_files": b0_nii_files,
-            "bids_origin_file": b0_bids_files,
-            "original_volume": relative_indices,
+            'nii_3d_files': b0_nii_files,
+            'bids_origin_file': b0_bids_files,
+            'original_volume': relative_indices,
         }
     )

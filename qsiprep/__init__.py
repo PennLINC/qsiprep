@@ -25,14 +25,14 @@
 try:
     from ._version import __version__
 except ImportError:
-    __version__ = "0+unknown"
+    __version__ = '0+unknown'
 
 import warnings
 
 # cmp is not used by qsiprep, so ignore nipype-generated warnings
-warnings.simplefilter("ignore")
-warnings.filterwarnings("ignore", r"cmp not installed")
-warnings.filterwarnings("ignore", r"Enable tracemalloc")
-warnings.filterwarnings("ignore", r"can't resolve package from __spec__ or __package__")
-warnings.filterwarnings("ignore", category=ResourceWarning)
-warnings.filterwarnings("ignore", r"Using or importing the ABCs from")
+warnings.simplefilter('ignore')
+warnings.filterwarnings('ignore', r'cmp not installed')
+warnings.filterwarnings('ignore', r'Enable tracemalloc')
+warnings.filterwarnings('ignore', r"can't resolve package from __spec__ or __package__")
+warnings.filterwarnings('ignore', category=ResourceWarning)
+warnings.filterwarnings('ignore', r'Using or importing the ABCs from')

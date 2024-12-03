@@ -39,7 +39,7 @@ QSIPREP_CMD=$(run_qsiprep_cmd ${BIDS_INPUT_DIR} ${OUTPUT_DIR})
 ${QSIPREP_CMD} \
 	 -w ${TEMPDIR} \
 	 --boilerplate \
-	 --sloppy --write-graph --mem_mb 4096 \
+	 --sloppy --write-graph --mem-mb 4096 \
 	 -vv --output-resolution 5
 
 # Test blip-up blip-down non-shelled series (SHORELine/sdcflows)
@@ -55,7 +55,7 @@ ${QSIPREP_CMD} \
 	 -w ${TEMPDIR} \
 	 --boilerplate \
      --hmc-model 3dSHORE \
-	 --sloppy --write-graph --mem_mb 4096 \
+	 --sloppy --write-graph --mem-mb 4096 \
 	 -vv --output-resolution 5
 
 

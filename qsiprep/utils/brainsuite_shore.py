@@ -1,5 +1,3 @@
-from __future__ import division
-
 import warnings
 from math import factorial
 
@@ -15,7 +13,7 @@ from sklearn.metrics import r2_score
 
 from .shm import real_sym_sh_brainsuite
 
-cvxpy, have_cvxpy, _ = optional_package("cvxpy")
+cvxpy, have_cvxpy, _ = optional_package('cvxpy')
 
 
 class BrainSuiteShoreModel(Cache):
@@ -51,7 +49,7 @@ class BrainSuiteShoreModel(Cache):
     def __init__(
         self,
         gtab,
-        regularization="L1",
+        regularization='L1',
         radial_order=6,
         zeta=700,
         tau=1.0 / (4 * np.pi**2),
@@ -59,7 +57,7 @@ class BrainSuiteShoreModel(Cache):
         lambdaN=1e-8,
         lambdaL=1e-8,
         # For L1 method
-        regularization_weighting="CV",
+        regularization_weighting='CV',
         l1_positive_constraint=False,
         l1_cv=3,
         l1_maxiter=1000,
@@ -188,24 +186,23 @@ class BrainSuiteShoreModel(Cache):
 
     @multi_voxel_fit
     def fit(self, data):
-
         # Generate the SHORE basis
-        M = self.cache_get("shore_matrix", key=self.gtab)
+        M = self.cache_get('shore_matrix', key=self.gtab)
         if M is None:
             M = brainsuite_shore_basis(self.radial_order, self.zeta, self.gtab, self.tau)
-            self.cache_set("shore_matrix", self.gtab, M)
-        MpseudoInv = self.cache_get("shore_matrix_reg_pinv", key=self.gtab)
+            self.cache_set('shore_matrix', self.gtab, M)
+        MpseudoInv = self.cache_get('shore_matrix_reg_pinv', key=self.gtab)
         if MpseudoInv is None:
             MpseudoInv = np.linalg.solve(
                 np.dot(M.T, M) + self.lambdaN * self.Nshore + self.lambdaL * self.Lshore, M.T
             )
-            self.cache_set("shore_matrix_reg_pinv", self.gtab, MpseudoInv)
+            self.cache_set('shore_matrix_reg_pinv', self.gtab, MpseudoInv)
 
         # Compute the signal coefficients in SHORE basis
         l2_fallback = False
-        if self.regularization == "L1":
+        if self.regularization == 'L1':
             regularization = 1
-            if self.regularization_weighting == "CV":
+            if self.regularization_weighting == 'CV':
                 lasso = LassoCV(
                     fit_intercept=False,
                     cv=self.l1_cv,
@@ -223,7 +220,7 @@ class BrainSuiteShoreModel(Cache):
 
             # Try the L1 fit
             with warnings.catch_warnings():
-                warnings.filterwarnings("error", category=ConvergenceWarning)
+                warnings.filterwarnings('error', category=ConvergenceWarning)
 
                 try:
                     lasso_fit = lasso.fit(M, data)
@@ -237,7 +234,7 @@ class BrainSuiteShoreModel(Cache):
                     else:
                         raise this_warning
 
-        if self.regularization == "L2" or l2_fallback:
+        if self.regularization == 'L2' or l2_fallback:
             regularization = 2
             coef = np.dot(MpseudoInv, data)
             fitted = np.dot(M, coef)
@@ -289,16 +286,16 @@ class BrainSuiteShoreFit:
 
         """
         # Create the grid in which to compute the pdf
-        rgrid_rtab = self.model.cache_get("pdf_grid", key=(gridsize, radius_max))
+        rgrid_rtab = self.model.cache_get('pdf_grid', key=(gridsize, radius_max))
         if rgrid_rtab is None:
             rgrid_rtab = create_rspace(gridsize, radius_max)
-            self.model.cache_set("pdf_grid", (gridsize, radius_max), rgrid_rtab)
+            self.model.cache_set('pdf_grid', (gridsize, radius_max), rgrid_rtab)
         rgrid, rtab = rgrid_rtab
 
-        psi = self.model.cache_get("shore_matrix_pdf", key=(gridsize, radius_max))
+        psi = self.model.cache_get('shore_matrix_pdf', key=(gridsize, radius_max))
         if psi is None:
             psi = shore_matrix_pdf(self.radial_order, self.zeta, rtab)
-            self.model.cache_set("shore_matrix_pdf", (gridsize, radius_max), psi)
+            self.model.cache_set('shore_matrix_pdf', (gridsize, radius_max), psi)
 
         propagator = np.dot(psi, self._shore_coef)
         eap = np.empty((gridsize, gridsize, gridsize), dtype=float)
@@ -313,13 +310,13 @@ class BrainSuiteShoreFit:
         results are cached for faster recalculation
         """
         if not r_points.flags.writeable:
-            psi = self.model.cache_get("shore_matrix_pdf", key=hash(r_points.data))
+            psi = self.model.cache_get('shore_matrix_pdf', key=hash(r_points.data))
         else:
             psi = None
         if psi is None:
             psi = brainsuite_shore_matrix_pdf(self.radial_order, self.zeta, r_points)
             if not r_points.flags.writeable:
-                self.model.cache_set("shore_matrix_pdf", hash(r_points.data), psi)
+                self.model.cache_set('shore_matrix_pdf', hash(r_points.data), psi)
 
         eap = np.dot(psi, self._shore_coef)
 
@@ -339,7 +336,6 @@ class BrainSuiteShoreFit:
         for n in range(self.radial_order + 1):
             for ell in range(0, n + 1, 2):
                 for m in range(-ell, ell + 1):
-
                     j = int(ell + m + (2 * np.array(range(0, ell, 2)) + 1).sum())
 
                     Cnl = (
@@ -369,10 +365,10 @@ class BrainSuiteShoreFit:
 
     def odf(self, sphere):
         r"""Calculates the ODF for a given discrete sphere."""
-        upsilon = self.model.cache_get("shore_matrix_odf", key=sphere)
+        upsilon = self.model.cache_get('shore_matrix_odf', key=sphere)
         if upsilon is None:
             upsilon = shore_matrix_odf(self.radial_order, self.zeta, sphere.vertices)
-            self.model.cache_set("shore_matrix_odf", sphere, upsilon)
+            self.model.cache_set('shore_matrix_odf', sphere, upsilon)
 
         odf = np.dot(upsilon, self._shore_coef)
         return odf
@@ -455,7 +451,7 @@ class BrainSuiteShoreFit:
 
     def fitted_signal(self):
         """The fitted signal."""
-        phi = self.model.cache_get("shore_matrix", key=self.model.gtab)
+        phi = self.model.cache_get('shore_matrix', key=self.model.gtab)
         return np.dot(phi, self._shore_coef)
 
     def predict(self, gtab, S0=100.0):
@@ -654,7 +650,7 @@ def create_rspace(gridsize, radius_max):
             for k in range(-radius, radius + 1):
                 vecs.append([i, j, k])
 
-    vecs = np.array(vecs, dtype="float32")
+    vecs = np.array(vecs, dtype='float32')
     tab = vecs / radius
     tab = tab * radius_max
     vecs = vecs + radius

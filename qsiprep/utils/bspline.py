@@ -1,12 +1,10 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 
 import numpy as np
 from nipype import logging
 
-LOGGER = logging.getLogger("nipype.interfaces")
+LOGGER = logging.getLogger('nipype.interfaces')
 
 
 def get_ijk(data, offset=0):
@@ -15,7 +13,7 @@ def get_ijk(data, offset=0):
     """
     from numpy import mgrid
 
-    if not isinstance(offset, (list, tuple)):
+    if not isinstance(offset, list | tuple):
         offset = [offset] * 3
 
     grid = mgrid[
@@ -39,7 +37,7 @@ def tbspl_eval(points, knots, zooms, njobs=None):
     """
     Evaluate tensor product BSpline
     """
-    raise Exception("Removed BSpline")
+    raise Exception('Removed BSpline')
 
 
 def _evalp(args):

@@ -41,11 +41,11 @@ def main():
 
     parse_args()
 
-    if "pdb" in config.execution.debug:
+    if 'pdb' in config.execution.debug:
         from qsiprep.utils.debug import setup_exceptionhook
 
         setup_exceptionhook()
-        config.nipype.plugin = "Linear"
+        config.nipype.plugin = 'Linear'
 
     sentry_sdk = None
     if not config.execution.notrack and not config.execution.debug:
@@ -58,14 +58,14 @@ def main():
     # CRITICAL Save the config to a file. This is necessary because the execution graph
     # is built as a separate process to keep the memory footprint low. The most
     # straightforward way to communicate with the child process is via the filesystem.
-    config_file = config.execution.work_dir / config.execution.run_uuid / "config.toml"
+    config_file = config.execution.work_dir / config.execution.run_uuid / 'config.toml'
     config_file.parent.mkdir(exist_ok=True, parents=True)
     config.to_filename(config_file)
 
     # CRITICAL Call build_workflow(config_file, retval) in a subprocess.
     # Because Python on Linux does not ever free virtual memory (VM), running the
     # workflow construction jailed within a process preempts excessive VM buildup.
-    if "pdb" not in config.execution.debug:
+    if 'pdb' not in config.execution.debug:
         with Manager() as mgr:
             retval = mgr.dict()
             p = Process(target=build_workflow, args=(str(config_file), retval))
@@ -74,13 +74,13 @@ def main():
             retval = dict(retval.items())  # Convert to base dictionary
 
             if p.exitcode:
-                retval["return_code"] = p.exitcode
+                retval['return_code'] = p.exitcode
 
     else:
         retval = build_workflow(str(config_file), {})
 
-    exitcode = retval.get("return_code", 0)
-    qsiprep_wf = retval.get("workflow", None)
+    exitcode = retval.get('return_code', 0)
+    qsiprep_wf = retval.get('workflow', None)
     output_dir = config.execution.output_dir
 
     # CRITICAL Load the config from the file. This is necessary because the ``build_workflow``
@@ -92,7 +92,7 @@ def main():
         sys.exit(int(exitcode > 0))
 
     if qsiprep_wf and config.execution.write_graph:
-        qsiprep_wf.write_graph(graph2use="colored", format="svg", simple_form=True)
+        qsiprep_wf.write_graph(graph2use='colored', format='svg', simple_form=True)
 
     exitcode = exitcode or (qsiprep_wf is None) * EX_SOFTWARE
     if exitcode != 0:
@@ -115,16 +115,16 @@ def main():
     # Sentry tracking
     if sentry_sdk is not None:
         with sentry_sdk.configure_scope() as scope:
-            scope.set_tag("run_uuid", config.execution.run_uuid)
-            scope.set_tag("npart", len(config.execution.participant_label))
-        sentry_sdk.add_breadcrumb(message="QSIPrep started", level="info")
-        sentry_sdk.capture_message("QSIPrep started", level="info")
+            scope.set_tag('run_uuid', config.execution.run_uuid)
+            scope.set_tag('npart', len(config.execution.participant_label))
+        sentry_sdk.add_breadcrumb(message='QSIPrep started', level='info')
+        sentry_sdk.capture_message('QSIPrep started', level='info')
 
     config.loggers.workflow.log(
         15,
-        "\n".join(["QSIPrep config:"] + ["\t\t%s" % s for s in config.dumps().splitlines()]),
+        '\n'.join(['QSIPrep config:'] + [f'\t\t{s}' for s in config.dumps().splitlines()]),
     )
-    config.loggers.workflow.log(25, "QSIPrep started!")
+    config.loggers.workflow.log(25, 'QSIPrep started!')
     errno = 1  # Default is error exit unless otherwise set
     try:
         qsiprep_wf.run(**config.nipype.get_plugin())
@@ -133,53 +133,51 @@ def main():
             from ..utils.sentry import process_crashfile
 
             crashfolders = [
-                output_dir / f"sub-{s}" / "log" / config.execution.run_uuid
+                output_dir / f'sub-{s}' / 'log' / config.execution.run_uuid
                 for s in config.execution.participant_label
             ]
             for crashfolder in crashfolders:
-                for crashfile in crashfolder.glob("crash*.*"):
+                for crashfile in crashfolder.glob('crash*.*'):
                     process_crashfile(crashfile)
 
-            if sentry_sdk is not None and "Workflow did not execute cleanly" not in str(e):
+            if sentry_sdk is not None and 'Workflow did not execute cleanly' not in str(e):
                 sentry_sdk.capture_exception(e)
-        config.loggers.workflow.critical("QSIPrep failed: %s", e)
+        config.loggers.workflow.critical('QSIPrep failed: %s', e)
         raise
     else:
-        config.loggers.workflow.log(25, "QSIPrep finished successfully!")
+        config.loggers.workflow.log(25, 'QSIPrep finished successfully!')
         if sentry_sdk is not None:
-            success_message = "QSIPrep finished without errors"
-            sentry_sdk.add_breadcrumb(message=success_message, level="info")
-            sentry_sdk.capture_message(success_message, level="info")
+            success_message = 'QSIPrep finished without errors'
+            sentry_sdk.add_breadcrumb(message=success_message, level='info')
+            sentry_sdk.capture_message(success_message, level='info')
 
         # Bother users with the boilerplate only iff the workflow went okay.
-        boiler_file = output_dir / "logs" / "CITATION.md"
+        boiler_file = output_dir / 'logs' / 'CITATION.md'
         if boiler_file.exists():
             if config.environment.exec_env in (
-                "singularity",
-                "docker",
+                'apptainer',
+                'singularity',
+                'docker',
             ):
-                boiler_file = Path("<OUTPUT_PATH>") / boiler_file.relative_to(
+                boiler_file = Path('<OUTPUT_PATH>') / boiler_file.relative_to(
                     config.execution.output_dir
                 )
             config.loggers.workflow.log(
                 25,
-                "Works derived from this QSIPrep execution should include the "
-                f"boilerplate text found in {boiler_file}.",
+                'Works derived from this QSIPrep execution should include the '
+                f'boilerplate text found in {boiler_file}.',
             )
 
         errno = 0
     finally:
-
         from ..reports.core import generate_reports
 
         # Generate reports phase
-        session_list = config.execution.get().get("bids_filters", {}).get("dwi", {}).get("session")
-
         failed_reports = generate_reports(
-            subject_list=config.execution.participant_label,
+            processing_list=config.execution.processing_list,
+            output_level=config.workflow.subject_anatomical_reference,
             output_dir=config.execution.output_dir,
             run_uuid=config.execution.run_uuid,
-            session_list=session_list,
         )
         write_derivative_description(
             config.execution.bids_dir,
