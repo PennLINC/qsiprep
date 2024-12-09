@@ -206,6 +206,8 @@ def collect_data(bids_dir, participant_label, session_id=None, filters=None, bid
     }
     bids_filters = filters or {}
     for acq, entities in bids_filters.items():
+        if 'session' in queries[acq]:
+            config.loggers.workflow.warning('BIDS filter file value for session may conflict with values specified on the command line')
         queries[acq]['session'] = session_id or Query.OPTIONAL
         queries[acq].update(entities)
 
