@@ -800,10 +800,11 @@ def parse_args(args=None, namespace=None):
 
     # Examine the available sessions for each participant
     for subject_id in participant_label:
+        # Find sessions with DWI data
         sessions = config.execution.layout.get_sessions(
             subject=subject_id,
             session=session_filters or Query.OPTIONAL,
-            suffix=['T1w', 'T2w', 'dwi'],
+            suffix=['dwi'],
         )
 
         # If there are no sessions, there is only one option:
@@ -811,7 +812,7 @@ def parse_args(args=None, namespace=None):
             if config.workflow.subject_anatomical_reference == 'sessionwise':
                 config.loggers.workflow.warning(
                     f'Subject {subject_id} had no sessions, '
-                    "but --subject-anatomical-reference was set to 'sessionwise'. "
+                    'but --subject-anatomical-reference was set to "sessionwise". '
                     'Outputs will NOT appear in a session directory for '
                     f'{subject_id}.',
                 )
@@ -823,6 +824,12 @@ def parse_args(args=None, namespace=None):
             for session in sessions:
                 processing_groups.append([subject_id, [session]])
         else:
+            # We can now use sessions that have anatomical data, but no DWI
+            sessions = config.execution.layout.get_sessions(
+                subject=subject_id,
+                session=session_filters or Query.OPTIONAL,
+                suffix=['dwi', 'T1w', 'T2w'],
+            )
             processing_groups.append([subject_id, sessions])
 
     # Make a nicely formatted message showing what we will process
