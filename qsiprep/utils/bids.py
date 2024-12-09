@@ -206,6 +206,7 @@ def collect_data(bids_dir, participant_label, session_id=None, filters=None, bid
     }
     bids_filters = filters or {}
     for acq, entities in bids_filters.items():
+        queries[acq]['session'] = session_id or Query.OPTIONAL
         queries[acq].update(entities)
 
     subj_data = {
@@ -213,7 +214,6 @@ def collect_data(bids_dir, participant_label, session_id=None, filters=None, bid
             layout.get(
                 return_type='file',
                 subject=participant_label,
-                session=session_id or Query.OPTIONAL,
                 extension=['nii', 'nii.gz'],
                 **query,
             )
