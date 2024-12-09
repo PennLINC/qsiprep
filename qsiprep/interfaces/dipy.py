@@ -22,7 +22,6 @@ from .denoise import (
     SeriesPreprocReportInputSpec,
     SeriesPreprocReportOutputSpec,
 )
-from .patch2self import patch2self
 
 LOGGER = logging.getLogger('nipype.interface')
 TAU_DEFAULT = 1.0 / (4 * np.pi**2)
@@ -37,7 +36,6 @@ def popen_run(arg_list):
 
 class Patch2SelfInputSpec(SeriesPreprocReportInputSpec):
     in_file = File(exists=True, mandatory=True, desc='4D diffusion MRI data file')
-    patch_radius = traits.Either(traits.Int(0), traits.Str('auto'), desc='patch radius in voxels.')
     bval_file = File(exists=True, mandatory=True, desc='bval file containing b-values')
     model = traits.Str('ols', usedefault=True, desc='Regression model for Patch2Self')
     alpha = traits.Float(1.0, usedefault=True, desc='Regularization parameter for Ridge and Lasso')
@@ -67,6 +65,8 @@ class Patch2Self(SeriesPreprocReport, SimpleInterface):
     output_spec = Patch2SelfOutputSpec
 
     def _run_interface(self, runtime):
+        from dipy.denoise.patch2self import patch2self
+
         in_file = self.inputs.in_file
         bval_file = self.inputs.bval_file
         denoised_file = fname_presuffix(
@@ -79,41 +79,11 @@ class Patch2Self(SeriesPreprocReport, SimpleInterface):
         noisy_arr = noisy_img.get_fdata()
         bvals = np.loadtxt(bval_file)
 
-        # Determine the patch radius
-        num_non_b0 = (bvals > self.inputs.b0_threshold).sum()
-        very_few_directions = num_non_b0 < 20
-        few_directions = num_non_b0 < 50
-        if self.inputs.patch_radius == 'auto':
-            if very_few_directions:
-                patch_radius = [3, 3, 3]
-            elif few_directions:
-                patch_radius = [1, 1, 1]
-            else:
-                patch_radius = [0, 0, 0]
-        else:
-            patch_radius = [self.inputs.patch_radius] * 3
-            if self.inputs.patch_radius > 3 and not very_few_directions:
-                LOGGER.info(
-                    'a very large patch radius is not necessary when more than '
-                    '20 gradient directions have been sampled.'
-                )
-            elif self.inputs.patch_radius > 1 and not few_directions:
-                LOGGER.info(
-                    'a large patch radius is not necessary when more than '
-                    '50 gradient directions have been sampled.'
-                )
-            elif self.inputs.patch_radius == 0 and few_directions:
-                LOGGER.warning(
-                    'When < 50 gradient directions are available, it is '
-                    'recommended to increase patch_radius to > 0.'
-                )
-
         denoised_arr, noise_residuals = patch2self(
-            noisy_arr,
-            bvals,
+            data=noisy_arr,
+            bvals=bvals,
             model=self.inputs.model,
             alpha=self.inputs.alpha,
-            patch_radius=patch_radius,
             b0_threshold=self.inputs.b0_threshold,
             verbose=True,
             b0_denoising=self.inputs.b0_denoising,
