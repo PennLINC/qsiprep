@@ -206,6 +206,12 @@ def collect_data(bids_dir, participant_label, session_id=None, filters=None, bid
     }
     bids_filters = filters or {}
     for acq, entities in bids_filters.items():
+        if ('session' in queries[acq]) and (session_id is not None):
+            config.loggers.workflow.warning(
+                'BIDS filter file value for session may conflict with values specified '
+                'on the command line'
+            )
+        queries[acq]['session'] = session_id or Query.OPTIONAL
         queries[acq].update(entities)
 
     subj_data = {
@@ -213,7 +219,6 @@ def collect_data(bids_dir, participant_label, session_id=None, filters=None, bid
             layout.get(
                 return_type='file',
                 subject=participant_label,
-                session=session_id or Query.OPTIONAL,
                 extension=['nii', 'nii.gz'],
                 **query,
             )
