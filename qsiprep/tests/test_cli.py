@@ -267,8 +267,8 @@ def test_drbuddi_tensorline_epi(data_dir, output_dir, working_dir):
     _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
-@pytest.mark.integration()
-@pytest.mark.drbuddi_tensorline_epi_dwidenoise()
+@pytest.mark.integration
+@pytest.mark.drbuddi_tensorline_epi_dwidenoise
 def test_drbuddi_tensorline_epi_dwidenoise(data_dir, output_dir, working_dir):
     """Test EPI fieldmap correction with TENSORLine + DRBUDDI.
 
@@ -304,8 +304,8 @@ def test_drbuddi_tensorline_epi_dwidenoise(data_dir, output_dir, working_dir):
     _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
-@pytest.mark.integration()
-@pytest.mark.drbuddi_tensorline_epi_patch2self()
+@pytest.mark.integration
+@pytest.mark.drbuddi_tensorline_epi_patch2self
 def test_drbuddi_tensorline_epi_patch2self(data_dir, output_dir, working_dir):
     """Test EPI fieldmap correction with TENSORLine + DRBUDDI.
 
