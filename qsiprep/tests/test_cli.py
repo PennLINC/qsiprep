@@ -35,7 +35,7 @@ def test_dsdti_fmap(data_dir, output_dir, working_dir):
     This tests the following features:
     - Blip-up + Blip-down DWI series for TOPUP/Eddy
     - Eddy is run on a CPU
-    - Denoising is skipped
+    - DWIDenoise is enabled implicitly.
 
     Inputs
     ------
@@ -95,6 +95,7 @@ def test_dscsdsi_fmap(data_dir, output_dir, working_dir):
         f'-w={work_dir}',
         '--boilerplate',
         '--sloppy',
+        '--denoise-method=dwidenoise',
         '--b0-motion-corr-to=first',
         '--write-graph',
         '--mem-mb=4096',
@@ -537,42 +538,6 @@ def test_forrest_gump(data_dir, output_dir, working_dir):
         f'-w={work_dir}',
         '--sloppy',
         '--denoise-method=none',
-        '--b1-biascorrect-stage=none',
-        '--write-graph',
-        '--output-resolution=5',
-        f'--bids-filter-file={bids_filter}',
-    ]
-
-    _run_and_generate(TEST_NAME, parameters, test_main=False)
-
-
-@pytest.mark.integration
-@pytest.mark.forrest_gump_dwidenoise
-def test_forrest_gump_dwidenoise(data_dir, output_dir, working_dir):
-    """Run QSIPrep on Forrest Gump data.
-
-    The dataset was built from the Forrest Gump dataset:
-    https://openneuro.org/datasets/ds000113/versions/1.3.0
-
-    The first subject's first session DWI data were downsampled to 5 mm isotropic voxels.
-    The dataset contains single-shell DWI data with a GRE field map.
-    """
-    TEST_NAME = 'forrest_gump_dwidenoise'
-
-    dataset_dir = download_test_data('forrest_gump', data_dir)
-    out_dir = os.path.join(output_dir, TEST_NAME)
-    work_dir = os.path.join(working_dir, TEST_NAME)
-
-    test_data_path = get_test_data_path()
-    bids_filter = os.path.join(test_data_path, 'forrest_gump_filter.json')
-
-    parameters = [
-        dataset_dir,
-        out_dir,
-        'participant',
-        f'-w={work_dir}',
-        '--sloppy',
-        '--denoise-method=dwidenoise',
         '--b1-biascorrect-stage=none',
         '--write-graph',
         '--output-resolution=5',

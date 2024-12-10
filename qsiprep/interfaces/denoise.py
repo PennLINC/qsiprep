@@ -62,6 +62,7 @@ class SeriesPreprocReport(reporting.ReportCapableInterface):
         pd.DataFrame(
             {title + '_pre': pres, title + '_post': posts, title + '_change': differences}
         ).to_csv(output_file, index=False)
+        raise Exception(output_file)
 
     def _generate_report(self):
         """Generate a reportlet."""

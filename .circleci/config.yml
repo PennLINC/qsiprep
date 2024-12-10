@@ -376,33 +376,6 @@ jobs:
       - store_artifacts:
           path: /tmp/src/qsiprep/.circleci/out/forrest_gump/
 
-  forrest_gump_dwidenoise:
-    resource_class: xlarge
-    environment:
-      CIRCLE_CPUS: 4
-    <<: *dockersetup
-    steps:
-      - checkout
-      - restore_cache:
-          key: forrestgump-01
-      - run: *runinstall
-      - run:
-          name: Run QSIPrep on single-shell dataset with GRE field maps
-          no_output_timeout: 3h
-          command: |
-            pytest -rP -o log_cli=true -m "forrest_gump_dwidenoise" --cov-config=/tmp/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/tmp/src/qsiprep/.circleci/data --output_dir=/tmp/src/qsiprep/.circleci/out --working_dir=/tmp/src/qsiprep/.circleci/work qsiprep
-            mkdir /tmp/src/coverage
-            mv /tmp/src/qsiprep/.coverage /tmp/src/coverage/.coverage.forrest_gump_dwidenoise
-            # remove nifti files before uploading artifacts
-            find /tmp/src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
-            find /tmp/src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
-      - persist_to_workspace:
-          root: /tmp/src/coverage/
-          paths:
-            - .coverage.forrest_gump_dwidenoise
-      - store_artifacts:
-          path: /tmp/src/qsiprep/.circleci/out/forrest_gump_dwidenoise/
-
   forrest_gump_patch2self:
     resource_class: xlarge
     environment:
@@ -701,13 +674,6 @@ workflows:
             tags:
               only: /.*/
 
-      - forrest_gump_dwidenoise:
-          requires:
-            - download_forrest_gump
-          filters:
-            tags:
-              only: /.*/
-
       - forrest_gump_patch2self:
           requires:
             - download_forrest_gump
@@ -746,7 +712,6 @@ workflows:
             - DRBUDDI_TENSORLine_EPI
             - maternal_brain_project
             - forrest_gump
-            - forrest_gump_dwidenoise
             - forrest_gump_patch2self
             - unit_tests
             - IntramodalTemplate
@@ -769,7 +734,6 @@ workflows:
             - DRBUDDI_TENSORLine_EPI
             - maternal_brain_project
             - forrest_gump
-            - forrest_gump_dwidenoise
             - forrest_gump_patch2self
             - unit_tests
             - IntramodalTemplate
