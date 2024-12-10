@@ -60,7 +60,7 @@ class Patch2SelfOutputSpec(SeriesPreprocReportOutputSpec):
     noise_image = File(exists=True, desc='Residuals depicting suppressed noise')
 
 
-class Patch2Self(SeriesPreprocReport, SimpleInterface):
+class Patch2Self(SimpleInterface, SeriesPreprocReport):
     input_spec = Patch2SelfInputSpec
     output_spec = Patch2SelfOutputSpec
 
