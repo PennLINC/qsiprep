@@ -16,6 +16,7 @@ from qsiprep.tests.utils import check_generated_files, download_test_data, get_t
 from qsiprep.utils.bids import write_bidsignore, write_derivative_description
 
 nipype_config.enable_debug_mode()
+nipype_config.execution.remove_unnecessary_outputs = False
 
 DEFAULT_NUM_CPUS = 4
 
