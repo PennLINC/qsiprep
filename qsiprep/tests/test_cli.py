@@ -490,7 +490,7 @@ def test_maternal_brain_project(data_dir, output_dir, working_dir):
     work_dir = os.path.join(working_dir, TEST_NAME)
 
     test_data_path = get_test_data_path()
-    bids_filter = os.path.join(test_data_path, f'{TEST_NAME}_filter.json')
+    bids_filter = os.path.join(test_data_path, 'forrest_gump_filter.json')
 
     parameters = [
         dataset_dir,
@@ -563,7 +563,7 @@ def test_forrest_gump_dwidenoise(data_dir, output_dir, working_dir):
     work_dir = os.path.join(working_dir, TEST_NAME)
 
     test_data_path = get_test_data_path()
-    bids_filter = os.path.join(test_data_path, f'{TEST_NAME}_filter.json')
+    bids_filter = os.path.join(test_data_path, 'forrest_gump_filter.json')
 
     parameters = [
         dataset_dir,
@@ -599,7 +599,7 @@ def test_forrest_gump_patch2self(data_dir, output_dir, working_dir):
     work_dir = os.path.join(working_dir, TEST_NAME)
 
     test_data_path = get_test_data_path()
-    bids_filter = os.path.join(test_data_path, f'{TEST_NAME}_filter.json')
+    bids_filter = os.path.join(test_data_path, 'forrest_gump_filter.json')
 
     parameters = [
         dataset_dir,

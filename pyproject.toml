@@ -193,8 +193,6 @@ markers = [
     "drbuddi_rpe: test 9",
     "drbuddi_shoreline_epi: test 10",
     "drbuddi_tensorline_epi: test 11",
-    "drbuddi_tensorline_epi_dwidenoise: test 11 with dwidenoise",
-    "drbuddi_tensorline_epi_patch2self: test 11 with patch2self",
     "dscsdsi: test 12",
     "dsdti_nofmap: test 13",
     "dsdti_synfmap: test 14",
@@ -203,6 +201,8 @@ markers = [
     "multi_t1w: test 22",
     "maternal_brain_project: multi-shell with GRE field map",
     "forrest_gump: single-shell with GRE field map",
+    "forrest_gump_dwidenoise: single-shell with GRE field map and dwidenoise",
+    "forrest_gump_patch2self: single-shell with GRE field map and patch2self",
 ]
 env = [
     "RUNNING_PYTEST = 1",
