@@ -60,7 +60,7 @@ class Patch2SelfOutputSpec(SeriesPreprocReportOutputSpec):
     noise_image = File(exists=True, desc='Residuals depicting suppressed noise')
 
 
-class Patch2Self(SeriesPreprocReport, SimpleInterface):
+class Patch2Self(SeriesPreprocReport):
     input_spec = Patch2SelfInputSpec
     output_spec = Patch2SelfOutputSpec
 
@@ -100,7 +100,7 @@ class Patch2Self(SeriesPreprocReport, SimpleInterface):
         p2s_residuals.to_filename(noise_file)
         self._results['out_file'] = denoised_file
         self._results['noise_image'] = noise_file
-        return super()._run_interface(runtime)
+        return runtime
 
     def _get_plotting_images(self):
         input_dwi = load_img(self.inputs.in_file)
