@@ -64,6 +64,9 @@ class Patch2Self(SimpleInterface, SeriesPreprocReport):
     input_spec = Patch2SelfInputSpec
     output_spec = Patch2SelfOutputSpec
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
     def _run_interface(self, runtime):
         from dipy.denoise.patch2self import patch2self
 
