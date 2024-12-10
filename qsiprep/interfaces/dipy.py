@@ -60,12 +60,9 @@ class Patch2SelfOutputSpec(SeriesPreprocReportOutputSpec):
     noise_image = File(exists=True, desc='Residuals depicting suppressed noise')
 
 
-class Patch2Self(SimpleInterface, SeriesPreprocReport):
+class Patch2Self(SeriesPreprocReport, SimpleInterface):
     input_spec = Patch2SelfInputSpec
     output_spec = Patch2SelfOutputSpec
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
 
     def _run_interface(self, runtime):
         from dipy.denoise.patch2self import patch2self
@@ -103,7 +100,7 @@ class Patch2Self(SimpleInterface, SeriesPreprocReport):
         p2s_residuals.to_filename(noise_file)
         self._results['out_file'] = denoised_file
         self._results['noise_image'] = noise_file
-        return runtime
+        return super()._run_interface(self, runtime)
 
     def _get_plotting_images(self):
         input_dwi = load_img(self.inputs.in_file)
