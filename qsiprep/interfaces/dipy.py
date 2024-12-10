@@ -7,13 +7,14 @@ Image tools interfaces
 
 """
 
+import os
 import subprocess
 
 import nibabel as nb
 import numpy as np
 from nilearn.image import load_img
 from nipype import logging
-from nipype.interfaces.base import File, SimpleInterface, traits
+from nipype.interfaces.base import File, SimpleInterface, isdefined, traits
 from nipype.utils.filemanip import fname_presuffix
 
 from .. import config
@@ -60,7 +61,7 @@ class Patch2SelfOutputSpec(SeriesPreprocReportOutputSpec):
     noise_image = File(exists=True, desc='Residuals depicting suppressed noise')
 
 
-class Patch2Self(SeriesPreprocReport):
+class Patch2Self(SeriesPreprocReport, SimpleInterface):
     input_spec = Patch2SelfInputSpec
     output_spec = Patch2SelfOutputSpec
 
@@ -100,6 +101,7 @@ class Patch2Self(SeriesPreprocReport):
         p2s_residuals.to_filename(noise_file)
         self._results['out_file'] = denoised_file
         self._results['noise_image'] = noise_file
+        self._nmse_text = None
         return runtime
 
     def _get_plotting_images(self):
@@ -110,3 +112,7 @@ class Patch2Self(SeriesPreprocReport):
         noise_name = outputs['noise_image']
         noisenii = load_img(noise_name)
         return input_dwi, denoised_nii, noisenii
+
+    def _list_outputs(self):
+        self._results['nmse_text'] = self._nmse_text
+        return super()._list_outputs()

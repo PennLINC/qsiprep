@@ -7,6 +7,8 @@ Interfaces for image denoising
 
 """
 
+import os
+
 import nibabel as nb
 import numpy as np
 import pandas as pd
@@ -45,6 +47,9 @@ class SeriesPreprocReport(reporting.ReportCapableInterface):
         """Calculate NMSE from the applied preprocessing operation."""
         outputs = self._list_outputs()
         output_file = outputs.get('nmse_text')
+        if not output_file:
+            output_file = os.path.abspath('nmse_text.txt')
+
         pres = []
         posts = []
         differences = []
@@ -62,6 +67,7 @@ class SeriesPreprocReport(reporting.ReportCapableInterface):
         pd.DataFrame(
             {title + '_pre': pres, title + '_post': posts, title + '_change': differences}
         ).to_csv(output_file, index=False)
+        self._nmse_text = output_file
 
     def _generate_report(self):
         """Generate a reportlet."""
