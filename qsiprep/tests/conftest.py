@@ -33,3 +33,11 @@ def output_dir(request):
     outdir = request.config.getoption('--output_dir')
     os.makedirs(outdir, exist_ok=True)
     return outdir
+
+
+@pytest.fixture(scope='session')
+def datasets(data_dir):
+    """Locate downloaded datasets."""
+    dsets = {}
+    dsets['forrest_gump'] = os.path.join(data_dir, 'forrest_gump')
+    return dsets
