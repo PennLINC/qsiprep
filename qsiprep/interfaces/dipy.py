@@ -90,7 +90,8 @@ class Patch2Self(SeriesPreprocReport, SimpleInterface):
             clip_negative_vals=self.inputs.clip_negative_vals,
             shift_intensity=self.inputs.shift_intensity,
         )
-        noise_residuals = np.mean((noisy_arr - denoised_arr) ** 2, axis=3)
+        # Calculate a "noise level" image
+        noise_residuals = np.sqrt(np.mean((noisy_arr - denoised_arr) ** 2, axis=3))
 
         # Back to nifti
         denoised_img = nb.Nifti1Image(denoised_arr, noisy_img.affine, noisy_img.header)
