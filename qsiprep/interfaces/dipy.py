@@ -100,7 +100,7 @@ class Patch2Self(SeriesPreprocReport, SimpleInterface):
         p2s_residuals.to_filename(noise_file)
         self._results['out_file'] = denoised_file
         self._results['noise_image'] = noise_file
-        return super()._run_interface(self, runtime)
+        return super()._run_interface(runtime)
 
     def _get_plotting_images(self):
         input_dwi = load_img(self.inputs.in_file)
