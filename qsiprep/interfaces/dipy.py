@@ -7,14 +7,13 @@ Image tools interfaces
 
 """
 
-import os
 import subprocess
 
 import nibabel as nb
 import numpy as np
 from nilearn.image import load_img
 from nipype import logging
-from nipype.interfaces.base import File, SimpleInterface, isdefined, traits
+from nipype.interfaces.base import File, SimpleInterface, traits
 from nipype.utils.filemanip import fname_presuffix
 
 from .. import config
