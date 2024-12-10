@@ -267,6 +267,80 @@ def test_drbuddi_tensorline_epi(data_dir, output_dir, working_dir):
     _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
+@pytest.mark.integration()
+@pytest.mark.drbuddi_tensorline_epi_dwidenoise()
+def test_drbuddi_tensorline_epi_dwidenoise(data_dir, output_dir, working_dir):
+    """Test EPI fieldmap correction with TENSORLine + DRBUDDI.
+
+    Was in DRBUDDI_TENSORLine_epi.sh.
+
+    This tests the following features:
+    - TENSORLine (tensor-based) motion correction
+    """
+    TEST_NAME = 'drbuddi_tensorline_epi'
+
+    dataset_dir = download_test_data('DSDTI', data_dir)
+    # XXX: Having to modify dataset_dirs is suboptimal.
+    dataset_dir = os.path.join(dataset_dir, 'DSDTI')
+    out_dir = os.path.join(output_dir, TEST_NAME)
+    work_dir = os.path.join(working_dir, TEST_NAME)
+
+    parameters = [
+        dataset_dir,
+        out_dir,
+        'participant',
+        f'-w={work_dir}',
+        '--sloppy',
+        '--anat-modality=none',
+        '--denoise-method=dwidenoise',
+        '--b0-motion-corr-to=first',
+        '--b1-biascorrect-stage=none',
+        '--pepolar-method=DRBUDDI',
+        '--hmc-model=tensor',
+        '--output-resolution=5',
+        '--shoreline-iters=1',
+    ]
+
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
+
+
+@pytest.mark.integration()
+@pytest.mark.drbuddi_tensorline_epi_patch2self()
+def test_drbuddi_tensorline_epi_patch2self(data_dir, output_dir, working_dir):
+    """Test EPI fieldmap correction with TENSORLine + DRBUDDI.
+
+    Was in DRBUDDI_TENSORLine_epi.sh.
+
+    This tests the following features:
+    - TENSORLine (tensor-based) motion correction
+    """
+    TEST_NAME = 'drbuddi_tensorline_epi'
+
+    dataset_dir = download_test_data('DSDTI', data_dir)
+    # XXX: Having to modify dataset_dirs is suboptimal.
+    dataset_dir = os.path.join(dataset_dir, 'DSDTI')
+    out_dir = os.path.join(output_dir, TEST_NAME)
+    work_dir = os.path.join(working_dir, TEST_NAME)
+
+    parameters = [
+        dataset_dir,
+        out_dir,
+        'participant',
+        f'-w={work_dir}',
+        '--sloppy',
+        '--anat-modality=none',
+        '--denoise-method=patch2self',
+        '--b0-motion-corr-to=first',
+        '--b1-biascorrect-stage=none',
+        '--pepolar-method=DRBUDDI',
+        '--hmc-model=tensor',
+        '--output-resolution=5',
+        '--shoreline-iters=1',
+    ]
+
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
+
+
 @pytest.mark.integration
 @pytest.mark.dscsdsi
 def test_dscsdsi(data_dir, output_dir, working_dir):
