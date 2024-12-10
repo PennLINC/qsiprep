@@ -142,6 +142,26 @@ jobs:
           paths:
             - /tmp/src/qsiprep/.circleci/data/twoses
 
+  download_forrest_gump:
+    resource_class: small
+    docker:
+      - image: cimg/python:3.10.9
+    working_directory: /tmp/src/qsiprep
+    steps:
+      - checkout
+      - restore_cache:
+          key: forrestgump-01
+      - run: *runinstall
+      - run:
+          name: Download forrest_gump test data
+          command: |
+            cd /tmp/src/qsiprep/.circleci
+            python get_data.py $PWD/data forrest_gump
+      - save_cache:
+          key: forrestgump-01
+          paths:
+            - /tmp/src/qsiprep/.circleci/data/forrest_gump
+
   DSCSDSI:
     resource_class: large
     environment:
@@ -250,60 +270,6 @@ jobs:
       - store_artifacts:
           path: /tmp/src/qsiprep/.circleci/out/drbuddi_tensorline_epi/
 
-  DRBUDDI_TENSORLine_EPI_dwidenoise:
-    resource_class: large
-    environment:
-      CIRCLE_CPUS: 4
-    <<: *dockersetup
-    steps:
-      - checkout
-      - restore_cache:
-          key: DSDTI-01
-      - run: *runinstall
-      - run:
-          name: Run TENSORLine with EPI fmaps, DRBUDDI, and dwidenoise
-          no_output_timeout: 2h
-          command: |
-            pytest -rP -o log_cli=true -m "drbuddi_tensorline_epi_dwidenoise" --cov-config=/tmp/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/tmp/src/qsiprep/.circleci/data --output_dir=/tmp/src/qsiprep/.circleci/out --working_dir=/tmp/src/qsiprep/.circleci/work qsiprep
-            mkdir /tmp/src/coverage
-            mv /tmp/src/qsiprep/.coverage /tmp/src/coverage/.coverage.drbuddi_tensorline_epi_dwidenoise
-            # remove nifti files before uploading artifacts
-            find /tmp/src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
-            find /tmp/src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
-      - persist_to_workspace:
-          root: /tmp/src/coverage/
-          paths:
-            - .coverage.drbuddi_tensorline_epi_dwidenoise
-      - store_artifacts:
-          path: /tmp/src/qsiprep/.circleci/out/drbuddi_tensorline_epi_dwidenoise/
-
-  DRBUDDI_TENSORLine_EPI_patch2self:
-    resource_class: large
-    environment:
-      CIRCLE_CPUS: 4
-    <<: *dockersetup
-    steps:
-      - checkout
-      - restore_cache:
-          key: DSDTI-01
-      - run: *runinstall
-      - run:
-          name: Run TENSORLine with EPI fmaps, DRBUDDI, and patch2self
-          no_output_timeout: 2h
-          command: |
-            pytest -rP -o log_cli=true -m "drbuddi_tensorline_epi_patch2self" --cov-config=/tmp/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/tmp/src/qsiprep/.circleci/data --output_dir=/tmp/src/qsiprep/.circleci/out --working_dir=/tmp/src/qsiprep/.circleci/work qsiprep
-            mkdir /tmp/src/coverage
-            mv /tmp/src/qsiprep/.coverage /tmp/src/coverage/.coverage.drbuddi_tensorline_epi_patch2self
-            # remove nifti files before uploading artifacts
-            find /tmp/src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
-            find /tmp/src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
-      - persist_to_workspace:
-          root: /tmp/src/coverage/
-          paths:
-            - .coverage.drbuddi_tensorline_epi_patch2self
-      - store_artifacts:
-          path: /tmp/src/qsiprep/.circleci/out/drbuddi_tensorline_epi_patch2self/
-
   DRBUDDI_SHORELine_EPI:
     resource_class: large
     environment:
@@ -390,6 +356,8 @@ jobs:
     <<: *dockersetup
     steps:
       - checkout
+      - restore_cache:
+          key: forrestgump-01
       - run: *runinstall
       - run:
           name: Run QSIPrep on single-shell dataset with GRE field maps
@@ -407,6 +375,60 @@ jobs:
             - .coverage.forrest_gump
       - store_artifacts:
           path: /tmp/src/qsiprep/.circleci/out/forrest_gump/
+
+  forrest_gump_dwidenoise:
+    resource_class: xlarge
+    environment:
+      CIRCLE_CPUS: 4
+    <<: *dockersetup
+    steps:
+      - checkout
+      - restore_cache:
+          key: forrestgump-01
+      - run: *runinstall
+      - run:
+          name: Run QSIPrep on single-shell dataset with GRE field maps
+          no_output_timeout: 3h
+          command: |
+            pytest -rP -o log_cli=true -m "forrest_gump_dwidenoise" --cov-config=/tmp/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/tmp/src/qsiprep/.circleci/data --output_dir=/tmp/src/qsiprep/.circleci/out --working_dir=/tmp/src/qsiprep/.circleci/work qsiprep
+            mkdir /tmp/src/coverage
+            mv /tmp/src/qsiprep/.coverage /tmp/src/coverage/.coverage.forrest_gump_dwidenoise
+            # remove nifti files before uploading artifacts
+            find /tmp/src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /tmp/src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+      - persist_to_workspace:
+          root: /tmp/src/coverage/
+          paths:
+            - .coverage.forrest_gump_dwidenoise
+      - store_artifacts:
+          path: /tmp/src/qsiprep/.circleci/out/forrest_gump_dwidenoise/
+
+  forrest_gump_patch2self:
+    resource_class: xlarge
+    environment:
+      CIRCLE_CPUS: 4
+    <<: *dockersetup
+    steps:
+      - checkout
+      - restore_cache:
+          key: forrestgump-01
+      - run: *runinstall
+      - run:
+          name: Run QSIPrep on single-shell dataset with GRE field maps
+          no_output_timeout: 3h
+          command: |
+            pytest -rP -o log_cli=true -m "forrest_gump_patch2self" --cov-config=/tmp/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/tmp/src/qsiprep/.circleci/data --output_dir=/tmp/src/qsiprep/.circleci/out --working_dir=/tmp/src/qsiprep/.circleci/work qsiprep
+            mkdir /tmp/src/coverage
+            mv /tmp/src/qsiprep/.coverage /tmp/src/coverage/.coverage.forrest_gump_patch2self
+            # remove nifti files before uploading artifacts
+            find /tmp/src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /tmp/src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+      - persist_to_workspace:
+          root: /tmp/src/coverage/
+          paths:
+            - .coverage.forrest_gump_patch2self
+      - store_artifacts:
+          path: /tmp/src/qsiprep/.circleci/out/forrest_gump_patch2self/
 
   IntramodalTemplate:
     resource_class: large
@@ -585,6 +607,13 @@ workflows:
             tags:
               only: /.*/
 
+      - download_forrest_gump:
+          requires:
+            - build
+          filters:
+            tags:
+              only: /.*/
+
       - DSCSDSI:
           requires:
             - download_DSCSDSI
@@ -607,20 +636,6 @@ workflows:
               only: /.*/
 
       - DRBUDDI_TENSORLine_EPI:
-          requires:
-            - download_DSDTI
-          filters:
-            tags:
-              only: /.*/
-
-      - DRBUDDI_TENSORLine_EPI_dwidenoise:
-          requires:
-            - download_DSDTI
-          filters:
-            tags:
-              only: /.*/
-
-      - DRBUDDI_TENSORLine_EPI_patch2self:
           requires:
             - download_DSDTI
           filters:
@@ -650,7 +665,21 @@ workflows:
 
       - forrest_gump:
           requires:
-            - build
+            - download_forrest_gump
+          filters:
+            tags:
+              only: /.*/
+
+      - forrest_gump_dwidenoise:
+          requires:
+            - download_forrest_gump
+          filters:
+            tags:
+              only: /.*/
+
+      - forrest_gump_patch2self:
+          requires:
+            - download_forrest_gump
           filters:
             tags:
               only: /.*/
@@ -677,10 +706,10 @@ workflows:
             - DRBUDDI_SHORELine_EPI
             - DRBUDDI_eddy_rpe_series
             - DRBUDDI_TENSORLine_EPI
-            - DRBUDDI_TENSORLine_EPI_dwidenoise
-            - DRBUDDI_TENSORLine_EPI_patch2self
             - maternal_brain_project
             - forrest_gump
+            - forrest_gump_dwidenoise
+            - forrest_gump_patch2self
             - IntramodalTemplate
             - MultiT1w
           filters:
@@ -699,10 +728,10 @@ workflows:
             - DRBUDDI_SHORELine_EPI
             - DRBUDDI_eddy_rpe_series
             - DRBUDDI_TENSORLine_EPI
-            - DRBUDDI_TENSORLine_EPI_dwidenoise
-            - DRBUDDI_TENSORLine_EPI_patch2self
             - maternal_brain_project
             - forrest_gump
+            - forrest_gump_dwidenoise
+            - forrest_gump_patch2self
             - IntramodalTemplate
             - MultiT1w
           filters:

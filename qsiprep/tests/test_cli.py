@@ -268,80 +268,6 @@ def test_drbuddi_tensorline_epi(data_dir, output_dir, working_dir):
 
 
 @pytest.mark.integration
-@pytest.mark.drbuddi_tensorline_epi_dwidenoise
-def test_drbuddi_tensorline_epi_dwidenoise(data_dir, output_dir, working_dir):
-    """Test EPI fieldmap correction with TENSORLine + DRBUDDI.
-
-    Was in DRBUDDI_TENSORLine_epi.sh.
-
-    This tests the following features:
-    - TENSORLine (tensor-based) motion correction
-    """
-    TEST_NAME = 'drbuddi_tensorline_epi'
-
-    dataset_dir = download_test_data('DSDTI', data_dir)
-    # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, 'DSDTI')
-    out_dir = os.path.join(output_dir, TEST_NAME)
-    work_dir = os.path.join(working_dir, TEST_NAME)
-
-    parameters = [
-        dataset_dir,
-        out_dir,
-        'participant',
-        f'-w={work_dir}',
-        '--sloppy',
-        '--anat-modality=none',
-        '--denoise-method=dwidenoise',
-        '--b0-motion-corr-to=first',
-        '--b1-biascorrect-stage=none',
-        '--pepolar-method=DRBUDDI',
-        '--hmc-model=tensor',
-        '--output-resolution=5',
-        '--shoreline-iters=1',
-    ]
-
-    _run_and_generate(TEST_NAME, parameters, test_main=False)
-
-
-@pytest.mark.integration
-@pytest.mark.drbuddi_tensorline_epi_patch2self
-def test_drbuddi_tensorline_epi_patch2self(data_dir, output_dir, working_dir):
-    """Test EPI fieldmap correction with TENSORLine + DRBUDDI.
-
-    Was in DRBUDDI_TENSORLine_epi.sh.
-
-    This tests the following features:
-    - TENSORLine (tensor-based) motion correction
-    """
-    TEST_NAME = 'drbuddi_tensorline_epi'
-
-    dataset_dir = download_test_data('DSDTI', data_dir)
-    # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, 'DSDTI')
-    out_dir = os.path.join(output_dir, TEST_NAME)
-    work_dir = os.path.join(working_dir, TEST_NAME)
-
-    parameters = [
-        dataset_dir,
-        out_dir,
-        'participant',
-        f'-w={work_dir}',
-        '--sloppy',
-        '--anat-modality=none',
-        '--denoise-method=patch2self',
-        '--b0-motion-corr-to=first',
-        '--b1-biascorrect-stage=none',
-        '--pepolar-method=DRBUDDI',
-        '--hmc-model=tensor',
-        '--output-resolution=5',
-        '--shoreline-iters=1',
-    ]
-
-    _run_and_generate(TEST_NAME, parameters, test_main=False)
-
-
-@pytest.mark.integration
 @pytest.mark.dscsdsi
 def test_dscsdsi(data_dir, output_dir, working_dir):
     """DSCSDSI test
@@ -610,6 +536,78 @@ def test_forrest_gump(data_dir, output_dir, working_dir):
         f'-w={work_dir}',
         '--sloppy',
         '--denoise-method=none',
+        '--b1-biascorrect-stage=none',
+        '--write-graph',
+        '--output-resolution=5',
+        f'--bids-filter-file={bids_filter}',
+    ]
+
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
+
+
+@pytest.mark.integration
+@pytest.mark.forrest_gump_dwidenoise
+def test_forrest_gump_dwidenoise(data_dir, output_dir, working_dir):
+    """Run QSIPrep on Forrest Gump data.
+
+    The dataset was built from the Forrest Gump dataset:
+    https://openneuro.org/datasets/ds000113/versions/1.3.0
+
+    The first subject's first session DWI data were downsampled to 5 mm isotropic voxels.
+    The dataset contains single-shell DWI data with a GRE field map.
+    """
+    TEST_NAME = 'forrest_gump_dwidenoise'
+
+    dataset_dir = download_test_data('forrest_gump', data_dir)
+    out_dir = os.path.join(output_dir, TEST_NAME)
+    work_dir = os.path.join(working_dir, TEST_NAME)
+
+    test_data_path = get_test_data_path()
+    bids_filter = os.path.join(test_data_path, f'{TEST_NAME}_filter.json')
+
+    parameters = [
+        dataset_dir,
+        out_dir,
+        'participant',
+        f'-w={work_dir}',
+        '--sloppy',
+        '--denoise-method=dwidenoise',
+        '--b1-biascorrect-stage=none',
+        '--write-graph',
+        '--output-resolution=5',
+        f'--bids-filter-file={bids_filter}',
+    ]
+
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
+
+
+@pytest.mark.integration
+@pytest.mark.forrest_gump_patch2self
+def test_forrest_gump_patch2self(data_dir, output_dir, working_dir):
+    """Run QSIPrep on Forrest Gump data.
+
+    The dataset was built from the Forrest Gump dataset:
+    https://openneuro.org/datasets/ds000113/versions/1.3.0
+
+    The first subject's first session DWI data were downsampled to 5 mm isotropic voxels.
+    The dataset contains single-shell DWI data with a GRE field map.
+    """
+    TEST_NAME = 'forrest_gump_patch2self'
+
+    dataset_dir = download_test_data('forrest_gump', data_dir)
+    out_dir = os.path.join(output_dir, TEST_NAME)
+    work_dir = os.path.join(working_dir, TEST_NAME)
+
+    test_data_path = get_test_data_path()
+    bids_filter = os.path.join(test_data_path, f'{TEST_NAME}_filter.json')
+
+    parameters = [
+        dataset_dir,
+        out_dir,
+        'participant',
+        f'-w={work_dir}',
+        '--sloppy',
+        '--denoise-method=patch2self',
         '--b1-biascorrect-stage=none',
         '--write-graph',
         '--output-resolution=5',
