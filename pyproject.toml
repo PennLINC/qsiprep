@@ -78,6 +78,7 @@ tests = [
     "pytest",
     "pytest-cov",
     "pytest-env",
+    "pytest-xdist",
 ]
 maint = [
     "fuzzywuzzy",
@@ -201,6 +202,7 @@ markers = [
     "multi_t1w: test 22",
     "maternal_brain_project: multi-shell with GRE field map",
     "forrest_gump: single-shell with GRE field map",
+    "forrest_gump_patch2self: single-shell with GRE field map and patch2self",
 ]
 env = [
     "RUNNING_PYTEST = 1",

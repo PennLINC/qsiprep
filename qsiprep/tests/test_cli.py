@@ -16,6 +16,7 @@ from qsiprep.tests.utils import check_generated_files, download_test_data, get_t
 from qsiprep.utils.bids import write_bidsignore, write_derivative_description
 
 nipype_config.enable_debug_mode()
+nipype_config.update_config({'execution': {'remove_unnecessary_outputs': False}})
 
 DEFAULT_NUM_CPUS = 4
 
@@ -34,7 +35,7 @@ def test_dsdti_fmap(data_dir, output_dir, working_dir):
     This tests the following features:
     - Blip-up + Blip-down DWI series for TOPUP/Eddy
     - Eddy is run on a CPU
-    - Denoising is skipped
+    - dwidenoise is enabled implicitly.
 
     Inputs
     ------
@@ -75,7 +76,7 @@ def test_dscsdsi_fmap(data_dir, output_dir, working_dir):
     This tests the following features:
     - Blip-up + Blip-down DWI series for TOPUP/Eddy
     - Eddy is run on a CPU
-    - Denoising is skipped
+    - dwidenoise is enabled explicitly
 
     Inputs
     ------
@@ -94,6 +95,7 @@ def test_dscsdsi_fmap(data_dir, output_dir, working_dir):
         f'-w={work_dir}',
         '--boilerplate',
         '--sloppy',
+        '--denoise-method=dwidenoise',
         '--b0-motion-corr-to=first',
         '--write-graph',
         '--mem-mb=4096',
@@ -280,6 +282,7 @@ def test_dscsdsi(data_dir, output_dir, working_dir):
     - The SHORELine motion correction workflow
     - Skipping B1 biascorrection
     - Using the SyN-SDC distortion correction method
+    - dwidenoise is enabled implicitly
 
     Inputs
     ------
@@ -406,7 +409,7 @@ def test_intramodal_template(data_dir, output_dir, working_dir):
     This tests the following features:
     - Blip-up + Blip-down DWI series for TOPUP/Eddy
     - Eddy is run on a CPU
-    - Denoising is skipped
+    - dwidenoise is enabled implicitly
 
     Inputs
     ------
@@ -443,6 +446,7 @@ def test_multi_t1w(data_dir, output_dir, working_dir):
 
     This tests the following features:
     - freesurfer's robust template
+    - dwidenoise is enabled implicitly
 
     Inputs
     ------
@@ -490,7 +494,7 @@ def test_maternal_brain_project(data_dir, output_dir, working_dir):
     work_dir = os.path.join(working_dir, TEST_NAME)
 
     test_data_path = get_test_data_path()
-    bids_filter = os.path.join(test_data_path, f'{TEST_NAME}_filter.json')
+    bids_filter = os.path.join(test_data_path, 'forrest_gump_filter.json')
 
     parameters = [
         dataset_dir,
@@ -512,7 +516,7 @@ def test_maternal_brain_project(data_dir, output_dir, working_dir):
 @pytest.mark.integration
 @pytest.mark.forrest_gump
 def test_forrest_gump(data_dir, output_dir, working_dir):
-    """Run QSIPrep on Forrest Gump data.
+    """Run QSIPrep on Forrest Gump data with dwidenoise denoising.
 
     The dataset was built from the Forrest Gump dataset:
     https://openneuro.org/datasets/ds000113/versions/1.3.0
@@ -536,6 +540,42 @@ def test_forrest_gump(data_dir, output_dir, working_dir):
         f'-w={work_dir}',
         '--sloppy',
         '--denoise-method=none',
+        '--b1-biascorrect-stage=none',
+        '--write-graph',
+        '--output-resolution=5',
+        f'--bids-filter-file={bids_filter}',
+    ]
+
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
+
+
+@pytest.mark.integration
+@pytest.mark.forrest_gump_patch2self
+def test_forrest_gump_patch2self(data_dir, output_dir, working_dir):
+    """Run QSIPrep on Forrest Gump data with patch2self denoising.
+
+    The dataset was built from the Forrest Gump dataset:
+    https://openneuro.org/datasets/ds000113/versions/1.3.0
+
+    The first subject's first session DWI data were downsampled to 5 mm isotropic voxels.
+    The dataset contains single-shell DWI data with a GRE field map.
+    """
+    TEST_NAME = 'forrest_gump_patch2self'
+
+    dataset_dir = download_test_data('forrest_gump', data_dir)
+    out_dir = os.path.join(output_dir, TEST_NAME)
+    work_dir = os.path.join(working_dir, TEST_NAME)
+
+    test_data_path = get_test_data_path()
+    bids_filter = os.path.join(test_data_path, 'forrest_gump_filter.json')
+
+    parameters = [
+        dataset_dir,
+        out_dir,
+        'participant',
+        f'-w={work_dir}',
+        '--sloppy',
+        '--denoise-method=patch2self',
         '--b1-biascorrect-stage=none',
         '--write-graph',
         '--output-resolution=5',

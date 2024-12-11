@@ -142,6 +142,26 @@ jobs:
           paths:
             - /tmp/src/qsiprep/.circleci/data/twoses
 
+  download_forrest_gump:
+    resource_class: small
+    docker:
+      - image: cimg/python:3.10.9
+    working_directory: /tmp/src/qsiprep
+    steps:
+      - checkout
+      - restore_cache:
+          key: forrestgump-01
+      - run: *runinstall
+      - run:
+          name: Download forrest_gump test data
+          command: |
+            cd /tmp/src/qsiprep/.circleci
+            python get_data.py $PWD/data forrest_gump
+      - save_cache:
+          key: forrestgump-01
+          paths:
+            - /tmp/src/qsiprep/.circleci/data/forrest_gump
+
   DSCSDSI:
     resource_class: large
     environment:
@@ -336,6 +356,8 @@ jobs:
     <<: *dockersetup
     steps:
       - checkout
+      - restore_cache:
+          key: forrestgump-01
       - run: *runinstall
       - run:
           name: Run QSIPrep on single-shell dataset with GRE field maps
@@ -353,6 +375,64 @@ jobs:
             - .coverage.forrest_gump
       - store_artifacts:
           path: /tmp/src/qsiprep/.circleci/out/forrest_gump/
+
+  forrest_gump_patch2self:
+    resource_class: xlarge
+    environment:
+      CIRCLE_CPUS: 4
+    <<: *dockersetup
+    steps:
+      - checkout
+      - restore_cache:
+          key: forrestgump-01
+      - run: *runinstall
+      - run:
+          name: Run QSIPrep on single-shell dataset with GRE field maps
+          no_output_timeout: 3h
+          command: |
+            pytest -rP -o log_cli=true -m "forrest_gump_patch2self" --cov-config=/tmp/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/tmp/src/qsiprep/.circleci/data --output_dir=/tmp/src/qsiprep/.circleci/out --working_dir=/tmp/src/qsiprep/.circleci/work qsiprep
+            mkdir /tmp/src/coverage
+            mv /tmp/src/qsiprep/.coverage /tmp/src/coverage/.coverage.forrest_gump_patch2self
+            # remove nifti files before uploading artifacts
+            find /tmp/src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
+            find /tmp/src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
+      - persist_to_workspace:
+          root: /tmp/src/coverage/
+          paths:
+            - .coverage.forrest_gump_patch2self
+      - store_artifacts:
+          path: /tmp/src/qsiprep/.circleci/out/forrest_gump_patch2self/
+
+  unit_tests:
+    resource_class: large
+    environment:
+      CIRCLE_CPUS: 4
+    <<: *dockersetup
+    steps:
+      - checkout
+      - restore_cache:
+          key: forrestgump-01
+      - run: *runinstall
+      - run:
+          name: Run unit tests
+          no_output_timeout: 1h
+          command: |
+            pytest \
+              -n ${CIRCLE_CPUS} \
+              --cov-append \
+              --cov-branch \
+              --cov-report term-missing \
+              --cov=qsiprep \
+              --data_dir=/tmp/src/qsiprep/.circleci/data \
+              --output_dir=/tmp/src/qsiprep/.circleci/out \
+              --working_dir=/tmp/src/qsiprep/.circleci/work \
+              qsiprep
+            mkdir /tmp/src/coverage
+            mv /tmp/src/qsiprep/.coverage /tmp/src/coverage/.coverage.unit_tests
+      - persist_to_workspace:
+          root: /tmp/src/coverage/
+          paths:
+            - .coverage.unit_tests
 
   IntramodalTemplate:
     resource_class: large
@@ -531,6 +611,13 @@ workflows:
             tags:
               only: /.*/
 
+      - download_forrest_gump:
+          requires:
+            - build
+          filters:
+            tags:
+              only: /.*/
+
       - DSCSDSI:
           requires:
             - download_DSCSDSI
@@ -582,7 +669,21 @@ workflows:
 
       - forrest_gump:
           requires:
-            - build
+            - download_forrest_gump
+          filters:
+            tags:
+              only: /.*/
+
+      - forrest_gump_patch2self:
+          requires:
+            - download_forrest_gump
+          filters:
+            tags:
+              only: /.*/
+
+      - unit_tests:
+          requires:
+            - download_forrest_gump
           filters:
             tags:
               only: /.*/
@@ -611,6 +712,8 @@ workflows:
             - DRBUDDI_TENSORLine_EPI
             - maternal_brain_project
             - forrest_gump
+            - forrest_gump_patch2self
+            - unit_tests
             - IntramodalTemplate
             - MultiT1w
           filters:
@@ -631,6 +734,8 @@ workflows:
             - DRBUDDI_TENSORLine_EPI
             - maternal_brain_project
             - forrest_gump
+            - forrest_gump_patch2self
+            - unit_tests
             - IntramodalTemplate
             - MultiT1w
           filters:
