@@ -35,7 +35,7 @@ def test_dsdti_fmap(data_dir, output_dir, working_dir):
     This tests the following features:
     - Blip-up + Blip-down DWI series for TOPUP/Eddy
     - Eddy is run on a CPU
-    - DWIDenoise is enabled implicitly.
+    - dwidenoise is enabled implicitly.
 
     Inputs
     ------
@@ -76,7 +76,7 @@ def test_dscsdsi_fmap(data_dir, output_dir, working_dir):
     This tests the following features:
     - Blip-up + Blip-down DWI series for TOPUP/Eddy
     - Eddy is run on a CPU
-    - Denoising is skipped
+    - dwidenoise is enabled explicitly
 
     Inputs
     ------
@@ -282,6 +282,7 @@ def test_dscsdsi(data_dir, output_dir, working_dir):
     - The SHORELine motion correction workflow
     - Skipping B1 biascorrection
     - Using the SyN-SDC distortion correction method
+    - dwidenoise is enabled implicitly
 
     Inputs
     ------
@@ -408,7 +409,7 @@ def test_intramodal_template(data_dir, output_dir, working_dir):
     This tests the following features:
     - Blip-up + Blip-down DWI series for TOPUP/Eddy
     - Eddy is run on a CPU
-    - Denoising is skipped
+    - dwidenoise is enabled implicitly
 
     Inputs
     ------
@@ -445,6 +446,7 @@ def test_multi_t1w(data_dir, output_dir, working_dir):
 
     This tests the following features:
     - freesurfer's robust template
+    - dwidenoise is enabled implicitly
 
     Inputs
     ------
@@ -514,7 +516,7 @@ def test_maternal_brain_project(data_dir, output_dir, working_dir):
 @pytest.mark.integration
 @pytest.mark.forrest_gump
 def test_forrest_gump(data_dir, output_dir, working_dir):
-    """Run QSIPrep on Forrest Gump data.
+    """Run QSIPrep on Forrest Gump data with dwidenoise denoising.
 
     The dataset was built from the Forrest Gump dataset:
     https://openneuro.org/datasets/ds000113/versions/1.3.0
@@ -550,7 +552,7 @@ def test_forrest_gump(data_dir, output_dir, working_dir):
 @pytest.mark.integration
 @pytest.mark.forrest_gump_patch2self
 def test_forrest_gump_patch2self(data_dir, output_dir, working_dir):
-    """Run QSIPrep on Forrest Gump data.
+    """Run QSIPrep on Forrest Gump data with patch2self denoising.
 
     The dataset was built from the Forrest Gump dataset:
     https://openneuro.org/datasets/ds000113/versions/1.3.0
