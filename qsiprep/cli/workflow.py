@@ -32,6 +32,7 @@ dictionary (``retval``) to allow isolation using a
 a hard-limited memory-scope.
 
 """
+
 from pathlib import Path
 
 from pkg_resources import resource_filename as pkgrf
@@ -53,17 +54,17 @@ def build_workflow(config_file, retval):
     build_log = config.loggers.workflow
     version = config.environment.version
 
-    retval["return_code"] = 1
-    retval["workflow"] = None
+    retval['return_code'] = 1
+    retval['workflow'] = None
 
-    banner = [f"Running QSIPrep version {version}"]
-    notice_path = Path(pkgrf("qsiprep", "data/NOTICE"))
+    banner = [f'Running QSIPrep version {version}']
+    notice_path = Path(pkgrf('qsiprep', 'data/NOTICE'))
     if notice_path.exists():
-        banner[0] += "\n"
+        banner[0] += '\n'
         banner += [f"License NOTICE {'#' * 50}"]
-        banner += [f"QSIPrep {version}"]
+        banner += [f'QSIPrep {version}']
         banner += notice_path.read_text().splitlines(keepends=False)[1:]
-        banner += ["#" * len(banner[1])]
+        banner += ['#' * len(banner[1])]
     build_log.log(25, f"\n{' ' * 9}".join(banner))
 
     # warn if older results exist: check for dataset_description.json in output folder
@@ -72,7 +73,7 @@ def build_workflow(config_file, retval):
     #     build_log.warning(msg)
 
     # Please note this is the input folder's dataset_description.json
-    dset_desc_path = config.execution.bids_dir / "dataset_description.json"
+    dset_desc_path = config.execution.bids_dir / 'dataset_description.json'
     if dset_desc_path.exists():
         from hashlib import sha256
 
@@ -86,57 +87,52 @@ def build_workflow(config_file, retval):
 
     # Called with reports only
     if config.execution.reports_only:
-        build_log.log(25, "Running --reports-only on participants %s", ", ".join(subject_list))
-        session_list = (
-            config.execution.bids_filters.get("dwi", {}).get("session")
-            if config.execution.bids_filters
-            else None
-        )
+        build_log.log(25, 'Running --reports-only for %s', config.execution.processing_list)
 
         failed_reports = generate_reports(
-            subject_list=config.execution.participant_label,
+            processing_list=config.execution.processing_list,
+            output_level=config.workflow.subject_anatomical_reference,
             output_dir=config.execution.output_dir,
             run_uuid=config.execution.run_uuid,
-            session_list=session_list,
         )
         if failed_reports:
             config.loggers.cli.error(
-                "Report generation was not successful for the following participants : %s.",
-                ", ".join(failed_reports),
+                'Report generation was not successful for the following processing groups : %s.',
+                ', '.join(failed_reports),
             )
 
-        retval["return_code"] = len(failed_reports)
+        retval['return_code'] = len(failed_reports)
         return retval
 
     # Build main workflow
     init_msg = [
         "Building QSIPrep's workflow:",
-        f"BIDS dataset path: {config.execution.bids_dir}.",
-        f"Participant list: {subject_list}.",
-        f"Run identifier: {config.execution.run_uuid}.",
+        f'BIDS dataset path: {config.execution.bids_dir}.',
+        f'Participant list: {subject_list}.',
+        f'Run identifier: {config.execution.run_uuid}.',
     ]
 
     build_log.log(25, f"\n{' ' * 11}* ".join(init_msg))
 
     # If qsiprep is being run on already preprocessed data:
-    retval["workflow"] = init_qsiprep_wf()
+    retval['workflow'] = init_qsiprep_wf()
 
     # Check workflow for missing commands
-    missing = check_deps(retval["workflow"])
+    missing = check_deps(retval['workflow'])
     if missing:
         build_log.critical(
-            "Cannot run QSIPrep. Missing dependencies:%s",
-            "\n\t* ".join([""] + [f"{cmd} (Interface: {iface})" for iface, cmd in missing]),
+            'Cannot run QSIPrep. Missing dependencies:%s',
+            '\n\t* '.join([''] + [f'{cmd} (Interface: {iface})' for iface, cmd in missing]),
         )
-        retval["return_code"] = 127  # 127 == command not found.
+        retval['return_code'] = 127  # 127 == command not found.
         return retval
 
     config.to_filename(config_file)
     build_log.info(
-        "QSIPrep workflow graph with %d nodes built successfully.",
-        len(retval["workflow"]._get_all_nodes()),
+        'QSIPrep workflow graph with %d nodes built successfully.',
+        len(retval['workflow']._get_all_nodes()),
     )
-    retval["return_code"] = 0
+    retval['return_code'] = 0
     return retval
 
 
@@ -145,11 +141,9 @@ def build_boilerplate(config_file, workflow):
     from .. import config
 
     config.load(config_file)
-    logs_path = config.execution.output_dir / "logs"
+    logs_path = config.execution.output_dir / 'logs'
     boilerplate = workflow.visit_desc()
-    citation_files = {
-        ext: logs_path / ("CITATION.%s" % ext) for ext in ("bib", "tex", "md", "html")
-    }
+    citation_files = {ext: logs_path / f'CITATION.{ext}' for ext in ('bib', 'tex', 'md', 'html')}
 
     if boilerplate:
         # To please git-annex users and also to guarantee consistency
@@ -161,50 +155,50 @@ def build_boilerplate(config_file, workflow):
             except FileNotFoundError:
                 pass
 
-    citation_files["md"].write_text(boilerplate)
+    citation_files['md'].write_text(boilerplate)
 
-    if citation_files["md"].exists():
+    if citation_files['md'].exists():
         from subprocess import CalledProcessError, TimeoutExpired, check_call
 
-        bib_text = Path(pkgrf("qsiprep", "data/boilerplate.bib")).read_text()
-        citation_files["bib"].write_text(
-            bib_text.replace("QSIPrep <version>", f"QSIPrep {config.environment.version}")
+        bib_text = Path(pkgrf('qsiprep', 'data/boilerplate.bib')).read_text()
+        citation_files['bib'].write_text(
+            bib_text.replace('QSIPrep <version>', f'QSIPrep {config.environment.version}')
         )
 
         # Generate HTML file resolving citations
         cmd = [
-            "pandoc",
-            "-s",
-            "--bibliography",
-            str(citation_files["bib"]),
-            "--filter",
-            "pandoc-citeproc",
-            "--metadata",
+            'pandoc',
+            '-s',
+            '--bibliography',
+            str(citation_files['bib']),
+            '--filter',
+            'pandoc-citeproc',
+            '--metadata',
             'pagetitle="QSIPrep citation boilerplate"',
-            str(citation_files["md"]),
-            "-o",
-            str(citation_files["html"]),
+            str(citation_files['md']),
+            '-o',
+            str(citation_files['html']),
         ]
 
-        config.loggers.cli.info("Generating an HTML version of the citation boilerplate...")
+        config.loggers.cli.info('Generating an HTML version of the citation boilerplate...')
         try:
             check_call(cmd, timeout=10)
         except (FileNotFoundError, CalledProcessError, TimeoutExpired):
-            config.loggers.cli.warning("Could not generate CITATION.html file:\n%s", " ".join(cmd))
+            config.loggers.cli.warning('Could not generate CITATION.html file:\n%s', ' '.join(cmd))
 
         # Generate LaTex file resolving citations
         cmd = [
-            "pandoc",
-            "-s",
-            "--bibliography",
-            str(citation_files["bib"]),
-            "--natbib",
-            str(citation_files["md"]),
-            "-o",
-            str(citation_files["tex"]),
+            'pandoc',
+            '-s',
+            '--bibliography',
+            str(citation_files['bib']),
+            '--natbib',
+            str(citation_files['md']),
+            '-o',
+            str(citation_files['tex']),
         ]
-        config.loggers.cli.info("Generating a LaTeX version of the citation boilerplate...")
+        config.loggers.cli.info('Generating a LaTeX version of the citation boilerplate...')
         try:
             check_call(cmd, timeout=10)
         except (FileNotFoundError, CalledProcessError, TimeoutExpired):
-            config.loggers.cli.warning("Could not generate CITATION.tex file:\n%s", " ".join(cmd))
+            config.loggers.cli.warning('Could not generate CITATION.tex file:\n%s', ' '.join(cmd))

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 """
@@ -8,6 +7,7 @@ Utility workflows
 .. autofunction:: init_dwi_reference_wf
 
 """
+
 import os
 from pathlib import Path
 
@@ -15,9 +15,9 @@ import nibabel as nb
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from nipype.utils.filemanip import split_filename
+from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from niworkflows.interfaces.reportlets.registration import SimpleBeforeAfterRPT
 
-from ...engine import Workflow
 from ...interfaces import DerivativesDataSink
 from ..anatomical import init_synthstrip_wf
 
@@ -26,10 +26,10 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 
 def init_dwi_reference_wf(
     dwi_file=None,
-    name="dwi_reference_wf",
+    name='dwi_reference_wf',
     gen_report=False,
     source_file=None,
-    desc="initial",
+    desc='initial',
 ):
     """Create dwiref reference image.
 
@@ -90,22 +90,22 @@ def init_dwi_reference_wf(
     * :py:func:`~qsiprep.workflows.dwi.util.init_enhance_and_skullstrip_wf`
     """
     workflow = Workflow(name=name)
-    workflow.__desc__ = ""
+    workflow.__desc__ = ''
     inputnode = pe.Node(
-        niu.IdentityInterface(fields=["b0_template", "t1_brain", "t1_mask", "t1_seg"]),
-        name="inputnode",
+        niu.IdentityInterface(fields=['b0_template', 't1_brain', 't1_mask', 't1_seg']),
+        name='inputnode',
     )
     outputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
-                "raw_ref_image",
-                "ref_image",
-                "ref_image_brain",
-                "dwi_mask",
-                "validation_report",
+                'raw_ref_image',
+                'ref_image',
+                'ref_image_brain',
+                'dwi_mask',
+                'validation_report',
             ],
         ),
-        name="outputnode",
+        name='outputnode',
     )
 
     # Simplify manually setting input image
@@ -141,7 +141,7 @@ def init_dwi_reference_wf(
     #     )
 
     # Use synthstrip to extract the brain
-    synthstrip_wf = init_synthstrip_wf(do_padding=True, name="synthstrip_wf")
+    synthstrip_wf = init_synthstrip_wf(do_padding=True, name='synthstrip_wf')
 
     workflow.connect([
         # (inputnode, t1_mask_to_b0, [
@@ -161,17 +161,17 @@ def init_dwi_reference_wf(
 
     if gen_report:
         if source_file is None:
-            raise Exception("Needs a source_file to write a report")
+            raise Exception('Needs a source_file to write a report')
 
-        b0ref_reportlet = pe.Node(SimpleBeforeAfterRPT(), name="b0ref_reportlet", mem_gb=0.1)
+        b0ref_reportlet = pe.Node(SimpleBeforeAfterRPT(), name='b0ref_reportlet', mem_gb=0.1)
         ds_report_b0_mask = pe.Node(
             DerivativesDataSink(
-                datatype="figures",
+                datatype='figures',
                 desc=desc,
-                suffix="b0ref",
+                suffix='b0ref',
                 source_file=source_file,
             ),
-            name="ds_report_b0_mask",
+            name='ds_report_b0_mask',
             mem_gb=DEFAULT_MEMORY_MIN_GB,
             run_without_submitting=True,
         )
@@ -199,9 +199,9 @@ def _create_mem_gb(dwi_fname):
         dwi_nvols = 1
 
     mem_gb = {
-        "filesize": dwi_size_gb,
-        "resampled": dwi_size_gb * 4,
-        "largemem": dwi_size_gb * (max(dwi_nvols / 100, 1.0) + 4),
+        'filesize': dwi_size_gb,
+        'resampled': dwi_size_gb * 4,
+        'largemem': dwi_size_gb * (max(dwi_nvols / 100, 1.0) + 4),
     }
 
     return dwi_nvols, mem_gb
@@ -210,9 +210,9 @@ def _create_mem_gb(dwi_fname):
 def _get_concatenated_bids_name(dwi_group):
     """Derive the output name for a dwi grouping."""
     try:
-        all_dwis = dwi_group["dwi_series"]
-        if dwi_group["fieldmap_info"]["suffix"] == "rpe_series":
-            all_dwis += dwi_group["fieldmap_info"]["rpe_series"]
+        all_dwis = dwi_group['dwi_series']
+        if dwi_group['fieldmap_info']['suffix'] == 'rpe_series':
+            all_dwis += dwi_group['fieldmap_info']['rpe_series']
 
     except Exception:
         all_dwis = dwi_group
@@ -222,30 +222,30 @@ def _get_concatenated_bids_name(dwi_group):
         no_runs = []
         for dwi in all_dwis:
             no_runs.append(
-                "_".join([part for part in dwi.split("_") if not part.startswith("run")])
+                '_'.join([part for part in dwi.split('_') if not part.startswith('run')])
             )
 
         input_fname = os.path.commonprefix(no_runs)
         fname = split_filename(input_fname)[1]
-        parts = fname.split("_")
-        full_parts = [part for part in parts if not part.endswith("-")]
-        fname = "_".join(full_parts)
+        parts = fname.split('_')
+        full_parts = [part for part in parts if not part.endswith('-')]
+        fname = '_'.join(full_parts)
 
     else:
         input_fname = all_dwis[0]
         fname = split_filename(input_fname)[1]
 
-    if fname.endswith("_dwi"):
+    if fname.endswith('_dwi'):
         fname = fname[:-4]
 
-    return fname.replace(".", "").replace(" ", "")
+    return fname.replace('.', '').replace(' ', '')
 
 
 def _get_wf_name(dwi_fname):
     """Derive the workflow name based on the output file prefix."""
-    spl = dwi_fname.split("_")
-    nosub = "_".join(spl[1:])
-    return f"dwi_preproc_{nosub}_wf".replace("__", "_").replace("-", "_")
+    spl = dwi_fname.split('_')
+    nosub = '_'.join(spl[1:])
+    return f'dwi_preproc_{nosub}_wf'.replace('__', '_').replace('-', '_')
 
 
 def _list_squeeze(in_list):
@@ -262,8 +262,8 @@ def _get_first(in_list):
     return in_list[0]
 
 
-def get_source_file(dwi_files, output_prefix=None, suffix=""):
+def get_source_file(dwi_files, output_prefix=None, suffix=''):
     """The reportlets need a source file. This file might not exist in the input data."""
     if output_prefix is None:
         output_prefix = _get_concatenated_bids_name(dwi_files)
-    return str(Path(dwi_files[0]).parent / output_prefix) + suffix + ".nii.gz"
+    return str(Path(dwi_files[0]).parent / output_prefix) + suffix + '.nii.gz'

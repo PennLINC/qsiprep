@@ -1,6 +1,6 @@
 # Contributing to qsiprep
 
-Contributions are welcome. Please see the guidelines for contributing to fmriprep and follow those here.
+Contributions are welcome. Please see the [guidelines for contributing to NiPreps projects](https://www.nipreps.org/community/CONTRIBUTING/) and follow those here.
 
 ## Licensing
 

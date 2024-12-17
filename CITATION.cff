@@ -1,0 +1,174 @@
+cff-version: 1.2.0
+title: "QSIPrep: An integrative platform for preprocessing and reconstructing diffusion MRI"
+message: If you use this software, please cite it using the following metadata.
+type: software
+authors:
+  - family-names: Cieslak
+    given-names: Matthew
+    affiliation: Department of Neuropsychiatry, University of Pennsylvania
+    orcid: https://orcid.org/0000-0002-1931-4734
+  - family-names: Camacho
+    given-names: Paul B.
+    affiliation: Beckman Institute for Advanced Science & Technology, University of Illinois at Urbana-Champaign, IL, USA
+    orcid: https://orcid.org/0000-0001-9048-7307
+  - family-names: Covitz
+    given-names: Sydney
+    affiliation: Perelman School of Medicine, University of Pennsylvania, PA, USA
+    orcid: https://orcid.org/0000-0002-7430-4125
+  - family-names: Foran
+    given-names: William
+    affiliation: Department of Psychiatry, University of Pittsburgh Medical Center
+    orcid: https://orcid.org/0000-0001-7491-9798
+  - family-names: He
+    given-names: Xiaosong
+    affiliation: Department of Bioengineering, University of Pennsylvania
+    orcid: https://orcid.org/0000-0002-7941-2918
+  - family-names: Humphries
+    given-names: Joseph
+    affiliation: Turing Medical
+    orcid: https://orcid.org/0000-0002-1025-7956
+  - family-names: Legarreta Gorroño
+    given-names: Jon Haitz
+    affiliation: Brigham and Women's Hospital, Mass General Brigham/Harvard Medical School
+    orcid: https://orcid.org/0000-0002-9661-1396
+  - family-names: Magnussen
+    given-names: Fredrik
+    affiliation: Department of Psychology, University of Oslo
+    orcid: https://orcid.org/0000-0003-2574-1705
+  - family-names: Meisler
+    given-names: Steven Lee
+    affiliation: Harvard-MIT Program in Speech and Hearing Bioscience and Technology
+    orcid: https://orcid.org/0000-0002-8888-1572
+  - family-names: Moore
+    given-names: Lucille A.
+    affiliation: Masonic Institute for the Developing Brain (MIDB), University of Minnesota
+    orcid: https://orcid.org/0000-0002-7665-2713
+  - family-names: Krause
+    given-names: Michael
+    affiliation: Max Planck Institute for Human Development, Berlin, Germany
+    orcid: https://orcid.org/0000-0002-3878-6542
+  - family-names: Sadil
+    given-names: Patrick
+    affiliation: Johns Hopkins Bloomberg School of Public Health
+    orcid: https://orcid.org/0000-0003-4141-1343
+  - family-names: Salo
+    given-names: Taylor
+    email: salot@pennmedicine.upenn.edu
+    affiliation: University of Pennsylvania
+    orcid: https://orcid.org/0000-0001-9813-3167
+  - family-names: Sydnor
+    given-names: Valerie Jill
+    affiliation: Perelman School of Medicine, University of Pennsylvania
+    orcid: https://orcid.org/0000-0002-8640-668X
+  - family-names: Satterthwaite
+    given-names: Theodore D.
+    affiliation: Perelman School of Medicine, University of Pennsylvania, PA, USA
+    orcid: https://orcid.org/0000-0001-7072-9399
+preferred-citation:
+  type: article
+  authors:
+    - family-names: Cieslak
+      given-names: Matthew
+    - family-names: Cook
+      given-names: Philip A.
+    - family-names: He
+      given-names: Xiaosong
+    - family-names: Yeh
+      given-names: Fang-Cheng
+    - family-names: Dhollander
+      given-names: Thijs
+    - family-names: Adebimpe
+      given-names: Azeez
+    - family-names: Aguirre
+      given-names: Geoffrey K.
+    - family-names: Bassett
+      given-names: Danielle S.
+    - family-names: Betzel
+      given-names: Richard F.
+    - family-names: Bourque
+      given-names: Josiane
+    - family-names: Cabral
+      given-names: Laura M.
+    - family-names: Davatzikos
+      given-names: Christos
+    - family-names: Detre
+      given-names: John A.
+    - family-names: Earl
+      given-names: Eric
+    - family-names: Elliott
+      given-names: Mark A.
+    - family-names: Fadnavis
+      given-names: Shreyas
+    - family-names: Fair
+      given-names: Damien A.
+    - family-names: Foran
+      given-names: Will
+    - family-names: Fotiadis
+      given-names: Panagiotis
+    - family-names: Garyfallidis
+      given-names: Eleftherios
+    - family-names: Giesbrecht
+      given-names: Barry
+    - family-names: Gur
+      given-names: Ruben C.
+    - family-names: Gur
+      given-names: Raquel E.
+    - family-names: Kelz
+      given-names: Max B.
+    - family-names: Keshavan
+      given-names: Anisha
+    - family-names: Larsen
+      given-names: Bart S.
+    - family-names: Luna
+      given-names: Beatriz
+    - family-names: Mackey
+      given-names: Allyson P.
+    - family-names: Milham
+      given-names: Michael P.
+    - family-names: Oathes
+      given-names: Desmond J.
+    - family-names: Perrone
+      given-names: Anders
+    - family-names: Pines
+      given-names: Adam R.
+    - family-names: Roalf
+      given-names: David R.
+    - family-names: Richie-Halford
+      given-names: Adam
+    - family-names: Rokem
+      given-names: Ariel
+    - family-names: Sydnor
+      given-names: Valerie J.
+    - family-names: Tapera
+      given-names: Tinashe M.
+    - family-names: Tooley
+      given-names: Ursula A.
+    - family-names: Vettel
+      given-names: Jean M.
+    - family-names: Yeatman
+      given-names: Jason D.
+    - family-names: Grafton
+      given-names: Scott T.
+    - family-names: Satterthwaite
+      given-names: Theodore D.
+  doi: 10.1038/s41592-021-01185-5
+  journal: Nature Methods
+  start: 775
+  end: 778
+  title: 'QSIPrep: an integrative platform for preprocessing and reconstructing diffusion MRI data'
+  issue: 7
+  volume: 18
+  year: 2021
+repository-code: 'https://github.com/PennLINC/qsiprep'
+url: 'https://qsiprep.readthedocs.io'
+keywords:
+  - neuroimaging
+  - workflow
+  - pipeline
+  - preprocessing
+  - dMRI
+  - BIDS
+  - BIDS-App
+license: BSD-3-Clause
+version: 1.0.0rc1
+date-released: '2024-11-19'

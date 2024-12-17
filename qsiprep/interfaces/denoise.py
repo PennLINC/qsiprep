@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 """
@@ -8,6 +6,9 @@ Interfaces for image denoising
 
 
 """
+
+import os
+
 import nibabel as nb
 import numpy as np
 import pandas as pd
@@ -19,17 +20,17 @@ from niworkflows.viz.utils import compose_view, cuts_from_bbox
 
 from ..viz.utils import plot_denoise
 
-LOGGER = logging.getLogger("nipype.interface")
+LOGGER = logging.getLogger('nipype.interface')
 
 
 class SeriesPreprocReportInputSpec(reporting.ReportCapableInputSpec):
     nmse_text = traits.File(
-        name_source="in_file", keep_extension=False, name_template="%s_nmse.txt"
+        name_source='in_file', keep_extension=False, name_template='%s_nmse.txt'
     )
 
 
 class SeriesPreprocReportOutputSpec(reporting.ReportCapableOutputSpec):
-    nmse_text = traits.File(desc="nmse between input and output volumes")
+    nmse_text = traits.File(desc='nmse between input and output volumes')
 
 
 class SeriesPreprocReport(reporting.ReportCapableInterface):
@@ -39,17 +40,22 @@ class SeriesPreprocReport(reporting.ReportCapableInterface):
 
     def __init__(self, **kwargs):
         """Instantiate SeriesPreprocReportlet."""
-        self._n_cuts = kwargs.pop("n_cuts", self._n_cuts)
-        super(SeriesPreprocReport, self).__init__(generate_report=True, **kwargs)
+        self._n_cuts = kwargs.pop('n_cuts', self._n_cuts)
+        super().__init__(generate_report=True, **kwargs)
 
     def _calculate_nmse(self, original_nii, corrected_nii):
         """Calculate NMSE from the applied preprocessing operation."""
         outputs = self._list_outputs()
-        output_file = outputs.get("nmse_text")
+        output_file = outputs.get('nmse_text')
+        if not output_file:
+            output_file = os.path.abspath('nmse_text.txt')
+
         pres = []
         posts = []
         differences = []
-        for orig_img, corrected_img in zip(iter_img(original_nii), iter_img(corrected_nii)):
+        for orig_img, corrected_img in zip(
+            iter_img(original_nii), iter_img(corrected_nii), strict=False
+        ):
             orig_data = orig_img.get_fdata()
             corrected_data = corrected_img.get_fdata()
             baseline = orig_data.mean()
@@ -57,14 +63,15 @@ class SeriesPreprocReport(reporting.ReportCapableInterface):
             posts.append(corrected_data.mean())
             scaled_diff = np.abs(corrected_data - orig_data).mean() / baseline
             differences.append(scaled_diff)
-        title = str(self.__class__)[:-2].split(".")[-1]
+        title = str(self.__class__)[:-2].split('.')[-1]
         pd.DataFrame(
-            {title + "_pre": pres, title + "_post": posts, title + "_change": differences}
+            {title + '_pre': pres, title + '_post': posts, title + '_change': differences}
         ).to_csv(output_file, index=False)
+        self._nmse_text = output_file
 
     def _generate_report(self):
         """Generate a reportlet."""
-        LOGGER.info("Generating denoising visual report")
+        LOGGER.info('Generating denoising visual report')
 
         input_dwi, denoised_nii, field_nii = self._get_plotting_images()
 
@@ -108,10 +115,10 @@ class SeriesPreprocReport(reporting.ReportCapableInterface):
             plot_denoise(
                 orig_lowb_nii,
                 orig_highb_nii,
-                "moving-image",
+                'moving-image',
                 estimate_brightness=True,
                 cuts=cuts,
-                label="Raw Image",
+                label='Raw Image',
                 lowb_contour=lowb_field_nii,
                 highb_contour=highb_field_nii,
                 compress=False,
@@ -119,10 +126,10 @@ class SeriesPreprocReport(reporting.ReportCapableInterface):
             plot_denoise(
                 denoised_lowb_nii,
                 denoised_highb_nii,
-                "fixed-image",
+                'fixed-image',
                 estimate_brightness=True,
                 cuts=cuts,
-                label="Denoised",
+                label='Denoised',
                 lowb_contour=lowb_field_nii,
                 highb_contour=highb_field_nii,
                 compress=False,

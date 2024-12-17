@@ -14,6 +14,7 @@ Set up tests
 >>> data_root = get_grouping_test_data()
 >>> os.chdir(data_root)
 """
+
 import logging
 from collections import defaultdict
 
@@ -22,7 +23,7 @@ from nipype.utils.filemanip import split_filename
 from .. import config
 from ..interfaces.bids import get_bids_params
 
-LOGGER = logging.getLogger("nipype.workflow")
+LOGGER = logging.getLogger('nipype.workflow')
 
 
 def group_dwi_scans(
@@ -52,13 +53,13 @@ def group_dwi_scans(
         concatenation. The values are lists of dwi files in that group.
     """
     # Handle the grouping of multiple dwi files within a session
-    dwi_session_groups = get_session_groups(config.execution.layout, subject_data, combine_scans)
+    dwi_entity_groups = get_entity_groups(config.execution.layout, subject_data, combine_scans)
 
     # Group them by their warp group
     dwi_fmap_groups = []
-    for dwi_session_group in dwi_session_groups:
+    for dwi_entity_group in dwi_entity_groups:
         dwi_fmap_groups.extend(
-            group_by_warpspace(dwi_session_group, config.execution.layout, ignore_fieldmaps)
+            group_by_warpspace(dwi_entity_group, config.execution.layout, ignore_fieldmaps)
         )
 
     if using_fsl:
@@ -70,8 +71,8 @@ def group_dwi_scans(
     return dwi_fmap_groups, {}
 
 
-def get_session_groups(layout, subject_data, combine_all_dwis):
-    """Handle the grouping of multiple dwi files within a session.
+def get_entity_groups(layout, subject_data, combine_all_dwis):
+    """Handle the grouping of multiple DWI files within a session/acquisition.
 
     Parameters
     ----------
@@ -80,42 +81,65 @@ def get_session_groups(layout, subject_data, combine_all_dwis):
     subject_data : :obj:`dict`
         A dictionary of BIDS data for a single subject
     combine_all_dwis : :obj:`bool`
-        If True, combine all dwi files within a session into a single group
+        If True, combine all DWI files within a session/acq into a single group
 
     Returns
     -------
-    dwi_session_groups : :obj:`list` of :obj:`list`
-        A list of lists of dwi files. Each list of dwi files is a group of scans
-        that can be concatenated together.
+    dwi_entity_groups : :obj:`list` of :obj:`list`
+        A list of lists of DWI files.
+        Each list of DWI files is a group of scans that can be concatenated together.
     """
-    sessions = layout.get_sessions() if layout is not None else []
-    all_dwis = subject_data["dwi"]
-    dwi_session_groups = []
+    all_dwis = subject_data['dwi']
+    dwi_groups = []
     if not combine_all_dwis:
-        dwi_session_groups = [[dwi] for dwi in all_dwis]
+        dwi_groups = [[dwi] for dwi in all_dwis]
 
     else:
-        if sessions:
-            LOGGER.info("Combining all dwi files within each available session:")
-            for session in sessions:
-                session_files = [img for img in all_dwis if "ses-" + session in img]
-                LOGGER.info("\t- %d scans in session %s", len(session_files), session)
-                dwi_session_groups.append(session_files)
-        else:
-            LOGGER.info("Combining all %d dwis within the single available session", len(all_dwis))
-            dwi_session_groups = [all_dwis]
+        dwi_entities = {}
+        for f in all_dwis:
+            f_entities = layout.get_file(f).get_entities()
+            for k, v in f_entities.items():
+                if k in dwi_entities:
+                    if v not in dwi_entities[k]:
+                        dwi_entities[k].append(v)
+                else:
+                    dwi_entities[k] = [v]
 
-    return dwi_session_groups
+        sessions = dwi_entities.get('session', [None])
+        acquisitions = dwi_entities.get('acquisition', [None])
+
+        LOGGER.info('Combining all DWI files within each available session and acquisition:')
+        for session in sessions:
+            session_files = [
+                img for img in all_dwis if layout.get_file(img).entities.get('session') == session
+            ]
+            for acq in acquisitions:
+                group_files = [
+                    img
+                    for img in session_files
+                    if layout.get_file(img).entities.get('acquisition') == acq
+                ]
+
+                if group_files:
+                    LOGGER.info(
+                        '\t- %d scans in session %s/acquisition %s',
+                        len(group_files),
+                        session,
+                        acq,
+                    )
+                    dwi_groups.append(group_files)
+
+    return dwi_groups
 
 
 FMAP_PRIORITY = {
-    "dwi": 0,
-    "epi": 1,
-    "fieldmap": 2,
-    "phasediff": 3,
-    "phase1": 4,
-    "phase": 4,
-    "syn": 5,
+    'dwi': 0,
+    'epi': 1,
+    'fieldmap': 2,
+    'phasediff': 3,
+    'phase1': 4,
+    'phase': 4,
+    'syn': 5,
 }
 
 
@@ -178,24 +202,24 @@ def get_highest_priority_fieldmap(fmap_infos):
     # Find fieldmaps
     default_priority = max(FMAP_PRIORITY.values()) + 1
     priority = default_priority
-    selected_fmap_info = {"suffix": None}
+    selected_fmap_info = {'suffix': None}
 
     # collapse multiple EPI fieldmaps into one entry
     epi_fmaps = sorted(
-        [fmap_info["epi"] for fmap_info in fmap_infos if fmap_info.get("suffix") == "epi"]
+        [fmap_info['epi'] for fmap_info in fmap_infos if fmap_info.get('suffix') == 'epi']
     )
     if epi_fmaps:
-        epi_info = {"suffix": "epi", "epi": epi_fmaps}
+        epi_info = {'suffix': 'epi', 'epi': epi_fmaps}
         fmap_infos = [
-            fmap_info for fmap_info in fmap_infos if fmap_info.get("suffix") != "epi"
+            fmap_info for fmap_info in fmap_infos if fmap_info.get('suffix') != 'epi'
         ] + [epi_info]
 
     # Select the highest priority fieldmap
     for fmap_info in fmap_infos:
-        if fmap_info.get("suffix") == "phase":
-            fmap_info["suffix"] = "phase1"
+        if fmap_info.get('suffix') == 'phase':
+            fmap_info['suffix'] = 'phase1'
 
-        fmap_type = fmap_info.get("suffix")
+        fmap_type = fmap_info.get('suffix')
         if fmap_type not in FMAP_PRIORITY:
             continue
 
@@ -310,8 +334,8 @@ def find_fieldmaps_from_other_dwis(dwi_files, dwi_file_metadatas):
     """
 
     scans_to_pe_dirs = {
-        fname: meta.get("PhaseEncodingDirection", "None")
-        for fname, meta in zip(dwi_files, dwi_file_metadatas)
+        fname: meta.get('PhaseEncodingDirection', 'None')
+        for fname, meta in zip(dwi_files, dwi_file_metadatas, strict=False)
     }
     pe_dirs_to_scans = defaultdict(list)
     for scan_name, scan_dir in scans_to_pe_dirs.items():
@@ -325,11 +349,11 @@ def find_fieldmaps_from_other_dwis(dwi_files, dwi_file_metadatas):
         if pe_dir is None:
             continue
 
-        opposite_pe = pe_dir[0] if pe_dir.endswith("-") else pe_dir + "-"
+        opposite_pe = pe_dir[0] if pe_dir.endswith('-') else pe_dir + '-'
         rpe_dwis = pe_dirs_to_scans[opposite_pe]
 
         if rpe_dwis:
-            dwi_series_fieldmaps[dwi_file] = {"suffix": "dwi", "dwi": sorted(rpe_dwis)}
+            dwi_series_fieldmaps[dwi_file] = {'suffix': 'dwi', 'dwi': sorted(rpe_dwis)}
 
     return dwi_series_fieldmaps
 
@@ -472,8 +496,8 @@ def split_by_phase_encoding_direction(dwi_files, metadatas):
     """
     pe_dir_groups = defaultdict(list)
     unknowns = []
-    for dwi_file, meta in zip(dwi_files, metadatas):
-        pe_dir = meta.get("PhaseEncodingDirection")
+    for dwi_file, meta in zip(dwi_files, metadatas, strict=False):
+        pe_dir = meta.get('PhaseEncodingDirection')
         if pe_dir:
             pe_dir_groups[pe_dir].append(dwi_file)
         else:
@@ -483,19 +507,19 @@ def split_by_phase_encoding_direction(dwi_files, metadatas):
     for pe_dir, dwi_group in sorted(pe_dir_groups.items()):
         dwi_groups.append(
             {
-                "dwi_series": dwi_group,
-                "fieldmap_info": {"suffix": None},
-                "dwi_series_pedir": pe_dir,
-                "concatenated_bids_name": get_concatenated_bids_name(dwi_group),
+                'dwi_series': dwi_group,
+                'fieldmap_info': {'suffix': None},
+                'dwi_series_pedir': pe_dir,
+                'concatenated_bids_name': get_concatenated_bids_name(dwi_group),
             }
         )
     for unknown in unknowns:
         dwi_groups.append(
             {
-                "dwi_series": [unknown],
-                "fieldmap_info": {"suffix": None},
-                "dwi_series_pedir": "",
-                "concatenated_bids_name": get_concatenated_bids_name([unknown]),
+                'dwi_series': [unknown],
+                'fieldmap_info': {'suffix': None},
+                'dwi_series_pedir': '',
+                'concatenated_bids_name': get_concatenated_bids_name([unknown]),
             }
         )
 
@@ -713,10 +737,10 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
         LOGGER.warning("Assuming we're building docs")
         return [
             {
-                "dwi_series": dwi_files,
-                "fieldmap_info": {"suffix": None},
-                "dwi_series_pedir": "j",
-                "concatenated_bids_name": "sub-1",
+                'dwi_series': dwi_files,
+                'fieldmap_info': {'suffix': None},
+                'dwi_series_pedir': 'j',
+                'concatenated_bids_name': 'sub-1',
             }
         ]
 
@@ -739,13 +763,13 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
         best_fieldmap[dwi_file] = best_fmap
 
         # Add the dwi file to a list of those corrected by this fieldmap
-        fmap_key = tuple(best_fmap[best_fmap["suffix"]]) if best_fmap["suffix"] else "None"
+        fmap_key = tuple(best_fmap[best_fmap['suffix']]) if best_fmap['suffix'] else 'None'
         grouped_by_fmap[fmap_key].append(dwi_file)
 
     # Create the final groups
     dwi_groups = []
     for fmap_key, dwi_group in grouped_by_fmap.items():
-        if fmap_key == "None":
+        if fmap_key == 'None':
             dwi_groups.extend(
                 split_by_phase_encoding_direction(
                     dwi_group, [layout.get_metadata(dwi_file) for dwi_file in dwi_group]
@@ -753,13 +777,13 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
             )
         else:
             example_dwi_file = dwi_group[0]
-            pe_direction = layout.get_metadata(example_dwi_file).get("PhaseEncodingDirection")
+            pe_direction = layout.get_metadata(example_dwi_file).get('PhaseEncodingDirection')
             dwi_groups.append(
                 {
-                    "dwi_series": dwi_group,
-                    "fieldmap_info": best_fieldmap[example_dwi_file],
-                    "dwi_series_pedir": pe_direction,
-                    "concatenated_bids_name": get_concatenated_bids_name(dwi_group),
+                    'dwi_series': dwi_group,
+                    'fieldmap_info': best_fieldmap[example_dwi_file],
+                    'dwi_series_pedir': pe_direction,
+                    'concatenated_bids_name': get_concatenated_bids_name(dwi_group),
                 }
             )
 
@@ -868,34 +892,34 @@ def merge_dwi_groups(dwi_groups_plus, dwi_groups_minus):
     fmap_files = []
 
     for dwi_group in dwi_groups_plus:
-        dwi_files += dwi_group["dwi_series"]
-        fmap_type = dwi_group["fieldmap_info"].get("suffix")
-        if fmap_type == "dwi":
-            rpe_files += dwi_group["fieldmap_info"]["dwi"]
-        elif fmap_type == "epi":
-            fmap_files += dwi_group["fieldmap_info"]["epi"]
-        pe_dir = dwi_group["dwi_series_pedir"]
+        dwi_files += dwi_group['dwi_series']
+        fmap_type = dwi_group['fieldmap_info'].get('suffix')
+        if fmap_type == 'dwi':
+            rpe_files += dwi_group['fieldmap_info']['dwi']
+        elif fmap_type == 'epi':
+            fmap_files += dwi_group['fieldmap_info']['epi']
+        pe_dir = dwi_group['dwi_series_pedir']
 
     for dwi_group in dwi_groups_minus:
-        rpe_files += dwi_group["dwi_series"]
-        fmap_type = dwi_group["fieldmap_info"].get("suffix")
-        if fmap_type == "dwi":
-            dwi_files += dwi_group["fieldmap_info"]["dwi"]
-        elif fmap_type == "epi":
-            fmap_files += dwi_group["fieldmap_info"]["epi"]
+        rpe_files += dwi_group['dwi_series']
+        fmap_type = dwi_group['fieldmap_info'].get('suffix')
+        if fmap_type == 'dwi':
+            dwi_files += dwi_group['fieldmap_info']['dwi']
+        elif fmap_type == 'epi':
+            fmap_files += dwi_group['fieldmap_info']['epi']
 
     dwi_files = sorted(set(dwi_files))
     rpe_files = sorted(set(rpe_files))
     fmap_files = sorted(set(fmap_files))
-    fieldmap_info = {"suffix": "rpe_series", "rpe_series": rpe_files}
+    fieldmap_info = {'suffix': 'rpe_series', 'rpe_series': rpe_files}
     if fmap_files:
-        fieldmap_info["epi"] = fmap_files
+        fieldmap_info['epi'] = fmap_files
 
     merged_group = {
-        "dwi_series": dwi_files,
-        "dwi_series_pedir": pe_dir,
-        "fieldmap_info": fieldmap_info,
-        "concatenated_bids_name": get_concatenated_bids_name(dwi_files + rpe_files),
+        'dwi_series': dwi_files,
+        'dwi_series_pedir': pe_dir,
+        'fieldmap_info': fieldmap_info,
+        'concatenated_bids_name': get_concatenated_bids_name(dwi_files + rpe_files),
     }
     return merged_group
 
@@ -1012,21 +1036,21 @@ def group_for_eddy(all_dwi_fmap_groups):
 
     """
     eddy_dwi_groups = []
-    eddy_compatible_suffixes = ("dwi", "epi")
+    eddy_compatible_suffixes = ('dwi', 'epi')
     session_groups = _group_by_sessions(all_dwi_fmap_groups)
     for _, dwi_fmap_groups in session_groups.items():
-        for pe_dir in "ijk":
+        for pe_dir in 'ijk':
             plus_series = [
                 dwi_group
                 for dwi_group in dwi_fmap_groups
-                if dwi_group.get("dwi_series_pedir") == pe_dir
-                and dwi_group["fieldmap_info"].get("suffix") in eddy_compatible_suffixes
+                if dwi_group.get('dwi_series_pedir') == pe_dir
+                and dwi_group['fieldmap_info'].get('suffix') in eddy_compatible_suffixes
             ]
             minus_series = [
                 dwi_group
                 for dwi_group in dwi_fmap_groups
-                if dwi_group.get("dwi_series_pedir") == pe_dir + "-"
-                and dwi_group["fieldmap_info"].get("suffix") in eddy_compatible_suffixes
+                if dwi_group.get('dwi_series_pedir') == pe_dir + '-'
+                and dwi_group['fieldmap_info'].get('suffix') in eddy_compatible_suffixes
             ]
 
             # Can these be grouped?
@@ -1037,11 +1061,11 @@ def group_for_eddy(all_dwi_fmap_groups):
 
         # Add separate groups for non-compatible fieldmaps
         for dwi_group in dwi_fmap_groups:
-            if dwi_group["fieldmap_info"].get("suffix") not in eddy_compatible_suffixes:
+            if dwi_group['fieldmap_info'].get('suffix') not in eddy_compatible_suffixes:
                 eddy_dwi_groups.append(dwi_group)
 
     return eddy_dwi_groups, {
-        group["concatenated_bids_name"]: group["concatenated_bids_name"]
+        group['concatenated_bids_name']: group['concatenated_bids_name']
         for group in eddy_dwi_groups
     }
 
@@ -1067,11 +1091,11 @@ def group_for_concatenation(all_dwi_fmap_groups):
     for _, dwi_fmap_groups in session_groups.items():
         all_images = []
         for group in dwi_fmap_groups:
-            all_images.extend(group["dwi_series"])
+            all_images.extend(group['dwi_series'])
         group_name = get_concatenated_bids_name(all_images)
         # Add separate groups for non-compatible fieldmaps
         for group in dwi_fmap_groups:
-            concatenation_grouping[group["concatenated_bids_name"]] = group_name
+            concatenation_grouping[group['concatenated_bids_name']] = group_name
 
     return concatenation_grouping
 
@@ -1124,17 +1148,17 @@ def get_concatenated_bids_name(dwi_group):
     # If a single file, use its name, otherwise use the common prefix
     if len(dwi_group) > 1:
         fname = _get_common_bids_fields(dwi_group)
-        parts = fname.split("_")
-        full_parts = [part for part in parts if not part.endswith("-")]
-        fname = "_".join(full_parts)
+        parts = fname.split('_')
+        full_parts = [part for part in parts if not part.endswith('-')]
+        fname = '_'.join(full_parts)
     else:
         input_fname = dwi_group[0]
         fname = split_filename(input_fname)[1]
 
-    if fname.endswith("_dwi"):
+    if fname.endswith('_dwi'):
         fname = fname[:-4]
 
-    return fname.replace(".", "").replace(" ", "")
+    return fname.replace('.', '').replace(' ', '')
 
 
 def _get_common_bids_fields(fnames):
@@ -1153,19 +1177,19 @@ def _get_common_bids_fields(fnames):
     bids_keys = defaultdict(set)
     for fname in fnames:
         basename = split_filename(fname)[1]
-        for token in basename.split("_"):
-            parts = token.split("-")
+        for token in basename.split('_'):
+            parts = token.split('-')
             if len(parts) == 2:
                 key, value = parts
                 bids_keys[key].update((value,))
 
     # Find all the keys with a single unique value
     common_bids = []
-    for key in ["sub", "ses", "acq", "dir", "run"]:
+    for key in ['sub', 'ses', 'acq', 'dir', 'run']:
         if len(bids_keys[key]) == 1:
-            common_bids.append(key + "-" + bids_keys[key].pop())
+            common_bids.append(key + '-' + bids_keys[key].pop())
 
-    return "_".join(common_bids)
+    return '_'.join(common_bids)
 
 
 def _group_by_sessions(dwi_fmap_groups):
@@ -1214,7 +1238,7 @@ def _group_by_sessions(dwi_fmap_groups):
     """
     ses_lookup = defaultdict(list)
     for group in dwi_fmap_groups:
-        bids_info = get_bids_params(group["concatenated_bids_name"])
-        ses_lookup[bids_info["session_id"]].append(group)
+        bids_info = get_bids_params(group['concatenated_bids_name'])
+        ses_lookup[bids_info['session_id']].append(group)
 
     return ses_lookup
