@@ -98,28 +98,37 @@ As with Docker, you will need to bind the Freesurfer license.txt when running Ap
         --fs-license-file /opt/freesurfer/license.txt
 
 .. note::
-    **Running QSIPrep on Non-Internet Nodes:**
+    **Running QSIPrep with Apptainer on Non-Internet Nodes**
+
     QSIPrep relies on TemplateFlow to provide standard anatomical templates. By default, it downloads 
     necessary files into the ``$TEMPLATEFLOW_HOME`` directory (default: ``$HOME/.cache/templateflow``). 
-    However, on nodes without internet access, this will cause job failure unless the required templates 
-    are pre-fetched and available.
+    However, when running with ``--containall``, the default location may not be accessible, and any 
+    missing templates will be tentatively downloaded into the temporary QSIPrep working directory instead.
+    To avoid this, you must always set and bind ``TEMPLATEFLOW_HOME`` explicitly.
 
-    1. Run QSIPrep once on an internet-enabled node. This will automatically download the required 
-    templates into the ``$TEMPLATEFLOW_HOME`` directory (or ``$HOME/.cache/templateflow`` if the variable 
-    is unset).  
-    2. If the directory is not accessible on the target HPC node, copy it manually to the target system.  
-    3. Bind and pass the ``TEMPLATEFLOW_HOME`` variable to the container:  
-       ```sh
-       export TEMPLATEFLOW_HOME=/path/to/copied/templateflow
-       apptainer run --cleanenv --containall \
-         -B ${TEMPLATEFLOW_HOME}:${TEMPLATEFLOW_HOME} \
-         --env "TEMPLATEFLOW_HOME=$TEMPLATEFLOW_HOME" \
-         /path/to/qsiprep_<VERSION>.sif <your commands>
-       ```
+    Steps to ensure successful execution:
 
-    For additional troubleshooting, see [fmriprep docs](https://fmriprep.org/en/stable/faq.html#how-do-you-use-templateflow-in-the-absence-of-access-to-the-internet) 
-    or [this thread on Neurostars](https://neurostars.org/t/issue-with-qsiprep-templateflow-on-hpc-host-with-no-internet-access/31259/10?u=pierre-nedelec).
+    1. On an **internet-enabled node**, set and bind the ``TEMPLATEFLOW_HOME`` variable to a persistent 
+       directory before running QSIPrep. This will ensure all necessary templates are downloaded into the 
+       specified location:
+    
+       .. code-block:: sh
+    
+          export TEMPLATEFLOW_HOME=/path/to/persistent/templateflow
+          apptainer run --cleanenv --containall \
+            -B ${TEMPLATEFLOW_HOME}:${TEMPLATEFLOW_HOME} \
+            --env "TEMPLATEFLOW_HOME=$TEMPLATEFLOW_HOME" \
+            /path/to/qsiprep_<VERSION>.sif <your commands>
 
+    2. If the ``TEMPLATEFLOW_HOME`` directory is not accessible on your target HPC node, manually copy it 
+       to the target system after the first run.
+
+    3. On nodes without internet access, bind the copied ``TEMPLATEFLOW_HOME`` directory and set the 
+       environment variable as described above before running QSIPrep.
+
+    
+    For additional troubleshooting, see `fmriprep docs <https://fmriprep.org/en/stable/faq.html#how-do-you-use-templateflow-in-the-absence-of-access-to-the-internet>`_ 
+    or `this thread on Neurostars <https://neurostars.org/t/issue-with-qsiprep-templateflow-on-hpc-host-with-no-internet-access/31259/10?u=pierre-nedelec>`_.
 
 *********************
 External Dependencies
