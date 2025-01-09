@@ -112,6 +112,8 @@ def test_processing_list(tmpdir, name, skeleton):
             '01',
             '--subject-anatomical-reference',
             'sessionwise',
+            '--output-resolution',
+            '2',
         ],
     )
     assert config.execution.processing_list == ['0\t01\t01', '1\t01\t02']
