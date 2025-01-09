@@ -41,7 +41,7 @@ longitudinal = {
             'anat': [{'suffix': 'T1w', 'metadata': {'EchoTime': 1}}],
             'dwi': [
                 {
-                    'direction': 'AP',
+                    'dir': 'AP',
                     'run': '01',
                     'suffix': 'dwi',
                     'metadata': {
@@ -51,7 +51,7 @@ longitudinal = {
                     },
                 },
                 {
-                    'direction': 'PA',
+                    'dir': 'PA',
                     'run': '01',
                     'suffix': 'dwi',
                     'metadata': {
@@ -67,7 +67,7 @@ longitudinal = {
             'anat': [{'suffix': 'T1w', 'metadata': {'EchoTime': 1}}],
             'dwi': [
                 {
-                    'direction': 'AP',
+                    'dir': 'AP',
                     'run': '01',
                     'suffix': 'dwi',
                     'metadata': {
@@ -77,7 +77,7 @@ longitudinal = {
                     },
                 },
                 {
-                    'direction': 'PA',
+                    'dir': 'PA',
                     'run': '01',
                     'suffix': 'dwi',
                     'metadata': {
