@@ -108,7 +108,7 @@ def test_processing_list(tmpdir, name, skeleton):
             bids_dir,
             str(tmpdir / 'out'),
             'participant',
-            '--participant_label',
+            '--participant-label',
             '01',
             '--subject-anatomical-reference',
             'sessionwise',
