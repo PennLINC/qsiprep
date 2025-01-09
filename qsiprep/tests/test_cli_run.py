@@ -117,4 +117,4 @@ def test_processing_list(tmpdir, name, skeleton):
             '--skip-bids-validation',
         ],
     )
-    assert config.execution.processing_list == ['0\t01\t01', '1\t01\t02']
+    assert config.execution.processing_list == [['01', ['01']], ['01', ['02']]]
