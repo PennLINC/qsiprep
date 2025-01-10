@@ -54,8 +54,8 @@ def _build_parser(**kwargs):
         def __call__(self, parser, namespace, values, option_string=None):
             new_opt, rem_vers = deprecations.get(self.dest, (None, None))
             msg = (
-                f"{self.option_strings} has been deprecated and will be removed in "
-                f"{rem_vers or 'a later version'}."
+                f'{self.option_strings} has been deprecated and will be removed in '
+                f'{rem_vers or "a later version"}.'
             )
             if new_opt:
                 msg += f' Please use `{new_opt}` instead.'
@@ -193,7 +193,7 @@ def _build_parser(**kwargs):
     parser.add_argument(
         'analysis_level',
         choices=['participant'],
-        help='Processing stage to be run, only "participant" in the case of ' 'QSIPrep (for now).',
+        help='Processing stage to be run, only "participant" in the case of QSIPrep (for now).',
     )
 
     g_bids = parser.add_argument_group('Options for filtering BIDS queries')
@@ -507,7 +507,7 @@ def _build_parser(**kwargs):
         action='store',
         default='Affine',
         choices=['Affine', 'Rigid'],
-        help='transformation to be optimized during head motion correction ' '(default: affine)',
+        help='transformation to be optimized during head motion correction (default: affine)',
     )
     g_moco.add_argument(
         '--hmc-model',
@@ -739,7 +739,7 @@ def parse_args(args=None, namespace=None):
 
     # Ensure input and output folders are not the same
     if output_dir == bids_dir:
-        rec_path = output_dir / 'derivatives' / f"qsiprep-{version.split('+')[0]}"
+        rec_path = output_dir / 'derivatives' / f'qsiprep-{version.split("+")[0]}'
         parser.error(
             'The selected output folder is the same as the input BIDS folder. '
             f'Please modify the output path (suggestion: {rec_path}).'
@@ -756,8 +756,7 @@ def parse_args(args=None, namespace=None):
         from ..utils.bids import validate_input_dir
 
         build_log.info(
-            'Making sure the input data is BIDS compliant (warnings can be ignored in most '
-            'cases).'
+            'Making sure the input data is BIDS compliant (warnings can be ignored in most cases).'
         )
         validate_input_dir(
             config.environment.exec_env,
@@ -782,7 +781,7 @@ def parse_args(args=None, namespace=None):
     if missing_subjects:
         parser.error(
             'One or more participant labels were not found in the BIDS directory: '
-            f"{', '.join(missing_subjects)}."
+            f'{", ".join(missing_subjects)}.'
         )
 
     # Determine which sessions to process and group them
