@@ -48,7 +48,7 @@ class Patch2SelfInputSpec(SeriesPreprocReportInputSpec):
     shift_intensity = traits.Bool(
         True,
         usedefault=True,
-        desc='Shifts the distribution of intensities per ' 'volume to give non-negative values',
+        desc='Shifts the distribution of intensities per volume to give non-negative values',
     )
     out_report = File(
         'patch2self_report.svg', usedefault=True, desc='filename for the visual report'

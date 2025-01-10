@@ -676,8 +676,7 @@ def gen_denoising_boilerplate():
     no_b0_harmonization = config.workflow.no_b0_harmonization
     b0_threshold = config.workflow.b0_threshold
     desc = [
-        f'Any images with a b-value less than {b0_threshold} s/mm^2 were treated as a '
-        '*b*=0 image.'
+        f'Any images with a b-value less than {b0_threshold} s/mm^2 were treated as a *b*=0 image.'
     ]
     harmonize_b0s = not no_b0_harmonization
     last_step = ''
