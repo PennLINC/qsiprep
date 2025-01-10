@@ -318,9 +318,9 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type, pepolar_method):
 
     # did you sep_offs_mov?
     if isdefined(ext_eddy.inputs.dont_sep_offs_move) and ext_eddy.inputs.dont_sep_offs_move:
-        desc.append('No attempt was made to separate field offset from ' 'subject movement.')
+        desc.append('No attempt was made to separate field offset from subject movement.')
     else:
-        desc.append('Field offset was attempted to be separated from ' 'subject movement.')
+        desc.append('Field offset was attempted to be separated from subject movement.')
 
     # did you peas?
     if isdefined(ext_eddy.inputs.dont_peas) and ext_eddy.inputs.dont_peas:
@@ -355,7 +355,7 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type, pepolar_method):
             if mb_off != 0:
                 offs_txt = {-1: 'bottom', 1: 'top'}
                 offs_txt = f'and slices removed from the {offs_txt} of the volume were'
-            desc.append('A multi-band acceleration factor of %d ' '%s assumed.' % (mbf, offs_txt))
+            desc.append(f'A multi-band acceleration factor of {mbf} {offs_txt} assumed.'))
 
         # The threshold for outliers
         std_threshold = (
@@ -420,7 +420,7 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type, pepolar_method):
     lsr_ref = ' [@fsllsr]' if ext_eddy.inputs.method == 'lsr' else ''
     if doing_2stage:
         desc.append(
-            'Interpolation after head motion and initial susceptibility ' 'distortion correction'
+            'Interpolation after head motion and initial susceptibility distortion correction'
         )
     else:
         desc.append('Final interpolation')
@@ -450,7 +450,7 @@ def topup_boilerplate(fieldmap_type, pepolar_method):
 
     desc.append('was used to estimate a susceptibility-induced off-resonance field based on')
     if fieldmap_type == 'epi':
-        desc.append('b=0 reference images with reversed ' 'phase encoding directions.')
+        desc.append('b=0 reference images with reversed phase encoding directions.')
     else:
         desc.append(
             'b=0 images extracted from multiple DWI series  '

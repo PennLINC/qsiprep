@@ -127,7 +127,7 @@ class SliceQCInputSpec(BaseInterfaceInputSpec):
     min_slice_size_percentile = traits.CFloat(
         10.0,
         usedefault=True,
-        desc='slices bigger than ' 'this percentile are candidates for imputation.',
+        desc='slices bigger than this percentile are candidates for imputation.',
     )
 
 
@@ -351,7 +351,7 @@ class ComposeTransformsInputSpec(ApplyTransformsInputSpec):
     b0_to_intramodal_template_transforms = InputMultiObject(
         File(exists=True),
         mandtory=False,
-        desc='list of transforms to register the b=0 to ' 'the intramodal template.',
+        desc='list of transforms to register the b=0 to the intramodal template.',
     )
     intramodal_template_to_t1_affine = File(
         exists=True, desc='affine from the intramodal template to t1'
@@ -565,8 +565,7 @@ class GradientRotationInputSpec(BaseInterfaceInputSpec):
     )
     bvec_files = InputMultiObject(
         File(exists=True),
-        desc='list of split bvec files, must correspond to a '
-        'non-oblique image/reference frame.',
+        desc='list of split bvec files, must correspond to a non-oblique image/reference frame.',
         mandatory=True,
     )
     bval_files = InputMultiObject(

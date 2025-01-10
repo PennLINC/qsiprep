@@ -723,8 +723,7 @@ def generate_drbuddi_boilerplate(fieldmap_type, t2w_sdc, with_topup=False):
     # Describe what's going on
     if fieldmap_type == 'epi':
         desc.append(
-            'DRBUDDI used b=0 reference images with reversed '
-            'phase encoding directions to estimate'
+            'DRBUDDI used b=0 reference images with reversed phase encoding directions to estimate'
         )
     else:
         desc.append(

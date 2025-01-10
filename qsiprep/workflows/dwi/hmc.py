@@ -161,8 +161,7 @@ def init_dwi_hmc_wf(
     # If we're just aligning based on the b=0 images, compute the b=0 tsnr as the cnr
     if hmc_model.lower() == 'none':
         workflow.__postdesc__ = (
-            'Each b>0 image was transformed based on the registration '
-            ' of the nearest b=0 image. '
+            'Each b>0 image was transformed based on the registration of the nearest b=0 image. '
         )
 
         concat_b0s = pe.Node(afni.TCat(outputtype='NIFTI_GZ'), name='concat_b0s')
