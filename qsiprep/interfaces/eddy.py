@@ -355,7 +355,7 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type, pepolar_method):
             if mb_off != 0:
                 offs_txt = {-1: 'bottom', 1: 'top'}
                 offs_txt = f'and slices removed from the {offs_txt} of the volume were'
-            desc.append(f'A multi-band acceleration factor of {mbf} {offs_txt} assumed.'))
+            desc.append(f'A multi-band acceleration factor of {mbf} {offs_txt} assumed.')
 
         # The threshold for outliers
         std_threshold = (
