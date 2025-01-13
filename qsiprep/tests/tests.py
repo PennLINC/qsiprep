@@ -31,7 +31,6 @@ from tempfile import mkdtemp
 from toml import loads
 
 from qsiprep.data import load as load_data
-from qsiprep.utils import doc
 
 
 @contextmanager
@@ -61,7 +60,6 @@ def mock_config():
     config.loggers.init()
 
     config.execution.work_dir = Path(mkdtemp())
-    config.execution.fmri_dir = Path(doc.download_example_data(out_dir=mkdtemp()))
     config.execution.output_dir = Path(mkdtemp())
     config.execution.bids_database_dir = None
     config.execution._layout = None
