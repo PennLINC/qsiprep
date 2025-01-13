@@ -125,6 +125,7 @@ As with Docker, you will need to bind the Freesurfer license.txt when running Ap
 
     3. On nodes without internet access, bind the copied ``TEMPLATEFLOW_HOME`` directory and set the 
        environment variable as described above before running QSIPrep.
+     4. It may help to run a single subject or session on its own before running many jobs that access the templates. The single run will download the necessary templates and prevent multiple jobs from attempting to download the templates simultaneously.
 
     
     For additional troubleshooting, see `fmriprep docs <https://fmriprep.org/en/stable/faq.html#how-do-you-use-templateflow-in-the-absence-of-access-to-the-internet>`_ 
