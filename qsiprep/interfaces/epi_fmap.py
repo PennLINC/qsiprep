@@ -106,7 +106,7 @@ def load_epi_dwi_fieldmaps(fmap_list, b0_threshold):
         # Which images are b=0 images?
         if op.exists(potential_bval_file):
             # If there is a secret bval file, check that it's allowed
-            bvals = np.loadtxt(potential_bval_file)
+            bvals = np.loadtxt(potential_bval_file, ndmin=1)
             if fmap_img.ndim == 3 and len(bvals) == 1:
                 _b0_indices = np.arange(num_images) + starting_index
             elif fmap_img.ndim == 4 and len(bvals) == fmap_img.shape[3]:
