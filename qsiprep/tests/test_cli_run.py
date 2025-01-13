@@ -163,23 +163,77 @@ def test_processing_list(tmpdir, name, skeleton, reference, expected):
     from glob import glob
 
     from qsiprep import config
+    from qsiprep.tests.tests import mock_config
 
-    full_name = f'{name}_{reference}'
+    with mock_config():
+        full_name = f'{name}_{reference}'
 
-    bids_dir = tmpdir / full_name
+        bids_dir = tmpdir / full_name
+        generate_bids_skeleton(str(bids_dir), skeleton)
+        parse_args(
+            [
+                str(bids_dir),
+                str(tmpdir / f'out_{full_name}'),
+                'participant',
+                '--participant-label',
+                '01',
+                '--subject-anatomical-reference',
+                reference,
+                '--output-resolution',
+                '2',
+                '--skip-bids-validation',
+            ],
+        )
+        assert config.execution.processing_list == expected, sorted(glob(str(bids_dir / '*/*')))
+
+
+@pytest.mark.parametrize(
+    ('name', 'skeleton'),
+    [
+        ('long', long, ['01', '02']),
+        ('long2', long2, ['diffonly', 'full']),
+    ],
+)
+def test_collect_data(tmpdir, name, skeleton, sessions):
+    """Test qsiprep.utils.bids.collect_data."""
+    import re
+
+    from bids.layout import BIDSLayout
+    from bids.layout.index import BIDSLayoutIndexer
+
+    from qsiprep.utils.bids import collect_data
+
+    bids_dir = tmpdir / name
+
     generate_bids_skeleton(str(bids_dir), skeleton)
-    parse_args(
-        [
-            str(bids_dir),
-            str(tmpdir / f'out_{full_name}'),
-            'participant',
-            '--participant-label',
-            '01',
-            '--subject-anatomical-reference',
-            reference,
-            '--output-resolution',
-            '2',
-            '--skip-bids-validation',
-        ],
+    participant_label = '01'
+
+    # Recommended after PyBIDS 12.1
+    ignore_patterns = [
+        'code',
+        'stimuli',
+        'sourcedata',
+        'models',
+        re.compile(r'\/\.\w+|^\.\w+'),  # hidden files
+        re.compile(r'sub-[a-zA-Z0-9]+(/ses-[a-zA-Z0-9]+)?/(beh|func|eeg|ieeg|meg|perf)'),
+        # Ignore any subjects who aren't the requested ones.
+        # This is only done if the database is written out to a run-specific folder.
+        re.compile(r'sub-(?!(' + '|'.join(participant_label) + r')(\b|_))'),
+    ]
+
+    _indexer = BIDSLayoutIndexer(
+        validate=False,
+        ignore=ignore_patterns,
     )
-    assert config.execution.processing_list == expected, sorted(glob(str(bids_dir / '*/*')))
+    layout = BIDSLayout(
+        str(bids_dir),
+        indexer=_indexer,
+    )
+    subj_data = collect_data(
+        bids_dir=layout,
+        participant_label=participant_label,
+        session_id=sessions,
+        filters=None,
+        bids_validate=False,
+    )
+    assert len(subj_data['t1w']) == 1

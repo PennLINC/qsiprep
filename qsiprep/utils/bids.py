@@ -190,6 +190,8 @@ def collect_participants(bids_dir, participant_label=None, strict=False, bids_va
 
 def collect_data(bids_dir, participant_label, session_id=None, filters=None, bids_validate=True):
     """Use pybids to retrieve the input data for a given participant."""
+    import yaml
+
     if isinstance(bids_dir, BIDSLayout):
         layout = bids_dir
     else:
@@ -225,6 +227,11 @@ def collect_data(bids_dir, participant_label, session_id=None, filters=None, bid
         )
         for dtype, query in queries.items()
     }
+
+    config.loggers.workflow.log(
+        25,
+        f'Collected data:\n{yaml.dump(subj_data, default_flow_style=False, indent=4)}',
+    )
 
     return subj_data, layout
 
