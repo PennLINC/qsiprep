@@ -164,11 +164,12 @@ def test_processing_list(tmpdir, name, skeleton, reference, expected):
 
     from qsiprep import config
 
-    config.from_dict({})
-
     full_name = f'{name}_{reference}'
 
     bids_dir = tmpdir / full_name
+
+    config.from_dict({'execution': {'bids_dir': str(bids_dir)}})
+
     generate_bids_skeleton(str(bids_dir), skeleton)
     parse_args(
         [
