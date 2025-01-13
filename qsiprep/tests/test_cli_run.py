@@ -225,7 +225,7 @@ def test_collect_data(tmpdir, name, skeleton, sessions):
     ]
 
     _indexer = BIDSLayoutIndexer(
-        validate=False,
+        validate=True,
         ignore=ignore_patterns,
     )
     layout = BIDSLayout(
