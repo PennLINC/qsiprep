@@ -163,46 +163,40 @@ def test_processing_list(tmpdir, name, skeleton, reference, expected):
     from glob import glob
 
     from qsiprep import config
-    from qsiprep.tests.tests import mock_config
 
-    with mock_config():
-        config.from_dict({})
+    config.from_dict({})
 
-        full_name = f'{name}_{reference}'
+    full_name = f'{name}_{reference}'
 
-        bids_dir = tmpdir / full_name
-        generate_bids_skeleton(str(bids_dir), skeleton)
-        parse_args(
-            [
-                str(bids_dir),
-                str(tmpdir / f'out_{full_name}'),
-                'participant',
-                '--participant-label',
-                '01',
-                '--subject-anatomical-reference',
-                reference,
-                '--output-resolution',
-                '2',
-                '--skip-bids-validation',
-            ],
-        )
-        assert config.execution.processing_list == expected, sorted(glob(str(bids_dir / '*/*')))
+    bids_dir = tmpdir / full_name
+    generate_bids_skeleton(str(bids_dir), skeleton)
+    parse_args(
+        [
+            str(bids_dir),
+            str(tmpdir / f'out_{full_name}'),
+            'participant',
+            '--participant-label',
+            '01',
+            '--subject-anatomical-reference',
+            reference,
+            '--output-resolution',
+            '2',
+            '--skip-bids-validation',
+        ],
+    )
+    assert config.execution.processing_list == expected, sorted(glob(str(bids_dir / '*/*')))
 
 
 @pytest.mark.parametrize(
-    ('name', 'skeleton', 'sessions'),
+    ('name', 'skeleton', 'sessions', 'n_anats'),
     [
-        ('long', long, ['01', '02']),
-        ('long2', long2, ['diffonly', 'full']),
+        ('long', long, ['01', '02'], [2, 1, 1]),
+        ('long2', long2, ['diffonly', 'full'], [1, 0, 1]),
     ],
 )
-def test_collect_data(tmpdir, name, skeleton, sessions):
+def test_collect_data(tmpdir, name, skeleton, sessions, n_anats):
     """Test qsiprep.utils.bids.collect_data."""
     import pprint
-    import re
-
-    from bids.layout import BIDSLayout
-    from bids.layout.index import BIDSLayoutIndexer
 
     from qsiprep.utils.bids import collect_data
 
@@ -211,18 +205,29 @@ def test_collect_data(tmpdir, name, skeleton, sessions):
     generate_bids_skeleton(str(bids_dir), skeleton)
     participant_label = '01'
 
-    _indexer = BIDSLayoutIndexer(
-        validate=False,
-    )
-    layout = BIDSLayout(
-        str(bids_dir),
-        indexer=_indexer,
-    )
     subj_data = collect_data(
-        bids_dir=layout,
+        bids_dir=str(bids_dir),
         participant_label=participant_label,
         session_id=sessions,
         filters=None,
         bids_validate=False,
     )[0]
-    assert len(subj_data['t1w']) == 1, pprint.pformat(subj_data)
+    assert len(subj_data['t1w']) == n_anats[0], pprint.pformat(subj_data)
+
+    subj_data = collect_data(
+        bids_dir=str(bids_dir),
+        participant_label=participant_label,
+        session_id=sessions[0],
+        filters=None,
+        bids_validate=False,
+    )[0]
+    assert len(subj_data['t1w']) == n_anats[1], pprint.pformat(subj_data)
+
+    subj_data = collect_data(
+        bids_dir=str(bids_dir),
+        participant_label=participant_label,
+        session_id=sessions[1],
+        filters=None,
+        bids_validate=False,
+    )[0]
+    assert len(subj_data['t1w']) == n_anats[2], pprint.pformat(subj_data)
