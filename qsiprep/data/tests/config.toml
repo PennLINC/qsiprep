@@ -1,0 +1,94 @@
+[environment]
+cpu_count = 1
+exec_env = "docker"
+free_mem = 52.2
+overcommit_policy = "heuristic"
+overcommit_limit = "50%"
+nipype_version = "1.9.1"
+templateflow_version = "23.1.0"
+version = "1.0.0rc2.dev29+gdee1425.d20250113"
+
+[execution]
+bids_dir = "/tmp/src/qsiprep/.circleci/data/forrest_gump"
+bids_database_dir = "/tmp/src/qsiprep/.circleci/work/forrest_gump/20250113-154517_1f7046f7-c5b1-4151-84ca-755a96dfbb55/bids_db"
+bids_description_hash = "86891931159357fa937a6724ac27013f79ca56859100547ed9793245866312cd"
+boilerplate_only = false
+sloppy = true
+debug = []
+layout = "BIDS Layout: ...ep/.circleci/data/forrest_gump | Subjects: 1 | Sessions: 1 | Runs: 0"
+log_dir = "/tmp/src/qsiprep/.circleci/out/forrest_gump/logs"
+log_level = 15
+low_mem = false
+notrack = true
+output_dir = "/tmp/src/qsiprep/.circleci/out/forrest_gump"
+reports_only = false
+run_uuid = "20250113-154517_1f7046f7-c5b1-4151-84ca-755a96dfbb55"
+participant_label = [ "01",]
+processing_list = [ "01:forrestgump",]
+skip_anat_based_spatial_normalization = false
+templateflow_home = "/home/qsiprep/.cache/templateflow"
+work_dir = "/tmp/src/qsiprep/.circleci/work/forrest_gump"
+write_graph = true
+
+[workflow]
+anat_modality = "T1w"
+anat_only = false
+anatomical_template = "MNI152NLin2009cAsym"
+b0_threshold = 100
+b0_motion_corr_to = "iterative"
+b0_to_t1w_transform = "Rigid"
+b1_biascorrect_stage = "none"
+denoise_after_combining = false
+denoise_method = "none"
+distortion_group_merge = "none"
+dwi_denoise_window = "auto"
+dwi_no_biascorr = false
+dwi_only = false
+fmap_bspline = false
+force_syn = false
+hmc_model = "eddy"
+hmc_transform = "Affine"
+ignore = []
+infant = false
+intramodal_template_iters = 0
+intramodal_template_transform = "BSplineSyN"
+subject_anatomical_reference = "first-alphabetically"
+longitudinal = false
+no_b0_harmonization = false
+output_resolution = 5.0
+pepolar_method = "TOPUP"
+separate_all_dwis = false
+shoreline_iters = 2
+use_syn_sdc = false
+spaces = "MNI152NLin2009cAsym"
+
+[nipype]
+crashfile_format = "txt"
+get_linked_libs = false
+nprocs = 4
+omp_nthreads = 4
+plugin = "MultiProc"
+remove_unnecessary_outputs = true
+resource_monitor = false
+stop_on_first_crash = true
+
+[seeds]
+master = 20506
+ants = 2720
+numpy = 32806
+
+[execution.derivatives]
+
+[execution.dataset_links]
+raw = "/tmp/src/qsiprep/.circleci/data/forrest_gump"
+templateflow = "/home/qsiprep/.cache/templateflow"
+
+[nipype.plugin_args]
+maxtasksperchild = 1
+raise_insufficient = false
+
+[execution.bids_filters.t1w]
+reconstruction = "autobox"
+
+[execution.bids_filters.t2w]
+reconstruction = "autobox"
