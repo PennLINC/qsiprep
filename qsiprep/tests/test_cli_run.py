@@ -188,7 +188,7 @@ def test_processing_list(tmpdir, name, skeleton, reference, expected):
 
 
 @pytest.mark.parametrize(
-    ('name', 'skeleton'),
+    ('name', 'skeleton', 'sessions'),
     [
         ('long', long, ['01', '02']),
         ('long2', long2, ['diffonly', 'full']),
