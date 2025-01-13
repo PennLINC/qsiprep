@@ -196,6 +196,7 @@ def test_processing_list(tmpdir, name, skeleton, reference, expected):
 )
 def test_collect_data(tmpdir, name, skeleton, sessions):
     """Test qsiprep.utils.bids.collect_data."""
+    import pprint
     import re
 
     from bids.layout import BIDSLayout
@@ -236,4 +237,4 @@ def test_collect_data(tmpdir, name, skeleton, sessions):
         filters=None,
         bids_validate=False,
     )[0]
-    assert len(subj_data['t1w']) == 1
+    assert len(subj_data['t1w']) == 1, pprint.pformat(subj_data)
