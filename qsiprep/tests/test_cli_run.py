@@ -166,6 +166,8 @@ def test_processing_list(tmpdir, name, skeleton, reference, expected):
     from qsiprep.tests.tests import mock_config
 
     with mock_config():
+        config.from_dict({})
+
         full_name = f'{name}_{reference}'
 
         bids_dir = tmpdir / full_name
