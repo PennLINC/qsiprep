@@ -160,6 +160,8 @@ long2 = {
     ],
 )
 def test_processing_list(tmpdir, name, skeleton, reference, expected):
+    from glob import glob
+
     from qsiprep import config
 
     full_name = f'{name}_{reference}'
@@ -180,4 +182,4 @@ def test_processing_list(tmpdir, name, skeleton, reference, expected):
             '--skip-bids-validation',
         ],
     )
-    assert config.execution.processing_list == expected
+    assert config.execution.processing_list == expected, sorted(glob(str(bids_dir / '*/*')))
