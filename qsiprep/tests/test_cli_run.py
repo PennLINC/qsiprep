@@ -211,22 +211,8 @@ def test_collect_data(tmpdir, name, skeleton, sessions):
     generate_bids_skeleton(str(bids_dir), skeleton)
     participant_label = '01'
 
-    # Recommended after PyBIDS 12.1
-    ignore_patterns = [
-        'code',
-        'stimuli',
-        'sourcedata',
-        'models',
-        re.compile(r'\/\.\w+|^\.\w+'),  # hidden files
-        re.compile(r'sub-[a-zA-Z0-9]+(/ses-[a-zA-Z0-9]+)?/(beh|func|eeg|ieeg|meg|perf)'),
-        # Ignore any subjects who aren't the requested ones.
-        # This is only done if the database is written out to a run-specific folder.
-        re.compile(r'sub-(?!(' + '|'.join(participant_label) + r')(\b|_))'),
-    ]
-
     _indexer = BIDSLayoutIndexer(
-        validate=True,
-        ignore=ignore_patterns,
+        validate=False,
     )
     layout = BIDSLayout(
         str(bids_dir),
