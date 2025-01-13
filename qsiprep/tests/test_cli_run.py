@@ -34,7 +34,7 @@ def gen_layout(bids_dir, database_dir=None):
     return layout
 
 
-longitudinal = {
+long = {
     '01': [
         {
             'session': '01',
@@ -91,17 +91,80 @@ longitudinal = {
     ],
 }
 
+long2 = {
+    '01': [
+        {
+            'session': 'full',
+            'anat': [{'suffix': 'T1w', 'metadata': {'EchoTime': 1}}],
+            'dwi': [
+                {
+                    'dir': 'AP',
+                    'run': '01',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'RepetitionTime': 0.8,
+                        'TotalReadoutTime': 0.5,
+                        'PhaseEncodingDirection': 'j',
+                    },
+                },
+                {
+                    'dir': 'PA',
+                    'run': '01',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'RepetitionTime': 0.8,
+                        'TotalReadoutTime': 0.5,
+                        'PhaseEncodingDirection': 'j',
+                    },
+                },
+            ],
+        },
+        {
+            'session': 'diffonly',
+            'dwi': [
+                {
+                    'dir': 'AP',
+                    'run': '01',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'RepetitionTime': 0.8,
+                        'TotalReadoutTime': 0.5,
+                        'PhaseEncodingDirection': 'j',
+                    },
+                },
+                {
+                    'dir': 'PA',
+                    'run': '01',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'RepetitionTime': 0.8,
+                        'TotalReadoutTime': 0.5,
+                        'PhaseEncodingDirection': 'j',
+                    },
+                },
+            ],
+        },
+    ],
+}
+
 
 @pytest.mark.parametrize(
-    ('name', 'skeleton'),
+    ('name', 'skeleton', 'reference', 'expected'),
     [
-        ('longitudinal', longitudinal),
+        ('longitudinal', long, 'sessionwise', [['01', ['01']], ['01', ['02']]]),
+        ('longitudinal', long, 'unbiased', [['01', ['01', '02']]]),
+        ('longitudinal', long, 'first', [['01', ['01', '02']]]),
+        ('longitudinal2', long2, 'sessionwise', [['01', ['01']], ['01', ['02']]]),
+        ('longitudinal2', long2, 'unbiased', [['01', ['01', '02']]]),
+        ('longitudinal2', long2, 'first', [['01', ['01', '02']]]),
     ],
 )
-def test_processing_list(tmpdir, name, skeleton):
+def test_processing_list(tmpdir, name, skeleton, reference, expected):
     from qsiprep import config
 
-    bids_dir = str(tmpdir / name)
+    full_name = f'{name}_{reference}'
+
+    bids_dir = str(tmpdir / full_name)
     generate_bids_skeleton(bids_dir, skeleton)
     parse_args(
         [
@@ -111,10 +174,10 @@ def test_processing_list(tmpdir, name, skeleton):
             '--participant-label',
             '01',
             '--subject-anatomical-reference',
-            'sessionwise',
+            reference,
             '--output-resolution',
             '2',
             '--skip-bids-validation',
         ],
     )
-    assert config.execution.processing_list == [['01', ['01']], ['01', ['02']]]
+    assert config.execution.processing_list == expected
