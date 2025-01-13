@@ -235,5 +235,5 @@ def test_collect_data(tmpdir, name, skeleton, sessions):
         session_id=sessions,
         filters=None,
         bids_validate=False,
-    )
+    )[0]
     assert len(subj_data['t1w']) == 1
