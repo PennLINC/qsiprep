@@ -184,7 +184,7 @@ def test_processing_list(tmpdir, name, skeleton, reference, expected):
             '--skip-bids-validation',
         ],
     )
-    assert config.execution.processing_list == expected, sorted(glob(str(bids_dir / '*/*')))
+    assert config.execution.processing_list == expected, config
 
 
 @pytest.mark.parametrize(
