@@ -168,7 +168,7 @@ def test_processing_list(tmpdir, name, skeleton, reference, expected):
     bids_dir = tmpdir / full_name
     generate_bids_skeleton(str(bids_dir), skeleton)
 
-    config.from_dict({'bids_dir': str(bids_dir)}, init=False)
+    config.from_dict({'bids_dir': str(bids_dir)}, init=True)
 
     parse_args(
         [
