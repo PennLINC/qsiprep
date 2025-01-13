@@ -232,6 +232,7 @@ def test_collect_data(tmpdir, name, skeleton, sessions):
         str(bids_dir),
         indexer=_indexer,
     )
+    raise Exception(layout.get())
     subj_data = collect_data(
         bids_dir=layout,
         participant_label=participant_label,
