@@ -3,8 +3,6 @@
 import pytest
 from niworkflows.utils.testing import generate_bids_skeleton
 
-from qsiprep.cli.parser import parse_args
-
 
 def gen_layout(bids_dir, database_dir=None):
     """Generate a BIDSLayout object."""
@@ -163,13 +161,14 @@ def test_processing_list(tmpdir, name, skeleton, reference, expected):
     from glob import glob
 
     from qsiprep import config
+    from qsiprep.cli.parser import parse_args
 
     full_name = f'{name}_{reference}'
 
     bids_dir = tmpdir / full_name
     generate_bids_skeleton(str(bids_dir), skeleton)
 
-    config.from_dict({'bids_dir': str(bids_dir)})
+    config.from_dict({'bids_dir': str(bids_dir)}, init=False)
 
     parse_args(
         [
