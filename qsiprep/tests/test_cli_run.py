@@ -190,8 +190,8 @@ def test_processing_list(tmpdir, name, skeleton, reference, expected):
 @pytest.mark.parametrize(
     ('name', 'skeleton', 'sessions', 'n_anats'),
     [
-        ('long', long, ['01', '02'], [2, 1, 1]),
-        ('long2', long2, ['diffonly', 'full'], [1, 0, 1]),
+        ('long', long, ['01', '02'], [1, 1, 2]),
+        ('long2', long2, ['diffonly', 'full'], [0, 1, 1]),
     ],
 )
 def test_collect_data(tmpdir, name, skeleton, sessions, n_anats):
@@ -208,7 +208,7 @@ def test_collect_data(tmpdir, name, skeleton, sessions, n_anats):
     subj_data = collect_data(
         bids_dir=str(bids_dir),
         participant_label=participant_label,
-        session_id=sessions,
+        session_id=sessions[0],
         filters=None,
         bids_validate=False,
     )[0]
@@ -217,7 +217,7 @@ def test_collect_data(tmpdir, name, skeleton, sessions, n_anats):
     subj_data = collect_data(
         bids_dir=str(bids_dir),
         participant_label=participant_label,
-        session_id=sessions[0],
+        session_id=sessions[1],
         filters=None,
         bids_validate=False,
     )[0]
@@ -226,7 +226,7 @@ def test_collect_data(tmpdir, name, skeleton, sessions, n_anats):
     subj_data = collect_data(
         bids_dir=str(bids_dir),
         participant_label=participant_label,
-        session_id=sessions[1],
+        session_id=sessions,
         filters=None,
         bids_validate=False,
     )[0]

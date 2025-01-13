@@ -216,6 +216,8 @@ def collect_data(bids_dir, participant_label, session_id=None, filters=None, bid
         queries[acq]['session'] = session_id or Query.OPTIONAL
         queries[acq].update(entities)
 
+    raise Exception(queries)
+
     subj_data = {
         dtype: sorted(
             layout.get(
