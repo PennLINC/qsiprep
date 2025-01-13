@@ -166,11 +166,11 @@ def test_processing_list(tmpdir, name, skeleton, reference, expected):
 
     full_name = f'{name}_{reference}'
 
-    bids_dir = str(tmpdir / full_name)
-    generate_bids_skeleton(bids_dir, skeleton)
+    bids_dir = tmpdir / full_name
+    generate_bids_skeleton(str(bids_dir), skeleton)
     parse_args(
         [
-            bids_dir,
+            str(bids_dir),
             str(tmpdir / f'out_{full_name}'),
             'participant',
             '--participant-label',
