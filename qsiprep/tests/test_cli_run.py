@@ -169,7 +169,7 @@ def test_processing_list(tmpdir, name, skeleton, reference, expected):
     parse_args(
         [
             bids_dir,
-            str(tmpdir / 'out'),
+            str(tmpdir / f'out_{full_name}'),
             'participant',
             '--participant-label',
             '01',
