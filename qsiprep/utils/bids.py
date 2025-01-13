@@ -207,16 +207,16 @@ def collect_data(bids_dir, participant_label, session_id=None, filters=None, bid
         'dwi': {'datatype': 'dwi', 'part': ['mag', None], 'suffix': 'dwi'},
     }
     bids_filters = filters or {}
-    for acq, entities in bids_filters.items():
-        if ('session' in queries[acq]) and (session_id is not None):
+    for acq in queries.keys():
+        entities = bids_filters.get(acq, {})
+
+        if ('session' in entities.keys()) and (session_id is not None):
             config.loggers.workflow.warning(
                 'BIDS filter file value for session may conflict with values specified '
                 'on the command line'
             )
         queries[acq]['session'] = session_id or Query.OPTIONAL
         queries[acq].update(entities)
-
-    raise Exception(queries)
 
     subj_data = {
         dtype: sorted(
