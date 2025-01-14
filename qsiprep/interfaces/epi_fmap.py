@@ -270,22 +270,22 @@ def get_best_b0_topup_inputs_from(
         by=['same_as_first', 'index'], ascending=[False, True], inplace=True
     )
 
-    imain_output = cwd + '/topup_imain.nii.gz'
+    imain_output = op.join(cwd, 'topup_imain.nii.gz')
     imain_img = concat_imgs(
         [to_lps(img, new_axcodes=('L', 'A', 'S')) for img in sdc_selections['nii_3d_files']],
         auto_resample=True,
     )
     imain_img.to_filename(imain_output)
 
-    datain_file = cwd + '/topup_datain.txt'
+    datain_file = op.join(cwd, 'topup_datain.txt')
     with open(datain_file, 'w') as f:
         f.write('\n'.join(sdc_selections['fsl_spec']))
 
-    b0_csv = cwd + '/b0_selection_info.csv'
-    dwi_b0_df.drop('nii_3d_files', 1).to_csv(b0_csv, index=False)
+    b0_tsv = op.join(cwd, 'b0_selection_info.tsv')
+    dwi_b0_df.drop('nii_3d_files', 1).to_csv(b0_tsv, sep='\t', index=False)
 
     # get out reference images from the topup and eddy data
-    topup_reg_file = cwd + '/topup_reg_image.nii.gz'
+    topup_reg_file = op.join(cwd, 'topup_reg_image.nii.gz')
     index_img(imain_output, 0).to_filename(topup_reg_file)
 
     topup_report = topup_selection_to_report(
@@ -298,7 +298,7 @@ def get_best_b0_topup_inputs_from(
         datain_file,
         imain_output,
         topup_report,
-        b0_csv,
+        b0_tsv,
         topup_reg_file,
         dwi_b0_df.loc[0, 'nii_3d_files'],
     )

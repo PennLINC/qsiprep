@@ -199,6 +199,7 @@ def init_distortion_group_merge_wf(
         DerivativesDataSink(
             desc='image',
             suffix='qc',
+            extension='tsv',
             source_file=source_file,
             base_directory=config.execution.output_dir,
         ),

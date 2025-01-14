@@ -22,10 +22,8 @@ sub-01/ses-01/anat/sub-01_ses-01_rec-autobox_from-orig_to-anat_mode-image_xfm.tx
 sub-01/ses-01/dwi
 sub-01/ses-01/dwi/sub-01_ses-01_desc-confounds_timeseries.tsv
 sub-01/ses-01/dwi/sub-01_ses-01_hmcOptimization.csv
-sub-01/ses-01/dwi/sub-01_ses-01_space-ACPC_model-3dSHORE_stat-cnr_dwimap.json
-sub-01/ses-01/dwi/sub-01_ses-01_space-ACPC_model-3dSHORE_stat-cnr_dwimap.nii.gz
 sub-01/ses-01/dwi/sub-01_ses-01_space-ACPC_desc-brain_mask.nii.gz
-sub-01/ses-01/dwi/sub-01_ses-01_space-ACPC_desc-image_qc.csv
+sub-01/ses-01/dwi/sub-01_ses-01_space-ACPC_desc-image_qc.tsv
 sub-01/ses-01/dwi/sub-01_ses-01_space-ACPC_desc-preproc_dwi.b
 sub-01/ses-01/dwi/sub-01_ses-01_space-ACPC_desc-preproc_dwi.b_table.txt
 sub-01/ses-01/dwi/sub-01_ses-01_space-ACPC_desc-preproc_dwi.bval
@@ -34,3 +32,5 @@ sub-01/ses-01/dwi/sub-01_ses-01_space-ACPC_desc-preproc_dwi.json
 sub-01/ses-01/dwi/sub-01_ses-01_space-ACPC_desc-preproc_dwi.nii.gz
 sub-01/ses-01/dwi/sub-01_ses-01_space-ACPC_desc-slice_qc.json
 sub-01/ses-01/dwi/sub-01_ses-01_space-ACPC_dwiref.nii.gz
+sub-01/ses-01/dwi/sub-01_ses-01_space-ACPC_model-3dSHORE_stat-cnr_dwimap.json
+sub-01/ses-01/dwi/sub-01_ses-01_space-ACPC_model-3dSHORE_stat-cnr_dwimap.nii.gz

@@ -57,7 +57,7 @@ class GatherEddyInputsOutputSpec(TraitedSpec):
     pre_topup_image = File(exists=True)
     eddy_acqp = File(exists=True)
     eddy_first = File(exists=True)
-    b0_csv = File(exists=True)
+    b0_tsv = File(exists=True)
     eddy_indices = File(exists=True)
     forward_transforms = traits.List()
     forward_warps = traits.List()
@@ -86,7 +86,7 @@ class GatherEddyInputs(SimpleInterface):
     def _run_interface(self, runtime):
         # Gather inputs for TOPUP
         topup_prefix = op.join(runtime.cwd, 'topup_')
-        topup_datain_file, topup_imain_file, topup_text, b0_csv, topup0, eddy0 = (
+        topup_datain_file, topup_imain_file, topup_text, b0_tsv, topup0, eddy0 = (
             get_best_b0_topup_inputs_from(
                 dwi_file=self.inputs.dwi_file,
                 bval_file=self.inputs.bval_file,
@@ -102,7 +102,7 @@ class GatherEddyInputs(SimpleInterface):
         self._results['topup_datain'] = topup_datain_file
         self._results['topup_imain'] = topup_imain_file
         self._results['topup_report'] = topup_text
-        self._results['b0_csv'] = b0_csv
+        self._results['b0_tsv'] = b0_tsv
         self._results['topup_first'] = topup0
         self._results['eddy_first'] = eddy0
 

@@ -342,6 +342,7 @@ def init_dwi_finalize_wf(
             space='ACPC',
             desc='image',
             suffix='qc',
+            extension='tsv',
             source_file=source_file,
             base_directory=config.execution.output_dir,
         ),

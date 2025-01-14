@@ -311,9 +311,14 @@ def init_fsl_hmc_wf(
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB,
         )
-        ds_topupcsv = pe.Node(
-            DerivativesDataSink(suffix='topupcsv', source_file=source_file),
-            name='ds_topupcsv',
+        ds_pepolar_qc_tsv = pe.Node(
+            DerivativesDataSink(
+                desc='pepolar',
+                suffix='qc',
+                extension='tsv',
+                source_file=source_file,
+            ),
+            name='ds_pepolar_qc_tsv',
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB,
         )
@@ -335,7 +340,7 @@ def init_fsl_hmc_wf(
                 ('topup_imain', 'in_file'),
                 ('topup_config', 'config'),
             ]),
-            (gather_inputs, ds_topupcsv, [('b0_csv', 'in_file')]),
+            (gather_inputs, ds_pepolar_qc_tsv, [('b0_tsv', 'in_file')]),
             (topup, eddy, [('out_field', 'field')]),
             (gather_inputs, topup_to_eddy_reg, [
                 ('topup_first', 'in_file'),
