@@ -507,8 +507,13 @@ to workflows in *QSIPrep*'s documentation]\
             ])  # fmt:skip
 
     for node in workflow.list_node_names():
-        if node.split('.')[-1].startswith('ds_'):
+        node_name = node.split('.')[-1]
+        if node_name.startswith('ds_'):
             workflow.get_node(node).interface.out_path_base = ''
+            workflow.get_node(node).interface.inputs.base_directory = config.execution.output_dir
+
+        if node_name.startswith('ds_report_'):
+            workflow.get_node(node).interface.inputs.datatype = 'figures'
 
     return workflow
 

@@ -150,7 +150,7 @@ class GatherDRBUDDIInputs(SimpleInterface):
         elif self.inputs.fieldmap_type == 'epi':
             # Use the same function that was used to get images for TOPUP, but get the images
             # directly from the CSV
-            _, _, _, b0_csv, _, _ = get_best_b0_topup_inputs_from(
+            _, _, _, b0_tsv, _, _ = get_best_b0_topup_inputs_from(
                 dwi_file=self.inputs.dwi_files,
                 bval_file=bval_files,
                 b0_threshold=self.inputs.b0_threshold,
@@ -161,7 +161,7 @@ class GatherDRBUDDIInputs(SimpleInterface):
                 raw_image_sdc=self.inputs.raw_image_sdc,
             )
 
-            b0s_df = pd.read_csv(b0_csv)
+            b0s_df = pd.read_table(b0_tsv)
             selected_images = b0s_df[b0s_df.selected_for_sdc].reset_index(drop=True)
             up_row = selected_images.loc[0]
             down_row = selected_images.loc[1]

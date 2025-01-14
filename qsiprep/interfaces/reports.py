@@ -554,8 +554,8 @@ class SeriesQC(SimpleInterface):
         image_qc['file_name'] = output_file
         bids_info = get_bids_params(output_file)
         image_qc.update(bids_info)
-        output = op.join(runtime.cwd, 'dwi_qc.csv')
-        pd.DataFrame(image_qc).to_csv(output, index=False)
+        output = op.join(runtime.cwd, 'dwi_qc.tsv')
+        pd.DataFrame(image_qc).to_csv(output, sep='\t', index=False)
         self._results['series_qc_file'] = output
         return runtime
 
