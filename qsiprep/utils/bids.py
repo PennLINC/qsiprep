@@ -190,6 +190,8 @@ def collect_participants(bids_dir, participant_label=None, strict=False, bids_va
 
 def collect_data(bids_dir, participant_label, session_id=None, filters=None, bids_validate=True):
     """Use pybids to retrieve the input data for a given participant."""
+    import yaml
+
     if isinstance(bids_dir, BIDSLayout):
         layout = bids_dir
     else:
@@ -205,8 +207,10 @@ def collect_data(bids_dir, participant_label, session_id=None, filters=None, bid
         'dwi': {'datatype': 'dwi', 'part': ['mag', None], 'suffix': 'dwi'},
     }
     bids_filters = filters or {}
-    for acq, entities in bids_filters.items():
-        if ('session' in queries[acq]) and (session_id is not None):
+    for acq in queries.keys():
+        entities = bids_filters.get(acq, {})
+
+        if ('session' in entities.keys()) and (session_id is not None):
             config.loggers.workflow.warning(
                 'BIDS filter file value for session may conflict with values specified '
                 'on the command line'
@@ -225,6 +229,11 @@ def collect_data(bids_dir, participant_label, session_id=None, filters=None, bid
         )
         for dtype, query in queries.items()
     }
+
+    config.loggers.workflow.log(
+        25,
+        f'Collected data:\n{yaml.dump(subj_data, default_flow_style=False, indent=4)}',
+    )
 
     return subj_data, layout
 
