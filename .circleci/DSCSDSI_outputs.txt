@@ -23,7 +23,7 @@ qsiprep/sub-tester/anat/sub-tester_space-MNI152NLin2009cAsym_label-GM_probseg.ni
 qsiprep/sub-tester/anat/sub-tester_space-MNI152NLin2009cAsym_label-WM_probseg.nii.gz
 qsiprep/sub-tester/dwi
 qsiprep/sub-tester/dwi/sub-tester_acq-HASC55AP_desc-confounds_timeseries.tsv
-qsiprep/sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_desc-image_qc.csv
+qsiprep/sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_desc-image_qc.tsv
 qsiprep/sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_desc-slice_qc.json
 qsiprep/sub-tester/dwi/sub-tester_acq-HASC55AP_dwiqc.json
 qsiprep/sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_model-3dSHORE_stat-cnr_dwimap.json
