@@ -36,7 +36,7 @@ Grouping scans
    ``--dwi-denoise-window``
 
 Assuming that ``sub-1/ses-1/fmap/sub-1_dir-PA_epi.nii.gz`` has a JSON sidecar containing the ``IntendedFor`` field for fieldmap correction
-(`see here <https://bids-specification.readthedocs.io/en/stable/04-modality-specific-files/01-magnetic-resonance-imaging-data.html#expressing-the-mr-protocol-intent-for-fieldmaps>`_)::
+(`see here <https://bids-specification.readthedocs.io/en/v1.10.0/04-modality-specific-files/01-magnetic-resonance-imaging-data.html#expressing-the-mr-protocol-intent-for-fieldmaps>`_)::
 
   "IntendedFor": [
     "ses-1/dwi/sub-1_ses-1_acq-multishell_run-01_dwi.nii.gz",
