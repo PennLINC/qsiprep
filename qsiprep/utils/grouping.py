@@ -152,7 +152,9 @@ def get_entity_groups(layout, subject_data, combine_all_dwis):
             acquisitions = dwi_entities.get('acquisition', [None])
             for session in sessions:
                 session_files = [
-                    img for img in all_dwis if layout.get_file(img).entities.get('session') == session
+                    img
+                    for img in all_dwis
+                    if layout.get_file(img).entities.get('session') == session
                 ]
 
                 for acq in acquisitions:
