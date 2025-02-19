@@ -171,13 +171,12 @@ def get_entity_groups(layout, subject_data, combine_all_dwis):
                 img for img in all_dwis if layout.get_file(img).entities.get('session') == session
             ]
 
-            if group_files:
-                LOGGER.info(
-                    '\t- %d scans in session %s',
-                    len(group_files),
-                    session,
-                )
-                dwi_groups.append(session_files)
+            LOGGER.info(
+                '\t- %d scans in session %s',
+                len(group_files),
+                session,
+            )
+            dwi_groups.append(session_files)
 
     return dwi_groups
 
