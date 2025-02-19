@@ -74,7 +74,10 @@ def group_dwi_scans(
 
 
 def get_entity_groups(layout, subject_data, combine_all_dwis):
-    """Handle the grouping of multiple DWI files within a session/acquisition.
+    """Handle the grouping of multiple DWI files.
+
+    This function will group DWI files based on the MultipartID metadata field,
+    when available, and will default to grouping by entities (acq and ses) when it is not.
 
     Parameters
     ----------
