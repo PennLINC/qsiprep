@@ -7,7 +7,6 @@ from niworkflows.utils.testing import generate_bids_skeleton
 
 from qsiprep.utils import grouping
 
-
 dset_multipartid = {
     '01': [
         {
