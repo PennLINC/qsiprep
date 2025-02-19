@@ -76,8 +76,8 @@ def test_get_entity_groups_with_multipartid(tmpdir):
     entity_groups = grouping.get_entity_groups(layout, subject_data, combine_all_dwis=True)
     expected = [
         [
-            'sub-01_acq-99dir_dir-AP_run-1_dwi.nii.gz',
             'sub-01_acq-98dir_dir-AP_run-2_dwi.nii.gz',
+            'sub-01_acq-99dir_dir-AP_run-1_dwi.nii.gz',
         ],
         ['sub-01_acq-99dir_dir-AP_run-3_dwi.nii.gz'],
     ]
@@ -85,8 +85,8 @@ def test_get_entity_groups_with_multipartid(tmpdir):
 
     entity_groups = grouping.get_entity_groups(layout, subject_data, combine_all_dwis=False)
     expected = [
-        ['sub-01_acq-99dir_dir-AP_run-1_dwi.nii.gz'],
         ['sub-01_acq-98dir_dir-AP_run-2_dwi.nii.gz'],
+        ['sub-01_acq-99dir_dir-AP_run-1_dwi.nii.gz'],
         ['sub-01_acq-99dir_dir-AP_run-3_dwi.nii.gz'],
     ]
     check_expected(entity_groups, expected)
@@ -110,8 +110,8 @@ def test_get_entity_groups_without_multipartid(tmpdir):
 
     entity_groups = grouping.get_entity_groups(layout, subject_data, combine_all_dwis=False)
     expected = [
-        ['sub-01_acq-99dir_dir-AP_run-1_dwi.nii.gz'],
         ['sub-01_acq-98dir_dir-AP_run-2_dwi.nii.gz'],
+        ['sub-01_acq-99dir_dir-AP_run-1_dwi.nii.gz'],
         ['sub-01_acq-99dir_dir-AP_run-3_dwi.nii.gz'],
     ]
     check_expected(entity_groups, expected)
