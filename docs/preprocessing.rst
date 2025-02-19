@@ -37,7 +37,7 @@ It is also common to collect a DWI scan (or scans) in the reverse phase encoding
 to use for susceptibility distortion correction (SDC).
 
 
-.. topic:: Encoding scan merging intent with BIDS metadata
+.. admonition:: Encoding scan merging intent with BIDS metadata
 
   The most appropriate way to explicitly specify which DWIs should be merged is to use the
   `"MultipartID" metadata field <https://bids-specification.readthedocs.io/en/stable/modality-specific-files/magnetic-resonance-imaging-data.html#multipart-split-dwi-schemes>`_.
