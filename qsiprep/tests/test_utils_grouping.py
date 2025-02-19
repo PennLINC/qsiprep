@@ -76,18 +76,18 @@ def test_get_entity_groups_with_multipartid(tmpdir):
     entity_groups = grouping.get_entity_groups(layout, subject_data, combine_all_dwis=True)
     expected = [
         [
-            'sub-01_ses-01_dir-AP_acq-99dir_run-01_dwi.nii.gz',
-            'sub-01_ses-01_dir-AP_acq-98dir_run-02_dwi.nii.gz',
+            'sub-01_dir-AP_acq-99dir_run-01_dwi.nii.gz',
+            'sub-01_dir-AP_acq-98dir_run-02_dwi.nii.gz',
         ],
-        ['sub-01_ses-01_dir-AP_acq-99dir_run-03_dwi.nii.gz'],
+        ['sub-01_dir-AP_acq-99dir_run-03_dwi.nii.gz'],
     ]
     check_expected(entity_groups, expected)
 
     entity_groups = grouping.get_entity_groups(layout, subject_data, combine_all_dwis=False)
     expected = [
-        ['sub-01_ses-01_dir-AP_acq-99dir_run-01_dwi.nii.gz'],
-        ['sub-01_ses-01_dir-AP_acq-98dir_run-02_dwi.nii.gz'],
-        ['sub-01_ses-01_dir-AP_acq-99dir_run-03_dwi.nii.gz'],
+        ['sub-01_dir-AP_acq-99dir_run-01_dwi.nii.gz'],
+        ['sub-01_dir-AP_acq-98dir_run-02_dwi.nii.gz'],
+        ['sub-01_dir-AP_acq-99dir_run-03_dwi.nii.gz'],
     ]
     check_expected(entity_groups, expected)
 
@@ -100,19 +100,19 @@ def test_get_entity_groups_without_multipartid(tmpdir):
     subject_data = {'dwi': layout.get(suffix='dwi', extension='nii.gz')}
     entity_groups = grouping.get_entity_groups(layout, subject_data, combine_all_dwis=True)
     expected = [
+        ['sub-01_dir-AP_acq-98dir_run-02_dwi.nii.gz'],
         [
-            'sub-01_ses-01_dir-AP_acq-99dir_run-01_dwi.nii.gz',
-            'sub-01_ses-01_dir-AP_acq-99dir_run-03_dwi.nii.gz',
+            'sub-01_dir-AP_acq-99dir_run-01_dwi.nii.gz',
+            'sub-01_dir-AP_acq-99dir_run-03_dwi.nii.gz',
         ],
-        ['sub-01_ses-01_dir-AP_acq-98dir_run-02_dwi.nii.gz'],
     ]
     check_expected(entity_groups, expected)
 
     entity_groups = grouping.get_entity_groups(layout, subject_data, combine_all_dwis=False)
     expected = [
-        ['sub-01_ses-01_dir-AP_acq-99dir_run-01_dwi.nii.gz'],
-        ['sub-01_ses-01_dir-AP_acq-98dir_run-02_dwi.nii.gz'],
-        ['sub-01_ses-01_dir-AP_acq-99dir_run-03_dwi.nii.gz'],
+        ['sub-01_dir-AP_acq-99dir_run-01_dwi.nii.gz'],
+        ['sub-01_dir-AP_acq-98dir_run-02_dwi.nii.gz'],
+        ['sub-01_dir-AP_acq-99dir_run-03_dwi.nii.gz'],
     ]
     check_expected(entity_groups, expected)
 
