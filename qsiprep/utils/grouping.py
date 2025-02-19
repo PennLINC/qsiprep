@@ -114,6 +114,7 @@ def get_entity_groups(layout, subject_data, combine_all_dwis):
     for i_file, f in enumerate(all_dwis):
         if grouping_method == 'metadata':
             # One MultipartID in any DWI metadata file means we use MultipartID to group
+            # If a DWI has no MultipartID, it will be placed in a group by itself
             grouping_metadata[f] = all_metadata[i_file].get('MultipartID', None)
         else:
             # Group by entity instead
@@ -126,31 +127,42 @@ def get_entity_groups(layout, subject_data, combine_all_dwis):
                     dwi_entities[k] = [v]
 
     if grouping_method == 'metadata':
-        LOGGER.info('Using MultipartID to group DWI files')
-    else:
-        LOGGER.info('Combining all DWI files within each available session')
-
-    if grouping_method == 'metadata':
         # Overwrite the existing dwi_groups (list) with a dict of lists
+        LOGGER.info('Using MultipartID to group DWI files')
         dwi_groups = {}
+        none_counter = 0
         for f in all_dwis:
             group = grouping_metadata[f]
+            if group is None:
+                # ! is not common, so it should be safe to use here without
+                # conflicting with a valid MultipartID
+                group = f'!none{none_counter}'
+                none_counter += 1
+
             if group not in dwi_groups:
                 dwi_groups[group] = []
 
             dwi_groups[group].append(f)
 
         for multipart_id, group_files in dwi_groups.items():
-            LOGGER.info(
-                '\t- %d scans with MultipartID %s',
-                len(group_files),
-                multipart_id,
-            )
+            if multipart_id.startswith('!'):
+                LOGGER.info(
+                    '\t- %d scan without MultipartID (set to %s)',
+                    len(group_files),
+                    multipart_id[1:],
+                )
+            else:
+                LOGGER.info(
+                    '\t- %d scans with MultipartID %s',
+                    len(group_files),
+                    multipart_id,
+                )
 
         # Convert to list of lists
         dwi_groups = list(dwi_groups.values())
 
     elif grouping_method == 'entities':
+        LOGGER.info('Combining all DWI files within each available session')
         # Group by session
         dwi_groups = []
         sessions = dwi_entities.get('session', [None])
