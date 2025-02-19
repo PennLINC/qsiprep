@@ -173,7 +173,7 @@ def get_entity_groups(layout, subject_data, combine_all_dwis):
 
             LOGGER.info(
                 '\t- %d scans in session %s',
-                len(group_files),
+                len(session_files),
                 session,
             )
             dwi_groups.append(session_files)
