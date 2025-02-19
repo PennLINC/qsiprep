@@ -92,86 +92,86 @@ def get_entity_groups(layout, subject_data, combine_all_dwis):
         Each list of DWI files is a group of scans that can be concatenated together.
     """
     all_dwis = subject_data['dwi']
-    dwi_groups = []
     if not combine_all_dwis:
         dwi_groups = [[dwi] for dwi in all_dwis]
+        return dwi_groups
 
-    else:
-        all_metadata = []
-        for f in all_dwis:
-            metadata = layout.get_file(f).get_metadata()
-            all_metadata.append(metadata)
+    all_metadata = []
+    for f in all_dwis:
+        metadata = layout.get_file(f).get_metadata()
+        all_metadata.append(metadata)
 
-        grouping_method = 'entities'  # default is to group by entities
-        if any('MultipartID' in metadata for metadata in all_metadata):
-            grouping_method = 'metadata'
+    grouping_method = 'entities'  # default is to group by entities
+    if any('MultipartID' in metadata for metadata in all_metadata):
+        grouping_method = 'metadata'
 
-        dwi_entities = {}
-        grouping_metadata = {}
-        for i_file, f in enumerate(all_dwis):
-            if grouping_method == 'metadata':
-                # One MultipartID in any DWI metadata file means we use MultipartID to group
-                grouping_metadata[f] = all_metadata[i_file].get('MultipartID', None)
-            else:
-                # Group by entity instead
-                f_entities = layout.get_file(f).get_entities()
-                for k, v in f_entities.items():
-                    if k in dwi_entities:
-                        if v not in dwi_entities[k]:
-                            dwi_entities[k].append(v)
-                    else:
-                        dwi_entities[k] = [v]
-
+    dwi_entities = {}
+    grouping_metadata = {}
+    for i_file, f in enumerate(all_dwis):
         if grouping_method == 'metadata':
-            LOGGER.info('Using MultipartID to group DWI files')
+            # One MultipartID in any DWI metadata file means we use MultipartID to group
+            grouping_metadata[f] = all_metadata[i_file].get('MultipartID', None)
         else:
-            LOGGER.info('Combining all DWI files within each available session and acquisition:')
+            # Group by entity instead
+            f_entities = layout.get_file(f).get_entities()
+            for k, v in f_entities.items():
+                if k in dwi_entities:
+                    if v not in dwi_entities[k]:
+                        dwi_entities[k].append(v)
+                else:
+                    dwi_entities[k] = [v]
 
-        if grouping_method == 'metadata':
-            # Overwrite the existing dwi_groups (list) with a dict of lists
-            dwi_groups = {}
-            for f in all_dwis:
-                group = grouping_metadata[f]
-                if group not in dwi_groups:
-                    dwi_groups[group] = []
+    if grouping_method == 'metadata':
+        LOGGER.info('Using MultipartID to group DWI files')
+    else:
+        LOGGER.info('Combining all DWI files within each available session and acquisition:')
 
-                dwi_groups[group].append(f)
+    if grouping_method == 'metadata':
+        # Overwrite the existing dwi_groups (list) with a dict of lists
+        dwi_groups = {}
+        for f in all_dwis:
+            group = grouping_metadata[f]
+            if group not in dwi_groups:
+                dwi_groups[group] = []
 
-            for multipart_id, group_files in dwi_groups.items():
-                LOGGER.info(
-                    '\t- %d scans with MultipartID %s',
-                    len(group_files),
-                    multipart_id,
-                )
+            dwi_groups[group].append(f)
 
-            # Convert to list of lists
-            dwi_groups = list(dwi_groups.values())
+        for multipart_id, group_files in dwi_groups.items():
+            LOGGER.info(
+                '\t- %d scans with MultipartID %s',
+                len(group_files),
+                multipart_id,
+            )
 
-        elif grouping_method == 'entities':
-            sessions = dwi_entities.get('session', [None])
-            acquisitions = dwi_entities.get('acquisition', [None])
-            for session in sessions:
-                session_files = [
+        # Convert to list of lists
+        dwi_groups = list(dwi_groups.values())
+
+    elif grouping_method == 'entities':
+        dwi_groups = []
+        sessions = dwi_entities.get('session', [None])
+        acquisitions = dwi_entities.get('acquisition', [None])
+        for session in sessions:
+            session_files = [
+                img
+                for img in all_dwis
+                if layout.get_file(img).entities.get('session') == session
+            ]
+
+            for acq in acquisitions:
+                group_files = [
                     img
-                    for img in all_dwis
-                    if layout.get_file(img).entities.get('session') == session
+                    for img in session_files
+                    if layout.get_file(img).entities.get('acquisition') == acq
                 ]
 
-                for acq in acquisitions:
-                    group_files = [
-                        img
-                        for img in session_files
-                        if layout.get_file(img).entities.get('acquisition') == acq
-                    ]
-
-                    if group_files:
-                        LOGGER.info(
-                            '\t- %d scans in session %s/acquisition %s',
-                            len(group_files),
-                            session,
-                            acq,
-                        )
-                        dwi_groups.append(group_files)
+                if group_files:
+                    LOGGER.info(
+                        '\t- %d scans in session %s/acquisition %s',
+                        len(group_files),
+                        session,
+                        acq,
+                    )
+                    dwi_groups.append(group_files)
 
     return dwi_groups
 
