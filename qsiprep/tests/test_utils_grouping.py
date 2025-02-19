@@ -126,6 +126,13 @@ def check_expected(subject_data, expected):
         assert subject_data is not None, 'subject_data is None.'
         assert len(subject_data) == len(expected)
         for item, expected_item in zip(subject_data, expected, strict=False):
-            assert os.path.basename(item) == expected_item
+            if isinstance(expected_item, list):
+                # Handle nested lists
+                assert isinstance(item, list), f'Expected list but got {type(item)}'
+                assert len(item) == len(expected_item)
+                for subitem, expected_subitem in zip(item, expected_item, strict=False):
+                    assert os.path.basename(subitem) == expected_subitem
+            else:
+                assert os.path.basename(item) == expected_item
     else:
         assert subject_data is expected
