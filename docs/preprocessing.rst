@@ -37,13 +37,15 @@ It is also common to collect a DWI scan (or scans) in the reverse phase encoding
 to use for susceptibility distortion correction (SDC).
 
 
-..topic:: Encoding scan merging intent with BIDS metadata
+.. topic:: Encoding scan merging intent with BIDS metadata
 
   The most appropriate way to explicitly specify which DWIs should be merged is to use the
-  ``MultipartID` metadata field <https://bids-specification.readthedocs.io/en/stable/modality-specific-files/magnetic-resonance-imaging-data.html#multipart-split-dwi-schemes`_.
+  `"MultipartID" metadata field <https://bids-specification.readthedocs.io/en/stable/modality-specific-files/magnetic-resonance-imaging-data.html#multipart-split-dwi-schemes>`_.
   This field is a unique string (per participant) that identifies a set of DWIs that should be considered as part of the same acquisition.
   If a DWI scan has the same MultipartID as another DWI scan, it will be merged with the other DWI scan.
   This can be specified across phase encoding directions (PEDs), in which case the DWIs will be merged across PEDs.
+
+  If you do not specify a ``MultipartID``, *QSIPrep* will group DWIs within each session based on the ``acq`` entity.
 
 This creates a number of possible scenarios for preprocessing your DWIs. These
 scenarios can be controlled by the ``--separate-all-dwis`` argument. If your study
