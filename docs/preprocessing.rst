@@ -45,7 +45,7 @@ to use for susceptibility distortion correction (SDC).
   If a DWI scan has the same MultipartID as another DWI scan, it will be merged with the other DWI scan.
   This can be specified across phase encoding directions (PEDs), in which case the DWIs will be merged across PEDs.
 
-  If you do not specify a ``MultipartID``, *QSIPrep* will group DWIs within each session based on the ``acq`` entity.
+  If you do not specify a ``MultipartID``, *QSIPrep* will group all DWIs within each session.
 
 This creates a number of possible scenarios for preprocessing your DWIs. These
 scenarios can be controlled by the ``--separate-all-dwis`` argument. If your study
