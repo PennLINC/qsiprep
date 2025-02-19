@@ -77,7 +77,8 @@ def get_entity_groups(layout, subject_data, combine_all_dwis):
     """Handle the grouping of multiple DWI files.
 
     This function will group DWI files based on the MultipartID metadata field,
-    when available, and will default to grouping by entities (acq and ses) when it is not.
+    when available, and will default to considering all DWIs in a session as a
+    "group" when it is not.
 
     Parameters
     ----------
@@ -86,7 +87,7 @@ def get_entity_groups(layout, subject_data, combine_all_dwis):
     subject_data : :obj:`dict`
         A dictionary of BIDS data for a single subject
     combine_all_dwis : :obj:`bool`
-        If True, combine all DWI files within a session/acq into a single group
+        If True, combine all DWI files within a session into a single group
 
     Returns
     -------
@@ -127,7 +128,7 @@ def get_entity_groups(layout, subject_data, combine_all_dwis):
     if grouping_method == 'metadata':
         LOGGER.info('Using MultipartID to group DWI files')
     else:
-        LOGGER.info('Combining all DWI files within each available session and acquisition:')
+        LOGGER.info('Combining all DWI files within each available session')
 
     if grouping_method == 'metadata':
         # Overwrite the existing dwi_groups (list) with a dict of lists
@@ -150,29 +151,21 @@ def get_entity_groups(layout, subject_data, combine_all_dwis):
         dwi_groups = list(dwi_groups.values())
 
     elif grouping_method == 'entities':
+        # Group by session
         dwi_groups = []
         sessions = dwi_entities.get('session', [None])
-        acquisitions = dwi_entities.get('acquisition', [None])
         for session in sessions:
             session_files = [
                 img for img in all_dwis if layout.get_file(img).entities.get('session') == session
             ]
 
-            for acq in acquisitions:
-                group_files = [
-                    img
-                    for img in session_files
-                    if layout.get_file(img).entities.get('acquisition') == acq
-                ]
-
-                if group_files:
-                    LOGGER.info(
-                        '\t- %d scans in session %s/acquisition %s',
-                        len(group_files),
-                        session,
-                        acq,
-                    )
-                    dwi_groups.append(group_files)
+            if group_files:
+                LOGGER.info(
+                    '\t- %d scans in session %s',
+                    len(group_files),
+                    session,
+                )
+                dwi_groups.append(session_files)
 
     return dwi_groups
 

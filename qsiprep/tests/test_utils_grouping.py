@@ -100,8 +100,8 @@ def test_get_entity_groups_without_multipartid(tmpdir):
     subject_data = {'dwi': layout.get(suffix='dwi', extension='nii.gz')}
     entity_groups = grouping.get_entity_groups(layout, subject_data, combine_all_dwis=True)
     expected = [
-        ['sub-01_acq-98dir_dir-AP_run-2_dwi.nii.gz'],
         [
+            'sub-01_acq-98dir_dir-AP_run-2_dwi.nii.gz',
             'sub-01_acq-99dir_dir-AP_run-1_dwi.nii.gz',
             'sub-01_acq-99dir_dir-AP_run-3_dwi.nii.gz',
         ],
