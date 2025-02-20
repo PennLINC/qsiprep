@@ -1024,32 +1024,18 @@ def group_for_eddy(all_dwi_fmap_groups):
     ...       'dwi_series_pedir': 'j',
     ...       'concatenated_bids_name': 'sub-1_dir-AP_run-2'}]
     >>> pprint(group_for_eddy(dwi_groups)) # doctest: +NORMALIZE_WHITESPACE
-    (
-        [
-            {
-                'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
-                'fieldmap_info': {
-                    'suffix': 'epi',
-                    'epi': ['.../mixed_fmaps/sub-1/fmap/sub-1_dir-PA_run-1_epi.nii.gz']
-                },
-                'dwi_series_pedir': 'j',
-                'concatenated_bids_name': 'sub-1_dir-AP_run-1'
-            },
-            {
-                'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
-                'fieldmap_info': {
-                    'suffix': 'epi',
-                    'epi': ['.../mixed_fmaps/sub-1/fmap/sub-1_dir-PA_run-2_epi.nii.gz']
-                },
-                'dwi_series_pedir': 'j',
-                'concatenated_bids_name': 'sub-1_dir-AP_run-2'
-            }
-        ],
-        {
-            'sub-1_dir-AP_run-1': 'sub-1_dir-AP_run-1',
-            'sub-1_dir-AP_run-2': 'sub-1_dir-AP_run-2'
-        }
-    )
+    ([{'concatenated_bids_name': 'sub-1_dir-AP_run-1',
+       'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
+       'dwi_series_pedir': 'j',
+       'fieldmap_info': {'epi': ['.../mixed_fmaps/sub-1/fmap/sub-1_dir-PA_run-1_epi.nii.gz'],
+                         'suffix': 'epi'}},
+      {'concatenated_bids_name': 'sub-1_dir-AP_run-2',
+       'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
+       'dwi_series_pedir': 'j',
+       'fieldmap_info': {'epi': ['.../mixed_fmaps/sub-1/fmap/sub-1_dir-PA_run-2_epi.nii.gz'],
+                         'suffix': 'epi'}}],
+        {'sub-1_dir-AP_run-1': 'sub-1_dir-AP_run-1',
+         'sub-1_dir-AP_run-2': 'sub-1_dir-AP_run-2'})
 
     Repeated scans per PE direction
     >>> dwi_groups = [
