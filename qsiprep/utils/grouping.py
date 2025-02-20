@@ -39,10 +39,12 @@ def group_dwi_scans(
     ----------
     bids_layout : :obj:`pybids.BIDSLayout`
         A PyBIDS layout
-    group_for_eddy : :obj:`bool`
+    using_fsl : :obj:`bool`
         Should a plus and minus series be grouped together for TOPUP/eddy?
     combine_scans : :obj:`bool`
         Should scan concatention happen?
+    ignore_fieldmaps : :obj:`bool`
+        Should fieldmaps be ignored?
     concatenate_distortion_groups : :obj:`bool`
         Will distortion groups get merged at the end of the pipeline?
 
@@ -72,7 +74,11 @@ def group_dwi_scans(
 
 
 def get_entity_groups(layout, subject_data, combine_all_dwis):
-    """Handle the grouping of multiple DWI files within a session/acquisition.
+    """Handle the grouping of multiple DWI files.
+
+    This function will group DWI files based on the MultipartID metadata field,
+    when available, and will default to considering all DWIs in a session as a
+    "group" when it is not.
 
     Parameters
     ----------
@@ -81,7 +87,7 @@ def get_entity_groups(layout, subject_data, combine_all_dwis):
     subject_data : :obj:`dict`
         A dictionary of BIDS data for a single subject
     combine_all_dwis : :obj:`bool`
-        If True, combine all DWI files within a session/acq into a single group
+        If True, combine all DWI files within a session into a single group
 
     Returns
     -------
@@ -90,13 +96,28 @@ def get_entity_groups(layout, subject_data, combine_all_dwis):
         Each list of DWI files is a group of scans that can be concatenated together.
     """
     all_dwis = subject_data['dwi']
-    dwi_groups = []
     if not combine_all_dwis:
         dwi_groups = [[dwi] for dwi in all_dwis]
+        return dwi_groups
 
-    else:
-        dwi_entities = {}
-        for f in all_dwis:
+    all_metadata = []
+    for f in all_dwis:
+        metadata = layout.get_file(f).get_metadata()
+        all_metadata.append(metadata)
+
+    grouping_method = 'entities'  # default is to group by entities
+    if any('MultipartID' in metadata for metadata in all_metadata):
+        grouping_method = 'metadata'
+
+    dwi_entities = {}
+    grouping_metadata = {}
+    for i_file, f in enumerate(all_dwis):
+        if grouping_method == 'metadata':
+            # One MultipartID in any DWI metadata file means we use MultipartID to group
+            # If a DWI has no MultipartID, it will be placed in a group by itself
+            grouping_metadata[f] = all_metadata[i_file].get('MultipartID', None)
+        else:
+            # Group by entity instead
             f_entities = layout.get_file(f).get_entities()
             for k, v in f_entities.items():
                 if k in dwi_entities:
@@ -105,29 +126,57 @@ def get_entity_groups(layout, subject_data, combine_all_dwis):
                 else:
                     dwi_entities[k] = [v]
 
-        sessions = dwi_entities.get('session', [None])
-        acquisitions = dwi_entities.get('acquisition', [None])
+    if grouping_method == 'metadata':
+        # Overwrite the existing dwi_groups (list) with a dict of lists
+        LOGGER.info('Using MultipartID to group DWI files')
+        dwi_groups = {}
+        none_counter = 0
+        for f in all_dwis:
+            group = grouping_metadata[f]
+            if group is None:
+                # ! is not common, so it should be safe to use here without
+                # conflicting with a valid MultipartID
+                group = f'!none{none_counter}'
+                none_counter += 1
 
-        LOGGER.info('Combining all DWI files within each available session and acquisition:')
+            if group not in dwi_groups:
+                dwi_groups[group] = []
+
+            dwi_groups[group].append(f)
+
+        for multipart_id, group_files in dwi_groups.items():
+            if multipart_id.startswith('!'):
+                LOGGER.info(
+                    '\t- %d scan without MultipartID (set to %s)',
+                    len(group_files),
+                    multipart_id[1:],
+                )
+            else:
+                LOGGER.info(
+                    '\t- %d scans with MultipartID %s',
+                    len(group_files),
+                    multipart_id,
+                )
+
+        # Convert to list of lists
+        dwi_groups = list(dwi_groups.values())
+
+    elif grouping_method == 'entities':
+        LOGGER.info('Combining all DWI files within each available session')
+        # Group by session
+        dwi_groups = []
+        sessions = dwi_entities.get('session', [None])
         for session in sessions:
             session_files = [
                 img for img in all_dwis if layout.get_file(img).entities.get('session') == session
             ]
-            for acq in acquisitions:
-                group_files = [
-                    img
-                    for img in session_files
-                    if layout.get_file(img).entities.get('acquisition') == acq
-                ]
 
-                if group_files:
-                    LOGGER.info(
-                        '\t- %d scans in session %s/acquisition %s',
-                        len(group_files),
-                        session,
-                        acq,
-                    )
-                    dwi_groups.append(group_files)
+            LOGGER.info(
+                '\t- %d scans in session %s',
+                len(session_files),
+                session,
+            )
+            dwi_groups.append(session_files)
 
     return dwi_groups
 
