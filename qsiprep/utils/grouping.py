@@ -52,6 +52,9 @@ def group_dwi_scans(
     scan_groups : :obj:`list` of :obj:`dict`
         A dict where the keys are the BIDS derivatives name of the output file after
         concatenation. The values are lists of dwi files in that group.
+    concatenation_grouping : :obj:`dict`
+        A dictionary mapping the concatenated BIDS name of each group to the name of the
+        group that it should be concatenated with.
     """
     config.loggers.workflow.info('Grouping DWI scans')
 
@@ -66,9 +69,9 @@ def group_dwi_scans(
         )
 
     if using_fsl:
-        eddy_groups = group_for_eddy(dwi_fmap_groups)
+        eddy_groups, concatenation_grouping = group_for_eddy(dwi_fmap_groups)
         config.loggers.workflow.info('Finished grouping DWI scans')
-        return eddy_groups
+        return eddy_groups, concatenation_grouping
 
     if concatenate_distortion_groups:
         concatenation_grouping = group_for_concatenation(dwi_fmap_groups)
@@ -960,6 +963,9 @@ def group_for_eddy(all_dwi_fmap_groups):
             If no information is available, the value will be an empty string.
         - ``concatenated_bids_name``: The BIDS name of the concatenated dwi series.
             If no information is available, the value will be an empty string.
+    concatenation_grouping : :obj:`dict`
+        A dictionary mapping the concatenated BIDS name of each group to the name of the
+        group that it should be concatenated with.
 
     Examples
     --------
