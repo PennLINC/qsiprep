@@ -983,12 +983,13 @@ def group_for_eddy(all_dwi_fmap_groups):
     ...      'dwi': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz']},
     ...      'dwi_series_pedir': 'j-',
     ...   'concatenated_bids_name': 'sub-1_dir-PA_run-2'}]
-    >>> group_for_eddy(dwi_groups) # doctest: +NORMALIZE_WHITESPACE
-    ([{'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
-      'dwi_series_pedir': 'j',
-      'fieldmap_info': {'suffix': 'rpe_series',
-       'rpe_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz']},
-      'concatenated_bids_name': 'sub-1'}], {'sub-1': 'sub-1'})
+    >>> pprint(group_for_eddy(dwi_groups)) # doctest: +NORMALIZE_WHITESPACE
+    ([{'concatenated_bids_name': 'sub-1',
+       'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
+       'dwi_series_pedir': 'j',
+       'fieldmap_info': {'rpe_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz'],
+                         'suffix': 'rpe_series'}}],
+     {'sub-1': 'sub-1'})
 
     AP/PA EPI fieldmaps
     >>> dwi_groups = [
@@ -1003,13 +1004,14 @@ def group_for_eddy(all_dwi_fmap_groups):
     ...       'dwi_series_pedir': 'j-',
     ...       'concatenated_bids_name': 'sub-1_dir-PA_run-2'}]
     >>> group_for_eddy(dwi_groups) # doctest: +NORMALIZE_WHITESPACE
-    ([{'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
-      'dwi_series_pedir': 'j',
-      'fieldmap_info': {'suffix': 'rpe_series',
-       'rpe_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz'],
-       'epi': ['.../mixed_fmaps/sub-1/fmap/sub-1_dir-AP_run-2_epi.nii.gz',
-               '.../mixed_fmaps/sub-1/fmap/sub-1_dir-PA_run-1_epi.nii.gz']},
-      'concatenated_bids_name': 'sub-1'}], {'sub-1': 'sub-1'})
+    ([{'concatenated_bids_name': 'sub-1',
+       'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
+       'dwi_series_pedir': 'j',
+       'fieldmap_info': {'epi': ['.../mixed_fmaps/sub-1/fmap/sub-1_dir-AP_run-2_epi.nii.gz',
+                                 '.../mixed_fmaps/sub-1/fmap/sub-1_dir-PA_run-1_epi.nii.gz'],
+                         'rpe_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz'],
+                         'suffix': 'rpe_series'}}],
+     {'sub-1': 'sub-1'})
 
     Val's scenario
     >>> dwi_groups = [
@@ -1039,28 +1041,29 @@ def group_for_eddy(all_dwi_fmap_groups):
 
     Repeated scans per PE direction
     >>> dwi_groups = [
-    ...    {'dwi_series': ['.../opposite_concat/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
-    ...                     '.../opposite_concat/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
+    ...    {'dwi_series': ['.../sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
+    ...                     '.../sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
     ...      'fieldmap_info': {'suffix': 'dwi',
-    ...       'dwi': ['.../opposite_concat/sub-1/dwi/sub-1_dir-PA_run-1_dwi.nii.gz',
-    ...               '.../opposite_concat/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz']},
+    ...       'dwi': ['.../sub-1/dwi/sub-1_dir-PA_run-1_dwi.nii.gz',
+    ...               '.../sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz']},
     ...      'dwi_series_pedir': 'j',
     ...      'concatenated_bids_name': 'sub-1_dir-AP'},
-    ...     {'dwi_series': ['.../opposite_concat/sub-1/dwi/sub-1_dir-PA_run-1_dwi.nii.gz',
-    ...                     '.../opposite_concat/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz'],
+    ...     {'dwi_series': ['.../sub-1/dwi/sub-1_dir-PA_run-1_dwi.nii.gz',
+    ...                     '.../sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz'],
     ...      'fieldmap_info': {'suffix': 'dwi',
-    ...       'dwi': ['.../opposite_concat/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
-    ...               '.../opposite_concat/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz']},
+    ...       'dwi': ['.../sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
+    ...               '.../sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz']},
     ...      'dwi_series_pedir': 'j-',
     ...      'concatenated_bids_name': 'sub-1_dir-PA'}]
-    >>> group_for_eddy(dwi_groups) # doctest: +NORMALIZE_WHITESPACE
-    ([{'dwi_series': ['.../opposite_concat/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
-                     '.../opposite_concat/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
-      'dwi_series_pedir': 'j',
-      'fieldmap_info': {'suffix': 'rpe_series',
-       'rpe_series': ['.../opposite_concat/sub-1/dwi/sub-1_dir-PA_run-1_dwi.nii.gz',
-                      '.../opposite_concat/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz']},
-      'concatenated_bids_name': 'sub-1'}], {'sub-1': 'sub-1'})
+    >>> pprint(group_for_eddy(dwi_groups)) # doctest: +NORMALIZE_WHITESPACE
+    ([{'concatenated_bids_name': 'sub-1',
+       'dwi_series': ['.../sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
+                      '.../sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
+       'dwi_series_pedir': 'j',
+       'fieldmap_info': {'rpe_series': ['.../sub-1/dwi/sub-1_dir-PA_run-1_dwi.nii.gz',
+                                        '.../sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz'],
+                         'suffix': 'rpe_series'}}],
+     {'sub-1': 'sub-1'})
 
     A phasediff fieldmap (Not used by eddy)
     >>> dwi_groups = [
@@ -1071,14 +1074,15 @@ def group_for_eddy(all_dwi_fmap_groups):
     ...                        'suffix': 'phasediff'},
     ...      'dwi_series_pedir': 'j',
     ...      'concatenated_bids_name': 'sub-1_dir-AP'}]
-    >>> group_for_eddy(dwi_groups) # doctest: +NORMALIZE_WHITESPACE
-    ([{'dwi_series': ['.../phasediff/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
-       '.../phasediff/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
-      'fieldmap_info': {'phasediff': '.../phasediff/sub-1/fmap/sub-1_phasediff.nii.gz',
-       'magnitude1': '.../magnitude1/sub-1/fmap/sub-1_magnitude1.nii.gz',
-       'suffix': 'phasediff'},
-      'dwi_series_pedir': 'j',
-      'concatenated_bids_name': 'sub-1_dir-AP'}], {'sub-1': 'sub-1'})
+    >>> pprint(group_for_eddy(dwi_groups)) # doctest: +NORMALIZE_WHITESPACE
+    ([{'concatenated_bids_name': 'sub-1_dir-AP',
+       'dwi_series': ['.../phasediff/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
+                      '.../phasediff/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
+       'dwi_series_pedir': 'j',
+       'fieldmap_info': {'magnitude1': '.../magnitude1/sub-1/fmap/sub-1_magnitude1.nii.gz',
+                         'phasediff': '.../phasediff/sub-1/fmap/sub-1_phasediff.nii.gz',
+                         'suffix': 'phasediff'}}],
+     {'sub-1': 'sub-1'})
 
     """
     eddy_dwi_groups = []
