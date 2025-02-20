@@ -1082,7 +1082,7 @@ def group_for_eddy(all_dwi_fmap_groups):
        'fieldmap_info': {'magnitude1': '.../magnitude1/sub-1/fmap/sub-1_magnitude1.nii.gz',
                          'phasediff': '.../phasediff/sub-1/fmap/sub-1_phasediff.nii.gz',
                          'suffix': 'phasediff'}}],
-     {'sub-1': 'sub-1'})
+     {'sub-1_dir-AP': 'sub-1_dir-AP'})
 
     """
     eddy_dwi_groups = []
