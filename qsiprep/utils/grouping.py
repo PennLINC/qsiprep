@@ -575,13 +575,14 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
     --------
 
     Set up tests
+    >>> from pprint import pprint
     >>> from qsiprep.utils.bids import collect_data
     >>> SUBJECT_ID = "1"
 
     No fieldmap data, a single DWI series
     >>> subject_data, layout = collect_data("easy", SUBJECT_ID)
-    >>> group_by_warpspace(
-    ...     subject_data['dwi'], layout, False) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    >>> pprint(group_by_warpspace(
+    ...     subject_data['dwi'], layout, False)) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
     [{'dwi_series': ['...sub-1_dwi.nii.gz'],
      'fieldmap_info': {'suffix': None},
      'dwi_series_pedir': 'j',
@@ -589,8 +590,8 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
 
     Two DWIs with the same PE direction, to be concatenated
     >>> subject_data, layout = collect_data("concat1", SUBJECT_ID)
-    >>> group_by_warpspace(
-    ...     subject_data['dwi'], layout, False) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    >>> pprint(group_by_warpspace(
+    ...     subject_data['dwi'], layout, False)) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
     [{'dwi_series': ['.../concat1/sub-1/dwi/sub-1_run-01_dwi.nii.gz',
                      '.../concat1/sub-1/dwi/sub-1_run-02_dwi.nii.gz'],
      'fieldmap_info': {'suffix': None},
@@ -599,8 +600,8 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
 
     Two DWI series intended to SDC each other
     >>> subject_data, layout = collect_data("opposite", SUBJECT_ID)
-    >>> group_by_warpspace(
-    ...     subject_data['dwi'], layout, False) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    >>> pprint(group_by_warpspace(
+    ...     subject_data['dwi'], layout, False)) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
     [{'dwi_series': ['.../opposite/sub-1/dwi/sub-1_dir-AP_dwi.nii.gz'],
       'fieldmap_info': {'suffix': 'dwi',
        'dwi': ['.../opposite/sub-1/dwi/sub-1_dir-PA_dwi.nii.gz']},
@@ -614,8 +615,8 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
 
     Multiple DWI series in two different PE directions
     >>> subject_data, layout = collect_data("opposite_concat", SUBJECT_ID)
-    >>> group_by_warpspace(
-    ...     subject_data['dwi'], layout, False) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    >>> pprint(group_by_warpspace(
+    ...     subject_data['dwi'], layout, False)) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
     [{'dwi_series': ['.../opposite_concat/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
                      '.../opposite_concat/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
       'fieldmap_info': {'suffix': 'dwi',
@@ -633,8 +634,8 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
 
     A phasediff fieldmap defines the warped group
     >>> subject_data, layout = collect_data("phasediff", SUBJECT_ID)
-    >>> group_by_warpspace(
-    ...     subject_data['dwi'], layout, False) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    >>> pprint(group_by_warpspace(
+    ...     subject_data['dwi'], layout, False)) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
     [{'dwi_series': ['.../phasediff/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
                      '.../phasediff/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
       'fieldmap_info': {'phasediff': '.../phasediff/sub-1/fmap/sub-1_phasediff.nii.gz',
@@ -645,8 +646,8 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
 
     Two DWI series, each with its own fieldmap/warped space
     >>> subject_data, layout = collect_data("separate_fmaps", SUBJECT_ID)
-    >>> group_by_warpspace(
-    ...     subject_data['dwi'], layout, False) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    >>> pprint(group_by_warpspace(
+    ...     subject_data['dwi'], layout, False)) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
     [{'dwi_series': ['.../separate_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
       'fieldmap_info': {'suffix': 'epi',
        'epi': ['.../separate_fmaps/sub-1/fmap/sub-1_dir-PA_run-1_epi.nii.gz']},
@@ -660,8 +661,8 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
 
     Same as above but ignoring fieldmaps. Data gets concatenated
     >>> subject_data, layout = collect_data("separate_fmaps", SUBJECT_ID)
-    >>> group_by_warpspace(
-    ...     subject_data['dwi'], layout, True) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    >>> pprint(group_by_warpspace(
+    ...     subject_data['dwi'], layout, True)) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
     [{'dwi_series': ['.../separate_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
        '.../separate_fmaps/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
       'fieldmap_info': {'suffix': None},
@@ -670,8 +671,8 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
 
     Two DWI series, opposite PE directions, dedicated EPI fieldmap for each
     >>> subject_data, layout = collect_data("mixed_fmaps", SUBJECT_ID)
-    >>> group_by_warpspace(
-    ...     subject_data['dwi'], layout, False) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    >>> pprint(group_by_warpspace(
+    ...     subject_data['dwi'], layout, False)) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
     [{'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
       'fieldmap_info': {'suffix': 'epi',
        'epi': ['.../mixed_fmaps/sub-1/fmap/sub-1_dir-PA_run-1_epi.nii.gz']},
@@ -685,8 +686,8 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
 
     Same as last one, but ignore fieldmaps. The DWI series will be used for SDC instead
     >>> subject_data, layout = collect_data("mixed_fmaps", SUBJECT_ID)
-    >>> group_by_warpspace(
-    ...     subject_data['dwi'], layout, True) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    >>> pprint(group_by_warpspace(
+    ...     subject_data['dwi'], layout, True)) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
     [{'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
       'fieldmap_info': {'suffix': 'dwi',
        'dwi': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz']},
@@ -701,8 +702,8 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
 
     There is no metadata related to epi distortion: don't concatenate anything
     >>> subject_data, layout = collect_data("missing_info", SUBJECT_ID)
-    >>> group_by_warpspace(
-    ...     subject_data['dwi'], layout, False) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    >>> pprint(group_by_warpspace(
+    ...     subject_data['dwi'], layout, False)) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
     [{'dwi_series': ['.../missing_info/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
       'fieldmap_info': {'suffix': None},
       'dwi_series_pedir': '',
@@ -714,8 +715,8 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
 
     A bizarre mix of PE directions and some missing data
     >>> subject_data, layout = collect_data("wtf", SUBJECT_ID)
-    >>> group_by_warpspace(
-    ...     subject_data['dwi'], layout, False) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    >>> pprint(group_by_warpspace(
+    ...     subject_data['dwi'], layout, False)) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
     [{'dwi_series': ['.../wtf/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
        '.../wtf/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
       'fieldmap_info': {'suffix': 'dwi',
