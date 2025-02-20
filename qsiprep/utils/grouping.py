@@ -16,6 +16,7 @@ Set up tests
 """
 
 import logging
+import pprint
 from collections import defaultdict
 
 from nipype.utils.filemanip import split_filename
@@ -52,10 +53,12 @@ def group_dwi_scans(
         A dict where the keys are the BIDS derivatives name of the output file after
         concatenation. The values are lists of dwi files in that group.
     """
+    config.loggers.workflow.info('Grouping DWI scans')
+
     # Handle the grouping of multiple dwi files within a session
     dwi_entity_groups = get_entity_groups(config.execution.layout, subject_data, combine_scans)
 
-    # Group them by their warp group
+    # Split the entity groups into groups of files with compatible warp groups
     dwi_fmap_groups = []
     for dwi_entity_group in dwi_entity_groups:
         dwi_fmap_groups.extend(
@@ -63,11 +66,16 @@ def group_dwi_scans(
         )
 
     if using_fsl:
-        return group_for_eddy(dwi_fmap_groups)
+        eddy_groups = group_for_eddy(dwi_fmap_groups)
+        config.loggers.workflow.info('Finished grouping DWI scans')
+        return eddy_groups
 
     if concatenate_distortion_groups:
-        return dwi_fmap_groups, group_for_concatenation(dwi_fmap_groups)
+        concatenation_grouping = group_for_concatenation(dwi_fmap_groups)
+        config.loggers.workflow.info('Finished grouping DWI scans')
+        return dwi_fmap_groups, concatenation_grouping
 
+    config.loggers.workflow.info('Finished grouping DWI scans')
     return dwi_fmap_groups, {}
 
 
@@ -787,6 +795,11 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
                 }
             )
 
+    config.loggers.workflow.info(
+        f'Found {len(dwi_groups)} groups of DWI series based on their warp spaces:\n'
+        f'{pprint.pformat(dwi_groups, indent=2, width=120)}'
+    )
+
     return dwi_groups
 
 
@@ -1064,6 +1077,11 @@ def group_for_eddy(all_dwi_fmap_groups):
             if dwi_group['fieldmap_info'].get('suffix') not in eddy_compatible_suffixes:
                 eddy_dwi_groups.append(dwi_group)
 
+    config.loggers.workflow.info(
+        f'Found {len(eddy_dwi_groups)} groups of DWI series that can be corrected by eddy:\n'
+        f'{pprint.pformat(eddy_dwi_groups, indent=2, width=120)}'
+    )
+
     return eddy_dwi_groups, {
         group['concatenated_bids_name']: group['concatenated_bids_name']
         for group in eddy_dwi_groups
@@ -1096,6 +1114,11 @@ def group_for_concatenation(all_dwi_fmap_groups):
         # Add separate groups for non-compatible fieldmaps
         for group in dwi_fmap_groups:
             concatenation_grouping[group['concatenated_bids_name']] = group_name
+
+    config.loggers.workflow.info(
+        f'Found {len(concatenation_grouping)} groups of DWI series that can be concatenated:\n'
+        f'{pprint.pformat(concatenation_grouping, indent=2, width=120)}'
+    )
 
     return concatenation_grouping
 
