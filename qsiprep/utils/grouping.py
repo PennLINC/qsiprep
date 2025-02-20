@@ -971,6 +971,7 @@ def group_for_eddy(all_dwi_fmap_groups):
     --------
 
     Paired DWI series to correct each other:
+    >>> from pprint import pprint
     >>> dwi_groups = [
     ...  {'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
     ...      'fieldmap_info': {'suffix': 'dwi',
@@ -1022,7 +1023,7 @@ def group_for_eddy(all_dwi_fmap_groups):
     ...       'epi': ['.../mixed_fmaps/sub-1/fmap/sub-1_dir-PA_run-2_epi.nii.gz']},
     ...       'dwi_series_pedir': 'j',
     ...       'concatenated_bids_name': 'sub-1_dir-AP_run-2'}]
-    >>> group_for_eddy(dwi_groups) # doctest: +NORMALIZE_WHITESPACE
+    >>> pprint(group_for_eddy(dwi_groups)) # doctest: +NORMALIZE_WHITESPACE
     (
         [
             {
