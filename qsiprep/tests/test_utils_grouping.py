@@ -197,7 +197,7 @@ def test_get_fieldmaps(tmp_path_factory):
     fieldmaps = layout.get_fieldmap(dwi_file, return_list=True)
     assert len(fieldmaps) == 1
     assert fieldmaps[0]['suffix'] == 'epi'
-    assert fieldmaps[0]['metadata']['IntendedFor'] == ['dwi/sub-01_dir-AP_dwi.nii.gz']
+    assert fieldmaps[0].get_metadata()['IntendedFor'] == ['dwi/sub-01_dir-AP_dwi.nii.gz']
 
     # Check that BIDS URI paths are correctly handled
     bids_dir = base_dir / 'dset_fmap_intendedfor_bidsuri'
@@ -207,7 +207,7 @@ def test_get_fieldmaps(tmp_path_factory):
     fieldmaps = layout.get_fieldmap(dwi_file, return_list=True)
     assert len(fieldmaps) == 1
     assert fieldmaps[0]['suffix'] == 'epi'
-    assert fieldmaps[0]['metadata']['IntendedFor'] == ['bids::sub-01/dwi/sub-01_dir-AP_dwi.nii.gz']
+    assert fieldmaps[0].get_metadata()['IntendedFor'] == ['bids::sub-01/dwi/sub-01_dir-AP_dwi.nii.gz']
 
     # Check that B0FieldIdentifier and B0FieldSource are correctly handled
     bids_dir = base_dir / 'dset_fmap_b0fields'
