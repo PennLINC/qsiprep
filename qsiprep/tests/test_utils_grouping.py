@@ -190,7 +190,7 @@ def test_get_fieldmaps(tmp_path_factory):
     base_dir = tmp_path_factory.mktemp('test_get_fieldmaps')
 
     # Check that relative paths are correctly handled
-    bids_dir = base_dir / 'dset_fmap_intendedfor_relpath')
+    bids_dir = base_dir / 'dset_fmap_intendedfor_relpath'
     generate_bids_skeleton(str(bids_dir), dset_fmap_intendedfor_relpath)
     layout = BIDSLayout(str(bids_dir))
     dwi_file = layout.get(suffix='dwi', extension='nii.gz', return_type='filename')[0]
