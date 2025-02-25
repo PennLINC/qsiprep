@@ -187,8 +187,10 @@ def test_get_entity_groups_without_multipartid(tmpdir):
 
 def test_get_fieldmaps(tmp_path_factory):
     """Test the get_fieldmaps function."""
+    base_dir = tmp_path_factory.mktemp('test_get_fieldmaps')
+
     # Check that relative paths are correctly handled
-    bids_dir = tmp_path_factory.mktemp('dset_fmap_intendedfor_relpath')
+    bids_dir = base_dir / 'dset_fmap_intendedfor_relpath')
     generate_bids_skeleton(str(bids_dir), dset_fmap_intendedfor_relpath)
     layout = BIDSLayout(str(bids_dir))
     dwi_file = layout.get(suffix='dwi', extension='nii.gz', return_type='filename')[0]
@@ -198,7 +200,7 @@ def test_get_fieldmaps(tmp_path_factory):
     assert fieldmaps[0]['metadata']['IntendedFor'] == ['dwi/sub-01_dir-AP_dwi.nii.gz']
 
     # Check that BIDS URI paths are correctly handled
-    bids_dir = tmp_path_factory.mktemp('dset_fmap_intendedfor_bidsuri')
+    bids_dir = base_dir / 'dset_fmap_intendedfor_bidsuri'
     generate_bids_skeleton(str(bids_dir), dset_fmap_intendedfor_bidsuri)
     layout = BIDSLayout(str(bids_dir))
     dwi_file = layout.get(suffix='dwi', extension='nii.gz', return_type='filename')[0]
@@ -208,7 +210,7 @@ def test_get_fieldmaps(tmp_path_factory):
     assert fieldmaps[0]['metadata']['IntendedFor'] == ['bids::sub-01/dwi/sub-01_dir-AP_dwi.nii.gz']
 
     # Check that B0FieldIdentifier and B0FieldSource are correctly handled
-    bids_dir = tmp_path_factory.mktemp('dset_fmap_b0fields')
+    bids_dir = base_dir / 'dset_fmap_b0fields'
     generate_bids_skeleton(str(bids_dir), dset_fmap_b0fields)
     layout = BIDSLayout(str(bids_dir))
     dwi_file = layout.get(suffix='dwi', extension='nii.gz', return_type='filename')[0]
