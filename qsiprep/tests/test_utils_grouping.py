@@ -66,6 +66,74 @@ dset_entities = {
     ],
 }
 
+dset_fmap_intendedfor_relpath = {
+    '01': [
+        {
+            'fmap': [
+                {
+                    'dir': 'PA',
+                    'suffix': 'epi',
+                    'metadata': {
+                        'IntendedFor': ['dwi/sub-01_dir-AP_dwi.nii.gz'],
+                    },
+                },
+            ],
+            'dwi': [
+                {
+                    'dir': 'AP',
+                    'suffix': 'dwi',
+                },
+            ],
+        },
+    ],
+}
+dset_fmap_intendedfor_bidsuri = {
+    '01': [
+        {
+            'fmap': [
+                {
+                    'dir': 'PA',
+                    'suffix': 'epi',
+                    'metadata': {
+                        'IntendedFor': ['bids::sub-01/dwi/sub-01_dir-AP_dwi.nii.gz'],
+                    },
+                },
+            ],
+            'dwi': [
+                {
+                    'dir': 'AP',
+                    'suffix': 'dwi',
+                },
+            ],
+        },
+    ],
+}
+dset_fmap_b0fields = {
+    '01': [
+        {
+            'fmap': [
+                {
+                    'dir': 'PA',
+                    'suffix': 'epi',
+                    'metadata': {
+                        'B0FieldIdentifier': 'pepolar',
+                    },
+                },
+            ],
+            'dwi': [
+                {
+                    'dir': 'AP',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'B0FieldIdentifier': 'pepolar',
+                        'B0FieldSource': 'pepolar',
+                    },
+                },
+            ],
+        },
+    ],
+}
+
 
 def test_get_entity_groups_with_multipartid(tmpdir):
     """Test the get_entity_groups function."""
@@ -115,6 +183,29 @@ def test_get_entity_groups_without_multipartid(tmpdir):
         ['sub-01_acq-99dir_dir-AP_run-3_dwi.nii.gz'],
     ]
     check_expected(entity_groups, expected)
+
+
+def test_get_fieldmaps(tmp_path_factory):
+    """Test the get_fieldmaps function."""
+    bids_dir = tmp_path_factory.mktemp('test_get_fieldmaps')
+
+    # Check that relative paths are correctly handled
+    generate_bids_skeleton(str(bids_dir), dset_fmap_intendedfor_relpath)
+    layout = BIDSLayout(str(bids_dir))
+    dwi_file = layout.get(suffix='dwi', extension='nii.gz', return_type='filename')[0]
+    fieldmaps = layout.get_fieldmap(dwi_file, return_list=True)
+    assert len(fieldmaps) == 1
+    assert fieldmaps[0]['suffix'] == 'epi'
+    assert fieldmaps[0]['metadata']['IntendedFor'] == ['dwi/sub-01_dir-AP_dwi.nii.gz']
+
+    # Check that BIDS URI paths are correctly handled
+    generate_bids_skeleton(str(bids_dir), dset_fmap_intendedfor_bidsuri)
+    layout = BIDSLayout(str(bids_dir))
+    dwi_file = layout.get(suffix='dwi', extension='nii.gz', return_type='filename')[0]
+    fieldmaps = layout.get_fieldmap(dwi_file, return_list=True)
+    assert len(fieldmaps) == 1
+    assert fieldmaps[0]['suffix'] == 'epi'
+    assert fieldmaps[0]['metadata']['IntendedFor'] == ['bids::sub-01/dwi/sub-01_dir-AP_dwi.nii.gz']
 
 
 def check_expected(subject_data, expected):
