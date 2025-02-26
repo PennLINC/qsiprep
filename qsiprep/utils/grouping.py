@@ -60,9 +60,7 @@ def group_dwi_scans(
     # Group them by their warp group
     dwi_fmap_groups = []
     for dwi_entity_group in dwi_entity_groups:
-        dwi_fmap_groups.extend(
-            group_by_warpspace(dwi_entity_group, layout, ignore_fieldmaps)
-        )
+        dwi_fmap_groups.extend(group_by_warpspace(dwi_entity_group, layout, ignore_fieldmaps))
 
     if using_fsl:
         return group_for_eddy(dwi_fmap_groups)
