@@ -1,6 +1,7 @@
 """Tests for the grouping utils."""
 
 import os
+from pprint import pformat
 
 from bids.layout import BIDSLayout
 from niworkflows.utils.testing import generate_bids_skeleton
@@ -231,7 +232,7 @@ def check_expected(subject_data, expected):
         assert os.path.basename(subject_data) == expected
     elif isinstance(expected, list):
         assert subject_data is not None, 'subject_data is None.'
-        assert len(subject_data) == len(expected)
+        assert len(subject_data) == len(expected), pformat(subject_data)
         for item, expected_item in zip(subject_data, expected, strict=False):
             if isinstance(expected_item, list):
                 # Handle nested lists
