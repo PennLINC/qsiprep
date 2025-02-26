@@ -16,6 +16,7 @@ Set up tests
 """
 
 import logging
+import pprint
 from collections import defaultdict
 
 from nipype.utils.filemanip import split_filename
@@ -53,11 +54,16 @@ def group_dwi_scans(
     scan_groups : :obj:`list` of :obj:`dict`
         A dict where the keys are the BIDS derivatives name of the output file after
         concatenation. The values are lists of dwi files in that group.
+    concatenation_grouping : :obj:`dict`
+        A dictionary mapping the concatenated BIDS name of each group to the name of the
+        group that it should be concatenated with.
     """
+    config.loggers.workflow.info('Grouping DWI scans')
+
     # Handle the grouping of multiple dwi files within a session
     dwi_entity_groups = get_entity_groups(config.execution.layout, subject_data, combine_scans)
 
-    # Group them by their warp group
+    # Split the entity groups into groups of files with compatible warp groups
     dwi_fmap_groups = []
     for dwi_entity_group in dwi_entity_groups:
         dwi_fmap_groups.extend(
@@ -65,11 +71,16 @@ def group_dwi_scans(
         )
 
     if using_fsl:
-        return group_for_eddy(dwi_fmap_groups)
+        eddy_groups, concatenation_grouping = group_for_eddy(dwi_fmap_groups)
+        config.loggers.workflow.info('Finished grouping DWI scans')
+        return eddy_groups, concatenation_grouping
 
     if concatenate_distortion_groups:
-        return dwi_fmap_groups, group_for_concatenation(dwi_fmap_groups)
+        concatenation_grouping = group_for_concatenation(dwi_fmap_groups)
+        config.loggers.workflow.info('Finished grouping DWI scans')
+        return dwi_fmap_groups, concatenation_grouping
 
+    config.loggers.workflow.info('Finished grouping DWI scans')
     return dwi_fmap_groups, {}
 
 
@@ -613,13 +624,14 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
     --------
 
     Set up tests
+    >>> from pprint import pprint
     >>> from qsiprep.utils.bids import collect_data
     >>> SUBJECT_ID = "1"
 
     No fieldmap data, a single DWI series
     >>> subject_data, layout = collect_data("easy", SUBJECT_ID)
-    >>> group_by_warpspace(
-    ...     subject_data['dwi'], layout, False) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    >>> pprint(group_by_warpspace(
+    ...     subject_data['dwi'], layout, False)) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
     [{'dwi_series': ['...sub-1_dwi.nii.gz'],
      'fieldmap_info': {'suffix': None},
      'dwi_series_pedir': 'j',
@@ -627,8 +639,8 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
 
     Two DWIs with the same PE direction, to be concatenated
     >>> subject_data, layout = collect_data("concat1", SUBJECT_ID)
-    >>> group_by_warpspace(
-    ...     subject_data['dwi'], layout, False) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    >>> pprint(group_by_warpspace(
+    ...     subject_data['dwi'], layout, False)) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
     [{'dwi_series': ['.../concat1/sub-1/dwi/sub-1_run-01_dwi.nii.gz',
                      '.../concat1/sub-1/dwi/sub-1_run-02_dwi.nii.gz'],
      'fieldmap_info': {'suffix': None},
@@ -637,8 +649,8 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
 
     Two DWI series intended to SDC each other
     >>> subject_data, layout = collect_data("opposite", SUBJECT_ID)
-    >>> group_by_warpspace(
-    ...     subject_data['dwi'], layout, False) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    >>> pprint(group_by_warpspace(
+    ...     subject_data['dwi'], layout, False)) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
     [{'dwi_series': ['.../opposite/sub-1/dwi/sub-1_dir-AP_dwi.nii.gz'],
       'fieldmap_info': {'suffix': 'dwi',
        'dwi': ['.../opposite/sub-1/dwi/sub-1_dir-PA_dwi.nii.gz']},
@@ -652,8 +664,8 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
 
     Multiple DWI series in two different PE directions
     >>> subject_data, layout = collect_data("opposite_concat", SUBJECT_ID)
-    >>> group_by_warpspace(
-    ...     subject_data['dwi'], layout, False) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    >>> pprint(group_by_warpspace(
+    ...     subject_data['dwi'], layout, False)) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
     [{'dwi_series': ['.../opposite_concat/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
                      '.../opposite_concat/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
       'fieldmap_info': {'suffix': 'dwi',
@@ -671,8 +683,8 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
 
     A phasediff fieldmap defines the warped group
     >>> subject_data, layout = collect_data("phasediff", SUBJECT_ID)
-    >>> group_by_warpspace(
-    ...     subject_data['dwi'], layout, False) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    >>> pprint(group_by_warpspace(
+    ...     subject_data['dwi'], layout, False)) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
     [{'dwi_series': ['.../phasediff/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
                      '.../phasediff/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
       'fieldmap_info': {'phasediff': '.../phasediff/sub-1/fmap/sub-1_phasediff.nii.gz',
@@ -683,8 +695,8 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
 
     Two DWI series, each with its own fieldmap/warped space
     >>> subject_data, layout = collect_data("separate_fmaps", SUBJECT_ID)
-    >>> group_by_warpspace(
-    ...     subject_data['dwi'], layout, False) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    >>> pprint(group_by_warpspace(
+    ...     subject_data['dwi'], layout, False)) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
     [{'dwi_series': ['.../separate_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
       'fieldmap_info': {'suffix': 'epi',
        'epi': ['.../separate_fmaps/sub-1/fmap/sub-1_dir-PA_run-1_epi.nii.gz']},
@@ -698,8 +710,8 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
 
     Same as above but ignoring fieldmaps. Data gets concatenated
     >>> subject_data, layout = collect_data("separate_fmaps", SUBJECT_ID)
-    >>> group_by_warpspace(
-    ...     subject_data['dwi'], layout, True) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    >>> pprint(group_by_warpspace(
+    ...     subject_data['dwi'], layout, True)) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
     [{'dwi_series': ['.../separate_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
        '.../separate_fmaps/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
       'fieldmap_info': {'suffix': None},
@@ -708,8 +720,8 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
 
     Two DWI series, opposite PE directions, dedicated EPI fieldmap for each
     >>> subject_data, layout = collect_data("mixed_fmaps", SUBJECT_ID)
-    >>> group_by_warpspace(
-    ...     subject_data['dwi'], layout, False) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    >>> pprint(group_by_warpspace(
+    ...     subject_data['dwi'], layout, False)) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
     [{'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
       'fieldmap_info': {'suffix': 'epi',
        'epi': ['.../mixed_fmaps/sub-1/fmap/sub-1_dir-PA_run-1_epi.nii.gz']},
@@ -723,8 +735,8 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
 
     Same as last one, but ignore fieldmaps. The DWI series will be used for SDC instead
     >>> subject_data, layout = collect_data("mixed_fmaps", SUBJECT_ID)
-    >>> group_by_warpspace(
-    ...     subject_data['dwi'], layout, True) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    >>> pprint(group_by_warpspace(
+    ...     subject_data['dwi'], layout, True)) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
     [{'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
       'fieldmap_info': {'suffix': 'dwi',
        'dwi': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz']},
@@ -739,8 +751,8 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
 
     There is no metadata related to epi distortion: don't concatenate anything
     >>> subject_data, layout = collect_data("missing_info", SUBJECT_ID)
-    >>> group_by_warpspace(
-    ...     subject_data['dwi'], layout, False) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    >>> pprint(group_by_warpspace(
+    ...     subject_data['dwi'], layout, False)) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
     [{'dwi_series': ['.../missing_info/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
       'fieldmap_info': {'suffix': None},
       'dwi_series_pedir': '',
@@ -752,8 +764,8 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
 
     A bizarre mix of PE directions and some missing data
     >>> subject_data, layout = collect_data("wtf", SUBJECT_ID)
-    >>> group_by_warpspace(
-    ...     subject_data['dwi'], layout, False) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    >>> pprint(group_by_warpspace(
+    ...     subject_data['dwi'], layout, False)) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
     [{'dwi_series': ['.../wtf/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
        '.../wtf/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
       'fieldmap_info': {'suffix': 'dwi',
@@ -835,6 +847,11 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
                     'concatenated_bids_name': get_concatenated_bids_name(dwi_group),
                 }
             )
+
+    config.loggers.workflow.info(
+        f'Found {len(dwi_groups)} groups of DWI series based on their warp spaces:\n'
+        f'{pprint.pformat(dwi_groups, indent=2, width=120)}'
+    )
 
     return dwi_groups
 
@@ -996,11 +1013,15 @@ def group_for_eddy(all_dwi_fmap_groups):
             If no information is available, the value will be an empty string.
         - ``concatenated_bids_name``: The BIDS name of the concatenated dwi series.
             If no information is available, the value will be an empty string.
+    concatenation_grouping : :obj:`dict`
+        A dictionary mapping the concatenated BIDS name of each group to the name of the
+        group that it should be concatenated with.
 
     Examples
     --------
 
     Paired DWI series to correct each other:
+    >>> from pprint import pprint
     >>> dwi_groups = [
     ...  {'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
     ...      'fieldmap_info': {'suffix': 'dwi',
@@ -1012,12 +1033,13 @@ def group_for_eddy(all_dwi_fmap_groups):
     ...      'dwi': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz']},
     ...      'dwi_series_pedir': 'j-',
     ...   'concatenated_bids_name': 'sub-1_dir-PA_run-2'}]
-    >>> group_for_eddy(dwi_groups) # doctest: +NORMALIZE_WHITESPACE
-    [{'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
-      'dwi_series_pedir': 'j',
-      'fieldmap_info': {'suffix': 'rpe_series',
-       'rpe_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz']},
-      'concatenated_bids_name': 'sub-1'}]
+    >>> pprint(group_for_eddy(dwi_groups)) # doctest: +NORMALIZE_WHITESPACE
+    ([{'concatenated_bids_name': 'sub-1',
+       'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
+       'dwi_series_pedir': 'j',
+       'fieldmap_info': {'rpe_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz'],
+                         'suffix': 'rpe_series'}}],
+     {'sub-1': 'sub-1'})
 
     AP/PA EPI fieldmaps
     >>> dwi_groups = [
@@ -1031,39 +1053,67 @@ def group_for_eddy(all_dwi_fmap_groups):
     ...       'epi': ['.../mixed_fmaps/sub-1/fmap/sub-1_dir-AP_run-2_epi.nii.gz']},
     ...       'dwi_series_pedir': 'j-',
     ...       'concatenated_bids_name': 'sub-1_dir-PA_run-2'}]
-    >>> group_for_eddy(dwi_groups) # doctest: +NORMALIZE_WHITESPACE
-    [{'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
-      'dwi_series_pedir': 'j',
-      'fieldmap_info': {'suffix': 'rpe_series',
-       'rpe_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz'],
-       'epi': ['.../mixed_fmaps/sub-1/fmap/sub-1_dir-AP_run-2_epi.nii.gz',
-               '.../mixed_fmaps/sub-1/fmap/sub-1_dir-PA_run-1_epi.nii.gz']},
-      'concatenated_bids_name': 'sub-1'}]
+    >>> pprint(group_for_eddy(dwi_groups)) # doctest: +NORMALIZE_WHITESPACE
+    ([{'concatenated_bids_name': 'sub-1',
+       'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
+       'dwi_series_pedir': 'j',
+       'fieldmap_info': {'epi': ['.../mixed_fmaps/sub-1/fmap/sub-1_dir-AP_run-2_epi.nii.gz',
+                                 '.../mixed_fmaps/sub-1/fmap/sub-1_dir-PA_run-1_epi.nii.gz'],
+                         'rpe_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz'],
+                         'suffix': 'rpe_series'}}],
+     {'sub-1': 'sub-1'})
+
+    Val's scenario
+    >>> dwi_groups = [
+    ...     {'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
+    ...      'fieldmap_info': {'suffix': 'epi',
+    ...       'epi': ['.../mixed_fmaps/sub-1/fmap/sub-1_dir-PA_run-1_epi.nii.gz']},
+    ...      'dwi_series_pedir': 'j',
+    ...      'concatenated_bids_name': 'sub-1_dir-AP_run-1'},
+    ...     {'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
+    ...      'fieldmap_info': {'suffix': 'epi',
+    ...       'epi': ['.../mixed_fmaps/sub-1/fmap/sub-1_dir-PA_run-2_epi.nii.gz']},
+    ...       'dwi_series_pedir': 'j',
+    ...       'concatenated_bids_name': 'sub-1_dir-AP_run-2'}]
+    >>> pprint(group_for_eddy(dwi_groups)) # doctest: +NORMALIZE_WHITESPACE
+    ([{'concatenated_bids_name': 'sub-1_dir-AP_run-1',
+       'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
+       'dwi_series_pedir': 'j',
+       'fieldmap_info': {'epi': ['.../mixed_fmaps/sub-1/fmap/sub-1_dir-PA_run-1_epi.nii.gz'],
+                         'suffix': 'epi'}},
+      {'concatenated_bids_name': 'sub-1_dir-AP_run-2',
+       'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
+       'dwi_series_pedir': 'j',
+       'fieldmap_info': {'epi': ['.../mixed_fmaps/sub-1/fmap/sub-1_dir-PA_run-2_epi.nii.gz'],
+                         'suffix': 'epi'}}],
+        {'sub-1_dir-AP_run-1': 'sub-1_dir-AP_run-1',
+         'sub-1_dir-AP_run-2': 'sub-1_dir-AP_run-2'})
 
     Repeated scans per PE direction
     >>> dwi_groups = [
-    ...    {'dwi_series': ['.../opposite_concat/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
-    ...                     '.../opposite_concat/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
+    ...    {'dwi_series': ['.../sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
+    ...                     '.../sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
     ...      'fieldmap_info': {'suffix': 'dwi',
-    ...       'dwi': ['.../opposite_concat/sub-1/dwi/sub-1_dir-PA_run-1_dwi.nii.gz',
-    ...               '.../opposite_concat/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz']},
+    ...       'dwi': ['.../sub-1/dwi/sub-1_dir-PA_run-1_dwi.nii.gz',
+    ...               '.../sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz']},
     ...      'dwi_series_pedir': 'j',
     ...      'concatenated_bids_name': 'sub-1_dir-AP'},
-    ...     {'dwi_series': ['.../opposite_concat/sub-1/dwi/sub-1_dir-PA_run-1_dwi.nii.gz',
-    ...                     '.../opposite_concat/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz'],
+    ...     {'dwi_series': ['.../sub-1/dwi/sub-1_dir-PA_run-1_dwi.nii.gz',
+    ...                     '.../sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz'],
     ...      'fieldmap_info': {'suffix': 'dwi',
-    ...       'dwi': ['.../opposite_concat/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
-    ...               '.../opposite_concat/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz']},
+    ...       'dwi': ['.../sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
+    ...               '.../sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz']},
     ...      'dwi_series_pedir': 'j-',
     ...      'concatenated_bids_name': 'sub-1_dir-PA'}]
-    >>> group_for_eddy(dwi_groups) # doctest: +NORMALIZE_WHITESPACE
-    [{'dwi_series': ['.../opposite_concat/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
-                     '.../opposite_concat/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
-      'dwi_series_pedir': 'j',
-      'fieldmap_info': {'suffix': 'rpe_series',
-       'rpe_series': ['.../opposite_concat/sub-1/dwi/sub-1_dir-PA_run-1_dwi.nii.gz',
-                      '.../opposite_concat/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz']},
-      'concatenated_bids_name': 'sub-1'}]
+    >>> pprint(group_for_eddy(dwi_groups)) # doctest: +NORMALIZE_WHITESPACE
+    ([{'concatenated_bids_name': 'sub-1',
+       'dwi_series': ['.../sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
+                      '.../sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
+       'dwi_series_pedir': 'j',
+       'fieldmap_info': {'rpe_series': ['.../sub-1/dwi/sub-1_dir-PA_run-1_dwi.nii.gz',
+                                        '.../sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz'],
+                         'suffix': 'rpe_series'}}],
+     {'sub-1': 'sub-1'})
 
     A phasediff fieldmap (Not used by eddy)
     >>> dwi_groups = [
@@ -1074,14 +1124,15 @@ def group_for_eddy(all_dwi_fmap_groups):
     ...                        'suffix': 'phasediff'},
     ...      'dwi_series_pedir': 'j',
     ...      'concatenated_bids_name': 'sub-1_dir-AP'}]
-    >>> group_for_eddy(dwi_groups) # doctest: +NORMALIZE_WHITESPACE
-    [{'dwi_series': ['.../phasediff/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
-       '.../phasediff/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
-      'fieldmap_info': {'phasediff': '.../phasediff/sub-1/fmap/sub-1_phasediff.nii.gz',
-       'magnitude1': '.../magnitude1/sub-1/fmap/sub-1_magnitude1.nii.gz',
-       'suffix': 'phasediff'},
-      'dwi_series_pedir': 'j',
-      'concatenated_bids_name': 'sub-1_dir-AP'}]
+    >>> pprint(group_for_eddy(dwi_groups)) # doctest: +NORMALIZE_WHITESPACE
+    ([{'concatenated_bids_name': 'sub-1_dir-AP',
+       'dwi_series': ['.../phasediff/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
+                      '.../phasediff/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
+       'dwi_series_pedir': 'j',
+       'fieldmap_info': {'magnitude1': '.../magnitude1/sub-1/fmap/sub-1_magnitude1.nii.gz',
+                         'phasediff': '.../phasediff/sub-1/fmap/sub-1_phasediff.nii.gz',
+                         'suffix': 'phasediff'}}],
+     {'sub-1_dir-AP': 'sub-1_dir-AP'})
 
     """
     eddy_dwi_groups = []
@@ -1112,6 +1163,11 @@ def group_for_eddy(all_dwi_fmap_groups):
         for dwi_group in dwi_fmap_groups:
             if dwi_group['fieldmap_info'].get('suffix') not in eddy_compatible_suffixes:
                 eddy_dwi_groups.append(dwi_group)
+
+    config.loggers.workflow.info(
+        f'Found {len(eddy_dwi_groups)} groups of DWI series that can be corrected by eddy:\n'
+        f'{pprint.pformat(eddy_dwi_groups, indent=2, width=120)}'
+    )
 
     return eddy_dwi_groups, {
         group['concatenated_bids_name']: group['concatenated_bids_name']
@@ -1145,6 +1201,11 @@ def group_for_concatenation(all_dwi_fmap_groups):
         # Add separate groups for non-compatible fieldmaps
         for group in dwi_fmap_groups:
             concatenation_grouping[group['concatenated_bids_name']] = group_name
+
+    config.loggers.workflow.info(
+        f'Found {len(concatenation_grouping)} groups of DWI series that can be concatenated:\n'
+        f'{pprint.pformat(concatenation_grouping, indent=2, width=120)}'
+    )
 
     return concatenation_grouping
 
