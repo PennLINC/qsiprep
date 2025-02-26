@@ -259,14 +259,24 @@ def test_group_dwi_scans_with_complex_b0fields(tmpdir):
         using_fsl=True,
         combine_scans=True,
         ignore_fieldmaps=False,
-        concatenate_distortion_groups=False,
+        concatenate_distortion_groups=True,
     )
     expected = [
-        [
-            'sub-01_acq-98dir_dir-AP_run-2_dwi.nii.gz',
-            'sub-01_acq-99dir_dir-AP_run-1_dwi.nii.gz',
-        ],
-        ['sub-01_acq-99dir_dir-AP_run-3_dwi.nii.gz'],
+        {
+            'concatenated_bids_name': 'sub-01_dir-AP',
+            'dwi_series': [
+                'sub-01/dwi/sub-01_dir-AP_run-1_dwi.nii.gz',
+                'sub-01/dwi/sub-01_dir-AP_run-2_dwi.nii.gz',
+            ],
+            'dwi_series_pedir': 'j',
+            'fieldmap_info': {'suffix': None},
+        },
+        {
+            'concatenated_bids_name': 'sub-01_dir-PA',
+            'dwi_series': ['sub-01/dwi/sub-01_dir-PA_dwi.nii.gz'],
+            'dwi_series_pedir': 'j-',
+            'fieldmap_info': {'suffix': None},
+        },
     ]
     check_expected(scan_groups, expected)
 
