@@ -24,7 +24,7 @@ from pathlib import Path
 
 from nireports.assembler.report import Report
 
-from .. import data
+from qsiprep import data
 
 
 def run_reports(

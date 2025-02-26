@@ -33,9 +33,12 @@ def fix_multi_T1w_source_name(in_files):
 def fix_multi_source_name(in_files, dwi_only, include_session, anatomical_contrast='T1w'):
     """Make up a generic source name when there are multiple source files.
 
-    >>> fix_multi_source_name([
-    ...     '/path/to/sub-045_ses-test_T1w.nii.gz',
-    ...     '/path/to/sub-045_ses-retest_T1w.nii.gz'])
+    >>> fix_multi_source_name(
+    ...     ['/path/to/sub-045_ses-test_T1w.nii.gz', '/path/to/sub-045_ses-retest_T1w.nii.gz'],
+    ...     False,
+    ...     False,
+    ...     'T1w',
+    ... )
     '/path/to/sub-045_T1w.nii.gz'
     """
     import os
