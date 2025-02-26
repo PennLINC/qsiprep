@@ -20,13 +20,13 @@ from collections import defaultdict
 
 from nipype.utils.filemanip import split_filename
 
-from .. import config
 from ..interfaces.bids import get_bids_params
 
 LOGGER = logging.getLogger('nipype.workflow')
 
 
 def group_dwi_scans(
+    layout,
     subject_data,
     using_fsl=False,
     combine_scans=True,
@@ -55,13 +55,13 @@ def group_dwi_scans(
         concatenation. The values are lists of dwi files in that group.
     """
     # Handle the grouping of multiple dwi files within a session
-    dwi_entity_groups = get_entity_groups(config.execution.layout, subject_data, combine_scans)
+    dwi_entity_groups = get_entity_groups(layout, subject_data, combine_scans)
 
     # Group them by their warp group
     dwi_fmap_groups = []
     for dwi_entity_group in dwi_entity_groups:
         dwi_fmap_groups.extend(
-            group_by_warpspace(dwi_entity_group, config.execution.layout, ignore_fieldmaps)
+            group_by_warpspace(dwi_entity_group, layout, ignore_fieldmaps)
         )
 
     if using_fsl:

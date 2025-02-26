@@ -5,6 +5,7 @@ import os
 from bids.layout import BIDSLayout
 from niworkflows.utils.testing import generate_bids_skeleton
 
+from qsiprep.tests.utils import get_test_data_path
 from qsiprep.utils import grouping
 
 dset_multipartid = {
@@ -242,3 +243,36 @@ def check_expected(subject_data, expected):
                 assert os.path.basename(item) == expected_item
     else:
         assert subject_data is expected
+
+
+def test_group_dwi_scans_with_complex_b0fields(tmpdir):
+    """Test the group_dwi_scans function."""
+    bids_dir = tmpdir / 'test_group_dwi_scans_with_complex_b0fields'
+    dset_yaml = os.path.join(get_test_data_path(), 'skeleton_complex_b0fields.yml')
+    generate_bids_skeleton(str(bids_dir), dset_yaml)
+    layout = BIDSLayout(str(bids_dir))
+    subject_data = {'dwi': layout.get(suffix='dwi', extension='nii.gz')}
+    scan_groups, _ = grouping.group_dwi_scans(
+        layout=layout,
+        subject_data=subject_data,
+        using_fsl=True,
+        combine_scans=True,
+        ignore_fieldmaps=False,
+        concatenate_distortion_groups=False,
+    )
+    expected = [
+        [
+            'sub-01_acq-98dir_dir-AP_run-2_dwi.nii.gz',
+            'sub-01_acq-99dir_dir-AP_run-1_dwi.nii.gz',
+        ],
+        ['sub-01_acq-99dir_dir-AP_run-3_dwi.nii.gz'],
+    ]
+    check_expected(entity_groups, expected)
+
+    entity_groups = grouping.get_entity_groups(layout, subject_data, combine_all_dwis=False)
+    expected = [
+        ['sub-01_acq-98dir_dir-AP_run-2_dwi.nii.gz'],
+        ['sub-01_acq-99dir_dir-AP_run-1_dwi.nii.gz'],
+        ['sub-01_acq-99dir_dir-AP_run-3_dwi.nii.gz'],
+    ]
+    check_expected(entity_groups, expected)
