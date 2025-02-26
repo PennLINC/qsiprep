@@ -364,3 +364,123 @@ def test_group_dwi_scans_with_complex_b0fields(tmpdir):
         ['sub-01_acq-99dir_dir-AP_run-3_dwi.nii.gz'],
     ]
     check_expected(scan_groups, expected)
+
+
+def test_group_dwi_scans_with_complex_relpaths(tmpdir):
+    """Test the group_dwi_scans function."""
+    bids_dir = tmpdir / 'test_group_dwi_scans_with_complex_relpaths'
+    dset_yaml = os.path.join(get_test_data_path(), 'skeleton_complex_relpaths.yml')
+    generate_bids_skeleton(str(bids_dir), dset_yaml)
+    layout = BIDSLayout(str(bids_dir))
+    subject_data = {'dwi': layout.get(suffix='dwi', extension='nii.gz')}
+    scan_groups, _ = grouping.group_dwi_scans(
+        layout=layout,
+        subject_data=subject_data,
+        using_fsl=True,
+        combine_scans=True,
+        ignore_fieldmaps=False,
+        concatenate_distortion_groups=True,
+    )
+    expected = [
+        {
+            'concatenated_bids_name': 'sub-01_dir-AP',
+            'dwi_series': [
+                'sub-01/dwi/sub-01_dir-AP_run-1_dwi.nii.gz',
+                'sub-01/dwi/sub-01_dir-AP_run-2_dwi.nii.gz',
+            ],
+            'dwi_series_pedir': 'j',
+            'fieldmap_info': {'suffix': None},
+        },
+        {
+            'concatenated_bids_name': 'sub-01_dir-PA',
+            'dwi_series': ['sub-01/dwi/sub-01_dir-PA_dwi.nii.gz'],
+            'dwi_series_pedir': 'j-',
+            'fieldmap_info': {'suffix': None},
+        },
+    ]
+    check_expected(scan_groups, expected)
+
+    scan_groups, _ = grouping.group_dwi_scans(
+        layout=layout,
+        subject_data=subject_data,
+        using_fsl=False,
+        combine_scans=True,
+        ignore_fieldmaps=False,
+        concatenate_distortion_groups=False,
+    )
+    expected = [
+        [
+            'sub-01_acq-98dir_dir-AP_run-2_dwi.nii.gz',
+            'sub-01_acq-99dir_dir-AP_run-1_dwi.nii.gz',
+        ],
+        ['sub-01_acq-99dir_dir-AP_run-3_dwi.nii.gz'],
+    ]
+    check_expected(scan_groups, expected)
+
+    scan_groups, _ = grouping.group_dwi_scans(
+        layout=layout,
+        subject_data=subject_data,
+        using_fsl=True,
+        combine_scans=False,
+        ignore_fieldmaps=False,
+        concatenate_distortion_groups=False,
+    )
+    expected = [
+        [
+            'sub-01_acq-98dir_dir-AP_run-2_dwi.nii.gz',
+            'sub-01_acq-99dir_dir-AP_run-1_dwi.nii.gz',
+        ],
+        ['sub-01_acq-99dir_dir-AP_run-3_dwi.nii.gz'],
+    ]
+    check_expected(scan_groups, expected)
+
+    scan_groups, _ = grouping.group_dwi_scans(
+        layout=layout,
+        subject_data=subject_data,
+        using_fsl=False,
+        combine_scans=False,
+        ignore_fieldmaps=False,
+        concatenate_distortion_groups=False,
+    )
+    expected = [
+        [
+            'sub-01_acq-98dir_dir-AP_run-2_dwi.nii.gz',
+            'sub-01_acq-99dir_dir-AP_run-1_dwi.nii.gz',
+        ],
+        ['sub-01_acq-99dir_dir-AP_run-3_dwi.nii.gz'],
+    ]
+    check_expected(scan_groups, expected)
+
+    scan_groups, _ = grouping.group_dwi_scans(
+        layout=layout,
+        subject_data=subject_data,
+        using_fsl=True,
+        combine_scans=True,
+        ignore_fieldmaps=True,
+        concatenate_distortion_groups=False,
+    )
+    expected = [
+        [
+            'sub-01_acq-98dir_dir-AP_run-2_dwi.nii.gz',
+            'sub-01_acq-99dir_dir-AP_run-1_dwi.nii.gz',
+        ],
+        ['sub-01_acq-99dir_dir-AP_run-3_dwi.nii.gz'],
+    ]
+    check_expected(scan_groups, expected)
+
+    scan_groups, _ = grouping.group_dwi_scans(
+        layout=layout,
+        subject_data=subject_data,
+        using_fsl=True,
+        combine_scans=True,
+        ignore_fieldmaps=False,
+        concatenate_distortion_groups=True,
+    )
+    expected = [
+        [
+            'sub-01_acq-98dir_dir-AP_run-2_dwi.nii.gz',
+            'sub-01_acq-99dir_dir-AP_run-1_dwi.nii.gz',
+        ],
+        ['sub-01_acq-99dir_dir-AP_run-3_dwi.nii.gz'],
+    ]
+    check_expected(scan_groups, expected)
