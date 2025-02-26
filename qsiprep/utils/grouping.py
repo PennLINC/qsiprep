@@ -21,6 +21,7 @@ from collections import defaultdict
 
 from nipype.utils.filemanip import split_filename
 
+from .. import config
 from ..interfaces.bids import get_bids_params
 
 LOGGER = logging.getLogger('nipype.workflow')
