@@ -367,7 +367,7 @@ texinfo_documents = [
 linkcode_resolve = make_linkcode_resolve(
     'qsiprep',
     (
-        'https://github.com/pennlinc/qsiprep/blob/{revision}/{package}/{path}#L{lineno}'  # noqa: FS003
+        'https://github.com/pennlinc/qsiprep/blob/{revision}/{package}/{path}#L{lineno}'
     ),
 )
 
