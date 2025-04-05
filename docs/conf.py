@@ -366,9 +366,7 @@ texinfo_documents = [
 # The following is used by sphinx.ext.linkcode to provide links to github
 linkcode_resolve = make_linkcode_resolve(
     'qsiprep',
-    (
-        'https://github.com/pennlinc/qsiprep/blob/{revision}/{package}/{path}#L{lineno}'
-    ),
+    'https://github.com/pennlinc/qsiprep/blob/{revision}/{package}/{path}#L{lineno}',
 )
 
 # -----------------------------------------------------------------------------
