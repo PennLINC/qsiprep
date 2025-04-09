@@ -1,0 +1,15 @@
+# A dataset with a single subject with a single run of fmap and dwi,
+# where the fmap is linked to the dwi with the B0FieldIdentifier
+# metadata field.
+'01':
+  - fmap:
+      - dir: PA
+        suffix: epi
+        metadata:
+          B0FieldIdentifier: pepolar
+    dwi:
+      - dir: AP
+        suffix: dwi
+        metadata:
+          B0FieldIdentifier: pepolar
+          B0FieldSource: pepolar
