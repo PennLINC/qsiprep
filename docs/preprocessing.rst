@@ -143,6 +143,13 @@ default (using ``dwibiascorrect``) and can be disabled with the
 across scans (i.e. scaled to an average value) by default, but this can be
 turned off using ``--dwi-no-b0-harmonization``.
 
+.. tip::
+
+  If prescan normalization is enabled,
+  we recommend using ``--b1-biascorrect-stage none``.
+  This will skip B1 bias field correction,
+  which may introduce artifacts on normalized data.
+
 Together, denoising (MP-PCA or patch2self), Gibbs unringing B1 bias field
 correction and b=0 intensity normalization are referred to as *denoising* in
 *QSIPrep*. Each of these image processing operations has assumptions about its
