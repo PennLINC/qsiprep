@@ -30,7 +30,7 @@ dependencies = [
     "nipype == 1.9.1",
     "nireports >= 24.0.3",
     "niworkflows >=1.9,<= 1.10",
-    "numpy <= 1.26.3",
+    "numpy >=2.0.0,<2.3.0",
     "pandas < 2.0.0",
     "psutil <= 5.9.8",
     "pybids",
