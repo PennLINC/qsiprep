@@ -222,7 +222,6 @@ class CombineMotionsInputSpec(BaseInterfaceInputSpec):
     transform_files = InputMultiObject(
         File(exists=True), mandatory=True, desc='transform files from hmc'
     )
-    source_files = InputMultiObject(File(exists=True), mandatory=True, desc='Moving images')
     ref_file = File(exists=True, mandatory=True, desc='Fixed Image')
 
 
@@ -241,9 +240,7 @@ class CombineMotions(SimpleInterface):
         output_spm_fname = os.path.join(runtime.cwd, 'spm_movpar.txt')
         ref_file = self.inputs.ref_file
         for motion_file in self.inputs.transform_files:
-            collected_motion.append(
-                get_fsl_motion_params(motion_file, ref_file, ref_file, runtime.cwd)
-            )
+            collected_motion.append(get_fsl_motion_params(motion_file, ref_file, runtime.cwd))
 
         final_motion = np.row_stack(collected_motion)
         cols = [
@@ -638,12 +635,13 @@ class LocalGradientRotation(SimpleInterface):
         return runtime
 
 
-def get_fsl_motion_params(itk_file, src_file, ref_file, working_dir):
+def get_fsl_motion_params(itk_file, ref_file, working_dir):
     tmp_fsl_file = fname_presuffix(itk_file, newpath=working_dir, suffix='_FSL.xfm', use_ext=False)
+    # Use the same file for src and ref
     fsl_convert_cmd = (
         'c3d_affine_tool '
         f'-ref {ref_file} '
-        f'-src {src_file} '
+        f'-src {ref_file} '
         f'-itk {itk_file} '
         f'-ras2fsl -o {tmp_fsl_file}'
     )
@@ -678,7 +676,7 @@ def get_fsl_motion_params(itk_file, src_file, ref_file, working_dir):
             trans[i] = offpart + rotpart
         return trans
 
-    img_center = get_image_center(src_file)
+    img_center = get_image_center(ref_file)
     c3d_out_xfm = np.loadtxt(fname=tmp_fsl_file, dtype='float')
     [T, Rotmat, Z, S] = decompose44(c3d_out_xfm)
     T = get_trans_from_offset(img_center, c3d_out_xfm)
