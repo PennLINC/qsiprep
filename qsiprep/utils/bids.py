@@ -199,8 +199,6 @@ def collect_data(bids_dir, participant_label, session_id=None, filters=None, bid
 
     queries = {
         'fmap': {'datatype': 'fmap'},
-        'sbref': {'datatype': 'func', 'suffix': 'sbref'},
-        'flair': {'datatype': 'anat', 'suffix': 'FLAIR'},
         't2w': {'datatype': 'anat', 'suffix': 'T2w'},
         't1w': {'datatype': 'anat', 'suffix': 'T1w'},
         'roi': {'datatype': 'anat', 'suffix': 'roi'},

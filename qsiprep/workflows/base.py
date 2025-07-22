@@ -290,7 +290,6 @@ to workflows in *QSIPrep*'s documentation]\
             ('t1w', 'inputnode.t1w'),
             ('t2w', 'inputnode.t2w'),
             ('roi', 'inputnode.roi'),
-            ('flair', 'inputnode.flair'),
         ]),
         (summary, anat_preproc_wf, [('subject_id', 'inputnode.subject_id')]),
         (bidssrc, ds_report_summary, [
