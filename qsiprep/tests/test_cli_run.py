@@ -235,6 +235,7 @@ def test_collect_data(tmpdir, name, skeleton, sessions, n_anats):
         session_id=sessions,
         filters=None,
         bids_validate=False,
-        ignore=[],
+        ignore=['t2w'],
     )[0]
     assert len(subj_data['t1w']) == n_anats[2], pprint.pformat(subj_data)
+    assert len(subj_data['t2w']) == 0, pprint.pformat(subj_data)
