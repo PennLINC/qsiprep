@@ -188,7 +188,14 @@ def collect_participants(bids_dir, participant_label=None, strict=False, bids_va
     return found_label
 
 
-def collect_data(bids_dir, participant_label, session_id=None, filters=None, bids_validate=True):
+def collect_data(
+    bids_dir,
+    participant_label,
+    session_id=None,
+    filters=None,
+    bids_validate=True,
+    ignore=None,
+):
     """Use pybids to retrieve the input data for a given participant."""
     import yaml
 
@@ -197,10 +204,11 @@ def collect_data(bids_dir, participant_label, session_id=None, filters=None, bid
     else:
         layout = BIDSLayout(str(bids_dir), validate=bids_validate)
 
+    # Coerce to list
+    ignore = ignore or []
+
     queries = {
         'fmap': {'datatype': 'fmap'},
-        'sbref': {'datatype': 'func', 'suffix': 'sbref'},
-        'flair': {'datatype': 'anat', 'suffix': 'FLAIR'},
         't2w': {'datatype': 'anat', 'suffix': 'T2w'},
         't1w': {'datatype': 'anat', 'suffix': 'T1w'},
         'roi': {'datatype': 'anat', 'suffix': 'roi'},
@@ -229,6 +237,10 @@ def collect_data(bids_dir, participant_label, session_id=None, filters=None, bid
         )
         for dtype, query in queries.items()
     }
+    # Remove data types that are in the ignore list (this will catch t2w)
+    for dtype in subj_data.keys():
+        if dtype in ignore:
+            subj_data[dtype] = []
 
     config.loggers.workflow.log(
         25,

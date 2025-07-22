@@ -183,7 +183,6 @@ def init_dwi_preproc_wf(
         niu.IdentityInterface(
             fields=[
                 'dwi_files',
-                'sbref_file',
                 'subjects_dir',
                 'subject_id',
                 't1_preproc',
@@ -218,7 +217,6 @@ def init_dwi_preproc_wf(
                 'dwi_mask',
                 'hmc_xforms',
                 'fieldwarps',
-                'sbref_file',
                 'original_files',
                 'original_bvecs',
                 'raw_qc_file',
