@@ -229,6 +229,10 @@ def collect_data(bids_dir, participant_label, session_id=None, filters=None, bid
         )
         for dtype, query in queries.items()
     }
+    # Remove data types that are in the ignore list (this will catch t2w)
+    for dtype in subj_data.keys():
+        if dtype in config.workflow.ignore:
+            subj_data[dtype] = []
 
     config.loggers.workflow.log(
         25,
