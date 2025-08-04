@@ -513,6 +513,7 @@ class _SeriesQCInputSpec(BaseInterfaceInputSpec):
     confounds_file = File(exists=True, desc='confounds file', mandatory=True)
     t1_mask_file = File(exists=True, desc='brain mask in t1 space')
     t1_cnr_file = File(exists=True, desc='CNR file in t1 space')
+    t1_fieldmap_hz_file = File(exists=True, desc='Fieldmap in Hz file in t1 space')
     t1_b0_series = File(exists=True, desc='time series of b=0 images')
     t1_dice_score = traits.Float()
     mni_dice_score = traits.Float()
@@ -548,6 +549,10 @@ class SeriesQC(SimpleInterface):
             if isdefined(self.inputs.t1_b0_series):
                 # Add a function to get b=0 TSNR
                 pass
+            if isdefined(self.inputs.t1_fieldmap_hz_file):
+                image_qc.update(
+                    get_fieldmap_values(self.inputs.t1_fieldmap_hz_file, self.inputs.t1_mask_file)
+                )
 
         # Get the metadata
         output_file = self.inputs.output_file_name
@@ -564,6 +569,19 @@ def _load_qc_file(fname, prefix=''):
     qc_data = pd.read_csv(fname).to_dict(orient='records')[0]
     renamed = {prefix + key: value for key, value in qc_data.items()}
     return renamed
+
+
+def get_fieldmap_values(fieldmap_image, brain_mask):
+    fieldmap_img = nb.load(fieldmap_image)
+    mask_img = nb.load(brain_mask)
+
+    freqs = {}
+    strategies = ['median', 'min', 'max', 'mean', 'standard_deviation']
+    for strategy in strategies:
+        masker = NiftiLabelsMasker(mask_img, strategy=strategy, resampling_target='data')
+        hz_values = masker.fit_transform(fieldmap_img).flatten()
+        freqs[f'fieldmap_hz_{strategy}'] = hz_values
+    return freqs
 
 
 def get_cnr_values(cnr_image, brain_mask):

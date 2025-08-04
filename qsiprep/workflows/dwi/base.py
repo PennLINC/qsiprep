@@ -483,6 +483,7 @@ Diffusion data preprocessing
             ('outputnode.bvec_files_to_transform', 'bvec_files'),
             ('outputnode.b0_template', 'b0_ref_image'),
             ('outputnode.cnr_map', 'cnr_map'),
+            ('outputnode.fieldmap_hz', 'fieldmap_hz'),
             ('outputnode.b0_template_mask', 'dwi_mask'),
             ('outputnode.to_dwi_ref_affines', 'hmc_xforms'),
             ('outputnode.to_dwi_ref_warps', 'fieldwarps'),

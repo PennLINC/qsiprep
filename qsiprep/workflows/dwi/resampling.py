@@ -85,6 +85,8 @@ def init_dwi_trans_wf(
             Individual 3D volumes, not motion corrected
         cnr_map
             Contrast to noise map from model-based hmc
+        fieldmap_hz
+            Fieldmap in Hz
         bval_files
             individual bval files
         bvec_files
@@ -147,6 +149,7 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
                 'name_source',
                 'dwi_files',
                 'cnr_map',
+                'fieldmap_hz',
                 'bval_files',
                 'bvec_files',
                 'b0_ref_image',
@@ -168,6 +171,7 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
                 'dwi_ref_resampled',
                 'dwi_mask_resampled',
                 'cnr_map_resampled',
+                'fieldmap_hz_resampled',
                 'bvals',
                 'resampled_dwi_mask',
                 'rotated_bvecs',
@@ -196,6 +200,11 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
     cnr_tfm = pe.Node(
         ants.ApplyTransforms(interpolation='LanczosWindowedSinc', float=True),
         name='cnr_tfm',
+        mem_gb=1,
+    )
+    fieldmap_hz_tfm = pe.Node(
+        ants.ApplyTransforms(interpolation='NearestNeighbor', float=True),
+        name='fieldmap_hz_tfm',
         mem_gb=1,
     )
 
@@ -239,7 +248,12 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
             ('cnr_map', 'input_image'),
             ('output_grid', 'reference_image'),
         ]),
+        (inputnode, fieldmap_hz_tfm, [
+            ('fieldmap_hz', 'input_image'),
+            ('output_grid', 'reference_image'),
+        ]),
         (cnr_tfm, outputnode, [('output_image', 'cnr_map_resampled')]),
+        (fieldmap_hz_tfm, outputnode, [('output_image', 'fieldmap_hz_resampled')]),
         (compose_transforms, dwi_transform, [('out_warps', 'transforms')]),
         (inputnode, dwi_transform, [
             ('dwi_files', 'input_image'),

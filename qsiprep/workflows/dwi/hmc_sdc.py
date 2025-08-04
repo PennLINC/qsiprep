@@ -82,6 +82,7 @@ def init_qsiprep_hmcsdc_wf(
                 'slice_quality',
                 'motion_params',
                 'cnr_map',
+                'fieldmap_hz',
                 'bvec_files_to_transform',
                 'dwi_files_to_transform',
                 'b0_indices',
@@ -150,6 +151,7 @@ def init_qsiprep_hmcsdc_wf(
              'to_dwi_ref_affines'),
             ('outputnode.optimization_data', 'hmc_optimization_data'),
             ('outputnode.cnr_image', 'cnr_map'),
+            ('outputnode.fieldmap_hz', 'fieldmap_hz'),
             ('outputnode.final_template_mask', 'b0_template_mask'),
         ]),
         (dwi_hmc_wf, summarize_motion, [
