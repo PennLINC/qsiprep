@@ -37,7 +37,7 @@ class StructuralReference(fs.RobustTemplate):
     >>> template = StructuralReference()  # doctest: +SKIP
     >>> template.inputs.in_files = t1w  # doctest: +SKIP
     >>> template.inputs.auto_detect_sensitivity = True  # doctest: +SKIP
-    >>> template.cmdline  # doctest: +ELLIPSIS +NORMALIZE_WHITESPACE  # doctest: +SKIP
+    >>> template.cmdline  # doctest: +SKIP
     'mri_robust_template --satit --mov .../sub-01_ses-retest_T1w.nii.gz
         .../sub-01_ses-test_T1w.nii.gz --template mri_robust_template_out.mgz'
 

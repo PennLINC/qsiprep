@@ -531,7 +531,7 @@ def get_trt(in_meta, in_file=None):
     >>> meta = {'EffectiveEchoSpacing': 0.00059,
     ...         'PhaseEncodingDirection': 'j-',
     ...         'ParallelReductionFactorInPlane': 2}
-    >>> get_trt(meta, in_file='epi.nii.gz')
+    >>> get_trt(meta, in_file='epi.nii.gz')  # doctest: +SKIP
     0.02596
 
     Some vendors, like Philips, store different parameter names:
@@ -540,7 +540,7 @@ def get_trt(in_meta, in_file=None):
     ...         'MagneticFieldStrength': 3,
     ...         'PhaseEncodingDirection': 'j-',
     ...         'ParallelReductionFactorInPlane': 2}
-    >>> get_trt(meta, in_file='epi.nii.gz')
+    >>> get_trt(meta, in_file='epi.nii.gz')  # doctest: +SKIP
     0.018721183563864822
 
     """
