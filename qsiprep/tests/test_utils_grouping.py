@@ -143,7 +143,7 @@ def test_get_entity_groups_with_multipartid(tmpdir):
     bids_dir = tmpdir / 'test_get_entity_groups'
     generate_bids_skeleton(str(bids_dir), dset_multipartid)
     layout = BIDSLayout(str(bids_dir))
-    subject_data = {'dwi': layout.get(suffix='dwi', extension='nii.gz')}
+    subject_data = {'dwi': layout.get(suffix='dwi', extension='nii.gz', return_type='file')}
     entity_groups = grouping.get_entity_groups(layout, subject_data, combine_all_dwis=True)
     expected = [
         [
@@ -168,7 +168,7 @@ def test_get_entity_groups_without_multipartid(tmpdir):
     bids_dir = tmpdir / 'test_get_entity_groups'
     generate_bids_skeleton(str(bids_dir), dset_entities)
     layout = BIDSLayout(str(bids_dir))
-    subject_data = {'dwi': layout.get(suffix='dwi', extension='nii.gz')}
+    subject_data = {'dwi': layout.get(suffix='dwi', extension='nii.gz', return_type='file')}
     entity_groups = grouping.get_entity_groups(layout, subject_data, combine_all_dwis=True)
     expected = [
         [
@@ -196,7 +196,7 @@ def test_get_fieldmaps(tmp_path_factory):
     bids_dir = base_dir / 'dset_fmap_intendedfor_relpath'
     generate_bids_skeleton(str(bids_dir), dset_fmap_intendedfor_relpath)
     layout = BIDSLayout(str(bids_dir))
-    dwi_file = layout.get(suffix='dwi', extension='nii.gz', return_type='filename')[0]
+    dwi_file = layout.get(suffix='dwi', extension='nii.gz', return_type='file')[0]
     fieldmaps = layout.get_fieldmap(dwi_file, return_list=True)
     assert len(fieldmaps) == 1
     assert fieldmaps[0]['suffix'] == 'epi'
@@ -209,7 +209,7 @@ def test_get_fieldmaps(tmp_path_factory):
     # bids_dir = base_dir / 'dset_fmap_intendedfor_bidsuri'
     # generate_bids_skeleton(str(bids_dir), dset_fmap_intendedfor_bidsuri)
     # layout = BIDSLayout(str(bids_dir))
-    # dwi_file = layout.get(suffix='dwi', extension='nii.gz', return_type='filename')[0]
+    # dwi_file = layout.get(suffix='dwi', extension='nii.gz', return_type='file')[0]
     # fieldmaps = layout.get_fieldmap(dwi_file, return_list=True)
     # assert len(fieldmaps) == 1
     # assert fieldmaps[0]['suffix'] == 'epi'
@@ -222,7 +222,7 @@ def test_get_fieldmaps(tmp_path_factory):
     # bids_dir = base_dir / 'dset_fmap_b0fields'
     # generate_bids_skeleton(str(bids_dir), dset_fmap_b0fields)
     # layout = BIDSLayout(str(bids_dir))
-    # dwi_file = layout.get(suffix='dwi', extension='nii.gz', return_type='filename')[0]
+    # dwi_file = layout.get(suffix='dwi', extension='nii.gz', return_type='file')[0]
     # fieldmaps = layout.get_fieldmap(dwi_file, return_list=True)
     # assert len(fieldmaps) == 1
     # assert fieldmaps[0]['suffix'] == 'epi'
@@ -273,7 +273,7 @@ def test_group_dwi_scans_with_complex_b0fields(tmpdir):
     dset_yaml = os.path.join(get_test_data_path(), 'skeleton_complex_b0fields.yml')
     generate_bids_skeleton(str(bids_dir), dset_yaml)
     layout = BIDSLayout(str(bids_dir))
-    subject_data = {'dwi': layout.get(suffix='dwi', extension='nii.gz')}
+    subject_data = {'dwi': layout.get(suffix='dwi', extension='nii.gz', return_type='file')}
     scan_groups, _ = grouping.group_dwi_scans(
         layout=layout,
         subject_data=subject_data,
@@ -397,7 +397,7 @@ def test_group_dwi_scans_with_complex_relpaths(tmpdir):
     dset_yaml = os.path.join(get_test_data_path(), 'skeleton_complex_relpaths.yml')
     generate_bids_skeleton(str(bids_dir), dset_yaml)
     layout = BIDSLayout(str(bids_dir))
-    subject_data = {'dwi': layout.get(suffix='dwi', extension='nii.gz')}
+    subject_data = {'dwi': layout.get(suffix='dwi', extension='nii.gz', return_type='file')}
     scan_groups, _ = grouping.group_dwi_scans(
         layout=layout,
         subject_data=subject_data,
