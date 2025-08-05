@@ -655,13 +655,13 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
     [{'concatenated_bids_name': 'sub-1_dir-AP',
       'dwi_series': ['.../opposite/sub-1/dwi/sub-1_dir-AP_dwi.nii.gz'],
       'dwi_series_pedir': 'j',
-      'fieldmap_info': {'suffix': 'dwi',
-       'dwi': ['.../opposite/sub-1/dwi/sub-1_dir-PA_dwi.nii.gz']}},
+      'fieldmap_info': {'dwi': ['.../opposite/sub-1/dwi/sub-1_dir-PA_dwi.nii.gz'],
+       'suffix': 'dwi'}},
      {'concatenated_bids_name': 'sub-1_dir-PA',
       'dwi_series': ['.../opposite/sub-1/dwi/sub-1_dir-PA_dwi.nii.gz'],
       'dwi_series_pedir': 'j-',
-      'fieldmap_info': {'suffix': 'dwi',
-       'dwi': ['.../opposite/sub-1/dwi/sub-1_dir-AP_dwi.nii.gz']}}]
+      'fieldmap_info': {'dwi': ['.../opposite/sub-1/dwi/sub-1_dir-AP_dwi.nii.gz'],
+       'suffix': 'dwi'}}]
 
     Multiple DWI series in two different PE directions
     >>> subject_data, layout = collect_data("opposite_concat", SUBJECT_ID)
