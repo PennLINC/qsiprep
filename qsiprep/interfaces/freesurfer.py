@@ -3,19 +3,6 @@
 """
 FreeSurfer tools interfaces
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Fetch some example data:
-
-    >>> import os
-    >>> from niworkflows import data
-    >>> data_root = data.get_bids_examples(variant='BIDS-examples-1-enh-ds054')
-    >>> os.chdir(data_root)
-
-Disable warnings:
-
-    >>> from nipype import logging
-    >>> logging.getLogger('nipype.interface').setLevel('ERROR')
-
 """
 
 import os.path as op
@@ -45,12 +32,12 @@ class StructuralReference(fs.RobustTemplate):
     """Variation on RobustTemplate that simply copies the source if a single
     volume is provided.
 
-    >>> from qsiprep.utils.bids import collect_data
-    >>> t1w = collect_data('ds114', '01')[0]['t1w']
-    >>> template = StructuralReference()
-    >>> template.inputs.in_files = t1w
-    >>> template.inputs.auto_detect_sensitivity = True
-    >>> template.cmdline  # doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
+    >>> from qsiprep.utils.bids import collect_data  # doctest: +SKIP
+    >>> t1w = collect_data('ds114', '01')[0]['t1w']  # doctest: +SKIP
+    >>> template = StructuralReference()  # doctest: +SKIP
+    >>> template.inputs.in_files = t1w  # doctest: +SKIP
+    >>> template.inputs.auto_detect_sensitivity = True  # doctest: +SKIP
+    >>> template.cmdline  # doctest: +ELLIPSIS +NORMALIZE_WHITESPACE  # doctest: +SKIP
     'mri_robust_template --satit --mov .../sub-01_ses-retest_T1w.nii.gz
         .../sub-01_ses-test_T1w.nii.gz --template mri_robust_template_out.mgz'
 

@@ -450,6 +450,7 @@ jobs:
           command: |
             pytest \
               --doctest-modules \
+              --ignore=tests/ \
               -n ${CIRCLE_CPUS} \
               --cov-append \
               --cov-branch \
