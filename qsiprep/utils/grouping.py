@@ -39,16 +39,24 @@ def group_dwi_scans(
 
     Parameters
     ----------
-    bids_layout : :obj:`pybids.BIDSLayout`
+    layout : :obj:`pybids.BIDSLayout`
         A PyBIDS layout
-    using_fsl : :obj:`bool`
-        Should a plus and minus series be grouped together for TOPUP/eddy?
-    combine_scans : :obj:`bool`
-        Should scan concatention happen?
-    ignore_fieldmaps : :obj:`bool`
-        Should fieldmaps be ignored?
-    concatenate_distortion_groups : :obj:`bool`
-        Will distortion groups get merged at the end of the pipeline?
+    subject_data : :obj:`dict`
+        A dictionary of BIDS data for a single subject.
+        The keys are the BIDS entities and the values are lists of BIDS filenames.
+        The ``dwi`` key is required.
+    using_fsl : :obj:`bool`, optional
+        If True, group plus and minus series together for TOPUP/eddy.
+        Default is False.
+    combine_scans : :obj:`bool`, optional
+        If True, group scans together based on their BIDS entities.
+        Default is True.
+    ignore_fieldmaps : :obj:`bool`, optional
+        If True, ignore fieldmaps.
+        Default is False.
+    concatenate_distortion_groups : :obj:`bool`, optional
+        If True, merge distortion groups at the end of the pipeline.
+        Default is False.
 
     Returns
     -------
@@ -808,6 +816,9 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
     dwi_metadatas = [layout.get_metadata(dwi_file) for dwi_file in dwi_files]
     # Check for any data in dwi/ that could be used for distortion correction
     dwi_series_fieldmaps = find_fieldmaps_from_other_dwis(dwi_files, dwi_metadatas)
+    LOGGER.info(
+        f'dwi_series_fieldmaps: {pprint.pformat(dwi_series_fieldmaps, indent=2, width=120)}'
+    )
 
     # Find the best fieldmap for each file.
     best_fieldmap = {}
@@ -825,6 +836,8 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
         # Add the dwi file to a list of those corrected by this fieldmap
         fmap_key = tuple(best_fmap[best_fmap['suffix']]) if best_fmap['suffix'] else 'None'
         grouped_by_fmap[fmap_key].append(dwi_file)
+
+    LOGGER.info(f'grouped_by_fmap: {pprint.pformat(grouped_by_fmap, indent=2, width=120)}')
 
     # Create the final groups
     dwi_groups = []
