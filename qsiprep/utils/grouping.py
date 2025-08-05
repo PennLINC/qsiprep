@@ -652,12 +652,12 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
     >>> subject_data, layout = collect_data("opposite", SUBJECT_ID)
     >>> pprint(group_by_warpspace(
     ...     subject_data['dwi'], layout, False)) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    [{'concatenated_bids_name': 'sub-1_dir-AP'
+    [{'concatenated_bids_name': 'sub-1_dir-AP',
       'dwi_series': ['.../opposite/sub-1/dwi/sub-1_dir-AP_dwi.nii.gz'],
       'dwi_series_pedir': 'j',
       'fieldmap_info': {'suffix': 'dwi',
        'dwi': ['.../opposite/sub-1/dwi/sub-1_dir-PA_dwi.nii.gz']}},
-     {'concatenated_bids_name': 'sub-1_dir-PA'
+     {'concatenated_bids_name': 'sub-1_dir-PA',
       'dwi_series': ['.../opposite/sub-1/dwi/sub-1_dir-PA_dwi.nii.gz'],
       'dwi_series_pedir': 'j-',
       'fieldmap_info': {'suffix': 'dwi',
@@ -667,132 +667,130 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
     >>> subject_data, layout = collect_data("opposite_concat", SUBJECT_ID)
     >>> pprint(group_by_warpspace(
     ...     subject_data['dwi'], layout, False)) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    [{'dwi_series': ['.../opposite_concat/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
+    [{'concatenated_bids_name': 'sub-1_dir-AP',
+      'dwi_series': ['.../opposite_concat/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
                      '.../opposite_concat/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
+      'dwi_series_pedir': 'j',
       'fieldmap_info': {'suffix': 'dwi',
        'dwi': ['.../opposite_concat/sub-1/dwi/sub-1_dir-PA_run-1_dwi.nii.gz',
-               '.../opposite_concat/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz']},
-      'dwi_series_pedir': 'j',
-      'concatenated_bids_name': 'sub-1_dir-AP'},
-     {'dwi_series': ['.../opposite_concat/sub-1/dwi/sub-1_dir-PA_run-1_dwi.nii.gz',
+               '.../opposite_concat/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz']}},
+     {'concatenated_bids_name': 'sub-1_dir-PA',
+      'dwi_series': ['.../opposite_concat/sub-1/dwi/sub-1_dir-PA_run-1_dwi.nii.gz',
                      '.../opposite_concat/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz'],
+      'dwi_series_pedir': 'j-',
       'fieldmap_info': {'suffix': 'dwi',
        'dwi': ['.../opposite_concat/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
-               '.../opposite_concat/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz']},
-      'dwi_series_pedir': 'j-',
-      'concatenated_bids_name': 'sub-1_dir-PA'}]
+               '.../opposite_concat/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz']}}]
 
     A phasediff fieldmap defines the warped group
     >>> subject_data, layout = collect_data("phasediff", SUBJECT_ID)
     >>> pprint(group_by_warpspace(
     ...     subject_data['dwi'], layout, False)) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    [{'dwi_series': ['.../phasediff/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
+    [{'concatenated_bids_name': 'sub-1_dir-AP',
+      'dwi_series': ['.../phasediff/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
                      '.../phasediff/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
+      'dwi_series_pedir': 'j',
       'fieldmap_info': {'phasediff': '.../phasediff/sub-1/fmap/sub-1_phasediff.nii.gz',
                         'magnitude1': '.../magnitude1/sub-1/fmap/sub-1_magnitude1.nii.gz',
-                        'suffix': 'phasediff'},
-      'dwi_series_pedir': 'j',
-      'concatenated_bids_name': 'sub-1_dir-AP'}]
+                        'suffix': 'phasediff'}}]
 
     Two DWI series, each with its own fieldmap/warped space
     >>> subject_data, layout = collect_data("separate_fmaps", SUBJECT_ID)
     >>> pprint(group_by_warpspace(
     ...     subject_data['dwi'], layout, False)) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    [{'dwi_series': ['.../separate_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
+    [{'concatenated_bids_name': 'sub-1_dir-AP_run-1',
+      'dwi_series': ['.../separate_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
+      'dwi_series_pedir': 'j',
       'fieldmap_info': {'suffix': 'epi',
        'epi': ['.../separate_fmaps/sub-1/fmap/sub-1_dir-PA_run-1_epi.nii.gz']},
-      'dwi_series_pedir': 'j',
-      'concatenated_bids_name': 'sub-1_dir-AP_run-1'},
-     {'dwi_series': ['.../separate_fmaps/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
+     {'concatenated_bids_name': 'sub-1_dir-AP_run-2',
+      'dwi_series': ['.../separate_fmaps/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
       'fieldmap_info': {'suffix': 'epi',
-       'epi': ['.../separate_fmaps/sub-1/fmap/sub-1_dir-PA_run-2_epi.nii.gz']},
-      'dwi_series_pedir': 'j',
-      'concatenated_bids_name': 'sub-1_dir-AP_run-2'}]
+       'epi': ['.../separate_fmaps/sub-1/fmap/sub-1_dir-PA_run-2_epi.nii.gz']}}]
 
     Same as above but ignoring fieldmaps. Data gets concatenated
     >>> subject_data, layout = collect_data("separate_fmaps", SUBJECT_ID)
     >>> pprint(group_by_warpspace(
     ...     subject_data['dwi'], layout, True)) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    [{'dwi_series': ['.../separate_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
+    [{'concatenated_bids_name': 'sub-1_dir-AP',
+      'dwi_series': ['.../separate_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
        '.../separate_fmaps/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
-      'fieldmap_info': {'suffix': None},
       'dwi_series_pedir': 'j',
-      'concatenated_bids_name': 'sub-1_dir-AP'}]
+      'fieldmap_info': {'suffix': None}}]
 
     Two DWI series, opposite PE directions, dedicated EPI fieldmap for each
     >>> subject_data, layout = collect_data("mixed_fmaps", SUBJECT_ID)
     >>> pprint(group_by_warpspace(
     ...     subject_data['dwi'], layout, False)) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    [{'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
-      'fieldmap_info': {'suffix': 'epi',
-       'epi': ['.../mixed_fmaps/sub-1/fmap/sub-1_dir-PA_run-1_epi.nii.gz']},
+    [{'concatenated_bids_name': 'sub-1_dir-AP_run-1',
+      'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
       'dwi_series_pedir': 'j',
-      'concatenated_bids_name': 'sub-1_dir-AP_run-1'},
-     {'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz'],
       'fieldmap_info': {'suffix': 'epi',
-       'epi': ['.../mixed_fmaps/sub-1/fmap/sub-1_dir-AP_run-2_epi.nii.gz']},
-       'dwi_series_pedir': 'j-',
-       'concatenated_bids_name': 'sub-1_dir-PA_run-2'}]
+       'epi': ['.../mixed_fmaps/sub-1/fmap/sub-1_dir-PA_run-1_epi.nii.gz']}},
+     {'concatenated_bids_name': 'sub-1_dir-PA_run-2',
+      'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz'],
+      'dwi_series_pedir': 'j-',
+      'fieldmap_info': {'suffix': 'epi',
+       'epi': ['.../mixed_fmaps/sub-1/fmap/sub-1_dir-AP_run-2_epi.nii.gz']}}]
 
     Same as last one, but ignore fieldmaps. The DWI series will be used for SDC instead
     >>> subject_data, layout = collect_data("mixed_fmaps", SUBJECT_ID)
     >>> pprint(group_by_warpspace(
     ...     subject_data['dwi'], layout, True)) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    [{'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
-      'fieldmap_info': {'suffix': 'dwi',
-       'dwi': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz']},
+    [{'concatenated_bids_name': 'sub-1_dir-AP_run-1',
+      'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
       'dwi_series_pedir': 'j',
-      'concatenated_bids_name': 'sub-1_dir-AP_run-1'},
-     {'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz'],
       'fieldmap_info': {'suffix': 'dwi',
-       'dwi': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz']},
+       'dwi': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz']}},
+     {'concatenated_bids_name': 'sub-1_dir-PA_run-2',
+      'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz'],
       'dwi_series_pedir': 'j-',
-      'concatenated_bids_name': 'sub-1_dir-PA_run-2'}]
-
+      'fieldmap_info': {'suffix': 'dwi',
+       'dwi': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz']}}]
 
     There is no metadata related to epi distortion: don't concatenate anything
     >>> subject_data, layout = collect_data("missing_info", SUBJECT_ID)
     >>> pprint(group_by_warpspace(
     ...     subject_data['dwi'], layout, False)) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    [{'dwi_series': ['.../missing_info/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
-      'fieldmap_info': {'suffix': None},
+    [{'concatenated_bids_name': 'sub-1_dir-AP_run-1',
+      'dwi_series': ['.../missing_info/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
       'dwi_series_pedir': '',
-      'concatenated_bids_name': 'sub-1_dir-AP_run-1'},
-     {'dwi_series': ['.../missing_info/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz'],
-      'fieldmap_info': {'suffix': None},
+      'fieldmap_info': {'suffix': None}},
+     {'concatenated_bids_name': 'sub-1_dir-PA_run-2',
+      'dwi_series': ['.../missing_info/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz'],
       'dwi_series_pedir': '',
-      'concatenated_bids_name': 'sub-1_dir-PA_run-2'}]
+      'fieldmap_info': {'suffix': None}}]
 
     A bizarre mix of PE directions and some missing data
     >>> subject_data, layout = collect_data("wtf", SUBJECT_ID)
     >>> pprint(group_by_warpspace(
     ...     subject_data['dwi'], layout, False)) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    [{'dwi_series': ['.../wtf/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
+    [{'concatenated_bids_name': 'sub-1_dir-AP',
+      'dwi_series': ['.../wtf/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
        '.../wtf/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
+      'dwi_series_pedir': 'j',
       'fieldmap_info': {'suffix': 'dwi',
        'dwi': ['.../wtf/sub-1/dwi/sub-1_dir-PA_run-1_dwi.nii.gz',
-        '.../wtf/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz']},
-      'dwi_series_pedir': 'j',
-      'concatenated_bids_name': 'sub-1_dir-AP'},
-     {'dwi_series': ['.../wtf/sub-1/dwi/sub-1_dir-IS_dwi.nii.gz'],
-      'fieldmap_info': {'suffix': None},
+        '.../wtf/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz']}},
+     {'concatenated_bids_name': 'sub-1_dir-IS',
+      'dwi_series': ['.../wtf/sub-1/dwi/sub-1_dir-IS_dwi.nii.gz'],
       'dwi_series_pedir': 'k-',
-      'concatenated_bids_name': 'sub-1_dir-IS'},
-     {'dwi_series': ['.../wtf/sub-1/dwi/sub-1_run-1_dwi.nii.gz'],
-      'fieldmap_info': {'suffix': None},
+      'fieldmap_info': {'suffix': None}},
+     {'concatenated_bids_name': 'sub-1_run-1',
+      'dwi_series': ['.../wtf/sub-1/dwi/sub-1_run-1_dwi.nii.gz'],
       'dwi_series_pedir': '',
-      'concatenated_bids_name': 'sub-1_run-1'},
-     {'dwi_series': ['.../wtf/sub-1/dwi/sub-1_run-2_dwi.nii.gz'],
-      'fieldmap_info': {'suffix': None},
+      'fieldmap_info': {'suffix': None}},
+     {'concatenated_bids_name': 'sub-1_run-2',
+      'dwi_series': ['.../wtf/sub-1/dwi/sub-1_run-2_dwi.nii.gz'],
       'dwi_series_pedir': '',
-      'concatenated_bids_name': 'sub-1_run-2'},
-     {'dwi_series': ['.../wtf/sub-1/dwi/sub-1_dir-PA_run-1_dwi.nii.gz',
+      'fieldmap_info': {'suffix': None}},
+     {'concatenated_bids_name': 'sub-1_dir-PA',
+      'dwi_series': ['.../wtf/sub-1/dwi/sub-1_dir-PA_run-1_dwi.nii.gz',
        '.../wtf/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz'],
+      'dwi_series_pedir': 'j-',
       'fieldmap_info': {'suffix': 'dwi',
        'dwi': ['.../wtf/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
-        '.../wtf/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz']},
-      'dwi_series_pedir': 'j-',
-      'concatenated_bids_name': 'sub-1_dir-PA'}]
+        '.../wtf/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz']}}]
     """
     # For doc-building
     if layout is None:
