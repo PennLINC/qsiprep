@@ -816,9 +816,6 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
     dwi_metadatas = [layout.get_metadata(dwi_file) for dwi_file in dwi_files]
     # Check for any data in dwi/ that could be used for distortion correction
     dwi_series_fieldmaps = find_fieldmaps_from_other_dwis(dwi_files, dwi_metadatas)
-    LOGGER.info(
-        f'dwi_series_fieldmaps: {pprint.pformat(dwi_series_fieldmaps, indent=2, width=120)}'
-    )
 
     # Find the best fieldmap for each file.
     best_fieldmap = {}
@@ -827,7 +824,6 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
         all_fmaps = [dwi_series_fieldmaps[dwi_file]]
         if not ignore_fieldmaps:
             fmap_fmaps = layout.get_fieldmap(dwi_file, return_list=True)
-            LOGGER.info(f'fmap_fmaps: {pprint.pformat(fmap_fmaps, indent=2, width=120)}')
             all_fmaps += fmap_fmaps
 
         # Find the highest priority fieldmap for this dwi file
@@ -837,8 +833,6 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
         # Add the dwi file to a list of those corrected by this fieldmap
         fmap_key = tuple(best_fmap[best_fmap['suffix']]) if best_fmap['suffix'] else 'None'
         grouped_by_fmap[fmap_key].append(dwi_file)
-
-    LOGGER.info(f'grouped_by_fmap: {pprint.pformat(grouped_by_fmap, indent=2, width=120)}')
 
     # Create the final groups
     dwi_groups = []
