@@ -401,7 +401,7 @@ def find_fieldmaps_from_other_dwis(dwi_files, dwi_file_metadatas):
     """
 
     scans_to_pe_dirs = {
-        fname: meta.get('PhaseEncodingDirection', 'None')
+        fname: meta.get('PhaseEncodingDirection', None)
         for fname, meta in zip(dwi_files, dwi_file_metadatas, strict=False)
     }
     pe_dirs_to_scans = defaultdict(list)
