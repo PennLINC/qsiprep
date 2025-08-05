@@ -167,7 +167,7 @@ def init_merge_and_denoise_wf(
             # Set up a strict query for a phase file based on the magnitude file.
             all_entities = layout.get_entities(metadata=False)
             # No other non-matching entities allowed
-            query = {k: Query.NONE for k in all_entities.keys()}
+            query = dict.fromkeys(all_entities.keys(), Query.NONE)
             query.update(layout.get_file(dwi_file).get_entities())
             query['part'] = 'phase'
             phase_files = layout.get(**query)

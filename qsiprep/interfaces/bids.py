@@ -137,12 +137,9 @@ class BIDSDataGrabberInputSpec(BaseInterfaceInputSpec):
 class BIDSDataGrabberOutputSpec(TraitedSpec):
     out_dict = traits.Dict(desc='output data structure')
     fmap = OutputMultiPath(desc='output fieldmaps')
-    bold = OutputMultiPath(desc='output functional images')
-    sbref = OutputMultiPath(desc='output sbrefs')
     t1w = OutputMultiPath(desc='output T1w images')
     roi = OutputMultiPath(desc='output ROI images')
     t2w = OutputMultiPath(desc='output T2w images')
-    flair = OutputMultiPath(desc='output FLAIR images')
     dwi = OutputMultiPath(desc='output DWI images')
 
 
@@ -213,7 +210,7 @@ class BIDSDataGrabber(SimpleInterface):
                 f'No DWI images found for subject sub-{self.inputs.subject_id}'
             )
 
-        for imtype in ['flair', 'fmap', 'sbref', 'roi', 'dwi']:
+        for imtype in ['fmap', 'roi', 'dwi']:
             if not bids_dict[imtype]:
                 LOGGER.warning("No '%s' images found for sub-%s", imtype, self.inputs.subject_id)
 

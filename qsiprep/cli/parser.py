@@ -315,7 +315,7 @@ def _build_parser(**kwargs):
         action='store',
         nargs='+',
         default=[],
-        choices=['fieldmaps', 'sbref', 't2w', 'flair', 'fmap-jacobian', 'phase'],
+        choices=['fieldmaps', 't2w', 'phase'],
         help='Ignore selected aspects of the input dataset to disable corresponding '
         'parts of the workflow (a space delimited list)',
     )
@@ -405,10 +405,15 @@ def _build_parser(**kwargs):
         action='store',
         choices=['final', 'none', 'legacy'],
         default='final',
-        help="Which stage to apply B1 bias correction. The default 'final' will "
-        'apply it after all the data has been resampled to its final space. '
-        "'none' will skip B1 bias correction and 'legacy' will behave consistent "
-        'with qsiprep < 0.17.',
+        help=(
+            'Which stage to apply B1 bias correction. '
+            'The default "final" will apply it after all the data has been resampled '
+            'to its final space. '
+            '"none" will skip B1 bias correction and '
+            '"legacy" will behave consistent with qsiprep < 0.17. '
+            'For prescan-normalized data, we recommend using "none", '
+            'as bias correction may introduce artifacts on normalized data.'
+        ),
     )
     g_conf.add_argument(
         '--no-b0-harmonization',

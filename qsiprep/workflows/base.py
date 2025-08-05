@@ -139,6 +139,7 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
             session_id=session_ids,
             filters=config.execution.bids_filters,
             bids_validate=False,
+            ignore=config.workflow.ignore,
         )[0]
 
     # Make sure we always go through these two checks
@@ -290,7 +291,6 @@ to workflows in *QSIPrep*'s documentation]\
             ('t1w', 'inputnode.t1w'),
             ('t2w', 'inputnode.t2w'),
             ('roi', 'inputnode.roi'),
-            ('flair', 'inputnode.flair'),
         ]),
         (summary, anat_preproc_wf, [('subject_id', 'inputnode.subject_id')]),
         (bidssrc, ds_report_summary, [

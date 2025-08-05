@@ -186,7 +186,6 @@ def init_dwi_finalize_wf(
                 'hmc_xforms',
                 'fieldwarps',
                 'output_grid',
-                'sbref_file',
                 'subjects_dir',
                 'subject_id',
                 't1_preproc',
