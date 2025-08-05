@@ -154,7 +154,6 @@ def init_qsiprep_hmcsdc_wf(
         ]),
         (dwi_hmc_wf, summarize_motion, [
             ('outputnode.final_template', 'ref_file'),
-            ('outputnode.final_template', 'source_files'),
             (('outputnode.forward_transforms', _list_squeeze), 'transform_files'),
         ]),
         (dwi_hmc_wf, slice_qc, [

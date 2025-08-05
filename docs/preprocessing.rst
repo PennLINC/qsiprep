@@ -81,8 +81,6 @@ of the file you will send to ``--bids-filter-file``. The queries in *QSIPrep* ar
 
   {
       "fmap": {"datatype": "fmap"},
-      "sbref": {"datatype": "func", "suffix": "sbref"},
-      "flair": {"datatype": "anat", "suffix": "FLAIR"},
       "t2w": {"datatype": "anat", "suffix": "T2w"},
       "t1w": {"datatype": "anat", "suffix": "T1w"},
       "roi": {"datatype": "anat", "suffix": "roi"},
@@ -142,6 +140,13 @@ default (using ``dwibiascorrect``) and can be disabled with the
 ``--dwi-no-biascorr`` option. The intensity of b=0 images is harmonized
 across scans (i.e. scaled to an average value) by default, but this can be
 turned off using ``--dwi-no-b0-harmonization``.
+
+.. tip::
+
+  If prescan normalization is enabled,
+  we recommend using ``--b1-biascorrect-stage none``.
+  This will skip B1 bias field correction,
+  which may introduce artifacts on normalized data.
 
 Together, denoising (MP-PCA or patch2self), Gibbs unringing B1 bias field
 correction and b=0 intensity normalization are referred to as *denoising* in

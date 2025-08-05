@@ -106,8 +106,6 @@ def init_anat_preproc_wf(
         List of T1-weighted structural images
     t2w
         List of T2-weighted structural images
-    flair
-        List of FLAIR images
     roi
         A mask to exclude regions during standardization (as list)
     subjects_dir
@@ -143,7 +141,7 @@ def init_anat_preproc_wf(
     workflow = Workflow(name=name)
     inputnode = pe.Node(
         niu.IdentityInterface(
-            fields=['t1w', 't2w', 'roi', 'flair', 'subjects_dir', 'subject_id'],
+            fields=['t1w', 't2w', 'roi', 'subjects_dir', 'subject_id'],
         ),
         name='inputnode',
     )

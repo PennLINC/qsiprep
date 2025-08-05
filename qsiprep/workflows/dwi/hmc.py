@@ -538,10 +538,7 @@ def init_hmc_model_iteration_wf(name='hmc_model_iter0'):
         (register_to_predicted, calculate_motion, [
             (('forward_transforms', _list_squeeze), 'transform_files'),
         ]),
-        (inputnode, calculate_motion, [
-            ('original_dwi_files', 'source_files'),
-            ('b0_mean', 'ref_file'),
-        ]),
+        (inputnode, calculate_motion, [('b0_mean', 'ref_file')]),
         (calculate_motion, outputnode, [('motion_file', 'motion_params')]),
         (register_to_predicted, post_bvec_transforms, [
             (('forward_transforms', _list_squeeze), 'affine_transforms'),
