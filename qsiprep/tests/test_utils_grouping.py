@@ -437,21 +437,26 @@ def test_group_dwi_scans_with_complex_relpaths(tmpdir):
     )
     expected = [
         {
-            'concatenated_bids_name': 'sub-01',
+            'concatenated_bids_name': 'sub-01_dir-AP',
+            'dwi_series': [
+                'sub-01_dir-AP_run-1_dwi.nii.gz',
+                'sub-01_dir-AP_run-2_dwi.nii.gz',
+            ],
+            'dwi_series_pedir': 'j-',
+            'fieldmap_info': {
+                'epi': ['sub-01_dir-PA_epi.nii.gz'],
+                'suffix': 'epi',
+            },
+        },
+        {
+            'concatenated_bids_name': 'sub-01_dir-PA',
             'dwi_series': [
                 'sub-01_dir-PA_dwi.nii.gz',
             ],
             'dwi_series_pedir': 'j',
             'fieldmap_info': {
-                'epi': [
-                    'sub-01_dir-AP_epi.nii.gz',
-                    'sub-01_dir-PA_epi.nii.gz',
-                ],
-                'rpe_series': [
-                    'sub-01_dir-AP_run-1_dwi.nii.gz',
-                    'sub-01_dir-AP_run-2_dwi.nii.gz',
-                ],
-                'suffix': 'rpe_series',
+                'epi': ['sub-01_dir-AP_epi.nii.gz'],
+                'suffix': 'epi',
             },
         },
     ]
