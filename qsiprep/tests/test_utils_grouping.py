@@ -237,14 +237,13 @@ def check_expected(subject_data, expected):
         assert subject_data is not None, 'subject_data is None.'
         assert len(subject_data) == len(expected), pformat(subject_data)
         for item, expected_item in zip(subject_data, expected, strict=False):
-            if isinstance(expected_item, list):
-                # Handle nested lists
-                assert isinstance(item, list), f'Expected list but got {type(item)}'
-                assert len(item) == len(expected_item)
-                for subitem, expected_subitem in zip(item, expected_item, strict=False):
-                    assert os.path.basename(subitem) == expected_subitem
-            else:
-                assert os.path.basename(item) == expected_item
+            check_expected(item, expected_item)
+    elif isinstance(expected, dict):
+        assert subject_data is not None, 'subject_data is None.'
+        assert len(subject_data) == len(expected), pformat(subject_data)
+        for key, value in expected.items():
+            assert key in subject_data, f'{key} not in subject_data.'
+            check_expected(subject_data[key], value)
     else:
         assert subject_data is expected
 
