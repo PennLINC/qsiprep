@@ -434,7 +434,7 @@ jobs:
           paths:
             - .coverage.unit_tests
 
-doctests:
+  doctests:
     resource_class: large
     environment:
       CIRCLE_CPUS: 4
