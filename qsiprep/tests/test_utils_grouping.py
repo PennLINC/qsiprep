@@ -408,19 +408,22 @@ def test_group_dwi_scans_with_complex_relpaths(tmpdir):
     )
     expected = [
         {
-            'concatenated_bids_name': 'sub-01_dir-AP',
+            'concatenated_bids_name': 'sub-01',
             'dwi_series': [
-                'sub-01/dwi/sub-01_dir-AP_run-1_dwi.nii.gz',
-                'sub-01/dwi/sub-01_dir-AP_run-2_dwi.nii.gz',
+                'sub-01/dwi/sub-01_dir-PA_dwi.nii.gz',
             ],
             'dwi_series_pedir': 'j',
-            'fieldmap_info': {'suffix': None},
-        },
-        {
-            'concatenated_bids_name': 'sub-01_dir-PA',
-            'dwi_series': ['sub-01/dwi/sub-01_dir-PA_dwi.nii.gz'],
-            'dwi_series_pedir': 'j-',
-            'fieldmap_info': {'suffix': None},
+            'fieldmap_info': {
+                'epi': [
+                    'sub-01/fmap/sub-01_dir-AP_epi.nii.gz',
+                    'sub-01/fmap/sub-01_dir-PA_epi.nii.gz',
+                ],
+                'rpe_series': [
+                    'sub-01/dwi/sub-01_dir-AP_run-1_dwi.nii.gz',
+                    'sub-01/dwi/sub-01_dir-AP_run-2_dwi.nii.gz',
+                ],
+                'suffix': 'rpe_series',
+            },
         },
     ]
     check_expected(scan_groups, expected)
@@ -434,11 +437,24 @@ def test_group_dwi_scans_with_complex_relpaths(tmpdir):
         concatenate_distortion_groups=False,
     )
     expected = [
-        [
-            'sub-01_dir-AP_run-1_dwi.nii.gz',
-            'sub-01_dir-AP_run-2_dwi.nii.gz',
-        ],
-        ['sub-01_dir-PA_dwi.nii.gz'],
+        {
+            'concatenated_bids_name': 'sub-01',
+            'dwi_series': [
+                'sub-01/dwi/sub-01_dir-PA_dwi.nii.gz',
+            ],
+            'dwi_series_pedir': 'j',
+            'fieldmap_info': {
+                'epi': [
+                    'sub-01/fmap/sub-01_dir-AP_epi.nii.gz',
+                    'sub-01/fmap/sub-01_dir-PA_epi.nii.gz',
+                ],
+                'rpe_series': [
+                    'sub-01/dwi/sub-01_dir-AP_run-1_dwi.nii.gz',
+                    'sub-01/dwi/sub-01_dir-AP_run-2_dwi.nii.gz',
+                ],
+                'suffix': 'rpe_series',
+            },
+        },
     ]
     check_expected(scan_groups, expected)
 
@@ -451,11 +467,24 @@ def test_group_dwi_scans_with_complex_relpaths(tmpdir):
         concatenate_distortion_groups=False,
     )
     expected = [
-        [
-            'sub-01_dir-AP_run-1_dwi.nii.gz',
-            'sub-01_dir-AP_run-2_dwi.nii.gz',
-        ],
-        ['sub-01_dir-PA_dwi.nii.gz'],
+        {
+            'concatenated_bids_name': 'sub-01',
+            'dwi_series': [
+                'sub-01/dwi/sub-01_dir-PA_dwi.nii.gz',
+            ],
+            'dwi_series_pedir': 'j',
+            'fieldmap_info': {
+                'epi': [
+                    'sub-01/fmap/sub-01_dir-AP_epi.nii.gz',
+                    'sub-01/fmap/sub-01_dir-PA_epi.nii.gz',
+                ],
+                'rpe_series': [
+                    'sub-01/dwi/sub-01_dir-AP_run-1_dwi.nii.gz',
+                    'sub-01/dwi/sub-01_dir-AP_run-2_dwi.nii.gz',
+                ],
+                'suffix': 'rpe_series',
+            },
+        },
     ]
     check_expected(scan_groups, expected)
 
@@ -468,11 +497,24 @@ def test_group_dwi_scans_with_complex_relpaths(tmpdir):
         concatenate_distortion_groups=False,
     )
     expected = [
-        [
-            'sub-01_dir-AP_run-1_dwi.nii.gz',
-            'sub-01_dir-AP_run-2_dwi.nii.gz',
-        ],
-        ['sub-01_dir-PA_dwi.nii.gz'],
+        {
+            'concatenated_bids_name': 'sub-01',
+            'dwi_series': [
+                'sub-01/dwi/sub-01_dir-PA_dwi.nii.gz',
+            ],
+            'dwi_series_pedir': 'j',
+            'fieldmap_info': {
+                'epi': [
+                    'sub-01/fmap/sub-01_dir-AP_epi.nii.gz',
+                    'sub-01/fmap/sub-01_dir-PA_epi.nii.gz',
+                ],
+                'rpe_series': [
+                    'sub-01/dwi/sub-01_dir-AP_run-1_dwi.nii.gz',
+                    'sub-01/dwi/sub-01_dir-AP_run-2_dwi.nii.gz',
+                ],
+                'suffix': 'rpe_series',
+            },
+        },
     ]
     check_expected(scan_groups, expected)
 
@@ -485,11 +527,24 @@ def test_group_dwi_scans_with_complex_relpaths(tmpdir):
         concatenate_distortion_groups=False,
     )
     expected = [
-        [
-            'sub-01_dir-AP_run-1_dwi.nii.gz',
-            'sub-01_dir-AP_run-2_dwi.nii.gz',
-        ],
-        ['sub-01_dir-PA_dwi.nii.gz'],
+        {
+            'concatenated_bids_name': 'sub-01',
+            'dwi_series': [
+                'sub-01/dwi/sub-01_dir-PA_dwi.nii.gz',
+            ],
+            'dwi_series_pedir': 'j',
+            'fieldmap_info': {
+                'epi': [
+                    'sub-01/fmap/sub-01_dir-AP_epi.nii.gz',
+                    'sub-01/fmap/sub-01_dir-PA_epi.nii.gz',
+                ],
+                'rpe_series': [
+                    'sub-01/dwi/sub-01_dir-AP_run-1_dwi.nii.gz',
+                    'sub-01/dwi/sub-01_dir-AP_run-2_dwi.nii.gz',
+                ],
+                'suffix': 'rpe_series',
+            },
+        },
     ]
     check_expected(scan_groups, expected)
 
@@ -502,10 +557,23 @@ def test_group_dwi_scans_with_complex_relpaths(tmpdir):
         concatenate_distortion_groups=True,
     )
     expected = [
-        [
-            'sub-01_dir-AP_run-1_dwi.nii.gz',
-            'sub-01_dir-AP_run-2_dwi.nii.gz',
-            'sub-01_dir-PA_dwi.nii.gz',
-        ],
+        {
+            'concatenated_bids_name': 'sub-01',
+            'dwi_series': [
+                'sub-01/dwi/sub-01_dir-PA_dwi.nii.gz',
+            ],
+            'dwi_series_pedir': 'j',
+            'fieldmap_info': {
+                'epi': [
+                    'sub-01/fmap/sub-01_dir-AP_epi.nii.gz',
+                    'sub-01/fmap/sub-01_dir-PA_epi.nii.gz',
+                ],
+                'rpe_series': [
+                    'sub-01/dwi/sub-01_dir-AP_run-1_dwi.nii.gz',
+                    'sub-01/dwi/sub-01_dir-AP_run-2_dwi.nii.gz',
+                ],
+                'suffix': 'rpe_series',
+            },
+        },
     ]
     check_expected(scan_groups, expected)
