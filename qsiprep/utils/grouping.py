@@ -631,36 +631,37 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
     No fieldmap data, a single DWI series
     >>> subject_data, layout = collect_data("easy", SUBJECT_ID)
     >>> pprint(group_by_warpspace(
-    ...     subject_data['dwi'], layout, False)) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    [{'dwi_series': ['...sub-1_dwi.nii.gz'],
-     'fieldmap_info': {'suffix': None},
+    ...     subject_data['dwi'], layout, False)
+    ... ) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    [{'concatenated_bids_name': 'sub-1',
+     'dwi_series': ['...sub-1_dwi.nii.gz'],
      'dwi_series_pedir': 'j',
-     'concatenated_bids_name': 'sub-1'}]
+     'fieldmap_info': {'suffix': None}}]
 
     Two DWIs with the same PE direction, to be concatenated
     >>> subject_data, layout = collect_data("concat1", SUBJECT_ID)
     >>> pprint(group_by_warpspace(
     ...     subject_data['dwi'], layout, False)) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    [{'dwi_series': ['.../concat1/sub-1/dwi/sub-1_run-01_dwi.nii.gz',
+    [{'concatenated_bids_name': 'sub-1',
+      'dwi_series': ['.../concat1/sub-1/dwi/sub-1_run-01_dwi.nii.gz',
                      '.../concat1/sub-1/dwi/sub-1_run-02_dwi.nii.gz'],
-     'fieldmap_info': {'suffix': None},
-     'dwi_series_pedir': 'j',
-     'concatenated_bids_name': 'sub-1'}]
+      'dwi_series_pedir': 'j',
+      'fieldmap_info': {'suffix': None}}]
 
     Two DWI series intended to SDC each other
     >>> subject_data, layout = collect_data("opposite", SUBJECT_ID)
     >>> pprint(group_by_warpspace(
     ...     subject_data['dwi'], layout, False)) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
-    [{'dwi_series': ['.../opposite/sub-1/dwi/sub-1_dir-AP_dwi.nii.gz'],
-      'fieldmap_info': {'suffix': 'dwi',
-       'dwi': ['.../opposite/sub-1/dwi/sub-1_dir-PA_dwi.nii.gz']},
+    [{'concatenated_bids_name': 'sub-1_dir-AP'
+      'dwi_series': ['.../opposite/sub-1/dwi/sub-1_dir-AP_dwi.nii.gz'],
       'dwi_series_pedir': 'j',
-      'concatenated_bids_name': 'sub-1_dir-AP'},
-     {'dwi_series': ['.../opposite/sub-1/dwi/sub-1_dir-PA_dwi.nii.gz'],
       'fieldmap_info': {'suffix': 'dwi',
-       'dwi': ['.../opposite/sub-1/dwi/sub-1_dir-AP_dwi.nii.gz']},
+       'dwi': ['.../opposite/sub-1/dwi/sub-1_dir-PA_dwi.nii.gz']}},
+     {'concatenated_bids_name': 'sub-1_dir-PA'
+      'dwi_series': ['.../opposite/sub-1/dwi/sub-1_dir-PA_dwi.nii.gz'],
       'dwi_series_pedir': 'j-',
-      'concatenated_bids_name': 'sub-1_dir-PA'}]
+      'fieldmap_info': {'suffix': 'dwi',
+       'dwi': ['.../opposite/sub-1/dwi/sub-1_dir-AP_dwi.nii.gz']}}]
 
     Multiple DWI series in two different PE directions
     >>> subject_data, layout = collect_data("opposite_concat", SUBJECT_ID)
