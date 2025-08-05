@@ -248,7 +248,24 @@ def check_expected(subject_data, expected):
 
 
 def test_group_dwi_scans_with_complex_b0fields(tmpdir):
-    """Test the group_dwi_scans function."""
+    """Test the group_dwi_scans function.
+
+    In the test dataset, we have the following::
+
+    fmap/
+        sub-01_dir-AP_epi.nii.gz
+        sub-01_dir-PA_epi.nii.gz
+    dwi/
+        sub-01_dir-AP_run-1_dwi.nii.gz
+        sub-01_dir-AP_run-2_dwi.nii.gz
+        sub-01_dir-PA_dwi.nii.gz
+
+    The first two DWI runs have different B0 field identifiers, but link to the same fieldmap.
+    The third DWI run has a different B0 field identifier, and links to a different fieldmap.
+
+    We expect the first two DWI runs to be grouped together, and the third DWI run to be grouped
+    separately, based on having the same phase encoding direction.
+    """
     bids_dir = tmpdir / 'test_group_dwi_scans_with_complex_b0fields'
     dset_yaml = os.path.join(get_test_data_path(), 'skeleton_complex_b0fields.yml')
     generate_bids_skeleton(str(bids_dir), dset_yaml)
@@ -291,10 +308,10 @@ def test_group_dwi_scans_with_complex_b0fields(tmpdir):
     )
     expected = [
         [
-            'sub-01_acq-98dir_dir-AP_run-2_dwi.nii.gz',
-            'sub-01_acq-99dir_dir-AP_run-1_dwi.nii.gz',
+            'sub-01_dir-AP_run-1_dwi.nii.gz',
+            'sub-01_dir-AP_run-2_dwi.nii.gz',
         ],
-        ['sub-01_acq-99dir_dir-AP_run-3_dwi.nii.gz'],
+        ['sub-01_dir-PA_dwi.nii.gz'],
     ]
     check_expected(scan_groups, expected)
 
@@ -308,10 +325,10 @@ def test_group_dwi_scans_with_complex_b0fields(tmpdir):
     )
     expected = [
         [
-            'sub-01_acq-98dir_dir-AP_run-2_dwi.nii.gz',
-            'sub-01_acq-99dir_dir-AP_run-1_dwi.nii.gz',
+            'sub-01_dir-AP_run-1_dwi.nii.gz',
+            'sub-01_dir-AP_run-2_dwi.nii.gz',
         ],
-        ['sub-01_acq-99dir_dir-AP_run-3_dwi.nii.gz'],
+        ['sub-01_dir-PA_dwi.nii.gz'],
     ]
     check_expected(scan_groups, expected)
 
@@ -325,10 +342,10 @@ def test_group_dwi_scans_with_complex_b0fields(tmpdir):
     )
     expected = [
         [
-            'sub-01_acq-98dir_dir-AP_run-2_dwi.nii.gz',
-            'sub-01_acq-99dir_dir-AP_run-1_dwi.nii.gz',
+            'sub-01_dir-AP_run-1_dwi.nii.gz',
+            'sub-01_dir-AP_run-2_dwi.nii.gz',
         ],
-        ['sub-01_acq-99dir_dir-AP_run-3_dwi.nii.gz'],
+        ['sub-01_dir-PA_dwi.nii.gz'],
     ]
     check_expected(scan_groups, expected)
 
@@ -342,10 +359,10 @@ def test_group_dwi_scans_with_complex_b0fields(tmpdir):
     )
     expected = [
         [
-            'sub-01_acq-98dir_dir-AP_run-2_dwi.nii.gz',
-            'sub-01_acq-99dir_dir-AP_run-1_dwi.nii.gz',
+            'sub-01_dir-AP_run-1_dwi.nii.gz',
+            'sub-01_dir-AP_run-2_dwi.nii.gz',
         ],
-        ['sub-01_acq-99dir_dir-AP_run-3_dwi.nii.gz'],
+        ['sub-01_dir-PA_dwi.nii.gz'],
     ]
     check_expected(scan_groups, expected)
 
@@ -359,16 +376,20 @@ def test_group_dwi_scans_with_complex_b0fields(tmpdir):
     )
     expected = [
         [
-            'sub-01_acq-98dir_dir-AP_run-2_dwi.nii.gz',
-            'sub-01_acq-99dir_dir-AP_run-1_dwi.nii.gz',
+            'sub-01_dir-AP_run-1_dwi.nii.gz',
+            'sub-01_dir-AP_run-2_dwi.nii.gz',
+            'sub-01_dir-PA_dwi.nii.gz',
         ],
-        ['sub-01_acq-99dir_dir-AP_run-3_dwi.nii.gz'],
     ]
     check_expected(scan_groups, expected)
 
 
 def test_group_dwi_scans_with_complex_relpaths(tmpdir):
-    """Test the group_dwi_scans function."""
+    """Test the group_dwi_scans function.
+
+    This is the same as test_group_dwi_scans_with_complex_b0fields,
+    but with IntendedFors using relative paths instead of B0Field* fields.
+    """
     bids_dir = tmpdir / 'test_group_dwi_scans_with_complex_relpaths'
     dset_yaml = os.path.join(get_test_data_path(), 'skeleton_complex_relpaths.yml')
     generate_bids_skeleton(str(bids_dir), dset_yaml)
@@ -411,10 +432,10 @@ def test_group_dwi_scans_with_complex_relpaths(tmpdir):
     )
     expected = [
         [
-            'sub-01_acq-98dir_dir-AP_run-2_dwi.nii.gz',
-            'sub-01_acq-99dir_dir-AP_run-1_dwi.nii.gz',
+            'sub-01_dir-AP_run-1_dwi.nii.gz',
+            'sub-01_dir-AP_run-2_dwi.nii.gz',
         ],
-        ['sub-01_acq-99dir_dir-AP_run-3_dwi.nii.gz'],
+        ['sub-01_dir-PA_dwi.nii.gz'],
     ]
     check_expected(scan_groups, expected)
 
@@ -428,10 +449,10 @@ def test_group_dwi_scans_with_complex_relpaths(tmpdir):
     )
     expected = [
         [
-            'sub-01_acq-98dir_dir-AP_run-2_dwi.nii.gz',
-            'sub-01_acq-99dir_dir-AP_run-1_dwi.nii.gz',
+            'sub-01_dir-AP_run-1_dwi.nii.gz',
+            'sub-01_dir-AP_run-2_dwi.nii.gz',
         ],
-        ['sub-01_acq-99dir_dir-AP_run-3_dwi.nii.gz'],
+        ['sub-01_dir-PA_dwi.nii.gz'],
     ]
     check_expected(scan_groups, expected)
 
@@ -445,10 +466,10 @@ def test_group_dwi_scans_with_complex_relpaths(tmpdir):
     )
     expected = [
         [
-            'sub-01_acq-98dir_dir-AP_run-2_dwi.nii.gz',
-            'sub-01_acq-99dir_dir-AP_run-1_dwi.nii.gz',
+            'sub-01_dir-AP_run-1_dwi.nii.gz',
+            'sub-01_dir-AP_run-2_dwi.nii.gz',
         ],
-        ['sub-01_acq-99dir_dir-AP_run-3_dwi.nii.gz'],
+        ['sub-01_dir-PA_dwi.nii.gz'],
     ]
     check_expected(scan_groups, expected)
 
@@ -462,10 +483,10 @@ def test_group_dwi_scans_with_complex_relpaths(tmpdir):
     )
     expected = [
         [
-            'sub-01_acq-98dir_dir-AP_run-2_dwi.nii.gz',
-            'sub-01_acq-99dir_dir-AP_run-1_dwi.nii.gz',
+            'sub-01_dir-AP_run-1_dwi.nii.gz',
+            'sub-01_dir-AP_run-2_dwi.nii.gz',
         ],
-        ['sub-01_acq-99dir_dir-AP_run-3_dwi.nii.gz'],
+        ['sub-01_dir-PA_dwi.nii.gz'],
     ]
     check_expected(scan_groups, expected)
 
@@ -479,9 +500,9 @@ def test_group_dwi_scans_with_complex_relpaths(tmpdir):
     )
     expected = [
         [
-            'sub-01_acq-98dir_dir-AP_run-2_dwi.nii.gz',
-            'sub-01_acq-99dir_dir-AP_run-1_dwi.nii.gz',
+            'sub-01_dir-AP_run-1_dwi.nii.gz',
+            'sub-01_dir-AP_run-2_dwi.nii.gz',
+            'sub-01_dir-PA_dwi.nii.gz',
         ],
-        ['sub-01_acq-99dir_dir-AP_run-3_dwi.nii.gz'],
     ]
     check_expected(scan_groups, expected)
