@@ -827,6 +827,7 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
         all_fmaps = [dwi_series_fieldmaps[dwi_file]]
         if not ignore_fieldmaps:
             fmap_fmaps = layout.get_fieldmap(dwi_file, return_list=True)
+            LOGGER.info(f'fmap_fmaps: {pprint.pformat(fmap_fmaps, indent=2, width=120)}')
             all_fmaps += fmap_fmaps
 
         # Find the highest priority fieldmap for this dwi file
