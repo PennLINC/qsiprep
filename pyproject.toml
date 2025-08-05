@@ -184,7 +184,7 @@ inline-quotes = "single"
 quote-style = "single"
 
 [tool.pytest.ini_options]
-addopts = '--doctest-modules -m "not integration"'
+addopts = '-m "not integration"'
 markers = [
     "integration: integration tests to skip by default",
     "dsdti_fmap: test 3",
