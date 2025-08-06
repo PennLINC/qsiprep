@@ -704,9 +704,10 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
       'dwi_series': ['.../separate_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
       'dwi_series_pedir': 'j',
       'fieldmap_info': {'epi': ['.../separate_fmaps/sub-1/fmap/sub-1_dir-PA_run-1_epi.nii.gz'],
-                        'suffix': 'epi'},
+                        'suffix': 'epi'}},
      {'concatenated_bids_name': 'sub-1_dir-AP_run-2',
       'dwi_series': ['.../separate_fmaps/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
+      'dwi_series_pedir': 'j',
       'fieldmap_info': {'epi': ['.../separate_fmaps/sub-1/fmap/sub-1_dir-PA_run-2_epi.nii.gz'],
                         'suffix': 'epi'}}]
 
