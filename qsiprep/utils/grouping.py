@@ -254,9 +254,11 @@ def get_highest_priority_fieldmap(fmap_infos):
              '/data/sub-1/fmap/sub-1_dir-AP_run-2_epi.nii.gz',
              '/data/sub-1/fmap/sub-1_dir-PA_epi.nii.gz']}
 
-    An EPI fieldmap from ``fmap/`` should be chosen over a reverse PE DWI series
-    >>> get_highest_priority_fieldmap([epi_fmap1, dwi_fmap2])
-    {'suffix': 'epi', 'epi': ['/data/sub-1/fmap/sub-1_dir-AP_run-1_epi.nii.gz']}
+    A reverse PE DWI series should be chosen over an EPI fieldmap from ``fmap/``
+    >>> get_highest_priority_fieldmap([epi_fmap1, dwi_fmap2])  # doctest: +NORMALIZE_WHITESPACE
+    {'suffix': 'dwi', 'dwi': ['/data/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
+    '/data/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz',
+    '/data/sub-1/dwi/sub-1_dir-AP_run-3_dwi.nii.gz']}
 
     """
     # Find fieldmaps
