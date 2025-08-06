@@ -523,14 +523,19 @@ def test_group_dwi_scans_with_complex_relpaths(
             [
                 {
                     'concatenated_bids_name': 'sub-01',
+                    'dwi_series': ['sub-01_dir-LR_dwi.nii.gz'],
+                    'dwi_series_pedir': 'i',
+                    'fieldmap_info': {
+                        'rpe_series': ['sub-01_dir-RL_dwi.nii.gz'],
+                        'suffix': 'rpe_series',
+                    },
+                },
+                {
+                    'concatenated_bids_name': 'sub-01',
                     'dwi_series': ['sub-01_dir-PA_dwi.nii.gz'],
                     'dwi_series_pedir': 'j',
                     'fieldmap_info': {
-                        'rpe_series': [
-                            'sub-01_dir-AP_dwi.nii.gz',
-                            'sub-01_dir-RL_dwi.nii.gz',
-                            'sub-01_dir-LR_dwi.nii.gz',
-                        ],
+                        'rpe_series': ['sub-01_dir-AP_dwi.nii.gz'],
                         'suffix': 'rpe_series',
                     },
                 },
@@ -543,17 +548,20 @@ def test_group_dwi_scans_with_complex_relpaths(
             [
                 {
                     'concatenated_bids_name': 'sub-01',
-                    'dwi_series': [
-                        'sub-01_dir-PA_dwi.nii.gz',
-                    ],
+                    'dwi_series': ['sub-01_dir-LR_dwi.nii.gz'],
+                    'dwi_series_pedir': 'i',
+                    'fieldmap_info': {
+                        'rpe_series': ['sub-01_dir-RL_dwi.nii.gz'],
+                        'suffix': 'rpe_series',
+                    },
+                },
+                {
+                    'concatenated_bids_name': 'sub-01',
+                    'dwi_series': ['sub-01_dir-PA_dwi.nii.gz'],
                     'dwi_series_pedir': 'j',
                     'fieldmap_info': {
-                        'rpe_series': [
-                            'sub-01_dir-AP_dwi.nii.gz',
-                            'sub-01_dir-RL_dwi.nii.gz',
-                            'sub-01_dir-LR_dwi.nii.gz',
-                        ],
-                        'suffix': None,
+                        'rpe_series': ['sub-01_dir-AP_dwi.nii.gz'],
+                        'suffix': 'rpe_series',
                     },
                 },
             ],
@@ -564,17 +572,28 @@ def test_group_dwi_scans_with_complex_relpaths(
             False,
             [
                 {
-                    'concatenated_bids_name': 'sub-01',
+                    'concatenated_bids_name': 'sub-01_dir-AP',
+                    'dwi_series': ['sub-01_dir-AP_dwi.nii.gz'],
+                    'dwi_series_pedir': 'j-',
+                    'fieldmap_info': {'suffix': None},
+                },
+                {
+                    'concatenated_bids_name': 'sub-01_dir-LR',
+                    'dwi_series': ['sub-01_dir-LR_dwi.nii.gz'],
+                    'dwi_series_pedir': 'i',
+                    'fieldmap_info': {'suffix': None},
+                },
+                {
+                    'concatenated_bids_name': 'sub-01_dir-PA',
                     'dwi_series': ['sub-01_dir-PA_dwi.nii.gz'],
                     'dwi_series_pedir': 'j',
-                    'fieldmap_info': {
-                        'rpe_series': [
-                            'sub-01_dir-AP_dwi.nii.gz',
-                            'sub-01_dir-RL_dwi.nii.gz',
-                            'sub-01_dir-LR_dwi.nii.gz',
-                        ],
-                        'suffix': 'rpe_series',
-                    },
+                    'fieldmap_info': {'suffix': None},
+                },
+                {
+                    'concatenated_bids_name': 'sub-01_dir-RL',
+                    'dwi_series': ['sub-01_dir-RL_dwi.nii.gz'],
+                    'dwi_series_pedir': 'i-',
+                    'fieldmap_info': {'suffix': None},
                 },
             ],
         ),
@@ -584,27 +603,27 @@ def test_group_dwi_scans_with_complex_relpaths(
             True,
             [
                 {
-                    'concatenated_bids_name': 'sub-01_dir-PA',
-                    'dwi_series': ['sub-01_dir-PA_dwi.nii.gz'],
-                    'dwi_series_pedir': 'j',
-                    'fieldmap_info': {'suffix': None},
-                },
-                {
                     'concatenated_bids_name': 'sub-01_dir-AP',
                     'dwi_series': ['sub-01_dir-AP_dwi.nii.gz'],
                     'dwi_series_pedir': 'j-',
                     'fieldmap_info': {'suffix': None},
                 },
                 {
-                    'concatenated_bids_name': 'sub-01_dir-RL',
-                    'dwi_series': ['sub-01_dir-RL_dwi.nii.gz'],
-                    'dwi_series_pedir': 'i-',
-                    'fieldmap_info': {'suffix': None},
-                },
-                {
                     'concatenated_bids_name': 'sub-01_dir-LR',
                     'dwi_series': ['sub-01_dir-LR_dwi.nii.gz'],
                     'dwi_series_pedir': 'i',
+                    'fieldmap_info': {'suffix': None},
+                },
+                {
+                    'concatenated_bids_name': 'sub-01_dir-PA',
+                    'dwi_series': ['sub-01_dir-PA_dwi.nii.gz'],
+                    'dwi_series_pedir': 'j',
+                    'fieldmap_info': {'suffix': None},
+                },
+                {
+                    'concatenated_bids_name': 'sub-01_dir-RL',
+                    'dwi_series': ['sub-01_dir-RL_dwi.nii.gz'],
+                    'dwi_series_pedir': 'i-',
                     'fieldmap_info': {'suffix': None},
                 },
             ],
