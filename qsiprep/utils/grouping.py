@@ -721,35 +721,36 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
       'dwi_series_pedir': 'j',
       'fieldmap_info': {'suffix': None}}]
 
-    Two DWI series, opposite PE directions, dedicated EPI fieldmap for each
+    Two DWI series, opposite PE directions, dedicated EPI fieldmap for each.
+    Use the DWI series instead of the fieldmaps.
     >>> subject_data, layout = collect_data("mixed_fmaps", SUBJECT_ID)
     >>> pprint(group_by_warpspace(
     ...     subject_data['dwi'], layout, False)) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
     [{'concatenated_bids_name': 'sub-1_dir-AP_run-1',
       'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
       'dwi_series_pedir': 'j',
-      'fieldmap_info': {'epi': ['.../mixed_fmaps/sub-1/fmap/sub-1_dir-PA_run-1_epi.nii.gz'],
-                        'suffix': 'epi'}},
+      'fieldmap_info': {'dwi': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz'],
+                        'suffix': 'dwi'}},
      {'concatenated_bids_name': 'sub-1_dir-PA_run-2',
       'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz'],
       'dwi_series_pedir': 'j-',
-      'fieldmap_info': {'epi': ['.../mixed_fmaps/sub-1/fmap/sub-1_dir-AP_run-2_epi.nii.gz'],
-                        'suffix': 'epi'}}]
+      'fieldmap_info': {'dwi': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
+                        'suffix': 'dwi'}}]
 
-    Same as last one, but ignore fieldmaps. The DWI series will be used for SDC instead
+    Same as last one, but ignore fieldmaps. The DWI series will still be used for SDC.
     >>> subject_data, layout = collect_data("mixed_fmaps", SUBJECT_ID)
     >>> pprint(group_by_warpspace(
     ...     subject_data['dwi'], layout, True)) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
     [{'concatenated_bids_name': 'sub-1_dir-AP_run-1',
       'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
       'dwi_series_pedir': 'j',
-      'fieldmap_info': {'suffix': 'dwi',
-       'dwi': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz']}},
+      'fieldmap_info': {'dwi': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz'],
+                        'suffix': 'dwi'}},
      {'concatenated_bids_name': 'sub-1_dir-PA_run-2',
       'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz'],
       'dwi_series_pedir': 'j-',
-      'fieldmap_info': {'suffix': 'dwi',
-       'dwi': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz']}}]
+      'fieldmap_info': {'dwi': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
+                        'suffix': 'dwi'}}]
 
     There is no metadata related to epi distortion: don't concatenate anything
     >>> subject_data, layout = collect_data("missing_info", SUBJECT_ID)
@@ -772,9 +773,9 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
       'dwi_series': ['.../wtf/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
        '.../wtf/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
       'dwi_series_pedir': 'j',
-      'fieldmap_info': {'suffix': 'dwi',
-       'dwi': ['.../wtf/sub-1/dwi/sub-1_dir-PA_run-1_dwi.nii.gz',
-        '.../wtf/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz']}},
+      'fieldmap_info': {'dwi': ['.../wtf/sub-1/dwi/sub-1_dir-PA_run-1_dwi.nii.gz',
+                                '.../wtf/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz'],
+                        'suffix': 'dwi'}},
      {'concatenated_bids_name': 'sub-1_dir-IS',
       'dwi_series': ['.../wtf/sub-1/dwi/sub-1_dir-IS_dwi.nii.gz'],
       'dwi_series_pedir': 'k-',
@@ -791,9 +792,9 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
       'dwi_series': ['.../wtf/sub-1/dwi/sub-1_dir-PA_run-1_dwi.nii.gz',
        '.../wtf/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz'],
       'dwi_series_pedir': 'j-',
-      'fieldmap_info': {'suffix': 'dwi',
-       'dwi': ['.../wtf/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
-        '.../wtf/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz']}}]
+      'fieldmap_info': {'dwi': ['.../wtf/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
+                                '.../wtf/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
+                        'suffix': 'dwi'}}]
     """
     # For doc-building
     if layout is None:
