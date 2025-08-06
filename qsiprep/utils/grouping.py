@@ -28,6 +28,7 @@ LOGGER = logging.getLogger('nipype.workflow')
 
 
 def group_dwi_scans(
+    layout,
     subject_data,
     using_fsl=False,
     combine_scans=True,
@@ -38,16 +39,24 @@ def group_dwi_scans(
 
     Parameters
     ----------
-    bids_layout : :obj:`pybids.BIDSLayout`
+    layout : :obj:`pybids.BIDSLayout`
         A PyBIDS layout
-    using_fsl : :obj:`bool`
-        Should a plus and minus series be grouped together for TOPUP/eddy?
-    combine_scans : :obj:`bool`
-        Should scan concatention happen?
-    ignore_fieldmaps : :obj:`bool`
-        Should fieldmaps be ignored?
-    concatenate_distortion_groups : :obj:`bool`
-        Will distortion groups get merged at the end of the pipeline?
+    subject_data : :obj:`dict`
+        A dictionary of BIDS data for a single subject.
+        The keys are the BIDS entities and the values are lists of BIDS filenames.
+        The ``dwi`` key is required.
+    using_fsl : :obj:`bool`, optional
+        If True, group plus and minus series together for TOPUP/eddy.
+        Default is False.
+    combine_scans : :obj:`bool`, optional
+        If True, group scans together based on their BIDS entities.
+        Default is True.
+    ignore_fieldmaps : :obj:`bool`, optional
+        If True, ignore fieldmaps.
+        Default is False.
+    concatenate_distortion_groups : :obj:`bool`, optional
+        If True, merge distortion groups at the end of the pipeline.
+        Default is False.
 
     Returns
     -------
@@ -61,14 +70,12 @@ def group_dwi_scans(
     config.loggers.workflow.info('Grouping DWI scans')
 
     # Handle the grouping of multiple dwi files within a session
-    dwi_entity_groups = get_entity_groups(config.execution.layout, subject_data, combine_scans)
+    dwi_entity_groups = get_entity_groups(layout, subject_data, combine_scans)
 
     # Split the entity groups into groups of files with compatible warp groups
     dwi_fmap_groups = []
     for dwi_entity_group in dwi_entity_groups:
-        dwi_fmap_groups.extend(
-            group_by_warpspace(dwi_entity_group, config.execution.layout, ignore_fieldmaps)
-        )
+        dwi_fmap_groups.extend(group_by_warpspace(dwi_entity_group, layout, ignore_fieldmaps))
 
     if using_fsl:
         eddy_groups, concatenation_grouping = group_for_eddy(dwi_fmap_groups)
@@ -396,7 +403,7 @@ def find_fieldmaps_from_other_dwis(dwi_files, dwi_file_metadatas):
     """
 
     scans_to_pe_dirs = {
-        fname: meta.get('PhaseEncodingDirection', 'None')
+        fname: meta.get('PhaseEncodingDirection', None)
         for fname, meta in zip(dwi_files, dwi_file_metadatas, strict=False)
     }
     pe_dirs_to_scans = defaultdict(list)

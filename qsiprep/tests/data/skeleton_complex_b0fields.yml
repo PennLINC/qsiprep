@@ -1,0 +1,55 @@
+# A dataset with a single subject with competing B0 fields:
+# Each DWI has a PEPOLAR field map, but also the DWI runs have
+# different phase encoding directions and can be used for
+# TOPUP-style distortion correction.
+'01':
+  - anat:
+      - suffix: T1w
+    fmap:
+      - dir: PA
+        suffix: epi
+        metadata:
+          B0FieldIdentifier:
+            - pepolar_ap_01
+            - pepolar_ap_02
+          PhaseEncodingDirection: j
+      - dir: AP
+        suffix: epi
+        metadata:
+          B0FieldIdentifier: pepolar_pa_01
+          PhaseEncodingDirection: j-
+    dwi:
+      - dir: AP
+        run: 1
+        suffix: dwi
+        metadata:
+          B0FieldIdentifier:
+            - pepolar_ap_01
+            - topup
+          B0FieldSource:
+            - pepolar_ap_01
+            - topup
+          MultipartID: ap_dwi
+          PhaseEncodingDirection: j-
+      - dir: AP
+        run: 2
+        suffix: dwi
+        metadata:
+          B0FieldIdentifier:
+            - pepolar_ap_02
+            - topup
+          B0FieldSource:
+            - pepolar_ap_02
+            - topup
+          MultipartID: ap_dwi
+          PhaseEncodingDirection: j-
+      - dir: PA
+        suffix: dwi
+        metadata:
+          B0FieldIdentifier:
+            - pepolar_pa_01
+            - topup
+          B0FieldSource:
+            - pepolar_pa_01
+            - topup
+          PhaseEncodingDirection: j

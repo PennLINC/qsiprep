@@ -319,7 +319,8 @@ to workflows in *QSIPrep*'s documentation]\
     # Handle the grouping of multiple dwi files within a session
     # concatenation_scheme maps the outputs to their final concatenation group
     dwi_fmap_groups, concatenation_scheme = group_dwi_scans(
-        subject_data,
+        layout=config.execution.layout,
+        subject_data=subject_data,
         using_fsl=True,
         combine_scans=not config.workflow.separate_all_dwis,
         ignore_fieldmaps='fieldmaps' in config.workflow.ignore,
