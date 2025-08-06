@@ -30,10 +30,8 @@ LOGGER = logging.getLogger('nipype.workflow')
 def group_dwi_scans(
     layout,
     subject_data,
-    using_fsl=False,
     combine_scans=True,
     ignore_fieldmaps=False,
-    concatenate_distortion_groups=False,
 ):
     """Determine which scans can be concatenated based on their acquisition parameters.
 
@@ -45,17 +43,11 @@ def group_dwi_scans(
         A dictionary of BIDS data for a single subject.
         The keys are the BIDS entities and the values are lists of BIDS filenames.
         The ``dwi`` key is required.
-    using_fsl : :obj:`bool`, optional
-        If True, group plus and minus series together for TOPUP/eddy.
-        Default is False.
     combine_scans : :obj:`bool`, optional
         If True, group scans together based on their BIDS entities.
         Default is True.
     ignore_fieldmaps : :obj:`bool`, optional
         If True, ignore fieldmaps.
-        Default is False.
-    concatenate_distortion_groups : :obj:`bool`, optional
-        If True, merge distortion groups at the end of the pipeline.
         Default is False.
 
     Returns
@@ -77,18 +69,9 @@ def group_dwi_scans(
     for dwi_entity_group in dwi_entity_groups:
         dwi_fmap_groups.extend(group_by_warpspace(dwi_entity_group, layout, ignore_fieldmaps))
 
-    if using_fsl:
-        eddy_groups, concatenation_grouping = group_for_eddy(dwi_fmap_groups)
-        config.loggers.workflow.info('Finished grouping DWI scans')
-        return eddy_groups, concatenation_grouping
-
-    if concatenate_distortion_groups:
-        concatenation_grouping = group_for_concatenation(dwi_fmap_groups)
-        config.loggers.workflow.info('Finished grouping DWI scans')
-        return dwi_fmap_groups, concatenation_grouping
-
+    eddy_groups, concatenation_grouping = group_for_eddy(dwi_fmap_groups)
     config.loggers.workflow.info('Finished grouping DWI scans')
-    return dwi_fmap_groups, {}
+    return eddy_groups, concatenation_grouping
 
 
 def get_entity_groups(layout, subject_data, combine_all_dwis):

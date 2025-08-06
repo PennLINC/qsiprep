@@ -276,10 +276,8 @@ def test_group_dwi_scans_with_complex_b0fields(tmpdir):
     scan_groups, _ = grouping.group_dwi_scans(
         layout=layout,
         subject_data=subject_data,
-        using_fsl=True,
         combine_scans=True,
         ignore_fieldmaps=False,
-        concatenate_distortion_groups=True,
     )
     expected = [
         {
@@ -303,10 +301,8 @@ def test_group_dwi_scans_with_complex_b0fields(tmpdir):
     scan_groups, _ = grouping.group_dwi_scans(
         layout=layout,
         subject_data=subject_data,
-        using_fsl=False,
         combine_scans=True,
         ignore_fieldmaps=False,
-        concatenate_distortion_groups=False,
     )
     expected = [
         [
@@ -320,10 +316,8 @@ def test_group_dwi_scans_with_complex_b0fields(tmpdir):
     scan_groups, _ = grouping.group_dwi_scans(
         layout=layout,
         subject_data=subject_data,
-        using_fsl=True,
         combine_scans=False,
         ignore_fieldmaps=False,
-        concatenate_distortion_groups=False,
     )
     expected = [
         [
@@ -337,10 +331,8 @@ def test_group_dwi_scans_with_complex_b0fields(tmpdir):
     scan_groups, _ = grouping.group_dwi_scans(
         layout=layout,
         subject_data=subject_data,
-        using_fsl=False,
         combine_scans=False,
         ignore_fieldmaps=False,
-        concatenate_distortion_groups=False,
     )
     expected = [
         [
@@ -354,10 +346,8 @@ def test_group_dwi_scans_with_complex_b0fields(tmpdir):
     scan_groups, _ = grouping.group_dwi_scans(
         layout=layout,
         subject_data=subject_data,
-        using_fsl=True,
         combine_scans=True,
         ignore_fieldmaps=True,
-        concatenate_distortion_groups=False,
     )
     expected = [
         [
@@ -371,10 +361,8 @@ def test_group_dwi_scans_with_complex_b0fields(tmpdir):
     scan_groups, _ = grouping.group_dwi_scans(
         layout=layout,
         subject_data=subject_data,
-        using_fsl=True,
         combine_scans=True,
         ignore_fieldmaps=False,
-        concatenate_distortion_groups=True,
     )
     expected = [
         [
@@ -400,10 +388,8 @@ def test_group_dwi_scans_with_complex_relpaths(tmpdir):
     scan_groups, _ = grouping.group_dwi_scans(
         layout=layout,
         subject_data=subject_data,
-        using_fsl=True,
         combine_scans=True,
         ignore_fieldmaps=False,
-        concatenate_distortion_groups=True,
     )
     expected = [
         {
@@ -430,10 +416,8 @@ def test_group_dwi_scans_with_complex_relpaths(tmpdir):
     scan_groups, _ = grouping.group_dwi_scans(
         layout=layout,
         subject_data=subject_data,
-        using_fsl=False,
         combine_scans=True,
-        ignore_fieldmaps=False,
-        concatenate_distortion_groups=False,
+        ignore_fieldmaps=True,
     )
     expected = [
         {
@@ -465,10 +449,8 @@ def test_group_dwi_scans_with_complex_relpaths(tmpdir):
     scan_groups, _ = grouping.group_dwi_scans(
         layout=layout,
         subject_data=subject_data,
-        using_fsl=True,
         combine_scans=False,
         ignore_fieldmaps=False,
-        concatenate_distortion_groups=False,
     )
     expected = [
         {
@@ -495,10 +477,8 @@ def test_group_dwi_scans_with_complex_relpaths(tmpdir):
     scan_groups, _ = grouping.group_dwi_scans(
         layout=layout,
         subject_data=subject_data,
-        using_fsl=False,
         combine_scans=False,
-        ignore_fieldmaps=False,
-        concatenate_distortion_groups=False,
+        ignore_fieldmaps=True,
     )
     expected = [
         {
@@ -526,63 +506,6 @@ def test_group_dwi_scans_with_complex_relpaths(tmpdir):
             'fieldmap_info': {
                 'epi': ['sub-01_dir-AP_epi.nii.gz'],
                 'suffix': 'epi',
-            },
-        },
-    ]
-    check_expected(scan_groups, expected)
-
-    scan_groups, _ = grouping.group_dwi_scans(
-        layout=layout,
-        subject_data=subject_data,
-        using_fsl=True,
-        combine_scans=True,
-        ignore_fieldmaps=True,
-        concatenate_distortion_groups=False,
-    )
-    expected = [
-        {
-            'concatenated_bids_name': 'sub-01_dir-AP',
-            'dwi_series': [
-                'sub-01_dir-AP_run-1_dwi.nii.gz',
-                'sub-01_dir-AP_run-2_dwi.nii.gz',
-            ],
-            'dwi_series_pedir': 'j-',
-            'fieldmap_info': {'suffix': None},
-        },
-        {
-            'concatenated_bids_name': 'sub-01_dir-PA',
-            'dwi_series': ['sub-01_dir-PA_dwi.nii.gz'],
-            'dwi_series_pedir': 'j',
-            'fieldmap_info': {'suffix': None},
-        },
-    ]
-    check_expected(scan_groups, expected)
-
-    scan_groups, _ = grouping.group_dwi_scans(
-        layout=layout,
-        subject_data=subject_data,
-        using_fsl=True,
-        combine_scans=True,
-        ignore_fieldmaps=False,
-        concatenate_distortion_groups=True,
-    )
-    expected = [
-        {
-            'concatenated_bids_name': 'sub-01',
-            'dwi_series': [
-                'sub-01_dir-PA_dwi.nii.gz',
-            ],
-            'dwi_series_pedir': 'j',
-            'fieldmap_info': {
-                'epi': [
-                    'sub-01_dir-AP_epi.nii.gz',
-                    'sub-01_dir-PA_epi.nii.gz',
-                ],
-                'rpe_series': [
-                    'sub-01_dir-AP_run-1_dwi.nii.gz',
-                    'sub-01_dir-AP_run-2_dwi.nii.gz',
-                ],
-                'suffix': 'rpe_series',
             },
         },
     ]
