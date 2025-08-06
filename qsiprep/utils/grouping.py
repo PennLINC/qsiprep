@@ -692,8 +692,8 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
       'dwi_series': ['.../phasediff/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
                      '.../phasediff/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
       'dwi_series_pedir': 'j',
-      'fieldmap_info': {'phasediff': '.../phasediff/sub-1/fmap/sub-1_phasediff.nii.gz',
-                        'magnitude1': '.../magnitude1/sub-1/fmap/sub-1_magnitude1.nii.gz',
+      'fieldmap_info': {'magnitude1': '.../magnitude1/sub-1/fmap/sub-1_magnitude1.nii.gz',
+                        'phasediff': '.../phasediff/sub-1/fmap/sub-1_phasediff.nii.gz',
                         'suffix': 'phasediff'}}]
 
     Two DWI series, each with its own fieldmap/warped space
@@ -703,12 +703,12 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
     [{'concatenated_bids_name': 'sub-1_dir-AP_run-1',
       'dwi_series': ['.../separate_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
       'dwi_series_pedir': 'j',
-      'fieldmap_info': {'suffix': 'epi',
-       'epi': ['.../separate_fmaps/sub-1/fmap/sub-1_dir-PA_run-1_epi.nii.gz']},
+      'fieldmap_info': {'epi': ['.../separate_fmaps/sub-1/fmap/sub-1_dir-PA_run-1_epi.nii.gz'],
+                        'suffix': 'epi'},
      {'concatenated_bids_name': 'sub-1_dir-AP_run-2',
       'dwi_series': ['.../separate_fmaps/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
-      'fieldmap_info': {'suffix': 'epi',
-       'epi': ['.../separate_fmaps/sub-1/fmap/sub-1_dir-PA_run-2_epi.nii.gz']}}]
+      'fieldmap_info': {'epi': ['.../separate_fmaps/sub-1/fmap/sub-1_dir-PA_run-2_epi.nii.gz'],
+                        'suffix': 'epi'}}]
 
     Same as above but ignoring fieldmaps. Data gets concatenated
     >>> subject_data, layout = collect_data("separate_fmaps", SUBJECT_ID)
@@ -716,7 +716,7 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
     ...     subject_data['dwi'], layout, True)) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
     [{'concatenated_bids_name': 'sub-1_dir-AP',
       'dwi_series': ['.../separate_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
-       '.../separate_fmaps/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
+                     '.../separate_fmaps/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
       'dwi_series_pedir': 'j',
       'fieldmap_info': {'suffix': None}}]
 
@@ -727,13 +727,13 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
     [{'concatenated_bids_name': 'sub-1_dir-AP_run-1',
       'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz'],
       'dwi_series_pedir': 'j',
-      'fieldmap_info': {'suffix': 'epi',
-       'epi': ['.../mixed_fmaps/sub-1/fmap/sub-1_dir-PA_run-1_epi.nii.gz']}},
+      'fieldmap_info': {'epi': ['.../mixed_fmaps/sub-1/fmap/sub-1_dir-PA_run-1_epi.nii.gz'],
+                        'suffix': 'epi'}},
      {'concatenated_bids_name': 'sub-1_dir-PA_run-2',
       'dwi_series': ['.../mixed_fmaps/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz'],
       'dwi_series_pedir': 'j-',
-      'fieldmap_info': {'suffix': 'epi',
-       'epi': ['.../mixed_fmaps/sub-1/fmap/sub-1_dir-AP_run-2_epi.nii.gz']}}]
+      'fieldmap_info': {'epi': ['.../mixed_fmaps/sub-1/fmap/sub-1_dir-AP_run-2_epi.nii.gz'],
+                        'suffix': 'epi'}}]
 
     Same as last one, but ignore fieldmaps. The DWI series will be used for SDC instead
     >>> subject_data, layout = collect_data("mixed_fmaps", SUBJECT_ID)
