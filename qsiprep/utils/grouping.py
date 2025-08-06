@@ -1165,41 +1165,6 @@ def group_for_eddy(all_dwi_fmap_groups):
     }
 
 
-def group_for_concatenation(all_dwi_fmap_groups):
-    """Find matched pairs of phase encoding directions that can be combined after SHORELine.
-
-    Any groups that don't have a phase encoding direction won't be correctable by SHORELine.
-
-    Parameters
-    ----------
-    all_dwi_fmap_groups : :obj:`list` of :obj:`dict`
-        A list of dictionaries describing each group of dwi files.
-
-    Returns
-    -------
-    concatenation_grouping : :obj:`dict`
-        A dictionary mapping the concatenated BIDS name of each group to the name of the
-        group that it should be concatenated with.
-    """
-    concatenation_grouping = {}
-    session_groups = _group_by_sessions(all_dwi_fmap_groups)
-    for _, dwi_fmap_groups in session_groups.items():
-        all_images = []
-        for group in dwi_fmap_groups:
-            all_images.extend(group['dwi_series'])
-        group_name = get_concatenated_bids_name(all_images)
-        # Add separate groups for non-compatible fieldmaps
-        for group in dwi_fmap_groups:
-            concatenation_grouping[group['concatenated_bids_name']] = group_name
-
-    config.loggers.workflow.info(
-        f'Found {len(concatenation_grouping)} groups of DWI series that can be concatenated:\n'
-        f'{pprint.pformat(concatenation_grouping, indent=2, width=120)}'
-    )
-
-    return concatenation_grouping
-
-
 def get_concatenated_bids_name(dwi_group):
     """Derive the output file name for a group of dwi files.
 
