@@ -673,18 +673,16 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
       'dwi_series': ['.../opposite_concat/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
                      '.../opposite_concat/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
       'dwi_series_pedir': 'j',
-      'fieldmap_info': {
-       'dwi': ['.../opposite_concat/sub-1/dwi/sub-1_dir-PA_run-1_dwi.nii.gz',
-               '.../opposite_concat/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz'],
-       'suffix': 'dwi'}},
+      'fieldmap_info': {'dwi': ['.../opposite_concat/sub-1/dwi/sub-1_dir-PA_run-1_dwi.nii.gz',
+                                '.../opposite_concat/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz'],
+                        'suffix': 'dwi'}},
      {'concatenated_bids_name': 'sub-1_dir-PA',
       'dwi_series': ['.../opposite_concat/sub-1/dwi/sub-1_dir-PA_run-1_dwi.nii.gz',
                      '.../opposite_concat/sub-1/dwi/sub-1_dir-PA_run-2_dwi.nii.gz'],
       'dwi_series_pedir': 'j-',
-      'fieldmap_info': {
-       'dwi': ['.../opposite_concat/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
-               '.../opposite_concat/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
-       'suffix': 'dwi'}}]
+      'fieldmap_info': {'dwi': ['.../opposite_concat/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
+                                '.../opposite_concat/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
+                        'suffix': 'dwi'}}]
 
     A phasediff fieldmap defines the warped group
     >>> subject_data, layout = collect_data("phasediff", SUBJECT_ID)
