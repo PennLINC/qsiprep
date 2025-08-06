@@ -374,7 +374,7 @@ def test_group_dwi_scans_with_complex_b0fields(tmpdir):
     check_expected(scan_groups, expected)
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture
 def complex_relpaths_dataset(tmpdir):
     """Create a BIDS dataset with complex relative paths for testing."""
     bids_dir = tmpdir / 'test_group_dwi_scans_with_complex_relpaths'
