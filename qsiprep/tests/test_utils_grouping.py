@@ -374,12 +374,157 @@ def test_group_dwi_scans_with_complex_b0fields(tmpdir):
     check_expected(scan_groups, expected)
 
 
-def test_group_dwi_scans_with_complex_relpaths(tmpdir):
-    """Test the group_dwi_scans function.
+@pytest.fixture
+def complex_relpaths_dataset(tmpdir):
+    """Create a BIDS dataset with complex relative paths for testing."""
+    bids_dir = tmpdir / 'test_group_dwi_scans_with_complex_relpaths'
+    dset_yaml = os.path.join(get_test_data_path(), 'skeleton_complex_relpaths.yml')
+    generate_bids_skeleton(str(bids_dir), dset_yaml)
+    layout = BIDSLayout(str(bids_dir))
+    subject_data = {'dwi': layout.get(suffix='dwi', extension='nii.gz', return_type='file')}
+    return layout, subject_data
+
+
+@pytest.mark.parametrize(
+    ('combine_scans', 'ignore_fieldmaps', 'expected'),
+    [
+        # Test case 1: combine_scans=True, ignore_fieldmaps=False
+        (
+            True,
+            False,
+            [
+                {
+                    'concatenated_bids_name': 'sub-01',
+                    'dwi_series': [
+                        'sub-01_dir-PA_dwi.nii.gz',
+                    ],
+                    'dwi_series_pedir': 'j',
+                    'fieldmap_info': {
+                        'epi': [
+                            'sub-01_dir-AP_epi.nii.gz',
+                            'sub-01_dir-PA_epi.nii.gz',
+                        ],
+                        'rpe_series': [
+                            'sub-01_dir-AP_run-1_dwi.nii.gz',
+                            'sub-01_dir-AP_run-2_dwi.nii.gz',
+                        ],
+                        'suffix': 'rpe_series',
+                    },
+                },
+            ],
+        ),
+        # Test case 2: combine_scans=True, ignore_fieldmaps=True
+        (
+            True,
+            True,
+            [
+                {
+                    'concatenated_bids_name': 'sub-01_dir-AP',
+                    'dwi_series': [
+                        'sub-01_dir-AP_run-1_dwi.nii.gz',
+                        'sub-01_dir-AP_run-2_dwi.nii.gz',
+                    ],
+                    'dwi_series_pedir': 'j-',
+                    'fieldmap_info': {
+                        'epi': ['sub-01_dir-PA_epi.nii.gz'],
+                        'suffix': 'epi',
+                    },
+                },
+                {
+                    'concatenated_bids_name': 'sub-01_dir-PA',
+                    'dwi_series': [
+                        'sub-01_dir-PA_dwi.nii.gz',
+                    ],
+                    'dwi_series_pedir': 'j',
+                    'fieldmap_info': {
+                        'epi': ['sub-01_dir-AP_epi.nii.gz'],
+                        'suffix': 'epi',
+                    },
+                },
+            ],
+        ),
+        # Test case 3: combine_scans=False, ignore_fieldmaps=False
+        (
+            False,
+            False,
+            [
+                {
+                    'concatenated_bids_name': 'sub-01',
+                    'dwi_series': [
+                        'sub-01_dir-PA_dwi.nii.gz',
+                    ],
+                    'dwi_series_pedir': 'j',
+                    'fieldmap_info': {
+                        'epi': [
+                            'sub-01_dir-AP_epi.nii.gz',
+                            'sub-01_dir-PA_epi.nii.gz',
+                        ],
+                        'rpe_series': [
+                            'sub-01_dir-AP_run-1_dwi.nii.gz',
+                            'sub-01_dir-AP_run-2_dwi.nii.gz',
+                        ],
+                        'suffix': 'rpe_series',
+                    },
+                },
+            ],
+        ),
+        # Test case 4: combine_scans=False, ignore_fieldmaps=True
+        (
+            False,
+            True,
+            [
+                {
+                    'concatenated_bids_name': 'sub-01_dir-AP_run-1',
+                    'dwi_series': ['sub-01_dir-AP_run-1_dwi.nii.gz'],
+                    'dwi_series_pedir': 'j-',
+                    'fieldmap_info': {
+                        'epi': ['sub-01_dir-PA_epi.nii.gz'],
+                        'suffix': 'epi',
+                    },
+                },
+                {
+                    'concatenated_bids_name': 'sub-01_dir-AP_run-2',
+                    'dwi_series': ['sub-01_dir-AP_run-2_dwi.nii.gz'],
+                    'dwi_series_pedir': 'j-',
+                    'fieldmap_info': {
+                        'epi': ['sub-01_dir-PA_epi.nii.gz'],
+                        'suffix': 'epi',
+                    },
+                },
+                {
+                    'concatenated_bids_name': 'sub-01_dir-PA',
+                    'dwi_series': ['sub-01_dir-PA_dwi.nii.gz'],
+                    'dwi_series_pedir': 'j',
+                    'fieldmap_info': {
+                        'epi': ['sub-01_dir-AP_epi.nii.gz'],
+                        'suffix': 'epi',
+                    },
+                },
+            ],
+        ),
+    ],
+)
+def test_group_dwi_scans_with_complex_relpaths(
+    complex_relpaths_dataset, combine_scans, ignore_fieldmaps, expected
+):
+    """Test the group_dwi_scans function with complex relative paths.
 
     This is the same as test_group_dwi_scans_with_complex_b0fields,
     but with IntendedFors using relative paths instead of B0Field* fields.
     """
+    layout, subject_data = complex_relpaths_dataset
+
+    scan_groups, _ = grouping.group_dwi_scans(
+        layout=layout,
+        subject_data=subject_data,
+        combine_scans=combine_scans,
+        ignore_fieldmaps=ignore_fieldmaps,
+    )
+    check_expected(scan_groups, expected)
+
+
+def test_group_dwi_scans_with_complex_relpaths_original(tmpdir):
+    """Original test function kept for backward compatibility."""
     bids_dir = tmpdir / 'test_group_dwi_scans_with_complex_relpaths'
     dset_yaml = os.path.join(get_test_data_path(), 'skeleton_complex_relpaths.yml')
     generate_bids_skeleton(str(bids_dir), dset_yaml)
