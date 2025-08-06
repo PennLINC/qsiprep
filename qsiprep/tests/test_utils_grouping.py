@@ -374,6 +374,7 @@ def test_group_dwi_scans_with_complex_b0fields(tmpdir):
     check_expected(scan_groups, expected)
 
 
+@pytest.fixture
 def simple_multiped_dataset(tmpdir):
     """Create a BIDS dataset with multiple DWI series."""
     bids_dir = tmpdir / 'simple_multiped_dataset'
