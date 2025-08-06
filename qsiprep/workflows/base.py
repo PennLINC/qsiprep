@@ -321,10 +321,8 @@ to workflows in *QSIPrep*'s documentation]\
     dwi_fmap_groups, concatenation_scheme = group_dwi_scans(
         layout=config.execution.layout,
         subject_data=subject_data,
-        using_fsl=True,
         combine_scans=not config.workflow.separate_all_dwis,
         ignore_fieldmaps='fieldmaps' in config.workflow.ignore,
-        concatenate_distortion_groups=merging_distortion_groups,
     )
     config.loggers.workflow.info(dwi_fmap_groups)
 
