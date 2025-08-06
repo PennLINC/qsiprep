@@ -1,0 +1,22 @@
+# A dataset with a single subject with multiple phase encoding directions.
+# No field maps, no complicated metadata fields.
+'01':
+  - anat:
+      - suffix: T1w
+    dwi:
+      - dir: AP
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j-'
+      - dir: PA
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j'
+      - dir: RL
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'i-'
+      - dir: LR
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'i'
