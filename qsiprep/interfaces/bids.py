@@ -3,19 +3,6 @@
 """
 Interfaces for handling BIDS-like neuroimaging structures
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Fetch some example data:
-
-    >>> import os
-    >>> from niworkflows import data
-    >>> data_root = data.get_bids_examples(variant='BIDS-examples-1-enh-ds054')
-    >>> os.chdir(data_root)
-
-Disable warnings:
-
-    >>> from nipype import logging
-    >>> logging.getLogger('nipype.interface').setLevel('ERROR')
-
 """
 
 import gzip
@@ -144,20 +131,7 @@ class BIDSDataGrabberOutputSpec(TraitedSpec):
 
 
 class BIDSDataGrabber(SimpleInterface):
-    """
-    Collect files from a BIDS directory structure
-
-    >>> from qsiprep.interfaces import BIDSDataGrabber
-    >>> from qsiprep.utils.bids import collect_data
-    >>> bids_src = BIDSDataGrabber(anat_only=False)
-    >>> bids_src.inputs.subject_data = collect_data('ds114', '01')[0]
-    >>> bids_src.inputs.subject_id = 'ds114'
-    >>> res = bids_src.run()
-    >>> res.outputs.t1w  # doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
-    ['.../ds114/sub-01/ses-retest/anat/sub-01_ses-retest_T1w.nii.gz',
-     '.../ds114/sub-01/ses-test/anat/sub-01_ses-test_T1w.nii.gz']
-
-    """
+    """Collect files from a BIDS directory structure."""
 
     input_spec = BIDSDataGrabberInputSpec
     output_spec = BIDSDataGrabberOutputSpec

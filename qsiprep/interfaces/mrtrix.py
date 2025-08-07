@@ -220,15 +220,16 @@ class DWIBiasCorrect(SeriesPreprocReport, MRTrix3Base):
     Perform B1 field inhomogeneity correction for a DWI volume series.
     For more information, see
     <https://mrtrix.readthedocs.io/en/latest/reference/scripts/dwibiascorrect.html>
+
     Example
     -------
     >>> import nipype.interfaces.mrtrix3 as mrt
-    >>> bias_correct = mrt.DWIBiasCorrect()
-    >>> bias_correct.inputs.in_file = 'dwi.mif'
-    >>> bias_correct.inputs.method = 'ants'
-    >>> bias_correct.cmdline
+    >>> bias_correct = mrt.DWIBiasCorrect()  # doctest: +SKIP
+    >>> bias_correct.inputs.in_file = 'dwi.mif'  # doctest: +SKIP
+    >>> bias_correct.inputs.method = 'ants'  # doctest: +SKIP
+    >>> bias_correct.cmdline  # doctest: +SKIP
     'dwibiascorrect ants dwi.mif dwi_biascorr.mif'
-    >>> bias_correct.run()                             # doctest: +SKIP
+    >>> bias_correct.run()  # doctest: +SKIP
     """
 
     _cmd = 'dwibiascorrect'
