@@ -845,7 +845,11 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps, use_drbuddi):
     # Get the metadata from every dwi file
     dwi_metadatas = [layout.get_metadata(dwi_file) for dwi_file in dwi_files]
     # Check for any data in dwi/ that could be used for distortion correction
-    dwi_series_fieldmaps = find_fieldmaps_from_other_dwis(dwi_files, dwi_metadatas)
+    dwi_series_fieldmaps = find_fieldmaps_from_other_dwis(
+        dwi_files=dwi_files,
+        dwi_file_metadatas=dwi_metadatas,
+        use_drbuddi=use_drbuddi,
+    )
 
     # Find the best fieldmap for each file.
     best_fieldmap = {}
