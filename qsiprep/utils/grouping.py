@@ -427,11 +427,10 @@ def find_fieldmaps_from_other_dwis(dwi_files, dwi_file_metadatas, use_drbuddi):
         for dwi_file in pe_dirs_to_scans.get(None, []):
             dwi_series_fieldmaps[dwi_file] = {}
 
-        for pe_dir in unique_nonnone_pe_dirs:
-            for dwi_file in pe_dirs_to_scans[pe_dir]:
-                rpe_dwis = [f for f in dwi_files if f != dwi_file]
-                rpe_dwis = [f for f in rpe_dwis if f not in pe_dirs_to_scans.get(None, [])]
-                dwi_series_fieldmaps[dwi_file] = {'suffix': 'dwi', 'dwi': sorted(rpe_dwis)}
+        dwi_file = pe_dirs_to_scans[unique_nonnone_pe_dirs[0]][0]
+        rpe_dwis = [f for f in dwi_files if f != dwi_file]
+        rpe_dwis = [f for f in rpe_dwis if f not in pe_dirs_to_scans.get(None, [])]
+        dwi_series_fieldmaps[dwi_file] = {'suffix': 'dwi', 'dwi': sorted(rpe_dwis)}
     else:
         # Group scans with reverse PEDs together
         dwi_series_fieldmaps = {}
