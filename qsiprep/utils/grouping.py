@@ -85,7 +85,7 @@ def group_dwi_scans(
             ),
         )
 
-    eddy_groups, concatenation_grouping = group_for_eddy(dwi_fmap_groups=dwi_fmap_groups)
+    eddy_groups, concatenation_grouping = group_for_eddy(all_dwi_fmap_groups=dwi_fmap_groups)
     config.loggers.workflow.info('Finished grouping DWI scans')
     return eddy_groups, concatenation_grouping
 
