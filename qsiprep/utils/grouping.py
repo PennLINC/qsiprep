@@ -416,7 +416,7 @@ def find_fieldmaps_from_other_dwis(dwi_files, dwi_file_metadatas, use_drbuddi):
         unique_pe_dirs = set(pe_dirs_to_scans.keys())
         unique_nonnone_pe_dirs = [pe_dir for pe_dir in unique_pe_dirs if pe_dir is not None]
 
-        if unique_nonnone_pe_dirs <= 1:
+        if len(unique_nonnone_pe_dirs) <= 1:
             # No compatible PED scans, return empty fieldmaps
             for dwi_file in dwi_files:
                 dwi_series_fieldmaps[dwi_file] = {}
