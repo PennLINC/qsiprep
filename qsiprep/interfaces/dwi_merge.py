@@ -709,7 +709,8 @@ def harmonize_b0s(dwi_files, bvals, b0_threshold, harmonize_b0s):
         corrections = b0_all_mean / np.array(b0_means)
         harmonized_niis = []
         for nii_img, correction in zip(dwi_niis, corrections, strict=False):
-            if np.isnan(b0_mean):
+            if np.isnan(b0_mean) or np.isnan(correction):
+                # XXX: No clue why b0_all_mean or b0_means could be NaNs here.
                 harmonized_niis.append(nii_img)
                 LOGGER.warning('An image has no b=0 images and cannot be harmonized')
             else:
