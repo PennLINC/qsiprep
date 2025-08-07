@@ -520,7 +520,7 @@ def test_group_dwi_scans_with_complex_relpaths(
         (
             True,
             False,
-            False,
+            True,
             [
                 {
                     'concatenated_bids_name': 'sub-01',
@@ -546,7 +546,7 @@ def test_group_dwi_scans_with_complex_relpaths(
         (
             True,
             True,
-            False,
+            True,
             [
                 {
                     'concatenated_bids_name': 'sub-01',
@@ -572,7 +572,7 @@ def test_group_dwi_scans_with_complex_relpaths(
         (
             False,
             False,
-            False,
+            True,
             [
                 {
                     'concatenated_bids_name': 'sub-01_dir-AP',
@@ -604,7 +604,7 @@ def test_group_dwi_scans_with_complex_relpaths(
         (
             False,
             True,
-            False,
+            True,
             [
                 {
                     'concatenated_bids_name': 'sub-01_dir-AP',
@@ -636,7 +636,7 @@ def test_group_dwi_scans_with_complex_relpaths(
         (
             True,
             False,
-            True,
+            False,
             [
                 {
                     'concatenated_bids_name': 'sub-01',
@@ -657,7 +657,7 @@ def test_group_dwi_scans_with_complex_relpaths(
         (
             True,
             True,
-            True,
+            False,
             [
                 {
                     'concatenated_bids_name': 'sub-01',
@@ -678,7 +678,7 @@ def test_group_dwi_scans_with_complex_relpaths(
         (
             False,
             False,
-            True,
+            False,
             [
                 {
                     'concatenated_bids_name': 'sub-01_dir-AP',
@@ -710,7 +710,7 @@ def test_group_dwi_scans_with_complex_relpaths(
         (
             False,
             True,
-            True,
+            False,
             [
                 {
                     'concatenated_bids_name': 'sub-01_dir-AP',
