@@ -224,6 +224,7 @@ def init_dwi_preproc_wf(
                 'raw_concatenated',
                 'carpetplot_data',
                 'sdc_scaling_images',
+                'fieldmap_hz',
             ]
         ),
         name='outputnode',

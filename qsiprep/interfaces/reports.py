@@ -547,7 +547,7 @@ class SeriesQC(SimpleInterface):
             if isdefined(self.inputs.t1_cnr_file):
                 image_qc.update(get_cnr_values(self.inputs.t1_cnr_file, self.inputs.t1_mask_file))
             if isdefined(self.inputs.t1_b0_series):
-                # Add a function to get b=0 TSNR
+                # TODO: Add a function to get b=0 TSNR
                 pass
             if isdefined(self.inputs.t1_fieldmap_hz_file):
                 image_qc.update(
@@ -572,6 +572,20 @@ def _load_qc_file(fname, prefix=''):
 
 
 def get_fieldmap_values(fieldmap_image, brain_mask):
+    """Parcellate field map and get summary values for each parcel.
+
+    Parameters
+    ----------
+    fieldmap_image : str
+        Path to the field map image.
+    brain_mask : str
+        Path to the brain mask image.
+
+    Returns
+    -------
+    freqs : dict
+        Dictionary of field map values for each parcel.
+    """
     fieldmap_img = nb.load(fieldmap_image)
     mask_img = nb.load(brain_mask)
 
