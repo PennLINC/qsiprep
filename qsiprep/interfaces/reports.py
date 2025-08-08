@@ -550,6 +550,7 @@ class SeriesQC(SimpleInterface):
                 # TODO: Add a function to get b=0 TSNR
                 pass
             if isdefined(self.inputs.t1_fieldmap_hz_file):
+                raise Exception('TEST!!!')
                 image_qc.update(
                     get_fieldmap_values(self.inputs.t1_fieldmap_hz_file, self.inputs.t1_mask_file)
                 )
