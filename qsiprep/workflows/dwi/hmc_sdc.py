@@ -82,7 +82,6 @@ def init_qsiprep_hmcsdc_wf(
                 'slice_quality',
                 'motion_params',
                 'cnr_map',
-                'fieldmap_hz',
                 'bvec_files_to_transform',
                 'dwi_files_to_transform',
                 'b0_indices',
@@ -101,7 +100,9 @@ def init_qsiprep_hmcsdc_wf(
                 'down_fa_image',
                 'down_fa_corrected_image',
                 't2w_image',
-            ]
+                # Will not be defined
+                'fieldmap_hz',
+            ],
         ),
         name='outputnode',
     )
@@ -235,7 +236,6 @@ def init_qsiprep_hmcsdc_wf(
                 ('outputnode.down_fa_corrected_image', 'down_fa_corrected_image'),
                 ('outputnode.t2w_image', 't2w_image'),
                 ('outputnode.b0_ref', 'b0_template'),
-                ('outputnode.fieldmap_hz', 'fieldmap_hz'),
             ]),
         ])  # fmt:skip
         return workflow
