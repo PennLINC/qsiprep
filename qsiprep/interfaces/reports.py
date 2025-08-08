@@ -550,7 +550,6 @@ class SeriesQC(SimpleInterface):
                 # TODO: Add a function to get b=0 TSNR
                 pass
             if isdefined(self.inputs.t1_fieldmap_hz_file):
-                raise Exception('TEST!!!')
                 image_qc.update(
                     get_fieldmap_values(self.inputs.t1_fieldmap_hz_file, self.inputs.t1_mask_file)
                 )
@@ -591,7 +590,7 @@ def get_fieldmap_values(fieldmap_image, brain_mask):
     mask_img = nb.load(brain_mask)
 
     freqs = {}
-    strategies = ['median', 'min', 'max', 'mean', 'standard_deviation']
+    strategies = ['median', 'minimum', 'maximum', 'mean', 'standard_deviation']
     for strategy in strategies:
         masker = NiftiLabelsMasker(mask_img, strategy=strategy, resampling_target='data')
         hz_values = masker.fit_transform(fieldmap_img).flatten()
