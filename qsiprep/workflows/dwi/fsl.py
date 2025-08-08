@@ -142,6 +142,7 @@ def init_fsl_hmc_wf(
                 'sdc_scaling_images',
                 # From SDC
                 'fieldmap_type',
+                'fieldmap_hz',
                 'b0_up_image',
                 'b0_up_corrected_image',
                 'b0_down_image',
@@ -333,6 +334,10 @@ def init_fsl_hmc_wf(
             fsl.ApplyXFM(apply_xfm=True, interp='nearestneighbour', output_type='NIFTI_GZ'),
             name='transform_mask_to_eddy',
         )
+        transform_fmap_to_eddy = pe.Node(
+            fsl.ApplyXFM(apply_xfm=True, interp='nearestneighbour', output_type='NIFTI_GZ'),
+            name='transform_fmap_to_eddy',
+        )
 
         workflow.connect([
             (gather_inputs, topup, [
@@ -354,9 +359,13 @@ def init_fsl_hmc_wf(
 
             # Ensure that the mask is aligned with eddy's first image
             (pre_eddy_b0_ref_wf, transform_mask_to_eddy, [('outputnode.dwi_mask', 'in_file')]),
+            (topup, transform_fmap_to_eddy, [('out_field', 'in_file')]),
             (topup_to_eddy_reg, transform_mask_to_eddy, [('out_matrix_file', 'in_matrix_file')]),
+            (topup_to_eddy_reg, transform_fmap_to_eddy, [('out_matrix_file', 'in_matrix_file')]),
             (gather_inputs, transform_mask_to_eddy, [('eddy_first', 'reference')]),
+            (gather_inputs, transform_fmap_to_eddy, [('eddy_first', 'reference')]),
             (transform_mask_to_eddy, eddy, [('out_file', 'in_mask')]),
+            (transform_fmap_to_eddy, outputnode, [('out_file', 'fieldmap_hz')]),
 
             # Save reports
             (gather_inputs, topup_summary, [('topup_report', 'summary')]),
