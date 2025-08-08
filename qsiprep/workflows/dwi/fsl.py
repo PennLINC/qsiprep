@@ -462,7 +462,6 @@ def init_fsl_hmc_wf(
                 ('outputnode.out_warp', 'to_dwi_ref_warps'),
                 ('outputnode.method', 'sdc_method'),
                 ('outputnode.b0_ref', 'b0_template'),
-                ('outputnode.fieldmap_hz', 'fieldmap_hz'),
             ]),
         ])  # fmt:skip
 

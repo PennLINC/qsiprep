@@ -38,6 +38,7 @@ def init_dwi_trans_wf(
     write_local_bvecs=False,
     write_reports=True,
     concatenate=True,
+    doing_topup=False,
 ):
     """
     This workflow samples dwi images to the ``output_grid`` in a "single shot"
@@ -86,7 +87,7 @@ def init_dwi_trans_wf(
         cnr_map
             Contrast to noise map from model-based hmc
         fieldmap_hz
-            Fieldmap in Hz
+            Fieldmap in Hz. Only written out if TOPUP was used.
         bval_files
             individual bval files
         bvec_files
@@ -149,7 +150,6 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
                 'name_source',
                 'dwi_files',
                 'cnr_map',
-                'fieldmap_hz',
                 'bval_files',
                 'bvec_files',
                 'b0_ref_image',
@@ -159,6 +159,8 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
                 'fieldwarps',
                 'output_grid',
                 'sdc_scaling_images',
+                # Only written out if TOPUP was used
+                'fieldmap_hz',
             ]
         ),
         name='inputnode',
@@ -171,13 +173,14 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
                 'dwi_ref_resampled',
                 'dwi_mask_resampled',
                 'cnr_map_resampled',
-                'fieldmap_hz_resampled',
                 'bvals',
                 'resampled_dwi_mask',
                 'rotated_bvecs',
                 'local_bvecs',
                 'b0_series',
                 'resampled_qc',
+                # Only written out if TOPUP was used
+                'fieldmap_hz_resampled',
             ]
         ),
         name='outputnode',
@@ -200,11 +203,6 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
     cnr_tfm = pe.Node(
         ants.ApplyTransforms(interpolation='LanczosWindowedSinc', float=True),
         name='cnr_tfm',
-        mem_gb=1,
-    )
-    fieldmap_hz_tfm = pe.Node(
-        ants.ApplyTransforms(interpolation='NearestNeighbor', float=True),
-        name='fieldmap_hz_tfm',
         mem_gb=1,
     )
 
@@ -248,12 +246,7 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
             ('cnr_map', 'input_image'),
             ('output_grid', 'reference_image'),
         ]),
-        (inputnode, fieldmap_hz_tfm, [
-            ('fieldmap_hz', 'input_image'),
-            ('output_grid', 'reference_image'),
-        ]),
         (cnr_tfm, outputnode, [('output_image', 'cnr_map_resampled')]),
-        (fieldmap_hz_tfm, outputnode, [('output_image', 'fieldmap_hz_resampled')]),
         (compose_transforms, dwi_transform, [('out_warps', 'transforms')]),
         (inputnode, dwi_transform, [
             ('dwi_files', 'input_image'),
@@ -263,6 +256,21 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
         (get_interpolation, dwi_transform, [('interpolation_method', 'interpolation')]),
         (dwi_transform, scale_dwis, [('output_image', 'dwi_files')]),
     ])  # fmt:skip
+
+    if doing_topup:
+        fieldmap_hz_tfm = pe.Node(
+            ants.ApplyTransforms(interpolation='NearestNeighbor', float=True),
+            name='fieldmap_hz_tfm',
+            mem_gb=1,
+        )
+        workflow.connect([
+            (inputnode, fieldmap_hz_tfm, [
+                ('fieldmap_hz', 'input_image'),
+                ('output_grid', 'reference_image'),
+            ]),
+            (compose_transforms, fieldmap_hz_tfm, [(('out_warps', _get_first), 'transforms')]),
+            (fieldmap_hz_tfm, outputnode, [('output_image', 'fieldmap_hz_resampled')]),
+        ])  # fmt:skip
 
     # If concatenation is not happening here, send the still-split images to outputs
     if not concatenate:

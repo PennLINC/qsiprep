@@ -150,7 +150,6 @@ def init_qsiprep_hmcsdc_wf(
             (('outputnode.forward_transforms', _list_squeeze), 'to_dwi_ref_affines'),
             ('outputnode.optimization_data', 'hmc_optimization_data'),
             ('outputnode.cnr_image', 'cnr_map'),
-            ('outputnode.fieldmap_hz', 'fieldmap_hz'),
             ('outputnode.final_template_mask', 'b0_template_mask'),
         ]),
         (dwi_hmc_wf, summarize_motion, [
@@ -236,6 +235,7 @@ def init_qsiprep_hmcsdc_wf(
                 ('outputnode.down_fa_corrected_image', 'down_fa_corrected_image'),
                 ('outputnode.t2w_image', 't2w_image'),
                 ('outputnode.b0_ref', 'b0_template'),
+                ('outputnode.fieldmap_hz', 'fieldmap_hz'),
             ]),
         ])  # fmt:skip
         return workflow

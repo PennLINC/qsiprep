@@ -329,7 +329,9 @@ Diffusion data preprocessing
 
         workflow.connect([
             (inputnode, fmap_unwarp_report_wf, [('t1_seg', 'inputnode.in_seg')]),
-            (hmc_wf, outputnode, [('outputnode.sdc_scaling_images', 'sdc_scaling_images')]),
+            (hmc_wf, outputnode, [
+                ('outputnode.sdc_scaling_images', 'sdc_scaling_images'),
+            ]),
             (hmc_wf, fmap_unwarp_report_wf, [
                 ('outputnode.pre_sdc_template', 'inputnode.in_pre'),
                 ('outputnode.b0_template', 'inputnode.in_post'),
@@ -339,6 +341,9 @@ Diffusion data preprocessing
             ]),
             (fmap_unwarp_report_wf, ds_report_sdc, [('outputnode.report', 'in_file')]),
         ])  # fmt:skip
+
+    if doing_topup:
+        workflow.connect([(hmc_wf, outputnode, [('outputnode.fieldmap_hz', 'fieldmap_hz')])])
 
     # DRBUDDI has some extra reports that we want to save. Make sure we get them!
     if (
@@ -484,7 +489,6 @@ Diffusion data preprocessing
             ('outputnode.bvec_files_to_transform', 'bvec_files'),
             ('outputnode.b0_template', 'b0_ref_image'),
             ('outputnode.cnr_map', 'cnr_map'),
-            ('outputnode.fieldmap_hz', 'fieldmap_hz'),
             ('outputnode.b0_template_mask', 'dwi_mask'),
             ('outputnode.to_dwi_ref_affines', 'hmc_xforms'),
             ('outputnode.to_dwi_ref_warps', 'fieldwarps'),
