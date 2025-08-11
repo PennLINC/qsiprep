@@ -467,40 +467,6 @@ def init_dwi_finalize_wf(
             ]),
         ])  # fmt:skip
 
-        ds_fieldmap_hz = pe.Node(
-            DerivativesDataSink(
-                datatype='fmap',
-                space='ACPC',
-                desc='preproc',
-                suffix='fieldmap',
-                source_file=source_file,
-                base_directory=config.execution.output_dir,
-                # Metadata
-                Units='Hz',
-            ),
-            name='ds_fieldmap_hz',
-            run_without_submitting=True,
-            mem_gb=DEFAULT_MEMORY_MIN_GB,
-        )
-        workflow.connect([(inputnode, ds_fieldmap_hz, [('fieldmap_hz', 'in_file')])])
-
-        ds_fieldmap_hz_t1 = pe.Node(
-            DerivativesDataSink(
-                datatype='fmap',
-                space='T1w',
-                desc='preproc',
-                suffix='fieldmap',
-                source_file=source_file,
-                base_directory=config.execution.output_dir,
-                # Metadata
-                Units='Hz',
-            ),
-            name='ds_fieldmap_hz_t1',
-            run_without_submitting=True,
-            mem_gb=DEFAULT_MEMORY_MIN_GB,
-        )
-        workflow.connect([(outputnode, ds_fieldmap_hz_t1, [('fieldmap_hz_t1', 'in_file')])])
-
     return workflow
 
 
