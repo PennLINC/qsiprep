@@ -118,7 +118,7 @@ def init_dwi_hmc_wf(
                 'optimization_data',
                 'final_template_brain',
                 'final_template_mask',
-            ]
+            ],
         ),
         name='outputnode',
     )
