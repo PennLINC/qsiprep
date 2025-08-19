@@ -419,10 +419,12 @@ def topup_selection_to_report(
     >>> original_files = ["sub-1_dir-AP_dwi.nii.gz"] * 30 + ["sub-1_dir-PA_dwi.nii.gz"] * 30
     >>> spec_lookup = {"sub-1_dir-AP_dwi.nii.gz": "0 1 0 0.087",
     ...                "sub-1_dir-PA_dwi.nii.gz": "0 -1 0 0.087"}
-    >>> print(topup_selection_to_report(selected_indices, original_files, spec_lookup))
-    A total of 2 distortion groups was included in the combined dwi data. Distortion \
+    >>> print(
+    ...    topup_selection_to_report(selected_indices, original_files, spec_lookup)
+    ... )  # doctest: +NORMALIZE_WHITESPACE
+    A total of 2 distortion groups were included in the combined DWI series data. Distortion \
 group '0 1 0 0.087' was represented by images 0, 15 from sub-1_dir-AP_dwi.nii.gz. \
-Distortion group '0 -1 0 0.087' was represented by images 0, 15 from sub-1_dir-PA_dwi.nii.gz. "
+Distortion group '0 -1 0 0.087' was represented by images 0, 15 from sub-1_dir-PA_dwi.nii.gz.
 
     Or
 
@@ -433,8 +435,10 @@ Distortion group '0 -1 0 0.087' was represented by images 0, 15 from sub-1_dir-P
     >>> spec_lookup = {"sub-1_dir-AP_run-1_dwi.nii.gz": "0 1 0 0.087",
     ...                "sub-1_dir-AP_run-2_dwi.nii.gz": "0 1 0 0.087",
     ...                "sub-1_dir-PA_dwi.nii.gz": "0 -1 0 0.087"}
-    >>> print(topup_selection_to_report(selected_indices, original_files, spec_lookup))
-    A total of 2 distortion groups was included in the combined dwi data. Distortion \
+    >>> print(
+    ...     topup_selection_to_report(selected_indices, original_files, spec_lookup)
+    ... )  # doctest: +NORMALIZE_WHITESPACE
+    A total of 2 distortion groups were included in the combined DWI series data. Distortion \
 group '0 1 0 0.087' was represented by image 0 from sub-1_dir-AP_run-1_dwi.nii.gz and \
 image 0 from sub-1_dir-AP_run-2_dwi.nii.gz. Distortion group '0 -1 0 0.087' was represented \
 by images 0, 15 from sub-1_dir-PA_dwi.nii.gz.
@@ -448,8 +452,10 @@ by images 0, 15 from sub-1_dir-PA_dwi.nii.gz.
     ...                "sub-1_dir-AP_run-2_dwi.nii.gz": "0 1 0 0.087",
     ...                "sub-1_dir-AP_run-3_dwi.nii.gz": "0 1 0 0.087",
     ...                "sub-1_dir-PA_dwi.nii.gz": "0 -1 0 0.087"}
-    >>> print(topup_selection_to_report(selected_indices, original_files, spec_lookup))
-    A total of 2 distortion groups was included in the combined dwi data. Distortion \
+    >>> print(
+    ...     topup_selection_to_report(selected_indices, original_files, spec_lookup)
+    ... )  # doctest: +NORMALIZE_WHITESPACE
+    A total of 2 distortion groups were included in the combined DWI series data. Distortion \
 group '0 1 0 0.087' was represented by image 0 from sub-1_dir-AP_run-1_dwi.nii.gz, \
 image 0 from sub-1_dir-AP_run-2_dwi.nii.gz and image 0 from sub-1_dir-AP_run-3_dwi.nii.gz. \
 Distortion group '0 -1 0 0.087' was represented by images 0, 15 from sub-1_dir-PA_dwi.nii.gz.
@@ -457,8 +463,10 @@ Distortion group '0 -1 0 0.087' was represented by images 0, 15 from sub-1_dir-P
     >>> selected_indices = [0, 15, 30, 45]
     >>> original_files = ["sub-1_dir-PA_dwi.nii.gz"] * 60
     >>> spec_lookup = {"sub-1_dir-PA_dwi.nii.gz": "0 -1 0 0.087"}
-    >>> print(topup_selection_to_report(selected_indices, original_files, spec_lookup))
-    A total of 1 distortion group was included in the combined dwi data. \
+    >>> print(
+    ...     topup_selection_to_report(selected_indices, original_files, spec_lookup)
+    ... )  # doctest: +NORMALIZE_WHITESPACE
+    A total of 1 distortion group was included in the combined DWI series data. \
 Distortion group '0 -1 0 0.087' was represented by images 0, 15, 30, 45 \
 from sub-1_dir-PA_dwi.nii.gz.
 
