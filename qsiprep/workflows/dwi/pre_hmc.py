@@ -252,3 +252,28 @@ def init_dwi_pre_hmc_wf(
         ])  # fmt:skip
 
     return workflow
+
+
+def sanity_check_merge(layout, files_to_merge):
+    """Check that some basic features of the to-be-merged scans are compatible.
+
+    The features checked are:
+        * The acquisition grid is the same (slices, inplane-resolution, affine)
+        * The TR, TE
+        * The MultibandAccelerationFactor
+        * The slice timings
+
+    Parameters
+    ----------
+    layout: bids.layout.BIDSLayout
+        pybids layout object
+    files_to_merge: list
+        List of files that will be merged
+
+    Returns
+    -------
+    merge_ok: bool
+        Whether the group of scans is ok to merge
+
+    """
+    metadata_lookup = {scan: layout.get_metadata(scan) for scan in files_to_merge}
