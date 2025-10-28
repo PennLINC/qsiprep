@@ -32,6 +32,7 @@ def group_dwi_scans(
     subject_data,
     combine_scans=True,
     ignore_fieldmaps=False,
+    use_drbuddi=False,
 ):
     """Determine which scans can be concatenated based on their acquisition parameters.
 
@@ -49,6 +50,10 @@ def group_dwi_scans(
     ignore_fieldmaps : :obj:`bool`, optional
         If True, ignore fieldmaps.
         Default is False.
+    use_drbuddi : :obj:`bool`, optional
+        If True, limit phase encoding direction-based grouping to reverse PED scans.
+        Otherwise, group all scans with different phase encoding directions together.
+        Default is False.
 
     Returns
     -------
@@ -62,14 +67,25 @@ def group_dwi_scans(
     config.loggers.workflow.info('Grouping DWI scans')
 
     # Handle the grouping of multiple dwi files within a session
-    dwi_entity_groups = get_entity_groups(layout, subject_data, combine_scans)
+    dwi_entity_groups = get_entity_groups(
+        layout=layout,
+        subject_data=subject_data,
+        combine_all_dwis=combine_scans,
+    )
 
     # Split the entity groups into groups of files with compatible warp groups
     dwi_fmap_groups = []
     for dwi_entity_group in dwi_entity_groups:
-        dwi_fmap_groups.extend(group_by_warpspace(dwi_entity_group, layout, ignore_fieldmaps))
+        dwi_fmap_groups.extend(
+            group_by_warpspace(
+                dwi_files=dwi_entity_group,
+                layout=layout,
+                ignore_fieldmaps=ignore_fieldmaps,
+                use_drbuddi=use_drbuddi,
+            ),
+        )
 
-    eddy_groups, concatenation_grouping = group_for_eddy(dwi_fmap_groups)
+    eddy_groups, concatenation_grouping = group_for_eddy(all_dwi_fmap_groups=dwi_fmap_groups)
     config.loggers.workflow.info('Finished grouping DWI scans')
     return eddy_groups, concatenation_grouping
 
@@ -281,7 +297,7 @@ def get_highest_priority_fieldmap(fmap_infos):
     return selected_fmap_info
 
 
-def find_fieldmaps_from_other_dwis(dwi_files, dwi_file_metadatas):
+def find_fieldmaps_from_other_dwis(dwi_files, dwi_file_metadatas, use_drbuddi):
     """Find a list of files in the dwi/ directory that can be used for distortion correction.
 
     It is common to acquire DWI scans with opposite phase encoding directions so they can be
@@ -295,6 +311,10 @@ def find_fieldmaps_from_other_dwis(dwi_files, dwi_file_metadatas):
     dwi_file_metadatas : :obj:`list` of :obj:`dict`
         A list of dictionaries containing metadata for each dwi file.
         Each dictionary should have a ``PhaseEncodingDirection`` key.
+    use_drbuddi : :obj:`bool`
+        If True, limit phase encoding direction-based grouping to reverse PED scans.
+        Otherwise, group all scans with different phase encoding directions together.
+        Default is False.
 
     Returns
     -------
@@ -392,18 +412,41 @@ def find_fieldmaps_from_other_dwis(dwi_files, dwi_file_metadatas):
         pe_dirs_to_scans[scan_dir].append(scan_name)
 
     dwi_series_fieldmaps = {}
-    for dwi_file in dwi_files:
-        dwi_series_fieldmaps[dwi_file] = {}
-        pe_dir = scans_to_pe_dirs[dwi_file]
-        # if there is no information, don't assume it's ok to combine
-        if pe_dir is None:
-            continue
+    if not use_drbuddi:
+        unique_pe_dirs = set(pe_dirs_to_scans.keys())
+        unique_nonnone_pe_dirs = [pe_dir for pe_dir in unique_pe_dirs if pe_dir is not None]
 
-        opposite_pe = pe_dir[0] if pe_dir.endswith('-') else pe_dir + '-'
-        rpe_dwis = pe_dirs_to_scans[opposite_pe]
+        if len(unique_nonnone_pe_dirs) <= 1:
+            # No compatible PED scans, return empty fieldmaps
+            for dwi_file in dwi_files:
+                dwi_series_fieldmaps[dwi_file] = {}
+            return dwi_series_fieldmaps
 
-        if rpe_dwis:
-            dwi_series_fieldmaps[dwi_file] = {'suffix': 'dwi', 'dwi': sorted(rpe_dwis)}
+        # Group all scans with different phase encoding directions together
+        # Exclude scans with no phase encoding direction
+        for dwi_file in pe_dirs_to_scans.get(None, []):
+            dwi_series_fieldmaps[dwi_file] = {}
+
+        for pe_dir in unique_nonnone_pe_dirs:
+            for dwi_file in pe_dirs_to_scans[pe_dir]:
+                rpe_dwis = [f for f in dwi_files if f != dwi_file]
+                rpe_dwis = [f for f in rpe_dwis if f not in pe_dirs_to_scans.get(None, [])]
+                dwi_series_fieldmaps[dwi_file] = {'suffix': 'dwi', 'dwi': sorted(rpe_dwis)}
+    else:
+        # Group scans with reverse PEDs together
+        dwi_series_fieldmaps = {}
+        for dwi_file in dwi_files:
+            dwi_series_fieldmaps[dwi_file] = {}
+            pe_dir = scans_to_pe_dirs[dwi_file]
+            # if there is no information, don't assume it's ok to combine
+            if pe_dir is None:
+                continue
+
+            opposite_pe = pe_dir[0] if pe_dir.endswith('-') else pe_dir + '-'
+            rpe_dwis = pe_dirs_to_scans[opposite_pe]
+
+            if rpe_dwis:
+                dwi_series_fieldmaps[dwi_file] = {'suffix': 'dwi', 'dwi': sorted(rpe_dwis)}
 
     return dwi_series_fieldmaps
 
@@ -576,7 +619,7 @@ def split_by_phase_encoding_direction(dwi_files, metadatas):
     return dwi_groups
 
 
-def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
+def group_by_warpspace(dwi_files, layout, ignore_fieldmaps, use_drbuddi):
     """Groups a session's DWI files by their acquisition parameters.
 
     DWIs are grouped by their **warped space**. Two DWI series that are
@@ -593,8 +636,12 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
     layout : :obj:`pybids.BIDSLayout`
         A representation of the BIDS tree
     ignore_fieldmaps : :obj:`bool`
-        If True, ignore any fieldmaps in the ``fmap/`` directory. Images in
-        ``dwi/`` will still be considered for SDC.
+        If True, ignore any fieldmaps in the ``fmap/`` directory.
+        Images in ``dwi/`` will still be considered for SDC.
+    use_drbuddi : :obj:`bool`
+        If True, limit phase encoding direction-based grouping to reverse PED scans.
+        Otherwise, group all scans with different phase encoding directions together.
+        Default is False.
 
     Returns
     -------
@@ -798,7 +845,11 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
     # Get the metadata from every dwi file
     dwi_metadatas = [layout.get_metadata(dwi_file) for dwi_file in dwi_files]
     # Check for any data in dwi/ that could be used for distortion correction
-    dwi_series_fieldmaps = find_fieldmaps_from_other_dwis(dwi_files, dwi_metadatas)
+    dwi_series_fieldmaps = find_fieldmaps_from_other_dwis(
+        dwi_files=dwi_files,
+        dwi_file_metadatas=dwi_metadatas,
+        use_drbuddi=use_drbuddi,
+    )
 
     # Find the best fieldmap for each file.
     best_fieldmap = {}
@@ -823,7 +874,8 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps):
         if fmap_key == 'None':
             dwi_groups.extend(
                 split_by_phase_encoding_direction(
-                    dwi_group, [layout.get_metadata(dwi_file) for dwi_file in dwi_group]
+                    dwi_group,
+                    [layout.get_metadata(dwi_file) for dwi_file in dwi_group],
                 )
             )
         else:
