@@ -302,7 +302,7 @@ def real_sym_sh_brainsuite(sh_order, theta, phi):
                 )
             )
             * _legendre(ell, np.cos(phi)).T
-            * np.exp(np.complex(0, 1) * theta * span[:, None]).T
+            * np.exp(complex(0, 1) * theta * span[:, None]).T
         )
         span2 = np.arange(2, ell + 2)
         Pell = np.column_stack(
