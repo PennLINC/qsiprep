@@ -436,12 +436,14 @@ def _build_parser(**kwargs):
         action='store',
         choices=['concat', 'average', 'none'],
         default='none',
-        help='How to combine images across distorted groups.\n'
-        ' - concatenate: append images in the 4th dimension\n '
-        ' - average: if a whole sequence was duplicated in both PE\n'
-        '            directions, average the corrected images of the same\n'
-        '            q-space coordinate\n'
-        ' - none: Default. Keep distorted groups separate',
+        help="""\
+How to combine images across distorted groups.
+ - concat: append images in the 4th dimension
+ - average: if a whole sequence was duplicated in both PE
+            directions, average the corrected images of the same
+            q-space coordinate
+ - none: Default. Keep distorted groups separate
+""",
     )
     g_conf.add_argument(
         '--anatomical-template',
