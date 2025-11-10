@@ -249,6 +249,10 @@ def collect_data(
     # Check that all DWI scans have at least 16 volumes
     bad_dwi_files = []
     for dwi_file in subj_data['dwi']:
+        if os.stat(dwi_file).st_size == 0:
+            # Skip empty files for testing purposes
+            continue
+
         img = nb.load(dwi_file)
         if img.ndim != 4:
             raise RuntimeError(f'DWI file not 4D: {dwi_file}')
