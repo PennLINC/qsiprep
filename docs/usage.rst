@@ -28,8 +28,6 @@ Command-Line Arguments
 .. argparse::
    :ref: qsiprep.cli.parser._build_parser
    :prog: qsiprep
-   :nodefault:
-   :nodefaultconst:
 
 
 ***********

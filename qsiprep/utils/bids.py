@@ -246,6 +246,26 @@ def collect_data(
         25,
         f'Collected data:\n{yaml.dump(subj_data, default_flow_style=False, indent=4)}',
     )
+    # Check that all DWI scans have at least 16 volumes
+    bad_dwi_files = []
+    for dwi_file in subj_data['dwi']:
+        if os.stat(dwi_file).st_size == 0:
+            # Skip empty files for testing purposes
+            continue
+
+        img = nb.load(dwi_file)
+        if img.ndim != 4:
+            raise RuntimeError(f'DWI file not 4D: {dwi_file}')
+        elif img.shape[3] < 16:
+            bad_dwi_files.append(dwi_file)
+
+    if bad_dwi_files:
+        config.loggers.workflow.warning(
+            f'The following DWI scans have fewer than 16 volumes: {", ".join(bad_dwi_files)}. '
+            'These are most likely short reverse-phase-encoded (RPE) scans meant for distortion '
+            'correction. If so, please organize them as EPI field maps instead. '
+            'Otherwise, you may ignore this warning.'
+        )
 
     return subj_data, layout
 
