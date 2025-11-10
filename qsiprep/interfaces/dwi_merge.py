@@ -74,10 +74,10 @@ class MergeDWIs(SimpleInterface):
         num_dwis = len(self.inputs.dwi_files)
 
         to_concat, b0_means, corrections = harmonize_b0s(
-            self.inputs.dwi_files,
-            bvals,
-            self.inputs.b0_threshold,
-            self.inputs.harmonize_b0_intensities,
+            dwi_files=self.inputs.dwi_files,
+            bvals=bvals,
+            b0_threshold=self.inputs.b0_threshold,
+            do_harmonization=self.inputs.harmonize_b0_intensities,
         )
 
         # Create a merged metadata json file for
@@ -660,7 +660,7 @@ def get_nvols(img):
     return shape[3]
 
 
-def harmonize_b0s(dwi_files, bvals, b0_threshold, harmonize_b0s):
+def harmonize_b0s(dwi_files, bvals, b0_threshold, do_harmonization):
     """Find the mean intensity of b=0 images in a dwi file and calculate corrections.
 
     Parameters
@@ -672,7 +672,7 @@ def harmonize_b0s(dwi_files, bvals, b0_threshold, harmonize_b0s):
             List of paths to bval files corresponding to the files in ``dwi_files``
         b0_threshold: int
             maximum b values for an image to be considered a b=0
-        harmonize_b0s: bool
+        do_harmonization: bool
             Apply a correction to each image so that their mean b=0 images are equal
 
     Returns
@@ -694,17 +694,20 @@ def harmonize_b0s(dwi_files, bvals, b0_threshold, harmonize_b0s):
         _bvals = np.loadtxt(bval_file)
         b0_indices = np.flatnonzero(_bvals < b0_threshold)
         if b0_indices.size == 0:
+            LOGGER.warning(f'No b<{b0_threshold} images found in {dwi_file}')
             b0_mean = np.nan
+        elif len(b0_indices) > 1:
+            # Create the mean from the b0 indices
+            b0_mean = index_img(dwi_nii, b0_indices).get_fdata().mean()
         else:
-            if len(b0_indices) > 1:
-                b0_mean = index_img(dwi_nii, b0_indices).get_fdata().mean()
-            else:
-                b0_mean = dwi_nii.get_fdata().mean()
+            # If there's only one B0, just use the mean of the entire image
+            b0_mean = dwi_nii.get_fdata().mean()
+
         b0_means.append(b0_mean)
         dwi_niis.append(dwi_nii)
 
     # Apply the b0 harmonization if requested
-    if harmonize_b0s:
+    if do_harmonization:
         b0_all_mean = np.nanmean(b0_means)
         corrections = b0_all_mean / np.array(b0_means)
         harmonized_niis = []
