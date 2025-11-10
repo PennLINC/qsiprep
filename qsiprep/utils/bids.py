@@ -256,11 +256,11 @@ def collect_data(
             bad_dwi_files.append(dwi_file)
 
     if bad_dwi_files:
-        raise RuntimeError(
+        config.loggers.workflow.warning(
             f'The following DWI scans have fewer than 16 volumes: {", ".join(bad_dwi_files)}. '
             'These are most likely short reverse-phase-encoded (RPE) scans meant for distortion '
-            'correction. '
-            'Please organize them as EPI field maps instead.'
+            'correction. If so, please organize them as EPI field maps instead. '
+            'Otherwise, you may ignore this warning.'
         )
 
     return subj_data, layout
