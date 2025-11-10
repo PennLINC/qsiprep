@@ -55,7 +55,12 @@ class MergeDWIsOutputSpec(TraitedSpec):
     out_dwi = File(desc='the merged dwi image')
     out_bval = File(desc='the merged bval file')
     out_bvec = File(desc='the merged bvec file')
-    original_images = traits.List()
+    original_images = traits.List(
+        desc=(
+            'The paths to the original images. '
+            'This will be a list with one element for each *volume* in the input images.'
+        ),
+    )
     merged_metadata = File(exists=True)
     merged_denoising_confounds = File(exists=True)
     merged_b0_ref = File(exists=True)
