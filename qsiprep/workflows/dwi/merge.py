@@ -449,7 +449,7 @@ def init_dwi_denoising_wf(
             # Configure the denoising window
             import numpy as np
 
-            dwi_denoise_window = closest_odd(int(np.cbrt(n_volumes)))
+            dwi_denoise_window = closest_odd(int(np.ceil(np.cbrt(n_volumes))))
             config.loggers.workflow.info(
                 f'Automatically using {dwi_denoise_window}, {dwi_denoise_window}, '
                 f'{dwi_denoise_window} window for dwidenoise'
@@ -752,6 +752,6 @@ def get_merged_parameter(parameter_df, parameter_name, selection_mode='all'):
 
 def closest_odd(x):
     if x % 2 == 0:
-        return x - 1
+        return x + 1
     else:
         return x
