@@ -268,7 +268,7 @@ and used as an anatomical reference throughout the workflow.
     workflow.__postdesc__ = f"""\
 Brain extraction was performed on the {config.workflow.anat_modality} image using
 SynthStrip [@synthstrip] and automated segmentation was
-performed using SynthSeg [@synthseg1, @synthseg2] from
+performed using SynthSeg [@synthseg1; @synthseg2] from
 FreeSurfer version {FS_VERSION}. """
 
     # Perform registrations
