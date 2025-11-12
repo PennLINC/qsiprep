@@ -1,7 +1,7 @@
 """Visualization utilities."""
 
 from lxml import etree
-from nilearn.plotting import plot_anat
+from nilearn import image, plotting
 from niworkflows.viz.utils import SVGNS, extract_svg, robust_set_limits, uuid4
 from svgutils.transform import SVGFigure
 
@@ -53,7 +53,8 @@ def plot_denoise(
             plot_params['title'] = None
 
         # Generate nilearn figure
-        display = plot_anat(lowb_nii, **plot_params)
+        lowb_nii = image.crop_img(lowb_nii)
+        display = plotting.plot_anat(lowb_nii, **plot_params)
         if lowb_contour is not None:
             display.add_contours(lowb_contour, linewidths=1)
 
@@ -83,7 +84,8 @@ def plot_denoise(
             highb_plot_params['title'] = None
 
         # Generate nilearn figure
-        display = plot_anat(highb_nii, **highb_plot_params)
+        highb_nii = image.crop_img(highb_nii)
+        display = plotting.plot_anat(highb_nii, **highb_plot_params)
         if highb_contour is not None:
             display.add_contours(highb_contour, linewidths=1)
 
@@ -134,7 +136,8 @@ def plot_acpc(
             plot_params['title'] = None
 
         # Generate nilearn figure
-        display = plot_anat(acpc_registered_img, **plot_params)
+        acpc_registered_img = image.crop_img(acpc_registered_img)
+        display = plotting.plot_anat(acpc_registered_img, **plot_params)
         for _coord, axis in display.axes.items():
             axis.ax.axvline(0, lw=1)
             axis.ax.axhline(0, lw=1)
