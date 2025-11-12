@@ -386,6 +386,8 @@ def plot_gradients(bvals, orig_bvecs, source_filenums, output_fname, final_bvecs
         )
         axes_list = [orig_ax]
         orig_ax.scatter(qx, qy, qz, c=source_filenums, marker='+')
+
+    fig.tight_layout()
     orig_ax.axis('off')
     orig_ax.set_title('Original Scheme')
     add_lines(orig_ax)
