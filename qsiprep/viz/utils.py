@@ -1,5 +1,6 @@
 """Visualization utilities."""
 
+import numpy as np
 from lxml import etree
 from nilearn import image, plotting
 from niworkflows.viz.utils import SVGNS, extract_svg, robust_set_limits, uuid4
@@ -44,8 +45,11 @@ def plot_denoise(
             lowb_nii.get_fdata(dtype='float32').reshape(-1), plot_params
         )
     # Plot each cut axis for low-b
-    raise Exception(lowb_nii.shape)
-    lowb_nii_cropped = image.crop_img(lowb_nii)
+    lowb_nii_data = lowb_nii.get_fdata(dtype='float32')
+    if np.all(lowb_nii_data <= 1e-8):
+        lowb_nii_cropped = lowb_nii
+    else:
+        lowb_nii_cropped = image.crop_img(lowb_nii)
 
     for i, mode in enumerate(list(order)):
         plot_params['display_mode'] = mode
@@ -78,7 +82,12 @@ def plot_denoise(
             highb_nii.get_fdata(dtype='float32').reshape(-1), highb_plot_params
         )
 
-    highb_nii_cropped = image.crop_img(highb_nii)
+    highb_nii_data = highb_nii.get_fdata(dtype='float32')
+    if np.all(highb_nii_data <= 1e-8):
+        highb_nii_cropped = highb_nii
+    else:
+        highb_nii_cropped = image.crop_img(highb_nii)
+
     for i, mode in enumerate(list(order)):
         highb_plot_params['display_mode'] = mode
         highb_plot_params['cut_coords'] = cuts[mode]
@@ -130,7 +139,12 @@ def plot_acpc(
         )
 
     # Plot each cut axis for low-b
-    acpc_registered_img_cropped = image.crop_img(acpc_registered_img)
+    acpc_registered_img_data = acpc_registered_img.get_fdata(dtype='float32')
+    if np.all(acpc_registered_img_data <= 1e-8):
+        acpc_registered_img_cropped = acpc_registered_img
+    else:
+        acpc_registered_img_cropped = image.crop_img(acpc_registered_img)
+
     for i, mode in enumerate(list(order)):
         plot_params['display_mode'] = mode
         plot_params['cut_coords'] = [-20.0, 0.0, 20.0]
