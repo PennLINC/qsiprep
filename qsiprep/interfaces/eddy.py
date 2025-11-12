@@ -276,13 +276,10 @@ class Eddy2SPMMotion(SimpleInterface):
 
 def boilerplate_from_eddy_config(eddy_config, fieldmap_type, pepolar_method):
     """Write boilerplate text based on an eddy config dict."""
-    from nipype.interfaces.fsl import Info
-
-    eddy_version = Info.version()
     doing_2stage = 'drbuddi' in pepolar_method.lower()
     ext_eddy = ExtendedEddy(**eddy_config)
     desc = [
-        f"FSL (version {eddy_version})'s eddy was used for head motion correction and "
+        f"FSL (version {ext_eddy.version})'s eddy was used for head motion correction and "
         'Eddy current correction [@anderssoneddy].'
     ]
 
