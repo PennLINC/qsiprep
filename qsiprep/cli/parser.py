@@ -51,6 +51,9 @@ def _build_parser(**kwargs):
     }
 
     class DeprecatedAction(Action):
+        def __init__(self, option_strings, dest, **kwargs):
+            super().__init__(option_strings, dest, nargs=0, **kwargs)
+
         def __call__(self, parser, namespace, values, option_string=None):
             new_opt, rem_vers = deprecations.get(self.dest, (None, None))
             msg = (
@@ -60,7 +63,9 @@ def _build_parser(**kwargs):
             if new_opt:
                 msg += f' Please use `{new_opt}` instead.'
             print(msg, file=sys.stderr)
-            delattr(namespace, self.dest)
+            # Remove the attribute if it exists (argparse may have set it)
+            if hasattr(namespace, self.dest):
+                delattr(namespace, self.dest)
 
     class ToDict(Action):
         def __call__(self, parser, namespace, values, option_string=None):
