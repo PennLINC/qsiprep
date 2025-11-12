@@ -44,6 +44,8 @@ def plot_denoise(
             lowb_nii.get_fdata(dtype='float32').reshape(-1), plot_params
         )
     # Plot each cut axis for low-b
+    lowb_nii_cropped = image.crop_img(lowb_nii)
+
     for i, mode in enumerate(list(order)):
         plot_params['display_mode'] = mode
         plot_params['cut_coords'] = cuts[mode]
@@ -53,8 +55,7 @@ def plot_denoise(
             plot_params['title'] = None
 
         # Generate nilearn figure
-        lowb_nii = image.crop_img(lowb_nii)
-        display = plotting.plot_anat(lowb_nii, **plot_params)
+        display = plotting.plot_anat(lowb_nii_cropped, **plot_params)
         if lowb_contour is not None:
             display.add_contours(lowb_contour, linewidths=1)
 
@@ -75,6 +76,8 @@ def plot_denoise(
         highb_plot_params = robust_set_limits(
             highb_nii.get_fdata(dtype='float32').reshape(-1), highb_plot_params
         )
+
+    highb_nii_cropped = image.crop_img(highb_nii)
     for i, mode in enumerate(list(order)):
         highb_plot_params['display_mode'] = mode
         highb_plot_params['cut_coords'] = cuts[mode]
@@ -84,8 +87,7 @@ def plot_denoise(
             highb_plot_params['title'] = None
 
         # Generate nilearn figure
-        highb_nii = image.crop_img(highb_nii)
-        display = plotting.plot_anat(highb_nii, **highb_plot_params)
+        display = plotting.plot_anat(highb_nii_cropped, **highb_plot_params)
         if highb_contour is not None:
             display.add_contours(highb_contour, linewidths=1)
 
@@ -127,6 +129,7 @@ def plot_acpc(
         )
 
     # Plot each cut axis for low-b
+    acpc_registered_img_cropped = image.crop_img(acpc_registered_img)
     for i, mode in enumerate(list(order)):
         plot_params['display_mode'] = mode
         plot_params['cut_coords'] = [-20.0, 0.0, 20.0]
@@ -136,8 +139,7 @@ def plot_acpc(
             plot_params['title'] = None
 
         # Generate nilearn figure
-        acpc_registered_img = image.crop_img(acpc_registered_img)
-        display = plotting.plot_anat(acpc_registered_img, **plot_params)
+        display = plotting.plot_anat(acpc_registered_img_cropped, **plot_params)
         for _coord, axis in display.axes.items():
             axis.ax.axvline(0, lw=1)
             axis.ax.axhline(0, lw=1)
