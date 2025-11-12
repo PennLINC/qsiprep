@@ -44,6 +44,7 @@ def plot_denoise(
             lowb_nii.get_fdata(dtype='float32').reshape(-1), plot_params
         )
     # Plot each cut axis for low-b
+    raise Exception(lowb_nii.shape)
     lowb_nii_cropped = image.crop_img(lowb_nii)
 
     for i, mode in enumerate(list(order)):
