@@ -18,6 +18,7 @@ from nipype.utils.filemanip import split_filename
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from niworkflows.interfaces.reportlets.registration import SimpleBeforeAfterRPT
 
+from ... import config
 from ...interfaces import DerivativesDataSink
 from ..anatomical import init_synthstrip_wf
 
@@ -141,7 +142,9 @@ def init_dwi_reference_wf(
     #     )
 
     # Use synthstrip to extract the brain
-    synthstrip_wf = init_synthstrip_wf(do_padding=True, name='synthstrip_wf')
+    synthstrip_wf = init_synthstrip_wf(
+        do_padding=True, no_csf=config.workflow.no_csf, name='synthstrip_wf'
+    )
 
     workflow.connect([
         # (inputnode, t1_mask_to_b0, [

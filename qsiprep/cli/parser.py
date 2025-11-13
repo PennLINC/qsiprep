@@ -34,7 +34,12 @@ def _build_parser(**kwargs):
 
     ``kwargs`` are passed to ``argparse.ArgumentParser`` (mainly useful for debugging).
     """
-    from argparse import Action, ArgumentDefaultsHelpFormatter, ArgumentParser
+    from argparse import (
+        Action,
+        ArgumentDefaultsHelpFormatter,
+        ArgumentParser,
+        BooleanOptionalAction,
+    )
     from functools import partial
     from pathlib import Path
 
@@ -498,6 +503,12 @@ How to combine images across distorted groups.
         type=Path,
         help='Path to FreeSurfer license key file. Get it (for free) by registering '
         'at https://surfer.nmr.mgh.harvard.edu/registration.html',
+    )
+    g_fs.add_argument(
+        '--no-csf',
+        action=BooleanOptionalAction,
+        default=False,
+        help='add the --no-csf option during SynthStrip mask creation',
     )
 
     g_moco = parser.add_argument_group('Specific options for motion correction and coregistration')
