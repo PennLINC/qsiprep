@@ -231,9 +231,9 @@ def init_dwi_preproc_wf(
     )
     workflow.__desc__ = """
 
-Diffusion data preprocessing
+#### Diffusion data preprocessing
 
-: """
+"""
 
     pre_hmc_wf = init_dwi_pre_hmc_wf(
         scan_groups=scan_groups,
