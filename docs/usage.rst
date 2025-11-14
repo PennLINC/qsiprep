@@ -70,7 +70,7 @@ Reverse phase-encoded images are a common acquisition for distortion correction.
 For a dMRI scan, this would mean acquiring one or more volumes of b=0 images with the
 opposite phase encoding direction of the main dMRI scan.
 
-Unlike Philips and GE, Siemens will not let you acquire a scan that only contains b=0 volumes,
+It can be hard to acquire a scan that only contains b=0 volumes with Siemens scanners,
 so researchers often acquire a short dMRI run with a mix of b=0 and b>0 volumes.
 QSIPrep expects these short scans to be in the fmap directory, instead of the dwi directory.
 If you acquire data like this, you should organize your data as below::
@@ -93,6 +93,9 @@ As of BIDS v1.10.0, EPI field maps can have bval and bvec files, so this organiz
 
 If you organize your short scan as a dMRI run, QSIPrep will denoise the short scan and concatenate it with the longer run,
 which is not optimal.
+
+Moreover, if you have a short scan with a mix of b=0 and b>0 volumes, and you do not include the bval and bvec files,
+QSIPrep will assume that all of the volumes are b=0, which will almost certainly produce suboptimal results.
 
 
 Complex-Valued Data
