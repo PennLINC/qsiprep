@@ -160,6 +160,7 @@ MultipartID is a metadata field that is used to identify a set of DWIs that shou
 If you want to group certain runs of dMRI data together, but not all runs (the default behavior), you should use the MultipartID field.
 
 However, please note that MultipartID may interact in unexpected ways with the IntendedFor field and the QSIPrep parameters that impact grouping (e.g., ``--distortion-group-merge``).
+Therefore, we recommend that, if you use MultipartID, you check your outputs to make sure the runs are being grouped in the manner you expect.
 
 
 ******************
