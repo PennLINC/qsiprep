@@ -103,7 +103,7 @@ and (2) retain a copy of the bval and bvec files with the part-mag entity includ
 
 QSIPrep is not compatible with real and imaginary data.
 
-Also, QSIPrep does not currently suppoorted using the inheritance principle for bval and bvec files.
+Also, QSIPrep does not currently support using the inheritance principle for bval and bvec files.
 While this is not normally a problem, since these files should not be inherited,
 it would make sense from a BIDS readability perspective to inherit the bvals and bvecs across both the magnitude and phase files.
 For example, the following organization would be perfectly BIDS-compliant::
