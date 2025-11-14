@@ -260,6 +260,7 @@ and used as an anatomical reference throughout the workflow.
     synthstrip_anat_wf = init_synthstrip_wf(
         unfatsat=config.workflow.anat_modality == 'T2w',
         name='synthstrip_anat_wf',
+        no_csf=config.workflow.no_csf,
     )
 
     # Segment the anatomical reference
@@ -492,7 +493,7 @@ image using an affine transformation in antsRegistration.
 """
     # Skull strip the anatomical reference
     synthstrip_anat_wf = init_synthstrip_wf(
-        do_padding=True, unfatsat=True, name='synthstrip_anat_wf'
+        do_padding=True, unfatsat=True, no_csf=config.workflow.no_csf, name='synthstrip_anat_wf'
     )
 
     # Perform registrations
@@ -923,7 +924,9 @@ def init_dl_prep_wf(name='dl_prep_wf') -> Workflow:
     return workflow
 
 
-def init_synthstrip_wf(do_padding=False, unfatsat=False, name='synthstrip_wf') -> Workflow:
+def init_synthstrip_wf(
+    do_padding=False, unfatsat=False, no_csf=False, name='synthstrip_wf'
+) -> Workflow:
     workflow = Workflow(name=name)
     inputnode = pe.Node(
         niu.IdentityInterface(fields=['padded_image', 'original_image']),
@@ -936,13 +939,13 @@ def init_synthstrip_wf(do_padding=False, unfatsat=False, name='synthstrip_wf') -
 
     if not config.execution.sloppy:
         synthstrip = pe.Node(
-            FixHeaderSynthStrip(),  # Threads are always fixed to 1 in the run
+            FixHeaderSynthStrip(no_csf=no_csf),  # Threads are always fixed to 1 in the run
             name='synthstrip',
             n_procs=config.nipype.omp_nthreads,
         )
     else:
         synthstrip = pe.Node(
-            MockSynthStrip(),
+            MockSynthStrip(no_csf=no_csf),
             name='mocksynthstrip',
         )
 

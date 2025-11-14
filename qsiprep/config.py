@@ -616,6 +616,8 @@ class workflow(_Config):
     use_syn_sdc = None
     """Run *fieldmap-less* susceptibility-derived distortions estimation
     in the absence of any alternatives."""
+    no_csf = False
+    """Add the --no-csf option during SynthStrip mask creation."""
 
 
 class loggers:
