@@ -670,25 +670,26 @@ def harmonize_b0s(dwi_files, bvals, b0_threshold, do_harmonization):
 
     Parameters
     ----------
-
-        dwi_files: list
-            List of paths to dwi Nifti files that will be concatenated
-        bvals: list
-            List of paths to bval files corresponding to the files in ``dwi_files``
-        b0_threshold: int
-            maximum b values for an image to be considered a b=0
-        do_harmonization: bool
-            Apply a correction to each image so that their mean b=0 images are equal
+    dwi_files: list of str
+        List of paths to dwi Nifti files that will be concatenated
+    bvals: list of str
+        List of paths to bval files corresponding to the files in ``dwi_files``
+    b0_threshold: int
+        maximum b values for an image to be considered a b=0
+    do_harmonization: bool
+        Apply a correction to each image so that their mean b=0 images are equal
 
     Returns
     -------
-        to_concat: list
-            List of NiftiImage objects to be concatenated. May have been harmonized.
-            Same length as the input ``dwi_files``.
-        corrections: list
-            The correction that would be applied to each image to harmonize their b=0's.
-            Same length as the input ``dwi_files``.
-
+    to_concat: list of NiftiImage objects
+        List of NiftiImage objects to be concatenated. May have been harmonized.
+        Same length as the input ``dwi_files``.
+    b0_means: list of floats
+        The mean b=0 intensity of each dwi series. Same length as the input ``dwi_files``.
+    corrections: list of floats
+        The correction that would be applied to each image to harmonize their b=0's.
+        Same length as the input ``dwi_files``.
+        If ``do_harmonization`` is False, this will be a list of ones.
     """
     # Load the dwi data and get the mean values from the b=0 images
     num_dwis = len(dwi_files)
@@ -701,12 +702,9 @@ def harmonize_b0s(dwi_files, bvals, b0_threshold, do_harmonization):
         if b0_indices.size == 0:
             LOGGER.warning(f'No b<{b0_threshold} images found in {dwi_file}')
             b0_mean = np.nan
-        elif len(b0_indices) > 1:
-            # Create the mean from the b0 indices
-            b0_mean = index_img(dwi_nii, b0_indices).get_fdata().mean()
         else:
-            # If there's only one B0, just use the mean of the entire image
-            b0_mean = dwi_nii.get_fdata().mean()
+            # Use the mean of the b=0 images
+            b0_mean = index_img(dwi_nii, b0_indices).get_fdata().mean()
 
         b0_means.append(b0_mean)
         dwi_niis.append(dwi_nii)
