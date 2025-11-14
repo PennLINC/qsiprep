@@ -103,11 +103,27 @@ and (2) retain a copy of the bval and bvec files with the part-mag entity includ
 
 QSIPrep is not compatible with real and imaginary data.
 
-Also, the inheritance principle is not currently supported for bval and bvec files.
+Also, QSIPrep does not currently suppoorted using the inheritance principle for bval and bvec files.
 While this is not normally a problem, since these files should not be inherited,
 it would make sense from a BIDS readability perspective to inherit the bvals and bvecs across both the magnitude and phase files.
-Unfortunately, if you do this, QSIPrep will not find the files.
-Therefore, organize your data as below::
+For example, the following organization would be perfectly BIDS-compliant::
+
+    sub-<label>/
+        ses-<label>/
+            dwi/
+                sub-<label>_ses-<label>_dwi.bval
+                sub-<label>_ses-<label>_dwi.bvec
+                sub-<label>_ses-<label>_part-mag_dwi.nii.gz
+                sub-<label>_ses-<label>_part-mag_dwi.json
+                sub-<label>_ses-<label>_part-phase_dwi.nii.gz
+                sub-<label>_ses-<label>_part-phase_dwi.json
+
+The inheritance principle ensures that the bvals and bvecs without the ``part`` entity
+apply to both the magnitude and phase files.
+
+Unfortunately, if you do this, QSIPrep will not be able to find the bvec and bval files.
+Therefore, you should organize your data as below, to make sure QSIPrep will work::
+
     sub-<label>/
         ses-<label>/
             dwi/
