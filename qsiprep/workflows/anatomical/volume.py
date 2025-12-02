@@ -583,7 +583,7 @@ def init_anat_template_wf(num_images) -> Workflow:
         workflow.__desc__ = f"""\
 A {contrast}-reference map was computed after registration of
 {num_images} {contrast} images (after INU-correction) using
-`antsRegistration` [ANTs {ANTS_VERSION}].
+`antsRegistration` [ANTs {ANTS_VERSION}; @ants].
 """.format(
             contrast=config.workflow.anat_modality,
             num_images=num_images,
@@ -807,7 +807,7 @@ a 6-DOF transform extracted from a full Affine registration to the
 
     desc += """\
 A full nonlinear registration to the template from AC-PC space was
-estimated via symmetric nonlinear registration (SyN) using antsRegistration. """
+estimated via symmetric nonlinear registration (SyN) using antsRegistration (@ants). """
     rigid_acpc_resample_anat = pe.Node(
         ants.ApplyTransforms(input_image_type=0, interpolation='LanczosWindowedSinc'),
         name='rigid_acpc_resample_anat',
