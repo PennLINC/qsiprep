@@ -63,7 +63,7 @@ Framewise displacement (FD) was computed from head-motion parameters using the
 implementation in *Nipype* [following @power_fd_dvars]. The head-motion estimates
 calculated in the correction step, including six rigid-body motion parameters
 (three translations in mm, three rotations in radians) were also included in the
-confounds file. Note that esimated motion parameters in the phase-encoding
+confounds file. Note that estimated motion parameters in the phase-encoding
 direction have high undercertainty due to the effect of a constant (mean)
 eddy-current field. Additional slice-level quality metrics (eddy standard
 deviations) were included in the confounds file along with the original gradient
