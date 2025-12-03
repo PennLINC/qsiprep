@@ -338,8 +338,8 @@ def _build_parser(**kwargs):
     )
     g_conf.add_argument(
         '--subject-anatomical-reference',
-        choices=['first-alphabetically', 'unbiased', 'sessionwise'],
-        default='first-alphabetically',
+        choices=['first-lex', 'unbiased', 'sessionwise'],
+        default='first-lex',
         help='How to define subject-specific anatomical space. '
         'sessionwise will produce one anatomical space per session. '
         'The others combine anatomical data across sessions to define '

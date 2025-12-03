@@ -71,7 +71,7 @@ def generate_reports(
 
     Parameters
     ----------
-    output_level {"sessionwise", "unbiased", "first-alphabetically"}
+    output_level {"sessionwise", "unbiased", "first-lex"}
     """
     errors = []
     for subject_label, session_list in processing_list:
