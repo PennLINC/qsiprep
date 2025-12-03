@@ -635,7 +635,9 @@ Intensity non-uniformity (INU) correction was applied to the {contrast}
 image using ANTs' (ANTs version {ANTS_VERSION}; @ants) _N4BiasFieldCorrection_ (@n4)
 algorithm with the following parameters: 50 iterations of convergence
 at each level, a convergence threshold of 0.0000001, a shrink factor of 4,
-and a B-spline fitting distance of 200 voxels.
+and a B-spline fitting distance of 200 voxels. This imaged served as the
+anatomical reference for subsequent steps.
+\n\n
         """.format(
             contrast=config.workflow.anat_modality,
             ANTS_VERSION=BrainExtraction().version or '<ver>',
@@ -689,14 +691,17 @@ of 200 voxels.
 The INU-corrected {config.workflow.anat_modality} images were
 then aligned using a rigid-body transformation to the first
 image (alphabetically) as the reference using rigid body registration
-in ANTs (@ants), and merged to create a single {config.workflow.anat_modality} template.
+in ANTs (@ants), and merged to create a single {config.workflow.anat_modality}
+reference image.
+\n\n
         """
     else:
         desc += f"""\
 The INU-corrected {config.workflow.anat_modality} images were
 then aligned using a rigid-body transformation to an iteratively refined
 template using rigid body registration in ANTs (@ants), and merged to create
-a single {config.workflow.anat_modality} template.
+a single {config.workflow.anat_modality} reference image.
+\n\n
         """
 
     anat_merge_wf = init_b0_hmc_wf(
