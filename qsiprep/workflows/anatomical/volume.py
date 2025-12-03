@@ -229,26 +229,11 @@ def init_anat_preproc_wf(
         workflow.add_nodes([inputnode])
         return workflow
 
-    contrast = config.workflow.anat_modality[:-1]
     desc = """
 
 #### Anatomical data preprocessing
 
 """
-    desc += (
-        f"""\
-A total of {num_anat_images} {contrast}-weighted ({contrast}w) images were found within the input
-BIDS dataset.
-All of them were corrected for intensity non-uniformity (INU)
-using `N4BiasFieldCorrection` [@n4, ANTs {ANTS_VERSION}].
-"""
-        if num_anat_images > 1
-        else f"""\
-The {contrast}-weighted ({contrast}w) image was corrected for intensity non-uniformity (INU)
-using `N4BiasFieldCorrection` [@n4, ANTs {ANTS_VERSION}],
-and used as an anatomical reference throughout the workflow.
-"""
-    )
 
     # Ensure there is 1 and only 1 anatomical reference
     anat_reference_wf = init_anat_template_wf(num_images=num_anat_images)
@@ -587,6 +572,15 @@ A {contrast}-reference map was computed after registration of
 """.format(
             contrast=config.workflow.anat_modality,
             num_images=num_images,
+            ants_ver=BrainExtraction().version or '<ver>',
+        )
+    else:
+        workflow.__desc__ = f"""\
+The {contrast}-weighted ({contrast}) image was corrected for intensity non-uniformity (INU)
+using `N4BiasFieldCorrection` [@n4, ANTs {ANTS_VERSION}],
+and used as an anatomical reference throughout the workflow.
+""".format(
+            contrast=config.workflow.anat_modality,
             ants_ver=BrainExtraction().version or '<ver>',
         )
 
