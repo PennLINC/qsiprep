@@ -705,7 +705,7 @@ PEPOLAR (TOPUP) Distortion Correction
 
 When images with different phase encoding directions are available, either
 dedicated fieldmaps (in the ``fmap/`` directory) or DWI series
-(in the ``dwi/`` directory), example b=0 images can be
+(in the ``dwi/`` directory), example b=0 images can be used for distortion correction.
 
 .. workflow::
     :graph2use: colored
