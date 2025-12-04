@@ -278,6 +278,7 @@ def write_derivative_description(bids_dir, deriv_dir):
     desc = {
         'Name': 'qsiprep output',
         'BIDSVersion': '1.1.1',
+        'DatasetType': 'derivative',
         'PipelineDescription': {
             'Name': 'qsiprep',
             'Version': __version__,
