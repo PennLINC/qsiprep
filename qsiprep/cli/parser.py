@@ -338,12 +338,15 @@ def _build_parser(**kwargs):
     )
     g_conf.add_argument(
         '--subject-anatomical-reference',
-        choices=['first-alphabetically', 'unbiased', 'sessionwise'],
-        default='first-alphabetically',
-        help='How to define subject-specific anatomical space. '
-        'sessionwise will produce one anatomical space per session. '
-        'The others combine anatomical data across sessions to define '
-        'one anatomical space per subject.',
+        choices=['first-lex', 'unbiased', 'sessionwise', 'first-alphabetically'],
+        default='first-lex',
+        help=(
+            'How to define subject-specific anatomical space. '
+            'sessionwise will produce one anatomical space per session. '
+            'The others combine anatomical data across sessions to define '
+            'one anatomical space per subject. '
+            'The "first-alphabetically" option is deprecated in favor of "first-lex".'
+        ),
     )
     g_conf.add_argument(
         '--skip-anat-based-spatial-normalization',
@@ -661,6 +664,15 @@ def parse_args(args=None, namespace=None):
 
     parser = _build_parser()
     opts = parser.parse_args(args, namespace)
+
+    # Warn about deprecated options
+    if opts.subject_anatomical_reference == 'first-alphabetically':
+        config.loggers.cli.warning(
+            '--subject-anatomical-reference=first-alphabetically has been deprecated '
+            'and will be removed in a later version. '
+            'Please use --subject-anatomical-reference=first-lex instead.'
+        )
+        opts.subject_anatomical_reference = 'first-lex'
 
     # Change anatomical_template based on infant parameter
     opts.anatomical_template = 'MNI152NLin2009cAsym'
