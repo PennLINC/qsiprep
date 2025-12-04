@@ -507,8 +507,8 @@ How to combine images across distorted groups.
     g_fs.add_argument(
         '--no-csf',
         action=BooleanOptionalAction,
-        default=False,
-        help='add the --no-csf option during SynthStrip mask creation',
+        default=True,
+        help='During spatial normalization, use a mask without CSF (True) or with CSF (False)',
     )
 
     g_moco = parser.add_argument_group('Specific options for motion correction and coregistration')

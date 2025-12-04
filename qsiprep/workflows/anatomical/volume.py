@@ -120,6 +120,8 @@ def init_anat_preproc_wf(
         Skull-stripped ``t1_preproc``
     t1_mask
         Mask of the skull-stripped template image
+    t1_masknocsf
+        Mask of the skull-stripped template image without CSF
     t1_seg
         Segmentation of preprocessed structural image, including
         gray-matter (GM), white-matter (WM) and cerebrospinal fluid (CSF)
@@ -152,6 +154,7 @@ def init_anat_preproc_wf(
                 't2_preproc',
                 't1_brain',
                 't1_mask',
+                't1_masknocsf',
                 't1_seg',
                 't1_aseg',
                 't1_aparc',
@@ -254,12 +257,26 @@ and used as an anatomical reference throughout the workflow.
     # Do some padding to prevent memory issues in the synth workflows
     pad_anat_reference_wf = init_dl_prep_wf()
 
-    # Skull strip the anatomical reference
-    synthstrip_anat_wf = init_synthstrip_wf(
+    # Produce a skull-strip mask of the anatomical reference (w/ CSF)
+    synthstrip_anat_csf_wf = init_synthstrip_wf(
         unfatsat=config.workflow.anat_modality == 'T2w',
-        name='synthstrip_anat_wf',
-        no_csf=config.workflow.no_csf,
+        name='synthstrip_anat_csf_wf',
+        no_csf=False,
     )
+
+    # Skull strip the anatomical reference for coregistration
+    synthstrip_anat_nocsf_wf = init_synthstrip_wf(
+        unfatsat=config.workflow.anat_modality == 'T2w',
+        name='synthstrip_anat_nocsf_wf',
+        no_csf=True,
+    )
+
+    # always make both masks, but only use one of the masks for
+    # coregistration depending on workflow configuration
+    if config.workflow.no_csf:
+        synthstrip_anat_wf = synthstrip_anat_nocsf_wf
+    else:
+        synthstrip_anat_wf = synthstrip_anat_csf_wf
 
     # Segment the anatomical reference
     synthseg_anat_wf = init_synthseg_wf()
@@ -299,6 +316,10 @@ FreeSurfer version {FS_VERSION}. """
         ants.ApplyTransforms(input_image_type=0, interpolation='MultiLabel'),
         name='rigid_acpc_resample_mask',
     )
+    rigid_acpc_resample_masknocsf = pe.Node(
+        ants.ApplyTransforms(input_image_type=0, interpolation='MultiLabel'),
+        name='rigid_acpc_resample_masknocsv',
+    )
 
     acpc_aseg_to_dseg = pe.Node(
         mrtrix3.LabelConvert(
@@ -312,7 +333,7 @@ FreeSurfer version {FS_VERSION}. """
     # What to do about T2w's?
     if config.workflow.anat_modality == 'T2w':
         workflow.connect([
-            (synthstrip_anat_wf, rigid_acpc_resample_unfatsat, [
+            (synthstrip_anat_nocsf_wf, rigid_acpc_resample_unfatsat, [
                 ('outputnode.unfatsat', 'input_image'),
             ]),
             (anat_normalization_wf, rigid_acpc_resample_unfatsat, [
@@ -359,10 +380,16 @@ FreeSurfer version {FS_VERSION}. """
         ]),
 
         # SynthStrip
-        (pad_anat_reference_wf, synthstrip_anat_wf, [
+        (pad_anat_reference_wf, synthstrip_anat_csf_wf, [
             ('outputnode.padded_image', 'inputnode.padded_image'),
         ]),
-        (anat_reference_wf, synthstrip_anat_wf, [
+        (anat_reference_wf, synthstrip_anat_csf_wf, [
+            ('outputnode.template', 'inputnode.original_image'),
+        ]),
+        (pad_anat_reference_wf, synthstrip_anat_nocsf_wf, [
+            ('outputnode.padded_image', 'inputnode.padded_image'),
+        ]),
+        (anat_reference_wf, synthstrip_anat_nocsf_wf, [
             ('outputnode.template', 'inputnode.original_image'),
         ]),
 
@@ -395,22 +422,31 @@ FreeSurfer version {FS_VERSION}. """
         ]),
 
         # Resampling
-        (synthstrip_anat_wf, rigid_acpc_resample_brain, [
+        (synthstrip_anat_csf_wf, rigid_acpc_resample_brain, [
             ('outputnode.brain_image', 'input_image'),
         ]),
-        (synthstrip_anat_wf, rigid_acpc_resample_mask, [('outputnode.brain_mask', 'input_image')]),
+        (synthstrip_anat_csf_wf, rigid_acpc_resample_mask, [
+            ('outputnode.brain_mask', 'input_image'),
+        ]),
+        (synthstrip_anat_nocsf_wf, rigid_acpc_resample_masknocsf, [
+            ('outputnode.brain_mask', 'input_image'),
+        ]),
         (anat_reference_wf, rigid_acpc_resample_head, [
             ('outputnode.bias_corrected', 'input_image'),
         ]),
         (synthseg_anat_wf, rigid_acpc_resample_aseg, [('outputnode.aparc_image', 'input_image')]),
         (reorient_brain_to_lps, rigid_acpc_resample_brain, [('out_file', 'reference_image')]),
         (reorient_brain_to_lps, rigid_acpc_resample_mask, [('out_file', 'reference_image')]),
+        (reorient_brain_to_lps, rigid_acpc_resample_masknocsf, [('out_file', 'reference_image')]),
         (reorient_brain_to_lps, rigid_acpc_resample_head, [('out_file', 'reference_image')]),
         (reorient_brain_to_lps, rigid_acpc_resample_aseg, [('out_file', 'reference_image')]),
         (anat_normalization_wf, rigid_acpc_resample_brain, [
             ('outputnode.to_template_rigid_transform', 'transforms'),
         ]),
         (anat_normalization_wf, rigid_acpc_resample_mask, [
+            ('outputnode.to_template_rigid_transform', 'transforms'),
+        ]),
+        (anat_normalization_wf, rigid_acpc_resample_masknocsf, [
             ('outputnode.to_template_rigid_transform', 'transforms'),
         ]),
         (anat_normalization_wf, rigid_acpc_resample_head, [
@@ -421,6 +457,7 @@ FreeSurfer version {FS_VERSION}. """
         ]),
         (rigid_acpc_resample_brain, outputnode, [('output_image', 't1_brain')]),
         (rigid_acpc_resample_mask, outputnode, [('output_image', 't1_mask')]),
+        (rigid_acpc_resample_mask, outputnode, [('output_image', 't1_masknocsf')]),
         (rigid_acpc_resample_head, outputnode, [('output_image', 't1_preproc')]),
         (rigid_acpc_resample_aseg, outputnode, [('output_image', 't1_aseg')]),
         (rigid_acpc_resample_aseg, acpc_aseg_to_dseg, [('output_image', 'in_file')]),
@@ -458,6 +495,7 @@ FreeSurfer version {FS_VERSION}. """
             ('acpc_inv_transform', 'inputnode.t1_acpc_inv_transform'),
             ('t1_preproc', 'inputnode.t1_preproc'),
             ('t1_mask', 'inputnode.t1_mask'),
+            ('t1_masknocsf', 'inputnode.t1_masknocsf'),
             ('t1_seg', 'inputnode.t1_seg'),
             ('t1_aseg', 'inputnode.t1_aseg'),
             ('t1_2_mni_forward_transform', 'inputnode.t1_2_mni_forward_transform'),
@@ -490,8 +528,10 @@ The additional T2w reference image was registered to the T1w-ACPC reference
 image using an affine transformation in antsRegistration.
 """
     # Skull strip the anatomical reference
+    # this mask is only used for rigid coregistration and so extra cruft
+    # around brain (csf etc) should be fine (hence no_csf=False)
     synthstrip_anat_wf = init_synthstrip_wf(
-        do_padding=True, unfatsat=True, no_csf=config.workflow.no_csf, name='synthstrip_anat_wf'
+        do_padding=True, unfatsat=True, no_csf=False, name='synthstrip_anat_wf'
     )
 
     # Perform registrations
@@ -1156,6 +1196,7 @@ def init_anat_derivatives_wf(anatomical_template) -> Workflow:
                 't1_acpc_inv_transform',
                 't1_preproc',
                 't1_mask',
+                't1_masknocsf',
                 't1_seg',
                 't1_2_mni_forward_transform',
                 't1_2_mni_reverse_transform',
@@ -1198,6 +1239,18 @@ def init_anat_derivatives_wf(anatomical_template) -> Workflow:
             suffix='mask',
         ),
         name='ds_t1_mask',
+        run_without_submitting=True,
+    )
+
+    ds_t1_masknocsf = pe.Node(
+        DerivativesDataSink(
+            compress=True,
+            base_directory=config.execution.output_dir,
+            space='ACPC',
+            desc='brainnocsf',
+            suffix='mask',
+        ),
+        name='ds_t1_masknocsf',
         run_without_submitting=True,
     )
 
@@ -1296,6 +1349,7 @@ def init_anat_derivatives_wf(anatomical_template) -> Workflow:
         (inputnode, ds_t1_template_acpc_inv_transform, [('t1_acpc_inv_transform', 'in_file')]),
         (inputnode, ds_t1_preproc, [('t1_preproc', 'in_file')]),
         (inputnode, ds_t1_mask, [('t1_mask', 'in_file')]),
+        (inputnode, ds_t1_masknocsf, [('t1_masknocsf', 'in_file')]),
         (inputnode, ds_t1_seg, [('t1_seg', 'in_file')]),
         (inputnode, ds_t1_aseg, [('t1_aseg', 'in_file')]),
         (t1_name, ds_t1_preproc, [('out', 'source_file')]),
@@ -1303,6 +1357,7 @@ def init_anat_derivatives_wf(anatomical_template) -> Workflow:
         (t1_name, ds_t1_template_acpc_inv_transform, [('out', 'source_file')]),
         (t1_name, ds_t1_aseg, [('out', 'source_file')]),
         (t1_name, ds_t1_mask, [('out', 'source_file')]),
+        (t1_name, ds_t1_masknocsf, [('out', 'source_file')]),
         (t1_name, ds_t1_seg, [('out', 'source_file')]),
     ])  # fmt:skip
 
