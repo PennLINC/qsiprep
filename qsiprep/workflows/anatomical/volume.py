@@ -457,7 +457,7 @@ FreeSurfer version {FS_VERSION}. """
         ]),
         (rigid_acpc_resample_brain, outputnode, [('output_image', 't1_brain')]),
         (rigid_acpc_resample_mask, outputnode, [('output_image', 't1_mask')]),
-        (rigid_acpc_resample_mask, outputnode, [('output_image', 't1_masknocsf')]),
+        (rigid_acpc_resample_masknocsf, outputnode, [('output_image', 't1_masknocsf')]),
         (rigid_acpc_resample_head, outputnode, [('output_image', 't1_preproc')]),
         (rigid_acpc_resample_aseg, outputnode, [('output_image', 't1_aseg')]),
         (rigid_acpc_resample_aseg, acpc_aseg_to_dseg, [('output_image', 'in_file')]),
