@@ -14,6 +14,7 @@ sub-PNC/anat/sub-PNC_from-anat_to-ACPC_mode-image_xfm.mat
 sub-PNC/anat/sub-PNC_from-orig_to-anat_mode-image_xfm.txt
 sub-PNC/anat/sub-PNC_space-ACPC_desc-aseg_dseg.nii.gz
 sub-PNC/anat/sub-PNC_space-ACPC_desc-brain_mask.nii.gz
+sub-PNC/anat/sub-PNC_space-ACPC_desc-brainnocsf_mask.nii.gz
 sub-PNC/anat/sub-PNC_space-ACPC_desc-preproc_T1w.json
 sub-PNC/anat/sub-PNC_space-ACPC_desc-preproc_T1w.nii.gz
 sub-PNC/anat/sub-PNC_space-ACPC_dseg.nii.gz
