@@ -591,6 +591,14 @@ How to combine images across distorted groups.
         help='EXPERIMENTAL/TEMPORARY: Use SyN correction in addition to '
         'fieldmap correction, if available',
     )
+    g_syn.add_argument(
+        "--syn-method",
+        "--syn_method",
+        choices=["synb0", "legacy"],
+        action="store",
+        default="synb0",
+        help="Mehtod for SYN unwarping.  Options are synb0 (default) or legacy",
+    )
 
     g_other = parser.add_argument_group('Other options')
     g_other.add_argument('--version', action='version', version=verstr)
