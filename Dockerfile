@@ -8,6 +8,9 @@ RUN python -m build /src/qsiprep
 
 FROM pennlinc/qsiprep_build:24.10.0
 
+RUN curl -o /opt/freesurfer/bin/mri_synthseg https://raw.githubusercontent.com/freesurfer/freesurfer/refs/tags/v8.1.0/mri_synthseg/mri_synthseg
+RUN curl -o /opt/freesurfer/FreeSurferColorLUT.txt https://raw.githubusercontent.com/freesurfer/freesurfer/refs/tags/v8.1.0/distribution/FreeSurferColorLUT.txt
+
 # Install qsiprep wheel
 COPY --from=wheelstage /src/qsiprep/dist/*.whl .
 RUN pip install --no-cache-dir $( ls *.whl )
