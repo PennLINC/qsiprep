@@ -561,7 +561,11 @@ def init_dwi_denoising_wf(
                 n_procs=omp_nthreads,
             )
         elif unringing_method == 'rpg':
-            desc += f'{last_step}Gibbs ringing was removed using TORTOISE [@pfgibbs]. '
+            desc += (
+                f'{last_step}partial-Fourier induced Gibbs ringing was '
+                'removed using the approach implemented in TORTOISE v4 '
+                '[@tortoisev4; @pfgibbs]. '
+            )
 
             pe_code = {
                 'i': 0,

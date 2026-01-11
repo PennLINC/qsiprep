@@ -229,26 +229,11 @@ def init_anat_preproc_wf(
         workflow.add_nodes([inputnode])
         return workflow
 
-    contrast = config.workflow.anat_modality[:-1]
     desc = """
 
 #### Anatomical data preprocessing
 
 """
-    desc += (
-        f"""\
-A total of {num_anat_images} {contrast}-weighted ({contrast}w) images were found within the input
-BIDS dataset.
-All of them were corrected for intensity non-uniformity (INU)
-using `N4BiasFieldCorrection` [@n4, ANTs {ANTS_VERSION}].
-"""
-        if num_anat_images > 1
-        else f"""\
-The {contrast}-weighted ({contrast}w) image was corrected for intensity non-uniformity (INU)
-using `N4BiasFieldCorrection` [@n4, ANTs {ANTS_VERSION}],
-and used as an anatomical reference throughout the workflow.
-"""
-    )
 
     # Ensure there is 1 and only 1 anatomical reference
     anat_reference_wf = init_anat_template_wf(num_images=num_anat_images)
@@ -579,17 +564,6 @@ def init_anat_template_wf(num_images) -> Workflow:
     workflow = Workflow(name='anat_template_wf')
     contrast = config.workflow.anat_modality
 
-    if num_images > 1:
-        workflow.__desc__ = f"""\
-A {contrast}-reference map was computed after registration of
-{num_images} {contrast} images (after INU-correction) using
-`antsRegistration` [ANTs {ANTS_VERSION}; @ants].
-""".format(
-            contrast=config.workflow.anat_modality,
-            num_images=num_images,
-            ants_ver=BrainExtraction().version or '<ver>',
-        )
-
     inputnode = pe.Node(niu.IdentityInterface(fields=['images']), name='inputnode')
     outputnode = pe.Node(
         niu.IdentityInterface(
@@ -607,6 +581,22 @@ A {contrast}-reference map was computed after registration of
     omp_nthreads = config.nipype.omp_nthreads
 
     # 0. Reorient anatomical image(s) to LPS and resample to common voxel space
+    if num_images > 1:
+        desc = f"""\
+All {num_images} {contrast} images were
+    """.format(
+            contrast=config.workflow.anat_modality,
+            num_images=num_images,
+        )
+    else:
+        desc = f"""\
+The {contrast} image was
+    """.format(contrast=config.workflow.anat_modality)
+
+    desc += """\
+ reoriented to LPS orientation and resampled to an isotropic voxel size using AFNI tools [@afni].
+    """
+
     template_dimensions = pe.Node(TemplateDimensions(), name='template_dimensions')
     anat_conform = pe.MapNode(
         Conform(deoblique_header=True), iterfield='in_file', name='anat_conform'
@@ -640,6 +630,18 @@ A {contrast}-reference map was computed after registration of
     )
 
     if num_images == 1:
+        desc += f"""\
+Intensity non-uniformity (INU) correction was applied to the {contrast}
+image using ANTs' (ANTs version {ANTS_VERSION}; @ants) _N4BiasFieldCorrection_ (@n4)
+algorithm with the following parameters: 50 iterations of convergence
+at each level, a convergence threshold of 0.0000001, a shrink factor of 4,
+and a B-spline fitting distance of 200 voxels. This imaged served as the
+anatomical reference for subsequent steps.
+\n\n
+        """.format(
+            contrast=config.workflow.anat_modality,
+            ANTS_VERSION=BrainExtraction().version or '<ver>',
+        )
 
         def _get_first(in_list):
             if isinstance(in_list, list | tuple):
@@ -656,7 +658,21 @@ A {contrast}-reference map was computed after registration of
             (n4_correct, outputnode, [('output_image', 'bias_corrected')]),
         ])  # fmt:skip
 
+        workflow.__desc__ = desc
         return workflow
+
+    # More than one image
+    desc += f"""\
+Intensity non-uniformity (INU) correction was applied to each {contrast} image
+using ANTs' (ANTs version {ANTS_VERSION}; @ants)
+_N4BiasFieldCorrection_ (@n4) algorithm with the following parameters:
+50 iterations of convergence at each level, a convergence threshold
+of 0.0000001, a shrink factor of 4, and a B-spline fitting distance
+of 200 voxels.
+        """.format(
+        contrast=config.workflow.anat_modality,
+        ANTS_VERSION=BrainExtraction().version or '<ver>',
+    )
 
     # 1. Template (only if several images)
     # 1a. Correct for bias field: the bias field is an additive factor
@@ -669,6 +685,25 @@ A {contrast}-reference map was computed after registration of
 
     # Make an unbiased template, same as used for b=0 registration
     align_to = config.workflow.subject_anatomical_reference
+
+    if align_to == 'first-alphabetically':
+        desc += f"""\
+The INU-corrected {config.workflow.anat_modality} images were
+then aligned using a rigid-body transformation to the first
+image (alphabetically) as the reference using rigid body registration
+in ANTs (@ants), and merged to create a single {config.workflow.anat_modality}
+reference image.
+\n\n
+        """
+    else:
+        desc += f"""\
+The INU-corrected {config.workflow.anat_modality} images were
+then aligned using a rigid-body transformation to an iteratively refined
+template using rigid body registration in ANTs (@ants), and merged to create
+a single {config.workflow.anat_modality} reference image.
+\n\n
+        """
+
     anat_merge_wf = init_b0_hmc_wf(
         align_to='first' if (align_to == 'first-lex') else 'iterative',
         transform='Rigid',
@@ -687,6 +722,7 @@ A {contrast}-reference map was computed after registration of
         ]),
     ])  # fmt:skip
 
+    workflow.__desc__ = desc
     return workflow
 
 
