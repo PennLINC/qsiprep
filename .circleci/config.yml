@@ -417,6 +417,8 @@ jobs:
           command: |
             pytest \
               -n ${CIRCLE_CPUS} \
+              -vv \
+              -o log_cli=true \
               -m "not (synthstrip or synthseg)" \
               --cov-append \
               --cov-branch \

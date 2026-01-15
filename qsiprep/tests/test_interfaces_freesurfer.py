@@ -73,4 +73,4 @@ def test_synthseg_interface(datasets, tmp_path_factory):
 
     seg_img = nb.load(results.outputs.out_seg)
     post_img = nb.load(results.outputs.out_post)
-    assert seg_img.shape == post_img.shape
+    assert seg_img.shape == post_img.shape[:3]
