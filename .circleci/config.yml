@@ -15,8 +15,6 @@ runinstall: &runinstall
         VERSION="$CIRCLE_TAG"
       fi
       git checkout $CIRCLE_BRANCH
-      echo "${VERSION}" > /tmp/src/qsiprep/qsiprep/VERSION
-      echo "include qsiprep/VERSION" >> /tmp/src/qsiprep/MANIFEST.in
       pip install .[tests] --progress-bar off
 
       # Precaching fonts, set 'Agg' as default backend for matplotlib
@@ -539,7 +537,6 @@ jobs:
               echo "the command ``git fetch --tags --verbose`` and push"
               echo "them to your fork with ``git push origin --tags``"
             fi
-            sed -i "s/title = {qsiprep}/title = {qsiprep ${CIRCLE_TAG:-$THISVERSION}}/" qsiprep/data/boilerplate.bib
             # Build docker image
             e=1 && for i in {1..5}; do
               docker build \

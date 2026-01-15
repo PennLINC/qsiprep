@@ -1,5 +1,31 @@
 # What's New
 
+## 1.1.0 (Jan 15, 2026)
+
+This release updates the base OS in QSIPrep's Docker image, updating GLIBC.
+The CUDA runtime is updated from 11.1.1 to 12.2.2.
+The compiled dependencies were rebuilt on the new OS at the exact same versions as 1.0.2
+except for:
+
+* FSL updated from 6.0.7.9 to 6.0.7.15 by @psadil in pennlinc/qsiprep_build#18
+* FreeSurfer updated from 7.3.1 to 7.4.1 by @MegaByte in pennlinc/qsiprep_build#19
+* scipy, numpy, dipy, AMICO updated by @36000 in pennlinc/sqiprep_build#20
+
+### 🎉 Exciting New Features
+* Update base image to ubuntu 22.04, CUDA 12.2.2 by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1019
+* Crop images before plotting by @tsalo in https://github.com/PennLINC/qsiprep/pull/997
+
+### 🐛 Bug Fixes
+* Fix DeprecatedAction by @tsalo in https://github.com/PennLINC/qsiprep/pull/999
+* Fix bug in b0 harmonization when there is only one b0 volume in a file by @tsalo in https://github.com/PennLINC/qsiprep/pull/1002
+
+### Other Changes
+* Correctly cite SynthSeg in boilerplate by @tsalo in https://github.com/PennLINC/qsiprep/pull/998
+* Update bibtex file by @araikes in https://github.com/PennLINC/qsiprep/pull/1009
+* ENH: Add recommended DatasetType field in dataset_description by @psadil in https://github.com/PennLINC/qsiprep/pull/1014
+* Add information on BIDS curation to Usage page by @tsalo in https://github.com/PennLINC/qsiprep/pull/1001
+* Add first-alphabetically anatomical reference and deprecate first-lex by @tsalo in https://github.com/PennLINC/qsiprep/pull/1013
+
 
 ## 1.0.2 (November 11, 2025)
 
