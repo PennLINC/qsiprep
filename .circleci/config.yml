@@ -417,7 +417,7 @@ jobs:
           command: |
             pytest \
               -n ${CIRCLE_CPUS} \
-              -m "not synthstrip and not synthseg" \
+              -m "not (synthstrip or synthseg)" \
               --cov-append \
               --cov-branch \
               --cov-report term-missing \

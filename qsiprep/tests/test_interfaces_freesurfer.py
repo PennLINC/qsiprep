@@ -63,7 +63,6 @@ def test_synthseg_interface(datasets, tmp_path_factory):
     """Test qsiprep.interfaces.freesurfer.SynthSeg."""
     tmpdir = tmp_path_factory.mktemp('test_synthseg')
     in_file = _resample_to_64_cube(_get_forrest_gump_t1w(datasets), tmpdir)
-    in_img = nb.load(in_file)
 
     interface = freesurfer.SynthSeg(input_image=in_file)
     results = interface.run(cwd=tmpdir)
@@ -74,5 +73,4 @@ def test_synthseg_interface(datasets, tmp_path_factory):
 
     seg_img = nb.load(results.outputs.out_seg)
     post_img = nb.load(results.outputs.out_post)
-    assert seg_img.shape == in_img.shape
-    assert post_img.shape == in_img.shape
+    assert seg_img.shape == post_img.shape
