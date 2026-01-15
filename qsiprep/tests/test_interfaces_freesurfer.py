@@ -3,7 +3,9 @@
 import os
 
 import nibabel as nb
+import numpy as np
 import pytest
+from nibabel.processing import resample_from_to
 
 from qsiprep.interfaces import freesurfer
 
@@ -19,13 +21,29 @@ def _get_forrest_gump_t1w(datasets):
     )
 
 
+def _resample_to_64_cube(in_file, tmpdir):
+    in_img = nb.load(in_file)
+    new_shape = (64, 64, 64)
+
+    direction = in_img.affine[:3, :3]
+    voxel_sizes = np.sqrt((direction**2).sum(axis=0))
+    direction_unit = direction / voxel_sizes
+    new_voxel_sizes = voxel_sizes * (np.array(in_img.shape[:3]) / np.array(new_shape))
+
+    new_affine = in_img.affine.copy()
+    new_affine[:3, :3] = direction_unit * new_voxel_sizes
+
+    resampled = resample_from_to(in_img, (new_shape, new_affine))
+    out_file = os.path.join(tmpdir, 'sub-01_ses-forrestgump_T1w_64cube.nii.gz')
+    resampled.to_filename(out_file)
+    return out_file
+
+
 @pytest.mark.synthstrip
 def test_synthstrip_interface(datasets, tmp_path_factory):
     """Test qsiprep.interfaces.freesurfer.FixHeaderSynthStrip."""
     tmpdir = tmp_path_factory.mktemp('test_synthstrip')
-    in_file = _get_forrest_gump_t1w(datasets)
-
-    assert os.path.isfile(in_file)
+    in_file = _resample_to_64_cube(_get_forrest_gump_t1w(datasets), tmpdir)
     in_img = nb.load(in_file)
 
     interface = freesurfer.FixHeaderSynthStrip(input_image=in_file)
@@ -44,9 +62,7 @@ def test_synthstrip_interface(datasets, tmp_path_factory):
 def test_synthseg_interface(datasets, tmp_path_factory):
     """Test qsiprep.interfaces.freesurfer.SynthSeg."""
     tmpdir = tmp_path_factory.mktemp('test_synthseg')
-    in_file = _get_forrest_gump_t1w(datasets)
-
-    assert os.path.isfile(in_file)
+    in_file = _resample_to_64_cube(_get_forrest_gump_t1w(datasets), tmpdir)
     in_img = nb.load(in_file)
 
     interface = freesurfer.SynthSeg(input_image=in_file)
