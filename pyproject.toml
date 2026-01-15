@@ -203,6 +203,8 @@ markers = [
     "maternal_brain_project: multi-shell with GRE field map",
     "forrest_gump: single-shell with GRE field map",
     "forrest_gump_patch2self: single-shell with GRE field map and patch2self",
+    "synthstrip: test synthstrip interface",
+    "synthseg: test synthseg interface",
 ]
 env = [
     "RUNNING_PYTEST = 1",
