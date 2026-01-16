@@ -263,6 +263,13 @@ jobs:
           key: DSDTI-01
       - run: *runinstall
       - run:
+          name: Skip unless run_full_drbuddi
+          command: |
+            if [ "<< pipeline.parameters.run_full_drbuddi >>" != "true" ]; then
+              echo "Skipping optional DRBUDDI TENSORLine job"
+              circleci-agent step halt
+            fi
+      - run:
           name: Run TENSORLine with epi fmaps and DRBUDDI
           no_output_timeout: 2h
           command: |
@@ -291,6 +298,13 @@ jobs:
       - restore_cache:
           key: drbuddi-data-01
       - run: *runinstall
+      - run:
+          name: Skip unless run_full_drbuddi
+          command: |
+            if [ "<< pipeline.parameters.run_full_drbuddi >>" != "true" ]; then
+              echo "Skipping optional DRBUDDI SHORELine job"
+              circleci-agent step halt
+            fi
       - run:
           name: Run SHORELine with epi fmaps and DRBUDDI
           no_output_timeout: 2h
@@ -669,7 +683,6 @@ workflows:
             tags:
               only: /.*/
 
-      <<# parameters.run_full_drbuddi >>
       - DRBUDDI_SHORELine_EPI:
           requires:
             - download_drbuddi_data
@@ -677,7 +690,6 @@ workflows:
           filters:
             tags:
               only: /.*/
-      <</ parameters.run_full_drbuddi >>
 
       - DRBUDDI_eddy_rpe_series:
           requires:
@@ -687,7 +699,6 @@ workflows:
             tags:
               only: /.*/
 
-      <<# parameters.run_full_drbuddi >>
       - DRBUDDI_TENSORLine_EPI:
           requires:
             - download_drbuddi_data
@@ -696,7 +707,6 @@ workflows:
           filters:
             tags:
               only: /.*/
-      <</ parameters.run_full_drbuddi >>
 
       - DSDTI_nofmap:
           requires:
