@@ -669,14 +669,15 @@ workflows:
             tags:
               only: /.*/
 
+      <<# parameters.run_full_drbuddi >>
       - DRBUDDI_SHORELine_EPI:
-          when: << pipeline.parameters.run_full_drbuddi >>
           requires:
             - download_drbuddi_data
             - build
           filters:
             tags:
               only: /.*/
+      <</ parameters.run_full_drbuddi >>
 
       - DRBUDDI_eddy_rpe_series:
           requires:
@@ -686,8 +687,8 @@ workflows:
             tags:
               only: /.*/
 
+      <<# parameters.run_full_drbuddi >>
       - DRBUDDI_TENSORLine_EPI:
-          when: << pipeline.parameters.run_full_drbuddi >>
           requires:
             - download_drbuddi_data
             - download_DSDTI
@@ -695,6 +696,7 @@ workflows:
           filters:
             tags:
               only: /.*/
+      <</ parameters.run_full_drbuddi >>
 
       - DSDTI_nofmap:
           requires:
