@@ -439,17 +439,40 @@ jobs:
     resource_class: gpu.nvidia.small
     environment:
       CIRCLE_CPUS: 4
-    <<: *dockersetup
+    machine: true
+    working_directory: /tmp/src/qsiprep
     steps:
       - checkout
       - restore_cache:
           key: forrestgump-01
-      - run: *runinstall
       - run:
           name: Run synthstrip/synthseg interface tests
           no_output_timeout: 2h
           command: |
-            pytest -rP -o log_cli=true -m "synthstrip or synthseg" --cov-config=/tmp/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/tmp/src/qsiprep/.circleci/data --output_dir=/tmp/src/qsiprep/.circleci/out --working_dir=/tmp/src/qsiprep/.circleci/work qsiprep
+            docker run --gpus all --rm \
+              -e CIRCLE_TAG \
+              -e CIRCLE_BRANCH \
+              -v /tmp/src/qsiprep:/tmp/src/qsiprep \
+              -w /tmp/src/qsiprep \
+              pennlinc/qsiprep_build:26.1.7 \
+              /bin/bash -lc '
+                VERSION=0+build
+                if [[ -n "$CIRCLE_TAG" ]]; then
+                  VERSION="$CIRCLE_TAG"
+                fi
+                pip install .[tests] --progress-bar off
+                python -c "from matplotlib import font_manager"
+                sed -i "s/\(backend *: \).*$/\1Agg/g" $( python -c "import matplotlib; print(matplotlib.matplotlib_fname())" )
+                if [ -d /home/qsiprep ]; then
+                  mkdir /root/.nipype
+                  CFG=/root/.nipype/nipype.cfg
+                  printf "[execution]\nstop_on_first_crash = true\n" > ${CFG}
+                  echo "poll_sleep_duration = 0.01" >> ${CFG}
+                  echo "hash_method = content" >> ${CFG}
+                  ln -s /home/qsiprep/.dipy /root/.dipy
+                fi
+                pytest -rP -o log_cli=true -m "synthstrip or synthseg" --cov-config=/tmp/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/tmp/src/qsiprep/.circleci/data --output_dir=/tmp/src/qsiprep/.circleci/out --working_dir=/tmp/src/qsiprep/.circleci/work qsiprep
+              '
             mkdir /tmp/src/coverage
             mv /tmp/src/qsiprep/.coverage /tmp/src/coverage/.coverage.synthstrip_synthseg
       - persist_to_workspace:
