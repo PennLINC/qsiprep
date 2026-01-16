@@ -419,7 +419,7 @@ jobs:
               -n ${CIRCLE_CPUS} \
               -vv \
               -o log_cli=true \
-              -m "not (synthstrip or synthseg)" \
+              -m "not integration and not (synthstrip or synthseg)" \
               --cov-append \
               --cov-branch \
               --cov-report term-missing \
@@ -436,7 +436,7 @@ jobs:
             - .coverage.unit_tests
 
   synthstrip_synthseg_interfaces:
-    resource_class: xlarge
+    resource_class: gpu.nvidia.small
     environment:
       CIRCLE_CPUS: 4
     <<: *dockersetup

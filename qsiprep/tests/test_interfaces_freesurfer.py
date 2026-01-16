@@ -46,7 +46,7 @@ def test_synthstrip_interface(datasets, tmp_path_factory):
     in_file = _resample_to_64_cube(_get_forrest_gump_t1w(datasets), tmpdir)
     in_img = nb.load(in_file)
 
-    interface = freesurfer.FixHeaderSynthStrip(input_image=in_file)
+    interface = freesurfer.FixHeaderSynthStrip(input_image=in_file, gpu=True)
     results = interface.run(cwd=tmpdir)
 
     assert os.path.isfile(results.outputs.out_brain)
@@ -64,7 +64,7 @@ def test_synthseg_interface(datasets, tmp_path_factory):
     tmpdir = tmp_path_factory.mktemp('test_synthseg')
     in_file = _resample_to_64_cube(_get_forrest_gump_t1w(datasets), tmpdir)
 
-    interface = freesurfer.SynthSeg(input_image=in_file)
+    interface = freesurfer.SynthSeg(input_image=in_file, cpu=False)
     results = interface.run(cwd=tmpdir)
 
     assert os.path.isfile(results.outputs.out_seg)
