@@ -1,6 +1,7 @@
 """Tests for the qsiprep.interfaces.freesurfer module."""
 
 import os
+import shutil
 
 import nibabel as nb
 import numpy as np
@@ -39,6 +40,10 @@ def _resample_to_64_cube(in_file, tmpdir):
     return out_file
 
 
+def _gpu_available():
+    return shutil.which('nvidia-smi') is not None
+
+
 @pytest.mark.synthstrip
 def test_synthstrip_interface(datasets, tmp_path_factory):
     """Test qsiprep.interfaces.freesurfer.FixHeaderSynthStrip."""
@@ -46,7 +51,8 @@ def test_synthstrip_interface(datasets, tmp_path_factory):
     in_file = _resample_to_64_cube(_get_forrest_gump_t1w(datasets), tmpdir)
     in_img = nb.load(in_file)
 
-    interface = freesurfer.FixHeaderSynthStrip(input_image=in_file, gpu=True)
+    use_gpu = _gpu_available()
+    interface = freesurfer.FixHeaderSynthStrip(input_image=in_file, gpu=use_gpu)
     results = interface.run(cwd=tmpdir)
 
     assert os.path.isfile(results.outputs.out_brain)
@@ -64,7 +70,8 @@ def test_synthseg_interface(datasets, tmp_path_factory):
     tmpdir = tmp_path_factory.mktemp('test_synthseg')
     in_file = _resample_to_64_cube(_get_forrest_gump_t1w(datasets), tmpdir)
 
-    interface = freesurfer.SynthSeg(input_image=in_file, cpu=False)
+    use_gpu = _gpu_available()
+    interface = freesurfer.SynthSeg(input_image=in_file, cpu=not use_gpu)
     results = interface.run(cwd=tmpdir)
 
     assert os.path.isfile(results.outputs.out_seg)
