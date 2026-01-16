@@ -1,5 +1,13 @@
 # What's New
 
+## 1.1.1 (Jan 15, 2026)
+
+A small fix to 1.1.0 for synthseg.
+
+* Add CI test for synthstrip by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1020
+
+
+
 ## 1.1.0 (Jan 15, 2026)
 
 This release updates the base OS in QSIPrep's Docker image, updating GLIBC.
