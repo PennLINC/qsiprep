@@ -4,7 +4,7 @@ orbs:
 
 .dockersetup: &dockersetup
   docker:
-    - image: pennlinc/qsiprep_build:26.1.6
+    - image: pennlinc/qsiprep_build:26.1.7
   working_directory: /tmp/src/qsiprep
 
 runinstall: &runinstall
@@ -417,6 +417,9 @@ jobs:
           command: |
             pytest \
               -n ${CIRCLE_CPUS} \
+              -vv \
+              -o log_cli=true \
+              -m "not integration and not (synthstrip or synthseg)" \
               --cov-append \
               --cov-branch \
               --cov-report term-missing \
@@ -431,6 +434,28 @@ jobs:
           root: /tmp/src/coverage/
           paths:
             - .coverage.unit_tests
+
+  synthstrip_synthseg_interfaces:
+    resource_class: xlarge
+    environment:
+      CIRCLE_CPUS: 4
+    <<: *dockersetup
+    steps:
+      - checkout
+      - restore_cache:
+          key: forrestgump-01
+      - run: *runinstall
+      - run:
+          name: Run synthstrip/synthseg interface tests
+          no_output_timeout: 2h
+          command: |
+            pytest -rP -o log_cli=true -m "synthstrip or synthseg" --cov-config=/tmp/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/tmp/src/qsiprep/.circleci/data --output_dir=/tmp/src/qsiprep/.circleci/out --working_dir=/tmp/src/qsiprep/.circleci/work qsiprep
+            mkdir /tmp/src/coverage
+            mv /tmp/src/qsiprep/.coverage /tmp/src/coverage/.coverage.synthstrip_synthseg
+      - persist_to_workspace:
+          root: /tmp/src/coverage/
+          paths:
+            - .coverage.synthstrip_synthseg
 
   IntramodalTemplate:
     resource_class: large
@@ -699,6 +724,13 @@ workflows:
             tags:
               only: /.*/
 
+      - synthstrip_synthseg_interfaces:
+          requires:
+            - download_forrest_gump
+          filters:
+            tags:
+              only: /.*/
+
       - merge_coverage:
           requires:
             - DSCSDSI
@@ -713,6 +745,7 @@ workflows:
             - unit_tests
             - IntramodalTemplate
             - MultiT1w
+            - synthstrip_synthseg_interfaces
           filters:
             branches:
               ignore:
@@ -735,6 +768,7 @@ workflows:
             - unit_tests
             - IntramodalTemplate
             - MultiT1w
+            - synthstrip_synthseg_interfaces
           filters:
             branches:
               only: master

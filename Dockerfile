@@ -6,7 +6,7 @@ RUN apt-get update && \
 COPY . /src/qsiprep
 RUN python -m build /src/qsiprep
 
-FROM pennlinc/qsiprep_build:26.1.6
+FROM pennlinc/qsiprep_build:26.1.7
 
 # Install qsiprep wheel
 COPY --from=wheelstage /src/qsiprep/dist/*.whl .
