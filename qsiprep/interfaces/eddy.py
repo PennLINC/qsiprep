@@ -417,14 +417,17 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type, pepolar_method):
         )
 
     # Format the interpolation
-    lsr_ref = ' [@fsllsr]' if ext_eddy.inputs.method == 'lsr' else ''
     if doing_2stage:
         desc.append(
-            'Interpolation after head motion and initial susceptibility distortion correction'
+            'Resampling after head motion and initial susceptibility '
+            'distortion correction was performed using '
         )
     else:
-        desc.append('Final interpolation')
-    desc.append(f'was performed using the `{ext_eddy.inputs.method}` method{lsr_ref}.')
+        desc.append('Final resamping was performed using ')
+    if ext_eddy.inputs.method == 'lsr':
+        desc.append('Least-Squares Reconstruction with spline interpolation ([@fsllsr]).')
+    else:
+        desc.append('Jacobian modulation with spline interpolation.')
     if not doing_2stage:
         desc.append('\n\n')
     return ' '.join(desc)
