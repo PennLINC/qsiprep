@@ -2,6 +2,11 @@ version: 2.1
 orbs:
   codecov: codecov/codecov@3.2.4
 
+parameters:
+  run_full_drbuddi:
+    type: boolean
+    default: false
+
 .dockersetup: &dockersetup
   docker:
     - image: pennlinc/qsiprep_build:26.1.7
@@ -14,8 +19,13 @@ runinstall: &runinstall
       if [[ -n "$CIRCLE_TAG" ]]; then
         VERSION="$CIRCLE_TAG"
       fi
-      git checkout $CIRCLE_BRANCH
-      pip install .[tests] --progress-bar off
+      WHEEL=$(ls dist/qsiprep-*.whl 2>/dev/null | head -n 1)
+      if [[ -n "$WHEEL" ]]; then
+        pip install "${WHEEL}[tests]" --progress-bar off
+      else
+        git checkout $CIRCLE_BRANCH
+        pip install .[tests] --progress-bar off
+      fi
 
       # Precaching fonts, set 'Agg' as default backend for matplotlib
       python -c "from matplotlib import font_manager"
@@ -39,61 +49,55 @@ jobs:
     working_directory: /tmp/src/qsiprep
     steps:
       - checkout
-      - run: *runinstall
-
-  download_drbuddi_rpe_series:
-    docker:
-      - image: cimg/python:3.10.9
-    working_directory: /tmp/src/qsiprep
-    steps:
-      - checkout
       - restore_cache:
-          key: drbuddi_rpe_series-01
-      - run: *runinstall
+          key: pip-{{ checksum "pyproject.toml" }}
       - run:
-          name: Download drbuddi_rpe_series test data
+          name: Build wheel
           command: |
-            cd /tmp/src/qsiprep/.circleci
-            python get_data.py $PWD/data drbuddi_rpe_series
+            python -m pip install --upgrade pip build --progress-bar off
+            python -m build --wheel
       - save_cache:
-          key: drbuddi_rpe_series-01
+          key: pip-{{ checksum "pyproject.toml" }}
           paths:
-            - /tmp/src/qsiprep/.circleci/data/drbuddi_rpe_series
+            - /root/.cache/pip
+      - persist_to_workspace:
+          root: /tmp/src/qsiprep
+          paths:
+            - dist
 
-  download_drbuddi_epi:
+  download_drbuddi_data:
     resource_class: small
     docker:
-      - image: cimg/python:3.10.9
+      - image: python:3.10-slim
     working_directory: /tmp/src/qsiprep
     steps:
       - checkout
       - restore_cache:
-          key: drbuddi_epi-01
-      - run: *runinstall
+          key: drbuddi-data-01
       - run:
-          name: Download drbuddi_epi test data
+          name: Download DRBUDDI test data
           command: |
-            cd /tmp/src/qsiprep/.circleci
-            python get_data.py $PWD/data drbuddi_epi
+            cd .circleci
+            python get_data.py $PWD/data drbuddi_rpe_series drbuddi_epi
       - save_cache:
-          key: drbuddi_epi-01
+          key: drbuddi-data-01
           paths:
+            - /tmp/src/qsiprep/.circleci/data/drbuddi_rpe_series
             - /tmp/src/qsiprep/.circleci/data/drbuddi_epi
 
   download_DSDTI:
     resource_class: small
     docker:
-      - image: cimg/python:3.10.9
+      - image: python:3.10-slim
     working_directory: /tmp/src/qsiprep
     steps:
       - checkout
       - restore_cache:
           key: DSDTI-01
-      - run: *runinstall
       - run:
           name: Download DSDTI test data
           command: |
-            cd /tmp/src/qsiprep/.circleci
+            cd .circleci
             python get_data.py $PWD/data DSDTI
       - save_cache:
           key: DSDTI-01
@@ -103,17 +107,16 @@ jobs:
   download_DSCSDSI:
     resource_class: small
     docker:
-      - image: cimg/python:3.10.9
+      - image: python:3.10-slim
     working_directory: /tmp/src/qsiprep
     steps:
       - checkout
       - restore_cache:
           key: DSCSDSI-01
-      - run: *runinstall
       - run:
           name: Download DSCSDSI test data
           command: |
-            cd /tmp/src/qsiprep/.circleci
+            cd .circleci
             python get_data.py $PWD/data DSCSDSI
       - save_cache:
           key: DSCSDSI-01
@@ -123,17 +126,16 @@ jobs:
   download_twoses:
     resource_class: small
     docker:
-      - image: cimg/python:3.10.9
+      - image: python:3.10-slim
     working_directory: /tmp/src/qsiprep
     steps:
       - checkout
       - restore_cache:
           key: twoses-02
-      - run: *runinstall
       - run:
           name: Download twoses test data
           command: |
-            cd /tmp/src/qsiprep/.circleci
+            cd .circleci
             python get_data.py $PWD/data twoses
       - save_cache:
           key: twoses-02
@@ -143,17 +145,16 @@ jobs:
   download_forrest_gump:
     resource_class: small
     docker:
-      - image: cimg/python:3.10.9
+      - image: python:3.10-slim
     working_directory: /tmp/src/qsiprep
     steps:
       - checkout
       - restore_cache:
           key: forrestgump-01
-      - run: *runinstall
       - run:
           name: Download forrest_gump test data
           command: |
-            cd /tmp/src/qsiprep/.circleci
+            cd .circleci
             python get_data.py $PWD/data forrest_gump
       - save_cache:
           key: forrestgump-01
@@ -167,6 +168,8 @@ jobs:
     <<: *dockersetup
     steps:
       - checkout
+      - attach_workspace:
+          at: /tmp/src/qsiprep
       - restore_cache:
           key: DSCSDSI-01
       - run: *runinstall
@@ -194,6 +197,8 @@ jobs:
     <<: *dockersetup
     steps:
       - checkout
+      - attach_workspace:
+          at: /tmp/src/qsiprep
       - restore_cache:
           key: DSDTI-01
       - run: *runinstall
@@ -221,6 +226,8 @@ jobs:
     <<: *dockersetup
     steps:
       - checkout
+      - attach_workspace:
+          at: /tmp/src/qsiprep
       - restore_cache:
           key: DSDTI-01
       - run: *runinstall
@@ -248,9 +255,20 @@ jobs:
     <<: *dockersetup
     steps:
       - checkout
+      - attach_workspace:
+          at: /tmp/src/qsiprep
+      - restore_cache:
+          key: drbuddi-data-01
       - restore_cache:
           key: DSDTI-01
       - run: *runinstall
+      - run:
+          name: Skip unless run_full_drbuddi
+          command: |
+            if [ "<< pipeline.parameters.run_full_drbuddi >>" != "true" ]; then
+              echo "Skipping optional DRBUDDI TENSORLine job"
+              circleci-agent step halt
+            fi
       - run:
           name: Run TENSORLine with epi fmaps and DRBUDDI
           no_output_timeout: 2h
@@ -275,9 +293,18 @@ jobs:
     <<: *dockersetup
     steps:
       - checkout
+      - attach_workspace:
+          at: /tmp/src/qsiprep
       - restore_cache:
-          key: drbuddi_epi-01
+          key: drbuddi-data-01
       - run: *runinstall
+      - run:
+          name: Skip unless run_full_drbuddi
+          command: |
+            if [ "<< pipeline.parameters.run_full_drbuddi >>" != "true" ]; then
+              echo "Skipping optional DRBUDDI SHORELine job"
+              circleci-agent step halt
+            fi
       - run:
           name: Run SHORELine with epi fmaps and DRBUDDI
           no_output_timeout: 2h
@@ -302,8 +329,10 @@ jobs:
     <<: *dockersetup
     steps:
       - checkout
+      - attach_workspace:
+          at: /tmp/src/qsiprep
       - restore_cache:
-          key: drbuddi_rpe_series-01
+          key: drbuddi-data-01
       - run: *runinstall
       - run:
           name: Run Eddy with rpe series fmaps and DRBUDDI
@@ -329,6 +358,8 @@ jobs:
     <<: *dockersetup
     steps:
       - checkout
+      - attach_workspace:
+          at: /tmp/src/qsiprep
       - run: *runinstall
       - run:
           name: Run QSIPrep on multi-shell dataset with GRE field maps
@@ -354,6 +385,8 @@ jobs:
     <<: *dockersetup
     steps:
       - checkout
+      - attach_workspace:
+          at: /tmp/src/qsiprep
       - restore_cache:
           key: forrestgump-01
       - run: *runinstall
@@ -381,6 +414,8 @@ jobs:
     <<: *dockersetup
     steps:
       - checkout
+      - attach_workspace:
+          at: /tmp/src/qsiprep
       - restore_cache:
           key: forrestgump-01
       - run: *runinstall
@@ -408,6 +443,8 @@ jobs:
     <<: *dockersetup
     steps:
       - checkout
+      - attach_workspace:
+          at: /tmp/src/qsiprep
       - restore_cache:
           key: forrestgump-01
       - run: *runinstall
@@ -442,6 +479,8 @@ jobs:
     <<: *dockersetup
     steps:
       - checkout
+      - attach_workspace:
+          at: /tmp/src/qsiprep
       - restore_cache:
           key: forrestgump-01
       - run: *runinstall
@@ -464,6 +503,8 @@ jobs:
       CIRCLE_CPUS: 4
     steps:
       - checkout
+      - attach_workspace:
+          at: /tmp/src/qsiprep
       - restore_cache:
           key: twoses-02
       - run: *runinstall
@@ -481,6 +522,8 @@ jobs:
       CIRCLE_CPUS: 4
     steps:
       - checkout
+      - attach_workspace:
+          at: /tmp/src/qsiprep
       - restore_cache:
           key: DSDTI-01
       - run: *runinstall
@@ -598,14 +641,7 @@ workflows:
             tags:
               only: /.*/
 
-      - download_drbuddi_rpe_series:
-          requires:
-            - build
-          filters:
-            tags:
-              only: /.*/
-
-      - download_drbuddi_epi:
+      - download_drbuddi_data:
           requires:
             - build
           filters:
@@ -649,21 +685,25 @@ workflows:
 
       - DRBUDDI_SHORELine_EPI:
           requires:
-            - download_drbuddi_epi
+            - download_drbuddi_data
+            - build
           filters:
             tags:
               only: /.*/
 
       - DRBUDDI_eddy_rpe_series:
           requires:
-            - download_drbuddi_rpe_series
+            - download_drbuddi_data
+            - build
           filters:
             tags:
               only: /.*/
 
       - DRBUDDI_TENSORLine_EPI:
           requires:
+            - download_drbuddi_data
             - download_DSDTI
+            - build
           filters:
             tags:
               only: /.*/
@@ -736,9 +776,7 @@ workflows:
             - DSCSDSI
             - DSDTI_nofmap
             - DSDTI_synfmap
-            - DRBUDDI_SHORELine_EPI
             - DRBUDDI_eddy_rpe_series
-            - DRBUDDI_TENSORLine_EPI
             - maternal_brain_project
             - forrest_gump
             - forrest_gump_patch2self
@@ -759,9 +797,7 @@ workflows:
             - DSCSDSI
             - DSDTI_nofmap
             - DSDTI_synfmap
-            - DRBUDDI_SHORELine_EPI
             - DRBUDDI_eddy_rpe_series
-            - DRBUDDI_TENSORLine_EPI
             - maternal_brain_project
             - forrest_gump
             - forrest_gump_patch2self
