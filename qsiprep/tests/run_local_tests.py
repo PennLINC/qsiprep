@@ -67,9 +67,10 @@ def run_command(command, env=None):
 def run_tests(test_regex, test_mark):
     """Run the tests."""
     local_patch = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    mounted_code = '/usr/local/miniconda/lib/python3.10/site-packages/qsiprep'
+    mounted_site_packages = '/app/.pixi/envs/qsiprep/lib/python3.10/site-packages'
+    mounted_code = f'{mounted_site_packages}/qsiprep'
     run_str = 'docker run --rm -ti '
-    run_str += f'-v {local_patch}:{mounted_code} '
+    run_str += f'-v {local_patch}:{mounted_site_packages} '
     run_str += '--entrypoint pytest '
     run_str += 'pennlinc/qsiprep:unstable '
     run_str += (

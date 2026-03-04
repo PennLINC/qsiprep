@@ -1,5 +1,4 @@
 ARG BASE_IMAGE=ubuntu:jammy-20250730
-ARG TAG_FSL=24.4.24
 ARG TAG_FREESURFER=24.9.3
 ARG TAG_ANTS=24.4.24
 ARG TAG_MRTRIX3=24.4.24
@@ -10,7 +9,6 @@ ARG TAG_TORTOISE=24.4.29
 ARG TAG_TORTOISECUDA=24.4.29
 ARG TAG_SYNB0=24.9.0
 
-FROM pennlinc/qsiprep-fsl:${TAG_FSL} AS build_fsl
 FROM pennlinc/qsiprep-freesurfer:${TAG_FREESURFER} AS build_freesurfer
 FROM pennlinc/qsiprep-ants:${TAG_ANTS} AS build_ants
 FROM pennlinc/qsiprep-mrtrix3:${TAG_MRTRIX3} AS build_mrtrix3
@@ -21,16 +19,6 @@ FROM pennlinc/qsiprep-drbuddi:${TAG_TORTOISE} AS build_tortoise
 FROM pennlinc/qsiprep-drbuddicuda:${TAG_TORTOISECUDA} AS build_tortoisecuda
 FROM pennlinc/qsiprep-synb0:${TAG_SYNB0} AS build_synb0
 FROM nvidia/cuda:11.1.1-runtime-ubuntu18.04 AS base
-
-COPY --from=build_fsl /opt/conda/envs/fslqsiprep /opt/conda/envs/fslqsiprep
-ENV FSLDIR="/opt/conda/envs/fslqsiprep" \
-    FSLOUTPUTTYPE="NIFTI_GZ" \
-    FSLMULTIFILEQUIT="TRUE" \
-    FSLLOCKDIR="" \
-    FSLMACHINELIST="" \
-    FSLREMOTECALL="" \
-    FSLGECUDAQ="cuda.q" \
-    PATH="/opt/conda/envs/fslqsiprep/bin:$PATH"
 
 COPY --from=build_ants /opt/ants /opt/ants
 ENV ANTSPATH="/opt/ants/bin" \
@@ -48,8 +36,7 @@ COPY --from=build_3tissue /opt/3Tissue /opt/3Tissue
 ENV PATH="$PATH:/opt/mrtrix3-latest/bin:/opt/3Tissue/bin"
 
 COPY --from=build_freesurfer /opt/freesurfer /opt/freesurfer
-ENV FSL_DIR="/opt/conda/envs/fslqsiprep" \
-    OS="Linux" \
+ENV OS="Linux" \
     FS_OVERRIDE=0 \
     FIX_VERTEX_AREA="" \
     FSF_OUTPUT_FORMAT="nii.gz" \
@@ -90,6 +77,13 @@ ENV HOME="/home/qsiprep" \
     IS_DOCKER_8395080871=1 \
     ARTHOME="/opt/art" \
     DIPY_HOME=/home/qsiprep/.dipy
+
+ENV FSLOUTPUTTYPE="NIFTI_GZ" \
+    FSLMULTIFILEQUIT="TRUE" \
+    FSLLOCKDIR="" \
+    FSLMACHINELIST="" \
+    FSLREMOTECALL="" \
+    FSLGECUDAQ="cuda.q"
 
 RUN apt-get update -qq \
     && apt-get install -y -q --no-install-recommends \
