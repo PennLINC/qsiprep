@@ -1,0 +1,155 @@
+ARG BASE_IMAGE=ubuntu:jammy-20250730
+ARG TAG_FSL=24.4.24
+ARG TAG_FREESURFER=24.9.3
+ARG TAG_ANTS=24.4.24
+ARG TAG_MRTRIX3=24.4.24
+ARG TAG_3TISSUE=24.4.24
+ARG TAG_DSISTUDIO=24.7.4
+ARG TAG_AFNI=23.3.2
+ARG TAG_TORTOISE=24.4.29
+ARG TAG_TORTOISECUDA=24.4.29
+ARG TAG_SYNB0=24.9.0
+
+FROM pennlinc/qsiprep-fsl:${TAG_FSL} AS build_fsl
+FROM pennlinc/qsiprep-freesurfer:${TAG_FREESURFER} AS build_freesurfer
+FROM pennlinc/qsiprep-ants:${TAG_ANTS} AS build_ants
+FROM pennlinc/qsiprep-mrtrix3:${TAG_MRTRIX3} AS build_mrtrix3
+FROM pennlinc/qsiprep-3tissue:${TAG_3TISSUE} AS build_3tissue
+FROM pennlinc/qsiprep-dsistudio:${TAG_DSISTUDIO} AS build_dsistudio
+FROM pennlinc/qsiprep-afni:${TAG_AFNI} AS build_afni
+FROM pennlinc/qsiprep-drbuddi:${TAG_TORTOISE} AS build_tortoise
+FROM pennlinc/qsiprep-drbuddicuda:${TAG_TORTOISECUDA} AS build_tortoisecuda
+FROM pennlinc/qsiprep-synb0:${TAG_SYNB0} AS build_synb0
+FROM nvidia/cuda:11.1.1-runtime-ubuntu18.04 AS base
+
+COPY --from=build_fsl /opt/conda/envs/fslqsiprep /opt/conda/envs/fslqsiprep
+ENV FSLDIR="/opt/conda/envs/fslqsiprep" \
+    FSLOUTPUTTYPE="NIFTI_GZ" \
+    FSLMULTIFILEQUIT="TRUE" \
+    FSLLOCKDIR="" \
+    FSLMACHINELIST="" \
+    FSLREMOTECALL="" \
+    FSLGECUDAQ="cuda.q" \
+    PATH="/opt/conda/envs/fslqsiprep/bin:$PATH"
+
+COPY --from=build_ants /opt/ants /opt/ants
+ENV ANTSPATH="/opt/ants/bin" \
+    LD_LIBRARY_PATH="/opt/ants/lib:$LD_LIBRARY_PATH" \
+    PATH="$PATH:/opt/ants/bin"
+
+ENV QT_BASE_DIR="/opt/qt512"
+ENV QTDIR="$QT_BASE_DIR" \
+    LD_LIBRARY_PATH="$QT_BASE_DIR/lib/x86_64-linux-gnu:$QT_BASE_DIR/lib:$LD_LIBRARY_PATH" \
+    PKG_CONFIG_PATH="$QT_BASE_DIR/lib/pkgconfig:$PKG_CONFIG_PATH" \
+    PATH="$QT_BASE_DIR/bin:$PATH:/opt/dsi-studio"
+
+COPY --from=build_mrtrix3 /opt/mrtrix3-latest /opt/mrtrix3-latest
+COPY --from=build_3tissue /opt/3Tissue /opt/3Tissue
+ENV PATH="$PATH:/opt/mrtrix3-latest/bin:/opt/3Tissue/bin"
+
+COPY --from=build_freesurfer /opt/freesurfer /opt/freesurfer
+ENV FSL_DIR="/opt/conda/envs/fslqsiprep" \
+    OS="Linux" \
+    FS_OVERRIDE=0 \
+    FIX_VERTEX_AREA="" \
+    FSF_OUTPUT_FORMAT="nii.gz" \
+    FREESURFER_HOME="/opt/freesurfer"
+ENV SUBJECTS_DIR="$FREESURFER_HOME/subjects" \
+    FUNCTIONALS_DIR="$FREESURFER_HOME/sessions" \
+    MNI_DIR="$FREESURFER_HOME/mni" \
+    LOCAL_DIR="$FREESURFER_HOME/local" \
+    MINC_BIN_DIR="$FREESURFER_HOME/mni/bin" \
+    MINC_LIB_DIR="$FREESURFER_HOME/mni/lib" \
+    MNI_DATAPATH="$FREESURFER_HOME/mni/data"
+ENV PERL5LIB="$MINC_LIB_DIR/perl5/5.8.5" \
+    MNI_PERL5LIB="$MINC_LIB_DIR/perl5/5.8.5" \
+    PATH="$FREESURFER_HOME/bin:$FSFAST_HOME/bin:$FREESURFER_HOME/tktools:$MINC_BIN_DIR:$PATH"
+RUN chmod a+rx /opt/freesurfer/bin/mri_synthseg /opt/freesurfer/bin/mri_synthstrip
+
+COPY --from=build_synb0 /opt/synb0 /opt/synb0
+ENV SYNB0_ATLASES=/opt/synb0/atlases
+
+COPY --from=build_afni /opt/afni-latest /opt/afni-latest
+ENV PATH="$PATH:/opt/afni-latest" \
+    AFNI_INSTALLDIR=/opt/afni-latest \
+    AFNI_IMSAVE_WARNINGS=NO
+
+COPY --from=build_tortoise /src/TORTOISEV4/bin /src/TORTOISEV4/bin
+COPY --from=build_tortoise /src/TORTOISEV4/settings /src/TORTOISEV4/settings
+COPY --from=build_tortoisecuda /src/TORTOISEV4/bin/*cuda /src/TORTOISEV4/bin/
+ENV PATH="$PATH:/src/TORTOISEV4/bin"
+
+RUN useradd -m -s /bin/bash -G users qsiprep
+WORKDIR /home/qsiprep
+ENV HOME="/home/qsiprep" \
+    MKL_NUM_THREADS=1 \
+    OMP_NUM_THREADS=1 \
+    MRTRIX_NTHREADS=1 \
+    KMP_WARNINGS=0 \
+    CRN_SHARED_DATA=/niworkflows_data \
+    IS_DOCKER_8395080871=1 \
+    ARTHOME="/opt/art" \
+    DIPY_HOME=/home/qsiprep/.dipy
+
+RUN apt-get update -qq \
+    && apt-get install -y -q --no-install-recommends \
+           apt-utils \
+           bc \
+           binutils \
+           bzip2 \
+           ca-certificates \
+           curl \
+           ed \
+           gsl-bin \
+           graphviz \
+           libfftw3-3 \
+           libglib2.0-0 \
+           libglu1-mesa-dev \
+           libglw1-mesa \
+           libgomp1 \
+           libjpeg62 \
+           libpng16-16 \
+           libquadmath0 \
+           libxm4 \
+           libxmu6 \
+           libxt6 \
+           netpbm \
+           perl \
+           software-properties-common \
+           tcsh \
+           xfonts-base \
+           xvfb \
+           zlib1g-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -sSL --retry 5 -o /tmp/libxp6.deb https://upenn.box.com/shared/static/reyyundn0l3guvjzghrrv6t4w6md2tjd.deb \
+    && dpkg -i /tmp/libxp6.deb \
+    && rm /tmp/libxp6.deb \
+    && curl -sSL --retry 5 -o /tmp/libpng.deb http://snapshot.debian.org/archive/debian-security/20160113T213056Z/pool/updates/main/libp/libpng/libpng12-0_1.2.49-1%2Bdeb7u2_amd64.deb \
+    && dpkg -i /tmp/libpng.deb \
+    && rm /tmp/libpng.deb \
+    && apt-get install -f --no-install-recommends \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
+    && gsl2_path="$(find / -name 'libgsl.so.19' || printf '')" \
+    && if [ -n "$gsl2_path" ]; then ln -sfv "$gsl2_path" "$(dirname "$gsl2_path")/libgsl.so.0"; fi \
+    && ldconfig
+
+COPY --from=build_dsistudio /opt/dsi-studio /opt/dsi-studio
+RUN add-apt-repository ppa:beineri/opt-qt-5.12.8-bionic \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends qt512base qt512charts-no-lgpl fftw3 wget git \
+    && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+WORKDIR /opt/art
+ENV PATH="/opt/art/bin:$PATH"
+RUN cd /opt/art && curl -fsSL https://osf.io/73h5s/download | tar xz --strip-components 1
+
+RUN ldconfig
+WORKDIR /tmp
+
+LABEL org.label-schema.name="qsiprep-base" \
+      org.label-schema.description="QSIPrep base image - runtime dependencies without the qsiprep package" \
+      org.label-schema.url="https://qsiprep.readthedocs.io/" \
+      org.label-schema.vcs-url="https://github.com/PennLINC/qsiprep" \
+      org.label-schema.schema-version="1.0"

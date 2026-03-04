@@ -1,27 +1,49 @@
-# Build into a wheel in a stage that has git installed
-FROM python:slim AS wheelstage
-RUN pip install build
+ARG BASE_IMAGE=pennlinc/qsiprep-base:20260304
+
+FROM ghcr.io/prefix-dev/pixi:0.58.0 AS build
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends git
-COPY . /src/qsiprep
-RUN python -m build /src/qsiprep
+    apt-get install -y --no-install-recommends \
+                    ca-certificates \
+                    build-essential \
+                    git && \
+    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+RUN pixi config set --global run-post-link-scripts insecure
 
-FROM pennlinc/qsiprep_build:26.1.7
+RUN mkdir /app
+COPY pixi.lock pyproject.toml /app
+WORKDIR /app
+RUN --mount=type=cache,target=/root/.cache/rattler pixi install -e qsiprep -e test --frozen --skip qsiprep
+RUN --mount=type=cache,target=/root/.npm pixi run --as-is -e qsiprep npm install -g svgo@^3.2.0 bids-validator@1.14.10
+RUN pixi shell-hook -e qsiprep --as-is | grep -v PATH > /shell-hook.sh
+RUN pixi shell-hook -e test --as-is | grep -v PATH > /test-shell-hook.sh
 
-# Install qsiprep wheel
-COPY --from=wheelstage /src/qsiprep/dist/*.whl .
-RUN pip install --no-cache-dir $( ls *.whl )
+COPY . /app
+RUN --mount=type=cache,target=/root/.cache/rattler pixi install -e test --frozen
+RUN --mount=type=cache,target=/root/.cache/rattler pixi install -e qsiprep --frozen
 
-# Precaching fonts, set 'Agg' as default backend for matplotlib
-RUN python -c "from matplotlib import font_manager" && \
-    sed -i 's/\(backend *: \).*$/\1Agg/g' $( python -c "import matplotlib; print(matplotlib.matplotlib_fname())" )
+FROM ${BASE_IMAGE} AS base
+WORKDIR /home/qsiprep
+ENV HOME="/home/qsiprep"
 
-RUN find $HOME -type d -exec chmod go=u {} + && \
-    find $HOME -type f -exec chmod go=u {} +
+RUN chmod -R go=u $HOME
+WORKDIR /tmp
 
-RUN ldconfig
-WORKDIR /tmp/
-ENTRYPOINT ["/opt/conda/envs/qsiprep/bin/qsiprep"]
+FROM base AS test
+COPY --link --from=build /app/.pixi/envs/test /app/.pixi/envs/test
+COPY --link --from=build /test-shell-hook.sh /shell-hook.sh
+RUN cat /shell-hook.sh >> $HOME/.bashrc
+ENV PATH="/app/.pixi/envs/test/bin:$PATH"
+ENV FSLDIR="/app/.pixi/envs/test"
+
+FROM base AS qsiprep
+COPY --link --from=build /app/.pixi/envs/qsiprep /app/.pixi/envs/qsiprep
+COPY --link --from=build /shell-hook.sh /shell-hook.sh
+RUN cat /shell-hook.sh >> $HOME/.bashrc
+ENV PATH="/app/.pixi/envs/qsiprep/bin:$PATH"
+ENV FSLDIR="/app/.pixi/envs/qsiprep"
+ENV IS_DOCKER_8395080871=1
+
+ENTRYPOINT ["/app/.pixi/envs/qsiprep/bin/qsiprep"]
 ARG BUILD_DATE
 ARG VCS_REF
 ARG VERSION

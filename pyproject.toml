@@ -118,6 +118,62 @@ source = "vcs"
 version-file = "qsiprep/_version.py"
 
 #
+# Pixi configuration
+#
+
+[tool.pixi.workspace]
+channels = ["https://fsl.fmrib.ox.ac.uk/fsldownloads/fslconda/public", "conda-forge"]
+platforms = ["linux-64"]
+
+[tool.pixi.activation.env]
+FSLDIR = "$CONDA_PREFIX"
+FSLOUTPUTTYPE = "NIFTI_GZ"
+
+[tool.pixi.environments]
+default = { features = ["editable"], solve-group = "default" }
+test = { features = ["editable", "tests"], solve-group = "default" }
+qsiprep = { features = ["production", "container"], solve-group = "production" }
+
+[tool.pixi.feature.editable.pypi-dependencies]
+qsiprep = { path = ".", editable = true }
+
+[tool.pixi.feature.production.pypi-dependencies]
+qsiprep = { path = ".", editable = false }
+
+[tool.pixi.tasks]
+
+[tool.pixi.pypi-options.dependency-overrides]
+numpy = ">=1.26,<1.27"
+
+[tool.pixi.dependencies]
+python = "3.10.*"
+nodejs = "20.*"
+mkl = "*"
+mkl-service = "*"
+numpy = "1.26.*"
+scipy = "1.11.*"
+matplotlib = "3.8.*"
+pandas = "1.5.*"
+h5py = "3.10.*"
+graphviz = "*"
+pandoc = "*"
+ants = "2.6.*"
+connectome-workbench-cli = { version = "2.0.*", build = "*qt6*" }
+fsl-base = "*"
+fsl-avwutils = "*"
+fsl-bet2 = "*"
+fsl-flirt = "*"
+fsl-fugue = "*"
+fsl-mcflirt = "*"
+fsl-miscmaths = "*"
+fsl-topup = "*"
+fsl-warpfns = "*"
+
+[tool.pixi.feature.container.dependencies]
+git = "*"
+git-annex = { version = "*", build = "alldep*" }
+
+#
 # Developer tool configurations
 #
 
