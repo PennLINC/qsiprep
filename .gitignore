@@ -99,3 +99,7 @@ scratch/
 
 notebooks/*
 !notebooks/*.ipynb
+
+# pixi environments
+.pixi/*
+!.pixi/config.toml

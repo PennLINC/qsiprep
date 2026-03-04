@@ -25,7 +25,7 @@ dependencies = [
     "jinja2 < 3.1",
     "matplotlib",
     "networkx ~= 2.8.8",
-    "nibabel <= 5.2.0",
+    "nibabel <= 5.3.2",
     "nilearn == 0.10.1",
     "nipype == 1.9.1",
     "nireports >= 24.0.3",
