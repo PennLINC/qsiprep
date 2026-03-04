@@ -226,8 +226,6 @@ jobs:
   get_data:
     <<: *machine_defaults
     steps:
-      - checkout:
-          path: /tmp/src/qsiprep
       - restore_cache:
           keys:
             - data-v1-{{ .Branch }}-{{ .Revision }}
@@ -238,14 +236,36 @@ jobs:
       - run:
           name: Download integration datasets
           command: |
-            cd /tmp/src/qsiprep/.circleci
-            mkdir -p /tmp/data
-            python get_data.py /tmp/data drbuddi_rpe_series
-            python get_data.py /tmp/data drbuddi_epi
-            python get_data.py /tmp/data DSDTI
-            python get_data.py /tmp/data DSCSDSI
-            python get_data.py /tmp/data twoses
-            python get_data.py /tmp/data forrest_gump
+            download_one() {
+              local dset=$1
+              local url=$2
+              if [[ -d /tmp/data/${dset} ]]; then
+                echo "${dset} data was cached"
+                return 0
+              fi
+              mkdir -p /tmp/data/${dset}
+              if [[ "${url}" == *.xz ]]; then
+                wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
+                  -O /tmp/${dset}.tar.xz "${url}" || return 1
+                tar xJf /tmp/${dset}.tar.xz -C /tmp/data/${dset}
+                rm -f /tmp/${dset}.tar.xz
+              elif [[ "${url}" == *.gz ]]; then
+                wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
+                  -O /tmp/${dset}.tar.gz "${url}" || return 1
+                tar xzf /tmp/${dset}.tar.gz -C /tmp/data/${dset}
+                rm -f /tmp/${dset}.tar.gz
+              else
+                echo "Unknown file extension for ${dset}: ${url}"
+                return 1
+              fi
+              echo "Downloaded ${dset}"
+            }
+            download_one drbuddi_rpe_series 'https://upenn.box.com/shared/static/j5mxts5wu0em1toafmrlzdndves1jnfv.xz'
+            download_one drbuddi_epi 'https://upenn.box.com/shared/static/plyuee1nbj9v8eck03s38ojji8tkspwr.xz'
+            download_one DSDTI 'https://upenn.box.com/shared/static/iefjtvfez0c2oug0g1a9ulozqe5il5xy.xz'
+            download_one DSCSDSI 'https://upenn.box.com/shared/static/eq6nvnyazi2zlt63uowqd0zhnlh6z4yv.xz'
+            download_one twoses 'https://upenn.box.com/shared/static/c949fjjhhen3ihgnzhkdw5jympm327pp.xz'
+            download_one forrest_gump 'https://upenn.box.com/shared/static/qat58an322bzzyixrrsk7cmf52q3bepq.xz'
       - save_cache:
           key: data-v1-{{ .Branch }}-{{ .Revision }}
           paths:
