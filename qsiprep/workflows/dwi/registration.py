@@ -4,7 +4,9 @@ from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
-from pkg_resources import resource_filename as pkgrf
+from importlib.resources import files
+
+from ...utils.resources import as_path
 
 from ... import config
 from ...interfaces.itk import ACPCReport, AffineToRigid
@@ -206,7 +208,7 @@ def init_direct_b0_acpc_wf(write_report=True, name='b0_anat_coreg'):
     workflow = Workflow(name=name)
 
     # Defines a coregistration operation
-    ants_settings = pkgrf('qsiprep', 'data/intermodal_ACPC.json')
+    ants_settings = as_path(files('qsiprep') / 'data' / 'intermodal_ACPC.json')
     acpc_reg = pe.Node(
         ANTSRegistrationRPT(generate_report=write_report, from_file=ants_settings),
         name='acpc_reg',

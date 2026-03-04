@@ -10,10 +10,11 @@ Head motion correction
 import nipype.pipeline.engine as pe
 from nipype.interfaces import afni, ants
 from nipype.interfaces import utility as niu
+from importlib.resources import files
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
-from pkg_resources import resource_filename as pkgrf
 
 from ... import config
+from ...utils.resources import as_path
 from ...interfaces import DerivativesDataSink
 from ...interfaces.gradients import CombineMotions, GradientRotation, MatchTransforms
 from ...interfaces.shoreline import (
@@ -251,9 +252,8 @@ def linear_alignment_workflow(transform='Rigid', iternum=0, omp_nthreads=1):
         name='outputnode',
     )
     precision = 'sloppy' if config.execution.sloppy else 'precise'
-    ants_settings = pkgrf(
-        'qsiprep',
-        f'data/shoreline_{precision}_{transform}.json',
+    ants_settings = as_path(
+        files('qsiprep') / 'data' / f'shoreline_{precision}_{transform}.json'
     )
     reg = ants.Registration(from_file=ants_settings, num_threads=omp_nthreads)
     iter_reg = pe.MapNode(
@@ -493,9 +493,8 @@ def init_hmc_model_iteration_wf(name='hmc_model_iter0'):
         name='outputnode',
     )
     precision = 'sloppy' if config.execution.sloppy else 'precise'
-    ants_settings = pkgrf(
-        'qsiprep',
-        f'data/shoreline_{precision}_{config.workflow.hmc_transform}.json',
+    ants_settings = as_path(
+        files('qsiprep') / 'data' / f'shoreline_{precision}_{config.workflow.hmc_transform}.json'
     )
 
     predict_dwis = pe.MapNode(

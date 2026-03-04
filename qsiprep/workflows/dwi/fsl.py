@@ -13,7 +13,9 @@ from nipype.interfaces import fsl
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
-from pkg_resources import resource_filename as pkgr_fn
+from importlib.resources import files
+
+from ...utils.resources import as_path
 
 from ... import config
 from ...interfaces import DerivativesDataSink
@@ -164,7 +166,7 @@ def init_fsl_hmc_wf(
     omp_nthreads = config.nipype.omp_nthreads
     if config.workflow.eddy_config is None:
         # load from the defaults
-        eddy_cfg_file = pkgr_fn('qsiprep.data', 'eddy_params.json')
+        eddy_cfg_file = as_path(files('qsiprep.data') / 'eddy_params.json')
     else:
         eddy_cfg_file = config.workflow.eddy_config
 
