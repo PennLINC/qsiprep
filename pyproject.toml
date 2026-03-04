@@ -290,3 +290,12 @@ exclude_lines = [
     'raise NotImplementedError',
     'warnings\.warn',
 ]
+
+[tool.codespell]
+skip = '.git,*.pdf,*.svg,*.html,dataset_description.json,*.gii,*.bib,*.lock'
+# te - TE
+# Weill - name
+# reson - Reson. abbreviation in citation
+# DNE: acronym for does not exist
+# fo: acronym for file object
+ignore-words-list = 'te,weill,reson,DNE,fo,Gage,nd,pres,fixel,assertIn'

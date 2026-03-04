@@ -10,7 +10,6 @@ Phase Encoding POLARity (*PEPOLAR*) techniques
 
 from importlib.resources import files
 
-from ...utils.resources import as_path
 from nipype.interfaces import afni, ants
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
@@ -23,6 +22,7 @@ from ...interfaces import StructuralReference
 from ...interfaces.fmap import B0RPEFieldmap, PEPOLARReport
 from ...interfaces.images import ExtractWM
 from ...interfaces.nilearn import EnhanceB0
+from ...utils.resources import as_path
 from ..anatomical import init_synthstrip_wf
 
 

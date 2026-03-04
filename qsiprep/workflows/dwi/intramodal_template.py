@@ -7,17 +7,17 @@ Head motion correction
 
 """
 
+from importlib.resources import files
+
 import nipype.pipeline.engine as pe
 from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
-from importlib.resources import files
-
-from ...utils.resources import as_path
 
 from ... import config
 from ...interfaces import DerivativesDataSink
 from ...interfaces.ants import MultivariateTemplateConstruction2
+from ...utils.resources import as_path
 from .hmc import init_b0_hmc_wf
 from .registration import init_b0_to_anat_registration_wf
 

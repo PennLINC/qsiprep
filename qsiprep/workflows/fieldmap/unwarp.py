@@ -18,10 +18,8 @@ Unwarping
 """
 
 import os
-
 from importlib.resources import files
 
-from ...utils.resources import as_path
 from nipype.interfaces import ants, fsl
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
@@ -37,6 +35,7 @@ from ...interfaces import DerivativesDataSink
 from ...interfaces.fmap import FieldToHz, FieldToRadS
 from ...interfaces.fmap import get_ees as _get_ees
 from ...interfaces.niworkflows import FUGUEvsm2ANTSwarp
+from ...utils.resources import as_path
 
 
 def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
@@ -121,13 +120,9 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
 
     # Register the reference of the fieldmap to the reference
     # of the target image (the one that shall be corrected)
-    ants_settings = as_path(
-        files('qsiprep') / 'data' / 'fmap-any_registration.json'
-    )
+    ants_settings = as_path(files('qsiprep') / 'data' / 'fmap-any_registration.json')
     if config.execution.sloppy:
-        ants_settings = as_path(
-            files('qsiprep') / 'data' / 'fmap-any_registration_testing.json'
-        )
+        ants_settings = as_path(files('qsiprep') / 'data' / 'fmap-any_registration_testing.json')
     fmap2ref_reg = pe.Node(
         ANTSRegistrationRPT(
             generate_report=True,

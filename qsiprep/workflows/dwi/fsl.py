@@ -8,14 +8,12 @@ Implementing the FSL preprocessing workflow
 
 import json
 import os
+from importlib.resources import files
 
 from nipype.interfaces import fsl
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
-from importlib.resources import files
-
-from ...utils.resources import as_path
 
 from ... import config
 from ...interfaces import DerivativesDataSink
@@ -30,6 +28,7 @@ from ...interfaces.gradients import ExtractB0s
 from ...interfaces.images import ConformDwi, IntraModalMerge, SplitDWIsFSL
 from ...interfaces.nilearn import EnhanceB0
 from ...interfaces.reports import TopupSummary
+from ...utils.resources import as_path
 from ..fieldmap.base import init_sdc_wf
 from ..fieldmap.drbuddi import init_drbuddi_wf
 

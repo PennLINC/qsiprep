@@ -32,6 +32,8 @@ Anatomical reference preprocessing workflows
 
 """
 
+from importlib.resources import files
+
 from nipype.interfaces import afni, ants, mrtrix3
 from nipype.interfaces import utility as niu
 from nipype.interfaces.ants import BrainExtraction, N4BiasFieldCorrection
@@ -40,9 +42,6 @@ from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from niworkflows.interfaces.images import TemplateDimensions
 from niworkflows.interfaces.reportlets.masks import ROIsPlot
-from importlib.resources import files
-
-from ...utils.resources import as_path
 
 from ... import config
 from ...interfaces import Conform, DerivativesDataSink
@@ -57,6 +56,7 @@ from ...interfaces.freesurfer import (
 from ...interfaces.itk import AffineToRigid, DisassembleTransform
 from ...interfaces.niworkflows import RobustMNINormalizationRPT
 from ...utils.misc import fix_multi_source_name
+from ...utils.resources import as_path
 
 ANTS_VERSION = BrainExtraction().version or '<ver>'
 FS_VERSION = '7.3.1'
