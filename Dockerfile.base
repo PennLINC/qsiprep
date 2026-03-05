@@ -18,18 +18,18 @@ FROM pennlinc/qsiprep-afni:${TAG_AFNI} AS build_afni
 FROM pennlinc/qsiprep-drbuddi:${TAG_TORTOISE} AS build_tortoise
 FROM pennlinc/qsiprep-drbuddicuda:${TAG_TORTOISECUDA} AS build_tortoisecuda
 FROM pennlinc/qsiprep-synb0:${TAG_SYNB0} AS build_synb0
-FROM nvidia/cuda:11.1.1-runtime-ubuntu18.04 AS base
+FROM nvidia/cuda:12.2.2-runtime-ubuntu22.04 AS base
 
 COPY --from=build_ants /opt/ants /opt/ants
 ENV ANTSPATH="/opt/ants/bin" \
     LD_LIBRARY_PATH="/opt/ants/lib:$LD_LIBRARY_PATH" \
     PATH="$PATH:/opt/ants/bin"
 
-ENV QT_BASE_DIR="/opt/qt512"
-ENV QTDIR="$QT_BASE_DIR" \
-    LD_LIBRARY_PATH="$QT_BASE_DIR/lib/x86_64-linux-gnu:$QT_BASE_DIR/lib:$LD_LIBRARY_PATH" \
-    PKG_CONFIG_PATH="$QT_BASE_DIR/lib/pkgconfig:$PKG_CONFIG_PATH" \
-    PATH="$QT_BASE_DIR/bin:$PATH:/opt/dsi-studio"
+ENV QT_BASE_DIR="/opt/qt512" \
+    QTDIR="$QT_BASE_DIR" \
+    LD_LIBRARY_PATH="$QT_BASE_DIR/lib/x86_64-linux-gnu:$QT_BASE_DIR/lib:${LD_LIBRARY_PATH:-}" \
+    PKG_CONFIG_PATH="$QT_BASE_DIR/lib/pkgconfig:${PKG_CONFIG_PATH:-}" \
+    PATH="$QT_BASE_DIR/bin:${PATH:-}:/opt/dsi-studio"
 
 COPY --from=build_mrtrix3 /opt/mrtrix3-latest /opt/mrtrix3-latest
 COPY --from=build_3tissue /opt/3Tissue /opt/3Tissue
@@ -48,9 +48,10 @@ ENV SUBJECTS_DIR="$FREESURFER_HOME/subjects" \
     MINC_BIN_DIR="$FREESURFER_HOME/mni/bin" \
     MINC_LIB_DIR="$FREESURFER_HOME/mni/lib" \
     MNI_DATAPATH="$FREESURFER_HOME/mni/data"
-ENV PERL5LIB="$MINC_LIB_DIR/perl5/5.8.5" \
+ENV FSFAST_HOME="$FREESURFER_HOME/fsfast" \
+    PERL5LIB="$MINC_LIB_DIR/perl5/5.8.5" \
     MNI_PERL5LIB="$MINC_LIB_DIR/perl5/5.8.5" \
-    PATH="$FREESURFER_HOME/bin:$FSFAST_HOME/bin:$FREESURFER_HOME/tktools:$MINC_BIN_DIR:$PATH"
+    PATH="$FREESURFER_HOME/bin:$FREESURFER_HOME/fsfast/bin:$FREESURFER_HOME/tktools:$MINC_BIN_DIR:$PATH"
 RUN chmod a+rx /opt/freesurfer/bin/mri_synthseg /opt/freesurfer/bin/mri_synthstrip
 
 COPY --from=build_synb0 /opt/synb0 /opt/synb0
@@ -120,27 +121,28 @@ RUN apt-get update -qq \
     && dpkg -i /tmp/libxp6.deb \
     && rm /tmp/libxp6.deb \
     && curl -sSL --retry 5 -o /tmp/libpng.deb http://snapshot.debian.org/archive/debian-security/20160113T213056Z/pool/updates/main/libp/libpng/libpng12-0_1.2.49-1%2Bdeb7u2_amd64.deb \
-    && dpkg -i /tmp/libpng.deb \
-    && rm /tmp/libpng.deb \
+    && (cd /tmp && ar x libpng.deb && tar xf data.tar.* && cp lib/x86_64-linux-gnu/libpng12.so.0* /usr/local/lib/ && rm -f libpng.deb data.tar.* control.tar.* debian-binary) \
     && apt-get install -f --no-install-recommends \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
+    && rm -rf /var/lib/apt/lists/* \
     && gsl2_path="$(find / -name 'libgsl.so.19' || printf '')" \
     && if [ -n "$gsl2_path" ]; then ln -sfv "$gsl2_path" "$(dirname "$gsl2_path")/libgsl.so.0"; fi \
     && ldconfig
 
 COPY --from=build_dsistudio /opt/dsi-studio /opt/dsi-studio
-RUN add-apt-repository ppa:beineri/opt-qt-5.12.8-bionic \
-    && add-apt-repository ppa:ubuntu-toolchain-r/test \
+# Reuse Qt 5.12 from dsistudio image (avoids Focal PPA and libicu66 on Jammy).
+COPY --from=build_dsistudio /opt/qt512 /opt/qt512
+# Ensure /tmp is writable; install remaining deps (Qt comes from dsistudio stage).
+RUN mkdir -p /tmp /var/tmp && chmod 1777 /tmp /var/tmp \
+    && add-apt-repository -y ppa:ubuntu-toolchain-r/test \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
-           qt512base \
-           qt512charts-no-lgpl \
            fftw3 \
            wget \
            git \
            g++-12 \
            libstdc++6 \
+    && strings /lib/x86_64-linux-gnu/libc.so.6 | grep -q 'GLIBC_2.28' \
     && strings /usr/lib/x86_64-linux-gnu/libstdc++.so.6 | grep -q 'GLIBCXX_3.4.26' \
     && strings /usr/lib/x86_64-linux-gnu/libstdc++.so.6 | grep -q 'GLIBCXX_3.4.30' \
     && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
