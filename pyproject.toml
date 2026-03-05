@@ -52,6 +52,7 @@ dependencies = [
     "pytest-xdist",
     "templateflow",
     "tensorflow",
+    "torch",
 ]
 dynamic = ["version"]
 
