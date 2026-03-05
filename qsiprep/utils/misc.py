@@ -83,5 +83,34 @@ def add_suffix(in_files, suffix):
     return op.basename(fname_presuffix(filename_to_list(in_files)[0], suffix=suffix))
 
 
+def validate_eddy_config(eddy_config):
+    """Validate the eddy configuration file.
+
+    Parameters
+    ----------
+    eddy_config : str
+        The path to the eddy configuration JSON file.
+
+    Raises
+    ------
+    ValueError
+        If the eddy configuration file is not valid.
+    """
+    import json
+    import os
+
+    if not os.path.exists(eddy_config):
+        raise ValueError(f'Eddy configuration file {eddy_config} does not exist.')
+    with open(eddy_config) as f:
+        eddy_config = json.load(f)
+
+    if 'cnr_maps' not in eddy_config:
+        raise ValueError('Eddy configuration file must contain "cnr_maps" key.')
+    if eddy_config['cnr_maps'] is not True:
+        raise ValueError('Eddy configuration file must contain "cnr_maps" key with value True.')
+
+    return
+
+
 if __name__ == '__main__':
     pass
