@@ -139,8 +139,10 @@ RUN add-apt-repository ppa:beineri/opt-qt-5.12.8-bionic \
            fftw3 \
            wget \
            git \
+           g++-12 \
            libstdc++6 \
     && strings /usr/lib/x86_64-linux-gnu/libstdc++.so.6 | grep -q 'GLIBCXX_3.4.26' \
+    && strings /usr/lib/x86_64-linux-gnu/libstdc++.so.6 | grep -q 'GLIBCXX_3.4.30' \
     && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 WORKDIR /opt/art
