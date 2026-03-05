@@ -131,8 +131,16 @@ RUN apt-get update -qq \
 
 COPY --from=build_dsistudio /opt/dsi-studio /opt/dsi-studio
 RUN add-apt-repository ppa:beineri/opt-qt-5.12.8-bionic \
+    && add-apt-repository ppa:ubuntu-toolchain-r/test \
     && apt-get update \
-    && apt-get install -y --no-install-recommends qt512base qt512charts-no-lgpl fftw3 wget git \
+    && apt-get install -y --no-install-recommends \
+           qt512base \
+           qt512charts-no-lgpl \
+           fftw3 \
+           wget \
+           git \
+           libstdc++6 \
+    && strings /usr/lib/x86_64-linux-gnu/libstdc++.so.6 | grep -q 'GLIBCXX_3.4.26' \
     && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 WORKDIR /opt/art
