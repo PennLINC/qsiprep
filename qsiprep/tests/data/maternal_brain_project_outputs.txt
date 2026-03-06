@@ -13,6 +13,7 @@ sub-01/anat/sub-01_from-MNI152NLin2009cAsym_to-ACPC_mode-image_xfm.h5
 sub-01/anat/sub-01_from-anat_to-ACPC_mode-image_xfm.mat
 sub-01/anat/sub-01_space-ACPC_desc-aseg_dseg.nii.gz
 sub-01/anat/sub-01_space-ACPC_desc-brain_mask.nii.gz
+sub-01/anat/sub-01_space-ACPC_desc-brainnocsf_mask.nii.gz
 sub-01/anat/sub-01_space-ACPC_desc-preproc_T1w.json
 sub-01/anat/sub-01_space-ACPC_desc-preproc_T1w.nii.gz
 sub-01/anat/sub-01_space-ACPC_dseg.nii.gz
