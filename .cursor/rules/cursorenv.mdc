@@ -1,0 +1,16 @@
+---
+description: Activate the conda environment specified in .cursor/.cursorenv before running shell commands
+alwaysApply: true
+---
+
+# Conda Environment Activation
+
+Before running any shell command that requires Python tooling (linters, formatters, test runners, package managers, etc.), activate the conda environment specified in `.cursor/.cursorenv`.
+
+Use this activation prefix for all such commands:
+
+```bash
+eval "$(/opt/miniconda3/condabin/conda shell.zsh hook)" && conda activate lincapps && <your command>
+```
+
+If `.cursor/.cursorenv` is absent or unreadable, fall back to running commands without activation and note the issue to the user.

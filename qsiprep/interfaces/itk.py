@@ -7,6 +7,7 @@ ITK files handling
 
 """
 
+import glob
 import os
 import os.path as op
 import subprocess
@@ -215,17 +216,37 @@ def _arrange_xfms(transforms, num_files, tmp_folder):
 
 def disassemble_transform(transform_file, cwd):
     cmd = ['CompositeTransformUtil', '--disassemble', transform_file, 'disassemble']
-    affine_out = cwd + '/00_disassemble_AffineTransform.mat'
-    warp_out = cwd + '/01_disassemble_DisplacementFieldTransform.nii.gz'
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd)
     LOGGER.info(' '.join(cmd))
     out, err = proc.communicate()
 
-    if not op.exists(affine_out):
-        raise Exception('unable to unpack composite transform')
-    transforms = [affine_out]
-    if op.exists(warp_out):
-        transforms.append(warp_out)
+    if proc.returncode != 0:
+        LOGGER.error(
+            'CompositeTransformUtil failed (exit %d): %s',
+            proc.returncode,
+            err.decode(),
+        )
+
+    # ANTs v2.4.x names files as {index}_{prefix}_{ClassName}.{ext},
+    # while v2.5+ uses {prefix}_{index}_{ClassName}.{ext}.
+    # ITK 5.4+ may also report MatrixOffsetTransformBase instead of AffineTransform.
+    # Use glob patterns to find the actual output files regardless of naming convention.
+    affine_candidates = sorted(
+        glob.glob(op.join(cwd, '*disassemble*Affine*.mat'))
+        + glob.glob(op.join(cwd, '*disassemble*MatrixOffset*.mat'))
+    )
+    warp_candidates = sorted(glob.glob(op.join(cwd, '*disassemble*DisplacementField*.nii.gz')))
+
+    if not affine_candidates:
+        raise Exception(
+            'Unable to unpack composite transform. '
+            f'stdout: {out.decode()}, stderr: {err.decode()}, '
+            f'files in cwd: {os.listdir(cwd)}'
+        )
+
+    transforms = [affine_candidates[0]]
+    if warp_candidates:
+        transforms.append(warp_candidates[0])
     return transforms
 
 
