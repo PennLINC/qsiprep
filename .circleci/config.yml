@@ -1,526 +1,518 @@
 version: 2.1
 orbs:
-  codecov: codecov/codecov@3.2.4
+  codecov: codecov/codecov@4.1.0
 
-.dockersetup: &dockersetup
-  docker:
-    - image: pennlinc/qsiprep_build:26.1.7
+_machine_defaults: &machine_defaults
+  environment:
+    TZ: "/usr/share/zoneinfo/America/New_York"
+  machine:
+    image: default
+    docker_layer_caching: true
   working_directory: /tmp/src/qsiprep
+  resource_class: large
 
-runinstall: &runinstall
-    name: Install qsiprep
-    command: |
-      VERSION=0+build
-      if [[ -n "$CIRCLE_TAG" ]]; then
-        VERSION="$CIRCLE_TAG"
-      fi
-      git checkout $CIRCLE_BRANCH
-      pip install .[tests] --progress-bar off
+_docker_auth: &docker_auth
+  name: Docker authentication
+  command: |
+    if [[ -n "$DOCKERHUB_TOKEN" ]]; then
+      echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+    fi
 
-      # Precaching fonts, set 'Agg' as default backend for matplotlib
-      python -c "from matplotlib import font_manager"
-      sed -i 's/\(backend *: \).*$/\1Agg/g' $( python -c "import matplotlib; print(matplotlib.matplotlib_fname())" )
+_setup_docker_registry: &setup_docker_registry
+  name: Set up local Docker registry
+  command: |
+    if [[ -f /tmp/images/registry.tar.gz ]]; then
+      docker load < /tmp/images/registry.tar.gz
+    else
+      docker pull registry:2
+    fi
+    docker run -d -p 5000:5000 --restart=always --name=registry \
+      -v /tmp/docker:/var/lib/registry registry:2
 
-      # Write the config file
-      if [ -d /home/qsiprep ]; then
-        mkdir /root/.nipype
-        CFG=/root/.nipype/nipype.cfg
-        printf "[execution]\nstop_on_first_crash = true\n" > ${CFG}
-        echo "poll_sleep_duration = 0.01" >> ${CFG}
-        echo "hash_method = content" >> ${CFG}
-        ln -s /home/qsiprep/.dipy /root/.dipy
-      fi
+_pull_from_registry: &pull_from_registry
+  name: Pull and tag production image from local registry
+  command: |
+    docker pull localhost:5000/qsiprep
+    docker tag localhost:5000/qsiprep pennlinc/qsiprep:latest
+
+_pull_test_image: &pull_test_image
+  name: Pull and tag test image from local registry
+  command: |
+    docker pull localhost:5000/qsiprep-test
+    docker tag localhost:5000/qsiprep-test pennlinc/qsiprep:test
+
+commands:
+  restore_build_and_data:
+    description: Restore Docker build cache and test data cache
+    steps:
+      - restore_cache:
+          keys:
+            - build-v3-{{ checksum "Dockerfile" }}-{{ checksum "pixi.lock" }}
+      - restore_cache:
+          keys:
+            - data-v1-{{ .Branch }}-{{ .Revision }}
+            - data-v1--{{ .Revision }}
+            - data-v1-{{ .Branch }}-
+            - data-v1-master-
+            - data-v1-
+      - run: *docker_auth
+      - run: *setup_docker_registry
+      - run: *pull_test_image
+
+  run_integration_test:
+    description: Run a pytest marker inside test image
+    parameters:
+      marker:
+        type: string
+      cpus:
+        type: integer
+        default: 4
+      coverage_name:
+        type: string
+    steps:
+      - run:
+          name: Run qsiprep (<< parameters.marker >>)
+          no_output_timeout: 5h
+          command: |
+            mkdir -p /tmp/out /tmp/work /tmp/coverage
+            docker run --rm=false \
+              -e CIRCLE_CPUS=<< parameters.cpus >> \
+              -e COVERAGE_FILE=/coverage/.coverage.<< parameters.coverage_name >> \
+              -v /tmp/src/qsiprep:/tmp/src/qsiprep:ro \
+              -v /tmp/data:/data:ro \
+              -v /tmp/out:/out \
+              -v /tmp/work:/work \
+              -v /tmp/coverage:/coverage \
+              -w /tmp/src/qsiprep \
+              --entrypoint pytest \
+              pennlinc/qsiprep:test \
+              -rP -o log_cli=true -m "<< parameters.marker >>" \
+              --cov-append --cov-report term-missing --cov=qsiprep \
+              --data_dir=/data --output_dir=/out --working_dir=/work \
+              qsiprep
+      - run:
+          name: Clean large artifacts
+          when: always
+          command: |
+            find /tmp/out/ -name "*.nii.gz" -type f -delete 2>/dev/null || true
+            find /tmp/out/ -name "*.fib.gz" -type f -delete 2>/dev/null || true
+      - store_artifacts:
+          path: /tmp/out
+      - persist_to_workspace:
+          root: /tmp/coverage
+          paths:
+            - .coverage.<< parameters.coverage_name >>
 
 jobs:
-  build:
-    resource_class: small
-    docker:
-      - image: cimg/python:3.10.9
-    working_directory: /tmp/src/qsiprep
+  image_prep:
+    <<: *machine_defaults
+    environment:
+      TZ: "/usr/share/zoneinfo/America/New_York"
+      DOCKER_BUILDKIT: "1"
     steps:
-      - checkout
-      - run: *runinstall
-
-  download_drbuddi_rpe_series:
-    docker:
-      - image: cimg/python:3.10.9
-    working_directory: /tmp/src/qsiprep
-    steps:
-      - checkout
+      - checkout:
+          path: /tmp/src/qsiprep
       - restore_cache:
-          key: drbuddi_rpe_series-01
-      - run: *runinstall
+          keys:
+            - build-v3-{{ checksum "Dockerfile" }}-{{ checksum "pixi.lock" }}
+            - build-v1-{{ .Branch }}-{{ .Revision }}
+            - build-v1-master-
+      - run: *docker_auth
+      - run: *setup_docker_registry
       - run:
-          name: Download drbuddi_rpe_series test data
+          name: Get base image information
           command: |
-            cd /tmp/src/qsiprep/.circleci
-            python get_data.py $PWD/data drbuddi_rpe_series
+            export BASE_IMAGE=$( grep "BASE_IMAGE=" Dockerfile | head -1 | cut -d= -f2 )
+            export BASE_IMAGE_NAME=${BASE_IMAGE%:*}
+            export BASE_TAG=${BASE_IMAGE#*:}
+            echo "BASE_IMAGE=$BASE_IMAGE" >> "$BASH_ENV"
+            echo "BASE_IMAGE_NAME=$BASE_IMAGE_NAME" >> "$BASH_ENV"
+            echo "BASE_TAG=$BASE_TAG" >> "$BASH_ENV"
+      - run:
+          name: Determine build requirements
+          command: |
+            if [[ -f /tmp/images/imageprep-success.marker ]]; then
+              echo "BUILD_PRODUCTION_IMAGE=0" >> "$BASH_ENV"
+              echo "BUILD_TEST_IMAGE=0" >> "$BASH_ENV"
+            else
+              echo "BUILD_PRODUCTION_IMAGE=1" >> "$BASH_ENV"
+              echo "BUILD_TEST_IMAGE=1" >> "$BASH_ENV"
+            fi
+      - run:
+          name: Build base image if needed
+          no_output_timeout: 90m
+          command: |
+            if ! docker manifest inspect "$BASE_IMAGE" > /dev/null 2>&1; then
+              docker build -f Dockerfile.base \
+                --platform linux/amd64 \
+                -t "$BASE_IMAGE" \
+                -t "$BASE_IMAGE_NAME:latest" .
+              echo "BASE_WAS_BUILT=1" >> "$BASH_ENV"
+            else
+              echo "BASE_WAS_BUILT=0" >> "$BASH_ENV"
+            fi
+      - run:
+          name: Build production image
+          no_output_timeout: 3h
+          command: |
+            if [[ "$BUILD_PRODUCTION_IMAGE" == "1" || "$BASE_WAS_BUILT" == "1" ]]; then
+              if [[ -n "$CIRCLE_TAG" ]]; then THISVERSION="$CIRCLE_TAG"; else THISVERSION="0+build"; fi
+              e=1 && for i in {1..5}; do
+                docker build \
+                  --target qsiprep \
+                  --rm=false \
+                  -t pennlinc/qsiprep:latest \
+                  --platform linux/amd64 \
+                  --build-arg BUILD_DATE="$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+                  --build-arg VCS_REF="$(git rev-parse --short HEAD)" \
+                  --build-arg VERSION="$THISVERSION" . \
+                && e=0 && break || sleep 15
+              done && [ "$e" -eq "0" ]
+            fi
+      - run:
+          name: Build test image
+          no_output_timeout: 90m
+          command: |
+            if [[ "$BUILD_TEST_IMAGE" == "1" || "$BASE_WAS_BUILT" == "1" ]]; then
+              docker build --target test --rm=false -t pennlinc/qsiprep:test --platform linux/amd64 .
+            elif docker image inspect pennlinc/qsiprep:test > /dev/null 2>&1; then
+              echo "Reusing local test image."
+            elif docker pull localhost:5000/qsiprep-test; then
+              docker tag localhost:5000/qsiprep-test pennlinc/qsiprep:test
+            else
+              docker build --target test --rm=false -t pennlinc/qsiprep:test --platform linux/amd64 .
+            fi
+      - run:
+          name: Verify images
+          command: |
+            if [[ "$BUILD_PRODUCTION_IMAGE" == "1" || "$BASE_WAS_BUILT" == "1" ]]; then
+              docker run --rm pennlinc/qsiprep:latest --version
+            fi
+            docker run --rm --entrypoint pytest pennlinc/qsiprep:test --version
+      - run:
+          name: Push base image if newly built
+          command: |
+            if [[ "$BASE_WAS_BUILT" == "1" ]] && docker image inspect "$BASE_IMAGE" > /dev/null 2>&1; then
+              if [[ -n "$DOCKERHUB_TOKEN" ]]; then
+                docker push "$BASE_IMAGE"
+                docker push "$BASE_IMAGE_NAME:latest"
+              fi
+            fi
+      - run:
+          name: Push images to local registry
+          no_output_timeout: 40m
+          command: |
+            if [[ "$BUILD_PRODUCTION_IMAGE" == "1" || "$BASE_WAS_BUILT" == "1" ]]; then
+              docker tag pennlinc/qsiprep:latest localhost:5000/qsiprep
+              docker push localhost:5000/qsiprep
+            fi
+            docker tag pennlinc/qsiprep:test localhost:5000/qsiprep-test
+            docker push localhost:5000/qsiprep-test
+      - run:
+          name: Docker registry garbage collection
+          command: docker exec registry /bin/registry garbage-collect --delete-untagged /etc/docker/registry/config.yml
+      - run:
+          name: Record successful image prep
+          command: |
+            mkdir -p /tmp/images
+            touch /tmp/images/imageprep-success.marker
+            docker save registry:2 -o /tmp/images/registry.tar.gz
       - save_cache:
-          key: drbuddi_rpe_series-01
+          key: build-v3-{{ checksum "Dockerfile" }}-{{ checksum "pixi.lock" }}
           paths:
-            - /tmp/src/qsiprep/.circleci/data/drbuddi_rpe_series
+            - /tmp/docker
+            - /tmp/images
 
-  download_drbuddi_epi:
-    resource_class: small
-    docker:
-      - image: cimg/python:3.10.9
-    working_directory: /tmp/src/qsiprep
+  get_data:
+    <<: *machine_defaults
     steps:
-      - checkout
       - restore_cache:
-          key: drbuddi_epi-01
-      - run: *runinstall
+          keys:
+            - data-v1-{{ .Branch }}-{{ .Revision }}
+            - data-v1--{{ .Revision }}
+            - data-v1-{{ .Branch }}-
+            - data-v1-master-
+            - data-v1-
       - run:
-          name: Download drbuddi_epi test data
+          name: Download integration datasets
           command: |
-            cd /tmp/src/qsiprep/.circleci
-            python get_data.py $PWD/data drbuddi_epi
+            download_one() {
+              local dset=$1
+              local url=$2
+              if [[ -d /tmp/data/${dset} ]]; then
+                echo "${dset} data was cached"
+                return 0
+              fi
+              mkdir -p /tmp/data/${dset}
+              if [[ "${url}" == *.xz ]]; then
+                wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
+                  -O /tmp/${dset}.tar.xz "${url}" || return 1
+                tar xJf /tmp/${dset}.tar.xz -C /tmp/data/${dset}
+                rm -f /tmp/${dset}.tar.xz
+              elif [[ "${url}" == *.gz ]]; then
+                wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
+                  -O /tmp/${dset}.tar.gz "${url}" || return 1
+                tar xzf /tmp/${dset}.tar.gz -C /tmp/data/${dset}
+                rm -f /tmp/${dset}.tar.gz
+              else
+                echo "Unknown file extension for ${dset}: ${url}"
+                return 1
+              fi
+              echo "Downloaded ${dset}"
+            }
+            download_one HBCD 'https://upenn.box.com/shared/static/gn1ec8x7mtk1f07l97d0th9idn4qv3yx.xz'
+            download_one DSCSDSI 'https://upenn.box.com/shared/static/eq6nvnyazi2zlt63uowqd0zhnlh6z4yv.xz'
+            download_one DSCSDSI_BUDS 'https://upenn.box.com/shared/static/bvhs3sw2swdkdyekpjhnrhvz89x3k87t.xz'
+            download_one DSDTI 'https://upenn.box.com/shared/static/iefjtvfez0c2oug0g1a9ulozqe5il5xy.xz'
+            download_one twoses 'https://upenn.box.com/shared/static/c949fjjhhen3ihgnzhkdw5jympm327pp.xz'
+            download_one multishell_output 'https://upenn.box.com/shared/static/hr7xnxicbx9iqndv1yl35bhtd61fpalp.xz'
+            download_one singleshell_output 'https://upenn.box.com/shared/static/9jhf0eo3ml6ojrlxlz6lej09ny12efgg.gz'
+            download_one drbuddi_rpe_series 'https://upenn.box.com/shared/static/j5mxts5wu0em1toafmrlzdndves1jnfv.xz'
+            download_one drbuddi_epi 'https://upenn.box.com/shared/static/plyuee1nbj9v8eck03s38ojji8tkspwr.xz'
+            download_one DSDTI_fmap 'https://upenn.box.com/shared/static/rxr6qbi6ezku9gw3esfpnvqlcxaw7n5n.gz'
+            download_one DSCSDSI_fmap 'https://upenn.box.com/shared/static/l561psez1ojzi4p3a12eidaw9vbizwdc.gz'
+            download_one maternal_brain_project 'https://upenn.box.com/shared/static/tkahg1ctipmfihvpa1gmibvcv0gb721h.xz'
+            download_one forrest_gump 'https://upenn.box.com/shared/static/qat58an322bzzyixrrsk7cmf52q3bepq.xz'
       - save_cache:
-          key: drbuddi_epi-01
+          key: data-v1-{{ .Branch }}-{{ .Revision }}
           paths:
-            - /tmp/src/qsiprep/.circleci/data/drbuddi_epi
-
-  download_DSDTI:
-    resource_class: small
-    docker:
-      - image: cimg/python:3.10.9
-    working_directory: /tmp/src/qsiprep
-    steps:
-      - checkout
-      - restore_cache:
-          key: DSDTI-01
-      - run: *runinstall
-      - run:
-          name: Download DSDTI test data
-          command: |
-            cd /tmp/src/qsiprep/.circleci
-            python get_data.py $PWD/data DSDTI
-      - save_cache:
-          key: DSDTI-01
-          paths:
-            - /tmp/src/qsiprep/.circleci/data/DSDTI
-
-  download_DSCSDSI:
-    resource_class: small
-    docker:
-      - image: cimg/python:3.10.9
-    working_directory: /tmp/src/qsiprep
-    steps:
-      - checkout
-      - restore_cache:
-          key: DSCSDSI-01
-      - run: *runinstall
-      - run:
-          name: Download DSCSDSI test data
-          command: |
-            cd /tmp/src/qsiprep/.circleci
-            python get_data.py $PWD/data DSCSDSI
-      - save_cache:
-          key: DSCSDSI-01
-          paths:
-            - /tmp/src/qsiprep/.circleci/data/DSCSDSI
-
-  download_twoses:
-    resource_class: small
-    docker:
-      - image: cimg/python:3.10.9
-    working_directory: /tmp/src/qsiprep
-    steps:
-      - checkout
-      - restore_cache:
-          key: twoses-02
-      - run: *runinstall
-      - run:
-          name: Download twoses test data
-          command: |
-            cd /tmp/src/qsiprep/.circleci
-            python get_data.py $PWD/data twoses
-      - save_cache:
-          key: twoses-02
-          paths:
-            - /tmp/src/qsiprep/.circleci/data/twoses
-
-  download_forrest_gump:
-    resource_class: small
-    docker:
-      - image: cimg/python:3.10.9
-    working_directory: /tmp/src/qsiprep
-    steps:
-      - checkout
-      - restore_cache:
-          key: forrestgump-01
-      - run: *runinstall
-      - run:
-          name: Download forrest_gump test data
-          command: |
-            cd /tmp/src/qsiprep/.circleci
-            python get_data.py $PWD/data forrest_gump
-      - save_cache:
-          key: forrestgump-01
-          paths:
-            - /tmp/src/qsiprep/.circleci/data/forrest_gump
+            - /tmp/data
 
   DSCSDSI:
-    resource_class: large
-    environment:
-      CIRCLE_CPUS: 4
-    <<: *dockersetup
+    <<: *machine_defaults
     steps:
-      - checkout
-      - restore_cache:
-          key: DSCSDSI-01
-      - run: *runinstall
-      - run:
-          name: Run TENSORLine with epi fmaps and DRBUDDI
-          no_output_timeout: 2h
-          command: |
-            pytest -rP -o log_cli=true -m "dscsdsi" --cov-config=/tmp/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/tmp/src/qsiprep/.circleci/data --output_dir=/tmp/src/qsiprep/.circleci/out --working_dir=/tmp/src/qsiprep/.circleci/work qsiprep
-            mkdir /tmp/src/coverage
-            mv /tmp/src/qsiprep/.coverage /tmp/src/coverage/.coverage.dscsdsi
-            # remove nifti files before uploading artifacts
-            find /tmp/src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
-            find /tmp/src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
-      - persist_to_workspace:
-          root: /tmp/src/coverage/
-          paths:
-            - .coverage.dscsdsi
-      - store_artifacts:
-          path: /tmp/src/qsiprep/.circleci/out/dscsdsi/
+      - checkout:
+          path: /tmp/src/qsiprep
+      - restore_build_and_data
+      - run_integration_test:
+          marker: dscsdsi
+          cpus: 4
+          coverage_name: dscsdsi
 
   DSDTI_nofmap:
-    environment:
-      CIRCLE_CPUS: 4
-    resource_class: large
-    <<: *dockersetup
+    <<: *machine_defaults
     steps:
-      - checkout
-      - restore_cache:
-          key: DSDTI-01
-      - run: *runinstall
-      - run:
-          name: Run DTI with no fieldmap
-          no_output_timeout: 1h
-          command: |
-            pytest -rP -o log_cli=true -m "dsdti_nofmap" --cov-config=/tmp/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/tmp/src/qsiprep/.circleci/data --output_dir=/tmp/src/qsiprep/.circleci/out --working_dir=/tmp/src/qsiprep/.circleci/work qsiprep
-            mkdir /tmp/src/coverage
-            mv /tmp/src/qsiprep/.coverage /tmp/src/coverage/.coverage.dsdti_nofmap
-            # remove nifti files before uploading artifacts
-            find /tmp/src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
-            find /tmp/src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
-      - persist_to_workspace:
-          root: /tmp/src/coverage/
-          paths:
-            - .coverage.dsdti_nofmap
-      - store_artifacts:
-          path: /tmp/src/qsiprep/.circleci/out/dsdti_nofmap/
+      - checkout:
+          path: /tmp/src/qsiprep
+      - restore_build_and_data
+      - run_integration_test:
+          marker: dsdti_nofmap
+          cpus: 4
+          coverage_name: dsdti_nofmap
 
   DSDTI_synfmap:
-    resource_class: large
-    environment:
-      CIRCLE_CPUS: 4
-    <<: *dockersetup
+    <<: *machine_defaults
     steps:
-      - checkout
-      - restore_cache:
-          key: DSDTI-01
-      - run: *runinstall
-      - run:
-          name: Run DTI with SyN SDC
-          no_output_timeout: 1h
-          command: |
-            pytest -rP -o log_cli=true -m "dsdti_synfmap" --cov-config=/tmp/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/tmp/src/qsiprep/.circleci/data --output_dir=/tmp/src/qsiprep/.circleci/out --working_dir=/tmp/src/qsiprep/.circleci/work qsiprep
-            mkdir /tmp/src/coverage
-            mv /tmp/src/qsiprep/.coverage /tmp/src/coverage/.coverage.dsdti_synfmap
-            # remove nifti files before uploading artifacts
-            find /tmp/src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
-            find /tmp/src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
-      - persist_to_workspace:
-          root: /tmp/src/coverage/
-          paths:
-            - .coverage.dsdti_synfmap
-      - store_artifacts:
-          path: /tmp/src/qsiprep/.circleci/out/dsdti_synfmap/
+      - checkout:
+          path: /tmp/src/qsiprep
+      - restore_build_and_data
+      - run_integration_test:
+          marker: dsdti_synfmap
+          cpus: 4
+          coverage_name: dsdti_synfmap
 
   DRBUDDI_TENSORLine_EPI:
-    resource_class: large
-    environment:
-      CIRCLE_CPUS: 4
-    <<: *dockersetup
+    <<: *machine_defaults
     steps:
-      - checkout
-      - restore_cache:
-          key: DSDTI-01
-      - run: *runinstall
-      - run:
-          name: Run TENSORLine with epi fmaps and DRBUDDI
-          no_output_timeout: 2h
-          command: |
-            pytest -rP -o log_cli=true -m "drbuddi_tensorline_epi" --cov-config=/tmp/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/tmp/src/qsiprep/.circleci/data --output_dir=/tmp/src/qsiprep/.circleci/out --working_dir=/tmp/src/qsiprep/.circleci/work qsiprep
-            mkdir /tmp/src/coverage
-            mv /tmp/src/qsiprep/.coverage /tmp/src/coverage/.coverage.drbuddi_tensorline_epi
-            # remove nifti files before uploading artifacts
-            find /tmp/src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
-            find /tmp/src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
-      - persist_to_workspace:
-          root: /tmp/src/coverage/
-          paths:
-            - .coverage.drbuddi_tensorline_epi
-      - store_artifacts:
-          path: /tmp/src/qsiprep/.circleci/out/drbuddi_tensorline_epi/
+      - checkout:
+          path: /tmp/src/qsiprep
+      - restore_build_and_data
+      - run_integration_test:
+          marker: drbuddi_tensorline_epi
+          cpus: 4
+          coverage_name: drbuddi_tensorline_epi
 
   DRBUDDI_SHORELine_EPI:
-    resource_class: large
-    environment:
-      CIRCLE_CPUS: 4
-    <<: *dockersetup
+    <<: *machine_defaults
     steps:
-      - checkout
-      - restore_cache:
-          key: drbuddi_epi-01
-      - run: *runinstall
-      - run:
-          name: Run SHORELine with epi fmaps and DRBUDDI
-          no_output_timeout: 2h
-          command: |
-            pytest -rP -o log_cli=true -m "drbuddi_shoreline_epi" --cov-config=/tmp/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/tmp/src/qsiprep/.circleci/data --output_dir=/tmp/src/qsiprep/.circleci/out --working_dir=/tmp/src/qsiprep/.circleci/work qsiprep
-            mkdir /tmp/src/coverage
-            mv /tmp/src/qsiprep/.coverage /tmp/src/coverage/.coverage.drbuddi_shoreline_epi
-            # remove nifti files before uploading artifacts
-            find /tmp/src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
-            find /tmp/src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
-      - persist_to_workspace:
-          root: /tmp/src/coverage/
-          paths:
-            - .coverage.drbuddi_shoreline_epi
-      - store_artifacts:
-          path: /tmp/src/qsiprep/.circleci/out/drbuddi_shoreline_epi/
+      - checkout:
+          path: /tmp/src/qsiprep
+      - restore_build_and_data
+      - run_integration_test:
+          marker: drbuddi_shoreline_epi
+          cpus: 4
+          coverage_name: drbuddi_shoreline_epi
 
   DRBUDDI_eddy_rpe_series:
-    resource_class: large
-    environment:
-      CIRCLE_CPUS: 4
-    <<: *dockersetup
+    <<: *machine_defaults
     steps:
-      - checkout
-      - restore_cache:
-          key: drbuddi_rpe_series-01
-      - run: *runinstall
-      - run:
-          name: Run Eddy with rpe series fmaps and DRBUDDI
-          no_output_timeout: 3h
-          command: |
-            pytest -rP -o log_cli=true -m "drbuddi_rpe" --cov-config=/tmp/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/tmp/src/qsiprep/.circleci/data --output_dir=/tmp/src/qsiprep/.circleci/out --working_dir=/tmp/src/qsiprep/.circleci/work qsiprep
-            mkdir /tmp/src/coverage
-            mv /tmp/src/qsiprep/.coverage /tmp/src/coverage/.coverage.drbuddi_rpe
-            # remove nifti files before uploading artifacts
-            find /tmp/src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
-            find /tmp/src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
-      - persist_to_workspace:
-          root: /tmp/src/coverage/
-          paths:
-            - .coverage.drbuddi_rpe
-      - store_artifacts:
-          path: /tmp/src/qsiprep/.circleci/out/drbuddi_rpe/
+      - checkout:
+          path: /tmp/src/qsiprep
+      - restore_build_and_data
+      - run_integration_test:
+          marker: drbuddi_rpe
+          cpus: 4
+          coverage_name: drbuddi_rpe
 
   maternal_brain_project:
-    resource_class: xlarge
-    environment:
-      CIRCLE_CPUS: 4
-    <<: *dockersetup
+    <<: *machine_defaults
     steps:
-      - checkout
-      - run: *runinstall
-      - run:
-          name: Run QSIPrep on multi-shell dataset with GRE field maps
-          no_output_timeout: 3h
-          command: |
-            pytest -rP -o log_cli=true -m "maternal_brain_project" --cov-config=/tmp/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/tmp/src/qsiprep/.circleci/data --output_dir=/tmp/src/qsiprep/.circleci/out --working_dir=/tmp/src/qsiprep/.circleci/work qsiprep
-            mkdir /tmp/src/coverage
-            mv /tmp/src/qsiprep/.coverage /tmp/src/coverage/.coverage.maternal_brain_project
-            # remove nifti files before uploading artifacts
-            find /tmp/src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
-            find /tmp/src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
-      - persist_to_workspace:
-          root: /tmp/src/coverage/
-          paths:
-            - .coverage.maternal_brain_project
-      - store_artifacts:
-          path: /tmp/src/qsiprep/.circleci/out/maternal_brain_project/
+      - checkout:
+          path: /tmp/src/qsiprep
+      - restore_build_and_data
+      - run_integration_test:
+          marker: maternal_brain_project
+          cpus: 4
+          coverage_name: maternal_brain_project
 
   forrest_gump:
-    resource_class: xlarge
-    environment:
-      CIRCLE_CPUS: 4
-    <<: *dockersetup
+    <<: *machine_defaults
     steps:
-      - checkout
-      - restore_cache:
-          key: forrestgump-01
-      - run: *runinstall
-      - run:
-          name: Run QSIPrep on single-shell dataset with GRE field maps
-          no_output_timeout: 3h
-          command: |
-            pytest -rP -o log_cli=true -m "forrest_gump" --cov-config=/tmp/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/tmp/src/qsiprep/.circleci/data --output_dir=/tmp/src/qsiprep/.circleci/out --working_dir=/tmp/src/qsiprep/.circleci/work qsiprep
-            mkdir /tmp/src/coverage
-            mv /tmp/src/qsiprep/.coverage /tmp/src/coverage/.coverage.forrest_gump
-            # remove nifti files before uploading artifacts
-            find /tmp/src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
-            find /tmp/src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
-      - persist_to_workspace:
-          root: /tmp/src/coverage/
-          paths:
-            - .coverage.forrest_gump
-      - store_artifacts:
-          path: /tmp/src/qsiprep/.circleci/out/forrest_gump/
+      - checkout:
+          path: /tmp/src/qsiprep
+      - restore_build_and_data
+      - run_integration_test:
+          marker: forrest_gump
+          cpus: 4
+          coverage_name: forrest_gump
 
   forrest_gump_patch2self:
-    resource_class: xlarge
-    environment:
-      CIRCLE_CPUS: 4
-    <<: *dockersetup
+    <<: *machine_defaults
     steps:
-      - checkout
-      - restore_cache:
-          key: forrestgump-01
-      - run: *runinstall
-      - run:
-          name: Run QSIPrep on single-shell dataset with GRE field maps
-          no_output_timeout: 3h
-          command: |
-            pytest -rP -o log_cli=true -m "forrest_gump_patch2self" --cov-config=/tmp/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/tmp/src/qsiprep/.circleci/data --output_dir=/tmp/src/qsiprep/.circleci/out --working_dir=/tmp/src/qsiprep/.circleci/work qsiprep
-            mkdir /tmp/src/coverage
-            mv /tmp/src/qsiprep/.coverage /tmp/src/coverage/.coverage.forrest_gump_patch2self
-            # remove nifti files before uploading artifacts
-            find /tmp/src/qsiprep/.circleci/out/ -name "*.nii.gz" -type f -delete
-            find /tmp/src/qsiprep/.circleci/out/ -name "*.fib.gz" -type f -delete
-      - persist_to_workspace:
-          root: /tmp/src/coverage/
-          paths:
-            - .coverage.forrest_gump_patch2self
-      - store_artifacts:
-          path: /tmp/src/qsiprep/.circleci/out/forrest_gump_patch2self/
+      - checkout:
+          path: /tmp/src/qsiprep
+      - restore_build_and_data
+      - run_integration_test:
+          marker: forrest_gump_patch2self
+          cpus: 4
+          coverage_name: forrest_gump_patch2self
+
+  synthstrip_synthseg_interfaces:
+    <<: *machine_defaults
+    steps:
+      - checkout:
+          path: /tmp/src/qsiprep
+      - restore_build_and_data
+      - run_integration_test:
+          marker: synthstrip or synthseg
+          cpus: 4
+          coverage_name: synthstrip_synthseg
 
   unit_tests:
-    resource_class: large
-    environment:
-      CIRCLE_CPUS: 4
-    <<: *dockersetup
+    <<: *machine_defaults
     steps:
-      - checkout
-      - restore_cache:
-          key: forrestgump-01
-      - run: *runinstall
+      - checkout:
+          path: /tmp/src/qsiprep
+      - restore_build_and_data
       - run:
           name: Run unit tests
-          no_output_timeout: 1h
+          no_output_timeout: 2h
           command: |
-            pytest \
-              -n ${CIRCLE_CPUS} \
-              -vv \
-              -o log_cli=true \
-              -m "not integration and not (synthstrip or synthseg)" \
-              --cov-append \
-              --cov-branch \
-              --cov-report term-missing \
-              --cov=qsiprep \
-              --data_dir=/tmp/src/qsiprep/.circleci/data \
-              --output_dir=/tmp/src/qsiprep/.circleci/out \
-              --working_dir=/tmp/src/qsiprep/.circleci/work \
+            mkdir -p /tmp/out /tmp/work /tmp/coverage
+            docker run --rm=false \
+              -e CIRCLE_CPUS=4 \
+              -e COVERAGE_FILE=/coverage/.coverage.unit_tests \
+              -v /tmp/src/qsiprep:/tmp/src/qsiprep:ro \
+              -v /tmp/data:/data:ro \
+              -v /tmp/out:/out \
+              -v /tmp/work:/work \
+              -v /tmp/coverage:/coverage \
+              -w /tmp/src/qsiprep \
+              --entrypoint pytest \
+              pennlinc/qsiprep:test \
+              -n 4 -vv -o log_cli=true -m "not integration and not (synthstrip or synthseg)" \
+              --cov-append --cov-branch --cov-report term-missing --cov=qsiprep \
+              --data_dir=/data --output_dir=/out --working_dir=/work \
               qsiprep
-            mkdir /tmp/src/coverage
-            mv /tmp/src/qsiprep/.coverage /tmp/src/coverage/.coverage.unit_tests
       - persist_to_workspace:
-          root: /tmp/src/coverage/
+          root: /tmp/coverage
           paths:
             - .coverage.unit_tests
 
-  synthstrip_synthseg_interfaces:
-    resource_class: xlarge
-    environment:
-      CIRCLE_CPUS: 4
-    <<: *dockersetup
-    steps:
-      - checkout
-      - restore_cache:
-          key: forrestgump-01
-      - run: *runinstall
-      - run:
-          name: Run synthstrip/synthseg interface tests
-          no_output_timeout: 2h
-          command: |
-            pytest -rP -o log_cli=true -m "synthstrip or synthseg" --cov-config=/tmp/src/qsiprep/pyproject.toml --cov-append --cov-report term-missing --cov=qsiprep --data_dir=/tmp/src/qsiprep/.circleci/data --output_dir=/tmp/src/qsiprep/.circleci/out --working_dir=/tmp/src/qsiprep/.circleci/work qsiprep
-            mkdir /tmp/src/coverage
-            mv /tmp/src/qsiprep/.coverage /tmp/src/coverage/.coverage.synthstrip_synthseg
-      - persist_to_workspace:
-          root: /tmp/src/coverage/
-          paths:
-            - .coverage.synthstrip_synthseg
-
   IntramodalTemplate:
-    resource_class: large
-    <<: *dockersetup
-    environment:
-      CIRCLE_CPUS: 4
+    <<: *machine_defaults
     steps:
-      - checkout
-      - restore_cache:
-          key: twoses-02
-      - run: *runinstall
+      - checkout:
+          path: /tmp/src/qsiprep
+      - restore_build_and_data
       - run:
-          name: Test the intramodal template workflow
+          name: Run IntramodalTemplate script
           no_output_timeout: 2h
           command: |
-            cd .circleci
-            bash IntramodalTemplate.sh
+            mkdir -p /tmp/out /tmp/work
+            docker run --rm=false \
+              -v /tmp/src/qsiprep:/tmp/src/qsiprep:ro \
+              -v /tmp/data:/tmp/src/qsiprep/.circleci/data:ro \
+              -v /tmp/out:/tmp/src/qsiprep/.circleci/out \
+              -v /tmp/work:/tmp/src/qsiprep/.circleci/work \
+              -w /tmp/src/qsiprep/.circleci \
+              --entrypoint bash \
+              pennlinc/qsiprep:test \
+              IntramodalTemplate.sh
 
   MultiT1w:
-    resource_class: large
-    <<: *dockersetup
-    environment:
-      CIRCLE_CPUS: 4
+    <<: *machine_defaults
     steps:
-      - checkout
-      - restore_cache:
-          key: DSDTI-01
-      - run: *runinstall
+      - checkout:
+          path: /tmp/src/qsiprep
+      - restore_build_and_data
       - run:
-          name: Test the mri robust template for T1w images
-          no_output_timeout: 1h
+          name: Run MultiT1w script
+          no_output_timeout: 2h
           command: |
-            cd .circleci
-            bash MultiT1w.sh
+            mkdir -p /tmp/out /tmp/work
+            docker run --rm=false \
+              -v /tmp/src/qsiprep:/tmp/src/qsiprep:ro \
+              -v /tmp/data:/tmp/src/qsiprep/.circleci/data:ro \
+              -v /tmp/out:/tmp/src/qsiprep/.circleci/out \
+              -v /tmp/work:/tmp/src/qsiprep/.circleci/work \
+              -w /tmp/src/qsiprep/.circleci \
+              --entrypoint bash \
+              pennlinc/qsiprep:test \
+              MultiT1w.sh
 
   merge_coverage:
-    resource_class: small
-    docker:
-      - image: cimg/python:3.10.9
-    working_directory: /tmp/src/qsiprep
+    <<: *machine_defaults
     steps:
-      - checkout
+      - checkout:
+          path: /tmp/src/qsiprep
       - attach_workspace:
-          at: /tmp/src/coverage
-      - run: *runinstall
+          at: /tmp/coverage
       - run:
           name: Merge coverage files
           command: |
-            cd /tmp/src/coverage/
-            coverage combine
-            coverage xml
+            pyenv local 3
+            pip install coverage
+            cd /tmp/src/qsiprep
+            coverage combine /tmp/coverage/
+            coverage xml -o /tmp/coverage/coverage.xml
       - store_artifacts:
-          path: /tmp/src/coverage
+          path: /tmp/coverage
       - codecov/upload:
-          file: /tmp/src/coverage/coverage.xml
+          file: /tmp/coverage/coverage.xml
 
   deployable:
-    resource_class: small
     docker:
       - image: busybox:latest
     steps:
       - run: echo Deploying!
 
+  deploy_docker:
+    <<: *machine_defaults
+    steps:
+      - checkout:
+          path: /tmp/src/qsiprep
+      - restore_cache:
+          keys:
+            - build-v3-{{ checksum "Dockerfile" }}-{{ checksum "pixi.lock" }}
+      - run: *docker_auth
+      - run: *setup_docker_registry
+      - run: *pull_from_registry
+      - run:
+          name: Deploy to Docker Hub
+          no_output_timeout: 40m
+          command: |
+            if [[ -n "$DOCKERHUB_TOKEN" ]]; then
+              docker tag pennlinc/qsiprep:latest pennlinc/qsiprep:unstable
+              docker push pennlinc/qsiprep:unstable
+              if [[ -n "$CIRCLE_TAG" ]]; then
+                docker tag pennlinc/qsiprep:latest pennlinc/qsiprep:$CIRCLE_TAG
+                docker push pennlinc/qsiprep:latest
+                docker push pennlinc/qsiprep:$CIRCLE_TAG
+              fi
+            fi
+
   deploy_pypi:
-    resource_class: small
     docker:
       - image: cimg/python:3.10.9
     working_directory: /tmp/src/qsiprep
@@ -534,203 +526,50 @@ jobs:
           command: python -m build
       - run:
           name: Upload packages to PyPI
-          command: python -m twine upload -u __token__ -p ${PYPI_PASS} dist/qsiprep*
-
-  build_and_deploy:
-    environment:
-      TZ: "/usr/share/zoneinfo/America/New_York"
-    docker:
-      - image: cimg/base:2020.09
-    working_directory: /tmp/src/qsiprep_build
-    steps:
-      - checkout
-      - setup_remote_docker:
-         version: docker24
-         docker_layer_caching: true
-      - run:
-          name: Build Docker image
-          no_output_timeout: 3h
-          command: |
-            sudo apt-get update
-            sudo apt-get install -y python3-pip
-            pip install hatch
-            # Get version, update files.
-            THISVERSION=$(hatch version)
-            if [[ ${THISVERSION:0:1} == "0" ]] ; then
-              echo "WARNING: latest git tag could not be found"
-              echo "Please, make sure you fetch all tags from upstream with"
-              echo "the command ``git fetch --tags --verbose`` and push"
-              echo "them to your fork with ``git push origin --tags``"
-            fi
-            # Build docker image
-            e=1 && for i in {1..5}; do
-              docker build \
-                --cache-from=pennlinc/qsiprep \
-                --rm=false \
-                -t pennlinc/qsiprep:latest \
-                --build-arg BUILD_DATE=`date -u +"%Y-%m-%dT%H:%M:%SZ"` \
-                --build-arg VCS_REF=`git rev-parse --short HEAD` \
-                --build-arg VERSION="${CIRCLE_TAG:-$THISVERSION}" . \
-              && e=0 && break || sleep 15
-            done && [ "$e" -eq "0" ]
-      - run:
-          name: Deploy to Docker Hub
-          no_output_timeout: 40m
-          command: |
-            if [[ -n "$DOCKER_PASS" ]]; then
-              docker login -u $DOCKER_USER -p $DOCKER_PASS
-              docker tag pennlinc/qsiprep pennlinc/qsiprep:unstable
-              docker push pennlinc/qsiprep:unstable
-              if [[ -n "$CIRCLE_TAG" ]]; then
-                docker push pennlinc/qsiprep:latest
-                docker tag pennlinc/qsiprep pennlinc/qsiprep:$CIRCLE_TAG
-                docker push pennlinc/qsiprep:$CIRCLE_TAG
-              fi
-            fi
+          command: python -m twine upload -u __token__ -p "${PYPI_PASS}" dist/qsiprep*
 
 workflows:
   version: 2
   build_test_deploy:
     jobs:
-
-      - build:
+      - image_prep:
           filters:
             tags:
               only: /.*/
-
-      - download_drbuddi_rpe_series:
-          requires:
-            - build
+      - get_data:
           filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
             tags:
               only: /.*/
-
-      - download_drbuddi_epi:
-          requires:
-            - build
-          filters:
-            tags:
-              only: /.*/
-
-      - download_DSDTI:
-          requires:
-            - build
-          filters:
-            tags:
-              only: /.*/
-
-      - download_DSCSDSI:
-          requires:
-            - build
-          filters:
-            tags:
-              only: /.*/
-
-      - download_twoses:
-          requires:
-            - build
-          filters:
-            tags:
-              only: /.*/
-
-      - download_forrest_gump:
-          requires:
-            - build
-          filters:
-            tags:
-              only: /.*/
-
       - DSCSDSI:
-          requires:
-            - download_DSCSDSI
-          filters:
-            tags:
-              only: /.*/
-
-      - DRBUDDI_SHORELine_EPI:
-          requires:
-            - download_drbuddi_epi
-          filters:
-            tags:
-              only: /.*/
-
-      - DRBUDDI_eddy_rpe_series:
-          requires:
-            - download_drbuddi_rpe_series
-          filters:
-            tags:
-              only: /.*/
-
-      - DRBUDDI_TENSORLine_EPI:
-          requires:
-            - download_DSDTI
-          filters:
-            tags:
-              only: /.*/
-
+          requires: [image_prep, get_data]
       - DSDTI_nofmap:
-          requires:
-            - download_DSDTI
-          filters:
-            tags:
-              only: /.*/
-
+          requires: [image_prep, get_data]
       - DSDTI_synfmap:
-          requires:
-            - download_DSDTI
-          filters:
-            tags:
-              only: /.*/
-
+          requires: [image_prep, get_data]
+      - DRBUDDI_SHORELine_EPI:
+          requires: [image_prep, get_data]
+      - DRBUDDI_eddy_rpe_series:
+          requires: [image_prep, get_data]
+      - DRBUDDI_TENSORLine_EPI:
+          requires: [image_prep, get_data]
       - maternal_brain_project:
-          requires:
-            - build
-          filters:
-            tags:
-              only: /.*/
-
+          requires: [image_prep, get_data]
       - forrest_gump:
-          requires:
-            - download_forrest_gump
-          filters:
-            tags:
-              only: /.*/
-
+          requires: [image_prep, get_data]
       - forrest_gump_patch2self:
-          requires:
-            - download_forrest_gump
-          filters:
-            tags:
-              only: /.*/
-
+          requires: [image_prep, get_data]
       - unit_tests:
-          requires:
-            - download_forrest_gump
-          filters:
-            tags:
-              only: /.*/
-
+          requires: [image_prep, get_data]
       - IntramodalTemplate:
-          requires:
-            - download_twoses
-          filters:
-            tags:
-              only: /.*/
-
+          requires: [image_prep, get_data]
       - MultiT1w:
-          requires:
-            - download_DSDTI
-          filters:
-            tags:
-              only: /.*/
-
+          requires: [image_prep, get_data]
       - synthstrip_synthseg_interfaces:
-          requires:
-            - download_forrest_gump
-          filters:
-            tags:
-              only: /.*/
-
+          requires: [image_prep, get_data]
       - merge_coverage:
           requires:
             - DSCSDSI
@@ -753,9 +592,9 @@ workflows:
                 - /tests?\/.*/
             tags:
               only: /.*/
-
       - deployable:
           requires:
+            - image_prep
             - DSCSDSI
             - DSDTI_nofmap
             - DSDTI_synfmap
@@ -774,19 +613,15 @@ workflows:
               only: master
             tags:
               only: /.*/
-
-      - build_and_deploy:
-          requires:
-            - deployable
+      - deploy_docker:
+          requires: [deployable]
           filters:
             branches:
               only: master
             tags:
               only: /.*/
-
       - deploy_pypi:
-          requires:
-            - deployable
+          requires: [deployable]
           filters:
             branches:
               ignore: /.*/

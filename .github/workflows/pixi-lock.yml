@@ -1,0 +1,72 @@
+on:
+  pull_request_target
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check-lockfile:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout pull request
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+      - name: Check latest commit for dependency edits
+        id: latest-commit
+        run: |
+          CHANGED_FILES="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          echo "$CHANGED_FILES"
+          if echo "$CHANGED_FILES" | grep -Eq '^(pyproject\.toml|pixi\.lock)$'; then
+            echo "run_lockfile_update=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_lockfile_update=false" >> "$GITHUB_OUTPUT"
+            echo "Latest commit did not touch pyproject.toml or pixi.lock; skipping lockfile update."
+          fi
+      - name: Find submitting repository
+        if: ${{ steps.latest-commit.outputs.run_lockfile_update == 'true' }}
+        id: get-source-repo
+        uses: actions/github-script@v8
+        env:
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.repository }}
+          PULL: ${{ github.event.number }}
+        with:
+          script: |
+            const { data } = await github.rest.pulls.get({
+              owner: process.env.OWNER,
+              repo: process.env.REPO.split('/')[1],
+              pull_number: process.env.PULL,
+            });
+            core.setOutput('remote', data.head.repo.html_url)
+            core.setOutput('branch', data.head.ref)
+      - name: Set git identity
+        if: ${{ steps.latest-commit.outputs.run_lockfile_update == 'true' }}
+        run: |
+          git config --global user.name "nipreps[bot]"
+          git config --global user.email "bot@nipreps.org"
+      - uses: prefix-dev/setup-pixi@v0.9.4
+        if: ${{ steps.latest-commit.outputs.run_lockfile_update == 'true' }}
+        with:
+          pixi-version: v0.58.0
+          run-install: false
+      - name: Install the latest version of uv
+        if: ${{ steps.latest-commit.outputs.run_lockfile_update == 'true' }}
+        uses: astral-sh/setup-uv@v7
+      - name: Update lockfile
+        if: ${{ steps.latest-commit.outputs.run_lockfile_update == 'true' }}
+        run: >
+          uvx datalad run -i pixi.lock -i pyproject.toml -o pixi.lock --
+          bash -lc "if pixi lock --check; then echo 'Lockfile up to date'; else pixi lock; fi"
+      - name: Push updated lockfile, if needed
+        if: ${{ steps.latest-commit.outputs.run_lockfile_update == 'true' && github.event.pull_request.head.repo.full_name == github.repository }}
+        run: |
+          git push "$REMOTE" "HEAD:$BRANCH"
+        env:
+          REMOTE: ${{ steps.get-source-repo.outputs.remote }}
+          BRANCH: ${{ steps.get-source-repo.outputs.branch }}
