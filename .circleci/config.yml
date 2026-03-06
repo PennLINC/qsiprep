@@ -540,7 +540,7 @@ jobs:
     environment:
       TZ: "/usr/share/zoneinfo/America/New_York"
     docker:
-      - image: cimg/base:2020.09
+      - image: cimg/python:3.10.9
     working_directory: /tmp/src/qsiprep_build
     steps:
       - checkout
@@ -551,8 +551,6 @@ jobs:
           name: Build Docker image
           no_output_timeout: 3h
           command: |
-            sudo apt-get update
-            sudo apt-get install -y python3-pip
             pip install hatch
             # Get version, update files.
             THISVERSION=$(hatch version)
