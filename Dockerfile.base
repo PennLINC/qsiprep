@@ -129,6 +129,17 @@ RUN apt-get update -qq \
     && if [ -n "$gsl2_path" ]; then ln -sfv "$gsl2_path" "$(dirname "$gsl2_path")/libgsl.so.0"; fi \
     && ldconfig
 
+# Do not install Convert3D with conda (v1.4.2). That was causing segfaults when running c3d in the container.
+RUN echo "Downloading Convert3D ..." \
+    && mkdir -p /opt/convert3d-nightly \
+    && curl -fsSL --retry 5 https://sourceforge.net/projects/c3d/files/c3d/Nightly/c3d-nightly-Linux-x86_64.tar.gz/download \
+    | tar -xz -C /opt/convert3d-nightly --strip-components 1 \
+    --exclude "c3d-1.0.0-Linux-x86_64/lib" \
+    --exclude "c3d-1.0.0-Linux-x86_64/share" \
+    --exclude "c3d-1.0.0-Linux-x86_64/bin/c3d_gui"
+ENV C3DPATH="/opt/convert3d-nightly" \
+    PATH="/opt/convert3d-nightly/bin:$PATH"
+
 COPY --from=build_dsistudio /opt/dsi-studio /opt/dsi-studio
 # Reuse Qt 5.12 from dsistudio image (avoids Focal PPA and libicu66 on Jammy).
 COPY --from=build_dsistudio /opt/qt512 /opt/qt512
