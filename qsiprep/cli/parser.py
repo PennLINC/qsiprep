@@ -692,6 +692,11 @@ def parse_args(args=None, namespace=None):
         config.load(opts.config_file, skip=skip, init=False)
         config.loggers.cli.info(f'Loaded previous configuration file {opts.config_file}')
 
+    if opts.eddy_config:
+        from ..utils.misc import validate_eddy_config
+
+        validate_eddy_config(opts.eddy_config)
+
     config.execution.log_level = int(max(25 - 5 * opts.verbose_count, logging.DEBUG))
     config.from_dict(vars(opts), init=['nipype'])
 
