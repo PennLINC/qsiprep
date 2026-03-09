@@ -4,7 +4,7 @@ ARG TAG_ANTS=26.1.2
 ARG TAG_MRTRIX3=26.1.0
 ARG TAG_3TISSUE=26.1.0
 ARG TAG_DSISTUDIO=26.1.2
-ARG TAG_AFNI=26.1.3
+ARG TAG_AFNI=AFNI_25.2.09
 ARG TAG_TORTOISE=26.1.3
 ARG TAG_TORTOISECUDA=26.1.3
 ARG TAG_SYNB0=26.1.2
@@ -14,7 +14,7 @@ FROM pennlinc/qsiprep-ants:${TAG_ANTS} AS build_ants
 FROM pennlinc/qsiprep-mrtrix3:${TAG_MRTRIX3} AS build_mrtrix3
 FROM pennlinc/qsiprep-3tissue:${TAG_3TISSUE} AS build_3tissue
 FROM pennlinc/qsiprep-dsistudio:${TAG_DSISTUDIO} AS build_dsistudio
-FROM pennlinc/qsiprep-afni:${TAG_AFNI} AS build_afni
+FROM afni/afni_make_build:${TAG_AFNI} AS build_afni
 FROM pennlinc/qsiprep-drbuddi:${TAG_TORTOISE} AS build_tortoise
 FROM pennlinc/qsiprep-drbuddicuda:${TAG_TORTOISECUDA} AS build_tortoisecuda
 FROM pennlinc/qsiprep-synb0:${TAG_SYNB0} AS build_synb0
@@ -57,9 +57,33 @@ RUN chmod a+rx /opt/freesurfer/bin/mri_synthseg /opt/freesurfer/bin/mri_synthstr
 COPY --from=build_synb0 /opt/synb0 /opt/synb0
 ENV SYNB0_ATLASES=/opt/synb0/atlases
 
-COPY --from=build_afni /opt/afni-latest /opt/afni-latest
-ENV PATH="$PATH:/opt/afni-latest" \
-    AFNI_INSTALLDIR=/opt/afni-latest \
+# Find libraries with `ldd $BINARIES | grep afni`
+COPY --link --from=build_afni \
+    /opt/afni/install/libf2c.so  \
+    /opt/afni/install/libmri.so  \
+    /opt/afni/install/libSUMA.so  \
+    /usr/local/lib/
+COPY --link --from=build_afni \
+    /opt/afni/install/3dAutobox \
+    /opt/afni/install/3dAutomask \
+    /opt/afni/install/3dFWHMx \
+    /opt/afni/install/3dQwarp \
+    /opt/afni/install/3dSeg \
+    /opt/afni/install/3dSkullStrip \
+    /opt/afni/install/3dTcat \
+    /opt/afni/install/3dTshift \
+    /opt/afni/install/3dTsplit4D \
+    /opt/afni/install/3dTstat \
+    /opt/afni/install/3dUnifize \
+    /opt/afni/install/3dWarp \
+    /opt/afni/install/3dZeropad \
+    /opt/afni/install/3dcalc \
+    /opt/afni/install/3drefit \
+    /opt/afni/install/3dresample \
+    /opt/afni/install/3dvolreg \
+    /usr/local/bin/
+ENV PATH="$PATH:/usr/local/bin" \
+    AFNI_INSTALLDIR=/usr/local/bin \
     AFNI_IMSAVE_WARNINGS=NO
 
 COPY --from=build_tortoise /src/TORTOISEV4/bin /src/TORTOISEV4/bin
@@ -142,8 +166,7 @@ ENV C3DPATH="/opt/convert3d-nightly" \
     PATH="/opt/convert3d-nightly/bin:$PATH"
 
 COPY --from=build_dsistudio /opt/dsi-studio /opt/dsi-studio
-# Reuse Qt 5.12 from dsistudio image (avoids Focal PPA and libicu66 on Jammy).
-COPY --from=build_dsistudio /opt/qt512 /opt/qt512
+
 # Ensure /tmp is writable; install remaining deps (Qt comes from dsistudio stage).
 RUN mkdir -p /tmp /var/tmp && chmod 1777 /tmp /var/tmp \
     && add-apt-repository -y ppa:ubuntu-toolchain-r/test \
