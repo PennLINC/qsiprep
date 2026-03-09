@@ -51,7 +51,7 @@ dependencies = [
     "pytest-env",
     "pytest-xdist",
     "templateflow",
-    "tensorflow",
+    "tensorflow-gpu == 2.8.4",
     "torch",
 ]
 dynamic = ["version"]
