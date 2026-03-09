@@ -109,6 +109,7 @@ RUN apt-get update -qq \
            libxmu6 \
            libxt6 \
            netpbm \
+           pandoc \
            perl \
            software-properties-common \
            tcsh \
