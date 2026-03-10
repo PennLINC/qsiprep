@@ -487,7 +487,9 @@ def test_multi_t1w(data_dir, output_dir, working_dir):
     source_img = nb.load(str(source_t1w))
     shifted_affine = source_img.affine.copy()
     shifted_affine[:3, 3] = shifted_affine[:3, 3] + np.array([2.0, 4.0, 1.0])
-    shifted_img = source_img.__class__(np.asanyarray(source_img.dataobj), shifted_affine, source_img.header)
+    shifted_img = source_img.__class__(
+        np.asanyarray(source_img.dataobj), shifted_affine, source_img.header
+    )
     nb.save(shifted_img, shifted_t1w)
     shutil.copy2(source_json, shifted_json)
 
@@ -519,7 +521,9 @@ def test_multi_t1w(data_dir, output_dir, working_dir):
         '--anat-only',
         '--subject-anatomical-reference=unbiased',
     ]
-    _run_and_generate(UNBIASED_TEST_NAME, unbiased_parameters, test_main=False, check_outputs=False)
+    _run_and_generate(
+        UNBIASED_TEST_NAME, unbiased_parameters, test_main=False, check_outputs=False
+    )
 
 
 @pytest.mark.integration
@@ -722,7 +726,9 @@ def _run_and_generate(test_name, parameters, test_main=False, check_outputs=True
 
     if check_outputs:
         output_list_file = os.path.join(get_test_data_path(), f'{test_name}_outputs.txt')
-        optional_outputs_list = os.path.join(get_test_data_path(), f'{test_name}_optional_outputs.txt')
+        optional_outputs_list = os.path.join(
+            get_test_data_path(), f'{test_name}_optional_outputs.txt'
+        )
         if not os.path.isfile(optional_outputs_list):
             optional_outputs_list = None
 
