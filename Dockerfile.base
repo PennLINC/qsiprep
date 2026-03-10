@@ -166,6 +166,15 @@ ENV C3DPATH="/opt/convert3d-nightly" \
     PATH="/opt/convert3d-nightly/bin:$PATH"
 
 COPY --from=build_dsistudio /opt/dsi-studio /opt/dsi-studio
+# Added Qt libraries from dsistudio stage. qsiprep_build didn't seem to need this step.
+COPY --from=build_dsistudio /usr/lib/x86_64-linux-gnu/libQt5Core.so.5* /usr/lib/x86_64-linux-gnu/
+COPY --from=build_dsistudio /usr/lib/x86_64-linux-gnu/libQt5Gui.so.5* /usr/lib/x86_64-linux-gnu/
+COPY --from=build_dsistudio /usr/lib/x86_64-linux-gnu/libQt5Widgets.so.5* /usr/lib/x86_64-linux-gnu/
+COPY --from=build_dsistudio /usr/lib/x86_64-linux-gnu/libQt5Charts.so.5* /usr/lib/x86_64-linux-gnu/
+COPY --from=build_dsistudio /usr/lib/x86_64-linux-gnu/libQt5OpenGL.so.5* /usr/lib/x86_64-linux-gnu/
+COPY --from=build_dsistudio /usr/lib/x86_64-linux-gnu/libQt5Svg.so.5* /usr/lib/x86_64-linux-gnu/
+COPY --from=build_dsistudio /usr/lib/x86_64-linux-gnu/libQt5Sql.so.5* /usr/lib/x86_64-linux-gnu/
+COPY --from=build_dsistudio /usr/lib/x86_64-linux-gnu/libQt5Network.so.5* /usr/lib/x86_64-linux-gnu/
 
 # Ensure /tmp is writable; install remaining deps (Qt comes from dsistudio stage).
 RUN mkdir -p /tmp /var/tmp && chmod 1777 /tmp /var/tmp \
@@ -181,6 +190,8 @@ RUN mkdir -p /tmp /var/tmp && chmod 1777 /tmp /var/tmp \
     && dpkg -i /tmp/libicu60.deb \
     && rm /tmp/libicu60.deb \
     && apt-get install -f --no-install-recommends \
+    && ldd /opt/dsi-studio/dsi_studio | grep -q 'libQt5Charts.so.5' \
+    && ldd /opt/dsi-studio/dsi_studio | grep -vq 'not found' \
     && ldconfig -p | grep -q 'libicui18n.so.60' \
     && strings /lib/x86_64-linux-gnu/libc.so.6 | grep -q 'GLIBC_2.28' \
     && strings /usr/lib/x86_64-linux-gnu/libstdc++.so.6 | grep -q 'GLIBCXX_3.4.26' \
