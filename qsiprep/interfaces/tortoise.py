@@ -290,7 +290,6 @@ class _DRBUDDIOutputSpec(TraitedSpec):
     # Direct outputs from DRBUDDI
     undistorted_reference = File(exists=True)
     bdown_to_bup_rigid_trans_h5 = File(exists=True)
-    undistorted_reference = File(exists=True)
     blip_down_b0 = File(exists=True)
     blip_down_b0_corrected = File(exists=True)
     blip_down_b0_corrected_jac = File(exists=True)
@@ -708,7 +707,7 @@ def make_bmat_file(bvals, bvecs):
 def generate_drbuddi_boilerplate(fieldmap_type, t2w_sdc, with_topup=False):
     """Generate boilerplate that describes how DRBUDDI is being used."""
 
-    desc = ['\n\nDRBUDDI [@drbuddi], part of the TORTOISE [@tortoisev3] software package,']
+    desc = ['\n\nDRBUDDI [@drbuddi], part of the TORTOISE [@tortoisev4] software package,']
     if not with_topup:
         # Until now there will have been no description of the SDC procedure.
         # Add extra details about the input data.

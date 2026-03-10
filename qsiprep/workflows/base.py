@@ -192,7 +192,7 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
     workflow.__desc__ = f"""
 Preprocessing was performed using *QSIPrep* {config.environment.version} [@cieslak2021qsiprep],
 which is based on *Nipype* {config.environment.nipype_version}
-[@nipype1; @nipype2; RRID:SCR_002502].
+[@nipype1; @nipype2; RRID:SCR_002502] and follows *NiPreps* framework [@nipreps].
 
 """
     workflow.__postdesc__ = f"""
@@ -453,6 +453,7 @@ to workflows in *QSIPrep*'s documentation]\
                 ('outputnode.confounds', 'inputnode.confounds'),
                 ('outputnode.carpetplot_data', 'inputnode.carpetplot_data'),
                 ('outputnode.sdc_scaling_images', 'inputnode.sdc_scaling_images'),
+                ('outputnode.fieldmap_hz', 'inputnode.fieldmap_hz'),
             ]),
         ])  # fmt:skip
 

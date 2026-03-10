@@ -18,11 +18,9 @@ import os.path as op
 from collections import defaultdict
 
 import nibabel as nb
-import nilearn.image as nim
-import nilearn.plotting as nip
 import numpy as np
 from lxml import etree
-from nilearn.image import concat_imgs, index_img, iter_img, load_img, math_img
+from nilearn import image, plotting
 from nipype import logging
 from nipype.interfaces import ants
 from nipype.interfaces.ants.resampling import ApplyTransformsInputSpec
@@ -142,7 +140,7 @@ class B0RPEFieldmap(SimpleInterface):
 
         image_list = []
         json_list = []
-        for imgnum, img in enumerate(iter_img(merged_b0s)):
+        for imgnum, img in enumerate(image.iter_img(merged_b0s)):
             # Save the conformed fmap and metadata
             output_fmap = fname_presuffix(
                 self.inputs.b0_file[0],
@@ -651,9 +649,9 @@ def phdiff2fmap(in_file, delta_te, newpath=None):
     #  GYROMAG_RATIO_H_PROTON_MHZ = 42.576
 
     out_file = fname_presuffix(in_file, suffix='_fmap', newpath=newpath)
-    image = nb.load(in_file)
-    data = image.get_fdata().astype(np.float32) / (2.0 * math.pi * delta_te)
-    nii = nb.Nifti1Image(data, image.affine, image.header)
+    img = nb.load(in_file)
+    data = img.get_fdata().astype(np.float32) / (2.0 * math.pi * delta_te)
+    nii = nb.Nifti1Image(data, img.affine, img.header)
     nii.set_data_dtype(np.float32)
     nii.to_filename(out_file)
     return out_file
@@ -841,7 +839,7 @@ def get_topup_inputs_from(
     b0_indices = np.flatnonzero(bvals < b0_threshold)
     if not b0_indices.size:
         raise RuntimeError('No b=0 images available for TOPUP from the dwi.')
-    dwi_nii = load_img(dwi_file)
+    dwi_nii = image.load_img(dwi_file)
     # Gather images from just the dwi series
     dwi_spec_lines, dwi_imain, dwi_report, _ = topup_inputs_from_4d_file(
         dwi_nii,
@@ -913,7 +911,7 @@ def load_epi_dwi_fieldmaps(fmap_list, b0_threshold):
         pth, fname, _ = split_filename(fmap_file)
         potential_bval_file = op.join(pth, fname) + '.bval'
         starting_index = len(original_files)
-        fmap_img = load_img(fmap_file)
+        fmap_img = image.load_img(fmap_file)
         image_series.append(fmap_img)
         num_images = 1 if fmap_img.ndim == 3 else fmap_img.shape[3]
         original_files += [fmap_file] * num_images
@@ -936,7 +934,7 @@ def load_epi_dwi_fieldmaps(fmap_list, b0_threshold):
             _b0_indices = np.arange(num_images) + starting_index
         b0_indices += _b0_indices.tolist()
 
-    concatenated_images = concat_imgs(image_series, auto_resample=True)
+    concatenated_images = image.concat_imgs(image_series, auto_resample=True)
     return concatenated_images, b0_indices, original_files
 
 
@@ -1010,7 +1008,7 @@ def topup_inputs_from_4d_file(
         spec_lines += [spec_line] * len(spec_b0_indices)
 
     # Load and subset the image
-    imain_nii = index_img(nii_file, selected_b0_indices)
+    imain_nii = image.index_img(nii_file, selected_b0_indices)
     report = topup_selection_to_report(
         selected_b0_indices, bids_origin_files, spec_lookup, image_source=image_source
     )
@@ -1077,8 +1075,8 @@ def add_epi_fmaps_to_dwi_b0s(epi_fmaps, b0_threshold, max_per_spec, dwi_spec_lin
         )
 
     # Add the epi b=0's to the dwi b=0's
-    topup_imain = concat_imgs(
-        [dwi_imain, index_img(fmap_imain, fmap_indices_to_add)], auto_resample=True
+    topup_imain = image.concat_imgs(
+        [dwi_imain, image.index_img(fmap_imain, fmap_indices_to_add)], auto_resample=True
     )
     topup_spec_lines = dwi_spec_lines + [fmap_spec_lines[idx] for idx in fmap_indices_to_add]
 
@@ -1235,7 +1233,7 @@ class ApplyScalingImages(SimpleInterface):
         scaled_dwi_images = []
         for dwi_file in self.inputs.dwi_files:
             scaled_dwi_file = fname_presuffix(dwi_file, newpath=runtime.cwd, suffix='_scaled')
-            math_img('a*b', a=dwi_file, b=dwi_files_to_scalings[dwi_file]).to_filename(
+            image.math_img('a*b', a=dwi_file, b=dwi_files_to_scalings[dwi_file]).to_filename(
                 scaled_dwi_file
             )
 
@@ -1331,8 +1329,8 @@ class PEPOLARReport(SimpleInterface):
         fa_up_corrected_img = nb.load(self.inputs.up_fa_corrected_image)
         fa_down_img = nb.load(self.inputs.down_fa_image)
         fa_down_corrected_img = nb.load(self.inputs.down_fa_corrected_image)
-        uncorrected_fa = nim.math_img('(a+b)/2', a=fa_up_img, b=fa_down_img)
-        corrected_fa = nim.math_img('(a+b)/2', a=fa_up_corrected_img, b=fa_down_corrected_img)
+        uncorrected_fa = image.math_img('(a+b)/2', a=fa_up_img, b=fa_down_img)
+        corrected_fa = image.math_img('(a+b)/2', a=fa_up_corrected_img, b=fa_down_corrected_img)
         compose_view(
             plot_fa_reg(
                 corrected_fa,
@@ -1395,7 +1393,8 @@ def plot_pepolar(
             blip_up_img.get_fdata(dtype='float32').reshape(-1), plot_params
         )
 
-    zeros_bg_img = nim.new_img_like(
+    seg_contour_img = image.crop_img(seg_contour_img)
+    zeros_bg_img = image.new_img_like(
         seg_contour_img, np.zeros(seg_contour_img.shape), copy_header=True
     )
 
@@ -1410,7 +1409,7 @@ def plot_pepolar(
             plot_params['title'] = None
 
         # Generate nilearn figure
-        display = nip.plot_anat(zeros_bg_img, **plot_params)
+        display = plotting.plot_anat(zeros_bg_img, **plot_params)
         display.add_overlay(blip_up_img, cmap='gray', **image_plot_params)
         display.add_contours(seg_contour_img, colors='b', linewidths=0.5)
 
@@ -1441,7 +1440,7 @@ def plot_pepolar(
             blip_down_plot_params['title'] = None
 
         # Generate nilearn figure
-        display = nip.plot_anat(zeros_bg_img, **blip_down_plot_params)
+        display = plotting.plot_anat(zeros_bg_img, **blip_down_plot_params)
         display.add_overlay(blip_down_img, cmap='gray', **image_blip_down_plot_params)
         display.add_contours(seg_contour_img, colors='b', linewidths=0.5)
         svg = extract_svg(display, compress=compress)
@@ -1485,7 +1484,8 @@ def plot_fa_reg(
         raise NotImplementedError
 
     out_files = []
-    zeros_bg_img = nim.new_img_like(
+    seg_contour_img = image.crop_img(seg_contour_img)
+    zeros_bg_img = image.new_img_like(
         seg_contour_img, np.zeros(seg_contour_img.shape), copy_header=True
     )
 
@@ -1500,7 +1500,7 @@ def plot_fa_reg(
             plot_params['title'] = None
 
         # Generate nilearn figure
-        display = nip.plot_anat(zeros_bg_img, **plot_params)
+        display = plotting.plot_anat(zeros_bg_img, **plot_params)
         display.add_overlay(fa_img, **image_plot_params)
         # display.add_contours(seg_contour_img, colors='b', linewidths=0.5)
 

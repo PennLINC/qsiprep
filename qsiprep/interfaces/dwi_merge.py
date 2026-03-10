@@ -55,7 +55,12 @@ class MergeDWIsOutputSpec(TraitedSpec):
     out_dwi = File(desc='the merged dwi image')
     out_bval = File(desc='the merged bval file')
     out_bvec = File(desc='the merged bvec file')
-    original_images = traits.List()
+    original_images = traits.List(
+        desc=(
+            'The paths to the original images. '
+            'This will be a list with one element for each *volume* in the input images.'
+        ),
+    )
     merged_metadata = File(exists=True)
     merged_denoising_confounds = File(exists=True)
     merged_b0_ref = File(exists=True)
@@ -74,10 +79,10 @@ class MergeDWIs(SimpleInterface):
         num_dwis = len(self.inputs.dwi_files)
 
         to_concat, b0_means, corrections = harmonize_b0s(
-            self.inputs.dwi_files,
-            bvals,
-            self.inputs.b0_threshold,
-            self.inputs.harmonize_b0_intensities,
+            dwi_files=self.inputs.dwi_files,
+            bvals=bvals,
+            b0_threshold=self.inputs.b0_threshold,
+            do_harmonization=self.inputs.harmonize_b0_intensities,
         )
 
         # Create a merged metadata json file for
@@ -660,30 +665,31 @@ def get_nvols(img):
     return shape[3]
 
 
-def harmonize_b0s(dwi_files, bvals, b0_threshold, harmonize_b0s):
+def harmonize_b0s(dwi_files, bvals, b0_threshold, do_harmonization):
     """Find the mean intensity of b=0 images in a dwi file and calculate corrections.
 
     Parameters
     ----------
-
-        dwi_files: list
-            List of paths to dwi Nifti files that will be concatenated
-        bvals: list
-            List of paths to bval files corresponding to the files in ``dwi_files``
-        b0_threshold: int
-            maximum b values for an image to be considered a b=0
-        harmonize_b0s: bool
-            Apply a correction to each image so that their mean b=0 images are equal
+    dwi_files: list of str
+        List of paths to dwi Nifti files that will be concatenated
+    bvals: list of str
+        List of paths to bval files corresponding to the files in ``dwi_files``
+    b0_threshold: int
+        maximum b values for an image to be considered a b=0
+    do_harmonization: bool
+        Apply a correction to each image so that their mean b=0 images are equal
 
     Returns
     -------
-        to_concat: list
-            List of NiftiImage objects to be concatenated. May have been harmonized.
-            Same length as the input ``dwi_files``.
-        corrections: list
-            The correction that would be applied to each image to harmonize their b=0's.
-            Same length as the input ``dwi_files``.
-
+    to_concat: list of NiftiImage objects
+        List of NiftiImage objects to be concatenated. May have been harmonized.
+        Same length as the input ``dwi_files``.
+    b0_means: list of floats
+        The mean b=0 intensity of each dwi series. Same length as the input ``dwi_files``.
+    corrections: list of floats
+        The correction that would be applied to each image to harmonize their b=0's.
+        Same length as the input ``dwi_files``.
+        If ``do_harmonization`` is False, this will be a list of ones.
     """
     # Load the dwi data and get the mean values from the b=0 images
     num_dwis = len(dwi_files)
@@ -694,22 +700,23 @@ def harmonize_b0s(dwi_files, bvals, b0_threshold, harmonize_b0s):
         _bvals = np.loadtxt(bval_file)
         b0_indices = np.flatnonzero(_bvals < b0_threshold)
         if b0_indices.size == 0:
+            LOGGER.warning(f'No b<{b0_threshold} images found in {dwi_file}')
             b0_mean = np.nan
         else:
-            if len(b0_indices) > 1:
-                b0_mean = index_img(dwi_nii, b0_indices).get_fdata().mean()
-            else:
-                b0_mean = dwi_nii.get_fdata().mean()
+            # Use the mean of the b=0 images
+            b0_mean = index_img(dwi_nii, b0_indices).get_fdata().mean()
+
         b0_means.append(b0_mean)
         dwi_niis.append(dwi_nii)
 
     # Apply the b0 harmonization if requested
-    if harmonize_b0s:
+    if do_harmonization:
         b0_all_mean = np.nanmean(b0_means)
         corrections = b0_all_mean / np.array(b0_means)
         harmonized_niis = []
         for nii_img, correction in zip(dwi_niis, corrections, strict=False):
-            if np.isnan(b0_mean):
+            if np.isnan(b0_mean) or np.isnan(correction):
+                # XXX: No clue why b0_all_mean or b0_means could be NaNs here.
                 harmonized_niis.append(nii_img)
                 LOGGER.warning('An image has no b=0 images and cannot be harmonized')
             else:

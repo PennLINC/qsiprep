@@ -1,0 +1,47 @@
+---
+alwaysApply: true
+---
+# PennLINC BIDS App Shared Conventions
+
+This project is one of four PennLINC BIDS Apps (qsiprep, qsirecon, xcp_d, aslprep) sharing
+the same architecture and conventions. See [AGENTS.md](mdc:AGENTS.md) for full details.
+
+## Architecture
+
+- CLI in `qsiprep/cli/` (parser.py, run.py, workflow.py, version.py)
+- Singleton config in [config.py](mdc:qsiprep/config.py) with sections: environment, execution, workflow, nipype, seeds
+- Workflows in `qsiprep/workflows/` using Nipype's `pe.Workflow`, `pe.Node`, `pe.MapNode`
+- Interfaces in `qsiprep/interfaces/` following Nipype patterns
+- Tests in `qsiprep/tests/` with pytest; integration tests gated by markers
+
+## Workflow Rules
+
+- Name all workflow factory functions `init_<name>_wf`; return a Workflow object
+- Use `LiterateWorkflow` from `niworkflows.engine.workflows`
+- Define `inputnode` and `outputnode` as `niu.IdentityInterface` nodes
+- Use `workflow.connect([(src, dst, [('out', 'in')])])` syntax with `# fmt:skip` on multi-line connects
+- Read global settings from `config` module, not function parameters
+
+## Interface Rules
+
+- Use Nipype traits for input/output specs (`File`, `traits.Bool`, etc.)
+- Implement `_run_interface(self, runtime)`, return `runtime`
+- Set outputs via `self._results['field'] = value`
+
+## Code Style
+
+- Linter: `ruff check`; Formatter: `ruff format`
+- Import sorting via ruff (isort-compatible)
+- Add `# fmt:skip` after multi-line `workflow.connect()` calls
+
+## Testing
+
+- Unit tests in `test_*.py` -- no external data or network access required
+- Integration tests use `@pytest.mark.<marker>` and are excluded by default
+- Fixtures: `data_dir`, `working_dir`, `output_dir` in conftest.py
+
+## BIDS
+
+- Outputs must conform to BIDS Derivatives specification
+- Use `pybids.BIDSLayout` for input queries
+- Use `DerivativesDataSink` for writing BIDS-compliant outputs

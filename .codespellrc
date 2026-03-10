@@ -1,5 +1,5 @@
 [codespell]
-skip = .git,*.pdf,*.svg,*.html,dataset_description.json,*.gii
+skip = .git,*.pdf,*.svg,*.html,dataset_description.json,*.gii,*.bib
 # te - TE
 # Weill - name
 # reson - Reson. abbreviation in citation

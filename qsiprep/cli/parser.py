@@ -51,6 +51,9 @@ def _build_parser(**kwargs):
     }
 
     class DeprecatedAction(Action):
+        def __init__(self, option_strings, dest, **kwargs):
+            super().__init__(option_strings, dest, nargs=0, **kwargs)
+
         def __call__(self, parser, namespace, values, option_string=None):
             new_opt, rem_vers = deprecations.get(self.dest, (None, None))
             msg = (
@@ -60,7 +63,9 @@ def _build_parser(**kwargs):
             if new_opt:
                 msg += f' Please use `{new_opt}` instead.'
             print(msg, file=sys.stderr)
-            delattr(namespace, self.dest)
+            # Remove the attribute if it exists (argparse may have set it)
+            if hasattr(namespace, self.dest):
+                delattr(namespace, self.dest)
 
     class ToDict(Action):
         def __call__(self, parser, namespace, values, option_string=None):
@@ -333,12 +338,15 @@ def _build_parser(**kwargs):
     )
     g_conf.add_argument(
         '--subject-anatomical-reference',
-        choices=['first-alphabetically', 'unbiased', 'sessionwise'],
-        default='first-alphabetically',
-        help='How to define subject-specific anatomical space. '
-        'sessionwise will produce one anatomical space per session. '
-        'The others combine anatomical data across sessions to define '
-        'one anatomical space per subject.',
+        choices=['first-lex', 'unbiased', 'sessionwise', 'first-alphabetically'],
+        default='first-lex',
+        help=(
+            'How to define subject-specific anatomical space. '
+            'sessionwise will produce one anatomical space per session. '
+            'The others combine anatomical data across sessions to define '
+            'one anatomical space per subject. '
+            'The "first-alphabetically" option is deprecated in favor of "first-lex".'
+        ),
     )
     g_conf.add_argument(
         '--skip-anat-based-spatial-normalization',
@@ -436,12 +444,14 @@ def _build_parser(**kwargs):
         action='store',
         choices=['concat', 'average', 'none'],
         default='none',
-        help='How to combine images across distorted groups.\n'
-        ' - concatenate: append images in the 4th dimension\n '
-        ' - average: if a whole sequence was duplicated in both PE\n'
-        '            directions, average the corrected images of the same\n'
-        '            q-space coordinate\n'
-        ' - none: Default. Keep distorted groups separate',
+        help="""\
+How to combine images across distorted groups.
+ - concat: append images in the 4th dimension
+ - average: if a whole sequence was duplicated in both PE
+            directions, average the corrected images of the same
+            q-space coordinate
+ - none: Default. Keep distorted groups separate
+""",
     )
     g_conf.add_argument(
         '--anatomical-template',
@@ -655,6 +665,15 @@ def parse_args(args=None, namespace=None):
     parser = _build_parser()
     opts = parser.parse_args(args, namespace)
 
+    # Warn about deprecated options
+    if opts.subject_anatomical_reference == 'first-alphabetically':
+        config.loggers.cli.warning(
+            '--subject-anatomical-reference=first-alphabetically has been deprecated '
+            'and will be removed in a later version. '
+            'Please use --subject-anatomical-reference=first-lex instead.'
+        )
+        opts.subject_anatomical_reference = 'first-lex'
+
     # Change anatomical_template based on infant parameter
     opts.anatomical_template = 'MNI152NLin2009cAsym'
     if opts.infant:
@@ -672,6 +691,11 @@ def parse_args(args=None, namespace=None):
         skip = {} if opts.reports_only else {'execution': ('run_uuid',)}
         config.load(opts.config_file, skip=skip, init=False)
         config.loggers.cli.info(f'Loaded previous configuration file {opts.config_file}')
+
+    if opts.eddy_config:
+        from ..utils.misc import validate_eddy_config
+
+        validate_eddy_config(opts.eddy_config)
 
     config.execution.log_level = int(max(25 - 5 * opts.verbose_count, logging.DEBUG))
     config.from_dict(vars(opts), init=['nipype'])

@@ -224,15 +224,16 @@ def init_dwi_preproc_wf(
                 'raw_concatenated',
                 'carpetplot_data',
                 'sdc_scaling_images',
+                'fieldmap_hz',
             ]
         ),
         name='outputnode',
     )
     workflow.__desc__ = """
 
-Diffusion data preprocessing
+#### Diffusion data preprocessing
 
-: """
+"""
 
     pre_hmc_wf = init_dwi_pre_hmc_wf(
         scan_groups=scan_groups,
@@ -328,7 +329,9 @@ Diffusion data preprocessing
 
         workflow.connect([
             (inputnode, fmap_unwarp_report_wf, [('t1_seg', 'inputnode.in_seg')]),
-            (hmc_wf, outputnode, [('outputnode.sdc_scaling_images', 'sdc_scaling_images')]),
+            (hmc_wf, outputnode, [
+                ('outputnode.sdc_scaling_images', 'sdc_scaling_images'),
+            ]),
             (hmc_wf, fmap_unwarp_report_wf, [
                 ('outputnode.pre_sdc_template', 'inputnode.in_pre'),
                 ('outputnode.b0_template', 'inputnode.in_post'),
@@ -338,6 +341,9 @@ Diffusion data preprocessing
             ]),
             (fmap_unwarp_report_wf, ds_report_sdc, [('outputnode.report', 'in_file')]),
         ])  # fmt:skip
+
+    if doing_topup:
+        workflow.connect([(hmc_wf, outputnode, [('outputnode.fieldmap_hz', 'fieldmap_hz')])])
 
     # DRBUDDI has some extra reports that we want to save. Make sure we get them!
     if (

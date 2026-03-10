@@ -230,9 +230,11 @@ def init_anat_preproc_wf(
         return workflow
 
     contrast = config.workflow.anat_modality[:-1]
-    desc = """Anatomical data preprocessing
+    desc = """
 
-: """
+#### Anatomical data preprocessing
+
+"""
     desc += (
         f"""\
 A total of {num_anat_images} {contrast}-weighted ({contrast}w) images were found within the input
@@ -268,7 +270,7 @@ and used as an anatomical reference throughout the workflow.
     workflow.__postdesc__ = f"""\
 Brain extraction was performed on the {config.workflow.anat_modality} image using
 SynthStrip [@synthstrip] and automated segmentation was
-performed using SynthSeg [@synthseg1, @synthseg2] from
+performed using SynthSeg [@synthseg1; @synthseg2] from
 FreeSurfer version {FS_VERSION}. """
 
     # Perform registrations
@@ -323,22 +325,21 @@ FreeSurfer version {FS_VERSION}. """
             (rigid_acpc_resample_unfatsat, outputnode, [('output_image', 't2w_unfatsat')]),
             (rigid_acpc_resample_head, outputnode, [('output_image', 't2_preproc')]),
         ])  # fmt:skip
-    else:
-        if num_additional_t2ws > 0:
-            t2w_preproc_wf = init_t2w_preproc_wf(
-                num_t2ws=num_additional_t2ws,
-                name='t2w_preproc_wf',
-            )
-            workflow.connect([
-                (rigid_acpc_resample_brain, t2w_preproc_wf, [
-                    ('output_image', 'inputnode.t1_brain'),
-                ]),
-                (inputnode, t2w_preproc_wf, [('t2w', 'inputnode.t2w_images')]),
-                (t2w_preproc_wf, outputnode, [
-                    ('outputnode.t2_preproc', 't2_preproc'),
-                    ('outputnode.t2w_unfatsat', 't2w_unfatsat'),
-                ]),
-            ])  # fmt:skip
+    elif num_additional_t2ws > 0:
+        t2w_preproc_wf = init_t2w_preproc_wf(
+            num_t2ws=num_additional_t2ws,
+            name='t2w_preproc_wf',
+        )
+        workflow.connect([
+            (rigid_acpc_resample_brain, t2w_preproc_wf, [
+                ('output_image', 'inputnode.t1_brain'),
+            ]),
+            (inputnode, t2w_preproc_wf, [('t2w', 'inputnode.t2w_images')]),
+            (t2w_preproc_wf, outputnode, [
+                ('outputnode.t2_preproc', 't2_preproc'),
+                ('outputnode.t2w_unfatsat', 't2w_unfatsat'),
+            ]),
+        ])  # fmt:skip
 
     seg2msks = pe.Node(niu.Function(function=_seg2msks), name='seg2msks')
     seg_rpt = pe.Node(ROIsPlot(colors=['r', 'magenta', 'b', 'g']), name='seg_rpt')
@@ -465,6 +466,7 @@ FreeSurfer version {FS_VERSION}. """
         ]),
     ])  # fmt:skip
 
+    workflow.__desc__ = desc
     return workflow
 
 
@@ -581,7 +583,7 @@ def init_anat_template_wf(num_images) -> Workflow:
         workflow.__desc__ = f"""\
 A {contrast}-reference map was computed after registration of
 {num_images} {contrast} images (after INU-correction) using
-`antsRegistration` [ANTs {ANTS_VERSION}].
+`antsRegistration` [ANTs {ANTS_VERSION}; @ants].
 """.format(
             contrast=config.workflow.anat_modality,
             num_images=num_images,
@@ -668,7 +670,7 @@ A {contrast}-reference map was computed after registration of
     # Make an unbiased template, same as used for b=0 registration
     align_to = config.workflow.subject_anatomical_reference
     anat_merge_wf = init_b0_hmc_wf(
-        align_to='first' if (align_to == 'first-alphabetically') else 'iterative',
+        align_to='first' if (align_to == 'first-lex') else 'iterative',
         transform='Rigid',
         name='anat_merge_wf',
         boilerplate=False,
@@ -805,7 +807,7 @@ a 6-DOF transform extracted from a full Affine registration to the
 
     desc += """\
 A full nonlinear registration to the template from AC-PC space was
-estimated via symmetric nonlinear registration (SyN) using antsRegistration. """
+estimated via symmetric nonlinear registration (SyN) using antsRegistration (@ants). """
     rigid_acpc_resample_anat = pe.Node(
         ants.ApplyTransforms(input_image_type=0, interpolation='LanczosWindowedSinc'),
         name='rigid_acpc_resample_anat',

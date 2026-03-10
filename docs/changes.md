@@ -1,6 +1,131 @@
 # What's New
 
-## 1.0.0rc1
+## 1.1.1 (Jan 15, 2026)
+
+A small fix to 1.1.0 for synthseg.
+
+* Add CI test for synthstrip by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1020
+
+
+
+## 1.1.0 (Jan 15, 2026)
+
+This release updates the base OS in QSIPrep's Docker image, updating GLIBC.
+The CUDA runtime is updated from 11.1.1 to 12.2.2.
+The compiled dependencies were rebuilt on the new OS at the exact same versions as 1.0.2
+except for:
+
+* FSL updated from 6.0.7.9 to 6.0.7.15 by @psadil in pennlinc/qsiprep_build#18
+* FreeSurfer updated from 7.3.1 to 7.4.1 by @MegaByte in pennlinc/qsiprep_build#19
+* scipy, numpy, dipy, AMICO updated by @36000 in pennlinc/sqiprep_build#20
+
+### 🎉 Exciting New Features
+* Update base image to ubuntu 22.04, CUDA 12.2.2 by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1019
+* Crop images before plotting by @tsalo in https://github.com/PennLINC/qsiprep/pull/997
+
+### 🐛 Bug Fixes
+* Fix DeprecatedAction by @tsalo in https://github.com/PennLINC/qsiprep/pull/999
+* Fix bug in b0 harmonization when there is only one b0 volume in a file by @tsalo in https://github.com/PennLINC/qsiprep/pull/1002
+
+### Other Changes
+* Correctly cite SynthSeg in boilerplate by @tsalo in https://github.com/PennLINC/qsiprep/pull/998
+* Update bibtex file by @araikes in https://github.com/PennLINC/qsiprep/pull/1009
+* ENH: Add recommended DatasetType field in dataset_description by @psadil in https://github.com/PennLINC/qsiprep/pull/1014
+* Add information on BIDS curation to Usage page by @tsalo in https://github.com/PennLINC/qsiprep/pull/1001
+* Add first-alphabetically anatomical reference and deprecate first-lex by @tsalo in https://github.com/PennLINC/qsiprep/pull/1013
+
+
+## 1.0.2 (November 11, 2025)
+
+This is a patch release to fix a few bugs.
+The most important bug is in how the extent window was being calculated for the dwidenoise denoising method.
+Before this release, the window size was being calculated incorrectly,
+which resulted in the denoising window being too small.
+The main effect of this was that, for short runs (<25 volumes), the extent window was being set to 1,
+which resulted in a later crash in the merge_dwis step.
+
+### 🐛 Bug Fixes
+
+* Fix handling of `--ignore` parameter by @tsalo in https://github.com/PennLINC/qsiprep/pull/953
+* Work around NaNs in merge_dwis by @tsalo in https://github.com/PennLINC/qsiprep/pull/968
+* Correct calculation of dwi_denoise_window by @MegaByte in https://github.com/PennLINC/qsiprep/pull/984
+* Raise warning if DWI files should be organized as field maps by @tsalo in https://github.com/PennLINC/qsiprep/pull/995
+
+### Other Changes
+
+* Add tips on B1 bias correction on normed data by @tsalo in https://github.com/PennLINC/qsiprep/pull/934
+* Bump dipy version by @tsalo in https://github.com/PennLINC/qsiprep/pull/936
+* Remove unused source_file parameter from CombineMotions by @tsalo in https://github.com/PennLINC/qsiprep/pull/943
+* Test dMRI and field map file grouping by @tsalo in https://github.com/PennLINC/qsiprep/pull/927
+* Remove unused parameters from `group_dwi_scans` by @tsalo in https://github.com/PennLINC/qsiprep/pull/966
+* Add tabular summary stats of fieldmap in hz by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/961
+* Replace numpy.complex with complex by @tsalo in https://github.com/PennLINC/qsiprep/pull/992
+* Swap zenodo.json with CITATION.cff in welcomebot by @tsalo in https://github.com/PennLINC/qsiprep/pull/993
+
+## New Contributors
+
+* @MegaByte made their first contribution in https://github.com/PennLINC/qsiprep/pull/984
+
+**Full Changelog**: https://github.com/PennLINC/qsiprep/compare/1.0.1...1.0.2
+
+
+## 1.0.1 (April 5, 2025)
+
+### 🛠 Breaking Changes
+
+* Group DWI scans by MultipartID when available by @tsalo in https://github.com/PennLINC/qsiprep/pull/918
+
+### 🐛 Bug Fixes
+
+* Fix DWI entities (including supporting run entity) by @tsalo in https://github.com/PennLINC/qsiprep/pull/925
+
+### Other Changes
+
+* Improve documentation for running QSIPrep with TemplateFlow on non-internet nodes by @pierre-nedelec in https://github.com/PennLINC/qsiprep/pull/907
+* Log steps of concatenation grouping by @tsalo in https://github.com/PennLINC/qsiprep/pull/922
+
+**Full Changelog**: https://github.com/PennLINC/qsiprep/compare/1.0.0...1.0.1
+
+
+## 1.0.0 (April 5, 2025)
+
+### 🛠 Breaking Changes
+
+* Replace pennbbl with pennlinc in package by @tsalo in https://github.com/PennLINC/qsiprep/pull/869
+* Move common metadata to top of JSON by @tsalo in https://github.com/PennLINC/qsiprep/pull/875
+* Calculate patch radius from number of volumes in DWI run by @tsalo in https://github.com/PennLINC/qsiprep/pull/892
+* Set output directory for derivative datasinks by @tsalo in https://github.com/PennLINC/qsiprep/pull/914
+
+### 🐛 Bug Fixes
+
+* [FIX] synthstrip extra arg by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/881
+* Pin nireports version and allow GIFs by @tsalo in https://github.com/PennLINC/qsiprep/pull/883
+* Fix session processing for datasets with mixed modalities by @tsalo in https://github.com/PennLINC/qsiprep/pull/901
+* Use DIPY version of patch2self by @tsalo in https://github.com/PennLINC/qsiprep/pull/902
+* Fix epi bval loading. by @smeisler in https://github.com/PennLINC/qsiprep/pull/913
+* Fix use of `session_id` in `collect_data` by @tsalo in https://github.com/PennLINC/qsiprep/pull/909
+
+### Other Changes
+
+* Restructure documentation and document how to run tests locally by @tsalo in https://github.com/PennLINC/qsiprep/pull/879
+* Prepare for 1.0.0rc1 release by @tsalo in https://github.com/PennLINC/qsiprep/pull/878
+* Add instructions for installing with pip by @tsalo in https://github.com/PennLINC/qsiprep/pull/885
+* Switch to ruff by @tsalo in https://github.com/PennLINC/qsiprep/pull/877
+* Change CI pytests to be more accurate by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/887
+* Remove surface functions and interfaces by @tsalo in https://github.com/PennLINC/qsiprep/pull/890
+* Link to NiPreps contributing guidelines by @LuciMoore in https://github.com/PennLINC/qsiprep/pull/896
+* Update CITATION.cff by @LuciMoore in https://github.com/PennLINC/qsiprep/pull/900
+* ENH: Update eddy_params.json by @cookpa in https://github.com/PennLINC/qsiprep/pull/903
+* Fix style issues by @tsalo in https://github.com/PennLINC/qsiprep/pull/910
+
+## New Contributors
+
+* @LuciMoore made their first contribution in https://github.com/PennLINC/qsiprep/pull/896
+
+**Full Changelog**: https://github.com/PennLINC/qsiprep/compare/0.24.0...1.0.0
+
+
+## 1.0.0rc1 (November 19, 2024)
 
 This is a prerelease for the version that will be used by the HBCD project for their first data release.
 Starting with this release, QSIPrep is now being deployed to `pennlinc/qsiprep`
@@ -25,7 +150,7 @@ We plan to not introduce any backwards-incompatible changes for a while.
 **Full Changelog**: https://github.com/PennLINC/qsiprep/compare/0.24.0...1.0.0rc1
 
 
-## 0.24.0 (November 14, 2023)
+## 0.24.0 (November 14, 2024)
 
 This is a major, backwards-incompatible release.
 It is also the last release using the `pennbbl` organization on DockerHub.

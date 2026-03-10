@@ -100,7 +100,9 @@ def init_qsiprep_hmcsdc_wf(
                 'down_fa_image',
                 'down_fa_corrected_image',
                 't2w_image',
-            ]
+                # Will not be defined
+                'fieldmap_hz',
+            ],
         ),
         name='outputnode',
     )
@@ -146,8 +148,7 @@ def init_qsiprep_hmcsdc_wf(
         (split_dwis, slice_qc, [('out_files', 'uncorrected_dwi_files')]),
         (dwi_hmc_wf, outputnode, [
             ('outputnode.final_template', 'pre_sdc_template'),
-            (('outputnode.forward_transforms', _list_squeeze),
-             'to_dwi_ref_affines'),
+            (('outputnode.forward_transforms', _list_squeeze), 'to_dwi_ref_affines'),
             ('outputnode.optimization_data', 'hmc_optimization_data'),
             ('outputnode.cnr_image', 'cnr_map'),
             ('outputnode.final_template_mask', 'b0_template_mask'),

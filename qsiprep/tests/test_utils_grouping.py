@@ -188,9 +188,9 @@ def test_get_entity_groups_without_multipartid(tmpdir):
     check_expected(entity_groups, expected)
 
 
-def test_get_fieldmaps(tmp_path_factory):
+def test_get_fieldmaps_relpaths(tmp_path_factory):
     """Test the get_fieldmaps function."""
-    base_dir = tmp_path_factory.mktemp('test_get_fieldmaps')
+    base_dir = tmp_path_factory.mktemp('test_get_fieldmaps_relpaths')
 
     # Check that relative paths are correctly handled
     bids_dir = base_dir / 'dset_fmap_intendedfor_relpath'
@@ -204,28 +204,38 @@ def test_get_fieldmaps(tmp_path_factory):
         'dwi/sub-01_dir-AP_dwi.nii.gz'
     ]
 
+
+@pytest.mark.xfail(reason='BIDS URI paths not supported by pybids')
+def test_get_fieldmaps_bidsuri(tmp_path_factory):
     # Check that BIDS URI paths are correctly handled
+    base_dir = tmp_path_factory.mktemp('test_get_fieldmaps_bidsuri')
+
     # XXX: This currently fails because pybids does not support BIDS URI paths.
-    # bids_dir = base_dir / 'dset_fmap_intendedfor_bidsuri'
-    # generate_bids_skeleton(str(bids_dir), dset_fmap_intendedfor_bidsuri)
-    # layout = BIDSLayout(str(bids_dir))
-    # dwi_file = layout.get(suffix='dwi', extension='nii.gz', return_type='file')[0]
-    # fieldmaps = layout.get_fieldmap(dwi_file, return_list=True)
-    # assert len(fieldmaps) == 1
-    # assert fieldmaps[0]['suffix'] == 'epi'
-    # assert layout.get_file(fieldmaps[0]['epi']).get_metadata()['IntendedFor'] == [
-    #     'bids::sub-01/dwi/sub-01_dir-AP_dwi.nii.gz'
-    # ]
+    bids_dir = base_dir / 'dset_fmap_intendedfor_bidsuri'
+    generate_bids_skeleton(str(bids_dir), dset_fmap_intendedfor_bidsuri)
+    layout = BIDSLayout(str(bids_dir))
+    dwi_file = layout.get(suffix='dwi', extension='nii.gz', return_type='file')[0]
+    fieldmaps = layout.get_fieldmap(dwi_file, return_list=True)
+    assert len(fieldmaps) == 1
+    assert fieldmaps[0]['suffix'] == 'epi'
+    assert layout.get_file(fieldmaps[0]['epi']).get_metadata()['IntendedFor'] == [
+        'bids::sub-01/dwi/sub-01_dir-AP_dwi.nii.gz'
+    ]
+
+
+@pytest.mark.xfail(reason='B0Field* not supported by pybids')
+def test_get_fieldmaps_b0fields(tmp_path_factory):
+    """Test the get_fieldmaps function."""
+    base_dir = tmp_path_factory.mktemp('test_get_fieldmaps_b0fields')
 
     # Check that B0FieldIdentifier and B0FieldSource are correctly handled
-    # XXX: This currently fails because pybids does not support B0Field* with get_fieldmap.
-    # bids_dir = base_dir / 'dset_fmap_b0fields'
-    # generate_bids_skeleton(str(bids_dir), dset_fmap_b0fields)
-    # layout = BIDSLayout(str(bids_dir))
-    # dwi_file = layout.get(suffix='dwi', extension='nii.gz', return_type='file')[0]
-    # fieldmaps = layout.get_fieldmap(dwi_file, return_list=True)
-    # assert len(fieldmaps) == 1
-    # assert fieldmaps[0]['suffix'] == 'epi'
+    bids_dir = base_dir / 'dset_fmap_b0fields'
+    generate_bids_skeleton(str(bids_dir), dset_fmap_b0fields)
+    layout = BIDSLayout(str(bids_dir))
+    dwi_file = layout.get(suffix='dwi', extension='nii.gz', return_type='file')[0]
+    fieldmaps = layout.get_fieldmap(dwi_file, return_list=True)
+    assert len(fieldmaps) == 1
+    assert fieldmaps[0]['suffix'] == 'epi'
 
 
 def check_expected(subject_data, expected):
