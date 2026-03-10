@@ -408,6 +408,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/f7/fd/67c61276de025801cfa8a1b9af2d7c577e7f27c17b6bff2baca20bf03543/tensorboard-2.8.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/60/f9/802efd84988bffd9f644c03b6e66fde8e76c3aa33db4279ddd11c5d61f4b/tensorboard_data_server-0.6.1-py3-none-manylinux2010_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/e0/68/e8ecfac5dd594b676c23a7f07ea34c197d7d69b3313afdf8ac1b0a9905a2/tensorboard_plugin_wit-1.8.1-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/e9/c6/b2e8c2e6c8537775f30eac2ee93b7e375a9bac9abec87b624415cc2d8cab/tensorflow-2.8.4-cp310-cp310-manylinux2010_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/4e/42/cefc351e0e428ca9c460bfbd994ec9f01e5d8bd34f88c65a7ea807ecd67a/tensorflow_estimator-2.8.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/98/b0/c7e9b5586c03e68b44a84207cb2f84adcd6a70dd0298db61b65ef8f113f1/tensorflow_gpu-2.8.4-cp310-cp310-manylinux2010_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/f3/48/47b7d25572961a48b1de3729b7a11e835b888e41e0203cca82df95d23b91/tensorflow_io_gcs_filesystem-0.37.1-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
@@ -861,6 +862,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/f7/fd/67c61276de025801cfa8a1b9af2d7c577e7f27c17b6bff2baca20bf03543/tensorboard-2.8.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/60/f9/802efd84988bffd9f644c03b6e66fde8e76c3aa33db4279ddd11c5d61f4b/tensorboard_data_server-0.6.1-py3-none-manylinux2010_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/e0/68/e8ecfac5dd594b676c23a7f07ea34c197d7d69b3313afdf8ac1b0a9905a2/tensorboard_plugin_wit-1.8.1-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/e9/c6/b2e8c2e6c8537775f30eac2ee93b7e375a9bac9abec87b624415cc2d8cab/tensorflow-2.8.4-cp310-cp310-manylinux2010_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/4e/42/cefc351e0e428ca9c460bfbd994ec9f01e5d8bd34f88c65a7ea807ecd67a/tensorflow_estimator-2.8.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/98/b0/c7e9b5586c03e68b44a84207cb2f84adcd6a70dd0298db61b65ef8f113f1/tensorflow_gpu-2.8.4-cp310-cp310-manylinux2010_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/f3/48/47b7d25572961a48b1de3729b7a11e835b888e41e0203cca82df95d23b91/tensorflow_io_gcs_filesystem-0.37.1-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
@@ -1290,6 +1292,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/f7/fd/67c61276de025801cfa8a1b9af2d7c577e7f27c17b6bff2baca20bf03543/tensorboard-2.8.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/60/f9/802efd84988bffd9f644c03b6e66fde8e76c3aa33db4279ddd11c5d61f4b/tensorboard_data_server-0.6.1-py3-none-manylinux2010_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/e0/68/e8ecfac5dd594b676c23a7f07ea34c197d7d69b3313afdf8ac1b0a9905a2/tensorboard_plugin_wit-1.8.1-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/e9/c6/b2e8c2e6c8537775f30eac2ee93b7e375a9bac9abec87b624415cc2d8cab/tensorflow-2.8.4-cp310-cp310-manylinux2010_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/4e/42/cefc351e0e428ca9c460bfbd994ec9f01e5d8bd34f88c65a7ea807ecd67a/tensorflow_estimator-2.8.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/98/b0/c7e9b5586c03e68b44a84207cb2f84adcd6a70dd0298db61b65ef8f113f1/tensorflow_gpu-2.8.4-cp310-cp310-manylinux2010_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/f3/48/47b7d25572961a48b1de3729b7a11e835b888e41e0203cca82df95d23b91/tensorflow_io_gcs_filesystem-0.37.1-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
@@ -6247,8 +6250,8 @@ packages:
   timestamp: 1770223379599
 - pypi: ./
   name: qsiprep
-  version: 1.1.2.dev21+ged2a65e0a.d20260309
-  sha256: 210d0cc4a886b526f59aefde4a19a62e5f3ece62d9dd872c4b3497918d695e12
+  version: 1.1.2.dev27+g3322b3c6d.d20260310
+  sha256: 15e04bfc29179cf165da73c3c44a8f9767f738432961be3f963284c42ba25b94
   requires_dist:
   - acres
   - coverage
@@ -6281,6 +6284,7 @@ packages:
   - surfa==0.6.1
   - svgutils<=0.3.4
   - templateflow
+  - tensorflow
   - tensorflow-gpu==2.8.4
   - torch
   - transforms3d
@@ -7062,6 +7066,32 @@ packages:
   name: tensorboard-plugin-wit
   version: 1.8.1
   sha256: ff26bdd583d155aa951ee3b152b3d0cffae8005dc697f72b44a8e8c2a77a8cbe
+- pypi: https://files.pythonhosted.org/packages/e9/c6/b2e8c2e6c8537775f30eac2ee93b7e375a9bac9abec87b624415cc2d8cab/tensorflow-2.8.4-cp310-cp310-manylinux2010_x86_64.whl
+  name: tensorflow
+  version: 2.8.4
+  sha256: 4482b736d9fbe962313ab25dcec423070bbe3fe1a6ecdf69b33a7d1f359577a5
+  requires_dist:
+  - absl-py>=0.4.0
+  - astunparse>=1.6.0
+  - flatbuffers>=1.12
+  - gast>=0.2.1
+  - google-pasta>=0.1.1
+  - h5py>=2.9.0
+  - keras-preprocessing>=1.1.1
+  - libclang>=9.0.1
+  - numpy>=1.20
+  - opt-einsum>=2.3.2
+  - protobuf>=3.9.2,<3.20
+  - setuptools
+  - six>=1.12.0
+  - termcolor>=1.1.0
+  - typing-extensions>=3.6.6
+  - wrapt>=1.11.0
+  - tensorboard>=2.8,<2.9
+  - tensorflow-estimator>=2.8,<2.9
+  - keras>=2.8.0rc0,<2.9
+  - tensorflow-io-gcs-filesystem>=0.23.1
+  - grpcio>=1.24.3,<2.0
 - pypi: https://files.pythonhosted.org/packages/4e/42/cefc351e0e428ca9c460bfbd994ec9f01e5d8bd34f88c65a7ea807ecd67a/tensorflow_estimator-2.8.0-py2.py3-none-any.whl
   name: tensorflow-estimator
   version: 2.8.0
