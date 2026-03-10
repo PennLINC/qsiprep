@@ -20,23 +20,31 @@ FROM pennlinc/qsiprep-drbuddicuda:${TAG_TORTOISECUDA} AS build_tortoisecuda
 FROM pennlinc/qsiprep-synb0:${TAG_SYNB0} AS build_synb0
 FROM nvidia/cuda:12.2.2-runtime-ubuntu22.04 AS base
 
+## ANTs
 COPY --from=build_ants /opt/ants /opt/ants
 ENV ANTSPATH="/opt/ants/bin" \
     LD_LIBRARY_PATH="/opt/ants/lib:$LD_LIBRARY_PATH" \
-    PATH="$PATH:/opt/ants/bin"
+    PATH="$PATH:/opt/ants/bin" \
+    ANTS_DEPS="zlib1g"
 
-ENV QT_BASE_DIR="/opt/qt512" \
-    QTDIR="$QT_BASE_DIR" \
-    LD_LIBRARY_PATH="$QT_BASE_DIR/lib/x86_64-linux-gnu:$QT_BASE_DIR/lib:${LD_LIBRARY_PATH:-}" \
-    PKG_CONFIG_PATH="$QT_BASE_DIR/lib/pkgconfig:${PKG_CONFIG_PATH:-}" \
-    PATH="$QT_BASE_DIR/bin:${PATH:-}:/opt/dsi-studio"
+## DSI Studio
+ENV DSI_STUDIO_DEPS="libqt5charts5 libqt5opengl5 libqt5svg5 libqt5gui5 libqt5widgets5 libqt5sql5 libqt5network5" \
+    QT_PLUGIN_PATH="/usr/lib/x86_64-linux-gnu/qt5/plugins" \
+    QML2_IMPORT_PATH="/usr/lib/x86_64-linux-gnu/qt5/qml" \
+    PATH="/opt/dsi-studio:/opt/dsi-studio/dsi_studio_64:$PATH"
 
+## MRtrix3
 COPY --from=build_mrtrix3 /opt/mrtrix3-latest /opt/mrtrix3-latest
+## MRtrix3-3Tissue
 COPY --from=build_3tissue /opt/3Tissue /opt/3Tissue
-ENV PATH="$PATH:/opt/mrtrix3-latest/bin:/opt/3Tissue/bin"
+ENV PATH="$PATH:/opt/mrtrix3-latest/bin:/opt/3Tissue/bin" \
+    MRTRIX3_DEPS="bzip2 ca-certificates curl libpng16-16 libblas3 liblapack3"
 
+## Freesurfer
 COPY --from=build_freesurfer /opt/freesurfer /opt/freesurfer
-ENV OS="Linux" \
+# Simulate SetUpFreeSurfer.sh
+ENV FSL_DIR="/opt/conda/envs/fslqsiprep" \
+    OS="Linux" \
     FS_OVERRIDE=0 \
     FIX_VERTEX_AREA="" \
     FSF_OUTPUT_FORMAT="nii.gz" \
@@ -48,15 +56,17 @@ ENV SUBJECTS_DIR="$FREESURFER_HOME/subjects" \
     MINC_BIN_DIR="$FREESURFER_HOME/mni/bin" \
     MINC_LIB_DIR="$FREESURFER_HOME/mni/lib" \
     MNI_DATAPATH="$FREESURFER_HOME/mni/data"
-ENV FSFAST_HOME="$FREESURFER_HOME/fsfast" \
-    PERL5LIB="$MINC_LIB_DIR/perl5/5.8.5" \
+ENV PERL5LIB="$MINC_LIB_DIR/perl5/5.8.5" \
     MNI_PERL5LIB="$MINC_LIB_DIR/perl5/5.8.5" \
-    PATH="$FREESURFER_HOME/bin:$FREESURFER_HOME/fsfast/bin:$FREESURFER_HOME/tktools:$MINC_BIN_DIR:$PATH"
+    PATH="$FREESURFER_HOME/bin:$FSFAST_HOME/bin:$FREESURFER_HOME/tktools:$MINC_BIN_DIR:$PATH" \
+    FREESURFER_DEPS="bc ca-certificates curl libgomp1 libxmu6 libxt6 tcsh perl"
 RUN chmod a+rx /opt/freesurfer/bin/mri_synthseg /opt/freesurfer/bin/mri_synthstrip
 
+# SynB0-DISCO
 COPY --from=build_synb0 /opt/synb0 /opt/synb0
 ENV SYNB0_ATLASES=/opt/synb0/atlases
 
+## AFNI
 # Find libraries with `ldd $BINARIES | grep afni`
 COPY --link --from=build_afni \
     /opt/afni/install/libf2c.so  \
@@ -82,15 +92,19 @@ COPY --link --from=build_afni \
     /opt/afni/install/3dresample \
     /opt/afni/install/3dvolreg \
     /usr/local/bin/
+
 ENV PATH="$PATH:/usr/local/bin" \
     AFNI_INSTALLDIR=/usr/local/bin \
     AFNI_IMSAVE_WARNINGS=NO
 
+## TORTOISE
 COPY --from=build_tortoise /src/TORTOISEV4/bin /src/TORTOISEV4/bin
 COPY --from=build_tortoise /src/TORTOISEV4/settings /src/TORTOISEV4/settings
 COPY --from=build_tortoisecuda /src/TORTOISEV4/bin/*cuda /src/TORTOISEV4/bin/
-ENV PATH="$PATH:/src/TORTOISEV4/bin"
+ENV PATH="$PATH:/src/TORTOISEV4/bin" \
+    TORTOISE_DEPS="libfftw3-3"
 
+# Create a shared $HOME directory
 RUN useradd -m -s /bin/bash -G users qsiprep
 WORKDIR /home/qsiprep
 ENV HOME="/home/qsiprep" \
@@ -112,34 +126,45 @@ ENV FSLOUTPUTTYPE="NIFTI_GZ" \
 
 RUN apt-get update -qq \
     && apt-get install -y -q --no-install-recommends \
-           apt-utils \
-           bc \
-           binutils \
-           bzip2 \
-           ca-certificates \
-           curl \
-           ed \
-           gsl-bin \
-           graphviz \
-           libfftw3-3 \
-           libglib2.0-0 \
-           libglu1-mesa-dev \
-           libglw1-mesa \
-           libgomp1 \
-           libjpeg62 \
-           libpng16-16 \
-           libquadmath0 \
-           libxm4 \
-           libxmu6 \
-           libxt6 \
-           netpbm \
-           pandoc \
-           perl \
-           software-properties-common \
-           tcsh \
-           xfonts-base \
-           xvfb \
-           zlib1g-dev \
+        bc \
+        binutils \
+        bzip2 \
+        ca-certificates \
+        curl \
+        wget \
+        git \
+        gnupg \
+        gsl-bin \
+        graphviz \
+        libblas3 \
+        libboost-filesystem1.74.0 \
+        libboost-program-options1.74.0 \
+        libboost-serialization1.74.0 \
+        libboost-system1.74.0 \
+        libboost-thread1.74.0 \
+        libfftw3-3 \
+        libglib2.0-0 \
+        libgl1 \
+        libglu1-mesa \
+        libglw1-mesa \
+        libgomp1 \
+        libjpeg62 \
+        liblapack3 \
+        libpng16-16 \
+        libquadmath0 \
+        libtiff5 \
+        libxm4 \
+        libxmu6 \
+        libxt6 \
+        netpbm \
+        perl \
+        tcsh \
+        xfonts-base \
+        xvfb \
+        zlib1g \
+        ${MRTRIX3_DEPS} \
+        ${DSI_STUDIO_DEPS} \
+        ${TORTOISE_DEPS} \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
     && curl -sSL --retry 5 -o /tmp/libxp6.deb https://upenn.box.com/shared/static/reyyundn0l3guvjzghrrv6t4w6md2tjd.deb \
@@ -165,45 +190,47 @@ RUN echo "Downloading Convert3D ..." \
 ENV C3DPATH="/opt/convert3d-nightly" \
     PATH="/opt/convert3d-nightly/bin:$PATH"
 
+# Install Qt runtime deps for DSI Studio and copy binaries
 COPY --from=build_dsistudio /opt/dsi-studio /opt/dsi-studio
-# Added Qt libraries from dsistudio stage. qsiprep_build didn't seem to need this step.
-COPY --from=build_dsistudio /usr/lib/x86_64-linux-gnu/libQt5Core.so.5* /usr/lib/x86_64-linux-gnu/
-COPY --from=build_dsistudio /usr/lib/x86_64-linux-gnu/libQt5Gui.so.5* /usr/lib/x86_64-linux-gnu/
-COPY --from=build_dsistudio /usr/lib/x86_64-linux-gnu/libQt5Widgets.so.5* /usr/lib/x86_64-linux-gnu/
-COPY --from=build_dsistudio /usr/lib/x86_64-linux-gnu/libQt5Charts.so.5* /usr/lib/x86_64-linux-gnu/
-COPY --from=build_dsistudio /usr/lib/x86_64-linux-gnu/libQt5OpenGL.so.5* /usr/lib/x86_64-linux-gnu/
-COPY --from=build_dsistudio /usr/lib/x86_64-linux-gnu/libQt5Svg.so.5* /usr/lib/x86_64-linux-gnu/
-COPY --from=build_dsistudio /usr/lib/x86_64-linux-gnu/libQt5Sql.so.5* /usr/lib/x86_64-linux-gnu/
-COPY --from=build_dsistudio /usr/lib/x86_64-linux-gnu/libQt5Network.so.5* /usr/lib/x86_64-linux-gnu/
-COPY --from=build_dsistudio /usr/lib/x86_64-linux-gnu/libmd4c.so.0* /usr/lib/x86_64-linux-gnu/
 
-# Ensure /tmp is writable; install remaining deps (Qt comes from dsistudio stage).
-RUN mkdir -p /tmp /var/tmp && chmod 1777 /tmp /var/tmp \
-    && add-apt-repository -y ppa:ubuntu-toolchain-r/test \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends \
-           fftw3 \
-           wget \
-           git \
-           g++-12 \
-           libstdc++6 \
-    && curl -sSL --retry 5 -o /tmp/libicu60.deb http://archive.ubuntu.com/ubuntu/pool/main/i/icu/libicu60_60.2-3ubuntu3.2_amd64.deb \
-    && dpkg -i /tmp/libicu60.deb \
-    && rm /tmp/libicu60.deb \
-    && apt-get install -f --no-install-recommends \
-    && ldd /opt/dsi-studio/dsi_studio | grep -vq 'not found' \
-    && ldconfig -p | grep -q 'libicui18n.so.60' \
-    && strings /lib/x86_64-linux-gnu/libc.so.6 | grep -q 'GLIBC_2.28' \
-    && strings /usr/lib/x86_64-linux-gnu/libstdc++.so.6 | grep -q 'GLIBCXX_3.4.26' \
-    && strings /usr/lib/x86_64-linux-gnu/libstdc++.so.6 | grep -q 'GLIBCXX_3.4.30' \
-    && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
+# Install ACPC-detect
 WORKDIR /opt/art
 ENV PATH="/opt/art/bin:$PATH"
-RUN cd /opt/art && curl -fsSL https://osf.io/73h5s/download | tar xz --strip-components 1
+RUN cd /opt/art \
+    && curl -fsSL https://osf.io/73h5s/download \
+    | tar xz --strip-components 1
 
-RUN ldconfig
-WORKDIR /tmp
+# Unless otherwise specified each process should only use one thread - nipype
+# will handle parallelization
+ENV \
+    HOME="/home/qsiprep" \
+    MKL_NUM_THREADS=1 \
+    OMP_NUM_THREADS=1 \
+    MRTRIX_NTHREADS=1 \
+    KMP_WARNINGS=0 \
+    CRN_SHARED_DATA=/niworkflows_data \
+    IS_DOCKER_8395080871=1 \
+    ARTHOME="/opt/art" \
+    DIPY_HOME=/home/qsiprep/.dipy \
+    QT_PLUGIN_PATH="/usr/lib/x86_64-linux-gnu/qt5/plugins" \
+    QML2_IMPORT_PATH="/usr/lib/x86_64-linux-gnu/qt5/qml" \
+    LD_LIBRARY_PATH="/opt/conda/envs/qsiprep/lib/python3.10/site-packages/nvidia/cudnn/lib:/opt/freesurfer/lib:${LD_LIBRARY_PATH}"
+
+WORKDIR /root/
+
+# Make it ok for singularity on CentOS
+RUN if [ -f /usr/lib/x86_64-linux-gnu/libQt5Core.so.5 ]; then \
+      strip --remove-section=.note.ABI-tag /usr/lib/x86_64-linux-gnu/libQt5Core.so.5; \
+    fi && ldconfig
+
+# Make singularity mount directories
+RUN  mkdir -p /sngl/data \
+    && mkdir /sngl/qsiprep-output \
+    && mkdir /sngl/out \
+    && mkdir /sngl/scratch \
+    && mkdir /sngl/eddy \
+    && mkdir /sngl/filter \
+    && chmod a+rwx /sngl/*
 
 LABEL org.label-schema.name="qsiprep-base" \
       org.label-schema.description="QSIPrep base image - runtime dependencies without the qsiprep package" \
