@@ -1,0 +1,38 @@
+---
+globs: "*.py"
+---
+# QSIPrep Project Rules
+
+## Project Identity
+
+- Package: `qsiprep` -- diffusion MRI preprocessing BIDS App
+- Default branch: `master` (migration to `main` is planned)
+- Entry point: [qsiprep/cli/run.py](mdc:qsiprep/cli/run.py)
+
+## Linting & Formatting
+
+- Config: [pyproject.toml](mdc:pyproject.toml) under `[tool.ruff]`
+- Pre-commit: [.pre-commit-config.yaml](mdc:.pre-commit-config.yaml) with ruff v0.6.2
+- Black is disabled (`[tool.black] exclude = ".*"`)
+
+### Suppressed Lint Rules (TODO)
+
+The following rules are suppressed in pyproject.toml with `# TODO: Fix these`:
+S605, DTZ005, B904, A001, B006, S607, S108, S602, E402, UP028, UP031, BLE001
+
+When touching code that triggers these rules, fix the violation.
+
+## Key Module Paths
+
+- DWI workflows: `qsiprep/workflows/dwi/` (hmc, hmc_sdc, fsl, resampling, confounds, etc.)
+- Anatomical workflows: `qsiprep/workflows/anatomical/`
+- Fieldmap workflows: `qsiprep/workflows/fieldmap/` (pepolar, phdiff, syn, drbuddi)
+- External tool interfaces: `qsiprep/interfaces/` (eddy, mrtrix, dsi_studio, dipy, tortoise, freesurfer)
+- Config: [qsiprep/config.py](mdc:qsiprep/config.py)
+
+## Testing
+
+- Test extras: `tests` in pyproject.toml
+- Parallel test execution supported via `pytest-xdist`
+- Integration test markers defined in `[tool.pytest.ini_options]`
+- Environment variable `RUNNING_PYTEST=1` is set during test runs
