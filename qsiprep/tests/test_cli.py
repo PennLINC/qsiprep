@@ -1,10 +1,13 @@
 """Command-line interface tests."""
 
 import os
+import shutil
 import sys
 from pathlib import Path
 from unittest.mock import patch
 
+import nibabel as nb
+import numpy as np
 import pytest
 from nipype import config as nipype_config
 
@@ -428,6 +431,7 @@ def test_intramodal_template(data_dir, output_dir, working_dir):
         out_dir,
         'participant',
         f'-w={work_dir}',
+        '--sloppy',
         '--b1-biascorrect-stage=none',
         '--hmc-model=none',
         '--b0-motion-corr-to=first',
@@ -446,34 +450,76 @@ def test_multi_t1w(data_dir, output_dir, working_dir):
 
     This tests the following features:
     - freesurfer's robust template
-    - dwidenoise is enabled implicitly
+    - Explicitly testing --subject-anatomical-reference unbiased
 
     Inputs
     ------
     - DSDTI BIDS data (data/DSDTI)
     """
     TEST_NAME = 'multi_t1w'
+    UNBIASED_TEST_NAME = 'multi_t1w_unbiased'
 
-    dataset_dir = download_test_data('twoses', data_dir)
+    dataset_dir = download_test_data('DSDTI', data_dir)
     # XXX: Having to modify dataset_dirs is suboptimal.
     dataset_dir = os.path.join(dataset_dir, 'DSDTI')
-    out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
+    writable_bids_dir = os.path.join(work_dir, 'DSDTI')
+    out_dir = os.path.join(output_dir, TEST_NAME)
+    unbiased_out_dir = os.path.join(output_dir, UNBIASED_TEST_NAME)
+    unbiased_work_dir = os.path.join(working_dir, UNBIASED_TEST_NAME)
+
+    if os.path.isdir(writable_bids_dir):
+        shutil.rmtree(writable_bids_dir)
+    shutil.copytree(dataset_dir, writable_bids_dir)
+
+    # CRITICAL: delete the fieldmap data.
+    fmap_dir = Path(writable_bids_dir) / 'sub-PNC' / 'fmap'
+    if fmap_dir.exists():
+        shutil.rmtree(fmap_dir)
+
+    anat_dir = Path(writable_bids_dir) / 'sub-PNC' / 'anat'
+    source_t1w = anat_dir / 'sub-PNC_T1w.nii.gz'
+    shifted_t1w = anat_dir / 'sub-PNC_run-02_T1w.nii.gz'
+    source_json = anat_dir / 'sub-PNC_T1w.json'
+    shifted_json = anat_dir / 'sub-PNC_run-02_T1w.json'
+
+    # Generate a second, translated T1w to test robust template construction.
+    source_img = nb.load(str(source_t1w))
+    shifted_affine = source_img.affine.copy()
+    shifted_affine[:3, 3] = shifted_affine[:3, 3] + np.array([2.0, 4.0, 1.0])
+    shifted_img = source_img.__class__(np.asanyarray(source_img.dataobj), shifted_affine, source_img.header)
+    nb.save(shifted_img, shifted_t1w)
+    shutil.copy2(source_json, shifted_json)
+
+    test_data_path = get_test_data_path()
+    eddy_config = os.path.join(test_data_path, 'eddy_config.json')
 
     parameters = [
-        dataset_dir,
+        writable_bids_dir,
         out_dir,
         'participant',
         f'-w={work_dir}',
-        '--b1-biascorrect-stage=none',
-        '--hmc-model=none',
-        '--b0-motion-corr-to=first',
+        f'--eddy-config={eddy_config}',
+        '--denoise-method=none',
+        '--sloppy',
         '--output-resolution=5',
-        '--intramodal-template-transform=BSplineSyN',
-        '--intramodal-template-iters=2',
+        '--anat-only',
     ]
+    _run_and_generate(TEST_NAME, parameters, test_main=False, check_outputs=False)
 
-    _run_and_generate(TEST_NAME, parameters, test_main=False)
+    unbiased_parameters = [
+        writable_bids_dir,
+        unbiased_out_dir,
+        'participant',
+        f'-w={unbiased_work_dir}',
+        f'--eddy-config={eddy_config}',
+        '--denoise-method=none',
+        '--sloppy',
+        '--output-resolution=5',
+        '--anat-only',
+        '--subject-anatomical-reference=unbiased',
+    ]
+    _run_and_generate(UNBIASED_TEST_NAME, unbiased_parameters, test_main=False, check_outputs=False)
 
 
 @pytest.mark.integration
@@ -608,7 +654,7 @@ def _update_resources(parameters):
     return parameters
 
 
-def _run_and_generate(test_name, parameters, test_main=False):
+def _run_and_generate(test_name, parameters, test_main=False, check_outputs=True):
     from qsiprep import config
 
     # TODO: Add --clean-workdir param to CLI
@@ -674,9 +720,10 @@ def _run_and_generate(test_name, parameters, test_main=False):
         )
         write_bidsignore(config.execution.output_dir)
 
-    output_list_file = os.path.join(get_test_data_path(), f'{test_name}_outputs.txt')
-    optional_outputs_list = os.path.join(get_test_data_path(), f'{test_name}_optional_outputs.txt')
-    if not os.path.isfile(optional_outputs_list):
-        optional_outputs_list = None
+    if check_outputs:
+        output_list_file = os.path.join(get_test_data_path(), f'{test_name}_outputs.txt')
+        optional_outputs_list = os.path.join(get_test_data_path(), f'{test_name}_optional_outputs.txt')
+        if not os.path.isfile(optional_outputs_list):
+            optional_outputs_list = None
 
-    check_generated_files(config.execution.output_dir, output_list_file, optional_outputs_list)
+        check_generated_files(config.execution.output_dir, output_list_file, optional_outputs_list)

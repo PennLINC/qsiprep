@@ -425,20 +425,10 @@ jobs:
       - checkout:
           path: /tmp/src/qsiprep
       - restore_build_and_data
-      - run:
-          name: Run IntramodalTemplate script
-          no_output_timeout: 2h
-          command: |
-            mkdir -p /tmp/out /tmp/work /tmp/src/qsiprep/.circleci/data /tmp/src/qsiprep/.circleci/out /tmp/src/qsiprep/.circleci/work
-            docker run --rm=false \
-              -v /tmp/src/qsiprep:/tmp/src/qsiprep:ro \
-              -v /tmp/data:/tmp/src/qsiprep/.circleci/data:ro \
-              -v /tmp/out:/tmp/src/qsiprep/.circleci/out \
-              -v /tmp/work:/tmp/src/qsiprep/.circleci/work \
-              -w /tmp/src/qsiprep/.circleci \
-              --entrypoint bash \
-              pennlinc/qsiprep:test \
-              IntramodalTemplate.sh
+      - run_integration_test:
+          marker: intramodal_template
+          cpus: 4
+          coverage_name: intramodal_template
 
   MultiT1w:
     <<: *machine_defaults
@@ -446,20 +436,10 @@ jobs:
       - checkout:
           path: /tmp/src/qsiprep
       - restore_build_and_data
-      - run:
-          name: Run MultiT1w script
-          no_output_timeout: 2h
-          command: |
-            mkdir -p /tmp/out /tmp/work /tmp/src/qsiprep/.circleci/data /tmp/src/qsiprep/.circleci/out /tmp/src/qsiprep/.circleci/work
-            docker run --rm=false \
-              -v /tmp/src/qsiprep:/tmp/src/qsiprep:ro \
-              -v /tmp/data:/tmp/src/qsiprep/.circleci/data:ro \
-              -v /tmp/out:/tmp/src/qsiprep/.circleci/out \
-              -v /tmp/work:/tmp/src/qsiprep/.circleci/work \
-              -w /tmp/src/qsiprep/.circleci \
-              --entrypoint bash \
-              pennlinc/qsiprep:test \
-              MultiT1w.sh
+      - run_integration_test:
+          marker: multi_t1w
+          cpus: 4
+          coverage_name: multi_t1w
 
   merge_coverage:
     <<: *machine_defaults
