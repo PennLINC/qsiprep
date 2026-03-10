@@ -141,7 +141,7 @@ def init_dwi_reference_wf(
     #     )
 
     # Use synthstrip to extract the brain
-    synthstrip_wf = init_synthstrip_wf(do_padding=True, name='synthstrip_wf')
+    synthstrip_wf = init_synthstrip_wf(do_padding=True, no_csf=False, name='synthstrip_wf')
 
     workflow.connect([
         # (inputnode, t1_mask_to_b0, [
