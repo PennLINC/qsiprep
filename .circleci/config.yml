@@ -429,7 +429,7 @@ jobs:
           name: Run IntramodalTemplate script
           no_output_timeout: 2h
           command: |
-            mkdir -p /tmp/out /tmp/work
+            mkdir -p /tmp/out /tmp/work /tmp/src/qsiprep/.circleci/data /tmp/src/qsiprep/.circleci/out /tmp/src/qsiprep/.circleci/work
             docker run --rm=false \
               -v /tmp/src/qsiprep:/tmp/src/qsiprep:ro \
               -v /tmp/data:/tmp/src/qsiprep/.circleci/data:ro \
@@ -450,7 +450,7 @@ jobs:
           name: Run MultiT1w script
           no_output_timeout: 2h
           command: |
-            mkdir -p /tmp/out /tmp/work
+            mkdir -p /tmp/out /tmp/work /tmp/src/qsiprep/.circleci/data /tmp/src/qsiprep/.circleci/out /tmp/src/qsiprep/.circleci/work
             docker run --rm=false \
               -v /tmp/src/qsiprep:/tmp/src/qsiprep:ro \
               -v /tmp/data:/tmp/src/qsiprep/.circleci/data:ro \
