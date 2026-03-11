@@ -151,10 +151,10 @@ long2 = {
     [
         ('long', long, 'sessionwise', [['01', ['01']], ['01', ['02']]]),
         ('long', long, 'unbiased', [['01', ['01', '02']]]),
-        ('long', long, 'first-alphabetically', [['01', ['01', '02']]]),
+        ('long', long, 'first-lex', [['01', ['01', '02']]]),
         ('long2', long2, 'sessionwise', [['01', ['diffonly']], ['01', ['full']]]),
         ('long2', long2, 'unbiased', [['01', ['diffonly', 'full']]]),
-        ('long2', long2, 'first-alphabetically', [['01', ['diffonly', 'full']]]),
+        ('long2', long2, 'first-lex', [['01', ['diffonly', 'full']]]),
     ],
 )
 def _test_processing_list(tmpdir, name, skeleton, reference, expected):

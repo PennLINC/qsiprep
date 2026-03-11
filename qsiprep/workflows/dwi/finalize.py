@@ -152,6 +152,11 @@ def init_dwi_finalize_wf(
     mem_gb = {'filesize': 1, 'resampled': 1, 'largemem': 1}
     dwi_nvols = 10
 
+    doing_topup = (
+        scan_groups['fieldmap_info']['suffix'] in ('epi', 'rpe_series')
+        and 'topup' in config.workflow.pepolar_method.lower()
+    )
+
     # Determine resource usage
     for scan in all_dwis:
         if not os.path.exists(scan):
@@ -202,6 +207,8 @@ def init_dwi_finalize_wf(
                 'confounds',
                 'carpetplot_data',
                 'sdc_scaling_images',
+                # Only written out if TOPUP was used
+                'fieldmap_hz',
             ]
         ),
         name='inputnode',
@@ -220,6 +227,8 @@ def init_dwi_finalize_wf(
                 'gradient_table_t1',
                 'btable_t1',
                 'hmc_optimization_data',
+                # Only written out if TOPUP was used
+                'fieldmap_hz_t1',
             ]
         ),
         name='outputnode',
@@ -254,6 +263,7 @@ def init_dwi_finalize_wf(
         mem_gb=mem_gb['resampled'],
         use_compression=False,
         concatenate=write_derivatives,
+        doing_topup=doing_topup,
     )
 
     # Apply denoising to the interpolated data if requested
@@ -308,6 +318,14 @@ def init_dwi_finalize_wf(
             ('outputnode.dwi_mask_t1', 'dwi_mask_t1'),
         ]),
     ])  # fmt:skip
+
+    if doing_topup:
+        workflow.connect([
+            (inputnode, transform_dwis_t1, [('fieldmap_hz', 'inputnode.fieldmap_hz')]),
+            (transform_dwis_t1, outputnode, [
+                ('outputnode.fieldmap_hz_resampled', 'fieldmap_hz_t1'),
+            ]),
+        ])  # fmt:skip
 
     # The workflow is done if we will be concatenating images later
     if not write_derivatives:
@@ -398,6 +416,7 @@ def init_dwi_finalize_wf(
         (transform_dwis_t1, series_qc, [
             ('outputnode.cnr_map_resampled', 't1_cnr_file'),
         ]),
+
         (final_denoise_wf, series_qc, [
             ('outputnode.dwi_mask_t1', 't1_mask_file'),
             ('outputnode.t1_b0_series', 't1_b0_series'),
@@ -440,6 +459,13 @@ def init_dwi_finalize_wf(
         ]),
         (gradient_plot, ds_report_gradients, [('plot_file', 'in_file')]),
     ])  # fmt:skip
+
+    if doing_topup:
+        workflow.connect([
+            (transform_dwis_t1, series_qc, [
+                ('outputnode.fieldmap_hz_resampled', 't1_fieldmap_hz_file'),
+            ]),
+        ])  # fmt:skip
 
     return workflow
 

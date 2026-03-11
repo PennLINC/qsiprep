@@ -23,7 +23,7 @@ jobs:
   style:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: pipx run ruff check .
       - run: pipx run ruff format --diff .
 
@@ -33,6 +33,6 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Codespell
         uses: codespell-project/actions-codespell@v2

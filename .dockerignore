@@ -1,6 +1,3 @@
-tests
-tests/*
-
 # python cache
 __pycache__/**/*
 __pycache__
@@ -16,27 +13,4 @@ qsiprep.egg-info
 .eggs/**/*
 .eggs
 
-# housekeeping tools
-update_changes.sh
-tox.ini
-
-# pip installs
-src/**/*
-src/
-
-# other
-work/**/*
-tests/*
-work
-out/**/*
-out/
-scratch
-scratch/*
-
-# CI, etc.
-.circleci
-.circleci/**/*
-.zenodo.json
-.travis.yml
-.readthedocs.yml
-CONTRIBUTING.md
+.tox
