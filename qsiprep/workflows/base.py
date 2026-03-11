@@ -323,7 +323,7 @@ to workflows in *QSIPrep*'s documentation]\
         subject_data=subject_data,
         combine_scans=not config.workflow.separate_all_dwis,
         ignore_fieldmaps='fieldmaps' in config.workflow.ignore,
-        use_drbuddi='drbuddi' not in config.workflow.pepolar_method.lower(),
+        estimate_per_axis='drbuddi' in config.workflow.pepolar_method.lower(),
     )
     config.loggers.workflow.info(dwi_fmap_groups)
 

@@ -19,6 +19,7 @@ import logging
 import pprint
 from collections import defaultdict
 
+import numpy as np
 from nipype.utils.filemanip import split_filename
 
 from .. import config
@@ -32,14 +33,14 @@ def group_dwi_scans(
     subject_data,
     combine_scans=True,
     ignore_fieldmaps=False,
-    use_drbuddi=False,
+    estimate_per_axis=False,
 ):
-    """Determine which scans can be concatenated based on their acquisition parameters.
+    f"""Determine which scans can be concatenated based on their acquisition parameters.
 
     Parameters
     ----------
     layout : :obj:`pybids.BIDSLayout`
-        A PyBIDS layout
+        A PyBIDS layout.
     subject_data : :obj:`dict`
         A dictionary of BIDS data for a single subject.
         The keys are the BIDS entities and the values are lists of BIDS filenames.
@@ -48,23 +49,62 @@ def group_dwi_scans(
         If True, group scans together based on their BIDS entities.
         Default is True.
     ignore_fieldmaps : :obj:`bool`, optional
-        If True, ignore fieldmaps.
+        If True, do not use fieldmaps (files in the fmap datatype) for distortion correction.
         Default is False.
-    use_drbuddi : :obj:`bool`, optional
+    estimate_per_axis : :obj:`bool`, optional
         If True, limit phase encoding direction-based grouping to reverse PED scans.
         Otherwise, group all scans with different phase encoding directions together.
+        Will be False for TOPUP and True for DRBUDDI and 3dQwarp.
         Default is False.
 
     Returns
     -------
-    scan_groups : :obj:`list` of :obj:`dict`
-        A dict where the keys are the BIDS derivatives name of the output file after
-        concatenation. The values are lists of dwi files in that group.
-    concatenation_grouping : :obj:`dict`
-        A dictionary mapping the concatenated BIDS name of each group to the name of the
-        group that it should be concatenated with.
+    distortion_groups : :obj:`dict`
+        A dict where the keys are the concatenated version of the BIDS name of
+        each distortion group and the values are lists of BIDS filenames.
+        E.g.
+        {
+            'sub-01_dir-AP': ['sub-01_dir-AP_run-1_dwi.nii.gz', 'sub-01_dir-AP_run-2_dwi.nii.gz'],
+            'sub-01_dir-PA': ['sub-01_dir-PA_run-1_dwi.nii.gz', 'sub-01_dir-PA_run-2_dwi.nii.gz'],
+            'sub-01_dir-LR': ['sub-01_dir-LR_run-1_dwi.nii.gz', 'sub-01_dir-LR_run-2_dwi.nii.gz'],
+            'sub-01_dir-RL': ['sub-01_dir-RL_run-1_dwi.nii.gz', 'sub-01_dir-RL_run-2_dwi.nii.gz'],
+        }
+    field_map_estimation_groups : :obj:`dict
+        A dict describing the field map estimation groups.
+        Keys are field map identifiers and values are the lists of BIDS filenames used to create the field map.
+        For B0Field*-based field maps, the keys are the B0FieldSource/B0FieldIdentifier values.
+        Otherwise, the keys are auto_0000X.
+        E.g.
+        {
+            'TOPUP': ['sub-01_dir-AP_run-1_dwi.nii.gz', 'sub-01_dir-AP_run-2_dwi.nii.gz'],
+            'DRBUDDI': ['sub-01_dir-PA_run-1_dwi.nii.gz', 'sub-01_dir-PA_run-2_dwi.nii.gz'],
+            'auto_00001': ['sub-01_dir-LR_run-1_dwi.nii.gz', 'sub-01_dir-LR_run-2_dwi.nii.gz'],
+        }
+    field_map_application_groups : :obj:`dict`
+        A dict describing the field map application groups.
+        Keys are field map identifiers and values are the lists of BIDS filenames that the field map is applied to.
+        E.g.
+        {
+            'TOPUP': ['sub-01_dir-AP_run-1_dwi.nii.gz', 'sub-01_dir-AP_run-2_dwi.nii.gz'],
+            'DRBUDDI': ['sub-01_dir-PA_run-1_dwi.nii.gz', 'sub-01_dir-PA_run-2_dwi.nii.gz'],
+            '3dQwarp': ['sub-01_dir-LR_run-1_dwi.nii.gz', 'sub-01_dir-LR_run-2_dwi.nii.gz'],
+        }
+    concatenation_groups : :obj:`dict`
+        A dictionary mapping the concatenated BIDS name of each concatenation group to the name of the
+        distortion groups used to create the concatenation.
+        E.g.
+        {
+            'sub-01': ['sub-01_dir-AP', 'sub-01_dir-PA', 'sub-01_dir-LR', 'sub-01_dir-RL'],
+        }
     """
     config.loggers.workflow.info('Grouping DWI scans')
+
+    # Create distortion groups
+    distortion_groups = create_distortion_groups(
+        layout=layout,
+        subject_data=subject_data,
+        combine_scans=combine_scans,
+    )
 
     # Handle the grouping of multiple dwi files within a session
     dwi_entity_groups = get_entity_groups(
@@ -81,13 +121,100 @@ def group_dwi_scans(
                 dwi_files=dwi_entity_group,
                 layout=layout,
                 ignore_fieldmaps=ignore_fieldmaps,
-                use_drbuddi=use_drbuddi,
+                estimate_per_axis=estimate_per_axis,
             ),
         )
 
     eddy_groups, concatenation_grouping = group_for_eddy(all_dwi_fmap_groups=dwi_fmap_groups)
     config.loggers.workflow.info('Finished grouping DWI scans')
     return eddy_groups, concatenation_grouping
+
+
+def create_distortion_groups(layout, subject_data, combine_scans):
+    """Create distortion groups.
+
+    Parameters
+    ----------
+    layout : :obj:`pybids.BIDSLayout`
+        A PyBIDS layout.
+    subject_data : :obj:`dict`
+        A dictionary of BIDS data for a single subject.
+    combine_scans : :obj:`bool`
+        If True, group scans together based on their BIDS entities.
+
+    Returns
+    -------
+    distortion_groups : :obj:`dict`
+        A dict where the keys are the concatenated version of the BIDS name of
+        each distortion group and the values are lists of BIDS filenames.
+        E.g.
+        {
+            'sub-01_dir-AP': ['sub-01_dir-AP_run-1_dwi.nii.gz', 'sub-01_dir-AP_run-2_dwi.nii.gz'],
+            'sub-01_dir-PA': ['sub-01_dir-PA_run-1_dwi.nii.gz', 'sub-01_dir-PA_run-2_dwi.nii.gz'],
+            'sub-01_dir-LR': ['sub-01_dir-LR_run-1_dwi.nii.gz', 'sub-01_dir-LR_run-2_dwi.nii.gz'],
+            'sub-01_dir-RL': ['sub-01_dir-RL_run-1_dwi.nii.gz', 'sub-01_dir-RL_run-2_dwi.nii.gz'],
+        }
+
+    Notes
+    -----
+    If combine_scans is False, then the distortion groups will each only contain one scan.
+
+    Otherwise, distortion groups will be created by grouping scans together based on
+    the "session" entity, the "PhaseEncodingDirection" metadata field, the "ShimSetting" metadata
+    field, and the "TotalReadoutTime" metadata field.
+    Each distortion group must have the same values for all of these metadata fields.
+    """
+    all_dwis = subject_data['dwi']
+    if not combine_scans:
+        dwi_names = [split_filename(dwi)[1] for dwi in all_dwis]
+        distortion_groups = {dwi_name: all_dwis[i_dwi] for i_dwi, dwi_name in enumerate(dwi_names)}
+        return distortion_groups
+
+    dwi_information = {}
+    for dwi in all_dwis:
+        # Get metadata for this DWI
+        metadata = layout.get_file(dwi).get_metadata()
+        # Get the session entity
+        session = layout.get_file(dwi).entities.get('session')
+        dwi_information[dwi] = {}
+        dwi_information[dwi]['session'] = session
+        dwi_information[dwi]['PhaseEncodingDirection'] = metadata.get('PhaseEncodingDirection')
+        dwi_information[dwi]['ShimSetting'] = metadata.get('ShimSetting')
+        dwi_information[dwi]['TotalReadoutTime'] = metadata.get('TotalReadoutTime')
+
+    distortion_groups = {}
+    for i_dwi, dwi in enumerate(all_dwis):
+        # Now compare dwi_information to find the right distortion group for each file
+        if i_dwi == 0:
+            distortion_groups[0] = [dwi]
+            continue
+
+        target_group = np.max(distortion_groups.keys()) + 1
+        for grp_name, grp in distortion_groups.items():
+            exemplar = grp[0]
+            # Compare the dictionaries to see if this DWI fits into the distortion group
+            for field, value in dwi_information[exemplar]:
+                if dwi_information[dwi][field] != value:
+                    # Does not match- continue to next group
+                    break
+
+            # If it reached this point then it's a match
+            target_group = grp_name
+
+        if target_group not in distortion_groups:
+            distortion_groups[target_group] = []
+
+        distortion_groups[target_group].append(dwi)
+
+    # Figure out good generalized filenames that are unique
+    generalized_group_names = _get_unique_concatenated_bids_names(list(distortion_groups.values()))
+
+    # Replace keys in distortion_groups with generalized filenames.
+    new_distortion_groups = {}
+    for group_name, group_files in zip(generalized_group_names, distortion_groups.values(), strict=False):
+        new_distortion_groups[group_name] = group_files
+
+    return new_distortion_groups
 
 
 def get_entity_groups(layout, subject_data, combine_all_dwis):
@@ -297,7 +424,7 @@ def get_highest_priority_fieldmap(fmap_infos):
     return selected_fmap_info
 
 
-def find_fieldmaps_from_other_dwis(dwi_files, dwi_file_metadatas, use_drbuddi):
+def find_fieldmaps_from_other_dwis(dwi_files, dwi_file_metadatas, estimate_per_axis):
     """Find a list of files in the dwi/ directory that can be used for distortion correction.
 
     It is common to acquire DWI scans with opposite phase encoding directions so they can be
@@ -311,7 +438,7 @@ def find_fieldmaps_from_other_dwis(dwi_files, dwi_file_metadatas, use_drbuddi):
     dwi_file_metadatas : :obj:`list` of :obj:`dict`
         A list of dictionaries containing metadata for each dwi file.
         Each dictionary should have a ``PhaseEncodingDirection`` key.
-    use_drbuddi : :obj:`bool`
+    estimate_per_axis : :obj:`bool`
         If True, limit phase encoding direction-based grouping to reverse PED scans.
         Otherwise, group all scans with different phase encoding directions together.
         Default is False.
@@ -412,7 +539,7 @@ def find_fieldmaps_from_other_dwis(dwi_files, dwi_file_metadatas, use_drbuddi):
         pe_dirs_to_scans[scan_dir].append(scan_name)
 
     dwi_series_fieldmaps = {}
-    if not use_drbuddi:
+    if not estimate_per_axis:
         unique_pe_dirs = set(pe_dirs_to_scans.keys())
         unique_nonnone_pe_dirs = [pe_dir for pe_dir in unique_pe_dirs if pe_dir is not None]
 
@@ -619,7 +746,7 @@ def split_by_phase_encoding_direction(dwi_files, metadatas):
     return dwi_groups
 
 
-def group_by_warpspace(dwi_files, layout, ignore_fieldmaps, use_drbuddi):
+def group_by_warpspace(dwi_files, layout, ignore_fieldmaps, estimate_per_axis):
     """Groups a session's DWI files by their acquisition parameters.
 
     DWIs are grouped by their **warped space**. Two DWI series that are
@@ -638,7 +765,7 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps, use_drbuddi):
     ignore_fieldmaps : :obj:`bool`
         If True, ignore any fieldmaps in the ``fmap/`` directory.
         Images in ``dwi/`` will still be considered for SDC.
-    use_drbuddi : :obj:`bool`
+    estimate_per_axis : :obj:`bool`
         If True, limit phase encoding direction-based grouping to reverse PED scans.
         Otherwise, group all scans with different phase encoding directions together.
         Default is False.
@@ -848,7 +975,7 @@ def group_by_warpspace(dwi_files, layout, ignore_fieldmaps, use_drbuddi):
     dwi_series_fieldmaps = find_fieldmaps_from_other_dwis(
         dwi_files=dwi_files,
         dwi_file_metadatas=dwi_metadatas,
-        use_drbuddi=use_drbuddi,
+        estimate_per_axis=estimate_per_axis,
     )
 
     # Find the best fieldmap for each file.
@@ -1276,6 +1403,77 @@ def get_concatenated_bids_name(dwi_group):
         fname = fname[:-4]
 
     return fname.replace('.', '').replace(' ', '')
+
+
+def _add_acq_entity(concatenated_bids_name, index):
+    """Add or modify an acquisition entity in a concatenated BIDS name.
+
+    Parameters
+    ----------
+    concatenated_bids_name : :obj:`str`
+        The concatenated BIDS name.
+    index : :obj:`int`
+        Index used to make a duplicate name unique.
+
+    Returns
+    -------
+    :obj:`str`
+        A BIDS-like name with an acquisition label.
+
+    Examples
+    --------
+    >>> _add_acq_entity('sub-1_dir-AP', 1)
+    'sub-1_acq-1_dir-AP'
+    >>> _add_acq_entity('sub-1_acq-HCP_dir-AP', 2)
+    'sub-1_acq-HCP+2_dir-AP'
+    """
+    name_parts = concatenated_bids_name.split('_')
+    acq_idx = next((idx for idx, part in enumerate(name_parts) if part.startswith('acq-')), None)
+    if acq_idx is not None:
+        acq_label = name_parts[acq_idx][len('acq-') :]
+        name_parts[acq_idx] = f'acq-{acq_label}+{index}'
+        return '_'.join(name_parts)
+
+    ses_idx = next((idx for idx, part in enumerate(name_parts) if part.startswith('ses-')), None)
+    sub_idx = next((idx for idx, part in enumerate(name_parts) if part.startswith('sub-')), None)
+    insert_idx = ses_idx + 1 if ses_idx is not None else sub_idx + 1 if sub_idx is not None else 0
+    name_parts.insert(insert_idx, f'acq-{index}')
+    return '_'.join(name_parts)
+
+
+def _get_unique_concatenated_bids_names(dwi_groups):
+    """Get unique concatenated BIDS names for a list of DWI groups.
+
+    Parameters
+    ----------
+    dwi_groups : :obj:`list` of :obj:`list` of :obj:`str`
+        A list of DWI groups.
+
+    Returns
+    -------
+    :obj:`list` of :obj:`str`
+        One generalized BIDS name per input group.
+
+    Notes
+    -----
+    `get_concatenated_bids_name` intentionally keeps shared entities only, which
+    can produce duplicate names for different groups. This helper resolves only
+    collisions by adding indexed `acq-` entities.
+    """
+    concatenated_names = [get_concatenated_bids_name(dwi_group) for dwi_group in dwi_groups]
+    grouped_name_indices = defaultdict(list)
+    for idx, concatenated_name in enumerate(concatenated_names):
+        grouped_name_indices[concatenated_name].append(idx)
+
+    unique_names = list(concatenated_names)
+    for concatenated_name, duplicate_indices in grouped_name_indices.items():
+        if len(duplicate_indices) == 1:
+            continue
+
+        for duplicate_idx, group_idx in enumerate(duplicate_indices, start=1):
+            unique_names[group_idx] = _add_acq_entity(concatenated_name, duplicate_idx)
+
+    return unique_names
 
 
 def _get_common_bids_fields(fnames):

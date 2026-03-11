@@ -535,9 +535,9 @@ def test_group_dwi_scans_with_complex_relpaths(
 
 
 @pytest.mark.parametrize(
-    ('combine_scans', 'use_drbuddi', 'ignore_fieldmaps', 'expected'),
+    ('combine_scans', 'estimate_per_axis', 'ignore_fieldmaps', 'expected'),
     [
-        # Test case 1: combine_scans=True, use_drbuddi=True, ignore_fieldmaps=False
+        # Test case 1: combine_scans=True, estimate_per_axis=True, ignore_fieldmaps=False
         # Grouping: LR/RL, PA/AP
         (
             True,
@@ -564,7 +564,7 @@ def test_group_dwi_scans_with_complex_relpaths(
                 },
             ],
         ),
-        # Test case 2: combine_scans=True, use_drbuddi=True, ignore_fieldmaps=True
+        # Test case 2: combine_scans=True, estimate_per_axis=True, ignore_fieldmaps=True
         # Grouping: LR/RL, PA/AP
         (
             True,
@@ -591,7 +591,7 @@ def test_group_dwi_scans_with_complex_relpaths(
                 },
             ],
         ),
-        # Test case 3: combine_scans=False, use_drbuddi=True, ignore_fieldmaps=False
+        # Test case 3: combine_scans=False, estimate_per_axis=True, ignore_fieldmaps=False
         # Grouping: AP, LR, PA, RL
         (
             False,
@@ -624,7 +624,7 @@ def test_group_dwi_scans_with_complex_relpaths(
                 },
             ],
         ),
-        # Test case 4: combine_scans=False, use_drbuddi=True, ignore_fieldmaps=True
+        # Test case 4: combine_scans=False, estimate_per_axis=True, ignore_fieldmaps=True
         # Grouping: AP, LR, PA, RL
         (
             False,
@@ -657,7 +657,7 @@ def test_group_dwi_scans_with_complex_relpaths(
                 },
             ],
         ),
-        # Test case 5: combine_scans=True, use_drbuddi=False, ignore_fieldmaps=False
+        # Test case 5: combine_scans=True, estimate_per_axis=False, ignore_fieldmaps=False
         # Grouping: LR/AP/RL/PA
         # XXX: Getting the following instead of the expected:
         # [
@@ -700,7 +700,7 @@ def test_group_dwi_scans_with_complex_relpaths(
                 },
             ],
         ),
-        # Test case 6: combine_scans=True, use_drbuddi=False, ignore_fieldmaps=True
+        # Test case 6: combine_scans=True, estimate_per_axis=False, ignore_fieldmaps=True
         # Grouping: LR/AP/RL/PA
         # XXX: Getting the following instead of the expected:
         # [
@@ -759,7 +759,7 @@ def test_group_dwi_scans_with_complex_relpaths(
                 },
             ],
         ),
-        # Test case 7: combine_scans=False, use_drbuddi=False, ignore_fieldmaps=False
+        # Test case 7: combine_scans=False, estimate_per_axis=False, ignore_fieldmaps=False
         # Grouping: AP, LR, PA, RL
         (
             False,
@@ -792,7 +792,7 @@ def test_group_dwi_scans_with_complex_relpaths(
                 },
             ],
         ),
-        # Test case 8: combine_scans=False, use_drbuddi=False, ignore_fieldmaps=True
+        # Test case 8: combine_scans=False, estimate_per_axis=False, ignore_fieldmaps=True
         # Grouping: AP, LR, PA, RL
         (
             False,
@@ -830,7 +830,7 @@ def test_group_dwi_scans_with_complex_relpaths(
 def test_group_dwi_scans_with_simple_multiped(
     simple_multiped_dataset,
     combine_scans,
-    use_drbuddi,
+    estimate_per_axis,
     ignore_fieldmaps,
     expected,
 ):
@@ -843,7 +843,7 @@ def test_group_dwi_scans_with_simple_multiped(
     ----------
     combine_scans : :obj:`bool`
         If True, group scans together based on their BIDS entities.
-    use_drbuddi : :obj:`bool`
+    estimate_per_axis : :obj:`bool`
         If True, limit phase encoding direction-based grouping to reverse PED scans.
     ignore_fieldmaps : :obj:`bool`
         If True, ignore fieldmaps. Placed last in the parameter list because it has no effect.
@@ -856,12 +856,12 @@ def test_group_dwi_scans_with_simple_multiped(
     If combine_scans is False, the scans should be kept separate regardless of the other
     parameters.
 
-    If combine_scans is True and use_drbuddi is False, all of the scans should be grouped
+    If combine_scans is True and estimate_per_axis is False, all of the scans should be grouped
     together, with the primary scan (dwi_series) being the one with the alphabetically first
     phase encoding direction.
     XXX: This combination is not working as expected.
 
-    If combine_scans is True and use_drbuddi is True, the scans should be grouped together
+    If combine_scans is True and estimate_per_axis is True, the scans should be grouped together
     with the reverse PED scans. So AP/PA and RL/LR, but not AP/LR/PA/RL.
     The primary scan should be the one with the alphabetically first phase encoding direction.
 
@@ -873,16 +873,16 @@ def test_group_dwi_scans_with_simple_multiped(
         layout=layout,
         subject_data=subject_data,
         combine_scans=combine_scans,
-        use_drbuddi=use_drbuddi,
+        estimate_per_axis=estimate_per_axis,
         ignore_fieldmaps=ignore_fieldmaps,
     )
     check_expected(scan_groups, expected)
 
 
 @pytest.mark.parametrize(
-    ('combine_scans', 'use_drbuddi', 'ignore_fieldmaps', 'expected'),
+    ('combine_scans', 'estimate_per_axis', 'ignore_fieldmaps', 'expected'),
     [
-        # Test case 1: combine_scans=True, use_drbuddi=True, ignore_fieldmaps=False
+        # Test case 1: combine_scans=True, estimate_per_axis=True, ignore_fieldmaps=False
         # Grouping: LR/RL, PA/AP
         (
             True,
@@ -921,7 +921,7 @@ def test_group_dwi_scans_with_simple_multiped(
                 },
             ],
         ),
-        # Test case 2: combine_scans=True, use_drbuddi=True, ignore_fieldmaps=True
+        # Test case 2: combine_scans=True, estimate_per_axis=True, ignore_fieldmaps=True
         # Grouping: LR/RL, PA/AP
         (
             True,
@@ -960,7 +960,7 @@ def test_group_dwi_scans_with_simple_multiped(
                 },
             ],
         ),
-        # Test case 3: combine_scans=False, use_drbuddi=True, ignore_fieldmaps=False
+        # Test case 3: combine_scans=False, estimate_per_axis=True, ignore_fieldmaps=False
         # Grouping: AP, LR, PA, RL
         (
             False,
@@ -1017,7 +1017,7 @@ def test_group_dwi_scans_with_simple_multiped(
                 },
             ],
         ),
-        # Test case 4: combine_scans=False, use_drbuddi=True, ignore_fieldmaps=True
+        # Test case 4: combine_scans=False, estimate_per_axis=True, ignore_fieldmaps=True
         # Grouping: AP, LR, PA, RL
         (
             False,
@@ -1074,7 +1074,7 @@ def test_group_dwi_scans_with_simple_multiped(
                 },
             ],
         ),
-        # Test case 5: combine_scans=True, use_drbuddi=False, ignore_fieldmaps=False
+        # Test case 5: combine_scans=True, estimate_per_axis=False, ignore_fieldmaps=False
         # Grouping: LR/AP/RL/PA
         # XXX: Getting the following instead of the expected:
         # [
@@ -1123,7 +1123,7 @@ def test_group_dwi_scans_with_simple_multiped(
                 },
             ],
         ),
-        # Test case 6: combine_scans=True, use_drbuddi=False, ignore_fieldmaps=True
+        # Test case 6: combine_scans=True, estimate_per_axis=False, ignore_fieldmaps=True
         # Grouping: LR/AP/RL/PA
         # XXX: Getting the following instead of the expected:
         # [
@@ -1188,7 +1188,7 @@ def test_group_dwi_scans_with_simple_multiped(
                 },
             ],
         ),
-        # Test case 7: combine_scans=False, use_drbuddi=False, ignore_fieldmaps=False
+        # Test case 7: combine_scans=False, estimate_per_axis=False, ignore_fieldmaps=False
         # Grouping: AP, LR, PA, RL
         (
             False,
@@ -1245,7 +1245,7 @@ def test_group_dwi_scans_with_simple_multiped(
                 },
             ],
         ),
-        # Test case 8: combine_scans=False, use_drbuddi=False, ignore_fieldmaps=True
+        # Test case 8: combine_scans=False, estimate_per_axis=False, ignore_fieldmaps=True
         # Grouping: AP, LR, PA, RL
         (
             False,
@@ -1307,7 +1307,7 @@ def test_group_dwi_scans_with_simple_multiped(
 def test_group_dwi_scans_with_multirun_multiped(
     multirun_multiped_dataset,
     combine_scans,
-    use_drbuddi,
+    estimate_per_axis,
     ignore_fieldmaps,
     expected,
 ):
@@ -1320,7 +1320,7 @@ def test_group_dwi_scans_with_multirun_multiped(
     ----------
     combine_scans : :obj:`bool`
         If True, group scans together based on their BIDS entities.
-    use_drbuddi : :obj:`bool`
+    estimate_per_axis : :obj:`bool`
         If True, limit phase encoding direction-based grouping to reverse PED scans.
     ignore_fieldmaps : :obj:`bool`
         If True, ignore fieldmaps. Placed last in the parameter list because it has no effect.
@@ -1333,12 +1333,12 @@ def test_group_dwi_scans_with_multirun_multiped(
     If combine_scans is False, the scans should be kept separate regardless of the other
     parameters.
 
-    If combine_scans is True and use_drbuddi is False, all of the scans should be grouped
+    If combine_scans is True and estimate_per_axis is False, all of the scans should be grouped
     together, with the primary scan (dwi_series) being the one with the alphabetically first
     phase encoding direction.
     XXX: This combination is not working as expected.
 
-    If combine_scans is True and use_drbuddi is True, the scans should be grouped together
+    If combine_scans is True and estimate_per_axis is True, the scans should be grouped together
     with the reverse PED scans. So AP/PA and RL/LR, but not AP/LR/PA/RL.
     The primary scan should be the one with the alphabetically first phase encoding direction.
 
@@ -1350,7 +1350,49 @@ def test_group_dwi_scans_with_multirun_multiped(
         layout=layout,
         subject_data=subject_data,
         combine_scans=combine_scans,
-        use_drbuddi=use_drbuddi,
+        estimate_per_axis=estimate_per_axis,
         ignore_fieldmaps=ignore_fieldmaps,
     )
     check_expected(scan_groups, expected)
+
+
+def test_add_acq_entity():
+    """Test adding an indexed acq entity to a concatenated BIDS name."""
+    assert grouping._add_acq_entity('sub-1_dir-AP', 1) == 'sub-1_acq-1_dir-AP'
+    assert grouping._add_acq_entity('sub-1_acq-HCP_dir-AP', 2) == 'sub-1_acq-HCP+2_dir-AP'
+
+
+def test_get_unique_concatenated_bids_names_without_acq():
+    """Duplicate names without acq entities should get indexed acq labels."""
+    dwi_groups = [
+        [
+            '/data/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
+            '/data/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz',
+        ],
+        [
+            '/data/sub-1/dwi/sub-1_dir-AP_run-3_dwi.nii.gz',
+            '/data/sub-1/dwi/sub-1_dir-AP_run-4_dwi.nii.gz',
+        ],
+    ]
+    assert grouping._get_unique_concatenated_bids_names(dwi_groups) == [
+        'sub-1_acq-1_dir-AP',
+        'sub-1_acq-2_dir-AP',
+    ]
+
+
+def test_get_unique_concatenated_bids_names_with_acq():
+    """Duplicate names with acq entities should append indexed suffixes."""
+    dwi_groups = [
+        [
+            '/data/sub-1/dwi/sub-1_acq-HCP_dir-AP_run-1_dwi.nii.gz',
+            '/data/sub-1/dwi/sub-1_acq-HCP_dir-AP_run-2_dwi.nii.gz',
+        ],
+        [
+            '/data/sub-1/dwi/sub-1_acq-HCP_dir-AP_run-3_dwi.nii.gz',
+            '/data/sub-1/dwi/sub-1_acq-HCP_dir-AP_run-4_dwi.nii.gz',
+        ],
+    ]
+    assert grouping._get_unique_concatenated_bids_names(dwi_groups) == [
+        'sub-1_acq-HCP+1_dir-AP',
+        'sub-1_acq-HCP+2_dir-AP',
+    ]
