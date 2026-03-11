@@ -535,7 +535,10 @@ to workflows in *QSIPrep*'s documentation]\
 
 
 def _build_outputs_to_files(
-    layout, distortion_groups, fmap_estimation_groups, fmap_application_groups,
+    layout,
+    distortion_groups,
+    fmap_estimation_groups,
+    fmap_application_groups,
 ):
     """Build old-style ``outputs_to_files`` dict from the new 4-dict return.
 

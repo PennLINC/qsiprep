@@ -62,19 +62,32 @@ def group_dwi_scans(
     distortion_groups = build_distortion_groups(layout, subject_data, combine_scans)
 
     fmap_estimation_groups = build_fmap_estimation_groups(
-        layout, subject_data, distortion_groups, ignore_fieldmaps, estimate_per_axis,
+        layout,
+        subject_data,
+        distortion_groups,
+        ignore_fieldmaps,
+        estimate_per_axis,
     )
 
     fmap_application_groups = build_fmap_application_groups(
-        layout, subject_data, distortion_groups, fmap_estimation_groups,
+        layout,
+        subject_data,
+        distortion_groups,
+        fmap_estimation_groups,
     )
 
     concatenation_groups = build_concatenation_groups(
-        layout, subject_data, distortion_groups, combine_scans,
+        layout,
+        subject_data,
+        distortion_groups,
+        combine_scans,
     )
 
     validate_group_consistency(
-        distortion_groups, fmap_estimation_groups, concatenation_groups, combine_scans,
+        distortion_groups,
+        fmap_estimation_groups,
+        concatenation_groups,
+        combine_scans,
     )
 
     distortion_groups = refine_distortion_groups(distortion_groups, fmap_estimation_groups)
@@ -152,7 +165,11 @@ def build_distortion_groups(layout, subject_data, combine_scans):
 
 
 def build_fmap_estimation_groups(
-    layout, subject_data, distortion_groups, ignore_fieldmaps, estimate_per_axis,
+    layout,
+    subject_data,
+    distortion_groups,
+    ignore_fieldmaps,
+    estimate_per_axis,
 ):
     """Determine which files contribute to each field-map estimation.
 
@@ -190,7 +207,7 @@ def build_fmap_estimation_groups(
         b0fi = _get_metadata_field(layout, dwi, 'B0FieldIdentifier')
         if b0fi is not None:
             has_b0field = True
-            for val in (_ensure_list(b0fi)):
+            for val in _ensure_list(b0fi):
                 b0field_groups[val].add(file_to_dg[dwi])
 
     for fmap_file in fmap_files:
@@ -202,7 +219,10 @@ def build_fmap_estimation_groups(
 
     if has_b0field:
         _check_b0field_axis_conflict(
-            b0field_groups, distortion_groups, layout, estimate_per_axis,
+            b0field_groups,
+            distortion_groups,
+            layout,
+            estimate_per_axis,
         )
         return {k: sorted(v) for k, v in b0field_groups.items()}
 
@@ -211,7 +231,10 @@ def build_fmap_estimation_groups(
     # ------------------------------------------------------------------
     if fmap_files:
         intended_groups = _build_intendedfor_groups(
-            layout, fmap_files, all_dwis, file_to_dg,
+            layout,
+            fmap_files,
+            all_dwis,
+            file_to_dg,
         )
         if intended_groups:
             return intended_groups
@@ -220,7 +243,9 @@ def build_fmap_estimation_groups(
     # Path 3: Heuristic — pair distortion groups by PE direction
     # ------------------------------------------------------------------
     return _build_heuristic_estimation_groups(
-        layout, distortion_groups, estimate_per_axis,
+        layout,
+        distortion_groups,
+        estimate_per_axis,
     )
 
 
@@ -230,7 +255,10 @@ def build_fmap_estimation_groups(
 
 
 def build_fmap_application_groups(
-    layout, subject_data, distortion_groups, fmap_estimation_groups,
+    layout,
+    subject_data,
+    distortion_groups,
+    fmap_estimation_groups,
 ):
     """Map each field-map identifier to the distortion groups it will correct.
 
@@ -332,7 +360,10 @@ def build_concatenation_groups(layout, subject_data, distortion_groups, combine_
 
 
 def validate_group_consistency(
-    distortion_groups, fmap_estimation_groups, concatenation_groups, combine_scans,
+    distortion_groups,
+    fmap_estimation_groups,
+    concatenation_groups,
+    combine_scans,
 ):
     """Check that groups are consistent with each other.
 
@@ -387,8 +418,6 @@ def refine_distortion_groups(distortion_groups, fmap_estimation_groups):
     """
     if not fmap_estimation_groups:
         return distortion_groups
-
-    file_to_dg = _build_file_to_dg_map(distortion_groups)
 
     dg_to_fme = defaultdict(set)
     for fme_key, fme_members in fmap_estimation_groups.items():
@@ -449,7 +478,9 @@ def _get_fmap_files(layout, dwi_files, ignore_fieldmaps):
     sub_id = layout.get_file(dwi_files[0]).entities.get('subject')
     try:
         files = layout.get(
-            subject=sub_id, datatype='fmap', extension=['.nii.gz', '.nii'],
+            subject=sub_id,
+            datatype='fmap',
+            extension=['.nii.gz', '.nii'],
             return_type='file',
         )
     except Exception:
@@ -487,7 +518,10 @@ def _dg_pe_direction(layout, distortion_groups, dg_id):
 
 
 def _check_b0field_axis_conflict(
-    b0field_groups, distortion_groups, layout, estimate_per_axis,
+    b0field_groups,
+    distortion_groups,
+    layout,
+    estimate_per_axis,
 ):
     """Raise if estimate_per_axis=True and a B0FieldIdentifier spans PE axes."""
     if not estimate_per_axis:
@@ -519,7 +553,7 @@ def _resolve_intended_for(intended_for_paths, dwi_files):
     resolved = []
     for target in intended_for_paths:
         if target.startswith('bids::'):
-            target = target[len('bids::'):]
+            target = target[len('bids::') :]
         target_basename = os.path.basename(target)
         if target_basename in basename_to_file:
             resolved.append(basename_to_file[target_basename])
@@ -553,10 +587,7 @@ def _build_intendedfor_groups(layout, fmap_files, all_dwis, file_to_dg):
     if not raw_groups:
         return {}
 
-    return {
-        key: sorted(members)
-        for _, (key, members) in raw_groups.items()
-    }
+    return {key: sorted(members) for _, (key, members) in raw_groups.items()}
 
 
 def _build_heuristic_estimation_groups(layout, distortion_groups, estimate_per_axis):
@@ -624,7 +655,7 @@ def _build_multipartid_concatenation_groups(layout, distortion_groups):
         all_file_lists.append(files)
 
     names = _get_unique_concatenated_bids_names(all_file_lists)
-    return {name: dg_ids for name, dg_ids in zip(names, all_dg_lists, strict=False)}
+    return dict(zip(names, all_dg_lists, strict=False))
 
 
 def _build_session_concatenation_groups(layout, distortion_groups):
@@ -643,7 +674,7 @@ def _build_session_concatenation_groups(layout, distortion_groups):
         all_file_lists.append(files)
 
     names = _get_unique_concatenated_bids_names(all_file_lists)
-    return {name: dg_ids for name, dg_ids in zip(names, all_dg_lists, strict=False)}
+    return dict(zip(names, all_dg_lists, strict=False))
 
 
 def get_entity_groups(layout, subject_data, combine_all_dwis):

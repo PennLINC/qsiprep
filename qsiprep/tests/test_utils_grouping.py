@@ -1968,7 +1968,9 @@ class TestScenario1ADefault:
 
     def test_distortion_groups(self, tmpdir):
         layout, subject_data = _make_layout(
-            tmpdir, dset_multirun_multiped_no_metadata, 'scenario_1a',
+            tmpdir,
+            dset_multirun_multiped_no_metadata,
+            'scenario_1a',
         )
         dg, _, _, _ = grouping.group_dwi_scans(
             layout=layout,
@@ -1985,7 +1987,9 @@ class TestScenario1ADefault:
 
     def test_fmap_estimation_groups(self, tmpdir):
         layout, subject_data = _make_layout(
-            tmpdir, dset_multirun_multiped_no_metadata, 'scenario_1a_fme',
+            tmpdir,
+            dset_multirun_multiped_no_metadata,
+            'scenario_1a_fme',
         )
         _, fme, _, _ = grouping.group_dwi_scans(
             layout=layout,
@@ -2005,7 +2009,9 @@ class TestScenario1ADefault:
 
     def test_concatenation_groups(self, tmpdir):
         layout, subject_data = _make_layout(
-            tmpdir, dset_multirun_multiped_no_metadata, 'scenario_1a_cg',
+            tmpdir,
+            dset_multirun_multiped_no_metadata,
+            'scenario_1a_cg',
         )
         _, _, _, cg = grouping.group_dwi_scans(
             layout=layout,
@@ -2032,7 +2038,9 @@ class TestScenario1AEstimatePerAxis:
 
     def test_fmap_estimation_groups(self, tmpdir):
         layout, subject_data = _make_layout(
-            tmpdir, dset_multirun_multiped_no_metadata, 'scenario_1a_epa',
+            tmpdir,
+            dset_multirun_multiped_no_metadata,
+            'scenario_1a_epa',
         )
         _, fme, _, _ = grouping.group_dwi_scans(
             layout=layout,
@@ -2055,7 +2063,9 @@ class TestScenario1ASeparateAll:
 
     def test_distortion_groups(self, tmpdir):
         layout, subject_data = _make_layout(
-            tmpdir, dset_multirun_multiped_no_metadata, 'scenario_1a_sep',
+            tmpdir,
+            dset_multirun_multiped_no_metadata,
+            'scenario_1a_sep',
         )
         dg, _, _, _ = grouping.group_dwi_scans(
             layout=layout,
@@ -2070,7 +2080,9 @@ class TestScenario1ASeparateAll:
 
     def test_concatenation_groups(self, tmpdir):
         layout, subject_data = _make_layout(
-            tmpdir, dset_multirun_multiped_no_metadata, 'scenario_1a_sep_cg',
+            tmpdir,
+            dset_multirun_multiped_no_metadata,
+            'scenario_1a_sep_cg',
         )
         dg, _, _, cg = grouping.group_dwi_scans(
             layout=layout,
@@ -2094,7 +2106,9 @@ class TestScenario1AIgnoreFieldmaps:
 
     def test_no_fmap_files_in_estimation(self, tmpdir):
         layout, subject_data = _make_layout(
-            tmpdir, dset_multirun_multiped_no_metadata, 'scenario_1a_ign',
+            tmpdir,
+            dset_multirun_multiped_no_metadata,
+            'scenario_1a_ign',
         )
         _, fme, _, _ = grouping.group_dwi_scans(
             layout=layout,
@@ -2120,7 +2134,9 @@ class TestScenario1BB0FieldSplitsRuns:
 
     def test_distortion_groups(self, tmpdir):
         layout, subject_data = _make_layout(
-            tmpdir, dset_multirun_multiped_split_b0field, 'scenario_1b',
+            tmpdir,
+            dset_multirun_multiped_split_b0field,
+            'scenario_1b',
         )
         dg, _, _, _ = grouping.group_dwi_scans(
             layout=layout,
@@ -2135,7 +2151,9 @@ class TestScenario1BB0FieldSplitsRuns:
 
     def test_fmap_estimation_groups(self, tmpdir):
         layout, subject_data = _make_layout(
-            tmpdir, dset_multirun_multiped_split_b0field, 'scenario_1b_fme',
+            tmpdir,
+            dset_multirun_multiped_split_b0field,
+            'scenario_1b_fme',
         )
         _, fme, _, _ = grouping.group_dwi_scans(
             layout=layout,
@@ -2151,7 +2169,9 @@ class TestScenario1BB0FieldSplitsRuns:
 
     def test_one_concatenation_group(self, tmpdir):
         layout, subject_data = _make_layout(
-            tmpdir, dset_multirun_multiped_split_b0field, 'scenario_1b_cg',
+            tmpdir,
+            dset_multirun_multiped_split_b0field,
+            'scenario_1b_cg',
         )
         _, _, _, cg = grouping.group_dwi_scans(
             layout=layout,
@@ -2174,7 +2194,9 @@ class TestScenario1CConflict:
 
     def test_raises(self, tmpdir):
         layout, subject_data = _make_layout(
-            tmpdir, dset_multirun_multiped_conflicting_concat, 'scenario_1c',
+            tmpdir,
+            dset_multirun_multiped_conflicting_concat,
+            'scenario_1c',
         )
         with pytest.raises(ValueError, match='subset'):
             grouping.group_dwi_scans(
@@ -2196,7 +2218,9 @@ class TestIntendedForFmaps:
 
     def test_fmap_in_estimation(self, tmpdir):
         layout, subject_data = _make_layout(
-            tmpdir, dset_with_intendedfor_fmaps, 'intendedfor',
+            tmpdir,
+            dset_with_intendedfor_fmaps,
+            'intendedfor',
         )
         _, fme, _, _ = grouping.group_dwi_scans(
             layout=layout,
@@ -2214,7 +2238,9 @@ class TestIntendedForFmaps:
 
     def test_fmap_not_in_application(self, tmpdir):
         layout, subject_data = _make_layout(
-            tmpdir, dset_with_intendedfor_fmaps, 'intendedfor_app',
+            tmpdir,
+            dset_with_intendedfor_fmaps,
+            'intendedfor_app',
         )
         _, _, fma, _ = grouping.group_dwi_scans(
             layout=layout,
@@ -2236,7 +2262,9 @@ class TestB0FieldFmaps:
 
     def test_b0field_keys(self, tmpdir):
         layout, subject_data = _make_layout(
-            tmpdir, dset_with_b0field_fmaps, 'b0field_fmaps',
+            tmpdir,
+            dset_with_b0field_fmaps,
+            'b0field_fmaps',
         )
         _, fme, _, _ = grouping.group_dwi_scans(
             layout=layout,
@@ -2261,7 +2289,9 @@ class TestIgnoreFmapFiles:
 
     def test_fmap_excluded(self, tmpdir):
         layout, subject_data = _make_layout(
-            tmpdir, dset_with_intendedfor_fmaps, 'ignore_fmaps',
+            tmpdir,
+            dset_with_intendedfor_fmaps,
+            'ignore_fmaps',
         )
         _, fme, _, _ = grouping.group_dwi_scans(
             layout=layout,
@@ -2282,7 +2312,9 @@ class TestMultiSession:
 
     def test_distortion_groups_per_session(self, tmpdir):
         layout, subject_data = _make_layout(
-            tmpdir, dset_multi_session, 'multi_session',
+            tmpdir,
+            dset_multi_session,
+            'multi_session',
         )
         dg, _, _, _ = grouping.group_dwi_scans(
             layout=layout,
@@ -2297,7 +2329,9 @@ class TestMultiSession:
 
     def test_concatenation_groups_per_session(self, tmpdir):
         layout, subject_data = _make_layout(
-            tmpdir, dset_multi_session, 'multi_session_cg',
+            tmpdir,
+            dset_multi_session,
+            'multi_session_cg',
         )
         _, _, _, cg = grouping.group_dwi_scans(
             layout=layout,
@@ -2314,7 +2348,9 @@ class TestMissingPEDMetadata:
 
     def test_singleton_for_missing_ped(self, tmpdir):
         layout, subject_data = _make_layout(
-            tmpdir, dset_missing_ped, 'missing_ped',
+            tmpdir,
+            dset_missing_ped,
+            'missing_ped',
         )
         dg, _, _, _ = grouping.group_dwi_scans(
             layout=layout,
@@ -2333,7 +2369,9 @@ class TestSingleDWI:
 
     def test_single_file(self, tmpdir):
         layout, subject_data = _make_layout(
-            tmpdir, dset_single_dwi, 'single_dwi',
+            tmpdir,
+            dset_single_dwi,
+            'single_dwi',
         )
         dg, fme, fma, cg = grouping.group_dwi_scans(
             layout=layout,
@@ -2356,9 +2394,11 @@ class TestSeparateAllOverridesMultipartID:
 
     def test_separate_overrides(self, tmpdir):
         layout, subject_data = _make_layout(
-            tmpdir, dset_separate_all_with_multipartid, 'sep_multipart',
+            tmpdir,
+            dset_separate_all_with_multipartid,
+            'sep_multipart',
         )
-        with pytest.warns(UserWarning):
+        with pytest.warns(UserWarning, match='MultipartID.*combine_scans'):
             dg, _, _, cg = grouping.group_dwi_scans(
                 layout=layout,
                 subject_data=subject_data,
@@ -2380,7 +2420,9 @@ class TestEstimatePerAxisConflictsB0Field:
 
     def test_raises(self, tmpdir):
         layout, subject_data = _make_layout(
-            tmpdir, dset_b0field_cross_axis, 'epa_conflict',
+            tmpdir,
+            dset_b0field_cross_axis,
+            'epa_conflict',
         )
         with pytest.raises(ValueError, match='axis'):
             grouping.group_dwi_scans(
