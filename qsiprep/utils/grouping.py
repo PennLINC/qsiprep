@@ -3,29 +3,22 @@
 """
 Utilities to group scans based on their acquisition parameters
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Download many variations of fieldmaps and dwi data
-
-Examples
---------
-Set up tests
->>> import os
->>> from qsiprep.utils.testing import get_grouping_test_data
->>> data_root = get_grouping_test_data()
->>> os.chdir(data_root)
 """
 
 import logging
+import os
 import pprint
+import warnings
 from collections import defaultdict
 
-import numpy as np
 from nipype.utils.filemanip import split_filename
 
 from .. import config
 from ..interfaces.bids import get_bids_params
 
 LOGGER = logging.getLogger('nipype.workflow')
+
+_DISTORTION_FIELDS = ('session', 'PhaseEncodingDirection', 'ShimSetting', 'TotalReadoutTime')
 
 
 def group_dwi_scans(
@@ -35,7 +28,7 @@ def group_dwi_scans(
     ignore_fieldmaps=False,
     estimate_per_axis=False,
 ):
-    f"""Determine which scans can be concatenated based on their acquisition parameters.
+    """Determine groupings for DWI preprocessing.
 
     Parameters
     ----------
@@ -43,178 +36,614 @@ def group_dwi_scans(
         A PyBIDS layout.
     subject_data : :obj:`dict`
         A dictionary of BIDS data for a single subject.
-        The keys are the BIDS entities and the values are lists of BIDS filenames.
         The ``dwi`` key is required.
     combine_scans : :obj:`bool`, optional
         If True, group scans together based on their BIDS entities.
-        Default is True.
     ignore_fieldmaps : :obj:`bool`, optional
-        If True, do not use fieldmaps (files in the fmap datatype) for distortion correction.
-        Default is False.
+        If True, do not use files in ``fmap/`` for distortion correction.
     estimate_per_axis : :obj:`bool`, optional
-        If True, limit phase encoding direction-based grouping to reverse PED scans.
-        Otherwise, group all scans with different phase encoding directions together.
-        Will be False for TOPUP and True for DRBUDDI and 3dQwarp.
-        Default is False.
+        If True, limit PE direction–based grouping to reverse-PED pairs only.
 
     Returns
     -------
-    distortion_groups : :obj:`dict`
-        A dict where the keys are the concatenated version of the BIDS name of
-        each distortion group and the values are lists of BIDS filenames.
-        E.g.
-        {
-            'sub-01_dir-AP': ['sub-01_dir-AP_run-1_dwi.nii.gz', 'sub-01_dir-AP_run-2_dwi.nii.gz'],
-            'sub-01_dir-PA': ['sub-01_dir-PA_run-1_dwi.nii.gz', 'sub-01_dir-PA_run-2_dwi.nii.gz'],
-            'sub-01_dir-LR': ['sub-01_dir-LR_run-1_dwi.nii.gz', 'sub-01_dir-LR_run-2_dwi.nii.gz'],
-            'sub-01_dir-RL': ['sub-01_dir-RL_run-1_dwi.nii.gz', 'sub-01_dir-RL_run-2_dwi.nii.gz'],
-        }
-    field_map_estimation_groups : :obj:`dict
-        A dict describing the field map estimation groups.
-        Keys are field map identifiers and values are the lists of BIDS filenames used to create the field map.
-        For B0Field*-based field maps, the keys are the B0FieldSource/B0FieldIdentifier values.
-        Otherwise, the keys are auto_0000X.
-        E.g.
-        {
-            'TOPUP': ['sub-01_dir-AP_run-1_dwi.nii.gz', 'sub-01_dir-AP_run-2_dwi.nii.gz'],
-            'DRBUDDI': ['sub-01_dir-PA_run-1_dwi.nii.gz', 'sub-01_dir-PA_run-2_dwi.nii.gz'],
-            'auto_00001': ['sub-01_dir-LR_run-1_dwi.nii.gz', 'sub-01_dir-LR_run-2_dwi.nii.gz'],
-        }
-    field_map_application_groups : :obj:`dict`
-        A dict describing the field map application groups.
-        Keys are field map identifiers and values are the lists of BIDS filenames that the field map is applied to.
-        E.g.
-        {
-            'TOPUP': ['sub-01_dir-AP_run-1_dwi.nii.gz', 'sub-01_dir-AP_run-2_dwi.nii.gz'],
-            'DRBUDDI': ['sub-01_dir-PA_run-1_dwi.nii.gz', 'sub-01_dir-PA_run-2_dwi.nii.gz'],
-            '3dQwarp': ['sub-01_dir-LR_run-1_dwi.nii.gz', 'sub-01_dir-LR_run-2_dwi.nii.gz'],
-        }
-    concatenation_groups : :obj:`dict`
-        A dictionary mapping the concatenated BIDS name of each concatenation group to the name of the
-        distortion groups used to create the concatenation.
-        E.g.
-        {
-            'sub-01': ['sub-01_dir-AP', 'sub-01_dir-PA', 'sub-01_dir-LR', 'sub-01_dir-RL'],
-        }
+    distortion_groups : dict[str, list[str]]
+        Keys are unique BIDS names, values are lists of raw DWI file paths.
+    fmap_estimation_groups : dict[str, list[str]]
+        Keys are field-map identifiers, values are lists mixing distortion-group
+        IDs (for DWI data) and raw file paths (for fmap data).
+    fmap_application_groups : dict[str, list[str]]
+        Keys are field-map identifiers, values are distortion-group IDs that
+        will be corrected by that field map.
+    concatenation_groups : dict[str, list[str]]
+        Keys are unique BIDS names, values are lists of distortion-group IDs.
     """
     config.loggers.workflow.info('Grouping DWI scans')
 
-    # Create distortion groups
-    distortion_groups = create_distortion_groups(
-        layout=layout,
-        subject_data=subject_data,
-        combine_scans=combine_scans,
+    distortion_groups = build_distortion_groups(layout, subject_data, combine_scans)
+
+    fmap_estimation_groups = build_fmap_estimation_groups(
+        layout, subject_data, distortion_groups, ignore_fieldmaps, estimate_per_axis,
     )
 
-    # Handle the grouping of multiple dwi files within a session
-    dwi_entity_groups = get_entity_groups(
-        layout=layout,
-        subject_data=subject_data,
-        combine_all_dwis=combine_scans,
+    fmap_application_groups = build_fmap_application_groups(
+        layout, subject_data, distortion_groups, fmap_estimation_groups,
     )
 
-    # Split the entity groups into groups of files with compatible warp groups
-    dwi_fmap_groups = []
-    for dwi_entity_group in dwi_entity_groups:
-        dwi_fmap_groups.extend(
-            group_by_warpspace(
-                dwi_files=dwi_entity_group,
-                layout=layout,
-                ignore_fieldmaps=ignore_fieldmaps,
-                estimate_per_axis=estimate_per_axis,
-            ),
-        )
+    concatenation_groups = build_concatenation_groups(
+        layout, subject_data, distortion_groups, combine_scans,
+    )
 
-    eddy_groups, concatenation_grouping = group_for_eddy(all_dwi_fmap_groups=dwi_fmap_groups)
+    validate_group_consistency(
+        distortion_groups, fmap_estimation_groups, concatenation_groups, combine_scans,
+    )
+
+    distortion_groups = refine_distortion_groups(distortion_groups, fmap_estimation_groups)
+
     config.loggers.workflow.info('Finished grouping DWI scans')
-    return eddy_groups, concatenation_grouping
+    return distortion_groups, fmap_estimation_groups, fmap_application_groups, concatenation_groups
 
 
-def create_distortion_groups(layout, subject_data, combine_scans):
-    """Create distortion groups.
+# ---------------------------------------------------------------------------
+# Stage 1
+# ---------------------------------------------------------------------------
+
+
+def build_distortion_groups(layout, subject_data, combine_scans):
+    """Group DWI files that share distortion-relevant metadata.
+
+    Files are grouped by (session, PhaseEncodingDirection, ShimSetting,
+    TotalReadoutTime).  When *combine_scans* is False every file becomes its
+    own singleton group.
 
     Parameters
     ----------
     layout : :obj:`pybids.BIDSLayout`
         A PyBIDS layout.
     subject_data : :obj:`dict`
-        A dictionary of BIDS data for a single subject.
+        Must contain a ``dwi`` key with a list of DWI file paths.
     combine_scans : :obj:`bool`
-        If True, group scans together based on their BIDS entities.
+        If False, each file is its own distortion group.
 
     Returns
     -------
-    distortion_groups : :obj:`dict`
-        A dict where the keys are the concatenated version of the BIDS name of
-        each distortion group and the values are lists of BIDS filenames.
-        E.g.
-        {
-            'sub-01_dir-AP': ['sub-01_dir-AP_run-1_dwi.nii.gz', 'sub-01_dir-AP_run-2_dwi.nii.gz'],
-            'sub-01_dir-PA': ['sub-01_dir-PA_run-1_dwi.nii.gz', 'sub-01_dir-PA_run-2_dwi.nii.gz'],
-            'sub-01_dir-LR': ['sub-01_dir-LR_run-1_dwi.nii.gz', 'sub-01_dir-LR_run-2_dwi.nii.gz'],
-            'sub-01_dir-RL': ['sub-01_dir-RL_run-1_dwi.nii.gz', 'sub-01_dir-RL_run-2_dwi.nii.gz'],
-        }
-
-    Notes
-    -----
-    If combine_scans is False, then the distortion groups will each only contain one scan.
-
-    Otherwise, distortion groups will be created by grouping scans together based on
-    the "session" entity, the "PhaseEncodingDirection" metadata field, the "ShimSetting" metadata
-    field, and the "TotalReadoutTime" metadata field.
-    Each distortion group must have the same values for all of these metadata fields.
+    distortion_groups : dict[str, list[str]]
+        Keys are unique BIDS names, values are lists of raw DWI file paths.
     """
     all_dwis = subject_data['dwi']
+
     if not combine_scans:
-        dwi_names = [split_filename(dwi)[1] for dwi in all_dwis]
-        distortion_groups = {dwi_name: all_dwis[i_dwi] for i_dwi, dwi_name in enumerate(dwi_names)}
-        return distortion_groups
+        names = _get_unique_concatenated_bids_names([[dwi] for dwi in all_dwis])
+        return {name: [dwi] for name, dwi in zip(names, all_dwis, strict=False)}
 
-    dwi_information = {}
+    dwi_info = {}
     for dwi in all_dwis:
-        # Get metadata for this DWI
         metadata = layout.get_file(dwi).get_metadata()
-        # Get the session entity
         session = layout.get_file(dwi).entities.get('session')
-        dwi_information[dwi] = {}
-        dwi_information[dwi]['session'] = session
-        dwi_information[dwi]['PhaseEncodingDirection'] = metadata.get('PhaseEncodingDirection')
-        dwi_information[dwi]['ShimSetting'] = metadata.get('ShimSetting')
-        dwi_information[dwi]['TotalReadoutTime'] = metadata.get('TotalReadoutTime')
+        shim = metadata.get('ShimSetting')
+        dwi_info[dwi] = {
+            'session': session,
+            'PhaseEncodingDirection': metadata.get('PhaseEncodingDirection'),
+            'ShimSetting': tuple(shim) if isinstance(shim, list) else shim,
+            'TotalReadoutTime': metadata.get('TotalReadoutTime'),
+        }
 
-    distortion_groups = {}
-    for i_dwi, dwi in enumerate(all_dwis):
-        # Now compare dwi_information to find the right distortion group for each file
-        if i_dwi == 0:
-            distortion_groups[0] = [dwi]
+    groups = []
+    group_exemplars = []
+    for dwi in all_dwis:
+        info = dwi_info[dwi]
+        matched = False
+        for idx, exemplar_info in enumerate(group_exemplars):
+            if all(info[k] == exemplar_info[k] for k in _DISTORTION_FIELDS):
+                groups[idx].append(dwi)
+                matched = True
+                break
+
+        if not matched:
+            groups.append([dwi])
+            group_exemplars.append(info)
+
+    names = _get_unique_concatenated_bids_names(groups)
+    return dict(zip(names, groups, strict=False))
+
+
+# ---------------------------------------------------------------------------
+# Stage 2
+# ---------------------------------------------------------------------------
+
+
+def build_fmap_estimation_groups(
+    layout, subject_data, distortion_groups, ignore_fieldmaps, estimate_per_axis,
+):
+    """Determine which files contribute to each field-map estimation.
+
+    Priority:
+    1. B0FieldIdentifier present on any file.
+    2. IntendedFor present on fmap files (no B0FieldIdentifier).
+    3. Heuristic pairing of DWI distortion groups by PE direction.
+
+    Parameters
+    ----------
+    layout : :obj:`pybids.BIDSLayout`
+    subject_data : :obj:`dict`
+    distortion_groups : dict[str, list[str]]
+    ignore_fieldmaps : :obj:`bool`
+    estimate_per_axis : :obj:`bool`
+
+    Returns
+    -------
+    fmap_estimation_groups : dict[str, list[str]]
+        Keys are field-map identifiers, values are lists mixing distortion-group
+        IDs and raw fmap file paths.
+    """
+    file_to_dg = _build_file_to_dg_map(distortion_groups)
+    all_dwis = subject_data['dwi']
+
+    fmap_files = _get_fmap_files(layout, all_dwis, ignore_fieldmaps)
+
+    # ------------------------------------------------------------------
+    # Path 1: B0FieldIdentifier
+    # ------------------------------------------------------------------
+    b0field_groups = defaultdict(set)
+    has_b0field = False
+
+    for dwi in all_dwis:
+        b0fi = _get_metadata_field(layout, dwi, 'B0FieldIdentifier')
+        if b0fi is not None:
+            has_b0field = True
+            for val in (_ensure_list(b0fi)):
+                b0field_groups[val].add(file_to_dg[dwi])
+
+    for fmap_file in fmap_files:
+        b0fi = _get_metadata_field(layout, fmap_file, 'B0FieldIdentifier')
+        if b0fi is not None:
+            has_b0field = True
+            for val in _ensure_list(b0fi):
+                b0field_groups[val].add(fmap_file)
+
+    if has_b0field:
+        _check_b0field_axis_conflict(
+            b0field_groups, distortion_groups, layout, estimate_per_axis,
+        )
+        return {k: sorted(v) for k, v in b0field_groups.items()}
+
+    # ------------------------------------------------------------------
+    # Path 2: IntendedFor on fmap files
+    # ------------------------------------------------------------------
+    if fmap_files:
+        intended_groups = _build_intendedfor_groups(
+            layout, fmap_files, all_dwis, file_to_dg,
+        )
+        if intended_groups:
+            return intended_groups
+
+    # ------------------------------------------------------------------
+    # Path 3: Heuristic — pair distortion groups by PE direction
+    # ------------------------------------------------------------------
+    return _build_heuristic_estimation_groups(
+        layout, distortion_groups, estimate_per_axis,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Stage 3
+# ---------------------------------------------------------------------------
+
+
+def build_fmap_application_groups(
+    layout, subject_data, distortion_groups, fmap_estimation_groups,
+):
+    """Map each field-map identifier to the distortion groups it will correct.
+
+    Priority:
+    1. B0FieldSource on DWI files.
+    2. IntendedFor on fmap files.
+    3. Heuristic — same members as the estimation group (all are both
+       sources and targets).
+
+    Parameters
+    ----------
+    layout : :obj:`pybids.BIDSLayout`
+    subject_data : :obj:`dict`
+    distortion_groups : dict[str, list[str]]
+    fmap_estimation_groups : dict[str, list[str]]
+
+    Returns
+    -------
+    fmap_application_groups : dict[str, list[str]]
+        Keys are field-map identifiers, values are lists of distortion-group
+        IDs that will be corrected.
+    """
+    all_dwis = subject_data['dwi']
+    file_to_dg = _build_file_to_dg_map(distortion_groups)
+
+    # Path 1: B0FieldSource
+    b0source_map = defaultdict(set)
+    has_b0source = False
+    for dwi in all_dwis:
+        b0fs = _get_metadata_field(layout, dwi, 'B0FieldSource')
+        if b0fs is not None:
+            has_b0source = True
+            for val in _ensure_list(b0fs):
+                b0source_map[val].add(file_to_dg[dwi])
+
+    if has_b0source:
+        return {k: sorted(v) for k, v in b0source_map.items()}
+
+    # Path 2 / 3: Derive from estimation groups — every DWI distortion group
+    # that appears in an estimation group is also an application target.
+    app_groups = {}
+    for key, members in fmap_estimation_groups.items():
+        dg_ids = [m for m in members if m in distortion_groups]
+        if dg_ids:
+            app_groups[key] = sorted(dg_ids)
+
+    return app_groups
+
+
+# ---------------------------------------------------------------------------
+# Stage 4
+# ---------------------------------------------------------------------------
+
+
+def build_concatenation_groups(layout, subject_data, distortion_groups, combine_scans):
+    """Group distortion groups into final output concatenations.
+
+    Priority:
+    1. combine_scans=False → each distortion group is its own concatenation group.
+    2. MultipartID present → group distortion groups whose files share MultipartID.
+    3. Otherwise → group all distortion groups within the same session.
+
+    Parameters
+    ----------
+    layout : :obj:`pybids.BIDSLayout`
+    subject_data : :obj:`dict`
+    distortion_groups : dict[str, list[str]]
+    combine_scans : :obj:`bool`
+
+    Returns
+    -------
+    concatenation_groups : dict[str, list[str]]
+        Keys are unique BIDS names, values are lists of distortion-group IDs.
+    """
+    all_dwis = subject_data['dwi']
+    has_multipart = any(
+        _get_metadata_field(layout, dwi, 'MultipartID') is not None for dwi in all_dwis
+    )
+
+    if not combine_scans:
+        if has_multipart:
+            warnings.warn(
+                'MultipartID metadata is present but combine_scans is False. '
+                'Each DWI file will remain a separate group.',
+                UserWarning,
+                stacklevel=2,
+            )
+        return {dg_id: [dg_id] for dg_id in distortion_groups}
+
+    if has_multipart:
+        return _build_multipartid_concatenation_groups(layout, distortion_groups)
+
+    return _build_session_concatenation_groups(layout, distortion_groups)
+
+
+# ---------------------------------------------------------------------------
+# Stage 5
+# ---------------------------------------------------------------------------
+
+
+def validate_group_consistency(
+    distortion_groups, fmap_estimation_groups, concatenation_groups, combine_scans,
+):
+    """Check that groups are consistent with each other.
+
+    Raises
+    ------
+    ValueError
+        If a field-map estimation group is not a subset of exactly one
+        concatenation group.
+    """
+    if not fmap_estimation_groups:
+        return
+
+    dg_to_concat = {}
+    for cg_id, dg_ids in concatenation_groups.items():
+        for dg_id in dg_ids:
+            dg_to_concat[dg_id] = cg_id
+
+    for fme_key, fme_members in fmap_estimation_groups.items():
+        fme_dg_ids = {m for m in fme_members if m in distortion_groups}
+        if not fme_dg_ids:
             continue
 
-        target_group = np.max(distortion_groups.keys()) + 1
-        for grp_name, grp in distortion_groups.items():
-            exemplar = grp[0]
-            # Compare the dictionaries to see if this DWI fits into the distortion group
-            for field, value in dwi_information[exemplar]:
-                if dwi_information[dwi][field] != value:
-                    # Does not match- continue to next group
-                    break
+        concat_ids = {dg_to_concat[dg_id] for dg_id in fme_dg_ids if dg_id in dg_to_concat}
+        if len(concat_ids) > 1:
+            raise ValueError(
+                f'Field-map estimation group {fme_key!r} spans multiple '
+                f'concatenation groups ({concat_ids}). A field-map estimation '
+                f'group must be a subset of exactly one concatenation group.'
+            )
 
-            # If it reached this point then it's a match
-            target_group = grp_name
 
-        if target_group not in distortion_groups:
-            distortion_groups[target_group] = []
+# ---------------------------------------------------------------------------
+# Stage 6
+# ---------------------------------------------------------------------------
 
-        distortion_groups[target_group].append(dwi)
 
-    # Figure out good generalized filenames that are unique
-    generalized_group_names = _get_unique_concatenated_bids_names(list(distortion_groups.values()))
+def refine_distortion_groups(distortion_groups, fmap_estimation_groups):
+    """Split distortion groups that span multiple field-map estimation groups.
 
-    # Replace keys in distortion_groups with generalized filenames.
-    new_distortion_groups = {}
-    for group_name, group_files in zip(generalized_group_names, distortion_groups.values(), strict=False):
-        new_distortion_groups[group_name] = group_files
+    If a distortion group contains files assigned to different estimation
+    groups (e.g. because B0FieldIdentifier splits runs), the distortion
+    group is split so each piece falls entirely within one estimation group.
 
-    return new_distortion_groups
+    Parameters
+    ----------
+    distortion_groups : dict[str, list[str]]
+    fmap_estimation_groups : dict[str, list[str]]
+
+    Returns
+    -------
+    refined : dict[str, list[str]]
+    """
+    if not fmap_estimation_groups:
+        return distortion_groups
+
+    file_to_dg = _build_file_to_dg_map(distortion_groups)
+
+    dg_to_fme = defaultdict(set)
+    for fme_key, fme_members in fmap_estimation_groups.items():
+        for member in fme_members:
+            if member in distortion_groups:
+                dg_to_fme[member].add(fme_key)
+
+    needs_split = {dg_id for dg_id, fme_keys in dg_to_fme.items() if len(fme_keys) > 1}
+    if not needs_split:
+        return distortion_groups
+
+    file_to_fme = {}
+    for fme_key, fme_members in fmap_estimation_groups.items():
+        for member in fme_members:
+            if member not in distortion_groups:
+                continue
+            for dwi in distortion_groups[member]:
+                file_to_fme[dwi] = fme_key
+
+    refined = {}
+    for dg_id, files in distortion_groups.items():
+        if dg_id not in needs_split:
+            refined[dg_id] = files
+            continue
+
+        sub_groups = defaultdict(list)
+        for dwi in files:
+            fme_key = file_to_fme.get(dwi, 'unknown')
+            sub_groups[fme_key].append(dwi)
+
+        sub_group_lists = list(sub_groups.values())
+        sub_names = _get_unique_concatenated_bids_names(sub_group_lists)
+        for name, sub_files in zip(sub_names, sub_group_lists, strict=False):
+            refined[name] = sub_files
+
+    return refined
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers for the stage functions
+# ---------------------------------------------------------------------------
+
+
+def _build_file_to_dg_map(distortion_groups):
+    """Return a mapping from DWI file path → distortion-group ID."""
+    file_to_dg = {}
+    for dg_id, files in distortion_groups.items():
+        for f in files:
+            file_to_dg[f] = dg_id
+    return file_to_dg
+
+
+def _get_fmap_files(layout, dwi_files, ignore_fieldmaps):
+    """Return fmap/ NIfTI files for the same subject, or [] if ignored."""
+    if ignore_fieldmaps or not dwi_files:
+        return []
+
+    sub_id = layout.get_file(dwi_files[0]).entities.get('subject')
+    try:
+        files = layout.get(
+            subject=sub_id, datatype='fmap', extension=['.nii.gz', '.nii'],
+            return_type='file',
+        )
+    except Exception:
+        files = []
+
+    return sorted(files)
+
+
+def _get_metadata_field(layout, filepath, field):
+    """Safely read a single metadata field from a BIDS file."""
+    try:
+        return layout.get_file(filepath).get_metadata().get(field)
+    except Exception:
+        return None
+
+
+def _ensure_list(value):
+    """Wrap scalars in a list; pass through lists unchanged."""
+    if isinstance(value, list):
+        return value
+    return [value]
+
+
+def _get_pe_axis(pe_dir):
+    """Extract the axis letter from a PhaseEncodingDirection string."""
+    if pe_dir is None:
+        return None
+    return pe_dir.rstrip('-')
+
+
+def _dg_pe_direction(layout, distortion_groups, dg_id):
+    """Return the PhaseEncodingDirection of a distortion group's exemplar file."""
+    exemplar = distortion_groups[dg_id][0]
+    return _get_metadata_field(layout, exemplar, 'PhaseEncodingDirection')
+
+
+def _check_b0field_axis_conflict(
+    b0field_groups, distortion_groups, layout, estimate_per_axis,
+):
+    """Raise if estimate_per_axis=True and a B0FieldIdentifier spans PE axes."""
+    if not estimate_per_axis:
+        return
+
+    for b0fi_key, members in b0field_groups.items():
+        axes = set()
+        for member in members:
+            if member in distortion_groups:
+                pe = _dg_pe_direction(layout, distortion_groups, member)
+            else:
+                pe = _get_metadata_field(layout, member, 'PhaseEncodingDirection')
+
+            axis = _get_pe_axis(pe)
+            if axis is not None:
+                axes.add(axis)
+
+        if len(axes) > 1:
+            raise ValueError(
+                f'B0FieldIdentifier {b0fi_key!r} groups files across PE axes '
+                f'{axes}, but estimate_per_axis is True. A single B0 field '
+                f'estimation group cannot span multiple axis pairs.'
+            )
+
+
+def _resolve_intended_for(intended_for_paths, dwi_files):
+    """Map IntendedFor target paths to actual DWI file paths."""
+    basename_to_file = {os.path.basename(f): f for f in dwi_files}
+    resolved = []
+    for target in intended_for_paths:
+        if target.startswith('bids::'):
+            target = target[len('bids::'):]
+        target_basename = os.path.basename(target)
+        if target_basename in basename_to_file:
+            resolved.append(basename_to_file[target_basename])
+    return resolved
+
+
+def _build_intendedfor_groups(layout, fmap_files, all_dwis, file_to_dg):
+    """Build estimation groups from IntendedFor metadata on fmap files."""
+    raw_groups = {}
+    auto_counter = 0
+
+    for fmap_file in fmap_files:
+        intended_for = _get_metadata_field(layout, fmap_file, 'IntendedFor')
+        if intended_for is None:
+            continue
+
+        intended_for = _ensure_list(intended_for)
+        targeted_dwis = _resolve_intended_for(intended_for, all_dwis)
+        targeted_dg_ids = sorted({file_to_dg[f] for f in targeted_dwis if f in file_to_dg})
+        if not targeted_dg_ids:
+            continue
+
+        target_key = tuple(targeted_dg_ids)
+        if target_key not in raw_groups:
+            key = f'auto_{auto_counter:05d}'
+            auto_counter += 1
+            raw_groups[target_key] = (key, set(targeted_dg_ids))
+
+        raw_groups[target_key][1].add(fmap_file)
+
+    if not raw_groups:
+        return {}
+
+    return {
+        key: sorted(members)
+        for _, (key, members) in raw_groups.items()
+    }
+
+
+def _build_heuristic_estimation_groups(layout, distortion_groups, estimate_per_axis):
+    """Pair distortion groups by PE direction when no curator metadata exists."""
+    pe_map = {}
+    for dg_id in distortion_groups:
+        pe = _dg_pe_direction(layout, distortion_groups, dg_id)
+        pe_map[dg_id] = pe
+
+    pe_axes = defaultdict(lambda: defaultdict(list))
+    for dg_id, pe in pe_map.items():
+        if pe is None:
+            continue
+        axis = _get_pe_axis(pe)
+        pe_axes[axis][pe].append(dg_id)
+
+    fme_groups = {}
+    auto_counter = 0
+
+    if estimate_per_axis:
+        for axis, dir_map in sorted(pe_axes.items()):
+            plus_dir = axis
+            minus_dir = axis + '-'
+            plus_dgs = dir_map.get(plus_dir, [])
+            minus_dgs = dir_map.get(minus_dir, [])
+            if plus_dgs and minus_dgs:
+                key = f'auto_{auto_counter:05d}'
+                auto_counter += 1
+                fme_groups[key] = sorted(plus_dgs + minus_dgs)
+    else:
+        all_dgs_with_pe = [dg_id for dg_id, pe in pe_map.items() if pe is not None]
+        unique_pes = {pe for pe in pe_map.values() if pe is not None}
+        if len(unique_pes) >= 2 and all_dgs_with_pe:
+            key = f'auto_{auto_counter:05d}'
+            fme_groups[key] = sorted(all_dgs_with_pe)
+
+    return fme_groups
+
+
+def _build_multipartid_concatenation_groups(layout, distortion_groups):
+    """Group distortion groups by MultipartID metadata."""
+    mp_groups = defaultdict(set)
+    none_counter = 0
+
+    for dg_id, files in distortion_groups.items():
+        mp_ids = set()
+        for dwi in files:
+            mp = _get_metadata_field(layout, dwi, 'MultipartID')
+            if mp is not None:
+                mp_ids.add(mp)
+
+        if mp_ids:
+            for mp_id in mp_ids:
+                mp_groups[mp_id].add(dg_id)
+        else:
+            mp_groups[f'_none_{none_counter}'] = {dg_id}
+            none_counter += 1
+
+    all_dg_lists = [sorted(dg_ids) for dg_ids in mp_groups.values()]
+    all_file_lists = []
+    for dg_ids in all_dg_lists:
+        files = []
+        for dg_id in dg_ids:
+            files.extend(distortion_groups[dg_id])
+        all_file_lists.append(files)
+
+    names = _get_unique_concatenated_bids_names(all_file_lists)
+    return {name: dg_ids for name, dg_ids in zip(names, all_dg_lists, strict=False)}
+
+
+def _build_session_concatenation_groups(layout, distortion_groups):
+    """Group all distortion groups within the same session."""
+    session_dgs = defaultdict(list)
+    for dg_id, files in distortion_groups.items():
+        session = layout.get_file(files[0]).entities.get('session')
+        session_dgs[session].append(dg_id)
+
+    all_dg_lists = [sorted(dg_ids) for dg_ids in session_dgs.values()]
+    all_file_lists = []
+    for dg_ids in all_dg_lists:
+        files = []
+        for dg_id in dg_ids:
+            files.extend(distortion_groups[dg_id])
+        all_file_lists.append(files)
+
+    names = _get_unique_concatenated_bids_names(all_file_lists)
+    return {name: dg_ids for name, dg_ids in zip(names, all_dg_lists, strict=False)}
 
 
 def get_entity_groups(layout, subject_data, combine_all_dwis):

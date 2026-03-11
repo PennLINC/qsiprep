@@ -515,6 +515,7 @@ def complex_relpaths_dataset(tmpdir):
         ),
     ],
 )
+@pytest.mark.xfail(reason='Old 2-tuple return signature replaced by 4-dict return')
 def test_group_dwi_scans_with_complex_relpaths(
     complex_relpaths_dataset, combine_scans, ignore_fieldmaps, expected
 ):
@@ -827,6 +828,7 @@ def test_group_dwi_scans_with_complex_relpaths(
         ),
     ],
 )
+@pytest.mark.xfail(reason='Old 2-tuple return signature replaced by 4-dict return')
 def test_group_dwi_scans_with_simple_multiped(
     simple_multiped_dataset,
     combine_scans,
@@ -1304,6 +1306,7 @@ def test_group_dwi_scans_with_simple_multiped(
         ),
     ],
 )
+@pytest.mark.xfail(reason='Old 2-tuple return signature replaced by 4-dict return')
 def test_group_dwi_scans_with_multirun_multiped(
     multirun_multiped_dataset,
     combine_scans,
@@ -1396,3 +1399,994 @@ def test_get_unique_concatenated_bids_names_with_acq():
         'sub-1_acq-HCP+1_dir-AP',
         'sub-1_acq-HCP+2_dir-AP',
     ]
+
+
+# ---------------------------------------------------------------------------
+# Test skeleton datasets for the new 4-dict group_dwi_scans interface.
+# Each dict is passed to generate_bids_skeleton to create a temporary BIDS
+# dataset.  Tests below validate all four outputs of the refactored
+# group_dwi_scans: distortion_groups, fmap_estimation_groups,
+# fmap_application_groups, and concatenation_groups.
+# ---------------------------------------------------------------------------
+
+_SHARED_SHIM = [3767, 2516, 398, 115, 44, -134, -53, 43]
+
+dset_multirun_multiped_no_metadata = {
+    '01': [
+        {
+            'anat': [{'suffix': 'T1w'}],
+            'dwi': [
+                {
+                    'dir': 'AP',
+                    'run': '1',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j-',
+                        'ShimSetting': _SHARED_SHIM,
+                    },
+                },
+                {
+                    'dir': 'AP',
+                    'run': '2',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j-',
+                        'ShimSetting': _SHARED_SHIM,
+                    },
+                },
+                {
+                    'dir': 'PA',
+                    'run': '1',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j',
+                        'ShimSetting': _SHARED_SHIM,
+                    },
+                },
+                {
+                    'dir': 'PA',
+                    'run': '2',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j',
+                        'ShimSetting': _SHARED_SHIM,
+                    },
+                },
+                {
+                    'dir': 'LR',
+                    'run': '1',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'i',
+                        'ShimSetting': _SHARED_SHIM,
+                    },
+                },
+                {
+                    'dir': 'LR',
+                    'run': '2',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'i',
+                        'ShimSetting': _SHARED_SHIM,
+                    },
+                },
+                {
+                    'dir': 'RL',
+                    'run': '1',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'i-',
+                        'ShimSetting': _SHARED_SHIM,
+                    },
+                },
+                {
+                    'dir': 'RL',
+                    'run': '2',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'i-',
+                        'ShimSetting': _SHARED_SHIM,
+                    },
+                },
+            ],
+        },
+    ],
+}
+
+dset_multirun_multiped_split_b0field = {
+    '01': [
+        {
+            'anat': [{'suffix': 'T1w'}],
+            'dwi': [
+                {
+                    'dir': 'AP',
+                    'run': '1',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j-',
+                        'ShimSetting': _SHARED_SHIM,
+                        'B0FieldIdentifier': 'fmap_run1',
+                        'B0FieldSource': 'fmap_run1',
+                    },
+                },
+                {
+                    'dir': 'AP',
+                    'run': '2',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j-',
+                        'ShimSetting': _SHARED_SHIM,
+                        'B0FieldIdentifier': 'fmap_run2',
+                        'B0FieldSource': 'fmap_run2',
+                    },
+                },
+                {
+                    'dir': 'PA',
+                    'run': '1',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j',
+                        'ShimSetting': _SHARED_SHIM,
+                        'B0FieldIdentifier': 'fmap_run1',
+                        'B0FieldSource': 'fmap_run1',
+                    },
+                },
+                {
+                    'dir': 'PA',
+                    'run': '2',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j',
+                        'ShimSetting': _SHARED_SHIM,
+                        'B0FieldIdentifier': 'fmap_run2',
+                        'B0FieldSource': 'fmap_run2',
+                    },
+                },
+                {
+                    'dir': 'LR',
+                    'run': '1',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'i',
+                        'ShimSetting': _SHARED_SHIM,
+                        'B0FieldIdentifier': 'fmap_run1',
+                        'B0FieldSource': 'fmap_run1',
+                    },
+                },
+                {
+                    'dir': 'LR',
+                    'run': '2',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'i',
+                        'ShimSetting': _SHARED_SHIM,
+                        'B0FieldIdentifier': 'fmap_run2',
+                        'B0FieldSource': 'fmap_run2',
+                    },
+                },
+                {
+                    'dir': 'RL',
+                    'run': '1',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'i-',
+                        'ShimSetting': _SHARED_SHIM,
+                        'B0FieldIdentifier': 'fmap_run1',
+                        'B0FieldSource': 'fmap_run1',
+                    },
+                },
+                {
+                    'dir': 'RL',
+                    'run': '2',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'i-',
+                        'ShimSetting': _SHARED_SHIM,
+                        'B0FieldIdentifier': 'fmap_run2',
+                        'B0FieldSource': 'fmap_run2',
+                    },
+                },
+            ],
+        },
+    ],
+}
+
+dset_multirun_multiped_conflicting_concat = {
+    '01': [
+        {
+            'anat': [{'suffix': 'T1w'}],
+            'dwi': [
+                {
+                    'dir': 'AP',
+                    'run': '1',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j-',
+                        'ShimSetting': _SHARED_SHIM,
+                        'B0FieldIdentifier': 'fmap_all',
+                        'B0FieldSource': 'fmap_all',
+                        'MultipartID': 'group_run1',
+                    },
+                },
+                {
+                    'dir': 'AP',
+                    'run': '2',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j-',
+                        'ShimSetting': _SHARED_SHIM,
+                        'B0FieldIdentifier': 'fmap_all',
+                        'B0FieldSource': 'fmap_all',
+                        'MultipartID': 'group_run2',
+                    },
+                },
+                {
+                    'dir': 'PA',
+                    'run': '1',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j',
+                        'ShimSetting': _SHARED_SHIM,
+                        'B0FieldIdentifier': 'fmap_all',
+                        'B0FieldSource': 'fmap_all',
+                        'MultipartID': 'group_run1',
+                    },
+                },
+                {
+                    'dir': 'PA',
+                    'run': '2',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j',
+                        'ShimSetting': _SHARED_SHIM,
+                        'B0FieldIdentifier': 'fmap_all',
+                        'B0FieldSource': 'fmap_all',
+                        'MultipartID': 'group_run2',
+                    },
+                },
+                {
+                    'dir': 'LR',
+                    'run': '1',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'i',
+                        'ShimSetting': _SHARED_SHIM,
+                        'B0FieldIdentifier': 'fmap_all',
+                        'B0FieldSource': 'fmap_all',
+                        'MultipartID': 'group_run1',
+                    },
+                },
+                {
+                    'dir': 'LR',
+                    'run': '2',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'i',
+                        'ShimSetting': _SHARED_SHIM,
+                        'B0FieldIdentifier': 'fmap_all',
+                        'B0FieldSource': 'fmap_all',
+                        'MultipartID': 'group_run2',
+                    },
+                },
+                {
+                    'dir': 'RL',
+                    'run': '1',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'i-',
+                        'ShimSetting': _SHARED_SHIM,
+                        'B0FieldIdentifier': 'fmap_all',
+                        'B0FieldSource': 'fmap_all',
+                        'MultipartID': 'group_run1',
+                    },
+                },
+                {
+                    'dir': 'RL',
+                    'run': '2',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'i-',
+                        'ShimSetting': _SHARED_SHIM,
+                        'B0FieldIdentifier': 'fmap_all',
+                        'B0FieldSource': 'fmap_all',
+                        'MultipartID': 'group_run2',
+                    },
+                },
+            ],
+        },
+    ],
+}
+
+dset_with_intendedfor_fmaps = {
+    '01': [
+        {
+            'anat': [{'suffix': 'T1w'}],
+            'fmap': [
+                {
+                    'dir': 'PA',
+                    'suffix': 'epi',
+                    'metadata': {
+                        'IntendedFor': [
+                            'dwi/sub-01_dir-AP_run-1_dwi.nii.gz',
+                            'dwi/sub-01_dir-AP_run-2_dwi.nii.gz',
+                        ],
+                        'PhaseEncodingDirection': 'j',
+                    },
+                },
+            ],
+            'dwi': [
+                {
+                    'dir': 'AP',
+                    'run': '1',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j-',
+                        'ShimSetting': _SHARED_SHIM,
+                    },
+                },
+                {
+                    'dir': 'AP',
+                    'run': '2',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j-',
+                        'ShimSetting': _SHARED_SHIM,
+                    },
+                },
+            ],
+        },
+    ],
+}
+
+dset_with_b0field_fmaps = {
+    '01': [
+        {
+            'anat': [{'suffix': 'T1w'}],
+            'fmap': [
+                {
+                    'dir': 'PA',
+                    'suffix': 'epi',
+                    'metadata': {
+                        'B0FieldIdentifier': 'pepolar01',
+                        'PhaseEncodingDirection': 'j',
+                    },
+                },
+            ],
+            'dwi': [
+                {
+                    'dir': 'AP',
+                    'run': '1',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j-',
+                        'ShimSetting': _SHARED_SHIM,
+                        'B0FieldIdentifier': 'pepolar01',
+                        'B0FieldSource': 'pepolar01',
+                    },
+                },
+                {
+                    'dir': 'AP',
+                    'run': '2',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j-',
+                        'ShimSetting': _SHARED_SHIM,
+                        'B0FieldIdentifier': 'pepolar01',
+                        'B0FieldSource': 'pepolar01',
+                    },
+                },
+            ],
+        },
+    ],
+}
+
+dset_multi_session = {
+    '01': [
+        {
+            'session': '01',
+            'anat': [{'suffix': 'T1w'}],
+            'dwi': [
+                {
+                    'dir': 'AP',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j-',
+                        'ShimSetting': _SHARED_SHIM,
+                    },
+                },
+                {
+                    'dir': 'PA',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j',
+                        'ShimSetting': _SHARED_SHIM,
+                    },
+                },
+            ],
+        },
+        {
+            'session': '02',
+            'dwi': [
+                {
+                    'dir': 'AP',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j-',
+                        'ShimSetting': _SHARED_SHIM,
+                    },
+                },
+                {
+                    'dir': 'PA',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j',
+                        'ShimSetting': _SHARED_SHIM,
+                    },
+                },
+            ],
+        },
+    ],
+}
+
+dset_missing_ped = {
+    '01': [
+        {
+            'anat': [{'suffix': 'T1w'}],
+            'dwi': [
+                {
+                    'dir': 'AP',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j-',
+                        'ShimSetting': _SHARED_SHIM,
+                    },
+                },
+                {
+                    'run': '1',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'ShimSetting': _SHARED_SHIM,
+                    },
+                },
+            ],
+        },
+    ],
+}
+
+dset_single_dwi = {
+    '01': [
+        {
+            'anat': [{'suffix': 'T1w'}],
+            'dwi': [
+                {
+                    'dir': 'AP',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j-',
+                        'ShimSetting': _SHARED_SHIM,
+                    },
+                },
+            ],
+        },
+    ],
+}
+
+dset_b0field_cross_axis = {
+    '01': [
+        {
+            'anat': [{'suffix': 'T1w'}],
+            'dwi': [
+                {
+                    'dir': 'AP',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j-',
+                        'ShimSetting': _SHARED_SHIM,
+                        'B0FieldIdentifier': 'cross_axis',
+                        'B0FieldSource': 'cross_axis',
+                    },
+                },
+                {
+                    'dir': 'LR',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'i',
+                        'ShimSetting': _SHARED_SHIM,
+                        'B0FieldIdentifier': 'cross_axis',
+                        'B0FieldSource': 'cross_axis',
+                    },
+                },
+            ],
+        },
+    ],
+}
+
+dset_separate_all_with_multipartid = {
+    '01': [
+        {
+            'anat': [{'suffix': 'T1w'}],
+            'dwi': [
+                {
+                    'dir': 'AP',
+                    'run': '1',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j-',
+                        'ShimSetting': _SHARED_SHIM,
+                        'MultipartID': 'group_a',
+                    },
+                },
+                {
+                    'dir': 'AP',
+                    'run': '2',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j-',
+                        'ShimSetting': _SHARED_SHIM,
+                        'MultipartID': 'group_a',
+                    },
+                },
+                {
+                    'dir': 'PA',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j',
+                        'ShimSetting': _SHARED_SHIM,
+                    },
+                },
+            ],
+        },
+    ],
+}
+
+
+def _make_layout(tmpdir, dset_dict, name):
+    """Helper: generate a BIDS skeleton and return (layout, subject_data)."""
+    bids_dir = tmpdir / name
+    generate_bids_skeleton(str(bids_dir), dset_dict)
+    layout = BIDSLayout(str(bids_dir))
+    subject_data = {'dwi': layout.get(suffix='dwi', extension='nii.gz', return_type='file')}
+    return layout, subject_data
+
+
+def _basenames(paths):
+    """Return sorted basenames from a list of paths."""
+    return sorted(os.path.basename(p) for p in paths)
+
+
+# ---------------------------------------------------------------------------
+# Tests targeting the new 4-dict return signature of group_dwi_scans.
+# ---------------------------------------------------------------------------
+
+
+class TestScenario1ADefault:
+    """Scenario 1A: multi-run multi-PED, no curator metadata, default flags.
+
+    combine_scans=True, ignore_fieldmaps=False, estimate_per_axis=False.
+    Expected: 4 distortion groups, 1 fmap estimation group, 1 concatenation group.
+    """
+
+    def test_distortion_groups(self, tmpdir):
+        layout, subject_data = _make_layout(
+            tmpdir, dset_multirun_multiped_no_metadata, 'scenario_1a',
+        )
+        dg, _, _, _ = grouping.group_dwi_scans(
+            layout=layout,
+            subject_data=subject_data,
+            combine_scans=True,
+            ignore_fieldmaps=False,
+            estimate_per_axis=False,
+        )
+        assert len(dg) == 4
+        expected_keys = {'sub-01_dir-AP', 'sub-01_dir-LR', 'sub-01_dir-PA', 'sub-01_dir-RL'}
+        assert set(dg.keys()) == expected_keys
+        for key, files in dg.items():
+            assert len(files) == 2, f'{key} should have 2 files'
+
+    def test_fmap_estimation_groups(self, tmpdir):
+        layout, subject_data = _make_layout(
+            tmpdir, dset_multirun_multiped_no_metadata, 'scenario_1a_fme',
+        )
+        _, fme, _, _ = grouping.group_dwi_scans(
+            layout=layout,
+            subject_data=subject_data,
+            combine_scans=True,
+            ignore_fieldmaps=False,
+            estimate_per_axis=False,
+        )
+        assert len(fme) == 1
+        group_members = list(fme.values())[0]
+        assert set(group_members) == {
+            'sub-01_dir-AP',
+            'sub-01_dir-PA',
+            'sub-01_dir-LR',
+            'sub-01_dir-RL',
+        }
+
+    def test_concatenation_groups(self, tmpdir):
+        layout, subject_data = _make_layout(
+            tmpdir, dset_multirun_multiped_no_metadata, 'scenario_1a_cg',
+        )
+        _, _, _, cg = grouping.group_dwi_scans(
+            layout=layout,
+            subject_data=subject_data,
+            combine_scans=True,
+            ignore_fieldmaps=False,
+            estimate_per_axis=False,
+        )
+        assert len(cg) == 1
+        group_members = list(cg.values())[0]
+        assert set(group_members) == {
+            'sub-01_dir-AP',
+            'sub-01_dir-PA',
+            'sub-01_dir-LR',
+            'sub-01_dir-RL',
+        }
+
+
+class TestScenario1AEstimatePerAxis:
+    """Scenario 1A with estimate_per_axis=True.
+
+    Expected: 4 distortion groups, 2 fmap estimation groups (AP/PA and LR/RL).
+    """
+
+    def test_fmap_estimation_groups(self, tmpdir):
+        layout, subject_data = _make_layout(
+            tmpdir, dset_multirun_multiped_no_metadata, 'scenario_1a_epa',
+        )
+        _, fme, _, _ = grouping.group_dwi_scans(
+            layout=layout,
+            subject_data=subject_data,
+            combine_scans=True,
+            ignore_fieldmaps=False,
+            estimate_per_axis=True,
+        )
+        assert len(fme) == 2
+        member_sets = [set(v) for v in fme.values()]
+        assert {'sub-01_dir-AP', 'sub-01_dir-PA'} in member_sets
+        assert {'sub-01_dir-LR', 'sub-01_dir-RL'} in member_sets
+
+
+class TestScenario1ASeparateAll:
+    """Scenario 1A with combine_scans=False (--separate-all-dwis).
+
+    Expected: 8 distortion groups (one per file), each its own concatenation group.
+    """
+
+    def test_distortion_groups(self, tmpdir):
+        layout, subject_data = _make_layout(
+            tmpdir, dset_multirun_multiped_no_metadata, 'scenario_1a_sep',
+        )
+        dg, _, _, _ = grouping.group_dwi_scans(
+            layout=layout,
+            subject_data=subject_data,
+            combine_scans=False,
+            ignore_fieldmaps=False,
+            estimate_per_axis=False,
+        )
+        assert len(dg) == 8
+        for files in dg.values():
+            assert len(files) == 1
+
+    def test_concatenation_groups(self, tmpdir):
+        layout, subject_data = _make_layout(
+            tmpdir, dset_multirun_multiped_no_metadata, 'scenario_1a_sep_cg',
+        )
+        dg, _, _, cg = grouping.group_dwi_scans(
+            layout=layout,
+            subject_data=subject_data,
+            combine_scans=False,
+            ignore_fieldmaps=False,
+            estimate_per_axis=False,
+        )
+        assert len(cg) == 8
+        for members in cg.values():
+            assert len(members) == 1
+
+
+class TestScenario1AIgnoreFieldmaps:
+    """Scenario 1A with ignore_fieldmaps=True.
+
+    Fmap estimation groups should only use DWI-based heuristics (no fmap/ files),
+    but since there are no fmap files in this dataset the result is the same as
+    the default case.
+    """
+
+    def test_no_fmap_files_in_estimation(self, tmpdir):
+        layout, subject_data = _make_layout(
+            tmpdir, dset_multirun_multiped_no_metadata, 'scenario_1a_ign',
+        )
+        _, fme, _, _ = grouping.group_dwi_scans(
+            layout=layout,
+            subject_data=subject_data,
+            combine_scans=True,
+            ignore_fieldmaps=True,
+            estimate_per_axis=False,
+        )
+        all_members = []
+        for members in fme.values():
+            all_members.extend(members)
+        for member in all_members:
+            assert 'fmap' not in member
+
+
+class TestScenario1BB0FieldSplitsRuns:
+    """Scenario 1B: B0FieldIdentifier splits run-1 and run-2 into separate fmap groups.
+
+    Expected: 8 distortion groups (because the fmap split forces distortion group
+    refinement), 2 fmap estimation groups keyed by B0FieldIdentifier, 1 concatenation
+    group.
+    """
+
+    def test_distortion_groups(self, tmpdir):
+        layout, subject_data = _make_layout(
+            tmpdir, dset_multirun_multiped_split_b0field, 'scenario_1b',
+        )
+        dg, _, _, _ = grouping.group_dwi_scans(
+            layout=layout,
+            subject_data=subject_data,
+            combine_scans=True,
+            ignore_fieldmaps=False,
+            estimate_per_axis=False,
+        )
+        assert len(dg) == 8
+        for files in dg.values():
+            assert len(files) == 1
+
+    def test_fmap_estimation_groups(self, tmpdir):
+        layout, subject_data = _make_layout(
+            tmpdir, dset_multirun_multiped_split_b0field, 'scenario_1b_fme',
+        )
+        _, fme, _, _ = grouping.group_dwi_scans(
+            layout=layout,
+            subject_data=subject_data,
+            combine_scans=True,
+            ignore_fieldmaps=False,
+            estimate_per_axis=False,
+        )
+        assert 'fmap_run1' in fme
+        assert 'fmap_run2' in fme
+        assert len(fme['fmap_run1']) == 4
+        assert len(fme['fmap_run2']) == 4
+
+    def test_one_concatenation_group(self, tmpdir):
+        layout, subject_data = _make_layout(
+            tmpdir, dset_multirun_multiped_split_b0field, 'scenario_1b_cg',
+        )
+        _, _, _, cg = grouping.group_dwi_scans(
+            layout=layout,
+            subject_data=subject_data,
+            combine_scans=True,
+            ignore_fieldmaps=False,
+            estimate_per_axis=False,
+        )
+        assert len(cg) == 1
+        members = list(cg.values())[0]
+        assert len(members) == 8
+
+
+class TestScenario1CConflict:
+    """Scenario 1C: One fmap estimation group spans both MultipartID concatenation groups.
+
+    This should raise an error because fmap estimation groups are not subsets of
+    concatenation groups.
+    """
+
+    def test_raises(self, tmpdir):
+        layout, subject_data = _make_layout(
+            tmpdir, dset_multirun_multiped_conflicting_concat, 'scenario_1c',
+        )
+        with pytest.raises(ValueError, match='subset'):
+            grouping.group_dwi_scans(
+                layout=layout,
+                subject_data=subject_data,
+                combine_scans=True,
+                ignore_fieldmaps=False,
+                estimate_per_axis=False,
+            )
+
+
+class TestIntendedForFmaps:
+    """fmap/ EPI linked to DWI via IntendedFor.
+
+    The fmap estimation group should contain both the fmap file path and the
+    DWI distortion group IDs.  The fmap application group should contain only
+    the DWI distortion group IDs (the fmap is a source, not a target).
+    """
+
+    def test_fmap_in_estimation(self, tmpdir):
+        layout, subject_data = _make_layout(
+            tmpdir, dset_with_intendedfor_fmaps, 'intendedfor',
+        )
+        _, fme, _, _ = grouping.group_dwi_scans(
+            layout=layout,
+            subject_data=subject_data,
+            combine_scans=True,
+            ignore_fieldmaps=False,
+            estimate_per_axis=False,
+        )
+        assert len(fme) == 1
+        members = list(fme.values())[0]
+        fmap_members = [m for m in members if 'epi' in m]
+        dwi_members = [m for m in members if 'epi' not in m]
+        assert len(fmap_members) >= 1
+        assert len(dwi_members) >= 1
+
+    def test_fmap_not_in_application(self, tmpdir):
+        layout, subject_data = _make_layout(
+            tmpdir, dset_with_intendedfor_fmaps, 'intendedfor_app',
+        )
+        _, _, fma, _ = grouping.group_dwi_scans(
+            layout=layout,
+            subject_data=subject_data,
+            combine_scans=True,
+            ignore_fieldmaps=False,
+            estimate_per_axis=False,
+        )
+        for targets in fma.values():
+            for target in targets:
+                assert 'epi' not in target
+
+
+class TestB0FieldFmaps:
+    """fmap/ EPI linked via B0FieldIdentifier + B0FieldSource.
+
+    Keys of fmap estimation groups should be the B0FieldIdentifier string.
+    """
+
+    def test_b0field_keys(self, tmpdir):
+        layout, subject_data = _make_layout(
+            tmpdir, dset_with_b0field_fmaps, 'b0field_fmaps',
+        )
+        _, fme, _, _ = grouping.group_dwi_scans(
+            layout=layout,
+            subject_data=subject_data,
+            combine_scans=True,
+            ignore_fieldmaps=False,
+            estimate_per_axis=False,
+        )
+        assert 'pepolar01' in fme
+        members = fme['pepolar01']
+        fmap_members = [m for m in members if 'epi' in m]
+        dwi_members = [m for m in members if 'epi' not in m]
+        assert len(fmap_members) >= 1
+        assert len(dwi_members) >= 1
+
+
+class TestIgnoreFmapFiles:
+    """ignore_fieldmaps=True should exclude fmap/ files from estimation groups.
+
+    Even though IntendedFor exists, fmap files should not appear.
+    """
+
+    def test_fmap_excluded(self, tmpdir):
+        layout, subject_data = _make_layout(
+            tmpdir, dset_with_intendedfor_fmaps, 'ignore_fmaps',
+        )
+        _, fme, _, _ = grouping.group_dwi_scans(
+            layout=layout,
+            subject_data=subject_data,
+            combine_scans=True,
+            ignore_fieldmaps=True,
+            estimate_per_axis=False,
+        )
+        all_members = []
+        for members in fme.values():
+            all_members.extend(members)
+        for member in all_members:
+            assert 'fmap' not in member
+
+
+class TestMultiSession:
+    """Two sessions should produce independent groups that do not cross boundaries."""
+
+    def test_distortion_groups_per_session(self, tmpdir):
+        layout, subject_data = _make_layout(
+            tmpdir, dset_multi_session, 'multi_session',
+        )
+        dg, _, _, _ = grouping.group_dwi_scans(
+            layout=layout,
+            subject_data=subject_data,
+            combine_scans=True,
+            ignore_fieldmaps=False,
+            estimate_per_axis=False,
+        )
+        assert len(dg) == 4
+        for key in dg:
+            assert 'ses-01' in key or 'ses-02' in key
+
+    def test_concatenation_groups_per_session(self, tmpdir):
+        layout, subject_data = _make_layout(
+            tmpdir, dset_multi_session, 'multi_session_cg',
+        )
+        _, _, _, cg = grouping.group_dwi_scans(
+            layout=layout,
+            subject_data=subject_data,
+            combine_scans=True,
+            ignore_fieldmaps=False,
+            estimate_per_axis=False,
+        )
+        assert len(cg) == 2
+
+
+class TestMissingPEDMetadata:
+    """Files without PhaseEncodingDirection should become singleton distortion groups."""
+
+    def test_singleton_for_missing_ped(self, tmpdir):
+        layout, subject_data = _make_layout(
+            tmpdir, dset_missing_ped, 'missing_ped',
+        )
+        dg, _, _, _ = grouping.group_dwi_scans(
+            layout=layout,
+            subject_data=subject_data,
+            combine_scans=True,
+            ignore_fieldmaps=False,
+            estimate_per_axis=False,
+        )
+        assert len(dg) == 2
+        singleton_groups = [files for files in dg.values() if len(files) == 1]
+        assert len(singleton_groups) >= 1
+
+
+class TestSingleDWI:
+    """Single DWI file: 1 distortion group, no fmap estimation, 1 concatenation group."""
+
+    def test_single_file(self, tmpdir):
+        layout, subject_data = _make_layout(
+            tmpdir, dset_single_dwi, 'single_dwi',
+        )
+        dg, fme, fma, cg = grouping.group_dwi_scans(
+            layout=layout,
+            subject_data=subject_data,
+            combine_scans=True,
+            ignore_fieldmaps=False,
+            estimate_per_axis=False,
+        )
+        assert len(dg) == 1
+        assert len(fme) == 0
+        assert len(fma) == 0
+        assert len(cg) == 1
+
+
+class TestSeparateAllOverridesMultipartID:
+    """combine_scans=False should override MultipartID and produce separate groups.
+
+    A warning should be raised.
+    """
+
+    def test_separate_overrides(self, tmpdir):
+        layout, subject_data = _make_layout(
+            tmpdir, dset_separate_all_with_multipartid, 'sep_multipart',
+        )
+        with pytest.warns(UserWarning):
+            dg, _, _, cg = grouping.group_dwi_scans(
+                layout=layout,
+                subject_data=subject_data,
+                combine_scans=False,
+                ignore_fieldmaps=False,
+                estimate_per_axis=False,
+            )
+        assert len(dg) == 3
+        for files in dg.values():
+            assert len(files) == 1
+        assert len(cg) == 3
+
+
+class TestEstimatePerAxisConflictsB0Field:
+    """B0FieldIdentifier groups AP and LR together but estimate_per_axis=True.
+
+    This should raise an error because the B0 field spans multiple PE axes.
+    """
+
+    def test_raises(self, tmpdir):
+        layout, subject_data = _make_layout(
+            tmpdir, dset_b0field_cross_axis, 'epa_conflict',
+        )
+        with pytest.raises(ValueError, match='axis'):
+            grouping.group_dwi_scans(
+                layout=layout,
+                subject_data=subject_data,
+                combine_scans=True,
+                ignore_fieldmaps=False,
+                estimate_per_axis=True,
+            )

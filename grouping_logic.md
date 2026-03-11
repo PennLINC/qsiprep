@@ -1,5 +1,7 @@
 # Walk through grouping logic
 
+NOTE: The specific concatenated filenames in this document are not necessarily correct. They are just attempts to follow the logic.
+
 The things we need to account for:
 
 1. Curator-defined metadata to determine which files should be concatenated together *at some point* (i.e., MultipartID).
@@ -40,33 +42,101 @@ The things we need to account for:
 
 ## Outputs
 
-1. Field Map Estimation Groups: List of valid field maps and the files used to create them.
-2. Field Map Application Groups: Links from valid field maps to target DWI files or vice versa.
-3. Distortion Groups: Groups of DWI files to be concatenated prior to denoising.
-3. Concatenation Groups: Groups of DWI files to be concatenated or averaged in the output directory.
+1.  Distortion Groups: Groups of DWI files to be concatenated prior to denoising.
+    A dictionary of unique concatenated filenames and the files used to create them.
+    For example:
+    ```
+    {
+        'sub-01_dir-AP': [
+            '/path/to/dwi/sub-01_dir-AP_run-1_dwi.nii.gz',
+            '/path/to/dwi/sub-01_dir-AP_run-2_dwi.nii.gz',
+        ],
+        'sub-01_dir-PA': [
+            '/path/to/dwi/sub-01_dir-PA_run-1_dwi.nii.gz',
+            '/path/to/dwi/sub-01_dir-PA_run-2_dwi.nii.gz',
+        ],
+        'sub-01_dir-LR': [
+            '/path/to/dwi/sub-01_dir-LR_run-1_dwi.nii.gz',
+            '/path/to/dwi/sub-01_dir-LR_run-2_dwi.nii.gz',
+        ],
+        'sub-01_dir-RL': [
+            '/path/to/dwi/sub-01_dir-RL_run-1_dwi.nii.gz',
+            '/path/to/dwi/sub-01_dir-RL_run-2_dwi.nii.gz',
+        ],
+        # One run doesn't match other files and is its own distortion group.
+        'sub-01_acq-unique_dir-AP_run-3': [
+            '/path/to/dwi/sub-01_acq-unique_dir-AP_run-3_dwi.nii.gz',
+        ],
+    }
+    ```
+2.  Field Map Estimation Groups: List of valid field maps and the files used to create them.
+    A dictionary of valid field map estimators from available data.
+    Keys are field map identifiers (B0FieldIdentifier when available, auto_000X when not).
+    Values are lists of files used to create the field map.
+    Since field map estimation happens after distortion groups are created and denoised,
+    the DWI files in the values should be distortion group IDs.
+
+    For example:
+    ```
+    {
+        # The files in the AP, PA, LR, and RL distortion groups all have B0FieldIdentifier/B0FieldSource
+        # indicating that they belong together.
+        'b0identifier01': ['sub-01_dir-AP', 'sub-01_dir-PA', 'sub-01_dir-RL', 'sub-01_dir-LR'],
+        # The unique run has a B0FieldIdentifier/B0FieldSource pairing it with an EPI file in fmap/
+        'b0identifier02': ['/path/to/fmap/sub-01_dir-AP_epi.nii.gz', 'sub-01_acq-unique_dir-AP_run-3'],
+    }
+    ```
+
+    If IntendedFor is used to link fmaps to DWI files instead of B0FieldSource/B0FieldIdentifier,
+    the key will be auto000X:
+    ```
+    {
+        'auto0001': ['/path/to/fmap/sub-01_dir-AP_epi.nii.gz', 'sub-01_acq-unique_dir-AP_run-3'],
+    }
+    ```
+
+    Alternatively, if no curator-generated metadata fields are present to define the field maps,
+    QSIPrep will automatically group them based on whether they have appropriate metadata, like ShimSetting
+    and TotalReadoutTime:
+    ```
+    # The files in the LR and RL distortion groups do not have metadata linking them,
+    # so they're grouped automatically by
+    'auto_00001': ['sub-01_dir-AP', 'sub-01_dir-PA', 'sub-01_dir-RL', 'sub-01_dir-LR']
+    # sub-01_acq-unique_dir-AP_run-3 is not linked to any field map because fmap-dwi field maps required
+    # some curator-generated metadata. Instead, Syn-SDC may be applied, depending on how QSIPrep is called.
+    ```
+3.  Field Map Application Groups: Links from valid field maps to target DWI files or vice versa.
+    A dictionary of field map identifiers and the DWI files that will use them for distortion correction.
+    Keys are field map identifiers (B0FieldIdentifier when available, auto_000X when not).
+    Values are lists of files on which the field maps will be used.
+    Values are lists of files used to create the field map.
+    Since field map estimation happens after distortion groups are created and denoised,
+    the DWI files in the values should be distortion group IDs.
+    For example:
+    ```
+    {
+        # The files in the AP, PA, LR, and RL distortion groups all have B0FieldIdentifier/B0FieldSource
+        # indicating that they belong together.
+        'b0identifier01': ['sub-01_dir-AP', 'sub-01_dir-PA', 'sub-01_dir-RL', 'sub-01_dir-LR'],
+        # The fmap file is not a target for distortion correction.
+        'b0identifier02': ['sub-01_acq-unique_dir-AP_run-3'],
+    }
+    ```
+4.  Concatenation Groups: Groups of DWI files to be concatenated or averaged in the output directory.
+    A dictionary of unique concatenated filenames and the distortion groups used to create them.
+    For example:
+    ```
+    {
+        'sub-01': ['sub-01_dir-AP', 'sub-01_dir-PA', 'sub-01_dir-LR', 'sub-01_dir-RL'],
+        'sub-01_acq-unique_dir-AP_run-3': ['sub-01_acq-unique_dir-AP_run-3'],
+    }
+    ```
 
 ## Steps
 
-1. Build a list of valid field maps from available data.
-    - The goal here is to mimic SDCFlows' output.
-      Something like this:
-      ```
-      FieldmapEstimation(sources=<2 files>, method=<EstimatorType.PEPOLAR: 2>, bids_id='auto0001')
-        j-      fmap/sub-01_dir-AP_epi.nii.gz
-        j       fmap/sub-01_dir-PA_epi.nii.gz
-      FieldmapEstimation(sources=<2 files>, method=<EstimatorType.PEPOLAR: 2>, bids_id='auto0002')
-        j-      dwi/sub-01_dir-AP_run-2_dwi.nii.gz
-        j       dwi/sub-01_dir-PA_run-2_dwi.nii.gz
-      ```
-
-    - Problem: There could be many possible field map combinations. For example, with a multi-run, multi-PED dataset (two DWI runs per PED, AP/PA/RL/LR PEDs), we'd have AP run-01/PA run-01, AP run-01/PA run-02, AP run-01/PA run-01/RL run-01, etc. We need to just group everything that can be used to estimate a field map together.
-
-2.
-
-## Questions
-
-1. Distortion correction always happens before concatenation, right?
-2. Should MultipartID impact Distortion Groups?
+I'm not sure what order the outputs should be generated in.
+Distortion groups are applied first (concatenated, then denoised), then field map groups, then concatenation groups.
+However, distortion groups should be subsets of field map groups, so we need to know the field map groups before we can finalize the distortion groups, and field map groups should be subsets of concatenation groups, so we need to know the concatenation groups before we can finalize the distortion groups.
 
 
 ## Scenarios
@@ -230,53 +300,62 @@ Two concatenation groups (raise an error)
     - sub-01_dir-RL_run-2_dwi.nii.gz
 
 
-#### Scenario 1D: Field map groups split up distortion groups
+## Gaps and Inconsistencies
 
-The automatic distortion group collection conflicts with the field map groups defined by the curator.
+The following issues were identified during review of the logic above.
+They should be resolved before or during implementation.
 
-For example, let's say that the B0Field* specify that run-1 files should be used for one field map and run-2 ones should be used for another.
+1. **Scenario 1A field map estimation group values use raw file paths.**
+   The spec (Output 2, line 77) says "the DWI files in the values should be distortion group IDs,"
+   but the Scenario 1A example lists raw file paths like `sub-01_dir-AP_run-1_dwi.nii.gz`.
+   The values should be distortion group IDs (e.g., `sub-01_dir-AP`).
 
-I think we want the distortion groups to reflect the field map estimation groups, but that's difficult.
+2. **Scenario 1A concatenation group values use raw file names.**
+   The concatenation group example lists `sub-01_dir-AP_dwi.nii.gz` etc.,
+   but these should be distortion group IDs like `sub-01_dir-AP`.
 
-Four distortion groups:
+3. **Field Map Application Groups description has a copy-paste error.**
+   Output 3 (line 112) says "Values are lists of files used to create the field map."
+   This duplicates the Estimation Groups description. It should say
+   "Values are lists of distortion group IDs that will be distortion-corrected
+   using the field map."
 
-- sub-01_dir-AP
-    - sub-01_dir-AP_run-1_dwi.nii.gz
-    - sub-01_dir-AP_run-2_dwi.nii.gz
-- sub-01_dir-PA
-    - sub-01_dir-PA_run-1_dwi.nii.gz
-    - sub-01_dir-PA_run-2_dwi.nii.gz
-- sub-01_dir-LR
-    - sub-01_dir-LR_run-1_dwi.nii.gz
-    - sub-01_dir-LR_run-2_dwi.nii.gz
-- sub-01_dir-RL
-    - sub-01_dir-RL_run-1_dwi.nii.gz
-    - sub-01_dir-RL_run-2_dwi.nii.gz
+4. **Scenario 1B does not specify the metadata mechanism.**
+   It says "the curator specified that the run-1 files should be used to create one
+   field map and the run-2 files should be used to create another" but does not state
+   which BIDS metadata fields accomplish this. The mechanism is B0FieldIdentifier:
+   run-1 files share one B0FieldIdentifier value and run-2 files share a different one.
 
-Two field map estimation groups:
+5. **No algorithm for computation order.**
+   The document acknowledges (line 137) uncertainty about the order. The proposed order is:
+   distortion groups -> field map estimation groups -> field map application groups ->
+   concatenation groups -> validate consistency -> refine distortion groups (split any
+   distortion group that spans multiple field map estimation groups).
 
-- TOPUP_run1
-    - sub-01_dir-AP_run-1_dwi.nii.gz
-    - sub-01_dir-PA_run-1_dwi.nii.gz
-    - sub-01_dir-LR_run-1_dwi.nii.gz
-    - sub-01_dir-RL_run-1_dwi.nii.gz
-- TOPUP_run2
-    - sub-01_dir-AP_run-2_dwi.nii.gz
-    - sub-01_dir-PA_run-2_dwi.nii.gz
-    - sub-01_dir-LR_run-2_dwi.nii.gz
-    - sub-01_dir-RL_run-2_dwi.nii.gz
+6. **TotalReadoutTime's role is unresolved.**
+   Line 32 says "ask Okan." Until resolved, it is treated the same as ShimSetting:
+   files must share the same TotalReadoutTime to be in the same distortion group.
 
-Two concatenation groups (raise an error)
+7. **Scenario 1B field map estimation group keys are misleading.**
+   The keys are `sub-01_run-1` and `sub-01_run-2`, which look like auto-generated names.
+   Since B0FieldIdentifier is the mechanism (see item 4), the keys should be the actual
+   B0FieldIdentifier strings chosen by the curator (arbitrary labels, not BIDS filenames).
 
-- sub-01_run-1
-    - sub-01_dir-AP_run-1_dwi.nii.gz
-    - sub-01_dir-PA_run-1_dwi.nii.gz
-    - sub-01_dir-LR_run-1_dwi.nii.gz
-    - sub-01_dir-RL_run-1_dwi.nii.gz
-- sub-01_run-2
-    - sub-01_dir-AP_run-2_dwi.nii.gz
-    - sub-01_dir-PA_run-2_dwi.nii.gz
-    - sub-01_dir-LR_run-2_dwi.nii.gz
-    - sub-01_dir-RL_run-2_dwi.nii.gz
+8. **Missing scenarios.** The document does not cover:
+   - `separate_all_dwis=True` (each file stays separate).
+   - `ignore_fieldmaps=True` when fmap/ files with IntendedFor/B0FieldIdentifier exist.
+   - Multiple sessions.
+   - Missing PhaseEncodingDirection metadata.
+   - Non-DWI fieldmaps in fmap/ (phasediff, phase1/phase2).
+   - Interaction between `estimate_per_axis=True` and B0FieldIdentifier-based grouping.
 
+9. **`estimate_per_axis` + B0Field\* conflict is under-specified.**
+   Line 24 says "raise an exception for now" but does not define the conflict precisely.
+   A conflict occurs when a single B0FieldIdentifier groups files whose phase encoding
+   directions span multiple axes (e.g., AP and LR in one B0FieldIdentifier) while
+   `estimate_per_axis=True`.
 
+10. **`denoise_before_combining` interaction is not discussed.**
+    Line 39 correctly notes it "hopefully doesn't impact grouping," but if denoising
+    happens before distortion-group concatenation, the operational meaning of
+    "distortion group" changes. This should be clarified or confirmed as out of scope.
