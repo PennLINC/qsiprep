@@ -148,15 +148,10 @@ class MultivariateTemplateConstruction2(ANTSCommand):
                     op.join(xdir, f'{prefix}input{num:04d}-{fname}-0GenericAffine.mat')
                     for xdir in transform_dirs
                 ],
-                [
-                    op.join(xdir, f'{prefix}*{fname}*0GenericAffine.mat')
-                    for xdir in transform_dirs
-                ],
+                [op.join(xdir, f'{prefix}*{fname}*0GenericAffine.mat') for xdir in transform_dirs],
             )
             warp = _resolve_transform(
-                [
-                    op.join(xdir, f'{prefix}{fname}{num}1Warp.nii.gz') for xdir in transform_dirs
-                ]
+                [op.join(xdir, f'{prefix}{fname}{num}1Warp.nii.gz') for xdir in transform_dirs]
                 + [
                     op.join(xdir, f'{prefix}input{num:04d}-{fname}-1Warp.nii.gz')
                     for xdir in transform_dirs
