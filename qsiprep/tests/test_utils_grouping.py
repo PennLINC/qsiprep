@@ -396,6 +396,17 @@ def simple_multiped_dataset(tmpdir):
 
 
 @pytest.fixture
+def multirun_multiped_dataset(tmpdir):
+    """Create a BIDS dataset with multiple DWI series."""
+    bids_dir = tmpdir / 'multirun_multiped_dataset'
+    dset_yaml = os.path.join(get_test_data_path(), 'skeleton_multirun_multiped.yml')
+    generate_bids_skeleton(str(bids_dir), dset_yaml)
+    layout = BIDSLayout(str(bids_dir))
+    subject_data = {'dwi': layout.get(suffix='dwi', extension='nii.gz', return_type='file')}
+    return layout, subject_data
+
+
+@pytest.fixture
 def complex_relpaths_dataset(tmpdir):
     """Create a BIDS dataset with complex relative paths for testing."""
     bids_dir = tmpdir / 'test_group_dwi_scans_with_complex_relpaths'
@@ -524,12 +535,40 @@ def test_group_dwi_scans_with_complex_relpaths(
 
 
 @pytest.mark.parametrize(
-    ('combine_scans', 'ignore_fieldmaps', 'use_drbuddi', 'expected'),
+    ('combine_scans', 'use_drbuddi', 'ignore_fieldmaps', 'expected'),
     [
-        # Test case 1: combine_scans=True, ignore_fieldmaps=False, use_drbuddi=False
+        # Test case 1: combine_scans=True, use_drbuddi=True, ignore_fieldmaps=False
+        # Grouping: LR/RL, PA/AP
         (
             True,
+            True,
             False,
+            [
+                {
+                    'concatenated_bids_name': 'sub-01',
+                    'dwi_series': ['sub-01_dir-LR_dwi.nii.gz'],
+                    'dwi_series_pedir': 'i',
+                    'fieldmap_info': {
+                        'rpe_series': ['sub-01_dir-RL_dwi.nii.gz'],
+                        'suffix': 'rpe_series',
+                    },
+                },
+                {
+                    'concatenated_bids_name': 'sub-01',
+                    'dwi_series': ['sub-01_dir-PA_dwi.nii.gz'],
+                    'dwi_series_pedir': 'j',
+                    'fieldmap_info': {
+                        'rpe_series': ['sub-01_dir-AP_dwi.nii.gz'],
+                        'suffix': 'rpe_series',
+                    },
+                },
+            ],
+        ),
+        # Test case 2: combine_scans=True, use_drbuddi=True, ignore_fieldmaps=True
+        # Grouping: LR/RL, PA/AP
+        (
+            True,
+            True,
             True,
             [
                 {
@@ -552,36 +591,44 @@ def test_group_dwi_scans_with_complex_relpaths(
                 },
             ],
         ),
-        # Test case 2: combine_scans=True, ignore_fieldmaps=True, use_drbuddi=False
+        # Test case 3: combine_scans=False, use_drbuddi=True, ignore_fieldmaps=False
+        # Grouping: AP, LR, PA, RL
         (
+            False,
             True,
-            True,
-            True,
+            False,
             [
                 {
-                    'concatenated_bids_name': 'sub-01',
-                    'dwi_series': ['sub-01_dir-LR_dwi.nii.gz'],
-                    'dwi_series_pedir': 'i',
-                    'fieldmap_info': {
-                        'rpe_series': ['sub-01_dir-RL_dwi.nii.gz'],
-                        'suffix': 'rpe_series',
-                    },
+                    'concatenated_bids_name': 'sub-01_dir-AP',
+                    'dwi_series': ['sub-01_dir-AP_dwi.nii.gz'],
+                    'dwi_series_pedir': 'j-',
+                    'fieldmap_info': {'suffix': None},
                 },
                 {
-                    'concatenated_bids_name': 'sub-01',
+                    'concatenated_bids_name': 'sub-01_dir-LR',
+                    'dwi_series': ['sub-01_dir-LR_dwi.nii.gz'],
+                    'dwi_series_pedir': 'i',
+                    'fieldmap_info': {'suffix': None},
+                },
+                {
+                    'concatenated_bids_name': 'sub-01_dir-PA',
                     'dwi_series': ['sub-01_dir-PA_dwi.nii.gz'],
                     'dwi_series_pedir': 'j',
-                    'fieldmap_info': {
-                        'rpe_series': ['sub-01_dir-AP_dwi.nii.gz'],
-                        'suffix': 'rpe_series',
-                    },
+                    'fieldmap_info': {'suffix': None},
+                },
+                {
+                    'concatenated_bids_name': 'sub-01_dir-RL',
+                    'dwi_series': ['sub-01_dir-RL_dwi.nii.gz'],
+                    'dwi_series_pedir': 'i-',
+                    'fieldmap_info': {'suffix': None},
                 },
             ],
         ),
-        # Test case 3: combine_scans=False, ignore_fieldmaps=False, use_drbuddi=False
+        # Test case 4: combine_scans=False, use_drbuddi=True, ignore_fieldmaps=True
+        # Grouping: AP, LR, PA, RL
         (
             False,
-            False,
+            True,
             True,
             [
                 {
@@ -610,39 +657,29 @@ def test_group_dwi_scans_with_complex_relpaths(
                 },
             ],
         ),
-        # Test case 4: combine_scans=False, ignore_fieldmaps=True, use_drbuddi=False
-        (
-            False,
-            True,
-            True,
-            [
-                {
-                    'concatenated_bids_name': 'sub-01_dir-AP',
-                    'dwi_series': ['sub-01_dir-AP_dwi.nii.gz'],
-                    'dwi_series_pedir': 'j-',
-                    'fieldmap_info': {'suffix': None},
-                },
-                {
-                    'concatenated_bids_name': 'sub-01_dir-LR',
-                    'dwi_series': ['sub-01_dir-LR_dwi.nii.gz'],
-                    'dwi_series_pedir': 'i',
-                    'fieldmap_info': {'suffix': None},
-                },
-                {
-                    'concatenated_bids_name': 'sub-01_dir-PA',
-                    'dwi_series': ['sub-01_dir-PA_dwi.nii.gz'],
-                    'dwi_series_pedir': 'j',
-                    'fieldmap_info': {'suffix': None},
-                },
-                {
-                    'concatenated_bids_name': 'sub-01_dir-RL',
-                    'dwi_series': ['sub-01_dir-RL_dwi.nii.gz'],
-                    'dwi_series_pedir': 'i-',
-                    'fieldmap_info': {'suffix': None},
-                },
-            ],
-        ),
-        # Test case 5: combine_scans=True, ignore_fieldmaps=False, use_drbuddi=True
+        # Test case 5: combine_scans=True, use_drbuddi=False, ignore_fieldmaps=False
+        # Grouping: LR/AP/RL/PA
+        # XXX: Getting the following instead of the expected:
+        # [
+        #     {
+        #         'concatenated_bids_name': 'sub-01',
+        #         'dwi_series': ['sub-01_dir-LR_dwi.nii.gz'],
+        #         'dwi_series_pedir': 'i',
+        #         'fieldmap_info': {
+        #             'rpe_series': ['sub-01_dir-RL_dwi.nii.gz'],
+        #             'suffix': 'rpe_series',
+        #         },
+        #     },
+        #     {
+        #         'concatenated_bids_name': 'sub-01',
+        #         'dwi_series': ['sub-01_dir-PA_dwi.nii.gz'],
+        #         'dwi_series_pedir': 'j',
+        #         'fieldmap_info': {
+        #             'rpe_series': ['sub-01_dir-AP_dwi.nii.gz'],
+        #             'suffix': 'rpe_series',
+        #         },
+        #     },
+        # ]
         (
             True,
             False,
@@ -663,11 +700,49 @@ def test_group_dwi_scans_with_complex_relpaths(
                 },
             ],
         ),
-        # Test case 6: combine_scans=True, ignore_fieldmaps=True, use_drbuddi=True
+        # Test case 6: combine_scans=True, use_drbuddi=False, ignore_fieldmaps=True
+        # Grouping: LR/AP/RL/PA
+        # XXX: Getting the following instead of the expected:
+        # [
+        #     {
+        #        'concatenated_bids_name': 'sub-01',
+        #         'dwi_series': [
+        #             'sub-01_dir-AP_dwi.nii.gz',
+        #             'sub-01_dir-LR_dwi.nii.gz',
+        #             'sub-01_dir-PA_dwi.nii.gz',
+        #         ],
+        #         'dwi_series_pedir': 'i',
+        #         'fieldmap_info': {
+        #             'rpe_series': [
+        #                 'sub-01_dir-AP_dwi.nii.gz',
+        #                 'sub-01_dir-PA_dwi.nii.gz',
+        #                 'sub-01_dir-RL_dwi.nii.gz',
+        #             ],
+        #             'suffix': 'rpe_series',
+        #         },
+        #     },
+        #     {
+        #         'concatenated_bids_name': 'sub-01',
+        #         'dwi_series': [
+        #             'sub-01_dir-LR_dwi.nii.gz',
+        #             'sub-01_dir-PA_dwi.nii.gz',
+        #             'sub-01_dir-RL_dwi.nii.gz',
+        #         ],
+        #         'dwi_series_pedir': 'j',
+        #         'fieldmap_info': {
+        #             'rpe_series': [
+        #                 'sub-01_dir-AP_dwi.nii.gz',
+        #                 'sub-01_dir-LR_dwi.nii.gz',
+        #                 'sub-01_dir-RL_dwi.nii.gz',
+        #             ],
+        #             'suffix': 'rpe_series',
+        #         },
+        #     },
+        # ]
         (
             True,
-            True,
             False,
+            True,
             [
                 {
                     'concatenated_bids_name': 'sub-01',
@@ -684,7 +759,8 @@ def test_group_dwi_scans_with_complex_relpaths(
                 },
             ],
         ),
-        # Test case 7: combine_scans=False, ignore_fieldmaps=False, use_drbuddi=True
+        # Test case 7: combine_scans=False, use_drbuddi=False, ignore_fieldmaps=False
+        # Grouping: AP, LR, PA, RL
         (
             False,
             False,
@@ -716,11 +792,12 @@ def test_group_dwi_scans_with_complex_relpaths(
                 },
             ],
         ),
-        # Test case 8: combine_scans=False, ignore_fieldmaps=True, use_drbuddi=True
+        # Test case 8: combine_scans=False, use_drbuddi=False, ignore_fieldmaps=True
+        # Grouping: AP, LR, PA, RL
         (
             False,
-            True,
             False,
+            True,
             [
                 {
                     'concatenated_bids_name': 'sub-01_dir-AP',
@@ -753,14 +830,42 @@ def test_group_dwi_scans_with_complex_relpaths(
 def test_group_dwi_scans_with_simple_multiped(
     simple_multiped_dataset,
     combine_scans,
-    ignore_fieldmaps,
     use_drbuddi,
+    ignore_fieldmaps,
     expected,
 ):
     """Test the group_dwi_scans function with complex relative paths.
 
     This is the same as test_group_dwi_scans_with_complex_b0fields,
     but with IntendedFors using relative paths instead of B0Field* fields.
+
+    Parameters
+    ----------
+    combine_scans : :obj:`bool`
+        If True, group scans together based on their BIDS entities.
+    use_drbuddi : :obj:`bool`
+        If True, limit phase encoding direction-based grouping to reverse PED scans.
+    ignore_fieldmaps : :obj:`bool`
+        If True, ignore fieldmaps. Placed last in the parameter list because it has no effect.
+    expected : :obj:`list` of :obj:`dict`
+        The expected output of the group_dwi_scans function.
+
+    Notes
+    -----
+
+    If combine_scans is False, the scans should be kept separate regardless of the other
+    parameters.
+
+    If combine_scans is True and use_drbuddi is False, all of the scans should be grouped
+    together, with the primary scan (dwi_series) being the one with the alphabetically first
+    phase encoding direction.
+    XXX: This combination is not working as expected.
+
+    If combine_scans is True and use_drbuddi is True, the scans should be grouped together
+    with the reverse PED scans. So AP/PA and RL/LR, but not AP/LR/PA/RL.
+    The primary scan should be the one with the alphabetically first phase encoding direction.
+
+    ignore_fieldmaps should have no effect, since there are no fieldmaps in the dataset.
     """
     layout, subject_data = simple_multiped_dataset
 
@@ -768,7 +873,484 @@ def test_group_dwi_scans_with_simple_multiped(
         layout=layout,
         subject_data=subject_data,
         combine_scans=combine_scans,
-        ignore_fieldmaps=ignore_fieldmaps,
         use_drbuddi=use_drbuddi,
+        ignore_fieldmaps=ignore_fieldmaps,
+    )
+    check_expected(scan_groups, expected)
+
+
+@pytest.mark.parametrize(
+    ('combine_scans', 'use_drbuddi', 'ignore_fieldmaps', 'expected'),
+    [
+        # Test case 1: combine_scans=True, use_drbuddi=True, ignore_fieldmaps=False
+        # Grouping: LR/RL, PA/AP
+        (
+            True,
+            True,
+            False,
+            [
+                {
+                    'concatenated_bids_name': 'sub-01',
+                    'dwi_series': [
+                        'sub-01_dir-LR_run-1_dwi.nii.gz',
+                        'sub-01_dir-LR_run-2_dwi.nii.gz',
+                    ],
+                    'dwi_series_pedir': 'i',
+                    'fieldmap_info': {
+                        'rpe_series': [
+                            'sub-01_dir-RL_run-1_dwi.nii.gz',
+                            'sub-01_dir-RL_run-2_dwi.nii.gz',
+                        ],
+                        'suffix': 'rpe_series',
+                    },
+                },
+                {
+                    'concatenated_bids_name': 'sub-01',
+                    'dwi_series': [
+                        'sub-01_dir-PA_run-1_dwi.nii.gz',
+                        'sub-01_dir-PA_run-2_dwi.nii.gz',
+                    ],
+                    'dwi_series_pedir': 'j',
+                    'fieldmap_info': {
+                        'rpe_series': [
+                            'sub-01_dir-AP_run-1_dwi.nii.gz',
+                            'sub-01_dir-AP_run-2_dwi.nii.gz',
+                        ],
+                        'suffix': 'rpe_series',
+                    },
+                },
+            ],
+        ),
+        # Test case 2: combine_scans=True, use_drbuddi=True, ignore_fieldmaps=True
+        # Grouping: LR/RL, PA/AP
+        (
+            True,
+            True,
+            True,
+            [
+                {
+                    'concatenated_bids_name': 'sub-01',
+                    'dwi_series': [
+                        'sub-01_dir-LR_run-1_dwi.nii.gz',
+                        'sub-01_dir-LR_run-2_dwi.nii.gz',
+                    ],
+                    'dwi_series_pedir': 'i',
+                    'fieldmap_info': {
+                        'rpe_series': [
+                            'sub-01_dir-RL_run-1_dwi.nii.gz',
+                            'sub-01_dir-RL_run-2_dwi.nii.gz',
+                        ],
+                        'suffix': 'rpe_series',
+                    },
+                },
+                {
+                    'concatenated_bids_name': 'sub-01',
+                    'dwi_series': [
+                        'sub-01_dir-PA_run-1_dwi.nii.gz',
+                        'sub-01_dir-PA_run-2_dwi.nii.gz',
+                    ],
+                    'dwi_series_pedir': 'j',
+                    'fieldmap_info': {
+                        'rpe_series': [
+                            'sub-01_dir-AP_run-1_dwi.nii.gz',
+                            'sub-01_dir-AP_run-2_dwi.nii.gz',
+                        ],
+                        'suffix': 'rpe_series',
+                    },
+                },
+            ],
+        ),
+        # Test case 3: combine_scans=False, use_drbuddi=True, ignore_fieldmaps=False
+        # Grouping: AP, LR, PA, RL
+        (
+            False,
+            True,
+            False,
+            [
+                {
+                    'concatenated_bids_name': 'sub-01_dir-AP_run-1',
+                    'dwi_series': ['sub-01_dir-AP_run-1_dwi.nii.gz'],
+                    'dwi_series_pedir': 'j-',
+                    'fieldmap_info': {'suffix': None},
+                },
+                {
+                    'concatenated_bids_name': 'sub-01_dir-AP_run-2',
+                    'dwi_series': ['sub-01_dir-AP_run-2_dwi.nii.gz'],
+                    'dwi_series_pedir': 'j-',
+                    'fieldmap_info': {'suffix': None},
+                },
+                {
+                    'concatenated_bids_name': 'sub-01_dir-LR_run-1',
+                    'dwi_series': ['sub-01_dir-LR_run-1_dwi.nii.gz'],
+                    'dwi_series_pedir': 'i',
+                    'fieldmap_info': {'suffix': None},
+                },
+                {
+                    'concatenated_bids_name': 'sub-01_dir-LR_run-2',
+                    'dwi_series': ['sub-01_dir-LR_run-2_dwi.nii.gz'],
+                    'dwi_series_pedir': 'i',
+                    'fieldmap_info': {'suffix': None},
+                },
+                {
+                    'concatenated_bids_name': 'sub-01_dir-PA_run-1',
+                    'dwi_series': ['sub-01_dir-PA_run-1_dwi.nii.gz'],
+                    'dwi_series_pedir': 'j',
+                    'fieldmap_info': {'suffix': None},
+                },
+                {
+                    'concatenated_bids_name': 'sub-01_dir-PA_run-2',
+                    'dwi_series': ['sub-01_dir-PA_run-2_dwi.nii.gz'],
+                    'dwi_series_pedir': 'j',
+                    'fieldmap_info': {'suffix': None},
+                },
+                {
+                    'concatenated_bids_name': 'sub-01_dir-RL_run-1',
+                    'dwi_series': ['sub-01_dir-RL_run-1_dwi.nii.gz'],
+                    'dwi_series_pedir': 'i-',
+                    'fieldmap_info': {'suffix': None},
+                },
+                {
+                    'concatenated_bids_name': 'sub-01_dir-RL_run-2',
+                    'dwi_series': ['sub-01_dir-RL_run-2_dwi.nii.gz'],
+                    'dwi_series_pedir': 'i-',
+                    'fieldmap_info': {'suffix': None},
+                },
+            ],
+        ),
+        # Test case 4: combine_scans=False, use_drbuddi=True, ignore_fieldmaps=True
+        # Grouping: AP, LR, PA, RL
+        (
+            False,
+            True,
+            True,
+            [
+                {
+                    'concatenated_bids_name': 'sub-01_dir-AP_run-1',
+                    'dwi_series': ['sub-01_dir-AP_run-1_dwi.nii.gz'],
+                    'dwi_series_pedir': 'j-',
+                    'fieldmap_info': {'suffix': None},
+                },
+                {
+                    'concatenated_bids_name': 'sub-01_dir-AP_run-2',
+                    'dwi_series': ['sub-01_dir-AP_run-2_dwi.nii.gz'],
+                    'dwi_series_pedir': 'j-',
+                    'fieldmap_info': {'suffix': None},
+                },
+                {
+                    'concatenated_bids_name': 'sub-01_dir-LR_run-1',
+                    'dwi_series': ['sub-01_dir-LR_run-1_dwi.nii.gz'],
+                    'dwi_series_pedir': 'i',
+                    'fieldmap_info': {'suffix': None},
+                },
+                {
+                    'concatenated_bids_name': 'sub-01_dir-LR_run-2',
+                    'dwi_series': ['sub-01_dir-LR_run-2_dwi.nii.gz'],
+                    'dwi_series_pedir': 'i',
+                    'fieldmap_info': {'suffix': None},
+                },
+                {
+                    'concatenated_bids_name': 'sub-01_dir-PA_run-1',
+                    'dwi_series': ['sub-01_dir-PA_run-1_dwi.nii.gz'],
+                    'dwi_series_pedir': 'j',
+                    'fieldmap_info': {'suffix': None},
+                },
+                {
+                    'concatenated_bids_name': 'sub-01_dir-PA_run-2',
+                    'dwi_series': ['sub-01_dir-PA_run-2_dwi.nii.gz'],
+                    'dwi_series_pedir': 'j',
+                    'fieldmap_info': {'suffix': None},
+                },
+                {
+                    'concatenated_bids_name': 'sub-01_dir-RL_run-1',
+                    'dwi_series': ['sub-01_dir-RL_run-1_dwi.nii.gz'],
+                    'dwi_series_pedir': 'i-',
+                    'fieldmap_info': {'suffix': None},
+                },
+                {
+                    'concatenated_bids_name': 'sub-01_dir-RL_run-2',
+                    'dwi_series': ['sub-01_dir-RL_run-2_dwi.nii.gz'],
+                    'dwi_series_pedir': 'i-',
+                    'fieldmap_info': {'suffix': None},
+                },
+            ],
+        ),
+        # Test case 5: combine_scans=True, use_drbuddi=False, ignore_fieldmaps=False
+        # Grouping: LR/AP/RL/PA
+        # XXX: Getting the following instead of the expected:
+        # [
+        #     {
+        #         'concatenated_bids_name': 'sub-01',
+        #         'dwi_series': ['sub-01_dir-LR_dwi.nii.gz'],
+        #         'dwi_series_pedir': 'i',
+        #         'fieldmap_info': {
+        #             'rpe_series': ['sub-01_dir-RL_dwi.nii.gz'],
+        #             'suffix': 'rpe_series',
+        #         },
+        #     },
+        #     {
+        #         'concatenated_bids_name': 'sub-01',
+        #         'dwi_series': ['sub-01_dir-PA_dwi.nii.gz'],
+        #         'dwi_series_pedir': 'j',
+        #         'fieldmap_info': {
+        #             'rpe_series': ['sub-01_dir-AP_dwi.nii.gz'],
+        #             'suffix': 'rpe_series',
+        #         },
+        #     },
+        # ]
+        (
+            True,
+            False,
+            False,
+            [
+                {
+                    'concatenated_bids_name': 'sub-01',
+                    'dwi_series': [
+                        'sub-01_dir-LR_run-1_dwi.nii.gz',
+                        'sub-01_dir-LR_run-2_dwi.nii.gz',
+                    ],
+                    'dwi_series_pedir': 'i',
+                    'fieldmap_info': {
+                        'rpe_series': [
+                            'sub-01_dir-AP_run-1_dwi.nii.gz',
+                            'sub-01_dir-AP_run-2_dwi.nii.gz',
+                            'sub-01_dir-RL_run-1_dwi.nii.gz',
+                            'sub-01_dir-RL_run-2_dwi.nii.gz',
+                            'sub-01_dir-PA_run-1_dwi.nii.gz',
+                            'sub-01_dir-PA_run-2_dwi.nii.gz',
+                        ],
+                        'suffix': 'rpe_series',
+                    },
+                },
+            ],
+        ),
+        # Test case 6: combine_scans=True, use_drbuddi=False, ignore_fieldmaps=True
+        # Grouping: LR/AP/RL/PA
+        # XXX: Getting the following instead of the expected:
+        # [
+        #     {
+        #        'concatenated_bids_name': 'sub-01',
+        #         'dwi_series': [
+        #             'sub-01_dir-AP_dwi.nii.gz',
+        #             'sub-01_dir-LR_dwi.nii.gz',
+        #             'sub-01_dir-PA_dwi.nii.gz',
+        #         ],
+        #         'dwi_series_pedir': 'i',
+        #         'fieldmap_info': {
+        #             'rpe_series': [
+        #                 'sub-01_dir-AP_dwi.nii.gz',
+        #                 'sub-01_dir-PA_dwi.nii.gz',
+        #                 'sub-01_dir-RL_dwi.nii.gz',
+        #             ],
+        #             'suffix': 'rpe_series',
+        #         },
+        #     },
+        #     {
+        #         'concatenated_bids_name': 'sub-01',
+        #         'dwi_series': [
+        #             'sub-01_dir-LR_dwi.nii.gz',
+        #             'sub-01_dir-PA_dwi.nii.gz',
+        #             'sub-01_dir-RL_dwi.nii.gz',
+        #         ],
+        #         'dwi_series_pedir': 'j',
+        #         'fieldmap_info': {
+        #             'rpe_series': [
+        #                 'sub-01_dir-AP_dwi.nii.gz',
+        #                 'sub-01_dir-LR_dwi.nii.gz',
+        #                 'sub-01_dir-RL_dwi.nii.gz',
+        #             ],
+        #             'suffix': 'rpe_series',
+        #         },
+        #     },
+        # ]
+        (
+            True,
+            False,
+            True,
+            [
+                {
+                    'concatenated_bids_name': 'sub-01',
+                    'dwi_series': [
+                        'sub-01_dir-LR_run-1_dwi.nii.gz',
+                        'sub-01_dir-LR_run-2_dwi.nii.gz',
+                    ],
+                    'dwi_series_pedir': 'i',
+                    'fieldmap_info': {
+                        'rpe_series': [
+                            'sub-01_dir-AP_run-1_dwi.nii.gz',
+                            'sub-01_dir-AP_run-2_dwi.nii.gz',
+                            'sub-01_dir-RL_run-1_dwi.nii.gz',
+                            'sub-01_dir-RL_run-2_dwi.nii.gz',
+                            'sub-01_dir-PA_run-1_dwi.nii.gz',
+                            'sub-01_dir-PA_run-2_dwi.nii.gz',
+                        ],
+                        'suffix': 'rpe_series',
+                    },
+                },
+            ],
+        ),
+        # Test case 7: combine_scans=False, use_drbuddi=False, ignore_fieldmaps=False
+        # Grouping: AP, LR, PA, RL
+        (
+            False,
+            False,
+            False,
+            [
+                {
+                    'concatenated_bids_name': 'sub-01_dir-AP_run-1',
+                    'dwi_series': ['sub-01_dir-AP_run-1_dwi.nii.gz'],
+                    'dwi_series_pedir': 'j-',
+                    'fieldmap_info': {'suffix': None},
+                },
+                {
+                    'concatenated_bids_name': 'sub-01_dir-AP_run-2',
+                    'dwi_series': ['sub-01_dir-AP_run-2_dwi.nii.gz'],
+                    'dwi_series_pedir': 'j-',
+                    'fieldmap_info': {'suffix': None},
+                },
+                {
+                    'concatenated_bids_name': 'sub-01_dir-LR_run-1',
+                    'dwi_series': ['sub-01_dir-LR_run-1_dwi.nii.gz'],
+                    'dwi_series_pedir': 'i',
+                    'fieldmap_info': {'suffix': None},
+                },
+                {
+                    'concatenated_bids_name': 'sub-01_dir-LR_run-2',
+                    'dwi_series': ['sub-01_dir-LR_run-2_dwi.nii.gz'],
+                    'dwi_series_pedir': 'i',
+                    'fieldmap_info': {'suffix': None},
+                },
+                {
+                    'concatenated_bids_name': 'sub-01_dir-PA_run-1',
+                    'dwi_series': ['sub-01_dir-PA_run-1_dwi.nii.gz'],
+                    'dwi_series_pedir': 'j',
+                    'fieldmap_info': {'suffix': None},
+                },
+                {
+                    'concatenated_bids_name': 'sub-01_dir-PA_run-2',
+                    'dwi_series': ['sub-01_dir-PA_run-2_dwi.nii.gz'],
+                    'dwi_series_pedir': 'j',
+                    'fieldmap_info': {'suffix': None},
+                },
+                {
+                    'concatenated_bids_name': 'sub-01_dir-RL_run-1',
+                    'dwi_series': ['sub-01_dir-RL_run-1_dwi.nii.gz'],
+                    'dwi_series_pedir': 'i-',
+                    'fieldmap_info': {'suffix': None},
+                },
+                {
+                    'concatenated_bids_name': 'sub-01_dir-RL_run-2',
+                    'dwi_series': ['sub-01_dir-RL_run-2_dwi.nii.gz'],
+                    'dwi_series_pedir': 'i-',
+                    'fieldmap_info': {'suffix': None},
+                },
+            ],
+        ),
+        # Test case 8: combine_scans=False, use_drbuddi=False, ignore_fieldmaps=True
+        # Grouping: AP, LR, PA, RL
+        (
+            False,
+            False,
+            True,
+            [
+                {
+                    'concatenated_bids_name': 'sub-01_dir-AP_run-1',
+                    'dwi_series': ['sub-01_dir-AP_run-1_dwi.nii.gz'],
+                    'dwi_series_pedir': 'j-',
+                    'fieldmap_info': {'suffix': None},
+                },
+                {
+                    'concatenated_bids_name': 'sub-01_dir-AP_run-2',
+                    'dwi_series': ['sub-01_dir-AP_run-2_dwi.nii.gz'],
+                    'dwi_series_pedir': 'j-',
+                    'fieldmap_info': {'suffix': None},
+                },
+                {
+                    'concatenated_bids_name': 'sub-01_dir-LR_run-1',
+                    'dwi_series': ['sub-01_dir-LR_run-1_dwi.nii.gz'],
+                    'dwi_series_pedir': 'i',
+                    'fieldmap_info': {'suffix': None},
+                },
+                {
+                    'concatenated_bids_name': 'sub-01_dir-LR_run-2',
+                    'dwi_series': ['sub-01_dir-LR_run-2_dwi.nii.gz'],
+                    'dwi_series_pedir': 'i',
+                    'fieldmap_info': {'suffix': None},
+                },
+                {
+                    'concatenated_bids_name': 'sub-01_dir-PA_run-1',
+                    'dwi_series': ['sub-01_dir-PA_run-1_dwi.nii.gz'],
+                    'dwi_series_pedir': 'j',
+                    'fieldmap_info': {'suffix': None},
+                },
+                {
+                    'concatenated_bids_name': 'sub-01_dir-PA_run-2',
+                    'dwi_series': ['sub-01_dir-PA_run-2_dwi.nii.gz'],
+                    'dwi_series_pedir': 'j',
+                    'fieldmap_info': {'suffix': None},
+                },
+                {
+                    'concatenated_bids_name': 'sub-01_dir-RL_run-1',
+                    'dwi_series': ['sub-01_dir-RL_run-1_dwi.nii.gz'],
+                    'dwi_series_pedir': 'i-',
+                    'fieldmap_info': {'suffix': None},
+                },
+                {
+                    'concatenated_bids_name': 'sub-01_dir-RL_run-2',
+                    'dwi_series': ['sub-01_dir-RL_run-2_dwi.nii.gz'],
+                    'dwi_series_pedir': 'i-',
+                    'fieldmap_info': {'suffix': None},
+                },
+            ],
+        ),
+    ],
+)
+def test_group_dwi_scans_with_multirun_multiped(
+    multirun_multiped_dataset,
+    combine_scans,
+    use_drbuddi,
+    ignore_fieldmaps,
+    expected,
+):
+    """Test the group_dwi_scans function with complex relative paths.
+
+    This is the same as test_group_dwi_scans_with_complex_b0fields,
+    but with IntendedFors using relative paths instead of B0Field* fields.
+
+    Parameters
+    ----------
+    combine_scans : :obj:`bool`
+        If True, group scans together based on their BIDS entities.
+    use_drbuddi : :obj:`bool`
+        If True, limit phase encoding direction-based grouping to reverse PED scans.
+    ignore_fieldmaps : :obj:`bool`
+        If True, ignore fieldmaps. Placed last in the parameter list because it has no effect.
+    expected : :obj:`list` of :obj:`dict`
+        The expected output of the group_dwi_scans function.
+
+    Notes
+    -----
+
+    If combine_scans is False, the scans should be kept separate regardless of the other
+    parameters.
+
+    If combine_scans is True and use_drbuddi is False, all of the scans should be grouped
+    together, with the primary scan (dwi_series) being the one with the alphabetically first
+    phase encoding direction.
+    XXX: This combination is not working as expected.
+
+    If combine_scans is True and use_drbuddi is True, the scans should be grouped together
+    with the reverse PED scans. So AP/PA and RL/LR, but not AP/LR/PA/RL.
+    The primary scan should be the one with the alphabetically first phase encoding direction.
+
+    ignore_fieldmaps should have no effect, since there are no fieldmaps in the dataset.
+    """
+    layout, subject_data = multirun_multiped_dataset
+
+    scan_groups, _ = grouping.group_dwi_scans(
+        layout=layout,
+        subject_data=subject_data,
+        combine_scans=combine_scans,
+        use_drbuddi=use_drbuddi,
+        ignore_fieldmaps=ignore_fieldmaps,
     )
     check_expected(scan_groups, expected)
