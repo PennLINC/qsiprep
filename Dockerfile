@@ -7,7 +7,6 @@ RUN apt-get update && \
                     build-essential \
                     git && \
     apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-RUN pixi config set --global run-post-link-scripts insecure
 
 RUN mkdir /app
 COPY pixi.lock pyproject.toml /app

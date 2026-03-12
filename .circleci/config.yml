@@ -451,11 +451,10 @@ jobs:
       - run:
           name: Merge coverage files
           command: |
-            pyenv local 3
-            pip install coverage
+            python3 -m pip install coverage
             cd /tmp/src/qsiprep
-            coverage combine /tmp/coverage/
-            coverage xml -o /tmp/coverage/coverage.xml
+            python3 -m coverage combine /tmp/coverage/
+            python3 -m coverage xml -o /tmp/coverage/coverage.xml
       - store_artifacts:
           path: /tmp/coverage
       - codecov/upload:

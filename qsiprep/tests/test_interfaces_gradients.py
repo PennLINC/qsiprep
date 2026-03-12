@@ -6,13 +6,15 @@ import shutil
 import nibabel as nb
 import numpy as np
 import SimpleITK as sitk
+import pytest
 
 from qsiprep.interfaces.gradients import get_fsl_motion_params
 
 
 def test_get_fsl_motion_params_identity_transform(tmp_path):
     """Test end-to-end motion parameter extraction using c3d_affine_tool."""
-    assert shutil.which('c3d_affine_tool') is not None, 'c3d_affine_tool is required for this test'
+    if shutil.which('c3d_affine_tool') is None:
+        pytest.skip('c3d_affine_tool is required for this test')
     ref_file = os.path.join(tmp_path, 'ref.nii.gz')
     itk_file = os.path.join(tmp_path, 'transform0GenericAffine.mat')
 
