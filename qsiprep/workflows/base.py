@@ -579,9 +579,14 @@ def _build_outputs_to_files(
             for rpe_id in rpe_dg_ids:
                 rpe_files.extend(distortion_groups[rpe_id])
 
-            if fmap_paths:
+            if fmap_paths and rpe_files:
                 fieldmap_info = {'suffix': 'rpe_series', 'rpe_series': sorted(rpe_files)}
                 fieldmap_info['epi'] = sorted(fmap_paths)
+            elif fmap_paths:
+                # Fmap-only estimation groups should flow through the EPI path.
+                # Marking these as rpe_series causes downstream PE+/PE- splitting
+                # to expect a reverse-DWI list that does not exist.
+                fieldmap_info = {'suffix': 'epi', 'epi': sorted(fmap_paths)}
             elif rpe_files:
                 fieldmap_info = {'suffix': 'rpe_series', 'rpe_series': sorted(rpe_files)}
             else:

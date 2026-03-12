@@ -80,9 +80,15 @@ The things we need to account for:
     {
         # The files in the AP, PA, LR, and RL distortion groups all have B0FieldIdentifier/B0FieldSource
         # indicating that they belong together.
-        'b0identifier01': ['sub-01_dir-AP', 'sub-01_dir-PA', 'sub-01_dir-RL', 'sub-01_dir-LR'],
+        'b0identifier01': {
+            'sources': ['sub-01_dir-AP', 'sub-01_dir-PA', 'sub-01_dir-RL', 'sub-01_dir-LR']
+            'type': 'dwi',
+        },
         # The unique run has a B0FieldIdentifier/B0FieldSource pairing it with an EPI file in fmap/
-        'b0identifier02': ['/path/to/fmap/sub-01_dir-AP_epi.nii.gz', 'sub-01_acq-unique_dir-AP_run-3'],
+        'b0identifier02': {
+            'sources': ['/path/to/fmap/sub-01_dir-AP_epi.nii.gz', 'sub-01_acq-unique_dir-AP_run-3'],
+            'type': 'dwi+epi',
+        },
     }
     ```
 

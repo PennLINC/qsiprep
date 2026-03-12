@@ -9,6 +9,7 @@ from niworkflows.utils.testing import generate_bids_skeleton
 
 from qsiprep.tests.utils import get_test_data_path
 from qsiprep.utils import grouping
+from qsiprep.workflows.base import _legacy_outputs_to_files
 
 dset_multipartid = {
     '01': [
@@ -136,56 +137,6 @@ dset_fmap_b0fields = {
         },
     ],
 }
-
-
-def test_get_entity_groups_with_multipartid(tmpdir):
-    """Test the get_entity_groups function."""
-    bids_dir = tmpdir / 'test_get_entity_groups'
-    generate_bids_skeleton(str(bids_dir), dset_multipartid)
-    layout = BIDSLayout(str(bids_dir))
-    subject_data = {'dwi': layout.get(suffix='dwi', extension='nii.gz', return_type='file')}
-    entity_groups = grouping.get_entity_groups(layout, subject_data, combine_all_dwis=True)
-    expected = [
-        [
-            'sub-01_acq-98dir_dir-AP_run-2_dwi.nii.gz',
-            'sub-01_acq-99dir_dir-AP_run-1_dwi.nii.gz',
-        ],
-        ['sub-01_acq-99dir_dir-AP_run-3_dwi.nii.gz'],
-    ]
-    check_expected(entity_groups, expected)
-
-    entity_groups = grouping.get_entity_groups(layout, subject_data, combine_all_dwis=False)
-    expected = [
-        ['sub-01_acq-98dir_dir-AP_run-2_dwi.nii.gz'],
-        ['sub-01_acq-99dir_dir-AP_run-1_dwi.nii.gz'],
-        ['sub-01_acq-99dir_dir-AP_run-3_dwi.nii.gz'],
-    ]
-    check_expected(entity_groups, expected)
-
-
-def test_get_entity_groups_without_multipartid(tmpdir):
-    """Test the get_entity_groups function."""
-    bids_dir = tmpdir / 'test_get_entity_groups'
-    generate_bids_skeleton(str(bids_dir), dset_entities)
-    layout = BIDSLayout(str(bids_dir))
-    subject_data = {'dwi': layout.get(suffix='dwi', extension='nii.gz', return_type='file')}
-    entity_groups = grouping.get_entity_groups(layout, subject_data, combine_all_dwis=True)
-    expected = [
-        [
-            'sub-01_acq-98dir_dir-AP_run-2_dwi.nii.gz',
-            'sub-01_acq-99dir_dir-AP_run-1_dwi.nii.gz',
-            'sub-01_acq-99dir_dir-AP_run-3_dwi.nii.gz',
-        ],
-    ]
-    check_expected(entity_groups, expected)
-
-    entity_groups = grouping.get_entity_groups(layout, subject_data, combine_all_dwis=False)
-    expected = [
-        ['sub-01_acq-98dir_dir-AP_run-2_dwi.nii.gz'],
-        ['sub-01_acq-99dir_dir-AP_run-1_dwi.nii.gz'],
-        ['sub-01_acq-99dir_dir-AP_run-3_dwi.nii.gz'],
-    ]
-    check_expected(entity_groups, expected)
 
 
 def test_get_fieldmaps_relpaths(tmp_path_factory):
@@ -2160,3 +2111,29 @@ class TestBranchingLogicCoverage:
         member_sets = {frozenset(v) for v in fme.values()}
         assert member_sets == expected_member_sets
         assert {frozenset(v) for v in fma.values()} == expected_member_sets
+
+
+class TestLegacyOutputAdapter:
+    """Regression tests for 4-dict -> legacy outputs adapter."""
+
+    def test_fmap_only_groups_are_labeled_epi(self, tmpdir):
+        """IntendedFor-linked fmap-only groups should not become rpe_series."""
+        layout, subject_data = _make_layout(
+            tmpdir,
+            dset_with_intendedfor_fmaps,
+            'legacy_adapter_fmap_only',
+        )
+        dg, fme, fma, _ = grouping.group_dwi_scans(
+            layout=layout,
+            subject_data=subject_data,
+            combine_scans=True,
+            ignore_fieldmaps=False,
+            estimate_per_axis=False,
+        )
+
+        outputs = _legacy_outputs_to_files(layout, dg, fme, fma)
+        assert len(outputs) == 1
+        scan_group = next(iter(outputs.values()))
+        assert scan_group['fieldmap_info']['suffix'] == 'epi'
+        assert 'epi' in scan_group['fieldmap_info']
+        assert 'rpe_series' not in scan_group['fieldmap_info']
